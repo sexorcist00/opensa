@@ -149,6 +149,25 @@ Known issues:
 
 Next iterations:
 
+Platform reach is the LEAD of this cycle (decided 2026-08-04) — a phone boots the engine and cannot open the
+world, because a pak built from SA assets is BC throughout and no mobile GPU has BC. Full chain and its
+measured evidence: [docs/plans/097-platform-reach/](docs/plans/097-platform-reach/readme.md).
+
+- [ ] Run the real map on a phone
+  - [✅] Boot the engine on a mobile GPU (BC taken when offered, never demanded)
+  - [✅] Refuse a world the device cannot display BEFORE it streams, naming the world
+  - [✅] Make the build say which GPUs it runs on, and fail when it claims one it cannot
+  - [✅] `--rgba8` converts the models too, not just the world (a car is not in the pak)
+  - [ ] Universal textures: one pak, transcoded per device (needs the quality go/no-go)
+  - [ ] A district loaded and driven on a real phone, with its own benchmark row
+  - [ ] Touch controls and chrome that fit 360 CSS px with a real world behind them
+  - [ ] A residency budget derived from the device — measured, never a per-device table
+- [ ] Take the hitches off the main thread
+  - [✅] Bake a cell's collision at build time (`.oscol`), so the browser never parses a COL
+  - [ ] Read the baked collision at runtime — the half that actually removes the spike
+  - [ ] Cell collider assembly and `.osm` parsing into workers
+  - [ ] Physics in a worker, IF a phone measurement demands it
+- [ ] WebGL2 fallback for devices without a WebGPU adapter (concept-gated, may be refused)
 - [ ] CJ
   - [ ] Clothes
   - [ ] Bodies
