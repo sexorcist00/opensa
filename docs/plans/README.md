@@ -16,8 +16,17 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`098`, one folder each (066, 073, 074, 078–082, 096–098 carry multi-part sub-plans; 083 kept its
+`001`–`099`, one folder each (066, 073, 074, 078–082, 096–099 carry multi-part sub-plans; 083 kept its
 row but its chain was superseded by 097). Newest first:
+
+- **[099 — UV animations on script objects](./099-script-object-uv-anim/readme.md)** — **PLANNED
+  2026-08-05** (from the 097/07 field bug round): the ferris wheel's blinking bulbs are a UVAnimDict
+  step animation (`f13d`, a 13-frame film strip stepping every 0.225 s) that the world's kind-4 lane
+  already plays but the rigid/script-object path ignores. Three steps: bake the animation through
+  (builder → `.osm` fixture, optional field), the rigid UV-anim lane (per-model uniform, identity
+  slot 0, dynamic offsets — unbundled draws, so no bundle staleness; zero cost for models without
+  animations, proven by A/B), field close-out (timed screenshot A/B at the wheel, edge-cases row
+  removed).
 
 - **[098 — All land vehicle types](./098-all-land-vehicles/readme.md)** — **PLANNED 2026-08-04**,
   supersedes `roadmap/0.5.0/plans/04-all-vehicle-types/` (deleted). Rewritten from a four-way recon
