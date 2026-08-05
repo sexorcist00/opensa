@@ -46,6 +46,23 @@ must not be "unified" with this one.
 
 **Caught:** no — nothing compares the four. The symptom is missing geometry in the field.
 
+### Anything BAKED per cell is baked on the grid its consumer streams on
+
+The two grids above are two different tessellations of one world, so "per cell" is ambiguous the moment a
+converter starts precomputing per-cell data. Render content (`.oscell`, far LODs, texture plans) is keyed on
+**250**; **collision and procobj are keyed on 256**, because that is the grid
+`CollisionStreamingSystem` asks for a cell with.
+
+A collision bake keyed on the render grid therefore hands the runtime the wrong cell's colliders — not
+missing ones, *wrong* ones, drawn from a rectangle offset by up to 6 units and growing with distance from
+the origin. `bakeCellCollision` (`tools/opensa-pack/src/pack-collision.ts`) takes the regions the caller
+already resolved for exactly this reason: the grid choice belongs to whoever called `buildCellColliders`,
+and it must be the same one the key is written with.
+
+**Caught:** no, and the symptom is worse than the LOD case above — the world renders correctly and the
+player falls through some of it while standing on nothing elsewhere, which reads as a physics bug rather
+than a bake bug.
+
 ## A frame-time span may only wrap synchronous work that runs BETWEEN frames
 
 The recorder is `packages/engine/src/debug/frame-spans.ts` (`type:engine`, so the app, the game layer and the

@@ -1,0 +1,82 @@
+import type { RegionColliders } from '@opensa/renderware';
+
+import { decodeOscol, encodeOscol } from '@opensa/engine-formats';
+import { toModelColliders } from '@opensa/game/adapters/gta-sa-world.adapter';
+import { Matrix4 } from '@opensa/math';
+import { describe, expect, it } from 'vitest';
+
+import { bakeCellCollision, bakeRegion } from './pack-collision';
+
+/**
+ * The bake is only correct if it agrees with the path it replaces, so the oracle is that path itself:
+ * `toModelColliders` is what the runtime builds today from the same `RegionColliders`.
+ *
+ * This test lives in the TOOL because it needs both the writer and the runtime, and `type:engine` may not
+ * depend on `type:tool` (`docs/restrictions/architecture.md`).
+ */
+
+const surface = (material: number): { brightness: number; flag: number; light: number; material: number } => ({
+  brightness: 0,
+  flag: 0,
+  light: 0,
+  material,
+});
+
+function regionColliders(): RegionColliders {
+  return {
+    col: {
+      bounds: { center: [0.5, 0.5, 0.5], max: [1, 1, 1], min: [0, 0, 0], radius: 2 },
+      boxes: [{ max: [1, 2, 3], min: [-1, -2, -3], surface: surface(7) }],
+      faces: [
+        { a: 0, b: 1, c: 2, light: 0, material: 4 },
+        { a: 0, b: 2, c: 3, light: 0, material: 17 },
+      ],
+      modelId: 42,
+      name: 'roads32_law2',
+      spheres: [{ center: [0, 0, 2], radius: 1.5, surface: surface(9) }],
+      version: 3,
+      vertices: Float32Array.from([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]),
+    },
+    name: 'roads32_law2',
+    transforms: [new Matrix4().setPosition(12.5, -3, 7)],
+  } as unknown as RegionColliders;
+}
+
+describe('bakeCellCollision', () => {
+  describe('negative cases', () => {
+    it('bakes an empty cell rather than nothing, so "no colliders" is distinguishable from "not baked"', () => {
+      expect(decodeOscol(encodeOscol(bakeCellCollision([]))).regions).toEqual([]);
+    });
+
+    it('does not drop a surface id anywhere on the way through the container', () => {
+      const baked = decodeOscol(encodeOscol(bakeCellCollision([regionColliders()]))).regions[0];
+
+      expect(baked.materials).toEqual(Uint8Array.from([4, 17]));
+      expect(baked.boxes[0].material).toBe(7);
+      expect(baked.spheres[0].material).toBe(9);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('agrees with the runtime path it replaces, index for index', () => {
+      const source = regionColliders();
+
+      const baked = bakeRegion(source);
+      const runtime = toModelColliders(source);
+
+      expect(baked.indices).toEqual(runtime.shape.indices);
+      expect(baked.materials).toEqual(runtime.shape.materials);
+      expect(baked.vertices).toEqual(runtime.shape.vertices);
+      expect(baked.name).toBe(runtime.name);
+    });
+
+    it('survives the round trip through .oscol with its placements intact', () => {
+      const baked = decodeOscol(encodeOscol(bakeCellCollision([regionColliders()]))).regions[0];
+
+      expect(baked.transforms).toHaveLength(1);
+      // Column-major: the translation is the last row of `Matrix4.elements`.
+      expect([...baked.transforms[0]].slice(12, 15)).toEqual([12.5, -3, 7]);
+      expect(baked.vertices).toEqual(Float32Array.from([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]));
+    });
+  });
+});

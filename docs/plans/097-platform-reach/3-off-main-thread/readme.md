@@ -24,6 +24,18 @@ bundle rather than beside it.
 The single largest named cost is a **parse of a 2004 file at runtime**. We have our own formats; there is no
 reason a browser ever sees a COL.
 
+**Landed so far: the container and the bake, not the plumbing.** `.oscol`
+(`packages/engine-formats/src/oscol.ts`) carries a cell's regions — flat vertex/index arrays, primitive
+boxes and spheres, the world transforms of every placement, and the per-triangle surface table, with the
+writer refusing a surface table that is not exactly one id per triangle. `bakeCellCollision`
+(`tools/opensa-pack/src/pack-collision.ts`) produces it, and its test uses the runtime's own
+`toModelColliders` as the oracle so the bake cannot quietly disagree with the path it replaces. **Still to
+do:** the pak entry kind, the converter wiring, and the runtime read.
+
+**The grid is the trap, and it is recorded as a restriction**: collision streams on `GAME_CELL_SIZE` (256)
+while the pak's render cells are 250. A bake keyed on the render grid hands back the *wrong* cell's
+colliders and reads in the field as a physics bug.
+
 - `opensa-pack` parses COL once, at build time, and writes the cell's collision as ready-to-transfer
   vertex/index buffers plus the per-triangle surface table.
 - **The data must survive intact.** A baked collider that loses the surface id is a data regression however
