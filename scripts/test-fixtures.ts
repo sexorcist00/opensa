@@ -29,7 +29,7 @@ import { dirname, join } from 'node:path';
 type Fixture =
   | { readonly dest: string; readonly entry: string; readonly type: 'archive' }
   | { readonly dest: string; readonly entry: string; readonly type: 'extract' }
-  /** Copied from `NO_COMMIT/cleo/` — see {@link CLEO_MANIFEST}. */
+  /** Copied from `mods-src/<game>/` (mods/ + vehicles/ subpaths) — see {@link CLEO_MANIFEST}. */
   | { readonly dest: string; readonly from: string; readonly type: 'cleo' }
   | { readonly dest: string; readonly from: string; readonly type: 'copy' }
   /** Copied from `mods-src/`, not from the game dir — see {@link MOD_MANIFEST}. */
@@ -69,25 +69,29 @@ const MOD_MANIFEST: readonly Fixture[] = [
 ];
 
 /**
- * The plan 097 CLEO corpus — seven real Sanny-compiled `.cs` mods, copied from `NO_COMMIT/cleo`
- * until plan 097/06 moves the mods into `mods-src` (these lines then flip to `mod`). Real scripts
- * falsify what synthetic ones confirm: the `__SBFTR` footer and the native-call encoding were both
- * invisible to a synthetic corpus (097/01 decision 6). `cardoor-coach`/`cardoor-bus` are the same
- * script shipped by two mods — both are fixtured so the decode census stays one line per mod.
+ * The plan 097 CLEO corpus — seven real Sanny-compiled `.cs` mods, copied from `mods-src/<game>/`
+ * (plan 097/06 moved them out of `NO_COMMIT/cleo`; paths carry the mods/ vs vehicles/ subfolder).
+ * Real scripts falsify what synthetic ones confirm: the `__SBFTR` footer and the native-call
+ * encoding were both invisible to a synthetic corpus (097/01 decision 6). `cardoor-coach`/
+ * `cardoor-bus` are the same script shipped by two mods — both are fixtured so the decode census
+ * stays one line per mod.
  */
 const cleoFile = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, from, type: 'cleo' });
 
 const CLEO_MANIFEST: readonly Fixture[] = [
-  cleoFile('46. Pacific Park Rotating Ferris Wheel/CLEO/Rotating Ferris Wheel (Junior_Djjr).cs', 'cleo/ferris.cs'),
+  cleoFile('mods/60. Pacific Park Rotating Ferris Wheel/CLEO/Rotating Ferris Wheel (Junior_Djjr).cs', 'cleo/ferris.cs'),
   cleoFile(
-    'bus - 1978 Motor Coach Industries MC-9 Crusader-II - stratumx/cleo/Car Left Door.cs',
+    'vehicles/bus - 1978 Motor Coach Industries MC-9 Crusader-II - stratumx/cleo/Car Left Door.cs',
     'cleo/cardoor-bus.cs',
   ),
-  cleoFile('coach - 1985 Motor Coach Industries 102A3 - stratumx/cleo/Car Left Door.cs', 'cleo/cardoor-coach.cs'),
-  cleoFile('firela - 1986 Sutphen 75 Mid-Mounted Ladder Truck - stratumx/cleo/firela.cs', 'cleo/firela.cs'),
-  cleoFile('newsvan - 1991 Ford Econoline 350 SA News Van - funky/cleo/van door [SA].cs', 'cleo/vandoor.cs'),
-  cleoFile('rhino - GTA 5 Rhino - _F_/cleo/rhino tracks.cs', 'cleo/rhino.cs'),
-  cleoFile('wind_farm/CLEO/Wind Farm (Junior_Djjr).cs', 'cleo/windfarm.cs'),
+  cleoFile(
+    'vehicles/coach - 1985 Motor Coach Industries 102A3 - stratumx/cleo/Car Left Door.cs',
+    'cleo/cardoor-coach.cs',
+  ),
+  cleoFile('vehicles/firela - 1986 Sutphen 75 Mid-Mounted Ladder Truck - stratumx/cleo/firela.cs', 'cleo/firela.cs'),
+  cleoFile('vehicles/newsvan - 1991 Ford Econoline 350 SA News Van - funky/cleo/van door [SA].cs', 'cleo/vandoor.cs'),
+  cleoFile('vehicles/rhino - GTA 5 Rhino - _F_/cleo/rhino tracks.cs', 'cleo/rhino.cs'),
+  cleoFile('mods/61. Wind Farm/CLEO/Wind Farm (Junior_Djjr).cs', 'cleo/windfarm.cs'),
 ];
 
 const MANIFEST: readonly Fixture[] = [
@@ -254,7 +258,7 @@ function produce(fixture: Fixture): null | Uint8Array {
       return data ? buildVer2Buffer([{ data, name: fixture.entry }]) : null;
     }
     case 'cleo': {
-      return new Uint8Array(readFileSync(join('NO_COMMIT', 'cleo', fixture.from)));
+      return new Uint8Array(readFileSync(join('mods-src', GAME, fixture.from)));
     }
     case 'copy': {
       return new Uint8Array(readFileSync(join(ROOT, fixture.from)));

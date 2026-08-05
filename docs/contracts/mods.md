@@ -119,7 +119,8 @@ folder layout stops mattering; every file is bucketed by bare name:
 | `.ide`, text `.ipl`, other `.dat` | Written to disk: over the stock file with that bare name, else to the path the loader declared. |
 | the loader `.txt` itself | Its `IDE`/`IPL` lines are appended to `data/gta.dat` (canonicalised to the stock `DATA\MAPS\…` spelling); `COLFILE` is dropped — col rides in the archive. |
 | `Remove original/` (any depth) | The file NAMES retire `gta3.img` entries; contents are never injected. |
-| `*.settings.txt`, CLEO `.cs`, prose `.txt` | Ignored by the map baker. Vehicle settings belong to a vehicle mod — see [vehicles.md](./vehicles.md). |
+| a `cleo/`/`CLEO/` dir (any depth, any extension inside), loose `.cs`/`.ini`/`.fxt` | Copied to `<out>/cleo/…` — the dir's author-relative structure preserved, loose files by bare name — with a log line per file. A misspelled dir (`cleo2/`) is NOT a cleo dir: its `.cs`/`.ini`/`.fxt` still land via the loose-extension rule, other extensions are dropped as before. |
+| `*.settings.txt`, prose `.txt` | Ignored by the map baker. Vehicle settings belong to a vehicle mod — see [vehicles.md](./vehicles.md). |
 
 Loader and data files are read **BOM-aware** (UTF-16 is what Notepad writes); the `.merge` and IPL/IDE
 readers on the overlay path still assume UTF-8.
@@ -129,8 +130,10 @@ readers on the overlay path still assume UTF-8.
 ## 4. CLEO scripts (`cleo/` — plan 097; the runtime reads these, not the baker)
 
 The RUNTIME discovers compiled scripts at boot from the VFS key prefix **`cleo/` + `.cs`** (keys are
-lowercased by every loader). Until plan 097/06 teaches the installers to place them, they are
-hand-placed into `build/<game>/opensa/cleo/` (`scripts/debug/cleo-place-mods.ts`).
+lowercased by every loader). The installers place them there (plan 097/06): mod-installer's bake
+buckets CLEO content to `<out>/cleo/` (overlay mods normalise a top-level `CLEO/` → `cleo/`), and
+vehicle-installer carries a vehicle mod's `cleo/` subfolder — see section 3 and
+[vehicles.md](./vehicles.md).
 
 | Name | Meaning | Misspelled → |
 | --- | --- | --- |

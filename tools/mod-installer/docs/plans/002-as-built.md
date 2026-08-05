@@ -90,7 +90,8 @@ loader is found → `{ baked:false }` (caller uses `applyMod`). Otherwise it **m
 3. `object.dat`/`procobj.dat` → `mergeDataFile` (additive); other `.dat` → overwrite.
 4. `injectImgEntries` sets every `assets` entry into `out/models/gta3.img` by name.
 
-CLEO `.cs`, vehicle `*.settings.txt`, and prose `.txt` are ignored.
+Vehicle `*.settings.txt` and prose `.txt` are ignored. (CLEO `.cs` was ignored here too until plan
+097/06 added the `cleo/` bucket — CLEO content now carries to `<out>/cleo/`.)
 
 ## Modules
 

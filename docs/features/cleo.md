@@ -14,7 +14,7 @@ native-address atlas. Plan chain: [`docs/plans/097-cleo-basic/`](../plans/097-cl
 | Engine host (plan 04) | DONE — object handle table on the rigid-model path, model id↔name resolver, `Config.cleo` + `?cleo=1`, boot discovery of `cleo/*.cs`, toast for PRINT_STRING_NOW. **Field checkpoint 1 passed: the Ferris wheel spins** |
 | Native atlas (plan 05) | DONE — opaque tokens surviving plain VM arithmetic, every corpus address named from gta-reversed (`CMatrix::SetRotate` = Rz·Rx·Ry; `0xB6F118` = TheCamera.m_fLODDistMultiplier), pool facade, frame tokens on the vehicle part registry, script fleet with slot-minted handles, atlas misses surfaced as console lines. **Zero misses in the field with the rhino driven** |
 | Class-B visuals | BLOCKED on three named rig facts (05 ledger): the optimizer drops empty parent frames (rhino's `misc_e` track chain — twin of `docs/hacks/cleo-frame-sibling-order.md`), rear-door 095F ratios have no animator source, firela's pin is vacuous here |
-| Packaging (plan 06) | NOT STARTED — installers carry `cleo/`, corpus moves into `mods-src`, gta.dat IDE lines automated (today: `scripts/debug/cleo-place-mods.ts` hand-places) |
+| Packaging (plan 06) | DONE 2026-08-05 — installers carry `cleo/` (bake buckets + vehicle subfolder), corpus moved into `mods-src/original` (mods 60/61 + 6 vehicle mods; hotring ships car-only, its script skipped), gta.dat IDE lines automated by the bake, `cleo-place-mods.ts` retired. **Field checkpoint 3 PASSED**: census `[cleo] 6 script(s)` from the built dir AND from the fetch pack, nothing hand-placed (ledger in the plan) |
 | Tier policy / F2 / CI coverage (plan 07) | NOT STARTED — the census `--json` and the miss console lines are its seams |
 
 ## Field knobs

@@ -26,7 +26,7 @@ Project Lumos, reLIT, Map Textures Fix) — ~1693 `.dff`, 125 `.txd`, 16 `.ipl`,
 | Loader file (`.txt` with `IDE`/`IPL`/`COLFILE`)             | `loader.txt`, `Loader.txt`, **`to gta.dat.txt`**, a UTF-16 `Loader.txt` | parsed → **patch `gta.dat`** (not copied)                     |
 | `.col` referenced by `COLFILE`                              | `relit.col`, `vtxcfix2dfxs.col`                                         | injected into `gta3.img` (SA auto-discovers embedded col)     |
 | `.ifp`                                                      | `cn2_ringking.ifp`, `des_stmotsigbas1.ifp`                              | inject into the anim archive by name (target TBD — see Risks) |
-| `.cs` (CLEO), prose `.txt`, `.ini`, `desktop.ini`           | `Illuminated Vinewood Sign.cs`, `. des_stwnbowl.txt`                    | **ignored** (out of scope)                                    |
+| `.cs` (CLEO), prose `.txt`, `.ini`, `desktop.ini`           | `Illuminated Vinewood Sign.cs`, `. des_stwnbowl.txt`                    | **ignored** at this plan's time — plan 097/06 later carries `.cs`/`.ini`/`.fxt` to `<out>/cleo/`; prose `.txt`/`desktop.ini` stay ignored |
 
 ## Runtime overlay vs. build-time bake (the core difference)
 
@@ -95,7 +95,9 @@ The existing `gta3img/` folder convention (e.g. `Map Textures Fix/gta3.img/`) an
 
 ## Out of scope
 
-- **CLEO `.cs`** — confirmed out of scope (no CLEO runtime; the static IPL placement still bakes, the script doesn't).
+- **CLEO `.cs`** — confirmed out of scope at this plan's time (no CLEO runtime then; the static IPL
+  placement still baked, the script didn't). Superseded by plan 097: the runtime exists and 097/06
+  carries the scripts.
 - **2dfx / neon / light rendering** — an engine-capability question, not baking. The defs/placements bake; whether a
   given effect renders is the engine's job.
 - **Cross-mod / sub-mod conflict priority** — last-wins (alphabetical), same as the simple overlay. No real

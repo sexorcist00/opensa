@@ -26,5 +26,6 @@ export {
   quatRotateY,
   quatRotateZ,
 } from './vm/sa-matrix';
+export { resolveScriptFilePath } from './vm/script-path';
 export { CleoThread, ThreadFault } from './vm/thread';
 export { VarSpace } from './vm/var-space';

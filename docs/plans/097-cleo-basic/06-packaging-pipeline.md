@@ -48,14 +48,14 @@ with all 7 mods in `mods-src` runs everything from the built dir AND from the fe
 
 ## Subtasks
 
-- [ ] mod-installer: bake buckets + normalisation + log lines + tests (bake-shaped CLEO mod keeps
+- [x] mod-installer: bake buckets + normalisation + log lines + tests (bake-shaped CLEO mod keeps
       scripts; prose `.txt` still dropped; `gta3_img/` handling untouched).
-- [ ] vehicle-installer: `cleo/` carry + rebake behaviour + tests.
-- [ ] Contracts + tool readmes updated (decision 4) — same change as the code.
-- [ ] Host: prefix enumeration helper + script-relative path resolution (`0AF0`) + tests.
-- [ ] Move the 7 corpus mods into `mods-src/<game>/mods/` slots (user call on which game(s));
-      full pmb build; verify `build/<game>/opensa/cleo/` contents match the corpus.
-- [ ] **Field checkpoint 3**: the built game runs all supported behaviours from `build/<game>/opensa`
+- [x] vehicle-installer: `cleo/` carry + rebake behaviour + tests.
+- [x] Contracts + tool readmes updated (decision 4) — same change as the code.
+- [x] Host: prefix enumeration helper + script-relative path resolution (`0AF0`) + tests.
+- [x] Move the corpus mods into `mods-src/original/` (user call: original); full pmb build; verify
+      `build/<game>/opensa/cleo/` contents match the corpus.
+- [x] **Field checkpoint 3**: the built game runs all supported behaviours from `build/<game>/opensa`
       (the field-run rule: the built dir and NOTHING else), then the same from a fetch pack via the
       static server. Boot census line lists the script count; numbers into the ledger.
 
@@ -65,6 +65,40 @@ with all 7 mods in `mods-src` runs everything from the built dir AND from the fe
   checkpoint); the misspelling case is loud; fetch and local loaders both discover the same script
   set.
 
-## Ledger
+## Ledger (2026-08-05, all six subtasks)
 
-_(files carried per mod, build sizes before/after, checkpoint 3 record, which game hosts the corpus)_
+**Code**: mod-installer `ModScan.cleo` bucket (cleo-dir any-extension + loose `.cs`/`.ini`/`.fxt`;
+the cleo segment matched MOD-relative — an outer `cleo/` parent dir must not match) + overlay
+`CLEO/`→`cleo/`; vehicle-installer `carryCleoFolder` (install + rebake). Tests: mod-installer 31,
+vehicle-installer 74, cleo 4 (script-path) — green. `resolveScriptFilePath` added for the `0AF0`
+seam (class C stays deferred).
+
+**Corpus home** (user call: original): `mods-src/original/mods/60. Pacific Park Rotating Ferris
+Wheel` + `61. Wind Farm`; `mods-src/original/vehicles/` bus/coach/firela/newsvan/rhino/hotring.
+hotring ships CAR-ONLY — its `no_lights.cs` sits in `cleo-skipped/` (the user's skip call; the
+postmortem carries the recon). `NO_COMMIT/cleo` is gone; fixtures regenerate from `mods-src`
+(93/93, byte-identical). `scripts/debug/cleo-place-mods.ts` deleted.
+
+**Full pmb build** (2026-08-05, `npm run build:game:original:opensa`, run by the user): carry log —
+mod-installer 2 files, vehicle-installer 7 files (bus+coach ship the identical Car Left Door pair;
+later-mod-wins dedupe → one on disk). Built `cleo/`: 6 `.cs` + 1 `.ini`, 70 019 B total. `gta.dat`
++2 IDE lines (`DATA\MAPS\ferriswheel.IDE`, `windfarm.IDE`); both IDEs in `data/maps/`;
+`models/cleomods.img` GONE (nothing hand-placed). Pak: 1 137 cells, 1.2 GB (baseline ~1123 — the
+mods' defs add a handful). Fetch pack `original-0.4.0`: the 7 cleo files ride 4 `others` chunks
+(lowercased keys), the IDEs the `data` chunk, and the script models are `.osm` in `models` chunks
+(`ferriswheel_base/lights/wheel/seat.osm`, `nt_windmill.osm` + both `.col`) — pack conversion runs
+off the IDE catalog the bake registered, so no cleo-specific selection was needed.
+
+**Field checkpoint 3 — PASSED both halves** (headless harness, DPR=1):
+- **Built dir** (`?loader=http-dir&src=…/build/original/opensa&cleo=1`): census
+  `[cleo] 6 script(s): car left door.cs, firela.cs, rhino tracks.cs, rotating ferris wheel
+  (junior_djjr).cs, van door [sa].cs, wind farm (junior_djjr).cs`; only the three KNOWN
+  degradation warns (`0AF0`/`0E43` class C by design; `0D4E` windfarm non-token struct read — the
+  plan-03 route, present since checkpoint 2). No pageerrors.
+- **Fetch pack** (original temp-flipped to the fetch loader, pack staged at
+  `static/games/original-0.4.0`): IDENTICAL census + warns; world rendered (Ganton night, mod
+  cars, 120 fps HUD; screenshot in the session record). Flip reverted after the run.
+- Harness facts worth keeping: the fetch flow shows the BEFORE-YOU-PLAY disclaimer whose OK button
+  `drive.js` never clicks (http-dir skips it), and headless Chromium's ephemeral profile needed a
+  CDP `Storage.overrideQuotaForOrigin` (8 GB) before the 1.2 GB chunk set would cache —
+  under-quota downloads die as silent `net::ERR_ABORTED` with zero console errors.

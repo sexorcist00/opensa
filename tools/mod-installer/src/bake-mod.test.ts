@@ -62,6 +62,33 @@ describe('scanModloaderMod', () => {
       expect(scan.refs.col).toEqual(['data/maps/c.col']);
     });
 
+    it('buckets CLEO content separately: cleo-dir files (any extension) + loose .cs/.ini/.fxt', () => {
+      write('mod/Loader.txt', 'IDE data/maps/a.ide');
+      write('mod/CLEO/Rotating Wheel.cs', 'code');
+      write('mod/CLEO/cleo_text/wheel.fxt', 'GXT');
+      write('mod/deep/nested/extra.cs', 'code2');
+      write('mod/settings.ini', 'k=v');
+      write('mod/models/x.dff', Uint8Array.of(1));
+      const scan = scanModloaderMod(join(dir, 'mod'));
+
+      expect([...scan.cleo.keys()].sort()).toEqual([
+        'Rotating Wheel.cs',
+        'cleo_text/wheel.fxt',
+        'extra.cs',
+        'settings.ini',
+      ]);
+      expect([...scan.assets.keys()]).toEqual(['x.dff']); // untouched by the cleo bucket
+    });
+
+    it('matches the cleo segment against the MOD-relative path only (a corpus under a cleo/ parent)', () => {
+      write('cleo/mod/Loader.txt', 'IDE data/maps/a.ide');
+      write('cleo/mod/models/x.dff', Uint8Array.of(1));
+      const scan = scanModloaderMod(join(dir, 'cleo', 'mod'));
+
+      expect(scan.cleo.size).toBe(0); // the OUTER cleo/ dir is not the mod's script folder
+      expect([...scan.assets.keys()]).toEqual(['x.dff']);
+    });
+
     it('detects a UTF-16 loader file (BOM-aware read) — the real SA Brightened Project fixture', () => {
       cpSync('tests/custom/modloader/utf16-loader.txt', join(dir, 'mod', 'Loader.txt'));
       const scan = scanModloaderMod(join(dir, 'mod'));
@@ -90,7 +117,7 @@ describe('bakeMod', () => {
     it('returns baked=false for a mod with no loader (caller should overlay instead)', () => {
       write('mod/models/x.dff', Uint8Array.of(1));
 
-      expect(bakeMod(join(dir, 'mod'), stockOut())).toEqual({ assets: 0, baked: false, texts: 0 });
+      expect(bakeMod(join(dir, 'mod'), stockOut())).toEqual({ assets: 0, baked: false, cleo: 0, texts: 0 });
     });
   });
 
@@ -117,6 +144,22 @@ describe('bakeMod', () => {
       expect(baked.has('ferris01_law2.dff')).toBe(false); // deleted
       expect(baked.has('ferriswheel_wheel.dff')).toBe(true); // new model injected
       expect(baked.has('existing.dff')).toBe(true); // untouched neighbour
+    });
+
+    it('carries CLEO files to <out>/cleo/ preserving author structure; prose .txt still dropped', () => {
+      const out = stockOut();
+      write('mod/loader.txt', 'IDE data/maps/ferriswheel.ide');
+      write('mod/data/maps/ferriswheel.ide', 'objs\n14644, fw, fw, 299, 0\nend\n');
+      write('mod/CLEO/Rotating Wheel.cs', 'code');
+      write('mod/CLEO/cleo_text/wheel.fxt', 'GXT');
+      write('mod/readme.txt', 'Thanks for downloading!');
+
+      const result = bakeMod(join(dir, 'mod'), out);
+      expect(result.cleo).toBe(2);
+      expect(readFileSync(join(out, 'cleo', 'Rotating Wheel.cs'), 'utf8')).toBe('code');
+      expect(readFileSync(join(out, 'cleo', 'cleo_text', 'wheel.fxt'), 'utf8')).toBe('GXT');
+      expect(existsSync(join(out, 'cleo', 'readme.txt'))).toBe(false); // prose stays dropped
+      expect(existsSync(join(out, 'readme.txt'))).toBe(false);
     });
 
     it('strips an id from stock IDEs when a baked IDE redefines it (Animal Statues anim case)', () => {

@@ -1,5 +1,5 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 import { parseFeatures } from './features';
 import { mergeVehicleImg } from './img-merge';
@@ -12,6 +12,8 @@ const FEATURES_FILE = 'features.txt';
 
 /** What one vehicle contributed — its gta3.img entries + the keys `--strip` keeps (model name, handling id). */
 export interface AppliedVehicle {
+  /** Files carried from the mod's `cleo/` subfolder into `<out>/cleo/` (dest paths relative to it). */
+  cleo: string[];
   /** What the mod's `features.txt` declares (uppercased tokens) — empty when it ships none. */
   features: string[];
   /** Handling id (uppercase) from the ide line's col 4 / the handling line / the model — for handling.cfg strip. */
@@ -37,12 +39,15 @@ export interface ApplyVehicleOptions {
 
 /**
  * Install one vehicle over `--out`: put its `dff`/`txd` (+ extra txds) into `models/gta3.img` (replace by name),
- * then merge its `*.settings.txt` lines into `data/{vehicles.ide,handling.cfg,carcols.dat,carmods.dat}`. Returns
- * the archive entries written + the model name / handling id (so a `--strip` run knows what to keep).
+ * carry its `cleo/` subfolder (scripts + `.ini` sidecars) into `<out>/cleo/`, then merge its `*.settings.txt`
+ * lines into `data/{vehicles.ide,handling.cfg,carcols.dat,carmods.dat}`. Returns the archive entries written +
+ * the model name / handling id (so a `--strip` run knows what to keep). A rebake re-runs the same path, so
+ * changed scripts re-copy with the mod (plan 097/06 decision 3).
  */
 export function applyVehicle(folderPath: string, outPath: string, options: ApplyVehicleOptions = {}): AppliedVehicle {
   const entries = readdirSync(folderPath);
   const imgNames = options.img === false ? [] : mergeVehicleImg(folderPath, join(outPath, 'models', 'gta3.img'));
+  const cleo = carryCleoFolder(folderPath, entries, outPath);
   // Without the archive step the model name comes from the folder itself — the same rule, one step earlier:
   // the mod's `.dff` basename IS the model.
   const model = (
@@ -62,7 +67,7 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
     entries.find((name) => name.toLowerCase().endsWith('.settings.txt')) ??
     entries.find((name) => name.toLowerCase().endsWith('.txt') && name.toLowerCase() !== FEATURES_FILE);
   if (!settingsFile) {
-    return { features, imgNames, model, warnings: [] };
+    return { cleo, features, imgNames, model, warnings: [] };
   }
   const warnings: string[] = [];
   const settings = parseVehicleSettings(decodeSettings(readFileSync(join(folderPath, settingsFile))), (message) =>
@@ -96,7 +101,39 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
     editFile(data('carmods.dat'), (text) => mergeCarmods(text, settings.carmodsLine!));
   }
 
-  return { features, handlingId: handlingId(settings, model), imgNames, model, warnings };
+  return { cleo, features, handlingId: handlingId(settings, model), imgNames, model, warnings };
+}
+
+/**
+ * Copy the mod's `cleo`/`CLEO` subfolder into `<out>/cleo/` (canonical lowercase, author-relative structure
+ * preserved — `.ini` sidecars ride along). Returns the dest paths relative to `<out>/cleo/`.
+ */
+function carryCleoFolder(folderPath: string, entries: string[], outPath: string): string[] {
+  const cleoDir = entries.find(
+    (name) => name.toLowerCase() === 'cleo' && statSync(join(folderPath, name)).isDirectory(),
+  );
+  if (cleoDir === undefined) {
+    return [];
+  }
+  const carried: string[] = [];
+  const copyTree = (srcDir: string, rel: string): void => {
+    for (const entry of readdirSync(srcDir, { withFileTypes: true })) {
+      const src = join(srcDir, entry.name);
+      const relPath = rel === '' ? entry.name : `${rel}/${entry.name}`;
+      if (entry.isDirectory()) {
+        copyTree(src, relPath);
+      } else {
+        const dest = join(outPath, 'cleo', relPath);
+        mkdirSync(dirname(dest), { recursive: true });
+        writeFileSync(dest, readFileSync(src));
+        carried.push(relPath);
+        console.log(`vehicle-installer: cleo → cleo/${relPath}`);
+      }
+    }
+  };
+  copyTree(join(folderPath, cleoDir), '');
+
+  return carried;
 }
 
 function editFile(path: string, edit: (text: string) => string): void {

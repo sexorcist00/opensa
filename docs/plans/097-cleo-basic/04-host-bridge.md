@@ -84,7 +84,7 @@ _(worker vs on-thread decision + numbers, facet inventory, field checkpoint 1 re
 
 ### Field checkpoint 1 — 2026-08-04, THE WHEEL SPINS
 
-Hand-placement (decision 8, via `scripts/debug/cleo-place-mods.ts` — plan 06 retires it): `cleo/*.cs`
+Hand-placement (decision 8, via `scripts/debug/cleo-place-mods.ts` — retired by plan 06 as planned): `cleo/*.cs`
 + mod IDEs + `gta.dat` IDE lines + a `models/cleomods.img` override into `build/original/opensa`
 (the Jul-30 build), served over http-dir, booted with `?cleo=1&spawn=350,-1900,9`.
 

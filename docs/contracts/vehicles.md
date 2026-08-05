@@ -29,6 +29,7 @@ the build keys off it.
 | `<model><N>.txd` | Extra numbered dictionaries (`previon1.txd`); they ship into `gta3.img` alongside. |
 | `<model>.settings.txt` | **Settings** — the car's data lines (below). |
 | `features.txt` | **Features** — what the model can DO (below). Folder-scoped, not `<model>.features.txt`. |
+| `cleo/` (or `CLEO/`) | The mod's compiled CLEO scripts + sidecars (`.cs`, `.ini`, `.fxt`) — copied to the built game's `cleo/` (canonical lowercase, author-relative structure preserved), where the runtime discovers them at boot (plan 097/06); a `--rebake` re-copies them. **Misspelled (`celo/`, loose `.cs` beside the dff): not carried at all** — the vehicle installs fine, its script never runs, and the boot census line (`[cleo] N script(s)`) is the only place the absence shows. |
 
 - The settings file is found by its **`.settings.txt` suffix**, never by "the first `.txt` in the folder" —
   `features.txt` sorts before it and used to swallow it whole (the previon lost its entire data row that way).
