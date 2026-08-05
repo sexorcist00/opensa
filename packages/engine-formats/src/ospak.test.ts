@@ -24,6 +24,35 @@ describe('ospak', () => {
       expect(() => buildOspak(doubled)).toThrow(/duplicate cell key/);
     });
 
+    it('REFUSES collision entries whose grid nobody stated', () => {
+      // 250 and 256 both "work" here and one of them is silently wrong -- a reader that assumes the render
+      // grid gets the WRONG cell's colliders, and the symptom is a player falling through the world.
+      const withCollision: OspakInput[] = [
+        ...inputs(),
+        { bytes: new Uint8Array([1]), key: '5,-7', kind: 'collision' as const },
+      ];
+
+      expect(() => buildOspak(withCollision)).toThrow(/collisionCellSize/);
+      expect(() => buildOspak(withCollision, { collisionCellSize: 256 })).not.toThrow();
+    });
+
+    it('validate rejects a manifest carrying collision without its grid', () => {
+      const { manifest } = buildOspak(inputs());
+
+      expect(() =>
+        validateOspakManifest({ ...manifest, collision: { '5,-7': { hash: 0, length: 1, offset: 0 } } }),
+      ).toThrow(/collisionCellSize/);
+    });
+
+    it('throws on a duplicate collision key', () => {
+      const doubled: OspakInput[] = [
+        { bytes: new Uint8Array([1]), key: '5,-7', kind: 'collision' as const },
+        { bytes: new Uint8Array([2]), key: '5,-7', kind: 'collision' as const },
+      ];
+
+      expect(() => buildOspak(doubled, { collisionCellSize: 256 })).toThrow(/duplicate collision key/);
+    });
+
     it('throws on a texture entry without meta', () => {
       expect(() => buildOspak([{ bytes: new Uint8Array([1]), key: 'array-1', kind: 'texture' }])).toThrow(
         /missing meta/,
@@ -71,6 +100,28 @@ describe('ospak', () => {
 
       expect(manifest.cells['54,-32,hd'].aabb).toEqual(aabb);
       expect(manifest.cells['54,-32,lod']).not.toHaveProperty('aabb');
+    });
+
+    it('keys collision on the GAME grid, apart from the render cells', () => {
+      const withCollision: OspakInput[] = [
+        ...inputs(),
+        { bytes: new Uint8Array([1, 2]), key: '5,-7', kind: 'collision' as const },
+      ];
+
+      const { manifest } = buildOspak(withCollision, { collisionCellSize: 256 });
+
+      expect(manifest.collisionCellSize).toBe(256);
+      expect(manifest.cellSize).toBe(250);
+      expect(Object.keys(manifest.collision ?? {})).toEqual(['5,-7']);
+      expect(Object.keys(manifest.cells)).not.toContain('5,-7');
+      expect(() => validateOspakManifest(manifest)).not.toThrow();
+    });
+
+    it('omits the collision keys entirely for a pak built without the bake', () => {
+      const { manifest } = buildOspak(inputs());
+
+      expect(manifest).not.toHaveProperty('collision');
+      expect(manifest).not.toHaveProperty('collisionCellSize');
     });
 
     it('carries texture meta into the manifest for the scheduler', () => {

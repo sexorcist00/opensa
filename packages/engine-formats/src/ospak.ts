@@ -52,7 +52,7 @@ export interface OspakInput {
   /** Wire encoding the producer applied to `bytes` (the reader inflates before use). */
   enc?: OspakWireEnc;
   key: string;
-  kind: 'cell' | 'texture';
+  kind: 'cell' | 'collision' | 'texture';
   /** Texture meta (required for kind 'texture'). */
   meta?: { format: number; height: number; layers: number; width: number };
   /** Decoded size of `bytes` when `enc` is set. */
@@ -75,6 +75,18 @@ export interface OspakManifest {
   cells: Record<string, OspakCellEntry>;
   /** World-grid cell size (engine units) — key "cx,cy,…" → engine-space centre mapping for streaming. */
   cellSize: number;
+  /**
+   * Baked cell collision (plan 097/3-01): `"cx,cy"` → range of one `.oscol`.
+   *
+   * **Keyed on {@link OspakManifest.collisionCellSize}, not on {@link OspakManifest.cellSize}.** Collision
+   * streams on the GAME grid (256) while render cells are 250 — two tessellations of one world, and a reader
+   * that assumes the render grid gets the WRONG cell's colliders rather than none. Absent on a pak built
+   * without the bake; the runtime then parses COL as it always did.
+   */
+  collision?: Record<string, OspakEntry>;
+  /** The grid {@link OspakManifest.collision} is keyed on — stated rather than implied, because it is NOT
+   *  `cellSize` and the difference is invisible until someone falls through the world. */
+  collisionCellSize?: number;
   /** Fetch game id (plan 086 phase 1): the `game-src/<id>` folder name this pak was built from
    *  (`original`, `gostown`, …). Absent on older paks. */
   game?: string;
@@ -120,12 +132,15 @@ export function buildOspak(
   inputs: readonly OspakInput[],
   options: {
     cellSize?: number;
+    /** Required whenever any input is `kind: 'collision'` — the GAME grid those keys are on. */
+    collisionCellSize?: number;
     missingLayers?: OspakManifest['missingLayers'];
     uvAnimations?: OspakUvAnimation[];
   } = {},
 ): { manifest: OspakManifest; pak: Uint8Array } {
   const sorted = [...inputs].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
   const cells: OspakManifest['cells'] = {};
+  const collision: Record<string, OspakEntry> = {};
   const textures: OspakManifest['textures'] = {};
   let offset = 0;
   const spans: { bytes: Uint8Array; offset: number }[] = [];
@@ -138,6 +153,11 @@ export function buildOspak(
     };
     if (input.kind === 'cell') {
       addCell(cells, input, entry);
+    } else if (input.kind === 'collision') {
+      if (collision[input.key]) {
+        throw new Error(`duplicate collision key ${input.key}`);
+      }
+      collision[input.key] = entry;
     } else {
       addTexture(textures, input, entry);
     }
@@ -149,11 +169,18 @@ export function buildOspak(
     pak.set(span.bytes, span.offset);
   }
 
+  // A collision entry whose grid nobody stated is unreadable: 250 and 256 both "work" and one of them is
+  // silently wrong, so the writer refuses rather than defaulting.
+  if (Object.keys(collision).length > 0 && options.collisionCellSize === undefined) {
+    throw new Error('collision entries need collisionCellSize — the GAME grid they are keyed on (never cellSize)');
+  }
+
   return {
     manifest: {
       byteLength: pak.byteLength,
       cells,
       cellSize: options.cellSize ?? 250,
+      ...(Object.keys(collision).length > 0 ? { collision, collisionCellSize: options.collisionCellSize } : {}),
       textures,
       ...(options.missingLayers !== undefined && options.missingLayers.length > 0
         ? { missingLayers: options.missingLayers }
@@ -194,7 +221,14 @@ export function validateOspakManifest(manifest: OspakManifest): void {
   if (manifest.version !== OSPAK_VERSION) {
     throw new Error(`unsupported .ospak manifest version ${manifest.version} (reader supports ${OSPAK_VERSION})`);
   }
-  const all: [string, OspakEntry][] = [...Object.entries(manifest.cells), ...Object.entries(manifest.textures)];
+  if (manifest.collision !== undefined && manifest.collisionCellSize === undefined) {
+    throw new Error('manifest carries collision entries without collisionCellSize (the grid they are keyed on)');
+  }
+  const all: [string, OspakEntry][] = [
+    ...Object.entries(manifest.cells),
+    ...Object.entries(manifest.collision ?? {}),
+    ...Object.entries(manifest.textures),
+  ];
   for (const [key, entry] of all) {
     if (entry.offset % OSPAK_ALIGN !== 0) {
       throw new Error(`entry ${key} offset ${entry.offset} not ${OSPAK_ALIGN}-aligned`);
