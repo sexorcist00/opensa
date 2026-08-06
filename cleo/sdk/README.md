@@ -27,5 +27,40 @@ cleo/
 
 ## Commands
 
-- `npm run build:cleo-scripts` — compile every script under `cleo/scripts/` to `cleo/sdk/dist/`.
-  (As of plan 001: discovery + report; assembly arrives with plans 002–004.)
+- `npm run build:cleo-scripts` — compile every script under `cleo/scripts/` to `cleo/sdk/dist/`
+  (build IR → whitelist gate → assemble → decode-verify; deterministic bytes).
+- `npm run cleo:whitelist` — regenerate the dual-target whitelist (drift-tested in CI).
+
+## Write a script
+
+`cleo/scripts/<name>/script.ts`, default-exporting a definition:
+
+```ts
+import { defineScript } from '../../sdk/src/dsl/script';
+import { int, str } from '../../sdk/src/ir';
+
+export default defineScript({
+  budgetPerTick: 50, // the story test asserts the measured cost against this
+  name: 'hello-conformance', // artifact + folder name; scmName defaults to first 7 chars
+  build(s) {
+    s.loop(() => {
+      s.wait(1000);
+      s.op('PRINT_STRING_NOW', str('hello'), int(1000));
+    });
+  },
+});
+```
+
+- Opcodes by Sanny name (`s.op`, `s.not` for negated conditions), typed operands from `../ir`
+  (`int` picks the smallest width; `str`/`str8`/`str16`; `s.local('x')` allocates a slot,
+  `s.global(i)` is always explicit).
+- Structured flow lowers to the SCM convention and hides nothing: `s.if(conds, {then, else?, any?})`
+  emits `00D6 IF` + `004D GOTO_IF_FALSE`; `s.while`/`s.loop` add the backwards `GOTO`. Read the
+  emitted listing in the story test's snapshot — the listing IS the semantics.
+- A backwards jump enclosing no `WAIT` warns (busy loop); suppress per site with
+  `{ noWaitWarning: true }` when intended.
+- The whitelist gate holds at build: dual-target scripts use only opcodes BOTH runtimes serve;
+  `target: 'opensa-only'` lifts the real-CLEO half and the artifact name carries it
+  (`docs/contracts/mods.md` §4).
+- End every script with an explicit terminator (`TERMINATE_THIS_CUSTOM_SCRIPT`) — trailing queued
+  labels are a build error.

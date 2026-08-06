@@ -16,7 +16,7 @@ scripts themselves arrive with the class-C facet, not here.
 | 1   | [001 — Scaffold & workspace wiring](001-scaffold.md)      | the `cleo/` root category, the `cleo/sdk` workspace project, `cleo/scripts/` home, build command, CI/lint/tsc green on empty | done    |
 | 2   | [002 — Assembler core](002-assembler-core.md)             | the decoder's mirror: operand writer, labels/jumps, LVARs, native-call tails, trailer; corpus re-encode byte-identical       | done    |
 | 3   | [003 — Dual-target whitelist](003-dual-target-whitelist.md) | generated allowed-set (real CLEO ∩ VM registry), the build gate, `opensa-only` flag + artifact-name contract               | done    |
-| 4   | [004 — DSL builder](004-dsl-builder.md)                   | the typed authoring surface: threads, labels, wait, if/else lowering, opcodes by Sanny name, raw escape hatch                | planned |
+| 4   | [004 — DSL builder](004-dsl-builder.md)                   | the typed authoring surface: threads, labels, wait, if/else lowering, opcodes by Sanny name, raw escape hatch                | done    |
 | 5   | [005 — hello-conformance](005-hello-conformance.md)       | first authored script end-to-end: listing snapshot, headless story, field boot, manual real-CLEO verdict; docs sweep         | planned |
 
 Dependencies are linear 001 → 005. 002 is the load-bearing step (the bytes); 003 and 004 both sit

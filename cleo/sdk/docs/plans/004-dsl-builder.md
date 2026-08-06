@@ -39,16 +39,19 @@ surface and the author has to be able to predict it.
 
 ## Tasks
 
-- [ ] `src/dsl/` — the builder producing 002's IR: definition shape, `op` by name, labels/jumps,
-      lvar/gvar handles, `wait`, the if/else lowering, `raw`.
-- [ ] Lowering tests as LISTING snapshots: each sugar construct's emitted listing is a committed
-      fixture (the diff IS the semantics), including the and/or condition-count encoding pinned
-      against a corpus example.
-- [ ] The missing-`wait` warning + suppression, with a test each way.
-- [ ] `build.ts` wired end-to-end: discover → build IR → gate → assemble → decode-verify → write
-      artifact (the architecture's build lifecycle, now real).
-- [ ] `cleo/sdk/README.md` — the authoring how-to (write a script, build it, read its listing,
-      write its story test).
+- [x] `src/dsl/script.ts` — `defineScript` (validated shape: kebab name, 7-char scmName, positive
+      budget) + `ScriptBuilder`: `op`/`not` by Sanny name or raw id (the raw escape hatch is the
+      same `op` with a numeric id — one path, nothing bypasses the gate), `label`/`wait`,
+      `local()` named-slot handles (allocated on first use), explicit `global(i)`, `if/while/loop`
+      lowering. `SCRIPT_NAME` auto-emitted first from `scmName`.
+- [x] Lowering tests as INLINE listing snapshots (reviewable in the test file; the diff IS the
+      semantics): if/else offsets verified by hand, while's backwards GOTO, the AND/OR group code
+      (0 single, count-1 AND, 19+count OR — pinned against the VM's `startAndOr`).
+- [x] The missing-`wait` warning (index-level heuristic over backwards label jumps) + per-site
+      suppression + the paced-loop negative, one test each.
+- [x] `build.ts` end-to-end (`compileScript`: IR → gate → assemble → decode-verify → listing) +
+      `cli.ts` writes `dist/<artifact>` and prints warnings.
+- [x] `cleo/sdk/README.md` — the authoring how-to.
 
 ## Verification
 
@@ -58,4 +61,14 @@ listing cannot show). Determinism holds through the full pipeline.
 
 ## Measurements / notes
 
-_(filled when executed)_
+### Shipped (2026-08-06)
+
+- The sugar-adds-nothing proof is a TEST: `s.loop(...)` and the same construct via explicit
+  `label`/`op('GOTO')` produce byte-identical artifacts.
+- if/else lowering (verified in the committed inline snapshot): `00D6 IF code` → conditions →
+  `004D GOTO_IF_FALSE else|end` → then → `0002 GOTO end` → else → end. Group code matches the
+  VM's `startAndOr` exactly; a non-condition opcode inside `if()` and a 0/9-condition group are
+  located build errors.
+- A script ending in a structured construct leaves its internal end label queued → the trailing
+  -label error names it; the rule "end every script with an explicit terminator" is in the README.
+- Full suite: **428 files / 3 730 tests green** (+14 DSL tests); tsc + eslint clean.
