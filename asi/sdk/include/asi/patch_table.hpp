@@ -56,7 +56,7 @@ inline void OnAttach(const Plugin& plugin) {
   log.TaggedKeyHex(plugin.tag, "DEBUG: sites total    ", plugin.tables.siteCount);
 #endif
   if (plugin.apply != nullptr) {
-    plugin.apply(log, adjusters);
+    plugin.apply(log, plugin, adjusters);
   }
 #else
   (void)adjusters;

@@ -4,6 +4,7 @@
 // when FLA/OLA is present (they own those zones). Compiled only into the APPLY build.
 #include <asi/coexistence.hpp>
 #include <asi/log.hpp>
+#include <asi/plugin.hpp>
 
 #include "config.hpp"
 
@@ -17,13 +18,13 @@
 
 namespace pm {
 
-inline void ApplyPatches(asi::Log& log, unsigned adjusterMask) {
+inline void ApplyPatches(asi::Log& log, const asi::Plugin& plugin, unsigned adjusterMask) {
 #if PM_FIX_INT16
-  patches::ApplyInt16(log);  // no adjuster fixes int16 → always apply
+  patches::ApplyInt16(log, plugin);  // no adjuster fixes int16 → always apply
 #endif
 
 #if PM_FIX_FX2DFX
-  patches::ApplyFx2dfx(log);  // fx zone is disjoint from adjusters → always apply (internal verify-and-defer)
+  patches::ApplyFx2dfx(log, plugin);  // fx zone is disjoint from adjusters → always apply (verify-and-defer)
 #endif
 
 #if PM_FIX_LOADEDBUILDINGS

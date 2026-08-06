@@ -19,51 +19,28 @@
 #include <cstdint>
 
 #include "../config.hpp"
+#include "../identity.hpp"
 #include <asi/fingerprint.hpp>  // asi::Runtime(), asi::HostBase()
 #include <asi/hook.hpp>
+#include <asi/append-log.hpp>
 #include <asi/log.hpp>
 #include <asi/mem.hpp>
+#include <asi/plugin.hpp>
+#include <asi/verify.hpp>
 
 namespace pm::patches {
 
 #if PM_FX2DFX_LOG
 inline int gFxGuardHits = 0;
 
-// Append `[dbg] fx2dfx dead-system caught #N` to the log (the guard runs after OnAttach closed its Log). Only ever
+// Count the catches (the guard runs after OnAttach closed its Log → the SDK's reopen-append logger). Only ever
 // called on the RARE null-blueprint path (a genuinely reaped system) — never on the hot live-system path.
 inline void PmFxDeadSystemLog(void* /*sys*/) {
   ++gFxGuardHits;
   if (gFxGuardHits > 32) {
     return;  // enough proof; stop spamming the log
   }
-  char path[MAX_PATH];
-  asi::HostDir(path, sizeof(path));
-  lstrcatA(path, "perfect-map-asi.log");
-  HANDLE f = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
-                         FILE_ATTRIBUTE_NORMAL, nullptr);
-  if (f == INVALID_HANDLE_VALUE) {
-    return;
-  }
-  char buf[64] = "[dbg] fx2dfx dead-system Stop/Play caught #";
-  char num[12];
-  int n = 0;
-  int v = gFxGuardHits;
-  do {
-    num[n++] = static_cast<char>('0' + v % 10);
-    v /= 10;
-  } while (v);
-  char* p = buf;
-  while (*p) {
-    ++p;
-  }
-  while (n) {
-    *p++ = num[--n];
-  }
-  *p++ = '\r';
-  *p++ = '\n';
-  DWORD w = 0;
-  WriteFile(f, buf, static_cast<DWORD>(p - buf), &w, nullptr);
-  CloseHandle(f);
+  asi::AppendCount(kLogFile, "[dbg] fx2dfx dead-system Stop/Play caught #", gFxGuardHits);
 }
 #endif
 
@@ -121,41 +98,27 @@ inline bool InstallNullBpGuard(uintptr_t entry, uintptr_t cont, const uint8_t* s
 
 }  // namespace detail
 
-// Original prologues we relocate (whole instructions covering the 5-byte jmp), + their continuations.
-inline constexpr uint8_t kFxStopEntry[] = {0x56, 0x8b, 0xf1, 0x8b, 0x46, 0x08};  // @0x4AA390 push esi;mov esi,ecx;mov eax,[esi+8]
-inline constexpr uint8_t kFxPlayEntry[] = {0x51, 0x56, 0x8b, 0xf1, 0x80, 0x7e, 0x50, 0x02};  // @0x4AA2F0 push ecx;push esi;mov esi,ecx;cmp byte[esi+0x50],2
+// The prologues we relocate (whole instructions covering the 5-byte jmp) are named, never re-declared: their
+// bytes come from the catalogue through the generated table.
+inline constexpr const char* kFx2dfxSites[] = {"FxSystem_c.Stop", "FxSystem_c.Play"};
 
-inline void ApplyFx2dfx(asi::Log& log) {
+inline void ApplyFx2dfx(asi::Log& log, const asi::Plugin& plugin) {
   if (asi::HostBase() != 0x400000) {
-    log.Line("[perfect-map] fx2dfx: unexpected image base — DEFER");
+    log.Tagged(plugin.tag, "fx2dfx: unexpected image base — DEFER");
     return;
   }
-  struct Site {
-    uint32_t va;
-    const uint8_t* bytes;
-    uint32_t len;
-    const char* name;
-  };
-  const Site sites[] = {
-      {0x4aa390, kFxStopEntry, sizeof(kFxStopEntry), "FxSystem_c::Stop 0x4AA390"},
-      {0x4aa2f0, kFxPlayEntry, sizeof(kFxPlayEntry), "FxSystem_c::Play 0x4AA2F0"},
-  };
-  bool anyDiff = false;
-  for (const Site& s : sites) {
-    if (!asi::VerifyBytes(asi::Runtime(s.va), s.bytes, s.len)) {
-      anyDiff = true;
-      log.Line("[perfect-map] fx2dfx: site DIFFERS (adjuster/PF owns it):");
-      log.Line(s.name);
-    }
-  }
-  if (anyDiff) {
-    log.Line("[perfect-map] fx2dfx: DEFER (patching nothing) — a hook already owns the fx zone");
+  if (!asi::VerifySitesOrDefer(log, plugin.tag, plugin.tables, kFx2dfxSites,
+                               sizeof(kFx2dfxSites) / sizeof(kFx2dfxSites[0]))) {
+    log.Tagged(plugin.tag, "fx2dfx: DEFER (patching nothing) — a hook already owns the fx zone");
     return;
   }
-  const bool a = detail::InstallNullBpGuard(asi::Runtime(0x4aa390), asi::Runtime(0x4aa396), kFxStopEntry, sizeof(kFxStopEntry));
-  const bool b = detail::InstallNullBpGuard(asi::Runtime(0x4aa2f0), asi::Runtime(0x4aa2f8), kFxPlayEntry, sizeof(kFxPlayEntry));
-  log.Line(a && b ? "[perfect-map] fx2dfx APPLIED: FxSystem_c::Stop/Play null-blueprint guarded (2dfx UAF fixed)"
-                  : "[perfect-map] fx2dfx: patch write FAILED (see VirtualProtect)");
+  const asi::ByteAnchor* stop = asi::FindSite(plugin.tables, "FxSystem_c.Stop");
+  const asi::ByteAnchor* play = asi::FindSite(plugin.tables, "FxSystem_c.Play");
+  const bool a = detail::InstallNullBpGuard(asi::Runtime(0x4aa390), asi::Runtime(0x4aa396), stop->bytes, stop->length);
+  const bool b = detail::InstallNullBpGuard(asi::Runtime(0x4aa2f0), asi::Runtime(0x4aa2f8), play->bytes, play->length);
+  log.Tagged(plugin.tag, a && b
+                             ? "fx2dfx APPLIED: FxSystem_c::Stop/Play null-blueprint guarded (2dfx UAF fixed)"
+                             : "fx2dfx: patch write FAILED (see VirtualProtect)");
 }
 
 }  // namespace pm::patches

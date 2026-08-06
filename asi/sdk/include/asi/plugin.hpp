@@ -13,10 +13,12 @@
 namespace asi {
 
 class Log;
+struct Plugin;
 
 // Applies the plugin's enabled fixes. Called only in an APPLY build, after the exe gate passed and the
-// adjuster mask is known; a fix that an adjuster already owns is the plugin's to defer.
-using ApplyFn = void (*)(Log& log, unsigned adjusterMask);
+// adjuster mask is known; a fix that an adjuster already owns is the plugin's to defer. The plugin is handed
+// back so a patch can verify its named sites against its own generated tables (see verify.hpp).
+using ApplyFn = void (*)(Log& log, const Plugin& plugin, unsigned adjusterMask);
 
 struct Plugin {
   // Log filename, written next to the host exe (e.g. "perfect-map-asi.log").

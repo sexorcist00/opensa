@@ -7,6 +7,7 @@
 
 #include "config.hpp"
 #include "generated/patches.hpp"
+#include "identity.hpp"
 
 #if PM_APPLY
 #include "apply.hpp"
@@ -20,8 +21,8 @@ inline constexpr asi::GeneratedTables kTables = {
 };
 
 inline constexpr asi::Plugin kPlugin = {
-    "perfect-map-asi.log",
-    "[perfect-map] ",
+    kLogFile,
+    kTag,
     kTables,
 #if PM_APPLY
     &ApplyPatches,

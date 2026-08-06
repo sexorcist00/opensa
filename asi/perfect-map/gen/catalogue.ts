@@ -50,6 +50,24 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
         name: 'RemoveIpl.lastBuilding.loop',
         note: 'the loop BACK-EDGE re-read of lastBuilding (every iteration) → detour: edx = gSnapLast',
       },
+      {
+        address: 0x404b54,
+        bytes: [0xa1, 0x9c, 0x44, 0xb7, 0x00],
+        name: 'RemoveIpl.cont.404B54',
+        note: 'mov eax,[0xB7449C] — the firstBuilding detour jumps back HERE; verified so a future adjuster hooking the continuation makes us defer instead of corrupt',
+      },
+      {
+        address: 0x404b63,
+        bytes: [0x89, 0x4c, 0x24, 0x14],
+        name: 'RemoveIpl.cont.404B63',
+        note: 'mov [esp+0x14],ecx — the lastBuilding detour continuation',
+      },
+      {
+        address: 0x404bad,
+        bytes: [0x83, 0xc5, 0x38],
+        name: 'RemoveIpl.cont.404BAD',
+        note: 'add ebp,0x38 — the loop back-edge detour continuation',
+      },
     ],
     strategy: 'hook',
     summary:

@@ -11,10 +11,14 @@
 #include <cstdint>
 
 #include "../config.hpp"
+#include "../identity.hpp"
 #include <asi/fingerprint.hpp>  // asi::Runtime(), asi::HostBase()
 #include <asi/hook.hpp>
+#include <asi/append-log.hpp>
 #include <asi/log.hpp>
 #include <asi/mem.hpp>
+#include <asi/plugin.hpp>
+#include <asi/verify.hpp>
 
 namespace pm::patches {
 
@@ -22,46 +26,10 @@ namespace pm::patches {
 inline int gDbgInc = 0;
 inline int gDbgRmv = 0;
 
-// Append signed-decimal `label a b c` to perfect-map-asi.log (the runtime hooks run after OnAttach closed its Log).
-inline char* DbgItoa(int32_t v, char* out) {
-  uint32_t u = v < 0 ? (*out++ = '-', 0u - static_cast<uint32_t>(v)) : static_cast<uint32_t>(v);
-  char tmp[12];
-  int n = 0;
-  do {
-    tmp[n++] = static_cast<char>('0' + u % 10);
-    u /= 10;
-  } while (u);
-  while (n) {
-    *out++ = tmp[--n];
-  }
-  return out;
-}
-
+// The runtime hooks fire long after OnAttach closed its Log, so they trace through the SDK's reopen-append
+// logger. Diagnostic builds only (PM_INT16_LOG), never the hot path.
 inline void DbgAppend(const char* label, int32_t a, int32_t b, int32_t c) {
-  char path[MAX_PATH];
-  asi::HostDir(path, sizeof(path));
-  lstrcatA(path, "perfect-map-asi.log");
-  HANDLE f = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
-                         FILE_ATTRIBUTE_NORMAL, nullptr);
-  if (f == INVALID_HANDLE_VALUE) {
-    return;
-  }
-  char buf[160];
-  char* p = buf;
-  for (const char* s = label; *s; ++s) {
-    *p++ = *s;
-  }
-  *p++ = ' ';
-  p = DbgItoa(a, p);
-  *p++ = ' ';
-  p = DbgItoa(b, p);
-  *p++ = ' ';
-  p = DbgItoa(c, p);
-  *p++ = '\r';
-  *p++ = '\n';
-  DWORD w = 0;
-  WriteFile(f, buf, static_cast<DWORD>(p - buf), &w, nullptr);
-  CloseHandle(f);
+  asi::AppendLabelled(kLogFile, label, a, b, c);
 }
 #endif
 
@@ -231,63 +199,42 @@ inline bool InstallLastBuildingLoopDetour() {
 // instruction and jump to a fixed continuation), so they work whether the read site is pristine (OLA/vanilla) or
 // already jmp-hooked by FLA — we simply overlay FLA's incomplete int16 patch with our complete one. We DO verify
 // the detour CONTINUATION targets, so a future adjuster hooking THOSE makes us defer instead of corrupt.
-inline constexpr uint8_t kIncludeEntry[] = {0xe9, 0x9b, 0xea, 0x15, 0x01};    // @0x404C90 IncludeEntity entry (jmp)
-inline constexpr uint8_t kRemoveIplEntry[] = {0xa1, 0xb0, 0x3f, 0x8e, 0x00};  // @0x404B20 RemoveIpl entry
-inline constexpr uint8_t kCont404B54[] = {0xa1, 0x9c, 0x44, 0xb7, 0x00};      // @0x404B54 mov eax,[0xB7449C]
-inline constexpr uint8_t kCont404B63[] = {0x89, 0x4c, 0x24, 0x14};            // @0x404B63 mov [esp+0x14],ecx
-inline constexpr uint8_t kCont404BAD[] = {0x83, 0xc5, 0x38};                  // @0x404BAD add ebp,0x38
+//
+// The sites are named, never re-declared: their bytes come from the catalogue through the generated table.
+inline constexpr const char* kInt16Sites[] = {
+    "IncludeEntity.entry", "RemoveIpl.entry", "RemoveIpl.cont.404B54", "RemoveIpl.cont.404B63",
+    "RemoveIpl.cont.404BAD",
+};
 
-inline void ApplyInt16(asi::Log& log) {
+inline void ApplyInt16(asi::Log& log, const asi::Plugin& plugin) {
   if (asi::HostBase() != 0x400000) {
-    log.Line("[perfect-map] int16: unexpected image base — DEFER");
+    log.Tagged(plugin.tag, "int16: unexpected image base — DEFER");
     return;
   }
   for (int i = 0; i < kMaxIpl; ++i) {
     gFirstBuilding[i] = 0x7FFFFFFF;
     gLastBuilding[i] = static_cast<int32_t>(0x80000000);
   }
-  // Verify every byte we hook or relocate (framework rule) before touching anything. Log the FIRST site that
-  // differs by name + address so we can see which one an adjuster owns (FLA patches the RemoveIpl reads).
-  struct Site {
-    uint32_t va;
-    const uint8_t* bytes;
-    uint32_t len;
-    const char* name;
-  };
-  const Site sites[] = {
-      {0x404c90, kIncludeEntry, sizeof(kIncludeEntry), "IncludeEntity.entry 0x404C90"},
-      {0x404b20, kRemoveIplEntry, sizeof(kRemoveIplEntry), "RemoveIpl.entry 0x404B20"},
-      {0x404b54, kCont404B54, sizeof(kCont404B54), "RemoveIpl.cont 0x404B54"},
-      {0x404b63, kCont404B63, sizeof(kCont404B63), "RemoveIpl.cont 0x404B63"},
-      {0x404bad, kCont404BAD, sizeof(kCont404BAD), "RemoveIpl.cont 0x404BAD"},
-  };
-  bool anyDiff = false;
-  for (const Site& s : sites) {
-    const uintptr_t a = asi::Runtime(s.va);
-    if (!asi::VerifyBytes(a, s.bytes, s.len)) {
-      anyDiff = true;
-      log.Line("[perfect-map] int16: site DIFFERS (adjuster owns it):");
-      log.Line(s.name);
-      if (asi::Readable(a, 8)) {  // dump what the adjuster actually wrote (to plan coexistence)
-        log.KeyHex("  found[0..3] ", *reinterpret_cast<const uint32_t*>(a));
-        log.KeyHex("  found[4..7] ", *reinterpret_cast<const uint32_t*>(a + 4));
-      }
-    }
-  }
-  if (anyDiff) {
-    log.Line("[perfect-map] int16: DEFER (patching nothing) — differing sites dumped above");
+  // Verify every byte we hook or relocate (framework rule) before touching anything.
+  if (!asi::VerifySitesOrDefer(log, plugin.tag, plugin.tables, kInt16Sites,
+                               sizeof(kInt16Sites) / sizeof(kInt16Sites[0]))) {
+    log.Tagged(plugin.tag, "int16: DEFER (patching nothing)");
     return;
   }
+  // HookObserve1Cont relocates RemoveIpl's first instruction, so it needs those bytes — from the table, not a
+  // second copy of them.
+  const asi::ByteAnchor* removeIplEntry = asi::FindSite(plugin.tables, "RemoveIpl.entry");
   // Order matters: the snapshot hook (RemoveIpl entry) sets gSnap for the bound-read detours a few insns later.
-  const bool s = asi::HookObserve1Cont(asi::Runtime(0x404b20), asi::Runtime(0x404b25), kRemoveIplEntry, sizeof(kRemoveIplEntry),
-                                  reinterpret_cast<void*>(&PmRemoveIplSnapshot));
+  const bool s = asi::HookObserve1Cont(asi::Runtime(0x404b20), asi::Runtime(0x404b25), removeIplEntry->bytes,
+                                  removeIplEntry->length, reinterpret_cast<void*>(&PmRemoveIplSnapshot));
   const bool a = asi::HookObserve2(asi::Runtime(0x404c90), asi::Runtime(0x1563730), reinterpret_cast<void*>(&PmIncludeObserver));
   const bool b = detail::InstallFirstBuildingDetour();
   const bool c = detail::InstallLastBuildingDetour();
   const bool e = detail::InstallLastBuildingLoopDetour();  // the loop back-edge re-read — the completeness fix
-  log.Line(s && a && b && c && e
-               ? "[perfect-map] int16 APPLIED (buildings): IncludeEntity observed + RemoveIpl snapshot + bounds int32"
-               : "[perfect-map] int16: patch write FAILED (see VirtualProtect)");
+  log.Tagged(plugin.tag,
+             s && a && b && c && e
+                 ? "int16 APPLIED (buildings): IncludeEntity observed + RemoveIpl snapshot + bounds int32"
+                 : "int16: patch write FAILED (see VirtualProtect)");
 }
 
 }  // namespace pm::patches
