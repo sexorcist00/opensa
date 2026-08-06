@@ -20,7 +20,9 @@ native-address atlas. Plan chain: [`docs/plans/097-cleo-basic/`](../plans/097-cl
 
 ## Field knobs
 
-`?cleo=1` (enable for a session) · `?spawncar=model[,x,y,z[,heading]]` · `?autoseat=1` — see
+CLEO is **ON by default** (decided 2026-08-06 — the A/B/A priced it: CPU frame parity, GPU
++0.45 ms mean where the content is visible). `?cleo=0` opts a session out, `?cleo=1`
+force-enables · `?spawncar=model[,x,y,z[,heading]]` · `?autoseat=1` — see
 `docs/commands.md`. Scripts are discovered from `cleo/*.cs` in the VFS (contract:
 [`docs/contracts/mods.md`](../contracts/mods.md)). In the field, **F2 → CLEO** is the support
 surface: runner/trace toggles, per-thread state and cost, unimplemented-opcode + atlas-miss
@@ -28,5 +30,5 @@ coverage with tiers, the per-thread trace, and a step-one-instruction affordance
 
 ## Open
 
-`Config.cleo.enabled` default-ON (06 decision 6) — the user's call; both 2026-08-05 wheel reports
-began as "cleo was just off".
+_(none — the `Config.cleo.enabled` default-ON decision closed 2026-08-06: ON; verdict recorded in
+the 06 plan, decision 6.)_

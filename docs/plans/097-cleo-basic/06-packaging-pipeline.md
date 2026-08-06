@@ -43,6 +43,10 @@ with all 7 mods in `mods-src` runs everything from the built dir AND from the fe
 6. **Config finalised**: `Config.cleo.enabled` stays default-OFF; the per-game switch (which games
    ship scripts) is simply whether the build's `cleo/` dir has content. The F2 row (plan 07) is the
    runtime toggle. The default flips to ON only at chain close-out with the field verdict recorded.
+   _(VERDICT 2026-08-06, user's call at chain close: **default ON**, priced by the frame A/B/A —
+   CPU frame parity across three sweeps, GPU pass +0.45 ms mean where the mod content is visible
+   (`docs/benchmarks/opensa-engine/2026-08-06-ingame-cleo-ab.json`); both 08-05 wheel field reports
+   had begun as "cleo was just off". `?cleo=0` opts a session out, `?cleo=1` still force-enables.)_
 7. **Pack sanity**: fetch-pack slices/pruning untouched (`.cs` are tiny); the standing pack checks
    apply (never re-pack a pack output; sanity-check cell count/size against the known baseline).
 

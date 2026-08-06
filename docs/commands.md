@@ -157,10 +157,11 @@ npx tsx scripts/debug/touch-controls-check.ts \
 # Tyre smoke dials (089/02) — ?smokeStart=<m/s> ?smokeFull=<m/s> ?smokeRate=<n/wheel/s>
 #   equivalent-slide thresholds + spawn rate (defaults 4 / 12 / 6); the fit: docs/hacks/tyre-smoke-intensity-fit.md
 # Air control (081/06 §1) — ?airCtl=<x> scales the in-air pitch/roll/yaw authority; 0 = off (the jump A/B)
-# CLEO (097) — ?cleo=1 runs the cleo/*.cs scripts for the session (census line `[cleo] N script(s)`;
-#   atlas misses print as `[cleo] atlas miss:` lines) · ?osmspike=<model> renders one map-object .osm
-#   beside the player (the 04 phase-0 spike hook) · F2 → CLEO (097/07): runner/trace toggles, thread
-#   list with per-tick cost, unimplemented/atlas coverage with tiers, per-thread trace, step-one
+# CLEO (097) — ON by default since 2026-08-06; ?cleo=0 opts a session out, ?cleo=1 force-enables
+#   (census line `[cleo] N script(s)`; atlas misses print as `[cleo] atlas miss:` lines) ·
+#   ?osmspike=<model> renders one map-object .osm beside the player (the 04 phase-0 spike hook) ·
+#   F2 → CLEO (097/07): runner/trace toggles, thread list with per-tick cost, unimplemented/atlas
+#   coverage with tiers, per-thread trace, step-one
 # Vehicle field checks (097/05) — ?spawncar=model[,x,y,z[,heading]] spawns one car (retries until the
 #   ground streams in; default spot 8 m north of spawn; heading is RADIANS — 0 faces north, the boot
 #   camera looks SOUTH, so put a car you want in frame at y − 10) · ?autoseat=1 seats the player once

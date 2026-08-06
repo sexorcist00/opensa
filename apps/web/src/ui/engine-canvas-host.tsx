@@ -345,6 +345,13 @@ export function EngineCanvasHost({
   );
 }
 
+/** `?cleo=0|1` — session override over the ON-by-default runner (06 decision 6, closed 2026-08-06). */
+function applyCleoOverride(config: ReturnType<typeof createGameRuntimeConfig>, params: URLSearchParams): void {
+  if (params.has('cleo')) {
+    config.cleo.enabled = params.get('cleo') !== '0';
+  }
+}
+
 /**
  * Sky A/B overrides (074/06 row 4 sky v2): `?sky=preetham` = the legacy dome vs the Hosek-Wilkie default;
  * `?clouds=N` = cloud-layer opacity (0 = the naked dome, kills cirrus+cumulus too).
@@ -993,9 +1000,9 @@ async function boot(
   let autoSeatPending = params.get('autoseat') === '1';
 
   // CLEO scripts (plan 097/04): discovered from `cleo/*.cs` in the VFS, run on the fixed step below.
-  // `?cleo=1` enables for the session (config default is off — zero overhead disabled). Explicit
-  // wiring, not SystemRegistry (that registry is dead — recon fact).
-  config.cleo.enabled = config.cleo.enabled || params.get('cleo') === '1';
+  // ON by default since 2026-08-06 (the A/B/A priced it); `?cleo=0` opts a session out, `?cleo=1`
+  // still force-enables. Explicit wiring, not SystemRegistry (that registry is dead — recon fact).
+  applyCleoOverride(config, params);
   const cleo = setupEngineCleo({
     adapter,
     cameraGta: (): [number, number, number] => [cameraEye[0], -cameraEye[2], cameraEye[1]],

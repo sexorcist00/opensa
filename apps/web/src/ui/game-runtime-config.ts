@@ -100,9 +100,11 @@ export function createGameRuntimeConfig(): Config {
       yawLagTime: 0.25,
       zoomLambda: 8,
     },
-    // CLEO scripts (plan 097/04): off by default — `?cleo=1` flips it for a session; live-read.
+    // CLEO scripts: ON by default (user's call 2026-08-06, priced by the A/B/A — ~0 CPU frame,
+    // ~0.45 ms GPU where the mod content is visible; both wheel field reports began as "cleo was
+    // just off"). `?cleo=0` opts a session out; live-read, F2 CLEO can pause it.
     cleo: {
-      enabled: false,
+      enabled: true,
       maxScripts: 32,
       trace: false,
     },
