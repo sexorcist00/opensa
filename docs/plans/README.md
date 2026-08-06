@@ -291,6 +291,9 @@ row but its chain was superseded by 097). Newest first:
 - **rw-codec** — shared pure RW chunk/DFF/DXT/geometry-struct codec, extracted from map-optimizer (plan 057,
   step 2). Top-level `rw-codec/` now; moves under `tools/` in the migration. No plans doc.
 - **timecyc-builder** — timecyc precompute. No plans doc yet.
+- **cleo/scripts** — authored CLEO script sources on the SDK (runtime content, not a build tool — the
+  `asi/perfect-map` root-category pattern). [`cleo/scripts/docs/plans/`](../../cleo/scripts/docs/plans/readme.md)
+  (`001` rhino tracks · `002` no_lights — the corpus-replacement chain, PLANNED 2026-08-06).
 
 ## Other docs
 

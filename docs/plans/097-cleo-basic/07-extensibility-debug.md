@@ -172,7 +172,9 @@ collector with KEYS/TAGS, which verified every fix above without a human at the 
    **[plan 099](../099-script-object-uv-anim/readme.md)** (2026-08-05).
 7. **Rhino tracks do not rotate** (road wheels behind them do) — the KNOWN class-B rig block (05 ledger:
    the vehicle-optimizer drops empty parent frames + parent links; `docs/hacks/cleo-frame-sibling-order.md`).
-   User's call 2026-08-05: SKIP — 097/08 authors our own track script instead.
+   User's call 2026-08-05: SKIP — 097/08 authors our own track script instead. That intent is now
+   the [`cleo/scripts/docs/plans/`](../../../cleo/scripts/docs/plans/readme.md) chain (001 rhino
+   tracks — by-name frame addressing, bypassing the sibling hack; commissioned 2026-08-06).
 
 ## Verification
 

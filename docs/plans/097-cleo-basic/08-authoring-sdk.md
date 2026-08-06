@@ -21,6 +21,10 @@ own vendored opcode DB gives all three and emits the very format mod authors alr
 (field-proven at 120 fps, in budget); `no_lights.cs` is SKIPPED entirely — not supported, not
 rewritten (the native light-damage alternative is recorded in
 `docs/postmortem/097-hotring-hotknife-intake.md`).
+**SUPERSEDED 2026-08-06** — the user commissioned authored replacements for both scripts:
+[`cleo/scripts/docs/plans/`](../../../cleo/scripts/docs/plans/readme.md). Note this paragraph had
+also contradicted 07's ledger (defect row 7: "097/08 authors our own track script instead") — the
+new chain restores that intent.
 
 ## The goals check (docs/project-goals.md)
 

@@ -5,9 +5,11 @@ one source, two runtimes (real CLEO on SA 1.0 US, and our VM). The standing desi
 [`../architecture.md`](../architecture.md); the root-level plan with the goals check and scope cuts
 is [`docs/plans/097-cleo-basic/08-authoring-sdk.md`](../../../../docs/plans/097-cleo-basic/08-authoring-sdk.md).
 
-Scope cuts inherited from the root plan (the user's call, 2026-08-05): NO corpus rewrites — rhino
-tracks stays the author's script, `no_lights.cs` stays skipped; ped-task opcodes and the city-life
-scripts themselves arrive with the class-C facet, not here.
+Scope cuts inherited from the root plan (the user's call, 2026-08-05): ped-task opcodes and the
+city-life scripts arrive with the class-C facet, not here. The original NO-corpus-rewrites cut
+(rhino tracks stays the author's script, `no_lights.cs` stays skipped) was **SUPERSEDED
+2026-08-06** — authored replacements for both are the
+[`cleo/scripts/docs/plans/`](../../../scripts/docs/plans/readme.md) chain.
 
 ## The chain
 
