@@ -16,9 +16,20 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`098`, one folder each (066, 073, 074, 078–082, 096, 097, 098 carry multi-part sub-plans; 083 kept its row
+`001`–`099`, one folder each (066, 073, 074, 078–082, 096, 097, 098 carry multi-part sub-plans; 083 kept its row
 but its folder moved to `roadmap/0.5.0/`). Newest first:
 
+- **[099 — PCAD Dispatch](./099-pcad-dispatch/readme.md)** — **THE FINAL PLAN**, opened 2026-08-06. The
+  product every dispatch doc here now serves: a **web dispatch application for a SA-MP server**, paired with a
+  client-side CAD plugin (PCAD). Three pieces — the plugin, a backend, and the web application — of which this
+  repository owns exactly one thing: **the 3D map component**. The field survey behind it: every dispatch map
+  in this market ([SonoranCAD](https://sonorancad.com/fivem),
+  [SnailyCAD](https://github.com/SnailyCAD/snaily-cadv4)) is a flat tile picture with dots on it, and both are
+  FiveM — nobody has the world, and nobody serves SA-MP. Carries the borrowings from the open-source map
+  engines (screen-space-error LOD, time as an axis, label collision, layer models, the SanMap projection), the
+  three seams and who owns them (self-reported positions are **claims**, not facts), five delivery phases
+  starting with the engine, and the honest statement that the four named budgets may not hold at once.
+  [098](./098-dispatch-console/readme.md) is subordinate to it.
 - **[098 — The dispatch console](./098-dispatch-console/readme.md)** — IN PROGRESS, opened 2026-08-06. The
   engine's second consumer, declared: a CAD operator surface over the streamed world, trimmed to what it
   actually draws, on a phone. `apps/dispatch` arrived in one commit with one write-up and no plan, no roadmap

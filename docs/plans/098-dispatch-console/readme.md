@@ -1,5 +1,10 @@
 # 098 — The dispatch console: a CAD map, trimmed to what it draws, on a phone
 
+> **This chain is subordinate to [099 — PCAD Dispatch](../099-pcad-dispatch/readme.md)**, the final plan.
+> That document is the product — a web dispatch application for a SA-MP server, paired with a client-side CAD
+> plugin — and OpenSA's role in it is exactly one component: **the 3D map**. Everything below is the engine
+> and map work that component needs. Read 099 first for why any of it is being done.
+
 **The engine's second consumer, declared** (priority set 2026-08-06). `apps/dispatch` is a computer-aided-
 dispatch operator surface over the streamed world — a top-down 3D map, live units, a call queue, and
 click-to-inspect that answers with the model and TXD names the pak was built from. It arrived in a single

@@ -159,6 +159,10 @@ mobile work and the "trim the engine to what the map draws" work, with the world
 cars and peds are drawn, vegetation sways, the day turns, and one engine serves PC and mobile.
 Full chain: [docs/plans/098-dispatch-console/](docs/plans/098-dispatch-console/readme.md).
 
+What that console is FOR is the final plan: **a web dispatch application for a SA-MP server**, paired with a
+client-side CAD plugin (PCAD), in which OpenSA is one component — the 3D map. Product, field survey, seams,
+phases and risks: [docs/plans/099-pcad-dispatch/](docs/plans/099-pcad-dispatch/readme.md).
+
 - [ ] Run the real map on a phone
   - [✅] Boot the engine on a mobile GPU (BC taken when offered, never demanded)
   - [✅] Refuse a world the device cannot display BEFORE it streams, naming the world
