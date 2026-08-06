@@ -82,5 +82,14 @@ never the app. The dependency picture is the tools cluster of
 
 ## asi/
 
-- **perfect-map** — the in-game (real SA) limit-adjuster ASI lifting the int16 building-pool ceiling; C++
-  sidecar, not part of the web build.
+The root category for `.asi` plugins that patch the real SA exe: an SDK plus its consumers, mirroring
+`cleo/`'s sdk-plus-scripts split. C++ sidecars, not part of the web build.
+
+- **sdk** (`@opensa/asi-sdk`) — the common base every plugin builds on: the `asi::` C++ framework (exe
+  fingerprint gate read from disk, byte-verify, adjuster coexistence, hook shapes, logging, the
+  reopen-append runtime logger, `VerifySitesOrDefer`), the catalogue codegen library (`gen/`, emitting a
+  plugin's generated header) and the MinGW-w64 build rules (`mk/asi-plugin.mk`). A plugin supplies only its
+  catalogue, its payloads, its config knobs and a thin Makefile.
+  [`asi/sdk/docs/`](../../asi/sdk/docs/architecture.md) — chain 001–005.
+- **perfect-map** — the first consumer: the limit-adjuster ASI lifting the int16 building-pool ceiling and
+  guarding the 2dfx fx-system use-after-free.

@@ -29,7 +29,7 @@ record lives in the architecture doc's Decided section and in the plans below.
 | 2   | [002 — TS codegen extraction](002-ts-codegen.md)            | catalogue interfaces + `renderHeader`/`validate` + `SA_FINGERPRINT` in the SDK; provenance convention; header byte-identical | done    |
 | 3   | [003 — C++ framework extraction](003-cpp-framework.md)      | `asi::` framework headers + Makefile fragment; the three inversions (plugin surface, injected fingerprint, config split)    | done    |
 | 4   | [004 — Shared runtime APIs](004-shared-runtime-apis.md)     | the reopen-append logger + `VerifySitesOrDefer`; continuation anchors flow through the catalogue; payload duplicates die    | done    |
-| 5   | [005 — Conformance & docs sweep](005-conformance-docs.md)   | the migration proof closed (Wine dry-run + int16 oracle verdicts recorded honestly), docs/ledger sweep, chain closed        | planned |
+| 5   | [005 — Conformance & docs sweep](005-conformance-docs.md)   | the migration proof closed (Wine dry-run + int16 oracle verdicts recorded honestly), docs/ledger sweep, chain closed        | done*   |
 
 Dependencies are linear 001 → 005. 003 is the load-bearing step (the framework bytes); 004 is the
 only step that intentionally changes payload code, so its referee is verdict-level. The chain
@@ -44,3 +44,10 @@ demonstrably the same plugin (each plan's ledger names byte-identical or its hon
 hypothetical second plugin needs to write ONLY those four things — the duplication list in the
 city-life roadmap plan is dead. Full repo suite, tsc, `eslint .` green; the Wine/field verdicts
 recorded, with any user-manual step marked as such until taken.
+
+**Status 2026-08-06: CODE-COMPLETE, not field-confirmed.** Everything provable on macOS holds —
+the migration is done (the table above), the artifact builds in all five modes with an unchanged
+KERNEL32-only import table, the suite is 431 files / 3 737 tests green. `*` on 005 marks what is
+outstanding and only the field can answer: the **Wine dry-run** on the real install and the
+**int16 repro oracle in-game**. Until those are taken the chain is not closed, and 005's ledger
+says the same thing in the same words.
