@@ -10,6 +10,11 @@ hitch artict1 to a linerun, drive a lap, reverse without a jackknife explosion, 
   today — as driverless "cars": no seat dummy → fallback seat offset, fallback sedan handling if the id
   is missing (`gta-sa-world.adapter.ts:672-716`), fully enterable in principle. Nothing marks them
   non-drivable; 01's threaded `type` is the hook for that.
+- **Field defect (2026-08-06, screenshots): the long semis do not stand level.** artict1 / artict2 /
+  artict3 / petrotr spawn tipping nose-down over their rear bogie — the wheel rig only finds the rear
+  axles, so the sprung chassis pivots until the kingpin end (or the landing-gear tip) digs into the
+  road. Two consequences: the parked stance is visibly wrong, and the kingpin sits at ground height, so
+  a cab cannot back under it — the attach flow depends on this being fixed first.
 - **Zero Rapier joints exist anywhere** (`createImpulseJoint`/`JointData`/revolute/spherical: no hits).
   `PhysicsWorld` has no joint API. This plan introduces the first one.
 - The closest articulation analogue is the door hinge subtree (`VehicleDoor.parts`, whole-subtree
@@ -28,6 +33,12 @@ hitch artict1 to a linerun, drive a lap, reverse without a jackknife explosion, 
 - **`PhysicsWorld` joint API** (minimal, explicit): create/destroy a limited spherical or revolute joint
   between two owned bodies, queried state (current articulation angle), impulse-threshold breakage
   optional and OFF by default. No general joint zoo — exactly what hitching needs.
+- **Parked stance: an unhitched trailer rests level on its landing gear.** The models carry the
+  support-leg geometry (visible in the field screenshots), so the stance DERIVES from the asset — the
+  support contact point comes from the trailer's own geometry/collision, sag from its handling row,
+  never a per-model constant. Recover how SA holds a detached trailer level (`CTrailer`'s landing-gear
+  handling in gta-reversed) in the same recon step as the hitch convention — they are one convention:
+  the kingpin height the stance establishes is the height the attach flow aligns against.
 - **Hitch identification derives from the asset.** SA marks tow points with model data (`misc_a` towbar
   on cabs, trailer kingpin position) — recover the exact convention from gta-reversed
   (`CTrailer`, `CVehicle::GetTowBarPos`/`GetTowHitchPos`) in a short recon step BEFORE the framework is
@@ -43,8 +54,12 @@ hitch artict1 to a linerun, drive a lap, reverse without a jackknife explosion, 
 
 ## Steps
 
-- [ ] Recon step: recover SA's hitch-point + pairing convention from gta-reversed; write it into this
-      file's ledger and `docs/contracts/vehicles.md` BEFORE coding the framework.
+- [ ] Recon step: recover SA's hitch-point + pairing convention AND the detached-trailer landing-gear
+      handling from gta-reversed; write both into this file's ledger and `docs/contracts/vehicles.md`
+      BEFORE coding the framework.
+- [ ] Parked stance: unhitched artict1/artict2/artict3/petrotr stand level on the landing gear
+      (asset-derived support point); field-checked against a line-up of all four before the hitch work
+      — attach alignment depends on the kingpin height this establishes.
 - [ ] `PhysicsWorld` joint API + unit coverage against the fake-GPU boot path (negative first: joint to
       a dead body, joint before step).
 - [ ] Hitch framework: identification (asset + token), attach/detach lifecycle, joint limits from the
