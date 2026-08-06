@@ -118,9 +118,7 @@ let page = null;
     durationMs: Date.now() - startedAt,
     hud,
     url: APP_URL,
-    warnings: [...seen.entries()]
-      .map(([text, entry]) => ({ text, ...entry }))
-      .sort((a, b) => b.count - a.count),
+    warnings: [...seen.entries()].map(([text, entry]) => ({ text, ...entry })).sort((a, b) => b.count - a.count),
   };
   writeFileSync(`${OUT}.json`, JSON.stringify(report, null, 2));
   console.log(`report ${OUT}.json · screenshot ${OUT}.png`);
