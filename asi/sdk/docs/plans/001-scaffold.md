@@ -55,6 +55,10 @@ Full lint + typecheck + test run green with the empty project in the tree; `npm 
   mask-and-compare. Added `-Wl,--no-insert-timestamp` to perfect-map's `LDFLAGS` (zeroes the
   timestamps; behaviour-neutral) — identical sources now build byte-identical DLLs, and the
   chain's referee is a plain hash compare. The flag carries into the SDK's Makefile fragment.
+  **Corrected by 002:** this verdict was incomplete — the banner's `__DATE__ __TIME__` still made
+  builds second-granular, and 001's two probe builds had landed in the SAME second (an A/B with no
+  run-order control). The referee protocol gained a pinned `SOURCE_DATE_EPOCH`; 002's ledger
+  carries the superseding baseline hashes.
 - **Baseline (post-flag, the chain's referee input):**
   - `make APPLY=1`: 16 384 B, sha256 `9d81a4b9c976050cbc726118f0f5d1f711cf2c6000ee62bdbfb1a27f65670a75`
   - `make` (verify-only): 9 728 B, sha256 `17cc66f90e5bf91152ad49ad97ee34b119bc0a5a370d20f358cc3007028265fc`

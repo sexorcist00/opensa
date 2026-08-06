@@ -35,15 +35,15 @@ its own.
 
 ## Tasks
 
-- [ ] `asi/sdk/gen/` per decision 1, moved (not copied) from perfect-map; perfect-map's
+- [x] `asi/sdk/gen/` per decision 1, moved (not copied) from perfect-map; perfect-map's
       `gen/catalogue.ts` keeps `CATALOGUE` and imports the interfaces + `SA_FINGERPRINT`;
       its `gen/generate.ts` becomes the thin invoker (decision 2).
-- [ ] Provenance field + the four entries filled (decision 3);
+- [x] Provenance field + the four entries filled (decision 3);
       `asi/perfect-map/docs/patch-catalogue.md`'s provenance section points at the typed field as
       the machine home.
-- [ ] Test split (decision 5); suite green.
-- [ ] Referee: regenerate → `git diff --stat asi/perfect-map/src/generated` empty /
-      byte-compare the emitted header against 001's tree.
+- [x] Test split (decision 5); suite green.
+- [x] Referee: regenerate → byte-compare against 001's tree (upgraded to an artifact-level A/B —
+      see the ledger).
 
 ## Verification
 
@@ -52,4 +52,26 @@ its own.
 
 ## Measurements / notes
 
-*(ledger: header byte-compare result, test counts moved vs kept)*
+### Shipped (2026-08-06)
+
+- **The referee found the chain's real determinism blocker, then passed at artifact level.** The
+  regenerated header differed in exactly ONE comment line (the SDK renderer drops perfect-map's
+  "plan 004" reference from the section comment) — constants byte-identical. But the rebuilt
+  `.asi` hash-mismatched the 001 baseline, and the diff was 5 bytes of ASCII digits + the PE
+  checksum: `patch_table.hpp`'s banner embeds `__DATE__ __TIME__`. **001's "deterministic" verdict
+  had been a same-second fluke** (both probe builds landed at 15:33:25) — an A/B without a
+  run-order control. The chain's referee protocol is therefore: build with pinned
+  `SOURCE_DATE_EPOCH=315532800` (GCC substitutes it into `__DATE__`/`__TIME__`; shipping builds
+  keep live timestamps), proven stable across a 2 s gap.
+- **Artifact-level A/B (pinned epoch): PASSED byte-identical.** Pre-002 tree (stashed, old
+  self-contained generator, "plan 004" comment present) and post-002 tree (SDK renderer) both
+  build `perfect-map.asi` APPLY=1 → sha256
+  `a0a18659eb1c338337ab8dca98989eefffc247d7417312e25d7a403b25737188` (16 384 B); verify-only →
+  `8019f8133864cc210fbe174edc27711ec8488a994306a37aa3b0eb6a0a11e028` (9 728 B). These supersede
+  001's baseline hashes as the chain's referee input.
+- Import style settled (chain readme open question): perfect-map is a workspace member, so it
+  imports `@opensa/asi-sdk/*` by package name through the `exports` map — no tsconfig paths
+  needed (the `@opensa/cleo` precedent).
+- Tests: SDK 8 (6 negative + 2 positive, incl. the namespace-parameter case) + perfect-map 3
+  (fingerprint pin, real-catalogue render, provenance-line shape) = 11 green in `asi/`; tsc +
+  `eslint .` clean.
