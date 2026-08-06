@@ -9,6 +9,11 @@
 #   MODELS=0 npm run phone            # skip the model convert: fast, but dispatch-only (no physics)
 #   RECT=8,-8,11,-5 SPAWN=2495,-1687,20 npm run phone
 #
+# A PREBUILT app in `build/webapp` (or `WEBAPP=<dir>`) is used INSTEAD of the dev server, and then vite is
+# never started at all. That is not a convenience: vite's rolldown binding dies with SIGILL on some arm64
+# Android CPUs (loading the native binding kills the process before the wasm fallback is even consulted), so
+# on those devices a dev server cannot run and a built copy served as static files is the only way in.
+#
 # Every knob is an env var so the command itself never changes. Ctrl+C stops the servers this run started
 # (one it found already running is left alone); so does closing the Termux session, which sends HUP.
 set -uo pipefail
@@ -22,6 +27,7 @@ BAKE="${BAKE:-1}"
 MODELS="${MODELS:-1}"
 REBUILD="${REBUILD:-0}"
 APP_PORT="${APP_PORT:-5173}"
+WEBAPP="${WEBAPP:-build/webapp}"
 STATIC_PORT="${STATIC_PORT:-3001}"
 LOGS="build/.phone"
 STARTED=()
@@ -100,7 +106,11 @@ else
   node node_modules/tsx/dist/cli.mjs scripts/serve-static.ts >"$LOGS/static.log" 2>&1 &
   STARTED+=($!)
 fi
-if port_open "$APP_PORT"; then
+PREBUILT=0
+if [ -f "$WEBAPP/index.html" ]; then
+  PREBUILT=1
+  say "prebuilt app at $WEBAPP — serving it as static files (no dev server)"
+elif port_open "$APP_PORT"; then
   say "app already on :$APP_PORT"
 else
   say "starting the app on :$APP_PORT → $LOGS/app.log"
@@ -126,7 +136,9 @@ cleanup() {
 }
 trap cleanup HUP INT TERM EXIT
 
-for port in "$STATIC_PORT" "$APP_PORT"; do
+ports=("$STATIC_PORT")
+[ "$PREBUILT" = 0 ] && ports+=("$APP_PORT")
+for port in "${ports[@]}"; do
   if ! wait_port "$port"; then
     echo "port $port never opened — see $LOGS/*.log" >&2
     exit 1
@@ -137,22 +149,35 @@ done
 # is kept; the LAN address is plain http, where it is not (the shell says so under the preloader).
 PAK_URL="http://localhost:$STATIC_PORT/${OUT#./}"
 IP="$(lan_ip)"
+# One origin when the app is prebuilt (it is served by the same static server as the pak): no CORS, no second
+# port, and — the reason it matters on a phone — no vite.
+if [ "$PREBUILT" = 1 ]; then
+  APP_URL="http://localhost:$STATIC_PORT/${WEBAPP#./}/index.html"
+  MAP_URL="http://localhost:$STATIC_PORT/${WEBAPP#./}/dispatch.html"
+  LAN_APP="http://$IP:$STATIC_PORT/${WEBAPP#./}/index.html"
+  LAN_PAK="http://$IP:$STATIC_PORT/${OUT#./}"
+else
+  APP_URL="http://localhost:$APP_PORT/"
+  MAP_URL="http://localhost:$APP_PORT/dispatch.html"
+  LAN_APP="http://$IP:$APP_PORT/"
+  LAN_PAK="http://$IP:$STATIC_PORT/${OUT#./}"
+fi
 say "open on this phone"
 if [ "$MODELS" = 0 ]; then
   echo "  MODELS=0 → no vehicles/peds were converted, so only the map surface is usable (it runs no physics,"
   echo "  which means it does not exercise the collision bake at all):"
-  echo "  http://localhost:$APP_PORT/dispatch.html?src=$PAK_URL&at=${SPAWN%,*}"
+  echo "  $MAP_URL?src=$PAK_URL&at=${SPAWN%,*}"
 else
   echo "  the game (this is the one that streams collision):"
-  echo "  http://localhost:$APP_PORT/?loader=http-dir&src=$PAK_URL&spawn=$SPAWN"
+  echo "  $APP_URL?loader=http-dir&src=$PAK_URL&spawn=$SPAWN"
   echo
   echo "  the map surface, no physics:"
-  echo "  http://localhost:$APP_PORT/dispatch.html?src=$PAK_URL&at=${SPAWN%,*}"
+  echo "  $MAP_URL?src=$PAK_URL&at=${SPAWN%,*}"
 fi
 if [ -n "$IP" ]; then
   echo
   echo "  from another device on this network (plain http → no Cache Storage, the shell will say so):"
-  echo "  http://$IP:$APP_PORT/?loader=http-dir&src=http://$IP:$STATIC_PORT/${OUT#./}&spawn=$SPAWN"
+  echo "  $LAN_APP?loader=http-dir&src=$LAN_PAK&spawn=$SPAWN"
 fi
 say "running — Ctrl+C stops the servers this run started"
 echo "logs: tail -f $LOGS/app.log $LOGS/static.log"

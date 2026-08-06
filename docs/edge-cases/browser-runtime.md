@@ -114,3 +114,29 @@ is capable without being a shipping path.
 What it makes possible today: `?demo=1` and any `--rgba8` pak render in 3D on this phone. What it argues for
 next: ASTC is not a hypothetical target — this GPU has it, and an ASTC `.ostex` would cost roughly what BC
 costs instead of RGBA8's 4-8x.
+
+## The dev server does not run on every phone: rolldown dies with SIGILL (2026-08-06)
+
+Measured on the same Android 10 / arm64 device as the mobile row above, Termux, Node 24.18:
+
+| | |
+| --- | --- |
+| `process.platform` / `arch` | `android` / `arm64` — and npm installed the RIGHT binding, `@rolldown/binding-android-arm64` |
+| `node -e "require('rolldown')"` | **exit 132** — SIGILL, killed on the native binding's load |
+| `require('lightningcss')` / `require('esbuild')` | 0 — they are fine, so this is rolldown alone |
+| `vite --version` | works (it never loads rolldown) |
+| `vite` (dev, even in an empty folder with one `index.html`) | **Illegal instruction**, no output at all |
+| `NAPI_RS_FORCE_WASI=1` + `@rolldown/binding-wasm32-wasi` installed with `--force` | **still SIGILL** |
+
+The wasm escape hatch does not help, and the reason is the order inside the loader: it calls `requireNative()`
+FIRST and only consults `NAPI_RS_FORCE_WASI` with the result. On a CPU that lacks an instruction the binding
+was built with, that first call ends the process — the fallback is never reached. (Physically removing the
+native binding so the require throws is the only way to get there, untested here.)
+
+**Consequence: on such a device the app cannot be served by vite at all** — not `dev`, not `build`. What works
+is a PREBUILT app served as static files: `scripts/phone.sh` uses `build/webapp/index.html` when it exists and
+skips vite entirely, which also collapses the two origins into one (no CORS, one port). The converter and the
+static server are unaffected — they run on tsx/esbuild, which this CPU executes fine.
+
+**Caught:** by nothing, and it is loud rather than silent — `Illegal instruction` with an empty log. Worth
+recording because the symptom names no package: the message points at `node vite.js`, not at rolldown.

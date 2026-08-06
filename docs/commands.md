@@ -68,7 +68,9 @@ the collision A/B, `MODELS=0` skips the model convert (fast, but then only `disp
 no physics), `RECT=` / `SPAWN=` / `OUT=` / `GAME=` / `APP_PORT=` / `STATIC_PORT=` move the rest. It converts
 only when there is no pak (a phone convert is minutes to hours), prints what the pak actually carries — the
 collision GRID first — and reuses a server that is already up. Ctrl+C (or closing the Termux session) stops
-the servers it started. Full phone recipe: [development/mobile-pak.md](./development/mobile-pak.md).
+the servers it started. A prebuilt app in `build/webapp` (or `WEBAPP=<dir>`) is served as static files and
+vite is not started at all — which is the only way in on a device whose rolldown binding crashes
+([edge-cases/browser-runtime.md](./edge-cases/browser-runtime.md)). Full phone recipe: [development/mobile-pak.md](./development/mobile-pak.md).
 
 | Surface                  | URL                                                                                                                |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
