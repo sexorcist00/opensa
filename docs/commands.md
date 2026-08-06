@@ -70,7 +70,8 @@ only when there is no pak (a phone convert is minutes to hours), prints what the
 collision GRID first — and reuses a server that is already up. Ctrl+C (or closing the Termux session) stops
 the servers it started. A prebuilt app in `build/webapp` (or `WEBAPP=<dir>`) is served as static files and
 vite is not started at all — which is the only way in on a device whose rolldown binding crashes
-([edge-cases/browser-runtime.md](./edge-cases/browser-runtime.md)). Full phone recipe: [development/mobile-pak.md](./development/mobile-pak.md).
+([edge-cases/browser-runtime.md](./edge-cases/browser-runtime.md)). A ready archive is committed:
+`tar -xzf prebuilt/opensa-webapp.tar.gz -C build/webapp` ([prebuilt/](../prebuilt/README.md)). Full phone recipe: [development/mobile-pak.md](./development/mobile-pak.md).
 
 | Surface                  | URL                                                                                                                |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |

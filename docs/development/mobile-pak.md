@@ -79,9 +79,15 @@ It refuses to start if `game-src/original/data/gta.dat` is missing, and it never
 phone convert is minutes to hours. The rest of this page is the same recipe by hand, and the reasons behind
 each flag.
 
-**If the device cannot run vite**, put a PREBUILT app in `build/webapp/` (an `npm run build -- --base=./`
-output from any machine, unpacked there) and the script serves it as static files instead of starting a dev
-server — same command, one origin, no vite. That is not hypothetical: on an Android 10 / arm64 phone the
+**If the device cannot run vite**, unpack the committed archive and the script serves the app as static files
+instead of starting a dev server — same command, one origin, no vite:
+
+```bash
+mkdir -p build/webapp && tar -xzf prebuilt/opensa-webapp.tar.gz -C build/webapp
+```
+
+(`prebuilt/` also says how to refresh it — `npm run build -- --base=./`; the `--base` is what keeps the asset
+paths working from a subfolder.) That is not hypothetical: on an Android 10 / arm64 phone the
 rolldown binding dies with `Illegal instruction` before printing a line, and no wasm fallback is reachable
 ([edge-cases/browser-runtime.md](../edge-cases/browser-runtime.md)). Build with `--base=./` or the asset
 paths will be absolute and 404 from a subfolder.
