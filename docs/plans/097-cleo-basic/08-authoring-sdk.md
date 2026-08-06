@@ -7,6 +7,11 @@ runtimes: the same compiled script runs under **real CLEO on the canonical SA 1.
 **our VM** — which also makes every authored script a conformance test of the VM against real CLEO
 (the impersonation doctrine, exercised from the other side).
 
+**Execution chain:** [`cleo/sdk/docs/`](../../../cleo/sdk/docs/architecture.md) — the project-local
+architecture + plans 001–005 ([chain readme](../../../cleo/sdk/docs/plans/readme.md), the
+`asi/perfect-map` pattern). This file stays the root-level plan: the goals check, the scope cuts,
+and the chain's ledger.
+
 **Why now:** the user's call (2026-08-05). The corpus work proved the VM; the next consumers of
 scripting are OURS — city-life is the named future customer (ped ambience, spawn logic). Authoring
 in Sanny Builder means a Windows GUI tool, no types, no tests, no CI; authoring in TS against our

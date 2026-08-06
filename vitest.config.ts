@@ -60,6 +60,7 @@ export default defineConfig({
       'tools/perfect-map-builder/**/*.test.ts',
       'tools-debug/sa-int16-repro/**/*.test.ts',
       'asi/perfect-map/**/*.test.ts',
+      'cleo/**/*.test.ts',
     ],
   },
 });

@@ -234,6 +234,7 @@ const scriptsConfig = {
     'tools-debug/bench-harness/**/*.{js,mjs,cjs,ts}',
     'tools-debug/sa-int16-repro/**/*.{js,mjs,cjs,ts}',
     'asi/perfect-map/**/*.{js,mjs,cjs,ts}',
+    'cleo/**/*.{js,mjs,cjs,ts}',
   ],
   languageOptions: {
     globals: {

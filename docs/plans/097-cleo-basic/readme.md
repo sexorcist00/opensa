@@ -115,7 +115,7 @@ Doctrine:
 | 05 | [Native atlas](05-native-atlas.md) | Virtual address space + SA 1.0 atlas; class B alive; **field checkpoint 2: ladder, door, tracks**. |
 | 06 | [Packaging + pipeline](06-packaging-pipeline.md) | mod-installer/vehicle-installer carry CLEO files; contracts rows; VFS discovery; **field checkpoint 3: full build**. |
 | 07 | [Extensibility + debug surface](07-extensibility-debug.md) | F2 CLEO screen, tracer, coverage in CI, tier registry, add-an-opcode flow, docs + audit close-out. |
-| 08 | [CLEO authoring SDK](08-authoring-sdk.md) | Root `cleo/sdk` subproject (the `asi/` pattern): author OUR scripts in TS → standard `.cs`, dual-target SA + OpenSA; city-life's future home. |
+| 08 | [CLEO authoring SDK](08-authoring-sdk.md) | Root `cleo/sdk` subproject (the `asi/` pattern): author OUR scripts in TS → standard `.cs`, dual-target SA + OpenSA; city-life's future home. Project-local chain: [`cleo/sdk/docs/`](../../../cleo/sdk/docs/plans/readme.md) (planned 2026-08-06). |
 
 Order and rationale: [priority.md](priority.md).
 
