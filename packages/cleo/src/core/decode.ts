@@ -17,7 +17,8 @@ import { readOperand } from './operands';
 
 export const NEGATED_BIT = 0x8000;
 
-const TRAILER_MAGIC = '__SBFTR\0';
+/** Exported: the authoring SDK emits the same trailer this decoder detects. */
+export const TRAILER_MAGIC = '__SBFTR\0';
 const TRAILER_LENGTH = TRAILER_MAGIC.length + 4;
 
 export interface DecodedScript {

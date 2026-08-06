@@ -39,21 +39,20 @@ EXACTLY. That test — not our reading of any spec — is the referee for every 
 
 ## Tasks
 
-- [ ] `src/assemble/operands.ts` — the writer; property tests `readOperand(emit(x)) ≅ x` across the
-      full type-byte set (reusing `@opensa/cleo`'s reader as the oracle).
-- [ ] `src/assemble/emit.ts` — instruction emission (u16 opcode, negation bit, arity from the
-      generated table, variadic tails).
-- [ ] `src/assemble/labels.ts` — two-pass label resolution, negative offsets, located errors for
-      unknown/duplicate labels.
-- [ ] `src/assemble/lvars.ts` — the allocator, pinned to `var-space.ts` (import its constants, do
-      not copy them).
-- [ ] `src/assemble/trailer.ts` + top-level `assemble(ir): Uint8Array`.
-- [ ] **The referee test:** for each corpus fixture — decode → IR-from-decoded → assemble →
-      byte-identical code region. Any mismatch is an encoding fact we got wrong; fix the writer,
-      never special-case the test.
-- [ ] Determinism test (double build, byte compare).
-- [ ] Record in Measurements: corpus files re-encoded, total bytes proven, any encoding fact the
-      referee test corrected.
+- [x] `src/assemble/operands.ts` — the writer; round-trip tests `readOperand(emit(x)) = x` across
+      the full type-byte set (reusing `@opensa/cleo`'s reader as the oracle). The type-byte
+      constants are now EXPORTED from `@opensa/cleo/core/operands` (reuse, not a fork).
+- [x] Instruction emission + two-pass label resolution + trailer, folded into one
+      `src/assemble/assemble.ts` (`assembleCode` / `assembleScript`) — smaller than the planned
+      three files; `src/assemble/writer.ts` is the little-endian mirror of `Cursor`. IR +
+      construction-time validation (arity, negation-on-conditions, name/id resolution with
+      ambiguous-name poisoning) in `src/ir.ts`.
+- [x] `src/assemble/lvars.ts` — the allocator, pinned to the VM (`LOCAL_SLOTS`/`TIMER_A` now
+      exported from `@opensa/cleo/vm/thread`; string8 = 2 slots, string16 = 4).
+- [x] **The referee test** (`corpus-reencode.test.ts`, skip-gated): all 7 corpus fixtures decode →
+      IR → assemble byte-identically over their code regions.
+- [x] Determinism test (double build, byte compare).
+- [x] Measurements below — including the encoding fact the referee corrected.
 
 ## Verification
 
@@ -62,4 +61,21 @@ property tests green across all type bytes; determinism test green. No engine fi
 
 ## Measurements / notes
 
-_(filled when executed)_
+### Shipped (2026-08-06)
+
+- **Referee: 7/7 corpus fixtures re-encode byte-identically** — 23 602 code bytes across 2 689
+  instructions (73 495 file bytes incl. footers). Comparison is over the code region; footers are
+  Sanny's VAR/FLAG/SRC metadata we do not emit.
+- **The referee corrected a real encoding fact on its first run:** the decoded union was NOT fully
+  lossless — fixed-string payload bytes past the first NUL were dropped by `text()`. The corpus
+  carries exactly one such byte (rhino's `09 "BB_05"`: `42 42 5f 30 35 00 54 00` — a leftover
+  `0x54` after the terminator). Fix in the DECODER, not the test: string operands now keep a
+  `padding` field (present only when the tail is non-zero), and the writer reproduces it after
+  validating it begins with NUL. `packages/cleo` suite unaffected (listings print `value` only).
+- Width policy pinned: `int()` picks int8/int16/int32 by value range; label operands are always
+  int32 (fixed 5-byte size makes layout single-shot exact); jumps emit the negated byte offset;
+  a label at offset 0 is a located error (unencodable under the negative-offset convention).
+- Determinism test green (double assemble, byte compare).
+- Full suite: **426 files / 3 708 tests green** (+5 files / +44 tests vs 001); tsc + eslint clean.
+- `@opensa/cleo` additions (all exports, no behaviour change beyond the padding fix): operand
+  type-byte constants, `TRAILER_MAGIC`, `LOCAL_SLOTS`/`TIMER_A`.

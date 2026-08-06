@@ -11,9 +11,9 @@ import type { Operand } from '../core/operands';
 
 import { VarSpace } from './var-space';
 
-/** Locals 0-31 + TIMERA/TIMERB at 32/33 — the SA layout. */
-const LOCAL_SLOTS = 34;
-const TIMER_A = 32;
+/** Locals 0-31 + TIMERA/TIMERB at 32/33 — the SA layout (exported: the authoring SDK's allocator pins to it). */
+export const LOCAL_SLOTS = 34;
+export const TIMER_A = 32;
 /** String-var data-type bytes → byte width (numeric vars read 32-bit slots). */
 const STRING_WIDTH: Readonly<Record<number, 8 | 16>> = { 0x0a: 8, 0x0b: 8, 0x10: 16, 0x11: 16 };
 /** Array element stride in SLOTS per data-type byte (numeric 1, string8 2, string16 4). */
