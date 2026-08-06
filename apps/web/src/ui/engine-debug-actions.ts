@@ -14,11 +14,14 @@
 import type { City, Config, ProcObjCategory, Vec3 } from '@opensa/game';
 import type { PerfStats } from '@opensa/game/perf/perf-monitor';
 
+import { atlasTierOf, opcodeDef } from '@opensa/cleo';
 import { VEHICLE_PHYSICS_CONSTANTS } from '@opensa/game/physics/physics-world';
 import { WEATHER_NAMES } from '@opensa/renderware';
 
+import type { CleoReadout } from './debug/cleo-panel';
 import type { DebugActions } from './debug/debug-overlay';
 import type { PhysicsReadout } from './debug/physics-panel';
+import type { CleoRunnerSystem } from './engine-cleo';
 
 /** Selectable weathers for the Weather screen (same list prod shows). */
 const WEATHERS: readonly { index: number; label: string }[] = WEATHER_NAMES.map((label, index) => ({
@@ -36,6 +39,8 @@ export interface EngineDebugActionsDeps {
   cameraDistance: () => number;
   /** The city the player is in (map.zon boxes, via the shared CityZoneSystem). */
   city: () => City;
+  /** The CLEO runner system; null when the build carries no `cleo/*.cs` (plan 097/07). */
+  cleo: () => CleoRunnerSystem | null;
   /** The host's live runtime config — mutated in place, re-read by the driver every frame. */
   config: Config;
   /** Flip the occupied car onto its wheels; no-op on foot. */
@@ -106,6 +111,32 @@ export interface EnginePerfSnapshot {
   weather: { id: number; name: string };
 }
 
+/**
+ * The F2 CLEO readout (plan 097/07 decision 3): the system's raw surface joined with the opcode DB
+ * (labels) and the tier tables (how each gap degrades). Pure over the system, so it is unit tested.
+ */
+export function cleoReadout(cleo: CleoRunnerSystem): CleoReadout {
+  return {
+    coverage: cleo.coverage().map((hit) => ({
+      count: hit.count,
+      declared: hit.declared,
+      label: `${hit.opcode.toString(16).toUpperCase().padStart(4, '0')} ${opcodeDef(hit.opcode)?.name ?? '???'}`,
+      tier: hit.tier,
+    })),
+    enabled: cleo.enabled,
+    faults: cleo.faults().map((fault) => `${fault.thread}: ${fault.message}`),
+    instructionsLastTick: cleo.instructionsLastTick(),
+    misses: cleo.atlasMisses().map((miss) => {
+      const resolved = atlasTierOf(miss);
+
+      return { declared: resolved.declared, label: `${miss.kind} ${miss.detail}`, tier: resolved.tier };
+    }),
+    objects: cleo.objectCount(),
+    threads: cleo.threadRows(),
+    tracing: cleo.tracing,
+  };
+}
+
 export function createEngineDebugActions(deps: EngineDebugActionsDeps): DebugActions {
   const { config } = deps;
   const graphics = config.graphics;
@@ -116,6 +147,13 @@ export function createEngineDebugActions(deps: EngineDebugActionsDeps): DebugAct
     camera: () => config.camera,
     cameraDistance: deps.cameraDistance,
     city: deps.city,
+    cleoReadout: (): CleoReadout | null => {
+      const cleo = deps.cleo();
+
+      return cleo ? cleoReadout(cleo) : null;
+    },
+    cleoStep: (thread): void => deps.cleo()?.step(thread),
+    cleoTraceLines: (thread): readonly string[] => deps.cleo()?.traceLines(thread) ?? [],
     clouds: () => graphics.clouds,
     effects: () => graphics.effects,
     engineStats: (): readonly (readonly [string, string])[] => {
@@ -149,6 +187,8 @@ export function createEngineDebugActions(deps: EngineDebugActionsDeps): DebugAct
     },
     setBloom: (patch): void => void Object.assign(graphics.bloom, patch),
     setCamera: (patch): void => void Object.assign(config.camera, patch),
+    setCleoEnabled: (enabled): void => deps.cleo()?.setEnabled(enabled),
+    setCleoTracing: (enabled): void => deps.cleo()?.setTracing(enabled),
     setClouds: (patch): void => void Object.assign(graphics.clouds, patch),
     setEffects: (patch): void => void Object.assign(graphics.effects, patch),
     setFlyMode: deps.setFlyMode,

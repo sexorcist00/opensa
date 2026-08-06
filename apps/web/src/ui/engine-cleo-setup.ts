@@ -9,7 +9,7 @@ import type { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapt
 import type { Config } from '@opensa/game/interfaces/config.interface';
 import type { AssetFileSystem } from '@opensa/renderware';
 
-import { type NativeWorld, quatAxes, ScriptRunner } from '@opensa/cleo';
+import { type NativeWorld, quatAxes, ScriptRunner, TraceRing } from '@opensa/cleo';
 import { toRigidModelInit } from '@opensa/game/adapters/vehicle-model-init';
 import { readModelOsm } from '@opensa/game/adapters/vehicle-osm';
 import { getClump, getTxdChain } from '@opensa/renderware/archive/asset-cache';
@@ -138,11 +138,16 @@ export function setupEngineCleo(args: EngineCleoArgs): CleoRunnerSystem | null {
     wind: (): number => 0,
   };
 
+  let sphereWalkCursor = 0;
   const playerCar = (): null | number => {
     const riding = args.vehicles()?.ridingVehicle() ?? null;
 
     return riding ? (fleet().find((entry) => entry.enterable === riding)?.scriptHandle ?? null) : null;
   };
+
+  // The plan 07 tracer: created OFF unless config says otherwise; the F2 CLEO screen toggles it.
+  const trace = new TraceRing();
+  trace.enabled = config.cleo.trace;
 
   const host = createCleoEngineHost({
     cameraGta: args.cameraGta,
@@ -152,13 +157,22 @@ export function setupEngineCleo(args: EngineCleoArgs): CleoRunnerSystem | null {
 
         return entry ? { car: entry.scriptHandle, progress: progress + 1 } : null;
       },
-      carInSphere: (x, y, z, radius): null | number => {
-        for (const entry of fleet()) {
-          const [px, py, pz] = entry.enterable.position;
+      carInSphere: (x, y, z, radius, findNext): null | number => {
+        // The 0AE2 walk cursor: findNext=false restarts, findNext=true resumes AFTER the last
+        // match, and exhaustion answers null so the script's own loop terminates and WAITs (the
+        // vandoor full-budget burn the 097/07 benchmark caught — 3 ms/tick behind a host that
+        // could never say "no more cars").
+        const cars = fleet();
+        let index = findNext ? sphereWalkCursor : 0;
+        for (; index < cars.length; index += 1) {
+          const [px, py, pz] = cars[index].enterable.position;
           if (Math.hypot(px - x, py - y, pz - z) <= radius) {
-            return entry.scriptHandle;
+            sphereWalkCursor = index + 1;
+
+            return cars[index].scriptHandle;
           }
         }
+        sphereWalkCursor = 0;
 
         return null;
       },
@@ -179,9 +193,10 @@ export function setupEngineCleo(args: EngineCleoArgs): CleoRunnerSystem | null {
     resolveById: (id) => adapter.cleoModelById(id),
     resolveByName: (name) => adapter.cleoModelIdByName(name),
     spawn,
+    trace,
   });
 
-  const runner = new ScriptRunner({ host });
+  const runner = new ScriptRunner({ host, trace });
   const readScript = (name: string): null | Uint8Array => {
     const bytes = fs.get(name);
 
@@ -195,7 +210,7 @@ export function setupEngineCleo(args: EngineCleoArgs): CleoRunnerSystem | null {
   // eslint-disable-next-line no-console
   console.log(`[cleo] ${spawned.length} script(s): ${spawned.map((name) => name.slice('cleo/'.length)).join(', ')}`);
 
-  return new CleoRunnerSystem(config, runner, host);
+  return new CleoRunnerSystem(config, runner, host, trace);
 }
 
 /** PRINT_STRING_NOW's surface: the HUD has no message lane yet, so this is a minimal DOM toast —

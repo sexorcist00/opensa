@@ -3,8 +3,8 @@ import type { Instruction } from '../../core/decode';
  * The stdlib domain (plan 097/03 decision 4): engine-independent CLEO+/NewOpcodes the corpus uses,
  * implemented IN the VM — no host round-trip for things with no engine meaning. Scratch memory is
  * plain ArrayBuffers behind TOKENS, never the native address space: a struct op on a value that is
- * not a token (cardoor reads a native task pointer) routes to `host.onUnimplemented` and yields 0 —
- * plan 05's memory facet takes those over.
+ * not a token (cardoor reads a native task pointer) routes through the plan 05 memory facade — a
+ * nameable address resolves, anything else is a REPORTED atlas miss answering 0 (097/07).
  */
 import type { HandlerContext, HandlerRegistry } from '../registry';
 
@@ -130,12 +130,16 @@ function registerBuffers(registry: HandlerRegistry, state: StdlibState): void {
     ctx: HandlerContext,
     instruction: Instruction,
     access: (view: DataView, byteOffset: number) => void,
+    native: () => void,
   ): 'continue' => {
     const token = ctx.thread.readInt(instruction.operands[0]);
     const view = state.buffers.get(token);
     if (!view) {
-      // A NATIVE pointer — plan 05's memory facet serves those; until then the read yields 0.
-      ctx.host.onUnimplemented(instruction.opcode, ctx.thread.name);
+      // A NATIVE pointer — route through the plan 05 memory facade: a nameable target resolves,
+      // anything else lands in the atlas MISS ledger (F2 coverage + the corpus join), never in a
+      // silent side channel. (Before 097/07 close-out this called onUnimplemented directly, which
+      // bypassed the coverage counter — the field's 0D4E warn had no row anywhere.)
+      native();
 
       return 'continue';
     }
@@ -145,29 +149,48 @@ function registerBuffers(registry: HandlerRegistry, state: StdlibState): void {
   };
 
   // 0D37 WRITE_STRUCT_PARAM struct index value — params are 4-byte slots.
-  registry.register(0x0d37, (ctx, instruction) =>
-    structAccess(ctx, instruction, (view) => {
-      const index = ctx.thread.readInt(instruction.operands[1]);
-      view.setInt32(index * 4, ctx.thread.readInt(instruction.operands[2]), true);
-    }),
-  );
+  registry.register(0x0d37, (ctx, instruction) => {
+    const struct = ctx.thread.readInt(instruction.operands[0]);
+    const index = ctx.thread.readInt(instruction.operands[1]);
+    const operand = instruction.operands[2];
+    const value = ctx.thread.readInt(operand);
+
+    return structAccess(
+      ctx,
+      instruction,
+      (view) => view.setInt32(index * 4, value, true),
+      () => void ctx.host.memory.write(struct + index * 4, 4, { float: ctx.thread.readFloat(operand), int: value }),
+    );
+  });
   // 0D38 READ_STRUCT_PARAM struct index out
-  registry.register(0x0d38, (ctx, instruction) =>
-    structAccess(ctx, instruction, (view) => {
-      const index = ctx.thread.readInt(instruction.operands[1]);
-      ctx.thread.writeInt(instruction.operands[2], view.getInt32(index * 4, true));
-    }),
-  );
+  registry.register(0x0d38, (ctx, instruction) => {
+    const struct = ctx.thread.readInt(instruction.operands[0]);
+    const index = ctx.thread.readInt(instruction.operands[1]);
+
+    return structAccess(
+      ctx,
+      instruction,
+      (view) => ctx.thread.writeInt(instruction.operands[2], view.getInt32(index * 4, true)),
+      () => writeNativeValue(ctx, instruction.operands[2], ctx.host.memory.read(struct + index * 4, 4)),
+    );
+  });
   // 0D4E GET_STRUCT_FIELD struct byteOffset size out
-  registry.register(0x0d4e, (ctx, instruction) =>
-    structAccess(ctx, instruction, (view) => {
-      const offset = ctx.thread.readInt(instruction.operands[1]);
-      const size = ctx.thread.readInt(instruction.operands[2]);
-      const value =
-        size === 1 ? view.getUint8(offset) : size === 2 ? view.getUint16(offset, true) : view.getInt32(offset, true);
-      ctx.thread.writeInt(instruction.operands[3], value);
-    }),
-  );
+  registry.register(0x0d4e, (ctx, instruction) => {
+    const struct = ctx.thread.readInt(instruction.operands[0]);
+    const offset = ctx.thread.readInt(instruction.operands[1]);
+    const size = ctx.thread.readInt(instruction.operands[2]);
+
+    return structAccess(
+      ctx,
+      instruction,
+      (view) => {
+        const value =
+          size === 1 ? view.getUint8(offset) : size === 2 ? view.getUint16(offset, true) : view.getInt32(offset, true);
+        ctx.thread.writeInt(instruction.operands[3], value);
+      },
+      () => writeNativeValue(ctx, instruction.operands[3], ctx.host.memory.read(struct + offset, size)),
+    );
+  });
 }
 
 function registerLists(registry: HandlerRegistry, state: StdlibState): void {
@@ -271,4 +294,17 @@ function registerMath(registry: HandlerRegistry): void {
 
     return 'continue';
   });
+}
+
+/** An atlas answer into a script var, kind preserved (a matrix field reads as float, not bits). */
+function writeNativeValue(
+  ctx: HandlerContext,
+  operand: Instruction['operands'][number],
+  value: ReturnType<HandlerContext['host']['memory']['read']>,
+): void {
+  if (value?.kind === 'float') {
+    ctx.thread.writeFloat(operand, value.value);
+  } else {
+    ctx.thread.writeInt(operand, value?.value ?? 0);
+  }
 }

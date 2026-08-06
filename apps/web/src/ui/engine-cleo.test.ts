@@ -1,10 +1,12 @@
-import { ScriptRunner } from '@opensa/cleo';
+import { ScriptRunner, TraceRing } from '@opensa/cleo';
+import { buildScript, int } from '@opensa/cleo/vm/test-script';
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { CleoHostDeps, CleoObjectInstance } from './engine-cleo';
 
-import { createCleoEngineHost, discoverAndSpawn } from './engine-cleo';
+import { CleoRunnerSystem, createCleoEngineHost, discoverAndSpawn } from './engine-cleo';
+import { createGameRuntimeConfig } from './game-runtime-config';
 
 const FERRIS = 'tests/original/cleo/ferris.cs';
 
@@ -151,6 +153,93 @@ describe('createCleoEngineHost', () => {
       const host = createCleoEngineHost(makeDeps({ cameraGta: () => [0, 0, 0] }));
       expect(host.world.cameraWithin(0, 500, 0, 600)).toBe(true);
       expect(host.world.cameraWithin(0, 500, 0, 400)).toBe(false);
+    });
+  });
+});
+
+/** A system over the fake deps: WAIT-loop thread `sleeper` + self-terminating thread `oneshot`. */
+function makeSystem(): { system: CleoRunnerSystem; trace: TraceRing } {
+  const config = createGameRuntimeConfig();
+  config.cleo.enabled = true;
+  const trace = new TraceRing();
+  const host = createCleoEngineHost({ ...makeDeps(), trace });
+  const runner = new ScriptRunner({ host, trace });
+  runner.spawn(
+    buildScript([
+      { op: 0x0001, operands: [int(10_000)] }, // WAIT 10s — stays asleep for every test tick
+      { op: 0x0002, operands: [int(0)] }, // GOTO start
+    ]),
+    'sleeper',
+  );
+  runner.spawn(buildScript([{ op: 0x004e }]), 'oneshot'); // TERMINATE immediately
+
+  return { system: new CleoRunnerSystem(config, runner, host, trace), trace };
+}
+
+describe('CleoRunnerSystem debug surface (the F2 screen, plan 097/07)', () => {
+  describe('negative cases', () => {
+    it('step on a thread name nobody spawned is a no-op', () => {
+      const { system } = makeSystem();
+      system.fixedUpdate(1 / 60);
+      const before = system.threadRows();
+      system.step('ghost');
+
+      expect(system.threadRows()).toEqual(before);
+    });
+
+    it('a paused runner (enabled false) dispatches nothing on fixedUpdate', () => {
+      const { system } = makeSystem();
+      system.setEnabled(false);
+      system.fixedUpdate(1 / 60);
+
+      expect(system.instructionsLastTick()).toBe(0);
+      expect(system.enabled).toBe(false);
+    });
+
+    it('stopping the trace clears the story (no stale lines for the next open)', () => {
+      const { system } = makeSystem();
+      system.setTracing(true);
+      system.fixedUpdate(1 / 60);
+      expect(system.traceLines().length).toBeGreaterThan(0);
+      system.setTracing(false);
+
+      expect(system.traceLines()).toEqual([]);
+      expect(system.tracing).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('threadRows names each thread with its state, wait and per-tick cost', () => {
+      const { system } = makeSystem();
+      system.fixedUpdate(1 / 60);
+      const rows = system.threadRows();
+
+      expect(rows).toHaveLength(2);
+      const sleeper = rows.find((row) => row.name === 'sleeper');
+      const oneshot = rows.find((row) => row.name === 'oneshot');
+      expect(sleeper?.state).toBe('sleep');
+      expect(sleeper?.waitMs).toBeGreaterThan(9000);
+      expect(sleeper?.instructions).toBe(1); // the WAIT itself
+      expect(oneshot?.state).toBe('done');
+    });
+
+    it('step dispatches ONE instruction on the named thread even while the runner is paused', () => {
+      const { system } = makeSystem();
+      system.fixedUpdate(1 / 60); // sleeper dispatched its WAIT and sleeps
+      system.setEnabled(false);
+      system.setTracing(true);
+      system.step('sleeper');
+
+      expect(system.traceLines('sleeper')).toHaveLength(1); // the GOTO after the WAIT, nothing more
+    });
+
+    it('the trace toggle writes config.cleo.trace and the ring records the tick story', () => {
+      const { system } = makeSystem();
+      system.setTracing(true);
+      system.fixedUpdate(1 / 60);
+      const lines = system.traceLines('sleeper');
+
+      expect(lines[0]).toContain('WAIT 10000');
     });
   });
 });

@@ -2,7 +2,14 @@ import type { Vec3 } from '@opensa/game';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { createEngineDebugActions, type EngineDebugActionsDeps, engineStatRows } from './engine-debug-actions';
+import type { CleoRunnerSystem } from './engine-cleo';
+
+import {
+  cleoReadout,
+  createEngineDebugActions,
+  type EngineDebugActionsDeps,
+  engineStatRows,
+} from './engine-debug-actions';
 import { createGameRuntimeConfig } from './game-runtime-config';
 
 function deps(overrides: Partial<EngineDebugActionsDeps> = {}): EngineDebugActionsDeps {
@@ -12,6 +19,7 @@ function deps(overrides: Partial<EngineDebugActionsDeps> = {}): EngineDebugActio
     breakNearest: vi.fn(() => true),
     cameraDistance: () => 7,
     city: () => 'LA',
+    cleo: () => null,
     config: createGameRuntimeConfig(),
     flipVehicle: vi.fn(),
     getHour: () => hour,
@@ -67,6 +75,18 @@ describe('createEngineDebugActions', () => {
         actions.setShowNormals(true);
         actions.topDownView();
         actions.setPerfEnabled(true);
+      }).not.toThrow();
+    });
+
+    it('answers inertly for CLEO when no runner booted (a build without cleo/*.cs)', () => {
+      const actions = createEngineDebugActions(deps());
+
+      expect(actions.cleoReadout?.()).toBeNull();
+      expect(actions.cleoTraceLines?.()).toEqual([]);
+      expect(() => {
+        actions.setCleoEnabled?.(true);
+        actions.setCleoTracing?.(true);
+        actions.cleoStep?.('any');
       }).not.toThrow();
     });
   });
@@ -150,6 +170,38 @@ const SNAPSHOT = {
   stream: { late: 0, loaded: 67, pending: 0 },
   weather: { id: 15, name: 'CLOUDY_CS' },
 };
+
+describe('cleoReadout', () => {
+  /** The slice of CleoRunnerSystem the readout reads, canned (the system itself is engine-cleo's test). */
+  const fakeSystem = {
+    atlasMisses: () => [{ address: 0x590, detail: 'vehicle+0x590 (size 4)', kind: 'read' as const }],
+    coverage: () => [{ count: 299, declared: true, opcode: 0x0af0, tier: 'conditional-false' as const }],
+    enabled: true,
+    faults: () => [{ message: 'boom', thread: 'cardoor' }],
+    instructionsLastTick: () => 42,
+    objectCount: () => 21,
+    threadRows: () => [{ instructions: 1, name: 'ferris', state: 'sleep' as const, waitMs: 240 }],
+    tracing: false,
+  } as unknown as CleoRunnerSystem;
+
+  describe('positive cases', () => {
+    it('labels coverage rows from the opcode DB and joins atlas misses with their tier', () => {
+      const readout = cleoReadout(fakeSystem);
+
+      expect(readout.coverage).toEqual([
+        { count: 299, declared: true, label: '0AF0 READ_INT_FROM_INI_FILE', tier: 'conditional-false' },
+      ]);
+      expect(readout.misses).toEqual([
+        { declared: false, label: 'read vehicle+0x590 (size 4)', tier: 'conditional-false' },
+      ]);
+      expect(readout.faults).toEqual(['cardoor: boom']);
+      expect(readout.threads).toEqual([{ instructions: 1, name: 'ferris', state: 'sleep', waitMs: 240 }]);
+      expect(readout.enabled).toBe(true);
+      expect(readout.instructionsLastTick).toBe(42);
+      expect(readout.objects).toBe(21);
+    });
+  });
+});
 
 describe('engineStatRows', () => {
   describe('negative cases', () => {

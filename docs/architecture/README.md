@@ -7,6 +7,7 @@ The map of OpenSA, split by concern. Start here, then drill into the flow you ca
 | [boot-and-loading.md](./boot-and-loading.md)       | How a game gets into the browser: menu → loader (fetch / local folder / http-dir) → VFS → world-ready |
 | [world-streaming.md](./world-streaming.md)         | The native formats (`.osm` / `.ostex` / `.oscell` / `.oswire` / `.ospak`) and how the engine streams the world |
 | [perfect-map-builder.md](./perfect-map-builder.md) | The offline build pipeline that produces the canonical build (`./build/original`)                      |
+| [cleo-scripts.md](./cleo-scripts.md)               | Compiled CLEO `.cs` mods on our own SCM VM: decoder → runner → host facets, the native-address atlas, tiers/tracer/F2 |
 | [tools.md](./tools.md)                             | One-paragraph architecture of every tool in `tools/` and `tools-debug/`                               |
 
 Diagrams live in [assets/](./assets/) and are **generated** — `npm run arch:render` refreshes them all

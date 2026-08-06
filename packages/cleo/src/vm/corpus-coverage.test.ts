@@ -5,7 +5,7 @@ import { decodeScript } from '../core/decode';
 import { opcodeDef } from '../core/opcode-table';
 import { createRecordingHost } from './recording-host';
 import { ScriptRunner } from './runner';
-import { DECLARED_TIERS } from './tiers';
+import { atlasMissKey, atlasTierOf, DECLARED_ATLAS_TIERS, DECLARED_TIERS } from './tiers';
 
 /**
  * The census→registry→tier join (plan 097/07 decision 1): every opcode the shipped corpus uses is
@@ -37,6 +37,30 @@ describe.skipIf(!existsSync(CORPUS))('corpus coverage join', () => {
 
       expect(report).toEqual([]);
     });
+
+    it('no corpus atlas MISS is undeclared (the atlas half of the join — decision 4)', () => {
+      // The corpus's whole native surface is served headless (measured 2026-08-06: zero misses).
+      // This is the guard for the NEXT mod: a script whose access the atlas cannot name fails here
+      // until its row gets a declared tier + consumer in DECLARED_ATLAS_TIERS.
+      const undeclared: string[] = [];
+      for (const file of readdirSync(CORPUS).filter((name) => name.endsWith('.cs'))) {
+        // A car exists AND the player sits in it — the widest realistic surface: cardoor's task
+        // probing (the size-2 struct reads) only runs for a seated player.
+        const host = createRecordingHost({ cars: [{ handle: 257, model: 432 }], playerInCar: 257 });
+        const runner = new ScriptRunner({ host });
+        runner.spawn(decodeScript(new Uint8Array(readFileSync(`${CORPUS}/${file}`))), file);
+        for (let frame = 0; frame < 120; frame += 1) {
+          runner.tick(1000 / 60);
+        }
+        for (const miss of host.atlas.misses) {
+          if (!atlasTierOf(miss).declared) {
+            undeclared.push(`${file}: ${atlasMissKey(miss)}`);
+          }
+        }
+      }
+
+      expect(undeclared).toEqual([]);
+    });
   });
 
   describe('positive cases', () => {
@@ -52,6 +76,26 @@ describe.skipIf(!existsSync(CORPUS))('corpus coverage join', () => {
 
       // Every declared tier row earns its place by a real corpus consumer (no dead policy rows).
       expect(exercised).toEqual([...DECLARED_TIERS.keys()].sort((a, b) => a - b));
+    });
+
+    it('every declared ATLAS row has a real corpus consumer (no dead policy rows here either)', () => {
+      const seen = new Set<string>();
+      for (const file of readdirSync(CORPUS).filter((name) => name.endsWith('.cs'))) {
+        // A car exists AND the player sits in it — the widest realistic surface: cardoor's task
+        // probing (the size-2 struct reads) only runs for a seated player.
+        const host = createRecordingHost({ cars: [{ handle: 257, model: 432 }], playerInCar: 257 });
+        const runner = new ScriptRunner({ host });
+        runner.spawn(decodeScript(new Uint8Array(readFileSync(`${CORPUS}/${file}`))), file);
+        for (let frame = 0; frame < 120; frame += 1) {
+          runner.tick(1000 / 60);
+        }
+        for (const miss of host.atlas.misses) {
+          seen.add(atlasMissKey(miss));
+        }
+      }
+      const dead = [...DECLARED_ATLAS_TIERS.keys()].filter((key) => !seen.has(key));
+
+      expect(dead).toEqual([]);
     });
   });
 });

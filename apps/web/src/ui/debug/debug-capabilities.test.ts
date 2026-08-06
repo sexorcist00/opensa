@@ -23,6 +23,12 @@ describe('menuFor', () => {
       expect(screens).not.toContain('physics');
     });
 
+    it('drops the CLEO screen on a host without the script VM', () => {
+      const screens = menuFor(ALL_DEBUG_CAPABILITIES, false).map((item) => item.screen);
+
+      expect(screens).not.toContain('cleo');
+    });
+
     it('drops the dev-only screens in the deploy build', () => {
       const screens = menuFor(ALL_DEBUG_CAPABILITIES, true).map((item) => item.screen);
 
@@ -62,6 +68,7 @@ describe('menuFor', () => {
         'player',
         'vehicles',
         'physics',
+        'cleo',
         'time',
         'atmosphere',
         'camera',

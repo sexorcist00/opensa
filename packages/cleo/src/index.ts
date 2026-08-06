@@ -3,6 +3,7 @@ export { CleoDecodeError, type DecodedScript, decodeScript, type Instruction, NE
 export { disassemble, formatInstruction } from './core/disasm';
 export { type OpcodeDef, opcodeDef, opcodeTable } from './core/opcode-table';
 export { type Operand, readOperand, TYPE_END, type VarScope } from './core/operands';
+export { CORPUS_TRACE_RUNS, corpusTrace, type CorpusTraceRun } from './vm/corpus-traces';
 export type {
   CleoHost,
   CleoModelFacet,
@@ -28,5 +29,14 @@ export {
 } from './vm/sa-matrix';
 export { resolveScriptFilePath } from './vm/script-path';
 export { CleoThread, ThreadFault } from './vm/thread';
-export { DECLARED_TIERS, tierOf, type TierResolution, type UnimplementedTier } from './vm/tiers';
+export {
+  atlasMissKey,
+  atlasTierOf,
+  DECLARED_ATLAS_TIERS,
+  DECLARED_TIERS,
+  tierOf,
+  type TierResolution,
+  type UnimplementedTier,
+} from './vm/tiers';
+export { type TraceEntry, TraceRing } from './vm/trace';
 export { VarSpace } from './vm/var-space';

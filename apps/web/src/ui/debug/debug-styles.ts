@@ -207,4 +207,10 @@ export const styles: Record<string, CSSProperties> = {
     paddingBottom: 6,
     textAlign: 'center',
   },
+  /** The CLEO trace tail: dense monospace lines, wrapped so long operand lists stay on screen. */
+  traceLog: {
+    fontSize: 10,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-all',
+  },
 };

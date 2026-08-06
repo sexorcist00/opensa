@@ -1078,6 +1078,7 @@ async function boot(
       breakNearest: (position, radius) => breakables.breakNearest(position, radius),
       cameraDistance: () => rig.distance,
       city: (): City => city,
+      cleo: () => cleo,
       config,
       flipVehicle: () => flipActiveVehicle(physics, vehicles?.activeVehicle() ?? null),
       getHour: () => hour,

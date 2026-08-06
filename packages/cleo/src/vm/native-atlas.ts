@@ -31,6 +31,9 @@ export const SA = {
   WEATHER_WIND: 0xc812f0,
 } as const;
 
+/** SA 1.0 US image base — no static address sits below it (the one canonical exe). */
+const SA_IMAGE_BASE = 0x400000;
+
 /** Struct offsets the corpus dereferences. */
 const VEHICLE_RW_OBJECT = 0x18;
 const VEHICLE_CAR_NODES = 0x648;
@@ -124,23 +127,38 @@ export class AtlasMemory {
   private readonly missKeys = new Set<string>();
   private readonly tokens = new TokenTable();
 
-  constructor(private readonly world: NativeWorld) {}
+  /** `onOp` is the plan 07 tracer's seam: every SERVED op emits one symbolised line ("read
+   *  CWeather::Wind -> 0.4"), never a raw address. Absent = zero cost (lines built lazily). */
+  constructor(
+    private readonly world: NativeWorld,
+    private readonly onOp?: (line: string) => void,
+  ) {}
 
   /** `0AA5-0AA8`: a call through the functions table. Returns the output value (null = unserved). */
   call(address: number, struct: null | number, args: readonly NativeArg[]): NativeValue {
     switch (address) {
       case SA.GET_FRAME_FROM_NAME:
         return this.getFrameFromName(args);
-      case SA.SET_ROTATE_X_ONLY:
-        return this.setRotate(address, struct, [quatRotateX(this.angleArg(args, 0))]);
-      case SA.SET_ROTATE_XYZ:
-        return this.setRotate(address, struct, [
-          quatFromSaEuler(this.angleArg(args, 0), this.angleArg(args, 1), this.angleArg(args, 2)),
-        ]);
-      case SA.SET_ROTATE_Y_ONLY:
-        return this.setRotate(address, struct, [quatRotateY(this.angleArg(args, 0))]);
-      case SA.SET_ROTATE_Z_ONLY:
-        return this.setRotate(address, struct, [quatRotateZ(this.angleArg(args, 0))]);
+      case SA.SET_ROTATE_X_ONLY: {
+        const angle = this.angleArg(args, 0);
+
+        return this.setRotate(address, struct, [quatRotateX(angle)], [angle]);
+      }
+      case SA.SET_ROTATE_XYZ: {
+        const angles = [this.angleArg(args, 0), this.angleArg(args, 1), this.angleArg(args, 2)];
+
+        return this.setRotate(address, struct, [quatFromSaEuler(angles[0], angles[1], angles[2])], angles);
+      }
+      case SA.SET_ROTATE_Y_ONLY: {
+        const angle = this.angleArg(args, 0);
+
+        return this.setRotate(address, struct, [quatRotateY(angle)], [angle]);
+      }
+      case SA.SET_ROTATE_Z_ONLY: {
+        const angle = this.angleArg(args, 0);
+
+        return this.setRotate(address, struct, [quatRotateZ(angle)], [angle]);
+      }
       default:
         this.miss('call', address, `unknown function 0x${address.toString(16)}`);
 
@@ -189,6 +207,8 @@ export class AtlasMemory {
     ) {
       const axis = ((matrixField - MATRIX_POS) / 4) as 0 | 1 | 2;
       this.world.setPartTranslationComponent(resolved.target.car, resolved.target.part, axis, value.float);
+      const { car, part } = resolved.target;
+      this.op(() => `write frame(car#${car} part#${part}).matrix.pos.${'xyz'[axis]} = ${traceNumber(value.float)}`);
 
       return true;
     }
@@ -218,13 +238,17 @@ export class AtlasMemory {
 
       return null;
     }
-    const part = this.world.partIndex(clump.target.car, name);
+    const car = clump.target.car;
+    const part = this.world.partIndex(car, name);
     if (part === null) {
+      this.op(() => `GetFrameFromName(car#${car}, '${name}') -> null frame (model lacks it)`);
+
       // A name the model lacks → null frame — real CLEO would crash on the deref; scripts guard it.
       return { kind: 'int', value: 0 };
     }
+    this.op(() => `GetFrameFromName(car#${car}, '${name}') -> part ${part}`);
 
-    return { kind: 'int', value: this.tokens.mint({ car: clump.target.car, kind: 'frame', part }) };
+    return { kind: 'int', value: this.tokens.mint({ car, kind: 'frame', part }) };
   }
 
   private miss(kind: AtlasMiss['kind'], address: number, detail: string): void {
@@ -232,6 +256,14 @@ export class AtlasMemory {
     if (!this.missKeys.has(key)) {
       this.missKeys.add(key);
       this.misses.push({ address, detail, kind });
+      this.op(() => `atlas miss: ${kind} 0x${address.toString(16)} — ${detail}`);
+    }
+  }
+
+  /** Build a trace line only when someone listens — the hot path pays one undefined check. */
+  private op(build: () => string): void {
+    if (this.onOp) {
+      this.onOp(build());
     }
   }
 
@@ -239,8 +271,10 @@ export class AtlasMemory {
     if (size !== 4) {
       return null;
     }
+    const label = `frame(car#${target.car} part#${target.part})`;
     if (offset === FRAME_NEXT_SIBLING) {
       const sibling = this.world.nextSiblingPart(target.car, target.part);
+      this.op(() => `read ${label}.next -> ${sibling === null ? 'end of chain' : `part ${sibling}`}`);
 
       return {
         kind: 'int',
@@ -249,10 +283,18 @@ export class AtlasMemory {
     }
     const field = offset - FRAME_MATRIX;
     if (field >= MATRIX_FORWARD && field < MATRIX_FORWARD + 12) {
-      return { kind: 'float', value: this.world.partForward(target.car, target.part)[(field - MATRIX_FORWARD) / 4] };
+      const axis = (field - MATRIX_FORWARD) / 4;
+      const value = this.world.partForward(target.car, target.part)[axis];
+      this.op(() => `read ${label}.matrix.forward.${'xyz'[axis]} -> ${traceNumber(value)}`);
+
+      return { kind: 'float', value };
     }
     if (field >= MATRIX_POS && field < MATRIX_POS + 12) {
-      return { kind: 'float', value: this.world.partTranslation(target.car, target.part)[(field - MATRIX_POS) / 4] };
+      const axis = (field - MATRIX_POS) / 4;
+      const value = this.world.partTranslation(target.car, target.part)[axis];
+      this.op(() => `read ${label}.matrix.pos.${'xyz'[axis]} -> ${traceNumber(value)}`);
+
+      return { kind: 'float', value };
     }
 
     return null;
@@ -260,16 +302,31 @@ export class AtlasMemory {
 
   private readGlobal(address: number, size: number): NativeValue {
     switch (address) {
-      case SA.LOD_DIST_MULTIPLIER:
-        return { kind: 'float', value: this.world.lodDistMultiplier() };
+      case SA.LOD_DIST_MULTIPLIER: {
+        const value = this.world.lodDistMultiplier();
+        this.op(() => `read TheCamera.m_fLODDistMultiplier -> ${traceNumber(value)}`);
+
+        return { kind: 'float', value };
+      }
       case SA.VEHICLE_POOL:
+        this.op(() => 'read CPools::ms_pVehiclePool -> pool');
+
         return { kind: 'int', value: this.tokens.mint({ kind: 'pool' }) };
-      case SA.WEATHER_WIND:
-        return { kind: 'float', value: this.world.wind() };
-      default:
-        this.miss('read', address, `unknown global (size ${size})`);
+      case SA.WEATHER_WIND: {
+        const value = this.world.wind();
+        this.op(() => `read CWeather::Wind -> ${traceNumber(value)}`);
+
+        return { kind: 'float', value };
+      }
+      default: {
+        // Below SA's image base nothing static lives — such an address is an opaque host token
+        // (e.g. GET_MODEL_INFO's) plus an offset, and the LABEL must not embed it: token values
+        // differ between the mock and the field, and the declared-tier key has to match both.
+        const label = address >= SA_IMAGE_BASE ? `unknown global 0x${address.toString(16)}` : 'non-native address';
+        this.miss('read', address, `${label} (size ${size})`);
 
         return null;
+      }
     }
   }
 
@@ -279,6 +336,7 @@ export class AtlasMemory {
     }
     // One slot byte: counter (bit7 clear) when occupied, 0x80 when free — the walk's contract.
     const handle = this.world.vehicleHandles().find((h) => h >> 8 === offset);
+    this.op(() => `read pool slot ${offset} -> ${handle === undefined ? 'free' : `counter ${handle & 0xff}`}`);
 
     return { kind: 'int', value: handle === undefined ? 0x80 : handle & 0xff };
   }
@@ -310,12 +368,18 @@ export class AtlasMemory {
       return null;
     }
     if (offset === VEHICLE_RW_OBJECT) {
+      this.op(() => `read vehicle#${target.car}.m_pRwObject -> clump`);
+
       return { kind: 'int', value: this.tokens.mint({ car: target.car, kind: 'clump' }) };
     }
     const node = offset - VEHICLE_CAR_NODES;
     if (node >= 0 && node < CAR_NODE_COUNT * 4 && node % 4 === 0) {
       const name = CAR_NODE_NAMES[node / 4];
       const part = name === null || name === undefined ? null : this.world.partIndex(target.car, name);
+      this.op(
+        () =>
+          `read vehicle#${target.car}.m_aCarNodes[${name ?? node / 4}] -> ${part === null ? 'no frame' : `part ${part}`}`,
+      );
 
       return { kind: 'int', value: part === null ? 0 : this.tokens.mint({ car: target.car, kind: 'frame', part }) };
     }
@@ -327,11 +391,17 @@ export class AtlasMemory {
     address: number,
     struct: null | number,
     [quat]: readonly [readonly [number, number, number, number]],
+    angles: readonly number[],
   ): NativeValue {
     const resolved = struct === null ? null : this.tokens.resolve(struct);
     // `this` is the modelling CMatrix: the frame token + 16 (firela adds it with PLAIN arithmetic).
     if (resolved && resolved.target.kind === 'frame' && resolved.offset === FRAME_MATRIX) {
-      this.world.setPartRotation(resolved.target.car, resolved.target.part, quat);
+      const { car, part } = resolved.target;
+      this.world.setPartRotation(car, part, quat);
+      this.op(
+        () =>
+          `${CALL_SYMBOLS[address] ?? 'call'}(frame(car#${car} part#${part}), ${angles.map(traceNumber).join(', ')} rad)`,
+      );
 
       return { kind: 'int', value: 0 };
     }
@@ -339,4 +409,17 @@ export class AtlasMemory {
 
     return null;
   }
+}
+
+/** Trace symbols for the functions table — the tracer never prints a raw address (decision 2). */
+const CALL_SYMBOLS: Readonly<Record<number, string>> = {
+  [SA.SET_ROTATE_X_ONLY]: 'CMatrix::SetRotateXOnly',
+  [SA.SET_ROTATE_XYZ]: 'CMatrix::SetRotate',
+  [SA.SET_ROTATE_Y_ONLY]: 'CMatrix::SetRotateYOnly',
+  [SA.SET_ROTATE_Z_ONLY]: 'CMatrix::SetRotateZOnly',
+};
+
+/** Short numbers for trace lines: integers plain, fractions to 3 places. */
+function traceNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(3);
 }

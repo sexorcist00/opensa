@@ -51,6 +51,8 @@ interface GosubFrame {
 export class CleoThread {
   andOr: AndOrState | null = null;
   condition = false;
+  /** Instructions this thread dispatched in the last runner tick — the F2 thread list reads it. */
+  instructionsLastTick = 0;
   /** Index into `script.instructions` of the NEXT instruction to run. */
   ip = 0;
   readonly locals = new VarSpace(LOCAL_SLOTS);

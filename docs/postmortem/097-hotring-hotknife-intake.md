@@ -57,6 +57,11 @@ intake.)
 story hidden (lesson: diff the mock's GATE ANSWERS when headless and field disagree). Any future
 corpus script that walks cars with `0AE2` hits this. Fix when the next such script arrives.
 
+**FIXED 2026-08-06 (097/07 close-out):** the next script was already shipping — vandoor. And the
+defect was not mock-only: the ENGINE host dropped `findNext` too, so the walk never exhausted in
+the field either (~3 ms/tick whenever a car sat in the probe radius). Both hosts now run a real
+walk cursor; the numbers and the story are in the 07 ledger + the 2026-08-06 benchmark.
+
 ## Revisit when
 
 - A damage model (or any feature) wants per-lamp breakage → the light-damage section above is the

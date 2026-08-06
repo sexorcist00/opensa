@@ -368,6 +368,16 @@ rose 13.73 → **15.64 ms** (max 21.89, draws p50 1049 → 1113) — that is wha
 GPU-bound shape the first drive found. Run:
 [`2026-08-02-drive-091-populated-map.json`](opensa-engine/2026-08-02-drive-091-populated-map.json).
 
+### 097/07 — the CLEO VM cost close-out (2026-08-06)
+
+The 097 big-rework benchmark, headless-first: the whole shipped corpus costs **465 µs/tick** on the
+VM (boot 0.23 ms for 7 scripts, `enabled: false` = one branch, tracer ×1.9 as a debug toggle) — and
+the run CAUGHT a field bug: both hosts answered `carInSphere` ignoring `findNext`, so vandoor's
+recursive walk never exhausted and burned its full 10 000-instr budget every tick (corpus 3 771 →
+465 µs/tick after the walk-cursor fix, vandoor ~100×). Field verify on `build/original/opensa`:
+census 6 scripts, F2 CLEO screen live at 1 572 instr/tick, 21 script objects. Analysis:
+[`2026-08-06-headless-cleo-vm-cost.md`](opensa-engine/2026-08-06-headless-cleo-vm-cost.md).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

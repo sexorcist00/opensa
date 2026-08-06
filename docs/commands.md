@@ -159,7 +159,8 @@ npx tsx scripts/debug/touch-controls-check.ts \
 # Air control (081/06 §1) — ?airCtl=<x> scales the in-air pitch/roll/yaw authority; 0 = off (the jump A/B)
 # CLEO (097) — ?cleo=1 runs the cleo/*.cs scripts for the session (census line `[cleo] N script(s)`;
 #   atlas misses print as `[cleo] atlas miss:` lines) · ?osmspike=<model> renders one map-object .osm
-#   beside the player (the 04 phase-0 spike hook)
+#   beside the player (the 04 phase-0 spike hook) · F2 → CLEO (097/07): runner/trace toggles, thread
+#   list with per-tick cost, unimplemented/atlas coverage with tiers, per-thread trace, step-one
 # Vehicle field checks (097/05) — ?spawncar=model[,x,y,z[,heading]] spawns one car (retries until the
 #   ground streams in; default spot 8 m north of spawn; heading is RADIANS — 0 faces north, the boot
 #   camera looks SOUTH, so put a car you want in frame at y − 10) · ?autoseat=1 seats the player once
@@ -200,6 +201,7 @@ npm run cleo:opcodes                 # regenerate packages/cleo opcode table fro
 npx tsx scripts/debug/scm-disasm.ts <file.cs|dir> [--census|--strings|--json] [--out <dir>]   # disassemble compiled CLEO scripts (097/02)
 npx tsx scripts/debug/cleo-census.ts [paths…] [--json]                                        # opcode frequency/coverage table over a CLEO corpus (097/02; status column = VM registry join)
 npx tsx scripts/debug/cleo-run.ts <file.cs> [--ticks 60] [--fps 60] [--calls 60]              # run a CLEO script headless on the VM, print the host-call trace (097/02+03)
+npx tsx scripts/debug/cleo-trace-fixtures.ts                                                  # regenerate the corpus trace snapshots (tests/custom/cleo-traces/, 097/07; review the diff — it IS the change)
 npm run e2e / e2e:ui / e2e:update    # playwright
 npm run lint / format                # tsc --noEmit + eslint / prettier+eslint --fix
 npm run arch / arch:render           # package graph to stdout / regenerate docs/architecture/assets

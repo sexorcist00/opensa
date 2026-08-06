@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { decodeScript } from '../core/decode';
 import { createRecordingHost } from './recording-host';
 import { ScriptRunner } from './runner';
+import { atlasTierOf } from './tiers';
 
 /** Real corpus scripts on the real decoder — the plan 03 headless integration. */
 const CORPUS = 'tests/original/cleo';
@@ -71,7 +72,9 @@ describe.skipIf(!existsSync(CORPUS))('corpus on the VM', () => {
       expect(host.calls.some((line) => line.startsWith('onUnimplemented 0A8D'))).toBe(false);
       expect(host.calls.filter((line) => line.startsWith('objects.create')).length).toBeGreaterThan(30);
       expect(host.calls.filter((line) => line.startsWith('objects.connectLods')).length).toBeGreaterThan(10);
-      expect(host.atlas.misses.filter((miss) => miss.kind === 'read')).toEqual([]);
+      // Every remaining read miss is a DECLARED gap (the 0D4E model-info field — 07's atlas tiers);
+      // an undeclared one would also fail the corpus-coverage join.
+      expect(host.atlas.misses.filter((miss) => miss.kind === 'read' && !atlasTierOf(miss).declared)).toEqual([]);
     });
 
     it('firela holds its ladder parts level: pool walk → frames by name → SetRotate*Only (class B)', () => {

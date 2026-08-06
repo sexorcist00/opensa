@@ -12,6 +12,9 @@ export interface DebugCapabilities {
   /** Follow-rig sliders (height/angle/response/angle limits) — the engine host's orbit is yaw+pitch by
    *  mouse with a fixed eye height; only distance and the zoom bounds have a counterpart there. */
   readonly cameraRig: boolean;
+  /** CLEO screen: runner/trace toggles, thread list, coverage + atlas gaps, per-thread trace
+   *  (plan 097/07). Needs the script VM behind it, which only the engine host boots. */
+  readonly cleoScreen: boolean;
   /** Cloud COVER slider — on the engine, cover/scale/tint come from the per-weather cloud profile
    *  (sky v2); only `clouds.opacity` reaches the frame. */
   readonly cloudCover: boolean;
@@ -71,6 +74,7 @@ export interface DebugCapabilities {
 export type Screen =
   | 'atmosphere'
   | 'camera'
+  | 'cleo'
   | 'graphics'
   | 'map'
   | 'perf'
@@ -86,6 +90,7 @@ export type Screen =
 /** Everything on — the three-WebGL host (unchanged behaviour until C2). */
 export const ALL_DEBUG_CAPABILITIES: DebugCapabilities = {
   cameraRig: true,
+  cleoScreen: false, // the script VM is engine-only (plan 097) — no runner exists on the three host
   cloudCover: true,
   coronaDistance: true,
   dynamicObjectsFill: true,
@@ -115,6 +120,7 @@ export const ALL_DEBUG_CAPABILITIES: DebugCapabilities = {
 /** The own-engine host: bucket-C rows off (see plan 074/22 for the per-row disposition). */
 export const ENGINE_DEBUG_CAPABILITIES: DebugCapabilities = {
   cameraRig: true, // 080/01 — the rig rows are the director's own config now, not the three follow orbit
+  cleoScreen: true, // 097/07 — the VM, tracer and coverage ride this host's fixed step
   cloudCover: false,
   coronaDistance: false,
   dynamicObjectsFill: false,
@@ -145,6 +151,7 @@ const ALL_MENU: readonly { label: string; screen: Screen }[] = [
   { label: 'Player', screen: 'player' },
   { label: 'Vehicles', screen: 'vehicles' },
   { label: 'Physics', screen: 'physics' },
+  { label: 'CLEO', screen: 'cleo' },
   { label: 'Time', screen: 'time' },
   { label: 'Atmosphere', screen: 'atmosphere' },
   { label: 'Camera', screen: 'camera' },
@@ -168,6 +175,7 @@ const DEV_ONLY_SCREENS: ReadonlySet<Screen> = new Set<Screen>([
 
 /** Screens that exist only where the host can drive them (the rest are renderer-agnostic). */
 const SCREEN_CAPABILITY: Partial<Record<Screen, keyof DebugCapabilities>> = {
+  cleo: 'cleoScreen',
   map: 'mapScreen',
   physics: 'physicsScreen',
 };

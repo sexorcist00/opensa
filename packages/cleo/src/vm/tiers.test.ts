@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createRecordingHost } from './recording-host';
 import { ScriptRunner } from './runner';
 import { buildScript, int } from './test-script';
-import { DECLARED_TIERS, tierOf } from './tiers';
+import { atlasTierOf, DECLARED_TIERS, tierOf } from './tiers';
 
 describe('unimplemented tiers', () => {
   describe('negative cases', () => {
@@ -51,6 +51,21 @@ describe('unimplemented tiers', () => {
 
       expect(thread.terminated).toBe(false);
       expect(thread.ip).toBe(4); // jumped over nothing extra: landed on the WAIT and yielded past it
+    });
+
+    it('an atlas miss resolves by what the facade DID: reads/calls answered 0 (tier b), writes skipped (tier a)', () => {
+      expect(atlasTierOf({ address: 0x590, detail: 'vehicle+0x590 (size 4)', kind: 'read' })).toEqual({
+        declared: false,
+        tier: 'conditional-false',
+      });
+      expect(atlasTierOf({ address: 0xdead, detail: 'unknown function 0xdead', kind: 'call' })).toEqual({
+        declared: false,
+        tier: 'conditional-false',
+      });
+      expect(atlasTierOf({ address: 0x590, detail: 'raw address', kind: 'write' })).toEqual({
+        declared: false,
+        tier: 'noop',
+      });
     });
 
     it('coverage() accumulates per-opcode counts with tier resolution, worst first', () => {

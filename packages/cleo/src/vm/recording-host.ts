@@ -9,6 +9,7 @@
  * are auto-assigned per (car, name) so traces read `part misc_a#0`.
  */
 import type { CleoHost } from './host.interface';
+import type { TraceRing } from './trace';
 
 import { AtlasMemory, type NativeWorld } from './native-atlas';
 
@@ -33,6 +34,8 @@ export interface RecordingHostOptions {
   readonly partNames?: readonly string[];
   /** The car the player currently sits in (a `cars` handle). */
   readonly playerInCar?: number;
+  /** Plan 07 tracer: atlas ops emit their symbolised lines into this ring as host effects. */
+  readonly trace?: TraceRing;
   /** CWeather::Wind (default 0.4). */
   readonly wind?: number;
 }
@@ -45,6 +48,7 @@ export function createRecordingHost(options: RecordingHostOptions = {}): Recordi
   const namedModels = new Map(options.knownModels ?? []);
   let nextNamedModel = 20000;
   let nextObject = 1;
+  let sphereWalk = 0;
   const objects = new Set<number>();
   const fixed = (value: number): string => (Number.isInteger(value) ? String(value) : value.toFixed(3));
 
@@ -91,7 +95,8 @@ export function createRecordingHost(options: RecordingHostOptions = {}): Recordi
     vehicleHandles: (): readonly number[] => (options.cars ?? []).map((car) => car.handle),
     wind: (): number => options.wind ?? 0.4,
   };
-  const atlas = new AtlasMemory(world);
+  const ring = options.trace;
+  const atlas = new AtlasMemory(world, ring ? (line): void => ring.hostEffect(line) : undefined);
 
   return {
     atlas,
@@ -193,8 +198,15 @@ export function createRecordingHost(options: RecordingHostOptions = {}): Recordi
 
         return car ? { car: car.handle, progress: progress + 1 } : null;
       },
-      carInSphere(): null | number {
-        return (options.cars ?? [])[0]?.handle ?? null;
+      carInSphere(x, y, z, radius, findNext): null | number {
+        // REAL walk semantics (the intake postmortem's recorded defect, fixed 2026-08-06):
+        // findNext=false restarts, findNext=true continues, and the walk EXHAUSTS to null — a
+        // mock that always answers car[0] hid a full budget burn behind a happy story.
+        sphereWalk = findNext ? sphereWalk + 1 : 0;
+        const car = (options.cars ?? [])[sphereWalk];
+        record(`vehicles.carInSphere findNext=${findNext} -> ${car ? `#${car.handle}` : 'exhausted'}`);
+
+        return car?.handle ?? null;
       },
       carModel(car): number {
         return (options.cars ?? []).find((entry) => entry.handle === car)?.model ?? 0;

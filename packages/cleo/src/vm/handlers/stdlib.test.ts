@@ -14,21 +14,27 @@ const run = (rows: Parameters<typeof buildScript>[0], random?: () => number): Re
 
 describe('stdlib handlers', () => {
   describe('negative cases', () => {
-    it('a struct op on a NON-token pointer routes to onUnimplemented and leaves the target alone', () => {
+    it('a struct op on an unservable NATIVE pointer lands in the atlas miss ledger and answers 0', () => {
       const host = createRecordingHost();
       const runner = new ScriptRunner({ host });
       const thread = runner.spawn(
         buildScript([
           { op: 0x0006, operands: [lvar(2), int(123)] },
-          // 0D4E on a raw native address (cardoor's task pointer) — plan 05 territory.
+          // 0D4E at an address+offset no atlas row names (cardoor's task pointer shape) — the read
+          // routes through the memory facade (097/07): a REPORTED miss + a deterministic 0, never
+          // a silent side channel and never stale var contents.
           { op: 0x0d4e, operands: [int(0x00b74494), int(0x10), int(4), lvar(2)] },
           { op: 0x0001, operands: [int(0)] },
         ]),
         'native-ptr',
       );
       runner.tick(16);
-      expect(host.calls).toContain('onUnimplemented 0D4E (native-ptr)');
-      expect(thread.locals.int(2)).toBe(123);
+      expect(host.atlas.misses).toContainEqual({
+        address: 0x00b744a4,
+        detail: 'unknown global 0xb744a4 (size 4)',
+        kind: 'read',
+      });
+      expect(thread.locals.int(2)).toBe(0);
     });
 
     it('a list op on a dead token is a located fault', () => {
@@ -40,6 +46,22 @@ describe('stdlib handlers', () => {
   });
 
   describe('positive cases', () => {
+    it('a struct read at an address the atlas CAN name is served through it', () => {
+      const host = createRecordingHost();
+      const runner = new ScriptRunner({ host });
+      // 0D4E struct=CPools::ms_pVehiclePool offset=0 — resolves to the pool token, not a miss.
+      const thread = runner.spawn(
+        buildScript([
+          { op: 0x0d4e, operands: [int(0x00b74494), int(0), int(4), lvar(0)] },
+          { op: 0x0001, operands: [int(0)] },
+        ]),
+        'pool-read',
+      );
+      runner.tick(16);
+      expect(host.atlas.misses).toEqual([]);
+      expect(thread.locals.int(0)).not.toBe(0);
+    });
+
     it('lists create/add/size/value/reset round-trip', () => {
       const thread = run([
         { op: 0x0e72, operands: [int(0), lvar(0)] },

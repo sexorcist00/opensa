@@ -8,7 +8,15 @@
  * degrees→radians happens in ONE place — {@link gtaEulerToQuat} — and the engine basis change lives
  * entirely in `writeGtaRoot`. Script objects have NO physics (readme's out-of-scope).
  */
-import type { CleoHost, NativeWorld, ScriptRunner } from '@opensa/cleo';
+import type {
+  AtlasMiss,
+  CleoHost,
+  NativeWorld,
+  ScriptRunner,
+  ThreadFaultRecord,
+  TraceRing,
+  UnimplementedHit,
+} from '@opensa/cleo';
 import type { System } from '@opensa/game/core/system';
 import type { Config } from '@opensa/game/interfaces/config.interface';
 
@@ -22,7 +30,10 @@ export interface CleoHostDeps {
   /** Live-car queries over the script fleet (plan 097/05 phase B) — the vehicles facet's world. */
   readonly cars: {
     anyCar(progress: number): null | { car: number; progress: number };
-    carInSphere(x: number, y: number, z: number, radius: number): null | number;
+    /** `0AE2`'s walk: findNext=false restarts, findNext=true continues, null when EXHAUSTED — a
+     *  host that always answers the first match traps the script in a full-budget loop (the
+     *  vandoor burn the 07 benchmark caught). */
+    carInSphere(x: number, y: number, z: number, radius: number, findNext: boolean): null | number;
     carModel(car: number): number;
     isCarModel(model: number): boolean;
     /** The car the player sits in (script handle), or null on foot. */
@@ -41,6 +52,8 @@ export interface CleoHostDeps {
   resolveByName(name: string): null | number;
   /** New instance of a previously ensured model, or null (not ensured / engine says no). */
   spawn(modelName: string): CleoObjectInstance | null;
+  /** Plan 07 tracer: atlas ops emit symbolised lines into it as host effects while it is enabled. */
+  readonly trace?: TraceRing;
 }
 
 /** One engine instance of a script object — the seam the headless test fakes. */
@@ -51,6 +64,8 @@ export interface CleoObjectInstance {
 }
 
 export interface EngineCleoHost extends CleoHost {
+  /** The concrete memory facade — the F2 coverage view reads its `misses` (decision 3). */
+  readonly atlas: AtlasMemory;
   dispose(): void;
   /** The object count — the boot census and tests read it. */
   objectCount(): number;
@@ -77,19 +92,52 @@ const DEG_TO_RAD = Math.PI / 180;
 /** A LOD pair without a readable draw distance still needs a swap point somewhere. */
 const DEFAULT_LOD_SWAP = 300;
 
+/** One row of the F2 thread list — UI-agnostic data the panel formats. */
+export interface CleoThreadRow {
+  /** Instructions dispatched in the last tick (0 while sleeping). */
+  readonly instructions: number;
+  readonly name: string;
+  readonly state: 'done' | 'fault' | 'run' | 'sleep';
+  /** Remaining WAIT (ms) when sleeping, 0 otherwise. */
+  readonly waitMs: number;
+}
+
 /** The runner system the boot closure wires by name into `runFixedSteps` (decision 7). */
 export class CleoRunnerSystem implements System {
   readonly name = 'cleo';
+
+  get enabled(): boolean {
+    return this.config.cleo.enabled;
+  }
+
+  // --- The F2 CLEO screen's surface (plan 097/07 decision 3) — UI-agnostic accessors. ---
+
+  get tracing(): boolean {
+    return this.trace.enabled;
+  }
 
   constructor(
     private readonly config: Config,
     private readonly runner: ScriptRunner,
     private readonly host: EngineCleoHost,
+    private readonly trace: TraceRing,
   ) {}
+
+  atlasMisses(): readonly AtlasMiss[] {
+    return this.host.atlas.misses;
+  }
+
+  coverage(): readonly UnimplementedHit[] {
+    return this.runner.coverage();
+  }
 
   dispose(): void {
     this.runner.dispose();
     this.host.dispose();
+  }
+
+  faults(): readonly ThreadFaultRecord[] {
+    return this.runner.faults;
   }
 
   fixedUpdate(step: number): void {
@@ -99,11 +147,61 @@ export class CleoRunnerSystem implements System {
     this.runner.tick(step * 1000);
     this.host.update();
   }
+
+  instructionsLastTick(): number {
+    return this.runner.instructionsLastTick;
+  }
+
+  objectCount(): number {
+    return this.host.objectCount();
+  }
+
+  setEnabled(enabled: boolean): void {
+    this.config.cleo.enabled = enabled;
+  }
+
+  setTracing(enabled: boolean): void {
+    this.trace.enabled = enabled;
+    this.config.cleo.trace = enabled;
+    if (!enabled) {
+      this.trace.clear(); // a stopped trace holds no stale story for the next open
+    }
+  }
+
+  /** Dispatch ONE instruction on the named thread (the F2 step affordance). */
+  step(thread: string): void {
+    const target = this.runner.allThreads.find((candidate) => candidate.name === thread);
+    if (target) {
+      this.runner.step(target);
+    }
+  }
+
+  threadRows(): readonly CleoThreadRow[] {
+    const faulted = new Set(this.runner.faults.map((fault) => fault.thread));
+
+    return this.runner.allThreads.map((thread) => ({
+      instructions: thread.instructionsLastTick,
+      name: thread.name,
+      state: thread.terminated
+        ? faulted.has(thread.name)
+          ? 'fault'
+          : 'done'
+        : thread.wakeAt > this.runner.now
+          ? 'sleep'
+          : 'run',
+      waitMs: Math.max(0, Math.round(thread.wakeAt - this.runner.now)),
+    }));
+  }
+
+  traceLines(thread?: string): readonly string[] {
+    return this.trace.snapshot(thread).map((entry) => entry.line);
+  }
 }
 
 /** The engine-agnostic host core over {@link CleoHostDeps} — everything testable lives here. */
 export function createCleoEngineHost(deps: CleoHostDeps): EngineCleoHost {
-  const memory = new AtlasMemory(deps.nativeWorld);
+  const ring = deps.trace;
+  const memory = new AtlasMemory(deps.nativeWorld, ring ? (line): void => ring.hostEffect(line) : undefined);
   let reportedMisses = 0;
   const objects = new Map<number, ScriptObject>();
   const deadLogged = new Set<number>();
@@ -141,6 +239,8 @@ export function createCleoEngineHost(deps: CleoHostDeps): EngineCleoHost {
   };
 
   return {
+    atlas: memory,
+
     dispose(): void {
       for (const object of objects.values()) {
         object.instance.destroy();
@@ -308,7 +408,8 @@ export function createCleoEngineHost(deps: CleoHostDeps): EngineCleoHost {
 
     vehicles: {
       anyCar: (progress): null | { car: number; progress: number } => deps.cars.anyCar(progress),
-      carInSphere: (x, y, z, radius): null | number => deps.cars.carInSphere(x, y, z, radius),
+      // skipWrecked is dropped knowingly: the script fleet has no wreck state to skip.
+      carInSphere: (x, y, z, radius, findNext): null | number => deps.cars.carInSphere(x, y, z, radius, findNext),
       carModel: (car): number => deps.cars.carModel(car),
       doorAngleRatio: (car, door): null | number => deps.nativeWorld.doorAngleRatio(car, door),
       // The player is the only modelled driver — a script asking for another car's driver gets none.

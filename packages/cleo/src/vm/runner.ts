@@ -10,7 +10,9 @@
 import type { DecodedScript, Instruction } from '../core/decode';
 import type { CleoHost } from './host.interface';
 import type { TierResolution, UnimplementedTier } from './tiers';
+import type { TraceRing } from './trace';
 
+import { formatInstruction } from '../core/disasm';
 import { opcodeDef } from '../core/opcode-table';
 import { registerControlFlow } from './handlers/control-flow';
 import { registerNatives } from './handlers/natives';
@@ -38,6 +40,8 @@ export interface ScriptRunnerOptions {
   readonly random?: () => number;
   /** Per-opcode tier overrides layered over {@link DECLARED_TIERS} (tests; a runtime policy later). */
   readonly tiers?: ReadonlyMap<number, UnimplementedTier>;
+  /** The plan 07 tracer — instruction + condition lines land here while `trace.enabled`. */
+  readonly trace?: TraceRing;
 }
 
 export interface ThreadFaultRecord {
@@ -62,14 +66,25 @@ export class ScriptRunner {
   get activeThreads(): readonly CleoThread[] {
     return this.threads.filter((thread) => !thread.terminated);
   }
+
+  /** Every spawned thread, terminated included — the F2 thread list shows the dead ones as 'done'. */
+  get allThreads(): readonly CleoThread[] {
+    return this.threads;
+  }
+  /** The runner's game clock (ms) — the F2 view derives "sleeping for N ms" from it. */
+  get now(): number {
+    return this.clock;
+  }
   private readonly budget: number;
   private clock = 0;
   private readonly host: CleoHost;
   private readonly random: () => number;
-  private readonly reportedUnimplemented = new Set<number>();
 
+  private readonly reportedUnimplemented = new Set<number>();
   private readonly threads: CleoThread[] = [];
   private readonly tierOverrides: ReadonlyMap<number, UnimplementedTier> | undefined;
+  private readonly trace: TraceRing | undefined;
+
   private readonly unimplementedHits = new Map<number, number>();
 
   constructor(options: ScriptRunnerOptions) {
@@ -77,6 +92,7 @@ export class ScriptRunner {
     this.budget = options.maxInstructionsPerTick ?? DEFAULT_BUDGET;
     this.random = options.random ?? Math.random;
     this.tierOverrides = options.tiers;
+    this.trace = options.trace;
     registerControlFlow(this.registry);
     registerVars(this.registry);
     registerStdlib(this.registry, createStdlibState());
@@ -106,6 +122,21 @@ export class ScriptRunner {
     return thread;
   }
 
+  /**
+   * The F2 debugger's step: dispatch exactly ONE instruction on the thread, wait state overridden —
+   * a step during WAIT means "run the next instruction now", the debugger's meaning of the word.
+   */
+  step(thread: CleoThread): void {
+    if (thread.terminated) {
+      return;
+    }
+    if (this.trace?.enabled) {
+      this.trace.currentThread = thread.name;
+    }
+    thread.wakeAt = this.clock;
+    this.stepOnce(thread, 0);
+  }
+
   /** One game step for every runnable thread. */
   tick(deltaMs: number): void {
     this.clock += deltaMs;
@@ -114,6 +145,7 @@ export class ScriptRunner {
       if (thread.terminated) {
         continue;
       }
+      thread.instructionsLastTick = 0;
       thread.advanceTimers(deltaMs);
       if (this.clock < thread.wakeAt) {
         continue;
@@ -153,38 +185,58 @@ export class ScriptRunner {
   }
 
   private run(thread: CleoThread, deltaMs: number): void {
+    if (this.trace?.enabled) {
+      this.trace.currentThread = thread.name;
+    }
     for (let spent = 0; spent < this.budget; spent += 1) {
-      const instruction = thread.script.instructions[thread.ip];
-      if (!instruction) {
-        // Fell off the end of the code region — the script is done (Sanny scripts normally
-        // terminate explicitly; running off the end is treated the same, not as a fault).
-        thread.terminated = true;
-
-        return;
-      }
-      thread.ip += 1;
-      this.instructionsLastTick += 1;
-      try {
-        const result = this.dispatch(thread, instruction, deltaMs);
-        if (result === 'terminate') {
-          thread.terminated = true;
-
-          return;
-        }
-        if (result === 'yield') {
-          return;
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.faults.push({ message, thread: thread.name });
-        // eslint-disable-next-line no-console -- a silently dead script is undiagnosable in the field
-        console.warn(`[cleo] thread '${thread.name}' killed at offset ${instruction.offset}: ${message}`);
-        thread.terminated = true;
-
+      if (this.stepOnce(thread, deltaMs) === 'stop') {
         return;
       }
     }
     // Budget exhausted: a WAIT-less loop yields here instead of hanging the tab (plan 03 decision 6).
+  }
+
+  /** Fetch + dispatch one instruction — the shared body of the tick loop and the F2 step. */
+  private stepOnce(thread: CleoThread, deltaMs: number): 'continue' | 'stop' {
+    const instruction = thread.script.instructions[thread.ip];
+    if (!instruction) {
+      // Fell off the end of the code region — the script is done (Sanny scripts normally
+      // terminate explicitly; running off the end is treated the same, not as a fault).
+      thread.terminated = true;
+
+      return 'stop';
+    }
+    thread.ip += 1;
+    this.instructionsLastTick += 1;
+    thread.instructionsLastTick += 1;
+    const entry = this.trace?.enabled ? this.trace.push(thread.name, formatInstruction(instruction)) : undefined;
+    try {
+      const result = this.dispatch(thread, instruction, deltaMs);
+      if (entry && opcodeDef(instruction.opcode)?.condition) {
+        // Appended AFTER dispatch so the gate's ANSWER is on the gate's own line — the windfarm
+        // lesson: when headless and field disagree, it is the gate answers you diff.
+        entry.line += ` -> ${thread.condition}`;
+      }
+      if (result === 'terminate') {
+        thread.terminated = true;
+
+        return 'stop';
+      }
+      if (result === 'yield') {
+        return 'stop';
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.faults.push({ message, thread: thread.name });
+      this.trace?.push(thread.name, `  ! thread killed at offset ${instruction.offset}: ${message}`);
+      // eslint-disable-next-line no-console -- a silently dead script is undiagnosable in the field
+      console.warn(`[cleo] thread '${thread.name}' killed at offset ${instruction.offset}: ${message}`);
+      thread.terminated = true;
+
+      return 'stop';
+    }
+
+    return 'continue';
   }
 
   private unimplemented(thread: CleoThread, instruction: Instruction): 'continue' | 'terminate' {
