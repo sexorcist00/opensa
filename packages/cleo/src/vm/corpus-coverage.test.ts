@@ -39,9 +39,10 @@ describe.skipIf(!existsSync(CORPUS))('corpus coverage join', () => {
     });
 
     it('no corpus atlas MISS is undeclared (the atlas half of the join — decision 4)', () => {
-      // The corpus's whole native surface is served headless (measured 2026-08-06: zero misses).
-      // This is the guard for the NEXT mod: a script whose access the atlas cannot name fails here
-      // until its row gets a declared tier + consumer in DECLARED_ATLAS_TIERS.
+      // Every miss the corpus produces must carry a DECLARED tier (today: the two struct-read rows
+      // — windfarm's model-info field, cardoor's task struct). This is the guard for the NEXT mod:
+      // a script whose access the atlas cannot name fails here until its row gets a declared tier
+      // + consumer in DECLARED_ATLAS_TIERS.
       const undeclared: string[] = [];
       for (const file of readdirSync(CORPUS).filter((name) => name.endsWith('.cs'))) {
         // A car exists AND the player sits in it — the widest realistic surface: cardoor's task
