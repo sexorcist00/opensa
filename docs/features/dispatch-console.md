@@ -13,13 +13,37 @@ Implemented and running. The world half is verified only on real GPU hardware �
 
 **Under active development as [plan 098](../plans/098-dispatch-console/readme.md)** (opened 2026-08-06), which
 declares the console as the engine's second consumer ([project-goals, directive 7](../project-goals.md)) and
-carries five chains: the map profile (trim the engine to what the map draws — and only that: cars and peds
+carries eight chains: the map profile (trim the engine to what the map draws — and only that: cars and peds
 drawn, vegetation swaying, the day turning and the weather colouring the world are all protected, and one
 engine serves PC and mobile on a budget rather than a branch), real device truth (the repo's first
 real-world mobile benchmark row), the operator surface at 360 CSS px, render-on-demand for a surface that
-idles most of a shift, and picking taken off its debug flag. The deferred CAD half — a live feed, real
-routes, replay, multi-operator, install/offline — is
-[roadmap 0.6.0](../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md).
+idles most of a shift, picking taken off its debug flag, **three display modes**, **the operator's map**
+(orthographic mode, flyTo, follow, bookmarks, a minimap, measuring, drawing, keys, embedding) and **the time
+axis**. The deferred CAD half — a live feed, real routes, cross-shift history, multi-operator,
+install/offline — is [roadmap 0.6.0](../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md).
+
+**The product it is aimed at** (settled with the user 2026-08-06): the dispatcher is a **player** on the
+server and so are the units; the data source is a **native CAD plugin**; the console stays a separate web
+application beside the game. Its named budgets are 150 units drawn as models, 60 fps on a phone, ≤3 s to a
+working picture and a hard 300–500 MB residency ceiling — see the
+[plan's budget table](../plans/098-dispatch-console/readme.md), which also states plainly that those four may
+not be satisfiable at once and how that gets decided.
+
+## Three ways to draw the world
+
+Decided 2026-08-06 — one camera, one symbology, one board, three sources for what is beneath them
+([098/6](../plans/098-dispatch-console/6-display-modes/readme.md)):
+
+| Mode | What it is | State |
+| --- | --- | --- |
+| Live render | the streamed pak — the game's own world | shipped, this document |
+| Baked 3D city map | the world pre-simplified offline and lit like a map rather than a game | the bake exists (`tools/opensa-lod-generator`), the mode does not |
+| Flat 2D | top-down tiles, no 3D at all | the frame exists (`plan-mode.ts`), the content does not |
+
+The operator picks; a device that cannot carry the choice starts in one that works **and says why**. Camera
+pose, selection and the moment in time survive a switch. The 2D tiles are baked by our own orthographic pass
+so every build — including total conversions, which have no third-party map raster and never will — gets all
+three modes.
 
 ## What it is made of
 

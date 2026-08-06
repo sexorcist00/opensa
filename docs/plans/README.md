@@ -28,7 +28,12 @@ but its folder moved to `roadmap/0.5.0/`). Newest first:
   day cycle and the weather are protected, and one engine serves PC and mobile), real device truth (the repo's
   first real-world mobile row, handing 097/1-04 the residency ceiling it refused to invent), the operator
   surface at 360 CSS px, render-on-demand for a console that idles most of a shift, and picking taken off the
-  `debugPicking` flag it stands on today. Owns none of 097's work and duplicates none of it.
+  `debugPicking` flag it stands on today. A requirements round on the same day added three more: **three
+  display modes** (live render / a baked 3D city map / flat 2D tiles — two thirds of which already exist
+  unrecognised, in `opensa-lod-generator` and `plan-mode.ts`), **the operator's map** (orthographic mode,
+  flyTo, follow, bookmarks, minimap, measuring, drawing, keys, embedding) and **the time axis**, moved forward
+  from 0.6.0 because where time lives in the data model is cheap now and a rewrite later. Owns none of 097's
+  work and duplicates none of it.
 - **[097 — Platform reach](./097-platform-reach/readme.md)** — IN PROGRESS, opened 2026-08-04. The world on a
   phone, and the frame off the main thread. A phone boots the engine and cannot open the world, because a pak
   built from SA assets is BC throughout and no mobile GPU has BC — a build-time content decision no runtime

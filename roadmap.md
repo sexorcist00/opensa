@@ -181,6 +181,9 @@ Full chain: [docs/plans/098-dispatch-console/](docs/plans/098-dispatch-console/r
   - [ ] An operator surface that works at 360 CSS px, on real touch hardware
   - [ ] Render on demand — a console idles most of a shift, a game never does
   - [ ] Picking off the `debugPicking` flag, and units drawn as models rather than debug lines
+  - [ ] Three display modes: live render, a baked 3D city map, flat 2D tiles — the operator picks
+  - [ ] The operator's map: orthographic mode, flyTo, follow a unit, bookmarks, minimap, measuring, drawing
+  - [ ] The time axis: interpolated movement, scrub the shift, unit trails
 - [ ] CJ
   - [ ] Clothes
   - [ ] Bodies

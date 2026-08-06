@@ -33,7 +33,11 @@ Taken 2026-08-06 with the user; every step below inherits them.
 | --- | --- | --- |
 | **The SA world only** | the console reads the same pak and the same authored data the game does | geo import (OSM / tiles / CityGML), a CRS layer, CAD over a real city |
 | **The console leads the mobile work** | phone work is ordered by the operator surface, because it is the one that runs there | the game shell's touch chrome setting the order |
-| **The board stays a mock** | `stepOperations` remains the feed; the seam stays a seam | a backend, a socket protocol, multi-operator, replay |
+| **The dispatcher is a player** | the operator is a player on the server, on one or two monitors plus a phone; the units are players too, and there is no decorative population on the map | a desk product for staff outside the game |
+| **The data comes from a native CAD plugin** | that plugin is the source of calls and the channel to units; the console stays a separate web application beside the game | the console inventing calls, or owning voice/chat |
+| **The board stays a mock for now** | `stepOperations` remains the feed; the seam stays a seam until the plugin is there | a backend or a socket protocol in this chain |
+| **Three ways to draw the world** | live render, a baked 3D city map, a flat 2D map — the operator picks, with an automatic floor | a silent quality ladder |
+| **Time is an axis, not a field** | positions interpolate, the shift can be scrubbed, units leave trails | extrapolating past what the feed sent |
 | **Cut only what is dead** | one declared map profile, over the build and the frame, removing what this surface **provably never reads** | cutting whatever looks "game-ish": cars and peds are drawn, vegetation sways, the day turns |
 | **One engine, PC and mobile** | shared code and a shared frame; the platform difference is a **budget**, not a feature set | a forked renderer, a "mobile shader path", a second codebase |
 | **UI is designed, not eyeballed** | the design skills are loaded before layout and colour; tokens live in `apps/dispatch/src/ui/styles.ts` | picking colour and density by feel, styles scattered per component |
@@ -57,6 +61,26 @@ Read together: the desktop engine is GPU-bound in steady state and main-thread-b
 phone has never been measured against real content at all. So the order is **cut the dead weight, then
 measure the thing we intend to ship, then tune against that measurement** — never the other way round.
 
+## The budgets this chain is held to
+
+Named by the user on 2026-08-06, before the work. Every one of them is a specification, not a hope
+([directive 5](../../project-goals.md#5-performance-is-a-requirement-not-an-outcome)).
+
+| Budget | Value | Where it bites |
+| --- | --- | --- |
+| Units on screen, worst case | **150**, each drawn as a **model with a symbol over it** | 1/04, 5/02, 5/04 |
+| Frame rate on a phone | **60 fps** | the whole of 1 and 2 |
+| Time to a working picture | **≤ 3 s** | 2/01, 6/02 |
+| Resident memory on a phone | **hard ceiling 300–500 MB** | 1/03, 2/04, 8/01 |
+| First download | as large as needed **if it caches** | 2/01, and the offline cache deferred to 0.6.0 |
+
+**These may not all be satisfiable at once, and the chain says so up front.** 150 textured vehicle models at
+60 fps inside 300 MB is not implied by anything measured: the only mobile row in the repo is 41 fps and 37 MB
+on a *synthetic* city with no streaming. Two honest outcomes exist — a screen-size threshold where a distant
+unit drops to its symbol, or a mode ([chain 6](6-display-modes/readme.md)) in which the world is cheap enough
+that the budget is comfortable — and [chain 2](2-real-device-truth/readme.md) decides between them with a
+measurement rather than an argument.
+
 ## The chains, in execution order
 
 | # | Chain | Why here |
@@ -66,6 +90,9 @@ measure the thing we intend to ship, then tune against that measurement** — ne
 | 3 | [The operator surface on a phone](3-the-operator-surface-on-a-phone/readme.md) | "It loads" is not "an operator can work it" — 360 CSS px, touch, legibility, and the no-GPU floor |
 | 4 | [A console is not a game](4-a-console-is-not-a-game/readme.md) | A game is always moving; a dispatch map idles most of a shift on a device that runs hot and flat |
 | 5 | [Symbology and picking as product](5-symbology-and-picking-as-product/readme.md) | The console's central interaction stands on a flag named `debug`, and its units are debug lines |
+| 6 | [Three ways to draw the world](6-display-modes/readme.md) | Live, baked-3D and flat-2D. Two thirds of it already exists unrecognised, and it is what makes the budget above reachable by choice rather than by giving up |
+| 7 | [The operator's map](7-the-operator-map/readme.md) | Orthographic mode, pitch clamp, flyTo, follow, bookmarks, fit bounds, a minimap, measuring, drawing, search, keys, embedding — what a map application has that a game does not |
+| 8 | [The time axis](8-the-time-axis/readme.md) | Where time lives in the data model is cheap now and a rewrite later. Moved forward from 0.6.0 for that reason alone |
 
 ## What this chain does NOT own
 
@@ -81,19 +108,26 @@ has taken, and [2/03](2-real-device-truth/readme.md) is the cheapest way to take
 
 Recorded so they are not re-litigated, not because they are bad:
 
-- **Real-world geography** — no OSM/tile/CityGML import, no CRS layer. The console maps the SA world.
-- **A live operations feed** — the board stays `stepOperations`. The seam is already named in
-  `apps/dispatch/src/ops/sim.ts`; the contract for a real one is
-  [roadmap 0.6.0](../../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md).
-- **Multi-operator, replay/history, install + offline pak cache** — same roadmap entry, deferred by decision
-  rather than by difficulty.
+- **Real-world geography — the door is closed** (2026-08-06, asked twice). No OSM/tile/CityGML import, no CRS
+  layer, and no "world source" abstraction kept open for one. GTA coordinates stay the coordinate system, and
+  the one conversion that exists (`apps/dispatch/src/map/coords.ts`) stays the one place it lives.
+- **Interiors and floors** — the map is the street. A unit that goes inside keeps its symbol at the door.
+- **Roles beyond the dispatcher** — one role, everyone sees everything. No observer mode, no field-unit
+  screen; the field unit's app is the native plugin's business, not this console's.
+- **Decorative population** — only real players are drawn, so nothing on the map is ever mistaken for data.
+- **A live operations feed, multi-operator, install + offline cache** — deferred to
+  [roadmap 0.6.0](../../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md). The feed's source is now known
+  (the native CAD plugin), which is why the contract is worth writing before the transport.
+- **Extrapolating unit positions** — see [8/02](8-the-time-axis/readme.md). A map that invents a position is
+  worse than one a second behind.
 
 ## Status
 
 | Step | State |
 | --- | --- |
 | the chain itself | **OPENED 2026-08-06** — declared, ordered, and the decisions above taken with the user |
-| 1/01 … 5/04 | not started |
+| the requirements round | **CLOSED 2026-08-06** — the product, the budgets, the display modes, the camera and the time axis settled in one questioning pass; chains 6–8 exist because of it |
+| 1/01 … 8/04 | not started. Execution order confirmed with the user: **the engine first** — the map profile and the phone, then everything above them |
 
 **Owed, and not yet paid:** every number quoted above is somebody else's measurement. This chain has not run
 anything yet, and its headline claim — a real district, on a real phone, in an operator's hands — stays

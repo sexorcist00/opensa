@@ -15,10 +15,19 @@ auto-dispatches, ages calls and trickles new ones. Its header already names the 
 to a game server, `stepOperations` is what gets replaced by the socket handler; nothing else in the app
 changes.* There is no networking anywhere in this repo today — not a WebSocket, not a poll.
 
+The source is known as of 2026-08-06: a **native CAD plugin** on the client side is what raises calls and
+carries the dispatcher's traffic to the units. The console stays a separate web application beside the game
+and consumes what that plugin publishes.
+
 So the first deliverable is not a server, it is a **contract**: the event and snapshot shapes, what a
-reconnect replays, what the client is allowed to extrapolate between updates, and what an operator sees when
-the feed is stale rather than empty. Written into [`docs/contracts/`](../../../../contracts/) so a backend can
-be built separately and later, against something rather than against a guess.
+reconnect replays, how often a unit's position is published (chain 8's interpolation is written against that
+rate), and what an operator sees when the feed is stale rather than empty. Written into
+[`docs/contracts/`](../../../../contracts/) so the plugin and the console can be built separately, against
+something rather than against a guess.
+
+Note what is **not** deferred: the client-side time axis moved forward into
+[098/8](../../../../plans/098-dispatch-console/8-the-time-axis/readme.md), because where time lives in the
+data model is cheap to decide now and a rewrite to decide late.
 
 ## Routes that are real paths, not bearings
 
@@ -31,13 +40,13 @@ Real routing needs the graph question answered first: what a game without `data/
 sidecar the [city-life chain](../../../0.5.0/plans/06-city-life/readme.md) is already designing for this case
 too. Note also what the graph does **not** say — travel direction (0 one-way links parsed) and gradient.
 
-## Replay and history
+## History beyond the current shift
 
-A dispatch desk is judged after the shift as much as during it: scrub back through a period, watch units and
-calls move, and answer "what did we see at 14:20". The engine already has the pieces in a different shape —
-plan 096's video mode drives seeded runs through the world deterministically — so the question is whether a
-replay is a recorded event log played back through the same board reducer (cheap, exact, and it works with
-the mock feed too) or something heavier.
+Scrubbing **within a shift** is no longer deferred — it lives in
+[098/8](../../../../plans/098-dispatch-console/8-the-time-axis/readme.md), client-side, needing no storage.
+What stays here is everything that outlives the browser tab: persisting events across shifts, an incident
+archive, and search over it ("what did we see at 14:20 last Tuesday"). That needs a server that keeps the
+log, which is the same server the live feed needs — so the two arrive together or not at all.
 
 ## Multi-operator
 
