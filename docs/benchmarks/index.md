@@ -386,3 +386,9 @@ successor on a real `--rgba8` district.
 07-18 → 07-20: what the map CONTAINED changed under us while the numbers were read as if it had not. The
 lab rows carry a `converter` block; the sweeps did not. Every new in-game run must name its pak in `note`
 — that is now in the readme's comparability checklist, and the 07-19/07-20 bisect rows carry it.
+
+## Tool trials (not engine runs, never comparable to one)
+
+| Date | File | What | Headline numbers |
+| --- | --- | --- | --- |
+| 08-06 | [astc-encoder-trial](opensa-engine/2026-08-06-headless-astc-encoder-trial.json) | The ASTC encoder chain 2 turned to (`astc-encoder.js` 1.0.0, wasm bindings of ARM astc-encoder), on a 128x128 synthetic with a HARD alpha edge — the shape SA's cutout foliage is made of. x64 container, one thread, no GPU. | **1.00 B/texel** (a quarter of RGBA8) · **PSNR 49.3 dB** (RGB 48.0, alpha 58.7) · 115 ms at MEDIUM |

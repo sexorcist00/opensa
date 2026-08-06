@@ -1,9 +1,26 @@
-# 2 — Universal textures: one pak, every GPU
+# 2 — Mobile texture formats: ASTC in the converter
 
-**Gate: [concepts/universal-texture-transcode.md](../../../concepts/universal-texture-transcode.md).**
-The direction is decided (Basis/KTX2 + transcode at load); what is *not* decided is whether the quality
-survives the trip, and that is a measurement, not an opinion. No step below starts before the concept's
-go/no-go.
+**Direction changed 2026-08-06 (user decision): a DIRECT ASTC encode, not Basis/KTX2 + transcode.** The
+universal concept is closed and recorded in
+[postmortem/universal-texture-transcode.md](../../../postmortem/universal-texture-transcode.md) — it was not
+measured away, it was decided away: one generation of loss instead of two, a target device that carries ASTC
+natively, and nothing added to the pak worker at all. The price accepted is that one pak no longer serves
+every GPU (desktop keeps BC, a phone gets ASTC).
+
+**The encoder is chosen and tried**: `astc-encoder.js` (wasm bindings of ARM's astc-encoder, no native
+binary — which is what lets it run in Termux on the phone as well as on a desktop). First measurement,
+2026-08-06: ASTC 4x4 at MEDIUM costs **1.00 B/texel**, reached **PSNR 49.3 dB** (RGB 48.0, alpha 58.7) on a
+synthetic with a hard alpha edge, 115 ms for 128x128 on one thread
+([benchmark](../../../benchmarks/opensa-engine/2026-08-06-headless-astc-encoder-trial.json)). The package
+also ships `computeErrorMetrics`, so the quality floor below is evaluated with the encoder's own metric
+rather than one we wrote.
+
+**Landed already**: `.ostex` carries the format (`OstexFormat.ASTC4x4`, minor 2), it demands
+`texture-compression-astc` through the existing `OSTEX_FORMAT_FEATURE` map — so `requireWorldSupport` refuses
+an ASTC world on a device without ASTC before a cell streams, with no new code — and `ostex-upload` maps it
+to `astc-4x4-unorm-srgb`. Nothing else in the layout changed, because ASTC 4x4 shares BC's 4x4 block; the
+writer's duplicate copy of the block table was removed in the same change (`ostexTightRowBytes`), since that
+copy is exactly what a new format breaks.
 
 ## What it is worth, in bytes (measurable today)
 
@@ -36,41 +53,38 @@ Expensive: SA ships **DXT**, so a universal encode is a second generation of los
 That is the concept's whole question. (Models are already re-encoded today — `model-ostex.ts` runs
 `encodeDxt` over the dictionary — so for vehicles and peds this is not a new class of loss.)
 
-## 01 — `.ostex` v1: the container gains a supercompressed payload
+## 01 — `.ostex` carries ASTC — **DONE 2026-08-06**
 
-The reader already rejects an unknown major (`unsupported .ostex major`), so **the break is caught, loudly,
-by code that exists**. Bump `OSTEX_VERSION_MAJOR` 0 → 1.
+No major break was needed, which is the whole point of the cheaper design: a new format ID, its GPU feature,
+its block size, its GPU format. Tested: it demands the ASTC feature and never the BC one, it costs exactly
+what BC3 costs and a quarter of RGBA8, and it round-trips through the container.
 
-- New format ids for the universal payload + a supercompression field; `width`/`height`/`layers`/`mipCount`
-  and the per-layer record (`nameHash`, `alphaClass`, `cutoutRef`, `wrap`) stay exactly as they are.
-- The invariant to preserve in the type: a *decoded* `.ostex` still hands out the layer-major, mip-minor,
-  256-aligned payload. Universal changes what is on disk, not what the uploader receives.
-- Verification: round-trip tests per format; an old reader against a v1 file must fail with the version
-  message, not with a payload-size mismatch.
+Still open here: **other ASTC block sizes**. Only 4x4 is in, because 4x4 is BC's block and therefore free;
+8x8 (0.25 B/texel, the quality/size lever a phone may well want) needs `ostexMipLayout` to stop assuming a
+4x4 block — the tests say so rather than the layout silently producing wrong rows.
 
-## 02 — The encode side (`opensa-pack` / `cell-weld`)
+## 02 — The encode side (`opensa-pack` / `cell-weld`) — NEXT
 
-- `--textures=universal|bc|rgba8`, defaulting per the concept's verdict. `bc` keeps today's DXT passthrough
+- `--textures=astc|bc|rgba8` (`--rgba8` stays as the alias it is today). `bc` keeps the DXT passthrough
   byte-for-byte — it is the desktop-quality reference and the A/B partner.
+- The encoder runs at BUILD time only. Encode cost is the new build-time number to watch: 115 ms per 128x128
+  layer at MEDIUM on one thread scales to minutes per district — the pack's existing worker pool is the
+  answer, and the quality preset is the dial (FASTEST…EXHAUSTIVE).
 - The alpha pipeline runs **before** the universal encode, unchanged: premultiply, dilate, classify
   (cutout / soft-blend / opaque), `cutoutRef`. A universal encoder that re-orders that pipeline silently
   changes 1 422 cutout layers.
 - **The run this chain owes:** two paks from the same tree with only the switch flipped. Plan 092 shipped
   without its equivalent and its `pass` column is unreadable for it; this chain does not repeat that.
 
-## 03 — The transcode side (worker)
+## 03 — ~~The transcode side (worker)~~ — DROPPED with the universal direction
 
-- The transcoder (wasm) lives in the pak worker, next to the existing decode; the target format is chosen
-  from the device's feature set — BC7/BC1 where BC exists, ASTC 4×4 where it does, ETC2 otherwise, RGBA8 as
-  the last resort.
-- Output is the existing aligned layout, so the upload path is unchanged and keeps the applied
-  **≤1.5 ms/frame** drain ([texture-upload-budget](../../../performance/applied/texture-upload-budget.md)).
-- Budget: transcode is off-frame by construction, but it is not free — it must not starve the worker's
-  streaming duty. Measure per-array transcode ms on desktop **and** on the phone; a per-array cost that
-  exceeds the cell's streaming deadline is a finding, not a footnote.
-- Watch the resource-lifetime restriction: a texture array that **grows** invalidates every bundle recorded
-  against it. The pak path never welds incrementally, so this stays clear — but a transcoder that "fills in
-  layers later" would walk straight into a use-after-destroy the driver reports however it feels like.
+There is no runtime transcode any more: an ASTC payload uploads verbatim exactly as a BC one does, so the
+upload path, its ≤1.5 ms/frame drain and every render bundle are untouched. This is the largest single saving
+of the change — the worker gains nothing to do and nothing to starve.
+
+What replaces it is a BUILD-side question: which target a build is for. `--platforms mobile` already fails a
+pack whose content a phone cannot display, and it reads `OSTEX_FORMAT_FEATURE`, so it covers ASTC the day the
+encoder writes it.
 
 ## 04 — Models, and the single-mip decision
 

@@ -15,6 +15,12 @@ observations that killed it, and the conditions under which it might be worth re
 
 ## Postmortems
 
+- [universal-texture-transcode.md](./universal-texture-transcode.md) — Basis/KTX2 in `.ostex` with a
+  transcode at load (plan 097 chain 2's original gate), replaced 2026-08-06 by a DIRECT ASTC encode in the
+  converter. Not measured away: decided away, on the loss budget (one generation instead of two), on the
+  fact that the target device carries ASTC natively, and on the moving parts a transcoder adds to the worker.
+  The price accepted is that one pak no longer serves every GPU. Revisit when a single artefact for all
+  devices becomes a requirement.
 - [runtime-modloader-overlay.md](./runtime-modloader-overlay.md) — the boot-time `modloader/` overlay
   (`@opensa/modloader`, plan 058) and the runtime DFF fallback it fed, both removed 2026-07-28. Not measured
   away but ARGUED away: what a car carries beyond geometry — its `features.txt` pop-up declaration, its plate

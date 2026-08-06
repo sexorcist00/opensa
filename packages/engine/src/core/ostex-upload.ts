@@ -14,6 +14,10 @@ import { decodeOstex, OstexFormat, type OstexFormatId, ostexMipLayout } from '@o
 import type { Resources } from './resources';
 
 const GPU_FORMAT: Record<OstexFormatId, GPUTextureFormat> = {
+  // ASTC 4x4 uploads verbatim like the BC formats — same 4x4 block, same 16 bytes, so nothing in the layout
+  // or the drain changes. The device must carry `texture-compression-astc`, which the manifest states and
+  // `requireWorldSupport` checks before a cell streams.
+  [OstexFormat.ASTC4x4]: 'astc-4x4-unorm-srgb',
   [OstexFormat.BC1]: 'bc1-rgba-unorm-srgb',
   [OstexFormat.BC2]: 'bc2-rgba-unorm-srgb',
   [OstexFormat.BC3]: 'bc3-rgba-unorm-srgb',

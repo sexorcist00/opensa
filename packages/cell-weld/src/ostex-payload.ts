@@ -4,7 +4,7 @@
  * Extracted from the world TexturePlanner so the PER-MODEL writer (plan opensa-pack/003 phase 2) packs
  * layers exactly the way the world arrays are packed — one repack, one set of alignment rules.
  */
-import { OstexFormat, type OstexFormatId, ostexLayerBytes, ostexMipLayout } from '@opensa/engine-formats';
+import { type OstexFormatId, ostexLayerBytes, ostexMipLayout, ostexTightRowBytes } from '@opensa/engine-formats';
 
 /** One mip level's tightly-packed bytes (rows back-to-back, no padding). */
 export interface TightMip {
@@ -25,10 +25,8 @@ export function packOstexPayload(
     for (let level = 0; level < mipCount; level += 1) {
       const layout = ostexMipLayout(format, width, height, level);
       const mip = mips[level];
-      const tightRow =
-        format === OstexFormat.RGBA8
-          ? layout.mipWidth * 4
-          : Math.ceil(layout.mipWidth / 4) * (format === OstexFormat.BC1 ? 8 : 16);
+      // The format's own block table, never a copy of it (see `ostexTightRowBytes`).
+      const tightRow = ostexTightRowBytes(format, layout.mipWidth);
       for (let row = 0; row < layout.rows; row += 1) {
         payload.set(mip.data.subarray(row * tightRow, (row + 1) * tightRow), offset + row * layout.bytesPerRow);
       }

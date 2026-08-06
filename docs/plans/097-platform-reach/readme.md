@@ -44,7 +44,7 @@ because the content will not load. **So the order is: make the world loadable, t
 | # | Chain | Why here | Gate |
 | --- | --- | --- | --- |
 | 1 | [Device truth](1-device-truth/readme.md) | Nothing may be optimised for a device we cannot measure. Also closes a restriction that is caught by **nothing** today | — |
-| 2 | [Universal textures](2-universal-textures/readme.md) | The single blocker between a phone and the real map | [concept](../../concepts/universal-texture-transcode.md) |
+| 2 | [Mobile texture formats (ASTC)](2-universal-textures/readme.md) | The single blocker between a phone and the real map | ungated since 2026-08-06 — the universal concept was replaced by a direct ASTC encode ([postmortem](../../postmortem/universal-texture-transcode.md)) |
 | 3 | [Off the main thread](3-off-main-thread/readme.md) | The hitches are all one shape: heavy work in the frame. A phone's CPU makes each of them 3–5× worse | — |
 | 4 | [Mobile runtime](4-mobile-runtime/readme.md) | Resolution, residency, fill, touch — the things that decide whether "it loads" becomes "it plays" | partly (see 4/01) |
 | 5 | [WebGL2 fallback](5-webgl2-fallback/readme.md) | Real reach, real permanent cost. Last, and only if the concept survives | [concept](../../concepts/webgl2-fallback-backend.md) |
@@ -66,7 +66,9 @@ because the content will not load. **So the order is: make the world loadable, t
 | 4/05 the shell's message when the adapter is refused | **SHIPPED 2026-08-05** — `probeWebGpu` answers `no-api` / `no-adapter` / `ok`, and the sorry screen says which. The old single message told a phone that HAS WebGPU that its browser lacks it; on the one device measured, the API is present and the driver blocklist refuses the adapter. The compatibility-adapter FALLBACK is deliberately not taken: the 08-04 record does not show it succeeding where the default fails, so it would be a guess dressed as reach |
 | 4/06 the cache that silently is not there | **SHIPPED 2026-08-05** — `cacheStorageStatus()` reports availability AND the reason, the fetch loader logs it once before the first byte, and the preloader carries the standing note. A phone on a LAN IP re-downloads the whole game every visit and nothing said so — including in the captures, where the numbers then include a download nobody intended |
 | 4/05 + 4/06 in a browser | **SHIPPED 2026-08-05** — `e2e/shell.spec.ts` simulates both phone states (no `caches` + insecure context; `requestAdapter` → null) and asserts what the shell says. Simulated deliberately: a dev machine is a secure context with an unblocked GPU, so these two states have no other way to be seen — and a silent state is the kind nobody notices has regressed |
-| chains 2, 5 | pending (both wait on their concepts) |
+| 2/01 `.ostex` carries ASTC 4x4 | **SHIPPED 2026-08-06** — format id, GPU feature (`texture-compression-astc`, so `requireWorldSupport` refuses an ASTC world on a device without it with no new code), `astc-4x4-unorm-srgb`, and the writer's duplicate block table removed. ASTC 4x4 shares BC's block, so no layout changed. Encoder chosen and tried: `astc-encoder.js` (wasm, runs in Termux too) — **1.00 B/texel, PSNR 49.3 dB, 115 ms per 128x128 at MEDIUM** |
+| 2/02 the encode side | NEXT — `--textures=astc|bc|rgba8` in opensa-pack, encode cost on the pack's worker pool, and the two-paks-one-switch A/B |
+| chain 5 | pending (waits on its concept) |
 | chain 4, the rest | waits on a phone: 4/01–04 all spend a budget that has not been measured |
 
 **Not yet measured, and owed:** every number in this plan so far is a build/CI fact. Nothing here has been

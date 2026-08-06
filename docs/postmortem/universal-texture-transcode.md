@@ -1,7 +1,41 @@
-# Concept — universal textures in `.ostex` (Basis/KTX2 + transcode at load)
+# Postmortem — universal textures in `.ostex` (Basis/KTX2 + transcode at load)
 
-**Status: live, go/no-go pending.** Opened 2026-08-04 as the gate on
-[plan 097 / chain 2](../plans/097-platform-reach/2-universal-textures/readme.md).
+**Closed 2026-08-06, NOT by measurement.** Opened 2026-08-04 as the gate on
+[plan 097 / chain 2](../plans/097-platform-reach/2-universal-textures/readme.md); replaced by a **direct
+ASTC encode in the converter** (user decision, 2026-08-06) before its go/no-go was taken. The record below is
+left as written, because the questions it poses are the ones the successor has to answer too — they are just
+answered against a cheaper design now.
+
+## Why it was replaced
+
+Three reasons, in the order they weigh:
+
+1. **The loss budget.** SA ships DXT. A universal encode is a SECOND generation on top of it; a direct ASTC
+   encode from the decoded source is one. The concept itself named this as its central risk, and the
+   replacement removes the risk instead of measuring it.
+2. **The device we actually have carries ASTC.** The 2026-08-04 phone reports `texture-compression-astc` AND
+   `texture-compression-etc2` ([edge-cases/browser-runtime.md](../edge-cases/browser-runtime.md)), so the
+   universal payload's whole selling point — "one payload, transcode to whatever the device has" — buys
+   nothing this target needs.
+3. **Cost and moving parts.** Universal needs a wasm transcoder in the pak worker, a supercompression field,
+   and a per-array transcode budget measured on two platforms. ASTC needs an encoder at BUILD time and
+   nothing at all at runtime: the payload uploads verbatim, exactly like BC does today.
+
+What it costs us, stated plainly: **not one pak for every GPU.** A desktop keeps the BC pak, a phone gets an
+ASTC one, and the build has to produce whichever a target needs. That is the trade the decision accepted.
+
+## When to revisit
+
+When "one artefact for every device" becomes a requirement rather than a nicety — a public download, a CDN
+where per-target variants are expensive, or a device family that carries neither BC nor ASTC. The measured
+numbers to start from are in
+[`benchmarks/opensa-engine/2026-08-06-headless-astc-encoder-trial.json`](../benchmarks/opensa-engine/2026-08-06-headless-astc-encoder-trial.json):
+ASTC 4x4 costs 1.00 B/texel and reached PSNR 49.3 dB on a hard-alpha synthetic at MEDIUM, 115 ms for
+128x128 on one thread. A universal path has to beat that on quality per byte, not just match it.
+
+---
+
+## The original concept, as written on 2026-08-04
 
 ## The question
 

@@ -23,7 +23,7 @@ its research record into its `docs/plans/<n>-…/` folder, and a killed one move
 
 ## Live
 
-- **[universal-texture-transcode](universal-texture-transcode.md)** — one `.ostex` payload transcoded to the
+- ~~universal-texture-transcode~~ — CLOSED 2026-08-06, replaced by a direct ASTC encode; the record is in [postmortem/universal-texture-transcode.md](../postmortem/universal-texture-transcode.md).
   device's format at load (Basis/KTX2), so a phone can open the real map. Direction decided 2026-08-04;
   the open question is whether the quality survives a second generation of loss on SA's DXT. Gate on
   [plan 097 chain 2](../plans/097-platform-reach/2-universal-textures/readme.md).

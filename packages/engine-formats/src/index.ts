@@ -82,6 +82,7 @@ export {
   ostexLayerBytes,
   ostexMaxMips,
   ostexMipLayout,
+  ostexTightRowBytes,
   readOstexFormat,
 } from './ostex';
 export {

@@ -8,9 +8,14 @@ import { ByteReader, ByteWriter } from './binary';
 
 export const OSTEX_MAGIC = 0x3154534f; // 'OST1' little-endian
 export const OSTEX_VERSION_MAJOR = 0;
-export const OSTEX_VERSION_MINOR = 1;
+export const OSTEX_VERSION_MINOR = 2; // 2: the ASTC4x4 format id
 
 export const OstexFormat = {
+  /** ASTC 4x4 LDR (plan 097 chain 2): 16 bytes per 4x4 block — ONE byte per texel, the same as BC3/BC7 and a
+   *  QUARTER of RGBA8. It is here because `--rgba8` is the only thing a GPU without BC can take today and it
+   *  costs 8x a BC1 payload, which is the arithmetic that keeps the full map off a phone. The 4x4 block
+   *  matches BC's, so every layout rule below is unchanged; other ASTC block sizes would not be. */
+  ASTC4x4: 5,
   BC1: 0,
   BC2: 4,
   BC3: 1,
@@ -27,6 +32,7 @@ export type OstexFormatId = (typeof OstexFormat)[keyof typeof OstexFormat];
  * ETC2/ASTC and never BC, so a BC payload is a desktop payload.
  */
 export const OSTEX_FORMAT_FEATURE: Record<OstexFormatId, string | undefined> = {
+  [OstexFormat.ASTC4x4]: 'texture-compression-astc',
   [OstexFormat.BC1]: 'texture-compression-bc',
   [OstexFormat.BC2]: 'texture-compression-bc',
   [OstexFormat.BC3]: 'texture-compression-bc',
@@ -66,6 +72,7 @@ export interface OstexLayer {
 export const OSTEX_ROW_ALIGN = 256;
 
 const BLOCK_BYTES: Record<OstexFormatId, number> = {
+  [OstexFormat.ASTC4x4]: 16,
   [OstexFormat.BC1]: 8,
   [OstexFormat.BC2]: 16,
   [OstexFormat.BC3]: 16,
@@ -173,10 +180,22 @@ export function ostexMipLayout(
   const mipHeight = Math.max(1, height >> level);
   const compressed = format !== OstexFormat.RGBA8;
   const rows = compressed ? Math.ceil(mipHeight / 4) : mipHeight;
-  const rawRow = compressed ? Math.ceil(mipWidth / 4) * BLOCK_BYTES[format] : mipWidth * BLOCK_BYTES[format];
+  const rawRow = ostexTightRowBytes(format, mipWidth);
   const bytesPerRow = Math.ceil(rawRow / OSTEX_ROW_ALIGN) * OSTEX_ROW_ALIGN;
 
   return { bytesPerRow, mipHeight, mipWidth, rows, totalBytes: bytesPerRow * rows };
+}
+
+/**
+ * The TIGHT (unaligned) bytes of one row of a mip level — what an encoder produces, before the payload is
+ * padded to {@link OSTEX_ROW_ALIGN}.
+ *
+ * Exported because the writer needs exactly this number and used to compute it from its own copy of the
+ * block table. Two copies of "how big is a block" is how adding a format goes wrong: the second one is
+ * updated by whoever remembers it exists.
+ */
+export function ostexTightRowBytes(format: OstexFormatId, mipWidth: number): number {
+  return format === OstexFormat.RGBA8 ? mipWidth * BLOCK_BYTES[format] : Math.ceil(mipWidth / 4) * BLOCK_BYTES[format];
 }
 
 /**
