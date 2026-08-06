@@ -3,7 +3,8 @@
 **Status: 01–07 DONE 2026-08-06 (all three field checkpoints + the 07 close-out: audit
 `docs/audit/cleo-basic-097.md`, benchmarks `2026-08-06-headless-cleo-vm-cost.md` + the frame A/B/A;
 CLEO is ON BY DEFAULT since the 06 decision-6 verdict, `?cleo=0` opts out). 08 (authoring SDK)
-remains.** Supersedes `roadmap/0.5.0/plans/08-cleo-basic/` (deleted in the same
+DONE 2026-08-06 as the project-local chain `cleo/sdk/docs/plans/` — hello-conformance
+field-verified; the real-CLEO Wine verdict stays pending (manual).** Supersedes `roadmap/0.5.0/plans/08-cleo-basic/` (deleted in the same
 change), which was itself the unstarted 083 rethink of the three-era idea chain. This version is grounded
 in a fresh recon: **all seven `.cs` scripts of the user's target corpus were fully disassembled** (against
 the vendored Sanny Builder opcode DB) and the engine/pipeline seams were re-verified file-by-line. The

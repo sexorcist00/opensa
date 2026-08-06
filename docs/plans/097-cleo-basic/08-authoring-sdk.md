@@ -99,5 +99,20 @@ build yields byte-identical artifacts.
 
 ## Ledger
 
-_(scaffold commit, assembler round-trip proof, hello-conformance sizes + headless numbers + field
-verdict, whitelist counts per runtime)_
+**DONE 2026-08-06** — executed as the project-local chain `cleo/sdk/docs/plans/` (001–005, one
+commit per plan; per-plan ledgers there). The chain's numbers:
+
+- **Assembler proof:** all 7 corpus fixtures re-encode byte-identically (23 602 code bytes /
+  2 689 instructions); the referee corrected a real decoder fact — fixed-string bytes past the
+  first NUL are now preserved (`padding`), making the decoded union genuinely lossless.
+- **Whitelist:** 90 dual-target of 105 VM-served opcodes (generated, drift-tested); all 15
+  non-dual are CLEO+ — the corpus mods genuinely require the plugin on real SA.
+- **hello-conformance:** 88 B artifact, 10 instructions; headless story green (5 prints, clean
+  termination, worst 7 instr/tick vs 50 declared, avg 0.10); deterministic (byte-identical
+  rebuild, sha1 `a5c253f9…`).
+- **Field verdict (2026-08-06, headless harness):** census `[cleo] 7 script(s)` (+1 over the six
+  shipped mod scripts), `HELLO OPENSA` toast visible on screen in Ganton — screenshot taken.
+  Artifact was hand-placed for the check and removed after (a conformance artifact, not a
+  shipping mod).
+- **Real CLEO under Wine: NOT YET TAKEN** (manual, the user's harness) — the dual-target claim
+  rests on the whitelist + the corpus-proven format until that run is recorded.

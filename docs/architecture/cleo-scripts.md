@@ -14,6 +14,7 @@ architecture picture.
 flowchart LR
   cs[("cleo/*.cs<br/>shipped by the mod build<br/>(contracts/mods.md)")]:::data
   db[("vendor/sa.json<br/>Sanny opcode DB, pinned")]:::data
+  sdk["cleo/sdk authoring SDK<br/>TS DSL → assembler (decoder's mirror) ·<br/>dual-target whitelist (real CLEO 4 ∩ VM)"]:::infra
   dec["decoder + disasm<br/>core/decode · core/disasm<br/>(listings are committed fixtures)"]:::vm
   run["ScriptRunner + CleoThread<br/>cooperative, game-time ticks ·<br/>10k instr budget · located faults"]:::vm
   reg["handler registries<br/>control-flow · vars · stdlib ·<br/>world · natives"]:::vm
@@ -27,6 +28,8 @@ flowchart LR
 
   cs --> dec
   db --> dec
+  db --> sdk
+  sdk -- "standard CLEO 4 bytes" --> cs
   dec --> run
   run --> reg
   reg --> host
@@ -67,3 +70,8 @@ The boundaries that make it hold:
 - **Scripts ship through the normal build** — installers carry `cleo/`, boot discovers
   `cleo/*.cs` in the VFS (capped by `config.cleo.maxScripts`), and `?cleo=1` /
   `Config.cleo.enabled` gate the whole system down to a single branch when off.
+- **Our own scripts are authored, not hand-compiled** — the `cleo/sdk` subproject
+  (`@opensa/cleo-sdk`, plan chain [`cleo/sdk/docs/`](../../cleo/sdk/docs/architecture.md)) compiles
+  a typed TS DSL to the SAME standard `.cs` bytes off the same vendored DB; the decoder referees
+  every artifact (corpus re-encode byte-identical), and the dual-target whitelist keeps an emitted
+  script runnable under plain real CLEO 4 unless its NAME says `opensa-only`.

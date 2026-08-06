@@ -16,7 +16,7 @@ surface and the author has to be able to predict it.
 
 ## Decisions
 
-1. **A script is a plain TS module** in `cleo/scripts/<name>/script.ts`, default-exporting a
+1. **A script is a plain TS module** in `cleo/scripts/<name>/script.ts`, exporting `script` (named — the repo's lint rule), a
    definition: `{ name, target?, budgetPerTick, build(s) }` — `name` becomes `03A4 SCRIPT_NAME` and
    the artifact filename; `budgetPerTick` is the DECLARED per-frame instruction budget the story
    test asserts (the VM's 10 000/thread ceiling is the hard gate above it).

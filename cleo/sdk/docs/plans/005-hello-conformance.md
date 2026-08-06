@@ -39,15 +39,16 @@ from.
 
 ## Tasks
 
-- [ ] `cleo/scripts/hello-conformance/script.ts` + `story.test.ts` (behaviour + budget assertion).
-- [ ] Listing snapshot committed; artifact builds deterministically.
-- [ ] Field boot: census +1, print visible — verdict + screenshot/log line into Measurements.
-- [ ] Real-CLEO Wine run (manual, with the user): artifact into the real game's CLEO folder, the
-      print visible in-game — verdict + versions into Measurements. If deferred, the ledger says
-      "not yet taken", never silence.
-- [ ] Docs sweep per decision 4; chain readme statuses updated.
-- [ ] Ledger: artifact size in bytes, instructions/tick measured vs declared, whitelist counts
-      (from 003) restated, the field and Wine verdicts.
+- [x] `cleo/scripts/hello-conformance/script.ts` + `story.test.ts` (5 prints on schedule, clean
+      termination, budget assertion via `runner.instructionsLastTick`).
+- [x] Listing snapshot committed (inline, verified by hand); deterministic build (test + CLI
+      double-run). Cross-checked with the standalone `scm-disasm` debug tool.
+- [x] Field boot (headless harness, this session) — verdict + numbers in Measurements.
+- [ ] Real-CLEO Wine run — **not yet taken** (manual, with the user; the artifact is
+      `cleo/sdk/dist/hello-conformance.cs`, rebuild with `npm run build:cleo-scripts`).
+- [x] Docs sweep: `docs/features/cleo.md` SDK row, `docs/architecture/cleo-scripts.md` + diagram
+      re-rendered, 097/08 ledger closed, chain readme statuses.
+- [x] Ledger below.
 
 ## Verification
 
@@ -56,4 +57,21 @@ sweep landed in the same change. The chain's "done" definition in [readme.md](re
 
 ## Measurements / notes
 
-_(filled when executed — sizes, instructions/tick, verdicts with dates)_
+### Shipped (2026-08-06)
+
+- **Artifact:** `hello-conformance.cs`, 88 bytes (76 code + 12 trailer), 10 instructions; sha1
+  `a5c253f990762e7dc03c37f54fdc6d809683ea60`; byte-identical on rebuild (CLI double-run + test).
+- **Headless story:** 5 prints at 1 Hz, thread terminates, zero faults. Cost: worst
+  **7 instructions/tick**, avg 0.10 — declared budget 50, VM ceiling 10 000 (rhino's measured
+  ~2 085 for scale).
+- **Field verdict (headless harness, ?loader=http-dir over the canonical build):** census
+  `[cleo] 7 script(s)` with `hello-conformance.cs` listed (+1 over the six shipped mod scripts);
+  the `HELLO OPENSA` toast VISIBLE on screen (screenshot; Ganton, 118 fps). Artifact hand-placed
+  into `build/original/opensa/cleo/` for the check and removed after — it is a conformance
+  artifact, not a shipping mod.
+- **Real CLEO under Wine: not yet taken.** Manual step with the user's harness; until recorded,
+  the dual-target claim rests on the whitelist + the corpus-proven format (this file says so
+  honestly, per decision 2d).
+- Harness note for the next field probe: `?loader=http-dir` still needs the RUN-game menu click
+  (only the folder/disclaimer steps are skipped); the print surface is the `#cleo-toast` DOM node
+  — poll it, the DOM is a verdict.

@@ -88,7 +88,7 @@ a script that consciously needs OpenSA — the artifact is then named `<name>.op
 cleo/                            # root category (mirror of asi/) — projects that AUTHOR runtime content
   scripts/                       # authored script SOURCES, one folder per script
     hello-conformance/
-      script.ts                  # the DSL source (default export = the script definition)
+      script.ts                  # the DSL source (named export `script` = the definition)
       story.test.ts              # headless run on the VM: behaviour + declared budget
   sdk/
     docs/

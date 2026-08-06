@@ -1,5 +1,5 @@
 /**
- * The typed authoring surface (plan cleo-sdk/004): a script is a plain TS module default-exporting
+ * The typed authoring surface (plan cleo-sdk/004): a script is a plain TS module exporting `script` —
  * a {@link ScriptDefinition}; its `build` callback drives this builder, which produces the
  * assembler's IR. No new language, no parser — and no construct hides the bytecode model: the
  * disasm listing snapshot is the review surface, so every sugar lowers to instructions the author

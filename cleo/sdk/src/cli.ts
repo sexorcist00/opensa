@@ -11,23 +11,30 @@ import type { ScriptDefinition } from './dsl/script';
 
 import { compileScript, discoverScriptDirs, SCRIPT_ENTRY } from './build';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const scriptsRoot = path.resolve(here, '../../scripts');
-const distDir = path.resolve(here, '../dist');
+async function main(): Promise<void> {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const scriptsRoot = path.resolve(here, '../../scripts');
+  const distDir = path.resolve(here, '../dist');
 
-const names = discoverScriptDirs(scriptsRoot);
-console.log(`[cleo-sdk] ${names.length} script(s) discovered${names.length > 0 ? `: ${names.join(', ')}` : ''}`);
+  const names = discoverScriptDirs(scriptsRoot);
+  console.log(`[cleo-sdk] ${names.length} script(s) discovered${names.length > 0 ? `: ${names.join(', ')}` : ''}`);
 
-for (const name of names) {
-  const module = (await import(path.join(scriptsRoot, name, SCRIPT_ENTRY))) as { default?: ScriptDefinition };
-  if (!module.default) {
-    throw new Error(`[cleo-sdk] ${name}/${SCRIPT_ENTRY} has no default export (expected a ScriptDefinition)`);
+  for (const name of names) {
+    const module = (await import(path.join(scriptsRoot, name, SCRIPT_ENTRY))) as { script?: ScriptDefinition };
+    if (!module.script) {
+      throw new Error(`[cleo-sdk] ${name}/${SCRIPT_ENTRY} must export "script" (a ScriptDefinition)`);
+    }
+    const compiled = compileScript(module.script);
+    for (const warning of compiled.warnings) {
+      console.warn(`[cleo-sdk] ${name}: WARNING ${warning}`);
+    }
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(path.join(distDir, compiled.artifact), compiled.bytes);
+    console.log(`[cleo-sdk] ${compiled.artifact}: ${compiled.bytes.length} bytes`);
   }
-  const compiled = compileScript(module.default);
-  for (const warning of compiled.warnings) {
-    console.warn(`[cleo-sdk] ${name}: WARNING ${warning}`);
-  }
-  mkdirSync(distDir, { recursive: true });
-  writeFileSync(path.join(distDir, compiled.artifact), compiled.bytes);
-  console.log(`[cleo-sdk] ${compiled.artifact}: ${compiled.bytes.length} bytes`);
 }
+
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});

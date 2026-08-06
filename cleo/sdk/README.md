@@ -33,13 +33,13 @@ cleo/
 
 ## Write a script
 
-`cleo/scripts/<name>/script.ts`, default-exporting a definition:
+`cleo/scripts/<name>/script.ts`, exporting the definition as `script` (the repo prefers named exports):
 
 ```ts
 import { defineScript } from '../../sdk/src/dsl/script';
 import { int, str } from '../../sdk/src/ir';
 
-export default defineScript({
+export const script = defineScript({
   budgetPerTick: 50, // the story test asserts the measured cost against this
   name: 'hello-conformance', // artifact + folder name; scmName defaults to first 7 chars
   build(s) {
