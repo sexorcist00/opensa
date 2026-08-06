@@ -35,6 +35,28 @@ FLA and OLA active on the same zones crash. A plan that raises a limit picks one
 
 **Caught:** no.
 
+## An exe address or expected byte is DECLARED ONCE, in the catalogue — never in the patch
+
+Everything an `.asi` writes into the game is blind: there is no type system on the other side, and a byte that
+is wrong by a nibble corrupts a running process. So the address, the expected original bytes and any
+continuation the patch resumes at all come from the plugin's typed catalogue through its generated header
+(`asi/sdk`, `asi::FindSite` / `asi::VerifySitesOrDefer`). A patch may NAME a site; it may not restate what is
+at it. The same rule kills the near-miss shape: a trampoline's continuation must be DERIVED
+(`entry + site->length`), because a literal silently desyncs the moment the catalogue's byte window changes.
+
+**Caught:** partly, and only since 2026-08-06. The generator now rejects duplicate site names (a duplicate is
+a `FindSite` key collision — the framework would hand a patch the wrong entry's bytes and verification could
+not see it, because the site it picked really is pristine), and `asi/perfect-map/gen/generate.test.ts` asserts
+that every name the payloads look up still exists in the catalogue and that the catalogue agrees with the
+shared fingerprint wherever both name the same site. Nothing catches a hand-written address that merely
+disagrees with the catalogue.
+
+Before that it was **silent in the worst available way**: perfect-map's payloads carried seven hand-copied byte
+arrays, and three of them — the `RemoveIpl` trampoline continuations — were verified ONLY inside the apply
+path, so no dry run in the field could ever see them. The project's own architecture doc claimed "a hand-edited
+address is structurally impossible" while the payloads had been doing exactly that since 004. Detail:
+[`asi/sdk/docs/plans/004-shared-runtime-apis.md`](../../asi/sdk/docs/plans/004-shared-runtime-apis.md).
+
 ## opensa-lod-generator output is for OpenSA only
 
 Uncapped per-cell LODs (hundreds of materials) are not loadable by real SA. The two LOD generators are not

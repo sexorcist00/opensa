@@ -16,7 +16,6 @@
 #include <asi/hook.hpp>
 #include <asi/append-log.hpp>
 #include <asi/log.hpp>
-#include <asi/mem.hpp>
 #include <asi/plugin.hpp>
 #include <asi/verify.hpp>
 
@@ -223,11 +222,21 @@ inline void ApplyInt16(asi::Log& log, const asi::Plugin& plugin) {
   }
   // HookObserve1Cont relocates RemoveIpl's first instruction, so it needs those bytes — from the table, not a
   // second copy of them.
-  const asi::ByteAnchor* removeIplEntry = asi::FindSite(plugin.tables, "RemoveIpl.entry");
+  const asi::ByteAnchor* removeIplEntry = asi::FindSite(plugin.tables, kInt16Sites[1]);
+  const asi::ByteAnchor* includeEntry = asi::FindSite(plugin.tables, kInt16Sites[0]);
+  if (removeIplEntry == nullptr || includeEntry == nullptr) {  // unreachable while the verify above passed
+    log.Tagged(plugin.tag, "int16: site name not in the catalogue — DEFER");
+    return;
+  }
+  // Address AND continuation derive from the site: the trampoline relocates `length` bytes and must resume at
+  // exactly entry+length. IncludeEntity is different — its continuation is the HOODLUM-relocated BODY, which is
+  // not adjacent to the entry and is therefore a genuine literal.
+  const uintptr_t removeIplAt = asi::Runtime(removeIplEntry->address);
   // Order matters: the snapshot hook (RemoveIpl entry) sets gSnap for the bound-read detours a few insns later.
-  const bool s = asi::HookObserve1Cont(asi::Runtime(0x404b20), asi::Runtime(0x404b25), removeIplEntry->bytes,
+  const bool s = asi::HookObserve1Cont(removeIplAt, removeIplAt + removeIplEntry->length, removeIplEntry->bytes,
                                   removeIplEntry->length, reinterpret_cast<void*>(&PmRemoveIplSnapshot));
-  const bool a = asi::HookObserve2(asi::Runtime(0x404c90), asi::Runtime(0x1563730), reinterpret_cast<void*>(&PmIncludeObserver));
+  const bool a = asi::HookObserve2(asi::Runtime(includeEntry->address), asi::Runtime(0x1563730),
+                                   reinterpret_cast<void*>(&PmIncludeObserver));
   const bool b = detail::InstallFirstBuildingDetour();
   const bool c = detail::InstallLastBuildingDetour();
   const bool e = detail::InstallLastBuildingLoopDetour();  // the loop back-edge re-read — the completeness fix

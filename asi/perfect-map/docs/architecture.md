@@ -25,17 +25,20 @@ The artifact is a native DLL, but the addresses come from RE (plan [001](./plans
 must never be hand-copied into C++. So the project is two cooperating halves:
 
 ```
-patch-catalogue.md ──▶ TS generator ──▶ generated/patches.hpp ──▶ C++ compile ──▶ perfect-map.asi
- (001, human RE)       (Nx/vitest)       (addresses, original       (MinGW-w64,     (Win32 PE32)
-                                          bytes, post-patch sig,      static CRT)
-                                          fingerprint constants)
+gen/catalogue.ts ──▶ asi/sdk renderer ──▶ generated/patches.hpp ──▶ C++ compile ──▶ perfect-map.asi
+ (typed, this project)  (validate+emit)     (addresses, original      (MinGW-w64,     (Win32 PE32)
+                                             bytes, fingerprint)       -nostdlib)
 ```
 
-- **TS half** (lives in the Nx/vitest world like every other tool): parses `001`'s `patch-catalogue.md` and emits
-  a C++ header of constants. Unit-tested on macOS, independent of the game. A wrong/malformed table is a hard
-  error at generate time, not a garbage write at runtime.
-- **C++ half**: a bare `DllMain` ASI that fingerprint-gates, runs the generated patch table with per-patch
-  byte-verification + coexistence checks, and logs. No ASI framework, no plugin-sdk — pure memory patches.
+- **TS half** (lives in the Nx/vitest world like every other tool): this project's typed `gen/catalogue.ts` is
+  the machine source of truth — the prose [patch-catalogue.md](./patch-catalogue.md) is the human narrative and
+  must agree with it, but nothing parses markdown. The renderer and validator are the SDK's
+  (`asi/sdk/gen/`). Unit-tested on macOS, independent of the game: a malformed table is a hard error at
+  generate time, not a garbage write at runtime.
+- **C++ half**: the payloads plus a `DllMain` that hands this plugin to the **SDK framework**
+  (`asi/sdk`, namespace `asi::`), which fingerprint-gates the exe from disk, byte-verifies every site,
+  detects adjusters and logs. The framework is shared; what lives here is what makes this plugin *this*
+  plugin.
 
 ## Directory layout
 
@@ -48,6 +51,7 @@ asi/perfect-map/
   src/
     dllmain.cpp              # entry → asi::OnAttach(pm::kPlugin)
     plugin.hpp               # this plugin's declaration: tag, log file, generated tables, apply fn
+    identity.hpp             # the log filename + log tag, declared once (plugin.hpp + payload traces)
     config.hpp               # PAYLOAD switches (PM_FIX_*); the framework's own are asi/config.hpp
     apply.hpp                # the asi::ApplyFn — runs the enabled fixes
     patches/                 # one unit per engine fix (int16, fx2dfx)
@@ -69,14 +73,16 @@ SDK's [architecture](../../sdk/docs/architecture.md) for the framework's own des
 
 1. **Open the log** next to `gta_sa.exe` (`perfect-map-asi.log`), flush-on-write so a crash still shows the last
    attempted patch.
-2. **Fingerprint** the host module (base image size + checksum + anchor bytes from 001). Not 1.0 US → log the
-   detected signature, patch nothing, return.
+2. **Fingerprint** the exe — read **from DISK** (`GetModuleFileNameA` + `CreateFileA`): exact file size plus
+   the anchor bytes at their FILE offsets, so an adjuster that has patched memory cannot spoof the version.
+   Not 1.0 US → log which check failed, patch nothing, return.
 3. **Detect adjusters** — enumerate loaded modules (FLA `fastman92limitAdjuster*`, OLA
-   `III.VC.SA.LimitAdjuster`) and, per conflicting zone, probe whether its bytes already differ from stock.
-4. **Run the patch table.** For each record `{ name, address, expectedOriginalBytes, apply, requires?,
-conflictsWith? }`: byte-verify → conflict-check → apply (under a `VirtualProtect` RAII guard) → log the
-   outcome (`applied` / `skipped-mismatch` / `skipped-conflict` / `skipped-version`). One skip never aborts the
-   rest (partial safety).
+   `III.VC.SA.LimitAdjuster`) and record the mask.
+4. **Verify, then apply.** A verify-only build walks every generated site
+   (`asi::ByteAnchor { name, address, bytes, length }`) and logs `pristine` / `differs — adjuster owns it`
+   with zero writes. An APPLY build calls this plugin's `ApplyPatches`, and each fix byte-verifies the sites
+   it NAMES (`asi::VerifySitesOrDefer`) before writing under a `VirtualProtect` RAII guard. A fix that cannot
+   verify defers; one deferral never aborts the others (partial safety).
 5. Return. That is the entire lifecycle — no per-frame hooks unless a specific fix demands one.
 
 ## The patch framework (003)
@@ -86,8 +92,9 @@ conflictsWith? }`: byte-verify → conflict-check → apply (under a `VirtualPro
   `IplEntityIndexArrays` 40), relocate to our own allocation + repoint accessors rather than detour code. Reserve
   function hooks (`asi/sdk/include/asi/hook.hpp`) for genuine logic changes — chiefly the `IplDef` int16 →
   int32 min/max widen in `CIplStore::IncludeEntity` (0x404C90).
-- **Idempotent + observable.** Re-apply is a no-op via a post-patch byte signature; `dry-run` verifies + logs the
-  full plan with zero writes (the primary debugging aid for blind patches).
+- **Observable before it is anything else.** The verify-only build logs the full plan with zero writes — the
+  primary debugging aid for blind patching. (Re-apply protection is structural rather than a post-patch
+  signature: a second attempt finds the site already changed and defers.)
 
 ## Toolchain
 

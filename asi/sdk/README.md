@@ -22,16 +22,34 @@ split this project mirrors.
 
 ## Writing a plugin
 
-Four things are yours; everything else is the SDK's:
+`asi/perfect-map` is the worked example — copy its shape. What is yours:
 
-1. `gen/catalogue.ts` — your `CatalogueEntry[]` (addresses, expected bytes, provenance) and a thin
-   `gen/generate.ts` calling `renderHeader(CATALOGUE, SA_FINGERPRINT, { namespace: '<ns>' })`.
-2. `src/patches/*.hpp` — what your fixes actually do, and `src/apply.hpp` (an `asi::ApplyFn`).
-3. `src/plugin.hpp` — one `constexpr asi::Plugin`: tag, log filename, generated tables, apply fn.
-   `src/dllmain.cpp` hands it to `asi::OnAttach`.
-4. `Makefile` — `PLUGIN_OUT` / `PLUGIN_SRC` / `PLUGIN_HDRS`, then `include ../sdk/mk/asi-plugin.mk`.
+1. **The subject matter** — `gen/catalogue.ts` (your `CatalogueEntry[]`: addresses, expected bytes,
+   provenance) and `src/patches/*.hpp` (what your fixes actually do).
+2. **The seam** (~180 lines, mostly boilerplate):
+   - `gen/generate.ts` — calls `renderHeader(CATALOGUE, SA_FINGERPRINT, { namespace: '<ns>' })` and
+     writes your `src/generated/patches.hpp`;
+   - `src/apply.hpp` — your `asi::ApplyFn`, running the enabled fixes;
+   - `src/identity.hpp` — your log filename and log tag, declared once;
+   - `src/plugin.hpp` — one `constexpr asi::Plugin` (identity + generated tables + apply fn);
+   - `src/config.hpp` — your own `#ifndef`-guarded payload flags (the framework's `ASI_APPLY` /
+     `ASI_DEBUG` come from `<asi/config.hpp>`);
+   - `src/dllmain.cpp` — hands the plugin to `asi::OnAttach`.
+3. **The wiring**: `Makefile` (see below), a `package.json` with `gen` / `build:asi` /
+   `build:verify` / `build:debug`, your directory added to the root `package.json` `workspaces`,
+   and a `.gitignore` for `dist/` and `src/generated/`. Lint and tests need no config — the repo's
+   globs already cover `asi/**`.
 
-`asi/perfect-map` is the worked example of exactly this shape.
+The Makefile is `PLUGIN_OUT`, `PLUGIN_SRC`, `PLUGIN_HDRS`, optionally `PLUGIN_DEFS` /
+`PLUGIN_DEBUG_DEFS`, then `include ../sdk/mk/asi-plugin.mk`. **`PLUGIN_HDRS` must list every header
+you own, `src/patches/*.hpp` included** — miss one and editing a payload does not trigger a rebuild,
+which looks exactly like a patch that did not work.
+
+Two rules the framework enforces for you, and one it cannot: every site is **named**, never
+re-declared (its bytes and address come from your generated table, so `VerifySitesOrDefer` and the
+write agree by construction); a fix that cannot verify **defers** rather than writing. What it
+cannot check is that your site names still exist in the catalogue after a rename — mirror
+perfect-map's `gen/generate.test.ts`, which asserts exactly that.
 
 ## Consumers
 

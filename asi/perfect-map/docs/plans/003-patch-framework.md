@@ -2,6 +2,13 @@
 
 Part of the [perfect-map ASI chain](readme.md). Depends on [002](002-toolchain-architecture.md) (a loading ASI). Delivers the SAFE, declarative machinery that 004's actual patches plug into — the difference between "a maintainable patcher" and "a pile of magic `WriteMemory` calls".
 
+> **Historical record — the framework this plan built now lives in [`asi/sdk`](../../../sdk/README.md)**
+> (namespace `asi::`, headers in `asi/sdk/include/asi/`, build rules in `asi/sdk/mk/asi-plugin.mk`),
+> extracted 2026-08-06 by the [asi/sdk chain](../../../sdk/docs/plans/readme.md). Paths to
+> `log/mem/hook/fingerprint/coexistence/patch_table.hpp` and `freestanding.cpp` below are where they
+> were WHEN THIS SHIPPED; the text is left unedited on purpose. `asi/perfect-map` keeps only its
+> catalogue, payloads, config knobs and a thin Makefile.
+
 ## Context
 
 Blind binary patching of a running game is unforgiving: a wrong address silently corrupts the process, a version mismatch patches garbage, and FLA/OLA patching the same zone crashes (`LinkLods` double-patch, documented in ghost-barriers.md). This plan builds the guardrails ONCE so every patch in 004 is declared, verified, logged, and coexistence-checked by construction.

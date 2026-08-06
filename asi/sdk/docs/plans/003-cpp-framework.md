@@ -37,8 +37,9 @@ everything; no separate SDK objects) is preserved — it is what keeps `-nostdli
 
 ## Tasks
 
-- [x] Move + rename per decisions 1–3; perfect-map's `src/` keeps only `dllmain.cpp` (thin),
-      `plugin.hpp` (its declaration), `config.hpp` (payload half), `patches/`, `generated/`.
+- [x] Move + rename per decisions 1–3; perfect-map's `src/` keeps `dllmain.cpp` (thin),
+      `plugin.hpp` + `identity.hpp` (its declaration; `identity.hpp` arrived in 004), `apply.hpp`,
+      `config.hpp` (payload half), `patches/`, `generated/`.
 - [x] Makefile fragment (decision 4); perfect-map consumes it; `make`, `make APPLY=1`,
       `make DEBUG=1` and the per-fix `PM='-D…'` bisection all still work.
 - [x] Referee run: build APPLY=1 + verify-only; compare against the baseline (import table, log
@@ -89,9 +90,11 @@ better now, and the artifact-level A/B is the referee that matters.
 
 **Layout:** SDK headers live at `asi/sdk/include/asi/*.hpp` (not `src/`), so a plugin's
 `#include <asi/log.hpp>` is unambiguous with a single `-I<sdk>/include`; `src/` keeps only
-`freestanding.cpp`. The Makefile fragment globs BOTH the SDK headers and the plugin's own
-`src/**/*.hpp` — perfect-map's old `HDRS` missed `src/patches/*.hpp`, so a payload-only edit did
-not trigger a rebuild. That latent staleness bug is fixed by the move.
+`freestanding.cpp`. The Makefile fragment globs the SDK headers and appends the plugin's
+`$(PLUGIN_HDRS)` — perfect-map's old `HDRS` missed `src/patches/*.hpp`, so a payload-only edit did
+not trigger a rebuild, and its thin Makefile now lists both `src/*.hpp` and `src/patches/*.hpp`.
+Note where the fix lives: the fragment cannot glob a plugin's tree for it, so **every plugin must
+declare its own headers** — stated in the SDK README as the one silent-failure trap of the setup.
 
 **A measurement trap worth keeping:** the first build-matrix run reported apply+debug as identical
 to verify-only. The builds were fine — the HARNESS was wrong: **zsh does not word-split an

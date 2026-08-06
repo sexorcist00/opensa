@@ -76,6 +76,21 @@ car does. An `.asi` is a build-time artifact that runs inside a different execut
 frame budget in this engine, so its sizes would mix schemas rather than join one. The artifact
 sizes and hashes live in the chain's per-step ledgers, which is where a future A/B will look.
 
+## What the post-chain review found
+
+Two independent audits (docs, code) were run over the finished chain rather than trusting it. They
+were worth their cost: the extraction had introduced **two crash-class fragilities** — a trampoline
+continuation left as a literal while the relocated length moved to another package, and `FindSite`
+results dereferenced on names typed twice — plus a **silent-corruption hole** in the generator
+(nothing rejected two sites sharing a name, which is a lookup key). All three are now structural,
+with three tests added and each falsified before being trusted. The docs pass found that
+perfect-map's README called the SHIPPING build "verify-only" — the exact confusion that had cost
+this session an APPLY verdict hours earlier. Detail: 005's ledger, "Post-chain review pass".
+
+The lesson for the next migration: **a clean build, a green suite and a passing field run say
+nothing about the invariants an extraction quietly moved across a package boundary.** Every one of
+these findings was in code that compiled, tested and ran correctly.
+
 ## Three method lessons this rework paid for
 
 1. **The measurement rig failed more often than the thing measured.** A build matrix reported

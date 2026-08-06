@@ -22,6 +22,11 @@ This is the "standing goal" recorded across the ghost-barriers post-mortem and m
 4. **Version-locked.** Only SA 1.0 US (HOODLUM). Detect the exe fingerprint; refuse to patch anything else rather than guess.
 5. **Reversible & debuggable.** Log every applied/skipped patch to a file; a "dry-run verify" mode that checks all sites without patching.
 
+> **The framework these five principles describe now lives in [`asi/sdk`](../../../sdk/README.md)**
+> (extracted 2026-08-06 — the [asi/sdk chain](../../../sdk/docs/plans/readme.md)), and perfect-map is its first
+> consumer. The principles are unchanged and are now the SDK's constraints; the plans below are the historical
+> record of how they were built, with pre-migration file paths.
+
 ## The chain
 
 | #   | Plan                                                                                                                                          | Delivers                                                                                                                                                                                                           | Status  |

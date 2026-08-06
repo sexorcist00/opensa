@@ -29,11 +29,17 @@ engine ground truth. Cross-compiled from macOS (MinGW-w64) to a Win32 PE DLL, te
 
 ```sh
 brew install mingw-w64          # i686-w64-mingw32-g++ (once)
-npm run build:asi -w @opensa/perfect-map-asi   # → asi/perfect-map/dist/perfect-map.asi
+npm run build:asi    -w @opensa/perfect-map-asi   # SHIPPING: applies both fixes → dist/perfect-map.asi
+npm run build:verify -w @opensa/perfect-map-asi   # DRY RUN: patches nothing, logs every site's verdict
+npm run build:debug  -w @opensa/perfect-map-asi   # APPLY + the verbose site dump + this plugin's traces
 ```
 
 The `.asi` is a 32-bit PE DLL with a **KERNEL32-only** import table (no CRT / MinGW runtime deps), so it drops
 into any Windows SA runs on. On load it writes `perfect-map-asi.log` next to `gta_sa.exe`.
+
+**Read that log's first line before anything else** — `built <date> <time> (APPLY|verify-only)` is the only
+thing that identifies which artifact the game actually loaded, and a verify-only build writes no bytes at all.
+Mistaking one for the other is how a dry run gets recorded as a working fix.
 
 ## Reproduction oracle
 
@@ -45,7 +51,6 @@ not re-derive a repro; brackets from that tool are the acceptance test for the l
 
 RE catalogue (001), toolchain + loading ASI (002), patch framework (003), and **fix #1 (004, the int16 ceiling)
 are DONE and confirmed in-game** — `make APPLY=1` → `perfect-map.asi` removes the ghost-barriers bug on the 33k
-repro with **both FLA and OLA** loaded (the chain's standing goal met). Build: `npm run build:asi -w
-@opensa/perfect-map-asi` (verify-only) / `make APPLY=1` (patching). Next: fixes #2/#3 array relocations (004b),
+repro with **both FLA and OLA** loaded (the chain's standing goal met). Next: fixes #2/#3 array relocations (004b),
 the Wine test ladder (005), and pipeline integration (006). See
 [004](./docs/plans/004-limit-patches.md) + [patch-catalogue.md](./docs/patch-catalogue.md) (#1).

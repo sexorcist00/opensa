@@ -39,7 +39,8 @@ sdk include/asi/*.hpp + plugin src/patches/*.hpp ──▶ single-TU compile ─
 
 **TS half (`asi/sdk/gen/`)** — the codegen library: the catalogue interfaces (`ByteAnchor`,
 `FileAnchor`, `Fingerprint`, `CatalogueEntry` with its provenance line), `renderHeader()` (namespace
-is a parameter — perfect-map passes `pm`), `validate()` (hard-error gate), and the shared
+is a parameter — perfect-map passes `pm`; it validates as a hard-error gate before emitting anything —
+module-private, not a second entry point), and the shared
 `SA_FINGERPRINT` constant — the canonical exe identity every SA plugin reuses. The `CATALOGUE`
 array (the addresses, bytes and strategies) stays per-plugin.
 
@@ -113,9 +114,16 @@ asi/
   artifact to vendor. Replaced by the provenance convention above.
 - **Design-for but do not build** city-life's known needs (per-frame tick hook, runtime `.ini`):
   the plugin surface must not preclude them; they arrive with that plugin.
-- **Perfect-map's framework history stays in `asi/perfect-map/docs/plans/`** (002/003/005 there) —
-  moving shipped plan files would break deep links from `docs/open-issues/fixed/*` and the
-  roadmap; this chain links back instead.
+- **Perfect-map's framework history stays in `asi/perfect-map/docs/plans/`** — moving shipped plan
+  files would break deep links from `docs/open-issues/fixed/*` and the roadmap. The framework was
+  designed and built there, by
+  [002 — toolchain](../../perfect-map/docs/plans/002-toolchain-architecture.md) (the `-nostdlib`
+  KERNEL32-only line, the rejected injector.hpp),
+  [003 — patch framework](../../perfect-map/docs/plans/003-patch-framework.md) (the fingerprint
+  gate, byte-verify, coexistence, the logger — and the Wine round that moved the gate from memory
+  to disk) and [004 — limit patches](../../perfect-map/docs/plans/004-limit-patches.md) (the hook
+  primitives). Each of those three carries a banner saying its file paths are pre-migration; read
+  them for WHY the framework is shaped this way, and this chain for where it lives now.
 - **No root-numbered plan** — the chain is project-local only (user's call, 2026-08-06), matching
   `asi/perfect-map` itself; `docs/plans/README.md` does not index `asi/` chains.
 - **No behaviour change to perfect-map in this chain** — a framework "improvement" that changes a

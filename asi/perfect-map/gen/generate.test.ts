@@ -1,5 +1,7 @@
 import { renderHeader } from '@opensa/asi-sdk/render';
 import { SA_FINGERPRINT } from '@opensa/asi-sdk/sa-fingerprint';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { CATALOGUE } from './catalogue';
@@ -23,6 +25,40 @@ describe('perfect-map catalogue', () => {
     it('names a gta-reversed-modern source in every provenance line', () => {
       for (const entry of CATALOGUE) {
         expect(entry.provenance).toMatch(/gta-reversed-modern source\/game_sa\//);
+      }
+    });
+
+    // The fingerprint (SDK) and the catalogue (here) now live in different packages and overlap on four
+    // names. A one-nibble typo in either would pass every other check and turn into a relocated garbage
+    // instruction in the field. The exe is linked at 0x400000 with a 0xC00 header, hence the fixed delta.
+    it('agrees with the shared fingerprint wherever the two tables name the same site', () => {
+      const VA_TO_FILE_DELTA = 0x400c00;
+      const sites = new Map(CATALOGUE.flatMap((entry) => entry.sites).map((site) => [site.name, site]));
+      const overlapping = SA_FINGERPRINT.anchors.filter((anchor) => sites.has(anchor.name));
+
+      expect(overlapping.length).toBeGreaterThan(0);
+      for (const anchor of overlapping) {
+        const site = sites.get(anchor.name);
+
+        expect(site?.address).toBe(anchor.fileOffset + VA_TO_FILE_DELTA);
+        expect(site?.bytes).toEqual(anchor.bytes);
+      }
+    });
+
+    // Catches the half-edit that `asi::FindSite` cannot: a payload naming a site the catalogue no longer
+    // carries compiles, verifies clean, and then dereferences null inside DLL_PROCESS_ATTACH.
+    it('carries every site name the payloads look up', () => {
+      const names = new Set(CATALOGUE.flatMap((entry) => entry.sites).map((site) => site.name));
+      const patchDir = join(import.meta.dirname, '..', 'src', 'patches');
+      const quoted = readdirSync(patchDir)
+        .filter((file) => file.endsWith('.hpp'))
+        .flatMap((file) => [...readFileSync(join(patchDir, file), 'utf8').matchAll(/"([^"\n]*)"/g)])
+        .map((match) => match[1])
+        .filter((text) => /^\w+(?:\.\w+)+$/.test(text) && !text.endsWith('.log'));
+
+      expect(quoted.length).toBeGreaterThan(0);
+      for (const name of new Set(quoted)) {
+        expect(names, `payload names "${name}"`).toContain(name);
       }
     });
   });

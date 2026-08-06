@@ -2,7 +2,6 @@
 // Apply orchestration — perfect-map's `asi::ApplyFn`. Runs the enabled fixes, each gated by config.hpp and
 // coexistence: int16 is applied regardless of adjusters (none of them fix it); the two array relocations DEFER
 // when FLA/OLA is present (they own those zones). Compiled only into the APPLY build.
-#include <asi/coexistence.hpp>
 #include <asi/log.hpp>
 #include <asi/plugin.hpp>
 
@@ -44,6 +43,7 @@ inline void ApplyPatches(asi::Log& log, const asi::Plugin& plugin, unsigned adju
 #endif
 
   (void)adjusterMask;
+  (void)plugin;
   (void)log;
 }
 

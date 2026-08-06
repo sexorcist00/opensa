@@ -43,7 +43,9 @@ tools/                             (tag type:tool — offline; may read engine p
   map-optimizer/ · opensa-lod-generator/ · sa-lod-generator/ · lod-trees-generator/ · lod-procobj-generator/
   vehicle-optimizer/ · timecyc-builder/ · lod-common/ · map-placement/ · rw-codec/ · tool-kit/
 tools-debug/  bench-harness/ (headless field checks) · sa-int16-repro/ (ghost-barriers repro dial)
-asi/          perfect-map/ (real-SA limit-adjuster ASI)
+asi/          sdk/ (the asi:: framework + codegen every .asi plugin builds on) · perfect-map/ (its first
+              consumer: the real-SA limit-adjuster ASI)
+cleo/         sdk/ (author CLEO scripts in TS → standard .cs) · scripts/ (our authored script sources)
 root: game-src/ · mods-src/ · build/ · static/ · tests/ · e2e/ · scripts/ · deploy/ · nx.json · *.html
 ```
 

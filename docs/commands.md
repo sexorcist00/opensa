@@ -189,8 +189,9 @@ npm run build:verify -w @opensa/perfect-map-asi   # DRY RUN: patches nothing, lo
 npm run build:debug  -w @opensa/perfect-map-asi   # APPLY + verbose site dump + the plugin's own traces
 npm run gen          -w @opensa/perfect-map-asi   # catalogue.ts → src/generated/patches.hpp only
 
-# Per-fix bisection (plugin-defined flags; run from the plugin dir)
-make -C asi/perfect-map APPLY=1 PM='-DPM_FIX_INT16=1 -DPM_FIX_FX2DFX=0'
+# Per-fix bisection (the flags are the plugin's; EXTRA_CXXFLAGS is the SDK's knob)
+make -C asi/perfect-map APPLY=1 EXTRA_CXXFLAGS='-DPM_FIX_INT16=1 -DPM_FIX_FX2DFX=0'
+# DEBUG=1 without APPLY=1 is refused: every debug switch is read inside an APPLY build.
 
 # Reproducible artifact for an A/B — pin BOTH the PE timestamps (already in the link line) and the
 # banner's __DATE__/__TIME__, or two builds a second apart differ:

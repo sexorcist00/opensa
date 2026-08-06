@@ -2,6 +2,13 @@
 
 Part of the [perfect-map ASI chain](readme.md). Depends on [003](003-patch-framework.md) (safe declarative machinery) which depends on [001](001-reverse-engineering.md) (the addresses). This is the whole point of the chain: **remove the int16 ceiling** so builds can add unlimited objects.
 
+> **Historical record — the framework this plan built now lives in [`asi/sdk`](../../../sdk/README.md)**
+> (namespace `asi::`, headers in `asi/sdk/include/asi/`, build rules in `asi/sdk/mk/asi-plugin.mk`),
+> extracted 2026-08-06 by the [asi/sdk chain](../../../sdk/docs/plans/readme.md). Paths to
+> `log/mem/hook/fingerprint/coexistence/patch_table.hpp` and `freestanding.cpp` below are where they
+> were WHEN THIS SHIPPED; the text is left unedited on purpose. `asi/perfect-map` keeps only its
+> catalogue, payloads, config knobs and a thin Makefile.
+
 ## Context
 
 The four unbounded structures, from [ghost-barriers.md](../../../../docs/open-issues/fixed/ghost-barriers.md), in impact order:

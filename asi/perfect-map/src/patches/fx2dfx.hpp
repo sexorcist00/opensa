@@ -24,7 +24,6 @@
 #include <asi/hook.hpp>
 #include <asi/append-log.hpp>
 #include <asi/log.hpp>
-#include <asi/mem.hpp>
 #include <asi/plugin.hpp>
 #include <asi/verify.hpp>
 
@@ -112,10 +111,18 @@ inline void ApplyFx2dfx(asi::Log& log, const asi::Plugin& plugin) {
     log.Tagged(plugin.tag, "fx2dfx: DEFER (patching nothing) — a hook already owns the fx zone");
     return;
   }
-  const asi::ByteAnchor* stop = asi::FindSite(plugin.tables, "FxSystem_c.Stop");
-  const asi::ByteAnchor* play = asi::FindSite(plugin.tables, "FxSystem_c.Play");
-  const bool a = detail::InstallNullBpGuard(asi::Runtime(0x4aa390), asi::Runtime(0x4aa396), stop->bytes, stop->length);
-  const bool b = detail::InstallNullBpGuard(asi::Runtime(0x4aa2f0), asi::Runtime(0x4aa2f8), play->bytes, play->length);
+  const asi::ByteAnchor* stop = asi::FindSite(plugin.tables, kFx2dfxSites[0]);
+  const asi::ByteAnchor* play = asi::FindSite(plugin.tables, kFx2dfxSites[1]);
+  if (stop == nullptr || play == nullptr) {  // unreachable while the verify above passed — see the note there
+    log.Tagged(plugin.tag, "fx2dfx: site name not in the catalogue — DEFER");
+    return;
+  }
+  // Address AND continuation both derive from the site: the stub relocates `length` bytes and must resume at
+  // exactly entry+length. A literal continuation would silently desync if the catalogue's byte window changed.
+  const uintptr_t stopEntry = asi::Runtime(stop->address);
+  const uintptr_t playEntry = asi::Runtime(play->address);
+  const bool a = detail::InstallNullBpGuard(stopEntry, stopEntry + stop->length, stop->bytes, stop->length);
+  const bool b = detail::InstallNullBpGuard(playEntry, playEntry + play->length, play->bytes, play->length);
   log.Tagged(plugin.tag, a && b
                              ? "fx2dfx APPLIED: FxSystem_c::Stop/Play null-blueprint guarded (2dfx UAF fixed)"
                              : "fx2dfx: patch write FAILED (see VirtualProtect)");

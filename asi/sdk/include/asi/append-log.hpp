@@ -60,14 +60,14 @@ inline void AppendLabelled(const char* logFile, const char* label, int32_t a, in
   AppendLine(logFile, buffer, static_cast<uint32_t>(cursor - buffer));
 }
 
-// Append "<label> <n>" — the counter shape (a guard that reports how many times it fired).
+// Append "<label><n>" — the counter shape (a guard reporting how many times it fired). Unlike
+// AppendLabelled, the LABEL owns the separator, so a label may end in "#", ": " or nothing at all.
 inline void AppendCount(const char* logFile, const char* label, int32_t n) {
   char buffer[128];
   char* cursor = buffer;
   for (const char* s = label; *s; ++s) {
     *cursor++ = *s;
   }
-  *cursor++ = ' ';
   cursor = AppendInt(n, cursor);
   AppendLine(logFile, buffer, static_cast<uint32_t>(cursor - buffer));
 }

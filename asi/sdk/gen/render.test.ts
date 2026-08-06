@@ -48,7 +48,21 @@ describe('renderHeader', () => {
     });
 
     it('throws on duplicate catalogue ids', () => {
-      expect(() => renderHeader([ENTRY, ENTRY], FP, NS)).toThrow(/duplicate/);
+      expect(() => renderHeader([ENTRY, ENTRY], FP, NS)).toThrow(/duplicate catalogue id/);
+    });
+
+    it('throws when two entries share a site name (FindSite would take the first)', () => {
+      const other = { ...ENTRY, id: 'other-entry' };
+
+      expect(() => renderHeader([ENTRY, other], FP, NS)).toThrow(/duplicate site name/);
+    });
+
+    it('throws when two fingerprint anchors share a name', () => {
+      const anchor = { bytes: [0xe9], fileOffset: 0x4090, name: 'a.entry' };
+
+      expect(() => renderHeader([ENTRY], { ...FP, anchors: [anchor, anchor] }, NS)).toThrow(
+        /duplicate fingerprint anchor name/,
+      );
     });
   });
 

@@ -4,9 +4,11 @@
 #include <asi/config.hpp>
 
 // The plugin's fixes are compiled only into an APPLY build; PM_APPLY mirrors the framework switch so the
-// payload headers keep one name to gate on.
+// payload headers keep one name to gate on. Guarded, so a `-DPM_APPLY=…` on the command line is honoured
+// rather than silently overridden (an unguarded #define here made per-fix bisection flags a no-op).
+#ifndef PM_APPLY
 #define PM_APPLY ASI_APPLY
-#define PM_DEBUG ASI_DEBUG
+#endif
 
 #ifndef PM_FIX_INT16
 #define PM_FIX_INT16 1  // IplDef int16 pool-range → int32 sidecar (the root 2^15 fix). No adjuster fixes this.

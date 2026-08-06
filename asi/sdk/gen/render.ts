@@ -116,4 +116,15 @@ function validate(catalogue: readonly CatalogueEntry[], fingerprint: Fingerprint
   if (new Set(ids).size !== ids.length) {
     throw new Error(`duplicate catalogue id: ${ids.join(', ')}`);
   }
+  // Site names are a LOOKUP KEY at runtime (asi::FindSite), so a duplicate is not cosmetic: the framework would
+  // hand a patch the first match's bytes and address, which for a trampoline means relocating a foreign
+  // instruction. Verification cannot catch it — the site it picked really is pristine.
+  const siteNames = catalogue.flatMap((entry) => entry.sites).map((site) => site.name);
+  if (new Set(siteNames).size !== siteNames.length) {
+    throw new Error(`duplicate site name (they are FindSite keys): ${siteNames.join(', ')}`);
+  }
+  const anchorNames = fingerprint.anchors.map((anchor) => anchor.name);
+  if (new Set(anchorNames).size !== anchorNames.length) {
+    throw new Error(`duplicate fingerprint anchor name: ${anchorNames.join(', ')}`);
+  }
 }

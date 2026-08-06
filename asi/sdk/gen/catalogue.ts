@@ -19,7 +19,13 @@ export interface ByteAnchor {
 }
 
 export interface CatalogueEntry {
-  /** Adjuster zones that, if already patched by FLA/OLA, make us defer this entry (coexistence). */
+  /**
+   * DOCUMENTATION ONLY — the adjuster zones (FLA/OLA) known to overlap this entry, recorded so an RE session
+   * can see what it is sharing the exe with. **Nothing reads it**: deferral is decided at runtime, per site,
+   * by the byte-verify (`asi::VerifySitesOrDefer`) — an adjuster that owns a site is detected by its bytes,
+   * never by this list. Do not add a zone here expecting coexistence behaviour to change; there is none to
+   * change. Same for `strategy` and `summary`.
+   */
   readonly conflictsWith?: readonly string[];
   /** kebab-case id, e.g. `ipldef-range`. */
   readonly id: string;

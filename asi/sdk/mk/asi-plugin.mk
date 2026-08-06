@@ -5,7 +5,9 @@
 #   make            verify-only / dry run — patches nothing, logs the full plan
 #   make APPLY=1    the shipping build
 #   make DEBUG=1    verbose: dump every site's verify status; the plugin's own trace flags are its to add
-# Per-fix bisection is the plugin's business: `make APPLY=1 PM='-DPM_FIX_X=1 -DPM_FIX_Y=0'`.
+# Per-fix bisection is the plugin's business, through the shared knob:
+#   make APPLY=1 EXTRA_CXXFLAGS='-DPM_FIX_X=1 -DPM_FIX_Y=0'
+# (the knob is deliberately NOT named after any one plugin's macro prefix).
 
 ASI_SDK_DIR := $(dir $(lastword $(MAKEFILE_LIST)))..
 
@@ -29,9 +31,16 @@ ifeq ($(APPLY),1)
 CXXFLAGS += -DASI_APPLY=1
 endif
 ifeq ($(DEBUG),1)
+# Every DEBUG switch is read inside an APPLY build (the pre-apply site dump, the plugins' own traces), so
+# `make DEBUG=1` alone would build something byte-identical to a plain verify-only run while looking like a
+# distinct mode. Refuse instead of building a lie.
+ifneq ($(APPLY),1)
+$(error DEBUG=1 requires APPLY=1 — a verify-only build has nothing to trace)
+endif
 CXXFLAGS += -DASI_DEBUG=1 $(PLUGIN_DEBUG_DEFS)
 endif
-CXXFLAGS += $(PLUGIN_DEFS) $(PM)
+# EXTRA_CXXFLAGS is the per-invocation knob (per-fix bisection); PLUGIN_DEFS is what a plugin's Makefile sets.
+CXXFLAGS += $(PLUGIN_DEFS) $(EXTRA_CXXFLAGS)
 
 # Every SDK header and every plugin header — editing either rebuilds (perfect-map's own HDRS used to miss
 # src/patches/*.hpp, so a payload edit alone did not trigger a build).
