@@ -5,6 +5,24 @@ The direction is decided (Basis/KTX2 + transcode at load); what is *not* decided
 survives the trip, and that is a measurement, not an opinion. No step below starts before the concept's
 go/no-go.
 
+## What it is worth, in bytes (measurable today)
+
+`scripts/debug/texture-budget.ts` reads a pak's manifest and computes what its arrays cost the GPU — the
+decoded pyramid, via the same `ostexLayerBytes` the runtime allocates against — plus what the SAME content
+would cost in another format. That last column is this chain's whole case, and it does not need a phone or a
+transcoder to be read:
+
+| | per texel (mips included) |
+| --- | --- |
+| BC1 — what SA ships, desktop-only | 0.5 B |
+| ASTC 4×4 / ETC2 RGBA8 / BC3 | 1 B |
+| **RGBA8 — what a no-BC device gets today** | **4 B** |
+
+So `--rgba8` is not "a bit heavier": it is **4× a BC3 payload and 8× BC1**, on every texture the world draws,
+which is why a phone today buys a district with `--max-texture 256` and cannot buy the map at any cap. A
+universal (or plain ASTC) encode brings the mobile cost back to the desktop's. Run the script on a district
+pak before and after this chain — the before number is available now.
+
 ## What makes this cheap, and what makes it expensive
 
 Cheap: **`.ostex` is already the right shape.** One `texture2d_array`, every layer the same W×H×format, full
