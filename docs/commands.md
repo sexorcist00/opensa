@@ -65,7 +65,9 @@ npm run phone               # the whole phone run in ONE command (convert if nee
 `npm run phone` (`scripts/phone.sh`, plan 097 chain 4) is the field-run ritual for a device, written so the
 command never changes and every knob is an env var: `REBUILD=1` re-converts, `BAKE=0` builds the other side of
 the collision A/B, `MODELS=0` skips the model convert (fast, but then only `dispatch.html` is usable — it runs
-no physics), `RECT=` / `SPAWN=` / `OUT=` / `GAME=` / `APP_PORT=` / `STATIC_PORT=` move the rest. It converts
+no physics), `VEHICLES=` / `PEDS=` set the model SUBSET (default `admiral,infernus,comet` + `bmycg,wmycr`;
+`all` converts the roster — hours on a phone), `RECT=` / `SPAWN=` / `OUT=` / `GAME=` / `APP_PORT=` /
+`STATIC_PORT=` move the rest. It converts
 only when there is no pak (a phone convert is minutes to hours), prints what the pak actually carries — the
 collision GRID first — and reuses a server that is already up. Ctrl+C (or closing the Termux session) stops
 the servers it started. A prebuilt app in `build/webapp` (or `WEBAPP=<dir>`) is served as static files and

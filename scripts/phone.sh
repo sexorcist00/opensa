@@ -6,7 +6,9 @@
 #   npm run phone                     # convert (once) with the collision bake, serve, print the URL
 #   REBUILD=1 npm run phone           # re-convert even though a pak is already there
 #   BAKE=0 OUT=./build/phone-plain npm run phone     # the OTHER side of the A/B: no --bake-collision
-#   MODELS=0 npm run phone            # skip the model convert: fast, but dispatch-only (no physics)
+#   MODELS=0 npm run phone            # skip the model convert entirely: fast, but dispatch-only (no physics)
+#   VEHICLES=admiral,infernus PEDS=bmycg npm run phone     # convert a different subset
+#   VEHICLES=all PEDS=all npm run phone                    # the whole roster (hours on a phone)
 #   RECT=8,-8,11,-5 SPAWN=2495,-1687,20 npm run phone
 #
 # A PREBUILT app in `build/webapp` (or `WEBAPP=<dir>`) is used INSTEAD of the dev server, and then vite is
@@ -25,6 +27,12 @@ RECT="${RECT:-9,-7,10,-6}"
 SPAWN="${SPAWN:-2400,-1700,20}"
 BAKE="${BAKE:-1}"
 MODELS="${MODELS:-1}"
+# The default is a SUBSET, because converting the roster costs hours on a phone and a field run needs a
+# handful of models. `all` restores the full convert. The player's model is added below whatever is asked
+# for: without it the game boots with nobody to move (`GAME_CONFIG.mainCharacter`).
+PLAYER_PED="${PLAYER_PED:-bmycg}"
+VEHICLES="${VEHICLES:-admiral,infernus,comet}"
+PEDS="${PEDS:-bmycg,wmycr}"
 REBUILD="${REBUILD:-0}"
 APP_PORT="${APP_PORT:-5173}"
 WEBAPP="${WEBAPP:-build/webapp}"
@@ -79,6 +87,16 @@ if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
   args=(--game "$GAME" --out "$OUT" --rgba8 --max-texture 256 --rect "$RECT" --no-ao --platforms mobile)
   [ "$BAKE" = 1 ] && args+=(--bake-collision)
   [ "$MODELS" = 0 ] && args+=(--no-models)
+  if [ "$MODELS" != 0 ]; then
+    [ "$VEHICLES" != all ] && args+=(--vehicles "$VEHICLES")
+    if [ "$PEDS" != all ]; then
+      case ",$PEDS," in
+        *",$PLAYER_PED,"*) ;;
+        *) PEDS="$PLAYER_PED,$PEDS" ;;
+      esac
+      args+=(--peds "$PEDS")
+    fi
+  fi
   # --platforms mobile fails the pack when anything it wrote needs a GPU feature a phone lacks (BC), so a pak
   # that survives this line is one the device can actually open.
   if ! NODE_OPTIONS=--max-old-space-size=4096 npx tsx tools/opensa-pack/src/cli.ts "${args[@]}"; then
@@ -147,6 +165,15 @@ done
 
 # 5 — the link. `localhost` is a SECURE CONTEXT, so on the phone itself Cache Storage works and the download
 # is kept; the LAN address is plain http, where it is not (the shell says so under the preloader).
+#
+# With a SUBSET converted, the traffic spawners are turned off in the URL. This is not tidiness: a car outside
+# `--vehicles` kept its original BC textures, and on a device without BC the first parked car or generator to
+# reach for one ends the run. `?parked=0&cargen=0` is the pair that stills the world (`parked=0` alone does
+# not — the generators are the larger half, ~962 placements against ~212).
+GATE=""
+if [ "$MODELS" != 0 ] && { [ "$VEHICLES" != all ] || [ "$PEDS" != all ]; }; then
+  GATE="&parked=0&cargen=0"
+fi
 PAK_URL="http://localhost:$STATIC_PORT/${OUT#./}"
 IP="$(lan_ip)"
 # One origin when the app is prebuilt (it is served by the same static server as the pak): no CORS, no second
@@ -169,7 +196,7 @@ if [ "$MODELS" = 0 ]; then
   echo "  $MAP_URL?src=$PAK_URL&at=${SPAWN%,*}"
 else
   echo "  the game (this is the one that streams collision):"
-  echo "  $APP_URL?loader=http-dir&src=$PAK_URL&spawn=$SPAWN"
+  echo "  $APP_URL?loader=http-dir&src=$PAK_URL&spawn=$SPAWN$GATE"
   echo
   echo "  the map surface, no physics:"
   echo "  $MAP_URL?src=$PAK_URL&at=${SPAWN%,*}"
@@ -177,7 +204,13 @@ fi
 if [ -n "$IP" ]; then
   echo
   echo "  from another device on this network (plain http → no Cache Storage, the shell will say so):"
-  echo "  $LAN_APP?loader=http-dir&src=$LAN_PAK&spawn=$SPAWN"
+  echo "  $LAN_APP?loader=http-dir&src=$LAN_PAK&spawn=$SPAWN$GATE"
+fi
+if [ -n "$GATE" ]; then
+  echo
+  echo "  converted: vehicles [$VEHICLES] · peds [$PEDS] — so the URL carries parked=0&cargen=0."
+  echo "  Everything else kept its original (BC) textures and would fail to spawn on this GPU."
+  echo "  VEHICLES=all PEDS=all npm run phone converts the roster and drops the gate (hours on a phone)."
 fi
 say "running — Ctrl+C stops the servers this run started"
 echo "logs: tail -f $LOGS/app.log $LOGS/static.log"

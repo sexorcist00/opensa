@@ -15,6 +15,13 @@ available.
 They are meant to be used together. `--rgba8` alone makes a district affordable only at a very small `--rect`;
 with `--max-texture 256` the same memory buys roughly sixteen times the area.
 
+**Convert a SUBSET of the models** (`--vehicles admiral,infernus,comet --peds bmycg,wmycr`) when the point is
+a field run rather than a complete game: the roster costs minutes on a desktop and hours on a phone, and two
+cars are usually all a run touches. The catch is the reason `npm run phone` gates the spawners: a model left
+out keeps its `.dff`/`.txd` and therefore its ORIGINAL (BC) textures, so on a device without BC the first
+parked car or car generator reaching for one ends the run — `?parked=0&cargen=0`, both halves, since the
+generators are the larger one. The player's ped (`GAME_CONFIG.mainCharacter`, `bmycg`) must be in `--peds`.
+
 **`--rgba8` covers the MODELS too, since 2026-08-04.** It used to convert only the world, and a car is not in
 the pak — `model-ostex.ts` picked BC for any block-aligned dictionary, so a phone loaded the district and threw
 on the first spawn. That is why every recipe here passed `--no-models`. With models converted the flag means

@@ -68,6 +68,9 @@ export interface PackOptions {
    *  Defaults to `<outDir>/pak` (plan 086 phase 8: the game dir is SELF-CONTAINED — one folder pick
    *  serves the whole game; `pak/` replaced the confusing nested `opensa/` name). */
   pakDir?: string;
+  /** Convert only these PEDS (lowercased model names); every ped when absent. The player's model must be in
+   *  the list or the game has nobody to move (`GAME_CONFIG.mainCharacter`). */
+  peds?: readonly string[];
   /** GPU families this build CLAIMS to run on (`desktop`, `mobile`). The pack fails when the textures it
    *  wrote demand a feature the named family does not carry — the one moment that is still checkable, since
    *  after this the answer belongs to someone else's device. Unset = claim nothing, only report. */
@@ -77,6 +80,10 @@ export interface PackOptions {
   rect?: readonly [number, number, number, number];
   /** Stochastic de-tiling name lists; defaults to the curated `data/stochastic.txt`. */
   stochasticFiles?: readonly string[];
+  /** Convert only these VEHICLES (lowercased model names); every car when absent. A car left out keeps its
+   *  `.dff`/`.txd`, so on an `--rgba8` build it stays in the ORIGINAL format — see the note in
+   *  `pack-vehicles.ts`: the caller has to make sure nothing spawns it. */
+  vehicles?: readonly string[];
 }
 
 export interface PackResult {
@@ -141,7 +148,10 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
     ...(models
       ? {
           onWorldPlanned: (planner, mapDefs): void => {
-            packed = packModels(fs, mapDefs, planner, bundles, log, options.forceRgba8 ?? false);
+            packed = packModels(fs, mapDefs, planner, bundles, log, options.forceRgba8 ?? false, {
+              ...(options.peds ? { peds: new Set(options.peds.map((name) => name.toLowerCase())) } : {}),
+              ...(options.vehicles ? { vehicles: new Set(options.vehicles.map((name) => name.toLowerCase())) } : {}),
+            });
           },
         }
       : {}),
@@ -280,8 +290,10 @@ function packModels(
   // A car is not in the pak, so `--rgba8` has to reach every class that ships its OWN dictionary; the map
   // objects plan into the world planner, which already has it.
   forceRgba8: boolean,
+  /** Optional per-class subsets (`--vehicles` / `--peds`); absent = the whole class. */
+  only: { peds?: ReadonlySet<string>; vehicles?: ReadonlySet<string> } = {},
 ): PackedModels {
-  const vehicles = packVehicles(fs, bundles, log, { forceRgba8 });
+  const vehicles = packVehicles(fs, bundles, log, { forceRgba8, ...(only.vehicles ? { only: only.vehicles } : {}) });
   // Smashable props (5b): only a `SHAT` section, so the model keeps its `.dff` — the shatter mesh is the
   // ONLY thing the runtime resolves by name for a prop, and it is what costs a main-thread DFF parse.
   const breakables = packBreakables(fs, breakableModelsFromText(fs.getText('data/object.dat')), bundles, log);
@@ -292,7 +304,7 @@ function packModels(
   // Animated map objects (5e): the frame tree the IFP matches by name — the clip stays a separate asset.
   const animObjects = packAnimObjects(fs, defs, bundles, log, { forceRgba8 });
   // Peds (5f): their own DESC/GEOM — no colours, no paint slots, but joints/weights and a real skeleton.
-  const peds = packPeds(fs, bundles, log, { forceRgba8 });
+  const peds = packPeds(fs, bundles, log, { forceRgba8, ...(only.peds ? { only: only.peds } : {}) });
   // Map objects (5g): everything else the IDEs name, against the shared dictionary.
   const mapObjects = packMapObjects(fs, defs, planner, bundles, isVegetationDef, log, defs.txdParents);
 

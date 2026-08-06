@@ -39,7 +39,7 @@ export function packPeds(
   fs: AssetFileSystem,
   bundles: ModelBundles,
   log: (message: string) => void,
-  options: { forceRgba8?: boolean } = {},
+  options: { forceRgba8?: boolean; only?: ReadonlySet<string> } = {},
 ): PedPackResult {
   const text = fs.getText('data/peds.ide');
   if (text === null) {
@@ -61,7 +61,17 @@ export function packPeds(
   let bytes = 0;
   let multiArray = 0;
 
-  const pedDefs = [...parsePedDefs(text).values()];
+  // Same subset rule as the vehicles (`--peds`). The one that must never be left out is the PLAYER's model:
+  // without its `.osm` the game boots and has nobody to move (`GAME_CONFIG.mainCharacter`).
+  const allPeds = [...parsePedDefs(text).values()];
+  const pedDefs = options.only ? allPeds.filter((def) => options.only?.has(def.model.toLowerCase())) : allPeds;
+  if (options.only) {
+    const missing = [...options.only].filter((name) => !allPeds.some((def) => def.model.toLowerCase() === name));
+    log(
+      `peds: converting ${pedDefs.length} of ${allPeds.length} (--peds)` +
+        (missing.length > 0 ? ` — NOT in peds.ide: ${missing.join(', ')}` : ''),
+    );
+  }
   const progress = createProgress('peds', pedDefs.length, log);
   for (const def of pedDefs) {
     progress.tick();

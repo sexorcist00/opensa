@@ -63,7 +63,8 @@ async function main(): Promise<void> {
     console.error(
       'usage: opensa-pack --game <dir> --out <dir> [--rect x0,y0,x1,y1] ' +
         '[--pak-out <dir>] [--game-id <id>] [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--rgba8] [--max-texture N] ' +
-        '[--platforms desktop|mobile[,…]] [--bake-collision] [--stochastic <file>[,<file>…]]',
+        '[--platforms desktop|mobile[,…]] [--bake-collision] [--stochastic <file>[,<file>…]] ' +
+        '[--vehicles a,b] [--peds a,b]',
     );
     process.exitCode = 2;
 
@@ -84,6 +85,16 @@ async function main(): Promise<void> {
   if (maxTexture !== 0 && (maxTexture < 4 || (maxTexture & (maxTexture - 1)) !== 0)) {
     throw new Error(`bad --max-texture '${maxTexture}' (want a power of two >= 4, or omit it)`);
   }
+  // Per-class subsets: convert two cars instead of the whole roster (minutes instead of hours on a phone).
+  // A model left out keeps its .dff/.txd and therefore its ORIGINAL texture format — on an --rgba8 build for
+  // a device without BC, spawning one would fail, so whoever passes this must keep it from being spawned.
+  const csv = (name: string): string[] =>
+    (arg(name) ?? '')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+  const vehicles = csv('vehicles');
+  const peds = csv('peds');
   const gameId = arg('game-id');
   const pakOut = arg('pak-out');
   const platforms = (arg('platforms') ?? '')
@@ -100,11 +111,13 @@ async function main(): Promise<void> {
     gameDir: requireDir('game', gameRaw),
     ...(gameId ? { gameId } : {}),
     models: !process.argv.includes('--no-models'),
+    ...(peds.length > 0 ? { peds } : {}),
     outDir: fromCwd(outRaw),
     ...(pakOut ? { pakDir: fromCwd(pakOut) } : {}),
     ...(platforms.length > 0 ? { platforms } : {}),
     ...(rect !== undefined ? { rect: rect as unknown as readonly [number, number, number, number] } : {}),
     ...(stochastic.length > 0 ? { stochasticFiles: stochastic } : {}),
+    ...(vehicles.length > 0 ? { vehicles } : {}),
   });
 }
 

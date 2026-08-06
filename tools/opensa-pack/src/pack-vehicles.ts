@@ -47,13 +47,26 @@ export function packVehicles(
   fs: AssetFileSystem,
   bundles: ModelBundles,
   log: (message: string) => void,
-  options: { forceRgba8?: boolean } = {},
+  options: { forceRgba8?: boolean; only?: ReadonlySet<string> } = {},
 ): VehiclePackResult {
   const text = fs.getText('data/vehicles.ide');
   if (text === null) {
     throw new Error('data/vehicles.ide not found — cannot enumerate vehicles');
   }
-  const defs = [...parseVehicleDefs(text).values()];
+  // A SUBSET is a legitimate ask (`--vehicles`): converting the whole roster costs minutes on a desktop and
+  // hours on a phone, and a field run usually needs two cars. What is left out keeps its `.dff`/`.txd` and
+  // therefore its ORIGINAL texture format — so on a pak built with `--rgba8` for a device without BC, a car
+  // outside the list is one the device cannot display. That is the caller's problem to gate (the phone
+  // workflow turns the traffic spawners off), and it is why the log states the subset rather than hiding it.
+  const all = [...parseVehicleDefs(text).values()];
+  const defs = options.only ? all.filter((def) => options.only?.has(def.model.toLowerCase())) : all;
+  if (options.only) {
+    const missing = [...options.only].filter((name) => !all.some((def) => def.model.toLowerCase() === name));
+    log(
+      `vehicles: converting ${defs.length} of ${all.length} (--vehicles)` +
+        (missing.length > 0 ? ` — NOT in vehicles.ide: ${missing.join(', ')}` : ''),
+    );
+  }
   // What the mods declared about their own models (vehicle-installer wrote it) — absent on a stock game dir,
   // and then every car is judged by its geometry alone.
   const features = parseVehicleFeatures(fs.getText('data/vehicle-features.txt') ?? '');
@@ -89,21 +102,21 @@ export function packVehicles(
     }
   }
 
-  const txdsKept = planTxdDeletions(defs, converted, deletes);
+  // ALL the defs, never the subset: the deletion test is "does any UNCONVERTED car still need this txd", and
+  // handing it only the converted ones would delete the dictionaries the cars outside `--vehicles` draw with.
+  const txdsKept = planTxdDeletions(all, converted, deletes);
   log(
-    `vehicles: ${converted.size}/${defs.length} converted, ${failed.length} failed, ` +
+    `vehicles: ${converted.size}/${all.length} converted, ${failed.length} failed, ` +
       `osm ${mb(osmBytes)} (dictionaries ${mb(ostexBytes)} of it), ${txdsKept.length} txds kept`,
   );
 
   return { deletes, report: { failed, models: converted.size, osmBytes, ostexBytes, txdsKept } };
 }
 
-function mb(bytes: number): string {
-  return `${(bytes / 1048576).toFixed(1)} MB`;
-}
-
-/** Queue `<txd>.txd` deletes for the dictionaries no unconverted car still needs; return the ones held back. */
-function planTxdDeletions(
+/** Queue `<txd>.txd` deletes for the dictionaries no unconverted car still needs; return the ones held back.
+ *  Exported for its test: this is the code that ERASES from the archives, and `--vehicles` made the
+ *  "unconverted" half of that question real rather than theoretical. */
+export function planTxdDeletions(
   defs: readonly { model: string; txd: string }[],
   converted: ReadonlySet<string>,
   deletes: string[],
@@ -124,4 +137,8 @@ function planTxdDeletions(
   }
 
   return kept;
+}
+
+function mb(bytes: number): string {
+  return `${(bytes / 1048576).toFixed(1)} MB`;
 }
