@@ -36,9 +36,15 @@ transcoder to be read:
 | **RGBA8 — what a no-BC device gets today** | **4 B** |
 
 So `--rgba8` is not "a bit heavier": it is **4× a BC3 payload and 8× BC1**, on every texture the world draws,
-which is why a phone today buys a district with `--max-texture 256` and cannot buy the map at any cap. A
-universal (or plain ASTC) encode brings the mobile cost back to the desktop's. Run the script on a district
-pak before and after this chain — the before number is available now.
+which is why a phone today buys a district with `--max-texture 256` and cannot buy the map at any cap. An
+ASTC encode brings the mobile cost back to the desktop's.
+
+**Confirmed on real content, 2026-08-06** — the user's own district pak, measured on the phone
+([benchmark](../../../benchmarks/opensa-engine/2026-08-06-headless-district-texture-budget.json)): 21.4 M
+texels over 663 layers cost **115.4 MB** resident as built (RGBA8), against **13.6 MB** in BC1 and
+**27.2 MB** in ASTC 4×4. That is 8.5× and 4.2× on SA's own textures, so the multipliers above are the
+content's, not the theory's. Extrapolating the recorded ~767 MB full-map texture floor by the same ratios:
+roughly **6.5 GB in RGBA8, ~1.5 GB in ASTC** — which is the difference between "no" and "a decision".
 
 ## What makes this cheap, and what makes it expensive
 

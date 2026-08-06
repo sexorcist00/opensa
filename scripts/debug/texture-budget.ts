@@ -1,8 +1,9 @@
 import type { OstexFormatId } from '@opensa/engine-formats/ostex';
 
 import { OstexFormat, ostexLayerBytes, ostexMaxMips } from '@opensa/engine-formats/ostex';
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+
+import { readPakManifest } from '../lib/pak-dir';
 
 /**
  * What a pak costs the GPU, and what it WOULD cost in another texture format (plan 097, chains 2 and 4).
@@ -32,11 +33,11 @@ interface ArrayEntry {
   rawLength?: number;
   width: number;
 }
-const manifest = JSON.parse(readFileSync(join(pakDir, 'manifest.json'), 'utf8')) as {
+const manifest = readPakManifest<{
   buildTime?: string;
   cells: Record<string, unknown>;
   textures: Record<string, ArrayEntry>;
-};
+}>(pakDir);
 
 const FORMAT_NAME: Record<number, string> = {
   [OstexFormat.BC1]: 'BC1',

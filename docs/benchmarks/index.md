@@ -391,4 +391,5 @@ lab rows carry a `converter` block; the sweeps did not. Every new in-game run mu
 
 | Date | File | What | Headline numbers |
 | --- | --- | --- | --- |
+| 08-06 | [district-texture-budget](opensa-engine/2026-08-06-headless-district-texture-budget.json) | The first REAL texture price of a mobile district, read off the user's own `--rgba8 --max-texture 256` pak on the phone (manifest computation, no GPU). 8 cell entries, 18 arrays, 663 layers, 21.4 M texels. | **115.4 MB** resident as built · **13.6 MB** if BC1 · **27.2 MB** if ASTC 4x4 → RGBA8 is **8.5x** BC1 and **4.2x** ASTC on real SA content |
 | 08-06 | [astc-encoder-trial](opensa-engine/2026-08-06-headless-astc-encoder-trial.json) | The ASTC encoder chain 2 turned to (`astc-encoder.js` 1.0.0, wasm bindings of ARM astc-encoder), on a 128x128 synthetic with a HARD alpha edge — the shape SA's cutout foliage is made of. x64 container, one thread, no GPU. | **1.00 B/texel** (a quarter of RGBA8) · **PSNR 49.3 dB** (RGB 48.0, alpha 58.7) · 115 ms at MEDIUM |

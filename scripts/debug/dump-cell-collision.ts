@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 
+import { readPakManifest } from '../lib/pak-dir';
+
 /**
  * Does this pak actually carry the collision the runtime would read, and is it keyed on the grid the runtime
  * streams on? (plan 097/3-01.)
@@ -34,12 +36,12 @@ interface PakEntry {
   length: number;
   offset: number;
 }
-const manifest = JSON.parse(readFileSync(join(pakDir, 'manifest.json'), 'utf8')) as {
+const manifest = readPakManifest<{
   buildTime?: string;
   cellSize?: number;
   collision?: Record<string, PakEntry | undefined>;
   collisionCellSize?: number;
-};
+}>(pakDir);
 
 const entries = manifest.collision;
 if (!entries || manifest.collisionCellSize === undefined) {
