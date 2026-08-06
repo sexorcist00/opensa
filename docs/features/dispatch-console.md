@@ -11,6 +11,16 @@ the smallest complete example of embedding the engine.
 
 Implemented and running. The world half is verified only on real GPU hardware — see [Verification](#verification).
 
+**Under active development as [plan 098](../plans/098-dispatch-console/readme.md)** (opened 2026-08-06), which
+declares the console as the engine's second consumer ([project-goals, directive 7](../project-goals.md)) and
+carries five chains: the map profile (trim the engine to what the map draws — and only that: cars and peds
+drawn, vegetation swaying, the day turning and the weather colouring the world are all protected, and one
+engine serves PC and mobile on a budget rather than a branch), real device truth (the repo's first
+real-world mobile benchmark row), the operator surface at 360 CSS px, render-on-demand for a surface that
+idles most of a shift, and picking taken off its debug flag. The deferred CAD half — a live feed, real
+routes, replay, multi-operator, install/offline — is
+[roadmap 0.6.0](../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md).
+
 ## What it is made of
 
 | Concern                | Where                                    | Notes                                                                                       |
@@ -76,15 +86,30 @@ opens a call at the ground point under the cursor.
 
 ## Known gaps
 
+Each now names the step that owns it, so none of them is an open-ended note.
+
 - **Routes are straight lines**, not driven paths. The vehicle path graph is `original`-only
   ([assets-and-data](../restrictions/assets-and-data.md)), so a total conversion has nothing to route on; a
   bearing that is honest about being a bearing beat a route that silently lies on half the games.
+  → deferred: [roadmap 0.6.0](../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md).
 - **The board is a mockup feed.** `stepOperations` stands in for a real one; wiring this to a game server
-  replaces that one module and nothing else.
-- **No unit models.** Units are beacons plus 2D symbols. `createVehicle` would give them real cars at the cost
-  of depending on converted vehicle models being present in the build.
+  replaces that one module and nothing else. → deferred, contract first:
+  [roadmap 0.6.0](../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md).
+- **No unit models** — **decided 2026-08-06: units get real models.** Cars and peds are drawn rather than
+  replaced by icons; the symbol keeps the label and the priority and stays 2D on top. The cost is a
+  dependency on the build carrying converted `.osm` models, and the fallback when one is absent is part of
+  the step. → [098/5-04](../plans/098-dispatch-console/5-symbology-and-picking-as-product/readme.md).
 - **Demo mode has no model names.** Synthetic cells carry no placement mapper, so a click on a demo block
-  resolves to bare ground.
+  resolves to bare ground. → picked up with the production pick capability,
+  [098/5-01](../plans/098-dispatch-console/5-symbology-and-picking-as-product/readme.md).
+- **Picking stands on a debug flag.** `engine.cells.debugPicking` must be true before the first cell loads,
+  and a build defaulting debug off in production kills click-to-inspect with no error — recorded as a
+  restriction ([architecture](../restrictions/architecture.md)) in the same change.
+  → [098/5-01](../plans/098-dispatch-console/5-symbology-and-picking-as-product/readme.md).
+- **The mobile evidence is emulated, not hardware.** The phone runs below are an emulated Pixel 7 and a
+  simulated mobile adapter; the one real device in the repo's record (Mali-G51, 360×800 DPR 2) ran the
+  synthetic `?demo=1` city, not a streamed world. → the real-district row is
+  [098/2-03](../plans/098-dispatch-console/2-real-device-truth/readme.md).
 
 ## Verification
 

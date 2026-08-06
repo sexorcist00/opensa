@@ -408,3 +408,77 @@ a scene capture afterwards. `station-supply.test.ts` now pins the yield ("yields
 to a plant that already spent it"), but that is one consumer pair, not a guard: a third consumer added
 tomorrow would go over budget silently again. Read `stations.castsMax` in a `[video]` capture before
 believing a new probe is free.
+
+## A non-game surface reaches the game layer through the environment driver and nothing else
+
+`apps/dispatch` is the engine's second consumer and its smallest complete embedding example: the renderer,
+the streamer, and one shared config→`Environment` driver
+(`@opensa/game/adapters/engine-environment-driver`) for lighting and timecyc. No ECS, no Rapier, no peds, no
+vehicle physics, no weather sim. That is what makes it evidence that the engine layer stayed an engine
+(`docs/project-goals.md`, directive 7).
+
+Nothing enforces it. The Nx tags allow `type:app → app|engine`, and `packages/game` is tagged `type:engine`,
+so the whole game layer is importable from the console with a green lint. The boundary is a convention held
+up by one paragraph in `apps/dispatch/readme.md`.
+
+The failure is not a crash, it is a slow loss of the property: the first `packages/game` import is always
+reasonable (zone names, a pick helper), and after three of them the "engine embedding example" pulls in a
+physics world to draw a map. When a console feature genuinely needs game-layer data — district names from
+`map.zon`/`info.zon` + GXT is the live case — the decision is to MOVE the lookup to a layer both consumers
+reach, or to take the import and write down why, in `docs/architecture/`.
+
+**Caught:** no — ESLint permits it by construction. The only check is review.
+
+## A production surface may not stand on a `debug*` switch
+
+The dispatch console's central interaction — click a building, get the model and TXD names the pak was built
+from plus GTA coordinates — resolves through `CellStore.pick`, which returns nothing unless
+`engine.cells.debugPicking = true` was set **before the first cell loaded**, and unless the pak carries the
+placement mapper (minor 6).
+
+So a product feature is gated on a flag named for debugging, at a moment (pre-first-cell) that no error
+reports. A build that starts defaulting `debug*` off in production — the sort of change nobody would think
+twice about, and `build:prod` already sets `OPENSA_DEBUGGER_HIDE=true` — turns click-to-inspect into a click
+that selects nothing. There is no throw, no warning, and no missing pixel: the map just stops answering.
+
+Either the capability gets an honest name and an owner outside the debug surface, or every consumer of it is
+listed where the flag is defined. See `docs/plans/098-dispatch-console/5-symbology-and-picking-as-product/`.
+
+**Caught:** no — and worse than silent at runtime, it is silent at review: the flag reads as debug-only, so a
+change that disables it looks safe.
+
+## A camera at city height must push the fog cut out, or the world renders EMPTY
+
+The engine culls any cell lying entirely past `fogCutDistance` (2400 by default). A map camera sits a
+kilometre up looking at a whole city, so **every** cell is past the cut and the frame comes back with nothing
+in it — a correct, fully-streamed world drawn as an empty canvas.
+
+`pushFogOut` (`apps/dispatch/src/world/boot.ts`) ties the cut to `CAMERA_FAR` (12000, `map/map-camera.ts`)
+and is **re-applied inside `applyHour`**, because the environment driver rewrites both distances every time
+it applies a timecyc row — set it once at boot and the next hour change empties the map. `?fog=1` restores
+the game's own fog for comparison.
+
+This has now been discovered twice, independently, by the two surfaces that lift the camera: `sa-map-viewer`
+and `dispatch`. Any third one — a map editor, an overview mode, a spectator view — will hit it in the same
+way, and the symptom (a black screen with healthy streaming counters) points at everything except the fog.
+
+**Caught:** no. The counters say the cells loaded; only the eye says they were not drawn.
+
+## The PC/mobile difference is a BUDGET, not a branch
+
+One engine runs on the desktop and on a phone. The difference between them is expressed in numbers the frame
+reads — ring sizes, cadences, residency ceilings, render scale — and never in branches the frame executes:
+no second renderer, no "mobile shader path", no parallel shader set, no per-platform pass list.
+
+The reason is cost that never comes back. A forked path is a second codebase every future rendering plan has
+to implement and verify twice, and the divergence is invisible until a look change lands on one platform and
+not the other. The repo already refused the neighbouring shape once: an automatic quality-tier ladder was
+measured and rejected (`docs/performance/deferred-optimizations/render-scale-tier.md`), leaving `?scale=` as
+the one knob (`docs/restrictions/gpu-and-shaders.md`).
+
+Where a device genuinely cannot do something, that is a **content** decision taken at build time — a world's
+texture format decides which GPUs can display it (`docs/restrictions/assets-and-data.md`) — not a runtime
+branch bolted into the frame.
+
+**Caught:** no. A platform branch lints clean, tests clean on whichever platform CI runs, and is only found
+when somebody compares the two screens.

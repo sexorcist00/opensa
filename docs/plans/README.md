@@ -16,9 +16,19 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`097`, one folder each (066, 073, 074, 078–082, 096, 097 carry multi-part sub-plans; 083 kept its row
+`001`–`098`, one folder each (066, 073, 074, 078–082, 096, 097, 098 carry multi-part sub-plans; 083 kept its row
 but its folder moved to `roadmap/0.5.0/`). Newest first:
 
+- **[098 — The dispatch console](./098-dispatch-console/readme.md)** — IN PROGRESS, opened 2026-08-06. The
+  engine's second consumer, declared: a CAD operator surface over the streamed world, trimmed to what it
+  actually draws, on a phone. `apps/dispatch` arrived in one commit with one write-up and no plan, no roadmap
+  row and no line in [project-goals](../project-goals.md) — while being the only surface in the repo that runs
+  on a mobile GPU, and therefore the cheapest instrument for the device measurement 097's phone-side steps are
+  blocked on. Five chains: the map profile (cut what is provably never read — cars, peds, vegetation sway, the
+  day cycle and the weather are protected, and one engine serves PC and mobile), real device truth (the repo's
+  first real-world mobile row, handing 097/1-04 the residency ceiling it refused to invent), the operator
+  surface at 360 CSS px, render-on-demand for a console that idles most of a shift, and picking taken off the
+  `debugPicking` flag it stands on today. Owns none of 097's work and duplicates none of it.
 - **[097 — Platform reach](./097-platform-reach/readme.md)** — IN PROGRESS, opened 2026-08-04. The world on a
   phone, and the frame off the main thread. A phone boots the engine and cannot open the world, because a pak
   built from SA assets is BC throughout and no mobile GPU has BC — a build-time content decision no runtime

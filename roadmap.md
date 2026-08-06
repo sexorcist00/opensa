@@ -153,6 +153,12 @@ Platform reach is the LEAD of this cycle (decided 2026-08-04) — a phone boots 
 world, because a pak built from SA assets is BC throughout and no mobile GPU has BC. Full chain and its
 measured evidence: [docs/plans/097-platform-reach/](docs/plans/097-platform-reach/readme.md).
 
+The DISPATCH CONSOLE leads beside it (decided 2026-08-06) — the engine's second consumer, a CAD 3D map for
+dispatchers over the same streamed world, and the only surface here that runs on a phone. It carries the
+mobile work and the "trim the engine to what the map draws" work, with the world's life explicitly protected:
+cars and peds are drawn, vegetation sways, the day turns, and one engine serves PC and mobile.
+Full chain: [docs/plans/098-dispatch-console/](docs/plans/098-dispatch-console/readme.md).
+
 - [ ] Run the real map on a phone
   - [✅] Boot the engine on a mobile GPU (BC taken when offered, never demanded)
   - [✅] Refuse a world the device cannot display BEFORE it streams, naming the world
@@ -168,6 +174,13 @@ measured evidence: [docs/plans/097-platform-reach/](docs/plans/097-platform-reac
   - [ ] Cell collider assembly and `.osm` parsing into workers
   - [ ] Physics in a worker, IF a phone measurement demands it
 - [ ] WebGL2 fallback for devices without a WebGPU adapter (concept-gated, may be refused)
+- [ ] The dispatch console: a CAD 3D map for dispatchers
+  - [✅] The console itself — top-down map, units, call queue, click-to-inspect over the streamed world
+  - [ ] Trim the engine to what the map draws — and only that (cars, peds, sway, the day cycle stay)
+  - [ ] A real district, on a real phone, with the repo's first real-world mobile benchmark row
+  - [ ] An operator surface that works at 360 CSS px, on real touch hardware
+  - [ ] Render on demand — a console idles most of a shift, a game never does
+  - [ ] Picking off the `debugPicking` flag, and units drawn as models rather than debug lines
 - [ ] CJ
   - [ ] Clothes
   - [ ] Bodies

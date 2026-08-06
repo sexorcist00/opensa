@@ -17,9 +17,28 @@ anything streams, a build-time `--platforms` gate over both halves (pak arrays �
 build half of chain 3/01: `.oscol`, the bake, and `--bake-collision`.
 
 **Next:** the runtime read of the baked collision (the half that removes the spike), then chain 2 once its
-concept clears — and everything on a phone stays unproven until it does.
+concept clears. Its phone-side steps are blocked on a device measurement nobody has taken, and the dispatch
+console below is the instrument that takes it — the only surface that opens a real world on a mobile GPU
+today. Until that row exists, everything on a phone stays unproven.
 
 Full chain: [../../plans/097-platform-reach/readme.md](../../plans/097-platform-reach/readme.md).
+
+## The dispatch console — IN PROGRESS as `docs/plans/098-dispatch-console/` (2026-08-06)
+
+The engine's **second consumer**, declared, and the second lead of the cycle — so it does not live here as
+future work either. `apps/dispatch` is a computer-aided-dispatch operator surface over the streamed world
+(top-down 3D map, live units, a call queue, click-to-inspect answering with model and TXD names plus GTA
+coordinates) that runs with no player, no ECS and no physics. It shipped in a single commit with one
+write-up and nothing else: no plan, no roadmap row, no line in the project goals — while being the only
+surface in the repo that runs on a phone.
+
+The chain does three things at once: **declares the direction** (a CAD 3D map on the SA world — geo import,
+a live feed and multi-operator are ruled out and deferred to [0.6.0](../0.6.0/readme.md)), **trims the engine
+to what the map actually draws** — and only that, because cars and peds are drawn, vegetation sways and the
+day turns, with one engine serving PC and mobile on a budget rather than a branch — and **takes the phone
+measurement** the platform-reach chain above is waiting for.
+
+Full chain: [../../plans/098-dispatch-console/readme.md](../../plans/098-dispatch-console/readme.md).
 
 ## Weather-driven wind (own engine)
 
