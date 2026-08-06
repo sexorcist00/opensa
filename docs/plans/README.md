@@ -42,7 +42,7 @@ row but its chain was superseded by 097). Newest first:
   `!` rows → rider animation → first joints/towing → abilities → per-class gameplay → audit close-out.
   Air/water/rail findings parked in `roadmap/0.6.0/plans/05-air-water-rail/`.
 
-- **[097 — CLEO basic](./097-cleo-basic/readme.md)** — **01–07 DONE 2026-08-06** (all three field checkpoints — the wheel spins, the corpus ships through pmb + fetch pack with nothing hand-placed; 07 closed with the tracer, the F2 CLEO screen, tiers-as-data + CI joins, audit + benchmarks, and CLEO is ON BY DEFAULT — `?cleo=0` opts out; only the 08 authoring-SDK remains), supersedes the deferred
+- **[097 — CLEO basic](./097-cleo-basic/readme.md)** — **CLOSED: 01–08 DONE 2026-08-06** (all three field checkpoints — the wheel spins, the corpus ships through pmb + fetch pack with nothing hand-placed; 07 closed with the tracer, the F2 CLEO screen, tiers-as-data + CI joins, audit + benchmarks, and CLEO is ON BY DEFAULT — `?cleo=0` opts out; 08 authoring SDK executed as the project-local chain `cleo/sdk/docs/plans/` — hello-conformance proven on BOTH runtimes, real CLEO included), supersedes the deferred
   `roadmap/0.5.0/plans/08-cleo-basic/` chain (deleted; it was the unstarted 083 rethink). Rewritten from a
   full recon: all seven target `.cs` scripts (`NO_COMMIT/cleo`) were disassembled — three mod classes
   (world objects / vehicle-part animation via native calls / ped-task orchestration), ~116 unique opcodes,

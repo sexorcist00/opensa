@@ -17,7 +17,7 @@ scripts themselves arrive with the class-C facet, not here.
 | 2   | [002 — Assembler core](002-assembler-core.md)             | the decoder's mirror: operand writer, labels/jumps, LVARs, native-call tails, trailer; corpus re-encode byte-identical       | done    |
 | 3   | [003 — Dual-target whitelist](003-dual-target-whitelist.md) | generated allowed-set (real CLEO ∩ VM registry), the build gate, `opensa-only` flag + artifact-name contract               | done    |
 | 4   | [004 — DSL builder](004-dsl-builder.md)                   | the typed authoring surface: threads, labels, wait, if/else lowering, opcodes by Sanny name, raw escape hatch                | done    |
-| 5   | [005 — hello-conformance](005-hello-conformance.md)       | first authored script end-to-end: listing snapshot, headless story, field boot, manual real-CLEO verdict; docs sweep         | done (Wine verdict pending) |
+| 5   | [005 — hello-conformance](005-hello-conformance.md)       | first authored script end-to-end: listing snapshot, headless story, field boot, manual real-CLEO verdict; docs sweep         | done    |
 
 Dependencies are linear 001 → 005. 002 is the load-bearing step (the bytes); 003 and 004 both sit
 on 002's IR; 005 is the proof that closes the chain and carries the docs/ledger sweep. The chain is
@@ -28,5 +28,6 @@ independent of the runtime — it touches no engine file, so it may interleave w
 A script authored in TS compiles to a `.cs` that (a) our disassembler renders to the expected
 committed snapshot, (b) runs headless within its declared per-frame budget, (c) boots in the field
 via the normal `cleo/` path, and (d) contains only dual-target opcodes unless explicitly flagged in
-its artifact name. Re-running the build yields byte-identical artifacts. The manual real-CLEO run
-under Wine is recorded in 005's ledger when taken.
+its artifact name. Re-running the build yields byte-identical artifacts. **All held, including the
+manual real-CLEO run under Wine: PASSED, user-confirmed 2026-08-06 (005's ledger) — the chain is
+CLOSED.**

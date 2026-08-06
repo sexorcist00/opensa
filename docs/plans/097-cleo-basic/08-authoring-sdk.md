@@ -114,5 +114,7 @@ commit per plan; per-plan ledgers there). The chain's numbers:
   shipped mod scripts), `HELLO OPENSA` toast visible on screen in Ganton — screenshot taken.
   Artifact was hand-placed for the check and removed after (a conformance artifact, not a
   shipping mod).
-- **Real CLEO under Wine: NOT YET TAKEN** (manual, the user's harness) — the dual-target claim
-  rests on the whitelist + the corpus-proven format until that run is recorded.
+- **Real CLEO under Wine: PASSED, user-confirmed 2026-08-06** — the artifact in the real install's
+  `CLEO/` folder, the print visible in-game on the canonical 1.0 US exe. The dual-target claim is
+  field-proven on both runtimes; the impersonation doctrine exercised from the authoring side, and
+  it held.

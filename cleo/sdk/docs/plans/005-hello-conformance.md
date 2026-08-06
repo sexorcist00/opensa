@@ -44,8 +44,7 @@ from.
 - [x] Listing snapshot committed (inline, verified by hand); deterministic build (test + CLI
       double-run). Cross-checked with the standalone `scm-disasm` debug tool.
 - [x] Field boot (headless harness, this session) — verdict + numbers in Measurements.
-- [ ] Real-CLEO Wine run — **not yet taken** (manual, with the user; the artifact is
-      `cleo/sdk/dist/hello-conformance.cs`, rebuild with `npm run build:cleo-scripts`).
+- [x] Real-CLEO Wine run — **PASSED, user-confirmed 2026-08-06** (verdict in Measurements).
 - [x] Docs sweep: `docs/features/cleo.md` SDK row, `docs/architecture/cleo-scripts.md` + diagram
       re-rendered, 097/08 ledger closed, chain readme statuses.
 - [x] Ledger below.
@@ -69,9 +68,13 @@ sweep landed in the same change. The chain's "done" definition in [readme.md](re
   the `HELLO OPENSA` toast VISIBLE on screen (screenshot; Ganton, 118 fps). Artifact hand-placed
   into `build/original/opensa/cleo/` for the check and removed after — it is a conformance
   artifact, not a shipping mod.
-- **Real CLEO under Wine: not yet taken.** Manual step with the user's harness; until recorded,
-  the dual-target claim rests on the whitelist + the corpus-proven format (this file says so
-  honestly, per decision 2d).
+- **Real CLEO under Wine: PASSED (user-confirmed 2026-08-06).** The artifact placed into the real
+  install's `CLEO/` folder; the `HELLO OPENSA` print visible in-game under real CLEO on the
+  canonical SA 1.0 US exe (the accepted HOODLUM build, 14 383 616 B — the perfect-map fingerprint;
+  the user's live modded install). CLEO library version not recorded — the install's CLEO 4-era
+  setup; the script uses only base-game + classic CLEO 4 block opcodes, so any 4.x+ serves it.
+  **The dual-target claim is now field-proven on BOTH runtimes** — the same 88 bytes ran on our VM
+  (headless + field) and under real CLEO.
 - Harness note for the next field probe: `?loader=http-dir` still needs the RUN-game menu click
   (only the folder/disclaimer steps are skipped); the print surface is the `#cleo-toast` DOM node
   — poll it, the DOM is a verdict.
