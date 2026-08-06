@@ -25,7 +25,7 @@ record lives in the architecture doc's Decided section and in the plans below.
 
 | #   | Plan                                                        | Delivers                                                                                                                    | Status  |
 | --- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------- |
-| 1   | [001 — Scaffold & workspace wiring](001-scaffold.md)        | the `asi/sdk` workspace project, widened `asi/**` globs, roadmap/links wording aligned, the baseline artifact hash recorded | planned |
+| 1   | [001 — Scaffold & workspace wiring](001-scaffold.md)        | the `asi/sdk` workspace project, widened `asi/**` globs, roadmap/links wording aligned, the baseline artifact hash recorded | done    |
 | 2   | [002 — TS codegen extraction](002-ts-codegen.md)            | catalogue interfaces + `renderHeader`/`validate` + `SA_FINGERPRINT` in the SDK; provenance convention; header byte-identical | planned |
 | 3   | [003 — C++ framework extraction](003-cpp-framework.md)      | `asi::` framework headers + Makefile fragment; the three inversions (plugin surface, injected fingerprint, config split)    | planned |
 | 4   | [004 — Shared runtime APIs](004-shared-runtime-apis.md)     | the reopen-append logger + `VerifySitesOrDefer`; continuation anchors flow through the catalogue; payload duplicates die    | planned |

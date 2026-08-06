@@ -59,7 +59,7 @@ export default defineConfig({
       'tools/ped-installer/**/*.test.ts',
       'tools/perfect-map-builder/**/*.test.ts',
       'tools-debug/sa-int16-repro/**/*.test.ts',
-      'asi/perfect-map/**/*.test.ts',
+      'asi/**/*.test.ts',
       'cleo/**/*.test.ts',
     ],
   },

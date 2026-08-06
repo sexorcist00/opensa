@@ -29,14 +29,14 @@ stay green through every step of the chain.
 
 ## Tasks
 
-- [ ] `asi/sdk/package.json`, added to the root `workspaces` list.
-- [ ] `asi/sdk/README.md` — layout, the why-root-not-tools line, pointers to
+- [x] `asi/sdk/package.json`, added to the root `workspaces` list.
+- [x] `asi/sdk/README.md` — layout, the why-root-not-tools line, pointers to
       `docs/architecture.md` and this chain.
-- [ ] Widen `vitest.config.ts` glob `asi/perfect-map/**/*.test.ts` → `asi/**/*.test.ts`; widen
+- [x] Widen `vitest.config.ts` glob `asi/perfect-map/**/*.test.ts` → `asi/**/*.test.ts`; widen
       `eslint.config.ts` node-globals glob the same way.
-- [ ] Roadmap + links wording (decision 3).
-- [ ] Record the baseline (decision 2) in this file's ledger.
-- [ ] Meta-checks: root tsc, full `eslint .`, vitest, `npm run arch` (`asi-sdk` must land in the
+- [x] Roadmap + links wording (decision 3).
+- [x] Record the baseline (decision 2) in this file's ledger.
+- [x] Meta-checks: root tsc, full `eslint .`, vitest, `npm run arch` (`asi-sdk` must land in the
       TOOLS subgraph — `scripts/arch-graph.ts` already classifies the `asi/` prefix, verify the
       render; revert any unchanged-source mermaid assets the render jitters).
 
@@ -48,4 +48,23 @@ Full lint + typecheck + test run green with the empty project in the tree; `npm 
 
 ## Measurements / notes
 
-*(ledger filled when shipped: suite counts, baseline sizes + hashes, import table)*
+### Shipped (2026-08-06)
+
+- **The baseline needed a determinism fix first:** two consecutive untouched builds differed in
+  6 bytes (PE/COFF + export-table timestamps), which would have made every later referee a
+  mask-and-compare. Added `-Wl,--no-insert-timestamp` to perfect-map's `LDFLAGS` (zeroes the
+  timestamps; behaviour-neutral) — identical sources now build byte-identical DLLs, and the
+  chain's referee is a plain hash compare. The flag carries into the SDK's Makefile fragment.
+- **Baseline (post-flag, the chain's referee input):**
+  - `make APPLY=1`: 16 384 B, sha256 `9d81a4b9c976050cbc726118f0f5d1f711cf2c6000ee62bdbfb1a27f65670a75`
+  - `make` (verify-only): 9 728 B, sha256 `17cc66f90e5bf91152ad49ad97ee34b119bc0a5a370d20f358cc3007028265fc`
+  - Import table: KERNEL32.dll ONLY — `CloseHandle CreateFileA CreateToolhelp32Snapshot
+    DisableThreadLibraryCalls FlushFileBuffers GetFileSize GetModuleFileNameA GetModuleHandleA
+    Module32First Module32Next ReadFile SetFilePointer VirtualAlloc VirtualProtect VirtualQuery
+    WriteFile lstrcatA` (17 functions).
+  - Toolchain: i686-w64-mingw32-g++ (GCC) 16.1.0, homebrew.
+- Suite with the project in the tree: **429 files / 3 733 tests green** (unchanged — the SDK has
+  no tests yet); root `tsc --noEmit` clean; full `eslint .` clean.
+- `npm run arch:render`: `asi_sdk` in the TOOLS class of `packages.svg`; `runtime-packages.svg`
+  untouched (the runtime picture does not see the SDK); `boot-flow.svg` jittered with no source
+  change — reverted per the standing trap.

@@ -11,7 +11,9 @@ OUT      := $(OUT_DIR)/perfect-map.asi
 # -fno-tree-loop-distribute-patterns: keep our freestanding memset/strlen loops from being rewritten into calls
 # to themselves (there is no libc to fall back to under -nostdlib).
 CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -fno-exceptions -fno-rtti -fno-tree-loop-distribute-patterns
-LDFLAGS  := -shared -nostdlib -Wl,--entry,_DllMain@12 -Wl,--exclude-all-symbols -s
+# --no-insert-timestamp: zero PE/export timestamps so identical sources build byte-identical DLLs
+# (the asi/sdk migration referee is a plain hash compare).
+LDFLAGS  := -shared -nostdlib -Wl,--entry,_DllMain@12 -Wl,--exclude-all-symbols -Wl,--no-insert-timestamp -s
 
 # `npm run build:asi` = the shipping build: APPLY with both fixes on (int16 + fx2dfx, per the PM_FIX_* defaults).
 # `make APPLY=1` alone builds the same; plain `make` (build:verify) is the plan-003 dry-run that patches nothing.

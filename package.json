@@ -66,6 +66,7 @@
     "tools/opensa-pack",
     "tools-debug/sa-int16-repro",
     "asi/perfect-map",
+    "asi/sdk",
     "cleo/sdk"
   ],
   "scripts": {
