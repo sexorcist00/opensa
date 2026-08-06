@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <cstdint>
 
-namespace pm {
+namespace asi {
 
 // True when [addr, addr+len) is committed and readable (guards the byte-verify against a fault on a stray addr).
 inline bool Readable(uintptr_t addr, uint32_t len) {
@@ -61,4 +61,4 @@ class ScopedUnprotect {
   bool ok_ = false;
 };
 
-}  // namespace pm
+}  // namespace asi

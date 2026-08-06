@@ -5,10 +5,10 @@
 #include <windows.h>
 #include <cstdint>
 
-#include "generated/patches.hpp"
+#include "generated-tables.hpp"
 #include "log.hpp"
 
-namespace pm {
+namespace asi {
 
 constexpr uintptr_t kImageBase = 0x400000;
 
@@ -22,45 +22,47 @@ inline uintptr_t Runtime(uint32_t va) {
   return HostBase() + (static_cast<uintptr_t>(va) - kImageBase);
 }
 
-inline bool IsSupportedExe(Log& log) {
+// The version gate. Reads the plugin's GENERATED fingerprint table (handed in, never reached into) against the
+// exe on disk. `tag` prefixes every line so the log reads as the plugin's own.
+inline bool IsSupportedExe(Log& log, const char* tag, const GeneratedTables& tables) {
   char path[MAX_PATH];
   if (GetModuleFileNameA(nullptr, path, sizeof(path)) == 0) {
-    log.Line("[perfect-map] fingerprint: cannot resolve exe path — UNSUPPORTED");
+    log.Tagged(tag, "fingerprint: cannot resolve exe path — UNSUPPORTED");
     return false;
   }
   HANDLE file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0,
                             nullptr);
   if (file == INVALID_HANDLE_VALUE) {
-    log.Line("[perfect-map] fingerprint: cannot open exe — UNSUPPORTED");
+    log.Tagged(tag, "fingerprint: cannot open exe — UNSUPPORTED");
     return false;
   }
 
   DWORD sizeHigh = 0;
   const DWORD size = GetFileSize(file, &sizeHigh);
-  if (sizeHigh != 0 || size != gen::kExeSize) {
-    log.Line("[perfect-map] fingerprint: exe size mismatch — UNSUPPORTED, patching nothing");
+  if (sizeHigh != 0 || size != tables.exeSize) {
+    log.Tagged(tag, "fingerprint: exe size mismatch — UNSUPPORTED, patching nothing");
     CloseHandle(file);
     return false;
   }
 
-  for (uint32_t i = 0; i < gen::kFingerprintCount; ++i) {
-    const gen::FileAnchor& anchor = gen::kFingerprint[i];
+  for (uint32_t i = 0; i < tables.fingerprintCount; ++i) {
+    const FileAnchor& anchor = tables.fingerprint[i];
     unsigned char buffer[32];
     if (anchor.length > sizeof(buffer) ||
         SetFilePointer(file, anchor.offset, nullptr, FILE_BEGIN) == INVALID_SET_FILE_POINTER) {
-      log.Line("[perfect-map] fingerprint: bad anchor read — UNSUPPORTED");
+      log.Tagged(tag, "fingerprint: bad anchor read — UNSUPPORTED");
       CloseHandle(file);
       return false;
     }
     DWORD got = 0;
     if (!ReadFile(file, buffer, anchor.length, &got, nullptr) || got != anchor.length) {
-      log.Line("[perfect-map] fingerprint: short anchor read — UNSUPPORTED");
+      log.Tagged(tag, "fingerprint: short anchor read — UNSUPPORTED");
       CloseHandle(file);
       return false;
     }
     for (uint32_t j = 0; j < anchor.length; ++j) {
       if (buffer[j] != anchor.bytes[j]) {
-        log.Line("[perfect-map] fingerprint: anchor mismatch — UNSUPPORTED, patching nothing:");
+        log.Tagged(tag, "fingerprint: anchor mismatch — UNSUPPORTED, patching nothing:");
         log.Line(anchor.name);
         CloseHandle(file);
         return false;
@@ -69,8 +71,8 @@ inline bool IsSupportedExe(Log& log) {
   }
 
   CloseHandle(file);
-  log.Line("[perfect-map] fingerprint OK — GTA:SA 1.0 US");
+  log.Tagged(tag, "fingerprint OK — GTA:SA 1.0 US");
   return true;
 }
 
-}  // namespace pm
+}  // namespace asi

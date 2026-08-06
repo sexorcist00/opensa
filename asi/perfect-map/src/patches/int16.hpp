@@ -11,10 +11,10 @@
 #include <cstdint>
 
 #include "../config.hpp"
-#include "../fingerprint.hpp"  // Runtime(), HostBase()
-#include "../hook.hpp"
-#include "../log.hpp"
-#include "../mem.hpp"
+#include <asi/fingerprint.hpp>  // asi::Runtime(), asi::HostBase()
+#include <asi/hook.hpp>
+#include <asi/log.hpp>
+#include <asi/mem.hpp>
 
 namespace pm::patches {
 
@@ -39,7 +39,7 @@ inline char* DbgItoa(int32_t v, char* out) {
 
 inline void DbgAppend(const char* label, int32_t a, int32_t b, int32_t c) {
   char path[MAX_PATH];
-  HostDir(path, sizeof(path));
+  asi::HostDir(path, sizeof(path));
   lstrcatA(path, "perfect-map-asi.log");
   HANDLE f = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
                          FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -172,7 +172,7 @@ inline void PutBytes(uint8_t* buf, uint32_t& pos, const uint8_t* src, uint32_t n
 // Detour at RemoveIpl.firstBuilding (0x404B4A): set edi = gSnapFirst (the range snapshotted at RemoveIpl entry),
 // run the clobbered `mov ecx,[0xB74498]`, jmp back to 0x404B54. No scratch regs needed → no push/pop.
 inline bool InstallFirstBuildingDetour() {
-  uint8_t* t = AllocExec(24);
+  uint8_t* t = asi::AllocExec(24);
   if (!t) {
     return false;
   }
@@ -183,14 +183,14 @@ inline bool InstallFirstBuildingDetour() {
   Put32(t, p, reinterpret_cast<uint32_t>(&gSnapFirst));
   const uint8_t tail[] = {0x8B, 0x0D, 0x98, 0x44, 0xB7, 0x00};  // mov ecx, [0xB74498]  (relocated clobbered insn)
   PutBytes(t, p, tail, sizeof(tail));
-  EmitJmp(t, p, base, Runtime(0x404B54));
-  return WriteJmp(Runtime(0x404B4A), base);
+  asi::EmitJmp(t, p, base, asi::Runtime(0x404B54));
+  return asi::WriteJmp(asi::Runtime(0x404B4A), base);
 }
 
 // Detour at RemoveIpl.lastBuilding (0x404B5D): set edx = gSnapLast, run the clobbered `cmp edi,edx`, jmp to
 // 0x404B63. No scratch regs needed.
 inline bool InstallLastBuildingDetour() {
-  uint8_t* t = AllocExec(24);
+  uint8_t* t = asi::AllocExec(24);
   if (!t) {
     return false;
   }
@@ -201,8 +201,8 @@ inline bool InstallLastBuildingDetour() {
   Put32(t, p, reinterpret_cast<uint32_t>(&gSnapLast));
   const uint8_t tail[] = {0x3B, 0xFA};  // cmp edi, edx  (relocated clobbered insn)
   PutBytes(t, p, tail, sizeof(tail));
-  EmitJmp(t, p, base, Runtime(0x404B63));
-  return WriteJmp(Runtime(0x404B5D), base);
+  asi::EmitJmp(t, p, base, asi::Runtime(0x404B63));
+  return asi::WriteJmp(asi::Runtime(0x404B5D), base);
 }
 
 // Detour at the loop back-edge re-read of lastBuilding (0x404BA8: `movsx edx,word[ebx+0x24]`, then `inc edi;
@@ -210,7 +210,7 @@ inline bool InstallLastBuildingDetour() {
 // after one building. Set edx = gSnapLast, run the clobbered `inc edi`, jmp to 0x404BAD. (0x404BA8 is also a jump
 // target for the skip paths — they land on our jmp and do the same edx-reload + inc, so they stay correct.)
 inline bool InstallLastBuildingLoopDetour() {
-  uint8_t* t = AllocExec(24);
+  uint8_t* t = asi::AllocExec(24);
   if (!t) {
     return false;
   }
@@ -220,8 +220,8 @@ inline bool InstallLastBuildingLoopDetour() {
   t[p++] = 0x15;  // mov edx, [gSnapLast]  (abs32 follows)
   Put32(t, p, reinterpret_cast<uint32_t>(&gSnapLast));
   t[p++] = 0x47;  // inc edi  (relocated clobbered insn)
-  EmitJmp(t, p, base, Runtime(0x404BAD));
-  return WriteJmp(Runtime(0x404BA8), base);
+  asi::EmitJmp(t, p, base, asi::Runtime(0x404BAD));
+  return asi::WriteJmp(asi::Runtime(0x404BA8), base);
 }
 
 }  // namespace detail
@@ -237,8 +237,8 @@ inline constexpr uint8_t kCont404B54[] = {0xa1, 0x9c, 0x44, 0xb7, 0x00};      //
 inline constexpr uint8_t kCont404B63[] = {0x89, 0x4c, 0x24, 0x14};            // @0x404B63 mov [esp+0x14],ecx
 inline constexpr uint8_t kCont404BAD[] = {0x83, 0xc5, 0x38};                  // @0x404BAD add ebp,0x38
 
-inline void ApplyInt16(Log& log) {
-  if (HostBase() != 0x400000) {
+inline void ApplyInt16(asi::Log& log) {
+  if (asi::HostBase() != 0x400000) {
     log.Line("[perfect-map] int16: unexpected image base — DEFER");
     return;
   }
@@ -263,12 +263,12 @@ inline void ApplyInt16(Log& log) {
   };
   bool anyDiff = false;
   for (const Site& s : sites) {
-    const uintptr_t a = Runtime(s.va);
-    if (!VerifyBytes(a, s.bytes, s.len)) {
+    const uintptr_t a = asi::Runtime(s.va);
+    if (!asi::VerifyBytes(a, s.bytes, s.len)) {
       anyDiff = true;
       log.Line("[perfect-map] int16: site DIFFERS (adjuster owns it):");
       log.Line(s.name);
-      if (Readable(a, 8)) {  // dump what the adjuster actually wrote (to plan coexistence)
+      if (asi::Readable(a, 8)) {  // dump what the adjuster actually wrote (to plan coexistence)
         log.KeyHex("  found[0..3] ", *reinterpret_cast<const uint32_t*>(a));
         log.KeyHex("  found[4..7] ", *reinterpret_cast<const uint32_t*>(a + 4));
       }
@@ -279,9 +279,9 @@ inline void ApplyInt16(Log& log) {
     return;
   }
   // Order matters: the snapshot hook (RemoveIpl entry) sets gSnap for the bound-read detours a few insns later.
-  const bool s = HookObserve1Cont(Runtime(0x404b20), Runtime(0x404b25), kRemoveIplEntry, sizeof(kRemoveIplEntry),
+  const bool s = asi::HookObserve1Cont(asi::Runtime(0x404b20), asi::Runtime(0x404b25), kRemoveIplEntry, sizeof(kRemoveIplEntry),
                                   reinterpret_cast<void*>(&PmRemoveIplSnapshot));
-  const bool a = HookObserve2(Runtime(0x404c90), Runtime(0x1563730), reinterpret_cast<void*>(&PmIncludeObserver));
+  const bool a = asi::HookObserve2(asi::Runtime(0x404c90), asi::Runtime(0x1563730), reinterpret_cast<void*>(&PmIncludeObserver));
   const bool b = detail::InstallFirstBuildingDetour();
   const bool c = detail::InstallLastBuildingDetour();
   const bool e = detail::InstallLastBuildingLoopDetour();  // the loop back-edge re-read — the completeness fix

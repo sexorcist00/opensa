@@ -1,10 +1,11 @@
 #pragma once
-// Minimal flush-on-write logger → perfect-map-asi.log next to the host exe. KERNEL32 only, no CRT (the whole
-// ASI links -nostdlib). Flush-on-write so a crash still shows the last attempted patch (blind-patch debugging).
+// Minimal flush-on-write logger → the plugin's log file next to the host exe (the name comes from its
+// `Plugin::logFile`). KERNEL32 only, no CRT (the whole ASI links -nostdlib). Flush-on-write so a crash still
+// shows the last attempted patch (blind-patch debugging).
 #include <windows.h>
 #include <cstdint>
 
-namespace pm {
+namespace asi {
 
 // Fill `out` with the host exe's directory (trailing separator); "./" on failure.
 inline void HostDir(char* out, DWORD size) {
@@ -25,10 +26,10 @@ inline void HostDir(char* out, DWORD size) {
 
 class Log {
  public:
-  void Open() {
+  void Open(const char* fileName) {
     char path[MAX_PATH];
     HostDir(path, sizeof(path));
-    lstrcatA(path, "perfect-map-asi.log");
+    lstrcatA(path, fileName);
     file_ = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL,
                         nullptr);
   }
@@ -36,6 +37,18 @@ class Log {
   void Line(const char* text) {
     Write(text);
     Write("\r\n");
+  }
+
+  // "<tag><text>" on its own line — the framework's own lines carry the plugin's tag.
+  void Tagged(const char* tag, const char* text) {
+    Write(tag);
+    Line(text);
+  }
+
+  // "<tag><key>0xXXXXXXXX" on its own line.
+  void TaggedKeyHex(const char* tag, const char* key, uint32_t value) {
+    Write(tag);
+    KeyHex(key, value);
   }
 
   // "<key>0xXXXXXXXX" on its own line.
@@ -75,4 +88,4 @@ class Log {
   }
 };
 
-}  // namespace pm
+}  // namespace asi

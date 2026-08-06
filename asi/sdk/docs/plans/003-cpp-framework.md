@@ -37,13 +37,13 @@ everything; no separate SDK objects) is preserved — it is what keeps `-nostdli
 
 ## Tasks
 
-- [ ] Move + rename per decisions 1–3; perfect-map's `src/` keeps only `dllmain.cpp` (thin),
-      `config.hpp` (payload half), `patches/`, `generated/`.
-- [ ] Makefile fragment (decision 4); perfect-map consumes it; `make`, `make APPLY=1`,
+- [x] Move + rename per decisions 1–3; perfect-map's `src/` keeps only `dllmain.cpp` (thin),
+      `plugin.hpp` (its declaration), `config.hpp` (payload half), `patches/`, `generated/`.
+- [x] Makefile fragment (decision 4); perfect-map consumes it; `make`, `make APPLY=1`,
       `make DEBUG=1` and the per-fix `PM='-D…'` bisection all still work.
-- [ ] Referee run: build APPLY=1 + verify-only; compare against 001's baseline (byte-compare with
-      the PE `TimeDateStamp` masked; `objdump -p` import table; sizes).
-- [ ] `asi/perfect-map/docs/architecture.md` + `README.md` updated in the same change (the
+- [x] Referee run: build APPLY=1 + verify-only; compare against the baseline (import table, log
+      strings, sizes).
+- [x] `asi/perfect-map/docs/architecture.md` + `README.md` updated in the same change (the
       framework sections now point at the SDK); `asi/sdk/README.md` gains the consumer how-to.
 
 ## Verification
@@ -53,5 +53,51 @@ named fallback); no SDK header names a plugin symbol (grep); full suite + tsc + 
 
 ## Measurements / notes
 
-*(ledger: byte-compare verdict, import table diff, sizes per mode, what moved untouched vs
-reworded)*
+### Shipped (2026-08-06)
+
+**Referee verdict: the FALLBACK, honestly.** Byte-identity was not reachable and was not expected
+to be once the namespace moved: `asi::` renaming, the `Tagged()` split and the plugin indirection
+all change codegen. What was proven instead, exactly as the plan's fallback specifies:
+
+- **Import table IDENTICAL** — KERNEL32.dll only, the same 17 functions in the same order
+  (`objdump -p`, diffed against 001's recorded list).
+- **Log output preserved** — a sorted `strings` diff of the verify-only builds shows the ONLY
+  structural change is that the `[perfect-map] ` prefix is now ONE deduplicated string written
+  before each message instead of being inlined into all 17 of them; `Tagged()` writes tag+text, so
+  the bytes reaching the log file are unchanged. Two DELIBERATE wording changes are recorded here
+  so a future log diff has a key: `"(APPLY, plan 004)"` → `"(APPLY)"`, `"(verify-only, plan 003)"`
+  → `"(verify-only)"`, and `"…safe to apply (004)"` → `"…safe to apply"` — plan-number references
+  that no longer mean anything in a shared framework.
+- **A real regression caught by that diff:** the first pass dropped the plugin tag from the four
+  `KeyHex` summary lines (`sites pristine`, `sites total`, and the two DEBUG ones). Fixed with
+  `Log::TaggedKeyHex` before the ledger was written.
+- **Sizes** (pinned `SOURCE_DATE_EPOCH`, sha256 first 16): apply 17 920 B `3104cd5d45ab917c`
+  (was 16 384); verify-only 10 752 B `fe18106d4f0e1991` (was 9 728); apply+debug 23 040 B
+  `b74785bb6e3340b0`. Growth ≈ +1.5 KB / +1 KB, i.e. two 512 B PE pages either side: the extra
+  per-line `Write` call at each log site and the plugin-table indirection cost more code than the
+  deduplicated tag string saves. Both per-fix bisection builds (`PM_FIX_INT16=0` / `PM_FIX_FX2DFX=0`)
+  link and produce distinct artifacts.
+
+**Design change vs the plan, made when the compiler refused the first shape:** `plugin.hpp` first
+handed the generated tables over with a `reinterpret_cast`, which is not a constant expression —
+so `kTables` could not be `constexpr`. The better fix was upstream: the GENERATOR now emits the
+tables as `asi::ByteAnchor`/`asi::FileAnchor` directly (`#include <asi/generated-tables.hpp>` in
+the generated header) instead of declaring a parallel pair of structs. The cast, the layout
+`static_assert`s and the drift risk all disappear — the plugin hands its tables over verbatim.
+This is why 002's "header byte-identical" claim is superseded rather than upheld: the header is
+better now, and the artifact-level A/B is the referee that matters.
+
+**Layout:** SDK headers live at `asi/sdk/include/asi/*.hpp` (not `src/`), so a plugin's
+`#include <asi/log.hpp>` is unambiguous with a single `-I<sdk>/include`; `src/` keeps only
+`freestanding.cpp`. The Makefile fragment globs BOTH the SDK headers and the plugin's own
+`src/**/*.hpp` — perfect-map's old `HDRS` missed `src/patches/*.hpp`, so a payload-only edit did
+not trigger a rebuild. That latent staleness bug is fixed by the move.
+
+**A measurement trap worth keeping:** the first build-matrix run reported apply+debug as identical
+to verify-only. The builds were fine — the HARNESS was wrong: **zsh does not word-split an
+unquoted `$args`**, so `make -C … $args` passed `APPLY=1 DEBUG=1` as ONE argument and make set
+`APPLY` to `"1 DEBUG=1"`, failing its `ifeq`. Caught by adding the compiled banner string
+(`(APPLY)` vs `(verify-only)`) to the matrix output — a per-row verdict the size column alone
+could not contradict. Use `${=args}` in zsh.
+
+Suite 12 tests in `asi/`, full repo tsc + `eslint .` clean.

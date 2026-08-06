@@ -34,7 +34,7 @@ Two constraints the SDK adds:
 ```
 plugin's gen/catalogue.ts ──▶ sdk renderHeader()+validate() ──▶ plugin's src/generated/patches.hpp
                                                                         │
-sdk src/*.hpp (asi::) + plugin src/patches/*.hpp ──▶ single-TU compile ──▶ dist/<plugin>.asi
+sdk include/asi/*.hpp + plugin src/patches/*.hpp ──▶ single-TU compile ──▶ dist/<plugin>.asi
 ```
 
 **TS half (`asi/sdk/gen/`)** — the codegen library: the catalogue interfaces (`ByteAnchor`,
@@ -43,8 +43,9 @@ is a parameter — perfect-map passes `pm`), `validate()` (hard-error gate), and
 `SA_FINGERPRINT` constant — the canonical exe identity every SA plugin reuses. The `CATALOGUE`
 array (the addresses, bytes and strategies) stays per-plugin.
 
-**C++ half (`asi/sdk/src/`, namespace `asi::`)** — `mem.hpp`, `hook.hpp`, `freestanding.cpp`
-(moved verbatim); `log.hpp`, `coexistence.hpp` (parameterised by the plugin tag/filename);
+**C++ half (`asi/sdk/include/asi/`, namespace `asi::`; plus `src/freestanding.cpp`)** — `mem.hpp`,
+`hook.hpp`, `freestanding.cpp` (moved verbatim); `log.hpp`, `coexistence.hpp` (parameterised by the
+plugin tag/filename);
 `fingerprint.hpp` (algorithm with the table injected, never reached into); `patch_table.hpp` (the
 attach lifecycle: open log → exe gate → adjuster detect → verify/apply or dry-run); the runtime
 append-logger and `VerifySitesOrDefer` (the two APIs both old payloads duplicated by hand); the
@@ -92,7 +93,8 @@ asi/
   sdk/                      this project (@opensa/asi-sdk, private, nx type:tool)
     docs/                   this file + plans/ (the 001–005 chain)
     gen/                    TS codegen library + its tests
-    src/                    C++ framework headers (asi::) + freestanding.cpp
+    include/asi/            C++ framework headers (asi::), included as <asi/...>
+    src/                    freestanding.cpp (the -nostdlib CRT builtins)
     mk/                     the includable Makefile fragment
   perfect-map/              first consumer: catalogue + payloads + thin Makefile + its own docs
 ```

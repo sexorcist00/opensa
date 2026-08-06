@@ -46,21 +46,22 @@ asi/perfect-map/
     patch-catalogue.md       # the frozen RE table (plan 001)
     plans/                   # the 001–010 execution chain (readme.md indexes it)
   src/
-    dllmain.cpp              # entry → pm::OnAttach()
-    log.hpp mem.hpp          # flush-on-write logger; Readable/VerifyBytes/ScopedUnprotect
-    fingerprint.hpp          # version gate (size + anchor bytes)
-    coexistence.hpp          # FLA/OLA module enumeration
-    patch_table.hpp          # OnAttach: gate → detect → verify → log (apply()s land in 004)
-    freestanding.cpp         # memset/memcpy/strlen for -nostdlib
-    patches/                 # [004] one unit per engine fix, plugging into the framework
+    dllmain.cpp              # entry → asi::OnAttach(pm::kPlugin)
+    plugin.hpp               # this plugin's declaration: tag, log file, generated tables, apply fn
+    config.hpp               # PAYLOAD switches (PM_FIX_*); the framework's own are asi/config.hpp
+    apply.hpp                # the asi::ApplyFn — runs the enabled fixes
+    patches/                 # one unit per engine fix (int16, fx2dfx)
     generated/               # patches.hpp — emitted by gen/, git-ignored, never hand-edited
-  gen/                       # TS half: catalogue.ts (source of truth) → generate.ts → generated/patches.hpp (vitest)
-  third_party/               # [004] injector.hpp (vendored, pinned commit, its license)
-  test/                      # [005] macOS byte-level unit tests
-  Makefile                   # MinGW-w64 build (i686-w64-mingw32-g++) → dist/perfect-map.asi
+  gen/                       # TS half: catalogue.ts (this plugin's rows) → generate.ts (SDK renderer)
+  Makefile                   # thin: identity + payload flags, then include ../sdk/mk/asi-plugin.mk
   package.json               # npm scripts: gen, build:asi (gen + make), clean
   README.md
 ```
+
+**The framework half now lives in [`asi/sdk`](../../sdk/README.md)** (`asi::` — log, mem, hook,
+fingerprint, coexistence, patch_table, the codegen library, the Makefile rules). What stays here is what
+makes this plugin *this* plugin: its catalogue, its payloads, its config knobs and a thin Makefile. See the
+SDK's [architecture](../../sdk/docs/architecture.md) for the framework's own design.
 
 ## Runtime lifecycle (C++)
 

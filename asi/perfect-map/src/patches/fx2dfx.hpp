@@ -19,10 +19,10 @@
 #include <cstdint>
 
 #include "../config.hpp"
-#include "../fingerprint.hpp"  // Runtime(), HostBase()
-#include "../hook.hpp"
-#include "../log.hpp"
-#include "../mem.hpp"
+#include <asi/fingerprint.hpp>  // asi::Runtime(), asi::HostBase()
+#include <asi/hook.hpp>
+#include <asi/log.hpp>
+#include <asi/mem.hpp>
 
 namespace pm::patches {
 
@@ -37,7 +37,7 @@ inline void PmFxDeadSystemLog(void* /*sys*/) {
     return;  // enough proof; stop spamming the log
   }
   char path[MAX_PATH];
-  HostDir(path, sizeof(path));
+  asi::HostDir(path, sizeof(path));
   lstrcatA(path, "perfect-map-asi.log");
   HANDLE f = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
                          FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -73,7 +73,7 @@ namespace detail {
 // (whole instructions, >=5) we relocate. Stub: if `this->m_SystemBP (+8)` is null → `ret`; else run the saved
 // prologue and jmp to `cont`. Then overwrite the entry with a 5-byte jmp to the stub.
 inline bool InstallNullBpGuard(uintptr_t entry, uintptr_t cont, const uint8_t* saved, uint32_t savedLen) {
-  uint8_t* t = AllocExec(48 + savedLen);
+  uint8_t* t = asi::AllocExec(48 + savedLen);
   if (!t) {
     return false;
   }
@@ -95,7 +95,7 @@ inline bool InstallNullBpGuard(uintptr_t entry, uintptr_t cont, const uint8_t* s
   t[p++] = 0x00;
   t[p++] = 0x60;  // pushad
   t[p++] = 0x51;  // push ecx  (the FxSystem_c* this)
-  EmitCall(t, p, base, reinterpret_cast<uintptr_t>(&PmFxDeadSystemLog));
+  asi::EmitCall(t, p, base, reinterpret_cast<uintptr_t>(&PmFxDeadSystemLog));
   t[p++] = 0x83;
   t[p++] = 0xC4;
   t[p++] = 0x04;  // add esp, 4
@@ -115,8 +115,8 @@ inline bool InstallNullBpGuard(uintptr_t entry, uintptr_t cont, const uint8_t* s
   for (uint32_t i = 0; i < savedLen; ++i) {
     t[p++] = saved[i];  // relocated prologue (position-independent movs/pushes — no rel operands)
   }
-  EmitJmp(t, p, base, cont);
-  return WriteJmp(entry, base);
+  asi::EmitJmp(t, p, base, cont);
+  return asi::WriteJmp(entry, base);
 }
 
 }  // namespace detail
@@ -125,8 +125,8 @@ inline bool InstallNullBpGuard(uintptr_t entry, uintptr_t cont, const uint8_t* s
 inline constexpr uint8_t kFxStopEntry[] = {0x56, 0x8b, 0xf1, 0x8b, 0x46, 0x08};  // @0x4AA390 push esi;mov esi,ecx;mov eax,[esi+8]
 inline constexpr uint8_t kFxPlayEntry[] = {0x51, 0x56, 0x8b, 0xf1, 0x80, 0x7e, 0x50, 0x02};  // @0x4AA2F0 push ecx;push esi;mov esi,ecx;cmp byte[esi+0x50],2
 
-inline void ApplyFx2dfx(Log& log) {
-  if (HostBase() != 0x400000) {
+inline void ApplyFx2dfx(asi::Log& log) {
+  if (asi::HostBase() != 0x400000) {
     log.Line("[perfect-map] fx2dfx: unexpected image base — DEFER");
     return;
   }
@@ -142,7 +142,7 @@ inline void ApplyFx2dfx(Log& log) {
   };
   bool anyDiff = false;
   for (const Site& s : sites) {
-    if (!VerifyBytes(Runtime(s.va), s.bytes, s.len)) {
+    if (!asi::VerifyBytes(asi::Runtime(s.va), s.bytes, s.len)) {
       anyDiff = true;
       log.Line("[perfect-map] fx2dfx: site DIFFERS (adjuster/PF owns it):");
       log.Line(s.name);
@@ -152,8 +152,8 @@ inline void ApplyFx2dfx(Log& log) {
     log.Line("[perfect-map] fx2dfx: DEFER (patching nothing) — a hook already owns the fx zone");
     return;
   }
-  const bool a = detail::InstallNullBpGuard(Runtime(0x4aa390), Runtime(0x4aa396), kFxStopEntry, sizeof(kFxStopEntry));
-  const bool b = detail::InstallNullBpGuard(Runtime(0x4aa2f0), Runtime(0x4aa2f8), kFxPlayEntry, sizeof(kFxPlayEntry));
+  const bool a = detail::InstallNullBpGuard(asi::Runtime(0x4aa390), asi::Runtime(0x4aa396), kFxStopEntry, sizeof(kFxStopEntry));
+  const bool b = detail::InstallNullBpGuard(asi::Runtime(0x4aa2f0), asi::Runtime(0x4aa2f8), kFxPlayEntry, sizeof(kFxPlayEntry));
   log.Line(a && b ? "[perfect-map] fx2dfx APPLIED: FxSystem_c::Stop/Play null-blueprint guarded (2dfx UAF fixed)"
                   : "[perfect-map] fx2dfx: patch write FAILED (see VirtualProtect)");
 }

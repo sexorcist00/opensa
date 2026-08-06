@@ -7,7 +7,7 @@
 
 #include "mem.hpp"
 
-namespace pm {
+namespace asi {
 
 // Write a 5-byte `E9 rel32` jump at `at` → `target`. Byte-verify the caller's expected original bytes FIRST
 // (framework rule); this only performs the write. Returns false if the page can't be made writable.
@@ -53,8 +53,9 @@ inline void EmitJmp(uint8_t* buf, uint32_t& pos, uintptr_t bufBase, uintptr_t ta
 }
 
 /**
- * Hook a cdecl function `entry(arg0, arg1)` whose real body continues at `body` (for IncludeEntity, `entry`
- * 0x404C90 is itself a `jmp` to `body` 0x1563730). Redirects `entry` through a trampoline that calls
+ * Hook a cdecl function `entry(arg0, arg1)` whose real body continues at `body` — the shape of a protector-
+ * relocated function, whose callable entry is itself a `jmp` into an overlay section. Redirects `entry`
+ * through a trampoline that calls
  * `observer(arg0, arg1)` (registers preserved, args forwarded) and then jumps to `body` so the original runs
  * unchanged. Observation-only — cannot corrupt the original's behaviour. Returns false on failure.
  */
@@ -77,7 +78,7 @@ inline bool HookObserve2(uintptr_t entry, uintptr_t body, void* observer) {
 
 // OBSERVE a cdecl function `entry(arg0)` whose first instruction (`savedBytes`, `savedLen` bytes) we relocate:
 // call `observer(arg0)` (registers preserved), run the saved instruction, then continue at `cont`. For a clean
-// ≥5-byte entry (e.g. RemoveIpl 0x404B20 `mov eax,[0x8E3FB0]`). Diagnostic/observe use — original runs unchanged.
+// ≥5-byte first instruction (e.g. a `mov eax,[abs32]` entry). Diagnostic/observe use — original runs unchanged.
 inline bool HookObserve1Cont(uintptr_t entry, uintptr_t cont, const uint8_t* savedBytes, uint32_t savedLen,
                              void* observer) {
   uint8_t* t = AllocExec(48);
@@ -98,8 +99,8 @@ inline bool HookObserve1Cont(uintptr_t entry, uintptr_t cont, const uint8_t* sav
   return WriteJmp(entry, base);
 }
 
-// Replace a cdecl function `entry(arg0)` outright with `replacement(arg0)` (the original never runs). Used for
-// RemoveIpl, which we reimplement with an int32 range. Trampoline forwards arg0 and returns to the caller.
+// Replace a cdecl function `entry(arg0)` outright with `replacement(arg0)` (the original never runs) — for a
+// patch that reimplements a routine rather than observing it. Trampoline forwards arg0 and returns to the caller.
 inline bool HookReplace1(uintptr_t entry, void* replacement) {
   uint8_t* t = AllocExec(16);
   if (!t) {
@@ -114,4 +115,4 @@ inline bool HookReplace1(uintptr_t entry, void* replacement) {
   return WriteJmp(entry, base);
 }
 
-}  // namespace pm
+}  // namespace asi

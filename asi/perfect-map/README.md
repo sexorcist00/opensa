@@ -9,6 +9,10 @@ engine ground truth. Cross-compiled from macOS (MinGW-w64) to a Win32 PE DLL, te
 
 > This is the repo's **first native/C++ artifact**; everything else is TypeScript/Nx. It lives under `asi/`
 > (not `tools/`) because it is a compiled DLL, not part of the map-build pipeline.
+>
+> **It is now a CONSUMER of [`asi/sdk`](../sdk/README.md)** — the shared framework (exe fingerprint gate,
+> byte-verify, adjuster coexistence, hooks, logging, the codegen library, the build rules). This project
+> holds only its own catalogue, payloads, config knobs and a thin Makefile.
 
 ## Layout
 
@@ -17,8 +21,9 @@ engine ground truth. Cross-compiled from macOS (MinGW-w64) to a Win32 PE DLL, te
   the fix per structure (plan 001, DONE for the four structures).
 - **[docs/plans/readme.md](./docs/plans/readme.md)** — the 001–010 execution chain (RE → toolchain → framework →
   patches → test → pipeline integration; Phase 2 adds the 2dfx emitter fix).
-- `src/dllmain.cpp` — the ASI entry (currently the empty-but-loading banner). `Makefile` — the MinGW build.
-- `src/generated/`, `third_party/` — added as 003 lands the patch framework + injector.hpp.
+- `src/dllmain.cpp` — the ASI entry, handing `pm::kPlugin` (`src/plugin.hpp`) to the SDK framework.
+- `src/patches/` — the payloads (int16, fx2dfx); `src/generated/` — the emitted catalogue header.
+- `Makefile` — thin: identity + payload flags, then `include ../sdk/mk/asi-plugin.mk`.
 
 ## Build (macOS → Win32)
 

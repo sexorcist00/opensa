@@ -1,10 +1,11 @@
 #pragma once
-// Apply orchestration (plan 004). Runs the enabled fixes, each gated by config.hpp and coexistence: int16 is
-// applied regardless of adjusters (none of them fix it); the two array relocations DEFER when FLA/OLA is present
-// (they own those zones). Compiled only into the APPLY build (PM_APPLY=1).
-#include "coexistence.hpp"
+// Apply orchestration — perfect-map's `asi::ApplyFn`. Runs the enabled fixes, each gated by config.hpp and
+// coexistence: int16 is applied regardless of adjusters (none of them fix it); the two array relocations DEFER
+// when FLA/OLA is present (they own those zones). Compiled only into the APPLY build.
+#include <asi/coexistence.hpp>
+#include <asi/log.hpp>
+
 #include "config.hpp"
-#include "log.hpp"
 
 #if PM_FIX_INT16
 #include "patches/int16.hpp"
@@ -16,7 +17,7 @@
 
 namespace pm {
 
-inline void ApplyPatches(Log& log, unsigned adjusterMask) {
+inline void ApplyPatches(asi::Log& log, unsigned adjusterMask) {
 #if PM_FIX_INT16
   patches::ApplyInt16(log);  // no adjuster fixes int16 → always apply
 #endif

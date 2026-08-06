@@ -14,10 +14,24 @@ split this project mirrors.
 
 - `gen/` — the TypeScript codegen library: catalogue interfaces, `renderHeader`/`validate`, the
   shared `SA_FINGERPRINT`. Consumed by each plugin's thin `gen/generate.ts`.
-- `src/` — the C++ framework headers (namespace `asi::`) + `freestanding.cpp` for `-nostdlib`.
+- `include/asi/` — the C++ framework headers (namespace `asi::`), included as `<asi/…>`.
+- `src/` — `freestanding.cpp` (the `-nostdlib` CRT builtins), compiled into every plugin.
 - `mk/` — the includable Makefile fragment (MinGW-w64 cross-compile, KERNEL32-only link line).
 - `docs/` — [architecture](docs/architecture.md) (the standing design + Decided) and the
   [plan chain](docs/plans/readme.md) (001–005).
+
+## Writing a plugin
+
+Four things are yours; everything else is the SDK's:
+
+1. `gen/catalogue.ts` — your `CatalogueEntry[]` (addresses, expected bytes, provenance) and a thin
+   `gen/generate.ts` calling `renderHeader(CATALOGUE, SA_FINGERPRINT, { namespace: '<ns>' })`.
+2. `src/patches/*.hpp` — what your fixes actually do, and `src/apply.hpp` (an `asi::ApplyFn`).
+3. `src/plugin.hpp` — one `constexpr asi::Plugin`: tag, log filename, generated tables, apply fn.
+   `src/dllmain.cpp` hands it to `asi::OnAttach`.
+4. `Makefile` — `PLUGIN_OUT` / `PLUGIN_SRC` / `PLUGIN_HDRS`, then `include ../sdk/mk/asi-plugin.mk`.
+
+`asi/perfect-map` is the worked example of exactly this shape.
 
 ## Consumers
 

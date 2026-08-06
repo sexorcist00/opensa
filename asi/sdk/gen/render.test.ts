@@ -58,9 +58,18 @@ describe('renderHeader', () => {
 
       expect(hpp).toContain('inline constexpr uint32_t kExeSize = 14383616u;');
       expect(hpp).toContain('"8c23ceffafa9fd88ea567be7926a33413b8e3c00"');
-      expect(hpp).toContain('struct FileAnchor');
+      expect(hpp).toContain('inline constexpr asi::FileAnchor kFingerprint[] = {');
       expect(hpp).toContain('{0xa1, 0xb0}');
       expect(hpp).toContain('inline constexpr uint32_t kFingerprintCount = 1u;');
+    });
+
+    it('emits the framework anchor types rather than redeclaring them', () => {
+      const hpp = renderHeader([ENTRY], FP, NS);
+
+      expect(hpp).toContain('#include <asi/generated-tables.hpp>');
+      expect(hpp).toContain('inline constexpr asi::ByteAnchor kPatchSites[] = {');
+      expect(hpp).not.toContain('struct ByteAnchor {');
+      expect(hpp).not.toContain('struct FileAnchor {');
     });
 
     it('emits into the namespace the plugin asked for', () => {
