@@ -140,6 +140,7 @@ vehicle-installer carries a vehicle mod's `cleo/` subfolder — see section 3 an
 | `cleo/<name>.cs` | Decoded and run as a script thread at boot (capped by `config.cleo.maxScripts`; census line `[cleo] N script(s)`). The local/http-dir partition ALSO pre-decodes these to select script-referenced models into the VFS (`cleoModelRefs`). | **Silently not discovered** — wrong folder or extension means no census entry and no model selection. The census line is the check: count your scripts. |
 | a broken/foreign `.cs` | Skipped WITH a console line (`[cleo] … failed to decode`); the other scripts still run. | reports itself |
 | the mod's `.ide` | Must ALSO be LISTED in `data/gta.dat` (`IDE DATA\MAPS\….ide`) — the runtime id→name resolver follows gta.dat, while the partition scans every `data/**/*.ide`. | Models reach the VFS but ids resolve to nothing: `[cleo] model id N resolves to nothing` (the 04 field lesson — reports itself) |
+| `<name>.opensa-only.cs` (SDK-authored artifacts, `cleo/sdk` plan 003) | The `@opensa/cleo-sdk` build embeds the script's declared target in the filename: a plain `<name>.cs` passed the dual-target whitelist (runs under plain real CLEO 4 on SA 1.0 US AND our VM); `<name>.opensa-only.cs` uses opcodes only our VM serves. Our runtime treats both as ordinary scripts. | Dropping the suffix by renaming does NOT make the script portable: on real SA it faults at the first unknown opcode (real CLEO's failure, loud). The suffix is information, not a switch. |
 
 ---
 

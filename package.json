@@ -80,6 +80,7 @@
     "build:game:original:sa": "NODE_OPTIONS=--max-old-space-size=12288 tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/original --in ./mods-src/original --out ./build/original --exclude vehicles,peds,opensa",
     "build:prod": "tsc -b && OPENSA_NO_VIEWERS=true OPENSA_DEBUGGER_HIDE=true vite build",
     "cleo:opcodes": "tsx packages/cleo/scripts/generate-opcodes.ts",
+    "cleo:whitelist": "tsx cleo/sdk/scripts/generate-whitelist.ts",
     "dev": "vite",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",

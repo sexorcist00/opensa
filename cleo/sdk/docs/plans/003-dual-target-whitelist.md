@@ -37,17 +37,18 @@ reality without a build going red.
 
 ## Tasks
 
-- [ ] Research the vendored DB's extension attribution; write the derivation rule + residual into
-      Measurements below (counts per source: base-game opcodes, CLEO-extension opcodes, VM-served,
-      intersection size).
-- [ ] Whitelist generator + committed `whitelist.generated.ts` + the regeneration-drift CI test.
-- [ ] The gate over IR + located build errors; unit tests: a dual-target script passes, a
-      forbidden opcode fails naming both the opcode and the missing runtime, `opensa-only` lifts
-      exactly the real-CLEO half.
-- [ ] Artifact naming in `build.ts` (`<name>.cs` / `<name>.opensa-only.cs`).
-- [ ] `docs/contracts/mods.md` — the naming rule, in the same change.
-- [ ] Ledger: the intersection counts per runtime (the whitelist size IS the SDK's usable surface —
-      record it).
+- [x] Research done — derivation rule + residual in Measurements below.
+- [x] Generator (`scripts/generate-whitelist.ts`, `npm run cleo:whitelist`) + committed
+      `src/whitelist/whitelist.generated.ts` + the drift test (derives live, compares sets).
+      Derivation is a pure module (`src/whitelist/derive.ts`) shared by both.
+- [x] The gate (`src/whitelist/gate.ts`): walks IR, aggregates EVERY violating opcode once with its
+      Sanny name and the missing runtime; the VM half holds under every target, `opensa-only`
+      lifts exactly the real-CLEO half. Unit-tested all three ways.
+- [x] `artifactName()` beside the gate (`<name>.cs` / `<name>.opensa-only.cs`) — `build.ts` wires
+      it when the pipeline compiles (plan 004).
+- [x] `docs/contracts/mods.md` §4 — the suffix rule (and why renaming does not make a script
+      portable: real CLEO faults loud at the first unknown opcode).
+- [x] Ledger below.
 
 ## Verification
 
@@ -56,4 +57,20 @@ contract doc carries the suffix rule. The whitelist counts are recorded in Measu
 
 ## Measurements / notes
 
-_(filled when executed — derivation rule, residual, counts per source and the intersection)_
+### Shipped (2026-08-06)
+
+- **What the vendored DB encodes (research):** extension attribution only, NO CLEO-version
+  attribution. Its `CLEO` extension (92 commands) mixes the classic CLEO 4 block
+  `0x0A8C-0x0AEF` with CLEO 5 ids (`0x0DD5`, `0x2000-0x2003`, `0x290B`); the module extensions
+  (audio/bitwise/clipboard/file/ini/…) mix 4.x-era ids with 5-only `0x2xxx` ranges; `CLEO+`,
+  `NewOpcodes`, `SAMPFUNCS`, `Sphere` are third-party plugins.
+- **Derivation rule (conservative):** real-CLEO-4 half = `default` extension (the game's own
+  opcodes, 2 637) + `CLEO`-extension ids within the contiguous classic block `0x0A8C-0x0AEF`
+  → 2 724 ids. **Residual:** module opcodes late CLEO 4.x DID serve (ini `0x0AF0+`, file
+  `0x0B00+`, bitwise `0x0B10+`, audio) are excluded — false NEGATIVES possible, false positives
+  not; a script passing the gate needs nothing beyond plain CLEO 4 on SA 1.0 US. Costs zero
+  today: the VM serves none of them.
+- **Counts:** VM-served 105 → dual-target **90**. The 15 VM-served non-dual opcodes are ALL
+  `CLEO+` (struct/list/perlin/model-info etc. — the corpus mods genuinely require the CLEO+
+  plugin on real SA). The dual 90 is the SDK's default authoring surface.
+- Full suite: **427 files / 3 716 tests green**; tsc + eslint clean.
