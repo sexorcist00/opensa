@@ -45,9 +45,11 @@ hypothetical second plugin needs to write ONLY those four things — the duplica
 city-life roadmap plan is dead. Full repo suite, tsc, `eslint .` green; the Wine/field verdicts
 recorded, with any user-manual step marked as such until taken.
 
-**Status 2026-08-06: CODE-COMPLETE, not field-confirmed.** Everything provable on macOS holds —
-the migration is done (the table above), the artifact builds in all five modes with an unchanged
-KERNEL32-only import table, the suite is 431 files / 3 737 tests green. `*` on 005 marks what is
-outstanding and only the field can answer: the **Wine dry-run** on the real install and the
-**int16 repro oracle in-game**. Until those are taken the chain is not closed, and 005's ledger
-says the same thing in the same words.
+**Status 2026-08-06: CODE-COMPLETE, dry run field-confirmed, one verdict outstanding.**
+Everything provable on macOS holds — the migration is done (the table above), the artifact builds
+in all five modes with an unchanged KERNEL32-only import table, the suite is 431 files / 3 737
+tests green. The **Wine dry-run PASSED** on the real modded install (FLA + OLA): 10 of 13 sites
+pristine, the three differing ones are the adjuster-owned bound reads the design overlays on
+purpose, and every site the apply path gates on is pristine — the same five `ApplyInt16` verified
+before the migration. `*` on 005 now marks only the **int16 repro oracle in-game** (an APPLY build
+on the 33k repro). Until that is taken the chain is not closed, and 005's ledger says so too.

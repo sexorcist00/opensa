@@ -25,7 +25,8 @@ until they are taken.
 
 - [x] Full meta sweep: root tsc, full `eslint .`, complete vitest run, `npm run arch:render`
       (revert unchanged-source assets — the mermaid jitter trap).
-- [ ] Wine dry-run + field oracle verdicts (user-manual): **PENDING** — see the ledger.
+- [x] Wine dry-run (user-run 2026-08-06): **PASSED** — see the ledger.
+- [ ] int16 repro oracle in-game (user-manual, APPLY build): **PENDING**.
 - [x] Docs: `docs/architecture/tools.md` (the asi section now describes sdk + consumers),
       `asi/perfect-map` docs cross-check, roadmap city-life plan points at `asi/sdk` (001), chain
       readme statuses, the architecture doc's Decided section confirmed against what shipped.
@@ -71,15 +72,30 @@ full `eslint .` clean; `npm run arch:render` shows `asi_sdk` in the TOOLS subgra
 same 17 functions as the pre-SDK baseline. The five build modes (apply / verify-only / apply+debug
 / both per-fix bisections) all link.
 
-**The outstanding verdicts — NOT taken, and this file says so rather than implying otherwise:**
+### Wine dry-run — PASSED, user-run 2026-08-06
 
-1. **Wine dry-run on the real install** — run the verify-only build against the modded install and
-   confirm the site report reads as before (13 sites now, up from 10: the three continuation
-   anchors joined the catalogue in 004). Expected: all pristine, or FLA/OLA-owned sites deferring
-   exactly as they did.
-2. **The int16 oracle in-game** — ghost barriers still gone on the 33k repro
-   (`tools-debug/sa-int16-repro`), and the 2dfx guard still holding.
+The verify-only build ran on the real modded install (FLA + OLA both present). The report is
+exactly what the migration predicts, and the delta against the pre-SDK shape is only the three
+anchors 004 added:
 
-Both are user-manual by nature (a Windows game under Wine, judged by a human). Everything a
-macOS-side check CAN prove has been proven above; what remains is the half only the field can
-answer, and until it is taken this chain is **code-complete, not field-confirmed**.
+- **`sites total 0x0000000d` (13), `sites pristine 0x0000000a` (10)** — up from 10/7, and the
+  three extra pristine sites are precisely the continuation anchors that moved from a hand-copied
+  array in `int16.hpp` into the catalogue (`RemoveIpl.cont.404B54 / .404B63 / .404BAD`). They had
+  NEVER been visible in a dry run before: pre-SDK they were checked only inside the apply path, so
+  a verify-only build could not see them. The dry run gained real diagnostic reach.
+- **The three differing sites are the expected ones** — `RemoveIpl.firstBuilding` (0x404B4A),
+  `RemoveIpl.lastBuilding` (0x404B5D) and `RemoveIpl.lastBuilding.loop` (0x404BA8): the bound-read
+  sites an adjuster jmp-hooks, exactly as the catalogue's own summary says ("FLA jmp-hooks the read
+  sites → we overlay it; OLA leaves them stock"). Nothing unexpected differs.
+- **The apply path is NOT blocked by that**, and this is the part a reader of the summary line
+  could easily misread: the framework's dry run verifies EVERY catalogue site, while `ApplyInt16`
+  gates on its own five — `IncludeEntity.entry`, `RemoveIpl.entry` and the three continuations —
+  all of which report pristine here. That set is byte-for-byte the same five the pre-SDK code
+  verified (compare `git show 7e3e378b:…/int16.hpp`'s `sites[]`), so the defer semantics are
+  unchanged, not merely similar. `ApplyFx2dfx` gates on `FxSystem_c.Stop`/`.Play` — both pristine.
+- Fingerprint gate passed on the canonical exe; both adjusters detected and named.
+
+**Still outstanding: the int16 oracle in-game** — an APPLY build on the 33k repro
+(`tools-debug/sa-int16-repro`), confirming ghost barriers stay gone and the 2dfx guard holds. That
+is the last verdict between this chain and closed; until it is taken the chain remains
+**code-complete with the dry run field-confirmed**, and this file says so rather than rounding up.
