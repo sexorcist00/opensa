@@ -69,11 +69,19 @@ of the screen.
 - **Draw**: a perimeter, a cordon, a search area — annotations laid on the world that stay where they were
   put.
 
-Both need geometry that follows the ground rather than floating over it, which is the same clamp-to-ground
-problem the runtime-recoloured layers have. Solve it once.
+Both need geometry that follows the ground rather than floating over it — the same clamp-to-ground problem
+the runtime-recoloured data layers have, and the one
+[8/04's unit trails](../8-the-time-axis/readme.md) have. **Solve it once, in the engine, for all three.**
 
-**Owes:** the ground-following rule (what a shape does over a bridge, a tunnel mouth, water), and the cost of
-carrying N annotations.
+The technique to copy is Cesium's **classification / ground primitives** ([links](../../../links.md)): do not
+tessellate the shape to the ground mesh — render a **volume** and classify the fragments it covers. The shape
+then needs to know nothing about the terrain under it, which matters here because our ground is welded cell
+geometry rather than a heightfield, and fitting a polygon to it would be a per-cell join problem of exactly
+the kind [the world-glass idea](../../../ideas/world-glass-material/readme.md) is stuck on.
+
+**Owes:** the ground-following rule (what a shape does over a bridge, a tunnel mouth, water), the cost of
+carrying N annotations, and a statement of whether the classification pass fits the frame budget named in
+[1/04](../1-the-map-profile/readme.md).
 
 ### 06 — Keyboard
 

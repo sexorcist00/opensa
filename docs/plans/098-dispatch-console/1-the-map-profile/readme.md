@@ -106,6 +106,20 @@ At map altitude the world is nearly all far-LOD, while the HD ring streams for a
 at. Anchor the ring policy to the map's focus rather than to a player. This **redistributes** detail; it does
 not lose it.
 
+**The prerequisite nobody had noticed:** the intended rule is LOD by **screen-space error** — a cell loads
+when its projected error exceeds N pixels, which is what makes one rule work at every zoom and on every
+screen instead of a ladder of hand-picked radii. That computation needs a **geometric error per cell**: the
+error introduced by drawing this cell instead of its finer content, in world units. **Our pak carries no such
+number.** [3D Tiles](../../../links.md) makes it a required per-tile field for exactly this reason.
+
+So this step has a bake half before it has a runtime half: `opensa-lod-generator` already measures its
+simplification against the source by render diff, which is where an honest error value can come from rather
+than a constant. Until that number exists, screen-space error has nothing to compute and the ring policy is
+the fallback, not the design.
+
+**Owes, additionally:** the geometric error written per cell, how it was derived, and the pixel threshold
+that reads it — measured on the phone from [chain 2](../2-real-device-truth/readme.md), never guessed.
+
 Watch the grid rule: render content is keyed on 250 and collision/procobj on 256
 ([architecture restrictions](../../../restrictions/architecture.md#anything-baked-per-cell-is-baked-on-the-grid-its-consumer-streams-on)).
 

@@ -36,6 +36,60 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
 - <https://www.gtainside.com/en/sanandreas/skins/144069-endoskeleton-terminator-t800/> — the T800 ped mod
   used as the material-maps test case (`docs/improvements/character-material-maps.md`).
 
+## 3D map engines & geospatial formats
+
+Surveyed 2026-08-06 for [plan 099](./plans/099-pcad-dispatch/readme.md). **We take ideas and formats from
+these, never code** — they are WebGL/three.js and we have our own WebGPU renderer, so nothing here is
+linkable even where the licence allows it (Apache-2.0 Cesium, BSD-3 MapLibre, MIT deck.gl/Giro3D). This is a
+reading map: what each one answers, so the survey is not re-derived.
+
+- <https://github.com/CesiumGS/cesium> — the reference for two things we need. **Screen-space error**
+  (`maximumScreenSpaceError`): a tile loads when its projected error exceeds N pixels, which is the correct
+  LOD rule for a camera with no player to ring-stream around. And **classification / ground primitives** —
+  how to drape a shape on the ground without tessellating it to the terrain mesh: render a volume and
+  classify the fragments it covers. That is the technique behind every clamp-to-ground need we have
+  (annotations, data layers, unit trails).
+- <https://docs.ogc.org/cs/22-025r4/22-025r4.html> — **3D Tiles** (OGC). Not a format we adopt, but the
+  concept we were missing: every tile declares the **geometric error** introduced by drawing it instead of
+  its children, and refinement is `ADD` or `REPLACE`. Screen-space-error LOD consumes exactly that number,
+  and our pak does not carry one — see [098/1](./plans/098-dispatch-console/1-the-map-profile/readme.md).
+- <https://github.com/CesiumGS/3d-tiles> — the schemas beside the spec, and **CZML**: entity properties as
+  functions over an interval, driven by a clock. The shape behind
+  [098/8](./plans/098-dispatch-console/8-the-time-axis/readme.md) — time as an axis rather than a field.
+- <https://deepwiki.com/maplibre/maplibre-native/3.3-symbol-placement-and-collision-detection> — **MapLibre's
+  symbol placement**: collision detection, sort-key priority, allow-overlap, variable placement. The best
+  documented answer to "150 labels at city zoom" and the reference for
+  [098/3](./plans/098-dispatch-console/3-the-operator-surface-on-a-phone/readme.md)'s declutter budget.
+- <https://deck.gl/docs/developer-guide/base-maps/using-with-maplibre> — **deck.gl**: the layer model over a
+  base map, and interleaved rendering into an existing context. The pattern for data layers restyled at
+  runtime over a world whose look is baked.
+- <https://github.com/giro3d-org/Giro3D> — **Giro3D** (successor of iTowns, IGN/Oslandia, three.js): a
+  geospatial scene with operator tools — measurement, annotation, cross-sections, elevation profiles. The
+  closest existing thing to what [098/7](./plans/098-dispatch-console/7-the-operator-map/readme.md) needs.
+- <https://github.com/protomaps/PMTiles> — **PMTiles**: a whole tile pyramid in **one file** on static
+  storage, read by HTTP range requests, Hilbert-ordered so neighbours are near each other in the file. The
+  right container for the flat-2D mode's tiles
+  ([098/6](./plans/098-dispatch-console/6-display-modes/readme.md)) — our pak is already served as static
+  range-friendly files, and this removes tile hosting entirely.
+- <https://github.com/ikkentim/SanMap> (Unlicense) — a **GTA-SA → tile-coordinate projection** and a tile
+  cutter. The zoom/tile scheme for the flat-2D mode, proven and free.
+- <https://github.com/AmyrAhmady/samap> — a 48000×48000 satellite-style raster of San Andreas. **Reference
+  only, not a dependency**: it covers stock SA (this engine exists to run total conversions) and its imagery
+  is credited to gtagmodding rather than owned by the repo publishing it.
+
+Surveyed and set aside, so nobody re-checks them: globe engines (OpenGlobus, NASA WorldWind, VTS) — we
+decided against real-world geography, so a globe and its CRS machinery buy nothing; point-cloud stacks
+(Potree, COPC) — no use case here.
+
+## Dispatch / CAD systems (the product's field)
+
+- <https://github.com/SnailyCAD/snaily-cadv4> (MIT) — the open-source benchmark for roleplay CAD/MDT:
+  self-hosted, TypeScript monorepo, Docker, Discord role sync, realtime state. The feature checklist the
+  product half is measured against. Its map is a [separate 2D integration](https://github.com/SnailyCAD/live-map).
+- <https://sonorancad.com/fivem> — the commercial leader for FiveM. Its live map is a 2D tile canvas with
+  blips; the only 3D live map it ships is for a Roblox game. Both it and SnailyCAD are FiveM, which is why
+  SA-MP/open.mp is the opening.
+
 ## Articles & techniques
 
 - <https://discourse.threejs.org/t/starry-shader-for-sky-sphere/7578> — starfield shader survey (fed the

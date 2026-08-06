@@ -66,6 +66,12 @@ recolour pass over geometry we already generate, not a runtime style.
 Content for the mode `plan-mode.ts` already frames. Raster tiles baked by an orthographic top-down pass over
 01's world, on a zoom/tile scheme taken from SanMap's projection rather than invented.
 
+**Ship the pyramid as one file.** [PMTiles](../../../links.md) puts a whole tile pyramid in a single archive
+on static storage, read by HTTP range requests and Hilbert-ordered so neighbouring tiles are near each other
+in the file. Our pak is already served as static, range-friendly files, so this fits the delivery we have and
+removes tile hosting as a problem — worth contrasting with what PCAD ships today, ~5 MB of loose PNGs in a
+`tiles/` directory.
+
 Two things the step must settle rather than assume: what a tile weighs at each zoom (the whole point of this
 mode is that it runs where nothing else does), and whether roads and water get extracted as **vector** on top
 — which is what the runtime-recoloured layers
