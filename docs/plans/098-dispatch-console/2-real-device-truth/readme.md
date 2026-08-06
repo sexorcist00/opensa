@@ -13,7 +13,8 @@ fitted constant with no residual. This chain is what unblocks it.
 ### 01 — A phone-sized district pak
 
 Built with the [chain-1 profile](../1-the-map-profile/readme.md) and `opensa-pack --rgba8` (which converts
-the model dictionaries too, since 2026-08-04 — a car is not in the pak). Record which district, the exact
+the model dictionaries too, since 2026-08-04 — a car is not in the pak), over the **district pinned in
+[1/01](../1-the-map-profile/readme.md)** — not a fresh one, or the before/after stops being an A/B. Record the exact
 invocation, and what `--platforms mobile` reports
 (`tools/opensa-pack/src/platforms.ts`, `docs/development/mobile-pak.md`).
 

@@ -43,17 +43,39 @@ Two more that bound the whole chain:
 What a map view actually reads, measured **before anything is cut**. No cut is proposed in this step; its
 whole output is a before-table.
 
-Three columns wide:
+Three columns wide, each with the instrument that produces it — so this step starts by running things that
+exist rather than by deciding how to measure:
 
-| Dimension | What it lists |
-| --- | --- |
-| Frame | every pass the console's frame runs, its cost, and whether anything on screen consumes it |
-| Bytes | every pak entry kind the console fetches, how many bytes, and how many times |
-| Bundle | every module the console ships, its kB, and whether it ever executes |
+| Dimension | What it lists | Instrument |
+| --- | --- | --- |
+| Frame | every pass the console's frame runs, its cost, and whether anything on screen consumes it | the frame-time attribution spans from [091](../../091-frame-time-attribution/readme.md) and `scripts/debug/slow-frame-census.ts`; a pass with no span is itself a finding |
+| Bytes | every pak entry kind the console fetches, how many bytes, and how many times | `opensa-pack`'s `report.json` for what the build contains, against the console's own fetches for what it actually asks for. **The gap between those two is the whole point of chain 1** |
+| Bundle | every module the console ships, its kB, and whether it ever executes | the vite build output plus `npm run knip` |
+
+Record two things beyond the tables, both of which later steps depend on and neither of which exists today:
+
+- **whether any per-cell error metric is present** in the pak — **step 05** needs one and
+  the answer is expected to be no;
+- **the district**, pinned here and reused by every later measurement in 098.
+
+### The measurement district — pinned once, here
+
+Every before/after number in this chain, and the phone row in
+[chain 2](../2-real-device-truth/readme.md), must be taken on **the same ground**. A before-table from one
+district and an after-table from another is not an A/B, and the repo has already paid for that lesson
+(`CLAUDE.md`: an A/B must be self-describing).
+
+So 01 picks the district, writes down why, and every later step names it. It must be somewhere an operator
+would actually look at — dense, mixed heights, some water — not an empty stretch that flatters every number.
 
 **Budget:** none — this step spends nothing and changes nothing.
-**Owes:** the three tables, in `docs/benchmarks/` per its schema, taken on the desktop build against a real
-district. Record which pak build was read (standing rule).
+**Owes:** the three tables and the pinned district, recorded in `docs/benchmarks/` **before** they are
+analysed (standing rule), naming the pak build that was read. Desktop only: the phone comes in chain 2, and
+this table is what it will be compared against.
+
+> **This step cannot run in a container without game data.** A field run reads `build/<game>/opensa` and
+> nothing else ([restrictions/architecture.md](../../../restrictions/architecture.md)), so 01 runs on a
+> machine with a built game — everything downstream of it is blocked until it does.
 
 ### 02 — The protected list
 
@@ -79,7 +101,7 @@ from 01; there is no "a map does not need it" without a measurement behind it.
 [5/04](../5-symbology-and-picking-as-product/readme.md) settles that units are kinematic rather than
 simulated. Vehicle and ped dictionaries and ped animation are **protected** by 02 and stay.
 
-**Owes:** bytes and resident MB before/after on one district, against the BC reference
+**Owes:** bytes and resident MB before/after on the **district pinned in step 01**, against the BC reference
 (1,272,901,632 B at 1137 cells), **and** the "kept, and why" list beside the "cut, and on what evidence" one.
 
 ### 04 — The frame profile
@@ -96,9 +118,14 @@ Two already-priced levers this profile can take honestly:
 
 **Budget:** name the console's frame budget on the target device before changing a pass, per
 [directive 5](../../../project-goals.md#5-performance-is-a-requirement-not-an-outcome).
-**Owes:** frame time before/after, desktop **and** the phone row from
-[chain 2](../2-real-device-truth/readme.md), and a verdict per pass — *kept / made cheaper / removed* — with
-its ground.
+
+**Owes, to close the step:** desktop frame time before/after on the **district pinned in step 01**,
+and a verdict per pass — *kept / made cheaper / removed* — with its ground.
+
+**Owes, after [2/03](../2-real-device-truth/readme.md):** the same table re-taken on the phone. This is a
+**named follow-up, not a blocker** — the chain would otherwise deadlock, since chain 2 measures the profile
+this step produces. A pass judged cheap on a desktop and expensive on a phone comes back here, and the
+re-take is what closes chain 1 for good.
 
 ### 05 — The streaming profile
 

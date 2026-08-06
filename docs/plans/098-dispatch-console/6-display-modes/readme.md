@@ -58,7 +58,7 @@ to "what does it look like" is *what real 3D city maps look like* — even light
 and legible surfaces, roads that read, buildings that carry shape rather than detail. That is a bake-time
 recolour pass over geometry we already generate, not a runtime style.
 
-**Owes:** bytes, resident MB and frame time against the live render on the same district and the same device
+**Owes:** bytes, resident MB and frame time against the live render on the [pinned district](../1-the-map-profile/readme.md) and the same device
 — the whole argument for this mode is the gap between those two columns.
 
 ### 02 — The flat 2D map

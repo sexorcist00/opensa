@@ -33,7 +33,7 @@ Residency drift and texture-array growth over hours of panning. The rule to watc
 [a texture array that GROWS invalidates every render bundle recorded against it](../../../restrictions/gpu-and-shaders.md)
 — a game session ends, an operator's does not.
 
-**Owes:** resident MB at t=0 / 30 min / 2 h on one district, and the count of bundle re-records over that
+**Owes:** resident MB at t=0 / 30 min / 2 h on the [pinned district](../1-the-map-profile/readme.md), and the count of bundle re-records over that
 window. A drift with no ceiling is a finding, not a footnote.
 
 ## Verification
