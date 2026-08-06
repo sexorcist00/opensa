@@ -15,18 +15,31 @@ plugin (PCAD).** A dispatcher — themselves a player — opens a browser, sees 
 moving in it, takes calls, assigns units, and works a shift. The units see their assignments in-game through
 the same plugin.
 
-Three pieces, and only one of them is this repository:
+**PCAD already exists and works** (`sexorcist00/pcad`, private, read 2026-08-06). This plan was first written
+as if the product had to be built; it does not. What is missing from it is one thing, and it is the one thing
+this repository makes.
 
-| Piece | What it does | Where it lives |
+| Piece | What it is, concretely | State |
 | --- | --- | --- |
-| **PCAD** — the client plugin | runs beside the game on each player's machine; reports the unit's own position and status, receives assignments and messages | outside this repo |
-| **The backend** | the single source of truth: identities, duty state, calls, assignments, the event log | outside this repo |
-| **The web application** | the dispatcher's screen — call queue, roster, incident cards, **and the 3D map** | `apps/dispatch` here, plus a product shell |
+| **PCAD client** | a MoonLoader Lua script for GTA:SA / SA-MP 0.3.7-R5 (`sampapi`), ~16k lines across `cad_system/*.lua`, ImGui interface, WebSocket via `websocketsamp.dll`, self-updating (`cad_autoupdate.lua`, v1.2.3-beta) | **built** |
+| **Backend** | Node.js `ws` server on :8443, MariaDB (`caddata`), bcrypt + JWT auth, Discord.js role gate, Google APIs. Services: Unit (1.1k lines), TacticalAssist, RMS (3.2k lines client-side), Radio, Discord; `server.js` is 4.1k lines | **built** |
+| **Web application** | the dispatcher's screen served from `backend/public/cad-frontend` — units, calls, incidents, BOLO, radio, command modules — plus a **React/Vite/Tailwind rewrite in progress** (`vibecode/`, with its own migration plan onto Zustand + one WS hook) | **built, being rewritten** |
+| **The map** | today a **2D tile canvas**: `tiles/*.png` (~5 MB), `worldToMapPoint`/`mapPointToWorld`, pan/point/circle/line draw modes, and **bounds calibrated by hand per operator into localStorage** | **this is the gap** |
 
-**OpenSA's role is exactly one thing: the 3D map.** It is not the product, it is the component that draws the
-world the units move in. That framing decides a lot below — most importantly that the map must be a
-*replaceable, embeddable component with a narrow interface*, not the application that everything else is
-bolted onto.
+**OpenSA's role is exactly one thing: the 3D map** — module 10 of the vibecode migration, the one its own
+plan calls a high-complexity imperative "island" with `useRef` + `useEffect` and logic kept close to the
+original. That is precisely the shape `apps/dispatch` already has: React never enters the frame loop, and the
+board is read through stable getters. The two designs met independently, which is the strongest available
+signal that the seam is in the right place.
+
+Two consequences worth stating plainly:
+
+- **This plan's delivery order was wrong and is corrected below.** The "dull half" is not ahead of us, it is
+  behind us. The remaining work is almost entirely the map.
+- **The hand-calibrated map bounds disappear.** The current 2D map needs an operator to align a picture to the
+  world and store it in localStorage. Our engine *is* the world — GTA coordinates are exact, and
+  `apps/dispatch/src/map/coords.ts` is the only conversion. Deleting a calibration step is a small feature
+  and a very good demonstration.
 
 ---
 
@@ -104,15 +117,37 @@ flowchart LR
 
 ### The three seams, and who owns what
 
-**PCAD → backend.** Each unit's own plugin reports that unit's own position. This is how the FiveM systems
-work and it is the only thing a client plugin *can* do — a dispatcher's console never reads another player's
-client. Two consequences that must be designed for, not discovered:
+**PCAD → backend.** Each unit's own plugin reports that unit's own position — the only thing a client plugin
+*can* do. The real numbers, read from the code rather than assumed:
 
-- **Positions are claims, not facts.** The backend treats them as untrusted input: rate-limited, sanity-checked
-  against plausible speed, and attributed to an authenticated identity. A map that draws whatever it is sent
-  is a map that can be lied to.
-- **Only on-duty units exist.** Coverage is by definition partial — a unit whose PCAD is closed is invisible,
-  and the console must say "not reporting" rather than draw a stale dot as if it were live.
+| Fact | Value | Where |
+| --- | --- | --- |
+| Position publish rate | **every 4 s** | `cadui.lua`, the `sendPositionUpdate` thread |
+| Payload | `pos_x, pos_y, pos_z, heading, vehicleId` over `unit_update_position` | same |
+| **Sent only while the unit is in a vehicle** | `isCharInAnyCar` gates the whole function — **on foot, nothing is sent** | same |
+| Status broadcast | every 15 s | `broadcastUnitStatus` thread |
+| Heartbeat / stale handling | heartbeat 20 s; a unit goes stale after 300 s, swept every 120 s | `server.js` |
+
+**A 4-second publish rate is the single hardest constraint on the 3D map, and it was not knowable before
+reading the code.** A car at 100 km/h covers ~110 m between packets. Naive linear interpolation over that gap
+draws a unit gliding in a straight line through buildings — smooth, confident and wrong, which is worse on a
+3D map than on a tile map because the world around it makes the error obvious. Three honest responses, and
+the choice is measured rather than argued:
+
+1. **raise the rate** in PCAD (a client change, and the cheapest fix by far);
+2. **draw the uncertainty** — a marker that widens as its fix ages, instead of a confident dot;
+3. **snap to the road graph** — blocked on `data/Paths` being `original`-only
+   ([assets-and-data](../../restrictions/assets-and-data.md)), so it lies on total conversions.
+
+Whatever wins, [098/8's rule stands](../098-dispatch-console/8-the-time-axis/readme.md): interpolate between
+what arrived, never extrapolate past it.
+
+**On foot, a unit has no position at all.** The map must show that state honestly — last known, aging — and
+not a dot parked at the car the unit left. This is a PCAD gap, not a map gap, and it is listed as such below.
+
+**Positions are claims, not facts.** They are self-reported by an authenticated client. The backend already
+attributes them to a JWT identity behind a Discord role gate; what it does not do is sanity-check them
+against plausible speed. A map that draws whatever it is sent is a map that can be lied to.
 
 **Backend → web application.** A live state snapshot plus an event stream. The contract comes before the
 transport ([roadmap 0.6.0](../../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md) already holds this
@@ -156,30 +191,48 @@ matches what SonoranCAD and SnailyCAD have, and the other two exceed it.
 **Done when:** the same district opens in all three modes, on a phone, and a device with no WebGPU still gets
 a working map and is told why.
 
-### Phase 2 — The contract, without a backend (this repo)
+### Phase 2 — Speak PCAD's protocol (this repo)
 
-Write the PCAD → backend → shell contract into [`docs/contracts/`](../../contracts/) and make the console
-consume it — fed by the existing mock. `stepOperations` stops being a simulation and becomes a *fake
-implementation of a real interface*. [098/8](../098-dispatch-console/8-the-time-axis/readme.md)'s time axis
-lands here, because interpolation is defined against a publish rate the contract names.
+Not "design a contract" — **document the one that already runs** and make the console consume it. The
+protocol exists in `server.js` and `cad_websocket.lua`; what does not exist is a written statement of it that
+two codebases can be built against. Write it into [`docs/contracts/`](../../contracts/): the message names,
+the unit and call shapes, the 4-second publish rate, what a reconnect replays, and the stale/timeout
+semantics the backend already implements.
 
-**Done when:** swapping the mock for a real socket changes one module and nothing else — the property
-`apps/dispatch/src/ops/sim.ts` already claims in its header, made true and tested.
+Then `stepOperations` stops being a simulation and becomes a **fake implementation of that real interface**,
+and [098/8's time axis](../098-dispatch-console/8-the-time-axis/readme.md) is built against a rate taken from
+the code rather than invented.
 
-### Phase 3 — The product's dull half (outside this repo)
+**Done when:** the console runs against a recorded capture of real traffic, and swapping the mock for the
+live socket changes one module — the property `apps/dispatch/src/ops/sim.ts` already claims in its header,
+made true and tested.
 
-The CAD, at SnailyCAD's standard: identities and duty state, the call lifecycle, assignment rules, unit
-statuses, permissions and roles on the admin side, Discord sync, an audit log, self-hosting. No technical
-novelty, most of the work, and the thing that decides whether anyone runs it.
+### Phase 3 — The map becomes vibecode's module 10 (both repos)
 
-**Done when:** a community can install it and work a shift without touching the map.
+The React rewrite's migration plan already reserves the slot: an imperative map island, `useRef` +
+`useEffect`, highest complexity, last wave. This phase fills it with the OpenSA map instead of a port of the
+old tile canvas — the shell passing units, calls, selection, camera intents and the moment in time in, and
+getting picks and view state back.
 
-### Phase 4 — PCAD and the live feed (outside this repo)
+The old 2D canvas does not get deleted; it becomes the **flat-2D display mode**
+([098/6](../098-dispatch-console/6-display-modes/readme.md)), which is what an operator on a weak machine
+should be looking at anyway. Its hand-calibrated `mapBounds` go away, because the engine knows the
+coordinates exactly.
 
-The client plugin and the transport. Last, because everything above can be built and demonstrated against the
-contract, and because this is the piece most exposed to SA-MP/open.mp specifics.
+**Done when:** a dispatcher can work a whole shift on the 3D map without reaching for the old one, and can
+switch to it whenever they want.
 
-**Done when:** a real shift runs on a real server, and the map shows what actually happened.
+### Phase 4 — What PCAD owes the map (the other repo)
+
+Two gaps this plan found by reading the client, neither of which the current tile map exposes:
+
+- **positions on foot** — nothing is sent unless the unit is in a vehicle;
+- **the publish rate** — 4 s is survivable on a tile map and visibly wrong on a 3D one.
+
+Both are small client changes and both are worth measuring before choosing: raise the rate and see what the
+map looks like, before building uncertainty rendering to compensate for a rate nobody tried to change.
+
+**Done when:** a real shift runs, and the units move the way the world says they should.
 
 ### Later, deferred by decision
 
@@ -231,17 +284,38 @@ Settled 2026-08-06 and recorded so they are not reopened:
 
 ## 8. Still open
 
-Questions this plan does not answer, listed so they are visible rather than assumed:
+Answered by reading `sexorcist00/pcad` on 2026-08-06: the server stack (SA-MP 0.3.7-R5 via `sampapi`), what
+PCAD is (a MoonLoader Lua script with an ImGui interface over a WebSocket), how identity is proven (bcrypt
+login → JWT, behind a Discord role gate), and the publish rate (4 s, vehicles only).
 
-- **Which server stack** — classic SA-MP, or open.mp? It changes what PCAD can do and how identity is proven.
-- **What PCAD is technically** — an ASI/CLEO-class client plugin, or something the launcher hosts? It decides
-  the position publish rate and therefore the interpolation.
-- **How a unit's identity is proven** to the backend, so a self-reported position can be trusted enough to
-  draw.
+What is still genuinely open:
+
 - **Hosting** — self-hosted per community like SnailyCAD, or one service? This decides the map's asset
-  delivery (a pak per community is very different from one shared build).
+  delivery, and a pak per community is a very different problem from one shared build. It is the biggest
+  unanswered question for phase 0, because it decides *what* gets measured.
 - **Whether the world shown is stock SA or the server's own total conversion.** All three display modes are
-  generated per build, so both work — but the answer sets which build phase 0 measures.
+  generated per build, so both work — but the answer sets which build gets measured first.
+- **How much of the map an operator on a weak machine actually gets.** Phase 1's three modes make this a
+  choice; what has not been decided is the default.
+
+## Preconditions in PCAD, before this ships to real users
+
+Found while reading the repository, listed here because the map will ship inside that application and
+inherits its posture. None of them is a map problem and all of them outrank the map:
+
+- **The JWT signing secret is a hardcoded placeholder string in `server.js`** and is what every auth token is
+  signed and verified with. Anyone who has seen the source — or guesses a very common placeholder — can mint
+  a token for any user. This is an authentication bypass and it does not depend on the repository being
+  private. Move it to an environment variable, rotate it, and invalidate existing tokens.
+- **Live credentials are committed**: database credentials and a Discord bot token in `cad_config.json`, a
+  Google service-account private key in `credentials.json`, and a MariaDB dump of `caddata` at the repository
+  root. The repository is private today, which is not a control — they are in the history of every clone.
+  Rotate all of them, remove the files, and keep configuration out of git.
+- **Self-reported positions are not sanity-checked** against plausible speed. Once the map draws a world
+  around them, a fabricated position becomes a much more useful lie than it is today.
+- **The auto-updater fetches client code from a raw GitHub URL under a different account** than the one
+  hosting this repository. Whoever controls that account controls the code on every client machine. Confirm
+  the ownership, or move the update source.
 
 ---
 
