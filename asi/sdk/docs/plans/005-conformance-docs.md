@@ -26,7 +26,8 @@ until they are taken.
 - [x] Full meta sweep: root tsc, full `eslint .`, complete vitest run, `npm run arch:render`
       (revert unchanged-source assets — the mermaid jitter trap).
 - [x] Wine dry-run (user-run 2026-08-06): **PASSED** — see the ledger.
-- [ ] int16 repro oracle in-game (user-manual, APPLY build): **PENDING**.
+- [x] APPLY run on the real install (user-run 2026-08-06): both fixes **APPLIED**, no defers.
+- [ ] Behavioural oracle in-game (33k repro looked at): **PENDING**.
 - [x] Docs: `docs/architecture/tools.md` (the asi section now describes sdk + consumers),
       `asi/perfect-map` docs cross-check, roadmap city-life plan points at `asi/sdk` (001), chain
       readme statuses, the architecture doc's Decided section confirmed against what shipped.
@@ -95,7 +96,32 @@ anchors 004 added:
   unchanged, not merely similar. `ApplyFx2dfx` gates on `FxSystem_c.Stop`/`.Play` — both pristine.
 - Fingerprint gate passed on the canonical exe; both adjusters detected and named.
 
-**Still outstanding: the int16 oracle in-game** — an APPLY build on the 33k repro
-(`tools-debug/sa-int16-repro`), confirming ghost barriers stay gone and the 2dfx guard holds. That
-is the last verdict between this chain and closed; until it is taken the chain remains
-**code-complete with the dry run field-confirmed**, and this file says so rather than rounding up.
+### APPLY run — both fixes applied on the real install, user-run 2026-08-06
+
+```
+[perfect-map] loaded — built Aug  6 2026 16:18:26 (APPLY)
+[perfect-map] fingerprint OK — GTA:SA 1.0 US
+[perfect-map] adjuster present: fastman92 (FLA)
+[perfect-map] adjuster present: LimitAdjuster (OLA)
+[perfect-map] int16 APPLIED (buildings): IncludeEntity observed + RemoveIpl snapshot + bounds int32
+[perfect-map] fx2dfx APPLIED: FxSystem_c::Stop/Play null-blueprint guarded (2dfx UAF fixed)
+```
+
+Both patches installed through the SDK framework with FLA and OLA present: the exe gate passed,
+both adjusters were detected, every site the apply path gates on verified, and neither fix
+deferred. The migration is therefore proven on the WRITE path, not only the read path — which is
+the half a dry run structurally cannot reach.
+
+**How this run was almost recorded wrong**, because it is the reason the banner carries a
+timestamp AND a mode: the first log offered as the APPLY verdict was byte-identical to the dry-run
+log — same `16:12:52 (verify-only)` banner. The game had loaded the OLD artifact; the new one had
+not reached the install. A verify-only build patches nothing, so "the game runs fine" would have
+been reported as "the fix works" on evidence that proves neither. **Read the banner's build time
+and mode before reading anything else in an ASI log** — it is the only line that identifies which
+file actually loaded.
+
+**Still outstanding: the behavioural oracle** — the 33k repro (`tools-debug/sa-int16-repro`) looked
+at in-game, confirming ghost barriers stay gone and particle 2dfx on LOD clones does not crash.
+The log proves the bytes were WRITTEN; only the map proves they still do their job. Until that is
+seen the chain is **code-complete, dry run and apply-path field-confirmed**, and this file says so
+rather than rounding up.
