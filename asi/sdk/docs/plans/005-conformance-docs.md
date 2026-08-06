@@ -63,8 +63,11 @@ is dead):
 Everything else — the fingerprint gate, byte-verify, coexistence, hooks, both loggers, the attach
 lifecycle, the freestanding CRT builtins and the whole cross-compile line — is the SDK's.
 
-**Meta sweep:** full suite **431 files / 3 737 tests green** (was 429/3 733 pre-chain: +2 files,
-+4 tests — the SDK's renderer tests and perfect-map's catalogue tests); root `tsc --noEmit` clean;
+**Meta sweep:** full suite **430 files / 3 737 tests green** (was 429 / 3 733 pre-chain: **+1 file,
++4 tests** — the new file is the SDK's `gen/render.test.ts`; perfect-map's `gen/generate.test.ts`
+survived as a file and was rewritten into catalogue tests. The count was first written here as
+"431 / +2 files" — INFERRED from the diff instead of read off a run, and corrected on the closing
+sweep. Read the number, never derive it); root `tsc --noEmit` clean;
 full `eslint .` clean; `npm run arch:render` shows `asi_sdk` in the TOOLS subgraph with
 `runtime-packages.svg` untouched (`boot-flow.svg` jittered with no source change — reverted).
 

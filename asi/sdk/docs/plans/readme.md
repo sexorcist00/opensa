@@ -26,10 +26,10 @@ record lives in the architecture doc's Decided section and in the plans below.
 | #   | Plan                                                        | Delivers                                                                                                                    | Status  |
 | --- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------- |
 | 1   | [001 — Scaffold & workspace wiring](001-scaffold.md)        | the `asi/sdk` workspace project, widened `asi/**` globs, roadmap/links wording aligned, the baseline artifact hash recorded | done    |
-| 2   | [002 — TS codegen extraction](002-ts-codegen.md)            | catalogue interfaces + `renderHeader`/`validate` + `SA_FINGERPRINT` in the SDK; provenance convention; header byte-identical | done    |
+| 2   | [002 — TS codegen extraction](002-ts-codegen.md)            | catalogue interfaces + `renderHeader`/`validate` + `SA_FINGERPRINT` in the SDK; provenance convention; artifact A/B byte-identical | done    |
 | 3   | [003 — C++ framework extraction](003-cpp-framework.md)      | `asi::` framework headers + Makefile fragment; the three inversions (plugin surface, injected fingerprint, config split)    | done    |
 | 4   | [004 — Shared runtime APIs](004-shared-runtime-apis.md)     | the reopen-append logger + `VerifySitesOrDefer`; continuation anchors flow through the catalogue; payload duplicates die    | done    |
-| 5   | [005 — Conformance & docs sweep](005-conformance-docs.md)   | the migration proof closed (Wine dry-run + int16 oracle verdicts recorded honestly), docs/ledger sweep, chain closed        | done*   |
+| 5   | [005 — Conformance & docs sweep](005-conformance-docs.md)   | docs/ledger sweep + the field proof: Wine dry-run PASSED, APPLY run installed both fixes; behavioural oracle outstanding   | done*   |
 
 Dependencies are linear 001 → 005. 003 is the load-bearing step (the framework bytes); 004 is the
 only step that intentionally changes payload code, so its referee is verdict-level. The chain
@@ -48,7 +48,7 @@ recorded, with any user-manual step marked as such until taken.
 **Status 2026-08-06: CODE-COMPLETE; dry run AND apply path field-confirmed; the behavioural
 oracle outstanding.** Everything provable on macOS holds — the migration is done (the table
 above), the artifact builds in all five modes with an unchanged KERNEL32-only import table, the
-suite is 431 files / 3 737 tests green. On the real modded install (FLA + OLA): the **dry run
+suite is 430 files / 3 737 tests green. On the real modded install (FLA + OLA): the **dry run
 PASSED** (10 of 13 sites pristine; the three differing are the adjuster-owned bound reads the
 design overlays on purpose), and the **APPLY run installed both fixes with no defers** —
 `int16 APPLIED` + `fx2dfx APPLIED`. `*` on 005 now marks only the behavioural check: the 33k repro

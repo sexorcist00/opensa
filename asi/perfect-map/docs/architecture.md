@@ -84,25 +84,33 @@ conflictsWith? }`: byte-verify → conflict-check → apply (under a `VirtualPro
 - **Declarative records**, generated — a hand-edited address is structurally impossible.
 - **Prefer data-relocation over instruction hooks.** For the too-small static arrays (`gpLoadedBuildings` 4096,
   `IplEntityIndexArrays` 40), relocate to our own allocation + repoint accessors rather than detour code. Reserve
-  function hooks (via injector.hpp) for genuine logic changes — chiefly the `IplDef` int16 → int32 min/max widen
-  in `CIplStore::IncludeEntity` (0x404C90).
+  function hooks (`asi/sdk/include/asi/hook.hpp`) for genuine logic changes — chiefly the `IplDef` int16 →
+  int32 min/max widen in `CIplStore::IncludeEntity` (0x404C90).
 - **Idempotent + observable.** Re-apply is a no-op via a post-patch byte signature; `dry-run` verifies + logs the
   full plan with zero writes (the primary debugging aid for blind patches).
 
 ## Toolchain
 
-- **Cross-compiler: MinGW-w64 `i686-w64-mingw32-g++`** (primary; SA is 32-bit / i386), Zig `zig cc -target
-x86-windows-gnu` as the documented fallback. Both evaluated in plan 002, one pinned.
-- **Static-link the C++ runtime** (`-static -static-libgcc -static-libstdc++`) so the `.asi` drops into a game
-  folder with no MinGW DLL dependencies (verified via the import table: only KERNEL32/USER32).
-- **Hook lib: injector.hpp** (thelink2012, permissive) vendored at a pinned commit — or a ~200-line self-authored
-  `WriteMemory`/`MakeCALL`/`VirtualProtect` subset for full transparency (decided in 002).
+**The toolchain belongs to [`asi/sdk`](../../sdk/README.md)** (`mk/asi-plugin.mk`); this Makefile sets only
+the output name and the payload flags. What it resolved, against what plan 002 originally sketched:
+
+- **Cross-compiler: MinGW-w64 `i686-w64-mingw32-g++`** (SA is 32-bit / i386). The Zig fallback
+  (`zig cc -target x86-windows-gnu`) was documented in 002 and never needed.
+- **`-nostdlib`, NOT a static CRT.** 002 expected `-static -static-libgcc -static-libstdc++`; that still
+  pulled `api-ms-win-crt-*` (UCRT), absent on the XP-era Windows SA runs on. The build links no CRT at all and
+  supplies `memset`/`memcpy`/`memmove`/`strlen` itself (`asi/sdk/src/freestanding.cpp`), with the raw
+  `_DllMain@12` entry. **Import table: KERNEL32 only** — 17 functions, verified per build.
+- **Hooks: self-authored, no vendored dep.** injector.hpp was REJECTED (it pulls `<cstdio>`/gvm and breaks
+  `-nostdlib`); `asi/sdk/include/asi/hook.hpp` is the ~120-line replacement (`WriteJmp`, `AllocExec`, three
+  trampoline shapes). There is no `third_party/`.
 - **Loads via** Ultimate ASI Loader / modloader, like every other `.asi`.
 
 ## Testing strategy
 
-- **macOS unit tests (vitest)** cover the TS half: catalogue → constants, malformed → hard error. This is where
-  correctness of the addresses/bytes is machine-checked before they ever reach the game.
+- **macOS unit tests (vitest)** cover the TS half: this plugin's tests pin the catalogue (real render, the
+  provenance convention, the fingerprint values); the malformed-catalogue → hard-error cases belong to the
+  SDK's renderer (`asi/sdk/gen/render.test.ts`). This is where correctness of the addresses/bytes is
+  machine-checked before they ever reach the game.
 - **Wine boot ladder** (plan 005): empty-but-loading ASI writes its banner → dry-run logs the full plan → real
   apply on a stock exe boots → FLA-present defers overlaps → wrong-version patches nothing.
 - **The oracle**: [`tools-debug/sa-int16-repro`](../../../tools-debug/sa-int16-repro) `--rows N` brackets — patched

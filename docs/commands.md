@@ -180,6 +180,28 @@ npx tsx scripts/phys-regression.ts sweep-*.log
 Guides: [development/benchmarks.md](./development/benchmarks.md) (perf) ·
 [development/physics-laps.md](./development/physics-laps.md) (`?phys=` laps).
 
+## ASI plugins (real SA, cross-compiled — needs `brew install mingw-w64`)
+
+```bash
+# Build a plugin. Every plugin gets these three via asi/sdk's Makefile fragment.
+npm run build:asi    -w @opensa/perfect-map-asi   # shipping: APPLY, both fixes → dist/perfect-map.asi
+npm run build:verify -w @opensa/perfect-map-asi   # DRY RUN: patches nothing, logs every site's verdict
+npm run build:debug  -w @opensa/perfect-map-asi   # APPLY + verbose site dump + the plugin's own traces
+npm run gen          -w @opensa/perfect-map-asi   # catalogue.ts → src/generated/patches.hpp only
+
+# Per-fix bisection (plugin-defined flags; run from the plugin dir)
+make -C asi/perfect-map APPLY=1 PM='-DPM_FIX_INT16=1 -DPM_FIX_FX2DFX=0'
+
+# Reproducible artifact for an A/B — pin BOTH the PE timestamps (already in the link line) and the
+# banner's __DATE__/__TIME__, or two builds a second apart differ:
+SOURCE_DATE_EPOCH=315532800 make -C asi/perfect-map clean && \
+  SOURCE_DATE_EPOCH=315532800 make -C asi/perfect-map APPLY=1
+```
+
+The verdict lives in `perfect-map-asi.log` next to `gta_sa.exe`. **Read its first line before anything
+else** — `built <date> <time> (APPLY|verify-only)` is the only thing identifying which artifact the game
+actually loaded, and a verify-only build patches nothing.
+
 ## Debug & repro
 
 ```bash
