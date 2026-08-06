@@ -48,3 +48,12 @@ interpret them.
   subsystem. Its per-frame cost is **under the timer's resolution** (mean 0.0172 ms over 22 817 frames). The
   lesson worth carrying: three of the four defects that mattered were found by a HUMAN watching footage after
   headless numbers had accepted the build, and each became a rule about what a metric cannot see.
+- [`asi-sdk-extraction.md`](./asi-sdk-extraction.md) — the `asi/sdk` chain (five plans, one day): the ASI
+  framework moved out of `asi/perfect-map` into a shared SDK, making `asi/` an sdk-plus-consumers category
+  like `cleo/`. **perfect-map 1 499 → 705 lines** (497 of them its own subject matter; 179 the seam a second
+  plugin must write), the roadmap's copy-verbatim list for `asi/city-life` is dead, and seven hand-copied byte
+  arrays went to zero — the "a hand-edited address is structurally impossible" rule is now true rather than
+  claimed. Field-confirmed on the real install (dry run + APPLY, both fixes installed with FLA/OLA present);
+  the behavioural oracle is the one verdict still open. The method lesson: **the measurement rig failed more
+  often than the thing measured** — two of three surprises were harness bugs, caught only by giving each row a
+  verdict from a different channel than the number.
