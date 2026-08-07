@@ -1,11 +1,18 @@
 # 01 — Every species survives the cap (no silently missing type)
 
-Part of [07 — LOD generators, extended](../readme.md), Part B. Independent of the ASI question
+Part of [07 — LOD generators, extended](../readme.md). Independent of the ASI question
 ([00](00-limit-route-review.md)) and of raised density ([02](02-density-model.md)) — this is a
 FAIRNESS defect in how the caps choose survivors, and it is worth fixing at today's density.
 
 **The ask:** a section allows 300 objects and three species are eligible there. All three must appear. Not
 in equal proportion — but none may be dropped to zero.
+
+**"Not in equal proportion" is the load-bearing half, and there is now evidence for it.** The reference set
+in [density-target.md](../density-target.md) — 57 583 hand-tuned instances from a shipping mod — puts **40 %
+of everything into two of its 46 species**, with a tail running down to a couple of hundred. A skew that
+extreme is what a good-looking scatter actually is. So the deliverable here is a FLOOR that outlaws zero,
+never a quota that flattens the distribution; an implementation that evens the mix out would be a
+regression measured against the only reference we have.
 
 ## Context — why a species can vanish today
 

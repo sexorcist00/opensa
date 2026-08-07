@@ -1,6 +1,8 @@
 # 02 — Procobj density model (build-time, configurable)
 
-Part of [07 — LOD generators, extended](../readme.md), Part B. The foundation for "more procobj": turn density from a hardcoded vanilla constant into a configurable, per-category/per-surface model. Depends on nothing to BUILD, but shipping raised density needs [04](04-slot-economy-and-budgets.md)'s budget lift (Task 3).
+Part of [07 — LOD generators, extended](../readme.md). The foundation for "more procobj": turn density from a hardcoded vanilla constant into a configurable, per-category/per-surface model. Depends on nothing to BUILD, but shipping raised density needs [04](04-slot-economy-and-budgets.md)'s ceilings and therefore [00](00-limit-route-review.md)'s route decision.
+
+**What "more" means is now a number**: [density-target.md](../density-target.md) sets the aiming point at **57 583 placed objects, 2.35× our current 24 552** — measured off ProperFixes 2.2.1, a shipping mod. That is the ceiling this plan's profiles are allowed to reach, not a quota to fill: reaching it with the wrong species is a failure. The same file records that a hand-authored reference set puts **40 % of its instances in two species** — so a profile that produces an even spread is not more correct than the reference, it is a different look, and the plan should say which one it is aiming for.
 
 ## Context
 

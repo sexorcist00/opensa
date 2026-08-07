@@ -12,6 +12,23 @@ Each folder below is one tool's chain; the numbers inside a folder are its order
   capped by budgets that exist because of the int16 bug. Make density configurable and biome-aware — denser
   bushes in forest, rocks on mountain slopes, cacti in the desert — and find the ceiling that actually binds.
 
+**How much is "more" is no longer a feeling:** [density-target.md](density-target.md) costs a real shipping
+mod's density (ProperFixes 2.2.1, **57 583 placed objects**) against our own build in rows and slots.
+
+## What the measurement changed
+
+Two findings from costing the density target against today's build. Each one moved a plan's premise, so they
+are stated here rather than buried:
+
+1. **The binding procobj ceiling is SLOTS, not the int16 row ceiling.** Measured 2026-08-07 on
+   `build/original/opensa`: **20 146 / 32 767 text rows** but **38 / 40 IPL slots** (build guard 39) — ONE
+   free slot. Reaching the density target costs ~16 312 text rows (fits, 29 504 against the 30 000 guard)
+   and **>= 19 areas against the 9 we ship** (does not fit, by ~10 slots). The int16 lift our ASI uniquely
+   provides is **not** on the critical path; the per-area `LoadScene` budget and the slot array are.
+2. **Folding areas into fewer files cannot buy the target.** [00](lod-procobj-generator/00-limit-route-review.md)
+   left this open as the cheap escape. It is now closed with a number: area count is set by the ~4 000-row
+   per-area `LoadScene` budget, not by how files are grouped, so fewer files means areas that breach it.
+
 ## Tool map
 
 Which package a plan's diff actually lands in — several plans touch a package that is not the tool they are

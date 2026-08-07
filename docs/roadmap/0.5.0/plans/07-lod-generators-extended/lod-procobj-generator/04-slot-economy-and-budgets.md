@@ -1,34 +1,53 @@
-# 04 — Budget lift & integration (post-asi)
+# 04 — Slot economy, budgets and integration
 
-> **PREMISE UNDER REVIEW — do not start this plan before [00](00-limit-route-review.md) closes.**
-> Everything below is written as "gated on our own ASI (Task 3)". Measured 2026-07-28, the build sits at
-> 25 461/32 767 text rows but **37/40 IPL slots** — the constraint that actually binds is the 40-slot
-> `IplEntityIndexArrays` limit, which our ASI does **not** lift (fixes #2/#3 are unbuilt) and which FLA
-> does. If 00 concludes the slot lift is what density needs, this plan's target-gating, its guard and its
-> "requires the asi" fallback all change shape.
+> **PREMISE WRONG — do not start this plan before [00](00-limit-route-review.md) closes.**
+> Everything below is written as "gated on our own ASI (Task 3)", i.e. as an int16 story. It is not one.
+> Measured 2026-08-07 on `build/original/opensa`: **20 146/32 767 text rows but 38/40 IPL slots**, and the
+> [density target](../density-target.md) costs ~16 312 rows (fits, 29 504 against a 30 000 guard) and ≥ 19
+> areas (**does not fit — 48 slots against a ceiling of 40**). The constraint that binds is the slot array
+> plus the per-area `LoadScene` budget, **neither of which our ASI lifts** (fixes #2/#3 are unbuilt) and
+> both of which FLA/OLA do. So this plan's target-gating, its guard and its "requires the asi" fallback all
+> change shape, and area folding — the cheap escape — is already closed as a route (00, decision 3).
+>
+> Rewrite this plan against 00's decision. What survives unchanged is decision 2 (the binary-stream economy
+> stays) and decision 3 (perf becomes the budget); those are the parts that were never about int16.
 
-Part of [07 — LOD generators, extended](../readme.md), Part B. Depends on [02](02-density-model.md)/[03](03-biome-zone-density.md) (the density model) AND **Task 3** ([03-asi Phase 1](../../../../../../asi/perfect-map/docs/plans/readme.md): the int16 limit lift) + [03-asi/006](../../../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md) (the stock-vs-opensa-asi target modes). Delivers the actual "MORE objects" — raising the int16-era caps now that the engine no longer corrupts past them.
+Part of [07 — LOD generators, extended](../readme.md). Depends on [02](02-density-model.md)/[03](03-biome-zone-density.md) (the density model), on [00](00-limit-route-review.md)'s route decision, and — if that decision keeps our own ASI on the path — on [03-asi/006](../../../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md) (the stock-vs-opensa-asi target modes). Delivers the actual "MORE objects": raising the caps so 02/03's density can ship, and re-establishing perf as the limiter.
 
 ## Context
 
-Raised density (02/03) is capped today by budgets that exist ONLY because of the int16 `IplDef` bug (from the grounding):
+Raised density (02/03) is capped today by budgets that were sized for the int16 bug (from the grounding):
 
 - `AREA_MAX_PAIRS = 2000` (4000 rows/area) + `STREAM_MAX_INST = 512` (`streamed-areas.ts`);
 - `procObjMax = 20000` (`config.ts` / `convert.ts`);
 - `TEXT_ROW_CAP = 30000` global (`pipeline.ts` `checkTextIplSlotBudget`);
 - `PROC_OBJ_MAX_DENSITY = 3` candidate ceiling (`procobj-scatter.ts`).
 
-With Task 3's asi these int16/array ceilings are lifted (03-asi/006 already added the target modes + relaxed `checkTextIplSlotBudget`). 04 raises the procobj-side caps for the **opensa-asi target** so 02/03's density actually SHIPS, and re-establishes the NEW real limiter: **runtime performance** (draw calls, streaming, frame budget), not int16.
+Only one of those four is an int16 cap. `TEXT_ROW_CAP` is, and it is **not** the one in the way — the target fits under it. `AREA_MAX_PAIRS` mirrors SA's per-area `LoadScene` budget, which is a real 2004 ceiling that stands whatever happens to int16, and it is what forces the area count that exhausts the slot array. `procObjMax` and `PROC_OBJ_MAX_DENSITY` are our own safety numbers and cost nothing to raise once something downstream can absorb the objects. **The plan's job is therefore the SLOT economy first and the row ceiling second** — get more objects per area and per slot, then raise what remains, then let perf (draw calls, streaming, frame budget) become the limiter it should have been all along.
 
 ## Decisions
 
-1. **Target-gated caps** (mirror 03-asi/006). For the opensa-asi target: `AREA_MAX_PAIRS`, `STREAM_MAX_INST`, `procObjMax`, and `PROC_OBJ_MAX_DENSITY` rise to new values (or become perf-bounded); for the stock target they stay exactly as today (int16-safe). One target flag drives limits, particle policy (Part A), AND procobj caps — consistent across the pipeline.
+1. **Target-gated caps** (mirror 03-asi/006). For the opensa-asi target: `AREA_MAX_PAIRS`, `STREAM_MAX_INST`, `procObjMax`, and `PROC_OBJ_MAX_DENSITY` rise to new values (or become perf-bounded); for the stock target they stay exactly as today (int16-safe). One target flag drives limits, particle policy (the 2dfx chain), AND procobj caps — consistent across the pipeline.
 2. **The `linkedHeight`/binary-stream economy STAYS.** It's still good memory/draw economy independent of the ceiling (shorter species ride binary streams costing zero text rows). We raise the ceiling, not abandon the streaming layout — density fills the newly-available headroom through the same efficient placement.
 3. **Perf becomes the budget.** Past int16, the limiter is FPS/streaming. Tie the density caps to a measured budget: use the rendering perf HUD (plan 063) + streaming smoothness (plan 060 machinery) to find how much clutter the engine streams without hitching, and set the opensa-asi caps from THAT, not a guess. Denser areas must still stream in smoothly (the warm-invisibly/atomic-appear invariants must hold under higher counts).
 4. **New guard, not no guard.** Replace the int16 `checkTextIplSlotBudget` throw (for the asi target) with a **perf/streaming budget guard**: fail (or warn) the build if a cell/area exceeds the measured streamable object count. Silent over-scatter that hitches in-game is as bad as the old crash — guard it loudly (same spirit as `checkImgIdBudgets`).
 5. **Fallback honesty** (from 006): an opensa-asi-target build with raised density REQUIRES the asi; without it, the same int16 corruption returns. The installer's asi-presence check covers this content; loud warning.
 
 ## Tasks
+
+**Slot economy first — these are the ones the target actually needs, and none of them needs an ASI:**
+
+- [ ] Pack the generated areas tight. They average 3 501 of a 4 000-row budget today; a repack to the budget
+      is ~2 slots back at current density and more at raised density. Measure the recovered slots and check
+      that no area breaches the budget after it — this is 00's hygiene task, executed.
+- [ ] Report the slot and row cost of a build as a first-class output (like `checkImgIdBudgets`), so a
+      density profile's price is visible when it is chosen rather than when the build fails. Today the number
+      takes a script to recover, which is why 04's premise went a fortnight without being checked.
+- [ ] Raise `linkedHeight` deliberately as a slot lever, and measure it: every species pushed below it trades
+      a permanent text row for a binary-stream row, which is the cheapest density we can buy without lifting
+      anything. Record what it costs at range (a shorter species with no permanent LOD pops in later).
+
+**Then the caps, shaped by [00](00-limit-route-review.md)'s decision:**
 
 - [ ] Target-gate the procobj caps (`AREA_MAX_PAIRS`, `STREAM_MAX_INST`, `procObjMax`, density ceiling): stock = today, opensa-asi = raised; wire to the same target flag 03-asi/006 introduced.
 - [ ] Perf/streaming budget calibration: measure (plan-063 perf HUD + streaming settle-watcher) how many procobj a dense area can stream without hitching; set the opensa-asi caps from the measurement. Record the numbers.
