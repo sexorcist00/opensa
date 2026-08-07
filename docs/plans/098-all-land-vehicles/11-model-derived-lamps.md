@@ -25,8 +25,15 @@ Stock SA archive, 170 vehicles:
 - **12 models carry no usable lamp dummy at either end**: the trailers (`artict1/2/3`, `farmtr1`,
   `utiltr1`, `bagboxa`, `bagboxb`, `tugstair`) and the aircraft (`androm`, `at400`, `cargobob`,
   `cropdust`, `nevada`, `rustler`). **OpenSA gives every one of them headlights today.**
-- **27 carry no lamp material at all** — helicopters (`leviathn`, `hunter`), the RC cars, `kart`,
-  `dodo`, `shamal`, `combine`, `quad`, `bloodrb`, and the `coach`'s front.
+- **27 carry no lamp material at either end** (28 in the built archive — the extra one is the modded
+  `hotring`): 11 that also have no dummy at all (`androm`, `at400`, `bagboxa`, `bagboxb`, `cargobob`,
+  `cropdust`, `farmtr1`, `nevada`, `rustler`, `tugstair`, `utiltr1`), 12 with both dummies real
+  (`bloodrb`, `combine`, `dodo`, `freiflat`, `hunter`, `kart`, `leviathn`, `quad`, `rcbandit`, `rccam`,
+  `rctiger`, `shamal`) and 4 mixed (`artict2`, `artict3`, `rdtraint`, `hydra`).
+- **That 27 is NOT the blast radius of Rule B**, and conflating the two is easy: `coach` is absent from
+  it because it carries a REAR lamp material and lacks only the front one. Applied per END, Rule B would
+  newly darken **30 ends across 18 models** — every end whose dummy is real while its material count is
+  zero. See the Rule B step.
 
 **The car the report came from**, measured rather than assumed:
 
@@ -71,10 +78,23 @@ rear deck in the 2026-08-07 field capture.
 - **The MESH half already derives correctly** and is not touched: the lit-twin swap and the emissive glow
   key on the submesh's lamp material (`vsRigid`), so a model with no lamp glass has nothing to light.
 - **Rule B is NOT taken here.** "No lamp material → no beam either" would make the modded hotring fully
-  dark, matching the report — but the census says it would also darken 27 stock models including the
-  `coach`'s headlights, and `DoVehicleLights` (0x6E1A60) is still a plugin-call stub in gta-reversed, so
-  there is no source to settle whether SA's corona comes from the dummy or the material. A field A/B
-  decides it, not an argument. Step 2.
+  dark, matching the report — but measured per END it newly darkens **30 ends across 18 models**, and
+  `DoVehicleLights` (0x6E1A60) is still a plugin-call stub in gta-reversed, so there is no source to
+  settle whether SA's corona comes from the dummy or the material. A field A/B decides it, not an
+  argument. Step 2.
+
+  The ones a player actually drives at night, which is where the verdict will be won or lost:
+
+  | Model | What Rule B takes |
+  | --- | --- |
+  | `coach` | **the bus's headlight beam** — the strongest argument against |
+  | `bloodrb` (Bloodring Banger) | both ends |
+  | `combine`, `kart`, `quad` | both ends |
+  | `tractor` | rear lamps |
+  | `artict2`, `artict3`, `rdtraint`, `freiflat` | rear lamps (trailers/train) |
+  | `dodo`, `hydra`, `hunter`, `leviathn`, `shamal` | aircraft — not flyable this version |
+  | the RC trio (`rcbandit`, `rccam`, `rctiger`) | both ends |
+  | the modded `hotring` | **the front beam — the outcome that opened this plan** |
 
 ## Steps
 
