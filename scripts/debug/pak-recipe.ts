@@ -51,6 +51,7 @@ interface Recipe {
   bakeCollision?: boolean;
   commit?: null | string;
   game?: string;
+  mapObjectsInRect?: boolean;
   maxTexture?: number;
   models?: boolean;
   peds?: null | string[];
@@ -88,6 +89,7 @@ const shown: [string, string][] = [
   ['rect', norm('rect', build.rect ? build.rect.join(',') : null)],
   ['rgba8', norm('rgba8', build.rgba8)],
   ['maxTexture', norm('maxTexture', build.maxTexture)],
+  ['mapObjectsInRect', norm('mapObjectsInRect', build.mapObjectsInRect)],
   ['bakeCollision', norm('bakeCollision', build.bakeCollision)],
   ['ao', norm('ao', build.ao)],
   ['models', norm('models', build.models)],

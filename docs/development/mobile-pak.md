@@ -222,6 +222,28 @@ D3D8/D3D9 only and **skips what it does not understand rather than failing**, so
 world with missing textures rather than an error. The PC files are what the converter reads. See
 [links.md](../links.md).
 
+## The district lever: convert only what the rect places
+
+`packMapObjects` walks **every model the IDEs name** — about 14 000 on the stock game — because for a
+full-map build that is the working set. For a district it is not: a 2×2-cell rect places a few hundred, and
+the rest are parsed, planned and written for a world the pak does not contain. On a phone that is the
+difference between a convert in minutes and one in hours, and it was the single slowest stage.
+
+`--map-objects-in-rect` converts only the models the `--rect` actually places (`npm run phone` passes it;
+`MAPOBJ=0` turns it off). It needs an explicit rect — without one the convert auto-fits to every cell with
+content, and "what this rect places" is the whole catalogue anyway.
+
+The cut is safe in the direction that matters: **a model left unconverted keeps its `.dff`**, so the runtime
+parses one rather than failing to find it — the same contract `--vehicles` / `--peds` already rely on. What
+it does not keep is a converted texture, so an unconverted model still carries its ORIGINAL (BC) dictionary
+and would fail on a device without BC. Nothing outside the rect is placed in a district pak, which is why
+this is keyed on **placement** rather than on a name list somebody maintains.
+
+Two second-order effects, both in the safe direction: more models stay unconverted, so more dictionaries are
+kept (`planTxdDeletions` may only drop one nothing unconverted still needs — the rect test deliberately runs
+*after* a model registers as a user of its TXD), and the archives shrink less. The pack log says how many
+were left: `… ; N not placed in the rect, left unconverted`.
+
 ## Build it once, then reuse it — and know what you are reusing
 
 A convert costs minutes to hours on a phone, so the pak is built once and reused for dozens of runs.

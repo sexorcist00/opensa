@@ -21,6 +21,7 @@ describe('buildRecipe', () => {
       const recipe = buildRecipe(BASE, META);
 
       expect(recipe.bakeCollision).toBe(false);
+      expect(recipe.mapObjectsInRect).toBe(false);
       expect(recipe.rgba8).toBe(false);
       expect(recipe.maxTexture).toBe(0);
       expect(recipe.rect).toBeNull();
@@ -46,6 +47,7 @@ describe('buildRecipe', () => {
           ao: false,
           bakeCollision: true,
           forceRgba8: true,
+          mapObjectsInRect: true,
           maxTextureSize: 256,
           models: true,
           peds: ['bmycg', 'wmycr'],
@@ -63,6 +65,7 @@ describe('buildRecipe', () => {
         bakeCollision: true,
         commit: 'abc1234',
         game: 'original',
+        mapObjectsInRect: true,
         maxTexture: 256,
         models: true,
         peds: ['bmycg', 'wmycr'],

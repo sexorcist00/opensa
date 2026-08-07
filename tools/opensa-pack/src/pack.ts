@@ -33,6 +33,7 @@ import { packMapObjects } from './pack-map-objects';
 import { packPeds } from './pack-peds';
 import { packProps } from './pack-props';
 import { packVehicles } from './pack-vehicles';
+import { placedModelNames } from './placed-models';
 import { assertPlatformSupport, platformDemand, satisfiedTargets } from './platforms';
 import { bakeWater } from './water';
 
@@ -59,6 +60,10 @@ export interface PackOptions {
    *  work-stage intermediate. */
   gameId?: string;
   log?: (message: string) => void;
+  /** Convert only the map objects the `rect` actually PLACES, instead of every model the IDEs name (~14 000).
+   *  A district places a few hundred, so this is the difference between a convert in minutes and one in
+   *  hours on a phone. Ignored without an explicit `rect`. See `placed-models.ts` for why the cut is safe. */
+  mapObjectsInRect?: boolean;
   /** Largest texture edge the pak may carry (0 = uncapped) — the other half of making an RGBA8 pak fit. */
   maxTextureSize?: number;
   /** Convert the per-model half (and rewrite the ~1 GB archives). ON by default. */
@@ -150,6 +155,11 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
       ? {
           onWorldPlanned: (planner, mapDefs): void => {
             packed = packModels(fs, mapDefs, planner, bundles, log, options.forceRgba8 ?? false, {
+              // Only with an explicit rect: without one the convert auto-fits to every cell with content,
+              // and "the models this rect places" is then the whole catalogue anyway.
+              ...(options.mapObjectsInRect && rect !== undefined
+                ? { mapObjects: placedModelNames(mapDefs, rect, CELL_SIZE) }
+                : {}),
               ...(options.peds ? { peds: new Set(options.peds.map((name) => name.toLowerCase())) } : {}),
               ...(options.vehicles ? { vehicles: new Set(options.vehicles.map((name) => name.toLowerCase())) } : {}),
             });
@@ -306,8 +316,9 @@ function packModels(
   // A car is not in the pak, so `--rgba8` has to reach every class that ships its OWN dictionary; the map
   // objects plan into the world planner, which already has it.
   forceRgba8: boolean,
-  /** Optional per-class subsets (`--vehicles` / `--peds`); absent = the whole class. */
-  only: { peds?: ReadonlySet<string>; vehicles?: ReadonlySet<string> } = {},
+  /** Optional per-class subsets (`--vehicles` / `--peds` / the rect's placed map objects); absent = the
+   *  whole class. */
+  only: { mapObjects?: ReadonlySet<string>; peds?: ReadonlySet<string>; vehicles?: ReadonlySet<string> } = {},
 ): PackedModels {
   const vehicles = packVehicles(fs, bundles, log, { forceRgba8, ...(only.vehicles ? { only: only.vehicles } : {}) });
   // Smashable props (5b): only a `SHAT` section, so the model keeps its `.dff` — the shatter mesh is the
@@ -322,7 +333,7 @@ function packModels(
   // Peds (5f): their own DESC/GEOM — no colours, no paint slots, but joints/weights and a real skeleton.
   const peds = packPeds(fs, bundles, log, { forceRgba8, ...(only.peds ? { only: only.peds } : {}) });
   // Map objects (5g): everything else the IDEs name, against the shared dictionary.
-  const mapObjects = packMapObjects(fs, defs, planner, bundles, isVegetationDef, log, defs.txdParents);
+  const mapObjects = packMapObjects(fs, defs, planner, bundles, isVegetationDef, log, defs.txdParents, only.mapObjects);
 
   return {
     animObjects,

@@ -7,6 +7,7 @@
 #   REBUILD=1 npm run phone           # re-convert even though a pak is already there
 #   BAKE=0 OUT=./build/phone-plain npm run phone     # the OTHER side of the A/B: no --bake-collision
 #   MODELS=0 npm run phone            # skip the model convert entirely: fast, but dispatch-only (no physics)
+#   MAPOBJ=0 npm run phone            # convert the whole ~14k map-object catalogue, not just what the rect places
 #   VEHICLES=admiral,infernus PEDS=bmycg npm run phone     # convert a different subset
 #   VEHICLES=all PEDS=all npm run phone                    # the whole roster (hours on a phone)
 #   RECT=8,-8,11,-5 SPAWN=2495,-1687,20 npm run phone
@@ -27,6 +28,9 @@ RECT="${RECT:-9,-7,10,-6}"
 SPAWN="${SPAWN:-2400,-1700,20}"
 BAKE="${BAKE:-1}"
 MODELS="${MODELS:-1}"
+# Convert only the map objects the rect PLACES, not all ~14 000 the IDEs name. ON here because this script
+# always converts a DISTRICT: the rest are models this pak does not contain. MAPOBJ=0 converts the catalogue.
+MAPOBJ="${MAPOBJ:-1}"
 # The default is a SUBSET, because converting the roster costs hours on a phone and a field run needs a
 # handful of models. `all` restores the full convert. The player's model is added below whatever is asked
 # for: without it the game boots with nobody to move (`GAME_CONFIG.mainCharacter`).
@@ -96,6 +100,7 @@ if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
   say "converting $GAME → $OUT (rect $RECT, bake=$BAKE, models=$MODELS)"
   args=(--game "$GAME" --out "$OUT" --rgba8 --max-texture 256 --rect "$RECT" --no-ao --platforms mobile)
   [ "$BAKE" = 1 ] && args+=(--bake-collision)
+  [ "$MAPOBJ" = 1 ] && args+=(--map-objects-in-rect)
   [ "$MODELS" = 0 ] && args+=(--no-models)
   if [ "$MODELS" != 0 ]; then
     [ "$VEHICLES" != all ] && args+=(--vehicles "$VEHICLES")
@@ -120,6 +125,7 @@ else
   # and in the log. Same for the collision A/B, where the two sides differ by one flag and nothing else.
   say "pak already at $OUT/pak (REBUILD=1 to redo it)"
   expect=(--expect "rect=$RECT" --expect "bakeCollision=$([ "$BAKE" = 1 ] && echo true || echo false)"
+          --expect "mapObjectsInRect=$([ "$MAPOBJ" = 1 ] && echo true || echo false)"
           --expect "models=$([ "$MODELS" != 0 ] && echo true || echo false)")
   if [ "$MODELS" != 0 ]; then
     expect+=(--expect "vehicles=$VEHICLES")

@@ -5,7 +5,7 @@
  * stage must not go through argv.
  *
  *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> [--rect x0,y0,x1,y1]
- *     [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--rgba8] [--max-texture N]
+ *     [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--rgba8] [--max-texture N] [--map-objects-in-rect]
  *     [--stochastic <file>[,<file>…]]
  *
  * REMOVED FLAGS (2026-07-19, user): `--cell-size` (the pak and the runtime must agree on it and nothing
@@ -33,6 +33,9 @@
  * failure, which is the last moment the answer is ours rather than a stranger's phone.
  *
  * `--max-texture N` (power of two) caps every texture's edge, halving both axes together so aspect survives.
+ * `--map-objects-in-rect` converts only the map objects `--rect` actually PLACES instead of all ~14 000 the
+ * IDEs name — the district lever that turns a phone convert from hours into minutes. Needs an explicit
+ * `--rect`; a model left out keeps its `.dff`, so the runtime parses one if anything ever asks for it.
  * With `--rgba8` it is what makes a district affordable: RGBA8 costs 4-8x its BC original, and one halving
  * takes three quarters of that back. A capped texture is decoded rather than passed through — a DXT block
  * cannot be resized without decoding it.
@@ -62,7 +65,7 @@ async function main(): Promise<void> {
   if (!gameRaw || !outRaw) {
     console.error(
       'usage: opensa-pack --game <dir> --out <dir> [--rect x0,y0,x1,y1] ' +
-        '[--pak-out <dir>] [--game-id <id>] [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--rgba8] [--max-texture N] ' +
+        '[--pak-out <dir>] [--game-id <id>] [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--rgba8] [--max-texture N] [--map-objects-in-rect] ' +
         '[--platforms desktop|mobile[,…]] [--bake-collision] [--stochastic <file>[,<file>…]] ' +
         '[--vehicles a,b] [--peds a,b]',
     );
@@ -109,6 +112,7 @@ async function main(): Promise<void> {
     forceRgba8: process.argv.includes('--rgba8'),
     ...(maxTexture ? { maxTextureSize: maxTexture } : {}),
     gameDir: requireDir('game', gameRaw),
+    mapObjectsInRect: process.argv.includes('--map-objects-in-rect'),
     ...(gameId ? { gameId } : {}),
     models: !process.argv.includes('--no-models'),
     ...(peds.length > 0 ? { peds } : {}),

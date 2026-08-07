@@ -302,6 +302,15 @@ export async function convertDistrict(
   return { defs, manifest, pak, report };
 }
 
+export function normalizedRect(rect: readonly [number, number, number, number]): [number, number, number, number] {
+  return [
+    Math.min(rect[0], rect[2]),
+    Math.min(rect[1], rect[3]),
+    Math.max(rect[0], rect[2]),
+    Math.max(rect[1], rect[3]),
+  ];
+}
+
 /** The tightest cell rect covering every grid cell with content — the no-`rect` default (a TC's true extent). */
 export function occupiedRect(grid: ReturnType<typeof buildWorldGrid>): [number, number, number, number] {
   let x0 = Infinity;
@@ -582,15 +591,6 @@ function mergeBakeReports(
       vertices: prev.vertices + sunBake.vertices,
     };
   }
-}
-
-function normalizedRect(rect: readonly [number, number, number, number]): [number, number, number, number] {
-  return [
-    Math.min(rect[0], rect[2]),
-    Math.min(rect[1], rect[3]),
-    Math.max(rect[0], rect[2]),
-    Math.max(rect[1], rect[3]),
-  ];
 }
 
 /** Split a normalized rect into chunk rects, keeping only chunks with content. Progress accounting rides

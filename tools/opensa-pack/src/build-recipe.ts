@@ -28,6 +28,9 @@ export interface PakBuildRecipe {
   readonly commit: null | string;
   /** Game id the pak was built from (`game-src/<id>`). */
   readonly game: string;
+  /** Only the models the rect PLACES were converted, not every model the IDEs name. Changes what the pak's
+   *  archives carry, so two paks differing only in this are not the same build. */
+  readonly mapObjectsInRect: boolean;
   /** Largest texture edge, 0 = uncapped. */
   readonly maxTexture: number;
   /** Whether the per-model half (vehicles, peds) was converted at all. */
@@ -63,6 +66,7 @@ export function buildRecipe(
     bakeCollision: options.bakeCollision ?? false,
     commit: meta.commit,
     game: meta.game,
+    mapObjectsInRect: options.mapObjectsInRect ?? false,
     maxTexture: options.maxTextureSize ?? 0,
     models: options.models ?? true,
     peds: subset(options.peds),

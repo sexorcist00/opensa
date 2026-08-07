@@ -39,6 +39,9 @@ export interface MapObjectPackReport {
   readonly deletes: readonly string[];
   readonly failed: readonly { readonly error: string; readonly model: string }[];
   readonly models: number;
+  /** Models the IDEs name that the convert rect does not place — skipped under `--map-objects-in-rect`,
+   *  0 without it. They keep their `.dff`, so the runtime parses one if anything ever asks. */
+  readonly outsideRect: number;
   /** Models a by-name class had already converted, left with their private dictionaries. */
   readonly skipped: number;
   /** Dictionaries held back, and why they could not go. */
@@ -58,65 +61,70 @@ export function packMapObjects(
   isVegetation: (def: IdeObjectDef) => boolean,
   log: (message: string) => void,
   txdParents: ReadonlyMap<string, string> = new Map(),
+  /** Convert only these model names (lowercased) — the rect's PLACED set (`--map-objects-in-rect`). Absent =
+   *  every model the IDEs name, which is right for a full-map build and wasteful for a district. */
+  only?: ReadonlySet<string>,
 ): MapObjectPackReport {
   const failed: { error: string; model: string }[] = [];
-  const seen = new Set<string>();
   const converted = new Set<string>();
   const deletes: string[] = [];
   const txdUsers = new Map<string, string[]>();
   let bytes = 0;
   let models = 0;
+  let outsideRect = 0;
   let skipped = 0;
 
-  const catalogs = [defs.catalog, defs.timedCatalog ?? new Map<number, IdeObjectDef>()];
-  // Unique model names up front: the loop dedups IDE rows, so row count is not the denominator a wait is
-  // measured against. Cheap next to what follows (one pass over ~10k names).
-  const uniqueModels = new Set(
-    catalogs.flatMap((catalog) => [...catalog.values()].map((def) => def.modelName.toLowerCase())),
+  const unique = uniqueByModel([defs.catalog, defs.timedCatalog ?? new Map<number, IdeObjectDef>()]);
+  // The denominator a wait is measured against is what will actually be CONVERTED — the IDE row count is not
+  // it (many rows per model), and neither is the catalogue when `only` cuts it to a district's placements.
+  const progress = createProgress(
+    'map objects',
+    unique.filter(([model]) => only === undefined || only.has(model)).length,
+    log,
   );
-  const progress = createProgress('map objects', uniqueModels.size, log);
 
-  for (const catalog of catalogs) {
-    for (const def of catalog.values()) {
-      const model = def.modelName.toLowerCase();
-      if (seen.has(model)) {
-        continue; // one model, many IDE rows
-      }
-      seen.add(model);
-      progress.tick();
-      const txd = def.txdName.toLowerCase();
-      txdUsers.set(txd, [...(txdUsers.get(txd) ?? []), model]);
-      if (bundles.hasSection(model, OsmSectionTag.GEOM)) {
-        skipped += 1;
-        continue;
-      }
-      if (!fs.has(`${model}.dff`)) {
-        continue; // an IDE row with no model is the map's own business, not a conversion failure
-      }
-      try {
-        const built = buildModelOsm(fs, model, {
-          txd: def.txdName.toLowerCase(),
-          worldDictionary: { planner, preferCutout: isVegetation(def) },
-        });
-        bundles.add(model, { sections: built.sections });
-        bytes += built.sections.reduce((total, section) => total + section.bytes.byteLength, 0);
-        // The `.osm` REPLACES the model: a surviving `.dff` is how the runtime recognises a mod.
-        deletes.push(`${model}.dff`);
-        converted.add(model);
-        models += 1;
-      } catch (error) {
-        failed.push({ error: error instanceof Error ? error.message : String(error), model });
-      }
+  for (const [model, def] of unique) {
+    const txd = def.txdName.toLowerCase();
+    // Registered BEFORE the rect test on purpose: `planTxdDeletions` may only drop a dictionary nothing
+    // UNCONVERTED still needs, and a model skipped here is exactly that — skipping it earlier would drop
+    // the textures it is still going to be read with.
+    txdUsers.set(txd, [...(txdUsers.get(txd) ?? []), model]);
+    if (only !== undefined && !only.has(model)) {
+      outsideRect += 1;
+      continue;
+    }
+    progress.tick();
+    if (bundles.hasSection(model, OsmSectionTag.GEOM)) {
+      skipped += 1;
+      continue;
+    }
+    if (!fs.has(`${model}.dff`)) {
+      continue; // an IDE row with no model is the map's own business, not a conversion failure
+    }
+    try {
+      const built = buildModelOsm(fs, model, {
+        txd,
+        worldDictionary: { planner, preferCutout: isVegetation(def) },
+      });
+      bundles.add(model, { sections: built.sections });
+      bytes += built.sections.reduce((total, section) => total + section.bytes.byteLength, 0);
+      // The `.osm` REPLACES the model: a surviving `.dff` is how the runtime recognises a mod.
+      deletes.push(`${model}.dff`);
+      converted.add(model);
+      models += 1;
+    } catch (error) {
+      failed.push({ error: error instanceof Error ? error.message : String(error), model });
     }
   }
   const txdsKept = planTxdDeletions(txdUsers, converted, txdParents, deletes);
   log(
     `map objects: ${models} converted against the shared dictionary, ${skipped} already bundled by name, ` +
       `${failed.length} failed, ${(bytes / 1048576).toFixed(0)} MB; ` +
-      `${deletes.length - models} dictionaries dropped, ${txdsKept} kept`,
+      `${deletes.length - models} dictionaries dropped, ${txdsKept} kept` +
+      (outsideRect > 0 ? `; ${outsideRect} not placed in the rect, left unconverted` : ''),
   );
 
-  return { bytes, deletes, failed, models, skipped, txdsKept };
+  return { bytes, deletes, failed, models, outsideRect, skipped, txdsKept };
 }
 
 /**
@@ -153,4 +161,20 @@ function planTxdDeletions(
   }
 
   return kept.size;
+}
+
+/** One `[lowercased model, def]` per model across both catalogues — a model is named by many IDE rows, and
+ *  the first row wins, which is the order the loop used to dedup in. */
+function uniqueByModel(catalogs: readonly ReadonlyMap<number, IdeObjectDef>[]): [string, IdeObjectDef][] {
+  const byModel = new Map<string, IdeObjectDef>();
+  for (const catalog of catalogs) {
+    for (const def of catalog.values()) {
+      const model = def.modelName.toLowerCase();
+      if (!byModel.has(model)) {
+        byModel.set(model, def);
+      }
+    }
+  }
+
+  return [...byModel];
 }

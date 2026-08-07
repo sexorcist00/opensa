@@ -75,7 +75,9 @@ command never changes and every knob is an env var: `REBUILD=1` re-converts, `BA
 the collision A/B, `MODELS=0` skips the model convert (fast, but then only `dispatch.html` is usable — it runs
 no physics), `VEHICLES=` / `PEDS=` set the model SUBSET (default `admiral,infernus,comet` + `bmycg,wmycr`;
 `all` converts the roster — hours on a phone), `RECT=` / `SPAWN=` / `OUT=` / `GAME=` / `APP_PORT=` /
-`STATIC_PORT=` move the rest. It converts
+`STATIC_PORT=` move the rest, and `MAPOBJ=0` turns off the district lever (`--map-objects-in-rect`, on by
+default here: convert only the map objects the rect PLACES instead of all ~14 000 the IDEs name — the slowest
+stage of a district convert). It converts
 only when there is no pak (a phone convert is minutes to hours), prints what the pak actually carries — the
 collision GRID first — and reuses a server that is already up. **When it reuses a pak it first asks that pak
 whether it is the one being requested** (`scripts/debug/pak-recipe.ts` against `report.json`'s `build` block)
