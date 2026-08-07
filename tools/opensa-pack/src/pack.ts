@@ -327,7 +327,7 @@ function packModels(
   // Clutter species (5c): the HOT by-name class — a species builds on cell stream-in, not on a rare event.
   const clutter = packClutter(fs, defs, bundles, log, { forceRgba8 });
   // Topple props (5d): the collider hull the host otherwise collects with a SECOND clump walk per prop.
-  const props = packProps(fs, defs, bundles, log);
+  const props = packProps(fs, defs, bundles, log, { forceRgba8 });
   // Animated map objects (5e): the frame tree the IFP matches by name — the clip stays a separate asset.
   const animObjects = packAnimObjects(fs, defs, bundles, log, { forceRgba8 });
   // Peds (5f): their own DESC/GEOM — no colours, no paint slots, but joints/weights and a real skeleton.

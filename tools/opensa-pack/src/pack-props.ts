@@ -39,6 +39,7 @@ export function packProps(
   defs: { catalog: ReadonlyMap<number, { modelName: string; txdName: string }> },
   bundles: ModelBundles,
   log: (message: string) => void,
+  options: { forceRgba8?: boolean } = {},
 ): PropPackReport {
   const text = fs.getText('data/object.dat');
   if (text === null) {
@@ -46,10 +47,11 @@ export function packProps(
 
     return { absent: 0, failed: [], hullBytes: 0, models: 0, points: { kept: 0, walked: 0 } };
   }
-  const txdByModel = new Map<string, string>();
-  for (const def of defs.catalog.values()) {
-    txdByModel.set(def.modelName.toLowerCase(), def.txdName.toLowerCase());
-  }
+  const txdByModel = txdIndex(defs.catalog);
+  // A prop not already bundled builds its OWN dictionary, so it needs the flag exactly as every other
+  // by-name class does — `model-ostex` picks BC for any block-aligned dictionary, and that is a format no
+  // mobile GPU carries. Hoisted out of the loop: it is the same for every prop.
+  const rgba8 = options.forceRgba8 ? ({ forceRgba8: true } as const) : {};
 
   const failed: { error: string; model: string }[] = [];
   const converted = new Set<string>();
@@ -92,6 +94,7 @@ export function packProps(
       } else {
         const built = buildModelOsm(fs, model, {
           extraSections: (_built, _dff, clump) => [hullSection(clump)],
+          ...rgba8,
           ...(txdByModel.has(model) ? { txd: txdByModel.get(model) } : {}),
         });
         bundles.add(model, { sections: built.sections });
@@ -148,4 +151,14 @@ function hullOf(clump: RWClump): OsmHull {
     ],
     points: new Float32Array(points),
   };
+}
+
+/** `model → txd`, both lowercased, over the render catalogue. */
+function txdIndex(catalog: ReadonlyMap<number, { modelName: string; txdName: string }>): Map<string, string> {
+  const byModel = new Map<string, string>();
+  for (const def of catalog.values()) {
+    byModel.set(def.modelName.toLowerCase(), def.txdName.toLowerCase());
+  }
+
+  return byModel;
 }

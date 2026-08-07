@@ -72,6 +72,23 @@ painted-on OPAQUE windows (`marinawindow1_256`, no alpha channel at all). Read t
 
 **Caught:** no — you get a real model, a real texture and a wrong conclusion.
 
+## Every model class that builds a PRIVATE dictionary must be handed `forceRgba8`
+
+`--rgba8` is not one switch — each by-name class (`pack-vehicles`, `pack-clutter`, `pack-anim-objects`,
+`pack-peds`, `pack-props`) builds its own dictionary through `buildModelOsm`, and `model-ostex` picks **BC**
+for any block-aligned dictionary unless the flag reaches it. Map objects are the exception: they plan into
+the shared WORLD dictionary and inherit its format. So a new class that forgets the option makes a pak the
+world half of which is mobile-clean while its models demand a feature no mobile GPU carries.
+
+This is exactly what happened: `pack-props.ts` was the one class the 2026-08-04 change
+(`--rgba8 now converts the MODEL dictionaries too`) missed, and it stayed wrong until a full-models phone
+convert hit it — `world [nothing], models [texture-compression-bc]`.
+
+**Caught:** yes, but LATE and only if you ask — `--platforms mobile` fails the pack, and it runs at the very
+END of the convert. On a phone that is the whole convert paid for before the error, which is why the rule is
+here rather than left to the check. Without `--platforms` the pack only *reports* the demand in one log line
+and `report.json`.
+
 ## Texture sizes are asset-driven
 
 Never hardcode a size that belongs to a source asset. Texture arrays derive their size from `max(assets)`;

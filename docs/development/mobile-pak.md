@@ -22,7 +22,11 @@ out keeps its `.dff`/`.txd` and therefore its ORIGINAL (BC) textures, so on a de
 parked car or car generator reaching for one ends the run — `?parked=0&cargen=0`, both halves, since the
 generators are the larger one. The player's ped (`GAME_CONFIG.mainCharacter`, `bmycg`) must be in `--peds`.
 
-**`--rgba8` covers the MODELS too, since 2026-08-04.** It used to convert only the world, and a car is not in
+**`--rgba8` covers the MODELS too, since 2026-08-04** — and completely only since 2026-08-07, when
+`pack-props` turned out to be the one by-name class that change missed. A full-models mobile convert failed
+on it with `world [nothing], models [texture-compression-bc]`: the world half was clean, the props' private
+dictionaries were BC. Each class that builds its own dictionary needs the flag passed to it
+([restrictions](../restrictions/assets-and-data.md)). It used to convert only the world, and a car is not in
 the pak — `model-ostex.ts` picked BC for any block-aligned dictionary, so a phone loaded the district and threw
 on the first spawn. That is why every recipe here passed `--no-models`. With models converted the flag means
 what it says, and the cost lands where a car's dictionary already is (~20× its model, so a full vehicle roster
