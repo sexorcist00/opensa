@@ -19,6 +19,14 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 `001`–`099`, one folder each (066, 073, 074, 078–082, 096–099 carry multi-part sub-plans; 083 kept its
 row but its chain was superseded by 097). Newest first:
 
+- **[101 — Escalators in OpenSA](./101-escalators/readme.md)** — **PLANNED 2026-08-07**: the steps have
+  never moved in our engine. `renderware` decodes the type-10 entry (plan 044) and there is a debug waypoint;
+  `engine`, `cell-weld` and `engine-formats` have no escalator code at all, so the staircase draws and
+  standing on it does nothing — a gap against the original, which implements them natively. Split out of
+  plan 100, which carries the 2dfx types our engine already consumes and cannot carry this one because the
+  behaviour does not exist. Step 00 is research first: recover SA's own step spacing, speed and carry rule
+  (and find out whether the steps are objects or a texture scroll — if the latter, plan 099's UV lane may
+  already do it) before any constant of ours is fitted. Corpus is 5 entries in 4 models, fully enumerable.
 - **[100 — 2dfx survives to LOD range](./100-2dfx-at-lod-range/readme.md)** — **PLANNED 2026-08-07**:
   chimney smoke, street lamps and street-name plates die at the HD boundary (`HD_RADIUS` 380), so a
   district past ~440 u draws to 1000 u dark, smokeless and unsigned. Both LOD generators bake the three
