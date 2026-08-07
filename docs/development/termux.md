@@ -50,9 +50,15 @@ baseline taken somewhere the product will never run is a baseline that flatters 
 
 ## Practical notes
 
-- `pkg install nodejs-lts git python` covers the toolchain; `npm install` then works normally.
+- **The whole setup is `pkg install nodejs-lts git` and then `npm run phone:setup`** — once per device. A
+  plain `npm install` is NOT the normal path here: the full tree pulls 1171 packages whose prebuilt binaries
+  are `linux-x64-gnu`, and it is the step most likely to fail on arm64. Setup passes `--omit=dev` (173
+  packages, none of which the convert path touches) and `HUSKY=0`, and it is idempotent, so re-running it
+  after a failure or a reboot repeats nothing. Then `npm run phone` for every run
+  ([mobile-pak.md](./mobile-pak.md)).
 - `termux-wake-lock` before a build, `termux-wake-unlock` after — without it a long pak build dies when the
-  screen sleeps.
+  screen sleeps. `npm run phone:setup` takes the lock when Termux offers one, so a convert started right
+  after it is already covered.
 - The dev server binds fine; reach it from the phone's browser at `localhost`, and from another device on the
   same network with `npm run dev -- --host`.
 - Storage: the built game lives under `build/<game>/opensa`, and a field run reads that and nothing else

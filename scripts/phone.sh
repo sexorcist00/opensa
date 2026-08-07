@@ -42,6 +42,16 @@ STARTED=()
 
 say() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
 
+# The LOCAL tsx, never `npx tsx`. On a phone npx is the slower path and, when the package cannot be resolved,
+# it reaches for the network — which on a field run means a convert that hangs on a captive portal instead of
+# saying what is missing. This says it instead, and names the command that installs it.
+TSX=node_modules/tsx/dist/cli.mjs
+if [ ! -f "$TSX" ]; then
+  echo "no $TSX — run: npm run phone:setup" >&2
+  exit 1
+fi
+tsx() { node "$TSX" "$@"; }
+
 # Node rather than curl/nc: node is the one tool this repo already requires, and Termux ships neither of the
 # other two by default.
 port_open() {
@@ -99,7 +109,7 @@ if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
   fi
   # --platforms mobile fails the pack when anything it wrote needs a GPU feature a phone lacks (BC), so a pak
   # that survives this line is one the device can actually open.
-  if ! NODE_OPTIONS=--max-old-space-size=4096 npx tsx tools/opensa-pack/src/cli.ts "${args[@]}"; then
+  if ! NODE_OPTIONS=--max-old-space-size=4096 tsx tools/opensa-pack/src/cli.ts "${args[@]}"; then
     echo "convert failed — nothing was served" >&2
     exit 1
   fi
@@ -122,7 +132,7 @@ else
       esac
     fi
   fi
-  if ! npx tsx scripts/debug/pak-recipe.ts "$OUT/pak" "${expect[@]}"; then
+  if ! tsx scripts/debug/pak-recipe.ts "$OUT/pak" "${expect[@]}"; then
     echo >&2
     echo "nothing was served. Either re-convert into this folder:" >&2
     echo "  REBUILD=1 npm run phone" >&2
@@ -135,7 +145,7 @@ fi
 # 3 — what the pak actually carries. The first line is the collision GRID: a bake keyed on the render grid
 # renders perfectly and drops the player through the world, and nothing else would ever say so.
 say "pak check"
-npx tsx scripts/debug/dump-cell-collision.ts "$OUT/pak"
+tsx scripts/debug/dump-cell-collision.ts "$OUT/pak"
 
 # 4 — servers. Each is started only if its port is free, so re-running this reuses what is already up.
 mkdir -p "$LOGS"
