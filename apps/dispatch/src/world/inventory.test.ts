@@ -2,7 +2,7 @@ import type { EngineStats, FrameSpanTotals } from '@opensa/engine';
 
 import { describe, expect, it } from 'vitest';
 
-import { FrameInventory } from './inventory';
+import { FrameInventory, UNNAMED_DISTRICT } from './inventory';
 
 const NO_SPANS: FrameSpanTotals = { byName: [], totalMs: 0 };
 
@@ -32,6 +32,49 @@ describe('FrameInventory', () => {
       expect(report.frame.fps).toBe(0);
       expect(report.frame.dtP50Ms).toBe(0);
       expect(report.windowMs).toBe(0);
+    });
+
+    it('discards the FIRST delta, which carries page load rather than a frame', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(41_026, stats(), NO_SPANS); // the load stall the 2026-08-07 capture reported as dtMax
+      inventory.sample(16, stats(), NO_SPANS);
+      inventory.sample(16, stats(), NO_SPANS);
+
+      const report = inventory.report(CONTEXT);
+
+      expect(report.frames).toBe(2);
+      expect(report.frame.dtMaxMs).toBe(16);
+    });
+
+    it('still reads the world off the discarded first sample, so an early report is not blank', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(41_026, stats({ cellsTotal: 9, cellsVisible: 4 }), NO_SPANS);
+
+      const report = inventory.report(CONTEXT);
+
+      expect(report.frames).toBe(0);
+      expect(report.world.cellsTotal).toBe(9);
+    });
+
+    it('VOIDS a capture that streamed no cells — the failure the first real capture shipped with', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats({ cellsTotal: 0, cellsVisible: 0 }), NO_SPANS);
+      inventory.sample(16, stats({ cellsTotal: 0, cellsVisible: 0 }), NO_SPANS);
+
+      const warnings = inventory.report(CONTEXT).warnings;
+
+      expect(warnings.some((warning) => warning.startsWith('VOID'))).toBe(true);
+    });
+
+    it('warns about a window too short to carry a percentile, and about an unnamed district', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS);
+      inventory.sample(16, stats(), NO_SPANS);
+
+      const warnings = inventory.report({ ...CONTEXT, district: UNNAMED_DISTRICT }).warnings;
+
+      expect(warnings.some((warning) => warning.includes('frames sampled'))).toBe(true);
+      expect(warnings.some((warning) => warning.includes('district not named'))).toBe(true);
     });
 
     it('marks GPU passes UNAVAILABLE when the adapter cannot time them, instead of reporting them as free', () => {
@@ -85,6 +128,7 @@ describe('FrameInventory', () => {
 
     it('averages a span over every sampled frame, not over the frames that paid it', () => {
       const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS); // primes the clock — the first delta is not a frame time
       inventory.sample(16, stats(), { byName: [['cell-collision', 30]], totalMs: 30 });
       inventory.sample(16, stats(), NO_SPANS);
 
@@ -96,6 +140,7 @@ describe('FrameInventory', () => {
 
     it('orders passes by mean cost so the table reads top-down', () => {
       const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS); // primes the clock — the first delta is not a frame time
       inventory.sample(16, stats({ gpuPassMs: 12, gpuPostMs: 3, submitMs: 0.4 }), NO_SPANS);
 
       const names = inventory.report(CONTEXT).passes.map((pass) => pass.name);

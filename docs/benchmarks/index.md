@@ -375,6 +375,7 @@ One row, and it is a first-light record rather than a comparable one — see its
 | Date | File | Harness / scene | Conditions | Headline numbers |
 | --- | --- | --- | --- | --- |
 | 08-04 | [mobile-first-light](opensa-engine/2026-08-04-mobile-first-light.json) | dispatch console status bar, `?demo=1` | **Mali-G51 / Android 10**, Yandex Browser 26.6 (Chromium 148), 360x800 CSS px @ DPR 2. SYNTHETIC world (no pak — this GPU has no BC). Needed `#enable-unsafe-webgpu` + the same day's "BC optional at device creation" change. No `timestamp-query`, so no GPU timings. | **41 fps** · cells 38/144 · draws 162 · resident 37 MB |
+| 08-07 | [mobile-inventory-void](opensa-engine/2026-08-07-mobile-inventory-void.json) | dispatch console, `?inventory=1`, first real district pak (`23:12 07-08-2026`, rect 9,-7,10,-6) | **VOID — DO NOT CITE.** Same Mali-G51. The world never streamed: `cellsTotal 0`, and the 113 494 triangles are exactly this pak's water mesh, so the capture is water over nothing. Taken 1.6 s after the collector started (15 frames). Also carries a poisoned `dtMax` — the first delta included page load, fixed the same day. | *none usable* — kept for the trap, not the numbers |
 
 Not comparable with anything above it: different host, different world, no p95, no GPU timers. It closes the
 gap `docs/features/mobile-controls.md` names ("no touch-device frame-time row exists"), and it is owed a

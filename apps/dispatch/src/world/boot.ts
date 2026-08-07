@@ -23,7 +23,7 @@ import { CAMERA_FAR, groundPoint, MAP_YAW, MapCamera } from '../map/map-camera';
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
 import { buildDemoCity } from './demo-city';
-import { FrameInventory, type InventoryReport } from './inventory';
+import { FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
 import { DEFAULT_SRC, resolvePakBase } from './pak-source';
 import { installWater } from './water';
 
@@ -210,7 +210,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         : inventory.report({
             build: world.label,
             device: engine.deviceReport,
-            district: params.get('district') ?? 'unnamed — pass ?district=',
+            district: params.get('district') ?? UNNAMED_DISTRICT,
             hasTimestamps: !engine.deviceReport.missing.includes('timestamp-query'),
           });
     },

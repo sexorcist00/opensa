@@ -44,6 +44,11 @@ export interface InventoryReport {
   readonly spans: readonly (readonly [string, number])[];
   /** Human-readable reasons a column above is absent on this device. */
   readonly unavailable: readonly string[];
+  /** Reasons this capture may NOT be cited as a before-table. Empty = nothing obviously wrong with it.
+   *  The first real capture (2026-08-07) was pasted, read and filed before anyone noticed it had streamed
+   *  no cells at all — the numbers describe water over an empty world. A capture that says so itself is
+   *  the cheapest possible guard against that. */
+  readonly warnings: readonly string[];
   readonly windowMs: number;
   readonly world: {
     readonly cellsTotal: number;
@@ -53,6 +58,14 @@ export interface InventoryReport {
     readonly triangles: number;
   };
 }
+
+/** What `?district=` defaults to. Exported so the reader and the writer cannot drift apart — the check for
+ *  "nobody named the district" is a string comparison, and a second copy of it would silently stop matching. */
+export const UNNAMED_DISTRICT = 'unnamed — pass ?district=';
+
+/** Frames below which a window is too short to carry a percentile. At the ~24 fps this device gives, 300 is
+ *  about twelve seconds — long enough to be past the load and into steady state. */
+const MIN_FRAMES = 300;
 
 /** The engine timings this collector averages, and whether each needs `timestamp-query` to mean anything. */
 const TIMED: readonly (readonly [keyof EngineStats, boolean])[] = [
@@ -113,6 +126,7 @@ export class FrameInventory {
         .map(([name, ms]) => [name, ms / frames] as const)
         .sort((a, b) => b[1] - a[1]),
       unavailable,
+      warnings: warningsFor(this.worldLast.cellsTotal, this.dts.length, context.district),
       windowMs,
       world: {
         cellsTotal: this.worldLast.cellsTotal,
@@ -127,7 +141,15 @@ export class FrameInventory {
   /** One frame. `spans` is the drain of the SAME frame — the loop drains at the top, per plan 091. */
   sample(dtMs: number, stats: EngineStats, spans: FrameSpanTotals): void {
     if (this.started === 0) {
+      // The FIRST delta is not a frame time. It is measured against whatever the loop did last — page load,
+      // the pak's first fetch, device init — so it enters dtMax and the percentiles as a frame that never
+      // happened. The 2026-08-07 capture reported dtMaxMs 41026.5 inside a windowMs of 1590.4, which is the
+      // arithmetic tell: a frame longer than the window it was sampled in. The world state is still taken
+      // from this call, since it is a reading rather than an interval.
       this.started = performance.now();
+      this.worldFrom(stats);
+
+      return;
     }
     this.dts.push(dtMs);
     this.bump('dt', dtMs);
@@ -137,16 +159,22 @@ export class FrameInventory {
     for (const [name, ms] of spans.byName) {
       this.spanTotals.set(name, (this.spanTotals.get(name) ?? 0) + ms);
     }
-    this.worldLast.cellsTotal = stats.cellsTotal;
-    this.worldLast.cellsVisible = stats.cellsVisible;
-    this.worldLast.draws = stats.drawsRecorded;
-    this.worldLast.residencyBytes = stats.residencyBytes;
-    this.worldLast.triangles = stats.trianglesRecorded;
+    this.worldFrom(stats);
   }
 
   private bump(key: string, value: number): void {
     this.sums.set(key, (this.sums.get(key) ?? 0) + value);
     this.maxima.set(key, Math.max(this.maxima.get(key) ?? 0, value));
+  }
+
+  /** The world figures are a READING of the latest frame, not an interval, so the skipped first sample still
+   *  contributes them — a report asked for immediately then still says `cellsTotal: 0` rather than nothing. */
+  private worldFrom(stats: EngineStats): void {
+    this.worldLast.cellsTotal = stats.cellsTotal;
+    this.worldLast.cellsVisible = stats.cellsVisible;
+    this.worldLast.draws = stats.drawsRecorded;
+    this.worldLast.residencyBytes = stats.residencyBytes;
+    this.worldLast.triangles = stats.trianglesRecorded;
   }
 }
 
@@ -157,4 +185,23 @@ function percentile(sorted: readonly number[], fraction: number): number {
   const index = Math.min(sorted.length - 1, Math.max(0, Math.round(fraction * (sorted.length - 1))));
 
   return sorted[index];
+}
+
+/** What makes a capture unusable as a before-table, in the order it bites. */
+function warningsFor(cellsTotal: number, frames: number, district: string): string[] {
+  const warnings: string[] = [];
+  if (cellsTotal === 0) {
+    warnings.push(
+      'VOID: no cells streamed (cellsTotal 0) — these numbers describe an empty world. Wait for the world ' +
+        'to arrive before taking a report.',
+    );
+  }
+  if (frames < MIN_FRAMES) {
+    warnings.push(`only ${frames} frames sampled — let it settle to at least ${MIN_FRAMES} before citing it`);
+  }
+  if (district === UNNAMED_DISTRICT) {
+    warnings.push('district not named — pass ?district=<name>, 098/1-01 pins one and the row has to say which');
+  }
+
+  return warnings;
 }

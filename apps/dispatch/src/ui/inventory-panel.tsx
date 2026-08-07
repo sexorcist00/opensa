@@ -67,6 +67,11 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
         {report.world.residencyMb.toFixed(0)} MB
       </div>
       {report.unavailable.length > 0 && <div style={styles.inventoryWarn}>GPU timings unavailable on this adapter</div>}
+      {report.warnings.map((warning) => (
+        <div key={warning} style={styles.inventoryWarn}>
+          {warning}
+        </div>
+      ))}
       <button onClick={copy} style={styles.inventoryButton} type="button">
         {copied || 'copy JSON'}
       </button>
