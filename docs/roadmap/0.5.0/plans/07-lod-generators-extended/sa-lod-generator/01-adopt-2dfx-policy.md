@@ -1,7 +1,7 @@
 # sa-lod-generator/01 — The verbatim and decimate paths adopt the 2dfx policy
 
 Part of [07 — LOD generators, extended](../readme.md). Depends on
-[lod-common/01](../lod-common/01-2dfx-keep-policy.md). **Gated on nothing** — this is a
+[lod-common/01](../../../../../../tools/lod-common/docs/plans/005-2dfx-keep-policy.md). **Gated on nothing** — this is a
 behaviour-preserving adoption; the real-SA capability that needs an ASI is
 [02](02-particle-emitters.md).
 

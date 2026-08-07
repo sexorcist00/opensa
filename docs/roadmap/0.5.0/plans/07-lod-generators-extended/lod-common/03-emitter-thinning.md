@@ -24,7 +24,7 @@ generator is the only place that can do it without new engine state.
      per smokestack instead of six). No payload edit, purely which entries survive, so it composes with the
      keep-policy and needs no FX authoring.
    - **parameter scaling** — if the particle payload exposes a rate field
-     ([rw-codec/01](../rw-codec/01-typed-2dfx-payload-codecs.md) decodes it), scale it down for the LOD copy.
+     ([rw-codec/01](../../../../../../tools/rw-codec/docs/plans/001-typed-2dfx-payload-codecs.md) decodes it), scale it down for the LOD copy.
      Only if thinning proves insufficient, and it is a payload edit with all the risk that carries.
 2. **Deterministic thinning, and the choice is not "the first N".** Which plume survives must be a pure
    function of the entry set (a stable hash of the entry's position, say) — same input, same LOD, always. A

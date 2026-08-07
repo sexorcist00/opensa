@@ -1,12 +1,12 @@
 # opensa-lod-generator/02 — Roadsigns and escalators ride baked cells
 
 Part of [07 — LOD generators, extended](../readme.md). Depends on
-[lod-common/02](../lod-common/02-2dfx-entry-transform.md) (the typed transform) and
+[lod-common/02](../../../../../../tools/lod-common/docs/plans/006-2dfx-entry-transform.md) (the typed transform) and
 [01](01-adopt-2dfx-policy.md) (the policy adoption). **Gated on nothing else — this is the visible win of the
 whole 2dfx line and it can ship today.**
 
 Was A2, which also owned the codec and the transform; those are now
-[rw-codec/01](../rw-codec/01-typed-2dfx-payload-codecs.md) and lod-common/02, leaving this plan with exactly
+[rw-codec/01](../../../../../../tools/rw-codec/docs/plans/001-typed-2dfx-payload-codecs.md) and lod-common/02, leaving this plan with exactly
 one job: widen the cell keep-set and prove the result is oriented correctly.
 
 ## The correction that unblocked this

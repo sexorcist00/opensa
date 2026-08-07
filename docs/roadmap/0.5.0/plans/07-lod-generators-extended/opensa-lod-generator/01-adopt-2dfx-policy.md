@@ -1,7 +1,7 @@
 # opensa-lod-generator/01 — The cell bake adopts the 2dfx policy
 
 Part of [07 — LOD generators, extended](../readme.md). Depends on
-[lod-common/01](../lod-common/01-2dfx-keep-policy.md). **Gated on nothing** — cell output is OpenSA-only
+[lod-common/01](../../../../../../tools/lod-common/docs/plans/005-2dfx-keep-policy.md). **Gated on nothing** — cell output is OpenSA-only
 (see below), so no ASI is in this path.
 
 The smallest possible step: delete this generator's private keep-set and read the shared one instead. Nothing

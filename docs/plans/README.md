@@ -288,9 +288,11 @@ row but its chain was superseded by 097). Newest first:
   [`map-placement/docs/plans/`](../../tools/map-placement/docs/plans/) (`001` architecture & API).
 - **sa-lod** — shared simplified-copy LOD pipeline (decimate → normals → encode DFF/TXD/COL), extracted from
   opensa-lod-generator, used by it + lod-procobj-generator.
-  [`sa-lod/docs/plans/`](../../tools/lod-common/docs/plans/) (`001` architecture & API).
-- **rw-codec** — shared pure RW chunk/DFF/DXT/geometry-struct codec, extracted from map-optimizer (plan 057,
-  step 2). Top-level `rw-codec/` now; moves under `tools/` in the migration. No plans doc.
+  [`sa-lod/docs/plans/`](../../tools/lod-common/docs/plans/) (`001` architecture & API · `005` the 2dfx
+  keep-policy + `006` `transform2dfxEntry` — both SHIPPED 2026-08-07, arrived from roadmap 0.5.0 plan 07).
+- **rw-codec** — shared pure RW chunk/DFF/DXT/geometry-struct/2dfx codec, extracted from map-optimizer
+  (plan 057, step 2). [`rw-codec/docs/plans/`](../../tools/rw-codec/docs/plans/) (`001` typed 2dfx payload
+  codecs — SHIPPED 2026-08-07, arrived from roadmap 0.5.0 plan 07).
 - **timecyc-builder** — timecyc precompute. No plans doc yet.
 - **cleo/scripts** — authored CLEO script sources on the SDK (runtime content, not a build tool — the
   `asi/perfect-map` root-category pattern). [`cleo/scripts/docs/plans/`](../../cleo/scripts/docs/plans/readme.md)
