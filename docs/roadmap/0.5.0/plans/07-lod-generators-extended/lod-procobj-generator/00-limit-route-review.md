@@ -13,41 +13,41 @@ changes if the decision goes the other way.
 2.2.1's vegetation set — a shipping mod, not a number we invented) and prices it: it fits in rows and misses
 by ~10 IPL slots. Read it before answering anything below.
 
-## Field run, 2026-08-07 — our ASI carries someone else's 70k-row map
+## Field run, 2026-08-07 — a clean A/B on someone else's 70k-row map
 
-The user ran the test this review asked for, on the real game, and it is the strongest evidence the chain has:
+The user ran the test this review asked for, on the real game. **OLA was loaded throughout**, which is
+required rather than incidental: [004's pivotal correction](../../../../../../asi/perfect-map/docs/plans/004-limit-patches.md)
+records that the int16 bug **cannot manifest at all** without a pool-raiser, because stock `CBuilding` is
+13 000 and a no-adjuster boot dies first at `0x5381A5`. So OLA is the floor the experiment stands on, and
+holding it constant while toggling only the int16 patch is what makes this a single-variable A/B rather than
+an observation:
 
 | Configuration | Result |
 | --- | --- |
-| ProperFixes 2.2.1 **with** the vegetation optional, `ProperFixes.asi` REMOVED | **ghost barriers reproduced** |
-| the same, with **`perfect-map.asi`** installed instead | **barriers gone, and the new-game 2dfx crash gone** |
+| ProperFixes 2.2.1 **with** the vegetation optional, OLA, `ProperFixes.asi` REMOVED | **ghost barriers reproduced** |
+| the same, OLA unchanged, **`perfect-map.asi`** in place of it | **barriers gone, and the new-game 2dfx crash gone** |
 
 That is **70 212 permanent text rows — 2.14× the int16 ceiling — on a third-party corpus with real
-positions**, held by our own patch. Everything our fix #1 had been proven on before was ours: the 33k synthetic
-repro dial and our own 30 566-row monolith. And the 2dfx half is 009's `FxSystem_c` guard confirmed on data
-nobody here authored (the reported symptom was the new-game crash, i.e. `0x004AA3A1`).
+positions**. Everything fix #1 had been proven on before was ours: the 33k synthetic repro dial and our own
+30 566-row monolith. And the 2dfx half is 009's `FxSystem_c` guard confirmed on data nobody here authored
+(the reported symptom was the new-game crash, i.e. `0x004AA3A1`).
 
-**What it decides.** Route 3 (our own ASI) is no longer a bet — for the int16 ceiling it is demonstrated at
-more than twice the limit on a foreign map. Route 1 (stay under the ceiling) is what we would be giving up,
-and route 2's appeal was never int16 anyway.
+**What it decides.**
 
-**What it does NOT decide, and must not be read as deciding:**
+- **Route 3 is no longer a bet** — for the int16 ceiling our patch is demonstrated at more than twice the
+  limit on a foreign map, with the pool-raiser held constant across both arms.
+- **OLA does not lift the int16 ceiling.** It was present in the failing arm too. This review's central
+  premise stands, and 004's source study of OLA already predicted it (`0x404B4A` is byte-stock in OLA).
+- **Neither route is sufficient alone, and that is the real answer to question 2 below.** The shipping
+  configuration for a dense map is **OLA (or FLA) for the pools and slots, PLUS our ASI for int16** — until
+  `004b` builds our own pool/array relocations. An external dependency is not a preference here; it is
+  currently load-bearing, and the stock-target promise has to say so.
+- **004's open item is closed by this run** — "our APPLY build still DEFERRED with OLA present". It applied
+  and it worked with OLA loaded, so the per-site diagnostic 004 asks for is unnecessary.
 
-- **Slots were never stressed.** ProperFixes occupies 6 IPL slots and the install stayed far below 40, so
-  `IplEntityIndexArrays` — the ceiling this whole review found binding — was not exercised at all. The
-  density target's actual blocker remains unmeasured.
-- **A pool-raising adjuster was almost certainly present, uncounted.**
-  [004's pivotal correction](../../../../../../asi/perfect-map/docs/plans/004-limit-patches.md) records that
-  the int16 bug **cannot manifest at all** without OLA or FLA raising `CBuilding` past its stock 13 000 — a
-  no-adjuster boot dies first at `0x5381A5` on pool exhaustion. 70 212 rows are far past 13 000, so for the
-  symptom to have appeared at all, something must have been raising that pool. The run was reported as
-  "perfect-map only". **Resolve this before quoting the run as a no-adjuster result** — one listing of the
-  game folder settles it (`ls` the exe folder and modloader for `.asi`/`.ini`). It does not weaken the
-  headline, which was never "no adjuster needed"; it decides whether the answer to question 2 below just got
-  easier or stayed where it was.
-- **If OLA WAS present, this run also closes 004's own open item** — "our APPLY build still DEFERRED with OLA
-  present" — because the fix demonstrably applied and worked. Check that before re-running the per-site
-  diagnostic 004 asks for.
+**What it does NOT decide.** **Slots were never stressed.** ProperFixes occupies 6 IPL slots and the install
+stayed far below 40, so `IplEntityIndexArrays` — the ceiling this whole review found binding — was not
+exercised at all. The density target's actual blocker remains unmeasured, and OLA is what would lift it.
 
 ## The question
 
@@ -157,10 +157,9 @@ Read together with the measurement, that is close to an answer:
       **Done 2026-08-07, and it answers decision 5 in our favour** — the bug reproduces on its data without
       `ProperFixes.asi`, and `perfect-map.asi` fixes it (plus the 2dfx new-game crash). See the field-run
       section above, including the one thing that still has to be checked about the configuration.
-- [ ] **List the game folder and name every `.asi`/`.ini` that was loaded during that run.** 004 says the
-      symptom cannot exist without a pool-raiser, so something was raising `CBuilding` — find out what before
-      the run is quoted as "no adjuster needed", and check whether it also closes 004's deferred-with-OLA
-      item.
+- [x] **Name what was loaded during that run. Answered: OLA, alongside `perfect-map.asi`** — which is the
+      only configuration in which the bug is reproducible at all, and which makes the run a single-variable
+      A/B. It also **closes 004's deferred-with-OLA open item**: #1 applied and worked with OLA present.
 - [ ] Verify the FLA claim on a real install: does `[IPL] Entity index array` actually lift the 40-slot
       ceiling, and does it coexist with whatever else the target install runs? Extend the repro dial with a
       SLOT dial if it only counts rows.
@@ -186,8 +185,8 @@ which route lifts it, and what that route costs the user's install.
 - **2026-08-07, reference measured:** ProperFixes 2.2.1 places 57 583 rows in 6 slots, 46 models, every row
   `lod = -1`, and requires OLA. 8.3× our row cost per object.
 - **2026-08-07, FIELD:** ProperFixes 2.2.1 + vegetation optional (70 212 map-wide rows, 2.14× the int16
-  ceiling) on the real game. `ProperFixes.asi` removed → ghost barriers reproduced. `perfect-map.asi`
-  installed → **barriers gone AND the new-game 2dfx crash gone.** Reported as perfect-map only; a pool-raiser
-  must nonetheless have been present (see above). Slots untouched by this run (6 in use).
+  ceiling) on the real game, **OLA loaded in both arms**. `ProperFixes.asi` removed → ghost barriers
+  reproduced. `perfect-map.asi` in its place → **barriers gone AND the new-game 2dfx crash gone.** One
+  variable, so: OLA does not lift int16; our patch does, on a foreign map. Slots untouched (6 in use).
 - _(FLA slot-lift verification — pending)_
 - _(folding hygiene win — pending)_

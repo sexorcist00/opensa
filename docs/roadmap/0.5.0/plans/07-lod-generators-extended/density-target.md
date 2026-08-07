@@ -90,10 +90,12 @@ Its 57 583 rows land on top of stock's 12 629 permanent rows, i.e. **70 212 map-
 ceiling** — and its 9 597-row files are **2.4× the per-area `LoadScene` budget**. Both are ceilings our own
 [ghost-barriers record](../../../../open-issues/fixed/ghost-barriers.md) says are structural.
 
-**Field-tested 2026-08-07, and the answer is its own `.asi`.** Remove `ProperFixes.asi` and the ghost
-barriers appear on its data — so the mod really is over the ceiling, and OLA is not what saves it. Install
-**`perfect-map.asi`** instead and the barriers go, along with the new-game 2dfx crash. Our own patch carries
-a foreign 70k-row map; everything it had been proven on before was ours. Details and the caveats in
+**Field-tested 2026-08-07, and the answer is its own `.asi`.** With OLA loaded throughout — it has to be,
+since the int16 bug cannot manifest without a pool-raiser — removing `ProperFixes.asi` makes the ghost
+barriers appear on its data, and putting **`perfect-map.asi`** in its place removes them again, along with the
+new-game 2dfx crash. One variable across the two arms, so: **OLA does not lift the int16 ceiling**, and our
+own patch carries a foreign 70k-row map where everything it had been proven on before was ours. The shipping
+configuration is therefore BOTH — an adjuster for the pools and slots, our ASI for int16. Details in
 [00](lod-procobj-generator/00-limit-route-review.md).
 
 The run leaves one number in this file open, and it is the important one: **their 9 597-row IPL files ran
