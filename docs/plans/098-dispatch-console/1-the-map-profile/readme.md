@@ -65,18 +65,24 @@ Every before/after number in this chain, and the phone row in
 district and an after-table from another is not an A/B, and the repo has already paid for that lesson
 (`CLAUDE.md`: an A/B must be self-describing).
 
-So 01 picks the district, writes down why, and every later step names it. It must be somewhere an operator
-would actually look at — dense, mixed heights, some water — not an empty stretch that flatters every number.
+**Pinned 2026-08-06: the centre of Los Santos** (`?district=los-santos-centre`, opening at `1480,-1720`).
+Dense, mixed heights, water within the view, and the part of the map an operator actually watches — not an
+empty stretch that flatters every number. Every later step names it; a number taken anywhere else is not
+part of this chain's before/after.
 
 **Budget:** none — this step spends nothing and changes nothing.
 **Owes:** the three tables and the pinned district, recorded in `docs/benchmarks/` **before** they are
 analysed (standing rule), naming the pak build that was read.
 
-**On which machine:** this chain was written as *desktop baseline first, phone second*, and the development
-machine is an Android phone ([development/termux.md](../../../development/termux.md)). That ordering
-therefore does not hold as written, and 01 must state which way it went — the phone as the baseline (honest,
-and the device the product targets, at the cost of comparability with the repo's desktop rows) or a borrowed
-desktop for the baseline only. Do not quietly produce one column and leave the reader to guess which.
+**On which machine — settled 2026-08-06: the phone is the baseline.** This chain was written as *desktop
+baseline first, phone second*, and the development machine is an Android phone
+([development/termux.md](../../../development/termux.md)). So every number in 098 is taken on the device the
+product targets, and none of them is comparable to the repo's existing desktop rows — which the mobile
+benchmark schema already declares as a rule ([097/1-02](../../097-platform-reach/1-device-truth/readme.md)).
+
+**The instrument exists:** `?inventory=1` collects the frame half and hands it over through a copy button,
+because there is no headless capture on this machine. Invocation and what it cannot measure:
+[development/query-parameters.md](../../../development/query-parameters.md).
 
 > **This step cannot run in a container without game data.** A field run reads `build/<game>/opensa` and
 > nothing else ([restrictions/architecture.md](../../../restrictions/architecture.md)), so 01 runs on a

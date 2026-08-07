@@ -11,7 +11,9 @@ import type { DispatchActions } from '../ops/use-operations';
 import type { BootOptions, DispatchHandle, DispatchReadout } from '../world/boot';
 
 import { bootDispatch } from '../world/boot';
+import { dispatchParams } from '../world/boot';
 import { bootPlanMode } from '../world/plan-mode';
+import { InventoryPanel } from './inventory-panel';
 import { styles } from './styles';
 
 /** Module scope, so StrictMode's dev double-mount boots the engine on the canvas exactly once. */
@@ -35,6 +37,8 @@ export function MapCanvas({
   const overlayRef = useRef<HTMLCanvasElement>(null);
   /** Why the 3D map is absent, when it is — shown as a banner over a WORKING plan-mode board. */
   const [degraded, setDegraded] = useState('');
+  /** Held for the inventory panel only (098/1-01) — it reads the collector, it does not drive the loop. */
+  const handleRef = useRef<DispatchHandle | null>(null);
 
   // Callbacks reach the loop through a ref so the boot effect never re-runs: re-booting the engine on a
   // re-render would leak a device and a streaming worker per render.
@@ -76,6 +80,7 @@ export function MapCanvas({
     });
     void booted.then((handle) => {
       if (handle) {
+        handleRef.current = handle;
         onReady(handle);
       }
     });
@@ -87,6 +92,9 @@ export function MapCanvas({
       <canvas ref={overlayRef} style={{ ...styles.fill, pointerEvents: 'none', zIndex: 2 }} />
       {children}
       {degraded && <DegradedBanner message={degraded} />}
+      {dispatchParams().get('inventory') === '1' && (
+        <InventoryPanel read={() => handleRef.current?.inventory() ?? null} />
+      )}
     </div>
   );
 }
