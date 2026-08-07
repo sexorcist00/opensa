@@ -56,13 +56,52 @@ roadsign's text into the cell containing its world position, deduped by model id
 and is the actual question behind "distant street-name signs" — is whether that text is drawn when only the
 LOD level of that area is resident.
 
+## Finding 3 — the field check, and the number that settles the gap
+
+Run 2026-08-07 against `build/original/opensa` (no rebuild — plan 07's working rule), headless through the
+real load path (`?loader=http-dir`), at the desert freeway signs by the LV satellite dishes.
+
+**The sign text is in the pak.** `pak/report.json` reports **`roadsigns: 481`** welded map-wide — plan 076's
+pre-pass ran and its output ships. The plates render: `cxrf_desertsig` is drawn from 8 m and from 36 m, and
+the cell carries them as ordinary welded placements (`dump-cell -456 2014`).
+
+**And the engine's own radii say where that text stops** (`packages/engine/src/stream/streaming.ts`):
+
+| Constant | Value |
+| --- | --- |
+| `HD_RADIUS` | **380 u** |
+| `LOD_RADIUS` | 1000 u |
+| `HYSTERESIS` | 60 u |
+
+So a cell drops to its LOD bundle at ~380–440 u and keeps drawing until 1000 u. Roadsign text welds into the
+**HD** bundle only (finding 2), which means **between ~440 u and 1000 u the area is drawn with no sign text at
+all** — a 560-unit band where a lit board reads blank or vanishes with its plate. That is the gap this plan
+was named for, expressed as a number instead of an impression, and it lands in `cell-weld`.
+
+**What the run did NOT establish, honestly:** whether a *plate* survives into the baked cell LOD (blank board)
+or the sign disappears entirely. Both runs stayed INSIDE the HD radius — 242 u and 197 u from the sign — so
+neither crossed the boundary. Two site facts cost those runs: the sign sits in a road cut between embankments,
+so running away loses line of sight to terrain long before 380 u, and the road descends to the Sherman dam.
+**A conclusive shot needs a sign with an open sightline and a run past 440 u** — a Las Venturas desert board
+(`ne_bit_07` ≈ (222, 2742), `ne_bit_08` ≈ (416, 2710)) across flat ground, not this cut.
+
+**Two harness traps, both of which cost a run:**
+
+1. **Streaming follows the PLAYER, not the photo camera.** The first probe flew the K+M camera 200 u back and
+   read "everything still drawn" — the player had not moved, so nothing had unloaded. The eye can retreat
+   without the world noticing.
+2. **`?spawn` does not wait for collision.** Spawning at a point whose ground has not streamed drops the
+   player to z ≈ −3800 (`grounded 0` in the HUD). Two of the four spawn points tried fell; land on a road
+   surface whose z you have read out of the placements, not a guessed one.
+
 ## The decision this plan now needs
 
 1. **Re-aim at the consumer** (`packages/cell-weld`). Weld roadsign glyph quads into the LOD level as well as
    the HD one, deduped by world position so a resident pair does not double the text. This is where the
-   visible win actually lives, and finding 1 is already handled correctly there. **Needs first**: a field
-   check on the existing build — stand at a known sign, back off until the area is LOD-only, and see whether
-   the text survives. If it does, there is no defect and this whole line closes.
+   visible win actually lives, and finding 1 is already handled correctly there. **Finding 3 says the gap is
+   real** — a 560-unit band, 440 → 1000 u, with no sign text — so this is a defect with a measured size, not a
+   suspicion. What is still open is whether a blank plate stands in that band or nothing does, which changes
+   how bad it looks but not whether the text is missing.
 2. **Or delete the dead section.** If cell 2dfx is read by nothing, the honest move is to stop writing it and
    record that the policy's `cell` column is a no-op — which would retire this plan and shrink every cell DFF
    slightly. Cheap, and it removes a section a future reader would otherwise trust.
