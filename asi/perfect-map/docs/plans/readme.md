@@ -2,7 +2,7 @@
 
 Build a tool that generates **our own `.asi` plugin** for real GTA:SA 1.0 — a Windows DLL that patches the engine's hard limits (chiefly the `IplDef` int16 ceiling behind the ghost-barriers bug) so perfect-map builds can add **any** number of objects without the current ≤30k text-row work-around.
 
-This is the "standing goal" recorded across the ghost-barriers post-mortem and memory: _pin the exact patches that remove the ceiling and ship a 100% fix._ [`ProperFixes.asi`](../../../../NO_COMMIT/mods-in-progress/ProperFixes%202.2.1/Proper%20Fixes/ProperFixes.asi) proves the bugs are code-patchable but is obfuscated and license-locked — we learn from it behaviourally and write our OWN patches from the decompiled engine ground truth.
+This is the "standing goal" recorded across the ghost-barriers post-mortem and memory: _pin the exact patches that remove the ceiling and ship a 100% fix._ [`ProperFixes.asi`](../../../../NO_COMMIT/ProperFixes%202.2.1/Proper%20Fixes/ProperFixes.asi) proves the bugs are code-patchable but is obfuscated and license-locked — we learn from it behaviourally and write our OWN patches from the decompiled engine ground truth.
 
 ## Why this, why now
 
