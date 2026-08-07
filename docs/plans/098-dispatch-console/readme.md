@@ -186,7 +186,8 @@ Recorded so they are not re-litigated, not because they are bad:
 | --- | --- |
 | the chain itself | **OPENED 2026-08-06** — declared, ordered, and the decisions above taken with the user |
 | the requirements round | **CLOSED 2026-08-06** — the product, the budgets, the display modes, the camera and the time axis settled in one questioning pass; chains 6–8 exist because of it |
-| 1/01 … 8/04 | not started. Execution order confirmed with the user: **the engine first** — the map profile and the phone, then everything above them |
+| [1/01 The inventory](1-the-map-profile/readme.md) | **IN PROGRESS** — the instrument is merged (`?inventory=1`, commit `112d70b`) and the before-table is being collected ON THE DEVICE. Not closed until its passes × ms, entry kinds × bytes and modules × kB are recorded here and in [`docs/benchmarks/`](../../benchmarks/index.md), together with the pinned district they were read on and the pak build that served them |
+| 1/02 … 8/04 | not started. Execution order confirmed with the user: **the engine first** — the map profile and the phone, then everything above them |
 
 **Owed, and not yet paid:** every number quoted above is somebody else's measurement. This chain has not run
 anything yet, and its headline claim — a real district, on a real phone, in an operator's hands — stays

@@ -125,6 +125,27 @@ Never edit generated code manually.
 
 ## Standing Workflow Rules
 
+- **SEVERAL AI AGENTS WORK ON THIS PROJECT, AND THEY SWAP. The repo is the only shared memory they have —
+  so START EVERY SESSION BY READING THE CHAIN BELOW, IN THIS ORDER, BEFORE PLANNING OR WRITING ANYTHING.**
+  An agent that skips it does not merely lack context: it re-decides a settled question, re-lands work that
+  is already in, or contradicts a decision taken with the user, and none of that is visible to the user until
+  it has cost a session.
+
+  1. `docs/project-goals.md` — what the project is FOR (directive, not aspirational)
+  2. `docs/restrictions/README.md` — what a design MAY NOT do
+  3. `docs/plans/099-pcad-dispatch/readme.md` — **THE FINAL PLAN**: the product is a web dispatch application
+     for a SA-MP server, and this repository owns exactly one component of it — **the 3D map**
+  4. `docs/plans/098-dispatch-console/readme.md` — **THE 3D MAP ENGINE PLAN**, subordinate to 099: 8 chains,
+     32 steps, with the decisions table, the evidence table, its "steps at a glance" index, and — at the
+     bottom — the **`## Status` table, which is the handoff point between agents**
+  5. `docs/plans/README.md` — every other plan, newest first, each marked IN PROGRESS or not
+  6. `roadmap.md` — the long checklist of what is done and what is left
+
+  **The `## Status` table of the active plan is the state of the project, and keeping it true is part of
+  doing the work, not paperwork after it.** Move a step to IN PROGRESS when it starts and to DONE with its
+  measured numbers when it ends, in the SAME change — a step whose table still says "not started" while its
+  code is merged is how the next agent concludes the work was never done and does it twice. If the reading
+  above and the code disagree, the CODE is the truth and the doc is the bug: fix the doc in that session.
 - **`main` IS THE ONLY BRANCH THAT SURVIVES. Work lands there, and the branch that carried it is DELETED —
   local and remote — in the same session.** A finished branch left on the remote is not a backup, it is a
   decoy: five of them accumulated once, and answering "is anything lost?" cost a full session of archaeology.
