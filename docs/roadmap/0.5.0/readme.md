@@ -60,14 +60,25 @@ Rewritten against a full recon of the 7-mod target corpus and moved to
 [`docs/plans/097-cleo-basic/`](../../plans/097-cleo-basic/readme.md); the chain that lived here
 (`plans/08-cleo-basic/`, the unstarted 083 rethink) is superseded and deleted.
 
-## LOD generators, extended (moved from 0.4.0, 2026-07-19)
+## LOD generators, extended (moved from 0.4.0, 2026-07-19; restructured 2026-08-07)
 
-Two independent generator upgrades for the REAL-GAME pipeline, each unlocked by an ASI engine fix from
-the [`asi/perfect-map`](../../../asi/perfect-map/docs/plans/readme.md) chain — untouched by the own-engine
-flip (they run in pmb/lod-generator land). **Part A** (needs asi Phase 2, the 2dfx emitter-leak fix):
-LODs carry the full 2dfx richness — coronas everywhere, roadsigns & escalators into baked cells,
-rate-budgeted particle emitters at range. **Part B** (needs asi Phase 1, the int16 limit lift): procobj
-scatter gets configurable, biome-aware density (forest bushes, mountain rocks, desert cacti) with the
-int16-era caps raised for the asi target. Both keep the stock target byte-identical to today.
+Two generator upgrades, **reorganised into one folder per TOOL** — the old A1–A3 / B0–B4 split cut across
+tool boundaries, so no plan mapped to a shippable diff. **2dfx on LODs** (`rw-codec` → `lod-common` → the two
+LOD generators): coronas correct and consistent everywhere, roadsigns & escalators into baked cells,
+rate-budgeted particle emitters at range. **Procobj density** (`lod-procobj-generator`): configurable,
+biome-aware scatter — forest bushes, mountain rocks, desert cacti.
+
+**The "both are ASI-gated" framing was wrong and has been corrected.** Baked-cell work is not gated at all —
+`opensa-lod-generator` output is OpenSA-only ([restrictions/sa-target.md](../../restrictions/sa-target.md)),
+so real SA never loads it and no plugin is involved; the roadsign/escalator carry is shippable today. The
+particle half is not waiting either: [`asi/perfect-map`](../../../asi/perfect-map/docs/plans/readme.md)
+Phase 2 shipped (009's patch, 010's pipeline flip), and only its far-view overdraw budget was deferred. On
+the procobj side the binding ceiling is **IPL slots** (measured 2026-08-07: 20 146/32 767 rows but
+**38/40 slots**), which our ASI does not lift — not the int16 row ceiling it does.
+
+How much "more" means is now a number rather than a feeling:
+[plans/07-lod-generators-extended/density-target.md](plans/07-lod-generators-extended/density-target.md)
+costs a shipping mod's density (ProperFixes 2.2.1, **57 583 placed objects**, 2.35× ours) against our own
+build — and finds our layout already **8.3× more row-efficient per object**.
 
 Full chain: [plans/07-lod-generators-extended/readme.md](plans/07-lod-generators-extended/readme.md).

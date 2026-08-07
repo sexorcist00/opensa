@@ -15,19 +15,49 @@ Each folder below is one tool's chain; the numbers inside a folder are its order
 **How much is "more" is no longer a feeling:** [density-target.md](density-target.md) costs a real shipping
 mod's density (ProperFixes 2.2.1, **57 583 placed objects**) against our own build in rows and slots.
 
-## What the measurement changed
+## What changed in this restructure
 
-Two findings from costing the density target against today's build. Each one moved a plan's premise, so they
-are stated here rather than buried:
+Four findings from re-reading the plan against the code, the restrictions and the ASI chain. Each one moved
+a plan's premise, so they are stated here rather than buried:
 
-1. **The binding procobj ceiling is SLOTS, not the int16 row ceiling.** Measured 2026-08-07 on
+1. **Baked-cell work is NOT ASI-gated.** The old readme said both parts are "worthless (crash the game) until
+   their asi lands". That is false for everything landing on baked cells:
+   [`restrictions/sa-target.md`](../../../../restrictions/sa-target.md) records that **opensa-lod-generator
+   output is for OpenSA only** — real SA cannot load an uncapped per-cell LOD, so no ASI is involved. The
+   roadsign/escalator carry — the most visible item in the whole plan — is **shippable today**.
+2. **The binding procobj ceiling is SLOTS, not the int16 row ceiling.** Measured 2026-08-07 on
    `build/original/opensa`: **20 146 / 32 767 text rows** but **38 / 40 IPL slots** (build guard 39) — ONE
    free slot. Reaching the density target costs ~16 312 text rows (fits, 29 504 against the 30 000 guard)
    and **>= 19 areas against the 9 we ship** (does not fit, by ~10 slots). The int16 lift our ASI uniquely
    provides is **not** on the critical path; the per-area `LoadScene` budget and the slot array are.
-2. **Folding areas into fewer files cannot buy the target.** [00](lod-procobj-generator/00-limit-route-review.md)
+3. **Folding areas into fewer files cannot buy the target.** [00](lod-procobj-generator/00-limit-route-review.md)
    left this open as the cheap escape. It is now closed with a number: area count is set by the ~4 000-row
    per-area `LoadScene` budget, not by how files are grouped, so fewer files means areas that breach it.
+4. **The particle chain's "Task 4, not built" gate is stale — it shipped.**
+   [03-asi Phase 2](../../../../../asi/perfect-map/docs/plans/readme.md) 009 landed the emitter-lifecycle
+   patch (confirmed in-game) and 010 flipped the pipeline: `sa-lod-generator` **keeps particles on the
+   verbatim path by default today**, with `--strip-particles` as the stock-target opt-out. What 010 deferred
+   is the far-view overdraw budget. So nothing in this plan is waiting on an unbuilt ASI fix, and the
+   remaining particle work is the decimate path plus a measurement nobody has taken.
+
+## Priorities
+
+Ordered by *what unblocks the most for the least*, not by plan number.
+
+| P | Plan | Why here |
+| --- | --- | --- |
+| **P0** | [lod-procobj-generator/00 — limit route review](lod-procobj-generator/00-limit-route-review.md) | A decision, no code. Nothing in the density chain can SHIP until it says which ceiling we lift and who lifts it. Now has a target to cost and a real 57.6k-row corpus to test against. |
+| **P1** | [lod-procobj-generator/01 — species floor](lod-procobj-generator/01-species-representation-floor.md) | A real fairness defect at TODAY's density; costs zero rows and zero slots, so it is gated on nothing. |
+| **P1** | [rw-codec/01 — typed 2dfx codecs](rw-codec/01-typed-2dfx-payload-codecs.md) | Pure codec, no behaviour change, unblocks every transform below it. |
+| **P1** | [lod-common/01 — keep policy](lod-common/01-2dfx-keep-policy.md) → [02 — entry transform](lod-common/02-2dfx-entry-transform.md) | The shared foundation; stock output stays byte-identical. |
+| **P1** | [opensa-lod-generator/01 — adopt](opensa-lod-generator/01-adopt-2dfx-policy.md) → [02 — rotation-bearing 2dfx on cells](opensa-lod-generator/02-rotation-bearing-2dfx-on-cells.md) | **The visible win, and it is ungated** (finding 1). Distant street-name signs and escalators on baked cells. |
+| **P1** | [sa-lod-generator/01 — adopt](sa-lod-generator/01-adopt-2dfx-policy.md) | Behaviour-preserving adoption; the regression fixture that proves the refactor. |
+| **P2** | [lod-procobj-generator/02 — density model](lod-procobj-generator/02-density-model.md) → [03 — biome density](lod-procobj-generator/03-biome-zone-density.md) | Buildable and testable now at today's totals; SHIPPING raised density waits on P0's route. |
+| **P2** | [lod-procobj-generator/04 — slot economy & budgets](lod-procobj-generator/04-slot-economy-and-budgets.md) | Reshaped by P0. Where perf replaces int16 as the limiter. |
+| **P3** | [lod-common/03 — emitter thinning](lod-common/03-emitter-thinning.md) → [sa-lod-generator/02 — particle emitters](sa-lod-generator/02-particle-emitters.md) | Not blocked (finding 4) — last because two thirds of it already shipped and the rest starts with a measurement of what is already running, not with code. |
+
+**Suggested first slice:** P0 (a review, cheap) in parallel with the `rw-codec/01 → lod-common/01+02 →
+opensa-lod-generator/01+02` line, which ships a visible improvement without touching a single limit.
 
 ## Tool map
 

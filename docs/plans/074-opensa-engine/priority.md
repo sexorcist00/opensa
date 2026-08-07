@@ -146,8 +146,9 @@ anchors ONLY, so the pak holds no particle data at all. Work = converter (type-1
 params — the text parser exists at `renderware/src/parsers/text/fxp.parser.ts` — into the `.oscell` light
 table) + engine (instanced billboard pass, shares the corona pass; emitter simulation). Textured corona
 sprites (`particle.txd` coronastar/coronamoon — the moon disc is still procedural) ride the same path.
-NOT to be confused with `docs/ideas/0.4.0/.../a3-2dfx-particle-emitters-lods.md` (emitters on LODs for the
-REAL SA game via the ASI — a different target).
+NOT to be confused with
+`docs/roadmap/0.5.0/plans/07-lod-generators-extended/sa-lod-generator/02-particle-emitters.md` (emitters on
+LODs for the REAL SA game via the ASI — a different target).
 **Done:** ✅ chimneys smoke and fountains run in `?engine=opensa`; ledger 06 row 13 closed → 14/14.
 
 **B7. Destruction objects, then animation objects** — [08](08-dynamics.md) · size M each
