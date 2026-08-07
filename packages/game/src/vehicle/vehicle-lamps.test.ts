@@ -39,12 +39,23 @@ function rolledCar(): EnterableVehicle {
 
 describe('vehicle-lamps', () => {
   describe('negative cases', () => {
-    it('a car with no lamp dummies falls back to its half-extents', () => {
-      const anchors = lampAnchorsOf(car(0, false));
+    it('a car with no lamp dummies has NO lamps — nothing is invented for it', () => {
+      // The half-extents fallback this replaces gave headlights to every trailer, tow box and aeroplane
+      // in the game (15 stock models carry no head dummy at all). SA lights what the model authors.
+      const vehicle = car(0, false);
 
-      // Fractions of [hx, hy, hz] = [1, 2, 0.7]; the rear anchor is BEHIND the car (−y).
-      expect(anchors.front[1]).toBeGreaterThan(0);
-      expect(anchors.rear[1]).toBeLessThan(0);
+      expect(lampAnchorsOf(vehicle)).toEqual({ front: null, rear: null });
+      expect(lampsOf(vehicle)).toEqual([]);
+    });
+
+    it('a dummy AT the model origin means "no lamp here", not "a lamp in the middle of the car"', () => {
+      // SA's own test — CVehicle::DoHeadLightBeam returns early on IsZero. A missing dummy reads back as
+      // (0,0,0), and taking that literally put both tail lamps inside the bodywork (the modded hotring).
+      const vehicle = car();
+      (vehicle.handle as FakeVehicleHandle).lampAnchors.set('tail', [0, 0, 0]);
+
+      expect(lampAnchorsOf(vehicle).rear).toBeNull();
+      expect(lampsOf(vehicle).map((lamp) => lamp.kind)).toEqual(['head', 'head']);
     });
 
     it('lamps stay dark unless the car is being DRIVEN at night', () => {

@@ -76,22 +76,31 @@ export function withLightSmashed(mask: number, light: number, smashed: boolean):
   return smashed ? mask | (1 << light) : mask & ~(1 << light);
 }
 
-/** Fallback lamp anchors as fractions of the half-extents — for models with no head/tail dummies. */
-const FALLBACK_X = 0.7;
-const FALLBACK_Y = 0.9;
-const FALLBACK_Z = -0.3;
+/**
+ * A dummy AT the model origin is SA's way of saying the model has no lamp of that kind: a missing dummy
+ * simply reads back as (0,0,0) from `CVehicleModelInfo::m_avDummyPos`, and `CVehicle::DoHeadLightBeam`
+ * (0x6E0E20) tests exactly that — `if (pointModelSpace.IsZero()) return;`. The bound is float noise
+ * against a real anchor (the closest in the stock fleet is 2.4 m from the origin), not a fitted threshold.
+ */
+const ORIGIN_EPSILON = 1e-6;
 
 /**
- * A car's head/tail lamp anchors in VEHICLE space. SA authors one dummy per end; models without them fall
- * back to a fraction of the half-extents. Both renderers mirror each anchor to ±X for the left/right lamp.
+ * A car's head/tail lamp anchors in VEHICLE space, or null for an end this model has no lamp at.
+ * SA authors one dummy per end and mirrors it to ±X for the left/right lamp.
+ *
+ * **There is no fallback, deliberately** (plan 098/11). Inventing an anchor from the half-extents gave
+ * headlights to every trailer, tow box and aeroplane in the game — 15 stock models that carry no head
+ * dummy at all — and put both tail lamps INSIDE the body of any car whose dummy sits at the origin. SA
+ * has no such fallback: what the model does not author, the game does not light.
  */
-export function lampAnchorsOf(vehicle: EnterableVehicle): { front: Vec3; rear: Vec3 } {
-  const [hx, hy, hz] = vehicle.halfExtents;
+export function lampAnchorsOf(vehicle: EnterableVehicle): { front: null | Vec3; rear: null | Vec3 } {
+  const anchor = (kind: 'head' | 'tail'): null | Vec3 => {
+    const dummy = vehicle.handle.lampAnchor(kind);
 
-  return {
-    front: vehicle.handle.lampAnchor('head') ?? [hx * FALLBACK_X, hy * FALLBACK_Y, hz * FALLBACK_Z],
-    rear: vehicle.handle.lampAnchor('tail') ?? [hx * FALLBACK_X, -hy * FALLBACK_Y, hz * FALLBACK_Z],
+    return dummy && dummy.some((value) => Math.abs(value) > ORIGIN_EPSILON) ? dummy : null;
   };
+
+  return { front: anchor('head'), rear: anchor('tail') };
 }
 
 /**
@@ -114,6 +123,9 @@ export function lampsOf(vehicle: EnterableVehicle): VehicleLamp[] {
     [head, 'head', LIGHT_FRONT_RIGHT, LIGHT_FRONT_LEFT],
     [tail, 'tail', LIGHT_REAR_RIGHT, LIGHT_REAR_LEFT],
   ] as const) {
+    if (!anchor) {
+      continue; // this model has no lamp at this end — see lampAnchorsOf
+    }
     for (const mirror of [1, -1]) {
       lamps.push({
         facing: rotate([0, kind === 'head' ? 1 : -1, 0], quat),
