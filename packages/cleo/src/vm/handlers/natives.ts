@@ -5,6 +5,13 @@
  *
  * WRITE_MEMORY's value needs the raw FLOAT as well as the int bits: vandoor writes door ratios and
  * `-0.15` as float immediates, and `readInt` would truncate them.
+ *
+ * `0AA5`-`0AA8` hand the atlas its args in **C argument order, i.e. REVERSED from the script**.
+ * That is CLEO's own marshalling, not a convenience: it collects the operands in stream order and
+ * then pushes them upward (`lea ecx, arguments / push [ecx] / add ecx, 4`,
+ * `CCustomOpcodeSystem.cpp`), so on a downward-growing stack the LAST listed operand lands at
+ * `[esp]` and becomes the function's FIRST argument. The atlas rows are written against the real SA
+ * signatures, so the reversal belongs here, once, rather than in every row.
  */
 import type { Instruction } from '../../core/decode';
 import type { NativeArg, NativeValue } from '../native-atlas';
@@ -67,7 +74,7 @@ export function registerNatives(registry: HandlerRegistry): void {
       const struct = method ? ctx.thread.readInt(instruction.operands[1]) : null;
       const numParams = ctx.thread.readInt(instruction.operands[method ? 2 : 1]);
       const tail = instruction.operands.slice(head);
-      const args = nativeArgs(ctx, tail.slice(0, numParams));
+      const args = nativeArgs(ctx, tail.slice(0, numParams)).reverse();
       const result = ctx.host.memory.call(address, struct, args);
       const outputs = tail.slice(numParams);
       if (returns && outputs.length > 0) {

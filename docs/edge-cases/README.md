@@ -23,3 +23,4 @@ the one-line rule and its blast radius live there.
 | [physics-runtime.md](./physics-runtime.md)       | Rapier vehicle-controller boundaries (cosmetic wheel rotation…) + where a vehicle body may exist at all (no parked car between 150 m and 250 m) |
 | [camera-rig.md](./camera-rig.md)                 | Follow-camera (080 director) limits — the mid-corner muted chase  |
 | [route-graph.md](./route-graph.md)               | Drivable-route limits (096) — a city grid yields no route at all  |
+| [cleo-vm.md](./cleo-vm.md)                       | CLEO VM gaps vs real CLEO — native-call args are in C order, not script order |

@@ -134,7 +134,9 @@ export class AtlasMemory {
     private readonly onOp?: (line: string) => void,
   ) {}
 
-  /** `0AA5-0AA8`: a call through the functions table. Returns the output value (null = unserved). */
+  /** `0AA5-0AA8`: a call through the functions table. Returns the output value (null = unserved).
+   *  `args` arrive in the SA function's own C argument order — `handlers/natives.ts` has already
+   *  undone CLEO's reversed push order, so a row indexes them exactly as its signature reads. */
   call(address: number, struct: null | number, args: readonly NativeArg[]): NativeValue {
     switch (address) {
       case SA.GET_FRAME_FROM_NAME:
@@ -227,7 +229,9 @@ export class AtlasMemory {
   }
 
   private getFrameFromName(args: readonly NativeArg[]): NativeValue {
-    // Argument order in compiled scripts varies (Sanny lists name first); identify by shape.
+    // C order is (clump, name), but this row identifies BY SHAPE deliberately: a string arg and a
+    // token arg are unmistakable, and tolerating either order costs nothing while a mod that lists
+    // them the other way stays servable instead of silently resolving a null frame.
     const name = args.find((arg) => arg.kind === 'string')?.value;
     const intOf = (arg: NativeArg): null | number =>
       arg.kind === 'raw' ? arg.int : arg.kind === 'string' ? null : arg.value;

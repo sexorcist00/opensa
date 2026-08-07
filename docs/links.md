@@ -9,6 +9,9 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
   catalogue's provenance lines cite it); the reference for engine internals (pools, `CIplStore`,
   streaming) behind our int16/pool guards and the `asi/` plugin work.
 - <https://github.com/JuniorDjjr/CLEOPlus> — CLEO extension reference (opcode surface for plan 097).
+- <https://github.com/cleolibrary/CLEO4> — CLEO 4's own source. `source/CCustomOpcodeSystem.cpp` is the
+  ground truth for how `0AA5`-`0AA8` marshal their parameters (the push loop that makes the LAST listed
+  parameter the FIRST C argument — see `docs/edge-cases/cleo-vm.md`).
 - <https://github.com/sannybuilder/library> — the Sanny Builder opcode DB (`sa/sa.json`, 3 739 commands
   with arities) — vendored + pinned by plan 097/01; also the recon disassembler's source of truth.
 - <https://github.com/JuniorDjjr/SA-MixSets> — per-feature SA tweaks reference.
