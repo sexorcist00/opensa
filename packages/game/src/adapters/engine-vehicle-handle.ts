@@ -62,6 +62,19 @@ export class EngineVehicleHandle implements VehicleHandle {
   /** CLEO's script-absolute part poses (plan 097/05), lazily seeded from the bind pose. */
   private readonly scriptParts = new Map<number, { quat: VehicleQuat; translation: Vec3 }>();
 
+  /**
+   * The DRAWN pose of every wheel part, as last written by {@link setWheel} — what a script must read
+   * back for that part instead of its own stale shadow.
+   *
+   * SA carries this for free: `CAutomobile` rebuilds each wheel node's modelling matrix every frame
+   * from `m_wheelRotation`/steer/suspension, so a script reading `m_aCarNodes[CAR_WHEEL_*]`'s
+   * `m_forward` sees the live roll. Ours drove the wheels straight onto the entity and left the
+   * script-visible state at the bind pose, so `wheel_rb_dummy` reported an unrotated frame forever —
+   * rhino's tread read a CONSTANT angle and never advanced (field 2026-08-07, plan
+   * `cleo/scripts` 001 step 5).
+   */
+  private readonly wheelPose = new Map<number, { quat: VehicleQuat; translation: Vec3 }>();
+
   constructor(instance: VehicleInstance, data: VehicleRigData, onDispose: () => void) {
     this.instance = instance;
     this.data = data;
@@ -138,12 +151,13 @@ export class EngineVehicleHandle implements VehicleHandle {
     return index >= 0 ? index : null;
   }
 
+  /** A wheel reports what it is DRAWN at; every other part reports the script's own absolute pose. */
   scriptPartLocalRotation(part: number): VehicleQuat {
-    return this.scriptState(part).quat;
+    return this.wheelPose.get(part)?.quat ?? this.scriptState(part).quat;
   }
 
   scriptPartLocalTranslation(part: number): Vec3 {
-    return this.scriptState(part).translation;
+    return this.wheelPose.get(part)?.translation ?? this.scriptState(part).translation;
   }
 
   /** ABSOLUTE local rotation (SA's SetRotate* replaces the matrix): the engine's anim channel is
@@ -278,12 +292,18 @@ export class EngineVehicleHandle implements VehicleHandle {
     // axle (X). The order is the whole correctness of this line (plan 081/06 §3.3): a steered wheel must lean
     // about ITS forward axis and not the body's, and the spin has to be innermost or it drags the lean round
     // with it — a wheel that cambers while rolling would wobble like a bent rim.
-    this.instance.entity.setPartRotation(
-      wheel.part,
-      quatMul(quatMul(axisAngle(2, pose.steer), axisAngle(1, pose.camber)), axisAngle(0, pose.spin)),
-    );
+    const anim = quatMul(quatMul(axisAngle(2, pose.steer), axisAngle(1, pose.camber)), axisAngle(0, pose.spin));
+    this.instance.entity.setPartRotation(wheel.part, anim);
     // Suspension travel: the wheel part slides along the body's local Z (the model frame is Z-up like GTA).
     this.instance.entity.setPartTranslation(wheel.part, [0, 0, pose.lift]);
+    // Publish it in the SAME space a script reads (absolute part-local = bind then anim) — see wheelPose.
+    const bind = this.data.parts[wheel.part];
+    this.wheelPose.set(wheel.part, {
+      quat: bind ? quatMul(bind.localRotation, anim) : anim,
+      translation: bind
+        ? [bind.localTranslation[0], bind.localTranslation[1], bind.localTranslation[2] + pose.lift]
+        : [0, 0, pose.lift],
+    });
   }
 
   private partIndex(name: string): null | number {

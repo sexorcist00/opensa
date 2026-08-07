@@ -364,6 +364,39 @@ describe('EngineVehicleHandle detached parts', () => {
       expect(tilts[1]).toBeCloseTo(-Math.sin(camber), 6);
     });
 
+    it('reports a wheel to SCRIPTS at its DRAWN pose, not at the bind pose it was seeded with', () => {
+      // SA rebuilds each wheel node's modelling matrix every frame, so a script reading
+      // `m_aCarNodes[CAR_WHEEL_*]`'s m_forward sees the live roll. Ours drove the entity and left the
+      // script-visible state frozen: rhino's tread read a CONSTANT angle and never advanced
+      // (field 2026-08-07). The forward column is what that script actually reads.
+      const { probe } = instance();
+      const handle = new EngineVehicleHandle(probe, model(), () => undefined);
+      const forwardZ = (): number => {
+        const [x, y, z, w] = handle.scriptPartLocalRotation(0);
+
+        return 2 * (y * z + x * w); // z of the rotated +Y axis — quatAxes().forward[2]
+      };
+
+      expect(forwardZ()).toBeCloseTo(0, 6); // unrotated: forward = (0, 1, 0)
+      handle.setWheel(0, { camber: 0, lift: 0, spin: 0.5, steer: 0 });
+      expect(forwardZ()).toBeCloseTo(Math.sin(0.5), 6);
+      handle.setWheel(0, { camber: 0, lift: 0, spin: 1.1, steer: 0 });
+      expect(forwardZ()).toBeCloseTo(Math.sin(1.1), 6);
+      // Suspension travel rides the same accessor — an absolute part-local translation.
+      handle.setWheel(0, { camber: 0, lift: -0.08, spin: 1.1, steer: 0 });
+      expect(handle.scriptPartLocalTranslation(0)[2]).toBeCloseTo(-0.08, 6);
+    });
+
+    it("leaves a NON-wheel part reporting the script's own absolute pose", () => {
+      const { probe } = instance();
+      const handle = new EngineVehicleHandle(probe, model(), () => undefined);
+      handle.setWheel(0, { camber: 0, lift: 0, spin: 1.1, steer: 0 });
+      handle.scriptSetPartLocalRotation(2, [0, 0, 0.7071, 0.7071]);
+
+      expect(handle.scriptPartLocalRotation(2)[2]).toBeCloseTo(0.7071, 4);
+      expect(handle.scriptPartLocalTranslation(2)).toEqual([-0.9, 0.5, 0]);
+    });
+
     it('keeps the spin INNERMOST, so a rolling wheel does not drag its lean round with it', () => {
       const { probe, rotations } = instance();
       const handle = new EngineVehicleHandle(probe, model(), () => undefined);
