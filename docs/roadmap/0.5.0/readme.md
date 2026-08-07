@@ -63,14 +63,22 @@ Rewritten against a full recon of the 7-mod target corpus and moved to
 ## LOD generators, extended (moved from 0.4.0, 2026-07-19; restructured 2026-08-07)
 
 Two generator upgrades, **reorganised into one folder per TOOL** — the old A1–A3 / B0–B4 split cut across
-tool boundaries, so no plan mapped to a shippable diff. **2dfx on LODs** (`rw-codec` → `lod-common` → the two
-LOD generators): coronas correct and consistent everywhere, roadsigns & escalators into baked cells,
-rate-budgeted particle emitters at range. **Procobj density** (`lod-procobj-generator`): configurable,
-biome-aware scatter — forest bushes, mountain rocks, desert cacti.
+tool boundaries, so no plan mapped to a shippable diff. **Procobj density** (`lod-procobj-generator`):
+configurable, biome-aware scatter — forest bushes, mountain rocks, desert cacti. That half is what remains
+here.
+
+**The 2dfx half LEFT this plan on 2026-08-07.** Its foundation shipped (`rw-codec/001` typed payload codecs,
+`lod-common/005` the carry-policy + `006` `transform2dfxEntry`, `opensa-lod-generator/005` the adoption, all
+moved into their tools) and the rest became [plan 100](../../plans/100-2dfx-at-lod-range/readme.md) after two
+measurements changed its shape: a roadsign's coordinates are WORLD, not model-local, and **nothing reads a
+cell LOD's 2dfx section** — both map consumers gather 2dfx from HD models only. So "roadsigns & escalators
+into baked cells, shippable today" was wrong on both counts, and escalators turned out to have no engine code
+at all ([plan 101](../../plans/101-escalators/readme.md)). What stays filed here from that half is the
+far-view emitter RATE BUDGET (`lod-common/03` + `sa-lod-generator/02`), and it should follow plan 100/04.
 
 **The "both are ASI-gated" framing was wrong and has been corrected.** Baked-cell work is not gated at all —
 `opensa-lod-generator` output is OpenSA-only ([restrictions/sa-target.md](../../restrictions/sa-target.md)),
-so real SA never loads it and no plugin is involved; the roadsign/escalator carry is shippable today. The
+so real SA never loads it and no plugin is involved. The
 particle half is not waiting either: [`asi/perfect-map`](../../../asi/perfect-map/docs/plans/readme.md)
 Phase 2 shipped (009's patch, 010's pipeline flip), and only its far-view overdraw budget was deferred. On
 the procobj side the binding ceiling is **IPL slots** (measured 2026-08-07: 20 146/32 767 rows but

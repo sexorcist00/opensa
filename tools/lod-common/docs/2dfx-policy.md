@@ -29,10 +29,10 @@ least one.
 | 1 | particle | 64 / 43 | carry-rate-scaled | drop | Emitters ship on the clone since `03-asi/010` flipped the strip; `--strip-particles` is the stock-target opt-out. A cell has no emitter budget yet. |
 | 3 | ped attractor | 916 / 266 | carry | drop | Carried because the clone paths carry it today. Nothing reads a ped attractor at LOD range — a candidate for the first MEASURED drop. |
 | 6 | enter/exit | 78 / 71 | carry | drop | As type 3. |
-| 7 | roadsign | 489 / 207 | carry | drop → **carry** | The visible win of the chain. `cell` is drop only until the cell path can re-rotate a plate. |
+| 7 | roadsign | 489 / 207 | carry | drop → **carry** | The visible win of the chain. `cell` is drop until [plan 100](../../../docs/plans/100-2dfx-at-lod-range/readme.md) both re-orients the plate and gives it a consumer — today nothing reads a cell LOD's 2dfx at all. |
 | 8 | trigger point | 33 / 7 | carry | drop | As type 3, and the rarest of them. |
 | 9 | cover point | 15 007 / 1210 | carry | drop | As type 3, and the bulk of the corpus by count — whatever it costs to carry, it costs 15 000 times. |
-| 10 | escalator | 5 / 4 | carry | drop → **carry** | Five entries in four models: it will never move an aggregate, so verify it by looking at those four. |
+| 10 | escalator | 5 / 4 | carry | **drop** | `clone` carries it because real SA implements escalators and reads the entry off the model it streams. `cell` does not, and not for a distance reason: our engine has no escalator code at all ([plan 101](../../../docs/plans/101-escalators/readme.md) builds it). |
 | *any other* | — | 0 | **drop** | **drop** | See below. |
 
 ## A type's coordinate SPACE is not the same question as its verdict

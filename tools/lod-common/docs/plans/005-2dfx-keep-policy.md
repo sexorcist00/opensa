@@ -4,7 +4,7 @@
 [07 — LOD generators, extended](../../../../docs/roadmap/0.5.0/plans/07-lod-generators-extended/readme.md)
 (`lod-common/01`) and moved here when it landed. Gated on nothing. The foundation of the whole 2dfx line:
 make the carry policy ONE thing before adding types
-([opensa-lod-generator/02](../../../../docs/postmortem/07-2dfx-on-baked-cells.md), which died)
+([opensa-lod-generator/02](../../../../docs/plans/100-2dfx-at-lod-range/readme.md), which died and came back as plan 100)
 or emitters
 ([sa-lod-generator/02](../../../../docs/roadmap/0.5.0/plans/07-lod-generators-extended/sa-lod-generator/02-particle-emitters.md)).
 

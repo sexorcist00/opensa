@@ -58,7 +58,7 @@ of `transform2dfxEntry`, which was already in place and unchanged here.
 
 **A finding from the step that follows this one, recorded here because it changes what this file's output is
 FOR.** While scoping the widening
-([`opensa-lod-generator/02`](../../../../docs/postmortem/07-2dfx-on-baked-cells.md), now a postmortem),
+([`opensa-lod-generator/02`](../../../../docs/plans/100-2dfx-at-lod-range/00-research-and-findings.md), which died and was revived as plan 100),
 the consumer turned out not to read this section at all in the shipping pipeline: `packages/cell-weld` gathers
 2dfx **from HD models only** (`if (!lod)`, "LOD duplicates would double every lamp"), and `resolveMap`'s
 `markCellLods` flags every instance in this generator's `lods.ipl` as `isLod`. So in the pak the cell DFF's

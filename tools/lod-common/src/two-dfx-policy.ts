@@ -75,7 +75,7 @@ export const LOD_2DFX_POLICY: readonly Lod2dfxRule[] = [
     clone: 'carry',
     name: 'roadsign',
     type: 7,
-    why: 'The visible win of the whole chain (489 / 207). `cell` is `drop` only until `opensa-lod-generator/02` can re-rotate the plate — a raw transplant repositions but does not re-orient.',
+    why: 'The visible win of the whole chain (489 / 207). `cell` is `drop` only until the cell path can re-rotate the plate and something reads it — plan 100 opens it.',
   },
   {
     cell: 'drop',
@@ -96,7 +96,7 @@ export const LOD_2DFX_POLICY: readonly Lod2dfxRule[] = [
     clone: 'carry',
     name: 'escalator',
     type: 10,
-    why: 'Five entries in four models, so it will never move an aggregate — verify it by looking at those four. `cell` flips with type 7 in `opensa-lod-generator/02`.',
+    why: 'Five entries in four models, so it will never move an aggregate — verify it by looking at those four. `cell` stays `drop`: our engine has no escalator code at all, so there is nothing to read one (plan 101 builds it).',
   },
 ];
 
