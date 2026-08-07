@@ -99,6 +99,60 @@ measurement rather than an argument.
 | 7 | [The operator's map](7-the-operator-map/readme.md) | Orthographic mode, pitch clamp, flyTo, follow, bookmarks, fit bounds, a minimap, measuring, drawing, search, keys, embedding — what a map application has that a game does not |
 | 8 | [The time axis](8-the-time-axis/readme.md) | Where time lives in the data model is cheap now and a rewrite later. Moved forward from 0.6.0 for that reason alone |
 
+## The steps, at a glance
+
+32 steps, 8 chains. Execution order is chain order; inside a chain, step order. The one-line form — each
+step's own section carries the budget it must fit and the number it owes.
+
+| # | Step | What it produces |
+| --- | --- | --- |
+| **1** | **[The map profile](1-the-map-profile/readme.md)** — cut only what is provably never read | |
+| 1/01 | The inventory | the before-table (passes × ms, entry kinds × bytes, modules × kB) + **the pinned district** |
+| 1/02 | The protected list | what may never be cut: cars, peds, sway, the day cycle, weather, one engine PC+mobile |
+| 1/03 | The pak profile | a build omitting only what 01 proved unread; bytes and resident MB before/after |
+| 1/04 | The frame profile | every pass judged *kept / cheaper / removed*, with its ground |
+| 1/05 | The streaming profile | rings anchored to the map focus — **and the per-cell geometric error the pak lacks** |
+| 1/06 | The bundle | dead code only; kB before/after on the single-file artifact |
+| **2** | **[Real device truth](2-real-device-truth/readme.md)** — the trimmed console on real hardware | |
+| 2/01 | A phone-sized district pak | `--rgba8` over the pinned district, profiled vs unprofiled |
+| 2/02 | Serve it from the shareable build | close the pak-worker chunk gap so a real `?src=` streams |
+| 2/03 | The field run | **the repo's first real-world mobile benchmark row** |
+| 2/04 | The residency ceiling, derived | the number 097/1-04 refused to invent, handed back |
+| **3** | **[The operator surface on a phone](3-the-operator-surface-on-a-phone/readme.md)** | |
+| 3/01 | 360 CSS px | the layout spec, fixed before code |
+| 3/02 | Gestures on real touch hardware | the three re-cast desk gestures, verified where a mouse cannot fail |
+| 3/03 | Legibility at city zoom | a labels-per-frame budget and a collision rule |
+| 3/04 | The floor, measured | plan mode (no GPU) on the same real phone |
+| **4** | **[A console is not a game](4-a-console-is-not-a-game/readme.md)** — session and battery | |
+| 4/01 | Render on demand | idle draws → 0, a named wake-latency budget, a battery delta |
+| 4/02 | The long session | resident MB at 0 / 30 min / 2 h; bundle re-records |
+| **5** | **[Symbology and picking as product](5-symbology-and-picking-as-product/readme.md)** | |
+| 5/01 | Picking off the debug flag | an honest pick capability with its memory cost stated |
+| 5/02 | Units as instanced symbols | draws and frame time at the declared count |
+| 5/03 | District names in the readout | the layer fork taken explicitly, and written down |
+| 5/04 | Units get real models | cars and peds drawn; the fallback when a model is absent |
+| **6** | **[Three ways to draw the world](6-display-modes/readme.md)** | |
+| 6/01 | The baked 3D city map | the LOD tier as the only tier, lit like a map — against the live render |
+| 6/02 | The flat 2D map | tiles from our own orthographic pass, shipped as one PMTiles archive |
+| 6/03 | Switching | camera, selection and the moment survive; an automatic floor that says why |
+| **7** | **[The operator's map](7-the-operator-map/readme.md)** | |
+| 7/01 | Orthographic mode | the same matrix that bakes 6/02's tiles; culling correct under it |
+| 7/02 | Where the camera may go | pitch clamp, zoom levels, `flyTo` that does not stall on streaming |
+| 7/03 | Getting somewhere | follow a unit, bookmarks, fit bounds, search by place |
+| 7/04 | The minimap | the 2D map at lowest zoom + a viewport rect — nothing like it exists in the repo |
+| 7/05 | Measuring and drawing | distance, radius, perimeter — on **classification**, not tessellation |
+| 7/06 | Keyboard | a base set plus remapping |
+| 7/07 | Leaving the console | a link to a view, iframe embedding, image export |
+| **8** | **[The time axis](8-the-time-axis/readme.md)** | |
+| 8/01 | A position is a function of time | the track type, its sampling policy, its memory cost |
+| 8/02 | Interpolation, honestly | between packets only — never past them |
+| 8/03 | The clock and the timeline | scrub, ×2/×8, live; game hour vs wall time kept apart on screen |
+| 8/04 | Trails | the last N minutes, on the same ground-following work as 7/05 |
+
+Above all of it sits [099](../099-pcad-dispatch/readme.md)'s phase order: **0** measure (1–2), **1** the three
+modes (6), **2** speak PCAD's protocol (+8), **3** the map becomes vibecode's module 10, **4** what PCAD owes
+back (publish rate, positions on foot).
+
 ## What this chain does NOT own
 
 [097](../097-platform-reach/readme.md) keeps all of it, and 098 duplicates none of it: universal texture
