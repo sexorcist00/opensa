@@ -44,7 +44,7 @@ checkpoint: a night hotring is dark on both runtimes.
 - [x] Engine seam: smashed-lamp state in `vehicle-lamps.ts`/`vehicle-lamp.system.ts` (negative
       tests first: unknown light index, dead car), atlas row for `0x6C2100` (+ `0x6C2130`
       read-back), unit + story coverage on the fake-GPU boot path.
-- [ ] Authored script + story test (declared budget; record instr/poll and artifact size vs
+- [x] Authored script + story test (declared budget; record instr/poll and artifact size vs
       275 B + 19 238 B footer).
 - [ ] Ship via the pak build; field close-out: hotring dark at night in OpenSA (headless screenshot
       A/B — lamps on a stock car, dark on the hotring) + manual real-CLEO Wine verdict.
@@ -112,3 +112,54 @@ declare — and the shader gate is the one part with no test, because nothing in
 (`docs/edge-cases/engine-rendering.md` already carries that trap). It is field-verified only. NB the shader
 DOES have a golden-snapshot test (`render/__snapshots__/shaders.test.ts.snap`) — that reviews the diff, it
 does not compile it.
+
+### Step 2 — the authored script (2026-08-07)
+
+`cleo/scripts/no-lights/` — `script.ts` + `story.test.ts` (6 tests). Gate green (dual-target), zero
+warnings, byte-deterministic across two builds (`c4df3745…`).
+
+**The original, disassembled** (`scripts/debug/scm-disasm.ts` on the mod's `cleo-skipped/no_lights.cs`):
+27 instructions / 275 B of code + a **19 238 B footer**. Its recipe is right and is kept verbatim —
+`0A97 GET_VEHICLE_POINTER` → `0A8E INT_ADD +1440` → four `0AA6 CALL_METHOD 7086336 <ptr> 2 0 1 <k>`. The
+disassembly settled the one thing the recon could not: **the arguments are listed `(status, light)`**, which
+after CLEO's reversed push order is `SetLightStatus(light, SMASHED)`. Our artifact emits that call shape
+byte-for-byte, so the conformance half is a direct comparison.
+
+Everything around the call changed:
+
+| The original | Ours | Why |
+| --- | --- | --- |
+| `WAIT 0` — every frame | `WAIT 400`, work BEFORE the wait | the effect is idempotent and permanent per car; a car cannot be spawned, seen and judged inside 400 ms. Waiting AFTER the work means a hotring already standing when the script spawns is dealt with on frame 1 |
+| `0AE2` radius **10 000 m** from the world ORIGIN | 150 m around the player | the original scans every car that exists, every frame |
+| `0441 GET_CAR_MODEL` + `0A01 IS_THIS_MODEL_A_CAR` + **7 identical** `0039` compares under one `IF 26` | one `0137 IS_CAR_MODEL car 494` | same test, 1 instruction instead of 9 |
+| no player guard at all | `DOES_CHAR_EXIST` + `IS_PLAYER_PLAYING` before reading coordinates | it reads the player's coordinates regardless today |
+
+**Measured, 60 ticks, same harness for both** (a throwaway `.tmp-nolights-measure.ts`, deleted after the
+run per the debug-scripts rule; every number is off a run):
+
+| In range | ours avg | ours peak | original avg | original peak |
+| --- | --- | --- | --- | --- |
+| nothing | **0.6** | 11 | 5.0 | 5 |
+| 1 hotring | **1.3** | 25 | 25.6 | 26 |
+| 8 cars, no hotring | **3.8** | 75 | 123.0 | 125 |
+| 16 cars + hotring | **7.7** | 153 | 261.6 | 266 |
+| 32 cars + hotring | **14.1** | 281 | 497.6 | 506 |
+
+**19.7× cheaper with a hotring in range, 32× cheaper on a street of eight cars that are not one**, and the
+artifact is **237 B against 19 513 B on disk** (225 B of code vs 275 B, and no 19 KB footer). Cost is linear
+at ~8 instructions per car in range on a POLL tick — the declared `budgetPerTick: 160` therefore has a
+stated meaning (a poll tick with the hotring plus 16 cars of traffic, measured 153), and the ~23 frames
+between polls cost ONE instruction each. Effect count over 60 frames: ours 12 (3 polls × 4 lamps), the
+original **236** — it re-smashes four already-smashed lamps every single frame.
+
+**No integration test, and that is a decision rather than an omission.** 001's audit asks for a test over
+the real artifact and the real runtime; here the four links of the chain are already guarded separately
+(artifact → real `AtlasMemory` → real light state in the story test; handle → lamp system; handle → GPU
+row), and the two that are NOT are the two an integration test in this folder cannot honestly reach:
+
+1. the app-layer glue in `engine-cleo-setup.ts` (two calls: `setLightSmashed` / `lightsSmashed`);
+2. the shader gate.
+
+A test that restated that glue inside the test file would prove the restatement, not the product — the
+exact failure 001 shipped. Both are the field checkpoint's job, and they are named here so the field run
+knows what it is the only evidence for.
