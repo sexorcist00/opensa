@@ -61,7 +61,7 @@ Ordered by *what unblocks the most for the least*, not by plan number.
 | ~~P1~~ | [rw-codec/01 — typed 2dfx codecs](../../../../../tools/rw-codec/docs/plans/001-typed-2dfx-payload-codecs.md) | **SHIPPED 2026-08-07** and moved into the tool. Pure codec, no behaviour change; it unblocked every transform below it. |
 | ~~P1~~ | [lod-common/01 — keep policy](../../../../../tools/lod-common/docs/plans/005-2dfx-keep-policy.md) → [02 — entry transform](../../../../../tools/lod-common/docs/plans/006-2dfx-entry-transform.md) | **SHIPPED 2026-08-07** as lod-common `005` + `006`. Stock output is unchanged, and the census says why: no stock model carrying 2dfx hangs it off a rotating frame. |
 | ~~P1~~ | [opensa-lod-generator/01 — adopt](../../../../../tools/opensa-lod-generator/docs/plans/005-adopt-2dfx-policy.md) | **SHIPPED 2026-08-07** as opensa-lod-generator `005` and moved into the tool. |
-| **BLOCKED** | [opensa-lod-generator/02 — rotation-bearing 2dfx on cells](opensa-lod-generator/02-rotation-bearing-2dfx-on-cells.md) | **STOPPED before any code, needs a decision** — both premises failed measurement: roadsign positions are WORLD coords (489/489), and NOTHING reads a cell LOD's 2dfx section (`cell-weld` gathers 2dfx HD-only; `markCellLods` flags this generator's insts as LOD). The visible win lives in `cell-weld`, not here. |
+| ~~DEAD~~ | [opensa-lod-generator/02 — rotation-bearing 2dfx on cells](../../../../postmortem/07-2dfx-on-baked-cells.md) | **DIED 2026-08-07 before any code** → postmortem. Both premises failed measurement (world-space sign coords 489/489; nothing reads a cell LOD's 2dfx section), the real gap is a 560-unit band in `cell-weld`, and the user closed that route: no glyphs in the LOD level. |
 | **P1** | [sa-lod-generator/01 — adopt](sa-lod-generator/01-adopt-2dfx-policy.md) | Behaviour-preserving adoption; the regression fixture that proves the refactor. |
 | **P2** | [lod-procobj-generator/02 — density model](lod-procobj-generator/02-density-model.md) → [03 — biome density](lod-procobj-generator/03-biome-zone-density.md) | Buildable and testable now at today's totals; SHIPPING raised density waits on P0's route. |
 | **P2** | [lod-procobj-generator/04 — slot economy & budgets](lod-procobj-generator/04-slot-economy-and-budgets.md) | Reshaped by P0. Where perf replaces int16 as the limiter. |
@@ -69,10 +69,12 @@ Ordered by *what unblocks the most for the least*, not by plan number.
 
 **Suggested first slice:** P0 (a review, cheap) in parallel with the `rw-codec/01 → lod-common/01+02 →
 opensa-lod-generator/01+02` line, which ships a visible improvement without touching a single limit.
-**Four fifths of that line is done** (2026-08-07): `rw-codec/01`, `lod-common/01`, `lod-common/02` and
-`opensa-lod-generator/01` all shipped and moved into their tools. The fifth, `opensa-lod-generator/02`, is
-**stopped**: the section it would widen is read by no consumer we ship, and the roadsign win it promised
-already exists via plan 076 — see its own file for the evidence and the three routes out.
+**That line is finished** (2026-08-07): `rw-codec/01`, `lod-common/01`, `lod-common/02` and
+`opensa-lod-generator/01` shipped and moved into their tools, and `opensa-lod-generator/02` **died into a
+[postmortem](../../../../postmortem/07-2dfx-on-baked-cells.md)** — the section it would widen is read by no
+consumer we ship, and the route that would have fixed the real gap (welding glyphs into the LOD level in
+`cell-weld`) is closed by decision. What is left of the 2dfx chain is `sa-lod-generator/01` and the P3
+emitter pair.
 
 ## Working rules while this plan runs
 
@@ -96,7 +98,7 @@ filed under, and that is worth knowing before estimating one.
 | ~~rw-codec/~~ (shipped, [moved](../../../../../tools/rw-codec/docs/plans/)) | `tools/rw-codec` | — |
 | [lod-common/](lod-common/) (01+02 shipped, [moved](../../../../../tools/lod-common/docs/plans/); 03 left) | `tools/lod-common` | `tools/rw-codec` (typed payloads), `packages/renderware` (the roadsign rotation convention) |
 | [sa-lod-generator/](sa-lod-generator/) | `tools/sa-lod-generator` | `tools/lod-common`, `asi/perfect-map` (02 only) |
-| [opensa-lod-generator/](opensa-lod-generator/) (01 shipped, [moved](../../../../../tools/opensa-lod-generator/docs/plans/); 02 stopped) | `tools/opensa-lod-generator` | `tools/lod-common`; **02's real home turned out to be `packages/cell-weld`** |
+| ~~opensa-lod-generator/~~ (01 shipped, [moved](../../../../../tools/opensa-lod-generator/docs/plans/); 02 [died](../../../../postmortem/07-2dfx-on-baked-cells.md)) | `tools/opensa-lod-generator` | `tools/lod-common`; **02's real home turned out to be `packages/cell-weld`, and that route is closed** |
 | [lod-procobj-generator/](lod-procobj-generator/) | `tools/lod-procobj-generator` (the CLI + `config.ts`) | **`tools/map-placement`** (`procobj/convert.ts`, `streamed-areas.ts`) and **`packages/renderware`** (`map/procobj-scatter.ts`) hold most of the code; `tools/perfect-map-builder` holds the guards |
 
 ## Chains
@@ -112,7 +114,7 @@ filed under, and that is worth knowing before estimating one.
 | [sa-lod-generator/01](sa-lod-generator/01-adopt-2dfx-policy.md) | verbatim + decimate paths routed through the policy, output byte-identical | lod-common/01 | idea |
 | [sa-lod-generator/02](sa-lod-generator/02-particle-emitters.md) | emitters on the DECIMATE path + the far-view budget (verbatim already ships) | none | idea |
 | [opensa-lod-generator/01](../../../../../tools/opensa-lod-generator/docs/plans/005-adopt-2dfx-policy.md) | cell bake routed through the policy (replaces the `LIGHT_2DFX` literal) | lod-common/01 | **SHIPPED** |
-| [opensa-lod-generator/02](opensa-lod-generator/02-rotation-bearing-2dfx-on-cells.md) | roadsigns & escalators survive into baked cells, correctly oriented | lod-common/02 | **STOPPED** — aimed at a section no consumer reads; re-aim at `cell-weld` or delete the section |
+| [opensa-lod-generator/02](../../../../postmortem/07-2dfx-on-baked-cells.md) | roadsigns & escalators survive into baked cells, correctly oriented | lod-common/02 | **DEAD** — [postmortem](../../../../postmortem/07-2dfx-on-baked-cells.md); residue: the cell LOD's 2dfx section is dead weight |
 
 ### Procobj density
 

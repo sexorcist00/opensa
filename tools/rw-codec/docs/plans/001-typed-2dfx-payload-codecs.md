@@ -28,7 +28,7 @@ Everything else stays opaque and byte-verbatim. Do not build codecs for types no
 
 1. **Decode / encode, not parse / render.** The deliverable is a symmetric pair per type in `rw-codec`,
    beside `build2dfxSection` — no transform logic, no policy, no LOD awareness. Those live in
-   [lod-common](../../../../docs/roadmap/0.5.0/plans/07-lod-generators-extended/lod-common/02-2dfx-entry-transform.md);
+   [lod-common](../../../lod-common/docs/plans/006-2dfx-entry-transform.md);
    keeping them out of the codec is what lets the round-trip test be an identity.
 2. **Byte-identity is the contract.** `encode(decode(entry)) === entry` for every real entry we can find, not
    just for synthetic ones. This is the guard that says the decode did not quietly lose a field, and it is

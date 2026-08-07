@@ -4,13 +4,13 @@
 [07 — LOD generators, extended](../../../../docs/roadmap/0.5.0/plans/07-lod-generators-extended/readme.md)
 (`lod-common/01`) and moved here when it landed. Gated on nothing. The foundation of the whole 2dfx line:
 make the carry policy ONE thing before adding types
-([opensa-lod-generator/02](../../../../docs/roadmap/0.5.0/plans/07-lod-generators-extended/opensa-lod-generator/02-rotation-bearing-2dfx-on-cells.md))
+([opensa-lod-generator/02](../../../../docs/postmortem/07-2dfx-on-baked-cells.md), which died)
 or emitters
 ([sa-lod-generator/02](../../../../docs/roadmap/0.5.0/plans/07-lod-generators-extended/sa-lod-generator/02-particle-emitters.md)).
 
 The adoption tasks live with the generators that own them
 ([sa-lod-generator/01](../../../../docs/roadmap/0.5.0/plans/07-lod-generators-extended/sa-lod-generator/01-adopt-2dfx-policy.md),
-[opensa-lod-generator/01](../../../../docs/roadmap/0.5.0/plans/07-lod-generators-extended/opensa-lod-generator/01-adopt-2dfx-policy.md))
+[opensa-lod-generator/01](../../../opensa-lod-generator/docs/plans/005-adopt-2dfx-policy.md))
 so each generator's change is its own reviewable, byte-compared diff. What was left here is the policy itself
 and the correctness bar it has to meet.
 
