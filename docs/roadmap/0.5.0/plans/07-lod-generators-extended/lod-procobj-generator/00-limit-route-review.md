@@ -50,7 +50,7 @@ positions**. Everything fix #1 had been proven on before was ours: the 33k synth
   the per-site diagnostic 004 asks for is unnecessary.
 
 **What it does NOT decide.** **Slots were never stressed.** ProperFixes occupies 6 IPL slots and the install
-runs 37 of 40, so `IplEntityIndexArrays` was not exercised. That turns out not to matter — see below.
+runs 36 of 40, so `IplEntityIndexArrays` was not exercised. That turns out not to matter — see below.
 
 ## And then the install answered the rest of the review
 

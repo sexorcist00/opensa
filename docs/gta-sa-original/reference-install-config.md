@@ -195,14 +195,16 @@ subject of half of plan 07. Any 2dfx observation made on this install is an obse
 
 ## What the install actually runs, counted
 
-Measured off its own `data/` + `modloader/` on 2026-08-07 (gta.dat IPL lines resolved through modloader
-overrides, then modloader `loader.txt` additions on top):
+Measured off its own `data/` + `modloader/` on 2026-08-07 by
+`npx tsx scripts/debug/ipl-row-census.ts NO_COMMIT/gta_sa` — gta.dat IPL lines resolved through modloader
+overrides, then modloader `loader.txt` additions on top. **Re-runnable against any install or built tree**,
+which is the point: these numbers were first taken by hand and the hand count was wrong by one slot.
 
 | | Value |
 | --- | --- |
 | gta.dat IPL lines | 52 |
 | Rows from gta.dat IPLs | 15 331, in 30 slots carrying `inst` |
-| Rows added by modloader | 57 583, in 6 slots (`procobj1..6.ipl`; `properfixes.ipl` carries none) |
+| Rows added by modloader | 57 583, in 6 slots (`procobj1..6.ipl`; `properfixes.ipl` carries no `inst` rows, so it takes no slot) |
 | **Permanent text `inst` rows, map-wide** | **72 914** — 2.23× the 32 767 int16 ceiling |
-| **IPL slots carrying `inst`** | **37** — under the stock 40, so `EntityIpl = unlimited` is not exercised |
+| **IPL slots carrying `inst`** | **36** — under the stock 40, so `EntityIpl = unlimited` is not exercised |
 | **Largest single text IPL** | **9 627 rows** — 2.35× stock's 4 096 per-file buffer, allowed by `EntitiesPerIpl = unlimited` |

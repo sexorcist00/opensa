@@ -12,7 +12,7 @@ plan 07 spent a fortnight organised around a limit nobody would have hit.
 | | Value |
 | --- | --- |
 | Permanent text-IPL `inst` rows, map-wide | **72 914** — **2.23× the int16 ceiling** |
-| gta.dat IPL lines / slots carrying `inst` | 52 / **37** |
+| gta.dat IPL lines / slots carrying `inst` | 52 / **36** |
 | Largest single text IPL | **9 627 rows** — **2.35× stock's 4 096 per-file buffer** |
 | Map content | ProperFixes 2.2.1 (via modloader) incl. its "Increased Vegetation Distance" optional — 57 583 of those rows in 6 files |
 
@@ -56,7 +56,7 @@ Our own log records the whole picture in six lines:
 | --- | --- | --- | --- |
 | int16 `IplDef` building indexes | 32 767 rows map-wide | **lifted** (running at 72 914) | **only `perfect-map.asi`** — OLA leaves `0x404B4A` byte-stock |
 | `gpLoadedBuildings` per-file buffer | 4 096 rows | **`EntitiesPerIpl = unlimited`** (running a 9 627-row file) | OLA |
-| `IplEntityIndexArrays` | 40 slots | **`EntityIpl = unlimited`** (37 in use, so untested here) | OLA |
+| `IplEntityIndexArrays` | 40 slots | **`EntityIpl = unlimited`** (36 in use, so untested here) | OLA |
 | `CPool<CBuilding>` | 13 000 | **`Buildings = 100000`** | OLA |
 | `CPool<CDummy>` | 2 500 | `Dummys = 50000` | OLA |
 | Streaming object instances | — | `StreamingObjectInstancesList = 30000` | OLA |

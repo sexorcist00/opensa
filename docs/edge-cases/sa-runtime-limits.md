@@ -12,7 +12,12 @@ runtime, but the converter guards stand for any build not running that ASI.
   4096-slot `LoadScene` buffer; overflow corrupts memory. `AREA_ROW_CAP = 4000`; over-budget instances
   migrate to the shared `plotr`/`plobj` overflow areas. Mirrored in mod-installer's IPL slot merge.
 - **Text-IPL slot cap 39** (`IplEntityIndexArrays`; stock uses 30, generators add ~9). At zero headroom any
-  modloader text-IPL with inst rows overflows in-game.
+  modloader text-IPL with inst rows overflows in-game. Only a file carrying `inst` rows takes a slot.
+- **The per-file 4 000-row budget and the 39-slot cap are STOCK numbers, and the install we target lifts
+  both** — OLA's `EntitiesPerIpl`/`EntityIpl` are `unlimited` there, and it runs a 9 627-row IPL without
+  complaint. Which set applies is a property of the install, not of the game:
+  [`gta-sa-original/reference-install.md`](../gta-sa-original/reference-install.md). Count either with
+  `scripts/debug/ipl-row-census.ts`.
 - **FLA ID-pool budgets: TXD 6000 / COL 275 / IPL 280** (stock 5000/255/256). Archive-file counts are ID
   slots; exhausting a pool corrupts the heap during data load (crash right after `shopping.dat`). pmb's
   `IMG_ID_BUDGETS` guards the operative FLA ini values.
