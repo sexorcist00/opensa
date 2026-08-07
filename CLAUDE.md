@@ -200,6 +200,10 @@ The documentation lifecycle (idea → concept → plan / postmortem; roadmap for
   steps, each ending with verification + measured numbers. Add a row in `docs/plans/README.md`
 - `docs/roadmap/` — decided work deferred to a later version (`0.5.0/`, `0.6.0/`); same plan-chain shape as
   `docs/plans/`, just not this version
+- `tools/<tool>/docs/plans/` — **where a plan step LANDS once it is built.** Every tool keeps its own numbered
+  chain beside its code; when a step from `docs/plans/` or `docs/roadmap/` ships inside one tool, its file
+  MOVES there (next free number, measured numbers filled in) and the central row is repointed. The central
+  folders carry what is still unbuilt or spans several tools
 - `docs/audit/` — a post-big-rework audit (see the Standing Workflow rule above): what changed, its cost, its
   gain
 

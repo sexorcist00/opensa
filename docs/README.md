@@ -42,6 +42,10 @@ Read it as a set of rules:
   It holds the rules a design has to satisfy — layer boundaries, format ceilings, engine splits, decisions
   taken at build time that cannot be re-taken at runtime — and says for each whether a violation is caught by
   a test/guard/lint or is SILENT. A new restriction is recorded there in the SAME change that finds it.
+- **A plan step ships inside one tool** → once it is built, MOVE its doc out of `docs/plans/` (or
+  `docs/roadmap/`) into that tool's OWN chain at `tools/<tool>/docs/plans/NNN-<name>.md`, taking the next
+  free number there, with its measured numbers filled in. Every tool keeps the record of its own steps
+  beside its code; the central folders carry what is still unbuilt or spans several tools.
 - **A change alters the architecture** → add/adjust notes (and the diagram) in
   [`docs/architecture/`](./architecture/README.md) in the SAME change.
 - **A NAME starts carrying behaviour** (a file the pipeline looks for, a frame/material the converter reads,

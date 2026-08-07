@@ -69,6 +69,18 @@ Ordered by *what unblocks the most for the least*, not by plan number.
 **Suggested first slice:** P0 (a review, cheap) in parallel with the `rw-codec/01 → lod-common/01+02 →
 opensa-lod-generator/01+02` line, which ships a visible improvement without touching a single limit.
 
+## Working rules while this plan runs
+
+1. **No full map rebuild through `perfect-map-builder` until this plan is finished** (decided 2026-08-07).
+   Every plan here changes what a LOD carries, so a rebuild taken mid-chain is a pak whose contents nobody
+   can attribute to a step. Tool-level verification (unit tests, fixture round-trips, single-model or
+   single-cell runs) is what each step is judged on; the map is rebuilt once, at the end, and THAT is the
+   run whose numbers go to `docs/benchmarks/`.
+2. **A finished step's plan doc MOVES into the tool it landed in.** Each tool keeps its own chain at
+   `tools/<tool>/docs/plans/NNN-<name>.md` — when a step here ships, its file leaves this folder for the
+   next free number in that tool's chain (its Measurements section filled in), and the row above is updated
+   to point at the new home. This folder holds only what is still unbuilt.
+
 ## Tool map
 
 Which package a plan's diff actually lands in — several plans touch a package that is not the tool they are
