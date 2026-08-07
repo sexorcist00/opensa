@@ -121,6 +121,26 @@ describe('rigid UV animations on a fake device', () => {
       expect(uvAnimWrites(gpu)).toHaveLength(0);
     });
 
+    it('a submesh naming a slot the model does not have draws STATIC, not off the end of the buffer', async () => {
+      const engine = new Engine();
+      await engine.init(harness.canvas);
+      // A `.osm` is a file a mod ships: this is the number nobody validated. Binding (3 + 1) × 256 into a
+      // 512-byte buffer is a WebGPU validation error INSIDE the pass — it takes the frame down.
+      const init = modelInit({ animated: true });
+      const lying = {
+        ...init,
+        submeshes: init.submeshes.map((submesh, at) => (at === 1 ? { ...submesh, uvAnim: 3 } : submesh)),
+      };
+      const model = engine.createVehicleModel(lying);
+      engine.createVehicle(model);
+      gpu.reset();
+
+      engine.frame(camera());
+
+      const draws = gpu.draws.filter((draw) => draw.pipeline === 'rigid-opaque');
+      expect(draws.map((draw) => draw.bindGroupOffsets[1])).toEqual([[0], [0]]);
+    });
+
     it('destroying an animated model frees its uniform, and a plain one frees no shared buffer', async () => {
       const engine = new Engine();
       await engine.init(harness.canvas);

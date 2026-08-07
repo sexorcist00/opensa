@@ -48,6 +48,24 @@ re-creating every resident cell **from cached `.oscell` bytes** when one changed
 **Caught:** NO, and worse than silent — a stale bind group is a use-after-destroy, so the symptom is
 whatever the driver does next (garbage texels, a validation error, or nothing at all on one machine).
 
+## A binding added to a BUNDLED layout re-records every bundle; the rigid layout is free
+
+Growing a bind-group layout is not one cost — it is two different ones, and which you pay depends on
+whether the draws are recorded:
+
+- **Bundled draws (the world/cell path).** A render bundle holds the bind groups it was recorded with. Grow
+  their layout, or mint a new buffer for one of their bindings, and every recorded bundle must be recorded
+  again. This is why the FRAME uniform is grown by nobody: its bind group sits in every cell bundle, so a
+  spare lane in an existing `vec4` is taken instead (`engine.ts` — the debug view mode rides
+  `moonColor.w`). A design that wants a new per-frame value has to fit an existing lane or budget the
+  re-record.
+- **Pass-encoded draws (the rigid path: vehicles, props, script objects).** Encoded fresh every frame into
+  the pass, never into a bundle. Their layout can grow freely — plan 099/02 added `binding 10` to
+  `rigidLayout` for the UV-animation transform and no bundle was touched.
+
+**Caught:** a MISSING entry is caught loudly (`createBindGroup` rejects a layout it does not satisfy). A
+stale BUNDLE is not the same failure — see the texture-array rule above for what that looks like.
+
 ## The one perf knob is `?scale=`
 
 Render scale. There is no quality tier ladder and there will not be one: the 2026-07-21 ladder run proved a

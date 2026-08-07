@@ -34,7 +34,7 @@ import {
 import { EnvProbe, PROBE_RANGE } from './render/probe';
 import { SkidMarks, type SkidSegment } from './render/skid-marks';
 import { buildSkyLut, SKY_LUT_HEIGHT, SKY_LUT_WIDTH, skyLutKey } from './render/sky-lut';
-import { stepUvAnimation, UV_ANIM_IDENTITY, UV_ANIM_STRIDE, type UvAnimation } from './render/uv-anim';
+import { stepUvAnimation, UV_ANIM_IDENTITY, UV_ANIM_STRIDE, type UvAnimation, uvAnimOffset } from './render/uv-anim';
 import { type CellHandle, CellStore } from './world/cells';
 import { TextureArrays } from './world/textures';
 
@@ -2073,7 +2073,7 @@ export class Engine {
     current: { array: number; offset: number },
   ): boolean {
     const array = submesh.array ?? 0;
-    const offset = submesh.uvAnim === undefined ? 0 : (submesh.uvAnim + 1) * UV_ANIM_STRIDE;
+    const offset = uvAnimOffset(submesh.uvAnim, model.uvAnimations.length);
     if (array === current.array && offset === current.offset) {
       return true;
     }

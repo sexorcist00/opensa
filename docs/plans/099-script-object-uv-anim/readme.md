@@ -54,3 +54,50 @@ UV-anim lane, so the material renders frame 0 forever.
 
 Named beneficiaries beyond the wheel: any future scripted/animated mod object with film-strip or
 scrolling materials (billboards, signs), and 097/08-authored scripts get it for free.
+
+## Post-chain review pass (2026-08-07, after the field verdict)
+
+An adversarial re-read of the whole chain with fresh eyes — the lesson that two audits over an
+already-field-confirmed chain produced ~20 real findings in minutes. Six held up; all six are fixed.
+
+**1. A crash-class hole: the engine trusted `uvAnim` from the file.** The dynamic offset was computed as
+`(uvAnim + 1) × 256` with no bound. `uvAnim` is read out of a `.osm` DESC — a file a mod ships — and a slot
+past the model's list binds past the end of the buffer, which is a WebGPU VALIDATION error *inside the
+render pass*: the frame dies, and on some drivers so does the device. Now `uvAnimOffset()` falls back to the
+identity for a slot that is missing, negative, fractional or out of range — the same "render static, never
+error" philosophy the builder already applies to an unresolvable dict name. Covered both at the unit level
+and end-to-end (a model whose submesh claims slot 3 of 1 draws at offset 0).
+
+**2. The shared stepper had no test of its own.** 099/02 claimed the extraction was bit-exact; the world
+lane's only coverage (`engine.frame.test.ts`) asserts that a write HAPPENED at offset 16 and never what was
+in it, so a value regression would have moved every scrolling sign in the map silently.
+`render/uv-anim.test.ts` now pins the walker: DFF param order, the lerp, the paired-keyframe HOLD (the
+difference between blinking and smearing), the wrap at the duration, the degenerate cases, and the offset
+write. **One of those tests was wrong on the first run and the code was right** — sampling at exactly
+`duration` wraps to time 0, which is correct and which the fixture had not accounted for. The rig failed
+before the thing measured did, again.
+
+**3. `toRigidModelInit` was a third, untested path.** The round-trip test covered `.osm` → runtime, but the
+DFF → runtime path (what `engine-props.ts` and `engine-cleo-setup.ts` use when a model has no baked `.osm`)
+passed the animations through with nothing asserting it. `no-data-loss.test.ts` now compares all three.
+
+**4. …and that gate was BLIND.** Adding a `uvAnimations` comparison to a corpus where nothing animates is
+`undefined === undefined` on every row. `ferriswheel_lights` joined the corpus as its own asset class, and a
+guard test names it — drop the row and the gate fails loudly instead of going quiet. (Its 3.7 MB DFF blows
+vitest's 5 s default, so those rows carry an explicit 30 s budget; deterministic work, just a lot of it.)
+
+**5. Three docs the chain owed and had not written.** The material→dict NAME rule with its silent failure
+mode (`docs/contracts/vehicles.md` §4 — a misspelt or dropped dict entry renders static and logs nothing,
+which looks exactly like the bug before the feature existed); the bind-group-layout growth rule the chain
+*relied* on (`docs/restrictions/gpu-and-shaders.md` — bundled layouts cost a re-record, pass-encoded ones are
+free, which is why `rigidLayout` could grow at all); and the keyframe-encoding lever
+(`docs/performance/deferred-optimizations/uv-anim-keyframe-encoding.md` — 19 312 B verbatim on the one
+animated model, kept simple on purpose).
+
+**6. `dump-osm.ts` read the manifest wrong** — recorded in 01's ledger; found by running the plan's own
+verification rather than by reading the code.
+
+**No separate `docs/audit/` entry was written**, and that is a judgment, not an omission: this is a feature
+addition whose "what changed / what it cost / what it bought" is already the three step ledgers, not a
+migration or subsystem rewrite. The audit rule's other half — the benchmark — is the chain's one open item
+and is named as such above.

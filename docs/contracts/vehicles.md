@@ -158,6 +158,17 @@ models author (`taillights2`), and anything else the author left.
 Carcols paint markers are **colours, not names**: `(60,255,0)` primary, `(255,0,175)` secondary,
 `(0,255,255)` tertiary, `(255,255,0)` quaternary.
 
+**A material's UV-animation name must match a dict entry in the SAME DFF** (plan 099). The material's UV
+Anim plugin names an entry of the clump's leading UVAnimDict (`f13d` on the ferris wheel's `Frames`
+material); the converter binds the two by that name and the runtime plays the keyframes. Both names are
+written by the exporter, so they normally agree — but a re-export that drops the dict, or a hand-edited
+clump, leaves a reference to nothing. **When the name resolves to no entry, or to one with no keyframes,
+the material renders STATIC and nothing is logged** — same fallback as the world lane, chosen because a
+missing animation must not take a model out of the game. The symptom is a sign or a light strip frozen on
+frame 0, which is exactly what the bug looks like before the animation ever worked, so check the dict
+first: `npx tsx scripts/debug/dump-osm.ts <model>` prints the animations the built `.osm` actually carries
+and the submesh each one drives. Only UV channel 0 is played; a mask naming more channels loses the rest.
+
 **There is deliberately NO texture-name matching for the reflection class.** Chrome is decided by data (an
 untextured neutral-grey material with an env map), glass by translucency, paint by a carcols marker. Mods
 combine arbitrary texture names, so a name rule there produces false positives on whole fleets.

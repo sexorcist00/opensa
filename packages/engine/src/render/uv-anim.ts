@@ -55,6 +55,23 @@ export function stepUvAnimation(entry: UvAnimation, seconds: number, out: Float3
   out[at + 3] = lerp(k0.uv[2] ?? 1, k1.uv[2] ?? 1, f);
 }
 
+/**
+ * The dynamic offset a submesh binds: its slot, or the IDENTITY when it names none — or names one this
+ * model does not have.
+ *
+ * The out-of-range case is not hypothetical bookkeeping: `uvAnim` is read out of a `.osm` DESC, and a file
+ * is a thing a mod ships. An offset past the buffer is a WebGPU VALIDATION error inside the render pass,
+ * which takes the frame (and on some drivers the device) down — so a number we cannot vouch for renders
+ * STATIC instead, exactly as an unresolvable dict name does at build time.
+ */
+export function uvAnimOffset(slot: number | undefined, count: number): number {
+  if (slot === undefined || !Number.isInteger(slot) || slot < 0 || slot >= count) {
+    return 0;
+  }
+
+  return (slot + 1) * UV_ANIM_STRIDE;
+}
+
 function lerp(a: number, b: number, f: number): number {
   return a + (b - a) * f;
 }
