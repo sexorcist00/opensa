@@ -27,6 +27,12 @@ interpret them.
   unmodified on our own SCM VM for 465 µs/tick, gaps are declared DATA enforced by CI joins — and the
   close-out benchmark itself caught a ~3 ms/tick field tax (the `findNext` walk that never exhausted)
   plus a reporting lane that bypassed coverage.
+- [`cleo-scripts-001-rhino-tracks.md`](./cleo-scripts-001-rhino-tracks.md) — the authored rhino track
+  script (one day, three field rounds): 5.4× cheaper at peak and **114× cheaper in the frame with no
+  tank in it**, artifact 2 628 B vs 34 114 B, two defects of the original fixed rather than copied —
+  and the honest headline is that **the script was the small half**: three defects underneath it
+  (reversed native-call arguments, a wheel roll the engine never published to scripts, a MARKER wheel
+  inflated 23.5×) had to be fixed first, and none was findable from the script side.
 - [`vehicle-effects-089.md`](./vehicle-effects-089.md) — the plan-089 vehicle-effects chain (one day,
   five steps, six field rounds): two new engine capabilities (the dynamic one-shot particle lane and the
   first decal lane), four effects on SA's own assets, one new physics read born of a dead channel

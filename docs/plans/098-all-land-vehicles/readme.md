@@ -113,8 +113,12 @@ Doctrine:
 | 06 | [Special abilities](06-special-abilities.md) | Hydraulics + moving `misc_*` parts on the 02 module; per-token contracts. **Field checkpoint 4: it bounces.** |
 | 07 | [Per-class gameplay](07-class-gameplay.md) | Mount/enter per class, `NO_DOORS`/`^` timings, per-class camera, roster. |
 | 08 | [Acceptance & close-out](08-acceptance-close.md) | Per-class drives, regression bands, benchmarks, audit, feature/contract docs settle. |
+| 09 | [Tracked chassis](09-tracked-chassis.md) | Ground support spanning the TRACK footprint, not six point wheels; unreachable wheel dummies ignored. Measured: the Rhino's track overhangs its support by 1.24 m front / 1.13 m rear, and its middle wheels sit 0.518 m too high to touch anything. |
+| 10 | [High entry boarding](10-high-entry-boarding.md) | Climb ON before getting IN, gated on a derived entry height vs the ped's own reach. Measured: the Rhino's door hinge is 1.82 m above its ground plane. |
 
-Order and rationale: [priority.md](priority.md).
+Order and rationale: [priority.md](priority.md). **09 and 10 were added 2026-08-07 from a field
+round on the GTA 5 Rhino** (the tank the `cleo/scripts` 001 track work put on the road) — both are
+tank-SHAPED symptoms with model-derived causes, and neither is allowed a per-model special case.
 
 ## Out of scope (recorded, not silent)
 
