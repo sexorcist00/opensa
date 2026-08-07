@@ -67,7 +67,7 @@ never the app. The dependency picture is the tools cluster of
 - **map-placement** — shared SA map-placement workflows: object-id allocation inside the stock id gap,
   IDE/`gta.dat` editing, streamed-area budgeting, procobj scatter conversion, the tree-model roster.
 - **rw-codec** — pure byte-level RenderWare codec (chunk walker, geometry struct, DXT, texture natives,
-  mips) used by every tool that rewrites DFF/TXD bytes.
+  mips, typed 2dfx payloads) used by every tool that rewrites DFF/TXD bytes.
 - **tool-kit** — shared building blocks: CLI arg helpers, smooth-group normals, QEM simplify, editable IMG
   archive, `copyGameDir`/`guardOut`.
 
