@@ -86,4 +86,4 @@ leading non-matching chunks), mirroring RW's `RwStreamFindChunk`; still throws i
 anywhere. Regression tests in `txd.test.ts` (synthetic leading-chunk case + real asset
 `tests/txd/yosemite.txd`). Note: the matching `yosemite.dff` is a separate, shelved problem — a
 "locked"/protected container whose declared chunk counts exceed its contents, which no faithful RW
-reader recovers — see [open-issues/locked-dff.md](../../open-issues/locked-dff.md).
+reader recovers — see [open-issues/locked-dff.md](../../open-issues/fixed/locked-dff.md).

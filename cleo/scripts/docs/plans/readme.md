@@ -46,7 +46,7 @@ author's original, with the author's mod files in `mods-src/` left byte-untouche
 failure of the chain's method: the script was correct, measured 19.7x cheaper than the original and
 field-proven — it simply turned out to be treating a symptom the ENGINE should never have produced. The
 reasoning and the numbers are in [002's ledger](002-no-lights.md); the replacement rule is
-[`docs/plans/098-all-land-vehicles/11-model-derived-lamps.md`](../../../docs/plans/098-all-land-vehicles/11-model-derived-lamps.md).
+[`docs/plans/098-all-land-vehicles/11-model-derived-lamps.md`](../../../../docs/plans/098-all-land-vehicles/11-model-derived-lamps.md).
 
 **(d) is waived for 001 (user's call 2026-08-07)** — the artifact is placed by hand and the
 automated substitution is not built. The recipe and what a pmb rebuild does to it are in 001's

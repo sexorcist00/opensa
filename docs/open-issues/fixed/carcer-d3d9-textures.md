@@ -66,4 +66,4 @@ Both are general: any mod (any TC) shipping DXT2/DXT4 or X8R8G8B8 now decodes co
 - 645 renderware + opensa-pack tests green; no regression.
 
 See also [`docs/edge-cases/sa-formats.md`](../../edge-cases/sa-formats.md) (TXD reading is broad: DXT1/2/3/4/5
-+ uncompressed 32/16-bit) and [locked-dff.md](../locked-dff.md) (the other TXD-decode saga — anti-rip locks).
++ uncompressed 32/16-bit) and [locked-dff.md](locked-dff.md) (the other TXD-decode saga — anti-rip locks).

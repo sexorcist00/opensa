@@ -83,4 +83,4 @@ never fired and `createCollider` threw _"expected instance of OA"_ (Rapier rejec
 car's `halfExtents` (threaded through `createDynamicVehicle`; default `[1.2, 2.5, 0.7]`). General
 robustness for any vehicle missing a COL. Tests in `physics-world.test.ts`. The locked DFFs that trigger
 this (cheetah/yosemite) are otherwise shelved — see
-[open-issues/locked-dff.md](../../open-issues/locked-dff.md).
+[open-issues/locked-dff.md](../../open-issues/fixed/locked-dff.md).

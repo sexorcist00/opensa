@@ -146,7 +146,7 @@ atomic some exporters leave in; (3) both paths handle the **middle axle** (`m`) 
 the front axle steers). A missing/empty wheel rig left the car sunk (no suspension) and undriveable (no
 force applied at the wheels). Real fixtures: `tests/dff/vehicle/petro-4wheels.dff` (per-corner) +
 `petro-6wheels.dff` (3-axle + stray `wheel`). A "locked"/protected mod DFF (`yosemite`) that builds no
-wheels is a separate, shelved issue — see [open-issues/locked-dff.md](../../open-issues/locked-dff.md).
+wheels is a separate, shelved issue — see [open-issues/locked-dff.md](../../open-issues/fixed/locked-dff.md).
 
 ---
 
