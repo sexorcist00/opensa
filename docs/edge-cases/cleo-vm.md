@@ -14,3 +14,14 @@ model-side facts a script author trips over. The VM's design and served surface 
   parameter and must not "fix" the order again. Only the reversal site is guarded
   (`handlers/natives.test.ts`) — a row that re-reverses is SILENT, and a wrong axis looks like a
   plausible animation rather than an error.
+
+## Vehicle models
+
+- **Only MESH-bearing frames become parts — a dummy frame cannot be addressed at all.** The vehicle
+  builder emits a part per atomic, so pure hierarchy frames (`Bradley_dummies`, `misc_e`, …) exist in
+  the DFF and are absent from the rig. A script that anchors on one gets a null frame and silently
+  does nothing: rhino's track script reads `m_aCarNodes[CAR_MISC_E]`, gets 0, fails its own null
+  guard, and never touches a single part — **0** effects per frame against the real rig where a
+  permissive mock reports 36. Check with `scripts/debug/dump-vehicle-rig.ts` (its "parts the builder
+  emitted" list is the addressable set); this is also why a VM test must be given the model's real
+  part list, never the default "every asked name exists".
