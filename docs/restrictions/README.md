@@ -22,6 +22,12 @@ The rubrics next door answer different questions, and the difference is WHEN you
 | [`performance/`](../performance/) | *What could I trade for frame time?* | when the frame budget is blown |
 | [`postmortem/`](../postmortem/) | *Has this been tried?* | before reviving a direction |
 
+**The original game gets its own folder.** [`gta-sa-original/`](../gta-sa-original/README.md) carries what
+Rockstar's game and the real install we ship into actually are — the reference install's plugins, ini
+settings and measured ceilings. This folder carries the RULE; that one carries the measurement. Read the
+reference install before costing anything against the numbers in [sa-target.md](sa-target.md): two of its
+four ceilings are set to `unlimited` on the install we target.
+
 A fact may appear in two of them, but **only once as detail**: edge-cases carries the measurement, this
 folder carries the one-line rule, a link, and the two things edge-cases does not say — **what breaks when you
 violate it, and whether anything catches you**. Nothing here is copied; everything here points.

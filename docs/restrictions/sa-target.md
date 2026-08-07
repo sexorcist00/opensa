@@ -22,6 +22,13 @@ build cannot tell you that you blew the real game's pools.
 
 **Caught:** on a `:sa` build, yes, loudly. On a `:opensa` build, no — and that is now the common case.
 
+> **The install we actually target lifts two of these.** [reference-install.md](../gta-sa-original/reference-install.md) records
+> the declared baseline (`NO_COMMIT/gta_sa`, 2026-08-07): OLA sets `EntitiesPerIpl = unlimited` (the 4 096
+> per-file buffer) and `EntityIpl = unlimited` (the 40 slots), and it runs 72 914 permanent rows in files of
+> up to 9 627. So the row-count table above is the **stock** budget; costing a plan against it when the
+> target has neither ceiling silently under-builds. The one ceiling no adjuster lifts is int16 — that is
+> `perfect-map.asi`'s, and at 2.23× the ceiling this install depends on it.
+
 ## In-game bisection of pool exhaustion gives false negatives
 
 Removing ANY img entry can make the symptom disappear without the removed entry being the cause. Diagnose
@@ -29,11 +36,16 @@ pool exhaustion by COUNTING against the ini, never by bisecting in the field.
 
 **Caught:** no — and the failure mode is a confident wrong answer.
 
-## Only one limit adjuster may patch IPL/pool limits
+## Only one limit adjuster may patch IPL/pool limits — but both may be INSTALLED
 
-FLA and OLA active on the same zones crash. A plan that raises a limit picks one adjuster and says which.
+FLA and OLA patching the same zones crash in `LinkLods`. What the rule forbids is the overlap, not the
+coexistence: the [reference install](../gta-sa-original/reference-install.md) runs **both**, and boots,
+because FLA's entire `[IPL]` section is disabled and OLA owns those zones alone. So "which adjuster is
+installed" is the wrong question — a plan that raises a limit has to name **which adjuster owns that
+limit's zone**, and check the other one's ini is not also set for it.
 
-**Caught:** no.
+**Caught:** no. And the failure is a boot crash with no attribution, so read both inis before blaming a
+build.
 
 ## An exe address or expected byte is DECLARED ONCE, in the catalogue — never in the patch
 

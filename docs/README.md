@@ -71,6 +71,7 @@ Read it as a set of rules:
 | [`contracts/`](./contracts/) | Names that carry behaviour (files, frames, materials, data rows). |
 | [`edge-cases/`](./edge-cases/README.md) | CURRENT limitations/constraints only, no legacy. Read while DEBUGGING. |
 | [`restrictions/`](./restrictions/README.md) | Rules a new design must satisfy. Read BEFORE an idea/concept/plan. |
+| [`gta-sa-original/`](./gta-sa-original/README.md) | The ORIGINAL game and the real install we ship into — kept apart from anything describing OpenSA. Anything we change or discover about GTA:SA original is recorded here in the same change. |
 | [`hacks/`](./hacks/README.md) | Expedients we knowingly took: fitted constants, stand-in rules, faked effects. Replaced ones move to [`hacks/retired/`](./hacks/retired/). |
 | [`performance/`](./performance/) | Deferred-optimization levers (a price tag, not a plan). |
 | [`benchmarks/`](./benchmarks/) | Every reported perf figure, recorded before it is analysed. |
