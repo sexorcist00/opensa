@@ -92,13 +92,17 @@ function main(): void {
       [`${pak}/pak/manifest.json`, `${pak}-pack/manifest.json`, `${pak}/opensa/manifest.json`].find((path) =>
         existsSync(path),
       ) ?? `${pak}/pak/manifest.json`;
+    // `textures` is a RECORD keyed `array-<n>`, not a list — reading it as one reported every world model's
+    // arrays as MISSING FROM MANIFEST while the game rendered them fine (found 2026-08-07, plan 099/01).
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
-      textures: { format?: string; layers?: number; size?: number }[];
+      textures: Record<string, { format?: number; height?: number; layers?: number; width?: number }>;
     };
-    console.log(`\nmanifest has ${manifest.textures.length} world arrays; the model's refs:`);
+    const arrays = manifest.textures ?? {};
+    console.log(`\nmanifest has ${Object.keys(arrays).length} world arrays; the model's refs:`);
     for (const array of new Set(fixture.submeshes.map((submesh) => submesh.array ?? 0))) {
-      const info = manifest.textures[array];
-      console.log(`array ${array}: ${info ? JSON.stringify(info) : 'MISSING FROM MANIFEST'}`);
+      const info = arrays[`array-${array}`];
+      const shown = info && { format: info.format, layers: info.layers, size: `${info.width}x${info.height}` };
+      console.log(`array ${array}: ${shown ? JSON.stringify(shown) : 'MISSING FROM MANIFEST'}`);
     }
   }
 }

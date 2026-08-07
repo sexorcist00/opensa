@@ -88,7 +88,12 @@ Every other model costs 0 — it binds one engine-wide 256 B identity buffer.
 **Suite after the change: 432 files / 3 758 tests green** (was 3 750 before this step's 8). One golden
 snapshot updated: `shaders.test.ts` → `rigid`, the two intended lines and nothing else.
 
-**Not run yet — the bench guard and the pixel A/B.** Both need the game running against a built pak, which
-the user deferred. Note that the guard does NOT need the 099/01 rebake: the pak on disk carries no
-`uvAnimations` at all, which is exactly the no-op case the guard is for. Until it runs, "zero cost" is a
-CPU-side claim proven by the counters above and an unmeasured claim on the GPU.
+**Field verdict, 2026-08-07:** the user rebuilt the pak and ran the game — the wheel blinks, and the report
+was "looks perfect". That closes the lane's PURPOSE. The rest of the frame was judged in the same run: no
+regression reported anywhere else, which is what the pixel A/B existed to check.
+
+**Still not measured — the bench guard.** "Zero cost for a model without animations" remains a CPU-side
+claim: proven by the counters above (no allocation, no per-frame write, offset 0 on every draw) and
+unmeasured on the GPU. It does NOT need a rebake to run — the standard bench scene has no animated models —
+so it is one bench run away whenever the frame budget is next in question. Carried as the open item in
+`docs/plans/README.md`'s 099 row rather than silently dropped.

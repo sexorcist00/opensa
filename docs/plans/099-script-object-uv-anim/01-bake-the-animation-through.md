@@ -38,8 +38,8 @@ runtime reader hands the engine everything it will need in 02.
 - [x] `scripts/debug/dump-osm.ts` prints the animation row + the submesh it drives, both DERIVED from
       the keyframes (distinct u-offsets, smallest positive time step), so a scrolling sign describes
       itself as honestly as a film strip.
-- [ ] **Rebake the ferris models through the normal pipeline** and read the row back with
-      `dump-osm.ts ferriswheel_lights` — deferred at the user's request (no rebuild yet, 2026-08-07).
+- [x] **Rebake the ferris models through the normal pipeline** and read the row back with
+      `dump-osm.ts ferriswheel_lights` — done 2026-08-07 (the user's own rebuild); output in the ledger.
 
 ## Verification
 
@@ -74,6 +74,22 @@ one slot; plus 2 real-asset cases pinning `f13d`'s 261 keyframes / 0.225 s caden
 `tools/opensa-pack/src` + `packages/game/src/adapters`: 36 files / 365 tests green. `tsc --noEmit` and
 `eslint` clean.
 
-**Not yet done:** the pak rebake and the `dump-osm.ts` read-back (the step's stated verification) — the user
-deferred rebuilding. Until it runs, this step is proven at the unit + round-trip level only: nothing has
-confirmed the row in a real built pak.
+**The stated verification, run 2026-08-07 against the user's rebuilt `build/original/opensa`:**
+
+```
+section DESC: 20538 bytes · section GEOM: 2911680 bytes
+textureSource: world · 51840 vertices
+uvAnimation: f13d (261 keyframes, 13 distinct u-offsets × 0.225 s, loop 29.25 s)
+submesh part=zzzz array=22 indices=151200 translucent=true uvAnim=0 (f13d)
+submesh part=zzzz array=33 indices=60480 translucent=false
+```
+
+Exactly the row the step asked for: one animation, one flagged submesh, the other static. The CONTROL
+(`dump-osm.ts admiral`) prints no animation row at all — the key is absent, as designed. Note the built
+ferris DESC is 20 538 B against the 20 512 B measured off `buildModelOsm` above: the built one is
+world-sourced and carries the per-submesh `array` refs the standalone build does not.
+
+**A defect the verification itself surfaced** (and it was in the tool, not the data — lesson 15): `dump-osm`
+read `manifest.textures` as a LIST, but it is a record keyed `array-<n>`. Every world-sourced model's arrays
+therefore printed `MISSING FROM MANIFEST` while the game rendered them fine. Fixed in the same change; the
+ferris now reports `array 22: 1024×1024, 16 layers` and `array 33: 4×4, 2 layers` out of 163 world arrays.

@@ -1,5 +1,11 @@
 # Plan 099 — UV animations on script objects (the ferris wheel's blinking lights)
 
+**STATUS: DONE 2026-08-07** — all three steps shipped; the user rebuilt and ran the game and the bulbs
+step ("looks perfect"). The `docs/edge-cases/engine-rendering.md` row is removed, the limitation is
+lifted. ONE open item, named in 02's and 03's ledgers: the bench guard was never run, so "zero cost for
+a model without animations" is proven CPU-side (no allocation, no per-frame write) and unmeasured on
+the GPU. The edge-cases text below is kept as the diagnosis record.
+
 **Field report (2026-08-05, the 097/07 bug round):** the Pacific Park ferris wheel spins but its light
 bulbs do not BLINK the way the original mod does under SA. Diagnosis is complete and recorded in
 `docs/edge-cases/engine-rendering.md`: the blink is a **UV animation**, not a script effect —

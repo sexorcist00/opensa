@@ -19,14 +19,15 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 `001`–`099`, one folder each (066, 073, 074, 078–082, 096–099 carry multi-part sub-plans; 083 kept its
 row but its chain was superseded by 097). Newest first:
 
-- **[099 — UV animations on script objects](./099-script-object-uv-anim/readme.md)** — **PLANNED
-  2026-08-05** (from the 097/07 field bug round): the ferris wheel's blinking bulbs are a UVAnimDict
-  step animation (`f13d`, a 13-frame film strip stepping every 0.225 s) that the world's kind-4 lane
-  already plays but the rigid/script-object path ignores. Three steps: bake the animation through
-  (builder → `.osm` fixture, optional field), the rigid UV-anim lane (per-model uniform, identity
-  slot 0, dynamic offsets — unbundled draws, so no bundle staleness; zero cost for models without
-  animations, proven by A/B), field close-out (timed screenshot A/B at the wheel, edge-cases row
-  removed).
+- **[099 — UV animations on script objects](./099-script-object-uv-anim/readme.md)** — **DONE
+  2026-08-07** (planned 2026-08-05 from the 097/07 field bug round): the ferris wheel's blinking bulbs
+  are a UVAnimDict step animation (`f13d`, a 13-frame film strip stepping every 0.225 s) that the
+  world's kind-4 lane already played but the rigid/script-object path ignored. Baked the animation
+  through (builder → `.osm` fixture, model-local list + per-submesh slot), added the rigid UV-anim lane
+  (per-model uniform, identity slot 0, dynamic offsets — unbundled draws, so no bundle staleness; zero
+  allocation and zero per-frame writes for models without animations), and the user's own rebuild +
+  field run closed it: **the wheel blinks**. The edge-cases row is removed — the limitation is lifted.
+  Open: the bench guard was never run, so "zero cost" is proven CPU-side only (099/02 ledger).
 
 - **[098 — All land vehicle types](./098-all-land-vehicles/readme.md)** — **PLANNED 2026-08-04**,
   supersedes `roadmap/0.5.0/plans/04-all-vehicle-types/` (deleted). Rewritten from a four-way recon
