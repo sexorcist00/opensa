@@ -88,6 +88,14 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   the legacy single max-size array, with a logged warning. The measured negative result stands: a SHARED
   per-size dictionary buys vehicles nothing (car textures do not repeat — 8 %):
   [`performance/applied/vehicle-texture-array-buckets.md`](../performance/applied/vehicle-texture-array-buckets.md).
+- **ImVehFt `ivflights` geometry is a lighting convention we do NOT read.** A mod authored for Improved
+  Vehicle Features puts its lamps in `ivflights` parts plus its own config, and such a car can ship with
+  no standard SA lamp material at all — to us it then looks lampless, and since plan 098/11 that means it
+  gets no beam, pool light or corona either. In today's fleet exactly ONE model carries `ivflights` (the
+  GTA 5 Rhino, 15 submeshes) and it also authors standard lamp materials and dummies, so nothing depends
+  on it — **but that is a property of the current fleet, not a rule**, and 098 exists to install more
+  custom cars. `scripts/debug/lamp-census.ts` prints the cross-tab (models with no standard lamp material
+  × models carrying `ivflights`); run it after each batch of installs.
 - **Mod vegetation is ~48× stock density, and almost none of it buys coverage.** `mods-src/vegetation`
   models run 1451–5813 triangles against SA's 48–132; in draw range of the Ganton path that is 13 524 →
   645 433 triangles (×47.7) for a leaf-area growth of only ×1.66 — **~96 % of the added triangles add no
