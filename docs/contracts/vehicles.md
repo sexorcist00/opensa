@@ -158,7 +158,28 @@ Every one is carried verbatim into the model. Consumed today:
 | Name | Used for |
 | --- | --- |
 | `ped_frontseat` | The driver seat position. |
-| `headlights` / `taillights` | Lamp anchors (SA authors ONE per end and mirrors it). |
+| `headlights` / `taillights` | Lamp anchors (SA authors ONE per end and mirrors it). **At the model ORIGIN = this model has no lamp of that kind** — see below. |
+
+**A lamp dummy at (0,0,0) means "no lamp here", and it is the only way to say it.** That is SA's own
+convention, not ours: a missing dummy reads back as (0,0,0) from `CVehicleModelInfo::m_avDummyPos` and
+`CVehicle::DoHeadLightBeam` tests exactly that (`if (pointModelSpace.IsZero()) return;`). Since plan
+098/11 OpenSA honours it at BOTH ends — an absent or origin dummy emits no beam, no pool light and no
+corona there — and there is no fallback: what the model does not author, the game does not light.
+
+For a mod author this is the whole lever. A race car with no lamps zeroes both dummies (the hotring mod's
+own author had already done it for `taillights`); a truck with no rear lamps zeroes just the tail. It
+needs no engine change, no config line and no per-model rule, and it is what
+`scripts/debug/zero-vehicle-dummy.ts` writes — a 12-byte edit to that one frame's position.
+
+**Spelled wrong / left out:** a dummy the model simply does not carry behaves identically to a zeroed
+one (no lamp at that end), so a typo in the frame name silently costs the car its lights on that side
+rather than erroring. `scripts/debug/lamp-census.ts` is where that shows up — it prints, per model,
+whether each lamp dummy is real, at the origin, or absent.
+
+**The lamp MATERIAL is a different thing and does not gate the light.** Whether the lens glows (the
+lit-twin swap and the emissive) keys on the `vehiclelights*` marker material; whether there IS a light
+keys on the dummy. The stock `coach` proves they are independent: it carries no head lamp material at
+all and still has working headlights.
 
 Carried but not consumed yet: `exhaust`, `petrolcap`, `engine`, `ped_arm`, the second lamp dummies some
 models author (`taillights2`), and anything else the author left.
