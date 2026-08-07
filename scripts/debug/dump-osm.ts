@@ -9,9 +9,31 @@ import { existsSync, readFileSync } from 'node:fs';
 
 interface Fixture {
   parts: { name: string }[];
-  submeshes: { array?: number; indexCount: number; part: number; translucent?: boolean }[];
+  submeshes: { array?: number; indexCount: number; part: number; translucent?: boolean; uvAnim?: number }[];
   textureSource?: 'world';
+  uvAnimations?: { duration: number; keyframes: { time: number; uv: number[] }[]; name: string }[];
   vertexCount: number;
+}
+
+/**
+ * One animation as a line: distinct UV-X offsets (a film strip's frame count) and the smallest positive
+ * step between keyframe times (its cadence) — both READ off the keyframes, so a scrolling sign describes
+ * itself just as honestly as the ferris wheel's 13-frame strip does.
+ */
+function describeUvAnim(animation: NonNullable<Fixture['uvAnimations']>[number]): string {
+  const offsets = new Set(animation.keyframes.map((keyframe) => keyframe.uv[4].toFixed(5)));
+  let cadence = Infinity;
+  for (let at = 1; at < animation.keyframes.length; at += 1) {
+    const step = animation.keyframes[at].time - animation.keyframes[at - 1].time;
+    if (step > 0) {
+      cadence = Math.min(cadence, step);
+    }
+  }
+
+  return (
+    `${animation.name} (${animation.keyframes.length} keyframes, ${offsets.size} distinct u-offsets` +
+    `${cadence === Infinity ? '' : ` × ${cadence.toFixed(3)} s`}, loop ${animation.duration.toFixed(2)} s)`
+  );
 }
 
 function main(): void {
@@ -47,10 +69,16 @@ function main(): void {
   const fixture = JSON.parse(new TextDecoder().decode(desc)) as Fixture;
   console.log(`\ntextureSource: ${fixture.textureSource ?? '(own TEXS)'} · ${fixture.vertexCount} vertices`);
   console.log(`parts: ${fixture.parts.map((part) => part.name).join(', ')}`);
+  for (const animation of fixture.uvAnimations ?? []) {
+    console.log(`uvAnimation: ${describeUvAnim(animation)}`);
+  }
   for (const submesh of fixture.submeshes) {
     console.log(
       `submesh part=${fixture.parts[submesh.part]?.name ?? submesh.part} array=${submesh.array ?? 0} ` +
-        `indices=${submesh.indexCount} translucent=${submesh.translucent ?? false}`,
+        `indices=${submesh.indexCount} translucent=${submesh.translucent ?? false}` +
+        (submesh.uvAnim === undefined
+          ? ''
+          : ` uvAnim=${submesh.uvAnim} (${fixture.uvAnimations?.[submesh.uvAnim]?.name ?? 'MISSING'})`),
     );
   }
 

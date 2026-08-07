@@ -66,6 +66,11 @@ const MOD_MANIFEST: readonly Fixture[] = [
   // face array put the slab face-down and single-sided culling deleted it — the "blue strip" (plan 095).
   // A synthetic clump cannot prove this: the whole point is what a real exporter actually writes.
   modFile('0. Map Fixes Pack/gta3_img/roads32_law2.dff', 'mods/roads32_law2.dff'),
+  // The Pacific Park ferris wheel's light ring (plan 099): a UVAnimDict entry `f13d` — 261 keyframes
+  // stepping UV0 by 1/13 every 0.225 s — plus the `Frames` material that references it. Nothing in stock
+  // SA's vehicle/prop set animates its UVs, so the rigid builder's binding can only be proven on this one.
+  modFile('60. Pacific Park Rotating Ferris Wheel/gta3_img/ferriswheel_lights.dff', 'mods/ferriswheel_lights.dff'),
+  modFile('60. Pacific Park Rotating Ferris Wheel/gta3_img/ferriswheel_lights.txd', 'mods/ferriswheel_lights.txd'),
 ];
 
 /**

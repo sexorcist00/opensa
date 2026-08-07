@@ -70,7 +70,7 @@ Run any of them as `npx tsx scripts/debug/<name>.ts …`; `--game <id>` picks th
 
 | Script | Answers |
 | --- | --- |
-| `dump-osm.ts <model> [--pak dir]` | a built pak `.osm`'s sections + DESC fixture: parts, submeshes, texture-array refs, own-TEXS vs world-sourced |
+| `dump-osm.ts <model> [--pak dir]` | a built pak `.osm`'s sections + DESC fixture: parts, submeshes, texture-array refs, own-TEXS vs world-sourced, and the model's UV animations (keyframes, distinct u-offsets, cadence, loop) with the submesh each one drives |
 | `dump-osm-meta.ts <model> [--pak dir]` | per-submesh texture-LAYER histograms (vertex meta) + each TEXS layer's size/format/mips/name-hash — the layer-mismatch finder |
 | `dump-texel-avg.ts <model> [pakDir]` | average colour of each own-TEXS layer (BC endpoint scan) — tells a black/greyed bake from a faithful one in seconds |
 | `dump-vehicle-ao.ts` | per-part night-alpha (vehicle AO channel) stats for the mods-src admiral/comet — bakes from the DFF, so it judges a sky-occlusion change offline (run · stash · run · diff) |

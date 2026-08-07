@@ -22,18 +22,24 @@ runtime reader hands the engine everything it will need in 02.
 
 ## Subtasks
 
-- [ ] `build-vehicle-model.ts`: resolve material → dict entry in `appendGeometry`'s material walk;
+- [x] `build-vehicle-model.ts`: resolve material → dict entry in `appendGeometry`'s material walk;
       thread the model-local animation list into `VehicleModelData` + the submesh records.
-- [ ] `VehicleFixture` (renderware vehicle types) + `tools/opensa-pack/src/model-osm.ts` (the fixture
+- [x] `VehicleFixture` (renderware vehicle types) + `tools/opensa-pack/src/model-osm.ts` (the fixture
       is serialized as-is — verify nothing strips unknown fields) + `readModelOsm`
       (`packages/game/src/adapters/vehicle-osm.ts`) + `toRigidModelInit` → `VehicleModelInit`.
-- [ ] Tests (builder): a synthetic clump whose material references a dict entry → submesh carries the
+- [x] Tests (builder): a synthetic clump whose material references a dict entry → submesh carries the
       slot and the model carries the keyframes; an unknown name → no slot; a clump with a dict but no
       referencing material → empty list (negative cases first, per the house test structure).
-- [ ] Tests (round-trip): encode a fixture with animations → `readModelOsm` returns them; an old
-      fixture without the field → none.
-- [ ] Rebake the ferris models through the normal pipeline; `scripts/debug/dump-osm.ts
-      ferriswheel_lights` prints the animation row (extend the dump to show it — it is the check).
+      **Plus the real asset**: `ferriswheel_lights.dff` is now a fixture (one `MOD_MANIFEST` line) —
+      nothing in the stock vehicle/prop set animates its UVs, so the binding could only be proven on it.
+- [x] Tests (round-trip): encode a fixture with animations → `readModelOsm` returns them; an old
+      fixture without the field → none. `tools/opensa-pack/src/model-osm-uv-anim.test.ts`, over the real
+      ferris ring (positive) and the real admiral (negative — no key written at all).
+- [x] `scripts/debug/dump-osm.ts` prints the animation row + the submesh it drives, both DERIVED from
+      the keyframes (distinct u-offsets, smallest positive time step), so a scrolling sign describes
+      itself as honestly as a film strip.
+- [ ] **Rebake the ferris models through the normal pipeline** and read the row back with
+      `dump-osm.ts ferriswheel_lights` — deferred at the user's request (no rebuild yet, 2026-08-07).
 
 ## Verification
 
@@ -44,4 +50,30 @@ delta in the ledger.
 
 ## Ledger
 
-_(numbers on completion)_
+**Decision that differs from the plan text:** `VehicleModelData.uvAnimations` is OPTIONAL, not a required
+array. The fixture writer emits the key only when the list is non-empty (the `popUpLights` pattern beside
+it), which is what keeps every other model's `DESC` byte-identical — an always-present `[]` would have
+rewritten the whole pak's descriptions to say nothing.
+
+**Sizes, 2026-08-07** (built through `buildModelOsm`, the production path, off the committed fixtures):
+
+| model                        | `.osm`      | `DESC`   | of which `uvAnimations` |
+| ---------------------------- | ----------- | -------- | ----------------------- |
+| `ferriswheel_lights` (mod)   | 3 981 140 B | 20 512 B | 19 312 B (94 % of DESC) |
+| `admiral` (stock, no anims)  | 261 708 B   | 44 178 B | 0 B — no key written    |
+
+The animation JSON is large RELATIVE TO ITS DESC (261 keyframes × 6 floats, spelled out) and negligible
+against the file: 0.49 % of the ferris `.osm`. Worth knowing before something with many animated materials
+ships — the keyframes are a STEP animation and would compress to a cadence + a step count — but nothing in
+the current corpus is anywhere near paying for that.
+
+**Verification run 2026-08-07:** `build-vehicle-model.test.ts` 60/60 green (5 new: 3 negative — unknown
+name, empty keyframes, unreferenced dict; 2 positive — model-local slot numbering, two materials sharing
+one slot; plus 2 real-asset cases pinning `f13d`'s 261 keyframes / 0.225 s cadence / 29.25 s loop).
+`model-osm-uv-anim.test.ts` 2/2. Affected suites `packages/renderware/src/vehicle` +
+`tools/opensa-pack/src` + `packages/game/src/adapters`: 36 files / 365 tests green. `tsc --noEmit` and
+`eslint` clean.
+
+**Not yet done:** the pak rebake and the `dump-osm.ts` read-back (the step's stated verification) — the user
+deferred rebuilding. Until it runs, this step is proven at the unit + round-trip level only: nothing has
+confirmed the row in a real built pak.

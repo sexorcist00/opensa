@@ -27,6 +27,12 @@ background, taken from the material's texture NAME, which conversion otherwise d
 `_vlo` LOD mesh). All are additive: a pak built before them still reads, and its cars simply wear the stock
 placeholder plate.
 
+**`DESC` also carries the model's UV animations** (plan 099): `uvAnimations` — the DFF UVAnimDict entries
+this model's materials actually reference, keyframes verbatim — plus a per-submesh `uvAnim` index into that
+list. Model-LOCAL on purpose: the cell path registers dict names GLOBALLY (cells index one manifest array),
+but a rigid model streams in and out on its own, so it carries its animations with it. Absent on the models
+that animate nothing, which is every vehicle and nearly every prop — and on every `.osm` written before 099.
+
 **Private vs world textures.** By-name classes (vehicles, peds, clutter, props, breakables) carry their own
 dictionary in the `.osm` `TEXS` section — self-contained, viewable standalone. **Map objects** are planned
 against the pak's shared world dictionary instead: their `.osm` is `DESC + GEOM` with global array

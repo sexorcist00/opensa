@@ -104,6 +104,9 @@ export function readModelOsm(name: string, osm: Uint8Array): OptimizedModel {
       reflect: at(layout.reflect, vertexCount * STRIDE.reflect),
       submeshes: fixture.submeshes,
       textures: dictionaries.map((bytes) => ({ bytes, kind: 'ostex' }) as const),
+      // Absent on every `.osm` written before 099 and on every model whose materials animate nothing —
+      // the same "no animation" the builder means by omitting it.
+      ...(fixture.uvAnimations?.length ? { uvAnimations: fixture.uvAnimations } : {}),
       uvs: at(layout.uvs, vertexCount * STRIDE.uvs),
       vertexCount,
     },

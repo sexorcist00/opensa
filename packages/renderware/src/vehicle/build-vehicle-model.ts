@@ -9,7 +9,7 @@
  *   - `_dam` / `_vlo` are extra SUBMESHES on the same buffers (hidden via per-submesh visibility), not
  *     separate meshes toggled through a scene graph, which the own engine does not have.
  */
-import type { RWClump, RWGeometry, RWMaterial } from '../parsers/binary/types';
+import type { RWClump, RWGeometry, RWMaterial, RWUvAnimation } from '../parsers/binary/types';
 import type { VehicleTextures } from './textures';
 import type {
   VehicleBuildOptions,
@@ -85,6 +85,10 @@ interface Scratch {
   positions: number[];
   reflect: number[];
   submeshes: VehicleModelSubmesh[];
+  /** Model-local animation list, appended the first time a material names an entry. */
+  uvAnimations: RWUvAnimation[];
+  /** The clump's UVAnimDict by name — the source {@link uvAnimSlot} resolves references against. */
+  uvAnimDict: ReadonlyMap<string, RWUvAnimation>;
   uvs: number[];
 }
 
@@ -104,6 +108,8 @@ export function buildVehicleModel(
     positions: [],
     reflect: [],
     submeshes: [],
+    uvAnimations: [],
+    uvAnimDict: new Map((clump.uvAnimations ?? []).map((animation) => [animation.name, animation])),
     uvs: [],
   };
   const doors: VehicleDoor[] = [];
@@ -208,6 +214,9 @@ export function buildVehicleModel(
     reflect: new Uint8Array(scratch.reflect),
     submeshes: scratch.submeshes,
     texture: textures.pack(),
+    // Only when a material actually references one: emitting an empty list would rewrite every model's
+    // fixture for nothing, and "absent" is what every consumer already reads as "no animation".
+    ...(scratch.uvAnimations.length > 0 ? { uvAnimations: scratch.uvAnimations } : {}),
     uvs: new Float32Array(scratch.uvs),
     wheels,
   };
@@ -357,6 +366,7 @@ function appendGeometry(
     // 5 of the 143 plated models author a plate face on their `_vlo` at all; they keep the stock look.
     const plate = kind === 'lod' ? null : plateFace(material);
     const tyre = tyres.has(materialIndex);
+    const uvAnim = uvAnimSlot(scratch, material);
     // Texture transparency judged over THIS group's own UV region, not the whole texture — mod interiors
     // share alpha atlases, and the whole-texture answer sent opaque shelves and gauge housings into the
     // no-depth blend phase (see `hasAlphaIn`).
@@ -467,6 +477,7 @@ function appendGeometry(
       part,
       radius: Math.sqrt(radiusSq),
       translucent: surface.translucent,
+      ...(uvAnim === null ? {} : { uvAnim }),
     });
   });
 }
@@ -992,6 +1003,32 @@ function shownShell(scratch: Scratch): Uint8Array {
   }
 
   return shown;
+}
+
+/**
+ * This material's slot in the model's own animation list (plan 099/01), or null for static UVs.
+ *
+ * The rule is the world lane's (`resolveUvAnim`, `packages/cell-weld/src/weld.ts`): the FIRST dict name the
+ * material references that the clump actually carries. A name with no entry, or an entry with no keyframes,
+ * renders STATIC rather than inventing a scroll — a mod that ships a stale reference must still draw.
+ * Channels beyond UV0 are ignored here too; nothing in the game authors one.
+ */
+function uvAnimSlot(scratch: Scratch, material: RWMaterial): null | number {
+  const name = material.effects?.uvAnim?.names[0];
+  if (name === undefined) {
+    return null;
+  }
+  const existing = scratch.uvAnimations.findIndex((animation) => animation.name === name);
+  if (existing !== -1) {
+    return existing;
+  }
+  const animation = scratch.uvAnimDict.get(name);
+  if (!animation || animation.keyframes.length === 0) {
+    return null;
+  }
+  scratch.uvAnimations.push(animation);
+
+  return scratch.uvAnimations.length - 1;
 }
 
 /**

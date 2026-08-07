@@ -3,6 +3,7 @@
  * (`three/build-vehicle.ts`); the own engine needs the SAME lore as flat buffers + part transforms. This is
  * the shared product both renderers' hosts consume.
  */
+import type { RWUvAnimation } from '../parsers/binary/types';
 
 /**
  * Per-vertex paint slot, carried in `meta.z`. The engine resolves it to the INSTANCE's colour at draw time,
@@ -109,6 +110,9 @@ export interface VehicleFixture {
   /** `'world'` = the submeshes' `array` fields are refs into the SHARED world plan and the file carries no
    *  `TEXS`; absent = a private dictionary rides along, which is what every by-name class ships. */
   textureSource?: 'world';
+  /** The UV animations this model's materials reference, model-local (see {@link VehicleModelData}).
+   *  Absent when no material references one — which every `.osm` written before 099 also says. */
+  uvAnimations?: RWUvAnimation[];
   vertexCount: number;
   wheels: VehicleWheel[];
 }
@@ -150,6 +154,14 @@ export interface VehicleModelData {
   reflect: Uint8Array;
   submeshes: readonly VehicleModelSubmesh[];
   texture: VehicleTextureArray;
+  /**
+   * UV animations from the DFF's UVAnimDict, keeping ONLY the entries this model's materials actually
+   * reference; a submesh names its own by `uvAnim`, an index into THIS list. The world lane registers dict
+   * names GLOBALLY across the pak (`resolveUvAnim`, cell-weld) because its cells index one shared manifest
+   * array — a rigid model streams in and out on its own, so it carries its animations with it instead.
+   * Absent when no material references one, which is every vehicle and nearly every prop.
+   */
+  uvAnimations?: readonly RWUvAnimation[];
   uvs: Float32Array;
   wheels: readonly VehicleWheel[];
 }
@@ -213,6 +225,9 @@ export interface VehicleModelSubmesh {
   /** True when this submesh is the WHEEL's rubber (`wheel-tyre.ts` — a geometric test, not a name). Rubber
    *  never reflects, and a damageable tyre will want to find itself later. Absent = not a tyre. */
   tyre?: boolean;
+  /** Index into the MODEL's `uvAnimations` (plan 099/01) — this submesh's material scrolls/steps its UV0.
+   *  Absent = static UVs, which is the only thing an `.osm` written before 099 can say. */
+  uvAnim?: number;
 }
 
 /**

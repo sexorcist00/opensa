@@ -216,6 +216,9 @@ export function packVehicleFixture(
         offset: 0, // the layers live in the sibling `.ostex`, not in GEOM
         width: built.texture.width,
       },
+      // Keyframes are small and few (one film-strip dict is ~260 rows) and only the models that reference
+      // one carry the key at all, so this rides in DESC rather than earning a section of its own.
+      ...(built.uvAnimations?.length ? { uvAnimations: [...built.uvAnimations] } : {}),
       vertexCount: built.positions.length / 3,
       wheels: [...built.wheels],
     },

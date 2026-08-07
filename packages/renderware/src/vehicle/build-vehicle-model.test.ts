@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import type { RWClump, RWFrame, RWGeometry, RWMaterial } from '../parsers/binary/types';
+import type { RWClump, RWFrame, RWGeometry, RWMaterial, RWUvAnimation } from '../parsers/binary/types';
 
 import { GeometryFlag } from '../parsers/binary/constants';
 import { parseDff } from '../parsers/binary/dff';
@@ -12,6 +12,11 @@ import { MaterialClass, PaintSlot } from './types';
 
 const PRIMARY_MARKER: [number, number, number, number] = [60, 255, 0, 255];
 const HEAD_LAMP_MARKER: [number, number, number, number] = [0, 255, 200, 255];
+
+/** A one-atomic clump carrying a UVAnimDict — the shape every animated script object has. */
+function animated(geometries: RWGeometry[], uvAnimations: RWUvAnimation[]): RWClump {
+  return { ...clump([frame('chassis')], [{ frame: 0, geometry: 0 }], geometries), uvAnimations };
+}
 
 function clump(frames: RWFrame[], atomics: { frame: number; geometry: number }[], geometries: RWGeometry[]): RWClump {
   return {
@@ -62,6 +67,22 @@ function material(partial: Partial<RWMaterial> = {}): RWMaterial {
 /** No TXDs: every material resolves to the built-in white layer. */
 function textures(): VehicleTextures {
   return new VehicleTextures([]);
+}
+
+/** A two-keyframe dict entry — the smallest thing the builder must accept as playable. */
+function uvAnimation(name: string): RWUvAnimation {
+  return {
+    duration: 0.45,
+    keyframes: [
+      { time: 0, uv: [0, 1, 1, 0, 0, 0] },
+      { time: 0.225, uv: [0, 1, 1, 0, 0.0769, 0] },
+    ],
+    name,
+  };
+}
+
+function uvAnimMaterial(name: string): RWMaterial {
+  return material({ effects: { uvAnim: { channelMask: 1, names: [name] } } });
 }
 
 describe('buildVehicleModel', () => {
@@ -125,9 +146,59 @@ describe('buildVehicleModel', () => {
       // runtime show exactly one per car instead of all three on top of each other.
       expect(built.submeshes.map((submesh) => submesh.extra ?? null)).toEqual([null, 'extra1', 'extra2', 'extra3']);
     });
+
+    it('a material naming a UV animation the clump does not carry renders static', () => {
+      const built = buildVehicleModel(
+        animated([geometry([uvAnimMaterial('missing')])], [uvAnimation('f13d')]),
+        textures(),
+      );
+
+      expect(built.uvAnimations).toBeUndefined();
+      expect(built.submeshes[0].uvAnim).toBeUndefined();
+    });
+
+    it('a named entry with no keyframes renders static rather than inventing a scroll', () => {
+      const built = buildVehicleModel(
+        animated([geometry([uvAnimMaterial('f13d')])], [{ ...uvAnimation('f13d'), keyframes: [] }]),
+        textures(),
+      );
+
+      expect(built.uvAnimations).toBeUndefined();
+      expect(built.submeshes[0].uvAnim).toBeUndefined();
+    });
+
+    it('a dict no material references is dropped — the model carries only what it plays', () => {
+      const built = buildVehicleModel(animated([geometry()], [uvAnimation('f13d')]), textures());
+
+      expect(built.uvAnimations).toBeUndefined();
+      expect(built.submeshes[0].uvAnim).toBeUndefined();
+    });
   });
 
   describe('positive cases', () => {
+    it('binds a material to its dict entry and keeps the keyframes on the model', () => {
+      const built = buildVehicleModel(
+        animated([geometry([uvAnimMaterial('f13d'), material()])], [uvAnimation('other'), uvAnimation('f13d')]),
+        textures(),
+      );
+
+      // The slot indexes the MODEL's list, not the clump's dict: only `f13d` is referenced, so it is 0 here
+      // even though the dict holds it second.
+      expect(built.submeshes[0].uvAnim).toBe(0);
+      expect(built.uvAnimations?.map((animation) => animation.name)).toEqual(['f13d']);
+      expect(built.uvAnimations?.[0].keyframes).toHaveLength(2);
+    });
+
+    it('two materials sharing one entry share the slot instead of duplicating the keyframes', () => {
+      const shared = animated([geometry([uvAnimMaterial('f13d'), uvAnimMaterial('f13d')])], [uvAnimation('f13d')]);
+      shared.geometries[0].triangles.push({ a: 0, b: 1, c: 2, materialIndex: 1 });
+
+      const built = buildVehicleModel(shared, textures());
+
+      expect(built.submeshes.map((submesh) => submesh.uvAnim)).toEqual([0, 0]);
+      expect(built.uvAnimations).toHaveLength(1);
+    });
+
     it('reads pop-up headlights off the model: the pod, and the pitch it is parked at', () => {
       const built = buildVehicleModel(
         clump(
@@ -990,6 +1061,35 @@ describe.skipIf(!existsSync(ZR350) || !existsSync(GENERIC_TXD))('buildVehicleMod
       // authored looking 40° down into the nose, which is exactly how far it has to swing.
       expect(built.parts[built.popUpLights!.part].name).toBe('misc_a');
       expect((built.popUpLights!.angle * 180) / Math.PI).toBeCloseTo(40.4, 1);
+    });
+  });
+});
+
+// Nothing in the stock vehicle/prop set animates its UVs, so the binding can only be proven on a mod: the
+// Pacific Park ferris wheel's light ring is the asset plan 099 exists for.
+const FERRIS_LIGHTS = 'tests/original/mods/ferriswheel_lights.dff';
+
+describe.skipIf(!existsSync(FERRIS_LIGHTS))('buildVehicleModel (real ferriswheel_lights.dff)', () => {
+  const built = buildVehicleModel(parseDff(toArrayBuffer(readFileSync(FERRIS_LIGHTS))), textures());
+
+  describe('positive cases', () => {
+    it("carries the mod's authored blink: the `f13d` film strip, on the `Frames` submesh alone", () => {
+      const animated = built.submeshes.filter((submesh) => submesh.uvAnim !== undefined);
+
+      expect(built.uvAnimations?.map((animation) => animation.name)).toEqual(['f13d']);
+      expect(animated).toHaveLength(1);
+      expect(animated[0].uvAnim).toBe(0);
+    });
+
+    it('keeps the keyframes verbatim — a 13-frame strip stepping every 0.225 s over a 29.25 s loop', () => {
+      const f13d = built.uvAnimations![0];
+      // Paired keyframes at the same timestamp are how a STEP animation is authored: the pair holds the
+      // frame, then jumps `1/13` of the strip. 130 steps × 2 + the closing key = 261.
+      expect(f13d.duration).toBeCloseTo(29.25, 4);
+      expect(f13d.keyframes).toHaveLength(261);
+      expect(f13d.keyframes[1].time).toBeCloseTo(0.225, 4);
+      expect(f13d.keyframes[2].time).toBeCloseTo(0.225, 4);
+      expect(f13d.keyframes[2].uv[4] - f13d.keyframes[1].uv[4]).toBeCloseTo(1 / 13, 4);
     });
   });
 });

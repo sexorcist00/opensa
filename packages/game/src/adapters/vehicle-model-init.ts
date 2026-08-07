@@ -20,6 +20,8 @@ export interface RigidModelInit {
   submeshes: VehicleModelData['submeshes'];
   /** One per texture ARRAY; a submesh's `array` indexes it. Runtime-built models always carry exactly one. */
   textures: readonly RigidTextureInit[];
+  /** Model-local UV animations a submesh's `uvAnim` indexes (plan 099/01). Absent = nothing animates. */
+  uvAnimations?: VehicleModelData['uvAnimations'];
   uvs: Uint8Array;
   vertexCount: number;
 }
@@ -62,6 +64,7 @@ export function toRigidModelInit(model: VehicleModelData): RigidModelInit {
         width: model.texture.width,
       },
     ],
+    ...(model.uvAnimations?.length ? { uvAnimations: model.uvAnimations } : {}),
     uvs: bytes(model.uvs),
     vertexCount: model.positions.length / 3,
   };
