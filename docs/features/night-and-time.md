@@ -30,6 +30,14 @@ and the instanced corona pass), `apps/web/src/ui/engine-canvas-host.tsx` wiring,
   at the lamp dummies; bloom makes the halo. Lamps are identified by POSITION near the `headlights`/`taillights`
   dummies (the marker colours are per-lamp ids, not front/rear). **No road beam** (the world is unlit) — the
   proper redo projects the beam onto the road polys (SA `CShadows`-style). Tuning in `graphics.headlights`.
+- **A lamp exists only where the MODEL authors one** (plan 098/11): the `headlights`/`taillights` dummy
+  is the anchor, and there is no fallback — absent, or at the model ORIGIN, means that end has no lamp and
+  emits no beam, no pool light and no corona. That is SA's own convention (`CVehicle::DoHeadLightBeam`
+  returns early on `IsZero`, and a missing dummy reads back as (0,0,0)); the half-extents fallback we used
+  to have gave headlights to every trailer and aeroplane in the game. The lamp MATERIAL is a separate,
+  independent signal — it decides whether the LENS glows, never whether there is a light: the stock
+  `coach` carries no head lamp material and has working headlights. Authoring contract:
+  [`contracts/vehicles.md`](../contracts/vehicles.md) §3; census: `scripts/debug/lamp-census.ts`.
 - **Light damage** (plan cleo/scripts 002): each car carries SA's own four-lamp status
   (`CDamageManager::m_nLightsStatus`, `eLights` 0 FL / 1 FR / 2 RR / 3 RL) on its handle, and a SMASHED lamp
   emits no beam, no pool light and no corona. It is derived from STATE, never from a model id, so anything
@@ -53,4 +61,6 @@ dummy position), `vehicle/vehicle-lamp.system.test.ts`, `enter-vehicle` (`isBrak
 browser-verified (no `node` test env). Light damage: the same two files (per-lamp suppression, the SA light
 index each lamp carries), `adapters/engine-vehicle-handle.test.ts` (the mask and its bounds) and
 `engine.lamps.test.ts` (the mask reaching the GPU row). The shader gate itself has NO test — nothing in the
-repo compiles WGSL, so it is field-verified only.
+repo compiles WGSL, so it is field-verified only. Model-derived lamps (098/11): `vehicle-lamps.test.ts`
+(no dummies → no anchors and no lamps; an ORIGIN dummy is not an anchor) plus the system-level guard in
+`vehicle-lamp.system.test.ts` (a car whose model authors no lamps emits nothing, driven at night).

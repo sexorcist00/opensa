@@ -110,9 +110,10 @@ const CLEO_MANIFEST: readonly Fixture[] = [
   { dest: `${OUT}/cleo/rhino.cs`, from: 'tests/custom/cleo/rhino.cs', type: 'committed' },
   // The hotring's original light-killer (plan `cleo/scripts` 002). COMMITTED for the same reason as
   // the rhino's, one step earlier: it ships in the mod's `cleo-skipped/` folder — a folder whose name
-  // the plan itself contemplated renaming once our replacement landed — so the corpus must not depend
-  // on it still being there under that name. It is also the reference our authored version is
-  // measured and CONFORMANCE-checked against (`cleo/scripts/no-lights/conformance.test.ts`).
+  // that plan contemplated renaming — so the corpus must not depend on it still being there under that
+  // name. 002's authored replacement was WITHDRAWN (superseded by plan 098/11: the effect is a property
+  // of the model now), and this fixture deliberately OUTLIVED it — its value is being a real
+  // Sanny-compiled decode / re-encode / listing subject, which never depended on us shipping anything.
   { dest: `${OUT}/cleo/nolights.cs`, from: 'tests/custom/cleo/no_lights.cs', type: 'committed' },
   // The rhino's MODEL, not a script. A track script is only testable end-to-end against the rig it
   // actually addresses: the original's chain anchor `misc_e` is a dummy the vehicle builder does not

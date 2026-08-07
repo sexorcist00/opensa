@@ -242,7 +242,9 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   **placement**, not to wherever the car ended up, or a shunted car takes its spot's trigger away with it. A
   spawn is allowed to be REJECTED (that is how it waits for its collision cell); an entry that keeps failing
   is reported once per model.
-- **Headlights** (plan 033, ⚠️ MVP — redo later): glowing lamp glass + coronas at the lamp dummies; lamps
+- **Headlights** (plan 033, ⚠️ MVP — redo later; the lamp EXISTENCE rule is 098/11 — a lamp is where the
+  model's dummy is, with no fallback, and the lamp material only decides whether the lens glows):
+  glowing lamp glass + coronas at the lamp dummies; lamps
   found by position near the `headlights`/`taillights` dummies; no road beam yet. See night-and-time.md.
 - Spawn tooling: debug Vehicles screen lists **every** car from `vehicles.ide` (sorted, with a name filter);
   the list comes from `vehicleModelsFromIde` (apps/web) — no hardcoded car set.

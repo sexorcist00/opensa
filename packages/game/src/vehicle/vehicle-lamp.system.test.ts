@@ -181,6 +181,27 @@ describe('VehicleLampSystem', () => {
       expect(coronas.every((corona) => corona.color[1] < 0.5)).toBe(true); // only the red tails survive
     });
 
+    it('a car whose model authors NO lamps emits nothing, even driven at night', () => {
+      // The product-level guard for plan 098/11: the half-extents fallback used to invent anchors here,
+      // so every trailer, tow box and aeroplane lit up. `car()` without anchors is that model.
+      const vehicle = car();
+      (vehicle.handle as FakeVehicleHandle).lampAnchors.clear();
+      const { coronas, lights, run } = harness(
+        (sinks) =>
+          new VehicleLampSystem(
+            enter(vehicle, true, true),
+            () => true,
+            () => CONFIG,
+            sinks,
+          ),
+      );
+
+      run();
+
+      expect(lights).toHaveLength(0);
+      expect(coronas).toHaveLength(0);
+    });
+
     it('a SMASHED lamp emits no pool light and no corona — its three siblings still do', () => {
       const vehicle = car();
       vehicle.handle.setLightSmashed(LIGHT_FRONT_LEFT, true);
