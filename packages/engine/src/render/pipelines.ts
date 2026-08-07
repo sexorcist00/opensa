@@ -270,6 +270,14 @@ export function compileAll(
       // rasters, and the three city backgrounds at whatever size the game's TXD ships them.
       { binding: 8, texture: { viewDimension: '2d-array' }, visibility: GPUShaderStage.FRAGMENT },
       { binding: 9, texture: { viewDimension: '2d-array' }, visibility: GPUShaderStage.FRAGMENT },
+      // UV animation (plan 099/02): ONE vec4 selected per draw by a dynamic offset — slot 0 is the identity
+      // every static submesh binds, so this costs a no-op multiply-add on the models that animate nothing.
+      // Rigid draws are pass-encoded, never recorded into a bundle, so growing this layout cannot stale one.
+      {
+        binding: 10,
+        buffer: { hasDynamicOffset: true, minBindingSize: 16, type: 'uniform' },
+        visibility: GPUShaderStage.VERTEX,
+      },
     ],
     label: 'rigid',
   });

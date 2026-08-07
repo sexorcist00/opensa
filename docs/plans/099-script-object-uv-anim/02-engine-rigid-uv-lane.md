@@ -29,22 +29,20 @@ wheel's lights.
 
 ## Subtasks
 
-- [ ] `VehicleModelInit`/`VehicleModel`: carry `uvAnimations` + per-submesh index;
+- [x] `VehicleModelInit`/`VehicleModel`: carry `uvAnimations` + per-submesh index;
       `createVehicleModel` mints the per-model uniform (animated models only) and destroys it in
       `destroyVehicleModel`.
-- [ ] Vehicle material layout + `createVehicleBindGroup` + `rigidBindGroup` (cache key unchanged —
+- [x] Vehicle material layout + `createVehicleBindGroup` + `rigidBindGroup` (cache key unchanged —
       the buffer is per-model, the offset per-draw) + `drawVehicles` dynamic offset.
-- [ ] Shared stepper helper + the per-frame advance for live animated models (frame clock `seconds`,
-      the same one the world lane reads — the two lanes must not drift).
-- [ ] WGSL: rigid/ped shader include; identity default.
-- [ ] Tests (fake GPU, decisions not API calls): a no-anim model performs ZERO uvAnim buffer writes
-      and still draws; an animated model's uniform WRITES advance between two frames stepped 0.3 s
-      apart (f13d's cadence is 0.225 s); a flagged submesh draws with a non-zero dynamic offset,
-      unflagged with 0; destroy frees the uniform (leak ledger).
+- [x] Shared stepper helper (`packages/engine/src/render/uv-anim.ts`) + the per-frame advance for live
+      animated models (frame clock `seconds`, the same one the world lane reads).
+- [x] WGSL: the rigid shader's term; identity default. **The ped path needed NO change** — see the
+      ledger's deviation note.
+- [x] Tests (fake GPU, decisions not API calls): `packages/engine/src/engine.uv-anim.test.ts`, 8 cases.
 - [ ] Bench guard: the standard bench scene (no animated models) before/after — frame cost delta
       within noise, numbers into the ledger AND `docs/benchmarks/` per the reporting rule; screenshot
       A/B on a stock-car scene proves bit-identical output (wind 0, water off — the edge-cases
-      pixel-A/B recipe).
+      pixel-A/B recipe). **Not run yet** (see the ledger).
 
 ## Verification
 
@@ -54,4 +52,43 @@ recorded. All engine + web suites green.
 
 ## Ledger
 
-_(numbers on completion)_
+**Deviation from decision 2 — the ped path was NOT touched, and needed nothing.** The plan assumed peds
+share the rigid shader family. They do not: `ped` is its own WGSL module (`PedVsIn`/`PedVsOut`, its own
+vertex struct) behind its own three-entry bind-group layout, so the rigid layout's new binding 10 is
+invisible to it. Nothing was added to the ped lane, and nothing had to be.
+
+**Deviation from decision 4 — the WGSL term is in the rigid module only**, for the same reason. It is the
+world lane's exact expression, `uv * uvAnim.zw + uvAnim.xy`.
+
+**Bit-exactness of the extraction (lesson 17 — diff what the OLD code DID, not just that it still runs).**
+`advanceUvAnimations` now calls the shared `stepUvAnimation`; the extracted body is character-for-character
+the old loop, and engine.ts's private `lerp` (`a + (b − a) * f`) moved with it rather than being replaced by
+another package's, which computes `(1 − t)x + ty` and is NOT the same float expression. The world lane's
+output is unchanged by construction, not by hope.
+
+**Cost of the no-op path, measured on the fake device** (`engine.uv-anim.test.ts`, 8/8 green):
+
+| claim                                            | how it is proven                                              |
+| ------------------------------------------------ | ------------------------------------------------------------- |
+| a model with no animations allocates nothing      | `vehicle-uv-anim` never appears in the created-buffer labels   |
+| …and writes nothing per frame                     | 0 transform writes across a frame at t = 300 s                 |
+| …and still draws                                  | both submeshes issue on `rigid-opaque`                         |
+| an animated model with no live instance is skipped | 0 writes — an unsampled buffer is pure cost                   |
+| each submesh binds its own slot                   | recorded dynamic offsets `[0]` and `[256]` on the two draws    |
+| destroy frees the model's uniform, not the shared one | `vehicle-uv-anim` destroyed, `uv-anim-identity` never       |
+
+The fake device gained one capability to make the fifth row possible: `setBindGroup` now records its dynamic
+offsets per bind-group index. A bind group with `hasDynamicOffset` is a DIFFERENT binding at a different
+offset, and the label alone cannot say so — without this the two draws were indistinguishable.
+
+**Buffer arithmetic.** Slot stride is WebGPU's `minUniformBufferOffsetAlignment` FLOOR, 256 B, so the layout
+is legal on any device: an N-animation model costs (N + 1) × 256 B. The ferris ring (N = 1) costs 512 B.
+Every other model costs 0 — it binds one engine-wide 256 B identity buffer.
+
+**Suite after the change: 432 files / 3 758 tests green** (was 3 750 before this step's 8). One golden
+snapshot updated: `shaders.test.ts` → `rigid`, the two intended lines and nothing else.
+
+**Not run yet — the bench guard and the pixel A/B.** Both need the game running against a built pak, which
+the user deferred. Note that the guard does NOT need the 099/01 rebake: the pak on disk carries no
+`uvAnimations` at all, which is exactly the no-op case the guard is for. Until it runs, "zero cost" is a
+CPU-side claim proven by the counters above and an unmeasured claim on the GPU.
