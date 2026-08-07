@@ -41,7 +41,7 @@ checkpoint: a night hotring is dark on both runtimes.
 
 ## Steps
 
-- [ ] Engine seam: smashed-lamp state in `vehicle-lamps.ts`/`vehicle-lamp.system.ts` (negative
+- [~] Engine seam: smashed-lamp state in `vehicle-lamps.ts`/`vehicle-lamp.system.ts` (negative
       tests first: unknown light index, dead car), atlas row for `0x6C2100` (+ `0x6C2130`
       read-back), unit + story coverage on the fake-GPU boot path.
 - [ ] Authored script + story test (declared budget; record instr/poll and artifact size vs
@@ -57,4 +57,52 @@ verdicts.
 
 ## Ledger
 
-(measured numbers; field verdicts)
+### Step 1a — the engine seam (2026-08-07)
+
+**What the original's data means, recovered rather than assumed** (gta-reversed `DamageManager.h/.cpp`,
+fetched this session; `docs/links.md` already names the repo):
+
+| Fact | Source |
+| --- | --- |
+| `eLights` = 0 FRONT_LEFT, 1 FRONT_RIGHT, 2 REAR_RIGHT, 3 REAR_LEFT | `DamageManager.h:107` — confirms the 097 recon verbatim |
+| `eLightsState` = 0 OK, 1 SMASHED | `DamageManager.h:116` |
+| `SetLightStatus` = `m_nLightsStatus` with **2 bits per lamp** replaced; `GetLightStatus` = `>> 2i & 3` | `DamageManager.cpp:320/325` (0x6C2130 / 0x6C2100) |
+| Collision damage smashes a lamp from its COMPONENT GROUP, never from a model id — `COMPGROUP_LIGHT` → `SetLightStatus(relCompIdx, SMASHED)` | `DamageManager.cpp:113` |
+
+**The one thing the reversed source does NOT carry, stated so it is not looked for again:**
+`DoVehicleLights` (0x6E1A60), `DoHeadLightEffect` (0x6E0A50) and `DoTailLightEffect` (0x6E1780) are still
+plugin-call stubs there, so SA's DRAW behaviour for a smashed lamp cannot be recovered. Nothing in
+`Automobile.cpp` reads the status either. The data meaning is fully recovered; the execution is ours by
+default, which is the doctrine anyway.
+
+**Our half.** The status lives on the vehicle HANDLE as a 4-bit mask (one bit is enough — SA only ever
+writes OK/SMASHED into its two), and it splits by what each consumer can actually address:
+
+- **per LAMP** — `lampsOf` now pins each of the four lamps to its SA index (`+X` is the car's right), and
+  `VehicleLampSystem` skips the beam, the pool light and the corona of a smashed one;
+- **per PAIR** — the lamp MESH. A DFF authors one lamp material per end, so the lit-twin swap and the
+  emissive glow can only be withheld when both lamps of an end are gone. `writeVehicleLamps` puts the mask
+  in the lamp row's spare `w` (it was there all along, unused) and `vsRigid` resolves it against the
+  submesh's lamp tag — where the tag and the instance both still exist. Recorded in
+  `docs/edge-cases/engine-rendering.md`.
+
+Damage is read off the CAR, not off the lit state: a parked car keeps its smashed lamps and does not light
+them the moment somebody gets in.
+
+**Coverage, and each guard verified to FAIL when its fix is reverted** (the 001 lesson: a test that cannot
+bite is `undefined === undefined`):
+
+| Guard | Bites |
+| --- | --- |
+| `vehicle-lamp.system.test.ts` — a smashed lamp emits nothing, its three siblings still do; all four smashed emits nothing at all | 2 tests fail with the `continue` removed |
+| `vehicle-lamps.test.ts` — each lamp's SA index, right/left the way SA numbers them | fails with the mirror pairing swapped |
+| `engine.lamps.test.ts` — the mask reaches the GPU row; a MASK-ONLY change still re-writes it | fails with `smashed` dropped from the change test |
+| `engine-vehicle-handle.test.ts` — an index outside SA's four cannot reach the mask (JS shifts by `light & 31`, so 32 would have read lamp 0) | — (new behaviour) |
+
+**Deviation from the plan, recorded rather than quietly satisfied:** the plan named the beam/corona/pool
+suppression only. The mesh glow had to be gated too, or the plan's own field checkpoint ("a night hotring is
+dark") could not pass with four glowing lenses. That made it a SHADER change, which the plan did not
+declare — and the shader gate is the one part with no test, because nothing in this repo compiles WGSL
+(`docs/edge-cases/engine-rendering.md` already carries that trap). It is field-verified only. NB the shader
+DOES have a golden-snapshot test (`render/__snapshots__/shaders.test.ts.snap`) — that reviews the diff, it
+does not compile it.

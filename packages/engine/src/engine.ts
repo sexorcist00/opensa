@@ -315,8 +315,12 @@ export interface VehicleInstance {
   /**
    * Per-vehicle lamp state (074/08 B5 step 5): headlights swap the lamp texture to its lit twin and glow the
    * glass; brakes take the tail lamps to full. Was a GLOBAL day/night gate — every parked car lit up at once.
+   *
+   * `smashed` is SA's light-damage mask, one bit per `eLights` index. The MESH can only go dark per PAIR —
+   * a DFF authors one lamp material for both sides of an end — so it takes both bits of an end to stop the
+   * twin/glow; the per-lamp half of the effect (beam, pool light, corona) is the game layer's.
    */
-  setLamps(headlights: boolean, brakes: boolean, intensity: number): void;
+  setLamps(headlights: boolean, brakes: boolean, intensity: number, smashed: number): void;
   /** Carcols colours (linear 0..1) the vertex paint slots resolve to — this car's own paint job. */
   setPaint(paint: VehiclePaint): void;
   /**
@@ -495,7 +499,7 @@ interface ClutterModel {
 
 interface VehicleInstanceState {
   entity: RigidEntity;
-  lamps: { brakes: boolean; headlights: boolean; intensity: number };
+  lamps: { brakes: boolean; headlights: boolean; intensity: number; smashed: number };
   /** Kept so a capacity grow (which reallocates the buffer) can restore it — paint is not re-sent per frame. */
   paint: VehiclePaint;
   /** This car's plate, kept for the same reason as `paint`: a capacity grow must restore it (082/03). */
@@ -940,7 +944,7 @@ export class Engine {
     }
     const state: VehicleInstanceState = {
       entity: new RigidEntity(parts),
-      lamps: { brakes: false, headlights: false, intensity: 1 },
+      lamps: { brakes: false, headlights: false, intensity: 1, smashed: 0 },
       paint: DEFAULT_PAINT,
       // Slot 0 of each array until the host assigns one: an unplated car shows the stock placeholder.
       plate: { city: 0, textSlot: 0 },
@@ -953,12 +957,17 @@ export class Engine {
     return {
       entity: state.entity,
       model: id,
-      setLamps: (headlights: boolean, brakes: boolean, intensity: number): void => {
+      setLamps: (headlights: boolean, brakes: boolean, intensity: number, smashed: number): void => {
         const lamps = state.lamps;
-        if (lamps.headlights === headlights && lamps.brakes === brakes && lamps.intensity === intensity) {
+        if (
+          lamps.headlights === headlights &&
+          lamps.brakes === brakes &&
+          lamps.intensity === intensity &&
+          lamps.smashed === smashed
+        ) {
           return; // lamp state is written on CHANGE, not per frame
         }
-        state.lamps = { brakes, headlights, intensity };
+        state.lamps = { brakes, headlights, intensity, smashed };
         this.writeVehicleLamps(model, state.slot, state.lamps);
       },
       setPaint: (paint: VehiclePaint): void => {
@@ -3112,13 +3121,16 @@ export class Engine {
   private writeVehicleLamps(
     model: VehicleModel,
     slot: number,
-    lamps: { brakes: boolean; headlights: boolean; intensity: number },
+    lamps: { brakes: boolean; headlights: boolean; intensity: number; smashed: number },
   ): void {
     const row = new Float32Array(model.partCount * 4);
     for (let part = 0; part < model.partCount; part += 1) {
       row[part * 4] = lamps.headlights ? 1 : 0;
       row[part * 4 + 1] = lamps.brakes ? 1 : 0;
       row[part * 4 + 2] = lamps.intensity;
+      // The spare component was always there; the light-damage mask is what finally uses it. The vertex
+      // stage resolves it against the submesh's lamp tag, where both the tag and the instance still exist.
+      row[part * 4 + 3] = lamps.smashed;
     }
     this.device.queue.writeBuffer(model.lampBuffer, slot * model.partCount * LAMP_ROW_BYTES, row);
   }

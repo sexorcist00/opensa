@@ -34,6 +34,12 @@ export interface VehicleHandle {
    * when the model has none — the caller then falls back to the half-extents.
    */
   lampAnchor(kind: 'head' | 'tail'): null | Vec3;
+  /**
+   * Which of this car's four lamps are SMASHED, one bit per SA `eLights` index — SA's
+   * `CDamageManager::m_nLightsStatus`, which a CLEO script writes through `SetLightStatus` and collision
+   * damage writes from its light component group. A smashed lamp emits nothing.
+   */
+  lightsSmashed(): number;
   /** Damageable body parts — the damage system's entire world model. */
   readonly parts: readonly VehiclePartInfo[];
   /** Drop a detached part for good. */
@@ -59,6 +65,8 @@ export interface VehicleHandle {
    * tail lamps from their dim running level to full. Per-VEHICLE, not global: only the driven car lights up.
    */
   setLamps(state: VehicleLampState): void;
+  /** Set ONE lamp's status. Out-of-range indices are ignored — the caller may be a script. */
+  setLightSmashed(light: number, smashed: boolean): void;
   setLodBand(band: VehicleBand): void;
   /** Swap a part between its intact and damaged meshes. */
   setPartDamaged(name: string, damaged: boolean): void;

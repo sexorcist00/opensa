@@ -10,11 +10,29 @@ import type { Vec3 } from '../interfaces/world-adapter.interface';
 import type { EnterableVehicle } from './enter-vehicle.system';
 import type { VehicleQuat } from './vehicle-handle';
 
+/**
+ * SA's `eLights` (gta-reversed `DamageManager.h`): which of the four lamps a status refers to. The order is
+ * the game's own, not ours — a CLEO script calling `CDamageManager::SetLightStatus` passes exactly these
+ * numbers, and collision damage maps its light component group onto the same index.
+ */
+export type VehicleLight = 0 | 1 | 2 | 3;
+export const LIGHT_FRONT_LEFT = 0;
+export const LIGHT_FRONT_RIGHT = 1;
+export const LIGHT_REAR_RIGHT = 2;
+export const LIGHT_REAR_LEFT = 3;
+/** SA's `eLights::MAX_LIGHTS` — the bound every index is checked against. */
+export const MAX_LIGHTS = 4;
+/** Both lamps of an end — a submesh is authored per PAIR, so the mesh glow can only go out per pair. */
+export const FRONT_PAIR_MASK = 0b0011;
+export const REAR_PAIR_MASK = 0b1100;
+
 /** One lamp of a lit car, in WORLD space (native Z-up) — what a light pool or a corona needs. */
 export interface VehicleLamp {
   /** Unit direction the lamp faces (a corona fades out when seen from behind it). */
   facing: [number, number, number];
   kind: 'head' | 'tail';
+  /** Which SA lamp this is — the damage status is per lamp, so the beam and corona die one at a time. */
+  light: VehicleLight;
   position: Vec3;
 }
 
@@ -26,6 +44,36 @@ export interface VehicleLampState {
   headlights: boolean;
   /** Config glow multiplier (`graphics.headlights.intensity`) — both renderers scale their glow by it. */
   intensity: number;
+  /**
+   * One bit per {@link VehicleLight}, set = SMASHED. SA keeps the same thing as two bits per lamp in
+   * `CDamageManager::m_nLightsStatus`; only OK/SMASHED are ever written, so one bit carries it here.
+   */
+  smashed: number;
+}
+
+/**
+ * True when THIS lamp is smashed — it emits no beam, no pool light and no corona. The index is bounds-checked
+ * because JS shifts by `light & 31`: an index of 32 arriving from a script would otherwise read lamp 0.
+ */
+export function isLightSmashed(mask: number, light: number): boolean {
+  if (!Number.isInteger(light) || light < 0 || light >= MAX_LIGHTS) {
+    return false;
+  }
+
+  return (mask & (1 << light)) !== 0;
+}
+
+/**
+ * The mask with one lamp's status replaced. The index is validated HERE, not by the callers: it arrives
+ * from a CLEO script as often as from our own damage code, and a mask that silently grew a fifth bit would
+ * only show up as a lamp that can never be lit again.
+ */
+export function withLightSmashed(mask: number, light: number, smashed: boolean): number {
+  if (!Number.isInteger(light) || light < 0 || light >= MAX_LIGHTS) {
+    return mask;
+  }
+
+  return smashed ? mask | (1 << light) : mask & ~(1 << light);
 }
 
 /** Fallback lamp anchors as fractions of the half-extents — for models with no head/tail dummies. */
@@ -59,14 +107,18 @@ export function lampsOf(vehicle: EnterableVehicle): VehicleLamp[] {
   const quat = vehicle.renderOrientation ?? vehicle.orientation;
   const origin = vehicle.renderPosition ?? vehicle.position;
   const lamps: VehicleLamp[] = [];
-  for (const [anchor, kind] of [
-    [head, 'head'],
-    [tail, 'tail'],
+  // Vehicle space is +X right, so the +1 mirror is the RIGHT lamp of its end — which is what pins each of
+  // the four to its SA light index. Get this backwards and a script that smashes the left headlight puts
+  // out the right one.
+  for (const [anchor, kind, right, left] of [
+    [head, 'head', LIGHT_FRONT_RIGHT, LIGHT_FRONT_LEFT],
+    [tail, 'tail', LIGHT_REAR_RIGHT, LIGHT_REAR_LEFT],
   ] as const) {
     for (const mirror of [1, -1]) {
       lamps.push({
         facing: rotate([0, kind === 'head' ? 1 : -1, 0], quat),
         kind,
+        light: mirror === 1 ? right : left,
         position: add(origin, rotate([anchor[0] * mirror, anchor[1], anchor[2]], quat)),
       });
     }
@@ -88,7 +140,17 @@ export function lampStateFor(
 ): { car: EnterableVehicle | null; state: VehicleLampState } {
   const lit = car && seated && night ? car : null;
 
-  return { car: lit, state: { brakes: lit ? braking : false, headlights: lit !== null, intensity } };
+  return {
+    car: lit,
+    state: {
+      brakes: lit ? braking : false,
+      headlights: lit !== null,
+      intensity,
+      // Damage belongs to the CAR, not to whether it is lit: a car whose lamps are switched off still has
+      // its smashed ones, and the renderer must not light them the moment somebody gets in.
+      smashed: car?.handle.lightsSmashed() ?? 0,
+    },
+  };
 }
 
 /** Yaw about GTA +Z (the car's heading) as a quaternion. */

@@ -30,6 +30,13 @@ and the instanced corona pass), `apps/web/src/ui/engine-canvas-host.tsx` wiring,
   at the lamp dummies; bloom makes the halo. Lamps are identified by POSITION near the `headlights`/`taillights`
   dummies (the marker colours are per-lamp ids, not front/rear). **No road beam** (the world is unlit) — the
   proper redo projects the beam onto the road polys (SA `CShadows`-style). Tuning in `graphics.headlights`.
+- **Light damage** (plan cleo/scripts 002): each car carries SA's own four-lamp status
+  (`CDamageManager::m_nLightsStatus`, `eLights` 0 FL / 1 FR / 2 RR / 3 RL) on its handle, and a SMASHED lamp
+  emits no beam, no pool light and no corona. It is derived from STATE, never from a model id, so anything
+  that can smash a lamp gets the effect: the CLEO atlas serves `SetLightStatus`/`GetLightStatus` today, and
+  collision damage can feed the same state (SA does exactly that, from its light component group — not built
+  here). The lamp MESH is the one half that is coarser than SA's data: see
+  [`edge-cases/engine-rendering.md`](../edge-cases/engine-rendering.md).
 - Night sky: stars, moon (`coronamoon` sprite, size/elevation knobs), skylight hemisphere knob.
 
 ## Known gaps / candidates
@@ -43,4 +50,7 @@ and the instanced corona pass), `apps/web/src/ui/engine-canvas-host.tsx` wiring,
 `time/game-clock.test.ts`, `adapters/engine-environment-driver.test.ts` (sun/moon arcs, timecyc colours),
 `plugins/sun-position.test.ts`. Headlights: `vehicle/vehicle-lamps.test.ts` (lamp dummies + `lightType` by
 dummy position), `vehicle/vehicle-lamp.system.test.ts`, `enter-vehicle` (`isBraking`); the visuals are
-browser-verified (no `node` test env).
+browser-verified (no `node` test env). Light damage: the same two files (per-lamp suppression, the SA light
+index each lamp carries), `adapters/engine-vehicle-handle.test.ts` (the mask and its bounds) and
+`engine.lamps.test.ts` (the mask reaching the GPU row). The shader gate itself has NO test — nothing in the
+repo compiles WGSL, so it is field-verified only.

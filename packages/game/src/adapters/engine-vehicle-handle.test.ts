@@ -3,6 +3,7 @@ import type { VehicleModelData } from '@opensa/renderware';
 
 import { describe, expect, it } from 'vitest';
 
+import { LIGHT_FRONT_LEFT, LIGHT_FRONT_RIGHT, LIGHT_REAR_LEFT } from '../vehicle/vehicle-lamps';
 import { EngineVehicleHandle } from './engine-vehicle-handle';
 
 /** How far a posed wheel's AXLE (its local +X) tips out of the horizontal — the camber, seen from outside
@@ -474,19 +475,90 @@ describe('EngineVehicleHandle detached parts', () => {
     });
 
     it('forwards the lamp state to the engine instance verbatim', () => {
-      const { probe } = instance();
-      const calls: [boolean, boolean, number][] = [];
-      const lamped = {
-        ...probe,
-        setLamps: (headlights: boolean, brakes: boolean, intensity: number): void => {
-          calls.push([headlights, brakes, intensity]);
-        },
-      };
-      const handle = new EngineVehicleHandle(lamped, model(), () => undefined);
+      const { calls, handle } = lampProbe();
 
-      handle.setLamps({ brakes: true, headlights: false, intensity: 0.75 });
+      handle.setLamps({ brakes: true, headlights: false, intensity: 0.75, smashed: 0 });
 
-      expect(calls).toEqual([[false, true, 0.75]]);
+      expect(calls).toEqual([[false, true, 0.75, 0]]);
     });
   });
 });
+
+describe('EngineVehicleHandle light damage', () => {
+  describe('negative cases', () => {
+    it('a light index that is not one of SA’s four leaves the mask alone', () => {
+      const { calls, handle } = litProbe();
+
+      for (const light of [-1, 4, 1.5, Number.NaN]) {
+        handle.setLightSmashed(light, true);
+      }
+
+      expect(handle.lightsSmashed()).toBe(0);
+      expect(calls).toEqual([]); // and nothing is pushed to the GPU for a lamp that does not exist
+    });
+
+    it('smashing an already-smashed lamp does not re-push the same mask', () => {
+      const { calls, handle } = litProbe();
+      handle.setLightSmashed(LIGHT_FRONT_LEFT, true);
+      calls.length = 0;
+
+      handle.setLightSmashed(LIGHT_FRONT_LEFT, true);
+
+      expect(calls).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('smashing a lamp sets its own bit and pushes the mask to the engine', () => {
+      const { calls, handle } = lampProbe();
+      handle.setLamps({ brakes: false, headlights: true, intensity: 1, smashed: 0 });
+
+      handle.setLightSmashed(LIGHT_FRONT_RIGHT, true);
+      handle.setLightSmashed(LIGHT_REAR_LEFT, true);
+
+      expect(handle.lightsSmashed()).toBe((1 << LIGHT_FRONT_RIGHT) | (1 << LIGHT_REAR_LEFT));
+      // One push per CHANGE, on top of the setLamps call — a car nobody drives is never lit again
+      // otherwise, and the GPU would keep reading the mask it had at spawn.
+      expect(calls).toEqual([
+        [true, false, 1, 0],
+        [true, false, 1, 1 << LIGHT_FRONT_RIGHT],
+        [true, false, 1, (1 << LIGHT_FRONT_RIGHT) | (1 << LIGHT_REAR_LEFT)],
+      ]);
+    });
+
+    it('a lamp can be repaired back to OK', () => {
+      const { handle } = lampProbe();
+      handle.setLightSmashed(LIGHT_FRONT_LEFT, true);
+
+      handle.setLightSmashed(LIGHT_FRONT_LEFT, false);
+
+      expect(handle.lightsSmashed()).toBe(0);
+    });
+  });
+});
+
+/** A handle over an instance that records every `setLamps` call, arguments included. */
+function lampProbe(): { calls: [boolean, boolean, number, number][]; handle: EngineVehicleHandle } {
+  const { probe } = instance();
+  const calls: [boolean, boolean, number, number][] = [];
+  const lamped = {
+    ...probe,
+    setLamps: (headlights: boolean, brakes: boolean, intensity: number, smashed: number): void => {
+      calls.push([headlights, brakes, intensity, smashed]);
+    },
+  };
+
+  return { calls, handle: new EngineVehicleHandle(lamped, model(), () => undefined) };
+}
+
+/**
+ * The same probe with its lamps already switched on and the call log cleared — so a test asserting that
+ * NOTHING was pushed is asserting about a handle that would otherwise have pushed.
+ */
+function litProbe(): { calls: [boolean, boolean, number, number][]; handle: EngineVehicleHandle } {
+  const probe = lampProbe();
+  probe.handle.setLamps({ brakes: false, headlights: true, intensity: 1, smashed: 0 });
+  probe.calls.length = 0;
+
+  return probe;
+}

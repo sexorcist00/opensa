@@ -23,6 +23,8 @@ import type {
 } from '../vehicle/vehicle-handle';
 import type { VehicleLampState } from '../vehicle/vehicle-lamps';
 
+import { withLightSmashed } from '../vehicle/vehicle-lamps';
+
 /**
  * Just the ARTICULATION a handle animates — doors, dummies, wheels, parts, submeshes — and nothing about
  * how the model reached the GPU. Both spawn paths satisfy it structurally: the unoptimized path's
@@ -54,6 +56,11 @@ export class EngineVehicleHandle implements VehicleHandle {
   private readonly extra: null | string;
 
   private readonly instance: VehicleInstance;
+
+  /** The last state the lamp system pushed — kept so a smashed lamp can be re-pushed without one. */
+  private lamps: null | VehicleLampState = null;
+  /** One bit per SA `eLights` index, set = SMASHED (`CDamageManager::m_nLightsStatus`). */
+  private lights = 0;
 
   private readonly onDispose: () => void;
 
@@ -130,6 +137,10 @@ export class EngineVehicleHandle implements VehicleHandle {
     );
 
     return dummy ? [...dummy.position] : null;
+  }
+
+  lightsSmashed(): number {
+    return this.lights;
   }
 
   removeDetached(name: string): void {
@@ -235,7 +246,21 @@ export class EngineVehicleHandle implements VehicleHandle {
   }
 
   setLamps(state: VehicleLampState): void {
-    this.instance.setLamps(state.headlights, state.brakes, state.intensity);
+    this.lamps = state;
+    this.instance.setLamps(state.headlights, state.brakes, state.intensity, this.lights);
+  }
+
+  setLightSmashed(light: number, smashed: boolean): void {
+    const lights = withLightSmashed(this.lights, light, smashed);
+    if (lights === this.lights) {
+      return; // unchanged — or an index that is not a lamp at all
+    }
+    this.lights = lights;
+    // Push it NOW rather than waiting for the next lamp update: only the DRIVEN car gets one, so a script
+    // smashing the lights of anything else would otherwise leave the GPU reading the old mask forever.
+    if (this.lamps) {
+      this.instance.setLamps(this.lamps.headlights, this.lamps.brakes, this.lamps.intensity, lights);
+    }
   }
 
   setLodBand(band: VehicleBand): void {

@@ -15,6 +15,8 @@ import type {
 } from './vehicle-handle';
 import type { VehicleLampState } from './vehicle-lamps';
 
+import { withLightSmashed } from './vehicle-lamps';
+
 export class FakeVehicleHandle implements VehicleHandle {
   band: VehicleBand = 'hd';
   /** Parts currently swapped to their damaged mesh. */
@@ -29,6 +31,8 @@ export class FakeVehicleHandle implements VehicleHandle {
   readonly hinges = new Map<string, Vec3>();
   readonly lampAnchors = new Map<'head' | 'tail', Vec3>();
   lamps: null | VehicleLampState = null;
+  /** Smashed-lamp mask, exactly as the engine handle keeps it (`withLightSmashed` guards both). */
+  lights = 0;
   readonly parts: VehiclePartInfo[];
   /** Last {@link setPopUpLights} value, 0 (parked) … 1 (up). */
   popUpLights = 0;
@@ -69,6 +73,10 @@ export class FakeVehicleHandle implements VehicleHandle {
 
   lampAnchor(kind: 'head' | 'tail'): null | Vec3 {
     return this.lampAnchors.get(kind) ?? null;
+  }
+
+  lightsSmashed(): number {
+    return this.lights;
   }
 
   removeDetached(name: string): void {
@@ -112,6 +120,10 @@ export class FakeVehicleHandle implements VehicleHandle {
 
   setLamps(state: VehicleLampState): void {
     this.lamps = state;
+  }
+
+  setLightSmashed(light: number, smashed: boolean): void {
+    this.lights = withLightSmashed(this.lights, light, smashed);
   }
 
   setLodBand(band: VehicleBand): void {

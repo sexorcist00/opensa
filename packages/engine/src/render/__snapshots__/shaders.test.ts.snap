@@ -5518,7 +5518,15 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   } else if (matClass == MAT_PLATE_BACK) {
     plateLayer = plate.y;
   }
-  out.lamps = vec4f(rigidLamp[in.instance].xyz, plateLayer);
+  // A SMASHED lamp does not light (SA CDamageManager::SetLightStatus — plan cleo/scripts 002). The status is
+  // per LAMP, but a DFF authors ONE lamp material per end, so the mesh can only go dark per PAIR: both bits
+  // of an end have to be set before the lit twin and the glow are withheld. The per-lamp half of the effect —
+  // beam, pool light, corona — is geometric and dies one lamp at a time in vehicle-lamp.system.ts.
+  let lampRow = rigidLamp[in.instance];
+  let smashed = u32(lampRow.w);
+  let lampOut = (out.lampTag == 1u && (smashed & 0x3u) == 0x3u) ||
+                (out.lampTag == 2u && (smashed & 0xCu) == 0xCu);
+  out.lamps = vec4f(select(lampRow.xyz, vec3f(0.0, 0.0, lampRow.z), lampOut), plateLayer);
   out.reflect = vec3f(in.reflect.yzw) / 255.0;
   // The night set's ALPHA is the self-occlusion the builder wrote (vehicle/sky-occlusion.ts). A fixture
   // from before it simply carries the material alpha there, which is 1 on everything opaque - no change.

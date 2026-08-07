@@ -14,7 +14,7 @@ import type { Vec3 } from '../interfaces/world-adapter.interface';
 import type { EnterableVehicle, EnterVehicleSystem } from './enter-vehicle.system';
 import type { VehicleLamp } from './vehicle-lamps';
 
-import { lampsOf, lampStateFor } from './vehicle-lamps';
+import { isLightSmashed, lampsOf, lampStateFor } from './vehicle-lamps';
 
 /** A lamp corona the renderer should draw this frame. */
 export interface LampCorona {
@@ -117,7 +117,12 @@ export class VehicleLampSystem implements System {
     );
     this.sinks.reset();
     if (this.lit && this.lit !== car) {
-      this.lit.handle.setLamps({ brakes: false, headlights: false, intensity: cfg.intensity });
+      this.lit.handle.setLamps({
+        brakes: false,
+        headlights: false,
+        intensity: cfg.intensity,
+        smashed: this.lit.handle.lightsSmashed(),
+      });
       this.lit.rig.setPopUpLights(false);
     }
     this.lit = car;
@@ -138,6 +143,9 @@ export class VehicleLampSystem implements System {
     for (const lamp of lampsOf(car)) {
       if (lamp.kind === 'head' && !headlights) {
         continue; // no pool light and no corona from a lamp that is still buried in the nose
+      }
+      if (isLightSmashed(state.smashed, lamp.light)) {
+        continue; // a smashed lamp is a hole in the bodywork: no beam, no pool, no corona
       }
       this.emit(lamp, cfg, braking, eye);
     }

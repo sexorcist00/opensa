@@ -33,6 +33,13 @@ Limits and deliberate approximations of the own WebGPU engine.
   the high nibble of `meta.w` was the only per-vertex channel left (plan 082/03). Note the knock-on: a
   fragment shader cannot be handed the instance index, so anything per-INSTANCE must be resolved in the
   vertex stage and forwarded as a single number.
+- **A smashed lamp goes dark per PAIR on the MESH, per lamp everywhere else.** SA's light damage is per
+  lamp (`eLights`: 0 FL, 1 FR, 2 RR, 3 RL) and the beam, pool light and corona all die one lamp at a time —
+  they are geometry the game layer places (`vehicle-lamp.system.ts`). The lamp GLASS cannot: a DFF authors
+  ONE lamp material per end, so both sides of a car share a submesh and the lit-twin swap plus the emissive
+  glow can only be withheld when BOTH lamps of that end are smashed (`vsRigid`, gated on the mask in the
+  lamp row's spare `w`). One broken headlight therefore still shows two glowing lenses with a single beam.
+  Splitting the mesh per side would need a geometry split nothing in the pipeline does today.
 - **Two-sided world rendering.** SA's static world renders without backface culling (mirrored coplanar
   pairs, `0x200000 DISABLE_BACKFACE_CULLING` honoured); glass is double-sided gated by
   `@builtin(front_facing)`. Roadsign glyphs render twice at ±0.05 m; sign text does not dim at night.
