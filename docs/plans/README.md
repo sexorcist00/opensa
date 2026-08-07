@@ -26,7 +26,9 @@ row but its chain was superseded by 097). Newest first:
   bake produces — the half that makes the other half real, since nothing reads a cell LOD's 2dfx today. Also
   fixes the flat `DRAW_DISTANCE = 300` that overrides every fx system's authored `cullDist`. Step 00 is the
   research: it began as a killed plan (postmortem) and was revived the same day by a reversed decision.
-  The six types with no consumer anywhere (16 934 stock entries) stay dropped.
+  The six types our engine does not consume (16 934 stock entries) stay out of the OpenSA line — escalators
+  among them, because our engine has no escalator code at all, while real SA implements them natively and the
+  SA clones keep carrying the entry.
 - **[099 — UV animations on script objects](./099-script-object-uv-anim/readme.md)** — **DONE
   2026-08-07** (planned 2026-08-05 from the 097/07 field bug round): the ferris wheel's blinking bulbs
   are a UVAnimDict step animation (`f13d`, a 13-frame film strip stepping every 0.225 s) that the

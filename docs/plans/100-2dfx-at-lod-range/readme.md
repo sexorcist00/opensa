@@ -4,11 +4,17 @@
 2026-08-07 by the user, after the research in [00](00-research-and-findings.md) killed the first attempt and
 then reversed one of its conclusions.
 
-Today every 2d-effect our engine consumes dies at the HD boundary. The three types that have a consumer —
+Today every 2d-effect our engine consumes dies at the HD boundary. The three types **our engine** consumes —
 **0 light, 1 particle, 7 roadsign** — are gathered from HD models only, so past ~440 u a district goes dark,
-smokeless and unsigned while its baked LOD keeps drawing to 1000 u. The six types that have no consumer at
-all (3 ped attractor, 4 sun glare, 6 enter/exit, 8 trigger point, 9 cover point, 10 escalator — 16 934 stock
-entries between them) stay dropped, by policy, and this plan does not touch them.
+smokeless and unsigned while its baked LOD keeps drawing to 1000 u. The other six (3 ped attractor, 4 sun
+glare, 6 enter/exit, 8 trigger point, 9 cover point, 10 escalator — 16 934 stock entries between them) have
+no code in `packages/engine` at all and stay out of the OpenSA line.
+
+**"No consumer" means ours, not the game's.** Real SA implements several of them natively and reads the entry
+off whatever model it streams, so the policy's `clone` column keeps carrying them and
+[step 05](05-sa-clone-parity.md) does not narrow it. Escalators are the clearest case: they work in SA, they
+have never moved in our engine (the staircase mesh draws — it is ordinary geometry — but nothing animates the
+steps), and giving a baked cell an entry our engine cannot read would not change that.
 
 ## The shape of it
 

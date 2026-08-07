@@ -19,7 +19,7 @@ observations that killed it, and the conditions under which it might be worth re
   and escalators onto `opensa-lod-generator`'s baked cells died when its two premises failed measurement and
   the user closed its last route; hours later that decision was reversed and the scope widened to both LOD
   generators. The research (world-space sign coordinates 489/489; nothing reads a cell LOD's 2dfx section;
-  the HD/LOD radii that size the gap; escalators having no consumer anywhere) lives on as step 00 of
+  the HD/LOD radii that size the gap; escalators having no consumer in OUR engine) lives on as step 00 of
   [plan 100](../plans/100-2dfx-at-lod-range/00-research-and-findings.md). The row stays so the death is not
   edited out of the record — a plan that died and came back is worth knowing about
 - [097-hotring-hotknife-intake.md](./097-hotring-hotknife-intake.md) — two CLEO vehicle mods

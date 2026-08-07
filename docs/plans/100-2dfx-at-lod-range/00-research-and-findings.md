@@ -81,6 +81,13 @@ baked cell DFF and no consumer we ship reads them. The dead plan left that as an
 section?"). This chain answers it the other way: [step 03](03-lod-bundle-reads-2dfx.md) makes `cell-weld`
 read it, so the section stops being dead instead of being deleted.
 
-**Escalators (10) stay out**, and that is not a scheduling decision — nothing in `packages/engine`,
-`packages/cell-weld` or `opensa-pack` consumes type 10 at any range. Moving steps are an engine feature, and
-a LOD cannot carry what nothing draws.
+**Escalators (10) stay out of the OpenSA line, and the reason is not distance.** `packages/engine`,
+`packages/cell-weld` and `packages/engine-formats` contain no escalator code at all: the steps have never
+moved in our engine, at any range. `packages/renderware` decodes the entry (plan 044) and
+`apps/web/src/game-config.tsx` has a debug waypoint labelled `LS - Escalators`; that is the whole of it. The
+staircase MESH draws normally — it is ordinary geometry — so what is missing is the moving-step behaviour, an
+engine feature nobody has built.
+
+**On the SA side they are a different story**, and the policy already says so: real SA implements escalators
+natively and reads the entry off whatever model it streams, so the `clone` column carries type 10 and
+[step 05](05-sa-clone-parity.md) keeps it. "No consumer" is true of OUR engine, not of the game.
