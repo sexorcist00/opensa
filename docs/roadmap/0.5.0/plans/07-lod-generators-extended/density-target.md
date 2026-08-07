@@ -88,18 +88,19 @@ array, not the int16 row ceiling we were planning around.
 
 Its 57 583 rows land on top of stock's 12 629 permanent rows, i.e. **70 212 map-wide — 2.14× the int16
 ceiling** — and its 9 597-row files are **2.4× the per-area `LoadScene` budget**. Both are ceilings our own
-[ghost-barriers record](../../../../open-issues/fixed/ghost-barriers.md) says are structural. So one of two
-things is true, and **we do not know which**:
+[ghost-barriers record](../../../../open-issues/fixed/ghost-barriers.md) says are structural.
 
-1. **OLA lifts the int16 `IplDef` truncation.** That would contradict "no limit adjuster exposes it" — a claim
-   worth re-testing, since our own ASI is described as overlaying *FLA's incomplete int16 patch*, which means
-   at least one adjuster already tries.
-2. **ProperFixes users have latent ghost barriers.** Entirely plausible: the symptom is script-gated props
-   appearing where they should not, which no player attributes to a vegetation mod.
+**Field-tested 2026-08-07, and the answer is its own `.asi`.** Remove `ProperFixes.asi` and the ghost
+barriers appear on its data — so the mod really is over the ceiling, and OLA is not what saves it. Install
+**`perfect-map.asi`** instead and the barriers go, along with the new-game 2dfx crash. Our own patch carries
+a foreign 70k-row map; everything it had been proven on before was ours. Details and the caveats in
+[00](lod-procobj-generator/00-limit-route-review.md).
 
-Either answer changes [00](lod-procobj-generator/00-limit-route-review.md), and this mod is the way to get it:
-it is a **real 57.6k-row corpus with real positions**, which the synthetic `tools-debug/sa-int16-repro` dial
-is not. Testing against it is 00's first task.
+The run leaves one number in this file open, and it is the important one: **their 9 597-row IPL files ran
+clean at 2.4× our `AREA_ROW_CAP`.** If that budget is genuinely that conservative, the "≥ 19 areas" above
+collapses to roughly their six slots and the slot problem with it. Their rows are pure text with no LODs and
+no binary streams, so it is not a like-for-like comparison — but it is now the cheapest thing standing
+between us and the target, and [04](lod-procobj-generator/04-slot-economy-and-budgets.md) owns measuring it.
 
 ## The target this plan adopts
 

@@ -37,6 +37,14 @@ Only one of those four is an int16 cap. `TEXT_ROW_CAP` is, and it is **not** the
 
 **Slot economy first — these are the ones the target actually needs, and none of them needs an ASI:**
 
+- [ ] **Find out what `AREA_ROW_CAP = 4000` really models, because a shipping mod beats it by 2.4×.**
+      ProperFixes' `procobj1..6.ipl` carry ~9 597 rows each and ran clean in the field on 2026-08-07 (see
+      [00](00-limit-route-review.md)). Either SA's `LoadScene` budget is not per-IPL-file, or our cap is far
+      more conservative than the ceiling it stands for, or their pure-text layout escapes something our
+      mixed text+binary areas do not. **This is the highest-value measurement in the chain**: if a
+      9 597-row area is safe, the density target costs about six slots instead of nineteen areas and the
+      binding ceiling disappears. Measure it against the real game — do not settle it by reading our own
+      constant.
 - [ ] Pack the generated areas tight. They average 3 501 of a 4 000-row budget today; a repack to the budget
       is ~2 slots back at current density and more at raised density. Measure the recovered slots and check
       that no area breaches the budget after it — this is 00's hygiene task, executed.

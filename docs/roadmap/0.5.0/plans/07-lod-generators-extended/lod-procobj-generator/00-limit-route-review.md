@@ -13,6 +13,42 @@ changes if the decision goes the other way.
 2.2.1's vegetation set — a shipping mod, not a number we invented) and prices it: it fits in rows and misses
 by ~10 IPL slots. Read it before answering anything below.
 
+## Field run, 2026-08-07 — our ASI carries someone else's 70k-row map
+
+The user ran the test this review asked for, on the real game, and it is the strongest evidence the chain has:
+
+| Configuration | Result |
+| --- | --- |
+| ProperFixes 2.2.1 **with** the vegetation optional, `ProperFixes.asi` REMOVED | **ghost barriers reproduced** |
+| the same, with **`perfect-map.asi`** installed instead | **barriers gone, and the new-game 2dfx crash gone** |
+
+That is **70 212 permanent text rows — 2.14× the int16 ceiling — on a third-party corpus with real
+positions**, held by our own patch. Everything our fix #1 had been proven on before was ours: the 33k synthetic
+repro dial and our own 30 566-row monolith. And the 2dfx half is 009's `FxSystem_c` guard confirmed on data
+nobody here authored (the reported symptom was the new-game crash, i.e. `0x004AA3A1`).
+
+**What it decides.** Route 3 (our own ASI) is no longer a bet — for the int16 ceiling it is demonstrated at
+more than twice the limit on a foreign map. Route 1 (stay under the ceiling) is what we would be giving up,
+and route 2's appeal was never int16 anyway.
+
+**What it does NOT decide, and must not be read as deciding:**
+
+- **Slots were never stressed.** ProperFixes occupies 6 IPL slots and the install stayed far below 40, so
+  `IplEntityIndexArrays` — the ceiling this whole review found binding — was not exercised at all. The
+  density target's actual blocker remains unmeasured.
+- **A pool-raising adjuster was almost certainly present, uncounted.**
+  [004's pivotal correction](../../../../../../asi/perfect-map/docs/plans/004-limit-patches.md) records that
+  the int16 bug **cannot manifest at all** without OLA or FLA raising `CBuilding` past its stock 13 000 — a
+  no-adjuster boot dies first at `0x5381A5` on pool exhaustion. 70 212 rows are far past 13 000, so for the
+  symptom to have appeared at all, something must have been raising that pool. The run was reported as
+  "perfect-map only". **Resolve this before quoting the run as a no-adjuster result** — one listing of the
+  game folder settles it (`ls` the exe folder and modloader for `.asi`/`.ini`). It does not weaken the
+  headline, which was never "no adjuster needed"; it decides whether the answer to question 2 below just got
+  easier or stayed where it was.
+- **If OLA WAS present, this run also closes 004's own open item** — "our APPLY build still DEFERRED with OLA
+  present" — because the fix demonstrably applied and worked. Check that before re-running the per-site
+  diagnostic 004 asks for.
+
 ## The question
 
 Three ways to place more procobj than vanilla limits allow:
@@ -66,12 +102,13 @@ So the two limits fall on opposite sides:
 | ----- | ------- | ------- |
 | `IplEntityIndexArrays` (40 slots) — **the binding one** | **YES** — FLA's `[IPL] Entity index array` | fix #2/#3, plan `004b`, NOT built |
 | per-area `LoadScene` budget (~4 096 rows) | YES (pool/array relocation) | `004b`, NOT built |
-| int16 `IplDef` row ceiling | **NO — structurally impossible** | **YES — fix #1, DONE and confirmed in-game** |
+| int16 `IplDef` row ceiling | **NO — structurally impossible** | **YES — fix #1, DONE; confirmed in-game, and on a foreign 70k-row map (2026-08-07)** |
 
 Read together with the measurement, that is close to an answer:
 
 - The limit we are actually about to hit (**slots**) is the one FLA already lifts and our ASI does not.
-- The limit our ASI uniquely lifts (**int16 rows**) is the one we have 22 % headroom on.
+- The limit our ASI uniquely lifts (**int16 rows**) is the one we have 9 854 rows of headroom on — and,
+  since the 2026-08-07 field run, the one it is demonstrably good for well past the ceiling.
 
 ## What to decide
 
@@ -93,13 +130,21 @@ Read together with the measurement, that is close to an answer:
    to density. See [density-target.md](../density-target.md).
 4. **What does the stock target promise?** Today it is "runs on unmodded SA 1.0". If density ships gated
    on FLA, that promise needs restating.
-5. **What is ProperFixes actually getting away with, and does it tell us the int16 answer?** Its vegetation
-   set is 57 583 permanent text rows on top of stock's 12 629 — **70 212 map-wide, 2.14× the int16 ceiling**
-   — in 9 597-row files, **2.4× the per-area budget**. It requires OLA and it ships to real players. So
-   either (a) **OLA lifts the int16 `IplDef` truncation**, which contradicts this review's central premise
-   and is not implausible (our own ASI is described as overlaying *FLA's incomplete int16 patch*, so at least
-   one adjuster already tries), or (b) **its users have latent ghost barriers nobody has attributed to a
-   vegetation mod**. The answer decides whether route 2 is genuinely free.
+5. ~~**What is ProperFixes actually getting away with?**~~ **ANSWERED 2026-08-07 in the field.** Its
+   vegetation set is 57 583 permanent text rows on top of stock's 12 629 — **70 212 map-wide, 2.14× the
+   int16 ceiling** — and the question was whether (a) OLA lifts the truncation, or (b) its users carry
+   latent ghost barriers. **It is (b) plus its own `.asi`:** strip `ProperFixes.asi` and the barriers appear
+   on its data. **OLA does not lift the int16 ceiling** — this review's central premise stands, and 004's
+   source study of OLA already said so (`0x404B4A` is byte-stock in OLA). What lifts it is a dedicated
+   patch: theirs, or ours. **Route 2 is therefore NOT free for int16.** It stays free for slots and pools,
+   which is all it ever covered.
+6. **Is our per-area row budget too tight by 2.4×, and does that dissolve the slot problem?** Their IPL files
+   carry ~9 597 rows each against our `AREA_ROW_CAP` of 4 000, and they ran clean. If a file that size is
+   genuinely safe, the density target is ~6 slots rather than ≥ 19 areas and the binding ceiling this review
+   found simply goes away. **Do not conclude it from this run** — their rows are pure text with no LODs and
+   no binary streams, ours are mixed, and `AREA_ROW_CAP` models a `LoadScene` budget that may not be
+   per-file at all. It is now the highest-value measurement in the chain, and
+   [04](04-slot-economy-and-budgets.md) is where it belongs.
 
 ## Tasks
 
@@ -108,10 +153,14 @@ Read together with the measurement, that is close to an answer:
       miss by ~10. The int16 lift is **not** on the critical path;
       [density-target.md](../density-target.md) carries the arithmetic.
 - [x] Test option 3 (fold generated areas into fewer files). **Closed** — see decision 3 above.
-- [ ] **Install ProperFixes 2.2.1 + its vegetation optional on the real game and look for ghost barriers.**
-      This is the cheapest available answer to decision 5, and it is a better subject than the synthetic
-      `tools-debug/sa-int16-repro` dial because the rows are real and positioned. Run it BOTH ways — with its
-      required OLA, and with our own ASI instead — and diff the symptom.
+- [x] **Install ProperFixes 2.2.1 + its vegetation optional on the real game and look for ghost barriers.**
+      **Done 2026-08-07, and it answers decision 5 in our favour** — the bug reproduces on its data without
+      `ProperFixes.asi`, and `perfect-map.asi` fixes it (plus the 2dfx new-game crash). See the field-run
+      section above, including the one thing that still has to be checked about the configuration.
+- [ ] **List the game folder and name every `.asi`/`.ini` that was loaded during that run.** 004 says the
+      symptom cannot exist without a pool-raiser, so something was raising `CBuilding` — find out what before
+      the run is quoted as "no adjuster needed", and check whether it also closes 004's deferred-with-OLA
+      item.
 - [ ] Verify the FLA claim on a real install: does `[IPL] Entity index array` actually lift the 40-slot
       ceiling, and does it coexist with whatever else the target install runs? Extend the repro dial with a
       SLOT dial if it only counts rows.
@@ -136,6 +185,9 @@ which route lifts it, and what that route costs the user's install.
   areas (slots 48 vs a 40 ceiling, does not fit). Area folding closed as a route.
 - **2026-08-07, reference measured:** ProperFixes 2.2.1 places 57 583 rows in 6 slots, 46 models, every row
   `lod = -1`, and requires OLA. 8.3× our row cost per object.
-- _(ghost-barrier field test against ProperFixes — pending)_
+- **2026-08-07, FIELD:** ProperFixes 2.2.1 + vegetation optional (70 212 map-wide rows, 2.14× the int16
+  ceiling) on the real game. `ProperFixes.asi` removed → ghost barriers reproduced. `perfect-map.asi`
+  installed → **barriers gone AND the new-game 2dfx crash gone.** Reported as perfect-map only; a pool-raiser
+  must nonetheless have been present (see above). Slots untouched by this run (6 in use).
 - _(FLA slot-lift verification — pending)_
 - _(folding hygiene win — pending)_

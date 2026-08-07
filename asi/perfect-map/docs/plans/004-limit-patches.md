@@ -113,3 +113,28 @@ to `unlimited` in OLA's ini. ⇒ our #1 fix stays necessary and shouldn't collid
 **Open:** our APPLY build still DEFERRED with OLA present (some #1 verify site differed) even though OLA doesn't
 touch 0x404B4A — need the per-site diagnostic run WITH OLA to name it, then adjust coexistence so #1 applies while
 OLA raises the pool (the only config where the bug is reproducible).
+
+### ✅ Third-party validation at 2.14× the ceiling (2026-08-07)
+
+Field run on the real install, reported by the user: **ProperFixes 2.2.1 with its "increase vegetation
+distance" optional** — 57 583 permanent text rows of its own on top of stock's 12 629, i.e. **70 212
+map-wide**, in six IPL slots.
+
+- `ProperFixes.asi` removed → **ghost barriers reproduce on its data.** So the mod is genuinely over the
+  ceiling and its own `.asi` is what normally hides that; **OLA does not lift the int16 truncation**, exactly
+  as the OLA source study above predicted.
+- `perfect-map.asi` installed instead → **barriers gone, and the new-game 2dfx crash gone** (#6, the
+  `FxSystem_c` guard — 009).
+
+This is the first time either patch has been proven on a map nobody here authored, and at more than twice the
+int16 ceiling; before it, the evidence was our own 33k repro dial and our own 30 566-row monolith.
+
+**Two things to check against this run before quoting it:**
+
+1. **Which adjuster was actually loaded.** It was reported as perfect-map only, but the pivotal correction
+   above says the symptom cannot exist without a pool-raiser (stock `CBuilding` is 13 000 and 70 212 rows are
+   far past it, so a no-adjuster boot should have died at `0x5381A5` first). List the exe folder and modloader
+   for `.asi`/`.ini` and record what was there.
+2. **Whether this closes the OPEN item above.** If OLA was present and #1 nonetheless APPLIED and fixed the
+   bug, the deferred-with-OLA problem is already solved and the per-site diagnostic run is unnecessary. Read
+   the banner's build time and mode in the log before concluding either way.
