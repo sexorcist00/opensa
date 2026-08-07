@@ -72,6 +72,7 @@ Read it as a set of rules:
 | [`edge-cases/`](./edge-cases/README.md) | CURRENT limitations/constraints only, no legacy. Read while DEBUGGING. |
 | [`restrictions/`](./restrictions/README.md) | Rules a new design must satisfy. Read BEFORE an idea/concept/plan. |
 | [`hacks/`](./hacks/README.md) | Expedients we knowingly took: fitted constants, stand-in rules, faked effects. Replaced ones move to [`hacks/retired/`](./hacks/retired/). |
+| [`references/`](./references/readme.md) | Ideas borrowed from other projects, with their status — planned, built, or refused with the reason. |
 | [`performance/`](./performance/) | Deferred-optimization levers (a price tag, not a plan). |
 | [`benchmarks/`](./benchmarks/) | Every reported perf figure, recorded before it is analysed. |
 | [`audit/`](./audit/) | Post-rework audits (what changed, what it cost, what it bought). |

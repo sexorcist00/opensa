@@ -1,4 +1,4 @@
-import { Engine, setupStreaming } from '@opensa/engine';
+import { Engine, frameSpans, setupStreaming } from '@opensa/engine';
 import {
   createEngineEnvironmentDriver,
   type EngineEnvironmentDriver,
@@ -23,6 +23,7 @@ import { CAMERA_FAR, groundPoint, MAP_YAW, MapCamera } from '../map/map-camera';
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
 import { buildDemoCity } from './demo-city';
+import { FrameInventory, type InventoryReport } from './inventory';
 import { DEFAULT_SRC, resolvePakBase } from './pak-source';
 import { installWater } from './water';
 
@@ -41,6 +42,11 @@ export interface BootOptions {
 export interface DispatchHandle {
   readonly camera: MapCamera;
   dispose(): void;
+  /**
+   * The 098/1-01 before-table, or null when `?inventory=1` was not set. Reading it does not stop or reset
+   * the collection — the window keeps growing, so a later read is a longer sample of the same run.
+   */
+  inventory(): InventoryReport | null;
   /** Frame a GTA point at a sensible working height — what "locate" does in the panels. */
   locate(at: GtaGround): void;
   setHour(hour: number): void;
@@ -130,6 +136,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   }
 
   const unbind = bindInput({ camera, canvas, engine, options, symbology });
+  // 098/1-01. Off unless asked for: draining the span recorder is cheap, but a mode that measures by default
+  // is a mode nobody can trust to have measured nothing.
+  const inventory = params.get('inventory') === '1' ? new FrameInventory() : null;
   const frames: number[] = [];
   let disposed = false;
   let lastReadout = 0;
@@ -140,7 +149,8 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       return;
     }
     const now = performance.now();
-    frames.push(now - previous);
+    const dt = now - previous;
+    frames.push(dt);
     previous = now;
     if (frames.length > 60) {
       frames.shift();
@@ -154,6 +164,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     // every ring and would stream nothing at all.
     const pending = world.follow([state.target[0], state.target[1], state.target[2]]);
     const stats = engine.frame(state);
+    // Drained every frame the mode is on, so a span never carries into the next frame's total. Plan 091's
+    // rule: the frame that DRAINS is the frame that paid, because the work ran in the gap before it.
+    if (inventory) {
+      inventory.sample(dt, stats, frameSpans.drain());
+    }
 
     projector.update(state, overlay.clientWidth, overlay.clientHeight);
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -188,6 +203,16 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       disposed = true;
       unbind();
       beacons.dispose();
+    },
+    inventory(): InventoryReport | null {
+      return inventory === null
+        ? null
+        : inventory.report({
+            build: world.label,
+            device: engine.deviceReport,
+            district: params.get('district') ?? 'unnamed — pass ?district=',
+            hasTimestamps: !engine.deviceReport.missing.includes('timestamp-query'),
+          });
     },
     locate(at: GtaGround): void {
       camera.zoomTo(at, LOCATE_HEIGHT);

@@ -16,9 +16,35 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`097`, one folder each (066, 073, 074, 078–082, 096, 097 carry multi-part sub-plans; 083 kept its row
+`001`–`099`, one folder each (066, 073, 074, 078–082, 096, 097, 098 carry multi-part sub-plans; 083 kept its row
 but its folder moved to `roadmap/0.5.0/`). Newest first:
 
+- **[099 — PCAD Dispatch](./099-pcad-dispatch/readme.md)** — **THE FINAL PLAN**, opened 2026-08-06. The
+  product every dispatch doc here now serves: a **web dispatch application for a SA-MP server**, paired with a
+  client-side CAD plugin (PCAD). Three pieces — the plugin, a backend, and the web application — of which this
+  repository owns exactly one thing: **the 3D map component**. The field survey behind it: every dispatch map
+  in this market ([SonoranCAD](https://sonorancad.com/fivem),
+  [SnailyCAD](https://github.com/SnailyCAD/snaily-cadv4)) is a flat tile picture with dots on it, and both are
+  FiveM — nobody has the world, and nobody serves SA-MP. Carries the borrowings from the open-source map
+  engines (screen-space-error LOD, time as an axis, label collision, layer models, the SanMap projection), the
+  three seams and who owns them (self-reported positions are **claims**, not facts), five delivery phases
+  starting with the engine, and the honest statement that the four named budgets may not hold at once.
+  [098](./098-dispatch-console/readme.md) is subordinate to it.
+- **[098 — The dispatch console](./098-dispatch-console/readme.md)** — IN PROGRESS, opened 2026-08-06. The
+  engine's second consumer, declared: a CAD operator surface over the streamed world, trimmed to what it
+  actually draws, on a phone. `apps/dispatch` arrived in one commit with one write-up and no plan, no roadmap
+  row and no line in [project-goals](../project-goals.md) — while being the only surface in the repo that runs
+  on a mobile GPU, and therefore the cheapest instrument for the device measurement 097's phone-side steps are
+  blocked on. Five chains: the map profile (cut what is provably never read — cars, peds, vegetation sway, the
+  day cycle and the weather are protected, and one engine serves PC and mobile), real device truth (the repo's
+  first real-world mobile row, handing 097/1-04 the residency ceiling it refused to invent), the operator
+  surface at 360 CSS px, render-on-demand for a console that idles most of a shift, and picking taken off the
+  `debugPicking` flag it stands on today. A requirements round on the same day added three more: **three
+  display modes** (live render / a baked 3D city map / flat 2D tiles — two thirds of which already exist
+  unrecognised, in `opensa-lod-generator` and `plan-mode.ts`), **the operator's map** (orthographic mode,
+  flyTo, follow, bookmarks, minimap, measuring, drawing, keys, embedding) and **the time axis**, moved forward
+  from 0.6.0 because where time lives in the data model is cheap now and a rewrite later. Owns none of 097's
+  work and duplicates none of it.
 - **[097 — Platform reach](./097-platform-reach/readme.md)** — IN PROGRESS, opened 2026-08-04. The world on a
   phone, and the frame off the main thread. A phone boots the engine and cannot open the world, because a pak
   built from SA assets is BC throughout and no mobile GPU has BC — a build-time content decision no runtime

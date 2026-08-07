@@ -130,6 +130,10 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
       disposed = true;
       unbind();
     },
+    /** Nothing to inventory: plan mode draws no world, so there are no passes and no residency to count. */
+    inventory(): null {
+      return null;
+    },
     locate(at: GtaGround): void {
       camera.zoomTo(at, 500);
     },

@@ -125,6 +125,14 @@ Never edit generated code manually.
 
 ## Standing Workflow Rules
 
+- **THE DEVELOPMENT MACHINE IS AN ANDROID PHONE RUNNING TERMUX.** Every command handed over is run there, so
+  write commands for that environment or they waste the user's time: no `sudo`, `pkg` rather than `apt`,
+  paths under `$PREFIX`, and a long job needs `termux-wake-lock` or Android suspends it. The user **has the
+  game files and can build paks**, so anything gated on game data is runnable — but assume **phone-scale RAM
+  and no desktop**: the `build:game:*` scripts ask for a 12 GB heap (`--max-old-space-size=12288`), which is
+  a desktop number, and **Playwright/Chromium headless is effectively unavailable**, so anything that drives
+  a browser has to run in the phone's own browser against `npm run dev` instead of a headless capture.
+  A "desktop baseline" is not automatically available — see `docs/development/termux.md`.
 - **CHECK `docs/project-goals.md` BEFORE writing an idea, a concept or a plan** — it is what the project is
   FOR, and it is directive, not aspirational. OpenSA is compatible with RenderWare; it is NOT a
   reimplementation of San Andreas. Two halves, and dropping either breaks it: **honour the authored DATA**

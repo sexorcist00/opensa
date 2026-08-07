@@ -132,6 +132,49 @@ The minimal boot kept as a repro harness (074/13 phase 3.4): `src` (default `pak
 > `cells`/`lod` exist because the panel's inspector OWNS the cell set: with `panel=0` there is no inspector,
 > so the host seeds the set itself.
 
+## Dispatch console — `apps/dispatch` (`/dispatch.html`)
+
+Read by `dispatchParams()` (`src/world/boot.ts`), which falls back to `window.__opensaDispatch` when the page
+has an opaque origin and cannot own its URL — a `content://` or `file://` host on a phone.
+
+| Parameter | Does |
+| --- | --- |
+| `demo=1` | synthetic block city, no pak needed |
+| `src=` | pak base to stream (default `build/original`) |
+| `hour=` | opening hour for the environment driver |
+| `at=x,y` · `h=` · `pitch=` · `yaw=` | opening camera pose (GTA ground point, height, degrees) |
+| `hd=` · `lod=` | streaming ring radii |
+| `fog=1` · `fogscale=` | restore the game's own fog instead of pushing the cut to the far plane |
+| `weather=` | weather id for the environment driver |
+| **`inventory=1`** | **098/1-01**: collect the frame before-table and show a panel with a copy button |
+| **`district=`** | the label the inventory capture records itself under — the pinned district's name |
+
+### Taking an inventory capture
+
+The measurement district for the whole of 098 is **the centre of Los Santos**, pinned in
+[098/1-01](../plans/098-dispatch-console/1-the-map-profile/readme.md); every before/after in that chain uses
+it, or the comparison is not an A/B.
+
+```sh
+npm run dev            # in Termux; add -- --host to reach it from another device
+```
+
+Then, in the phone's own browser (there is no headless capture on this machine —
+[development/termux.md](./termux.md)):
+
+```
+http://localhost:5173/dispatch.html?inventory=1&district=los-santos-centre&at=1480,-1720&h=900
+```
+
+Let it settle, pan and zoom the way an operator would, then press **copy JSON**. On a LAN address the
+clipboard API is unavailable (not a secure context) and the panel drops a selected textarea instead — long
+press, copy. The JSON goes to `docs/benchmarks/` **before** it is analysed, per the standing rule.
+
+**What it cannot tell you on a phone:** `gpuPassMs`, `gpuPostMs` and `gpuProbeMs` need `timestamp-query`,
+which mobile adapters do not have. The report says so in `unavailable` rather than printing them as zero —
+the numbers that remain (`dt` percentiles, `submitMs`, draws, triangles, cells, residency, and the
+between-frame spans) are all real.
+
 ## Two known inconsistencies
 
 Documented rather than silently fixed; both are load-bearing for existing bookmarks and bench URLs:

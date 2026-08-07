@@ -11,6 +11,40 @@ the smallest complete example of embedding the engine.
 
 Implemented and running. The world half is verified only on real GPU hardware — see [Verification](#verification).
 
+**Under active development as [plan 098](../plans/098-dispatch-console/readme.md)** (opened 2026-08-06), which
+declares the console as the engine's second consumer ([project-goals, directive 7](../project-goals.md)) and
+carries eight chains: the map profile (trim the engine to what the map draws — and only that: cars and peds
+drawn, vegetation swaying, the day turning and the weather colouring the world are all protected, and one
+engine serves PC and mobile on a budget rather than a branch), real device truth (the repo's first
+real-world mobile benchmark row), the operator surface at 360 CSS px, render-on-demand for a surface that
+idles most of a shift, picking taken off its debug flag, **three display modes**, **the operator's map**
+(orthographic mode, flyTo, follow, bookmarks, a minimap, measuring, drawing, keys, embedding) and **the time
+axis**. The deferred CAD half — a live feed, real routes, cross-shift history, multi-operator,
+install/offline — is [roadmap 0.6.0](../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md).
+
+**The product it is aimed at** (settled with the user 2026-08-06): the dispatcher is a **player** on the
+server and so are the units; the data source is a **native CAD plugin**; the console stays a separate web
+application beside the game. Its named budgets are 150 units drawn as models, 60 fps on a phone, ≤3 s to a
+working picture and a hard 300–500 MB residency ceiling — see the
+[plan's budget table](../plans/098-dispatch-console/readme.md), which also states plainly that those four may
+not be satisfiable at once and how that gets decided.
+
+## Three ways to draw the world
+
+Decided 2026-08-06 — one camera, one symbology, one board, three sources for what is beneath them
+([098/6](../plans/098-dispatch-console/6-display-modes/readme.md)):
+
+| Mode | What it is | State |
+| --- | --- | --- |
+| Live render | the streamed pak — the game's own world | shipped, this document |
+| Baked 3D city map | the world pre-simplified offline and lit like a map rather than a game | the bake exists (`tools/opensa-lod-generator`), the mode does not |
+| Flat 2D | top-down tiles, no 3D at all | the frame exists (`plan-mode.ts`), the content does not |
+
+The operator picks; a device that cannot carry the choice starts in one that works **and says why**. Camera
+pose, selection and the moment in time survive a switch. The 2D tiles are baked by our own orthographic pass
+so every build — including total conversions, which have no third-party map raster and never will — gets all
+three modes.
+
 ## What it is made of
 
 | Concern                | Where                                    | Notes                                                                                       |
@@ -76,15 +110,30 @@ opens a call at the ground point under the cursor.
 
 ## Known gaps
 
+Each now names the step that owns it, so none of them is an open-ended note.
+
 - **Routes are straight lines**, not driven paths. The vehicle path graph is `original`-only
   ([assets-and-data](../restrictions/assets-and-data.md)), so a total conversion has nothing to route on; a
   bearing that is honest about being a bearing beat a route that silently lies on half the games.
+  → deferred: [roadmap 0.6.0](../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md).
 - **The board is a mockup feed.** `stepOperations` stands in for a real one; wiring this to a game server
-  replaces that one module and nothing else.
-- **No unit models.** Units are beacons plus 2D symbols. `createVehicle` would give them real cars at the cost
-  of depending on converted vehicle models being present in the build.
+  replaces that one module and nothing else. → deferred, contract first:
+  [roadmap 0.6.0](../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md).
+- **No unit models** — **decided 2026-08-06: units get real models.** Cars and peds are drawn rather than
+  replaced by icons; the symbol keeps the label and the priority and stays 2D on top. The cost is a
+  dependency on the build carrying converted `.osm` models, and the fallback when one is absent is part of
+  the step. → [098/5-04](../plans/098-dispatch-console/5-symbology-and-picking-as-product/readme.md).
 - **Demo mode has no model names.** Synthetic cells carry no placement mapper, so a click on a demo block
-  resolves to bare ground.
+  resolves to bare ground. → picked up with the production pick capability,
+  [098/5-01](../plans/098-dispatch-console/5-symbology-and-picking-as-product/readme.md).
+- **Picking stands on a debug flag.** `engine.cells.debugPicking` must be true before the first cell loads,
+  and a build defaulting debug off in production kills click-to-inspect with no error — recorded as a
+  restriction ([architecture](../restrictions/architecture.md)) in the same change.
+  → [098/5-01](../plans/098-dispatch-console/5-symbology-and-picking-as-product/readme.md).
+- **The mobile evidence is emulated, not hardware.** The phone runs below are an emulated Pixel 7 and a
+  simulated mobile adapter; the one real device in the repo's record (Mali-G51, 360×800 DPR 2) ran the
+  synthetic `?demo=1` city, not a streamed world. → the real-district row is
+  [098/2-03](../plans/098-dispatch-console/2-real-device-truth/readme.md).
 
 ## Verification
 

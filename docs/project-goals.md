@@ -103,6 +103,35 @@ Concretely, what "high-performance" has to mean in a plan:
   one look identical in a screenshot and nothing alike from a car;
 - **it holds up in the field** — the last word belongs to someone driving, not to a bench.
 
+### 7. The engine has two consumers, and the second one is not a game
+
+`apps/dispatch` is a computer-aided-dispatch operator surface over the same streamed world: a top-down 3D
+map, live units, a call queue, click-to-inspect. It runs with **no player, no ECS and no physics** — the
+renderer, the streamer and one shared config→`Environment` driver, and nothing else. That makes it two
+things at once: the project's proof that the engine layer stayed an engine, and the smallest complete
+example of embedding it. It is also the only surface in this repo that runs on a phone.
+
+**What that changes for a plan.** A feature that only works when a character, a physics world or a HUD
+exists is a feature the second consumer cannot use. That is not automatically wrong — plenty of the game
+belongs to the game — but it is a fact a plan states rather than discovers, and a feature that could have
+been engine-layer and was written player-first is a boundary that quietly moved.
+
+**What it does not change.** Same authored SA data, same contracts, same import path. This is not a
+real-world mapping product (decided 2026-08-06): no geo import, no CRS layer. The console maps the world the
+pak was built from, like everything else here.
+
+**And what the second consumer does not license.** Two failure modes, both tempting:
+
+- **Trading away a living world for a lighter one.** Cars and peds drawn, vegetation swaying, the day
+  turning, the weather colouring the world — these are not overhead a "map view" gets to drop. Directive 6
+  applies to the console exactly as it applies to the game; what may be trimmed is what a surface *provably
+  never reads*, which is a measurement, not a category.
+- **Splitting the platforms.** One engine runs on PC and on mobile. The difference between them is a
+  **budget** — numbers the frame reads — never a branch it executes, and never a second renderer to
+  maintain.
+
+Worked chain: [plan 098](./plans/098-dispatch-console/readme.md).
+
 ## The line we do not cross
 
 **Deviate in BEHAVIOUR; keep the CONTRACT.**
@@ -150,10 +179,11 @@ These are not aspirations; they are the pattern to follow.
 
 ## The check, when a plan is written
 
-Five questions. A plan that cannot answer them is not ready:
+Six questions. A plan that cannot answer them is not ready:
 
 1. **Which authored data does this read, and does it read it as the author meant it?**
 2. **What does the original do here, and why is that not our answer?**
 3. **What is better in our version, and what measurement or field verdict says so?**
 4. **What does it cost per frame when the world is busy?**
 5. **What contract does a mod author still get to rely on?**
+6. **Does this need a player — and if it does, does it belong in the engine layer at all?**
