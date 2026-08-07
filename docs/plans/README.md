@@ -294,7 +294,8 @@ row but its chain was superseded by 097). Newest first:
 - **timecyc-builder** — timecyc precompute. No plans doc yet.
 - **cleo/scripts** — authored CLEO script sources on the SDK (runtime content, not a build tool — the
   `asi/perfect-map` root-category pattern). [`cleo/scripts/docs/plans/`](../../cleo/scripts/docs/plans/readme.md)
-  (`001` rhino tracks · `002` no_lights — the corpus-replacement chain, PLANNED 2026-08-06).
+  (`001` rhino tracks — CLOSED 2026-08-07, both runtimes field-proven, shipping step waived ·
+  `002` no_lights — PLANNED 2026-08-06).
 
 ## Other docs
 

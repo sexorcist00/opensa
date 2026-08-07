@@ -106,6 +106,25 @@ track chain — `docs/hacks/cleo-frame-sibling-order.md`) and flattens parent li
 run in rig order. What that costs a script is measured in `docs/edge-cases/cleo-vm.md`: a script
 anchored on a dummy does nothing at all, silently.
 
+### Tracked vehicles (`track_*` — read by our shipped `rhino-tracks.cs`)
+
+A model carrying these names gets its tread and road wheels animated by the script we ship
+(`cleo/scripts/rhino-tracks/`), on **any slot** — the script tests for the names, never for a model
+id, so the mod may be installed anywhere and a new tracked vehicle needs no code.
+
+| Name | Role |
+| --- | --- |
+| `track_1` … `track_12` | The tread FLIPBOOK: twelve authored states of the same belt. Exactly one is shown at a time, advancing one link per 1.5 deg of wheel roll and repeating every 18 deg. **`track_1` is the capability test** — a model without it is left completely alone. |
+| `wheel_big_0`, `wheel_big_1` | Drive sprockets. Rolled by the reference wheel's own angle. |
+| `wheel_small_1` … `wheel_small_8` | Road wheels. Rolled at **2x** the sprocket angle (they are half the diameter). |
+| `wheel_rb_dummy` | The reference wheel the roll angle is read from (`m_forward`, via `m_aCarNodes[CAR_WHEEL_RB]`) — a standard hub name, no extra authoring. |
+
+Every one of these must be a frame **with a mesh**: a dummy is not an addressable part (above), and
+the script skips what it cannot resolve. Gaps are tolerated but visible — `track_7` missing means
+the tread simply vanishes for that 1.5 deg of the cycle rather than crashing. The count is fixed at
+twelve today; the arc per link is `18 / <count>`, so a model with a different link count needs the
+script's `TRACK_LINKS` changed, not just renamed frames.
+
 ### Damageable components
 
 `bonnet`, `boot`, `bump_front`, `bump_rear`, `wing_lf`, `wing_rf`, `windscreen`, `door_{lf|rf|lr|rr}` —

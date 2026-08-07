@@ -47,8 +47,9 @@ under real CLEO on the canonical exe.
   the source of truth for what its data MEANS, not for its shape.
 - **Drop the speed HUD** — it cannot pass the dual gate and our engine owns its own HUD.
 - **Shipping:** the author's mod in `mods-src/` stays byte-untouched; the pak build ships OUR
-  artifact in place of the author's `.cs` (mechanism decided in step 4 — if a name rule appears,
-  it goes to `docs/contracts/mods.md` in the same change).
+  artifact in place of the author's `.cs`. **The automated mechanism is SKIPPED (user's call
+  2026-08-07)** — the artifact is placed by hand; see the step-4 ledger entry for the manual recipe
+  and what a rebuild does to it.
 
 ## Steps
 
@@ -58,12 +59,15 @@ under real CLEO on the canonical exe.
       run headless — does `SetRotate` land on the part, and does this answer whether the
       tracks-don't-rotate defect was ONLY the sibling walk (or also the optimizer's dropped parent
       frames)? Verdict into the ledger before the full port.
-- [ ] Full script in the DSL + story test (declared per-frame budget; the original's avg ~300 /
+- [x] Full script in the DSL + story test (declared per-frame budget; the original's avg ~300 /
       peak 1 334 is the calibration point — beat it and record both numbers).
-- [ ] Shipping decision + wiring: our artifact replaces the author's in the pak build; contracts
-      row if a name rule appears.
-- [ ] Field close-out: tracks rolling in OpenSA (closes the 097/07 defect row; update the 05-ledger
-      reference and the hack file per its retirement clause) + manual real-CLEO Wine verdict.
+- [~] Shipping decision + wiring — **SKIPPED, user's call 2026-08-07**: the artifact is dropped in
+      by hand for now (see the ledger). The contracts row it would have produced was written
+      anyway, in step 3.
+- [x] Field close-out — **BOTH runtimes PASSED 2026-08-07** (tread rolls, wheels roll, no wedges):
+      the 097/07 defect row is closed and its diagnosis corrected, and the hack file's judged-on
+      claim is corrected too (it names a checkpoint that could never have run). The real-CLEO Wine
+      verdict is the user's, same day — the conformance half holds.
 
 ## Verification
 
@@ -260,6 +264,187 @@ frames. Consequences:
 version strictly better than a faithful port, and the third is a VM bug the port would have
 inherited.
 
-### Step 3 — full script + story test
+### Step 3 — full script + story test (2026-08-07)
 
-(pending)
+`cleo/scripts/rhino-tracks/` — `script.ts` + `story.test.ts` (9 tests). Builds through the real
+pipeline (`npm run build:cleo-scripts` → `rhino-tracks.cs`, 2 628 B), gate green, zero warnings,
+byte-deterministic.
+
+**Measured, 60 ticks each, same harness for both** (`.tmp-rhino-measure.ts`, deleted after the run):
+
+| Run | avg instr/tick | peak | part effects / 60 f |
+| --- | --- | --- | --- |
+| **ours** — one tank in range, REAL rig | **241** | **245** | **1 298** |
+| **ours** — no cars at all | **11** | **11** | 0 |
+| original — one tank, REAL rig | 1 275 | 1 297 | **0** |
+| original — one tank, permissive mock (its best case) | 1 312 | 1 334 | 236 |
+| original — no cars at all | 1 250 | 1 271 | 0 |
+
+The original's 1 334 peak reproduces the 097/07 ledger figure exactly — the harness is calibrated.
+Against its best case ours is **5.4x cheaper at peak** and **114x cheaper in the frame with no tank
+in it**, which is the frame the player is in essentially always: the original paid its whole
+139-slot pool walk whether a Rhino existed or not. Artifact **2 628 B vs 34 114 B** on disk
+(2 616 B of code vs 16 572 B). And on the real rig ours is the only one that does anything at all.
+
+Cost is linear and measured, so the declared `budgetPerTick: 300` has a stated meaning — one tracked
+vehicle plus a few cars of traffic:
+
+| In range | avg instr/tick |
+| --- | --- |
+| nothing | 11 |
+| 1 / 2 / 4 / 8 cars, none tracked | 23 / 34 / 58 / 105 (~12 per car) |
+| 1 / 2 / 4 tanks | 241 / 471 / 931 (~230 per tank) |
+
+**What the script does differently, and why each is a fix rather than a preference:**
+
+- **By name, never by sibling chain** — the step-2 root cause. This also leaves
+  `docs/hacks/cleo-frame-sibling-order.md` with no consumer in the shipped path.
+- **No model id.** `track_1` IS the capability test, so the mod works on any slot and any other
+  tracked model authored to the same names is animated for free — the standing "never hardcode a
+  value for a specific car" rule. Recorded as a name contract in `docs/contracts/vehicles.md`.
+- **The bucket wraps** (half-open on the right), so a parked tank shows link 1 instead of nothing.
+- **`SetRotateXOnly`** instead of the 3-arg `SetRotate`: one axis, one argument, no ambiguity — and
+  per gta-reversed `Core/Matrix.cpp` only `SetRotate(x,y,z)` ends with `m_pos.Set(0,0,0)`, so the
+  original's 3-read + 3-write position restore around all 22 parts is not needed at all. That is
+  most of the saving. Track links keep the x/y the author modelled instead of being forced to the
+  frame origin.
+- **One `z` write per link** instead of three components, and `HIDDEN_Z = -1000` instead of -1e35
+  (`docs/hacks/cleo-track-link-hide.md`).
+- **`0AE2` near the player** instead of the manual 139-slot pool walk; the speed HUD is dropped.
+
+**Every part lookup is null-guarded** (66 instructions of the 241): a model may carry `track_1` and
+be missing `track_7`, and under real CLEO a null frame handed to `SetRotate*` is an access
+violation, not a no-op. The test for a model without track links proves the whole script stays off.
+
+**Deviation from the plan, recorded rather than quietly satisfied:** the plan said "zero engine
+changes". One test-only option was added to `packages/cleo`'s recording host —
+`partForward`, so a story test can roll the reference wheel. Without it the harness can only ever
+report a parked vehicle, and half the assertions (the flipbook advancing, the 2x wheel ratio) could
+not exist. No product behaviour changed.
+
+**Two things the headless run cannot answer**, for step 5's field checkpoint: whether a part parked
+at `z = -1000` disturbs the vehicle's bounding/culling volume in our renderer, and whether the
+tread reads as continuous motion at 60 fps rather than a strobe (the flipbook advances one link per
+1.5 deg of wheel roll — at speed that is far faster than the frame rate, and aliasing is a real
+possibility the original shares).
+
+### Step 5 — FIELD: FAILED (2026-08-07), and the cause is engine-side
+
+User's field run: tracks do not move, wheels do not move, and large flat wedges sweep out of the
+front wheel area. Screenshots in the session.
+
+**Root cause — the reference angle is a constant.** `partForward` (engine-cleo-setup.ts) answers
+`quatAxes(vehicle.scriptPartLocalRotation(part)).forward`, and
+`EngineVehicleHandle.scriptPartLocalRotation` returns `scriptState(part).quat` — a per-part shadow
+**seeded from the BIND pose and mutated only by script writes**. Nothing in the engine ever
+publishes a wheel's live roll into it. `wheel_rb_dummy`'s bind rotation is identity (the rig dump
+does not mark it ROTATED), so:
+
+- `forward` = (0, 1, 0) forever → `GET_HEADING_FROM_VECTOR_2D(1, 0)` = **270 deg forever**
+- `phase` = 270 mod 18 = **0 forever** → link 1 is always the visible one → the tread never advances
+- `spin` = 270 deg constant → all ten wheels are pinned at `SetRotateXOnly(270 deg)`, the small ones
+  at 540 — set once, never changed, so nothing turns
+
+The wedges follow from the same constant: `scriptSetPartLocalRotation` sets the part's ABSOLUTE
+local rotation (faithful — SA's `SetRotate*` replaces the matrix), so each wheel part is yanked a
+fixed quarter-turn about its FRAME origin. The parts where the user sees the wedges
+(`wheel_big_0` at y 3.563, `wheel_small_1/2` at y 3.784) are the front ones, matching the
+screenshots. That last link is inference from the geometry, not measured.
+
+**This is NOT the step-2 defect and it is not new.** The author's original reads the same wheel
+frame through `m_aCarNodes[CAR_WHEEL_RB]`, which lands on the same shadow state — so even with its
+`misc_e` anchor resolving, it would have been equally frozen. The 097/07 "tracks do not rotate" row
+has TWO independent causes and step 2 found only the first.
+
+**Why the headless suite passed anyway, stated plainly:** the story test drives
+`createRecordingHost`, whose `partForward` is a canned value — and it is canned because *I added
+that option in step 3 so the test could roll the wheel*. The test asserts that the script converts
+an angle into a flipbook correctly, which it does; it can say nothing about where the angle comes
+from. [[next-session-roadmap]] lesson 2, earned again: a test driving a HARNESS proves nothing about
+the PRODUCT — and feeding the harness the very input the product fails to supply made it worse, not
+better. Any re-test has to read the angle through the engine's own accessor.
+
+**The fix is in the engine, not the script — DONE.** The live pose already existed
+(`setWheel` composes steer/camber/spin and drives the entity every frame); it was simply not
+published anywhere a script could read. `EngineVehicleHandle` now records each wheel part's DRAWN
+pose and `scriptPartLocalRotation`/`scriptPartLocalTranslation` return it for wheel parts, falling
+back to the script shadow for everything else. `rhino-tracks.cs` is byte-identical — our runtime
+now answers the question SA already answers. Guarded by
+`engine-vehicle-handle.test.ts` ("reports a wheel to SCRIPTS at its DRAWN pose"), which asserts the
+forward column the script actually reads and was **verified to fail with the change reverted**.
+Consequence for the plan: 001 is **not** script-only after all, and the engine half was not optional.
+
+**Second field round (after the engine fix): tracks roll, wheels roll — and the wedges remained.**
+They were never ours. Two wrong attributions of mine, both corrected here rather than left standing:
+I first blamed the script's rotation, then the one-triangle `wheel_small_1/2/8` stubs. The stubs are
+real (1 triangle each against 488 for their siblings, in the source DFF and the built `.osm` alike)
+but they measure **0.021 x 0.037 m** — far too small to be anything the player sees. I had also
+mis-read "9 vertices"; that was the length of the coordinate array, i.e. three vertices.
+
+**The real cause is our own wheel-fitting rule, and it has nothing to do with CLEO.** The `wheel`
+atomic — the mesh SA instances at every `wheel_*_dummy` — is itself a marker: 1 triangle,
+**3.4e-9 m of width** against 3.3 m for every real wheel in the same model. The author made the six
+SA road wheels invisible on purpose, because the Rhino's running gear is drawn by the
+`wheel_big_*`/`track_*` meshes. `axleScale` then normalised that marker to the ide diameter —
+`wheelScale / (authoredRadius * 2)` = **23.462**, exactly the scale the rig dump reported — so the
+engine drew six half-metre triangles and rotated them with the wheels. SA never rescales a wheel
+mesh (it applies the ide scale as-is), which is why the original is clean. That also explains the
+FIRST field round, where the wedges were already there while our script was not even installed.
+
+Fixed in `build-vehicle-model.ts`: `axleScale` becomes `wheelFit`, which separates the two things
+the old formula conflated — the VISUAL scale and the PHYSICS radius. A mesh with no extent along
+the axle is not a solid of revolution and is left unscaled; the radius still comes from the ide, so
+the marker's 2 cm can never reach the vehicle controller (it would have collapsed the suspension).
+The bound is float noise (1e-6 m against a 9-order-of-magnitude gap), not a fitted threshold. For
+every non-degenerate wheel both outputs are algebraically identical to before, so no other vehicle
+moved. Guarded by a new builder test; rebaked with
+`vehicle-installer --rebake original --only rhino`, and the built fixture now reads `scale = 1` on
+all six dummies with `radius 0.65` intact.
+
+**Worth keeping: the rebake re-copied the author's `rhino tracks.cs` and wiped our artifact** — the
+step-4 trap, live. Anything that re-runs the installer needs the two-line placement redone.
+
+**Third field round: PASSED on OpenSA (2026-08-07).** Tread rolls, road wheels roll, no wedges. The
+097/07 defect row is closed on our runtime and its row updated — with the correction that the
+sibling hack it blamed was never the blocker. Three causes in total, none of them the one the plan
+started from, and only the first is script-shaped:
+
+1. the original's chain anchor `misc_e` is a dummy the builder does not emit as a part (step 2);
+2. the engine published no live wheel roll into the script-visible part state (step 5);
+3. the wheel-fitting rule inflated the model's flat MARKER wheel 23.5x (step 5).
+
+**Real-CLEO Wine verdict: CONFIRMED by the user, 2026-08-07** — it works under real CLEO on the
+canonical exe. That closes the chain's (c) criterion and the plan: both runtimes, field-proven.
+Recorded as the user's verdict, not a measurement of ours; if it is ever re-run, note WHICH `.cs`
+the install carried, because a run that silently tested the author's artifact already cost this plan
+a whole field round (below).
+
+**Plan 001 is CLOSED** — steps 1, 2, 3 and 5 done, step 4 waived by the user. Audit:
+[`docs/audit/cleo-scripts-001-rhino-tracks.md`](../../../../docs/audit/cleo-scripts-001-rhino-tracks.md).
+
+### Step 4 — shipping: SKIPPED by the user (2026-08-07)
+
+No automated replacement is built. The artifact is placed by hand:
+
+```
+npm run build:cleo-scripts          # -> cleo/sdk/dist/rhino-tracks.cs (2 628 B)
+cp cleo/sdk/dist/rhino-tracks.cs build/original/opensa/cleo/
+rm "build/original/opensa/cleo/rhino tracks.cs"     # 34 114 B — NOT optional
+```
+
+Three facts that make or break the hand-placement, verified in the code rather than assumed:
+
+- **The runtime SCANS the folder** — `discoverAndSpawn(fs.names, …)` spawns every `cleo/*.cs` in the
+  VFS, so the filename does not matter and nothing needs registering. The cap is
+  `config.cleo.maxScripts` = 32 against 6 scripts present, so there is room.
+- **Removing the author's `.cs` is required, not tidiness.** Both would be spawned and both would
+  drive the same 22 parts every frame. The original loses (it does nothing on our rig) but still
+  burns its ~1 250 instr/frame, and on a runtime where it DID work the two would fight.
+- **A rebuild reverts it.** `build/original/opensa/cleo/` is written by mod-installer, which carries
+  the mod's `cleo/` folder verbatim out of `mods-src/`, so the drop must be redone after every pmb
+  run until an automated path exists.
+
+Retiring the skip means teaching the pak build the substitution — the natural home is a
+mod-installer rule keyed on the artifact name, recorded in `docs/contracts/mods.md` in that same
+change. The name contract step 4 would have produced was written anyway, in step 3
+(`docs/contracts/vehicles.md`, "Tracked vehicles").

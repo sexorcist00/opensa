@@ -175,6 +175,12 @@ collector with KEYS/TAGS, which verified every fix above without a human at the 
    User's call 2026-08-05: SKIP — 097/08 authors our own track script instead. That intent is now
    the [`cleo/scripts/docs/plans/`](../../../cleo/scripts/docs/plans/readme.md) chain (001 rhino
    tracks — by-name frame addressing, bypassing the sibling hack; commissioned 2026-08-06).
+   **CLOSED on OpenSA 2026-08-07** (001 step 5, field-confirmed: tread rolls, wheels roll). The
+   diagnosis above was only PART of it, and the sibling hack was never the blocker: the original's
+   chain anchor is `misc_e`, a dummy the builder does not emit as a part, so the walk never started
+   at all. Two further causes, both fixed and neither script-side — the engine published no live
+   wheel roll into the script-visible part state (so the tread read a constant angle), and the
+   wheel-fitting rule inflated the model's flat MARKER wheel 23.5x. See 001's step-5 ledger.
 
 ## Verification
 

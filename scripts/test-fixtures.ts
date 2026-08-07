@@ -8,7 +8,9 @@ import { convertTo24h, parseTimecyc, stringifyTimecyc } from '@opensa/renderware
  *
  *   npm run test:fixtures
  *
- * Custom, non-Rockstar fixtures live in `tests/custom/` and ARE committed — this script never touches them.
+ * Custom, non-Rockstar fixtures live in `tests/custom/` and ARE committed — this script never WRITES
+ * there. It may READ from it (`committed` fixtures): a corpus subject whose mod folder no longer ships
+ * it keeps its pristine copy in the repo, so the corpus survives that folder changing under it.
  *
  * Each fixture declares how it is produced:
  *   - copy:    copied verbatim from `game-src/<game>/<from>`
@@ -31,6 +33,10 @@ type Fixture =
   | { readonly dest: string; readonly entry: string; readonly type: 'extract' }
   /** Copied from `mods-src/<game>/` (mods/ + vehicles/ subpaths) — see {@link CLEO_MANIFEST}. */
   | { readonly dest: string; readonly from: string; readonly type: 'cleo' }
+  /** Copied from a COMMITTED path (`tests/custom/…`) — for a corpus entry whose mod no longer ships
+   *  it. The pristine copy lives in the repo precisely so the corpus survives the mod folder
+   *  changing under it; see the rhino row in {@link CLEO_MANIFEST}. */
+  | { readonly dest: string; readonly from: string; readonly type: 'committed' }
   | { readonly dest: string; readonly from: string; readonly type: 'copy' }
   /** Copied from `mods-src/`, not from the game dir — see {@link MOD_MANIFEST}. */
   | { readonly dest: string; readonly from: string; readonly type: 'mod' };
@@ -95,7 +101,18 @@ const CLEO_MANIFEST: readonly Fixture[] = [
   ),
   cleoFile('vehicles/firela - 1986 Sutphen 75 Mid-Mounted Ladder Truck - stratumx/cleo/firela.cs', 'cleo/firela.cs'),
   cleoFile('vehicles/newsvan - 1991 Ford Econoline 350 SA News Van - funky/cleo/van door [SA].cs', 'cleo/vandoor.cs'),
-  cleoFile('vehicles/rhino - GTA 5 Rhino - _F_/cleo/rhino tracks.cs', 'cleo/rhino.cs'),
+  // The rhino's original script no longer lives in the mod folder — our authored replacement took its
+  // place there (plan `cleo/scripts` 001). The corpus still needs it: it is one of the seven real
+  // Sanny-compiled decode/trace subjects, AND the integration test uses it to pin that the original
+  // does nothing on this model's real rig. So the pristine copy is COMMITTED and read from there;
+  // sourcing it from a mod folder that can be edited under us is what made this fixture report
+  // MISSING while a stale local copy kept the corpus tests green.
+  { dest: `${OUT}/cleo/rhino.cs`, from: 'tests/custom/cleo/rhino.cs', type: 'committed' },
+  // The rhino's MODEL, not a script. A track script is only testable end-to-end against the rig it
+  // actually addresses: the original's chain anchor `misc_e` is a dummy the vehicle builder does not
+  // emit as a part, which is why it was a silent no-op on our runtime while every headless test on a
+  // permissive mock passed (plan `cleo/scripts` 001 step 2).
+  cleoFile('vehicles/rhino - GTA 5 Rhino - _F_/rhino.dff', 'vehicles/rhino.dff'),
   cleoFile('mods/61. Wind Farm/CLEO/Wind Farm (Junior_Djjr).cs', 'cleo/windfarm.cs'),
 ];
 
@@ -264,6 +281,9 @@ function produce(fixture: Fixture): null | Uint8Array {
     }
     case 'cleo': {
       return new Uint8Array(readFileSync(join('mods-src', GAME, fixture.from)));
+    }
+    case 'committed': {
+      return new Uint8Array(readFileSync(fixture.from));
     }
     case 'copy': {
       return new Uint8Array(readFileSync(join(ROOT, fixture.from)));

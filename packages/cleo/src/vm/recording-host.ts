@@ -30,6 +30,9 @@ export interface RecordingHostOptions {
   readonly hour?: number;
   /** Model name → id for `GET_MODEL_BY_NAME` (default: every name resolves, ids assigned 20000+). */
   readonly knownModels?: ReadonlyMap<string, number>;
+  /** The frame m_forward column every part reports (default (0,1,0) — an UNROTATED frame, i.e. a
+   *  parked vehicle). Rhino's tread reads its reference wheel's roll out of this column. */
+  readonly partForward?: readonly [number, number, number];
   /** Frame names each car's model carries (default: every asked name exists). */
   readonly partNames?: readonly string[];
   /** The car the player currently sits in (a `cars` handle). */
@@ -70,7 +73,7 @@ export function createRecordingHost(options: RecordingHostOptions = {}): Recordi
       // The fake frame tree is a flat chain: sibling = the next auto-assigned part, 3 links deep.
       return part < 2 ? part + 1 : null;
     },
-    partForward: (): readonly [number, number, number] => [0, 1, 0],
+    partForward: (): readonly [number, number, number] => options.partForward ?? [0, 1, 0],
     partIndex: (car, name): null | number => {
       if (options.partNames && !options.partNames.includes(name)) {
         record(`natives.partIndex car#${car} ${name} -> missing`);

@@ -14,8 +14,12 @@ the whole part list) and it would interleave wrongly on a model whose sibling ch
 contiguous in frame order.
 
 **Judged on.** The rhino headless run (the walk terminates via the script's own null checks at the
-part-count bound) — not yet field-judged; the plan 097/05 field checkpoint 2 (tank tracks rolling)
-is the visual verdict.
+part-count bound). **It has never been judged in the field and the checkpoint this file used to name
+could not have judged it** (corrected 2026-08-07, plan `cleo/scripts` 001 step 2): rhino's chain
+anchor is `m_aCarNodes[CAR_MISC_E]` = `misc_e`, a dummy frame the vehicle builder does not emit as a
+part, so the script's own null guard fires and the sibling walk is never entered — measured at
+**0** part effects per frame against the model's real rig. The stand-in is therefore UNEXERCISED by
+its only known consumer, not proven by it.
 
 **What would retire it.** The vehicle-optimizer carrying a `parent` index per part (a `DESC` fixture
 extension — additive, old fixtures default to a flat hierarchy), then `nextSiblingPart` answering
