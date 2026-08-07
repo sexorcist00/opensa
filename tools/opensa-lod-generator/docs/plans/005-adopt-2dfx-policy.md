@@ -1,55 +1,68 @@
-# opensa-lod-generator/01 — The cell bake adopts the 2dfx policy
+# 005 — The cell bake adopts the 2dfx policy
 
-Part of [07 — LOD generators, extended](../readme.md). Depends on
-[lod-common/01](../../../../../../tools/lod-common/docs/plans/005-2dfx-keep-policy.md). **Gated on nothing** — cell output is OpenSA-only
-(see below), so no ASI is in this path.
+**Shipped 2026-08-07.** Came from
+[07 — LOD generators, extended](../../../../docs/roadmap/0.5.0/plans/07-lod-generators-extended/readme.md)
+(`opensa-lod-generator/01`) and moved here when it landed. Depended on
+[lod-common/005](../../../lod-common/docs/plans/005-2dfx-keep-policy.md).
 
 The smallest possible step: delete this generator's private keep-set and read the shared one instead. Nothing
-about WHICH types are carried changes here; that is [02](02-rotation-bearing-2dfx-on-cells.md).
+about WHICH types are carried changes here.
 
 ## Context
 
-`opensa-lod-generator/src/adapters/gta-sa/merge.ts:12` holds the whole of this generator's 2dfx policy:
+`merge.ts` held the whole of this generator's 2dfx policy in a leaf-file literal:
 
 ```ts
 /** 2dfx entry type 0 — light/corona. Cells carry only these (rotation-bearing types can't ride a raw transplant). */
 const LIGHT_2DFX = new Set([0]);
 ```
 
-It is correct today and it is a literal in a leaf file — which means the reason for it (a raw transplant
-cannot re-rotate) lives in a comment, not in anything a second generator can consult. lod-common/01 makes
-that reason a declared policy; this plan makes this generator obey it.
+Correct, and unreadable from anywhere else: the REASON for it lived in a comment, not in anything a second
+generator could consult.
 
 **Worth stating once, because the old plan got it wrong:** this generator's output is loaded by the OpenSA
-engine only — [`restrictions/sa-target.md`](../../../../../restrictions/sa-target.md) records that real SA
-cannot load an uncapped per-cell LOD, and the two LOD generators are not interchangeable. So nothing in this
-folder is gated on `asi/perfect-map`, and the "asi target" framing the old A2 carried was a mistake.
+engine only — [`restrictions/sa-target.md`](../../../../docs/restrictions/sa-target.md) records that real SA
+cannot load an uncapped per-cell LOD. So nothing in this chain is gated on `asi/perfect-map`, and the "asi
+target" framing the old A2 carried was a mistake.
 
 ## Decisions
 
-1. **Replace the literal with `keepTypesFor(target)`.** The resolved set for the current target is `{0}`, so
-   the output does not move. The regression fixture is what says so, not the diff.
-2. **Keep the reasoning WITH the policy.** The comment explaining why rotation-bearing types cannot ride a
-   raw transplant belongs in lod-common's policy table, next to the entry that drops them — the place a
-   reader of the other generator will also find it.
-3. **No widening here.** It is tempting to fold [02](02-rotation-bearing-2dfx-on-cells.md) in, since it is
-   "one more line in a set". Do not: this step's whole value is that it is provably behaviour-preserving, and
-   a step that both refactors and changes behaviour cannot prove either half.
+1. **Replace the literal with `keepTypesFor('cell')`.** The resolved set is `{0}`, so the output does not move.
+2. **Keep the reasoning WITH the policy** — the comment about rotation-bearing types now lives in lod-common's
+   table, where the other generator's reader also finds it.
+3. **No widening here.** A step that both refactors and changes behaviour can prove neither half.
 
 ## Tasks
 
-- [ ] `merge.ts`: drop `LIGHT_2DFX`, resolve the keep-set from the policy; move the explanatory comment into
+- [x] `merge.ts`: drop `LIGHT_2DFX`, resolve the keep-set from the policy; the explanatory comment moved into
       lod-common's policy table.
-- [ ] Golden compare: baked cells for a sample set are byte-identical to today's output.
-- [ ] Grep guard: no residual private keep-set in this package.
+- [x] Golden compare — see the note below on what form it took.
+- [x] Grep guard: no residual private keep-set in this package.
 
 ## Verification
 
-- Baked cell bytes unchanged across the sample set.
-- The only place this generator's 2dfx fate is decided is the shared policy.
+`npx vitest run tools/opensa-lod-generator tools/lod-common` — 31 files, 170 tests, green.
+
+- A new negative test bakes a cell containing a model whose only 2dfx entry is a **roadsign**, through the real
+  path (a real DFF, no pre-seeded cache), and asserts nothing is carried — plus that the set it read is `{0}`.
+  Both halves matter: the first says the policy is obeyed, the second says which policy.
+- `grep` over `tools/opensa-lod-generator/src`: the only 2dfx keep-set left in the package is the
+  `keepTypesFor('cell')` call.
 
 ## Measurements / notes
 
-_(record after implementation)_
+**The golden compare is a set equality, not a bake.** Plan 07's working rule freezes full pmb rebuilds for the
+duration of the chain, and this step does not need one: `keepTypesFor('cell')` resolves to exactly `{0}`, the
+literal it replaced, asserted in the test above. Every byte the bake would emit is a function of that set and
+of `transform2dfxEntry`, which was already in place and unchanged here.
 
-- sample set used for the golden compare (cells, models, 2dfx entries carried): …
+**A finding from the step that follows this one, recorded here because it changes what this file's output is
+FOR.** While scoping the widening
+([`opensa-lod-generator/02`](../../../../docs/roadmap/0.5.0/plans/07-lod-generators-extended/opensa-lod-generator/02-rotation-bearing-2dfx-on-cells.md)),
+the consumer turned out not to read this section at all in the shipping pipeline: `packages/cell-weld` gathers
+2dfx **from HD models only** (`if (!lod)`, "LOD duplicates would double every lamp"), and `resolveMap`'s
+`markCellLods` flags every instance in this generator's `lods.ipl` as `isLod`. So in the pak the cell DFF's
+2dfx section is dead weight. It is still read by the direct (`loader=http-dir`) path, which is what the dev
+harness boots. That does not change anything this plan did — one shared policy is right either way — but it
+does mean the row that decides whether cells carry 2dfx at all is now a live question rather than a settled
+one. See 02 for the evidence.

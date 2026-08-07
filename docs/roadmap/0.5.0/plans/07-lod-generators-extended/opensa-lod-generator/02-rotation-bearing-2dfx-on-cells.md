@@ -1,79 +1,112 @@
 # opensa-lod-generator/02 — Roadsigns and escalators ride baked cells
 
 Part of [07 — LOD generators, extended](../readme.md). Depends on
-[lod-common/02](../../../../../../tools/lod-common/docs/plans/006-2dfx-entry-transform.md) (the typed transform) and
-[01](01-adopt-2dfx-policy.md) (the policy adoption). **Gated on nothing else — this is the visible win of the
-whole 2dfx line and it can ship today.**
+[lod-common/006](../../../../../../tools/lod-common/docs/plans/006-2dfx-entry-transform.md) (the typed
+transform) and [005](../../../../../../tools/opensa-lod-generator/docs/plans/005-adopt-2dfx-policy.md) (the
+policy adoption).
 
-Was A2, which also owned the codec and the transform; those are now
-[rw-codec/01](../../../../../../tools/rw-codec/docs/plans/001-typed-2dfx-payload-codecs.md) and lod-common/02, leaving this plan with exactly
-one job: widen the cell keep-set and prove the result is oriented correctly.
+> **STOPPED 2026-08-07, before any code, and it needs a decision.** Two measurements taken while scoping it
+> knocked out both of its premises: the payload space it assumed, and the consumer it assumed. The plan as
+> written would emit bytes nothing reads, having first thrown every plate thousands of metres from where it
+> belongs. What follows is the evidence and the three routes out; the original body is kept below the fold
+> because it is still the right idea aimed at the wrong layer.
 
-## The correction that unblocked this
+## Finding 1 — roadsign positions are WORLD coordinates, not model-local
 
-A2 gated itself on the `asi/perfect-map` chain, describing the widening as "for the asi target". That was
-wrong. [`restrictions/sa-target.md`](../../../../../restrictions/sa-target.md):
+Measured over the stock corpus (14 865 models):
 
-> **opensa-lod-generator output is for OpenSA only** — uncapped per-cell LODs (hundreds of materials) are not
-> loadable by real SA. The two LOD generators are not interchangeable.
+| Type | Entries | Coordinate space | Instancing |
+| --- | --- | --- | --- |
+| 7 roadsign | 489 in 207 models | **world, 489 / 489** | every one of the 207 models is placed EXACTLY ONCE; 28 sit on a rotated instance |
+| 10 escalator | 5 in 4 models | **model-local, 5 / 5** | 2 of the 4 models are placed more than once (`escl_la` ×4, `escl_singlela` ×2) |
+| 0 light | 2203 | model-local, 2094 / 2094 checked | — |
 
-Baked cells are consumed by our own engine, which already decodes and renders both of these types
-(`packages/renderware/src/parsers/binary/dff.ts`, `roadsign/glyph-quads.ts`). There is no 2004 ceiling in this
-path and no plugin to wait for. The plan was parked behind an ASI for a reason that never applied to it.
+`cen_bit_08` is the shape of it: the instance sits at (−487.6, 1929.9, 67.0) and its three sign entries are at
+(−456.1, 2014.2, 61.6), (−434.2, 2039.0, 62.0), (−530.2, 1989.4, 62.0) — real city coordinates, near the
+instance but not relative to it. `packages/renderware/src/roadsign/glyph-quads.ts` says so in its header, and
+`opensa-pack` has relied on it since plan 076 ("roadsigns store world coords, not instance-local").
 
-## Context
+**So this plan's decision 1 — "route each entry through `transform2dfxEntry` with the transform it already
+computes" — would have been a bug**, and a spectacular one: applying the instance rotation and translation to
+an already-world position throws the plate a kilometre away. The right carry for a roadsign is
+`world − cellOrigin` with the authored rotation untouched. That the type-7 half of the policy is a
+`space: world` fact, not just a `carry` fact, is the shared piece this plan should have started from.
+
+Escalators are the opposite and the plan's "same model at different rotations in one cell" worry is real for
+them specifically — `escl_la` is placed four times.
+
+## Finding 2 — nothing reads a cell LOD's 2dfx section
+
+The bigger one. In the OpenSA consumption path, 2dfx is gathered **from HD models only**:
+
+- `packages/cell-weld/src/weld.ts`: `if (!lod) { collectLights(...); collectParticles(...) }` — *"LOD
+  duplicates would double every lamp"*. Roadsign text is welded in the same HD-only branch.
+- `tools/opensa-pack/src/convert.ts` → `collectRoadsigns` skips `instance.isLod` outright.
+- `packages/renderware/src/map/resolve-map.ts` → `markCellLods` flags **every instance in this generator's
+  `lods.ipl`** as `isLod`, precisely so they bucket as LOD.
+- Both consumers of the map go through that welder: the pak (`opensa-pack`) and the in-browser
+  `sa-map-viewer` (`weldCell`).
+
+So the 2dfx section `opensa-lod-generator` writes into each cell DFF — the coronas it carries today included —
+**is dead weight in every path we ship**. Widening its keep-set to `{0, 7, 10}` would produce a larger DFF and
+no visible change whatsoever.
+
+And the win this plan was named for is already shipped, elsewhere: plan 076's global pre-pass welds every
+roadsign's text into the cell containing its world position, deduped by model id, once. What is NOT known —
+and is the actual question behind "distant street-name signs" — is whether that text is drawn when only the
+LOD level of that area is resident.
+
+## The decision this plan now needs
+
+1. **Re-aim at the consumer** (`packages/cell-weld`). Weld roadsign glyph quads into the LOD level as well as
+   the HD one, deduped by world position so a resident pair does not double the text. This is where the
+   visible win actually lives, and finding 1 is already handled correctly there. **Needs first**: a field
+   check on the existing build — stand at a known sign, back off until the area is LOD-only, and see whether
+   the text survives. If it does, there is no defect and this whole line closes.
+2. **Or delete the dead section.** If cell 2dfx is read by nothing, the honest move is to stop writing it and
+   record that the policy's `cell` column is a no-op — which would retire this plan and shrink every cell DFF
+   slightly. Cheap, and it removes a section a future reader would otherwise trust.
+3. **Escalators: no consumer exists at all.** Nothing in `packages/engine`, `packages/cell-weld` or
+   `opensa-pack` mentions type 10; `OscellObject`'s kinds are timed / breakable / animated / roadsign /
+   uvScroll. Moving steps on a baked cell is a new engine feature, not a LOD-carry, and it should leave this
+   plan for one of its own.
+
+Route 1 is the one that keeps the plan's intent. It is not this generator's plan any more, though — it is a
+`cell-weld` plan, and this file should die into `docs/postmortem/` or be rewritten under that tool once the
+field check says whether there is a defect to fix.
+
+---
+
+## Original body (kept — the idea is right, the layer was wrong)
+
+### Context
 
 The cell bake merges many instances into one cell-centre-relative mesh and repositions each carried 2dfx via
 `instanceTransform` — but only the entry's POSITION (`build2dfxSection` overwrites the first 12 bytes).
 Roadsign (7) and escalator (10) encode orientation and geometry in their payload, so a position-only
-transplant leaves a street-name plate facing the wrong way and an escalator's motion line pointing at
-nothing. That is the whole reason `LIGHT_2DFX` is `{0}`. With lod-common/02 the transplant can rewrite those
-fields, and the reason expires.
+transplant leaves a street-name plate facing the wrong way and an escalator's motion line pointing at nothing.
+That is the whole reason `LIGHT_2DFX` was `{0}`. With lod-common/006 the transplant can rewrite those fields,
+and that reason expires.
 
-sa-lod's verbatim and decimate paths already carry these types correctly — they inherit the model's own
-frame. Only the CELL path has the gap.
+sa-lod's verbatim and decimate paths already carry these types correctly — they inherit the model's own frame.
+Only the CELL path has the gap.
 
-## Decisions
+### Decisions (superseded by the findings above)
 
-1. **Widen the policy to carry 7 and 10 on cells**, and let the widened `collectCellLightEffects` route each
-   entry through `transform2dfxEntry` with the transform it already computes. No new spatial code in this
-   package.
-2. **Scope to types worth having at range.** Roadsigns and escalators are the sensible additions; undecoded
-   orientation-bearing types stay dropped by policy. Do not build a codec for a type nobody can see from a
-   cell's distance.
-3. **The name stops being a lie.** `collectCellLightEffects` will no longer collect only lights — rename it
-   with the widening rather than leaving a function whose name documents the constraint it just lost.
-4. **Fidelity bar: a baked-cell roadsign faces the same way and sits in the same place as the HD one**, and
-   an escalator's implied motion line matches. Fixture math first, viewer second — the viewer catches what
-   the math's expected value was also wrong about.
+1. Widen the policy to carry 7 and 10 on cells and route each entry through `transform2dfxEntry`.
+   **Superseded**: right for escalators, wrong for roadsigns (finding 1), and moot until finding 2 is settled.
+2. Scope to types worth having at range; undecoded orientation-bearing types stay dropped by policy.
+3. **The name stops being a lie** — `collectCellLightEffects` would no longer collect only lights. Not done:
+   with the widening stopped, the name is still accurate.
+4. Fidelity bar: a baked-cell roadsign faces the same way and sits in the same place as the HD one.
 
-## Tasks
+### Tasks (not started)
 
-- [ ] Widen the cell keep-set via the policy to `{0, 7, 10}`; route every carried entry through
-      `transform2dfxEntry`; rename `collectCellLightEffects`.
-- [ ] Fixtures: real models carrying a roadsign and an escalator → bake a cell containing rotated instances
-      of them → assert plate position and normal, and the escalator's three points, match the
-      HD-instance-transformed expectation.
-- [ ] The case that matters and the cheap fixture will not cover: **two instances of the same model at
-      different rotations in one cell**. The per-model effect memoization (`cache` in `merge.ts`) stores
-      untransformed entries and the transform is applied per instance — assert that, because a caching bug
-      here gives every sign in the cell the first instance's heading and looks plausible in a screenshot.
-- [ ] Viewer check: a distant baked cell shows correctly-oriented street-name signs; an escalator reads the
-      right way.
-- [ ] Census: how many stock cells gain roadsign / escalator entries, and how many entries map-wide — the
-      number that says whether this is a visible change or a technically-correct one.
-
-## Verification
-
-- Baked-cell roadsign and escalator orientation and position match HD (fixture math + viewer).
-- Repeated instances of one model at different rotations each get their own orientation.
-- Cells still carry no type outside the policy's set.
-- Cell bake time and output size move by an amount the census explains.
-
-## Measurements / notes
-
-_(record after implementation)_
-
-- roadsign orientation error vs HD, worst case: …
-- cells gaining entries / entries carried map-wide, per type: …
-- cell bake time and pak size delta: …
+- [ ] Widen the cell keep-set; route every carried entry through `transform2dfxEntry`; rename
+      `collectCellLightEffects`.
+- [ ] Fixtures: rotated instances of real sign / escalator models → assert plate position and normal, and the
+      escalator's three points, against the HD-instance-transformed expectation.
+- [ ] Two instances of the same model at different rotations in one cell — the per-model memoization stores
+      untransformed entries, and a caching bug here gives every sign in the cell the first instance's heading.
+      **Still the right test, and now known to matter for escalators rather than for signs.**
+- [ ] Viewer check; census of cells gaining entries.

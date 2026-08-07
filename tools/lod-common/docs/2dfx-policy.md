@@ -35,6 +35,21 @@ least one.
 | 10 | escalator | 5 / 4 | carry | drop → **carry** | Five entries in four models: it will never move an aggregate, so verify it by looking at those four. |
 | *any other* | — | 0 | **drop** | **drop** | See below. |
 
+## A type's coordinate SPACE is not the same question as its verdict
+
+Measured over the stock corpus 2026-08-07, and the reason a carry can be correct in the table above and still
+land a kilometre away:
+
+| Type | Space | Evidence |
+| --- | --- | --- |
+| 0 light | model-local | 2094 / 2094 checked |
+| 7 **roadsign** | **WORLD** | **489 / 489**. `cen_bit_08` sits at (−487.6, 1929.9) and its plates at (−456.1, 2014.2), (−434.2, 2039.0), (−530.2, 1989.4) — city coordinates. Every one of the 207 sign-carrying models is placed EXACTLY ONCE, which is what makes baking world coords into a model work at all. |
+| 10 escalator | model-local | 5 / 5. Two of the four models are placed more than once (`escl_la` ×4), so escalators genuinely need a per-instance transform. |
+
+So a roadsign carried into a cell-relative representation moves by `world − cellOrigin` and keeps its authored
+rotation; applying an instance transform to it is a bug, not a refinement. `opensa-pack` has relied on this
+since plan 076, and `packages/renderware/src/roadsign/glyph-quads.ts` states it in its header.
+
 ## The two rules that are easy to get wrong
 
 **A type with no row is dropped, on every target.** The stock corpus carries only the eight types above, so
