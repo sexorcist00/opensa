@@ -19,6 +19,8 @@
     "./budgeted-decimate": "./src/budgeted-decimate.ts",
     "./opaque-coverage": "./src/opaque-coverage.ts",
     "./clump-effects": "./src/clump-effects.ts",
+    "./two-dfx-policy": "./src/two-dfx-policy.ts",
+    "./two-dfx-transform": "./src/two-dfx-transform.ts",
     "./decimate": "./src/decimate.ts",
     "./normals": "./src/normals.ts",
     "./encode-dff": "./src/encode-dff.ts",

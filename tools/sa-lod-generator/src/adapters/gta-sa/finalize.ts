@@ -38,7 +38,8 @@ export interface BuildInput {
   holeLodDraw: number;
   /** Curated HD models (lowercased) with no LOD to give a generated far-LOD (plan 003). */
   holeModels: ReadonlySet<string>;
-  /** REPRO: keep particle 2dfx on the clones (default false strips them) — see {@link LodConfig.keepParticles}. */
+  /** Keep particle 2dfx on the clones — **default true** since plan 010; `--strip-particles` is the stock-target
+   *  opt-out. See {@link LodConfig.keepParticles} and `lod-common`'s 2dfx policy (type 1). */
   keepParticles: boolean;
   links: readonly LodLink[];
   outDir: string;

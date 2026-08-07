@@ -1,7 +1,12 @@
 import type { ClumpEffect } from '@opensa/lod-common/clump-effects';
+import type { MergedMesh } from '@opensa/lod-common/mesh';
 import type { ModelSource } from '@opensa/lod-common/model-source';
 import type { RWClump, RWGeometry } from '@opensa/renderware/parsers/binary/types';
 
+import { encodeLodDff } from '@opensa/lod-common/encode-dff';
+import { parseDff } from '@opensa/renderware/parsers/binary/dff';
+import { toArrayBuffer } from '@opensa/renderware/test-utils';
+import { build2dfxSection } from '@opensa/rw-codec/dff';
 import { describe, expect, it } from 'vitest';
 
 import type { Cell } from '../../core/types';
@@ -31,6 +36,24 @@ function geometry(texture: string, positions: number[]): RWGeometry {
     triangles: [{ a: 0, b: 1, c: 2, materialIndex: 0 }],
     uvLayers: [],
   };
+}
+
+/** A real DFF: one triangle plus a type-0 light entry at model-local (1, 0, 0) — vertex 1's position. */
+function lampDff(): Uint8Array {
+  const entry = new Uint8Array(20 + 4);
+  const view = new DataView(entry.buffer);
+  view.setFloat32(0, 1, true); // position x = 1 (y, z stay 0)
+  view.setUint32(12, 0, true); // type 0 — light
+  view.setUint32(16, 4, true);
+  const mesh: MergedMesh = {
+    colors: new Uint8Array(12).fill(255),
+    groups: [{ indices: Uint32Array.of(0, 1, 2), texture: 'pole' }],
+    normals: new Float32Array(9),
+    positions: Float32Array.from([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+    uvs: new Float32Array(6),
+  };
+
+  return encodeLodDff(mesh, 'lamp', { effects: build2dfxSection([{ bytes: entry, position: [1, 0, 0] }])! });
 }
 
 function source(models: Record<string, RWClump>): ModelSource {
@@ -121,6 +144,29 @@ describe('mergeCell', () => {
       // Instance (130,128,5) + local (1,0,0) − cell centre (128,128,0) = (3, 0, 5) — same maths as mergeCell.
       expect(effects[0].position).toEqual([3, 0, 5]);
       expect([...effects[0].bytes]).toEqual([9, 9, 9]); // raw entry bytes untouched
+    });
+
+    it('puts a corona on a ROTATED instance exactly where the vertex it sits on lands', () => {
+      // The strongest form of "a corona is in the same place on every representation": the light entry sits
+      // at the same model-local point as vertex 1, so the carried effect must land on the merged vertex —
+      // asserted against the mesh itself, not against a second copy of the transform maths (lod-common/001).
+      const dff = lampDff();
+      const models = { lamp: parseDff(toArrayBuffer(dff)) };
+      const cell: Cell = {
+        cx: 0,
+        cy: 0,
+        // 90° about Z (the IPL quaternion is the inverse; merge conjugates it) at an off-centre position.
+        instances: [{ model: 'lamp', position: [130, 140, 5], rotation: [0, 0, Math.SQRT1_2, Math.SQRT1_2], txd: '' }],
+      };
+
+      const mesh: MergedMesh = mergeCell(cell, 256, source(models));
+      const effects = collectCellLightEffects(cell, 256, () => dff, source(models), new Map());
+
+      expect(effects).toHaveLength(1);
+      const vertex = [mesh.positions[3], mesh.positions[4], mesh.positions[5]]; // vertex 1 = local (1,0,0)
+      effects[0].position.forEach((axis, component) => {
+        expect(axis).toBeCloseTo(vertex[component], 5);
+      });
     });
 
     it('groups triangles by texture across materials', () => {

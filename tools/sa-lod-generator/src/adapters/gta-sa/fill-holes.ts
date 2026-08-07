@@ -19,7 +19,8 @@ export interface FillInput {
   /** The clone-TXD provider (shared with Phase 1): source HD txd → packed ½-res clone txd name, or `null`. */
   ensureTxd: (hdTxd: string) => null | string;
   holeLodDraw: number;
-  /** REPRO: keep particle 2dfx on the hole-fill clones (default false strips) — see {@link LodConfig.keepParticles}. */
+  /** Keep particle 2dfx on the hole-fill clones — **default true** since plan 010 (`--strip-particles` opts out);
+   *  see {@link LodConfig.keepParticles}. */
   keepParticles: boolean;
   /** Curated HD models (lowercased) to give a far-LOD. */
   models: ReadonlySet<string>;
