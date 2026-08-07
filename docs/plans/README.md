@@ -19,6 +19,14 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 `001`–`099`, one folder each (066, 073, 074, 078–082, 096–099 carry multi-part sub-plans; 083 kept its
 row but its chain was superseded by 097). Newest first:
 
+- **[100 — 2dfx survives to LOD range](./100-2dfx-at-lod-range/readme.md)** — **PLANNED 2026-08-07**:
+  chimney smoke, street lamps and street-name plates die at the HD boundary (`HD_RADIUS` 380), so a
+  district past ~440 u draws to 1000 u dark, smokeless and unsigned. Both LOD generators bake the three
+  types that have a consumer (0 light, 1 particle, 7 roadsign) and `cell-weld` starts reading what the cell
+  bake produces — the half that makes the other half real, since nothing reads a cell LOD's 2dfx today. Also
+  fixes the flat `DRAW_DISTANCE = 300` that overrides every fx system's authored `cullDist`. Step 00 is the
+  research: it began as a killed plan (postmortem) and was revived the same day by a reversed decision.
+  The six types with no consumer anywhere (16 934 stock entries) stay dropped.
 - **[099 — UV animations on script objects](./099-script-object-uv-anim/readme.md)** — **DONE
   2026-08-07** (planned 2026-08-05 from the 097/07 field bug round): the ferris wheel's blinking bulbs
   are a UVAnimDict step animation (`f13d`, a 13-frame film strip stepping every 0.225 s) that the

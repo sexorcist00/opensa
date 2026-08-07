@@ -1,9 +1,13 @@
-# Roadsigns and escalators on baked cells (roadmap 0.5.0, plan 07)
+# 00 — Research: what a LOD can carry, and what actually reads it
 
-**Died 2026-08-07, before any code was written.** Was
-`docs/roadmap/0.5.0/plans/07-lod-generators-extended/opensa-lod-generator/02`, the item its own plan called
-"the visible win of the whole 2dfx line". Two measurements knocked out both of its premises, and the user's
-call closed the one route that survived them: **glyphs are not to be welded into the LOD level.**
+**The record of one killed plan and the reversal that revived it, kept as this chain's step 0.** This was
+roadmap 0.5.0 plan 07's `opensa-lod-generator/02`, the item its own plan called "the visible win of the whole
+2dfx line". Two measurements knocked out both of its premises and it died into `docs/postmortem/` the same
+day — then, hours later, the user reversed the decision that had closed its last route and widened the scope
+to both generators. It comes back here as research rather than as a plan: everything below is measured, and
+the plan it feeds is [the chain readme](readme.md).
+
+**Read this before touching any step.** It is the reason the chain has a consumer step at all.
 
 ## The goal
 
@@ -45,9 +49,12 @@ close up, while `packages/engine/src/stream/streaming.ts` sets `HD_RADIUS 380`, 
 HD-only — so **between ~440 u and 1000 u a sign area draws with no text**, a 560-unit band. The defect is in
 `packages/cell-weld`, not in `opensa-lod-generator`.
 
-**4. And that route is closed by decision.** 2026-08-07, the user: **glyphs are not to be welded into the LOD
-level.** So the 560-unit band stands as a known, accepted property rather than a bug to fix — which is what
-makes this a postmortem instead of a re-scoped plan.
+**4. That route was closed by decision, and then reopened.** 2026-08-07, first call: glyphs are not to be
+welded into the LOD level, so the 560-unit band stood as an accepted property — which is what killed this
+plan. Later the same day the user reversed it and widened the scope: **0 light, 1 particle and 7 roadsign are
+all to be baked, by BOTH LOD generators.** The band is a defect again, and the fix is the chain this file now
+opens. What does NOT come back is the shape the dead plan had: it aimed at `opensa-lod-generator` alone, and
+findings 1 and 2 still say that alone would change nothing.
 
 **5. Escalators never had a consumer at all.** Nothing in `packages/engine`, `packages/cell-weld` or
 `opensa-pack` mentions type 10; `OscellObject`'s kinds are timed / breakable / animated / roadsign / uvScroll.
@@ -55,28 +62,25 @@ Moving steps on a baked cell is a new engine feature, not a LOD carry.
 
 ## What survives it
 
-- [`rw-codec/001`](../../tools/rw-codec/docs/plans/001-typed-2dfx-payload-codecs.md) — typed 2dfx payload
+- [`rw-codec/001`](../../../tools/rw-codec/docs/plans/001-typed-2dfx-payload-codecs.md) — typed 2dfx payload
   codecs, shipped and byte-identical on round trip.
-- [`lod-common/005`](../../tools/lod-common/docs/plans/005-2dfx-keep-policy.md) +
-  [`006`](../../tools/lod-common/docs/plans/006-2dfx-entry-transform.md) — the declared carry-policy and
+- [`lod-common/005`](../../../tools/lod-common/docs/plans/005-2dfx-keep-policy.md) +
+  [`006`](../../../tools/lod-common/docs/plans/006-2dfx-entry-transform.md) — the declared carry-policy and
   `transform2dfxEntry`, both shipped. `006` handles rotation correctly for anything that ever needs it.
-- [`opensa-lod-generator/005`](../../tools/opensa-lod-generator/docs/plans/005-adopt-2dfx-policy.md) — the
+- [`opensa-lod-generator/005`](../../../tools/opensa-lod-generator/docs/plans/005-adopt-2dfx-policy.md) — the
   cell bake reads the shared policy instead of a private literal.
 - The per-type coordinate-space table, now in
-  [`lod-common/docs/2dfx-policy.md`](../../tools/lod-common/docs/2dfx-policy.md), where no future carry
+  [`lod-common/docs/2dfx-policy.md`](../../../tools/lod-common/docs/2dfx-policy.md), where no future carry
   decision can be taken without it.
 - `scripts/debug/two-dfx-census.ts [--frames]` — the corpus denominator, kept.
 
-## The residue, still open
+## The residue, and what the chain does with it
 
-**The cell LOD's 2dfx section is dead weight.** `opensa-lod-generator` still writes type-0 lights into every
-baked cell DFF and no consumer we ship reads them. Stopping that write would shrink each cell DFF slightly and
-remove a section a future reader would otherwise trust. Not done here — it is a separate decision about
-shipped output, and it belongs to whoever takes `opensa-lod-generator` next.
+**The cell LOD's 2dfx section is dead weight today** — `opensa-lod-generator` writes type-0 lights into every
+baked cell DFF and no consumer we ship reads them. The dead plan left that as an open question ("delete the
+section?"). This chain answers it the other way: [step 03](03-lod-bundle-reads-2dfx.md) makes `cell-weld`
+read it, so the section stops being dead instead of being deleted.
 
-## When to revisit
-
-If the engine ever draws welded cell content from the DFF's own 2dfx (rather than from HD models through
-`cell-weld`), or if the HD/LOD split stops being the thing that decides what carries text, this plan's body is
-the research record for doing it correctly — in particular finding 1, which is not obvious from any code that
-consumes a roadsign.
+**Escalators (10) stay out**, and that is not a scheduling decision — nothing in `packages/engine`,
+`packages/cell-weld` or `opensa-pack` consumes type 10 at any range. Moving steps are an engine feature, and
+a LOD cannot carry what nothing draws.

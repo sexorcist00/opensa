@@ -15,14 +15,13 @@ observations that killed it, and the conditions under which it might be worth re
 
 ## Postmortems
 
-- [07-2dfx-on-baked-cells.md](./07-2dfx-on-baked-cells.md) — roadsigns and escalators onto
-  `opensa-lod-generator`'s baked cells (roadmap 0.5.0 plan 07), died 2026-08-07 before any code. Both
-  premises failed measurement: roadsign positions are WORLD coordinates (489/489), so the planned instance
-  transform would have thrown every plate a kilometre; and NOTHING reads a cell LOD's 2dfx section — both map
-  consumers go through `cell-weld`, which gathers 2dfx HD-only. The real gap it named is a measured 560-unit
-  band (`HD_RADIUS` 380 → `LOD_RADIUS` 1000) where a sign area draws with no text, and it lives in
-  `cell-weld` — a route the user closed by decision (no glyphs in the LOD level). Keeps the coordinate-space
-  table and names the residue: the cell LOD's 2dfx section is dead weight nobody reads
+- ~~07-2dfx-on-baked-cells.md~~ — **REVIVED the same day, 2026-08-07**, and no longer rests here. Roadsigns
+  and escalators onto `opensa-lod-generator`'s baked cells died when its two premises failed measurement and
+  the user closed its last route; hours later that decision was reversed and the scope widened to both LOD
+  generators. The research (world-space sign coordinates 489/489; nothing reads a cell LOD's 2dfx section;
+  the HD/LOD radii that size the gap; escalators having no consumer anywhere) lives on as step 00 of
+  [plan 100](../plans/100-2dfx-at-lod-range/00-research-and-findings.md). The row stays so the death is not
+  edited out of the record — a plan that died and came back is worth knowing about
 - [097-hotring-hotknife-intake.md](./097-hotring-hotknife-intake.md) — two CLEO vehicle mods
   analysed and cut the SAME day (2026-08-05) by the user's call: hotknife (paintjobs) cut
   entirely; hotring's CAR kept but `no_lights.cs` skipped — a polling loop for a one-shot effect
