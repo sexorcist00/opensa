@@ -4,6 +4,7 @@ import type { ModelSource } from '@opensa/lod-common/model-source';
 import type { RWClump, RWGeometry } from '@opensa/renderware/parsers/binary/types';
 
 import { encodeLodDff } from '@opensa/lod-common/encode-dff';
+import { keepTypesFor } from '@opensa/lod-common/two-dfx-policy';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { toArrayBuffer } from '@opensa/renderware/test-utils';
 import { build2dfxSection } from '@opensa/rw-codec/dff';
@@ -56,6 +57,23 @@ function lampDff(): Uint8Array {
   return encodeLodDff(mesh, 'lamp', { effects: build2dfxSection([{ bytes: entry, position: [1, 0, 0] }])! });
 }
 
+/** A real DFF carrying a type-7 roadsign entry — a type the cell policy drops. */
+function signDff(): Uint8Array {
+  const entry = new Uint8Array(20 + 88);
+  const view = new DataView(entry.buffer);
+  view.setUint32(12, 7, true);
+  view.setUint32(16, 88, true);
+  const mesh: MergedMesh = {
+    colors: new Uint8Array(12).fill(255),
+    groups: [{ indices: Uint32Array.of(0, 1, 2), texture: 'board' }],
+    normals: new Float32Array(9),
+    positions: Float32Array.from([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+    uvs: new Float32Array(6),
+  };
+
+  return encodeLodDff(mesh, 'board', { effects: build2dfxSection([{ bytes: entry, position: [0, 0, 0] }])! });
+}
+
 function source(models: Record<string, RWClump>): ModelSource {
   return { load: (model) => models[model.toLowerCase()] ?? null };
 }
@@ -64,6 +82,19 @@ const IDENTITY = [0, 0, 0, 1] as const; // no rotation
 
 describe('mergeCell', () => {
   describe('negative cases', () => {
+    it('carries no type the shared policy drops from cells — the fate is decided in one place', () => {
+      const dff = signDff();
+      const models = { board: parseDff(toArrayBuffer(dff)) };
+      const cell: Cell = {
+        cx: 0,
+        cy: 0,
+        instances: [{ model: 'board', position: [128, 128, 0], rotation: IDENTITY, txd: '' }],
+      };
+
+      expect(collectCellLightEffects(cell, 256, () => dff, source(models), new Map())).toEqual([]);
+      expect([...keepTypesFor('cell')]).toEqual([0]); // and this is the set it read
+    });
+
     it('skips instances whose model is missing', () => {
       const cell: Cell = {
         cx: 0,

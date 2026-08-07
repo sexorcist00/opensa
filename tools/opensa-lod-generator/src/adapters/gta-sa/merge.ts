@@ -5,18 +5,17 @@ import type { ModelSource } from '@opensa/lod-common/model-source';
 import { MeshBuilder, type VertexTransform } from '@opensa/lod-common/build-mesh';
 import { collectClumpEffects } from '@opensa/lod-common/clump-effects';
 import { registerScopedName, type ScopedRegistry } from '@opensa/lod-common/scoped-texture';
+import { keepTypesFor } from '@opensa/lod-common/two-dfx-policy';
 import { transform2dfxEntry } from '@opensa/lod-common/two-dfx-transform';
 
 import type { Cell } from '../../core/types';
 
-/** 2dfx entry type 0 — light/corona. Cells carry only these (rotation-bearing types can't ride a raw transplant). */
-const LIGHT_2DFX = new Set([0]);
-
 /**
- * Gather the cell's 2dfx **light** entries (street lamps, casino lights) in cell-centre-relative space — the
- * same instance transform {@link mergeCell} applies to vertices, so the baked cell's coronas glow exactly where
- * the source models' did (plan 003, Phase 5: distant night city lights). Raw entry bytes stay verbatim
- * (`collectClumpEffects`); only positions are rewritten. Per-model entries are memoized via `cache`.
+ * Gather the cell's 2dfx entries in cell-centre-relative space — the same instance transform {@link mergeCell}
+ * applies to vertices, so the baked cell's coronas glow exactly where the source models' did (plan 003,
+ * Phase 5: distant night city lights). WHICH types ride is not decided here: it is
+ * `@opensa/lod-common`'s declared policy for the `cell` target, which resolves to lights alone today and
+ * carries the reason with it. Each entry goes through `transform2dfxEntry`; per-model entries are memoized.
  */
 export function collectCellLightEffects(
   cell: Cell,
@@ -32,7 +31,7 @@ export function collectCellLightEffects(
     if (!effects) {
       const clump = source.load(instance.model);
       const raw = clump ? loadRaw(instance.model) : null;
-      effects = clump && raw ? collectClumpEffects(raw, clump, LIGHT_2DFX) : [];
+      effects = clump && raw ? collectClumpEffects(raw, clump, keepTypesFor('cell')) : [];
       cache.set(instance.model, effects);
     }
     if (effects.length === 0) {
