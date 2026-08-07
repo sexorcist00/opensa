@@ -57,9 +57,11 @@ of that convention is exactly the bug this plan exists to prevent.
 
 ## Verification
 
-`npx vitest run tools/lod-common tools/opensa-lod-generator tools/sa-lod-generator` — 34 files, 185 tests,
-green, with 9 new ones in `two-dfx-transform.test.ts`. Every existing test is unchanged: the reroute did not
-need one adjusted.
+`npx vitest run tools/lod-common tools/opensa-lod-generator tools/sa-lod-generator` — green, with **9 new
+tests** in `two-dfx-transform.test.ts`. Every existing test is unchanged: the reroute did not need one
+adjusted. **Re-measured 2026-08-07 after the chain landed: 35 files, 195 tests.** (The first figure written
+here, 34/185, was read off the run taken BEFORE the new test file existed — a count belongs to the run it
+came from, and this one did not.)
 
 - **Identity transform is byte-identity** on all four carried types (roadsign, escalator, particle, light).
 - **A turned plate faces where the HD plate faced**: the carried sign's plate normal — the text normal through

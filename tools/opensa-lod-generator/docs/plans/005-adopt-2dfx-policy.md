@@ -41,7 +41,8 @@ target" framing the old A2 carried was a mistake.
 
 ## Verification
 
-`npx vitest run tools/opensa-lod-generator tools/lod-common` — 31 files, 170 tests, green.
+`npx vitest run tools/opensa-lod-generator tools/lod-common` — green; **31 files, 171 tests** re-measured
+after the chain landed (170 at the time of this step, before its own negative test).
 
 - A new negative test bakes a cell containing a model whose only 2dfx entry is a **roadsign**, through the real
   path (a real DFF, no pre-seeded cache), and asserts nothing is carried — plus that the set it read is `{0}`.

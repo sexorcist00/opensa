@@ -61,7 +61,9 @@ that was decided — it was three local answers to a question nobody asked globa
 ## Verification
 
 `npx vitest run tools/lod-common tools/opensa-lod-generator` — green, 7 new tests in
-`two-dfx-policy.test.ts` + 1 in `opensa-lod-generator/.../merge.test.ts`.
+`two-dfx-policy.test.ts` + 1 in `opensa-lod-generator/.../merge.test.ts`. Re-measured after the whole chain
+landed: **31 files, 171 tests** (the count at the time of this step was 170 — `opensa-lod-generator/005`
+added the extra one).
 
 - `keepTypesFor('cell')` = `{0}`; `keepTypesFor('clone')` = `{0,1,3,6,7,8,9,10}`, exactly the types the stock
   census found. An unlisted type (4, sun glare) resolves to `drop` on both.
