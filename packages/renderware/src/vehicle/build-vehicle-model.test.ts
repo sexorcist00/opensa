@@ -477,6 +477,33 @@ describe('buildVehicleModel', () => {
       expect(left.localRotation).toEqual([0, 0, 1, 0]); // 180° about Z — a mirror would flip the winding
     });
 
+    it('a zero-WIDTH marker wheel is left unscaled, but still reports the ide physics radius', () => {
+      // The GTA 5 Rhino draws its running gear with `wheel_big_*`/`track_*` meshes and parks a flat
+      // 2 cm triangle on the SA wheel frames to keep them invisible. Fitting that to the ide diameter
+      // scaled it 23.5x and drew six half-metre triangles sweeping with the wheels (field 2026-08-07).
+      const marker: RWGeometry = {
+        ...geometry(),
+        // No extent along the axle (local X) — a solid of revolution cannot have zero width.
+        positions: new Float32Array([0, 0, 0, 0, 0.011, 0.019, 0, -0.011, -0.019]),
+      };
+      const built = buildVehicleModel(
+        clump(
+          [frame('chassis'), frame('wheel'), frame('wheel_lf_dummy', -1, [1, 2, 0])],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 1, geometry: 1 },
+          ],
+          [geometry(), marker],
+        ),
+        textures(),
+        { wheelScale: [1, 1] },
+      );
+
+      expect(built.parts[built.wheels[0].part].scale ?? 1).toBe(1);
+      // The physics radius may NOT follow the marker down to 2 cm — it is the ide half-diameter.
+      expect(built.wheels[0].radius).toBeCloseTo(0.5, 5);
+    });
+
     it('an orphan vertex no triangle references cannot inflate the wheel radius (the coach wheel_lf case)', () => {
       // Same triangle as `geometry()` plus one corrupt UNREFERENCED vertex — the real coach.dff ships one
       // at ~5.8e25 on wheel_lf, which read as the authored radius and scaled that wheel to nothing.

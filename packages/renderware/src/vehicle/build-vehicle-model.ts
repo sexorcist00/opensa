@@ -303,9 +303,8 @@ function addWheels(
     const authoredRight = authoredWheelRight(clump);
 
     return cornerWheels.map((wheel) => {
-      const authoredRadius = wheelRadius(clump.geometries[wheel.geometryIndex]);
-      const scale = axleScale(wheelScale, wheel.front, authoredRadius);
-      const part = addPart(scratch, clump, wheel.frameIndex, frameName(clump, wheel.frameIndex), scale);
+      const fit = wheelFit(wheelScale, wheel.front, clump.geometries[wheel.geometryIndex]);
+      const part = addPart(scratch, clump, wheel.frameIndex, frameName(clump, wheel.frameIndex), fit.scale);
       if (wheel.right !== authoredRight) {
         scratch.parts[part].localRotation = flipWheelSide(scratch.parts[part].localRotation);
       }
@@ -319,7 +318,7 @@ function addWheels(
         tyreMaterials(clump.geometries[wheel.geometryIndex]),
       );
 
-      return { front: wheel.front, part, radius: authoredRadius * scale };
+      return { front: wheel.front, part, radius: fit.radius };
     });
   }
   if (sharedWheel !== null) {
@@ -514,24 +513,6 @@ function authoredWheelRight(clump: RWClump, fromFrame?: number): boolean {
   return true;
 }
 
-/** SA scales the axles separately (vehicles.ide gives [front, rear]); the in-engine boost rides on top. */
-/**
- * Fit an authored wheel mesh to the size the data asks for. `vehicles.ide`'s wheel field (a mod's
- * `.settings.txt` line carries the same one) is the wheel DIAMETER IN METRES, not a multiplier — measured
- * against the stock meshes it names: admiral 0.68 vs a 0.700 m mesh, cheetah 0.68 vs 0.688, infernus 0.70 vs
- * 0.700, petro 1.106 vs 1.182. Ratios of 0.94–1.00, i.e. every stock mesh is already modelled at its target.
- *
- * Multiplying by it instead shrank every wheel by a third, which is what prod's 1.25 "wheels read a touch
- * small" boost was patching over (0.70 × 1.25 = 0.875 — still 12 % short, hence the wording). Fitting to the
- * diameter needs no fudge and is a no-op for a mesh authored at size, so ONE rule covers all four wheel
- * conventions instead of exempting the per-corner and container ones.
- */
-function axleScale(wheelScale: readonly [number, number], front: boolean, authoredRadius: number): number {
-  const diameter = authoredRadius * 2;
-
-  return diameter > 0 ? (front ? wheelScale[0] : wheelScale[1]) / diameter : 1;
-}
-
 /** `f_wheel_<mask>` container frames (and their descendants): the wheel sub-model, not body geometry. */
 function collectContainerFrames(clump: RWClump): Set<number> {
   const frames = new Set<number>();
@@ -675,11 +656,6 @@ function indicesFor(vertexCount: number, indices: number[]): Uint16Array | Uint3
 }
 
 /**
- * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
- * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
- */
-
-/**
  * The shared wheel atomic, instanced at every `wheel_*_dummy`, each dummy's own orientation honoured and the
  * copies on the far side from {@link authoredWheelRight} turned by {@link flipWheelSide}.
  */
@@ -692,7 +668,6 @@ function instanceWheels(
   sourceFrame?: number,
 ): VehicleWheel[] {
   const wheels: VehicleWheel[] = [];
-  const baseRadius = wheelRadius(clump.geometries[geometryIndex]);
   const tyres = tyreMaterials(clump.geometries[geometryIndex]);
   const authoredRight = authoredWheelRight(clump, sourceFrame);
   for (const [frameIndex, frame] of clump.frames.entries()) {
@@ -701,7 +676,7 @@ function instanceWheels(
       continue;
     }
     const front = match[2] === 'f';
-    const scale = axleScale(wheelScale, front, baseRadius);
+    const fit = wheelFit(wheelScale, front, clump.geometries[geometryIndex]);
     const world = frameWorldTransform(clump.frames, frameIndex);
     const right = match[1] === 'r';
     const mounted: [number, number, number, number] = world ? rotationToQuat(world.rot) : [0, 0, 0, 1];
@@ -710,14 +685,19 @@ function instanceWheels(
       localRotation: right === authoredRight ? mounted : flipWheelSide(mounted),
       localTranslation: world ? world.pos : [0, 0, 0],
       name: frame.name.trim().toLowerCase(),
-      scale,
+      scale: fit.scale,
     });
     appendGeometry(scratch, clump.geometries[geometryIndex], part, textures, 'body', null, tyres);
-    wheels.push({ front, part, radius: baseRadius * scale });
+    wheels.push({ front, part, radius: fit.radius });
   }
 
   return wheels;
 }
+
+/**
+ * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
+ * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
+ */
 
 function lampTag(material: RWMaterial): 'head' | 'tail' | null {
   if (!(material.texture?.name.toLowerCase() ?? '').startsWith('vehiclelights')) {
@@ -1031,11 +1011,41 @@ function uvAnimSlot(scratch: Scratch, material: RWMaterial): null | number {
   return scratch.uvAnimations.length - 1;
 }
 
+/** SA scales the axles separately (vehicles.ide gives [front, rear]); the in-engine boost rides on top. */
 /**
- * Measured over the vertices the TRIANGLES reference — the set RenderWare actually draws. An ORPHAN vertex
- * is invisible in-game but poisons a positions scan: coach's `wheel_lf` ships one corrupt orphan at ~5.8e25,
- * which read as the authored radius and scaled that wheel to nothing (axleScale fits to the diameter).
+ * Fit an authored wheel mesh to the size the data asks for. `vehicles.ide`'s wheel field (a mod's
+ * `.settings.txt` line carries the same one) is the wheel DIAMETER IN METRES, not a multiplier — measured
+ * against the stock meshes it names: admiral 0.68 vs a 0.700 m mesh, cheetah 0.68 vs 0.688, infernus 0.70 vs
+ * 0.700, petro 1.106 vs 1.182. Ratios of 0.94–1.00, i.e. every stock mesh is already modelled at its target.
+ *
+ * Multiplying by it instead shrank every wheel by a third, which is what prod's 1.25 "wheels read a touch
+ * small" boost was patching over (0.70 × 1.25 = 0.875 — still 12 % short, hence the wording). Fitting to the
+ * diameter needs no fudge and is a no-op for a mesh authored at size, so ONE rule covers all four wheel
+ * conventions instead of exempting the per-corner and container ones.
  */
+function wheelFit(
+  wheelScale: readonly [number, number],
+  front: boolean,
+  geometry: RWGeometry | undefined,
+): { radius: number; scale: number } {
+  const radius = (front ? wheelScale[0] : wheelScale[1]) / 2;
+  const authored = wheelRadius(geometry);
+  // A PLACEHOLDER wheel is not a wheel authored at the wrong size, and fitting it is nonsense: the
+  // GTA 5 Rhino ships its road wheels as one 2 cm triangle with NO WIDTH, because its running gear
+  // is drawn by the `wheel_big_*`/`track_*` meshes instead. Normalising that to a 1 m tyre scaled it
+  // 23.5x and drew six half-metre triangles sweeping round with the wheels (field 2026-08-07). SA
+  // never rescales a wheel mesh — it applies the ide scale as-is — so the marker stays invisible
+  // there. The test is STRUCTURAL: a wheel is a solid of revolution about the axle, so one with no
+  // extent ALONG the axle is not a wheel. Measured on the rhino it is 3.4e-9 m against 3.3 m for
+  // every real wheel in the same model — the bound below is float noise, not a fitted threshold.
+  // The physics radius still comes from the ide, never from the marker's own 2 cm.
+  if (wheelWidth(geometry) <= 1e-6 || authored <= 0) {
+    return { radius, scale: 1 };
+  }
+
+  return { radius, scale: radius / authored };
+}
+
 function wheelRadius(geometry: RWGeometry | undefined): number {
   if (!geometry) {
     return 0.35;
@@ -1057,4 +1067,35 @@ function wheelRadius(geometry: RWGeometry | undefined): number {
   }
 
   return max;
+}
+
+/**
+ * Measured over the vertices the TRIANGLES reference — the set RenderWare actually draws. An ORPHAN vertex
+ * is invisible in-game but poisons a positions scan: coach's `wheel_lf` ships one corrupt orphan at ~5.8e25,
+ * which read as the authored radius and scaled that wheel to nothing (axleScale fits to the diameter).
+ */
+/** Extent along the AXLE (local X) over the drawn vertices — a real wheel's width, ~0 for a marker. */
+function wheelWidth(geometry: RWGeometry | undefined): number {
+  if (!geometry) {
+    return Infinity; // unknown geometry is not evidence of a marker — leave the fit alone
+  }
+  let low = Infinity;
+  let high = -Infinity;
+  const measure = (vertex: number): void => {
+    low = Math.min(low, geometry.positions[vertex * 3]);
+    high = Math.max(high, geometry.positions[vertex * 3]);
+  };
+  if (geometry.triangles.length > 0) {
+    for (const tri of geometry.triangles) {
+      measure(tri.a);
+      measure(tri.b);
+      measure(tri.c);
+    }
+  } else {
+    for (let vertex = 0; vertex * 3 < geometry.positions.length; vertex += 1) {
+      measure(vertex);
+    }
+  }
+
+  return high >= low ? high - low : Infinity;
 }

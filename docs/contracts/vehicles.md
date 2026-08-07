@@ -88,7 +88,7 @@ re-authoring the mods.
 | --- | --- |
 | `chassis` | The body mesh. `chassis_dummy` is the root the components hang under. |
 | `<anything>_vlo` | The low-detail mesh shown past the vehicle LOD swap (`chassis_vlo`). |
-| `wheel` | A single wheel atomic, instanced at every `wheel_*_dummy` (mirrored on the right). |
+| `wheel` | A single wheel atomic, instanced at every `wheel_*_dummy` (mirrored on the right). **A FLAT mesh (no extent along the axle) is a MARKER meaning "this model draws no SA wheels"** — the builder leaves it unscaled instead of fitting it to the ide diameter, so it stays invisible the way SA leaves it. The GTA 5 Rhino does this (its running gear is `wheel_big_*`/`track_*`); fitting it instead scaled a 2 cm triangle by 23.5 and swept six half-metre shards around with the wheels. The physics radius still comes from the ide, never from the marker. |
 | `wheel_{l\|r}{f\|m\|b}_dummy` | Wheel hubs. `m` is the middle axle of a 3-axle truck. |
 | `wheel_{lf\|rf\|lm\|rm\|lb\|rb}` | Per-corner wheel atomics (different front/rear wheels). A LONE corner with real dummies is treated as a mis-named shared wheel — several mods ship only `wheel_rf`. |
 | `f_wheel_<mask>` | A container frame whose child atomics are the wheel sub-model (the wheel-mod convention). |
@@ -103,7 +103,8 @@ null frame token — the script's own guard skips, SILENTLY by design (real CLEO
 the atlas-miss console lines report only UNKNOWN addresses, not missing frames. Two rig facts
 currently limit this surface: the vehicle-optimizer DROPS empty parent frames (rhino's `misc_e`
 track chain — `docs/hacks/cleo-frame-sibling-order.md`) and flattens parent links, so sibling walks
-run in rig order.
+run in rig order. What that costs a script is measured in `docs/edge-cases/cleo-vm.md`: a script
+anchored on a dummy does nothing at all, silently.
 
 ### Damageable components
 
