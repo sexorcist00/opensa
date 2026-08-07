@@ -101,8 +101,7 @@ rear deck in the 2026-08-07 field capture.
 - [x] Rule A: `lampAnchorsOf` returns null for an absent or origin dummy, `lampsOf` emits only the ends
       that exist, the half-extents fallback is deleted. Negative tests first. Field: trailers and
       aircraft dark, every lamp-authoring car unchanged.
-- [ ] Rule B go/no-go: a field A/B on a car with a head dummy but no head material (`coach` is the stock
-      case) — does dropping its beam read as a fix or as a regression? Verdict into this ledger.
+- [x] Rule B go/no-go: **NO-GO**, settled by evidence before the A/B was run. See the step-2 ledger.
 
 ## Verification
 
@@ -148,3 +147,40 @@ expects more ImVehFt-authored cars as 098 installs them, and for such a car "no 
 would mean "its lamps are authored somewhere we do not look", not "it has no lamps". Re-run the census
 after each batch — it prints the `ivflights` cross-tab for exactly this reason. Recorded in
 [`docs/edge-cases/converter-pipeline.md`](../../edge-cases/converter-pipeline.md).
+
+
+### Step 2 — Rule B: NO-GO, and the answer was in the asset (2026-08-07)
+
+The planned A/B was never run, because the fleet already contains its falsifying case. **The stock `coach`
+carries no head lamp material at all** (`tail` x2, `head` 0 — measured on Rockstar's own `coach.dff`) and
+its headlights work: the user's field knowledge said so plainly ("buses definitely have headlights, both
+custom and default"), and the model says why. Its head DUMMY is real.
+
+So the two signals mean different things, and Rule B conflates them:
+
+| Signal | Governs |
+| --- | --- |
+| lamp MATERIAL (`vehiclelights*` marker) | whether the LENS glows — the lit twin and the emissive |
+| lamp DUMMY | whether there IS a light — beam, pool light, corona |
+
+Gating the beam on the material would have taken the headlights off a bus that has them. **Rule B is
+rejected on evidence, not on taste**, and the split Rule A already implements is the correct one. Worth
+recording that the discrepancy is stock-vs-mod and not a tool defect: the coach in the BUILT fleet is a mod
+(stratumx) that does carry head materials — it was checking that which turned up the stock case.
+
+**The hotring is the same shape as the stock coach** — real head dummy, no lamp material — so no honest
+model-derived rule can darken its front without breaking the bus. The answer is not another engine rule:
+
+**The asset says it.** Zeroing the `headlights` dummy is SA's own way of declaring "no lamp here", the
+engine has honoured it since Rule A, and the mod's own author had already done exactly that to
+`taillights`. Applied with `scripts/debug/zero-vehicle-dummy.ts` (a checked 12-byte edit to one frame's
+position), rebaked, and **field-verified: the car is fully dark at night — no beam pool, no tail glow.**
+Zero engine code for this car, and the same lever works for any model a modder installs.
+
+Recorded as an authoring contract in
+[`docs/contracts/vehicles.md`](../../contracts/vehicles.md) §3 (Dummies), including what happens when the
+frame name is misspelled — it behaves exactly like a zeroed dummy, silently.
+
+**The plan is CLOSED**: Rule A shipped and field-passed, Rule B rejected with its evidence, and the effect
+the whole detour started from (a race car with no lights) is now a property of the asset rather than of a
+per-car script or a per-car rule.
