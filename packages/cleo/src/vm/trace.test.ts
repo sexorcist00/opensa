@@ -13,11 +13,13 @@ const HAS_MODEL_LOADED = 0x0248;
 
 const world = {
   doorAngleRatio: (): null => null,
+  lightStatus: (): number => 0,
   lodDistMultiplier: (): number => 1,
   nextSiblingPart: (): null => null,
   partForward: (): readonly [number, number, number] => [0, 1, 0],
   partIndex: (): null => null,
   partTranslation: (): readonly [number, number, number] => [0, 0, 0],
+  setLightStatus: (): void => undefined,
   setPartRotation: (): void => undefined,
   setPartTranslationComponent: (): void => undefined,
   vehicleHandles: (): readonly number[] => [],

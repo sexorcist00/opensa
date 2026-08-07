@@ -60,11 +60,13 @@ function makeDeps(overrides: Partial<CleoHostDeps> = {}): CleoHostDeps & { spawn
     hour: () => 12,
     nativeWorld: {
       doorAngleRatio: () => null,
+      lightStatus: () => 0,
       lodDistMultiplier: () => 1,
       nextSiblingPart: () => null,
       partForward: () => [0, 1, 0],
       partIndex: () => null,
       partTranslation: () => [0, 0, 0],
+      setLightStatus: () => undefined,
       setPartRotation: () => undefined,
       setPartTranslationComponent: () => undefined,
       vehicleHandles: () => [],

@@ -12,6 +12,7 @@ import type { AssetFileSystem } from '@opensa/renderware';
 import { type NativeWorld, quatAxes, ScriptRunner, TraceRing } from '@opensa/cleo';
 import { toRigidModelInit } from '@opensa/game/adapters/vehicle-model-init';
 import { readModelOsm } from '@opensa/game/adapters/vehicle-osm';
+import { isLightSmashed } from '@opensa/game/vehicle/vehicle-lamps';
 import { getClump, getTxdChain } from '@opensa/renderware/archive/asset-cache';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
@@ -106,6 +107,7 @@ export function setupEngineCleo(args: EngineCleoArgs): CleoRunnerSystem | null {
 
       return side ? (args.vehicles()?.scriptDoorRatio(car, side) ?? 0) : null;
     },
+    lightStatus: (car, light): number => (isLightSmashed(byCar(car)?.vehicle.lightsSmashed() ?? 0, light) ? 1 : 0),
     lodDistMultiplier: (): number => 1,
     nextSiblingPart: (car, part): null | number => {
       // FRAME-ORDER adjacency stands in for the dropped parent links —
@@ -122,6 +124,10 @@ export function setupEngineCleo(args: EngineCleoArgs): CleoRunnerSystem | null {
     partIndex: (car, name): null | number => byCar(car)?.vehicle.scriptPartIndex(name) ?? null,
     partTranslation: (car, part): readonly [number, number, number] =>
       byCar(car)?.vehicle.scriptPartLocalTranslation(part) ?? [0, 0, 0],
+    // SA writes 0 (OK) or 1 (SMASHED) into two bits per lamp; anything non-zero is damage here.
+    setLightStatus: (car, light, status): void => {
+      byCar(car)?.vehicle.setLightSmashed(light, status !== 0);
+    },
     setPartRotation: (car, part, quat): void => {
       byCar(car)?.vehicle.scriptSetPartLocalRotation(part, [quat[0], quat[1], quat[2], quat[3]]);
     },

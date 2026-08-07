@@ -41,7 +41,7 @@ checkpoint: a night hotring is dark on both runtimes.
 
 ## Steps
 
-- [~] Engine seam: smashed-lamp state in `vehicle-lamps.ts`/`vehicle-lamp.system.ts` (negative
+- [x] Engine seam: smashed-lamp state in `vehicle-lamps.ts`/`vehicle-lamp.system.ts` (negative
       tests first: unknown light index, dead car), atlas row for `0x6C2100` (+ `0x6C2130`
       read-back), unit + story coverage on the fake-GPU boot path.
 - [ ] Authored script + story test (declared budget; record instr/poll and artifact size vs
@@ -57,7 +57,7 @@ verdicts.
 
 ## Ledger
 
-### Step 1a — the engine seam (2026-08-07)
+### Step 1 — the engine seam + the atlas rows (2026-08-07)
 
 **What the original's data means, recovered rather than assumed** (gta-reversed `DamageManager.h/.cpp`,
 fetched this session; `docs/links.md` already names the repo):
@@ -89,6 +89,11 @@ writes OK/SMASHED into its two), and it splits by what each consumer can actuall
 Damage is read off the CAR, not off the lit state: a parked car keeps its smashed lamps and does not light
 them the moment somebody gets in.
 
+**Atlas.** `SET_LIGHT_STATUS` / `GET_LIGHT_STATUS` resolve `this` as a vehicle token at exactly
+`CAutomobile+0x5A0` — the script reaches it with plain arithmetic (`+1440`), which the 12-bit token offset
+field already carries. Any other offset reports a miss instead of guessing. Args are read in the SA C order
+(light, status), i.e. after the `0AA5`-`0AA8` reversal 001 fixed.
+
 **Coverage, and each guard verified to FAIL when its fix is reverted** (the 001 lesson: a test that cannot
 bite is `undefined === undefined`):
 
@@ -97,6 +102,7 @@ bite is `undefined === undefined`):
 | `vehicle-lamp.system.test.ts` — a smashed lamp emits nothing, its three siblings still do; all four smashed emits nothing at all | 2 tests fail with the `continue` removed |
 | `vehicle-lamps.test.ts` — each lamp's SA index, right/left the way SA numbers them | fails with the mirror pairing swapped |
 | `engine.lamps.test.ts` — the mask reaches the GPU row; a MASK-ONLY change still re-writes it | fails with `smashed` dropped from the change test |
+| `native-atlas.test.ts` — `this` that is not `vehicle+0x5A0` is refused | fails with the offset check relaxed |
 | `engine-vehicle-handle.test.ts` — an index outside SA's four cannot reach the mask (JS shifts by `light & 31`, so 32 would have read lamp 0) | — (new behaviour) |
 
 **Deviation from the plan, recorded rather than quietly satisfied:** the plan named the beam/corona/pool

@@ -7,6 +7,8 @@ import { isNativeToken, TokenTable, type TokenTarget } from './native-tokens';
  *
  * Every symbol below is verified against gta-reversed (2026-08-04):
  * - `0x4C5400` CClumpModelInfo::GetFrameFromName
+ * - `0x6C2100/0x6C2130` CDamageManager::SetLightStatus/GetLightStatus (`CAutomobile+0x5A0` =
+ *   m_damageManager; `eLights` 0 FL, 1 FR, 2 RR, 3 RL; `eLightsState` 0 OK, 1 SMASHED)
  * - `0x59AFA0/0x59AFE0/0x59B020` CMatrix::SetRotateX/Y/ZOnly
  * - `0x59B120` CMatrix::SetRotate(x,y,z) — composition Rz·Rx·Ry (see `sa-matrix.ts`)
  * - `0xB74494` CPools::ms_pVehiclePool
@@ -22,7 +24,9 @@ import { quatFromSaEuler, quatRotateX, quatRotateY, quatRotateZ } from './sa-mat
 /** Function/global addresses (SA 1.0 US — the one canonical exe, the perfect-map doctrine). */
 export const SA = {
   GET_FRAME_FROM_NAME: 0x4c5400,
+  GET_LIGHT_STATUS: 0x6c2130,
   LOD_DIST_MULTIPLIER: 0xb6f118,
+  SET_LIGHT_STATUS: 0x6c2100,
   SET_ROTATE_X_ONLY: 0x59afa0,
   SET_ROTATE_XYZ: 0x59b120,
   SET_ROTATE_Y_ONLY: 0x59afe0,
@@ -36,6 +40,8 @@ const SA_IMAGE_BASE = 0x400000;
 
 /** Struct offsets the corpus dereferences. */
 const VEHICLE_RW_OBJECT = 0x18;
+/** `CAutomobile+0x5A0` m_damageManager — the `this` the light-status calls are made on. */
+const VEHICLE_DAMAGE_MANAGER = 0x5a0;
 const VEHICLE_CAR_NODES = 0x648;
 const CAR_NODE_COUNT = 25;
 /** RwFrame+0x10 = the modelling CMatrix; within it: +0x10 m_forward, +0x30 m_pos. RwFrame+0x9C is
@@ -99,6 +105,8 @@ export type NativeValue = null | { readonly kind: 'float' | 'int'; readonly valu
 export interface NativeWorld {
   /** Current door openness 0..1 for `095F` (door 2..5 = SA door ids), or null when unknown. */
   doorAngleRatio(car: number, door: number): null | number;
+  /** `CDamageManager::GetLightStatus` — 0 = OK, 1 = SMASHED, per SA's `eLights` index. */
+  lightStatus(car: number, light: number): number;
   /** TheCamera.m_fLODDistMultiplier — the draw-distance slider (1.0 when there is no slider). */
   lodDistMultiplier(): number;
   /** The NEXT sibling of a part in the model's frame order (RwFrame+0x9C), or null at chain end. */
@@ -109,6 +117,9 @@ export interface NativeWorld {
   partIndex(car: number, name: string): null | number;
   /** The part's local translation (the matrix m_pos reads — rhino reads track-link positions). */
   partTranslation(car: number, part: number): readonly [number, number, number];
+  /** `CDamageManager::SetLightStatus`. SA stores two bits per lamp and only ever writes 0 or 1, so any
+   *  non-zero status is SMASHED here — a script that writes 2 must not read back as repaired. */
+  setLightStatus(car: number, light: number, status: number): void;
   /** Set a part's local rotation (quaternion, GTA axes) — the SetRotate* family lands here. */
   setPartRotation(car: number, part: number, quat: readonly [number, number, number, number]): void;
   /** Overwrite ONE component (0=x 1=y 2=z) of a part's local translation — the matrix pos writes. */
@@ -141,6 +152,29 @@ export class AtlasMemory {
     switch (address) {
       case SA.GET_FRAME_FROM_NAME:
         return this.getFrameFromName(args);
+      case SA.GET_LIGHT_STATUS: {
+        const car = this.damageManagerCar(address, struct);
+        if (car === null) {
+          return null;
+        }
+        const light = this.intArg(args, 0);
+        const status = this.world.lightStatus(car, light);
+        this.op(() => `CDamageManager::GetLightStatus(car#${car}, light ${light}) -> ${status}`);
+
+        return { kind: 'int', value: status };
+      }
+      case SA.SET_LIGHT_STATUS: {
+        const car = this.damageManagerCar(address, struct);
+        if (car === null) {
+          return null;
+        }
+        const light = this.intArg(args, 0);
+        const status = this.intArg(args, 1);
+        this.world.setLightStatus(car, light, status);
+        this.op(() => `CDamageManager::SetLightStatus(car#${car}, light ${light}, ${status === 0 ? 'OK' : 'SMASHED'})`);
+
+        return { kind: 'int', value: 0 };
+      }
       case SA.SET_ROTATE_X_ONLY: {
         const angle = this.angleArg(args, 0);
 
@@ -228,6 +262,18 @@ export class AtlasMemory {
     return arg.kind === 'raw' ? arg.float : arg.value;
   }
 
+  /** `this` for the light-status calls: a vehicle token offset to `CAutomobile+0x5A0`, and nothing else —
+   *  the script reached it with plain arithmetic, so a wrong offset must report rather than guess. */
+  private damageManagerCar(address: number, struct: null | number): null | number {
+    const resolved = struct === null ? null : this.tokens.resolve(struct);
+    if (resolved && resolved.target.kind === 'vehicle' && resolved.offset === VEHICLE_DAMAGE_MANAGER) {
+      return resolved.target.car;
+    }
+    this.miss('call', address, 'this is not a vehicle m_damageManager token');
+
+    return null;
+  }
+
   private getFrameFromName(args: readonly NativeArg[]): NativeValue {
     // C order is (clump, name), but this row identifies BY SHAPE deliberately: a string arg and a
     // token arg are unmistakable, and tolerating either order costs nothing while a mod that lists
@@ -253,6 +299,16 @@ export class AtlasMemory {
     this.op(() => `GetFrameFromName(car#${car}, '${name}') -> part ${part}`);
 
     return { kind: 'int', value: this.tokens.mint({ car, kind: 'frame', part }) };
+  }
+
+  /** An integer parameter (a `raw` arg carries both readings; a float one is truncated as the ABI does). */
+  private intArg(args: readonly NativeArg[], at: number): number {
+    const arg = args[at];
+    if (!arg || arg.kind === 'string') {
+      return 0;
+    }
+
+    return arg.kind === 'raw' ? arg.int : Math.trunc(arg.value);
   }
 
   private miss(kind: AtlasMiss['kind'], address: number, detail: string): void {
@@ -417,6 +473,8 @@ export class AtlasMemory {
 
 /** Trace symbols for the functions table — the tracer never prints a raw address (decision 2). */
 const CALL_SYMBOLS: Readonly<Record<number, string>> = {
+  [SA.GET_LIGHT_STATUS]: 'CDamageManager::GetLightStatus',
+  [SA.SET_LIGHT_STATUS]: 'CDamageManager::SetLightStatus',
   [SA.SET_ROTATE_X_ONLY]: 'CMatrix::SetRotateXOnly',
   [SA.SET_ROTATE_XYZ]: 'CMatrix::SetRotate',
   [SA.SET_ROTATE_Y_ONLY]: 'CMatrix::SetRotateYOnly',

@@ -6,22 +6,29 @@ import { AtlasMemory, SA } from './native-atlas';
 import { quatRotateX } from './sa-matrix';
 
 interface Recorded {
+  lights: { car: number; light: number; status: number }[];
   rotations: { car: number; part: number; quat: readonly number[] }[];
   translations: { axis: number; car: number; part: number; value: number }[];
 }
 
 function makeWorld(overrides: Partial<NativeWorld> = {}): NativeWorld & Recorded {
+  const lights: Recorded['lights'] = [];
   const rotations: Recorded['rotations'] = [];
   const translations: Recorded['translations'] = [];
 
   return {
     doorAngleRatio: () => 0.5,
+    lights,
+    lightStatus: (car, light) => lights.filter((row) => row.car === car && row.light === light).pop()?.status ?? 0,
     lodDistMultiplier: () => 1.25,
     nextSiblingPart: (car, part) => (part < 16 ? part + 1 : null),
     partForward: () => [0, 0.8, 0.6],
     partIndex: (car, name) => (name === 'missing' ? null : name.length),
     partTranslation: () => [1, 2, 3],
     rotations,
+    setLightStatus: (car, light, status): void => {
+      lights.push({ car, light, status });
+    },
     setPartRotation: (car, part, quat): void => {
       rotations.push({ car, part, quat });
     },
@@ -69,6 +76,23 @@ describe('AtlasMemory', () => {
       ]);
       expect(frame).toEqual({ kind: 'int', value: 0 });
     });
+
+    it('SetLightStatus on anything but a vehicle m_damageManager is refused, not applied', () => {
+      const world = makeWorld();
+      const atlas = new AtlasMemory(world);
+      const vehicle = atlas.pointerOf(257);
+
+      // The vehicle itself, a WRONG offset, and a raw address — none of them is the damage manager.
+      for (const struct of [vehicle, vehicle + 0x5a4, 0x6c2100]) {
+        atlas.call(SA.SET_LIGHT_STATUS, struct, [
+          { kind: 'int', value: 0 },
+          { kind: 'int', value: 1 },
+        ]);
+      }
+
+      expect(world.lights).toHaveLength(0);
+      expect(atlas.misses.every((miss) => miss.kind === 'call')).toBe(true);
+    });
   });
 
   describe('positive cases', () => {
@@ -89,6 +113,25 @@ describe('AtlasMemory', () => {
       expect(atlas.read(bytesToken + 1, 1)).toEqual({ kind: 'int', value: 1 });
       expect(atlas.read(bytesToken + 4, 1)).toEqual({ kind: 'int', value: 2 });
       expect(atlas.read(bytesToken + 2, 1)).toEqual({ kind: 'int', value: 0x80 });
+    });
+
+    it('vehicle + 0x5A0 is the damage manager: SetLightStatus lands, GetLightStatus reads it back', () => {
+      const world = makeWorld();
+      const atlas = new AtlasMemory(world);
+      // no_lights' own shape: GET_VEHICLE_POINTER, then += 1440 with PLAIN arithmetic.
+      const damage = atlas.pointerOf(257) + 1440;
+
+      // Args arrive in the SA function's C order (light, status) — handlers/natives.ts already undid
+      // CLEO's reversed push order.
+      atlas.call(SA.SET_LIGHT_STATUS, damage, [
+        { kind: 'int', value: 2 },
+        { kind: 'int', value: 1 },
+      ]);
+
+      expect(world.lights).toEqual([{ car: 257, light: 2, status: 1 }]);
+      expect(atlas.call(SA.GET_LIGHT_STATUS, damage, [{ kind: 'int', value: 2 }])).toEqual({ kind: 'int', value: 1 });
+      expect(atlas.call(SA.GET_LIGHT_STATUS, damage, [{ kind: 'int', value: 3 }])).toEqual({ kind: 'int', value: 0 });
+      expect(atlas.misses).toHaveLength(0);
     });
 
     it('vehicle+0x18 yields the clump; GetFrameFromName + 16 + SetRotateXOnly rotates the part', () => {

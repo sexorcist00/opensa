@@ -66,8 +66,18 @@ export function createRecordingHost(options: RecordingHostOptions = {}): Recordi
 
     return `#${part}`;
   };
+  // CDamageManager's light status, per car — a real state, not a canned answer: a script that smashes a
+  // lamp and reads it back must see its own write, and a story test must be able to assert on it.
+  const lightsByCar = new Map<number, number[]>();
+  const lightsOf = (car: number): number[] => {
+    const lights = lightsByCar.get(car) ?? [0, 0, 0, 0];
+    lightsByCar.set(car, lights);
+
+    return lights;
+  };
   const world: NativeWorld = {
     doorAngleRatio: (): null | number => options.doorAngleRatio ?? 0.5,
+    lightStatus: (car, light): number => lightsOf(car)[light] ?? 0,
     lodDistMultiplier: (): number => 1,
     nextSiblingPart: (car, part): null | number => {
       // The fake frame tree is a flat chain: sibling = the next auto-assigned part, 3 links deep.
@@ -89,6 +99,13 @@ export function createRecordingHost(options: RecordingHostOptions = {}): Recordi
       return parts.get(name) ?? null;
     },
     partTranslation: (): readonly [number, number, number] => [0, 0, 0],
+    setLightStatus: (car, light, status): void => {
+      const lights = lightsOf(car);
+      if (light >= 0 && light < lights.length) {
+        lights[light] = status;
+      }
+      record(`natives.setLightStatus car#${car} light ${light} -> ${status === 0 ? 'OK' : 'SMASHED'}`);
+    },
     setPartRotation: (car, part, quat): void => {
       record(`natives.setPartRotation car#${car} ${partName(car, part)} quat(${quat.map(fixed).join(',')})`);
     },
