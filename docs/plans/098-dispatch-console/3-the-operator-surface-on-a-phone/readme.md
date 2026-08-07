@@ -47,7 +47,10 @@ a long press racing a pan, a two-finger orbit read as a pinch.
 
 **Owes:** a scripted check in the shape of `scripts/debug/touch-controls-check.ts` — which drives real pixels
 and is the only check that covers wiring rather than the overlay alone — or a stated reason it cannot be
-scripted for this surface. Add its row to [`docs/debug/`](../../../debug/README.md) if it lands.
+scripted for this surface. **Expect the second answer**: that script drives Playwright, which is
+effectively unavailable on the development machine ([development/termux.md](../../../development/termux.md)),
+so the realistic form here is the real phone's own browser against `npm run dev` and a human reading the
+result. Add its row to [`docs/debug/`](../../../debug/README.md) if something scriptable does land.
 
 ### 03 — Legibility at city zoom
 

@@ -70,8 +70,13 @@ would actually look at — dense, mixed heights, some water — not an empty str
 
 **Budget:** none — this step spends nothing and changes nothing.
 **Owes:** the three tables and the pinned district, recorded in `docs/benchmarks/` **before** they are
-analysed (standing rule), naming the pak build that was read. Desktop only: the phone comes in chain 2, and
-this table is what it will be compared against.
+analysed (standing rule), naming the pak build that was read.
+
+**On which machine:** this chain was written as *desktop baseline first, phone second*, and the development
+machine is an Android phone ([development/termux.md](../../../development/termux.md)). That ordering
+therefore does not hold as written, and 01 must state which way it went — the phone as the baseline (honest,
+and the device the product targets, at the cost of comparability with the repo's desktop rows) or a borrowed
+desktop for the baseline only. Do not quietly produce one column and leave the reader to guess which.
 
 > **This step cannot run in a container without game data.** A field run reads `build/<game>/opensa` and
 > nothing else ([restrictions/architecture.md](../../../restrictions/architecture.md)), so 01 runs on a
