@@ -68,6 +68,10 @@ plans below must not trade it away to buy density.
 
 ### Costing the target: 57 583 objects, our layout
 
+> **This section prices the target against STOCK ceilings. The install we ship to lifts two of them** — see
+> "What ProperFixes is actually paying" below. Kept because the stock target still has to be costed this
+> way, and because it is what the build guards enforce.
+
 Scale our current mix by 2.35× and it costs **57 583 binary HD rows + 16 312 permanent text LOD rows**.
 
 - **Rows: it fits.** Map-wide permanent text becomes `20 146 − 6 954 + 16 312 = ` **29 504** against the
@@ -98,11 +102,17 @@ own patch carries a foreign 70k-row map where everything it had been proven on b
 configuration is therefore BOTH — an adjuster for the pools and slots, our ASI for int16. Details in
 [00](lod-procobj-generator/00-limit-route-review.md).
 
-The run leaves one number in this file open, and it is the important one: **their 9 597-row IPL files ran
-clean at 2.4× our `AREA_ROW_CAP`.** If that budget is genuinely that conservative, the "≥ 19 areas" above
-collapses to roughly their six slots and the slot problem with it. Their rows are pure text with no LODs and
-no binary streams, so it is not a like-for-like comparison — but it is now the cheapest thing standing
-between us and the target, and [04](lod-procobj-generator/04-slot-economy-and-budgets.md) owns measuring it.
+**And their 9 627-row IPL files are explained too, which retires the slot arithmetic above.** OLA sets
+**`EntitiesPerIpl = unlimited`** on that install — it grows exactly the `gpLoadedBuildings` per-file buffer
+our `AREA_MAX_PAIRS = 2000` guards — and **`EntityIpl = unlimited`**, which removes the 40-slot ceiling. So
+the "≥ 19 areas, 48 slots" cost priced earlier is the **stock** cost; on the install we ship to there is no
+per-file ceiling and no slot ceiling to pay it against. Our cap was never wrong, it is just inert here.
+Capture: [`gta-sa-original/reference-install-config.md`](../../../../gta-sa-original/reference-install-config.md).
+
+**What that leaves as the real constraint on this target: memory and frame time.** The density target is
+reachable without lifting anything — which makes
+[04](lod-procobj-generator/04-slot-economy-and-budgets.md) a perf-budget plan rather than a ceiling hunt, and
+makes point 2 below the only thing still standing between us and shipping 2.35× the clutter.
 
 ## The target this plan adopts
 

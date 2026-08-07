@@ -119,7 +119,8 @@ loaded**, on ProperFixes' 70k-row map. Do not re-run the diagnostic without a fr
 
 Field run on the real install: **ProperFixes 2.2.1 with its "increase vegetation distance" optional** —
 57 583 permanent text rows of its own on top of stock's 12 629, i.e. **70 212 map-wide**, in six IPL slots.
-**OLA was loaded in both arms**, as the pivotal correction above requires — the symptom cannot exist without a
+**FLA and OLA were BOTH loaded in both arms** — our own log names them — with OLA owning the IPL zones and
+FLA's entire `[IPL]` section disabled, which is how they coexist. A pool-raiser is required — the symptom cannot exist without a
 pool-raiser, so OLA is the floor the experiment stands on, not a confound. The only variable was the int16
 patch:
 

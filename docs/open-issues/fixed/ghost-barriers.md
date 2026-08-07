@@ -9,7 +9,7 @@
 > an int32 sidecar and redirects `CIplStore::RemoveIpl`'s three building-bound reads (incl. the loop
 > back-edge re-read at 0x404BA8) to it. **Confirmed in-game on the 33k-row repro with BOTH FLA and OLA**
 > (it overlays FLA's incomplete int16 patch), and — **2026-08-07 — on a THIRD-PARTY map at 70 212 permanent
-> rows (2.14× the ceiling)**: with OLA held constant in both arms, ProperFixes 2.2.1 + its vegetation optional
+> rows (2.14× the ceiling)**: with FLA+OLA held constant in both arms, ProperFixes 2.2.1 + its vegetation optional
 > shows the barriers as soon as `ProperFixes.asi` is removed, and `perfect-map.asi` in its place removes them
 > again (the 2dfx new-game crash with it). One variable, so it also settles what OLA does here — **nothing for
 > int16**: the mod needs a dedicated patch, ours or its own, exactly as 004's source study of OLA predicted.

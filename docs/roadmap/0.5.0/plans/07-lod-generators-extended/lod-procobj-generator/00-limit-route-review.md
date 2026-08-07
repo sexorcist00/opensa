@@ -15,8 +15,11 @@ by ~10 IPL slots. Read it before answering anything below.
 
 ## Field run, 2026-08-07 — a clean A/B on someone else's 70k-row map
 
-The user ran the test this review asked for, on the real game. **OLA was loaded throughout**, which is
-required rather than incidental: [004's pivotal correction](../../../../../../asi/perfect-map/docs/plans/004-limit-patches.md)
+The user ran the test this review asked for, on the real game, and the install has since been captured in
+full ([`gta-sa-original/reference-install-config.md`](../../../../../gta-sa-original/reference-install-config.md))
+— so the configuration is no longer a report, it is a record. **FLA and OLA were BOTH loaded throughout**
+(our own `perfect-map-asi.log` names both), with OLA owning the IPL zones and FLA's entire `[IPL]` section
+disabled. A pool-raiser being present is required rather than incidental: [004's pivotal correction](../../../../../../asi/perfect-map/docs/plans/004-limit-patches.md)
 records that the int16 bug **cannot manifest at all** without a pool-raiser, because stock `CBuilding` is
 13 000 and a no-adjuster boot dies first at `0x5381A5`. So OLA is the floor the experiment stands on, and
 holding it constant while toggling only the int16 patch is what makes this a single-variable A/B rather than
@@ -24,8 +27,8 @@ an observation:
 
 | Configuration | Result |
 | --- | --- |
-| ProperFixes 2.2.1 **with** the vegetation optional, OLA, `ProperFixes.asi` REMOVED | **ghost barriers reproduced** |
-| the same, OLA unchanged, **`perfect-map.asi`** in place of it | **barriers gone, and the new-game 2dfx crash gone** |
+| ProperFixes 2.2.1 **with** the vegetation optional, FLA+OLA, `ProperFixes.asi` REMOVED | **ghost barriers reproduced** |
+| the same, FLA+OLA unchanged, **`perfect-map.asi`** in place of it | **barriers gone, and the new-game 2dfx crash gone** |
 
 That is **70 212 permanent text rows — 2.14× the int16 ceiling — on a third-party corpus with real
 positions**. Everything fix #1 had been proven on before was ours: the 33k synthetic repro dial and our own
@@ -42,12 +45,28 @@ positions**. Everything fix #1 had been proven on before was ours: the 33k synth
   configuration for a dense map is **OLA (or FLA) for the pools and slots, PLUS our ASI for int16** — until
   `004b` builds our own pool/array relocations. An external dependency is not a preference here; it is
   currently load-bearing, and the stock-target promise has to say so.
-- **004's open item is closed by this run** — "our APPLY build still DEFERRED with OLA present". It applied
-  and it worked with OLA loaded, so the per-site diagnostic 004 asks for is unnecessary.
+- **004's open item is closed, with a log line rather than an inference** — "our APPLY build still DEFERRED
+  with OLA present". `perfect-map-asi.log` reads `int16 APPLIED` **and** names both adjusters as present, so
+  the per-site diagnostic 004 asks for is unnecessary.
 
 **What it does NOT decide.** **Slots were never stressed.** ProperFixes occupies 6 IPL slots and the install
-stayed far below 40, so `IplEntityIndexArrays` — the ceiling this whole review found binding — was not
-exercised at all. The density target's actual blocker remains unmeasured, and OLA is what would lift it.
+runs 37 of 40, so `IplEntityIndexArrays` was not exercised. That turns out not to matter — see below.
+
+## And then the install answered the rest of the review
+
+Capturing the reference install closed the remaining questions from its ini files, without another field run:
+
+- **`EntitiesPerIpl = unlimited`** — OLA grows `gpLoadedBuildings`, the 4 096 per-file buffer our
+  `AREA_MAX_PAIRS = 2000` guards. **That is why ProperFixes' 9 627-row IPL files load**, and it means our cap
+  is a stock-target cap that is simply inert here. Nothing was wrong with our model of the ceiling; the
+  target does not have the ceiling.
+- **`EntityIpl = unlimited`** — the 40-slot array, gone too.
+- **`Buildings = 100000`** (stock 13 000) — which is what lets 72 914 rows exist at all.
+
+**So the binding ceiling this review spent its length identifying does not exist on the install we ship to.**
+Both remaining routes collapse into one answer: **the reference target needs the adjusters AND our ASI**, and
+past that the limiter is memory and frame time. `004b` (our own pool/array relocations) stops being a
+prerequisite for density and becomes what would free us from depending on someone else's plugin.
 
 ## The question
 

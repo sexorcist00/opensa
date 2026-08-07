@@ -1,16 +1,23 @@
 # 04 — Slot economy, budgets and integration
 
-> **PREMISE WRONG — do not start this plan before [00](00-limit-route-review.md) closes.**
-> Everything below is written as "gated on our own ASI (Task 3)", i.e. as an int16 story. It is not one.
-> Measured 2026-08-07 on `build/original/opensa`: **20 146/32 767 text rows but 38/40 IPL slots**, and the
-> [density target](../density-target.md) costs ~16 312 rows (fits, 29 504 against a 30 000 guard) and ≥ 19
-> areas (**does not fit — 48 slots against a ceiling of 40**). The constraint that binds is the slot array
-> plus the per-area `LoadScene` budget, **neither of which our ASI lifts** (fixes #2/#3 are unbuilt) and
-> both of which FLA/OLA do. So this plan's target-gating, its guard and its "requires the asi" fallback all
-> change shape, and area folding — the cheap escape — is already closed as a route (00, decision 3).
+> **PREMISE WRONG TWICE — rewrite this plan before starting it.**
 >
-> Rewrite this plan against 00's decision. What survives unchanged is decision 2 (the binary-stream economy
-> stays) and decision 3 (perf becomes the budget); those are the parts that were never about int16.
+> It was written as an int16 story ("gated on our own ASI, Task 3"). It is not one: measured 2026-08-07 on
+> `build/original/opensa`, we sit at 20 146/32 767 text rows but **38/40 IPL slots**, so what binds on STOCK
+> is the slot array and the per-area `LoadScene` budget, neither of which our ASI lifts.
+>
+> Then the target install itself was captured, and **on the install we actually ship to neither of those
+> ceilings exists**: OLA sets `EntitiesPerIpl = unlimited` (the 4 096 per-file buffer) and
+> `EntityIpl = unlimited` (the 40 slots), with `Buildings = 100000`. It runs 72 914 permanent rows in files
+> of up to 9 627 — see [`gta-sa-original/reference-install.md`](../../../../../gta-sa-original/reference-install.md).
+> **So there is no ceiling left to lift here, and no correctness number left to find.** The one ceiling no
+> adjuster touches is int16, and `perfect-map.asi` already handles it at 2.23× the limit on that install.
+>
+> What this plan becomes: **a per-target cap decision plus a perf budget.** Stock keeps today's guards;
+> the reference target is bounded by memory and frame time, measured. Decisions 2 (the binary-stream economy
+> stays) and 3 (perf becomes the budget) survive intact — they were never about int16. Decision 1's
+> "opensa-asi target" needs renaming: the target is defined by the ADJUSTERS plus our asi, not by our asi
+> alone.
 
 Part of [07 — LOD generators, extended](../readme.md). Depends on [02](02-density-model.md)/[03](03-biome-zone-density.md) (the density model), on [00](00-limit-route-review.md)'s route decision, and — if that decision keeps our own ASI on the path — on [03-asi/006](../../../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md) (the stock-vs-opensa-asi target modes). Delivers the actual "MORE objects": raising the caps so 02/03's density can ship, and re-establishing perf as the limiter.
 
@@ -23,7 +30,9 @@ Raised density (02/03) is capped today by budgets that were sized for the int16 
 - `TEXT_ROW_CAP = 30000` global (`pipeline.ts` `checkTextIplSlotBudget`);
 - `PROC_OBJ_MAX_DENSITY = 3` candidate ceiling (`procobj-scatter.ts`).
 
-Only one of those four is an int16 cap. `TEXT_ROW_CAP` is, and it is **not** the one in the way — the target fits under it. `AREA_MAX_PAIRS` mirrors SA's per-area `LoadScene` budget, which is a real 2004 ceiling that stands whatever happens to int16, and it is what forces the area count that exhausts the slot array. `procObjMax` and `PROC_OBJ_MAX_DENSITY` are our own safety numbers and cost nothing to raise once something downstream can absorb the objects. **The plan's job is therefore the SLOT economy first and the row ceiling second** — get more objects per area and per slot, then raise what remains, then let perf (draw calls, streaming, frame budget) become the limiter it should have been all along.
+Only one of those four is an int16 cap. `TEXT_ROW_CAP` is, and it is **not** in the way — the density target fits under it. `AREA_MAX_PAIRS` mirrors SA's per-file `gpLoadedBuildings` budget, which is a real 2004 ceiling **on a stock install and is set to `unlimited` on the reference one**. `procObjMax` and `PROC_OBJ_MAX_DENSITY` are our own safety numbers and cost nothing to raise once something downstream can absorb the objects.
+
+**So the plan's job is not to lift anything.** It is to (1) split the caps by target, (2) find where memory and frame time actually stop us on the reference install, and (3) keep the stock target exactly as safe as it is today. Perf was always going to be the real limiter; on this install it already is.
 
 ## Decisions
 
@@ -37,14 +46,17 @@ Only one of those four is an int16 cap. `TEXT_ROW_CAP` is, and it is **not** the
 
 **Slot economy first — these are the ones the target actually needs, and none of them needs an ASI:**
 
-- [ ] **Find out what `AREA_ROW_CAP = 4000` really models, because a shipping mod beats it by 2.4×.**
-      ProperFixes' `procobj1..6.ipl` carry ~9 597 rows each and ran clean in the field on 2026-08-07 (see
-      [00](00-limit-route-review.md)). Either SA's `LoadScene` budget is not per-IPL-file, or our cap is far
-      more conservative than the ceiling it stands for, or their pure-text layout escapes something our
-      mixed text+binary areas do not. **This is the highest-value measurement in the chain**: if a
-      9 597-row area is safe, the density target costs about six slots instead of nineteen areas and the
-      binding ceiling disappears. Measure it against the real game — do not settle it by reading our own
-      constant.
+- [x] ~~Find out what `AREA_ROW_CAP = 4000` really models~~ — **ANSWERED 2026-08-07 from the target
+      install's own configuration, no field run needed.** ProperFixes' 9 627-row IPL files load because OLA
+      sets **`EntitiesPerIpl = unlimited`**, which grows exactly the `gpLoadedBuildings` per-file buffer our
+      cap guards (0xBCC0E0 @ 0x5B892A — our own OLA source study in `asi/perfect-map` 004). The cap is not
+      wrong; it is a **stock-target** cap, and it is **inert on the install we ship to**. The same install
+      sets `EntityIpl = unlimited`, so the 40-slot ceiling is gone too, and `Buildings = 100000`. Full
+      capture: [`gta-sa-original/reference-install-config.md`](../../../../../gta-sa-original/reference-install-config.md).
+- [ ] **Decide the reference-target caps, and measure what actually limits them.** With both ceilings
+      `unlimited` there is no correctness number left to find here — the limiter is memory and frame time,
+      which is what the perf tasks below are for. Set `AREA_MAX_PAIRS` and the slot guard per target (stock
+      = today, reference = perf-bounded) rather than hunting a ceiling that the target does not have.
 - [ ] Pack the generated areas tight. They average 3 501 of a 4 000-row budget today; a repack to the budget
       is ~2 slots back at current density and more at raised density. Measure the recovered slots and check
       that no area breaches the budget after it — this is 00's hygiene task, executed.

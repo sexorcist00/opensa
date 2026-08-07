@@ -33,12 +33,22 @@ a plan's premise, so they are stated here rather than buried:
 3. **Folding areas into fewer files cannot buy the target.** [00](lod-procobj-generator/00-limit-route-review.md)
    left this open as the cheap escape. It is now closed with a number: area count is set by the ~4 000-row
    per-area `LoadScene` budget, not by how files are grouped, so fewer files means areas that breach it.
+   **On STOCK, again** — see finding 5.
 4. **The particle chain's "Task 4, not built" gate is stale — it shipped.**
    [03-asi Phase 2](../../../../../asi/perfect-map/docs/plans/readme.md) 009 landed the emitter-lifecycle
    patch (confirmed in-game) and 010 flipped the pipeline: `sa-lod-generator` **keeps particles on the
    verbatim path by default today**, with `--strip-particles` as the stock-target opt-out. What 010 deferred
    is the far-view overdraw budget. So nothing in this plan is waiting on an unbuilt ASI fix, and the
    remaining particle work is the decimate path plus a measurement nobody has taken.
+
+5. **And then the target install was captured, and two of those ceilings turned out not to exist on it.**
+   [`gta-sa-original/reference-install.md`](../../../../gta-sa-original/reference-install.md), declared the
+   baseline 2026-08-07: OLA sets **`EntitiesPerIpl = unlimited`** (the 4 096 per-file buffer that
+   `AREA_MAX_PAIRS` guards) and **`EntityIpl = unlimited`** (the 40 slots), with `Buildings = 100000`. It
+   runs **72 914 permanent rows in files of up to 9 627**. So findings 2 and 3 are the STOCK story and the
+   build guards are right to keep enforcing it — but on the install we ship to, **the density target needs
+   no ceiling lifted at all**, and the limiter is memory and frame time. The one ceiling no adjuster touches
+   is int16, which `perfect-map.asi` already carries there at 2.23× the limit.
 
 ## Priorities
 
