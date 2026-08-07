@@ -25,7 +25,9 @@
 - Use TypeScript strict mode
 - Avoid `any`
 - Prefer explicit types for public APIs
-- Prefer `type` over `interface`
+- An OBJECT SHAPE is an `interface`, not a `type` — `@typescript-eslint/consistent-type-definitions` is on
+  and rejects `type Foo = { … }` with *"Use an `interface` instead of a `type`"*. `type` stays for what an
+  interface cannot say: unions, intersections, mapped/conditional types, aliases of primitives and tuples
 - Use discriminated unions when appropriate
 - Prefer readonly where possible
 - Avoid unnecessary generics
