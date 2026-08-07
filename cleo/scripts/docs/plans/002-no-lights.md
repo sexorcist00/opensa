@@ -218,3 +218,26 @@ repo.
 above are VM-side and live in this ledger; no frame-time measurement was taken because the script's cost
 sits far below the noise floor of the standard bench scene, so a `docs/benchmarks/` row would be noise
 rather than evidence.
+
+### Step 4 — the conformance guard the field verdict was standing in for (2026-08-07, user's call)
+
+The real-CLEO half rested on one claim — "our artifact emits the original's call shape byte-for-byte" —
+and that claim was asserted by nothing but me reading two disassembly listings side by side. It is now a
+test, and the ARGUMENT ORDER is the reason it earns its place: CLEO pushes a native call's arguments in
+reverse, so `(status, light)` in the listing is `SetLightStatus(light, status)` in C. Plan 001 shipped a
+VM that had exactly this backwards and the whole suite stayed green.
+
+- **The original is COMMITTED** at `tests/custom/cleo/no_lights.cs` (sha1 `d288e508…`), read through the
+  manifest's `committed` fixture type into `tests/original/cleo/nolights.cs`. Sourced from the mod folder
+  it would sit in `cleo-skipped/` — a folder this very plan contemplated renaming — and a corpus subject
+  may not depend on a folder that can be edited under it (001's fixture accident, one step earlier).
+- **`cleo/scripts/no-lights/conformance.test.ts`** compares OUR `0AA6` operands against the original's:
+  the address, the parameter count/pop and both arguments in order, skipping only the `this` var (`4@`
+  there, `1@` here — allocation, not shape). **Verified to bite:** listing the arguments the other way
+  round fails 3 tests (2 here + the story test's order assertion).
+- **The corpus absorbed it for free**, which is the part worth having: `corpus-reencode` now round-trips
+  `nolights.cs` byte-identically over its code region, `corpus-coverage`'s two joins found no undeclared
+  opcode or atlas gap, and the disasm listing is committed at `tests/custom/cleo-listings/nolights.txt`
+  as the review surface for every claim the step-2 table makes about the original.
+
+Corpus subjects: 7 → 8 (`docs/features/cleo.md` updated in the same change).

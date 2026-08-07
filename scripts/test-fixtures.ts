@@ -108,6 +108,12 @@ const CLEO_MANIFEST: readonly Fixture[] = [
   // sourcing it from a mod folder that can be edited under us is what made this fixture report
   // MISSING while a stale local copy kept the corpus tests green.
   { dest: `${OUT}/cleo/rhino.cs`, from: 'tests/custom/cleo/rhino.cs', type: 'committed' },
+  // The hotring's original light-killer (plan `cleo/scripts` 002). COMMITTED for the same reason as
+  // the rhino's, one step earlier: it ships in the mod's `cleo-skipped/` folder — a folder whose name
+  // the plan itself contemplated renaming once our replacement landed — so the corpus must not depend
+  // on it still being there under that name. It is also the reference our authored version is
+  // measured and CONFORMANCE-checked against (`cleo/scripts/no-lights/conformance.test.ts`).
+  { dest: `${OUT}/cleo/nolights.cs`, from: 'tests/custom/cleo/no_lights.cs', type: 'committed' },
   // The rhino's MODEL, not a script. A track script is only testable end-to-end against the rig it
   // actually addresses: the original's chain anchor `misc_e` is a dummy the vehicle builder does not
   // emit as a part, which is why it was a silent no-op on our runtime while every headless test on a
