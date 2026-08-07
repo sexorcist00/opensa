@@ -33,6 +33,12 @@ interpret them.
   and the honest headline is that **the script was the small half**: three defects underneath it
   (reversed native-call arguments, a wheel roll the engine never published to scripts, a MARKER wheel
   inflated 23.5×) had to be fixed first, and none was findable from the script side.
+- [`cleo-scripts-chain.md`](./cleo-scripts-chain.md) — the CHAIN's conclusion: **one script shipped, one
+  WITHDRAWN**, and the withdrawal is the more useful result. Authoring against our own VM asked the engine
+  questions nothing else asked and found FOUR live defects, the last of which — lamp anchors invented from
+  the half-extents for any model with no lamp dummy — was the whole reason 002 had anything to smash. The
+  pattern, having recurred three times in two days: **ask what the engine is doing wrong before authoring
+  content that compensates for it.**
 - [`vehicle-effects-089.md`](./vehicle-effects-089.md) — the plan-089 vehicle-effects chain (one day,
   five steps, six field rounds): two new engine capabilities (the dynamic one-shot particle lane and the
   first decal lane), four effects on SA's own assets, one new physics read born of a dead channel
