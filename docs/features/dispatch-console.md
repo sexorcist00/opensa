@@ -100,6 +100,37 @@ GPU, which no phone has.
   board on a 2D canvas with a projected ground grid, and a banner says what is missing. The world is gone;
   the dispatcher's job is not.
 
+## Embedding it
+
+`src/embed.ts` is the library entry: the map surface without the console's own chrome, for a host that
+already HAS a dispatch board and wants the map fed from its own data. `npm run build:embed:dispatch` emits it
+to `dist-embed/` as one ES module (337 kB, 104 kB gzipped) **plus a separate `assets/pak-worker-*.js`, which
+must be served beside it at the path the entry names** — the same trap the single-file build hit, and the
+reason this build does not try to be single-file.
+
+It exports nothing new. `bootDispatch` and `bootPlanMode` are the functions `app.tsx` already calls, so an
+embedding host and this repo's own console run identical code and cannot drift. React is absent from the
+bundle by construction rather than by configuration — the surface is plain DOM and engine, and only the
+chrome is React, so a React import appearing in `dist-embed` means chrome has leaked into the surface.
+
+**A host owns its own URL**, so the surface must not read it: configuration goes through
+`window.__opensaDispatch` (see `dispatchParams`). That channel already existed for opaque-origin pages on a
+phone; an embedding host is its second, and less exotic, user.
+
+**Worlds are HTTP, and that is the whole point.** `resolvePakBase` probes `manifest.json` over `fetch` and
+accepts an absolute URL, so a hosted pak needs no local game files, no folder picker and no File System
+Access prompt — a user opens the page and the world streams. The folder picker belongs to `sa-map-viewer`,
+which is a different app answering a different question. Two costs are attached and neither is a bug: the
+reference pak is **1.27 GB at 1137 cells** (streamed, so a session pays for the cells it visits, cached per
+build version), and a stock pak is BC throughout, so **a hosted world is desktop-only** until
+[plan 097 / chain 2](../plans/097-platform-reach/2-universal-textures/readme.md) lands — `--rgba8` is the
+interim, at 4–8× texture memory.
+
+`MapCamera.applyPose` exists for hosts: every other camera step is relative, which is right for input and
+wrong for a host that has a pose in hand — locking a view north-up, or restoring the tilt it left, would
+otherwise mean solving through `orbit` and knowing the camera's private step scale. `pitch` is clamped like
+any other, so a caller may ask for straight down without knowing how far down this camera goes.
+
 ## Clicking
 
 A click resolves against the symbology first (the operator aimed at a chip), then against the world through
@@ -138,6 +169,14 @@ Each now names the step that owns it, so none of them is an open-ended note.
 ## Verification
 
 - `apps/dispatch/src/ops/sim.test.ts`, `src/map/coords.test.ts` — the board and the coordinate conversion.
+- `apps/dispatch/src/map/map-camera.test.ts` — `applyPose`: that it is what the constructor does (so a fresh
+  camera and an applied pose agree), that it round-trips a saved pose, and that it answers its own bound to
+  anything past it — the test that pinned `TOP_DOWN_PITCH` at a hundredth of a radian short of vertical
+  rather than at vertical, which is what a host asking for "straight down" actually receives.
+- The embed build, 2026-08-07: `dist-embed/dispatch.js` emits all five exports, carries **no React**, names
+  its `pak-worker-*.js` chunk, and imports cleanly in a bare Node runtime — so the module has no top-level
+  browser dependency. **Not verified: the embedded surface has never been rendered by a host** — that needs a
+  GPU, and the artifact's first real consumer is outside this repo.
 - `packages/engine/src/core/ostex-upload.test.ts` — both directions of the BC rule: a BC payload is refused by
   name on a GPU without BC (and no texture is created), an RGBA8 one uploads.
 - `packages/cell-weld/src/textures.rgba8.test.ts` — both directions of `--rgba8`, on a SYNTHETIC DXT1

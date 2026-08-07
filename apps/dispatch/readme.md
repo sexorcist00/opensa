@@ -32,6 +32,24 @@ the shared config→`Environment` driver, so no ECS, no Rapier, no peds, no vehi
 Camera rig steps come from `@opensa/web/ui/camera/*`, the demo city's fixture from
 `@opensa/engine-lab/synthetic`.
 
+## Embedding the map elsewhere
+
+```bash
+npm run build:embed:dispatch   # → dist-embed/dispatch.js + assets/pak-worker-*.js
+```
+
+`src/embed.ts` exports the surface without this app's chrome, for a host with its own dispatch board:
+
+```ts
+const map = await bootDispatch({ canvas, overlay, ops, selection, onClick, onGround, onReadout });
+map.camera.applyPose({ at: [1700, -1500], height: 900, pitch: -Math.PI / 2, yaw: MAP_YAW }); // north-up plan view
+```
+
+Serve the worker chunk beside the entry, configure through `window.__opensaDispatch` rather than the address
+bar (the host owns the URL), and point `src=` at an absolute URL to stream a hosted pak — no local game
+files, no folder picker. Details and the costs:
+[docs/features/dispatch-console.md](../../docs/features/dispatch-console.md#embedding-it).
+
 ## Design notes
 
 Two things are worth knowing before changing anything here:

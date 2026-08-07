@@ -70,6 +70,7 @@
     "arch": "tsx scripts/arch-graph.ts",
     "arch:render": "tsx scripts/arch-graph.ts --svg docs/architecture/assets/packages.svg && tsx scripts/arch-graph.ts --layers app,engine --svg docs/architecture/assets/runtime-packages.svg && tsx scripts/arch-graph.ts --render docs/architecture",
     "build": "tsc -b && vite build",
+    "build:embed:dispatch": "vite build --config apps/dispatch/vite.lib.config.ts",
     "build:game:anderius:opensa": "NODE_OPTIONS=--max-old-space-size=12288 tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/anderius --in ./mods-src/anderius --out ./build/anderius --exclude sa && tsx tools/fetch-pack/src/cli.ts --build ./build/anderius",
     "build:game:carcer:opensa": "NODE_OPTIONS=--max-old-space-size=12288 tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/carcer --in ./mods-src/carcer --out ./build/carcer --exclude sa && tsx tools/fetch-pack/src/cli.ts --build ./build/carcer",
     "build:game:gostown:opensa": "NODE_OPTIONS=--max-old-space-size=12288 tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/gostown --in ./mods-src/gostown --out ./build/gostown --exclude sa && tsx tools/fetch-pack/src/cli.ts --build ./build/gostown",

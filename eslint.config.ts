@@ -316,6 +316,7 @@ const disableDefaultExportBlockingForStorybook = {
     '**/playwright*.config.ts',
     '**/.storybook/**',
     '**/vite.config.ts',
+    '**/vite.*.config.ts',
     '**/vitest.config.ts',
     '**/eslint.config.ts',
   ],

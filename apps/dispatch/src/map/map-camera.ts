@@ -51,13 +51,28 @@ const MIN_DISTANCE = 30;
 const NEAR = 0.5;
 
 export class MapCamera {
-  private distance: number;
+  private distance!: number;
   /** The looked-at ground point, ENGINE coords. */
-  private focus: [number, number, number];
-  private pitch: number;
-  private yaw: number;
+  private focus!: [number, number, number];
+  private pitch!: number;
+  private yaw!: number;
 
   constructor(pose: MapPose) {
+    this.applyPose(pose);
+  }
+
+  /**
+   * Put the camera at a pose outright, the way the constructor does.
+   *
+   * Every other step here is RELATIVE — a drag, a notch, a pinch — which is right for input and wrong for a
+   * host that has a pose in hand: a caller wanting a known tilt would otherwise have to solve for it through
+   * `orbit`, which means knowing this camera's private step scale. A dispatch console locking its view
+   * north-up needs exactly that, and so does restoring the tilt it left.
+   *
+   * `pitch` is clamped like any other pitch, so a caller may ask for straight down without knowing how far
+   * down this camera goes.
+   */
+  applyPose(pose: MapPose): void {
     this.focus = gtaToEngine(pose.at);
     this.pitch = clampPitch(pose.pitch);
     this.yaw = pose.yaw;

@@ -60,6 +60,7 @@ spawn it by name to look at it ([plan 006](../tools/vehicle-installer/docs/plans
 npm run dev                 # Vite dev server → http://localhost:5173
 npm run serve:static        # static origin :3001 — mounts /build + /game-src (Range + /__index), static/ archives
 npm run phone               # the whole phone run in ONE command (convert if needed → check the pak → serve → print the URL)
+npm run build:embed:dispatch # → dist-embed/ — the dispatch MAP as one ES module, for an external host
 ```
 
 `npm run phone` (`scripts/phone.sh`, plan 097 chain 4) is the field-run ritual for a device, written so the
@@ -94,6 +95,7 @@ vite is not started at all — which is the only way in on a device whose rolldo
 | dispatch: a PHONE pak    | `npx tsx tools/opensa-pack/src/cli.ts --game ./game-src/original --out ./build/district --rgba8 --max-texture 256 --rect 8,-8,11,-5 --no-ao --no-models` → serve it and open `dispatch.html?src=build/district&at=2495,-1687`. `--rgba8` is what makes the pak loadable on a GPU without BC (every mobile one); `--max-texture N` takes back three quarters of its 4-8x cost; `--rect` keeps the rest affordable. Full recipe, including building on the phone in Termux: [development/mobile-pak.md](./development/mobile-pak.md). Cells are `floor(worldXY / 250)` and **Los Santos sits at NEGATIVE GTA y** — `8,-8,11,-5` is x 2000…3000, y −2000…−1250 (Ganton/Idlewood); the whole of LS is about `1,-10,11,-3` |
 | dispatch: a pose         | `…&at=1700,-1500&h=900&pitch=-66&yaw=180` (GTA x,y · height · degrees) — same convention as sa-map-viewer |
 | dispatch: world knobs    | `&src=<built game>` · `&hd=450&lod=2200` streaming rings · `&hour=10` · `&weather=0` · `&fogscale=2.5` · `&fog=1` restores the game's fog (off by default, or a city view culls every cell) |
+| dispatch: embedded       | `npm run build:embed:dispatch` → `dist-embed/dispatch.js` **plus `assets/pak-worker-*.js`, which must be served beside it at the path the entry names**. A host imports the module, calls `bootDispatch` / `bootPlanMode`, and configures it through `window.__opensaDispatch` — NOT the address bar, which belongs to the host. `&src=` accepts an absolute URL, so a hosted pak needs no local game files: [features/dispatch-console.md](./features/dispatch-console.md#embedding-it) |
 
 Full query-param reference: [development/query-parameters.md](./development/query-parameters.md).
 
