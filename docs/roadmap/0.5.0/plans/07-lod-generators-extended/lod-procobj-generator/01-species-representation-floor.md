@@ -1,7 +1,7 @@
-# B4 — Every species survives the cap (no silently missing type)
+# 01 — Every species survives the cap (no silently missing type)
 
 Part of [07 — LOD generators, extended](../readme.md), Part B. Independent of the ASI question
-([B0](b0-limit-lift-need-review.md)) and of raised density ([B1](b1-procobj-density-model.md)) — this is a
+([00](00-limit-route-review.md)) and of raised density ([02](02-density-model.md)) — this is a
 FAIRNESS defect in how the caps choose survivors, and it is worth fixing at today's density.
 
 **The ask:** a section allows 300 objects and three species are eligible there. All three must appear. Not
@@ -14,7 +14,7 @@ Both cap sites select survivors the same way: pool every candidate, sort by `lot
 1. **Build-time, global** (`tools/map-placement/src/procobj/convert.ts`):
 
    ```ts
-   const vanilla = batch.placements.filter((p) => p.lottery < 1);   // vanilla cutoff (B1 makes it configurable)
+   const vanilla = batch.placements.filter((p) => p.lottery < 1);   // vanilla cutoff (02 makes it configurable)
    …
    placed.sort((a, b) => a.placement.lottery - b.placement.lottery);
    const final = placed.slice(0, procObjMax);                        // ONE global cut, procObjMax = 20 000
@@ -34,7 +34,7 @@ Nothing today detects this: the caps are silent, and a missing species looks lik
 no cacti. `cullByMinDistance` runs per species and cannot help — it thins within a species, before the
 cross-species cut.
 
-This is also why the fix belongs here and not inside B1: raising density does not remove the bias, it just
+This is also why the fix belongs here and not inside 02: raising density does not remove the bias, it just
 moves which species falls off the end.
 
 ## Decisions (to settle during the plan)

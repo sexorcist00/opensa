@@ -1,24 +1,24 @@
-# B3 — Budget lift & integration (post-asi)
+# 04 — Budget lift & integration (post-asi)
 
-> **PREMISE UNDER REVIEW — do not start this plan before [B0](b0-limit-lift-need-review.md) closes.**
+> **PREMISE UNDER REVIEW — do not start this plan before [00](00-limit-route-review.md) closes.**
 > Everything below is written as "gated on our own ASI (Task 3)". Measured 2026-07-28, the build sits at
 > 25 461/32 767 text rows but **37/40 IPL slots** — the constraint that actually binds is the 40-slot
 > `IplEntityIndexArrays` limit, which our ASI does **not** lift (fixes #2/#3 are unbuilt) and which FLA
-> does. If B0 concludes the slot lift is what density needs, this plan's target-gating, its guard and its
+> does. If 00 concludes the slot lift is what density needs, this plan's target-gating, its guard and its
 > "requires the asi" fallback all change shape.
 
-Part of [07 — LOD generators, extended](../readme.md), Part B. Depends on [B1](b1-procobj-density-model.md)/[B2](b2-biome-zone-density.md) (the density model) AND **Task 3** ([03-asi Phase 1](../../../../../../asi/perfect-map/docs/plans/readme.md): the int16 limit lift) + [03-asi/006](../../../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md) (the stock-vs-opensa-asi target modes). Delivers the actual "MORE objects" — raising the int16-era caps now that the engine no longer corrupts past them.
+Part of [07 — LOD generators, extended](../readme.md), Part B. Depends on [02](02-density-model.md)/[03](03-biome-zone-density.md) (the density model) AND **Task 3** ([03-asi Phase 1](../../../../../../asi/perfect-map/docs/plans/readme.md): the int16 limit lift) + [03-asi/006](../../../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md) (the stock-vs-opensa-asi target modes). Delivers the actual "MORE objects" — raising the int16-era caps now that the engine no longer corrupts past them.
 
 ## Context
 
-Raised density (B1/B2) is capped today by budgets that exist ONLY because of the int16 `IplDef` bug (from the grounding):
+Raised density (02/03) is capped today by budgets that exist ONLY because of the int16 `IplDef` bug (from the grounding):
 
 - `AREA_MAX_PAIRS = 2000` (4000 rows/area) + `STREAM_MAX_INST = 512` (`streamed-areas.ts`);
 - `procObjMax = 20000` (`config.ts` / `convert.ts`);
 - `TEXT_ROW_CAP = 30000` global (`pipeline.ts` `checkTextIplSlotBudget`);
 - `PROC_OBJ_MAX_DENSITY = 3` candidate ceiling (`procobj-scatter.ts`).
 
-With Task 3's asi these int16/array ceilings are lifted (03-asi/006 already added the target modes + relaxed `checkTextIplSlotBudget`). B3 raises the procobj-side caps for the **opensa-asi target** so B1/B2's density actually SHIPS, and re-establishes the NEW real limiter: **runtime performance** (draw calls, streaming, frame budget), not int16.
+With Task 3's asi these int16/array ceilings are lifted (03-asi/006 already added the target modes + relaxed `checkTextIplSlotBudget`). 04 raises the procobj-side caps for the **opensa-asi target** so 02/03's density actually SHIPS, and re-establishes the NEW real limiter: **runtime performance** (draw calls, streaming, frame budget), not int16.
 
 ## Decisions
 
@@ -33,7 +33,7 @@ With Task 3's asi these int16/array ceilings are lifted (03-asi/006 already adde
 - [ ] Target-gate the procobj caps (`AREA_MAX_PAIRS`, `STREAM_MAX_INST`, `procObjMax`, density ceiling): stock = today, opensa-asi = raised; wire to the same target flag 03-asi/006 introduced.
 - [ ] Perf/streaming budget calibration: measure (plan-063 perf HUD + streaming settle-watcher) how many procobj a dense area can stream without hitching; set the opensa-asi caps from the measurement. Record the numbers.
 - [ ] New budget guard for the asi target (per-area/per-cell streamable-object ceiling) replacing the int16 row guard; tests both modes (mirrors `checkImgIdBudgets`/`checkTextIplSlotBudget` test style).
-- [ ] End-to-end: build a high-density full map (B1/B2 profiles, opensa-asi target), install with the Task-3 asi, in-game (Wine) → denser forests/desert/mountains, no ghost-barrier/int16 corruption, streaming stays smooth. Record counts + fps + hitch stats.
+- [ ] End-to-end: build a high-density full map (02/03 profiles, opensa-asi target), install with the Task-3 asi, in-game (Wine) → denser forests/desert/mountains, no ghost-barrier/int16 corruption, streaming stays smooth. Record counts + fps + hitch stats.
 - [ ] Stock-target regression: caps unchanged, build still int16-safe (fails past 30k as today).
 - [ ] Docs/memory: update the procobj plans (007 binary streams), ghost-barriers cross-ref (the density this unlocks), and the opensa-procobj-decimation memory (density knobs + new asi-target ceilings).
 

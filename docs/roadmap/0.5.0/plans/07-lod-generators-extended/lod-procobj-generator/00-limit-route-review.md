@@ -1,11 +1,11 @@
-# B0 — Do we need our own limit lift at all? (FLA/OLA vs perfect-map ASI)
+# 00 — Do we need our own limit lift at all? (FLA/OLA vs perfect-map ASI)
 
 Part of [07 — LOD generators, extended](../readme.md), Part B. **A go/no-go review, not an implementation
-plan.** It runs BEFORE [B3](b3-budget-lift-integration.md), because B3 assumes the answer — it is written as
+plan.** It runs BEFORE [04](04-slot-economy-and-budgets.md), because 04 assumes the answer — it is written as
 "gated on Task 3, our own ASI" — and that assumption has never been argued against the alternative the user
 raises: **a real SA install will definitely have FLA and OLA anyway.**
 
-Nothing here should be built until this review closes. Its output is a decision, and B3's premise is what
+Nothing here should be built until this review closes. Its output is a decision, and 04's premise is what
 changes if the decision goes the other way.
 
 ## The question
@@ -18,7 +18,7 @@ Three ways to place more procobj than vanilla limits allow:
 | 2 | Depend on **FLA + OLA** (user-installed limit adjusters, present on any modded install) | zero engineering for us; a hard external dependency |
 | 3 | Our own **`asi/perfect-map`** | we own it; fix #1 done, #2/#3 (`004b`) not |
 
-B3 currently assumes 3. The user's point is that 2 is free. So: what does each route actually buy?
+04 currently assumes 3. The user's point is that 2 is free. So: what does each route actually buy?
 
 ## Measured starting state (2026-07-28, `build/original/sa`)
 
@@ -67,7 +67,7 @@ Read together with the measurement, that is close to an answer:
 ## What to decide
 
 1. **Does raising density need the int16 lift at all, or only the slot lift?** Estimate the row and slot
-   cost of the B1/B2 density profiles first. If more density mostly adds BINARY instances (which cost no
+   cost of the 02/03 density profiles first. If more density mostly adds BINARY instances (which cost no
    text rows) and a handful of areas, the answer is "slots only" — and our ASI is not on the critical path
    for 0.5.0 density at all.
 2. **Is an external dependency acceptable for the shipped product?** FLA is free but it is the user's to
@@ -78,20 +78,20 @@ Read together with the measurement, that is close to an answer:
    already folds mod IPLs and stock inst-blocks into host IPLs (`ipl-slot-merge.ts`) to save slots. Could
    the generated areas be folded the same way — fewer, larger `plobj` files — trading against the 4 096
    per-area boot ceiling? **This may buy the needed headroom with no ASI and no FLA at all**, and it is
-   the option neither B3 nor the ASI chain currently considers.
+   the option neither 04 nor the ASI chain currently considers.
 4. **What does the stock target promise?** Today it is "runs on unmodded SA 1.0". If density ships gated
    on FLA, that promise needs restating.
 
 ## Tasks
 
-- [ ] Cost the B1/B2 density profiles in ROWS and SLOTS (not just object counts) — the number that decides
+- [ ] Cost the 02/03 density profiles in ROWS and SLOTS (not just object counts) — the number that decides
       whether the int16 lift is on the critical path.
 - [ ] Test option 3 (fold generated areas into fewer files): how many slots does it free, and does any area
       then breach `gpLoadedBuildings` 4 096 at boot? Measure, do not reason.
 - [ ] Verify the FLA claim on a real install: does `[IPL] Entity index array` actually lift the 40-slot
       ceiling, and does it coexist with whatever else the target install runs? The repro dial
       (`tools-debug/sa-int16-repro`) is the harness; extend it with a SLOT dial if it only counts rows.
-- [ ] Write the decision into this file, then amend [B3](b3-budget-lift-integration.md) to match — B3's
+- [ ] Write the decision into this file, then amend [04](04-slot-economy-and-budgets.md) to match — 04's
       "gated on Task 3" framing is only correct if the answer to question 1 is "we need the int16 lift".
 - [ ] If the answer is "FLA is enough", state plainly what that costs the stock-target promise, and whether
       `asi/perfect-map` `004b` still deserves the effort.
