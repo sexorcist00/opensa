@@ -18,7 +18,7 @@ remains the engine half of plan 002, not an alternative to it). The superseded s
 | #   | Plan                                    | Delivers                                                                                                                                      | Status  |
 | --- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | 1   | [001 — rhino tracks](001-rhino-tracks.md) | authored track script: `0AE2` walk, per-link loop, frames addressed BY NAME (`track_1`…`track_12`) — bypassing the sibling-order hack; both-runtime field proof | CLOSED - both runtimes field-proven |
-| 2   | [002 — no_lights](002-no-lights.md)     | authored hotring light-killer + the engine half that makes it visible on OpenSA (atlas row for `SetLightStatus`, smashed-lamp state in vehicle-lamps) | planned |
+| 2   | [002 — no_lights](002-no-lights.md)     | authored hotring light-killer + the engine half that makes it visible on OpenSA (atlas row for `SetLightStatus`, smashed-lamp state in vehicle-lamps) | SHIPPED - OpenSA field-PASSED; real-CLEO Wine verdict outstanding |
 
 001 first: it exercises the SDK loop/name-lookup surface 002 reuses. It was planned as "script-only,
 zero engine changes" and that assumption did not survive the field — writing the script was the

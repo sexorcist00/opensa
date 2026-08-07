@@ -37,7 +37,9 @@ checkpoint: a night hotring is dark on both runtimes.
 - **Shipping:** same pattern as 001 — the author's `cleo-skipped/no_lights.cs` stays untouched in
   `mods-src/`; our artifact ships via the pak build. The `cleo-skipped/` folder name loses its
   reason once this lands — rename/move is part of the close-out, recorded in the mod-intake docs
-  if a convention shifts.
+  if a convention shifts. **Settled in step 3: no rename.** Our artifact went into a NEW `cleo/`
+  folder beside it and the author's file was left byte-untouched, so no convention shifted and
+  nothing that reads the original could break — see the step-3 ledger.
 
 ## Steps
 
@@ -46,8 +48,9 @@ checkpoint: a night hotring is dark on both runtimes.
       read-back), unit + story coverage on the fake-GPU boot path.
 - [x] Authored script + story test (declared budget; record instr/poll and artifact size vs
       275 B + 19 238 B footer).
-- [ ] Ship via the pak build; field close-out: hotring dark at night in OpenSA (headless screenshot
+- [~] Ship via the pak build; field close-out: hotring dark at night in OpenSA (headless screenshot
       A/B — lamps on a stock car, dark on the hotring) + manual real-CLEO Wine verdict.
+      **Shipped and OpenSA-PASSED 2026-08-07; the real-CLEO Wine verdict is outstanding.**
 
 ## Verification
 
@@ -163,3 +166,55 @@ row), and the two that are NOT are the two an integration test in this folder ca
 A test that restated that glue inside the test file would prove the restatement, not the product — the
 exact failure 001 shipped. Both are the field checkpoint's job, and they are named here so the field run
 knows what it is the only evidence for.
+
+### Step 3 — shipped, and FIELD: PASSED on OpenSA (2026-08-07)
+
+**Shipping is real this time, not a hand-placement.** The author's script sits in the mod's
+`cleo-skipped/` folder, which the installer ignores by design, so there is nothing to substitute — our
+artifact only had to be INSTALLED. It went into a new `cleo/` folder in the mod
+(`mods-src/original/vehicles/hotring …/cleo/no-lights.cs`) and
+`vehicle-installer --rebake original --only hotring` carried it: `vehicle-installer: cleo →
+cleo/no-lights.cs`. **The chain's (d) criterion holds for 002** — the one 001 had waived — and a pmb
+rebuild no longer reverts anything.
+
+Two things done deliberately here, both learned from 001:
+
+- `cleo-skipped/no_lights.cs` is left BYTE-UNTOUCHED. 001 shipped by replacing the author's file inside
+  `mods-src/` and silently took a corpus fixture with it; adding a folder beside it cannot.
+- The verdict below was taken against the REBAKED build, not the hand-placed copy — the 001 field round
+  that tested the author's artifact cost a whole round-trip and a wrong attribution.
+
+**The A/B, four headless runs, same spot / same hour / same script set** (`warnings.js`, captures in the
+session; depot courtyard `?spawn=1797,-1918,14`, car at `y−5`, `?parked=0&hour=23&autoseat=1`, SEATED
+confirmed on the HUD in every one):
+
+| Run | Car | CLEO | Result |
+| --- | --- | --- | --- |
+| A | hotring | on | **dark** — no headlight pool on the asphalt, no tail glow |
+| B | admiral | on | both tail lamps glow red, a clear beam pool ahead of the car |
+| C | **hotring** | **off** | **pool ahead AND a red tail glow — the model's lamps work** |
+| D | hotring | on, REBAKED build | identical to A |
+
+**C is the run that makes this evidence rather than a screenshot.** A and B differ by the model, so on
+their own they cannot separate "our script killed the lamps" from "this mod's model has no lamps at all" —
+the magnitude-vs-suspect trap from 001, where three confident attributions were wrong. Same model, same
+spot, same hour, only the script toggled: the lamps are there and our script is what puts them out.
+
+`[cleo] 7 script(s): … no-lights.cs …` in every run, and **no atlas miss belongs to us**. The three
+`non-native address` reads (`0x18`, `0xd`, `0x35`) appear identically in A and B — and on the admiral our
+script stops at the model compare and issues nothing — so they cannot be ours; our artifact contains no
+`READ_MEMORY` at all (see the step-2 disassembly). They arrive with `Car Left Door` and its unimplemented
+`0AF0`/`0E43`/`0E4A`, a pre-existing class-C script.
+
+**Still outstanding: the real-CLEO Wine verdict** (the chain's (c) criterion, the user's to give). Our
+artifact emits the `0AA6 CALL_METHOD 7086336 <ptr> 2 0 1 <k>` call shape byte-for-byte, so the comparison
+is direct. If it is ever re-run, note WHICH `.cs` the install carried.
+
+**What the field run is now the ONLY evidence for**, as step 2 predicted: the two-call glue in
+`engine-cleo-setup.ts` and the shader gate. Both are exercised by runs A/C/D and by nothing else in the
+repo.
+
+**No benchmark row, and it is a decision** — the same one 001's audit recorded. The instruction counts
+above are VM-side and live in this ledger; no frame-time measurement was taken because the script's cost
+sits far below the noise floor of the standard bench scene, so a `docs/benchmarks/` row would be noise
+rather than evidence.
