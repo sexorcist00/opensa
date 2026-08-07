@@ -166,7 +166,10 @@ And do not reach for `--ignore-scripts` to get past the husky failure either: es
 binary from a `postinstall`, so silencing scripts trades one break for a worse one. Deleting the one script
 that fails is the surgical fix, and a git hook is meaningless on a phone.
 
-Put the game's `data/` and `models/` under `game-src/original/`, then convert a SMALL area first:
+Put the game's `data/`, `models/` **and `anim/`** under `game-src/original/`, then convert a SMALL area first.
+`anim/` is not optional the moment peds are converted: without `anim/ped.ifp` the pack falls back to the BIND
+POSE and says so (`peds: BIND POSE (no ped.ifp — feet level will be wrong)`), and the player then stands at
+the wrong height — the rest pack fine, so the only symptom is a character that looks planted wrong.
 
 ```bash
 npx tsx tools/opensa-pack/src/cli.ts \
