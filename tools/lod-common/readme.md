@@ -37,8 +37,12 @@ measurements).
 
 - `encode-dff` / `encode-txd` / `encode-col` — RenderWare writers (per-face two-sided masks, material tints,
   night plugin, 2dfx section, 65 535-vertex atomic splits).
-- `clump-effects` — lift a model's raw 2dfx entries with frame transforms applied (byte-verbatim transplant of
-  coronas into LODs; pairs with rw-codec `extract2dfxEntries`/`build2dfxSection`).
+- `clump-effects` — lift a model's raw 2dfx entries, each carried through its geometry's frame by
+  `two-dfx-transform` (pairs with rw-codec `extract2dfxEntries`/`build2dfxSection`).
+- `two-dfx-policy` — the ONE declared carry-policy: which 2dfx types ride onto which LOD target, and why.
+  The living write-up is [`docs/2dfx-policy.md`](./docs/2dfx-policy.md).
+- `two-dfx-transform` — `transform2dfxEntry`: position for an opaque payload, plus orientation for the ones
+  that carry it (a plate's rotation, an escalator's step path). Refuses a scaled or mirrored basis.
 - `prelight` / `normals` — prelit conditioning + smooth-normal rebuild.
 
 **Measurement**

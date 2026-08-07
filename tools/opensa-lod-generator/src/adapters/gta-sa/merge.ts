@@ -5,6 +5,7 @@ import type { ModelSource } from '@opensa/lod-common/model-source';
 import { MeshBuilder, type VertexTransform } from '@opensa/lod-common/build-mesh';
 import { collectClumpEffects } from '@opensa/lod-common/clump-effects';
 import { registerScopedName, type ScopedRegistry } from '@opensa/lod-common/scoped-texture';
+import { transform2dfxEntry } from '@opensa/lod-common/two-dfx-transform';
 
 import type { Cell } from '../../core/types';
 
@@ -39,7 +40,7 @@ export function collectCellLightEffects(
     }
     const transform = instanceTransform(conjugate(instance.rotation), instance.position, origin);
     for (const effect of effects) {
-      out.push({ bytes: effect.bytes, position: transform.point(...effect.position) });
+      out.push(transform2dfxEntry(effect, transform));
     }
   }
 
