@@ -125,6 +125,17 @@ Never edit generated code manually.
 
 ## Standing Workflow Rules
 
+- **`main` IS THE ONLY BRANCH THAT SURVIVES. Work lands there, and the branch that carried it is DELETED —
+  local and remote — in the same session.** A finished branch left on the remote is not a backup, it is a
+  decoy: five of them accumulated once, and answering "is anything lost?" cost a full session of archaeology.
+  Merge, verify, then `git push origin --delete <branch>` and `git branch -d <branch>`.
+  **When checking whether a branch is already in `main`, compare CONTENT, never commits.** `git cherry`,
+  `git log main..branch` and the merge-base all compare patch-ids, and a rebase changes every one of them —
+  they will report a dozen "missing" commits that are already in `main`, and hide the one that genuinely is
+  not. This is SILENT: it fails by making you re-land work that is present, or by declaring a branch clean
+  while a file on it exists nowhere else. Diff the file blobs (`git cat-file -e main:<path>` for existence,
+  blob hashes for content), and check the DIRECTION before merging anything — `main` is usually the newer
+  side, and the branch is a stale ancestor whose "missing" work would be a regression if replayed.
 - **THE DEVELOPMENT MACHINE IS AN ANDROID PHONE RUNNING TERMUX.** Every command handed over is run there, so
   write commands for that environment or they waste the user's time: no `sudo`, `pkg` rather than `apt`,
   paths under `$PREFIX`, and a long job needs `termux-wake-lock` or Android suspends it. The user **has the
