@@ -21,6 +21,12 @@ and no dev server.
 
 ## Rebuild it
 
+**Anywhere except the phone.** `npm run build` is `tsc -b && vite build`, so refreshing this archive on the
+device it exists for is a contradiction: vite is the thing that cannot run there. It looks like a hang rather
+than an error — `tsc -b` over the monorepo grinds for minutes on phone-scale RAM, and rolldown's SIGILL kills
+the process without printing a line. Build it on a machine that can, commit the archive, and let the phone
+`git pull`.
+
 ```bash
 npm run build -- --base=./
 tar -czf prebuilt/opensa-webapp.tar.gz -C dist .
