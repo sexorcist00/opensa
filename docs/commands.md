@@ -59,9 +59,16 @@ spawn it by name to look at it ([plan 006](../tools/vehicle-installer/docs/plans
 ```bash
 npm run dev                 # Vite dev server → http://localhost:5173
 npm run serve:static        # static origin :3001 — mounts /build + /game-src (Range + /__index), static/ archives
+npm run phone:setup         # ONCE per device: deps, tsx, the prebuilt app, and what is still missing
 npm run phone               # the whole phone run in ONE command (convert if needed → check the pak → serve → print the URL)
 npm run build:embed:dispatch # → dist-embed/ — the dispatch MAP as one ES module, for an external host
 ```
+
+**Two commands is the whole phone workflow**: `npm run phone:setup` once, then `npm run phone` for every run
+after. Setup is idempotent — re-running it after a failure, a pulled commit or a reboot costs seconds and
+repeats nothing — and it installs only; the pak is `npm run phone`'s business because that is the expensive
+half. It uses `HUSKY=0` rather than editing `package.json` to get past the `prepare` hook, so the worktree
+stays clean on the one machine where `git status` is hardest to read.
 
 `npm run phone` (`scripts/phone.sh`, plan 097 chain 4) is the field-run ritual for a device, written so the
 command never changes and every knob is an env var: `REBUILD=1` re-converts, `BAKE=0` builds the other side of
@@ -70,7 +77,10 @@ no physics), `VEHICLES=` / `PEDS=` set the model SUBSET (default `admiral,infern
 `all` converts the roster — hours on a phone), `RECT=` / `SPAWN=` / `OUT=` / `GAME=` / `APP_PORT=` /
 `STATIC_PORT=` move the rest. It converts
 only when there is no pak (a phone convert is minutes to hours), prints what the pak actually carries — the
-collision GRID first — and reuses a server that is already up. Ctrl+C (or closing the Termux session) stops
+collision GRID first — and reuses a server that is already up. **When it reuses a pak it first asks that pak
+whether it is the one being requested** (`scripts/debug/pak-recipe.ts` against `report.json`'s `build` block)
+and refuses to serve a mismatch, naming both sides: before that check, `RECT=… npm run phone` over an existing
+pak served the OLD district in silence, because the knobs are read only on the convert branch. Ctrl+C (or closing the Termux session) stops
 the servers it started. A prebuilt app in `build/webapp` (or `WEBAPP=<dir>`) is served as static files and
 vite is not started at all — which is the only way in on a device whose rolldown binding crashes
 ([edge-cases/browser-runtime.md](./edge-cases/browser-runtime.md)). A ready archive is committed:

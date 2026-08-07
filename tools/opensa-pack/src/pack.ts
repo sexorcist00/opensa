@@ -21,6 +21,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { rewriteModelArchives } from './archive-edit';
+import { buildRecipe, readGitCommit } from './build-recipe';
 import { convertDistrict } from './convert';
 import { openGameDir } from './game-fs';
 import { WaterHeightGrid } from './height-grid';
@@ -213,13 +214,28 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
 
   // Convert the by-name assets INTO the copied archives — `<model>.dff`/`<txd>.txd` out, `<model>.osm` in.
   const written = packed ? rewriteOptimizedArchives(outDir, bundles, packed, log) : null;
+  // What this pak IS, beside what it contains: the rect and the flags it was converted with. A phone reuses
+  // a pak for many runs rather than paying minutes-to-hours again, and reuse is only safe when the folder can
+  // be asked what it is — `scripts/phone.sh` reads this back and refuses to serve a pak built for a different
+  // area or a different collision side than the one being asked for.
+  const build = buildRecipe(options, {
+    appVersion,
+    at: manifest.buildTime,
+    commit: readGitCommit(resolve(gameDir)),
+    game: manifest.game,
+  });
   writeFileSync(
     join(products, 'report.json'),
     JSON.stringify(
-      { ...report, platforms: { ...demand, satisfies: targets }, ...(written ? { models: written } : {}) },
+      { ...report, build, platforms: { ...demand, satisfies: targets }, ...(written ? { models: written } : {}) },
       null,
       2,
     ),
+  );
+  log(
+    `build: rect ${build.rect ? build.rect.join(',') : 'auto'} · rgba8=${build.rgba8} · ` +
+      `max-texture=${build.maxTexture || 'none'} · bake-collision=${build.bakeCollision} · ` +
+      `models=${build.models}${build.commit ? ` · ${build.commit}` : ''} — recorded in report.json`,
   );
   printReport(report, started, log);
 

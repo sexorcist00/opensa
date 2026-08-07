@@ -74,13 +74,18 @@ ritual repeated dozens of times on a device with no keyboard, and every step of 
 a step that gets skipped:
 
 ```bash
+npm run phone:setup                             # once per device (deps, tsx, the app)
 npm run phone                                   # first run: converts, then serves
 npm run phone                                   # every run after: servers up, here is the link
-REBUILD=1 npm run phone                         # re-convert
-BAKE=0 OUT=./build/phone-plain npm run phone    # the other side of the collision A/B
+REBUILD=1 npm run phone                         # re-convert into the same folder
+BAKE=0 OUT=./build/phone-plain npm run phone    # the other side of the collision A/B, in its own folder
 MODELS=0 npm run phone                          # skip the model convert (dispatch only — no physics)
-RECT=8,-8,11,-5 SPAWN=2495,-1687,20 npm run phone
+RECT=8,-8,11,-5 OUT=./build/phone-ls npm run phone
 ```
+
+Changing a knob needs a folder of its own (or `REBUILD=1`): a pak already in `OUT` is reused, and since it
+records what it was built from, a request that does not match it is refused rather than silently served —
+see [Build it once, then reuse it](#build-it-once-then-reuse-it--and-know-what-you-are-reusing).
 
 It refuses to start if `game-src/original/data/gta.dat` is missing, and it never re-converts silently — a
 phone convert is minutes to hours. The rest of this page is the same recipe by hand, and the reasons behind
@@ -148,25 +153,43 @@ needs is in this repo, and nothing in the chain compiles native code. The 59 dev
 oxlint, lightningcss) are dev tooling the conversion never touches, and their prebuilt binaries are
 `linux-x64-gnu`, which is why a full `npm install` is the step most likely to complain on an arm64 phone.
 
+**Two commands, and the second one is the only one repeated:**
+
 ```bash
-pkg install nodejs-lts git python
+pkg install nodejs-lts git
 git clone <your fork> && cd opensa
 
-npm pkg delete scripts.prepare       # the repo's `prepare` runs husky, which --omit=dev does not install
-npm install --omit=dev               # 173 packages instead of 1171 — the dev toolchain is never used here
+npm run phone:setup                  # once: deps, tsx, the prebuilt app, and what is still missing
+npm run phone                        # every run: convert if needed → check the pak → serve → print the URL
+```
+
+`npm run phone:setup` (`scripts/phone-setup.sh`) is idempotent: each step checks whether it is already done,
+so re-running it after a failed install, a pulled commit or a reboot costs seconds and repeats nothing. It
+holds a `termux-wake-lock` when Termux offers one — Android suspends a long job the moment the screen goes
+off, and a convert is minutes to hours. It **installs only**; converting is `npm run phone`'s business,
+because that is the expensive half and it must not happen by surprise.
+
+What it does, and the two things it deliberately does NOT do:
+
+```bash
+HUSKY=0 npm install --omit=dev       # 173 packages instead of 1171 — the dev toolchain is never used here
 npm i tsx                            # the TS runner; it is a devDependency, so --omit=dev skipped it
 ```
+
+- **`HUSKY=0` rather than `npm pkg delete scripts.prepare`.** Both get past the `prepare` hook, but deleting
+  the script edits `package.json`, which leaves the worktree dirty on the one machine where `git status` is
+  hardest to read — and that edit eventually gets committed. `HUSKY=0` is husky's own opt-out and touches
+  nothing.
+- **Not `--ignore-scripts`.** esbuild installs its platform binary from a `postinstall`, so silencing scripts
+  trades one break for a worse one.
 
 **Do NOT pass `--omit=optional`.** It looks right — the flaky prebuilt binaries (nx, rolldown, oxlint) are
 optional deps — but npm already filters those by `os`/`cpu`, so an arm64 phone never fetches the `linux-x64`
 ones anyway. What `--omit=optional` *would* skip is `@esbuild/android-arm64`, which is exactly the binary
 `tsx` needs to run a single line of TypeScript.
 
-And do not reach for `--ignore-scripts` to get past the husky failure either: esbuild installs its platform
-binary from a `postinstall`, so silencing scripts trades one break for a worse one. Deleting the one script
-that fails is the surgical fix, and a git hook is meaningless on a phone.
-
-Put the game's `data/` and `models/` under `game-src/original/`, then convert a SMALL area first:
+Put the game's `data/` and `models/` under `game-src/original/`. `npm run phone` converts a small district by
+default (`RECT=9,-7,10,-6`) — the same convert by hand, when the point is to change one flag:
 
 ```bash
 npx tsx tools/opensa-pack/src/cli.ts \
@@ -183,8 +206,9 @@ cd build/district && python3 -m http.server 8080
 
 ### What to expect to go wrong
 
-- **`npm install`** — the arm64/bionic mismatch on dev-tool binaries. `--omit=optional` is the first thing to
-  try; the conversion path does not need any of them.
+- **`npm install`** — the arm64/bionic mismatch on dev-tool binaries. `--omit=dev` is the answer (what
+  `npm run phone:setup` passes); the conversion path needs none of them. **Not `--omit=optional`** — see
+  above, it skips the one binary `tsx` needs.
 - **Memory.** The full-map scripts run with `--max-old-space-size=12288`. A 2x2-cell district needs far less,
   but no number has been measured on a phone — start small and grow.
 - **Disk.** The PC game is ~4.7 GB before the pak.
@@ -197,6 +221,40 @@ GTA:SA for Android stores textures in the OpenGL/PVR Texture Native layout (PVRT
 D3D8/D3D9 only and **skips what it does not understand rather than failing**, so those dictionaries produce a
 world with missing textures rather than an error. The PC files are what the converter reads. See
 [links.md](../links.md).
+
+## Build it once, then reuse it — and know what you are reusing
+
+A convert costs minutes to hours on a phone, so the pak is built once and reused for dozens of runs.
+`npm run phone` already skips the convert whenever `<OUT>/pak/manifest.json` exists; what makes that **safe**
+is that the pak can be asked what it is.
+
+Every pak records the recipe it was built from into its own `report.json`, under `build`: the rect, `--rgba8`,
+`--max-texture`, `--bake-collision`, `--no-ao`, the vehicle/ped subsets, the claimed platforms, the build time
+and the commit. Read it back at any time:
+
+```bash
+npx tsx scripts/debug/pak-recipe.ts build/phone/pak
+```
+
+This exists because the failure it prevents is **silent**. The knobs above are read only on the convert
+branch, so with a pak already in place `RECT=8,-8,11,-5 npm run phone` used to serve the OLD district and say
+nothing — on screen or in the log. The collision A/B is the same trap with higher stakes: its two sides differ
+by one flag and nothing else, and a run attributed to the wrong side is worse than no run. `npm run phone` now
+compares the request against the pak before serving it and stops on a mismatch, naming both sides:
+
+```
+the pak in ./build/phone/pak is not the one being asked for:
+  rect: pak has 9,-7,10,-6, asked for 8,-8,11,-5
+```
+
+Two ways forward, and the script prints both: re-convert into the same folder (`REBUILD=1 npm run phone`), or
+keep both paks and serve the other from its own (`OUT=./build/phone-ls npm run phone`). **Keeping both is
+usually right** — a second district is another convert, and the A/B needs its two folders side by side
+anyway, which is what `BAKE=0 OUT=./build/phone-plain` is for.
+
+A pak built before recipes were recorded has no `build` block. It says so and is still served — an existing
+pak keeps working — but it cannot be verified, and a benchmark row may not cite it without one
+([benchmarks](../benchmarks/readme.md) require the build a run read). `REBUILD=1` makes it self-describing.
 
 ## Why the phone needs no assets of its own
 

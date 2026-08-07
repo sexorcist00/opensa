@@ -104,7 +104,32 @@ if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
     exit 1
   fi
 else
+  # Reuse is the normal case — but only after the pak on disk is asked whether it is the one being requested.
+  # Until this check existed, `RECT=8,-8,11,-5 npm run phone` over an existing pak served the OLD district and
+  # said nothing: the knobs above are read only on the convert branch, so a mismatch was invisible on screen
+  # and in the log. Same for the collision A/B, where the two sides differ by one flag and nothing else.
   say "pak already at $OUT/pak (REBUILD=1 to redo it)"
+  expect=(--expect "rect=$RECT" --expect "bakeCollision=$([ "$BAKE" = 1 ] && echo true || echo false)"
+          --expect "models=$([ "$MODELS" != 0 ] && echo true || echo false)")
+  if [ "$MODELS" != 0 ]; then
+    expect+=(--expect "vehicles=$VEHICLES")
+    if [ "$PEDS" = all ]; then
+      expect+=(--expect "peds=all")
+    else
+      case ",$PEDS," in
+        *",$PLAYER_PED,"*) expect+=(--expect "peds=$PEDS") ;;
+        *) expect+=(--expect "peds=$PLAYER_PED,$PEDS") ;;
+      esac
+    fi
+  fi
+  if ! npx tsx scripts/debug/pak-recipe.ts "$OUT/pak" "${expect[@]}"; then
+    echo >&2
+    echo "nothing was served. Either re-convert into this folder:" >&2
+    echo "  REBUILD=1 npm run phone" >&2
+    echo "or keep both and serve the other one from its own folder:" >&2
+    echo "  OUT=./build/phone-$(date +%H%M) npm run phone" >&2
+    exit 1
+  fi
 fi
 
 # 3 — what the pak actually carries. The first line is the collision GRID: a bake keyed on the render grid
