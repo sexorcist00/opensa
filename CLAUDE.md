@@ -128,7 +128,17 @@ Never edit generated code manually.
 - **`main` IS THE ONLY BRANCH THAT SURVIVES. Work lands there, and the branch that carried it is DELETED —
   local and remote — in the same session.** A finished branch left on the remote is not a backup, it is a
   decoy: five of them accumulated once, and answering "is anything lost?" cost a full session of archaeology.
-  Merge, verify, then `git push origin --delete <branch>` and `git branch -d <branch>`.
+  Merge, verify, delete the local branch (`git branch -d <branch>`) — and then **HAND THE REMOTE DELETION TO
+  THE USER, because the agent cannot do it.** `git push origin --delete` returns `HTTP 403` from the session's
+  token: pushing commits is allowed, deleting a ref is not, and no GitHub MCP tool deletes a branch either.
+  So the last step of any session that merged a branch is to END THE REPLY with the exact command, listing
+  every branch verified as contained — never a vague "you can clean these up":
+
+  ```bash
+  for b in <branch> <branch>; do git push origin --delete "$b"; done && git fetch --prune
+  ```
+
+  Nobody else will notice these; if the reminder is not written, the branches stay forever.
   **When checking whether a branch is already in `main`, compare CONTENT, never commits.** `git cherry`,
   `git log main..branch` and the merge-base all compare patch-ids, and a rebase changes every one of them —
   they will report a dozen "missing" commits that are already in `main`, and hide the one that genuinely is
