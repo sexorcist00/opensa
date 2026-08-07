@@ -50,7 +50,8 @@ checkpoint: a night hotring is dark on both runtimes.
       275 B + 19 238 B footer).
 - [~] Ship via the pak build; field close-out: hotring dark at night in OpenSA (headless screenshot
       A/B — lamps on a stock car, dark on the hotring) + manual real-CLEO Wine verdict.
-      **Shipped and OpenSA-PASSED 2026-08-07; the real-CLEO Wine verdict is outstanding.**
+      **Shipped and OpenSA-PASSED 2026-08-07** — then the SCRIPT WAS WITHDRAWN the same day (step 5);
+      the real-CLEO verdict is moot and was never taken.
 
 ## Verification
 
@@ -241,3 +242,43 @@ VM that had exactly this backwards and the whole suite stayed green.
   as the review surface for every claim the step-2 table makes about the original.
 
 Corpus subjects: 7 → 8 (`docs/features/cleo.md` updated in the same change).
+
+### Step 5 — the script is WITHDRAWN, and why that is the right end (2026-08-07, user's call)
+
+The user's report is what opened it: *"I wanted this script only for the original GTA SA — but it turns
+out it is no longer relevant. In original SA the hotring has no headlights even without this CLEO."*
+Measured rather than accepted (`scripts/debug/lamp-census.ts`):
+
+| | `headlights` | `taillights` | lamp materials |
+| --- | --- | --- | --- |
+| STOCK `hotring` | real | real | **head + tail** |
+| the installed mod (Buick Regal, pav3l) | 0.802, 2.538, −0.059 | **0, 0, 0** | **none of 91 submeshes** |
+
+So the script was NOT pointless when it was written — the stock car it targets authors a full set of
+lamps, and on stock SA it does real work. It is redundant **for the model actually installed**, which
+authors no lamps at all and zeroes its rear dummy. That is a property of the ASSET, and an asset property
+belongs in the engine, not in a per-car script: **plan
+[`098/11 — model-derived lamps`](../../../../docs/plans/098-all-land-vehicles/11-model-derived-lamps.md)**
+replaces it with a rule that reads what every model already carries. The engine was inventing the very
+lamps the script was written to smash.
+
+**Withdrawn:** `cleo/scripts/no-lights/` (script, story test, conformance test), the artifact, and its
+`cleo/` folder in the mod. The author's `cleo-skipped/no_lights.cs` stays byte-untouched, as it always was.
+
+**KEPT, and this is the part that was not wasted:**
+
+- **the engine seam and the atlas rows (steps 1–2).** They are SA data support, not script support: any
+  CLEO mod smashing lights lands on them, and collision damage — which SA drives from its light component
+  group, never from a model id — is the extension they were built for.
+- **the corpus subject.** `tests/custom/cleo/no_lights.cs` stays committed: it is a real Sanny-compiled
+  decode / re-encode / listing subject and its value never depended on us shipping a replacement.
+
+**The lesson, and it is the third time this shape has appeared in two days:** 001 fixed a tank whose
+tracks did not move and found the ENGINE was not publishing wheel roll; 098/09-10 turned two tank symptoms
+into model-derived rules; here a script written to remove lights was replaced by not inventing them. Ask
+what the ENGINE is doing wrong before authoring content that compensates for it. The cost of learning it
+this time was three commits, which is cheap for a rule that fixes 12 stock models nobody had reported.
+
+A caveat that would have bitten the outstanding verdict: the real-CLEO run was to be taken on the user's
+install, which carries several patches. If a patch is what darkens that car, the run would have shown a
+dark hotring whether our script fired or not — a count of zero where the counted thing could not happen.

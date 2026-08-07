@@ -18,7 +18,7 @@ remains the engine half of plan 002, not an alternative to it). The superseded s
 | #   | Plan                                    | Delivers                                                                                                                                      | Status  |
 | --- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | 1   | [001 — rhino tracks](001-rhino-tracks.md) | authored track script: `0AE2` walk, per-link loop, frames addressed BY NAME (`track_1`…`track_12`) — bypassing the sibling-order hack; both-runtime field proof | CLOSED - both runtimes field-proven |
-| 2   | [002 — no_lights](002-no-lights.md)     | authored hotring light-killer + the engine half that makes it visible on OpenSA (atlas row for `SetLightStatus`, smashed-lamp state in vehicle-lamps) | SHIPPED - OpenSA field-PASSED; real-CLEO Wine verdict outstanding |
+| 2   | [002 — no_lights](002-no-lights.md)     | authored hotring light-killer + the engine half that makes it visible on OpenSA (atlas row for `SetLightStatus`, smashed-lamp state in vehicle-lamps) | engine half SHIPPED; the SCRIPT was WITHDRAWN 2026-08-07 - superseded by plan 098/11 |
 
 001 first: it exercises the SDK loop/name-lookup surface 002 reuses. It was planned as "script-only,
 zero engine changes" and that assumption did not survive the field — writing the script was the
@@ -41,6 +41,12 @@ Each authored script: (a) compiles dual-target under the whitelist gate, byte-de
 it replaces (numbers in the plan ledger); (c) field-proven on OpenSA AND under real CLEO on the
 canonical SA 1.0 US exe (Wine, manual verdict); (d) ships in the pak build in place of the
 author's original, with the author's mod files in `mods-src/` left byte-untouched.
+
+**002's script no longer exists**, so the bar below applies to 001 alone. The withdrawal is not a
+failure of the chain's method: the script was correct, measured 19.7x cheaper than the original and
+field-proven — it simply turned out to be treating a symptom the ENGINE should never have produced. The
+reasoning and the numbers are in [002's ledger](002-no-lights.md); the replacement rule is
+[`docs/plans/098-all-land-vehicles/11-model-derived-lamps.md`](../../../docs/plans/098-all-land-vehicles/11-model-derived-lamps.md).
 
 **(d) is waived for 001 (user's call 2026-08-07)** — the artifact is placed by hand and the
 automated substitution is not built. The recipe and what a pmb rebuild does to it are in 001's
