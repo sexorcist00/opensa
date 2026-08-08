@@ -3,7 +3,7 @@ import type { ProcObjPlacement } from '@opensa/renderware/map/procobj-scatter';
 
 import { buildColliders } from '@opensa/renderware/collision/build-colliders';
 import { buildCollisionIndex } from '@opensa/renderware/collision/collision-index';
-import { groupRulesBySurface, scatterProcObjects } from '@opensa/renderware/map/procobj-scatter';
+import { groupRulesBySurface, PROC_OBJ_MAX_DENSITY, scatterProcObjects } from '@opensa/renderware/map/procobj-scatter';
 import { parseProcObj } from '@opensa/renderware/parsers/text/procobj.parser';
 import { parseSurfaceNames } from '@opensa/renderware/parsers/text/surfinfo.parser';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -18,6 +18,15 @@ export interface ProcObjConvertOptions {
   /** Base name for the area IPLs (`data/maps/<areaBase><i>.ipl` + gta.dat lines + `<areaBase><i>_stream<k>.ipl`
    *  IMG entries). Keep it ≤ 10 chars: IMG VER2 caps entry names at 23 bytes — e.g. `plobj`. */
   areaBase: string;
+  /**
+   * Build-time density CUTOFF on the scatter lottery (07/02 task 1, the global half). Every candidate carries
+   * `lottery ∈ [0, PROC_OBJ_MAX_DENSITY)`; keeping `lottery < density` is what picks how many survive, so
+   * **1 is vanilla** and the count scales with this number until MINDIST or `procObjMax` binds instead.
+   *
+   * It is a build INPUT so an A/B can state what it was configured with (the self-describing-capture rule);
+   * the per-category and per-surface axes 07/02 adds sit on top of this one.
+   */
+  density?: number;
   /** `--modloader`: emit `procobj.dat` as **disable rows** (converted species' scatter set to zero, replacing the
    *  stock rule by surface+model on additive merge) instead of a stripped whole file — so the strip survives a
    *  Modloader additive `.dat` merge (which would re-add omitted species from stock). Default (false): strip. */
@@ -75,10 +84,11 @@ export function buildStreamedIpl(
 
 export function convertProcObj(
   options: ProcObjConvertOptions,
-): null | { datLines: string[]; imgFiles: [string, Uint8Array][]; objects: number; rows: number } {
+): null | { datLines: string[]; dropped: number; imgFiles: [string, Uint8Array][]; objects: number; rows: number } {
   const {
     archive,
     areaBase,
+    density = 1,
     disableScatter,
     gamePath,
     heightThreshold,
@@ -88,6 +98,15 @@ export function convertProcObj(
     procObjMax,
     species,
   } = options;
+  // NaN is the dangerous one and it passes BOTH comparisons: `NaN <= 0` and `NaN > 3` are false, and then
+  // every `lottery < NaN` is false too — a silently EMPTY clutter layer from a mistyped flag.
+  if (!Number.isFinite(density) || density <= 0 || density > PROC_OBJ_MAX_DENSITY) {
+    throw new Error(
+      `procobj density must be in (0, ${PROC_OBJ_MAX_DENSITY}]: got ${density}. The scatter only GENERATES ` +
+        `${PROC_OBJ_MAX_DENSITY}× the vanilla candidate count, so a higher cutoff has nothing left to keep — ` +
+        'raise PROC_OBJ_MAX_DENSITY (procobj-scatter.ts) first, which changes the runtime slider range too.',
+    );
+  }
   const procObjText = readFileSync(join(gamePath, 'data', 'procobj.dat'), 'utf8');
 
   // Candidate species: have a LOD, clear the optional height gate, and are not the never-touch underwater set.
@@ -106,7 +125,7 @@ export function convertProcObj(
     minDistByModel.set(rule.model, Math.max(minDistByModel.get(rule.model) ?? 0, rule.minDistance));
   }
 
-  // Scatter (vanilla) over the whole map, then thin per species by MINDIST, then a global lowest-lottery cap.
+  // Scatter over the whole map at `density`, then thin per species by MINDIST, then a global lowest-lottery cap.
   const defs = buildMapDefinitions(gamePath, archive);
   const colliders = buildColliders(buildCollisionIndex(archive), defs, { center: [0, 0, 0], radius: Infinity });
   const surfaceNames = parseSurfaceNames(readFileSync(join(gamePath, 'data', 'surfinfo.dat'), 'utf8'));
@@ -114,8 +133,8 @@ export function convertProcObj(
 
   const placed: { model: string; placement: ProcObjPlacement }[] = [];
   for (const batch of batches) {
-    const vanilla = batch.placements.filter((placement) => placement.lottery < 1);
-    for (const placement of cullByMinDistance(vanilla, minDistByModel.get(batch.model) ?? 0)) {
+    const kept = batch.placements.filter((placement) => placement.lottery < density);
+    for (const placement of cullByMinDistance(kept, minDistByModel.get(batch.model) ?? 0)) {
       placed.push({ model: batch.model, placement });
     }
   }
@@ -140,7 +159,10 @@ export function convertProcObj(
       : stripProcObj(procObjText, (m) => !converted.has(m.toLowerCase())).text,
   );
 
-  return { datLines, imgFiles, objects: final.length, rows };
+  // `dropped` is the honest half of the cap (07/02 decision 7): once `procObjMax` binds, raising density
+  // stops adding objects and starts DISPLACING them, so a measurement that does not state the drop is
+  // measuring the cap and calling it the density.
+  return { datLines, dropped: placed.length - final.length, imgFiles, objects: final.length, rows };
 }
 
 /** Greedy min-distance (XY) cull, spatial-hashed; input is already lottery-sorted so the lowest survive. */

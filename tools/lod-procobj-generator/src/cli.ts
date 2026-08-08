@@ -12,6 +12,8 @@
  *     --draw    LOD draw distance in game units (default from config)
  *     --max     cap on converted procobj objects (0 disables; default from config)
  *     --height  optional min HD height (m) gate, drops short clutter (0 = off; default from config)
+ *     --density scatter density cutoff, 1 = vanilla, max 3 (the scatter's candidate ceiling). The placed
+ *               count scales with it until MINDIST or `--max` binds; the run prints the density it used
  *     --target  the host this layer is built FOR (sa|opensa, default sa) — it names which ceilings the layer's
  *               cost is reported against; pmb passes the whole build's target down (see its `--target`)
  *     --prelight [info]  copy the stock model's trunk prelight onto each LOD (and swapped HD with `--in`); foliage
@@ -64,6 +66,7 @@ function main(): void {
 
   const merged = {
     ...config,
+    density: Number(argValue('--density') ?? config.density),
     drawDistance: Number(argValue('--draw') ?? config.drawDistance),
     procObjHeight: Number(argValue('--height') ?? config.procObjHeight),
     procObjMax: Number(argValue('--max') ?? config.procObjMax),

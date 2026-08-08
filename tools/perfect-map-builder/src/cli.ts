@@ -30,6 +30,11 @@ import { parseBuildTarget } from '@opensa/tool-kit/target';
  *                      shares one common chain and so resolves to `sa`, the host that still has ceilings).
  *                      `--target opensa` without `--exclude sa` is refused: the shared chain cannot carry a
  *                      profile the real game could not run.
+ *     --procobj-density <n>  scatter density cutoff for the procobj stage: 1 = vanilla, max 3 (the scatter's
+ *                      candidate ceiling). The knob 07/04's perf budgets sweep — the run prints the density
+ *                      it built at, so a capture states its own configuration.
+ *     --procobj-max <n>  raise the placed-object safety cap with the density (default 20000). Without it a
+ *                      high-density run measures the CAP — the build prints CAP DROPPED when it binds.
  *     --keep-work      keep the intermediate `.work` builds even on a full run.
  *     --no-<pass>      disable a map-optimizer pass to bisect it: --no-weld-seams | --no-textures.
  *     --allow-text-row-overflow  build past the int16 30k text-row budget (the 03-asi ghost-barriers repro —
@@ -79,6 +84,9 @@ async function main(): Promise<void> {
     throw new Error(`--until must be one of: ${STAGE_NAMES.join(' | ')}`);
   }
 
+  const procobjDensity = numberArg('--procobj-density');
+  const procobjMax = numberArg('--procobj-max');
+
   const optimizerPasses: Partial<OptimizerPasses> = {
     ...(process.argv.includes('--no-textures') ? { textures: false } : {}),
     ...(process.argv.includes('--no-weld-seams') ? { weldSeams: false } : {}),
@@ -86,7 +94,11 @@ async function main(): Promise<void> {
 
   const { produced, stoppedEarly } = await buildPerfectMap({
     allowTextRowOverflow: process.argv.includes('--allow-text-row-overflow'),
-    config: { optimizerPasses },
+    config: {
+      optimizerPasses,
+      ...(procobjDensity !== undefined ? { procobjDensity } : {}),
+      ...(procobjMax !== undefined ? { procobjMax } : {}),
+    },
     exclude: parseExcludedStages(process.argv),
     gamePath,
     inPath,
@@ -100,6 +112,21 @@ async function main(): Promise<void> {
   for (const stage of produced) {
     console.log(`  ${stage.name.padEnd(9)} → ${stage.dir}`);
   }
+}
+
+/** A numeric flag, or undefined when absent. A typo has to fail loudly — `Number('x')` is NaN, and a NaN
+ *  density silently keeps NOTHING (every `lottery < NaN` is false), i.e. an empty layer nobody asked for. */
+function numberArg(flag: string): number | undefined {
+  const raw = argValue(flag);
+  if (raw === undefined) {
+    return undefined;
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    throw new Error(`${flag} must be a number: got '${raw}'`);
+  }
+
+  return value;
 }
 
 main().catch((error: unknown) => {

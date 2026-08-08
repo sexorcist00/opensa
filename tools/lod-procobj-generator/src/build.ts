@@ -212,15 +212,22 @@ export function combinedModelSource(inPath: string, archive: ImgArchive): ModelS
  * for: on `sa` permanent rows are the one ceiling no adjuster lifts (SA truncates building-pool indexes to
  * int16, so past 32,767 map-wide the build depends on `perfect-map.asi`); OpenSA has no such index.
  */
-export function layerCostLine(target: BuildTarget, procObj: null | { objects: number; rows: number }): null | string {
+export function layerCostLine(
+  target: BuildTarget,
+  density: number,
+  procObj: null | { dropped?: number; objects: number; rows: number },
+): null | string {
   if (!procObj) {
     return null; // nothing converted (a TC with no matching species) — there is no price to report
   }
-  const { objects, rows } = procObj;
+  const { dropped = 0, objects, rows } = procObj;
   const perObject = objects > 0 ? (rows / objects).toFixed(3) : '0.000';
 
   return (
-    `procobj cost (target ${target}): ${objects} objects · ${rows} permanent text rows · ${perObject} rows/object` +
+    `procobj cost (target ${target}, density ${density}): ` +
+    `${objects} objects · ${rows} permanent text rows · ${perObject} rows/object` +
+    // A capped run is measuring procObjMax, not the density it says it ran at — so the cap says so itself.
+    (dropped > 0 ? ` · CAP DROPPED ${dropped} (procObjMax binds — raise it or this density is not what shipped)` : '') +
     (target === 'sa'
       ? " — permanent rows spend SA's int16 building-pool budget (perfect-map.asi past 32,767 map-wide)"
       : ' — no SA row ceiling on this target')
@@ -337,6 +344,7 @@ export function run(options: BuildOptions): void {
   const procObj = convertProcObj({
     archive,
     areaBase: AREA_BASE,
+    density: config.density,
     disableScatter: modloader,
     gamePath,
     heightThreshold: config.procObjHeight,
@@ -346,7 +354,7 @@ export function run(options: BuildOptions): void {
     procObjMax: config.procObjMax,
     species: species_,
   });
-  logLayerCost(target, procObj);
+  logLayerCost(target, config.density, procObj);
   // The swapped (prelit) HD DFFs — with `--in`, regardless of mode (the HD carries our prelight; we don't drop it).
   const swapModels = lods.map((lod) => lod.model);
   const swap =
@@ -542,8 +550,8 @@ function loadCustomTextures(txdPath: string): Map<string, SourceTexture> {
 }
 
 /** Print {@link layerCostLine} when there is a price to print. */
-function logLayerCost(target: BuildTarget, procObj: null | { objects: number; rows: number }): void {
-  const line = layerCostLine(target, procObj);
+function logLayerCost(target: BuildTarget, density: number, procObj: null | { objects: number; rows: number }): void {
+  const line = layerCostLine(target, density, procObj);
   if (line !== null) {
     console.log(line);
   }

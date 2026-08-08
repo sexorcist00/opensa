@@ -185,7 +185,11 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     name: 'procobj',
     run: (game, out) =>
       buildProcobjLods({
-        config: { textureSize: config.procobjTex },
+        config: {
+          density: config.procobjDensity,
+          ...(config.procobjMax !== undefined ? { procObjMax: config.procobjMax } : {}),
+          textureSize: config.procobjTex,
+        },
         gamePath: game,
         inPath: source(subfolders.procobj),
         outPath: out,

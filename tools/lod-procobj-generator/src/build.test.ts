@@ -91,28 +91,43 @@ describe.skipIf(!existsSync(WASHER) || !existsSync(BUSH))('combinedModelSource',
 describe('layerCostLine', () => {
   describe('negative cases', () => {
     it('reports no price when nothing was converted (a TC with no matching species)', () => {
-      expect(layerCostLine('sa', null)).toBeNull();
+      expect(layerCostLine('sa', 1, null)).toBeNull();
     });
 
     it('does not divide by zero when the layer placed nothing', () => {
-      expect(layerCostLine('sa', { objects: 0, rows: 0 })).toContain('0.000 rows/object');
+      expect(layerCostLine('sa', 1, { objects: 0, rows: 0 })).toContain('0.000 rows/object');
     });
   });
 
   describe('positive cases', () => {
     it('names the int16 budget the permanent rows are spent on for the sa host', () => {
-      const line = layerCostLine('sa', { objects: 15286, rows: 6487 });
+      const line = layerCostLine('sa', 1, { objects: 15286, rows: 6487 });
 
       expect(line).toContain('15286 objects · 6487 permanent text rows · 0.424 rows/object');
       expect(line).toMatch(/int16/);
     });
 
     it('reports the same price for opensa but no row ceiling with it', () => {
-      const line = layerCostLine('opensa', { objects: 15286, rows: 6487 });
+      const line = layerCostLine('opensa', 1, { objects: 15286, rows: 6487 });
 
       expect(line).toContain('0.424 rows/object');
       expect(line).not.toMatch(/int16/);
       expect(line).toContain('no SA row ceiling');
+    });
+
+    it('states the density it was built at, so a capture is not identified by memory', () => {
+      expect(layerCostLine('opensa', 2.5, { objects: 10, rows: 4 })).toContain('density 2.5');
+    });
+
+    it('says CAP DROPPED when procObjMax bound — a capped run measures the cap, not the density', () => {
+      const line = layerCostLine('opensa', 3, { dropped: 812, objects: 20000, rows: 8000 });
+
+      expect(line).toContain('CAP DROPPED 812');
+      expect(line).toMatch(/procObjMax binds/);
+    });
+
+    it('says nothing about the cap when it did not bind', () => {
+      expect(layerCostLine('opensa', 1, { dropped: 0, objects: 10, rows: 4 })).not.toMatch(/CAP DROPPED/);
     });
   });
 });

@@ -25,8 +25,9 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
 ```
 
 Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|peds|optimize|trees|procobj|sa|opensa|pack|lod>`
-(inclusive, keeps `.work/`) · **`--exclude <stage,stage>`** · **`--target <sa|opensa>`** · `--keep-work` ·
-`--no-weld-seams` · `--no-textures` · `--allow-text-row-overflow`.
+(inclusive, keeps `.work/`) · **`--exclude <stage,stage>`** · **`--target <sa|opensa>`** ·
+`--procobj-density <n>` · `--procobj-max <n>` · `--keep-work` · `--no-weld-seams` · `--no-textures` ·
+`--allow-text-row-overflow`.
 
 `--exclude` says WHICH STAGES run where `--until` is the stop point: it drops the named stages and keeps
 everything after them (repeatable, comma-separated, same names as `--until` minus the `lod` alias; an unknown
@@ -41,6 +42,14 @@ common chain is shared and its content has to satisfy the host that still has ce
 without `--exclude sa` is refused for the same reason. The run prints the target it resolved, and the procobj
 stage prints that layer's price against it (objects · permanent text rows · rows/object).
 NB `--target` means a DIRECTORY in `vehicle-installer --rebake` — same word, unrelated meaning.
+
+`--procobj-density` is the scatter density cutoff for the procobj stage — **1 = vanilla, max 3** (the
+scatter's candidate ceiling; above it there are no candidates left to keep and the build refuses). The run
+prints the density it built at, so a capture states its own configuration. `--procobj-max` raises the placed
+-object safety cap with it; without that a high-density run measures the CAP, and the build says so with a
+`CAP DROPPED n` line. **Measured 2026-08-08: the cutoff is NOT the density lever** — 3× yields +3.6 % objects
+because `cullByMinDistance` culls with the `procobj.dat` MINDIST column, which is a 50–80 m *draw* distance
+([07/02](./roadmap/0.5.0/plans/07-lod-generators-extended/lod-procobj-generator/02-density-model.md)).
 
 The SA ceilings are checked on the built `sa/` tree only (`checkTextIplBudgets` + `checkImgIdBudgets`), so an
 `--exclude sa` run checks neither. Of the two text-IPL ceilings only int16 fails a build; the 39 stock slots
@@ -102,7 +111,8 @@ npx tsx tools/map-optimizer/src/cli.ts --game <dir> --out <dir>
 npx tsx tools/lod-trees-generator/src/cli.ts --in ./mods-src/vegetation --game <dir> --out <dir> \
   --prelight ./mods-src/vegetation/prelight/info.json --tex 512
 
-# Procobj → static IPL + LODs ([--target sa|opensa]: the host the layer's cost is reported against; pmb passes its own)
+# Procobj → static IPL + LODs ([--target sa|opensa]: the host the layer's cost is reported against; pmb passes
+# its own. [--density n]: scatter cutoff, 1 = vanilla, max 3 — the run prints the density + rows/object it built)
 npx tsx tools/lod-procobj-generator/src/cli.ts --in ./mods-src/procobj --game <dir> --out <dir> --prelight --tex 128
 
 # OpenSA cell LODs ([--holes <json>]: hole-fill models merged verbatim past the reduction tracks)

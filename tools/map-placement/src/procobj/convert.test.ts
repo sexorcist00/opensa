@@ -3,7 +3,7 @@ import type { ProcObjPlacement } from '@opensa/renderware/map/procobj-scatter';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { describe, expect, it } from 'vitest';
 
-import { buildStreamedIpl, cullByMinDistance, iplQuaternion } from './convert';
+import { buildStreamedIpl, convertProcObj, cullByMinDistance, iplQuaternion } from './convert';
 
 /** A placement at (x, y) with the given lottery — only the fields the cull reads matter. */
 function place(x: number, y: number, lottery: number): ProcObjPlacement {
@@ -38,6 +38,33 @@ describe('cullByMinDistance', () => {
       const b: ProcObjPlacement = { ...place(0, 0, 1), position: [0, 0, 999] };
 
       expect(cullByMinDistance([a, b], 10)).toHaveLength(1);
+    });
+  });
+});
+
+describe('convertProcObj density', () => {
+  /** Only the fields the density gate reads — it runs before any file is touched, which is the point. */
+  const options = (density: number): Parameters<typeof convertProcObj>[0] =>
+    ({ areaBase: 'plobj', density, gamePath: '/nonexistent', iplName: 'x', outPath: '/nonexistent' }) as never;
+
+  describe('negative cases', () => {
+    it('refuses a cutoff above the scatter candidate ceiling, naming what has to be raised first', () => {
+      expect(() => convertProcObj(options(4))).toThrow(/PROC_OBJ_MAX_DENSITY/);
+      expect(() => convertProcObj(options(3.77))).toThrow(/got 3.77/);
+    });
+
+    it('refuses a non-positive density instead of silently emptying the layer', () => {
+      expect(() => convertProcObj(options(0))).toThrow(/must be in \(0, 3\]/);
+      expect(() => convertProcObj(options(-1))).toThrow(/must be in \(0, 3\]/);
+    });
+
+    it('refuses NaN — it passes both range comparisons and would empty the layer in silence', () => {
+      expect(() => convertProcObj(options(Number.NaN))).toThrow(/must be in \(0, 3\]/);
+      expect(() => convertProcObj(options(Number.POSITIVE_INFINITY))).toThrow(/must be in \(0, 3\]/);
+    });
+
+    it('fails on the file read, not the gate, at the ceiling itself (3 is legal)', () => {
+      expect(() => convertProcObj(options(3))).toThrow(/ENOENT/);
     });
   });
 });

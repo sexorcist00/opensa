@@ -1,5 +1,10 @@
 /** Build knobs for the procobj LOD generator (overridable via CLI flags). */
 export interface ProcObjLodConfig {
+  /** Build-time scatter density CUTOFF — **1 = vanilla**, up to the scatter's candidate ceiling
+   *  (`PROC_OBJ_MAX_DENSITY` = 3; a higher cutoff has no candidates left to keep and is refused). The count
+   *  scales with it until MINDIST or {@link ProcObjLodConfig.procObjMax} binds instead. 07/02 hangs the
+   *  per-category and per-surface axes off this one; 07/04 sets what each target may raise it to. */
+  density: number;
   /** Emitted LOD draw distance (world units) — the visibility gate for the LOD def.
    *  MUST stay BELOW 300: SA classifies defs with drawDistance ≥ 300 (the FLA-configurable "LOD distance")
    *  as big buildings / the LOD layer, and MASS text-IPL instances of such defs overflow that path's
@@ -26,6 +31,7 @@ export interface ProcObjLodConfig {
 
 /** Defaults tuned for medium-distance procobj clutter (bushes, rocks, scrub). */
 export const config: ProcObjLodConfig = {
+  density: 1, // vanilla; every profile 07/02 ships moves this, and every measurement states which one it ran
   drawDistance: 290,
   linkedHeight: 4,
   procObjHeight: 0,

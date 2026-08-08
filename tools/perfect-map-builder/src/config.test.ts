@@ -1,4 +1,5 @@
 import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
+import { config as procobjDefaults } from '@opensa/lod-procobj-generator/config';
 import { config as lodDefaults } from '@opensa/opensa-lod-generator/lod.config';
 import { describe, expect, it } from 'vitest';
 
@@ -12,6 +13,13 @@ describe('builder config invariants (plan 087)', () => {
       // the same floor(pivot / cell), so an object's HD and LOD always share a streaming slot.
       expect(config.lodCellSize).toBe(CELL_SIZE);
       expect(lodDefaults.cellSize).toBe(CELL_SIZE);
+    });
+
+    it('never ships a procobj density other than vanilla by accident (07/04)', () => {
+      // The knob exists for measurement sweeps. A default other than 1 would change what EVERY build
+      // scatters, silently and map-wide — the shipped density is a decision 07/02 has to make explicitly.
+      expect(config.procobjDensity).toBe(1);
+      expect(procobjDefaults.density).toBe(1);
     });
   });
 

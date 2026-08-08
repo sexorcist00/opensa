@@ -4,7 +4,8 @@
   "private": true,
   "description": "Convert GTA-SA procobj scatter species into static IPL instances with simplified-copy (decimated) LODs.",
   "exports": {
-    "./build": "./src/build.ts"
+    "./build": "./src/build.ts",
+    "./config": "./src/config.ts"
   },
   "nx": {
     "tags": [
