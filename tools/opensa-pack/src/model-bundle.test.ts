@@ -100,6 +100,35 @@ describe('createModelBundles', () => {
       expect(bundles.ostexFormats()).toEqual([]);
     });
 
+    it('rewrites every dictionary array through the texture-format pass, skipping shared-dictionary placeholders', async () => {
+      const bundles = createModelBundles();
+      bundles.add('admiral', { sections: [texs(OstexFormat.RGBA8)] });
+      // A map object binds the world's arrays instead of carrying its own — a zero-length placeholder.
+      bundles.add('wall01', {
+        sections: [{ bytes: encodeOsmTextures({ arrays: [new Uint8Array()] }), tag: OsmSectionTag.TEXS }],
+      });
+
+      const rewritten = await bundles.retexture(async (array) => {
+        expect(array.byteLength).toBeGreaterThan(0);
+
+        return Promise.resolve(
+          encodeOstex({
+            format: OstexFormat.ASTC4x4,
+            height: 4,
+            layers: [{ alphaClass: 0, cutoutRef: 0, nameHash: 0, wrap: 0 }],
+            mipCount: 1,
+            payload: new Uint8Array(ostexLayerBytes(OstexFormat.ASTC4x4, 4, 4, 1)),
+            premultiplied: true,
+            width: 4,
+          }),
+        );
+      });
+
+      expect(rewritten).toBe(1);
+      // The platform check reads this AFTER the pass, so it must see the format the archives will carry.
+      expect(bundles.ostexFormats()).toEqual([OstexFormat.ASTC4x4]);
+    });
+
     it('keeps models apart', () => {
       const bundles = createModelBundles();
       bundles.add('a', { sections: [section(OsmSectionTag.GEOM)] });

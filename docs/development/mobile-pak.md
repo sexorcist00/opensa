@@ -2,18 +2,26 @@
 
 A world built from SA assets cannot be displayed on a phone: its textures are BC-compressed and mobile GPUs
 ship ETC2/ASTC instead ([edge-cases/browser-runtime.md](../edge-cases/browser-runtime.md)). Two converter
-flags fix that, and this page is the whole recipe — including the case where the phone is the only computer
-available.
+flags fix that — one picks a format the phone can read, the other keeps the bill down — and this page is the
+whole recipe, including the case where the phone is the only computer available.
 
-## The two flags
+## The flags
 
 | Flag | What it does | What it costs |
 | --- | --- | --- |
-| `--rgba8` | Refuses the DXT passthrough, so every texture is decoded to RGBA8 — a format every GPU reads | **4-8x** the texture memory |
-| `--max-texture N` | Caps every texture edge at N (power of two), halving both axes together so aspect survives | One halving takes back **three quarters** of what `--rgba8` costs |
+| `--textures astc` | Re-encodes every array to ASTC 4x4 — **one byte per texel**, the format this phone actually carries | Build time (the encode) + one generation of loss |
+| `--textures rgba8` (`--rgba8`) | Refuses the DXT passthrough and leaves the pixels uncompressed — a format every GPU reads | **4-8x** the texture memory |
+| `--max-texture N` | Caps every texture edge at N (power of two), halving both axes together so aspect survives | One halving takes back **three quarters** of what the format costs |
 
-They are meant to be used together. `--rgba8` alone makes a district affordable only at a very small `--rect`;
-with `--max-texture 256` the same memory buys roughly sixteen times the area.
+**Prefer `--textures astc`** (since 2026-08-07, plan 097/2-02): it is a quarter of `rgba8` on the same texels
+— measured on a real district, 27.2 MB against 115.4 MB
+([benchmark](../benchmarks/opensa-engine/2026-08-06-headless-district-texture-budget.json)) — and the same
+cost a desktop BC3 pak pays. `rgba8` remains the fallback while ASTC has not been proven on a device, and the
+one build that loads on BOTH a desktop and a phone.
+
+The format flag and `--max-texture` are meant to be used together. `--rgba8` alone makes a district
+affordable only at a very small `--rect`; with `--max-texture 256` the same memory buys roughly sixteen times
+the area. With `--textures astc` the cap becomes a quality dial rather than a survival one.
 
 **Convert a SUBSET of the models** (`--vehicles admiral,infernus,comet --peds bmycg,wmycr`) when the point is
 a field run rather than a complete game: the roster costs minutes on a desktop and hours on a phone, and two
@@ -22,20 +30,21 @@ out keeps its `.dff`/`.txd` and therefore its ORIGINAL (BC) textures, so on a de
 parked car or car generator reaching for one ends the run — `?parked=0&cargen=0`, both halves, since the
 generators are the larger one. The player's ped (`GAME_CONFIG.mainCharacter`, `bmycg`) must be in `--peds`.
 
-**`--rgba8` covers the MODELS too, since 2026-08-04** — and completely only since 2026-08-07, when
-`pack-props` turned out to be the one by-name class that change missed. A full-models mobile convert failed
-on it with `world [nothing], models [texture-compression-bc]`: the world half was clean, the props' private
-dictionaries were BC. Each class that builds its own dictionary needs the flag passed to it
-([restrictions](../restrictions/assets-and-data.md)). It used to convert only the world, and a car is not in
-the pak — `model-ostex.ts` picked BC for any block-aligned dictionary, so a phone loaded the district and threw
-on the first spawn. That is why every recipe here passed `--no-models`. With models converted the flag means
-what it says, and the cost lands where a car's dictionary already is (~20× its model, so a full vehicle roster
-in RGBA8 is not a district-sized decision — keep `--no-models` unless the run needs cars).
+**The format flag covers the MODELS too** (`--rgba8` since 2026-08-04, `--textures astc` from the start) — and
+completely only since 2026-08-07, when `pack-props` turned out to be the one by-name class that change missed.
+A full-models mobile convert failed on it with `world [nothing], models [texture-compression-bc]`: the world
+half was clean, the props' private dictionaries were BC. Each class that builds its own dictionary needs the
+flag passed to it ([restrictions](../restrictions/assets-and-data.md)). It used to convert only the world, and
+a car is not in the pak — `model-ostex.ts` picked BC for any block-aligned dictionary, so a phone loaded the
+district and threw on the first spawn. That is why every recipe here passed `--no-models`. With models
+converted the flag means what it says, and the cost lands where a car's dictionary already is (~20× its model,
+so a full vehicle roster in RGBA8 is not a district-sized decision — keep `--no-models` unless the run needs
+cars, or use `--textures astc`, which is what makes a roster affordable at all).
 
 ## Verify it rather than trust the flag
 
 ```bash
-npx tsx tools/opensa-pack/src/cli.ts --game … --out … --rgba8 --platforms mobile
+npx tsx tools/opensa-pack/src/cli.ts --game … --out … --textures astc --platforms mobile
 ```
 
 `--platforms` fails the pack when what it wrote demands a feature that GPU family does not carry, reading
@@ -83,6 +92,7 @@ npm run phone                                   # first run: converts, then serv
 npm run phone                                   # every run after: servers up, here is the link
 REBUILD=1 npm run phone                         # re-convert into the same folder
 BAKE=0 OUT=./build/phone-plain npm run phone    # the other side of the collision A/B, in its own folder
+TEXTURES=rgba8 OUT=./build/phone-rgba8 npm run phone     # the other side of the texture-format A/B
 MODELS=0 npm run phone                          # skip the model convert (dispatch only — no physics)
 DISTRICT=ganton OUT=./build/phone-ganton npm run phone   # another measurement district, in its own folder
 RECT=8,-8,11,-5 OUT=./build/phone-ls npm run phone       # ground the district table does not name
@@ -128,7 +138,7 @@ A phone's CPU makes every main-thread spike several times worse, and the largest
 cell. `--bake-collision` moves it into the converter:
 
 ```bash
-npx tsx tools/opensa-pack/src/cli.ts --game … --out … --rgba8 --max-texture 256 --bake-collision
+npx tsx tools/opensa-pack/src/cli.ts --game … --out … --textures astc --max-texture 256 --bake-collision
 # or, through the canonical build:
 npx tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/original --in ./mods-src --exclude sa --bake-collision
 ```
@@ -149,7 +159,7 @@ asks for a cell's colliders — the baked path is simply not on its route.
 ```bash
 npx tsx tools/opensa-pack/src/cli.ts \
   --game ./game-src/original --out ./build/district \
-  --rgba8 --max-texture 256 --rect 8,-8,11,-5 --no-ao --no-models
+  --textures astc --max-texture 256 --rect 8,-8,11,-5 --no-ao --no-models
 
 npm run dev -- --host
 # phone, same Wi-Fi — the map surface (no physics):
@@ -166,8 +176,11 @@ which a dispatch map does not draw. Add them back when the area is proven.
 
 ## On the phone itself (Termux)
 
-Viable because **the converter's only external runtime dependency is `meshoptimizer`** — everything else it
-needs is in this repo, and nothing in the chain compiles native code. The 59 devDependencies (nx, rolldown,
+Viable because **the converter's only external runtime dependencies are `meshoptimizer` and
+`astc-encoder.js`** — everything else it needs is in this repo, and nothing in the chain compiles native
+code. `astc-encoder.js` is wasm rather than a native addon, which is exactly why it was the encoder chosen
+for `--textures astc`: an arm64 phone runs it as-is (the same reason the dev server does NOT run here — see
+rolldown below). The 59 devDependencies (nx, rolldown,
 oxlint, lightningcss) are dev tooling the conversion never touches, and their prebuilt binaries are
 `linux-x64-gnu`, which is why a full `npm install` is the step most likely to complain on an arm64 phone.
 
@@ -206,14 +219,29 @@ optional deps — but npm already filters those by `os`/`cpu`, so an arm64 phone
 ones anyway. What `--omit=optional` *would* skip is `@esbuild/android-arm64`, which is exactly the binary
 `tsx` needs to run a single line of TypeScript.
 
-Put the game's `data/` and `models/` under `game-src/original/`. `npm run phone` converts a small district by
-default (`RECT=9,-7,10,-6`) — the same convert by hand, when the point is to change one flag:
+And do not reach for `--ignore-scripts` to get past the husky failure either: esbuild installs its platform
+binary from a `postinstall`, so silencing scripts trades one break for a worse one. Deleting the one script
+that fails is the surgical fix, and a git hook is meaningless on a phone.
+
+Put the game's `data/`, `models/` **and `anim/`** under `game-src/original/`. `anim/` is not optional the
+moment peds are converted: without `anim/ped.ifp` the pack falls back to the BIND POSE and says so
+(`peds: BIND POSE (no ped.ifp — feet level will be wrong)`), and the player then stands at the wrong height —
+the rest pack fine, so the only symptom is a character that looks planted wrong.
+
+`npm run phone` then converts the pinned district by default — the same convert by hand, when the point is to
+change one flag:
 
 ```bash
 npx tsx tools/opensa-pack/src/cli.ts \
   --game ./game-src/original --out ./build/district \
-  --rgba8 --max-texture 256 --rect 9,-7,10,-6 --no-ao --no-models
+  --textures astc --max-texture 256 --rect 9,-7,10,-6 --no-ao --no-models
 ```
+
+The ASTC encode adds a stage to the run. Budget for it: ~315 K texels/s on a 4-core x64 box at the default
+MEDIUM preset ([benchmark](../benchmarks/opensa-engine/2026-08-07-headless-astc-preset-knee.json)), so the
+21.4 M texels of a 2x2 district are ~90 s there and several times that on a phone. It is the one stage
+`--textures rgba8` does not pay — which is the trade: build time now, or four times the texture memory for
+the whole run.
 
 Serve it and open the console, both on the phone:
 

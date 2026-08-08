@@ -21,6 +21,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { rewriteModelArchives } from './archive-edit';
+import { createAstcEncoder } from './astc-encode';
 import { buildRecipe, readGitCommit } from './build-recipe';
 import { convertDistrict } from './convert';
 import { openGameDir } from './game-fs';
@@ -51,7 +52,8 @@ export interface PackOptions {
   /** Bake worker pool size; the default is a quarter of the cores. */
   bakeWorkers?: number;
   /** Emit every world texture as RGBA8 instead of passing SA's DXT through, so the pak loads on a GPU
-   *  without BC (every mobile one). 4-8x the texture memory — pair it with a district {@link rect}. */
+   *  without BC (every mobile one). 4-8x the texture memory — pair it with a district {@link rect}.
+   *  The older spelling of `textures: 'rgba8'`; {@link textures} wins when both are given. */
   forceRgba8?: boolean;
   /** The game dir to convert. */
   gameDir: string;
@@ -86,6 +88,9 @@ export interface PackOptions {
   rect?: readonly [number, number, number, number];
   /** Stochastic de-tiling name lists; defaults to the curated `data/stochastic.txt`. */
   stochasticFiles?: readonly string[];
+  /** Which texture format the build WRITES (plan 097/2-02). Defaults to `bc` — SA's own DXT, passed through
+   *  untouched, desktop-only. See {@link TextureTarget}. */
+  textures?: TextureTarget;
   /** Convert only these VEHICLES (lowercased model names); every car when absent. A car left out keeps its
    *  `.dff`/`.txd`, so on an `--rgba8` build it stays in the ORIGINAL format — see the note in
    *  `pack-vehicles.ts`: the caller has to make sure nothing spawns it. */
@@ -96,6 +101,19 @@ export interface PackResult {
   models: null | object;
   report: Awaited<ReturnType<typeof convertDistrict>>['report'];
 }
+
+/**
+ * The texture format a build writes — one choice for the world AND every model dictionary, because a device
+ * that cannot display one cannot display the other (`docs/restrictions/assets-and-data.md`: it is decided at
+ * build time and no runtime option can re-take it).
+ *
+ * - `bc` — SA's own DXT passed through, no re-encode and no second generation of loss. Desktop only.
+ * - `astc` — ASTC 4x4, one byte per texel: the same cost as BC3 and a quarter of RGBA8, on the GPUs that
+ *   have no BC. Costs build time (the encode) and one generation of loss on the world's textures.
+ * - `rgba8` — uncompressed. Portable everywhere and 4x an ASTC payload; what a no-BC device got before ASTC,
+ *   and still the reference when a format question is about the ENCODER rather than the pipeline.
+ */
+export type TextureTarget = 'astc' | 'bc' | 'rgba8';
 
 interface PackedModels {
   animObjects: ReturnType<typeof packAnimObjects>;
@@ -124,6 +142,10 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
   const bakes = options.bakes ?? false;
   const models = options.models ?? true;
   const log = options.log ?? ((message: string): void => console.log(`[opensa-pack] ${message}`));
+  const textures: TextureTarget = options.textures ?? (options.forceRgba8 === true ? 'rgba8' : 'bc');
+  // ASTC is an RGBA8 build plus one encode pass: the planner has to decode every layer either way, so this
+  // is the ONE place the two switches are tied together (`astc-encode.ts` refuses a BC layer on purpose).
+  const forceRgba8 = textures !== 'bc';
   guardOut(outDir, gameDir);
 
   const started = Date.now();
@@ -154,7 +176,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
     ...(models
       ? {
           onWorldPlanned: (planner, mapDefs): void => {
-            packed = packModels(fs, mapDefs, planner, bundles, log, options.forceRgba8 ?? false, {
+            packed = packModels(fs, mapDefs, planner, bundles, log, forceRgba8, {
               // Only with an explicit rect: without one the convert auto-fits to every cell with content,
               // and "the models this rect places" is then the whole catalogue anyway.
               ...(options.mapObjectsInRect && rect !== undefined
@@ -166,7 +188,8 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
           },
         }
       : {}),
-    ...(options.forceRgba8 ? { forceRgba8: true } : {}),
+    ...(textures === 'astc' ? { astc: true } : {}),
+    ...(forceRgba8 ? { forceRgba8: true } : {}),
     ...(options.maxTextureSize ? { maxTextureSize: options.maxTextureSize } : {}),
     ...(rect !== undefined ? { rect } : {}),
     stochasticNames,
@@ -207,6 +230,8 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
     manifest.appVersion = appVersion;
   }
   writeFileSync(join(products, 'manifest.json'), JSON.stringify(manifest));
+
+  await retextureModels(bundles, textures, log);
 
   // Which GPUs can run what we just wrote. Computed from BOTH halves — the pak's arrays and every model's
   // dictionary — because a car is not in the pak, so a world that loads on a phone can still fail at the
@@ -431,6 +456,29 @@ function readStochasticNames(files?: readonly string[]): Set<string> {
 
   return names;
 }
+/**
+ * The models' half of the texture-format choice (097/2-02): re-encode every model dictionary.
+ *
+ * It runs after every asset class has contributed and BEFORE the platform check reads the formats, so what
+ * the check reports is what the archives will carry. A no-op for any target but `astc` — `bc` and `rgba8`
+ * are what the per-model writers already produced.
+ */
+async function retextureModels(
+  bundles: ReturnType<typeof createModelBundles>,
+  textures: TextureTarget,
+  log: (message: string) => void,
+): Promise<void> {
+  if (textures !== 'astc') {
+    return;
+  }
+  const encoder = createAstcEncoder();
+  const arrays = await bundles.retexture((array) => encoder.ostex(array));
+  log(
+    `astc: ${arrays} model dictionary arrays, ${(encoder.stats.texels / 1e6).toFixed(1)} M texels in ` +
+      `${(encoder.stats.ms / 1000).toFixed(1)} s`,
+  );
+}
+
 /**
  * Write the accumulated `.osm` files into the copied archives and report what moved. Rebuilding the
  * archives is the expensive half — it streams, but it still rewrites ~1 GB of `gta3.img`.

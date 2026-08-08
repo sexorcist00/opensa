@@ -13,10 +13,11 @@ import { readPakManifest } from '../lib/pak-dir';
  * The manifest carries each array's format, size and layer count, so the pyramid is computable exactly —
  * `ostexLayerBytes` is the same function the runtime allocates against.
  *
- * The "what if" columns are the point. `--rgba8` is the only way a BC pak reaches a mobile GPU today and it
- * costs 4x a BC1 payload; ASTC 4x4 and ETC2 (which the 2026-08-04 device HAS — `docs/edge-cases/browser-runtime.md`)
- * would cost 1 byte per texel, i.e. the same as BC3/BC7 and a quarter of RGBA8. Neither exists in `.ostex`
- * yet; this prints what they would buy, which is the number chain 2's go/no-go needs.
+ * The "what if" columns are the point, and since 2026-08-07 one of them is a build rather than a hypothetical:
+ * `opensa-pack --textures astc` writes ASTC 4x4 at 1 byte per texel — the same as BC3/BC7, a quarter of the
+ * `--rgba8` a no-BC GPU used to need. Run this against both paks of that A/B and the `by format as built`
+ * block is the answer. ETC2 (which the 2026-08-04 device also HAS — `docs/edge-cases/browser-runtime.md`) is
+ * still only a row here; nothing writes it.
  *
  * Run: `npx tsx scripts/debug/texture-budget.ts [pakDir]` (default `build/original/opensa/pak`).
  */
@@ -40,6 +41,7 @@ const manifest = readPakManifest<{
 }>(pakDir);
 
 const FORMAT_NAME: Record<number, string> = {
+  [OstexFormat.ASTC4x4]: 'ASTC4x4',
   [OstexFormat.BC1]: 'BC1',
   [OstexFormat.BC2]: 'BC2',
   [OstexFormat.BC3]: 'BC3',

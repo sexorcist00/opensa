@@ -12,11 +12,17 @@
   **16-bit R5G6B5 / A1R5G5B5 / A4R4G4B4** (expanded to RGBA8888 at parse, plan 043); and **PAL8** palettized
   (expanded at parse). **PAL4** (4-bit) is **REJECTED** rather than decoded — `expandPalette` assumes
   8-bit/256-entry, and no shipped asset uses PAL4 (see docs/open-issues/pal4-textures.md).
-- Consumers: the world path goes through the converter (`tools/opensa-pack/src/textures.ts`), which
+- Consumers: the world path goes through the converter (`packages/cell-weld/src/textures.ts`), which
   keeps block-aligned power-of-two DXT untouched and buckets everything into `texture_2d_array`s by
   exact (format, W, H, mips), decoding the rest via `textures/dxt.ts`. Vehicles/peds build their
   arrays in the browser (`vehicle/textures.ts`, `ped/build-ped-model.ts`) off the same decoder.
   Names are matched lowercased; `hasAlpha` drives the alpha-test / blend class.
+- **The passthrough is conditional on the build's TARGET** (`opensa-pack --textures astc|bc|rgba8`, plan
+  097/2-02). `bc` is the default and is the passthrough described above. The other two refuse it — a mobile
+  GPU has no BC at all — so every layer is decoded, runs the alpha pipeline and is written as RGBA8; `astc`
+  then re-encodes the finished array to ASTC 4x4 (`tools/opensa-pack/src/astc-encode.ts`), one byte per texel
+  against RGBA8's four. Which GPU families the result can be displayed on follows from that one choice and
+  cannot be re-taken at runtime (`docs/restrictions/assets-and-data.md`).
 - **txdp inheritance** (`parseTxdParents` + `resolveTxdChain`): a child TXD inherits textures it
   lacks from its parent chain (child wins), cycle-guarded, memoized per name. Required by the
   optimized/modded maps that hoist shared textures into regional `*_gene` parents.

@@ -213,10 +213,15 @@ A pak built from SA assets is BC throughout, and **BC is desktop-only** — mobi
 "which devices can run this world" is not a runtime question or a performance question: it is decided by the
 converter, at build time, and cannot be re-taken later.
 
-Design against it rather than around it: a plan that says "and then it also runs on phones" needs an
-ASTC/ETC2 encode path or a Basis/KTX2 transcode in `.ostex` in the SAME plan, or it needs to say that its
-world is RGBA8. Relaxing the device gate does not help — that was already done (a phone boots the engine
-now); it moves the failure to the first texture, it does not remove it.
+Design against it rather than around it: a plan that says "and then it also runs on phones" has to name the
+build it means. Since 2026-08-07 there are three (`opensa-pack --textures astc|bc|rgba8`) and **none of them
+is universal** — `bc` demands `texture-compression-bc`, `astc` demands `texture-compression-astc`, and only
+`rgba8` loads on both at 4x an ASTC payload. So the rule did not go away, it acquired a switch: a plan states
+which target its pak is built for, and a plan that needs one artifact on both GPU families still has nothing
+to build it with (the Basis/KTX2 route was closed by decision —
+[postmortem](../postmortem/universal-texture-transcode.md)). Relaxing the device gate does not help — that
+was already done (a phone boots the engine now); it moves the failure to the first texture, it does not
+remove it.
 
 Detail and the measurement: [edge-cases/browser-runtime.md](../edge-cases/browser-runtime.md).
 
@@ -233,7 +238,9 @@ model dictionaries do exactly that, since **vehicles and peds are not in the pak
 (`platformDemand`: the pak's arrays ∪ every model's `TEXS` dictionary), logs it, records it in `report.json`
 under `platforms`, and `--platforms desktop|mobile` turns the report into a build failure.
 
-**The half a pak-only check cannot see:** `--rgba8` converts the WORLD, and a car is not in the pak — model
-dictionaries are BC whenever their arrays are block-aligned (`model-ostex.ts`), so an RGBA8 world can still
-be unspawnable on a phone. That is why the check reads both halves, and it is why naming a platform is worth
-doing rather than eyeballing the flag.
+**The half a pak-only check cannot see:** the world is not the whole build — a car is not in the pak, and
+model dictionaries are BC whenever their arrays are block-aligned (`model-ostex.ts`), so a portable world can
+still be unspawnable on a phone. `--textures` moves both halves together (the models' dictionaries are
+re-encoded in `packGameDir` before the check reads their formats), but the check still reads both, because
+the halves are separately reachable and a per-class subset (`--vehicles`, `--peds`) leaves models behind in
+their ORIGINAL format by design. Naming a platform is worth doing rather than eyeballing the flag.

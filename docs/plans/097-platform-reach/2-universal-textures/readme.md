@@ -69,18 +69,52 @@ Still open here: **other ASTC block sizes**. Only 4x4 is in, because 4x4 is BC's
 8x8 (0.25 B/texel, the quality/size lever a phone may well want) needs `ostexMipLayout` to stop assuming a
 4x4 block — the tests say so rather than the layout silently producing wrong rows.
 
-## 02 — The encode side (`opensa-pack` / `cell-weld`) — NEXT
+## 02 — The encode side (`opensa-pack`) — **CODE DONE 2026-08-07, the A/B still owed**
 
-- `--textures=astc|bc|rgba8` (`--rgba8` stays as the alias it is today). `bc` keeps the DXT passthrough
-  byte-for-byte — it is the desktop-quality reference and the A/B partner.
-- The encoder runs at BUILD time only. Encode cost is the new build-time number to watch: 115 ms per 128x128
-  layer at MEDIUM on one thread scales to minutes per district — the pack's existing worker pool is the
-  answer, and the quality preset is the dial (FASTEST…EXHAUSTIVE).
-- The alpha pipeline runs **before** the universal encode, unchanged: premultiply, dilate, classify
-  (cutout / soft-blend / opaque), `cutoutRef`. A universal encoder that re-orders that pipeline silently
-  changes 1 422 cutout layers.
-- **The run this chain owes:** two paks from the same tree with only the switch flipped. Plan 092 shipped
-  without its equivalent and its `pass` column is unreadable for it; this chain does not repeat that.
+`opensa-pack --textures astc|bc|rgba8` (`--rgba8` is kept as the older spelling; the two are refused when
+they DISAGREE rather than silently ranked). `bc` stays the default and keeps the DXT passthrough
+byte-for-byte — the desktop-quality reference and the A/B partner.
+
+**The encode is a pass over a FINISHED `.ostex`, not a change to the planner** (`astc-encode.ts`), and that
+one decision is what kept the diff small:
+
+- The alpha pipeline is untouched by construction. Premultiply, dilate, classify, `cutoutRef` and the mip
+  chain have all already run when the encoder sees the bytes, so an ASTC build is exactly an `--rgba8` build
+  with one more stage — there is no ordering left to get wrong, and the 1 422 cutout layers cannot move.
+- **One transform covers every producer.** The world's arrays and every model dictionary end up in the same
+  container, so the world half hooks into `convertDistrict`'s array loop and the models' half is one pass
+  over the bundles (`ModelBundles.retexture`) — vehicles, peds, clutter, anim objects and map objects all
+  come along without their writers knowing the format changed. It runs BEFORE `platformDemand` reads the
+  formats, so the build's platform line reports what the archives will actually carry.
+- The two switches are tied together in ONE place (`packGameDir`: `forceRgba8 = textures !== 'bc'`), because
+  the encoder needs decoded layers. A BC payload reaching the encoder is refused rather than re-encoded — it
+  would mean the wiring came apart, and re-encoding it would be a second generation of loss nobody asked for.
+- The mip chain is **truncated**, not reinterpreted: RGBA8 mips run to 1x1 and ASTC's stop at the 4x4 block.
+- The `.ostex` `format` byte AND the pak manifest's entry meta are both rewritten; `texture-budget.ts` and
+  the runtime's feature check read the manifest, and one that still said RGBA8 would describe a pak that no
+  longer exists.
+
+Settings, measured rather than assumed
+([benchmark](../../../benchmarks/opensa-engine/2026-08-07-headless-astc-preset-knee.json)): **MEDIUM** is the
+knee (+3.07 dB over FAST for 1.35x the time; THOROUGH adds 0.30 dB for 1.41x again) and **astcenc's own
+thread pool** is worth taking (2.38x one thread on 4 cores, bit-identical output). Both are the encoder's
+defaults. Profile is `LDR_SRGB` because the upload format is `astc-4x4-unorm-srgb`, and `USE_APLHA_WEIGHT`
+is deliberately OFF — it weights RGB error by alpha, which is right for straight alpha and wrong for a
+premultiplied payload.
+
+Encode cost, extrapolated from the same trial: ~315 K texels/s on 4 cores at MEDIUM, so the 21.4 M texels of
+the 08-06 district are ~90 s on that box. On the phone it will be several times that — measured, not guessed,
+is the point of the run below.
+
+**Still owed here — the run this chain owes:** two paks from the same tree with only `--textures` flipped
+(`astc` vs `bc`), on real game assets. This container has none, so it belongs on the machine that has them.
+Plan 092 shipped without its equivalent and its `pass` column is unreadable for it; this chain does not
+repeat that. What the A/B has to produce: the texture budget of both paks, the encode's wall time as a share
+of the convert, and the field's own verdict on the desktop pak's look.
+
+**Also still open:** the encode runs on the pack's main thread, one array at a time. The pack has a worker
+pool and this stage is embarrassingly parallel per layer — the moment the A/B says the encode is a real
+share of a district's build, that is the first thing to pull.
 
 ## 03 — ~~The transcode side (worker)~~ — DROPPED with the universal direction
 

@@ -20,6 +20,7 @@ import {
   oscellSections,
   type OspakInput,
   type OspakManifest,
+  OstexFormat,
 } from '@opensa/engine-formats';
 import { buildCellColliders, buildCollisionIndex } from '@opensa/renderware';
 import { getClump } from '@opensa/renderware/archive/asset-cache';
@@ -39,6 +40,7 @@ import { deflateRawSync } from 'node:zlib';
 import type { WaterHeightGrid } from './height-grid';
 
 import { AO_MAX_DISTANCE, bakeAo, type BakeAoReport, buildOccluderBvh } from './ao';
+import { createAstcEncoder } from './astc-encode';
 import { bakeCellsPooled, defaultBakeWorkers } from './bake-pool';
 import { bakeCellCollision, collisionCellRect } from './pack-collision';
 import { bakeSunVis, type BakeSunVisReport, SUNVIS_MAX_DISTANCE } from './sunvis';
@@ -50,6 +52,10 @@ export interface ConvertOptions {
   alwaysOnLods?: ReadonlySet<string>;
   /** Bake per-vertex AO/skyVis (074/07); on by default, `--no-ao` skips it. */
   ao?: boolean;
+  /** Re-encode every world array as ASTC 4x4 (plan 097/2-02) — one byte per texel instead of RGBA8's four,
+   *  on the GPUs that have no BC. Requires {@link forceRgba8}: the encode reads decoded layers, so the DXT
+   *  passthrough must be off. */
+  astc?: boolean;
 
   /** Bake every cell's COLLISION into the pak (plan 097/3-01), so the browser never parses a COL. Off by
    *  default while the runtime still reads the archives — the bake costs build time and nothing reads the
@@ -282,8 +288,8 @@ export async function convertDistrict(
     : 0;
 
   log('encoding texture arrays …');
-  for (const array of planner.build()) {
-    inputs.push(wireCompress({ bytes: array.bytes, key: `array-${array.ref}`, kind: 'texture', meta: array.meta }));
+  for (const input of await encodeTextureArrays(planner, options.astc === true, log)) {
+    inputs.push(input);
     report.textures.arrays += 1;
   }
   Object.assign(report.textures, planner.report, { arrays: report.textures.arrays });
@@ -561,6 +567,35 @@ function countRectCells(
   }
 
   return count;
+}
+
+/**
+ * Seal the texture plan into pak inputs, re-encoding to ASTC 4x4 when the build asked for it (097/2-02).
+ *
+ * The format lives in the entry META as well as in the `.ostex` header: the manifest is what the runtime's
+ * platform check and `texture-budget.ts` read, and a manifest that still said RGBA8 would describe a pak that
+ * no longer exists.
+ */
+async function encodeTextureArrays(
+  planner: TexturePlanner,
+  astc: boolean,
+  log: (message: string) => void,
+): Promise<OspakInput[]> {
+  const encoder = astc ? createAstcEncoder() : null;
+  const inputs: OspakInput[] = [];
+  for (const array of planner.build()) {
+    const bytes = encoder === null ? array.bytes : await encoder.ostex(array.bytes);
+    const meta = encoder === null ? array.meta : { ...array.meta, format: OstexFormat.ASTC4x4 };
+    inputs.push(wireCompress({ bytes, key: `array-${array.ref}`, kind: 'texture', meta }));
+  }
+  if (encoder !== null) {
+    log(
+      `astc: world arrays, ${(encoder.stats.texels / 1e6).toFixed(1)} M texels in ` +
+        `${(encoder.stats.ms / 1000).toFixed(1)} s`,
+    );
+  }
+
+  return inputs;
 }
 
 /** Fold one chunk's bake counters into the report (ms accumulates; both pooled rows share one wall time). */

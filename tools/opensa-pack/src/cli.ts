@@ -5,7 +5,8 @@
  * stage must not go through argv.
  *
  *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> [--rect x0,y0,x1,y1]
- *     [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--rgba8] [--max-texture N] [--map-objects-in-rect]
+ *     [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--textures astc|bc|rgba8] [--max-texture N]
+ *     [--map-objects-in-rect]
  *     [--stochastic <file>[,<file>…]]
  *
  * REMOVED FLAGS (2026-07-19, user): `--cell-size` (the pak and the runtime must agree on it and nothing
@@ -20,9 +21,13 @@
  * (sun-vis, 074/07): production, bench-ritual and pre-flip converts MUST pass it — without it the direct
  * sun renders unshadowed (bridges/canyons) by design.
  *
- * `--rgba8` emits every world texture as RGBA8 instead of passing SA's DXT blocks through. BC is desktop-only,
- * so this is what makes a pak loadable on a phone; it costs 4-8x the texture memory, so pair it with a
- * district `--rect`.
+ * `--textures astc|bc|rgba8` picks the format the build WRITES — for the world arrays and every model
+ * dictionary alike, because a GPU that cannot display one cannot display the other. `bc` (the default) passes
+ * SA's own DXT blocks through untouched and is desktop-only. `astc` re-encodes to ASTC 4x4, which every
+ * mobile GPU carries and which costs ONE byte per texel — the same as BC3 and a quarter of RGBA8; it costs
+ * build time (the encode) and one generation of loss. `rgba8` leaves the pixels uncompressed: portable
+ * everywhere, 4x an ASTC payload, and the reference when the question is about the encoder rather than the
+ * pipeline. `--rgba8` is the older spelling of `--textures rgba8`.
  *
  * `--bake-collision` writes every cell's collision into the pak (`.oscol`, GAME grid) so the browser never
  * parses a COL — the largest named spike cost there is. Off by default while the runtime still reads the
@@ -36,7 +41,7 @@
  * `--map-objects-in-rect` converts only the map objects `--rect` actually PLACES instead of all ~14 000 the
  * IDEs name — the district lever that turns a phone convert from hours into minutes. Needs an explicit
  * `--rect`; a model left out keeps its `.dff`, so the runtime parses one if anything ever asks for it.
- * With `--rgba8` it is what makes a district affordable: RGBA8 costs 4-8x its BC original, and one halving
+ * With `--textures rgba8` it is what makes a district affordable: RGBA8 costs 4-8x its BC original, and one halving
  * takes three quarters of that back. A capped texture is decoded rather than passed through — a DXT block
  * cannot be resized without decoding it.
  *
@@ -52,7 +57,7 @@
 import { argValue, fromCwd } from '@opensa/tool-kit/cli';
 import { statSync } from 'node:fs';
 
-import { packGameDir } from './pack';
+import { packGameDir, type TextureTarget } from './pack';
 
 function arg(name: string): null | string {
   return argValue(`--${name}`) ?? null;
@@ -65,7 +70,8 @@ async function main(): Promise<void> {
   if (!gameRaw || !outRaw) {
     console.error(
       'usage: opensa-pack --game <dir> --out <dir> [--rect x0,y0,x1,y1] ' +
-        '[--pak-out <dir>] [--game-id <id>] [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--rgba8] [--max-texture N] [--map-objects-in-rect] ' +
+        '[--pak-out <dir>] [--game-id <id>] [--no-ao] [--no-models] [--bakes] [--bake-workers N] ' +
+        '[--textures astc|bc|rgba8] [--max-texture N] [--map-objects-in-rect] ' +
         '[--platforms desktop|mobile[,…]] [--bake-collision] [--stochastic <file>[,<file>…]] ' +
         '[--vehicles a,b] [--peds a,b]',
     );
@@ -84,6 +90,7 @@ async function main(): Promise<void> {
     .filter(Boolean)
     .map(fromCwd);
 
+  const textures = readTextureTarget();
   const maxTexture = Number(arg('max-texture') ?? 0) || 0;
   if (maxTexture !== 0 && (maxTexture < 4 || (maxTexture & (maxTexture - 1)) !== 0)) {
     throw new Error(`bad --max-texture '${maxTexture}' (want a power of two >= 4, or omit it)`);
@@ -109,7 +116,6 @@ async function main(): Promise<void> {
     ...(bakeWorkers !== undefined ? { bakeWorkers } : {}),
     bakeCollision: process.argv.includes('--bake-collision'),
     bakes: process.argv.includes('--bakes'),
-    forceRgba8: process.argv.includes('--rgba8'),
     ...(maxTexture ? { maxTextureSize: maxTexture } : {}),
     gameDir: requireDir('game', gameRaw),
     mapObjectsInRect: process.argv.includes('--map-objects-in-rect'),
@@ -121,8 +127,29 @@ async function main(): Promise<void> {
     ...(platforms.length > 0 ? { platforms } : {}),
     ...(rect !== undefined ? { rect: rect as unknown as readonly [number, number, number, number] } : {}),
     ...(stochastic.length > 0 ? { stochasticFiles: stochastic } : {}),
+    textures,
     ...(vehicles.length > 0 ? { vehicles } : {}),
   });
+}
+
+/**
+ * `--textures astc|bc|rgba8`, with `--rgba8` still accepted as its older spelling.
+ *
+ * The two are rejected when they DISAGREE rather than silently ranked: a script that still passes `--rgba8`
+ * and a caller that added `--textures astc` mean two different builds, and picking one of them quietly is how
+ * a pak ships in a format nobody asked for.
+ */
+function readTextureTarget(): TextureTarget {
+  const named = arg('textures')?.trim().toLowerCase();
+  const legacy = process.argv.includes('--rgba8');
+  if (named !== undefined && named !== 'astc' && named !== 'bc' && named !== 'rgba8') {
+    throw new Error(`bad --textures '${named}' (want astc, bc or rgba8)`);
+  }
+  if (named !== undefined && legacy && named !== 'rgba8') {
+    throw new Error(`--rgba8 and --textures ${named} disagree — pass one of them`);
+  }
+
+  return named ?? (legacy ? 'rgba8' : 'bc');
 }
 
 /** A `--flag` that must name an existing directory. */
