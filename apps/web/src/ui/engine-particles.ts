@@ -24,8 +24,30 @@ import { decodeDxt } from '@opensa/renderware/textures/dxt';
 
 /** Atlas side used only when NO sprite resolves (every emitter's texture missing) — the procedural dot. */
 const FALLBACK_ATLAS_SIZE = 64;
-/** Config draw distance for emitters (world units) — beyond this the vertex shader collapses the quad. */
-const DRAW_DISTANCE = 300;
+/**
+ * Draw distance for a system with no authored `cullDist` (world units) — beyond it the vertex shader
+ * collapses the quad. Every stock system authors one, so this is the fallback for a mod's that does not.
+ */
+const FALLBACK_DRAW_DISTANCE = 300;
+
+/**
+ * The two places we knowingly do NOT draw an effect for the distance `effects.fxp` authors, both the user's
+ * call and both recorded in `docs/hacks/`. Everything absent from this table takes its authored number
+ * verbatim — the point of the step is that the table wins.
+ */
+const DRAW_DISTANCE_DEPARTURES: readonly {
+  /** `atLeast` raises a too-tight authored value to a floor; `world` draws it as far as the world is drawn. */
+  rule: 'atLeast' | 'world';
+  systems: readonly string[];
+  value?: number;
+}[] = [
+  // `docs/hacks/smoke-draws-to-world-edge.md` — authored 150–255, and a plume that dies while its chimney is
+  // still drawn is the defect plan 100 exists to fix. 42 of the map's 878 anchors, so it is a cheap departure.
+  { rule: 'world', systems: ['ws_factorysmoke', 'smoke30m', 'smoke30lit', 'smoke50lit'] },
+  // `docs/hacks/tiny-fx-distance-floor.md` — authored 15, which reads literally as arm's length. 100 is the
+  // accepted compromise and still 3× tighter than the flat 300 these had before.
+  { rule: 'atLeast', systems: ['insects', 'cigarette_smoke'], value: 100 },
+];
 
 /**
  * Systems preloaded into the DYNAMIC one-shot lane (089/01) — lowercased, as `parseFxp` keys them. The
@@ -90,6 +112,25 @@ interface Sprite {
 }
 
 /**
+ * How far one fx system is drawn, in world units: its own authored `cullDist`, with the two departures above
+ * applied. `worldDrawDistance` is the host's LOD radius — the distance the geometry an emitter sits on is
+ * still drawn at — so the smoke departure is derived from the world rather than fitted.
+ */
+export function fxDrawDistance(system: FxSystem, worldDrawDistance: number): number {
+  const authored = system.cullDist > 0 ? system.cullDist : FALLBACK_DRAW_DISTANCE;
+  const name = system.name.toLowerCase();
+  for (const departure of DRAW_DISTANCE_DEPARTURES) {
+    if (!departure.systems.includes(name)) {
+      continue;
+    }
+
+    return departure.rule === 'world' ? worldDrawDistance : Math.max(authored, departure.value ?? authored);
+  }
+
+  return authored;
+}
+
+/**
  * The SA corona billboards from `particle.txd` (B6): `coronastar` for lamps and headlights, `coronamoon` for
  * the moon. Layers are packed at the LARGEST of the two sizes — nothing here is pinned to 64², so dropping in
  * a higher-resolution moon just works. Returns undefined when the profile ships no particle.txd; the engine
@@ -129,7 +170,16 @@ export function loadSkidSprite(fs: AssetFileSystem): undefined | { height: numbe
   return decodeSprites(bytes).get('particleskid');
 }
 
-export function setupEngineParticles(engine: Engine, fs: AssetFileSystem): EngineParticles | null {
+/**
+ * `worldDrawDistance` is the host's LOD radius (`GAME_CONFIG[game].drawDistance`, the same number
+ * `setupStreaming` is given) — how far the world itself is drawn. It is what the smoke departure in
+ * {@link fxDrawDistance} is measured against, so a profile that draws further smokes further.
+ */
+export function setupEngineParticles(
+  engine: Engine,
+  fs: AssetFileSystem,
+  worldDrawDistance: number,
+): EngineParticles | null {
   const fxpText = fs.getText('models/effects.fxp');
   const txdBytes = fs.get('models/effectspc.txd') ?? fs.get('models/effectsPC.txd');
   if (!fxpText || !txdBytes) {
@@ -137,7 +187,7 @@ export function setupEngineParticles(engine: Engine, fs: AssetFileSystem): Engin
   }
   const systems = parseFxp(fxpText);
   const sprites = decodeSprites(txdBytes);
-  const dynamic = buildDynamicLibrary(systems, sprites);
+  const dynamic = buildDynamicLibrary(systems, sprites, worldDrawDistance);
   engine.initDynamicParticles(dynamic.library);
 
   let signature = '';
@@ -207,7 +257,7 @@ export function setupEngineParticles(engine: Engine, fs: AssetFileSystem): Engin
           placements.set(particle.effectName, list);
         }
       }
-      engine.setParticles(buildUpload(systems, sprites, placements));
+      engine.setParticles(buildUpload(systems, sprites, placements, worldDrawDistance));
     },
   };
 }
@@ -235,8 +285,9 @@ export function toEngineSpace(emitter: FxBakedEmitter): FxBakedEmitter {
 function buildDynamicLibrary(
   systems: Map<string, FxSystem>,
   sprites: Map<string, Sprite>,
+  worldDrawDistance: number,
 ): { index: Map<string, { baked: FxBakedEmitter; systemIndex: number }[]>; library: DynamicParticleLibrary } {
-  const baked: FxBakedEmitter[] = [];
+  const baked: { distance: number; emitter: FxBakedEmitter }[] = [];
   const index = new Map<string, { baked: FxBakedEmitter; systemIndex: number }[]>();
   for (const { alias, name, sizeScale, tint } of DYNAMIC_SYSTEMS) {
     const system = systems.get(name);
@@ -244,6 +295,7 @@ function buildDynamicLibrary(
       continue; // this profile does not ship the system — createEmitter(name) then returns null
     }
     const entries: { baked: FxBakedEmitter; systemIndex: number }[] = [];
+    const distance = fxDrawDistance(system, worldDrawDistance);
     // includeTriggered: the prt_* family carries NO emrate track — the runtime caller owns the count.
     for (const emitter of bakeFxSystem(system, { includeTriggered: true })) {
       const engineEmitter = toEngineSpace(emitter);
@@ -259,7 +311,7 @@ function buildDynamicLibrary(
         ]);
       }
       entries.push({ baked: engineEmitter, systemIndex: baked.length });
-      baked.push(engineEmitter);
+      baked.push({ distance, emitter: engineEmitter });
     }
     if (entries.length > 0) {
       index.set(alias ?? name, entries);
@@ -269,13 +321,13 @@ function buildDynamicLibrary(
   const additive: boolean[] = [];
   const layers: string[] = [];
   const records = new Float32Array(baked.length * FX_SYSTEM_STRIDE);
-  baked.forEach((emitter, at) => {
+  baked.forEach(({ distance, emitter }, at) => {
     let layer = layers.indexOf(emitter.texture);
     if (layer < 0) {
       layers.push(emitter.texture);
       layer = layers.length - 1;
     }
-    writeFxSystemRecord(records, at, emitter, layer, DRAW_DISTANCE);
+    writeFxSystemRecord(records, at, emitter, layer, distance);
     additive.push(emitter.additive);
   });
 
@@ -287,15 +339,17 @@ function buildUpload(
   systems: Map<string, FxSystem>,
   sprites: Map<string, Sprite>,
   placements: Map<string, FxPlacement[]>,
+  worldDrawDistance: number,
 ): ParticleUpload {
-  const baked: { emitter: FxBakedEmitter; placed: FxPlacement[] }[] = [];
+  const baked: { distance: number; emitter: FxBakedEmitter; placed: FxPlacement[] }[] = [];
   for (const [name, placed] of placements) {
     const system = systems.get(name);
     if (!system) {
       continue; // an emitter naming a system this profile does not ship
     }
+    const distance = fxDrawDistance(system, worldDrawDistance);
     for (const emitter of bakeFxSystem(system)) {
-      baked.push({ emitter: toEngineSpace(emitter), placed });
+      baked.push({ distance, emitter: toEngineSpace(emitter), placed });
     }
   }
 
@@ -303,13 +357,13 @@ function buildUpload(
   const records = new Float32Array(baked.length * FX_SYSTEM_STRIDE);
   const add: Float32Array[] = [];
   const blend: Float32Array[] = [];
-  baked.forEach(({ emitter, placed }, index) => {
+  baked.forEach(({ distance, emitter, placed }, index) => {
     let layer = layers.indexOf(emitter.texture);
     if (layer < 0) {
       layers.push(emitter.texture);
       layer = layers.length - 1;
     }
-    writeFxSystemRecord(records, index, emitter, layer, DRAW_DISTANCE);
+    writeFxSystemRecord(records, index, emitter, layer, distance);
     const instances = bakeFxInstances(emitter, placed, index);
     (emitter.additive ? add : blend).push(instances);
   });

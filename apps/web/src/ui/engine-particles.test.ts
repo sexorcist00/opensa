@@ -1,10 +1,11 @@
 import type { DynamicParticleLibrary, Engine } from '@opensa/engine';
 import type { AssetFileSystem, FxBakedEmitter } from '@opensa/renderware';
 
+import { parseFxp } from '@opensa/renderware';
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { setupEngineParticles, toEngineSpace } from './engine-particles';
+import { fxDrawDistance, setupEngineParticles, toEngineSpace } from './engine-particles';
 
 /** A fountain: SA authors "up" as +Z, and buoyant force the same way. */
 function fountain(): FxBakedEmitter {
@@ -56,6 +57,8 @@ describe('engine particles', () => {
 // list resolves against what SA actually ships (system names, textures, the tint/size overrides).
 const EFFECTS_FXP = 'tests/original/models/effects.fxp';
 const EFFECTS_TXD = 'tests/original/models/effectsPC.txd';
+/** A host LOD radius unlike any authored cullDist, so "drawn as far as the world" cannot pass by accident. */
+const WORLD_DRAW_DISTANCE = 1500;
 
 interface RecordedSpawn {
   alpha: number;
@@ -121,7 +124,7 @@ describe.skipIf(!existsSync(EFFECTS_FXP) || !existsSync(EFFECTS_TXD))('dynamic l
   describe('negative cases', () => {
     it('returns null for a system outside the boot-time list', () => {
       const { engine } = fakeEngine();
-      const particles = setupEngineParticles(engine, fixtureFs());
+      const particles = setupEngineParticles(engine, fixtureFs(), WORLD_DRAW_DISTANCE);
 
       expect(particles?.createEmitter('prt_blood')).toBeNull();
     });
@@ -130,7 +133,7 @@ describe.skipIf(!existsSync(EFFECTS_FXP) || !existsSync(EFFECTS_TXD))('dynamic l
       const { engine, library } = fakeEngine();
       const empty = { get: (): null => null, getText: (): null => null } as unknown as AssetFileSystem;
 
-      expect(setupEngineParticles(engine, empty)).toBeNull();
+      expect(setupEngineParticles(engine, empty, WORLD_DRAW_DISTANCE)).toBeNull();
       expect(library()).toBeNull();
     });
   });
@@ -138,7 +141,7 @@ describe.skipIf(!existsSync(EFFECTS_FXP) || !existsSync(EFFECTS_TXD))('dynamic l
   describe('positive cases', () => {
     it('every boot-time system resolves against the real library, aliases included', () => {
       const { engine } = fakeEngine();
-      const particles = setupEngineParticles(engine, fixtureFs());
+      const particles = setupEngineParticles(engine, fixtureFs(), WORLD_DRAW_DISTANCE);
 
       for (const name of [
         'prt_collisionsmoke',
@@ -154,7 +157,7 @@ describe.skipIf(!existsSync(EFFECTS_FXP) || !existsSync(EFFECTS_TXD))('dynamic l
 
     it('a burst spawns count particles with the emitter look applied', () => {
       const { engine, spawns } = fakeEngine();
-      const particles = setupEngineParticles(engine, fixtureFs());
+      const particles = setupEngineParticles(engine, fixtureFs(), WORLD_DRAW_DISTANCE);
       const emitter = particles!.createEmitter('wheeldirt-grass')!;
       emitter.lifeScale = 0.5;
       emitter.alphaScale = 0.25;
@@ -171,7 +174,7 @@ describe.skipIf(!existsSync(EFFECTS_FXP) || !existsSync(EFFECTS_TXD))('dynamic l
 
     it('the grass alias carries its earthy tint and prt_sand its size cut in the baked records', () => {
       const { engine, library, spawns } = fakeEngine();
-      const particles = setupEngineParticles(engine, fixtureFs());
+      const particles = setupEngineParticles(engine, fixtureFs(), WORLD_DRAW_DISTANCE);
 
       particles!.createEmitter('wheeldirt-grass')!.burst(1);
       const grassIndex = spawns[0].system;
@@ -185,6 +188,58 @@ describe.skipIf(!existsSync(EFFECTS_FXP) || !existsSync(EFFECTS_TXD))('dynamic l
       expect(systems[grassIndex * 20 + 10]).toBeCloseTo(0.3, 3);
       // prt_sand's authored size-at-0 is 8 m (a bullet plume); the lane cuts it 0.35×.
       expect(systems[sandIndex * 20 + 4]).toBeCloseTo(8 * 0.35, 3);
+    });
+  });
+});
+
+describe.skipIf(!existsSync(EFFECTS_FXP))('fx draw distance (real effects.fxp)', () => {
+  const systems = parseFxp(readFileSync(EFFECTS_FXP).toString('latin1'));
+  const distanceOf = (name: string): number => fxDrawDistance(systems.get(name)!, WORLD_DRAW_DISTANCE);
+
+  describe('negative cases', () => {
+    it('does not apply a departure to a system that is not in the table', () => {
+      // The whole point of the step: the fxp wins everywhere except the two recorded places. These four are
+      // the ones the flat 300 stretched hardest — a vent used to be drawn 12× further than SA drew it.
+      expect(distanceOf('vent')).toBe(25);
+      expect(distanceOf('vent2')).toBe(25);
+      expect(distanceOf('fire')).toBe(35);
+      expect(distanceOf('carwashspray')).toBe(70);
+    });
+
+    it('falls back for a system that authors no cullDist at all', () => {
+      expect(fxDrawDistance({ boundingSphere: [0, 0, 0, 0], cullDist: 0, emitters: [], name: 'modded' }, 1500)).toBe(
+        300,
+      );
+    });
+  });
+
+  describe('positive cases', () => {
+    it('draws every smoke system as far as the world is drawn, not the authored 150-255', () => {
+      for (const name of ['ws_factorysmoke', 'smoke30m', 'smoke30lit', 'smoke50lit']) {
+        expect(systems.get(name)!.cullDist, name).toBeLessThan(WORLD_DRAW_DISTANCE); // the departure is real
+        expect(distanceOf(name), name).toBe(WORLD_DRAW_DISTANCE);
+      }
+    });
+
+    it('floors the two tiny systems at 100 rather than their authored 15', () => {
+      expect(systems.get('insects')!.cullDist).toBe(15);
+      expect(distanceOf('insects')).toBe(100);
+      expect(distanceOf('cigarette_smoke')).toBe(100);
+    });
+
+    it('writes the authored distance into the baked record, not the flat constant', () => {
+      const { engine, library } = fakeEngine();
+      setupEngineParticles(engine, fixtureFs(), WORLD_DRAW_DISTANCE);
+
+      // The dynamic lane is the code-triggered prt_* family, and SA authors all four of them at 50 — so the
+      // assertion is that the lane carries THAT and not the 300 every system used to get. Read off the real
+      // records; the value is at offset 7 of each 20-float system stride.
+      const records = library()!.systems;
+      const distances = new Set<number>();
+      for (let index = 0; index * 20 < records.length; index += 1) {
+        distances.add(records[index * 20 + 7]);
+      }
+      expect([...distances]).toEqual([50]);
     });
   });
 });
