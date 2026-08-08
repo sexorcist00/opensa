@@ -1523,8 +1523,8 @@ function DrawDistanceControls({ actions }: { actions: DebugActions }): ReactElem
   );
 }
 
-/** Graphics-screen block for the world 2dfx particle effects (plan 044): master toggle + the
- *  draw distance that replaces the systems' authored CULLDIST. */
+/** Graphics-screen block for the world 2dfx particle effects (plan 044): master toggle + the multiplier
+ *  over the distance each system is shipped with (its authored CULLDIST; plan 100/04). */
 function WorldEffectsControls(props: {
   effects: EffectsConfig;
   onPatch: (patch: Partial<EffectsConfig>) => void;
@@ -1542,14 +1542,14 @@ function WorldEffectsControls(props: {
         />
         <span style={effects.enabled ? styles.optionActive : styles.option}>World effects</span>
       </label>
-      <div style={styles.groupLabel}>EFFECTS DISTANCE: {effects.drawDistance.toFixed(0)}</div>
+      <div style={styles.groupLabel}>EFFECTS DISTANCE: ×{effects.drawDistanceScale.toFixed(2)}</div>
       <input
-        max={300}
-        min={10}
-        onChange={(e) => onPatch({ drawDistance: Number(e.target.value) })}
-        step={10}
+        max={4}
+        min={0.25}
+        onChange={(e) => onPatch({ drawDistanceScale: Number(e.target.value) })}
+        step={0.25}
         type="range"
-        value={effects.drawDistance}
+        value={effects.drawDistanceScale}
       />
     </>
   );

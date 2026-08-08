@@ -165,6 +165,11 @@ npx tsx scripts/debug/touch-controls-check.ts \
 # HUD `signs N` — roadsign glyph quads in the cells drawn this frame (.oscell minor 8). The instrument for
 #   "do plates survive to LOD range", which a screenshot cannot answer (~8 px at 440 u). 0 on a pre-minor-8
 #   pak means UNKNOWN, not none — check the pak manifest's buildTime first (canonical: 13:19 08-08-2026 on)
+# Effect draw distance — ?fx=N scales EVERY fx system's shipped distance (its authored cullDist with the
+#   recorded departures and the dynamic lane's 300 u floor applied). 1 = as the data says; the debugger's
+#   Graphics → EFFECTS DISTANCE slider is the same knob live. A tiny value (?fx=0.02) is the POSITIVE
+#   CONTROL a distance capture needs: it culls the emitters, which is the only way a shot can prove the
+#   specks in it are particles. Find something to aim at with scripts/debug/fx-anchor-census.ts
 # Camera aim (100 field checks) — ?look=x,y,z points the boot camera at a GTA world point and turns the
 #   ped with it (auto-centre then holds the aim). Without it every headless probe stares SOUTH, since
 #   look is pointer-only and the harness has no mouse. Pair with ?spawn: `?spawn=2033,2832,80&look=2632,2832,127`

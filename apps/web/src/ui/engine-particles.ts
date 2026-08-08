@@ -41,7 +41,7 @@ const DRAW_DISTANCE_DEPARTURES: readonly {
   systems: readonly string[];
   value?: number;
 }[] = [
-  // `docs/hacks/smoke-draws-to-world-edge.md` — authored 150–255, and a plume that dies while its chimney is
+  // `docs/hacks/smoke-drawn-to-world-edge.md` — authored 150–255, and a plume that dies while its chimney is
   // still drawn is the defect plan 100 exists to fix. 42 of the map's 878 anchors, so it is a cheap departure.
   { rule: 'world', systems: ['ws_factorysmoke', 'smoke30m', 'smoke30lit', 'smoke50lit'] },
   // `docs/hacks/tiny-fx-distance-floor.md` — authored 15, which reads literally as arm's length. 100 is the
@@ -101,8 +101,12 @@ export interface DynamicFxEmitter {
 export interface EngineParticles {
   /** A dynamic emitter for one preloaded system (089/01) — null when this profile does not ship it. */
   createEmitter(name: string): DynamicFxEmitter | null;
-  /** Rebuild the GPU buffers from the currently STREAMED cells. Cheap and rare — call on a cell-set change. */
-  rebuild(): void;
+  /**
+   * Rebuild the GPU buffers from the currently STREAMED cells. Cheap and rare — call on a cell-set change.
+   * `drawDistanceScale` is the live knob; a changed value re-bakes BOTH lanes, which is why it arrives here
+   * rather than being read once at boot.
+   */
+  rebuild(drawDistanceScale: number): void;
 }
 
 interface Sprite {
@@ -112,22 +116,17 @@ interface Sprite {
 }
 
 /**
- * How far one fx system is drawn, in world units: its own authored `cullDist`, with the two departures above
+ * How far one fx system is drawn, in world units: its own authored `cullDist`, with the departures above
  * applied. `worldDrawDistance` is the host's LOD radius — the distance the geometry an emitter sits on is
  * still drawn at — so the smoke departure is derived from the world rather than fitted.
+ *
+ * `scale` is the live `graphics.effects.drawDistanceScale` knob, applied LAST so it moves every system —
+ * departed or authored — by the same factor. 1 = exactly what the data (and the departures) say.
  */
-export function fxDrawDistance(system: FxSystem, worldDrawDistance: number): number {
-  const authored = system.cullDist > 0 ? system.cullDist : FALLBACK_DRAW_DISTANCE;
-  const name = system.name.toLowerCase();
-  for (const departure of DRAW_DISTANCE_DEPARTURES) {
-    if (!departure.systems.includes(name)) {
-      continue;
-    }
+export function fxDrawDistance(system: FxSystem, worldDrawDistance: number, options: { scale?: number } = {}): number {
+  const { scale = 1 } = options;
 
-    return departure.rule === 'world' ? worldDrawDistance : Math.max(authored, departure.value ?? authored);
-  }
-
-  return authored;
+  return departedDrawDistance(system, worldDrawDistance) * scale;
 }
 
 /**
@@ -174,11 +173,13 @@ export function loadSkidSprite(fs: AssetFileSystem): undefined | { height: numbe
  * `worldDrawDistance` is the host's LOD radius (`GAME_CONFIG[game].drawDistance`, the same number
  * `setupStreaming` is given) — how far the world itself is drawn. It is what the smoke departure in
  * {@link fxDrawDistance} is measured against, so a profile that draws further smokes further.
+ * `drawDistanceScale` is the boot value of the live knob (1 = as authored); `rebuild` carries it after that.
  */
 export function setupEngineParticles(
   engine: Engine,
   fs: AssetFileSystem,
   worldDrawDistance: number,
+  drawDistanceScale = 1,
 ): EngineParticles | null {
   const fxpText = fs.getText('models/effects.fxp');
   const txdBytes = fs.get('models/effectspc.txd') ?? fs.get('models/effectsPC.txd');
@@ -187,7 +188,8 @@ export function setupEngineParticles(
   }
   const systems = parseFxp(fxpText);
   const sprites = decodeSprites(txdBytes);
-  const dynamic = buildDynamicLibrary(systems, sprites, worldDrawDistance);
+  let scale = drawDistanceScale;
+  const dynamic = buildDynamicLibrary(systems, sprites, worldDrawDistance, scale);
   engine.initDynamicParticles(dynamic.library);
 
   let signature = '';
@@ -239,11 +241,18 @@ export function setupEngineParticles(
 
       return emitter;
     },
-    rebuild(): void {
+    rebuild(drawDistanceScale: number): void {
+      if (drawDistanceScale !== scale) {
+        scale = drawDistanceScale;
+        // The dynamic lane's records are baked once at boot, so the knob has to re-install them. `dynamic.index`
+        // is deliberately NOT replaced: DYNAMIC_SYSTEMS is a fixed list, so the new records land at the same
+        // indices and every emitter handed out earlier keeps spawning into the right system.
+        engine.initDynamicParticles(buildDynamicLibrary(systems, sprites, worldDrawDistance, scale).library);
+      }
       // The cell set changes only when streaming crosses a ring, so a signature check keeps this off the
-      // per-frame path entirely.
+      // per-frame path entirely. The scale is in the signature too — changing it must re-upload.
       const cells = [...engine.cells.all()].filter((cell) => cell.particles.length > 0);
-      const next = cells.map((cell) => cell.key).join('|');
+      const next = [scale, ...cells.map((cell) => cell.key)].join('|');
       if (next === signature) {
         return;
       }
@@ -257,7 +266,7 @@ export function setupEngineParticles(
           placements.set(particle.effectName, list);
         }
       }
-      engine.setParticles(buildUpload(systems, sprites, placements, worldDrawDistance));
+      engine.setParticles(buildUpload(systems, sprites, placements, worldDrawDistance, scale));
     },
   };
 }
@@ -286,6 +295,7 @@ function buildDynamicLibrary(
   systems: Map<string, FxSystem>,
   sprites: Map<string, Sprite>,
   worldDrawDistance: number,
+  scale: number,
 ): { index: Map<string, { baked: FxBakedEmitter; systemIndex: number }[]>; library: DynamicParticleLibrary } {
   const baked: { distance: number; emitter: FxBakedEmitter }[] = [];
   const index = new Map<string, { baked: FxBakedEmitter; systemIndex: number }[]>();
@@ -295,7 +305,7 @@ function buildDynamicLibrary(
       continue; // this profile does not ship the system — createEmitter(name) then returns null
     }
     const entries: { baked: FxBakedEmitter; systemIndex: number }[] = [];
-    const distance = fxDrawDistance(system, worldDrawDistance);
+    const distance = fxDrawDistance(system, worldDrawDistance, { scale });
     // includeTriggered: the prt_* family carries NO emrate track — the runtime caller owns the count.
     for (const emitter of bakeFxSystem(system, { includeTriggered: true })) {
       const engineEmitter = toEngineSpace(emitter);
@@ -340,6 +350,7 @@ function buildUpload(
   sprites: Map<string, Sprite>,
   placements: Map<string, FxPlacement[]>,
   worldDrawDistance: number,
+  scale: number,
 ): ParticleUpload {
   const baked: { distance: number; emitter: FxBakedEmitter; placed: FxPlacement[] }[] = [];
   for (const [name, placed] of placements) {
@@ -347,7 +358,7 @@ function buildUpload(
     if (!system) {
       continue; // an emitter naming a system this profile does not ship
     }
-    const distance = fxDrawDistance(system, worldDrawDistance);
+    const distance = fxDrawDistance(system, worldDrawDistance, { scale });
     for (const emitter of bakeFxSystem(system)) {
       baked.push({ distance, emitter: toEngineSpace(emitter), placed });
     }
@@ -401,6 +412,21 @@ function decodeSprites(bytes: ArrayBuffer): Map<string, Sprite> {
   }
 
   return sprites;
+}
+
+/** The authored `cullDist` with {@link DRAW_DISTANCE_DEPARTURES} applied — before the live scale. */
+function departedDrawDistance(system: FxSystem, worldDrawDistance: number): number {
+  const authored = system.cullDist > 0 ? system.cullDist : FALLBACK_DRAW_DISTANCE;
+  const name = system.name.toLowerCase();
+  for (const departure of DRAW_DISTANCE_DEPARTURES) {
+    if (!departure.systems.includes(name)) {
+      continue;
+    }
+
+    return departure.rule === 'world' ? worldDrawDistance : Math.max(authored, departure.value ?? authored);
+  }
+
+  return authored;
 }
 
 /**

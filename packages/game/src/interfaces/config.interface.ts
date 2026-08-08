@@ -256,9 +256,10 @@ export interface DynamicObjectsFillConfig {
 
 /** World 2dfx particle effects (fires/smoke/fountains; plan 044) — live-tunable. */
 export interface EffectsConfig {
-  /** Visibility distance (world units; fade-out over the last 20%). Replaces each FX system's
-   *  authored CULLDIST (vanilla culls e.g. fire at 35 m — too close), so it works both ways. */
-  drawDistance: number;
+  /** Multiplier over every fx system's SHIPPED draw distance — its authored `cullDist` with the two
+   *  recorded departures and the dynamic lane's floor already applied (`fxDrawDistance`). 1 = as the data
+   *  says; it scales the whole set rather than replacing it, so the authored table still wins the shape. */
+  drawDistanceScale: number;
   /** Master toggle (off = no particle emitters render). */
   enabled: boolean;
 }

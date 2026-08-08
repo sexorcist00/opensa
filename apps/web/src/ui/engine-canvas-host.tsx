@@ -355,6 +355,34 @@ function applyCleoOverride(config: ReturnType<typeof createGameRuntimeConfig>, p
 }
 
 /**
+ * The graphics A/B knobs, folded into the LIVE config so the debugger keeps telling the truth about what is
+ * running: `?aces=0` and `?bloom=0|N` (the 074/09 post A/Bs), `?scale=0.75` (the 074/09 render-scale tier —
+ * MSAA/bloomq were field-tested and dropped), and `?fx=N`, a multiplier over every fx system's shipped draw
+ * distance (100/04). `?fx` doubles as the POSITIVE CONTROL a distance capture needs: a tiny value culls the
+ * emitters, which is the only way a shot can prove the specks in it are particles at all.
+ */
+function applyGraphicsParams(config: ReturnType<typeof createGameRuntimeConfig>, params: URLSearchParams): void {
+  if (params.get('aces') === '0') {
+    config.graphics.toneMapping = false;
+  }
+  const bloomParam = Number(params.get('bloom') ?? Number.NaN);
+  if (Number.isFinite(bloomParam)) {
+    config.graphics.bloom.enabled = bloomParam > 0;
+    if (bloomParam > 0) {
+      config.graphics.bloom.intensity = bloomParam;
+    }
+  }
+  const scaleParam = Number(params.get('scale') ?? Number.NaN);
+  if (Number.isFinite(scaleParam)) {
+    config.graphics.renderScale = scaleParam;
+  }
+  const fxParam = Number(params.get('fx') ?? Number.NaN);
+  if (Number.isFinite(fxParam) && fxParam > 0) {
+    config.graphics.effects.drawDistanceScale = fxParam;
+  }
+}
+
+/**
  * Sky A/B overrides (074/06 row 4 sky v2): `?sky=preetham` = the legacy dome vs the Hosek-Wilkie default;
  * `?clouds=N` = cloud-layer opacity (0 = the naked dome, kills cirrus+cumulus too).
  */
@@ -382,27 +410,11 @@ async function boot(
   const params = new URLSearchParams(window.location.search);
   const hud = document.getElementById('engine-hud') as HTMLPreElement;
   const config = createGameRuntimeConfig();
-  // `?aces=0` / `?bloom=0|N` — the 074/09 post A/Bs (fold into the live config, so debug stays truthful).
-  if (params.get('aces') === '0') {
-    config.graphics.toneMapping = false;
-  }
-  const bloomParam = Number(params.get('bloom') ?? Number.NaN);
-  if (Number.isFinite(bloomParam)) {
-    config.graphics.bloom.enabled = bloomParam > 0;
-    if (bloomParam > 0) {
-      config.graphics.bloom.intensity = bloomParam;
-    }
-  }
+  applyGraphicsParams(config, params);
   // `?probe=0` — the 074/16 env-probe A/B: keeps reflections on the analytic-sky fallback.
   const probeEnabled = params.get('probe') !== '0';
   // `?probeview=1` — replace the frame with the probe cube panorama (orientation/content debug).
   const probeViewEnabled = params.get('probeview') === '1';
-  // Tier knob (074/09): `?scale=0.75` render scale (live). MSAA/bloomq knobs were field-tested and
-  // dropped (WebGPU allows sampleCount 1|4 only; bloom levels saved ~0.05 ms).
-  const scaleParam = Number(params.get('scale') ?? Number.NaN);
-  if (Number.isFinite(scaleParam)) {
-    config.graphics.renderScale = scaleParam;
-  }
   // Draw distance (074/21 P1): ONE knob → the LOD streaming ring, with the fog cut capped at
   // `drawDistance − FOG_RING_MARGIN` — the outer margin band is always loaded before it leaves the fog,
   // so streaming pops are impossible by construction. Per-game default from GAME_CONFIG (an island TC
@@ -805,7 +817,7 @@ async function boot(
   const player = loadEnginePlayer(engine, fs, GAME_CONFIG[gameId].mainCharacter, config.movement);
   // 2dfx particles (B6): the pak carries the emitter anchors, this reads effects.fxp + effectsPC.txd and
   // bakes them. Absent-tolerant — a profile without the FX files simply renders no particles.
-  const particles = setupEngineParticles(engine, fs, drawDistance);
+  const particles = setupEngineParticles(engine, fs, drawDistance, config.graphics.effects.drawDistanceScale);
   // Skid-mark decal lane (089/03): SA's particleskid sprite, installed once — absent-tolerant like the FX.
   const skidSprite = loadSkidSprite(fs);
   if (skidSprite) {
@@ -1704,7 +1716,8 @@ async function boot(
     const streamStarted = performance.now();
     const streamStats: StreamStats = setup.driver.update(playerEngine);
     // Emitters follow the streamed cell set; the call self-gates on a signature, so this is not per-frame work.
-    particles?.rebuild();
+    // The live distance scale rides in on the same call — a changed value re-bakes both lanes.
+    particles?.rebuild(config.graphics.effects.drawDistanceScale);
     void refreshCollision(); // self-gates on the camera's cell set — a no-op unless the overlay is on and moved
     streamMs = performance.now() - streamStarted;
     lastStream = streamStats;

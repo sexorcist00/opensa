@@ -41,11 +41,13 @@ columns, steam vents, fountains — 113 entries across the shipped map, each nam
   ([hack](../hacks/tiny-fx-distance-floor.md)). 300 survives only as the fallback for a modded system that
   authors no `cullDist`. Shipped values: `vent`/`vent2`/`waterfall_end` 25, `water_fountain` 30,
   `fire`/`flame` 35, `prt_*` 50, `carwashspray` 70, `insects`/`cigarette_smoke` 100, smoke → LOD radius.
-- **Live config** — `graphics.effects { enabled, drawDistance }` (init config + debugger → Graphics →
-  "World effects"). **Only `enabled` does anything** (`engine.particlesEnabled`). `drawDistance` is a
-  leftover of the plan-044 three-renderer lane: nothing on the own engine reads it, so the debugger's
-  EFFECTS DISTANCE slider moves a number that reaches no code. Found by the plan-100 audit; either wire it
-  as a scale over the authored values or delete both — it may not stay a knob that lies.
+- **Live config** — `graphics.effects { enabled, drawDistanceScale }` (init config + debugger → Graphics →
+  "World effects"). `enabled` gates both lanes (`engine.particlesEnabled`); `drawDistanceScale` (default 1,
+  slider ×0.25–×4) multiplies every system's SHIPPED distance — authored, departed or floored — and is applied
+  last, inside `fxDrawDistance`. It rides in on `rebuild(scale)`: a changed value re-bakes the placed lane
+  (it is in the upload signature) and re-installs the dynamic lane's records, which are otherwise built once
+  at boot. It replaces the plan-044 `drawDistance` knob, which had REPLACED each system's authored cullDist
+  and, since the three renderer went, reached no code at all (found by the plan-100 audit).
 - **Escalators (2dfx type 10)** — `RWEscalator` parsing only (geometry-local path
   start → bottom → top → end + direction). The moving-step RENDERER was deleted with the three
   renderer (074/13) and has **no replacement on the engine** — escalators currently do not move.

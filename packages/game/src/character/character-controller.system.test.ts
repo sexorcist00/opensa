@@ -118,7 +118,7 @@ function config(gameState: Config['gameState']): Config {
     graphics: {
       bloom: { enabled: true, intensity: 0.7, threshold: 0.7 },
       clouds: { coverage: 0.5, opacity: 0.85, volumetric: false },
-      effects: { drawDistance: 150, enabled: true },
+      effects: { drawDistanceScale: 1, enabled: true },
       headlights: {
         beamIntensity: 2.2,
         beamRange: 34,

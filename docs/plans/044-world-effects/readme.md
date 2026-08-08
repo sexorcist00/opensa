@@ -68,6 +68,9 @@ walks the real chunk tree and won't see them.)
      it: vanilla culls are tiny (fire = 35 m) — effects only appeared near-point-blank and the
      slider had no authority above the authored value. Default 150 m, fade over the last 20%,
      shared `uDrawDistance` uniform keeps the CPU cutoff aligned with the GPU fade.
+     **Superseded 2026-08-08** — that knob went dead with the three renderer and is now
+     `graphics.effects.drawDistanceScale`, a MULTIPLIER over each system's authored `cullDist`
+     rather than a replacement of it (plan 100/04; `docs/features/world-effects.md`).
 3. **Escalators (2dfx type 10, ×6). — DONE (verified in browser: LA mall pairs)** Parser:
    `RWEscalator { position, bottom, top, end, direction }` — geometry-local path points
    (survey-confirmed), path = start → bottom (lower landing) → top (incline) → end (upper

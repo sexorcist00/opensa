@@ -106,4 +106,5 @@ and simultaneously the measure of how little it costs.
 **Per-system distances shipped** (authored → applied): `insects` 15 → **100**, `cigarette_smoke` 15 → **100**,
 `ws_factorysmoke` 150 → **1500**, `smoke30m`/`smoke30lit` 155 → **1500**, `smoke50lit` 255 → **1500**,
 `carwashspray` 70, `fire`/`flame` 35, `water_fountain`/`water_fnt_tme` 30, `vent`/`vent2`/`waterfall_end` 25,
-`prt_*` (the dynamic lane) 50. Everything not in bold is the authored number, verbatim.
+`prt_*` (the dynamic lane) 50. Everything not in bold is the authored number, verbatim, and the whole set is
+multiplied by the live `graphics.effects.drawDistanceScale` (default 1).

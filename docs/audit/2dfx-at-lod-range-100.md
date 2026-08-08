@@ -73,7 +73,10 @@ throughout.
   a debugger slider, and **nothing on the own engine reads it** — a leftover of the plan-044 three-renderer
   lane. `docs/features/world-effects.md` claimed it "REPLACES each system's authored CULLDIST", which was
   false before this chain and is doubly misleading after it. The doc is corrected; the knob is left for the
-  user to decide between wiring and deleting.
+  user to decide between wiring and deleting. **Decided 2026-08-08: wired.** It is now
+  `graphics.effects.drawDistanceScale` (default 1) — a multiplier over each system's shipped distance,
+  applied last inside `fxDrawDistance` and carried in on `rebuild(scale)`, so the authored table still
+  decides the SHAPE and the knob only stretches it.
 - **`sa-map-viewer` is the second `weld.ts` consumer** and the doubling argument had only been checked
   against the engine's streamer. It holds: `CellRenderer.setCells(coords, lod)` makes exactly one level
   resident and unloads everything outside the wanted set, so the viewer cannot mix levels either.

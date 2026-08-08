@@ -125,9 +125,9 @@ export function createGameRuntimeConfig(): Config {
     graphics: {
       bloom: { enabled: true, intensity: 0.7, threshold: 0.7 },
       clouds: { coverage: 0.5, opacity: 0.85, volumetric: false },
-      // World 2dfx particle effects (plan 044) — drawDistance replaces the systems' authored
-      // CULLDIST (vanilla culls fire at 35 m — too close).
-      effects: { drawDistance: 150, enabled: true },
+      // World 2dfx particle effects (plan 044) — each system is drawn for its own authored CULLDIST
+      // (plan 100/04); the scale is a live multiplier over that, 1 = exactly what the fxp says.
+      effects: { drawDistanceScale: 1, enabled: true },
       headlights: {
         beamIntensity: 2.2,
         beamRange: 34,

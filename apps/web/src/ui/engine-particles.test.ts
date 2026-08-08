@@ -1,4 +1,4 @@
-import type { DynamicParticleLibrary, Engine } from '@opensa/engine';
+import type { DynamicParticleLibrary, Engine, ParticleUpload } from '@opensa/engine';
 import type { AssetFileSystem, FxBakedEmitter } from '@opensa/renderware';
 
 import { parseFxp } from '@opensa/renderware';
@@ -66,17 +66,24 @@ interface RecordedSpawn {
   system: number;
 }
 
-/** A recording Engine stand-in: the two calls setupEngineParticles makes for the dynamic lane. */
+/** A recording Engine stand-in: the calls setupEngineParticles makes for the dynamic lane, plus the empty
+ *  cell set `rebuild` walks (no streamed cells, so the PLACED lane uploads nothing). */
 function fakeEngine(): {
   engine: Engine;
   library: () => DynamicParticleLibrary | null;
   spawns: RecordedSpawn[];
+  uploads: ParticleUpload[];
 } {
   let library: DynamicParticleLibrary | null = null;
   const spawns: RecordedSpawn[] = [];
+  const uploads: ParticleUpload[] = [];
   const engine = {
+    cells: { all: (): [] => [] },
     initDynamicParticles: (upload: DynamicParticleLibrary): void => {
       library = upload;
+    },
+    setParticles: (upload: ParticleUpload): void => {
+      uploads.push(upload);
     },
     spawnParticle: (
       system: number,
@@ -95,7 +102,7 @@ function fakeEngine(): {
     },
   } as unknown as Engine;
 
-  return { engine, library: () => library, spawns };
+  return { engine, library: () => library, spawns, uploads };
 }
 
 /** The two fixture files behind the AssetFileSystem surface setupEngineParticles reads. */
@@ -211,6 +218,12 @@ describe.skipIf(!existsSync(EFFECTS_FXP))('fx draw distance (real effects.fxp)',
         300,
       );
     });
+
+    it('leaves every system where it was at scale 1 — the knob is a multiplier, not a replacement', () => {
+      for (const name of ['vent', 'fire', 'insects', 'ws_factorysmoke']) {
+        expect(fxDrawDistance(systems.get(name)!, WORLD_DRAW_DISTANCE, { scale: 1 }), name).toBe(distanceOf(name));
+      }
+    });
   });
 
   describe('positive cases', () => {
@@ -227,6 +240,14 @@ describe.skipIf(!existsSync(EFFECTS_FXP))('fx draw distance (real effects.fxp)',
       expect(distanceOf('cigarette_smoke')).toBe(100);
     });
 
+    it('scales every distance by the live knob, floors and departures included', () => {
+      expect(fxDrawDistance(systems.get('vent')!, WORLD_DRAW_DISTANCE, { scale: 2 })).toBe(50); // authored 25
+      expect(fxDrawDistance(systems.get('insects')!, WORLD_DRAW_DISTANCE, { scale: 0.5 })).toBe(50); // floored 100
+      expect(fxDrawDistance(systems.get('smoke30m')!, WORLD_DRAW_DISTANCE, { scale: 0.5 })).toBe(
+        WORLD_DRAW_DISTANCE / 2,
+      );
+    });
+
     it('writes the authored distance into the baked record, not the flat constant', () => {
       const { engine, library } = fakeEngine();
       setupEngineParticles(engine, fixtureFs(), WORLD_DRAW_DISTANCE);
@@ -240,6 +261,15 @@ describe.skipIf(!existsSync(EFFECTS_FXP))('fx draw distance (real effects.fxp)',
         distances.add(records[index * 20 + 7]);
       }
       expect([...distances]).toEqual([50]);
+    });
+
+    it('re-bakes the dynamic lane when the live scale changes', () => {
+      const { engine, library } = fakeEngine();
+      const particles = setupEngineParticles(engine, fixtureFs(), WORLD_DRAW_DISTANCE)!;
+
+      particles.rebuild(0.5);
+
+      expect(library()!.systems[7]).toBe(25); // the authored 50, halved
     });
   });
 });
