@@ -30,8 +30,11 @@ columns, steam vents, fountains — 113 entries across the shipped map, each nam
   (`tools/opensa-pack`) and stored as per-cell anchors; the host resolves each anchor's `effectName`
   against the loaded library. **Both levels since plan 100/03**: a LOD bundle takes its anchors from the
   baked cell model's own 2dfx section, so an emitter survives the HD ring instead of vanishing at ~440 u.
-  The stock map places **878 anchors across 13 systems** (`insects` 402, `vent` 206, `vent2` 162, `fire` 45,
-  the four smokes 42 between them, the rest single digits).
+  The shipping pak carries **943 anchors across 13 systems** in its 569 HD cells (`insects` 336, `vent` 209,
+  `vent2` 162, `cigarette_smoke` 87, `fire` 53, the four smokes 77 between them, the rest single digits);
+  the LOD level carries 888 of the same anchors, so the two levels must not be summed. Read off the bytes by
+  `scripts/debug/fx-anchor-census.ts` — plan 100's ledgers quote 878/`insects` 402/`cigarette_smoke` none
+  from an in-process bake count, which the pak does not bear out.
 - **Draw distance is each system's authored `cullDist`** (plan 100/04). Until then one flat 300 was written
   into every system record, so a cigarette plume rendered 20× further than authored while a factory plume
   stopped at 300 whatever the streamer kept resident. `fxDrawDistance` reads the fxp value per system, with

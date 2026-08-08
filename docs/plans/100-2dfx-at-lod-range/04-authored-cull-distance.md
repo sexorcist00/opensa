@@ -77,8 +77,21 @@ global tuning constant standing where the game's own numbers should be read.
   cooling-tower puffs seen at 300 u are gone by 600 — two systems, two authored distances, both live in the
   field. Details in [03](03-lod-bundle-reads-2dfx.md) and the
   [hack file](../../hacks/smoke-drawn-to-world-edge.md).
-- **The `insects`/`cigarette_smoke` floor is still unverified** — the run framed no anchor of either, and at
-  15 u authored vs 100 u applied the difference is only visible standing next to one.
+- **The `insects`/`cigarette_smoke` floor is VERIFIED (2026-08-08, same pak), and the verdict is that the
+  number is inert.** A/B at one spot, `?fx=1` against `?fx=0.02` (every emitter culled — the positive
+  control), on the Santa Maria pier anchor `388.9, −2071.6, 8.4` approached along the pier: **specks at
+  ~9 m, marginal at ~19 m, nothing at ~26 / 34 / 40 m.** `insects` authors `size 0.02` — a 2 cm sprite, ~3 px
+  at 9 m and under half a pixel at 100 — so the floor keeps 336 anchors alive across 75 u in which nothing
+  can be seen. Kept anyway: 15 u restores the pop it was raised for, and 100/04's own A/B put the whole
+  particle system under the noise floor. Details in [the hack](../../hacks/tiny-fx-distance-floor.md).
+- **The anchor counts below are not what the shipping pak carries.** `scripts/debug/fx-anchor-census.ts`
+  (self-checked, read off the canonical pak's bytes) gives **943 anchors in 569 hd cells** — `insects` 336,
+  `vent` 209, `vent2` 162, **`cigarette_smoke` 87**, `fire` 53, `smoke30lit` 49, `smoke30m` 19,
+  `waterfall_end` 9, `water_fountain` 7, `smoke50lit` 6, `ws_factorysmoke` 3, `coke_puff` 2,
+  `water_fnt_tme` 1; no `flame`, no `carwashspray`. The 878 below came from an in-process bake count, and
+  the difference runs in both directions with systems appearing and disappearing — the shape of a
+  mods-merged build read against a source-side tally. **`cigarette_smoke` having no anchor at all was the
+  most load-bearing of the wrong numbers**: it is 87.
 
 ## Measurements / notes
 
