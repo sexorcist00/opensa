@@ -49,7 +49,8 @@ choice, and the dedup a world-space type needs.
 ## Measurements / notes
 
 **What a full bake now carries** — computed over the stock map at the engine's 250 u grid without running a
-bake (the standing rule: no full pmb rebuild until plan 07's chain is finished):
+bake (no rebuild had been taken at the time; the rule that deferred it was lifted 2026-08-08 in favour of a
+[capture manifest](../../../../docs/roadmap/0.5.0/plans/07-lod-generators-extended/readme.md#working-rules-while-this-plan-runs)):
 
 | Type | Entries | Cells |
 | --- | --- | --- |

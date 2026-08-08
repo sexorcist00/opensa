@@ -88,22 +88,19 @@ with it (plan 100 step 05); what stays here is the far-view emitter RATE BUDGET 
 
 ## Working rules while this plan runs
 
-1. **No full map rebuild through `perfect-map-builder` until this plan is finished** (decided 2026-08-07).
-   Every plan here changes what a LOD carries, so a rebuild taken mid-chain is a pak whose contents nobody
-   can attribute to a step. Tool-level verification (unit tests, fixture round-trips, single-model or
-   single-cell runs) is what each step is judged on; the map is rebuilt once, at the end, and THAT is the
-   run whose numbers go to `docs/benchmarks/`.
+1. **A full rebuild is judged by what it CAPTURES, not by when it is allowed** (the 2026-08-07 ban on
+   rebuilding until this plan finished was lifted 2026-08-08, on the user's call — it had made
+   [plan 100](../../../../plans/100-2dfx-at-lod-range/readme.md)'s owed field check a hostage of a chain it
+   has nothing to do with, while [04](lod-procobj-generator/04-slot-economy-and-budgets.md)'s perf
+   calibration needed a build of its own).
 
-   **ONE exception, granted 2026-08-08: an EARLY rebuild that serves plan 100 and this chain's baseline
-   together.** The rule had made [plan 100](../../../../plans/100-2dfx-at-lod-range/readme.md)'s owed field
-   check a hostage of the whole procobj chain — its pack input is a `.work` intermediate the pipeline
-   deletes, so nothing can be asked of a tree built earlier — while
-   [04](lod-procobj-generator/04-slot-economy-and-budgets.md)'s perf calibration needs a full build of its
-   own. One run answers both. It is **one**: the end-of-chain rebuild still happens, and this is not a licence
-   to rebuild whenever a step wants reassurance.
+   What the ban was protecting is still true and is now the rule instead: **a step is judged on tool-level
+   verification** — unit tests, fixture round-trips, single-model or single-cell runs — because a pak built
+   mid-chain carries several steps at once and its contents cannot be attributed to any of them. A rebuild
+   settles questions only a whole map can answer; it is not a step's evidence.
 
-   It only counts if it is captured, so the run carries a fixed manifest — nothing here may be gathered
-   afterwards from a tree, and a missed item costs the whole rebuild:
+   And a rebuild only counts if it is captured, so every full run carries this manifest. Nothing on it can be
+   gathered from the tree afterwards, so a missed item costs the run:
 
    | For | Capture |
    | --- | --- |
@@ -114,8 +111,11 @@ with it (plan 100 step 05); what stays here is the far-view emitter RATE BUDGET 
    | 07/00 | `procobj-layer-census.ts` and `ipl-row-census.ts` on the fresh tree — the numbers this chain is priced in |
    | standing | which pak build every figure was read from, into `docs/benchmarks/` BEFORE anything is analysed |
 
-   Keep the run re-usable: pmb's `--until <stage>` KEEPS the intermediate, which is the only way a second
-   question can be asked of the same build instead of buying another one.
+   Keep the run re-usable with **`--keep-work`** — it is what leaves `<out>/.work` behind on a FULL run, so a
+   second question can be asked of the same build instead of buying another one. `--until <stage>` also keeps
+   it, but it is a stop point rather than a speed-up: `--until pack` still runs everything up to `pack`.
+   What makes a RE-run cheap is `--exclude`, which leaves the excluded stage's previous output in place
+   (only `.work` is cleared). **No flag makes a full rebuild fast** — budget it as a full rebuild.
 2. **A finished step's plan doc MOVES into the tool it landed in.** Each tool keeps its own chain at
    `tools/<tool>/docs/plans/NNN-<name>.md` — when a step here ships, its file leaves this folder for the
    next free number in that tool's chain (its Measurements section filled in), and the row above is updated

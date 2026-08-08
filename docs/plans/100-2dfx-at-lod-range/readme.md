@@ -49,10 +49,10 @@ tree can be asked whether a chimney smokes at 600 u. Three things ride on that o
 verification in [03](03-lod-bundle-reads-2dfx.md), the look verdict for both `docs/hacks/` entries from
 [04](04-authored-cull-distance.md), and confirmation that nothing doubles at the transition distance.
 
-**It now has a scheduled home (decided 2026-08-08).** Plan 07's working rule banned a full pmb rebuild until
-its procobj chain finishes, which would have left this chain unverified for the length of another one. The
-user granted **one early rebuild serving both**; its capture manifest — this plan's three items plus 07's
-baseline numbers — is in
+**It now has a scheduled home (decided 2026-08-08).** Plan 07's working rule had banned a full pmb rebuild
+until its procobj chain finishes, which would have left this chain unverified for the length of another one.
+That rule is **lifted**: a rebuild is now gated on what it CAPTURES rather than on when it is taken, and the
+manifest — this plan's three items plus 07's baseline numbers — is in
 [07's working rules](../../roadmap/0.5.0/plans/07-lod-generators-extended/readme.md#working-rules-while-this-plan-runs).
 Nothing here can be recovered from the tree afterwards, so an item missed on that run costs the rebuild.
 

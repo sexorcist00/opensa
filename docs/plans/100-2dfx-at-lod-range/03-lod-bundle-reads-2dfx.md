@@ -79,13 +79,15 @@ run: a light is **100 B**, an emitter **44 B**, a plate **108 B**. Across those 
 **6368 B of 213 016 B (+3.1 %)**. Map-wide that projects to 878 × 44 + 489 × 108 ≈ **89 KB** added to the cell
 LOD DFFs, against the 22 366 lights already there.
 
-**The FIELD check is NOT done, and cannot be without the deferred rebuild.** The pack's LOD input is a pmb
+**The FIELD check is NOT done, and cannot be without a rebuild.** The pack's LOD input is a pmb
 intermediate (`<out>/.work/opensa-lod`) that the pipeline deletes as it consumes it — the built tree's
 `lods.img` holds `.osm`, the pack's OUTPUT. So "from >440 u a chimney smokes, a lamp glows and a plate reads"
-lands with the chain's single rebuild, per the standing rule that no full map rebuild runs until plan 07's
-chain is finished. Two things ride on that same run: the look verdict for both
-[`docs/hacks/`](../../hacks/README.md) entries from 04, and the confirmation that no plate or plume doubles at
-the transition distance.
+lands with the next full build. **That build was scheduled 2026-08-08**, when the standing "no rebuild until
+plan 07 finishes" rule was lifted in favour of a
+[capture manifest](../../roadmap/0.5.0/plans/07-lod-generators-extended/readme.md#working-rules-while-this-plan-runs).
+Two things ride on that same run: the look verdict for both [`docs/hacks/`](../../hacks/README.md) entries
+from 04, and the confirmation that no plate or plume doubles at the transition distance. Run it with
+`--keep-work` — without it the `.work` LOD input is deleted again and the same question needs another build.
 
 ## Measurements / notes
 
