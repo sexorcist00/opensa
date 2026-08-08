@@ -72,6 +72,15 @@ A perf comparison is worthless without these held equal, so record them in `note
   until 2026-07-23 (plan 086) — rows recorded before that date read the same folder under its old name.
 - renderer flags (`?scale=`, `?draw=`, `?engine=`)
 
+**And check `avgTriangles` BEFORE reading any `gpuMs.pass` delta.** Two arms of the same scene must draw the
+same world; when the triangle count moves by more than the content change can explain, the row is measuring
+the harness, not the build. Earned 2026-08-08 on the 07/04 density A/B: three of nine scenes disagreed — the
+control scene `ocean-horizon`, which no map layer moves, by **+107 %** — while `lateCreates` stayed 0 and
+every report looked normal. The cause is a live defect
+([`open-issues/bench-scene-transition-collision.md`](../open-issues/bench-scene-transition-collision.md)):
+collision is missing across a scene teleport, so what streamed in differs run to run. Until it is fixed, a
+scene-to-scene A/B on this harness cannot resolve anything smaller than its own drift.
+
 ## Runs
 
 See [index.md](index.md) — the full chronological table with conditions.

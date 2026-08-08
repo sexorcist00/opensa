@@ -413,6 +413,47 @@ density baseline plan 07/04 compares against**. Scene-to-scene `gpuMs.pass` move
 in both directions, which is run-to-run spread: minor 8 adds one header word per cell and no geometry, and the
 positive control two rows up already showed this sweep cannot resolve differences of that size.
 
+### Procobj density sweep — the arm that was cut, and why the sweep could not answer anything (2026-08-08)
+
+Two builds were made for 07/04's opensa perf budget, both from the canonical build's kept `.work/5-trees`
+stage so the ONLY variable is the procobj density: `bench-d1` (`--procobj-density 1`, vanilla) and `bench-d3`
+(`--procobj-density 3`, the scatter's candidate ceiling, cap raised to 200 000 so it could not bind).
+
+**The builds already answered the question the bench was meant to ask, and the answer is that the arms are not
+arms.** Three times the candidates yields **15 840 objects against 15 286 — +3.6 %, not 3×** (rows 6 728 vs
+6 487; pak 1 275 777 024 vs 1 272 020 992 B, +0.30 %; 1139 cells in both). No `CAP DROPPED`, so `procObjMax`
+never bound: the extra candidates were culled by **MINDIST**, which is already saturated at vanilla density.
+Two builds 3.6 % apart cannot price a streaming budget — the layer's whole GPU cost is 0.07–0.38 ms
+([layer decomposition](opensa-engine/2026-07-21-layer-decomposition.md)), so 3.6 % of it is far below what
+this instrument resolves.
+
+The headless `d1` sweep was killed externally after 5 of 6 scenes and `d3` never ran headless; those partial
+rows are [`2026-08-08-headless-07-04-density-d1-partial.json`](opensa-engine/2026-08-08-headless-07-04-density-d1-partial.json).
+**The user then ran both arms in full on his own machine** (9 scenes each, in-game `?bench=all`):
+[`2026-08-08-ingame-07-04-density-ab.json`](opensa-engine/2026-08-08-ingame-07-04-density-ab.json).
+
+**Result: +3.6 % clutter costs nothing this instrument can see.** Six scenes come back with triangle counts
+identical to ±0.0 % and `gpuMs.pass` within ±0.03 ms; `country-dusk` — the clutter scene — moves **+0.3 %
+triangles for +0.013 ms**. That is the whole verdict, and it is a statement about 3.6 %, not about density.
+
+**Three rows are contaminated, and the partial headless run is what identifies which arm is wrong.** The
+scenes where the arms disagree do so by amounts no 3.6 % content change can produce — `sf-fog-dawn` −4.2 %
+triangles, `lv-night` +15.5 %, `ocean-horizon` **+107.3 %** (the control scene, which
+[the layer decomposition](opensa-engine/2026-07-21-layer-decomposition.md) showed does not move for ANY map
+layer). In all three the `d3` arm agrees with the independent headless `d1` run (ocean-horizon 848 670 vs
+846 535 triangles; lv-night 2 070 601 vs 2 058 684; sf-fog-dawn 1 483 818 vs 1 482 512) while the user's `d1`
+arm is the outlier — so the content is the same and the **`d1` run's scene states drifted**, under-streaming
+two scenes and over-streaming one.
+
+That matches the defect the user reported on both runs: collision is lost across scene transitions (cars fall
+through the ground) and the player falls when the sweep ends —
+[`open-issues/bench-scene-transition-collision.md`](../open-issues/bench-scene-transition-collision.md).
+**Until that is fixed, no scene-to-scene A/B on this harness can be trusted below its own drift**, which
+these rows measure at up to 107 % of a scene's triangles.
+
+What a real density measurement needs is a lever that MOVES the count, and the only one left is the authored
+`procobj.dat` MINDIST — a data-honesty decision, not a knob.
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
