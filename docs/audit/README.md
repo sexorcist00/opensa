@@ -86,3 +86,13 @@ interpret them.
   131 times in 489 (now a restriction), steps 01 and 02 could not ship apart, and step 05 fixed nothing that
   was broken. The field check is owed to the chain's single rebuild. The audit itself found a debugger slider
   wired to nothing.
+- [`plan-07-per-target-and-effect-distance.md`](./plan-07-per-target-and-effect-distance.md) — the session
+  after: plan 100's last row closed (the `insects` floor is field-judged and **inert** — a 2 cm sprite is
+  under half a pixel at its cull distance), the dead slider wired as a SCALE over the authored table rather
+  than a replacement, `?fx=N` added as the positive control a distance capture needs, and the `prt_*` lane
+  floored back at 300 u. Then plan 07 from three open decisions to none: `01` sized (both build-time caps
+  zero nothing — MINDIST provably cannot — while the runtime cell cap zeroes species in 19.8 % of scattering
+  cells, latent in the shipping build only because our own generator strips them), and 02/04 rewritten per
+  target, then narrowed to TWO when stock SA was ruled out of scope — which retired the slot economy 04 is
+  named after and left int16, ours, as the only ceiling. Two new instruments, and **both self-checks fired on
+  their first run**: pak particle positions are cell-LOCAL, and "the cap is finite" is not "the cap binds".

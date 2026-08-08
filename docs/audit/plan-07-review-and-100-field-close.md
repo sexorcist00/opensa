@@ -112,5 +112,9 @@ minute against 1137 cells in an hour. The canonical pak was then re-packed prope
   control. The floor is inert above ~25 u (the sprite is 2 cm) and is kept because 15 u restores the pop.
   What made the shot possible was `scripts/debug/fx-anchor-census.ts` — the missing half of last session's
   two failed rounds was never the camera, it was not knowing where an emitter stood.
-- Plan 07's own decisions: whether `01` survives its sizing task, and whether `02`/`04` get rewritten per
-  TARGET (stock has 1.18× of headroom in total) before any code.
+- ~~Plan 07's own decisions: whether `01` survives its sizing task, and whether `02`/`04` get rewritten per
+  TARGET before any code.~~ **Both settled 2026-08-08** — `01` was sized (the defect is at the runtime cell
+  cap, not the build-time ones) and re-ordered behind `02`; `02`/`04` were rewritten per target, then
+  narrowed to TWO when the user ruled stock SA out of scope, which retired the 1.18× headroom figure this
+  line quoted. Written up in
+  [`plan-07-per-target-and-effect-distance.md`](plan-07-per-target-and-effect-distance.md).

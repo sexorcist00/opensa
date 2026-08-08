@@ -5,8 +5,15 @@ the P0 of the whole density chain.** It runs BEFORE [04](04-slot-economy-and-bud
 the answer — it is written as "gated on Task 3, our own ASI" — and that assumption has never been argued
 against the alternative the user raises: **a real SA install will definitely have FLA and OLA anyway.**
 
-Nothing here should be built until this review closes. Its output is a decision, and 04's premise is what
-changes if the decision goes the other way.
+~~Nothing here should be built until this review closes.~~ **CLOSED 2026-08-08 by the user's scope call, not
+by this review's own argument: stock SA is not a target.** The shipping configuration is OLA + FLA for the
+pools and slots plus our own `perfect-map.asi` for int16 — the one ceiling no adjuster lifts
+([`gta-sa-original/reference-install.md`](../../../../../gta-sa-original/reference-install.md)). That answers
+the question in the title, so the density chain is unblocked and
+[04](04-slot-economy-and-budgets.md) is rewritten around two targets, `sa` and `opensa`. **Everything below
+is the record of how the question was costed, and its stock arithmetic is no longer a constraint to plan
+against** — read it for the int16 story, not for the slot one. What survives as work is the asi's own
+shipping and verification story, which is `asi/perfect-map`'s chain, not this one.
 
 **Since 2026-08-07 the review has a TARGET to cost and a real corpus to test against.**
 [density-target.md](../density-target.md) fixes the aiming point at **57 583 placed objects** (ProperFixes

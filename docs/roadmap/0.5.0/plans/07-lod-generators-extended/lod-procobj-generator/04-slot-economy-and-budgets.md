@@ -1,4 +1,7 @@
-# 04 — Slot economy, budgets and integration, PER TARGET
+# 04 — Budgets and integration, PER TARGET
+
+> The file is still named for the slot economy because its links are; the plan is not. Slots stopped being a
+> currency on 2026-08-08 — see the banner below.
 
 **Rewritten PER TARGET 2026-08-08 (the user's call), and narrowed to TWO targets the same day.** The premise
 banner this file carried — three corrections stacked on an original that was wrong — is spent: what it was
