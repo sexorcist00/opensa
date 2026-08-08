@@ -27,19 +27,24 @@ row but its chain was superseded by 097). Newest first:
   behaviour does not exist. Step 00 is research first: recover SA's own step spacing, speed and carry rule
   (and find out whether the steps are objects or a texture scroll — if the latter, plan 099's UV lane may
   already do it) before any constant of ours is fitted. Corpus is 5 entries in 4 models, fully enumerable.
-- **[100 — 2dfx survives to LOD range](./100-2dfx-at-lod-range/readme.md)** — **IN PROGRESS** (planned
-  2026-08-07; steps 01 + 02 shipped 2026-08-08 and moved into
-  [lod-common/007](../../tools/lod-common/docs/plans/007-2dfx-space-and-cell-carry.md) +
-  [opensa-lod-generator/006](../../tools/opensa-lod-generator/docs/plans/006-cell-bake-carries-effects.md)):
-  chimney smoke, street lamps and street-name plates die at the HD boundary (`HD_RADIUS` 380), so a
-  district past ~440 u draws to 1000 u dark, smokeless and unsigned. Both LOD generators bake the three
-  types that have a consumer (0 light, 1 particle, 7 roadsign) and `cell-weld` starts reading what the cell
-  bake produces — the half that makes the other half real, since nothing reads a cell LOD's 2dfx today. Also
-  fixes the flat `DRAW_DISTANCE = 300` that overrides every fx system's authored `cullDist`. Step 00 is the
-  research: it began as a killed plan (postmortem) and was revived the same day by a reversed decision.
-  The six types our engine does not consume (16 934 stock entries) stay out of the OpenSA line — escalators
-  among them, because our engine has no escalator code at all, while real SA implements them natively and the
-  SA clones keep carrying the entry.
+- **[100 — 2dfx survives to LOD range](./100-2dfx-at-lod-range/readme.md)** — **ALL FIVE STEPS SHIPPED
+  2026-08-08** (planned 2026-08-07), **field check owed to the chain's single rebuild**. Steps moved into
+  [lod-common/007](../../tools/lod-common/docs/plans/007-2dfx-space-and-cell-carry.md),
+  [opensa-lod-generator/006](../../tools/opensa-lod-generator/docs/plans/006-cell-bake-carries-effects.md) and
+  [sa-lod-generator/007](../../tools/sa-lod-generator/docs/plans/007-clone-2dfx-policy.md); 03 and 04 stayed
+  central (`cell-weld`/`opensa-pack` and `apps/web` keep no plan chains). Chimney smoke, street lamps and
+  street-name plates died at the HD boundary (`HD_RADIUS` 380), so a district past ~440 u drew to 1000 u dark,
+  smokeless and unsigned. Both LOD generators now bake the three types that have a consumer (0 light,
+  1 particle, 7 roadsign) and `cell-weld` reads what the cell bake produces — the half that makes the other
+  half real. The flat `DRAW_DISTANCE = 300` is gone; every fx system takes its authored `cullDist` bar two
+  recorded departures. Step 00 is the research: it began as a killed plan (postmortem) and was revived the
+  same day by a reversed decision. The six types our engine does not consume (16 934 stock entries) stay out
+  of the OpenSA line — escalators among them, because our engine has no escalator code at all, while real SA
+  implements them natively and the SA clones keep carrying the entry. **Three things the chain measured that
+  its plan had not**: a plate's world position lands outside its instance's own cell 131 times in 489 (so LOD
+  roadsigns come from the world-keyed pre-pass, not the LOD model, or they double across cell keys); the bench
+  cannot see emitter cost at all (proven by a positive control, not assumed); and 05 fixed nothing that was
+  broken — its premise that the decimate path lost emitters was already false.
 - **[099 — UV animations on script objects](./099-script-object-uv-anim/readme.md)** — **DONE
   2026-08-07** (planned 2026-08-05 from the 097/07 field bug round): the ferris wheel's blinking bulbs
   are a UVAnimDict step animation (`f13d`, a 13-frame film strip stepping every 0.225 s) that the

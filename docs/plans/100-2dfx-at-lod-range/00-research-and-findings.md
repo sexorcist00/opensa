@@ -90,4 +90,4 @@ engine feature nobody has built.
 
 **On the SA side they are a different story**, and the policy already says so: real SA implements escalators
 natively and reads the entry off whatever model it streams, so the `clone` column carries type 10 and
-[step 05](05-sa-clone-parity.md) keeps it. "No consumer" is true of OUR engine, not of the game.
+[step 05](../../../tools/sa-lod-generator/docs/plans/007-clone-2dfx-policy.md) keeps it. "No consumer" is true of OUR engine, not of the game.

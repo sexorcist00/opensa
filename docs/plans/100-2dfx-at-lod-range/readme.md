@@ -12,7 +12,7 @@ no code in `packages/engine` at all and stay out of the OpenSA line.
 
 **"No consumer" means ours, not the game's.** Real SA implements several of them natively and reads the entry
 off whatever model it streams, so the policy's `clone` column keeps carrying them and
-[step 05](05-sa-clone-parity.md) does not narrow it. Escalators are the clearest case: they work in SA, they
+[step 05](../../../tools/sa-lod-generator/docs/plans/007-clone-2dfx-policy.md) does not narrow it. Escalators are the clearest case: they work in SA, they
 have never moved in our engine (the staircase mesh draws — it is ordinary geometry — but nothing animates the
 steps), and giving a baked cell an entry our engine cannot read would not change that.
 
@@ -25,7 +25,7 @@ reads it. Either the generators feed a consumer or they write bytes into a void 
 
 | Target | Who bakes | Who consumes | State |
 | --- | --- | --- | --- |
-| real SA (`sa-lod-generator` clones) | per-object LOD clone carries the entry in its own DFF | **SA itself** reads 2dfx off whatever model streams | verbatim path already carries all three; decimate path drops particles — [05](05-sa-clone-parity.md) |
+| real SA (`sa-lod-generator` clones) | per-object LOD clone carries the entry in its own DFF | **SA itself** reads 2dfx off whatever model streams | **closed by [05](../../../tools/sa-lod-generator/docs/plans/007-clone-2dfx-policy.md)** — all three clone paths resolve one keep-set. Nothing was actually losing emitters (the step's premise was wrong): the change is consolidation, and stock output moves for 6 models, in entry ORDER only |
 | OpenSA (`opensa-lod-generator` cells) | the cell bake carries the entry in the merged cell DFF | `cell-weld` → the pak's LOD bundle | **closed by 01–03.** Lights and emitters come off the LOD model's own section; **plates come off the world-keyed pre-pass instead** — 131 of 489 sit in a different cell from the instance carrying them, and the two sources would double them ([03](03-lod-bundle-reads-2dfx.md) decision 3) |
 
 ## Steps
@@ -36,12 +36,18 @@ reads it. Either the generators feed a consumer or they write bytes into a void 
 | 02 | the cell bake emits lights, emitters and plates with the right transform per space | `tools/opensa-lod-generator` | **SHIPPED 2026-08-08** → [opensa-lod-generator/006](../../../tools/opensa-lod-generator/docs/plans/006-cell-bake-carries-effects.md) |
 | [03](03-lod-bundle-reads-2dfx.md) | `cell-weld` reads the LOD level's 2dfx into the LOD bundle, deduped against HD | `packages/cell-weld` (+ `opensa-pack`) | **SHIPPED 2026-08-08** — field check owed to the chain's rebuild |
 | [04](04-authored-cull-distance.md) | honour each fx system's authored `cullDist` instead of one hardcoded 300, and raise the smoke systems | `apps/web` | **SHIPPED 2026-08-08** (stays here — `apps/web` keeps no plan chain) |
-| [05](05-sa-clone-parity.md) | the SA clones carry the same set on BOTH paths (verbatim and decimate) | `tools/sa-lod-generator` | |
+| 05 | the SA clones carry the same set on BOTH paths (verbatim and decimate) | `tools/sa-lod-generator` | **SHIPPED 2026-08-08** → [sa-lod-generator/007](../../../tools/sa-lod-generator/docs/plans/007-clone-2dfx-policy.md) |
 
 Order: 01 → 02 → 03 is the OpenSA line and must land in that order (03 is what makes 02 visible). **01 and 02
 turned out to be inseparable** — `opensa-lod-generator` reads the policy directly, so the table flip and the
 per-space transform are one change; they shipped together. 04 is independent and can go first — it is the step
 that decides how far smoke is drawn at all. 05 is the real-SA line and depends only on 01.
+
+**All five shipped 2026-08-08. One thing is still owed: the FIELD CHECK**, and it cannot run before the
+chain's single rebuild — the pack's LOD input is a `.work` intermediate the pipeline deletes as it consumes
+it, so no built tree can be asked whether a chimney smokes at 600 u. Three things ride on that one run: the
+visual verification in [03](03-lod-bundle-reads-2dfx.md), the look verdict for both `docs/hacks/` entries from
+[04](04-authored-cull-distance.md), and confirmation that nothing doubles at the transition distance.
 
 ## The numbers this plan is budgeted against
 
@@ -59,8 +65,9 @@ From [00](00-research-and-findings.md) and the fx census, all measured 2026-08-0
 
 ## Two deliberate departures from the authored data
 
-Both are the user's call, both get a `docs/hacks/` file when they land, because they are places where we
-knowingly do not do what the game's own tables say:
+Both are the user's call, both landed in [04](04-authored-cull-distance.md) with a `docs/hacks/` file
+([smoke](../../hacks/smoke-drawn-to-world-edge.md), [floor](../../hacks/tiny-fx-distance-floor.md)), because
+they are places where we knowingly do not do what the game's own tables say:
 
 1. **Smoke is drawn farther than SA drew it.** `ws_factorysmoke` is authored at 150 u; a chimney plume that
    vanishes at 150 while its factory is drawn to 1000 is the defect this plan exists to fix.
