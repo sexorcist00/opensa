@@ -23,10 +23,10 @@ what the cell bake produces.** That second half is what makes the first half rea
 already writes a 2dfx section into every baked cell and [00](00-research-and-findings.md) found that nothing
 reads it. Either the generators feed a consumer or they write bytes into a void — so the two land together.
 
-| Target | Who bakes | Who consumes | State today |
+| Target | Who bakes | Who consumes | State |
 | --- | --- | --- | --- |
-| real SA (`sa-lod-generator` clones) | per-object LOD clone carries the entry in its own DFF | **SA itself** reads 2dfx off whatever model streams | verbatim path already carries all three; decimate path drops particles |
-| OpenSA (`opensa-lod-generator` cells) | the cell bake carries the entry in the merged cell DFF | `cell-weld` → the pak's LOD bundle | **nothing reads it** — the gap this plan closes |
+| real SA (`sa-lod-generator` clones) | per-object LOD clone carries the entry in its own DFF | **SA itself** reads 2dfx off whatever model streams | verbatim path already carries all three; decimate path drops particles — [05](05-sa-clone-parity.md) |
+| OpenSA (`opensa-lod-generator` cells) | the cell bake carries the entry in the merged cell DFF | `cell-weld` → the pak's LOD bundle | **closed by 01–03.** Lights and emitters come off the LOD model's own section; **plates come off the world-keyed pre-pass instead** — 131 of 489 sit in a different cell from the instance carrying them, and the two sources would double them ([03](03-lod-bundle-reads-2dfx.md) decision 3) |
 
 ## Steps
 
@@ -34,7 +34,7 @@ reads it. Either the generators feed a consumer or they write bytes into a void 
 | --- | --- | --- | --- |
 | 01 | the policy gains a per-type coordinate SPACE and the `cell` target carries 1 + 7 | `tools/lod-common` | **SHIPPED 2026-08-08** → [lod-common/007](../../../tools/lod-common/docs/plans/007-2dfx-space-and-cell-carry.md) |
 | 02 | the cell bake emits lights, emitters and plates with the right transform per space | `tools/opensa-lod-generator` | **SHIPPED 2026-08-08** → [opensa-lod-generator/006](../../../tools/opensa-lod-generator/docs/plans/006-cell-bake-carries-effects.md) |
-| [03](03-lod-bundle-reads-2dfx.md) | `cell-weld` reads the LOD level's 2dfx into the LOD bundle, deduped against HD | `packages/cell-weld` (+ `opensa-pack`) | next |
+| [03](03-lod-bundle-reads-2dfx.md) | `cell-weld` reads the LOD level's 2dfx into the LOD bundle, deduped against HD | `packages/cell-weld` (+ `opensa-pack`) | **SHIPPED 2026-08-08** — field check owed to the chain's rebuild |
 | [04](04-authored-cull-distance.md) | honour each fx system's authored `cullDist` instead of one hardcoded 300, and raise the smoke systems | `apps/web` | **SHIPPED 2026-08-08** (stays here — `apps/web` keeps no plan chain) |
 | [05](05-sa-clone-parity.md) | the SA clones carry the same set on BOTH paths (verbatim and decimate) | `tools/sa-lod-generator` | |
 
