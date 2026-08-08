@@ -35,10 +35,17 @@ fi
 
 # 1 — runtime deps. --omit=dev is 173 packages instead of 1171: the dev toolchain (nx, rolldown, oxlint) is
 # never on the convert path, and its prebuilt binaries are linux-x64-gnu, which is what fails on an arm64 phone.
+#
+# The check is STALENESS, not existence. npm writes `node_modules/.package-lock.json` on every install, so a
+# repo lock newer than it means a pull brought dependencies this tree does not have. Existence alone reported
+# "✓ node_modules present" after the merge that added `astc-encoder.js`, and the convert died on
+# `Cannot find module 'astc-encoder.js'` minutes later, inside the stage that needed it — a setup step whose
+# whole job is to make the next command work, saying yes to a tree that could not run it.
 say "dependencies"
-if [ -d node_modules ] && [ -f node_modules/.package-lock.json ]; then
-  ok "node_modules present (delete it and re-run to reinstall)"
+if [ -d node_modules ] && [ -f node_modules/.package-lock.json ] && [ ! package-lock.json -nt node_modules/.package-lock.json ]; then
+  ok "node_modules present and current with package-lock.json (delete it and re-run to reinstall)"
 else
+  [ -d node_modules ] && echo "   package-lock.json is newer than the installed tree — a pull added deps"
   echo "   installing runtime deps (HUSKY=0 — a git hook is meaningless here)…"
   if ! HUSKY=0 npm install --omit=dev --no-audit --no-fund; then
     echo "npm install failed — see docs/development/mobile-pak.md for what usually bites" >&2

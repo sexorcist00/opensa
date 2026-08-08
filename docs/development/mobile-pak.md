@@ -87,7 +87,7 @@ ritual repeated dozens of times on a device with no keyboard, and every step of 
 a step that gets skipped:
 
 ```bash
-npm run phone:setup                             # once per device (deps, tsx, the app)
+npm run phone:setup                             # once per device, and again after any pull (deps, tsx, the app)
 npm run phone                                   # first run: converts, then serves
 npm run phone                                   # every run after: servers up, here is the link
 REBUILD=1 npm run phone                         # re-convert into the same folder
