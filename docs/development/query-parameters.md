@@ -147,7 +147,7 @@ has an opaque origin and cannot own its URL — a `content://` or `file://` host
 | `fog=1` · `fogscale=` | restore the game's own fog instead of pushing the cut to the far plane |
 | `weather=` | weather id for the environment driver |
 | **`inventory=1`** | **098/1-01**: collect the frame before-table and show a panel with a copy button |
-| **`district=`** | the label the inventory capture records itself under — the pinned district's name |
+| **`district=`** | the measurement district: names the capture AND, with no `at=`, opens the camera over it (`apps/dispatch/src/world/districts.ts`) |
 
 ### Taking an inventory capture
 
@@ -163,8 +163,12 @@ Then, in the phone's own browser (there is no headless capture on this machine �
 [development/termux.md](./termux.md)):
 
 ```
-http://localhost:5173/dispatch.html?inventory=1&district=los-santos-centre&at=1480,-1720&h=900
+http://localhost:5173/dispatch.html?inventory=1&district=los-santos-centre
 ```
+
+`npm run phone` prints exactly this URL for whatever `DISTRICT=` it converted, and the district's name is
+enough: the opening point comes from the same table the pak rect came from, so the capture cannot be filed
+under one district while looking at another. `at=` still overrides it for ground the table does not name.
 
 Let it settle, pan and zoom the way an operator would, then press **copy JSON**. On a LAN address the
 clipboard API is unavailable (not a secure context) and the panel drops a selected textarea instead — long
@@ -174,6 +178,25 @@ press, copy. The JSON goes to `docs/benchmarks/` **before** it is analysed, per 
 which mobile adapters do not have. The report says so in `unavailable` rather than printing them as zero —
 the numbers that remain (`dt` percentiles, `submitMs`, draws, triangles, cells, residency, and the
 between-frame spans) are all real.
+
+**What replaces them.** The 2026-08-07 mobile row came back with no GPU timer, empty spans and `submitMs` at
+5.6 % of the frame — 94 % of it with no owner. So the report also carries a **CPU-side split**, which every
+device can produce:
+
+| Field | Reads as |
+| --- | --- |
+| `cpu.bodyMeanMs` | mean ms inside the rAF callback — the main thread actually working |
+| `cpu.outsideMeanMs` | mean dt minus that: present, GPU backpressure, vsync wait, other tasks, GC |
+| `cpu.shareOfFrame` | the first of those over the frame. Low = the frame is WAITING; high = it is working |
+| `cpu.segmentsMs` | where the body went (`engine-frame`, `overlay-2d`, `board`, `stream`, `readout`, `other`) |
+| `frame.dtHistogramMs` | dt counts per 2 ms bin. Piled at 16.7/33.3 = locked to vsync; spread = simply slow |
+
+The last two rows answer the open question the mobile row could not: a frame missing a 60 Hz deadline and a
+frame that is genuinely 32 ms of work look identical in a p50 and are fixed in opposite directions.
+
+The report also states its own ground — `district`, `camera.at`, `camera.height` — and **warns when the
+district is not the one 098/1-01 pinned**, because a capture on other ground is a valid measurement of
+somewhere else and not part of the chain's before/after series.
 
 ## Two known inconsistencies
 

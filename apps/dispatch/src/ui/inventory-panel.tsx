@@ -63,6 +63,10 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
         {report.frame.dtMaxMs.toFixed(0)} ms
       </div>
       <div>
+        cpu {report.cpu.bodyMeanMs.toFixed(1)} · outside {report.cpu.outsideMeanMs.toFixed(1)} ms (
+        {Math.round(report.cpu.shareOfFrame * 100)}% in the loop)
+      </div>
+      <div>
         {report.world.cellsVisible}/{report.world.cellsTotal} cells · {report.world.draws} draws ·{' '}
         {report.world.residencyMb.toFixed(0)} MB
       </div>

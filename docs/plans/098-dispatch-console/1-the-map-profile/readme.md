@@ -48,7 +48,7 @@ exist rather than by deciding how to measure:
 
 | Dimension | What it lists | Instrument |
 | --- | --- | --- |
-| Frame | every pass the console's frame runs, its cost, and whether anything on screen consumes it | the frame-time attribution spans from [091](../../091-frame-time-attribution/readme.md) and `scripts/debug/slow-frame-census.ts`; a pass with no span is itself a finding |
+| Frame | every pass the console's frame runs, its cost, and whether anything on screen consumes it | the frame-time attribution spans from [091](../../091-frame-time-attribution/readme.md) and `scripts/debug/slow-frame-census.ts`; a pass with no span is itself a finding — **plus the CPU-side split below, because on the target device that finding turned out to be the whole frame** |
 | Bytes | every pak entry kind the console fetches, how many bytes, and how many times | `opensa-pack`'s `report.json` for what the build contains, against the console's own fetches for what it actually asks for. **The gap between those two is the whole point of chain 1** |
 | Bundle | every module the console ships, its kB, and whether it ever executes | the vite build output plus `npm run knip` |
 
@@ -70,6 +70,24 @@ Dense, mixed heights, water within the view, and the part of the map an operator
 empty stretch that flatters every number. Every later step names it; a number taken anywhere else is not
 part of this chain's before/after.
 
+**Re-affirmed 2026-08-08, and the pin now moves the tools instead of the other way round.** The first real
+mobile capture was taken on Ganton, because that is the rect `phone.sh` converted by default — the pin was a
+sentence in this document and nothing read it. It is now a table
+(`apps/dispatch/src/world/districts.ts`) that the pak rect, the game spawn, the map's opening point and the
+report all read, so:
+
+- `npm run phone` converts **`los-santos-centre` by default**, and `DISTRICT=` picks another;
+- `?district=<name>` alone opens the camera over that district — the label and the ground come from one place
+  and cannot disagree;
+- a report taken anywhere but the pinned district **says so in its own `warnings`**, instead of a paragraph
+  written by hand after it is filed.
+
+Its rect is `5,-7,6,-6` — the same 2×2 shape Ganton was converted at, anchored on the cell `1480,-1720`
+falls in, so the two differ in CONTENT and not in how much world was built. That shape is not only
+convenience: the Ganton row measured **~60 MB resident per cell**, so a 3×3 district would sit at roughly
+540 MB against a 300–500 MB ceiling. Widening the rect is therefore a decision with a number attached, and it
+belongs to [1/03](#03--the-pak-profile) rather than to the pin.
+
 **Budget:** none — this step spends nothing and changes nothing.
 **Owes:** the three tables and the pinned district, recorded in `docs/benchmarks/` **before** they are
 analysed (standing rule), naming the pak build that was read.
@@ -83,6 +101,26 @@ benchmark schema already declares as a rule ([097/1-02](../../097-platform-reach
 **The instrument exists:** `?inventory=1` collects the frame half and hands it over through a copy button,
 because there is no headless capture on this machine. Invocation and what it cannot measure:
 [development/query-parameters.md](../../../development/query-parameters.md).
+
+**And it had to grow a CPU side, which is a finding rather than a feature** (2026-08-08). The first real
+capture on this device came back with **no `timestamp-query` at all**, empty `spans`, and `submitMs` at 5.6 %
+of the frame: 94 % of the frame had no owner, and no GPU timer exists on this adapter to give it one. A step
+told to cut what is never read cannot proceed against that, so the collector now also records **where the
+main thread's own time goes** — a number every device can produce:
+
+| Field | What it settles |
+| --- | --- |
+| `cpu.bodyMeanMs` / `cpu.outsideMeanMs` | is the frame WORKING or WAITING? The two have opposite fixes and the p50 cannot tell them apart |
+| `cpu.segmentsMs` | which part of the body — `engine-frame`, `overlay-2d`, `board`, `stream`, `readout`, and `other` for what nobody claimed |
+| `frame.dtHistogramMs` | dt per 2 ms bin: piled at 16.7/33.3 is a missed vsync deadline, spread is genuine cost. The open question the 08-07 row could not answer |
+
+It is a **proxy, not a GPU timer**: what is outside the body stays one number (present, backpressure, vsync,
+other tasks, GC together). That is the honest ceiling of what this device can measure, and it is still the
+difference between 94 % unattributed and one named residual.
+
+The segments are timed with a SECOND `FrameSpans` recorder, never the shared one — a span opened inside the
+loop body would be subtracted from `dt` twice
+([restrictions/architecture.md](../../../restrictions/architecture.md#a-frame-time-span-may-only-wrap-synchronous-work-that-runs-between-frames)).
 
 > **This step cannot run in a container without game data.** A field run reads `build/<game>/opensa` and
 > nothing else ([restrictions/architecture.md](../../../restrictions/architecture.md)), so 01 runs on a

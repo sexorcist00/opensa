@@ -4,6 +4,7 @@
 # the second run is just "servers up, here is the link".
 #
 #   npm run phone                     # convert (once) with the collision bake, serve, print the URL
+#   DISTRICT=ganton npm run phone     # another measurement district (npx tsx scripts/district.ts lists them)
 #   REBUILD=1 npm run phone           # re-convert even though a pak is already there
 #   BAKE=0 OUT=./build/phone-plain npm run phone     # the OTHER side of the A/B: no --bake-collision
 #   MODELS=0 npm run phone            # skip the model convert entirely: fast, but dispatch-only (no physics)
@@ -24,8 +25,12 @@ cd "$(dirname "$0")/.." || exit 1
 
 GAME="${GAME:-./game-src/original}"
 OUT="${OUT:-./build/phone}"
-RECT="${RECT:-9,-7,10,-6}"
-SPAWN="${SPAWN:-2400,-1700,20}"
+# The DISTRICT decides the rect, the spawn and the map's opening point together, from one table
+# (`apps/dispatch/src/world/districts.ts`) the console reads as well. It defaults to the one 098/1-01 PINNED,
+# because a capture on any other ground is a valid measurement of somewhere else and not part of the chain's
+# before/after series — which the first real mobile row found out after it was taken. RECT and SPAWN still
+# override, for ground the table does not name.
+DISTRICT="${DISTRICT:-los-santos-centre}"
 BAKE="${BAKE:-1}"
 MODELS="${MODELS:-1}"
 # Convert only the map objects the rect PLACES, not all ~14 000 the IDEs name. ON here because this script
@@ -55,6 +60,17 @@ if [ ! -f "$TSX" ]; then
   exit 1
 fi
 tsx() { node "$TSX" "$@"; }
+
+# The district's numbers, read from the table the console reads — never typed twice. RECT/SPAWN set in the
+# environment still win, so ground the table does not name is still reachable.
+if ! DISTRICT_LINE="$(tsx scripts/district.ts "$DISTRICT")"; then
+  echo "  npx tsx scripts/district.ts   # lists the districts and which one 098/1-01 pinned" >&2
+  exit 1
+fi
+read -r DISTRICT_RECT DISTRICT_SPAWN DISTRICT_AT <<<"$DISTRICT_LINE"
+RECT="${RECT:-$DISTRICT_RECT}"
+SPAWN="${SPAWN:-$DISTRICT_SPAWN}"
+AT="${AT:-$DISTRICT_AT}"
 
 # Node rather than curl/nc: node is the one tool this repo already requires, and Termux ships neither of the
 # other two by default.
@@ -230,18 +246,24 @@ else
   LAN_APP="http://$IP:$APP_PORT/"
   LAN_PAK="http://$IP:$STATIC_PORT/${OUT#./}"
 fi
+# Every map URL carries `district=`, and the console takes its opening point from that name — so the ground
+# the run looks at and the ground the capture is FILED under cannot disagree.
+MAP_QUERY="src=$PAK_URL&district=$DISTRICT&at=$AT"
 say "open on this phone"
 if [ "$MODELS" = 0 ]; then
   echo "  MODELS=0 → no vehicles/peds were converted, so only the map surface is usable (it runs no physics,"
   echo "  which means it does not exercise the collision bake at all):"
-  echo "  $MAP_URL?src=$PAK_URL&at=${SPAWN%,*}"
+  echo "  $MAP_URL?$MAP_QUERY"
 else
   echo "  the game (this is the one that streams collision):"
   echo "  $APP_URL?loader=http-dir&src=$PAK_URL&spawn=$SPAWN$GATE"
   echo
   echo "  the map surface, no physics:"
-  echo "  $MAP_URL?src=$PAK_URL&at=${SPAWN%,*}"
+  echo "  $MAP_URL?$MAP_QUERY"
 fi
+echo
+echo "  the 098/1-01 inventory capture (let it settle past 300 frames, then press copy JSON):"
+echo "  $MAP_URL?$MAP_QUERY&inventory=1"
 if [ -n "$IP" ]; then
   echo
   echo "  from another device on this network (plain http → no Cache Storage, the shell will say so):"

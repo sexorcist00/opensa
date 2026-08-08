@@ -84,8 +84,22 @@ npm run phone                                   # every run after: servers up, h
 REBUILD=1 npm run phone                         # re-convert into the same folder
 BAKE=0 OUT=./build/phone-plain npm run phone    # the other side of the collision A/B, in its own folder
 MODELS=0 npm run phone                          # skip the model convert (dispatch only — no physics)
-RECT=8,-8,11,-5 OUT=./build/phone-ls npm run phone
+DISTRICT=ganton OUT=./build/phone-ganton npm run phone   # another measurement district, in its own folder
+RECT=8,-8,11,-5 OUT=./build/phone-ls npm run phone       # ground the district table does not name
 ```
+
+**The DISTRICT is the rect.** `DISTRICT=` picks the pak rect, the game spawn and the map's opening point
+together, from the one table the console reads (`apps/dispatch/src/world/districts.ts`; `npx tsx
+scripts/district.ts` lists them). It defaults to **`los-santos-centre`, the district 098/1-01 pinned** — so
+the default run produces a capture that belongs to the chain's before/after series, which the first real
+mobile row did not. `RECT=`/`SPAWN=` still override for ground the table does not name.
+
+Two consequences worth knowing before the first run after this change: an existing pak in `build/phone` was
+converted for **Ganton**, so it no longer matches the default request and the recipe check will refuse to
+serve it (naming both sides). Keep it with `mv build/phone build/phone-ganton` and reach it again with
+`DISTRICT=ganton OUT=./build/phone-ganton npm run phone`, or convert the pinned district into a folder of its
+own. Each district in its own folder is the arrangement the chain wants anyway — the two are compared, not
+replaced.
 
 Changing a knob needs a folder of its own (or `REBUILD=1`): a pak already in `OUT` is reused, and since it
 records what it was built from, a request that does not match it is refused rather than silently served —

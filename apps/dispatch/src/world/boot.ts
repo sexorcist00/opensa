@@ -1,4 +1,4 @@
-import { Engine, frameSpans, setupStreaming } from '@opensa/engine';
+import { Engine, FrameSpans, frameSpans, setupStreaming } from '@opensa/engine';
 import {
   createEngineEnvironmentDriver,
   type EngineEnvironmentDriver,
@@ -23,7 +23,8 @@ import { CAMERA_FAR, groundPoint, MAP_YAW, MapCamera } from '../map/map-camera';
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
 import { buildDemoCity } from './demo-city';
-import { FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
+import { DISTRICTS } from './districts';
+import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
 import { DEFAULT_SRC, resolvePakBase } from './pak-source';
 import { installWater } from './water';
 
@@ -139,6 +140,13 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // 098/1-01. Off unless asked for: draining the span recorder is cheap, but a mode that measures by default
   // is a mode nobody can trust to have measured nothing.
   const inventory = params.get('inventory') === '1' ? new FrameInventory() : null;
+  // A SECOND span recorder, deliberately not the shared `frameSpans`. That one is for work between frames,
+  // and a span opened inside the loop body would be subtracted from `dt` twice
+  // (restrictions/architecture.md). Nobody subtracts this one from anything: it is the CPU-side proxy for a
+  // device with no `timestamp-query`, and it only runs when the mode is on.
+  const loopCpu = new FrameSpans();
+  const time = <T>(name: string, run: () => T): T => (inventory ? loopCpu.measure(name, run) : run());
+  let bodyMs = 0;
   const frames: number[] = [];
   let disposed = false;
   let lastReadout = 0;
@@ -155,44 +163,52 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     if (frames.length > 60) {
       frames.shift();
     }
+    // Drained BEFORE this frame opens a segment of its own, so what comes out is the PREVIOUS body — the
+    // work that actually ran inside the `dt` interval about to be reported.
+    const cpu: FrameCpuSample = { bodyMs, segments: loopCpu.drain() };
 
     const ops = options.ops();
     const aspect = canvas.width / Math.max(1, canvas.height);
     const state = camera.state(aspect);
-    beacons.update(ops, options.selection());
+    time('board', () => beacons.update(ops, options.selection()));
     // Rings follow the ground point the view is over, never the eye: a camera a kilometre up sits outside
     // every ring and would stream nothing at all.
-    const pending = world.follow([state.target[0], state.target[1], state.target[2]]);
-    const stats = engine.frame(state);
+    const pending = time('stream', () => world.follow([state.target[0], state.target[1], state.target[2]]));
+    const stats = time('engine-frame', () => engine.frame(state));
     // Drained every frame the mode is on, so a span never carries into the next frame's total. Plan 091's
     // rule: the frame that DRAINS is the frame that paid, because the work ran in the gap before it.
     if (inventory) {
-      inventory.sample(dt, stats, frameSpans.drain());
+      inventory.sample(dt, stats, frameSpans.drain(), cpu);
     }
 
-    projector.update(state, overlay.clientWidth, overlay.clientHeight);
-    context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    context.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
-    symbology.render(context, projector, ops, options.selection(), {
-      height: overlay.clientHeight,
-      width: overlay.clientWidth,
+    time('overlay-2d', () => {
+      projector.update(state, overlay.clientWidth, overlay.clientHeight);
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      context.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
+      symbology.render(context, projector, ops, options.selection(), {
+        height: overlay.clientHeight,
+        width: overlay.clientWidth,
+      });
     });
 
     if (now - lastReadout > 1000 / READOUT_HZ) {
       lastReadout = now;
       const average = frames.reduce((sum, value) => sum + value, 0) / Math.max(1, frames.length);
-      options.onReadout({
-        buildTime: world.label,
-        cellsTotal: stats.cellsTotal,
-        cellsVisible: stats.cellsVisible,
-        draws: stats.drawsRecorded,
-        fps: Math.round(1000 / Math.max(1, average)),
-        hour,
-        pending,
-        pose: camera.pose(),
-        residencyMb: stats.residencyBytes / (1024 * 1024),
-      });
+      time('readout', () =>
+        options.onReadout({
+          buildTime: world.label,
+          cellsTotal: stats.cellsTotal,
+          cellsVisible: stats.cellsVisible,
+          draws: stats.drawsRecorded,
+          fps: Math.round(1000 / Math.max(1, average)),
+          hour,
+          pending,
+          pose: camera.pose(),
+          residencyMb: stats.residencyBytes / (1024 * 1024),
+        }),
+      );
     }
+    bodyMs = performance.now() - now;
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
@@ -205,14 +221,18 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       beacons.dispose();
     },
     inventory(): InventoryReport | null {
-      return inventory === null
-        ? null
-        : inventory.report({
-            build: world.label,
-            device: engine.deviceReport,
-            district: params.get('district') ?? UNNAMED_DISTRICT,
-            hasTimestamps: !engine.deviceReport.missing.includes('timestamp-query'),
-          });
+      if (inventory === null) {
+        return null;
+      }
+      const pose = camera.pose();
+
+      return inventory.report({
+        build: world.label,
+        camera: { at: pose.at, height: pose.height },
+        device: engine.deviceReport,
+        district: params.get('district') ?? UNNAMED_DISTRICT,
+        hasTimestamps: !engine.deviceReport.missing.includes('timestamp-query'),
+      });
     },
     locate(at: GtaGround): void {
       camera.zoomTo(at, LOCATE_HEIGHT);
@@ -317,11 +337,19 @@ function numberParam(params: URLSearchParams, name: string, fallback: number): n
   return Number.isFinite(raw) ? raw : fallback;
 }
 
+/**
+ * The opening pose: `?at=` if given, else the point the named `?district=` opens over, else the default.
+ *
+ * The district step matters more than it looks. A capture is labelled by `?district=` and aimed by `?at=`,
+ * and until they came from one table a run could be labelled one district while looking at another — with
+ * nothing on screen or in the report saying so.
+ */
 function poseFromQuery(params: URLSearchParams): MapPose {
   const at = (params.get('at') ?? '').split(',').map(Number);
+  const district = DISTRICTS[params.get('district') ?? ''];
 
   return {
-    at: at.length === 2 && at.every(Number.isFinite) ? [at[0], at[1]] : OPENING_POSE.at,
+    at: at.length === 2 && at.every(Number.isFinite) ? [at[0], at[1]] : (district?.at ?? OPENING_POSE.at),
     height: numberParam(params, 'h', OPENING_POSE.height),
     pitch: (numberParam(params, 'pitch', (OPENING_POSE.pitch * 180) / Math.PI) * Math.PI) / 180,
     yaw: (numberParam(params, 'yaw', (OPENING_POSE.yaw * 180) / Math.PI) * Math.PI) / 180,

@@ -10,13 +10,50 @@
  *   report that will be read six months later as "the GPU was free", which is the exact failure the mobile
  *   benchmark schema was written to prevent (097/1-02).
  *
- * Frame cost has two halves and both are collected here: the engine's own per-frame stats (submit, GPU
- * passes when the adapter can time them, draws, triangles, residency) and the named spans for work that runs
- * BETWEEN frames (`frameSpans`) — cell collider builds, `.osm` parses, texture uploads. The console never
- * drained those before this mode existed, so anything they cost was invisible to it.
+ * Frame cost has three halves — the third one added after the first real capture, which is the point of it:
+ *
+ * 1. the engine's own per-frame stats (submit, GPU passes when the adapter can time them, draws, triangles,
+ *    residency);
+ * 2. the named spans for work that runs BETWEEN frames (`frameSpans`) — cell collider builds, `.osm` parses,
+ *    texture uploads. The console never drained those before this mode existed;
+ * 3. **the CPU side of the loop body itself.** The 2026-08-07 mobile row came back with `submitMs` at 5.6 %
+ *    of a 31.8 ms frame, no `timestamp-query` on the adapter, and empty spans — so 94 % of the frame had no
+ *    owner at all. A chain asked to cut what is never read cannot work against that, and the missing number
+ *    is not a GPU one: it is how much of the frame the main thread was even running. That is measurable on
+ *    any device, which is why it is here rather than waiting for a GPU timer no phone offers.
+ *
+ * The third half answers one question the mobile row left open and could not settle: **is the frame slow
+ * because work is being done, or is it waiting?** A body of 6 ms inside a 32 ms frame says the main thread
+ * is idle for 26 of them and the cost is downstream (present, GPU, vsync); a body of 28 ms says the opposite.
+ * The two have opposite fixes, and the report now carries the split instead of the argument.
  */
 
 import type { EngineStats, FrameSpanTotals } from '@opensa/engine';
+
+import { DISTRICTS, PINNED_DISTRICT } from './districts';
+
+/** The CPU cost of ONE loop body, measured by the host around its own frame. */
+export interface FrameCpuSample {
+  /** rAF callback start → end, ms: everything the host's main thread did for that frame. */
+  readonly bodyMs: number;
+  /** Named segments inside the body. Their sum is ≤ `bodyMs`; the remainder is untimed glue. */
+  readonly segments: FrameSpanTotals;
+}
+
+/** Where the frame went on the CPU, averaged over the sampled window. */
+export interface InventoryCpu {
+  readonly bodyMaxMs: number;
+  /** Mean ms spent inside the rAF callback. */
+  readonly bodyMeanMs: number;
+  /** Mean dt − mean body: the part of the frame the main thread was NOT running. Present, GPU backpressure,
+   *  vsync wait, other tasks and GC all live in here, and nothing on this device can separate them further —
+   *  the number's value is that it says how much room there is to separate. */
+  readonly outsideMeanMs: number;
+  /** Mean ms per sampled frame, descending. `other` is body time no segment claimed. */
+  readonly segmentsMs: readonly (readonly [string, number])[];
+  /** Body mean ÷ dt mean, 0..1. */
+  readonly shareOfFrame: number;
+}
 
 /** One pass or cost centre, averaged over the sampled window. */
 export interface InventoryPass {
@@ -29,10 +66,18 @@ export interface InventoryPass {
 
 export interface InventoryReport {
   readonly build: string;
+  /** Where the operator was when they took the report — so the capture states its own ground. */
+  readonly camera: { readonly at: readonly [number, number]; readonly height: number };
+  readonly cpu: InventoryCpu;
   readonly device: unknown;
   readonly district: string;
   readonly frame: {
+    /** dt counts per 2 ms bin, ascending, empty bins omitted. A frame waiting on a 60 Hz vsync piles into
+     *  the bins around 16.7 and 33.3; a frame that is simply slow spreads. The two look identical in a p50
+     *  and have opposite fixes, which is the whole reason the shape is kept. */
+    readonly dtHistogramMs: readonly (readonly [number, number])[];
     readonly dtMaxMs: number;
+    readonly dtMeanMs: number;
     readonly dtP50Ms: number;
     readonly dtP95Ms: number;
     readonly fps: number;
@@ -67,6 +112,12 @@ export const UNNAMED_DISTRICT = 'unnamed — pass ?district=';
  *  about twelve seconds — long enough to be past the load and into steady state. */
 const MIN_FRAMES = 300;
 
+/** dt histogram bin width, ms. Half a 60 Hz vsync interval: fine enough that 16.7 and 33.3 land in
+ *  different bins from anything either side of them, coarse enough that the JSON stays readable. */
+const BIN_MS = 2;
+/** Everything at or above this lands in one tail bin — a 300 ms hitch must not open 150 empty bins. */
+const BIN_TAIL_MS = 100;
+
 /** The engine timings this collector averages, and whether each needs `timestamp-query` to mean anything. */
 const TIMED: readonly (readonly [keyof EngineStats, boolean])[] = [
   ['submitMs', false],
@@ -84,6 +135,8 @@ export class FrameInventory {
   get frames(): number {
     return this.dts.length;
   }
+  private readonly bins = new Map<number, number>();
+  private readonly cpuTotals = new Map<string, number>();
   private readonly dts: number[] = [];
   private readonly maxima = new Map<string, number>();
   private readonly spanTotals = new Map<string, number>();
@@ -92,10 +145,18 @@ export class FrameInventory {
 
   private readonly worldLast = { cellsTotal: 0, cellsVisible: 0, draws: 0, residencyBytes: 0, triangles: 0 };
 
-  report(context: { build: string; device: unknown; district: string; hasTimestamps: boolean }): InventoryReport {
+  report(context: {
+    build: string;
+    camera: { at: readonly [number, number]; height: number };
+    device: unknown;
+    district: string;
+    hasTimestamps: boolean;
+  }): InventoryReport {
     const sorted = [...this.dts].sort((a, b) => a - b);
     const frames = Math.max(1, this.dts.length);
     const windowMs = this.started === 0 ? 0 : performance.now() - this.started;
+    const dtMeanMs = (this.sums.get('dt') ?? 0) / frames;
+    const bodyMeanMs = (this.sums.get('cpu-body') ?? 0) / frames;
 
     const passes = TIMED.map(([key, needsTimestamps]) => ({
       available: !needsTimestamps || context.hasTimestamps,
@@ -112,10 +173,20 @@ export class FrameInventory {
 
     return {
       build: context.build,
+      camera: { at: context.camera.at, height: context.camera.height },
+      cpu: {
+        bodyMaxMs: this.maxima.get('cpu-body') ?? 0,
+        bodyMeanMs,
+        outsideMeanMs: Math.max(0, dtMeanMs - bodyMeanMs),
+        segmentsMs: this.cpuSegments(frames, bodyMeanMs),
+        shareOfFrame: dtMeanMs > 0 ? bodyMeanMs / dtMeanMs : 0,
+      },
       device: context.device,
       district: context.district,
       frame: {
+        dtHistogramMs: [...this.bins.entries()].sort((a, b) => a[0] - b[0]),
         dtMaxMs: this.maxima.get('dt') ?? 0,
+        dtMeanMs,
         dtP50Ms: percentile(sorted, 0.5),
         dtP95Ms: percentile(sorted, 0.95),
         fps: percentile(sorted, 0.5) > 0 ? Math.round(1000 / percentile(sorted, 0.5)) : 0,
@@ -126,7 +197,12 @@ export class FrameInventory {
         .map(([name, ms]) => [name, ms / frames] as const)
         .sort((a, b) => b[1] - a[1]),
       unavailable,
-      warnings: warningsFor(this.worldLast.cellsTotal, this.dts.length, context.district),
+      warnings: warningsFor({
+        bodyMeanMs,
+        cellsTotal: this.worldLast.cellsTotal,
+        district: context.district,
+        frames: this.dts.length,
+      }),
       windowMs,
       world: {
         cellsTotal: this.worldLast.cellsTotal,
@@ -138,8 +214,15 @@ export class FrameInventory {
     };
   }
 
-  /** One frame. `spans` is the drain of the SAME frame — the loop drains at the top, per plan 091. */
-  sample(dtMs: number, stats: EngineStats, spans: FrameSpanTotals): void {
+  /**
+   * One frame.
+   *
+   * `spans` is the drain of the SAME frame — the loop drains at the top, per plan 091. `cpu` is the
+   * PREVIOUS loop body, and that is arithmetic rather than taste: `dt` runs from one rAF start to the next,
+   * so the body that ran inside the interval being reported is the one before it. Paired that way the body
+   * can never exceed the frame it is a share of.
+   */
+  sample(dtMs: number, stats: EngineStats, spans: FrameSpanTotals, cpu: FrameCpuSample): void {
     if (this.started === 0) {
       // The FIRST delta is not a frame time. It is measured against whatever the loop did last — page load,
       // the pak's first fetch, device init — so it enters dtMax and the percentiles as a frame that never
@@ -153,6 +236,12 @@ export class FrameInventory {
     }
     this.dts.push(dtMs);
     this.bump('dt', dtMs);
+    const bin = dtMs >= BIN_TAIL_MS ? BIN_TAIL_MS : Math.floor(dtMs / BIN_MS) * BIN_MS;
+    this.bins.set(bin, (this.bins.get(bin) ?? 0) + 1);
+    this.bump('cpu-body', cpu.bodyMs);
+    for (const [name, ms] of cpu.segments.byName) {
+      this.cpuTotals.set(name, (this.cpuTotals.get(name) ?? 0) + ms);
+    }
     for (const [key] of TIMED) {
       this.bump(key, stats[key]);
     }
@@ -165,6 +254,15 @@ export class FrameInventory {
   private bump(key: string, value: number): void {
     this.sums.set(key, (this.sums.get(key) ?? 0) + value);
     this.maxima.set(key, Math.max(this.maxima.get(key) ?? 0, value));
+  }
+
+  /** The named segments plus `other` — the body time nobody claimed. Without that row the breakdown looks
+   *  complete while summing to less than the body, which is the same lie as printing an absent GPU as zero. */
+  private cpuSegments(frames: number, bodyMeanMs: number): readonly (readonly [string, number])[] {
+    const segments = [...this.cpuTotals.entries()].map(([name, ms]) => [name, ms / frames] as const);
+    const claimed = segments.reduce((sum, [, ms]) => sum + ms, 0);
+
+    return [...segments, ['other', Math.max(0, bodyMeanMs - claimed)] as const].sort((a, b) => b[1] - a[1]);
   }
 
   /** The world figures are a READING of the latest frame, not an interval, so the skipped first sample still
@@ -188,7 +286,8 @@ function percentile(sorted: readonly number[], fraction: number): number {
 }
 
 /** What makes a capture unusable as a before-table, in the order it bites. */
-function warningsFor(cellsTotal: number, frames: number, district: string): string[] {
+function warningsFor(capture: { bodyMeanMs: number; cellsTotal: number; district: string; frames: number }): string[] {
+  const { bodyMeanMs, cellsTotal, district, frames } = capture;
   const warnings: string[] = [];
   if (cellsTotal === 0) {
     warnings.push(
@@ -201,6 +300,20 @@ function warningsFor(cellsTotal: number, frames: number, district: string): stri
   }
   if (district === UNNAMED_DISTRICT) {
     warnings.push('district not named — pass ?district=<name>, 098/1-01 pins one and the row has to say which');
+  } else if (district !== PINNED_DISTRICT) {
+    // The 2026-08-07 row said this in a paragraph somebody had to write by hand AFTER the capture was filed.
+    // A capture that says it itself is the difference between a caught mistake and a session of archaeology.
+    const known = district in DISTRICTS ? '' : ' (and it is not a district this build knows at all)';
+    warnings.push(
+      `taken on '${district}'${known}, not on '${PINNED_DISTRICT}' which 098/1-01 pinned — a valid ` +
+        "measurement of that ground, and NOT part of this chain's before/after series",
+    );
+  }
+  if (frames > 0 && bodyMeanMs === 0) {
+    warnings.push(
+      'the host did not time its loop body, so the CPU/outside split is meaningless here — read shareOfFrame ' +
+        'as absent, never as "the CPU was free"',
+    );
   }
 
   return warnings;

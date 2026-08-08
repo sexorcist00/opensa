@@ -74,7 +74,9 @@ stays clean on the one machine where `git status` is hardest to read.
 command never changes and every knob is an env var: `REBUILD=1` re-converts, `BAKE=0` builds the other side of
 the collision A/B, `MODELS=0` skips the model convert (fast, but then only `dispatch.html` is usable — it runs
 no physics), `VEHICLES=` / `PEDS=` set the model SUBSET (default `admiral,infernus,comet` + `bmycg,wmycr`;
-`all` converts the roster — hours on a phone), `RECT=` / `SPAWN=` / `OUT=` / `GAME=` / `APP_PORT=` /
+`all` converts the roster — hours on a phone), `DISTRICT=` picks the measurement district — its rect, its
+spawn and the map's opening point at once, from the table the console reads (`npx tsx scripts/district.ts`
+lists them; the default is the one 098/1-01 pinned), `RECT=` / `SPAWN=` / `OUT=` / `GAME=` / `APP_PORT=` /
 `STATIC_PORT=` move the rest, and `MAPOBJ=0` turns off the district lever (`--map-objects-in-rect`, on by
 default here: convert only the map objects the rect PLACES instead of all ~14 000 the IDEs name — the slowest
 stage of a district convert). It converts
