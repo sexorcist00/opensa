@@ -58,6 +58,9 @@ interface Recipe {
   platforms?: null | string[];
   rect?: null | number[];
   rgba8?: boolean;
+  /** Since 2026-08-08. A pak built before it carries only `rgba8`, which cannot tell ASTC from BC — both
+   *  record false — so the fallback below reads what that boolean COULD say and nothing more. */
+  textures?: string;
   vehicles?: null | string[];
 }
 
@@ -87,6 +90,10 @@ const norm = (key: string, value: boolean | null | number | readonly string[] | 
 
 const shown: [string, string][] = [
   ['rect', norm('rect', build.rect ? build.rect.join(',') : null)],
+  // An older pak has no `textures`, and `rgba8` is the only thing it can be derived from. Deriving it beats
+  // reporting "not recorded": `npm run phone` gates reuse on this key, and a pak that cannot answer it would
+  // be refused on every run — including the district convert that costs hours.
+  ['textures', norm('textures', build.textures ?? (build.rgba8 === true ? 'rgba8' : 'bc'))],
   ['rgba8', norm('rgba8', build.rgba8)],
   ['maxTexture', norm('maxTexture', build.maxTexture)],
   ['mapObjectsInRect', norm('mapObjectsInRect', build.mapObjectsInRect)],
