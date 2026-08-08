@@ -35,7 +35,7 @@ reads it. Either the generators feed a consumer or they write bytes into a void 
 | 01 | the policy gains a per-type coordinate SPACE and the `cell` target carries 1 + 7 | `tools/lod-common` | **SHIPPED 2026-08-08** → [lod-common/007](../../../tools/lod-common/docs/plans/007-2dfx-space-and-cell-carry.md) |
 | 02 | the cell bake emits lights, emitters and plates with the right transform per space | `tools/opensa-lod-generator` | **SHIPPED 2026-08-08** → [opensa-lod-generator/006](../../../tools/opensa-lod-generator/docs/plans/006-cell-bake-carries-effects.md) |
 | [03](03-lod-bundle-reads-2dfx.md) | `cell-weld` reads the LOD level's 2dfx into the LOD bundle, deduped against HD | `packages/cell-weld` (+ `opensa-pack`) | next |
-| [04](04-authored-cull-distance.md) | honour each fx system's authored `cullDist` instead of one hardcoded 300, and raise the smoke systems | `apps/web` + `packages/renderware` | |
+| [04](04-authored-cull-distance.md) | honour each fx system's authored `cullDist` instead of one hardcoded 300, and raise the smoke systems | `apps/web` | **SHIPPED 2026-08-08** (stays here — `apps/web` keeps no plan chain) |
 | [05](05-sa-clone-parity.md) | the SA clones carry the same set on BOTH paths (verbatim and decimate) | `tools/sa-lod-generator` | |
 
 Order: 01 → 02 → 03 is the OpenSA line and must land in that order (03 is what makes 02 visible). **01 and 02

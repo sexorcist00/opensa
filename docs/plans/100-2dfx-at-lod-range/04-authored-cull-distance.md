@@ -1,8 +1,9 @@
 # 04 — Each fx system's own cull distance, and how far smoke is drawn
 
-Part of [100 — 2dfx survives to LOD range](readme.md). Lands in `apps/web` + `packages/renderware`.
-**Gated on nothing** — and it is the step that decides how far an emitter is drawn at all, so nothing else in
-this chain is visible for particles until it lands.
+**SHIPPED 2026-08-08.** Part of [100 — 2dfx survives to LOD range](readme.md). Landed in `apps/web`
+(`ui/engine-particles.ts`) — `packages/renderware` needed no change, `writeFxSystemRecord` already took the
+distance as an argument. It stays here rather than moving into a tool: `apps/web` keeps no numbered plan
+chain, and the standing move-on-ship rule is about `tools/<tool>/docs/plans/`.
 
 ## Context
 
@@ -44,26 +45,60 @@ global tuning constant standing where the game's own numbers should be read.
 4. **Everything else takes its authored number verbatim.** No global scale, no clamp — the point of the step
    is that the table wins.
 
-## Tasks
+## What shipped
 
-- [ ] Thread each system's `cullDist` into `writeFxSystemRecord` instead of `DRAW_DISTANCE`.
-- [ ] Apply the two departures (smoke raise, 100 floor for the two tiny systems) as DATA, in one table, not
-      as scattered conditionals.
-- [ ] `docs/hacks/`: one file for the smoke raise, one for the floor.
-- [ ] Tests: a system's record carries its own distance; the two floored systems carry 100; a system absent
-      from the departures table carries exactly what the fxp says.
-- [ ] Measure: draw calls / frame ms with the authored distances vs the flat 300, in a dense area — most
-      systems get SHORTER, so this should pay for the smoke raise on its own.
+- `fxDrawDistance(system, worldDrawDistance)` reads each system's authored `cullDist` and applies the two
+  departures from one `DRAW_DISTANCE_DEPARTURES` table — data, not scattered conditionals. Both bake paths
+  (the placed lane and the dynamic `prt_*` lane) go through it; `DRAW_DISTANCE = 300` is gone, surviving only
+  as the fallback for a modded system that authors no `cullDist` at all.
+- **The smoke departure is derived, not fitted.** `rule: 'world'` takes the host's LOD radius — the same
+  number `setupStreaming` is given — so the plume is drawn as far as the world that carries the chimney.
+  `setupEngineParticles` gained that argument. A profile that draws further smokes further.
+- `docs/hacks/smoke-drawn-to-world-edge.md` and `docs/hacks/tiny-fx-distance-floor.md`, both rowed in the
+  hacks README. They are opposite departures and are recorded together on purpose.
+- Tests against the REAL `effects.fxp`: four untabled systems keep their authored 25/25/35/70; the four smoke
+  systems all take the world distance; `insects`/`cigarette_smoke` come out at 100 from an authored 15; a
+  system with no `cullDist` falls back to 300; and the dynamic lane's records read back 50 — SA's own
+  `prt_*` value — where they used to read 300.
 
 ## Verification
 
 - Every baked system's draw distance equals its authored `cullDist`, except the two documented departures.
-- Smoke is visible at the distance the field check asks for; insects stop at 100 rather than 300.
-- Frame cost in a dense area does not regress; the expected direction is a small win.
+- **A consequence the step did not anticipate, worth a field look**: all four `prt_*` systems (wheel dust,
+  collision smoke, sand) author **50**, so the vehicle-effect lane's reach fell from 300 u to 50 u. That is
+  the authored number and the step's own rule, but it means another car's tyre smoke now stops at 50 m.
+- The look — smoke at the world edge, insects stopping at 100 — is NOT verified: it needs
+  [03](03-lod-bundle-reads-2dfx.md)'s field check, which is what makes a far cell's emitter exist at all.
 
 ## Measurements / notes
 
-_(record after implementation)_
+**Placed anchors by system** (stock map, the denominator the departures are priced against): `insects` 402,
+`vent` 206, `vent2` 162, `fire` 45, `smoke30m` 19, `smoke30lit` 16, `waterfall_end` 9, `water_fountain` 7,
+`smoke50lit` 6, `flame` 3, `water_fnt_tme` 1, `ws_factorysmoke` 1, `carwashspray` 1 — **878 anchors across 13
+systems**. The smoke departure touches 42 of them (4.8 %); the rest get between 4× and 12× tighter.
 
-- per-system distances shipped (authored vs applied): …
-- frame ms before/after in a dense area: …
+**Frame cost: unmeasurable, and the honest answer is a NULL result, not a win.**
+[`docs/benchmarks/opensa-engine/2026-08-08-ingame-fx-cull-distance.json`](../../benchmarks/opensa-engine/2026-08-08-ingame-fx-cull-distance.json).
+Headless DPR=2 against `build/original/opensa`, on the two scenes that actually carry emitters
+(`country-dusk`: 50 anchors within 300 u including both departures; `lv-night`: 26 `fire`):
+
+| Scene | Arm | `gpuMs.pass` | `avgTriangles` |
+| --- | --- | --- | --- |
+| country-dusk | before (flat 300) | 3.867 | 1 229 094 |
+| country-dusk | after | 3.875 | 1 229 041 |
+| country-dusk | **control — every emitter culled** | **3.880** | 1 229 026 |
+| lv-night | before (flat 300) | 3.629 | 2 049 828 |
+| lv-night | after | 3.600 | 2 046 938 |
+
+The step predicted "a small win". It is not there, and the **positive control is why that claim cannot be
+made either way**: forcing every emitter quad in the map to collapse gives 3.880 ms against the A/B's 3.867
+and 3.875 — the whole particle system is below this scene's noise floor, so "no regression" would have been a
+measurement of nothing. `avgMs` is pinned at 8.333 (the 120 fps cap) in every row, leaving `gpuMs.pass` as the
+only responsive column. The one column that does move is triangle count: `lv-night` **−2890 of 2 049 828
+(−0.14 %)**, which is the 26 `fire` anchors going from 300 u to 35 — proof the change is live in the field,
+and simultaneously the measure of how little it costs.
+
+**Per-system distances shipped** (authored → applied): `insects` 15 → **100**, `cigarette_smoke` 15 → **100**,
+`ws_factorysmoke` 150 → **1500**, `smoke30m`/`smoke30lit` 155 → **1500**, `smoke50lit` 255 → **1500**,
+`carwashspray` 70, `fire`/`flame` 35, `water_fountain`/`water_fnt_tme` 30, `vent`/`vent2`/`waterfall_end` 25,
+`prt_*` (the dynamic lane) 50. Everything not in bold is the authored number, verbatim.

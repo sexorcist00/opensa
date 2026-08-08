@@ -382,6 +382,17 @@ existing (ocean-horizon 27 → 84 draws, 136 k → 843 k tris), not VM cost. Ana
 [`2026-08-06-headless-cleo-vm-cost.md`](opensa-engine/2026-08-06-headless-cleo-vm-cost.md); raw
 rows [`2026-08-06-ingame-cleo-ab.json`](opensa-engine/2026-08-06-ingame-cleo-ab.json).
 
+### 100/04 — per-system fx cull distance (2026-08-08)
+
+A/B on `build/original/opensa`, headless DPR=2: replacing the flat `DRAW_DISTANCE = 300` with each fx
+system's authored `cullDist` (plus two recorded departures) is **below what the bench can measure**. The
+verdict rests on a POSITIVE CONTROL, not on the A/B: forcing every emitter quad to collapse gives
+`country-dusk` a GPU pass of 3.880 ms against 3.875 (after) and 3.867 (before) — culling every particle in
+the map is indistinguishable from drawing them, so the scene has no power to judge this change either way.
+The only column that moves is `avgTriangles`: `lv-night` −2890 of 2 049 828 (−0.14 %), which is 26 `fire`
+anchors going from 300 u to their authored 35. `avgMs` is pinned at the 120 fps cap in every row. Rows:
+[`2026-08-08-ingame-fx-cull-distance.json`](opensa-engine/2026-08-08-ingame-fx-cull-distance.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
