@@ -137,9 +137,11 @@ Never edit generated code manually.
   2. `docs/restrictions/README.md` — what a design MAY NOT do
   3. `docs/plans/099-pcad-dispatch/readme.md` — **THE FINAL PLAN**: the product is a web dispatch application
      for a SA-MP server, and this repository owns exactly one component of it — **the 3D map**
-  4. `docs/plans/098-dispatch-console/readme.md` — **THE 3D MAP ENGINE PLAN**, subordinate to 099: 8 chains,
-     32 steps, with the decisions table, the evidence table, its "steps at a glance" index, and — at the
-     bottom — the **`## Status` table, which is the handoff point between agents**
+  4. `docs/plans/098-dispatch-console/readme.md` — **THE 3D MAP ENGINE PLAN**, subordinate to
+     `099-pcad-dispatch`: 8 chains, 32 steps, with the decisions table, the evidence table, its "steps at a
+     glance" index, and — at the bottom — the **`## Status` table, which is the handoff point between
+     agents**. (Both folders are named by their FULL path here on purpose — upstream has its own 098 and
+     099, see the fork rule below.)
   5. `docs/plans/README.md` — every other plan, newest first, each marked IN PROGRESS or not
   6. `roadmap.md` — the long checklist of what is done and what is left
 
@@ -169,6 +171,30 @@ Never edit generated code manually.
   while a file on it exists nowhere else. Diff the file blobs (`git cat-file -e main:<path>` for existence,
   blob hashes for content), and check the DIRECTION before merging anything — `main` is usually the newer
   side, and the branch is a stale ancestor whose "missing" work would be a regression if replayed.
+- **THIS REPOSITORY IS A FORK, AND UPSTREAM MOVES WITHOUT US. PULL IT AT THE START OF EVERY SESSION**, in
+  the same breath as the reading order above:
+
+  ```bash
+  git remote add upstream https://github.com/AlexSergey/opensa.git   # once per clone
+  git fetch upstream main && git log --oneline main..upstream/main | head -30
+  ```
+
+  `origin` is `sexorcist00/opensa`; the parent is **`AlexSergey/opensa`**, where the engine's own line of
+  work continues. Nothing tells you it moved — `git status` is clean, `origin/main` is up to date, and the
+  divergence only shows up when someone asks for it. The first time it was asked, 2026-08-08, upstream was
+  **93 commits ahead** of the fork point while this side carried 57 of its own, and the cost of waiting was
+  visible in the merge: a conflict in `docs/links.md` where upstream had already repointed a link this side
+  still cited, a function that crossed the complexity gate because both sides had grown branches in it, and
+  — the expensive one — **upstream code that silently undid a fix of ours**, because it was written against
+  a flag that does not exist over there (`bucketDictionary` encoding model textures without the build's
+  texture format, which ships BC into a pak built for a GPU that has none). **That class of bug is what a
+  late merge costs**: not a conflict marker, but a clean auto-merge that is wrong, and it gets worse with
+  every week of divergence. Merge (never rebase — `main` is pushed), and read the upstream commits for what
+  they mean rather than only for what conflicts.
+  **The plan NUMBERS collide, and that is permanent until we renumber**: both sides numbered forward from
+  096, so `097`, `098` and `099` name different chains here and upstream. Cite a plan by its FOLDER
+  (`098-dispatch-console`), never by its bare number, and check `docs/plans/README.md`'s note before adding
+  a new one.
 - **THE DEVELOPMENT MACHINE IS AN ANDROID PHONE RUNNING TERMUX.** Every command handed over is run there, so
   write commands for that environment or they waste the user's time: no `sudo`, `pkg` rather than `apt`,
   paths under `$PREFIX`, and a long job needs `termux-wake-lock` or Android suspends it. The user **has the
