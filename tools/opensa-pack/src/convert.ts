@@ -103,7 +103,7 @@ export interface ConvertReport {
 }
 
 /** The invariant context of a `weldRect` pass — everything constant across its cells. */
-interface WeldRectContext {
+export interface WeldRectContext {
   breakableModels: ReadonlySet<string>;
   cellSize: number;
   defs: ReturnType<typeof resolveMap>;
@@ -298,6 +298,45 @@ export function occupiedRect(grid: ReturnType<typeof buildWorldGrid>): [number, 
   }
 
   return [x0, y0, x1, y1];
+}
+
+/**
+ * Weld one grid cell's HD + LOD levels (skips empty cells); appends the results to `welded`.
+ *
+ * Exported for its test: which of the two levels gets the cell's roadsign list is decided HERE, and losing
+ * the LOD half is silent — the bundle simply welds no text and the plate goes blank past the HD ring.
+ */
+export function weldGridCell(
+  ctx: WeldRectContext,
+  cx: number,
+  cy: number,
+  welded: { cell: WeldedCell; key: string }[],
+): void {
+  const cell = ctx.grid.get(cellKey(cx, cy));
+  if (!cell) {
+    return;
+  }
+  // Cell origin in ENGINE coords: GTA cell centre (x, y) → engine (x, 0, −y).
+  const origin: [number, number, number] = [(cx + 0.5) * ctx.cellSize, 0, -(cy + 0.5) * ctx.cellSize];
+  const roadsigns = ctx.roadsignsByCell.get(cellKey(cx, cy));
+  for (const lod of [false, true]) {
+    // Both levels get the same world-keyed roadsign list since plan 100/03 — the text has to survive to LOD
+    // range, and one key per plate is what keeps it from doubling (see `weldCellParts`' note).
+    const parts = weldCellParts(
+      ctx.fs,
+      ctx.defs,
+      cell,
+      lod,
+      ctx.planner,
+      origin,
+      ctx.breakableModels,
+      ctx.uvAnimRegistry,
+      roadsigns,
+    );
+    if (parts) {
+      welded.push({ cell: parts, key: `${cx},${cy},${lod ? 'lod' : 'hd'}` });
+    }
+  }
 }
 
 function accumulate(report: ConvertReport, key: string, bytes: number, stats: WeldStats): void {
@@ -543,35 +582,6 @@ function tryGetClump(fs: AssetFileSystem, modelName: string): null | ReturnType<
     return getClump(fs, modelName);
   } catch {
     return null;
-  }
-}
-
-/** Weld one grid cell's HD + LOD levels (skips empty cells); appends the results to `welded`. */
-function weldGridCell(ctx: WeldRectContext, cx: number, cy: number, welded: { cell: WeldedCell; key: string }[]): void {
-  const cell = ctx.grid.get(cellKey(cx, cy));
-  if (!cell) {
-    return;
-  }
-  // Cell origin in ENGINE coords: GTA cell centre (x, y) → engine (x, 0, −y).
-  const origin: [number, number, number] = [(cx + 0.5) * ctx.cellSize, 0, -(cy + 0.5) * ctx.cellSize];
-  const roadsigns = ctx.roadsignsByCell.get(cellKey(cx, cy));
-  for (const lod of [false, true]) {
-    // Both levels get the same world-keyed roadsign list since plan 100/03 — the text has to survive to LOD
-    // range, and one key per plate is what keeps it from doubling (see `weldCellParts`' note).
-    const parts = weldCellParts(
-      ctx.fs,
-      ctx.defs,
-      cell,
-      lod,
-      ctx.planner,
-      origin,
-      ctx.breakableModels,
-      ctx.uvAnimRegistry,
-      roadsigns,
-    );
-    if (parts) {
-      welded.push({ cell: parts, key: `${cx},${cy},${lod ? 'lod' : 'hd'}` });
-    }
   }
 }
 
