@@ -86,8 +86,25 @@ The multiplier belongs on the first two. The per-cell budget is the engine's own
      distance for this rule (the dat's MINDIST column)"*. Its ONLY consumer in the repo is
      `cullByMinDistance`, which uses it as an inter-object exclusion RADIUS — a 50–80 m one. The runtime
      never reads it.
+   - **The field, and it is decisive about the shape** (the user, 2026-08-08): in SA the clutter stands in
+     **groups** — "a rock with bushes around it, or different bush types in one spot". Objects metres apart
+     are the authored look, so a 50–80 m exclusion radius between two of them is not a rule the game obeys.
+     This is independent of the data analysis above and agrees with it.
    So `sjmcacti2`'s 152 → 2 is not MINDIST doing quality control; it is a view distance being applied as a
    spacing, and it is the reason this layer ships 15 286 objects where a shipping mod ships 57 583.
+
+   **And the damage has a signature, because the cull is PER SPECIES** (`minDistByModel`): mixed clumps
+   survive it — a rock with bushes around it, or two different bushes together, are exactly the cases it
+   never touches. What it deletes is the SECOND instance of the SAME species anywhere within 50–80 m. So the
+   defect is invisible as a missing object and visible only as a texture that never repeats nearby: the
+   authored look becomes one-of-each, which goes wrong in FEEL rather than in loading — the failure mode
+   [`project-goals.md`](../../../../../project-goals.md) names for misread authored data.
+
+   **A falsifiable check that needs no reverse-engineering** and can run on the BUILT tree before step 3:
+   the nearest-neighbour distance between two placements of the same species should be ≥ that species'
+   MINDIST (50–80 m) everywhere, while cross-species distances should be free. If that is what the artifact
+   shows, the misreading is confirmed from our own output and the reverse only has to answer what the column
+   is FOR and what governs spacing instead.
    **Not yet concluded**: what SA itself does with the column (`CPlantMgr` in gta-reversed) has not been
    read, and the repo rule is to recover the original's meaning before changing our own. Nor is it known
    what the correct reading yields — the pre-cull count has never been measured — nor what should guard
@@ -104,9 +121,13 @@ The multiplier belongs on the first two. The per-cell budget is the engine's own
       `convert.ts` ← generator (`--density`) ← pmb (`--procobj-density`), with `--procobj-max` and a
       `CAP DROPPED n` line so a capped run cannot pass itself off as a density. **Shipped 2026-08-08, and it
       is what falsified decision 5**: the knob works and moves almost nothing, which is the finding.
-- [ ] **FIRST, before any per-category work: settle what MINDIST is** (decision 5). Recover `CPlantMgr`'s use
-      of the column from gta-reversed, measure the pre-cull placement count, and decide what replaces the
-      cull. Every task below is priced against a density this answer changes.
+- [ ] **FIRST, before any per-category work: settle what MINDIST is** (decision 5), in this order — the
+      cheap checks come before the reverse:
+      1. **Nearest-neighbour census on the BUILT tree**: same-species distances ≥ 50–80 m everywhere while
+         cross-species are free confirms the misreading from our own artifact.
+      2. **The pre-cull placement count** — one number, and it is what the correct reading yields.
+      3. **Then the reverse**: what `CPlantMgr` does with the column, and what governs spacing in its place.
+      Every task below is priced against a density these three change.
 - [ ] `convert.ts`: replace `lottery < 1` with `lottery < densityFor(category, surface)`; category is already on the placement, thread surface through. Config type `ProcObjDensityConfig` (per-category and per-category×surface overrides), default = all 1.0.
 - [ ] Candidate-ceiling knob: allow raising the candidate-generation multiplier (`PROC_OBJ_MAX_DENSITY` equivalent) via config when a category wants density > 3; keep 3 as default. Both targets need it for the 3.77× aiming point — a cutoff above 3 has no candidates to keep.
 - [ ] **Two shipped profiles, each priced before it is written**: `sa` (up to 3.77×, declaring its `perfect-map.asi` gate above 32 767 map-wide rows) and `opensa` (perf-bounded — [04](04-slot-economy-and-budgets.md) supplies the number; until it does, this profile does not exist rather than guessing one). The 1.0 vanilla default stays as the regression baseline, not as a shipped profile.
