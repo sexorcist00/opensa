@@ -10,14 +10,25 @@
 > ceilings exists**: OLA sets `EntitiesPerIpl = unlimited` (the 4 096 per-file buffer) and
 > `EntityIpl = unlimited` (the 40 slots), with `Buildings = 100000`. It runs 72 914 permanent rows in files
 > of up to 9 627 — see [`gta-sa-original/reference-install.md`](../../../../../gta-sa-original/reference-install.md).
-> **So there is no ceiling left to lift here, and no correctness number left to find.** The one ceiling no
-> adjuster touches is int16, and `perfect-map.asi` already handles it at 2.23× the limit on that install.
+> ~~So there is no ceiling left to lift here, and no correctness number left to find.~~
 >
-> What this plan becomes: **a per-target cap decision plus a perf budget.** Stock keeps today's guards;
-> the reference target is bounded by memory and frame time, measured. Decisions 2 (the binary-stream economy
-> stays) and 3 (perf becomes the budget) survive intact — they were never about int16. Decision 1's
-> "opensa-asi target" needs renaming: the target is defined by the ADJUSTERS plus our asi, not by our asi
-> alone.
+> **And then the baseline itself was re-measured (2026-08-08) and put one ceiling back.** The layer places
+> **15 286** objects, not 24 552 — the old figure counted stream RECORDS
+> ([`procobj-layer-census.ts`](../../../../../../scripts/debug/procobj-layer-census.ts)). At 3.77× the target
+> costs 24 437 permanent rows, i.e. **38 096 map-wide, over the int16 ceiling**, which is precisely the
+> ceiling OLA does not lift. So this plan sits **above** an int16 gate that `perfect-map.asi` already clears
+> at 2.23× on that install — the asi is a prerequisite for the target, not an optional hedge.
+>
+> What this plan becomes: **a per-target cap decision plus a perf budget, over an asi-gated target.** Stock
+> keeps today's guards and has **1.18×** of headroom in total (slots, guard 39) — say that plainly rather
+> than shipping a multiplier it cannot take. Decisions 2 (the binary-stream economy stays) and 3 (perf
+> becomes the budget) survive intact — they were never about int16. Decision 1's "opensa-asi target" needs
+> renaming: the target is defined by the ADJUSTERS plus our asi, not by our asi alone.
+>
+> **And decision 3 has to name its HOST.** "Perf becomes the budget" currently reaches for the plan-063 perf
+> HUD and plan-060 streaming machinery, which measure the OpenSA engine, while decision 1 gates caps by SA
+> target. The same density lands in both hosts and they have different limiters; a budget that does not say
+> which one it was taken in cannot set a cap for either.
 
 Part of [07 — LOD generators, extended](../readme.md). Depends on [02](02-density-model.md)/[03](03-biome-zone-density.md) (the density model), on [00](00-limit-route-review.md)'s route decision, and — if that decision keeps our own ASI on the path — on [03-asi/006](../../../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md) (the stock-vs-opensa-asi target modes). Delivers the actual "MORE objects": raising the caps so 02/03's density can ship, and re-establishing perf as the limiter.
 
@@ -53,10 +64,14 @@ Only one of those four is an int16 cap. `TEXT_ROW_CAP` is, and it is **not** in 
       wrong; it is a **stock-target** cap, and it is **inert on the install we ship to**. The same install
       sets `EntityIpl = unlimited`, so the 40-slot ceiling is gone too, and `Buildings = 100000`. Full
       capture: [`gta-sa-original/reference-install-config.md`](../../../../../gta-sa-original/reference-install-config.md).
-- [ ] **Decide the reference-target caps, and measure what actually limits them.** With both ceilings
-      `unlimited` there is no correctness number left to find here — the limiter is memory and frame time,
-      which is what the perf tasks below are for. Set `AREA_MAX_PAIRS` and the slot guard per target (stock
-      = today, reference = perf-bounded) rather than hunting a ceiling that the target does not have.
+- [ ] **Decide the reference-target caps, and measure what actually limits them.** With the slot and
+      per-file ceilings `unlimited` there, the remaining correctness number is **int16**: the target's
+      38 096 map-wide rows need `perfect-map.asi`, so the reference caps are perf-bounded *above* an asi
+      gate. Set `AREA_MAX_PAIRS` and the slot guard per target (stock = today and honest about its 1.18×,
+      reference = perf-bounded) rather than hunting a ceiling that the target does not have.
+- [ ] **Keep the permanent-row cost per object as a first-class knob.** It is 0.424 rows/object today
+      (6 487 / 15 286) and it is the whole reason our layout beats a text-IPL mod's by 2.36×. Every density
+      profile changes it — a profile that favours TALL species buys rows nobody costed.
 - [ ] Pack the generated areas tight. They average 3 501 of a 4 000-row budget today; a repack to the budget
       is ~2 slots back at current density and more at raised density. Measure the recovered slots and check
       that no area breaches the budget after it — this is 00's hygiene task, executed.

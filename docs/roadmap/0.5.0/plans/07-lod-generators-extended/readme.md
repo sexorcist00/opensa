@@ -25,11 +25,13 @@ a plan's premise, so they are stated here rather than buried:
    [`restrictions/sa-target.md`](../../../../restrictions/sa-target.md) records that **opensa-lod-generator
    output is for OpenSA only** — real SA cannot load an uncapped per-cell LOD, so no ASI is involved. The
    roadsign/escalator carry — the most visible item in the whole plan — is **shippable today**.
-2. **The binding procobj ceiling is SLOTS, not the int16 row ceiling.** Measured 2026-08-07 on
+2. **The FIRST ceiling is slots; the int16 ceiling is the second, and the target clears both.** Measured on
    `build/original/opensa`: **20 146 / 32 767 text rows** but **38 / 40 IPL slots** (build guard 39) — ONE
-   free slot. Reaching the density target costs ~16 312 text rows (fits, 29 504 against the 30 000 guard)
-   and **>= 19 areas against the 9 we ship** (does not fit, by ~10 slots). The int16 lift our ASI uniquely
-   provides is **not** on the critical path; the per-area `LoadScene` budget and the slot array are.
+   free slot, so a stock build can grow the layer by **1.18×** and no further. Re-measured 2026-08-08
+   ([`procobj-layer-census.ts`](../../../../../scripts/debug/procobj-layer-census.ts)), the target costs 24 437
+   text rows — map-wide **38 096, over the int16 ceiling by 5 329** — in **29 areas** (slots 59 vs 40). The
+   half-day-old claim that "the int16 lift is not on the critical path" was priced off a baseline 61 % too
+   high; **it is on the path**, and it is the only one of the three that no adjuster can lift.
 3. **Folding areas into fewer files cannot buy the target.** [00](lod-procobj-generator/00-limit-route-review.md)
    left this open as the cheap escape. It is now closed with a number: area count is set by the ~4 000-row
    per-area `LoadScene` budget, not by how files are grouped, so fewer files means areas that breach it.
@@ -46,9 +48,17 @@ a plan's premise, so they are stated here rather than buried:
    baseline 2026-08-07: OLA sets **`EntitiesPerIpl = unlimited`** (the 4 096 per-file buffer that
    `AREA_MAX_PAIRS` guards) and **`EntityIpl = unlimited`** (the 40 slots), with `Buildings = 100000`. It
    runs **72 914 permanent rows in files of up to 9 627**. So findings 2 and 3 are the STOCK story and the
-   build guards are right to keep enforcing it — but on the install we ship to, **the density target needs
-   no ceiling lifted at all**, and the limiter is memory and frame time. The one ceiling no adjuster touches
-   is int16, which `perfect-map.asi` already carries there at 2.23× the limit.
+   build guards are right to keep enforcing it — but on the install we ship to, the slot and per-file
+   ceilings are gone. The one ceiling no adjuster touches is int16, which `perfect-map.asi` already carries
+   there at 2.23× the limit.
+
+6. **And the layer's own baseline was wrong, which flipped finding 5's conclusion (2026-08-08).** "The
+   density target needs no ceiling lifted at all" held only while the layer was believed to place 24 552
+   objects; it places **15 286** — the old figure was the generated streams' RECORD count (HD + the unlinked
+   LOD of every short species + 467 tree impostors sharing the areas). At the true 3.77× the target's rows
+   clear int16, so on the reference install the target is **gated on our own asi** rather than free. The
+   census is a script now, and it checks itself: [density-target.md](density-target.md) has the arithmetic,
+   the two intermediate walls (1.18× slots, 2.95× int16) and the re-derivation command.
 
 ## Priorities
 
@@ -57,7 +67,7 @@ Ordered by *what unblocks the most for the least*, not by plan number.
 | P | Plan | Why here |
 | --- | --- | --- |
 | **P0** | [lod-procobj-generator/00 — limit route review](lod-procobj-generator/00-limit-route-review.md) | A decision, no code. Nothing in the density chain can SHIP until it says which ceiling we lift and who lifts it. Now has a target to cost and a real 57.6k-row corpus to test against. |
-| **P1** | [lod-procobj-generator/01 — species floor](lod-procobj-generator/01-species-representation-floor.md) | A real fairness defect at TODAY's density; costs zero rows and zero slots, so it is gated on nothing. |
+| **P1** | [lod-procobj-generator/01 — species floor](lod-procobj-generator/01-species-representation-floor.md) | Costs zero rows and zero slots, so it is gated on nothing — but its premise was **falsified 2026-08-08** (the lottery draw is unbiased; density lives in `spacing`). It is now a SIZE-IT-FIRST plan that may close as latent. |
 | ~~P1~~ | [rw-codec/01 — typed 2dfx codecs](../../../../../tools/rw-codec/docs/plans/001-typed-2dfx-payload-codecs.md) | **SHIPPED 2026-08-07** and moved into the tool. Pure codec, no behaviour change; it unblocked every transform below it. |
 | ~~P1~~ | [lod-common/01 — keep policy](../../../../../tools/lod-common/docs/plans/005-2dfx-keep-policy.md) → [02 — entry transform](../../../../../tools/lod-common/docs/plans/006-2dfx-entry-transform.md) | **SHIPPED 2026-08-07** as lod-common `005` + `006`. Stock output is unchanged, and the census says why: no stock model carrying 2dfx hangs it off a rotating frame. |
 | ~~P1~~ | [opensa-lod-generator/01 — adopt](../../../../../tools/opensa-lod-generator/docs/plans/005-adopt-2dfx-policy.md) | **SHIPPED 2026-08-07** as opensa-lod-generator `005` and moved into the tool. |
@@ -65,7 +75,7 @@ Ordered by *what unblocks the most for the least*, not by plan number.
 | ~~MOVED~~ | [sa-lod-generator/01 — adopt](sa-lod-generator/01-adopt-2dfx-policy.md) | **Superseded by [plan 100 step 05](../../../../../tools/sa-lod-generator/docs/plans/007-clone-2dfx-policy.md)**, which does the same adoption plus the carrying half of `02`. The file stays as the record of how it was scoped here. |
 | **P2** | [lod-procobj-generator/02 — density model](lod-procobj-generator/02-density-model.md) → [03 — biome density](lod-procobj-generator/03-biome-zone-density.md) | Buildable and testable now at today's totals; SHIPPING raised density waits on P0's route. |
 | **P2** | [lod-procobj-generator/04 — slot economy & budgets](lod-procobj-generator/04-slot-economy-and-budgets.md) | Reshaped by P0. Where perf replaces int16 as the limiter. |
-| **P3** | [lod-common/03 — emitter thinning](lod-common/03-emitter-thinning.md) → [sa-lod-generator/02 — particle emitters](sa-lod-generator/02-particle-emitters.md) | The far-view emitter RATE BUDGET, the only 2dfx work still filed here. **Do it after [plan 100/04](../../../../plans/100-2dfx-at-lod-range/04-authored-cull-distance.md)**: budgeting far-view emitters against a flat `DRAW_DISTANCE = 300` that 100/04 deletes would measure the wrong thing. |
+| **P3** | [lod-common/03 — emitter thinning](lod-common/03-emitter-thinning.md) → [sa-lod-generator/02 — particle emitters](sa-lod-generator/02-particle-emitters.md) | The far-view emitter RATE BUDGET, the only 2dfx work still filed here. **Its gate is open** — [100/04](../../../../plans/100-2dfx-at-lod-range/04-authored-cull-distance.md) shipped, so emitters draw to their authored distance (smoke to the world edge). **Start with the measurement, not the mechanism**: 100/04 found the emitter system below the noise floor with a positive control, so the budget may have nothing to buy. Both generators now CARRY type-1, so thinning changes live output. |
 
 **Suggested first slice:** P0 (a review, cheap) in parallel with the `rw-codec/01 → lod-common/01+02 →
 opensa-lod-generator/01+02` line, which ships a visible improvement without touching a single limit.
@@ -159,8 +169,11 @@ budget it left open.
   (all-but-particle); **cells keep only `LIGHT_2DFX = new Set([0])`**
   (`opensa-lod-generator/src/adapters/gta-sa/merge.ts:12`) — rotation-bearing types are dropped because a raw
   transplant repositions but does not re-rotate.
-- procobj scatter (`packages/renderware/src/map/procobj-scatter.ts`): `PROC_OBJ_MAX_DENSITY = 3`, count
-  `= area/spacing × density`, per-placement `lottery`; build-time cutoff hardcoded `lottery < 1`
+- procobj scatter (`packages/renderware/src/map/procobj-scatter.ts`): `PROC_OBJ_MAX_DENSITY = 3`, candidate
+  count `= area / rule.spacing × PROC_OBJ_MAX_DENSITY`, and `lottery = random() × PROC_OBJ_MAX_DENSITY` —
+  **uniform, with no per-species term**; a species' density is its `spacing` and is spent on the candidate
+  count. (Read wrong for a fortnight — see [01](lod-procobj-generator/01-species-representation-floor.md).)
+  Build-time cutoff hardcoded `lottery < 1`
   (`map-placement/src/procobj/convert.ts`). `procObjCategory(model, surface)` →
   bushes/cacti/flowers/grass/rocks/trees already exists; surface names from `surfinfo.dat`; zones parseable
   (`parseZones`, info.zon) but **not joined to scatter**.

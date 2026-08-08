@@ -31,18 +31,37 @@ Both cap sites select survivors the same way: pool every candidate, sort by `lot
    `procObjLotteryCap`): pools the lotteries of ALL of the cell's batches, sorts, and returns the
    `limit`-th as the cutoff — "lowest lotteries win — the most-vanilla subset".
 
-The hole is in what `lottery` means. Scatter assigns `lottery = random × density`, where `density` comes
-from the species' own `procobj.dat` rule. So **a species with a low rule density produces systematically
-low lotteries and crowds out one with a high density** — the ordering is not a fair draw across species,
-it is a draw biased by a per-species constant. Under a tight cap the tail species can reach zero
-placements, in a section where its rule was perfectly valid.
+### What the mechanism actually is (corrected 2026-08-08, against the code)
 
-Nothing today detects this: the caps are silent, and a missing species looks like terrain that simply has
-no cacti. `cullByMinDistance` runs per species and cannot help — it thins within a species, before the
-cross-species cut.
+This plan was written around a bias that does not exist. It said `lottery = random × density` with `density`
+coming from the species' own `procobj.dat` rule, so a low-density species would produce systematically low
+lotteries and crowd the others out. The code says otherwise:
+`lottery: random() * PROC_OBJ_MAX_DENSITY` (`procobj-scatter.ts:195`) — **uniform in [0, 3) for every
+candidate of every species**, with no per-species term. `ProcObjRule` has no density field at all
+(`procobj.parser.ts`): `procobj.dat` expresses density as **`spacing`**, one object per N m², and it is spent
+at candidate GENERATION (`expected = area / rule.spacing × PROC_OBJ_MAX_DENSITY`).
 
-This is also why the fix belongs here and not inside 02: raising density does not remove the bias, it just
-moves which species falls off the end.
+So the cross-species draw is unbiased and the global cut is **proportional** — each species keeps roughly the
+same fraction of its own candidates. Which kills the cheapest of the three candidate fixes below outright:
+"per-species lottery NORMALISATION, divide by the rule density" has nothing to divide by and nothing to
+correct.
+
+**A species can still reach zero, by two routes that are not the one this plan described:**
+
+1. **Rounding.** A species whose eligible count × the surviving fraction falls below 1 disappears — a rare
+   species on a small patch, not a low-density one. The tighter the cap the more species this reaches.
+2. **MINDIST before the cut.** `cullByMinDistance` runs per species on the lottery-filtered set
+   (`convert.ts:115`) and can thin a tightly-spaced species to almost nothing before the cross-species cut
+   ever sees it. It is not the innocent bystander the old text made it.
+
+Both are real; neither has been observed. **That makes the first task below the whole plan for now** — the
+defect is structural in a weaker form than claimed, and it may well be latent at shipping density.
+
+Nothing today detects it either way: the caps are silent, and a missing species looks like terrain that
+simply has no cacti.
+
+This is still why the fix belongs here and not inside 02: raising density changes which species round to
+zero, it does not stop the rounding.
 
 ## Decisions (to settle during the plan)
 
@@ -58,10 +77,9 @@ moves which species falls off the end.
    the section budget proportional to its eligible count, floor each share at N, then fill the remaining
    budget by the existing lottery order. It is deterministic, needs no RNG, degrades to today's behaviour
    when the budget is not binding, and is the standard fix for exactly this "smallest party gets zero
-   seats" problem. Two cheaper alternatives to weigh against it: a stratified draw (round-robin one per
-   species until the budget runs out, then lottery order), and per-species lottery NORMALISATION (divide
-   by the rule density so the draw is unbiased) — the last one is the smallest diff and may be enough on
-   its own; measure before choosing.
+   seats" problem. One cheaper alternative to weigh against it: a stratified draw (round-robin one per
+   species until the budget runs out, then lottery order). ~~Per-species lottery normalisation~~ is struck —
+   the draw is already unbiased, see the mechanism section.
 4. **Determinism is non-negotiable.** Same seed and same inputs → same placement set, as today. Any
    apportionment must be a pure function of the candidate set.
 5. **Make the drop visible.** Whatever the algorithm, log per-section which species were floored and which
@@ -69,10 +87,11 @@ moves which species falls off the end.
 
 ## Tasks
 
-- [ ] Reproduce and SIZE the defect first: instrument the current build to report, per cell, species
-      eligible vs species placed. Find real sections where a species reaches zero. If the answer is "this
-      never actually happens at shipping density", say so and close the plan — the defect is structural but
-      may be latent.
+- [ ] **Reproduce and SIZE the defect first, and nothing else until it reports.** Instrument the current
+      build to report, per cell, species eligible vs species placed — and split the loss by cause, MINDIST
+      versus the cross-species cut, because the two want different fixes. Find real sections where a species
+      reaches zero. If the answer is "this never actually happens at shipping density", say so and close the
+      plan: with the biased-draw premise gone, latency is the likely outcome rather than the fallback one.
 - [ ] Decide the section unit (cell vs global) and the floor N; record why.
 - [ ] Implement the chosen algorithm behind a config flag, defaulting OFF until the numbers justify it.
 - [ ] Unit tests: three species with skewed rule densities and a budget of 300 — all three present, and the

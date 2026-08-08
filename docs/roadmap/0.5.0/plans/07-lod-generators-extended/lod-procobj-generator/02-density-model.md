@@ -8,7 +8,7 @@ Part of [07 — LOD generators, extended](../readme.md). The foundation for "mor
 
 Procobj scatter (`packages/renderware/src/map/procobj-scatter.ts`, reused at build time by `map-placement/src/procobj/convert.ts`):
 
-- candidate count `expected = area / rule.spacing × PROC_OBJ_MAX_DENSITY` (`PROC_OBJ_MAX_DENSITY = 3`); each placement gets `lottery = random × density`.
+- candidate count `expected = area / rule.spacing × PROC_OBJ_MAX_DENSITY` (`PROC_OBJ_MAX_DENSITY = 3`); each placement gets `lottery = random() × PROC_OBJ_MAX_DENSITY` — **uniform, with no per-species term** (a species' density is its `spacing`, already spent above).
 - **build-time density is hardcoded**: `convert.ts` keeps `placement.lottery < 1` — pure vanilla density — then MINDIST-thins per species and caps to `procObjMax = 20000`.
 - Category is already derived per placement: `procObjCategory(model, surface) → bushes/cacti/flowers/grass/rocks/trees` (`procobj-categories.ts`). Surface name is available (`surfinfo.dat`).
 
@@ -34,13 +34,14 @@ The multiplier belongs on the first two. The per-cell ~300 is the engine's own b
 3. **MINDIST stays the quality guard.** Denser candidates still pass through `cullByMinDistance` per species — density raises the ceiling, MINDIST prevents visual clumping/z-fighting. So "more" never means "piled on top of each other".
 4. **Build-time only, deterministic.** Same seed → same scatter (existing determinism preserved); the config is a build input, not a runtime slider (the runtime already has a live density slider for preview — unchanged).
 5. **Honest capping.** With density up, `procObjMax` and the area budgets bite sooner — 02 surfaces (logs) how many placements the caps drop, so raising density without raising budgets (04) is visibly a no-op past the cap, not a silent truncation.
+6. **A per-category knob is only LOCAL below the global cap.** All categories feed one lowest-lottery cut (`convert.ts:119` sorts every surviving placement together and slices to `procObjMax`), so once that cut binds, boosting bushes **displaces** rocks and cacti rather than adding to them. Today the layer places 15 286 against `procObjMax = 20000`, so the cut is NOT binding and the knob is local — but it is 1.31× away, which any interesting profile crosses. State which side of it a test is on.
 
 ## Tasks
 
 - [ ] `convert.ts`: replace `lottery < 1` with `lottery < densityFor(category, surface)`; category is already on the placement, thread surface through. Config type `ProcObjDensityConfig` (per-category and per-category×surface overrides), default = all 1.0.
 - [ ] Density ceiling knob: allow raising the candidate-generation multiplier (`PROC_OBJ_MAX_DENSITY` equivalent) via config when a category wants density > 3; keep 3 as default.
 - [ ] Logging: per-category placed vs generated vs dropped-by-cap counts (so 04's budget interplay is visible).
-- [ ] Unit tests: density 1.0 reproduces today's counts (regression); density 2.0 for `bushes` ~doubles bush placements and leaves other categories unchanged; MINDIST still enforced.
+- [ ] Unit tests: density 1.0 reproduces today's counts (regression); density 2.0 for `bushes` ~doubles bush placements and leaves other categories unchanged **with the global cap slack** (decision 6 — a fixture that crosses `procObjMax` must assert the displacement instead, or it asserts the wrong thing); MINDIST still enforced.
 - [ ] Wire the config through lod-procobj-generator (`config.ts`) and pmb.
 
 ## Verification

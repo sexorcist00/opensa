@@ -11,8 +11,11 @@ emitter-lifecycle patch (the `FxSystem_c` use-after-free, confirmed in-game), an
 opt-out for a stock target with no asi (`cli.ts:42`, `finalize.ts:219`). What 010 left open is the far-view
 overdraw budget, deferred on the user's call.
 
-So what remains here is the **decimate path** — which still drops emitters — plus the budget. Two of the
-three things A3 described are shipped.
+**And the decimate half shipped too, in [plan 100/05](../../../../../../tools/sa-lod-generator/docs/plans/007-clone-2dfx-policy.md).**
+All three clone paths — decimated re-encode, verbatim byte copy, hole-fill — now resolve one keep-set
+through `cloneKeepTypes` (`adapters/gta-sa/finalize.ts:85`, `:95`), so a decimated LOD carries its emitters
+today. **What remains here is the BUDGET and the stock-target regression, nothing else** — the plan's own
+scope line below is what it was before 100 landed, kept for the record.
 
 ## Context & boundary
 
@@ -49,10 +52,11 @@ own plan with its own budget, and it is not blocked on anything here.
 
 ## Tasks
 
-- [ ] Policy: type-1 → carry-rate-scaled for the asi target on verbatim and decimate, replacing the
-      `keepParticles` boolean; stock still strips via `--strip-particles`.
-- [ ] Decimate path carries the thinned emitters (keep-set + lod-common/03's thinning + the existing frame
-      transforms).
+- [x] ~~Policy: type-1 → carry-rate-scaled for the asi target on verbatim and decimate~~ — **SHIPPED as plan
+      100/05.** The policy row already reads `carry-rate-scaled` for `clone`; `keepParticles` survives only
+      as the `--strip-particles` override of it, on one line.
+- [x] ~~Decimate path carries the emitters~~ — **SHIPPED as plan 100/05**, through the same keep-set as the
+      other two clone paths. What is left is applying lod-common/03's THINNING to it once the factors exist.
 - [ ] Measure what the ALREADY-SHIPPED verbatim carry costs at range, before adding decimate to it. 010
       deferred the far-view budget, so this number has never been taken and it is the one that says whether
       thinning is needed at all.

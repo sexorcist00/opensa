@@ -36,9 +36,12 @@ generator is the only place that can do it without new engine state.
    conservative.
 4. **One budget model, two consumers.** The factors live in one config consumed by both the pipeline flip
    (03-asi/010) and the encoders here. A second copy of the numbers is a second answer to the same question.
-5. **This plan ships no behaviour on its own.** Thinning is dormant until a generator's policy carries type-1
-   at all, which is [sa-lod-generator/02](../sa-lod-generator/02-particle-emitters.md). That is deliberate:
-   the mechanism can be unit-tested and reviewed while its consumer is still blocked.
+5. ~~**This plan ships no behaviour on its own.**~~ **False since plan 100 — thinning now changes LIVE output
+   on BOTH targets.** It was written when no path carried type-1. Today `clone` carries particles by default
+   (plan 010, `sa-lod-generator/src/cli.ts:42`) and `cell` is `carry` in the policy
+   (`lod-common/src/two-dfx-policy.ts`, plan 100), so the first factor below moves what both generators
+   emit. The golden compare on both generators will move with it, deliberately — it can no longer serve as
+   the guard that says nothing changed.
 
 ## Tasks
 
@@ -56,9 +59,15 @@ generator is the only place that can do it without new engine state.
 ## Verification
 
 - Thinning is deterministic and correctly bounded (unit).
-- No generator output changes: with no path carrying type-1 yet, this is dead code by design — the guard is
-  the existing golden compare on both generators.
+- **Both generators' golden output changes exactly where a factor says it should**, and nowhere else — with
+  every factor at 1.0 the output is byte-identical to today. That regression arm replaces the old "dead code
+  by design" guard, which the plan-100 carry retired.
 - The budget config has exactly one definition, shared with 010 (grep).
+- **Measure before tuning.** [Plan 100/04](../../../../../plans/100-2dfx-at-lod-range/04-authored-cull-distance.md)
+  is the only far-view particle measurement anyone has taken, and it found the whole emitter system **below
+  the noise floor** on both bench scenes — a positive control (every emitter culled) came out slower than
+  both arms. Whatever motivates thinning has to show up over that, or the honest deliverable of this plan is
+  a null result and a table of 1.0s.
 
 ## Measurements / notes
 

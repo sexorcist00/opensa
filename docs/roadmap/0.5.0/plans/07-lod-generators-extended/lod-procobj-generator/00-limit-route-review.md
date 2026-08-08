@@ -10,8 +10,18 @@ changes if the decision goes the other way.
 
 **Since 2026-08-07 the review has a TARGET to cost and a real corpus to test against.**
 [density-target.md](../density-target.md) fixes the aiming point at **57 583 placed objects** (ProperFixes
-2.2.1's vegetation set — a shipping mod, not a number we invented) and prices it: it fits in rows and misses
-by ~10 IPL slots. Read it before answering anything below.
+2.2.1's vegetation set — a shipping mod, not a number we invented) and prices it. Read it before answering
+anything below.
+
+> **Re-measured 2026-08-08, and the price changed.** Our layer places **15 286** objects, not the 24 552 this
+> review was costed against — that figure was the generated streams' RECORD count
+> ([`procobj-layer-census.ts`](../../../../../../scripts/debug/procobj-layer-census.ts)). The target is therefore
+> 3.77× rather than 2.35×, it costs **24 437** permanent rows rather than 16 312, and map-wide it lands at
+> **38 096 — over the int16 ceiling**. So the conclusion below that "the int16 lift is not on the critical
+> path" is **wrong**: on stock the target misses on rows AND slots, and on the reference install int16 is the
+> only ceiling left standing, because it is the only one no adjuster lifts. Route 3 is not a hedge, it is the
+> gate. What does NOT change: slots bind FIRST — at ~18 000 objects, 1.18× today — so the stock target's real
+> headroom is 18 %, and everything past that needs the adjusters plus our ASI.
 
 ## Field run, 2026-08-07 — a clean A/B on someone else's 70k-row map
 
@@ -68,6 +78,11 @@ Both remaining routes collapse into one answer: **the reference target needs the
 past that the limiter is memory and frame time. `004b` (our own pool/array relocations) stops being a
 prerequisite for density and becomes what would free us from depending on someone else's plugin.
 
+**One correction to that, from the 2026-08-08 re-measurement**: "past that the limiter is memory and frame
+time" holds only up to ~45 000 objects. The target's 57 583 costs 38 096 map-wide permanent rows, and int16
+is the ceiling those rows hit — the one OLA leaves in place. Between the slot wall and the frame budget there
+is a third wall, ours to lift, and the target sits above it.
+
 ## The question
 
 Three ways to place more procobj than vanilla limits allow:
@@ -92,12 +107,17 @@ the second supersedes the first (they measured different trees: `build/original/
 | `IplEntityIndexArrays` — gta.dat IPL slots with `inst` | 37 | **38** | 40 | 39 | **ONE slot** |
 | per-area `LoadScene` rows (text + binary) | worst 3 822 | — | ~4 096 | `AREA_ROW_CAP` 4 000 | 4 % |
 
-Generated procobj today (2026-08-07): **6 954** text rows (the LOD layer, 9 files `plobj0..7` + `plotr0`) +
-**24 552** instances inside 51 binary stream tiles, over 63 `plo*` models in the text layer and no TXDs of
-its own (the no-`--in` mode reuses the game's own models and textures). Alongside them the tree LOD layer
-holds another 563 rows in `lods.ipl`, so **7 517 of the 20 146 rows and 10 of the 38 slots are ours**; stock
-accounts for 12 629 rows in 28 slots. Per-area totals sit just under the 4 000-row budget — that is what
-created eight areas beyond the first.
+Generated procobj today (**re-measured 2026-08-08** by
+[`procobj-layer-census.ts`](../../../../../../scripts/debug/procobj-layer-census.ts)): **15 286 placed objects**
+— 6 487 of them tall enough for a permanent text LOD row (`plobj0..7`, 8 slots), the other 8 799 riding the
+binary streams with their LOD unlinked. The 51 stream tiles hold **24 552 records** in total: those 15 286 HD
+plus 8 799 LOD plus 467 tree impostors that share the `plotr0` overflow area. 43 species, no TXDs of its own
+(the no-`--in` mode reuses the game's own models and textures). Per-area totals sit just under the 4 000-row
+budget — that is what created seven areas beyond the first.
+
+The three numbers this paragraph used to carry — 6 954 rows, "24 552 instances", 63 models — each counted
+something adjacent: the trees' overflow rows folded into ours, stream RECORDS read as objects, LOD defs read
+as species. See [density-target.md](../density-target.md).
 
 **The finding that reframes everything: the binding constraint is SLOTS, not the int16 row ceiling.** We have
 9 854 rows of headroom to the guard and **one IPL slot**. Any meaningful density increase needs more
@@ -168,9 +188,10 @@ Read together with the measurement, that is close to an answer:
 ## Tasks
 
 - [x] Cost the density profiles in ROWS and SLOTS (not just object counts) — the number that decides whether
-      the int16 lift is on the critical path. **Done 2026-08-07**: rows fit (29 504 / 30 000 guard), slots
-      miss by ~10. The int16 lift is **not** on the critical path;
-      [density-target.md](../density-target.md) carries the arithmetic.
+      the int16 lift is on the critical path. **Done 2026-08-07, redone 2026-08-08 off a self-checking
+      census**: at the target, rows land at 38 096 (over the 32 767 ceiling) and slots at 59 (over 40) — it
+      misses on BOTH, and the int16 lift **is** on the critical path. Slots still bind first, at 1.18× today.
+      [density-target.md](../density-target.md) carries the arithmetic and the intermediate walls.
 - [x] Test option 3 (fold generated areas into fewer files). **Closed** — see decision 3 above.
 - [x] **Install ProperFixes 2.2.1 + its vegetation optional on the real game and look for ghost barriers.**
       **Done 2026-08-07, and it answers decision 5 in our favour** — the bug reproduces on its data without
@@ -199,8 +220,15 @@ which route lifts it, and what that route costs the user's install.
 - 2026-07-28 baseline (`build/original/sa`): 25 461 rows / 37 slots.
 - **2026-08-07 baseline (`build/original/opensa`, the canonical tree): 20 146 rows / 38 slots.** Slots are
   the number to watch — headroom is ONE against the build guard.
-- **2026-08-07, target costed:** 57 583 objects needs ~16 312 text rows (map-wide 29 504, fits) and ≥ 19
-  areas (slots 48 vs a 40 ceiling, does not fit). Area folding closed as a route.
+- ~~2026-08-07, target costed: 57 583 objects needs ~16 312 text rows (map-wide 29 504, fits) and ≥ 19 areas
+  (slots 48 vs a 40 ceiling, does not fit).~~ **Superseded — priced off a baseline that was 61 % too high.**
+  Area folding stays closed as a route.
+- **2026-08-08, our layer re-measured** (`procobj-layer-census.ts`, both identities check): **15 286 placed
+  objects**, 6 487 permanent rows in 8 slots, 24 552 stream records, 43 species. Plus 816 stock hand-placed
+  instances of the same species outside the layer.
+- **2026-08-08, target re-costed:** 3.77× → 24 437 text rows (map-wide **38 096**, over the int16 ceiling by
+  5 329) and 29 areas (slots **59** vs 40). Walls on the way: slots at ~18 000 objects (1.18×), the build
+  guard at ~38 500 (2.52×), int16 at ~45 000 (2.95×).
 - **2026-08-07, reference measured:** ProperFixes 2.2.1 places 57 583 rows in 6 slots, 46 models, every row
   `lod = -1`, and requires OLA. 8.3× our row cost per object.
 - **2026-08-07, FIELD:** ProperFixes 2.2.1 + vegetation optional (70 212 map-wide rows, 2.14× the int16
