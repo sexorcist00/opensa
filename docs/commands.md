@@ -64,12 +64,13 @@ npm run phone               # the whole phone run in ONE command (convert if nee
 
 `npm run phone` (`scripts/phone.sh`, plan 097 chain 4) is the field-run ritual for a device, written so the
 command never changes and every knob is an env var: `REBUILD=1` re-converts, `BAKE=0` builds the other side of
-the collision A/B, `MODELS=0` skips the model convert (fast, but then only `dispatch.html` is usable — it runs
+the collision A/B, `TEXTURES=` picks the texture format (default `astc`; `rgba8` is the A/B's other side),
+`MODELS=0` skips the model convert (fast, but then only `dispatch.html` is usable — it runs
 no physics), `VEHICLES=` / `PEDS=` set the model SUBSET (default `admiral,infernus,comet` + `bmycg,wmycr`;
 `all` converts the roster — hours on a phone), `RECT=` / `SPAWN=` / `OUT=` / `GAME=` / `APP_PORT=` /
 `STATIC_PORT=` move the rest. It converts
 only when there is no pak (a phone convert is minutes to hours), prints what the pak actually carries — the
-collision GRID first — and reuses a server that is already up. Ctrl+C (or closing the Termux session) stops
+collision GRID first, then what its textures cost — and reuses a server that is already up. Ctrl+C (or closing the Termux session) stops
 the servers it started. A prebuilt app in `build/webapp` (or `WEBAPP=<dir>`) is served as static files and
 vite is not started at all — which is the only way in on a device whose rolldown binding crashes
 ([edge-cases/browser-runtime.md](./edge-cases/browser-runtime.md)). A ready archive is committed:
@@ -91,7 +92,7 @@ vite is not started at all — which is the only way in on a device whose rolldo
 | sa-map-viewer: the sea   | on by default; `&water=0` hides it (the panel has "Show water") — scripted shots add `water=0` themselves |
 | dispatch console         | `npm run dev` → `http://localhost:5173/dispatch.html` (defaults to `?src=build/original`) — the CAD surface: top-down map, live units, call queue, click-to-inspect |
 | dispatch: no build       | `…/dispatch.html?demo=1` — a synthetic block city, no pak needed (and no model names on click) |
-| dispatch: a PHONE pak    | `npx tsx tools/opensa-pack/src/cli.ts --game ./game-src/original --out ./build/district --rgba8 --max-texture 256 --rect 8,-8,11,-5 --no-ao --no-models` → serve it and open `dispatch.html?src=build/district&at=2495,-1687`. `--rgba8` is what makes the pak loadable on a GPU without BC (every mobile one); `--max-texture N` takes back three quarters of its 4-8x cost; `--rect` keeps the rest affordable. Full recipe, including building on the phone in Termux: [development/mobile-pak.md](./development/mobile-pak.md). Cells are `floor(worldXY / 250)` and **Los Santos sits at NEGATIVE GTA y** — `8,-8,11,-5` is x 2000…3000, y −2000…−1250 (Ganton/Idlewood); the whole of LS is about `1,-10,11,-3` |
+| dispatch: a PHONE pak    | `npx tsx tools/opensa-pack/src/cli.ts --game ./game-src/original --out ./build/district --textures astc --max-texture 256 --rect 8,-8,11,-5 --no-ao --no-models` → serve it and open `dispatch.html?src=build/district&at=2495,-1687`. `--textures astc` is what makes the pak loadable on a GPU without BC (every mobile one) at one byte per texel; `--textures rgba8` is the portable-but-4x fallback and `--max-texture N` takes back three quarters of ITS cost; `--rect` keeps the rest affordable. Full recipe, including building on the phone in Termux: [development/mobile-pak.md](./development/mobile-pak.md). Cells are `floor(worldXY / 250)` and **Los Santos sits at NEGATIVE GTA y** — `8,-8,11,-5` is x 2000…3000, y −2000…−1250 (Ganton/Idlewood); the whole of LS is about `1,-10,11,-3` |
 | dispatch: a pose         | `…&at=1700,-1500&h=900&pitch=-66&yaw=180` (GTA x,y · height · degrees) — same convention as sa-map-viewer |
 | dispatch: world knobs    | `&src=<built game>` · `&hd=450&lod=2200` streaming rings · `&hour=10` · `&weather=0` · `&fogscale=2.5` · `&fog=1` restores the game's fog (off by default, or a city view culls every cell) |
 
@@ -124,7 +125,7 @@ NODE_OPTIONS=--max-old-space-size=8192 npx tsx tools/sa-lod-generator/src/cli.ts
 # Game dir → native pak (the pack stage standalone)
 NODE_OPTIONS=--max-old-space-size=12288 \
   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --in ./mods-src
-#   [--rect x0,y0,x1,y1] [--pak-out <dir>] [--game-id <id>] [--no-ao] [--bakes --clouds mods-src/clouds] [--no-models] [--bake-workers N] [--stochastic <file…>] [--platforms desktop|mobile[,…]]
+#   [--rect x0,y0,x1,y1] [--pak-out <dir>] [--game-id <id>] [--no-ao] [--bakes --clouds mods-src/clouds] [--no-models] [--bake-workers N] [--stochastic <file…>] [--platforms desktop|mobile[,…]] [--textures astc|bc|rgba8] [--max-texture N] [--vehicles a,b] [--peds a,b]
 #   --rect: optional SUBSET override (bench districts); default auto-fits every cell with content — the old
 #     hardcoded ±12 silently dropped gostown's far islands (plan 087)
 #   --pak-out: where the pak products land (default: <out>/pak — the game dir is self-contained, 086 phase 8)
@@ -136,6 +137,11 @@ NODE_OPTIONS=--max-old-space-size=12288 \
 #   --platforms: ASSERT the build runs on the named GPU families, and fail the pack when it does not. Every
 #     run reports the demand anyway (report.json `platforms`, and one log line): world arrays ∪ model
 #     dictionaries, because a car is NOT in the pak — an --rgba8 world can still be unspawnable on a phone
+#   --textures: the format the build WRITES, for the world AND every model dictionary (097/2-02).
+#     bc (default) passes SA's DXT through untouched, desktop-only. astc re-encodes to ASTC 4x4 — one byte
+#     per texel (the same as BC3, a QUARTER of rgba8) on the GPUs that have no BC; it costs build time and
+#     one generation of loss. rgba8 leaves the pixels uncompressed: portable, 4x an astc payload.
+#     `--rgba8` is the older spelling of `--textures rgba8`; passing both when they DISAGREE is an error
 ```
 
 ## Viewers' compare server

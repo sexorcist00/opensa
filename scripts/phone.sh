@@ -9,6 +9,7 @@
 #   MODELS=0 npm run phone            # skip the model convert entirely: fast, but dispatch-only (no physics)
 #   VEHICLES=admiral,infernus PEDS=bmycg npm run phone     # convert a different subset
 #   VEHICLES=all PEDS=all npm run phone                    # the whole roster (hours on a phone)
+#   TEXTURES=rgba8 OUT=./build/phone-rgba8 npm run phone   # the texture-format A/B's other side
 #   RECT=8,-8,11,-5 SPAWN=2495,-1687,20 npm run phone
 #
 # A PREBUILT app in `build/webapp` (or `WEBAPP=<dir>`) is used INSTEAD of the dev server, and then vite is
@@ -27,6 +28,10 @@ RECT="${RECT:-9,-7,10,-6}"
 SPAWN="${SPAWN:-2400,-1700,20}"
 BAKE="${BAKE:-1}"
 MODELS="${MODELS:-1}"
+# ASTC by default (097/2-02): a quarter of rgba8's texture memory on the same texels, and the format this
+# class of GPU actually carries. It costs an encode stage in the convert — `TEXTURES=rgba8` is the way back
+# and the A/B's other side. `bc` is desktop-only and would fail the --platforms mobile line below.
+TEXTURES="${TEXTURES:-astc}"
 # The default is a SUBSET, because converting the roster costs hours on a phone and a field run needs a
 # handful of models. `all` restores the full convert. The player's model is added below whatever is asked
 # for: without it the game boots with nobody to move (`GAME_CONFIG.mainCharacter`).
@@ -83,8 +88,8 @@ fi
 # 2 — convert, but only when there is nothing to run on. A phone convert is minutes to hours; re-running this
 # script must not silently repeat it.
 if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
-  say "converting $GAME → $OUT (rect $RECT, bake=$BAKE, models=$MODELS)"
-  args=(--game "$GAME" --out "$OUT" --rgba8 --max-texture 256 --rect "$RECT" --no-ao --platforms mobile)
+  say "converting $GAME → $OUT (rect $RECT, textures=$TEXTURES, bake=$BAKE, models=$MODELS)"
+  args=(--game "$GAME" --out "$OUT" --textures "$TEXTURES" --max-texture 256 --rect "$RECT" --no-ao --platforms mobile)
   [ "$BAKE" = 1 ] && args+=(--bake-collision)
   [ "$MODELS" = 0 ] && args+=(--no-models)
   if [ "$MODELS" != 0 ]; then
@@ -111,6 +116,9 @@ fi
 # renders perfectly and drops the player through the world, and nothing else would ever say so.
 say "pak check"
 npx tsx scripts/debug/dump-cell-collision.ts "$OUT/pak"
+# What the textures actually cost this device, read off the manifest rather than assumed — the `as built` row
+# is the one to compare between two runs of the A/B above.
+npx tsx scripts/debug/texture-budget.ts "$OUT/pak"
 
 # 4 — servers. Each is started only if its port is free, so re-running this reuses what is already up.
 mkdir -p "$LOGS"

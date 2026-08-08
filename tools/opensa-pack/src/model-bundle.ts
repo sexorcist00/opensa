@@ -11,7 +11,13 @@
  */
 import type { OsmSection, OstexFormatId } from '@opensa/engine-formats';
 
-import { encodeOsm, OsmSectionTag, osmTextureFormats } from '@opensa/engine-formats';
+import {
+  decodeOsmTextures,
+  encodeOsm,
+  encodeOsmTextures,
+  OsmSectionTag,
+  osmTextureFormats,
+} from '@opensa/engine-formats';
 
 import type { ArchiveInsert } from './archive-edit';
 
@@ -26,6 +32,11 @@ export interface ModelBundles {
    *  which GPUs can spawn these models. Headers only: {@link inserts} is what encodes, and calling it twice
    *  to answer this would re-encode the whole game. */
   ostexFormats(): OstexFormatId[];
+  /** Rewrite every accumulated dictionary array through `transform`, returning how many were rewritten.
+   *  The texture-format pass (plan 097/2-02) is the only caller and runs AFTER every class has contributed,
+   *  so no asset class has to know which format the build targets. Zero-length placeholders — a model that
+   *  binds the world's arrays instead of carrying its own — are left alone. */
+  retexture(transform: (array: Uint8Array) => Promise<Uint8Array>): Promise<number>;
   /** Number of distinct models accumulated. */
   size(): number;
 }
@@ -73,6 +84,29 @@ export function createModelBundles(): ModelBundles {
       }
 
       return formats;
+    },
+    async retexture(transform: (array: Uint8Array) => Promise<Uint8Array>): Promise<number> {
+      let rewritten = 0;
+      for (const bundle of bundles.values()) {
+        for (const section of bundle.sections) {
+          if (section.tag !== OsmSectionTag.TEXS) {
+            continue;
+          }
+          const textures = decodeOsmTextures(section.bytes);
+          const arrays: Uint8Array[] = [];
+          for (const array of textures.arrays) {
+            if (array.byteLength === 0) {
+              arrays.push(array);
+              continue;
+            }
+            arrays.push(await transform(array));
+            rewritten += 1;
+          }
+          section.bytes = encodeOsmTextures({ arrays });
+        }
+      }
+
+      return rewritten;
     },
     size(): number {
       return bundles.size;
