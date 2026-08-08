@@ -69,3 +69,12 @@ interpret them.
   the behavioural oracle is the one verdict still open. The method lesson: **the measurement rig failed more
   often than the thing measured** — two of three surprises were harness bugs, caught only by giving each row a
   verdict from a different channel than the number.
+- [`2dfx-at-lod-range-100.md`](./2dfx-at-lod-range-100.md) — plan 100 (five steps, one day): lamps, chimney
+  plumes and street-name plates now survive past the HD ring instead of leaving a 560-unit dark, smokeless,
+  blank-signed band, and every fx system draws for the `cullDist` it authors rather than one flat 300 (836 of
+  878 anchors got 3–12× tighter). **The frame win the plan predicted is not there and cannot be claimed
+  either way** — a positive control proved the bench cannot see the particle system at all. Three things the
+  plan did not know were found by measuring: a plate's world position lands outside its instance's own cell
+  131 times in 489 (now a restriction), steps 01 and 02 could not ship apart, and step 05 fixed nothing that
+  was broken. The field check is owed to the chain's single rebuild. The audit itself found a debugger slider
+  wired to nothing.
