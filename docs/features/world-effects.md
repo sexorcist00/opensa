@@ -40,7 +40,11 @@ columns, steam vents, fountains — 113 entries across the shipped map, each nam
   `insects`/`cigarette_smoke` are floored at 100 instead of their authored 15
   ([hack](../hacks/tiny-fx-distance-floor.md)). 300 survives only as the fallback for a modded system that
   authors no `cullDist`. Shipped values: `vent`/`vent2`/`waterfall_end` 25, `water_fountain` 30,
-  `fire`/`flame` 35, `prt_*` 50, `carwashspray` 70, `insects`/`cigarette_smoke` 100, smoke → LOD radius.
+  `fire`/`flame` 35, `carwashspray` 70, `insects`/`cigarette_smoke` 100, `prt_*` 300, smoke → LOD radius.
+- **The DYNAMIC lane is floored at 300** ([hack](../hacks/vehicle-fx-lane-reach.md)) — a floor on the LANE,
+  applied by `buildDynamicLibrary` alone, not a row in the departures table. Every `prt_*` system authors 50,
+  which is a cheap guard on effects SA only spawns around the player; we spawn them for every vehicle, so read
+  literally it ended another car's tyre smoke 50 m away.
 - **Live config** — `graphics.effects { enabled, drawDistanceScale }` (init config + debugger → Graphics →
   "World effects"). `enabled` gates both lanes (`engine.particlesEnabled`); `drawDistanceScale` (default 1,
   slider ×0.25–×4) multiplies every system's SHIPPED distance — authored, departed or floored — and is applied

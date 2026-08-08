@@ -64,9 +64,14 @@ global tuning constant standing where the game's own numbers should be read.
 ## Verification
 
 - Every baked system's draw distance equals its authored `cullDist`, except the two documented departures.
-- **A consequence the step did not anticipate, worth a field look**: all four `prt_*` systems (wheel dust,
-  collision smoke, sand) author **50**, so the vehicle-effect lane's reach fell from 300 u to 50 u. That is
-  the authored number and the step's own rule, but it means another car's tyre smoke now stops at 50 m.
+- **A consequence the step did not anticipate**: all four `prt_*` systems (wheel dust, collision smoke, sand)
+  author **50**, so the vehicle-effect lane's reach fell from 300 u to 50 u. That is the authored number and
+  the step's own rule, but it means another car's tyre smoke now stops at 50 m. **CLOSED 2026-08-08 — the
+  user's call: put 300 back**, as a floor on the DYNAMIC LANE (`DYNAMIC_LANE_DRAW_DISTANCE`, applied by
+  `buildDynamicLibrary` only), not as a fourth row of the departures table. SA's 50 guards effects it spawns
+  only around the player; our lane spawns for every vehicle in the world, so the premise behind the number is
+  not shared. Recorded in [`docs/hacks/vehicle-fx-lane-reach.md`](../../hacks/vehicle-fx-lane-reach.md);
+  still unverified in the field at 300.
 - **The smoke half of the look is VERIFIED (2026-08-08, first post-chain pak).** LV plant stacks shot from
   open desert at 300/400/440/600 u: the plume rides the chimney head at every distance, and the white
   cooling-tower puffs seen at 300 u are gone by 600 — two systems, two authored distances, both live in the
@@ -106,5 +111,6 @@ and simultaneously the measure of how little it costs.
 **Per-system distances shipped** (authored → applied): `insects` 15 → **100**, `cigarette_smoke` 15 → **100**,
 `ws_factorysmoke` 150 → **1500**, `smoke30m`/`smoke30lit` 155 → **1500**, `smoke50lit` 255 → **1500**,
 `carwashspray` 70, `fire`/`flame` 35, `water_fountain`/`water_fnt_tme` 30, `vent`/`vent2`/`waterfall_end` 25,
-`prt_*` (the dynamic lane) 50. Everything not in bold is the authored number, verbatim, and the whole set is
-multiplied by the live `graphics.effects.drawDistanceScale` (default 1).
+`prt_*` (the dynamic lane) 50 → **300** (the lane floor, added the same day). Everything not in bold is the
+authored number, verbatim, and the whole set is multiplied by the live `graphics.effects.drawDistanceScale`
+(default 1).

@@ -31,6 +31,14 @@ const FALLBACK_ATLAS_SIZE = 64;
 const FALLBACK_DRAW_DISTANCE = 300;
 
 /**
+ * Floor under the DYNAMIC lane's reach (`docs/hacks/vehicle-fx-lane-reach.md`). Every `prt_*` system authors
+ * `cullDist` 50, which reads as another car's tyre smoke ending 50 m away — SA spawns these for the player's
+ * own events, we spawn them for every vehicle in the world. A LANE floor, not a per-system row: it applies to
+ * whatever {@link DYNAMIC_SYSTEMS} carries, including a mod's.
+ */
+const DYNAMIC_LANE_DRAW_DISTANCE = 300;
+
+/**
  * The two places we knowingly do NOT draw an effect for the distance `effects.fxp` authors, both the user's
  * call and both recorded in `docs/hacks/`. Everything absent from this table takes its authored number
  * verbatim — the point of the step is that the table wins.
@@ -120,13 +128,18 @@ interface Sprite {
  * applied. `worldDrawDistance` is the host's LOD radius — the distance the geometry an emitter sits on is
  * still drawn at — so the smoke departure is derived from the world rather than fitted.
  *
- * `scale` is the live `graphics.effects.drawDistanceScale` knob, applied LAST so it moves every system —
+ * `floor` is the calling LANE's minimum (the dynamic lane's, see {@link DYNAMIC_LANE_DRAW_DISTANCE}); `scale`
+ * is the live `graphics.effects.drawDistanceScale` knob, applied LAST so it moves every system — floored,
  * departed or authored — by the same factor. 1 = exactly what the data (and the departures) say.
  */
-export function fxDrawDistance(system: FxSystem, worldDrawDistance: number, options: { scale?: number } = {}): number {
-  const { scale = 1 } = options;
+export function fxDrawDistance(
+  system: FxSystem,
+  worldDrawDistance: number,
+  options: { floor?: number; scale?: number } = {},
+): number {
+  const { floor = 0, scale = 1 } = options;
 
-  return departedDrawDistance(system, worldDrawDistance) * scale;
+  return Math.max(departedDrawDistance(system, worldDrawDistance), floor) * scale;
 }
 
 /**
@@ -305,7 +318,7 @@ function buildDynamicLibrary(
       continue; // this profile does not ship the system — createEmitter(name) then returns null
     }
     const entries: { baked: FxBakedEmitter; systemIndex: number }[] = [];
-    const distance = fxDrawDistance(system, worldDrawDistance, { scale });
+    const distance = fxDrawDistance(system, worldDrawDistance, { floor: DYNAMIC_LANE_DRAW_DISTANCE, scale });
     // includeTriggered: the prt_* family carries NO emrate track — the runtime caller owns the count.
     for (const emitter of bakeFxSystem(system, { includeTriggered: true })) {
       const engineEmitter = toEngineSpace(emitter);
@@ -414,7 +427,7 @@ function decodeSprites(bytes: ArrayBuffer): Map<string, Sprite> {
   return sprites;
 }
 
-/** The authored `cullDist` with {@link DRAW_DISTANCE_DEPARTURES} applied — before the live scale. */
+/** The authored `cullDist` with {@link DRAW_DISTANCE_DEPARTURES} applied — before any lane floor or scale. */
 function departedDrawDistance(system: FxSystem, worldDrawDistance: number): number {
   const authored = system.cullDist > 0 ? system.cullDist : FALLBACK_DRAW_DISTANCE;
   const name = system.name.toLowerCase();

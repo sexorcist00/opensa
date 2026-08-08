@@ -224,6 +224,11 @@ describe.skipIf(!existsSync(EFFECTS_FXP))('fx draw distance (real effects.fxp)',
         expect(fxDrawDistance(systems.get(name)!, WORLD_DRAW_DISTANCE, { scale: 1 }), name).toBe(distanceOf(name));
       }
     });
+
+    it('does not give a PLACED system the dynamic lane floor', () => {
+      // The floor is the calling lane's, not a property of the system — a vent stays at its authored 25.
+      expect(distanceOf('vent')).toBe(25);
+    });
   });
 
   describe('positive cases', () => {
@@ -246,21 +251,24 @@ describe.skipIf(!existsSync(EFFECTS_FXP))('fx draw distance (real effects.fxp)',
       expect(fxDrawDistance(systems.get('smoke30m')!, WORLD_DRAW_DISTANCE, { scale: 0.5 })).toBe(
         WORLD_DRAW_DISTANCE / 2,
       );
+      // The lane floor is applied BEFORE the scale, so the knob can still pull the dynamic lane back in.
+      expect(fxDrawDistance(systems.get('prt_sand')!, WORLD_DRAW_DISTANCE, { floor: 300, scale: 0.5 })).toBe(150);
     });
 
-    it('writes the authored distance into the baked record, not the flat constant', () => {
+    it('gives the dynamic lane its 300 u floor, not the 50 every prt_* system authors', () => {
       const { engine, library } = fakeEngine();
       setupEngineParticles(engine, fixtureFs(), WORLD_DRAW_DISTANCE);
 
-      // The dynamic lane is the code-triggered prt_* family, and SA authors all four of them at 50 — so the
-      // assertion is that the lane carries THAT and not the 300 every system used to get. Read off the real
-      // records; the value is at offset 7 of each 20-float system stride.
+      // SA authors all four prt_* systems at 50, which reads as another car's tyre smoke ending 50 m away.
+      // The lane floors them (docs/hacks/vehicle-fx-lane-reach.md). Read off the real records; the value is
+      // at offset 7 of each 20-float system stride.
+      expect(systems.get('prt_sand')!.cullDist).toBe(50); // the floor is a real departure, not a no-op
       const records = library()!.systems;
       const distances = new Set<number>();
       for (let index = 0; index * 20 < records.length; index += 1) {
         distances.add(records[index * 20 + 7]);
       }
-      expect([...distances]).toEqual([50]);
+      expect([...distances]).toEqual([300]);
     });
 
     it('re-bakes the dynamic lane when the live scale changes', () => {
@@ -269,7 +277,7 @@ describe.skipIf(!existsSync(EFFECTS_FXP))('fx draw distance (real effects.fxp)',
 
       particles.rebuild(0.5);
 
-      expect(library()!.systems[7]).toBe(25); // the authored 50, halved
+      expect(library()!.systems[7]).toBe(150); // the floored 300, halved
     });
   });
 });

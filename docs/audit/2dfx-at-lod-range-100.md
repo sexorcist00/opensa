@@ -65,7 +65,8 @@ throughout.
    claiming "no generator output moves on this step alone" was a hypothesis about code it had not read.
 3. **All four `prt_*` systems author `cullDist` 50**, so honouring the table cut the vehicle-effect lane's
    reach from 300 u to 50 u. Authored, and the step's own rule — but it means another car's tyre smoke now
-   stops at 50 m, and that wants a field look.
+   stops at 50 m, and that wants a field look. **Closed 2026-08-08 (the user's call): 300 is back as a floor
+   on the dynamic LANE — [hack](../hacks/vehicle-fx-lane-reach.md).**
 
 ## What the audit itself turned up
 
