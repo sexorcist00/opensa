@@ -393,6 +393,16 @@ The only column that moves is `avgTriangles`: `lv-night` −2890 of 2 049 828 (�
 anchors going from 300 u to their authored 35. `avgMs` is pinned at the 120 fps cap in every row. Rows:
 [`2026-08-08-ingame-fx-cull-distance.json`](opensa-engine/2026-08-08-ingame-fx-cull-distance.json).
 
+### Post-plan-100 rebuild — the density baseline (2026-08-08)
+
+The first full rebuild after plan 100 shipped, and the "before" plan 07/04 owes: an 8-scene sweep at
+TODAY's procobj density, against a pak that now carries 2dfx at **both** levels (particles 943 → **1831**,
+roadsigns 481 → **962**, 1137 cells, buildTime `11:42 08-08-2026`). Nothing moved: `country-dusk` 3.868 ms
+GPU pass against 3.875 on the pre-100 pak, `lv-night` 3.603 against 3.600, `avgMs` pinned at the 120 fps cap
+throughout. **That is a baseline, not a verdict** — the positive control in the row above proves this sweep
+cannot price emitter cost at all, and it never enters the 440–1000 u transition band where the doubling
+question lives. Rows: [`2026-08-08-ingame-post-100-rebuild.json`](opensa-engine/2026-08-08-ingame-post-100-rebuild.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
