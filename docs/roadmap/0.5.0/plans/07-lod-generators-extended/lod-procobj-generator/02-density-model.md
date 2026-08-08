@@ -73,7 +73,26 @@ The multiplier belongs on the first two. The per-cell budget is the engine's own
 2. **The MACHINERY is target-independent; the PROFILE is per target.** One `ProcObjDensityConfig` type, two shipped profiles, and the build picks by target. A profile is not a multiplier the operator types — it is a named, costed set that some plan has priced against a wall.
 3. **Every profile declares its target, its cost and its GATE, and the build refuses a mismatch.** A profile carries the object total it produces and whether it needs `perfect-map.asi` (anything past 32 767 map-wide rows does); a mismatch fails at CONFIG time naming the wall, not at a guard three stages later and not in-game. This is the one new invariant the per-target split adds, and it is what keeps [lesson 28](../../../../../project-goals.md)'s silent under/over-build out of the pipeline.
 4. **Category is the primary control axis** (forest→bushes, mountain→rocks, desert→cacti maps to categories bushes/rocks/cacti). Surface is the secondary axis. Zone/biome is [03](03-biome-zone-density.md).
-5. **MINDIST stays the quality guard.** Denser candidates still pass through `cullByMinDistance` per species — density raises the ceiling, MINDIST prevents visual clumping/z-fighting. So "more" never means "piled on top of each other". (It is also, measured, what makes a species rare in the first place: `sjmcacti2` goes 152 vanilla placements → **2** map-wide through MINDIST alone.)
+5. ~~**MINDIST stays the quality guard.**~~ **UNDER REVIEW 2026-08-08 — the column is probably not a spacing
+   rule at all, and decision 1 above is built on that reading.** Evidence, in the order it arrived:
+   - **Measured**: raising the cutoff to 3 (all candidates kept, `procObjMax` unable to bind) yields
+     **15 840 objects against 15 286 — +3.6 %**. The extra two-thirds of the candidate pool is culled by
+     `cullByMinDistance` alone, i.e. the cull is at its packing limit and the cutoff cannot move the count.
+   - **The data**: the MINDIST column of `procobj.dat` takes exactly **four values map-wide — 50, 60, 70,
+     80 — clustered by SURFACE FAMILY**, not by species (every `P_GRASS*` row is 50, every `P_SAND*` is 60).
+     The number that varies per species is `spacing` (10–23 m² per object), and that is where the authored
+     density lives.
+   - **Our own parser already says so**: `procobj.parser.ts` documents the field as *"Vanilla draw/creation
+     distance for this rule (the dat's MINDIST column)"*. Its ONLY consumer in the repo is
+     `cullByMinDistance`, which uses it as an inter-object exclusion RADIUS — a 50–80 m one. The runtime
+     never reads it.
+   So `sjmcacti2`'s 152 → 2 is not MINDIST doing quality control; it is a view distance being applied as a
+   spacing, and it is the reason this layer ships 15 286 objects where a shipping mod ships 57 583.
+   **Not yet concluded**: what SA itself does with the column (`CPlantMgr` in gta-reversed) has not been
+   read, and the repo rule is to recover the original's meaning before changing our own. Nor is it known
+   what the correct reading yields — the pre-cull count has never been measured — nor what should guard
+   against clumping in its place. Until those three land, this decision cannot be restated, and **the 3.77×
+   target may be mostly the size of this defect rather than a goal.** Denser candidates still pass through `cullByMinDistance` per species — density raises the ceiling, MINDIST prevents visual clumping/z-fighting. So "more" never means "piled on top of each other". (It is also, measured, what makes a species rare in the first place: `sjmcacti2` goes 152 vanilla placements → **2** map-wide through MINDIST alone.)
 6. **Build-time only, deterministic.** Same seed → same scatter; the config is a build input, not a runtime slider (the runtime keeps its live preview slider, unchanged).
 7. **Honest capping.** With density up, `procObjMax` and the area budgets bite sooner — log how many placements the caps drop, so raising density without raising budgets ([04](04-slot-economy-and-budgets.md)) is visibly a no-op past the cap, not a silent truncation.
 8. **A per-category knob is only LOCAL below the global cap.** All categories feed one lowest-lottery cut (`convert.ts:119` sorts every surviving placement together and slices to `procObjMax`), so once that cut binds, boosting bushes **displaces** rocks and cacti rather than adding to them. Today the layer places 15 286 against 20 000, so the cut is NOT binding and the knob is local — but it is 1.31× away, which any interesting profile crosses. State which side of it a test is on — and note that this cut is OURS (`procObjMax`), not a target ceiling, so [04](04-slot-economy-and-budgets.md) moves it rather than the profile working around it.
@@ -81,6 +100,13 @@ The multiplier belongs on the first two. The per-cell budget is the engine's own
 
 ## Tasks
 
+- [x] **The global half of the cutoff knob** — `lottery < density` (default 1 = vanilla), threaded
+      `convert.ts` ← generator (`--density`) ← pmb (`--procobj-density`), with `--procobj-max` and a
+      `CAP DROPPED n` line so a capped run cannot pass itself off as a density. **Shipped 2026-08-08, and it
+      is what falsified decision 5**: the knob works and moves almost nothing, which is the finding.
+- [ ] **FIRST, before any per-category work: settle what MINDIST is** (decision 5). Recover `CPlantMgr`'s use
+      of the column from gta-reversed, measure the pre-cull placement count, and decide what replaces the
+      cull. Every task below is priced against a density this answer changes.
 - [ ] `convert.ts`: replace `lottery < 1` with `lottery < densityFor(category, surface)`; category is already on the placement, thread surface through. Config type `ProcObjDensityConfig` (per-category and per-category×surface overrides), default = all 1.0.
 - [ ] Candidate-ceiling knob: allow raising the candidate-generation multiplier (`PROC_OBJ_MAX_DENSITY` equivalent) via config when a category wants density > 3; keep 3 as default. Both targets need it for the 3.77× aiming point — a cutoff above 3 has no candidates to keep.
 - [ ] **Two shipped profiles, each priced before it is written**: `sa` (up to 3.77×, declaring its `perfect-map.asi` gate above 32 767 map-wide rows) and `opensa` (perf-bounded — [04](04-slot-economy-and-budgets.md) supplies the number; until it does, this profile does not exist rather than guessing one). The 1.0 vanilla default stays as the regression baseline, not as a shipped profile.

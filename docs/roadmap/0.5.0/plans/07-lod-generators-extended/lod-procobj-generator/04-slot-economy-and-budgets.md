@@ -92,6 +92,23 @@ a too-conservative build looks exactly like a successful one.
    spirit as `checkImgIdBudgets`. **Still OPEN after the guard move (2026-08-08):** the branch ANNOUNCES that
    it carries no ceiling (`OPENSA_BUDGET_NOTICE`) because the number does not exist yet. It is gated on the
    `opensa` perf budget in the tasks below — that measurement is the whole of what is missing.
+5b. **The int16 THROW goes away too — the guard becomes a WARNING that names the ini knob** (the user's
+   call, 2026-08-08). Decision 2 kept the row check as a throw "because it is the one ceiling that is still
+   real". On the declared target it is not: our asi lifts int16 (patch #1, field-proven at 2.14× on a
+   third-party map), OLA lifts the per-file buffer, the slot array and the building pool. Keeping a 30 000-row
+   throw there is decision 8's mistake one level up — rationing the install we ship to — and it blocks this
+   plan's own 38 096-row target by design. **The shape it takes instead:**
+   - **pmb SHIPS the generated `perfect-map.asi` into the `sa/` target** (asi/perfect-map 006 task 1). That is
+     what makes "this build needs the asi" true by construction instead of true by the operator remembering.
+   - **Every ceiling becomes a console WARNING that says what to change**, naming the actual ini knob —
+     OLA `EntitiesPerIpl` / `EntityIpl` / `Buildings`, FLA's `FILE_TYPE_*` pools — and, for int16, naming the
+     asi this build already carries. A number the operator can act on, not a build that refuses to exist.
+   - **Order: the perf budgets first, this second** (the user's call). Until the asi is shipped by the build,
+     the throw stays as the stand-in for a dependency nothing checks — dropping it before then would turn a
+     loud build error into silent heap corruption on any install without the plugin, or on another exe (the
+     asi accepts exactly one).
+   The one unretired assumption to carry into that work: patch #1 covers `firstBuilding/lastBuilding` and
+   leaves `firstDummy/lastDummy` int16 ("no over-int16 dummies" — diagnosed live, not proven).
 6. **Fallback honesty, and it now covers TWO plugins.** An `sa` build past 32 767 map-wide rows REQUIRES
    `perfect-map.asi`; without it the int16 corruption returns on our own data exactly as it did on
    ProperFixes'. Past the stock slot and per-file ceilings it also requires **OLA**, which our installer has
@@ -217,7 +234,26 @@ a too-conservative build looks exactly like a successful one.
 
 ## Measurements / notes
 
-_(record after implementation)_
+**2026-08-08 — the first budget attempt, and what it actually found.** Two builds from the canonical
+build's kept `.work/5-trees` stage, density 1 vs 3 (cap raised so it could not bind), benched by the user
+in-game over 9 scenes ([`benchmarks/…/2026-08-08-ingame-07-04-density-ab.json`](../../../../../benchmarks/opensa-engine/2026-08-08-ingame-07-04-density-ab.json)):
+
+- **The density cutoff is not the density lever.** 3× the cutoff yields **15 840 objects vs 15 286 — +3.6 %**
+  (rows 6 728 vs 6 487, pak +0.30 %, 1139 cells both). `procObjMax` never bound, so MINDIST culled the extra
+  candidates: the authored spacing is already saturated at vanilla density. **This falsifies
+  [02](02-density-model.md)'s premise** that "raising density is mostly raise the cutoff" — the only lever
+  left that moves the count is the authored `procobj.dat` MINDIST, which is a data-honesty decision, not a
+  knob, and it is now the gate on this whole plan's density.
+- **What the A/B can honestly say**: +3.6 % clutter costs nothing measurable — six scenes identical to ±0.0 %
+  triangles with `gpuMs.pass` within ±0.03 ms, and `country-dusk` (the clutter scene) +0.3 % triangles for
+  +0.013 ms. It says NOTHING about a streaming budget, because the arms are 3.6 % apart.
+- **The harness drifts more than the content does**, and that is a new blocker: three scenes disagreed by
+  amounts no 3.6 % change can produce (control scene `ocean-horizon` +107 % triangles). Filed as
+  [`open-issues/bench-scene-transition-collision.md`](../../../../../open-issues/bench-scene-transition-collision.md)
+  — collision is missing across a scene teleport. **The perf budgets below cannot be taken until it is
+  fixed**: a sweep whose control scene moves by 107 % cannot resolve a cap.
+
+_(the rows below are still to be recorded)_
 
 - `opensa` streamable-object budget per cell/area, and the caps set from it: …
 - `sa` frame/stream numbers under Wine, above the asi gate: …
