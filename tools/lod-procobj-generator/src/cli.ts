@@ -12,6 +12,8 @@
  *     --draw    LOD draw distance in game units (default from config)
  *     --max     cap on converted procobj objects (0 disables; default from config)
  *     --height  optional min HD height (m) gate, drops short clutter (0 = off; default from config)
+ *     --target  the host this layer is built FOR (sa|opensa, default sa) — it names which ceilings the layer's
+ *               cost is reported against; pmb passes the whole build's target down (see its `--target`)
  *     --prelight [info]  copy the stock model's trunk prelight onto each LOD (and swapped HD with `--in`); foliage
  *                        kept. Optionally pass `--prelight ./info.json` of per-model `{ "<model>": { "skip": true } }`
  *                        overrides to opt a model out of the transfer.
@@ -22,6 +24,7 @@
  *   All paths are relative to the current working directory (absolute paths pass through).
  */
 import { parsePrelightInfo, type PrelightInfo } from '@opensa/lod-common/prelight';
+import { parseBuildTarget } from '@opensa/tool-kit/target';
 import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 
@@ -82,7 +85,16 @@ function main(): void {
     prelightInfo = parsePrelightInfo(readFileSync(file, 'utf8'));
   }
 
-  run({ config: merged, gamePath, inPath, modloader, outPath, prelight, prelightInfo });
+  run({
+    config: merged,
+    gamePath,
+    inPath,
+    modloader,
+    outPath,
+    prelight,
+    prelightInfo,
+    target: parseBuildTarget(argValue('--target')) ?? 'sa',
+  });
 }
 
 main();

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { collectImgEntries, combinedModelSource, swapFolder } from './build';
+import { collectImgEntries, combinedModelSource, layerCostLine, swapFolder } from './build';
 
 const bytes = (...values: number[]): Uint8Array => Uint8Array.from(values);
 
@@ -84,6 +84,35 @@ describe.skipIf(!existsSync(WASHER) || !existsSync(BUSH))('combinedModelSource',
       const stock = openArchive(buildArchiveBuffer([{ data: new Uint8Array(readFileSync(WASHER)), name: 'w.dff' }]));
       const washerVerts = combinedModelSource(dir, stock).load('w')!.geometries[0].positions.length;
       expect(fromPack.geometries[0].positions.length).toBe(washerVerts); // the pack's geometry, not the bush's
+    });
+  });
+});
+
+describe('layerCostLine', () => {
+  describe('negative cases', () => {
+    it('reports no price when nothing was converted (a TC with no matching species)', () => {
+      expect(layerCostLine('sa', null)).toBeNull();
+    });
+
+    it('does not divide by zero when the layer placed nothing', () => {
+      expect(layerCostLine('sa', { objects: 0, rows: 0 })).toContain('0.000 rows/object');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('names the int16 budget the permanent rows are spent on for the sa host', () => {
+      const line = layerCostLine('sa', { objects: 15286, rows: 6487 });
+
+      expect(line).toContain('15286 objects · 6487 permanent text rows · 0.424 rows/object');
+      expect(line).toMatch(/int16/);
+    });
+
+    it('reports the same price for opensa but no row ceiling with it', () => {
+      const line = layerCostLine('opensa', { objects: 15286, rows: 6487 });
+
+      expect(line).toContain('0.424 rows/object');
+      expect(line).not.toMatch(/int16/);
+      expect(line).toContain('no SA row ceiling');
     });
   });
 });

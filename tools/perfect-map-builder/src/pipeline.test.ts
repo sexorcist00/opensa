@@ -8,7 +8,9 @@ import {
   checkImgIdBudgets,
   checkTextIplSlotBudget,
   EXCLUDABLE_STAGES,
+  type ExcludableStage,
   parseExcludedStages,
+  resolveBuildTarget,
   runsStage,
 } from './pipeline';
 
@@ -72,6 +74,38 @@ describe('parseExcludedStages', () => {
 
     it('accumulates repeated flags and de-duplicates, ignoring surrounding whitespace', () => {
       expect(parseExcludedStages(['--exclude', 'sa', '--exclude', ' sa , peds '])).toEqual(['sa', 'peds']);
+    });
+  });
+});
+
+describe('resolveBuildTarget', () => {
+  const excluding = (...stages: ExcludableStage[]): ReadonlySet<ExcludableStage> => new Set(stages);
+
+  describe('negative cases', () => {
+    it('refuses an opensa profile while the sa target is still being built', () => {
+      expect(() => resolveBuildTarget('opensa', excluding())).toThrow(/--exclude sa/);
+      expect(() => resolveBuildTarget('opensa', excluding('peds', 'vehicles'))).toThrow(/int16/);
+    });
+
+    it('never derives opensa from a run that builds both targets', () => {
+      expect(resolveBuildTarget(undefined, excluding())).not.toBe('opensa');
+      expect(resolveBuildTarget(undefined, excluding('pack'))).not.toBe('opensa');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('derives the target from --exclude when none is given (what the build scripts already declare)', () => {
+      expect(resolveBuildTarget(undefined, excluding('sa'))).toBe('opensa');
+      expect(resolveBuildTarget(undefined, excluding('opensa', 'peds', 'vehicles'))).toBe('sa');
+      expect(resolveBuildTarget(undefined, excluding())).toBe('sa');
+    });
+
+    it('allows the conservative mismatch — an opensa-only build carrying the sa profile', () => {
+      expect(resolveBuildTarget('sa', excluding('sa'))).toBe('sa');
+    });
+
+    it('honours an explicit opensa once the sa target is excluded', () => {
+      expect(resolveBuildTarget('opensa', excluding('sa'))).toBe('opensa');
     });
   });
 });

@@ -25,14 +25,22 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
 ```
 
 Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|peds|optimize|trees|procobj|sa|opensa|pack|lod>`
-(inclusive, keeps `.work/`) · **`--exclude <stage,stage>`** · `--keep-work` · `--no-weld-seams` ·
-`--no-textures` · `--allow-text-row-overflow`.
+(inclusive, keeps `.work/`) · **`--exclude <stage,stage>`** · **`--target <sa|opensa>`** · `--keep-work` ·
+`--no-weld-seams` · `--no-textures` · `--allow-text-row-overflow`.
 
-`--exclude` is the TARGET directive where `--until` is the stop point: it drops the named stages and keeps
+`--exclude` says WHICH STAGES run where `--until` is the stop point: it drops the named stages and keeps
 everything after them (repeatable, comma-separated, same names as `--until` minus the `lod` alias; an unknown
 name is an error, never a silent skip). Excluding `opensa` drops `pack` with it; excluding `pack` alone leaves
 `opensa/` in GAME format; excluding `sa` also drops its `checkImgIdBudgets` guard, which reads the `sa/` tree.
 **`:sa` builds no mod vehicles or peds** — that is what `--exclude vehicles,peds` means.
+
+`--target` says which HOST the build is for, and it picks every knob whose right value is a fact about the
+host rather than about the source data (limits, particle policy, procobj density). Omit it and it is DERIVED
+from `--exclude` — `--exclude sa` builds for `opensa`, anything that still builds `sa/` is `sa`, because the
+common chain is shared and its content has to satisfy the host that still has ceilings. `--target opensa`
+without `--exclude sa` is refused for the same reason. The run prints the target it resolved, and the procobj
+stage prints that layer's price against it (objects · permanent text rows · rows/object).
+NB `--target` means a DIRECTORY in `vehicle-installer --rebake` — same word, unrelated meaning.
 
 ### Vehicle round: rebake instead of rebuilding
 
@@ -89,7 +97,7 @@ npx tsx tools/map-optimizer/src/cli.ts --game <dir> --out <dir>
 npx tsx tools/lod-trees-generator/src/cli.ts --in ./mods-src/vegetation --game <dir> --out <dir> \
   --prelight ./mods-src/vegetation/prelight/info.json --tex 512
 
-# Procobj → static IPL + LODs
+# Procobj → static IPL + LODs ([--target sa|opensa]: the host the layer's cost is reported against; pmb passes its own)
 npx tsx tools/lod-procobj-generator/src/cli.ts --in ./mods-src/procobj --game <dir> --out <dir> --prelight --tex 128
 
 # OpenSA cell LODs ([--holes <json>]: hole-fill models merged verbatim past the reduction tracks)

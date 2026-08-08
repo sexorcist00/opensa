@@ -110,8 +110,26 @@ a too-conservative build looks exactly like a successful one.
       wrong; it is a **stock-target** cap, and it is **inert on the install we ship to**. The same install
       sets `EntityIpl = unlimited`, so the 40-slot ceiling is gone too, and `Buildings = 100000`. Full
       capture: [`gta-sa-original/reference-install-config.md`](../../../../../gta-sa-original/reference-install-config.md).
-- [ ] **Introduce the target selector** and thread it through pmb → lod-procobj-generator → `convert.ts`.
+- [x] **Introduce the target selector** and thread it through pmb → lod-procobj-generator → `convert.ts`.
       Two values (`sa`, `opensa`), defaulting to today's behaviour so the first commit moves nothing.
+      **DONE 2026-08-08.** `BuildTarget` + `parseBuildTarget` live in `@opensa/tool-kit/target` (the one
+      package every tool can reach without a new edge); pmb takes `--target` and `resolveBuildTarget` DERIVES
+      it from `--exclude` when it is omitted, because the exclusion set is what already declares a target in
+      practice — so `build:game:original:opensa` resolves to `opensa` with no script change, and an operator
+      cannot forget the flag. A run that still builds `sa/` resolves to `sa` (the common chain is shared), and
+      `--target opensa` alongside a `sa/` build is REFUSED at config time — 02 decision 3, checked in a test
+      per pair; the conservative reverse is allowed and logged as leaving headroom.
+      **Two deviations, both deliberate:**
+      1. The `convert.ts` leg is threaded as far as the generator, not into `convertProcObj`, because nothing
+         inside it reads a target yet — the parameter lands with its first consumer (02's density profile).
+         What convert.ts contributes NOW is the number the target is spent on: `buildStreamedIpl` counts the
+         permanent text `rows` where the link is decided, and `convertProcObj` returns it.
+      2. That makes the selector's first real job the layer's **price report** — the generator prints
+         `procobj cost (target <t>): N objects · R permanent text rows · R/N rows/object`, naming int16 on
+         `sa` and no row ceiling on `opensa`. It is the cheap half of the "report the cost as a first-class
+         output" task below, and it is why the flag is not dead weight in its own commit.
+      Behaviour is unchanged: no emitted byte moves, and both hosts still run the SA guards (that is the next
+      task).
 - [ ] **Move `checkTextIplSlotBudget` onto the `sa/` branch** (from `pipeline.ts:206`) and split its two
       ceilings: the int16 row check stays a THROW on `sa/` (it is the asi's gate and the only ceiling the
       target still has); the 39-slot check becomes a report, since OLA lifts it; `opensa/` gets neither and
@@ -122,6 +140,9 @@ a too-conservative build looks exactly like a successful one.
 - [ ] **Keep the permanent-row cost per object as a first-class knob.** 0.424 rows/object today
       (6 487 / 15 286), and it is the whole reason our layout beats a text-IPL mod's by 2.36×. Every density
       profile changes it — a profile that favours TALL species buys rows nobody costed.
+      **Half done 2026-08-08**: the number is now READ OFF the run (`buildStreamedIpl` returns `rows`; the
+      generator prints objects · rows · rows/object per target) instead of taking a script to recover. It is a
+      reported number, not yet a knob — `linkedHeight` is still what moves it, and moving it is the task below.
 - [ ] Pack the generated areas tight. They average 3 501 of a 4 000-row budget today; a repack to the budget
       is ~2 slots back. **Struck 2026-08-08 with the stock target** — it buys SLOTS, and `EntityIpl =
       unlimited` means slots are not a currency on the install we ship to.
@@ -132,7 +153,9 @@ a too-conservative build looks exactly like a successful one.
 - [ ] Report the slot, row and object cost of a build as a first-class output (like `checkImgIdBudgets`), per
       target, so a density profile's price is visible when it is CHOSEN rather than when the build fails.
       Today the number takes a script to recover, which is why this plan's premise went a fortnight without
-      being checked.
+      being checked. **The procobj LAYER's share landed with the target selector** (objects · permanent rows ·
+      rows/object, per target); what is still missing is the MAP-wide roll-up — the layer does not know what
+      the rest of the build spends, and int16 is a map-wide ceiling.
 - [ ] Raise `linkedHeight` deliberately and measure it: every species pushed below it trades a permanent
       text row for a binary-stream row. On `sa/` that is still the cheapest way to stay under int16 — the one
       ceiling left — so it survives the stock cull with its purpose changed from slots to ROWS. Record what

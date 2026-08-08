@@ -1,6 +1,7 @@
 import type { OptimizerPasses } from '@opensa/map-optimizer/run';
 
 import { argValue, fromCwd } from '@opensa/tool-kit/cli';
+import { parseBuildTarget } from '@opensa/tool-kit/target';
 /**
  * perfect-map-builder CLI. Chains every map tool into one build and splits it into the `sa` (real game) and
  * `opensa` LOD targets. Usage:
@@ -23,6 +24,12 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  *                      `pack` with it; excluding `pack` alone leaves `opensa/` in GAME format. An excluded
  *                      stage leaves whatever an earlier run wrote in its place — only `<out>/.work` is
  *                      cleared — so the two targets can be rebuilt independently in the same `--out`.
+ *     --target <host>  the host this build is FOR (sa|opensa) — it picks every knob whose right value is a
+ *                      fact about the host: limits, particle policy, procobj density. Omitted, it is DERIVED
+ *                      from `--exclude` (`--exclude sa` builds for opensa; a run that builds BOTH targets
+ *                      shares one common chain and so resolves to `sa`, the host that still has ceilings).
+ *                      `--target opensa` without `--exclude sa` is refused: the shared chain cannot carry a
+ *                      profile the real game could not run.
  *     --keep-work      keep the intermediate `.work` builds even on a full run.
  *     --no-<pass>      disable a map-optimizer pass to bisect it: --no-weld-seams | --no-textures.
  *     --allow-text-row-overflow  build past the int16 30k text-row budget (the 03-asi ghost-barriers repro —
@@ -51,7 +58,7 @@ async function main(): Promise<void> {
   if (!gameArg || !inArg) {
     throw new Error(
       'usage: tsx tools/perfect-map-builder/src/cli.ts --game <path> --in <mods-src> [--out <path>] ' +
-        '[--until <stage>] [--exclude <stage,stage>] [--keep-work] [--no-<pass>]',
+        '[--target <sa|opensa>] [--until <stage>] [--exclude <stage,stage>] [--keep-work] [--no-<pass>]',
     );
   }
 
@@ -84,6 +91,7 @@ async function main(): Promise<void> {
     inPath,
     keepWork: process.argv.includes('--keep-work'),
     outPath: fromCwd(outArg),
+    target: parseBuildTarget(argValue('--target')),
     until: until as StageName | undefined,
   });
 

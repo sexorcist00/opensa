@@ -49,30 +49,33 @@ export interface ProcObjSpecies {
 /**
  * Emit the static HD+LOD pairs as **streamed areas** (see `buildLinkedAreas`): per area a small text IPL with
  * the permanent LOD rows + binary streams with the HD instances, `lod`-linked to their LOD row.
+ *
+ * `rows` is the layer's PRICE — the permanent text rows the linked pairs cost. It is the number every density
+ * profile moves and the one the `sa` target's int16 ceiling is spent on, so it is counted here (where the
+ * link is decided) rather than re-derived by a reader of the emitted files.
  */
 export function buildStreamedIpl(
   final: readonly { model: string; placement: ProcObjPlacement }[],
   species: ReadonlyMap<string, ProcObjSpecies>,
   areaBase: string,
   linkedHeight = 0,
-): { datLines: string[]; files: [string, string][]; imgFiles: [string, Uint8Array][] } {
-  return buildLinkedAreas(
-    final.map(({ model, placement }) => {
-      const s = species.get(model)!;
+): { datLines: string[]; files: [string, string][]; imgFiles: [string, Uint8Array][]; rows: number } {
+  const pairs = final.map(({ model, placement }) => {
+    const s = species.get(model)!;
 
-      return {
-        hd: { id: s.hdId, interior: 0, position: placement.position, rotation: iplQuaternion(placement.rotation) },
-        linked: s.height >= linkedHeight,
-        lod: { id: s.lodId, model: s.lodModel },
-      };
-    }),
-    areaBase,
-  );
+    return {
+      hd: { id: s.hdId, interior: 0, position: placement.position, rotation: iplQuaternion(placement.rotation) },
+      linked: s.height >= linkedHeight,
+      lod: { id: s.lodId, model: s.lodModel },
+    };
+  });
+
+  return { ...buildLinkedAreas(pairs, areaBase), rows: pairs.filter((pair) => pair.linked).length };
 }
 
 export function convertProcObj(
   options: ProcObjConvertOptions,
-): null | { datLines: string[]; imgFiles: [string, Uint8Array][]; objects: number } {
+): null | { datLines: string[]; imgFiles: [string, Uint8Array][]; objects: number; rows: number } {
   const {
     archive,
     areaBase,
@@ -119,7 +122,7 @@ export function convertProcObj(
   placed.sort((a, b) => a.placement.lottery - b.placement.lottery);
   const final = placed.slice(0, procObjMax);
 
-  const { datLines, files, imgFiles } = buildStreamedIpl(final, species, areaBase, linkedHeight);
+  const { datLines, files, imgFiles, rows } = buildStreamedIpl(final, species, areaBase, linkedHeight);
   for (const [file, text] of files) {
     writeText(join(outPath, 'data', 'maps', file), text);
   }
@@ -137,7 +140,7 @@ export function convertProcObj(
       : stripProcObj(procObjText, (m) => !converted.has(m.toLowerCase())).text,
   );
 
-  return { datLines, imgFiles, objects: final.length };
+  return { datLines, imgFiles, objects: final.length, rows };
 }
 
 /** Greedy min-distance (XY) cull, spatial-hashed; input is already lottery-sorted so the lowest survive. */

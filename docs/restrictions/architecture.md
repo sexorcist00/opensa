@@ -138,15 +138,21 @@ can differ from `game-src/<game>/data/*` completely. Diagnosing against the sour
 
 ## A build asks for a target, not for the whole pipeline
 
-`sa` and `opensa` are independent targets of the same source tree, selected with pmb's `--exclude`
-(`build:game:<id>:opensa` / `build:game:original:sa`). They write disjoint subtrees of the same `--out` and
-only `<out>/.work` is cleared, so an excluded target keeps whatever an earlier run left.
+`sa` and `opensa` are independent targets of the same source tree. Which STAGES run is pmb's `--exclude`
+(`build:game:<id>:opensa` / `build:game:original:sa`); which HOST they are built for is pmb's `--target`,
+derived from `--exclude` when it is omitted. They write disjoint subtrees of the same `--out` and only
+`<out>/.work` is cleared, so an excluded target keeps whatever an earlier run left.
+
+The two are not interchangeable, and the common chain is why: the stages before the split are SHARED, so a
+run that still builds `sa/` cannot carry an `opensa` profile — pmb refuses that pair at config time. The
+reverse (an opensa-only build priced for `sa`) is merely conservative, and is logged as leaving headroom.
 
 A plan that says "rebuild the game" has to say **which target**, because they no longer carry the same
 content: the `:sa` script excludes `vehicles` and `peds`, so the real-game build ships the stock roster.
 
-**Caught:** partly — an unknown `--exclude` name is a hard error, but a STALE target left by an older run is
-indistinguishable from a fresh one.
+**Caught:** partly — an unknown `--exclude`/`--target` name is a hard error and the resolved target is
+printed at the top of every run, but a STALE target left by an older run is indistinguishable from a fresh
+one.
 
 Detail: [`architecture/perfect-map-builder.md`](../architecture/perfect-map-builder.md).
 

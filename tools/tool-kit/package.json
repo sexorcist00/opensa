@@ -10,7 +10,8 @@
     "./mesh/bvh": "./src/mesh/bvh.ts",
     "./archive/img": "./src/archive/img.ts",
     "./cli": "./src/cli.ts",
-    "./game-dir": "./src/game-dir.ts"
+    "./game-dir": "./src/game-dir.ts",
+    "./target": "./src/target.ts"
   },
   "nx": {
     "tags": [

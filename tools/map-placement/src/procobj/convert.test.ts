@@ -70,10 +70,11 @@ describe('buildStreamedIpl', () => {
 
   describe('negative cases', () => {
     it('emits nothing for an empty placement list', () => {
-      const { datLines, files, imgFiles } = buildStreamedIpl([], species, 'plobj');
+      const { datLines, files, imgFiles, rows } = buildStreamedIpl([], species, 'plobj');
       expect(files).toEqual([]);
       expect(datLines).toEqual([]);
       expect(imgFiles).toEqual([]);
+      expect(rows).toBe(0);
     });
   });
 
@@ -87,10 +88,11 @@ describe('buildStreamedIpl', () => {
         { model: 'bush', placement: pair(0).placement },
         { model: 'cedar', placement: pair(1).placement },
       ];
-      const { files, imgFiles } = buildStreamedIpl(pairs, mixed, 'plobj', 4);
+      const { files, imgFiles, rows } = buildStreamedIpl(pairs, mixed, 'plobj', 4);
 
       const textRows = files[0][1].split('\r\n').filter((l) => /^\d/.test(l));
       expect(textRows).toHaveLength(1); // only the cedar LOD is a permanent row
+      expect(rows).toBe(textRows.length); // the reported price counts the rows actually emitted
       expect(textRows[0]).toMatch(/^6501, plocedar/);
 
       const insts = parseBinaryIpl(toArrayBuffer(imgFiles[0][1]));
@@ -125,14 +127,17 @@ describe('buildStreamedIpl', () => {
 
     it('splits areas so text+binary rows per area stay under the 4096 boot buffer', () => {
       const pairs = Array.from({ length: 4000 }, (_, i) => pair(i));
-      const { datLines, files, imgFiles } = buildStreamedIpl(pairs, species, 'plobj');
+      const { datLines, files, imgFiles, rows } = buildStreamedIpl(pairs, species, 'plobj');
 
       expect(files.length).toBe(2); // exactly ⌈4000/2000⌉ — every area costs one of SA's 40 text-IPL slots
       expect(datLines).toHaveLength(files.length);
+      let emitted = 0;
       for (const [, text] of files) {
         const lodRows = text.split('\r\n').filter((l) => l.includes(',')).length;
+        emitted += lodRows;
         expect(2 * lodRows).toBeLessThanOrEqual(4096); // text LOD rows + streamed HD rows share the boot buffer
       }
+      expect(rows).toBe(emitted); // the reported price is MAP-wide, not the first area's
       for (const [name, bytes] of imgFiles) {
         expect(name).toMatch(/^plobj\d+_stream\d+\.ipl$/);
         expect(parseBinaryIpl(toArrayBuffer(bytes)).length).toBeLessThanOrEqual(512);

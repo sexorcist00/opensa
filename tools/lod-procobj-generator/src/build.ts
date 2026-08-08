@@ -30,6 +30,7 @@ import { parseGtaDat } from '@opensa/renderware/parsers/text/gta-dat.parser';
 import { parseIde, parseTimedObjects } from '@opensa/renderware/parsers/text/ide.parser';
 import { decodeDxt } from '@opensa/rw-codec/dxt';
 import { editArchive } from '@opensa/tool-kit/archive/img';
+import { type BuildTarget } from '@opensa/tool-kit/target';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
@@ -47,6 +48,7 @@ export function buildProcobjLods(options: {
   outPath: string;
   prelight?: boolean;
   prelightInfo?: PrelightInfo;
+  target?: BuildTarget;
 }): void {
   run({
     config: { ...defaultConfig, ...options.config },
@@ -56,6 +58,7 @@ export function buildProcobjLods(options: {
     outPath: options.outPath,
     prelight: options.prelight ?? false,
     prelightInfo: options.prelightInfo,
+    target: options.target ?? 'sa',
   });
 }
 
@@ -83,6 +86,9 @@ export interface BuildOptions {
   prelight: boolean;
   /** Per-model `--prelight` overrides (`--prelight <info.json>`); models in `skip` are left untouched. */
   prelightInfo?: PrelightInfo;
+  /** The host this layer is built FOR — it decides which ceilings the layer's cost is reported against, and
+   *  (07/02, 07/04) which density profile and caps it is built to. */
+  target: BuildTarget;
 }
 
 /** A registered LOD (pass 2): a {@link BuiltMesh} with its allocated alias/id and encoded DFF. */
@@ -200,6 +206,28 @@ export function combinedModelSource(inPath: string, archive: ImgArchive): ModelS
 }
 
 /**
+ * The layer's PRICE, per target and READ OFF the run: objects placed, the permanent text rows they cost, and
+ * the rows/object ratio every density profile moves (07/04 — today 0.424, and it is why our layout beats a
+ * text-IPL mod's by 2.36×). The two hosts spend that price differently, so the line names which one it is
+ * for: on `sa` permanent rows are the one ceiling no adjuster lifts (SA truncates building-pool indexes to
+ * int16, so past 32,767 map-wide the build depends on `perfect-map.asi`); OpenSA has no such index.
+ */
+export function layerCostLine(target: BuildTarget, procObj: null | { objects: number; rows: number }): null | string {
+  if (!procObj) {
+    return null; // nothing converted (a TC with no matching species) — there is no price to report
+  }
+  const { objects, rows } = procObj;
+  const perObject = objects > 0 ? (rows / objects).toFixed(3) : '0.000';
+
+  return (
+    `procobj cost (target ${target}): ${objects} objects · ${rows} permanent text rows · ${perObject} rows/object` +
+    (target === 'sa'
+      ? " — permanent rows spend SA's int16 building-pool budget (perfect-map.asi past 32,767 map-wide)"
+      : ' — no SA row ceiling on this target')
+  );
+}
+
+/**
  * Convert the `--dff ∩ procobj` species into static IPL instances with **simplified-copy** LODs: per species,
  * build a model-local mesh (frame-aware) → QEM decimate → re-derive normals → encode a low-poly DFF; pack one
  * shared `lod_procobj.txd` (downscaled, `--txd ∪ stock`) + `lod_procobj.col`; register the LODs in
@@ -207,7 +235,7 @@ export function combinedModelSource(inPath: string, archive: ImgArchive): ModelS
  * HD DFFs for `--dff`, and emit the drop-in under `--out`.
  */
 export function run(options: BuildOptions): void {
-  const { config, gamePath, modloader, outPath, prelight, prelightInfo } = options;
+  const { config, gamePath, modloader, outPath, prelight, prelightInfo, target } = options;
   const inPath = swapFolder(options.inPath);
   const archive = openArchive(readBytes(join(gamePath, 'models', 'gta3.img')));
   const dat = parseGtaDat(readFileSync(join(gamePath, 'data', 'gta.dat'), 'utf8'));
@@ -318,6 +346,7 @@ export function run(options: BuildOptions): void {
     procObjMax: config.procObjMax,
     species: species_,
   });
+  logLayerCost(target, procObj);
   // The swapped (prelit) HD DFFs — with `--in`, regardless of mode (the HD carries our prelight; we don't drop it).
   const swapModels = lods.map((lod) => lod.model);
   const swap =
@@ -510,6 +539,14 @@ function loadCustomTextures(txdPath: string): Map<string, SourceTexture> {
   }
 
   return out;
+}
+
+/** Print {@link layerCostLine} when there is a price to print. */
+function logLayerCost(target: BuildTarget, procObj: null | { objects: number; rows: number }): void {
+  const line = layerCostLine(target, procObj);
+  if (line !== null) {
+    console.log(line);
+  }
 }
 
 /** `--prelight`: recolour each built LOD mesh's trunk to its stock model's ambient — foliage kept, skip-list honoured. */

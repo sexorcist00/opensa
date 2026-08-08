@@ -23,6 +23,15 @@ keeps whatever an earlier run left. Excluding `opensa` drops `pack` with it; exc
 which reads the `sa/` tree. An unknown `--exclude` name is an error — a typo must not silently produce a build
 missing the target it was meant to keep.
 
+**And a run says which HOST it is for** (`--target <sa|opensa>`, `resolveBuildTarget`): the selector for every
+knob whose right value is a fact about the host rather than about the source data — limits, particle policy,
+procobj density (07/04). Omitted, it is DERIVED from `--exclude`, which is what already declares a target in
+practice: `--exclude sa` resolves to `opensa`, anything that still builds `sa/` resolves to `sa`. The
+asymmetry is the shared common chain — a profile priced for an engine with no int16 cannot be handed to the
+real game, so `--target opensa` alongside a `sa/` build is refused at config time; the conservative reverse is
+allowed and logged. The resolved target is printed at the top of the run and reaches the `procobj` stage,
+which reports that layer's price against it (objects · permanent text rows · rows/object).
+
 ![pmb pipeline](./assets/pmb-pipeline.svg)
 
 <details><summary>diagram source</summary>

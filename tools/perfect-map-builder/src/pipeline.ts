@@ -18,6 +18,7 @@ import { parseIde } from '@opensa/renderware/parsers/text/ide.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { buildSaLods } from '@opensa/sa-lod-generator/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
+import { type BuildTarget } from '@opensa/tool-kit/target';
 import { install as installVehicles } from '@opensa/vehicle-installer/install';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
@@ -77,6 +78,12 @@ export interface BuildPerfectMapOptions {
   keepWork?: boolean;
   /** Output root; the builder creates `<out>/sa` and `<out>/opensa`. */
   outPath: string;
+  /**
+   * The HOST this build is for (`--target`) — what picks every knob whose right value is a fact about the
+   * host rather than about the source data. Omitted, it is DERIVED from `exclude` (see
+   * {@link resolveBuildTarget}), which is what already declares a target today.
+   */
+  target?: BuildTarget;
   /** Stop after this stage and keep every stage build (for step-by-step in-game debugging). */
   until?: StageName;
 }
@@ -100,6 +107,8 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   const { subfolders } = config;
   const keepWork = options.keepWork || until !== undefined;
   const excluded: ReadonlySet<ExcludableStage> = new Set(options.exclude ?? []);
+  const target = resolveBuildTarget(options.target, excluded);
+  logTarget(target, options.target !== undefined, excluded);
 
   const work = join(outPath, '.work');
   rmSync(work, { force: true, recursive: true });
@@ -167,6 +176,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
         inPath: source(subfolders.procobj),
         outPath: out,
         prelight: true,
+        target,
       }),
   });
 
@@ -322,6 +332,32 @@ export function parseExcludedStages(argv: readonly string[]): ExcludableStage[] 
   }
 
   return [...new Set(names as ExcludableStage[])];
+}
+
+/**
+ * The host a run is building FOR — `--target`, or DERIVED from `--exclude` when it is omitted, because the
+ * exclusion set is already what declares a target today (`build:game:<id>:opensa` is `--exclude sa`; see
+ * `docs/restrictions/architecture.md`). A run that builds BOTH resolves to `sa`: the common chain is shared,
+ * so its content has to satisfy the host that still has ceilings.
+ *
+ * One combination cannot be honest and is refused at CONFIG time rather than by a guard three stages later
+ * (07/02 decision 3): `--target opensa` while the `sa` target is still being built would hand the real game a
+ * layer priced against a host with no int16. The reverse — an opensa-only build carrying the `sa` profile —
+ * is merely conservative, so it is allowed and logged.
+ */
+export function resolveBuildTarget(
+  explicit: BuildTarget | undefined,
+  excluded: ReadonlySet<ExcludableStage>,
+): BuildTarget {
+  if (explicit === 'opensa' && !excluded.has('sa')) {
+    throw new Error(
+      '--target opensa builds the `sa` target too: add --exclude sa, or build with --target sa. The common ' +
+        "chain is shared, so an opensa profile would price the real game's content against a host that has " +
+        'neither int16 nor a building pool.',
+    );
+  }
+
+  return explicit ?? (excluded.has('sa') ? 'opensa' : 'sa');
 }
 
 /**
@@ -631,6 +667,18 @@ function log(message: string): void {
  * both reasons, separately: a stage whose source folder is empty, and a stage the run excluded on purpose. A
  * silently missing stage reads as a broken build, and the two causes need different fixes.
  */
+/**
+ * Announce the resolved target, and whether it was asked for or DERIVED — a run has to say which host it
+ * priced itself against, because designing down to a ceiling the target does not have is silent (the build
+ * succeeds and just carries less). The conservative mismatch is legal, so it is named rather than refused.
+ */
+function logTarget(target: BuildTarget, explicit: boolean, excluded: ReadonlySet<ExcludableStage>): void {
+  log(`target: ${target}${explicit ? '' : ' (derived from --exclude)'}`);
+  if (target === 'sa' && excluded.has('sa')) {
+    log('  ! an opensa-only build carrying the sa profile — allowed, but it leaves opensa headroom unused');
+  }
+}
+
 function planChain<T extends { name: ExcludableStage }>(
   chain: readonly T[],
   excluded: ReadonlySet<ExcludableStage>,
