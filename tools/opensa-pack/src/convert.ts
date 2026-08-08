@@ -556,7 +556,8 @@ function weldGridCell(ctx: WeldRectContext, cx: number, cy: number, welded: { ce
   const origin: [number, number, number] = [(cx + 0.5) * ctx.cellSize, 0, -(cy + 0.5) * ctx.cellSize];
   const roadsigns = ctx.roadsignsByCell.get(cellKey(cx, cy));
   for (const lod of [false, true]) {
-    // Roadsigns are HD-only (world-space text — a LOD copy would double it).
+    // Both levels get the same world-keyed roadsign list since plan 100/03 — the text has to survive to LOD
+    // range, and one key per plate is what keeps it from doubling (see `weldCellParts`' note).
     const parts = weldCellParts(
       ctx.fs,
       ctx.defs,
@@ -566,7 +567,7 @@ function weldGridCell(ctx: WeldRectContext, cx: number, cy: number, welded: { ce
       origin,
       ctx.breakableModels,
       ctx.uvAnimRegistry,
-      lod ? undefined : roadsigns,
+      roadsigns,
     );
     if (parts) {
       welded.push({ cell: parts, key: `${cx},${cy},${lod ? 'lod' : 'hd'}` });

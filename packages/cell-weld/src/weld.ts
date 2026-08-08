@@ -192,7 +192,8 @@ export function weldCellParts(
   /** UV-scroll registry (B7·c): omit on occluder welds — a scroller then welds as ordinary static geometry. */
   uvAnimRegistry?: UvAnimRegistry,
   /** 2dfx roadsign glyph quads (plan 076) whose WORLD position falls in THIS cell — collected globally in a
-   *  pre-pass (they are world-space, not instance-local), welded here as beam-class text. HD cells only. */
+   *  pre-pass (they are world-space, not instance-local), welded here as beam-class text. BOTH levels since
+   *  plan 100/03: the same world-keyed list feeds the LOD bundle, so a plate keeps reading past ~440 u. */
   roadsigns?: readonly RoadsignGlyphQuads[],
 ): null | WeldedCell {
   const buckets = new Map<string, WeldBucket>();
@@ -250,17 +251,35 @@ export function weldCellParts(
       // answer what was clicked there.
       placements,
     );
-    // 2dfx corona anchors (074/06 row 13) — HD level only (LOD duplicates would double every lamp).
-    if (!lod) {
-      collectLights(fs, group.def, group.instances, originEngine, lights, isBreakable(fs, group.def, breakableModels));
-      collectParticles(fs, group.def, group.instances, originEngine, particles);
-    }
+    // 2dfx corona anchors and emitters (074/06 row 13). BOTH levels since plan 100/03: on HD these come off
+    // the source models, on LOD off the baked cell model's own 2dfx section, which `opensa-lod-generator`
+    // writes cell-relative. Doubling — the reason this was HD-only — cannot happen: a slot holds ONE level
+    // (`slot.current`), and the HD↔LOD swap unloads the old key in the same synchronous `create` call.
+    // A LOD light is never breakable: a far corona has no smashable owner (breakables are HD-only, and the
+    // baked cell model is not in `breakableModels` anyway).
+    collectLights(
+      fs,
+      group.def,
+      group.instances,
+      originEngine,
+      lights,
+      lod ? false : isBreakable(fs, group.def, breakableModels),
+    );
+    collectParticles(fs, group.def, group.instances, originEngine, particles);
   }
 
   // Roadsign text (plan 076): world-space glyph quads collected in the pre-pass for THIS cell weld into beam
   // buckets — unlit + full-bright (readable day AND night), drawn in the blend phase AFTER all opaque so the
-  // text composites over its plate, never before it. HD only.
-  if (!lod && roadsigns && roadsigns.length > 0) {
+  // text composites over its plate, never before it.
+  //
+  // BOTH levels since plan 100/03, and the source stays the WORLD-KEYED pre-pass rather than the LOD model's
+  // own type-7 entries — the one place this step departs from "a LOD's effects come from the LOD model".
+  // A plate's coordinates are world, and 131 of the map's 489 sit OUTSIDE the cell holding the instance that
+  // carries them (measured, `opensa-lod-generator/006`). Read off the LOD model, such a plate would weld into
+  // cell A's LOD bundle while the HD pre-pass files it under cell B — two different keys, so the streamer's
+  // one-level-per-slot rule would not stop them being resident together, and the plate would draw twice.
+  // Bucketing by world position keeps every plate on exactly ONE key, at both levels.
+  if (roadsigns && roadsigns.length > 0) {
     weldRoadsigns(roadsigns, buckets, planner, originEngine);
     stats.roadsigns = roadsigns.length;
   }
