@@ -6,12 +6,12 @@ import { patchGtaDat } from '@opensa/map-placement/ide';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
-import { stripParticleEffects } from '@opensa/rw-codec/dff';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Archives } from './io';
 
+import { cloneKeepTypes, stripCloneTo } from './clone-2dfx';
 import { areaKey, walk } from './resolve';
 
 export interface FillInput {
@@ -138,10 +138,9 @@ function assignFills(
     }
     nextId += 1;
     const lodModel = `salodh${String(fills.length).padStart(4, '0')}`;
-    // Same as Phase 1: the far-LOD clone must not carry particle emitters (smoke/fire) — strip them, keep coronas.
-    // (The repro switch keeps them: cloned-LOD emitters never unload → the 0x004AA3A1 crash we want to trigger.)
-    const clone = new Uint8Array(dff);
-    input.setImg(`${lodModel}.dff`, input.keepParticles ? clone : stripParticleEffects(clone));
+    // Same as Phase 1's verbatim path: the shared policy decides what rides, applied subtractively so the
+    // byte copy keeps every plugin our writers do not model.
+    input.setImg(`${lodModel}.dff`, stripCloneTo(new Uint8Array(dff), cloneKeepTypes(input.keepParticles)));
     fills.push({ bounds: dffBounds(dff), hdModel, hdTxd: txd, lodId: nextId, lodModel });
   }
 
