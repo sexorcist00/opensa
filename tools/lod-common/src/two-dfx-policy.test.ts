@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import type { Vec3 } from './mesh';
 
 import { collectClumpEffects } from './clump-effects';
-import { keepTypesFor, LOD_2DFX_POLICY, verdictFor } from './two-dfx-policy';
+import { keepTypesFor, LOD_2DFX_POLICY, spaceOf, verdictFor } from './two-dfx-policy';
 
 // A real refinery chimney: three light coronas beside a smoke emitter — the corona baseline every richer
 // carried type is built on (`npm run test:fixtures`).
@@ -45,15 +45,26 @@ describe('LOD 2dfx policy', () => {
       expect(keepTypesFor('clone').has(4)).toBe(false);
     });
 
-    it('keeps the rotation-bearing types off cells — the cell path cannot re-rotate a plate yet', () => {
-      expect(verdictFor(7, 'cell')).toBe('drop');
+    it('keeps escalators off cells — our engine has no code that moves a step, at any range', () => {
       expect(verdictFor(10, 'cell')).toBe('drop');
+      expect(keepTypesFor('cell').has(10)).toBe(false);
+    });
+
+    it('assumes model space for a type with no row, rather than re-basing an unknown entry', () => {
+      expect(spaceOf(4)).toBe('model'); // sun glare — absent from the stock corpus
     });
   });
 
   describe('positive cases', () => {
-    it('resolves to the cell set in force today: lights only', () => {
-      expect([...keepTypesFor('cell')]).toEqual([0]);
+    it('resolves to the cell set: the three types our engine consumes', () => {
+      expect([...keepTypesFor('cell')].sort((a, b) => a - b)).toEqual([0, 1, 7]);
+    });
+
+    it('marks the roadsign as the one world-space type, and every other carried type as model-local', () => {
+      expect(spaceOf(7)).toBe('world');
+      for (const type of [...keepTypesFor('cell'), ...keepTypesFor('clone')]) {
+        expect(spaceOf(type)).toBe(type === 7 ? 'world' : 'model');
+      }
     });
 
     it('resolves to the clone set in force today: every type the stock corpus carries', () => {
@@ -81,14 +92,23 @@ describe('carried coronas (decimate path)', () => {
       const expected = parsedLightPositions(clump);
       expect(expected).toHaveLength(3); // fixture sanity: the coronas exist to be carried
 
-      const carried = collectClumpEffects(bytes, clump, keepTypesFor('cell'));
+      const carried = collectClumpEffects(bytes, clump, keepTypesFor('cell')).filter((effect) => effect.type === 0);
 
-      expect(carried.map((effect) => effect.type)).toEqual([0, 0, 0]);
+      expect(carried).toHaveLength(3);
       carried.forEach((effect, index) => {
         effect.position.forEach((axis, component) => {
           expect(axis).toBeCloseTo(expected[index][component], 4);
         });
       });
+    });
+
+    it('carries the chimney smoke emitter too, now that a cell keeps type 1', () => {
+      const bytes = new Uint8Array(readFileSync(CHIMNEY_DFF));
+      const clump = parseDff(toArrayBuffer(bytes));
+
+      const carried = collectClumpEffects(bytes, clump, keepTypesFor('cell'));
+
+      expect(carried.filter((effect) => effect.type === 1)).toHaveLength(1);
     });
   });
 });

@@ -18,10 +18,20 @@ export interface Lod2dfxRule {
   clone: Lod2dfxVerdict;
   /** gtamods' name for the type, for readable diagnostics. */
   name: string;
+  /** Which space the entry's authored position is written in — see {@link Lod2dfxSpace}. */
+  space: Lod2dfxSpace;
   type: number;
   /** Why the verdicts are what they are — the half of this table that is worth having. */
   why: string;
 }
+
+/**
+ * The space a type's authored position is written in, measured over the stock corpus by
+ * `scripts/debug/two-dfx-space.ts`. It decides WHICH transform a carry applies, which is a different question
+ * from whether the entry rides at all: a `world` entry re-based by an instance transform lands a kilometre
+ * from its post, and that is the failure plan 100's dead first attempt would have shipped.
+ */
+export type Lod2dfxSpace = 'model' | 'world';
 
 /** Which host the LOD is being built for — see the module note on why this is not keyed by generator. */
 export type Lod2dfxTarget = 'cell' | 'clone';
@@ -40,47 +50,63 @@ export type Lod2dfxVerdict = 'carry' | 'carry-rate-scaled' | 'drop';
  */
 export const LOD_2DFX_UNLISTED: Lod2dfxVerdict = 'drop';
 
-/** The policy. Entry counts in the `why` column are stock `original`, from the census script. */
+/**
+ * The space assumed for a type with no row. Moot in practice — an unlisted type is
+ * {@link LOD_2DFX_UNLISTED} on every target, so nothing carries it far enough to transform — but `model` is
+ * the conservative reading: it keeps an unknown entry attached to the instance it was authored on.
+ */
+export const LOD_2DFX_UNLISTED_SPACE: Lod2dfxSpace = 'model';
+
+/**
+ * The policy. Entry counts in the `why` column are stock `original`, from `scripts/debug/two-dfx-census.ts`;
+ * the `space` column is measured by `scripts/debug/two-dfx-space.ts` and is unanimous per type.
+ */
 export const LOD_2DFX_POLICY: readonly Lod2dfxRule[] = [
   {
     cell: 'carry',
     clone: 'carry',
     name: 'light',
+    space: 'model',
     type: 0,
-    why: 'Distant night city lights are why 2dfx rides a LOD at all (2203 entries / 327 models). The only type a baked cell has ever carried.',
+    why: 'Distant night city lights are why 2dfx rides a LOD at all (2203 entries / 327 models). The first type a baked cell ever carried.',
   },
   {
-    cell: 'drop',
+    cell: 'carry',
     clone: 'carry-rate-scaled',
     name: 'particle',
+    space: 'model',
     type: 1,
-    why: 'Emitters ship on the clone since 03-asi/010 flipped the strip (64 / 43); `--strip-particles` is the stock-target opt-out. A cell has no emitter budget yet — plan 07, `lod-common/03`, owns both halves.',
+    why: 'A chimney whose factory draws to 1000 u and whose plume stops at the HD boundary is the defect plan 100 exists to fix (64 / 43). `--strip-particles` stays the stock-target opt-out; how MANY a far view may run is the rate budget plan 07 owns.',
   },
   {
     cell: 'drop',
     clone: 'carry',
     name: 'ped attractor',
+    space: 'model',
     type: 3,
-    why: 'Carried because the clone paths carry it today (916 / 266); nothing reads a ped attractor at LOD range, so it is a candidate for the first MEASURED drop, not an argued one.',
+    why: 'Carried because the clone paths carry it today (916 / 266); nothing in our engine reads a ped attractor at any range, so `cell` has nothing to feed. A candidate for the first MEASURED clone-side drop, not an argued one.',
   },
   {
     cell: 'drop',
     clone: 'carry',
     name: 'enter/exit',
+    space: 'model',
     type: 6,
     why: 'As type 3 (78 / 71) — an interior marker on a far copy does nothing, but dropping it is a behaviour change that has to be measured by the generator plan, not assumed here.',
   },
   {
-    cell: 'drop',
+    cell: 'carry',
     clone: 'carry',
     name: 'roadsign',
+    space: 'world',
     type: 7,
-    why: 'The visible win of the whole chain (489 / 207). `cell` is `drop` only until the cell path can re-rotate the plate and something reads it — plan 100 opens it.',
+    why: 'The visible win of the whole chain (489 / 207): street-name text used to stop at the HD boundary and leave a blank plate out to 1000 u. Its position is WORLD (489/489), so a cell re-bases it by the cell origin and never by the instance transform.',
   },
   {
     cell: 'drop',
     clone: 'carry',
     name: 'trigger point',
+    space: 'model',
     type: 8,
     why: 'As type 3, and the rarest of them (33 / 7) — a trigger a far copy has no way to fire.',
   },
@@ -88,6 +114,7 @@ export const LOD_2DFX_POLICY: readonly Lod2dfxRule[] = [
     cell: 'drop',
     clone: 'carry',
     name: 'cover point',
+    space: 'model',
     type: 9,
     why: 'As type 3, and the bulk of the corpus by count (15 007 / 1210) — whatever it costs to carry, it costs it 15 000 times.',
   },
@@ -95,8 +122,9 @@ export const LOD_2DFX_POLICY: readonly Lod2dfxRule[] = [
     cell: 'drop',
     clone: 'carry',
     name: 'escalator',
+    space: 'model',
     type: 10,
-    why: 'Five entries in four models, so it will never move an aggregate — verify it by looking at those four. `cell` stays `drop`: our engine has no escalator code at all, so there is nothing to read one (plan 101 builds it).',
+    why: 'Five entries in four models, so it will never move an aggregate — verify it by looking at those four. `cell` stays `drop`, and NOT for a distance reason: our engine has no escalator code at all, so there is nothing to read one (plan 101 builds it).',
   },
 ];
 
@@ -108,6 +136,14 @@ const BY_TYPE = new Map(LOD_2DFX_POLICY.map((rule) => [rule.type, rule]));
  */
 export function keepTypesFor(target: Lod2dfxTarget): ReadonlySet<number> {
   return new Set(LOD_2DFX_POLICY.filter((rule) => rule[target] !== 'drop').map((rule) => rule.type));
+}
+
+/**
+ * The space one entry type's position is authored in — {@link LOD_2DFX_UNLISTED_SPACE} when the type has no
+ * row. A carrier branches on THIS, not on the type, so a type declared later inherits the right transform.
+ */
+export function spaceOf(type: number): Lod2dfxSpace {
+  return BY_TYPE.get(type)?.space ?? LOD_2DFX_UNLISTED_SPACE;
 }
 
 /** The verdict for one entry type on one target — {@link LOD_2DFX_UNLISTED} when the type has no row. */
