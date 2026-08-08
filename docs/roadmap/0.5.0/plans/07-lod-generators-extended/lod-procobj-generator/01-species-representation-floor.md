@@ -85,14 +85,40 @@ zero, it does not stop the rounding.
 5. **Make the drop visible.** Whatever the algorithm, log per-section which species were floored and which
    were cut to zero before the fix — the diagnostic is what proves the defect is real and, later, gone.
 
+## SIZED 2026-08-08 — the defect is real, and it is not where this plan looked
+
+`scripts/debug/procobj-species-floor.ts` runs both cap sites with the pipeline's own functions. Numbers in
+[Measurements](#measurements--notes); the shape of the answer:
+
+- **Neither BUILD-time cap can zero a species.** MINDIST provably cannot — `cullByMinDistance` starts with an
+  empty spatial grid, so the first placement of every non-empty batch always survives; it thins savagely
+  (`sjmcacti2` 152 → 2 map-wide) and never to zero. The global `procObjMax` cut zeroed nothing either, and on
+  the real converted set it **does not fire at all**: the layer places 15 286 against a cap of 20 000. The
+  rounding route zeroed nothing. **So the whole Context section above describes the wrong site.**
+- **The RUNTIME cell cap does zero species, in one clutter cell in five.** On stock rules, `procObjLimit` 150
+  binds in 98 % of cells that scatter anything and drops at least one eligible species to zero in **19.8 %**
+  of them — worst case 14 of 25 species placed, with eight desert `dead_tree_*` variants and the tallgrass
+  gone at once. That is exactly the "a desert cell shows only one shrub species" the ask describes.
+- **And on the SHIPPING build it is latent — because of the generator, not because the cap is safe.**
+  `convertProcObj` strips every converted species from `procobj.dat`, so what still scatters at runtime in
+  `build/original/opensa` is **8 underwater rules on one surface**. Over the same geometry those lose
+  **zero** species: 8 species share a 150 budget comfortably. The tall species are static instances now, and
+  a static instance is never capped.
+
+**What that means for the decision.** The defect is genuine and worth fixing, but nothing in the shipped
+`original` build shows it today. It returns the moment either of two things happens: a game that does NOT run
+`lod-procobj-generator` (its runtime scatter is the full stock set), or [02](02-density-model.md) raising
+density — more candidates per cell is more cap pressure, and the cap is what zeroes. **This plan should
+therefore be re-scoped to the runtime cell cap alone and sequenced with 02**, not shipped ahead of it. The
+build-time half is closed as a non-defect.
+
 ## Tasks
 
-- [ ] **Reproduce and SIZE the defect first, and nothing else until it reports.** Instrument the current
-      build to report, per cell, species eligible vs species placed — and split the loss by cause, MINDIST
-      versus the cross-species cut, because the two want different fixes. Find real sections where a species
-      reaches zero. If the answer is "this never actually happens at shipping density", say so and close the
-      plan: with the biased-draw premise gone, latency is the likely outcome rather than the fallback one.
-- [ ] Decide the section unit (cell vs global) and the floor N; record why.
+- [x] **Reproduce and SIZE the defect first, and nothing else until it reports.** Done — see above and
+      [Measurements](#measurements--notes). The split by cause it asked for came out one-sided: MINDIST and
+      both build-time cuts zero nothing, the runtime cell cap zeroes plenty.
+- [ ] Decide the section unit (cell vs global) and the floor N; record why. **The measurement settles the
+      unit: the CELL, and only the cell** — the global cut has no zeroing to prevent.
 - [ ] Implement the chosen algorithm behind a config flag, defaulting OFF until the numbers justify it.
 - [ ] Unit tests: three species with skewed rule densities and a budget of 300 — all three present, and the
       proportions still follow the lottery order above the floor; with the flag off, the placement set is
@@ -111,8 +137,46 @@ zero, it does not stop the rounding.
 
 ## Measurements / notes
 
-_(record after implementation)_
+**The sizing run, 2026-08-08** — `scripts/debug/procobj-species-floor.ts`, corpus `game-src/original`
+(95 scatter rules on 17 surfaces, 562 populated 250 u cells), collision and map defs from the same tree.
+Both modes call the shipping functions (`scatterProcObjects`, `procObjLotteryCap`, `cullByMinDistance`), so
+these are the pipeline's numbers, not a model's.
 
-- sections where a species reached zero, before the fix: …
-- floor N chosen + why: …
-- proportion shift against vanilla (how much character the floor costs): …
+### Runtime cell cap — `procObjLimit` 150, density 1
+
+| Rule set | Cells sampled | With clutter | Cap binding | Cells losing ≥1 species |
+| --- | --- | --- | --- | --- |
+| stock `procobj.dat` (95 rules) | 188 (stride 3) | 96 | **94 (97.9 %)** | **19 (19.8 %)** |
+| the SHIPPING set — `build/original/opensa/data/procobj.dat` (8 rules) | 188 | 11 | 11 (100 %) | **0** |
+
+Most-often zeroed on stock, by cells: `dead_tree_3` 7, `dead_tree_6` 7, `dead_tree_2` 6, `dead_tree_5` 6,
+`dead_tree_8` 6, `dead_tree_9` 6, `dead_tree_7` 4, `genveg_bush13` 4, `rockbrkq` 4 — 18 species in all.
+Worst cells: `-10,-8` (~−2375, −1875) places **14 of 25** eligible species, losing eight `dead_tree_*` plus
+two tallgrasses and a bush; `-4,-4` places 13 of 23; `-2,-7` loses nine species worth 268 instances.
+
+The cap binds almost everywhere and costs nothing most of the time — what decides whether a species dies is
+how many species compete in the cell, which is why 8 underwater rules are safe and 25 desert ones are not.
+
+Self-check in the script: **binding ⇒ the cell draws exactly `limit`; not binding ⇒ it draws everything
+vanilla would.** It failed on one cell first time and the rig was wrong, not the engine — a cell can hold
+more than `limit` candidates and still have its 150th lottery above 1, in which case density is the cutoff
+and the cap costs nothing.
+
+### Build-time pass — whole-map colliders, `procObjMax` 20 000, all 95 rules
+
+7019 collider groups → 51 batches → **20 265 placed, cut to 20 000** (the cut binds by 1.3 %; on the real
+converted set it does not fire at all — the layer places 15 286).
+
+| Zeroed by | Species |
+| --- | --- |
+| the `lottery < 1` cut (rounding) | **0** |
+| MINDIST | **0** — and it *cannot*: `cullByMinDistance` starts with an empty grid, so a non-empty batch always keeps its first placement (asserted by the script) |
+| the global `procObjMax` cut | **0** |
+
+MINDIST is nonetheless where the population goes: `sjmcacti2` 485 candidates → 152 vanilla → **2** after
+MINDIST; `sm_des_pcklypr1` 336 → 113 → **2**; `veg_pflowers03` 14 431 → 4869 → **70**; the eight
+`dead_tree_*` land on 140–149 each. A rare species is rare because of its MINDIST column, not because a cap
+took it.
+
+- floor N chosen + why: _(not yet — the fix is deferred, see the verdict above)_
+- proportion shift against vanilla (how much character the floor costs): _(not yet)_
