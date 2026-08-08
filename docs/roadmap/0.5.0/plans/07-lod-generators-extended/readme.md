@@ -67,7 +67,7 @@ Ordered by *what unblocks the most for the least*, not by plan number.
 | P | Plan | Why here |
 | --- | --- | --- |
 | **P0** | [lod-procobj-generator/00 — limit route review](lod-procobj-generator/00-limit-route-review.md) | A decision, no code. Nothing in the density chain can SHIP until it says which ceiling we lift and who lifts it. Now has a target to cost and a real 57.6k-row corpus to test against. |
-| ~~P1~~ **→ P2, behind 02** | [lod-procobj-generator/01 — species floor](lod-procobj-generator/01-species-representation-floor.md) | **SIZED 2026-08-08.** Neither build-time cap can zero a species (MINDIST provably keeps the first of every batch; `procObjMax` does not even fire at 15 286/20 000) — so the plan's whole Context described the wrong site. The RUNTIME cell cap zeroes species in **19.8 % of stock clutter cells** (worst: 14 of 25 placed), but in the shipping build only 8 underwater rules still scatter and **none is lost**. Real, currently latent here, and it comes back when [02](lod-procobj-generator/02-density-model.md) raises density — so it follows 02 rather than leading. |
+| ~~P1~~ **→ P2, AFTER 02** | [lod-procobj-generator/01 — species floor](lod-procobj-generator/01-species-representation-floor.md) | **SIZED 2026-08-08, and re-ordered behind 02 the same day (the user's call).** Neither build-time cap can zero a species (MINDIST provably keeps the first of every batch; `procObjMax` does not even fire at 15 286/20 000) — so the plan's whole Context described the wrong site. The RUNTIME cell cap zeroes species in **19.8 % of stock clutter cells** (worst: 14 of 25 placed), but in the shipping build only 8 underwater rules still scatter and **none is lost**. Building the floor before the density that provokes it would mean tuning it against a population nothing produces yet. |
 | ~~P1~~ | [rw-codec/01 — typed 2dfx codecs](../../../../../tools/rw-codec/docs/plans/001-typed-2dfx-payload-codecs.md) | **SHIPPED 2026-08-07** and moved into the tool. Pure codec, no behaviour change; it unblocked every transform below it. |
 | ~~P1~~ | [lod-common/01 — keep policy](../../../../../tools/lod-common/docs/plans/005-2dfx-keep-policy.md) → [02 — entry transform](../../../../../tools/lod-common/docs/plans/006-2dfx-entry-transform.md) | **SHIPPED 2026-08-07** as lod-common `005` + `006`. Stock output is unchanged, and the census says why: no stock model carrying 2dfx hangs it off a rotating frame. |
 | ~~P1~~ | [opensa-lod-generator/01 — adopt](../../../../../tools/opensa-lod-generator/docs/plans/005-adopt-2dfx-policy.md) | **SHIPPED 2026-08-07** as opensa-lod-generator `005` and moved into the tool. |
@@ -168,8 +168,9 @@ filed under, and that is worth knowing before estimating one.
 
 Dependencies (as originally scoped; the 2dfx half now lives in plan 100): `rw-codec/01 → lod-common/02 →
 opensa-lod-generator/02`; `lod-common/01 → {sa-lod/01,
-opensa-lod/01}`; `lod-common/03 → sa-lod/02`. `00 gates 04`; `02 → 03`. **01 is independent of
-everything** — it is a defect at today's density, not one raised density introduces. The two chains are
+opensa-lod/01}`; `lod-common/03 → sa-lod/02`. `00 gates 04`; `02 → 03`; **`02 → 01`** (2026-08-08 — ~~01 is
+independent of everything, a defect at today's density~~ was wrong on both counts: the sizing found nothing
+lost in the shipping build, and raised density is exactly what brings the defect back). The two chains are
 independent of each other.
 
 ## Boundary vs the 03-asi chain

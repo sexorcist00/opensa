@@ -1,8 +1,11 @@
 # 01 — Every species survives the cap (no silently missing type)
 
 Part of [07 — LOD generators, extended](../readme.md). Independent of the ASI question
-([00](00-limit-route-review.md)) and of raised density ([02](02-density-model.md)) — this is a
-FAIRNESS defect in how the caps choose survivors, and it is worth fixing at today's density.
+([00](00-limit-route-review.md)) — this is a FAIRNESS defect in how the caps choose survivors, not a limit
+question. ~~And independent of raised density ([02](02-density-model.md)) — worth fixing at today's
+density.~~ **Both halves of that were wrong and the 2026-08-08 sizing struck them: at today's density the
+shipping build loses no species at all, and [02](02-density-model.md) is what brings the defect back. This
+plan now RUNS AFTER 02** (the user's call, same day).
 
 **The ask:** a section allows 300 objects and three species are eligible there. All three must appear. Not
 in equal proportion — but none may be dropped to zero.
@@ -108,17 +111,28 @@ zero, it does not stop the rounding.
 **What that means for the decision.** The defect is genuine and worth fixing, but nothing in the shipped
 `original` build shows it today. It returns the moment either of two things happens: a game that does NOT run
 `lod-procobj-generator` (its runtime scatter is the full stock set), or [02](02-density-model.md) raising
-density — more candidates per cell is more cap pressure, and the cap is what zeroes. **This plan should
-therefore be re-scoped to the runtime cell cap alone and sequenced with 02**, not shipped ahead of it. The
-build-time half is closed as a non-defect.
+density — more candidates per cell is more cap pressure, and the cap is what zeroes.
+
+**DECIDED 2026-08-08 (the user's call): this plan runs AFTER [02](02-density-model.md), re-scoped to the
+runtime cell cap alone.** The build-time half is closed as a non-defect and its tasks below are struck. The
+plan is not closed as latent — it is sequenced, because 02 is what makes the defect bite in the shipping
+build, and building the floor before the density that provokes it would mean tuning a fix against a
+population nothing produces yet.
+
+**What 02 must therefore carry away from here:** the moment it raises density it owns this defect. The
+measurement to repeat at the new density is the first table below — the same script, same `--stride 3`
+sample, so the two runs are comparable — and the number to watch is *cells losing ≥1 species*, not the cap's
+binding rate, which is already 97.9 % and says nothing on its own.
 
 ## Tasks
 
 - [x] **Reproduce and SIZE the defect first, and nothing else until it reports.** Done — see above and
       [Measurements](#measurements--notes). The split by cause it asked for came out one-sided: MINDIST and
       both build-time cuts zero nothing, the runtime cell cap zeroes plenty.
-- [ ] Decide the section unit (cell vs global) and the floor N; record why. **The measurement settles the
-      unit: the CELL, and only the cell** — the global cut has no zeroing to prevent.
+- [x] Decide the section unit (cell vs global) and the floor N; record why. **Unit DECIDED: the runtime
+      CELL, and only it** — the global cut has no zeroing to prevent, so ~~a per-species floor on
+      `procObjMax`~~ is struck along with decision 2's second half. N is still open and is 02's to pick,
+      against the density it lands on.
 - [ ] Implement the chosen algorithm behind a config flag, defaulting OFF until the numbers justify it.
 - [ ] Unit tests: three species with skewed rule densities and a budget of 300 — all three present, and the
       proportions still follow the lottery order above the floor; with the flag off, the placement set is
