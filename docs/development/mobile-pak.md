@@ -296,9 +296,11 @@ A convert costs minutes to hours on a phone, so the pak is built once and reused
 `npm run phone` already skips the convert whenever `<OUT>/pak/manifest.json` exists; what makes that **safe**
 is that the pak can be asked what it is.
 
-Every pak records the recipe it was built from into its own `report.json`, under `build`: the rect, `--rgba8`,
-`--max-texture`, `--bake-collision`, `--no-ao`, the vehicle/ped subsets, the claimed platforms, the build time
-and the commit. Read it back at any time:
+Every pak records the recipe it was built from into its own `report.json`, under `build`: the rect, the
+texture format, `--max-texture`, `--bake-collision`, `--no-ao`, the vehicle/ped subsets, the claimed
+platforms, the build time and the commit. The format is recorded as `textures` (`astc` / `bc` / `rgba8`)
+because the older `rgba8` boolean cannot tell an ASTC build from a BC one — it reads FALSE for both — and
+those are the two sides of an A/B. Read it back at any time:
 
 ```bash
 npx tsx scripts/debug/pak-recipe.ts build/phone/pak

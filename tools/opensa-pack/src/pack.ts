@@ -268,7 +268,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
     ),
   );
   log(
-    `build: rect ${build.rect ? build.rect.join(',') : 'auto'} · rgba8=${build.rgba8} · ` +
+    `build: rect ${build.rect ? build.rect.join(',') : 'auto'} · textures=${build.textures} · ` +
       `max-texture=${build.maxTexture || 'none'} · bake-collision=${build.bakeCollision} · ` +
       `models=${build.models}${build.commit ? ` · ${build.commit}` : ''} — recorded in report.json`,
   );

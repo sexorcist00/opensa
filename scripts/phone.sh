@@ -147,6 +147,7 @@ else
   say "pak already at $OUT/pak (REBUILD=1 to redo it)"
   expect=(--expect "rect=$RECT" --expect "bakeCollision=$([ "$BAKE" = 1 ] && echo true || echo false)"
           --expect "mapObjectsInRect=$([ "$MAPOBJ" = 1 ] && echo true || echo false)"
+          --expect "textures=$TEXTURES"
           --expect "models=$([ "$MODELS" != 0 ] && echo true || echo false)")
   if [ "$MODELS" != 0 ]; then
     expect+=(--expect "vehicles=$VEHICLES")

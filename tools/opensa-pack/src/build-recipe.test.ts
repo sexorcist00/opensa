@@ -72,6 +72,7 @@ describe('buildRecipe', () => {
         platforms: ['mobile'],
         rect: [9, -7, 10, -6],
         rgba8: true,
+        textures: 'rgba8',
         vehicles: ['admiral'],
       });
     });
@@ -81,6 +82,20 @@ describe('buildRecipe', () => {
       const plain = buildRecipe({ ...BASE, bakeCollision: false }, META);
 
       expect(baked.bakeCollision).not.toBe(plain.bakeCollision);
+    });
+
+    it('distinguishes the texture A/B too — `rgba8` alone reads false for ASTC and for BC alike', () => {
+      const astc = buildRecipe({ ...BASE, textures: 'astc' }, META);
+      const plain = buildRecipe({ ...BASE, textures: 'rgba8' }, META);
+
+      expect(astc.textures).toBe('astc');
+      expect(plain.textures).toBe('rgba8');
+      expect(astc.rgba8).toBe(plain.rgba8);
+    });
+
+    it('reads the older spelling as the format it always meant', () => {
+      expect(buildRecipe({ ...BASE, forceRgba8: true }, META).textures).toBe('rgba8');
+      expect(buildRecipe(BASE, META).textures).toBe('bc');
     });
   });
 });
