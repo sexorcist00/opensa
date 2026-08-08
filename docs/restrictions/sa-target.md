@@ -22,6 +22,11 @@ build cannot tell you that you blew the real game's pools.
 
 **Caught:** on a `:sa` build, yes, loudly. On a `:opensa` build, no — and that is now the common case.
 
+> **Stock SA is NOT a target of this project (2026-08-08, the user's call)** — the declared configuration is
+> OLA + FLA plus our own `perfect-map.asi`. The table above is what STOCK costs, kept because a plan still
+> has to know which of its numbers are real; only int16 and the FLA ID pools are, and int16 is ours. Do not
+> design against the slot or per-file rows.
+>
 > **The install we actually target lifts two of these.** [reference-install.md](../gta-sa-original/reference-install.md) records
 > the declared baseline (`NO_COMMIT/gta_sa`, 2026-08-07): OLA sets `EntitiesPerIpl = unlimited` (the 4 096
 > per-file buffer) and `EntityIpl = unlimited` (the 40 slots), and it runs 72 914 permanent rows in files of

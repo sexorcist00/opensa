@@ -92,9 +92,12 @@ plans below must not trade it away to buy density; it is a thinner lead than the
 
 ### Costing the target: 57 583 objects, our layout
 
-> **This section prices the target against STOCK ceilings. The install we ship to lifts two of them** — see
-> "What ProperFixes is actually paying" below. Kept because the stock target still has to be costed this
-> way, and because it is what the build guards enforce.
+> **This section prices the target against STOCK ceilings, and stock is NOT a target of this project**
+> (settled 2026-08-08: the declared configuration is OLA + FLA plus our own `perfect-map.asi` —
+> [reference-install.md](../../../../gta-sa-original/reference-install.md)). Kept as the record of what those
+> ceilings cost, and because the build guards still enforce some of them until
+> [04](lod-procobj-generator/04-slot-economy-and-budgets.md) splits them by target. **Do not plan against
+> the slot and per-area numbers below** — they are `unlimited` where we ship.
 
 Scale our current mix by **3.77×** and it costs **90 728 binary stream records + 24 437 permanent text LOD
 rows**, in **29 areas** (`AREA_MAX_PAIRS = 2000` pairs per area).
