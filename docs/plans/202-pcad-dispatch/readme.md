@@ -1,7 +1,7 @@
-# 099 — PCAD Dispatch: the web dispatch application for a SA-MP server
+# 202 — PCAD Dispatch: the web dispatch application for a SA-MP server
 
 **The final plan.** Everything else in this repository that concerns the dispatch direction is subordinate to
-this document: [098](../098-dispatch-console/readme.md) is the engine work that makes this product's map
+this document: [201](../201-dispatch-console/readme.md) is the engine work that makes this product's map
 possible, and this is the product.
 
 Opened 2026-08-06, after a requirements round and a survey of the field.
@@ -73,11 +73,11 @@ Nothing here needs inventing. Each row is a solved problem with a reference impl
 
 | What we take | From | Why it matters here |
 | --- | --- | --- |
-| **LOD by screen-space error** — load a tile when its projected error exceeds N pixels | [CesiumJS](https://cesium.com/learn/cesiumjs/ref-doc/Cesium3DTileset.html) (`maximumScreenSpaceError`) | the map camera has no player to ring-stream around; this is the correct rule and it is [098/1-05](../098-dispatch-console/1-the-map-profile/readme.md) |
-| **Time as an axis** — entity properties as functions over an interval, driven by a clock | CesiumJS / CZML | a self-reported position stream is a time series; [098/8](../098-dispatch-console/8-the-time-axis/readme.md) |
+| **LOD by screen-space error** — load a tile when its projected error exceeds N pixels | [CesiumJS](https://cesium.com/learn/cesiumjs/ref-doc/Cesium3DTileset.html) (`maximumScreenSpaceError`) | the map camera has no player to ring-stream around; this is the correct rule and it is [201/1-05](../201-dispatch-console/1-the-map-profile/readme.md) |
+| **Time as an axis** — entity properties as functions over an interval, driven by a clock | CesiumJS / CZML | a self-reported position stream is a time series; [201/8](../201-dispatch-console/8-the-time-axis/readme.md) |
 | **Label collision, priority and variable placement** | [MapLibre GL JS](https://deepwiki.com/maplibre/maplibre-native/3.3-symbol-placement-and-collision-detection) (sort keys, allow-overlap) | 150 units with symbols at city zoom is a decluttering problem, not a drawing one |
 | **A layer model over the base world**, styled from data at runtime | [deck.gl](https://deck.gl/docs/developer-guide/base-maps/using-with-maplibre) | zones by workload, coverage, heat — the runtime-restyled layers, which our baked world cannot do by itself |
-| **Measuring, annotation, cross-sections** on a 3D scene | [Giro3D / iTowns](https://github.com/giro3d-org/Giro3D) (three.js, MIT) | the operator tools in [098/7](../098-dispatch-console/7-the-operator-map/readme.md) |
+| **Measuring, annotation, cross-sections** on a 3D scene | [Giro3D / iTowns](https://github.com/giro3d-org/Giro3D) (three.js, MIT) | the operator tools in [201/7](../201-dispatch-console/7-the-operator-map/readme.md) |
 | **A GTA-SA → tile projection and a tile pyramid** | [ikkentim/SanMap](https://github.com/ikkentim/SanMap) (Unlicense) | the flat-2D mode's coordinate scheme, proven and free |
 | **Self-hosted CAD product shape** — Docker, Discord role sync, realtime state, permissions | [SnailyCAD](https://github.com/SnailyCAD/snaily-cadv4) (MIT) | the CAD half's feature checklist, written by people who ran it |
 
@@ -139,7 +139,7 @@ the choice is measured rather than argued:
 3. **snap to the road graph** — blocked on `data/Paths` being `original`-only
    ([assets-and-data](../../restrictions/assets-and-data.md)), so it lies on total conversions.
 
-Whatever wins, [098/8's rule stands](../098-dispatch-console/8-the-time-axis/readme.md): interpolate between
+Whatever wins, [201/8's rule stands](../201-dispatch-console/8-the-time-axis/readme.md): interpolate between
 what arrived, never extrapolate past it.
 
 **On foot, a unit has no position at all.** The map must show that state honestly — last known, aging — and
@@ -152,7 +152,7 @@ against plausible speed. A map that draws whatever it is sent is a map that can 
 **Backend → web application.** A live state snapshot plus an event stream. The contract comes before the
 transport ([roadmap 0.6.0](../../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md) already holds this
 note): the event and snapshot shapes, what a reconnect replays, the position publish rate — because
-[098/8's interpolation](../098-dispatch-console/8-the-time-axis/readme.md) is written against that rate — and
+[201/8's interpolation](../201-dispatch-console/8-the-time-axis/readme.md) is written against that rate — and
 what an operator sees when the feed goes stale rather than empty.
 
 **Shell → map.** The narrow interface that keeps the map a component:
@@ -174,7 +174,7 @@ Ordered by what unblocks what. The user's instruction stands: **the engine first
 
 ### Phase 0 — The map earns its place (this repo, now)
 
-[098 chains 1 and 2](../098-dispatch-console/readme.md): trim the engine to what a map draws, then measure it
+[201 chains 1 and 2](../201-dispatch-console/readme.md): trim the engine to what a map draws, then measure it
 on a real phone with a real district. Until that row exists, every claim about this product on a phone is
 unproven — the repo's only mobile measurement is 41 fps on a synthetic city.
 
@@ -183,7 +183,7 @@ derived from it.
 
 ### Phase 1 — Three ways to draw the world (this repo)
 
-[098/6](../098-dispatch-console/6-display-modes/readme.md). Live render, baked 3D city map, flat 2D tiles.
+[201/6](../201-dispatch-console/6-display-modes/readme.md). Live render, baked 3D city map, flat 2D tiles.
 This is the phase that makes the product *deployable to real users on real hardware*, because it stops
 depending on every dispatcher having a capable GPU. It is also the phase that beats the field: the 2D mode
 matches what SonoranCAD and SnailyCAD have, and the other two exceed it.
@@ -200,7 +200,7 @@ the unit and call shapes, the 4-second publish rate, what a reconnect replays, a
 semantics the backend already implements.
 
 Then `stepOperations` stops being a simulation and becomes a **fake implementation of that real interface**,
-and [098/8's time axis](../098-dispatch-console/8-the-time-axis/readme.md) is built against a rate taken from
+and [201/8's time axis](../201-dispatch-console/8-the-time-axis/readme.md) is built against a rate taken from
 the code rather than invented.
 
 **Done when:** the console runs against a recorded capture of real traffic, and swapping the mock for the
@@ -215,7 +215,7 @@ old tile canvas — the shell passing units, calls, selection, camera intents an
 getting picks and view state back.
 
 The old 2D canvas does not get deleted; it becomes the **flat-2D display mode**
-([098/6](../098-dispatch-console/6-display-modes/readme.md)), which is what an operator on a weak machine
+([201/6](../201-dispatch-console/6-display-modes/readme.md)), which is what an operator on a weak machine
 should be looking at anyway. Its hand-calibrated `mapBounds` go away, because the engine knows the
 coordinates exactly.
 
@@ -244,7 +244,7 @@ node graph (`original`-only, so it lies on total conversions) — all in
 
 ## 6. Budgets and the honest risk
 
-Named with the user before the work ([the 098 budget table](../098-dispatch-console/readme.md)): **150 units
+Named with the user before the work ([the 201 budget table](../201-dispatch-console/readme.md)): **150 units
 drawn as models with symbols, 60 fps on a phone, ≤3 s to a working picture, a hard 300–500 MB residency
 ceiling.**
 
@@ -252,7 +252,7 @@ ceiling.**
 it late. The evidence base is one synthetic mobile row at 41 fps with no streaming. Three honest outcomes,
 in preference order:
 
-1. the [map profile](../098-dispatch-console/1-the-map-profile/readme.md) frees enough that they all hold;
+1. the [map profile](../201-dispatch-console/1-the-map-profile/readme.md) frees enough that they all hold;
 2. a screen-size threshold drops distant units to their symbols, and the budget holds with a stated rule;
 3. the operator uses the baked 3D or 2D mode on weak hardware — **a choice, not a degradation**, which is
    precisely why phase 1 exists.
@@ -323,8 +323,8 @@ inherits its posture. None of them is a map problem and all of them outrank the 
 
 | Doc | What it holds |
 | --- | --- |
-| [098 — the dispatch console](../098-dispatch-console/readme.md) | all engine and map work: the map profile, real-device truth, the phone surface, render-on-demand, symbology and picking, the three display modes, the operator's map, the time axis |
-| [097 — platform reach](../097-platform-reach/readme.md) | the device half: universal textures, off-main-thread work, WebGL2. 098 hands it the phone measurement it is blocked on |
+| [201 — the dispatch console](../201-dispatch-console/readme.md) | all engine and map work: the map profile, real-device truth, the phone surface, render-on-demand, symbology and picking, the three display modes, the operator's map, the time axis |
+| [200 — platform reach](../200-platform-reach/readme.md) | the device half: universal textures, off-main-thread work, WebGL2. 201 hands it the phone measurement it is blocked on |
 | [project-goals, directive 7](../../project-goals.md) | why the engine has a second consumer and what that consumer may not do |
 | [restrictions/architecture.md](../../restrictions/architecture.md) | the four silent rules found while reading the console against the layer boundaries |
 | [roadmap 0.6.0 — CAD depth](../../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md) | the deferred half: live feed transport, cross-shift history, multi-operator, offline |

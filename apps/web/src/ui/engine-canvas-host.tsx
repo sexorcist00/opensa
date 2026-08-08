@@ -491,7 +491,7 @@ async function boot(
   // COL cells around the player on the game's own 256-unit grid (independent of the pak's render grid).
   hud.textContent = 'own engine: preparing collision…';
   const adapter = new GtaSaWorldAdapter({
-    // Baked collision (097/3-01): present only when the pak was built with `--bake-collision`, and then the
+    // Baked collision (200/3-01): present only when the pak was built with `--bake-collision`, and then the
     // browser never parses that cell's COL. The adapter refuses a source keyed on a grid other than the one
     // below — the mismatch is silent otherwise.
     ...(setup.collision ? { bakedCollision: setup.collision } : {}),

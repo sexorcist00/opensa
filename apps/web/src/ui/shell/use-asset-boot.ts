@@ -19,7 +19,7 @@ const STATUS_INTERVAL_MS = 3600;
 /** The shell's boot controller: drives the per-game loader/VFS by phase and exposes state + actions. */
 export interface AssetBoot {
   acceptDisclaimer: () => void;
-  /** What this load will NOT do, shown under the preloader; empty when there is nothing to say (097/4-06). */
+  /** What this load will NOT do, shown under the preloader; empty when there is nothing to say (200/4-06). */
   cacheNote: string;
   /** Prompt for the install folder (local loader, user gesture) — unblocks loading. */
   chooseFolder: () => void;

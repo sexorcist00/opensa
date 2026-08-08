@@ -72,7 +72,7 @@ already paid to learn.
 
 Plan 081 chased SA-faithful vehicle physics through several rounds, and **every step toward authenticity made
 the car feel worse** — the accepted feel is a deliberate deviation, and it was found by driving, not by
-reasoning. So: a deviation is justified by a measurement in [`docs/benchmarks/`](./benchmarks/README.md) or by
+reasoning. So: a deviation is justified by a measurement in [`docs/benchmarks/`](./benchmarks/index.md) or by
 a field verdict from the driver's seat. An improvement nobody can point at is an opinion, and opinions do not
 get to change a system.
 
@@ -130,7 +130,7 @@ pak was built from, like everything else here.
   **budget** — numbers the frame reads — never a branch it executes, and never a second renderer to
   maintain.
 
-Worked chain: [plan 098](./plans/098-dispatch-console/readme.md).
+Worked chain: [plan 201](./plans/201-dispatch-console/readme.md).
 
 ## The line we do not cross
 

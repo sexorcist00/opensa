@@ -62,7 +62,7 @@ test.describe('ui shell', () => {
 });
 
 /**
- * What a PHONE meets (plan 097 chain 4). Both states are invisible on a dev machine — localhost is a secure
+ * What a PHONE meets (plan 200 chain 4). Both states are invisible on a dev machine — localhost is a secure
  * context and a desktop GPU is not blocklisted — so they are simulated in the page before anything boots.
  * Simulated, and therefore worth having: the two failures they cover are ones that used to say nothing at
  * all, and a silent state is exactly the kind nobody notices has regressed.

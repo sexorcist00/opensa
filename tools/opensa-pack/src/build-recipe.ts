@@ -24,7 +24,7 @@ export interface PakBuildRecipe {
   /** Build time, same clock and format as `manifest.buildTime`. */
   readonly at: string;
   /** `--bake-collision`: the pak carries each cell's collision instead of the browser parsing COL. The one
-   *  flag the A/B in 097/3-01 turns, so a run that does not record it cannot be attributed. */
+   *  flag the A/B in 200/3-01 turns, so a run that does not record it cannot be attributed. */
   readonly bakeCollision: boolean;
   /** Short commit that built it, or null outside a git checkout / with git unavailable. */
   readonly commit: null | string;

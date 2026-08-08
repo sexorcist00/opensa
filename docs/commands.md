@@ -27,7 +27,7 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
 Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|peds|optimize|trees|procobj|sa|opensa|pack|lod>`
 (inclusive, keeps `.work/`) · **`--exclude <stage,stage>`** · `--keep-work` · `--no-weld-seams` ·
 `--no-textures` · `--allow-text-row-overflow` · **`--bake-collision`** (write every cell's collision into the
-pak — plan 097/3-01; off by default, and the same tree built with and without it is the A/B the claim is read
+pak — plan 200/3-01; off by default, and the same tree built with and without it is the A/B the claim is read
 on: the runtime reads a bake when the pak has one and parses COL when it does not).
 
 `--exclude` is the TARGET directive where `--until` is the stop point: it drops the named stages and keeps
@@ -70,14 +70,14 @@ repeats nothing — and it installs only; the pak is `npm run phone`'s business 
 half. It uses `HUSKY=0` rather than editing `package.json` to get past the `prepare` hook, so the worktree
 stays clean on the one machine where `git status` is hardest to read.
 
-`npm run phone` (`scripts/phone.sh`, plan 097 chain 4) is the field-run ritual for a device, written so the
+`npm run phone` (`scripts/phone.sh`, plan 200 chain 4) is the field-run ritual for a device, written so the
 command never changes and every knob is an env var: `REBUILD=1` re-converts, `BAKE=0` builds the other side of
 the collision A/B, `TEXTURES=` picks the texture format (default `astc`; `rgba8` is the A/B's other side),
 `MODELS=0` skips the model convert (fast, but then only `dispatch.html` is usable — it runs
 no physics), `VEHICLES=` / `PEDS=` set the model SUBSET (default `admiral,infernus,comet` + `bmycg,wmycr`;
 `all` converts the roster — hours on a phone), `DISTRICT=` picks the measurement district — its rect, its
 spawn and the map's opening point at once, from the table the console reads (`npx tsx scripts/district.ts`
-lists them; the default is the one 098/1-01 pinned), `RECT=` / `SPAWN=` / `OUT=` / `GAME=` / `APP_PORT=` /
+lists them; the default is the one 201/1-01 pinned), `RECT=` / `SPAWN=` / `OUT=` / `GAME=` / `APP_PORT=` /
 `STATIC_PORT=` move the rest, and `MAPOBJ=0` turns off the district lever (`--map-objects-in-rect`, on by
 default here: convert only the map objects the rect PLACES instead of all ~14 000 the IDEs name — the slowest
 stage of a district convert). It converts
@@ -150,11 +150,11 @@ NODE_OPTIONS=--max-old-space-size=12288 \
 #   --bake-collision: write every cell's collision into the pak (.oscol v2, on the GAME grid 256 -- NOT the
 #     render grid 250) so the browser never parses a COL, and resolve the breakable gate here too (the
 #     per-placement instance keys ride along, so the runtime opens no DFF either). The runtime READS this
-#     since 097/3-01; a cell without an entry falls back to parsing COL. Off by default: it costs build time
+#     since 200/3-01; a cell without an entry falls back to parsing COL. Off by default: it costs build time
 #   --platforms: ASSERT the build runs on the named GPU families, and fail the pack when it does not. Every
 #     run reports the demand anyway (report.json `platforms`, and one log line): world arrays ∪ model
 #     dictionaries, because a car is NOT in the pak — an --rgba8 world can still be unspawnable on a phone
-#   --textures: the format the build WRITES, for the world AND every model dictionary (097/2-02).
+#   --textures: the format the build WRITES, for the world AND every model dictionary (200/2-02).
 #     bc (default) passes SA's DXT through untouched, desktop-only. astc re-encodes to ASTC 4x4 — one byte
 #     per texel (the same as BC3, a QUARTER of rgba8) on the GPUs that have no BC; it costs build time and
 #     one generation of loss. rgba8 leaves the pixels uncompressed: portable, 4x an astc payload.
@@ -208,7 +208,7 @@ npx tsx scripts/debug/touch-controls-check.ts \
 # Tyre smoke dials (089/02) — ?smokeStart=<m/s> ?smokeFull=<m/s> ?smokeRate=<n/wheel/s>
 #   equivalent-slide thresholds + spawn rate (defaults 4 / 12 / 6); the fit: docs/hacks/tyre-smoke-intensity-fit.md
 # Air control (081/06 §1) — ?airCtl=<x> scales the in-air pitch/roll/yaw authority; 0 = off (the jump A/B)
-# CLEO (097) — ON by default since 2026-08-06; ?cleo=0 opts a session out, ?cleo=1 force-enables
+# CLEO (200) — ON by default since 2026-08-06; ?cleo=0 opts a session out, ?cleo=1 force-enables
 #   (census line `[cleo] N script(s)`; atlas misses print as `[cleo] atlas miss:` lines) ·
 #   ?osmspike=<model> renders one map-object .osm beside the player (the 04 phase-0 spike hook) ·
 #   F2 → CLEO (097/07): runner/trace toggles, thread list with per-tick cost, unimplemented/atlas

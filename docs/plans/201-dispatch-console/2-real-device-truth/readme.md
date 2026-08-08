@@ -1,10 +1,10 @@
-# 098/2 — Real device truth: the trimmed console, a real district, real hardware
+# 201/2 — Real device truth: the trimmed console, a real district, real hardware
 
 Second rather than first, and deliberately so. Dropping bytes that are never read needs no device to justify
 it — but the **tuning** half of the profile (rings, resolution, residency) may not aim at a device nobody has
 measured, and the first real mobile row in this repo should be a row of *the thing we intend to ship*.
 
-The stakes beyond this chain: [097/1-04](../../097-platform-reach/1-device-truth/readme.md) refused to write
+The stakes beyond this chain: [200/1-04](../../200-platform-reach/1-device-truth/readme.md) refused to write
 a residency ceiling because WebGPU exposes no VRAM and a number invented before a device is measured is a
 fitted constant with no residual. This chain is what unblocks it.
 
@@ -39,7 +39,7 @@ A real phone, the 01 district, panned and zoomed the way an operator does — no
 synthetic city. This is the run the whole chain exists to produce.
 
 **Owes:** a row in `docs/benchmarks/` under the **mobile schema**
-([097/1-02](../../097-platform-reach/1-device-truth/readme.md)) — adapter features *and what is missing*, no
+([200/1-02](../../200-platform-reach/1-device-truth/readme.md)) — adapter features *and what is missing*, no
 `gpuMs` column when there is no `timestamp-query`, `featureLevel`, DPR, CSS px, and the pak's platform field.
 Numbers: fps p50 **and p95** (the synthetic row has no p95, so it cannot see a hitch), cells visible/total,
 draws, resident MB, and the cold-entry cost the desktop measures at 235 ms.
@@ -53,7 +53,7 @@ Not written — **derived from 03**. The rule the ceiling has to satisfy: it com
 not from a per-device table, and it says what it was measured over.
 
 **Owes:** the ceiling, and it is handed back to
-[097/1-04](../../097-platform-reach/1-device-truth/readme.md) with the row it came from.
+[200/1-04](../../200-platform-reach/1-device-truth/readme.md) with the row it came from.
 
 ## Verification
 

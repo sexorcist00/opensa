@@ -37,7 +37,7 @@ export function MapCanvas({
   const overlayRef = useRef<HTMLCanvasElement>(null);
   /** Why the 3D map is absent, when it is — shown as a banner over a WORKING plan-mode board. */
   const [degraded, setDegraded] = useState('');
-  /** Held for the inventory panel only (098/1-01) — it reads the collector, it does not drive the loop. */
+  /** Held for the inventory panel only (201/1-01) — it reads the collector, it does not drive the loop. */
   const handleRef = useRef<DispatchHandle | null>(null);
 
   // Callbacks reach the loop through a ref so the boot effect never re-runs: re-booting the engine on a

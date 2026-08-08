@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One command for a phone run (plan 097 chain 4): convert what is missing, prove the pak is what it claims,
+# One command for a phone run (plan 200 chain 4): convert what is missing, prove the pak is what it claims,
 # serve it, print the URL to open. Re-running it is the normal case — everything already done is skipped, so
 # the second run is just "servers up, here is the link".
 #
@@ -27,7 +27,7 @@ cd "$(dirname "$0")/.." || exit 1
 GAME="${GAME:-./game-src/original}"
 OUT="${OUT:-./build/phone}"
 # The DISTRICT decides the rect, the spawn and the map's opening point together, from one table
-# (`apps/dispatch/src/world/districts.ts`) the console reads as well. It defaults to the one 098/1-01 PINNED,
+# (`apps/dispatch/src/world/districts.ts`) the console reads as well. It defaults to the one 201/1-01 PINNED,
 # because a capture on any other ground is a valid measurement of somewhere else and not part of the chain's
 # before/after series — which the first real mobile row found out after it was taken. RECT and SPAWN still
 # override, for ground the table does not name.
@@ -37,7 +37,7 @@ MODELS="${MODELS:-1}"
 # Convert only the map objects the rect PLACES, not all ~14 000 the IDEs name. ON here because this script
 # always converts a DISTRICT: the rest are models this pak does not contain. MAPOBJ=0 converts the catalogue.
 MAPOBJ="${MAPOBJ:-1}"
-# ASTC by default (097/2-02): a quarter of rgba8's texture memory on the same texels, and the format this
+# ASTC by default (200/2-02): a quarter of rgba8's texture memory on the same texels, and the format this
 # class of GPU actually carries. It costs an encode stage in the convert — `TEXTURES=rgba8` is the way back
 # and the A/B's other side. `bc` is desktop-only and would fail the --platforms mobile line below.
 TEXTURES="${TEXTURES:-astc}"
@@ -69,7 +69,7 @@ tsx() { node "$TSX" "$@"; }
 # The district's numbers, read from the table the console reads — never typed twice. RECT/SPAWN set in the
 # environment still win, so ground the table does not name is still reachable.
 if ! DISTRICT_LINE="$(tsx scripts/district.ts "$DISTRICT")"; then
-  echo "  npx tsx scripts/district.ts   # lists the districts and which one 098/1-01 pinned" >&2
+  echo "  npx tsx scripts/district.ts   # lists the districts and which one 201/1-01 pinned" >&2
   exit 1
 fi
 read -r DISTRICT_RECT DISTRICT_SPAWN DISTRICT_AT <<<"$DISTRICT_LINE"
@@ -271,7 +271,7 @@ else
   echo "  $MAP_URL?$MAP_QUERY"
 fi
 echo
-echo "  the 098/1-01 inventory capture (let it settle past 300 frames, then press copy JSON):"
+echo "  the 201/1-01 inventory capture (let it settle past 300 frames, then press copy JSON):"
 echo "  $MAP_URL?$MAP_QUERY&inventory=1"
 if [ -n "$IP" ]; then
   echo

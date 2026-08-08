@@ -11,7 +11,7 @@ export const OSTEX_VERSION_MAJOR = 0;
 export const OSTEX_VERSION_MINOR = 2; // 2: the ASTC4x4 format id
 
 export const OstexFormat = {
-  /** ASTC 4x4 LDR (plan 097 chain 2): 16 bytes per 4x4 block — ONE byte per texel, the same as BC3/BC7 and a
+  /** ASTC 4x4 LDR (plan 200 chain 2): 16 bytes per 4x4 block — ONE byte per texel, the same as BC3/BC7 and a
    *  QUARTER of RGBA8. It is here because `--rgba8` is the only thing a GPU without BC can take today and it
    *  costs 8x a BC1 payload, which is the arithmetic that keeps the full map off a phone. The 4x4 block
    *  matches BC's, so every layout rule below is unchanged; other ASTC block sizes would not be. */

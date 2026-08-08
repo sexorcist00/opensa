@@ -129,7 +129,7 @@ export const styles = {
     marginTop: 4,
     width: '100%',
   },
-  /** 098/1-01. Bottom-left so it never sits under the selection panel, and narrow enough for 360 CSS px. */
+  /** 201/1-01. Bottom-left so it never sits under the selection panel, and narrow enough for 360 CSS px. */
   inventoryPanel: {
     background: 'rgba(11, 16, 23, 0.94)',
     border: `1px solid ${COLORS.accent}`,

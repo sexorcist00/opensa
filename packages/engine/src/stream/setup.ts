@@ -32,7 +32,7 @@ export interface StreamSetup {
    *  runtime config's copy, which a pak converted at another size would contradict. */
   cellSize: number;
   center: [number, number, number];
-  /** Baked cell collision (097/3-01), when the pak carries it — the host hands this to whatever streams
+  /** Baked cell collision (200/3-01), when the pak carries it — the host hands this to whatever streams
    *  collision, and a pak built without `--bake-collision` simply has none. */
   collision?: PakCollisionSource;
   driver: StreamingDriver;

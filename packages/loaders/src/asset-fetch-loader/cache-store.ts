@@ -68,7 +68,7 @@ export class CacheStore {
  * Exported because the no-op above is otherwise invisible: nothing breaks, the game just re-downloads
  * itself on every visit, which on a phone is gigabytes over someone's connection. The canonical way to
  * meet this is the one a phone actually takes — `http://<lan-ip>:5173` from a dev machine — so the shell
- * has to be able to SAY it (plan 097/4-06).
+ * has to be able to SAY it (plan 200/4-06).
  */
 export function cacheStorageStatus(): { available: boolean; reason: string } {
   if (typeof caches !== 'undefined') {

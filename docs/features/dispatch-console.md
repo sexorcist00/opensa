@@ -11,7 +11,7 @@ the smallest complete example of embedding the engine.
 
 Implemented and running. The world half is verified only on real GPU hardware — see [Verification](#verification).
 
-**Under active development as [plan 098](../plans/098-dispatch-console/readme.md)** (opened 2026-08-06), which
+**Under active development as [plan 201](../plans/201-dispatch-console/readme.md)** (opened 2026-08-06), which
 declares the console as the engine's second consumer ([project-goals, directive 7](../project-goals.md)) and
 carries eight chains: the map profile (trim the engine to what the map draws — and only that: cars and peds
 drawn, vegetation swaying, the day turning and the weather colouring the world are all protected, and one
@@ -26,13 +26,13 @@ install/offline — is [roadmap 0.6.0](../roadmap/0.6.0/plans/05-dispatch-cad-de
 server and so are the units; the data source is a **native CAD plugin**; the console stays a separate web
 application beside the game. Its named budgets are 150 units drawn as models, 60 fps on a phone, ≤3 s to a
 working picture and a hard 300–500 MB residency ceiling — see the
-[plan's budget table](../plans/098-dispatch-console/readme.md), which also states plainly that those four may
+[plan's budget table](../plans/201-dispatch-console/readme.md), which also states plainly that those four may
 not be satisfiable at once and how that gets decided.
 
 ## Three ways to draw the world
 
 Decided 2026-08-06 — one camera, one symbology, one board, three sources for what is beneath them
-([098/6](../plans/098-dispatch-console/6-display-modes/readme.md)):
+([201/6](../plans/201-dispatch-console/6-display-modes/readme.md)):
 
 | Mode | What it is | State |
 | --- | --- | --- |
@@ -123,7 +123,7 @@ Access prompt — a user opens the page and the world streams. The folder picker
 which is a different app answering a different question. Two costs are attached and neither is a bug: the
 reference pak is **1.27 GB at 1137 cells** (streamed, so a session pays for the cells it visits, cached per
 build version), and a stock pak is BC throughout, so **a hosted world is desktop-only** until
-[plan 097 / chain 2](../plans/097-platform-reach/2-universal-textures/readme.md) lands — `--rgba8` is the
+[plan 200 / chain 2](../plans/200-platform-reach/2-universal-textures/readme.md) lands — `--rgba8` is the
 interim, at 4–8× texture memory.
 
 `MapCamera.applyPose` exists for hosts: every other camera step is relative, which is right for input and
@@ -153,18 +153,18 @@ Each now names the step that owns it, so none of them is an open-ended note.
 - **No unit models** — **decided 2026-08-06: units get real models.** Cars and peds are drawn rather than
   replaced by icons; the symbol keeps the label and the priority and stays 2D on top. The cost is a
   dependency on the build carrying converted `.osm` models, and the fallback when one is absent is part of
-  the step. → [098/5-04](../plans/098-dispatch-console/5-symbology-and-picking-as-product/readme.md).
+  the step. → [201/5-04](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
 - **Demo mode has no model names.** Synthetic cells carry no placement mapper, so a click on a demo block
   resolves to bare ground. → picked up with the production pick capability,
-  [098/5-01](../plans/098-dispatch-console/5-symbology-and-picking-as-product/readme.md).
+  [201/5-01](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
 - **Picking stands on a debug flag.** `engine.cells.debugPicking` must be true before the first cell loads,
   and a build defaulting debug off in production kills click-to-inspect with no error — recorded as a
   restriction ([architecture](../restrictions/architecture.md)) in the same change.
-  → [098/5-01](../plans/098-dispatch-console/5-symbology-and-picking-as-product/readme.md).
+  → [201/5-01](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
 - **The mobile evidence is emulated, not hardware.** The phone runs below are an emulated Pixel 7 and a
   simulated mobile adapter; the one real device in the repo's record (Mali-G51, 360×800 DPR 2) ran the
   synthetic `?demo=1` city, not a streamed world. → the real-district row is
-  [098/2-03](../plans/098-dispatch-console/2-real-device-truth/readme.md).
+  [201/2-03](../plans/201-dispatch-console/2-real-device-truth/readme.md).
 
 ## Verification
 

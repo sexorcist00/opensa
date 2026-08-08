@@ -151,17 +151,17 @@ Next iterations:
 
 Platform reach is the LEAD of this cycle (decided 2026-08-04) — a phone boots the engine and cannot open the
 world, because a pak built from SA assets is BC throughout and no mobile GPU has BC. Full chain and its
-measured evidence: [docs/plans/097-platform-reach/](docs/plans/097-platform-reach/readme.md).
+measured evidence: [docs/plans/200-platform-reach/](docs/plans/200-platform-reach/readme.md).
 
 The DISPATCH CONSOLE leads beside it (decided 2026-08-06) — the engine's second consumer, a CAD 3D map for
 dispatchers over the same streamed world, and the only surface here that runs on a phone. It carries the
 mobile work and the "trim the engine to what the map draws" work, with the world's life explicitly protected:
 cars and peds are drawn, vegetation sways, the day turns, and one engine serves PC and mobile.
-Full chain: [docs/plans/098-dispatch-console/](docs/plans/098-dispatch-console/readme.md).
+Full chain: [docs/plans/201-dispatch-console/](docs/plans/201-dispatch-console/readme.md).
 
 What that console is FOR is the final plan: **a web dispatch application for a SA-MP server**, paired with a
 client-side CAD plugin (PCAD), in which OpenSA is one component — the 3D map. Product, field survey, seams,
-phases and risks: [docs/plans/099-pcad-dispatch/](docs/plans/099-pcad-dispatch/readme.md).
+phases and risks: [docs/plans/202-pcad-dispatch/](docs/plans/202-pcad-dispatch/readme.md).
 
 - [ ] Run the real map on a phone
   - [✅] Boot the engine on a mobile GPU (BC taken when offered, never demanded)

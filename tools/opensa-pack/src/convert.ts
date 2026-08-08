@@ -52,12 +52,12 @@ export interface ConvertOptions {
   alwaysOnLods?: ReadonlySet<string>;
   /** Bake per-vertex AO/skyVis (074/07); on by default, `--no-ao` skips it. */
   ao?: boolean;
-  /** Re-encode every world array as ASTC 4x4 (plan 097/2-02) — one byte per texel instead of RGBA8's four,
+  /** Re-encode every world array as ASTC 4x4 (plan 200/2-02) — one byte per texel instead of RGBA8's four,
    *  on the GPUs that have no BC. Requires {@link forceRgba8}: the encode reads decoded layers, so the DXT
    *  passthrough must be off. */
   astc?: boolean;
 
-  /** Bake every cell's COLLISION into the pak (plan 097/3-01), so the browser never parses a COL. Off by
+  /** Bake every cell's COLLISION into the pak (plan 200/3-01), so the browser never parses a COL. Off by
    *  default while the runtime still reads the archives — the bake costs build time and nothing reads the
    *  entries yet. Keyed on the GAME grid, never on the render one. */
   bakeCollision?: boolean;
@@ -570,7 +570,7 @@ function countRectCells(
 }
 
 /**
- * Seal the texture plan into pak inputs, re-encoding to ASTC 4x4 when the build asked for it (097/2-02).
+ * Seal the texture plan into pak inputs, re-encoding to ASTC 4x4 when the build asked for it (200/2-02).
  *
  * The format lives in the entry META as well as in the `.ostex` header: the manifest is what the runtime's
  * platform check and `texture-budget.ts` read, and a manifest that still said RGBA8 would describe a pak that

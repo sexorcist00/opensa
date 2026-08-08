@@ -135,13 +135,11 @@ Never edit generated code manually.
 
   1. `docs/project-goals.md` — what the project is FOR (directive, not aspirational)
   2. `docs/restrictions/README.md` — what a design MAY NOT do
-  3. `docs/plans/099-pcad-dispatch/readme.md` — **THE FINAL PLAN**: the product is a web dispatch application
+  3. `docs/plans/202-pcad-dispatch/readme.md` — **THE FINAL PLAN**: the product is a web dispatch application
      for a SA-MP server, and this repository owns exactly one component of it — **the 3D map**
-  4. `docs/plans/098-dispatch-console/readme.md` — **THE 3D MAP ENGINE PLAN**, subordinate to
-     `099-pcad-dispatch`: 8 chains, 32 steps, with the decisions table, the evidence table, its "steps at a
-     glance" index, and — at the bottom — the **`## Status` table, which is the handoff point between
-     agents**. (Both folders are named by their FULL path here on purpose — upstream has its own 098 and
-     099, see the fork rule below.)
+  4. `docs/plans/201-dispatch-console/readme.md` — **THE 3D MAP ENGINE PLAN**, subordinate to 202: 8 chains,
+     32 steps, with the decisions table, the evidence table, its "steps at a glance" index, and — at the
+     bottom — the **`## Status` table, which is the handoff point between agents**
   5. `docs/plans/README.md` — every other plan, newest first, each marked IN PROGRESS or not
   6. `roadmap.md` — the long checklist of what is done and what is left
 
@@ -191,10 +189,12 @@ Never edit generated code manually.
   late merge costs**: not a conflict marker, but a clean auto-merge that is wrong, and it gets worse with
   every week of divergence. Merge (never rebase — `main` is pushed), and read the upstream commits for what
   they mean rather than only for what conflicts.
-  **The plan NUMBERS collide, and that is permanent until we renumber**: both sides numbered forward from
-  096, so `097`, `098` and `099` name different chains here and upstream. Cite a plan by its FOLDER
-  (`098-dispatch-console`), never by its bare number, and check `docs/plans/README.md`'s note before adding
-  a new one.
+  **THE FORK'S PLANS LIVE IN A `2xx` BLOCK, and that is why.** Both sides numbered forward from 096 without
+  knowing about each other, so for two days `097`, `098` and `099` each named two unrelated chains — which
+  made every bare citation ambiguous, this file's reading order included. Renumbered 2026-08-08:
+  **`200-platform-reach`, `201-dispatch-console`, `202-pcad-dispatch`**, and anything the fork adds continues
+  from `203`. Upstream keeps `0xx`/`1xx` and will not reach 200 for years. A citation older than that date
+  reads `098/1-01` where the repo now says `201/1-01`.
 - **THE DEVELOPMENT MACHINE IS AN ANDROID PHONE RUNNING TERMUX.** Every command handed over is run there, so
   write commands for that environment or they waste the user's time: no `sudo`, `pkg` rather than `apt`,
   paths under `$PREFIX`, and a long job needs `termux-wake-lock` or Android suspends it. The user **has the

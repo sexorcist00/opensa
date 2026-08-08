@@ -89,7 +89,7 @@ iOS 26 — the **content** is. The measured consequences:
 
 **Cheaper than RGBA8 exists since 2026-08-07: `opensa-pack --textures astc`** re-encodes every array — the
 world's and every model dictionary's — to ASTC 4x4 at one byte per texel, the same as BC3 and a quarter of
-RGBA8 (plan 097/2-02). It is a second generation of loss on the world's textures, since SA ships DXT, and it
+RGBA8 (plan 200/2-02). It is a second generation of loss on the world's textures, since SA ships DXT, and it
 costs build time. What it does NOT do is make one pak serve both families: an ASTC pak demands
 `texture-compression-astc` exactly as a BC pak demands `texture-compression-bc`, so **the remaining limit is
 that a pak is built for one GPU family** — desktop gets `bc`, a phone gets `astc`, and `rgba8` is the only
@@ -97,7 +97,7 @@ one that loads on both. The Basis/KTX2 route that would have removed even that w
 (`docs/postmortem/universal-texture-transcode.md`).
 
 Not yet demonstrated on a device: as of 2026-08-07 no ASTC pak has been built from real assets or loaded on
-the Mali row's phone. Until plan 097/2 records that run, "an ASTC pak works on this GPU" is an expectation
+the Mali row's phone. Until plan 200/2 records that run, "an ASTC pak works on this GPU" is an expectation
 from the adapter's feature list, not a measurement.
 
 ### Measured on a real phone (2026-08-04)
@@ -122,7 +122,7 @@ developer flag** — it carries a security warning and nobody else's phone has i
 is capable without being a shipping path.
 
 What it makes possible today: `?demo=1` and any `--rgba8` pak render in 3D on this phone. What it argued for
-next has since been built — `--textures astc` (097/2-02) — on the strength of this row: ASTC was never a
+next has since been built — `--textures astc` (200/2-02) — on the strength of this row: ASTC was never a
 hypothetical target, this GPU carries it, and an ASTC `.ostex` costs roughly what BC costs instead of
 RGBA8's 4-8x. The row still owes its successor: an ASTC pak actually loaded here.
 

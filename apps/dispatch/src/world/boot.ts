@@ -44,7 +44,7 @@ export interface DispatchHandle {
   readonly camera: MapCamera;
   dispose(): void;
   /**
-   * The 098/1-01 before-table, or null when `?inventory=1` was not set. Reading it does not stop or reset
+   * The 201/1-01 before-table, or null when `?inventory=1` was not set. Reading it does not stop or reset
    * the collection — the window keeps growing, so a later read is a longer sample of the same run.
    */
   inventory(): InventoryReport | null;
@@ -137,7 +137,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   }
 
   const unbind = bindInput({ camera, canvas, engine, options, symbology });
-  // 098/1-01. Off unless asked for: draining the span recorder is cheap, but a mode that measures by default
+  // 201/1-01. Off unless asked for: draining the span recorder is cheap, but a mode that measures by default
   // is a mode nobody can trust to have measured nothing.
   const inventory = params.get('inventory') === '1' ? new FrameInventory() : null;
   // A SECOND span recorder, deliberately not the shared `frameSpans`. That one is for work between frames,

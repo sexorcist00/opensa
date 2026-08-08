@@ -146,13 +146,13 @@ has an opaque origin and cannot own its URL — a `content://` or `file://` host
 | `hd=` · `lod=` | streaming ring radii |
 | `fog=1` · `fogscale=` | restore the game's own fog instead of pushing the cut to the far plane |
 | `weather=` | weather id for the environment driver |
-| **`inventory=1`** | **098/1-01**: collect the frame before-table and show a panel with a copy button |
+| **`inventory=1`** | **201/1-01**: collect the frame before-table and show a panel with a copy button |
 | **`district=`** | the measurement district: names the capture AND, with no `at=`, opens the camera over it (`apps/dispatch/src/world/districts.ts`) |
 
 ### Taking an inventory capture
 
-The measurement district for the whole of 098 is **the centre of Los Santos**, pinned in
-[098/1-01](../plans/098-dispatch-console/1-the-map-profile/readme.md); every before/after in that chain uses
+The measurement district for the whole of 201 is **the centre of Los Santos**, pinned in
+[201/1-01](../plans/201-dispatch-console/1-the-map-profile/readme.md); every before/after in that chain uses
 it, or the comparison is not an A/B.
 
 ```sh
@@ -195,7 +195,7 @@ The last two rows answer the open question the mobile row could not: a frame mis
 frame that is genuinely 32 ms of work look identical in a p50 and are fixed in opposite directions.
 
 The report also states its own ground — `district`, `camera.at`, `camera.height` — and **warns when the
-district is not the one 098/1-01 pinned**, because a capture on other ground is a valid measurement of
+district is not the one 201/1-01 pinned**, because a capture on other ground is a valid measurement of
 somewhere else and not part of the chain's before/after series.
 
 ## Two known inconsistencies

@@ -17,7 +17,7 @@ its own WebGPU renderer, so nothing here is linkable even where the licence woul
 Cesium, BSD-3 MapLibre, MIT deck.gl / Giro3D / SnailyCAD). A borrowed *technique* costs an attribution line
 here; borrowed *source* would cost a licence obligation and a second codebase.
 
-Surveyed 2026-08-06 for [plan 099](../plans/099-pcad-dispatch/readme.md).
+Surveyed 2026-08-06 for [plan 202](../plans/202-pcad-dispatch/readme.md).
 
 ## Status vocabulary
 
@@ -34,12 +34,12 @@ Surveyed 2026-08-06 for [plan 099](../plans/099-pcad-dispatch/readme.md).
 
 | Idea | From | What it answers for us | Status |
 | --- | --- | --- | --- |
-| **LOD by screen-space error** — load a tile when its projected error exceeds N pixels | CesiumJS (`maximumScreenSpaceError`) | a map camera has no player to ring-stream around; one rule that works at every zoom and on every screen, instead of hand-picked radii | **planned** — [098/1-05](../plans/098-dispatch-console/1-the-map-profile/readme.md) |
+| **LOD by screen-space error** — load a tile when its projected error exceeds N pixels | CesiumJS (`maximumScreenSpaceError`) | a map camera has no player to ring-stream around; one rule that works at every zoom and on every screen, instead of hand-picked radii | **planned** — [201/1-05](../plans/201-dispatch-console/1-the-map-profile/readme.md) |
 | **Geometric error declared per tile** — the error introduced by drawing this tile instead of its children | [3D Tiles](https://docs.ogc.org/cs/22-025r4/22-025r4.html) (OGC) | the input screen-space error consumes. **Our pak carries no such number** — the idea found a gap rather than filling one | **planned** — same step, bake half first |
 | **`ADD` vs `REPLACE` refinement** | 3D Tiles | names what our HD/LOD tiers already are (a two-level REPLACE) and what a deeper tree would need | **noted** |
-| **Classification instead of tessellation** — drape a shape on the ground by rendering a volume and classifying the fragments it covers | CesiumJS ground primitives | every clamp-to-ground need at once: annotations, data layers, unit trails. Our ground is welded cell geometry, so fitting a polygon to it would be a per-cell join problem | **planned** — [098/7-05](../plans/098-dispatch-console/7-the-operator-map/readme.md) |
+| **Classification instead of tessellation** — drape a shape on the ground by rendering a volume and classifying the fragments it covers | CesiumJS ground primitives | every clamp-to-ground need at once: annotations, data layers, unit trails. Our ground is welded cell geometry, so fitting a polygon to it would be a per-cell join problem | **planned** — [201/7-05](../plans/201-dispatch-console/7-the-operator-map/readme.md) |
 | **A layer model over the base world**, styled from data at runtime | deck.gl | zones by workload, coverage, heat — over a world whose look is baked | **planned** |
-| **One-file tile pyramid, range-requested** | [PMTiles](https://github.com/protomaps/PMTiles) | the flat-2D mode's delivery: our pak is already static and range-friendly, so tile hosting disappears | **planned** — [098/6-02](../plans/098-dispatch-console/6-display-modes/readme.md) |
+| **One-file tile pyramid, range-requested** | [PMTiles](https://github.com/protomaps/PMTiles) | the flat-2D mode's delivery: our pak is already static and range-friendly, so tile hosting disappears | **planned** — [201/6-02](../plans/201-dispatch-console/6-display-modes/readme.md) |
 | **GTA-SA → tile-coordinate projection** | [SanMap](https://github.com/ikkentim/SanMap) (Unlicense) | the flat-2D zoom/tile scheme, proven, rather than invented | **planned** — same step |
 | **A prebuilt satellite raster of San Andreas** | [samap](https://github.com/AmyrAhmady/samap) | — | **refused**: covers stock SA only (this engine exists to run total conversions) and the imagery is credited to gtagmodding, not owned by the repo publishing it |
 | **Globe / CRS machinery** | OpenGlobus, NASA WorldWind, VTS | — | **refused**: real-world geography is out by decision, so a globe buys nothing |
@@ -49,21 +49,21 @@ Surveyed 2026-08-06 for [plan 099](../plans/099-pcad-dispatch/readme.md).
 
 | Idea | From | What it answers for us | Status |
 | --- | --- | --- | --- |
-| **Label collision with sort-key priority**, allow-overlap, variable placement | [MapLibre](https://deepwiki.com/maplibre/maplibre-native/3.3-symbol-placement-and-collision-detection) | 150 units with labels at city zoom is a decluttering problem, not a drawing one | **planned** — [098/3-03](../plans/098-dispatch-console/3-the-operator-surface-on-a-phone/readme.md) |
+| **Label collision with sort-key priority**, allow-overlap, variable placement | [MapLibre](https://deepwiki.com/maplibre/maplibre-native/3.3-symbol-placement-and-collision-detection) | 150 units with labels at city zoom is a decluttering problem, not a drawing one | **planned** — [201/3-03](../plans/201-dispatch-console/3-the-operator-surface-on-a-phone/readme.md) |
 | **Drag a unit onto a call, a group, a lookup window, a timer** | SonoranCAD | the best dispatch interaction in their product, and we have nothing like it — we have click-then-panel | **noted** — the strongest single borrow available |
 | **Per-category blip visibility and outline colour** (police / fire / EMS / dispatch) | SonoranCAD | at 150 units this is necessity, not decoration | **noted** |
 | **Hover shows brief, click opens an action menu** (add to call, group, lookup, edit, panic) | SonoranCAD | two-level disclosure instead of one panel carrying everything | **noted** |
-| **A pin in a list opens the map and zooms to it** | SonoranCAD | binds the lists to the map, not just the map to itself | **planned** in part — [098/7-03](../plans/098-dispatch-console/7-the-operator-map/readme.md) |
+| **A pin in a list opens the map and zooms to it** | SonoranCAD | binds the lists to the map, not just the map to itself | **planned** in part — [201/7-03](../plans/201-dispatch-console/7-the-operator-map/readme.md) |
 | **Bodycam from a unit blip** | SonoranCAD (ER:LC) | a live view from the unit, reachable from the map | **noted**, future |
 | **Visibility gated by duty, not by presence** — a unit appears only when logged into the CAD | SonoranCAD | we get this free: PCAD only reports units that are on duty | **built**, by construction |
-| **Measurement, annotation, cross-sections on a 3D scene** | [Giro3D](https://github.com/giro3d-org/Giro3D) / iTowns | the operator tools | **planned** — [098/7-05](../plans/098-dispatch-console/7-the-operator-map/readme.md) |
+| **Measurement, annotation, cross-sections on a 3D scene** | [Giro3D](https://github.com/giro3d-org/Giro3D) / iTowns | the operator tools | **planned** — [201/7-05](../plans/201-dispatch-console/7-the-operator-map/readme.md) |
 
 ## Data and time
 
 | Idea | From | What it answers for us | Status |
 | --- | --- | --- | --- |
-| **Entity properties as functions over an interval, driven by a clock** | CZML (Cesium) | time as an axis rather than a field — scrub, trails and playback all fall out of one structure | **planned** — [098/8](../plans/098-dispatch-console/8-the-time-axis/readme.md) |
-| **Interpolate between received samples, never past them** | general tracking practice, and CZML's shape | a car continuing on its last vector drives through a wall | **planned** — [098/8-02](../plans/098-dispatch-console/8-the-time-axis/readme.md) |
+| **Entity properties as functions over an interval, driven by a clock** | CZML (Cesium) | time as an axis rather than a field — scrub, trails and playback all fall out of one structure | **planned** — [201/8](../plans/201-dispatch-console/8-the-time-axis/readme.md) |
+| **Interpolate between received samples, never past them** | general tracking practice, and CZML's shape | a car continuing on its last vector drives through a wall | **planned** — [201/8-02](../plans/201-dispatch-console/8-the-time-axis/readme.md) |
 
 ## Product shape
 

@@ -1,4 +1,4 @@
-# 097 — Platform reach: the world on a phone, and the frame off the main thread
+# 200 — Platform reach: the world on a phone, and the frame off the main thread
 
 **The lead chain of the cycle** (priority set 2026-08-04). Everything else in 0.5.0 makes the world richer;
 this one makes it *reachable* — and pays for the richness by taking the hitches off the main thread.

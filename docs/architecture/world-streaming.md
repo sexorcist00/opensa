@@ -8,7 +8,7 @@ The engine never parses RenderWare at runtime — everything is converted offlin
 
 | Format    | Magic  | One file is…                                  | Key contents                                                                                                                                                                                  |
 | --------- | ------ | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.oscol`  | `OSCL` | one **cell's collision**, baked (plan 097/3) | regions: model name · flat vertex/index arrays · primitive boxes/spheres · the per-**triangle** surface table · the world transform of every placement · **v2**: the per-placement breakable instance keys, present exactly when the model shatters — the writer decides, so the reader never opens a DFF to ask. Replaces a 9.6-78.3 ms per-cell COL parse in the browser; a v1 file is REFUSED (its breakability is unknown, not "false") and the runtime falls back to COL |
+| `.oscol`  | `OSCL` | one **cell's collision**, baked (plan 200/3) | regions: model name · flat vertex/index arrays · primitive boxes/spheres · the per-**triangle** surface table · the world transform of every placement · **v2**: the per-placement breakable instance keys, present exactly when the model shatters — the writer decides, so the reader never opens a DFF to ask. Replaces a 9.6-78.3 ms per-cell COL parse in the browser; a v1 file is REFUSED (its breakability is unknown, not "false") and the runtime falls back to COL |
 | `.osm`    | `OSM1` | one **model** (vehicle/ped/prop/…), sectioned | `DESC` (JSON: parts/submeshes/wheels/layout) · `GEOM` · `COLL` (baked collision) · `HULL` · `SHAT` (shatter mesh) · `SKEL` · `TEXS` (the model's private texture dictionary)                  |
 | `.ostex`  | `OST1` | one `texture_2d_array`                        | BC1/BC2/BC3/BC7/RGBA8, full offline mip chain, premultiplied alpha, alpha class (opaque/cutout/soft-blend)                                                                                    |
 | `.oscell` | `OSC1` | one streamed **cell** level (HD or LOD)       | 36-byte vertices (pos, normal + baked sunVis, uv, day/night prelit, layer + AO/emissive channels), object/breakable/particle/light tables (object kinds incl. 4 uv-scroll / 5 timed uv-scroll, minor 7), pipeline classes opaque/cutout/blend/beam/**additive**, placement mapper for the debugger |
@@ -89,7 +89,7 @@ flowchart LR
   ring skipped cells whose geometry already sat inside the fog. **Per-ring texture residency**: a shared
   array is fetched with the first cell that draws it and released with the last.
 - **`stream/collision-source.ts`** — `PakCollisionSource`: the baked-collision half of the pak (plan
-  097/3-01), present only when the manifest carries `collision`. Reads an entry's range through the SAME pak
+  200/3-01), present only when the manifest carries `collision`. Reads an entry's range through the SAME pak
   worker (keys prefixed `collision-`, so the driver ignores replies that are not its cells), de-dupes
   concurrent reads of one cell, and answers `null` for a cell with no bake or a failed read — the game layer
   then parses COL exactly as before. It publishes `cellSize` (the GAME grid, 256) because a consumer

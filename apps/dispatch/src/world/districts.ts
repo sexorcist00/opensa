@@ -1,7 +1,7 @@
 /**
- * The ground a 098 measurement may be taken on — and which of them is PINNED.
+ * The ground a 201 measurement may be taken on — and which of them is PINNED.
  *
- * [098/1-01](../../../../docs/plans/098-dispatch-console/1-the-map-profile/readme.md) pins one district for
+ * [201/1-01](../../../../docs/plans/201-dispatch-console/1-the-map-profile/readme.md) pins one district for
  * the whole chain, because a before-table from one district and an after-table from another is not an A/B.
  * The first real mobile row was taken on Ganton — a valid measurement of a real district, and not part of
  * this chain's series, which cost a paragraph of prose in the benchmark file to say.
@@ -28,7 +28,7 @@ export interface MeasurementDistrict {
   readonly spawn: readonly [number, number, number];
 }
 
-/** The district 098/1-01 pinned on 2026-08-06. Every before/after in the chain is taken here. */
+/** The district 201/1-01 pinned on 2026-08-06. Every before/after in the chain is taken here. */
 export const PINNED_DISTRICT = 'los-santos-centre';
 
 export const DISTRICTS: Readonly<Record<string, MeasurementDistrict>> = {

@@ -449,7 +449,7 @@ twice about, and `build:prod` already sets `OPENSA_DEBUGGER_HIDE=true` — turns
 that selects nothing. There is no throw, no warning, and no missing pixel: the map just stops answering.
 
 Either the capability gets an honest name and an owner outside the debug surface, or every consumer of it is
-listed where the flag is defined. See `docs/plans/098-dispatch-console/5-symbology-and-picking-as-product/`.
+listed where the flag is defined. See `docs/plans/201-dispatch-console/5-symbology-and-picking-as-product/`.
 
 **Caught:** no — and worse than silent at runtime, it is silent at review: the flag reads as debug-only, so a
 change that disables it looks safe.

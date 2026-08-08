@@ -39,11 +39,11 @@ playing`, plus `paused` and `error`. State carries the selected `game`; `SELECT`
   also demand `texture-compression-bc`, which conflated the device with the content and told every phone that
   its browser does not support WebGPU (it does; the WORLD was BC). Whether a given world is displayable is
   read from that world's manifest at stream setup (`requireWorldSupport`), where the answer is true and
-  specific. The probe reports **`no-api` vs `no-adapter`** (097/4-05) and `webGpuGateMessage` says which:
+  specific. The probe reports **`no-api` vs `no-adapter`** (200/4-05) and `webGpuGateMessage` says which:
   the phone case is `no-adapter` — WebGPU is present and the driver blocklist refuses the adapter — where
   "this browser does not support WebGPU" is simply false. A thrown request counts as `no-adapter`.
 - **Preloader note** (`boot-status.ts` `cacheNote`): a standing line under the rotating status for what this
-  load will NOT do. Today: the download is not being kept, because Cache Storage is unavailable (097/4-06).
+  load will NOT do. Today: the download is not being kept, because Cache Storage is unavailable (200/4-06).
   Only for the `fetch` loader — a picked folder is read where it is.
 - **Analytics** (`analytics.ts`): gtag, `VITE_GA_ID`-gated — a no-op when unset (dev). See `.env.example`.
 - **Debugger** re-skinned to the same theme (`debug-styles.ts`).

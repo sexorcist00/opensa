@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Everything a phone needs BEFORE its first run, once (098 chain 2 / the phone workflow):
+# Everything a phone needs BEFORE its first run, once (201 chain 2 / the phone workflow):
 #
 #   npm run phone:setup     # install what the converter needs, unpack the app, say what is still missing
 #   npm run phone           # every run after that

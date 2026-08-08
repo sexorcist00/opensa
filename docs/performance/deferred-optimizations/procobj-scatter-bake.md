@@ -1,6 +1,6 @@
 # Bake the procobj scatter, the way collision is now baked
 
-**Status:** in reserve — opened 2026-08-05 by [097/3-01's runtime read](../../plans/097-platform-reach/3-off-main-thread/readme.md),
+**Status:** in reserve — opened 2026-08-05 by [200/3-01's runtime read](../../plans/200-platform-reach/3-off-main-thread/readme.md),
 which took the COL bind off the map-collision path and left this one standing.
 
 ## What we do today

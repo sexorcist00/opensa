@@ -26,11 +26,11 @@ its research record into its `docs/plans/<n>-…/` folder, and a killed one move
 - ~~universal-texture-transcode~~ — CLOSED 2026-08-06, replaced by a direct ASTC encode; the record is in [postmortem/universal-texture-transcode.md](../postmortem/universal-texture-transcode.md).
   device's format at load (Basis/KTX2), so a phone can open the real map. Direction decided 2026-08-04;
   the open question is whether the quality survives a second generation of loss on SA's DXT. Gate on
-  [plan 097 chain 2](../plans/097-platform-reach/2-universal-textures/readme.md).
+  [plan 200 chain 2](../plans/200-platform-reach/2-universal-textures/readme.md).
 - **[webgl2-fallback-backend](webgl2-fallback-backend.md)** — a second rendering backend for devices with no
   WebGPU adapter. In scope by decision; carries its own counter-case (the reach window is closing, the tax is
   permanent). Gate on
-  [plan 097 chain 5](../plans/097-platform-reach/5-webgl2-fallback/readme.md).
+  [plan 200 chain 5](../plans/200-platform-reach/5-webgl2-fallback/readme.md).
 
 ## Graduated to plans
 

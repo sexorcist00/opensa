@@ -6,7 +6,7 @@ the surface exist and proved the engine embeds — and this is the list of what 
 that a mock does not.
 
 Deferred by decision on 2026-08-06, not by difficulty. Each item is a blurb, not a step chain; the chain gets
-written when the cycle picks it up. The 0.5.0 half is [plan 098](../../../../plans/098-dispatch-console/readme.md).
+written when the cycle picks it up. The 0.5.0 half is [plan 201](../../../../plans/201-dispatch-console/readme.md).
 
 ## The live operations feed — contract first
 
@@ -26,7 +26,7 @@ rate), and what an operator sees when the feed is stale rather than empty. Writt
 something rather than against a guess.
 
 Note what is **not** deferred: the client-side time axis moved forward into
-[098/8](../../../../plans/098-dispatch-console/8-the-time-axis/readme.md), because where time lives in the
+[201/8](../../../../plans/201-dispatch-console/8-the-time-axis/readme.md), because where time lives in the
 data model is cheap to decide now and a rewrite to decide late.
 
 ## Routes that are real paths, not bearings
@@ -43,7 +43,7 @@ too. Note also what the graph does **not** say — travel direction (0 one-way l
 ## History beyond the current shift
 
 Scrubbing **within a shift** is no longer deferred — it lives in
-[098/8](../../../../plans/098-dispatch-console/8-the-time-axis/readme.md), client-side, needing no storage.
+[201/8](../../../../plans/201-dispatch-console/8-the-time-axis/readme.md), client-side, needing no storage.
 What stays here is everything that outlives the browser tab: persisting events across shifts, an incident
 archive, and search over it ("what did we see at 14:20 last Tuesday"). That needs a server that keeps the
 log, which is the same server the live feed needs — so the two arrive together or not at all.

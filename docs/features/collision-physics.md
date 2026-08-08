@@ -19,7 +19,7 @@
 - **Clutter collision** (procobj): models that ship a COL collide; the collidable subset always
   equals the rendered subset (density knobs + `procObjLimit` lottery cap), live re-stream on
   knob changes (debounced cache invalidation).
-- **Baked cell collision** (plan 097/3-01): a pak built with `opensa-pack --bake-collision` carries one
+- **Baked cell collision** (plan 200/3-01): a pak built with `opensa-pack --bake-collision` carries one
   `.oscol` per GAME-grid (256) cell, and the runtime reads it instead of binding COL —
   `PakCollisionSource` (engine, shares the pak worker) → `readBakedCell` (game) → the same `ModelColliders`
   the COL path produces, **breakable instance keys included**: `.oscol` v2 resolves the shatter gate at build

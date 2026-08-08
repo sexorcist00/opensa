@@ -4,7 +4,7 @@ Future-work plans for the 0.5.0 cycle. Same convention as the sibling [0.6.0](..
 feature is a chain of small, individually-implementable plans under [plans/](plans/), ending with
 verification + measurements.
 
-## Platform reach — IN PROGRESS as `docs/plans/097-platform-reach/` (2026-08-04)
+## Platform reach — IN PROGRESS as `docs/plans/200-platform-reach/` (2026-08-04)
 
 The lead chain of the cycle, and no longer deferred work, so it no longer lives here. The world on a phone,
 and the frame off the main thread: a phone boots the engine and **cannot open the world**, because a pak
@@ -21,9 +21,9 @@ concept clears. Its phone-side steps are blocked on a device measurement nobody 
 console below is the instrument that takes it — the only surface that opens a real world on a mobile GPU
 today. Until that row exists, everything on a phone stays unproven.
 
-Full chain: [../../plans/097-platform-reach/readme.md](../../plans/097-platform-reach/readme.md).
+Full chain: [../../plans/200-platform-reach/readme.md](../../plans/200-platform-reach/readme.md).
 
-## The dispatch console — IN PROGRESS as `docs/plans/098-dispatch-console/` (2026-08-06)
+## The dispatch console — IN PROGRESS as `docs/plans/201-dispatch-console/` (2026-08-06)
 
 The engine's **second consumer**, declared, and the second lead of the cycle — so it does not live here as
 future work either. `apps/dispatch` is a computer-aided-dispatch operator surface over the streamed world
@@ -38,7 +38,7 @@ to what the map actually draws** — and only that, because cars and peds are dr
 day turns, with one engine serving PC and mobile on a budget rather than a branch — and **takes the phone
 measurement** the platform-reach chain above is waiting for.
 
-Full chain: [../../plans/098-dispatch-console/readme.md](../../plans/098-dispatch-console/readme.md).
+Full chain: [../../plans/201-dispatch-console/readme.md](../../plans/201-dispatch-console/readme.md).
 
 ## Weather-driven wind (own engine)
 

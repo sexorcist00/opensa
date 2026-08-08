@@ -1,4 +1,4 @@
-# 098/7 — The operator's map: camera modes and the tools on top
+# 201/7 — The operator's map: camera modes and the tools on top
 
 What a map application has that a game does not, beyond the world itself. All of it decided 2026-08-06; none
 of it exists today.

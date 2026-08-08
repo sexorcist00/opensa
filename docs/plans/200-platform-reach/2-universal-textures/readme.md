@@ -133,7 +133,7 @@ decision, not just a size one, and vehicles are the assets a player looks at fro
 
 - Re-price mips for model dictionaries on the mobile target.
 - Cross-check the parked lever: [one texture array per vehicle, at its largest texture's
-  size](../../../performance/deferred-optimizations/vehicle-texture-array-buckets.md) — 220 → 34 MB by
+  size](../../../performance/applied/vehicle-texture-array-buckets.md) — 220 → 34 MB by
   buckets, ~24 → 3.5 MB VRAM per type. On a phone that lever is likely to stop being optional; if this chain
   pulls it, it moves to `performance/applied/` with its before/after.
 

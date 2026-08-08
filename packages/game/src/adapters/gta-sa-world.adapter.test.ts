@@ -228,7 +228,7 @@ describe('GtaSaWorldAdapter cell streaming', () => {
   });
 });
 
-describe('GtaSaWorldAdapter baked collision (097/3-01)', () => {
+describe('GtaSaWorldAdapter baked collision (200/3-01)', () => {
   /** One baked cell, as the pak would hand it over: a region no COL in this fixture could produce, so a
    *  collider named `baked_road` proves the bytes came from the pak and not from a parse. */
   const bakedCell = (): Uint8Array =>

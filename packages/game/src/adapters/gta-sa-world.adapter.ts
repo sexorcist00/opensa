@@ -127,7 +127,7 @@ export interface EngineVehicleData {
 }
 
 export interface GtaSaWorldConfig {
-  /** The pak's baked cell collision (plan 097/3-01), when it carries one — the COL bind is skipped for every
+  /** The pak's baked cell collision (plan 200/3-01), when it carries one — the COL bind is skipped for every
    *  cell the bake covers. Absent (or a pak built without `--bake-collision`) simply keeps the COL path.
    *  Its grid must be {@link GtaSaWorldConfig.cellSize}: the constructor refuses a source keyed on another,
    *  because the symptom of a mismatch is a neighbouring cell's colliders, not missing ones. */
@@ -182,7 +182,7 @@ interface VehiclePaint {
 export class GtaSaWorldAdapter implements WorldAdapter {
   readonly cellSize: number;
 
-  /** The pak's baked collision (plan 097/3-01), or null when this pak carries none. */
+  /** The pak's baked collision (plan 200/3-01), or null when this pak carries none. */
   private readonly baked: BakedCollisionSource | null;
   /** Lowercased model names that "smash" per object.dat but carry no RW Breakable atomic (plan 045) —
    *  their shatter mesh is synthesized from the render geometry. Built in {@link prepare}. */
@@ -608,7 +608,7 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   }
 
   /**
-   * One cell's colliders: the pak's BAKE when it carries one for this cell (plan 097/3-01), the COL bind
+   * One cell's colliders: the pak's BAKE when it carries one for this cell (plan 200/3-01), the COL bind
    * otherwise — plus the procedural clutter, which both paths share.
    *
    * The two branches must agree shape for shape: `.oscol` was written by the converter from the same

@@ -1,4 +1,4 @@
-# 098/4 — A console is not a game: the session and the battery
+# 201/4 — A console is not a game: the session and the battery
 
 A game's frame loop runs flat out because a game is always moving. A dispatch map is **idle for most of a
 shift**, on a device that runs hot and goes flat. Nothing in the engine knows the difference yet: the console

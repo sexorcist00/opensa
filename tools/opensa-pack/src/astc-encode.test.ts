@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { createAstcEncoder } from './astc-encode';
 
 /**
- * The ASTC re-encode (plan 097/2-02), on synthetic layers — no game assets, so it runs in CI.
+ * The ASTC re-encode (plan 200/2-02), on synthetic layers — no game assets, so it runs in CI.
  *
  * What is only checkable here: the output declares the layout the uploader allocates against, the mip chain
  * is TRUNCATED at the 4x4 block floor rather than reinterpreted (RGBA8 mips run to 1x1 and ASTC's cannot),

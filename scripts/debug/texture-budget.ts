@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs';
 import { readPakManifest } from '../lib/pak-dir';
 
 /**
- * What a pak costs the GPU, and what it WOULD cost in another texture format (plan 097, chains 2 and 4).
+ * What a pak costs the GPU, and what it WOULD cost in another texture format (plan 200, chains 2 and 4).
  *
  * The question this answers is "how far is the full map from a phone", and it cannot be answered by the file
  * size: a pak's bytes on disk are deflated, while what a device has to hold is the decoded texture pyramid.

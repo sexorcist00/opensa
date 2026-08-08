@@ -1,4 +1,4 @@
-# 098/6 — Three ways to draw the world
+# 201/6 — Three ways to draw the world
 
 One console, one camera, one symbology, one board — and **three sources for what is under them**. Decided
 2026-08-06.
@@ -97,6 +97,6 @@ camera and hands `plan-mode` the same one) and must stay true.
 ## Verification
 
 - The same district, in all three modes, at the same camera pose, with the same units selected.
-- The budget table from the 098 readme, filled in three times — one column per mode.
+- The budget table from the 201 readme, filled in three times — one column per mode.
 - A device with no WebGPU reaches the 2D mode and is told why.
 - A total conversion (not `original`) has all three modes, because all three are generated from its own build.

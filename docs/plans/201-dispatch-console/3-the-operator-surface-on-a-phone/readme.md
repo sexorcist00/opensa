@@ -1,10 +1,10 @@
-# 098/3 — The operator surface on a phone
+# 201/3 — The operator surface on a phone
 
 "It loads" is not "an operator can work it". The compact layout flips at ≤860 CSS px
 (`apps/dispatch/src/ui/use-compact.ts` — a media query, because a phone in landscape, a narrow window and a
 split screen all need the same treatment and none is reliably identifiable any other way) and it was verified
 on an **emulated** Pixel 7 at 412×839 DPR 3. The only real phone in the record is 360×800, and
-[097/4-04](../../097-platform-reach/4-mobile-runtime/readme.md)'s "360 CSS px" target has never been verified
+[200/4-04](../../200-platform-reach/4-mobile-runtime/readme.md)'s "360 CSS px" target has never been verified
 for any surface.
 
 ## UI here is designed, not eyeballed

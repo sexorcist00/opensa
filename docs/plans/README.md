@@ -15,32 +15,60 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 
 ## Engine (`docs/plans/`)
 
-Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`101`, one folder each (066, 073, 074, 078–082, 096–101 carry multi-part sub-plans; 083 kept its
-row but its chain was superseded by 097). Newest first:
+Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI. Upstream's
+chains run `001`–`101`, one folder each (066, 073, 074, 078–082, 096–101 carry multi-part sub-plans; 083 kept
+its row but its chain was superseded by 097); **this fork's own chains live in a `2xx` block of their own**.
+Newest first:
 
-> **THREE NUMBERS MEAN TWO THINGS IN THIS REPO, and it is not a typo.** The fork and upstream both
-> numbered forward from 096 without knowing about each other, so `097`, `098` and `099` each name two
-> unrelated chains — upstream's (CLEO, land vehicles, script-object UV animation) and this fork's
-> (platform reach, the dispatch console, PCAD dispatch). The FOLDERS are distinct and nothing was lost;
-> what is ambiguous is every bare citation, and `CLAUDE.md`'s reading order cites "098" by number. Until
-> the fork's chains are renumbered, cite them by FOLDER — `098-dispatch-console/1-01`, never `098/1-01`.
+> **WHY THE FORK NUMBERS FROM 200.** For two days three numbers meant two things here: the fork and upstream
+> both numbered forward from 096 without knowing about each other, so `097`, `098` and `099` each named two
+> unrelated chains — upstream's (CLEO, land vehicles, script-object UV animation) and this fork's. The
+> folders were distinct and nothing was lost, but every bare citation was ambiguous, including the one
+> `CLAUDE.md`'s reading order makes. Renumbered 2026-08-08 into a block upstream will not reach:
+> **`200-platform-reach`, `201-dispatch-console`, `202-pcad-dispatch`** — the same chains, the same steps,
+> new numbers (`098/1-01` is now `201/1-01`). Anything the fork adds continues from `203`.
 
-- **[099 — PCAD Dispatch](./099-pcad-dispatch/readme.md)** — **THE FINAL PLAN for the fork's dispatch
-  line**, opened 2026-08-06. The product every dispatch doc here serves: a **web dispatch application for a
-  SA-MP server**, paired with a client-side CAD plugin (PCAD), of which this repository owns exactly one
-  thing — **the 3D map component**. Not to be confused with upstream's 099 (script-object UV animations).
-- **[098 — The dispatch console](./098-dispatch-console/readme.md)** — IN PROGRESS, opened 2026-08-06. The
-  engine's second consumer: a CAD operator surface over the streamed world, trimmed to what it actually
-  draws, on a phone — and the only surface in the repo that runs on a mobile GPU, which makes it the
-  instrument for the device measurement the platform-reach chain is blocked on. Eight chains; 1/01 (the
-  inventory) is the live step. Not to be confused with upstream's 098 (all land vehicle types).
-- **[097 — Platform reach](./097-platform-reach/readme.md)** — the device half of the fork's line:
-  universal textures (`--textures astc` landed 2026-08-07), off-main-thread work, WebGL2. Not to be
-  confused with upstream's 097 (CLEO basic).
+### The fork's block (`2xx`)
 
-`001`–`099`, one folder each (066, 073, 074, 078–082, 096–099 carry multi-part sub-plans; 083 kept its
-row but its chain was superseded by 097). Newest first:
+- **[202 — PCAD Dispatch](./202-pcad-dispatch/readme.md)** — **THE FINAL PLAN**, opened 2026-08-06. The
+  product every dispatch doc here now serves: a **web dispatch application for a SA-MP server**, paired with a
+  client-side CAD plugin (PCAD). Three pieces — the plugin, a backend, and the web application — of which this
+  repository owns exactly one thing: **the 3D map component**. The field survey behind it: every dispatch map
+  in this market ([SonoranCAD](https://sonorancad.com/fivem),
+  [SnailyCAD](https://github.com/SnailyCAD/snaily-cadv4)) is a flat tile picture with dots on it, and both are
+  FiveM — nobody has the world, and nobody serves SA-MP. Carries the borrowings from the open-source map
+  engines (screen-space-error LOD, time as an axis, label collision, layer models, the SanMap projection), the
+  three seams and who owns them (self-reported positions are **claims**, not facts), five delivery phases
+  starting with the engine, and the honest statement that the four named budgets may not hold at once.
+  [201](./201-dispatch-console/readme.md) is subordinate to it.
+- **[201 — The dispatch console](./201-dispatch-console/readme.md)** — IN PROGRESS, opened 2026-08-06. The
+  engine's second consumer, declared: a CAD operator surface over the streamed world, trimmed to what it
+  actually draws, on a phone. `apps/dispatch` arrived in one commit with one write-up and no plan, no roadmap
+  row and no line in [project-goals](../project-goals.md) — while being the only surface in the repo that runs
+  on a mobile GPU, and therefore the cheapest instrument for the device measurement 200's phone-side steps are
+  blocked on. Five chains: the map profile (cut what is provably never read — cars, peds, vegetation sway, the
+  day cycle and the weather are protected, and one engine serves PC and mobile), real device truth (the repo's
+  first real-world mobile row, handing 200/1-04 the residency ceiling it refused to invent), the operator
+  surface at 360 CSS px, render-on-demand for a console that idles most of a shift, and picking taken off the
+  `debugPicking` flag it stands on today. A requirements round on the same day added three more: **three
+  display modes** (live render / a baked 3D city map / flat 2D tiles — two thirds of which already exist
+  unrecognised, in `opensa-lod-generator` and `plan-mode.ts`), **the operator's map** (orthographic mode,
+  flyTo, follow, bookmarks, minimap, measuring, drawing, keys, embedding) and **the time axis**, moved forward
+  from 0.6.0 because where time lives in the data model is cheap now and a rewrite later. Owns none of 200's
+  work and duplicates none of it.
+- **[200 — Platform reach](./200-platform-reach/readme.md)** — IN PROGRESS, opened 2026-08-04. The world on a
+  phone, and the frame off the main thread. A phone boots the engine and cannot open the world, because a pak
+  built from SA assets is BC throughout and no mobile GPU has BC — a build-time content decision no runtime
+  relaxation can undo. Five chains: device truth, universal textures, off the main thread, mobile runtime, and
+  a concept-gated WebGL2 fallback; two of them wait on live concepts
+  ([universal transcode](../postmortem/universal-texture-transcode.md),
+  [WebGL2 backend](../concepts/webgl2-fallback-backend.md)). Landed so far: the world's GPU demand read from
+  its manifest before anything streams, the build-time `--platforms` gate over BOTH halves (pak arrays ∪ model
+  dictionaries), and the `--rgba8` defect that gate found — it converted the world and left every car BC.
+
+### Upstream's block
+
+Newest first:
 
 - **[101 — Escalators in OpenSA](./101-escalators/readme.md)** — **PLANNED 2026-08-07**: the steps have
   never moved in our engine. `renderware` decodes the type-10 entry (plan 044) and there is a debug waypoint;
@@ -94,41 +122,6 @@ row but its chain was superseded by 097). Newest first:
   checkpoints (wheel spins → ladder/door/tracks → full build); also fixes mod-installer's silent `.cs`
   deletion on the bake path. Dedicated tooling sub-plan: `scm-disasm` / `cleo-census` / `cleo-run`.
 
-- **[099 — PCAD Dispatch](./099-pcad-dispatch/readme.md)** — **THE FINAL PLAN**, opened 2026-08-06. The
-  product every dispatch doc here now serves: a **web dispatch application for a SA-MP server**, paired with a
-  client-side CAD plugin (PCAD). Three pieces — the plugin, a backend, and the web application — of which this
-  repository owns exactly one thing: **the 3D map component**. The field survey behind it: every dispatch map
-  in this market ([SonoranCAD](https://sonorancad.com/fivem),
-  [SnailyCAD](https://github.com/SnailyCAD/snaily-cadv4)) is a flat tile picture with dots on it, and both are
-  FiveM — nobody has the world, and nobody serves SA-MP. Carries the borrowings from the open-source map
-  engines (screen-space-error LOD, time as an axis, label collision, layer models, the SanMap projection), the
-  three seams and who owns them (self-reported positions are **claims**, not facts), five delivery phases
-  starting with the engine, and the honest statement that the four named budgets may not hold at once.
-  [098](./098-dispatch-console/readme.md) is subordinate to it.
-- **[098 — The dispatch console](./098-dispatch-console/readme.md)** — IN PROGRESS, opened 2026-08-06. The
-  engine's second consumer, declared: a CAD operator surface over the streamed world, trimmed to what it
-  actually draws, on a phone. `apps/dispatch` arrived in one commit with one write-up and no plan, no roadmap
-  row and no line in [project-goals](../project-goals.md) — while being the only surface in the repo that runs
-  on a mobile GPU, and therefore the cheapest instrument for the device measurement 097's phone-side steps are
-  blocked on. Five chains: the map profile (cut what is provably never read — cars, peds, vegetation sway, the
-  day cycle and the weather are protected, and one engine serves PC and mobile), real device truth (the repo's
-  first real-world mobile row, handing 097/1-04 the residency ceiling it refused to invent), the operator
-  surface at 360 CSS px, render-on-demand for a console that idles most of a shift, and picking taken off the
-  `debugPicking` flag it stands on today. A requirements round on the same day added three more: **three
-  display modes** (live render / a baked 3D city map / flat 2D tiles — two thirds of which already exist
-  unrecognised, in `opensa-lod-generator` and `plan-mode.ts`), **the operator's map** (orthographic mode,
-  flyTo, follow, bookmarks, minimap, measuring, drawing, keys, embedding) and **the time axis**, moved forward
-  from 0.6.0 because where time lives in the data model is cheap now and a rewrite later. Owns none of 097's
-  work and duplicates none of it.
-- **[097 — Platform reach](./097-platform-reach/readme.md)** — IN PROGRESS, opened 2026-08-04. The world on a
-  phone, and the frame off the main thread. A phone boots the engine and cannot open the world, because a pak
-  built from SA assets is BC throughout and no mobile GPU has BC — a build-time content decision no runtime
-  relaxation can undo. Five chains: device truth, universal textures, off the main thread, mobile runtime, and
-  a concept-gated WebGL2 fallback; two of them wait on live concepts
-  ([universal transcode](../concepts/universal-texture-transcode.md),
-  [WebGL2 backend](../concepts/webgl2-fallback-backend.md)). Landed so far: the world's GPU demand read from
-  its manifest before anything streams, the build-time `--platforms` gate over BOTH halves (pak arrays ∪ model
-  dictionaries), and the `--rgba8` defect that gate found — it converted the world and left every car BC.
 - **[096 — Video mode](./096-video-mode/readme.md)** — **SHIPPED 2026-07-30/08-01, all eight phases**
   (road graph + seeded routes, autopilot, director + shot table, surveyed tripod stations, the region
   sequencer, the build-time mod-car ledger, the walk + flythrough scenes that complete D3's program, and the

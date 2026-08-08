@@ -91,7 +91,7 @@ describe('ostex codec', () => {
 });
 
 /**
- * ASTC 4x4 (plan 097 chain 2): the format that lets a GPU without BC hold the world at the DESKTOP's price.
+ * ASTC 4x4 (plan 200 chain 2): the format that lets a GPU without BC hold the world at the DESKTOP's price.
  * Its 4x4 block is BC's, which is the whole reason nothing else in the layout had to change — these tests
  * pin that, because the day a non-4x4 ASTC block is added, `ostexMipLayout` stops being right and only a
  * test says so.

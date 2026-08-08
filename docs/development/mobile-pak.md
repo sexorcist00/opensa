@@ -13,7 +13,7 @@ whole recipe, including the case where the phone is the only computer available.
 | `--textures rgba8` (`--rgba8`) | Refuses the DXT passthrough and leaves the pixels uncompressed — a format every GPU reads | **4-8x** the texture memory |
 | `--max-texture N` | Caps every texture edge at N (power of two), halving both axes together so aspect survives | One halving takes back **three quarters** of what the format costs |
 
-**Prefer `--textures astc`** (since 2026-08-07, plan 097/2-02): it is a quarter of `rgba8` on the same texels
+**Prefer `--textures astc`** (since 2026-08-07, plan 200/2-02): it is a quarter of `rgba8` on the same texels
 — measured on a real district, 27.2 MB against 115.4 MB
 ([benchmark](../benchmarks/opensa-engine/2026-08-06-headless-district-texture-budget.json)) — and the same
 cost a desktop BC3 pak pays. `rgba8` remains the fallback while ASTC has not been proven on a device, and the
@@ -100,7 +100,7 @@ RECT=8,-8,11,-5 OUT=./build/phone-ls npm run phone       # ground the district t
 
 **The DISTRICT is the rect.** `DISTRICT=` picks the pak rect, the game spawn and the map's opening point
 together, from the one table the console reads (`apps/dispatch/src/world/districts.ts`; `npx tsx
-scripts/district.ts` lists them). It defaults to **`los-santos-centre`, the district 098/1-01 pinned** — so
+scripts/district.ts` lists them). It defaults to **`los-santos-centre`, the district 201/1-01 pinned** — so
 the default run produces a capture that belongs to the chain's before/after series, which the first real
 mobile row did not. `RECT=`/`SPAWN=` still override for ground the table does not name.
 
@@ -132,7 +132,7 @@ rolldown binding dies with `Illegal instruction` before printing a line, and no 
 ([edge-cases/browser-runtime.md](../edge-cases/browser-runtime.md)). Build with `--base=./` or the asset
 paths will be absolute and 404 from a subfolder.
 
-## Bake the collision too (097/3-01)
+## Bake the collision too (200/3-01)
 
 A phone's CPU makes every main-thread spike several times worse, and the largest named one is a COL parse per
 cell. `--bake-collision` moves it into the converter:

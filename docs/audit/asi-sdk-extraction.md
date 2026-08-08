@@ -71,7 +71,7 @@ proves they still do their job.
 
 ## No benchmark entry, deliberately
 
-[`docs/benchmarks/`](../benchmarks/README.md) carries two families — what a frame costs, and what a
+[`docs/benchmarks/`](../benchmarks/index.md) carries two families — what a frame costs, and what a
 car does. An `.asi` is a build-time artifact that runs inside a different executable and has no
 frame budget in this engine, so its sizes would mix schemas rather than join one. The artifact
 sizes and hashes live in the chain's per-step ledgers, which is where a future A/B will look.

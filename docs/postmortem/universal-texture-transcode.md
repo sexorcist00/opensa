@@ -1,7 +1,7 @@
 # Postmortem — universal textures in `.ostex` (Basis/KTX2 + transcode at load)
 
 **Closed 2026-08-06, NOT by measurement.** Opened 2026-08-04 as the gate on
-[plan 097 / chain 2](../plans/097-platform-reach/2-universal-textures/readme.md); replaced by a **direct
+[plan 200 / chain 2](../plans/200-platform-reach/2-universal-textures/readme.md); replaced by a **direct
 ASTC encode in the converter** (user decision, 2026-08-06) before its go/no-go was taken. The record below is
 left as written, because the questions it poses are the ones the successor has to answer too — they are just
 answered against a cheaper design now.

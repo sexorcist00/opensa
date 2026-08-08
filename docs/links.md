@@ -44,7 +44,7 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
 
 ## 3D map engines & geospatial formats
 
-Surveyed 2026-08-06 for [plan 099](./plans/099-pcad-dispatch/readme.md). **We take ideas and formats from
+Surveyed 2026-08-06 for [plan 202](./plans/202-pcad-dispatch/readme.md). **We take ideas and formats from
 these, never code** — they are WebGL/three.js and we have our own WebGPU renderer, so nothing here is
 linkable even where the licence allows it (Apache-2.0 Cesium, BSD-3 MapLibre, MIT deck.gl/Giro3D). This is a
 reading map: what each one answers, so the survey is not re-derived.
@@ -58,24 +58,24 @@ reading map: what each one answers, so the survey is not re-derived.
 - <https://docs.ogc.org/cs/22-025r4/22-025r4.html> — **3D Tiles** (OGC). Not a format we adopt, but the
   concept we were missing: every tile declares the **geometric error** introduced by drawing it instead of
   its children, and refinement is `ADD` or `REPLACE`. Screen-space-error LOD consumes exactly that number,
-  and our pak does not carry one — see [098/1](./plans/098-dispatch-console/1-the-map-profile/readme.md).
+  and our pak does not carry one — see [201/1](./plans/201-dispatch-console/1-the-map-profile/readme.md).
 - <https://github.com/CesiumGS/3d-tiles> — the schemas beside the spec, and **CZML**: entity properties as
   functions over an interval, driven by a clock. The shape behind
-  [098/8](./plans/098-dispatch-console/8-the-time-axis/readme.md) — time as an axis rather than a field.
+  [201/8](./plans/201-dispatch-console/8-the-time-axis/readme.md) — time as an axis rather than a field.
 - <https://deepwiki.com/maplibre/maplibre-native/3.3-symbol-placement-and-collision-detection> — **MapLibre's
   symbol placement**: collision detection, sort-key priority, allow-overlap, variable placement. The best
   documented answer to "150 labels at city zoom" and the reference for
-  [098/3](./plans/098-dispatch-console/3-the-operator-surface-on-a-phone/readme.md)'s declutter budget.
+  [201/3](./plans/201-dispatch-console/3-the-operator-surface-on-a-phone/readme.md)'s declutter budget.
 - <https://deck.gl/docs/developer-guide/base-maps/using-with-maplibre> — **deck.gl**: the layer model over a
   base map, and interleaved rendering into an existing context. The pattern for data layers restyled at
   runtime over a world whose look is baked.
 - <https://github.com/giro3d-org/Giro3D> — **Giro3D** (successor of iTowns, IGN/Oslandia, three.js): a
   geospatial scene with operator tools — measurement, annotation, cross-sections, elevation profiles. The
-  closest existing thing to what [098/7](./plans/098-dispatch-console/7-the-operator-map/readme.md) needs.
+  closest existing thing to what [201/7](./plans/201-dispatch-console/7-the-operator-map/readme.md) needs.
 - <https://github.com/protomaps/PMTiles> — **PMTiles**: a whole tile pyramid in **one file** on static
   storage, read by HTTP range requests, Hilbert-ordered so neighbours are near each other in the file. The
   right container for the flat-2D mode's tiles
-  ([098/6](./plans/098-dispatch-console/6-display-modes/readme.md)) — our pak is already served as static
+  ([201/6](./plans/201-dispatch-console/6-display-modes/readme.md)) — our pak is already served as static
   range-friendly files, and this removes tile hosting entirely.
 - <https://github.com/ikkentim/SanMap> (Unlicense) — a **GTA-SA → tile-coordinate projection** and a tile
   cutter. The zoom/tile scheme for the flat-2D mode, proven and free.

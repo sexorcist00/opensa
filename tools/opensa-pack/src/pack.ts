@@ -44,7 +44,7 @@ export interface PackOptions {
   alwaysOnLods?: readonly string[];
   /** Bake per-vertex AO/skyVis. ON by default — it stands in for prod's SSAO, so a shipping pak needs it. */
   ao?: boolean;
-  /** Bake every cell's COLLISION into the pak (plan 097/3-01) so the browser never parses a COL. OFF by
+  /** Bake every cell's COLLISION into the pak (plan 200/3-01) so the browser never parses a COL. OFF by
    *  default while the runtime still reads the archives: it costs build time and nothing reads it yet. */
   bakeCollision?: boolean;
   /** Bake per-vertex SUN VISIBILITY — the heavy shadow bake. OFF by default; production converts need it. */
@@ -88,7 +88,7 @@ export interface PackOptions {
   rect?: readonly [number, number, number, number];
   /** Stochastic de-tiling name lists; defaults to the curated `data/stochastic.txt`. */
   stochasticFiles?: readonly string[];
-  /** Which texture format the build WRITES (plan 097/2-02). Defaults to `bc` — SA's own DXT, passed through
+  /** Which texture format the build WRITES (plan 200/2-02). Defaults to `bc` — SA's own DXT, passed through
    *  untouched, desktop-only. See {@link TextureTarget}. */
   textures?: TextureTarget;
   /** Convert only these VEHICLES (lowercased model names); every car when absent. A car left out keeps its
@@ -468,7 +468,7 @@ function readStochasticNames(files?: readonly string[]): Set<string> {
   return names;
 }
 /**
- * The models' half of the texture-format choice (097/2-02): re-encode every model dictionary.
+ * The models' half of the texture-format choice (200/2-02): re-encode every model dictionary.
  *
  * It runs after every asset class has contributed and BEFORE the platform check reads the formats, so what
  * the check reports is what the archives will carry. A no-op for any target but `astc` — `bc` and `rgba8`

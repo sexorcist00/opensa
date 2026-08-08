@@ -1,5 +1,5 @@
 /**
- * The 098/1-01 readout: a small panel that says how much has been sampled and hands the table over.
+ * The 201/1-01 readout: a small panel that says how much has been sampled and hands the table over.
  *
  * It exists because the development machine is a phone ([`docs/development/termux.md`]) — there is no
  * headless browser to capture from, so the capture has to leave through something a thumb can press.

@@ -24,7 +24,7 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  *                      stage leaves whatever an earlier run wrote in its place — only `<out>/.work` is
  *                      cleared — so the two targets can be rebuilt independently in the same `--out`.
  *     --keep-work      keep the intermediate `.work` builds even on a full run.
- *     --bake-collision write every cell's COLLISION into the pak (plan 097/3-01), so the browser never parses
+ *     --bake-collision write every cell's COLLISION into the pak (plan 200/3-01), so the browser never parses
  *                      a COL for a cell the bake covers. Costs build time; OFF by default, because it is the
  *                      A/B switch — the runtime reads the bake when it is there and parses COL when it is
  *                      not, so the SAME tree built twice, one flag apart, is what the claim is measured on.
@@ -81,7 +81,7 @@ async function main(): Promise<void> {
     ...(process.argv.includes('--no-weld-seams') ? { weldSeams: false } : {}),
   };
 
-  // 097/3-01: bake the collision into the pak (the runtime reads it and falls back to COL without it), so
+  // 200/3-01: bake the collision into the pak (the runtime reads it and falls back to COL without it), so
   // the same tree can produce both sides of the A/B by flipping one flag.
   const bakeCollision = process.argv.includes('--bake-collision');
 

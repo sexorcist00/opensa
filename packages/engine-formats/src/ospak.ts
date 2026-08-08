@@ -76,7 +76,7 @@ export interface OspakManifest {
   /** World-grid cell size (engine units) — key "cx,cy,…" → engine-space centre mapping for streaming. */
   cellSize: number;
   /**
-   * Baked cell collision (plan 097/3-01): `"cx,cy"` → range of one `.oscol`.
+   * Baked cell collision (plan 200/3-01): `"cx,cy"` → range of one `.oscol`.
    *
    * **Keyed on {@link OspakManifest.collisionCellSize}, not on {@link OspakManifest.cellSize}.** Collision
    * streams on the GAME grid (256) while render cells are 250 — two tessellations of one world, and a reader

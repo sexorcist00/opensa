@@ -1,9 +1,9 @@
-# 098 — The dispatch console: a CAD map, trimmed to what it draws, on a phone
+# 201 — The dispatch console: a CAD map, trimmed to what it draws, on a phone
 
-> **This chain is subordinate to [099 — PCAD Dispatch](../099-pcad-dispatch/readme.md)**, the final plan.
+> **This chain is subordinate to [202 — PCAD Dispatch](../202-pcad-dispatch/readme.md)**, the final plan.
 > That document is the product — a web dispatch application for a SA-MP server, paired with a client-side CAD
 > plugin — and OpenSA's role in it is exactly one component: **the 3D map**. Everything below is the engine
-> and map work that component needs. Read 099 first for why any of it is being done.
+> and map work that component needs. Read 202 first for why any of it is being done.
 
 **The engine's second consumer, declared** (priority set 2026-08-06). `apps/dispatch` is a computer-aided-
 dispatch operator surface over the streamed world — a top-down 3D map, live units, a call queue, and
@@ -16,10 +16,10 @@ Two facts make that gap expensive right now.
 
 **This is the surface that reaches a phone.** It is the only one in the repo that does. The game cannot: a
 pak built from SA assets is BC throughout and no mobile GPU has BC, which is the whole reason
-[097](../097-platform-reach/readme.md) exists. The console already opens an `--rgba8` world today — no gate,
-no pending concept. Meanwhile the project's entire mobile evidence base is **one synthetic row**, and 097
+[200](../200-platform-reach/readme.md) exists. The console already opens an `--rgba8` world today — no gate,
+no pending concept. Meanwhile the project's entire mobile evidence base is **one synthetic row**, and 200
 says so itself: *"nothing here has been run on the phone"*. Its step
-[1/04](../097-platform-reach/1-device-truth/readme.md) deliberately refused to write a residency ceiling
+[1/04](../200-platform-reach/1-device-truth/readme.md) deliberately refused to write a residency ceiling
 rather than fit a constant before a device was measured. This chain is how that measurement gets taken.
 
 **A map view never reads part of what it ships — and only that part may be cut.** The direction is to
@@ -60,7 +60,7 @@ Every number is already in the record.
 | Cold entry into a district | first frame `cell-collision-read` **235 ms**, then ~20 frames of 110–170 ms | 093 sweep |
 | Boot frame | **576.1 ms** | 091 |
 | The shareable console | ~490 kB of ASCII-escaped JS, single-file **for `?demo=1` only** — the pak worker is a separate `assets/pak-worker-*.js` chunk | [features/dispatch-console.md](../../features/dispatch-console.md#verification) |
-| BC pak reference | 1,272,901,632 B at 1137 cells | [universal-texture concept](../../concepts/universal-texture-transcode.md) |
+| BC pak reference | 1,272,901,632 B at 1137 cells | [universal-texture concept](../../postmortem/universal-texture-transcode.md) |
 
 Read together: the desktop engine is GPU-bound in steady state and main-thread-bound in transients, and the
 phone has never been measured against real content at all. So the order is **cut the dead weight, then
@@ -91,7 +91,7 @@ measurement rather than an argument.
 | # | Chain | Why here |
 | --- | --- | --- |
 | 1 | [The map profile](1-the-map-profile/readme.md) | Dropping bytes nothing reads needs no device to justify it, and it changes every number the rest of the chain is tuned against |
-| 2 | [Real device truth](2-real-device-truth/readme.md) | The first real mobile row in this repo, and it should be a row of what we intend to ship. Hands 097 the ceiling it refused to invent |
+| 2 | [Real device truth](2-real-device-truth/readme.md) | The first real mobile row in this repo, and it should be a row of what we intend to ship. Hands 200 the ceiling it refused to invent |
 | 3 | [The operator surface on a phone](3-the-operator-surface-on-a-phone/readme.md) | "It loads" is not "an operator can work it" — 360 CSS px, touch, legibility, and the no-GPU floor |
 | 4 | [A console is not a game](4-a-console-is-not-a-game/readme.md) | A game is always moving; a dispatch map idles most of a shift on a device that runs hot and flat |
 | 5 | [Symbology and picking as product](5-symbology-and-picking-as-product/readme.md) | The console's central interaction stands on a flag named `debug`, and its units are debug lines |
@@ -117,7 +117,7 @@ step's own section carries the budget it must fit and the number it owes.
 | 2/01 | A phone-sized district pak | `--rgba8` over the pinned district, profiled vs unprofiled |
 | 2/02 | Serve it from the shareable build | close the pak-worker chunk gap so a real `?src=` streams |
 | 2/03 | The field run | **the repo's first real-world mobile benchmark row** |
-| 2/04 | The residency ceiling, derived | the number 097/1-04 refused to invent, handed back |
+| 2/04 | The residency ceiling, derived | the number 200/1-04 refused to invent, handed back |
 | **3** | **[The operator surface on a phone](3-the-operator-surface-on-a-phone/readme.md)** | |
 | 3/01 | 360 CSS px | the layout spec, fixed before code |
 | 3/02 | Gestures on real touch hardware | the three re-cast desk gestures, verified where a mouse cannot fail |
@@ -149,18 +149,18 @@ step's own section carries the budget it must fit and the number it owes.
 | 8/03 | The clock and the timeline | scrub, ×2/×8, live; game hour vs wall time kept apart on screen |
 | 8/04 | Trails | the last N minutes, on the same ground-following work as 7/05 |
 
-Above all of it sits [099](../099-pcad-dispatch/readme.md)'s phase order: **0** measure (1–2), **1** the three
+Above all of it sits [202](../202-pcad-dispatch/readme.md)'s phase order: **0** measure (1–2), **1** the three
 modes (6), **2** speak PCAD's protocol (+8), **3** the map becomes vibecode's module 10, **4** what PCAD owes
 back (publish rate, positions on foot).
 
 ## What this chain does NOT own
 
-[097](../097-platform-reach/readme.md) keeps all of it, and 098 duplicates none of it: universal texture
+[200](../200-platform-reach/readme.md) keeps all of it, and 201 duplicates none of it: universal texture
 transcode and its concept gate, workers and `crossOriginIsolated` transport, the runtime read of the baked
 collision, the WebGL2 fallback backend and its concept gate, and the game shell's touch controls. Where this
 chain needs one of those, it says so and waits rather than building a second version.
 
-The relationship runs the other way too: 097's phone-side steps are blocked on a device measurement nobody
+The relationship runs the other way too: 200's phone-side steps are blocked on a device measurement nobody
 has taken, and [2/03](2-real-device-truth/readme.md) is the cheapest way to take it.
 
 ## Ruled out, 2026-08-06
@@ -203,7 +203,7 @@ converts the pinned district), open the inventory URL it prints, let it settle p
 JSON. That capture is what closes 1/01 — with, for the first time, an owner for the 94 %.
 
 **Two variables moved between that capture and the 08-07 row, and the row must say so.** The ground changed
-(Ganton → the pinned district) and, since [097/2-02](../097-platform-reach/2-universal-textures/readme.md)
+(Ganton → the pinned district) and, since [200/2-02](../200-platform-reach/2-universal-textures/readme.md)
 landed, the phone workflow writes **ASTC** rather than RGBA8 by default — a quarter of the texture memory on
 the same texels. So the pinned-district capture is the chain's **new baseline**, not a comparison against
 239 MB / 31 fps: the old row was already off-series. What it must not do is claim a delta against it. The pak

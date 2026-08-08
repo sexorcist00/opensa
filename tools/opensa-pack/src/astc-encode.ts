@@ -1,5 +1,5 @@
 /**
- * RGBA8 `.ostex` → ASTC 4x4 `.ostex` (plan 097 chain 2, step 02).
+ * RGBA8 `.ostex` → ASTC 4x4 `.ostex` (plan 200 chain 2, step 02).
  *
  * A GPU without BC can only take `--rgba8` today, and RGBA8 costs 8.5x a BC1 payload and 4.2x an ASTC one on
  * SA's own textures (`docs/benchmarks/opensa-engine/2026-08-06-headless-district-texture-budget.json`) — which

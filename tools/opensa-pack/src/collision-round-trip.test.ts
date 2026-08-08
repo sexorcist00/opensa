@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { bakeCellCollision } from './pack-collision';
 
 /**
- * The WHOLE chain in one test (plan 097/3-01): regions → bake → `.oscol` → a real `.ospak` → a byte-range
+ * The WHOLE chain in one test (plan 200/3-01): regions → bake → `.oscol` → a real `.ospak` → a byte-range
  * read → `PakCollisionSource` → `GtaSaWorldAdapter` → the colliders the physics layer consumes.
  *
  * Every unit on that path is tested on its own; what is only testable HERE is that they agree — the manifest

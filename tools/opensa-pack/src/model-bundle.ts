@@ -33,7 +33,7 @@ export interface ModelBundles {
    *  to answer this would re-encode the whole game. */
   ostexFormats(): OstexFormatId[];
   /** Rewrite every accumulated dictionary array through `transform`, returning how many were rewritten.
-   *  The texture-format pass (plan 097/2-02) is the only caller and runs AFTER every class has contributed,
+   *  The texture-format pass (plan 200/2-02) is the only caller and runs AFTER every class has contributed,
    *  so no asset class has to know which format the build targets. Zero-length placeholders — a model that
    *  binds the world's arrays instead of carrying its own — are left alone. */
   retexture(transform: (array: Uint8Array) => Promise<Uint8Array>): Promise<number>;

@@ -24,7 +24,7 @@ export const TEXTURE_STATUS: readonly string[] = [
  *
  * Only the `fetch` loader downloads and caches — a picked folder and a served dir are read where they are, so
  * a cache has nothing to do with them. When Cache Storage is unavailable the download is disposable, and
- * silence there costs the whole game again on the next visit (plan 097/4-06). Empty ⇒ nothing to say.
+ * silence there costs the whole game again on the next visit (plan 200/4-06). Empty ⇒ nothing to say.
  */
 export function cacheNote(loader: AssetLoaderKind): string {
   if (loader !== 'fetch') {

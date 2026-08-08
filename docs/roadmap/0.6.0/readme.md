@@ -21,14 +21,14 @@ Full plan: [plans/02-water-realism/readme.md](plans/02-water-realism/readme.md).
 
 ## CAD depth — the dispatch console's missing half
 
-The console ships in 0.5.0 ([plan 098](../../plans/098-dispatch-console/readme.md)) as a real map with a mock
+The console ships in 0.5.0 ([plan 201](../../plans/201-dispatch-console/readme.md)) as a real map with a mock
 desk: real world, real streaming, real picking, real operator chrome — and a client-side simulation standing
 in for the operations feed. This is what a working dispatch system has that a mock does not: the **live feed**
 (contract first — the source is a native CAD plugin on the client, the seam is already named in
 `apps/dispatch/src/ops/sim.ts`, and there is no networking anywhere in this repo yet), **real routes** instead
 of bearings (blocked on the `original`-only vehicle node graph), **history across shifts**, **multi-operator**,
 and **install + offline**. Deferred on 2026-08-06 by decision rather than difficulty — except the within-shift
-time axis, which moved forward into [098/8](../../plans/098-dispatch-console/8-the-time-axis/readme.md).
+time axis, which moved forward into [201/8](../../plans/201-dispatch-console/8-the-time-axis/readme.md).
 
 Full plan: [plans/05-dispatch-cad-depth/readme.md](plans/05-dispatch-cad-depth/readme.md).
 ## Air, water and rail vehicles (IDEA — parked recon facts)

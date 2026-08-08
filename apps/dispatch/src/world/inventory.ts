@@ -1,5 +1,5 @@
 /**
- * The 098/1-01 inventory: what a map view actually costs per frame, measured before anything is cut.
+ * The 201/1-01 inventory: what a map view actually costs per frame, measured before anything is cut.
  *
  * Two rules this collector exists to satisfy, both from the plan:
  *
@@ -8,7 +8,7 @@
  * - **It states what it could NOT measure.** On a phone there is no `timestamp-query`, so every GPU pass
  *   time is zero — not cheap, *absent*. A report that prints `gpuPassMs 0.0` beside real CPU numbers is a
  *   report that will be read six months later as "the GPU was free", which is the exact failure the mobile
- *   benchmark schema was written to prevent (097/1-02).
+ *   benchmark schema was written to prevent (200/1-02).
  *
  * Frame cost has three halves — the third one added after the first real capture, which is the point of it:
  *
@@ -299,13 +299,13 @@ function warningsFor(capture: { bodyMeanMs: number; cellsTotal: number; district
     warnings.push(`only ${frames} frames sampled — let it settle to at least ${MIN_FRAMES} before citing it`);
   }
   if (district === UNNAMED_DISTRICT) {
-    warnings.push('district not named — pass ?district=<name>, 098/1-01 pins one and the row has to say which');
+    warnings.push('district not named — pass ?district=<name>, 201/1-01 pins one and the row has to say which');
   } else if (district !== PINNED_DISTRICT) {
     // The 2026-08-07 row said this in a paragraph somebody had to write by hand AFTER the capture was filed.
     // A capture that says it itself is the difference between a caught mistake and a session of archaeology.
     const known = district in DISTRICTS ? '' : ' (and it is not a district this build knows at all)';
     warnings.push(
-      `taken on '${district}'${known}, not on '${PINNED_DISTRICT}' which 098/1-01 pinned — a valid ` +
+      `taken on '${district}'${known}, not on '${PINNED_DISTRICT}' which 201/1-01 pinned — a valid ` +
         "measurement of that ground, and NOT part of this chain's before/after series",
     );
   }

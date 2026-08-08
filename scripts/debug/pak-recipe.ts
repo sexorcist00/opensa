@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * What is this pak, and is it the one being asked for? (098 chain 2 / the phone workflow.)
+ * What is this pak, and is it the one being asked for? (201 chain 2 / the phone workflow.)
  *
  * A pak costs minutes to hours on a phone, so it is built once and reused for dozens of runs — and the
  * failure that makes reuse dangerous is silent: asking for a different rect, or the other side of the

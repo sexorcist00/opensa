@@ -1,4 +1,4 @@
-# 098/1 — The map profile: cut what is dead, keep what is alive
+# 201/1 — The map profile: cut what is dead, keep what is alive
 
 **The lead chain.** Trim the engine to what this surface actually uses — and nothing further.
 
@@ -56,7 +56,7 @@ Record two things beyond the tables, both of which later steps depend on and nei
 
 - **whether any per-cell error metric is present** in the pak — **step 05** needs one and
   the answer is expected to be no;
-- **the district**, pinned here and reused by every later measurement in 098.
+- **the district**, pinned here and reused by every later measurement in 201.
 
 ### The measurement district — pinned once, here
 
@@ -94,9 +94,9 @@ analysed (standing rule), naming the pak build that was read.
 
 **On which machine — settled 2026-08-06: the phone is the baseline.** This chain was written as *desktop
 baseline first, phone second*, and the development machine is an Android phone
-([development/termux.md](../../../development/termux.md)). So every number in 098 is taken on the device the
+([development/termux.md](../../../development/termux.md)). So every number in 201 is taken on the device the
 product targets, and none of them is comparable to the repo's existing desktop rows — which the mobile
-benchmark schema already declares as a rule ([097/1-02](../../097-platform-reach/1-device-truth/readme.md)).
+benchmark schema already declares as a rule ([200/1-02](../../200-platform-reach/1-device-truth/readme.md)).
 
 **The instrument exists:** `?inventory=1` collects the frame half and hands it over through a copy button,
 because there is no headless capture on this machine. Invocation and what it cannot measure:

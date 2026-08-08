@@ -24,7 +24,7 @@ is the machine.
 `NODE_OPTIONS=--max-old-space-size=12288`. That is a desktop number and no phone will honour it. If a pak
 build runs on the device, the flag has to come down to what the phone has and the build has to be sized to
 fit — a district rather than the whole state is the obvious lever, and it is the same district
-[098/1-01](../plans/098-dispatch-console/1-the-map-profile/readme.md) pins for measurement anyway.
+[201/1-01](../plans/201-dispatch-console/1-the-map-profile/readme.md) pins for measurement anyway.
 
 **There is no headless capture path.** Much of `scripts/debug/` and all of `e2e/` drive a browser through
 Playwright. Here the equivalent is: run `npm run dev` in Termux and open the page in the phone's own browser
@@ -34,14 +34,14 @@ another way rather than assume `npx playwright` will run.
 
 ## What this does to the measurement plan
 
-[098](../plans/098-dispatch-console/readme.md) is written as *desktop baseline first, phone second* — chain 1
+[201](../plans/201-dispatch-console/readme.md) is written as *desktop baseline first, phone second* — chain 1
 takes its before/after on a desktop and chain 2 re-takes it on a phone. **With no desktop, that ordering does
 not hold as written.** Two honest ways out, and the chain says which it took rather than quietly producing
 one column:
 
 1. **The phone is the baseline.** Everything is measured on the one machine there is. The numbers stop being
    comparable to the repo's existing desktop rows — which the mobile benchmark schema
-   ([097/1-02](../plans/097-platform-reach/1-device-truth/readme.md)) already declares as a rule — and in
+   ([200/1-02](../plans/200-platform-reach/1-device-truth/readme.md)) already declares as a rule — and in
    exchange every number is taken on the device the product actually targets.
 2. **A desktop is borrowed** for the baseline only, and the phone rows stay the ones that decide anything.
 

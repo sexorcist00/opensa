@@ -123,7 +123,7 @@
   text-transform: uppercase;
 }
 
-/* The standing note (097/4-06): a sentence, not a status — it wraps, keeps its case, and must stay
+/* The standing note (200/4-06): a sentence, not a status — it wraps, keeps its case, and must stay
    readable on the 360 CSS px this chain targets. */
 .sa-status--note {
   max-width: 420px;

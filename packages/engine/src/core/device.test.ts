@@ -4,7 +4,7 @@ import { installFakeWebGpu } from '../test/fake-device';
 import { describeDevice, initDevice } from './device';
 
 /**
- * The no-BC emulation gate (plan 097/1-03).
+ * The no-BC emulation gate (plan 200/1-03).
  *
  * A phone was unbootable until 2026-08-04 because `initDevice` listed `texture-compression-bc`
  * unconditionally, and `requestDevice` REJECTS a required feature the adapter does not carry. Nothing caught

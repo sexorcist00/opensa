@@ -23,12 +23,12 @@ observations that killed it, and the conditions under which it might be worth re
   [plan 100](../plans/100-2dfx-at-lod-range/00-research-and-findings.md). The row stays so the death is not
   edited out of the record — a plan that died and came back is worth knowing about
 - [universal-texture-transcode.md](./universal-texture-transcode.md) — Basis/KTX2 in `.ostex` with a
-  transcode at load (plan 097 chain 2's original gate), replaced 2026-08-06 by a DIRECT ASTC encode in the
+  transcode at load (plan 200 chain 2's original gate), replaced 2026-08-06 by a DIRECT ASTC encode in the
   converter. Not measured away: decided away, on the loss budget (one generation instead of two), on the
   fact that the target device carries ASTC natively, and on the moving parts a transcoder adds to the worker.
   The price accepted is that one pak no longer serves every GPU. Revisit when a single artefact for all
   devices becomes a requirement.
-- [097-hotring-hotknife-intake.md](./097-hotring-hotknife-intake.md) — two CLEO vehicle mods
+- [200-hotring-hotknife-intake.md](./097-hotring-hotknife-intake.md) — two CLEO vehicle mods
   analysed and cut the SAME day (2026-08-05) by the user's call: hotknife (paintjobs) cut
   entirely; hotring's CAR kept but `no_lights.cs` skipped — a polling loop for a one-shot effect
   belongs engine-native. Keeps the verified natives (`SetLightStatus@0x6C2100`,

@@ -1,5 +1,5 @@
 /**
- * Baked cell collision, read out of the pak (plan 097/3-01, the runtime half).
+ * Baked cell collision, read out of the pak (plan 200/3-01, the runtime half).
  *
  * The bake put the COL parse in the converter; this is what makes the runtime stop doing it. The bytes ride
  * the SAME pak worker the cells do — one file handle, one range reader, no second fetch path — and a read is

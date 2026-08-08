@@ -20,7 +20,7 @@ export interface BuilderConfig {
    */
   pack: {
     ao: boolean;
-    /** Bake every cell's COLLISION into the pak (plan 097/3-01). OFF by default: the runtime reads it when
+    /** Bake every cell's COLLISION into the pak (plan 200/3-01). OFF by default: the runtime reads it when
      *  it is there and parses COL when it is not, so this is the A/B switch — two paks from the same tree,
      *  one flag apart — not a decision the builder should be making for a field run. `--bake-collision`. */
     bakeCollision: boolean;

@@ -18,7 +18,7 @@
   arrays in the browser (`vehicle/textures.ts`, `ped/build-ped-model.ts`) off the same decoder.
   Names are matched lowercased; `hasAlpha` drives the alpha-test / blend class.
 - **The passthrough is conditional on the build's TARGET** (`opensa-pack --textures astc|bc|rgba8`, plan
-  097/2-02). `bc` is the default and is the passthrough described above. The other two refuse it — a mobile
+  200/2-02). `bc` is the default and is the passthrough described above. The other two refuse it — a mobile
   GPU has no BC at all — so every layer is decoded, runs the alpha pipeline and is written as RGBA8; `astc`
   then re-encodes the finished array to ASTC 4x4 (`tools/opensa-pack/src/astc-encode.ts`), one byte per texel
   against RGBA8's four. Which GPU families the result can be displayed on follows from that one choice and

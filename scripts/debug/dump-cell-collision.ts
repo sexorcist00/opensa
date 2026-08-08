@@ -7,7 +7,7 @@ import { readPakManifest } from '../lib/pak-dir';
 
 /**
  * Does this pak actually carry the collision the runtime would read, and is it keyed on the grid the runtime
- * streams on? (plan 097/3-01.)
+ * streams on? (plan 200/3-01.)
  *
  * The failure this answers is the silent one: a pak baked on the RENDER grid (250) instead of the GAME grid
  * (256) loads, renders, and drops the player through a strip of world — so the first thing printed is the

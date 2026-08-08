@@ -1,5 +1,5 @@
 /**
- * `.oscol` — one CELL's collision, parsed at BUILD time (plan 097/3-01).
+ * `.oscol` — one CELL's collision, parsed at BUILD time (plan 200/3-01).
  *
  * The browser has no business parsing a 2004 archive format. Reading COL at runtime is the largest named
  * spike cost this project has measured — **9.6–78.3 ms per cell** for the parse alone, on the main thread,

@@ -175,7 +175,7 @@ export class AssetFetchLoader implements AssetLoader {
   }
 
   /**
-   * Say ONCE, before the first byte, that this visit's download is disposable (plan 097/4-06).
+   * Say ONCE, before the first byte, that this visit's download is disposable (plan 200/4-06).
    *
    * The no-op cache breaks nothing — which is the problem. A phone reaching a dev machine at
    * `http://<lan-ip>:5173` has no secure context, so every visit re-downloads the whole game over someone's

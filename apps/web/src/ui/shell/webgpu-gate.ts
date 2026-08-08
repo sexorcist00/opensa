@@ -7,7 +7,7 @@
  * we happened to ship was BC. Whether a given world can be displayed is read from that world's manifest
  * instead (`requireWorldSupport`, at stream setup), where the answer is true and specific.
  *
- * What it reports is a REASON, not a boolean (plan 097/4-05). "No WebGPU in this browser" and "WebGPU is
+ * What it reports is a REASON, not a boolean (plan 200/4-05). "No WebGPU in this browser" and "WebGPU is
  * here and the adapter was refused" are different facts with different remedies, and the phone case is the
  * second one: a Mali-G51 on Chromium 148 has WebGPU and returns a **null adapter** because of the driver
  * blocklist (`docs/edge-cases/browser-runtime.md`, 2026-08-04). Telling that user to "use a recent Chrome"
