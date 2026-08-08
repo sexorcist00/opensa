@@ -147,6 +147,33 @@ there is no per-file ceiling and no slot ceiling to pay it against. Our cap was 
 here. Capture:
 [`gta-sa-original/reference-install-config.md`](../../../../gta-sa-original/reference-install-config.md).
 
+### Could a STOCK build do what ProperFixes does? No — and not because of our layout
+
+Re-checked against the mod on 2026-08-08, because "they ship 3.77× of what we do, so why are we capped at
+1.18×?" is the obvious question and it deserves an arithmetic answer rather than a doc reference.
+
+- **Their six files are 9 520–9 627 rows each — 2.4× SA's 4 096-slot `LoadScene` buffer.** On a stock install
+  those files are the ghost-barrier corruption, not a density. They fit because OLA sets
+  `EntitiesPerIpl = unlimited`, which is why the suite's readme REQUIRES it. So their 6 slots are not a
+  layout we could copy; they are a ceiling we would have to remove first.
+- **Priced legally, their own layout does not reach the target on stock either.** At the 4 096 budget a
+  LOD-less text layout holds ~4 096 objects per file, so 57 583 objects need **15 slots**. Stock has
+  **one** free. The wall is not our efficiency — it is that the base map plus our other generators already
+  spend 38 of the 39, and procobj holds 8 of them.
+- **Our objects cost two rows each against that same buffer, theirs cost one.** A linked pair spends a
+  permanent text LOD row plus a binary HD row; an unlinked pair spends two binary rows — and the buffer takes
+  an area's text rows *and* its streams together
+  ([sa-runtime-limits](../../../../edge-cases/sa-runtime-limits.md)). So an area carries ~2 000 of our
+  objects where it would carry ~4 096 of theirs. **That is the same 2.36× rows/object advantage read from the
+  other side**: we win on the map-wide permanent-row budget and pay for it in per-area capacity, because our
+  objects carry LODs and theirs carry none (`lod = -1` throughout).
+
+So on stock the 1.18× is real and it is not a consequence of how we split areas. It follows from one free
+slot and ~2 000 objects per area, and no layout available to us moves it: fewer, larger files breach the
+per-file buffer; more files breach the slot array. **The lever that exists on stock is elsewhere — the ~30
+slots the base map itself spends** (mod-installer already compacts `int_cont` + `gen_int1` down to 28). That
+has never been costed, and it is the only thing that would make stock a density target at all.
+
 **What that leaves as the real constraint on this target: int16, then memory and frame time.** This is where
 the corrected baseline changes the answer. At 38 096 map-wide permanent rows the target clears the int16
 ceiling by 5 329, and int16 is the one thing OLA demonstrably does NOT lift — so the target is reachable

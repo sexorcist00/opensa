@@ -105,7 +105,17 @@ a too-conservative build looks exactly like a successful one.
       is ~2 slots back at current density and more at raised density. **`sa-stock` is the only target this
       buys anything on** — it is where slots are the wall — which is itself the argument for doing it there
       and not paying its complexity elsewhere. Measure the recovered slots and check no area breaches the
-      budget after it; this is 00's hygiene task, executed.
+      budget after it; this is 00's hygiene task, executed. **Do not expect much**: the areas are already at
+      ~88 % of budget (6 487 permanent rows + ~24 000 stream rows across 8 areas, both counted against the
+      same buffer), which is why this is worth ~2 slots and not 6.
+- [ ] **Cost the ~30 slots the BASE MAP spends — the only lever that would make `sa-stock` a density
+      target.** Our 8 procobj areas plus 1 impostor area are already 9 of the ~9 free slots; everything else
+      is stock's own map, which mod-installer only partly compacts (`int_cont` + `gen_int1` → 28). Nothing
+      has ever costed merging more of it. Until someone does, 1.18× is the honest stock ceiling and
+      [02](02-density-model.md)'s stock profile stays a redistribution. See
+      [density-target.md](../density-target.md) for why no layout available to us moves the wall: fewer,
+      larger files breach the 4 096-row per-area buffer, more files breach the 39-slot array, and even a
+      LOD-less layout like ProperFixes' needs 15 legal slots for the target.
 - [ ] Report the slot, row and object cost of a build as a first-class output (like `checkImgIdBudgets`), per
       target, so a density profile's price is visible when it is CHOSEN rather than when the build fails.
       Today the number takes a script to recover, which is why this plan's premise went a fortnight without
