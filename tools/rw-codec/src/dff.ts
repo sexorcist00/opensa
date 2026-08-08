@@ -121,6 +121,34 @@ export function extract2dfxEntries(bytes: Uint8Array, keepTypes?: ReadonlySet<nu
 }
 
 /**
+ * Remove every 2d-effect entry `keep` rejects, from every geometry's 2dfx section, leaving the kept ones and
+ * the rest of the file byte-for-byte intact. This is the SUBTRACTIVE half of the LOD carry policy: a verbatim
+ * byte-copy clone exists to preserve plugins our writers do not model (breakable, and whatever else), so a
+ * type it must not carry is cut out of the copy rather than the whole model being re-encoded.
+ *
+ * Byte-faithful via {@link readRw}/{@link writeRw}; returns the input unchanged (identity) when `keep` accepts
+ * everything, so it is safe to call on every clone.
+ */
+export function strip2dfxEntries(bytes: Uint8Array, keep: (type: number) => boolean): Uint8Array {
+  const file = readRw(bytes);
+  let removed = 0;
+  for (const geometry of collectGeometries(file.chunks)) {
+    const extension = geometry.children?.find((child) => child.type === RW_EXTENSION);
+    const fx = extension?.children?.find((child) => child.type === RW_TWO_D_EFFECT && child.data);
+    if (!fx?.data) {
+      continue;
+    }
+    const filtered = filterEntries(fx.data, keep);
+    if (filtered) {
+      fx.data = filtered.data;
+      removed += filtered.removed;
+    }
+  }
+
+  return removed > 0 ? writeRw(file) : bytes;
+}
+
+/**
  * Remove **particle** 2d-effect entries (type 1 — `effects.fxp` emitters) from every geometry's 2dfx section,
  * leaving lights/coronas, road signs, escalators and everything else byte-for-byte intact. Used when cloning an HD
  * model into a far LOD: the verbatim clone would otherwise carry the emitter, so the effect (factory smoke, fire,
@@ -131,22 +159,7 @@ export function extract2dfxEntries(bytes: Uint8Array, keepTypes?: ReadonlySet<nu
  * particle entries, so it is safe to call on every clone.
  */
 export function stripParticleEffects(bytes: Uint8Array): Uint8Array {
-  const file = readRw(bytes);
-  let removed = 0;
-  for (const geometry of collectGeometries(file.chunks)) {
-    const extension = geometry.children?.find((child) => child.type === RW_EXTENSION);
-    const fx = extension?.children?.find((child) => child.type === RW_TWO_D_EFFECT && child.data);
-    if (!fx?.data) {
-      continue;
-    }
-    const filtered = filterParticleEntries(fx.data);
-    if (filtered) {
-      fx.data = filtered.data;
-      removed += filtered.removed;
-    }
-  }
-
-  return removed > 0 ? writeRw(file) : bytes;
+  return strip2dfxEntries(bytes, (type) => type !== PARTICLE_2DFX);
 }
 
 function concat(parts: readonly Uint8Array[]): Uint8Array {
@@ -163,10 +176,13 @@ function concat(parts: readonly Uint8Array[]): Uint8Array {
 
 /**
  * Rewrite a 2dfx section's raw bytes (`u32 count`, then entries of `position(12) + type(4) + dataSize(4) + data`)
- * keeping every non-particle entry verbatim. Returns `null` when there is nothing to remove (leave the leaf as-is),
- * else the new bytes + how many particle entries were dropped. Any bytes trailing the last entry are preserved.
+ * keeping every entry `keep` accepts, verbatim. Returns `null` when there is nothing to remove (leave the leaf
+ * as-is), else the new bytes + how many entries were dropped. Any bytes trailing the last entry are preserved.
  */
-function filterParticleEntries(data: Uint8Array): null | { data: Uint8Array; removed: number } {
+function filterEntries(
+  data: Uint8Array,
+  keep: (type: number) => boolean,
+): null | { data: Uint8Array; removed: number } {
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const count = view.getUint32(0, true);
   const kept: Uint8Array[] = [];
@@ -181,10 +197,10 @@ function filterParticleEntries(data: Uint8Array): null | { data: Uint8Array; rem
     if (entryEnd > data.length) {
       return null;
     }
-    if (entryType === PARTICLE_2DFX) {
-      removed += 1;
-    } else {
+    if (keep(entryType)) {
       kept.push(data.subarray(pos, entryEnd));
+    } else {
+      removed += 1;
     }
     pos = entryEnd;
   }
