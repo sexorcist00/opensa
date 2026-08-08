@@ -43,18 +43,22 @@ turned out to be inseparable** — `opensa-lod-generator` reads the policy direc
 per-space transform are one change; they shipped together. 04 is independent and can go first — it is the step
 that decides how far smoke is drawn at all. 05 is the real-SA line and depends only on 01.
 
-**All five shipped 2026-08-08. One thing is still owed: the FIELD CHECK**, and it cannot run before a
-rebuild — the pack's LOD input is a `.work` intermediate the pipeline deletes as it consumes it, so no built
-tree can be asked whether a chimney smokes at 600 u. Three things ride on that one run: the visual
-verification in [03](03-lod-bundle-reads-2dfx.md), the look verdict for both `docs/hacks/` entries from
-[04](04-authored-cull-distance.md), and confirmation that nothing doubles at the transition distance.
+**All five shipped 2026-08-08, and the FIELD CHECK ran the same day** on the first pak built after the chain
+(buildTime `11:42 08-08-2026`). It needed that build: the pack's LOD input is a `.work` intermediate the
+pipeline deletes as it consumes it, so no earlier tree could be asked whether a chimney smokes at 600 u.
 
-**It now has a scheduled home (decided 2026-08-08).** Plan 07's working rule had banned a full pmb rebuild
-until its procobj chain finishes, which would have left this chain unverified for the length of another one.
-That rule is **lifted**: a rebuild is now gated on what it CAPTURES rather than on when it is taken, and the
-manifest — this plan's three items plus 07's baseline numbers — is in
+| Owed | Verdict |
+| --- | --- |
+| a chimney smokes past the HD boundary ([03](03-lod-bundle-reads-2dfx.md)) | **PASS** — LV plant stacks plume at 300/400/440/**600 u** |
+| nothing doubles at the transition ([03](03-lod-bundle-reads-2dfx.md)) | **PASS** — one plume per stack at every distance, including inside the hysteresis band |
+| the smoke departure's look ([04](04-authored-cull-distance.md), [hack](../../hacks/smoke-drawn-to-world-edge.md)) | **PASS** — and the cooling-tower puffs visible at 300 u are gone by 600, so the per-system table is live, not a blanket raise |
+| a plate readable at LOD range ([03](03-lod-bundle-reads-2dfx.md)) | **NOT CLOSED** — 2.4 m at 440 u is ~8 px; needs an engine-side quad count, not another build |
+| `insects`/`cigarette_smoke` floor ([hack](../../hacks/tiny-fx-distance-floor.md)) | **NOT CLOSED** — no shot framed one |
+
+The rebuild that carried this was granted by lifting plan 07's ban on rebuilding mid-chain: a rebuild is now
+gated on what it CAPTURES, and the manifest lives in
 [07's working rules](../../roadmap/0.5.0/plans/07-lod-generators-extended/readme.md#working-rules-while-this-plan-runs).
-Nothing here can be recovered from the tree afterwards, so an item missed on that run costs the rebuild.
+The two open rows above are what that run could not capture, and neither is waiting on another one.
 
 ## The numbers this plan is budgeted against
 

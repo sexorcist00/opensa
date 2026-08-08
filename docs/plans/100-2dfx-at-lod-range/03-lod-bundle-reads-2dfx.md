@@ -79,15 +79,25 @@ run: a light is **100 B**, an emitter **44 B**, a plate **108 B**. Across those 
 **6368 B of 213 016 B (+3.1 %)**. Map-wide that projects to 878 × 44 + 489 × 108 ≈ **89 KB** added to the cell
 LOD DFFs, against the 22 366 lights already there.
 
-**The FIELD check is NOT done, and cannot be without a rebuild.** The pack's LOD input is a pmb
-intermediate (`<out>/.work/opensa-lod`) that the pipeline deletes as it consumes it — the built tree's
-`lods.img` holds `.osm`, the pack's OUTPUT. So "from >440 u a chimney smokes, a lamp glows and a plate reads"
-lands with the next full build. **That build was scheduled 2026-08-08**, when the standing "no rebuild until
-plan 07 finishes" rule was lifted in favour of a
-[capture manifest](../../roadmap/0.5.0/plans/07-lod-generators-extended/readme.md#working-rules-while-this-plan-runs).
-Two things ride on that same run: the look verdict for both [`docs/hacks/`](../../hacks/README.md) entries
-from 04, and the confirmation that no plate or plume doubles at the transition distance. Run it with
-`--keep-work` — without it the `.work` LOD input is deleted again and the same question needs another build.
+**The FIELD check ran 2026-08-08**, on the first pak built after this chain (buildTime `11:42 08-08-2026`,
+pmb `--exclude sa --keep-work` + fetch-pack). It needed that build: the pack's LOD input is a pmb intermediate
+(`<out>/.work/opensa-lod`) the pipeline deletes as it consumes it, and the built tree's `lods.img` holds
+`.osm`, the pack's OUTPUT — so no earlier tree could be asked.
+
+**The chimney half PASSES.** Subject: the Las Venturas plant stacks (`vegasplant09/10`, `smoke30m`), shot from
+open desert due west at **300, 400, 440 and 600 u**, camera aimed with the new `?look=x,y,z` knob. Every stack
+carries its plume at every distance, **including 600 u** — past the ~440 u point where the LOD bundle is the
+only thing left to carry an emitter, and where before this chain there was nothing.
+
+**Nothing doubles.** One plume per stack in all four shots, including 400 and 440 — inside the streaming
+hysteresis band, which is where two resident levels would have shown as a pair. That is the field's answer to
+the `slot.current` argument this step's code makes; the argument now has a measurement under it.
+
+**The PLATE half is NOT closed, and not for want of a build.** A street-name plate is 2.4 m wide, so at the
+440 u where the question lives it subtends ~8 px in a 1440-wide capture — "readable" is not physically
+available there, and "present vs blank" is a judgement about a smudge. The pak counters say the plates ARE in
+the LOD bundles (roadsigns 481 → 962, both levels). What is missing is an instrument, not a rebuild: an
+engine-side count of roadsign quads actually drawn would settle it in one line, and no screenshot will.
 
 ## Measurements / notes
 

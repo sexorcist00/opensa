@@ -183,6 +183,8 @@ const CAM_JUMP_YAW = 0.35;
 
 /** The GTA heading the player spawns facing — the camera seeds behind it, the pose falls back to it. */
 const SPAWN_FACING = Math.PI;
+/** The rig's boot pitch (radians, positive = up): slightly down at the player. `?look` computes its own. */
+const DEFAULT_CAMERA_PITCH = -0.25;
 /** How long the camera keeps EASING its collision response after a scripted enter/exit ends (seconds). */
 const EXIT_EASE_SECONDS = 0.8;
 /** How close (world units) the player must stay to the car they left for the camera to keep ignoring it. */
@@ -416,6 +418,7 @@ async function boot(
     spawnParam.length === 3 && spawnParam.every(Number.isFinite)
       ? [spawnParam[0], spawnParam[1], spawnParam[2]]
       : [...GAME_CONFIG[gameId].playerSpawn];
+  const aim = bootAim(params, spawn);
   hud.textContent = 'own engine: initializing…';
 
   const dpr = window.devicePixelRatio;
@@ -539,7 +542,9 @@ async function boot(
   Velocity.y[playerEid] = 0;
   Velocity.z[playerEid] = 0;
   Velocity.grounded[playerEid] = 0;
-  Locomotion.heading[playerEid] = SPAWN_FACING; // spawn facing, mirrors the pose fallback below
+  // Spawn facing, mirrors the pose fallback below — `?look` re-points it so the rig's auto-centre HOLDS the
+  // aim instead of swinging back behind a ped still facing south.
+  Locomotion.heading[playerEid] = aim.heading;
   Locomotion.state[playerEid] = 0; // LOCOMOTION_GROUNDED
   Locomotion.stateTime[playerEid] = 0;
   Locomotion.fallSpeed[playerEid] = 0;
@@ -588,7 +593,7 @@ async function boot(
   // camera shim (the only three-shaped seam in CharacterControllerSystem).
   // Seat the camera BEHIND the spawn facing (the ped spawns facing π; behind it is yawBehind(π) = 0). Seeding
   // it at π put the camera nose-to-nose with a stationary player until they first moved.
-  const rig = createRigState(config.camera, yawBehind(SPAWN_FACING), -0.25);
+  const rig = createRigState(config.camera, yawBehind(aim.heading), aim.pitch);
   /** This frame's raw camera input, drained by the loop: pointer deltas in pixels, drag pan in NDC, wheel
    *  notches. Accumulating instead of mutating the rig is what lets ONE pure step own the smoothing. */
   const pendingInput = { look: { x: 0, y: 0 }, pan: null as null | { x: number; y: number }, zoom: 0 };
@@ -1999,6 +2004,35 @@ async function boot(
     },
     weatherNames: WEATHER_NAMES,
   });
+}
+
+/**
+ * What the boot camera starts as: `?look=x,y,z` aims it at a GTA world point, otherwise the fixed spawn
+ * facing. The ped is seeded with the same heading, which is what stops auto-centre swinging the aim away.
+ *
+ * **This knob exists because the headless harness has no mouse.** It presses keys, and look is pointer-only,
+ * so without an aim every probe stares SOUTH — a subject then needs standable ground ~600 u to its NORTH to
+ * be seen at LOD range, which the Las Payasadas boards do not have: the map ends ~350 u past them and a
+ * spawn there falls through the void.
+ *
+ * Both conventions are the ones `auto-center.ts` states: in GTA space the camera looks along
+ * (sin yaw, −cos yaw), a heading h points along (−sin h, cos h), and the two agree at `yaw = h + π` — so the
+ * heading is `yaw − π`. Pitch is the rig's own sign (positive = up) and ignores the eye's offset behind the
+ * ped: at the ranges this exists to probe, a few metres of follow distance is far below one pixel.
+ */
+function bootAim(params: URLSearchParams, from: readonly [number, number, number]): { heading: number; pitch: number } {
+  const look = (params.get('look') ?? '').split(',').map(Number);
+  if (look.length !== 3 || !look.every(Number.isFinite)) {
+    return { heading: SPAWN_FACING, pitch: DEFAULT_CAMERA_PITCH };
+  }
+  const dx = look[0] - from[0];
+  const dy = look[1] - from[1];
+  const flat = Math.hypot(dx, dy);
+
+  return {
+    heading: Math.atan2(dx, -dy) - Math.PI,
+    pitch: flat > 0 ? Math.atan2(look[2] - from[2], flat) : 0,
+  };
 }
 
 /** Which rig frames this frame: a detached eye wins over a seat, a seat over the on-foot follow. */

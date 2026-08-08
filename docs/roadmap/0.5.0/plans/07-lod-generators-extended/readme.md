@@ -102,14 +102,19 @@ with it (plan 100 step 05); what stays here is the far-view emitter RATE BUDGET 
    And a rebuild only counts if it is captured, so every full run carries this manifest. Nothing on it can be
    gathered from the tree afterwards, so a missed item costs the run:
 
-   | For | Capture |
-   | --- | --- |
-   | plan 100/03 | 2dfx alive at LOD range — a chimney smoking past the HD boundary, a readable plate on an open LV board (`ne_bit_07` ≈ 222, 2742; `ne_bit_08` ≈ 416, 2710 — both earlier probes stayed inside 380 u and proved nothing) |
-   | plan 100/03 | nothing DOUBLES at the transition band (~440 → 1000 u) — HD and LOD emitters both live |
-   | plan 100/04 | the look verdict for both `docs/hacks/` entries: smoke drawn to the world edge, `insects`/`cigarette_smoke` floored at 100 u |
-   | 07/04 | the streaming + frame baseline at TODAY's density, so a later density arm has a before |
-   | 07/00 | `procobj-layer-census.ts` and `ipl-row-census.ts` on the fresh tree — the numbers this chain is priced in |
-   | standing | which pak build every figure was read from, into `docs/benchmarks/` BEFORE anything is analysed |
+   | For | Capture | 2026-08-08 run |
+   | --- | --- | --- |
+   | plan 100/03 | 2dfx alive at LOD range — a chimney smoking past the HD boundary | **done** — LV plant stacks plume at 600 u |
+   | plan 100/03 | a readable plate at LOD range | **not capturable** — 2.4 m at 440 u is ~8 px; wants an engine-side quad count |
+   | plan 100/03 | nothing DOUBLES at the transition band | **done** — one plume per stack at 300/400/440/600 u |
+   | plan 100/04 | the look verdict for both `docs/hacks/` entries | **smoke done**, `insects`/floor not framed |
+   | 07/04 | the streaming + frame baseline at TODAY's density, so a later density arm has a before | **done** — 8-scene sweep |
+   | 07/00 | `procobj-layer-census.ts` and `ipl-row-census.ts` on the fresh tree | **done** — reproduced exactly |
+   | standing | which pak build every figure was read from, into `docs/benchmarks/` BEFORE anything is analysed | **done** — buildTime in the note |
+
+   **What the run taught about the manifest itself:** two of its rows were written as if a screenshot could
+   answer anything a human eye could. Angular size decides that, not the build — a 2.4 m plate at LOD range
+   is ~8 px, and no rebuild changes it. A capture item should name the INSTRUMENT, not just the sight.
 
    Keep the run re-usable with **`--keep-work`** — it is what leaves `<out>/.work` behind on a FULL run, so a
    second question can be asked of the same build instead of buying another one. `--until <stage>` also keeps

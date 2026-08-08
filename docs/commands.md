@@ -162,6 +162,9 @@ npx tsx scripts/debug/touch-controls-check.ts \
 #   ?osmspike=<model> renders one map-object .osm beside the player (the 04 phase-0 spike hook) ·
 #   F2 → CLEO (097/07): runner/trace toggles, thread list with per-tick cost, unimplemented/atlas
 #   coverage with tiers, per-thread trace, step-one
+# Camera aim (100 field checks) — ?look=x,y,z points the boot camera at a GTA world point and turns the
+#   ped with it (auto-centre then holds the aim). Without it every headless probe stares SOUTH, since
+#   look is pointer-only and the harness has no mouse. Pair with ?spawn: `?spawn=2033,2832,80&look=2632,2832,127`
 # Vehicle field checks (097/05) — ?spawncar=model[,x,y,z[,heading]] spawns one car (retries until the
 #   ground streams in; default spot 8 m north of spawn; heading is RADIANS — 0 faces north, the boot
 #   camera looks SOUTH, so put a car you want in frame at y − 10) · ?autoseat=1 seats the player once

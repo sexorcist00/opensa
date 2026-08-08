@@ -38,9 +38,17 @@ meaning.
 between 15 and 100. The raise is paid for several times over by the step that carries it; see the frame
 numbers in [100/04](../plans/100-2dfx-at-lod-range/04-authored-cull-distance.md).
 
-The LOOK has not been field-judged yet — the field check belongs to
-[100/03](../plans/100-2dfx-at-lod-range/03-lod-bundle-reads-2dfx.md), which is what makes a far cell's emitter
-exist at all. Until then this is an argued departure with a measured price, not a verified one.
+**And the LOOK was field-judged 2026-08-08**, on the first pak built after plan 100 (buildTime
+`11:42 08-08-2026`). Subject: the Las Venturas plant stacks (`vegasplant09/10`, `smoke30m`), shot from open
+desert due west at 300, 400, 440 and 600 u with `?look` aiming the camera. **At 600 u every stack still
+carries its plume**, attached to the chimney head rather than smeared or detached — the authored 155 would
+have ended it at less than a third of that, and the old flat 300 at half. It reads as a working refinery seen
+across a valley, which is what the departure was for.
+
+The same series shows the departure is not a blanket raise: the white cooling-tower puffs visible at 300 u
+are gone by 600 while the stack plumes remain. Different systems, different authored distances, both live —
+which is [100/04](../plans/100-2dfx-at-lod-range/04-authored-cull-distance.md)'s table doing its job in the
+field, not just in a test.
 
 ## What would retire it
 

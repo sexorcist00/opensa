@@ -228,10 +228,21 @@ load path — `fetchInstallSource` reads the served dir's `/__index` + files ove
   anything: the shell fails with `command not found` and exit 127 before the harness ever starts, which
   reads exactly like the harness dying at launch. Use `drive.js`'s own budget argument (the millisecond
   value after the tag) instead; there is nothing to wrap.
-- **The boot camera faces SOUTH.** Anything `?spawncar` places north of `?spawn` is behind the camera —
-  a car 8 m north "spawns" but never appears on a screenshot (and one placed 4–6 m north puts the
-  FOLLOW camera inside it). Place field-check targets at `y − 10` or lower. `?spawncar`'s heading is
-  RADIANS: 0 faces north (front toward the boot camera), `4.712` (3π/2) shows the DRIVER side.
+- **The boot camera faces SOUTH** unless `?look` says otherwise. Anything `?spawncar` places north of
+  `?spawn` is behind the camera — a car 8 m north "spawns" but never appears on a screenshot (and one
+  placed 4–6 m north puts the FOLLOW camera inside it). Place field-check targets at `y − 10` or lower.
+  `?spawncar`'s heading is RADIANS: 0 faces north (front toward the boot camera), `4.712` (3π/2) shows
+  the DRIVER side.
+- **`?look=x,y,z` aims the boot camera at a GTA point** (and turns the ped with it, so auto-centre holds
+  the aim). The harness has no mouse and look is pointer-only, so before this knob a subject had to sit
+  SOUTH of a standable spawn to be seen at all — which is unsatisfiable near the map's north edge
+  (`y ≈ 3000`): a spawn past it falls through the void, HUD `grounded 0` and `draws 12`.
+- **Aim is not sight.** Two spawns 600 u from a subject with a clean bearing still showed a fence and a
+  rooftop wall — LS geometry blocks nearly every ground-level sight line. Pick the approach over open
+  terrain (desert, water's edge), and confirm from the shot, not from the coordinates.
+- **Angular size decides what a screenshot can answer.** A 2.4 m roadsign plate at 440 u is ~8 px in a
+  1440-wide capture: "is it readable" has no answer there at any build quality. Judge distance checks on
+  something big (a smoke plume) or add a counter to the engine; do not spend runs on a smudge.
 
 ### `warnings.js` — the warning catcher (bug rounds)
 

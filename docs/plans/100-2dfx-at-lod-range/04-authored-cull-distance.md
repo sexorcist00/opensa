@@ -67,8 +67,13 @@ global tuning constant standing where the game's own numbers should be read.
 - **A consequence the step did not anticipate, worth a field look**: all four `prt_*` systems (wheel dust,
   collision smoke, sand) author **50**, so the vehicle-effect lane's reach fell from 300 u to 50 u. That is
   the authored number and the step's own rule, but it means another car's tyre smoke now stops at 50 m.
-- The look — smoke at the world edge, insects stopping at 100 — is NOT verified: it needs
-  [03](03-lod-bundle-reads-2dfx.md)'s field check, which is what makes a far cell's emitter exist at all.
+- **The smoke half of the look is VERIFIED (2026-08-08, first post-chain pak).** LV plant stacks shot from
+  open desert at 300/400/440/600 u: the plume rides the chimney head at every distance, and the white
+  cooling-tower puffs seen at 300 u are gone by 600 — two systems, two authored distances, both live in the
+  field. Details in [03](03-lod-bundle-reads-2dfx.md) and the
+  [hack file](../../hacks/smoke-drawn-to-world-edge.md).
+- **The `insects`/`cigarette_smoke` floor is still unverified** — the run framed no anchor of either, and at
+  15 u authored vs 100 u applied the difference is only visible standing next to one.
 
 ## Measurements / notes
 
