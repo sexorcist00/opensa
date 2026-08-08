@@ -1,61 +1,86 @@
-# 04 — Slot economy, budgets and integration
+# 04 — Slot economy, budgets and integration, PER TARGET
 
-> **PREMISE WRONG TWICE — rewrite this plan before starting it.**
->
-> It was written as an int16 story ("gated on our own ASI, Task 3"). It is not one: measured 2026-08-07 on
-> `build/original/opensa`, we sit at 20 146/32 767 text rows but **38/40 IPL slots**, so what binds on STOCK
-> is the slot array and the per-area `LoadScene` budget, neither of which our ASI lifts.
->
-> Then the target install itself was captured, and **on the install we actually ship to neither of those
-> ceilings exists**: OLA sets `EntitiesPerIpl = unlimited` (the 4 096 per-file buffer) and
-> `EntityIpl = unlimited` (the 40 slots), with `Buildings = 100000`. It runs 72 914 permanent rows in files
-> of up to 9 627 — see [`gta-sa-original/reference-install.md`](../../../../../gta-sa-original/reference-install.md).
-> ~~So there is no ceiling left to lift here, and no correctness number left to find.~~
->
-> **And then the baseline itself was re-measured (2026-08-08) and put one ceiling back.** The layer places
-> **15 286** objects, not 24 552 — the old figure counted stream RECORDS
-> ([`procobj-layer-census.ts`](../../../../../../scripts/debug/procobj-layer-census.ts)). At 3.77× the target
-> costs 24 437 permanent rows, i.e. **38 096 map-wide, over the int16 ceiling**, which is precisely the
-> ceiling OLA does not lift. So this plan sits **above** an int16 gate that `perfect-map.asi` already clears
-> at 2.23× on that install — the asi is a prerequisite for the target, not an optional hedge.
->
-> What this plan becomes: **a per-target cap decision plus a perf budget, over an asi-gated target.** Stock
-> keeps today's guards and has **1.18×** of headroom in total (slots, guard 39) — say that plainly rather
-> than shipping a multiplier it cannot take. Decisions 2 (the binary-stream economy stays) and 3 (perf
-> becomes the budget) survive intact — they were never about int16. Decision 1's "opensa-asi target" needs
-> renaming: the target is defined by the ADJUSTERS plus our asi, not by our asi alone.
->
-> **And decision 3 has to name its HOST.** "Perf becomes the budget" currently reaches for the plan-063 perf
-> HUD and plan-060 streaming machinery, which measure the OpenSA engine, while decision 1 gates caps by SA
-> target. The same density lands in both hosts and they have different limiters; a budget that does not say
-> which one it was taken in cannot set a cap for either.
+**Rewritten PER TARGET 2026-08-08 (the user's call).** The premise banner this file carried — three
+corrections stacked on an original that was wrong — is now spent: what it was groping toward is that there is
+no single answer, because there is no single target. Its history, kept short because
+[density-target.md](../density-target.md) and [00](00-limit-route-review.md) carry it in full: written as an
+int16 story; corrected to a slot story when the layer measured 38/40 slots; corrected again when the target
+install turned out to set both `EntitiesPerIpl` and `EntityIpl` to `unlimited`; and corrected a third time
+when the layer's own baseline fell from 24 552 to **15 286** objects, which put int16 back on the path for
+the 3.77× target. Every one of those corrections was true of *a* target.
 
-Part of [07 — LOD generators, extended](../readme.md). Depends on [02](02-density-model.md)/[03](03-biome-zone-density.md) (the density model), on [00](00-limit-route-review.md)'s route decision, and — if that decision keeps our own ASI on the path — on [03-asi/006](../../../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md) (the stock-vs-opensa-asi target modes). Delivers the actual "MORE objects": raising the caps so 02/03's density can ship, and re-establishing perf as the limiter.
+Part of [07 — LOD generators, extended](../readme.md). Depends on [02](02-density-model.md)/[03](03-biome-zone-density.md) (the
+density model) and on [00](00-limit-route-review.md)'s route decision. Delivers the actual "MORE objects":
+the caps 02/03's density ships against, per target, and perf as the limiter where a ceiling no longer is.
 
-## Context
+## The three targets, and what limits each
 
-Raised density (02/03) is capped today by budgets that were sized for the int16 bug (from the grounding):
+| Target | Correctness ceiling | Then what limits it | Density it reaches | Needs our asi? |
+| --- | --- | --- | --- | --- |
+| **`sa/` stock** | IPL slots (39 guard; 38 used ⇒ 9 procobj areas), the ~4 000-row per-file `LoadScene` budget, int16 | never gets there — slots bind at **1.18×** | ~18 000 objects | no |
+| **`sa/` reference** | **int16 only** — OLA lifts the slot array and the per-file buffer, and demonstrably does NOT lift int16 | memory + frame time in SA | **2.95×** bare, **3.77×** with the asi | **yes, above 2.95×** |
+| **`opensa/`** | none of SA's — no slot array, no per-file budget, no int16 | memory + frame time in OUR engine, and the per-cell `procObjLimit` | unmeasured | no |
 
-- `AREA_MAX_PAIRS = 2000` (4000 rows/area) + `STREAM_MAX_INST = 512` (`streamed-areas.ts`);
-- `procObjMax = 20000` (`config.ts` / `convert.ts`);
-- `TEXT_ROW_CAP = 30000` global (`pipeline.ts` `checkTextIplSlotBudget`);
-- `PROC_OBJ_MAX_DENSITY = 3` candidate ceiling (`procobj-scatter.ts`).
+Two things fall out of the table and they are the plan:
 
-Only one of those four is an int16 cap. `TEXT_ROW_CAP` is, and it is **not** in the way — the density target fits under it. `AREA_MAX_PAIRS` mirrors SA's per-file `gpLoadedBuildings` budget, which is a real 2004 ceiling **on a stock install and is set to `unlimited` on the reference one**. `procObjMax` and `PROC_OBJ_MAX_DENSITY` are our own safety numbers and cost nothing to raise once something downstream can absorb the objects.
+1. **Stock is not a density target.** 1.18 × is the whole of it. Say that plainly and stop shipping a
+   multiplier it cannot take — [02](02-density-model.md)'s stock profile is a redistribution, not growth.
+2. **`opensa/` has no ceiling and is currently capped by SA's.** See the guard finding below. This is the
+   target where [project-goals directive 3](../../../../../project-goals.md) applies hardest: a 2004 limit is
+   not our limit, and matching one is the choice that needs an argument.
 
-**So the plan's job is not to lift anything.** It is to (1) split the caps by target, (2) find where memory and frame time actually stop us on the reference install, and (3) keep the stock target exactly as safe as it is today. Perf was always going to be the real limiter; on this install it already is.
+## The guard finding — `opensa/` inherits ceilings it does not have
+
+`checkTextIplSlotBudget(game, …)` runs on the **common baked build**, at `perfect-map-builder/src/pipeline.ts:206`,
+*before* the split that feeds `sa/` and `opensa/`. So an opensa-only build:
+
+- **throws** past `TEXT_ROW_CAP = 30 000` permanent text-IPL rows — a cap that exists because SA stores
+  building-pool indexes as int16 in `IplDef`, which no OpenSA code path reads;
+- **warns** at `TEXT_IPL_SLOT_CAP = 39` — SA's `IplEntityIndexArrays`, which our engine does not have.
+
+The escape is a manual `--allow-text-row-overflow` flag, i.e. an operator decision taken build by build,
+which is precisely how a ceiling stays enforced by accident. Nothing fails loudly here: the build succeeds
+and quietly carries less than it could, which is [lesson 28](../../../../../project-goals.md)'s signature —
+a too-conservative build looks exactly like a successful one.
+
+**This plan's first task is therefore not raising a cap; it is putting each cap on the branch that owns it.**
 
 ## Decisions
 
-1. **Target-gated caps** (mirror 03-asi/006). For the opensa-asi target: `AREA_MAX_PAIRS`, `STREAM_MAX_INST`, `procObjMax`, and `PROC_OBJ_MAX_DENSITY` rise to new values (or become perf-bounded); for the stock target they stay exactly as today (int16-safe). One target flag drives limits, particle policy (the 2dfx chain), AND procobj caps — consistent across the pipeline.
-2. **The `linkedHeight`/binary-stream economy STAYS.** It's still good memory/draw economy independent of the ceiling (shorter species ride binary streams costing zero text rows). We raise the ceiling, not abandon the streaming layout — density fills the newly-available headroom through the same efficient placement.
-3. **Perf becomes the budget.** Past int16, the limiter is FPS/streaming. Tie the density caps to a measured budget: use the rendering perf HUD (plan 063) + streaming smoothness (plan 060 machinery) to find how much clutter the engine streams without hitching, and set the opensa-asi caps from THAT, not a guess. Denser areas must still stream in smoothly (the warm-invisibly/atomic-appear invariants must hold under higher counts).
-4. **New guard, not no guard.** Replace the int16 `checkTextIplSlotBudget` throw (for the asi target) with a **perf/streaming budget guard**: fail (or warn) the build if a cell/area exceeds the measured streamable object count. Silent over-scatter that hitches in-game is as bad as the old crash — guard it loudly (same spirit as `checkImgIdBudgets`).
-5. **Fallback honesty** (from 006): an opensa-asi-target build with raised density REQUIRES the asi; without it, the same int16 corruption returns. The installer's asi-presence check covers this content; loud warning.
+1. **Caps are target-gated, and the gate is a build INPUT, not a flag an operator remembers.** One target
+   selector drives limits, particle policy (the 2dfx chain's `--strip-particles` opt-out) AND procobj caps —
+   consistent across the pipeline. `sa-stock` keeps today's numbers exactly; `sa-reference` is perf-bounded
+   *above* an int16 gate; `opensa` is perf-bounded with no SA ceiling in it at all.
+2. **Guards move to the branch they describe.** `checkTextIplSlotBudget` becomes an `sa/`-branch check. The
+   `opensa/` branch gets its OWN budget guard (decision 5) rather than none — the answer to a ceiling that
+   does not apply is a different ceiling, not the absence of one.
+3. **The `linkedHeight`/binary-stream economy STAYS on every target.** It is memory and draw economy
+   independent of any ceiling (shorter species ride binary streams costing zero permanent rows). It is worth
+   **0.424 rows/object against a text-IPL mod's 1.000** — a 2.36× edge that
+   [density-target.md](../density-target.md) warns is thinner than the chain once believed, and that these
+   plans may not trade away to buy density.
+4. **Perf becomes the budget — and a budget NAMES ITS HOST.** The same density lands in two engines with
+   different limiters, so there are two measurements and neither substitutes for the other:
+   - `opensa`: the 074-era perf HUD + streaming settle machinery, on the canonical build. This is the
+     measurement we can take today, with instruments we own.
+   - `sa-reference`: SA's own frame time and streaming on the real install, under Wine. Slower to take,
+     smaller sample, and it is the number that decides whether 3.77× is shippable there at all.
+   A cap set from the wrong host's number is a guess wearing a measurement's clothes.
+5. **New guard, not no guard.** For `opensa`, replace the int16 row throw with a **streamable-object budget
+   guard**: fail (or warn) when a cell or area exceeds the measured count the engine streams without
+   hitching. Silent over-scatter that hitches in-game is as bad as the old crash — guard it loudly, same
+   spirit as `checkImgIdBudgets`.
+6. **Fallback honesty.** An `sa-reference` build above 2.95× REQUIRES `perfect-map.asi`; without it the int16
+   corruption returns on our own data exactly as it did on ProperFixes'. The installer's asi-presence check
+   covers this content; loud warning. (Field-proven both directions in
+   [`open-issues/fixed/ghost-barriers.md`](../../../../../open-issues/fixed/ghost-barriers.md).)
+7. **A raised cap is not a raised density.** Every cap this plan moves is a ceiling; what fills it is
+   [02](02-density-model.md)'s profile, measured, with [01](01-species-representation-floor.md)'s
+   species-floor check re-run at the new density. Raising a cap and reporting the headroom is not a result.
 
 ## Tasks
 
-**Slot economy first — these are the ones the target actually needs, and none of them needs an ASI:**
+**First — put the caps where they belong. None of this needs an ASI, a rebuild, or a density decision:**
 
 - [x] ~~Find out what `AREA_ROW_CAP = 4000` really models~~ — **ANSWERED 2026-08-07 from the target
       install's own configuration, no field run needed.** ProperFixes' 9 627-row IPL files load because OLA
@@ -64,43 +89,67 @@ Only one of those four is an int16 cap. `TEXT_ROW_CAP` is, and it is **not** in 
       wrong; it is a **stock-target** cap, and it is **inert on the install we ship to**. The same install
       sets `EntityIpl = unlimited`, so the 40-slot ceiling is gone too, and `Buildings = 100000`. Full
       capture: [`gta-sa-original/reference-install-config.md`](../../../../../gta-sa-original/reference-install-config.md).
-- [ ] **Decide the reference-target caps, and measure what actually limits them.** With the slot and
-      per-file ceilings `unlimited` there, the remaining correctness number is **int16**: the target's
-      38 096 map-wide rows need `perfect-map.asi`, so the reference caps are perf-bounded *above* an asi
-      gate. Set `AREA_MAX_PAIRS` and the slot guard per target (stock = today and honest about its 1.18×,
-      reference = perf-bounded) rather than hunting a ceiling that the target does not have.
-- [ ] **Keep the permanent-row cost per object as a first-class knob.** It is 0.424 rows/object today
-      (6 487 / 15 286) and it is the whole reason our layout beats a text-IPL mod's by 2.36×. Every density
+- [ ] **Introduce the target selector** and thread it through pmb → lod-procobj-generator → `convert.ts`.
+      Three values (`sa-stock`, `sa-reference`, `opensa`), defaulting to today's behaviour so the first
+      commit moves nothing.
+- [ ] **Move `checkTextIplSlotBudget` onto the `sa/` branch** (from `pipeline.ts:206`) and split its two
+      ceilings by target: rows/int16 and the 39-slot array are `sa-stock`; `sa-reference` keeps the int16 row
+      check and drops the slot one (OLA lifts it); `opensa` gets neither. Test all three, and assert the
+      opensa branch still guards SOMETHING (decision 5) rather than silently everything.
+      **`--allow-text-row-overflow` should disappear with it** — an operator flag is what a missing target
+      split looks like.
+- [ ] **Keep the permanent-row cost per object as a first-class knob.** 0.424 rows/object today
+      (6 487 / 15 286), and it is the whole reason our layout beats a text-IPL mod's by 2.36×. Every density
       profile changes it — a profile that favours TALL species buys rows nobody costed.
 - [ ] Pack the generated areas tight. They average 3 501 of a 4 000-row budget today; a repack to the budget
-      is ~2 slots back at current density and more at raised density. Measure the recovered slots and check
-      that no area breaches the budget after it — this is 00's hygiene task, executed.
-- [ ] Report the slot and row cost of a build as a first-class output (like `checkImgIdBudgets`), so a
-      density profile's price is visible when it is chosen rather than when the build fails. Today the number
-      takes a script to recover, which is why 04's premise went a fortnight without being checked.
-- [ ] Raise `linkedHeight` deliberately as a slot lever, and measure it: every species pushed below it trades
-      a permanent text row for a binary-stream row, which is the cheapest density we can buy without lifting
-      anything. Record what it costs at range (a shorter species with no permanent LOD pops in later).
+      is ~2 slots back at current density and more at raised density. **`sa-stock` is the only target this
+      buys anything on** — it is where slots are the wall — which is itself the argument for doing it there
+      and not paying its complexity elsewhere. Measure the recovered slots and check no area breaches the
+      budget after it; this is 00's hygiene task, executed.
+- [ ] Report the slot, row and object cost of a build as a first-class output (like `checkImgIdBudgets`), per
+      target, so a density profile's price is visible when it is CHOSEN rather than when the build fails.
+      Today the number takes a script to recover, which is why this plan's premise went a fortnight without
+      being checked.
+- [ ] Raise `linkedHeight` deliberately as a slot lever on `sa-stock`, and measure it: every species pushed
+      below it trades a permanent text row for a binary-stream row, the cheapest density available without
+      lifting anything. Record what it costs at range (a shorter species with no permanent LOD pops in later).
 
-**Then the caps, shaped by [00](00-limit-route-review.md)'s decision:**
+**Then the numbers, one host at a time:**
 
-- [ ] Target-gate the procobj caps (`AREA_MAX_PAIRS`, `STREAM_MAX_INST`, `procObjMax`, density ceiling): stock = today, opensa-asi = raised; wire to the same target flag 03-asi/006 introduced.
-- [ ] Perf/streaming budget calibration: measure (plan-063 perf HUD + streaming settle-watcher) how many procobj a dense area can stream without hitching; set the opensa-asi caps from the measurement. Record the numbers.
-- [ ] New budget guard for the asi target (per-area/per-cell streamable-object ceiling) replacing the int16 row guard; tests both modes (mirrors `checkImgIdBudgets`/`checkTextIplSlotBudget` test style).
-- [ ] End-to-end: build a high-density full map (02/03 profiles, opensa-asi target), install with the Task-3 asi, in-game (Wine) → denser forests/desert/mountains, no ghost-barrier/int16 corruption, streaming stays smooth. Record counts + fps + hitch stats.
-- [ ] Stock-target regression: caps unchanged, build still int16-safe (fails past 30k as today).
-- [ ] Docs/memory: update the procobj plans (007 binary streams), ghost-barriers cross-ref (the density this unlocks), and the opensa-procobj-decimation memory (density knobs + new asi-target ceilings).
+- [ ] **`opensa` perf budget.** Measure how much clutter the engine streams without hitching (perf HUD +
+      streaming settle-watcher) and set `procObjMax`, the candidate ceiling and the per-cell `procObjLimit`
+      from THAT. Record the rows in `docs/benchmarks/` before analysing them. This is the first real ceiling
+      the target has ever been given.
+- [ ] **`sa-reference` perf budget**, on the real install under Wine, above the asi gate. Separate rows,
+      separate conclusion; explicitly not comparable to the opensa numbers.
+- [ ] `sa-stock`: caps unchanged, and a regression test that a build past them still fails as today.
+- [ ] Target-gate the remaining procobj caps (`AREA_MAX_PAIRS`, `STREAM_MAX_INST`, `procObjMax`, candidate
+      ceiling) once the two budgets above exist.
+- [ ] End-to-end on `sa-reference`: build a high-density map (02/03 profiles), install with
+      `perfect-map.asi`, in-game (Wine) → denser forests/desert/mountains, no ghost barriers, no int16
+      corruption, streaming smooth. Record counts + fps + hitch stats.
+- [ ] Docs/memory: update the procobj plans (007 binary streams), the ghost-barriers cross-ref (the density
+      this unlocks), and `docs/restrictions/` if the target split earns a new rule — it probably does, since
+      "a guard must live on the branch whose target it describes" is exactly the kind of thing that is
+      SILENT when violated.
 
 ## Verification
 
-- opensa-asi target: a build exceeding the old 20k/30k caps ships and runs; denser biomes visible; streaming smooth (no hitch regression); no int16 corruption.
-- stock target: unchanged, still guarded at the old caps.
-- Without the asi on a dense build: installer warns; corruption returns (fallback honesty).
+- **Per target, and never averaged.** `sa-stock`: caps unchanged, build still fails past them, 1.18×
+  documented as its ceiling. `sa-reference`: a build above 2.95× ships and runs WITH the asi, and the
+  installer warns without it. `opensa`: the SA guards no longer run, a streamable-object guard does, and the
+  cap it enforces came from a measurement in that engine.
+- No target can be built with another's profile ([02](02-density-model.md) decision 3) — checked at config
+  time, in a test per pair.
+- Denser biomes visible in-game; streaming smooth (no hitch regression); species floor unchanged or handed to
+  [01](01-species-representation-floor.md).
 
 ## Measurements / notes
 
 _(record after implementation)_
 
-- new opensa-asi caps (area pairs / stream inst / procObjMax / density ceiling): …
-- streamable-object budget per area from measurement: …
-- dense full-map counts + fps + hitch stats vs vanilla: …
+- `opensa` streamable-object budget per cell/area, and the caps set from it: …
+- `sa-reference` frame/stream numbers under Wine, above the asi gate: …
+- slots recovered by the area repack on `sa-stock`: …
+- rows/object per shipped profile (today: 0.424): …
+- dense full-map counts + fps + hitch stats vs vanilla, per host: …

@@ -2,6 +2,8 @@
 
 Part of [07 — LOD generators, extended](../readme.md). Depends on [02](02-density-model.md) (the density model). Delivers the user's actual ask: density that KNOWS the terrain — more cacti in the desert, more bushes in forest, more rocks on mountain slopes.
 
+**02 is per target now (2026-08-08), so this plan is too**: biome is a third axis on top of category×surface, and a biome profile inherits its target's wall. On `sa-stock` that wall is 1.18×, so "more cacti in the desert" there can only mean cacti INSTEAD of something else — a biome profile that reads as growth belongs to `sa-reference` or `opensa`. Same rule as 02's decision 3: a profile declares its target and the build refuses a mismatch.
+
 ## Context
 
 02 gives per-category/per-surface density but no notion of WHERE. Two terrain signals exist at build time but aren't joined to scatter:

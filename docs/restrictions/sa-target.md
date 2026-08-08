@@ -29,6 +29,27 @@ build cannot tell you that you blew the real game's pools.
 > target has neither ceiling silently under-builds. The one ceiling no adjuster lifts is int16 — that is
 > `perfect-map.asi`'s, and at 2.23× the ceiling this install depends on it.
 
+## A ceiling is enforced on the branch whose target has it — never on the shared build
+
+The two facts above cut in opposite directions and both are live:
+
+- `checkImgIdBudgets` reads the built `sa/` tree, so an opensa-only run never runs it — an `sa/` ceiling
+  going **unchecked**;
+- `checkTextIplSlotBudget` runs on the **common baked build**, before the `sa/`/`opensa/` split
+  (`perfect-map-builder/src/pipeline.ts:206`), so an opensa-only run is still refused past
+  `TEXT_ROW_CAP = 30 000` and warned at 39 slots — an `sa/` ceiling wrongly **enforced**. Neither number
+  reaches an OpenSA code path: our engine reads a pak, and has no building pool, no int16 index and no
+  `IplEntityIndexArrays`.
+
+The rule for a new plan: **decide which target a ceiling belongs to, and put its guard on that branch.** A
+shared-stage guard is not "safe by default" — it silently rations the target that does not have the limit.
+The escape currently in the tree (`--allow-text-row-overflow`) is the shape of the problem, not a fix: an
+operator flag is what a missing target split looks like.
+
+**Caught:** no, in both directions, and the enforcement half is the worse one — the build SUCCEEDS. It just
+carries a fraction of what the target could hold, which is indistinguishable from success. Owned by
+[07/04](../roadmap/0.5.0/plans/07-lod-generators-extended/lod-procobj-generator/04-slot-economy-and-budgets.md).
+
 ## In-game bisection of pool exhaustion gives false negatives
 
 Removing ANY img entry can make the symptom disappear without the removed entry being the cause. Diagnose
