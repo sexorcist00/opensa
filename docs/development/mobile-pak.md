@@ -98,6 +98,15 @@ DISTRICT=ganton OUT=./build/phone-ganton npm run phone   # another measurement d
 RECT=8,-8,11,-5 OUT=./build/phone-ls npm run phone       # ground the district table does not name
 ```
 
+**ASTC encoding is threaded, and its default is wrong for a phone.** `astc-encoder.js` starts one worker per
+core; each is a V8 isolate reserving its own code range, and each inherits the convert's `--max-old-space-size`
+setting. On the target device that ends the encode stage with `Fatal process out of memory: Failed to reserve
+virtual memory for CodeRange`, printed once per worker that lost the race — after the whole district has
+already been converted, which is the expensive half. `npm run phone` therefore passes `--astc-threads 2`;
+`ASTC_THREADS=1` retreats further and `ASTC_THREADS=0` restores one-per-core for a machine that can afford it.
+The thread count does not change the output bytes (pinned by a test), so it is a build-speed knob and never a
+build difference.
+
 **The DISTRICT is the rect.** `DISTRICT=` picks the pak rect, the game spawn and the map's opening point
 together, from the one table the console reads (`apps/dispatch/src/world/districts.ts`; `npx tsx
 scripts/district.ts` lists them). It defaults to **`los-santos-centre`, the district 201/1-01 pinned** — so

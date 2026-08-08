@@ -49,6 +49,11 @@ export interface PackOptions {
   bakeCollision?: boolean;
   /** Bake per-vertex SUN VISIBILITY — the heavy shadow bake. OFF by default; production converts need it. */
   bakes?: boolean;
+  /** astcenc worker threads for `--textures astc`; 0 (the default) is one per core. A PHONE cannot afford
+   *  that: every worker is a V8 isolate reserving its own code range, and on a 2026 arm64 device with the
+   *  convert's 4 GB heap setting inherited by each one, the encode stage dies with
+   *  `Failed to reserve virtual memory for CodeRange` — once per worker that lost the race. */
+  astcThreads?: number;
   /** Bake worker pool size; the default is a quarter of the cores. */
   bakeWorkers?: number;
   /** Emit every world texture as RGBA8 instead of passing SA's DXT through, so the pak loads on a GPU
@@ -231,7 +236,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
   }
   writeFileSync(join(products, 'manifest.json'), JSON.stringify(manifest));
 
-  await retextureModels(bundles, textures, log);
+  await retextureModels(bundles, textures, options.astcThreads ?? 0, log);
 
   // Which GPUs can run what we just wrote. Computed from BOTH halves — the pak's arrays and every model's
   // dictionary — because a car is not in the pak, so a world that loads on a phone can still fail at the
@@ -477,12 +482,13 @@ function readStochasticNames(files?: readonly string[]): Set<string> {
 async function retextureModels(
   bundles: ReturnType<typeof createModelBundles>,
   textures: TextureTarget,
+  astcThreads: number,
   log: (message: string) => void,
 ): Promise<void> {
   if (textures !== 'astc') {
     return;
   }
-  const encoder = createAstcEncoder();
+  const encoder = createAstcEncoder(astcThreads > 0 ? { threads: astcThreads } : {});
   const arrays = await bundles.retexture((array) => encoder.ostex(array));
   log(
     `astc: ${arrays} model dictionary arrays, ${(encoder.stats.texels / 1e6).toFixed(1)} M texels in ` +

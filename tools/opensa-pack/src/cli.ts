@@ -71,7 +71,7 @@ async function main(): Promise<void> {
     console.error(
       'usage: opensa-pack --game <dir> --out <dir> [--rect x0,y0,x1,y1] ' +
         '[--pak-out <dir>] [--game-id <id>] [--no-ao] [--no-models] [--bakes] [--bake-workers N] ' +
-        '[--textures astc|bc|rgba8] [--max-texture N] [--map-objects-in-rect] ' +
+        '[--textures astc|bc|rgba8] [--astc-threads N] [--max-texture N] [--map-objects-in-rect] ' +
         '[--platforms desktop|mobile[,…]] [--bake-collision] [--stochastic <file>[,<file>…]] ' +
         '[--vehicles a,b] [--peds a,b]',
     );
@@ -91,6 +91,12 @@ async function main(): Promise<void> {
     .map(fromCwd);
 
   const textures = readTextureTarget();
+  // `--astc-threads N` caps astcenc's worker pool. Unset means one per core, which is right on a desktop and
+  // fatal on a phone: see PackOptions.astcThreads.
+  const astcThreads = Number(arg('astc-threads') ?? 0) || 0;
+  if (astcThreads < 0) {
+    throw new Error(`bad --astc-threads '${astcThreads}' (want a positive count, or omit it for one per core)`);
+  }
   const maxTexture = Number(arg('max-texture') ?? 0) || 0;
   if (maxTexture !== 0 && (maxTexture < 4 || (maxTexture & (maxTexture - 1)) !== 0)) {
     throw new Error(`bad --max-texture '${maxTexture}' (want a power of two >= 4, or omit it)`);
@@ -113,6 +119,7 @@ async function main(): Promise<void> {
     .filter(Boolean);
   await packGameDir({
     ao: !process.argv.includes('--no-ao'),
+    ...(astcThreads > 0 ? { astcThreads } : {}),
     ...(bakeWorkers !== undefined ? { bakeWorkers } : {}),
     bakeCollision: process.argv.includes('--bake-collision'),
     bakes: process.argv.includes('--bakes'),

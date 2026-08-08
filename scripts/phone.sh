@@ -12,6 +12,7 @@
 #   VEHICLES=admiral,infernus PEDS=bmycg npm run phone     # convert a different subset
 #   VEHICLES=all PEDS=all npm run phone                    # the whole roster (hours on a phone)
 #   TEXTURES=rgba8 OUT=./build/phone-rgba8 npm run phone   # the texture-format A/B's other side
+#   ASTC_THREADS=1 npm run phone      # fewer encoder workers still (0 = one per core — it OOMs a phone)
 #   RECT=8,-8,11,-5 SPAWN=2495,-1687,20 npm run phone
 #
 # A PREBUILT app in `build/webapp` (or `WEBAPP=<dir>`) is used INSTEAD of the dev server, and then vite is
@@ -41,6 +42,13 @@ MAPOBJ="${MAPOBJ:-1}"
 # class of GPU actually carries. It costs an encode stage in the convert — `TEXTURES=rgba8` is the way back
 # and the A/B's other side. `bc` is desktop-only and would fail the --platforms mobile line below.
 TEXTURES="${TEXTURES:-astc}"
+# astcenc worker threads. NOT one-per-core here, which is the library's default and what killed the first
+# ASTC district convert on the target phone: each worker is a V8 isolate reserving its own code range, and
+# with the 4 GB heap below inherited by every one of them the encode stage died with `Failed to reserve
+# virtual memory for CodeRange` — five times, once per worker that lost. Two is a CONSERVATIVE guess, not a
+# measurement: the next field convert is what confirms it or moves it, and `ASTC_THREADS=1` is the retreat.
+# `ASTC_THREADS=0` restores one-per-core for a machine that can afford it.
+ASTC_THREADS="${ASTC_THREADS:-2}"
 # The default is a SUBSET, because converting the roster costs hours on a phone and a field run needs a
 # handful of models. `all` restores the full convert. The player's model is added below whatever is asked
 # for: without it the game boots with nobody to move (`GAME_CONFIG.mainCharacter`).
@@ -120,6 +128,7 @@ fi
 if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
   say "converting $GAME → $OUT (rect $RECT, textures=$TEXTURES, bake=$BAKE, models=$MODELS)"
   args=(--game "$GAME" --out "$OUT" --textures "$TEXTURES" --max-texture 256 --rect "$RECT" --no-ao --platforms mobile)
+  [ "$TEXTURES" = astc ] && [ "$ASTC_THREADS" != 0 ] && args+=(--astc-threads "$ASTC_THREADS")
   [ "$BAKE" = 1 ] && args+=(--bake-collision)
   [ "$MAPOBJ" = 1 ] && args+=(--map-objects-in-rect)
   [ "$MODELS" = 0 ] && args+=(--no-models)

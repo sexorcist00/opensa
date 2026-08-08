@@ -126,6 +126,17 @@ describe('createAstcEncoder', () => {
       expect(ospakRequiredFeatures(manifest)).toEqual(['texture-compression-astc']);
     });
 
+    it('encodes the same bytes with a CAPPED worker pool — the phone knob may not change the output', async () => {
+      // `threads` exists because one-per-core (the default) OOMs the target device: every astcenc worker is
+      // a V8 isolate reserving its own code range. A knob that also changed the pak would make the phone's
+      // build a different build, so this pins that it does not.
+      const source = rgba8Array(16, 16, 2);
+      const wide = await createAstcEncoder().ostex(source);
+      const capped = await createAstcEncoder({ threads: 1 }).ostex(source);
+
+      expect(Array.from(capped)).toEqual(Array.from(wide));
+    });
+
     it('reports what the stage cost, so a build can log it', async () => {
       const encoder = createAstcEncoder();
       await encoder.ostex(rgba8Array(16, 16, 2));
