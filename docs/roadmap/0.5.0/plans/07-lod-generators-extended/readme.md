@@ -93,6 +93,29 @@ with it (plan 100 step 05); what stays here is the far-view emitter RATE BUDGET 
    can attribute to a step. Tool-level verification (unit tests, fixture round-trips, single-model or
    single-cell runs) is what each step is judged on; the map is rebuilt once, at the end, and THAT is the
    run whose numbers go to `docs/benchmarks/`.
+
+   **ONE exception, granted 2026-08-08: an EARLY rebuild that serves plan 100 and this chain's baseline
+   together.** The rule had made [plan 100](../../../../plans/100-2dfx-at-lod-range/readme.md)'s owed field
+   check a hostage of the whole procobj chain — its pack input is a `.work` intermediate the pipeline
+   deletes, so nothing can be asked of a tree built earlier — while
+   [04](lod-procobj-generator/04-slot-economy-and-budgets.md)'s perf calibration needs a full build of its
+   own. One run answers both. It is **one**: the end-of-chain rebuild still happens, and this is not a licence
+   to rebuild whenever a step wants reassurance.
+
+   It only counts if it is captured, so the run carries a fixed manifest — nothing here may be gathered
+   afterwards from a tree, and a missed item costs the whole rebuild:
+
+   | For | Capture |
+   | --- | --- |
+   | plan 100/03 | 2dfx alive at LOD range — a chimney smoking past the HD boundary, a readable plate on an open LV board (`ne_bit_07` ≈ 222, 2742; `ne_bit_08` ≈ 416, 2710 — both earlier probes stayed inside 380 u and proved nothing) |
+   | plan 100/03 | nothing DOUBLES at the transition band (~440 → 1000 u) — HD and LOD emitters both live |
+   | plan 100/04 | the look verdict for both `docs/hacks/` entries: smoke drawn to the world edge, `insects`/`cigarette_smoke` floored at 100 u |
+   | 07/04 | the streaming + frame baseline at TODAY's density, so a later density arm has a before |
+   | 07/00 | `procobj-layer-census.ts` and `ipl-row-census.ts` on the fresh tree — the numbers this chain is priced in |
+   | standing | which pak build every figure was read from, into `docs/benchmarks/` BEFORE anything is analysed |
+
+   Keep the run re-usable: pmb's `--until <stage>` KEEPS the intermediate, which is the only way a second
+   question can be asked of the same build instead of buying another one.
 2. **A finished step's plan doc MOVES into the tool it landed in.** Each tool keeps its own chain at
    `tools/<tool>/docs/plans/NNN-<name>.md` — when a step here ships, its file leaves this folder for the
    next free number in that tool's chain (its Measurements section filled in), and the row above is updated

@@ -43,11 +43,18 @@ turned out to be inseparable** — `opensa-lod-generator` reads the policy direc
 per-space transform are one change; they shipped together. 04 is independent and can go first — it is the step
 that decides how far smoke is drawn at all. 05 is the real-SA line and depends only on 01.
 
-**All five shipped 2026-08-08. One thing is still owed: the FIELD CHECK**, and it cannot run before the
-chain's single rebuild — the pack's LOD input is a `.work` intermediate the pipeline deletes as it consumes
-it, so no built tree can be asked whether a chimney smokes at 600 u. Three things ride on that one run: the
-visual verification in [03](03-lod-bundle-reads-2dfx.md), the look verdict for both `docs/hacks/` entries from
+**All five shipped 2026-08-08. One thing is still owed: the FIELD CHECK**, and it cannot run before a
+rebuild — the pack's LOD input is a `.work` intermediate the pipeline deletes as it consumes it, so no built
+tree can be asked whether a chimney smokes at 600 u. Three things ride on that one run: the visual
+verification in [03](03-lod-bundle-reads-2dfx.md), the look verdict for both `docs/hacks/` entries from
 [04](04-authored-cull-distance.md), and confirmation that nothing doubles at the transition distance.
+
+**It now has a scheduled home (decided 2026-08-08).** Plan 07's working rule banned a full pmb rebuild until
+its procobj chain finishes, which would have left this chain unverified for the length of another one. The
+user granted **one early rebuild serving both**; its capture manifest — this plan's three items plus 07's
+baseline numbers — is in
+[07's working rules](../../roadmap/0.5.0/plans/07-lod-generators-extended/readme.md#working-rules-while-this-plan-runs).
+Nothing here can be recovered from the tree afterwards, so an item missed on that run costs the rebuild.
 
 ## The numbers this plan is budgeted against
 
