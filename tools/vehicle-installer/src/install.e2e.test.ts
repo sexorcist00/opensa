@@ -5,7 +5,7 @@ import { parseHandling } from '@opensa/renderware/parsers/text/handling.parser';
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 import { parseVehicleMods } from '@opensa/renderware/parsers/text/vehicle-mods.parser';
 import { createImg, openImg } from '@opensa/tool-kit/archive/img';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -85,6 +85,34 @@ describe.skipIf(!hasFixtures)('install (end-to-end, real data fixtures)', () => 
 
       const carmods = parseCarmods(readFileSync(join(out, 'data', 'carmods.dat'), 'utf8'));
       expect(carmods.mods.get('admiral')).toEqual(['exh_b_l']);
+    });
+
+    it("carries a mod's CLEO/ subfolder to <out>/cleo/ (lowercased, .ini sidecar rides along)", () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'in');
+      const out = join(root, 'out');
+
+      mkdirSync(join(game, 'data'), { recursive: true });
+      for (const file of DATA_FILES) {
+        cpSync(join(DATA, file), join(game, 'data', file));
+      }
+      mkdirSync(join(game, 'models'), { recursive: true });
+      writeFileSync(join(game, 'models', 'gta3.img'), createImg().build());
+
+      const folder = join(mods, 'coach - 1985 MCI 102A3');
+      mkdirSync(join(folder, 'CLEO'), { recursive: true });
+      writeFileSync(join(folder, 'coach.dff'), Uint8Array.of(1));
+      writeFileSync(join(folder, 'coach.settings.txt'), HANDLING);
+      writeFileSync(join(folder, 'CLEO', 'Car Left Door.cs'), 'code');
+      writeFileSync(join(folder, 'CLEO', 'Car Left Door.ini'), 'door=left');
+
+      install({ gamePath: game, inPath: mods, outPath: out });
+
+      expect(readFileSync(join(out, 'cleo', 'Car Left Door.cs'), 'utf8')).toBe('code');
+      expect(readFileSync(join(out, 'cleo', 'Car Left Door.ini'), 'utf8')).toBe('door=left');
+      // Canonical lowercase spelling on disk (a case-insensitive FS answers existsSync('CLEO') anyway).
+      expect(readdirSync(out)).toContain('cleo');
+      expect(readdirSync(out)).not.toContain('CLEO');
     });
 
     it('merges a UTF-16 settings file — the encoding most vehicle mods are saved in', () => {

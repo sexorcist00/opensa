@@ -45,6 +45,15 @@ function harness(
       },
     },
     environment: { fogCutDistance },
+    // The real one keeps an array a live rigid model still binds; this fake has no models, so it always
+    // unloads — mirroring `textures.unload` below.
+    releaseWorldArray: (ref: number): boolean => {
+      draining.delete(ref);
+      live.delete(ref);
+      unloadedArrays.push(ref);
+
+      return true;
+    },
     textures: {
       beginLoad: (ref: number): void => {
         if (live.has(ref) || draining.has(ref)) {

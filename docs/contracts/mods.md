@@ -119,14 +119,32 @@ folder layout stops mattering; every file is bucketed by bare name:
 | `.ide`, text `.ipl`, other `.dat` | Written to disk: over the stock file with that bare name, else to the path the loader declared. |
 | the loader `.txt` itself | Its `IDE`/`IPL` lines are appended to `data/gta.dat` (canonicalised to the stock `DATA\MAPS\…` spelling); `COLFILE` is dropped — col rides in the archive. |
 | `Remove original/` (any depth) | The file NAMES retire `gta3.img` entries; contents are never injected. |
-| `*.settings.txt`, CLEO `.cs`, prose `.txt` | Ignored by the map baker. Vehicle settings belong to a vehicle mod — see [vehicles.md](./vehicles.md). |
+| a `cleo/`/`CLEO/` dir (any depth, any extension inside), loose `.cs`/`.ini`/`.fxt` | Copied to `<out>/cleo/…` — the dir's author-relative structure preserved, loose files by bare name — with a log line per file. A misspelled dir (`cleo2/`) is NOT a cleo dir: its `.cs`/`.ini`/`.fxt` still land via the loose-extension rule, other extensions are dropped as before. |
+| `*.settings.txt`, prose `.txt` | Ignored by the map baker. Vehicle settings belong to a vehicle mod — see [vehicles.md](./vehicles.md). |
 
 Loader and data files are read **BOM-aware** (UTF-16 is what Notepad writes); the `.merge` and IPL/IDE
 readers on the overlay path still assume UTF-8.
 
 ---
 
-## 4. What is NOT a contract
+## 4. CLEO scripts (`cleo/` — plan 097; the runtime reads these, not the baker)
+
+The RUNTIME discovers compiled scripts at boot from the VFS key prefix **`cleo/` + `.cs`** (keys are
+lowercased by every loader). The installers place them there (plan 097/06): mod-installer's bake
+buckets CLEO content to `<out>/cleo/` (overlay mods normalise a top-level `CLEO/` → `cleo/`), and
+vehicle-installer carries a vehicle mod's `cleo/` subfolder — see section 3 and
+[vehicles.md](./vehicles.md).
+
+| Name | Meaning | Misspelled → |
+| --- | --- | --- |
+| `cleo/<name>.cs` | Decoded and run as a script thread at boot (capped by `config.cleo.maxScripts`; census line `[cleo] N script(s)`). The local/http-dir partition ALSO pre-decodes these to select script-referenced models into the VFS (`cleoModelRefs`). | **Silently not discovered** — wrong folder or extension means no census entry and no model selection. The census line is the check: count your scripts. |
+| a broken/foreign `.cs` | Skipped WITH a console line (`[cleo] … failed to decode`); the other scripts still run. | reports itself |
+| the mod's `.ide` | Must ALSO be LISTED in `data/gta.dat` (`IDE DATA\MAPS\….ide`) — the runtime id→name resolver follows gta.dat, while the partition scans every `data/**/*.ide`. | Models reach the VFS but ids resolve to nothing: `[cleo] model id N resolves to nothing` (the 04 field lesson — reports itself) |
+| `<name>.opensa-only.cs` (SDK-authored artifacts, `cleo/sdk` plan 003) | The `@opensa/cleo-sdk` build embeds the script's declared target in the filename: a plain `<name>.cs` passed the dual-target whitelist (runs under plain real CLEO 4 on SA 1.0 US AND our VM); `<name>.opensa-only.cs` uses opcodes only our VM serves. Our runtime treats both as ordinary scripts. | Dropping the suffix by renaming does NOT make the script portable: on real SA it faults at the first unknown opcode (real CLEO's failure, loud). The suffix is information, not a switch. |
+
+---
+
+## 5. What is NOT a contract
 
 - **The mod folder's name** — ordering only. Renaming a mod cannot change what it does.
 - **The path a Modloader-style mod uses internally** — bare names decide everything there.
@@ -134,7 +152,7 @@ readers on the overlay path still assume UTF-8.
 
 ---
 
-## 5. Adding a convention
+## 6. Adding a convention
 
 When a new folder/file name starts meaning something, it goes here in the same change, with what happens when
 it is misspelled. That last part is the point: nearly every rule on this page exists because some spelling of

@@ -290,9 +290,9 @@ verdicts.**
 
 | Check | Verdict |
 | --- | --- |
-| **The towers** — the reported symptom | **fixed**: "проблема с башнями ушла" |
-| **Vegetation control** — the 2026-07-13 screen-door must not return | **clean**: first pass "ничего не заметил", then explicitly re-checked at a named spot — "точно все хорошо" |
-| **True-blend control** — glass must still composite | **clean**: "стекло на месте, все через него хорошо видно" |
+| **The towers** — the reported symptom | **fixed**: "the tower problem is gone" |
+| **Vegetation control** — the 2026-07-13 screen-door must not return | **clean**: first pass "did not notice anything", then explicitly re-checked at a named spot — "definitely all good" |
+| **True-blend control** — glass must still composite | **clean**: "the glass is there and you can see through it fine" |
 
 Shipped classes, read out of the pak's 43 RGBA8 arrays rather than predicted: **1 422 cutout / 661
 soft-blend / 380 opaque**. These count a DIFFERENT population from phase 1's 599 → 2 201 and the two are not

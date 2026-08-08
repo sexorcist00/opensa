@@ -28,10 +28,12 @@ export interface ModelOsm {
   /** The `.osm` bytes: `DESC` + `GEOM`, plus whatever `extraSections` the caller added. */
   bytes: Uint8Array;
   fixture: VehicleFixture;
-  /** The model's dictionary (`.ostex` payload) — carried as the `TEXS` SECTION, not a sibling file. */
+  /** The model's dictionary — the `TEXS` section payload (empty when the model uses the world plan). */
   ostex: Uint8Array;
   /** The sections themselves, so a caller can MERGE them with another class's for the same model. */
   sections: OsmSection[];
+  /** Non-fatal degradations — e.g. the size-bucketed dictionary fell back to the single max-size array. */
+  warnings: string[];
 }
 
 export interface ModelOsmOptions {
@@ -120,7 +122,15 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
         name,
       )
     : null;
-  const slots = planned?.slots ?? shared;
+  const warnings: string[] = [];
+  // Without a raw/world dictionary the layers are bucketed by NATIVE size — one array per size, nothing
+  // upscaled. `pack()`'s one-array-at-max-size shape taxed every layer with the largest one's footprint
+  // (a 32-layer mod dictionary hit 128 MB where the sources sum to ~10 MB) and overran the VER2 archive's
+  // u16 sector ceiling. Falls back to that legacy single array only when a submesh straddles size buckets
+  // or a lamps-on twin lands where the runtime cannot follow (both throw in the helpers).
+  const bucketed =
+    planned || shared ? null : bucketDictionary(name, dictionary, built, warnings, options.forceRgba8 ?? false);
+  const slots = planned?.slots ?? shared ?? bucketed?.slots ?? null;
   const arrays = slots ? submeshArrays(name, built, slots) : null;
   if (slots) {
     remapModelLayers(built.meta, slots);
@@ -134,19 +144,18 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
     // than look for a dictionary that is deliberately absent.
     fixture.textureSource = 'world';
   }
-  // Without a raw dictionary the builder bucketed everything into ONE array, so `TEXS` carries a single
-  // entry; peds and map objects are the classes whose textures disagree on size and need more.
-  const ostex = shared
-    ? new Uint8Array(0)
-    : planned
-      ? planned.arrays[0]
-      : packModelOstex(built.texture, { forceRgba8: options.forceRgba8 ?? false });
+  // The legacy single-array fallback still has to honour the build's texture format: a model whose
+  // dictionary reaches this branch on an --rgba8/--textures build and keeps BC is unspawnable on the very
+  // device the build was made for (the bug `pack-props` shipped twice).
+  const texsArrays = shared
+    ? []
+    : (planned?.arrays ??
+      bucketed?.arrays ?? [packModelOstex(built.texture, { forceRgba8: options.forceRgba8 ?? false })]);
+  const ostex = shared ? new Uint8Array(0) : encodeOsmTextures({ arrays: texsArrays });
   const sections: OsmSection[] = [
     { bytes: new TextEncoder().encode(JSON.stringify(fixture)), tag: OsmSectionTag.DESC },
     { bytes: bin, tag: OsmSectionTag.GEOM },
-    ...(shared
-      ? []
-      : [{ bytes: encodeOsmTextures({ arrays: planned ? planned.arrays : [ostex] }), tag: OsmSectionTag.TEXS }]),
+    ...(shared ? [] : [{ bytes: ostex, tag: OsmSectionTag.TEXS }]),
     ...(options.extraSections?.(built, dff, clump) ?? []),
   ];
 
@@ -156,6 +165,7 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
     fixture,
     ostex,
     sections,
+    warnings,
   };
 }
 
@@ -217,10 +227,52 @@ export function packVehicleFixture(
         offset: 0, // the layers live in the sibling `.ostex`, not in GEOM
         width: built.texture.width,
       },
+      // Keyframes are small and few (one film-strip dict is ~260 rows) and only the models that reference
+      // one carry the key at all, so this rides in DESC rather than earning a section of its own.
+      ...(built.uvAnimations?.length ? { uvAnimations: [...built.uvAnimations] } : {}),
       vertexCount: built.positions.length / 3,
       wheels: [...built.wheels],
     },
   };
+}
+
+/**
+ * The default dictionary: size buckets from the builder's own layers, validated against what the runtime
+ * can bind. Returns null (fall back to the legacy single max-size array) when validation throws — a
+ * submesh whose vertices straddle two size buckets, or a lamps-on twin split from its base — because a
+ * WRONG dictionary retextures the model silently, while the fallback merely costs bytes.
+ *
+ * When every layer shares one size the single bucket IS the legacy shape, minus the resample.
+ */
+function bucketDictionary(
+  name: string,
+  dictionary: VehicleTextures,
+  built: VehicleModelData,
+  warnings: string[],
+  // Every writer of a model dictionary takes the build's format, or the class it serves ships BC into a pak
+  // built for a GPU that has none — the failure `--rgba8` had to be chased through four by-name classes
+  // (`docs/restrictions/assets-and-data.md`). Bucketing arrived after that hunt and would have re-opened it.
+  forceRgba8: boolean,
+): null | { arrays: Uint8Array[]; slots: readonly { array: number; layer: number }[] } {
+  const buckets = dictionary.packBuckets();
+  if (buckets.arrays.length === 1) {
+    return { arrays: [packModelOstex(buckets.arrays[0], { forceRgba8 })], slots: buckets.slots };
+  }
+  try {
+    // Validate BEFORE committing: both checks throw, and `remapModelLayers` mutates meta in place, so it
+    // runs on a copy here and the caller re-runs it on the real meta only after both passes succeed.
+    submeshArrays(name, built, buckets.slots);
+    remapModelLayers(built.meta.slice(), buckets.slots);
+  } catch (error) {
+    warnings.push(
+      `${name}: size-bucketed dictionary fell back to the single max-size array — ` +
+        (error instanceof Error ? error.message : String(error)),
+    );
+
+    return null;
+  }
+
+  return { arrays: buckets.arrays.map((bucket) => packModelOstex(bucket, { forceRgba8 })), slots: buckets.slots };
 }
 
 function bytesOf(array: Float32Array | Uint16Array | Uint32Array): Uint8Array {

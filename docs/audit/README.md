@@ -23,6 +23,22 @@ interpret them.
   (blended sample 8.2 µs vs 6.0 µs; no render-side change) and +~100 unit tests.
 - [`three-to-own-engine.md`](./three-to-own-engine.md) — the three.js → own WebGPU engine migration:
   runtime (~7× fps, same machine/content) and bundle (−12.8 % gzip despite adding a whole engine).
+- [`cleo-basic-097.md`](./cleo-basic-097.md) — the plan-097 CLEO chain: six real mod scripts run
+  unmodified on our own SCM VM for 465 µs/tick, gaps are declared DATA enforced by CI joins — and the
+  close-out benchmark itself caught a ~3 ms/tick field tax (the `findNext` walk that never exhausted)
+  plus a reporting lane that bypassed coverage.
+- [`cleo-scripts-001-rhino-tracks.md`](./cleo-scripts-001-rhino-tracks.md) — the authored rhino track
+  script (one day, three field rounds): 5.4× cheaper at peak and **114× cheaper in the frame with no
+  tank in it**, artifact 2 628 B vs 34 114 B, two defects of the original fixed rather than copied —
+  and the honest headline is that **the script was the small half**: three defects underneath it
+  (reversed native-call arguments, a wheel roll the engine never published to scripts, a MARKER wheel
+  inflated 23.5×) had to be fixed first, and none was findable from the script side.
+- [`cleo-scripts-chain.md`](./cleo-scripts-chain.md) — the CHAIN's conclusion: **one script shipped, one
+  WITHDRAWN**, and the withdrawal is the more useful result. Authoring against our own VM asked the engine
+  questions nothing else asked and found FOUR live defects, the last of which — lamp anchors invented from
+  the half-extents for any model with no lamp dummy — was the whole reason 002 had anything to smash. The
+  pattern, having recurred three times in two days: **ask what the engine is doing wrong before authoring
+  content that compensates for it.**
 - [`vehicle-effects-089.md`](./vehicle-effects-089.md) — the plan-089 vehicle-effects chain (one day,
   five steps, six field rounds): two new engine capabilities (the dynamic one-shot particle lane and the
   first decal lane), four effects on SA's own assets, one new physics read born of a dead channel
@@ -44,3 +60,12 @@ interpret them.
   subsystem. Its per-frame cost is **under the timer's resolution** (mean 0.0172 ms over 22 817 frames). The
   lesson worth carrying: three of the four defects that mattered were found by a HUMAN watching footage after
   headless numbers had accepted the build, and each became a rule about what a metric cannot see.
+- [`asi-sdk-extraction.md`](./asi-sdk-extraction.md) — the `asi/sdk` chain (five plans, one day): the ASI
+  framework moved out of `asi/perfect-map` into a shared SDK, making `asi/` an sdk-plus-consumers category
+  like `cleo/`. **perfect-map 1 499 → 705 lines** (497 of them its own subject matter; 179 the seam a second
+  plugin must write), the roadmap's copy-verbatim list for `asi/city-life` is dead, and seven hand-copied byte
+  arrays went to zero — the "a hand-edited address is structurally impossible" rule is now true rather than
+  claimed. Field-confirmed on the real install (dry run + APPLY, both fixes installed with FLA/OLA present);
+  the behavioural oracle is the one verdict still open. The method lesson: **the measurement rig failed more
+  often than the thing measured** — two of three surprises were harness bugs, caught only by giving each row a
+  verdict from a different channel than the number.

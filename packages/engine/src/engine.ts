@@ -34,6 +34,7 @@ import {
 import { EnvProbe, PROBE_RANGE } from './render/probe';
 import { SkidMarks, type SkidSegment } from './render/skid-marks';
 import { buildSkyLut, SKY_LUT_HEIGHT, SKY_LUT_WIDTH, skyLutKey } from './render/sky-lut';
+import { stepUvAnimation, UV_ANIM_IDENTITY, UV_ANIM_STRIDE, type UvAnimation, uvAnimOffset } from './render/uv-anim';
 import { type CellHandle, CellStore } from './world/cells';
 import { TextureArrays } from './world/textures';
 
@@ -314,8 +315,12 @@ export interface VehicleInstance {
   /**
    * Per-vehicle lamp state (074/08 B5 step 5): headlights swap the lamp texture to its lit twin and glow the
    * glass; brakes take the tail lamps to full. Was a GLOBAL day/night gate — every parked car lit up at once.
+   *
+   * `smashed` is SA's light-damage mask, one bit per `eLights` index. The MESH can only go dark per PAIR —
+   * a DFF authors one lamp material for both sides of an end — so it takes both bits of an end to stop the
+   * twin/glow; the per-lamp half of the effect (beam, pool light, corona) is the game layer's.
    */
-  setLamps(headlights: boolean, brakes: boolean, intensity: number): void;
+  setLamps(headlights: boolean, brakes: boolean, intensity: number, smashed: number): void;
   /** Carcols colours (linear 0..1) the vertex paint slots resolve to — this car's own paint job. */
   setPaint(paint: VehiclePaint): void;
   /**
@@ -354,6 +359,12 @@ export interface VehicleModelInit {
    * layers into 6 arrays, because one array is one size AND one format AND one mip count.
    */
   textures: readonly ModelTextureInit[];
+  /**
+   * The model's own UV animations (plan 099), a submesh's `uvAnim` indexes them. Present only on the models
+   * that animate — a script object with a film-strip material, a scrolling sign — so a car, a ped and every
+   * ordinary prop allocate nothing and bind the engine's shared identity.
+   */
+  uvAnimations?: readonly UvAnimation[];
   uvs: Uint8Array;
   vertexCount: number;
 }
@@ -371,6 +382,10 @@ export interface VehicleSubmesh {
    *  the single-array case every runtime-built model (and every car) is. The LAYER stays per-vertex in
    *  `meta.x`, because the lamps-on twin is switched per vertex and per-submesh binding cannot say that. */
   array?: number;
+  /** Part-local AABB — the translucent sort clamps the eye into it for an exact nearest-extent key. The
+   *  `center − radius` sphere over-reached on scattered submeshes (a gauge cluster spanning the dash beat
+   *  the window sheet in front of it and the cabin drew over the glass). Absent on old fixtures. */
+  bounds?: { max: readonly [number, number, number]; min: readonly [number, number, number] };
   /** Model-space centroid (074/16 round 6) — translucent submeshes sort back-to-front by it per frame.
    *  Optional: fixtures built before the field carry none and sort at the origin. */
   center?: readonly [number, number, number];
@@ -384,6 +399,9 @@ export interface VehicleSubmesh {
    *  distance − radius), so a raked windscreen beats the wheel under its overhang (074/16 field fix). */
   radius?: number;
   translucent: boolean;
+  /** Which of the model's `uvAnimations` drives this submesh's UVs (plan 099). Absent = static UVs, which
+   *  binds the identity transform — algebraically a no-op, and the only thing an old `.osm` can say. */
+  uvAnim?: number;
 }
 
 /** Per-frame environment (074/06): drives the world lighting uniforms. All CPU-side arcs live in the host. */
@@ -481,7 +499,7 @@ interface ClutterModel {
 
 interface VehicleInstanceState {
   entity: RigidEntity;
-  lamps: { brakes: boolean; headlights: boolean; intensity: number };
+  lamps: { brakes: boolean; headlights: boolean; intensity: number; smashed: number };
   /** Kept so a capacity grow (which reallocates the buffer) can restore it — paint is not re-sent per frame. */
   paint: VehiclePaint;
   /** This car's plate, kept for the same reason as `paint`: a capacity grow must restore it (082/03). */
@@ -510,6 +528,13 @@ interface VehicleModel {
   /** Residency estimate per array, parallel to `textures` — each is destroyed with its own share. */
   textureBytes: number[];
   textures: GPUTexture[];
+  /** Empty on all but the animated models — the per-frame advance skips those without paying for them. */
+  uvAnimations: readonly UvAnimation[];
+  /** Slot 0 = identity, slots 1..N = `uvAnimations`, {@link UV_ANIM_STRIDE} apart; the draw picks one with a
+   *  dynamic offset. This is the engine's SHARED identity buffer on a model that animates nothing. */
+  uvAnimBuffer: GPUBuffer;
+  /** False when `uvAnimBuffer` is the shared identity: destroying it would take every other model down. */
+  uvAnimOwned: boolean;
   /** True when `submeshes[].array` are refs into the SHARED world plan — the model owns no textures, and
    *  a submesh whose array has not streamed in yet is simply not drawn this frame. */
   worldArrays: boolean;
@@ -700,6 +725,8 @@ export class Engine {
   private frameTriangles = 0;
   private frameUniform!: GPUBuffer;
   private readonly frustumPlanes = new Float32Array(24);
+  /** The engine-wide identity UV transform every non-animated rigid model binds (plan 099/02). */
+  private identityUvAnim!: GPUBuffer;
   private readonly invViewProj: Mat4 = mat4Identity();
   private lightPoolBuffer!: GPUBuffer;
   private readonly lightPoolScratch = new Float32Array(LIGHT_POOL_CAP * LIGHT_STRIDE);
@@ -923,7 +950,7 @@ export class Engine {
     }
     const state: VehicleInstanceState = {
       entity: new RigidEntity(parts),
-      lamps: { brakes: false, headlights: false, intensity: 1 },
+      lamps: { brakes: false, headlights: false, intensity: 1, smashed: 0 },
       paint: DEFAULT_PAINT,
       // Slot 0 of each array until the host assigns one: an unplated car shows the stock placeholder.
       plate: { city: 0, textSlot: 0 },
@@ -936,12 +963,17 @@ export class Engine {
     return {
       entity: state.entity,
       model: id,
-      setLamps: (headlights: boolean, brakes: boolean, intensity: number): void => {
+      setLamps: (headlights: boolean, brakes: boolean, intensity: number, smashed: number): void => {
         const lamps = state.lamps;
-        if (lamps.headlights === headlights && lamps.brakes === brakes && lamps.intensity === intensity) {
+        if (
+          lamps.headlights === headlights &&
+          lamps.brakes === brakes &&
+          lamps.intensity === intensity &&
+          lamps.smashed === smashed
+        ) {
           return; // lamp state is written on CHANGE, not per frame
         }
-        state.lamps = { brakes, headlights, intensity };
+        state.lamps = { brakes, headlights, intensity, smashed };
         this.writeVehicleLamps(model, state.slot, state.lamps);
       },
       setPaint: (paint: VehiclePaint): void => {
@@ -995,6 +1027,7 @@ export class Engine {
     const paintBuffer = this.createVehiclePaintBuffer(init.parts.length, VEHICLE_CAPACITY);
     const lampBuffer = this.createVehicleLampBuffer(init.parts.length, VEHICLE_CAPACITY);
     const plateBuffer = this.createVehiclePlateBuffer(init.parts.length, VEHICLE_CAPACITY);
+    const uvAnim = this.createModelUvAnim(init.uvAnimations ?? []);
     const uploads = init.textures.map((texture) => this.createModelTexture(texture, 'vehicle-texture'));
     const textures = uploads.map((upload) => upload.texture);
     const textureBytes = uploads.map((upload) => upload.byteEstimate);
@@ -1015,6 +1048,9 @@ export class Engine {
       submeshes: init.submeshes,
       textureBytes,
       textures,
+      uvAnimations: uvAnim.animations,
+      uvAnimBuffer: uvAnim.buffer,
+      uvAnimOwned: uvAnim.owned,
       worldArrays: init.textures.length === 0,
     };
     this.vehicleModels.set(id, model);
@@ -1071,6 +1107,11 @@ export class Engine {
     this.resources.destroyBuffer('uniform', model.paintBuffer);
     this.resources.destroyBuffer('uniform', model.lampBuffer);
     this.resources.destroyBuffer('uniform', model.plateBuffer);
+    // NOT the shared identity: every non-animated model binds that one buffer, and destroying it with the
+    // first prop unloaded would take the whole rigid lane down.
+    if (model.uvAnimOwned) {
+      this.resources.destroyBuffer('uniform', model.uvAnimBuffer);
+    }
     model.textures.forEach((texture, array) => {
       this.resources.destroyTexture('texture', texture, model.textureBytes[array] ?? 0);
     });
@@ -1225,6 +1266,9 @@ export class Engine {
     // ObjectTable draws (074/06 row 9): hour-gated timed objects + kind-4 UV-scroll (B7·c), in the opaque
     // phase (their blend groups sort with the world blends only approximately — the standard caveat).
     this.advanceUvAnimations(seconds);
+    // The rigid lane's own animations (plan 099/02), stepped from the SAME clock: a script object's film
+    // strip and a cell's scrolling sign must not drift apart.
+    this.advanceModelUvAnimations(seconds);
     draws += this.drawObjects(pass);
     // Procedural clutter (074/19): grass/bushes/rocks, instanced, in the opaque phase before the sky.
     draws += this.drawClutter(pass);
@@ -1348,6 +1392,14 @@ export class Engine {
       label: 'probe-view',
       layout: this.pipelines.probeViewLayout,
     });
+    // The rigid lane's shared IDENTITY UV transform (plan 099/02). One buffer for the whole engine: every
+    // model that animates nothing binds it, so a car costs no allocation and its draws stay a no-op.
+    this.identityUvAnim = this.resources.createBuffer('uniform', {
+      label: 'uv-anim-identity',
+      size: UV_ANIM_STRIDE,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(this.identityUvAnim, 0, new Float32Array(UV_ANIM_IDENTITY));
     this.frameUniform = this.resources.createBuffer('uniform', {
       label: 'frame',
       size: 416, // viewProj + invViewProj (128) + 18 × vec4 (camera/sun/params/sky×2/fog/params2/moon×2/params3/sunCore/sunCorona/water/params4/cloudTop/cloudBottom/ambient)
@@ -1489,6 +1541,32 @@ export class Engine {
   /** Residency ledger passthrough (HUD + leak assertions). */
   ledger(): ReturnType<Resources['ledger']> {
     return this.resources.ledger();
+  }
+
+  /**
+   * Streaming's eviction seam for a WORLD texture array. A live rigid instance still drawing with `ref`
+   * KEEPS the array (its cached bind group references the shared texture — destroying it under a recorded
+   * bundle is "destroyed texture used in a submit", the black screen at the ferris wheel). Otherwise every
+   * cached world-array bind group over `ref` is dropped first — a later reload mints a NEW texture, and a
+   * stale cache would keep submitting the destroyed one — and the array is unloaded. True = unloaded.
+   */
+  releaseWorldArray(ref: number): boolean {
+    for (const model of this.vehicleModels.values()) {
+      if (!model.worldArrays || !model.instances.some((state) => state !== null)) {
+        continue;
+      }
+      if (model.submeshes.some((submesh) => (submesh.array ?? 0) === ref)) {
+        return false;
+      }
+    }
+    for (const model of this.vehicleModels.values()) {
+      if (model.worldArrays) {
+        model.bindGroups.delete(ref);
+      }
+    }
+    this.textures.unload(ref);
+
+    return true;
   }
 
   /** Drop a streamed-out cell's clutter (074/19). */
@@ -1967,32 +2045,63 @@ export class Engine {
     this.writePlateLayer(this.plateTexture, slot, rgba, PLATE_SLOT_WIDTH, PLATE_SLOT_HEIGHT);
   }
 
+  /**
+   * Step every ANIMATED rigid model's transforms to `seconds` (plan 099/02) — the same clock the world lane
+   * reads, or a sign on a building and a sign on a script object would visibly disagree.
+   *
+   * Gated twice: a model with no animations is skipped (that is every car), and so is one with no LIVE
+   * instance — the buffer of an unspawned model cannot be sampled, so writing it would be pure cost.
+   */
+  private advanceModelUvAnimations(seconds: number): void {
+    for (const model of this.vehicleModels.values()) {
+      if (model.uvAnimations.length === 0 || !model.instances.some((state) => state !== null)) {
+        continue;
+      }
+      model.uvAnimations.forEach((animation, index) => {
+        stepUvAnimation(animation, seconds, this.uvAnimScratch, 0);
+        // Slot index + 1: slot 0 is the identity every static submesh of this same model binds.
+        this.device.queue.writeBuffer(model.uvAnimBuffer, (index + 1) * UV_ANIM_STRIDE, this.uvAnimScratch);
+      });
+    }
+  }
+
   /** ObjectTable draws for visible cells (074/06 row 9). Timed: render when `hour` is inside [on, off). */
   /** Advance every UV-scroll animation to wall-clock `seconds` (B7·c / plan 074/18). The prod lerp: equal-time
    *  keyframe pairs snap (DolSign's stepped flipbook), the rest lerp. A handful of entries — cheap per frame. */
   private advanceUvAnimations(seconds: number): void {
     for (let index = 0; index < this.uvAnimations.length; index += 1) {
-      const entry = this.uvAnimations[index];
-      const keys = entry.keyframes;
-      if (keys.length === 0) {
-        continue;
-      }
-      const time = entry.duration > 0 ? seconds % entry.duration : 0;
-      let k = keys.length - 1;
-      while (k > 0 && keys[k].time > time) {
-        k -= 1;
-      }
-      const k0 = keys[k];
-      const k1 = keys[Math.min(k + 1, keys.length - 1)];
-      const span = k1.time - k0.time;
-      const f = span > 1e-6 ? Math.min(Math.max((time - k0.time) / span, 0), 1) : 0;
-      const at = index * 4;
-      // uv params: [rotation, scaleX, scaleY, skew, translateX, translateY] → the shader wants (tx, ty, sx, sy).
-      this.uvAnimTransforms[at] = lerp(k0.uv[4] ?? 0, k1.uv[4] ?? 0, f);
-      this.uvAnimTransforms[at + 1] = lerp(k0.uv[5] ?? 0, k1.uv[5] ?? 0, f);
-      this.uvAnimTransforms[at + 2] = lerp(k0.uv[1] ?? 1, k1.uv[1] ?? 1, f);
-      this.uvAnimTransforms[at + 3] = lerp(k0.uv[2] ?? 1, k1.uv[2] ?? 1, f);
+      stepUvAnimation(this.uvAnimations[index], seconds, this.uvAnimTransforms, index * 4);
     }
+  }
+
+  /**
+   * Put group 1 in the state this submesh needs, if it is not already. Returns false when the submesh's
+   * WORLD texture array has not streamed in yet — the caller skips it and it appears the frame it lands.
+   *
+   * The UV-anim slot is tracked beside the array rather than folded into it (plan 099/02): the dynamic
+   * offset is part of the binding, so two submeshes sharing one array but animating differently still need
+   * a rebind each. `current` is mutated — it is the caller's running state across the whole model.
+   */
+  private bindRigidSubmesh(
+    pass: GPURenderPassEncoder,
+    model: VehicleModel,
+    submesh: VehicleSubmesh,
+    current: { array: number; offset: number },
+  ): boolean {
+    const array = submesh.array ?? 0;
+    const offset = uvAnimOffset(submesh.uvAnim, model.uvAnimations.length);
+    if (array === current.array && offset === current.offset) {
+      return true;
+    }
+    const group = this.rigidBindGroup(model, array);
+    if (!group) {
+      return false;
+    }
+    pass.setBindGroup(1, group, [offset]);
+    current.array = array;
+    current.offset = offset;
+
+    return true;
   }
 
   /**
@@ -2147,6 +2256,33 @@ export class Engine {
   }
 
   /**
+   * A model's UV-animation uniform (plan 099/02): slot 0 identity, slots 1..N its animations, one
+   * {@link UV_ANIM_STRIDE} apart so a draw can select its own with a dynamic offset.
+   *
+   * A model with NO animations gets the engine's shared identity buffer instead of one of its own — which
+   * is every car, every ped and nearly every prop, so the common path allocates nothing and writes nothing.
+   */
+  private createModelUvAnim(animations: readonly UvAnimation[]): {
+    animations: readonly UvAnimation[];
+    buffer: GPUBuffer;
+    owned: boolean;
+  } {
+    if (animations.length === 0) {
+      return { animations, buffer: this.identityUvAnim, owned: false };
+    }
+    const buffer = this.resources.createBuffer('uniform', {
+      label: 'vehicle-uv-anim',
+      size: (animations.length + 1) * UV_ANIM_STRIDE,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    // Slot 0 stays identity for the model's own static submeshes — the ferris ring animates ONE material
+    // and draws the rest of its geometry through the same bind group.
+    this.device.queue.writeBuffer(buffer, 0, new Float32Array(UV_ANIM_IDENTITY));
+
+    return { animations, buffer, owned: true };
+  }
+
+  /**
    * An RGBA8 texture ARRAY for the plate rasters. No mips: a plate is 64×16 and SA samples its own with
    * `rwFILTERNEAREST`, so there is no chain to build and nothing to lose by not having one.
    */
@@ -2166,6 +2302,7 @@ export class Engine {
     paintBuffer: GPUBuffer;
     plateBuffer: GPUBuffer;
     texture: GPUTexture;
+    uvAnimBuffer: GPUBuffer;
   }): GPUBindGroup {
     return this.device.createBindGroup({
       entries: [
@@ -2194,6 +2331,10 @@ export class Engine {
         { binding: 7, resource: { buffer: model.plateBuffer } },
         { binding: 8, resource: this.plateTexture.createView({ dimension: '2d-array' }) },
         { binding: 9, resource: this.plateBackTexture.createView({ dimension: '2d-array' }) },
+        // The UV transform (plan 099/02). `size` bounds the binding to ONE slot so the per-draw dynamic
+        // offset can slide it across the model's list; without it the binding would claim the whole buffer
+        // and every offset past slot 0 would run off its end.
+        { binding: 10, resource: { buffer: model.uvAnimBuffer, offset: 0, size: 16 } },
       ],
       label: 'vehicle',
       layout: this.pipelines.rigidLayout,
@@ -2241,6 +2382,18 @@ export class Engine {
     this.resources.destroyTexture('texture', entry.texture, entry.textureBytes);
   }
 
+  /**
+   * Draw every live instance of every model. `firstInstance` carries the matrix row — slot × partCount +
+   * part — so the WGSL side is unchanged from the single-probe days. One draw per visible submesh per car:
+   * the known cost knob if a street full of parked cars ever pushes the draw budget.
+   */
+  /**
+   * Two draws for every 2dfx emitter on the map (one per blend mode). The vertex shader owns the lifecycle,
+   * so this is genuinely all there is to it per frame.
+   */
+  /** Draw the live breaks and retire the finished ones (their GPU resources go back immediately). */
+  /** Debug wireframes (074/13 phase 4) — one draw per registered set, skipped entirely when there are none. */
+
   private drawClutter(pass: GPURenderPassEncoder): number {
     let draws = 0;
     for (const cellDraws of this.clutterCells.values()) {
@@ -2273,18 +2426,6 @@ export class Engine {
 
     return draws;
   }
-
-  /**
-   * Draw every live instance of every model. `firstInstance` carries the matrix row — slot × partCount +
-   * part — so the WGSL side is unchanged from the single-probe days. One draw per visible submesh per car:
-   * the known cost knob if a street full of parked cars ever pushes the draw budget.
-   */
-  /**
-   * Two draws for every 2dfx emitter on the map (one per blend mode). The vertex shader owns the lifecycle,
-   * so this is genuinely all there is to it per frame.
-   */
-  /** Draw the live breaks and retire the finished ones (their GPU resources go back immediately). */
-  /** Debug wireframes (074/13 phase 4) — one draw per registered set, skipped entirely when there are none. */
 
   /** 2dfx corona billboards of visible cells (074/06 row 13): CPU-gated by night + farClip, one
    *  instanced draw. Colour is premultiplied by the dn gate — coronas are a NIGHT phenomenon (v1). */
@@ -2524,9 +2665,9 @@ export class Engine {
   private drawVehicleModel(pass: GPURenderPassEncoder, model: VehicleModel, translucent: boolean, eye: Vec3): number {
     let draws = 0;
     let bound = false;
-    // Which texture array is currently bound. A car keeps this at 0 for the whole model — the switch only
-    // costs anything on a multi-array map object, and even there the opaque order groups submeshes by array.
-    let boundArray = -1;
+    // What group 1 currently holds: the texture ARRAY and the UV-anim SLOT. Cars and map objects both ship
+    // size-bucketed dictionaries, and the opaque order groups submeshes by array, so switches stay rare.
+    const group1 = { array: -1, offset: -1 };
     const indexFormat: GPUIndexFormat = model.index16 ? 'uint16' : 'uint32';
     for (const state of model.instances) {
       if (!state) {
@@ -2541,14 +2682,8 @@ export class Engine {
           pass.setIndexBuffer(model.indexBuffer, indexFormat);
           bound = true;
         }
-        const array = submesh.array ?? 0;
-        if (array !== boundArray) {
-          const group = this.rigidBindGroup(model, array);
-          if (!group) {
-            continue; // a world array still streaming in — the submesh appears the frame it lands
-          }
-          pass.setBindGroup(1, group);
-          boundArray = array;
+        if (!this.bindRigidSubmesh(pass, model, submesh, group1)) {
+          continue; // a world array still streaming in — the submesh appears the frame it lands
         }
         pass.drawIndexed(submesh.indexCount, 1, submesh.indexOffset, 0, state.slot * model.partCount + submesh.part);
         this.frameTriangles += submesh.indexCount / 3;
@@ -2939,23 +3074,45 @@ export class Engine {
   }
 
   /**
-   * Translucent sort key: eye distance of the submesh's centroid (under its part's CURRENT world matrix)
-   * MINUS its bounding radius — the submesh counts by its nearest extent. A raked windscreen's centre sits
-   * behind the wheel at down-looking angles while its overhang is in front; the plain centroid distance
-   * drew the wheel OVER the glass there (074/16 field round). Subtracting the radius biases large sheets
-   * later in the back-to-front order, which is the correct side of every near-tie: glass composites over
-   * the interior it covers.
+   * Translucent sort key: the eye's distance to the submesh's NEAREST extent, under its part's CURRENT
+   * world matrix. A raked windscreen's centre sits behind the wheel at down-looking angles while its
+   * overhang is in front; the plain centroid distance drew the wheel OVER the glass there (074/16 field
+   * round). Where the fixture carries an AABB the key is the nearest of its 8 corners — the exact form of
+   * that idea: the earlier `centroid − radius` sphere over-reached on SCATTERED submeshes (a mod's gauge
+   * cluster spanning the whole dash, radius 1.8, counted as nearer than the equally-distant window SHEET
+   * in front of it, and the cabin drew over the glass). Old fixtures keep the sphere fallback.
    */
   private submeshSortDistance(state: VehicleInstanceState, model: VehicleModel, index: number, eye: Vec3): number {
     const submesh = model.submeshes[index];
-    const center = submesh.center ?? [0, 0, 0];
     const m = state.entity.matrices;
     const at = submesh.part * 16;
-    const x = m[at] * center[0] + m[at + 4] * center[1] + m[at + 8] * center[2] + m[at + 12];
-    const y = m[at + 1] * center[0] + m[at + 5] * center[1] + m[at + 9] * center[2] + m[at + 13];
-    const z = m[at + 2] * center[0] + m[at + 6] * center[1] + m[at + 10] * center[2] + m[at + 14];
+    const distanceTo = (px: number, py: number, pz: number): number => {
+      const x = m[at] * px + m[at + 4] * py + m[at + 8] * pz + m[at + 12];
+      const y = m[at + 1] * px + m[at + 5] * py + m[at + 9] * pz + m[at + 13];
+      const z = m[at + 2] * px + m[at + 6] * py + m[at + 10] * pz + m[at + 14];
 
-    return Math.hypot(x - eye[0], y - eye[1], z - eye[2]) - (submesh.radius ?? 0);
+      return Math.hypot(x - eye[0], y - eye[1], z - eye[2]);
+    };
+    const bounds = submesh.bounds;
+    if (!bounds) {
+      const center = submesh.center ?? [0, 0, 0];
+
+      return distanceTo(center[0], center[1], center[2]) - (submesh.radius ?? 0);
+    }
+    // Exact point-to-AABB: the eye into the part's LOCAL frame (affine inverse — parts carry a uniform
+    // scale at most), clamped into the box, back through the matrix. Nearest-corner alone over-reports
+    // for an eye facing the middle of a large sheet, which is exactly the close-up-at-the-window case.
+    const [ex, ey, ez] = [eye[0] - m[at + 12], eye[1] - m[at + 13], eye[2] - m[at + 14]];
+    const scaleSq = m[at] * m[at] + m[at + 1] * m[at + 1] + m[at + 2] * m[at + 2];
+    const inv = scaleSq > 0 ? 1 / scaleSq : 0;
+    const lx = (m[at] * ex + m[at + 1] * ey + m[at + 2] * ez) * inv;
+    const ly = (m[at + 4] * ex + m[at + 5] * ey + m[at + 6] * ez) * inv;
+    const lz = (m[at + 8] * ex + m[at + 9] * ey + m[at + 10] * ez) * inv;
+    const qx = Math.min(Math.max(lx, bounds.min[0]), bounds.max[0]);
+    const qy = Math.min(Math.max(ly, bounds.min[1]), bounds.max[1]);
+    const qz = Math.min(Math.max(lz, bounds.min[2]), bounds.max[2]);
+
+    return distanceTo(qx, qy, qz);
   }
 
   /** One RGBA layer into a plate array. */
@@ -2971,13 +3128,16 @@ export class Engine {
   private writeVehicleLamps(
     model: VehicleModel,
     slot: number,
-    lamps: { brakes: boolean; headlights: boolean; intensity: number },
+    lamps: { brakes: boolean; headlights: boolean; intensity: number; smashed: number },
   ): void {
     const row = new Float32Array(model.partCount * 4);
     for (let part = 0; part < model.partCount; part += 1) {
       row[part * 4] = lamps.headlights ? 1 : 0;
       row[part * 4 + 1] = lamps.brakes ? 1 : 0;
       row[part * 4 + 2] = lamps.intensity;
+      // The spare component was always there; the light-damage mask is what finally uses it. The vertex
+      // stage resolves it against the submesh's lamp tag, where both the tag and the instance still exist.
+      row[part * 4 + 3] = lamps.smashed;
     }
     this.device.queue.writeBuffer(model.lampBuffer, slot * model.partCount * LAMP_ROW_BYTES, row);
   }
@@ -3049,10 +3209,6 @@ function clutterBounds(matrices: Float32Array): [number, number, number, number]
     center[2],
     Math.hypot(maxX - center[0], maxY - center[1], maxZ - center[2]) + CLUTTER_MODEL_RADIUS,
   ];
-}
-
-function lerp(a: number, b: number, f: number): number {
-  return a + (b - a) * f;
 }
 
 /**

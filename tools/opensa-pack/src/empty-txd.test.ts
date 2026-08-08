@@ -10,7 +10,7 @@
  * its material NAMES a texture (`mine_64`) the empty dictionary cannot supply, which is exactly where a
  * "missing texture" rule would paint it magenta.
  */
-import { decodeOstex, OstexFormat } from '@opensa/engine-formats';
+import { decodeOsmTextures, decodeOstex, OstexFormat } from '@opensa/engine-formats';
 import { parseDff } from '@opensa/renderware';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { readFileSync } from 'node:fs';
@@ -56,7 +56,7 @@ describe('an empty stock TXD', () => {
   describe('positive cases', () => {
     it('gives the NAMED texture a white stand-in, the way the game does — not a magenta marker', () => {
       const osm = buildModelOsm(fs, 'mine', { rawDictionary: { txdParents: new Map<string, string>() } });
-      const dictionary = decodeOstex(osm.ostex);
+      const dictionary = decodeOstex(decodeOsmTextures(osm.ostex).arrays[0]);
 
       // The material names `mine_64`; with nothing to supply it the layer must be plain white, so the
       // material's own colour comes through the multiply exactly as it does in SA.

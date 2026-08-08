@@ -25,17 +25,20 @@ The artifact is a native DLL, but the addresses come from RE (plan [001](./plans
 must never be hand-copied into C++. So the project is two cooperating halves:
 
 ```
-patch-catalogue.md ──▶ TS generator ──▶ generated/patches.hpp ──▶ C++ compile ──▶ perfect-map.asi
- (001, human RE)       (Nx/vitest)       (addresses, original       (MinGW-w64,     (Win32 PE32)
-                                          bytes, post-patch sig,      static CRT)
-                                          fingerprint constants)
+gen/catalogue.ts ──▶ asi/sdk renderer ──▶ generated/patches.hpp ──▶ C++ compile ──▶ perfect-map.asi
+ (typed, this project)  (validate+emit)     (addresses, original      (MinGW-w64,     (Win32 PE32)
+                                             bytes, fingerprint)       -nostdlib)
 ```
 
-- **TS half** (lives in the Nx/vitest world like every other tool): parses `001`'s `patch-catalogue.md` and emits
-  a C++ header of constants. Unit-tested on macOS, independent of the game. A wrong/malformed table is a hard
-  error at generate time, not a garbage write at runtime.
-- **C++ half**: a bare `DllMain` ASI that fingerprint-gates, runs the generated patch table with per-patch
-  byte-verification + coexistence checks, and logs. No ASI framework, no plugin-sdk — pure memory patches.
+- **TS half** (lives in the Nx/vitest world like every other tool): this project's typed `gen/catalogue.ts` is
+  the machine source of truth — the prose [patch-catalogue.md](./patch-catalogue.md) is the human narrative and
+  must agree with it, but nothing parses markdown. The renderer and validator are the SDK's
+  (`asi/sdk/gen/`). Unit-tested on macOS, independent of the game: a malformed table is a hard error at
+  generate time, not a garbage write at runtime.
+- **C++ half**: the payloads plus a `DllMain` that hands this plugin to the **SDK framework**
+  (`asi/sdk`, namespace `asi::`), which fingerprint-gates the exe from disk, byte-verifies every site,
+  detects adjusters and logs. The framework is shared; what lives here is what makes this plugin *this*
+  plugin.
 
 ## Directory layout
 
@@ -46,21 +49,23 @@ asi/perfect-map/
     patch-catalogue.md       # the frozen RE table (plan 001)
     plans/                   # the 001–010 execution chain (readme.md indexes it)
   src/
-    dllmain.cpp              # entry → pm::OnAttach()
-    log.hpp mem.hpp          # flush-on-write logger; Readable/VerifyBytes/ScopedUnprotect
-    fingerprint.hpp          # version gate (size + anchor bytes)
-    coexistence.hpp          # FLA/OLA module enumeration
-    patch_table.hpp          # OnAttach: gate → detect → verify → log (apply()s land in 004)
-    freestanding.cpp         # memset/memcpy/strlen for -nostdlib
-    patches/                 # [004] one unit per engine fix, plugging into the framework
+    dllmain.cpp              # entry → asi::OnAttach(pm::kPlugin)
+    plugin.hpp               # this plugin's declaration: tag, log file, generated tables, apply fn
+    identity.hpp             # the log filename + log tag, declared once (plugin.hpp + payload traces)
+    config.hpp               # PAYLOAD switches (PM_FIX_*); the framework's own are asi/config.hpp
+    apply.hpp                # the asi::ApplyFn — runs the enabled fixes
+    patches/                 # one unit per engine fix (int16, fx2dfx)
     generated/               # patches.hpp — emitted by gen/, git-ignored, never hand-edited
-  gen/                       # TS half: catalogue.ts (source of truth) → generate.ts → generated/patches.hpp (vitest)
-  third_party/               # [004] injector.hpp (vendored, pinned commit, its license)
-  test/                      # [005] macOS byte-level unit tests
-  Makefile                   # MinGW-w64 build (i686-w64-mingw32-g++) → dist/perfect-map.asi
+  gen/                       # TS half: catalogue.ts (this plugin's rows) → generate.ts (SDK renderer)
+  Makefile                   # thin: identity + payload flags, then include ../sdk/mk/asi-plugin.mk
   package.json               # npm scripts: gen, build:asi (gen + make), clean
   README.md
 ```
+
+**The framework half now lives in [`asi/sdk`](../../sdk/README.md)** (`asi::` — log, mem, hook,
+fingerprint, coexistence, patch_table, the codegen library, the Makefile rules). What stays here is what
+makes this plugin *this* plugin: its catalogue, its payloads, its config knobs and a thin Makefile. See the
+SDK's [architecture](../../sdk/docs/architecture.md) for the framework's own design.
 
 ## Runtime lifecycle (C++)
 
@@ -68,14 +73,16 @@ asi/perfect-map/
 
 1. **Open the log** next to `gta_sa.exe` (`perfect-map-asi.log`), flush-on-write so a crash still shows the last
    attempted patch.
-2. **Fingerprint** the host module (base image size + checksum + anchor bytes from 001). Not 1.0 US → log the
-   detected signature, patch nothing, return.
+2. **Fingerprint** the exe — read **from DISK** (`GetModuleFileNameA` + `CreateFileA`): exact file size plus
+   the anchor bytes at their FILE offsets, so an adjuster that has patched memory cannot spoof the version.
+   Not 1.0 US → log which check failed, patch nothing, return.
 3. **Detect adjusters** — enumerate loaded modules (FLA `fastman92limitAdjuster*`, OLA
-   `III.VC.SA.LimitAdjuster`) and, per conflicting zone, probe whether its bytes already differ from stock.
-4. **Run the patch table.** For each record `{ name, address, expectedOriginalBytes, apply, requires?,
-conflictsWith? }`: byte-verify → conflict-check → apply (under a `VirtualProtect` RAII guard) → log the
-   outcome (`applied` / `skipped-mismatch` / `skipped-conflict` / `skipped-version`). One skip never aborts the
-   rest (partial safety).
+   `III.VC.SA.LimitAdjuster`) and record the mask.
+4. **Verify, then apply.** A verify-only build walks every generated site
+   (`asi::ByteAnchor { name, address, bytes, length }`) and logs `pristine` / `differs — adjuster owns it`
+   with zero writes. An APPLY build calls this plugin's `ApplyPatches`, and each fix byte-verifies the sites
+   it NAMES (`asi::VerifySitesOrDefer`) before writing under a `VirtualProtect` RAII guard. A fix that cannot
+   verify defers; one deferral never aborts the others (partial safety).
 5. Return. That is the entire lifecycle — no per-frame hooks unless a specific fix demands one.
 
 ## The patch framework (003)
@@ -83,25 +90,34 @@ conflictsWith? }`: byte-verify → conflict-check → apply (under a `VirtualPro
 - **Declarative records**, generated — a hand-edited address is structurally impossible.
 - **Prefer data-relocation over instruction hooks.** For the too-small static arrays (`gpLoadedBuildings` 4096,
   `IplEntityIndexArrays` 40), relocate to our own allocation + repoint accessors rather than detour code. Reserve
-  function hooks (via injector.hpp) for genuine logic changes — chiefly the `IplDef` int16 → int32 min/max widen
-  in `CIplStore::IncludeEntity` (0x404C90).
-- **Idempotent + observable.** Re-apply is a no-op via a post-patch byte signature; `dry-run` verifies + logs the
-  full plan with zero writes (the primary debugging aid for blind patches).
+  function hooks (`asi/sdk/include/asi/hook.hpp`) for genuine logic changes — chiefly the `IplDef` int16 →
+  int32 min/max widen in `CIplStore::IncludeEntity` (0x404C90).
+- **Observable before it is anything else.** The verify-only build logs the full plan with zero writes — the
+  primary debugging aid for blind patching. (Re-apply protection is structural rather than a post-patch
+  signature: a second attempt finds the site already changed and defers.)
 
 ## Toolchain
 
-- **Cross-compiler: MinGW-w64 `i686-w64-mingw32-g++`** (primary; SA is 32-bit / i386), Zig `zig cc -target
-x86-windows-gnu` as the documented fallback. Both evaluated in plan 002, one pinned.
-- **Static-link the C++ runtime** (`-static -static-libgcc -static-libstdc++`) so the `.asi` drops into a game
-  folder with no MinGW DLL dependencies (verified via the import table: only KERNEL32/USER32).
-- **Hook lib: injector.hpp** (thelink2012, permissive) vendored at a pinned commit — or a ~200-line self-authored
-  `WriteMemory`/`MakeCALL`/`VirtualProtect` subset for full transparency (decided in 002).
+**The toolchain belongs to [`asi/sdk`](../../sdk/README.md)** (`mk/asi-plugin.mk`); this Makefile sets only
+the output name and the payload flags. What it resolved, against what plan 002 originally sketched:
+
+- **Cross-compiler: MinGW-w64 `i686-w64-mingw32-g++`** (SA is 32-bit / i386). The Zig fallback
+  (`zig cc -target x86-windows-gnu`) was documented in 002 and never needed.
+- **`-nostdlib`, NOT a static CRT.** 002 expected `-static -static-libgcc -static-libstdc++`; that still
+  pulled `api-ms-win-crt-*` (UCRT), absent on the XP-era Windows SA runs on. The build links no CRT at all and
+  supplies `memset`/`memcpy`/`memmove`/`strlen` itself (`asi/sdk/src/freestanding.cpp`), with the raw
+  `_DllMain@12` entry. **Import table: KERNEL32 only** — 17 functions, verified per build.
+- **Hooks: self-authored, no vendored dep.** injector.hpp was REJECTED (it pulls `<cstdio>`/gvm and breaks
+  `-nostdlib`); `asi/sdk/include/asi/hook.hpp` is the ~120-line replacement (`WriteJmp`, `AllocExec`, three
+  trampoline shapes). There is no `third_party/`.
 - **Loads via** Ultimate ASI Loader / modloader, like every other `.asi`.
 
 ## Testing strategy
 
-- **macOS unit tests (vitest)** cover the TS half: catalogue → constants, malformed → hard error. This is where
-  correctness of the addresses/bytes is machine-checked before they ever reach the game.
+- **macOS unit tests (vitest)** cover the TS half: this plugin's tests pin the catalogue (real render, the
+  provenance convention, the fingerprint values); the malformed-catalogue → hard-error cases belong to the
+  SDK's renderer (`asi/sdk/gen/render.test.ts`). This is where correctness of the addresses/bytes is
+  machine-checked before they ever reach the game.
 - **Wine boot ladder** (plan 005): empty-but-loading ASI writes its banner → dry-run logs the full plan → real
   apply on a stock exe boots → FLA-present defers overlaps → wrong-version patches nothing.
 - **The oracle**: [`tools-debug/sa-int16-repro`](../../../tools-debug/sa-int16-repro) `--rows N` brackets — patched

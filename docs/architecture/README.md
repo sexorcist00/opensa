@@ -7,6 +7,7 @@ The map of OpenSA, split by concern. Start here, then drill into the flow you ca
 | [boot-and-loading.md](./boot-and-loading.md)       | How a game gets into the browser: menu → loader (fetch / local folder / http-dir) → VFS → world-ready |
 | [world-streaming.md](./world-streaming.md)         | The native formats (`.osm` / `.ostex` / `.oscell` / `.oswire` / `.ospak`) and how the engine streams the world |
 | [perfect-map-builder.md](./perfect-map-builder.md) | The offline build pipeline that produces the canonical build (`./build/original`)                      |
+| [cleo-scripts.md](./cleo-scripts.md)               | Compiled CLEO `.cs` mods on our own SCM VM: decoder → runner → host facets, the native-address atlas, tiers/tracer/F2 |
 | [tools.md](./tools.md)                             | One-paragraph architecture of every tool in `tools/` and `tools-debug/`                               |
 
 Diagrams live in [assets/](./assets/) and are **generated** — `npm run arch:render` refreshes them all
@@ -43,7 +44,9 @@ tools/                             (tag type:tool — offline; may read engine p
   map-optimizer/ · opensa-lod-generator/ · sa-lod-generator/ · lod-trees-generator/ · lod-procobj-generator/
   vehicle-optimizer/ · timecyc-builder/ · lod-common/ · map-placement/ · rw-codec/ · tool-kit/
 tools-debug/  bench-harness/ (headless field checks) · sa-int16-repro/ (ghost-barriers repro dial)
-asi/          perfect-map/ (real-SA limit-adjuster ASI)
+asi/          sdk/ (the asi:: framework + codegen every .asi plugin builds on) · perfect-map/ (its first
+              consumer: the real-SA limit-adjuster ASI)
+cleo/         sdk/ (author CLEO scripts in TS → standard .cs) · scripts/ (our authored script sources)
 root: game-src/ · mods-src/ · build/ · static/ · tests/ · e2e/ · scripts/ · deploy/ · nx.json · *.html
 ```
 

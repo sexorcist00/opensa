@@ -10,11 +10,7 @@ import {
   RW_TWO_D_EFFECT,
   writeRw,
 } from './chunk';
-
-/** 2d-effect entry type for a particle emitter (an `effects.fxp` system — factory smoke, fire, fountains, vents). */
-const PARTICLE_2DFX = 1;
-/** A 2d-effect entry header before its type-specific data: `position` (3×f32) + `type` (u32) + `dataSize` (u32). */
-const ENTRY_HEADER_BYTES = 20;
+import { ENTRY_HEADER_BYTES, PARTICLE_2DFX } from './two-d-effect';
 
 /** One raw 2d-effect entry lifted out of a geometry — `bytes` is the whole entry (header + data) verbatim. */
 export interface Raw2dfxEntry {

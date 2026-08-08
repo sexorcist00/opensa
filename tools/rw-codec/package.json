@@ -6,6 +6,7 @@
   "exports": {
     "./chunk": "./src/chunk.ts",
     "./dff": "./src/dff.ts",
+    "./two-d-effect": "./src/two-d-effect.ts",
     "./geometry-struct": "./src/geometry-struct.ts",
     "./dxt": "./src/dxt.ts",
     "./dxt-encode": "./src/dxt-encode.ts",

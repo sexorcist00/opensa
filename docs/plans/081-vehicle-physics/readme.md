@@ -162,7 +162,8 @@ adjacent code re-verifies the quirk's test.** As the chain closes, this is the w
 
 - **080/05 vehicle camera** consumes `speed`, `velocityDir`, and (new here) a slip proxy — drift
   framing gets honest data from plan 01's telemetry channel.
-- **0.5.0/04 all-vehicle-types** rides on this chain (its per-class presets are plan 07 here);
+- **[098 all-land-vehicles](../098-all-land-vehicles/readme.md)** (formerly roadmap 0.5.0/04) rides on
+  this chain (plan 07 here shipped it an EMPTY class-factor table, by measurement);
   bikes' balance controller remains out of scope for 081.
 - **0.6.0/01 vehdeform** consumes the same Rapier contact events — orthogonal, no coupling.
 - Vanilla references for feel targets: the user's real-SA installs under `game-src/` (same

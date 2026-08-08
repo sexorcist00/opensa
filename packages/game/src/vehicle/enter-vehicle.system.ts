@@ -370,6 +370,14 @@ export class EnterVehicleSystem implements System {
     return this.phase === 'idle' && this.nearestEnterable() !== null;
   }
 
+  /** CLEO's `095F` read (plan 097/05): a door's current openness 0..1 — through the accessor the
+   *  owning system publishes. Only the front doors swing (the walk-up animator drives no others). */
+  doorOpenRatio(vehicle: EnterableVehicle, side: 'lf' | 'rf'): number {
+    const angles = this.doors.get(vehicle);
+
+    return angles ? Math.min(1, Math.abs(angles[side]) / Math.abs(DOOR_OPEN_ANGLE)) : 0;
+  }
+
   fixedUpdate(step: number): void {
     // Controls FIRST if the host did not apply them pre-step; then the phase machine, which reads results.
     this.applyControls(step);
@@ -716,8 +724,9 @@ export class EnterVehicleSystem implements System {
     this.active = nearest;
     this.closeDoorWhenClear = false; // entering again — the entry flow owns the door now
     // The NEAR front door (088/09b): a passenger-side approach uses the rf door + the seat shuffle,
-    // instead of hiking around the car to the driver door.
-    this.side = this.playerLocal(nearest)[0] > 0 ? 'rf' : 'lf';
+    // instead of hiking around the car to the driver door. Among the doors the MODEL actually has:
+    // a bus authored without a driver door boards through its real one (see doorSides).
+    this.side = this.doorSides(nearest, this.playerLocal(nearest)[0] > 0 ? 'rf' : 'lf')[0];
     this.phase = 'approaching';
     this.approachHeld = 0;
     this.approachStalled = 0;
@@ -763,7 +772,7 @@ export class EnterVehicleSystem implements System {
   /** The first FRONT door whose egress ray is clear, driver side first — or null when both are blocked. */
   private clearDoorSide(vehicle: EnterableVehicle): DoorSide | null {
     const [hx] = vehicle.halfExtents;
-    for (const side of ['lf', 'rf'] as const) {
+    for (const side of this.doorSides(vehicle, 'lf')) {
       this.side = side;
       // Probe PAST the doorway spot: a wall just beyond it still blocks the standing body there.
       const target = this.toWorld(vehicle, [sideSign(side) * (hx + DOORWAY_CLEAR + 0.6), vehicle.seatLocal[1]]);
@@ -791,15 +800,27 @@ export class EnterVehicleSystem implements System {
 
   /**
    * A world-space path (Z-up) to the standing spot outside `side`'s front door (088/09b). The door is
-   * always on the PLAYER'S side of the car now, so the approach is straight — no bumper routing.
+   * on the PLAYER'S side whenever the model has one there, so the approach is usually straight — the
+   * bumper routing survives for ONE case: a model whose only front door sits on the far side (the
+   * coach), where the straight line runs through the body and the approach stalls against it.
    */
   private doorApproachPath(vehicle: EnterableVehicle, side: DoorSide): Vec3[] {
-    const [hx] = vehicle.halfExtents;
+    const [hx, hy] = vehicle.halfExtents;
     const sign = sideSign(side);
     const hinge = vehicle.handle.doorHinge(side);
     const entry: [number, number] = [(hinge?.[0] ?? sign * hx) + sign * DOOR_STANDOFF, hinge?.[1] ?? 0];
+    const player = this.playerLocal(vehicle);
+    if (Math.sign(player[0]) !== -sign) {
+      return [this.toWorld(vehicle, entry)];
+    }
+    // Around the bumper END nearer the door, one corner per flank, then the door standoff.
+    const cornerY = (entry[1] >= 0 ? 1 : -1) * (hy + DOOR_STANDOFF);
 
-    return [this.toWorld(vehicle, entry)];
+    return [
+      this.toWorld(vehicle, [-sign * (hx + DOOR_STANDOFF), cornerY]),
+      this.toWorld(vehicle, [sign * (hx + DOOR_STANDOFF), cornerY]),
+      this.toWorld(vehicle, entry),
+    ];
   }
 
   /** The DOOR PART that physically sits on a WORLD flank (plan 088 fr6): the crawl/egress spots are
@@ -816,6 +837,20 @@ export class EnterVehicleSystem implements System {
     const modelRightIsWorldRight = rightDot >= -1e-3;
 
     return positiveX === modelRightIsWorldRight ? 'rf' : 'lf';
+  }
+
+  /**
+   * The front sides whose door PART the model actually carries, `preferred` first — the side an entry
+   * or exit should use. A model authored without a driver door (the coach: only `door_rf`, the bus's
+   * real entry) boards and leaves through the door it HAS — the same swap its bundled "Car Left Door"
+   * CLEO script performs with ped tasks. A model with no front door parts at all (plain mods) keeps
+   * both sides in order: the hinge fallback stands in, as it always has.
+   */
+  private doorSides(vehicle: EnterableVehicle, preferred: DoorSide): DoorSide[] {
+    const ordered: DoorSide[] = preferred === 'lf' ? ['lf', 'rf'] : ['rf', 'lf'];
+    const existing = ordered.filter((side) => vehicle.handle.doorHinge(side) !== null);
+
+    return existing.length > 0 ? existing : ordered;
   }
 
   /** Standing spot in the open doorway of the sequence's side, aligned with the seat row. */
@@ -1040,7 +1075,13 @@ export class EnterVehicleSystem implements System {
     return { brake: 0, driverBraking: false, gear: drive.gear, targetEngine: car.handling.mass * drive.accel };
   }
 
-  /** The nearest upright car within enter range, or null — the car Enter would target from idle. */
+  /**
+   * The nearest upright car within enter range, or null — the car Enter would target from idle.
+   *
+   * Range is measured to the car's FOOTPRINT (the halfExtents rectangle at its heading), not its centre:
+   * a centre rule scaled with the car, so an 11 m coach was un-enterable from beside its own front door
+   * (5.6 m of body between the door and the centre already spent the whole range).
+   */
   private nearestEnterable(): EnterableVehicle | null {
     const [px, py] = this.playerPosition();
     let nearest: EnterableVehicle | null = null;
@@ -1050,9 +1091,17 @@ export class EnterVehicleSystem implements System {
       if (!this.isUpright(vehicle)) {
         continue;
       }
-      const dx = vehicle.position[0] - px;
-      const dy = vehicle.position[1] - py;
-      const distance = dx * dx + dy * dy;
+      const dx = px - vehicle.position[0];
+      const dy = py - vehicle.position[1];
+      // Into the vehicle frame: heading h faces (−sin h, cos h), its right side (cos h, sin h).
+      const sin = Math.sin(vehicle.heading);
+      const cos = Math.cos(vehicle.heading);
+      const localRight = dx * cos + dy * sin;
+      const localForward = -dx * sin + dy * cos;
+      const [hx, hy] = vehicle.halfExtents;
+      const outsideRight = Math.max(0, Math.abs(localRight) - hx);
+      const outsideForward = Math.max(0, Math.abs(localForward) - hy);
+      const distance = outsideRight * outsideRight + outsideForward * outsideForward;
       if (distance < nearestDistance) {
         nearestDistance = distance;
         nearest = vehicle;

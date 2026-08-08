@@ -97,6 +97,7 @@ export function packVehicles(
       osmBytes += built.bytes.byteLength;
       ostexBytes += built.ostex.byteLength;
       converted.add(model);
+      built.warnings.forEach((warning) => log(`vehicles: ${warning}`));
     } catch (error) {
       failed.push({ error: error instanceof Error ? error.message : String(error), model });
     }

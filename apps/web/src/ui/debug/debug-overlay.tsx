@@ -34,6 +34,7 @@ import type { Teleport } from '../../game-config';
 import type { DebugCapabilities, Screen } from './debug-capabilities';
 import type { MapGame } from './map-inspector';
 
+import { CleoPanel, type CleoReadout } from './cleo-panel';
 import {
   ALL_DEBUG_CAPABILITIES,
   cameraControlsFor,
@@ -67,6 +68,12 @@ export interface DebugActions {
   cameraDistance(): number;
   /** The city the player is currently in (Los Santos / San Fierro / Las Venturas / Countryside). */
   city(): City;
+  /** The CLEO screen's live readout (engine host only, plan 097/07); null = no scripts in the build. */
+  cleoReadout?(): CleoReadout | null;
+  /** Dispatch ONE instruction on the named CLEO thread (the F2 step affordance). */
+  cleoStep?(thread: string): void;
+  /** The CLEO trace ring's lines — all threads, or one thread's story. */
+  cleoTraceLines?(thread?: string): readonly string[];
   /** Current cloud tuning. */
   clouds(): CloudsConfig;
   /** Current world 2dfx particle-effects tuning (plan 044). */
@@ -119,6 +126,10 @@ export interface DebugActions {
   setBloom(patch: Partial<BloomConfig>): void;
   /** Tune the follow camera (distance / angle / responsiveness / zoom range). */
   setCamera(patch: Partial<CameraConfig>): void;
+  /** Run/pause the CLEO script runner (writes `config.cleo.enabled`). */
+  setCleoEnabled?(enabled: boolean): void;
+  /** Start/stop the CLEO tracer — off costs one boolean per instruction. */
+  setCleoTracing?(enabled: boolean): void;
   /** Tune clouds (coverage/opacity). */
   setClouds(patch: Partial<CloudsConfig>): void;
   /** Tune world 2dfx particle effects (enabled/drawDistance; plan 044). */
@@ -1279,6 +1290,8 @@ export function DebugOverlay({
           {screen === 'perf' && <PerfPanel actions={actions} />}
 
           {screen === 'physics' && capabilities.physicsScreen && <PhysicsPanel actions={actions} />}
+
+          {screen === 'cleo' && capabilities.cleoScreen && <CleoPanel actions={actions} />}
 
           {screen === 'weather' && (
             <div style={styles.group}>

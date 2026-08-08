@@ -1,9 +1,13 @@
 #pragma once
-// Build-time switches. Default = verify-only (plan 003); pass -DPM_APPLY=1 (`make APPLY=1`) to actually patch
-// (plan 004). Per-fix flags allow bring-up bisection — enable one fix at a time under Wine.
+// perfect-map's PAYLOAD switches (the framework's own — ASI_APPLY / ASI_DEBUG — live in the SDK's config.hpp).
+// Per-fix flags allow bring-up bisection: enable one fix at a time under Wine.
+#include <asi/config.hpp>
 
+// The plugin's fixes are compiled only into an APPLY build; PM_APPLY mirrors the framework switch so the
+// payload headers keep one name to gate on. Guarded, so a `-DPM_APPLY=…` on the command line is honoured
+// rather than silently overridden (an unguarded #define here made per-fix bisection flags a no-op).
 #ifndef PM_APPLY
-#define PM_APPLY 0  // 0 = verify-only; 1 = apply the enabled fixes below
+#define PM_APPLY ASI_APPLY
 #endif
 
 #ifndef PM_FIX_INT16
@@ -20,10 +24,6 @@
 
 #ifndef PM_FIX_IPLINDEX
 #define PM_FIX_IPLINDEX 0  // [004b] IplEntityIndexArrays 40-slot relocation — not yet implemented
-#endif
-
-#ifndef PM_DEBUG
-#define PM_DEBUG 0  // 1 (`make DEBUG=1`) = verbose: dump every patch site's verify status before applying (APPLY build)
 #endif
 
 #ifndef PM_INT16_LOG

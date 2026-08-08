@@ -32,5 +32,5 @@ flake retires only if vehicle geometry gains normal maps, which is a different p
 **Blast radius.** All three are global to every painted vehicle. `REFLECT_HDR` interacts with the sky-occlusion
 gate that plan 090 tried and reverted — a surface mirroring more sky than it can see is the symptom that
 started that chain, and it is still open
-([`open-issues/vehicle-cabin-and-glass.md`](../open-issues/vehicle-cabin-and-glass.md)). Changing the gain
+([`open-issues/vehicle-cabin-lighting.md`](../open-issues/vehicle-cabin-lighting.md)). Changing the gain
 without re-reading that postmortem re-opens it.

@@ -102,6 +102,14 @@ export function createGameRuntimeConfig(): Config {
       yawLagTime: 0.25,
       zoomLambda: 8,
     },
+    // CLEO scripts: ON by default (user's call 2026-08-06, priced by the A/B/A — ~0 CPU frame,
+    // ~0.45 ms GPU where the mod content is visible; both wheel field reports began as "cleo was
+    // just off"). `?cleo=0` opts a session out; live-read, F2 CLEO can pause it.
+    cleo: {
+      enabled: true,
+      maxScripts: 32,
+      trace: false,
+    },
     // 088/03: RUN is the default gait (SA jogs); Shift sprints. `walk` is left unbound — the slow tier
     // is reachable by a partial touch-stick deflection, or bind a key here.
     controls: {

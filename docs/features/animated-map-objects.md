@@ -2,7 +2,9 @@
 
 UV animations: `packages/renderware/src/parsers/binary/dff.ts` (UVAnimDict parsing),
 `tools/opensa-pack/src/weld.ts` (per-object kind-4 registry baked into the pak),
-`packages/engine/src/render/shaders.ts` (the per-cell `uvAnim` uniform).
+`packages/engine/src/render/shaders.ts` (the per-cell `uvAnim` uniform, and the rigid lane's
+`rigidUvAnim`), `packages/engine/src/render/uv-anim.ts` (the keyframe walker both lanes step through),
+`packages/renderware/src/vehicle/build-vehicle-model.ts` (the rigid builder's material → dict binding).
 IFP-animated clumps: `packages/renderware/src/anim/frame-clip.ts` (frames-as-bones clip),
 `packages/engine/src/anim/` (`IfpSampler`), host wiring in `apps/web/src/ui/engine-anim-objects.ts`.
 
@@ -17,6 +19,14 @@ IFP-animated clumps: `packages/renderware/src/anim/frame-clip.ts` (frames-as-bon
 - Generic keyframe-pair lerp looping over the duration; equal-time key pairs snap (stepped
   flipbooks like `DolSign`). Scroll direction verified against the original game (no flip).
 - The world shader applies it per object cell: `uv = uv * scale + offset`.
+- **The RIGID lane plays the same animations** (plan 099): a script-spawned object, a prop, the `.osm`
+  spike — anything uploaded through `createVehicleModel`. Its list is MODEL-local rather than a pak-wide
+  registry (a rigid model streams in and out on its own), and a per-draw dynamic offset picks the
+  submesh's slot out of one uniform whose slot 0 is the identity. Both lanes step through the same
+  walker (`packages/engine/src/render/uv-anim.ts`) on the same frame clock, so a sign on a building and
+  a sign on a script object cannot drift. A model that animates nothing allocates no buffer, writes
+  nothing per frame and binds the shared identity — the Pacific Park ferris wheel's blinking bulb ring
+  is what this exists for.
 
 **IFP-animated clump objects** (IDE `anim` section — oil pumps, windmills, fans)
 
@@ -38,6 +48,9 @@ IFP-animated clumps: `packages/renderware/src/anim/frame-clip.ts` (frames-as-bon
 
 ## Test coverage anchors
 
-`parsers/binary/uv-anim.test.ts` (parse/interp/real asset), `roadsign.test.ts` shares the 2dfx walk,
+`parsers/binary/uv-anim.test.ts` (parse/interp/real asset), `engine.uv-anim.test.ts` (the rigid lane:
+zero cost without animations, the advance, the per-submesh dynamic offset), `vehicle/build-vehicle-model.test.ts`
++ `opensa-pack/model-osm-uv-anim.test.ts` (the bake and the `.osm` round trip, on the real ferris ring),
+`roadsign.test.ts` shares the 2dfx walk,
 `anim/frame-clip.test.ts` (frames-as-bones clip), `engine/src/anim/ifp-sampler.test.ts`,
 `ide.parser` anim rows, `ifp` parser tests.

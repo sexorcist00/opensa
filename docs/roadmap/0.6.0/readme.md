@@ -31,6 +31,12 @@ and **install + offline**. Deferred on 2026-08-06 by decision rather than diffic
 time axis, which moved forward into [098/8](../../plans/098-dispatch-console/8-the-time-axis/readme.md).
 
 Full plan: [plans/05-dispatch-cad-depth/readme.md](plans/05-dispatch-cad-depth/readme.md).
+## Air, water and rail vehicles (IDEA — parked recon facts)
+
+Not scheduled work: the fact sheet the 098 all-land-vehicles recon produced about the out-of-scope
+classes — boats' rows never parse (column-count guard), the `$`/`%` handling sub-tables are unread,
+`anim.img` ingestion and the features module (`PLANE_SMOKE`) give them a landing path, and boats wait on
+water realism. Full note: [plans/05-air-water-rail/readme.md](plans/05-air-water-rail/readme.md).
 
 ## Graphic improvements — shadows + street-lamp lighting (DRAFT)
 

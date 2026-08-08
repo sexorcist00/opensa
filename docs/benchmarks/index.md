@@ -368,6 +368,19 @@ rose 13.73 → **15.64 ms** (max 21.89, draws p50 1049 → 1113) — that is wha
 GPU-bound shape the first drive found. Run:
 [`2026-08-02-drive-091-populated-map.json`](opensa-engine/2026-08-02-drive-091-populated-map.json).
 
+### 097/07 — the CLEO VM cost close-out (2026-08-06)
+
+The 097 big-rework benchmark, headless-first: the whole shipped corpus costs **465 µs/tick** on the
+VM (boot 0.23 ms for 7 scripts, `enabled: false` = one branch, tracer ×1.9 as a debug toggle) — and
+the run CAUGHT a field bug: both hosts answered `carInSphere` ignoring `findNext`, so vandoor's
+recursive walk never exhausted and burned its full 10 000-instr budget every tick (corpus 3 771 →
+465 µs/tick after the walk-cursor fix, vandoor ~100×). Field verify on `build/original/opensa`:
+census 6 scripts, F2 CLEO screen live at 1 572 instr/tick, 21 script objects. Same-day frame-level
+A/B/A (`?bench=all` ×3, run-order controlled): CPU frame parity (avg 8.33 ms, p95 ~10, 120 fps in
+all three variants), GPU pass +0.45 ms mean with CLEO on — the RENDER cost of the wheel/turbines
+existing (ocean-horizon 27 → 84 draws, 136 k → 843 k tris), not VM cost. Analysis:
+[`2026-08-06-headless-cleo-vm-cost.md`](opensa-engine/2026-08-06-headless-cleo-vm-cost.md); raw
+rows [`2026-08-06-ingame-cleo-ab.json`](opensa-engine/2026-08-06-ingame-cleo-ab.json).
 ## Mobile
 
 One row, and it is a first-light record rather than a comparable one — see its `note`.

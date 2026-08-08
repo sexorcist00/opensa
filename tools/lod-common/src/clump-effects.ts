@@ -1,10 +1,18 @@
 import type { RWClump } from '@opensa/renderware/parsers/binary/types';
 
-import { extract2dfxEntries, type Raw2dfxEntry } from '@opensa/rw-codec/dff';
+import { extract2dfxEntries } from '@opensa/rw-codec/dff';
 
+import type { VertexTransform } from './build-mesh';
 import type { Vec3 } from './mesh';
 
 import { clumpFrameTransforms } from './build-mesh';
+import { transform2dfxEntry } from './two-dfx-transform';
+
+/** A geometry with no atomic of its own keeps the entry where it was authored. */
+const IDENTITY_TRANSFORM: VertexTransform = {
+  normal: (x, y, z): Vec3 => [x, y, z],
+  point: (x, y, z): Vec3 => [x, y, z],
+};
 
 /** A raw 2dfx entry with its position lifted into **model-local** space (the geometry's frame applied). */
 export interface ClumpEffect {
@@ -14,11 +22,11 @@ export interface ClumpEffect {
 }
 
 /**
- * Lift a model's 2dfx entries out of its DFF bytes with each entry's position mapped through the owning
- * geometry's frame — the same placement {@link clumpFrameTransforms} gives vertices, so effects land exactly
- * where the encoded mesh's geometry did (plan 003, Phase 5). Everything but the 12 position bytes stays
- * verbatim (fields our parsers don't know survive). `keepTypes` filters (cells keep lights only); default =
- * everything except particles (deliberately stripped from far LODs).
+ * Lift a model's 2dfx entries out of its DFF bytes, each carried through the owning geometry's frame by
+ * {@link transform2dfxEntry} — the same placement {@link clumpFrameTransforms} gives vertices, so effects land
+ * exactly where the encoded mesh's geometry did (plan 003, Phase 5). An opaque payload stays byte-verbatim;
+ * a spatial one (a plate's rotation, an escalator's step path) is carried too. `keepTypes` filters (cells keep
+ * lights only); default = everything except particles.
  */
 export function collectClumpEffects(
   dffBytes: Uint8Array,
@@ -27,10 +35,7 @@ export function collectClumpEffects(
 ): ClumpEffect[] {
   const transforms = clumpFrameTransforms(clump);
 
-  return extract2dfxEntries(dffBytes, keepTypes).map((entry: Raw2dfxEntry) => ({
-    bytes: entry.bytes,
-    position:
-      transforms[entry.geometryIndex]?.point(entry.position[0], entry.position[1], entry.position[2]) ?? entry.position,
-    type: entry.type,
-  }));
+  return extract2dfxEntries(dffBytes, keepTypes).map((entry) =>
+    transform2dfxEntry(entry, transforms[entry.geometryIndex] ?? IDENTITY_TRANSFORM),
+  );
 }

@@ -5,8 +5,15 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
 
 ## GTA SA reverse engineering & modding
 
-- <https://github.com/gta-reversed/gta-reversed> — reversed GTA SA source; the reference for engine
-  internals (pools, `CIplStore`, streaming) behind our int16/pool guards and the `asi/perfect-map` work.
+- <https://github.com/gta-reversed/gta-reversed-modern> — reversed GTA SA source (the active repo; the
+  catalogue's provenance lines cite it); the reference for engine internals (pools, `CIplStore`,
+  streaming) behind our int16/pool guards and the `asi/` plugin work.
+- <https://github.com/JuniorDjjr/CLEOPlus> — CLEO extension reference (opcode surface for plan 097).
+- <https://github.com/cleolibrary/CLEO4> — CLEO 4's own source. `source/CCustomOpcodeSystem.cpp` is the
+  ground truth for how `0AA5`-`0AA8` marshal their parameters (the push loop that makes the LAST listed
+  parameter the FIRST C argument — see `docs/edge-cases/cleo-vm.md`).
+- <https://github.com/sannybuilder/library> — the Sanny Builder opcode DB (`sa/sa.json`, 3 739 commands
+  with arities) — vendored + pinned by plan 097/01; also the recon disassembler's source of truth.
 - <https://github.com/gta-android/gta-reversed-android> — reverse of GTA:SA **2.10 Android**. Consulted
   2026-08-04 for the mobile-asset question: the Android release stores its textures in the OpenGL/PVR
   Texture Native layout (PVRTC/ETC), not the D3D8/D3D9 one, so its `.txd` files are NOT an input this
@@ -15,7 +22,6 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
 - <https://github.com/in0finite/SanAndreasUnity> — open reimplementation of the SA engine in Unity, with
   Android builds; development halted. Like every project of its kind it READS a copy of the game and does
   not ship one, which is the answer to "where do the assets come from" for all of them.
-- <https://github.com/JuniorDjjr/CLEOPlus> — CLEO extension reference (opcode surface for plan 083).
 - <https://github.com/JuniorDjjr/SA-MixSets> — per-feature SA tweaks reference.
 - <https://github.com/JuniorDjjr/VehFuncs> — vehicle function extensions (useful for vehicle features
   parity: extras, wheels, steering parts).

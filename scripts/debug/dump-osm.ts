@@ -9,9 +9,31 @@ import { existsSync, readFileSync } from 'node:fs';
 
 interface Fixture {
   parts: { name: string }[];
-  submeshes: { array?: number; indexCount: number; part: number; translucent?: boolean }[];
+  submeshes: { array?: number; indexCount: number; part: number; translucent?: boolean; uvAnim?: number }[];
   textureSource?: 'world';
+  uvAnimations?: { duration: number; keyframes: { time: number; uv: number[] }[]; name: string }[];
   vertexCount: number;
+}
+
+/**
+ * One animation as a line: distinct UV-X offsets (a film strip's frame count) and the smallest positive
+ * step between keyframe times (its cadence) — both READ off the keyframes, so a scrolling sign describes
+ * itself just as honestly as the ferris wheel's 13-frame strip does.
+ */
+function describeUvAnim(animation: NonNullable<Fixture['uvAnimations']>[number]): string {
+  const offsets = new Set(animation.keyframes.map((keyframe) => keyframe.uv[4].toFixed(5)));
+  let cadence = Infinity;
+  for (let at = 1; at < animation.keyframes.length; at += 1) {
+    const step = animation.keyframes[at].time - animation.keyframes[at - 1].time;
+    if (step > 0) {
+      cadence = Math.min(cadence, step);
+    }
+  }
+
+  return (
+    `${animation.name} (${animation.keyframes.length} keyframes, ${offsets.size} distinct u-offsets` +
+    `${cadence === Infinity ? '' : ` × ${cadence.toFixed(3)} s`}, loop ${animation.duration.toFixed(2)} s)`
+  );
 }
 
 function main(): void {
@@ -47,10 +69,16 @@ function main(): void {
   const fixture = JSON.parse(new TextDecoder().decode(desc)) as Fixture;
   console.log(`\ntextureSource: ${fixture.textureSource ?? '(own TEXS)'} · ${fixture.vertexCount} vertices`);
   console.log(`parts: ${fixture.parts.map((part) => part.name).join(', ')}`);
+  for (const animation of fixture.uvAnimations ?? []) {
+    console.log(`uvAnimation: ${describeUvAnim(animation)}`);
+  }
   for (const submesh of fixture.submeshes) {
     console.log(
       `submesh part=${fixture.parts[submesh.part]?.name ?? submesh.part} array=${submesh.array ?? 0} ` +
-        `indices=${submesh.indexCount} translucent=${submesh.translucent ?? false}`,
+        `indices=${submesh.indexCount} translucent=${submesh.translucent ?? false}` +
+        (submesh.uvAnim === undefined
+          ? ''
+          : ` uvAnim=${submesh.uvAnim} (${fixture.uvAnimations?.[submesh.uvAnim]?.name ?? 'MISSING'})`),
     );
   }
 
@@ -64,13 +92,17 @@ function main(): void {
       [`${pak}/pak/manifest.json`, `${pak}-pack/manifest.json`, `${pak}/opensa/manifest.json`].find((path) =>
         existsSync(path),
       ) ?? `${pak}/pak/manifest.json`;
+    // `textures` is a RECORD keyed `array-<n>`, not a list — reading it as one reported every world model's
+    // arrays as MISSING FROM MANIFEST while the game rendered them fine (found 2026-08-07, plan 099/01).
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
-      textures: { format?: string; layers?: number; size?: number }[];
+      textures: Record<string, { format?: number; height?: number; layers?: number; width?: number }>;
     };
-    console.log(`\nmanifest has ${manifest.textures.length} world arrays; the model's refs:`);
+    const arrays = manifest.textures ?? {};
+    console.log(`\nmanifest has ${Object.keys(arrays).length} world arrays; the model's refs:`);
     for (const array of new Set(fixture.submeshes.map((submesh) => submesh.array ?? 0))) {
-      const info = manifest.textures[array];
-      console.log(`array ${array}: ${info ? JSON.stringify(info) : 'MISSING FROM MANIFEST'}`);
+      const info = arrays[`array-${array}`];
+      const shown = info && { format: info.format, layers: info.layers, size: `${info.width}x${info.height}` };
+      console.log(`array ${array}: ${shown ? JSON.stringify(shown) : 'MISSING FROM MANIFEST'}`);
     }
   }
 }

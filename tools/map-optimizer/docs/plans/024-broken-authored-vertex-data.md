@@ -162,7 +162,7 @@ fix. Cheap; establishes the A side of the A/B.
 
 **Round 1 (2026-07-29, user field checks) — three verdicts, two metric corrections:**
 
-- `lae2_roads17` lab build (strip-normals): **"выглядит идеально"** — Phase 0 loop + the Family A
+- `lae2_roads17` lab build (strip-normals): **"looks perfect"** — Phase 0 loop + the Family A
   mechanism both field-confirmed end-to-end.
 - `standard01_lawn` (the symmetric metric's #1): **looks FINE in the field** — falsified the naive
   ">60° off the face" criterion. Its grass/bush cards carry deliberate straight-UP normals on
@@ -173,7 +173,7 @@ fix. Cheap; establishes the A side of the A/B.
 - `gaz27_law`: **Family B field-confirmed** (one whole wall pure black at day) — and the
   strip-normals lab build did NOT fix it (correct negative control: the defect is prelit, not
   normals). `--prelit-floor` experiment lever added to `model-repack.ts` for the ambient-theory
-  field proof. **Floor-40 lab verdict (user, same day): "стена теперь выглядит нормально" — the
+  field proof. **Floor-40 lab verdict (user, same day): "the wall looks right now" — the
   missing-ambient theory is FIELD-PROVEN on the data side.** Phase 3b step 1 (recover the exact SA
   formula) is now the gating item for the engine fix.
 
@@ -239,7 +239,7 @@ control — expect a re-check to pass), `xoverlaymap09` 1558u² / 4 faces (Map F
    renders at ambient level; that is the term our `worldShade` (`lit = prelit×sunIndirect×ao +
    sun×N·L + …`) is missing, and why the engine exposes every prelit hole the original hides.
 2. **DECIDED + BUILT 2026-07-29: engine level** (user decision — "we don't break the original map
-   and follow the правильный approach"). The engine half lives in
+   and follow the correct approach"). The engine half lives in
    [`docs/plans/093-world-ambient-term/`](../../../../docs/plans/093-world-ambient-term/readme.md);
    restriction recorded in `docs/restrictions/engine-lighting.md`. The options considered:
    - **Engine**: if SA genuinely adds an ambient floor, our world shader is missing a term of the
@@ -304,7 +304,7 @@ cannot touch world cells).** The gate's first full-map run:
 | recomputed | 5 | **56** |
 | created | — | 11 311 |
 
-Field verdict (user): the 024 spots "все в порядке". Two NEW field reports from the tour turned out
+Field verdict (user): the 024 spots "all fine". Two NEW field reports from the tour turned out
 to be an UNRELATED pre-existing class — flat light-blue ground patches at Santa Maria / SF-west —
 investigated the same day to a stalemate (pak data exonerated piece by piece; a mod-resolved asset
 triggers it; the 024 gate provably didn't touch those cells — all their models ship no normals):

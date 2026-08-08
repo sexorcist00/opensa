@@ -15,12 +15,26 @@ observations that killed it, and the conditions under which it might be worth re
 
 ## Postmortems
 
+- ~~07-2dfx-on-baked-cells.md~~ — **REVIVED the same day, 2026-08-07**, and no longer rests here. Roadsigns
+  and escalators onto `opensa-lod-generator`'s baked cells died when its two premises failed measurement and
+  the user closed its last route; hours later that decision was reversed and the scope widened to both LOD
+  generators. The research (world-space sign coordinates 489/489; nothing reads a cell LOD's 2dfx section;
+  the HD/LOD radii that size the gap; escalators having no consumer in OUR engine) lives on as step 00 of
+  [plan 100](../plans/100-2dfx-at-lod-range/00-research-and-findings.md). The row stays so the death is not
+  edited out of the record — a plan that died and came back is worth knowing about
 - [universal-texture-transcode.md](./universal-texture-transcode.md) — Basis/KTX2 in `.ostex` with a
   transcode at load (plan 097 chain 2's original gate), replaced 2026-08-06 by a DIRECT ASTC encode in the
   converter. Not measured away: decided away, on the loss budget (one generation instead of two), on the
   fact that the target device carries ASTC natively, and on the moving parts a transcoder adds to the worker.
   The price accepted is that one pak no longer serves every GPU. Revisit when a single artefact for all
   devices becomes a requirement.
+- [097-hotring-hotknife-intake.md](./097-hotring-hotknife-intake.md) — two CLEO vehicle mods
+  analysed and cut the SAME day (2026-08-05) by the user's call: hotknife (paintjobs) cut
+  entirely; hotring's CAR kept but `no_lights.cs` skipped — a polling loop for a one-shot effect
+  belongs engine-native. Keeps the verified natives (`SetLightStatus@0x6C2100`,
+  `CAutomobile+0x5A0`) and the fully recovered SA paintjob/remap mechanism (numbered TXDs,
+  `remap*` textures, first-texture swap, spawn roll) for the day liveries or light damage are
+  built engine-native — plus a live recording-host defect (`carInSphere` ignores `findNext`).
 - [runtime-modloader-overlay.md](./runtime-modloader-overlay.md) — the boot-time `modloader/` overlay
   (`@opensa/modloader`, plan 058) and the runtime DFF fallback it fed, both removed 2026-07-28. Not measured
   away but ARGUED away: what a car carries beyond geometry — its `features.txt` pop-up declaration, its plate
@@ -33,7 +47,7 @@ observations that killed it, and the conditions under which it might be worth re
   was asking, because **not one in-engine capture was taken in three rounds of look-work**. Carries the
   flat-varying artefact (a per-vertex flag drawn through `@interpolate(flat)` = hard triangular patches) and
   the noisy-bake-threshold speckle. The symptoms stay open in
-  [`open-issues/vehicle-cabin-and-glass.md`](../open-issues/vehicle-cabin-and-glass.md).
+  [`open-issues/vehicle-cabin-lighting.md`](../open-issues/vehicle-cabin-lighting.md).
 - [modern-cell-tooling.md](./modern-cell-tooling.md) — custom `.cell` format + baked channels + static
   batching/atlasing (plans 066 + opensa-lod-generator 005–010). No measurable perf/quality gain; code parked
   on `backup/tooling-experiment`. Produced the CPU-bound-on-draw-calls diagnosis that led to the own engine

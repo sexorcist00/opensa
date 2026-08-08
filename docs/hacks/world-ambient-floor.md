@@ -21,7 +21,7 @@ was accidentally SA-faithful in showing them black.
   survives untouched.
 - `0.13` day value: **fitted, not derived** — it reproduces the field-approved `--prelit-floor 40`
   experiment (prelit byte 40/255 × sunIndirect 0.85 ≈ 0.133 in the shader's lit units), the look the
-  user judged "стена теперь выглядит нормально" (2026-07-29).
+  user judged "the wall looks right now" (2026-07-29).
 
 **Judged on:** the 024 field round — `gaz27_law`'s black wall with the data-side floor emulation;
 plus the map-wide scan showing 2 243 models carry all-black day triangles (repairing data at that

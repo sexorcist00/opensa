@@ -16,7 +16,9 @@ disasm); #5 is detection-only.
 
 **Address provenance.** Addresses are annotated in
 [gta-reversed-modern](https://github.com/gta-reversed/gta-reversed-modern) `source/game_sa/` (1.0 US only) AND
-confirmed against the exe. **Caveat — HOODLUM relocation:** on the real 1.0 US HOODLUM exe the protector has
+confirmed against the exe. The MACHINE home of provenance is each catalogue entry's `provenance` field
+(`gen/catalogue.ts`, typed by the SDK — file/function + the commit consulted at RE time; the asi/sdk 002
+convention): this prose carries the narrative, the typed field is what a future RE session greps. **Caveat — HOODLUM relocation:** on the real 1.0 US HOODLUM exe the protector has
 STOLEN/relocated some function bodies. `IncludeEntity`'s callable entry 0x404C90 is a trampoline
 (`e9 9b ea 15 01` = `jmp 0x1563730`); its real body — including the int16 truncation — lives at **0x1563730**
 (in the `.HOODLUM`/`_TEXT_HA` overlay). `RemoveIpl`, `LoadScene`, `LoadIplBoundingBox` are clean in place. This

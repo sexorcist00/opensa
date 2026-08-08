@@ -107,7 +107,9 @@ on-disk equivalent of what `@opensa/modloader` does at runtime (whose pure merge
 - `object.dat`/`procobj.dat` are **additively merged** onto the stock (other `.dat` overwrite);
 - every `.dff`/`.txd`/`.col`/`.ifp` (and `_streamN.ipl`) is **injected into `--out/models/gta3.img` by bare name**
   (`COLFILE` is dropped — SA auto-discovers the embedded `.col`);
-- UTF-16 loaders are read BOM-aware; CLEO `.cs` and prose `.txt` are ignored.
+- UTF-16 loaders are read BOM-aware; prose `.txt` is ignored. CLEO content (a `cleo/`/`CLEO/` dir +
+  loose `.cs`/`.ini`/`.fxt`) is carried to `<out>/cleo/` with a log line per file (plan 097/06);
+  overlay mods get a top-level `CLEO/` normalised to `cleo/`.
 
 Folder names are irrelevant (files match by bare name). Note: injecting a large model bundle bloats `gta3.img` —
 baking trades disk size for not needing a runtime loader. See

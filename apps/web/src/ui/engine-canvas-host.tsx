@@ -100,6 +100,7 @@ import { type DebugActions, type DebugGame, DebugOverlay } from './debug/debug-o
 import { type MapGame } from './debug/map-inspector';
 import { setupEngineAnimObjects } from './engine-anim-objects';
 import { setupEngineBreakables } from './engine-breakables';
+import { setupEngineCleo } from './engine-cleo-setup';
 import { setupEngineClutter } from './engine-clutter';
 import { createEngineDebugActions, type EnginePerfSnapshot } from './engine-debug-actions';
 import { type DynamicFxEmitter, loadCoronaSprites, loadSkidSprite, setupEngineParticles } from './engine-particles';
@@ -112,6 +113,7 @@ import { setupVideoRuns } from './engine-video-runs';
 import { createGameRuntimeConfig, GAME_CELL_SIZE } from './game-runtime-config';
 import { Hud, type HudGame } from './hud/hud';
 import { loadFonts } from './hud/load-fonts';
+import { setupOsmSpike } from './osm-spike';
 import { loadCityBoxes, loadGxt, loadInfoZones } from './zone-data';
 
 interface EngineCanvasHostProps {
@@ -124,6 +126,48 @@ interface EngineCanvasHostProps {
    *  from `?src=` or `public/pak-map`. The loading MODE selects the world — folder mode never reads public. */
   pakSource?: LocalPakSource | null;
   paused?: boolean;
+}
+
+/** `?spawncar` retry loop (097/05): spawn keeps failing until collision streams in — retry from the
+ *  fixed loop, log the success coordinates and each DISTINCT failure once. */
+function createSpawnCarRetry(
+  spec: null | string,
+  spawnParam: readonly number[],
+  vehicles: EngineVehicles | null,
+  reported: Set<string>,
+): () => void {
+  let pending = spec !== null && vehicles !== null;
+  let busy = false;
+
+  return (): void => {
+    if (!pending || busy || !spec || !vehicles) {
+      return;
+    }
+    const [carModel, sx, sy, sz, sHeading] = spec.split(',');
+    const carAt: [number, number, number] =
+      sx !== undefined && sy !== undefined
+        ? [Number(sx), Number(sy), Number(sz ?? spawnParam[2] ?? 10)]
+        : [spawnParam[0] ?? 0, (spawnParam[1] ?? 0) + 8, (spawnParam[2] ?? 10) + 1];
+    busy = true;
+    vehicles
+      .spawn({ groundSnap: true, heading: Number(sHeading ?? 0), model: carModel, position: carAt })
+      .then(() => {
+        pending = false;
+        // eslint-disable-next-line no-console -- field probes read this to know the car exists
+        console.log(`[spawncar] ${carModel} spawned at ${carAt.join(',')}`);
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!reported.has(`spawncar:${message}`)) {
+          reported.add(`spawncar:${message}`);
+          // eslint-disable-next-line no-console -- a silent retry loop costs a field round
+          console.warn(`[spawncar] ${carModel}:`, message);
+        }
+      })
+      .finally(() => {
+        busy = false;
+      });
+  };
 }
 
 const FIXED_STEP = 1 / 60;
@@ -301,6 +345,39 @@ export function EngineCanvasHost({
   );
 }
 
+/** `?cleo=0|1` — session override over the ON-by-default runner (06 decision 6, closed 2026-08-06). */
+function applyCleoOverride(config: ReturnType<typeof createGameRuntimeConfig>, params: URLSearchParams): void {
+  if (params.has('cleo')) {
+    config.cleo.enabled = params.get('cleo') !== '0';
+  }
+}
+
+/**
+ * Post-chain A/B overrides (074/09): `?aces=0` drops tone mapping, `?bloom=0|N` turns bloom off or sets its
+ * intensity, `?scale=0.75` sets the render scale. They fold into the LIVE config rather than into the
+ * renderer, so the debug readout keeps telling the truth about what is running.
+ *
+ * Extracted from `boot` when merging upstream: both sides had grown query-param branches there and the
+ * function crossed the cognitive-complexity gate. MSAA and bloom-level knobs were field-tested and dropped
+ * (WebGPU allows sampleCount 1|4 only; bloom levels saved ~0.05 ms).
+ */
+function applyPostOverrides(config: ReturnType<typeof createGameRuntimeConfig>, params: URLSearchParams): void {
+  if (params.get('aces') === '0') {
+    config.graphics.toneMapping = false;
+  }
+  const bloomParam = Number(params.get('bloom') ?? Number.NaN);
+  if (Number.isFinite(bloomParam)) {
+    config.graphics.bloom.enabled = bloomParam > 0;
+    if (bloomParam > 0) {
+      config.graphics.bloom.intensity = bloomParam;
+    }
+  }
+  const scaleParam = Number(params.get('scale') ?? Number.NaN);
+  if (Number.isFinite(scaleParam)) {
+    config.graphics.renderScale = scaleParam;
+  }
+}
+
 /**
  * Sky A/B overrides (074/06 row 4 sky v2): `?sky=preetham` = the legacy dome vs the Hosek-Wilkie default;
  * `?clouds=N` = cloud-layer opacity (0 = the naked dome, kills cirrus+cumulus too).
@@ -329,27 +406,11 @@ async function boot(
   const params = new URLSearchParams(window.location.search);
   const hud = document.getElementById('engine-hud') as HTMLPreElement;
   const config = createGameRuntimeConfig();
-  // `?aces=0` / `?bloom=0|N` — the 074/09 post A/Bs (fold into the live config, so debug stays truthful).
-  if (params.get('aces') === '0') {
-    config.graphics.toneMapping = false;
-  }
-  const bloomParam = Number(params.get('bloom') ?? Number.NaN);
-  if (Number.isFinite(bloomParam)) {
-    config.graphics.bloom.enabled = bloomParam > 0;
-    if (bloomParam > 0) {
-      config.graphics.bloom.intensity = bloomParam;
-    }
-  }
+  applyPostOverrides(config, params);
   // `?probe=0` — the 074/16 env-probe A/B: keeps reflections on the analytic-sky fallback.
   const probeEnabled = params.get('probe') !== '0';
   // `?probeview=1` — replace the frame with the probe cube panorama (orientation/content debug).
   const probeViewEnabled = params.get('probeview') === '1';
-  // Tier knob (074/09): `?scale=0.75` render scale (live). MSAA/bloomq knobs were field-tested and
-  // dropped (WebGPU allows sampleCount 1|4 only; bloom levels saved ~0.05 ms).
-  const scaleParam = Number(params.get('scale') ?? Number.NaN);
-  if (Number.isFinite(scaleParam)) {
-    config.graphics.renderScale = scaleParam;
-  }
   // Draw distance (074/21 P1): ONE knob → the LOD streaming ring, with the fog cut capped at
   // `drawDistance − FOG_RING_MARGIN` — the outer margin band is always loaded before it leaves the fog,
   // so streaming pops are impossible by construction. Per-game default from GAME_CONFIG (an island TC
@@ -766,6 +827,10 @@ async function boot(
   // Smashable props (B7·a): the colliders are already tagged with their placement key by the shared adapter.
   // Uproot props (lampposts, meters) fall as real dynamic bodies; the rest shatter into analytic debris.
   const props = setupEngineProps(engine, fs, physics);
+  // `?osmspike=<model>` (097/04 phase 0): one map-object `.osm` loaded by NAME and rendered beside the
+  // player — the CLEO host's model path, proven before the chain is built. Temporary.
+  const osmSpikeName = params.get('osmspike');
+  const osmSpike = osmSpikeName ? setupOsmSpike(engine, fs, osmSpikeName) : null;
   // Animated map objects (B7·b): the converter left their MOVING frames out of the bundle; these are them.
   const animObjects = setupEngineAnimObjects(engine, fs, adapter);
   const breakables = setupEngineBreakables(engine, physics, collision, adapter, fs, props);
@@ -939,6 +1004,30 @@ async function boot(
       : GAME_CONFIG[gameId].loadGame.startMinutes / 60;
   environmentDriver.apply(hour);
 
+  // `?spawncar=model[,x,y,z[,heading]]` (097/05 field checks): one car spawned at the given GTA spot
+  // (default: 8 m north of the player's spawn) — how a specific vehicle mod is put in front of the
+  // camera without waiting for traffic to deal one. Retries until the ground has streamed in.
+  const trySpawnCar = createSpawnCarRetry(params.get('spawncar'), spawnParam, vehicles, reportedFixedStepErrors);
+
+  // `?autoseat=1` (097/05 field checks): seat the player into the nearest car once it exists —
+  // headless probes cannot walk the door approach reliably.
+  let autoSeatPending = params.get('autoseat') === '1';
+
+  // CLEO scripts (plan 097/04): discovered from `cleo/*.cs` in the VFS, run on the fixed step below.
+  // ON by default since 2026-08-06 (the A/B/A priced it); `?cleo=0` opts a session out, `?cleo=1`
+  // still force-enables. Explicit wiring, not SystemRegistry (that registry is dead — recon fact).
+  applyCleoOverride(config, params);
+  const cleo = setupEngineCleo({
+    adapter,
+    cameraGta: (): [number, number, number] => [cameraEye[0], -cameraEye[2], cameraEye[1]],
+    config,
+    engine,
+    fs,
+    hour: (): number => Math.floor(hour) % 24,
+    playerGta: (): [number, number, number] => [Transform.x[playerEid], Transform.y[playerEid], Transform.z[playerEid]],
+    vehicles: (): EngineVehicles | null => vehicles,
+  });
+
   // Prod HUD + district names (074/10 reuse-not-duplicate): the SAME DOM <Hud> component fed through the
   // narrow HudGame surface; the lookup is the game's own ZoneNameSystem over info.zon + american.gxt.
   await loadFonts(config.fonts);
@@ -1010,6 +1099,7 @@ async function boot(
       breakNearest: (position, radius) => breakables.breakNearest(position, radius),
       cameraDistance: () => rig.distance,
       city: (): City => city,
+      cleo: () => cleo,
       config,
       flipVehicle: () => flipActiveVehicle(physics, vehicles?.activeVehicle() ?? null),
       getHour: () => hour,
@@ -1122,7 +1212,15 @@ async function boot(
         const [px, py, pz] = viewOf();
         // In FRONT of the camera, facing the same way. The camera's native forward is (sin yaw, −cos yaw);
         // a heading h points along (−sin h, cos h), so the matching heading is yaw + π.
-        const position: [number, number, number] = [px + Math.sin(rig.yaw) * 5, py - Math.cos(rig.yaw) * 5, pz + 1];
+        // The gap scales with the MODEL: clearance + half its length — a fixed 5 m put the CENTRE of a
+        // 11 m coach ahead, which wrapped the body around the player.
+        const half = (await vehicles?.modelHalfExtents(model)) ?? [1, 2.5, 1];
+        const distance = 2.5 + half[1];
+        const position: [number, number, number] = [
+          px + Math.sin(rig.yaw) * distance,
+          py - Math.cos(rig.yaw) * distance,
+          pz + 1,
+        ];
         await vehicles?.spawn({
           ...(combos.length > 0 ? { colour: combos[index % combos.length].join(',') } : {}),
           groundSnap: true,
@@ -1368,6 +1466,13 @@ async function boot(
         const vehicleFixedStarted = performance.now();
         vehicles?.fixedUpdate(FIXED_STEP);
         vehicleFixedMs += performance.now() - vehicleFixedStarted + physics.takeVehicleStepMs();
+        // CLEO runs AFTER the vehicle step (plan 097/04 decision 7): scripts read seated-vehicle
+        // state the same step they animate. Gated inside on `cleo.enabled` + play state.
+        cleo?.fixedUpdate(FIXED_STEP);
+        trySpawnCar();
+        if (autoSeatPending && vehicles?.seatInstantly()) {
+          autoSeatPending = false;
+        }
         // Snapshot AFTER: the cars sampled their bodies in fixedUpdate, and the ped Transform is now current.
         [curPlayerGta[0], curPlayerGta[1], curPlayerGta[2]] = viewOf();
         // Contact-force impacts are produced BY the physics step, so drain them here — one step late and a
@@ -1556,6 +1661,7 @@ async function boot(
       const animStarted = performance.now();
       animObjects.update(animStarted / 1000, [Transform.x[playerEid], Transform.y[playerEid], Transform.z[playerEid]]);
       animMs = performance.now() - animStarted;
+      osmSpike?.update([Transform.x[playerEid], Transform.y[playerEid], Transform.z[playerEid]]);
       const vehiclesStarted = performance.now();
       tickVehicles(dt, renderAlpha);
       vehiclesMs = performance.now() - vehiclesStarted;

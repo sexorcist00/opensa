@@ -3,6 +3,7 @@
  * (`three/build-vehicle.ts`); the own engine needs the SAME lore as flat buffers + part transforms. This is
  * the shared product both renderers' hosts consume.
  */
+import type { RWUvAnimation } from '../parsers/binary/types';
 
 /**
  * Per-vertex paint slot, carried in `meta.z`. The engine resolves it to the INSTANCE's colour at draw time,
@@ -62,6 +63,12 @@ export interface VehicleDoor {
   /** `door_lf` … — the hinge part's name. */
   name: string;
   part: number;
+  /**
+   * Every part whose frame lives under this door's hinge — the door atomic PLUS any separate glass/trim
+   * atomics a mod authors there (SA rotates the whole frame subtree, so they travel with the door). Present
+   * only when the subtree carries more than the door part itself; absent = just `part`.
+   */
+  parts?: readonly number[];
   side: string;
 }
 
@@ -103,6 +110,9 @@ export interface VehicleFixture {
   /** `'world'` = the submeshes' `array` fields are refs into the SHARED world plan and the file carries no
    *  `TEXS`; absent = a private dictionary rides along, which is what every by-name class ships. */
   textureSource?: 'world';
+  /** The UV animations this model's materials reference, model-local (see {@link VehicleModelData}).
+   *  Absent when no material references one — which every `.osm` written before 099 also says. */
+  uvAnimations?: RWUvAnimation[];
   vertexCount: number;
   wheels: VehicleWheel[];
 }
@@ -144,6 +154,14 @@ export interface VehicleModelData {
   reflect: Uint8Array;
   submeshes: readonly VehicleModelSubmesh[];
   texture: VehicleTextureArray;
+  /**
+   * UV animations from the DFF's UVAnimDict, keeping ONLY the entries this model's materials actually
+   * reference; a submesh names its own by `uvAnim`, an index into THIS list. The world lane registers dict
+   * names GLOBALLY across the pak (`resolveUvAnim`, cell-weld) because its cells index one shared manifest
+   * array — a rigid model streams in and out on its own, so it carries its animations with it instead.
+   * Absent when no material references one, which is every vehicle and nearly every prop.
+   */
+  uvAnimations?: readonly RWUvAnimation[];
   uvs: Float32Array;
   wheels: readonly VehicleWheel[];
 }
@@ -161,6 +179,13 @@ export interface VehicleModelSubmesh {
   /** Which texture ARRAY this submesh samples (opensa-pack 003 phase 5g). Absent means 0 — the single-array
    *  case every runtime build is; only the offline converter, planning from raw TXDs, ever sets it. */
   array?: number;
+  /**
+   * Part-local AABB of the submesh's triangles. The translucent sort keys on the eye's distance to the
+   * NEAREST of its corners: `center − radius` counted a SCATTERED submesh (a mod's gauge cluster, pieces
+   * across the whole dash, radius 1.8) as nearer than the equally-distant window sheet in front of it, and
+   * the cabin drew OVER the glass. Absent on old fixtures — they fall back to `center`/`radius`.
+   */
+  bounds?: { max: [number, number, number]; min: [number, number, number] };
   /** Model-space centroid of the submesh's triangles (074/16 round 6) — the engine sorts TRANSLUCENT
    *  submeshes back-to-front by this each frame, or the steering wheel draws over the windscreen. */
   center: [number, number, number];
@@ -200,6 +225,9 @@ export interface VehicleModelSubmesh {
   /** True when this submesh is the WHEEL's rubber (`wheel-tyre.ts` — a geometric test, not a name). Rubber
    *  never reflects, and a damageable tyre will want to find itself later. Absent = not a tyre. */
   tyre?: boolean;
+  /** Index into the MODEL's `uvAnimations` (plan 099/01) — this submesh's material scrolls/steps its UV0.
+   *  Absent = static UVs, which is the only thing an `.osm` written before 099 can say. */
+  uvAnim?: number;
 }
 
 /**

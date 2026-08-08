@@ -1,70 +1,65 @@
+import { renderHeader } from '@opensa/asi-sdk/render';
+import { SA_FINGERPRINT } from '@opensa/asi-sdk/sa-fingerprint';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { CATALOGUE, type CatalogueEntry, type Fingerprint, FINGERPRINT } from './catalogue';
-import { renderHeader } from './generate';
+import { CATALOGUE } from './catalogue';
 
-const FP: Fingerprint = {
-  anchors: [{ bytes: [0xe9, 0x9b], fileOffset: 0x4090, name: 'a.entry' }],
-  exeSize: 14383616,
-  sha1: '8c23ceffafa9fd88ea567be7926a33413b8e3c00',
-};
-
-const ENTRY: CatalogueEntry = {
-  id: 'ipldef-range',
-  sites: [{ address: 0x404b20, bytes: [0xa1, 0xb0], name: 'RemoveIpl.entry' }],
-  strategy: 'hook',
-  summary: 's',
-};
-
-describe('renderHeader', () => {
-  describe('negative cases', () => {
-    it('throws when the fingerprint sha1 is not 40 hex chars', () => {
-      expect(() => renderHeader([ENTRY], { ...FP, sha1: 'abc' })).toThrow(/sha1/);
-    });
-
-    it('throws when a fingerprint fileOffset is outside the exe', () => {
-      expect(() =>
-        renderHeader([ENTRY], { ...FP, anchors: [{ bytes: [1], fileOffset: 0x9000000, name: 'x' }] }),
-      ).toThrow(/fileOffset/);
-    });
-
-    it('throws when a patch-site address is outside the 1.0 US range', () => {
-      const bad = { ...ENTRY, sites: [{ address: 0x10, bytes: [1], name: 'x' }] };
-      expect(() => renderHeader([bad], FP)).toThrow(/range/);
-    });
-
-    it('throws when an anchor has empty bytes', () => {
-      const bad = { ...ENTRY, sites: [{ address: 0x404b20, bytes: [], name: 'x' }] };
-      expect(() => renderHeader([bad], FP)).toThrow(/empty/);
-    });
-
-    it('throws on a byte outside 0..255', () => {
-      const bad = { ...ENTRY, sites: [{ address: 0x404b20, bytes: [0x100], name: 'x' }] };
-      expect(() => renderHeader([bad], FP)).toThrow(/0\.\.255/);
-    });
-
-    it('throws on duplicate catalogue ids', () => {
-      expect(() => renderHeader([ENTRY, ENTRY], FP)).toThrow(/duplicate/);
-    });
-  });
-
+describe('perfect-map catalogue', () => {
   describe('positive cases', () => {
-    it('emits the fingerprint (file anchors) and a site byte array', () => {
-      const hpp = renderHeader([ENTRY], FP);
-
-      expect(hpp).toContain('inline constexpr uint32_t kExeSize = 14383616u;');
-      expect(hpp).toContain('"8c23ceffafa9fd88ea567be7926a33413b8e3c00"');
-      expect(hpp).toContain('struct FileAnchor');
-      expect(hpp).toContain('{0xa1, 0xb0}');
-      expect(hpp).toContain('inline constexpr uint32_t kFingerprintCount = 1u;');
+    it('pins the shared fingerprint to the one accepted exe', () => {
+      expect(SA_FINGERPRINT.exeSize).toBe(14383616);
+      expect(SA_FINGERPRINT.sha1).toBe('8c23ceffafa9fd88ea567be7926a33413b8e3c00');
     });
 
     it('renders the real catalogue with one anchor per site', () => {
-      const hpp = renderHeader(CATALOGUE, FINGERPRINT);
+      const hpp = renderHeader(CATALOGUE, SA_FINGERPRINT, { namespace: 'pm' });
       const siteCount = CATALOGUE.reduce((sum, entry) => sum + entry.sites.length, 0);
 
       expect(hpp).toContain(`inline constexpr uint32_t kPatchSiteCount = ${siteCount}u;`);
       expect(hpp).toContain('{0x66, 0x8b, 0x43, 0x2a}'); // LoadIplBoundingBox.staticIdx
+      expect(hpp).toContain('namespace pm::gen {');
+    });
+
+    it('names a gta-reversed-modern source in every provenance line', () => {
+      for (const entry of CATALOGUE) {
+        expect(entry.provenance).toMatch(/gta-reversed-modern source\/game_sa\//);
+      }
+    });
+
+    // The fingerprint (SDK) and the catalogue (here) now live in different packages and overlap on four
+    // names. A one-nibble typo in either would pass every other check and turn into a relocated garbage
+    // instruction in the field. The exe is linked at 0x400000 with a 0xC00 header, hence the fixed delta.
+    it('agrees with the shared fingerprint wherever the two tables name the same site', () => {
+      const VA_TO_FILE_DELTA = 0x400c00;
+      const sites = new Map(CATALOGUE.flatMap((entry) => entry.sites).map((site) => [site.name, site]));
+      const overlapping = SA_FINGERPRINT.anchors.filter((anchor) => sites.has(anchor.name));
+
+      expect(overlapping.length).toBeGreaterThan(0);
+      for (const anchor of overlapping) {
+        const site = sites.get(anchor.name);
+
+        expect(site?.address).toBe(anchor.fileOffset + VA_TO_FILE_DELTA);
+        expect(site?.bytes).toEqual(anchor.bytes);
+      }
+    });
+
+    // Catches the half-edit that `asi::FindSite` cannot: a payload naming a site the catalogue no longer
+    // carries compiles, verifies clean, and then dereferences null inside DLL_PROCESS_ATTACH.
+    it('carries every site name the payloads look up', () => {
+      const names = new Set(CATALOGUE.flatMap((entry) => entry.sites).map((site) => site.name));
+      const patchDir = join(import.meta.dirname, '..', 'src', 'patches');
+      const quoted = readdirSync(patchDir)
+        .filter((file) => file.endsWith('.hpp'))
+        .flatMap((file) => [...readFileSync(join(patchDir, file), 'utf8').matchAll(/"([^"\n]*)"/g)])
+        .map((match) => match[1])
+        .filter((text) => /^\w+(?:\.\w+)+$/.test(text) && !text.endsWith('.log'));
+
+      expect(quoted.length).toBeGreaterThan(0);
+      for (const name of new Set(quoted)) {
+        expect(names, `payload names "${name}"`).toContain(name);
+      }
     });
   });
 });

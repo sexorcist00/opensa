@@ -34,10 +34,28 @@ export interface VehicleHandle {
    * when the model has none — the caller then falls back to the half-extents.
    */
   lampAnchor(kind: 'head' | 'tail'): null | Vec3;
+  /**
+   * Which of this car's four lamps are SMASHED, one bit per SA `eLights` index — SA's
+   * `CDamageManager::m_nLightsStatus`, which a CLEO script writes through `SetLightStatus` and collision
+   * damage writes from its light component group. A smashed lamp emits nothing.
+   */
+  lightsSmashed(): number;
   /** Damageable body parts — the damage system's entire world model. */
   readonly parts: readonly VehiclePartInfo[];
   /** Drop a detached part for good. */
   removeDetached(name: string): void;
+  /** CLEO natives (plan 097/05): total rig part count — the frame-order sibling walk's bound. */
+  scriptPartCount(): number;
+  /** CLEO natives: rig part index by frame name (`misc_a`, `dvan_l`…), or null when absent. */
+  scriptPartIndex(name: string): null | number;
+  /** CLEO natives: the part's CURRENT local rotation (script-absolute; starts at the bind pose). */
+  scriptPartLocalRotation(part: number): VehicleQuat;
+  /** CLEO natives: the part's CURRENT local translation (script-absolute; starts at the bind pose). */
+  scriptPartLocalTranslation(part: number): Vec3;
+  /** CLEO natives: REPLACE the part's local rotation (SA's SetRotate* writes the matrix absolutely). */
+  scriptSetPartLocalRotation(part: number, quat: VehicleQuat): void;
+  /** CLEO natives: REPLACE the part's local translation (the matrix pos writes). */
+  scriptSetPartLocalTranslation(part: number, translation: Vec3): void;
   /** Pose a detached part in world space (native Z-up). */
   setDetachedPose(name: string, pose: VehiclePose): void;
   /** Swing a door about its hinge (radians; 0 = closed). */
@@ -47,6 +65,8 @@ export interface VehicleHandle {
    * tail lamps from their dim running level to full. Per-VEHICLE, not global: only the driven car lights up.
    */
   setLamps(state: VehicleLampState): void;
+  /** Set ONE lamp's status. Out-of-range indices are ignored — the caller may be a script. */
+  setLightSmashed(light: number, smashed: boolean): void;
   setLodBand(band: VehicleBand): void;
   /** Swap a part between its intact and damaged meshes. */
   setPartDamaged(name: string, damaged: boolean): void;

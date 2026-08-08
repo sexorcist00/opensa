@@ -11,10 +11,13 @@
 #include <cstdint>
 
 #include "../config.hpp"
-#include "../fingerprint.hpp"  // Runtime(), HostBase()
-#include "../hook.hpp"
-#include "../log.hpp"
-#include "../mem.hpp"
+#include "../identity.hpp"
+#include <asi/fingerprint.hpp>  // asi::Runtime(), asi::HostBase()
+#include <asi/hook.hpp>
+#include <asi/append-log.hpp>
+#include <asi/log.hpp>
+#include <asi/plugin.hpp>
+#include <asi/verify.hpp>
 
 namespace pm::patches {
 
@@ -22,46 +25,10 @@ namespace pm::patches {
 inline int gDbgInc = 0;
 inline int gDbgRmv = 0;
 
-// Append signed-decimal `label a b c` to perfect-map-asi.log (the runtime hooks run after OnAttach closed its Log).
-inline char* DbgItoa(int32_t v, char* out) {
-  uint32_t u = v < 0 ? (*out++ = '-', 0u - static_cast<uint32_t>(v)) : static_cast<uint32_t>(v);
-  char tmp[12];
-  int n = 0;
-  do {
-    tmp[n++] = static_cast<char>('0' + u % 10);
-    u /= 10;
-  } while (u);
-  while (n) {
-    *out++ = tmp[--n];
-  }
-  return out;
-}
-
+// The runtime hooks fire long after OnAttach closed its Log, so they trace through the SDK's reopen-append
+// logger. Diagnostic builds only (PM_INT16_LOG), never the hot path.
 inline void DbgAppend(const char* label, int32_t a, int32_t b, int32_t c) {
-  char path[MAX_PATH];
-  HostDir(path, sizeof(path));
-  lstrcatA(path, "perfect-map-asi.log");
-  HANDLE f = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
-                         FILE_ATTRIBUTE_NORMAL, nullptr);
-  if (f == INVALID_HANDLE_VALUE) {
-    return;
-  }
-  char buf[160];
-  char* p = buf;
-  for (const char* s = label; *s; ++s) {
-    *p++ = *s;
-  }
-  *p++ = ' ';
-  p = DbgItoa(a, p);
-  *p++ = ' ';
-  p = DbgItoa(b, p);
-  *p++ = ' ';
-  p = DbgItoa(c, p);
-  *p++ = '\r';
-  *p++ = '\n';
-  DWORD w = 0;
-  WriteFile(f, buf, static_cast<DWORD>(p - buf), &w, nullptr);
-  CloseHandle(f);
+  asi::AppendLabelled(kLogFile, label, a, b, c);
 }
 #endif
 
@@ -172,7 +139,7 @@ inline void PutBytes(uint8_t* buf, uint32_t& pos, const uint8_t* src, uint32_t n
 // Detour at RemoveIpl.firstBuilding (0x404B4A): set edi = gSnapFirst (the range snapshotted at RemoveIpl entry),
 // run the clobbered `mov ecx,[0xB74498]`, jmp back to 0x404B54. No scratch regs needed → no push/pop.
 inline bool InstallFirstBuildingDetour() {
-  uint8_t* t = AllocExec(24);
+  uint8_t* t = asi::AllocExec(24);
   if (!t) {
     return false;
   }
@@ -183,14 +150,14 @@ inline bool InstallFirstBuildingDetour() {
   Put32(t, p, reinterpret_cast<uint32_t>(&gSnapFirst));
   const uint8_t tail[] = {0x8B, 0x0D, 0x98, 0x44, 0xB7, 0x00};  // mov ecx, [0xB74498]  (relocated clobbered insn)
   PutBytes(t, p, tail, sizeof(tail));
-  EmitJmp(t, p, base, Runtime(0x404B54));
-  return WriteJmp(Runtime(0x404B4A), base);
+  asi::EmitJmp(t, p, base, asi::Runtime(0x404B54));
+  return asi::WriteJmp(asi::Runtime(0x404B4A), base);
 }
 
 // Detour at RemoveIpl.lastBuilding (0x404B5D): set edx = gSnapLast, run the clobbered `cmp edi,edx`, jmp to
 // 0x404B63. No scratch regs needed.
 inline bool InstallLastBuildingDetour() {
-  uint8_t* t = AllocExec(24);
+  uint8_t* t = asi::AllocExec(24);
   if (!t) {
     return false;
   }
@@ -201,8 +168,8 @@ inline bool InstallLastBuildingDetour() {
   Put32(t, p, reinterpret_cast<uint32_t>(&gSnapLast));
   const uint8_t tail[] = {0x3B, 0xFA};  // cmp edi, edx  (relocated clobbered insn)
   PutBytes(t, p, tail, sizeof(tail));
-  EmitJmp(t, p, base, Runtime(0x404B63));
-  return WriteJmp(Runtime(0x404B5D), base);
+  asi::EmitJmp(t, p, base, asi::Runtime(0x404B63));
+  return asi::WriteJmp(asi::Runtime(0x404B5D), base);
 }
 
 // Detour at the loop back-edge re-read of lastBuilding (0x404BA8: `movsx edx,word[ebx+0x24]`, then `inc edi;
@@ -210,7 +177,7 @@ inline bool InstallLastBuildingDetour() {
 // after one building. Set edx = gSnapLast, run the clobbered `inc edi`, jmp to 0x404BAD. (0x404BA8 is also a jump
 // target for the skip paths — they land on our jmp and do the same edx-reload + inc, so they stay correct.)
 inline bool InstallLastBuildingLoopDetour() {
-  uint8_t* t = AllocExec(24);
+  uint8_t* t = asi::AllocExec(24);
   if (!t) {
     return false;
   }
@@ -220,8 +187,8 @@ inline bool InstallLastBuildingLoopDetour() {
   t[p++] = 0x15;  // mov edx, [gSnapLast]  (abs32 follows)
   Put32(t, p, reinterpret_cast<uint32_t>(&gSnapLast));
   t[p++] = 0x47;  // inc edi  (relocated clobbered insn)
-  EmitJmp(t, p, base, Runtime(0x404BAD));
-  return WriteJmp(Runtime(0x404BA8), base);
+  asi::EmitJmp(t, p, base, asi::Runtime(0x404BAD));
+  return asi::WriteJmp(asi::Runtime(0x404BA8), base);
 }
 
 }  // namespace detail
@@ -231,63 +198,52 @@ inline bool InstallLastBuildingLoopDetour() {
 // instruction and jump to a fixed continuation), so they work whether the read site is pristine (OLA/vanilla) or
 // already jmp-hooked by FLA — we simply overlay FLA's incomplete int16 patch with our complete one. We DO verify
 // the detour CONTINUATION targets, so a future adjuster hooking THOSE makes us defer instead of corrupt.
-inline constexpr uint8_t kIncludeEntry[] = {0xe9, 0x9b, 0xea, 0x15, 0x01};    // @0x404C90 IncludeEntity entry (jmp)
-inline constexpr uint8_t kRemoveIplEntry[] = {0xa1, 0xb0, 0x3f, 0x8e, 0x00};  // @0x404B20 RemoveIpl entry
-inline constexpr uint8_t kCont404B54[] = {0xa1, 0x9c, 0x44, 0xb7, 0x00};      // @0x404B54 mov eax,[0xB7449C]
-inline constexpr uint8_t kCont404B63[] = {0x89, 0x4c, 0x24, 0x14};            // @0x404B63 mov [esp+0x14],ecx
-inline constexpr uint8_t kCont404BAD[] = {0x83, 0xc5, 0x38};                  // @0x404BAD add ebp,0x38
+//
+// The sites are named, never re-declared: their bytes come from the catalogue through the generated table.
+inline constexpr const char* kInt16Sites[] = {
+    "IncludeEntity.entry", "RemoveIpl.entry", "RemoveIpl.cont.404B54", "RemoveIpl.cont.404B63",
+    "RemoveIpl.cont.404BAD",
+};
 
-inline void ApplyInt16(Log& log) {
-  if (HostBase() != 0x400000) {
-    log.Line("[perfect-map] int16: unexpected image base — DEFER");
+inline void ApplyInt16(asi::Log& log, const asi::Plugin& plugin) {
+  if (asi::HostBase() != 0x400000) {
+    log.Tagged(plugin.tag, "int16: unexpected image base — DEFER");
     return;
   }
   for (int i = 0; i < kMaxIpl; ++i) {
     gFirstBuilding[i] = 0x7FFFFFFF;
     gLastBuilding[i] = static_cast<int32_t>(0x80000000);
   }
-  // Verify every byte we hook or relocate (framework rule) before touching anything. Log the FIRST site that
-  // differs by name + address so we can see which one an adjuster owns (FLA patches the RemoveIpl reads).
-  struct Site {
-    uint32_t va;
-    const uint8_t* bytes;
-    uint32_t len;
-    const char* name;
-  };
-  const Site sites[] = {
-      {0x404c90, kIncludeEntry, sizeof(kIncludeEntry), "IncludeEntity.entry 0x404C90"},
-      {0x404b20, kRemoveIplEntry, sizeof(kRemoveIplEntry), "RemoveIpl.entry 0x404B20"},
-      {0x404b54, kCont404B54, sizeof(kCont404B54), "RemoveIpl.cont 0x404B54"},
-      {0x404b63, kCont404B63, sizeof(kCont404B63), "RemoveIpl.cont 0x404B63"},
-      {0x404bad, kCont404BAD, sizeof(kCont404BAD), "RemoveIpl.cont 0x404BAD"},
-  };
-  bool anyDiff = false;
-  for (const Site& s : sites) {
-    const uintptr_t a = Runtime(s.va);
-    if (!VerifyBytes(a, s.bytes, s.len)) {
-      anyDiff = true;
-      log.Line("[perfect-map] int16: site DIFFERS (adjuster owns it):");
-      log.Line(s.name);
-      if (Readable(a, 8)) {  // dump what the adjuster actually wrote (to plan coexistence)
-        log.KeyHex("  found[0..3] ", *reinterpret_cast<const uint32_t*>(a));
-        log.KeyHex("  found[4..7] ", *reinterpret_cast<const uint32_t*>(a + 4));
-      }
-    }
-  }
-  if (anyDiff) {
-    log.Line("[perfect-map] int16: DEFER (patching nothing) — differing sites dumped above");
+  // Verify every byte we hook or relocate (framework rule) before touching anything.
+  if (!asi::VerifySitesOrDefer(log, plugin.tag, plugin.tables, kInt16Sites,
+                               sizeof(kInt16Sites) / sizeof(kInt16Sites[0]))) {
+    log.Tagged(plugin.tag, "int16: DEFER (patching nothing)");
     return;
   }
+  // HookObserve1Cont relocates RemoveIpl's first instruction, so it needs those bytes — from the table, not a
+  // second copy of them.
+  const asi::ByteAnchor* removeIplEntry = asi::FindSite(plugin.tables, kInt16Sites[1]);
+  const asi::ByteAnchor* includeEntry = asi::FindSite(plugin.tables, kInt16Sites[0]);
+  if (removeIplEntry == nullptr || includeEntry == nullptr) {  // unreachable while the verify above passed
+    log.Tagged(plugin.tag, "int16: site name not in the catalogue — DEFER");
+    return;
+  }
+  // Address AND continuation derive from the site: the trampoline relocates `length` bytes and must resume at
+  // exactly entry+length. IncludeEntity is different — its continuation is the HOODLUM-relocated BODY, which is
+  // not adjacent to the entry and is therefore a genuine literal.
+  const uintptr_t removeIplAt = asi::Runtime(removeIplEntry->address);
   // Order matters: the snapshot hook (RemoveIpl entry) sets gSnap for the bound-read detours a few insns later.
-  const bool s = HookObserve1Cont(Runtime(0x404b20), Runtime(0x404b25), kRemoveIplEntry, sizeof(kRemoveIplEntry),
-                                  reinterpret_cast<void*>(&PmRemoveIplSnapshot));
-  const bool a = HookObserve2(Runtime(0x404c90), Runtime(0x1563730), reinterpret_cast<void*>(&PmIncludeObserver));
+  const bool s = asi::HookObserve1Cont(removeIplAt, removeIplAt + removeIplEntry->length, removeIplEntry->bytes,
+                                  removeIplEntry->length, reinterpret_cast<void*>(&PmRemoveIplSnapshot));
+  const bool a = asi::HookObserve2(asi::Runtime(includeEntry->address), asi::Runtime(0x1563730),
+                                   reinterpret_cast<void*>(&PmIncludeObserver));
   const bool b = detail::InstallFirstBuildingDetour();
   const bool c = detail::InstallLastBuildingDetour();
   const bool e = detail::InstallLastBuildingLoopDetour();  // the loop back-edge re-read — the completeness fix
-  log.Line(s && a && b && c && e
-               ? "[perfect-map] int16 APPLIED (buildings): IncludeEntity observed + RemoveIpl snapshot + bounds int32"
-               : "[perfect-map] int16: patch write FAILED (see VirtualProtect)");
+  log.Tagged(plugin.tag,
+             s && a && b && c && e
+                 ? "int16 APPLIED (buildings): IncludeEntity observed + RemoveIpl snapshot + bounds int32"
+                 : "int16: patch write FAILED (see VirtualProtect)");
 }
 
 }  // namespace pm::patches

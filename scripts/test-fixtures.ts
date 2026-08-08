@@ -8,7 +8,9 @@ import { convertTo24h, parseTimecyc, stringifyTimecyc } from '@opensa/renderware
  *
  *   npm run test:fixtures
  *
- * Custom, non-Rockstar fixtures live in `tests/custom/` and ARE committed — this script never touches them.
+ * Custom, non-Rockstar fixtures live in `tests/custom/` and ARE committed — this script never WRITES
+ * there. It may READ from it (`committed` fixtures): a corpus subject whose mod folder no longer ships
+ * it keeps its pristine copy in the repo, so the corpus survives that folder changing under it.
  *
  * Each fixture declares how it is produced:
  *   - copy:    copied verbatim from `game-src/<game>/<from>`
@@ -29,6 +31,12 @@ import { dirname, join } from 'node:path';
 type Fixture =
   | { readonly dest: string; readonly entry: string; readonly type: 'archive' }
   | { readonly dest: string; readonly entry: string; readonly type: 'extract' }
+  /** Copied from `mods-src/<game>/` (mods/ + vehicles/ subpaths) — see {@link CLEO_MANIFEST}. */
+  | { readonly dest: string; readonly from: string; readonly type: 'cleo' }
+  /** Copied from a COMMITTED path (`tests/custom/…`) — for a corpus entry whose mod no longer ships
+   *  it. The pristine copy lives in the repo precisely so the corpus survives the mod folder
+   *  changing under it; see the rhino row in {@link CLEO_MANIFEST}. */
+  | { readonly dest: string; readonly from: string; readonly type: 'committed' }
   | { readonly dest: string; readonly from: string; readonly type: 'copy' }
   /** Copied from `mods-src/`, not from the game dir — see {@link MOD_MANIFEST}. */
   | { readonly dest: string; readonly from: string; readonly type: 'mod' };
@@ -64,6 +72,55 @@ const MOD_MANIFEST: readonly Fixture[] = [
   // face array put the slab face-down and single-sided culling deleted it — the "blue strip" (plan 095).
   // A synthetic clump cannot prove this: the whole point is what a real exporter actually writes.
   modFile('0. Map Fixes Pack/gta3_img/roads32_law2.dff', 'mods/roads32_law2.dff'),
+  // The Pacific Park ferris wheel's light ring (plan 099): a UVAnimDict entry `f13d` — 261 keyframes
+  // stepping UV0 by 1/13 every 0.225 s — plus the `Frames` material that references it. Nothing in stock
+  // SA's vehicle/prop set animates its UVs, so the rigid builder's binding can only be proven on this one.
+  modFile('60. Pacific Park Rotating Ferris Wheel/gta3_img/ferriswheel_lights.dff', 'mods/ferriswheel_lights.dff'),
+  modFile('60. Pacific Park Rotating Ferris Wheel/gta3_img/ferriswheel_lights.txd', 'mods/ferriswheel_lights.txd'),
+];
+
+/**
+ * The plan 097 CLEO corpus — seven real Sanny-compiled `.cs` mods, copied from `mods-src/<game>/`
+ * (plan 097/06 moved them out of `NO_COMMIT/cleo`; paths carry the mods/ vs vehicles/ subfolder).
+ * Real scripts falsify what synthetic ones confirm: the `__SBFTR` footer and the native-call
+ * encoding were both invisible to a synthetic corpus (097/01 decision 6). `cardoor-coach`/
+ * `cardoor-bus` are the same script shipped by two mods — both are fixtured so the decode census
+ * stays one line per mod.
+ */
+const cleoFile = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, from, type: 'cleo' });
+
+const CLEO_MANIFEST: readonly Fixture[] = [
+  cleoFile('mods/60. Pacific Park Rotating Ferris Wheel/CLEO/Rotating Ferris Wheel (Junior_Djjr).cs', 'cleo/ferris.cs'),
+  cleoFile(
+    'vehicles/bus - 1978 Motor Coach Industries MC-9 Crusader-II - stratumx/cleo/Car Left Door.cs',
+    'cleo/cardoor-bus.cs',
+  ),
+  cleoFile(
+    'vehicles/coach - 1985 Motor Coach Industries 102A3 - stratumx/cleo/Car Left Door.cs',
+    'cleo/cardoor-coach.cs',
+  ),
+  cleoFile('vehicles/firela - 1986 Sutphen 75 Mid-Mounted Ladder Truck - stratumx/cleo/firela.cs', 'cleo/firela.cs'),
+  cleoFile('vehicles/newsvan - 1991 Ford Econoline 350 SA News Van - funky/cleo/van door [SA].cs', 'cleo/vandoor.cs'),
+  // The rhino's original script no longer lives in the mod folder — our authored replacement took its
+  // place there (plan `cleo/scripts` 001). The corpus still needs it: it is one of the seven real
+  // Sanny-compiled decode/trace subjects, AND the integration test uses it to pin that the original
+  // does nothing on this model's real rig. So the pristine copy is COMMITTED and read from there;
+  // sourcing it from a mod folder that can be edited under us is what made this fixture report
+  // MISSING while a stale local copy kept the corpus tests green.
+  { dest: `${OUT}/cleo/rhino.cs`, from: 'tests/custom/cleo/rhino.cs', type: 'committed' },
+  // The hotring's original light-killer (plan `cleo/scripts` 002). COMMITTED for the same reason as
+  // the rhino's, one step earlier: it ships in the mod's `cleo-skipped/` folder — a folder whose name
+  // that plan contemplated renaming — so the corpus must not depend on it still being there under that
+  // name. 002's authored replacement was WITHDRAWN (superseded by plan 098/11: the effect is a property
+  // of the model now), and this fixture deliberately OUTLIVED it — its value is being a real
+  // Sanny-compiled decode / re-encode / listing subject, which never depended on us shipping anything.
+  { dest: `${OUT}/cleo/nolights.cs`, from: 'tests/custom/cleo/no_lights.cs', type: 'committed' },
+  // The rhino's MODEL, not a script. A track script is only testable end-to-end against the rig it
+  // actually addresses: the original's chain anchor `misc_e` is a dummy the vehicle builder does not
+  // emit as a part, which is why it was a silent no-op on our runtime while every headless test on a
+  // permissive mock passed (plan `cleo/scripts` 001 step 2).
+  cleoFile('vehicles/rhino - GTA 5 Rhino - _F_/rhino.dff', 'vehicles/rhino.dff'),
+  cleoFile('mods/61. Wind Farm/CLEO/Wind Farm (Junior_Djjr).cs', 'cleo/windfarm.cs'),
 ];
 
 const MANIFEST: readonly Fixture[] = [
@@ -229,6 +286,12 @@ function produce(fixture: Fixture): null | Uint8Array {
 
       return data ? buildVer2Buffer([{ data, name: fixture.entry }]) : null;
     }
+    case 'cleo': {
+      return new Uint8Array(readFileSync(join('mods-src', GAME, fixture.from)));
+    }
+    case 'committed': {
+      return new Uint8Array(readFileSync(fixture.from));
+    }
     case 'copy': {
       return new Uint8Array(readFileSync(join(ROOT, fixture.from)));
     }
@@ -246,7 +309,7 @@ function produce(fixture: Fixture): null | Uint8Array {
 let written = 0;
 const missing: string[] = [];
 
-for (const fixture of [...MANIFEST, ...MOD_MANIFEST]) {
+for (const fixture of [...MANIFEST, ...MOD_MANIFEST, ...CLEO_MANIFEST]) {
   let data: null | Uint8Array = null;
   try {
     data = produce(fixture);
@@ -274,7 +337,9 @@ try {
   missing.push(`${OUT}/data/timecyc_24h.dat`);
 }
 
-console.log(`test:fixtures (${GAME}): wrote ${written}/${MANIFEST.length + MOD_MANIFEST.length + 1} into ${OUT}/`);
+console.log(
+  `test:fixtures (${GAME}): wrote ${written}/${MANIFEST.length + MOD_MANIFEST.length + CLEO_MANIFEST.length + 1} into ${OUT}/`,
+);
 if (missing.length > 0) {
   console.error(`\n  MISSING ${missing.length} — source not found in ${ROOT}:`);
   for (const dest of missing) {

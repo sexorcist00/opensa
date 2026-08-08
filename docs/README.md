@@ -42,6 +42,10 @@ Read it as a set of rules:
   It holds the rules a design has to satisfy — layer boundaries, format ceilings, engine splits, decisions
   taken at build time that cannot be re-taken at runtime — and says for each whether a violation is caught by
   a test/guard/lint or is SILENT. A new restriction is recorded there in the SAME change that finds it.
+- **A plan step ships inside one tool** → once it is built, MOVE its doc out of `docs/plans/` (or
+  `docs/roadmap/`) into that tool's OWN chain at `tools/<tool>/docs/plans/NNN-<name>.md`, taking the next
+  free number there, with its measured numbers filled in. Every tool keeps the record of its own steps
+  beside its code; the central folders carry what is still unbuilt or spans several tools.
 - **A change alters the architecture** → add/adjust notes (and the diagram) in
   [`docs/architecture/`](./architecture/README.md) in the SAME change.
 - **A NAME starts carrying behaviour** (a file the pipeline looks for, a frame/material the converter reads,
@@ -71,6 +75,7 @@ Read it as a set of rules:
 | [`contracts/`](./contracts/) | Names that carry behaviour (files, frames, materials, data rows). |
 | [`edge-cases/`](./edge-cases/README.md) | CURRENT limitations/constraints only, no legacy. Read while DEBUGGING. |
 | [`restrictions/`](./restrictions/README.md) | Rules a new design must satisfy. Read BEFORE an idea/concept/plan. |
+| [`gta-sa-original/`](./gta-sa-original/README.md) | The ORIGINAL game and the real install we ship into — kept apart from anything describing OpenSA. Anything we change or discover about GTA:SA original is recorded here in the same change. |
 | [`hacks/`](./hacks/README.md) | Expedients we knowingly took: fitted constants, stand-in rules, faked effects. Replaced ones move to [`hacks/retired/`](./hacks/retired/). |
 | [`references/`](./references/readme.md) | Ideas borrowed from other projects, with their status — planned, built, or refused with the reason. |
 | [`performance/`](./performance/) | Deferred-optimization levers (a price tag, not a plan). |

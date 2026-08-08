@@ -1280,6 +1280,10 @@ struct RigidVsOut {
 @group(1) @binding(8) var plateTexture: texture_2d_array<f32>;
 // The three city backgrounds (plateback1..3 = SF / LV / LS), at whatever size the game's TXD ships.
 @group(1) @binding(9) var plateBackTexture: texture_2d_array<f32>;
+// The UV transform for THIS draw (plan 099): uv·zw + xy, the world lane's exact term. A dynamic offset
+// selects the submesh's slot out of the model's own animation list; slot 0 is (0,0,1,1), so a car — and
+// every static submesh of an animated model — runs the identity and comes out bit-identical.
+@group(1) @binding(10) var<uniform> rigidUvAnim: vec4f;
 
 // MaterialClass — the high nibble of slots.w. Kept in sync with renderware/vehicle/types.ts.
 const MAT_PLATE_BACK: u32 = 4u;
@@ -1294,7 +1298,7 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   let world = model * vec4f(in.position, 1.0);
   var out: RigidVsOut;
   out.clip = frame.viewProj * world;
-  out.uv = in.uv;
+  out.uv = in.uv * rigidUvAnim.zw + rigidUvAnim.xy;
   out.normal = normalize((model * vec4f(in.normal, 0.0)).xyz);
   out.world = world.xyz;
   // Day → night on the prelit set, BEFORE the paint override: a car's night set is its day set (no prelit,
@@ -1323,7 +1327,15 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   } else if (matClass == MAT_PLATE_BACK) {
     plateLayer = plate.y;
   }
-  out.lamps = vec4f(rigidLamp[in.instance].xyz, plateLayer);
+  // A SMASHED lamp does not light (SA CDamageManager::SetLightStatus — plan cleo/scripts 002). The status is
+  // per LAMP, but a DFF authors ONE lamp material per end, so the mesh can only go dark per PAIR: both bits
+  // of an end have to be set before the lit twin and the glow are withheld. The per-lamp half of the effect —
+  // beam, pool light, corona — is geometric and dies one lamp at a time in vehicle-lamp.system.ts.
+  let lampRow = rigidLamp[in.instance];
+  let smashed = u32(lampRow.w);
+  let lampOut = (out.lampTag == 1u && (smashed & 0x3u) == 0x3u) ||
+                (out.lampTag == 2u && (smashed & 0xCu) == 0xCu);
+  out.lamps = vec4f(select(lampRow.xyz, vec3f(0.0, 0.0, lampRow.z), lampOut), plateLayer);
   out.reflect = vec3f(in.reflect.yzw) / 255.0;
   // The night set's ALPHA is the self-occlusion the builder wrote (vehicle/sky-occlusion.ts). A fixture
   // from before it simply carries the material alpha there, which is 1 on everything opaque - no change.

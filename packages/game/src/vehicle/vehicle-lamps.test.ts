@@ -3,7 +3,17 @@ import { describe, expect, it } from 'vitest';
 import type { EnterableVehicle } from './enter-vehicle.system';
 
 import { FakeVehicleHandle } from './vehicle-handle.fake';
-import { lampAnchorsOf, lampsOf, lampStateFor, quatFromHeading } from './vehicle-lamps';
+import {
+  lampAnchorsOf,
+  lampsOf,
+  lampStateFor,
+  LIGHT_FRONT_LEFT,
+  LIGHT_FRONT_RIGHT,
+  LIGHT_REAR_LEFT,
+  LIGHT_REAR_RIGHT,
+  quatFromHeading,
+  withLightSmashed,
+} from './vehicle-lamps';
 
 /** A car at the origin facing +Y (heading 0), with authored lamp dummies unless `anchors` says otherwise. */
 function car(heading = 0, anchors = true): EnterableVehicle {
@@ -29,12 +39,23 @@ function rolledCar(): EnterableVehicle {
 
 describe('vehicle-lamps', () => {
   describe('negative cases', () => {
-    it('a car with no lamp dummies falls back to its half-extents', () => {
-      const anchors = lampAnchorsOf(car(0, false));
+    it('a car with no lamp dummies has NO lamps — nothing is invented for it', () => {
+      // The half-extents fallback this replaces gave headlights to every trailer, tow box and aeroplane
+      // in the game (15 stock models carry no head dummy at all). SA lights what the model authors.
+      const vehicle = car(0, false);
 
-      // Fractions of [hx, hy, hz] = [1, 2, 0.7]; the rear anchor is BEHIND the car (−y).
-      expect(anchors.front[1]).toBeGreaterThan(0);
-      expect(anchors.rear[1]).toBeLessThan(0);
+      expect(lampAnchorsOf(vehicle)).toEqual({ front: null, rear: null });
+      expect(lampsOf(vehicle)).toEqual([]);
+    });
+
+    it('a dummy AT the model origin means "no lamp here", not "a lamp in the middle of the car"', () => {
+      // SA's own test — CVehicle::DoHeadLightBeam returns early on IsZero. A missing dummy reads back as
+      // (0,0,0), and taking that literally put both tail lamps inside the bodywork (the modded hotring).
+      const vehicle = car();
+      (vehicle.handle as FakeVehicleHandle).lampAnchors.set('tail', [0, 0, 0]);
+
+      expect(lampAnchorsOf(vehicle).rear).toBeNull();
+      expect(lampsOf(vehicle).map((lamp) => lamp.kind)).toEqual(['head', 'head']);
     });
 
     it('lamps stay dark unless the car is being DRIVEN at night', () => {
@@ -50,7 +71,17 @@ describe('vehicle-lamps', () => {
         brakes: false,
         headlights: false,
         intensity: 1,
+        smashed: 0,
       });
+    });
+
+    it('an index outside SA’s four lamps cannot reach the mask', () => {
+      let mask = 0;
+      for (const light of [-1, 4, 99, 2.5, Number.NaN]) {
+        mask = withLightSmashed(mask, light, true);
+      }
+
+      expect(mask).toBe(0);
     });
   });
 
@@ -88,7 +119,29 @@ describe('vehicle-lamps', () => {
       const lit = lampStateFor(vehicle, true, true, true, 0.5);
 
       expect(lit.car).toBe(vehicle);
-      expect(lit.state).toEqual({ brakes: true, headlights: true, intensity: 0.5 });
+      expect(lit.state).toEqual({ brakes: true, headlights: true, intensity: 0.5, smashed: 0 });
+    });
+
+    it('each lamp carries its own SA light index, right and left the way SA numbers them', () => {
+      const lamps = lampsOf(car());
+      const at = (light: number): (typeof lamps)[number] => lamps.find((lamp) => lamp.light === light)!;
+
+      // +X is the car's RIGHT. Get this pairing wrong and a script smashing the front left puts out the
+      // front right instead — silently, since both are headlights.
+      expect(at(LIGHT_FRONT_RIGHT).position[0]).toBeCloseTo(0.8, 5);
+      expect(at(LIGHT_FRONT_LEFT).position[0]).toBeCloseTo(-0.8, 5);
+      expect(at(LIGHT_REAR_RIGHT).position[0]).toBeCloseTo(0.6, 5);
+      expect(at(LIGHT_REAR_LEFT).position[0]).toBeCloseTo(-0.6, 5);
+      expect(at(LIGHT_FRONT_LEFT).kind).toBe('head');
+      expect(at(LIGHT_REAR_LEFT).kind).toBe('tail');
+    });
+
+    it('damage belongs to the CAR, so an unlit car still reports its smashed lamps', () => {
+      const vehicle = car();
+      vehicle.handle.setLightSmashed(LIGHT_REAR_RIGHT, true);
+
+      // Daytime, nobody driving — the lamps are off, but the damage must not read as repaired.
+      expect(lampStateFor(vehicle, false, false, false, 1).state.smashed).toBe(1 << LIGHT_REAR_RIGHT);
     });
   });
 });

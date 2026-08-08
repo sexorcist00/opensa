@@ -1,0 +1,401 @@
+models.byName windturb_base -> 20000
+models.byName windturb_fan -> 20001
+models.byName lodwindturb_base -> 20002
+models.byName lodwindturb_fan -> 20003
+models.info 20002
+models.request 20002
+models.request 20003
+models.isAvailable 20002 -> true
+models.isAvailable 20003 -> true
+objects.create 20002 at 135.716,776.425,65.457 -> #1
+objects.setHeading #1 -60
+objects.create 20003 at 135.716,776.425,65.457 -> #2
+objects.setHeading #2 -60
+objects.create 20002 at 82.882,814.416,73.648 -> #3
+objects.setHeading #3 -60
+objects.create 20003 at 82.882,814.416,73.648 -> #4
+objects.setHeading #4 -60
+objects.create 20002 at 83.495,758.280,66.825 -> #5
+objects.setHeading #5 -60
+objects.create 20003 at 83.495,758.280,66.825 -> #6
+objects.setHeading #6 -60
+objects.create 20002 at 39.612,708.520,61.442 -> #7
+objects.setHeading #7 -60
+objects.create 20003 at 39.612,708.520,61.442 -> #8
+objects.setHeading #8 -60
+objects.create 20002 at 3.200,745.761,63.763 -> #9
+objects.setHeading #9 -60
+objects.create 20003 at 3.200,745.761,63.763 -> #10
+objects.setHeading #10 -60
+objects.create 20002 at -18.446,695.305,59.318 -> #11
+objects.setHeading #11 -60
+objects.create 20003 at -18.446,695.305,59.318 -> #12
+objects.setHeading #12 -60
+objects.create 20002 at -37.656,789.709,67.827 -> #13
+objects.setHeading #13 -60
+objects.create 20003 at -37.656,789.709,67.827 -> #14
+objects.setHeading #14 -60
+objects.create 20002 at -74.496,727.737,63.260 -> #15
+objects.setHeading #15 -60
+objects.create 20003 at -74.496,727.737,63.260 -> #16
+objects.setHeading #16 -60
+objects.create 20002 at -110.755,674.543,59.027 -> #17
+objects.setHeading #17 -60
+objects.create 20003 at -110.755,674.543,59.027 -> #18
+objects.setHeading #18 -60
+objects.create 20002 at -172.757,699.798,62.939 -> #19
+objects.setHeading #19 -60
+objects.create 20003 at -172.757,699.798,62.939 -> #20
+objects.setHeading #20 -60
+objects.create 20002 at -244.990,737.654,64.889 -> #21
+objects.setHeading #21 -60
+objects.create 20003 at -244.990,737.654,64.889 -> #22
+objects.setHeading #22 -60
+objects.create 20002 at -313.317,744.840,67.853 -> #23
+objects.setHeading #23 -60
+objects.create 20003 at -313.317,744.840,67.853 -> #24
+objects.setHeading #24 -60
+objects.create 20002 at -332.084,690.318,64.730 -> #25
+objects.setHeading #25 -60
+objects.create 20003 at -332.084,690.318,64.730 -> #26
+objects.setHeading #26 -60
+objects.create 20002 at -347.864,626.021,58.078 -> #27
+objects.setHeading #27 -60
+objects.create 20003 at -347.864,626.021,58.078 -> #28
+objects.setHeading #28 -60
+objects.create 20002 at -404.741,632.011,56.309 -> #29
+objects.setHeading #29 -60
+objects.create 20003 at -404.741,632.011,56.309 -> #30
+objects.setHeading #30 -60
+objects.create 20002 at -380.556,687.529,66.636 -> #31
+objects.setHeading #31 -60
+objects.create 20003 at -380.556,687.529,66.636 -> #32
+objects.setHeading #32 -60
+objects.create 20002 at -438.871,709.025,60.677 -> #33
+objects.setHeading #33 -60
+objects.create 20003 at -438.871,709.025,60.677 -> #34
+objects.setHeading #34 -60
+models.request 20000
+models.request 20001
+models.isAvailable 20000 -> true
+models.isAvailable 20001 -> true
+objects.create 20000 at 135.716,776.425,65.457 -> #35
+objects.setHeading #35 -60
+objects.connectLods 35 1
+objects.create 20001 at 135.716,776.425,65.457 -> #36
+objects.setHeading #36 -60
+objects.connectLods 36 2
+objects.create 20000 at 82.882,814.416,73.648 -> #37
+objects.setHeading #37 -60
+objects.connectLods 37 3
+objects.create 20001 at 82.882,814.416,73.648 -> #38
+objects.setHeading #38 -60
+objects.connectLods 38 4
+objects.create 20000 at 83.495,758.280,66.825 -> #39
+objects.setHeading #39 -60
+objects.connectLods 39 5
+objects.create 20001 at 83.495,758.280,66.825 -> #40
+objects.setHeading #40 -60
+objects.connectLods 40 6
+objects.create 20000 at 39.612,708.520,61.442 -> #41
+objects.setHeading #41 -60
+objects.connectLods 41 7
+objects.create 20001 at 39.612,708.520,61.442 -> #42
+objects.setHeading #42 -60
+objects.connectLods 42 8
+objects.create 20000 at 3.200,745.761,63.763 -> #43
+objects.setHeading #43 -60
+objects.connectLods 43 9
+objects.create 20001 at 3.200,745.761,63.763 -> #44
+objects.setHeading #44 -60
+objects.connectLods 44 10
+objects.create 20000 at -18.446,695.305,59.318 -> #45
+objects.setHeading #45 -60
+objects.connectLods 45 11
+objects.create 20001 at -18.446,695.305,59.318 -> #46
+objects.setHeading #46 -60
+objects.connectLods 46 12
+objects.create 20000 at -37.656,789.709,67.827 -> #47
+objects.setHeading #47 -60
+objects.connectLods 47 13
+objects.create 20001 at -37.656,789.709,67.827 -> #48
+objects.setHeading #48 -60
+objects.connectLods 48 14
+objects.create 20000 at -74.496,727.737,63.260 -> #49
+objects.setHeading #49 -60
+objects.connectLods 49 15
+objects.create 20001 at -74.496,727.737,63.260 -> #50
+objects.setHeading #50 -60
+objects.connectLods 50 16
+objects.create 20000 at -110.755,674.543,59.027 -> #51
+objects.setHeading #51 -60
+objects.connectLods 51 17
+objects.create 20001 at -110.755,674.543,59.027 -> #52
+objects.setHeading #52 -60
+objects.connectLods 52 18
+objects.create 20000 at -172.757,699.798,62.939 -> #53
+objects.setHeading #53 -60
+objects.connectLods 53 19
+objects.create 20001 at -172.757,699.798,62.939 -> #54
+objects.setHeading #54 -60
+objects.connectLods 54 20
+objects.create 20000 at -244.990,737.654,64.889 -> #55
+objects.setHeading #55 -60
+objects.connectLods 55 21
+objects.create 20001 at -244.990,737.654,64.889 -> #56
+objects.setHeading #56 -60
+objects.connectLods 56 22
+objects.create 20000 at -313.317,744.840,67.853 -> #57
+objects.setHeading #57 -60
+objects.connectLods 57 23
+objects.create 20001 at -313.317,744.840,67.853 -> #58
+objects.setHeading #58 -60
+objects.connectLods 58 24
+objects.create 20000 at -332.084,690.318,64.730 -> #59
+objects.setHeading #59 -60
+objects.connectLods 59 25
+objects.create 20001 at -332.084,690.318,64.730 -> #60
+objects.setHeading #60 -60
+objects.connectLods 60 26
+objects.create 20000 at -347.864,626.021,58.078 -> #61
+objects.setHeading #61 -60
+objects.connectLods 61 27
+objects.create 20001 at -347.864,626.021,58.078 -> #62
+objects.setHeading #62 -60
+objects.connectLods 62 28
+objects.create 20000 at -404.741,632.011,56.309 -> #63
+objects.setHeading #63 -60
+objects.connectLods 63 29
+objects.create 20001 at -404.741,632.011,56.309 -> #64
+objects.setHeading #64 -60
+objects.connectLods 64 30
+objects.create 20000 at -380.556,687.529,66.636 -> #65
+objects.setHeading #65 -60
+objects.connectLods 65 31
+objects.create 20001 at -380.556,687.529,66.636 -> #66
+objects.setHeading #66 -60
+objects.connectLods 66 32
+objects.create 20000 at -438.871,709.025,60.677 -> #67
+objects.setHeading #67 -60
+objects.connectLods 67 33
+objects.create 20001 at -438.871,709.025,60.677 -> #68
+objects.setHeading #68 -60
+objects.connectLods 68 34
+objects.setRotation #36 107.630,0,-60
+objects.setRotation #2 107.630,0,-60
+objects.setRotation #38 60.075,0,-60
+objects.setRotation #4 60.075,0,-60
+objects.setRotation #40 94.262,0,-60
+objects.setRotation #6 94.262,0,-60
+objects.setRotation #42 154.767,0,-60
+objects.setRotation #8 154.767,0,-60
+objects.setRotation #44 311.153,0,-60
+objects.setRotation #10 311.153,0,-60
+objects.setRotation #46 191.185,0,-60
+objects.setRotation #12 191.185,0,-60
+objects.setRotation #48 178.451,0,-60
+objects.setRotation #14 178.451,0,-60
+objects.setRotation #50 114.017,0,-60
+objects.setRotation #16 114.017,0,-60
+objects.setRotation #52 39.980,0,-60
+objects.setRotation #18 39.980,0,-60
+objects.setRotation #54 344.272,0,-60
+objects.setRotation #20 344.272,0,-60
+objects.setRotation #56 164.501,0,-60
+objects.setRotation #22 164.501,0,-60
+objects.setRotation #58 98.498,0,-60
+objects.setRotation #24 98.498,0,-60
+objects.setRotation #60 111.509,0,-60
+objects.setRotation #26 111.509,0,-60
+objects.setRotation #62 101.141,0,-60
+objects.setRotation #28 101.141,0,-60
+objects.setRotation #64 74.984,0,-60
+objects.setRotation #30 74.984,0,-60
+objects.setRotation #66 197.926,0,-60
+objects.setRotation #32 197.926,0,-60
+objects.setRotation #68 338.616,0,-60
+objects.setRotation #34 338.616,0,-60
+objects.setRotation #36 114.774,0,-60
+objects.setRotation #2 114.774,0,-60
+objects.setRotation #38 67.219,0,-60
+objects.setRotation #4 67.219,0,-60
+objects.setRotation #40 101.406,0,-60
+objects.setRotation #6 101.406,0,-60
+objects.setRotation #42 161.912,0,-60
+objects.setRotation #8 161.912,0,-60
+objects.setRotation #44 318.297,0,-60
+objects.setRotation #10 318.297,0,-60
+objects.setRotation #46 198.329,0,-60
+objects.setRotation #12 198.329,0,-60
+objects.setRotation #48 185.596,0,-60
+objects.setRotation #14 185.596,0,-60
+objects.setRotation #50 121.162,0,-60
+objects.setRotation #16 121.162,0,-60
+objects.setRotation #52 47.125,0,-60
+objects.setRotation #18 47.125,0,-60
+objects.setRotation #54 351.416,0,-60
+objects.setRotation #20 351.416,0,-60
+objects.setRotation #56 171.645,0,-60
+objects.setRotation #22 171.645,0,-60
+objects.setRotation #58 105.643,0,-60
+objects.setRotation #24 105.643,0,-60
+objects.setRotation #60 118.653,0,-60
+objects.setRotation #26 118.653,0,-60
+objects.setRotation #62 108.286,0,-60
+objects.setRotation #28 108.286,0,-60
+objects.setRotation #64 82.128,0,-60
+objects.setRotation #30 82.128,0,-60
+objects.setRotation #66 205.071,0,-60
+objects.setRotation #32 205.071,0,-60
+objects.setRotation #68 345.760,0,-60
+objects.setRotation #34 345.760,0,-60
+objects.setRotation #36 121.919,0,-60
+objects.setRotation #2 121.919,0,-60
+objects.setRotation #38 74.364,0,-60
+objects.setRotation #4 74.364,0,-60
+objects.setRotation #40 108.551,0,-60
+objects.setRotation #6 108.551,0,-60
+objects.setRotation #42 169.056,0,-60
+objects.setRotation #8 169.056,0,-60
+objects.setRotation #44 325.442,0,-60
+objects.setRotation #10 325.442,0,-60
+objects.setRotation #46 205.474,0,-60
+objects.setRotation #12 205.474,0,-60
+objects.setRotation #48 192.740,0,-60
+objects.setRotation #14 192.740,0,-60
+objects.setRotation #50 128.306,0,-60
+objects.setRotation #16 128.306,0,-60
+objects.setRotation #52 54.269,0,-60
+objects.setRotation #18 54.269,0,-60
+objects.setRotation #54 358.561,0,-60
+objects.setRotation #20 358.561,0,-60
+objects.setRotation #56 178.790,0,-60
+objects.setRotation #22 178.790,0,-60
+objects.setRotation #58 112.787,0,-60
+objects.setRotation #24 112.787,0,-60
+objects.setRotation #60 125.798,0,-60
+objects.setRotation #26 125.798,0,-60
+objects.setRotation #62 115.430,0,-60
+objects.setRotation #28 115.430,0,-60
+objects.setRotation #64 89.273,0,-60
+objects.setRotation #30 89.273,0,-60
+objects.setRotation #66 212.215,0,-60
+objects.setRotation #32 212.215,0,-60
+objects.setRotation #68 352.905,0,-60
+objects.setRotation #34 352.905,0,-60
+objects.setRotation #36 129.063,0,-60
+objects.setRotation #2 129.063,0,-60
+objects.setRotation #38 81.508,0,-60
+objects.setRotation #4 81.508,0,-60
+objects.setRotation #40 115.695,0,-60
+objects.setRotation #6 115.695,0,-60
+objects.setRotation #42 176.201,0,-60
+objects.setRotation #8 176.201,0,-60
+objects.setRotation #44 332.586,0,-60
+objects.setRotation #10 332.586,0,-60
+objects.setRotation #46 212.618,0,-60
+objects.setRotation #12 212.618,0,-60
+objects.setRotation #48 199.885,0,-60
+objects.setRotation #14 199.885,0,-60
+objects.setRotation #50 135.451,0,-60
+objects.setRotation #16 135.451,0,-60
+objects.setRotation #52 61.414,0,-60
+objects.setRotation #18 61.414,0,-60
+objects.setRotation #54 5.705,0,-60
+objects.setRotation #20 5.705,0,-60
+objects.setRotation #56 185.934,0,-60
+objects.setRotation #22 185.934,0,-60
+objects.setRotation #58 119.932,0,-60
+objects.setRotation #24 119.932,0,-60
+objects.setRotation #60 132.942,0,-60
+objects.setRotation #26 132.942,0,-60
+objects.setRotation #62 122.575,0,-60
+objects.setRotation #28 122.575,0,-60
+objects.setRotation #64 96.417,0,-60
+objects.setRotation #30 96.417,0,-60
+objects.setRotation #66 219.360,0,-60
+objects.setRotation #32 219.360,0,-60
+objects.setRotation #68 0.049,0,-60
+objects.setRotation #34 0.049,0,-60
+objects.setRotation #36 136.208,0,-60
+objects.setRotation #2 136.208,0,-60
+objects.setRotation #38 88.653,0,-60
+objects.setRotation #4 88.653,0,-60
+objects.setRotation #40 122.839,0,-60
+objects.setRotation #6 122.839,0,-60
+objects.setRotation #42 183.345,0,-60
+objects.setRotation #8 183.345,0,-60
+objects.setRotation #44 339.731,0,-60
+objects.setRotation #10 339.731,0,-60
+objects.setRotation #46 219.763,0,-60
+objects.setRotation #12 219.763,0,-60
+objects.setRotation #48 207.029,0,-60
+objects.setRotation #14 207.029,0,-60
+objects.setRotation #50 142.595,0,-60
+objects.setRotation #16 142.595,0,-60
+objects.setRotation #52 68.558,0,-60
+objects.setRotation #18 68.558,0,-60
+objects.setRotation #54 12.850,0,-60
+objects.setRotation #20 12.850,0,-60
+objects.setRotation #56 193.079,0,-60
+objects.setRotation #22 193.079,0,-60
+objects.setRotation #58 127.076,0,-60
+objects.setRotation #24 127.076,0,-60
+objects.setRotation #60 140.087,0,-60
+objects.setRotation #26 140.087,0,-60
+objects.setRotation #62 129.719,0,-60
+objects.setRotation #28 129.719,0,-60
+objects.setRotation #64 103.562,0,-60
+objects.setRotation #30 103.562,0,-60
+objects.setRotation #66 226.504,0,-60
+objects.setRotation #32 226.504,0,-60
+objects.setRotation #68 7.194,0,-60
+objects.setRotation #34 7.194,0,-60
+objects.setRotation #36 143.352,0,-60
+objects.setRotation #2 143.352,0,-60
+objects.setRotation #38 95.797,0,-60
+objects.setRotation #4 95.797,0,-60
+objects.setRotation #40 129.984,0,-60
+objects.setRotation #6 129.984,0,-60
+objects.setRotation #42 190.490,0,-60
+objects.setRotation #8 190.490,0,-60
+objects.setRotation #44 346.875,0,-60
+objects.setRotation #10 346.875,0,-60
+objects.setRotation #46 226.907,0,-60
+objects.setRotation #12 226.907,0,-60
+objects.setRotation #48 214.174,0,-60
+objects.setRotation #14 214.174,0,-60
+objects.setRotation #50 149.740,0,-60
+objects.setRotation #16 149.740,0,-60
+objects.setRotation #52 75.703,0,-60
+objects.setRotation #18 75.703,0,-60
+objects.setRotation #54 19.994,0,-60
+objects.setRotation #20 19.994,0,-60
+objects.setRotation #56 200.223,0,-60
+objects.setRotation #22 200.223,0,-60
+objects.setRotation #58 134.221,0,-60
+objects.setRotation #24 134.221,0,-60
+objects.setRotation #60 147.231,0,-60
+objects.setRotation #26 147.231,0,-60
+objects.setRotation #62 136.864,0,-60
+objects.setRotation #28 136.864,0,-60
+objects.setRotation #64 110.706,0,-60
+objects.setRotation #30 110.706,0,-60
+objects.setRotation #66 233.649,0,-60
+objects.setRotation #32 233.649,0,-60
+objects.setRotation #68 14.338,0,-60
+objects.setRotation #34 14.338,0,-60
+objects.setRotation #36 150.497,0,-60
+objects.setRotation #2 150.497,0,-60
+objects.setRotation #38 102.942,0,-60
+objects.setRotation #4 102.942,0,-60
+objects.setRotation #40 137.128,0,-60
+objects.setRotation #6 137.128,0,-60
+objects.setRotation #42 197.634,0,-60
+objects.setRotation #8 197.634,0,-60
+objects.setRotation #44 354.020,0,-60
+objects.setRotation #10 354.020,0,-60
+objects.setRotation #46 234.052,0,-60
+objects.setRotation #12 234.052,0,-60
+objects.setRotation #48 221.318,0,-60
+… 531 more calls (931 total)

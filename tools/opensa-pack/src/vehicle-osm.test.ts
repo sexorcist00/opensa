@@ -6,6 +6,7 @@
  */
 import type { AssetFileSystem } from '@opensa/renderware';
 
+import { decodeOsmTextures } from '@opensa/engine-formats';
 import { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
 import { readVehicleOsm } from '@opensa/game/adapters/vehicle-osm';
 import { parseDff, parseVehicleDefs } from '@opensa/renderware';
@@ -67,9 +68,30 @@ describe('readVehicleOsm', () => {
     it('carries the texture dictionary in the container, uncompressed by nobody', () => {
       const source = built();
       const read = readVehicleOsm('admiral', source.bytes);
+      const arrays = decodeOsmTextures(source.ostex).arrays;
 
-      expect(read.model.textures[0].kind).toBe('ostex');
-      expect(read.model.textures[0].kind === 'ostex' && read.model.textures[0].bytes).toEqual(source.ostex);
+      expect(read.model.textures.length).toBe(arrays.length);
+      read.model.textures.forEach((texture, index) => {
+        expect(texture.kind).toBe('ostex');
+        expect(texture.kind === 'ostex' && texture.bytes).toEqual(arrays[index]);
+      });
+    });
+
+    it('buckets the dictionary by native size instead of upscaling every layer to the largest', () => {
+      // The admiral's chain mixes sizes (its own 256² body set against the shared vehicle.txd's smaller
+      // rasters), so the bake must come out as one array per size — the single max-size array taxed every
+      // layer with the largest one's footprint, and a 32-layer 2048² mod dictionary hit the VER2 archive's
+      // 128 MB entry ceiling that way.
+      const source = built();
+      const read = readVehicleOsm('admiral', source.bytes);
+
+      expect(read.model.textures.length).toBeGreaterThan(1);
+      expect(source.warnings).toEqual([]);
+      // Every submesh names an array that exists — the runtime binds by this index.
+      const arrays = new Set(read.model.submeshes.map((submesh) => submesh.array ?? 0));
+      for (const array of arrays) {
+        expect(array).toBeLessThan(read.model.textures.length);
+      }
     });
 
     it('bakes the collision the runtime would otherwise parse at spawn', () => {

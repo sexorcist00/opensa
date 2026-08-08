@@ -29,6 +29,7 @@ the build keys off it.
 | `<model><N>.txd` | Extra numbered dictionaries (`previon1.txd`); they ship into `gta3.img` alongside. |
 | `<model>.settings.txt` | **Settings** — the car's data lines (below). |
 | `features.txt` | **Features** — what the model can DO (below). Folder-scoped, not `<model>.features.txt`. |
+| `cleo/` (or `CLEO/`) | The mod's compiled CLEO scripts + sidecars (`.cs`, `.ini`, `.fxt`) — copied to the built game's `cleo/` (canonical lowercase, author-relative structure preserved), where the runtime discovers them at boot (plan 097/06); a `--rebake` re-copies them. **Misspelled (`celo/`, loose `.cs` beside the dff): not carried at all** — the vehicle installs fine, its script never runs, and the boot census line (`[cleo] N script(s)`) is the only place the absence shows. |
 
 - The settings file is found by its **`.settings.txt` suffix**, never by "the first `.txt` in the folder" —
   `features.txt` sorts before it and used to swallow it whole (the previon lost its entire data row that way).
@@ -87,13 +88,42 @@ re-authoring the mods.
 | --- | --- |
 | `chassis` | The body mesh. `chassis_dummy` is the root the components hang under. |
 | `<anything>_vlo` | The low-detail mesh shown past the vehicle LOD swap (`chassis_vlo`). |
-| `wheel` | A single wheel atomic, instanced at every `wheel_*_dummy` (mirrored on the right). |
+| `wheel` | A single wheel atomic, instanced at every `wheel_*_dummy` (mirrored on the right). **A FLAT mesh (no extent along the axle) is a MARKER meaning "this model draws no SA wheels"** — the builder leaves it unscaled instead of fitting it to the ide diameter, so it stays invisible the way SA leaves it. The GTA 5 Rhino does this (its running gear is `wheel_big_*`/`track_*`); fitting it instead scaled a 2 cm triangle by 23.5 and swept six half-metre shards around with the wheels. The physics radius still comes from the ide, never from the marker. |
 | `wheel_{l\|r}{f\|m\|b}_dummy` | Wheel hubs. `m` is the middle axle of a 3-axle truck. |
 | `wheel_{lf\|rf\|lm\|rm\|lb\|rb}` | Per-corner wheel atomics (different front/rear wheels). A LONE corner with real dummies is treated as a mis-named shared wheel — several mods ship only `wheel_rf`. |
 | `f_wheel_<mask>` | A container frame whose child atomics are the wheel sub-model (the wheel-mod convention). |
 | `extra1` … `extraN` | Mutually-exclusive optional parts; SA shows at most one, and the pick is per SPAWN. |
 | `misc_a` … `misc_h` | SA's generic moving components. A `misc_*` holding head-lamp faces is a **pop-up headlight pod**. |
 | `ug_*` | Upgrade attachment points. Present in models, consumed by nothing yet. |
+
+**CLEO scripts see these names too** (plan 097/05): `GetFrameFromName` resolves script part lookups
+against the rig's part names verbatim (`misc_a`, `dvan_l`, `dmbus_r`…), and the CAutomobile carNode
+reads (`CVehicle+0x648`) bind wheels to the **`wheel_*_dummy`** forms. A name the rig lacks yields a
+null frame token — the script's own guard skips, SILENTLY by design (real CLEO would crash there);
+the atlas-miss console lines report only UNKNOWN addresses, not missing frames. Two rig facts
+currently limit this surface: the vehicle-optimizer DROPS empty parent frames (rhino's `misc_e`
+track chain — `docs/hacks/cleo-frame-sibling-order.md`) and flattens parent links, so sibling walks
+run in rig order. What that costs a script is measured in `docs/edge-cases/cleo-vm.md`: a script
+anchored on a dummy does nothing at all, silently.
+
+### Tracked vehicles (`track_*` — read by our shipped `rhino-tracks.cs`)
+
+A model carrying these names gets its tread and road wheels animated by the script we ship
+(`cleo/scripts/rhino-tracks/`), on **any slot** — the script tests for the names, never for a model
+id, so the mod may be installed anywhere and a new tracked vehicle needs no code.
+
+| Name | Role |
+| --- | --- |
+| `track_1` … `track_12` | The tread FLIPBOOK: twelve authored states of the same belt. Exactly one is shown at a time, advancing one link per 1.5 deg of wheel roll and repeating every 18 deg. **`track_1` is the capability test** — a model without it is left completely alone. |
+| `wheel_big_0`, `wheel_big_1` | Drive sprockets. Rolled by the reference wheel's own angle. |
+| `wheel_small_1` … `wheel_small_8` | Road wheels. Rolled at **2x** the sprocket angle (they are half the diameter). |
+| `wheel_rb_dummy` | The reference wheel the roll angle is read from (`m_forward`, via `m_aCarNodes[CAR_WHEEL_RB]`) — a standard hub name, no extra authoring. |
+
+Every one of these must be a frame **with a mesh**: a dummy is not an addressable part (above), and
+the script skips what it cannot resolve. Gaps are tolerated but visible — `track_7` missing means
+the tread simply vanishes for that 1.5 deg of the cycle rather than crashing. The count is fixed at
+twelve today; the arc per link is `18 / <count>`, so a model with a different link count needs the
+script's `TRACK_LINKS` changed, not just renamed frames.
 
 ### Damageable components
 
@@ -106,7 +136,20 @@ each as a `<part>_dummy` frame carrying a `<part>_ok` mesh and its `<part>_dam` 
   in the stock fleet ever showed the difference.
 - A door swings about its `*_dummy` frame's **own local Z**. A mod that turns a hinge frame ABOVE the dummy
   gets a scissor door for free, with no special case anywhere.
+- **A door is its whole hinge SUBTREE, not one named mesh.** SA rotates the dummy's frame, so every atomic
+  a mod authors under `door_*_dummy` — separate glass (`glass_lf_ok`), trim, whatever the exporter split —
+  travels with the door. The builder records the subtree as the door's part roster (`VehicleDoor.parts`) and
+  the swing rotates each member about the hinge. Misspell the glass out of the subtree (parent it to the
+  chassis) and it silently stays behind when the door opens — the comet mod's authoring is what surfaced
+  this (2026-08-04). Stock cars author one atomic per door, so their doors carry no roster.
 - The damage system names parts **without** the suffix: `door_lf`, `bonnet`.
+- **Which FRONT doors exist decides how the player boards (2026-08-05).** Entry and the exit chain pick
+  among the sides whose `door_{lf|rf}` part the model actually carries: a model authored with only
+  `door_rf` (the coach — a real bus boards through its one front door) is entered from EITHER side via
+  that door, with the approach routed around the bumper, then the seat shuffle. A model with NO front
+  door parts keeps the near-side behaviour (the hinge fallback). Misspelling a door name is SILENT and
+  now changes boarding: `door_If` (capital i) reads as "this side has no door" and the player walks
+  around to the other one — `dump-vehicle-rig.ts`'s articulation list is the check.
 
 ### Dummies (frames with no mesh)
 
@@ -115,7 +158,28 @@ Every one is carried verbatim into the model. Consumed today:
 | Name | Used for |
 | --- | --- |
 | `ped_frontseat` | The driver seat position. |
-| `headlights` / `taillights` | Lamp anchors (SA authors ONE per end and mirrors it). |
+| `headlights` / `taillights` | Lamp anchors (SA authors ONE per end and mirrors it). **At the model ORIGIN = this model has no lamp of that kind** — see below. |
+
+**A lamp dummy at (0,0,0) means "no lamp here", and it is the only way to say it.** That is SA's own
+convention, not ours: a missing dummy reads back as (0,0,0) from `CVehicleModelInfo::m_avDummyPos` and
+`CVehicle::DoHeadLightBeam` tests exactly that (`if (pointModelSpace.IsZero()) return;`). Since plan
+098/11 OpenSA honours it at BOTH ends — an absent or origin dummy emits no beam, no pool light and no
+corona there — and there is no fallback: what the model does not author, the game does not light.
+
+For a mod author this is the whole lever. A race car with no lamps zeroes both dummies (the hotring mod's
+own author had already done it for `taillights`); a truck with no rear lamps zeroes just the tail. It
+needs no engine change, no config line and no per-model rule, and it is what
+`scripts/debug/zero-vehicle-dummy.ts` writes — a 12-byte edit to that one frame's position.
+
+**Spelled wrong / left out:** a dummy the model simply does not carry behaves identically to a zeroed
+one (no lamp at that end), so a typo in the frame name silently costs the car its lights on that side
+rather than erroring. `scripts/debug/lamp-census.ts` is where that shows up — it prints, per model,
+whether each lamp dummy is real, at the origin, or absent.
+
+**The lamp MATERIAL is a different thing and does not gate the light.** Whether the lens glows (the
+lit-twin swap and the emissive) keys on the `vehiclelights*` marker material; whether there IS a light
+keys on the dummy. The stock `coach` proves they are independent: it carries no head lamp material at
+all and still has working headlights.
 
 Carried but not consumed yet: `exhaust`, `petrolcap`, `engine`, `ped_arm`, the second lamp dummies some
 models author (`taillights2`), and anything else the author left.
@@ -134,6 +198,17 @@ models author (`taillights2`), and anything else the author left.
 
 Carcols paint markers are **colours, not names**: `(60,255,0)` primary, `(255,0,175)` secondary,
 `(0,255,255)` tertiary, `(255,255,0)` quaternary.
+
+**A material's UV-animation name must match a dict entry in the SAME DFF** (plan 099). The material's UV
+Anim plugin names an entry of the clump's leading UVAnimDict (`f13d` on the ferris wheel's `Frames`
+material); the converter binds the two by that name and the runtime plays the keyframes. Both names are
+written by the exporter, so they normally agree — but a re-export that drops the dict, or a hand-edited
+clump, leaves a reference to nothing. **When the name resolves to no entry, or to one with no keyframes,
+the material renders STATIC and nothing is logged** — same fallback as the world lane, chosen because a
+missing animation must not take a model out of the game. The symptom is a sign or a light strip frozen on
+frame 0, which is exactly what the bug looks like before the animation ever worked, so check the dict
+first: `npx tsx scripts/debug/dump-osm.ts <model>` prints the animations the built `.osm` actually carries
+and the submesh each one drives. Only UV channel 0 is played; a mask naming more channels loses the rest.
 
 **There is deliberately NO texture-name matching for the reflection class.** Chrome is decided by data (an
 untextured neutral-grey material with an env map), glass by translucency, paint by a carcols marker. Mods

@@ -463,7 +463,9 @@ export class StreamingDriver {
     }
   }
 
-  /** Drop this cell's claims; an array nothing draws with any more is destroyed. */
+  /** Drop this cell's claims; an array nothing draws with any more is destroyed — unless a live rigid
+   *  model (a CLEO object, the osm spike) still binds it, which `releaseWorldArray` checks. A kept array
+   *  keeps its `requested` mark too: it IS resident, nothing needs to re-fetch it. */
   private releaseTextures(key: string): void {
     for (const ref of this.manifest.cells[key].textures ?? []) {
       const users = this.arrayUsers.get(ref);
@@ -473,8 +475,9 @@ export class StreamingDriver {
       users.delete(key);
       if (users.size === 0) {
         this.arrayUsers.delete(ref);
-        this.engine.textures.unload(ref);
-        this.requested.delete(`array-${ref}`);
+        if (this.engine.releaseWorldArray(ref)) {
+          this.requested.delete(`array-${ref}`);
+        }
       }
     }
   }

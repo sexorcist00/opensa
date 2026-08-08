@@ -42,7 +42,9 @@ function layerOf(dir: string): Layer {
     return 'app';
   }
 
-  return dir.startsWith('tools/') || dir.startsWith('tools-debug/') || dir.startsWith('asi/') ? 'tool' : 'engine';
+  return dir.startsWith('tools/') || dir.startsWith('tools-debug/') || dir.startsWith('asi/') || dir.startsWith('cleo/')
+    ? 'tool'
+    : 'engine';
 }
 
 function loadPackages(): Map<string, Pkg> {

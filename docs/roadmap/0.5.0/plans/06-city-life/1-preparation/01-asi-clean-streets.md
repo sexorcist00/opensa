@@ -27,7 +27,9 @@ a FEATURE with runtime state, an ini, and a growth path to a full simulation. Di
 infrastructure: the Makefile/link flags (`-nostdlib`, KERNEL32-only), `freestanding.cpp`, `log.hpp`,
 `mem.hpp`, `hook.hpp` (all three hook shapes), `fingerprint.hpp` (exact-exe: 14,383,616 B, SHA1
 `8c23ceff…`, HOODLUM), `coexistence.hpp`, and the `gen/catalogue.ts → generated header` codegen with its
-vitest are copied/shared verbatim. A shared `asi/common/` extraction is allowed if it stays a pure move.
+vitest are copied/shared verbatim. That extraction is now the `asi/sdk` chain
+(`asi/sdk/docs/plans/readme.md`, started 2026-08-06 — the full SDK, beyond the pure move this line
+once sanctioned): city-life consumes the SDK instead of copying anything on this list.
 
 ## The suppression seam (decision D4)
 
@@ -87,8 +89,9 @@ for this plan.
 
 ## Tasks
 
-- [ ] Scaffold `asi/city-life` (workspace, Makefile, gen/catalogue.ts + tests, fingerprint/coexistence
-      reuse; decide plain-copy vs `asi/common` extraction and record it).
+- [ ] Scaffold `asi/city-life` (workspace, thin Makefile including `asi/sdk/mk/asi-plugin.mk`,
+      gen/catalogue.ts + tests on the SDK's codegen library — the extraction decision is settled:
+      consume `asi/sdk`).
 - [ ] RE session → catalogue rows for the seams above (two-source rule; completeness check: enumerate
       every writer of both multipliers, the way plan 001 enumerated every reader of the int16 fields).
 - [ ] Per-frame tick hook + multiplier reassertion + ini loading.

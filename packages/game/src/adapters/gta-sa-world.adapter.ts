@@ -325,6 +325,46 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     return out;
   }
 
+  /** `0A01 IS_THIS_MODEL_A_CAR` (plan 097/05): the id names a car-class vehicle — the same
+   *  car/bike split SA draws (bikes, boats, planes and helis answer no). */
+  cleoIsCarModelId(id: number): boolean {
+    for (const vehicle of this.vehicleDefs?.values() ?? []) {
+      if (vehicle.id === id) {
+        return vehicle.type === 'car' || vehicle.type === 'mtruck' || vehicle.type === 'quad';
+      }
+    }
+
+    return false;
+  }
+
+  /** CLEO model resolution, id-first (plan 097/04 decision 2): the IDE catalog composed with
+   *  `vehicles.ide` — scripts request map objects AND vehicles by the same id space. Null before the
+   *  map defs load, or when nothing carries the id. */
+  cleoModelById(id: number): null | { drawDistance: number; modelName: string; txdName: string } {
+    const def = this.defs?.catalog.get(id);
+    if (def) {
+      return { drawDistance: def.drawDistance, modelName: def.modelName, txdName: def.txdName };
+    }
+    for (const vehicle of this.vehicleDefs?.values() ?? []) {
+      if (vehicle.id === id) {
+        return { drawDistance: 300, modelName: vehicle.model, txdName: vehicle.txd };
+      }
+    }
+
+    return null;
+  }
+
+  /** CLEO model resolution, name-first (`GET_MODEL_BY_NAME 0E9C` gives names — Wind Farm uses it). */
+  cleoModelIdByName(name: string): null | number {
+    const def = this.defByName?.get(name.toLowerCase());
+    if (def) {
+      return def.id;
+    }
+    const vehicle = this.vehicleDefs?.get(name.toLowerCase());
+
+    return vehicle ? vehicle.id : null;
+  }
+
   /** Drop the cached per-cell colliders (clutter knobs changed) — the collision streaming system
    *  then re-streams physics via {@link loadCellColliders}, rebuilding with the new density. */
   invalidateColliderCache(): void {
@@ -392,6 +432,23 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     };
   }
 
+  // eslint-disable-next-line
+  async loadCellColliders(cx: number, cy: number): Promise<ModelColliders[]> {
+    const key = `${cx},${cy}`;
+    let pending = this.colliderCache.get(key);
+    if (pending === undefined) {
+      // The cache holds the PROMISE, not the result: with a baked pak this path awaits a range read, so two
+      // callers wanting the same cell (the streamer and the debug wireframe) would otherwise build it twice.
+      // A rejected read is evicted — a poisoned key that can never be retried is a failure mode this project
+      // has already paid for once (the stuck-at-LOD blob mark).
+      pending = this.assembleColliders(cx, cy);
+      pending.catch(() => this.colliderCache.delete(key));
+      this.colliderCache.set(key, pending);
+    }
+
+    return pending;
+  }
+
   /**
    * The map's specific-model car generators (binary IPL `CARS` sections in gta3.img) as parked-car placements
    * for the vehicle LOD system. `id → model` is resolved from `vehicles.ide`; random (`id = -1`) generators are
@@ -436,23 +493,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     this.modelIndexCache ??= new ModelIndex(this.defs);
 
     return this.modelIndexCache;
-  }
-
-  // eslint-disable-next-line
-  async loadCellColliders(cx: number, cy: number): Promise<ModelColliders[]> {
-    const key = `${cx},${cy}`;
-    let pending = this.colliderCache.get(key);
-    if (pending === undefined) {
-      // The cache holds the PROMISE, not the result: with a baked pak this path awaits a range read, so two
-      // callers wanting the same cell (the streamer and the debug wireframe) would otherwise build it twice.
-      // A rejected read is evicted — a poisoned key that can never be retried is a failure mode this project
-      // has already paid for once (the stuck-at-LOD blob mark).
-      pending = this.assembleColliders(cx, cy);
-      pending.catch(() => this.colliderCache.delete(key));
-      this.colliderCache.set(key, pending);
-    }
-
-    return pending;
   }
 
   /**

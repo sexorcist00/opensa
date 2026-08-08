@@ -9,8 +9,9 @@ and close the bookkeeping.
   handling's natural classes: sports · sedan · heavy (truck/bus) · offroad · van/pickup — 2–3
   representatives each, spawned via the F2 vehicle spawner. Where a class needs a shared correction
   (e.g. bus steering-lock feel, offroad suspension bias), it lands as a NAMED class factor in one
-  table — never per-model hand edits (0.5.0/04 all-vehicle-types inherits this table as its preset
-  seed; bikes/trailers stay out of scope here).
+  table — never per-model hand edits (the all-vehicle-types chain — now
+  `docs/plans/098-all-land-vehicles/` — inherits this table as its preset seed; bikes/trailers stay out
+  of scope here).
 - The 841-car bench road sweep doubles as a mass spawn-sanity check (rest attitude, no sleep-jitter,
   parking holds on grades) — run it once on the final tuning.
 
@@ -168,7 +169,8 @@ vehicle with `fEngineAcceleration` 14. Braking spans 0.35 g (bus, the fleet's lo
 
 **So no class factor is proposed, and that is a result rather than an omission**: the plan says a factor lands
 only where a class needs a SHARED correction, and every difference the sweep found is a difference the data
-authored. `docs/roadmap/0.5.0/plans/04-all-vehicle-types/` inherits an empty table and the reason for it.
+authored. `docs/plans/098-all-land-vehicles/` (formerly `roadmap/0.5.0/plans/04-all-vehicle-types/`)
+inherits an empty table and the reason for it.
 
 **What did NOT generalise is the instrument set — the honest half of this section:**
 

@@ -1,0 +1,2 @@
+onUnimplemented 0AF0 (Car Left Door)
+onUnimplemented 0E43 (Car Left Door)

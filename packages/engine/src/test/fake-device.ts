@@ -41,6 +41,10 @@ export interface FakeGpu {
 
 /** One recorded draw, with the pipeline and bind groups in force when it was issued. */
 export interface RecordedDraw {
+  /** Dynamic offsets in force per bind-group index (undefined where the group has none). A bind group with
+   *  `hasDynamicOffset` bindings is a DIFFERENT binding at a different offset, which the label cannot say —
+   *  the rigid lane's UV-animation slot (plan 099/02) is selected this way. */
+  bindGroupOffsets: (readonly number[] | undefined)[];
   bindGroups: (string | undefined)[];
   /** Present for `drawIndexed`. */
   indexCount?: number;
@@ -367,11 +371,13 @@ export function installFakeWebGpu(options: { adapterFeatures?: readonly string[]
 function encoderRecorder(recorder: Recorder, pass: RecordedPass): Record<string, unknown> {
   let pipeline: string | undefined;
   const bindGroups: (string | undefined)[] = [];
+  const bindGroupOffsets: (readonly number[] | undefined)[] = [];
 
   return {
     draw(vertexCount: number, instanceCount = 1): void {
       pass.drawCount += 1;
       recorder.draws.push({
+        bindGroupOffsets: [...bindGroupOffsets],
         bindGroups: [...bindGroups],
         instanceCount,
         kind: 'draw',
@@ -383,6 +389,7 @@ function encoderRecorder(recorder: Recorder, pass: RecordedPass): Record<string,
     drawIndexed(indexCount: number, instanceCount = 1): void {
       pass.drawCount += 1;
       recorder.draws.push({
+        bindGroupOffsets: [...bindGroupOffsets],
         bindGroups: [...bindGroups],
         indexCount,
         instanceCount,
@@ -397,8 +404,9 @@ function encoderRecorder(recorder: Recorder, pass: RecordedPass): Record<string,
         pass.bundles.push(bundle.label);
       }
     },
-    setBindGroup(index: number, group: null | { label?: string }): void {
+    setBindGroup(index: number, group: null | { label?: string }, dynamicOffsets?: readonly number[]): void {
       bindGroups[index] = group?.label;
+      bindGroupOffsets[index] = dynamicOffsets ? [...dynamicOffsets] : undefined;
     },
     setIndexBuffer(): void {},
     setPipeline(value: { label?: string }): void {

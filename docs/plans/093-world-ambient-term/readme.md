@@ -1,7 +1,7 @@
 # 093 — The world ambient term: the piece of SA's own formula the engine skipped
 
 **Status: CLOSED 2026-08-01 — SHIPPED and FIELD-CONFIRMED for BOTH day and night. Nothing is owed.**
-Day: 2026-07-29 ("стена теперь выглядит нормально", and the three Vegas controls "все три выглядят хорошо").
+Day: 2026-07-29 ("the wall looks right now", and the three Vegas controls "all three look good").
 Night: 2026-08-01 — the user looked at the four frames below and the verdict was that they look adequate.
 The night pass was answered in two halves: the arithmetic one PROVES our deliberate floor contributes
 exactly 0 after dark (so a night frame is one this plan never touched), and the look one confirms the
@@ -33,7 +33,7 @@ OUT.Color.rgb += ambient * surfAmb;                            // timecycle ambi
 black prelit + a face angled from the sun = pure black, hard-edged against healthy neighbours.
 
 Field proof of the mechanism (024 Phase 2): lifting `gaz27_law`'s day prelit to a luma floor of 40
-on the DATA side ("стена теперь выглядит нормально") — i.e. the missing term, emulated per-model,
+on the DATA side ("the wall looks right now") — i.e. the missing term, emulated per-model,
 is exactly the difference. The fix belongs in the ENGINE, not in map-optimizer: repairing 2 243
 models rewrites the original map's data; adding the term restores the formula the data was authored
 against. (User decision 2026-07-29: engine level, explicitly.)
@@ -94,22 +94,22 @@ Owed: bench sweep + field round below.
 
 ## Field + bench (2026-07-29)
 
-- `gaz27_law` noon, main build, floor active: **"стена теперь выглядит нормально"** (user) — the
+- `gaz27_law` noon, main build, floor active: **"the wall looks right now"** (user) — the
   Family B mechanism closed engine-side, no data touched.
 - Bench ritual: all NINE scenes at the 120 Hz cap (incl. the new `strip-noon` debut at 119.9 fps),
   `gpuMs.pass` 1.50–2.69 ms, p95 9.2–9.3, `lateCreates` 0 — a clean A/B against the 092 sweep
   (same pak, engine-only change), no cost.
   Row: `docs/benchmarks/opensa-engine/2026-07-29-headless-093-world-ambient-sweep.json`.
-- Day eyeball round: `exclbr_hotl02_lvs` / `sphinx01_lvs` / `flamingo01_lvs` — "все три выглядят
-  хорошо" (user, same day). The NIGHT pass was answered on 2026-08-01 — see the section below.
+- Day eyeball round: `exclbr_hotl02_lvs` / `sphinx01_lvs` / `flamingo01_lvs` — "all three look
+  good" (user, same day). The NIGHT pass was answered on 2026-08-01 — see the section below.
 
 ## Verification
 
 - Unit: engine suites stay green (fake-GPUDevice floors); driver test asserts `ambientColor` follows
   timecyc `amb` and the knob.
 - Bench ritual (`?engine=opensa&bench=all`) — shader change = frame-cost mechanism (074 series row).
-- Field: DONE for day (2026-07-29): `gaz27_law` ("стена теперь выглядит нормально"),
-  `exclbr_hotl02_lvs` / `sphinx01_lvs` / `flamingo01_lvs` "все три выглядят хорошо", healthy
+- Field: DONE for day (2026-07-29): `gaz27_law` ("the wall looks right now"),
+  `exclbr_hotl02_lvs` / `sphinx01_lvs` / `flamingo01_lvs` "all three look good", healthy
   districts unchanged. Night: DONE (2026-08-01) — the floor is provably 0 after dark and the four
   night frames were looked at and judged adequate. Both halves are in the night section below.
 - Numbers land here per phase; anything perf-visible additionally in `docs/benchmarks/`.

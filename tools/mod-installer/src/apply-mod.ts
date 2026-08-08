@@ -28,7 +28,9 @@ export function applyMod(modPath: string, outPath: string): { copied: number; me
     if (IMG_FOLDERS.has(entry.toLowerCase())) {
       continue;
     }
-    const result = applyEntry(join(modPath, entry), join(outPath, entry), merges);
+    // `CLEO/` → `cleo/`: the canonical on-disk spelling is lowercase (plan 097/06 decision 1); authors ship both.
+    const dest = entry.toLowerCase() === 'cleo' ? 'cleo' : entry;
+    const result = applyEntry(join(modPath, entry), join(outPath, dest), merges);
     copied += result.copied;
     merged += result.merged;
   }

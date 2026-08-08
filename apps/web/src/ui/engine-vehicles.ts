@@ -32,6 +32,7 @@ import { EnterVehicleSystem } from '@opensa/game/vehicle/enter-vehicle.system';
 import { composePlateText, plateBackgroundIndex } from '@opensa/game/vehicle/plate-raster';
 import { BLANK_PLATE_SLOT, PlateSlots } from '@opensa/game/vehicle/plate-slots';
 import { STRONG_HIT, VehicleDamageSystem } from '@opensa/game/vehicle/vehicle-damage.system';
+import { type VehicleHandle } from '@opensa/game/vehicle/vehicle-handle';
 import { VehicleLampSystem } from '@opensa/game/vehicle/vehicle-lamp.system';
 import { VehicleLodSystem } from '@opensa/game/vehicle/vehicle-lod.system';
 import { VehiclePhysicsSystem } from '@opensa/game/vehicle/vehicle-physics.system';
@@ -94,6 +95,9 @@ export interface EngineVehicles {
    * {@link EngineVehicles.seatInstantly}. False when nobody is seated.
    */
   leaveInstantly(): boolean;
+  /** The model's half-extents `[hx, hy, hz]` (vehicle space) — builds/caches the model as a side effect.
+   *  The debug spawner reads hy (half the LENGTH) so a bus lands in FRONT of the player, not around him. */
+  modelHalfExtents(model: string): Promise<readonly [number, number, number]>;
   /** Register placements to spawn LAZILY by distance (the LOD system streams them) — the bench road cars. */
   register(placements: readonly VehiclePlacement[]): void;
   /**
@@ -102,6 +106,10 @@ export interface EngineVehicles {
    * (ground snap, locomotion heading), else the rider floats above the roof through the whole climb-in.
    */
   ridingVehicle(): EnterableVehicle | null;
+  /** The `095F` door read for a script vehicle (front doors only — the walk-up animator's swing). */
+  scriptDoorRatio(scriptHandle: number, side: 'lf' | 'rf'): number;
+  /** CLEO's live-vehicle surface: every spawned car under its stable script handle (plan 097/05). */
+  scriptVehicles(): readonly ScriptVehicle[];
   /**
    * Put the player straight into the nearest car, skipping the walk/door/climb-in (plan 081/01). False when
    * nothing is in range or a sequence is already running. For automation that measures DRIVING — a scripted
@@ -175,6 +183,16 @@ export interface EngineVehiclesDeps {
   /** Emitter factory for the surface effects (089/05) — `EngineParticles.createEmitter`, absent-tolerant. */
   surfaceEmitter?: (name: string) => DynamicFxEmitter | null;
   viewOf: () => Vec3;
+}
+
+/** One live car on CLEO's surface (plan 097/05): the slot-minted script handle + the part registry. */
+export interface ScriptVehicle {
+  readonly enterable: EnterableVehicle;
+  /** The model name the car spawned as (resolves to an id through the adapter). */
+  readonly model: string;
+  /** `slot*256 + counter` (counter 1-127, bit7 clear) — what the pool-facade byte walk reconstructs. */
+  readonly scriptHandle: number;
+  readonly vehicle: VehicleHandle;
 }
 
 export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
@@ -410,6 +428,22 @@ export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
    * through the existing worker (spawns already defer, so the ~100–200 ms build never blocks the frame).
    */
   const models = new Map<string, VehicleModelEntry>();
+  // CLEO's live fleet (plan 097/05): slots REUSE (the pool walk is bounded at 140 slots and road
+  // cars churn constantly); the counter (1-127, bit7 clear) is exactly SA's staleness detector.
+  const scriptSlots: (null | (ScriptVehicle & { slot: number }))[] = [];
+  const scriptCounters: number[] = [];
+  const mintScriptVehicle = (enterable: EnterableVehicle, vehicle: VehicleHandle, model: string): { slot: number } => {
+    let slot = scriptSlots.findIndex((entry) => entry === null);
+    if (slot < 0) {
+      slot = scriptSlots.length;
+      scriptSlots.push(null);
+      scriptCounters.push(0);
+    }
+    scriptCounters[slot] = (scriptCounters[slot] % 127) + 1;
+    scriptSlots[slot] = { enterable, model, scriptHandle: slot * 256 + scriptCounters[slot], slot, vehicle };
+
+    return { slot };
+  };
   /** In-flight builds by type — two simultaneous spawns of a NEW type must share one build (the loser used
    *  to overwrite the winner's map entry, leaking the winner's GPU model — harmless before eviction existed,
    *  a real leak now). */
@@ -597,10 +631,12 @@ export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
       vehiclePhysics.add(vehicle);
       enterVehicle.add(vehicle);
       vehicleDamage.add({ body, handle });
+      const scriptSlot = mintScriptVehicle(vehicle, handle, model);
       frameSpans.add(`vehicle-spawn:${model}`, performance.now() - spawnStarted);
 
       return {
         despawn: (): void => {
+          scriptSlots[scriptSlot.slot] = null;
           vehiclePhysics.remove(vehicle);
           enterVehicle.remove(vehicle);
           vehicleDamage.remove(body);
@@ -700,12 +736,26 @@ export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
     },
     isSettling: (): boolean => enterVehicle.isSettling(),
     leaveInstantly: (): boolean => enterVehicle.leaveInstantly(),
+    async modelHalfExtents(model: string): Promise<readonly [number, number, number]> {
+      const entry = await acquireModel(model);
+      // acquireModel counts an instance that this read never spawns — hand it straight back.
+      entry.instances = Math.max(0, entry.instances - 1);
+
+      return entry.data.halfExtents;
+    },
     register(placements: readonly VehiclePlacement[]): void {
       for (const placement of placements) {
         vehicleLod.register(placement);
       }
     },
     ridingVehicle: (): EnterableVehicle | null => (enterVehicle.isRiding() ? enterVehicle.getActive() : null),
+    scriptDoorRatio: (scriptHandle: number, side: 'lf' | 'rf'): number => {
+      const entry = scriptSlots.find((candidate) => candidate?.scriptHandle === scriptHandle);
+
+      return entry ? enterVehicle.doorOpenRatio(entry.enterable, side) : 0;
+    },
+    scriptVehicles: (): readonly ScriptVehicle[] =>
+      scriptSlots.filter((entry): entry is NonNullable<(typeof scriptSlots)[number]> => entry !== null),
     seatInstantly: (): boolean => enterVehicle.seatInstantly(),
     async spawn(placement: VehiclePlacement): Promise<void> {
       vehicleLod.add(placement, await spawnVehicle(placement));

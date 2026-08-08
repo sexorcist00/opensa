@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import type { RWClump, RWFrame, RWGeometry, RWMaterial } from '../parsers/binary/types';
+import type { RWClump, RWFrame, RWGeometry, RWMaterial, RWUvAnimation } from '../parsers/binary/types';
 
 import { GeometryFlag } from '../parsers/binary/constants';
 import { parseDff } from '../parsers/binary/dff';
@@ -12,6 +12,11 @@ import { MaterialClass, PaintSlot } from './types';
 
 const PRIMARY_MARKER: [number, number, number, number] = [60, 255, 0, 255];
 const HEAD_LAMP_MARKER: [number, number, number, number] = [0, 255, 200, 255];
+
+/** A one-atomic clump carrying a UVAnimDict — the shape every animated script object has. */
+function animated(geometries: RWGeometry[], uvAnimations: RWUvAnimation[]): RWClump {
+  return { ...clump([frame('chassis')], [{ frame: 0, geometry: 0 }], geometries), uvAnimations };
+}
 
 function clump(frames: RWFrame[], atomics: { frame: number; geometry: number }[], geometries: RWGeometry[]): RWClump {
   return {
@@ -62,6 +67,22 @@ function material(partial: Partial<RWMaterial> = {}): RWMaterial {
 /** No TXDs: every material resolves to the built-in white layer. */
 function textures(): VehicleTextures {
   return new VehicleTextures([]);
+}
+
+/** A two-keyframe dict entry — the smallest thing the builder must accept as playable. */
+function uvAnimation(name: string): RWUvAnimation {
+  return {
+    duration: 0.45,
+    keyframes: [
+      { time: 0, uv: [0, 1, 1, 0, 0, 0] },
+      { time: 0.225, uv: [0, 1, 1, 0, 0.0769, 0] },
+    ],
+    name,
+  };
+}
+
+function uvAnimMaterial(name: string): RWMaterial {
+  return material({ effects: { uvAnim: { channelMask: 1, names: [name] } } });
 }
 
 describe('buildVehicleModel', () => {
@@ -125,9 +146,59 @@ describe('buildVehicleModel', () => {
       // runtime show exactly one per car instead of all three on top of each other.
       expect(built.submeshes.map((submesh) => submesh.extra ?? null)).toEqual([null, 'extra1', 'extra2', 'extra3']);
     });
+
+    it('a material naming a UV animation the clump does not carry renders static', () => {
+      const built = buildVehicleModel(
+        animated([geometry([uvAnimMaterial('missing')])], [uvAnimation('f13d')]),
+        textures(),
+      );
+
+      expect(built.uvAnimations).toBeUndefined();
+      expect(built.submeshes[0].uvAnim).toBeUndefined();
+    });
+
+    it('a named entry with no keyframes renders static rather than inventing a scroll', () => {
+      const built = buildVehicleModel(
+        animated([geometry([uvAnimMaterial('f13d')])], [{ ...uvAnimation('f13d'), keyframes: [] }]),
+        textures(),
+      );
+
+      expect(built.uvAnimations).toBeUndefined();
+      expect(built.submeshes[0].uvAnim).toBeUndefined();
+    });
+
+    it('a dict no material references is dropped — the model carries only what it plays', () => {
+      const built = buildVehicleModel(animated([geometry()], [uvAnimation('f13d')]), textures());
+
+      expect(built.uvAnimations).toBeUndefined();
+      expect(built.submeshes[0].uvAnim).toBeUndefined();
+    });
   });
 
   describe('positive cases', () => {
+    it('binds a material to its dict entry and keeps the keyframes on the model', () => {
+      const built = buildVehicleModel(
+        animated([geometry([uvAnimMaterial('f13d'), material()])], [uvAnimation('other'), uvAnimation('f13d')]),
+        textures(),
+      );
+
+      // The slot indexes the MODEL's list, not the clump's dict: only `f13d` is referenced, so it is 0 here
+      // even though the dict holds it second.
+      expect(built.submeshes[0].uvAnim).toBe(0);
+      expect(built.uvAnimations?.map((animation) => animation.name)).toEqual(['f13d']);
+      expect(built.uvAnimations?.[0].keyframes).toHaveLength(2);
+    });
+
+    it('two materials sharing one entry share the slot instead of duplicating the keyframes', () => {
+      const shared = animated([geometry([uvAnimMaterial('f13d'), uvAnimMaterial('f13d')])], [uvAnimation('f13d')]);
+      shared.geometries[0].triangles.push({ a: 0, b: 1, c: 2, materialIndex: 1 });
+
+      const built = buildVehicleModel(shared, textures());
+
+      expect(built.submeshes.map((submesh) => submesh.uvAnim)).toEqual([0, 0]);
+      expect(built.uvAnimations).toHaveLength(1);
+    });
+
     it('reads pop-up headlights off the model: the pod, and the pitch it is parked at', () => {
       const built = buildVehicleModel(
         clump(
@@ -406,6 +477,64 @@ describe('buildVehicleModel', () => {
       expect(left.localRotation).toEqual([0, 0, 1, 0]); // 180° about Z — a mirror would flip the winding
     });
 
+    it('a zero-WIDTH marker wheel is left unscaled, but still reports the ide physics radius', () => {
+      // The GTA 5 Rhino draws its running gear with `wheel_big_*`/`track_*` meshes and parks a flat
+      // 2 cm triangle on the SA wheel frames to keep them invisible. Fitting that to the ide diameter
+      // scaled it 23.5x and drew six half-metre triangles sweeping with the wheels (field 2026-08-07).
+      const marker: RWGeometry = {
+        ...geometry(),
+        // No extent along the axle (local X) — a solid of revolution cannot have zero width.
+        positions: new Float32Array([0, 0, 0, 0, 0.011, 0.019, 0, -0.011, -0.019]),
+      };
+      const built = buildVehicleModel(
+        clump(
+          [frame('chassis'), frame('wheel'), frame('wheel_lf_dummy', -1, [1, 2, 0])],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 1, geometry: 1 },
+          ],
+          [geometry(), marker],
+        ),
+        textures(),
+        { wheelScale: [1, 1] },
+      );
+
+      expect(built.parts[built.wheels[0].part].scale ?? 1).toBe(1);
+      // The physics radius may NOT follow the marker down to 2 cm — it is the ide half-diameter.
+      expect(built.wheels[0].radius).toBeCloseTo(0.5, 5);
+    });
+
+    it('an orphan vertex no triangle references cannot inflate the wheel radius (the coach wheel_lf case)', () => {
+      // Same triangle as `geometry()` plus one corrupt UNREFERENCED vertex — the real coach.dff ships one
+      // at ~5.8e25 on wheel_lf, which read as the authored radius and scaled that wheel to nothing.
+      const poisoned: RWGeometry = {
+        ...geometry(),
+        positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 5.8e25, 2.5e7, 0]),
+      };
+      const built = buildVehicleModel(
+        clump(
+          [
+            frame('chassis'),
+            frame('wheel'),
+            frame('wheel_lf_dummy', -1, [1, 2, 0]),
+            frame('wheel_rf_dummy', -1, [-1, 2, 0]),
+          ],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 1, geometry: 1 },
+          ],
+          [geometry(), poisoned],
+        ),
+        textures(),
+        { wheelScale: [0.8, 0.8] },
+      );
+
+      for (const wheel of built.wheels) {
+        expect(wheel.radius).toBeCloseTo(0.4, 5);
+        expect(built.parts[wheel.part].scale).toBeCloseTo(0.4, 5);
+      }
+    });
+
     it('`_dam` twins ride the same buffers as hidden submeshes, paired to their `_ok` by damage group', () => {
       const built = buildVehicleModel(
         clump(
@@ -446,7 +575,9 @@ describe('buildVehicleModel', () => {
     it('a door sits on its HINGE frame and the _ok frame own transform is DISCARDED (SA collapses it)', () => {
       const built = buildVehicleModel(
         clump(
-          [frame('chassis'), frame('door_lf_dummy', -1, [1, 0, 0]), frame('door_lf_ok', 1, [0.5, 0, 0])],
+          // The dummy hangs under the root, as every real export authors it — a ROOT's own transform is
+          // SA-owned (the entity matrix replaces it) and never contributes.
+          [frame('chassis'), frame('door_lf_dummy', 0, [1, 0, 0]), frame('door_lf_ok', 1, [0.5, 0, 0])],
           [
             { frame: 0, geometry: 0 },
             { frame: 2, geometry: 0 },
@@ -457,9 +588,47 @@ describe('buildVehicleModel', () => {
       );
 
       expect(built.doors).toEqual([{ name: 'door_lf', part: 1, side: 'lf' }]);
+      expect(built.doors[0].parts).toBeUndefined(); // one atomic under the hinge = the stock shape, no roster
       const door = built.parts[1];
       expect(door.localTranslation).toEqual([1, 0, 0]); // the hinge dummy — NOT the door's own frame
       expect(door.offset).toBeUndefined(); // the 0.5 m on `door_lf_ok` is the frame SA destroys
+    });
+
+    it('every submesh carries its part-local AABB — the translucent sort keys on the nearest extent', () => {
+      // `center − radius` counted a scattered submesh as nearer than the window sheet in front of it and
+      // the cabin drew OVER the glass; the AABB is what the runtime clamps the eye into instead.
+      const built = buildVehicleModel(clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [geometry()]), textures());
+
+      const submesh = built.submeshes[0];
+      expect(submesh.bounds).toBeDefined();
+      // The helper geometry's vertices: (0,0,0), (1,0,0), (0,1,0).
+      expect(submesh.bounds!.min).toEqual([0, 0, 0]);
+      expect(submesh.bounds!.max).toEqual([1, 1, 0]);
+    });
+
+    it('a door collects every part under its hinge frame — a mod glass atomic swings with it', () => {
+      // The comet authors `glass_lf_ok` as its own atomic beside `door_lf_ok`, both under `door_lf_dummy`.
+      // SA rotates the dummy's frame, so the whole subtree travels; the door therefore carries a part
+      // roster, and the chassis (outside the subtree) stays off it.
+      const built = buildVehicleModel(
+        clump(
+          [frame('chassis'), frame('door_lf_dummy', 0, [1, 0, 0]), frame('door_lf_ok', 1), frame('glass_lf_ok', 1)],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 2, geometry: 0 },
+            { frame: 3, geometry: 0 },
+          ],
+          [geometry()],
+        ),
+        textures(),
+      );
+
+      const door = built.doors[0];
+      const glass = built.parts.findIndex((part) => part.name === 'glass_lf_ok');
+      expect(door.parts).toBeDefined();
+      expect(door.parts).toContain(door.part);
+      expect(door.parts).toContain(glass);
+      expect(door.parts).not.toContain(0);
     });
 
     it('a scissor door keeps the ROTATED hinge above the dummy — the swing axis comes from it', () => {
@@ -645,6 +814,27 @@ describe.skipIf(!existsSync(ADMIRAL) || !existsSync(GENERIC_TXD))('buildVehicleM
   );
 
   describe('positive cases', () => {
+    it('builds identically when the clump ROOT matrix is poisoned (the comet anti-rip lock)', () => {
+      // The lock plants garbage in the one matrix SA never reads (the entity matrix replaces the root's on
+      // attach): rotation[0][0] = −3.9e14. Composing it flung every off-centre part to ±1e14 — invisible
+      // car, live collision. The builder must produce the same model with and without the poison.
+      const poisoned = parseDff(toArrayBuffer(readFileSync(ADMIRAL)));
+      const root = poisoned.frames.findIndex((frame) => frame.parentIndex === -1);
+      poisoned.frames[root].rotation = [-3.9e14, 0, 0, 0, 1, 0, 0, 0, 1];
+      poisoned.frames[root].position = [7e13, -1, 2];
+
+      const rebuilt = buildVehicleModel(
+        poisoned,
+        new VehicleTextures([toArrayBuffer(readFileSync(ADMIRAL_TXD)), toArrayBuffer(readFileSync(GENERIC_TXD))]),
+        { wheelScale: [0.7, 0.7] },
+      );
+
+      expect(rebuilt.positions).toEqual(built.positions);
+      expect(rebuilt.parts.map((part) => part.localTranslation)).toEqual(
+        built.parts.map((part) => part.localTranslation),
+      );
+    });
+
     it('builds the full stock rig: 4 wheels, 4 doors, and the lamp dummies', () => {
       expect(built.wheels).toHaveLength(4);
       expect(built.wheels.filter((wheel) => wheel.front)).toHaveLength(2);
@@ -898,6 +1088,35 @@ describe.skipIf(!existsSync(ZR350) || !existsSync(GENERIC_TXD))('buildVehicleMod
       // authored looking 40° down into the nose, which is exactly how far it has to swing.
       expect(built.parts[built.popUpLights!.part].name).toBe('misc_a');
       expect((built.popUpLights!.angle * 180) / Math.PI).toBeCloseTo(40.4, 1);
+    });
+  });
+});
+
+// Nothing in the stock vehicle/prop set animates its UVs, so the binding can only be proven on a mod: the
+// Pacific Park ferris wheel's light ring is the asset plan 099 exists for.
+const FERRIS_LIGHTS = 'tests/original/mods/ferriswheel_lights.dff';
+
+describe.skipIf(!existsSync(FERRIS_LIGHTS))('buildVehicleModel (real ferriswheel_lights.dff)', () => {
+  const built = buildVehicleModel(parseDff(toArrayBuffer(readFileSync(FERRIS_LIGHTS))), textures());
+
+  describe('positive cases', () => {
+    it("carries the mod's authored blink: the `f13d` film strip, on the `Frames` submesh alone", () => {
+      const animated = built.submeshes.filter((submesh) => submesh.uvAnim !== undefined);
+
+      expect(built.uvAnimations?.map((animation) => animation.name)).toEqual(['f13d']);
+      expect(animated).toHaveLength(1);
+      expect(animated[0].uvAnim).toBe(0);
+    });
+
+    it('keeps the keyframes verbatim — a 13-frame strip stepping every 0.225 s over a 29.25 s loop', () => {
+      const f13d = built.uvAnimations![0];
+      // Paired keyframes at the same timestamp are how a STEP animation is authored: the pair holds the
+      // frame, then jumps `1/13` of the strip. 130 steps × 2 + the closing key = 261.
+      expect(f13d.duration).toBeCloseTo(29.25, 4);
+      expect(f13d.keyframes).toHaveLength(261);
+      expect(f13d.keyframes[1].time).toBeCloseTo(0.225, 4);
+      expect(f13d.keyframes[2].time).toBeCloseTo(0.225, 4);
+      expect(f13d.keyframes[2].uv[4] - f13d.keyframes[1].uv[4]).toBeCloseTo(1 / 13, 4);
     });
   });
 });

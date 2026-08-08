@@ -7,6 +7,7 @@ import type { LampCorona, LampLight } from './vehicle-lamp.system';
 
 import { FakeVehicleHandle } from './vehicle-handle.fake';
 import { VehicleLampSystem } from './vehicle-lamp.system';
+import { LIGHT_FRONT_LEFT, LIGHT_FRONT_RIGHT, LIGHT_REAR_LEFT, LIGHT_REAR_RIGHT } from './vehicle-lamps';
 import { VehicleRig } from './vehicle-rig';
 
 const CONFIG: HeadlightConfig = {
@@ -178,6 +179,72 @@ describe('VehicleLampSystem', () => {
       run();
 
       expect(coronas.every((corona) => corona.color[1] < 0.5)).toBe(true); // only the red tails survive
+    });
+
+    it('a car whose model authors NO lamps emits nothing, even driven at night', () => {
+      // The product-level guard for plan 098/11: the half-extents fallback used to invent anchors here,
+      // so every trailer, tow box and aeroplane lit up. `car()` without anchors is that model.
+      const vehicle = car();
+      (vehicle.handle as FakeVehicleHandle).lampAnchors.clear();
+      const { coronas, lights, run } = harness(
+        (sinks) =>
+          new VehicleLampSystem(
+            enter(vehicle, true, true),
+            () => true,
+            () => CONFIG,
+            sinks,
+          ),
+      );
+
+      run();
+
+      expect(lights).toHaveLength(0);
+      expect(coronas).toHaveLength(0);
+    });
+
+    it('a SMASHED lamp emits no pool light and no corona — its three siblings still do', () => {
+      const vehicle = car();
+      vehicle.handle.setLightSmashed(LIGHT_FRONT_LEFT, true);
+      const { coronas, lights, run } = harness(
+        (sinks) =>
+          new VehicleLampSystem(
+            enter(vehicle, true),
+            () => true,
+            () => CONFIG,
+            sinks,
+          ),
+      );
+
+      run();
+
+      const heads = lights.filter((light) => light.cone !== undefined);
+      expect(heads).toHaveLength(1);
+      expect(heads[0].position[0]).toBeCloseTo(0.8, 5); // the surviving one is the RIGHT headlight
+      expect(lights.filter((light) => light.cone === undefined)).toHaveLength(2); // both tails untouched
+      expect(coronas.filter((corona) => corona.color[1] > 0.5)).toHaveLength(1);
+    });
+
+    it('all four smashed leaves the car emitting nothing at all, driven or not', () => {
+      const vehicle = car();
+      for (const light of [LIGHT_FRONT_LEFT, LIGHT_FRONT_RIGHT, LIGHT_REAR_RIGHT, LIGHT_REAR_LEFT]) {
+        vehicle.handle.setLightSmashed(light, true);
+      }
+      const { coronas, lights, run } = harness(
+        (sinks) =>
+          new VehicleLampSystem(
+            enter(vehicle, true, true),
+            () => true,
+            () => CONFIG,
+            sinks,
+          ),
+      );
+
+      run();
+
+      expect(lights).toHaveLength(0);
+      expect(coronas).toHaveLength(0);
+      // …and the mask reaches the renderer, which is what puts the lamp MESHES out.
+      expect((vehicle.handle as FakeVehicleHandle).lamps?.smashed).toBe(0b1111);
     });
   });
 

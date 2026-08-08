@@ -252,6 +252,10 @@ The documentation lifecycle (idea → concept → plan / postmortem; roadmap for
   steps, each ending with verification + measured numbers. Add a row in `docs/plans/README.md`
 - `docs/roadmap/` — decided work deferred to a later version (`0.5.0/`, `0.6.0/`); same plan-chain shape as
   `docs/plans/`, just not this version
+- `tools/<tool>/docs/plans/` — **where a plan step LANDS once it is built.** Every tool keeps its own numbered
+  chain beside its code; when a step from `docs/plans/` or `docs/roadmap/` ships inside one tool, its file
+  MOVES there (next free number, measured numbers filled in) and the central row is repointed. The central
+  folders carry what is still unbuilt or spans several tools
 - `docs/audit/` — a post-big-rework audit (see the Standing Workflow rule above): what changed, its cost, its
   gain
 
@@ -284,6 +288,17 @@ Keep these in sync with the code — update them in the same change, not later:
   what it would save, what it would cost, what would have to be true to pull it. This is the plan-B list read
   when the frame budget is blown — a lever with a price attached, not a plan (one file per lever in
   `docs/performance/deferred-optimizations/` + a row in the README)
+- `docs/gta-sa-original/` — **the ORIGINAL game and the real install we ship into, kept apart from anything
+  describing OpenSA. Whenever we touch, change, configure or discover something about GTA:SA original — the
+  reference install's plugins or ini settings, an adjuster that owns a limit, an exe fingerprint, a mod that
+  is installed there, a stock behaviour we relied on — it is recorded here in the SAME change.** The install
+  copy under `NO_COMMIT/` is temporary and gets deleted; `reference-install-config.md` is the verbatim
+  capture that has to survive it, and `reference-install.md` is what the configuration MEANS for our plans.
+  **Budget a map-content plan against the install we ship to, not against stock 1.0 — and say which one you
+  picked**: two of the four ceilings `docs/restrictions/sa-target.md` makes you budget for are set to
+  `unlimited` there, and designing down to a ceiling the target does not have is SILENT (the build works, it
+  just carries far less than it could). A rule a new design must satisfy still goes in
+  `docs/restrictions/` and links here for the measurement
 - `docs/links.md` — when an external resource (repo, article, tool) proves useful, add it here
 - `docs/commands.md` — when a command/CLI/param is added or changed, update this cheat sheet
 - `docs/debug/` — when a debug script proves useful, KEEP it in `scripts/debug/` and add a row in

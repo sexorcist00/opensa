@@ -38,6 +38,8 @@ full build writes the placements. See [plan 006](./docs/plans/006-rebake.md).
 2. Each vehicle folder (alphabetical) → **`applyVehicle`**:
    - **Models** — `set` every `.dff` + `.txd` (incl. extra numbered `<model>N.txd`) into `out/models/gta3.img`,
      replacing by name; rebuild the archive.
+   - **CLEO** — carry the mod's `cleo/`/`CLEO/` subfolder (scripts + `.ini`/`.fxt` sidecars) to `out/cleo/`
+     (canonical lowercase, structure preserved; one log line per file — plan 097/06). `--rebake` re-copies it.
    - **Settings** — parse `*.settings.txt` (blank-line-separated blocks, each classified + validated by the real
      engine parser) and merge into:
 

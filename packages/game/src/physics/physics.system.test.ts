@@ -76,6 +76,7 @@ function config(gameState: Config['gameState']): Config {
       yawLagTime: 0.25,
       zoomLambda: 8,
     },
+    cleo: { enabled: false, maxScripts: 32, trace: false },
     controls: { back: 'KeyS', forward: 'KeyW', jump: 'Space', left: 'KeyA', right: 'KeyD' },
     fog: { distance: 800, timecycScale: 1 },
     fonts: { hud: { clock: 'SixCaps-Regular', zone: 'SixCaps-Regular' } },

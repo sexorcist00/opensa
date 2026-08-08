@@ -23,6 +23,8 @@ import type {
 } from '../vehicle/vehicle-handle';
 import type { VehicleLampState } from '../vehicle/vehicle-lamps';
 
+import { withLightSmashed } from '../vehicle/vehicle-lamps';
+
 /**
  * Just the ARTICULATION a handle animates — doors, dummies, wheels, parts, submeshes — and nothing about
  * how the model reached the GPU. Both spawn paths satisfy it structurally: the unoptimized path's
@@ -55,10 +57,30 @@ export class EngineVehicleHandle implements VehicleHandle {
 
   private readonly instance: VehicleInstance;
 
+  /** The last state the lamp system pushed — kept so a smashed lamp can be re-pushed without one. */
+  private lamps: null | VehicleLampState = null;
+  /** One bit per SA `eLights` index, set = SMASHED (`CDamageManager::m_nLightsStatus`). */
+  private lights = 0;
+
   private readonly onDispose: () => void;
 
   /** The body's last rotation — a detaching panel inherits it (see `detachPart`). */
   private rotation: VehicleQuat = [0, 0, 0, 1];
+  /** CLEO's script-absolute part poses (plan 097/05), lazily seeded from the bind pose. */
+  private readonly scriptParts = new Map<number, { quat: VehicleQuat; translation: Vec3 }>();
+
+  /**
+   * The DRAWN pose of every wheel part, as last written by {@link setWheel} — what a script must read
+   * back for that part instead of its own stale shadow.
+   *
+   * SA carries this for free: `CAutomobile` rebuilds each wheel node's modelling matrix every frame
+   * from `m_wheelRotation`/steer/suspension, so a script reading `m_aCarNodes[CAR_WHEEL_*]`'s
+   * `m_forward` sees the live roll. Ours drove the wheels straight onto the entity and left the
+   * script-visible state at the bind pose, so `wheel_rb_dummy` reported an unrotated frame forever —
+   * rhino's tread read a CONSTANT angle and never advanced (field 2026-08-07, plan
+   * `cleo/scripts` 001 step 5).
+   */
+  private readonly wheelPose = new Map<number, { quat: VehicleQuat; translation: Vec3 }>();
 
   constructor(instance: VehicleInstance, data: VehicleRigData, onDispose: () => void) {
     this.instance = instance;
@@ -117,6 +139,10 @@ export class EngineVehicleHandle implements VehicleHandle {
     return dummy ? [...dummy.position] : null;
   }
 
+  lightsSmashed(): number {
+    return this.lights;
+  }
+
   removeDetached(name: string): void {
     const part = this.partIndex(name);
     if (part !== null) {
@@ -124,6 +150,51 @@ export class EngineVehicleHandle implements VehicleHandle {
     }
   }
 
+  scriptPartCount(): number {
+    return this.data.parts.length;
+  }
+
+  /** By FRAME name (`misc_a`, `dvan_l`…) — the damage-group lookup below serves a different space. */
+  scriptPartIndex(name: string): null | number {
+    const wanted = name.trim().toLowerCase();
+    const index = this.data.parts.findIndex((part) => part.name.trim().toLowerCase() === wanted);
+
+    return index >= 0 ? index : null;
+  }
+
+  /** A wheel reports what it is DRAWN at; every other part reports the script's own absolute pose. */
+  scriptPartLocalRotation(part: number): VehicleQuat {
+    return this.wheelPose.get(part)?.quat ?? this.scriptState(part).quat;
+  }
+
+  scriptPartLocalTranslation(part: number): Vec3 {
+    return this.wheelPose.get(part)?.translation ?? this.scriptState(part).translation;
+  }
+
+  /** ABSOLUTE local rotation (SA's SetRotate* replaces the matrix): the engine's anim channel is
+   *  applied AFTER the bind rotation (`R = bind ⊗ anim`), so anim = conj(bind) ⊗ target. */
+  scriptSetPartLocalRotation(part: number, quat: VehicleQuat): void {
+    const bind = this.data.parts[part]?.localRotation;
+    if (!bind) {
+      return;
+    }
+    this.scriptState(part).quat = [...quat];
+    this.instance.entity.setPartRotation(part, quatMul(quatInvert(bind), quat));
+  }
+
+  /** ABSOLUTE local translation: the engine's channel is a DELTA on the bind translation. */
+  scriptSetPartLocalTranslation(part: number, translation: Vec3): void {
+    const bind = this.data.parts[part]?.localTranslation;
+    if (!bind) {
+      return;
+    }
+    this.scriptState(part).translation = [...translation];
+    this.instance.entity.setPartTranslation(part, [
+      translation[0] - bind[0],
+      translation[1] - bind[1],
+      translation[2] - bind[2],
+    ]);
+  }
   setDetachedPose(name: string, pose: VehiclePose): void {
     const part = this.partIndex(name);
     if (part === null) {
@@ -132,17 +203,64 @@ export class EngineVehicleHandle implements VehicleHandle {
     writeWorld(WORLD, gtaToEngine(pose.position), pose.rotation);
     this.instance.entity.setPartWorldMatrix(part, WORLD);
   }
-
   setDoorAngle(side: string, angle: number): void {
     const door = this.data.doors.find((candidate) => candidate.side === side);
-    if (door) {
-      // The hinge frame IS the part's pivot (the builder put it there), so the swing is a plain Z rotation.
-      this.instance.entity.setPartRotation(door.part, axisAngle(2, angle));
+    if (!door) {
+      return;
+    }
+    // The hinge frame IS the part's pivot (the builder put it there), so the swing is a plain Z rotation.
+    const swing = axisAngle(2, angle);
+    this.instance.entity.setPartRotation(door.part, swing);
+    if (!door.parts) {
+      return;
+    }
+    // SA swings the hinge FRAME, so every part authored under it (a mod's separate glass/trim atomics)
+    // travels with the door. Each member rotates about the HINGE, not its own pivot: same rotation carried
+    // into body axes (conjugated by the hinge's bind rotation, so scissor doors keep their swing plane) and
+    // then into the member's own local frame, plus the translation that turns a rotation-about-own-pivot
+    // into a rotation-about-the-hinge. For the common export (member pivot ON the hinge, identity-rotated)
+    // both corrections are zero.
+    const hinge = this.data.parts[door.part];
+    const world = quatMul(quatMul(hinge.localRotation, swing), quatInvert(hinge.localRotation));
+    for (const member of door.parts) {
+      if (member === door.part) {
+        continue;
+      }
+      const part = this.data.parts[member];
+      this.instance.entity.setPartRotation(
+        member,
+        quatMul(quatMul(quatInvert(part.localRotation), world), part.localRotation),
+      );
+      const toHinge: [number, number, number] = [
+        hinge.localTranslation[0] - part.localTranslation[0],
+        hinge.localTranslation[1] - part.localTranslation[1],
+        hinge.localTranslation[2] - part.localTranslation[2],
+      ];
+      const rotated = quatRotate(world, toHinge);
+      this.instance.entity.setPartTranslation(member, [
+        toHinge[0] - rotated[0],
+        toHinge[1] - rotated[1],
+        toHinge[2] - rotated[2],
+      ]);
     }
   }
 
   setLamps(state: VehicleLampState): void {
-    this.instance.setLamps(state.headlights, state.brakes, state.intensity);
+    this.lamps = state;
+    this.instance.setLamps(state.headlights, state.brakes, state.intensity, this.lights);
+  }
+
+  setLightSmashed(light: number, smashed: boolean): void {
+    const lights = withLightSmashed(this.lights, light, smashed);
+    if (lights === this.lights) {
+      return; // unchanged — or an index that is not a lamp at all
+    }
+    this.lights = lights;
+    // Push it NOW rather than waiting for the next lamp update: only the DRIVEN car gets one, so a script
+    // smashing the lights of anything else would otherwise leave the GPU reading the old mask forever.
+    if (this.lamps) {
+      this.instance.setLamps(this.lamps.headlights, this.lamps.brakes, this.lamps.intensity, lights);
+    }
   }
 
   setLodBand(band: VehicleBand): void {
@@ -183,11 +301,13 @@ export class EngineVehicleHandle implements VehicleHandle {
       this.instance.entity.setPartRotation(popUp.part, axisAngle(0, open * popUp.angle));
     }
   }
+
   setTransform(position: Vec3, rotation: VehicleQuat): void {
     this.rotation = rotation;
     writeWorld(WORLD, gtaToEngine(position), rotation);
     this.instance.entity.setRoot(WORLD);
   }
+
   setWheel(index: number, pose: VehicleWheelPose): void {
     const wheel = this.data.wheels[index];
     if (!wheel) {
@@ -197,18 +317,39 @@ export class EngineVehicleHandle implements VehicleHandle {
     // axle (X). The order is the whole correctness of this line (plan 081/06 §3.3): a steered wheel must lean
     // about ITS forward axis and not the body's, and the spin has to be innermost or it drags the lean round
     // with it — a wheel that cambers while rolling would wobble like a bent rim.
-    this.instance.entity.setPartRotation(
-      wheel.part,
-      quatMul(quatMul(axisAngle(2, pose.steer), axisAngle(1, pose.camber)), axisAngle(0, pose.spin)),
-    );
+    const anim = quatMul(quatMul(axisAngle(2, pose.steer), axisAngle(1, pose.camber)), axisAngle(0, pose.spin));
+    this.instance.entity.setPartRotation(wheel.part, anim);
     // Suspension travel: the wheel part slides along the body's local Z (the model frame is Z-up like GTA).
     this.instance.entity.setPartTranslation(wheel.part, [0, 0, pose.lift]);
+    // Publish it in the SAME space a script reads (absolute part-local = bind then anim) — see wheelPose.
+    const bind = this.data.parts[wheel.part];
+    this.wheelPose.set(wheel.part, {
+      quat: bind ? quatMul(bind.localRotation, anim) : anim,
+      translation: bind
+        ? [bind.localTranslation[0], bind.localTranslation[1], bind.localTranslation[2] + pose.lift]
+        : [0, 0, pose.lift],
+    });
   }
 
   private partIndex(name: string): null | number {
     const submesh = this.data.submeshes.find((candidate) => candidate.damageGroup === name);
 
     return submesh ? submesh.part : null;
+  }
+
+  /** Script-absolute part state, lazily seeded from the bind pose. */
+  private scriptState(part: number): { quat: VehicleQuat; translation: Vec3 } {
+    let state = this.scriptParts.get(part);
+    if (!state) {
+      const bind = this.data.parts[part];
+      state = {
+        quat: bind ? [...bind.localRotation] : [0, 0, 0, 1],
+        translation: bind ? [...bind.localTranslation] : [0, 0, 0],
+      };
+      this.scriptParts.set(part, state);
+    }
+
+    return state;
   }
 
   private setPartSubmeshesVisible(part: number, visible: boolean): void {
@@ -259,6 +400,11 @@ function gtaToEngine(position: Vec3): [number, number, number] {
   return [position[0], position[2], -position[1]];
 }
 
+/** Unit-quaternion inverse (conjugate) — bind rotations are unit by construction. */
+function quatInvert(q: readonly [number, number, number, number]): [number, number, number, number] {
+  return [-q[0], -q[1], -q[2], q[3]];
+}
+
 function quatMul(
   a: readonly [number, number, number, number],
   b: readonly [number, number, number, number],
@@ -269,6 +415,20 @@ function quatMul(
     a[3] * b[2] + a[2] * b[3] + a[0] * b[1] - a[1] * b[0],
     a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
   ];
+}
+
+/** Rotate a vector by a unit quaternion: v' = q v q⁻¹. */
+function quatRotate(
+  q: readonly [number, number, number, number],
+  v: readonly [number, number, number],
+): [number, number, number] {
+  const [qx, qy, qz, qw] = q;
+  // t = 2 (q.xyz × v); v' = v + qw t + q.xyz × t
+  const tx = 2 * (qy * v[2] - qz * v[1]);
+  const ty = 2 * (qz * v[0] - qx * v[2]);
+  const tz = 2 * (qx * v[1] - qy * v[0]);
+
+  return [v[0] + qw * tx + qy * tz - qz * ty, v[1] + qw * ty + qz * tx - qx * tz, v[2] + qw * tz + qx * ty - qy * tx];
 }
 
 function writeWorld(out: Float32Array, position: readonly [number, number, number], rotation: VehicleQuat): void {

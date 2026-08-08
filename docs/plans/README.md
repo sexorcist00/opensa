@@ -16,8 +16,83 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`099`, one folder each (066, 073, 074, 078–082, 096, 097, 098 carry multi-part sub-plans; 083 kept its row
-but its folder moved to `roadmap/0.5.0/`). Newest first:
+`001`–`101`, one folder each (066, 073, 074, 078–082, 096–101 carry multi-part sub-plans; 083 kept its
+row but its chain was superseded by 097). Newest first:
+
+> **THREE NUMBERS MEAN TWO THINGS IN THIS REPO, and it is not a typo.** The fork and upstream both
+> numbered forward from 096 without knowing about each other, so `097`, `098` and `099` each name two
+> unrelated chains — upstream's (CLEO, land vehicles, script-object UV animation) and this fork's
+> (platform reach, the dispatch console, PCAD dispatch). The FOLDERS are distinct and nothing was lost;
+> what is ambiguous is every bare citation, and `CLAUDE.md`'s reading order cites "098" by number. Until
+> the fork's chains are renumbered, cite them by FOLDER — `098-dispatch-console/1-01`, never `098/1-01`.
+
+- **[099 — PCAD Dispatch](./099-pcad-dispatch/readme.md)** — **THE FINAL PLAN for the fork's dispatch
+  line**, opened 2026-08-06. The product every dispatch doc here serves: a **web dispatch application for a
+  SA-MP server**, paired with a client-side CAD plugin (PCAD), of which this repository owns exactly one
+  thing — **the 3D map component**. Not to be confused with upstream's 099 (script-object UV animations).
+- **[098 — The dispatch console](./098-dispatch-console/readme.md)** — IN PROGRESS, opened 2026-08-06. The
+  engine's second consumer: a CAD operator surface over the streamed world, trimmed to what it actually
+  draws, on a phone — and the only surface in the repo that runs on a mobile GPU, which makes it the
+  instrument for the device measurement the platform-reach chain is blocked on. Eight chains; 1/01 (the
+  inventory) is the live step. Not to be confused with upstream's 098 (all land vehicle types).
+- **[097 — Platform reach](./097-platform-reach/readme.md)** — the device half of the fork's line:
+  universal textures (`--textures astc` landed 2026-08-07), off-main-thread work, WebGL2. Not to be
+  confused with upstream's 097 (CLEO basic).
+
+`001`–`099`, one folder each (066, 073, 074, 078–082, 096–099 carry multi-part sub-plans; 083 kept its
+row but its chain was superseded by 097). Newest first:
+
+- **[101 — Escalators in OpenSA](./101-escalators/readme.md)** — **PLANNED 2026-08-07**: the steps have
+  never moved in our engine. `renderware` decodes the type-10 entry (plan 044) and there is a debug waypoint;
+  `engine`, `cell-weld` and `engine-formats` have no escalator code at all, so the staircase draws and
+  standing on it does nothing — a gap against the original, which implements them natively. Split out of
+  plan 100, which carries the 2dfx types our engine already consumes and cannot carry this one because the
+  behaviour does not exist. Step 00 is research first: recover SA's own step spacing, speed and carry rule
+  (and find out whether the steps are objects or a texture scroll — if the latter, plan 099's UV lane may
+  already do it) before any constant of ours is fitted. Corpus is 5 entries in 4 models, fully enumerable.
+- **[100 — 2dfx survives to LOD range](./100-2dfx-at-lod-range/readme.md)** — **PLANNED 2026-08-07**:
+  chimney smoke, street lamps and street-name plates die at the HD boundary (`HD_RADIUS` 380), so a
+  district past ~440 u draws to 1000 u dark, smokeless and unsigned. Both LOD generators bake the three
+  types that have a consumer (0 light, 1 particle, 7 roadsign) and `cell-weld` starts reading what the cell
+  bake produces — the half that makes the other half real, since nothing reads a cell LOD's 2dfx today. Also
+  fixes the flat `DRAW_DISTANCE = 300` that overrides every fx system's authored `cullDist`. Step 00 is the
+  research: it began as a killed plan (postmortem) and was revived the same day by a reversed decision.
+  The six types our engine does not consume (16 934 stock entries) stay out of the OpenSA line — escalators
+  among them, because our engine has no escalator code at all, while real SA implements them natively and the
+  SA clones keep carrying the entry.
+- **[099 — UV animations on script objects](./099-script-object-uv-anim/readme.md)** — **DONE
+  2026-08-07** (planned 2026-08-05 from the 097/07 field bug round): the ferris wheel's blinking bulbs
+  are a UVAnimDict step animation (`f13d`, a 13-frame film strip stepping every 0.225 s) that the
+  world's kind-4 lane already played but the rigid/script-object path ignored. Baked the animation
+  through (builder → `.osm` fixture, model-local list + per-submesh slot), added the rigid UV-anim lane
+  (per-model uniform, identity slot 0, dynamic offsets — unbundled draws, so no bundle staleness; zero
+  allocation and zero per-frame writes for models without animations), and the user's own rebuild +
+  field run closed it: **the wheel blinks**. The edge-cases row is removed — the limitation is lifted.
+  Open: the bench guard was never run, so "zero cost" is proven CPU-side only (099/02 ledger).
+
+- **[098 — All land vehicle types](./098-all-land-vehicles/readme.md)** — **PLANNED 2026-08-04**,
+  supersedes `roadmap/0.5.0/plans/04-all-vehicle-types/` (deleted). Rewritten from a four-way recon
+  (data pipeline / physics / animation / docs) + the `NO_COMMIT/all-veh` corpus (the VSA Editor's
+  15-class special-ability catalogue; a control mod car). The recon overturned the old chain's two
+  pillars: 081/07's class-preset seed shipped EMPTY by measurement, and bikes fail on NAMES and
+  PLUMBING before physics — `wheel_front`/`wheel_rear` match no regex (zero wheels baked), the 13 `!`
+  bike-handling rows and the 30 `^` anim-group rows are parsed away, the ride IFPs sit in the
+  deliberately-unexpanded `anim/anim.img`, and the repo contains ZERO Rapier joints (trailer hitch is
+  greenfield). Eight sub-plans, four field checkpoints (it rides → it looks ridden → it tows → it
+  bounces): data foundations → features module (pop-up lights generalised into a token registry —
+  hydraulics, hooks, moving `misc_*` parts become data) → two-wheel balance controller on the authored
+  `!` rows → rider animation → first joints/towing → abilities → per-class gameplay → audit close-out.
+  Air/water/rail findings parked in `roadmap/0.6.0/plans/05-air-water-rail/`.
+
+- **[097 — CLEO basic](./097-cleo-basic/readme.md)** — **CLOSED: 01–08 DONE 2026-08-06** (all three field checkpoints — the wheel spins, the corpus ships through pmb + fetch pack with nothing hand-placed; 07 closed with the tracer, the F2 CLEO screen, tiers-as-data + CI joins, audit + benchmarks, and CLEO is ON BY DEFAULT — `?cleo=0` opts out; 08 authoring SDK executed as the project-local chain `cleo/sdk/docs/plans/` — hello-conformance proven on BOTH runtimes, real CLEO included), supersedes the deferred
+  `roadmap/0.5.0/plans/08-cleo-basic/` chain (deleted; it was the unstarted 083 rethink). Rewritten from a
+  full recon: all seven target `.cs` scripts (`NO_COMMIT/cleo`) were disassembled — three mod classes
+  (world objects / vehicle-part animation via native calls / ped-task orchestration), ~116 unique opcodes,
+  and a native surface of only ~15 SA 1.0 addresses. CLEO becomes its own layer (`packages/cleo`:
+  core decoder / VM / host contract / **native atlas** — memory and exe calls served as an
+  object-capability facade over `VehicleHandle`, not byte emulation). Seven sub-plans with three field
+  checkpoints (wheel spins → ladder/door/tracks → full build); also fixes mod-installer's silent `.cs`
+  deletion on the bake path. Dedicated tooling sub-plan: `scm-disasm` / `cleo-census` / `cleo-run`.
 
 - **[099 — PCAD Dispatch](./099-pcad-dispatch/readme.md)** — **THE FINAL PLAN**, opened 2026-08-06. The
   product every dispatch doc here now serves: a **web dispatch application for a SA-MP server**, paired with a
@@ -157,10 +232,9 @@ but its folder moved to `roadmap/0.5.0/`). Newest first:
   dynamics. The perf row is CLOSED (2026-07-21: it was mod vegetation, not vehicles). Peds share the
   row-B root.
 
-- **083 — Basic CLEO support** — **MOVED to 0.5.0 on 2026-08-01, unstarted**:
-  [`roadmap/0.5.0/plans/08-cleo-basic/`](../roadmap/0.5.0/plans/08-cleo-basic/readme.md). Run compiled `.cs`
-  scripts: Sanny-DB SCM decoder (lifts the 0x014B car-gen reader), engine-agnostic thread VM, CleoHost on the
-  rigid `.osm` path, `packages/cleo` module, tracer + coverage. Promoted from ideas/0.4.0/04.
+- **083 — Basic CLEO support** — moved to 0.5.0 on 2026-08-01 unstarted, then **SUPERSEDED by
+  [097](./097-cleo-basic/readme.md) on 2026-08-04** (the roadmap chain was rewritten against a full
+  corpus recon and pulled back into active work; its folder is deleted). Promoted from ideas/0.4.0/04.
 - **[082 — Vehicle license plates](./082-vehicle-plates/readme.md)** — per-instance city-correct plates on
   the array-based engine: plate atlas array + per-instance slot, converter-flagged plate submeshes,
   mask DSL + placement-seeded determinism, damage-riding. Promoted from ideas/0.4.0/01.
@@ -290,10 +364,16 @@ but its folder moved to `roadmap/0.5.0/`). Newest first:
   [`map-placement/docs/plans/`](../../tools/map-placement/docs/plans/) (`001` architecture & API).
 - **sa-lod** — shared simplified-copy LOD pipeline (decimate → normals → encode DFF/TXD/COL), extracted from
   opensa-lod-generator, used by it + lod-procobj-generator.
-  [`sa-lod/docs/plans/`](../../tools/lod-common/docs/plans/) (`001` architecture & API).
-- **rw-codec** — shared pure RW chunk/DFF/DXT/geometry-struct codec, extracted from map-optimizer (plan 057,
-  step 2). Top-level `rw-codec/` now; moves under `tools/` in the migration. No plans doc.
+  [`sa-lod/docs/plans/`](../../tools/lod-common/docs/plans/) (`001` architecture & API · `005` the 2dfx
+  keep-policy + `006` `transform2dfxEntry` — both SHIPPED 2026-08-07, arrived from roadmap 0.5.0 plan 07).
+- **rw-codec** — shared pure RW chunk/DFF/DXT/geometry-struct/2dfx codec, extracted from map-optimizer
+  (plan 057, step 2). [`rw-codec/docs/plans/`](../../tools/rw-codec/docs/plans/) (`001` typed 2dfx payload
+  codecs — SHIPPED 2026-08-07, arrived from roadmap 0.5.0 plan 07).
 - **timecyc-builder** — timecyc precompute. No plans doc yet.
+- **cleo/scripts** — authored CLEO script sources on the SDK (runtime content, not a build tool — the
+  `asi/perfect-map` root-category pattern). [`cleo/scripts/docs/plans/`](../../cleo/scripts/docs/plans/readme.md)
+  (`001` rhino tracks — CLOSED 2026-08-07, both runtimes field-proven, shipping step waived ·
+  `002` no_lights — PLANNED 2026-08-06).
 
 ## Other docs
 

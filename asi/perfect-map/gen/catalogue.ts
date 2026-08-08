@@ -1,96 +1,24 @@
 /**
- * Machine-readable patch catalogue — the single source of truth the generator ([generate.ts](./generate.ts))
- * turns into `src/generated/patches.hpp`. Values are the RE results verified against the 1.0 US exe (SHA1
+ * Machine-readable patch catalogue — perfect-map's single source of truth, typed against the SDK's
+ * interfaces (`@opensa/asi-sdk/catalogue`) and turned into `src/generated/patches.hpp` by
+ * [generate.ts](./generate.ts). Values are the RE results verified against the 1.0 US exe (SHA1
  * `8c23ceff…`); the human narrative lives in [docs/patch-catalogue.md](../docs/patch-catalogue.md), which MUST
  * agree with this file. Addresses are 1.0 US virtual addresses (image base 0x400000).
  *
- * This file carries the byte-verify BASELINES (fingerprint anchors + per-site original bytes). The `apply`
- * logic per patch is hand-written C++ in `src/patches/` (plan 004) — a markdown table cannot express a sidecar
- * hook or an array relocation, so the generator emits DATA only.
+ * This file carries the byte-verify BASELINES (per-site original bytes); the shared exe identity is the SDK's
+ * `SA_FINGERPRINT`. The `apply` logic per patch is hand-written C++ in `src/patches/` — a table cannot express
+ * a sidecar hook or an array relocation, so the generator emits DATA only.
  */
 
-/** A byte sequence expected at a runtime exe address — the per-patch original-byte verification (never write
- *  unless the bytes at `address` still match; a mismatch means an adjuster already owns the site → defer). */
-export interface ByteAnchor {
-  /** 1.0 US virtual address. */
-  readonly address: number;
-  /** The exact original bytes at `address`. */
-  readonly bytes: readonly number[];
-  /** Stable identifier, e.g. `IncludeEntity.entry`. */
-  readonly name: string;
-  readonly note?: string;
-}
+import type { CatalogueEntry } from '@opensa/asi-sdk/catalogue';
 
-export interface CatalogueEntry {
-  /** Adjuster zones that, if already patched by FLA/OLA, make us defer this entry (coexistence). */
-  readonly conflictsWith?: readonly string[];
-  /** kebab-case id, e.g. `ipldef-range`. */
-  readonly id: string;
-  /** The byte-verify sites this patch touches (its `apply` in 004 confirms these before writing). */
-  readonly sites: readonly ByteAnchor[];
-  /** `hook` = injector function_hooker on a callable entry; `relocate` = repoint a too-small static array. */
-  readonly strategy: 'hook' | 'relocate';
-  readonly summary: string;
-}
-
-/** A byte sequence at a FILE offset — the version fingerprint reads these from the exe on DISK, so it identifies
- *  the build regardless of what an in-memory adjuster (FLA/OLA) has patched at runtime. */
-export interface FileAnchor {
-  /** The exact original bytes at `fileOffset`. */
-  readonly bytes: readonly number[];
-  /** Offset into the exe file. */
-  readonly fileOffset: number;
-  readonly name: string;
-  readonly note?: string;
-}
-
-export interface Fingerprint {
-  /** DISK-read anchor bytes proving it is 1.0 US — file offsets, so a loaded FLA/OLA can't invalidate them. */
-  readonly anchors: readonly FileAnchor[];
-  /** Exact file size of the only accepted `gta_sa.exe`. */
-  readonly exeSize: number;
-  /** Its SHA1 (40 hex chars). */
-  readonly sha1: string;
-}
-
-/** The only accepted target: canonical GTA:SA 1.0 US (HOODLUM). Reject the 14,405,632 / `0df50d56…` variant.
- *  Anchors are FILE offsets (read from disk) — the version identity must survive whatever an adjuster has patched
- *  in memory. */
-export const FINGERPRINT: Fingerprint = {
-  anchors: [
-    {
-      bytes: [0xe9, 0x9b, 0xea, 0x15, 0x01],
-      fileOffset: 0x4090,
-      name: 'IncludeEntity.entry',
-      note: 'va 0x404C90 — jmp 0x1563730 (HOODLUM trampoline)',
-    },
-    {
-      bytes: [0x0f, 0xbf, 0x7b, 0x22],
-      fileOffset: 0x3f4a,
-      name: 'RemoveIpl.firstBuilding',
-      note: 'va 0x404B4A — movsx edi, word[ebx+0x22]',
-    },
-    {
-      bytes: [0x66, 0x8b, 0x43, 0x2a],
-      fileOffset: 0x5023,
-      name: 'LoadIplBoundingBox.staticIdx',
-      note: 'va 0x405C23 — mov ax, word[ebx+0x2a]',
-    },
-    {
-      bytes: [0x89, 0x04, 0x8d, 0xe0, 0xc0, 0xbc, 0x00],
-      fileOffset: 0x1b7d38,
-      name: 'LoadScene.store',
-      note: 'va 0x5B8938 — mov [ecx*4+0xBCC0E0], eax',
-    },
-  ],
-  exeSize: 14383616,
-  sha1: '8c23ceffafa9fd88ea567be7926a33413b8e3c00',
-};
+const PRE_SDK_RE = 'commit unrecorded (pre-SDK RE, 2026-07; bytes confirmed against the exe)';
 
 export const CATALOGUE: readonly CatalogueEntry[] = [
   {
     conflictsWith: ['fla:ipl-entity-index'],
     id: 'ipldef-range',
+    provenance: `gta-reversed-modern source/game_sa/IplStore.cpp — CIplStore::IncludeEntity + CIplStore::RemoveIpl; ${PRE_SDK_RE}`,
     sites: [
       {
         address: 0x404c90,
@@ -122,6 +50,24 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
         name: 'RemoveIpl.lastBuilding.loop',
         note: 'the loop BACK-EDGE re-read of lastBuilding (every iteration) → detour: edx = gSnapLast',
       },
+      {
+        address: 0x404b54,
+        bytes: [0xa1, 0x9c, 0x44, 0xb7, 0x00],
+        name: 'RemoveIpl.cont.404B54',
+        note: 'mov eax,[0xB7449C] — the firstBuilding detour jumps back HERE; verified so a future adjuster hooking the continuation makes us defer instead of corrupt',
+      },
+      {
+        address: 0x404b63,
+        bytes: [0x89, 0x4c, 0x24, 0x14],
+        name: 'RemoveIpl.cont.404B63',
+        note: 'mov [esp+0x14],ecx — the lastBuilding detour continuation',
+      },
+      {
+        address: 0x404bad,
+        bytes: [0x83, 0xc5, 0x38],
+        name: 'RemoveIpl.cont.404BAD',
+        note: 'add ebp,0x38 — the loop back-edge detour continuation',
+      },
     ],
     strategy: 'hook',
     summary:
@@ -130,6 +76,7 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
   {
     conflictsWith: ['fla:inst-entries-per-file'],
     id: 'loaded-buildings',
+    provenance: `gta-reversed-modern source/game_sa/FileLoader.cpp — CFileLoader::LoadScene (INST case); ${PRE_SDK_RE}`,
     sites: [
       {
         address: 0x5b8938,
@@ -150,6 +97,7 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
   {
     conflictsWith: ['fla:ipl-entity-index'],
     id: 'ipl-entity-index',
+    provenance: `gta-reversed-modern source/game_sa/IplStore.cpp — CIplStore::LoadIplBoundingBox + GetNewIplEntityIndexArray; ${PRE_SDK_RE}`,
     sites: [
       {
         address: 0x405c23,
@@ -163,6 +111,7 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
   },
   {
     id: 'fx-emitter-uaf',
+    provenance: `gta-reversed-modern source/game_sa/Fx/FxSystem.cpp — FxSystem_c::Stop + FxSystem_c::Play (reap path: Fx/FxManager.cpp Update/DestroyFxSystem, Fx/Fx.cpp DestroyEntityFx); ${PRE_SDK_RE}`,
     sites: [
       {
         address: 0x4aa390,

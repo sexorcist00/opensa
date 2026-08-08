@@ -9,7 +9,7 @@
  *   - `_dam` / `_vlo` are extra SUBMESHES on the same buffers (hidden via per-submesh visibility), not
  *     separate meshes toggled through a scene graph, which the own engine does not have.
  */
-import type { RWClump, RWGeometry, RWMaterial } from '../parsers/binary/types';
+import type { RWClump, RWGeometry, RWMaterial, RWUvAnimation } from '../parsers/binary/types';
 import type { VehicleTextures } from './textures';
 import type {
   VehicleBuildOptions,
@@ -85,6 +85,10 @@ interface Scratch {
   positions: number[];
   reflect: number[];
   submeshes: VehicleModelSubmesh[];
+  /** Model-local animation list, appended the first time a material names an entry. */
+  uvAnimations: RWUvAnimation[];
+  /** The clump's UVAnimDict by name — the source {@link uvAnimSlot} resolves references against. */
+  uvAnimDict: ReadonlyMap<string, RWUvAnimation>;
   uvs: number[];
 }
 
@@ -104,9 +108,15 @@ export function buildVehicleModel(
     positions: [],
     reflect: [],
     submeshes: [],
+    uvAnimations: [],
+    uvAnimDict: new Map((clump.uvAnimations ?? []).map((animation) => [animation.name, animation])),
     uvs: [],
   };
   const doors: VehicleDoor[] = [];
+  // Per-part SOURCE frame (body atomics only — wheels are instanced and never door members) and per-door
+  // hinge frame, so door membership can be derived from the frame tree after every atomic is placed.
+  const partFrames: number[] = [];
+  const doorHinges: number[] = [];
   const damGeometry = collectDamGeometry(clump);
   const containerFrames = collectContainerFrames(clump);
   const wheelScale = options.wheelScale ?? [1, 1];
@@ -139,7 +149,10 @@ export function buildVehicleModel(
       continue; // `_dam` rides with its `_ok` twin
     }
     const before = scratch.submeshes.length;
-    addBodyAtomic(scratch, clump, atomic.geometryIndex, name, atomic.frameIndex, textures, damGeometry, doors);
+    addBodyAtomic(scratch, clump, atomic.geometryIndex, name, atomic.frameIndex, textures, damGeometry, doors, {
+      doorHinges,
+      partFrames,
+    });
     // Every `extraN` alternative ships, tagged with its frame. SA shows at most one and the pick is per
     // SPAWN — a build-time choice would freeze one optional part into the pak for every car in the world.
     if (EXTRA_RE.test(name)) {
@@ -148,6 +161,22 @@ export function buildVehicleModel(
       }
     }
   }
+
+  // A door is its whole HINGE SUBTREE, not one named atomic: SA swings the dummy's frame, so a mod's
+  // separate glass/trim atomics under it travel with the door (the comet authors `glass_lf_ok` beside
+  // `door_lf_ok`; rotating only the named part left its glass hanging in the air). Membership is derived
+  // from the frame tree; stock cars author one atomic per door, so their doors carry no `parts`.
+  doors.forEach((door, index) => {
+    const members: number[] = [];
+    partFrames.forEach((frame, part) => {
+      if (frame !== undefined && frameDescendsFrom(clump, frame, doorHinges[index])) {
+        members.push(part);
+      }
+    });
+    if (members.length > 1) {
+      door.parts = members;
+    }
+  });
 
   const wheels = addWheels(scratch, clump, textures, wheelScale, { containerWheels, cornerWheels, sharedWheel });
   // Self-occlusion rides in the NIGHT set's alpha, which the builder had been filling with a constant 255:
@@ -185,6 +214,9 @@ export function buildVehicleModel(
     reflect: new Uint8Array(scratch.reflect),
     submeshes: scratch.submeshes,
     texture: textures.pack(),
+    // Only when a material actually references one: emitting an empty list would rewrite every model's
+    // fixture for nothing, and "absent" is what every consumer already reads as "no animation".
+    ...(scratch.uvAnimations.length > 0 ? { uvAnimations: scratch.uvAnimations } : {}),
     uvs: new Float32Array(scratch.uvs),
     wheels,
   };
@@ -200,13 +232,16 @@ function addBodyAtomic(
   textures: VehicleTextures,
   damGeometry: Map<string, RWGeometry>,
   doors: VehicleDoor[],
+  frameTracking: { doorHinges: number[]; partFrames: number[] },
 ): void {
   const lod = name.endsWith('_vlo');
   const door = DOOR_RE.exec(name);
   const placement = componentFrame(clump, frameIndex, name);
   const part = addPart(scratch, clump, placement, door ? `door_${door[1]}` : name);
+  frameTracking.partFrames[part] = frameIndex;
   if (door) {
     doors.push({ name: `door_${door[1]}`, part, side: door[1] });
+    frameTracking.doorHinges.push(placement);
   }
   const base = lod ? name.slice(0, -4) : name;
   appendGeometry(scratch, clump.geometries[geometryIndex], part, textures, lod ? 'lod' : 'body', null);
@@ -268,9 +303,8 @@ function addWheels(
     const authoredRight = authoredWheelRight(clump);
 
     return cornerWheels.map((wheel) => {
-      const authoredRadius = wheelRadius(clump.geometries[wheel.geometryIndex]);
-      const scale = axleScale(wheelScale, wheel.front, authoredRadius);
-      const part = addPart(scratch, clump, wheel.frameIndex, frameName(clump, wheel.frameIndex), scale);
+      const fit = wheelFit(wheelScale, wheel.front, clump.geometries[wheel.geometryIndex]);
+      const part = addPart(scratch, clump, wheel.frameIndex, frameName(clump, wheel.frameIndex), fit.scale);
       if (wheel.right !== authoredRight) {
         scratch.parts[part].localRotation = flipWheelSide(scratch.parts[part].localRotation);
       }
@@ -284,7 +318,7 @@ function addWheels(
         tyreMaterials(clump.geometries[wheel.geometryIndex]),
       );
 
-      return { front: wheel.front, part, radius: authoredRadius * scale };
+      return { front: wheel.front, part, radius: fit.radius };
     });
   }
   if (sharedWheel !== null) {
@@ -331,7 +365,18 @@ function appendGeometry(
     // 5 of the 143 plated models author a plate face on their `_vlo` at all; they keep the stock look.
     const plate = kind === 'lod' ? null : plateFace(material);
     const tyre = tyres.has(materialIndex);
-    const surface = materialSurface(material, textures, kind, tyre, plate);
+    const uvAnim = uvAnimSlot(scratch, material);
+    // Texture transparency judged over THIS group's own UV region, not the whole texture — mod interiors
+    // share alpha atlases, and the whole-texture answer sent opaque shelves and gauge housings into the
+    // no-depth blend phase (see `hasAlphaIn`).
+    const surface = materialSurface(
+      material,
+      textures,
+      kind,
+      tyre,
+      plate,
+      textures.hasAlphaIn(material, rw.uvLayers[0], tris),
+    );
     const { color, klass, lamp, layer, nightLayer, paint, reflect } = surface;
     const indexOffset = scratch.indices.length;
     const center: [number, number, number] = [0, 0, 0];
@@ -397,8 +442,13 @@ function appendGeometry(
     const centroid: [number, number, number] = [center[0] / corners, center[1] / corners, center[2] / corners];
     // Bounding radius about the centroid (074/16 sort fix): the translucent sort subtracts it, so a LARGE
     // sheet (a raked windscreen) counts as nearer than its centre — a single centroid put the wheel OVER
-    // the glass overhang at down-looking angles.
+    // the glass overhang at down-looking angles. The AABB beside it is the exact form of the same idea:
+    // sorting by the sphere over-reached on SCATTERED submeshes (a gauge cluster spanning the dash, radius
+    // 1.8, counted as nearer than the window sheet in front of it), so the runtime keys on the nearest AABB
+    // corner where the bounds exist and falls back to `center − radius` on old fixtures.
     let radiusSq = 0;
+    const min: [number, number, number] = [Infinity, Infinity, Infinity];
+    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
     for (const tri of tris) {
       for (const corner of [tri.a, tri.b, tri.c]) {
         radiusSq = Math.max(
@@ -407,9 +457,14 @@ function appendGeometry(
             (rw.positions[corner * 3 + 1] - centroid[1]) ** 2 +
             (rw.positions[corner * 3 + 2] - centroid[2]) ** 2,
         );
+        for (let axis = 0; axis < 3; axis += 1) {
+          min[axis] = Math.min(min[axis], rw.positions[corner * 3 + axis]);
+          max[axis] = Math.max(max[axis], rw.positions[corner * 3 + axis]);
+        }
       }
     }
     scratch.submeshes.push({
+      bounds: { max, min },
       center: centroid,
       damageGroup,
       ...(plate ? { plate } : {}),
@@ -421,6 +476,7 @@ function appendGeometry(
       part,
       radius: Math.sqrt(radiusSq),
       translucent: surface.translucent,
+      ...(uvAnim === null ? {} : { uvAnim }),
     });
   });
 }
@@ -455,24 +511,6 @@ function authoredWheelRight(clump: RWClump, fromFrame?: number): boolean {
   }
 
   return true;
-}
-
-/** SA scales the axles separately (vehicles.ide gives [front, rear]); the in-engine boost rides on top. */
-/**
- * Fit an authored wheel mesh to the size the data asks for. `vehicles.ide`'s wheel field (a mod's
- * `.settings.txt` line carries the same one) is the wheel DIAMETER IN METRES, not a multiplier — measured
- * against the stock meshes it names: admiral 0.68 vs a 0.700 m mesh, cheetah 0.68 vs 0.688, infernus 0.70 vs
- * 0.700, petro 1.106 vs 1.182. Ratios of 0.94–1.00, i.e. every stock mesh is already modelled at its target.
- *
- * Multiplying by it instead shrank every wheel by a third, which is what prod's 1.25 "wheels read a touch
- * small" boost was patching over (0.70 × 1.25 = 0.875 — still 12 % short, hence the wording). Fitting to the
- * diameter needs no fudge and is a no-op for a mesh authored at size, so ONE rule covers all four wheel
- * conventions instead of exempting the per-corner and container ones.
- */
-function axleScale(wheelScale: readonly [number, number], front: boolean, authoredRadius: number): number {
-  const diameter = authoredRadius * 2;
-
-  return diameter > 0 ? (front ? wheelScale[0] : wheelScale[1]) / diameter : 1;
 }
 
 /** `f_wheel_<mask>` container frames (and their descendants): the wheel sub-model, not body geometry. */
@@ -588,6 +626,21 @@ function flipWheelSide(q: readonly [number, number, number, number]): [number, n
   return [q[1], -q[0] || 0, q[3], -q[2] || 0];
 }
 
+/** Whether `frame` is `ancestor` or sits anywhere under it (hop-guarded, like every walk over mod trees). */
+function frameDescendsFrom(clump: RWClump, frame: number, ancestor: number): boolean {
+  for (let at = frame, hops = 0; at >= 0 && at < clump.frames.length && hops <= clump.frames.length; hops += 1) {
+    if (at === ancestor) {
+      return true;
+    }
+    if (clump.frames[at].parentIndex === at) {
+      break;
+    }
+    at = clump.frames[at].parentIndex;
+  }
+
+  return false;
+}
+
 function frameName(clump: RWClump, frameIndex: number): string {
   return clump.frames[frameIndex]?.name.trim().toLowerCase() ?? '';
 }
@@ -603,11 +656,6 @@ function indicesFor(vertexCount: number, indices: number[]): Uint16Array | Uint3
 }
 
 /**
- * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
- * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
- */
-
-/**
  * The shared wheel atomic, instanced at every `wheel_*_dummy`, each dummy's own orientation honoured and the
  * copies on the far side from {@link authoredWheelRight} turned by {@link flipWheelSide}.
  */
@@ -620,7 +668,6 @@ function instanceWheels(
   sourceFrame?: number,
 ): VehicleWheel[] {
   const wheels: VehicleWheel[] = [];
-  const baseRadius = wheelRadius(clump.geometries[geometryIndex]);
   const tyres = tyreMaterials(clump.geometries[geometryIndex]);
   const authoredRight = authoredWheelRight(clump, sourceFrame);
   for (const [frameIndex, frame] of clump.frames.entries()) {
@@ -629,7 +676,7 @@ function instanceWheels(
       continue;
     }
     const front = match[2] === 'f';
-    const scale = axleScale(wheelScale, front, baseRadius);
+    const fit = wheelFit(wheelScale, front, clump.geometries[geometryIndex]);
     const world = frameWorldTransform(clump.frames, frameIndex);
     const right = match[1] === 'r';
     const mounted: [number, number, number, number] = world ? rotationToQuat(world.rot) : [0, 0, 0, 1];
@@ -638,14 +685,19 @@ function instanceWheels(
       localRotation: right === authoredRight ? mounted : flipWheelSide(mounted),
       localTranslation: world ? world.pos : [0, 0, 0],
       name: frame.name.trim().toLowerCase(),
-      scale,
+      scale: fit.scale,
     });
     appendGeometry(scratch, clump.geometries[geometryIndex], part, textures, 'body', null, tyres);
-    wheels.push({ front, part, radius: baseRadius * scale });
+    wheels.push({ front, part, radius: fit.radius });
   }
 
   return wheels;
 }
+
+/**
+ * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
+ * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
+ */
 
 function lampTag(material: RWMaterial): 'head' | 'tail' | null {
   if (!(material.texture?.name.toLowerCase() ?? '').startsWith('vehiclelights')) {
@@ -711,6 +763,7 @@ function materialSurface(
   kind: VehicleModelSubmesh['kind'],
   tyre = false,
   plate: 'back' | 'face' | null = null,
+  textureAlpha = false,
 ): {
   color: [number, number, number, number];
   klass: number;
@@ -733,7 +786,9 @@ function materialSurface(
   // says it instead (`wheel-tyre.ts`) and the tyre loses reflection AND specular here. The rim beside it is
   // untouched — that one is supposed to shine.
   const reflect = tyre ? ([0, 0, 0, 0] as [number, number, number, number]) : reflectionOf(material);
-  const translucent = color[3] < 250 || textures.hasAlpha(material);
+  // `textureAlpha` is the caller's per-UV-region verdict (`hasAlphaIn`) — a texture transparent somewhere
+  // does not make a submesh that never samples those texels translucent.
+  const translucent = color[3] < 250 || textureAlpha;
 
   return {
     color,
@@ -930,14 +985,117 @@ function shownShell(scratch: Scratch): Uint8Array {
   return shown;
 }
 
+/**
+ * This material's slot in the model's own animation list (plan 099/01), or null for static UVs.
+ *
+ * The rule is the world lane's (`resolveUvAnim`, `packages/cell-weld/src/weld.ts`): the FIRST dict name the
+ * material references that the clump actually carries. A name with no entry, or an entry with no keyframes,
+ * renders STATIC rather than inventing a scroll — a mod that ships a stale reference must still draw.
+ * Channels beyond UV0 are ignored here too; nothing in the game authors one.
+ */
+function uvAnimSlot(scratch: Scratch, material: RWMaterial): null | number {
+  const name = material.effects?.uvAnim?.names[0];
+  if (name === undefined) {
+    return null;
+  }
+  const existing = scratch.uvAnimations.findIndex((animation) => animation.name === name);
+  if (existing !== -1) {
+    return existing;
+  }
+  const animation = scratch.uvAnimDict.get(name);
+  if (!animation || animation.keyframes.length === 0) {
+    return null;
+  }
+  scratch.uvAnimations.push(animation);
+
+  return scratch.uvAnimations.length - 1;
+}
+
+/** SA scales the axles separately (vehicles.ide gives [front, rear]); the in-engine boost rides on top. */
+/**
+ * Fit an authored wheel mesh to the size the data asks for. `vehicles.ide`'s wheel field (a mod's
+ * `.settings.txt` line carries the same one) is the wheel DIAMETER IN METRES, not a multiplier — measured
+ * against the stock meshes it names: admiral 0.68 vs a 0.700 m mesh, cheetah 0.68 vs 0.688, infernus 0.70 vs
+ * 0.700, petro 1.106 vs 1.182. Ratios of 0.94–1.00, i.e. every stock mesh is already modelled at its target.
+ *
+ * Multiplying by it instead shrank every wheel by a third, which is what prod's 1.25 "wheels read a touch
+ * small" boost was patching over (0.70 × 1.25 = 0.875 — still 12 % short, hence the wording). Fitting to the
+ * diameter needs no fudge and is a no-op for a mesh authored at size, so ONE rule covers all four wheel
+ * conventions instead of exempting the per-corner and container ones.
+ */
+function wheelFit(
+  wheelScale: readonly [number, number],
+  front: boolean,
+  geometry: RWGeometry | undefined,
+): { radius: number; scale: number } {
+  const radius = (front ? wheelScale[0] : wheelScale[1]) / 2;
+  const authored = wheelRadius(geometry);
+  // A PLACEHOLDER wheel is not a wheel authored at the wrong size, and fitting it is nonsense: the
+  // GTA 5 Rhino ships its road wheels as one 2 cm triangle with NO WIDTH, because its running gear
+  // is drawn by the `wheel_big_*`/`track_*` meshes instead. Normalising that to a 1 m tyre scaled it
+  // 23.5x and drew six half-metre triangles sweeping round with the wheels (field 2026-08-07). SA
+  // never rescales a wheel mesh — it applies the ide scale as-is — so the marker stays invisible
+  // there. The test is STRUCTURAL: a wheel is a solid of revolution about the axle, so one with no
+  // extent ALONG the axle is not a wheel. Measured on the rhino it is 3.4e-9 m against 3.3 m for
+  // every real wheel in the same model — the bound below is float noise, not a fitted threshold.
+  // The physics radius still comes from the ide, never from the marker's own 2 cm.
+  if (wheelWidth(geometry) <= 1e-6 || authored <= 0) {
+    return { radius, scale: 1 };
+  }
+
+  return { radius, scale: radius / authored };
+}
+
 function wheelRadius(geometry: RWGeometry | undefined): number {
   if (!geometry) {
     return 0.35;
   }
   let max = 0;
-  for (let vertex = 0; vertex < geometry.positions.length; vertex += 3) {
-    max = Math.max(max, Math.hypot(geometry.positions[vertex + 1], geometry.positions[vertex + 2]));
+  const measure = (vertex: number): void => {
+    max = Math.max(max, Math.hypot(geometry.positions[vertex * 3 + 1], geometry.positions[vertex * 3 + 2]));
+  };
+  if (geometry.triangles.length > 0) {
+    for (const tri of geometry.triangles) {
+      measure(tri.a);
+      measure(tri.b);
+      measure(tri.c);
+    }
+  } else {
+    for (let vertex = 0; vertex * 3 < geometry.positions.length; vertex += 1) {
+      measure(vertex);
+    }
   }
 
   return max;
+}
+
+/**
+ * Measured over the vertices the TRIANGLES reference — the set RenderWare actually draws. An ORPHAN vertex
+ * is invisible in-game but poisons a positions scan: coach's `wheel_lf` ships one corrupt orphan at ~5.8e25,
+ * which read as the authored radius and scaled that wheel to nothing (axleScale fits to the diameter).
+ */
+/** Extent along the AXLE (local X) over the drawn vertices — a real wheel's width, ~0 for a marker. */
+function wheelWidth(geometry: RWGeometry | undefined): number {
+  if (!geometry) {
+    return Infinity; // unknown geometry is not evidence of a marker — leave the fit alone
+  }
+  let low = Infinity;
+  let high = -Infinity;
+  const measure = (vertex: number): void => {
+    low = Math.min(low, geometry.positions[vertex * 3]);
+    high = Math.max(high, geometry.positions[vertex * 3]);
+  };
+  if (geometry.triangles.length > 0) {
+    for (const tri of geometry.triangles) {
+      measure(tri.a);
+      measure(tri.b);
+      measure(tri.c);
+    }
+  } else {
+    for (let vertex = 0; vertex * 3 < geometry.positions.length; vertex += 1) {
+      measure(vertex);
+    }
+  }
+
+  return high >= low ? high - low : Infinity;
 }

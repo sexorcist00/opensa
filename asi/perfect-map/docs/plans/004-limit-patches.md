@@ -2,6 +2,13 @@
 
 Part of the [perfect-map ASI chain](readme.md). Depends on [003](003-patch-framework.md) (safe declarative machinery) which depends on [001](001-reverse-engineering.md) (the addresses). This is the whole point of the chain: **remove the int16 ceiling** so builds can add unlimited objects.
 
+> **Historical record — the framework this plan built now lives in [`asi/sdk`](../../../sdk/README.md)**
+> (namespace `asi::`, headers in `asi/sdk/include/asi/`, build rules in `asi/sdk/mk/asi-plugin.mk`),
+> extracted 2026-08-06 by the [asi/sdk chain](../../../sdk/docs/plans/readme.md). Paths to
+> `log/mem/hook/fingerprint/coexistence/patch_table.hpp` and `freestanding.cpp` below are where they
+> were WHEN THIS SHIPPED; the text is left unedited on purpose. `asi/perfect-map` keeps only its
+> catalogue, payloads, config knobs and a thin Makefile.
+
 ## Context
 
 The four unbounded structures, from [ghost-barriers.md](../../../../docs/open-issues/fixed/ghost-barriers.md), in impact order:
@@ -103,6 +110,30 @@ relocates two IPL arrays via `injector` `MakeCALL` growers: `EntitiesPerIpl` (gp
 are our #2/#3 zones — so **#2/#3 defer to OLA** (as designed); **#1 is free** (OLA leaves it stock). Both default
 to `unlimited` in OLA's ini. ⇒ our #1 fix stays necessary and shouldn't collide with OLA at 0x404B4A.
 
-**Open:** our APPLY build still DEFERRED with OLA present (some #1 verify site differed) even though OLA doesn't
-touch 0x404B4A — need the per-site diagnostic run WITH OLA to name it, then adjust coexistence so #1 applies while
-OLA raises the pool (the only config where the bug is reproducible).
+~~**Open:**~~ **CLOSED 2026-08-07 by the field run below.** Our APPLY build had still DEFERRED with OLA present
+(some #1 verify site differed) even though OLA doesn't touch 0x404B4A, and the fix was to run a per-site
+diagnostic WITH OLA and adjust coexistence. That is no longer needed: #1 **applied and worked with OLA
+loaded**, on ProperFixes' 70k-row map. Do not re-run the diagnostic without a fresh reason.
+
+### ✅ Third-party validation at 2.14× the ceiling (2026-08-07)
+
+Field run on the real install: **ProperFixes 2.2.1 with its "increase vegetation distance" optional** —
+57 583 permanent text rows of its own on top of stock's 12 629, i.e. **70 212 map-wide**, in six IPL slots.
+**FLA and OLA were BOTH loaded in both arms** — our own log names them — with OLA owning the IPL zones and
+FLA's entire `[IPL]` section disabled, which is how they coexist. A pool-raiser is required — the symptom cannot exist without a
+pool-raiser, so OLA is the floor the experiment stands on, not a confound. The only variable was the int16
+patch:
+
+- `ProperFixes.asi` removed → **ghost barriers reproduce on its data.** So the mod is genuinely over the
+  ceiling, its own `.asi` is what normally hides that, and **OLA does not lift the int16 truncation** —
+  exactly as the OLA source study above predicted from the source.
+- `perfect-map.asi` in its place → **barriers gone, and the new-game 2dfx crash gone** (#6, the `FxSystem_c`
+  guard — 009).
+
+This is the first time either patch has been proven on a map nobody here authored, and at more than twice the
+int16 ceiling; before it, the evidence was our own 33k repro dial and our own 30 566-row monolith.
+
+**What it does not cover:** ProperFixes uses six IPL slots, so `IplEntityIndexArrays` was never stressed and
+#2/#3 (`004b`) remain unmeasured in the field. The shipping configuration for a dense map is still **an
+adjuster for the pools and slots PLUS our ASI for int16** — which is the argument for building `004b`, not
+against it.

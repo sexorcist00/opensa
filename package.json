@@ -39,6 +39,7 @@
     "apps/engine-lab",
     "apps/sa-map-viewer",
     "packages/cell-weld",
+    "packages/cleo",
     "tools/rw-codec",
     "tools/tool-kit",
     "packages/renderware",
@@ -64,12 +65,15 @@
     "tools/ped-installer",
     "tools/opensa-pack",
     "tools-debug/sa-int16-repro",
-    "asi/perfect-map"
+    "asi/perfect-map",
+    "asi/sdk",
+    "cleo/sdk"
   ],
   "scripts": {
     "arch": "tsx scripts/arch-graph.ts",
     "arch:render": "tsx scripts/arch-graph.ts --svg docs/architecture/assets/packages.svg && tsx scripts/arch-graph.ts --layers app,engine --svg docs/architecture/assets/runtime-packages.svg && tsx scripts/arch-graph.ts --render docs/architecture",
     "build": "tsc -b && vite build",
+    "build:cleo-scripts": "tsx cleo/sdk/src/cli.ts",
     "build:embed:dispatch": "vite build --config apps/dispatch/vite.lib.config.ts",
     "build:game:anderius:opensa": "NODE_OPTIONS=--max-old-space-size=12288 tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/anderius --in ./mods-src/anderius --out ./build/anderius --exclude sa && tsx tools/fetch-pack/src/cli.ts --build ./build/anderius",
     "build:game:carcer:opensa": "NODE_OPTIONS=--max-old-space-size=12288 tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/carcer --in ./mods-src/carcer --out ./build/carcer --exclude sa && tsx tools/fetch-pack/src/cli.ts --build ./build/carcer",
@@ -77,6 +81,8 @@
     "build:game:original:opensa": "NODE_OPTIONS=--max-old-space-size=12288 tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/original --in ./mods-src/original --out ./build/original --exclude sa && tsx tools/fetch-pack/src/cli.ts --build ./build/original",
     "build:game:original:sa": "NODE_OPTIONS=--max-old-space-size=12288 tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/original --in ./mods-src/original --out ./build/original --exclude vehicles,peds,opensa",
     "build:prod": "tsc -b && OPENSA_NO_VIEWERS=true OPENSA_DEBUGGER_HIDE=true vite build",
+    "cleo:opcodes": "tsx packages/cleo/scripts/generate-opcodes.ts",
+    "cleo:whitelist": "tsx cleo/sdk/scripts/generate-whitelist.ts",
     "dev": "vite",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",

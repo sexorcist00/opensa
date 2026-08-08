@@ -1,6 +1,7 @@
 # compiled output
 /dist
 /dist-embed
+cleo/sdk/dist
 apps/engine-lab/dist
 apps/engine-lab/public/pak*/*.ospak
 apps/engine-lab/public/pak*/manifest.json

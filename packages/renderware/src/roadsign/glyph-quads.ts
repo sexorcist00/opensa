@@ -58,6 +58,34 @@ export interface RoadsignGlyphQuads {
   uvs: number[];
 }
 
+/** Rotation Z→X→Y (radians) as a point transformer — allocation-free per corner.
+ *  The order is solver-verified (scripts/debug/solve-roadsign.ts) across every observed sign family, and this
+ *  function IS the convention: anything that has to compose or decompose a roadsign's Euler triple (the LOD
+ *  generators, when they carry a plate onto a rotated instance) reads it from here rather than restating it. */
+export function composeRoadsignRotation(
+  rx: number,
+  ry: number,
+  rz: number,
+): (x: number, y: number, z: number) => [number, number, number] {
+  const [sx, cx] = [Math.sin(rx), Math.cos(rx)];
+  const [sy, cy] = [Math.sin(ry), Math.cos(ry)];
+  const [sz, cz] = [Math.sin(rz), Math.cos(rz)];
+
+  return (x, y, z) => {
+    // Z axis
+    const x1 = x * cz - y * sz;
+    const y1 = x * sz + y * cz;
+    // X axis
+    const y2 = y1 * cx - z * sx;
+    const z2 = y1 * sx + z * cx;
+    // Y axis
+    const x3 = x1 * cy + z2 * sy;
+    const z3 = -x1 * sy + z2 * cy;
+
+    return [x3, y2, z3];
+  };
+}
+
 /** Glyph cell for a character, or null when it draws nothing (`_` = space) / is unknown. */
 export function roadsignGlyphIndex(char: string): null | number {
   if (char === '_' || char === ' ') {
@@ -91,7 +119,7 @@ export function roadsignGlyphQuads(sign: RWRoadsign): null | RoadsignGlyphQuads 
   // into giant letters; the text block is centred vertically instead.
   const charHeight = (plateHeight * TEXT_INSET) / 4;
   const [rx, ry, rz] = sign.rotation.map((deg) => deg * DEG_TO_RAD);
-  const rotate = composeRotation(rx, ry, rz);
+  const rotate = composeRoadsignRotation(rx, ry, rz);
 
   for (let line = 0; line < lineCount; line += 1) {
     const text = sign.lines[line];
@@ -131,30 +159,4 @@ export function roadsignGlyphQuads(sign: RWRoadsign): null | RoadsignGlyphQuads 
   }
 
   return positions.length > 0 ? { colour: sign.colour, positions, uvs } : null;
-}
-
-/** Rotation Z→X→Y (radians) as a point transformer — allocation-free per corner.
- *  The order is solver-verified (scripts/solve-roadsign.ts) across every observed sign family. */
-function composeRotation(
-  rx: number,
-  ry: number,
-  rz: number,
-): (x: number, y: number, z: number) => [number, number, number] {
-  const [sx, cx] = [Math.sin(rx), Math.cos(rx)];
-  const [sy, cy] = [Math.sin(ry), Math.cos(ry)];
-  const [sz, cz] = [Math.sin(rz), Math.cos(rz)];
-
-  return (x, y, z) => {
-    // Z axis
-    const x1 = x * cz - y * sz;
-    const y1 = x * sz + y * cz;
-    // X axis
-    const y2 = y1 * cx - z * sx;
-    const z2 = y1 * sx + z * cx;
-    // Y axis
-    const x3 = x1 * cy + z2 * sy;
-    const z3 = -x1 * sy + z2 * cy;
-
-    return [x3, y2, z3];
-  };
 }

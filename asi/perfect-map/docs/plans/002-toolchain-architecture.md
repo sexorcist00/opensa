@@ -2,6 +2,13 @@
 
 Part of the [perfect-map ASI chain](readme.md). Depends on [001](001-reverse-engineering.md) (we need to know it's function-hooks + raw patches before choosing a hook lib). Delivers a **buildable, empty-but-loading ASI**: cross-compiles on macOS, loads under Wine, logs "hello", patches nothing yet.
 
+> **Historical record — the framework this plan built now lives in [`asi/sdk`](../../../sdk/README.md)**
+> (namespace `asi::`, headers in `asi/sdk/include/asi/`, build rules in `asi/sdk/mk/asi-plugin.mk`),
+> extracted 2026-08-06 by the [asi/sdk chain](../../../sdk/docs/plans/readme.md). Paths to
+> `log/mem/hook/fingerprint/coexistence/patch_table.hpp` and `freestanding.cpp` below are where they
+> were WHEN THIS SHIPPED; the text is left unedited on purpose. `asi/perfect-map` keeps only its
+> catalogue, payloads, config knobs and a thin Makefile.
+
 ## Context
 
 This is the repo's FIRST native/C++ artifact — everything else is TypeScript/Nx. It must fit the monorepo conventions (an `asi/perfect-map/` package) while carrying a C++ build that produces a Win32 PE DLL from macOS with no Windows machine and no MSVC. The user tests everything under Wine already.

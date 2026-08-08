@@ -55,12 +55,14 @@ The second-attempt plan now lives in the 0.6.0 "graphic improvements" draft bund
 street-lamp lighting v2 idea:
 [../0.6.0/plans/04-graphic-improvements/01-baked-directional-shadows.md](../0.6.0/plans/04-graphic-improvements/01-baked-directional-shadows.md).
 
-## All land vehicle types
+## All land vehicle types — PULLED BACK into active work (2026-08-04)
 
-Motorbikes (two-wheel balance controller + rider), bicycles, trucks with trailers (hitch joints),
-buses, utility vehicles (forklift/combine/mower). Air & water explicitly out. Builds on the 0.4.0 physics
-overhaul presets and the 074/08 dynamics layer. Full plan:
-[plans/04-all-vehicle-types/readme.md](plans/04-all-vehicle-types/readme.md).
+Rewritten against a fresh four-way recon (data pipeline, physics, animation, docs) plus the
+`NO_COMMIT/all-veh` corpus (the VSA Editor ability catalogue + a control mod car) and moved to
+[`docs/plans/098-all-land-vehicles/`](../../plans/098-all-land-vehicles/readme.md); the single-file chain
+that lived here (`plans/04-all-vehicle-types/`) is superseded and deleted. Air & water stay out — the
+recon's findings on them are recorded in
+[../0.6.0/plans/05-air-water-rail/readme.md](../0.6.0/plans/05-air-water-rail/readme.md).
 
 ## Rain & weather phenomena (timecyc-driven)
 
@@ -88,23 +90,39 @@ the ASI traffic twin), `3-peds` (crowd rendering, generated silhouette LODs, sid
 
 Full chain: [plans/06-city-life/readme.md](plans/06-city-life/readme.md).
 
-## Basic CLEO support (moved from 0.4.0, 2026-08-01)
+## Basic CLEO support — PULLED BACK into active work (2026-08-04)
 
-Run compiled GTA:SA CLEO `.cs` scripts in the engine: a Sanny-DB SCM decoder (lifting the 0x014B car-gen
-reader already in the tree), an engine-agnostic thread VM, a `CleoHost` on the rigid `.osm` path, a
-`packages/cleo` module, tracer + coverage. Planned in full on 2026-07-19 as `docs/plans/083-cleo-basic/` and
-moved here **unstarted** — nothing about the plan changed, only its cycle.
+Rewritten against a full recon of the 7-mod target corpus and moved to
+[`docs/plans/097-cleo-basic/`](../../plans/097-cleo-basic/readme.md); the chain that lived here
+(`plans/08-cleo-basic/`, the unstarted 083 rethink) is superseded and deleted.
 
-Full chain: [plans/08-cleo-basic/readme.md](plans/08-cleo-basic/readme.md).
+## LOD generators, extended (moved from 0.4.0, 2026-07-19; restructured 2026-08-07)
 
-## LOD generators, extended (moved from 0.4.0, 2026-07-19)
+Two generator upgrades, **reorganised into one folder per TOOL** — the old A1–A3 / B0–B4 split cut across
+tool boundaries, so no plan mapped to a shippable diff. **Procobj density** (`lod-procobj-generator`):
+configurable, biome-aware scatter — forest bushes, mountain rocks, desert cacti. That half is what remains
+here.
 
-Two independent generator upgrades for the REAL-GAME pipeline, each unlocked by an ASI engine fix from
-the [`asi/perfect-map`](../../../asi/perfect-map/docs/plans/readme.md) chain — untouched by the own-engine
-flip (they run in pmb/lod-generator land). **Part A** (needs asi Phase 2, the 2dfx emitter-leak fix):
-LODs carry the full 2dfx richness — coronas everywhere, roadsigns & escalators into baked cells,
-rate-budgeted particle emitters at range. **Part B** (needs asi Phase 1, the int16 limit lift): procobj
-scatter gets configurable, biome-aware density (forest bushes, mountain rocks, desert cacti) with the
-int16-era caps raised for the asi target. Both keep the stock target byte-identical to today.
+**The 2dfx half LEFT this plan on 2026-08-07.** Its foundation shipped (`rw-codec/001` typed payload codecs,
+`lod-common/005` the carry-policy + `006` `transform2dfxEntry`, `opensa-lod-generator/005` the adoption, all
+moved into their tools) and the rest became [plan 100](../../plans/100-2dfx-at-lod-range/readme.md) after two
+measurements changed its shape: a roadsign's coordinates are WORLD, not model-local, and **nothing reads a
+cell LOD's 2dfx section** — both map consumers gather 2dfx from HD models only. So "roadsigns & escalators
+into baked cells, shippable today" was wrong on both counts, and escalators turned out to have no engine code
+at all ([plan 101](../../plans/101-escalators/readme.md)). What stays filed here from that half is the
+far-view emitter RATE BUDGET (`lod-common/03` + `sa-lod-generator/02`), and it should follow plan 100/04.
+
+**The "both are ASI-gated" framing was wrong and has been corrected.** Baked-cell work is not gated at all —
+`opensa-lod-generator` output is OpenSA-only ([restrictions/sa-target.md](../../restrictions/sa-target.md)),
+so real SA never loads it and no plugin is involved. The
+particle half is not waiting either: [`asi/perfect-map`](../../../asi/perfect-map/docs/plans/readme.md)
+Phase 2 shipped (009's patch, 010's pipeline flip), and only its far-view overdraw budget was deferred. On
+the procobj side the binding ceiling is **IPL slots** (measured 2026-08-07: 20 146/32 767 rows but
+**38/40 slots**), which our ASI does not lift — not the int16 row ceiling it does.
+
+How much "more" means is now a number rather than a feeling:
+[plans/07-lod-generators-extended/density-target.md](plans/07-lod-generators-extended/density-target.md)
+costs a shipping mod's density (ProperFixes 2.2.1, **57 583 placed objects**, 2.35× ours) against our own
+build — and finds our layout already **8.3× more row-efficient per object**.
 
 Full chain: [plans/07-lod-generators-extended/readme.md](plans/07-lod-generators-extended/readme.md).

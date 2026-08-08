@@ -193,6 +193,18 @@ load path — `fetchInstallSource` reads the served dir's `/__index` + files ove
 
 **Gotchas** (learned the hard way, keep them):
 
+- **A per-game-loader boot (no `?loader=http-dir`) shows a BEFORE-YOU-PLAY disclaimer** whose OK
+  button must be clicked, and **a fetch-loader boot needs a Cache Storage quota override** — the
+  ephemeral headless profile's default quota is smaller than the ~1.2 GB chunk set, and over-quota
+  downloads die as silent `net::ERR_ABORTED` with zero console errors. `drive.js` handles both
+  since 097/06 (an OK-click that no-ops on http-dir; CDP `Storage.overrideQuotaForOrigin` to 8 GB).
+- **`TAG` re-targets what counts as a report** — `TAG='[cleo]'` turns `drive.js` into a boot-census
+  checker (the 097/06 field checkpoint ran exactly that way); the run exits after `expectReports`
+  matching lines instead of a bench sweep.
+- **`VITE_STATIC_URL` in the local `.env` may point at the machine's LAN IP** (for phone tests) —
+  when a fetch boot hangs with no errors, verify that IP against `ifconfig` before blaming the
+  loader.
+
 - **Headless 1× is NOT pass-comparable to the user's 2× retina display rows** — and a 1× A/B once
   missed a 30–40 % display-only night cost (the plan-16 SSR lesson — that feature was rolled back). `DPR=2` closes the render-target
   gap (verify: screenshot is 2880×1800, HUD `target` ~345 MB vs 92 at 1×), but **user-display rows
@@ -219,6 +231,29 @@ load path — `fetchInstallSource` reads the served dir's `/__index` + files ove
   anything: the shell fails with `command not found` and exit 127 before the harness ever starts, which
   reads exactly like the harness dying at launch. Use `drive.js`'s own budget argument (the millisecond
   value after the tag) instead; there is nothing to wrap.
+- **The boot camera faces SOUTH.** Anything `?spawncar` places north of `?spawn` is behind the camera —
+  a car 8 m north "spawns" but never appears on a screenshot (and one placed 4–6 m north puts the
+  FOLLOW camera inside it). Place field-check targets at `y − 10` or lower. `?spawncar`'s heading is
+  RADIANS: 0 faces north (front toward the boot camera), `4.712` (3π/2) shows the DRIVER side.
+
+### `warnings.js` — the warning catcher (bug rounds)
+
+`drive.js` waits for a report protocol; `warnings.js` (same boot: http-dir, quota override, OK click)
+instead just lives in the world for `<durationMs>` and collects every console warning/error, pageerror
+and WebGPU validation message — deduped with counts — into `<out>.json` with the HUD text and a
+screenshot. `TAGS='[spawncar],[cleo]'` also records matching info lines (a failed spawn says so at info
+level); `KEYS='Wait:6000;KeyW:4000;Enter:700'` holds keys in sequence (`Wait` = idle — let the
+`?spawncar` retry land before pressing keys at the car); `FAIL_ON=error` makes it exit 1 on any error.
+
+```bash
+SRC="http://localhost:3001/build/original/opensa"
+NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/warnings.js \
+  "http://localhost:5173/?loader=http-dir&src=$SRC&cleo=1&spawn=383,-2035,8" wheel-check 45000
+```
+
+The 2026-08-05 bug round ran on exactly this: the ferris-wheel destroyed-texture crash, the coach/bus
+missing driver-side wheel and the coach Enter-range fix were each verified by a `warnings.js` run
+(spawn at the reported spot → walk/press → read the JSON + screenshot), no human at the screen.
 
 ## Unit / e2e lanes
 

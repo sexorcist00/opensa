@@ -1,6 +1,6 @@
 import { normalizeDatPath } from '@opensa/renderware/archive';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 
 import { ADDITIVE_DAT, mergeDataFile } from './data-merge';
 import { mergeGtaDat } from './gta-dat-merge';
@@ -14,6 +14,9 @@ const STREAM_IPL = /_stream\d+\.ipl$/;
 export interface ModScan {
   /** bare name → file path: `.dff`/`.txd`/`.col`/`.ifp` + binary `_stream` IPLs → injected into gta3.img. */
   assets: Map<string, string>;
+  /** dest path under `<out>/cleo/` → file path: everything under a `cleo`/`CLEO` dir (any extension, the
+   *  author-relative structure preserved) + loose `.cs`/`.ini`/`.fxt` (plan 097/06 decision 2). */
+  cleo: Map<string, string>;
   /** bare name → file paths: `object.dat`/`procobj.dat` → additively merged onto stock. */
   dataMerges: Map<string, string[]>;
   /** Whether ≥ 1 loader file was found — i.e. this is a Modloader mod (vs a plain path-overlay mod). */
@@ -33,10 +36,13 @@ export interface ModScan {
  * `object.dat`/`procobj.dat`, and inject the scattered `.dff`/`.txd`/`.col`/`.ifp` into `models/gta3.img` by name.
  * Returns `{ baked:false }` when the mod has no loader file (caller should use the plain path-overlay instead).
  */
-export function bakeMod(modPath: string, outPath: string): { assets: number; baked: boolean; texts: number } {
+export function bakeMod(
+  modPath: string,
+  outPath: string,
+): { assets: number; baked: boolean; cleo: number; texts: number } {
   const scan = scanModloaderMod(modPath);
   if (!scan.loaderFound) {
-    return { assets: 0, baked: false, texts: 0 };
+    return { assets: 0, baked: false, cleo: 0, texts: 0 };
   }
 
   // 1. Register the loader's defs/placements in gta.dat (COLFILE dropped — col is injected into gta3.img below).
@@ -102,18 +108,26 @@ export function bakeMod(modPath: string, outPath: string): { assets: number; bak
   }
   const assets = injectImgEntries(entries, join(outPath, 'models', 'gta3.img'), [...scan.removals]);
 
-  return { assets, baked: true, texts };
+  // 5. Carry the mod's CLEO files to `<out>/cleo/` (the silent-drop era ends loudly — one line per file).
+  for (const [rel, src] of scan.cleo) {
+    writeOut(join(outPath, 'cleo', rel), new Uint8Array(readFileSync(src)));
+    console.log(`mod-installer: cleo → cleo/${rel}`);
+  }
+
+  return { assets, baked: true, cleo: scan.cleo.size, texts };
 }
 
 /**
  * Scan a `--in` mod subtree (any depth, folder layout irrelevant) and bucket every file by **bare name**, the way
  * SA's Modloader resolves one. `loaderFound` tells {@link bakeMod}/`install` whether to bake
- * (a Modloader mod) or fall back to the plain path-overlay. Vehicle `*.settings.txt`, CLEO `.cs`, and prose `.txt`
- * are ignored.
+ * (a Modloader mod) or fall back to the plain path-overlay. CLEO content (anything under a `cleo`/`CLEO` dir +
+ * loose `.cs`/`.ini`/`.fxt`) buckets separately for the `<out>/cleo/` carry; vehicle `*.settings.txt` and prose
+ * `.txt` are ignored.
  */
 export function scanModloaderMod(modPath: string): ModScan {
   const scan: ModScan = {
     assets: new Map(),
+    cleo: new Map(),
     dataMerges: new Map(),
     loaderFound: false,
     refs: { col: [], ide: [], ipl: [] },
@@ -126,6 +140,18 @@ export function scanModloaderMod(modPath: string): ModScan {
     if (path.split(/[\\/]/).some((segment) => isRemoveOriginalDir(segment))) {
       // `Remove original/` — the file NAMES retire gta3.img entries; the contents are never injected.
       scan.removals.add(base);
+      continue;
+    }
+    // The cleo segment is matched against the MOD-relative path only — the corpus itself may live under a
+    // `cleo/` parent on disk, and that outer segment must not turn every file into script content.
+    const modRel = relative(modPath, path).split(/[\\/]/);
+    const cleoAt = modRel.findIndex((segment) => segment.toLowerCase() === 'cleo');
+    if (cleoAt >= 0 && cleoAt < modRel.length - 1) {
+      scan.cleo.set(modRel.slice(cleoAt + 1).join('/'), path);
+      continue;
+    }
+    if (lower.endsWith('.cs') || lower.endsWith('.fxt') || lower.endsWith('.ini')) {
+      scan.cleo.set(base, path);
       continue;
     }
     if (

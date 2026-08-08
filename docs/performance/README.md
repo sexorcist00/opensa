@@ -32,8 +32,9 @@ stays, pointing at the new home).
 | [Bake vehicle sky-occlusion in opensa-pack](deferred-optimizations/vehicle-ao-baking.md) | spawn hitch | 8–78 ms per model, once per model, spawn path only | in reserve — not needed |
 | [Automatic render-scale / quality-tier ladder](deferred-optimizations/render-scale-tier.md) | GPU pass | 0.4–1.4 ms (measured ceiling), targets 345 → 88 MB | measured and refused |
 | [Per-ring texture laziness](deferred-optimizations/per-ring-texture-laziness.md) | memory | under the ~767 MB world-array floor | in reserve |
+| [Compress UV-animation keyframes in the `.osm` DESC](deferred-optimizations/uv-anim-keyframe-encoding.md) | pak bytes · spawn parse | 19 312 B on the one animated model — 94 % of its DESC, 0.49 % of its file | in reserve — noise until animated models are common |
 | [One draw per visible vehicle submesh](deferred-optimizations/vehicle-submesh-draw-batching.md) | draw count | unmeasured; the axis the pass floor lives on | in reserve |
-| [One texture array per vehicle, at its largest texture's size](deferred-optimizations/vehicle-texture-array-buckets.md) | build size · VRAM · spawn hitch | 220 → 34 MB by size buckets, → 26 MB with BC1; ~24 → 3.5 MB VRAM per type | in reserve — a shared dictionary was measured and REFUSED (8 %) |
+| [One texture array per vehicle, at its largest texture's size](applied/vehicle-texture-array-buckets.md) | build size · VRAM · spawn hitch | 220 → 34 MB by size buckets, → 26 MB with BC1; comet.osm 136.6 → 20.3 MB measured | **PULLED 2026-08-04** — forced by the VER2 128 MB entry ceiling, not by frame time; a shared dictionary stays REFUSED (8 %) |
 | [Env-probe cadence and resolution](deferred-optimizations/env-probe-cadence.md) | GPU pass | 0.2–1.9 ms observed, ~5.8 ms worst seen | in reserve |
 | [Foliage fill](deferred-optimizations/foliage-fill.md) | GPU pass (fill) | the 07-21 case was 13.72 → 7.63 ms | parked by decision |
 | [Per-wheel surface probe vs surface-tagged colliders](deferred-optimizations/surface-probe-per-wheel.md) | fixed-step CPU | ~free today (driven car only); ~0.6 ms/step if ever run on all 80 cars | in reserve |

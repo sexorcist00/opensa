@@ -32,6 +32,7 @@ implemented ones, and assembling the release changelog.
 | UI shell (boot/menu/loading/pause)            | [ui-shell.md](ui-shell.md)                         |
 | Mobile on-screen controls (touch)             | [mobile-controls.md](mobile-controls.md)           |
 | Dispatch console (CAD over the map)           | [dispatch-console.md](dispatch-console.md)         |
+| CLEO scripts (decoder, VM, host, native atlas) | [cleo.md](cleo.md)                                 |
 
 Cross-cutting architecture (native `.osm`/`.ostex`/`.oscell`/`.oswire`/`.ospak` formats, engine world
 streaming, the boot/loader chain, the offline build pipeline) lives in

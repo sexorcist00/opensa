@@ -40,6 +40,14 @@ const ALSO = process.env.ALSO ?? '';
   page.on('pageerror', (err) => console.log(`pageerror ${err.message}`));
 
   console.log(`goto ${APP_URL}`);
+  // A fetch-loader boot caches the whole chunk set (~1.2 GB) in Cache Storage; the ephemeral headless
+  // profile's default quota is smaller, and an over-quota download dies as a silent net::ERR_ABORTED
+  // with ZERO console errors (097/06 checkpoint 3). Raise it up front — harmless for http-dir runs.
+  const origin = new URL(APP_URL).origin;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp
+    .send('Storage.overrideQuotaForOrigin', { origin, quotaSize: 8 * 1024 ** 3 })
+    .catch((err) => console.log(`quota override failed (continuing): ${err.message}`));
   await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
   // http-dir loads straight from ?src — click the game and wait; no "Choose game folder" step.
   // WAIT for the button first: `domcontentloaded` fires before React has rendered the menu, so an
@@ -53,6 +61,17 @@ const ALSO = process.env.ALSO ?? '';
   if (await runButton.count()) {
     await runButton.first().click();
   }
+  // The per-game loaders (NOT the ?loader=http-dir override) show a BEFORE-YOU-PLAY disclaimer next;
+  // without this click the run hangs on "waiting for canvas" with no error (097/06 checkpoint 3).
+  const okButton = page.getByText('OK', { exact: true });
+  await okButton
+    .first()
+    .waitFor({ state: 'visible', timeout: 5000 })
+    .then(async () => {
+      await okButton.first().click();
+      console.log('disclaimer accepted');
+    })
+    .catch(() => {}); // no disclaimer (http-dir) — nothing to click
   console.log('game selected, waiting for canvas...');
   await page.waitForSelector('canvas', { timeout: 240000 });
   console.log('canvas up, waiting for bench sweep...');

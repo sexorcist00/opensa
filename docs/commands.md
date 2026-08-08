@@ -208,6 +208,20 @@ npx tsx scripts/debug/touch-controls-check.ts \
 # Tyre smoke dials (089/02) — ?smokeStart=<m/s> ?smokeFull=<m/s> ?smokeRate=<n/wheel/s>
 #   equivalent-slide thresholds + spawn rate (defaults 4 / 12 / 6); the fit: docs/hacks/tyre-smoke-intensity-fit.md
 # Air control (081/06 §1) — ?airCtl=<x> scales the in-air pitch/roll/yaw authority; 0 = off (the jump A/B)
+# CLEO (097) — ON by default since 2026-08-06; ?cleo=0 opts a session out, ?cleo=1 force-enables
+#   (census line `[cleo] N script(s)`; atlas misses print as `[cleo] atlas miss:` lines) ·
+#   ?osmspike=<model> renders one map-object .osm beside the player (the 04 phase-0 spike hook) ·
+#   F2 → CLEO (097/07): runner/trace toggles, thread list with per-tick cost, unimplemented/atlas
+#   coverage with tiers, per-thread trace, step-one
+# Vehicle field checks (097/05) — ?spawncar=model[,x,y,z[,heading]] spawns one car (retries until the
+#   ground streams in; default spot 8 m north of spawn; heading is RADIANS — 0 faces north, the boot
+#   camera looks SOUTH, so put a car you want in frame at y − 10) · ?autoseat=1 seats the player once
+#   it exists
+# Warning catcher (bug rounds) — collects every console warning/error + WebGPU validation message from a
+#   live headless run into JSON (deduped, with counts) + screenshot; KEYS holds keys, TAGS echoes info
+#   lines like [spawncar]. See tools-debug/bench-harness/README.md
+NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/warnings.js \
+  "http://localhost:5173/?loader=http-dir&src=http://localhost:3001/build/original/opensa&cleo=1&spawn=X,Y,Z" out 30000
 # Diff two capture sets (raw harness logs are accepted as-is); --determinism gates a replay check
 npx tsx scripts/phys-compare.ts before.log after.log [--determinism]
 # The regression pack (081/07): a fresh 5-car sweep against the committed accepted-feel matrix
@@ -216,6 +230,29 @@ npx tsx scripts/phys-regression.ts sweep-*.log
 
 Guides: [development/benchmarks.md](./development/benchmarks.md) (perf) ·
 [development/physics-laps.md](./development/physics-laps.md) (`?phys=` laps).
+
+## ASI plugins (real SA, cross-compiled — needs `brew install mingw-w64`)
+
+```bash
+# Build a plugin. Every plugin gets these three via asi/sdk's Makefile fragment.
+npm run build:asi    -w @opensa/perfect-map-asi   # shipping: APPLY, both fixes → dist/perfect-map.asi
+npm run build:verify -w @opensa/perfect-map-asi   # DRY RUN: patches nothing, logs every site's verdict
+npm run build:debug  -w @opensa/perfect-map-asi   # APPLY + verbose site dump + the plugin's own traces
+npm run gen          -w @opensa/perfect-map-asi   # catalogue.ts → src/generated/patches.hpp only
+
+# Per-fix bisection (the flags are the plugin's; EXTRA_CXXFLAGS is the SDK's knob)
+make -C asi/perfect-map APPLY=1 EXTRA_CXXFLAGS='-DPM_FIX_INT16=1 -DPM_FIX_FX2DFX=0'
+# DEBUG=1 without APPLY=1 is refused: every debug switch is read inside an APPLY build.
+
+# Reproducible artifact for an A/B — pin BOTH the PE timestamps (already in the link line) and the
+# banner's __DATE__/__TIME__, or two builds a second apart differ:
+SOURCE_DATE_EPOCH=315532800 make -C asi/perfect-map clean && \
+  SOURCE_DATE_EPOCH=315532800 make -C asi/perfect-map APPLY=1
+```
+
+The verdict lives in `perfect-map-asi.log` next to `gta_sa.exe`. **Read its first line before anything
+else** — `built <date> <time> (APPLY|verify-only)` is the only thing identifying which artifact the game
+actually loaded, and a verify-only build patches nothing.
 
 ## Debug & repro
 
@@ -234,7 +271,14 @@ npx tsx scripts/crosstxd-fix.ts   # → NO_COMMIT/crossTxdFix/<mod>/gta3_img/<tx
 
 ```bash
 npm test / npm run test:coverage     # vitest (+ coverage floors)
-npm run test:fixtures                # real-GTA fixtures + viewer e2e assets
+npm run test:fixtures                # real-GTA fixtures + viewer e2e assets (+ the CLEO corpus from mods-src/original)
+npm run cleo:opcodes                 # regenerate packages/cleo opcode table from the vendored Sanny sa.json (pin: packages/cleo/vendor/README.md)
+npm run build:cleo-scripts           # CLEO authoring SDK: compile cleo/scripts/* to cleo/sdk/dist/*.cs (cleo/sdk plan 001: discovery+report; assembly lands with 002-004)
+npm run cleo:whitelist               # regenerate the SDK's dual-target whitelist (real CLEO 4 x VM registry; drift test guards staleness)
+npx tsx scripts/debug/scm-disasm.ts <file.cs|dir> [--census|--strings|--json] [--out <dir>]   # disassemble compiled CLEO scripts (097/02)
+npx tsx scripts/debug/cleo-census.ts [paths…] [--json]                                        # opcode frequency/coverage table over a CLEO corpus (097/02; status column = VM registry join)
+npx tsx scripts/debug/cleo-run.ts <file.cs> [--ticks 60] [--fps 60] [--calls 60]              # run a CLEO script headless on the VM, print the host-call trace (097/02+03)
+npx tsx scripts/debug/cleo-trace-fixtures.ts                                                  # regenerate the corpus trace snapshots (tests/custom/cleo-traces/, 097/07; review the diff — it IS the change)
 npm run e2e / e2e:ui / e2e:update    # playwright
 npm run lint / format                # tsc --noEmit + eslint / prettier+eslint --fix
 npm run arch / arch:render           # package graph to stdout / regenerate docs/architecture/assets
