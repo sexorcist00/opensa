@@ -28,10 +28,24 @@ columns, steam vents, fountains — 113 entries across the shipped map, each nam
   are rebuilt only when the streamed cell set changes.
 - **Map plumbing** — 2dfx type-1 entries are frame-transformed to world space by the converter
   (`tools/opensa-pack`) and stored as per-cell anchors; the host resolves each anchor's `effectName`
-  against the loaded library.
-- **Live config** — `graphics.effects { enabled, drawDistance }` (init config + debugger →
-  Graphics → "World effects"): `drawDistance` REPLACES each system's authored CULLDIST (vanilla fire
-  culls at 35 m — too close), so the CPU cutoff lands where the GPU fade hits zero.
+  against the loaded library. **Both levels since plan 100/03**: a LOD bundle takes its anchors from the
+  baked cell model's own 2dfx section, so an emitter survives the HD ring instead of vanishing at ~440 u.
+  The stock map places **878 anchors across 13 systems** (`insects` 402, `vent` 206, `vent2` 162, `fire` 45,
+  the four smokes 42 between them, the rest single digits).
+- **Draw distance is each system's authored `cullDist`** (plan 100/04). Until then one flat 300 was written
+  into every system record, so a cigarette plume rendered 20× further than authored while a factory plume
+  stopped at 300 whatever the streamer kept resident. `fxDrawDistance` reads the fxp value per system, with
+  exactly two recorded departures: the four smoke systems take the host's LOD radius (so a plume lives as
+  long as the chimney it rises from — [hack](../hacks/smoke-drawn-to-world-edge.md)) and
+  `insects`/`cigarette_smoke` are floored at 100 instead of their authored 15
+  ([hack](../hacks/tiny-fx-distance-floor.md)). 300 survives only as the fallback for a modded system that
+  authors no `cullDist`. Shipped values: `vent`/`vent2`/`waterfall_end` 25, `water_fountain` 30,
+  `fire`/`flame` 35, `prt_*` 50, `carwashspray` 70, `insects`/`cigarette_smoke` 100, smoke → LOD radius.
+- **Live config** — `graphics.effects { enabled, drawDistance }` (init config + debugger → Graphics →
+  "World effects"). **Only `enabled` does anything** (`engine.particlesEnabled`). `drawDistance` is a
+  leftover of the plan-044 three-renderer lane: nothing on the own engine reads it, so the debugger's
+  EFFECTS DISTANCE slider moves a number that reaches no code. Found by the plan-100 audit; either wire it
+  as a scale over the authored values or delete both — it may not stay a knob that lies.
 - **Escalators (2dfx type 10)** — `RWEscalator` parsing only (geometry-local path
   start → bottom → top → end + direction). The moving-step RENDERER was deleted with the three
   renderer (074/13) and has **no replacement on the engine** — escalators currently do not move.

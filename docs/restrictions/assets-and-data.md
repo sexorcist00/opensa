@@ -127,6 +127,25 @@ not being read yet.
 
 **Caught:** no.
 
+## A 2dfx entry's coordinate SPACE decides both its transform and its OWNER
+
+Read the type's `space` off `@opensa/lod-common`'s carry policy (`spaceOf`, measured by
+`scripts/debug/two-dfx-space.ts`) before writing any code that moves or files an entry. Type 7 roadsign is
+**world**, unanimously (489/489); every other type is model-local. Two rules follow, and a design that
+breaks either produces content that looks placed and is not:
+
+1. **Transform by the space, not by the type.** A world-space entry is re-based by the cell origin alone —
+   never by the instance transform, never by the geometry frame. The dead first attempt at plan 100 would
+   have routed plates through the instance transform and thrown every one about a kilometre.
+2. **A world-space entry belongs to the cell its POSITION falls in, not to the cell of the instance
+   carrying it.** These differ for **131 of the map's 489 plates**. File it by the owning instance in one
+   consumer and by world position in another and the same plate lands on two cell keys — which defeats the
+   streamer's one-level-per-slot rule and draws it twice. This is why `cell-weld` takes LOD roadsigns from
+   `opensa-pack`'s world-keyed pre-pass while it takes lights and emitters off the LOD model itself.
+
+**Caught:** no, in both directions. A misplaced plate renders perfectly a kilometre away, and a doubled one
+is two correct plates in the same spot — z-fighting at best, invisible at worst. Nothing asserts either.
+
 ## `.osm` indices are BYTES
 
 Decode by `index16` or every number belongs to somebody else. This mis-read already produced one wrong
