@@ -201,3 +201,11 @@ this adapter and empty `spans`. The headline claim — a real district, on a rea
 no container has one: unpack the refreshed `prebuilt/opensa-webapp.tar.gz`, run `npm run phone` (which now
 converts the pinned district), open the inventory URL it prints, let it settle past 300 frames, and paste the
 JSON. That capture is what closes 1/01 — with, for the first time, an owner for the 94 %.
+
+**Two variables moved between that capture and the 08-07 row, and the row must say so.** The ground changed
+(Ganton → the pinned district) and, since [097/2-02](../097-platform-reach/2-universal-textures/readme.md)
+landed, the phone workflow writes **ASTC** rather than RGBA8 by default — a quarter of the texture memory on
+the same texels. So the pinned-district capture is the chain's **new baseline**, not a comparison against
+239 MB / 31 fps: the old row was already off-series. What it must not do is claim a delta against it. The pak
+records its own format now (`report.json` → `build.textures`), so the row can state which. `TEXTURES=rgba8`
+takes the other side when the format itself is the question.
