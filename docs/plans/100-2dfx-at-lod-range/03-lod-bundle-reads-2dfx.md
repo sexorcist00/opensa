@@ -102,16 +102,18 @@ nothing downstream could tell it apart — the count is the only thing that can.
 
 **Read 2026-08-08 and the answer is clean, at both layers:**
 
-- **In the pak**, every cell's LOD level carries EXACTLY its HD level's quads — the cell holding the
-  `se_bit_12` board (`1,3`) reads 146 at both, and so does every other cell in the probe. That is the
-  world-keyed pre-pass feeding both levels one list: nothing lost, nothing welded twice.
-- **In the field**, standing north of that board with the camera aimed at it: **1240 quads at 200 u, 1318 at
-  600 u.** Past the HD boundary the number does not fall — it rises, because a further view frames more
-  cells, each carrying its own plates.
+- **In the pak**, every cell's LOD level carries EXACTLY its HD level's quads. Map-wide on the canonical
+  pak: **334 of 1137 cells carry plates, 50 552 glyph quads in total, and ZERO disagreements** between a
+  cell's two levels (the one apparent mismatch is a cell with no LOD level at all, carrying zero either
+  way). That is the world-keyed pre-pass feeding both levels one list: nothing lost, nothing welded twice.
+- **In the field**, standing north of the `se_bit_12` board with the camera aimed at it: **2460 quads at
+  200 u, 1594 at 600 u.** Past the HD boundary the count does not fall to zero — the LOD level is drawing
+  plates. (The two numbers are not a ratio to read: what changes with distance is how many CELLS the view
+  frames, not whether a level carries text.)
 
-Measured on a rect-limited probe pak (`--rect -1,1,3,8`, `--no-ao`, so NOT a shipping build) welded from the
-kept `.work/opensa-lod`. **The canonical `build/original/opensa` pak predates minor 8 and reads `signs 0` —
-which means UNKNOWN, not none, until the next full rebuild.**
+Read on the canonical pak, `buildTime 13:19 08-08-2026` — the re-pack that put minor 8 into the shipping
+build. Only the `pack` stage was re-run: the change lives in `cell-weld`, its input `.work/opensa-lod`
+survived the first build under `--keep-work`, and nothing upstream of it moved.
 
 ## Measurements / notes
 

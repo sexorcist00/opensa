@@ -52,7 +52,7 @@ pipeline deletes as it consumes it, so no earlier tree could be asked whether a 
 | a chimney smokes past the HD boundary ([03](03-lod-bundle-reads-2dfx.md)) | **PASS** — LV plant stacks plume at 300/400/440/**600 u** |
 | nothing doubles at the transition ([03](03-lod-bundle-reads-2dfx.md)) | **PASS** — one plume per stack at every distance, including inside the hysteresis band |
 | the smoke departure's look ([04](04-authored-cull-distance.md), [hack](../../hacks/smoke-drawn-to-world-edge.md)) | **PASS** — and the cooling-tower puffs visible at 300 u are gone by 600, so the per-system table is live, not a blanket raise |
-| plates survive to LOD range ([03](03-lod-bundle-reads-2dfx.md)) | **PASS, by COUNT not by eye** — `.oscell` minor 8 + `EngineStats.roadsignQuadsRecorded`: every cell's LOD level carries its HD level's quads exactly (the board's cell 146 = 146), and the field reads 1240 quads at 200 u, 1318 at 600 u |
+| plates survive to LOD range ([03](03-lod-bundle-reads-2dfx.md)) | **PASS, by COUNT not by eye** — `.oscell` minor 8 + `EngineStats.roadsignQuadsRecorded`: map-wide 334 of 1137 cells carry plates and 50 552 quads with ZERO hd/lod disagreements, and the field reads 2460 quads at 200 u, 1594 at 600 u |
 | `insects`/`cigarette_smoke` floor ([hack](../../hacks/tiny-fx-distance-floor.md)) | **NOT CLOSED** — no shot framed one |
 
 The rebuild that carried this was granted by lifting plan 07's ban on rebuilding mid-chain: a rebuild is now

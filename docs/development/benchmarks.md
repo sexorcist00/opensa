@@ -245,7 +245,8 @@ load path — `fetchInstallSource` reads the served dir's `/__index` + files ove
   something big (a smoke plume) or add a counter to the engine; do not spend runs on a smudge. The roadsign
   case took the second road: the HUD's `signs N` (`EngineStats.roadsignQuadsRecorded`, `.oscell` minor 8)
   counts roadsign glyph quads in the cells drawn this frame. **`signs 0` on a pre-minor-8 pak means UNKNOWN,
-  not none** — check the pak's `buildTime` before reading it as a verdict.
+  not none** — check the pak's `buildTime` before reading it as a verdict. The canonical `build/original`
+  pak carries it from `13:19 08-08-2026` on.
 - **A diagnostic that needs new pak bytes does NOT need a full rebuild.** With `.work` kept, re-pack a RECT
   (`opensa-pack --game build/<game>/.work/opensa-lod --out build/<probe> --rect x0,y0,x1,y1 --no-ao`) and
   serve that dir: 80 cells in a minute instead of 1137 in an hour. It is a diagnostic pak, not a shipping

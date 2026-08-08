@@ -164,7 +164,7 @@ npx tsx scripts/debug/touch-controls-check.ts \
 #   coverage with tiers, per-thread trace, step-one
 # HUD `signs N` — roadsign glyph quads in the cells drawn this frame (.oscell minor 8). The instrument for
 #   "do plates survive to LOD range", which a screenshot cannot answer (~8 px at 440 u). 0 on a pre-minor-8
-#   pak means UNKNOWN, not none — check the pak manifest's buildTime first
+#   pak means UNKNOWN, not none — check the pak manifest's buildTime first (canonical: 13:19 08-08-2026 on)
 # Camera aim (100 field checks) — ?look=x,y,z points the boot camera at a GTA world point and turns the
 #   ped with it (auto-centre then holds the aim). Without it every headless probe stares SOUTH, since
 #   look is pointer-only and the harness has no mouse. Pair with ?spawn: `?spawn=2033,2832,80&look=2632,2832,127`
