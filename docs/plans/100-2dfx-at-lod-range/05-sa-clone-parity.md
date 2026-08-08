@@ -1,7 +1,7 @@
 # 05 — The SA clones carry the same three types on both paths
 
 Part of [100 — 2dfx survives to LOD range](readme.md). Lands in `tools/sa-lod-generator`. Depends on
-[01](01-policy-space-and-cell-carry.md) only — this is the real-SA half and shares no code with the OpenSA
+[01](../../../tools/lod-common/docs/plans/007-2dfx-space-and-cell-carry.md) only — this is the real-SA half and shares no code with the OpenSA
 steps.
 
 ## Context

@@ -27,7 +27,10 @@ row but its chain was superseded by 097). Newest first:
   behaviour does not exist. Step 00 is research first: recover SA's own step spacing, speed and carry rule
   (and find out whether the steps are objects or a texture scroll — if the latter, plan 099's UV lane may
   already do it) before any constant of ours is fitted. Corpus is 5 entries in 4 models, fully enumerable.
-- **[100 — 2dfx survives to LOD range](./100-2dfx-at-lod-range/readme.md)** — **PLANNED 2026-08-07**:
+- **[100 — 2dfx survives to LOD range](./100-2dfx-at-lod-range/readme.md)** — **IN PROGRESS** (planned
+  2026-08-07; steps 01 + 02 shipped 2026-08-08 and moved into
+  [lod-common/007](../../tools/lod-common/docs/plans/007-2dfx-space-and-cell-carry.md) +
+  [opensa-lod-generator/006](../../tools/opensa-lod-generator/docs/plans/006-cell-bake-carries-effects.md)):
   chimney smoke, street lamps and street-name plates die at the HD boundary (`HD_RADIUS` 380), so a
   district past ~440 u draws to 1000 u dark, smokeless and unsigned. Both LOD generators bake the three
   types that have a consumer (0 light, 1 particle, 7 roadsign) and `cell-weld` starts reading what the cell

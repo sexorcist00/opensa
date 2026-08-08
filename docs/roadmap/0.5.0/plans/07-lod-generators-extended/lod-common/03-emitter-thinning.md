@@ -1,7 +1,7 @@
 # lod-common/03 — Emitter thinning (the far-view rate budget)
 
-Part of [07 — LOD generators, extended](../readme.md). Depends on [01](01-2dfx-keep-policy.md) /
-[02](02-2dfx-entry-transform.md) and on the budget model defined by
+Part of [07 — LOD generators, extended](../readme.md). Depends on [01](../../../../../../tools/lod-common/docs/plans/005-2dfx-keep-policy.md) /
+[02](../../../../../../tools/lod-common/docs/plans/006-2dfx-entry-transform.md) and on the budget model defined by
 [03-asi/010](../../../../../../asi/perfect-map/docs/plans/010-pipeline-keep-2dfx.md). Split out of the old A3
 so the shared mechanism is not welded to the real-SA consumer that waits on an ASI fix.
 

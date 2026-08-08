@@ -1,7 +1,7 @@
 # 03 — The LOD bundle reads the cell bake's 2dfx
 
 Part of [100 — 2dfx survives to LOD range](readme.md). Lands in `packages/cell-weld` (+ `tools/opensa-pack`).
-Depends on [02](02-cell-bake-carries-effects.md). **This is the step that makes the whole OpenSA line
+Depends on [02](../../../tools/opensa-lod-generator/docs/plans/006-cell-bake-carries-effects.md). **This is the step that makes the whole OpenSA line
 visible** — without it, 01 and 02 write bytes nobody reads.
 
 ## Context
