@@ -105,7 +105,7 @@ with it (plan 100 step 05); what stays here is the far-view emitter RATE BUDGET 
    | For | Capture | 2026-08-08 run |
    | --- | --- | --- |
    | plan 100/03 | 2dfx alive at LOD range — a chimney smoking past the HD boundary | **done** — LV plant stacks plume at 600 u |
-   | plan 100/03 | a readable plate at LOD range | **not capturable** — 2.4 m at 440 u is ~8 px; wants an engine-side quad count |
+   | plan 100/03 | plates survive to LOD range | **done, by COUNT** — `.oscell` minor 8 + HUD `signs N`; LOD level carries the HD level's quads exactly |
    | plan 100/03 | nothing DOUBLES at the transition band | **done** — one plume per stack at 300/400/440/600 u |
    | plan 100/04 | the look verdict for both `docs/hacks/` entries | **smoke done**, `insects`/floor not framed |
    | 07/04 | the streaming + frame baseline at TODAY's density, so a later density arm has a before | **done** — 8-scene sweep |
@@ -114,7 +114,9 @@ with it (plan 100 step 05); what stays here is the far-view emitter RATE BUDGET 
 
    **What the run taught about the manifest itself:** two of its rows were written as if a screenshot could
    answer anything a human eye could. Angular size decides that, not the build — a 2.4 m plate at LOD range
-   is ~8 px, and no rebuild changes it. A capture item should name the INSTRUMENT, not just the sight.
+   is ~8 px, and no rebuild changes it. A capture item should name the INSTRUMENT, not just the sight. The
+   plate row was then closed by BUILDING that instrument (`.oscell` minor 8, a roadsign quad count summed
+   over visible cells), which cost less than the rounds spent squinting at a smudge would have.
 
    Keep the run re-usable with **`--keep-work`** — it is what leaves `<out>/.work` behind on a FULL run, so a
    second question can be asked of the same build instead of buying another one. `--until <stage>` also keeps

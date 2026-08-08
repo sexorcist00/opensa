@@ -62,6 +62,7 @@ function cellBytes(overrides: Partial<Oscell> = {}): Uint8Array {
     origin: [0, 0, 0],
     particles: [],
     placements: [],
+    roadsignQuads: 0,
     vertexCount,
     vertexData: new Uint8Array(vertexCount * OSCELL_VERTEX_STRIDE),
     ...overrides,
@@ -242,6 +243,17 @@ describe('Engine frame decisions', () => {
       engine.cells.load('far', cellBytes({ bounds: [0, 0, 0, 10], origin: [100000, 0, 0] }));
 
       expect(engine.frame(camera()).trianglesRecorded).toBe(2);
+    });
+
+    it('counts the roadsign glyph quads of VISIBLE cells only', async () => {
+      // The reading plan 100/03 could not take by eye: a 2.4 m plate at LOD range is ~8 px, so whether a
+      // far cell still carries its text has to be a NUMBER. It must fall to zero when the cell carrying it
+      // is culled, or standing back from a sign would read as "still drawn".
+      const engine = await bootedEngine();
+      engine.cells.load('near', cellBytes({ roadsignQuads: 12 }));
+      engine.cells.load('far', cellBytes({ bounds: [0, 0, 0, 10], origin: [100000, 0, 0], roadsignQuads: 900 }));
+
+      expect(engine.frame(camera()).roadsignQuadsRecorded).toBe(12);
     });
 
     it('keeps drawing a cell as the camera moves within range, and stops beyond it', async () => {

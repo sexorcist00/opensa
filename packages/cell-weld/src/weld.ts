@@ -113,6 +113,9 @@ export interface WeldStats {
   particles: number;
   /** Placement-mapper rows written (minor 6) — the debugger's per-object identity. */
   placements: number;
+  /** GLYPH QUADS those entries welded (minor 8) — the number the engine sums over visible cells to answer
+   *  "do plates still draw at LOD range", which no screenshot can at ~8 px. One sign is many quads. */
+  roadsignQuads: number;
   /** 2dfx roadsign entries welded as beam-class text (plan 076). */
   roadsigns: number;
   skippedTimed: number;
@@ -205,6 +208,7 @@ export function weldCellParts(
     indices: 0,
     particles: 0,
     placements: 0,
+    roadsignQuads: 0,
     roadsigns: 0,
     skippedTimed: 0,
     timedObjects: 0,
@@ -280,7 +284,7 @@ export function weldCellParts(
   // one-level-per-slot rule would not stop them being resident together, and the plate would draw twice.
   // Bucketing by world position keeps every plate on exactly ONE key, at both levels.
   if (roadsigns && roadsigns.length > 0) {
-    weldRoadsigns(roadsigns, buckets, planner, originEngine);
+    stats.roadsignQuads = weldRoadsigns(roadsigns, buckets, planner, originEngine);
     stats.roadsigns = roadsigns.length;
   }
 
@@ -535,6 +539,7 @@ function assemble(
     origin,
     particles: channels.particles,
     placements: mapper.placements,
+    roadsignQuads: stats.roadsignQuads,
     vertexCount,
     vertexData,
   };
@@ -1074,9 +1079,10 @@ function weldRoadsigns(
   buckets: Map<string, WeldBucket>,
   planner: TexturePlanner,
   origin: readonly [number, number, number],
-): void {
+): number {
   const resolved = planner.resolve('particle', 'roadsignfont', [255, 255, 255, 255], false);
   const layerValue = resolved.layer | (resolved.stochastic ? 0x8000 : 0);
+  let welded = 0;
   for (const sign of roadsigns) {
     const [pr, pg, pb] = ROADSIGN_PALETTE[sign.colour] ?? ROADSIGN_PALETTE[0];
     const bucket = bucketFor(buckets, resolved.arrayRef, 3, 1, null, null); // beam class (3), double-sided (1)
@@ -1119,7 +1125,10 @@ function weldRoadsigns(
       }
       bucket.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
+    welded += quadCount;
   }
+
+  return welded;
 }
 
 /** Encode one bucket's scratch rows into the interleaved payload; true when any emissive mask fired. */

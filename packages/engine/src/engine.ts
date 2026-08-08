@@ -167,6 +167,15 @@ export interface EngineStats {
   /** Env-probe span (face render + mips), ms — the plan-16 ≤0.5 ms gate is measured. 0 when skipped. */
   gpuProbeMs: number;
   residencyBytes: number;
+  /**
+   * Roadsign GLYPH QUADS in the cells drawn this frame (`.oscell` minor 8). Roadsign text welds into an
+   * ordinary beam bucket, so nothing downstream can tell it apart — and a 2.4 m plate at LOD range is ~8 px,
+   * which is below what a screenshot can be asked. This is the reading that answers "do plates survive to
+   * LOD range" (plan 100/03): drive out past the HD boundary and watch whether it holds or falls to zero.
+   * Counted per cell at LOAD and summed over VISIBLE cells, exactly like {@link trianglesRecorded}, so it
+   * costs one add per cell per frame. 0 on a pre-minor-8 pak means UNKNOWN, not none.
+   */
+  roadsignQuadsRecorded: number;
   submitMs: number;
   /**
    * Triangles submitted this frame — baked cell bundles (counted at load) plus every out-of-bundle
@@ -787,6 +796,7 @@ export class Engine {
     gpuPostMs: 0,
     gpuProbeMs: 0,
     residencyBytes: 0,
+    roadsignQuadsRecorded: 0,
     submitMs: 0,
     trianglesRecorded: 0,
   };
@@ -1186,6 +1196,7 @@ export class Engine {
     let draws = 0;
     let total = 0;
     let triangles = 0;
+    let roadsignQuads = 0;
     this.frameTriangles = 0;
     for (const cell of this.cells.all()) {
       total += 1;
@@ -1215,6 +1226,7 @@ export class Engine {
         }
         draws += cell.draws;
         triangles += cell.triangles;
+        roadsignQuads += cell.roadsignQuads;
       }
     }
     // Blend phase back-to-front by CELL distance — cross-cell transparency ordering (per-group order inside
@@ -1350,6 +1362,7 @@ export class Engine {
     this.statsValue.cellsVisible = bundles.length;
     this.statsValue.drawsRecorded = draws;
     this.statsValue.trianglesRecorded = triangles + this.frameTriangles;
+    this.statsValue.roadsignQuadsRecorded = roadsignQuads;
     this.statsValue.residencyBytes = this.resources.totalBytes();
 
     return this.statsValue;

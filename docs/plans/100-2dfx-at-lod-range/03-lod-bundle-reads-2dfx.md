@@ -93,11 +93,25 @@ only thing left to carry an emitter, and where before this chain there was nothi
 hysteresis band, which is where two resident levels would have shown as a pair. That is the field's answer to
 the `slot.current` argument this step's code makes; the argument now has a measurement under it.
 
-**The PLATE half is NOT closed, and not for want of a build.** A street-name plate is 2.4 m wide, so at the
-440 u where the question lives it subtends ~8 px in a 1440-wide capture — "readable" is not physically
-available there, and "present vs blank" is a judgement about a smudge. The pak counters say the plates ARE in
-the LOD bundles (roadsigns 481 → 962, both levels). What is missing is an instrument, not a rebuild: an
-engine-side count of roadsign quads actually drawn would settle it in one line, and no screenshot will.
+**The PLATE half was NOT closable by eye, so it got an instrument instead.** A street-name plate is 2.4 m
+wide, so at the 440 u where the question lives it subtends ~8 px in a 1440-wide capture — "readable" is not
+physically available there, and "present vs blank" is a judgement about a smudge. `.oscell` **minor 8** now
+records the roadsign GLYPH-QUAD count per cell and the engine sums it over VISIBLE cells
+(`EngineStats.roadsignQuadsRecorded`, HUD `signs N`). Roadsign text welds into an ordinary beam bucket, so
+nothing downstream could tell it apart — the count is the only thing that can.
+
+**Read 2026-08-08 and the answer is clean, at both layers:**
+
+- **In the pak**, every cell's LOD level carries EXACTLY its HD level's quads — the cell holding the
+  `se_bit_12` board (`1,3`) reads 146 at both, and so does every other cell in the probe. That is the
+  world-keyed pre-pass feeding both levels one list: nothing lost, nothing welded twice.
+- **In the field**, standing north of that board with the camera aimed at it: **1240 quads at 200 u, 1318 at
+  600 u.** Past the HD boundary the number does not fall — it rises, because a further view frames more
+  cells, each carrying its own plates.
+
+Measured on a rect-limited probe pak (`--rect -1,1,3,8`, `--no-ao`, so NOT a shipping build) welded from the
+kept `.work/opensa-lod`. **The canonical `build/original/opensa` pak predates minor 8 and reads `signs 0` —
+which means UNKNOWN, not none, until the next full rebuild.**
 
 ## Measurements / notes
 

@@ -82,6 +82,10 @@ export interface CellHandle {
     model: string;
     txd: string;
   }[];
+  /** Roadsign glyph quads welded into this cell (`.oscell` minor 8) — summed per visible cell into
+   *  `EngineStats.roadsignQuadsRecorded`. Read off the header, not counted: the quads are indistinguishable
+   *  from any other beam geometry once welded. */
+  roadsignQuads: number;
   /** Triangles baked into the two bundles — summed per visible cell into `EngineStats.trianglesRecorded`.
    *  Counted once at load because a bundle is recorded once and never rebuilt. */
   triangles: number;
@@ -324,6 +328,7 @@ export class CellStore {
         z: particle.position[2] + cell.origin[2],
       })),
       placements: this.debugPicking ? worldPlacements(cell) : [],
+      roadsignQuads: cell.roadsignQuads,
       triangles: bundleGroups.reduce((sum, group) => sum + group.indexCount / 3, 0),
       uniform,
       vertexBuffer,

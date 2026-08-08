@@ -162,6 +162,9 @@ npx tsx scripts/debug/touch-controls-check.ts \
 #   ?osmspike=<model> renders one map-object .osm beside the player (the 04 phase-0 spike hook) ·
 #   F2 → CLEO (097/07): runner/trace toggles, thread list with per-tick cost, unimplemented/atlas
 #   coverage with tiers, per-thread trace, step-one
+# HUD `signs N` — roadsign glyph quads in the cells drawn this frame (.oscell minor 8). The instrument for
+#   "do plates survive to LOD range", which a screenshot cannot answer (~8 px at 440 u). 0 on a pre-minor-8
+#   pak means UNKNOWN, not none — check the pak manifest's buildTime first
 # Camera aim (100 field checks) — ?look=x,y,z points the boot camera at a GTA world point and turns the
 #   ped with it (auto-centre then holds the aim). Without it every headless probe stares SOUTH, since
 #   look is pointer-only and the harness has no mouse. Pair with ?spawn: `?spawn=2033,2832,80&look=2632,2832,127`

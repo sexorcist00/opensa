@@ -242,7 +242,14 @@ load path — `fetchInstallSource` reads the served dir's `/__index` + files ove
   terrain (desert, water's edge), and confirm from the shot, not from the coordinates.
 - **Angular size decides what a screenshot can answer.** A 2.4 m roadsign plate at 440 u is ~8 px in a
   1440-wide capture: "is it readable" has no answer there at any build quality. Judge distance checks on
-  something big (a smoke plume) or add a counter to the engine; do not spend runs on a smudge.
+  something big (a smoke plume) or add a counter to the engine; do not spend runs on a smudge. The roadsign
+  case took the second road: the HUD's `signs N` (`EngineStats.roadsignQuadsRecorded`, `.oscell` minor 8)
+  counts roadsign glyph quads in the cells drawn this frame. **`signs 0` on a pre-minor-8 pak means UNKNOWN,
+  not none** — check the pak's `buildTime` before reading it as a verdict.
+- **A diagnostic that needs new pak bytes does NOT need a full rebuild.** With `.work` kept, re-pack a RECT
+  (`opensa-pack --game build/<game>/.work/opensa-lod --out build/<probe> --rect x0,y0,x1,y1 --no-ao`) and
+  serve that dir: 80 cells in a minute instead of 1137 in an hour. It is a diagnostic pak, not a shipping
+  one — say so wherever its numbers land, and do not benchmark against it.
 
 ### `warnings.js` — the warning catcher (bug rounds)
 

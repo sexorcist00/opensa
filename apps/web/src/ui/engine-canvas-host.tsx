@@ -2131,7 +2131,7 @@ function hudText(frame: {
     `OWN ENGINE (074/10 B3) — walk: WASD, run: Shift, jump: Space, click = capture mouse (Esc frees)\n` +
     `        F2 = debugger · K+M = photo camera (ARROWS move, PgUp/PgDn lift, mouse looks)\n` +
     `frame   ${avg.toFixed(2)} ms (${(1000 / Math.max(avg, 0.001)).toFixed(0)} fps)\n` +
-    `submit  ${stats.submitMs.toFixed(2)} ms · GPU ${ms(stats.gpuPassMs)} ms · post ${ms(stats.gpuPostMs)} ms · probe ${ms(stats.gpuProbeMs, 'off')} ms · draws ${stats.drawsRecorded}\n` +
+    `submit  ${stats.submitMs.toFixed(2)} ms · GPU ${ms(stats.gpuPassMs)} ms · post ${ms(stats.gpuPostMs)} ms · probe ${ms(stats.gpuProbeMs, 'off')} ms · draws ${stats.drawsRecorded} · signs ${stats.roadsignQuadsRecorded}\n` +
     `stream  ${stream.loadedCells} cells, ${stream.pendingCells} pending, late ${stream.lateCreates} · ` +
     `residency ${(stats.residencyBytes / 1048576).toFixed(0)} MB (${frame.residency})\n` +
     `GTA     ${gta[0].toFixed(1)}, ${gta[1].toFixed(1)}, ${gta[2].toFixed(1)} · ${clock}\n` +

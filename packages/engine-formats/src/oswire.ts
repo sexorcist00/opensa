@@ -108,13 +108,14 @@ export function oscellSections(raw: Uint8Array): OscellSections {
   }
   // NB this walks the header by HARD OFFSETS — it duplicates encodeOscell's layout knowledge, so any new
   // header field must be reflected here or the wire codec silently slices the payload in the wrong place.
-  // Minor 2 (B6) inserted `particleCount` between the light count and the offsets.
+  // Minor 2 (B6) inserted `particleCount` between the light count and the offsets; minor 8 appended the
+  // roadsign glyph-quad count after the placement count, on the same rule.
   r.seek(6); // major is at 4, minor at 6
   const minor = r.u16();
   // A newer minor may add a header count the offset formula below does not know about — which would slice
   // the payload at the wrong place and produce a corrupt-but-valid-looking `.oscell` on rebuild. Fail LOUD
   // instead. Bump this literal WITH the formula whenever encodeOscell gains a pre-offset header field.
-  const KNOWN_MINOR = 7;
+  const KNOWN_MINOR = 8;
   if (minor > KNOWN_MINOR) {
     throw new Error(
       `.oswire: .oscell minor ${minor} is newer than the header formula (knows <= ${KNOWN_MINOR}) — ` +
@@ -127,7 +128,7 @@ export function oscellSections(raw: Uint8Array): OscellSections {
   const vertexCount = r.u32();
   const indexCount = r.u32();
   // Header words: … counts …, then the three section offsets. Each minor that ADDS a count pushes them by 4.
-  r.seek(68 + (minor >= 2 ? 4 : 0) + (minor >= 3 ? 4 : 0) + (minor >= 6 ? 4 : 0));
+  r.seek(68 + (minor >= 2 ? 4 : 0) + (minor >= 3 ? 4 : 0) + (minor >= 6 ? 4 : 0) + (minor >= 8 ? 4 : 0));
   const vertexOffset = r.u32();
   const indexOffset = r.u32();
   const indexElemSize = (flags & OscellFlag.INDEX16) !== 0 ? 2 : 4;

@@ -106,6 +106,7 @@ function cellBytes(overrides: Partial<Oscell> = {}): Uint8Array {
     origin: [0, 0, 0],
     particles: [],
     placements: [],
+    roadsignQuads: 0,
     vertexCount: 3,
     vertexData: new Uint8Array(3 * OSCELL_VERTEX_STRIDE),
     ...overrides,

@@ -61,6 +61,7 @@ function sampleCell(index16: boolean): Oscell {
     origin: [0, 0, 0],
     particles: [],
     placements: [],
+    roadsignQuads: 0,
     vertexCount,
     vertexData,
   };
