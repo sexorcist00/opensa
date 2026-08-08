@@ -44,16 +44,16 @@ export interface PackOptions {
   alwaysOnLods?: readonly string[];
   /** Bake per-vertex AO/skyVis. ON by default — it stands in for prod's SSAO, so a shipping pak needs it. */
   ao?: boolean;
-  /** Bake every cell's COLLISION into the pak (plan 200/3-01) so the browser never parses a COL. OFF by
-   *  default while the runtime still reads the archives: it costs build time and nothing reads it yet. */
-  bakeCollision?: boolean;
-  /** Bake per-vertex SUN VISIBILITY — the heavy shadow bake. OFF by default; production converts need it. */
-  bakes?: boolean;
   /** astcenc worker threads for `--textures astc`; 0 (the default) is one per core. A PHONE cannot afford
    *  that: every worker is a V8 isolate reserving its own code range, and on a 2026 arm64 device with the
    *  convert's 4 GB heap setting inherited by each one, the encode stage dies with
    *  `Failed to reserve virtual memory for CodeRange` — once per worker that lost the race. */
   astcThreads?: number;
+  /** Bake every cell's COLLISION into the pak (plan 200/3-01) so the browser never parses a COL. OFF by
+   *  default while the runtime still reads the archives: it costs build time and nothing reads it yet. */
+  bakeCollision?: boolean;
+  /** Bake per-vertex SUN VISIBILITY — the heavy shadow bake. OFF by default; production converts need it. */
+  bakes?: boolean;
   /** Bake worker pool size; the default is a quarter of the cores. */
   bakeWorkers?: number;
   /** Emit every world texture as RGBA8 instead of passing SA's DXT through, so the pak loads on a GPU
