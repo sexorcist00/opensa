@@ -55,6 +55,30 @@ export interface AutoCenterStep {
   yaw: number;
 }
 
+/**
+ * The (heading, pitch) that AIMS at a GTA world point from another — `?look`'s math, and the inverse of
+ * {@link yawBehind}: the camera looks along (sin yaw, −cos yaw), so `yaw = atan2(dx, −dy)` and the heading
+ * that puts the camera behind a ped facing the same way is `yaw − π`. Seeding the PED with it is what stops
+ * auto-centre undoing the aim.
+ *
+ * Pitch is the rig's own sign (positive = up) and ignores the eye's offset behind the ped: the knob exists
+ * for LOD-range field checks, where a few metres of follow distance is far below one pixel. Degenerate input
+ * (aiming at the spot you stand on) yields pitch 0 rather than a NaN from `atan2(0, 0)`'s sibling cases.
+ */
+export function aimAt(
+  from: readonly [number, number, number],
+  target: readonly [number, number, number],
+): { heading: number; pitch: number } {
+  const dx = target[0] - from[0];
+  const dy = target[1] - from[1];
+  const flat = Math.hypot(dx, dy);
+
+  return {
+    heading: Math.atan2(dx, -dy) - Math.PI,
+    pitch: flat > 0 ? Math.atan2(target[2] - from[2], flat) : 0,
+  };
+}
+
 /** The mouse takes the camera back: the swing stops, and the idle clock restarts from zero. */
 export function cancelAutoCenter(state: AutoCenterState): void {
   state.following = false;

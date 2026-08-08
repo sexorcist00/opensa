@@ -77,7 +77,7 @@ import type { PlayerPose } from './engine-video-runs';
 import { IS_DEV } from '../dev-mode';
 import { GAME_CONFIG } from '../game-config';
 import { vehicleModelsFromIde } from '../vehicle-models';
-import { yawBehind } from './camera/auto-center';
+import { aimAt, yawBehind } from './camera/auto-center';
 import { type CameraProbe, type GroundProbe } from './camera/camera-collision';
 import {
   type CameraRigState,
@@ -2015,24 +2015,14 @@ async function boot(
  * be seen at LOD range, which the Las Payasadas boards do not have: the map ends ~350 u past them and a
  * spawn there falls through the void.
  *
- * Both conventions are the ones `auto-center.ts` states: in GTA space the camera looks along
- * (sin yaw, −cos yaw), a heading h points along (−sin h, cos h), and the two agree at `yaw = h + π` — so the
- * heading is `yaw − π`. Pitch is the rig's own sign (positive = up) and ignores the eye's offset behind the
- * ped: at the ranges this exists to probe, a few metres of follow distance is far below one pixel.
+ * The aim math itself is {@link aimAt}, beside the convention it inverts.
  */
 function bootAim(params: URLSearchParams, from: readonly [number, number, number]): { heading: number; pitch: number } {
   const look = (params.get('look') ?? '').split(',').map(Number);
-  if (look.length !== 3 || !look.every(Number.isFinite)) {
-    return { heading: SPAWN_FACING, pitch: DEFAULT_CAMERA_PITCH };
-  }
-  const dx = look[0] - from[0];
-  const dy = look[1] - from[1];
-  const flat = Math.hypot(dx, dy);
 
-  return {
-    heading: Math.atan2(dx, -dy) - Math.PI,
-    pitch: flat > 0 ? Math.atan2(look[2] - from[2], flat) : 0,
-  };
+  return look.length === 3 && look.every(Number.isFinite)
+    ? aimAt(from, [look[0], look[1], look[2]])
+    : { heading: SPAWN_FACING, pitch: DEFAULT_CAMERA_PITCH };
 }
 
 /** Which rig frames this frame: a detached eye wins over a seat, a seat over the on-foot follow. */

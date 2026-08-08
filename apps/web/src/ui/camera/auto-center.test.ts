@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cancelAutoCenter, createAutoCenter, stepAutoCenter, yawBehind } from './auto-center';
+import { aimAt, cancelAutoCenter, createAutoCenter, stepAutoCenter, yawBehind } from './auto-center';
 import { TEST_CAMERA_CONFIG as CONFIG } from './camera-test-config';
 
 const DT = 1 / 60;
@@ -37,6 +37,43 @@ describe('yawBehind', () => {
 
       expect(Math.sin(yaw)).toBeCloseTo(-Math.sin(0.7), 12);
       expect(-Math.cos(yaw)).toBeCloseTo(Math.cos(0.7), 12);
+    });
+  });
+});
+
+describe('aimAt', () => {
+  describe('negative cases', () => {
+    it('yields pitch 0 when the target is the spot you stand on', () => {
+      // atan2 of a zero horizontal leg would otherwise decide the pitch from a rounding artefact.
+      expect(aimAt([10, 20, 3], [10, 20, 3]).pitch).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('points the CAMERA at the target once the heading goes through yawBehind', () => {
+      // The round trip is the contract: aimAt returns a HEADING, and the rig seeds `yawBehind(heading)`.
+      // A sign slip here aims 180° away, which is exactly what a headless probe cannot see for itself.
+      const from: [number, number, number] = [100, 200, 10];
+      const target: [number, number, number] = [140, 230, 10];
+      const yaw = yawBehind(aimAt(from, target).heading);
+      const flat = Math.hypot(target[0] - from[0], target[1] - from[1]);
+
+      expect(Math.sin(yaw)).toBeCloseTo((target[0] - from[0]) / flat, 12);
+      expect(-Math.cos(yaw)).toBeCloseTo((target[1] - from[1]) / flat, 12);
+    });
+
+    it('reproduces the boot facing for a target due SOUTH', () => {
+      // The default camera looks south (`yawBehind(SPAWN_FACING)`, SPAWN_FACING = π), so a target at −y must
+      // come back to the same heading — the one case a field probe can check against the old behaviour.
+      const heading = aimAt([0, 0, 0], [0, -500, 0]).heading;
+
+      expect(Math.sin(heading)).toBeCloseTo(Math.sin(Math.PI), 12);
+      expect(Math.cos(heading)).toBeCloseTo(Math.cos(Math.PI), 12);
+    });
+
+    it('tilts UP for a target above the eye and DOWN for one below', () => {
+      expect(aimAt([0, 0, 0], [0, 100, 100]).pitch).toBeCloseTo(Math.PI / 4, 12);
+      expect(aimAt([0, 0, 0], [0, 100, -100]).pitch).toBeCloseTo(-Math.PI / 4, 12);
     });
   });
 });

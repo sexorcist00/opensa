@@ -1091,12 +1091,16 @@ function lodFixtureCell(): GridCell {
 }
 
 /** One plate's worth of glyph quads at a world position, in the shape the pre-pass produces. */
-function plate(x: number, y: number, z: number): RoadsignGlyphQuads {
-  return {
-    colour: 0,
-    positions: [x, y, z, x + 1, y, z, x + 1, y, z + 1, x, y, z + 1],
-    uvs: [0, 0, 1, 0, 1, 1, 0, 1],
-  };
+function plate(x: number, y: number, z: number, quads = 1): RoadsignGlyphQuads {
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  for (let q = 0; q < quads; q += 1) {
+    const left = x + q;
+    positions.push(left, y, z, left + 1, y, z, left + 1, y, z + 1, left, y, z + 1);
+    uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+  }
+
+  return { colour: 0, positions, uvs };
 }
 
 /** Weld one level with an optional roadsign list, at the traffic-light cell's origin. */
@@ -1104,7 +1108,7 @@ function weldWithSigns(
   lod: boolean,
   cell: GridCell,
   signs?: RoadsignGlyphQuads[],
-): null | { rows: number; signs: number } {
+): null | { quads: number; rows: number; signs: number } {
   const fs = fixtureFs();
   const welded = weldCellParts(
     fs,
@@ -1123,6 +1127,7 @@ function weldWithSigns(
 
   // `stats.vertices` only fills during the later encode pass, so count the scratch buckets themselves.
   return {
+    quads: welded.stats.roadsignQuads,
     rows: welded.buckets.reduce((total, bucket) => total + bucket.vertices.length, 0),
     signs: welded.stats.roadsigns,
   };
@@ -1142,6 +1147,22 @@ describe('weldCell roadsign text', () => {
   });
 
   describe('positive cases', () => {
+    it('counts GLYPH QUADS, not signs — the number the LOD-range reading is taken from', () => {
+      // `roadsigns` is how many plates welded; `roadsignQuads` is how much TEXT, and only the second can
+      // answer "is this plate blank at LOD range" (minor 8). One sign of three glyphs must read 1 and 3.
+      const withText = weldWithSigns(true, lodFixtureCell(), [plate(2350, -1650, 20, 3)]);
+
+      expect(withText?.signs).toBe(1);
+      expect(withText?.quads).toBe(3);
+    });
+
+    it('counts the same quads on BOTH levels — a plate that thins at range is the defect', () => {
+      const signs = [plate(2350, -1650, 20, 2), plate(2360, -1650, 20, 4)];
+
+      expect(weldWithSigns(false, fixtureCell(1), signs)?.quads).toBe(6);
+      expect(weldWithSigns(true, lodFixtureCell(), signs)?.quads).toBe(6);
+    });
+
     it('welds the text into a LOD bundle — the 440→1000 u band used to draw a blank plate', () => {
       const bare = weldWithSigns(true, lodFixtureCell());
       const withText = weldWithSigns(true, lodFixtureCell(), [plate(2350, -1650, 20)]);

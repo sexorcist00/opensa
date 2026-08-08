@@ -69,6 +69,14 @@ interpret them.
   the behavioural oracle is the one verdict still open. The method lesson: **the measurement rig failed more
   often than the thing measured** — two of three surprises were harness bugs, caught only by giving each row a
   verdict from a different channel than the number.
+- [`plan-07-review-and-100-field-close.md`](./plan-07-review-and-100-field-close.md) — the 2026-08-08 review
+  session: plan 07's density chain was costed against a number that counted STREAM RECORDS, not objects (24 552
+  vs the real 15 286), and correcting it inverts the chain's conclusion — the int16 lift is back on the
+  critical path, and a stock target has 1.18× of headroom in total. Three of its steps' premises were falsified
+  by the code. Plan 100's owed field check then ran and passed three rows; the fourth, "is a plate readable at
+  LOD range", turned out to be unanswerable by screenshot at ~8 px, so it got an instrument instead
+  (`.oscell` minor 8 + HUD `signs N`). Also what the session got wrong: a census scoped by model id, a
+  no-op mutation offered as proof, and a grep that hid `.tsx`.
 - [`2dfx-at-lod-range-100.md`](./2dfx-at-lod-range-100.md) — plan 100 (five steps, one day): lamps, chimney
   plumes and street-name plates now survive past the HD ring instead of leaving a 560-unit dark, smokeless,
   blank-signed band, and every fx system draws for the `cullDist` it authors rather than one flat 300 (836 of

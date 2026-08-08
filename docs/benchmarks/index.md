@@ -403,6 +403,16 @@ throughout. **That is a baseline, not a verdict** — the positive control in th
 cannot price emitter cost at all, and it never enters the 440–1000 u transition band where the doubling
 question lives. Rows: [`2026-08-08-ingame-post-100-rebuild.json`](opensa-engine/2026-08-08-ingame-post-100-rebuild.json).
 
+### Minor-8 re-pack — the baseline that still exists (2026-08-08)
+
+The post-100 sweep above named a pak that was then replaced: the canonical build was re-packed onto `.oscell`
+minor 8 (the roadsign glyph-quad count), so its rows point at a `buildTime` nothing on disk matches. The same
+8 scenes re-taken on the pak that DOES exist (`13:19 08-08-2026`) are
+[`2026-08-08-ingame-minor8-repack.json`](opensa-engine/2026-08-08-ingame-minor8-repack.json) — **this is the
+density baseline plan 07/04 compares against**. Scene-to-scene `gpuMs.pass` moves between −0.16 and +0.14 ms
+in both directions, which is run-to-run spread: minor 8 adds one header word per cell and no geometry, and the
+positive control two rows up already showed this sweep cannot resolve differences of that size.
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

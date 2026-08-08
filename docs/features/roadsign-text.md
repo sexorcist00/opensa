@@ -17,6 +17,12 @@ type-7 entries, `tools/opensa-pack/src/convert.ts` (world-space pre-pass, signs 
   world position rather than read off the LOD model, and that is not a style choice: **131 of the 489 plates
   sit outside the cell holding the instance that carries them**, so the two sources would file the same
   plate under two different cell keys and draw it twice whenever both are resident.
+  **Field-verified 2026-08-08, by COUNT rather than by eye**: `.oscell` minor 8 records each cell's roadsign
+  GLYPH-QUAD total and the engine sums it over VISIBLE cells (`EngineStats.roadsignQuadsRecorded`, HUD
+  `signs N`). Map-wide on the canonical pak, **334 of 1137 cells carry plates, 50 552 quads, and no cell's
+  two levels disagree**; standing off a board reads 2460 quads at 200 u and 1594 at 600 u. A plate is 2.4 m
+  wide, i.e. ~8 px at LOD range, so a screenshot was never going to answer this — the counter is the
+  instrument, and `signs 0` on a pak older than `13:19 08-08-2026` means UNKNOWN, not none.
 - Plate transform (solver-verified across every observed rotation family,
   `scripts/debug/solve-roadsign.ts`): flat base (width +X, lines −Y, normal −Z), entry Euler applied
   **Z→X→Y**, angles as stored. 90°-multiple rotations satisfy several wrong conventions — never
