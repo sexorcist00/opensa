@@ -15,7 +15,8 @@ This also explains why Junior's 57k-row mod needs ProperFixes.asi (it patches th
 (~25k rows) were fine, and why no FLA/OLA option ever helped (neither exposes these int16 fields).
 
 **Budget rule: permanent text-IPL rows ≤ 30,000 map-wide** (int16 max minus headroom for runtime-resident
-binary instances sharing the pool) — enforced by pmb `checkTextIplSlotBudget`. The generator's lever is
+binary instances sharing the pool) — enforced by pmb `checkTextIplBudgets` (on the built `sa/` tree since
+2026-08-08; an `--exclude sa` run never reaches it). The generator's lever is
 `linkedHeight` (default 4 m): species below it ship BOTH rows unlinked in the binary streams (the decimated
 LOD hides inside the HD up close — zero text rows); only tall species (trees, joshua) keep the permanent
 text LOD row + lod-link suppression.

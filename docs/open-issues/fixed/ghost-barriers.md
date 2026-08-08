@@ -74,9 +74,11 @@ Each of these was hit for real during the investigation; fixing them was necessa
 4. **Slot/row economy in mod-installer**: mod-added inst-only IPLs and the stream-less stock
    `int_cont`/`gen_int1` inst blocks are appended into the least-loaded stock host IPL (appends never
    shift binary lod indexes; internal links rebased).
-5. **Build guards in perfect-map-builder** (`checkTextIplSlotBudget`): fails the build over 39 text-IPL
-   slots or 30,000 total text rows — loud error instead of silent in-game corruption. Full build now
-   runs ~21–22k/30k rows, ~37/39 slots.
+5. **Build guards in perfect-map-builder** (`checkTextIplBudgets`, `checkTextIplSlotBudget` until
+   2026-08-08): fails the build over 30,000 total text rows — loud error instead of silent in-game
+   corruption. Full build then ran ~21–22k/30k rows, ~37/39 slots. **The slot half is a REPORT since
+   2026-08-08** (the target's OLA lifts that array), and both ceilings moved onto the built `sa/` tree —
+   an `--exclude sa` run checks neither (07/04).
 
 ## The ProperFixes.asi influence (MixMods)
 
@@ -121,6 +123,6 @@ the build output.
 - `tools/lod-trees-generator/docs/plans/011-area-row-budget.md` — area budgets, migration, slot economy.
 - `tools/map-placement/src/streamed-areas.ts` / `ipl-binary-write.ts` — the shared machinery.
 - `tools/mod-installer/src/ipl-slot-merge.ts` — mod-IPL folding + stock inst-block compaction.
-- `tools/perfect-map-builder/src/pipeline.ts` — `checkTextIplSlotBudget` (both guards).
+- `tools/perfect-map-builder/src/pipeline.ts` — `checkTextIplBudgets` (int16 throws, slots report).
 - gta-reversed: `IplStore.cpp` (`IncludeEntity`, `LoadIplBoundingBox`), `FileLoader.cpp` (`LoadScene`,
   `LinkLods`) — the decompiled ground truth all of this was read from.

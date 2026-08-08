@@ -2,13 +2,14 @@ import { buildVer2Buffer } from '@opensa/renderware/archive/img-archive';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   checkImgIdBudgets,
-  checkTextIplSlotBudget,
+  checkTextIplBudgets,
   EXCLUDABLE_STAGES,
   type ExcludableStage,
+  OPENSA_BUDGET_NOTICE,
   parseExcludedStages,
   resolveBuildTarget,
   runsStage,
@@ -156,7 +157,7 @@ describe('runsStage', () => {
   });
 });
 
-describe('checkTextIplSlotBudget', () => {
+describe('checkTextIplBudgets', () => {
   let dir: string;
 
   beforeEach(() => {
@@ -167,20 +168,35 @@ describe('checkTextIplSlotBudget', () => {
     rmSync(dir, { force: true, recursive: true });
   });
 
-  describe('negative cases', () => {
-    it('throws when more than 39 text IPLs carry inst rows', () => {
-      writeGame(dir, 40);
+  /** A game dir whose whole map is one text IPL of `n` inst rows. */
+  const writeRows = (n: number): void => {
+    mkdirSync(join(dir, 'data', 'maps'), { recursive: true });
+    const rows = Array.from({ length: n }, (_, i) => `${i}, thing, 0, 0,0,0, 0,0,0,1, -1`).join('\n');
+    writeFileSync(join(dir, 'data', 'maps', 'big.IPL'), `inst\n${rows}\nend\n`);
+    writeFileSync(join(dir, 'data', 'gta.dat'), 'IPL DATA\\MAPS\\big.IPL\n');
+  };
 
-      expect(() => checkTextIplSlotBudget(dir)).toThrow(/IplEntityIndexArrays/);
+  describe('negative cases', () => {
+    it('throws when total permanent rows exceed the int16 building-pool budget — the one ceiling nothing lifts', () => {
+      writeRows(30001);
+
+      expect(() => checkTextIplBudgets(dir)).toThrow(/int16/);
     });
 
-    it('throws when total permanent rows exceed the int16 building-pool budget', () => {
-      mkdirSync(join(dir, 'data', 'maps'), { recursive: true });
-      const rows = Array.from({ length: 30001 }, (_, i) => `${i}, thing, 0, 0,0,0, 0,0,0,1, -1`).join('\n');
-      writeFileSync(join(dir, 'data', 'maps', 'big.IPL'), `inst\n${rows}\nend\n`);
-      writeFileSync(join(dir, 'data', 'gta.dat'), 'IPL DATA\\MAPS\\big.IPL\n');
+    it("does NOT throw past stock SA's 39 slots — OLA lifts that array on the target", () => {
+      writeGame(dir, 45);
 
-      expect(() => checkTextIplSlotBudget(dir)).toThrow(/int16/);
+      expect(() => checkTextIplBudgets(dir)).not.toThrow();
+    });
+
+    it('reports the stock slot overflow rather than swallowing it', () => {
+      writeGame(dir, 45);
+      const lines: string[] = [];
+      const spy = vi.spyOn(console, 'log').mockImplementation((message: unknown) => void lines.push(String(message)));
+      checkTextIplBudgets(dir);
+      spy.mockRestore();
+
+      expect(lines.join('\n')).toMatch(/past stock SA's 39-slot IplEntityIndexArrays \(45\)/);
     });
   });
 
@@ -188,7 +204,25 @@ describe('checkTextIplSlotBudget', () => {
     it('passes at exactly 39 slots (inst-less IPLs do not count)', () => {
       writeGame(dir, 39);
 
-      expect(() => checkTextIplSlotBudget(dir)).not.toThrow();
+      expect(() => checkTextIplBudgets(dir)).not.toThrow();
+    });
+
+    it('downgrades the int16 throw to a warning under --allow-text-row-overflow (the asi repro path)', () => {
+      writeRows(30001);
+      const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      expect(() => checkTextIplBudgets(dir, true)).not.toThrow();
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('--allow-text-row-overflow'));
+      spy.mockRestore();
+    });
+  });
+});
+
+describe('OPENSA_BUDGET_NOTICE', () => {
+  describe('positive cases', () => {
+    it('says both halves: no SA ceiling here, and no measured budget of our own yet', () => {
+      expect(OPENSA_BUDGET_NOTICE).toMatch(/do not apply/);
+      expect(OPENSA_BUDGET_NOTICE).toMatch(/no streaming budget guard exists yet/);
     });
   });
 });

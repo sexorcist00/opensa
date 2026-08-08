@@ -44,7 +44,9 @@ instead of 8, and installed mods brought 9 inst IPLs of their own — overflowin
   indexes so the host's binary-stream lod links stay valid; mods' internal lod links rebased; files with
   `_stream` companions or non-inst sections are left alone; skipped when no host fits the 4000-row area
   budget) — 9 slots → **0**.
-- pmb `checkTextIplSlotBudget` fails the build loudly over 40 slots and warns at exactly 40.
+- pmb `checkTextIplSlotBudget` fails the build loudly over 40 slots and warns at exactly 40. (**Since
+  2026-08-08 it is `checkTextIplBudgets` and the slot half only REPORTS** — the target's OLA lifts that
+  array; the row half still throws. The slot economy below is still good memory economy, not a ceiling fight.)
 
 Budget after fixes: 30 stock + 8 plobj + 1 plotr = **39/40 — one slot of headroom** for a user's own
 modloader IPL mod. Perfect5 postmortem: EXACTLY 40 slots crashed in-game on `plobj7_stream` — the user's

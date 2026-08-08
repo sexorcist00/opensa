@@ -2,6 +2,14 @@
 
 Part of the [perfect-map ASI chain](readme.md). Depends on [004](004-limit-patches.md) (a working ASI) + [005](005-build-debug-test.md) (it's trustworthy). Closes the loop: **ship the ASI with our builds and relax the work-around budgets that only existed because of the bug**.
 
+> **Read this before decision 2 (2026-08-08).** Two of its premises moved. **Stock SA is not a target of this
+> project** (the declared configuration is OLA + FLA + this asi — `docs/gta-sa-original/reference-install.md`),
+> so the "stock vs opensa-asi mode" split this plan proposes is not the axis to build: pmb already has a
+> `--target sa|opensa` selector, and **its `opensa` means OUR ENGINE, not "SA with our asi"** — do not reuse
+> the word for a third meaning. What survives is decision 2's real content: with the asi shipped, the `sa`
+> branch's int16 gate is the thing that lifts. And the 39-slot half is already gone — it became a REPORT when
+> `checkTextIplBudgets` moved onto the `sa/` branch (07/04), because OLA lifts that array on the target.
+
 ## Context
 
 `checkTextIplSlotBudget` in `tools/perfect-map-builder/src/pipeline.ts` fails the build past **39 text-IPL slots / 30,000 rows** — guards that exist purely because of the int16/array bugs 004 now fixes. `checkImgIdBudgets` (the FLA FILE*TYPE*\* pools, just corrected in the shopping.dat work) is a DIFFERENT class (FLA's runtime pools, still real) and stays. The map-installer + placement machinery (binary streams, `linkedHeight`, per-area budgets) can stay as-is — they're still good economy — but the HARD CEILING they were fighting is gone.

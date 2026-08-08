@@ -46,7 +46,8 @@ flowchart TB
   opt["optimize · map-optimizer<br/>normals · prelit · dedupe"]:::stage
   trees["trees · lod-trees-generator<br/>impostor cards + atlas"]:::stage
   proc["procobj · lod-procobj-generator<br/>scatter → static IPL + LODs"]:::stage
-  guard{{"guards<br/>int16 30k text rows · 39 IPL slots ·<br/>FLA pools TXD 6000 / COL 275 / IPL 280"}}:::guard
+  guard{{"sa guards (on the BUILT sa/ tree)<br/>int16 30k text rows THROW · 39 IPL slots report ·<br/>FLA pools TXD 6000 / COL 275 / IPL 280"}}:::guard
+  osguard{{"opensa: no SA ceiling applies<br/>and no streaming budget measured yet"}}:::guard
   sa["sa · sa-lod-generator<br/>per-object HD-clone LODs"]:::stage
   oslod["opensa · opensa-lod-generator<br/>cell-LOD bake + linear TXDs"]:::stage
   pack["pack · opensa-pack packGameDir<br/>weld cells · .osm per model · pak"]:::stage
@@ -55,9 +56,9 @@ flowchart TB
   fetch["fetch-pack (chained by build:game:&lt;id&gt;:opensa)<br/>content-hashed zip chunks + manifest"]:::stage
   outpak[("&lt;out&gt;/opensa-pack/&lt;game&gt;-&lt;version&gt;<br/>the FETCH build — deploy as games/&lt;game&gt;-&lt;version&gt;")]:::data
 
-  src --> mods --> veh --> peds --> opt --> trees --> proc --> guard
-  guard --> sa --> outsa
-  guard --> oslod --> pack --> outos
+  src --> mods --> veh --> peds --> opt --> trees --> proc
+  proc --> sa --> guard --> outsa
+  proc --> osguard --> oslod --> pack --> outos
   outos --> fetch --> outpak
 
   classDef stage fill:#d8f5e0,stroke:#1f9d55,color:#111
@@ -77,9 +78,8 @@ flowchart TB
 | 4   | `optimize` | `runOptimizer` (map-optimizer)                | lossless conditioning; `broken-prelight.json` force-list         |
 | 5   | `trees`    | `buildTreeLods`                               | skipped when `vegetation/` is empty; `--tex` 512 atlas, `prelight.json` |
 | 6   | `procobj`  | `buildProcobjLods`                            | always (original ships no `procobj/` — bakes the built-in roster, no-op on a TC); `--tex` 128 |
-| —   | guard      | `checkTextIplSlotBudget`                      | an SA runtime ceiling read off the COMMON chain, so it runs whatever target was asked for — see [edge-cases](../edge-cases/) |
-| 7   | `sa`       | `buildSaLods` → `<out>/sa`, then `checkImgIdBudgets` | the real-game (RenderWare) target; its ID-pool guard reads the built `sa/` tree and goes with it |
-| 8   | `opensa`   | `buildOpensaLods` + `swapLinearTxds`          | cell 250 bake (= the render grid, plan 087), `stripLods`, linear-convention TXD swap |
+| 7   | `sa`       | `buildSaLods` → `<out>/sa`, then `checkTextIplBudgets` + `checkImgIdBudgets` | the real-game (RenderWare) target; **both guards read the built `sa/` tree and go with it** — int16 rows throw, the 39 stock slots are a report (07/04) |
+| 8   | `opensa`   | `buildOpensaLods` + `swapLinearTxds`          | cell 250 bake (= the render grid, plan 087), `stripLods`, linear-convention TXD swap. No SA ceiling applies and no budget guard of its own exists yet — the run says so (`OPENSA_BUDGET_NOTICE`) |
 | 9   | `pack`     | `packGameDir` (opensa-pack) → `<out>/opensa`  | the OpenSA target, self-contained (pak → `<out>/opensa/pak`, 086 phase 8); convert rect = the game's `PACK_RECTS.full` (auto-fit when unpinned, plan 087); report mirrored to `<out>/report.json` |
 | 10  | `lod`      | —                                             | special `--until` value: run everything, keep every intermediate. **Not an `--exclude` value** — it names no stage to skip |
 

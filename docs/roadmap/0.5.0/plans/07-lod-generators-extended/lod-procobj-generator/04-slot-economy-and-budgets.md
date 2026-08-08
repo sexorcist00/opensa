@@ -43,7 +43,12 @@ Three things fall out and they are the plan:
 
 ## The guard finding — `opensa/` inherits ceilings it does not have
 
-`checkTextIplSlotBudget(game, …)` runs on the **common baked build**, at `perfect-map-builder/src/pipeline.ts:206`,
+> **FIXED 2026-08-08** (first task below). The guard is now `checkTextIplBudgets`, it runs on the built `sa/`
+> tree beside `checkImgIdBudgets`, and its two ceilings are split: int16 rows throw, the 39 stock slots are a
+> report. `opensa/` runs neither and announces that it has no ceiling of its own yet. The section below is
+> kept as the finding that motivated it.
+
+`checkTextIplSlotBudget(game, …)` ran on the **common baked build**, at `perfect-map-builder/src/pipeline.ts:206`,
 *before* the split that feeds `sa/` and `opensa/`. So an opensa-only build:
 
 - **throws** past `TEXT_ROW_CAP = 30 000` permanent text-IPL rows — a cap that exists because SA stores
@@ -84,7 +89,9 @@ a too-conservative build looks exactly like a successful one.
 5. **New guard, not no guard.** For `opensa`, replace the int16 row throw with a **streamable-object budget
    guard**: fail (or warn) when a cell or area exceeds the measured count the engine streams without
    hitching. Silent over-scatter that hitches in-game is as bad as the old crash — guard it loudly, same
-   spirit as `checkImgIdBudgets`.
+   spirit as `checkImgIdBudgets`. **Still OPEN after the guard move (2026-08-08):** the branch ANNOUNCES that
+   it carries no ceiling (`OPENSA_BUDGET_NOTICE`) because the number does not exist yet. It is gated on the
+   `opensa` perf budget in the tasks below — that measurement is the whole of what is missing.
 6. **Fallback honesty, and it now covers TWO plugins.** An `sa` build past 32 767 map-wide rows REQUIRES
    `perfect-map.asi`; without it the int16 corruption returns on our own data exactly as it did on
    ProperFixes'. Past the stock slot and per-file ceilings it also requires **OLA**, which our installer has
@@ -130,13 +137,29 @@ a too-conservative build looks exactly like a successful one.
          output" task below, and it is why the flag is not dead weight in its own commit.
       Behaviour is unchanged: no emitted byte moves, and both hosts still run the SA guards (that is the next
       task).
-- [ ] **Move `checkTextIplSlotBudget` onto the `sa/` branch** (from `pipeline.ts:206`) and split its two
+- [x] **Move `checkTextIplSlotBudget` onto the `sa/` branch** (from `pipeline.ts:206`) and split its two
       ceilings: the int16 row check stays a THROW on `sa/` (it is the asi's gate and the only ceiling the
       target still has); the 39-slot check becomes a report, since OLA lifts it; `opensa/` gets neither and
       gains its own budget guard instead (decision 5). Test both branches, and assert the opensa branch still
       guards SOMETHING rather than silently everything.
       **`--allow-text-row-overflow` should disappear with it** — an operator flag is what a missing target
       split looks like.
+      **DONE 2026-08-08**, as `checkTextIplBudgets` (the old name gated slots; it no longer does). It runs
+      beside `checkImgIdBudgets`, on the BUILT `sa/` tree — and that re-basing found a false PASS the move was
+      not looking for: the sa LOD stage appends hole-fill instances to the copied text IPLs *after* the split,
+      so the shared-build count was never the count SA loads. Verified with a run that excludes every stage:
+      the `text-IPL slots:` line is gone from the common chain, and the opensa branch prints its notice.
+      **Two things did NOT go as written, both deliberate:**
+      1. **`--allow-text-row-overflow` stays.** Its problem was that it escaped a ceiling the opensa target
+         does not have; after the split it cannot do that (opensa never runs the gate). What is left is the
+         deliberate over-int16 `sa` build that `tools-debug/sa-int16-repro` documents — a named consumer with
+         open work against it (the asi/sdk behavioural oracle), not a missing target split. Deleting it would
+         have removed the only way to build that repro.
+      2. **`opensa/` got an ANNOUNCEMENT, not a guard** (`OPENSA_BUDGET_NOTICE`). Decision 5's guard needs the
+         streaming number decision 4 has to measure, and this plan's own standard forbids the alternative —
+         "a cap set from the wrong host's number is a guess wearing a measurement's clothes". So the branch
+         says on every run that it carries no ceiling and why, which turns a silent absence into a loud one.
+         **The real guard is still open and is decision 5's line below.**
 - [ ] **Keep the permanent-row cost per object as a first-class knob.** 0.424 rows/object today
       (6 487 / 15 286), and it is the whole reason our layout beats a text-IPL mod's by 2.36×. Every density
       profile changes it — a profile that favours TALL species buys rows nobody costed.

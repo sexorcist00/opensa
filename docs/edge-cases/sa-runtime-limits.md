@@ -7,12 +7,15 @@ runtime, but the converter guards stand for any build not running that ASI.
 - **int16 building-pool → ≤ 30,000 permanent text-IPL rows map-wide.** `CIplStore::IncludeEntity` truncates
   building-pool indexes to int16; past index 32,767 the ranges wrap negative and stream-out corrupts memory
   (the "ghost barriers" bug, bisected to exactly 32,768 rows). pmb caps at 30k (`TEXT_ROW_CAP`) and
-  hard-fails; `--allow-text-row-overflow` bypasses. Repro dial: `tools-debug/sa-int16-repro`.
+  hard-fails **on the built `sa/` tree** (`checkTextIplBudgets`, since 2026-08-08 — an `--exclude sa` run
+  never reaches it); `--allow-text-row-overflow` bypasses. Repro dial: `tools-debug/sa-int16-repro`.
 - **Per-area 4,000-row budget.** An area's text rows + binary-stream rows pass through SA's unbounded
   4096-slot `LoadScene` buffer; overflow corrupts memory. `AREA_ROW_CAP = 4000`; over-budget instances
   migrate to the shared `plotr`/`plobj` overflow areas. Mirrored in mod-installer's IPL slot merge.
 - **Text-IPL slot cap 39** (`IplEntityIndexArrays`; stock uses 30, generators add ~9). At zero headroom any
-  modloader text-IPL with inst rows overflows in-game. Only a file carrying `inst` rows takes a slot.
+  modloader text-IPL with inst rows overflows in-game. Only a file carrying `inst` rows takes a slot. **The
+  build no longer FAILS on it** (2026-08-08) — it prints what the artifact would cost on a stock install,
+  because the target's OLA lifts the array.
 - **The per-file 4 000-row budget and the 39-slot cap are STOCK numbers, and the install we target lifts
   both** — OLA's `EntitiesPerIpl`/`EntityIpl` are `unlimited` there, and it runs a 9 627-row IPL without
   complaint. Which set applies is a property of the install, not of the game:

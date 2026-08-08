@@ -42,6 +42,11 @@ without `--exclude sa` is refused for the same reason. The run prints the target
 stage prints that layer's price against it (objects · permanent text rows · rows/object).
 NB `--target` means a DIRECTORY in `vehicle-installer --rebake` — same word, unrelated meaning.
 
+The SA ceilings are checked on the built `sa/` tree only (`checkTextIplBudgets` + `checkImgIdBudgets`), so an
+`--exclude sa` run checks neither. Of the two text-IPL ceilings only int16 fails a build; the 39 stock slots
+are printed, because the install we target lifts that array. `--allow-text-row-overflow` therefore has one
+remaining use — the deliberate over-int16 `sa` build of `tools-debug/sa-int16-repro`.
+
 ### Vehicle round: rebake instead of rebuilding
 
 ```bash

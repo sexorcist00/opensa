@@ -50,10 +50,24 @@ export const STAGE_NAMES = [
  */
 export const EXCLUDABLE_STAGES = STAGE_NAMES.filter((name): name is ExcludableStage => name !== 'lod');
 
+/**
+ * What the `opensa` target gets in place of SA's ceilings — today, an announcement that it has none. Our
+ * engine has no building pool, no int16 `IplDef` index and no `IplEntityIndexArrays`, so
+ * {@link checkTextIplBudgets} does not run here; what replaces it is a STREAMING budget whose number does not
+ * exist yet (07/04 decisions 4–5 — it has to be measured in our engine, and a cap taken from SA's numbers
+ * would be a guess wearing a measurement's clothes).
+ *
+ * It is announced rather than left silent because an unguarded build and a well-behaved one look exactly
+ * alike from the outside — the same reason the shared-stage guard survived a fortnight.
+ */
+export const OPENSA_BUDGET_NOTICE =
+  "opensa: SA's row/slot ceilings do not apply here — and no streaming budget guard exists yet " +
+  '(07/04 decision 5: the number must be measured in our engine, never inherited from SA)';
+
 export interface BuildPerfectMapOptions {
   /** Downgrade the int16 text-ROW budget from a build-stopping error to a warning — the 03-asi ghost-barriers
-   *  repro path (an intentionally over-2^15 full build). The 39-slot guard stays hard so the other structures
-   *  remain in-bounds. Never set for a shipping build. */
+   *  repro path (an intentionally over-2^15 full build), the ONLY thing it is for now that the guard is
+   *  `sa/`-only and the slot ceiling is a report. Never set for a shipping build. */
   allowTextRowOverflow?: boolean;
   config?: Partial<BuilderConfig>;
   /**
@@ -213,8 +227,6 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // User-curated LOD exclusions (`lod-exclude.json` at the mods-src root or inside mods/): models that must
   // not enter the far LODs at all — e.g. HD street-furniture replacements (a 22k-tri ELECTRICA traffic light
   // placed 729× exploded the cell bake ~50×; at 300+ u it is a few unreadable pixels anyway).
-  checkTextIplSlotBudget(game, options.allowTextRowOverflow);
-
   const userExcluded = loadLodExclude(inPath, source(subfolders.mods));
   const excludeItems = [...collectGeneratedModels(game), ...userExcluded];
   log(
@@ -232,10 +244,14 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     const sa = join(outPath, 'sa');
     log('sa → sa/');
     buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa });
+    // Both SA ceilings are checked HERE, on the tree the real game loads — not on the shared build. The LOD
+    // stage appends hole-fill instances to the copied text IPLs, so the common build undercounts the rows.
+    checkTextIplBudgets(sa, options.allowTextRowOverflow);
     checkImgIdBudgets(sa);
     produced.push({ dir: sa, name: 'sa' });
   }
   if (runsStage('opensa', until, excluded)) {
+    log(OPENSA_BUDGET_NOTICE);
     produced.push(
       ...(await buildOpensaTarget({
         alwaysOnLods,
@@ -482,11 +498,15 @@ async function buildOpensaTarget(step: {
   ];
 }
 
-/** SA's `IplEntityIndexArrays` usable capacity: one slot per gta.dat text IPL with inst rows, and the game
- *  writes past the array without a bounds check (the "ghost barriers" corruption family — lod-procobj plan
- *  007, lod-trees plan 011). The struct is declared 40 long, but a build with EXACTLY 40 crashed in-game on
- *  the 40th slot (perfect5) — treat 39 as the hard line. Stock uses 30 (mod-installer compacts int_cont +
- *  gen_int1 down to 28 and folds mod IPLs into a stock host); the generators add ~9 (`plobj*`, `plotr*`). */
+/** STOCK SA's `IplEntityIndexArrays` usable capacity: one slot per gta.dat text IPL with inst rows, and the
+ *  game writes past the array without a bounds check (the "ghost barriers" corruption family — lod-procobj
+ *  plan 007, lod-trees plan 011). The struct is declared 40 long, but a build with EXACTLY 40 crashed in-game
+ *  on the 40th slot (perfect5) — 39 was the hard line. Stock uses 30 (mod-installer compacts int_cont +
+ *  gen_int1 down to 28 and folds mod IPLs into a stock host); the generators add ~9 (`plobj*`, `plotr*`).
+ *
+ *  **A REPORT since 2026-08-08, not a gate.** The install we target sets OLA's `EntityIpl = unlimited`, so the
+ *  array does not exist there and stock is not a target (07/04) — the line stays because a plan still has to
+ *  know what it would cost on a plain 1.0, and stock is a report rather than a mode. */
 const TEXT_IPL_SLOT_CAP = 39;
 
 /** SA truncates building-pool indexes to **int16** in `IplDef::firstBuilding/lastBuilding`
@@ -537,7 +557,21 @@ export function checkImgIdBudgets(gameDir: string): void {
   }
 }
 
-export function checkTextIplSlotBudget(gameDir: string, allowTextRowOverflow = false): void {
+/**
+ * The `sa/` target's two text-IPL ceilings, split by whether the install we ship to still HAS them (07/04):
+ *
+ * - **int16 permanent rows — a THROW.** The one ceiling no adjuster lifts (`0x404B4A` is byte-stock on the
+ *   reference install), so it is the gate our own `perfect-map.asi` answers for. Past it the corruption is
+ *   silent in the build and lands in-game as ghost barriers.
+ * - **the 39 `IplEntityIndexArrays` slots — a REPORT.** OLA sets `EntityIpl = unlimited` on the target, so
+ *   the array is not there to overflow. Stock is not a target; it is a line in the log
+ *   (`docs/gta-sa-original/reference-install.md`).
+ *
+ * Runs on the BUILT `sa/` tree, like {@link checkImgIdBudgets} — never on the shared build, which both
+ * rations the target that has no such ceiling and undercounts this one (the sa LOD stage appends hole-fill
+ * instances to the text IPLs after the split).
+ */
+export function checkTextIplBudgets(gameDir: string, allowTextRowOverflow = false): void {
   const datPath = join(gameDir, 'data', 'gta.dat');
   if (!existsSync(datPath)) {
     return;
@@ -556,28 +590,25 @@ export function checkTextIplSlotBudget(gameDir: string, allowTextRowOverflow = f
       totalRows += rows;
     }
   }
-  log(`text-IPL slots: ${used.length}/${TEXT_IPL_SLOT_CAP} (IplEntityIndexArrays), rows: ${totalRows}/${TEXT_ROW_CAP}`);
+  log(`sa text-IPL rows: ${totalRows}/${TEXT_ROW_CAP} (int16), slots: ${used.length}/${TEXT_IPL_SLOT_CAP} (stock)`);
+  if (used.length >= TEXT_IPL_SLOT_CAP) {
+    // A report, not a gate: the target runs OLA with `EntityIpl = unlimited`. It says what this build would
+    // cost on a plain 1.0, which is a thing a plan has to know — not a reason to ration the supported install.
+    log(
+      `  · past stock SA's ${TEXT_IPL_SLOT_CAP}-slot IplEntityIndexArrays (${used.length}) — fine on the ` +
+        'target (OLA `EntityIpl = unlimited`), corrupts CIplStore on a stock install',
+    );
+  }
   if (totalRows > TEXT_ROW_CAP) {
     const message =
       `${totalRows} permanent text-IPL rows exceed the ${TEXT_ROW_CAP} budget: SA stores building-pool ` +
       'indexes as int16 in IplDef (CIplStore::IncludeEntity) and permanent rows past ~32.7k corrupt ' +
-      'stream-out ranges. Convert placements to binary streams (unlinked pairs) or cull.';
+      'stream-out ranges — no adjuster lifts this one. Convert placements to binary streams (unlinked ' +
+      'pairs), cull, or ship with perfect-map.asi.';
     if (!allowTextRowOverflow) {
       throw new Error(message);
     }
     console.warn(`  ! --allow-text-row-overflow: ${message}`);
-  }
-  if (used.length === TEXT_IPL_SLOT_CAP) {
-    console.warn(
-      '  ! zero slot headroom: any modloader mod adding a text IPL with inst rows will overflow ' +
-        'IplEntityIndexArrays in-game',
-    );
-  }
-  if (used.length > TEXT_IPL_SLOT_CAP) {
-    throw new Error(
-      `${used.length} text IPLs with inst rows exceed SA's ${TEXT_IPL_SLOT_CAP}-slot IplEntityIndexArrays ` +
-        `(unbounded — overflowing corrupts CIplStore). Merge or drop mod IPLs:\n  ${used.join('\n  ')}`,
-    );
   }
 }
 

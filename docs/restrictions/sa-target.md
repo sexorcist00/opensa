@@ -16,11 +16,13 @@ The measured numbers live in [`edge-cases/sa-runtime-limits.md`](../edge-cases/s
 | FLA ID pools | TXD 6000 / COL 275 / IPL 280 | heap corruption during data load — the crash lands right after `shopping.dat` |
 | Model id | **≤ 18630** | silently fails to load; "HD swapped but nothing changed" |
 
-The first three are **checked by the pmb build** (`checkTextIplSlotBudget`, `checkImgIdBudgets`) — but
-`checkImgIdBudgets` reads the built `sa/` tree, so **an `--exclude sa` run never runs it.** An opensa-only
-build cannot tell you that you blew the real game's pools.
+The first three are **read by the pmb build** (`checkTextIplBudgets`, `checkImgIdBudgets`), and since
+2026-08-08 both run on the built `sa/` tree — so **an `--exclude sa` run runs neither.** An opensa-only build
+cannot tell you that you blew the real game's pools. Only int16 still FAILS a build; the 39 slots are a
+printed line, because the target has no such array.
 
-**Caught:** on a `:sa` build, yes, loudly. On a `:opensa` build, no — and that is now the common case.
+**Caught:** on a `:sa` build, int16 loudly and the stock slot cost as a report. On a `:opensa` build, no —
+and that is now the common case.
 
 > **Stock SA is NOT a target of this project (2026-08-08, the user's call)** — the declared configuration is
 > OLA + FLA plus our own `perfect-map.asi`. The table above is what STOCK costs, kept because a plan still
@@ -36,23 +38,30 @@ build cannot tell you that you blew the real game's pools.
 
 ## A ceiling is enforced on the branch whose target has it — never on the shared build
 
-The two facts above cut in opposite directions and both are live:
-
-- `checkImgIdBudgets` reads the built `sa/` tree, so an opensa-only run never runs it — an `sa/` ceiling
-  going **unchecked**;
-- `checkTextIplSlotBudget` runs on the **common baked build**, before the `sa/`/`opensa/` split
-  (`perfect-map-builder/src/pipeline.ts:206`), so an opensa-only run is still refused past
-  `TEXT_ROW_CAP = 30 000` and warned at 39 slots — an `sa/` ceiling wrongly **enforced**. Neither number
-  reaches an OpenSA code path: our engine reads a pak, and has no building pool, no int16 index and no
-  `IplEntityIndexArrays`.
-
 The rule for a new plan: **decide which target a ceiling belongs to, and put its guard on that branch.** A
-shared-stage guard is not "safe by default" — it silently rations the target that does not have the limit.
-The escape currently in the tree (`--allow-text-row-overflow`) is the shape of the problem, not a fix: an
-operator flag is what a missing target split looks like.
+shared-stage guard is not "safe by default" — it silently rations the target that does not have the limit,
+and the build still succeeds, which is indistinguishable from success.
 
-**Caught:** no, in both directions, and the enforcement half is the worse one — the build SUCCEEDS. It just
-carries a fraction of what the target could hold, which is indistinguishable from success. Owned by
+**Enforced since 2026-08-08** (07/04): `checkTextIplBudgets` moved off the common baked build onto the `sa/`
+branch, beside `checkImgIdBudgets`, and its two ceilings split by whether the target still HAS them — int16
+rows throw (no adjuster lifts that one), the 39 slots are a report (OLA's `EntityIpl = unlimited`). Moving it
+also fixed a false PASS in the other direction: the sa LOD stage appends hole-fill instances to the text IPLs
+*after* the split, so the shared-build count was never the count SA loads.
+
+Two things the move did not fix, and both are live:
+
+- `checkImgIdBudgets` and now `checkTextIplBudgets` read the built `sa/` tree, so an opensa-only run runs
+  neither — an `sa/` ceiling going **unchecked** on the common case;
+- the `opensa/` branch has **no budget guard of its own**. SA's numbers reach no OpenSA code path (our engine
+  reads a pak: no building pool, no int16 index, no `IplEntityIndexArrays`), and the streaming budget that
+  should replace them has never been measured. The build ANNOUNCES the gap on every opensa run rather than
+  leaving it silent, which is the most that can be said honestly until the measurement exists.
+
+`--allow-text-row-overflow` survives the split, narrowed: it is no longer an escape from a ceiling the target
+does not have (opensa never runs the guard now), only the deliberate over-int16 `sa` build the int16 repro
+needs (`tools-debug/sa-int16-repro`).
+
+**Caught:** the enforcement half, yes. The unchecked half, no. Owned by
 [07/04](../roadmap/0.5.0/plans/07-lod-generators-extended/lod-procobj-generator/04-slot-economy-and-budgets.md).
 
 ## In-game bisection of pool exhaustion gives false negatives
