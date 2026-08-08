@@ -142,7 +142,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
   const bakes = options.bakes ?? false;
   const models = options.models ?? true;
   const log = options.log ?? ((message: string): void => console.log(`[opensa-pack] ${message}`));
-  const textures: TextureTarget = options.textures ?? (options.forceRgba8 === true ? 'rgba8' : 'bc');
+  const textures = resolveTextureTarget(options);
   // ASTC is an RGBA8 build plus one encode pass: the planner has to decode every layer either way, so this
   // is the ONE place the two switches are tied together (`astc-encode.ts` refuses a BC layer on purpose).
   const forceRgba8 = textures !== 'bc';
@@ -287,6 +287,17 @@ export function readAppVersion(): null | string {
   } catch {
     return null;
   }
+}
+
+/**
+ * Which format a build WRITES, from the two spellings that can ask for it.
+ *
+ * One function rather than the expression in two places: the pack and the recipe it records must never
+ * disagree about what the pak is — a report that describes a different build than the one on disk is worse
+ * than no report, because it is believed.
+ */
+export function resolveTextureTarget(options: Pick<PackOptions, 'forceRgba8' | 'textures'>): TextureTarget {
+  return options.textures ?? (options.forceRgba8 === true ? 'rgba8' : 'bc');
 }
 
 /** The two texture-resolution ledgers (085 rows B/F): cross-TXD rescues (info) and true misses (warn). */

@@ -14,6 +14,8 @@ import { execFileSync } from 'node:child_process';
 
 import type { PackOptions, TextureTarget } from './pack';
 
+import { resolveTextureTarget } from './pack';
+
 export interface PakBuildRecipe {
   /** Ambient-occlusion bake — the slowest stage, and the first thing a field run drops. */
   readonly ao: boolean;
@@ -79,9 +81,9 @@ export function buildRecipe(
     platforms: subset(options.platforms),
     rect: options.rect ?? null,
     rgba8: options.forceRgba8 ?? false,
-    // The same resolution `packGameDir` runs, and deliberately the same expression rather than a value
-    // threaded in: a recipe that disagreed with the build it describes is worse than one that is absent.
-    textures: options.textures ?? (options.forceRgba8 === true ? 'rgba8' : 'bc'),
+    // The same resolver `packGameDir` runs, never a second copy of the rule: a recipe that disagreed with
+    // the build it describes is worse than one that is absent.
+    textures: resolveTextureTarget(options),
     vehicles: subset(options.vehicles),
   };
 }
