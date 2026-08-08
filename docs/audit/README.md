@@ -96,3 +96,12 @@ interpret them.
   target, then narrowed to TWO when stock SA was ruled out of scope — which retired the slot economy 04 is
   named after and left int16, ours, as the only ceiling. Two new instruments, and **both self-checks fired on
   their first run**: pak particle positions are cell-LOCAL, and "the cap is finite" is not "the cap binds".
+- [`plan-07-target-selector-and-density-lever.md`](./plan-07-target-selector-and-density-lever.md) — 07/04's
+  first two tasks shipped (the target selector, DERIVED from `--exclude` so no operator can forget it; the
+  guard move onto the built `sa/` tree, which also fixed a false PASS nobody was looking for), and then the
+  perf budget could not be taken. The knob built for the measurement **falsified the plan's density
+  premise**: 3× the cutoff yields **+3.6 %** objects, because `cullByMinDistance` culls with the
+  `procobj.dat` MINDIST column — four values map-wide, clustered by surface family, and documented by our own
+  parser as the *draw* distance. The A/B also found the harness drifting further than the content (control
+  scene +107 % triangles → a filed collision defect). The audit itself caught a NaN hole in the new guard
+  that would have emptied the clutter layer in silence.
