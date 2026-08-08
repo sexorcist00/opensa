@@ -98,7 +98,7 @@
     "phone": "bash scripts/phone.sh",
     "phone:setup": "bash scripts/phone-setup.sh",
     "pre-commit": "lint-staged --config .lintstagedrc.cjs",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "preview": "vite preview",
     "release": "release-it",
     "serve:static": "tsx scripts/serve-static.ts",

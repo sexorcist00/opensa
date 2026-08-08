@@ -219,9 +219,11 @@ optional deps — but npm already filters those by `os`/`cpu`, so an arm64 phone
 ones anyway. What `--omit=optional` *would* skip is `@esbuild/android-arm64`, which is exactly the binary
 `tsx` needs to run a single line of TypeScript.
 
-And do not reach for `--ignore-scripts` to get past the husky failure either: esbuild installs its platform
-binary from a `postinstall`, so silencing scripts trades one break for a worse one. Deleting the one script
-that fails is the surgical fix, and a git hook is meaningless on a phone.
+And do not reach for `--ignore-scripts` to get past a husky failure: esbuild installs its platform binary
+from a `postinstall`, so silencing scripts trades one break for a worse one. Since 2026-08-08 the hook does
+not fail at all — `prepare` is `husky || true`, because `--omit=dev` PRUNES husky and npm then runs a
+`prepare` whose command no longer exists (`husky: not found`, exit 127, and the install dies after having
+already pruned `tsx`). `HUSKY=0` does not help: it quiets husky, it does not stop npm from calling it.
 
 Put the game's `data/`, `models/` **and `anim/`** under `game-src/original/`. `anim/` is not optional the
 moment peds are converted: without `anim/ped.ifp` the pack falls back to the BIND POSE and says so
