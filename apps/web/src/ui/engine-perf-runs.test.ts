@@ -66,7 +66,7 @@ describe('setupPerfRuns settle', () => {
   describe('negative cases', () => {
     it('does not begin a leg while the new anchor’s ring is still pending (the stale poll)', async () => {
       const clock = installFrameClock();
-      let teleportFrame = 0;
+      let teleportFrame = -1; // the frame the scene's FIRST teleport landed on (frame 0 is a real answer)
       let sawPending = false;
       const legStart: LegStart[] = []; // pushed once, by the first beginSamples the sweep makes
       // The ring around the OLD anchor is already drained, so the first polls answer 0 for a ring that has
@@ -90,7 +90,9 @@ describe('setupPerfRuns settle', () => {
         },
         params: new URLSearchParams(`bench=${OCEAN.key}`),
         teleportPlayer: (): void => {
-          teleportFrame = clock.frame();
+          if (teleportFrame < 0) {
+            teleportFrame = clock.frame(); // the settle's re-warp goes to the SAME anchor: the ring is unchanged
+          }
         },
       });
 
@@ -119,7 +121,9 @@ describe('setupPerfRuns settle', () => {
         },
         // The render ring is drained the whole time — only the GROUND can hold this leg back.
         getStream: (): StreamStats => streamStats(0),
+        groundBelow: (at, maxDrop): null | number => world.groundBelow(at, maxDrop),
         params: new URLSearchParams(`bench=${OCEAN.key}`),
+        playerProbe: (): { grounded: boolean; z: number } => ({ grounded: world.grounded(), z: world.playerZ() }),
         // Exactly what the host wires today (engine-canvas-host: perf-runs' own inline teleport).
         teleportPlayer: (anchor): void => {
           world.teleport([anchor[0], anchor[1], anchor[2]]);
@@ -207,6 +211,7 @@ function installFrameClock(onFrame?: () => void): { frame: () => number } {
 /** A real physics world with the host's player capsule and its collision streaming, driven per frame. */
 async function physicalWorld(): Promise<{
   dispose: () => void;
+  groundBelow: (at: readonly [number, number, number], maxDrop: number) => null | number;
   grounded: () => boolean;
   groundExists: () => boolean;
   groundReleasedAtFrame: () => number;
@@ -272,6 +277,7 @@ async function physicalWorld(): Promise<{
 
   return {
     dispose: (): void => physics.dispose(),
+    groundBelow: (at, maxDrop): null | number => physics.groundBelow([at[0], at[1], at[2]], maxDrop, capsule.body),
     grounded: (): boolean => Velocity.grounded[player] === 1,
     groundExists: (): boolean => physics.groundBelow([spawn[0], spawn[1], OCEAN.anchor[2] + 50], 100) !== null,
     groundReleasedAtFrame: (): number => groundReleasedAtFrame,
@@ -305,7 +311,10 @@ function silentHost(): PerfRunsHost {
     fs: {} as AssetFileSystem,
     getStream: (): StreamStats => streamStats(0),
     getVehicles: (): null => null,
+    // A world whose ground is already there — the runs that measure the RING override this.
+    groundBelow: (at): number => at[2] - 1,
     params: new URLSearchParams(),
+    playerProbe: (): { grounded: boolean; z: number } => ({ grounded: true, z: OCEAN.anchor[2] }),
     setBenchCamera: vi.fn(),
     setHour: vi.fn(),
     setSoakStatus: vi.fn(),

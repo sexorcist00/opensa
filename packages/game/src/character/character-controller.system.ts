@@ -45,6 +45,18 @@ interface AirStep {
 /** Gravity integrated into the kinematic body's vertical velocity (Z-up). */
 const GRAVITY = -9.81;
 
+/**
+ * How far the body may be from where THIS controller left it before the move is read as a WARP (m).
+ *
+ * The controller drives a kinematic capsule, so the body lands exactly on the translation it asked for —
+ * anything else moved it: a debugger teleport, a bench leg's anchor, a respawn, a script. Whatever the
+ * motion state described belongs to the place the player LEFT, and carrying it across is how one bench
+ * scene's lost collision race put the player under the mesh at terminal velocity for every scene after it
+ * (plan 102). Deriving the reset here rather than asking every caller to remember it means no warp path can
+ * forget. The margin is far above a real step (sprint 39 u/s ≈ 0.65 m) and far below any teleport.
+ */
+const WARP_DISTANCE = 5;
+
 /** Debug fly mode moves at this multiple of the run speed (horizontal + vertical). */
 const FLY_SPEED_MULTIPLIER = 2;
 
@@ -95,6 +107,9 @@ export class CharacterControllerSystem implements System {
   private flyMode = false;
   private readonly forward = new Vector3();
   private readonly input: InputState;
+  /** Where this controller last left each player's body — the reference a {@link WARP_DISTANCE} jump is
+   *  measured against. An entity with no entry yet has not been moved by us, so nothing is compared. */
+  private readonly lastPlaced = new Map<number, Vec3>();
   private readonly physics: PhysicsWorld;
   /** Last step's jump-held signal — the buffer arms on the RISING edge only (no held-key auto-hop). */
   private prevJumpHeld = false;
@@ -358,6 +373,8 @@ export class CharacterControllerSystem implements System {
     target: { x: number; y: number },
   ): void {
     const { movement } = this.config;
+    const [bodyX, bodyY, bodyZ] = this.physics.readBody(RigidBody.handle[eid]).position;
+    this.resetIfWarped(eid, [bodyX, bodyY, bodyZ]);
     const grounded = Velocity.grounded[eid] === 1;
     const slope = grounded ? this.groundSlope(eid) : null;
     const air = this.advanceAirState(eid, step, jumpEdge, grounded, slope);
@@ -389,6 +406,9 @@ export class CharacterControllerSystem implements System {
       Velocity.y[eid] * step,
       vz * step,
     ]);
+    // A kinematic body lands exactly on the translation asked for, so this IS where the body will be —
+    // the reference the next step measures a warp against.
+    this.lastPlaced.set(eid, [bodyX + move.movement[0], bodyY + move.movement[1], bodyZ + move.movement[2]]);
     Velocity.grounded[eid] = move.grounded ? 1 : 0;
     if (move.grounded && vz < 0) {
       if (!grounded) {
@@ -427,6 +447,7 @@ export class CharacterControllerSystem implements System {
    *  animation) — the one place fly mode moves the player, so the body and Transform never diverge. */
   private placeFlying(eid: number, next: Vec3, vx: number, vy: number, vz: number): void {
     this.physics.teleport(RigidBody.handle[eid], next);
+    this.lastPlaced.set(eid, [next[0], next[1], next[2]]); // our own placement — never a warp
     Transform.x[eid] = next[0];
     Transform.y[eid] = next[1];
     Transform.z[eid] = next[2];
@@ -447,6 +468,31 @@ export class CharacterControllerSystem implements System {
     }
 
     return state === LOCOMOTION_HARD_LAND ? movement.hardLandRecoverySeconds : movement.landRecoverySeconds;
+  }
+
+  /** A body that is not where we left it was moved by something else — see {@link WARP_DISTANCE}. */
+  private resetIfWarped(eid: number, position: Vec3): void {
+    const placed = this.lastPlaced.get(eid);
+    if (placed === undefined) {
+      return;
+    }
+    const jump = Math.hypot(position[0] - placed[0], position[1] - placed[1], position[2] - placed[2]);
+    if (jump > WARP_DISTANCE) {
+      this.resetMotion(eid);
+    }
+  }
+
+  /** Drop one player's motion state: the velocity, the air FSM and the impact the landing tier reads. */
+  private resetMotion(eid: number): void {
+    Velocity.x[eid] = 0;
+    Velocity.y[eid] = 0;
+    Velocity.z[eid] = 0;
+    Locomotion.state[eid] = LOCOMOTION_GROUNDED;
+    Locomotion.stateTime[eid] = 0;
+    // Not just cosmetic: a fall's impact speed survives a warp otherwise, and the next touchdown reads it
+    // as a 20 m/s landing — the ped collapses on arrival and spends 1.8 s standing back up (plan 102).
+    Locomotion.fallSpeed[eid] = 0;
+    this.airTimers.delete(eid);
   }
 
   /** Where a SLIDE goes this step (088/08): sliding off an edge falls, a flattened slope (with
@@ -528,13 +574,9 @@ export class CharacterControllerSystem implements System {
   }
 
   private zeroVelocity(): void {
+    // Both callers (seating into a car, toggling fly mode) also abandon any in-flight jump state.
     for (const eid of query(this.world, [PlayerControlled, Velocity])) {
-      Velocity.x[eid] = 0;
-      Velocity.y[eid] = 0;
-      Velocity.z[eid] = 0;
-      // Both callers (seating into a car, toggling fly mode) also abandon any in-flight jump state.
-      Locomotion.state[eid] = LOCOMOTION_GROUNDED;
-      Locomotion.stateTime[eid] = 0;
+      this.resetMotion(eid);
     }
     this.airTimers.clear();
   }
