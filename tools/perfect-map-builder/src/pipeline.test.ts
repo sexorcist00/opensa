@@ -1,10 +1,11 @@
 import { buildVer2Buffer } from '@opensa/renderware/archive/img-archive';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  buildPerfectMap,
   checkImgIdBudgets,
   checkTextIplBudgets,
   EXCLUDABLE_STAGES,
@@ -13,6 +14,8 @@ import {
   parseExcludedStages,
   resolveBuildTarget,
   runsStage,
+  type StageTiming,
+  writeStageTimings,
 } from './pipeline';
 
 /** A game dir whose gta.dat registers `n` text IPLs with one inst row each. */
@@ -153,6 +156,92 @@ describe('runsStage', () => {
     it('keeps the target that was NOT excluded (excluding one must not cost the other)', () => {
       expect(runsStage('opensa', undefined, new Set(['sa']))).toBe(true);
       expect(runsStage('sa', undefined, new Set(['opensa', 'peds', 'vehicles']))).toBe(true);
+    });
+  });
+});
+
+describe('buildPerfectMap source/out overlap', () => {
+  let out: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-work-'));
+  });
+
+  afterEach(() => {
+    rmSync(out, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it('refuses a source inside <out>/.work instead of wiping it, and leaves the intermediate intact', async () => {
+      const stage = join(out, '.work', '5-trees');
+      mkdirSync(join(stage, 'models'), { recursive: true });
+      writeFileSync(join(stage, 'models', 'gta3.img'), 'intermediate');
+
+      await expect(
+        buildPerfectMap({ exclude: ['sa'], gamePath: stage, inPath: '/nonexistent', outPath: out }),
+      ).rejects.toThrow(/inside .*\.work/);
+      expect(existsSync(join(stage, 'models', 'gta3.img'))).toBe(true);
+    });
+
+    it('refuses a mods root inside <out>/.work for the same reason', async () => {
+      const mods = join(out, '.work', 'mods-src');
+      mkdirSync(mods, { recursive: true });
+
+      await expect(
+        buildPerfectMap({ exclude: ['sa'], gamePath: '/nonexistent', inPath: mods, outPath: out }),
+      ).rejects.toThrow(/--in .*is inside/);
+    });
+  });
+});
+
+describe('writeStageTimings', () => {
+  let out: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-timings-'));
+  });
+
+  afterEach(() => {
+    rmSync(out, { force: true, recursive: true });
+  });
+
+  const knobs = { procobjDensity: 1, procobjMax: 100000, target: 'opensa' } as const;
+
+  describe('negative cases', () => {
+    it('writes nothing when no stage ran — an empty file would read as a build that took no time', () => {
+      writeStageTimings(out, [], knobs);
+
+      expect(existsSync(join(out, 'build-timings.json'))).toBe(false);
+    });
+  });
+
+  const written = (): { config: unknown; stages: StageTiming[]; total: number } =>
+    JSON.parse(readFileSync(join(out, 'build-timings.json'), 'utf8')) as {
+      config: unknown;
+      stages: StageTiming[];
+      total: number;
+    };
+
+  describe('positive cases', () => {
+    it('records the knobs the run was configured with, so two durations are comparable', () => {
+      writeStageTimings(out, [{ name: 'procobj', seconds: 420 }], knobs);
+
+      expect(written().config).toEqual(knobs);
+      expect(written().stages).toEqual([{ name: 'procobj', seconds: 420 }]);
+      expect(written().total).toBe(420);
+    });
+
+    it('totals the stages it was given rather than re-deriving them', () => {
+      writeStageTimings(
+        out,
+        [
+          { name: 'mods', seconds: 84 },
+          { name: 'opensa', seconds: 2221.5 },
+        ],
+        knobs,
+      );
+
+      expect(written().total).toBe(2305.5);
     });
   });
 });

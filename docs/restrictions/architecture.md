@@ -154,6 +154,18 @@ content: the `:sa` script excludes `vehicles` and `peds`, so the real-game build
 printed at the top of every run, but a STALE target left by an older run is indistinguishable from a fresh
 one.
 
+## A build's SOURCE may not live inside its own output
+
+`<out>/.work` is wiped at the top of every run, before any stage reads `--game` or `--in`. So the obvious
+fast path for re-running one stage — `--game <out>/.work/5-trees --out <out>` — deletes the intermediate it
+was about to read. Copy the stage build out of `.work` first, or point `--out` somewhere else. The same
+applies to `--in`.
+
+**Caught:** yes, since 2026-08-09 — pmb refuses the overlap by name before the wipe
+(`pipeline.ts`, two tests in `pipeline.test.ts`). Before that it was silent in the worst way: the run died on
+a missing `gta3.img` several seconds AFTER the intermediates were already gone, so the error named the
+symptom and never the cause. It cost a full rebuild that day.
+
 Detail: [`architecture/perfect-map-builder.md`](../architecture/perfect-map-builder.md).
 
 ## A debug view has exactly ONE owner of what it shows

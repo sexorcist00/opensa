@@ -125,6 +125,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   logTarget(target, options.target !== undefined, excluded);
 
   const work = join(outPath, '.work');
+  refuseSourceInsideWork(work, gamePath, inPath);
   rmSync(work, { force: true, recursive: true });
   mkdirSync(work, { recursive: true });
 
@@ -206,6 +207,19 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   });
 
   const produced: { dir: string; name: string }[] = [];
+  const timings: StageTiming[] = [];
+  // Timed per stage and logged AS EACH ONE ENDS, not only in the summary: a long build that is killed part
+  // way still leaves its numbers in the log. Nothing recorded a build's duration before 2026-08-09, so the
+  // first question asked of the procobj density change ("what did it cost in build time?") had no baseline.
+  const timed = async <T>(name: string, run: () => Promise<T> | T): Promise<T> => {
+    const started = Date.now();
+    const result = await run();
+    const seconds = Number(((Date.now() - started) / 1000).toFixed(1));
+    timings.push({ name, seconds });
+    log(`${name} — ${seconds}s`);
+
+    return result;
+  };
   const untilIndex = until === undefined ? Infinity : STAGE_NAMES.indexOf(until);
   let game = gamePath;
   for (const [index, stage] of runnable.entries()) {
@@ -214,7 +228,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     }
     log(stage.name);
     const out = join(work, `${index + 1}-${stage.name}`);
-    await stage.run(game, out);
+    await timed(stage.name, () => stage.run(game, out));
     if (!keepWork && game !== gamePath) {
       rmSync(game, { force: true, recursive: true }); // consumed → free disk
     }
@@ -247,7 +261,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   if (runsStage('sa', until, excluded)) {
     const sa = join(outPath, 'sa');
     log('sa → sa/');
-    buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa });
+    await timed('sa', () => buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa }));
     // Both SA ceilings are checked HERE, on the tree the real game loads — not on the shared build. The LOD
     // stage appends hole-fill instances to the copied text IPLs, so the common build undercounts the rows.
     checkTextIplBudgets(sa, options.allowTextRowOverflow);
@@ -257,18 +271,20 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   if (runsStage('opensa', until, excluded)) {
     log(OPENSA_BUDGET_NOTICE);
     produced.push(
-      ...(await buildOpensaTarget({
-        alwaysOnLods,
-        config,
-        excludeItems,
-        game,
-        gamePath,
-        holeFillModels,
-        log,
-        outPath,
-        packing: until !== 'opensa' && !excluded.has('pack'),
-        work,
-      })),
+      ...(await timed('opensa', () =>
+        buildOpensaTarget({
+          alwaysOnLods,
+          config,
+          excludeItems,
+          game,
+          gamePath,
+          holeFillModels,
+          log,
+          outPath,
+          packing: until !== 'opensa' && !excluded.has('pack'),
+          work,
+        }),
+      )),
     );
   }
 
@@ -281,6 +297,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   if (!keepWork) {
     rmSync(work, { force: true, recursive: true });
   }
+  writeStageTimings(outPath, timings, { procobjDensity: config.procobjDensity, procobjMax: config.procobjMax, target });
 
   return { produced, stoppedEarly: until !== undefined };
 }
@@ -533,6 +550,12 @@ const IMG_ID_BUDGETS = [
   { ext: '.ipl', label: 'binary IPL files', limit: 280, margin: 8 },
 ] as const;
 
+/** One stage's wall clock. `seconds` is measured, never derived from a diff of two other numbers. */
+export interface StageTiming {
+  name: string;
+  seconds: number;
+}
+
 /**
  * Fail the build when a real-SA ID pool is at (or within `margin` of) its cap — loud at build time instead of
  * heap corruption at boot. Counts every entry across the build's IMG archives.
@@ -614,6 +637,36 @@ export function checkTextIplBudgets(gameDir: string, allowTextRowOverflow = fals
     }
     console.warn(`  ! --allow-text-row-overflow: ${message}`);
   }
+}
+
+/**
+ * The run's wall clock per stage → `<out>/build-timings.json`, plus a summary table in the log.
+ *
+ * **Self-describing** (the A/B rule): the file states the target and the procobj knobs it was produced with,
+ * because a duration is only comparable against another run whose configuration is known. Comparing two
+ * builds is otherwise a guess about what each one was told to do.
+ */
+export function writeStageTimings(
+  outPath: string,
+  timings: readonly StageTiming[],
+  config: { procobjDensity: number; procobjMax?: number; target: BuildTarget },
+): void {
+  if (timings.length === 0) {
+    return;
+  }
+  const total = timings.reduce((sum, stage) => sum + stage.seconds, 0);
+  log('build time');
+  for (const { name, seconds } of timings) {
+    const share = total > 0 ? ((100 * seconds) / total).toFixed(0) : '0';
+    console.log(`  ${name.padEnd(10)} ${formatMinutes(seconds).padStart(8)}  ${share.padStart(3)} %`);
+  }
+  console.log(`  ${'TOTAL'.padEnd(10)} ${formatMinutes(total).padStart(8)}`);
+  writeFileSync(join(outPath, 'build-timings.json'), JSON.stringify({ config, stages: timings, total }, null, 2));
+}
+
+/** `1234.5` → `20m 34s` — the unit a build is actually discussed in. */
+function formatMinutes(seconds: number): string {
+  return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 }
 
 /** The first `lod-always.json` found among `dirs` → lowercased lod-TARGET models that are the real content
@@ -732,4 +785,24 @@ function planChain<T extends { name: ExcludableStage }>(
   }
 
   return chain.filter((stage) => !excluded.has(stage.name));
+}
+
+/**
+ * `<out>/.work` is wiped unconditionally before any stage reads `--game`/`--in`, so a source pointing INTO it
+ * (the obvious fast path for re-running one stage: `--game <out>/.work/5-trees`) is deleted before it is
+ * read. Silent otherwise — the run dies on a missing `gta3.img` seconds after the intermediates are already
+ * gone, naming the symptom and never the cause. It cost a full rebuild on 2026-08-09.
+ */
+function refuseSourceInsideWork(work: string, gamePath: string, inPath: string): void {
+  for (const [flag, path] of [
+    ['--game', gamePath],
+    ['--in', inPath],
+  ] as const) {
+    if (resolve(path).startsWith(resolve(work))) {
+      throw new Error(
+        `${flag} ${path} is inside ${work}, which this run wipes before it reads anything. Copy the ` +
+          'intermediate out of `.work` first, or point --out somewhere else.',
+      );
+    }
+  }
 }

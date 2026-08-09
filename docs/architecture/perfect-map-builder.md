@@ -11,7 +11,11 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
 
 Each stage is another tool's Node API; every stage hands the next a **complete game dir**, so the chain can
 stop anywhere (`--until <stage>`, inclusive, keeps intermediates). Intermediates live under
-`<out>/.work/<n>-<stage>` and are deleted as consumed unless `--keep-work`/`--until`.
+`<out>/.work/<n>-<stage>` and are deleted as consumed unless `--keep-work`/`--until`. **`.work` is wiped at
+the top of every run, before any stage reads `--game`/`--in`** — so a source pointing into it is refused by
+name rather than eaten ([restrictions/architecture.md](../restrictions/architecture.md)). Every stage is
+timed and logged as it ends, and the run writes `<out>/build-timings.json` stating the target and the procobj
+knobs it was configured with.
 
 **A run asks for a TARGET, not for the whole pipeline** (`--exclude <stage,stage>`, repeatable): the named
 stages are dropped and everything after them still runs. That is what the two `build:game:<id>:*` script
