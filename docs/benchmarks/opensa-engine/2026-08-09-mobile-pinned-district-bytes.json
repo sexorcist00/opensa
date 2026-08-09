@@ -1,6 +1,15 @@
 {
-  "note": "THE BYTES COLUMN of 201/1-01, and the last table the step owed. Same phone, same pak (`build/phone-ls-rgba8/pak`, 02:47 09-08-2026, rgba8, --max-texture 256) and same pinned district as the 08-09 frame row, taken with the camera WORKED — down to street level (h 25.7) and across the district — because the column fills with what the streamer requests and a static camera asks for almost nothing after the first load. 799 frames / 33.1 s, `warnings` empty. It is a second capture, not a replacement: its frame numbers describe a harder camera at a lower eye than the 08-09 baseline row and are recorded here for context rather than as a revision of it.",
-  "device": { "adapter": "arm bifrost", "gpu": "Mali-G51 (ARM, Bifrost)", "css": "360x364", "dpr": 2, "missing": ["texture-compression-bc", "timestamp-query"] },
+  "note": "THE BYTES COLUMN of 201/1-01, and the last table the step owed. Same phone, same pak (`build/phone-ls-rgba8/pak`, 02:47 09-08-2026, rgba8, --max-texture 256) and same pinned district as the 08-09 frame row, taken with the camera WORKED — down to street level (h 25.7) and across the district — because the column fills with what the streamer requests and a static camera asks for almost nothing after the first load. 799 frames / 33.1 s, `warnings` empty. It is a second capture, not a replacement: its frame numbers describe a harder camera at a lower eye than the 08-09 baseline row and are recorded here for context rather than as a revision of it. ARTEFACT GONE (noted 2026-08-09): see the texture-budget row of the same day — `build/phone-ls-rgba8` was a symlink sharing one directory with three other pak names, and later ASTC converts overwrote the pak this capture ran against. The capture itself is unaffected: it was taken live, and every number in it came out of the running console.",
+  "device": {
+    "adapter": "arm bifrost",
+    "gpu": "Mali-G51 (ARM, Bifrost)",
+    "css": "360x364",
+    "dpr": 2,
+    "missing": [
+      "texture-compression-bc",
+      "timestamp-query"
+    ]
+  },
   "runs": [
     {
       "key": "dispatch-bytes-los-santos-centre",
@@ -15,21 +24,68 @@
       "cpuBodyMaxMs": 1068.199999988079,
       "cpuOutsideMeanMs": 30.17872340404644,
       "cpuShareOfFrame": 0.15902987521752057,
-      "cpuSegmentsMs": [["overlay-2d", 3.050438047798166], ["engine-frame", 1.7111389236396484], ["stream", 0.38110137660900256], ["board", 0.27734668308563615], ["other", 0.26933667134582073], ["readout", 0.017521902228774356]],
+      "cpuSegmentsMs": [
+        [
+          "overlay-2d",
+          3.050438047798166
+        ],
+        [
+          "engine-frame",
+          1.7111389236396484
+        ],
+        [
+          "stream",
+          0.38110137660900256
+        ],
+        [
+          "board",
+          0.27734668308563615
+        ],
+        [
+          "other",
+          0.26933667134582073
+        ],
+        [
+          "readout",
+          0.017521902228774356
+        ]
+      ],
       "submitMeanMs": 1.5764705881159355,
       "draws": 110,
       "triangles": 265079,
       "cellsVisible": 4,
       "cellsTotal": 4,
       "residencyMb": 148.021071434021,
-      "cameraAtReport": { "at": [1253.5275640626141, -1489.277055013705], "height": 25.70757246528044 },
+      "cameraAtReport": {
+        "at": [
+          1253.5275640626141,
+          -1489.277055013705
+        ],
+        "height": 25.70757246528044
+      },
       "pakBytesRead": 36415641,
       "pakRequests": 28,
       "pakByKind": [
-        { "bytes": 31104178, "kind": "texture-array", "requests": 20 },
-        { "bytes": 2658756, "kind": "water.bin", "requests": 1 },
-        { "bytes": 2414018, "kind": "cell-hd", "requests": 4 },
-        { "bytes": 238689, "kind": "cell-lod", "requests": 3 }
+        {
+          "bytes": 31104178,
+          "kind": "texture-array",
+          "requests": 20
+        },
+        {
+          "bytes": 2658756,
+          "kind": "water.bin",
+          "requests": 1
+        },
+        {
+          "bytes": 2414018,
+          "kind": "cell-hd",
+          "requests": 4
+        },
+        {
+          "bytes": 238689,
+          "kind": "cell-lod",
+          "requests": 3
+        }
       ]
     }
   ],
