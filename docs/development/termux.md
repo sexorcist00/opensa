@@ -48,6 +48,25 @@ one column:
 Option 1 is the more honest default here: the console's whole point is that it runs on a phone, and a
 baseline taken somewhere the product will never run is a baseline that flatters it.
 
+## Where things are on the phone (read before writing a command with a path in it)
+
+Paths here are not guessable, and two of them are not where the Termux documentation says they are. Measured
+2026-08-09 on the device this chain is captured on:
+
+| What | Path | Notes |
+| --- | --- | --- |
+| the repo | `~/opensa` | `/data/data/com.termux/files/home/opensa` |
+| the game copy | `game-src/original` → `~/storage/downloads/New Folder` | holds `data/` + `models/`; **`~/storage/downloads` is a REAL directory inside Termux's private home**, not the usual `termux-setup-storage` symlink into shared storage |
+| the pristine distribution | `/storage/emulated/0/Download/GTA CORP.rar` | `GTA_CORP/{data,models,SAMP}` — `models/gta3.img` 1 093 664 768 B, `gta_int.img` 198 545 408 B. **This is the restore source**; `pkg install unrar`, then `unrar e <rar> "GTA_CORP/models/<file>" ./` pulls single files without unpacking 2 GB |
+| build output | `build/phone-ls` → `/storage/emulated/0/Download/opensa-build/phone-ls` | on SHARED storage, deliberately outside the game copy — see the symlink rule below |
+| volumes | `/storage/emulated` only | no SD card, so there is no second place to look |
+
+**Two search traps this cost a session to learn.** `~/storage/shared` does not exist here, and `find` does not
+descend into a symlink it is GIVEN unless you pass `-L` — so `find ~/storage/shared …` returns silence that
+reads exactly like "there is no copy of the game on this phone". Search `/storage/emulated/0` for the shared
+side and `~` for the Termux-private side, and remember they are different filesystems with different free
+space.
+
 ## Practical notes
 
 - **The whole setup is `pkg install nodejs-lts git` and then `npm run phone:setup`** — once per device. A

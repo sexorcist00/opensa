@@ -26,7 +26,7 @@
 - Avoid `any`
 - Prefer explicit types for public APIs
 - An OBJECT SHAPE is an `interface`, not a `type` — `@typescript-eslint/consistent-type-definitions` is on
-  and rejects `type Foo = { … }` with *"Use an `interface` instead of a `type`"*. `type` stays for what an
+  and rejects `type Foo = { … }` with _"Use an `interface` instead of a `type`"_. `type` stays for what an
   interface cannot say: unions, intersections, mapped/conditional types, aliases of primitives and tuples
 - Use discriminated unions when appropriate
 - Prefer readonly where possible
@@ -132,7 +132,6 @@ Never edit generated code manually.
   An agent that skips it does not merely lack context: it re-decides a settled question, re-lands work that
   is already in, or contradicts a decision taken with the user, and none of that is visible to the user until
   it has cost a session.
-
   1. `docs/project-goals.md` — what the project is FOR (directive, not aspirational)
   2. `docs/restrictions/README.md` — what a design MAY NOT do
   3. `docs/plans/202-pcad-dispatch/readme.md` — **THE FINAL PLAN**: the product is a web dispatch application
@@ -148,6 +147,7 @@ Never edit generated code manually.
   measured numbers when it ends, in the SAME change — a step whose table still says "not started" while its
   code is merged is how the next agent concludes the work was never done and does it twice. If the reading
   above and the code disagree, the CODE is the truth and the doc is the bug: fix the doc in that session.
+
 - **`main` IS THE ONLY BRANCH THAT SURVIVES. Work lands there, and the branch that carried it is DELETED —
   local and remote — in the same session.** A finished branch left on the remote is not a backup, it is a
   decoy: five of them accumulated once, and answering "is anything lost?" cost a full session of archaeology.
@@ -169,6 +169,7 @@ Never edit generated code manually.
   while a file on it exists nowhere else. Diff the file blobs (`git cat-file -e main:<path>` for existence,
   blob hashes for content), and check the DIRECTION before merging anything — `main` is usually the newer
   side, and the branch is a stale ancestor whose "missing" work would be a regression if replayed.
+
 - **THIS REPOSITORY IS A FORK, AND UPSTREAM MOVES WITHOUT US. PULL IT AT THE START OF EVERY SESSION**, in
   the same breath as the reading order above:
 
@@ -195,6 +196,7 @@ Never edit generated code manually.
   **`200-platform-reach`, `201-dispatch-console`, `202-pcad-dispatch`**, and anything the fork adds continues
   from `203`. Upstream keeps `0xx`/`1xx` and will not reach 200 for years. A citation older than that date
   reads `098/1-01` where the repo now says `201/1-01`.
+
 - **THE DEVELOPMENT MACHINE IS AN ANDROID PHONE RUNNING TERMUX.** Every command handed over is run there, so
   write commands for that environment or they waste the user's time: no `sudo`, `pkg` rather than `apt`,
   paths under `$PREFIX`, and a long job needs `termux-wake-lock` or Android suspends it. The user **has the
@@ -203,6 +205,12 @@ Never edit generated code manually.
   a desktop number, and **Playwright/Chromium headless is effectively unavailable**, so anything that drives
   a browser has to run in the phone's own browser against `npm run dev` instead of a headless capture.
   A "desktop baseline" is not automatically available — see `docs/development/termux.md`.
+  **THERE IS NO PC. The game files live on the phone, and WHERE they live is written down** — the game copy,
+  the pristine `GTA CORP.rar` every restore comes out of, where build output may and may not go, and the two
+  search traps that make a wrong `find` answer "there is no game here" (`~/storage/shared` does not exist,
+  and `find` needs `-L` for a symlink argument). The table is in `docs/development/termux.md` → _Where things
+  are on the phone_; **read it before writing any command that carries a path**, and never invent a source
+  location or hand over a `<placeholder>` — bash will run it literally.
 - **CHECK `docs/project-goals.md` BEFORE writing an idea, a concept or a plan** — it is what the project is
   FOR, and it is directive, not aspirational. OpenSA is compatible with RenderWare; it is NOT a
   reimplementation of San Andreas. Two halves, and dropping either breaks it: **honour the authored DATA**
