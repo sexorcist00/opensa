@@ -53,7 +53,7 @@ export const EXCLUDABLE_STAGES = STAGE_NAMES.filter((name): name is ExcludableSt
 /**
  * What the `opensa` target gets in place of SA's ceilings — today, an announcement that it has none. Our
  * engine has no building pool, no int16 `IplDef` index and no `IplEntityIndexArrays`, so
- * {@link checkTextIplBudgets} does not run here; what replaces it is a STREAMING budget whose number does not
+ * {@link reportTextIplCensus} does not run here; what replaces it is a STREAMING budget whose number does not
  * exist yet (07/04 decisions 4–5 — it has to be measured in our engine, and a cap taken from SA's numbers
  * would be a guess wearing a measurement's clothes).
  *
@@ -65,10 +65,6 @@ export const OPENSA_BUDGET_NOTICE =
   '(07/04 decision 5: the number must be measured in our engine, never inherited from SA)';
 
 export interface BuildPerfectMapOptions {
-  /** Downgrade the int16 text-ROW budget from a build-stopping error to a warning — the 03-asi ghost-barriers
-   *  repro path (an intentionally over-2^15 full build), the ONLY thing it is for now that the guard is
-   *  `sa/`-only and the slot ceiling is a report. Never set for a shipping build. */
-  allowTextRowOverflow?: boolean;
   config?: Partial<BuilderConfig>;
   /**
    * Stages to SKIP, whatever else the run asks for — the target-split directive. Unlike `--until` (which cuts
@@ -264,7 +260,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     await timed('sa', () => buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa }));
     // Both SA ceilings are checked HERE, on the tree the real game loads — not on the shared build. The LOD
     // stage appends hole-fill instances to the copied text IPLs, so the common build undercounts the rows.
-    checkTextIplBudgets(sa, options.allowTextRowOverflow);
+    reportTextIplCensus(sa);
     checkImgIdBudgets(sa);
     produced.push({ dir: sa, name: 'sa' });
   }
@@ -379,8 +375,11 @@ export function parseExcludedStages(argv: readonly string[]): ExcludableStage[] 
  *
  * One combination cannot be honest and is refused at CONFIG time rather than by a guard three stages later
  * (07/02 decision 3): `--target opensa` while the `sa` target is still being built would hand the real game a
- * layer priced against a host with no int16. The reverse — an opensa-only build carrying the `sa` profile —
- * is merely conservative, so it is allowed and logged.
+ * layer priced against a host with no building pool and no RenderWare streaming at all. The reverse — an
+ * opensa-only build carrying the `sa` profile — is merely conservative, so it is allowed and logged.
+ *
+ * The differences that remain are the HOST's, not a ceiling's: SA's `CBuilding` pool and its particle policy.
+ * int16 stopped being one of them on 2026-08-09 (see {@link reportTextIplCensus}) — the target lifts it.
  */
 export function resolveBuildTarget(
   explicit: BuildTarget | undefined,
@@ -389,8 +388,8 @@ export function resolveBuildTarget(
   if (explicit === 'opensa' && !excluded.has('sa')) {
     throw new Error(
       '--target opensa builds the `sa` target too: add --exclude sa, or build with --target sa. The common ' +
-        "chain is shared, so an opensa profile would price the real game's content against a host that has " +
-        'neither int16 nor a building pool.',
+        "chain is shared, so an opensa profile would price the real game's content against a host that has no " +
+        'building pool and no RenderWare streaming.',
     );
   }
 
@@ -519,26 +518,6 @@ async function buildOpensaTarget(step: {
   ];
 }
 
-/** STOCK SA's `IplEntityIndexArrays` usable capacity: one slot per gta.dat text IPL with inst rows, and the
- *  game writes past the array without a bounds check (the "ghost barriers" corruption family — lod-procobj
- *  plan 007, lod-trees plan 011). The struct is declared 40 long, but a build with EXACTLY 40 crashed in-game
- *  on the 40th slot (perfect5) — 39 was the hard line. Stock uses 30 (mod-installer compacts int_cont +
- *  gen_int1 down to 28 and folds mod IPLs into a stock host); the generators add ~9 (`plobj*`, `plotr*`).
- *
- *  **A REPORT since 2026-08-08, not a gate.** The install we target sets OLA's `EntityIpl = unlimited`, so the
- *  array does not exist there and stock is not a target (07/04) — the line stays because a plan still has to
- *  know what it would cost on a plain 1.0, and stock is a report rather than a mode. */
-const TEXT_IPL_SLOT_CAP = 39;
-
-/** SA truncates building-pool indexes to **int16** in `IplDef::firstBuilding/lastBuilding`
- *  (`CIplStore::IncludeEntity`) — permanent text-IPL instances fill the pool's low indexes, and once they
- *  push streamed binary instances past index 32,767 the wrap corrupts CIplStore's stream-out ranges (the
- *  FINAL "ghost barriers" root cause; bisected to exactly 32,768 total rows). Cap at 30k to leave headroom
- *  for the runtime-resident binary instances that share the pool. */
-const TEXT_ROW_CAP = 30000;
-
-/** Fail the build when the baked game registers more inst-bearing text IPLs than SA can hold. */
-
 /** FLA ID-pool budgets for the real-SA build — mirrors the operative FILE_TYPE_* values in the target
  *  install's fastman92limitAdjuster_GTASA.ini (TXD 6000, COL 275, IPL 280; stock pools: 5000/255/256).
  *  Each counts ARCHIVE FILES = ID slots. The margins leave room for SA's runtime slots (script/generic/
@@ -585,24 +564,49 @@ export function checkImgIdBudgets(gameDir: string): void {
 }
 
 /**
- * The `sa/` target's two text-IPL ceilings, split by whether the install we ship to still HAS them (07/04):
+ * What the built `sa/` tree COSTS in permanent text-IPL rows and inst-bearing IPL slots. **A census, not a
+ * gate** (2026-08-09, the user's call): the configuration we ship to always carries `perfect-map.asi` + OLA +
+ * FLA, so SA's int16 pool index and its 39-slot `IplEntityIndexArrays` are lifted where our data lands and
+ * neither is a limit our content is designed against — `docs/project-goals.md` directive 3, and
+ * `docs/gta-sa-original/reference-install.md` for what the target actually sets.
  *
- * - **int16 permanent rows — a THROW.** The one ceiling no adjuster lifts (`0x404B4A` is byte-stock on the
- *   reference install), so it is the gate our own `perfect-map.asi` answers for. Past it the corruption is
- *   silent in the build and lands in-game as ghost barriers.
- * - **the 39 `IplEntityIndexArrays` slots — a REPORT.** OLA sets `EntityIpl = unlimited` on the target, so
- *   the array is not there to overflow. Stock is not a target; it is a line in the log
- *   (`docs/gta-sa-original/reference-install.md`).
+ * What died with the gate, and why it was never a gate worth having:
  *
- * Runs on the BUILT `sa/` tree, like {@link checkImgIdBudgets} — never on the shared build, which both
- * rations the target that has no such ceiling and undercounts this one (the sa LOD stage appends hole-fill
- * instances to the text IPLs after the split).
+ * - **the throw** failed every `sa` build to ration an install we do not build for. Past the 2026-08-09
+ *   procobj column fix the layer alone costs 39 219 rows, so the condition was constant — and a condition that
+ *   is always true is a print statement wearing a guard's clothes.
+ * - **the `TEXT_ROW_CAP = 30000` budget** under it, 2 767 of unmeasured headroom below a ceiling that is itself
+ *   lifted. It never shaped content: nothing culled to fit it. (What DOES shape rows is `linkedHeight` — short
+ *   species ride binary streams at zero permanent rows — and lod-trees' per-area `AREA_ROW_CAP` migration.)
+ * - **`--allow-text-row-overflow`**, which had nothing left to permit.
+ * - **the two stock ceilings as printed scale** — int16's 32 767 (field-bisected to exactly 2^15: 31 300 rows
+ *   clean, 33 210 corrupt) and `IplEntityIndexArrays`' 39 slots. Both are lifted on the target, so printing
+ *   them measured our build against a machine it never runs on. They live in
+ *   `docs/gta-sa-original/reference-install.md` and `docs/open-issues/fixed/ghost-barriers.md`.
+ *
+ * **This is not "guards are bad".** {@link checkImgIdBudgets} beside it still THROWS, and correctly: FLA's
+ * pools are what the target is actually configured with (TXD 6000 / COL 275 / IPL 280 — real numbers, not
+ * `unlimited`), and exhausting one corrupts the heap during data load. A ceiling the target HAS is a gate; a
+ * ceiling it lifted is a museum piece.
+ *
+ * **The census names its own scope**, because both halves of it used to read a missing file as zero rows: an
+ * IPL listed in `gta.dat` but absent on disk silently subtracted its rows, and an absent `gta.dat` skipped the
+ * whole thing without a line. The error only ever ran DOWNWARD, so the count could only ever be falsely quiet —
+ * and it is the number that prices the `CBuilding` pool (013's deferred task), so a lower bound sold as a total
+ * is a wrong answer to a question we have not asked yet.
+ *
+ * Runs on the BUILT `sa/` tree, like {@link checkImgIdBudgets} — never on the shared build, which undercounts
+ * it (the sa LOD stage appends hole-fill instances to the text IPLs after the split).
  */
-export function checkTextIplBudgets(gameDir: string, allowTextRowOverflow = false): void {
+export function reportTextIplCensus(gameDir: string): void {
   const datPath = join(gameDir, 'data', 'gta.dat');
   if (!existsSync(datPath)) {
+    console.warn(`  ! sa text-IPL census SKIPPED — no data/gta.dat under ${gameDir}; this build's row cost is unknown`);
+
     return;
   }
+  const listed: string[] = [];
+  const missing: string[] = [];
   const used: string[] = [];
   let totalRows = 0;
   for (const line of readFileSync(datPath, 'utf8').split(/\r?\n/)) {
@@ -610,32 +614,28 @@ export function checkTextIplBudgets(gameDir: string, allowTextRowOverflow = fals
     if (!match || match[1].toLowerCase().endsWith('.zon')) {
       continue;
     }
+    listed.push(match[1]);
     const file = join(gameDir, match[1].replace(/\\/g, '/'));
-    const rows = existsSync(file) ? parseIpl(readFileSync(file, 'utf8')).length : 0;
+    if (!existsSync(file)) {
+      missing.push(match[1]);
+      continue;
+    }
+    const rows = parseIpl(readFileSync(file, 'utf8')).length;
     if (rows > 0) {
       used.push(match[1]);
       totalRows += rows;
     }
   }
-  log(`sa text-IPL rows: ${totalRows}/${TEXT_ROW_CAP} (int16), slots: ${used.length}/${TEXT_IPL_SLOT_CAP} (stock)`);
-  if (used.length >= TEXT_IPL_SLOT_CAP) {
-    // A report, not a gate: the target runs OLA with `EntityIpl = unlimited`. It says what this build would
-    // cost on a plain 1.0, which is a thing a plan has to know — not a reason to ration the supported install.
-    log(
-      `  · past stock SA's ${TEXT_IPL_SLOT_CAP}-slot IplEntityIndexArrays (${used.length}) — fine on the ` +
-        'target (OLA `EntityIpl = unlimited`), corrupts CIplStore on a stock install',
+  log(
+    `sa map cost: ${totalRows} permanent text-IPL rows, ${used.length} inst-bearing IPLs, ` +
+      `read ${listed.length - missing.length}/${listed.length} listed`,
+  );
+  if (missing.length > 0) {
+    const named = missing.slice(0, 3).join(', ');
+    console.warn(
+      `  ! ${missing.length} of ${listed.length} IPLs listed in gta.dat are MISSING on disk (${named}` +
+        `${missing.length > 3 ? ', …' : ''}) — ${totalRows} is a LOWER BOUND, not this build's row cost`,
     );
-  }
-  if (totalRows > TEXT_ROW_CAP) {
-    const message =
-      `${totalRows} permanent text-IPL rows exceed the ${TEXT_ROW_CAP} budget: SA stores building-pool ` +
-      'indexes as int16 in IplDef (CIplStore::IncludeEntity) and permanent rows past ~32.7k corrupt ' +
-      'stream-out ranges — no adjuster lifts this one. Convert placements to binary streams (unlinked ' +
-      'pairs), cull, or ship with perfect-map.asi.';
-    if (!allowTextRowOverflow) {
-      throw new Error(message);
-    }
-    console.warn(`  ! --allow-text-row-overflow: ${message}`);
   }
 }
 

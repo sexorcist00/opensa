@@ -7,11 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildPerfectMap,
   checkImgIdBudgets,
-  checkTextIplBudgets,
   EXCLUDABLE_STAGES,
   type ExcludableStage,
   OPENSA_BUDGET_NOTICE,
   parseExcludedStages,
+  reportTextIplCensus,
   resolveBuildTarget,
   runsStage,
   type StageTiming,
@@ -88,7 +88,7 @@ describe('resolveBuildTarget', () => {
   describe('negative cases', () => {
     it('refuses an opensa profile while the sa target is still being built', () => {
       expect(() => resolveBuildTarget('opensa', excluding())).toThrow(/--exclude sa/);
-      expect(() => resolveBuildTarget('opensa', excluding('peds', 'vehicles'))).toThrow(/int16/);
+      expect(() => resolveBuildTarget('opensa', excluding('peds', 'vehicles'))).toThrow(/no building pool/);
     });
 
     it('never derives opensa from a run that builds both targets', () => {
@@ -246,7 +246,7 @@ describe('writeStageTimings', () => {
   });
 });
 
-describe('checkTextIplBudgets', () => {
+describe('reportTextIplCensus', () => {
   let dir: string;
 
   beforeEach(() => {
@@ -265,44 +265,66 @@ describe('checkTextIplBudgets', () => {
     writeFileSync(join(dir, 'data', 'gta.dat'), 'IPL DATA\\MAPS\\big.IPL\n');
   };
 
-  describe('negative cases', () => {
-    it('throws when total permanent rows exceed the int16 building-pool budget — the one ceiling nothing lifts', () => {
-      writeRows(30001);
+  /** The reported lines, `console.log` and `console.warn` kept apart — severity is part of what is asserted. */
+  const capture = (): { logs: string[]; warns: string[] } => {
+    const logs: string[] = [];
+    const warns: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((m: unknown) => void logs.push(String(m)));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation((m: unknown) => void warns.push(String(m)));
+    reportTextIplCensus(dir);
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
 
-      expect(() => checkTextIplBudgets(dir)).toThrow(/int16/);
+    return { logs, warns };
+  };
+
+  describe('negative cases', () => {
+    it("does NOT throw past stock SA's int16 pool ceiling — the target lifts it, so the count is only reported", () => {
+      writeRows(32768); // one past 2^15, the row count that used to fail the build
+
+      expect(() => reportTextIplCensus(dir)).not.toThrow();
+      expect(capture().logs.join('\n')).toMatch(/sa map cost: 32768 permanent text-IPL rows/);
     });
 
     it("does NOT throw past stock SA's 39 slots — OLA lifts that array on the target", () => {
       writeGame(dir, 45);
 
-      expect(() => checkTextIplBudgets(dir)).not.toThrow();
+      expect(() => reportTextIplCensus(dir)).not.toThrow();
+      expect(capture().logs.join('\n')).toMatch(/45 inst-bearing IPLs/);
     });
 
-    it('reports the stock slot overflow rather than swallowing it', () => {
-      writeGame(dir, 45);
-      const lines: string[] = [];
-      const spy = vi.spyOn(console, 'log').mockImplementation((message: unknown) => void lines.push(String(message)));
-      checkTextIplBudgets(dir);
-      spy.mockRestore();
+    it('WARNS that the count is a lower bound when a listed IPL is missing on disk, instead of reading it as zero rows', () => {
+      writeGame(dir, 3);
+      rmSync(join(dir, 'data', 'maps', 'a1.IPL'));
 
-      expect(lines.join('\n')).toMatch(/past stock SA's 39-slot IplEntityIndexArrays \(45\)/);
+      const { logs, warns } = capture();
+
+      expect(warns.join('\n')).toMatch(/1 of 4 IPLs listed in gta\.dat are MISSING on disk .*LOWER BOUND/);
+      expect(logs.join('\n')).toMatch(/read 3\/4 listed/);
+    });
+
+    it('WARNS rather than passing silently when the built tree has no gta.dat to count', () => {
+      const { logs, warns } = capture();
+
+      expect(warns.join('\n')).toMatch(/census SKIPPED — no data\/gta\.dat/);
+      expect(logs).toHaveLength(0);
     });
   });
 
   describe('positive cases', () => {
-    it('passes at exactly 39 slots (inst-less IPLs do not count)', () => {
-      writeGame(dir, 39);
+    it('counts every listed IPL, and an inst-less one is listed but takes no slot and no rows', () => {
+      writeGame(dir, 2);
 
-      expect(() => checkTextIplBudgets(dir)).not.toThrow();
+      const { logs, warns } = capture();
+
+      expect(logs.join('\n')).toMatch(/sa map cost: 2 permanent text-IPL rows, 2 inst-bearing IPLs, read 3\/3 listed/);
+      expect(warns).toHaveLength(0);
     });
 
-    it('downgrades the int16 throw to a warning under --allow-text-row-overflow (the asi repro path)', () => {
-      writeRows(30001);
-      const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    it('reports the cost alone — no stock ceiling is quoted at a build that never runs on one', () => {
+      writeGame(dir, 45);
 
-      expect(() => checkTextIplBudgets(dir, true)).not.toThrow();
-      expect(spy).toHaveBeenCalledWith(expect.stringContaining('--allow-text-row-overflow'));
-      spy.mockRestore();
+      expect(capture().logs.join('\n')).not.toMatch(/32767|\b39\b|stock/i);
     });
   });
 });
