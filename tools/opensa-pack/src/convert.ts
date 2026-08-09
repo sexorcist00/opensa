@@ -574,13 +574,6 @@ function countRectCells(
   return count;
 }
 
-/**
- * Seal the texture plan into pak inputs, re-encoding to ASTC 4x4 when the build asked for it (200/2-02).
- *
- * The format lives in the entry META as well as in the `.ostex` header: the manifest is what the runtime's
- * platform check and `texture-budget.ts` read, and a manifest that still said RGBA8 would describe a pak that
- * no longer exists.
- */
 async function encodeTextureArrays(
   planner: TexturePlanner,
   astc: boolean,
@@ -589,10 +582,26 @@ async function encodeTextureArrays(
 ): Promise<OspakInput[]> {
   const encoder = astc ? createAstcEncoder({ threads: astcThreads }) : null;
   const inputs: OspakInput[] = [];
-  for (const array of planner.build()) {
+  const arrays = planner.build();
+  // The ASTC pass is minutes long, single-threaded on a phone, and used to print ONE line before it and one
+  // after — so a working encode and a hung one looked identical for the whole stage. Progress is per array
+  // (the granularity the loop actually has) in mip-0 texels, which is what the eta is proportional to.
+  const totalTexels = arrays.reduce((sum, array) => sum + texelsOf(array.meta), 0);
+  const started = Date.now();
+  let doneTexels = 0;
+  for (const [index, array] of arrays.entries()) {
     const bytes = encoder === null ? array.bytes : await encoder.ostex(array.bytes);
     const meta = encoder === null ? array.meta : { ...array.meta, format: OstexFormat.ASTC4x4 };
     inputs.push(wireCompress({ bytes, key: `array-${array.ref}`, kind: 'texture', meta }));
+    doneTexels += texelsOf(array.meta);
+    if (encoder !== null) {
+      const elapsed = (Date.now() - started) / 1000;
+      const eta = (elapsed / doneTexels) * (totalTexels - doneTexels);
+      log(
+        `astc: array ${index + 1}/${arrays.length} — ${(doneTexels / 1e6).toFixed(1)}/` +
+          `${(totalTexels / 1e6).toFixed(1)} M texels, elapsed ${elapsed.toFixed(0)}s, eta ~${eta.toFixed(0)}s`,
+      );
+    }
   }
   if (encoder !== null) {
     log(
@@ -659,6 +668,18 @@ function planChunks(
   }
 
   return chunks;
+}
+
+/**
+ * Seal the texture plan into pak inputs, re-encoding to ASTC 4x4 when the build asked for it (200/2-02).
+ *
+ * The format lives in the entry META as well as in the `.ostex` header: the manifest is what the runtime's
+ * platform check and `texture-budget.ts` read, and a manifest that still said RGBA8 would describe a pak that
+ * no longer exists.
+ */
+/** Mip-0 texels of one planned array — the progress unit the ASTC pass advances in. */
+function texelsOf(meta: { height: number; layers: number; width: number }): number {
+  return meta.width * meta.height * meta.layers;
 }
 
 function tryGetClump(fs: AssetFileSystem, modelName: string): null | ReturnType<typeof getClump> {
