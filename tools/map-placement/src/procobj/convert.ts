@@ -165,7 +165,14 @@ export function convertProcObj(
   return { datLines, dropped: placed.length - final.length, imgFiles, objects: final.length, rows };
 }
 
-/** Greedy min-distance (XY) cull, spatial-hashed; input is already lottery-sorted so the lowest survive. */
+/**
+ * Greedy min-distance (XY) cull, spatial-hashed; input is already lottery-sorted so the lowest survive.
+ *
+ * **Known to be a misreading of the column, kept until plan 07/02's fix step lands.** MINDIST is a distance
+ * from the CAMERA in the original (`docs/gta-sa-original/procedural-objects.md`), so this exclusion radius
+ * has no counterpart in the game: measured 2026-08-09 it deletes 99.0 % of the placements and leaves a
+ * one-of-each-species-per-50-m look. Do not build a quality argument on it.
+ */
 export function cullByMinDistance(placements: readonly ProcObjPlacement[], minDist: number): ProcObjPlacement[] {
   if (minDist <= 0) {
     return [...placements];
