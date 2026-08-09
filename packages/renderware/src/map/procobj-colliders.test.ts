@@ -38,7 +38,12 @@ const index: CollisionIndex = new Map([['p_rubble05col', rockCol()]]);
 describe('procObjColliders', () => {
   describe('negative cases', () => {
     it('skips models without a COL (grass/flowers stay walk-through)', () => {
-      const batch: ProcObjBatch = { category: 'grass', model: 'veg_procgrasspatch', placements: [placement()] };
+      const batch: ProcObjBatch = {
+        category: 'grass',
+        model: 'veg_procgrasspatch',
+        placements: [placement()],
+        surface: 'p_grass_short',
+      };
       expect(procObjColliders(index, [batch])).toEqual([]);
     });
 
@@ -47,12 +52,18 @@ describe('procObjColliders', () => {
         category: 'rocks',
         model: 'p_rubble05col',
         placements: [placement({ lottery: 1.5 }), placement({ lottery: 2.5 })],
+        surface: 'p_mountain',
       };
       expect(procObjColliders(index, [batch])).toEqual([]);
     });
 
     it('collides nothing for a disabled category (densityOf → 0)', () => {
-      const batch: ProcObjBatch = { category: 'rocks', model: 'p_rubble05col', placements: [placement()] };
+      const batch: ProcObjBatch = {
+        category: 'rocks',
+        model: 'p_rubble05col',
+        placements: [placement()],
+        surface: 'p_mountain',
+      };
       expect(procObjColliders(index, [batch], { densityOf: () => 0 })).toEqual([]);
     });
   });
@@ -63,6 +74,7 @@ describe('procObjColliders', () => {
         category: 'rocks',
         model: 'p_rubble05col',
         placements: [placement({ lottery: 0.2, position: [10, 20, 5] }), placement({ lottery: 1.2 })],
+        surface: 'p_mountain',
       };
       const colliders = procObjColliders(index, [batch]);
       expect(colliders).toHaveLength(1);
@@ -78,6 +90,7 @@ describe('procObjColliders', () => {
         category: 'rocks',
         model: 'p_rubble05col',
         placements: [placement({ lottery: 0.2 }), placement({ lottery: 1.2 }), placement({ lottery: 2.4 })],
+        surface: 'p_mountain',
       };
       expect(procObjColliders(index, [batch], { densityOf: () => 3 })[0].transforms).toHaveLength(3);
       expect(procObjColliders(index, [batch], { densityOf: () => 1.5 })[0].transforms).toHaveLength(2);
@@ -92,6 +105,7 @@ describe('procObjColliders', () => {
           placement({ lottery: 0.2, position: [1, 0, 0] }),
           placement({ lottery: 0.8, position: [2, 0, 0] }),
         ],
+        surface: 'p_mountain',
       };
       const colliders = procObjColliders(index, [batch], { densityOf: () => 3, lotteryCap: 0.5 });
       expect(colliders[0].transforms).toHaveLength(1); // lottery 0.8 is beyond the limit → no body

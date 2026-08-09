@@ -34,12 +34,22 @@ import { procObjCategory } from './procobj-categories';
  * every rule of a surface fires on the same triangle, so mixed clumps are the system working.
  */
 
+/**
+ * One model's placements **on one surface**. The pair is the identity, not the model alone: 19 of the 56
+ * models `procobj.dat` names appear under several surfaces (`p_rubble` sits on `p_wasteground`, `p_mountain`
+ * AND `p_underwaterbarren`), and {@link procObjCategory} reads the surface — so a batch keyed by model alone
+ * took the category of whichever surface the collider walk reached first and gave it to every placement,
+ * including the ones from the other surfaces. Splitting the key fixes that by construction and is what makes
+ * a per-surface density profile expressible at all (lod-procobj plan 010).
+ */
 export interface ProcObjBatch {
   category: ProcObjCategoryName;
   /** Clutter model name (lowercased) — defs/meshes resolve through the regular IDE catalog. */
   model: string;
   /** Sorted by `lottery` ascending — see the density cutoff note above. */
   placements: ProcObjPlacement[];
+  /** The surfinfo surface these placements grew on — the rule's own key, and the secondary density axis. */
+  surface: string;
 }
 
 export interface ProcObjPlacement {
@@ -190,10 +200,13 @@ function scatterFace(
   if (count === 0) {
     return;
   }
-  let batch = batches.get(rule.model);
+  // Keyed by model AND surface — see {@link ProcObjBatch}. The RNG is untouched by the split (it is consumed
+  // in the same order whatever bucket a placement lands in), so the scatter itself is bit-identical.
+  const key = `${rule.model} ${surface}`;
+  let batch = batches.get(key);
   if (!batch) {
-    batch = { category: procObjCategory(rule.model, surface), model: rule.model, placements: [] };
-    batches.set(rule.model, batch);
+    batch = { category: procObjCategory(rule.model, surface), model: rule.model, placements: [], surface };
+    batches.set(key, batch);
   }
   for (let i = 0; i < count; i += 1) {
     // Uniform point on the triangle (sqrt warp keeps it area-uniform, not corner-biased).

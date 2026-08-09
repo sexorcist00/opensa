@@ -65,6 +65,23 @@ describe('scatterProcObjects', () => {
       const batches = scatterProcObjects([collider], groupRulesBySurface([rule()]), SURFACES, 0, 0);
       expect(batches).toEqual([]);
     });
+
+    it('does not let the first surface walked decide the category for a model that scatters on several', () => {
+      // 19 of the 56 models in stock procobj.dat do this; `p_rubble05col` is rocks on land and underwater
+      // below the waterline. Keyed by model alone, one batch took whichever surface came first.
+      const rules = groupRulesBySurface([
+        rule({ model: 'p_rubble05col', surface: 'p_sand' }),
+        rule({ model: 'p_rubble05col', surface: 'p_underwaterbarren' }),
+      ]);
+
+      const batches = scatterProcObjects([triangleCollider(1), triangleCollider(2)], rules, SURFACES, 0, 0);
+
+      expect(batches.map((batch) => [batch.surface, batch.category]).sort()).toEqual([
+        ['p_sand', 'rocks'],
+        ['p_underwaterbarren', 'underwater'],
+      ]);
+      expect(batches.every((batch) => batch.placements.length > 0)).toBe(true);
+    });
   });
 
   describe('positive cases', () => {
