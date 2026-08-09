@@ -57,7 +57,7 @@ pipeline deletes as it consumes it, so no earlier tree could be asked whether a 
 
 The rebuild that carried this was granted by lifting plan 07's ban on rebuilding mid-chain: a rebuild is now
 gated on what it CAPTURES, and the manifest lives in
-[07's working rules](../../roadmap/0.5.0/plans/07-lod-generators-extended/readme.md#working-rules-while-this-plan-runs).
+[07's working rules](../../roadmap/0.5.0/readme.md#working-rules-while-this-plan-runs).
 The one open row above is what that run could not capture, and it is not waiting on another one. The
 plate row was closed by BUILDING THE INSTRUMENT the manifest should have named: a 2.4 m plate at LOD range
 is ~8 px, so no screenshot at any build quality was ever going to answer it.

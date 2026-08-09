@@ -7,7 +7,7 @@ contradicted it.
 
 Records: [`docs/plans/100-2dfx-at-lod-range/04`](../plans/100-2dfx-at-lod-range/04-authored-cull-distance.md),
 [`docs/hacks/`](../hacks/README.md) (two entries, one rewritten and one new),
-[`docs/roadmap/0.5.0/plans/07-lod-generators-extended/`](../roadmap/0.5.0/plans/07-lod-generators-extended/readme.md)
+[`docs/roadmap/0.5.0/plans/07-lod-generators-extended/`](../roadmap/0.5.0/readme.md)
 (01 sized, 02/03/04 rewritten).
 
 ## What it cost
@@ -103,7 +103,7 @@ map-wide — which is why a species is rare, and it is not a cap doing it.
 
 **And on the shipping build the defect is latent, because of our own generator**: `convertProcObj` strips the
 converted species from `procobj.dat`, leaving 8 underwater rules that share the 150 budget comfortably and
-lose none. The plan is therefore not closed but **sequenced after [02](../roadmap/0.5.0/plans/07-lod-generators-extended/lod-procobj-generator/02-density-model.md)**,
+lose none. The plan is therefore not closed but **sequenced after [02](../../tools/lod-procobj-generator/docs/plans/010-density-model.md)**,
 which is what brings the defect back.
 
 ### 7. Plan 07's 02/04 rewritten per target — twice

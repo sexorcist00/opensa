@@ -1,16 +1,36 @@
-# 00 — Which limit do we lift, and who lifts it?
+# 008 — Which limit do we lift, and who lifts it? (CLOSED)
 
-Part of [07 — LOD generators, extended](../readme.md). **A go/no-go review, not an implementation plan — and
-the P0 of the whole density chain.** It runs BEFORE [04](04-slot-economy-and-budgets.md), because 04 assumes
+> **Moved here 2026-08-09 from `docs/roadmap/0.5.0/plans/07-lod-generators-extended/lod-procobj-generator/00`,
+> closed with no live work left.** It was a go/no-go review, and its answer is what governs every ceiling this
+> tool's output crosses, so it belongs beside the tool rather than in a chain of unbuilt plans. The answer
+> shipped in three places: the target split (`--target`, `checkTextIplBudgets`, see
+> [perfect-map-builder/003](../../../perfect-map-builder/docs/plans/003-target-split-and-budget-guards.md)),
+> the rule in [`restrictions/sa-target.md`](../../../../docs/restrictions/sa-target.md), and the captured
+> install in [`gta-sa-original/reference-install.md`](../../../../docs/gta-sa-original/reference-install.md).
+>
+> **Its two remaining tasks were struck the same day, both for the same reason** — slots stopped being a
+> currency when stock SA stopped being a target (`EntityIpl = unlimited` on the install we ship to):
+> *"verify the FLA slot-lift claim"* and *"measure the folding hygiene win"* would each have bought slots
+> that are not scarce. The other two open lines ("write the decision into this file", "amend 04") are done —
+> this banner is the first and [04](013-density-budgets-per-target.md)
+> was rewritten per target on 2026-08-08.
+>
+> **One number below is now known to be a defect rather than a baseline.** Everything costed against "our
+> layer places 15 286 objects" was costed against a misread of `procobj.dat`; the layer places **91 092** at
+> the authored density ([009](009-procobj-dat-columns-as-the-game-reads-them.md)). The int16 conclusion
+> survives — it gets stronger, since the crossing now happens without any density profile at all.
+
+**A go/no-go review, not an implementation plan — and
+the P0 of the whole density chain.** It runs BEFORE [04](013-density-budgets-per-target.md), because 04 assumes
 the answer — it is written as "gated on Task 3, our own ASI" — and that assumption has never been argued
 against the alternative the user raises: **a real SA install will definitely have FLA and OLA anyway.**
 
 ~~Nothing here should be built until this review closes.~~ **CLOSED 2026-08-08 by the user's scope call, not
 by this review's own argument: stock SA is not a target.** The shipping configuration is OLA + FLA for the
 pools and slots plus our own `perfect-map.asi` for int16 — the one ceiling no adjuster lifts
-([`gta-sa-original/reference-install.md`](../../../../../gta-sa-original/reference-install.md)). That answers
+([`gta-sa-original/reference-install.md`](../../../../docs/gta-sa-original/reference-install.md)). That answers
 the question in the title, so the density chain is unblocked and
-[04](04-slot-economy-and-budgets.md) is rewritten around two targets, `sa` and `opensa`. **Everything below
+[04](013-density-budgets-per-target.md) is rewritten around two targets, `sa` and `opensa`. **Everything below
 is the record of how the question was costed, and its stock arithmetic is no longer a constraint to plan
 against** — read it for the int16 story, not for the slot one. What survives as work is the asi's own
 shipping and verification story, which is `asi/perfect-map`'s chain, not this one.
@@ -22,7 +42,7 @@ anything below.
 
 > **Re-measured 2026-08-08, and the price changed.** Our layer places **15 286** objects, not the 24 552 this
 > review was costed against — that figure was the generated streams' RECORD count
-> ([`procobj-layer-census.ts`](../../../../../../scripts/debug/procobj-layer-census.ts)). The target is therefore
+> ([`procobj-layer-census.ts`](../../../../scripts/debug/procobj-layer-census.ts)). The target is therefore
 > 3.77× rather than 2.35×, it costs **24 437** permanent rows rather than 16 312, and map-wide it lands at
 > **38 096 — over the int16 ceiling**. So the conclusion below that "the int16 lift is not on the critical
 > path" is **wrong**: on stock the target misses on rows AND slots, and on the reference install int16 is the
@@ -33,10 +53,10 @@ anything below.
 ## Field run, 2026-08-07 — a clean A/B on someone else's 70k-row map
 
 The user ran the test this review asked for, on the real game, and the install has since been captured in
-full ([`gta-sa-original/reference-install-config.md`](../../../../../gta-sa-original/reference-install-config.md))
+full ([`gta-sa-original/reference-install-config.md`](../../../../docs/gta-sa-original/reference-install-config.md))
 — so the configuration is no longer a report, it is a record. **FLA and OLA were BOTH loaded throughout**
 (our own `perfect-map-asi.log` names both), with OLA owning the IPL zones and FLA's entire `[IPL]` section
-disabled. A pool-raiser being present is required rather than incidental: [004's pivotal correction](../../../../../../asi/perfect-map/docs/plans/004-limit-patches.md)
+disabled. A pool-raiser being present is required rather than incidental: [004's pivotal correction](../../../../asi/perfect-map/docs/plans/004-limit-patches.md)
 records that the int16 bug **cannot manifest at all** without a pool-raiser, because stock `CBuilding` is
 13 000 and a no-adjuster boot dies first at `0x5381A5`. So OLA is the floor the experiment stands on, and
 holding it constant while toggling only the int16 patch is what makes this a single-variable A/B rather than
@@ -115,7 +135,7 @@ the second supersedes the first (they measured different trees: `build/original/
 | per-area `LoadScene` rows (text + binary) | worst 3 822 | — | ~4 096 | `AREA_ROW_CAP` 4 000 | 4 % |
 
 Generated procobj today (**re-measured 2026-08-08** by
-[`procobj-layer-census.ts`](../../../../../../scripts/debug/procobj-layer-census.ts)): **15 286 placed objects**
+[`procobj-layer-census.ts`](../../../../scripts/debug/procobj-layer-census.ts)): **15 286 placed objects**
 — 6 487 of them tall enough for a permanent text LOD row (`plobj0..7`, 8 slots), the other 8 799 riding the
 binary streams with their LOD unlinked. The 51 stream tiles hold **24 552 records** in total: those 15 286 HD
 plus 8 799 LOD plus 467 tree impostors that share the `plotr0` overflow area. 43 species, no TXDs of its own
@@ -136,7 +156,7 @@ exactly its job.
 
 ## What each route actually covers
 
-The decisive fact is already recorded in [ghost-barriers.md](../../../../../open-issues/fixed/ghost-barriers.md)
+The decisive fact is already recorded in [ghost-barriers.md](../../../../docs/open-issues/fixed/ghost-barriers.md)
 and must not be re-litigated:
 
 > Raising pools (FLA/OLA) **cannot** help: the int16 lives in the `IplDef` struct itself and **no limit
@@ -190,7 +210,7 @@ Read together with the measurement, that is close to an answer:
    found simply goes away. **Do not conclude it from this run** — their rows are pure text with no LODs and
    no binary streams, ours are mixed, and `AREA_ROW_CAP` models a `LoadScene` budget that may not be
    per-file at all. It is now the highest-value measurement in the chain, and
-   [04](04-slot-economy-and-budgets.md) is where it belongs.
+   [04](013-density-budgets-per-target.md) is where it belongs.
 
 ## Tasks
 
@@ -207,15 +227,16 @@ Read together with the measurement, that is close to an answer:
 - [x] **Name what was loaded during that run. Answered: OLA, alongside `perfect-map.asi`** — which is the
       only configuration in which the bug is reproducible at all, and which makes the run a single-variable
       A/B. It also **closes 004's deferred-with-OLA open item**: #1 applied and worked with OLA present.
-- [ ] Verify the FLA claim on a real install: does `[IPL] Entity index array` actually lift the 40-slot
-      ceiling, and does it coexist with whatever else the target install runs? Extend the repro dial with a
-      SLOT dial if it only counts rows.
-- [ ] Measure the folding hygiene win separately: our 9 areas average 3 501 of a 4 000-row budget. How many
-      slots does a tight repack recover, and does any area then breach the budget? Measure, do not reason.
-- [ ] Write the decision into this file, then amend [04](04-slot-economy-and-budgets.md) to match — its
-      "gated on Task 3" framing is now known to be wrong, so the amendment is not conditional.
-- [ ] If the answer is "FLA/OLA is enough", state plainly what that costs the stock-target promise, and
-      whether `asi/perfect-map` `004b` still deserves the effort.
+- [~] ~~Verify the FLA claim on a real install~~ — **STRUCK 2026-08-08**: `EntityIpl = unlimited` on the target,
+      so the 40-slot ceiling it would lift is not a ceiling we ship against.
+- [~] ~~Measure the folding hygiene win separately~~ — **STRUCK 2026-08-08** for the same reason: it buys
+      SLOTS, and slots stopped being a currency when stock stopped being a target.
+- [x] Write the decision into this file, then amend [04](013-density-budgets-per-target.md)
+      to match. **Done 2026-08-08** — 04 was rewritten per target and stopped being a slot-economy plan.
+- [x] State what the answer costs the stock-target promise. **Done** — stock is a REPORT, not a mode
+      (04 decision 8): the build says what the artifact needs and what it would breach on a plain 1.0, and
+      never rations the install we do ship to. `asi/perfect-map` `004b` stops being a density prerequisite
+      and becomes what would free us from depending on someone else's plugin.
 
 ## Verification
 

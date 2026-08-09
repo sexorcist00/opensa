@@ -1,6 +1,10 @@
-# 03 — Biome/zone-aware density (desert, forest, mountain)
+# 011 — Biome/zone-aware density (desert, forest, mountain)
 
-Part of [07 — LOD generators, extended](../readme.md). Depends on [02](02-density-model.md) (the density model). Delivers the user's actual ask: density that KNOWS the terrain — more cacti in the desert, more bushes in forest, more rocks on mountain slopes.
+> **UNBUILT.** Moved here 2026-08-09 from the roadmap chain `07-lod-generators-extended/03`, which was dissolved into the tools it touches — see
+> [roadmap 0.5.0](../../../../docs/roadmap/0.5.0/readme.md) for what the chain was and what shipped out of it.
+
+
+Depends on [02](010-density-model.md) (the density model). Delivers the user's actual ask: density that KNOWS the terrain — more cacti in the desert, more bushes in forest, more rocks on mountain slopes.
 
 **02 is per target now (2026-08-08), so this plan is too**: biome is a third axis on top of category×surface, and a biome profile inherits its target's gate. There are two targets — `sa` (OLA + FLA + our asi; int16 is the only ceiling, and past 32 767 map-wide rows the profile depends on `perfect-map.asi`) and `opensa` (no SA ceiling at all). Stock SA is not one. Same rule as 02's decision 3: a profile declares its target and its gate, and the build refuses a mismatch.
 
@@ -14,7 +18,7 @@ Part of [07 — LOD generators, extended](../readme.md). Depends on [02](02-dens
 
 ## Decisions
 
-1. **Join zones into scatter.** Add a point-in-zone lookup at build time so each placement knows its zone/biome — from **`parseZones` in `@opensa/renderware`** (`parsers/text/zon.parser`, already a dependency), with the AABB test owned by the tool. Copy the engine's `cityAt` SHAPE if it helps, but do not import `packages/game`: this is build-time code and the engine layer is not its dependency ([restrictions/architecture](../../../../../restrictions/architecture.md)). Classify zones into biomes: **desert** (Bone County), **forest/countryside** (Red County, Flint County vegetation), **city** (LA/SF/LV), **mountain** (Chiliad / high-slope areas). Biome becomes a third density axis on top of 02's category×surface.
+1. **Join zones into scatter.** Add a point-in-zone lookup at build time so each placement knows its zone/biome — from **`parseZones` in `@opensa/renderware`** (`parsers/text/zon.parser`, already a dependency), with the AABB test owned by the tool. Copy the engine's `cityAt` SHAPE if it helps, but do not import `packages/game`: this is build-time code and the engine layer is not its dependency ([restrictions/architecture](../../../../docs/restrictions/architecture.md)). Classify zones into biomes: **desert** (Bone County), **forest/countryside** (Red County, Flint County vegetation), **city** (LA/SF/LV), **mountain** (Chiliad / high-slope areas). Biome becomes a third density axis on top of 02's category×surface.
 2. **Biome × category density profiles.** A small config: e.g. desert → cacti ×3, bushes(dry shrubs) ×2, grass ×0.5; forest → bushes ×2.5, trees(procobj) ×1.5, flowers ×2; mountain → rocks ×3 (slope-gated), everything else ×0.5. Defaults are conservative and tuned in-game; the table is the deliverable.
 3. **Slope-gated rocks.** Use the face normal `.z` as a slope proxy: rock categories get a density boost on steep faces (low `normal.z`) and thinning on flat ground — so mountains get scree, plains don't. Cheap, no heightmap needed.
 4. **Surface stays the fine filter.** Biome sets the broad multiplier; surface still gates WHICH rules apply (cacti rules are already on sand surfaces). Biome density never places a species on a surface its `procobj.dat` rule forbids — it only scales within allowed surfaces. This keeps authored SA plausibility (no cacti on grass).

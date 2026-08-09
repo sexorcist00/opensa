@@ -1,8 +1,12 @@
-# lod-common/03 — Emitter thinning (the far-view rate budget)
+# 008 — Emitter thinning (the far-view rate budget)
 
-Part of [07 — LOD generators, extended](../readme.md). Depends on [01](../../../../../../tools/lod-common/docs/plans/005-2dfx-keep-policy.md) /
-[02](../../../../../../tools/lod-common/docs/plans/006-2dfx-entry-transform.md) and on the budget model defined by
-[03-asi/010](../../../../../../asi/perfect-map/docs/plans/010-pipeline-keep-2dfx.md). Split out of the old A3
+> **UNBUILT.** Moved here 2026-08-09 from the roadmap chain `07-lod-generators-extended/lod-common/03`, which was dissolved into the tools it touches — see
+> [roadmap 0.5.0](../../../../docs/roadmap/0.5.0/readme.md) for what the chain was and what shipped out of it.
+
+
+Depends on [01](005-2dfx-keep-policy.md) /
+[02](006-2dfx-entry-transform.md) and on the budget model defined by
+[03-asi/010](../../../../asi/perfect-map/docs/plans/010-pipeline-keep-2dfx.md). Split out of the old A3
 so the shared mechanism is not welded to the real-SA consumer that waits on an ASI fix.
 
 **This is 010's deferred half, not a blocked plan.** 009's engine fix shipped and 010 already keeps particles
@@ -24,7 +28,7 @@ generator is the only place that can do it without new engine state.
      per smokestack instead of six). No payload edit, purely which entries survive, so it composes with the
      keep-policy and needs no FX authoring.
    - **parameter scaling** — if the particle payload exposes a rate field
-     ([rw-codec/01](../../../../../../tools/rw-codec/docs/plans/001-typed-2dfx-payload-codecs.md) decodes it), scale it down for the LOD copy.
+     ([rw-codec/01](../../../rw-codec/docs/plans/001-typed-2dfx-payload-codecs.md) decodes it), scale it down for the LOD copy.
      Only if thinning proves insufficient, and it is a payload edit with all the risk that carries.
 2. **Deterministic thinning, and the choice is not "the first N".** Which plume survives must be a pure
    function of the entry set (a stable hash of the entry's position, say) — same input, same LOD, always. A
@@ -54,7 +58,7 @@ generator is the only place that can do it without new engine state.
       same round-trip guard.
 - [ ] Record the per-species table and what each factor was judged on. "It looked right at range" is a
       legitimate answer as long as it says so — and if a factor is a fitted constant rather than a recovered
-      one, it needs a file in [`docs/hacks/`](../../../../../hacks/) in the same change.
+      one, it needs a file in [`docs/hacks/`](../../../../docs/hacks) in the same change.
 
 ## Verification
 
@@ -63,7 +67,7 @@ generator is the only place that can do it without new engine state.
   every factor at 1.0 the output is byte-identical to today. That regression arm replaces the old "dead code
   by design" guard, which the plan-100 carry retired.
 - The budget config has exactly one definition, shared with 010 (grep).
-- **Measure before tuning.** [Plan 100/04](../../../../../plans/100-2dfx-at-lod-range/04-authored-cull-distance.md)
+- **Measure before tuning.** [Plan 100/04](../../../../docs/plans/100-2dfx-at-lod-range/04-authored-cull-distance.md)
   is the only far-view particle measurement anyone has taken, and it found the whole emitter system **below
   the noise floor** on both bench scenes — a positive control (every emitter culled) came out slower than
   both arms. Whatever motivates thinning has to show up over that, or the honest deliverable of this plan is

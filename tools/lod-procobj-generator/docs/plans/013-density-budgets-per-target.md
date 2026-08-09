@@ -1,4 +1,8 @@
-# 04 — Budgets and integration, PER TARGET
+# 013 — Density budgets and integration, PER TARGET
+
+> **UNBUILT.** Moved here 2026-08-09 from the roadmap chain `07-lod-generators-extended/04`, which was dissolved into the tools it touches — see
+> [roadmap 0.5.0](../../../../docs/roadmap/0.5.0/readme.md) for what the chain was and what shipped out of it.
+
 
 > The file is still named for the slot economy because its links are; the plan is not. Slots stopped being a
 > currency on 2026-08-08 — see the banner below.
@@ -6,7 +10,7 @@
 **Rewritten PER TARGET 2026-08-08 (the user's call), and narrowed to TWO targets the same day.** The premise
 banner this file carried — three corrections stacked on an original that was wrong — is spent: what it was
 groping toward is that there is no single answer, because there is no single target. Its history, kept short
-because [density-target.md](../density-target.md) and [00](00-limit-route-review.md) carry it in full:
+because [density-target.md](../density-target.md) and [the closed route review](008-limit-route-review-closed.md) carry it in full:
 written as an int16 story; corrected to a slot story when the layer measured 38/40 slots; corrected again
 when the target install turned out to set both `EntitiesPerIpl` and `EntityIpl` to `unlimited`; and corrected
 a third time when the layer's own baseline fell from 24 552 to **15 286** objects, which put int16 back on the
@@ -14,12 +18,12 @@ path for the 3.77× target.
 
 **And then the target itself was declared, which settles it: stock SA is not one.** The configuration we ship
 to is OLA + FLA plus our own `perfect-map.asi`
-([`gta-sa-original/reference-install.md`](../../../../../gta-sa-original/reference-install.md)). So the slot
+([`gta-sa-original/reference-install.md`](../../../../docs/gta-sa-original/reference-install.md)). So the slot
 array and the per-file buffer — the two ceilings this plan is named after — are `unlimited` where it matters,
 and **this stops being a slot-economy plan**. What is left is one correctness gate and two perf budgets.
 
-Part of [07 — LOD generators, extended](../readme.md). Depends on [02](02-density-model.md)/[03](03-biome-zone-density.md) (the
-density model) and on [00](00-limit-route-review.md)'s route decision. Delivers the actual "MORE objects":
+Depends on [02](010-density-model.md)/[03](011-biome-zone-density.md) (the
+density model) and on [the closed route review](008-limit-route-review-closed.md)'s route decision. Delivers the actual "MORE objects":
 the caps 02/03's density ships against, per target, and perf as the limiter now that no ceiling is.
 
 ## The two targets, and what limits each
@@ -38,29 +42,24 @@ Three things fall out and they are the plan:
    and is already carrying a 72 914-row map on that install. A density profile past 32 767 map-wide rows
    declares that dependency or it is not shippable.
 3. **`opensa/` has no ceiling and is currently capped by SA's.** See the guard finding below. This is where
-   [project-goals directive 3](../../../../../project-goals.md) applies hardest: a 2004 limit is not our
+   [project-goals directive 3](../../../../docs/project-goals.md) applies hardest: a 2004 limit is not our
    limit, and matching one is the choice that needs an argument.
 
-## The guard finding — `opensa/` inherits ceilings it does not have
+## The guard split — SHIPPED, and it left this plan
 
-> **FIXED 2026-08-08** (first task below). The guard is now `checkTextIplBudgets`, it runs on the built `sa/`
-> tree beside `checkImgIdBudgets`, and its two ceilings are split: int16 rows throw, the 39 stock slots are a
-> report. `opensa/` runs neither and announces that it has no ceiling of its own yet. The section below is
-> kept as the finding that motivated it.
+**Done 2026-08-08 and moved to the tool:**
+[`perfect-map-builder/003`](../../../perfect-map-builder/docs/plans/003-target-split-and-budget-guards.md)
+carries the finding (`checkTextIplSlotBudget` ran on the COMMON build, so an opensa-only build threw at a
+30 000-row int16 cap and warned at 39 SA slots — two 2004 numbers no OpenSA code path reads), the target
+selector, and `checkTextIplBudgets` on the built `sa/` tree with int16 throwing and the slots reporting.
 
-`checkTextIplSlotBudget(game, …)` ran on the **common baked build**, at `perfect-map-builder/src/pipeline.ts:206`,
-*before* the split that feeds `sa/` and `opensa/`. So an opensa-only build:
+**What stays this plan's:** the two perf budgets, the `opensa` streaming guard the announcement stands in
+for, and the stock report. None of it is a builder change until a measurement exists.
 
-- **throws** past `TEXT_ROW_CAP = 30 000` permanent text-IPL rows — a cap that exists because SA stores
-  building-pool indexes as int16 in `IplDef`, which no OpenSA code path reads;
-- **warns** at `TEXT_IPL_SLOT_CAP = 39` — SA's `IplEntityIndexArrays`, which our engine does not have.
-
-The escape is a manual `--allow-text-row-overflow` flag, i.e. an operator decision taken build by build,
-which is precisely how a ceiling stays enforced by accident. Nothing fails loudly here: the build succeeds
-and quietly carries less than it could, which is [lesson 28](../../../../../project-goals.md)'s signature —
-a too-conservative build looks exactly like a successful one.
-
-**This plan's first task is therefore not raising a cap; it is putting each cap on the branch that owns it.**
+**And the guard now FIRES.** The 2026-08-09 column fix put the layer at 25 560 permanent rows — ≈ 38 189
+map-wide with stock's 12 629, against int16's 32 767 — at *vanilla* density, with no profile involved. A full
+build including `sa/` throws today. That is decision 3 of [02](010-density-model.md) arriving by accident
+instead of by design, and turning it into a declared profile gate is this plan's.
 
 ## Decisions
 
@@ -114,9 +113,9 @@ a too-conservative build looks exactly like a successful one.
    ProperFixes'. Past the stock slot and per-file ceilings it also requires **OLA**, which our installer has
    never checked for — dropping stock as a target makes an adjuster a dependency rather than a bonus.
    Both go in the installer's presence check, loudly. (Field-proven both directions in
-   [`open-issues/fixed/ghost-barriers.md`](../../../../../open-issues/fixed/ghost-barriers.md).)
+   [`open-issues/fixed/ghost-barriers.md`](../../../../docs/open-issues/fixed/ghost-barriers.md).)
 7. **A raised cap is not a raised density.** Every cap this plan moves is a ceiling; what fills it is
-   [02](02-density-model.md)'s profile, measured, with [01](01-species-representation-floor.md)'s
+   [02](010-density-model.md)'s profile, measured, with [01](012-species-representation-floor.md)'s
    species-floor check re-run at the new density. Raising a cap and reporting the headroom is not a result.
 8. **Stock is a REPORT, not a mode.** Not a target is not the same as not a failure mode: someone will drop
    this build on a plain 1.0. The build prints what the artifact needs (OLA, and `perfect-map.asi` past
@@ -125,67 +124,23 @@ a too-conservative build looks exactly like a successful one.
 
 ## Tasks
 
-**First — put the caps where they belong. None of this needs an ASI, a rebuild, or a density decision:**
+**First — the three tasks that needed no ASI, no rebuild and no density decision. All three landed
+2026-08-07/08 and their record is [`perfect-map-builder/003`](../../../perfect-map-builder/docs/plans/003-target-split-and-budget-guards.md):**
+`AREA_ROW_CAP = 4000` was answered from the target install's own ini (it guards a `gpLoadedBuildings` buffer
+OLA sets to `unlimited`, so the cap is inert where we ship); the **target selector** shipped as
+`@opensa/tool-kit/target` + pmb `--target`, derived from `--exclude`; and the **guard move** shipped as
+`checkTextIplBudgets` on the built `sa/` tree. Two deliberate deviations are recorded there —
+`--allow-text-row-overflow` survives for the `sa-int16-repro` consumer, and `opensa/` got an announcement
+rather than a guard, because its number does not exist yet.
 
-- [x] ~~Find out what `AREA_ROW_CAP = 4000` really models~~ — **ANSWERED 2026-08-07 from the target
-      install's own configuration, no field run needed.** ProperFixes' 9 627-row IPL files load because OLA
-      sets **`EntitiesPerIpl = unlimited`**, which grows exactly the `gpLoadedBuildings` per-file buffer our
-      cap guards (0xBCC0E0 @ 0x5B892A — our own OLA source study in `asi/perfect-map` 004). The cap is not
-      wrong; it is a **stock-target** cap, and it is **inert on the install we ship to**. The same install
-      sets `EntityIpl = unlimited`, so the 40-slot ceiling is gone too, and `Buildings = 100000`. Full
-      capture: [`gta-sa-original/reference-install-config.md`](../../../../../gta-sa-original/reference-install-config.md).
-- [x] **Introduce the target selector** and thread it through pmb → lod-procobj-generator → `convert.ts`.
-      Two values (`sa`, `opensa`), defaulting to today's behaviour so the first commit moves nothing.
-      **DONE 2026-08-08.** `BuildTarget` + `parseBuildTarget` live in `@opensa/tool-kit/target` (the one
-      package every tool can reach without a new edge); pmb takes `--target` and `resolveBuildTarget` DERIVES
-      it from `--exclude` when it is omitted, because the exclusion set is what already declares a target in
-      practice — so `build:game:original:opensa` resolves to `opensa` with no script change, and an operator
-      cannot forget the flag. A run that still builds `sa/` resolves to `sa` (the common chain is shared), and
-      `--target opensa` alongside a `sa/` build is REFUSED at config time — 02 decision 3, checked in a test
-      per pair; the conservative reverse is allowed and logged as leaving headroom.
-      **Two deviations, both deliberate:**
-      1. The `convert.ts` leg is threaded as far as the generator, not into `convertProcObj`, because nothing
-         inside it reads a target yet — the parameter lands with its first consumer (02's density profile).
-         What convert.ts contributes NOW is the number the target is spent on: `buildStreamedIpl` counts the
-         permanent text `rows` where the link is decided, and `convertProcObj` returns it.
-      2. That makes the selector's first real job the layer's **price report** — the generator prints
-         `procobj cost (target <t>): N objects · R permanent text rows · R/N rows/object`, naming int16 on
-         `sa` and no row ceiling on `opensa`. It is the cheap half of the "report the cost as a first-class
-         output" task below, and it is why the flag is not dead weight in its own commit.
-      Behaviour is unchanged: no emitted byte moves, and both hosts still run the SA guards (that is the next
-      task).
-- [x] **Move `checkTextIplSlotBudget` onto the `sa/` branch** (from `pipeline.ts:206`) and split its two
-      ceilings: the int16 row check stays a THROW on `sa/` (it is the asi's gate and the only ceiling the
-      target still has); the 39-slot check becomes a report, since OLA lifts it; `opensa/` gets neither and
-      gains its own budget guard instead (decision 5). Test both branches, and assert the opensa branch still
-      guards SOMETHING rather than silently everything.
-      **`--allow-text-row-overflow` should disappear with it** — an operator flag is what a missing target
-      split looks like.
-      **DONE 2026-08-08**, as `checkTextIplBudgets` (the old name gated slots; it no longer does). It runs
-      beside `checkImgIdBudgets`, on the BUILT `sa/` tree — and that re-basing found a false PASS the move was
-      not looking for: the sa LOD stage appends hole-fill instances to the copied text IPLs *after* the split,
-      so the shared-build count was never the count SA loads. Verified with a run that excludes every stage:
-      the `text-IPL slots:` line is gone from the common chain, and the opensa branch prints its notice.
-      **Two things did NOT go as written, both deliberate:**
-      1. **`--allow-text-row-overflow` stays.** Its problem was that it escaped a ceiling the opensa target
-         does not have; after the split it cannot do that (opensa never runs the gate). What is left is the
-         deliberate over-int16 `sa` build that `tools-debug/sa-int16-repro` documents — a named consumer with
-         open work against it (the asi/sdk behavioural oracle), not a missing target split. Deleting it would
-         have removed the only way to build that repro.
-      2. **`opensa/` got an ANNOUNCEMENT, not a guard** (`OPENSA_BUDGET_NOTICE`). Decision 5's guard needs the
-         streaming number decision 4 has to measure, and this plan's own standard forbids the alternative —
-         "a cap set from the wrong host's number is a guess wearing a measurement's clothes". So the branch
-         says on every run that it carries no ceiling and why, which turns a silent absence into a loud one.
-         **The real guard is still open and is decision 5's line below.**
+**What is left here:**
+
 - [ ] **Keep the permanent-row cost per object as a first-class knob.** 0.424 rows/object today
       (6 487 / 15 286), and it is the whole reason our layout beats a text-IPL mod's by 2.36×. Every density
       profile changes it — a profile that favours TALL species buys rows nobody costed.
       **Half done 2026-08-08**: the number is now READ OFF the run (`buildStreamedIpl` returns `rows`; the
       generator prints objects · rows · rows/object per target) instead of taking a script to recover. It is a
       reported number, not yet a knob — `linkedHeight` is still what moves it, and moving it is the task below.
-- [ ] Pack the generated areas tight. They average 3 501 of a 4 000-row budget today; a repack to the budget
-      is ~2 slots back. **Struck 2026-08-08 with the stock target** — it buys SLOTS, and `EntityIpl =
-      unlimited` means slots are not a currency on the install we ship to.
 - [ ] **What area size does STREAMING want?** `AREA_MAX_PAIRS = 2000` was picked to fit a 4 096-row buffer
       that no longer binds, so the number is unowned rather than tuned. Measure it against settle time and
       hitching (decision 4's opensa budget) and set it from that. This replaces the two slot-recovery tasks
@@ -227,21 +182,21 @@ a too-conservative build looks exactly like a successful one.
   the installer warns without it (and without OLA), and the slot/per-file checks are reports rather than
   throws. `opensa`: the SA guards no longer run, a streamable-object guard does, and the cap it enforces came
   from a measurement in that engine.
-- No target can be built with another's profile ([02](02-density-model.md) decision 3) — checked at config
+- No target can be built with another's profile ([02](010-density-model.md) decision 3) — checked at config
   time, in a test per pair.
 - Denser biomes visible in-game; streaming smooth (no hitch regression); species floor unchanged or handed to
-  [01](01-species-representation-floor.md).
+  [01](012-species-representation-floor.md).
 
 ## Measurements / notes
 
 **2026-08-08 — the first budget attempt, and what it actually found.** Two builds from the canonical
 build's kept `.work/5-trees` stage, density 1 vs 3 (cap raised so it could not bind), benched by the user
-in-game over 9 scenes ([`benchmarks/…/2026-08-08-ingame-07-04-density-ab.json`](../../../../../benchmarks/opensa-engine/2026-08-08-ingame-07-04-density-ab.json)):
+in-game over 9 scenes ([`benchmarks/…/2026-08-08-ingame-07-04-density-ab.json`](../../../../docs/benchmarks/opensa-engine/2026-08-08-ingame-07-04-density-ab.json)):
 
 - **The density cutoff is not the density lever.** 3× the cutoff yields **15 840 objects vs 15 286 — +3.6 %**
   (rows 6 728 vs 6 487, pak +0.30 %, 1139 cells both). `procObjMax` never bound, so MINDIST culled the extra
   candidates: the authored spacing is already saturated at vanilla density. **This falsifies
-  [02](02-density-model.md)'s premise** that "raising density is mostly raise the cutoff" — the only lever
+  [02](010-density-model.md)'s premise** that "raising density is mostly raise the cutoff" — the only lever
   left that moves the count is the authored `procobj.dat` MINDIST, which is a data-honesty decision, not a
   knob, and it is now the gate on this whole plan's density.
 - **What the A/B can honestly say**: +3.6 % clutter costs nothing measurable — six scenes identical to ±0.0 %
@@ -249,7 +204,7 @@ in-game over 9 scenes ([`benchmarks/…/2026-08-08-ingame-07-04-density-ab.json`
   +0.013 ms. It says NOTHING about a streaming budget, because the arms are 3.6 % apart.
 - **The harness drifts more than the content does**, and that is a new blocker: three scenes disagreed by
   amounts no 3.6 % change can produce (control scene `ocean-horizon` +107 % triangles). Filed as
-  [`open-issues/bench-scene-transition-collision.md`](../../../../../open-issues/bench-scene-transition-collision.md)
+  [`open-issues/bench-scene-transition-collision.md`](../../../../docs/open-issues/bench-scene-transition-collision.md)
   — collision is missing across a scene teleport. **The perf budgets below cannot be taken until it is
   fixed**: a sweep whose control scene moves by 107 % cannot resolve a cap.
 

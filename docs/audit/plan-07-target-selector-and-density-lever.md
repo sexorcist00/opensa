@@ -43,7 +43,7 @@ move anything. This is the record of what changed, what it cost, what it bought,
    70, 80) clustered by surface family; the per-species number is `spacing`; and our own parser documents the
    field as *the draw/creation distance*. Its only consumer uses it as a 50–80 m exclusion radius.
    **Not concluded** — `CPlantMgr` has not been read, and the repo rule is to recover the original's meaning
-   first. Full evidence in [02 decision 5](../roadmap/0.5.0/plans/07-lod-generators-extended/lod-procobj-generator/02-density-model.md).
+   first. Full evidence in [02 decision 5](../../tools/lod-procobj-generator/docs/plans/010-density-model.md).
 3. **+3.6 % clutter costs nothing measurable**: six scenes identical to ±0.0 % triangles with `gpuMs.pass`
    within ±0.03 ms; `country-dusk` +0.3 % triangles for +0.013 ms.
 4. **The bench harness drifts more than the content does.** Three of nine scenes disagreed by amounts no
@@ -58,7 +58,7 @@ move anything. This is the record of what changed, what it cost, what it bought,
   measured, and a cap taken from SA's numbers would be a guess wearing a measurement's clothes.
 - **The int16 THROW** — the user's call is that it goes: pmb ships the generated asi and every ceiling becomes
   a warning naming the ini knob (OLA `EntitiesPerIpl`/`EntityIpl`/`Buildings`, FLA `FILE_TYPE_*`). Recorded as
-  [04 decision 5b](../roadmap/0.5.0/plans/07-lod-generators-extended/lod-procobj-generator/04-slot-economy-and-budgets.md),
+  [04 decision 5b](../../tools/lod-procobj-generator/docs/plans/013-density-budgets-per-target.md),
   ordered AFTER the perf budgets, and gated on the build actually shipping the asi — until then the throw is
   the stand-in for a dependency nothing checks.
 - **No test drives `buildPerfectMap`**, so the guard's PLACEMENT on the `sa/` branch is verified by a build

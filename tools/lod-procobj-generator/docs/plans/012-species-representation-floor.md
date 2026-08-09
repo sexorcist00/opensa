@@ -1,10 +1,14 @@
-# 01 — Every species survives the cap (no silently missing type)
+# 012 — Every species survives the cap (no silently missing type)
 
-Part of [07 — LOD generators, extended](../readme.md). Independent of the ASI question
-([00](00-limit-route-review.md)) — this is a FAIRNESS defect in how the caps choose survivors, not a limit
-question. ~~And independent of raised density ([02](02-density-model.md)) — worth fixing at today's
+> **UNBUILT.** Moved here 2026-08-09 from the roadmap chain `07-lod-generators-extended/01`, which was dissolved into the tools it touches — see
+> [roadmap 0.5.0](../../../../docs/roadmap/0.5.0/readme.md) for what the chain was and what shipped out of it.
+
+
+Independent of the ASI question
+([00](008-limit-route-review-closed.md)) — this is a FAIRNESS defect in how the caps choose survivors, not a limit
+question. ~~And independent of raised density ([02](010-density-model.md)) — worth fixing at today's
 density.~~ **Both halves of that were wrong and the 2026-08-08 sizing struck them: at today's density the
-shipping build loses no species at all, and [02](02-density-model.md) is what brings the defect back. This
+shipping build loses no species at all, and [02](010-density-model.md) is what brings the defect back. This
 plan now RUNS AFTER 02** (the user's call, same day).
 
 **The ask:** a section allows 300 objects and three species are eligible there. All three must appear. Not
@@ -110,10 +114,10 @@ zero, it does not stop the rounding.
 
 **What that means for the decision.** The defect is genuine and worth fixing, but nothing in the shipped
 `original` build shows it today. It returns the moment either of two things happens: a game that does NOT run
-`lod-procobj-generator` (its runtime scatter is the full stock set), or [02](02-density-model.md) raising
+`lod-procobj-generator` (its runtime scatter is the full stock set), or [02](010-density-model.md) raising
 density — more candidates per cell is more cap pressure, and the cap is what zeroes.
 
-**DECIDED 2026-08-08 (the user's call): this plan runs AFTER [02](02-density-model.md), re-scoped to the
+**DECIDED 2026-08-08 (the user's call): this plan runs AFTER [02](010-density-model.md), re-scoped to the
 runtime cell cap alone.** The build-time half is closed as a non-defect and its tasks below are struck. The
 plan is not closed as latent — it is sequenced, because 02 is what makes the defect bite in the shipping
 build, and building the floor before the density that provokes it would mean tuning a fix against a

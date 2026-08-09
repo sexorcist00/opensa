@@ -62,7 +62,7 @@ does not have (opensa never runs the guard now), only the deliberate over-int16 
 needs (`tools-debug/sa-int16-repro`).
 
 **Caught:** the enforcement half, yes. The unchecked half, no. Owned by
-[07/04](../roadmap/0.5.0/plans/07-lod-generators-extended/lod-procobj-generator/04-slot-economy-and-budgets.md).
+[07/04](../../tools/lod-procobj-generator/docs/plans/013-density-budgets-per-target.md).
 
 ## In-game bisection of pool exhaustion gives false negatives
 

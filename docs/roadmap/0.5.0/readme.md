@@ -60,33 +60,50 @@ Rewritten against a full recon of the 7-mod target corpus and moved to
 [`docs/plans/097-cleo-basic/`](../../plans/097-cleo-basic/readme.md); the chain that lived here
 (`plans/08-cleo-basic/`, the unstarted 083 rethink) is superseded and deleted.
 
-## LOD generators, extended (moved from 0.4.0, 2026-07-19; restructured 2026-08-07)
+## LOD generators, extended — DISSOLVED into the tools, 2026-08-09
 
-Two generator upgrades, **reorganised into one folder per TOOL** — the old A1–A3 / B0–B4 split cut across
-tool boundaries, so no plan mapped to a shippable diff. **Procobj density** (`lod-procobj-generator`):
-configurable, biome-aware scatter — forest bushes, mountain rocks, desert cacti. That half is what remains
-here.
+**This chain no longer has a folder here.** It began as two generator upgrades (2dfx on LODs, procobj
+density), was reorganised on 2026-08-07 into one sub-folder per tool, and on 2026-08-09 those sub-folders
+moved into the tools themselves — the plans had stopped spanning tools, and a plan that lives beside its code
+cannot drift from it. **Every remaining task is unbuilt work in a tool's own numbered chain:**
 
-**The 2dfx half LEFT this plan on 2026-08-07.** Its foundation shipped (`rw-codec/001` typed payload codecs,
-`lod-common/005` the carry-policy + `006` `transform2dfxEntry`, `opensa-lod-generator/005` the adoption, all
-moved into their tools) and the rest became [plan 100](../../plans/100-2dfx-at-lod-range/readme.md) after two
-measurements changed its shape: a roadsign's coordinates are WORLD, not model-local, and **nothing reads a
-cell LOD's 2dfx section** — both map consumers gather 2dfx from HD models only. So "roadsigns & escalators
-into baked cells, shippable today" was wrong on both counts, and escalators turned out to have no engine code
-at all ([plan 101](../../plans/101-escalators/readme.md)). What stays filed here from that half is the
-far-view emitter RATE BUDGET (`lod-common/03` + `sa-lod-generator/02`), and it should follow plan 100/04.
+| Tool | Plan | What is left |
+| --- | --- | --- |
+| `lod-procobj-generator` | [013 — density budgets, per target](../../../tools/lod-procobj-generator/docs/plans/013-density-budgets-per-target.md) | **the P1.** The two perf budgets (`opensa`, `sa`), the streaming guard the build currently only ANNOUNCES, and the stock report. Newly urgent: the layer now costs 25 560 permanent rows, so a full `sa/` build throws on int16 — the profile gate arrived by accident and has to be made deliberate |
+| `lod-procobj-generator` | [010 — density model](../../../tools/lod-procobj-generator/docs/plans/010-density-model.md) | per-category / per-surface density and the two shipped profiles. Its first task shipped, so what is left is SHAPING density rather than raising it |
+| `lod-procobj-generator` | [011 — biome density](../../../tools/lod-procobj-generator/docs/plans/011-biome-zone-density.md) | zone × scatter join + slope proxy. Gated on 010, and it inherits a new problem: a density multiplier changes GROUPING as a side effect |
+| `lod-procobj-generator` | [012 — species floor](../../../tools/lod-procobj-generator/docs/plans/012-species-representation-floor.md) | the runtime cell cap zeroing whole species. **Its 19.8 % sizing predates the column fix and must be re-taken** |
+| `lod-common` → `sa-lod-generator` | [008 — emitter thinning](../../../tools/lod-common/docs/plans/008-emitter-thinning.md) → [008 — far-view budget](../../../tools/sa-lod-generator/docs/plans/008-far-view-emitter-budget.md) | **one measurement, then possibly nothing.** Both generators already carry emitters; plan 100/04 found the system below the noise floor with a positive control, so the honest deliverable may be a table of 1.0s |
 
-**The "both are ASI-gated" framing was wrong and has been corrected.** Baked-cell work is not gated at all —
-`opensa-lod-generator` output is OpenSA-only ([restrictions/sa-target.md](../../restrictions/sa-target.md)),
-so real SA never loads it and no plugin is involved. The
-particle half is not waiting either: [`asi/perfect-map`](../../../asi/perfect-map/docs/plans/readme.md)
-Phase 2 shipped (009's patch, 010's pipeline flip), and only its far-view overdraw budget was deferred. On
-the procobj side the binding ceiling is **IPL slots** (measured 2026-08-07: 20 146/32 767 rows but
-**38/40 slots**), which our ASI does not lift — not the int16 row ceiling it does.
+**What shipped out of the chain**, each recorded in the tool it landed in:
+[`rw-codec/001`](../../../tools/rw-codec/docs/plans/001-typed-2dfx-payload-codecs.md) typed 2dfx payload
+codecs · [`lod-common/005`](../../../tools/lod-common/docs/plans/005-2dfx-keep-policy.md) +
+[`006`](../../../tools/lod-common/docs/plans/006-2dfx-entry-transform.md) the carry policy and the entry
+transform · [`opensa-lod-generator/005`](../../../tools/opensa-lod-generator/docs/plans/005-adopt-2dfx-policy.md)
+and [`sa-lod-generator/007`](../../../tools/sa-lod-generator/docs/plans/007-clone-2dfx-policy.md) the two
+adoptions · [`perfect-map-builder/003`](../../../tools/perfect-map-builder/docs/plans/003-target-split-and-budget-guards.md)
+the target split and its guards ·
+[`lod-procobj-generator/008`](../../../tools/lod-procobj-generator/docs/plans/008-limit-route-review-closed.md)
+the closed limit-route review and
+[`009`](../../../tools/lod-procobj-generator/docs/plans/009-procobj-dat-columns-as-the-game-reads-them.md)
+the `procobj.dat` column fix. The rotation-bearing-2dfx step died and came back as
+[plan 100](../../plans/100-2dfx-at-lod-range/readme.md); escalators turned out to have no engine code at all
+([plan 101](../../plans/101-escalators/readme.md)).
 
-How much "more" means is now a number rather than a feeling:
-[plans/07-lod-generators-extended/density-target.md](plans/07-lod-generators-extended/density-target.md)
-costs a shipping mod's density (ProperFixes 2.2.1, **57 583 placed objects**, 2.35× ours) against our own
-build — and finds our layout already **8.3× more row-efficient per object**.
+**The finding that reframed the whole procobj half (2026-08-09).** `procobj.dat`'s two columns were being
+read the way the file's header describes them rather than the way the game spends them: SPACING is a LENGTH
+(`area / spacing²`) and MINDIST is a camera radius, not an inter-object distance. The layer was running at
+**16.8 % of the authored density** with an inverted, evenly-spaced look. Fixed, rebuilt and
+**field-accepted** — 15 286 → **91 092** objects, one bench scene moved (`country-dusk` +12.6 %, the only
+rural one). So "more procobj" was never a stretch goal; it was a return to the data, and the aiming point
+taken from ProperFixes (57 583 objects) is itself **0.63× vanilla**. The research record is
+[`tools/lod-procobj-generator/docs/density-target.md`](../../../tools/lod-procobj-generator/docs/density-target.md)
+— **read its banner first**: every multiplier in it is quoted against 15 286, which is the defect.
 
-Full chain: [plans/07-lod-generators-extended/readme.md](plans/07-lod-generators-extended/readme.md).
+**Two framings this chain got wrong, kept because they are how the corrections were found.** "Both halves are
+ASI-gated" was false — baked-cell work is OpenSA-only ([restrictions/sa-target.md](../../restrictions/sa-target.md)),
+so no plugin is involved, and the particle half was not waiting either
+([`asi/perfect-map`](../../../asi/perfect-map/docs/plans/readme.md) Phase 2 shipped). And "the binding ceiling
+is IPL slots" held only for stock SA, which stopped being a target on 2026-08-08: on the install we ship to
+`EntityIpl` and `EntitiesPerIpl` are `unlimited`, and **int16 is the only correctness ceiling left** — the one
+no adjuster lifts, and ours to clear.

@@ -4,7 +4,7 @@ One session, 8 commits, no feature shipped. What it produced instead: a **measur
 had a guessed one, three falsified premises removed from its steps, plan 100's owed field check taken, and one
 new instrument built because the field could not answer with a screenshot.
 
-Records: [`docs/roadmap/0.5.0/plans/07-lod-generators-extended/`](../roadmap/0.5.0/plans/07-lod-generators-extended/readme.md)
+Records: [`docs/roadmap/0.5.0/plans/07-lod-generators-extended/`](../roadmap/0.5.0/readme.md)
 (the reviewed chain), [`docs/plans/100-2dfx-at-lod-range/`](../plans/100-2dfx-at-lod-range/readme.md) (the
 verdicts), [`2026-08-08-ingame-post-100-rebuild.json`](../benchmarks/opensa-engine/2026-08-08-ingame-post-100-rebuild.json).
 

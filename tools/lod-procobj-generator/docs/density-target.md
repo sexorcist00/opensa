@@ -1,13 +1,17 @@
 # The density target — what a shipping mod actually places
 
-Part of [07 — LOD generators, extended](readme.md). The procobj chain says "more procobj" without ever naming a NUMBER,
+> **Research record, moved here 2026-08-09** from the dissolved roadmap chain
+> `07-lod-generators-extended`. It is the input to [010](plans/010-density-model.md) /
+> [013](plans/013-density-budgets-per-target.md), not a plan of its own.
+
+The procobj chain says "more procobj" without ever naming a NUMBER,
 so every plan under it has been tuned against a feeling. This file fixes the target against a real, shipping
 reference and costs it in the two currencies that decide whether it can ship: **permanent text-IPL rows** and
 **gta.dat IPL slots**.
 
 Everything below was read off a run — the reference off `NO_COMMIT/ProperFixes 2.2.1` on **2026-08-07**, our
 side re-measured off `build/original/opensa` on **2026-08-08** by
-[`scripts/debug/procobj-layer-census.ts`](../../../../../scripts/debug/procobj-layer-census.ts). Nothing here
+[`scripts/debug/procobj-layer-census.ts`](../../../scripts/debug/procobj-layer-census.ts). Nothing here
 is derived from a diff or from an older doc.
 
 > **Our half of this file was wrong until 2026-08-08, and the correction inverts its conclusion.** The
@@ -41,7 +45,7 @@ f92la)"_.
 
 The distribution is heavily skewed — ids 865 and 866 alone are **22 863 rows, 40 % of the whole set**, and the
 tail runs down to a couple of hundred. Worth carrying into
-[01 — species representation](lod-procobj-generator/01-species-representation-floor.md): a hand-tuned
+[01 — species representation](plans/012-species-representation-floor.md): a hand-tuned
 reference set is this lopsided on purpose, so "every species survives" is a floor argument, never an
 equal-share one.
 
@@ -71,7 +75,7 @@ The census also turned up a number no plan had: **816 instances of the converted
 the stock map, outside the generated areas.** No density knob moves them, and counting the layer by MODEL ID
 instead of by file silently adopts them — which is exactly what the first version of the script did.
 
-Note the two numbers that moved since [00's](lod-procobj-generator/00-limit-route-review.md) 2026-07-28
+Note the two numbers that moved since [00's](plans/008-limit-route-review-closed.md) 2026-07-28
 baseline (which measured `build/original/sa`, a different tree): rows are **down** 25 461 → 20 146, slots are
 **up** 37 → 38. Headroom is now **12 621 rows and TWO slots** — one, against the build guard.
 
@@ -87,16 +91,16 @@ baseline (which measured `build/original/sa`, a different tree): rows are **down
 **Their density is 3.77× ours; their row cost per object is 2.36× ours.** The `linkedHeight` binary-stream
 economy is doing what it was built for — at an equal row budget our layout places 2.36× what theirs does —
 but the earlier "8.3×" read the ratio of TOTALS as a ratio of costs, and the real edge is less than half
-that. It is still the [directive-3](../../../../project-goals.md) case where we are already ahead, and the
+that. It is still the [directive-3](../../../docs/project-goals.md) case where we are already ahead, and the
 plans below must not trade it away to buy density; it is a thinner lead than the chain was told.
 
 ### Costing the target: 57 583 objects, our layout
 
 > **This section prices the target against STOCK ceilings, and stock is NOT a target of this project**
 > (settled 2026-08-08: the declared configuration is OLA + FLA plus our own `perfect-map.asi` —
-> [reference-install.md](../../../../gta-sa-original/reference-install.md)). Kept as the record of what those
+> [reference-install.md](../../../docs/gta-sa-original/reference-install.md)). Kept as the record of what those
 > ceilings cost, and because the build guards still enforce some of them until
-> [04](lod-procobj-generator/04-slot-economy-and-budgets.md) splits them by target. **Do not plan against
+> [04](plans/013-density-budgets-per-target.md) splits them by target. **Do not plan against
 > the slot and per-area numbers below** — they are `unlimited` where we ship.
 
 Scale our current mix by **3.77×** and it costs **90 728 binary stream records + 24 437 permanent text LOD
@@ -104,7 +108,7 @@ rows**, in **29 areas** (`AREA_MAX_PAIRS = 2000` pairs per area).
 
 - **Rows: it does NOT fit.** Map-wide permanent text becomes `20 146 − 6 487 + 24 437 = ` **38 096** —
   **5 329 over the 32 767 int16 ceiling** and 8 096 over the build guard. The int16 lift is back **on** the
-  critical path for this target, and it is the one ceiling [00](lod-procobj-generator/00-limit-route-review.md)
+  critical path for this target, and it is the one ceiling [00](plans/008-limit-route-review-closed.md)
   proved no adjuster provides.
 - **Slots: it does not fit either, and by more than was thought.** 29 areas against the 8 the layer ships
   takes slots 38 → **59**, against a ceiling of 40.
@@ -119,20 +123,20 @@ Two intermediate numbers the chain never had, and they are what 02/03 should act
 | The target | 57 583 objects | 3.77× |
 
 So on stock the layer is within 18 % of its ceiling today — which is the same answer
-[00](lod-procobj-generator/00-limit-route-review.md) reached (slots bind first), reached at a much lower
+[00](plans/008-limit-route-review-closed.md) reached (slots bind first), reached at a much lower
 density than the old arithmetic implied. And past the slot wall the NEXT wall is int16, not perf.
 
-That still closes [00's](lod-procobj-generator/00-limit-route-review.md) open option 3 ("fold the generated
+That still closes [00's](plans/008-limit-route-review-closed.md) open option 3 ("fold the generated
 areas into fewer, larger files") **with a number rather than a hope: folding cannot buy this target.** The
 area count is set by the ~4 000-row per-area `LoadScene` budget
-([sa-runtime-limits](../../../../edge-cases/sa-runtime-limits.md)), not by how the files are grouped, so
+([sa-runtime-limits](../../../docs/edge-cases/sa-runtime-limits.md)), not by how the files are grouped, so
 fewer files means areas that breach it.
 
 ### What ProperFixes is actually paying
 
 Its 57 583 rows land on top of stock's 12 629 permanent rows, i.e. **70 212 map-wide — 2.14× the int16
 ceiling** — and its 9 597-row files are **2.4× the per-area `LoadScene` budget**. Both are ceilings our own
-[ghost-barriers record](../../../../open-issues/fixed/ghost-barriers.md) says are structural.
+[ghost-barriers record](../../../docs/open-issues/fixed/ghost-barriers.md) says are structural.
 
 **Field-tested 2026-08-07, and the answer is its own `.asi`.** With OLA loaded throughout — it has to be,
 since the int16 bug cannot manifest without a pool-raiser — removing `ProperFixes.asi` makes the ghost
@@ -140,7 +144,7 @@ barriers appear on its data, and putting **`perfect-map.asi`** in its place remo
 new-game 2dfx crash. One variable across the two arms, so: **OLA does not lift the int16 ceiling**, and our
 own patch carries a foreign 70k-row map where everything it had been proven on before was ours. The shipping
 configuration is therefore BOTH — an adjuster for the pools and slots, our ASI for int16. Details in
-[00](lod-procobj-generator/00-limit-route-review.md).
+[00](plans/008-limit-route-review-closed.md).
 
 **And their 9 627-row IPL files are explained too, which retires the SLOT half of the arithmetic above.** OLA
 sets **`EntitiesPerIpl = unlimited`** on that install — it grows exactly the `gpLoadedBuildings` per-file
@@ -148,7 +152,7 @@ buffer our `AREA_MAX_PAIRS = 2000` guards — and **`EntityIpl = unlimited`**, w
 ceiling. So the "29 areas, 59 slots" cost priced earlier is the **stock** cost; on the install we ship to
 there is no per-file ceiling and no slot ceiling to pay it against. Our cap was never wrong, it is just inert
 here. Capture:
-[`gta-sa-original/reference-install-config.md`](../../../../gta-sa-original/reference-install-config.md).
+[`gta-sa-original/reference-install-config.md`](../../../docs/gta-sa-original/reference-install-config.md).
 
 ### Could a STOCK build do what ProperFixes does? No — and not because of our layout
 
@@ -166,7 +170,7 @@ Re-checked against the mod on 2026-08-08, because "they ship 3.77× of what we d
 - **Our objects cost two rows each against that same buffer, theirs cost one.** A linked pair spends a
   permanent text LOD row plus a binary HD row; an unlinked pair spends two binary rows — and the buffer takes
   an area's text rows *and* its streams together
-  ([sa-runtime-limits](../../../../edge-cases/sa-runtime-limits.md)). So an area carries ~2 000 of our
+  ([sa-runtime-limits](../../../docs/edge-cases/sa-runtime-limits.md)). So an area carries ~2 000 of our
   objects where it would carry ~4 096 of theirs. **That is the same 2.36× rows/object advantage read from the
   other side**: we win on the map-wide permanent-row budget and pay for it in per-area capacity, because our
   objects carry LODs and theirs carry none (`lod = -1` throughout).
@@ -182,34 +186,40 @@ the corrected baseline changes the answer. At 38 096 map-wide permanent rows the
 ceiling by 5 329, and int16 is the one thing OLA demonstrably does NOT lift — so the target is reachable
 **only with `perfect-map.asi` present**, exactly as ProperFixes is only shippable with its own. Our ASI is
 load-bearing for this target rather than optional, which is the opposite of what this file said for a day.
-[04](lod-procobj-generator/04-slot-economy-and-budgets.md) is therefore a perf-budget plan **above** an
+[04](plans/013-density-budgets-per-target.md) is therefore a perf-budget plan **above** an
 int16-gated target, not a perf-budget plan instead of a ceiling story.
 
 ## The target this plan adopts
 
 > **2026-08-09: the aiming point is now known to sit BELOW vanilla, and the ratios below are ratios against
 > a defect.** The `procobj.dat` reverse
-> ([`gta-sa-original/procedural-objects.md`](../../../../gta-sa-original/procedural-objects.md)) recovered
+> ([`gta-sa-original/procedural-objects.md`](../../../docs/gta-sa-original/procedural-objects.md)) recovered
 > the authored density as `area / spacing²`: **90 906** objects for the 43 species this layer converts. Our
 > 15 286 is **16.8 %** of that, and ProperFixes' 57 583 is **0.63×** of it. So "3.77× ours" is not an
 > ambitious multiplier — it is most of the way back to what the data already says, and the mod is a
 > conservative reading of it rather than a stretch. **What stays valid:** every row/slot/area cost per
 > object, the int16 arithmetic, and the reference's 40 %-in-two-species skew. **What does not:** treating
 > 57 583 as a ceiling to aim at, and any multiplier quoted against 15 286 as if that baseline were vanilla.
-> The correction is [02](lod-procobj-generator/02-density-model.md)'s first step; this file is re-derived
+> The correction is [02](plans/010-density-model.md)'s first step; this file is re-derived
 > after it lands and the layer has a real count again.
+>
+> **It landed the same day.** The scatter reads `area / spacing²` and the MINDIST cull is gone, so the layer
+> emits **91 067** objects at vanilla density (+0.18 % on the predicted 90 906) and `procObjMax` went
+> 20 000 → 100 000 to stop the cap being what a measurement measures. Every ratio in the sections below is
+> still stated against 15 286 and is therefore a ratio against the defect — **read them as history until this
+> file is re-derived**, which needs the rebuilt layer's own row/slot/area counts, not an estimate.
 
 **57 583 placed objects, map-wide, as the aiming point — not as a promise.** It is a demonstrated,
 field-accepted density from a mod people actually run, which is the bar
-[project-goals directive 4](../../../../project-goals.md) asks for; it is not a number we invented. Three
+[project-goals directive 4](../../../docs/project-goals.md) asks for; it is not a number we invented. Three
 qualifications go with it:
 
 1. **Distribution beats total.** Their 40 %-in-two-species skew is a hand-authored look, not a scatter model.
-   [02](lod-procobj-generator/02-density-model.md) and [03](lod-procobj-generator/03-biome-zone-density.md)
+   [02](plans/010-density-model.md) and [03](plans/011-biome-zone-density.md)
    have to earn the same look from `procobj.dat` rules plus biome, and the target is the ceiling those
    profiles are allowed to reach — reaching it with the wrong species is a failure, not a pass.
 2. **Perf is part of the specification.** 3.77× the clutter has never been measured in either host. The
-   target is provisional until [04](lod-procobj-generator/04-slot-economy-and-budgets.md) has the frame and
+   target is provisional until [04](plans/013-density-budgets-per-target.md) has the frame and
    streaming numbers; if the engine says 1.6× is the honest ceiling, the target moves and this file records
    why.
 3. **Our objects are not their objects.** Ours carry generated LODs and colliders; theirs carry neither
@@ -217,7 +227,7 @@ qualifications go with it:
    it costs them, and buys visibly more at range. Compare counts, never costs.
 4. **The stock target cannot go there and should stop pretending to.** 1.18× is its whole headroom. Every
    plan below has to be written per target, not per multiplier — see
-   [04](lod-procobj-generator/04-slot-economy-and-budgets.md).
+   [04](plans/013-density-budgets-per-target.md).
 
 ## Re-deriving this file
 

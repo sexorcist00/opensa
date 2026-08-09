@@ -1,17 +1,24 @@
-# sa-lod-generator/02 — Particle emitters on real-SA LODs
+# 008 — The far-view emitter budget (particles on real-SA LODs)
 
-Part of [07 — LOD generators, extended](../readme.md). Depends on [01](01-adopt-2dfx-policy.md) and
-[lod-common/03](../lod-common/03-emitter-thinning.md) (thinning).
+> **UNBUILT.** Moved here 2026-08-09 from the roadmap chain `07-lod-generators-extended/sa-lod-generator/02`, which was dissolved into the tools it touches — see
+> [roadmap 0.5.0](../../../../docs/roadmap/0.5.0/readme.md) for what the chain was and what shipped out of it.
+
+
+Depends on
+[lod-common/03](../../../lod-common/docs/plans/008-emitter-thinning.md) (thinning). Its sibling `01` (the policy adoption) was
+deleted 2026-08-09: it shipped as
+[sa-lod-generator/007](007-clone-2dfx-policy.md) via plan
+100/05, which is now the record.
 
 **The ASI gate this plan was parked behind is already open, and its scope is smaller than A3 assumed.**
-[03-asi Phase 2](../../../../../../asi/perfect-map/docs/plans/readme.md) is done: 009 shipped the
+[03-asi Phase 2](../../../../asi/perfect-map/docs/plans/readme.md) is done: 009 shipped the
 emitter-lifecycle patch (the `FxSystem_c` use-after-free, confirmed in-game), and
-[010](../../../../../../asi/perfect-map/docs/plans/010-pipeline-keep-2dfx.md) already flipped the pipeline —
+[010](../../../../asi/perfect-map/docs/plans/010-pipeline-keep-2dfx.md) already flipped the pipeline —
 `sa-lod-generator` **keeps particles on the verbatim path by default** today, with `--strip-particles` as the
 opt-out for a stock target with no asi (`cli.ts:42`, `finalize.ts:219`). What 010 left open is the far-view
 overdraw budget, deferred on the user's call.
 
-**And the decimate half shipped too, in [plan 100/05](../../../../../../tools/sa-lod-generator/docs/plans/007-clone-2dfx-policy.md).**
+**And the decimate half shipped too, in [plan 100/05](007-clone-2dfx-policy.md).**
 All three clone paths — decimated re-encode, verbatim byte copy, hole-fill — now resolve one keep-set
 through `cloneKeepTypes` (`adapters/gta-sa/finalize.ts:85`, `:95`), so a decimated LOD carries its emitters
 today. **What remains here is the BUDGET and the stock-target regression, nothing else** — the plan's own
@@ -29,7 +36,8 @@ them. So a decimated LOD still carries no emitter, and nothing has ever measured
 verbatim path costs at range.
 
 Baked cells are **not** in scope — that generator's output never loads in real SA
-([01](01-adopt-2dfx-policy.md) has the citation). If our own engine ever wants emitters on cells, that is its
+([`restrictions/sa-target.md`](../../../../docs/restrictions/sa-target.md) has the citation). If our own engine
+ever wants emitters on cells, that is its
 own plan with its own budget, and it is not blocked on anything here.
 
 ## Decisions
@@ -52,19 +60,22 @@ own plan with its own budget, and it is not blocked on anything here.
 
 ## Tasks
 
-- [x] ~~Policy: type-1 → carry-rate-scaled for the asi target on verbatim and decimate~~ — **SHIPPED as plan
-      100/05.** The policy row already reads `carry-rate-scaled` for `clone`; `keepParticles` survives only
-      as the `--strip-particles` override of it, on one line.
-- [x] ~~Decimate path carries the emitters~~ — **SHIPPED as plan 100/05**, through the same keep-set as the
-      other two clone paths. What is left is applying lod-common/03's THINNING to it once the factors exist.
-- [ ] Measure what the ALREADY-SHIPPED verbatim carry costs at range, before adding decimate to it. 010
-      deferred the far-view budget, so this number has never been taken and it is the one that says whether
-      thinning is needed at all.
-- [ ] In-game (Wine, asi target): refinery and plant smoke visible at LOD range through both paths; a new
-      game boots (009's guard); far-view frame cost inside budget. Record per-species factors and fps.
+- [x] ~~Policy: type-1 → carry-rate-scaled on verbatim and decimate~~ and ~~decimate carries the emitters~~ —
+      **BOTH SHIPPED as [plan 100/05](007-clone-2dfx-policy.md).**
+      All three clone paths resolve one keep-set through `cloneKeepTypes`; `keepParticles` survives only as
+      the `--strip-particles` override, on one line.
+- [ ] **Measure what the ALREADY-SHIPPED verbatim carry costs at range.** This is the whole of what is left,
+      and it comes before any mechanism: 010 deferred the far-view budget and nobody has taken the number.
+      [Plan 100/04](../../../../docs/plans/100-2dfx-at-lod-range/04-authored-cull-distance.md) found the emitter
+      system **below the noise floor** with a positive control, so the honest outcome may be a null result —
+      in which case [lod-common/03](../../../lod-common/docs/plans/008-emitter-thinning.md) ships a table of 1.0s and this plan
+      closes.
 - [ ] The deliberate worst case: a viewpoint with the maximum number of emitting LODs in frame. Find it, log
       it, and re-run it after every factor change — an A/B of a tuning factor against two different
       viewpoints proves nothing.
+- [ ] In-game (Wine, asi target), only if the measurement says thinning is needed: refinery and plant smoke
+      visible at LOD range through both paths; a new game boots (009's guard); far-view frame cost inside
+      budget. Record per-species factors and fps.
 - [ ] Stock-target regression: particles fully stripped, byte-identical to today.
 
 ## Verification
