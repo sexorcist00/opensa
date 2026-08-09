@@ -114,7 +114,13 @@ export const BENCH_SCENES: readonly BenchScene[] = [
     // (~20 frames of 110-170 ms, mostly UNATTRIBUTED, plus the known per-type vehicle hitch) — the
     // casino district's density deserves a standing steady-state row like ganton-noon's, and the
     // teleport transient itself is the queued 091 follow-up.
-    anchor: [1934, 1177, 14],
+    // The anchor was authored INSIDE the Flamingo (`flamingo01_lvs` stands at 1932.8, 1177.4): the ground
+    // probe answered 13.0 from a surface the capsule cannot rest on, so the player fell out of the world on
+    // every run of this scene since it was added — cars and all, because residency is anchored to him.
+    // Moved 2026-08-09 onto the standable ground south of the building (`teleport-spot.ts flamingo01_lvs`,
+    // ring z 17.6) which is also 50 m closer to the camera path this scene actually flies. Every strip-noon
+    // row taken before this date measured a falling player and is not comparable.
+    anchor: [1933, 1127, 18],
     cars: { radius: 500, spacing: 30 },
     durationS: 15,
     hour: 12,

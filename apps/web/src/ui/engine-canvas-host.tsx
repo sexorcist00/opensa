@@ -180,6 +180,10 @@ const SLOW_FRAME_MS = 20;
  *  exists to catch the seen-once jump class, not to narrate ordinary motion. */
 const CAM_JUMP_TARGET = 1.5;
 const CAM_JUMP_YAW = 0.35;
+/** Consecutive watched frames that must each report a jump before the run calls it a FALL rather than a
+ *  discontinuity. A jump is a seen-once event by definition; a hundred in a row is the camera chasing a
+ *  player nothing is holding up, and that reads as a wall of `[cam]` lines nobody counts by hand. */
+const CAM_FALL_STREAK = 100;
 
 /** The GTA heading the player spawns facing — the camera seeds behind it, the pose falls back to it. */
 const SPAWN_FACING = Math.PI;
@@ -208,6 +212,8 @@ let touchRef: null | { canEnterExit: () => boolean; source: TouchInputSource } =
 /** The [cam] jump watchdog's last frame (plan 080/09 §4.1) — null until the first watched frame. */
 interface CamWatch {
   focus: [number, number, number] | null;
+  /** Watched frames in a row that reported a jump — {@link CAM_FALL_STREAK} of them is a fall. */
+  jumpStreak: number;
   mode: string;
   target: [number, number, number] | null;
   yaw: number;
@@ -1429,7 +1435,7 @@ async function boot(
   let perfHud = IS_DEV;
   let perfLogs = IS_DEV;
   // The [cam] jump watchdog's last frame (plan 080/09 §4.1) — see `watchCameraJump`.
-  const camWatch: CamWatch = { focus: null, mode: '', target: null, yaw: 0 };
+  const camWatch: CamWatch = { focus: null, jumpStreak: 0, mode: '', target: null, yaw: 0 };
   // Missing-texture highlight (plan 085 row B): magenta stand-ins ON while developing, the quiet material
   // colour in a production build; toggled live from the debugger's Map screen. Applying the flag here is
   // early enough — arrays stream in later and paint on load.
@@ -1879,7 +1885,15 @@ async function boot(
     fs,
     getStream: (): null | StreamStats => lastStream,
     getVehicles: (): EngineVehicles | null => vehicles,
+    // The player's OWN capsule is excluded, or the probe answers with the body it is testing the ground
+    // under: the settle asks about the anchor, and the player is standing exactly on it.
+    groundBelow: (at, maxDrop): null | number =>
+      physics.groundBelow([at[0], at[1], at[2]], maxDrop, RigidBody.handle[playerEid]),
     params,
+    playerProbe: (): { grounded: boolean; z: number } => ({
+      grounded: Velocity.grounded[playerEid] === 1,
+      z: Transform.z[playerEid],
+    }),
     setBenchCamera: (camera): void => {
       benchCamera = camera;
     },
@@ -1901,11 +1915,10 @@ async function boot(
 
       return samples;
     },
+    // The SAME warp the debugger and the phys/video runs take (plan 102): its own inline teleport skipped
+    // the interpolation snap, so a bench leg streaked the ped across the map for a frame.
     teleportPlayer: (anchor): void => {
-      physics.teleport(RigidBody.handle[playerEid], [anchor[0], anchor[1], anchor[2]]);
-      Transform.x[playerEid] = anchor[0];
-      Transform.y[playerEid] = anchor[1];
-      Transform.z[playerEid] = anchor[2];
+      teleportPlayer([anchor[0], anchor[1], anchor[2]]);
     },
     toEngine,
   });
@@ -2371,12 +2384,26 @@ function watchCameraJump(
   const yawJump = Math.abs(angleDelta(watch.yaw, rig.yaw));
   const looked = snapshot.look.x !== 0 || snapshot.look.y !== 0;
   if (!legit && (targetJump > CAM_JUMP_TARGET || (!looked && yawJump > CAM_JUMP_YAW))) {
+    watch.jumpStreak += 1;
     // eslint-disable-next-line no-console -- deliberate field diagnostic: the seen-once jump needs a name
     console.log(
       `[cam] jump target ${targetJump.toFixed(2)} · yaw ${((yawJump * 180) / Math.PI).toFixed(1)}° · ` +
         `mode ${snapshot.mode} · dt ${(snapshot.dt * 1000).toFixed(1)} · dist ${rig.distance.toFixed(2)} ` +
         `shown ${rig.collision.shown.toFixed(2)} · look ${looked}`,
     );
+    // Once per streak (`===`, not `>=`): the wall of jump lines is the symptom, this is the diagnosis, and a
+    // diagnosis repeated every frame is another wall. `focus[1]` is the engine's up axis, so the drop per
+    // frame is what separates a fall from a camera that merely lost its target.
+    if (watch.jumpStreak === CAM_FALL_STREAK) {
+      const drop = watch.focus === null ? 0 : watch.focus[1] - snapshot.focus[1];
+      // eslint-disable-next-line no-console -- the marker IS the deliverable (see CAM_FALL_STREAK)
+      console.log(
+        `[fall] ${CAM_FALL_STREAK} jump frames in a row — nothing is holding the focus up · ` +
+          `height ${snapshot.focus[1].toFixed(1)} · dropping ${drop.toFixed(2)}/frame · mode ${snapshot.mode}`,
+      );
+    }
+  } else {
+    watch.jumpStreak = 0;
   }
   watch.focus = [snapshot.focus[0], snapshot.focus[1], snapshot.focus[2]];
   watch.mode = snapshot.mode;

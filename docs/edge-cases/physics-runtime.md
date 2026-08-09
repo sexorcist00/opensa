@@ -65,3 +65,14 @@ Its friction-circle scaling runs `if wheel.side_impulse != 0.0` — a car accele
 AHEAD has no longitudinal grip limit at all inside Rapier. The engine clamps engine force and brake
 impulse to `μ × load` itself (`setVehicleControls`, the 081/04 five-g-launch fix); any new force channel
 must apply the same clamp or it will push arbitrary force into the road.
+
+## `groundBelow` answers with the CASTER's own body unless it is excluded
+
+`PhysicsWorld.groundBelow(at, maxDrop)` casts a downward ray from `at` with `solid: true`, so a point INSIDE
+a body hits that body's own surface: probing "is there ground under the anchor?" while the player stands on
+that anchor returns his capsule, at ~0.9 m below the probe point. The answer looks exactly like real ground —
+a number, in range, every time. It cost the plan-102 settle gate a full cycle: the gate opened instantly on a
+world with no collision at all, and only the leg-start probe (a player 11 m under his anchor) said otherwise.
+
+Pass the body to skip: `groundBelow(at, maxDrop, RigidBody.handle[playerEid])`. The same applies to
+`groundNormalBelow`. Nothing catches a missing exclusion — the reading is plausible, not absent.
