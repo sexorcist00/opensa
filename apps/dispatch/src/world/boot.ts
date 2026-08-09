@@ -1,3 +1,5 @@
+import type { StreamStats } from '@opensa/engine';
+
 import { Engine, FrameSpans, frameSpans, pakTraffic, setupStreaming } from '@opensa/engine';
 import {
   createEngineEnvironmentDriver,
@@ -77,6 +79,19 @@ const OPENING_POSE: MapPose = { at: [1700, -1500], height: 900, pitch: -1.15, ya
 const LOCATE_HEIGHT = 260;
 /** Readout pushes per second. The loop must not re-render React. */
 const READOUT_HZ = 4;
+/** A world with nothing to stream — the demo's synthetic grid is resident from the start. */
+const IDLE_STREAM: StreamStats = {
+  blobMs: 0,
+  created: 0,
+  evicted: 0,
+  lateCreates: 0,
+  loadedCells: 0,
+  pendingCells: 0,
+  uploadMs: 0,
+  worstBlobMs: 0,
+  worstCreateMs: 0,
+};
+
 /** Streaming rings. Wider than the game's, because a map view looks at the city rather than at a street. */
 const DEFAULT_HD_RADIUS = 450;
 const DEFAULT_LOD_RADIUS = 2200;
@@ -87,7 +102,10 @@ const DEFAULT_LOD_RADIUS = 2200;
  * demo world has nothing to move.
  */
 interface DispatchWorld {
-  follow: (focus: readonly [number, number, number]) => number;
+  /** Called once a frame with the ground point the view sits over. Returns the ENGINE's own streaming
+   *  numbers — blob-handler and upload milliseconds, creates, evictions — which the console used to throw
+   *  away, keeping only `pendingCells`. They are the between-frame half no in-loop timer can see. */
+  follow: (focus: readonly [number, number, number]) => StreamStats;
   /** Where `data/` sits, for timecyc. Empty when there is no game dir (the demo). */
   gameDir: string;
   /** What the status bar shows as the world's provenance. */
@@ -173,12 +191,12 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     time('board', () => beacons.update(ops, options.selection()));
     // Rings follow the ground point the view is over, never the eye: a camera a kilometre up sits outside
     // every ring and would stream nothing at all.
-    const pending = time('stream', () => world.follow([state.target[0], state.target[1], state.target[2]]));
+    const stream = time('stream', () => world.follow([state.target[0], state.target[1], state.target[2]]));
     const stats = time('engine-frame', () => engine.frame(state));
     // Drained every frame the mode is on, so a span never carries into the next frame's total. Plan 091's
     // rule: the frame that DRAINS is the frame that paid, because the work ran in the gap before it.
     if (inventory) {
-      inventory.sample(dt, stats, frameSpans.drain(), cpu);
+      inventory.sample(dt, stats, frameSpans.drain(), cpu, stream);
     }
 
     time('overlay-2d', () => {
@@ -202,7 +220,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           draws: stats.drawsRecorded,
           fps: Math.round(1000 / Math.max(1, average)),
           hour,
-          pending,
+          pending: stream.pendingCells,
           pose: camera.pose(),
           residencyMb: stats.residencyBytes / (1024 * 1024),
         }),
@@ -228,6 +246,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
 
       return inventory.report({
         build: world.label,
+        byCategory: engine.ledger(),
         bytes: { byKind: pakTraffic.report(), requests: pakTraffic.requests, totalBytes: pakTraffic.totalBytes },
         camera: { at: pose.at, height: pose.height },
         device: engine.deviceReport,
@@ -329,7 +348,7 @@ function demoWorld(engine: Engine): DispatchWorld {
   // eslint-disable-next-line no-console -- the boot record: a demo run must never be mistaken for a real one
   console.log(`[dispatch] DEMO world — synthetic blocks, ${draws} recorded draws. No pak, no model names.`);
 
-  return { follow: () => 0, gameDir: '', label: 'demo (synthetic)' };
+  return { follow: () => IDLE_STREAM, gameDir: '', label: 'demo (synthetic)' };
 }
 
 function numberParam(params: URLSearchParams, name: string, fallback: number): number {
@@ -402,7 +421,7 @@ async function streamedWorld(engine: Engine, params: URLSearchParams): Promise<D
   await installWater(engine, source.base, setup.water);
 
   return {
-    follow: (focus) => setup.driver.update(focus).pendingCells,
+    follow: (focus) => setup.driver.update(focus),
     gameDir: source.gameDir,
     label: setup.buildTime ?? 'unknown',
   };

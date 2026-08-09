@@ -202,6 +202,15 @@ no frame of this surface ever asked for. Wire bytes are what the network carried
 a `deflate-raw` entry — so they are comparable with a `Range:` server's log and not with the decoded size the
 manifest already states.
 
+**And what the STREAMER did.** `streaming` carries the engine's own per-update numbers, which the console
+used to throw away: `blobMeanMs` (the worker's message handler — decode and `createTexture` — which runs
+between frames where no in-loop timer can see it), `uploadMeanMs` (the budgeted drain inside `update`),
+`worstBlobMs` / `worstCreateMs` as MAXIMA rather than averages, and the create/evict/late counts. The game
+shell has read these since a 2026-07-27 field report of 20-250 ms frames turned out to be whole-array uploads
+at 15-85 ms a call. Beside it, `cpu.worstFrame` keeps the worst body of the window **with its own segment
+breakdown**, because two captures in a row made the worst frame the interesting one and a mean cannot say
+which part of it grew.
+
 The report also states its own ground — `district`, `camera.at`, `camera.height` — and **warns when the
 district is not the one 201/1-01 pinned**, because a capture on other ground is a valid measurement of
 somewhere else and not part of the chain's before/after series.

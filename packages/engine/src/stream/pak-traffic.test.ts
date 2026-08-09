@@ -69,9 +69,7 @@ describe('pak traffic', () => {
 
       postPakFetch(worker, 'array-7', { enc: 'deflate-raw', length: 4096, offset: 8192 });
 
-      expect(posted).toEqual([
-        { enc: 'deflate-raw', key: 'array-7', length: 4096, offset: 8192, type: 'fetch' },
-      ]);
+      expect(posted).toEqual([{ enc: 'deflate-raw', key: 'array-7', length: 4096, offset: 8192, type: 'fetch' }]);
     });
 
     it('omits `enc` entirely for an entry that has none — the worker branches on its absence', () => {

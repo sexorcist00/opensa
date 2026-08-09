@@ -1,4 +1,4 @@
-import type { EngineStats, FrameSpanTotals } from '@opensa/engine';
+import type { EngineStats, FrameSpanTotals, StreamStats } from '@opensa/engine';
 
 import { describe, expect, it } from 'vitest';
 
@@ -7,6 +7,18 @@ import { type FrameCpuSample, FrameInventory, UNNAMED_DISTRICT } from './invento
 const NO_SPANS: FrameSpanTotals = { byName: [], totalMs: 0 };
 /** A host that timed nothing — most tests are about the frame, not about where its CPU time went. */
 const NO_CPU: FrameCpuSample = { bodyMs: 0, segments: NO_SPANS };
+/** A streamer with nothing to do — most tests are about the frame, not about what the world was loading. */
+const IDLE: StreamStats = {
+  blobMs: 0,
+  created: 0,
+  evicted: 0,
+  lateCreates: 0,
+  loadedCells: 4,
+  pendingCells: 0,
+  uploadMs: 0,
+  worstBlobMs: 0,
+  worstCreateMs: 0,
+};
 
 /** One loop body: its wall time, and the segments inside it. */
 function cpu(bodyMs: number, segments: readonly (readonly [string, number])[] = []): FrameCpuSample {
@@ -33,6 +45,7 @@ function stats(overrides: Partial<EngineStats> = {}): EngineStats {
 
 const CONTEXT = {
   build: 'original@test',
+  byCategory: {},
   bytes: { byKind: [], requests: 0, totalBytes: 0 },
   camera: { at: [1480, -1720] as const, height: 900 },
   device: {},
@@ -53,9 +66,9 @@ describe('FrameInventory', () => {
 
     it('discards the FIRST delta, which carries page load rather than a frame', () => {
       const inventory = new FrameInventory();
-      inventory.sample(41_026, stats(), NO_SPANS, NO_CPU); // the load stall the 2026-08-07 capture reported as dtMax
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU);
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU);
+      inventory.sample(41_026, stats(), NO_SPANS, NO_CPU, IDLE); // the load stall the 2026-08-07 capture reported as dtMax
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
 
       const report = inventory.report(CONTEXT);
 
@@ -65,7 +78,7 @@ describe('FrameInventory', () => {
 
     it('still reads the world off the discarded first sample, so an early report is not blank', () => {
       const inventory = new FrameInventory();
-      inventory.sample(41_026, stats({ cellsTotal: 9, cellsVisible: 4 }), NO_SPANS, NO_CPU);
+      inventory.sample(41_026, stats({ cellsTotal: 9, cellsVisible: 4 }), NO_SPANS, NO_CPU, IDLE);
 
       const report = inventory.report(CONTEXT);
 
@@ -75,8 +88,8 @@ describe('FrameInventory', () => {
 
     it('VOIDS a capture that streamed no cells — the failure the first real capture shipped with', () => {
       const inventory = new FrameInventory();
-      inventory.sample(16, stats({ cellsTotal: 0, cellsVisible: 0 }), NO_SPANS, NO_CPU);
-      inventory.sample(16, stats({ cellsTotal: 0, cellsVisible: 0 }), NO_SPANS, NO_CPU);
+      inventory.sample(16, stats({ cellsTotal: 0, cellsVisible: 0 }), NO_SPANS, NO_CPU, IDLE);
+      inventory.sample(16, stats({ cellsTotal: 0, cellsVisible: 0 }), NO_SPANS, NO_CPU, IDLE);
 
       const warnings = inventory.report(CONTEXT).warnings;
 
@@ -85,8 +98,8 @@ describe('FrameInventory', () => {
 
     it('warns about a window too short to carry a percentile, and about an unnamed district', () => {
       const inventory = new FrameInventory();
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU);
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
 
       const warnings = inventory.report({ ...CONTEXT, district: UNNAMED_DISTRICT }).warnings;
 
@@ -96,7 +109,7 @@ describe('FrameInventory', () => {
 
     it('marks GPU passes UNAVAILABLE when the adapter cannot time them, instead of reporting them as free', () => {
       const inventory = new FrameInventory();
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
 
       const report = inventory.report({ ...CONTEXT, hasTimestamps: false });
       const gpu = report.passes.find((pass) => pass.name === 'gpuPassMs');
@@ -108,7 +121,7 @@ describe('FrameInventory', () => {
 
     it('keeps submitMs available without timestamps — it is a CPU number', () => {
       const inventory = new FrameInventory();
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
 
       const submit = inventory.report({ ...CONTEXT, hasTimestamps: false }).passes.find((p) => p.name === 'submitMs');
 
@@ -117,15 +130,15 @@ describe('FrameInventory', () => {
 
     it('records no spans when nothing between frames was wrapped', () => {
       const inventory = new FrameInventory();
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
 
       expect(inventory.report(CONTEXT).spans).toEqual([]);
     });
 
     it('says the loop body was never timed instead of reporting a CPU share of zero as a finding', () => {
       const inventory = new FrameInventory();
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU);
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
 
       const report = inventory.report(CONTEXT);
 
@@ -135,7 +148,7 @@ describe('FrameInventory', () => {
 
     it('warns that a capture off the PINNED district is not part of the chain series', () => {
       const inventory = new FrameInventory();
-      inventory.sample(16, stats(), NO_SPANS, cpu(6));
+      inventory.sample(16, stats(), NO_SPANS, cpu(6), IDLE);
 
       const warnings = inventory.report({ ...CONTEXT, district: 'ganton' }).warnings;
 
@@ -145,7 +158,7 @@ describe('FrameInventory', () => {
 
     it('says so when the district is not one this build knows at all', () => {
       const inventory = new FrameInventory();
-      inventory.sample(16, stats(), NO_SPANS, cpu(6));
+      inventory.sample(16, stats(), NO_SPANS, cpu(6), IDLE);
 
       const warnings = inventory.report({ ...CONTEXT, district: 'somewhere' }).warnings;
 
@@ -154,10 +167,10 @@ describe('FrameInventory', () => {
 
     it('never reports a negative time outside the loop, whatever the body claims', () => {
       const inventory = new FrameInventory();
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
       // A body longer than the frame is arithmetically impossible with the previous-body pairing; the clamp
       // is here so a host that pairs them wrong reports 0 rather than a negative that reads as an insight.
-      inventory.sample(16, stats(), NO_SPANS, cpu(40));
+      inventory.sample(16, stats(), NO_SPANS, cpu(40), IDLE);
 
       expect(inventory.report(CONTEXT).cpu.outsideMeanMs).toBe(0);
     });
@@ -169,10 +182,10 @@ describe('FrameInventory', () => {
       // 10 % of frames hitch. A mean would read 38 ms and hide both the healthy body and the stalls; p50 and
       // p95 report them separately, which is the whole reason the window keeps every dt.
       for (let i = 0; i < 90; i += 1) {
-        inventory.sample(16, stats(), NO_SPANS, NO_CPU);
+        inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
       }
       for (let i = 0; i < 10; i += 1) {
-        inventory.sample(240, stats(), NO_SPANS, NO_CPU);
+        inventory.sample(240, stats(), NO_SPANS, NO_CPU, IDLE);
       }
 
       const report = inventory.report(CONTEXT);
@@ -185,9 +198,9 @@ describe('FrameInventory', () => {
 
     it('averages a span over every sampled frame, not over the frames that paid it', () => {
       const inventory = new FrameInventory();
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU); // primes the clock — the first delta is not a frame time
-      inventory.sample(16, stats(), { byName: [['cell-collision', 30]], totalMs: 30 }, NO_CPU);
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE); // primes the clock — the first delta is not a frame time
+      inventory.sample(16, stats(), { byName: [['cell-collision', 30]], totalMs: 30 }, NO_CPU, IDLE);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
 
       const [[name, meanMs]] = inventory.report(CONTEXT).spans;
 
@@ -197,8 +210,8 @@ describe('FrameInventory', () => {
 
     it('orders passes by mean cost so the table reads top-down', () => {
       const inventory = new FrameInventory();
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU); // primes the clock — the first delta is not a frame time
-      inventory.sample(16, stats({ gpuPassMs: 12, gpuPostMs: 3, submitMs: 0.4 }), NO_SPANS, NO_CPU);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE); // primes the clock — the first delta is not a frame time
+      inventory.sample(16, stats({ gpuPassMs: 12, gpuPostMs: 3, submitMs: 0.4 }), NO_SPANS, NO_CPU, IDLE);
 
       const names = inventory.report(CONTEXT).passes.map((pass) => pass.name);
 
@@ -207,11 +220,11 @@ describe('FrameInventory', () => {
 
     it('splits the frame into the loop body and everything outside it', () => {
       const inventory = new FrameInventory();
-      inventory.sample(32, stats(), NO_SPANS, NO_CPU); // primes the clock — the first delta is not a frame time
+      inventory.sample(32, stats(), NO_SPANS, NO_CPU, IDLE); // primes the clock — the first delta is not a frame time
       // The shape of the 2026-08-07 mobile row: a 32 ms frame whose main thread ran for 6 of it. The chain
       // needs to read that as "the frame is waiting", not as "94 % is unknown".
-      inventory.sample(32, stats(), NO_SPANS, cpu(6));
-      inventory.sample(32, stats(), NO_SPANS, cpu(6));
+      inventory.sample(32, stats(), NO_SPANS, cpu(6), IDLE);
+      inventory.sample(32, stats(), NO_SPANS, cpu(6), IDLE);
 
       const { cpu: measured } = inventory.report(CONTEXT);
 
@@ -222,7 +235,7 @@ describe('FrameInventory', () => {
 
     it('names the body time no segment claimed, so the breakdown adds up to the body', () => {
       const inventory = new FrameInventory();
-      inventory.sample(32, stats(), NO_SPANS, NO_CPU);
+      inventory.sample(32, stats(), NO_SPANS, NO_CPU, IDLE);
       inventory.sample(
         32,
         stats(),
@@ -231,6 +244,7 @@ describe('FrameInventory', () => {
           ['engine-frame', 4],
           ['overlay-2d', 1],
         ]),
+        IDLE,
       );
 
       const segments = inventory.report(CONTEXT).cpu.segmentsMs;
@@ -244,11 +258,11 @@ describe('FrameInventory', () => {
 
     it('bins dt, so a frame waiting on vsync can be told from one that is simply slow', () => {
       const inventory = new FrameInventory();
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU); // primes the clock
-      inventory.sample(33.4, stats(), NO_SPANS, NO_CPU);
-      inventory.sample(33.9, stats(), NO_SPANS, NO_CPU);
-      inventory.sample(16.7, stats(), NO_SPANS, NO_CPU);
-      inventory.sample(240, stats(), NO_SPANS, NO_CPU); // the tail bin — a hitch may not open 70 empty bins
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE); // primes the clock
+      inventory.sample(33.4, stats(), NO_SPANS, NO_CPU, IDLE);
+      inventory.sample(33.9, stats(), NO_SPANS, NO_CPU, IDLE);
+      inventory.sample(16.7, stats(), NO_SPANS, NO_CPU, IDLE);
+      inventory.sample(240, stats(), NO_SPANS, NO_CPU, IDLE); // the tail bin — a hitch may not open 70 empty bins
 
       expect(inventory.report(CONTEXT).frame.dtHistogramMs).toEqual([
         [16, 1],
@@ -257,9 +271,74 @@ describe('FrameInventory', () => {
       ]);
     });
 
+    it('keeps the WORST body with its own segments — a mean cannot say which part of it grew', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(32, stats(), NO_SPANS, NO_CPU, IDLE);
+      inventory.sample(32, stats(), NO_SPANS, cpu(6, [['engine-frame', 4]]), IDLE);
+      // The shape of both field captures: one frame an order of magnitude worse than the rest.
+      inventory.sample(1097, stats(), NO_SPANS, cpu(1068, [['engine-frame', 1050]]), IDLE);
+      inventory.sample(32, stats(), NO_SPANS, cpu(6, [['engine-frame', 4]]), IDLE);
+
+      const { worstFrame } = inventory.report(CONTEXT).cpu;
+
+      expect(worstFrame.bodyMs).toBe(1068);
+      expect(worstFrame.segmentsMs).toEqual([['engine-frame', 1050]]);
+    });
+
+    it("carries the STREAMER's own numbers, which the console used to drop on the floor", () => {
+      const inventory = new FrameInventory();
+      inventory.sample(32, stats(), NO_SPANS, NO_CPU, IDLE);
+      inventory.sample(32, stats(), NO_SPANS, NO_CPU, {
+        ...IDLE,
+        blobMs: 40,
+        created: 2,
+        lateCreates: 1,
+        uploadMs: 6,
+        worstBlobMs: 38,
+        worstCreateMs: 12,
+      });
+      inventory.sample(32, stats(), NO_SPANS, NO_CPU, { ...IDLE, blobMs: 10, evicted: 1, worstBlobMs: 9 });
+
+      const { streaming } = inventory.report(CONTEXT);
+
+      expect(streaming.blobMeanMs).toBe(25); // 50 ms over two sampled frames
+      expect(streaming.uploadMeanMs).toBe(3);
+      expect(streaming.cellsCreated).toBe(2);
+      expect(streaming.cellsEvicted).toBe(1);
+      expect(streaming.lateCreates).toBe(1);
+      // The worsts are MAXIMA, never averages: one 38 ms upload and four 9 ms ones are different problems.
+      expect(streaming.worstBlobMs).toBe(38);
+      expect(streaming.worstCreateMs).toBe(12);
+    });
+
+    it("breaks residency down by the engine's own ledger categories, non-zero only", () => {
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+
+      const report = inventory.report({
+        ...CONTEXT,
+        byCategory: {
+          cellIndex: { bytes: 4 * 1024 * 1024, count: 8 },
+          cellVertex: { bytes: 20 * 1024 * 1024, count: 8 },
+          debris: { bytes: 0, count: 0 },
+          target: { bytes: 24 * 1024 * 1024, count: 6 },
+          texture: { bytes: 100 * 1024 * 1024, count: 20 },
+          uniform: { bytes: 1024 * 1024, count: 40 },
+        },
+      });
+
+      expect(report.world.byCategoryMb).toEqual([
+        ['texture', 100],
+        ['target', 24],
+        ['cellVertex', 20],
+        ['cellIndex', 4],
+        ['uniform', 1],
+      ]);
+    });
+
     it('carries the pak traffic the surface actually read, so the build can be argued against it', () => {
       const inventory = new FrameInventory();
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
 
       const report = inventory.report({
         ...CONTEXT,
@@ -280,11 +359,12 @@ describe('FrameInventory', () => {
 
     it('carries the world counters and the context the capture must state', () => {
       const inventory = new FrameInventory();
-      inventory.sample(16, stats(), NO_SPANS, NO_CPU);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
 
       const report = inventory.report(CONTEXT);
 
       expect(report.world).toEqual({
+        byCategoryMb: [],
         cellsTotal: 144,
         cellsVisible: 38,
         draws: 162,

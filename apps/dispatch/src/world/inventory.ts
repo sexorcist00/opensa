@@ -28,7 +28,7 @@
  * The two have opposite fixes, and the report now carries the split instead of the argument.
  */
 
-import type { EngineStats, FrameSpanTotals, PakTrafficKind } from '@opensa/engine';
+import type { EngineStats, FrameSpanTotals, PakTrafficKind, StreamStats } from '@opensa/engine';
 
 import { DISTRICTS, PINNED_DISTRICT } from './districts';
 
@@ -53,6 +53,10 @@ export interface InventoryCpu {
   readonly segmentsMs: readonly (readonly [string, number])[];
   /** Body mean ÷ dt mean, 0..1. */
   readonly shareOfFrame: number;
+  /** The WORST body of the window, with its own segment breakdown rather than the window's averages. Two
+   *  captures in a row made the worst frame the interesting one, and a mean cannot answer which part of it
+   *  grew — 1068 ms of body says nothing about whether it was the render, the overlay or the streamer. */
+  readonly worstFrame: { readonly bodyMs: number; readonly segmentsMs: readonly (readonly [string, number])[] };
 }
 
 /** One pass or cost centre, averaged over the sampled window. */
@@ -70,7 +74,11 @@ export interface InventoryReport {
    *  since boot rather than over the sampled window. The build's `report.json` says what the pak CONTAINS;
    *  the gap between the two is what 201/1 is for, and an entry kind absent from this list is one no frame
    *  of this surface ever asked for. */
-  readonly bytes: { readonly byKind: readonly PakTrafficKind[]; readonly requests: number; readonly totalBytes: number };
+  readonly bytes: {
+    readonly byKind: readonly PakTrafficKind[];
+    readonly requests: number;
+    readonly totalBytes: number;
+  };
   /** Where the operator was when they took the report — so the capture states its own ground. */
   readonly camera: { readonly at: readonly [number, number]; readonly height: number };
   readonly cpu: InventoryCpu;
@@ -92,6 +100,8 @@ export interface InventoryReport {
   readonly passes: readonly InventoryPass[];
   /** Between-frame named work, mean ms per sampled frame, descending. Empty means nothing was wrapped. */
   readonly spans: readonly (readonly [string, number])[];
+  /** What the streamer did over the window — the engine's own numbers, which the console used to drop. */
+  readonly streaming: InventoryStreaming;
   /** Human-readable reasons a column above is absent on this device. */
   readonly unavailable: readonly string[];
   /** Reasons this capture may NOT be cited as a before-table. Empty = nothing obviously wrong with it.
@@ -101,12 +111,37 @@ export interface InventoryReport {
   readonly warnings: readonly string[];
   readonly windowMs: number;
   readonly world: {
+    /** Resident GPU bytes BY CATEGORY, from the engine's own ledger — `texture`, `cellVertex`, `cellIndex`,
+     *  `target` (the render targets, a cost of RESOLUTION rather than of content), `uniform`. The 08-09
+     *  capture reported 148 MB against a pak whose whole texture ceiling is 99.7, and the 48 MB difference
+     *  had no owner; the engine has counted it by category since 074/01 and the console was not asking. */
+    readonly byCategoryMb: readonly (readonly [string, number])[];
     readonly cellsTotal: number;
     readonly cellsVisible: number;
     readonly draws: number;
     readonly residencyMb: number;
     readonly triangles: number;
   };
+}
+
+/** The streaming work the ENGINE times for itself, kept because the console used to discard it.
+ *
+ *  `blobMs` is the worker's message handler — decode and `createTexture` — which runs BETWEEN frames where no
+ *  in-loop timer can see it; `uploadMs` is the budgeted drain inside `update`. The game shell has read these
+ *  since 2026-07-27, when a field report of 20-250 ms frames turned out to be whole-array uploads at 15-85 ms
+ *  a call, invisible to every block the host timed. The map profile's first two captures reported a 185 ms
+ *  and a 1068 ms body with no owner, which is the same shape of question. */
+export interface InventoryStreaming {
+  readonly blobMeanMs: number;
+  readonly cellsCreated: number;
+  readonly cellsEvicted: number;
+  /** Creates whose cell was already inside the fog cut — each one a visible pop. */
+  readonly lateCreates: number;
+  readonly uploadMeanMs: number;
+  /** The single most expensive worker-handler call in the window: one huge upload and a pile-up of small
+   *  ones are different problems, and only this tells them apart. */
+  readonly worstBlobMs: number;
+  readonly worstCreateMs: number;
 }
 
 /** What `?district=` defaults to. Exported so the reader and the writer cannot drift apart — the check for
@@ -146,12 +181,25 @@ export class FrameInventory {
   private readonly maxima = new Map<string, number>();
   private readonly spanTotals = new Map<string, number>();
   private started = 0;
+  private readonly stream = {
+    blobMs: 0,
+    created: 0,
+    evicted: 0,
+    lateCreates: 0,
+    uploadMs: 0,
+    worstBlobMs: 0,
+    worstCreateMs: 0,
+  };
   private readonly sums = new Map<string, number>();
-
   private readonly worldLast = { cellsTotal: 0, cellsVisible: 0, draws: 0, residencyBytes: 0, triangles: 0 };
+
+  /** The worst body seen, kept WITH its own segments — the mean cannot say which part of it grew. */
+  private worst: { bodyMs: number; segmentsMs: readonly (readonly [string, number])[] } = { bodyMs: 0, segmentsMs: [] };
 
   report(context: {
     build: string;
+    /** `engine.ledger()` — resident bytes and counts per category. */
+    byCategory: Readonly<Record<string, { bytes: number; count: number }>>;
     bytes: { byKind: readonly PakTrafficKind[]; requests: number; totalBytes: number };
     camera: { at: readonly [number, number]; height: number };
     device: unknown;
@@ -187,6 +235,7 @@ export class FrameInventory {
         outsideMeanMs: Math.max(0, dtMeanMs - bodyMeanMs),
         segmentsMs: this.cpuSegments(frames, bodyMeanMs),
         shareOfFrame: dtMeanMs > 0 ? bodyMeanMs / dtMeanMs : 0,
+        worstFrame: this.worst,
       },
       device: context.device,
       district: context.district,
@@ -203,6 +252,15 @@ export class FrameInventory {
       spans: [...this.spanTotals.entries()]
         .map(([name, ms]) => [name, ms / frames] as const)
         .sort((a, b) => b[1] - a[1]),
+      streaming: {
+        blobMeanMs: this.stream.blobMs / frames,
+        cellsCreated: this.stream.created,
+        cellsEvicted: this.stream.evicted,
+        lateCreates: this.stream.lateCreates,
+        uploadMeanMs: this.stream.uploadMs / frames,
+        worstBlobMs: this.stream.worstBlobMs,
+        worstCreateMs: this.stream.worstCreateMs,
+      },
       unavailable,
       warnings: warningsFor({
         bodyMeanMs,
@@ -212,6 +270,10 @@ export class FrameInventory {
       }),
       windowMs,
       world: {
+        byCategoryMb: Object.entries(context.byCategory)
+          .filter(([, entry]) => entry.bytes > 0)
+          .map(([category, entry]) => [category, entry.bytes / (1024 * 1024)] as const)
+          .sort((a, b) => b[1] - a[1]),
         cellsTotal: this.worldLast.cellsTotal,
         cellsVisible: this.worldLast.cellsVisible,
         draws: this.worldLast.draws,
@@ -229,7 +291,7 @@ export class FrameInventory {
    * so the body that ran inside the interval being reported is the one before it. Paired that way the body
    * can never exceed the frame it is a share of.
    */
-  sample(dtMs: number, stats: EngineStats, spans: FrameSpanTotals, cpu: FrameCpuSample): void {
+  sample(dtMs: number, stats: EngineStats, spans: FrameSpanTotals, cpu: FrameCpuSample, stream: StreamStats): void {
     if (this.started === 0) {
       // The FIRST delta is not a frame time. It is measured against whatever the loop did last — page load,
       // the pak's first fetch, device init — so it enters dtMax and the percentiles as a frame that never
@@ -249,6 +311,18 @@ export class FrameInventory {
     for (const [name, ms] of cpu.segments.byName) {
       this.cpuTotals.set(name, (this.cpuTotals.get(name) ?? 0) + ms);
     }
+    if (cpu.bodyMs > this.worst.bodyMs) {
+      this.worst = { bodyMs: cpu.bodyMs, segmentsMs: cpu.segments.byName };
+    }
+    // The streamer's own numbers are per-UPDATE and reset each one, so they sum like the spans do. The two
+    // worsts are kept rather than averaged: one 85 ms upload and twenty 4 ms ones are different problems.
+    this.stream.blobMs += stream.blobMs;
+    this.stream.uploadMs += stream.uploadMs;
+    this.stream.created += stream.created;
+    this.stream.evicted += stream.evicted;
+    this.stream.lateCreates += stream.lateCreates;
+    this.stream.worstBlobMs = Math.max(this.stream.worstBlobMs, stream.worstBlobMs);
+    this.stream.worstCreateMs = Math.max(this.stream.worstCreateMs, stream.worstCreateMs);
     for (const [key] of TIMED) {
       this.bump(key, stats[key]);
     }

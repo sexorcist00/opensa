@@ -5,6 +5,12 @@ numbers and links to the raw records — so the result survives the session and 
 without re-deriving it. Runtime numbers live in [`../benchmarks/`](../benchmarks/); these docs summarise and
 interpret them.
 
+- [`dispatch-engine-api-usage.md`](./dispatch-engine-api-usage.md) — the dispatch console against the ENGINE's
+  own public surface, 2026-08-09. Written after a field capture asked a question the console's instrument
+  could not answer and the answer turned out to be a number the engine had computed since 074/01 and the app
+  was discarding. Two capabilities taken (the streamer's `StreamStats`, the residency `ledger()`), ten found
+  and left with the step that will want each. The method is the point: read the PROVIDER's surface, because
+  neither gap was visible in a review of the consumer
 - [`vehicle-physics-081.md`](./vehicle-physics-081.md) — the plan-081 driving chain: `handling.cfg` went from
   5 fields consumed to 21, six global constants died, and the five bugs seven field rounds found were all the
   same mistake — a number guessed where the game ships the answer.

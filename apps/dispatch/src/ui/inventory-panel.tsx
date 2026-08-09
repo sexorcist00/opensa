@@ -74,6 +74,17 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
         pak read {(report.bytes.totalBytes / (1024 * 1024)).toFixed(1)} MB in {report.bytes.requests} requests
         {report.bytes.byKind.length > 0 && ` · ${report.bytes.byKind[0].kind} leads`}
       </div>
+      <div>
+        stream blob {report.streaming.blobMeanMs.toFixed(1)} · upload {report.streaming.uploadMeanMs.toFixed(1)} ms ·
+        worst blob {report.streaming.worstBlobMs.toFixed(0)} ms · {report.streaming.cellsCreated} created
+      </div>
+      {report.cpu.worstFrame.bodyMs > 0 && (
+        <div>
+          worst body {report.cpu.worstFrame.bodyMs.toFixed(0)} ms
+          {report.cpu.worstFrame.segmentsMs.length > 0 &&
+            ` — ${report.cpu.worstFrame.segmentsMs[0][0]} ${report.cpu.worstFrame.segmentsMs[0][1].toFixed(0)}`}
+        </div>
+      )}
       {report.unavailable.length > 0 && <div style={styles.inventoryWarn}>GPU timings unavailable on this adapter</div>}
       {report.warnings.map((warning) => (
         <div key={warning} style={styles.inventoryWarn}>
