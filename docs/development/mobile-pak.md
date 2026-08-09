@@ -102,7 +102,12 @@ RECT=8,-8,11,-5 OUT=./build/phone-ls npm run phone       # ground the district t
 core; each is a V8 isolate reserving its own code range, and each inherits the convert's `--max-old-space-size`
 setting. On the target device that ends the encode stage with `Fatal process out of memory: Failed to reserve
 virtual memory for CodeRange`, printed once per worker that lost the race — after the whole district has
-already been converted, which is the expensive half. `npm run phone` therefore passes **`--astc-threads 1`**, which is the only setting that reserves no new
+already been converted, which is the expensive half. The encode then died at `1` as well, with no worker to blame — which rules the workers out and points at the
+address space the process ALREADY reserved: `NODE_OPTIONS=--max-old-space-size`. An ASTC run now asks for
+2 GB instead of 4, and `HEAP=` moves it; the convert line prints the value it used, so a log answers this
+question by itself. That is a hypothesis under test, not a measured fix.
+
+`npm run phone` therefore passes **`--astc-threads 1`**, which is the only setting that reserves no new
 address space at all — measured 2026-08-09 by counting worker threads off `/proc/self/status`: `0` spawns one
 per core, `2` spawns two, and `1` spawns **none**, running the encode on the main thread. Two was tried in the
 field first and died the same way, which is what moved this from a guess to a measurement. The cost is speed

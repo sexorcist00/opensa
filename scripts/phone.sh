@@ -13,6 +13,7 @@
 #   VEHICLES=all PEDS=all npm run phone                    # the whole roster (hours on a phone)
 #   TEXTURES=rgba8 OUT=./build/phone-rgba8 npm run phone   # the texture-format A/B's other side
 #   ASTC_THREADS=0 npm run phone      # one encoder worker per core (a desktop; it OOMs this phone)
+#   HEAP=1536 npm run phone           # the node heap the convert reserves, MB (astc runs default to 2048)
 #   RECT=8,-8,11,-5 SPAWN=2495,-1687,20 npm run phone
 #
 # A PREBUILT app in `build/webapp` (or `WEBAPP=<dir>`) is used INSTEAD of the dev server, and then vite is
@@ -42,18 +43,19 @@ MAPOBJ="${MAPOBJ:-1}"
 # class of GPU actually carries. It costs an encode stage in the convert — `TEXTURES=rgba8` is the way back
 # and the A/B's other side. `bc` is desktop-only and would fail the --platforms mobile line below.
 TEXTURES="${TEXTURES:-astc}"
-# astcenc worker threads, and ONE is not a typo. The library's default (0) is one worker per core; each worker
-# is a V8 isolate that reserves its own code range, on top of the 4 GB heap this convert asks for below. On
-# the target phone that ended the encode stage with `Failed to reserve virtual memory for CodeRange` — first
-# at one-per-core, then AGAIN at two, which is what moved this from a guess to the value it has.
+# astcenc worker threads. The library's default (0) is one per core; each worker is a V8 isolate reserving its
+# own code range. Measured 2026-08-09, counting threads off `/proc/self/status` across module load, context
+# creation and the encode itself:
 #
-# Measured 2026-08-09 (worker threads counted off `/proc/self/status` while one context encodes):
-#   --astc-threads 0 → +4 workers (one per core)   2 → +2 workers   1 → +0, it runs on the MAIN thread
+#   --astc-threads 0 → +4 workers (one per core)   2 → +2 workers   1 → +0, the encode runs on the MAIN thread
 #
-# So 1 is the only setting that reserves no new address space at all, and the cost is speed: the 08-07 knee
-# row measured astcenc's own pool at 2.38x a single thread, bit-identical either way. A convert that finishes
-# slowly beats one that dies at the last stage, after the whole district has already been converted.
-# `ASTC_THREADS=0` restores one-per-core for a machine that can afford it.
+# 1 is therefore the setting that spawns nothing, and it is the default because the encode had already died on
+# this phone at one-per-core and again at two. **It then died at 1 as well** — which is what RULES THE WORKERS
+# OUT: with no isolate to create, `Failed to reserve virtual memory for CodeRange` has to be about the address
+# space the process already reserved, and that is the `HEAP` knob below. The thread setting stays at 1 anyway:
+# it costs speed only (astcenc's pool measured 2.38x one thread on 2026-08-07, bit-identical either way) and it
+# removes one variable from the next attempt. `ASTC_THREADS=0` restores one-per-core for a machine that can
+# afford it.
 ASTC_THREADS="${ASTC_THREADS:-1}"
 # The default is a SUBSET, because converting the roster costs hours on a phone and a field run needs a
 # handful of models. `all` restores the full convert. The player's model is added below whatever is asked
@@ -132,7 +134,14 @@ fi
 # 2 — convert, but only when there is nothing to run on. A phone convert is minutes to hours; re-running this
 # script must not silently repeat it.
 if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
-  say "converting $GAME → $OUT (rect $RECT, textures=$TEXTURES, bake=$BAKE, models=$MODELS)"
+  # The heap the convert asks for. 4 GB is what the model and collision stages want; the ASTC encode that
+  # follows them needs ADDRESS SPACE for its isolates, and on the target phone it has now failed three times
+  # with `Failed to reserve virtual memory for CodeRange` — twice with worker threads and once with none at
+  # all, which is what rules the workers out and points at this reservation. 2 GB for an ASTC run is the
+  # hypothesis under test, not a measured value: if the encode survives it, the district also has to convert
+  # inside it, and both halves are visible in this line.
+  HEAP="${HEAP:-$([ "$TEXTURES" = astc ] && echo 2048 || echo 4096)}"
+  say "converting $GAME → $OUT (rect $RECT, textures=$TEXTURES, astc-threads=$ASTC_THREADS, heap=${HEAP}m, bake=$BAKE, models=$MODELS)"
   args=(--game "$GAME" --out "$OUT" --textures "$TEXTURES" --max-texture 256 --rect "$RECT" --no-ao --platforms mobile)
   [ "$TEXTURES" = astc ] && [ "$ASTC_THREADS" != 0 ] && args+=(--astc-threads "$ASTC_THREADS")
   # Said out loud because it is the slow setting and the log otherwise looks stuck: the encode is the LAST
@@ -153,8 +162,15 @@ if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
   fi
   # --platforms mobile fails the pack when anything it wrote needs a GPU feature a phone lacks (BC), so a pak
   # that survives this line is one the device can actually open.
-  if ! NODE_OPTIONS=--max-old-space-size=4096 tsx tools/opensa-pack/src/cli.ts "${args[@]}"; then
+  if ! NODE_OPTIONS="--max-old-space-size=$HEAP" tsx tools/opensa-pack/src/cli.ts "${args[@]}"; then
     echo "convert failed — nothing was served" >&2
+    if [ "$TEXTURES" = astc ]; then
+      echo >&2
+      echo "the ASTC encode is the LAST stage, so the district converted and only the re-encode died." >&2
+      echo "next, in order of cost:" >&2
+      echo "  HEAP=1536 REBUILD=1 npm run phone     # less reserved address space for the isolates to fit in" >&2
+      echo "  TEXTURES=rgba8 REBUILD=1 npm run phone  # take the pak without ASTC and lose the 4x texture win" >&2
+    fi
     exit 1
   fi
 else
