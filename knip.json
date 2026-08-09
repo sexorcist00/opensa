@@ -1,42 +1,24 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "tags": [
-    "-lintignore"
-  ],
+  "tags": ["-lintignore"],
   "workspaces": {
     ".": {
-      "entry": [
-        "scripts/debug/**/*.ts"
-      ]
+      "entry": ["scripts/debug/**/*.ts"]
     },
     "apps/dispatch": {
-      "entry": [
-        "src/main.tsx",
-        "src/embed.ts"
-      ]
+      "entry": ["src/main.tsx", "src/embed.ts"]
     },
     "apps/engine-lab": {
-      "entry": [
-        "src/main.ts",
-        "src/main.tsx",
-        "src/synthetic.ts"
-      ]
+      "entry": ["src/main.ts", "src/main.tsx", "src/synthetic.ts"]
     },
     "apps/sa-map-viewer": {
-      "entry": [
-        "src/main.tsx"
-      ]
+      "entry": ["src/main.tsx"]
     },
     "apps/viewer": {
-      "entry": [
-        "src/shell.ts"
-      ]
+      "entry": ["src/shell.ts"]
     },
     "apps/web": {
-      "entry": [
-        "src/main.tsx",
-        "src/standalone/*.{ts,tsx}"
-      ]
+      "entry": ["src/main.tsx", "src/standalone/*.{ts,tsx}"]
     }
   }
 }
