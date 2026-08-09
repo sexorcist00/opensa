@@ -18,9 +18,10 @@ import type { OspakManifest } from '@opensa/engine-formats';
  * (whose closest-point test already beat the old centre test by the 177 u half-diagonal).
  */
 import type { Engine } from '../engine';
-import type { PakWorkerRequest, PakWorkerResponse } from './pak-worker';
+import type { PakWorkerResponse } from './pak-worker';
 
 import { COLLISION_KEY_PREFIX } from './collision-source';
+import { postPakFetch } from './pak-traffic';
 
 const HD_RADIUS = 380;
 const LOD_RADIUS = 1000;
@@ -484,14 +485,7 @@ export class StreamingDriver {
 
   private requestBlob(key: string): void {
     this.requested.add(key);
-    const entry = this.manifest.cells[key];
-    this.worker.postMessage({
-      ...(entry.enc !== undefined ? { enc: entry.enc } : {}),
-      key,
-      length: entry.length,
-      offset: entry.offset,
-      type: 'fetch',
-    } satisfies PakWorkerRequest);
+    postPakFetch(this.worker, key, this.manifest.cells[key]);
   }
 
   /**
@@ -525,13 +519,7 @@ export class StreamingDriver {
           continue;
         }
         this.requested.add(arrayKey);
-        this.worker.postMessage({
-          ...(entry.enc !== undefined ? { enc: entry.enc } : {}),
-          key: arrayKey,
-          length: entry.length,
-          offset: entry.offset,
-          type: 'fetch',
-        } satisfies PakWorkerRequest);
+        postPakFetch(this.worker, arrayKey, entry);
       }
     }
 

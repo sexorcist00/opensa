@@ -28,7 +28,7 @@
  * The two have opposite fixes, and the report now carries the split instead of the argument.
  */
 
-import type { EngineStats, FrameSpanTotals } from '@opensa/engine';
+import type { EngineStats, FrameSpanTotals, PakTrafficKind } from '@opensa/engine';
 
 import { DISTRICTS, PINNED_DISTRICT } from './districts';
 
@@ -66,6 +66,11 @@ export interface InventoryPass {
 
 export interface InventoryReport {
   readonly build: string;
+  /** What this surface actually READ out of the pak, by entry kind — wire bytes and request counts, live
+   *  since boot rather than over the sampled window. The build's `report.json` says what the pak CONTAINS;
+   *  the gap between the two is what 201/1 is for, and an entry kind absent from this list is one no frame
+   *  of this surface ever asked for. */
+  readonly bytes: { readonly byKind: readonly PakTrafficKind[]; readonly requests: number; readonly totalBytes: number };
   /** Where the operator was when they took the report — so the capture states its own ground. */
   readonly camera: { readonly at: readonly [number, number]; readonly height: number };
   readonly cpu: InventoryCpu;
@@ -147,6 +152,7 @@ export class FrameInventory {
 
   report(context: {
     build: string;
+    bytes: { byKind: readonly PakTrafficKind[]; requests: number; totalBytes: number };
     camera: { at: readonly [number, number]; height: number };
     device: unknown;
     district: string;
@@ -173,6 +179,7 @@ export class FrameInventory {
 
     return {
       build: context.build,
+      bytes: context.bytes,
       camera: { at: context.camera.at, height: context.camera.height },
       cpu: {
         bodyMaxMs: this.maxima.get('cpu-body') ?? 0,

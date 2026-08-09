@@ -8,6 +8,8 @@
  */
 import type { Engine } from '@opensa/engine';
 
+import { pakTraffic } from '@opensa/engine';
+
 /** Floats per baked water vertex: position, shore depth, water class. */
 const WATER_STRIDE_FLOATS = 5;
 
@@ -25,6 +27,9 @@ export async function installWater(
     return 0;
   }
   const bytes = new Uint8Array(await response.arrayBuffer());
+  // The one pak read that does NOT go through the IO worker: `water.bin` rides beside the pak as a loose
+  // file, so it is recorded here or it is missing from the bytes column entirely.
+  pakTraffic.record(water.file, bytes.byteLength);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const vertexCount = view.getUint32(0, true);
   const indexCount = view.getUint32(4, true);

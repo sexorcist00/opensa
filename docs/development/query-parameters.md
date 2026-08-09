@@ -194,6 +194,14 @@ device can produce:
 The last two rows answer the open question the mobile row could not: a frame missing a 60 Hz deadline and a
 frame that is genuinely 32 ms of work look identical in a p50 and are fixed in opposite directions.
 
+**And the bytes column.** The report carries `bytes` — what the surface actually READ out of the pak since
+boot, by entry kind (`texture-array`, `cell-hd`, `cell-lod`, `collision`, plus any loose file such as
+`water.bin` by name), with wire bytes and request counts. The build's own `report.json` says what the pak
+CONTAINS; **the gap between the two is what the map profile is for**, and a kind absent from this list is one
+no frame of this surface ever asked for. Wire bytes are what the network carried — before the worker inflates
+a `deflate-raw` entry — so they are comparable with a `Range:` server's log and not with the decoded size the
+manifest already states.
+
 The report also states its own ground — `district`, `camera.at`, `camera.height` — and **warns when the
 district is not the one 201/1-01 pinned**, because a capture on other ground is a valid measurement of
 somewhere else and not part of the chain's before/after series.

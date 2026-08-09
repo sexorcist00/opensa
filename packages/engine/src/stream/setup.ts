@@ -10,6 +10,7 @@ import type { Engine } from '../engine';
 import type { PakWorkerRequest, PakWorkerResponse } from './pak-worker';
 
 import { PakCollisionSource } from './collision-source';
+import { postPakFetch } from './pak-traffic';
 import { StreamingDriver, type StreamingRadii } from './streaming';
 
 /**
@@ -128,13 +129,7 @@ export async function setupStreaming(
     };
     worker.addEventListener('message', listener);
     for (const [key, entry] of textureEntries) {
-      worker.postMessage({
-        ...(entry.enc !== undefined ? { enc: entry.enc } : {}),
-        key,
-        length: entry.length,
-        offset: entry.offset,
-        type: 'fetch',
-      } satisfies PakWorkerRequest);
+      postPakFetch(worker, key, entry);
     }
   });
 

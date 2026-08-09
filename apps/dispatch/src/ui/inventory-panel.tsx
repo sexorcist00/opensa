@@ -70,6 +70,10 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
         {report.world.cellsVisible}/{report.world.cellsTotal} cells · {report.world.draws} draws ·{' '}
         {report.world.residencyMb.toFixed(0)} MB
       </div>
+      <div>
+        pak read {(report.bytes.totalBytes / (1024 * 1024)).toFixed(1)} MB in {report.bytes.requests} requests
+        {report.bytes.byKind.length > 0 && ` · ${report.bytes.byKind[0].kind} leads`}
+      </div>
       {report.unavailable.length > 0 && <div style={styles.inventoryWarn}>GPU timings unavailable on this adapter</div>}
       {report.warnings.map((warning) => (
         <div key={warning} style={styles.inventoryWarn}>

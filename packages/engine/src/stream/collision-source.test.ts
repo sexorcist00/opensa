@@ -3,6 +3,7 @@ import type { OspakManifest } from '@opensa/engine-formats';
 import { describe, expect, it } from 'vitest';
 
 import { COLLISION_KEY_PREFIX, PakCollisionSource } from './collision-source';
+import { pakTraffic } from './pak-traffic';
 
 /** A pak worker that records what it was asked for and answers on demand — the reads are promises, so a
  *  test drives the reply explicitly rather than waiting on a timer. */
@@ -97,6 +98,17 @@ describe('PakCollisionSource', () => {
       expect(h.requested).toEqual([
         { enc: 'deflate-raw', key: `${COLLISION_KEY_PREFIX}4,-7`, length: 64, offset: 8192, type: 'fetch' },
       ]);
+    });
+
+    it('COUNTS what it read into the pak-traffic ledger — the bytes column of 201/1-01', () => {
+      // The ledger's value is the gap between what a pak contains and what a surface asks for, so it has to
+      // be fed by the REAL request path rather than by a helper nobody calls. This is that path.
+      pakTraffic.reset();
+      const h = harness(entries);
+      void h.source.read(4, -7);
+
+      expect(pakTraffic.report()).toEqual([{ bytes: 64, kind: 'collision', requests: 1 }]);
+      pakTraffic.reset();
     });
 
     it('shares ONE range read between two callers asking for the same cell at once', async () => {

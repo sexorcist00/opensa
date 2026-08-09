@@ -17,7 +17,9 @@
  */
 import type { OspakEntry, OspakManifest } from '@opensa/engine-formats';
 
-import type { PakWorkerRequest, PakWorkerResponse } from './pak-worker';
+import type { PakWorkerResponse } from './pak-worker';
+
+import { postPakFetch } from './pak-traffic';
 
 /** Wire-key prefix for a collision entry. The streaming driver shares this worker and sees every reply, so
  *  the two payload kinds must be distinguishable by key alone — a bare `"cx,cy"` is one `,level` away from
@@ -68,13 +70,7 @@ export class PakCollisionSource {
 
     return new Promise((resolve) => {
       this.pending.set(key, [resolve]);
-      this.worker.postMessage({
-        ...(entry.enc !== undefined ? { enc: entry.enc } : {}),
-        key,
-        length: entry.length,
-        offset: entry.offset,
-        type: 'fetch',
-      } satisfies PakWorkerRequest);
+      postPakFetch(this.worker, key, entry);
     });
   }
 

@@ -1,4 +1,4 @@
-import { Engine, FrameSpans, frameSpans, setupStreaming } from '@opensa/engine';
+import { Engine, FrameSpans, frameSpans, pakTraffic, setupStreaming } from '@opensa/engine';
 import {
   createEngineEnvironmentDriver,
   type EngineEnvironmentDriver,
@@ -228,6 +228,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
 
       return inventory.report({
         build: world.label,
+        bytes: { byKind: pakTraffic.report(), requests: pakTraffic.requests, totalBytes: pakTraffic.totalBytes },
         camera: { at: pose.at, height: pose.height },
         device: engine.deviceReport,
         district: params.get('district') ?? UNNAMED_DISTRICT,
