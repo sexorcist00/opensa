@@ -73,3 +73,8 @@ baseline taken somewhere the product will never run is a baseline that flatters 
   (`tools/tool-kit/src/game-dir.ts`), and `npm run phone` repeats the check before it deletes anything — but
   **a game copy already fed to a run in this shape is damaged and has to be restored from a clean copy.**
   `readlink -f game-src/* build/*` is the one-line way to see it.
+  The damage is bounded and measurable: `rewriteOptimizedArchives` touches `models/*.img` and nothing else, so
+  `data/` survives and only the archives that HELD converted models are rewritten. Measured on that copy with
+  [`img-census.ts`](../debug/README.md) — `gta3.img` 1073 `.osm` bundles, `gta_int.img` 155, `cutscene.img` and
+  `player.img` clean. Restoring those two files from a pristine install is the whole repair; the deleted `.dff`
+  are not recoverable from the rewritten archive.
