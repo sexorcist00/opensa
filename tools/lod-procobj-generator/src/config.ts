@@ -2,8 +2,8 @@
 export interface ProcObjLodConfig {
   /** Build-time scatter density CUTOFF — **1 = vanilla**, up to the scatter's candidate ceiling
    *  (`PROC_OBJ_MAX_DENSITY` = 3; a higher cutoff has no candidates left to keep and is refused). The count
-   *  scales with it until MINDIST or {@link ProcObjLodConfig.procObjMax} binds instead. 07/02 hangs the
-   *  per-category and per-surface axes off this one; 07/04 sets what each target may raise it to. */
+   *  scales with it until {@link ProcObjLodConfig.procObjMax} binds instead. 07/02 hangs the per-category
+   *  and per-surface axes off this one; 07/04 sets what each target may raise it to. */
   density: number;
   /** Emitted LOD draw distance (world units) — the visibility gate for the LOD def.
    *  MUST stay BELOW 300: SA classifies defs with drawDistance ≥ 300 (the FLA-configurable "LOD distance")
@@ -21,7 +21,10 @@ export interface ProcObjLodConfig {
   linkedHeight: number;
   /** Optional min HD height (m) gate — drops short clutter (grass) from conversion. 0 = off. */
   procObjHeight: number;
-  /** Cap on statically converted procobj objects (0 disables the conversion). */
+  /** Cap on statically converted procobj objects (0 disables the conversion). It is OUR safety cap, not a
+   *  target ceiling: once it binds, the lowest-lottery cut is global, so raising one category displaces the
+   *  others instead of adding to them (07/02 decision 8). Keep it clear of the authored count — a build that
+   *  is capped is measuring the cap. `CAP DROPPED n` says when it bit. */
   procObjMax: number;
   /** Max texture dimension (px) in the shared `lod_procobj.txd`; sources are downscaled to it. */
   textureSize: number;
@@ -35,7 +38,10 @@ export const config: ProcObjLodConfig = {
   drawDistance: 290,
   linkedHeight: 4,
   procObjHeight: 0,
-  procObjMax: 20000,
+  // 20000 until 2026-08-09, when SPACING started being read as a length: the authored density is 91 067
+  // objects for the 43 converted species, so the old cap threw away 78 % of them and every field verdict
+  // would have been about the cap. Clear of that count, not a budget — 07/04 sets the per-target one.
+  procObjMax: 100000,
   textureSize: 64,
   tris: 200,
 };
