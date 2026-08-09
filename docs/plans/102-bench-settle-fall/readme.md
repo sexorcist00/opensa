@@ -1,6 +1,6 @@
 # 102 — The bench settle lies, and a fall poisons the sweep
 
-**Status: STEPS 1-4 DONE 2026-08-09, awaiting the merge call (step 5).** Branch `102-bench-settle-fall`. Closes the harness half of
+**Status: DONE and MERGED 2026-08-09** (`ed6b90ba`, close-out audit `6202503e`). Closes the harness half of
 [`docs/open-issues/bench-scene-transition-collision.md`](../../open-issues/bench-scene-transition-collision.md)
 — the falls and the A/A triangle drift. The city-scale simulation-residency question that doc also carries is
 NOT this plan; it stays open as a design track (the user's draw-distance requirement stands, but no observed

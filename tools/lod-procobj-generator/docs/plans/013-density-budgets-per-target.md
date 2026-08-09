@@ -229,6 +229,18 @@ rather than a guard, because its number does not exist yet.
       streaming settle-watcher) and set `procObjMax`, the candidate ceiling and the per-cell `procObjLimit`
       from THAT. Record the rows in `docs/benchmarks/` before analysing them. This is the first real ceiling
       the target has ever been given.
+      **UNBLOCKED 2026-08-09, and the instrument states its own limits.** The harness blocker is gone —
+      [plan 102](../../../../docs/plans/102-bench-settle-fall/readme.md) shipped and merged, and the A/A floor
+      was re-taken on THIS pak (91 092 clutter objects, not the lighter 08-08 one 102 measured):
+      [`2026-08-09-headless-aa-floor-current-pak.json`](../../../../docs/benchmarks/opensa-engine/2026-08-09-headless-aa-floor-current-pak.json).
+      - **Content holds still**: `avgTriangles` worst-of-nine **0.094 %**, draws 0.52 %.
+      - **Cost does not**: `gpuMs.pass` worst **13.37 %** on a single sweep, and `avgMs` is SATURATED at the
+        120 fps frame cap (8.333 ms) on seven of nine scenes in the headless lane at DPR=2.
+      **So this budget may not be read off one sweep's `avgMs`.** It has to come from hitching — `p95Ms`,
+      `[slow]` frames, stream stats, `lateCreates` — plus repeated `gpuMs.pass` samples, or from the user's
+      uncapped display lane (which is why the density A/B could see `country-dusk` +12.6 % there and the
+      headless lane cannot). Deciding WHICH lane, and how many repeats a `gpuMs.pass` claim needs, is the
+      first task of the measurement rather than an assumption inside it.
 - [ ] **`sa` perf budget — now a VERIFICATION, not a lever** (see the scope call above). On the real install
       under Wine, above the asi gate. Separate rows, separate conclusion, explicitly not comparable to the
       opensa numbers. **If SA does not cope at the shipped density, this plan has no lever left** — say so

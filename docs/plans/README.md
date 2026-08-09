@@ -20,7 +20,7 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 row but its chain was superseded by 097). Newest first:
 
 - **[102 — The bench settle lies, and a fall poisons the sweep](./102-bench-settle-fall/readme.md)** —
-  **STEPS 1-4 DONE 2026-08-09**, branch `102-bench-settle-fall`, awaiting the merge call. The perf-runs
+  **DONE and MERGED 2026-08-09** (`ed6b90ba`; close-out audit `6202503e`). The perf-runs
   settle exited on a stale `pendingCells` read, nothing waited for collision, and a teleport preserved
   `Velocity.z` — one lost race sent the player under the mesh at terminal velocity for the rest of the
   sweep. Three red tests → the fix (notice → ring → ground → warp onto that ground → wait for rest) + a

@@ -1,9 +1,20 @@
 # Simulation residency: nothing decides WHAT may be simulated, WHERE
 
-**Status: OPEN, deliberately unfixed.** A fix was written on 2026-08-08, measured, and **reverted** — it
-worked and it was still the wrong shape (see [The fix that was rejected](#the-fix-that-was-rejected)). The
-task this doc exists for is a mechanism that is right at CITY scale, not a patch that makes today's nine
-bench scenes green.
+**Status: HALF CLOSED 2026-08-09.** Read this header before quoting any measurement below it.
+
+- **The measurement contamination and the falls are FIXED and merged** ([plan 102](../plans/102-bench-settle-fall/readme.md),
+  merge `ed6b90ba`, close-out audit `6202503e`). They were a HARNESS bug, not the design question this doc
+  argues for. **Section A's A/A table below is the BEFORE, not a current reproduction** — the spread went
+  10.19 % → 0.14 % (`lv-night`), worst-of-nine 0.36 %; `[cam]` jump lines 89 255 → 1. **The bench is a usable
+  instrument today**, and a perf budget may be measured on it.
+- **What stays open is the design question**: three streaming radii, two distance metrics (the world grid is
+  2D, `VehicleLodSystem` is 3D), no authoritative answer to "may this body be simulated here, right now".
+  **No observed defect currently forces a mechanism** — the requirements list and the eight killed hypotheses
+  below are the starting point when one does.
+
+An earlier fix was written on 2026-08-08, measured, and **reverted** — it worked and it was still the wrong
+shape (see [The fix that was rejected](#the-fix-that-was-rejected)): the task this doc exists for is a
+mechanism that is right at CITY scale, not a patch that makes today's nine bench scenes green.
 
 The symptom that opened it: **cars fall through the world across a bench scene transition, and the player
 falls at the end of a run** (reported by the user on both arms of the 07/04 density A/B). The investigation
@@ -63,7 +74,10 @@ npm run serve:static          # :3001 — mounts /build
 npm run dev                   # READ the port off the Vite line; 5173 is often taken (this session: 5174)
 ```
 
-### A. The measurement contamination (always reproduces)
+### A. The measurement contamination — FIXED 2026-08-09, kept as the BEFORE
+
+**Do not read the table below as a current reproduction.** It is the baseline plan 102 was measured against;
+the same recipe now returns a spread of 0.14–0.36 %. The recipe itself is still the right one for an A/A.
 
 ```bash
 SRC="http://localhost:3001/build/original/opensa"

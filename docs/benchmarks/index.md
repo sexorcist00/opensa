@@ -508,6 +508,27 @@ The arm-A run that found the anchor-height defect on the way there:
 [`2026-08-09-ingame-102-probe-arm-a.json`](opensa-engine/2026-08-09-ingame-102-probe-arm-a.json) —
 **diagnostic, not a baseline.**
 
+### A/A on the CURRENT pak — the content column is solid, the cost column is not (2026-08-09)
+
+Plan 102's floor (worst-of-nine **0.36 %** triangles) was taken on the minor-8 pak of 08-08. lod-procobj
+013's `opensa` perf budget will be read on the post-column-fix pak (13:53, **91 092** clutter objects), so
+the floor was re-established there: two back-to-back headless `?bench=all` sweeps of the SAME build, Claude's
+lane, M3 Pro, DPR=2, 1219 road cars, `legStart.ok` on all nine scenes in both arms, `lateCreates` 0.
+Rows: [`2026-08-09-headless-aa-floor-current-pak.json`](opensa-engine/2026-08-09-headless-aa-floor-current-pak.json).
+
+| column | worst-of-nine A/A spread | verdict |
+| --- | --- | --- |
+| `avgTriangles` | **0.094 %** (lv-night) | trustworthy — better than the 0.36 % of the lighter pak |
+| `avgDrawCalls` | 0.52 % | trustworthy |
+| `avgMs` | 0.62 % — but **SATURATED at the 120 fps cap** (8.333 ms) on 7 of 9 scenes, both arms | carries no signal on this machine at DPR=2 |
+| `gpuMs.pass` | **13.37 %** (sf-fog-dawn) | the real cost floor, and it is large |
+
+**What this bounds.** The harness holds still on CONTENT, so an A/B may be read on triangles and draws. It
+does NOT hold still on cost: a single sweep's `gpuMs.pass` cannot resolve anything under ~13 %, and `avgMs`
+is a frame cap rather than a measurement. So 013's perf budget has to come from HITCHING — `p95Ms`, `[slow]`
+frames, stream stats — plus repeated `gpuMs.pass` samples, and never from one sweep's `avgMs`. The earlier
+density A/B read `avgMs` on the user's uncapped display lane, which is why it could see 12.6 % there.
+
 ### The procobj density recovery — one scene moved, and it is the rural one (2026-08-09)
 
 The first sweep on a pak built with `procobj.dat` read the way the game reads it (`area / spacing²`, no
