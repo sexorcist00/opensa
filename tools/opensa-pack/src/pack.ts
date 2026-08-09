@@ -193,7 +193,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
           },
         }
       : {}),
-    ...(textures === 'astc' ? { astc: true } : {}),
+    ...(textures === 'astc' ? { astc: true, astcThreads: options.astcThreads ?? 0 } : {}),
     ...(forceRgba8 ? { forceRgba8: true } : {}),
     ...(options.maxTextureSize ? { maxTextureSize: options.maxTextureSize } : {}),
     ...(rect !== undefined ? { rect } : {}),
@@ -488,7 +488,7 @@ async function retextureModels(
   if (textures !== 'astc') {
     return;
   }
-  const encoder = createAstcEncoder(astcThreads > 0 ? { threads: astcThreads } : {});
+  const encoder = createAstcEncoder({ threads: astcThreads });
   const arrays = await bundles.retexture((array) => encoder.ostex(array));
   log(
     `astc: ${arrays} model dictionary arrays, ${(encoder.stats.texels / 1e6).toFixed(1)} M texels in ` +

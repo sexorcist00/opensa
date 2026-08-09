@@ -47,8 +47,15 @@ export interface AstcEncoderOptions {
   /** astcenc effort preset, 0 (FASTEST) … 100 (EXHAUSTIVE). Default MEDIUM — measured 2026-08-07 as the knee:
    *  +3.1 dB over FAST for 1.35x the time, and THOROUGH buys another 0.3 dB for 1.4x again. */
   quality?: number;
-  /** astcenc worker threads; 0 = one per core (the default, and ~2.4x a single thread on a 4-core box). */
-  threads?: number;
+  /**
+   * astcenc worker threads. `0` is one per core; `1` spawns none and encodes on the calling thread.
+   *
+   * REQUIRED, and that is the whole point of it. It was optional until 2026-08-09, and the world-array call
+   * site never passed one — so `--astc-threads 1` capped the model dictionaries while the arrays kept
+   * spawning a worker per core, and three phone converts died at `encoding texture arrays` with the cap
+   * apparently applied. A new call site must now state what it wants, or it does not compile.
+   */
+  threads: number;
 }
 
 /**
@@ -59,7 +66,7 @@ export interface AstcEncoderOptions {
  * would mean the pack wired the two switches apart, and re-encoding it silently would be a second generation
  * of loss nobody asked for.
  */
-export function createAstcEncoder(options: AstcEncoderOptions = {}): AstcEncoder {
+export function createAstcEncoder(options: AstcEncoderOptions): AstcEncoder {
   const config = new ASTCConfig(
     // LDR_SRGB, because the upload format is `astc-4x4-unorm-srgb`: the encoder has to weight its error in the
     // space the sampler decodes in, or it spends its bits on the wrong end of the ramp.
@@ -72,7 +79,7 @@ export function createAstcEncoder(options: AstcEncoderOptions = {}): AstcEncoder
     // — the payload is already premultiplied, so the RGB of a transparent texel is already zero.
     0,
   );
-  const context = new ASTCContext(config, options.threads ?? 0);
+  const context = new ASTCContext(config, options.threads);
   const swizzle = new ASTCSwizzle();
   const stats = { ms: 0, texels: 0 };
 

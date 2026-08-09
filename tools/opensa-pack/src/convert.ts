@@ -56,6 +56,11 @@ export interface ConvertOptions {
    *  on the GPUs that have no BC. Requires {@link forceRgba8}: the encode reads decoded layers, so the DXT
    *  passthrough must be off. */
   astc?: boolean;
+  /** astcenc worker threads for the WORLD arrays. Must be threaded through: this encode is a separate call
+   *  site from the model dictionaries', and until 2026-08-09 it silently kept the library's one-per-core
+   *  default while `--astc-threads` capped only the other one — which is why three phone converts died
+   *  HERE, at `encoding texture arrays`, with the cap apparently applied. */
+  astcThreads?: number;
 
   /** Bake every cell's COLLISION into the pak (plan 200/3-01), so the browser never parses a COL. Off by
    *  default while the runtime still reads the archives — the bake costs build time and nothing reads the
@@ -288,7 +293,7 @@ export async function convertDistrict(
     : 0;
 
   log('encoding texture arrays …');
-  for (const input of await encodeTextureArrays(planner, options.astc === true, log)) {
+  for (const input of await encodeTextureArrays(planner, options.astc === true, options.astcThreads ?? 0, log)) {
     inputs.push(input);
     report.textures.arrays += 1;
   }
@@ -579,9 +584,10 @@ function countRectCells(
 async function encodeTextureArrays(
   planner: TexturePlanner,
   astc: boolean,
+  astcThreads: number,
   log: (message: string) => void,
 ): Promise<OspakInput[]> {
-  const encoder = astc ? createAstcEncoder() : null;
+  const encoder = astc ? createAstcEncoder({ threads: astcThreads }) : null;
   const inputs: OspakInput[] = [];
   for (const array of planner.build()) {
     const bytes = encoder === null ? array.bytes : await encoder.ostex(array.bytes);

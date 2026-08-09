@@ -134,13 +134,12 @@ fi
 # 2 — convert, but only when there is nothing to run on. A phone convert is minutes to hours; re-running this
 # script must not silently repeat it.
 if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
-  # The heap the convert asks for. 4 GB is what the model and collision stages want; the ASTC encode that
-  # follows them needs ADDRESS SPACE for its isolates, and on the target phone it has now failed three times
-  # with `Failed to reserve virtual memory for CodeRange` — twice with worker threads and once with none at
-  # all, which is what rules the workers out and points at this reservation. 2 GB for an ASTC run is the
-  # hypothesis under test, not a measured value: if the encode survives it, the district also has to convert
-  # inside it, and both halves are visible in this line.
-  HEAP="${HEAP:-$([ "$TEXTURES" = astc ] && echo 2048 || echo 4096)}"
+  # The heap the convert asks for. The ASTC-specific reduction that briefly lived here was aimed at the wrong
+  # cause — the real one was a call site that never received `--astc-threads` and kept spawning a worker per
+  # core (see the note above). The knob stays because it is genuinely useful on a small device, and because
+  # the failure count did fall with it (six lost isolates at 4 GB, two at 2 GB), but the default is the value
+  # the model and collision stages were built around.
+  HEAP="${HEAP:-4096}"
   say "converting $GAME → $OUT (rect $RECT, textures=$TEXTURES, astc-threads=$ASTC_THREADS, heap=${HEAP}m, bake=$BAKE, models=$MODELS)"
   args=(--game "$GAME" --out "$OUT" --textures "$TEXTURES" --max-texture 256 --rect "$RECT" --no-ao --platforms mobile)
   [ "$TEXTURES" = astc ] && [ "$ASTC_THREADS" != 0 ] && args+=(--astc-threads "$ASTC_THREADS")

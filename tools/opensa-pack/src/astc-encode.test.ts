@@ -70,13 +70,13 @@ describe('createAstcEncoder', () => {
         width: 8,
       });
 
-      await expect(createAstcEncoder().ostex(bc1)).rejects.toThrow(/RGBA8 source/);
+      await expect(createAstcEncoder({ threads: 0 }).ostex(bc1)).rejects.toThrow(/RGBA8 source/);
     });
   });
 
   describe('positive cases', () => {
     it('writes the layout the runtime allocates against, at a quarter of RGBA8', async () => {
-      const astc = decodeOstex(await createAstcEncoder().ostex(rgba8Array(64, 64, 2)));
+      const astc = decodeOstex(await createAstcEncoder({ threads: 0 }).ostex(rgba8Array(64, 64, 2)));
 
       expect(astc.format).toBe(OstexFormat.ASTC4x4);
       expect(astc.mipCount).toBe(5); // 64x64 down to 4x4
@@ -90,14 +90,14 @@ describe('createAstcEncoder', () => {
 
     it('truncates the chain at the 4x4 block floor rather than reinterpreting RGBA8 levels', async () => {
       const source = decodeOstex(rgba8Array(32, 32, 1));
-      const astc = decodeOstex(await createAstcEncoder().ostex(rgba8Array(32, 32, 1)));
+      const astc = decodeOstex(await createAstcEncoder({ threads: 0 }).ostex(rgba8Array(32, 32, 1)));
 
       expect(source.mipCount).toBe(6); // RGBA8 runs to 1x1
       expect(astc.mipCount).toBe(4); // ASTC stops at 4x4
     });
 
     it('carries the alpha classification and the premultiplied flag through unchanged', async () => {
-      const astc = decodeOstex(await createAstcEncoder().ostex(rgba8Array(16, 16, 3)));
+      const astc = decodeOstex(await createAstcEncoder({ threads: 0 }).ostex(rgba8Array(16, 16, 3)));
 
       expect(astc.premultiplied).toBe(true);
       expect(astc.layers.map((layer) => layer.alphaClass)).toEqual([
@@ -110,7 +110,7 @@ describe('createAstcEncoder', () => {
     });
 
     it('lands in a pak that DEMANDS ASTC — the manifest is what the runtime gates on', async () => {
-      const bytes = await createAstcEncoder().ostex(rgba8Array(16, 16, 1));
+      const bytes = await createAstcEncoder({ threads: 0 }).ostex(rgba8Array(16, 16, 1));
       const { manifest } = buildOspak([
         {
           bytes,
@@ -131,14 +131,14 @@ describe('createAstcEncoder', () => {
       // a V8 isolate reserving its own code range. A knob that also changed the pak would make the phone's
       // build a different build, so this pins that it does not.
       const source = rgba8Array(16, 16, 2);
-      const wide = await createAstcEncoder().ostex(source);
+      const wide = await createAstcEncoder({ threads: 0 }).ostex(source);
       const capped = await createAstcEncoder({ threads: 1 }).ostex(source);
 
       expect(Array.from(capped)).toEqual(Array.from(wide));
     });
 
     it('reports what the stage cost, so a build can log it', async () => {
-      const encoder = createAstcEncoder();
+      const encoder = createAstcEncoder({ threads: 0 });
       await encoder.ostex(rgba8Array(16, 16, 2));
 
       expect(encoder.stats.texels).toBe(2 * (256 + 64 + 16));
