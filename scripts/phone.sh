@@ -293,6 +293,22 @@ if [ -n "$GATE" ]; then
   echo "  Everything else kept its original (BC) textures and would fail to spawn on this GPU."
   echo "  VEHICLES=all PEDS=all npm run phone converts the roster and drops the gate (hours on a phone)."
 fi
-say "running — Ctrl+C stops the servers this run started"
-echo "logs: tail -f $LOGS/app.log $LOGS/static.log"
-wait
+# 6 — the logs, FOLLOWED rather than named. Printing `tail -f …` as advice made the running terminal a dead
+# end: the only way to type it was Ctrl+C, which stops the very servers whose logs were wanted. So this run
+# holds the terminal on the logs themselves, and Ctrl+C still means "stop everything" through the trap below.
+say "running — Ctrl+C stops the servers this run started (the logs follow below)"
+logs=()
+for file in "$LOGS/static.log" "$LOGS/app.log"; do
+  [ -f "$file" ] && logs+=("$file")
+done
+if [ ${#logs[@]} -eq 0 ]; then
+  # Nothing to follow: both servers were already up, so this run started no log of its own.
+  echo "no log from this run — the servers were already running"
+  wait
+else
+  # `-n 5` rather than the whole file: a reused log can be long, and what matters is what happens NEXT.
+  tail -n 5 -f "${logs[@]}" &
+  TAIL_PID=$!
+  STARTED+=("$TAIL_PID")
+  wait
+fi
