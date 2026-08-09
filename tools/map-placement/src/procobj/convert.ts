@@ -21,7 +21,7 @@ export interface ProcObjConvertOptions {
   /**
    * Build-time density CUTOFF on the scatter lottery (07/02 task 1, the global half). Every candidate carries
    * `lottery ∈ [0, PROC_OBJ_MAX_DENSITY)`; keeping `lottery < density` is what picks how many survive, so
-   * **1 is vanilla** and the count scales with this number until MINDIST or `procObjMax` binds instead.
+   * **1 is vanilla** and the count scales with this number until `procObjMax` binds instead.
    *
    * It is a build INPUT so an A/B can state what it was configured with (the self-describing-capture rule);
    * the per-category and per-surface axes 07/02 adds sit on top of this one.
@@ -120,12 +120,9 @@ export function convertProcObj(
     return null;
   }
   const converted = new Set(rules.map((rule) => rule.model));
-  const minDistByModel = new Map<string, number>();
-  for (const rule of rules) {
-    minDistByModel.set(rule.model, Math.max(minDistByModel.get(rule.model) ?? 0, rule.minDistance));
-  }
 
-  // Scatter over the whole map at `density`, then thin per species by MINDIST, then a global lowest-lottery cap.
+  // Scatter over the whole map at `density`, then a global lowest-lottery cap. Nothing thins by MINDIST: the
+  // column is a camera radius, not an inter-object spacing (`docs/gta-sa-original/procedural-objects.md`).
   const defs = buildMapDefinitions(gamePath, archive);
   const colliders = buildColliders(buildCollisionIndex(archive), defs, { center: [0, 0, 0], radius: Infinity });
   const surfaceNames = parseSurfaceNames(readFileSync(join(gamePath, 'data', 'surfinfo.dat'), 'utf8'));
@@ -133,9 +130,10 @@ export function convertProcObj(
 
   const placed: { model: string; placement: ProcObjPlacement }[] = [];
   for (const batch of batches) {
-    const kept = batch.placements.filter((placement) => placement.lottery < density);
-    for (const placement of cullByMinDistance(kept, minDistByModel.get(batch.model) ?? 0)) {
-      placed.push({ model: batch.model, placement });
+    for (const placement of batch.placements) {
+      if (placement.lottery < density) {
+        placed.push({ model: batch.model, placement });
+      }
     }
   }
   placed.sort((a, b) => a.placement.lottery - b.placement.lottery);
@@ -165,59 +163,9 @@ export function convertProcObj(
   return { datLines, dropped: placed.length - final.length, imgFiles, objects: final.length, rows };
 }
 
-/**
- * Greedy min-distance (XY) cull, spatial-hashed; input is already lottery-sorted so the lowest survive.
- *
- * **Known to be a misreading of the column, kept until plan 07/02's fix step lands.** MINDIST is a distance
- * from the CAMERA in the original (`docs/gta-sa-original/procedural-objects.md`), so this exclusion radius
- * has no counterpart in the game: measured 2026-08-09 it deletes 99.0 % of the placements and leaves a
- * one-of-each-species-per-50-m look. Do not build a quality argument on it.
- */
-export function cullByMinDistance(placements: readonly ProcObjPlacement[], minDist: number): ProcObjPlacement[] {
-  if (minDist <= 0) {
-    return [...placements];
-  }
-  const grid = new Map<string, ProcObjPlacement[]>();
-  const minSq = minDist * minDist;
-  const kept: ProcObjPlacement[] = [];
-  for (const placement of placements) {
-    const gx = Math.floor(placement.position[0] / minDist);
-    const gy = Math.floor(placement.position[1] / minDist);
-    if (!tooClose(grid, gx, gy, placement, minSq)) {
-      kept.push(placement);
-      const key = `${gx},${gy}`;
-      (grid.get(key) ?? grid.set(key, []).get(key)!).push(placement);
-    }
-  }
-
-  return kept;
-}
-
 /** GTA IPL rotation quaternion for a yaw around Z (conjugated, the IPL convention; align is unused). */
 export function iplQuaternion(yaw: number): [number, number, number, number] {
   return [0, 0, -Math.sin(yaw / 2), Math.cos(yaw / 2)];
-}
-
-function tooClose(
-  grid: ReadonlyMap<string, ProcObjPlacement[]>,
-  gx: number,
-  gy: number,
-  p: ProcObjPlacement,
-  minSq: number,
-): boolean {
-  for (let dx = -1; dx <= 1; dx += 1) {
-    for (let dy = -1; dy <= 1; dy += 1) {
-      for (const q of grid.get(`${gx + dx},${gy + dy}`) ?? []) {
-        const ddx = p.position[0] - q.position[0];
-        const ddy = p.position[1] - q.position[1];
-        if (ddx * ddx + ddy * ddy < minSq) {
-          return true;
-        }
-      }
-    }
-  }
-
-  return false;
 }
 
 function writeText(path: string, text: string): void {

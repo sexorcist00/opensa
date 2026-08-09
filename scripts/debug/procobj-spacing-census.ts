@@ -4,7 +4,6 @@ import type { ColFace } from '@opensa/renderware/parsers/binary/col-types';
 import type { ProcObjRule } from '@opensa/renderware/parsers/text/procobj.parser';
 import type { MapDefinitions } from '@opensa/renderware/parsers/text/types';
 
-import { cullByMinDistance } from '@opensa/map-placement/procobj';
 import { buildColliders } from '@opensa/renderware/collision/build-colliders';
 import { buildCollisionIndex } from '@opensa/renderware/collision/collision-index';
 import { groupRulesBySurface, PROC_OBJ_MAX_DENSITY, scatterProcObjects } from '@opensa/renderware/map/procobj-scatter';
@@ -25,9 +24,10 @@ import { gameArg, gameDir, loadMapDefs, openGameArchive } from '../lib/game';
  *   (`DistanceBetweenPointsSquared(triangleCentre, TheCamera) < m_fSquaredMinDistance → create nothing`).
  *   MINDIST is an anti-pop-in radius around the player, never a distance between two objects.
  *
- * So this script reports both readings side by side and then measures the signature the wrong one leaves in
- * our own output: with MINDIST used as an exclusion radius, the nearest SAME-species neighbour is ≥ 50–80 m
- * everywhere while cross-species neighbours are free.
+ * So this script reports both readings side by side and then measures what our own scatter does. **Both
+ * columns were fixed 2026-08-09** (`area / spacing²`, the MINDIST cull deleted), so the stages below now
+ * measure the corrected pipeline and the nearest-neighbour block is the REGRESSION check: same-species pairs
+ * must be free to stand metres apart again (the old cull left `min 50.0 m` and 0 pairs below their MINDIST).
  *
  * Run: `npx tsx scripts/debug/procobj-spacing-census.ts [--game original] [--density 1] [--nn 0]
  *       [--models build/original/opensa/data/maps/lod_procobj.models] [--json <path>]`
@@ -238,9 +238,10 @@ function reportGrouping(): void {
 
 /**
  * The two readings of SPACING as map-wide expectations. Both are exact expectations of the same per-triangle
- * rounding (floor + fractional lottery), so they are comparable without running a scatter — and the OURS
+ * rounding (floor + fractional lottery), so they are comparable without running a scatter — and the SA
  * column is what the scatter's candidate count divided by PROC_OBJ_MAX_DENSITY must reproduce, which is the
- * identity `reportStages` asserts.
+ * identity `reportStages` asserts. The `old` column is the misreading this pipeline shipped until
+ * 2026-08-09; it is kept so the cost of the defect stays measurable on any corpus, not just the stock map.
  */
 function reportReadings(areaBySurface: ReadonlyMap<string, number>): void {
   let ours = 0;
@@ -265,11 +266,12 @@ function reportReadings(areaBySurface: ReadonlyMap<string, number>): void {
   );
 
   console.log('\nSPACING, the two readings (map-wide expectation at vanilla density):');
-  console.log(`  ours  area / spacing   ${Math.round(ours).toLocaleString('en-US')} objects`);
+  console.log(`  old   area / spacing   ${Math.round(ours).toLocaleString('en-US')} objects   (the misreading)`);
   console.log(
-    `  SA    area / spacing²  ${Math.round(sa).toLocaleString('en-US')} objects   (× ${(sa / ours).toFixed(3)})`,
+    `  SA    area / spacing²  ${Math.round(sa).toLocaleString('en-US')} objects   (× ${(sa / ours).toFixed(3)})` +
+      '   ← what we scatter now',
   );
-  console.log('\n  widest gaps (species · spacing · ours → SA):');
+  console.log('\n  widest gaps (species · spacing · old → SA):');
   for (const row of perSpecies.sort((a, b) => b.ours - b.sa - (a.ours - a.sa)).slice(0, 10)) {
     console.log(
       `    ${row.model.padEnd(22)} spacing ${String(row.spacing).padStart(6)}   ` +
@@ -282,7 +284,7 @@ function reportReadings(areaBySurface: ReadonlyMap<string, number>): void {
   }
 }
 
-/** The build's own pass, stage by stage, plus the nearest-neighbour signature MINDIST-as-spacing leaves. */
+/** The build's own pass, stage by stage, plus the nearest-neighbour signature the scatter leaves. */
 function reportStages(areaBySurface: ReadonlyMap<string, number>): void {
   const minDistByModel = new Map<string, number>();
   for (const rule of rules) {
@@ -291,42 +293,36 @@ function reportStages(areaBySurface: ReadonlyMap<string, number>): void {
   const batches = scatterProcObjects(colliders, groupRulesBySurface(rules), surfaceNames, 0, 0);
   let candidates = 0;
   let atDensity = 0;
-  let afterMinDist = 0;
-  const keptByModel = new Map<string, ProcObjPlacement[]>();
-  const preCullByModel = new Map<string, ProcObjPlacement[]>();
+  const placedByModel = new Map<string, ProcObjPlacement[]>();
   for (const batch of batches) {
     const vanilla = batch.placements.filter((placement) => placement.lottery < density);
-    const kept = cullByMinDistance(vanilla, minDistByModel.get(batch.model) ?? 0);
     candidates += batch.placements.length;
     atDensity += vanilla.length;
-    afterMinDist += kept.length;
-    push(preCullByModel, batch.model, vanilla);
-    push(keptByModel, batch.model, kept);
+    push(placedByModel, batch.model, vanilla);
   }
 
-  // Self-check: candidates are `area / spacing × PROC_OBJ_MAX_DENSITY` by construction, so the scatter must
-  // reproduce the OURS column above. A mismatch means this census models a pipeline that is not the one
+  // Self-check: candidates are `area / spacing² × PROC_OBJ_MAX_DENSITY` by construction, so the scatter must
+  // reproduce the SA column above. A mismatch means this census models a pipeline that is not the one
   // running, and every number below measures the model instead.
   let expected = 0;
   for (const rule of rules) {
-    expected += ((areaBySurface.get(rule.surface) ?? 0) / rule.spacing) * PROC_OBJ_MAX_DENSITY;
+    expected += ((areaBySurface.get(rule.surface) ?? 0) / (rule.spacing * rule.spacing)) * PROC_OBJ_MAX_DENSITY;
   }
   const drift = (100 * Math.abs(candidates - expected)) / Math.max(1, expected);
-  const survival = ((100 * afterMinDist) / Math.max(1, atDensity)).toFixed(1);
   console.log(`\nstages (density ${density}):`);
   console.log(`  candidates      ${candidates.toLocaleString('en-US')}`);
-  console.log(`  lottery < ${density}     ${atDensity.toLocaleString('en-US')}   ← the PRE-CULL placement count`);
-  console.log(`  after MINDIST   ${afterMinDist.toLocaleString('en-US')}   (${survival} % survive)`);
-  console.log(`  self-check: candidates vs area/spacing×3 — drift ${drift.toFixed(2)} % (must be under ~2 %)`);
+  console.log(
+    `  lottery < ${density}     ${atDensity.toLocaleString('en-US')}   ← the placement count the build emits`,
+  );
+  console.log(`  self-check: candidates vs area/spacing²×3 — drift ${drift.toFixed(2)} % (must be under ~2 %)`);
 
   if (!withNearest) {
     return;
   }
+  // Regression check: the MINDIST cull is gone, so same-species pairs must now be free to stand close. A
+  // `min` back at 50–80 m with 0 pairs below their MINDIST is the inverted look returning.
   console.log('\nnearest-neighbour signature (XY, metres) — same species vs any species:');
-  for (const [label, byModel] of [
-    ['pre-cull ', preCullByModel],
-    ['post-cull', keptByModel],
-  ] as const) {
+  for (const [label, byModel] of [['placed', placedByModel]] as const) {
     const anyNear = nearestDistances([...byModel.values()].flat());
     const sameNear: number[] = [];
     let below = 0;

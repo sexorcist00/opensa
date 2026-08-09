@@ -28,17 +28,17 @@ function rule(partial: Partial<ProcObjRule> = {}): ProcObjRule {
   };
 }
 
-/** Right triangle (0,0)-(20,0)-(0,20) at z=0 — area exactly 200 m². */
+/** Right triangle (0,0)-(100,0)-(0,40) at z=0 — area exactly 2000 m², i.e. 20 objects at spacing 10. */
 function triangleCollider(material: number, transform = new Matrix4()): RegionColliders {
   const col: ColModel = {
-    bounds: { center: [0, 0, 0], max: [20, 20, 0], min: [0, 0, 0], radius: 30 },
+    bounds: { center: [0, 0, 0], max: [100, 40, 0], min: [0, 0, 0], radius: 110 },
     boxes: [],
     faces: [{ a: 0, b: 1, c: 2, light: 0, material }],
     modelId: 0,
     name: 'ground',
     spheres: [],
     version: 1,
-    vertices: new Float32Array([0, 0, 0, 20, 0, 0, 0, 20, 0]),
+    vertices: new Float32Array([0, 0, 0, 100, 0, 0, 0, 40, 0]),
   };
 
   return { col, name: 'ground', transforms: [transform] };
@@ -81,7 +81,8 @@ describe('scatterProcObjects', () => {
       const batches = scatterProcObjects([triangleCollider(1)], groupRulesBySurface([rule()]), SURFACES, 0, 0);
       expect(batches).toHaveLength(1);
       const { placements } = batches[0];
-      expect(placements).toHaveLength((200 / 10) * PROC_OBJ_MAX_DENSITY); // area 200, spacing 10
+      // SPACING is a LENGTH: one object per spacing² m², so area 2000 / 10² = 20 at vanilla density.
+      expect(placements).toHaveLength((2000 / (10 * 10)) * PROC_OBJ_MAX_DENSITY);
       for (let i = 1; i < placements.length; i += 1) {
         expect(placements[i].lottery).toBeGreaterThanOrEqual(placements[i - 1].lottery);
       }
@@ -91,13 +92,60 @@ describe('scatterProcObjects', () => {
       expect(vanilla).toBeLessThan(30);
     });
 
+    it('spends SPACING as a LENGTH — doubling it QUARTERS the count, it does not halve it', () => {
+      // The property the 2026-08-09 fix is about, and the one a constant cannot pin: `area / spacing²`.
+      // Under the old `area / spacing` reading this ratio would be 2, and every count below would be right
+      // for the wrong reason. Same seed and same face, so only the column's meaning differs.
+      const at = (spacing: number): number =>
+        scatterProcObjects([triangleCollider(1)], groupRulesBySurface([rule({ spacing })]), SURFACES, 0, 0)[0]
+          .placements.length;
+
+      expect(at(10)).toBe(60); // area 2000 / 10² × 3
+      expect(at(20)).toBe(15); // ×4 the spacing-squared ⇒ ÷4 the count
+      expect(at(10) / at(20)).toBe(4);
+    });
+
+    it('leaves a sparse species absent from most faces (a 163 m rule is one tree per 26 569 m²)', () => {
+      // `p_woodland DEAD_TREE_2`'s real spacing. On a 2000 m² face it expects 0.23 candidates, so the
+      // fractional lottery must resolve to a handful of cells with one and the rest with none — the
+      // "isolated dead trees" the data authors. Under `area / spacing` it would expect 36 on every face.
+      const rules = groupRulesBySurface([rule({ model: 'dead_tree_2', spacing: 163 })]);
+      const counts = Array.from(
+        { length: 40 },
+        (_, i) => scatterProcObjects([triangleCollider(1)], rules, SURFACES, i, 0)[0]?.placements.length ?? 0,
+      );
+
+      expect(Math.max(...counts)).toBeLessThanOrEqual(1); // never a clump of dead trees
+      expect(counts.filter((n) => n === 0).length).toBeGreaterThan(20); // absent from most cells
+      expect(counts.some((n) => n === 1)).toBe(true); // but it does fire — a zero here would be no evidence
+    });
+
+    it('never spaces placements by the MINDIST column — that column is a camera radius', () => {
+      // Fails the day someone adds an exclusion radius to the SCATTER (an "anti-clumping" pass is the
+      // plausible shape). It does NOT re-catch the deleted `cullByMinDistance`, which lived downstream in
+      // `map-placement/procobj/convert.ts` and cannot be unit-tested without a fixture game dir — that seam
+      // is named as uncovered in lod-procobj-generator/009. The rule fixture's minDistance is 60.
+      const batches = scatterProcObjects([triangleCollider(1)], groupRulesBySurface([rule()]), SURFACES, 0, 0);
+      const { placements } = batches[0];
+      let nearest = Infinity;
+      for (let i = 0; i < placements.length; i += 1) {
+        for (let j = i + 1; j < placements.length; j += 1) {
+          const dx = placements[i].position[0] - placements[j].position[0];
+          const dy = placements[i].position[1] - placements[j].position[1];
+          nearest = Math.min(nearest, Math.hypot(dx, dy));
+        }
+      }
+
+      expect(nearest).toBeLessThan(rule().minDistance); // same species, metres apart — the authored look
+    });
+
     it('places inside the face with the rule ranges applied (scale/rotation/z-offset/normal)', () => {
       const batches = scatterProcObjects([triangleCollider(1)], groupRulesBySurface([rule()]), SURFACES, 1, 2);
       for (const placement of batches[0].placements) {
         const [x, y, z] = placement.position;
         expect(x).toBeGreaterThanOrEqual(0);
         expect(y).toBeGreaterThanOrEqual(0);
-        expect(x + y).toBeLessThanOrEqual(20.0001); // inside the triangle
+        expect(x / 100 + y / 40).toBeLessThanOrEqual(1.0001); // inside the triangle
         expect(z).toBeCloseTo(-0.3, 5); // zOffMin == zOffMax == −0.3
         expect(placement.normal).toEqual([0, 0, 1]);
         expect(placement.align).toBe(true);

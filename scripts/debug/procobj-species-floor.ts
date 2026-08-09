@@ -1,6 +1,5 @@
 import type { MapDefinitions } from '@opensa/renderware/parsers/text/types';
 
-import { cullByMinDistance } from '@opensa/map-placement/procobj';
 import { buildCellColliders } from '@opensa/renderware/collision/build-cell-colliders';
 import { buildColliders } from '@opensa/renderware/collision/build-colliders';
 import { buildCollisionIndex } from '@opensa/renderware/collision/collision-index';
@@ -25,9 +24,9 @@ import { gameArg, gameDir, loadMapDefs, openGameArchive } from '../lib/game';
  *       [--stride 7] [--cells 200]`
  *
  * `--build-time` measures the OTHER cap site instead: `convertProcObj`'s whole-map pass, per species through
- * every stage — candidates → the `lottery < 1` cut → MINDIST → the global `procObjMax` slice. It runs the
- * same functions the converter does, over the same whole-map colliders, so it is the pipeline rather than a
- * model of it; the cost is one full collision build.
+ * every stage — candidates → the `lottery < 1` cut → the global `procObjMax` slice. It runs the same
+ * functions the converter does, over the same whole-map colliders, so it is the pipeline rather than a model
+ * of it; the cost is one full collision build.
  *
  * **Read the corpus line it prints.** `game-src/<game>` is stock: 96 scatter rules. The BUILT tree is not —
  * the generator converts the tall species to static instances and strips them, leaving the runtime path
@@ -94,32 +93,24 @@ interface Zeroed {
 function reportBuildTime(): void {
   const procObjMax = Number(argValue('--max') ?? 20000);
   console.log(`\nbuild-time pass — whole-map colliders, procObjMax ${procObjMax}`);
-  const flat = [...rules.values()].flat();
-  const minDistByModel = new Map<string, number>();
-  for (const rule of flat) {
-    minDistByModel.set(rule.model, Math.max(minDistByModel.get(rule.model) ?? 0, rule.minDistance));
-  }
   const colliders = buildColliders(index, defs, { center: [0, 0, 0], radius: Infinity });
   const batches = scatterProcObjects(colliders, rules, surfaceNames, 0, 0);
   console.log(`  ${colliders.length} collider groups, ${batches.length} batches`);
 
   interface Stage {
     afterCut: number;
-    afterMinDist: number;
     candidates: number;
     vanilla: number;
   }
   const stages = new Map<string, Stage>();
   const placed: { lottery: number; model: string }[] = [];
   for (const batch of batches) {
-    const stage = stages.get(batch.model) ?? { afterCut: 0, afterMinDist: 0, candidates: 0, vanilla: 0 };
+    const stage = stages.get(batch.model) ?? { afterCut: 0, candidates: 0, vanilla: 0 };
     const vanilla = batch.placements.filter((placement) => placement.lottery < 1);
-    const kept = cullByMinDistance(vanilla, minDistByModel.get(batch.model) ?? 0);
     stage.candidates += batch.placements.length;
     stage.vanilla += vanilla.length;
-    stage.afterMinDist += kept.length;
     stages.set(batch.model, stage);
-    for (const placement of kept) {
+    for (const placement of vanilla) {
       placed.push({ lottery: placement.lottery, model: batch.model });
     }
   }
@@ -128,18 +119,13 @@ function reportBuildTime(): void {
   for (const { model } of final) {
     stages.get(model)!.afterCut += 1;
   }
-  // Self-check: MINDIST keeps the first placement of every non-empty batch by construction (the spatial grid
-  // starts empty), so it can THIN a species but never zero one. Asserting it is what turns that reading of
-  // the code into a measurement.
-  const minDistZeros = [...stages].filter(([, s]) => s.vanilla > 0 && s.afterMinDist === 0);
   console.log(
     `  placed ${placed.length} → final ${final.length} · the global cut ` +
       (placed.length > procObjMax ? `BINDS (dropped ${placed.length - procObjMax})` : 'never fires'),
   );
-  console.log(`  self-check: ${minDistZeros.length} species zeroed by MINDIST (must be 0 — it always keeps one)`);
 
   const zeroedByLottery = [...stages].filter(([, s]) => s.candidates > 0 && s.vanilla === 0);
-  const zeroedByCut = [...stages].filter(([, s]) => s.afterMinDist > 0 && s.afterCut === 0);
+  const zeroedByCut = [...stages].filter(([, s]) => s.vanilla > 0 && s.afterCut === 0);
   console.log(`\n  species with candidates: ${stages.size}`);
   console.log(`  zeroed by the lottery cut (rounding): ${zeroedByLottery.length}`);
   console.log(`  zeroed by the global procObjMax cut:  ${zeroedByCut.length}`);
@@ -147,12 +133,12 @@ function reportBuildTime(): void {
     console.log(`    ${model.padEnd(22)} candidates ${stage.candidates} → vanilla ${stage.vanilla}`);
   }
 
-  console.log('\n  thinnest survivors (species · candidates → vanilla → minDist → final):');
+  console.log('\n  thinnest survivors (species · candidates → vanilla → final):');
   const survivors = [...stages].filter(([, s]) => s.afterCut > 0).sort((a, b) => a[1].afterCut - b[1].afterCut);
   for (const [model, stage] of survivors.slice(0, 15)) {
     console.log(
       `    ${model.padEnd(22)} ${String(stage.candidates).padStart(6)} → ${String(stage.vanilla).padStart(6)} → ` +
-        `${String(stage.afterMinDist).padStart(6)} → ${stage.afterCut}`,
+        `${stage.afterCut}`,
     );
   }
 }

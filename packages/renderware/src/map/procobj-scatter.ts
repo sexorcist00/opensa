@@ -19,8 +19,19 @@ import { procObjCategory } from './procobj-categories';
  * uniform in [0, MAX_DENSITY) and sort each batch by it — the renderer then shows exactly the
  * instances with `lottery < density` via a plain instance-count cutoff (no rebuild on the knob).
  *
- * Vanilla's MINDIST column (create-around-the-camera radius in SA's streaming CProcObjectMan) is
- * ignored — our placements are static per cell and visibility is the per-category drawDistance.
+ * Both of `procobj.dat`'s numeric columns are spent the way the original spends them (recovered
+ * 2026-08-09, `docs/gta-sa-original/procedural-objects.md`):
+ *
+ * - SPACING is a LENGTH in metres, so the count per face is `area / spacing²` — `ProcSurfaceInfo_c`
+ *   stores `1/(spacing*spacing)` and multiplies the triangle area by it. The file's own header
+ *   comment ("1 object every n square metres") is wrong; reading it as an area over-generates by
+ *   4–163× per rule.
+ * - MINDIST is a distance to the CAMERA (clamped to 80), an anti-pop-in radius around the player —
+ *   never a distance between two objects. It is ignored here: our placements are static per cell and
+ *   visibility is the per-category drawDistance.
+ *
+ * Nothing in the original prevents clumping, and neither does this: the triangle IS the group, and
+ * every rule of a surface fires on the same triangle, so mixed clumps are the system working.
  */
 
 export interface ProcObjBatch {
@@ -171,9 +182,10 @@ function scatterFace(
   normal: Vector3,
   area: number,
 ): void {
-  // MAX_DENSITY × the vanilla expectation; the fractional part rolls one extra candidate so
-  // small faces still average out to the authored spacing.
-  const expected = (area / rule.spacing) * PROC_OBJ_MAX_DENSITY;
+  // MAX_DENSITY × the vanilla expectation — one object per `spacing × spacing` m², as the original
+  // spends the column. The fractional part rolls one extra candidate so small faces still average
+  // out to the authored spacing (SA's `for (density; density > 0; density -= 1)` does the same).
+  const expected = (area / (rule.spacing * rule.spacing)) * PROC_OBJ_MAX_DENSITY;
   const count = Math.floor(expected) + (random() < expected % 1 ? 1 : 0);
   if (count === 0) {
     return;
