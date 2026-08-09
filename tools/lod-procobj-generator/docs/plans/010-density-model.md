@@ -118,9 +118,22 @@ Four caps, and they are not interchangeable:
 - [x] **Read the two columns the way the game does.** **SHIPPED 2026-08-09, field-accepted** — moved to
       [`lod-procobj-generator/009`](009-procobj-dat-columns-as-the-game-reads-them.md)
       with every measurement (census, built layer, on-disk size, the nine-scene sweep).
-- [ ] `convert.ts`: replace the global `lottery < density` with `lottery < densityFor(category, surface)`;
-      category is already on the placement, thread surface through. Config type `ProcObjDensityConfig`
-      (per-category and per-category×surface overrides), default = all 1.0.
+- [x] **`densityFor(category, surface)` — SHIPPED 2026-08-09.** `ProcObjDensityConfig` +
+      `densityFor`/`densityProfile`/`validateDensityProfile`/`densityLabel` live in
+      `map-placement/src/procobj/density.ts` (export `@opensa/map-placement/procobj-density`); `convert.ts`
+      resolves a cutoff PER BATCH. Default is the empty profile = 1.0 everywhere, so the scatter is unchanged.
+      A plain number is still accepted and means `base` — `--procobj-density` keeps working untouched.
+      **The plan's premise here was wrong and cost a fix.** "Category is already on the placement, thread
+      surface through" — category is on the BATCH, and the batch was keyed by MODEL ALONE while
+      `procobj.dat`'s rules are keyed by surface+model. **19 of the 56 models scatter on more than one
+      surface** (`p_rubble` on `p_wasteground`, `p_mountain` and `p_underwaterbarren`), and
+      `procObjCategory(model, surface)` reads the surface — so a batch took the category of whichever surface
+      the collider walk reached first and handed it to placements from all the others. Six rubble models were
+      mis-categorised at runtime (draw distance follows category), silently and differently per cell.
+      Keying `ProcObjBatch` by model×surface fixes it by construction and is what makes the surface axis
+      exist at all. The RNG is untouched by the split, so the scatter is bit-identical — the regression the
+      verification section asks for holds by construction, not by luck.
+      Tests: `density.test.ts` (16) + a scatter test that fails against the model-only key (run reverted).
 - [ ] Candidate-ceiling knob: allow raising `PROC_OBJ_MAX_DENSITY` via config when a category wants density
       > 3; keep 3 as default. A cutoff above 3 has no candidates to keep.
 - [ ] **ONE shipped profile, priced before it is written** (decision 2, 2026-08-09): both targets get it.
@@ -131,14 +144,24 @@ Four caps, and they are not interchangeable:
       "does this need the asi", so the guard would test a constant. Its job passes to
       [asi/perfect-map 006](../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md): ship the asi
       from the build, then downgrade the int16 throw to a warning that names it.
-- [ ] Logging: per-category placed vs generated vs dropped-by-cap counts, plus the permanent-row cost per
-      object — which every profile changes, and not in proportion to the object count (measured: 5.96× the
-      objects bought 3.94× the rows).
-- [ ] Unit tests: density 1.0 reproduces today's counts (regression); density 2.0 for `bushes` ~doubles bush
-      placements and leaves other categories unchanged **with the global cap slack** (decision 8 — a fixture
-      that crosses `procObjMax` must assert the displacement instead, or it asserts the wrong thing).
-- [ ] Wire the config through lod-procobj-generator (`config.ts`) and pmb. **Not keyed by target** — the
-      density is one value for both hosts; the target still picks caps and reporting.
+- [x] **Logging — SHIPPED 2026-08-09.** `convertProcObj` returns a per-category cost (`generated` candidates,
+      `objects` shipped, `dropped` by the global cap) and `categoryCostLines` prints one row per category
+      under the existing layer-cost line, which keeps the rows/object ratio. The breakdown exists because a
+      TOTAL cannot show DISPLACEMENT: past `procObjMax`, "bushes +8 000 / rocks −8 000" and "+0 objects" are
+      the same total and a different result. The density line now names the PROFILE (`base=1 rocks=2`), not
+      just a number — a build that doubled the rocks may not print "density 1".
+- [~] Unit tests — **resolution and validation are covered; the whole-pipeline count test is NOT.** Shipped:
+      the empty profile is 1.0 everywhere (the regression baseline), most-specific-wins across
+      surface→category→base, one category's profile never leaks into another, and every bad entry throws
+      NAMING ITS KEY (`'cacti/p_sand'`) rather than a bare range — a profile is hand-written, and NaN would
+      empty that category in silence.
+      **Still owed:** "2.0 for `bushes` ~doubles bush placements and leaves the others alone, below the cap".
+      It needs a game dir to scatter over (the converter reads `procobj.dat`, `surfinfo.dat` and the whole
+      collision set), so it is an integration fixture, not a unit test — and decision 8 means it must first
+      state which side of `procObjMax` it sits on.
+- [x] **Wired through — SHIPPED 2026-08-09.** `ProcObjLodConfig.density` and pmb's `BuilderConfig.procobjDensity`
+      both take `number | ProcObjDensityConfig`; **neither is keyed by target** (decision 2). Default stays 1.
+      `--procobj-density` remains the scalar override the perf sweeps use.
 - [ ] **A/B the corner-biased sampler.** The original pulls placements toward a triangle's first vertex
       (`offset1 = rand()`, `offset2 = offset1 × rand()`); ours is area-uniform. A difference in the LOOK,
       cheap to test now that the density is right — and it interacts with decision 5's grouping.

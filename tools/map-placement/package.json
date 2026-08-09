@@ -9,6 +9,7 @@
     "./retxd": "./src/retxd.ts",
     "./procobj-strip": "./src/procobj-strip.ts",
     "./procobj": "./src/procobj/convert.ts",
+    "./procobj-density": "./src/procobj/density.ts",
     "./vegetation": "./src/vegetation.ts",
     "./ipl-text-strip": "./src/ipl-text-strip.ts",
     "./ipl-text-retransform": "./src/ipl-text-retransform.ts",

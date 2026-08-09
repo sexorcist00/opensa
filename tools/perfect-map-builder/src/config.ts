@@ -1,4 +1,5 @@
 import type { OptimizerPasses } from '@opensa/map-optimizer/run';
+import type { ProcObjDensityInput } from '@opensa/map-placement/procobj-density';
 
 /** perfect-map-builder run config (plan 001). */
 export interface BuilderConfig {
@@ -20,11 +21,15 @@ export interface BuilderConfig {
    */
   pack: { ao: boolean; bakes: boolean; bakeWorkers?: number; rect?: readonly [number, number, number, number] };
   /**
-   * Procobj scatter density cutoff — **1 = vanilla**, capped by the scatter's candidate ceiling (3). This is
-   * the knob 07/04's perf budgets sweep and 07/02's profiles will set per target; it stays a build INPUT so a
-   * capture states the density it was taken at, rather than a constant somebody edited between two runs.
+   * Procobj scatter density cutoff — **1 = vanilla**, capped by the scatter's candidate ceiling (3). It stays
+   * a build INPUT so a capture states the density it was taken at, rather than a constant somebody edited
+   * between two runs.
+   *
+   * `--procobj-density` sets the whole-map number (what 013's perf budget sweeps). A profile — per category,
+   * per category×surface — is a `ProcObjDensityConfig` here, and there is **one for both targets**: density is
+   * not a per-target axis (plan 010 decision 2).
    */
-  procobjDensity: number;
+  procobjDensity: ProcObjDensityInput;
   /** Safety cap on placed procobj objects. Raising density without raising this measures the CAP — the build
    *  says so when it binds. `undefined` keeps the generator's own default (20 000). */
   procobjMax?: number;

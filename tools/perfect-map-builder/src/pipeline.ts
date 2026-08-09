@@ -1,3 +1,5 @@
+import type { ProcObjDensityInput } from '@opensa/map-placement/procobj-density';
+
 import { parsePrelightInfo, type PrelightInfo } from '@opensa/lod-common/prelight';
 /**
  * The perfect-map build pipeline (plan 001): chain every map tool via its Node API, each stage's output feeding the
@@ -649,7 +651,7 @@ export function reportTextIplCensus(gameDir: string): void {
 export function writeStageTimings(
   outPath: string,
   timings: readonly StageTiming[],
-  config: { procobjDensity: number; procobjMax?: number; target: BuildTarget },
+  config: { procobjDensity: ProcObjDensityInput; procobjMax?: number; target: BuildTarget },
 ): void {
   if (timings.length === 0) {
     return;

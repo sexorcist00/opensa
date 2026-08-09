@@ -1,4 +1,5 @@
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
+import type { ProcObjCategoryName } from '@opensa/renderware/map/procobj-categories';
 import type { ProcObjPlacement } from '@opensa/renderware/map/procobj-scatter';
 
 import { buildColliders } from '@opensa/renderware/collision/build-colliders';
@@ -9,9 +10,23 @@ import { parseSurfaceNames } from '@opensa/renderware/parsers/text/surfinfo.pars
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import type { ProcObjDensityInput } from './density';
+
 import { disableProcObj, stripProcObj, UNDERWATER_PROCOBJ } from '../procobj-strip';
 import { buildLinkedAreas } from '../streamed-areas';
+import { densityFor, densityProfile, validateDensityProfile } from './density';
 import { buildMapDefinitions } from './world';
+
+/** What one category cost this build — the readable half of decision 8's displacement warning. */
+export interface ProcObjCategoryCost {
+  category: ProcObjCategoryName;
+  /** Survivors of the cutoff that the global `procObjMax` slice then took. */
+  dropped: number;
+  /** Candidates the scatter produced for this category, before any cutoff. */
+  generated: number;
+  /** What actually shipped. */
+  objects: number;
+}
 
 export interface ProcObjConvertOptions {
   archive: ImgArchive;
@@ -19,14 +34,15 @@ export interface ProcObjConvertOptions {
    *  IMG entries). Keep it ≤ 10 chars: IMG VER2 caps entry names at 23 bytes — e.g. `plobj`. */
   areaBase: string;
   /**
-   * Build-time density CUTOFF on the scatter lottery (07/02 task 1, the global half). Every candidate carries
-   * `lottery ∈ [0, PROC_OBJ_MAX_DENSITY)`; keeping `lottery < density` is what picks how many survive, so
-   * **1 is vanilla** and the count scales with this number until `procObjMax` binds instead.
+   * Build-time density CUTOFF on the scatter lottery. Every candidate carries
+   * `lottery ∈ [0, PROC_OBJ_MAX_DENSITY)`; keeping `lottery < cutoff` is what picks how many survive, so
+   * **1 is vanilla** and the count scales with it until `procObjMax` binds instead.
    *
-   * It is a build INPUT so an A/B can state what it was configured with (the self-describing-capture rule);
-   * the per-category and per-surface axes 07/02 adds sit on top of this one.
+   * A plain number is the whole map; a {@link ProcObjDensityConfig} sets it per category and per
+   * category×surface (plan 010 decision 1). It is a build INPUT so an A/B can state what it was configured
+   * with — the self-describing-capture rule.
    */
-  density?: number;
+  density?: ProcObjDensityInput;
   /** `--modloader`: emit `procobj.dat` as **disable rows** (converted species' scatter set to zero, replacing the
    *  stock rule by surface+model on additive merge) instead of a stripped whole file — so the strip survives a
    *  Modloader additive `.dat` merge (which would re-add omitted species from stock). Default (false): strip. */
@@ -45,6 +61,19 @@ export interface ProcObjConvertOptions {
   procObjMax: number;
   /** sourceName → registration. Only models that have a generated LOD are candidates. */
   species: ReadonlyMap<string, ProcObjSpecies>;
+}
+
+export interface ProcObjConvertResult {
+  /** Per-category cost, sorted by category — see {@link ProcObjCategoryCost}. */
+  categories: ProcObjCategoryCost[];
+  datLines: string[];
+  /** Placements the global `procObjMax` slice took, all categories. */
+  dropped: number;
+  imgFiles: [string, Uint8Array][];
+  /** HD objects shipped. */
+  objects: number;
+  /** Permanent text-IPL rows the linked pairs cost — the layer's price. */
+  rows: number;
 }
 
 /** Per converted species: the stock HD model id + its generated LOD (id/model name) + bbox height (the gate). */
@@ -82,9 +111,7 @@ export function buildStreamedIpl(
   return { ...buildLinkedAreas(pairs, areaBase), rows: pairs.filter((pair) => pair.linked).length };
 }
 
-export function convertProcObj(
-  options: ProcObjConvertOptions,
-): null | { datLines: string[]; dropped: number; imgFiles: [string, Uint8Array][]; objects: number; rows: number } {
+export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjConvertResult {
   const {
     archive,
     areaBase,
@@ -98,15 +125,8 @@ export function convertProcObj(
     procObjMax,
     species,
   } = options;
-  // NaN is the dangerous one and it passes BOTH comparisons: `NaN <= 0` and `NaN > 3` are false, and then
-  // every `lottery < NaN` is false too — a silently EMPTY clutter layer from a mistyped flag.
-  if (!Number.isFinite(density) || density <= 0 || density > PROC_OBJ_MAX_DENSITY) {
-    throw new Error(
-      `procobj density must be in (0, ${PROC_OBJ_MAX_DENSITY}]: got ${density}. The scatter only GENERATES ` +
-        `${PROC_OBJ_MAX_DENSITY}× the vanilla candidate count, so a higher cutoff has nothing left to keep — ` +
-        'raise PROC_OBJ_MAX_DENSITY (procobj-scatter.ts) first, which changes the runtime slider range too.',
-    );
-  }
+  const profile = densityProfile(density);
+  validateDensityProfile(profile, PROC_OBJ_MAX_DENSITY);
   const procObjText = readFileSync(join(gamePath, 'data', 'procobj.dat'), 'utf8');
 
   // Candidate species: have a LOD, clear the optional height gate, and are not the never-touch underwater set.
@@ -128,11 +148,16 @@ export function convertProcObj(
   const surfaceNames = parseSurfaceNames(readFileSync(join(gamePath, 'data', 'surfinfo.dat'), 'utf8'));
   const batches = scatterProcObjects(colliders, groupRulesBySurface(rules), surfaceNames, 0, 0);
 
-  const placed: { model: string; placement: ProcObjPlacement }[] = [];
+  // The cutoff is per batch now, and a batch is one model on one SURFACE — so `densityFor` can answer for the
+  // category, or for that category on that surface, without the converter knowing which axis a profile used.
+  const generated = new Map<ProcObjCategoryName, number>();
+  const placed: { category: ProcObjCategoryName; model: string; placement: ProcObjPlacement }[] = [];
   for (const batch of batches) {
+    const cutoff = densityFor(profile, batch.category, batch.surface);
+    generated.set(batch.category, (generated.get(batch.category) ?? 0) + batch.placements.length);
     for (const placement of batch.placements) {
-      if (placement.lottery < density) {
-        placed.push({ model: batch.model, placement });
+      if (placement.lottery < cutoff) {
+        placed.push({ category: batch.category, model: batch.model, placement });
       }
     }
   }
@@ -157,15 +182,46 @@ export function convertProcObj(
       : stripProcObj(procObjText, (m) => !converted.has(m.toLowerCase())).text,
   );
 
-  // `dropped` is the honest half of the cap (07/02 decision 7): once `procObjMax` binds, raising density
-  // stops adding objects and starts DISPLACING them, so a measurement that does not state the drop is
-  // measuring the cap and calling it the density.
-  return { datLines, dropped: placed.length - final.length, imgFiles, objects: final.length, rows };
+  // `dropped` is the honest half of the cap (decision 7): once `procObjMax` binds, raising density stops
+  // adding objects and starts DISPLACING them, so a measurement that does not state the drop is measuring the
+  // cap and calling it the density. The per-category breakdown is what makes the displacement READABLE —
+  // "bushes +8 000, rocks −8 000" is the shape decision 8 warns about, and a total cannot show it.
+  return {
+    categories: categoryCosts(generated, placed, final),
+    datLines,
+    dropped: placed.length - final.length,
+    imgFiles,
+    objects: final.length,
+    rows,
+  };
 }
 
 /** GTA IPL rotation quaternion for a yaw around Z (conjugated, the IPL convention; align is unused). */
 export function iplQuaternion(yaw: number): [number, number, number, number] {
   return [0, 0, -Math.sin(yaw / 2), Math.cos(yaw / 2)];
+}
+
+/** Per category: candidates generated, survivors of the cutoff, and how many of those the global cap took. */
+function categoryCosts(
+  generated: ReadonlyMap<ProcObjCategoryName, number>,
+  placed: readonly { category: ProcObjCategoryName }[],
+  final: readonly { category: ProcObjCategoryName }[],
+): ProcObjCategoryCost[] {
+  const kept = new Map<ProcObjCategoryName, number>();
+  for (const entry of placed) {
+    kept.set(entry.category, (kept.get(entry.category) ?? 0) + 1);
+  }
+  const shipped = new Map<ProcObjCategoryName, number>();
+  for (const entry of final) {
+    shipped.set(entry.category, (shipped.get(entry.category) ?? 0) + 1);
+  }
+
+  return [...generated.keys()].sort().map((category) => ({
+    category,
+    dropped: (kept.get(category) ?? 0) - (shipped.get(category) ?? 0),
+    generated: generated.get(category) ?? 0,
+    objects: shipped.get(category) ?? 0,
+  }));
 }
 
 function writeText(path: string, text: string): void {

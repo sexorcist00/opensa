@@ -19,7 +19,8 @@ import {
 import { registerScopedName, type ScopedRegistry, scopedSource } from '@opensa/lod-common/scoped-texture';
 import { createTextureSource } from '@opensa/lod-common/texture-source';
 import { allocateLodIds, buildLodIde, lodAlias, patchGtaDat } from '@opensa/map-placement/ide';
-import { convertProcObj, type ProcObjSpecies } from '@opensa/map-placement/procobj';
+import { convertProcObj, type ProcObjCategoryCost, type ProcObjSpecies } from '@opensa/map-placement/procobj';
+import { densityLabel, type ProcObjDensityInput } from '@opensa/map-placement/procobj-density';
 import { UNDERWATER_PROCOBJ } from '@opensa/map-placement/procobj-strip';
 import { retxdSwappedModels, writeTxdpHdMod } from '@opensa/map-placement/retxd';
 import { openArchive } from '@opensa/renderware/archive/img-archive';
@@ -142,6 +143,23 @@ export function buildSpeciesLod(
   return { bbox, height, mesh, model, textures };
 }
 
+/**
+ * The per-category breakdown (plan 010 task "logging"). It exists because a TOTAL cannot show DISPLACEMENT:
+ * once the global `procObjMax` slice binds, raising one category takes objects from the others, and
+ * "bushes +8 000 / rocks −8 000" is a different result from "+8 000 objects" while the totals agree.
+ */
+export function categoryCostLines(categories: readonly ProcObjCategoryCost[]): string[] {
+  return categories.map(({ category, dropped, generated, objects }) => {
+    const kept = generated > 0 ? ((100 * objects) / generated).toFixed(1) : '0.0';
+
+    return (
+      `  ${category.padEnd(10)} ${String(objects).padStart(7)} objects · ` +
+      `${String(generated).padStart(7)} candidates (${kept} % kept)` +
+      (dropped > 0 ? ` · ${dropped} taken by the cap` : '')
+    );
+  });
+}
+
 /** The changed IMG entries to emit: LOD DFFs + lod_procobj.txd/col + binary IPL streams (the HD placement
  *  layer, `<area>_streamN.ipl`) + the swapped HD DFFs + custom TXDs. */
 export function collectImgEntries(
@@ -214,7 +232,7 @@ export function combinedModelSource(inPath: string, archive: ImgArchive): ModelS
  */
 export function layerCostLine(
   target: BuildTarget,
-  density: number,
+  density: ProcObjDensityInput,
   procObj: null | { dropped?: number; objects: number; rows: number },
 ): null | string {
   if (!procObj) {
@@ -224,7 +242,7 @@ export function layerCostLine(
   const perObject = objects > 0 ? (rows / objects).toFixed(3) : '0.000';
 
   return (
-    `procobj cost (target ${target}, density ${density}): ` +
+    `procobj cost (target ${target}, density ${densityLabel(density)}): ` +
     `${objects} objects · ${rows} permanent text rows · ${perObject} rows/object` +
     // A capped run is measuring procObjMax, not the density it says it ran at — so the cap says so itself.
     (dropped > 0 ? ` · CAP DROPPED ${dropped} (procObjMax binds — raise it or this density is not what shipped)` : '') +
@@ -549,11 +567,19 @@ function loadCustomTextures(txdPath: string): Map<string, SourceTexture> {
   return out;
 }
 
-/** Print {@link layerCostLine} when there is a price to print. */
-function logLayerCost(target: BuildTarget, density: number, procObj: null | { objects: number; rows: number }): void {
+/** Print {@link layerCostLine} and its per-category breakdown when there is a price to print. */
+function logLayerCost(
+  target: BuildTarget,
+  density: ProcObjDensityInput,
+  procObj: null | { categories?: readonly ProcObjCategoryCost[]; objects: number; rows: number },
+): void {
   const line = layerCostLine(target, density, procObj);
-  if (line !== null) {
-    console.log(line);
+  if (line === null) {
+    return;
+  }
+  console.log(line);
+  for (const line_ of categoryCostLines(procObj?.categories ?? [])) {
+    console.log(line_);
   }
 }
 

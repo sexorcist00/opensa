@@ -1,10 +1,17 @@
+import type { ProcObjDensityInput } from '@opensa/map-placement/procobj-density';
+
 /** Build knobs for the procobj LOD generator (overridable via CLI flags). */
 export interface ProcObjLodConfig {
   /** Build-time scatter density CUTOFF — **1 = vanilla**, up to the scatter's candidate ceiling
    *  (`PROC_OBJ_MAX_DENSITY` = 3; a higher cutoff has no candidates left to keep and is refused). The count
-   *  scales with it until {@link ProcObjLodConfig.procObjMax} binds instead. 07/02 hangs the per-category
-   *  and per-surface axes off this one; 07/04 sets what each target may raise it to. */
-  density: number;
+   *  scales with it until {@link ProcObjLodConfig.procObjMax} binds instead.
+   *
+   *  A plain number is the whole map. A `ProcObjDensityConfig` sets it per CATEGORY and per
+   *  category×SURFACE — plan 010's density model, and the shape a shipped profile takes. **It is not keyed by
+   *  target**: `sa` and `opensa` get the same density (decision 2), and what the target picks is caps and
+   *  reporting. Every profile is priced by 013's perf budget before it ships; until that number exists the
+   *  default stays 1. */
+  density: ProcObjDensityInput;
   /** Emitted LOD draw distance (world units) — the visibility gate for the LOD def.
    *  MUST stay BELOW 300: SA classifies defs with drawDistance ≥ 300 (the FLA-configurable "LOD distance")
    *  as big buildings / the LOD layer, and MASS text-IPL instances of such defs overflow that path's
