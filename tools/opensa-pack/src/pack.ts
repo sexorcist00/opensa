@@ -489,7 +489,23 @@ async function retextureModels(
     return;
   }
   const encoder = createAstcEncoder({ threads: astcThreads });
-  const arrays = await bundles.retexture((array) => encoder.ostex(array));
+  // A line every ~5 s, because this stage is minutes long at one thread and silence reads as a hang — it was
+  // reported as one. Elapsed time rather than a bundle count as the trigger: bundles differ in size by two
+  // orders of magnitude, so a per-N-bundles line is a burst and then nothing.
+  let announced = Date.now();
+  const arrays = await bundles.retexture(
+    (array) => encoder.ostex(array),
+    (done, total) => {
+      if (Date.now() - announced < 5000) {
+        return;
+      }
+      announced = Date.now();
+      log(
+        `astc: model dictionaries ${done}/${total} (${((100 * done) / Math.max(1, total)).toFixed(0)} %), ` +
+          `${(encoder.stats.texels / 1e6).toFixed(1)} M texels in ${(encoder.stats.ms / 1000).toFixed(0)} s`,
+      );
+    },
+  );
   log(
     `astc: ${arrays} model dictionary arrays, ${(encoder.stats.texels / 1e6).toFixed(1)} M texels in ` +
       `${(encoder.stats.ms / 1000).toFixed(1)} s`,

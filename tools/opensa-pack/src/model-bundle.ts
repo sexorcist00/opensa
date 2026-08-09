@@ -35,8 +35,15 @@ export interface ModelBundles {
   /** Rewrite every accumulated dictionary array through `transform`, returning how many were rewritten.
    *  The texture-format pass (plan 200/2-02) is the only caller and runs AFTER every class has contributed,
    *  so no asset class has to know which format the build targets. Zero-length placeholders — a model that
-   *  binds the world's arrays instead of carrying its own — are left alone. */
-  retexture(transform: (array: Uint8Array) => Promise<Uint8Array>): Promise<number>;
+   *  binds the world's arrays instead of carrying its own — are left alone.
+   *
+   *  `onProgress` fires once per model bundle. The stage is minutes long at one encoder thread and printed
+   *  nothing until it finished, which on a phone is indistinguishable from a hang — and was reported as one
+   *  on 2026-08-09. */
+  retexture(
+    transform: (array: Uint8Array) => Promise<Uint8Array>,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<number>;
   /** Number of distinct models accumulated. */
   size(): number;
 }
@@ -85,9 +92,15 @@ export function createModelBundles(): ModelBundles {
 
       return formats;
     },
-    async retexture(transform: (array: Uint8Array) => Promise<Uint8Array>): Promise<number> {
+    async retexture(
+      transform: (array: Uint8Array) => Promise<Uint8Array>,
+      onProgress?: (done: number, total: number) => void,
+    ): Promise<number> {
       let rewritten = 0;
+      let visited = 0;
       for (const bundle of bundles.values()) {
+        visited += 1;
+        onProgress?.(visited, bundles.size);
         for (const section of bundle.sections) {
           if (section.tag !== OsmSectionTag.TEXS) {
             continue;
