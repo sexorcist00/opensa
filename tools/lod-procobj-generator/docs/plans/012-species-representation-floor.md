@@ -166,6 +166,20 @@ these are the pipeline's numbers, not a model's.
 | --- | --- | --- | --- | --- |
 | stock `procobj.dat` (95 rules) | 188 (stride 3) | 96 | **94 (97.9 %)** | **19 (19.8 %)** |
 | the SHIPPING set — `build/original/opensa/data/procobj.dat` (8 rules) | 188 | 11 | 11 (100 %) | **0** |
+| **stock, RE-MEASURED after the column fix** (2026-08-09) | 188 | 96 | **56 (58.3 %)** | **17 (17.7 %)** |
+| **the SHIPPING set, re-measured** (built tree of 2026-08-09 13:53) | 188 | 11 | 8 (72.7 %) | **0** |
+
+**The re-measure was the gate on this whole plan, and the plan survives it unchanged.** The 2026-08-09
+`procobj.dat` column fix reads SPACING as a length, which cuts CANDIDATES per cell by roughly an order of
+magnitude, so the runtime cell cap now binds in **58.3 %** of clutter cells rather than 97.9 %. The defect it
+causes barely moved: **17.7 % against 19.8 %**. That is the plan's own finding restated by an independent
+change — *what kills a species is not total pressure but how many species compete in one cell*, and the fix
+changed the pressure without changing the competition. Worst cell today is `8,-3` at **16 of 23** species
+placed (was `-10,-8` at 14 of 25).
+
+Two things follow. The task is **neither killed nor made urgent** — its size, its shape and its priority band
+are what they were. And it stays **latent on what we ship**: the shipping set still loses zero species,
+because the tall species are static instances and a static instance is never capped.
 
 Most-often zeroed on stock, by cells: `dead_tree_3` 7, `dead_tree_6` 7, `dead_tree_2` 6, `dead_tree_5` 6,
 `dead_tree_8` 6, `dead_tree_9` 6, `dead_tree_7` 4, `genveg_bush13` 4, `rockbrkq` 4 — 18 species in all.
