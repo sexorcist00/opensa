@@ -1007,3 +1007,55 @@ describe('CharacterControllerSystem slope slide (plan 088/08)', () => {
     });
   });
 });
+
+/**
+ * A WARP is a discontinuity: the body is put somewhere else by something that is not this controller
+ * (the debugger teleport, a bench leg's anchor, a respawn). Whatever the fall before it had accumulated
+ * belongs to the place the player LEFT — carrying it across is how one bench scene's lost collision race
+ * put the player under the mesh at terminal velocity for every scene after it (plan 102).
+ *
+ * The velocity only self-heals when the warp lands ON ground (`moveOnFoot` zeroes it on contact); these
+ * cases warp into the air, which is exactly what a teleport into a cell whose colliders are still building
+ * looks like.
+ */
+describe('CharacterControllerSystem warped body', () => {
+  describe('negative cases', () => {
+    it('does not carry a fall’s velocity across a warp into the air', async () => {
+      const player = await groundedPlayer();
+      const { step } = liveSystem(player);
+      const handle = RigidBody.handle[player.eid];
+      player.physics.teleport(handle, [0, 0, 200]); // off the ground entirely → free fall
+      for (let i = 0; i < 120; i += 1) {
+        step();
+      }
+      expect(Velocity.z[player.eid]).toBeLessThan(-15); // the fall really accumulated (2 s of gravity)
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_FALL);
+
+      player.physics.teleport(handle, [0, 0, 400]); // a genuine warp, still with no ground under it
+      step();
+
+      // Only THIS step's gravity may survive the warp — not the 20 m/s the previous place had built up.
+      expect(Velocity.z[player.eid]).toBeGreaterThan(-1);
+      player.physics.dispose();
+    });
+
+    it('does not carry the land-tier impact speed across a warp (no phantom collapse on arrival)', async () => {
+      const player = await groundedPlayer();
+      const { step } = liveSystem(player);
+      const handle = RigidBody.handle[player.eid];
+      player.physics.teleport(handle, [0, 0, 200]);
+      for (let i = 0; i < 120; i += 1) {
+        step();
+      }
+
+      player.physics.teleport(handle, [0, 0, 1.4]); // warped back onto the ground, at rest
+      stepUntilGrounded(player, step); // the warped collider takes a frame to be where the body is
+      step(); // the frame the FSM picks the landing tier on
+
+      expect(Velocity.grounded[player.eid]).toBe(1);
+      expect(Locomotion.state[player.eid]).not.toBe(LOCOMOTION_COLLAPSE);
+      expect(Locomotion.state[player.eid]).not.toBe(LOCOMOTION_HARD_LAND);
+      player.physics.dispose();
+    });
+  });
+});
