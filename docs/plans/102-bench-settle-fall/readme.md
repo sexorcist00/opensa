@@ -164,10 +164,19 @@ Records: [`2026-08-09-headless-bench-aa-after-102.json`](../../benchmarks/opensa
    the ground it just found (`SETTLE_LIFT` 1 m) and then waits until the player is **at rest**; `dz` is
    reported against where the settle put him (`targetZ`), and it is context, not a verdict — a moving player
    is what invalidates a row, not where he stands.
-2. **`strip-noon` has no floor at all.** Its anchor answers `13.00` to the ground ray and the capsule falls
-   ~900 m past it, identically in both arms. Written up as its own issue rather than fixed by retyping the
-   anchor — the `ocean-horizon` fossil is what that habit produces:
-   [`open-issues/strip-noon-anchor-has-no-floor.md`](../../open-issues/strip-noon-anchor-has-no-floor.md).
+2. **`strip-noon`'s anchor was authored INSIDE the Flamingo.** The ground ray answers `13.00` off the
+   building and the capsule falls out of the world — every run of that scene since 2026-07-29. Diagnosed
+   wrongly at first as a hole in the world; the user's reading of his own run corrected it, and both
+   "supporting" symptoms turned out to be correct systems doing their job (the cars' `no ground` deferrals
+   are the spawn gate at the 150 m collision ring; the district emptying is residency culling around a
+   player 890 m down). Anchor moved to `[1933, 1127, 18]` off `teleport-spot.ts`, re-run clean: `dz −0.08`,
+   grounded, 27 cars live. Full write-up, wrong diagnosis kept:
+   [`open-issues/fixed/strip-noon-anchor-inside-a-building.md`](../../open-issues/fixed/strip-noon-anchor-inside-a-building.md).
+
+   Landing with it: the wait-for-rest is capped at **3 s** (`REST_TIMEOUT_MS`) instead of the 12 s
+   world-ready budget. On a floorless anchor the full budget turned an 11 m fall into ~890 m, and since the
+   world IS anchored to the player, that correctly despawned the whole district — the bad anchor's cost is
+   now bounded. **All nine scenes are green.**
 
 ## Step 4 — the benchmarks the falls invalidated
 

@@ -481,9 +481,13 @@ inside the character controller. `avgTriangles` spread per scene is **0.00–0.3
 gone: **1** `[cam]` line per run against a baseline of **89 255**.
 
 Eight of nine scenes now report `legStart.ok` true (`dz −0.08 m`, grounded, worst frame drop 0): the player
-stands still where the settle put him for the whole leg. The ninth, `strip-noon`, is RED in both arms — its
-anchor has no floor the capsule can rest on, and the row says so instead of quietly measuring a falling
-camera ([`open-issues/strip-noon-anchor-has-no-floor.md`](../open-issues/strip-noon-anchor-has-no-floor.md)).
+stands still where the settle put him for the whole leg. The ninth, `strip-noon`, is RED in both arms, and
+the row says so instead of quietly measuring a falling camera — **its anchor was authored inside the
+Flamingo**, fixed hours later the same day
+([`open-issues/fixed/strip-noon-anchor-inside-a-building.md`](../open-issues/fixed/strip-noon-anchor-inside-a-building.md)):
+moved to `[1933, 1127, 18]`, re-run clean (`dz −0.08 m`, grounded, 27 cars live, `avgTriangles` 1 893 061).
+**Every `strip-noon` row in this record, including the two arms above, predates that fix and measured a
+falling player.**
 
 Rows: [`2026-08-09-headless-bench-aa-after-102.json`](opensa-engine/2026-08-09-headless-bench-aa-after-102.json).
 The arm-A run that found the anchor-height defect on the way there:

@@ -27,6 +27,18 @@ const WARMUP_SECONDS = 1.5;
 /** How far below the anchor the settle looks for its ground before a leg may start (m). */
 const GROUND_PROBE_DROP = 60;
 
+/**
+ * How long the settle waits for the player to come to REST after the warp (ms).
+ *
+ * Deliberately much shorter than {@link PerfRunsHost.settleTimeoutMs}: where the probe ray answers with
+ * something the capsule cannot stand on, he never lands at all, and the full world-ready budget turns an
+ * 11 m fall into ~890 m (measured 2026-08-09 on `strip-noon`). That is not just an ugly number — the world
+ * IS anchored to the player, so a fall that deep correctly despawns the whole district's cars and the leg
+ * then measures an empty street. A bounded wait keeps a bad anchor's cost bounded; the row still reports
+ * itself red either way.
+ */
+const REST_TIMEOUT_MS = 3000;
+
 /** Metres above the found ground the settle drops the player from — a scene anchor's authored z is NOT the
  *  ground (measured 2026-08-09: 6 of the 9 scenes sit 3.65-26.29 m above it, so warping to the anchor put
  *  him into free fall for the whole warmup). Just enough to land on rather than spawn inside the surface. */
@@ -151,7 +163,7 @@ export function setupPerfRuns(host: PerfRunsHost): void {
     // strip-noon it answers with a rooftop he then slides off (measured 2026-08-09, deterministic), and a
     // player still moving churns streaming and the LOD rings all through the capture. Whatever he ends up
     // standing on, the leg starts from a stopped player.
-    await until(() => host.playerProbe().grounded, host.settleTimeoutMs);
+    await until(() => host.playerProbe().grounded, REST_TIMEOUT_MS);
     await waitSeconds(WARMUP_SECONDS);
   };
   const flyLeg = async (
