@@ -119,7 +119,9 @@ export const BENCH_SCENES: readonly BenchScene[] = [
     // every run of this scene since it was added — cars and all, because residency is anchored to him.
     // Moved 2026-08-09 onto the standable ground south of the building (`teleport-spot.ts flamingo01_lvs`,
     // ring z 17.6) which is also 50 m closer to the camera path this scene actually flies. Every strip-noon
-    // row taken before this date measured a falling player and is not comparable.
+    // row taken before this date measured a falling player and is not comparable — and the move shifted the
+    // road-car region with it, so the sweep now places 1219 cars instead of 1196. An anchor is part of what
+    // a row MEASURES, not just where it starts.
     anchor: [1933, 1127, 18],
     cars: { radius: 500, spacing: 30 },
     durationS: 15,

@@ -23,7 +23,7 @@ import { Matrix4, type Vector3 } from '@opensa/math';
 import { addComponent, addEntity } from 'bitecs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { LegSample, PerfRunsHost } from './engine-perf-runs';
+import type { LegProbe, LegSample, PerfRunsHost } from './engine-perf-runs';
 
 import { BENCH_SCENES } from '../bench-scenes';
 import { setupPerfRuns } from './engine-perf-runs';
@@ -57,7 +57,11 @@ interface LegStart {
   playerZ?: number;
 }
 
+/** The `[bench] {json}` rows a sweep printed, by scene key — that console line IS the deliverable. */
+const reports = new Map<string, { legStart: LegProbe }>();
+
 afterEach(() => {
+  reports.clear();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -140,6 +144,78 @@ describe('setupPerfRuns settle', () => {
       expect(legStart[0]?.grounded).toBe(true);
       world.dispose();
     });
+
+    it('does not drop the player down to the ground when the anchor stands metres above it', async () => {
+      // A scene anchor is authored for the CAMERA: six of the nine sit 3.65-26.29 m above their ground and
+      // `ocean-horizon`'s own is 43.75 m up (measured 2026-08-09). Warping to it therefore means a fall.
+      //
+      // The fall is NOT observable at leg start — the rest gate (3 s) plus the warmup (1.5 s) give him 4.5 s
+      // to land, which covers every floor the 60 m probe can even find, so the leg begins grounded either
+      // way. Nor is the lowest point: he is already falling from the anchor while the gates wait, so both
+      // versions bottom out on the same floor. What the warp target actually decides is how far he is made
+      // to fall PER SCENE TRANSITION — once (placed on the ground) or twice (dropped onto it again) — and
+      // residency is anchored to him, so every one of those metres empties and refills the district.
+      const world = await physicalWorld({ groundDepth: 55 });
+      const clock = installFrameClock(() => world.tick());
+      const legStart: LegStart[] = [];
+      const swept = untilSweepComplete();
+      setupPerfRuns({
+        ...silentHost(),
+        beginSamples: (): void => {
+          legStart.push({
+            frame: clock.frame(),
+            grounded: world.grounded(),
+            pendingCells: 0,
+            playerZ: world.playerZ(),
+          });
+        },
+        getStream: (): StreamStats => streamStats(0),
+        groundBelow: (at, maxDrop): null | number => world.groundBelow(at, maxDrop),
+        params: new URLSearchParams(`bench=${OCEAN.key}`),
+        playerProbe: (): { grounded: boolean; z: number } => ({ grounded: world.grounded(), z: world.playerZ() }),
+        teleportPlayer: (anchor): void => {
+          world.teleport([anchor[0], anchor[1], anchor[2]]);
+        },
+      });
+
+      await swept;
+
+      expect(legStart[0]?.grounded).toBe(true);
+      expect(legStart[0]?.playerZ ?? 0).toBeCloseTo(world.restingZ(), 1); // standing on the real floor…
+      // …having descended the 55 m gap ONCE. Warping to the anchor instead makes him fall it twice.
+      expect(world.descent()).toBeLessThan(75);
+      world.dispose();
+    });
+
+    it('marks the row RED and prints [fall] when the player never lands', async () => {
+      // A scene whose anchor has no floor at all (strip-noon was one). The sweep must still finish, and the
+      // row must refuse itself: the whole point of the probe is that a fall can no longer be silent.
+      const world = await physicalWorld({ groundArrivesAtFrame: null });
+      installFrameClock(() => world.tick());
+      const swept = untilSweepComplete();
+      const falls: string[] = [];
+      vi.spyOn(console, 'warn').mockImplementation((line: unknown): void => {
+        falls.push(String(line));
+      });
+      setupPerfRuns({
+        ...silentHost(),
+        getStream: (): StreamStats => streamStats(0),
+        groundBelow: (at, maxDrop): null | number => world.groundBelow(at, maxDrop),
+        params: new URLSearchParams(`bench=${OCEAN.key}`),
+        playerProbe: (): { grounded: boolean; z: number } => ({ grounded: world.grounded(), z: world.playerZ() }),
+        teleportPlayer: (anchor): void => {
+          world.teleport([anchor[0], anchor[1], anchor[2]]);
+        },
+      });
+
+      await swept; // the wait for rest is BOUNDED — a floorless anchor may not hang the sweep
+
+      expect(world.groundExists()).toBe(false); // the instrument was pointed at a real hole
+      expect(reportOf(OCEAN.key).legStart.ok).toBe(false);
+      expect(reportOf(OCEAN.key).legStart.grounded).toBe(false);
+      expect(falls.filter((line) => line.startsWith('[fall]'))).toHaveLength(1);
+      world.dispose();
+    });
   });
 
   describe('positive cases', () => {
@@ -164,9 +240,9 @@ describe('setupPerfRuns settle', () => {
   });
 });
 
-/** A flat slab of collision under an anchor — the cell's ground, as the adapter would hand it over. */
-function groundUnder(anchor: readonly [number, number, number]): ModelColliders {
-  const top = anchor[2] - (CAPSULE_HALF_HEIGHT + CAPSULE_RADIUS);
+/** A flat slab of collision `depth` metres under an anchor — the cell's ground, as the adapter hands it over. */
+function groundUnder(anchor: readonly [number, number, number], depth: number): ModelColliders {
+  const top = anchor[2] - depth;
 
   return {
     name: 'test-ground',
@@ -208,17 +284,30 @@ function installFrameClock(onFrame?: () => void): { frame: () => number } {
   return { frame: (): number => frame };
 }
 
-/** A real physics world with the host's player capsule and its collision streaming, driven per frame. */
-async function physicalWorld(): Promise<{
+/**
+ * A real physics world with the host's player capsule and its collision streaming, driven per frame.
+ *
+ * `groundDepth` is how far BELOW the scene anchor the cell's floor sits — the default puts it exactly under
+ * the capsule's feet, which is the one case where "warp to the anchor" and "warp onto the ground" look the
+ * same. Scenes in the real map are not like that (measured 2026-08-09: six of nine anchors sit 3.65-26.29 m
+ * above their ground), so a test that only ever uses the default cannot see the difference.
+ * `groundArrivesAtFrame: null` is a floor that never comes at all.
+ */
+async function physicalWorld(options: { groundArrivesAtFrame?: null | number; groundDepth?: number } = {}): Promise<{
+  descent: () => number;
   dispose: () => void;
   groundBelow: (at: readonly [number, number, number], maxDrop: number) => null | number;
   grounded: () => boolean;
   groundExists: () => boolean;
   groundReleasedAtFrame: () => number;
   playerZ: () => number;
+  restingZ: () => number;
   teleport: (position: [number, number, number]) => void;
   tick: () => void;
 }> {
+  const groundDepth = options.groundDepth ?? CAPSULE_HALF_HEIGHT + CAPSULE_RADIUS;
+  const groundArrivesAtFrame =
+    options.groundArrivesAtFrame === undefined ? WARMUP_FRAMES * 2 : options.groundArrivesAtFrame;
   const config = createGameRuntimeConfig();
   const physics = new PhysicsWorld(await initRapier());
   const controller = physics.createCharacterController();
@@ -264,7 +353,7 @@ async function physicalWorld(): Promise<{
   let releaseGround: () => void = vi.fn();
   let groundReleasedAtFrame = 0;
   const ground = new Promise<ModelColliders[]>((resolve) => {
-    releaseGround = (): void => resolve([groundUnder(OCEAN.anchor)]);
+    releaseGround = (): void => resolve([groundUnder(OCEAN.anchor, groundDepth)]);
   });
   const collision = new CollisionStreamingSystem(
     { cellSize: config.streaming.cellSize, loadCellColliders: (): Promise<ModelColliders[]> => ground },
@@ -274,21 +363,25 @@ async function physicalWorld(): Promise<{
   );
 
   let frame = 0;
+  let descent = 0;
+  let previousZ: null | number = null;
 
   return {
+    descent: (): number => descent,
     dispose: (): void => physics.dispose(),
     groundBelow: (at, maxDrop): null | number => physics.groundBelow([at[0], at[1], at[2]], maxDrop, capsule.body),
     grounded: (): boolean => Velocity.grounded[player] === 1,
     groundExists: (): boolean => physics.groundBelow([spawn[0], spawn[1], OCEAN.anchor[2] + 50], 100) !== null,
     groundReleasedAtFrame: (): number => groundReleasedAtFrame,
     playerZ: (): number => positionOf()[2],
+    restingZ: (): number => OCEAN.anchor[2] - groundDepth + CAPSULE_HALF_HEIGHT + CAPSULE_RADIUS,
     teleport: (position: [number, number, number]): void => {
       physics.teleport(capsule.body, position);
     },
     tick: (): void => {
       frame += 1;
       // Late by construction: the colliders land well after the warmup a leg starts on.
-      if (frame === WARMUP_FRAMES * 2) {
+      if (frame === groundArrivesAtFrame) {
         groundReleasedAtFrame = frame;
         releaseGround();
       }
@@ -296,11 +389,23 @@ async function physicalWorld(): Promise<{
       controllerSystem.fixedUpdate(STEP);
       physics.step(STEP);
       const [x, y, z] = positionOf();
+      descent += Math.max(0, (previousZ ?? z) - z); // metres travelled DOWNWARD, teleports included
+      previousZ = z;
       Transform.x[player] = x;
       Transform.y[player] = y;
       Transform.z[player] = z;
     },
   };
+}
+
+/** The report row a sweep printed for a scene; throws rather than let a missing row read as a pass. */
+function reportOf(key: string): { legStart: LegProbe } {
+  const row = reports.get(key);
+  if (row === undefined) {
+    throw new Error(`no [bench] row was printed for '${key}'`);
+  }
+
+  return row;
 }
 
 /** The host accessors a settle test does not care about — every run overrides what it measures. */
@@ -341,10 +446,15 @@ function streamStats(pendingCells: number): StreamStats {
   };
 }
 
-/** Resolves on the sweep's own last line — the runs are fire-and-forget, so their protocol is the join. */
+/** Resolves on the sweep's own last line — the runs are fire-and-forget, so their protocol is the join.
+ *  Collects the report rows on the way through, since that console line is the only place they exist. */
 function untilSweepComplete(): Promise<void> {
   return new Promise<void>((resolve) => {
     vi.spyOn(console, 'log').mockImplementation((...parts: unknown[]): void => {
+      if (parts[0] === '[bench]' && typeof parts[1] === 'string') {
+        const row = JSON.parse(parts[1]) as { key: string; legStart: LegProbe };
+        reports.set(row.key, row);
+      }
       if (parts[0] === '[bench] sweep complete') {
         resolve();
       }

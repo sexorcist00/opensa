@@ -105,3 +105,13 @@ interpret them.
   parser as the *draw* distance. The A/B also found the harness drifting further than the content (control
   scene +107 % triangles → a filed collision defect). The audit itself caught a NaN hole in the new guard
   that would have emptied the clutter layer in silence.
+- [`bench-settle-fall-102.md`](./bench-settle-fall-102.md) — plan 102, the day the sweep learned to measure
+  itself: A/A `avgTriangles` spread **10.19 % → 0.14 %**, `[cam]` jump lines **89 255 → 1**, and the density
+  A/B re-taken to say **d1 ≡ d3** under the noise floor. The audit is mostly about what did NOT hold: two of
+  the three red tests pinned less than they claimed (the suite chose a world where the distinction under test
+  did not exist — a floor exactly under the capsule's feet), the replacement test written here **passed twice
+  with the fix reverted** before the third form discriminated, and the ground-warp turns out to buy less than
+  the plan said (the rest gate decides the leg-start state; the warp only halves the descent). Plus a ceiling
+  nobody had noticed (`GROUND_PROBE_DROP` 60 m against an anchor 43.75 m up, silent when exceeded), a wrong
+  diagnosis assembled from two correct systems, and one regression report that was a background process —
+  caught by a scene that could not possibly have been affected moving with the rest.

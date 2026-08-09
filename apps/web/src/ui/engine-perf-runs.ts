@@ -24,7 +24,14 @@ const TELEPORT_NOTICE_SECONDS = 1;
 /** Shader compiles / fresh-ring uploads drain here, outside the capture (prod WARMUP_S). */
 const WARMUP_SECONDS = 1.5;
 
-/** How far below the anchor the settle looks for its ground before a leg may start (m). */
+/**
+ * How far below the anchor the settle looks for its ground before a leg may start (m).
+ *
+ * This is also a CEILING on scene authoring: an anchor standing further than this above its floor finds no
+ * ground at all, and the settle falls back to the authored anchor — silently. The measured span today is
+ * 3.65-26.29 m, with `ocean-horizon` at 43.75 m, so the headroom is thin. The leg-start probe catches the
+ * consequence; nothing catches the cause.
+ */
 const GROUND_PROBE_DROP = 60;
 
 /**

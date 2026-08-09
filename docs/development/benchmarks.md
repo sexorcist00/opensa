@@ -22,19 +22,29 @@ phase 5 a `?engine=three` override booted the old WebGL renderer for side-by-sid
 renderer is deleted, so pre-2026-07-18 prod columns in the series can no longer be reproduced.)
 
 ```
-http://localhost:5173/?bench=all          # the full 8-scene sweep
+http://localhost:5173/?bench=all          # the full 9-scene sweep
 http://localhost:5173/?bench=country-dusk # one scene
 ```
 
-Scenes live in `apps/web/src/bench-scenes.ts` (plan 063 protocol — the camera paths are unchanged from
-the WebGL era, which is what makes the historical rows comparable): `ls-noon` · `sf-fog-dawn` · `lv-night` · `country-dusk` · `ocean-horizon` · `ls-rain-night`.
-Each scene: teleport to the anchor → **1 s teleport notice** → streaming ring settles → **ground under the
-anchor exists** → warp back onto the anchor → 1.5 s warmup → 15 s camera flight with per-frame sampling.
-The last three gates are plan 102: the first polls after a teleport still describe the ring the player LEFT
-(drained, so they answer 0), the ring says nothing about COLLISION (built in a promise continuation behind
-it), and the player keeps falling while the gates wait — so he is put back on the anchor before the warmup. **Road cars** (841 across the scenes, from vehicles.ide on the NODES.DAT road
-graph) register automatically — the realistic vehicle load every row must share; `?benchcar=`
-pins one model.
+Scenes live in `apps/web/src/bench-scenes.ts` (plan 063 protocol — the camera paths are unchanged from the
+WebGL era, which is what makes the historical rows comparable): `ls-noon` · `sf-fog-dawn` · `lv-night` ·
+`country-dusk` · `ocean-horizon` · `ls-rain-night` · `ganton-noon` · `strip-noon` · `ganton-night`.
+
+Each scene: teleport to the anchor → **1 s teleport notice** → the streaming ring drains → **ground is found
+under the anchor** → **the player is warped onto THAT GROUND** (not the anchor) → **wait until he is at rest**
+(capped at 3 s) → 1.5 s warmup → 15 s camera flight with per-frame sampling. Everything after the ring is
+plan 102: the first polls after a teleport still describe the ring the player LEFT (drained, so they answer
+0), the ring says nothing about COLLISION (built in a promise continuation behind it), and **a scene anchor
+is authored for the CAMERA** — six of the nine sit 3.65–26.29 m above their ground and `ocean-horizon`'s is
+43.75 m up, so warping to it means a fall.
+
+**A scene anchor may not stand more than 60 m above its ground** (`GROUND_PROBE_DROP`). Further than that
+the floor is not found, and the settle falls back to the authored anchor — silently, and the row then reports
+whatever the fall left. The probe catches the consequence; nothing catches the cause.
+
+**Road cars** (1219 across the nine scenes as of 2026-08-09, from vehicles.ide on the NODES.DAT road graph)
+register automatically — the realistic vehicle load every row must share; `?benchcar=` pins one model. The
+count is a function of the scene ANCHORS, so moving one changes it (`strip-noon`'s move added 23).
 
 Report line (the deliverable IS this console line):
 
@@ -51,11 +61,13 @@ Report line (the deliverable IS this console line):
   A/B (`?probe=0`), never by this column** (plan-16 lesson).
 - `lateCreates` — streaming honesty (074/21): creates inside the fog cut during the measure window;
   0 in a healthy run.
-- `legStart` — `{dz, grounded, ok, pendingCells, worstDrop}`: where the player stood when the capture began
-  and the worst single-frame drop over the leg (plan 102). **`ok: false` means the row measured a falling
-  camera** — read nothing else in it, and the run also prints a `[fall]` warning line so the fallwatch
-  (`TAG='[fall]'`) catches it. Bounds: within 2 m of the anchor, grounded, no pending cells, no 2 m frame
-  drop. The falls were invisible for a month because no instrument could print non-zero; this is it.
+- `legStart` — `{dz, grounded, ok, pendingCells, targetZ, worstDrop}` (plan 102). `targetZ` is where the
+  settle PUT him (found ground + 1 m), `dz` is how far he had moved from it when the capture began, and
+  `worstDrop` is the worst single-frame descent over the leg. **`ok: false` means the row measured a moving
+  camera** — read nothing else in it; the run also prints a `[fall]` warning so the fallwatch
+  (`TAG='[fall]'`) catches it. `ok` judges **grounded**, `worstDrop ≤ 2 m` and no pending cells — *not* `dz`,
+  because where he stands is the scene's business while a player still MOVING is what invalidates a row.
+  The falls were invisible for a month because no instrument could print non-zero; this is it.
 - `residency` — GPU ledger by category, MB; `texture` is the plan-21 accumulation watch.
 - `vehicles` — `{live, meanMs, maxMs}`: the vehicle slice of ONE fixed step (081/07 §3) — the raycast
   controllers plus the vehicle system's own fixed update, apart from the solver (`physicsMs`) and from the
