@@ -508,6 +508,38 @@ The arm-A run that found the anchor-height defect on the way there:
 [`2026-08-09-ingame-102-probe-arm-a.json`](opensa-engine/2026-08-09-ingame-102-probe-arm-a.json) —
 **diagnostic, not a baseline.**
 
+### The procobj density recovery — one scene moved, and it is the rural one (2026-08-09)
+
+The first sweep on a pak built with `procobj.dat` read the way the game reads it (`area / spacing²`, no
+MINDIST cull): the clutter layer went **15 286 → 91 092 objects**. User display lane, his run, same nine
+scenes, 1219 road cars / 212 parked on both arms, all nine `legStart.ok`. Baseline is the same-day
+[oldmap row](opensa-engine/2026-08-09-ingame-user-display-oldmap-baseline.json).
+Rows: [`2026-08-09-ingame-user-display-procobj-recovered.json`](opensa-engine/2026-08-09-ingame-user-display-procobj-recovered.json).
+
+| scene | avgMs | Δ | gpu.pass Δ | triangles Δ |
+| --- | --- | --- | --- | --- |
+| **country-dusk** | 16.366 → **18.434** | **+12.6 %** (61.1 → 54.2 fps) | **+16.3 %** | **+16.4 %** |
+| strip-noon | 10.166 → 10.464 | +2.9 % | +2.3 % | +2.4 % |
+| ls-noon | 9.452 → 9.564 | +1.2 % | +0.3 % | +0.9 % |
+| ganton-noon / -night | 13.55 / 13.655 → 13.644 / 13.73 | +0.7 / +0.6 % | +1.5 / +0.6 % | +0.6 / +0.8 % |
+| ls-rain-night · sf-fog-dawn · ocean-horizon | — | +0.4 / −0.1 / −0.0 % | +1.5 / +1.5 / +1.5 % | +0.9 / −0.1 / +6.7 % |
+| lv-night | 14.321 → 13.898 | **−3.0 %** | +1.8 % | +1.7 % |
+
+**Read it as one scene, not a regression.** Eight of nine sit inside ±3 %, and `lv-night` moved the wrong
+way while its triangles rose — a car-heavy scene's run-to-run spread (`vehicles.maxMs` 1.1 → 0.7), not a
+saving. The one real move is `country-dusk`, the only RURAL scene in the set, which is exactly where a
+ground-clutter layer lives.
+
+**The cost is GPU geometry, and the columns say so without inference**: `country-dusk`'s frame grew
+**+2.07 ms** while its `gpu.pass` grew **+2.03 ms** — the whole delta is raster of the added triangles, with
+CPU flat (`avgDrawCalls` +1.7 %, so it is not batching either). Across all nine scenes the ms delta tracks
+the triangle delta; that is the relationship to watch when 07/04 sets a budget.
+
+**What this run cannot say**, and it bounds any decision taken on it: the two paks differ in more than
+procobj — their `report.json` says particles 943 → 1 831 and roadsigns 481 → 962 (`a48ffa2f`, `493fe926`
+landed between the builds). Every rise above is an UPPER BOUND on the density's cost. `ocean-horizon` is at
+the 120 fps cap as always — its +6.7 % triangles are the only readable column.
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
