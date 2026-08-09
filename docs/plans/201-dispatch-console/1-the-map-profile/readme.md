@@ -128,8 +128,11 @@ loop body would be subtracted from `dt` twice
 
 ### 02 — The protected list
 
-Written **before the first cut**, so the trim cannot quietly eat the life of the world. What may not be
-removed at any measurement:
+**DONE 2026-08-09 — [the list](protected-list.md).** Written **before the first cut**, so the trim cannot
+quietly eat the life of the world. Six rows, each naming what carries the item in code or data (so "we kept
+it" is checkable) and whether losing it is caught or **silent — four of the six are**, which is why the
+chain's verification is a field verdict rather than a screenshot pair. Baked collision is recorded there as
+what it is: a conditional candidate for 03, not a protected item. What may not be removed at any measurement:
 
 - **cars and peds drawn and animated** — see [5/04](../5-symbology-and-picking-as-product/readme.md), which
   makes this a decision rather than a gap;
