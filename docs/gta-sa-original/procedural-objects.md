@@ -79,6 +79,21 @@ authored clutter reads as **groups in some places and singles in others**:
 `srand` is seeded per triangle (`(V1+V2+V3).ComponentwiseSum() + modelIndex`) and restored afterwards, so a
 triangle's scatter is stable across visits.
 
+### A rule is keyed by SURFACE + MODEL, and a third of the models use several surfaces
+
+Measured on stock `procobj.dat` 2026-08-09: **95 rules over 56 distinct models, and 19 of those models carry
+rules on more than one surface.** The widest are `sand_combush02` (7 surfaces), `sand_combush03` and
+`sand_combush1` (5 and 4), the four `p_rubble*col` variants and `p_rubble`/`p_rubble2` (3 each, always
+including `p_underwaterbarren`), the `veg_p*` trio on `p_grass_short`/`p_grass_dry`/`p_flowerbed`, and the
+three `cedar*_po` on `p_bushydry`/`p_foreststumps`.
+
+**So a model name is not an identity in this file** — the same species is authored with different spacing and
+different scale ranges depending on what it grows on, and anything derived per species has to be derived per
+`(surface, model)` pair. Ours does now; it did not until 2026-08-09, and the six `p_rubble*` were the ones it
+got wrong (our `procObjCategory` reads the surface to separate underwater rubble from mountain rubble, and a
+batch keyed by model alone took whichever surface the collision walk reached first). Recorded because nothing
+in the file's own shape warns you: the rows just repeat the model name.
+
 ### Which species group and which stand alone — measured
 
 The field report that started this (the user, 2026-08-08/09: *clutter mostly stands in groups, but not

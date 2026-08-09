@@ -5,6 +5,12 @@ numbers and links to the raw records — so the result survives the session and 
 without re-deriving it. Runtime numbers live in [`../benchmarks/`](../benchmarks/); these docs summarise and
 interpret them.
 
+- [`procobj-density-and-the-guards-that-guarded-nothing.md`](./procobj-density-and-the-guards-that-guarded-nothing.md)
+  — the 2026-08-09 evening arc: build-time density became a per-category/per-surface profile with a raisable
+  candidate ceiling, and three guards were deleted for guarding a ceiling the target lifted. **Four separate
+  documents described a state the code was not in** — including "P1 is blocked", which had been fixed and
+  merged days' worth of commits earlier. Also the instrument's floor per COLUMN: content 0.094 %, but `avgMs`
+  saturated at the frame cap and `gpuMs.pass` at 13.37 %.
 - [`vehicle-physics-081.md`](./vehicle-physics-081.md) — the plan-081 driving chain: `handling.cfg` went from
   5 fields consumed to 21, six global constants died, and the five bugs seven field rounds found were all the
   same mistake — a number guessed where the game ships the answer.

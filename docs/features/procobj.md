@@ -19,7 +19,20 @@ screen.
   the group, which is why authored clutter reads as clumps in some places and singles in others
   ([`gta-sa-original/procedural-objects.md`](../gta-sa-original/procedural-objects.md)).
 - **Lottery mechanism**: 3× vanilla candidates with `lottery ∈ [0,3)`, sorted → live density
-  slider = instance-count cutoff, no cell rebuild.
+  slider = instance-count cutoff, no cell rebuild. The headroom is a PARAMETER since 2026-08-09
+  (`scatterProcObjects(…, maxDensity)`, default 3), so a build-time cutoff above 3 is reachable — at the price
+  of re-rolling the scatter from the second collision face on (each face consumes draws in proportion to its
+  candidate count).
+- **A scatter batch is one model on ONE SURFACE** (2026-08-09). `procobj.dat` keys its rules by surface+model
+  and 19 of its 56 models appear on several surfaces, so a batch keyed by model alone took the category of
+  whichever surface the collision walk reached first — six `p_rubble*` were mis-categorised, which mattered
+  because category drives draw distance. See
+  [`gta-sa-original/procedural-objects.md`](../gta-sa-original/procedural-objects.md).
+- **Build-time density is a PROFILE, not one number** (2026-08-09, lod-procobj plan 010):
+  `lottery < densityFor(category, surface)` — category-on-a-surface beats category beats base beats the
+  authored density, default 1.0 everywhere so the scatter is unchanged. `tools/map-placement/src/procobj/
+  density.ts`; the converter reports per-category `generated / objects / dropped-by-cap`. A bad entry throws
+  naming its key. **No shipped profile yet** — it waits on the `opensa` perf budget (plan 013).
 - Semantic categories (grass/flowers/bushes/cacti/trees/rocks/underwater; sea floor overrides
   to underwater) with per-category `{enabled, drawDistance, density}` in `graphics.procobj` +
   debug **ProcObj** screen.

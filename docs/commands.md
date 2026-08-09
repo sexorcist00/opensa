@@ -50,7 +50,12 @@ NB `--target` means a DIRECTORY in `vehicle-installer --rebake` — same word, u
 
 `--procobj-density` is the scatter density cutoff for the procobj stage — **1 = vanilla, max 3** (the
 scatter's candidate ceiling; above it there are no candidates left to keep and the build refuses). The run
-prints the density it built at, so a capture states its own configuration. `--procobj-max` raises the placed
+prints the density it built at, so a capture states its own configuration. **The flag is the whole-map
+number; a PROFILE** — per category and per category×surface, plus a `maxDensity` that raises the candidate
+ceiling — **is a config value, not a flag** (`BuilderConfig.procobjDensity` / `ProcObjLodConfig.density`
+accept `number | ProcObjDensityConfig`). The build then prints every key (`base=1 rocks=2`) and a
+per-category `objects / candidates / taken by the cap` breakdown. One density for both targets: it is not
+keyed by host. `--procobj-max` raises the placed
 -object safety cap with it; without that a high-density run measures the CAP, and the build says so with a
 `CAP DROPPED n` line. **The 2026-08-08 finding that "the cutoff is not the density lever" is retired**: it was
 true only because `cullByMinDistance` was deleting 99 % of the candidates with a column that is a camera
