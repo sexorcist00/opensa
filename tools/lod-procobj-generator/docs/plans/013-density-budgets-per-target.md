@@ -61,6 +61,32 @@ map-wide with stock's 12 629, against int16's 32 767 — at *vanilla* density, w
 build including `sa/` throws today. That is decision 3 of [02](010-density-model.md) arriving by accident
 instead of by design, and turning it into a declared profile gate is this plan's.
 
+## The scope call that reshaped this plan (2026-08-09)
+
+**`sa` ships the SAME density as `opensa`** (the user's call), and the exe is fixed — the reference build,
+the only one our asi accepts, is the one we ship to. Three consequences, and they are the plan now:
+
+1. **Density stops being a per-target lever.** [010](010-density-model.md) ships ONE profile. This plan keeps
+   per-target CAPS and REPORTING; it no longer sets per-target content.
+2. **int16 is crossed by construction, on every `sa` build.** Measured on the built tree with
+   `ipl-row-census.ts`: **39 219 permanent text rows / 32 767**, and **76 IPL slots** (not a wall —
+   `EntityIpl = unlimited`). So the throw can never be right: it fails every build to guard a case that
+   cannot arise on the target. **[asi/perfect-map 006](../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md)
+   moves onto the critical path** — pmb ships the asi, then the throw becomes a warning naming it. That is no
+   longer "after the perf budgets" (decision 5b's order): there is no profile decision left to wait for.
+3. **The `sa` perf budget stops being a lever and becomes a VERIFICATION.** It can no longer answer "how
+   dense may `sa` be" — that is settled. It answers "does the real game cope with the density we ship", and
+   **if the answer is no, this plan has no lever left to pull.** That question is open and belongs to whoever
+   takes the measurement.
+
+### The ceiling this decision surfaces, and nobody has priced it
+
+**`CPool<CBuilding>`, `Buildings = 100000` on the reference install — OLA's, not ours; `perfect-map.asi` does
+not touch it.** SA instantiates a building per `inst` row, so **39 219 of that pool is spent before anything
+streams**, and the binary streams hold 157 091 more records (91 092 HD + 65 532 unlinked LOD) of which
+whatever is resident adds on top. Whether that fits is a measurement nobody has taken, and it is the one SA
+ceiling this density could still hit. It is a task below.
+
 ## Decisions
 
 1. **Caps are target-gated, and the gate is a build INPUT, not a flag an operator remembers.** One target
@@ -162,8 +188,14 @@ rather than a guard, because its number does not exist yet.
       streaming settle-watcher) and set `procObjMax`, the candidate ceiling and the per-cell `procObjLimit`
       from THAT. Record the rows in `docs/benchmarks/` before analysing them. This is the first real ceiling
       the target has ever been given.
-- [ ] **`sa` perf budget**, on the real install under Wine, above the asi gate. Separate rows, separate
-      conclusion; explicitly not comparable to the opensa numbers.
+- [ ] **`sa` perf budget — now a VERIFICATION, not a lever** (see the scope call above). On the real install
+      under Wine, above the asi gate. Separate rows, separate conclusion, explicitly not comparable to the
+      opensa numbers. **If SA does not cope at the shipped density, this plan has no lever left** — say so
+      rather than quietly lowering it.
+- [ ] **Price the `CBuilding` pool at the shipped density.** `Buildings = 100000` (OLA), of which 39 219 is
+      spent by permanent rows before any streaming; the streams hold 157 091 more records. Count what is
+      resident in the worst case and report it at build time like the row budget. **Our asi does not lift
+      this one** — it is the last SA ceiling the density could hit, and it has never been measured.
 - [ ] **The stock REPORT** (decision 8): print what the artifact requires — OLA, and `perfect-map.asi` past
       32 767 rows — and what it would breach on a plain 1.0. A line in the build output, not a throw.
 - [ ] Target-gate the remaining procobj caps (`AREA_MAX_PAIRS`, `STREAM_MAX_INST`, `procObjMax`, candidate

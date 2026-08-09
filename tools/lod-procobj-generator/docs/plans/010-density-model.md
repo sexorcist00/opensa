@@ -73,13 +73,18 @@ Four caps, and they are not interchangeable:
 1. **Density cutoff becomes configurable, per category and per surface.** Replace the global
    `lottery < density` with `lottery < densityFor(category, surface)` — a config table (default all-1.0 =
    the authored density). `densityFor > 1` keeps more candidates for that category/surface; `< 1` thins.
-2. **The MACHINERY is target-independent; the PROFILE is per target.** One `ProcObjDensityConfig` type, two
-   shipped profiles, and the build picks by target. A profile is not a multiplier the operator types — it is
-   a named, costed set that some plan has priced against a wall.
-3. **Every profile declares its target, its cost and its GATE, and the build refuses a mismatch.** A profile
-   carries the object total it produces and whether it needs `perfect-map.asi` (anything past 32 767 map-wide
-   rows does — which is now everything on `sa/`); a mismatch fails at CONFIG time naming the wall, not at a
-   guard three stages later and not in-game.
+2. ~~**The MACHINERY is target-independent; the PROFILE is per target.**~~ **STRUCK 2026-08-09 (the user's
+   call): `sa` ships the SAME density as `opensa`.** There is ONE profile, not two, and density stops being a
+   per-target axis at all. What survives of the split is per-target CAPS and reporting, not per-target
+   content — the two hosts render the same world or they are not the same game.
+3. ~~**Every profile declares its target, its cost and its GATE, and the build refuses a mismatch.**~~
+   **Collapsed by decision 2.** With one density the `sa` target crosses int16 on EVERY build by
+   construction (measured on the built tree: **39 219** permanent rows against 32 767), so "does this profile
+   need `perfect-map.asi`" has one answer, always yes. A per-profile gate would be a guard over a constant.
+   What replaces it is a real check of the real dependency — the build SHIPS the asi
+   ([asi/perfect-map 006](../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md)) and the int16
+   throw becomes a warning. **That moves 006 onto the critical path**: it is now what makes an `sa` build
+   shippable at all, not an integration nicety.
 4. **Category is the primary control axis** (forest→bushes, mountain→rocks, desert→cacti maps to categories
    bushes/rocks/cacti). Surface is the secondary axis. Zone/biome is [03](011-biome-zone-density.md).
 5. **A density multiplier changes GROUPING as a side effect, and that is not a bug to design out.** Objects
@@ -117,21 +122,22 @@ Four caps, and they are not interchangeable:
       (per-category and per-category×surface overrides), default = all 1.0.
 - [ ] Candidate-ceiling knob: allow raising `PROC_OBJ_MAX_DENSITY` via config when a category wants density
       > 3; keep 3 as default. A cutoff above 3 has no candidates to keep.
-- [ ] **Two shipped profiles, each priced before it is written**: `sa` (declaring its `perfect-map.asi` gate,
-      which vanilla density already trips) and `opensa` (perf-bounded — [04](013-density-budgets-per-target.md)
-      supplies the number; until it does, this profile does not exist rather than guessing one). The 1.0
-      default stays as the regression baseline, not as a shipped profile.
-- [ ] **The mismatch guard of decision 3**, with a test per target: a profile that crosses int16 without
-      declaring the asi gate fails at config time naming the number, and an `sa` profile loaded into an
-      opensa build is *allowed* but logged as leaving headroom on the table.
+- [ ] **ONE shipped profile, priced before it is written** (decision 2, 2026-08-09): both targets get it.
+      It is perf-bounded by [013](013-density-budgets-per-target.md)'s `opensa` measurement; until that
+      number exists the profile does not exist rather than being guessed. The 1.0 default stays as the
+      regression baseline.
+- [~] ~~The mismatch guard of decision 3~~ — **struck with decision 3.** One density means one answer to
+      "does this need the asi", so the guard would test a constant. Its job passes to
+      [asi/perfect-map 006](../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md): ship the asi
+      from the build, then downgrade the int16 throw to a warning that names it.
 - [ ] Logging: per-category placed vs generated vs dropped-by-cap counts, plus the permanent-row cost per
       object — which every profile changes, and not in proportion to the object count (measured: 5.96× the
       objects bought 3.94× the rows).
 - [ ] Unit tests: density 1.0 reproduces today's counts (regression); density 2.0 for `bushes` ~doubles bush
       placements and leaves other categories unchanged **with the global cap slack** (decision 8 — a fixture
       that crosses `procObjMax` must assert the displacement instead, or it asserts the wrong thing).
-- [ ] Wire the config through lod-procobj-generator (`config.ts`) and pmb, keyed by the same target flag
-      [04](013-density-budgets-per-target.md) introduced.
+- [ ] Wire the config through lod-procobj-generator (`config.ts`) and pmb. **Not keyed by target** — the
+      density is one value for both hosts; the target still picks caps and reporting.
 - [ ] **A/B the corner-biased sampler.** The original pulls placements toward a triangle's first vertex
       (`offset1 = rand()`, `offset2 = offset1 × rand()`); ours is area-uniform. A difference in the LOOK,
       cheap to test now that the density is right — and it interacts with decision 5's grouping.
