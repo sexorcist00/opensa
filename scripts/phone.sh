@@ -12,7 +12,7 @@
 #   VEHICLES=admiral,infernus PEDS=bmycg npm run phone     # convert a different subset
 #   VEHICLES=all PEDS=all npm run phone                    # the whole roster (hours on a phone)
 #   TEXTURES=rgba8 OUT=./build/phone-rgba8 npm run phone   # the texture-format A/B's other side
-#   ASTC_THREADS=1 npm run phone      # fewer encoder workers still (0 = one per core — it OOMs a phone)
+#   ASTC_THREADS=0 npm run phone      # one encoder worker per core (a desktop; it OOMs this phone)
 #   RECT=8,-8,11,-5 SPAWN=2495,-1687,20 npm run phone
 #
 # A PREBUILT app in `build/webapp` (or `WEBAPP=<dir>`) is used INSTEAD of the dev server, and then vite is
@@ -42,13 +42,19 @@ MAPOBJ="${MAPOBJ:-1}"
 # class of GPU actually carries. It costs an encode stage in the convert — `TEXTURES=rgba8` is the way back
 # and the A/B's other side. `bc` is desktop-only and would fail the --platforms mobile line below.
 TEXTURES="${TEXTURES:-astc}"
-# astcenc worker threads. NOT one-per-core here, which is the library's default and what killed the first
-# ASTC district convert on the target phone: each worker is a V8 isolate reserving its own code range, and
-# with the 4 GB heap below inherited by every one of them the encode stage died with `Failed to reserve
-# virtual memory for CodeRange` — five times, once per worker that lost. Two is a CONSERVATIVE guess, not a
-# measurement: the next field convert is what confirms it or moves it, and `ASTC_THREADS=1` is the retreat.
+# astcenc worker threads, and ONE is not a typo. The library's default (0) is one worker per core; each worker
+# is a V8 isolate that reserves its own code range, on top of the 4 GB heap this convert asks for below. On
+# the target phone that ended the encode stage with `Failed to reserve virtual memory for CodeRange` — first
+# at one-per-core, then AGAIN at two, which is what moved this from a guess to the value it has.
+#
+# Measured 2026-08-09 (worker threads counted off `/proc/self/status` while one context encodes):
+#   --astc-threads 0 → +4 workers (one per core)   2 → +2 workers   1 → +0, it runs on the MAIN thread
+#
+# So 1 is the only setting that reserves no new address space at all, and the cost is speed: the 08-07 knee
+# row measured astcenc's own pool at 2.38x a single thread, bit-identical either way. A convert that finishes
+# slowly beats one that dies at the last stage, after the whole district has already been converted.
 # `ASTC_THREADS=0` restores one-per-core for a machine that can afford it.
-ASTC_THREADS="${ASTC_THREADS:-2}"
+ASTC_THREADS="${ASTC_THREADS:-1}"
 # The default is a SUBSET, because converting the roster costs hours on a phone and a field run needs a
 # handful of models. `all` restores the full convert. The player's model is added below whatever is asked
 # for: without it the game boots with nobody to move (`GAME_CONFIG.mainCharacter`).
@@ -129,6 +135,9 @@ if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
   say "converting $GAME → $OUT (rect $RECT, textures=$TEXTURES, bake=$BAKE, models=$MODELS)"
   args=(--game "$GAME" --out "$OUT" --textures "$TEXTURES" --max-texture 256 --rect "$RECT" --no-ao --platforms mobile)
   [ "$TEXTURES" = astc ] && [ "$ASTC_THREADS" != 0 ] && args+=(--astc-threads "$ASTC_THREADS")
+  # Said out loud because it is the slow setting and the log otherwise looks stuck: the encode is the LAST
+  # stage, and on this device it is the one that has to run without spawning a single worker isolate.
+  [ "$TEXTURES" = astc ] && [ "$ASTC_THREADS" = 1 ] && say "astc: single-threaded encode (no worker isolates — slower, and it survives)"
   [ "$BAKE" = 1 ] && args+=(--bake-collision)
   [ "$MAPOBJ" = 1 ] && args+=(--map-objects-in-rect)
   [ "$MODELS" = 0 ] && args+=(--no-models)

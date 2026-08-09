@@ -102,8 +102,13 @@ RECT=8,-8,11,-5 OUT=./build/phone-ls npm run phone       # ground the district t
 core; each is a V8 isolate reserving its own code range, and each inherits the convert's `--max-old-space-size`
 setting. On the target device that ends the encode stage with `Fatal process out of memory: Failed to reserve
 virtual memory for CodeRange`, printed once per worker that lost the race — after the whole district has
-already been converted, which is the expensive half. `npm run phone` therefore passes `--astc-threads 2`;
-`ASTC_THREADS=1` retreats further and `ASTC_THREADS=0` restores one-per-core for a machine that can afford it.
+already been converted, which is the expensive half. `npm run phone` therefore passes **`--astc-threads 1`**, which is the only setting that reserves no new
+address space at all — measured 2026-08-09 by counting worker threads off `/proc/self/status`: `0` spawns one
+per core, `2` spawns two, and `1` spawns **none**, running the encode on the main thread. Two was tried in the
+field first and died the same way, which is what moved this from a guess to a measurement. The cost is speed
+(astcenc's own pool is 2.38x one thread, bit-identical either way), and a convert that finishes slowly beats
+one that dies at the last stage after the whole district is already converted. `ASTC_THREADS=0` restores
+one-per-core for a machine that can afford it.
 The thread count does not change the output bytes (pinned by a test), so it is a build-speed knob and never a
 build difference.
 
