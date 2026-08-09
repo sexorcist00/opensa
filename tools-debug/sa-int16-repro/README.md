@@ -49,12 +49,13 @@ The command logs the isolation numbers (base/added/final rows, slots `/39`, whet
 
 ## Full-build safety-net repro
 
-The full over-budget build is the guaranteed-correct fallback (it is how the bug was found). Build it with the
-row guard downgraded to a warning (the 39-slot guard stays hard):
+The full over-budget build is the guaranteed-correct fallback (it is how the bug was found). Since 2026-08-09
+it needs no flag — pmb no longer guards the int16 row count at all (the target always runs `perfect-map.asi`,
+which lifts it), so an over-budget build is simply a build:
 
 ```sh
 NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cli.ts \
-  --game ./game-src/original --in <over-budget-mods-src> --out ./build/original --allow-text-row-overflow
+  --game ./game-src/original --in <over-budget-mods-src> --out ./build/original
 ```
 
 ## In-game procedure (Wine) & detection oracle

@@ -42,8 +42,9 @@ up to a chosen total `N` permanent text-IPL rows:
   "clean") can't fire. No seeded stream cluster is needed: the stock binary streams already corrupt once `N` >
   32,767 (**confirmed in-game — the bug reproduces from the row count alone**).
 
-The full-build fallback: `perfect-map-builder --allow-text-row-overflow` downgrades the int16 row guard to a
-warning (the 39-slot guard stays hard), for an intentionally over-2^15 full build.
+The full-build fallback: since 2026-08-09 `perfect-map-builder` needs no flag for this — the int16 row guard
+and `--allow-text-row-overflow` were both deleted (the `sa` target always runs the asi that lifts the
+ceiling), so an intentionally over-2^15 full build is just a build.
 
 ## Worked example (no perfect-map-builder needed)
 

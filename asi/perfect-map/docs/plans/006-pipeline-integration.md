@@ -6,9 +6,14 @@ Part of the [perfect-map ASI chain](readme.md). Depends on [004](004-limit-patch
 > project** (the declared configuration is OLA + FLA + this asi — `docs/gta-sa-original/reference-install.md`),
 > so the "stock vs opensa-asi mode" split this plan proposes is not the axis to build: pmb already has a
 > `--target sa|opensa` selector, and **its `opensa` means OUR ENGINE, not "SA with our asi"** — do not reuse
-> the word for a third meaning. What survives is decision 2's real content: with the asi shipped, the `sa`
-> branch's int16 gate is the thing that lifts. And the 39-slot half is already gone — it became a REPORT when
-> `checkTextIplBudgets` moved onto the `sa/` branch (07/04), because OLA lifts that array on the target.
+> the word for a third meaning.
+>
+> **And on 2026-08-09 decision 2 lost its subject entirely.** There is no int16 gate left to make ASI-aware:
+> pmb's `checkTextIplBudgets` became `reportTextIplCensus`, and the 30,000-row throw, the 39-slot line and
+> `--allow-text-row-overflow` were deleted — the target always carries OLA + FLA + this asi, so those are not
+> its ceilings. **What survives of this plan is task 1 only: pmb SHIPS the asi into `sa/`.** That is now the
+> whole point rather than a step toward a budget lift — the build already emits maps a plain install cannot
+> run (39 219 permanent rows), and nothing checks the asi is there.
 
 ## Context
 

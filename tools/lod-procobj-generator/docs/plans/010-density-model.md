@@ -29,11 +29,12 @@ read the banner there), [`gta-sa-original/reference-install.md`](../../../../doc
 for what the target install lifts, [`restrictions/sa-target.md`](../../../../docs/restrictions/sa-target.md)
 for why `opensa/` is a separate representation rather than a mode of `sa/`.
 
-**int16 is now crossed by the DATA, not by a profile.** At vanilla density the layer costs 25 560 permanent
-text rows; with stock's 12 629 that is **≈ 38 189 map-wide against a 32 767 ceiling**. `checkTextIplBudgets`
-is `sa/`-only, so `--exclude sa` builds and every opensa field run are unaffected — but a full build
-including `sa/` throws today, correctly, naming the number. **That is decision 3's profile gate arriving by
-accident**, and turning it into a declared per-target profile is [04](013-density-budgets-per-target.md)'s.
+**int16 is now crossed by the DATA, not by a profile — and it stopped mattering on 2026-08-09.** At vanilla
+density the layer costs 25 560 permanent text rows; with stock's 12 629 that is **≈ 38 189 map-wide against a
+32 767 stock ceiling**. That ceiling is lifted on the target (`perfect-map.asi` patch #1), so
+[04](013-density-budgets-per-target.md) deleted the guard rather than gating a profile behind it: the build
+now reports the row cost and stops there. **A density profile no longer has an int16 gate to declare** — what
+prices it is the perf budget, which is still unmeasured.
 
 **And a build that lands on a stock install is a build nobody guarded.** Not a target is not the same as not
 a failure mode: someone will install this over a plain 1.0. The honest form is a build-time REPORT — "this

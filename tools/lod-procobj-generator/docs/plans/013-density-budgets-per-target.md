@@ -71,9 +71,13 @@ the only one our asi accepts, is the one we ship to. Three consequences, and the
 2. **int16 is crossed by construction, on every `sa` build.** Measured on the built tree with
    `ipl-row-census.ts`: **39 219 permanent text rows / 32 767**, and **76 IPL slots** (not a wall —
    `EntityIpl = unlimited`). So the throw can never be right: it fails every build to guard a case that
-   cannot arise on the target. **[asi/perfect-map 006](../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md)
-   moves onto the critical path** — pmb ships the asi, then the throw becomes a warning naming it. That is no
-   longer "after the perf budgets" (decision 5b's order): there is no profile decision left to wait for.
+   cannot arise on the target. **SHIPPED 2026-08-09** — see the first task below. It went further than
+   decision 5b's warning: the target always carries the asi, so the build reports its COST and quotes no
+   ceiling at all. That also demoted
+   [asi/perfect-map 006](../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md) back off the
+   critical path — shipping the asi from pmb is the honest finish, not a prerequisite.
+   **Caveat carried forward:** 39 219 is a LOWER BOUND until a census with no missing files confirms it (the
+   old counter read an absent IPL as zero rows). The `CBuilding`-pool task below is the one that depends on it.
 3. **The `sa` perf budget stops being a lever and becomes a VERIFICATION.** It can no longer answer "how
    dense may `sa` be" — that is settled. It answers "does the real game cope with the density we ship", and
    **if the answer is no, this plan has no lever left to pull.** That question is open and belongs to whoever
@@ -193,13 +197,31 @@ rather than a guard, because its number does not exist yet.
       ceiling left — so it survives the stock cull with its purpose changed from slots to ROWS. Record what
       it costs at range (a shorter species with no permanent LOD pops in later).
 
-**FIRST, and it is the only thing blocking a full build: drop the int16 throw.** Decision 5b, unblocked
-2026-08-09 by the single-density call — see the scope section at the top.
+**FIRST, and it is the only thing blocking a full build: drop the int16 throw. — DONE 2026-08-09.**
 
-- [ ] **int16 becomes a WARNING that names what to change**, not a build-stopping error: the asi for the row
-      ceiling, and OLA's `EntitiesPerIpl` / `EntityIpl` / `Buildings` for the pools. The number stays in the
-      message — an operator can act on a number. Test that it fires and names the count.
-      **`--allow-text-row-overflow` is what to use meanwhile**, and it can retire with the throw.
+- [x] **The int16 guard is gone, and it did not become a warning.** Decision 5b said "a WARNING that names
+      what to change"; the user's call while it was being written took it further, and the plan is corrected
+      here rather than in a footnote: **the `sa` target ALWAYS carries OLA + FLA + our `perfect-map.asi`, so
+      a lifted ceiling is not something a build reports on every run.** A warning firing on every build is a
+      throw one severity down — the condition is constant (39 219 rows at vanilla density), and a constant
+      condition is a print statement wearing a guard's clothes.
+      **What shipped** (`tools/perfect-map-builder/src/pipeline.ts`):
+      - `checkTextIplBudgets` → **`reportTextIplCensus`**: permanent rows, inst-bearing IPLs, and how many of
+        the IPLs listed in `gta.dat` it could actually read. No ceiling quoted.
+      - **deleted**: the throw, `TEXT_ROW_CAP = 30000`, `TEXT_IPL_SLOT_CAP = 39`, `--allow-text-row-overflow`
+        and its `BuildPerfectMapOptions` field. The 30 000 was 2 767 of unmeasured headroom under a lifted
+        ceiling and **nothing ever culled to fit it**, so removing it moved no content.
+      - **the census now names its scope.** Both halves used to read a missing file as zero rows — an IPL
+        listed in `gta.dat` but absent on disk silently subtracted its rows, and an absent `gta.dat` skipped
+        the whole check without a line. The error only ever ran DOWNWARD, so 39 219 was a lower bound sold as
+        a total. Missing files now WARN and the count is labelled as a lower bound.
+      - `checkImgIdBudgets` **keeps its throw** — FLA's pools are what the target is really configured with
+        (TXD 6000 / COL 275 / IPL 280, not `unlimited`), and exhausting one corrupts the heap at boot. The
+        rule is "delete the museum pieces, keep the gates", now a standing rule in `CLAUDE.md`.
+      - tests: 35 pass, and the two that matter were **run against the reverted behaviour** — re-adding the
+        throw and the silent zero fails exactly those two and nothing else.
+      *Not verified yet:* no full `sa` build has been run since. The throw is what blocked one; whether the
+      rest of the `sa` chain completes at 91 092 objects is unmeasured and belongs to the next `sa` run.
 
 **Then the numbers, one host at a time:**
 
