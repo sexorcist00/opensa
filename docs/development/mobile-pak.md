@@ -102,10 +102,20 @@ RECT=8,-8,11,-5 OUT=./build/phone-ls npm run phone       # ground the district t
 core; each is a V8 isolate reserving its own code range, and each inherits the convert's `--max-old-space-size`
 setting. On the target device that ends the encode stage with `Fatal process out of memory: Failed to reserve
 virtual memory for CodeRange`, printed once per worker that lost the race — after the whole district has
-already been converted, which is the expensive half. The encode then died at `1` as well, with no worker to blame — which rules the workers out and points at the
-address space the process ALREADY reserved: `NODE_OPTIONS=--max-old-space-size`. An ASTC run now asks for
-2 GB instead of 4, and `HEAP=` moves it; the convert line prints the value it used, so a log answers this
-question by itself. That is a hypothesis under test, not a measured fix.
+already been converted, which is the expensive half. The encode then died at `1` as well — and that was the clue, because at `1` no worker exists to blame. The
+cause was not the cap but where it went: it reached the model dictionaries and never the WORLD arrays, whose
+encoder was constructed with no options at all and kept the library's one-per-core default. Fixed 2026-08-09,
+with `threads` made a required option so a third call site cannot inherit a default silently; the encode then
+ran in 12.8 s. `HEAP=` remains as a knob because a small device can want it, and the convert line prints
+textures, threads and heap together so a log answers this class of question without a screenshot.
+
+**Give every pak its own REAL directory.** `OUT=` is a path, and on a phone it is routinely a symlink —
+internal storage is small, so build output gets pointed at shared storage. On 2026-08-09 four names
+(`phone`, `phone-ganton`, `phone-ls`, `phone-ls-rgba8`) all resolved to ONE folder, so every convert
+overwrote the previous pak and the A/B that was meant to keep two apart kept one. The convert now prints the
+resolved path when it differs, and a `REBUILD=1` removes the previous `pak/` first — a rebuild that starts
+on top of the last one can inherit archives it never converted, which is how a district that reads 597
+texture layers on one build came out with 49 on the next.
 
 `npm run phone` therefore passes **`--astc-threads 1`**, which is the only setting that reserves no new
 address space at all — measured 2026-08-09 by counting worker threads off `/proc/self/status`: `0` spawns one

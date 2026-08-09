@@ -13,7 +13,7 @@
 #   VEHICLES=all PEDS=all npm run phone                    # the whole roster (hours on a phone)
 #   TEXTURES=rgba8 OUT=./build/phone-rgba8 npm run phone   # the texture-format A/B's other side
 #   ASTC_THREADS=0 npm run phone      # one encoder worker per core (a desktop; it OOMs this phone)
-#   HEAP=1536 npm run phone           # the node heap the convert reserves, MB (astc runs default to 2048)
+#   HEAP=1536 npm run phone           # the node heap the convert reserves, MB (default 4096)
 #   RECT=8,-8,11,-5 SPAWN=2495,-1687,20 npm run phone
 #
 # A PREBUILT app in `build/webapp` (or `WEBAPP=<dir>`) is used INSTEAD of the dev server, and then vite is
@@ -49,13 +49,14 @@ TEXTURES="${TEXTURES:-astc}"
 #
 #   --astc-threads 0 → +4 workers (one per core)   2 → +2 workers   1 → +0, the encode runs on the MAIN thread
 #
-# 1 is therefore the setting that spawns nothing, and it is the default because the encode had already died on
-# this phone at one-per-core and again at two. **It then died at 1 as well** — which is what RULES THE WORKERS
-# OUT: with no isolate to create, `Failed to reserve virtual memory for CodeRange` has to be about the address
-# space the process already reserved, and that is the `HEAP` knob below. The thread setting stays at 1 anyway:
-# it costs speed only (astcenc's pool measured 2.38x one thread on 2026-08-07, bit-identical either way) and it
-# removes one variable from the next attempt. `ASTC_THREADS=0` restores one-per-core for a machine that can
-# afford it.
+# 1 is the setting that spawns nothing, and it is the default because this phone died three times at
+# `encoding texture arrays` while the flag was on the command line — the cap reached the model dictionaries
+# and NOT the world arrays, whose encoder was built with no options at all and kept one worker per core. That
+# was the whole bug (fixed 2026-08-09, `threads` is now required so a third call site cannot inherit a
+# default). With it fixed the encode ran: 1.1 M texels in 12.8 s, single-threaded. The setting stays at 1
+# because it is what has been proven on this device; the cost is speed only (astcenc's pool measured 2.38x one
+# thread on 2026-08-07, bit-identical either way). `ASTC_THREADS=0` restores one-per-core for a machine that
+# can afford it.
 ASTC_THREADS="${ASTC_THREADS:-1}"
 # The default is a SUBSET, because converting the roster costs hours on a phone and a field run needs a
 # handful of models. `all` restores the full convert. The player's model is added below whatever is asked
@@ -140,7 +141,21 @@ if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
   # the failure count did fall with it (six lost isolates at 4 GB, two at 2 GB), but the default is the value
   # the model and collision stages were built around.
   HEAP="${HEAP:-4096}"
+  # The RESOLVED path, because `OUT` is routinely a symlink on a phone (internal storage is small, so build
+  # output is pointed at shared storage) and two different OUT names can be the same directory. On 2026-08-09
+  # four of them were: `phone`, `phone-ganton`, `phone-ls` and `phone-ls-rgba8` all resolved to one folder, so
+  # every convert overwrote the last and the A/B that was supposed to keep two paks apart kept one.
+  REAL_OUT="$(cd "$(dirname "$OUT")" 2>/dev/null && pwd -P)/$(basename "$OUT")"
+  REAL_OUT="$(readlink -f "$OUT" 2>/dev/null || echo "$REAL_OUT")"
   say "converting $GAME → $OUT (rect $RECT, textures=$TEXTURES, astc-threads=$ASTC_THREADS, heap=${HEAP}m, bake=$BAKE, models=$MODELS)"
+  [ "$REAL_OUT" != "$(readlink -f . 2>/dev/null)/${OUT#./}" ] && echo "   → real path: $REAL_OUT"
+  # A REBUILD is a rebuild: the previous pak's products are removed first. Without this the convert writes
+  # into a directory that still holds the last one, and a run can inherit archives it never converted — which
+  # is how a district that reads 597 texture layers on one build came out with 49 on the next.
+  if [ -d "$OUT/pak" ]; then
+    echo "   removing the previous pak in $OUT/pak (a rebuild starts from nothing)"
+    rm -rf "$OUT/pak"
+  fi
   args=(--game "$GAME" --out "$OUT" --textures "$TEXTURES" --max-texture 256 --rect "$RECT" --no-ao --platforms mobile)
   [ "$TEXTURES" = astc ] && [ "$ASTC_THREADS" != 0 ] && args+=(--astc-threads "$ASTC_THREADS")
   # Said out loud because it is the slow setting and the log otherwise looks stuck: the encode is the LAST
