@@ -19,6 +19,16 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 `001`–`099`, one folder each (066, 073, 074, 078–082, 096–099 carry multi-part sub-plans; 083 kept its
 row but its chain was superseded by 097). Newest first:
 
+- **[102 — The bench settle lies, and a fall poisons the sweep](./102-bench-settle-fall/readme.md)** —
+  **PLANNED 2026-08-08**, branch `102-bench-settle-fall`: the perf-runs settle exits on a stale
+  `pendingCells` read (the notice that phys/video runs both carry was never brought over), nothing waits for
+  collision, and a teleport preserves `Velocity.z` — so one lost race sends the player under the mesh at
+  terminal velocity for the rest of the sweep, culling every car through the 3D distance metric. Bench-only,
+  confirmed against the other two run modes and the in-game teleport panel; the fossil is the ocean-horizon
+  anchor moved "ON the sand" on 2026-07-10. Order: three red tests (stale gate, warp resets motion,
+  fall-through-late-ground) → fix + a permanent leg-start probe in the report → field fallwatch + A/A →
+  re-take the minor-8/d1/d3 benchmarks the falls contaminated → merge and close the harness half of
+  [`open-issues/bench-scene-transition-collision.md`](../open-issues/bench-scene-transition-collision.md).
 - **[101 — Escalators in OpenSA](./101-escalators/readme.md)** — **PLANNED 2026-08-07**: the steps have
   never moved in our engine. `renderware` decodes the type-10 entry (plan 044) and there is a debug waypoint;
   `engine`, `cell-weld` and `engine-formats` have no escalator code at all, so the staircase draws and
