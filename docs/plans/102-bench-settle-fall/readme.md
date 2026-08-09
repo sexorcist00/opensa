@@ -139,7 +139,35 @@ column), `docs/features/character.md` (the warp reset), `docs/edge-cases/physics
   (`docs/benchmarks/readme.md` rule).
 - Probe fields clean on all nine scenes.
 
-Record the numbers here before moving on.
+**Done 2026-08-09.** Headless harness, M3 Pro, DPR=2, pak `build/original/opensa` (minor 8, buildTime
+`13:19 08-08-2026`), 1196 road cars, three full `?bench=all` sweeps.
+
+| Measure | 2026-08-08 baseline | After 102 |
+| --- | --- | --- |
+| `avgTriangles` A/A spread, `lv-night` | 10.19 % | **0.14 %** |
+| …`sf-fog-dawn` | 6.00 % | **0.36 %** |
+| …worst scene of nine | 10.19 % | **0.36 %** |
+| `avgMs` A/A spread | — | ≤ 0.02 % |
+| `[cam]` jump lines per run | 89 255 | **1** |
+| console errors | — | 0 |
+| scenes with `legStart.ok` | (no instrument existed) | **8 of 9** (`dz −0.08 m`, grounded, worst frame drop 0) |
+
+Records: [`2026-08-09-headless-bench-aa-after-102.json`](../../benchmarks/opensa-engine/2026-08-09-headless-bench-aa-after-102.json)
+(the A/A pair) and [`2026-08-09-ingame-102-probe-arm-a.json`](../../benchmarks/opensa-engine/2026-08-09-ingame-102-probe-arm-a.json)
+(the diagnostic arm), plus the index entry.
+
+**The field found two things the suite could not**, both from the probe's own numbers:
+
+1. **A scene anchor is authored for the CAMERA, not for the player.** Six of the nine sit 3.65–26.29 m above
+   the ground, so warping to `scene.anchor` restarted the fall for the whole 1.5 s warmup — `dz −11.16` is
+   exactly 1.5 s of gravity, and it was on the row before the units gave it away. The settle now warps onto
+   the ground it just found (`SETTLE_LIFT` 1 m) and then waits until the player is **at rest**; `dz` is
+   reported against where the settle put him (`targetZ`), and it is context, not a verdict — a moving player
+   is what invalidates a row, not where he stands.
+2. **`strip-noon` has no floor at all.** Its anchor answers `13.00` to the ground ray and the capsule falls
+   ~900 m past it, identically in both arms. Written up as its own issue rather than fixed by retyping the
+   anchor — the `ocean-horizon` fossil is what that habit produces:
+   [`open-issues/strip-noon-anchor-has-no-floor.md`](../../open-issues/strip-noon-anchor-has-no-floor.md).
 
 ## Step 4 — the benchmarks the falls invalidated
 
