@@ -27,18 +27,26 @@ const WARMUP_SECONDS = 1.5;
 /** How far below the anchor the settle looks for its ground before a leg may start (m). */
 const GROUND_PROBE_DROP = 60;
 
+/** Metres above the found ground the settle drops the player from — a scene anchor's authored z is NOT the
+ *  ground (measured 2026-08-09: 6 of the 9 scenes sit 3.65-26.29 m above it, so warping to the anchor put
+ *  him into free fall for the whole warmup). Just enough to land on rather than spawn inside the surface. */
+const SETTLE_LIFT = 1;
+
 /** What the leg-start probe accepts (m): further than this from the anchor — or a single frame that drops
  *  him this far — and the player is falling, so the row measures the fall and not the scene. */
 const PROBE_MAX_DROP = 2;
 
 /** The leg-start probe (plan 102) — what the world was doing the moment the capture began. */
 export interface LegProbe {
-  /** The player's Z relative to the scene anchor — negative means he is UNDER the ground he stands on. */
+  /** The player's Z relative to {@link targetZ}: how far he has moved from where the settle put him. */
   dz: number;
   grounded: boolean;
   /** Every field within bounds. A false row's numbers describe a falling camera, not the scene. */
   ok: boolean;
   pendingCells: number;
+  /** Where the settle placed him (found ground + {@link SETTLE_LIFT}) — stated so the row describes its
+   *  own configuration instead of being read against the scene's camera anchor. */
+  targetZ: number;
   /** The worst single-frame drop over the leg (m) — a fall that STARTS mid-leg shows up here. */
   worstDrop: number;
 }
@@ -114,6 +122,9 @@ export function setupPerfRuns(host: PerfRunsHost): void {
       target: host.toEngine(pose.look),
     });
   };
+  /** Where the settle actually put the player — the reference the leg-start probe is judged against, and
+   *  the number the report row states so a reader can see what the run was configured with. */
+  let settledZ: null | number = null;
   // Shared leg mechanics (bench + soak): teleport + settle + warmup OUTSIDE the capture, then the timed
   // flight with frame sampling. Bench formats the plan-063 report; soak accumulates stability intervals.
   const settleAt = async (scene: BenchScene): Promise<void> => {
@@ -129,9 +140,18 @@ export function setupPerfRuns(host: PerfRunsHost): void {
     // Then the GROUND, which the ring says nothing about: collision is built in a promise continuation
     // behind it and loses the race under sweep load by a second or two.
     await until(() => host.groundBelow(scene.anchor, GROUND_PROBE_DROP) !== null, host.settleTimeoutMs);
-    // Put him back on the anchor now that it HAS ground: gravity is integrated whether or not the world is
-    // there, so he has been falling for as long as the gates took. The warp resets his motion state.
-    host.teleportPlayer(scene.anchor);
+    // Put him back ON THAT GROUND — not on the anchor, which is authored for the CAMERA and stands metres
+    // above the surface. Gravity is integrated whether or not the world is there, so he has been falling for
+    // as long as the gates took, and a warp to the anchor would only restart the fall. The warp resets his
+    // motion state; the small lift lands him instead of spawning him inside the surface.
+    const groundZ = host.groundBelow(scene.anchor, GROUND_PROBE_DROP);
+    settledZ = groundZ === null ? scene.anchor[2] : groundZ + SETTLE_LIFT;
+    host.teleportPlayer([scene.anchor[0], scene.anchor[1], settledZ]);
+    // Finally, wait for him to be AT REST. Where the probe ray lands is not always where he can stand: at
+    // strip-noon it answers with a rooftop he then slides off (measured 2026-08-09, deterministic), and a
+    // player still moving churns streaming and the LOD rings all through the capture. Whatever he ends up
+    // standing on, the leg starts from a stopped player.
+    await until(() => host.playerProbe().grounded, host.settleTimeoutMs);
     await waitSeconds(WARMUP_SECONDS);
   };
   const flyLeg = async (
@@ -157,15 +177,19 @@ export function setupPerfRuns(host: PerfRunsHost): void {
     }
     const samples = host.takeSamples();
     host.setBenchCamera(null);
-    const dz = start.z - scene.anchor[2];
+    const targetZ = settledZ ?? scene.anchor[2];
+    const dz = start.z - targetZ;
 
     return {
       lateCreates: (host.getStream()?.lateCreates ?? 0) - lateStart,
       legStart: {
         dz: Number(dz.toFixed(2)),
         grounded: start.grounded,
-        ok: start.grounded && Math.abs(dz) <= PROBE_MAX_DROP && worstDrop <= PROBE_MAX_DROP && pendingCells === 0,
+        // `dz` is CONTEXT, not a verdict: where he stands is the scene's business (a rooftop the settle
+        // found is a legitimate place to stand), while a player still MOVING is what invalidates the row.
+        ok: start.grounded && worstDrop <= PROBE_MAX_DROP && pendingCells === 0,
         pendingCells,
+        targetZ: Number(targetZ.toFixed(2)),
         worstDrop: Number(worstDrop.toFixed(2)),
       },
       samples,
