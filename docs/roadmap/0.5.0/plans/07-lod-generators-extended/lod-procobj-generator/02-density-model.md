@@ -73,8 +73,56 @@ The multiplier belongs on the first two. The per-cell budget is the engine's own
 2. **The MACHINERY is target-independent; the PROFILE is per target.** One `ProcObjDensityConfig` type, two shipped profiles, and the build picks by target. A profile is not a multiplier the operator types — it is a named, costed set that some plan has priced against a wall.
 3. **Every profile declares its target, its cost and its GATE, and the build refuses a mismatch.** A profile carries the object total it produces and whether it needs `perfect-map.asi` (anything past 32 767 map-wide rows does); a mismatch fails at CONFIG time naming the wall, not at a guard three stages later and not in-game. This is the one new invariant the per-target split adds, and it is what keeps [lesson 28](../../../../../project-goals.md)'s silent under/over-build out of the pipeline.
 4. **Category is the primary control axis** (forest→bushes, mountain→rocks, desert→cacti maps to categories bushes/rocks/cacti). Surface is the secondary axis. Zone/biome is [03](03-biome-zone-density.md).
-5. ~~**MINDIST stays the quality guard.**~~ **UNDER REVIEW 2026-08-08 — the column is probably not a spacing
-   rule at all, and decision 1 above is built on that reading.** Evidence, in the order it arrived:
+5. ~~**MINDIST stays the quality guard.**~~ ~~**UNDER REVIEW 2026-08-08**~~ → **ANSWERED 2026-08-09 by the
+   reverse, and it is worse than the review supposed: BOTH columns were read wrong.** The recovered
+   mechanism is [`gta-sa-original/procedural-objects.md`](../../../../../gta-sa-original/procedural-objects.md)
+   (`ProcObjectMan_c` / `ProcSurfaceInfo_c` — not `CPlantMgr`, which is the grass system and reads none of
+   this file):
+
+   - **MINDIST is a distance to the CAMERA**, clamped `max(minDist, 80)`, tested against the triangle
+     centroid before anything is created — an anti-pop-in radius, never a distance between two objects. The
+     four authored values (50/60/70/80) all collapse to 80 in the stock engine, so the column carries no
+     per-species intent to honour. **`cullByMinDistance` is not a quality guard; it is the column applied to
+     the wrong pair of points.**
+   - **SPACING is a LENGTH in metres**: `m_fSquaredSpacingRadius = 1/(spacing*spacing)` and
+     `density = triangleArea × that`, i.e. **`area / spacing²`**. We read `area / spacing`, so we generate
+     4–163× too many candidates (`procobj.dat`'s own header comment is what misled us — it says "1 object
+     every n square metres" and the code squares the number).
+   - **Nothing guards against clumping in the original**, which is what task 3 asked. The look comes from the
+     triangle being the group (`area / spacing²` objects on one collision face), a corner-biased sampler, and
+     every rule of a surface firing on the same triangle — mixed clumps are the system working. The user's
+     field report (2026-08-08/09: groups in the forest, chaotic singles among desert rocks) falls straight
+     out of `spacing²` and is now measured per rule: `sand_combush02` puts **59 %** of its objects on a face
+     carrying ≥2 of itself while `sand_josh1` on the SAME surface puts **2 %**, desert rock and cacti
+     (`sm_scrub_rock3` 1 %, `sjmcacti2` 0 %) are singles, mountain rubble (`p_rubble04col`, spacing 10) is
+     **76 %** grouped, and 85–97 % of everything stands on a face that also carries another species. **The
+     species' own `spacing` decides the look, not the biome** — which is a warning for
+     [03](03-biome-zone-density.md): a biome multiplier changes counts, and it changes GROUPING as a side
+     effect, because grouping is what a count per triangle means.
+   - **The two errors point in opposite directions**, which is why the output looked plausible: too many
+     candidates, then 99.0 % of them deleted by an exclusion radius that does not exist.
+
+   Measured (`scripts/debug/procobj-spacing-census.ts`, 2026-08-09, `game-src/original`) — this closes tasks
+   1 and 2 below:
+
+   | | our reading | the game's |
+   | --- | --- | --- |
+   | expected objects, 95 rules | 1 947 713 | **103 007** |
+   | expected objects, the 43 converted species | 1 571 748 | **90 906** |
+
+   Stages at vanilla density: 5 843 322 candidates → **1 948 374 pre-cull** (task 2's number, and it matches
+   the expectation to 0.00 % — the census's self-check) → **20 265** after MINDIST. And the signature task 1
+   asked for is in our own artifact: post-cull same-species nearest neighbour **min 50.0 m**, p05 50.4, med
+   58.2, with **0 of 20 246 pairs below their MINDIST**, while cross-species pairs run min 0.3 / med 10.9.
+   What ships is evenly spaced and one-of-each-kind — the authored look inverted.
+
+   **So the restatement:** MINDIST leaves the build entirely, `spacing` gets squared, and the anti-clumping
+   job it was believed to do is not a job at all. That is a behaviour change to `procobj-scatter.ts` (shared
+   with the RUNTIME cell scatter, whose `procObjLimit = 150` is calibrated against the wrong density) plus
+   `convert.ts`, and it needs its own step with a rebuild and a field verdict — **it is not part of the
+   per-category work below, it is what the per-category work sits on.**
+
+   The original evidence, kept because it is what pointed the reverse at the right question:
    - **Measured**: raising the cutoff to 3 (all candidates kept, `procObjMax` unable to bind) yields
      **15 840 objects against 15 286 — +3.6 %**. The extra two-thirds of the candidate pool is culled by
      `cullByMinDistance` alone, i.e. the cull is at its packing limit and the cutoff cannot move the count.
@@ -100,16 +148,13 @@ The multiplier belongs on the first two. The per-cell budget is the engine's own
    authored look becomes one-of-each, which goes wrong in FEEL rather than in loading — the failure mode
    [`project-goals.md`](../../../../../project-goals.md) names for misread authored data.
 
-   **A falsifiable check that needs no reverse-engineering** and can run on the BUILT tree before step 3:
-   the nearest-neighbour distance between two placements of the same species should be ≥ that species'
-   MINDIST (50–80 m) everywhere, while cross-species distances should be free. If that is what the artifact
-   shows, the misreading is confirmed from our own output and the reverse only has to answer what the column
-   is FOR and what governs spacing instead.
-   **Not yet concluded**: what SA itself does with the column (`CPlantMgr` in gta-reversed) has not been
-   read, and the repo rule is to recover the original's meaning before changing our own. Nor is it known
-   what the correct reading yields — the pre-cull count has never been measured — nor what should guard
-   against clumping in its place. Until those three land, this decision cannot be restated, and **the 3.77×
-   target may be mostly the size of this defect rather than a goal.** Denser candidates still pass through `cullByMinDistance` per species — density raises the ceiling, MINDIST prevents visual clumping/z-fighting. So "more" never means "piled on top of each other". (It is also, measured, what makes a species rare in the first place: `sjmcacti2` goes 152 vanilla placements → **2** map-wide through MINDIST alone.)
+   ~~**A falsifiable check that needs no reverse-engineering**~~ — run 2026-08-09, and it says yes: the
+   nearest-neighbour numbers above are that check. ~~**Not yet concluded**~~ — all three questions are
+   answered above, and **the 3.77× target was indeed mostly the size of this defect**: at the recovered
+   density the 43 converted species come to **90 906** objects, so the layer's 15 286 is **16.8 % of
+   vanilla** and the aiming point taken from ProperFixes (57 583) is itself **0.63× vanilla**. "More
+   procobj" is not a stretch goal above the authored data — it is most of the way back TO it. (`sjmcacti2`'s
+   152 vanilla placements → **2** map-wide is the same defect seen per species.)
 6. **Build-time only, deterministic.** Same seed → same scatter; the config is a build input, not a runtime slider (the runtime keeps its live preview slider, unchanged).
 7. **Honest capping.** With density up, `procObjMax` and the area budgets bite sooner — log how many placements the caps drop, so raising density without raising budgets ([04](04-slot-economy-and-budgets.md)) is visibly a no-op past the cap, not a silent truncation.
 8. **A per-category knob is only LOCAL below the global cap.** All categories feed one lowest-lottery cut (`convert.ts:119` sorts every surviving placement together and slices to `procObjMax`), so once that cut binds, boosting bushes **displaces** rocks and cacti rather than adding to them. Today the layer places 15 286 against 20 000, so the cut is NOT binding and the knob is local — but it is 1.31× away, which any interesting profile crosses. State which side of it a test is on — and note that this cut is OURS (`procObjMax`), not a target ceiling, so [04](04-slot-economy-and-budgets.md) moves it rather than the profile working around it.
@@ -121,13 +166,22 @@ The multiplier belongs on the first two. The per-cell budget is the engine's own
       `convert.ts` ← generator (`--density`) ← pmb (`--procobj-density`), with `--procobj-max` and a
       `CAP DROPPED n` line so a capped run cannot pass itself off as a density. **Shipped 2026-08-08, and it
       is what falsified decision 5**: the knob works and moves almost nothing, which is the finding.
-- [ ] **FIRST, before any per-category work: settle what MINDIST is** (decision 5), in this order — the
-      cheap checks come before the reverse:
-      1. **Nearest-neighbour census on the BUILT tree**: same-species distances ≥ 50–80 m everywhere while
-         cross-species are free confirms the misreading from our own artifact.
-      2. **The pre-cull placement count** — one number, and it is what the correct reading yields.
-      3. **Then the reverse**: what `CPlantMgr` does with the column, and what governs spacing in its place.
-      Every task below is priced against a density these three change.
+- [x] **FIRST, before any per-category work: settle what MINDIST is** (decision 5). **DONE 2026-08-09** —
+      all three parts: the nearest-neighbour census confirms the signature in our own output (min 50.0 m
+      same-species, 0 of 20 246 pairs below MINDIST), the pre-cull count is **1 948 374**, and the reverse
+      says MINDIST is a camera radius while SPACING is a length. Rig:
+      [`procobj-spacing-census.ts`](../../../../../../scripts/debug/procobj-spacing-census.ts); mechanism:
+      [`gta-sa-original/procedural-objects.md`](../../../../../gta-sa-original/procedural-objects.md).
+- [ ] **NEXT, and everything below is priced against it: read the two columns the way the game does.**
+      `expected = area / spacing²` in `procobj-scatter.ts` (this also changes the RUNTIME cell scatter and
+      what `procObjLimit = 150` means), and `cullByMinDistance` out of `convert.ts` — a step of its own,
+      ending in a rebuild and a field verdict on the LOOK, because it moves the layer from 15 286 toward
+      ~90 906 objects and crosses `procObjMax`, the int16 gate and the perf budgets all at once
+      ([04](04-slot-economy-and-budgets.md)). Open inside it: whether to reproduce the original's
+      corner-biased sampler (ours is area-uniform — a different look, and the grouping the user reports is
+      partly its doing) — cheap to A/B once the density is right, and not before. The three
+      `cullByMinDistance` unit tests in `convert.test.ts` go with the function; they pin what it does, not
+      that it should exist.
 - [ ] `convert.ts`: replace `lottery < 1` with `lottery < densityFor(category, surface)`; category is already on the placement, thread surface through. Config type `ProcObjDensityConfig` (per-category and per-category×surface overrides), default = all 1.0.
 - [ ] Candidate-ceiling knob: allow raising the candidate-generation multiplier (`PROC_OBJ_MAX_DENSITY` equivalent) via config when a category wants density > 3; keep 3 as default. Both targets need it for the 3.77× aiming point — a cutoff above 3 has no candidates to keep.
 - [ ] **Two shipped profiles, each priced before it is written**: `sa` (up to 3.77×, declaring its `perfect-map.asi` gate above 32 767 map-wide rows) and `opensa` (perf-bounded — [04](04-slot-economy-and-budgets.md) supplies the number; until it does, this profile does not exist rather than guessing one). The 1.0 vanilla default stays as the regression baseline, not as a shipped profile.
@@ -146,7 +200,37 @@ The multiplier belongs on the first two. The per-cell budget is the engine's own
 
 ## Measurements / notes
 
-_(record after implementation)_
+**2026-08-09 — the MINDIST/SPACING reverse** (`scripts/debug/procobj-spacing-census.ts`, corpus
+`game-src/original`, 95 rules, 50 935 instances, 7 019 collider groups; the whole-map pass the converter runs):
+
+| Stage, at vanilla density | Objects |
+| --- | --- |
+| candidates (`area / spacing × 3`) | 5 843 322 |
+| `lottery < 1` — the PRE-CULL count | **1 948 374** |
+| after `cullByMinDistance` | 20 265 (1.0 % survive) |
+| self-check: candidates vs `area/spacing × 3` | drift **0.00 %** |
+| **what the game's own formula asks for** (`area / spacing²`) | **103 007** all rules · **90 906** the 43 converted species |
+
+Nearest neighbour, XY metres — pre-cull: same-species min 0.0 / p05 1.6 / med 4.2, any-species 0.0 / 0.9 /
+2.6. Post-cull: same-species **min 50.0** / p05 50.4 / med 58.2, any-species 0.3 / 3.9 / 10.9, and **0 of
+20 246** same-species pairs below their MINDIST.
+
+Against the shipping layer's 15 286 objects: **16.8 % of the authored density**, i.e. 5.9× short — and the
+57 583-object aiming point of [density-target.md](../density-target.md) is 0.63× of it.
+
+Two by-products of the same run, both to be carried into the tasks below:
+
+- **17 of the 95 rules can never fire**: `p_grass_dry` (9 rules), `p_flowerbed` (6) and `p_wasteground` (2)
+  have ZERO collision area map-wide, so a profile that boosts a category through one of them buys nothing.
+  Controlled against `procobj-stats.ts -450 1500` before it was believed — the surfinfo→COL mapping resolves
+  the other 14 surfaces correctly.
+- **Grouping is a side effect of any density change.** The per-rule table in
+  [`procedural-objects.md`](../../../../../gta-sa-original/procedural-objects.md) shows the same surface
+  carrying a 59 %-grouped species and a 2 %-grouped one; a category multiplier moves objects per triangle,
+  which is exactly what decides clump vs single. [03](03-biome-zone-density.md) has to state which of the
+  two it is aiming at.
+
+_(the rest still to record after implementation)_
 
 - vanilla counts per category (baseline): …
 - placements at density 2× bushes / 2× rocks / 2× cacti: …

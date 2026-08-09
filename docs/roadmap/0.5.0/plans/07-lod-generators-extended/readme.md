@@ -71,6 +71,17 @@ a plan's premise, so they are stated here rather than buried:
    [04](lod-procobj-generator/04-slot-economy-and-budgets.md) are rewritten around two targets, `sa` and
    `opensa`, and 04 stops being a slot-economy plan.
 
+8. **And then the DATA turned out to be misread, which reframes the whole procobj chain (2026-08-09).** The
+   reverse of `procobj.dat` ([`gta-sa-original/procedural-objects.md`](../../../../gta-sa-original/procedural-objects.md))
+   says SPACING is a length (`area / spacing²`, not `area / spacing`) and MINDIST is a camera radius, not a
+   distance between objects. Our layer generates 4–163× too many candidates and then deletes 99.0 % of them
+   with an exclusion rule the game does not have. At the authored density the 43 converted species come to
+   **90 906** objects; the layer ships **15 286 — 16.8 % of vanilla**, and the 57 583-object target taken
+   from ProperFixes is **0.63× vanilla**. So "more procobj" is not a stretch above the authored data, it is
+   a return to it, and the first step of [02](lod-procobj-generator/02-density-model.md) is a bug fix rather
+   than a density model. [density-target.md](density-target.md) keeps the row/slot arithmetic; its
+   MULTIPLIERS are all measured against a baseline that is itself the defect.
+
 ## Priorities
 
 Ordered by *what unblocks the most for the least*, not by plan number.

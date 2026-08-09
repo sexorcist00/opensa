@@ -187,6 +187,18 @@ int16-gated target, not a perf-budget plan instead of a ceiling story.
 
 ## The target this plan adopts
 
+> **2026-08-09: the aiming point is now known to sit BELOW vanilla, and the ratios below are ratios against
+> a defect.** The `procobj.dat` reverse
+> ([`gta-sa-original/procedural-objects.md`](../../../../gta-sa-original/procedural-objects.md)) recovered
+> the authored density as `area / spacing²`: **90 906** objects for the 43 species this layer converts. Our
+> 15 286 is **16.8 %** of that, and ProperFixes' 57 583 is **0.63×** of it. So "3.77× ours" is not an
+> ambitious multiplier — it is most of the way back to what the data already says, and the mod is a
+> conservative reading of it rather than a stretch. **What stays valid:** every row/slot/area cost per
+> object, the int16 arithmetic, and the reference's 40 %-in-two-species skew. **What does not:** treating
+> 57 583 as a ceiling to aim at, and any multiplier quoted against 15 286 as if that baseline were vanilla.
+> The correction is [02](lod-procobj-generator/02-density-model.md)'s first step; this file is re-derived
+> after it lands and the layer has a real count again.
+
 **57 583 placed objects, map-wide, as the aiming point — not as a promise.** It is a demonstrated,
 field-accepted density from a mod people actually run, which is the bar
 [project-goals directive 4](../../../../project-goals.md) asks for; it is not a number we invented. Three
