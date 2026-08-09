@@ -79,13 +79,24 @@ the only one our asi accepts, is the one we ship to. Three consequences, and the
    **if the answer is no, this plan has no lever left to pull.** That question is open and belongs to whoever
    takes the measurement.
 
-### The ceiling this decision surfaces, and nobody has priced it
+### The ceiling this surfaces — DEFERRED, on his call
 
-**`CPool<CBuilding>`, `Buildings = 100000` on the reference install — OLA's, not ours; `perfect-map.asi` does
-not touch it.** SA instantiates a building per `inst` row, so **39 219 of that pool is spent before anything
-streams**, and the binary streams hold 157 091 more records (91 092 HD + 65 532 unlinked LOD) of which
-whatever is resident adds on top. Whether that fits is a measurement nobody has taken, and it is the one SA
-ceiling this density could still hit. It is a task below.
+**`CPool<CBuilding>`, `Buildings = 100000` on the reference install — OLA's, not ours.** SA instantiates a
+building per `inst` row, so 39 219 of that pool is spent before anything streams, and the binary streams hold
+157 091 more records of which whatever is resident adds on top.
+
+**Not a design constraint (2026-08-09, the user's call): measure it when the work is done, and solve it if it
+bites.** The reasoning is the project's own — we ship OLA + FLA, and where a plugin stops we write the patch
+ourselves, so an SA pool is a number to raise rather than a wall to design down to
+([project-goals directive 3](../../../../docs/project-goals.md): a 2004 limit is not our limit, and matching
+one is the choice that needs an argument). It stays a task, at the bottom, and nothing waits on it.
+
+### And what it costs `linkedHeight`
+
+`linkedHeight`'s remaining purpose was **staying under int16 on `sa/`** — decision 3 called it "the cheapest
+way to stay under the one ceiling left". With int16 no longer a constraint to design against, it is back to
+being plain memory and draw economy, which is worth having and worth nobody's schedule. **Both of its tasks
+drop to the bottom of this plan.**
 
 ## Decisions
 
@@ -182,6 +193,14 @@ rather than a guard, because its number does not exist yet.
       ceiling left — so it survives the stock cull with its purpose changed from slots to ROWS. Record what
       it costs at range (a shorter species with no permanent LOD pops in later).
 
+**FIRST, and it is the only thing blocking a full build: drop the int16 throw.** Decision 5b, unblocked
+2026-08-09 by the single-density call — see the scope section at the top.
+
+- [ ] **int16 becomes a WARNING that names what to change**, not a build-stopping error: the asi for the row
+      ceiling, and OLA's `EntitiesPerIpl` / `EntityIpl` / `Buildings` for the pools. The number stays in the
+      message — an operator can act on a number. Test that it fires and names the count.
+      **`--allow-text-row-overflow` is what to use meanwhile**, and it can retire with the throw.
+
 **Then the numbers, one host at a time:**
 
 - [ ] **`opensa` perf budget.** Measure how much clutter the engine streams without hitching (perf HUD +
@@ -192,10 +211,9 @@ rather than a guard, because its number does not exist yet.
       under Wine, above the asi gate. Separate rows, separate conclusion, explicitly not comparable to the
       opensa numbers. **If SA does not cope at the shipped density, this plan has no lever left** — say so
       rather than quietly lowering it.
-- [ ] **Price the `CBuilding` pool at the shipped density.** `Buildings = 100000` (OLA), of which 39 219 is
-      spent by permanent rows before any streaming; the streams hold 157 091 more records. Count what is
-      resident in the worst case and report it at build time like the row budget. **Our asi does not lift
-      this one** — it is the last SA ceiling the density could hit, and it has never been measured.
+- [ ] **DEFERRED — price the `CBuilding` pool at the shipped density**, when the work above is done and only
+      if it bites. `Buildings = 100000` (OLA); 39 219 spent by permanent rows before any streaming. Raising
+      it is OLA's ini or, past that, our own patch — a number, not a wall.
 - [ ] **The stock REPORT** (decision 8): print what the artifact requires — OLA, and `perfect-map.asi` past
       32 767 rows — and what it would breach on a plain 1.0. A line in the build output, not a throw.
 - [ ] Target-gate the remaining procobj caps (`AREA_MAX_PAIRS`, `STREAM_MAX_INST`, `procObjMax`, candidate
