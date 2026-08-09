@@ -1,5 +1,6 @@
+import { guardOut } from '@opensa/tool-kit/game-dir';
 import { cpSync, readdirSync, rmSync } from 'node:fs';
-import { join, parse, resolve, sep } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { applyPed } from './apply-ped';
 import { stripOutput } from './strip';
@@ -15,19 +16,6 @@ export interface InstallOptions {
   player?: string;
   /** Reduce the output to ONLY the installed peds (gta3.img + peds.ide), plus the player ped. Default off. */
   strip?: boolean;
-}
-
-/** Refuse to wipe a dangerous `--out` — the filesystem root, or a path that is (or contains) `--game` / `--in`. */
-export function guardOut(outPath: string, gamePath: string, inPath: string): void {
-  if (outPath === parse(outPath).root) {
-    throw new Error(`refusing to wipe the filesystem root as --out: ${outPath}`);
-  }
-  if (outPath === gamePath || outPath === inPath) {
-    throw new Error(`--out must differ from --game and --in: ${outPath}`);
-  }
-  if (gamePath.startsWith(outPath + sep) || inPath.startsWith(outPath + sep)) {
-    throw new Error(`--out must not contain --game or --in (would wipe them): ${outPath}`);
-  }
 }
 
 /**

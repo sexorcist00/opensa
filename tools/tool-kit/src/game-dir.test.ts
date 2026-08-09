@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, realpathSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -22,6 +22,20 @@ describe('guardOut', () => {
 
     it('checks every source, not just the first', () => {
       expect(() => guardOut(`${sep}a${sep}wind`, `${sep}a${sep}game`, `${sep}a${sep}wind`)).toThrow(/must differ/);
+    });
+
+    it('refuses an --out that is a symlink onto a source dir', () => {
+      const root = realpathSync(mkdtempSync(join(tmpdir(), 'game-dir-')));
+      const game = join(root, 'game');
+      const out = join(root, 'out');
+      mkdirSync(game, { recursive: true });
+      symlinkSync(game, out, 'dir');
+
+      expect(() => guardOut(out, game)).toThrow(/same directory/);
+    });
+
+    it('refuses an --out inside a source dir', () => {
+      expect(() => guardOut(`${sep}a${sep}game${sep}pak`, `${sep}a${sep}game`)).toThrow(/inside/);
     });
   });
 

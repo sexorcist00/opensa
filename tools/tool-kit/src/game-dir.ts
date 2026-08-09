@@ -1,13 +1,10 @@
-import { cpSync, rmSync } from 'node:fs';
-import { parse, sep } from 'node:path';
+import { cpSync, realpathSync, rmSync } from 'node:fs';
+import { basename, dirname, join, parse, resolve, sep } from 'node:path';
 
 /**
  * The chain's `--game` in / `--out` out convention (plan opensa-pack/003): every tool copies the whole game
  * dir into `--out` and mutates the COPY, so each stage hands the next a complete, bootable game tree
  * (`perfect-map-builder/src/pipeline.ts` relies on exactly that).
- *
- * Deduped from the installers' private copies — `mod-installer`, `vehicle-installer` and `ped-installer`
- * still carry their own `guardOut`; they can adopt this one whenever they are next touched.
  */
 
 /** Wipe `--out` and mirror the game dir into it. Guard the paths with {@link guardOut} first. */
@@ -17,19 +14,46 @@ export function copyGameDir(gamePath: string, outPath: string): void {
 }
 
 /**
- * Refuse a dangerous `--out` before anything is wiped: the filesystem root, a path equal to one of the
- * source dirs, or a path that CONTAINS one (wiping `--out` would take the source with it).
+ * Refuse a dangerous `--out` before anything is wiped: the filesystem root, a path that IS one of the source
+ * dirs, one that CONTAINS one (wiping `--out` would take the source with it), or one that sits INSIDE one
+ * (the copy would feed on itself).
+ *
+ * The comparison is on REAL paths, symlinks resolved, because the names alone do not tell you where a wipe
+ * lands. On the phone `build/*` and `game-src/*` are routinely symlinks into shared storage, and two of them
+ * pointing at one folder is exactly how a converter run ate its own source archives (2026-08-09) — the guard
+ * saw two different names and let it through.
  */
 export function guardOut(outPath: string, ...sources: readonly string[]): void {
-  if (outPath === parse(outPath).root) {
+  const out = realPath(outPath);
+  if (out === parse(out).root) {
     throw new Error(`refusing to wipe the filesystem root as --out: ${outPath}`);
   }
   for (const source of sources) {
-    if (outPath === source) {
-      throw new Error(`--out must differ from the source dirs: ${outPath}`);
+    const real = realPath(source);
+    const where = real === resolve(source) ? source : `${source} → ${real}`;
+    if (out === real) {
+      throw new Error(`--out must differ from the source dirs: ${outPath} and ${where} are the same directory`);
     }
-    if (source.startsWith(outPath + sep)) {
-      throw new Error(`--out must not contain a source dir (would wipe it): ${outPath} contains ${source}`);
+    if (real.startsWith(out + sep)) {
+      throw new Error(`--out must not contain a source dir (would wipe it): ${outPath} contains ${where}`);
     }
+    if (out.startsWith(real + sep)) {
+      throw new Error(`--out must not sit inside a source dir (would copy into it): ${outPath} is inside ${where}`);
+    }
+  }
+}
+
+/**
+ * Where a path really lands, symlinks resolved. `--out` does not have to exist yet, so an unresolvable tail
+ * is rebuilt onto the nearest ancestor that does resolve — which is the directory a wipe would sit in.
+ */
+function realPath(path: string): string {
+  const absolute = resolve(path);
+  try {
+    return realpathSync(absolute);
+  } catch {
+    const parent = dirname(absolute);
+
+    return parent === absolute ? absolute : join(realPath(parent), basename(absolute));
   }
 }

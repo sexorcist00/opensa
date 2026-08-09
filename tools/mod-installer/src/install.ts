@@ -1,5 +1,6 @@
+import { guardOut } from '@opensa/tool-kit/game-dir';
 import { cpSync, readdirSync, rmSync } from 'node:fs';
-import { join, parse, resolve, sep } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { applyMod } from './apply-mod';
 import { bakeMod } from './bake-mod';
@@ -9,19 +10,6 @@ export interface InstallOptions {
   gamePath: string;
   inPath: string;
   outPath: string;
-}
-
-/** Refuse to wipe a dangerous `--out` — the filesystem root, or a path that is (or contains) `--game` / `--in`. */
-export function guardOut(outPath: string, gamePath: string, inPath: string): void {
-  if (outPath === parse(outPath).root) {
-    throw new Error(`refusing to wipe the filesystem root as --out: ${outPath}`);
-  }
-  if (outPath === gamePath || outPath === inPath) {
-    throw new Error(`--out must differ from --game and --in: ${outPath}`);
-  }
-  if (gamePath.startsWith(outPath + sep) || inPath.startsWith(outPath + sep)) {
-    throw new Error(`--out must not contain --game or --in (would wipe them): ${outPath}`);
-  }
 }
 
 /**

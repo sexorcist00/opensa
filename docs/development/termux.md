@@ -64,3 +64,12 @@ baseline taken somewhere the product will never run is a baseline that flatters 
 - Storage: the built game lives under `build/<game>/opensa`, and a field run reads that and nothing else
   ([restrictions/architecture.md](../restrictions/architecture.md)). Keep it on internal storage — shared
   storage via `termux-setup-storage` is slower and has different permission behaviour.
+- **Symlinking `build/*` or `game-src/*` into shared storage is normal here, and two of those links must never
+  land on one folder.** On 2026-08-09 `game-src/original`, `build/phone`, `build/phone-ganton`, `build/phone-ls`
+  and `build/phone-ls-rgba8` all resolved to the same directory: every convert overwrote the previous pak (an
+  A/B that kept one build), and — worse — the converter's `--out` was its own `--game`, so it rewrote the
+  archives it was reading (`gta3.img` 1325 → 1145 MB, and a district that measured 597 texture layers came out
+  with 49). Nothing said so; the paths had different names. `guardOut` now compares REAL paths and refuses it
+  (`tools/tool-kit/src/game-dir.ts`), and `npm run phone` repeats the check before it deletes anything — but
+  **a game copy already fed to a run in this shape is damaged and has to be restored from a clean copy.**
+  `readlink -f game-src/* build/*` is the one-line way to see it.

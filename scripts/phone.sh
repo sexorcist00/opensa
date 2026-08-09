@@ -28,6 +28,15 @@ cd "$(dirname "$0")/.." || exit 1
 
 GAME="${GAME:-./game-src/original}"
 OUT="${OUT:-./build/phone}"
+# Both are routinely symlinks here (internal storage is small), and on 2026-08-09 they pointed at ONE folder:
+# the convert then rewrote the archives it was reading, and the district came out with 49 texture layers where
+# it had had 597. `guardOut` refuses this now, but it refuses it after the rm below, so the check is repeated
+# up front — before anything is deleted.
+if [ "$(readlink -f "$GAME" 2>/dev/null)" = "$(readlink -f "$OUT" 2>/dev/null)" ]; then
+  echo "GAME and OUT are the same directory ($(readlink -f "$GAME")) — the convert would eat its own source." >&2
+  echo "point OUT at a path outside the game copy, e.g. OUT=./build/phone-ls npm run phone" >&2
+  exit 1
+fi
 # The DISTRICT decides the rect, the spawn and the map's opening point together, from one table
 # (`apps/dispatch/src/world/districts.ts`) the console reads as well. It defaults to the one 201/1-01 PINNED,
 # because a capture on any other ground is a valid measurement of somewhere else and not part of the chain's
