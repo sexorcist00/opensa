@@ -113,8 +113,27 @@ if (expectations.size === 0) {
   process.exit(0);
 }
 
+/**
+ * The `npm run phone` knob that sets each recipe key, so a mismatch can say how to ASK for what the pak is.
+ *
+ * Without it the message named the difference and left the reader to remember which env var moves it — which
+ * cost a round-trip on 2026-08-09, when a pak built `rgba8` was asked for as `astc` (the default) and the
+ * answer was one variable nobody was reminded of.
+ */
+const KNOBS: Readonly<Record<string, string>> = {
+  bakeCollision: 'BAKE',
+  mapObjectsInRect: 'MAPOBJ',
+  models: 'MODELS',
+  peds: 'PEDS',
+  rect: 'RECT',
+  textures: 'TEXTURES',
+  vehicles: 'VEHICLES',
+};
+
 const actual = new Map(shown);
 const differences: string[] = [];
+/** `KNOB=value` for every difference whose key has one — the command that would match this pak. */
+const asks: string[] = [];
 
 for (const [key, want] of expectations) {
   const got = actual.get(key);
@@ -122,6 +141,11 @@ for (const [key, want] of expectations) {
     differences.push(`  ${key}: not recorded in this pak`);
   } else if (norm(key, want) !== got) {
     differences.push(`  ${key}: pak has ${got}, asked for ${norm(key, want)}`);
+    const knob = KNOBS[key];
+    if (knob) {
+      // `bakeCollision` reads true/false in the recipe and 1/0 on the command line.
+      asks.push(`${knob}=${key === 'bakeCollision' ? (got === 'true' ? '1' : '0') : got}`);
+    }
   }
 }
 
@@ -129,6 +153,10 @@ if (differences.length > 0) {
   console.error(`the pak in ${pakDir} is not the one being asked for:`);
   for (const line of differences) {
     console.error(line);
+  }
+  if (asks.length > 0) {
+    console.error('');
+    console.error(`to ask for the pak that IS here: ${asks.join(' ')} npm run phone`);
   }
   process.exit(1);
 }
