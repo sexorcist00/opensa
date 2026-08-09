@@ -92,17 +92,20 @@ export async function initDevice(): Promise<EngineDevice> {
   if (!adapter) {
     throw new Error('WebGPU adapter request failed (blocklisted GPU or disabled flag?)');
   }
-  const hasBc = adapter.features.has('texture-compression-bc');
-  const hasTimestamps = adapter.features.has('timestamp-query');
   // Every feature is requested only when the adapter offers it: `requestDevice` REJECTS a required feature
   // the adapter does not carry, so listing one unconditionally is the same as refusing the device.
-  const required: GPUFeatureName[] = [];
-  if (hasBc) {
-    required.push('texture-compression-bc');
-  }
-  if (hasTimestamps) {
-    required.push('timestamp-query');
-  }
+  //
+  // ALL THREE compression families, not just BC — and that is a bug fixed on 2026-08-09, not a preference.
+  // `device.features` contains what was REQUESTED, never what the adapter merely offers, and the world's
+  // GPU-demand gate (`requireWorldSupport`) reads the device. So an ASTC pak on a phone whose adapter lists
+  // `texture-compression-astc` was refused with "this device does not have texture-compression-astc" — by
+  // the one line that could have asked for it. The map fell back to 2D plan mode on a device that supports
+  // the format natively, which is the whole point of the ASTC build.
+  const required: GPUFeatureName[] = (
+    ['texture-compression-astc', 'texture-compression-bc', 'texture-compression-etc2', 'timestamp-query'] as const
+  ).filter((feature) => adapter.features.has(feature));
+  const hasBc = adapter.features.has('texture-compression-bc');
+  const hasTimestamps = adapter.features.has('timestamp-query');
   const device = await adapter.requestDevice({ requiredFeatures: required });
   const info = adapter.info;
 
