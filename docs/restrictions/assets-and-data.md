@@ -236,3 +236,25 @@ follows a link at read time, whatever assembles its inputs follows the same link
 
 **Caught:** no. A missing dictionary is not an error at any layer — the lookup falls off the end of the
 chain and the material renders in its flat colour, which on a white LOD material is a white building.
+
+## A stock data column means what the CODE does with it, not what the file's header says
+
+`procobj.dat` documents SPACING as *"1 object every n square metres"* and MINDIST as *"no objects created
+closer than this"*. Both readings are wrong at the point that matters: the game squares SPACING
+(`density = triangleArea / spacing²`, so the column is a LENGTH) and measures MINDIST **from the camera** to
+the triangle, clamped up to 80 — never between two objects. We read both the way the header reads, and the
+result was a clutter layer at 16.8 % of the authored density with an even, one-of-each-species look nothing
+in the game produces. The mechanism and the numbers:
+[`gta-sa-original/procedural-objects.md`](../gta-sa-original/procedural-objects.md).
+
+The rule for a new design: before a plan spends an authored column, the column's meaning comes from the
+reversed source (`docs/links.md` → gta-reversed) — Rockstar's own comments, our parser's doc comments and a
+modding wiki are leads, not the spec. This is the same directive that says to recover the original's formula
+before fitting a constant (`CLAUDE.md`); the addition here is that a data file's own header is one of the
+sources it applies to.
+
+**Caught:** no, and it is the worst kind of silent: two misread columns whose errors ran in opposite
+directions (4–163× too many candidates, then 99.0 % of them culled), so every count looked reasonable, the
+build was green, and the world looked populated. What catches it now is
+`scripts/debug/procobj-spacing-census.ts`, which prices both readings side by side and reports the
+nearest-neighbour signature — but only if someone runs it.
