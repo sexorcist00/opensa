@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { densityEntries, densityFor, densityProfile, validateDensityProfile } from './density';
+import {
+  densityCeiling,
+  densityEntries,
+  densityFor,
+  densityLabel,
+  densityProfile,
+  validateDensityProfile,
+} from './density';
 
 const MAX = 3;
 
@@ -94,6 +101,36 @@ describe('densityEntries', () => {
         { key: 'rocks', value: 2 },
         { key: 'cacti/p_sand', value: 1.5 },
       ]);
+    });
+  });
+});
+
+describe('densityCeiling', () => {
+  describe('negative cases', () => {
+    it('refuses a headroom below the authored density, which would silently thin the whole map', () => {
+      expect(() => validateDensityProfile({ maxDensity: 0.5 }, MAX)).toThrow(/maxDensity must be a finite number/);
+      expect(() => validateDensityProfile({ maxDensity: Number.NaN }, MAX)).toThrow(/maxDensity/);
+    });
+
+    it('still refuses a cutoff above the RAISED headroom, naming the new ceiling', () => {
+      expect(() => validateDensityProfile({ byCategory: { rocks: 7 }, maxDensity: 6 }, MAX)).toThrow(
+        /'rocks' must be in \(0, 6\]/,
+      );
+    });
+  });
+
+  describe('positive cases', () => {
+    it('lets a cutoff above the default through once the profile raises the headroom for it', () => {
+      expect(() => validateDensityProfile({ byCategory: { rocks: 5 }, maxDensity: 6 }, MAX)).not.toThrow();
+      expect(densityCeiling({ maxDensity: 6 }, MAX)).toBe(6);
+    });
+
+    it('falls back to the scatter default when the profile does not raise it', () => {
+      expect(densityCeiling({}, MAX)).toBe(MAX);
+    });
+
+    it('names the headroom in the label — it re-rolls the scatter, so a capture must state it', () => {
+      expect(densityLabel({ byCategory: { rocks: 5 }, maxDensity: 6 })).toBe('base=1 rocks=5 maxDensity=6');
     });
   });
 });

@@ -1,6 +1,6 @@
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
 import type { ProcObjCategoryName } from '@opensa/renderware/map/procobj-categories';
-import type { ProcObjPlacement } from '@opensa/renderware/map/procobj-scatter';
+import type { ProcObjBatch, ProcObjPlacement } from '@opensa/renderware/map/procobj-scatter';
 
 import { buildColliders } from '@opensa/renderware/collision/build-colliders';
 import { buildCollisionIndex } from '@opensa/renderware/collision/collision-index';
@@ -10,11 +10,11 @@ import { parseSurfaceNames } from '@opensa/renderware/parsers/text/surfinfo.pars
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import type { ProcObjDensityInput } from './density';
+import type { ProcObjDensityConfig, ProcObjDensityInput } from './density';
 
 import { disableProcObj, stripProcObj, UNDERWATER_PROCOBJ } from '../procobj-strip';
 import { buildLinkedAreas } from '../streamed-areas';
-import { densityFor, densityProfile, validateDensityProfile } from './density';
+import { densityCeiling, densityFor, densityProfile, validateDensityProfile } from './density';
 import { buildMapDefinitions } from './world';
 
 /** What one category cost this build — the readable half of decision 8's displacement warning. */
@@ -84,6 +84,13 @@ export interface ProcObjSpecies {
   lodModel: string;
 }
 
+/** One placement that survived the density cutoff, with the category it was judged under. */
+export interface SelectedPlacement {
+  category: ProcObjCategoryName;
+  model: string;
+  placement: ProcObjPlacement;
+}
+
 /**
  * Emit the static HD+LOD pairs as **streamed areas** (see `buildLinkedAreas`): per area a small text IPL with
  * the permanent LOD rows + binary streams with the HD instances, `lod`-linked to their LOD row.
@@ -127,6 +134,9 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
   } = options;
   const profile = densityProfile(density);
   validateDensityProfile(profile, PROC_OBJ_MAX_DENSITY);
+  // The scatter must GENERATE against the same headroom the cutoffs are read against, or a cutoff above the
+  // default would keep candidates that were never rolled.
+  const ceiling = densityCeiling(profile, PROC_OBJ_MAX_DENSITY);
   const procObjText = readFileSync(join(gamePath, 'data', 'procobj.dat'), 'utf8');
 
   // Candidate species: have a LOD, clear the optional height gate, and are not the never-touch underwater set.
@@ -146,23 +156,8 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
   const defs = buildMapDefinitions(gamePath, archive);
   const colliders = buildColliders(buildCollisionIndex(archive), defs, { center: [0, 0, 0], radius: Infinity });
   const surfaceNames = parseSurfaceNames(readFileSync(join(gamePath, 'data', 'surfinfo.dat'), 'utf8'));
-  const batches = scatterProcObjects(colliders, groupRulesBySurface(rules), surfaceNames, 0, 0);
-
-  // The cutoff is per batch now, and a batch is one model on one SURFACE — so `densityFor` can answer for the
-  // category, or for that category on that surface, without the converter knowing which axis a profile used.
-  const generated = new Map<ProcObjCategoryName, number>();
-  const placed: { category: ProcObjCategoryName; model: string; placement: ProcObjPlacement }[] = [];
-  for (const batch of batches) {
-    const cutoff = densityFor(profile, batch.category, batch.surface);
-    generated.set(batch.category, (generated.get(batch.category) ?? 0) + batch.placements.length);
-    for (const placement of batch.placements) {
-      if (placement.lottery < cutoff) {
-        placed.push({ category: batch.category, model: batch.model, placement });
-      }
-    }
-  }
-  placed.sort((a, b) => a.placement.lottery - b.placement.lottery);
-  const final = placed.slice(0, procObjMax);
+  const batches = scatterProcObjects(colliders, groupRulesBySurface(rules), surfaceNames, 0, 0, ceiling);
+  const { categories, dropped, final } = selectPlacements(batches, profile, procObjMax);
 
   const { datLines, files, imgFiles, rows } = buildStreamedIpl(final, species, areaBase, linkedHeight);
   for (const [file, text] of files) {
@@ -182,23 +177,46 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
       : stripProcObj(procObjText, (m) => !converted.has(m.toLowerCase())).text,
   );
 
-  // `dropped` is the honest half of the cap (decision 7): once `procObjMax` binds, raising density stops
-  // adding objects and starts DISPLACING them, so a measurement that does not state the drop is measuring the
-  // cap and calling it the density. The per-category breakdown is what makes the displacement READABLE —
-  // "bushes +8 000, rocks −8 000" is the shape decision 8 warns about, and a total cannot show it.
-  return {
-    categories: categoryCosts(generated, placed, final),
-    datLines,
-    dropped: placed.length - final.length,
-    imgFiles,
-    objects: final.length,
-    rows,
-  };
+  return { categories, datLines, dropped, imgFiles, objects: final.length, rows };
 }
 
 /** GTA IPL rotation quaternion for a yaw around Z (conjugated, the IPL convention; align is unused). */
 export function iplQuaternion(yaw: number): [number, number, number, number] {
   return [0, 0, -Math.sin(yaw / 2), Math.cos(yaw / 2)];
+}
+
+/**
+ * Apply the density profile to the scattered batches, then the global `procObjMax` slice — the whole of what a
+ * profile DOES, with no file or collision work in it, which is what makes it testable without a game dir.
+ *
+ * `dropped` is the honest half of the cap (decision 7): once `procObjMax` binds, raising a cutoff stops adding
+ * objects and starts DISPLACING them, because the slice keeps the lowest lotteries across every category at
+ * once. A measurement that does not state the drop is measuring the cap and calling it the density — and the
+ * per-category breakdown is what makes displacement readable, since "bushes +8 000, rocks −8 000" and
+ * "+0 objects" are the same total.
+ */
+export function selectPlacements(
+  batches: readonly ProcObjBatch[],
+  profile: ProcObjDensityConfig,
+  procObjMax: number,
+): { categories: ProcObjCategoryCost[]; dropped: number; final: SelectedPlacement[] } {
+  const generated = new Map<ProcObjCategoryName, number>();
+  const placed: SelectedPlacement[] = [];
+  for (const batch of batches) {
+    // A batch is one model on one SURFACE, so `densityFor` can answer on either axis without the converter
+    // knowing which one a profile used.
+    const cutoff = densityFor(profile, batch.category, batch.surface);
+    generated.set(batch.category, (generated.get(batch.category) ?? 0) + batch.placements.length);
+    for (const placement of batch.placements) {
+      if (placement.lottery < cutoff) {
+        placed.push({ category: batch.category, model: batch.model, placement });
+      }
+    }
+  }
+  placed.sort((a, b) => a.placement.lottery - b.placement.lottery);
+  const final = placed.slice(0, procObjMax);
+
+  return { categories: categoryCosts(generated, placed, final), dropped: placed.length - final.length, final };
 }
 
 /** Per category: candidates generated, survivors of the cutoff, and how many of those the global cap took. */

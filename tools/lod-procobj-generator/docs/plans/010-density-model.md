@@ -100,9 +100,21 @@ Four caps, and they are not interchangeable:
    placements the caps drop (`CAP DROPPED n`), so raising density without raising budgets is visibly a no-op
    past the cap rather than a silent truncation.
 8. **A per-category knob is only LOCAL below the global cap.** All categories feed one lowest-lottery cut
-   (`convert.ts` sorts every surviving placement together and slices to `procObjMax`), so once that cut binds,
-   boosting bushes **displaces** rocks and cacti rather than adding to them. At 91 092 against 100 000 the
-   cut is 1.10× away — any interesting profile crosses it, so state which side of it a test is on.
+   (`selectPlacements` sorts every surviving placement together and slices to `procObjMax`). At 91 092 against
+   100 000 the cut is 1.10× away — any interesting profile crosses it, so state which side of it a test is on.
+   **CORRECTED 2026-08-09, by the test written for it.** The original wording — "once that cut binds, boosting
+   bushes DISPLACES rocks and cacti rather than adding to them" — is wrong in the common case, and the
+   mechanism says why: the slice keeps the globally lowest lotteries, and raising a cutoff only ever adds
+   placements ABOVE the old one.
+   - **From a uniform base, a boost past a binding cap is TRUNCATED, not traded.** Every other category's kept
+     placements sit below the old cutoff, so the added ones sort last and are exactly what the cap takes. The
+     boost buys nothing — and costs nobody anything. *This is the shape a naive profile will actually hit.*
+   - **Displacement needs an UNEVEN profile**: another category already above the boosted one (rocks at 2.5
+     while bushes go 1 → 2), so the added `[1, 2)` band undercuts rocks' `[2, 2.5)` entries. Only then does a
+     boost take slots from a neighbour.
+   Both are pinned in `select-placements.test.ts`. The practical rule for a profile author is unchanged in
+   spirit and sharper in fact: **past the cap, check the per-category line — a boost that shows no gain is the
+   cap eating it, and a neighbour losing objects means the profile is uneven.**
 9. **The species floor is [01](012-species-representation-floor.md)'s, and this plan owns its trigger.** The
    2026-08-09 fix cuts both ways: far fewer candidates per cell (the cap binds less), but the surviving
    placements now CLUMP (the cap, when it binds, drops a clump). **01's 19.8 % measurement predates the fix
@@ -134,8 +146,20 @@ Four caps, and they are not interchangeable:
       exist at all. The RNG is untouched by the split, so the scatter is bit-identical — the regression the
       verification section asks for holds by construction, not by luck.
       Tests: `density.test.ts` (16) + a scatter test that fails against the model-only key (run reverted).
-- [ ] Candidate-ceiling knob: allow raising `PROC_OBJ_MAX_DENSITY` via config when a category wants density
-      > 3; keep 3 as default. A cutoff above 3 has no candidates to keep.
+- [x] **Candidate-ceiling knob — SHIPPED 2026-08-09.** `ProcObjDensityConfig.maxDensity` (default 3) is
+      threaded into `scatterProcObjects(…, maxDensity)`; the converter scatters against the same number the
+      cutoffs are validated against, so a raised cutoff cannot keep candidates that were never rolled.
+      **It is explicit, never derived from a cutoff**, and two properties measured while wiring it say why:
+      - what a cutoff MEANS does not change with headroom (`d` is `d ×` the authored density at any ceiling),
+        because the lottery is uniform over `[0, maxDensity)` and the candidate count scales with the same
+        number — verified at ceilings 3 and 6;
+      - but **the scatter moves from the SECOND face on.** Each face consumes RNG draws in proportion to its
+        candidate count, so raising the headroom shifts where every later face starts in the seeded sequence.
+        The first face's placements survive; nothing after them does. Two builds with different headroom
+        compare only statistically. (The first version of this note claimed the whole scatter re-rolls — the
+        test disagreed, and the precise statement is the one above.)
+      Below 1 is refused outright: the scatter could not reach the authored density, so `base: 1` would
+      silently thin the map.
 - [ ] **ONE shipped profile, priced before it is written** (decision 2, 2026-08-09): both targets get it.
       It is perf-bounded by [013](013-density-budgets-per-target.md)'s `opensa` measurement; until that
       number exists the profile does not exist rather than being guessed. The 1.0 default stays as the
@@ -150,15 +174,16 @@ Four caps, and they are not interchangeable:
       TOTAL cannot show DISPLACEMENT: past `procObjMax`, "bushes +8 000 / rocks −8 000" and "+0 objects" are
       the same total and a different result. The density line now names the PROFILE (`base=1 rocks=2`), not
       just a number — a build that doubled the rocks may not print "density 1".
-- [~] Unit tests — **resolution and validation are covered; the whole-pipeline count test is NOT.** Shipped:
-      the empty profile is 1.0 everywhere (the regression baseline), most-specific-wins across
-      surface→category→base, one category's profile never leaks into another, and every bad entry throws
-      NAMING ITS KEY (`'cacti/p_sand'`) rather than a bare range — a profile is hand-written, and NaN would
-      empty that category in silence.
-      **Still owed:** "2.0 for `bushes` ~doubles bush placements and leaves the others alone, below the cap".
-      It needs a game dir to scatter over (the converter reads `procobj.dat`, `surfinfo.dat` and the whole
-      collision set), so it is an integration fixture, not a unit test — and decision 8 means it must first
-      state which side of `procObjMax` it sits on.
+- [x] **Unit tests — DONE 2026-08-09, and they needed no game dir.** The selection step was extracted as
+      `selectPlacements(batches, profile, procObjMax)` — profile → cutoff → global slice, with no file or
+      collision work in it — so the claim is testable where the decision is MADE. Batches with lotteries
+      spread evenly over `[0, max)` make a cutoff's effect a COUNT rather than a probability.
+      Covered: the empty profile is the authored density (a third of the candidates — the regression
+      baseline); 2.0 on `bushes` exactly doubles bushes and leaves rocks and cacti untouched below the cap;
+      a per-surface cutoff moves one surface with the SAME model unchanged on another; per-category
+      `generated` counts every candidate whatever survived; plus profile resolution and key-naming validation
+      in `density.test.ts`.
+      **And the cap case corrected the plan — see decision 8 below.**
 - [x] **Wired through — SHIPPED 2026-08-09.** `ProcObjLodConfig.density` and pmb's `BuilderConfig.procobjDensity`
       both take `number | ProcObjDensityConfig`; **neither is keyed by target** (decision 2). Default stays 1.
       `--procobj-density` remains the scalar override the perf sweeps use.

@@ -12,7 +12,7 @@ describe('convertProcObj density', () => {
 
   describe('negative cases', () => {
     it('refuses a cutoff above the scatter candidate ceiling, naming what has to be raised first', () => {
-      expect(() => convertProcObj(options(4))).toThrow(/PROC_OBJ_MAX_DENSITY/);
+      expect(() => convertProcObj(options(4))).toThrow(/raise the profile's `maxDensity`/);
       expect(() => convertProcObj(options(3.77))).toThrow(/got 3.77/);
     });
 
