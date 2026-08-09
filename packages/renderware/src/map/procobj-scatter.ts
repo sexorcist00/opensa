@@ -68,7 +68,20 @@ export interface ProcObjPlacement {
   scaleZ: number;
 }
 
-/** Max density the config/debug slider supports (candidates generated per m² scale with this). */
+/**
+ * Default candidate headroom: how many times the AUTHORED density the scatter generates, and therefore the
+ * highest cutoff a caller can ask for. Also the runtime debug slider's range (0–3).
+ *
+ * The lottery is uniform in `[0, maxDensity)` and the candidate count scales with the same number, so a
+ * cutoff of `d` keeps `d/maxDensity` of `vanilla × maxDensity` — **`d` times the authored density, whatever
+ * the headroom is**. Raising it therefore does not change what a cutoff MEANS; it only makes cutoffs above 3
+ * reachable, at a linear cost in candidates (and in scatter time).
+ *
+ * **It does change the SCATTER, from the second face onward.** Each face consumes draws in proportion to its
+ * candidate COUNT, so raising the headroom shifts where every later face starts in the seeded sequence: the
+ * first face's placements survive unchanged and nothing after them does. Every species moves, not only the one
+ * whose cutoff wanted the headroom, so two builds with different headroom compare only statistically.
+ */
 export const PROC_OBJ_MAX_DENSITY = 3;
 
 const DEG_TO_RAD = Math.PI / 180;
@@ -134,6 +147,7 @@ export function scatterProcObjects(
   surfaceNames: readonly string[],
   cx: number,
   cy: number,
+  maxDensity: number = PROC_OBJ_MAX_DENSITY,
 ): ProcObjBatch[] {
   const random = mulberry32(cellSeed(cx, cy));
   const batches = new Map<string, ProcObjBatch>();
@@ -150,7 +164,7 @@ export function scatterProcObjects(
     const { faces, vertices } = collider.col;
     for (const transform of collider.transforms) {
       for (const face of faces) {
-        scatterTriangle(batches, random, rulesBySurface, surfaceNames, face, vertices, transform, scratch);
+        scatterTriangle(batches, random, rulesBySurface, surfaceNames, face, vertices, transform, scratch, maxDensity);
       }
     }
   }
@@ -191,11 +205,12 @@ function scatterFace(
   c: Vector3,
   normal: Vector3,
   area: number,
+  maxDensity: number,
 ): void {
-  // MAX_DENSITY × the vanilla expectation — one object per `spacing × spacing` m², as the original
+  // maxDensity × the vanilla expectation — one object per `spacing × spacing` m², as the original
   // spends the column. The fractional part rolls one extra candidate so small faces still average
   // out to the authored spacing (SA's `for (density; density > 0; density -= 1)` does the same).
-  const expected = (area / (rule.spacing * rule.spacing)) * PROC_OBJ_MAX_DENSITY;
+  const expected = (area / (rule.spacing * rule.spacing)) * maxDensity;
   const count = Math.floor(expected) + (random() < expected % 1 ? 1 : 0);
   if (count === 0) {
     return;
@@ -217,7 +232,7 @@ function scatterFace(
     const wc = r * s;
     batch.placements.push({
       align: rule.align,
-      lottery: random() * PROC_OBJ_MAX_DENSITY,
+      lottery: random() * maxDensity,
       normal: [normal.x, normal.y, normal.z],
       position: [
         a.x * wa + b.x * wb + c.x * wc,
@@ -242,6 +257,7 @@ function scatterTriangle(
   vertices: Float32Array,
   transform: Matrix4,
   scratch: TriangleScratch,
+  maxDensity: number,
 ): void {
   const surface: string | undefined = surfaceNames[face.material];
   if (surface === undefined) {
@@ -267,7 +283,7 @@ function scatterTriangle(
     normal.negate();
   }
   for (const rule of rules) {
-    scatterFace(batches, random, rule, surface, a, b, c, normal, area);
+    scatterFace(batches, random, rule, surface, a, b, c, normal, area, maxDensity);
   }
 }
 

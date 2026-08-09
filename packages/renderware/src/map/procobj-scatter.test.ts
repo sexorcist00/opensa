@@ -94,6 +94,41 @@ describe('scatterProcObjects', () => {
       expect(other).not.toEqual(first);
     });
 
+    it('generates against a RAISED candidate ceiling, so cutoffs above the default become reachable', () => {
+      const rules = groupRulesBySurface([rule()]);
+
+      const wide = scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0, 6);
+
+      expect(wide[0].placements).toHaveLength((2000 / (10 * 10)) * 6); // 120, against 60 at the default
+      expect(Math.max(...wide[0].placements.map((p) => p.lottery))).toBeGreaterThan(PROC_OBJ_MAX_DENSITY);
+    });
+
+    it('keeps the MEANING of a cutoff at any ceiling — `< 1` is the authored density either way', () => {
+      const rules = groupRulesBySurface([rule()]);
+      const vanillaCount = (batches: ReturnType<typeof scatterProcObjects>): number =>
+        batches[0].placements.filter((p) => p.lottery < 1).length;
+
+      // Area 2000 / spacing² 100 = 20 objects at the authored density, whatever headroom generated them.
+      expect(vanillaCount(scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0))).toBeGreaterThan(12);
+      expect(vanillaCount(scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0))).toBeLessThan(29);
+      expect(vanillaCount(scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0, 6))).toBeGreaterThan(12);
+      expect(vanillaCount(scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0, 6))).toBeLessThan(29);
+    });
+
+    it('RE-ROLLS the scatter from the SECOND face on when the ceiling changes', () => {
+      const rules = groupRulesBySurface([rule()]);
+      const positions = (batches: ReturnType<typeof scatterProcObjects>): Set<string> =>
+        new Set(batches[0].placements.map((p) => JSON.stringify(p.position)));
+      const two = [triangleCollider(1), triangleCollider(1)];
+
+      const base = positions(scatterProcObjects(two, rules, SURFACES, 0, 0));
+      const wide = positions(scatterProcObjects(two, rules, SURFACES, 0, 0, 6));
+
+      // A face consumes draws in proportion to its candidate COUNT, so raising the ceiling shifts where every
+      // later face starts in the sequence. The first face's placements survive; nothing after it does.
+      expect([...base].every((p) => wide.has(p))).toBe(false);
+    });
+
     it('generates MAX_DENSITY × the vanilla count, lottery-sorted for the density cutoff', () => {
       const batches = scatterProcObjects([triangleCollider(1)], groupRulesBySurface([rule()]), SURFACES, 0, 0);
       expect(batches).toHaveLength(1);
