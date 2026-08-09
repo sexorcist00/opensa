@@ -7,34 +7,32 @@ not because the build might fail, but because it might NOT fail and corrupt the 
 The measured numbers live in [`edge-cases/sa-runtime-limits.md`](../edge-cases/sa-runtime-limits.md) and
 [`edge-cases/sa-formats.md`](../edge-cases/sa-formats.md). This page is the planning gate over them.
 
-## Budget first: the four ceilings a content plan can hit
+## Budget first — and against the TARGET's numbers, not stock's
 
-| Ceiling | Value | What overflowing does |
-| --- | --- | --- |
-| Permanent text-IPL rows, map-wide | **30,000** | `CIplStore::IncludeEntity` truncates building-pool indexes to int16; past ~32.7k it corrupts stream-out ranges (the "ghost barriers" family) |
-| Text IPLs carrying `inst` rows | **39 slots** | `IplEntityIndexArrays` is written past without a bounds check |
-| FLA ID pools | TXD 6000 / COL 275 / IPL 280 | heap corruption during data load — the crash lands right after `shopping.dat` |
-| Model id | **≤ 18630** | silently fails to load; "HD swapped but nothing changed" |
+**The `sa` target always runs OLA + FLA + our own `perfect-map.asi`, and a stock 1.0 is not a configuration
+we build for** (the user's call, reaffirmed 2026-08-09). So the useful column is the third one:
 
-The first three are **read by the pmb build** (`checkTextIplBudgets`, `checkImgIdBudgets`), and since
-2026-08-08 both run on the built `sa/` tree — so **an `--exclude sa` run runs neither.** An opensa-only build
-cannot tell you that you blew the real game's pools. Only int16 still FAILS a build; the 39 slots are a
-printed line, because the target has no such array.
+| Ceiling | Stock | **On the target** | What overflowing does |
+| --- | --- | --- | --- |
+| Permanent text-IPL rows, map-wide | 32,767 (int16) | **lifted — `perfect-map.asi` patch #1** (the install runs 72,914) | `CIplStore::IncludeEntity` truncates building-pool indexes to int16; past 2^15 it corrupts stream-out ranges (the "ghost barriers" family) |
+| Text IPLs carrying `inst` rows | 39 slots | **lifted — OLA `EntityIpl = unlimited`** | `IplEntityIndexArrays` is written past without a bounds check |
+| Rows per text IPL + its boot streams | 4,096 | **lifted — OLA `EntitiesPerIpl = unlimited`** (runs a 9,627-row file) | `gpLoadedBuildings` static array is written past → trashed statics |
+| `CPool<CBuilding>` | 13,000 | **`Buildings = 100000`** (OLA) — a number, raisable again | pool exhaustion at load |
+| **FLA ID pools** | 5000/255/256 | **TXD 6000 / COL 275 / IPL 280 — REAL, not `unlimited`** | heap corruption during data load — the crash lands right after `shopping.dat` |
+| **Model id** | **≤ 18630** | **≤ 18630 — unchanged** | silently fails to load; "HD swapped but nothing changed" |
 
-**Caught:** on a `:sa` build, int16 loudly and the stock slot cost as a report. On a `:opensa` build, no —
-and that is now the common case.
+**The rule this table exists to enforce: do not design content down to a lifted ceiling, and do not add a
+guard, cap or migration that shapes output to one.** Budgeting against a stock number the target does not
+have silently under-builds, and it looks exactly like success. The bottom two rows are the ones that are
+still real — those a plan must respect, and `checkImgIdBudgets` still FAILS the build on the FLA pools.
 
-> **Stock SA is NOT a target of this project (2026-08-08, the user's call)** — the declared configuration is
-> OLA + FLA plus our own `perfect-map.asi`. The table above is what STOCK costs, kept because a plan still
-> has to know which of its numbers are real; only int16 and the FLA ID pools are, and int16 is ours. Do not
-> design against the slot or per-file rows.
->
-> **The install we actually target lifts two of these.** [reference-install.md](../gta-sa-original/reference-install.md) records
-> the declared baseline (`NO_COMMIT/gta_sa`, 2026-08-07): OLA sets `EntitiesPerIpl = unlimited` (the 4 096
-> per-file buffer) and `EntityIpl = unlimited` (the 40 slots), and it runs 72 914 permanent rows in files of
-> up to 9 627. So the row-count table above is the **stock** budget; costing a plan against it when the
-> target has neither ceiling silently under-builds. The one ceiling no adjuster lifts is int16 — that is
-> `perfect-map.asi`'s, and at 2.23× the ceiling this install depends on it.
+Where the numbers come from: [reference-install-config.md](../gta-sa-original/reference-install-config.md)
+(verbatim ini capture) and [reference-install.md](../gta-sa-original/reference-install.md) (what it means for
+a plan). Read that table rather than assuming a stock value.
+
+**Caught:** the FLA pools and the model id, yes — on a `:sa` build only, since `checkImgIdBudgets` reads the
+built `sa/` tree and an `--exclude sa` run never reaches it. Everything else in the table is not enforced
+because it is not a limit here. **Designing down to a lifted ceiling is caught by nothing at all.**
 
 ## A ceiling is enforced on the branch whose target has it — never on the shared build
 
@@ -42,24 +40,26 @@ The rule for a new plan: **decide which target a ceiling belongs to, and put its
 shared-stage guard is not "safe by default" — it silently rations the target that does not have the limit,
 and the build still succeeds, which is indistinguishable from success.
 
-**Enforced since 2026-08-08** (07/04): `checkTextIplBudgets` moved off the common baked build onto the `sa/`
-branch, beside `checkImgIdBudgets`, and its two ceilings split by whether the target still HAS them — int16
-rows throw (no adjuster lifts that one), the 39 slots are a report (OLA's `EntityIpl = unlimited`). Moving it
-also fixed a false PASS in the other direction: the sa LOD stage appends hole-fill instances to the text IPLs
-*after* the split, so the shared-build count was never the count SA loads.
+**Enforced since 2026-08-08** (07/04): the text-IPL check moved off the common baked build onto the `sa/`
+branch, beside `checkImgIdBudgets`. Moving it also fixed a false PASS in the other direction: the sa LOD stage
+appends hole-fill instances to the text IPLs *after* the split, so the shared-build count was never the count
+SA loads.
 
-Two things the move did not fix, and both are live:
+**And on 2026-08-09 the other half of the rule landed: a guard for a ceiling the target LIFTED is not a guard
+at all.** `checkTextIplBudgets` threw past an invented 30,000-row budget; after the procobj column fix the
+layer alone costs 39,219 rows, so the condition was constant and the throw failed every `sa` build to ration
+an install we never ship to. It is now `reportTextIplCensus` — rows, inst-bearing IPLs, census coverage, no
+ceiling quoted — and the 30,000 budget, the 39-slot line and `--allow-text-row-overflow` are deleted with it.
+Nothing had ever culled to fit that cap, so no content moved.
 
-- `checkImgIdBudgets` and now `checkTextIplBudgets` read the built `sa/` tree, so an opensa-only run runs
-  neither — an `sa/` ceiling going **unchecked** on the common case;
+Two things neither move fixed, and both are live:
+
+- `checkImgIdBudgets` reads the built `sa/` tree, so an opensa-only run never checks the FLA pools — a ceiling
+  the target really HAS going unchecked on the common case;
 - the `opensa/` branch has **no budget guard of its own**. SA's numbers reach no OpenSA code path (our engine
   reads a pak: no building pool, no int16 index, no `IplEntityIndexArrays`), and the streaming budget that
   should replace them has never been measured. The build ANNOUNCES the gap on every opensa run rather than
   leaving it silent, which is the most that can be said honestly until the measurement exists.
-
-`--allow-text-row-overflow` survives the split, narrowed: it is no longer an escape from a ceiling the target
-does not have (opensa never runs the guard now), only the deliberate over-int16 `sa` build the int16 repro
-needs (`tools-debug/sa-int16-repro`).
 
 **Caught:** the enforcement half, yes. The unchecked half, no. Owned by
 [07/04](../../tools/lod-procobj-generator/docs/plans/013-density-budgets-per-target.md).

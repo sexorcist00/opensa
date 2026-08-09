@@ -144,6 +144,17 @@ Never edit generated code manually.
   the first build. When a new restriction is discovered, it goes there in the SAME change, and every entry
   must say whether a violation is caught by a test/guard/lint or is SILENT — the silent ones are why the
   folder exists
+- **The `sa` target ALWAYS runs OLA + FLA + our own `perfect-map.asi`. That is the only configuration we
+  build for, and a stock 1.0 is not one.** So a stock ceiling is a fact about a 2004 machine, never a budget
+  our content is cut to: `EntitiesPerIpl`, `EntityIpl`, `Buildings`, `Dummys` are raised or `unlimited` on the
+  target, and int16 `IplDef` — the one thing no adjuster reaches — is lifted by our asi. **Do not add a guard,
+  a cap or a migration that shapes output to a limit the target does not have**, and when you meet one that
+  already exists, price whether it still binds before defending it. The measured configuration is
+  `docs/gta-sa-original/reference-install-config.md` (verbatim capture) and what it MEANS for a plan is
+  `reference-install.md` — read the table there rather than assuming a stock number.
+  **The converse is the same rule, and it is the one that bites**: a limit the target really HAS stays a hard
+  guard — FLA's pools are configured numbers, not `unlimited` (TXD 6000 / COL 275 / IPL 280), and exhausting
+  one corrupts the heap at boot. Delete the museum pieces, keep the gates.
 - English only, repo-wide: no Cyrillic in any doc, comment, or committed file — paraphrase field verdicts
   in English (chat language stays whatever the user speaks)
 - Record measured numbers into the plan doc after EVERY phase/step (before/after, representative log lines);
