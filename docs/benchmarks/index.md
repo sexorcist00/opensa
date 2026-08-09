@@ -489,6 +489,20 @@ moved to `[1933, 1127, 18]`, re-run clean (`dz −0.08 m`, grounded, 27 cars liv
 **Every `strip-noon` row in this record, including the two arms above, predates that fix and measured a
 falling player.**
 
+### The density A/B, re-taken on the repaired harness (2026-08-09)
+
+The 07/04 question, asked again now that the instrument holds still. Three sweeps on the user's display lane
+(oldmap · `bench-d1` · `bench-d3`, 1219 road cars and 212 parked on every arm, all nine scenes `legStart.ok`):
+**d1 and d3 are indistinguishable** — `avgTriangles` 0.00–0.25 % apart, `avgDrawCalls` 0–3 calls, `avgMs`
+≤ 1.6 % with the sign flipping between scenes, all of it under the harness's own 0.36 % A/A floor. The
+2026-08-08 audit's finding stands, now on evidence: the selector shipped, the lever does not move anything.
+
+Both d-builds do differ from the oldmap pak (+0.2…+1.5 % triangles, +5–7 % draws, same direction on both
+arms) — so they carry something the old map does not; it is not the density value.
+Rows: [`2026-08-09-ingame-user-display-density-ab.json`](opensa-engine/2026-08-09-ingame-user-display-density-ab.json)
+and [`…-oldmap-baseline.json`](opensa-engine/2026-08-09-ingame-user-display-oldmap-baseline.json).
+**`ocean-horizon` sits at the 120 fps cap on every arm — read its content columns, never its milliseconds.**
+
 Rows: [`2026-08-09-headless-bench-aa-after-102.json`](opensa-engine/2026-08-09-headless-bench-aa-after-102.json).
 The arm-A run that found the anchor-height defect on the way there:
 [`2026-08-09-ingame-102-probe-arm-a.json`](opensa-engine/2026-08-09-ingame-102-probe-arm-a.json) —

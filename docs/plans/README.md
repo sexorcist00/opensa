@@ -20,15 +20,17 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 row but its chain was superseded by 097). Newest first:
 
 - **[102 — The bench settle lies, and a fall poisons the sweep](./102-bench-settle-fall/readme.md)** —
-  **PLANNED 2026-08-08**, branch `102-bench-settle-fall`: the perf-runs settle exits on a stale
-  `pendingCells` read (the notice that phys/video runs both carry was never brought over), nothing waits for
-  collision, and a teleport preserves `Velocity.z` — so one lost race sends the player under the mesh at
-  terminal velocity for the rest of the sweep, culling every car through the 3D distance metric. Bench-only,
-  confirmed against the other two run modes and the in-game teleport panel; the fossil is the ocean-horizon
-  anchor moved "ON the sand" on 2026-07-10. Order: three red tests (stale gate, warp resets motion,
-  fall-through-late-ground) → fix + a permanent leg-start probe in the report → field fallwatch + A/A →
-  re-take the minor-8/d1/d3 benchmarks the falls contaminated → merge and close the harness half of
-  [`open-issues/bench-scene-transition-collision.md`](../open-issues/bench-scene-transition-collision.md).
+  **STEPS 1-4 DONE 2026-08-09**, branch `102-bench-settle-fall`, awaiting the merge call. The perf-runs
+  settle exited on a stale `pendingCells` read, nothing waited for collision, and a teleport preserved
+  `Velocity.z` — one lost race sent the player under the mesh at terminal velocity for the rest of the
+  sweep. Three red tests → the fix (notice → ring → ground → warp onto that ground → wait for rest) + a
+  derived warp reset in the character controller + a permanent leg-start probe in the report. Measured:
+  A/A `avgTriangles` spread **10.19 % → 0.14 %**, `[cam]` jump lines **89 255 → 1**, all nine scenes
+  `legStart.ok`. The field then forced a second fix — a scene anchor is authored for the CAMERA, six of
+  nine sit 3.65–26.29 m above the ground — and exposed `strip-noon`'s anchor standing inside the Flamingo
+  ([fixed](../open-issues/fixed/strip-noon-anchor-inside-a-building.md)). The re-taken density A/B says
+  d1 and d3 are indistinguishable under the noise floor, confirming the 07/04 audit on an instrument that
+  can now be trusted.
 - **[101 — Escalators in OpenSA](./101-escalators/readme.md)** — **PLANNED 2026-08-07**: the steps have
   never moved in our engine. `renderware` decodes the type-10 entry (plan 044) and there is a debug waypoint;
   `engine`, `cell-weld` and `engine-formats` have no escalator code at all, so the staircase draws and

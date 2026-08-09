@@ -1,6 +1,6 @@
 # 102 — The bench settle lies, and a fall poisons the sweep
 
-**Status: PLANNED 2026-08-08.** Branch `102-bench-settle-fall`. Closes the harness half of
+**Status: STEPS 1-4 DONE 2026-08-09, awaiting the merge call (step 5).** Branch `102-bench-settle-fall`. Closes the harness half of
 [`docs/open-issues/bench-scene-transition-collision.md`](../../open-issues/bench-scene-transition-collision.md)
 — the falls and the A/A triangle drift. The city-scale simulation-residency question that doc also carries is
 NOT this plan; it stays open as a design track (the user's draw-distance requirement stands, but no observed
@@ -187,6 +187,37 @@ Re-take and record into `docs/benchmarks/` (per its schema, pak stated per run):
   after the sweep is recorded).
 
 This redoes the 07/04 density A/B that the falls contaminated.
+
+**Done 2026-08-09, by the user on his own display lane** (all three arms: 1219 road cars, 212 parked,
+`legStart.ok` on all nine scenes, no anomalies reported). Records:
+[oldmap](../../benchmarks/opensa-engine/2026-08-09-ingame-user-display-oldmap-baseline.json) ·
+[d1/d3](../../benchmarks/opensa-engine/2026-08-09-ingame-user-display-density-ab.json).
+
+| scene | tri d1 | tri d3 | d1↔d3 | vs oldmap | ms d1 | ms d3 | d1↔d3 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ls-noon | 2 453 074 | 2 452 564 | 0.02 % | +0.89 % | 9.586 | 9.528 | 0.61 % |
+| sf-fog-dawn | 1 543 665 | 1 545 048 | 0.09 % | −0.19 % | 9.035 | 8.992 | 0.48 % |
+| lv-night | 2 077 303 | 2 075 426 | 0.09 % | +0.47 % | 14.464 | 14.481 | 0.12 % |
+| country-dusk | 1 256 872 | 1 260 040 | 0.25 % | +1.45 % | 16.557 | 16.597 | 0.24 % |
+| ocean-horizon | 409 328 | 409 525 | 0.05 % | +0.76 % | 8.333 | 8.333 | — (frame cap) |
+| ls-rain-night | 1 798 393 | 1 798 221 | 0.01 % | +0.96 % | 8.579 | 8.715 | 1.56 % |
+| ganton-noon | 1 600 933 | 1 599 035 | 0.12 % | +0.59 % | 13.550 | 13.574 | 0.18 % |
+| strip-noon | 1 926 089 | 1 926 057 | 0.00 % | +0.52 % | 10.202 | 10.190 | 0.12 % |
+| ganton-night | 1 602 353 | 1 602 710 | 0.02 % | +0.77 % | 13.734 | 13.689 | 0.33 % |
+
+**The density value changes nothing that any column can see.** `avgTriangles` differ by 0.00–0.25 %,
+`avgDrawCalls` by 0–3 calls, `avgMs` by ≤ 1.6 % with the sign flipping between scenes. The instrument's own
+A/A floor is 0.36 % on triangles, so this is not a small effect — it is **no measurable effect**, and it
+confirms the 2026-08-08 audit ("the selector shipped, the density lever did not exist") on an instrument
+that can now be trusted. That confirmation is the whole reason the re-take was owed.
+
+Two things the table says that the verdict does not:
+
+- **Both d-builds differ from the oldmap pak** — consistently, in the same direction, on both arms:
+  +0.2…+1.5 % triangles and +5–7 % draw calls (ls-noon 1215/1218 vs 1138). So the d-builds carry something
+  the old map does not; it just is not the density value.
+- **`ocean-horizon`'s cost column is saturated** at the 120 fps frame cap (8.333 ms on all three arms), so
+  that scene discriminates on content only. Read its triangles, never its milliseconds.
 
 ## Step 5 — close
 
