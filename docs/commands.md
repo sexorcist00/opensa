@@ -17,7 +17,13 @@ npm run build:game:gostown:opensa      # TCs are opensa-only (also :carcer :ande
 ```
 
 Both write into the same `./build/<id>`: `:opensa` fills `opensa/` + `opensa-pack/`, `:sa` fills `sa/`, and
-neither touches the other's directory (the builder only clears `<out>/.work`). Standalone:
+neither touches the other's directory (the builder only clears `<out>/.work`).
+
+**`<out>/.work` is wiped before any stage reads `--game`**, so re-running one stage off an intermediate
+(`--game <out>/.work/5-trees`) deletes the intermediate first. Copy it out of `.work`, or point `--out`
+elsewhere; the builder refuses the overlap rather than wiping it. Every run writes
+`<out>/build-timings.json` — per-stage wall clock plus the target and procobj knobs it was built with, so two
+durations are comparable. Standalone:
 
 ```bash
 NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cli.ts \
@@ -47,9 +53,10 @@ NB `--target` means a DIRECTORY in `vehicle-installer --rebake` — same word, u
 scatter's candidate ceiling; above it there are no candidates left to keep and the build refuses). The run
 prints the density it built at, so a capture states its own configuration. `--procobj-max` raises the placed
 -object safety cap with it; without that a high-density run measures the CAP, and the build says so with a
-`CAP DROPPED n` line. **Measured 2026-08-08: the cutoff is NOT the density lever** — 3× yields +3.6 % objects
-because `cullByMinDistance` culls with the `procobj.dat` MINDIST column, which is a 50–80 m *draw* distance
-([07/02](./roadmap/0.5.0/plans/07-lod-generators-extended/lod-procobj-generator/02-density-model.md)).
+`CAP DROPPED n` line. **The 2026-08-08 finding that "the cutoff is not the density lever" is retired**: it was
+true only because `cullByMinDistance` was deleting 99 % of the candidates with a column that is a camera
+distance. Since [009](../tools/lod-procobj-generator/docs/plans/009-procobj-dat-columns-as-the-game-reads-them.md)
+density 1 IS the authored density (91 092 objects) and `procObjMax` defaults to 100 000 so it does not bind.
 
 The SA ceilings are checked on the built `sa/` tree only (`checkTextIplBudgets` + `checkImgIdBudgets`), so an
 `--exclude sa` run checks neither. Of the two text-IPL ceilings only int16 fails a build; the 39 stock slots

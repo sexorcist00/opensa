@@ -245,7 +245,9 @@ closer than this"*. Both readings are wrong at the point that matters: the game 
 the triangle, clamped up to 80 — never between two objects. We read both the way the header reads, and the
 result was a clutter layer at 16.8 % of the authored density with an even, one-of-each-species look nothing
 in the game produces. The mechanism and the numbers:
-[`gta-sa-original/procedural-objects.md`](../gta-sa-original/procedural-objects.md).
+[`gta-sa-original/procedural-objects.md`](../gta-sa-original/procedural-objects.md). Fixed in the code
+2026-08-09 (`area / spacing²`, no inter-object cull), which is why the example is safe to state — the rule
+below is what the fix cost, not a live defect.
 
 The rule for a new design: before a plan spends an authored column, the column's meaning comes from the
 reversed source (`docs/links.md` → gta-reversed) — Rockstar's own comments, our parser's doc comments and a

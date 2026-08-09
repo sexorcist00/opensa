@@ -13,13 +13,20 @@ screen.
   triangles from COL verts × placement matrices; area-weighted counts; sqrt-warped barycentric
   points; rule ranges for rotation/scaleXY/scaleZ/z-offset; face normal kept (align), flipped
   up when winding points down (upside-down-bushes fix).
+- **`procobj.dat`'s columns are spent the way the game spends them** (corrected 2026-08-09, and it was worth
+  5.9× the clutter): SPACING is a LENGTH, so the count per face is `area / spacing²`, and MINDIST is a
+  distance to the CAMERA, never between two objects. Nothing culls by inter-object distance — the triangle IS
+  the group, which is why authored clutter reads as clumps in some places and singles in others
+  ([`gta-sa-original/procedural-objects.md`](../gta-sa-original/procedural-objects.md)).
 - **Lottery mechanism**: 3× vanilla candidates with `lottery ∈ [0,3)`, sorted → live density
   slider = instance-count cutoff, no cell rebuild.
 - Semantic categories (grass/flowers/bushes/cacti/trees/rocks/underwater; sea floor overrides
   to underwater) with per-category `{enabled, drawDistance, density}` in `graphics.procobj` +
   debug **ProcObj** screen.
 - **One `procObjLimit` (default 150/cell)** caps BOTH rendering and collision via the cell-wide
-  lottery threshold; vanilla pools at ~300 for the same physics-cost reason.
+  lottery threshold; vanilla pools at ~300 for the same physics-cost reason. **Its value is unowned since
+  the 2026-08-09 column fix** — the candidate pool it rations shrank ~19×, so it binds far less often and the
+  number was calibrated against a density that no longer exists.
 - Collision = rendered set ∩ models that ship a COL (rocks/cacti/trees collide; grass/flowers
   walk-through); knob changes re-stream physics (debounced invalidate + reload).
 - Wind mod's `decoratePart` runs on clutter parts (procedural bushes sway when listed).
@@ -31,7 +38,11 @@ screen.
 - `useGrid` column unimplemented (no vanilla rule uses it).
 - Vanilla's create-around-camera MINDIST behaviour intentionally replaced by per-category
   drawDistance + per-cell budget.
-- Density defaults left at 1 (authored) — the per-cell limit dominates.
+- Density defaults left at 1 (authored). Since the column fix that IS the authored density: the build-time
+  layer places 91 092 objects against 15 286 before. Shaping it per category/surface/biome is
+  [`lod-procobj-generator/010`–`012`](../../tools/lod-procobj-generator/docs/plans/010-density-model.md);
+  the perf budget that should own `procObjLimit` and `procObjMax` is
+  [`013`](../../tools/lod-procobj-generator/docs/plans/013-density-budgets-per-target.md).
 
 ## Test coverage anchors
 

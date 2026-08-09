@@ -55,12 +55,13 @@ workflows) → the LOD tools (CLI). Sits beside `sa-lod` (mesh encode) under `to
 ### `./procobj` (`convert.ts` + `world.ts`) — scatter → static IPL
 
 - `convertProcObj(options)` → `null | { datLine, objects }` — convert `--dff ∩ procobj` species from runtime
-  scatter into **static IPL instances**: reuse the engine's vanilla `scatterProcObjects`, thin it
-  (`cullByMinDistance` MINDIST min-spacing + a global cap — static can't materialise full runtime density), emit
-  each as an HD `inst` + its LOD `inst` (text-internal `lod` link), and strip those species from `procobj.dat`.
+  scatter into **static IPL instances**: reuse the engine's vanilla `scatterProcObjects`, keep everything under
+  the density cutoff and slice to a global `procObjMax` cap, emit each as an HD `inst` + its LOD `inst`
+  (text-internal `lod` link), and strip those species from `procobj.dat`. (A per-species MINDIST min-spacing cull
+  sat between the two until 2026-08-09; the column is a camera radius, not an inter-object distance.)
   Generalised: `ProcObjSpecies = { hdId, height, lodId, lodModel }` (not impostor-specific); the IPL name is an
   option. Returns the `gta.dat` IPL line to register.
-- `cullByMinDistance(placements, minDist)` / `iplQuaternion(yaw)` — the thinning + the yaw→quat helper.
+- `iplQuaternion(yaw)` — the yaw→quat helper.
 - `buildMapDefinitions(gamePath, archive)` (`world.ts`) — assemble the `MapDefinitions` (object catalog from the
   gta.dat IDEs + every instance from the text IPLs and the binary IPL streams in `gta3.img`) that the engine's
   collision / procobj-scatter code expects — the **offline** counterpart of the runtime resolver.

@@ -90,8 +90,8 @@ and gets a `lod<species>.dff` + its textures.
 
 ## procobj placement (reused from `lod-trees-generator`)
 
-`procobj/convert.ts` + `procobj/world.ts` already: reuse the engine's vanilla `scatterProcObjects`, thin by MINDIST
-min-spacing + a global cap, emit `lodtrees_procobj.ipl` (HD inst + LOD inst with a text-internal `lod` link), strip
+`procobj/convert.ts` + `procobj/world.ts` already: reuse the engine's vanilla `scatterProcObjects`, cut by the
+density cutoff and a global cap, emit `lodtrees_procobj.ipl` (HD inst + LOD inst with a text-internal `lod` link), strip
 converted species from `procobj.dat`, and return the `gta.dat` IPL line. The **only** change for the new tool: the
 LOD instance references the **simplified-copy** model (id/name from P3) instead of an impostor alias. The
 `ProcObjSpecies` record's `impostorId/impostorAlias` become a generic `lodId/lodModel`.

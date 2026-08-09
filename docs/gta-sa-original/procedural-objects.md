@@ -4,7 +4,7 @@
 `ProcSurfaceInfo.cpp`, `source/game_sa/PlantMgr.cpp`), because two of the file's columns were being read wrong
 by our own pipeline and the misreading is silent — it produces a plausible-looking world that carries a
 sixth of the authored clutter. This page carries what the DATA means; the design consequences are
-[plan 07/02 decision 5](../roadmap/0.5.0/plans/07-lod-generators-extended/lod-procobj-generator/02-density-model.md),
+[plan 07/02 decision 5](../../tools/lod-procobj-generator/docs/plans/010-density-model.md),
 and the one-line rule is in [`restrictions/assets-and-data.md`](../restrictions/assets-and-data.md).
 
 **The class is `ProcObjectMan_c` / `ProcSurfaceInfo_c`, not `CPlantMgr`.** `CPlantMgr` (`PlantMgr.cpp`) is the

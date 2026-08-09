@@ -153,16 +153,12 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   too. Any positions SCAN in the vehicle path must measure over triangle-referenced vertices, the set
   RW draws (`wheelRadius` learned this 2026-08-05 — the wheel had scaled to nothing; `appendGeometry`
   was already safe). New scans over `geometry.positions` inherit the trap SILENTLY.
-- **The procobj clutter layer ships at 16.8 % of the density `procobj.dat` authors, with an inverted look.**
-  Both columns the scatter reads are misread (recovered 2026-08-09): SPACING is a LENGTH, so vanilla is
-  `area / spacing²` and we generate `area / spacing` (4–163× too many candidates), and MINDIST is a distance
-  to the CAMERA, not between objects, so `cullByMinDistance` then deletes 99.0 % of them. The two errors
-  cancel into a plausible total — 15 286 objects against the 90 906 the data asks for — but not into a
-  plausible LOOK: post-cull the nearest same-species neighbour is ≥ 50 m everywhere (0 of 20 246 pairs
-  below) while cross-species pairs sit at a median of 10.9 m, i.e. evenly spaced and one-of-each-kind where
-  the game clumps per collision triangle. Measurement and the recovered formulas:
-  [`gta-sa-original/procedural-objects.md`](../gta-sa-original/procedural-objects.md); the rule for new
-  designs is in [`restrictions/assets-and-data.md`](../restrictions/assets-and-data.md); the fix is the
-  first task of [07/02](../roadmap/0.5.0/plans/07-lod-generators-extended/lod-procobj-generator/02-density-model.md)
-  and it changes the RUNTIME cell scatter too (`procObjLimit = 150` is calibrated against the wrong
-  density). Re-measure with `scripts/debug/procobj-spacing-census.ts`; **delete this entry when it lands.**
+- **A FULL build that includes the `sa/` target now FAILS on int16, and it is the guard working.** Since the
+  2026-08-09 `procobj.dat` column fix the clutter layer costs **25 560 permanent text rows**; with the stock
+  map's 12 629 that is ≈ **38 189 map-wide against int16's 32 767 ceiling**, so `checkTextIplBudgets` throws.
+  `npm run build:game:original:opensa` and every `--exclude sa` run are unaffected — the guard is `sa/`-only —
+  but `npm run build:game:original:sa` does not complete today. The fix is a declared per-target density
+  profile that names its `perfect-map.asi` gate
+  ([`lod-procobj-generator/013`](../../tools/lod-procobj-generator/docs/plans/013-density-budgets-per-target.md));
+  `--allow-text-row-overflow` downgrades the throw meanwhile, and is what `tools-debug/sa-int16-repro` uses.
+  **Remove this entry when 013 lands.**
