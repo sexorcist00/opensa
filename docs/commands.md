@@ -32,8 +32,7 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
 
 Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|peds|optimize|trees|procobj|sa|opensa|pack|lod>`
 (inclusive, keeps `.work/`) · **`--exclude <stage,stage>`** · **`--target <sa|opensa>`** ·
-`--procobj-density <n>` · `--procobj-max <n>` · `--keep-work` · `--no-weld-seams` · `--no-textures` ·
-`--allow-text-row-overflow`.
+`--procobj-density <n>` · `--procobj-max <n>` · `--keep-work` · `--no-weld-seams` · `--no-textures`.
 
 `--exclude` says WHICH STAGES run where `--until` is the stop point: it drops the named stages and keeps
 everything after them (repeatable, comma-separated, same names as `--until` minus the `lod` alias; an unknown
@@ -58,10 +57,11 @@ true only because `cullByMinDistance` was deleting 99 % of the candidates with a
 distance. Since [009](../tools/lod-procobj-generator/docs/plans/009-procobj-dat-columns-as-the-game-reads-them.md)
 density 1 IS the authored density (91 092 objects) and `procObjMax` defaults to 100 000 so it does not bind.
 
-The SA ceilings are checked on the built `sa/` tree only (`checkTextIplBudgets` + `checkImgIdBudgets`), so an
-`--exclude sa` run checks neither. Of the two text-IPL ceilings only int16 fails a build; the 39 stock slots
-are printed, because the install we target lifts that array. `--allow-text-row-overflow` therefore has one
-remaining use — the deliberate over-int16 `sa` build of `tools-debug/sa-int16-repro`.
+On the built `sa/` tree the build prints a **map-cost census** (`reportTextIplCensus`: permanent text-IPL rows,
+inst-bearing IPLs, and how many of the IPLs listed in `gta.dat` it could actually read) and enforces the **FLA
+ID pools** (`checkImgIdBudgets` — the one set of ceilings the target really has). An `--exclude sa` run does
+neither. There is no int16 row guard any more: the target always runs `perfect-map.asi` + OLA + FLA, so that
+ceiling is lifted where our data lands — `--allow-text-row-overflow` was deleted with it (2026-08-09).
 
 ### Vehicle round: rebake instead of rebuilding
 

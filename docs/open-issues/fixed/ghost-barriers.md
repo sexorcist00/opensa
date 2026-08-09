@@ -123,6 +123,8 @@ the build output.
 - `tools/lod-trees-generator/docs/plans/011-area-row-budget.md` — area budgets, migration, slot economy.
 - `tools/map-placement/src/streamed-areas.ts` / `ipl-binary-write.ts` — the shared machinery.
 - `tools/mod-installer/src/ipl-slot-merge.ts` — mod-IPL folding + stock inst-block compaction.
-- `tools/perfect-map-builder/src/pipeline.ts` — `checkTextIplBudgets` (int16 throws, slots report).
+- `tools/perfect-map-builder/src/pipeline.ts` — `reportTextIplCensus` (a cost census since 2026-08-09; the
+  int16 throw and the slot report were deleted once the target's always-present `perfect-map.asi` + OLA made
+  both ceilings inapplicable).
 - gta-reversed: `IplStore.cpp` (`IncludeEntity`, `LoadIplBoundingBox`), `FileLoader.cpp` (`LoadScene`,
   `LinkLods`) — the decompiled ground truth all of this was read from.

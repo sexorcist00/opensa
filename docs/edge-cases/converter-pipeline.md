@@ -153,12 +153,3 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   too. Any positions SCAN in the vehicle path must measure over triangle-referenced vertices, the set
   RW draws (`wheelRadius` learned this 2026-08-05 — the wheel had scaled to nothing; `appendGeometry`
   was already safe). New scans over `geometry.positions` inherit the trap SILENTLY.
-- **A FULL build that includes the `sa/` target now FAILS on int16, and it is the guard working.** Since the
-  2026-08-09 `procobj.dat` column fix the clutter layer costs **25 560 permanent text rows**; with the stock
-  map's 12 629 that is ≈ **38 189 map-wide against int16's 32 767 ceiling**, so `checkTextIplBudgets` throws.
-  `npm run build:game:original:opensa` and every `--exclude sa` run are unaffected — the guard is `sa/`-only —
-  but `npm run build:game:original:sa` does not complete today. The fix is a declared per-target density
-  profile that names its `perfect-map.asi` gate
-  ([`lod-procobj-generator/013`](../../tools/lod-procobj-generator/docs/plans/013-density-budgets-per-target.md));
-  `--allow-text-row-overflow` downgrades the throw meanwhile, and is what `tools-debug/sa-int16-repro` uses.
-  **Remove this entry when 013 lands.**
