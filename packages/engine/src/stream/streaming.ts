@@ -435,6 +435,10 @@ export class StreamingDriver {
         this.engine.textures.beginLoad(Number(message.key.slice('array-'.length)), new Uint8Array(message.buffer));
       } else {
         this.requested.delete(message.key); // failed: let the next cell that needs it re-request
+        // Said out loud for the same reason the cell branch is: a world whose ARRAYS all fail draws nothing
+        // and reports nothing, which is a whole field session to diagnose without this line.
+        // eslint-disable-next-line no-console -- deliberate field diagnostic, same class as the cell warning below
+        console.warn(`[stream] array ${message.key} failed: ${message.error ?? 'unknown'} — will retry`);
       }
 
       return;

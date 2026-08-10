@@ -49,10 +49,19 @@ export function createErrorLog(target: ErrorLogTarget = window, limit = DEFAULT_
   target.addEventListener('error', onError);
   target.addEventListener('unhandledrejection', onRejection);
 
+  const format = (args: unknown[]): string =>
+    args.map((arg) => (arg instanceof Error ? arg.message : String(arg))).join(' ');
   const originalConsoleError = console.error;
   console.error = (...args: unknown[]): void => {
-    record(args.map((arg) => (arg instanceof Error ? arg.message : String(arg))).join(' '));
+    record(format(args));
     originalConsoleError(...args);
+  };
+  // `warn` as well as `error`: the engine's field diagnostics are warnings — a streamed entry that fails
+  // says so through `console.warn`, and that line is the answer to "the bytes arrived and nothing appeared".
+  const originalConsoleWarn = console.warn;
+  console.warn = (...args: unknown[]): void => {
+    record(`warn: ${format(args)}`);
+    originalConsoleWarn(...args);
   };
 
   return {
@@ -60,6 +69,7 @@ export function createErrorLog(target: ErrorLogTarget = window, limit = DEFAULT_
       target.removeEventListener('error', onError);
       target.removeEventListener('unhandledrejection', onRejection);
       console.error = originalConsoleError;
+      console.warn = originalConsoleWarn;
     },
     entries(): readonly string[] {
       return [...counts].map(([message, count]) => (count > 1 ? `${count}x ${message}` : message));

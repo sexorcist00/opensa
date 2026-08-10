@@ -50,6 +50,14 @@ describe('createErrorLog', () => {
       expect(log.entries()).toEqual([]);
     });
 
+    it('records a console.warn too, because the engine reports a failed pak entry as a warning', () => {
+      const log = createErrorLog(target, 10);
+      dispose = () => log.dispose();
+      console.warn('[stream] array array-3 failed: range fetch 416 — will retry');
+
+      expect(log.entries()).toEqual(['warn: [stream] array array-3 failed: range fetch 416 — will retry']);
+    });
+
     it('records an error event and an unhandled rejection', () => {
       const log = createErrorLog(target, 10);
       dispose = () => log.dispose();

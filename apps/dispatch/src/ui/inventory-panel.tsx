@@ -91,6 +91,13 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
           {warning}
         </div>
       ))}
+      {/* On the phone there is no devtools to open, so an error the page logged has to be readable HERE —
+          copying the JSON out of a browser that is failing is the harder half of the round trip. */}
+      {report.errors.map((error) => (
+        <div key={error} style={styles.inventoryWarn}>
+          error: {error}
+        </div>
+      ))}
       <button onClick={copy} style={styles.inventoryButton} type="button">
         {copied || 'copy JSON'}
       </button>
