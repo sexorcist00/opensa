@@ -1,6 +1,8 @@
 # 014 — procobj without LOD twins: permanent rows on `sa`, runtime scatter on `opensa`
 
-**Status: 🔴 in progress (2026-08-10).** The user's call, and the measurements behind it are in
+**Status: ✅ the `sa` half SHIPPED and FIELD-CONFIRMED 2026-08-10** (it boots, it plays, and the range works);
+the `opensa` half is measured and wins, with one look decision left (step 5). The user's call, and the
+measurements behind it are in
 [`map-placement/002`](../../../map-placement/docs/plans/002-ipl-slot-budget.md): the HD+LOD twin per clutter
 object was the wrong shape from the start, and at the shipped density **it cannot fit SA at all**.
 
@@ -90,21 +92,30 @@ geometry per model type — ~48 of them — and draws instanced.
    the common build (and therefore `opensa`) never carries it and `procobj.dat` reaches our engine unstripped.
 4. **Build `sa`, count rows/areas/slots on the artifact**, then the field run: does it boot, and does clutter
    now reach ~299 m instead of ~190.
-5. **`opensa`: confirm the runtime scatter gets 96 rules**, and expose the draw distance as a setting.
-6. **Per-category draw distance** — 299 flat is PF's compromise, and we would ship 91 092 objects against their
-   57 583 (1.6×). The IDE distance is per model, so grass can be nearer than rocks. **Measured, not assumed** —
-   this step exists only if step 4 shows a cost worth paying for.
+5. **`opensa`: pick the seven draw distances now that the scatter is alive.** The setting was never missing —
+   `game-runtime-config.ts` has carried a per-category `drawDistance` with live sliders (debug → ProcObj) since
+   plan 042: flowers 50 · grass 50 · underwater 60 · bushes 80 · rocks 80 · cacti 100 · trees 150. What is open is
+   the VALUES: they were chosen in a world where this scatter drew almost nothing, because the bake stripped
+   `procobj.dat` to 9 underwater rules. The 2026-08-10 sweep is the first time anyone has seen them with all 95.
+   And the two hosts now diverge visibly — the real game shows the same clutter at **299**. A look decision, judged
+   in the engine rather than in a doc.
+6. **Per-category draw distance on `sa`** — 299 flat is PF's compromise at 57 583 rows and we ship 91 092 (1.6×),
+   so 58 638 bushes now draw to 299 m. The IDE column is per MODEL, so grass could be nearer than rocks.
+   **Not needed by anything measured**: the field says the range works and the flat value is the proven one, so
+   this stays unopened until a frame cost asks for it.
 
 ## Measured numbers
 
-**FIELD-CONFIRMED 2026-08-10.** He installed this build and played it: *"проверил в gta sa — все работает
-отлично"*. That closes step 4's first question — the game boots at 39 of 40 inst-bearing IPLs, with 110 055
+**FIELD-CONFIRMED 2026-08-10.** He installed this build and played it, and reported it working correctly. That
+closes step 4's first question — the game boots at 39 of 40 inst-bearing IPLs, with 110 055
 permanent rows against the raised `Buildings = 150000`, where the twinned shape had crashed twice (slot 40, then
 the boot buffer at 8 520 entries). The build he ran carries `sa-lod-generator`'s full output as well (353.6 s of
 it, 4 400 `lod*` entries), so the world's own far-LODs are intact and only the clutter is LOD-less by design.
 
-**Still unanswered by that run:** whether the clutter now reaches 299 m rather than ~190. Nobody looked at the
-pop-in radius, and it is the half of step 4 that prices the whole mechanism.
+**And the range works** — he checked that in the real game separately and reported it good. That closes
+step 4 completely. The mechanism the whole redesign was for is confirmed in the field: permanent rows at `lod = -1`
+with the stock `procobj.ide` raised to 299 do show the clutter at that range, where the streamed shape had been
+capped at ~190 m by `CIplStore`'s residency gate no matter what the IDE said.
 
 **Steps 1–4 (build half) done 2026-08-10.** Same corpus, same density 1, read off the artifact:
 
@@ -142,11 +153,13 @@ writing anything) but it used to report "no species", which reads like a missing
 
 ## Still open
 
-- **Step 5** — confirm on the `opensa` side that the runtime scatter takes all 95 rules, and expose the draw
-  distance as a setting. The build half is done: the common build's `procobj.dat` is no longer stripped.
+- **Step 5, restated** — the draw distance was never missing on `opensa`; the VALUES are the open question. Per
+  category today: flowers 50 · grass 50 · underwater 60 · bushes 80 · rocks 80 · cacti 100 · trees 150, against the
+  real game's 299. They were defaulted when the runtime scatter was effectively dead (9 underwater rules of 96), so
+  nobody has judged them with the full set. Where the cost of raising them will show: `country-dusk` carries the
+  highest `gpuMs.pass` of all nine scenes (12.03) on the FEWEST draws (851).
 - **Step 6** — per-category draw distance. 299 flat is PF's compromise at 57 583 rows; we ship 91 092 (1.6×), so
   58 638 bushes now draw to 299 m. Measure before tuning.
-- **The field run.** Does it boot at 39 slots, and does the clutter reach 299 m instead of ~190?
 - **AO on `opensa` clutter** — the runtime path has nowhere to keep a per-instance value. Prelight is unaffected.
 - **The cross-target placement parity check** (`scripts/debug/pak-placement-parity.ts` + its test) still assumes
   both targets carry the same clutter. It has to be re-scoped deliberately.

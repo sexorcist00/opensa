@@ -1,7 +1,7 @@
 # Audit — the clutter layer's shape, and the two ceilings that proved it could not fit (2026-08-10)
 
-Commits `504f3d95..719e63c2`. The day started with a build that would not boot and ended with one the user played
-(*"проверил в gta sa — все работает отлично"*). Between those two facts the clutter layer changed shape entirely,
+Commits `504f3d95..719e63c2`. The day started with a build that would not boot and ended with one the user played, whose clutter reaches the
+range the redesign was for — both confirmed by him in the real game. Between those two facts the clutter layer changed shape entirely,
 and both of the field crashes on the way were **mine**.
 
 ## What was asked, and what it turned into
@@ -89,15 +89,18 @@ scoped-texture integration test went with the shared LOD txd it covered; its reg
 
 ## Still open
 
-- **Does the clutter actually reach 299 m?** The field run confirmed it boots and plays; nobody measured the
-  pop-in radius, and that is the number the whole mechanism was changed for.
-- **The OpenSA half.** The stage no longer runs for that target, so the runtime scatter gets 95 rules instead of
-  9 and the pak stops welding 91 092 vertex-duplicated instances. The pak measurement is running; draw distance
-  still needs exposing as a setting.
+- ~~Does the clutter reach 299 m?~~ **CONFIRMED in the field** the same day — he checked the real game
+  separately: the range works. That was the number the whole mechanism was changed for.
+- ~~The OpenSA half.~~ **MEASURED, and it wins**: his own `bench=all` sweep shows no frame cost anywhere and
+  `country-dusk` 18.434 → 16.091 ms (54.2 → 62.1 fps, faster than even the 15 286-object baseline), while the pak
+  drops **24.7 %** and its AO bake **32 %**. Caveat recorded rather than smoothed: country-dusk also drew 15.5 %
+  fewer triangles, so it is "less drawn AND faster", not proven cheaper at equal content —
+  [`benchmarks/index.md`](../benchmarks/index.md).
+- **What the two hosts now show at different ranges.** The real game draws this clutter at 299; our engine at
+  50–150 per category, values defaulted when the runtime scatter was drawing almost nothing. Judging them is a
+  look decision, and `country-dusk`'s highest-pass/fewest-draws signature is where their cost will appear.
 - **Baked AO on OpenSA clutter** is gone by construction — the runtime path is instanced and has nowhere to keep
   a per-vertex value. Prelight is unaffected.
-- **Per-category draw distance.** 299 flat is PF's compromise at 57 583 rows; we ship 91 092, so 58 638 bushes
-  now draw to 299 m. Measure before tuning.
 - **The cross-target placement parity check** still assumes both targets carry the same clutter.
 
 Plan and full record: [`sa-procobj-placement/014`](../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md);
