@@ -22,14 +22,18 @@ export interface LinkedPair {
 
 /** Boot loads a text IPL **plus all its binary streams** through one static buffer (`gpLoadedBuildings`,
  *  `CFileLoader::LoadScene` + `CIplStore::SetupRelatedIpls`), so an area's text rows and its binary rows share
- *  one budget. Stock sizes it 4096; the target lifts it with OLA `EntitiesPerIpl = unlimited`, and the field
- *  has it running **9 627** entries (ProperFixes' vegetation layer, `docs/gta-sa-original/`).
+ *  one budget. Stock sizes it 4096.
  *
- *  Either kind of area costs **2 entries per pair** — linked: one text row + one HD stream record; unlinked:
- *  two stream records — so 4800 pairs = 9600 entries, just under what is measured working. Sized against the
- *  measurement rather than against stock's 4096, because the ONLY thing that made the layer fit before was
- *  spending a 40-slot array 47 times over (plan 002). */
-export const AREA_MAX_PAIRS = 4800;
+ *  A linked area costs **2 entries per pair** — one text row + one HD stream record — so 2000 pairs = 4000
+ *  entries, under stock with margin. **This is the number that shipped for a year, and it is back after a
+ *  crash:** on 2026-08-10 it was raised to 4800 on the strength of the 9 627-row text IPL ProperFixes is
+ *  measured running, and the game died on the first area at ~8 520 mixed entries. PF's file has **zero binary
+ *  streams**; its number is not a budget for this path. `AREA_MAX_ROWS` in `permanent-areas.ts` is where that
+ *  number legitimately applies, because that path emits text rows alone.
+ *
+ *  Since plan 014 the only caller is lod-trees' overflow areas, which is exactly why this stayed wrong quietly:
+ *  the layer that crashed had moved off it, and 467 rows was nowhere near the raised cap. */
+export const AREA_MAX_PAIRS = 2000;
 
 /** Instances per binary stream file — vanilla-sized tiles so position streaming stays fine-grained. */
 export const STREAM_MAX_INST = 512;

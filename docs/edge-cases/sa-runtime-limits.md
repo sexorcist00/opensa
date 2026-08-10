@@ -17,9 +17,10 @@ runtime, but the converter guards stand for any build not running that ASI.
   `EntitiesPerIpl = unlimited` lifts it, and the install runs a **9 627-row** text IPL). **CLOSED 2026-08-10, by a
   crash:** raising `AREA_MAX_PAIRS` 2 000 → 4 800 on the strength of that 9 627 put 4 260 rows + 9 stream tiles
   (~8 520 entries) into one area and the game died on it. PF's 9 627 is a **text-only** file; it is not a budget
-  for the mixed path. Live numbers: `AREA_ROW_CAP = 4000` (lod-trees + mod-installer), `AREA_MAX_PAIRS = 4800`
-  (`map-placement`, pairs = 2 entries each = 9 600, and only lod-trees' overflow areas use it now), and
-  `AREA_MAX_ROWS = 9600` for the text-only procobj layer — the path PF's number actually covers.
+  for the mixed path. Live numbers: `AREA_ROW_CAP = 4000` (lod-trees + mod-installer), `AREA_MAX_PAIRS = **2000**`
+  (`map-placement`; a pair is 2 entries, so 4 000 — put BACK after the crash, and its only caller now is
+  lod-trees' overflow areas), and `AREA_MAX_ROWS = 9600` for the text-only procobj layer, which is the one path
+  PF's number actually covers.
 - **Text-IPL slot cap 40** (`IplEntityIndexArrays`; stock uses ~28-30). Only a file carrying `inst` rows takes
   a slot. **REAL on the target and NOT lifted by anything** — measured twice on 2026-08-10: a build shipping 75
   inst-bearing IPLs died loading the 40th (`plobj10.ipl`), with OLA's `EntityIpl = unlimited` set, and again with

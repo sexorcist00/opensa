@@ -33,7 +33,7 @@ export const AREA_MAX_ROWS = 9600;
  * Emit placements as **permanent text IPLs**, ProperFixes' shape: per spatial area one `<areaBase><i>.ipl`
  * registered in `gta.dat`, every row `lod = -1`, and no binary streams at all.
  *
- * Why this rather than the HD+LOD streamed pairs of {@link buildLinkedAreas} (plan 103): `CIplStore` only loads
+ * Why this rather than the HD+LOD streamed pairs of {@link buildLinkedAreas} (plan 014): `CIplStore` only loads
  * a stream's IPL slot while the player is inside its bounding box grown by 190 units, so a streamed row cannot
  * draw at any distance its tile is not resident for — our 512-instance tiles gate the layer at ~190 m whatever
  * the IDE says. A permanent row has no such gate, so range comes from the IDE (299, one metre under SA's

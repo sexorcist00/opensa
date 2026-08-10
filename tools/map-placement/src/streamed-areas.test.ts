@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildLinkedAreas, type LinkedPair, splitByMedian } from './streamed-areas';
+import { AREA_MAX_PAIRS, buildLinkedAreas, type LinkedPair, splitByMedian } from './streamed-areas';
 
 const pairAt = (x: number, y = 0): LinkedPair => ({
   hd: { id: 800, interior: 3, position: [x, y, 0], rotation: [0, 0, 0, 1] },
@@ -25,6 +25,24 @@ describe('splitByMedian', () => {
         expect(leaf.length).toBeGreaterThanOrEqual(1900); // near-equal packing
       }
       expect(leaves.reduce((n, leaf) => n + leaf.length, 0)).toBe(15283);
+    });
+  });
+});
+
+describe('AREA_MAX_PAIRS', () => {
+  describe('negative cases', () => {
+    it('keeps an area under the 4096 boot buffer, counting BOTH entries a pair costs', () => {
+      // A linked pair is one text row + one HD stream record, and both pass through gpLoadedBuildings. Raised to
+      // 4800 on 2026-08-10 from ProperFixes' measured 9 627-row file, this killed the game on the first area at
+      // ~8 520 mixed entries — PF's file has zero streams, so its number does not apply to this path. The
+      // text-only path has its own cap (`AREA_MAX_ROWS`), where 9 627 legitimately does apply.
+      expect(2 * AREA_MAX_PAIRS).toBeLessThanOrEqual(4096);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is the value that shipped for a year', () => {
+      expect(AREA_MAX_PAIRS).toBe(2000);
     });
   });
 });

@@ -102,6 +102,9 @@ scoped-texture integration test went with the shared LOD txd it covered; its reg
 - **Baked AO on OpenSA clutter** is gone by construction — the runtime path is instanced and has nowhere to keep
   a per-vertex value. Prelight is unaffected.
 - **The cross-target placement parity check** still assumes both targets carry the same clutter.
+- ~~Breakable clutter after the move~~ **CONFIRMED breaking in the field 2026-08-10** — the 6 species carrying a
+  DFF Breakable mesh left the pak for the runtime path, and plan 074/20's `breakClutterInstance` handles them
+  there. Nothing was lost with the bake.
 
 Plan and full record: [`sa-procobj-placement/014`](../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md);
 the stopgap that failed is [`map-placement/002`](../../tools/map-placement/docs/plans/002-ipl-slot-budget.md).

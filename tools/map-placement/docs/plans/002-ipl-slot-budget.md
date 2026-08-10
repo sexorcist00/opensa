@@ -1,8 +1,14 @@
 # 002 — map-placement: the layer must fit SA's 40 inst-bearing IPL slots
 
-**Status: 🔴 in progress (2026-08-10).** The `sa` build at the shipped density does not boot: the game dies loading
-`plobj10.ipl`, the **40th** inst-bearing text IPL, against SA's 40-slot `IplEntityIndexArrays`. Our layer ships
-**47** inst-bearing areas on its own, so it exhausts the array without any help from stock.
+**Status: ⚰️ SUPERSEDED 2026-08-10 by
+[`sa-procobj-placement/014`](../../../sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md).** It
+never shipped a booting build: its own per-area cap crashed the game, and the arithmetic then showed the shape it
+was packing could not fit at all. **What survives is `checkInstBearingIplSlots`** — the gate — and the reasoning
+below, which is why the redesign took the form it did. Read it for that, not as a design to follow.
+
+The problem it was written for: the `sa` build at the shipped density did not boot — the game died loading
+`plobj10.ipl`, the **40th** inst-bearing text IPL, against SA's 40-slot `IplEntityIndexArrays`, and the layer
+shipped **47** inst-bearing areas on its own.
 
 ## What is measured, and what has already been ruled out
 
