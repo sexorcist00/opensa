@@ -129,6 +129,46 @@ verifier with its own positive control for the second.
 - **The collision census compares against `game-src` only**, so a mod dropping a model that another MOD added
   is invisible to it. The new warning catches that case, but only on the next build.
 
+## The afternoon: the field kept talking, and four of my axes were wrong
+
+The morning's work made the `sa` build exist. The user then ran it, and the rest of the day was field
+debugging with no commits — everything tried was reverted. It is written down because the WRONG turns are the
+expensive part, and three of them were mine to avoid.
+
+**The crash chain, each step measured:**
+
+| # | Symptom | Diagnosis | How it was found |
+| --- | --- | --- | --- |
+| 1 | `model ID 3752 does not have loaded collision` | a mod's partial `.col` (fixed, see above) | census over 216 archives |
+| 2 | Access violation at `0x00405C3A` | **the 40-slot `IplEntityIndexArrays`** | modloader's log ends at `plobj10.ipl`, the stack carries the string `plobj10_`, and `plobj10` is the **40th** inst-bearing IPL |
+| 3 | NULL deref at `0x005381A5` | an entity pool exhausted | disassembly: `push 0x38` → allocator → `je` failure path → `xor eax,eax` → `mov eax,[esi]`. `EDX = 100000` = OLA's `Buildings` |
+| 4 | World loads as LODs only | **UNSOLVED** | see [`open-issues/sa-world-loads-only-lods.md`](../open-issues/sa-world-loads-only-lods.md) |
+
+**Finding 2 is the one that outlives the session.** `docs/restrictions/sa-target.md` recorded the 40-slot
+ceiling as *"lifted — OLA `EntityIpl = unlimited`"*. The setting IS in the install's ini, and the game died on
+slot 40 anyway. The reason nobody knew: the reference install carries **36** inst-bearing IPLs, so the lift
+had **never been exercised**. And plan 007 had budgeted for this ceiling correctly — *"stock 30 + 8 = 38 ≤ the
+40-slot array"* — at 15 283 objects. The density fix took the layer to 91 092, the areas 8 → 46, the slots
+38 → 76, and nothing re-checked the budget the plan had written down.
+
+**The four wrong axes, in the order I walked them:** ID pools → stream FILE count → entity count → a mod
+corrupting the map. Each was falsified: cutting stream files 533 → 46 (11.6×) changed nothing at all; the
+mods-stage repro exonerated procobj entirely; and the mod bisection converged on `0. Map Fixes Pack` before a
+trivial mod shipping one `readme.txt` reproduced the marker identically.
+
+**That last one is the process failure worth naming.** The bisection had **no negative control** — every arm
+was positive from the first run, and I never asked what an arm WITHOUT the culprit prints. The marker I was
+bisecting (`gen_int1.ipl` emptied, 206 rows → 0) turned out to be our own intentional, lossless slot
+compaction. I had written the governing lesson into memory that same morning ("a zero is only evidence if the
+instrument could have printed non-zero"), applied it to other people's measurements, and not to my own. The
+compaction's loss-free property is now pinned by a test, so the next reader gets a one-line answer where I
+spent six builds.
+
+**What the field did give us, and it is a lot:** a tight repro (clean game + `.work/1-mods` alone), the
+texture-weight measurement (557 → 805 MiB against an unchanged 1024 MB stream budget), archives proven
+structurally clean, and ProperFixes' layer measured as a working counter-example on the same machine — 6
+files, ~9 600 rows each, every row `lod = -1`, zero binary streams, range from the IDE at 299 m.
+
 ## The lesson worth carrying
 
 **Two guards lied in opposite directions and neither could be caught by running the build.** The int16 one
@@ -136,3 +176,13 @@ fired on every build to protect a ceiling the target does not have; the TXD one 
 number was above the ceiling the target does have. The first was loud and wrong, the second silent and wrong,
 and the same question separates them: *what is the install actually configured with?* Not what the ini file
 contains, not what a doc summarised — what the adjuster's own log says it built.
+
+**The afternoon added its mirror image, and it is the same question again.** `EntityIpl = unlimited` was in
+the ini, the doc said "lifted", and the game died on slot 40 — because the install had never carried more than
+36 and nothing had ever tested the lift. So: **a ceiling you have never crossed is not a ceiling anyone has
+lifted.** Read a limit off the artifact that enforces it, and if you cannot, treat the number as real until
+something crosses it and survives.
+
+And one about method rather than about SA: **an instrument that has only ever printed one answer has told you
+nothing.** It cost a whole bisection — six builds converging confidently on an innocent mod — and the guard
+against it is a single cheap run: the arm you expect to be NEGATIVE.

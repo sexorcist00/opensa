@@ -248,3 +248,23 @@ which is the point: these numbers were first taken by hand and the hand count wa
 | **Permanent text `inst` rows, map-wide** | **72 914** — 2.23× the 32 767 int16 ceiling |
 | **IPL slots carrying `inst`** | **36** — under the stock 40, so `EntityIpl = unlimited` is not exercised |
 | **Largest single text IPL** | **9 627 rows** — 2.35× stock's 4 096 per-file buffer, allowed by `EntitiesPerIpl = unlimited` |
+
+### How that layer is SHAPED, and why it is worth copying (measured 2026-08-10)
+
+The install's biggest map layer is a working example of a shape ours does not use, on the exact machine we
+ship to. Read before designing a placement layout:
+
+- **6 files, ~9 600 rows each, and NOTHING ELSE.** No binary IPL streams at all — the whole 57 583-row layer
+  is permanent text rows.
+- **Every row is `lod = -1`.** Measured across all six: **zero** linked rows, max lod index −1. The HD→LOD
+  index link SA offers is simply not used; their tree LODs come from a separate ProperFixes layer.
+- **Range comes from the IDE, not from LODs**: their `data/maps/generic/procobj.ide` sets draw distance to
+  **299** — their notes call it "the maximum allowed", and it is one metre under the **300** threshold that
+  puts an object on SA's big-building path ([`edge-cases/sa-runtime-limits.md`](../edge-cases/sa-runtime-limits.md)).
+- Their notes also state the layer **requires an updated OLA and raised limits**, i.e. the author knows the
+  shape only works on an adjusted install — the same bargain we make.
+
+**Why this matters to us:** our procobj layer is the opposite shape — 46 areas of ~555 rows, 331 binary
+streams, and 25 560 rows that ARE linked. Ours was designed to minimise permanent rows because of int16;
+theirs spends 57 583 of them and loads. So permanent-row COUNT alone is not what breaks a map on this
+install, and a layout that leans on the `lod` link is using a mechanism their proven layer never touches.

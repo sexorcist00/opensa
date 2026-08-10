@@ -3,11 +3,15 @@
  * and splice an `IDE` line into `gta.dat` (IDEs load before IPLs). Shared by the LOD tools.
  */
 
-/** Search window for free object ids: above the low special-model ranges, **at or below the stock model ceiling
- *  of 18630** — ids above it silently fail to load on stock SA (no adjuster), which is the "HD swapped, no LOD"
- *  symptom. The window must stay ≤ 18630; do not widen it. */
+/** Search window for free object ids: above the low special-model ranges, below the model ceiling.
+ *
+ *  **19000, raised from the stock 18630 (the user's call, 2026-08-10).** 18630 is a fact about a plain 1.0 —
+ *  ids above it silently fail to load there, which is the "HD swapped, no LOD" symptom. The target always
+ *  carries FLA, whose DFF range is `0 - 19999` (its own log prints it), so budgeting to the stock number was
+ *  designing down to a ceiling the target does not have — silent by construction, per
+ *  `docs/restrictions/sa-target.md`. 19000 keeps ~1000 ids of FLA headroom rather than spending the range. */
 const ID_MIN = 4000;
-const ID_MAX = 18630;
+const ID_MAX = 19000;
 /** Default object flags for LOD billboards — the value the Proper-Fixes LOD-vegetation mod uses for tree LODs.
  *  (0x200084: alpha + draw-last + LOD-friendly.) */
 const DEFAULT_FLAGS = 2097284;
@@ -17,8 +21,8 @@ const MAX_MODEL = 19;
 
 /**
  * Assign each model a free object id — the lowest unused ids in the stock space (**not** necessarily contiguous;
- * ids needn't be consecutive, and a heavily-modded game rarely has a wide contiguous gap left below 18630).
- * Deterministic (models sorted, ids ascending). Staying ≤ 18630 means they load without an adjuster.
+ * ids needn't be consecutive, and a heavily-modded game rarely has a wide contiguous gap left below the
+ * ceiling). Deterministic (models sorted, ids ascending). See {@link ID_MAX} for what the ceiling is a fact about.
  */
 export function allocateLodIds(models: readonly string[], used: ReadonlySet<number>): Map<string, number> {
   const sorted = [...new Set(models.map((m) => m.toLowerCase()))].sort();

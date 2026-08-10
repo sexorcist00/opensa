@@ -5,9 +5,12 @@ Strict RenderWare/SA requirements every generated or byte-edited asset must sati
 stories: `tools/lod-trees-generator/docs/plans/005-sa-asset-format.md`,
 `tools/lod-procobj-generator/docs/plans/003-sa-asset-format.md`.
 
-- **Model id ≤ 18630 (stock ceiling).** Ids above it silently fail to load on stock SA — "HD swapped but no
-  LOD shows". Allocators (`allocateLodIds`, `findFreeBlock` in `tools/map-placement`) stay inside the stock
-  id gap; going higher needs fastman92 Limit Adjuster.
+- **Model id ≤ 19000 on the target; 18630 is the STOCK ceiling.** Ids above 18630 silently fail to load on a
+  plain 1.0 — "HD swapped but no LOD shows" — but the target always carries FLA, whose DFF range is
+  `0 - 19999` (its own log prints it). **Raised to 19000 on 2026-08-10** (the user's call): budgeting to the
+  stock number was designing down to a ceiling the target does not have, and 19000 keeps ~1000 ids of FLA
+  headroom. Allocators (`allocateLodIds`, `findFreeBlock` in `tools/map-placement`) share the window; a build
+  shipped to a plain 1.0 would lose whatever it placed above 18630, silently.
 - **uint16 vertex/index ceiling (65,535).** Indexed geometry must split across atomics past 65,535 verts.
   The engine paths are widened to uint32, but the index-width flag is load-bearing everywhere (cell path,
   rigid path, LOD encoders) — two ~90k-vert custom cars once took the whole vehicle system down.

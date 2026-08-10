@@ -8,10 +8,10 @@ describe('allocateLodIds', () => {
       expect(allocateLodIds([], new Set()).size).toBe(0);
     });
 
-    it('throws when the stock id window cannot fit every model (≤ 18630)', () => {
+    it('throws when the id window cannot fit every model rather than spilling past the ceiling', () => {
       const used = new Set<number>();
-      for (let id = 4000; id <= 18630; id += 1) {
-        if (id !== 18630) {
+      for (let id = 4000; id <= 19000; id += 1) {
+        if (id !== 19000) {
           used.add(id); // leave a single free id, ask for two
         }
       }
