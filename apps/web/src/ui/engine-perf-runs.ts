@@ -79,8 +79,15 @@ export interface LegSample {
   gpuMs: number;
   /** Raycast vehicles alive in the physics world — the vehicle cost means nothing without the count. */
   liveVehicles: number;
+  /** Cells still loading at this frame's stream update — the streaming BACKLOG behind a hitch. */
+  pendingCells: number;
   postMs: number;
   probeMs: number;
+  /** `StreamStats.blobMs` for this frame: pak-blob handler work, which runs BETWEEN frames and so lands in
+   *  the frame INTERVAL without appearing in any in-frame block timer. The usual shape of a real hitch. */
+  streamBlobMs: number;
+  /** `StreamStats.uploadMs` for this frame — the budgeted, in-frame share of texture-array writes. */
+  streamUploadMs: number;
   submitMs: number;
   triangles: number;
   /** The vehicle slice of this frame's fixed steps (081/07 §3): raycast controllers + the vehicle
@@ -117,6 +124,37 @@ export interface PerfRunsHost {
   teleportPlayer(anchor: readonly [number, number, number]): void;
   /** GTA Z-up → engine world space (the camera's frame). */
   toEngine(gta: readonly [number, number, number]): [number, number, number];
+}
+
+/**
+ * The hitch columns — what a leg's WORST frames did, as opposed to its average one.
+ *
+ * Why they exist (lod-procobj 013's `opensa` streaming budget): under vsync the mean and the p95 both sit on
+ * the frame period — measured 2026-08-09, `avgMs` 8.333 on seven of nine scenes and `p95Ms` 9.1 on ALL nine,
+ * in both arms of an A/A. A cap bounds how FAST a frame may be and says nothing about how slow one gets, so
+ * the tail still carries signal where the averages carry none. `maxMs` and `slowFrames` are that tail;
+ * `blobMaxMs`/`uploadMaxMs`/`pendingMax` are what a streaming hitch is MADE of, so a budget that moves can
+ * say which of the two it moved.
+ */
+export function hitchStats(
+  samples: readonly LegSample[],
+  slowFrameMs: number,
+): { blobMaxMs: number; maxMs: number; p99Ms: number; pendingMax: number; slowFrames: number; uploadMaxMs: number } {
+  if (samples.length === 0) {
+    return { blobMaxMs: 0, maxMs: 0, p99Ms: 0, pendingMax: 0, slowFrames: 0, uploadMaxMs: 0 };
+  }
+  const sortedMs = samples.map((sample) => sample.frameMs).sort((a, b) => a - b);
+  const max = (values: readonly number[]): number => values.reduce((best, value) => Math.max(best, value), 0);
+
+  return {
+    blobMaxMs: Number(max(samples.map((sample) => sample.streamBlobMs)).toFixed(3)),
+    maxMs: Number(sortedMs[sortedMs.length - 1].toFixed(3)),
+    p99Ms: Number((sortedMs[Math.min(sortedMs.length - 1, Math.floor(sortedMs.length * 0.99))] ?? 0).toFixed(3)),
+    pendingMax: max(samples.map((sample) => sample.pendingCells)),
+    // The same threshold the host prints `[slow]` at, so the count and the console lines are one instrument.
+    slowFrames: samples.filter((sample) => sample.frameMs > slowFrameMs).length,
+    uploadMaxMs: Number(max(samples.map((sample) => sample.streamUploadMs)).toFixed(3)),
+  };
 }
 
 /** Residency by ledger category, MB (074/21 P3 — the sweep-accumulation diagnosis): non-zero buckets only. */
@@ -236,6 +274,8 @@ export function setupPerfRuns(host: PerfRunsHost): void {
         probe: Number(avg(probeSamples).toFixed(3)),
         submit: Number(avg(samples.map((sample) => sample.submitMs)).toFixed(3)),
       },
+      // The TAIL, which is the only cost column a frame cap cannot pin (lod-procobj 013's opensa budget).
+      hitch: hitchStats(samples, host.slowFrameMs),
       key: scene.key,
       // The fog-mask honesty gate (074/21 P3): creates inside the fog cut during the measure window.
       lateCreates,

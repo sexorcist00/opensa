@@ -6,7 +6,16 @@
 // Env: DPR=2 (retina-equivalent render targets) · TAG='[soak]' (default '[bench]') · DRAG=<dy> (pitch camera)
 //   ALSO='[cam]' echoes a SECOND protocol without counting it as a report — a run whose acceptance depends
 //   on another subsystem's diagnostics (096/03 reads the `[cam] jump` watchdog while collecting `[video]`).
+//   UNCAPPED=1 unpins the frame clock (see below).
 const { chromium } = require('playwright');
+
+// The frame clock is vsync, and vsync SATURATES the cost columns: measured 2026-08-09 on the A/A floor,
+// `avgMs` sat on 8.333 ms for seven of nine scenes and `p95Ms` on 9.1 for all nine, in BOTH arms — a
+// difference the user's uncapped display could see (country-dusk +12.6 %) was invisible here. These flags
+// take the presentation clock out of the way so rAF runs as fast as the frame does.
+// OFF by default on purpose: every recorded sweep so far was taken capped, and an uncapped arm is not
+// comparable to them. Opt in per run, and say which mode the capture was taken in.
+const UNCAPPED_ARGS = ['--disable-frame-rate-limit', '--disable-gpu-vsync'];
 
 const APP_URL = process.argv[2];
 const OUT = process.argv[3] ?? 'shot';
@@ -16,10 +25,17 @@ const TAG = process.env.TAG ?? '[bench]';
 const ALSO = process.env.ALSO ?? '';
 
 (async () => {
+  const uncapped = process.env.UNCAPPED === '1';
   const browser = await chromium.launch({
-    args: ['--enable-unsafe-webgpu', '--enable-features=WebGPU', '--use-angle=metal'],
+    args: [
+      '--enable-unsafe-webgpu',
+      '--enable-features=WebGPU',
+      '--use-angle=metal',
+      ...(uncapped ? UNCAPPED_ARGS : []),
+    ],
     headless: true,
   });
+  console.log(`frameClock=${uncapped ? 'uncapped' : 'vsync'}`);
   const dpr = Number(process.env.DPR ?? 1);
   const page = await browser.newPage({ deviceScaleFactor: dpr, viewport: { height: 900, width: 1440 } });
   console.log(`deviceScaleFactor=${dpr}`);

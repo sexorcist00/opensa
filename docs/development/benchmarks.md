@@ -59,6 +59,17 @@ Report line (the deliverable IS this console line):
   overlap artifact — begin timestamps fire at vertex start; the plan-09 fix).
 - `gpuMs.probe` — **contaminated by the same Metal begin-overlap; judge the env probe ONLY by on/off
   A/B (`?probe=0`), never by this column** (plan-16 lesson).
+- `hitch` — `{blobMaxMs, maxMs, p99Ms, pendingMax, slowFrames, uploadMaxMs}`: the leg's WORST frames, and
+  the only cost columns a frame cap cannot pin. **Read these, not `avgMs`, on a vsync-capped lane** — the
+  2026-08-09 A/A floor measured `avgMs` at 8.333 on seven of nine scenes and `p95Ms` at 9.1 on all nine, in
+  both arms, so neither carries signal there. A cap bounds how FAST a frame may be and says nothing about
+  how slow one gets. `maxMs`/`slowFrames` (the same 20 ms threshold the `[slow]` line prints at) catch the
+  seen-once stall; `p99Ms` needs the degradation to reach 1 % of the leg, so it answers about a budget being
+  exceeded rather than about one hitch. `blobMaxMs`/`uploadMaxMs`/`pendingMax` say whether a stall was
+  STREAMING — blob-handler work lands between frames, where no in-frame block timer can see it.
+  **Not a clutter lever:** `?procobj` / `?procobjLimit` reach only the rules the BUILD did not bake, which
+  on a built map is the underwater leftovers (9 of 96 on original) — measured null on `country-dusk`
+  2026-08-10. Map clutter is a build-time quantity; vary it by swapping PAKS.
 - `lateCreates` — streaming honesty (074/21): creates inside the fog cut during the measure window;
   0 in a healthy run.
 - `legStart` — `{dz, grounded, ok, pendingCells, targetZ, worstDrop}` (plan 102). `targetZ` is where the
@@ -192,6 +203,12 @@ npm run dev
 SRC="http://localhost:3001/build/original/opensa"
 DPR=2 NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
   "http://localhost:5173/?loader=http-dir&src=$SRC&bench=all" sweep 600000 8
+
+# UNCAPPED=1 drops the presentation clock (--disable-frame-rate-limit --disable-gpu-vsync) when the
+# question is COST rather than hitching — the capped lane's avgMs/p95Ms sit on the vsync period. The run
+# prints frameClock=uncapped|vsync; an uncapped arm may never be compared against a capped record.
+UNCAPPED=1 DPR=2 NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
+  "http://localhost:5173/?loader=http-dir&src=$SRC&bench=all" sweep-uncapped 600000 8
 
 # a soak run: TAG switches the captured protocol, expect count is bypassed by the verdict line
 DPR=2 TAG='[soak]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \

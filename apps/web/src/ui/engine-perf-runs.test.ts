@@ -26,7 +26,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LegProbe, LegSample, PerfRunsHost } from './engine-perf-runs';
 
 import { BENCH_SCENES } from '../bench-scenes';
-import { setupPerfRuns } from './engine-perf-runs';
+import { hitchStats, setupPerfRuns } from './engine-perf-runs';
 import { createGameRuntimeConfig } from './game-runtime-config';
 
 /** The host's own capsule (engine-canvas-host) — the test player must stand exactly as the field one does. */
@@ -239,6 +239,105 @@ describe('setupPerfRuns settle', () => {
     });
   });
 });
+
+describe('hitchStats', () => {
+  describe('negative cases', () => {
+    it('reports zeroes for an empty leg rather than reading past the end of the samples', () => {
+      expect(hitchStats([], 20)).toEqual({
+        blobMaxMs: 0,
+        maxMs: 0,
+        p99Ms: 0,
+        pendingMax: 0,
+        slowFrames: 0,
+        uploadMaxMs: 0,
+      });
+    });
+
+    it('does not let a vsync-pinned leg hide its hitch — the mean and the p95 both sit on the frame period', () => {
+      // The measured A/A shape: 199 capped frames and one 41 ms stall. p95 lands on a capped frame, so the
+      // column the budget used to be read off says the leg was clean.
+      const samples = [...capped(199), frame({ frameMs: 41, streamBlobMs: 33 })];
+      const sortedMs = samples.map((sample) => sample.frameMs).sort((a, b) => a - b);
+      expect(sortedMs[Math.floor(sortedMs.length * 0.95)]).toBe(8.333);
+
+      const hitch = hitchStats(samples, 20);
+      expect(hitch.maxMs).toBe(41);
+      expect(hitch.slowFrames).toBe(1);
+      expect(hitch.blobMaxMs).toBe(33);
+    });
+
+    it('counts no slow frame when every frame is under the host’s own [slow] threshold', () => {
+      expect(hitchStats([...capped(50), frame({ frameMs: 19.9 })], 20).slowFrames).toBe(0);
+    });
+
+    it('does not see a stall rarer than one frame in a hundred in p99 either', () => {
+      // Two stalls in 300 frames is 0.67 % of the leg, so the 99th percentile lands on a capped frame. A
+      // real sweep flies ~1800 frames, where p99 is the worst EIGHTEEN — it answers about sustained
+      // degradation, never about the seen-once stall. That is what `maxMs` and `slowFrames` are for.
+      const hitch = hitchStats([...capped(298), frame({ frameMs: 30 }), frame({ frameMs: 52 })], 20);
+
+      expect(hitch.p99Ms).toBe(8.333);
+      expect(hitch.maxMs).toBe(52);
+      expect(hitch.slowFrames).toBe(2);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('takes the worst frame, the worst blob and upload spike, and the deepest backlog', () => {
+      const hitch = hitchStats(
+        [
+          frame({ frameMs: 8.4, pendingCells: 2, streamBlobMs: 1.5, streamUploadMs: 0.4 }),
+          frame({ frameMs: 26.5, pendingCells: 11, streamBlobMs: 18.25, streamUploadMs: 2.75 }),
+          frame({ frameMs: 9.1, pendingCells: 7, streamBlobMs: 0, streamUploadMs: 1.1 }),
+        ],
+        20,
+      );
+
+      expect(hitch).toEqual({
+        blobMaxMs: 18.25,
+        maxMs: 26.5,
+        p99Ms: 26.5,
+        pendingMax: 11,
+        slowFrames: 1,
+        uploadMaxMs: 2.75,
+      });
+    });
+
+    it('moves p99 when the degradation is sustained rather than seen-once', () => {
+      // 10 % of the leg spent at 25 ms — the shape of a streaming budget actually being exceeded, as
+      // opposed to one stall. This is the column that separates the two.
+      const hitch = hitchStats([...capped(270), ...Array.from({ length: 30 }, () => frame({ frameMs: 25 }))], 20);
+
+      expect(hitch.p99Ms).toBe(25);
+      expect(hitch.slowFrames).toBe(30);
+    });
+  });
+});
+
+/** A leg's worth of frames pinned to the 120 Hz period — the shape every headless scene measures at DPR=2. */
+function capped(count: number): LegSample[] {
+  return Array.from({ length: count }, () => frame({ frameMs: 8.333 }));
+}
+
+/** One sampled frame; every column a hitch is not about defaults to a healthy value. */
+function frame(over: Partial<LegSample>): LegSample {
+  return {
+    draws: 0,
+    fixedSteps: 1,
+    frameMs: 8.333,
+    gpuMs: 0,
+    liveVehicles: 0,
+    pendingCells: 0,
+    postMs: 0,
+    probeMs: 0,
+    streamBlobMs: 0,
+    streamUploadMs: 0,
+    submitMs: 0,
+    triangles: 0,
+    vehicleFixedMs: 0,
+    ...over,
+  };
+}
 
 /** A flat slab of collision `depth` metres under an anchor — the cell's ground, as the adapter hands it over. */
 function groundUnder(anchor: readonly [number, number, number], depth: number): ModelColliders {

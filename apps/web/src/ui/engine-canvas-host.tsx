@@ -386,6 +386,20 @@ function applyGraphicsParams(config: ReturnType<typeof createGameRuntimeConfig>,
   if (Number.isFinite(fxParam) && fxParam > 0) {
     config.graphics.effects.drawDistanceScale = fxParam;
   }
+  // `?procobj=<multiplier>` scales the RUNTIME clutter scatter across every category, `?procobj=0` turns it
+  // off. **It reaches only the rules the BUILD did not bake.** `convertProcObj` strips every species it
+  // scattered into static instances, so a built map ships a `procobj.dat` of leftovers — 9 rules of 96 on
+  // original 2026-08-10, all `P_UNDERWATERBARREN`. So this knob moves nothing on dry land, and an A/B that
+  // uses it as a clutter lever measures zero on any scene without water (measured: `country-dusk` identical
+  // across `?procobj=0` and a 3000× `?procobjLimit`). Map clutter is a BUILD-time quantity on this target.
+  // Written so 0 reads as zero rather than as absent, like `?airCtl`.
+  const procobjParam = Number(params.get('procobj') ?? Number.NaN);
+  if (Number.isFinite(procobjParam) && procobjParam >= 0) {
+    for (const setting of Object.values(config.graphics.procobj)) {
+      setting.density *= procobjParam;
+      setting.enabled = setting.enabled && procobjParam > 0;
+    }
+  }
 }
 
 /**
@@ -517,7 +531,10 @@ async function boot(
 
       return setting.enabled ? setting.density : 0;
     },
-    procObjLimit: 150,
+    // `?procobjLimit=<n>` sweeps the per-cell budget itself — the number lod-procobj 013 has to SET from a
+    // streaming measurement, and which has never been anything but this hand-picked 150. Same reach as
+    // `?procobj` above: on a BUILT map it governs the leftover (underwater) rules only.
+    procObjLimit: Number(params.get('procobjLimit')) || 150,
   });
   await adapter.prepare();
   const physics = new PhysicsWorld(await initRapier());
@@ -1828,8 +1845,11 @@ async function boot(
       frameMs: dt * 1000,
       gpuMs: stats.gpuPassMs,
       liveVehicles: physics.census().vehicles,
+      pendingCells: streamStats.pendingCells,
       postMs: stats.gpuPostMs,
       probeMs: stats.gpuProbeMs,
+      streamBlobMs: streamStats.blobMs,
+      streamUploadMs: streamStats.uploadMs,
       submitMs: stats.submitMs,
       triangles: stats.trianglesRecorded,
       vehicleFixedMs,

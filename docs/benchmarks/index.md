@@ -561,6 +561,26 @@ procobj — their `report.json` says particles 943 → 1 831 and roadsigns 481 �
 landed between the builds). Every rise above is an UPPER BOUND on the density's cost. `ocean-horizon` is at
 the 120 fps cap as always — its +6.7 % triangles are the only readable column.
 
+### The runtime clutter layer draws nothing on a built map — a NULL result (2026-08-10)
+
+The pak bakes the procobj layer into its cells AND `updateClutter` feeds `adapter.cellClutter` into an
+instanced render every frame, which reads like the clutter is drawn twice. It is not. Five single-scene
+`country-dusk` sweeps, Claude's headless lane: `?procobj=0` and a per-cell cap swept **1 → 3000** both leave
+`avgTriangles` unchanged to **0.007 %**, against this pair's own same-config A/A drift of **0.41 %**.
+**Cause, by construction:** `convertProcObj` strips every species it bakes, so a built `data/procobj.dat`
+carries **9 rules of 96**, all `P_UNDERWATERBARREN` — the runtime layer is alive with nothing to scatter on
+dry land. The positive control failed on the SITE, not on the instrument.
+Rows: [`2026-08-10-headless-runtime-clutter-null-result.json`](opensa-engine/2026-08-10-headless-runtime-clutter-null-result.json).
+
+**What this settles for lod-procobj 013:** clutter load on `opensa` is a **BUILD-time** quantity. Neither
+`?procobj` nor `?procobjLimit` is a lever for the streaming budget, so that measurement needs two BUILDS —
+and one already exists on disk (`NO_COMMIT/old_map`, 15 286 objects, against today's 91 092).
+
+**Also from these runs:** the new `hitch` block carries signal where the averages do not — `maxMs` spans
+9.4–21 ms across five arms whose `avgMs` is 8.329–8.334 and whose `p95Ms` is 9–9.1. Its three streaming
+columns (`blobMaxMs`, `uploadMaxMs`, `pendingMax`) printed 0 on every arm; a settled leg streams nothing, so
+they still owe a positive control before a zero from them counts as evidence.
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
