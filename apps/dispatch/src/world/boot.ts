@@ -26,6 +26,7 @@ import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
 import { buildDemoCity } from './demo-city';
 import { DISTRICTS } from './districts';
+import { createErrorLog } from './error-log';
 import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
 import { DEFAULT_SRC, resolvePakBase } from './pak-source';
 import { installWater } from './water';
@@ -145,6 +146,8 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   };
   applyHour(hour);
 
+  // Installed before anything else this boot does, because the failures worth catching happen during it.
+  const errorLog = createErrorLog();
   const camera = new MapCamera(poseFromQuery(params));
   const beacons = new Beacons(engine);
   const symbology = new SymbologyLayer();
@@ -236,6 +239,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     dispose(): void {
       disposed = true;
       unbind();
+      errorLog.dispose();
       beacons.dispose();
     },
     inventory(): InventoryReport | null {
@@ -251,6 +255,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         camera: { at: pose.at, height: pose.height },
         device: engine.deviceReport,
         district: params.get('district') ?? UNNAMED_DISTRICT,
+        errors: errorLog.entries(),
         hasTimestamps: !engine.deviceReport.missing.includes('timestamp-query'),
       });
     },

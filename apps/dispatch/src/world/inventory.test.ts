@@ -50,6 +50,7 @@ const CONTEXT = {
   camera: { at: [1480, -1720] as const, height: 900 },
   device: {},
   district: 'los-santos-centre',
+  errors: [],
   hasTimestamps: true,
 };
 

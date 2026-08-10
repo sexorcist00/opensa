@@ -84,6 +84,8 @@ export interface InventoryReport {
   readonly cpu: InventoryCpu;
   readonly device: unknown;
   readonly district: string;
+  /** The page's own errors during the capture (see `error-log.ts`) — a phone has no devtools to read. */
+  readonly errors: readonly string[];
   readonly frame: {
     /** dt counts per 2 ms bin, ascending, empty bins omitted. A frame waiting on a 60 Hz vsync piles into
      *  the bins around 16.7 and 33.3; a frame that is simply slow spreads. The two look identical in a p50
@@ -204,6 +206,7 @@ export class FrameInventory {
     camera: { at: readonly [number, number]; height: number };
     device: unknown;
     district: string;
+    errors: readonly string[];
     hasTimestamps: boolean;
   }): InventoryReport {
     const sorted = [...this.dts].sort((a, b) => a - b);
@@ -239,6 +242,7 @@ export class FrameInventory {
       },
       device: context.device,
       district: context.district,
+      errors: context.errors,
       frame: {
         dtHistogramMs: [...this.bins.entries()].sort((a, b) => a[0] - b[0]),
         dtMaxMs: this.maxima.get('dt') ?? 0,
