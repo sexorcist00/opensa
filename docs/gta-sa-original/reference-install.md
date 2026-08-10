@@ -56,16 +56,34 @@ Our own log records the whole picture in six lines:
 | --- | --- | --- | --- |
 | int16 `IplDef` building indexes | 32 767 rows map-wide | **lifted** (running at 72 914) | **only `perfect-map.asi`** — OLA leaves `0x404B4A` byte-stock |
 | `gpLoadedBuildings` per-file buffer | 4 096 rows | **`EntitiesPerIpl = unlimited`** (running a 9 627-row file) | OLA |
-| `IplEntityIndexArrays` | 40 slots | **`EntityIpl = unlimited`** (36 in use, so untested here) | OLA |
-| `CPool<CBuilding>` | 13 000 | **`Buildings = 100000`** | OLA |
+| `IplEntityIndexArrays` | 40 slots | **NOT LIFTED — `EntityIpl = unlimited` is set and does not work** | nothing |
+| `CPool<CBuilding>` | 13 000 | **`Buildings = 100000`** — see the prerequisite below | OLA |
 | `CPool<CDummy>` | 2 500 | `Dummys = 50000` | OLA |
 | Streaming object instances | — | `StreamingObjectInstancesList = 30000` | OLA |
 
-**The consequence for our generators.** `AREA_MAX_PAIRS = 2000` (4 000 rows/area) and pmb's 39-slot guard
-exist to respect the second and third rows of that table. **On this install both are inert** — the ceilings
-they protect are set to `unlimited`. They remain correct and necessary for a stock target; they are simply
-not what limits density here. What limits density here is memory and frame time, which is the honest place
-for a budget to live.
+**The consequence for our generators — corrected 2026-08-10, twice by the field.** The per-area row cap and the
+slot count are NOT interchangeable:
+
+- **The row cap is genuinely lifted**, and this install proves it by running a 9 627-row text IPL. But that
+  proof is for a text IPL with **zero binary streams**; an area's rows and its stream records share the same
+  buffer, and 8 520 mixed entries crashed on the first area. Read the number for the path it was measured on.
+- **The 40-slot array is NOT lifted at all.** `EntityIpl = unlimited` is set, documents itself as *"Maximum
+  number of IPL files that creates entities"*, and the game still dies loading the 40th inst-bearing IPL —
+  measured with our `perfect-map.asi` and again with an `-DPM_FIX_INT16=0` probe of it, so nothing of ours is
+  the cause. This install never crossed it (36 in use), which is why the setting looked like it worked.
+  `checkInstBearingIplSlots` in pmb now fails the build on it.
+
+### Prerequisite for the permanent-row clutter layer (`sa-procobj-placement/014`)
+
+That layer puts one permanent text row per clutter object, taking map-wide rows **44 523 → ~110 000**, which the
+current `Buildings = 100000` cannot hold — pool exhaustion at load (the 2026-08-10 `0x005381A5` crash was this
+pool at exactly 100 000). **It needs raising to ~150 000 before that build is run.**
+
+**Measured state 2026-08-10 15:47: `[SALIMITS] Buildings` still reads 100000** in the live install
+(`~/Library/Application Support/CrossOver/Bottles/Win10/drive_c/GTA SA/GTA San Andreas/III.VC.SA.LimitAdjuster.ini`,
+mtime 11:42), and no OLA ini on disk carries 150000. Recorded as a REQUIREMENT rather than as a capture, because
+this file's job is to say what the install actually is — a number written here above the install's own is silent
+by construction and can only fail to warn (the `FILE_TYPE_TXD` lesson, same day).
 
 **And the piece only we supply:** OLA raises every pool and array it knows about and still cannot fix int16,
 because the truncation is inside the `IplDef` struct rather than in a pool size. At 72 914 rows this install
@@ -75,8 +93,10 @@ removed.
 
 ## What may and may not be assumed
 
-- **May be assumed** for a plan targeting this install: no per-file row ceiling, no 40-slot ceiling, a
-  100 000-building pool — and `perfect-map.asi` present for int16.
+- **May be assumed** for a plan targeting this install: no per-file row ceiling **for text rows alone** (9 627
+  proven), a 100 000-building pool, and `perfect-map.asi` present for int16.
+- **May NOT be assumed here either, despite the ini saying so:** the 40-slot `IplEntityIndexArrays`. It is real
+  on this install.
 - **May NOT be assumed** for the stock target, which still has all four. A build that ships raised density
   must either keep the stock guards for the stock target or state plainly that it requires the adjusters.
 - **May not be assumed to be stable.** This is one user's install, recorded on one day. `NO_COMMIT/gta_sa`

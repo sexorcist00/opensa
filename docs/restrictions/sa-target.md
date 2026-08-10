@@ -17,7 +17,7 @@ we build for** (the user's call, reaffirmed 2026-08-09). So the useful column is
 | Permanent text-IPL rows, map-wide | 32,767 (int16) | **lifted — `perfect-map.asi` patch #1** (the install runs 72,914) | `CIplStore::IncludeEntity` truncates building-pool indexes to int16; past 2^15 it corrupts stream-out ranges (the "ghost barriers" family) |
 | Text IPLs carrying `inst` rows | 39/40 slots | **NOT lifted in practice — treat 40 as REAL** (2026-08-10, field) | `IplEntityIndexArrays` is written past without a bounds check |
 | Rows per text IPL + its boot streams | 4,096 | **lifted — OLA `EntitiesPerIpl = unlimited`** (runs a 9,627-row file) | `gpLoadedBuildings` static array is written past → trashed statics |
-| `CPool<CBuilding>` | 13,000 | **`Buildings = 100000`** (OLA) — a number, raisable again | pool exhaustion at load |
+| `CPool<CBuilding>` | 13,000 | **`Buildings = 100000`** (OLA) — a number, raisable again. **The permanent-row clutter layer needs ~150 000** and the install still reads 100000 (measured 2026-08-10 15:47) | pool exhaustion at load — the `0x005381A5` crash was this pool at exactly 100 000 |
 | **FLA ID pools** | 5000/255/256 | **TXD 6000 / COL 400 / IPL 1024 — REAL, not `unlimited`; raised in the ini 2026-08-10** | heap corruption during data load — the crash lands right after `shopping.dat` |
 | **Model id** | **≤ 18630** | **≤ 18630 — unchanged** | silently fails to load; "HD swapped but nothing changed" |
 
