@@ -49,8 +49,8 @@ flowchart TB
   peds["peds · ped-installer"]:::stage
   opt["optimize · map-optimizer<br/>normals · prelit · dedupe"]:::stage
   trees["trees · lod-trees-generator<br/>impostor cards + atlas"]:::stage
-  proc["procobj · sa-procobj-placement<br/>scatter → static IPL + LODs"]:::stage
-  guard{{"sa checks (on the BUILT sa/ tree)<br/>FLA pools THROW: TXD 6000 / COL 400 / IPL 1024 ·<br/>map-cost census: rows · IPLs · coverage"}}:::guard
+  proc["procobj · sa-procobj-placement<br/>scatter → permanent rows, lod -1<br/>(IN PLACE, sa only)"]:::stage
+  guard{{"sa checks (on the BUILT sa/ tree)<br/>inst-bearing IPLs THROW: 40 slots ·<br/>FLA pools THROW: TXD 6000 / COL 400 / IPL 1024 ·<br/>map-cost census: rows · IPLs · coverage"}}:::guard
   osguard{{"opensa: no SA ceiling applies<br/>and no streaming budget measured yet"}}:::guard
   sa["sa · sa-lod-generator<br/>per-object HD-clone LODs"]:::stage
   oslod["opensa · opensa-lod-generator<br/>cell-LOD bake + linear TXDs"]:::stage
@@ -60,9 +60,9 @@ flowchart TB
   fetch["fetch-pack (chained by build:game:&lt;id&gt;:opensa)<br/>content-hashed zip chunks + manifest"]:::stage
   outpak[("&lt;out&gt;/opensa-pack/&lt;game&gt;-&lt;version&gt;<br/>the FETCH build — deploy as games/&lt;game&gt;-&lt;version&gt;")]:::data
 
-  src --> mods --> veh --> peds --> opt --> trees --> proc
-  proc --> sa --> guard --> outsa
-  proc --> osguard --> oslod --> pack --> outos
+  src --> mods --> veh --> peds --> opt --> trees
+  trees --> sa --> proc --> guard --> outsa
+  trees --> osguard --> oslod --> pack --> outos
   outos --> fetch --> outpak
 
   classDef stage fill:#d8f5e0,stroke:#1f9d55,color:#111
@@ -81,7 +81,7 @@ flowchart TB
 | 3   | `peds`     | `installPeds`                                 | skipped when `peds/` is empty                                    |
 | 4   | `optimize` | `runOptimizer` (map-optimizer)                | lossless conditioning; `broken-prelight.json` force-list         |
 | 5   | `trees`    | `buildTreeLods`                               | skipped when `vegetation/` is empty; `--tex` 512 atlas, `prelight.json` |
-| 6   | `procobj`  | `buildProcobjLods`                            | always (original ships no `procobj/` — bakes the built-in roster, no-op on a TC); `--tex` 128 |
+| 6   | `procobj`  | `buildProcobjLods`                            | **inside the `sa` branch, in place, AFTER its LOD build** (plan 014): the layer is that target's alone — OpenSA scatters the same species at runtime, so baking it into the common build would only cost that target a stripped `procobj.dat` and 91 092 vertex-duplicated instances in its pak. Always runs (original ships no `procobj/` — bakes the built-in roster, no-op on a TC). Its place in `STAGE_NAMES` is its place in the RUN order, so `--until sa` stops before the clutter |
 | 7   | `sa`       | `buildSaLods` → `<out>/sa`, then `reportTextIplCensus` + `checkImgIdBudgets` | the real-game (RenderWare) target; **both read the built `sa/` tree and go with it** — the FLA ID pools THROW (a ceiling the target really has), the text-IPL cost is a census with no ceiling quoted (2026-08-09: the target always runs OLA + FLA + `perfect-map.asi`) |
 | 8   | `opensa`   | `buildOpensaLods` + `swapLinearTxds`          | cell 250 bake (= the render grid, plan 087), `stripLods`, linear-convention TXD swap. No SA ceiling applies and no budget guard of its own exists yet — the run says so (`OPENSA_BUDGET_NOTICE`) |
 | 9   | `pack`     | `packGameDir` (opensa-pack) → `<out>/opensa`  | the OpenSA target, self-contained (pak → `<out>/opensa/pak`, 086 phase 8); convert rect = the game's `PACK_RECTS.full` (auto-fit when unpinned, plan 087); report mirrored to `<out>/report.json` |

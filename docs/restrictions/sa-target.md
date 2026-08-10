@@ -144,3 +144,19 @@ baked IDE redefining a stock id must strip the older definition. Binary IPL stre
 index**, so removing a row renumbers everything after it.
 
 **Caught:** no — wrong or missing objects, no error.
+
+## Range comes from a permanent row, never from a binary stream
+
+`CIplStore` loads a binary stream's IPL slot only while the player is inside its bounding box grown by **190
+units**, so an instance in a stream is not resident far enough to use a long draw distance at all. Our clutter
+layer was declared at 290 and effectively capped at ~190 m for months because of it; the measurement is in
+[`edge-cases/sa-runtime-limits.md`](../edge-cases/sa-runtime-limits.md).
+
+The rule for a new design: **decide the mechanism by what you want from it.** Streams buy position streaming and
+cost no permanent rows; a permanent text row buys unconditional residency, i.e. range, and costs one `CBuilding`.
+A layer that wants to be seen at distance has to be permanent rows — which then puts it against the 40-slot array
+and the building pool instead, and those are the numbers to budget.
+
+**Caught:** no, and it is silent in the worst way — the objects are there, they draw, they just stop appearing at
+a distance nobody wrote down. What surfaces it is a field observation of the pop-in radius, or reading
+`IplStore.cpp`.

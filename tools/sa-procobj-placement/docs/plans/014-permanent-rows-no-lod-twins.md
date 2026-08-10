@@ -97,4 +97,47 @@ geometry per model type — ~48 of them — and draws instanced.
 
 ## Measured numbers
 
-Filled in per step.
+**Steps 1–4 (build half) done 2026-08-10.** Same corpus, same density 1, read off the artifact:
+
+| | before | after |
+| --- | --- | --- |
+| objects | 91 092 | 91 092 (unchanged — the shape changed, not the content) |
+| permanent text rows, layer | 25 560 | **91 092** · rows/object 0.281 → **1.000** |
+| permanent text rows, map-wide | 44 523 | **110 055** |
+| entities for those objects | 182 184 | **91 092** — the twin is gone |
+| inst-bearing area IPLs, layer | 47, then 6 | **10** |
+| inst-bearing IPLs, map-wide | 75 (crashed on slot 40) → 35 | **39 of 40** |
+| binary IPL files | 522 → 511 | **191** — every stream tile of this layer gone (only `plotr0_stream0`, the trees layer's, remains) |
+| FLA TXD / COL slots | 4999 / 264 | **4998 / 263** — `lod_procobj.txd`/`.col` no longer exist |
+| `procobj.dat` rules reaching `opensa` | 9 of 96 (stripped) | **95** — the common build is untouched |
+| `procobj.dat` rules in `sa/` | — | **8**, the never-touch underwater set |
+| species raised to 299 in `procobj.ide` | — | **39** of 107 (only the ones actually placed; the rest keep stock 59 for the runtime scatter) |
+| procobj stage | 5.7 s | **3.2 s** — nothing is decimated |
+| build wall clock | 9 m 53 s | **9 m 49 s** |
+
+`Buildings` was raised 100 000 → **150 000** and verified in the live install for the 110 055 rows
+(`docs/gta-sa-original/reference-install.md`). Headroom ~36 %, which is what a density rise prices against.
+
+### A defect this introduced, found on the artifact
+
+The bake runs in place and `sa/` is not wiped between runs, so the first build left **46 area files on disk for
+10 registered areas** — 36 orphans from earlier runs, 4 492 rows. Unregistered, so the game never reads them,
+but a census over the directory then read **95 584 rows for a 91 092-row run**, and that is the kind of number
+that gets published. `removeStaleAreas` deletes `<areaBase><n>.ipl` files the run did not write, the count is
+reported in the cost line rather than done silently, and the artifact now reads 10 files / 10 registered /
+91 092 rows.
+
+Also learnt: **the in-place bake consumes its own input** — the first run strips the converted species out of
+`procobj.dat`, so a second run on the same tree finds only the underwater set. Harmless (it returns before
+writing anything) but it used to report "no species", which reads like a missing `--in`; it now names the cause.
+
+## Still open
+
+- **Step 5** — confirm on the `opensa` side that the runtime scatter takes all 95 rules, and expose the draw
+  distance as a setting. The build half is done: the common build's `procobj.dat` is no longer stripped.
+- **Step 6** — per-category draw distance. 299 flat is PF's compromise at 57 583 rows; we ship 91 092 (1.6×), so
+  58 638 bushes now draw to 299 m. Measure before tuning.
+- **The field run.** Does it boot at 39 slots, and does the clutter reach 299 m instead of ~190?
+- **AO on `opensa` clutter** — the runtime path has nowhere to keep a per-instance value. Prelight is unaffected.
+- **The cross-target placement parity check** (`scripts/debug/pak-placement-parity.ts` + its test) still assumes
+  both targets carry the same clutter. It has to be re-scoped deliberately.

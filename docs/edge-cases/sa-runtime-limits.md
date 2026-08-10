@@ -20,15 +20,25 @@ runtime, but the converter guards stand for any build not running that ASI.
   runs a 9,627-row file). Unlike the deleted int16 budget, these three do move content: they split areas and
   migrate instances. Nobody has measured whether they still bind at the shipped density, or what the split
   costs in streaming granularity — price that before either defending or removing them.
-- **Text-IPL slot cap 39** (`IplEntityIndexArrays`; stock uses 30, generators add ~9). At zero headroom any
-  modloader text-IPL with inst rows overflows in-game. Only a file carrying `inst` rows takes a slot. **The
-  build neither fails nor reports on it any more** (2026-08-09): OLA's `EntityIpl = unlimited` means the array
-  is not there to overflow, so the census counts inst-bearing IPLs without quoting the stock number.
-- **The per-file 4 000-row budget and the 39-slot cap are STOCK numbers, and the install we target lifts
-  both** — OLA's `EntitiesPerIpl`/`EntityIpl` are `unlimited` there, and it runs a 9 627-row IPL without
-  complaint. Which set applies is a property of the install, not of the game:
+- **Text-IPL slot cap 40** (`IplEntityIndexArrays`; stock uses ~28-30). Only a file carrying `inst` rows takes
+  a slot. **REAL on the target and NOT lifted by anything** — measured twice on 2026-08-10: a build shipping 75
+  inst-bearing IPLs died loading the 40th (`plobj10.ipl`), with OLA's `EntityIpl = unlimited` set, and again with
+  an `-DPM_FIX_INT16=0` probe of our own asi, so nothing of ours is the cause. The reference install carries 36,
+  which is why the setting looked like it worked for months. `checkInstBearingIplSlots` FAILS the build on it.
+- **The per-file row budget IS lifted; the slot cap is NOT.** They were documented as one pair of stock numbers
+  both raised by OLA — they are not. The install runs a 9 627-row text IPL, so the row lift is real, but that
+  proof covers a file with **zero binary streams**: an area's text rows and its stream records share the same
+  buffer, and 8 520 mixed entries crashed on the first area. Which set applies is a property of the install for
+  the row cap and of the game for the slot cap:
   [`gta-sa-original/reference-install.md`](../gta-sa-original/reference-install.md). Count either with
   `scripts/debug/ipl-row-census.ts`.
+- **A binary IPL stream is only resident within 190 units of the player** — so it cannot carry draw distance.
+  `CIplStore` loads a stream's slot only while the player is inside its bounding box grown by 190
+  (`if (!def->bb.IsPointInside(posn, -190.f) || CStreaming::IsModelLoaded(IPLToModelId(slot))) continue;`,
+  `gta-reversed-modern/source/game_sa/IplStore.cpp`). With 512-instance tiles the boxes are small, so the gate
+  binds long before any IDE draw distance does — a clutter layer in streams was capped at ~190 m no matter what
+  it was declared at. A PERMANENT text row has no such gate, which is why ProperFixes' whole vegetation layer is
+  text rows at `lod = -1` and gets the IDE's 299. **Streams buy streaming, never range.**
 - **FLA ID-pool budgets: TXD 6000 / COL 400 / IPL 1024** (stock 5000/255/256), raised in the install's ini
   2026-08-10. Archive-file counts are ID slots; exhausting a pool corrupts the heap during data load (crash
   right after `shopping.dat`). pmb's `IMG_ID_BUDGETS` guards the operative FLA ini values. **Measured on the

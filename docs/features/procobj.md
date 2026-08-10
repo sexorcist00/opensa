@@ -4,6 +4,24 @@
 `packages/renderware/src/map/procobj-*.ts`, `build-procobj.ts`, adapter integration, debug ProcObj
 screen.
 
+## The two hosts get it by DIFFERENT mechanisms (plan 014, 2026-08-10)
+
+- **`sa` (the real game) — BAKED.** `sa-procobj-placement` scatters at build time and emits **one permanent text
+  IPL row per object at `lod = -1`**, then raises those species' draw distance in the stock
+  `data/maps/generic/procobj.ide` from **59 to 299**. No LOD twin, no binary stream: `CIplStore` only keeps a
+  stream's slot resident within 190 units of the player, so a streamed row cannot use a long draw distance at
+  all, and a generated LOD recovered ~0.2 % of a hand-modelled bush's geometry for the price of a whole entity.
+  Costs 91 092 permanent `CBuilding` entries and 10 of SA's 40 inst-bearing IPL slots.
+- **`opensa` (our engine) — RUNTIME.** No bake at all: the stage does not run for this target, so `procobj.dat`
+  reaches the engine with all 95 rules (it used to arrive stripped to 9, all underwater) and the scatter below
+  places them per cell. Draw distance is a setting rather than an IDE column, nothing is vertex-duplicated into
+  the pak, and density is a runtime knob again.
+
+**What that reverses:** density used to be "one profile, both hosts, not a per-target axis" (2026-08-09). It is a
+build constant on `sa` and a setting on `opensa` now. What `opensa` gives up is the baked AO the pak computes per
+HD vertex — runtime clutter is drawn instanced and has nowhere to keep it. Prelight is unaffected (it lives in the
+stock DFFs).
+
 ## Implemented
 
 - `procobj.dat` parsing (~95 rules, 18 `P_*` surfaces, 14 columns) and `surfinfo.dat` surface
@@ -62,6 +80,10 @@ screen.
 - `useGrid` column unimplemented (no vanilla rule uses it).
 - Vanilla's create-around-camera MINDIST behaviour intentionally replaced by per-category
   drawDistance + per-cell budget.
+- **`sa`'s baked layer uses one flat draw distance (299)** — ProperFixes' value, matched before improving on it.
+  Ours is 1.6× their object count, so 58 638 bushes now draw to 299 m; the IDE column is per model, so per-category
+  distances are the next lever and want a measurement first
+  ([`014` step 6](../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md)).
 - Density defaults left at 1 (authored). Since the column fix that IS the authored density: the build-time
   layer places 91 092 objects against 15 286 before. Shaping it per category/surface/biome is
   [`sa-procobj-placement/010`–`012`](../../tools/sa-procobj-placement/docs/plans/010-density-model.md);
