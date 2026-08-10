@@ -5,6 +5,16 @@ numbers and links to the raw records — so the result survives the session and 
 without re-deriving it. Runtime numbers live in [`../benchmarks/`](../benchmarks/); these docs summarise and
 interpret them.
 
+- [`procobj-budget-answered-and-a-knob-nobody-had-connected.md`](./procobj-budget-answered-and-a-knob-nobody-had-connected.md)
+  — the 2026-08-10 close: backlog bands **P1 and P2**. P1 asked for the clutter perf budget and found there is
+  none to give — at 3× vanilla the layer costs less than one sweep's A/A drift and never hitches, so the caps
+  are limited by data and by our own `PROC_OBJ_MAX_DENSITY`, not by frame time. P2 asked for seven VALUES and
+  found seven **dead constants**: `procobj[*].drawDistance` had a slider, a setter and a test, and no reader —
+  clutter really drew at whatever its 256-unit cell reached. Now applied per instance in the clutter shader,
+  100 (SA's own flat `PLANTS_MAX_DISTANCE`) as the floor and 300 for trees/cacti, measured monotone against a
+  0.020 % control and free in frame terms. **Also carries a mistake of mine that reached a commit**: I named
+  the wrong limiter for the density ladder (the data's spacing, when it was our own constant) by reading the
+  curve instead of the function.
 - [`procobj-permanent-rows-and-the-shape-that-could-not-fit.md`](./procobj-permanent-rows-and-the-shape-that-could-not-fit.md)
   — the 2026-08-10 late arc: the clutter layer's HD+LOD twin turned out not to fit SA **at all** at the shipped
   density (25 560 linked pairs need 13 inst-bearing areas; 12 exist), and binary streams could never have carried
