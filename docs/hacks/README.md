@@ -68,6 +68,7 @@ the number.
 | [Tyre-smoke intensity fit](tyre-smoke-intensity-fit.md) | `game/vehicle/vehicle-tyre-smoke.system.ts` | `CFx::AddWheel*` parameters — stubs in gta-reversed, nothing to port |
 | [Skid-mark look fit](skid-mark-look-fit.md) | `game/vehicle/vehicle-skid-marks.system.ts` | SA's `CSkidmarks` width/opacity constants, same unrecoverable code paths |
 | [Impact-smoke fit](impact-smoke-fit.md) | `web/ui/engine-vehicles.ts` | SA's `CFx` collision-effect counts/lifetimes; the trigger itself is the calibrated damage gate |
+| [Per-category clutter draw distances](clutter-category-draw-distances.md) | `web/ui/game-runtime-config.ts` | a range derived from each clutter model's own size — SA has only a flat `PLANTS_MAX_DISTANCE = 100`, so there is no formula to port |
 | [Surface-FX fit](surface-fx-fit.md) | `game/vehicle/vehicle-surface-fx.system.ts` | `CFx::AddWheel*` per-surface counts/colours; the dispatch itself is surfinfo's own `W_*` flags |
 | [Alpha-mask thresholds](alpha-mask-thresholds.md) | `opensa-pack/alpha.ts` | SA's ONE alpha pass with a per-entity reference (140/100/0, recovered) — we bake a two-class split instead, and two side floors are fitted |
 | [Autopilot gains](autopilot-gains.md) | `game/vehicle/path-follow.ts` | SA's own `CCarAI`/`CCarCtrl` traffic steering, not ported (and tuned for cars the player is not in) |
