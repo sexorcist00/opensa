@@ -581,6 +581,20 @@ and one already exists on disk (`NO_COMMIT/old_map`, 15 286 objects, against tod
 columns (`blobMaxMs`, `uploadMaxMs`, `pendingMax`) printed 0 on every arm; a settled leg streams nothing, so
 they still owe a positive control before a zero from them counts as evidence.
 
+## 2026-08-10 — the pak, before and after the clutter moved to the runtime scatter
+
+[`opensa-engine/2026-08-10-pak-clutter-runtime-vs-baked.json`](opensa-engine/2026-08-10-pak-clutter-runtime-vs-baked.json)
+— a BUILD measurement, not a frame one, and it does not mix with the rows above. Plan 014 took the procobj
+clutter off the bake for `opensa`: **pak 1 551 → 1 168 MB (−24.7 %)**, **AO bake 21 m 14 s → 14 m 25 s
+(−32 %)**, **welded HD vertices 105.8 M → 60.4 M (−42.9 %)**. The cause is that welding duplicates vertices per
+instance, so 91 092 baked objects were ~45.4 M vertices of copies; the runtime path uploads ~48 geometries.
+
+**No frame number attaches to this yet.** Whether per-cell scatter at stream-in costs more than a baked cell is
+a hitch question, and it is the user's `?bench=all` run to make. The pair is also 30 h apart with one mods-stage
+change in it, so the deltas are attributed rather than isolated — the file lists the confounds, including a
+`breakables` −991 that turned out to be the 6 breakable clutter species leaving the pak for a runtime path that
+already handles them (074/20).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
