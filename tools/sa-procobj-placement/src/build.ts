@@ -351,10 +351,7 @@ export function run(options: BuildOptions): void {
 
   // Scatter → static IPL (HD inst → its LOD) + strip `procobj.dat`; swap the procobj HD DFFs + retxd their TXD.
   const species_ = new Map<string, ProcObjSpecies>(
-    lods.map((lod) => [
-      lod.model,
-      { hdId: idByModel.get(lod.model)!, height: lod.height, lodId: lod.id, lodModel: lod.alias },
-    ]),
+    lods.map((lod) => [lod.model, { hdId: idByModel.get(lod.model)!, height: lod.height }]),
   );
   // `--modloader` ships two mods under `<out>`: `lod/` (this build) + `hd/` (the swapped HD models). So the LOD
   // mod's files (IPL + procobj.dat from convertProcObj, the IDE, the IMG entries) go under `<out>/lod/`. Under
@@ -370,7 +367,6 @@ export function run(options: BuildOptions): void {
     gamePath,
     heightThreshold: config.procObjHeight,
     iplName: IPL_NAME,
-    linkedHeight: config.linkedHeight,
     outPath: lodOut,
     procObjMax: config.procObjMax,
     species: species_,
@@ -389,12 +385,7 @@ export function run(options: BuildOptions): void {
   if (modloader) {
     // LOD mod: only the LOD assets to `<out>/lod/gta3img/`; the HD swap is a separate `<out>/hd/` mod that parents
     // the stock TXDs to the custom one via `txdp` — so no stock IDE is rewritten (the `./5` approach).
-    emitImg(
-      archive,
-      collectImgEntries(lods, lodTxd, lodCol, new Map(), new Map(), procObj?.imgFiles ?? []),
-      lodOut,
-      true,
-    );
+    emitImg(archive, collectImgEntries(lods, lodTxd, lodCol, new Map(), new Map(), []), lodOut, true);
     const swapped = emitHdMod(inPath, gamePath, dat, swap, swapModels, outPath);
     console.log(
       `procobj→lod: ${lods.length} species · ${procObj?.objects ?? 0} static objects → ${outPath}/lod` +
@@ -412,7 +403,7 @@ export function run(options: BuildOptions): void {
   for (const [idePath, text] of retxd.ides) {
     writeText(join(outPath, idePath.replace(/\\/g, '/')), text);
   }
-  emitImg(archive, collectImgEntries(lods, lodTxd, lodCol, swap, retxd.txds, procObj?.imgFiles ?? []), outPath, false);
+  emitImg(archive, collectImgEntries(lods, lodTxd, lodCol, swap, retxd.txds, []), outPath, false);
   console.log(
     `procobj→lod: ${lods.length} species · ${procObj?.objects ?? 0} static objects · ` +
       `${swap.size} HD swapped (${retxd.txds.size} custom TXD) → ${outPath}/models/gta3.img`,

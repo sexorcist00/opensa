@@ -7,15 +7,23 @@ import { buildCollisionIndex } from '@opensa/renderware/collision/collision-inde
 import { groupRulesBySurface, PROC_OBJ_MAX_DENSITY, scatterProcObjects } from '@opensa/renderware/map/procobj-scatter';
 import { parseProcObj } from '@opensa/renderware/parsers/text/procobj.parser';
 import { parseSurfaceNames } from '@opensa/renderware/parsers/text/surfinfo.parser';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import type { ProcObjDensityConfig, ProcObjDensityInput } from './density';
 
+import { setIdeDrawDistance } from '../ide';
+import { buildPermanentAreas } from '../permanent-areas';
 import { disableProcObj, stripProcObj, UNDERWATER_PROCOBJ } from '../procobj-strip';
-import { buildLinkedAreas, isLinked } from '../streamed-areas';
 import { densityCeiling, densityFor, densityProfile, validateDensityProfile } from './density';
 import { buildMapDefinitions } from './world';
+
+/**
+ * Draw distance the baked clutter is declared at. **299, ProperFixes' number** — one metre under the 300 that
+ * puts an object on SA's big-building path, and the value their 57 583-row layer is measured running. Stock
+ * declares every procobj species at 59.
+ */
+export const PROC_OBJ_DRAW_DISTANCE = 299;
 
 /** What one category cost this build — the readable half of decision 8's displacement warning. */
 export interface ProcObjCategoryCost {
@@ -30,8 +38,7 @@ export interface ProcObjCategoryCost {
 
 export interface ProcObjConvertOptions {
   archive: ImgArchive;
-  /** Base name for the area IPLs (`data/maps/<areaBase><i>.ipl` + gta.dat lines + `<areaBase><i>_stream<k>.ipl`
-   *  IMG entries). Keep it ≤ 10 chars: IMG VER2 caps entry names at 23 bytes — e.g. `plobj`. */
+  /** Base name for the area IPLs (`data/maps/<areaBase><i>.ipl` + their gta.dat lines) — e.g. `plobj`. */
   areaBase: string;
   /**
    * Build-time density CUTOFF on the scatter lottery. Every candidate carries
@@ -47,19 +54,25 @@ export interface ProcObjConvertOptions {
    *  stock rule by surface+model on additive merge) instead of a stripped whole file — so the strip survives a
    *  Modloader additive `.dat` merge (which would re-add omitted species from stock). Default (false): strip. */
   disableScatter?: boolean;
+  /**
+   * Draw distance written onto the baked species' STOCK `data/maps/generic/procobj.ide` rows — the layer's whole
+   * range mechanism now that nothing is streamed and nothing has a LOD (plan 014).
+   *
+   * Stock declares all 107 procobj models at **59**, which is why SA's runtime clutter pops in almost underfoot.
+   * ProperFixes ships the same file at **299**, one metre under the 300 threshold that puts an object on SA's
+   * big-building path — the default here, because matching a proven configuration comes before improving on it.
+   * Per-category distances are the obvious next lever and want a measurement first (014 step 6).
+   */
+  drawDistance?: number;
   gamePath: string;
   /** Only convert species whose HD bbox is at least this tall (excludes grass/small bushes). 0 = no gate. */
   heightThreshold: number;
   /** Base name for the emitted sidecars (`data/maps/<iplName>.models` manifest) — e.g. `lod_procobj`. */
   iplName: string;
-  /** Species at least this tall (m) get a PERMANENT text LOD row + lod-link (SA hides the LOD up close);
-   *  shorter species ship both rows unlinked in the binary stream — the LOD hides inside the HD, and every
-   *  avoided text row protects SA's int16 building-pool index budget (see `LinkedPair.linked`). */
-  linkedHeight: number;
   outPath: string;
   /** Safety cap on total placed objects (HD count); the set is thinned to the lowest-lottery survivors. */
   procObjMax: number;
-  /** sourceName → registration. Only models that have a generated LOD are candidates. */
+  /** sourceName → its stock object id + bbox height (the {@link heightThreshold} gate). */
   species: ReadonlyMap<string, ProcObjSpecies>;
 }
 
@@ -67,23 +80,22 @@ export interface ProcObjConvertResult {
   /** Per-category cost, sorted by category — see {@link ProcObjCategoryCost}. */
   categories: ProcObjCategoryCost[];
   datLines: string[];
+  /** Species whose stock IDE draw distance was raised, and any this tool refused to guess at (plan 014). */
+  drawDistance: { changed: number; skipped: string[] };
   /** Placements the global `procObjMax` slice took, all categories. */
   dropped: number;
-  imgFiles: [string, Uint8Array][];
-  /** Area text IPLs carrying `inst` rows — one of SA's 40 `IplEntityIndexArrays` slots each (plan 002). */
+  /** Area text IPLs carrying `inst` rows — one of SA's 40 `IplEntityIndexArrays` slots each. */
   instBearingFiles: number;
   /** HD objects shipped. */
   objects: number;
-  /** Permanent text-IPL rows the linked pairs cost — the layer's price. */
+  /** Permanent text-IPL rows — one per object now, so this is what the `CBuilding` pool pays. */
   rows: number;
 }
 
-/** Per converted species: the stock HD model id + its generated LOD (id/model name) + bbox height (the gate). */
+/** Per converted species: the stock object id it is placed under + its bbox height (the gate). */
 export interface ProcObjSpecies {
   hdId: number;
   height: number;
-  lodId: number;
-  lodModel: string;
 }
 
 /** One placement that survived the density cutoff, with the category it was judged under. */
@@ -94,36 +106,31 @@ export interface SelectedPlacement {
 }
 
 /**
- * Emit the static HD+LOD pairs as **streamed areas** (see `buildLinkedAreas`): per area a small text IPL with
- * the permanent LOD rows + binary streams with the HD instances, `lod`-linked to their LOD row.
+ * Emit the placements as **permanent text IPLs** — one row per object, `lod = -1`, no binary streams and no LOD
+ * twin (plan 014). ProperFixes' shape, and the only one that fits SA at this density.
  *
- * `rows` is the layer's PRICE — the permanent text rows the linked pairs cost. It is the number every density
- * profile moves and the one the `sa` target's int16 ceiling is spent on, so it is counted here (where the
- * link is decided) rather than re-derived by a reader of the emitted files.
+ * Why the twin went: `CIplStore` loads a stream's IPL slot only inside its bounding box grown by 190 units, so a
+ * streamed row cannot draw past ~190 m whatever the IDE says — and the LOD that used to buy the range recovered
+ * ~0.2 % of a hand-modelled bush's geometry for the price of a whole entity. Range now comes from the IDE
+ * instead (see {@link ProcObjConvertOptions.drawDistance}).
+ *
+ * `rows` is the layer's PRICE and is now simply the object count: every placement is a permanent row, so what it
+ * spends is the `CBuilding` pool rather than an int16 index our asi lifts.
  */
-export function buildStreamedIpl(
+export function buildPermanentIpl(
   final: readonly { model: string; placement: ProcObjPlacement }[],
   species: ReadonlyMap<string, ProcObjSpecies>,
   areaBase: string,
-  linkedHeight = 0,
-): {
-  datLines: string[];
-  files: [string, string][];
-  imgFiles: [string, Uint8Array][];
-  instBearingFiles: number;
-  rows: number;
-} {
-  const pairs = final.map(({ model, placement }) => {
-    const s = species.get(model)!;
+): { datLines: string[]; files: [string, string][]; instBearingFiles: number; rows: number } {
+  const placements = final.map(({ model, placement }) => ({
+    id: species.get(model)!.hdId,
+    interior: 0,
+    model,
+    position: placement.position,
+    rotation: iplQuaternion(placement.rotation),
+  }));
 
-    return {
-      hd: { id: s.hdId, interior: 0, position: placement.position, rotation: iplQuaternion(placement.rotation) },
-      linked: s.height >= linkedHeight,
-      lod: { id: s.lodId, model: s.lodModel },
-    };
-  });
-
-  return { ...buildLinkedAreas(pairs, areaBase), rows: pairs.filter(isLinked).length };
+  return { ...buildPermanentAreas(placements, areaBase), rows: placements.length };
 }
 
 export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjConvertResult {
@@ -132,10 +139,10 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
     areaBase,
     density = 1,
     disableScatter,
+    drawDistance = PROC_OBJ_DRAW_DISTANCE,
     gamePath,
     heightThreshold,
     iplName,
-    linkedHeight,
     outPath,
     procObjMax,
     species,
@@ -147,7 +154,7 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
   const ceiling = densityCeiling(profile, PROC_OBJ_MAX_DENSITY);
   const procObjText = readFileSync(join(gamePath, 'data', 'procobj.dat'), 'utf8');
 
-  // Candidate species: have a LOD, clear the optional height gate, and are not the never-touch underwater set.
+  // Candidate species: clear the optional height gate and are not the never-touch underwater set.
   const eligible = new Set(
     [...species]
       .filter(([model, s]) => s.height >= heightThreshold && !UNDERWATER_PROCOBJ.has(model.toLowerCase()))
@@ -167,19 +174,17 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
   const batches = scatterProcObjects(colliders, groupRulesBySurface(rules), surfaceNames, 0, 0, ceiling);
   const { categories, dropped, final } = selectPlacements(batches, profile, procObjMax);
 
-  const { datLines, files, imgFiles, instBearingFiles, rows } = buildStreamedIpl(
-    final,
-    species,
-    areaBase,
-    linkedHeight,
-  );
+  const { datLines, files, instBearingFiles, rows } = buildPermanentIpl(final, species, areaBase);
   for (const [file, text] of files) {
     writeText(join(outPath, 'data', 'maps', file), text);
   }
-  // Model-name manifest for downstream generators (pmb `collectGeneratedModels`): the HD placement layer now
-  // lives in binary streams (id-only records), so the converted species names are no longer greppable from IPLs.
+  // Model-name manifest for downstream generators (pmb `collectGeneratedModels`).
   const placedModels = [...new Set(final.map(({ model }) => model))].sort();
   writeText(join(outPath, 'data', 'maps', `${iplName}.models`), placedModels.join('\r\n') + '\r\n');
+
+  // The layer's RANGE: raise the baked species' stock IDE draw distance (59 → 299). Nothing here is streamed and
+  // nothing has a LOD, so this row is the only thing deciding how far the clutter is visible.
+  const distance = raiseDrawDistance(gamePath, outPath, placedModels, drawDistance);
 
   // Stop the converted species scattering at runtime (they're now static). `--out` strips them from a whole-file
   // procobj.dat; `--modloader` emits disable rows instead, so a Modloader additive `.dat` merge can't re-add them.
@@ -190,7 +195,7 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
       : stripProcObj(procObjText, (m) => !converted.has(m.toLowerCase())).text,
   );
 
-  return { categories, datLines, dropped, imgFiles, instBearingFiles, objects: final.length, rows };
+  return { categories, datLines, drawDistance: distance, dropped, instBearingFiles, objects: final.length, rows };
 }
 
 /** GTA IPL rotation quaternion for a yaw around Z (conjugated, the IPL convention; align is unused). */
@@ -253,6 +258,41 @@ function categoryCosts(
     generated: generated.get(category) ?? 0,
     objects: shipped.get(category) ?? 0,
   }));
+}
+
+/**
+ * Rewrite the baked species' draw distance in `data/maps/generic/procobj.ide`, reading the STOCK file from
+ * `gamePath` and writing the result under `outPath`.
+ *
+ * A missing file is a loud warning rather than a throw: a total conversion need not ship SA's procobj set, and
+ * the placements are still correct without the raise — they would just keep whatever range the TC declared. A
+ * model the editor refuses to guess at is named, because an unchanged draw distance is invisible until somebody
+ * measures the range in the field.
+ */
+function raiseDrawDistance(
+  gamePath: string,
+  outPath: string,
+  models: readonly string[],
+  distance: number,
+): { changed: number; skipped: string[] } {
+  const relative = join('data', 'maps', 'generic', 'procobj.ide');
+  const source = join(gamePath, relative);
+  if (!existsSync(source)) {
+    console.warn(`map-placement: no ${relative} under ${gamePath} — baked clutter keeps its declared draw distance`);
+
+    return { changed: 0, skipped: [] };
+  }
+  const wanted = new Set(models.map((model) => model.toLowerCase()));
+  const result = setIdeDrawDistance(readFileSync(source, 'utf8'), wanted, distance);
+  writeText(join(outPath, relative), result.text);
+  if (result.skipped.length > 0) {
+    console.warn(
+      `map-placement: ${relative} — ${result.skipped.length} row(s) not in the 5-cell objs form, draw distance ` +
+        `left as authored: ${result.skipped.slice(0, 8).join(', ')}`,
+    );
+  }
+
+  return { changed: result.changed.length, skipped: result.skipped };
 }
 
 function writeText(path: string, text: string): void {
