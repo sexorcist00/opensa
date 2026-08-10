@@ -97,6 +97,10 @@ export interface AnimatedPlacement {
 
 /** One clutter model's instances in a cell (074/19), for the own-engine host to render instanced. */
 export interface CellClutterRender {
+  /** The batch's semantic category — the key the host's per-category draw distance is read with. It rides
+   *  here because a cell's clutter is split by model×SURFACE and the category follows the surface, so the
+   *  host cannot recover it from `modelName` alone (19 of 56 models scatter on several surfaces). */
+  category: ProcObjCategoryName;
   /** Per-instance breakable key hash (074/20), aligned with `matrices` — present only for breakable clutter
    *  models (cactus/rubble/rock), so a hit can resolve to the instance to degenerate. */
   keyHashes?: Uint32Array;
@@ -293,6 +297,7 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       if (floats.length > 0) {
         out.push({
           ...(breakable ? { keyHashes: new Uint32Array(hashes) } : {}),
+          category: batch.category,
           matrices: new Float32Array(floats),
           modelName: def.modelName,
           txdName: def.txdName,

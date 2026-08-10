@@ -54,21 +54,51 @@ stock DFFs).
 - Semantic categories (grass/flowers/bushes/cacti/trees/rocks/underwater; sea floor overrides
   to underwater) with per-category `{enabled, drawDistance, density}` in `graphics.procobj` +
   debug **ProcObj** screen.
+- **`drawDistance` became REAL on 2026-08-10, and until then it was dead config.** It was written by
+  `setProcObj` and by the debug slider and read by NOTHING, so the seven values (50–150) described a behaviour
+  the engine did not have: clutter was drawn for every instance of every loaded cell, the cells came from
+  `streaming.collisionDrawDistance` (150), and cells are 256 units — so the effective reach was cell-shaped and
+  depended on where in the cell you stood, up to ~360 units at a corner.
+  **How it works now:** the range rides to the engine per group (`CellClutter.drawDistance`, keyed off the
+  batch's category, which is why `CellClutterRender` carries `category`) and is applied **per instance** in
+  `vsClutter` — an instance whose ORIGIN is past the range is pushed outside the clip volume. Per instance
+  rather than per group because one group spans a 256-unit cell and a whole-group test cannot express 100.
+  A group that is *entirely* out of range is skipped on the CPU as well, so it costs no vertex work either.
+  The streaming ring is now `clutterRingRadius` — the widest ENABLED category — because a category cannot draw
+  past the radius its cell is loaded at. **Clutter COLLIDERS deliberately stay on the collision ring**: a bush
+  300 units away is scenery, and Rapier static bodies at that radius are the cost that once bought 17 ms/step.
+  **The shipped values, and the reasoning rather than the numbers**: SA draws ALL procedural clutter at a flat
+  `PLANTS_MAX_DISTANCE = 100`, one number with no species variation. That is our FLOOR, not our target — so
+  grass/flowers/underwater sit at 100, bushes 150, rocks 200, and cacti/trees 300, on the rule that what reads
+  as a silhouette carries and what reads as ground texture does not. 300 is also what `sa` shows (plan 014's
+  permanent rows at 299), so the two targets stop disagreeing about the same world.
+  **Measured**: monotone across 100 / 150 / per-category / 300 against a 0.020 % A/A control, a **4× lever in
+  layer terms** (9 110 → 36 191 triangles) reading as +2.3 % of the scene, and **free** — `gpuMs.pass` spans
+  1.7 %, inside its own A/A drift
+  ([bench row](../benchmarks/opensa-engine/2026-08-10-headless-procobj-per-category-ranges.json)).
+  `?procobjRange=<units>` overrides every category with one number (the A/B knob; `150` reproduces the old
+  ring, `100` is SA's own). **Caveat for anyone measuring this**: `frameTriangles` counts SUBMITTED instances,
+  so a group the camera stands inside is counted whole — the column is accurate about vertex load and blind to
+  the fill saving.
 - **One `procObjLimit` (default 150/cell, `?procobjLimit=<n>`)** caps BOTH rendering and collision via the
   cell-wide lottery threshold; vanilla pools at ~300 for the same physics-cost reason. **Its value is unowned
   since the 2026-08-09 column fix** — the candidate pool it rations shrank ~19×, so it binds far less often
   and the number was calibrated against a density that no longer exists.
-- **On a BUILT map the runtime scatter has almost nothing left to scatter, and that is by design.** The
-  converter STRIPS every species it baked into static instances (`convertProcObj`), so the shipped
-  `data/procobj.dat` carries only the rules it could not bake — 9 of 96 on original 2026-08-10, all
-  `P_UNDERWATERBARREN`. Everything you see on dry land is the PAK's baked layer, not this one. Measured as a
-  null result: `?procobj=0`, and `?procobjLimit` swept 1 → 3000, move `country-dusk` triangles by 0.007 %
-  against a 0.41 % A/A drift
-  ([bench row](../benchmarks/opensa-engine/2026-08-10-headless-runtime-clutter-null-result.json)).
-  **Consequences worth knowing before designing anything here:** the two layers are disjoint (no double
-  clutter); clutter load on `opensa` is a BUILD-time quantity, so a perf sweep varies PAKS, not URL params;
-  and a knob test on a dry scene cannot print non-zero, which is how the first attempt failed its own
-  positive control.
+- **The bake left the `opensa` branch on 2026-08-10 (plan 014), so the runtime scatter is the WHOLE clutter
+  layer there again.** `convertProcObj` STRIPS every species it bakes, so while the bake ran on this target the
+  shipped `data/procobj.dat` carried 9 rules of 96 (all `P_UNDERWATERBARREN`) and the runtime knobs measured a
+  null result on dry land — `?procobj=0` and `?procobjLimit` 1 → 3000 moved `country-dusk` by 0.007 % against a
+  0.41 % A/A drift ([the null row](../benchmarks/opensa-engine/2026-08-10-headless-runtime-clutter-null-result.json)).
+  **That was a SITE failure, not an instrument one, and it is closed**: on the unbaked pak the same arm moves
+  −2.72 % against a 0.007 % drift.
+  **What still holds from it:** the two layers are disjoint (there is no double clutter), and a knob test on a
+  dry scene could not have printed non-zero — check that the thing you are switching off is PRESENT where you
+  measure before reading a null.
+  **What no longer holds:** clutter load on `opensa` is a runtime quantity again, so a density sweep is URL
+  params on one pak rather than two builds. Its ceilings, measured: `procObjLimit` saturates at 300 (the
+  candidate pool per face is `area / spacing²`, so a cell has no 300th placement at cutoff 1) and the density
+  multiplier at ×3, which is OUR `PROC_OBJ_MAX_DENSITY` and not a wall
+  ([the ladder](../benchmarks/opensa-engine/2026-08-10-headless-procobj-runtime-knob-ladder.json)).
 - Collision = rendered set ∩ models that ship a COL (rocks/cacti/trees collide; grass/flowers
   walk-through); knob changes re-stream physics (debounced invalidate + reload).
 - Wind mod's `decoratePart` runs on clutter parts (procedural bushes sway when listed).
@@ -81,9 +111,11 @@ stock DFFs).
 - Vanilla's create-around-camera MINDIST behaviour intentionally replaced by per-category
   drawDistance + per-cell budget.
 - **`sa`'s baked layer uses one flat draw distance (299)** — ProperFixes' value, matched before improving on it.
-  Ours is 1.6× their object count, so 58 638 bushes now draw to 299 m; the IDE column is per model, so per-category
-  distances are the next lever and want a measurement first
-  ([`014` step 6](../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md)).
+  Ours is 1.6× their object count, so 58 638 bushes now draw to 299 m; the IDE column is per model, so
+  per-category distances are the open lever THERE
+  ([`014` step 6](../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md)) — on
+  `opensa` they shipped 2026-08-10 and are measured, so that step now has a reference set to argue against
+  rather than a blank. Nothing measured asks for it on `sa`, where 299 flat is the proven value.
 - Density defaults left at 1 (authored). Since the column fix that IS the authored density: the build-time
   layer places 91 092 objects against 15 286 before. Shaping it per category/surface/biome is
   [`sa-procobj-placement/010`–`012`](../../tools/sa-procobj-placement/docs/plans/010-density-model.md);

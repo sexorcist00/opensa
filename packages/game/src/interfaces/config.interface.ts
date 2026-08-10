@@ -482,7 +482,14 @@ export type ProcObjConfig = Record<ProcObjCategory, ProcObjTypeConfig>;
 export interface ProcObjTypeConfig {
   /** Density multiplier on the authored spacing (1 = vanilla, 0.5 = half the objects). */
   density: number;
-  /** Visibility distance (world units) for this category's scattered objects. */
+  /**
+   * Visibility distance (world units) for this category's scattered objects, applied PER INSTANCE. The
+   * widest enabled category also sets the radius clutter cells stream at, so a category can never be visible
+   * past its own number nor past the widest one.
+   *
+   * SA has no per-category equivalent — it draws all procedural clutter at a flat `PLANTS_MAX_DISTANCE = 100`
+   * — so this is deliberately not the original's shape. 100 is the FLOOR here, not the target.
+   */
   drawDistance: number;
   enabled: boolean;
 }

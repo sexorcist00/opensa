@@ -153,14 +153,32 @@ export function createGameRuntimeConfig(): Config {
       // budget contract is plan 072, PARKED for now — this is a straight "everything but volumetric" flip.
       pipeline: 'modern',
       // Procedural ground clutter (procobj.dat; plan 042) — per-category, live-tunable in debug → ProcObj.
+      //
+      // `drawDistance` is world units, and it is REAL since 2026-08-10: the values below were dead config for
+      // as long as they existed (written by the slider, read by nothing), so every category was really drawn
+      // at the collision ring's 150. The range is now applied per instance in the clutter shader.
+      //
+      // The scale, and why it is not the original's: SA draws ALL procedural clutter at a flat
+      // `PLANTS_MAX_DISTANCE = 100` (`docs/gta-sa-original/procedural-objects.md`) — one number, no species
+      // variation, a 2004 compromise in a create/destroy system with a pool. We have neither the pool nor the
+      // per-frame creation, and our `sa` target already shows this same clutter at 299 (plan 014's permanent
+      // rows), so matching 100 would make the two targets disagree about the same world. The floor is
+      // therefore 100 — the original's number is our MINIMUM — and size decides the rest: what reads as a
+      // silhouette on the horizon carries far, what reads as ground texture does not.
       procobj: {
-        bushes: { density: 1, drawDistance: 80, enabled: true },
-        cacti: { density: 1, drawDistance: 100, enabled: true },
-        flowers: { density: 1, drawDistance: 50, enabled: true },
-        grass: { density: 1, drawDistance: 50, enabled: true },
-        rocks: { density: 1, drawDistance: 80, enabled: true },
-        trees: { density: 1, drawDistance: 150, enabled: true },
-        underwater: { density: 1, drawDistance: 60, enabled: true },
+        // Waist-height masses; they read as cover rather than as a silhouette.
+        bushes: { density: 1, drawDistance: 150, enabled: true },
+        // Tall desert landmarks — the thing you navigate by in Bone County.
+        cacti: { density: 1, drawDistance: 300, enabled: true },
+        flowers: { density: 1, drawDistance: 100, enabled: true },
+        // Ground texture: past ~100 it is sub-pixel noise that costs pure fill.
+        grass: { density: 1, drawDistance: 100, enabled: true },
+        // Mixed by nature — `searock01` boulders down to `p_rubble` gravel — so mid-range.
+        rocks: { density: 1, drawDistance: 200, enabled: true },
+        // The biggest silhouette, and the one `sa` shows at 299.
+        trees: { density: 1, drawDistance: 300, enabled: true },
+        // Water attenuates long before the range does.
+        underwater: { density: 1, drawDistance: 100, enabled: true },
       },
       renderScale: 1,
       shadows: { distance: 800, enabled: true },

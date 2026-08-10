@@ -692,6 +692,36 @@ continuous movement is sampled by no arm here, and the three streaming columns r
 pressure never arose rather than that it was survived. **Nor what raising `PROC_OBJ_MAX_DENSITY` would cost:**
 every arm above ×3 measured the same world.
 
+## 2026-08-10 — the per-category clutter ranges, which had never been connected to anything
+
+[`opensa-engine/2026-08-10-headless-procobj-per-category-ranges.json`](opensa-engine/2026-08-10-headless-procobj-per-category-ranges.json)
+— five `country-dusk` sweeps, same lane and pak as the knob ladder above. **The seven per-category draw
+distances were dead config**: written by the debug slider, read by nothing, so every category really drew at
+whatever its 256-unit cell reached and the cell ring was `streaming.collisionDrawDistance` = 150. They are now
+applied per INSTANCE in the clutter vertex shader, with the streaming ring widened to the widest enabled
+category.
+
+| range | draws | triangles | layer on screen¹ | `gpuMs.pass` |
+| --- | --- | --- | --- | --- |
+| 100 — SA's flat `PLANTS_MAX_DISTANCE` | 818 | 1 182 287 | 9 110 | 3.636 |
+| 150 — the collision ring | 819 | 1 186 367 | 13 190 | 3.633 |
+| **per-category (shipped)** | **821** | **1 191 188** | **18 011** | **3.694** |
+| 300 — every category at the widest | 830 | 1 209 368 | 36 191 | 3.678 |
+
+¹ against the same pak's clutter-off baseline of 1 173 177 triangles.
+
+Four points, one direction, against an A/A control of **0.020 %** on triangles and **zero** on draws. **In
+layer terms the range is a 4× lever** (9 110 → 36 191) while reading as +2.3 % of the scene — the scope matters
+or it sounds like nothing. And it is **free in frame terms**: `gpuMs.pass` spans 1.7 % across the whole ladder,
+inside this column's own 6.5 % A/A drift, with every hitch column flat. **Choosing a range is a look decision
+with a free budget**, which is what the P1 measurement above predicted for this layer.
+
+**Two things to carry forward.** The old behaviour was never "150" — it was "every instance of whatever cell you
+are in", so the effective reach depended on where in the cell the camera stood (~360 units at a corner); the win
+is determinism as much as reach. And **`avgTriangles` under-reports this feature**: it counts SUBMITTED
+instances, so a group the camera stands inside is counted whole and culled per instance in the shader. The
+column is accurate about vertex load and blind to the fill saving.
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

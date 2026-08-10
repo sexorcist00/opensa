@@ -101,7 +101,7 @@ import { type MapGame } from './debug/map-inspector';
 import { setupEngineAnimObjects } from './engine-anim-objects';
 import { setupEngineBreakables } from './engine-breakables';
 import { setupEngineCleo } from './engine-cleo-setup';
-import { setupEngineClutter } from './engine-clutter';
+import { clutterRingRadius, setupEngineClutter } from './engine-clutter';
 import { createEngineDebugActions, type EnginePerfSnapshot } from './engine-debug-actions';
 import { type DynamicFxEmitter, loadCoronaSprites, loadSkidSprite, setupEngineParticles } from './engine-particles';
 import { ledgerBreakdown, type LegSample, setupPerfRuns } from './engine-perf-runs';
@@ -402,6 +402,16 @@ function applyGraphicsParams(config: ReturnType<typeof createGameRuntimeConfig>,
     for (const setting of Object.values(config.graphics.procobj)) {
       setting.density *= procobjParam;
       setting.enabled = setting.enabled && procobjParam > 0;
+    }
+  }
+  // `?procobjRange=<units>` OVERRIDES every category's draw distance with one number — the A/B knob for the
+  // per-category ranges, and the only way to reproduce a uniform world: `150` is what the engine really drew
+  // before the ranges were wired (the collision ring), `100` is SA's own flat `PLANTS_MAX_DISTANCE`. An
+  // override rather than a multiplier precisely so those two are reachable exactly.
+  const procobjRangeParam = Number(params.get('procobjRange') ?? Number.NaN);
+  if (Number.isFinite(procobjRangeParam) && procobjRangeParam > 0) {
+    for (const setting of Object.values(config.graphics.procobj)) {
+      setting.drawDistance = procobjRangeParam;
     }
   }
 }
@@ -869,10 +879,16 @@ async function boot(
   const breakables = setupEngineBreakables(engine, physics, collision, adapter, fs, props);
   // Procedural clutter (074/19 B7·d): grass/bushes/rocks scattered per cell, rendered instanced. Streamed on
   // the SAME cells + budget as the colliders (adapter memoizes the scatter), so render and collision agree.
-  const engineClutter = setupEngineClutter(engine, fs);
+  const engineClutter = setupEngineClutter(engine, fs, (category) => config.graphics.procobj[category].drawDistance);
   const clutterLoaded = new Set<string>();
   const updateClutter = (): void => {
-    const cells = cellsWithin(viewOf(), config.streaming.collisionDrawDistance, adapter.cellSize);
+    // The ring is the WIDEST per-category range, not `collisionDrawDistance` — a category cannot be visible
+    // past the radius its cell is streamed at, so tying the two capped every category at the collision ring
+    // (150) whatever its own number said. The per-instance cull in the clutter shader is what brings each
+    // category back to its own distance inside this ring, so a wider ring costs scatter and upload, never
+    // fill. Clutter COLLIDERS deliberately stay on the collision ring: a bush 300 units away is scenery, and
+    // Rapier static bodies at that radius are the cost that once bought 17 ms/step.
+    const cells = cellsWithin(viewOf(), clutterRingRadius(config.graphics.procobj), adapter.cellSize);
     const desired = new Set(cells.map(([cx, cy]) => `${cx},${cy}`));
     for (const key of clutterLoaded) {
       if (!desired.has(key)) {
