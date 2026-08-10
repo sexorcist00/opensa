@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildPerfectMap,
   checkImgIdBudgets,
+  checkInstBearingIplSlots,
   EXCLUDABLE_STAGES,
   type ExcludableStage,
+  INST_BEARING_IPL_SLOTS,
   OPENSA_BUDGET_NOTICE,
   parseExcludedStages,
   reportTextIplCensus,
@@ -363,10 +365,14 @@ describe('reportTextIplCensus', () => {
       expect(capture().logs.join('\n')).toMatch(/sa map cost: 32768 permanent text-IPL rows/);
     });
 
-    it("does NOT throw past stock SA's 39 slots — OLA lifts that array on the target", () => {
+    it('MEASURES the slot count past 40 and leaves the failing to the gate beside it', () => {
+      // The census reports; `checkInstBearingIplSlots` is what fails the build. Kept apart so the gate is a
+      // pure function testable without a game dir — and because the census must still print a number when the
+      // gate is about to throw, which is how the field crash got its count (75 of 40, plan 002).
       writeGame(dir, 45);
 
       expect(() => reportTextIplCensus(dir)).not.toThrow();
+      expect(reportTextIplCensus(dir).instBearingIpls).toBe(45);
       expect(capture().logs.join('\n')).toMatch(/45 inst-bearing IPLs/);
     });
 
@@ -468,6 +474,30 @@ describe('checkImgIdBudgets', () => {
         Array.from({ length: 522 }, (_, i) => `a${i}_stream0.ipl`),
       );
       expect(() => checkImgIdBudgets(dir)).not.toThrow();
+    });
+  });
+});
+
+describe('checkInstBearingIplSlots', () => {
+  describe('negative cases', () => {
+    it('fails the build the field crashed on: 75 inst-bearing IPLs against 40 slots', () => {
+      // The `sa` build at the shipped density, 2026-08-10. The game died loading `plobj10.ipl` — slot 40 — with
+      // OLA's `EntityIpl = unlimited` set, measured twice (with and without our own asi's int16 patch).
+      expect(() => checkInstBearingIplSlots(75)).toThrow(/75 inst-bearing text IPLs of 40 SA slots/);
+    });
+
+    it('fails on the first slot past the array, not one later', () => {
+      expect(() => checkInstBearingIplSlots(INST_BEARING_IPL_SLOTS + 1)).toThrow(/IplEntityIndexArrays/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('passes a tree that exactly fills the array', () => {
+      expect(() => checkInstBearingIplSlots(INST_BEARING_IPL_SLOTS)).not.toThrow();
+    });
+
+    it('passes the budget plan 002 targets: 28 stock + 6 linked areas', () => {
+      expect(() => checkInstBearingIplSlots(28 + 6)).not.toThrow();
     });
   });
 });

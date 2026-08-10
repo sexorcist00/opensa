@@ -260,9 +260,9 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     const sa = join(outPath, 'sa');
     log('sa → sa/');
     await timed('sa', () => buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa }));
-    // Both SA ceilings are checked HERE, on the tree the real game loads — not on the shared build. The LOD
+    // Every SA ceiling is checked HERE, on the tree the real game loads — not on the shared build. The LOD
     // stage appends hole-fill instances to the copied text IPLs, so the common build undercounts the rows.
-    reportTextIplCensus(sa);
+    checkInstBearingIplSlots(reportTextIplCensus(sa).instBearingIpls);
     checkImgIdBudgets(sa);
     produced.push({ dir: sa, name: 'sa' });
   }
@@ -577,11 +577,13 @@ export function checkImgIdBudgets(gameDir: string): void {
 }
 
 /**
- * What the built `sa/` tree COSTS in permanent text-IPL rows and inst-bearing IPL slots. **A census, not a
- * gate** (2026-08-09, the user's call): the configuration we ship to always carries `perfect-map.asi` + OLA +
- * FLA, so SA's int16 pool index and its 39-slot `IplEntityIndexArrays` are lifted where our data lands and
- * neither is a limit our content is designed against — `docs/project-goals.md` directive 3, and
- * `docs/gta-sa-original/reference-install.md` for what the target actually sets.
+ * What the built `sa/` tree COSTS in permanent text-IPL rows and inst-bearing IPL slots. **A census for the
+ * ROWS, a gate for the SLOTS** — the row half stayed a census on 2026-08-09 (the user's call: `perfect-map.asi`
+ * lifts the int16 pool index where our data lands, so it is not a limit our content is designed against —
+ * `docs/project-goals.md` directive 3). The slot half became {@link checkInstBearingIplSlots} on 2026-08-10,
+ * when the field killed the belief that OLA lifts it too. The two halves of this function are now the two sides
+ * of the same rule: **delete the museum pieces, keep the gates** — and which is which is answered by the
+ * target, never by an ini.
  *
  * What died with the gate, and why it was never a gate worth having:
  *
@@ -592,10 +594,12 @@ export function checkImgIdBudgets(gameDir: string): void {
  *   lifted. It never shaped content: nothing culled to fit it. (What DOES shape rows is `linkedHeight` — short
  *   species ride binary streams at zero permanent rows — and lod-trees' per-area `AREA_ROW_CAP` migration.)
  * - **`--allow-text-row-overflow`**, which had nothing left to permit.
- * - **the two stock ceilings as printed scale** — int16's 32 767 (field-bisected to exactly 2^15: 31 300 rows
- *   clean, 33 210 corrupt) and `IplEntityIndexArrays`' 39 slots. Both are lifted on the target, so printing
- *   them measured our build against a machine it never runs on. They live in
+ * - **int16's 32 767 as printed scale** (field-bisected to exactly 2^15: 31 300 rows clean, 33 210 corrupt) —
+ *   lifted by our asi, so printing it measured our build against a machine it never runs on. It lives in
  *   `docs/gta-sa-original/reference-install.md` and `docs/open-issues/fixed/ghost-barriers.md`.
+ *   **`IplEntityIndexArrays` was dropped alongside it on the same reasoning and that was WRONG** — it is real,
+ *   and it is back as a gate. The lesson is not "keep every ceiling": it is that "lifted" needs the artifact
+ *   that enforces the limit to say so, and for this one nothing ever had.
  *
  * **This is not "guards are bad".** {@link checkImgIdBudgets} beside it still THROWS, and correctly: FLA's
  * pools are what the target is actually configured with — real numbers, not `unlimited` — and exhausting one
@@ -612,12 +616,12 @@ export function checkImgIdBudgets(gameDir: string): void {
  * Runs on the BUILT `sa/` tree, like {@link checkImgIdBudgets} — never on the shared build, which undercounts
  * it (the sa LOD stage appends hole-fill instances to the text IPLs after the split).
  */
-export function reportTextIplCensus(gameDir: string): void {
+export function reportTextIplCensus(gameDir: string): { instBearingIpls: number; rows: number } {
   const datPath = join(gameDir, 'data', 'gta.dat');
   if (!existsSync(datPath)) {
     console.warn(`  ! sa text-IPL census SKIPPED — no data/gta.dat under ${gameDir}; this build's row cost is unknown`);
 
-    return;
+    return { instBearingIpls: 0, rows: 0 };
   }
   const listed: string[] = [];
   const missing: string[] = [];
@@ -651,6 +655,41 @@ export function reportTextIplCensus(gameDir: string): void {
         `${missing.length > 3 ? ', …' : ''}) — ${totalRows} is a LOWER BOUND, not this build's row cost`,
     );
   }
+
+  return { instBearingIpls: used.length, rows: totalRows };
+}
+
+/** SA's `IplEntityIndexArrays` — one slot per text IPL that carries `inst` rows, written past without a bounds
+ *  check. **Real on the target**, twice-measured 2026-08-10 (see {@link checkInstBearingIplSlots}). */
+export const INST_BEARING_IPL_SLOTS = 40;
+
+/**
+ * Fail the build when the tree carries more inst-bearing text IPLs than SA has slots for.
+ *
+ * **This one was a museum piece until the field made it a gate.** The census above used to print the 39/40
+ * `IplEntityIndexArrays` figure and then stopped, on the grounds that OLA lifts it — `EntityIpl = unlimited` is
+ * set in the reference install and documents itself as *"Maximum number of IPL files that creates entities"*.
+ * The lift does not work. The `sa` build at the shipped density ships **75** inst-bearing IPLs and the game dies
+ * loading the **40th** (`plobj10.ipl`), measured twice: with the shipping `perfect-map.asi` and with an
+ * `-DPM_FIX_INT16=0` probe of it, so our own asi is not the cause.
+ *
+ * A ceiling nobody had crossed was not a ceiling anyone had lifted, and the reference install carries only 36 —
+ * which is why nothing caught this for a month. The number a plan writes down has to be READ by something:
+ * plan 007 budgeted *"stock 30 + 8 = 38 ≤ the 40-slot array"* at 15 283 objects, the density fix took the layer's
+ * areas 8 → 46, and no code re-checked it. Pure so it is testable without a game dir — the layer's own share is
+ * reported at emit time by `buildLinkedAreas`.
+ */
+export function checkInstBearingIplSlots(instBearingIpls: number): void {
+  if (instBearingIpls <= INST_BEARING_IPL_SLOTS) {
+    return;
+  }
+  throw new Error(
+    `${instBearingIpls} inst-bearing text IPLs of ${INST_BEARING_IPL_SLOTS} SA slots ` +
+      "(IplEntityIndexArrays) — the game crashes loading the slot past the last, and OLA's EntityIpl " +
+      "lift does not work (measured 2026-08-10). Group the layer's permanent rows into FEWER areas: a text " +
+      'IPL with no inst rows costs no slot, and rows inside one file are cheap (the field runs 9 627 of them). ' +
+      'See tools/map-placement/docs/plans/002-ipl-slot-budget.md.',
+  );
 }
 
 /**

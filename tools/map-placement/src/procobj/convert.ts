@@ -13,7 +13,7 @@ import { dirname, join } from 'node:path';
 import type { ProcObjDensityConfig, ProcObjDensityInput } from './density';
 
 import { disableProcObj, stripProcObj, UNDERWATER_PROCOBJ } from '../procobj-strip';
-import { buildLinkedAreas } from '../streamed-areas';
+import { buildLinkedAreas, isLinked } from '../streamed-areas';
 import { densityCeiling, densityFor, densityProfile, validateDensityProfile } from './density';
 import { buildMapDefinitions } from './world';
 
@@ -70,6 +70,8 @@ export interface ProcObjConvertResult {
   /** Placements the global `procObjMax` slice took, all categories. */
   dropped: number;
   imgFiles: [string, Uint8Array][];
+  /** Area text IPLs carrying `inst` rows — one of SA's 40 `IplEntityIndexArrays` slots each (plan 002). */
+  instBearingFiles: number;
   /** HD objects shipped. */
   objects: number;
   /** Permanent text-IPL rows the linked pairs cost — the layer's price. */
@@ -104,7 +106,13 @@ export function buildStreamedIpl(
   species: ReadonlyMap<string, ProcObjSpecies>,
   areaBase: string,
   linkedHeight = 0,
-): { datLines: string[]; files: [string, string][]; imgFiles: [string, Uint8Array][]; rows: number } {
+): {
+  datLines: string[];
+  files: [string, string][];
+  imgFiles: [string, Uint8Array][];
+  instBearingFiles: number;
+  rows: number;
+} {
   const pairs = final.map(({ model, placement }) => {
     const s = species.get(model)!;
 
@@ -115,7 +123,7 @@ export function buildStreamedIpl(
     };
   });
 
-  return { ...buildLinkedAreas(pairs, areaBase), rows: pairs.filter((pair) => pair.linked).length };
+  return { ...buildLinkedAreas(pairs, areaBase), rows: pairs.filter(isLinked).length };
 }
 
 export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjConvertResult {
@@ -159,7 +167,12 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
   const batches = scatterProcObjects(colliders, groupRulesBySurface(rules), surfaceNames, 0, 0, ceiling);
   const { categories, dropped, final } = selectPlacements(batches, profile, procObjMax);
 
-  const { datLines, files, imgFiles, rows } = buildStreamedIpl(final, species, areaBase, linkedHeight);
+  const { datLines, files, imgFiles, instBearingFiles, rows } = buildStreamedIpl(
+    final,
+    species,
+    areaBase,
+    linkedHeight,
+  );
   for (const [file, text] of files) {
     writeText(join(outPath, 'data', 'maps', file), text);
   }
@@ -177,7 +190,7 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
       : stripProcObj(procObjText, (m) => !converted.has(m.toLowerCase())).text,
   );
 
-  return { categories, datLines, dropped, imgFiles, objects: final.length, rows };
+  return { categories, datLines, dropped, imgFiles, instBearingFiles, objects: final.length, rows };
 }
 
 /** GTA IPL rotation quaternion for a yaw around Z (conjugated, the IPL convention; align is unused). */

@@ -233,17 +233,20 @@ export function combinedModelSource(inPath: string, archive: ImgArchive): ModelS
 export function layerCostLine(
   target: BuildTarget,
   density: ProcObjDensityInput,
-  procObj: null | { dropped?: number; objects: number; rows: number },
+  procObj: null | { dropped?: number; instBearingFiles?: number; objects: number; rows: number },
 ): null | string {
   if (!procObj) {
     return null; // nothing converted (a TC with no matching species) — there is no price to report
   }
-  const { dropped = 0, objects, rows } = procObj;
+  const { dropped = 0, instBearingFiles, objects, rows } = procObj;
   const perObject = objects > 0 ? (rows / objects).toFixed(3) : '0.000';
 
   return (
     `procobj cost (target ${target}, density ${densityLabel(density)}): ` +
     `${objects} objects · ${rows} permanent text rows · ${perObject} rows/object` +
+    // The other, scarcer price: an inst-bearing area IPL is one of SA's 40 IplEntityIndexArrays slots, and the
+    // field crashed on slot 40 (plan 002). Reported beside the rows so a density change shows BOTH costs.
+    (instBearingFiles === undefined ? '' : ` · ${instBearingFiles} inst-bearing area IPL(s) of SA's 40 slots`) +
     // A capped run is measuring procObjMax, not the density it says it ran at — so the cap says so itself.
     (dropped > 0 ? ` · CAP DROPPED ${dropped} (procObjMax binds — raise it or this density is not what shipped)` : '') +
     (target === 'sa'

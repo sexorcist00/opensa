@@ -20,11 +20,16 @@ export interface LinkedPair {
   readonly lod: { readonly id: number; readonly model: string };
 }
 
-/** Boot loads a text IPL **plus all its binary streams** through one 4096-slot static buffer
- *  (`gpLoadedBuildings`, `CFileLoader::LoadScene` + `CIplStore::SetupRelatedIpls`), so an area's text rows +
- *  binary rows must stay ≤ 4096 together. 2000 pairs = 4000 rows, with margin. Keep areas as FEW as possible:
- *  each area's text IPL also takes one of SA's 40 `IplEntityIndexArrays` slots (also unbounded). */
-export const AREA_MAX_PAIRS = 2000;
+/** Boot loads a text IPL **plus all its binary streams** through one static buffer (`gpLoadedBuildings`,
+ *  `CFileLoader::LoadScene` + `CIplStore::SetupRelatedIpls`), so an area's text rows and its binary rows share
+ *  one budget. Stock sizes it 4096; the target lifts it with OLA `EntitiesPerIpl = unlimited`, and the field
+ *  has it running **9 627** entries (ProperFixes' vegetation layer, `docs/gta-sa-original/`).
+ *
+ *  Either kind of area costs **2 entries per pair** — linked: one text row + one HD stream record; unlinked:
+ *  two stream records — so 4800 pairs = 9600 entries, just under what is measured working. Sized against the
+ *  measurement rather than against stock's 4096, because the ONLY thing that made the layer fit before was
+ *  spending a 40-slot array 47 times over (plan 002). */
+export const AREA_MAX_PAIRS = 4800;
 
 /** Instances per binary stream file — vanilla-sized tiles so position streaming stays fine-grained. */
 export const STREAM_MAX_INST = 512;
@@ -33,28 +38,39 @@ export const STREAM_MAX_INST = 512;
  * Emit HD+LOD pairs **vanilla-style**: per spatial area, a small text IPL (`<areaBase><i>.ipl`, registered in
  * gta.dat) holding the permanent LOD rows, plus binary `<areaBase><i>_stream<k>.ipl` streams (shipped inside
  * the IMG) holding the HD instances, each `lod` field indexing its LOD row in the area's text IPL. Mass
- * instances in ONE text IPL overflow SA's unbounded 4096-row per-file static buffer (the "ghost barriers"
- * corruption — lod-procobj plan 007); binary streams instead flow through `CIplStore` position streaming —
- * the exact mechanism the stock map ships 35k+ instances with.
+ * instances in ONE text IPL overflow SA's per-file static buffer (the "ghost barriers" corruption — lod-procobj
+ * plan 007); binary streams instead flow through `CIplStore` position streaming — the exact mechanism the stock
+ * map ships 35k+ instances with.
+ *
+ * **Linked and unlinked pairs are split into SEPARATE areas** (plan 002). A text IPL carrying `inst` rows costs
+ * one of SA's 40 `IplEntityIndexArrays` slots, and that array is REAL — the field crashed on slot 40 twice on
+ * 2026-08-10, `EntityIpl = unlimited` notwithstanding. Splitting on position alone scattered the linked pairs
+ * across every area, so 28 % of the pairs were spending 100 % of the slots: 47 areas for 25 560 rows. Grouped by
+ * link, only the linked areas carry rows (~6 of them), and an unlinked area's text IPL is emitted with an EMPTY
+ * `inst` section — the file and its `gta.dat` line still have to exist, because that is how
+ * `CIplStore::SetupRelatedIpls` finds its `_stream<k>` companions.
+ *
+ * `instBearingFiles` is what the slot budget is spent on, returned rather than re-derived by a reader of the
+ * emitted files: plan 007 wrote its slot budget into prose and nothing re-read it when the density fix took
+ * areas 8 → 46.
  */
 export function buildLinkedAreas(
   pairs: readonly LinkedPair[],
   areaBase: string,
-): { datLines: string[]; files: [string, string][]; imgFiles: [string, Uint8Array][] } {
-  if (pairs.length === 0) {
-    return { datLines: [], files: [], imgFiles: [] };
-  }
-
+): { datLines: string[]; files: [string, string][]; imgFiles: [string, Uint8Array][]; instBearingFiles: number } {
   const datLines: string[] = [];
   const files: [string, string][] = [];
   const imgFiles: [string, Uint8Array][] = [];
+  let instBearingFiles = 0;
+  let index = 0;
 
-  splitByMedian(pairs, AREA_MAX_PAIRS, (pair) => pair.hd.position).forEach((area, i) => {
-    const areaName = `${areaBase}${i}`;
+  const emitArea = (area: readonly LinkedPair[]): void => {
+    const areaName = `${areaBase}${index}`;
+    index += 1;
     const lodRows: string[] = [];
     const hdInstances: BinaryIplInstance[] = [];
     for (const { hd, linked, lod } of area) {
-      if (linked ?? true) {
+      if (isLinked({ hd, linked, lod })) {
         const t = [...hd.position, ...hd.rotation].join(', ');
         hdInstances.push({ ...hd, lod: lodRows.length });
         lodRows.push(`${lod.id}, ${lod.model}, ${hd.interior}, ${t}, -1`);
@@ -62,6 +78,9 @@ export function buildLinkedAreas(
         hdInstances.push({ ...hd, lod: -1 });
         hdInstances.push({ id: lod.id, interior: hd.interior, lod: -1, position: hd.position, rotation: hd.rotation });
       }
+    }
+    if (lodRows.length > 0) {
+      instBearingFiles += 1;
     }
 
     datLines.push(`IPL DATA\\MAPS\\${areaName}.IPL`);
@@ -76,9 +95,22 @@ export function buildLinkedAreas(
       }
       imgFiles.push([stream, encodeBinaryIpl(tile)]);
     });
-  });
+  };
 
-  return { datLines, files, imgFiles };
+  // Linked first, so the slot-bearing areas keep the low indexes — a stable, greppable ordering.
+  for (const family of [pairs.filter(isLinked), pairs.filter((pair) => !isLinked(pair))]) {
+    if (family.length === 0) {
+      continue;
+    }
+    splitByMedian(family, AREA_MAX_PAIRS, (pair) => pair.hd.position).forEach(emitArea);
+  }
+
+  return { datLines, files, imgFiles, instBearingFiles };
+}
+
+/** A pair whose LOD becomes a permanent text row (the default) — see {@link LinkedPair.linked}. */
+export function isLinked(pair: LinkedPair): boolean {
+  return pair.linked ?? true;
 }
 
 /** Recursive median split on the longest XY axis until each leaf holds ≤ `max` items. Deterministic and

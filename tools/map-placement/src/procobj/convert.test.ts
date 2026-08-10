@@ -78,22 +78,25 @@ describe('buildStreamedIpl', () => {
         { model: 'bush', placement: pair(0).placement },
         { model: 'cedar', placement: pair(1).placement },
       ];
-      const { files, imgFiles, rows } = buildStreamedIpl(pairs, mixed, 'plobj', 4);
+      const { files, imgFiles, instBearingFiles, rows } = buildStreamedIpl(pairs, mixed, 'plobj', 4);
 
-      const textRows = files[0][1].split('\r\n').filter((l) => /^\d/.test(l));
-      expect(textRows).toHaveLength(1); // only the cedar LOD is a permanent row
-      expect(rows).toBe(textRows.length); // the reported price counts the rows actually emitted
-      expect(textRows[0]).toMatch(/^6501, plocedar/);
+      // The two species land in SEPARATE areas (plan 002) — linked first, so it holds the only text rows and
+      // is the only area spending an `IplEntityIndexArrays` slot.
+      const textRows = files.map((file) => file[1].split('\r\n').filter((l) => /^\d/.test(l)));
+      expect(textRows.map((r) => r.length)).toEqual([1, 0]);
+      expect(textRows[0][0]).toMatch(/^6501, plocedar/); // only the cedar LOD is permanent
+      expect(rows).toBe(1); // the reported price counts the rows actually emitted
+      expect(instBearingFiles).toBe(1);
 
-      const insts = parseBinaryIpl(toArrayBuffer(imgFiles[0][1]));
-      expect(insts).toHaveLength(3); // bush HD + bush LOD (both unlinked) + cedar HD (linked)
+      expect(parseBinaryIpl(toArrayBuffer(imgFiles[0][1])).map((i) => [i.id, i.lod])).toEqual([[801, 0]]);
       expect(
-        insts
-          .filter((i) => i.lod === -1)
-          .map((i) => i.id)
-          .sort((a, b) => a - b),
-      ).toEqual([800, 6500]);
-      expect(insts.find((i) => i.id === 801)?.lod).toBe(0); // cedar HD → its text row
+        parseBinaryIpl(toArrayBuffer(imgFiles[1][1]))
+          .map((i) => [i.id, i.lod])
+          .sort((a, b) => a[0] - b[0]),
+      ).toEqual([
+        [800, -1],
+        [6500, -1],
+      ]); // the bush ships HD + LOD unlinked, at zero text cost
     });
 
     it('emits a text LOD layer plus a binary HD stream whose lod indexes the text rows', () => {
@@ -115,17 +118,20 @@ describe('buildStreamedIpl', () => {
       expect(hd[1].position[0]).toBeCloseTo(lodFloat(lodRows[1], 3), 5);
     });
 
-    it('splits areas so text+binary rows per area stay under the 4096 boot buffer', () => {
-      const pairs = Array.from({ length: 4000 }, (_, i) => pair(i));
-      const { datLines, files, imgFiles, rows } = buildStreamedIpl(pairs, species, 'plobj');
+    it('splits areas so text+binary rows per area stay under the boot buffer the field has proven', () => {
+      const pairs = Array.from({ length: 9600 }, (_, i) => pair(i));
+      const { datLines, files, imgFiles, instBearingFiles, rows } = buildStreamedIpl(pairs, species, 'plobj');
 
-      expect(files.length).toBe(2); // exactly ⌈4000/2000⌉ — every area costs one of SA's 40 text-IPL slots
+      expect(files.length).toBe(2); // exactly ⌈9600/4800⌉ — every inst-bearing area costs one of SA's 40 slots
+      expect(instBearingFiles).toBe(files.length); // all-linked input: every area carries rows
       expect(datLines).toHaveLength(files.length);
       let emitted = 0;
       for (const [, text] of files) {
         const lodRows = text.split('\r\n').filter((l) => l.includes(',')).length;
         emitted += lodRows;
-        expect(2 * lodRows).toBeLessThanOrEqual(4096); // text LOD rows + streamed HD rows share the boot buffer
+        // Text LOD rows + streamed HD rows share one boot buffer; 9 627 entries is what ProperFixes is
+        // measured running on the target, and the split is sized under it rather than under stock's 4 096.
+        expect(2 * lodRows).toBeLessThanOrEqual(9627);
       }
       expect(rows).toBe(emitted); // the reported price is MAP-wide, not the first area's
       for (const [name, bytes] of imgFiles) {
