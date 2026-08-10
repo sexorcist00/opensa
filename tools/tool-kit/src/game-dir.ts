@@ -7,10 +7,18 @@ import { basename, dirname, join, parse, resolve, sep } from 'node:path';
  * (`perfect-map-builder/src/pipeline.ts` relies on exactly that).
  */
 
-/** Wipe `--out` and mirror the game dir into it. Guard the paths with {@link guardOut} first. */
+/**
+ * Wipe `--out` and mirror the game dir into it. Guard the paths with {@link guardOut} first.
+ *
+ * **`dereference` is what keeps `--out` a real tree.** With the default, a SYMLINKED `--game` is copied as a
+ * symlink — so `--out` becomes a second name for the game dir, and every stage after this one (the archive
+ * rewrite above all) writes into the source. That is not theory: on 2026-08-10 the guard passed on two
+ * genuinely different paths, and then this copy created the very aliasing the guard exists to prevent —
+ * the run rewrote the game archives that had been restored an hour earlier.
+ */
 export function copyGameDir(gamePath: string, outPath: string): void {
   rmSync(outPath, { force: true, recursive: true });
-  cpSync(gamePath, outPath, { force: true, recursive: true });
+  cpSync(gamePath, outPath, { dereference: true, force: true, recursive: true });
 }
 
 /**

@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { mkdtempSync, realpathSync, symlinkSync } from 'node:fs';
+import { lstatSync, mkdtempSync, realpathSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -65,6 +65,22 @@ describe('copyGameDir', () => {
 
       expect(readFileSync(join(out, 'data', 'gta.dat'), 'utf8')).toBe('IDE data/maps/x.ide');
       expect(existsSync(join(out, 'stale.txt'))).toBe(false);
+    });
+
+    it('copies a SYMLINKED game dir as a real tree, never as a second name for it', () => {
+      const root = realpathSync(mkdtempSync(join(tmpdir(), 'game-dir-')));
+      const game = join(root, 'game');
+      const link = join(root, 'game-link');
+      const out = join(root, 'out');
+      mkdirSync(join(game, 'models'), { recursive: true });
+      writeFileSync(join(game, 'models', 'gta3.img'), 'archive');
+      symlinkSync(game, link, 'dir');
+
+      copyGameDir(link, out);
+      writeFileSync(join(out, 'models', 'gta3.img'), 'rewritten by a later stage');
+
+      expect(lstatSync(out).isSymbolicLink()).toBe(false);
+      expect(readFileSync(join(game, 'models', 'gta3.img'), 'utf8')).toBe('archive');
     });
   });
 });

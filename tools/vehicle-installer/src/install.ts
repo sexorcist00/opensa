@@ -1,5 +1,5 @@
-import { guardOut } from '@opensa/tool-kit/game-dir';
-import { cpSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyGameDir, guardOut } from '@opensa/tool-kit/game-dir';
+import { readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { applyVehicle } from './apply-vehicle';
@@ -29,8 +29,7 @@ export function install(options: InstallOptions): void {
   const outPath = resolve(options.outPath);
   guardOut(outPath, gamePath, inPath);
 
-  rmSync(outPath, { force: true, recursive: true });
-  cpSync(gamePath, outPath, { force: true, recursive: true });
+  copyGameDir(gamePath, outPath);
 
   const vehicles = readdirSync(inPath, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
