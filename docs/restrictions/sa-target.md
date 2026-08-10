@@ -17,15 +17,17 @@ we build for** (the user's call, reaffirmed 2026-08-09). So the useful column is
 | Permanent text-IPL rows, map-wide | 32,767 (int16) | **lifted — `perfect-map.asi` patch #1** (the install runs 72,914) | `CIplStore::IncludeEntity` truncates building-pool indexes to int16; past 2^15 it corrupts stream-out ranges (the "ghost barriers" family) |
 | Text IPLs carrying `inst` rows | 39/40 slots | **NOT lifted in practice — treat 40 as REAL** (2026-08-10, field) | `IplEntityIndexArrays` is written past without a bounds check |
 | Rows per text IPL + its boot streams | 4,096 | **lifted — OLA `EntitiesPerIpl = unlimited`** (runs a 9,627-row file) | `gpLoadedBuildings` static array is written past → trashed statics |
-| `CPool<CBuilding>` | 13,000 | **`Buildings = 100000`** (OLA) — a number, raisable again. **The permanent-row clutter layer needs ~150 000** and the install still reads 100000 (measured 2026-08-10 15:47) | pool exhaustion at load — the `0x005381A5` crash was this pool at exactly 100 000 |
+| `CPool<CBuilding>` | 13,000 | **`Buildings = 150000`** (OLA) — raised 2026-08-10 for the permanent-row clutter layer, which took map-wide rows to **110 055**; verified in the install, not assumed | pool exhaustion at load — the `0x005381A5` crash was this pool at exactly 100 000 |
 | **FLA ID pools** | 5000/255/256 | **TXD 6000 / COL 400 / IPL 1024 — REAL, not `unlimited`; raised in the ini 2026-08-10** | heap corruption during data load — the crash lands right after `shopping.dat` |
 | **Model id** | **≤ 18630** | **≤ 18630 — unchanged** | silently fails to load; "HD swapped but nothing changed" |
 
 ### The row that was WRONG, and it cost a crash (2026-08-10)
 
 **`EntityIpl = unlimited` is set in the install's OLA ini and the game still died on the 40th inst-bearing
-IPL.** Our `sa` build ships **75** of them (46 `plobj` areas + stock); the game loaded 39 and crashed on
-`plobj10.ipl`, which is **slot 40**. Three independent lines agree: modloader's log ends at that file, the
+IPL.** The `sa` build shipped **75** of them at the time (46 `plobj` areas + stock); the game loaded 39 and
+crashed on `plobj10.ipl`, which is **slot 40**. (The layer ships **10** areas since
+[014](../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md), 39 map-wide — the numbers
+below are the crash's, not today's.) Three independent lines agree: modloader's log ends at that file, the
 crash stack carries the string `plobj10_`, and 40 is the documented size of `IplEntityIndexArrays`.
 
 This row previously read "lifted", on the strength of the ini alone — and the reference install has only

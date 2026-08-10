@@ -1,6 +1,13 @@
 # The reference install — what the real game we target actually provides
 
-**Declared the baseline by the user on 2026-08-07.** A full copy lives at `NO_COMMIT/gta_sa`. Every plan that
+**Declared the baseline by the user on 2026-08-07.**
+
+**The install the game actually RUNS from is a CrossOver bottle:**
+`~/Library/Application Support/CrossOver/Bottles/Win10/drive_c/GTA SA/GTA San Andreas`. `NO_COMMIT/gta_sa` is a
+COPY the user uploads for diffing, and it is not what launches — patching a file there changes nothing about the
+next run. That cost a wasted launch on 2026-08-10, when an `.asi` probe was swapped into the copy and the crash
+that came back was the probe's, from the bottle, still carrying the previous build. Read logs from the bottle;
+diff against the copy. Every plan that
 adds map placements is designed against THIS, not against unmodded SA 1.0 — and the difference is not
 cosmetic: **two of the four ceilings [sa-target.md](../restrictions/sa-target.md) makes a plan budget for do not exist here.**
 
@@ -57,7 +64,7 @@ Our own log records the whole picture in six lines:
 | int16 `IplDef` building indexes | 32 767 rows map-wide | **lifted** (running at 72 914) | **only `perfect-map.asi`** — OLA leaves `0x404B4A` byte-stock |
 | `gpLoadedBuildings` per-file buffer | 4 096 rows | **`EntitiesPerIpl = unlimited`** (running a 9 627-row file) | OLA |
 | `IplEntityIndexArrays` | 40 slots | **NOT LIFTED — `EntityIpl = unlimited` is set and does not work** | nothing |
-| `CPool<CBuilding>` | 13 000 | **`Buildings = 100000`** — see the prerequisite below | OLA |
+| `CPool<CBuilding>` | 13 000 | **`Buildings = 150000`** (raised 2026-08-10 for the clutter layer) | OLA |
 | `CPool<CDummy>` | 2 500 | `Dummys = 50000` | OLA |
 | Streaming object instances | — | `StreamingObjectInstancesList = 30000` | OLA |
 
@@ -73,17 +80,16 @@ slot count are NOT interchangeable:
   the cause. This install never crossed it (36 in use), which is why the setting looked like it worked.
   `checkInstBearingIplSlots` in pmb now fails the build on it.
 
-### Prerequisite for the permanent-row clutter layer (`sa-procobj-placement/014`)
+### The building pool was raised for the permanent-row clutter layer (2026-08-10)
 
-That layer puts one permanent text row per clutter object, taking map-wide rows **44 523 → ~110 000**, which the
-current `Buildings = 100000` cannot hold — pool exhaustion at load (the 2026-08-10 `0x005381A5` crash was this
-pool at exactly 100 000). **It needs raising to ~150 000 before that build is run.**
+`sa-procobj-placement/014` puts one permanent text row per clutter object, which took map-wide rows
+**44 523 → 110 055** (read off the build, not estimated). `Buildings = 100000` could not hold that — pool
+exhaustion at load, and the 2026-08-10 `0x005381A5` crash was this pool at exactly 100 000.
 
-**Measured state 2026-08-10 15:47: `[SALIMITS] Buildings` still reads 100000** in the live install
-(`~/Library/Application Support/CrossOver/Bottles/Win10/drive_c/GTA SA/GTA San Andreas/III.VC.SA.LimitAdjuster.ini`,
-mtime 11:42), and no OLA ini on disk carries 150000. Recorded as a REQUIREMENT rather than as a capture, because
-this file's job is to say what the install actually is — a number written here above the install's own is silent
-by construction and can only fail to warn (the `FILE_TYPE_TXD` lesson, same day).
+**Raised to 150 000 and verified in the live install** (`[SALIMITS]`, ini mtime 15:51). It was checked rather
+than assumed: the first attempt at this edit did not reach the file the game reads, and a number written here
+above the install's own is silent by construction — it can only fail to warn (the `FILE_TYPE_TXD` lesson, same
+day). Headroom over the measured 110 055 is ~36 %, which is what a density rise has to be priced against.
 
 **And the piece only we supply:** OLA raises every pool and array it knows about and still cannot fix int16,
 because the truncation is inside the `IplDef` struct rather than in a pool size. At 72 914 rows this install
@@ -94,7 +100,7 @@ removed.
 ## What may and may not be assumed
 
 - **May be assumed** for a plan targeting this install: no per-file row ceiling **for text rows alone** (9 627
-  proven), a 100 000-building pool, and `perfect-map.asi` present for int16.
+  proven), a **150 000**-building pool, and `perfect-map.asi` present for int16.
 - **May NOT be assumed here either, despite the ini saying so:** the 40-slot `IplEntityIndexArrays`. It is real
   on this install.
 - **May NOT be assumed** for the stock target, which still has all four. A build that ships raised density

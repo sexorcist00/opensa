@@ -1,8 +1,11 @@
 import type { ProcObjPlacement } from '@opensa/renderware/map/procobj-scatter';
 
-import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-import { buildPermanentIpl, convertProcObj, iplQuaternion } from './convert';
+import { buildPermanentIpl, convertProcObj, iplQuaternion, removeStaleAreas } from './convert';
 
 describe('convertProcObj density', () => {
   /** Only the fields the density gate reads — it runs before any file is touched, which is the point. */
@@ -115,6 +118,63 @@ describe('buildPermanentIpl', () => {
       expect(instBearingFiles).toBe(files.length);
       expect(files.length).toBe(3); // ⌈20000/9600⌉
       expect(files.reduce((n, [, text]) => n + rowsOf(text).length, 0)).toBe(20_000);
+    });
+  });
+});
+
+describe('removeStaleAreas', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'stale-areas-'));
+    mkdirSync(join(dir, 'data', 'maps'), { recursive: true });
+  });
+
+  const write = (name: string): void => writeFileSync(join(dir, 'data', 'maps', name), 'inst\nend\n');
+  const left = (): string[] => readdirSync(join(dir, 'data', 'maps')).sort();
+
+  describe('negative cases', () => {
+    it('leaves every file alone when this run wrote them all', () => {
+      write('plobj0.ipl');
+      write('plobj1.ipl');
+
+      expect(removeStaleAreas(dir, 'plobj', new Set(['plobj0.ipl', 'plobj1.ipl']))).toBe(0);
+      expect(left()).toEqual(['plobj0.ipl', 'plobj1.ipl']);
+    });
+
+    it('never touches a file outside its own area-base numbering', () => {
+      write('plotr0.ipl'); // the trees layer's areas
+      write('LAw2.ipl'); // stock
+      write('plobj_notes.ipl'); // not <base><digits>
+      write('plobjX.ipl');
+
+      expect(removeStaleAreas(dir, 'plobj', new Set())).toBe(0);
+      expect(left()).toEqual(['LAw2.ipl', 'plobjX.ipl', 'plobj_notes.ipl', 'plotr0.ipl']);
+    });
+
+    it('reports nothing when the tree has no data/maps at all', () => {
+      expect(removeStaleAreas(mkdtempSync(join(tmpdir(), 'empty-')), 'plobj', new Set())).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('deletes the surplus a smaller run left behind (the 46-files-for-10-areas case)', () => {
+      // Measured on the real artifact 2026-08-10: the in-place bake wrote 10 areas into an sa tree still
+      // holding 36 from earlier runs, and a census over the directory then read 95 584 rows for a 91 092-row run.
+      for (let i = 0; i < 46; i += 1) {
+        write(`plobj${i}.ipl`);
+      }
+      const written = new Set(Array.from({ length: 10 }, (_, i) => `plobj${i}.ipl`));
+
+      expect(removeStaleAreas(dir, 'plobj', written)).toBe(36);
+      expect(left()).toEqual([...written].sort());
+    });
+
+    it('matches case-insensitively — SA data ships mixed case', () => {
+      write('PLOBJ7.IPL');
+
+      expect(removeStaleAreas(dir, 'plobj', new Set(['plobj0.ipl']))).toBe(1);
+      expect(left()).toEqual([]);
     });
   });
 });

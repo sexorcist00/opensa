@@ -19,7 +19,7 @@ import { decodeDxt } from '@opensa/rw-codec/dxt';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { type BuildTarget } from '@opensa/tool-kit/target';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 import type { ProcObjLodConfig } from './config';
 
@@ -50,8 +50,8 @@ export function buildProcobjLods(options: {
 }
 
 const IPL_NAME = 'lod_procobj';
-/** Area IPL base (`plobj<i>.ipl` + `plobj<i>_stream<k>.ipl`): short because IMG VER2 caps entry names at
- *  23 bytes — `lod_procobj0_stream0.ipl` (24) does not fit. */
+/** Area IPL base (`plobj<i>.ipl`). Kept short from the era when each area also shipped
+ *  `plobj<i>_stream<k>.ipl` entries inside the IMG, where VER2 caps names at 23 bytes. */
 const AREA_BASE = 'plobj';
 /** The HD mod (`<out>/hd/`) `txdp` IDE — parents each swapped model's stock TXD to the custom TXD, so the stock
  *  IDEs stay untouched (the `./5` approach; see {@link emitHdMod}). */
@@ -62,12 +62,12 @@ export interface BuildOptions {
   gamePath: string;
   /** Optional HD model folder (`<model>.dff` + `<model>.txd`); omitted → convert the game's own procobj models. */
   inPath?: string;
-  /** `--modloader`: emit two Modloader mods under `<out>` — `lod/` (LOD `gta3img/` + static IPL + stripped
-   *  `procobj.dat` + `loader.txt`) and `hd/` (the swapped HD models via a `txdp` IDE, no stock IDE rewritten) —
-   *  instead of repacking one `<out>/models/gta3.img` + patching `data/gta.dat` with the HD swap inlined. */
+  /** `--modloader`: emit two Modloader mods under `<out>` — `lod/` (the permanent IPLs + raised `procobj.ide` +
+   *  stripped `procobj.dat` + `loader.txt`) and `hd/` (the swapped HD models via a `txdp` IDE, no stock IDE
+   *  rewritten) — instead of writing into `<out>` + patching `data/gta.dat` with the HD swap inlined. */
   modloader: boolean;
   outPath: string;
-  /** Copy each model's trunk prelight from its stock DFF onto the LOD (and the swapped HD when `--in`). */
+  /** Copy each model's trunk prelight from its stock DFF onto the swapped HD (needs `--in`). */
   prelight: boolean;
   /** Per-model `--prelight` overrides (`--prelight <info.json>`); models in `skip` are left untouched. */
   prelightInfo?: PrelightInfo;
@@ -93,8 +93,8 @@ export function categoryCostLines(categories: readonly ProcObjCategoryCost[]): s
   });
 }
 
-/** The changed IMG entries to emit: LOD DFFs + lod_procobj.txd/col + binary IPL streams (the HD placement
- *  layer, `<area>_streamN.ipl`) + the swapped HD DFFs + custom TXDs. */
+/** The changed IMG entries to emit — since plan 014 only the swapped HD DFFs and the custom TXDs their retxd
+ *  produced. The layer itself ships no asset: it is text rows plus a raised draw distance. */
 export function collectImgEntries(
   swap: ReadonlyMap<string, Uint8Array>,
   retxdTxds: ReadonlyMap<string, Uint8Array>,
@@ -145,11 +145,11 @@ export function combinedModelSource(inPath: string, archive: ImgArchive): ModelS
 }
 
 /**
- * The layer's PRICE, per target and READ OFF the run: objects placed, the permanent text rows they cost, and
- * the rows/object ratio every density profile moves (07/04 — today 0.424, and it is why our layout beats a
- * text-IPL mod's by 2.36×). The two hosts spend that price differently, so the line names which one it is
- * for: on `sa` permanent rows are the one ceiling no adjuster lifts (SA truncates building-pool indexes to
- * int16, so past 32,767 map-wide the build depends on `perfect-map.asi`); OpenSA has no such index.
+ * The layer's PRICE, READ OFF the run: objects placed, the permanent text rows they cost (one each since plan
+ * 014, so the ratio is 1.000 and stays there), and the inst-bearing area files they spend against SA's 40 slots.
+ *
+ * `sa` is the only host that pays it — OpenSA scatters this clutter at runtime. What the rows spend there is the
+ * `CBuilding` pool and the int16 building index our asi lifts.
  */
 export function layerCostLine(
   target: BuildTarget,
@@ -192,9 +192,15 @@ export function run(options: BuildOptions): void {
   const procModels = procObjModels(gamePath);
 
   // Non-modloader: mirror the whole input game first so the drop-in is a **complete** build (our repacked gta3.img +
-  // static IPL/IDE below then overwrite the copies) — even when there are no species to convert. Keeps the pipeline
+  // the IPLs below then overwrite the copies) — even when there are no species to convert. Keeps the pipeline
   // lossless (see plan 005). `--modloader` writes only `lod/` + `hd/` mods, so it must NOT mirror.
-  if (!modloader) {
+  //
+  // `--game` === `--out` is an IN-PLACE bake, which is how pmb runs it since plan 014: the layer belongs to the
+  // `sa` target alone, so it is baked into the finished `sa/` tree rather than into the common build both targets
+  // share. Mirroring a tree onto itself is at best a long no-op, so it is skipped — every read here happens
+  // before the write that would disturb it.
+  const inPlace = resolve(gamePath) === resolve(outPath);
+  if (!modloader && !inPlace) {
     cpSync(gamePath, outPath, { force: true, recursive: true });
   }
 
@@ -209,22 +215,19 @@ export function run(options: BuildOptions): void {
   const modelSource = inPath === undefined ? createModelSource([archive]) : combinedModelSource(inPath, archive);
   const textureSource = inPath === undefined ? createTextureSource([archive]) : combinedTextureSource(inPath, archive);
 
-  // Per species: only the bbox HEIGHT, which is all the gate reads. Nothing is decimated and no LOD is built —
-  // plan 014 removed the twin, so the placement layer needs nothing from a species but its stock id and height.
-  const heights = new Map<string, number>();
-  for (const model of species) {
-    const clump = modelSource.load(model);
-    if (!clump) {
-      continue;
-    }
-    const height = speciesHeight(clump);
-    if (config.procObjHeight > 0 && height < config.procObjHeight) {
-      continue; // short clutter (grass) — left on the runtime scatter
-    }
-    heights.set(model, height);
-  }
+  const heights = gatedHeights(species, modelSource, config.procObjHeight);
   if (heights.size === 0) {
-    console.log('sa-procobj-placement: no `--dff ∩ procobj` species to convert');
+    // Name the likely cause rather than the symptom. An in-place bake CONSUMES its input: the first run strips
+    // the converted species out of `procobj.dat`, so a second run on the same tree sees only the never-touch
+    // underwater set and has nothing to do. Harmless (this returns before anything is written), but "no species"
+    // reads like a missing `--in` and sent one debugging session looking for the wrong thing.
+    const rebaked = inPlace && existsSync(join(outPath, 'data', 'maps', `${AREA_BASE}0.ipl`));
+    console.log(
+      rebaked
+        ? `sa-procobj-placement: ${outPath} is already baked (its procobj.dat is stripped) — nothing to do. ` +
+            'Re-run from the common build, not on the output.'
+        : 'sa-procobj-placement: no `--dff ∩ procobj` species to convert',
+    );
 
     return;
   }
@@ -422,6 +425,28 @@ function emitRegistration(args: {
     gtaDat = `${gtaDat.replace(/\s*$/, '')}${eol}${procObj.datLines.join(eol)}${eol}`;
   }
   writeText(join(outPath, 'data', 'gta.dat'), gtaDat);
+}
+
+/**
+ * model → bbox height for every candidate that clears the `procObjHeight` gate — the only thing the placement
+ * layer reads from geometry. A model the source cannot load is skipped rather than failing the build: a TC's
+ * `procobj.dat` may name species it does not ship.
+ */
+function gatedHeights(species: readonly string[], modelSource: ModelSource, minHeight: number): Map<string, number> {
+  const heights = new Map<string, number>();
+  for (const model of species) {
+    const clump = modelSource.load(model);
+    if (!clump) {
+      continue;
+    }
+    const height = speciesHeight(clump);
+    if (minHeight > 0 && height < minHeight) {
+      continue; // short clutter (grass) — left on the runtime scatter
+    }
+    heights.set(model, height);
+  }
+
+  return heights;
 }
 
 /** Model names under `--dff` (a `.dff` file or a directory), lowercased without extension. */

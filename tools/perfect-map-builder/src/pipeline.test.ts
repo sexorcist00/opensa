@@ -23,7 +23,7 @@ import {
 /** The three map builders the split calls — mocked so the target-split test costs no map build. Each one
  *  creates its output dir, which is all the pipeline needs from them between the call and the next stage. */
 const procobjLods = vi.hoisted(() =>
-  vi.fn<(step: { config: { density: unknown }; outPath: string }) => void>((step) => {
+  vi.fn<(step: { config: { density: unknown }; gamePath: string; outPath: string; target: string }) => void>((step) => {
     mkdirSync(step.outPath, { recursive: true });
   }),
 );
@@ -69,8 +69,10 @@ describe('EXCLUDABLE_STAGES', () => {
         'peds',
         'optimize',
         'trees',
-        'procobj',
         'sa',
+        // procobj sits AFTER sa since plan 014: it is baked inside that branch, so its place in the pipeline
+        // order — which is what `--until` reads — is after the LOD build it follows.
+        'procobj',
         'opensa',
         'pack',
       ]);
@@ -144,8 +146,13 @@ describe('runsStage', () => {
     });
 
     it('does not run either target when the run stops in the common chain', () => {
-      expect(runsStage('sa', 'procobj')).toBe(false);
-      expect(runsStage('opensa', 'procobj')).toBe(false);
+      expect(runsStage('sa', 'trees')).toBe(false);
+      expect(runsStage('opensa', 'trees')).toBe(false);
+    });
+
+    it('does not bake procobj when the run stops at sa — the clutter follows the LOD build', () => {
+      expect(runsStage('procobj', 'sa')).toBe(false);
+      expect(runsStage('procobj', undefined, new Set(['procobj']))).toBe(false);
     });
 
     it('does not run an EXCLUDED target on an otherwise full run (the :opensa / :sa split)', () => {
@@ -245,16 +252,26 @@ describe('buildPerfectMap target split', () => {
   });
 
   describe('positive cases', () => {
-    it('scatters procobj ONCE and hands that same stage build to both targets', async () => {
+    it('bakes procobj into the sa tree ALONE, and never into what opensa is built from', async () => {
+      // Plan 014 retired the old invariant here ("one scatter handed to both targets"): the clutter is an SA
+      // layer now. OpenSA scatters the same species at runtime, so a bake in the common build would only cost
+      // it a stripped procobj.dat and 91 092 vertex-duplicated instances in its pak.
       await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: '/nonexistent', outPath: out });
 
-      // One scatter. A second call would mean two independent lotteries, i.e. two different worlds.
-      expect(procobjLods).toHaveBeenCalledTimes(1);
-      const scattered = procobjLods.mock.calls[0][0].outPath;
+      expect(procobjLods).toHaveBeenCalledTimes(1); // one scatter — a second is a second lottery, another world
+      const bake = procobjLods.mock.calls[0][0];
       expect(saLods).toHaveBeenCalledTimes(1);
       expect(opensaLods).toHaveBeenCalledTimes(1);
-      expect(saLods.mock.calls[0][0].gameDir).toBe(scattered);
-      expect(opensaLods.mock.calls[0][0].gameDir).toBe(scattered);
+
+      // Baked IN PLACE into the finished sa tree, after its LOD build.
+      const saDir = saLods.mock.calls[0][0].outDir;
+      expect(bake.gamePath).toBe(saDir);
+      expect(bake.outPath).toBe(saDir);
+      expect(bake.target).toBe('sa');
+
+      // Both targets are still built from the same common build — the split point is unchanged.
+      expect(opensaLods.mock.calls[0][0].gameDir).toBe(saLods.mock.calls[0][0].gameDir);
+      expect(opensaLods.mock.calls[0][0].gameDir).not.toBe(saDir);
     });
 
     it('keeps the density a property of the build, not of the target it is being built for', async () => {

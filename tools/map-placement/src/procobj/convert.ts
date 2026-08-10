@@ -7,7 +7,7 @@ import { buildCollisionIndex } from '@opensa/renderware/collision/collision-inde
 import { groupRulesBySurface, PROC_OBJ_MAX_DENSITY, scatterProcObjects } from '@opensa/renderware/map/procobj-scatter';
 import { parseProcObj } from '@opensa/renderware/parsers/text/procobj.parser';
 import { parseSurfaceNames } from '@opensa/renderware/parsers/text/surfinfo.parser';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import type { ProcObjDensityConfig, ProcObjDensityInput } from './density';
@@ -90,6 +90,8 @@ export interface ProcObjConvertResult {
   objects: number;
   /** Permanent text-IPL rows — one per object now, so this is what the `CBuilding` pool pays. */
   rows: number;
+  /** Area files from an earlier run that this one deleted — the in-place bake cleaning up after itself. */
+  staleAreasRemoved: number;
 }
 
 /** Per converted species: the stock object id it is placed under + its bbox height (the gate). */
@@ -178,6 +180,7 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
   for (const [file, text] of files) {
     writeText(join(outPath, 'data', 'maps', file), text);
   }
+  const orphans = removeStaleAreas(outPath, areaBase, new Set(files.map(([file]) => file.toLowerCase())));
   // Model-name manifest for downstream generators (pmb `collectGeneratedModels`).
   const placedModels = [...new Set(final.map(({ model }) => model))].sort();
   writeText(join(outPath, 'data', 'maps', `${iplName}.models`), placedModels.join('\r\n') + '\r\n');
@@ -195,12 +198,48 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
       : stripProcObj(procObjText, (m) => !converted.has(m.toLowerCase())).text,
   );
 
-  return { categories, datLines, drawDistance: distance, dropped, instBearingFiles, objects: final.length, rows };
+  return {
+    categories,
+    datLines,
+    drawDistance: distance,
+    dropped,
+    instBearingFiles,
+    objects: final.length,
+    rows,
+    staleAreasRemoved: orphans,
+  };
 }
 
 /** GTA IPL rotation quaternion for a yaw around Z (conjugated, the IPL convention; align is unused). */
 export function iplQuaternion(yaw: number): [number, number, number, number] {
   return [0, 0, -Math.sin(yaw / 2), Math.cos(yaw / 2)];
+}
+
+/**
+ * Delete `<areaBase><n>.ipl` files this run did NOT write, returning how many went.
+ *
+ * The bake runs IN PLACE on the `sa` tree (plan 014), and that tree is not wiped between runs, so a run that
+ * emits fewer areas than the last one leaves the surplus on disk. They are unregistered — `gta.dat` is rebuilt
+ * from this run's `datLines`, so the game never reads them — but "the game ignores it" is not the same as
+ * harmless: a build measured on the artifact then counts rows from two different scatters. It read 95 584 rows
+ * across 46 files where the run had written 91 092 across 10, and that is exactly the kind of number that gets
+ * published. The layer owns these names, so it cleans up after itself.
+ */
+export function removeStaleAreas(outPath: string, areaBase: string, written: ReadonlySet<string>): number {
+  const maps = join(outPath, 'data', 'maps');
+  if (!existsSync(maps)) {
+    return 0;
+  }
+  const mine = new RegExp(`^${areaBase}\\d+\\.ipl$`, 'i');
+  let removed = 0;
+  for (const entry of readdirSync(maps)) {
+    if (mine.test(entry) && !written.has(entry.toLowerCase())) {
+      rmSync(join(maps, entry), { force: true });
+      removed += 1;
+    }
+  }
+
+  return removed;
 }
 
 /**

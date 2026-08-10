@@ -39,8 +39,11 @@ export const STAGE_NAMES = [
   'peds',
   'optimize',
   'trees',
-  'procobj',
   'sa',
+  // procobj is baked INSIDE the sa branch, after the LOD build (plan 014) — it is that target's layer alone, so
+  // it must not reach the common build both targets share. Its place in this list is its place in the RUN order,
+  // which is what `--until` reads: `--until sa` stops before the clutter, `--until procobj` includes it.
+  'procobj',
   'opensa',
   'pack',
   'lod',
@@ -178,24 +181,6 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
         }),
     });
   }
-  // procobj stays unconditional: original ships NO procobj/ folder — the no-`--in` mode bakes the built-in
-  // roster from the game's own gta3.img/procobj.dat and exits gracefully when no species matches (a TC).
-  chain.push({
-    name: 'procobj',
-    run: (game, out) =>
-      buildProcobjLods({
-        config: {
-          density: config.procobjDensity,
-          ...(config.procobjMax !== undefined ? { procObjMax: config.procobjMax } : {}),
-        },
-        gamePath: game,
-        inPath: source(subfolders.procobj),
-        outPath: out,
-        prelight: true,
-        target,
-      }),
-  });
-
   const runnable = planChain(chain, excluded, {
     mods: subfolders.mods,
     peds: subfolders.peds,
@@ -259,6 +244,29 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     const sa = join(outPath, 'sa');
     log('sa → sa/');
     await timed('sa', () => buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa }));
+    // The procobj clutter is baked into the FINISHED sa tree, in place (plan 014). It belongs to this target
+    // alone: OpenSA scatters the same species at runtime, where draw distance is a setting and none of SA's
+    // ceilings exist, so baking it into the common build would cost that target a stripped `procobj.dat` (9
+    // rules of 96 survived it) and 91 092 vertex-duplicated instances in its pak for nothing.
+    //
+    // After `buildSaLods`, not before: the LOD generators work from placements, so clutter that does not exist
+    // yet gets no far-LODs — which is what we want for objects whose range now comes from their IDE row.
+    if (runsStage('procobj', until, excluded)) {
+      log('procobj → sa/');
+      await timed('procobj', () =>
+        buildProcobjLods({
+          config: {
+            density: config.procobjDensity,
+            ...(config.procobjMax !== undefined ? { procObjMax: config.procobjMax } : {}),
+          },
+          gamePath: sa,
+          inPath: source(subfolders.procobj),
+          outPath: sa,
+          prelight: true,
+          target: 'sa',
+        }),
+      );
+    }
     // Every SA ceiling is checked HERE, on the tree the real game loads — not on the shared build. The LOD
     // stage appends hole-fill instances to the copied text IPLs, so the common build undercounts the rows.
     checkInstBearingIplSlots(reportTextIplCensus(sa).instBearingIpls);
@@ -398,14 +406,15 @@ export function resolveBuildTarget(
 }
 
 /**
- * Whether a post-split target (`sa`/`opensa`) runs under the given `--until` and `--exclude`. `STAGE_NAMES` is
- * the pipeline ORDER, so `--until <stage>` means "run everything up to and including it" — `--until pack`
- * builds `sa` too, because `sa` precedes `pack`. (It used to be an explicit name list, which silently dropped
- * the whole `sa` target from `--until pack`/`--until opensa` runs: no log line, no error, just a missing
- * build.) `--exclude` overrides that ordering: an excluded target never runs, whatever `--until` says.
+ * Whether a POST-SPLIT stage runs under the given `--until` and `--exclude` — the two targets, and `procobj`,
+ * which is baked inside the `sa` branch since plan 014. `STAGE_NAMES` is the pipeline ORDER, so
+ * `--until <stage>` means "run everything up to and including it" — `--until pack` builds `sa` too, because
+ * `sa` precedes `pack`. (It used to be an explicit name list, which silently dropped the whole `sa` target from
+ * `--until pack`/`--until opensa` runs: no log line, no error, just a missing build.) `--exclude` overrides that
+ * ordering: an excluded stage never runs, whatever `--until` says.
  */
 export function runsStage(
-  stage: 'opensa' | 'sa',
+  stage: 'opensa' | 'procobj' | 'sa',
   until: StageName | undefined,
   exclude: ReadonlySet<ExcludableStage> = new Set(),
 ): boolean {
