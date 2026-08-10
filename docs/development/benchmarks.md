@@ -67,9 +67,15 @@ Report line (the deliverable IS this console line):
   seen-once stall; `p99Ms` needs the degradation to reach 1 % of the leg, so it answers about a budget being
   exceeded rather than about one hitch. `blobMaxMs`/`uploadMaxMs`/`pendingMax` say whether a stall was
   STREAMING — blob-handler work lands between frames, where no in-frame block timer can see it.
-  **Not a clutter lever:** `?procobj` / `?procobjLimit` reach only the rules the BUILD did not bake, which
-  on a built map is the underwater leftovers (9 of 96 on original) — measured null on `country-dusk`
-  2026-08-10. Map clutter is a build-time quantity; vary it by swapping PAKS.
+  **A clutter lever again, and a small one:** `?procobj` / `?procobjLimit` reach only the rules the BUILD did
+  not bake, which since plan 014 is all 95 on `opensa` (the bake moved into the `sa` branch). They move
+  content — `?procobj=0` is −2.72 % triangles on `country-dusk` against a 0.007 % A/A drift — but **both
+  saturate against the authored MINDIST spacing**: the cap at 300, the multiplier at ×4, and the whole layer
+  is +10.1 % of that scene, below the noise on every cost column
+  ([the ladder](../benchmarks/opensa-engine/2026-08-10-headless-procobj-runtime-knob-ladder.json)).
+  **And pick your lane:** the `hitch` block is only readable CAPPED — every `UNCAPPED=1` arm reads `maxMs`
+  148–196 ms and `slowFrames` 16–19 regardless of content, because the loop runs flat out. Uncapped answers
+  cost (`avgMs` unpins 8.33 → 5.4–5.6, `p95Ms` 9.1 → 6.7–7.2); capped answers hitching. Never both, never mixed.
 - `lateCreates` — streaming honesty (074/21): creates inside the fog cut during the measure window;
   0 in a healthy run.
 - `legStart` — `{dz, grounded, ok, pendingCells, targetZ, worstDrop}` (plan 102). `targetZ` is where the

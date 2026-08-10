@@ -634,6 +634,51 @@ reading, not a delta): only the two heaviest scenes show slow frames at all, `co
 `gpuMs.pass` of all nine (**12.03**) on the FEWEST draws and second-fewest triangles — high pass cost on little
 geometry is where to look when the runtime scatter is tuned.
 
+## 2026-08-10 — the runtime clutter knobs, swept on the unbaked pak: BOTH saturate before the engine notices
+
+[`opensa-engine/2026-08-10-headless-procobj-runtime-knob-ladder.json`](opensa-engine/2026-08-10-headless-procobj-runtime-knob-ladder.json)
+— 15 single-scene `country-dusk` sweeps in Claude's headless lane, on the pak rebuilt 2026-08-10 17:47 **without**
+the procobj bake (`data/procobj.dat` back to all 95 source rules). This is the P1 measurement plan 013 owns.
+
+**The null result above is now closed as a SITE failure, exactly as it was diagnosed.** Same code, same scene,
+same harness, different pak: `?procobj=0` moves triangles **1 206 029 → 1 173 177 (−2.72 %)** and draws 830 → 815,
+against this session's own A/A drift of **0.007 %** (a vs a2). On the baked pak the identical arm moved 0.007 %.
+
+**Both knobs saturate, and neither saturates on the engine.**
+
+| knob | ladder | triangles | verdict |
+| --- | --- | --- | --- |
+| `procObjLimit` (per-cell cap) | 150 → 300 | 1 206 029 → 1 210 952 (+0.41 %) | the shipped 150 barely binds |
+| | 300 → 600 → 1200 → 3000 | 1 210 952 / 1 210 827 / 1 211 008 / 1 210 965 | flat to 0.015 %, 20× the cap for nothing |
+| `?procobj` (density ×) | 1 → 2 → 4 | 1 210 965 → 1 251 866 → 1 291 582 (+6.66 %) | the only lever that moves anything |
+| | 4 → 8 → 16 | 1 291 582 / 1 291 753 / 1 291 717 | flat to 0.015 % |
+
+The limiter is the authored `procobj.dat` **MINDIST spacing** — the runtime path restating the 2026-08-08
+build-side finding that the density cutoff is not the density lever. **The layer's whole span is +10.11 % of this
+scene's triangles** (clutter off → data-maximum), and the shipped default already delivers 2.8 pp of it. Draws move
+only at the on/off boundary: the clutter is instanced, so its cost is per-pixel, not per-draw.
+
+**And there is no hitch to find.** Across the 11 capped arms `hitch.maxMs` reads 9.7–36.0 ms and `slowFrames` 0–4
+with **no relation to load** — the two worst arms are `lim600` (35.4 / 4) and `d8` (36.0 / 1), while `d16`, the
+heaviest world of the ladder, reads 12.3 / 0 and the A/A pair alone spans 21.9 vs 9.7. `blobMaxMs`, `uploadMaxMs`
+and `pendingMax` are 0 on every arm. The hitch columns' own noise on this lane is larger than anything the layer
+can produce.
+
+**`UNCAPPED=1` works, and it costs the other half of the report.** `avgMs` unpins 8.33 → **5.42–5.64** and `p95Ms`
+9.1–9.2 → **6.7–7.2**, at 177–185 fps — so the "this needs the user's display" half of P1 is retired. But every
+uncapped arm, clutter-off included, reads `maxMs` 148–196 ms and `slowFrames` 16–19: the loop runs flat out and
+scheduling stalls swamp the hitch block. **Capped for hitching, uncapped for cost, and the two lanes are never
+comparable.** Even uncapped the layer stays below the noise: `gpuMs.pass` A/A is 6.5 % apart (4.164 vs 3.910),
+*wider* than off → max (3.952 → 4.201), and on `avgMs` the two default arms bracket the maximum arm outright.
+
+**What this settles for plan 013:** `procObjMax`, the candidate ceiling and per-cell `procObjLimit` are
+**data-limited, not perf-limited** on `opensa`. The budget cannot be read off a hitch measurement because the layer
+cannot be pushed into one. Keep `procObjLimit` at 150 (300 is the only defensible alternative — it buys the last
+0.41 %), and spend the certified headroom on the P2 draw distances, which is a look decision.
+**Not covered:** one scene, camera flights rather than a drive, n=1 per arm — a streaming-shaped hitch under
+continuous movement is sampled by no arm here, and the three streaming columns reading 0 everywhere means that
+pressure never arose rather than that it was survived.
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
