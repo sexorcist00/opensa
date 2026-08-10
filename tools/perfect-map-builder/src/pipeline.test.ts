@@ -438,6 +438,7 @@ describe('OPENSA_BUDGET_NOTICE', () => {
 
     it('names the one half that IS measured, so the notice cannot read as wholly unmeasured', () => {
       expect(OPENSA_BUDGET_NOTICE).toMatch(/clutter half is measured and does not bind/);
+      expect(OPENSA_BUDGET_NOTICE).toMatch(/no frame-time ceiling to cap it at/);
     });
   });
 });

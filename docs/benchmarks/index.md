@@ -644,19 +644,29 @@ the procobj bake (`data/procobj.dat` back to all 95 source rules). This is the P
 same harness, different pak: `?procobj=0` moves triangles **1 206 029 → 1 173 177 (−2.72 %)** and draws 830 → 815,
 against this session's own A/A drift of **0.007 %** (a vs a2). On the baked pak the identical arm moved 0.007 %.
 
-**Both knobs saturate, and neither saturates on the engine.**
+**Both knobs saturate, neither saturates on the engine — and they stop for two DIFFERENT reasons.**
 
 | knob | ladder | triangles | verdict |
 | --- | --- | --- | --- |
-| `procObjLimit` (per-cell cap) | 150 → 300 | 1 206 029 → 1 210 952 (+0.41 %) | the shipped 150 barely binds |
+| `procObjLimit` (per-cell cap) | 150 → 300 | 1 206 029 → 1 210 952 (+0.41 %) | +0.41 % of the SCENE is **13.0 % of the LAYER** |
 | | 300 → 600 → 1200 → 3000 | 1 210 952 / 1 210 827 / 1 211 008 / 1 210 965 | flat to 0.015 %, 20× the cap for nothing |
-| `?procobj` (density ×) | 1 → 2 → 4 | 1 210 965 → 1 251 866 → 1 291 582 (+6.66 %) | the only lever that moves anything |
-| | 4 → 8 → 16 | 1 291 582 / 1 291 753 / 1 291 717 | flat to 0.015 % |
+| `?procobj` (density ×) | 1 → 2 → 4 | 1 210 965 → 1 251 866 → 1 291 582 (+6.66 %) | linear in the cutoff |
+| | 4 → 8 → 16 | 1 291 582 / 1 291 753 / 1 291 717 | flat — the ceiling is ×3, and it is OURS |
 
-The limiter is the authored `procobj.dat` **MINDIST spacing** — the runtime path restating the 2026-08-08
-build-side finding that the density cutoff is not the density lever. **The layer's whole span is +10.11 % of this
-scene's triangles** (clutter off → data-maximum), and the shipped default already delivers 2.8 pp of it. Draws move
-only at the on/off boundary: the clutter is instanced, so its cost is per-pixel, not per-draw.
+**The cap's ceiling is the data.** The candidate pool per face is `area / spacing²`
+([009](../../tools/sa-procobj-placement/docs/plans/009-procobj-dat-columns-as-the-game-reads-them.md)), so at
+cutoff 1 a cell does not hold 300 placements and no cap above 300 can bind. What it *does* trim at the shipped
+150 is 4 923 triangles of a 37 775-triangle layer — read that +0.41 % with its scope.
+
+**The multiplier's ceiling is ours.** `scatterProcObjects` generates `area / spacing² × PROC_OBJ_MAX_DENSITY`
+candidates with a lottery uniform in `[0, PROC_OBJ_MAX_DENSITY)`, the renderer keeps `lottery < density`, and
+the runtime adapter takes the default **3** (`gta-sa-world.adapter.ts:632`, no argument). So a cutoff of 3 or
+more keeps every candidate. The arms measure exactly that: clutter triangles over the clutter-off baseline run
+**37 788 : 78 689 : 118 405 : 118 576 : 118 540 = 1 : 2.08 : 3.13 : 3.14 : 3.14** — linear, then flat at 3.
+(The ~4 % over an exact 1:2:3 is species mix; models do not carry equal triangle counts.) **So "+10.11 % of the
+scene" is what the layer costs at 3× vanilla, not a ceiling** — raising `PROC_OBJ_MAX_DENSITY` buys more at a
+linear cost in candidates. Draws move only at the on/off boundary: the clutter is instanced, so its cost is
+per-pixel, not per-draw.
 
 **And there is no hitch to find.** Across the 11 capped arms `hitch.maxMs` reads 9.7–36.0 ms and `slowFrames` 0–4
 with **no relation to load** — the two worst arms are `lim600` (35.4 / 4) and `d8` (36.0 / 1), while `d16`, the
@@ -671,13 +681,16 @@ scheduling stalls swamp the hitch block. **Capped for hitching, uncapped for cos
 comparable.** Even uncapped the layer stays below the noise: `gpuMs.pass` A/A is 6.5 % apart (4.164 vs 3.910),
 *wider* than off → max (3.952 → 4.201), and on `avgMs` the two default arms bracket the maximum arm outright.
 
-**What this settles for plan 013:** `procObjMax`, the candidate ceiling and per-cell `procObjLimit` are
-**data-limited, not perf-limited** on `opensa`. The budget cannot be read off a hitch measurement because the layer
-cannot be pushed into one. Keep `procObjLimit` at 150 (300 is the only defensible alternative — it buys the last
-0.41 %), and spend the certified headroom on the P2 draw distances, which is a look decision.
+**What this settles for plan 013:** at 3× vanilla density the whole layer still costs less than one sweep's A/A
+drift, so there is no perf number to set `procObjMax`, the candidate ceiling or `procObjLimit` from — the budget
+cannot be read off a hitch measurement because the layer cannot be pushed into one. Keep `procObjLimit` at 150
+unless the look wants back the 13 % of the layer it trims (300 is the only value above it worth choosing), and
+treat the density ceiling as **available headroom, not a measured maximum**. The certified room goes to the P2
+draw distances, which is a look decision.
 **Not covered:** one scene, camera flights rather than a drive, n=1 per arm — a streaming-shaped hitch under
 continuous movement is sampled by no arm here, and the three streaming columns reading 0 everywhere means that
-pressure never arose rather than that it was survived.
+pressure never arose rather than that it was survived. **Nor what raising `PROC_OBJ_MAX_DENSITY` would cost:**
+every arm above ×3 measured the same world.
 
 ## The gap this record has
 

@@ -275,12 +275,21 @@ rather than a guard, because its number does not exist yet.
       - **The knob is live**: `?procobj=0` moves triangles **−2.72 %** (1 206 029 → 1 173 177) and draws
         830 → 815, against an A/A drift of **0.007 %**. The 08-10 null result really was a SITE failure —
         same code, same scene, same harness, only the pak changed.
-      - **`procObjLimit` saturates at 300**: 150 → 300 is +0.41 %; 300 / 600 / 1200 / 3000 agree to 0.015 %.
-      - **Density saturates at ×4** (cap held unbound): ×1 → ×2 → ×4 is +3.38 % → +6.66 %; ×8 and ×16 add
-        nothing. The limiter is the authored `procobj.dat` **MINDIST spacing** — the runtime path restating
-        this plan's own 2026-08-08 finding that the cutoff is not the density lever.
-      - **The layer's whole span is +10.11 % of the clutter scene's triangles**, and draws move only at the
-        on/off boundary — it is instanced, so a per-pixel cost, not a draw-count one.
+      - **`procObjLimit` saturates at 300, and THAT half is data-limited**: 150 → 300 is +0.41 % of the scene;
+        300 / 600 / 1200 / 3000 agree to 0.015 %. The candidate pool per face is `area / spacing²`
+        ([009](009-procobj-dat-columns-as-the-game-reads-them.md)), so at cutoff 1 a cell does not hold 300
+        placements. **Read the +0.41 % with its scope**: 4 923 triangles of a 37 775-triangle layer, so the
+        shipped 150 trims **13.0 % of the layer** while costing 0.41 % of the scene.
+      - **Density saturates at ×3, and THAT ceiling is OURS.** Corrected on review, before this went out as a
+        verdict: `scatterProcObjects` generates `area / spacing² × PROC_OBJ_MAX_DENSITY` candidates with a
+        lottery uniform in `[0, PROC_OBJ_MAX_DENSITY)`, the renderer keeps `lottery < density`, and the runtime
+        adapter takes the default **3** (`gta-sa-world.adapter.ts:632`, no argument) — so a cutoff ≥ 3 keeps
+        every candidate and nothing above it can exist. The arms measure exactly that: clutter triangles over
+        the clutter-off baseline run **37 788 : 78 689 : 118 405 : 118 576 : 118 540 = 1 : 2.08 : 3.13 : 3.14 :
+        3.14**, linear in the cutoff and then flat at 3 (the ~4 % over an exact 1:2:3 is species mix).
+      - **So "+10.11 % of the clutter scene" is the layer's cost at 3× vanilla, not its ceiling.** Raising
+        `PROC_OBJ_MAX_DENSITY` buys more at a linear cost in candidates and scatter time. Draws move only at
+        the on/off boundary — it is instanced, so a per-pixel cost, not a draw-count one.
       - **There is no hitch to find.** `hitch.maxMs` 9.7–36.0 and `slowFrames` 0–4 across the 11 capped arms
         with **no relation to load** (worst: `lim600` 35.4/4 and `d8` 36.0/1; the heaviest arm `d16` reads
         12.3/0; the A/A pair alone spans 21.9 vs 9.7). `blobMaxMs`/`uploadMaxMs`/`pendingMax` 0 everywhere.
@@ -289,13 +298,16 @@ rather than a guard, because its number does not exist yet.
         in *every* arm including clutter-off. Capped for hitching, uncapped for cost, never mixed. Even
         uncapped the layer is below the noise: `gpuMs.pass` A/A is 6.5 % apart, *wider* than off → max (6.3 %).
 
-      **So the three numbers this task was to SET are data-limited, not perf-limited.** `procObjLimit` stays
-      **150** (300 is the only defensible alternative and buys the last 0.41 %); `procObjMax` and the candidate
-      ceiling have no perf ceiling to be given on this host. **Decision 5's streaming guard therefore has no
-      number to guard with** — see the task below, which changes shape because of this.
+      **So the three numbers this task was to SET have no perf ceiling to be given on this host** — at 3×
+      vanilla the layer still costs less than one sweep's A/A drift. `procObjLimit` stays **150** unless the
+      look wants back the 13 % of the layer it trims (300 is the only value above it worth choosing);
+      `procObjMax` and the candidate ceiling are unconstrained by frame time here, and the density ceiling is
+      **available headroom rather than a measured maximum**. **Decision 5's streaming guard therefore has no
+      number to guard the clutter layer with** — see the task below, which changes shape because of this.
       **What is NOT covered**: one scene, camera flights rather than a drive, n=1 per arm. A streaming-shaped
       hitch under continuous movement is sampled by no arm here, and the three streaming columns reading 0
-      everywhere means that pressure never arose, not that it was survived.
+      everywhere means that pressure never arose, not that it was survived. **Nor what raising
+      `PROC_OBJ_MAX_DENSITY` costs** — every arm above ×3 measured the same world.
 - [ ] **`sa` perf budget — now a VERIFICATION, not a lever** (see the scope call above). On the real install
       under Wine, above the asi gate. Separate rows, separate conclusion, explicitly not comparable to the
       opensa numbers. **If SA does not cope at the shipped density, this plan has no lever left** — say so

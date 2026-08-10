@@ -390,9 +390,11 @@ function applyGraphicsParams(config: ReturnType<typeof createGameRuntimeConfig>,
   // off. **It reaches only the rules the BUILD did not bake**, which since plan 014 is all 95 of them on
   // `opensa` — the bake moved into the `sa` branch, so this is a live lever again. (It was not before: a
   // baked `procobj.dat` carried 9 rules of 96, all `P_UNDERWATERBARREN`, and an A/B using this knob measured
-  // zero on any dry scene.) **What it can reach is bounded by the DATA, not by the cap**: the multiplier
-  // saturates at ×4 against the authored MINDIST spacing — ×8 and ×16 are inside 0.015 % of ×4 — and the
-  // whole layer is +10.1 % of `country-dusk`'s triangles, below the noise on every cost column
+  // zero on any dry scene.) **Its ceiling is `PROC_OBJ_MAX_DENSITY` (3), which is ours, not the data's**: the
+  // lottery is uniform in `[0, 3)` and the renderer keeps `lottery < density`, so a multiplier of 3 or more
+  // keeps every candidate and ×4/×8/×16 all draw the same world. Measured, and it is exactly linear below
+  // that — clutter triangles run 1 : 2.08 : 3.13 for ×1/×2/×4, the whole layer being +10.1 % of
+  // `country-dusk` at ×3 and below the noise on every cost column
   // (`benchmarks/opensa-engine/2026-08-10-headless-procobj-runtime-knob-ladder.json`).
   // Written so 0 reads as zero rather than as absent, like `?airCtl`.
   const procobjParam = Number(params.get('procobj') ?? Number.NaN);
@@ -533,11 +535,12 @@ async function boot(
 
       return setting.enabled ? setting.density : 0;
     },
-    // `?procobjLimit=<n>` sweeps the per-cell budget itself. **Measured 2026-08-10 and the hand-picked 150
-    // survives**: 150 → 300 buys +0.41 % triangles on `country-dusk` and 300 → 3000 buys nothing (flat to
-    // 0.015 %), because the authored MINDIST spacing runs out of candidates long before the cap does. So
-    // plan 013's "set this from a streaming measurement" has no measurement to make — the cap is
-    // data-limited, not perf-limited, and no value above 300 can be worth choosing.
+    // `?procobjLimit=<n>` sweeps the per-cell budget itself. **Measured 2026-08-10**: 300 → 3000 buys nothing
+    // (flat to 0.015 %), because the candidate pool per face is `area / spacing²` and at cutoff 1 a cell does
+    // not hold 300 placements — so no value above 300 can bind. 150 → 300 buys +0.41 % of `country-dusk`'s
+    // triangles, which is **13 % of the clutter layer** — small in scene terms, real in layer terms, and a
+    // look call rather than a perf one. Plan 013's "set this from a streaming measurement" has no measurement
+    // to make: the layer never hitches at any reachable setting.
     procObjLimit: Number(params.get('procobjLimit')) || 150,
   });
   await adapter.prepare();
