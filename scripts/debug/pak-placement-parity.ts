@@ -198,6 +198,18 @@ for (const inst of wanted) {
 
 const missing = wanted.length - found;
 console.log(`game dir ${gameDir} · pak ${pakDir}`);
+// An EMPTY layer used to print `0 / 0` and `NOT covered: 0.000 %` — a perfect score for having measured nothing.
+// It became reachable by default on 2026-08-10: plan 014 bakes the `plobj` clutter for the `sa` target ALONE, so
+// pointing this at an `opensa` tree finds no such layer at all. A zero is only evidence if the counted thing
+// could have happened.
+if (wanted.length === 0) {
+  console.error(
+    `\nNOTHING MEASURED — no instances of layer "${streamPrefix}" in ${gameDir}. The percentage above is ` +
+      'vacuous. Since plan 014 the `plobj` clutter is baked for the `sa` target only (OpenSA scatters it at ' +
+      'runtime), so pass `--streams plotr` for the trees layer, or point --game at a `sa/` tree.',
+  );
+  process.exitCode = 1;
+}
 console.log(
   `layer "${streamPrefix}": ${wanted.length} instances — ${binary} in binary streams + ${text} in text IPLs` +
     `${skipped > 0 ? ` (+${skipped} with no IDE definition)` : ''}`,
