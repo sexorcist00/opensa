@@ -36,6 +36,18 @@ A binary archive cannot be patched file-by-file, so a mod ships a folder instead
 - **Place an asset in the archive its STOCK copy lives in.** An interior model belongs in `gta_int_img/`; put
   it in `gta3_img/` and it shadows nothing.
 - Loose files inside become entries by name — added if new, replacing an existing entry otherwise.
+- **A `.col` is a LIBRARY, and replacing it DELETES every model it does not carry.** `laxref.col` holds 148
+  named collision models; a mod shipping its own copy to change one bench replaces the entry whole, and the
+  other 147 lose their collision. The objects still exist — they are simply placed with nothing to stand on,
+  which shows in-game as walking through a bench, never as an error. **Ship the whole library, not your
+  edit of it**, and if you started from another mod's copy check that it was whole first. Same shape as
+  `Remove original/`, except nothing declared the intent.
+  *What catches you:* since 2026-08-10 the installer prints
+  `mod-installer: <name>.col replaced — N collision model(s) LOST: …` naming the models, so the loss is at
+  least loud at build time. It is still a WARNING — the replacement wins, per this contract. Nothing catches
+  it at runtime unless FLA's optional error reporting is on, which is how the first case was found: mod 60
+  had dropped `ferseat01_LAx`, and the real game said "model ID 3752 does not have loaded collision" months
+  after the install.
 - **`Remove original/`** (also `Remove originals`, `remove-original`, …): the file NAMES inside are DELETED
   from the archive. The contents are irrelevant — mods ship the retired originals for reference.
 - A subfolder holding PNGs is a **texture folder for an archive-internal `<folder>.txd`** (below).

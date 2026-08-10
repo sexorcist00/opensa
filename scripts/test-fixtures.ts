@@ -156,6 +156,9 @@ const MANIFEST: readonly Fixture[] = [
   // --- Entries extracted from the IMG archives ---
   extract('barriers.col', 'col/barriers.col'),
   extract('countn2_17.col', 'col/countn2_17.col'),
+  // A 148-model library — the case mod-installer's partial-`.col` check is about (a mod replacing one of
+  // these entries silently deletes the other 147's collision; field-found 2026-08-10 on `ferseat01_LAx`).
+  extract('laxref.col', 'col/laxref.col'),
   extract('lae_stream0.ipl', 'ipl_binary/lae_stream0.ipl'),
   // Map-strip fixtures (lod-trees-generator): a text IPL + its companion binary stream share one LOD-index space
   // — a stream's `lod` indexes into its area's text IPL. `lae` is a coupled urban pair (the text has its own

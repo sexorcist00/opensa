@@ -2,6 +2,7 @@ import { createImg, openImg } from '@opensa/tool-kit/archive/img';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import { warnDroppedCollisions } from './col-replace';
 import { applyStreamMerge, isStreamMerge } from './stream-merge';
 import { mergeTxdBytes } from './txd-folder';
 
@@ -62,6 +63,7 @@ export function injectImgEntries(
     }
   }
   for (const [name, bytes] of entries) {
+    warnDroppedCollisions(name, img.get(name) ?? undefined, bytes);
     img.set(name, bytes);
   }
   writeBytes(imgPath, img.build());
@@ -134,6 +136,7 @@ export function mergeImgDir(imgDir: string, imgPath: string): number {
     }
   }
   for (const [name, bytes] of entries) {
+    warnDroppedCollisions(name, img.get(name) ?? undefined, bytes);
     img.set(name, bytes);
   }
   let merged = 0;

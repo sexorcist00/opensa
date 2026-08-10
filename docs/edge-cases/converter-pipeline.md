@@ -6,6 +6,14 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   `NODE_OPTIONS=--max-old-space-size=12288` (the cell bake holds the mod-grown ~1.3 GB `gta3.img` + merged
   cells); the default 4 GB dies around 37 % of the AO bake. sa-lod-generator needs ~8 GB. The full map cannot
   weld in one heap — welding is chunked.
+- **A mod replacing a `.col` deletes every collision model its copy omits.** The IMG contract replaces an
+  entry whole, and a `.col` is a LIBRARY of named models — so a partial copy silently strips the rest. Found
+  2026-08-10 on the shipping mod set: `laxref.col` 148 → 147 models, losing `ferseat01_LAx` +
+  `LODseat01_LAx`, because mod 60 installs last and its copy lacked them. **Map-wide damage was exactly
+  those 2 of 216 archives' models** — bounded, but invisible: an object with no collision looks normal and is
+  merely walk-through. The installer now WARNS with the names (`N collision model(s) LOST`); nothing catches
+  it at runtime except FLA's optional error box, which is how it surfaced. Contract + author rule:
+  [`contracts/mods.md`](../contracts/mods.md).
 - **Map objects have no standalone `.osm` texture set.** Only by-name classes (peds, vehicles, props,
   breakables, clutter) carry private `TEXS` dictionaries. Map objects are `textureSource: 'world'`
   (`DESC + GEOM` with global refs into the pak's shared dictionary — ~400 MB shared vs ~3.7 GB per-model) —
