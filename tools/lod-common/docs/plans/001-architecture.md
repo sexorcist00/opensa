@@ -7,13 +7,13 @@
 **Status: ✅ As-built (shared library).** `@opensa/lod-common` is a `type:tool` **library** (no CLI): the
 **simplified-copy LOD mesh pipeline** — QEM decimation, smooth-normal rebuild, and RenderWare DFF/TXD/COL encode
 from a merged mesh. Extracted from `opensa-lod-generator`'s adapter (+ a new `mesh.ts` types module) — see
-`lod-procobj-generator` [001 §extraction, phase 3](../../../lod-procobj-generator/docs/plans/001-architecture.md).
+`sa-procobj-placement` [001 §extraction, phase 3](../../../sa-procobj-placement/docs/plans/001-architecture.md).
 (The JSDoc "plan 002 / plan 015" references in the source point at **`opensa-lod-generator`'s** plans, where these modules
 originated.)
 
 ## Why it exists
 
-Two tools make "simplified copy" LODs — `opensa-lod-generator` (per merged **cell**) and `lod-procobj-generator` (per
+Two tools make "simplified copy" LODs — `opensa-lod-generator` (per merged **cell**) and `sa-procobj-placement` (per
 **species** model). Both feed a mesh through the **same** transforms (decimate → re-normal → encode) and the same
 SA-strict encoders. That pipeline lives here so both import it; `tool-kit` stays generic (pure mesh ops), this
 package adds the **RenderWare encode** knowledge.
@@ -25,7 +25,7 @@ Layering: `@opensa/rw-codec` + `@opensa/tool-kit` (bytes / generic mesh) → `@o
 ## The interchange: `MergedMesh`
 
 `./mesh` defines the contract. A **producer** (a cell merge in `opensa-lod-generator`; a single frame-baked model in
-`lod-procobj-generator`'s `mesh-builder.ts`) builds a `MergedMesh`: native **Z-up** space, triangles bucketed into
+`sa-procobj-placement`'s `mesh-builder.ts`) builds a `MergedMesh`: native **Z-up** space, triangles bucketed into
 per-texture `MergedGroup`s (no atlas), vertex attributes as parallel arrays indexed by the group `indices`. Normals
 ride from the source when present (else zero, for the normals pass); colours default to opaque white when a source
 vertex had no prelit. `sa-lod` consumes it; it does not produce it (each tool owns its own merge/build granularity).
@@ -77,14 +77,14 @@ vertex had no prelit. `sa-lod` consumes it; it does not produce it (each tool ow
 ### Prelight transfer (`--prelight`)
 
 - `./prelight` — stock→custom prelight transfer, shared by **both** LOD tools (`lod-trees-generator` and
-  `lod-procobj-generator`). Custom HD models often ship with badly-set prelit (black / washed-out) versus the stock
+  `sa-procobj-placement`). Custom HD models often ship with badly-set prelit (black / washed-out) versus the stock
   model SA lit for that spot, and SA draws `prelit × material` — so the swapped HD + its LOD look wrong in-world.
   We take one representative ambient colour from the **stock** model's prelit (`stockPrelightColor`, mean RGBA) and
   write it onto the **trunk** (opaque surfaces); **foliage** (alpha-cutout, `FoliagePredicate`) keeps its own.
   - `applyStockPrelight(customDff, stockDff, isFoliage)` — the **HD DFF** path (per-geometry Struct prelit fill +
     PRELIT flag); topology-independent (one representative colour, not a 1:1 copy). Used by both tools' HD swap.
   - `applyMeshTrunkPrelight(mesh, trunk, isFoliage)` — the decimated **LOD mesh** path (per-vertex recolour of
-    `MergedMesh.colors`); `lod-procobj-generator`'s mesh LOD. (`lod-trees-generator`'s billboard LOD re-bakes the
+    `MergedMesh.colors`); `sa-procobj-placement`'s mesh LOD. (`lod-trees-generator`'s billboard LOD re-bakes the
     atlas instead, in its own `io.ts`.)
   - `parsePrelightInfo(text)` → `PrelightInfo { skip }` — the `--prelight <info.json>` per-model override
     (`{ "<model>": { "skip": true } }` opts a model out of the transfer entirely).
@@ -109,6 +109,6 @@ downscaled levels, 112-byte COL3). `prelight.test.ts` — the stock-ambient aver
 
 ## Consumers
 
-`opensa-lod-generator` (per-cell) and `lod-procobj-generator` (per-species), paired with `@opensa/map-placement`
+`opensa-lod-generator` (per-cell) and `sa-procobj-placement` (per-species), paired with `@opensa/map-placement`
 ([001](../../../map-placement/docs/plans/001-architecture.md)) for the map-file side. `lod-trees-generator` also
 imports `./encode-col` + `./prelight` (its impostor bake is otherwise its own).

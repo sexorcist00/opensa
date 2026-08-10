@@ -1,12 +1,20 @@
-# @opensa/lod-procobj-generator
+# @opensa/sa-procobj-placement
 
-Convert **GTA-SA procobj scatter species** (bushes, rocks, scrub, joshua…) into **static IPL instances with
-simplified-copy LODs** — a decimated low-poly mesh, not a billboard impostor (that's
-[`lod-trees-generator`](../lod-trees-generator/)). The companion to it for the procobj clutter the impostor tool
-deliberately leaves alone.
+Convert **GTA-SA procobj scatter species** (bushes, rocks, scrub, joshua…) into **static IPL instances**.
+
+> **Renamed from `lod-procobj-generator` on 2026-08-10, ahead of the change that earns the name.** This still
+> generates a simplified-copy LOD per object; [plan 014](docs/plans/014-permanent-rows-no-lod-twins.md) removes
+> that entirely — the twin recovers ~0.2 % of a hand-modelled bush's geometry for the price of a whole entity,
+> and at the shipped density the twinned shape **cannot fit SA's ceilings at all**. What replaces it is one
+> permanent text row per object at `lod = -1` with range from the IDE, and the tool becomes SA-only: our own
+> engine scatters this clutter at runtime and needs no bake. Read that plan before touching the LOD paths here.
+
+Today's behaviour, until 014 lands: static IPL instances with **simplified-copy LODs** — a decimated low-poly
+mesh, not a billboard impostor (that's [`lod-trees-generator`](../lod-trees-generator/)). The companion to it for
+the procobj clutter the impostor tool deliberately leaves alone.
 
 ```sh
-tsx tools/lod-procobj-generator/src/cli.ts --out <path> --game <path> [--in <dir>]
+tsx tools/sa-procobj-placement/src/cli.ts --out <path> --game <path> [--in <dir>]
 ```
 
 - `--in` — optional folder of HD procobj models (`<model>.dff` + `<model>.txd`), intersected with `procobj.dat` to

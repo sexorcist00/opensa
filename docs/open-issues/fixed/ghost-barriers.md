@@ -23,7 +23,7 @@
 
 ## Symptom
 
-- Real SA (1.0 US + FLA): after installing the `lod-procobj-generator` output, `barriers2.ipl` props
+- Real SA (1.0 US + FLA): after installing the `sa-procobj-placement` output, `barriers2.ipl` props
   ghost-streamed in at the bridge on every save — even full-progress saves where all bridges are open.
 - Teleport-then-save near the bridge crashed the game.
 - OpenSA (browser engine): the same roadblocks appeared baked into far-LOD cells (`lod_2_1`,
@@ -119,7 +119,7 @@ the build output.
 
 ## Pointers
 
-- `tools/lod-procobj-generator/docs/plans/007-binary-ipl-streams.md` — layout + full post-mortem.
+- `tools/sa-procobj-placement/docs/plans/007-binary-ipl-streams.md` — layout + full post-mortem.
 - `tools/lod-trees-generator/docs/plans/011-area-row-budget.md` — area budgets, migration, slot economy.
 - `tools/map-placement/src/streamed-areas.ts` / `ipl-binary-write.ts` — the shared machinery.
 - `tools/mod-installer/src/ipl-slot-merge.ts` — mod-IPL folding + stock inst-block compaction.

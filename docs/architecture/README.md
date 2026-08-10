@@ -40,7 +40,7 @@ packages/                          (tag type:engine)
   game-build/     @opensa/game-build      partitioning shared by the loaders + build scripts
 tools/                             (tag type:tool — offline; may read engine packages, never the app)
   perfect-map-builder/ · opensa-pack/ · fetch-pack/ · mod-installer/ · vehicle-installer/ · ped-installer/
-  map-optimizer/ · opensa-lod-generator/ · sa-lod-generator/ · lod-trees-generator/ · lod-procobj-generator/
+  map-optimizer/ · opensa-lod-generator/ · sa-lod-generator/ · lod-trees-generator/ · sa-procobj-placement/
   vehicle-optimizer/ · timecyc-builder/ · lod-common/ · map-placement/ · rw-codec/ · tool-kit/
 tools-debug/  bench-harness/ (headless field checks) · sa-int16-repro/ (ghost-barriers repro dial)
 asi/          sdk/ (the asi:: framework + codegen every .asi plugin builds on) · perfect-map/ (its first

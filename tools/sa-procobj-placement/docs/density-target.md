@@ -36,7 +36,7 @@ it the opposite way, which is what makes it useful.
 
 The last row is the mechanism: the mod **deletes the land scatter from `procobj.dat` and re-ships it as
 static IPL rows**, keeping only the underwater rules procedural. That is the same trade our
-`lod-procobj-generator` makes (`procobj-strip.ts` / `--modloader` disable rows) — placement moves from
+`sa-procobj-placement` makes (`procobj-strip.ts` / `--modloader` disable rows) — placement moves from
 runtime to build time. The difference is entirely in the LAYOUT of what comes out.
 
 Its own header states the price: _"Requires increased game limits (included in Proper Fixes and Urbanize)

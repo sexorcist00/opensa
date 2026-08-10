@@ -302,7 +302,7 @@ export function run(options: BuildOptions): void {
     }
   }
   if (built.length === 0) {
-    console.log('lod-procobj-generator: no `--dff ∩ procobj` species to convert');
+    console.log('sa-procobj-placement: no `--dff ∩ procobj` species to convert');
 
     return;
   }
@@ -434,12 +434,12 @@ export function swapFolder(inPath: string | undefined): string | undefined {
   }
   const stat = statSync(inPath, { throwIfNoEntry: false });
   if (stat === undefined) {
-    console.log(`lod-procobj-generator: no HD swap folder at ${inPath} — converting every procobj species`);
+    console.log(`sa-procobj-placement: no HD swap folder at ${inPath} — converting every procobj species`);
 
     return undefined;
   }
   if (stat.isDirectory() && listDffModels(inPath).length === 0) {
-    console.log(`lod-procobj-generator: no .dff in ${inPath} — converting every procobj species`);
+    console.log(`sa-procobj-placement: no .dff in ${inPath} — converting every procobj species`);
 
     return undefined;
   }

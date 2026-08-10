@@ -306,8 +306,8 @@ row but its chain was superseded by 097). Newest first:
   trees, plus the map strip + place stages (text↔binary IPL LOD-index coupling), the SA asset-format checklist,
   and aspect-aware atlas + `--prelight` trunk transfer. (procobj is now its own tool.)
   [`lod-trees-generator/docs/plans/`](../../tools/lod-trees-generator/docs/plans/) (`001`–`005`, `007`).
-- **lod-procobj-generator** — procobj scatter → static IPL with **simplified-copy** (decimated) LODs; reuses
-  `sa-lod` + `map-placement`. [`lod-procobj-generator/docs/plans/`](../../tools/lod-procobj-generator/docs/plans/)
+- **sa-procobj-placement** — procobj scatter → static IPL with **simplified-copy** (decimated) LODs; reuses
+  `sa-lod` + `map-placement`. [`sa-procobj-placement/docs/plans/`](../../tools/sa-procobj-placement/docs/plans/)
   (`001` architecture · `002` build pipeline · `003` asset format).
 - **mod-installer** — layer mod folders onto a base game (files overwrite, `gta3img/` merges into `gta3.img`, a
   PNG folder merges into a sibling loose `.txd`), alphabetical.
@@ -322,10 +322,10 @@ row but its chain was superseded by 097). Newest first:
   add/replace · `003` strip).
 - **tool-kit** — shared building blocks (mesh smooth-normals + QEM simplify, editable IMG). No plans doc yet.
 - **map-placement** — shared SA map-edit workflows (id allocation, IDE/gta.dat edits, swapped-HD retexture,
-  procobj convert/strip), used by lod-trees-generator + lod-procobj-generator.
+  procobj convert/strip), used by lod-trees-generator + sa-procobj-placement.
   [`map-placement/docs/plans/`](../../tools/map-placement/docs/plans/) (`001` architecture & API).
 - **sa-lod** — shared simplified-copy LOD pipeline (decimate → normals → encode DFF/TXD/COL), extracted from
-  opensa-lod-generator, used by it + lod-procobj-generator.
+  opensa-lod-generator, used by it + sa-procobj-placement.
   [`sa-lod/docs/plans/`](../../tools/lod-common/docs/plans/) (`001` architecture & API · `005` the 2dfx
   keep-policy + `006` `transform2dfxEntry` — both SHIPPED 2026-08-07, arrived from roadmap 0.5.0 plan 07).
 - **rw-codec** — shared pure RW chunk/DFF/DXT/geometry-struct/2dfx codec, extracted from map-optimizer

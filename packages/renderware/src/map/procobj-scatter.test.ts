@@ -176,7 +176,7 @@ describe('scatterProcObjects', () => {
       // Fails the day someone adds an exclusion radius to the SCATTER (an "anti-clumping" pass is the
       // plausible shape). It does NOT re-catch the deleted `cullByMinDistance`, which lived downstream in
       // `map-placement/procobj/convert.ts` and cannot be unit-tested without a fixture game dir — that seam
-      // is named as uncovered in lod-procobj-generator/009. The rule fixture's minDistance is 60.
+      // is named as uncovered in sa-procobj-placement/009. The rule fixture's minDistance is 60.
       const batches = scatterProcObjects([triangleCollider(1)], groupRulesBySurface([rule()]), SURFACES, 0, 0);
       const { placements } = batches[0];
       let nearest = Infinity;

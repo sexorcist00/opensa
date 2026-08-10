@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 /**
- * Integration test for the Modloader **HD mod** emit that `lod-procobj-generator --modloader` uses (its full `run`
+ * Integration test for the Modloader **HD mod** emit that `sa-procobj-placement --modloader` uses (its full `run`
  * needs the whole map's collision to scatter procobjs, so the LOD side is covered e2e, not here). Drives the shared
  * `writeTxdpHdMod` with a real fixture DFF (`washer.dff`, textures `junk_tv2`/`junk_washer1`) + a minted parent TXD
  * containing `junk_tv2`, asserting the on-disk `hd/` mod parents the model's stock TXD via `txdp` (no stock IDE).

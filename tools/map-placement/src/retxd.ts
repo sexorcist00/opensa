@@ -169,7 +169,7 @@ export function txdpSwappedModels(
  * injects them into `gta3.img` by name), a `txdp` IDE ({@link txdpIde} of {@link txdpSwappedModels}) parenting each
  * swapped model's stock TXD to the custom one, and a one-line `loader.txt`. **No stock IDE is touched.** Returns the
  * number of swapped DFFs — `0` (nothing written) when `swap` is empty or no model matched a custom TXD. Shared by
- * `lod-trees-generator` + `lod-procobj-generator` under `--modloader`.
+ * `lod-trees-generator` + `sa-procobj-placement` under `--modloader`.
  */
 export function writeTxdpHdMod(args: {
   gamePath: string;

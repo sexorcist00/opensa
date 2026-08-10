@@ -103,7 +103,7 @@ map-wide — which is why a species is rare, and it is not a cap doing it.
 
 **And on the shipping build the defect is latent, because of our own generator**: `convertProcObj` strips the
 converted species from `procobj.dat`, leaving 8 underwater rules that share the 150 budget comfortably and
-lose none. The plan is therefore not closed but **sequenced after [02](../../tools/lod-procobj-generator/docs/plans/010-density-model.md)**,
+lose none. The plan is therefore not closed but **sequenced after [02](../../tools/sa-procobj-placement/docs/plans/010-density-model.md)**,
 which is what brings the defect back.
 
 ### 7. Plan 07's 02/04 rewritten per target — twice

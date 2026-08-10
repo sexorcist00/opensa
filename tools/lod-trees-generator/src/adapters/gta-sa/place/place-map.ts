@@ -104,7 +104,7 @@ interface PlacedInst {
  * - **`--modloader`:** the **same** attachment, packaged as **two** Modloader mods under `<out>` — `lod/` (the LOD
  *   attachment) + `hd/` (the swapped HD models, via `txdp` so no stock IDE is rewritten). See {@link placeModloader}.
  *
- * procobj species keep their stock HD + runtime scatter (procobj LODs are a separate tool — `lod-procobj-generator`).
+ * procobj species keep their stock HD + runtime scatter (procobj LODs are a separate tool — `sa-procobj-placement`).
  */
 export function placeMap(options: PlaceOptions): void {
   const { gamePath, impostors, modloader, outPath } = options;
@@ -367,7 +367,7 @@ function editAreas(
  * Emit the HD mod under `<out>/hd/`: the swapped (prelit) HD DFFs + the custom parent TXD, plus a `txdp` IDE that
  * parents each swapped model's **stock** TXD to the custom one (so the stock IDEs are never rewritten — the `./5`
  * approach). Returns the number of swapped DFFs; 0 (nothing written) when there's no `--in` or no model matched a
- * custom TXD. procobj species are excluded (their HD stays stock — handled by `lod-procobj-generator`).
+ * custom TXD. procobj species are excluded (their HD stays stock — handled by `sa-procobj-placement`).
  */
 function emitHdMod(
   options: PlaceOptions,

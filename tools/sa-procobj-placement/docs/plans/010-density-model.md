@@ -11,7 +11,7 @@ configurable, per-category/per-surface model.
 > task turned out to be a bug fix, not a density feature: both numeric columns of `procobj.dat` were being
 > read the way the file's header describes them rather than the way the game spends them. That step is done,
 > field-accepted, and its record moved to the tool —
-> [`lod-procobj-generator/009`](009-procobj-dat-columns-as-the-game-reads-them.md).
+> [`sa-procobj-placement/009`](009-procobj-dat-columns-as-the-game-reads-them.md).
 > **What it means for everything below:** the layer now places **91 092** objects at *vanilla* density, not
 > 15 286, so every multiplier this chain ever quoted against 15 286 was a multiplier against a defect —
 > including [density-target.md](../density-target.md)'s 3.77×, whose 57 583-object aiming point is itself
@@ -66,7 +66,7 @@ Four caps, and they are not interchangeable:
 | ---- | ----- | ------- | --- |
 | `lottery < density` | `map-placement/src/procobj/convert.ts` | the build-time density cutoff — **this is what this plan makes per-category** | **yes** — it IS the profile |
 | `PROC_OBJ_MAX_DENSITY = 3` | `procobj-scatter.ts` | how many CANDIDATES are generated at all; a cutoff above 3 needs this raised too | **yes** |
-| `procObjMax = 100000` | `lod-procobj-generator/config.ts` | global safety cap on placed objects | **yes** ([04](013-density-budgets-per-target.md) sets the real one) |
+| `procObjMax = 100000` | `sa-procobj-placement/config.ts` | global safety cap on placed objects | **yes** ([04](013-density-budgets-per-target.md) sets the real one) |
 | `procObjLimit` (150 in `engine-canvas-host`) | the OpenSA runtime adapter, per cell | a runtime render/collide budget, **not** a build knob. The 2026-08-09 fix shrank the candidate pool ~19×, so it binds far less often and its value is now unowned rather than tuned | `opensa/` only |
 
 ## Decisions
@@ -128,7 +128,7 @@ Four caps, and they are not interchangeable:
       `CAP DROPPED n` line. **Shipped 2026-08-08, and it is what falsified the old decision 5**: the knob
       worked and moved almost nothing, which is the finding that started the reverse.
 - [x] **Read the two columns the way the game does.** **SHIPPED 2026-08-09, field-accepted** — moved to
-      [`lod-procobj-generator/009`](009-procobj-dat-columns-as-the-game-reads-them.md)
+      [`sa-procobj-placement/009`](009-procobj-dat-columns-as-the-game-reads-them.md)
       with every measurement (census, built layer, on-disk size, the nine-scene sweep).
 - [x] **`densityFor(category, surface)` — SHIPPED 2026-08-09.** `ProcObjDensityConfig` +
       `densityFor`/`densityProfile`/`validateDensityProfile`/`densityLabel` live in
@@ -204,7 +204,7 @@ Four caps, and they are not interchangeable:
 ## Measurements / notes
 
 The 2026-08-09 reverse and fix, with all their numbers, live in
-[`lod-procobj-generator/009`](009-procobj-dat-columns-as-the-game-reads-them.md).
+[`sa-procobj-placement/009`](009-procobj-dat-columns-as-the-game-reads-them.md).
 Two by-products of that work belong to the tasks above rather than to the fix, so they are kept here:
 
 - **17 of the 95 rules can never fire**: `p_grass_dry` (9 rules), `p_flowerbed` (6) and `p_wasteground` (2)

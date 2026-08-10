@@ -168,7 +168,7 @@ of `modloader/`. Roughly a focused day or two.
 **Status: ✅ Implemented (decorator); in-game verify pending.** Phase 2 of the decorator: load **map/asset mods** —
 new object defs + placements + collision + `txdp` parents registered through a **gta.dat-style loader text file**,
 not just vehicle dff/txd overrides. This is the "OpenSA next stage" that `lod-trees-generator` plan `008` and
-`lod-procobj-generator` plan `004` defer to: it makes our own `--modloader` output (`lod/` + `hd/`) load in OpenSA,
+`sa-procobj-placement` plan `004` defer to: it makes our own `--modloader` output (`lod/` + `hd/`) load in OpenSA,
 and as a bonus loads community map mods of the same shape (MixMods "Project Props", "LOD Vegetation", "BSOR
 Vegetation").
 
@@ -304,7 +304,7 @@ Vegetation by …`). Content-based detection, case-insensitive, prose-tolerant.
 
 ## Relationship
 
-- Consumes the output of `lod-trees-generator/008` (`lod/`+`hd/`) + `lod-procobj-generator/004` — the "OpenSA next
+- Consumes the output of `lod-trees-generator/008` (`lod/`+`hd/`) + `sa-procobj-placement/004` — the "OpenSA next
   stage" both defer to. Same `txdp` mechanism those use (`@opensa/map-placement/retxd` `txdpSwappedModels` →
   `parseTxdParents`/`setTxdParents` here). Reference mods: Project Props 4, LOD Vegetation, BSOR Vegetation, and the
   SA Brightened Project (the multi-mod bundle that surfaced the UTF-16 loader + `.ifp` gaps).

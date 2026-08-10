@@ -59,7 +59,7 @@ keyed by host. `--procobj-max` raises the placed
 -object safety cap with it; without that a high-density run measures the CAP, and the build says so with a
 `CAP DROPPED n` line. **The 2026-08-08 finding that "the cutoff is not the density lever" is retired**: it was
 true only because `cullByMinDistance` was deleting 99 % of the candidates with a column that is a camera
-distance. Since [009](../tools/lod-procobj-generator/docs/plans/009-procobj-dat-columns-as-the-game-reads-them.md)
+distance. Since [009](../tools/sa-procobj-placement/docs/plans/009-procobj-dat-columns-as-the-game-reads-them.md)
 density 1 IS the authored density (91 092 objects) and `procObjMax` defaults to 100 000 so it does not bind.
 
 On the built `sa/` tree the build prints a **map-cost census** (`reportTextIplCensus`: permanent text-IPL rows,
@@ -125,7 +125,7 @@ npx tsx tools/lod-trees-generator/src/cli.ts --in ./mods-src/vegetation --game <
 
 # Procobj → static IPL + LODs ([--target sa|opensa]: the host the layer's cost is reported against; pmb passes
 # its own. [--density n]: scatter cutoff, 1 = vanilla, max 3 — the run prints the density + rows/object it built)
-npx tsx tools/lod-procobj-generator/src/cli.ts --in ./mods-src/procobj --game <dir> --out <dir> --prelight --tex 128
+npx tsx tools/sa-procobj-placement/src/cli.ts --in ./mods-src/procobj --game <dir> --out <dir> --prelight --tex 128
 
 # OpenSA cell LODs ([--holes <json>]: hole-fill models merged verbatim past the reduction tracks)
 npx tsx tools/opensa-lod-generator/src/cli.ts --game <dir> --out <dir> --cell 250

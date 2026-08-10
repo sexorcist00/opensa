@@ -1,4 +1,4 @@
-# 001 — lod-procobj-generator: architecture, extraction & task plan
+# 001 — sa-procobj-placement: architecture, extraction & task plan
 
 **Implemented** (phases 1–5; in-game verify pending — see the task plan). The build pipeline is detailed in
 [002](./002-build-pipeline.md); the strict-SA format requirements in [003](./003-sa-asset-format.md). Split procobj
@@ -16,7 +16,7 @@ machinery either way, so it moves to a shared package both can use.
 | Tool                              | Input                     | LOD strategy                       | Placement                            |
 | --------------------------------- | ------------------------- | ---------------------------------- | ------------------------------------ |
 | `lod-trees-generator`             | tree HDs (`--dff/txd`)    | **impostor** (cards + atlas)       | attach to streamed/text HD instances |
-| `lod-procobj-generator` (new)     | procobj HDs (`--dff/txd`) | **simplified copy** (QEM decimate) | procobj scatter → static IPL         |
+| `sa-procobj-placement` (new)     | procobj HDs (`--dff/txd`) | **simplified copy** (QEM decimate) | procobj scatter → static IPL         |
 | `opensa-lod-generator` (existing) | whole-map cells           | **simplified copy** (QEM decimate) | per-cell merged static IPL           |
 
 ## The new tool
@@ -30,7 +30,7 @@ machinery either way, so it moves to a shared package both can use.
 > The pipeline prose below still says "`--dff`/`--txd`" — read it as the contents of `--in`.
 
 ```
-tsx tools/lod-procobj-generator/src/cli.ts --out <path> --game <path> [--in <dir>]
+tsx tools/sa-procobj-placement/src/cli.ts --out <path> --game <path> [--in <dir>]
   --in    optional HD model folder (<model>.dff + <model>.txd ∩ procobj.dat); omit → all procobj species from gta3.img
   --out   output drop-in directory
   --game  game-data dir (gta.dat + data/ + models/gta3.img)
@@ -188,7 +188,7 @@ Note: the **memory** `ipl-lod-index-coupling` and `sa-generated-asset-format` st
    `map-placement/src/procobj/`; `convert` generalised — `ProcObjSpecies` now `{ hdId, height, lodId, lodModel }`,
    the IPL name is an `iplName` option (`lod_procobj`), and `UNDERWATER_PROCOBJ` species are never converted.
    Exported as `@opensa/map-placement/procobj`. `world.ts` was already generic (moved as-is). Tests recovered.
-5. **Build `lod-procobj-generator`** ✅ **Done.** `src/cli.ts` + `config.ts` + `mesh-builder.ts` (frame-aware
+5. **Build `sa-procobj-placement`** ✅ **Done.** `src/cli.ts` + `config.ts` + `mesh-builder.ts` (frame-aware
    single-model → `MergedMesh` + `meshBounds`) + `build.ts` (the P0–P7 orchestrator). Wires `map-placement`
    (`convertProcObj`/`allocateLodIds`/`buildLodIde`/`lodAlias`/`patchGtaDat`/`retxdSwappedModels`) × `sa-lod`
    (`decimateMesh`/`rebuildMeshNormals`/`encodeLodDff`/`encodeLodTxd`/`encodeColLibrary`/model+texture sources) ×
@@ -206,4 +206,4 @@ Each phase keeps `tsc`/`eslint`/tests green; extraction phases were move-then-re
    `UNDERWATER_PROCOBJ` species.
 3. **Cleanup timing** — **done** (Phase 1), ahead of the package work.
 4. **LOD TXD** — **one shared `lod_procobj.txd`** (name-prefixed entries, fewer IMG entries).
-5. **New tool name** — **`lod-procobj-generator`**.
+5. **New tool name** — **`sa-procobj-placement`**.

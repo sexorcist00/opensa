@@ -64,9 +64,9 @@ screen.
   drawDistance + per-cell budget.
 - Density defaults left at 1 (authored). Since the column fix that IS the authored density: the build-time
   layer places 91 092 objects against 15 286 before. Shaping it per category/surface/biome is
-  [`lod-procobj-generator/010`–`012`](../../tools/lod-procobj-generator/docs/plans/010-density-model.md);
+  [`sa-procobj-placement/010`–`012`](../../tools/sa-procobj-placement/docs/plans/010-density-model.md);
   the perf budget that should own `procObjLimit` and `procObjMax` is
-  [`013`](../../tools/lod-procobj-generator/docs/plans/013-density-budgets-per-target.md).
+  [`013`](../../tools/sa-procobj-placement/docs/plans/013-density-budgets-per-target.md).
 
 ## Test coverage anchors
 

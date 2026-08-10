@@ -114,7 +114,7 @@ zero, it does not stop the rounding.
 
 **What that means for the decision.** The defect is genuine and worth fixing, but nothing in the shipped
 `original` build shows it today. It returns the moment either of two things happens: a game that does NOT run
-`lod-procobj-generator` (its runtime scatter is the full stock set), or [02](010-density-model.md) raising
+`sa-procobj-placement` (its runtime scatter is the full stock set), or [02](010-density-model.md) raising
 density — more candidates per cell is more cap pressure, and the cap is what zeroes.
 
 **DECIDED 2026-08-08 (the user's call): this plan runs AFTER [02](010-density-model.md), re-scoped to the

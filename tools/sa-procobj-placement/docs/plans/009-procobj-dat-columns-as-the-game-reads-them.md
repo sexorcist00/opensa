@@ -34,7 +34,7 @@ the one-line rule for future designs is in
 | --- | --- |
 | `packages/renderware/src/map/procobj-scatter.ts` | `expected = area / (spacing × spacing) × PROC_OBJ_MAX_DENSITY`. **Shared with the RUNTIME cell scatter**, so `procObjLimit = 150` now rations a ~19× smaller candidate pool and binds far less often |
 | `tools/map-placement/src/procobj/convert.ts` | `cullByMinDistance` deleted, with `minDistByModel` and `tooClose`. Its three unit tests went with it — they pinned what it did, not that it should exist |
-| `tools/lod-procobj-generator/src/config.ts` | `procObjMax` 20 000 → **100 000**. At the corrected reading the old cap dropped 78 % of the layer, so any measurement taken against it would have been a measurement of the cap |
+| `tools/sa-procobj-placement/src/config.ts` | `procObjMax` 20 000 → **100 000**. At the corrected reading the old cap dropped 78 % of the layer, so any measurement taken against it would have been a measurement of the cap |
 | `packages/renderware/src/parsers/text/procobj.parser.ts` | `minDistance` documented as consumed by NOTHING — it is parsed to keep the row round-trippable and for census tooling |
 | `scripts/debug/procobj-spacing-census.ts`, `procobj-species-floor.ts` | re-pointed at the corrected pipeline; the census's self-check now asserts `area/spacing²`, and its nearest-neighbour block became the REGRESSION check |
 

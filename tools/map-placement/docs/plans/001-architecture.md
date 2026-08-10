@@ -3,12 +3,12 @@
 **Status: ✅ As-built (shared library).** `@opensa/map-placement` is a `type:tool` **library** (no CLI) holding the
 SA map-edit workflows shared by the LOD tools: object-id allocation, IDE / `gta.dat` editing, swapped-HD retexture,
 and procobj scatter conversion / stripping. It was extracted from `lod-trees-generator` (+ the procobj modules
-recovered from git history and generalised) — see `lod-procobj-generator`
-[001 §extraction, phases 2 & 4](../../../lod-procobj-generator/docs/plans/001-architecture.md).
+recovered from git history and generalised) — see `sa-procobj-placement`
+[001 §extraction, phases 2 & 4](../../../sa-procobj-placement/docs/plans/001-architecture.md).
 
 ## Why it exists
 
-`lod-trees-generator` (impostors) and `lod-procobj-generator` (simplified copies) place their LODs the **same** way
+`lod-trees-generator` (impostors) and `sa-procobj-placement` (simplified copies) place their LODs the **same** way
 — allocate ids, register IDE/`gta.dat`, edit IPLs, retxd swapped HD models, scatter procobj into static IPL — only
 the LOD model they point at differs. That placement machinery lives here so both import it instead of duplicating
 it. `tool-kit` stays format-agnostic; this package is the SA-specific **write** layer.
@@ -79,9 +79,9 @@ workflows) → the LOD tools (CLI). Sits beside `sa-lod` (mesh encode) under `to
 
 `ide.test.ts`, `retxd.test.ts`, `txd-trim.test.ts`, `procobj-strip.test.ts`, `procobj/convert.test.ts` — each module unit-tested
 (id allocation cap/determinism, coverage-gated retxd, the never-touch strip, MINDIST cull + IPL emit). Consumers
-(`lod-trees-generator`, `lod-procobj-generator`) cover the end-to-end wiring.
+(`lod-trees-generator`, `sa-procobj-placement`) cover the end-to-end wiring.
 
 ## Consumers
 
-`lod-trees-generator` (impostor placement), `lod-procobj-generator` (simplified-copy placement). Both also use
+`lod-trees-generator` (impostor placement), `sa-procobj-placement` (simplified-copy placement). Both also use
 `@opensa/sa-lod` (see its [001](../../../lod-common/docs/plans/001-architecture.md)) and `@opensa/tool-kit`.

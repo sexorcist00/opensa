@@ -9,7 +9,7 @@ tsx tools/lod-trees-generator/src/cli.ts --out <path> --game <path> [--in <dir>]
 
 - `--in` — optional folder of HD trees (`<model>.dff` + `<model>.txd`); textures are baked from its TXDs. A
   **directory** is filtered to tree-like models — `procobj.dat` scatter species (handled by
-  `lod-procobj-generator`) and non-foliage "types" (rocks / grass / flowers / rubble / pots / proc-patches /
+  `sa-procobj-placement`) and non-foliage "types" (rocks / grass / flowers / rubble / pots / proc-patches /
   already-`lod*`) are skipped (logged); a single-file `--in` is taken as-is. **Omit `--in` to bake the built-in SA
   tree roster (`@opensa/map-placement/vegetation`) straight from the game's own `gta3.img`** — no model/texture
   swap, just impostor LODs for the stock trees. (SA has no "is-a-tree" data flag, so the roster + the "type" cut
@@ -56,7 +56,7 @@ attachment) + `<out>/hd/` (the swapped HD models via a `txdp` IDE) — neither t
 `--modloader` flag above). A shared `--in`
 TXD is **trimmed** to just the textures the swapped models use (the dropped procobj/non-tree models' textures don't
 bloat the output). `procobj.dat` is left untouched; procobj species get their LODs from a separate tool
-(`lod-procobj-generator`) whose LODs are simplified-copy meshes, not impostors.
+(`sa-procobj-placement`) whose LODs are simplified-copy meshes, not impostors.
 
 See [`docs/plans/002-build-pipeline.md`](./docs/plans/002-build-pipeline.md) for the bake design (and the
 `cedar1_hi` → `lodCedar1_hi` reference breakdown), [`003-map-strip.md`](./docs/plans/003-map-strip.md) for the

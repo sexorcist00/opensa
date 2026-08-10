@@ -1,13 +1,6 @@
 import type { ProcObjDensityInput } from '@opensa/map-placement/procobj-density';
 
 import { parsePrelightInfo, type PrelightInfo } from '@opensa/lod-common/prelight';
-/**
- * The perfect-map build pipeline (plan 001): chain every map tool via its Node API, each stage's output feeding the
- * next as a **complete** game dir (full passthrough), then split the common build into the `sa` (real game) and
- * `opensa` final LOD targets. Intermediate stages live under `<out>/.work` and are deleted as they're consumed —
- * unless `keepWork`/`until` is set, in which case every stage build is kept for step-by-step in-game debugging.
- */
-import { buildProcobjLods } from '@opensa/lod-procobj-generator/build';
 import { buildTreeLods } from '@opensa/lod-trees-generator/build';
 import { parseOnlyList, runOptimizer } from '@opensa/map-optimizer/run';
 import { SA_TREE_MODELS } from '@opensa/map-placement/vegetation';
@@ -19,6 +12,13 @@ import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { parseIde } from '@opensa/renderware/parsers/text/ide.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { buildSaLods } from '@opensa/sa-lod-generator/build';
+/**
+ * The perfect-map build pipeline (plan 001): chain every map tool via its Node API, each stage's output feeding the
+ * next as a **complete** game dir (full passthrough), then split the common build into the `sa` (real game) and
+ * `opensa` final LOD targets. Intermediate stages live under `<out>/.work` and are deleted as they're consumed —
+ * unless `keepWork`/`until` is set, in which case every stage build is kept for step-by-step in-game debugging.
+ */
+import { buildProcobjLods } from '@opensa/sa-procobj-placement/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { type BuildTarget } from '@opensa/tool-kit/target';
 import { install as installVehicles } from '@opensa/vehicle-installer/install';

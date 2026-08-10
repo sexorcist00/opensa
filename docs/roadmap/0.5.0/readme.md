@@ -69,10 +69,10 @@ cannot drift from it. **Every remaining task is unbuilt work in a tool's own num
 
 | Tool | Plan | What is left |
 | --- | --- | --- |
-| `lod-procobj-generator` | [013 — density budgets, per target](../../../tools/lod-procobj-generator/docs/plans/013-density-budgets-per-target.md) | **the P1.** The two perf budgets (`opensa`, `sa`), the streaming guard the build currently only ANNOUNCES, and the stock report. Newly urgent: the layer now costs 25 560 permanent rows, so a full `sa/` build throws on int16 — the profile gate arrived by accident and has to be made deliberate |
-| `lod-procobj-generator` | [010 — density model](../../../tools/lod-procobj-generator/docs/plans/010-density-model.md) | per-category / per-surface density and the two shipped profiles. Its first task shipped, so what is left is SHAPING density rather than raising it |
-| `lod-procobj-generator` | [011 — biome density](../../../tools/lod-procobj-generator/docs/plans/011-biome-zone-density.md) | zone × scatter join + slope proxy. Gated on 010, and it inherits a new problem: a density multiplier changes GROUPING as a side effect |
-| `lod-procobj-generator` | [012 — species floor](../../../tools/lod-procobj-generator/docs/plans/012-species-representation-floor.md) | the runtime cell cap zeroing whole species. **Its 19.8 % sizing predates the column fix and must be re-taken** |
+| `sa-procobj-placement` | [013 — density budgets, per target](../../../tools/sa-procobj-placement/docs/plans/013-density-budgets-per-target.md) | **the P1.** The two perf budgets (`opensa`, `sa`), the streaming guard the build currently only ANNOUNCES, and the stock report. Newly urgent: the layer now costs 25 560 permanent rows, so a full `sa/` build throws on int16 — the profile gate arrived by accident and has to be made deliberate |
+| `sa-procobj-placement` | [010 — density model](../../../tools/sa-procobj-placement/docs/plans/010-density-model.md) | per-category / per-surface density and the two shipped profiles. Its first task shipped, so what is left is SHAPING density rather than raising it |
+| `sa-procobj-placement` | [011 — biome density](../../../tools/sa-procobj-placement/docs/plans/011-biome-zone-density.md) | zone × scatter join + slope proxy. Gated on 010, and it inherits a new problem: a density multiplier changes GROUPING as a side effect |
+| `sa-procobj-placement` | [012 — species floor](../../../tools/sa-procobj-placement/docs/plans/012-species-representation-floor.md) | the runtime cell cap zeroing whole species. **Its 19.8 % sizing predates the column fix and must be re-taken** |
 | `lod-common` → `sa-lod-generator` | [008 — emitter thinning](../../../tools/lod-common/docs/plans/008-emitter-thinning.md) → [008 — far-view budget](../../../tools/sa-lod-generator/docs/plans/008-far-view-emitter-budget.md) | **one measurement, then possibly nothing.** Both generators already carry emitters; plan 100/04 found the system below the noise floor with a positive control, so the honest deliverable may be a table of 1.0s |
 
 **What shipped out of the chain**, each recorded in the tool it landed in:
@@ -83,9 +83,9 @@ transform · [`opensa-lod-generator/005`](../../../tools/opensa-lod-generator/do
 and [`sa-lod-generator/007`](../../../tools/sa-lod-generator/docs/plans/007-clone-2dfx-policy.md) the two
 adoptions · [`perfect-map-builder/003`](../../../tools/perfect-map-builder/docs/plans/003-target-split-and-budget-guards.md)
 the target split and its guards ·
-[`lod-procobj-generator/008`](../../../tools/lod-procobj-generator/docs/plans/008-limit-route-review-closed.md)
+[`sa-procobj-placement/008`](../../../tools/sa-procobj-placement/docs/plans/008-limit-route-review-closed.md)
 the closed limit-route review and
-[`009`](../../../tools/lod-procobj-generator/docs/plans/009-procobj-dat-columns-as-the-game-reads-them.md)
+[`009`](../../../tools/sa-procobj-placement/docs/plans/009-procobj-dat-columns-as-the-game-reads-them.md)
 the `procobj.dat` column fix. The rotation-bearing-2dfx step died and came back as
 [plan 100](../../plans/100-2dfx-at-lod-range/readme.md); escalators turned out to have no engine code at all
 ([plan 101](../../plans/101-escalators/readme.md)).
@@ -97,7 +97,7 @@ read the way the file's header describes them rather than the way the game spend
 **field-accepted** — 15 286 → **91 092** objects, one bench scene moved (`country-dusk` +12.6 %, the only
 rural one). So "more procobj" was never a stretch goal; it was a return to the data, and the aiming point
 taken from ProperFixes (57 583 objects) is itself **0.63× vanilla**. The research record is
-[`tools/lod-procobj-generator/docs/density-target.md`](../../../tools/lod-procobj-generator/docs/density-target.md)
+[`tools/sa-procobj-placement/docs/density-target.md`](../../../tools/sa-procobj-placement/docs/density-target.md)
 — **read its banner first**: every multiplier in it is quoted against 15 286, which is the defect.
 
 **Two framings this chain got wrong, kept because they are how the corrections were found.** "Both halves are

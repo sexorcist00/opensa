@@ -89,6 +89,59 @@ export function patchGtaDat(dat: string, idePath: string): string {
   return lines.join(eol);
 }
 
+/**
+ * Rewrite the DRAW DISTANCE of the named `objs` models in an IDE text, leaving every other row, comment and
+ * line ending untouched. Returns the new text and which models were changed.
+ *
+ * This is how a baked clutter layer gets its range (plan 014). Stock `data/maps/generic/procobj.ide` declares
+ * all 107 procobj models at **59**, which is why SA's runtime scatter pops in so close; ProperFixes ships the
+ * same file at **299** — one metre under the 300 threshold that puts an object on SA's big-building path — and
+ * that is the whole mechanism behind their layer's range. No new ids: the stock row IS the declaration.
+ *
+ * **Only the 5-cell `id, model, txd, drawDist, flags` form is edited.** SA also has a variant carrying a mesh
+ * count and several draw distances; a requested model in any other shape is returned in `skipped` rather than
+ * guessed at, because a silently unchanged draw distance is invisible until someone measures the range.
+ */
+export function setIdeDrawDistance(
+  text: string,
+  models: ReadonlySet<string>,
+  distance: number,
+): { changed: string[]; skipped: string[]; text: string } {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const changed: string[] = [];
+  const skipped: string[] = [];
+  let section = '';
+  const lines = text.split(/\r?\n/).map((line) => {
+    const bare = line.split('#')[0].trim();
+    if (bare === '') {
+      return line;
+    }
+    if (!bare.includes(',')) {
+      section = bare.toLowerCase() === 'end' ? '' : bare.toLowerCase();
+
+      return line;
+    }
+    if (section !== 'objs') {
+      return line;
+    }
+    const cells = bare.split(',').map((cell) => cell.trim());
+    const model = (cells[1] ?? '').toLowerCase();
+    if (!models.has(model)) {
+      return line;
+    }
+    if (cells.length !== 5) {
+      skipped.push(model);
+
+      return line;
+    }
+    changed.push(model);
+
+    return `${cells[0]}, ${cells[1]}, ${cells[2]}, ${distance}, ${cells[4]}`;
+  });
+
+  return { changed, skipped, text: lines.join(eol) };
+}
+
 /** The lowest `count` unused ids within `[ID_MIN, ID_MAX]` (ascending; gaps allowed). */
 function freeIds(used: ReadonlySet<number>, count: number): number[] {
   const ids: number[] = [];

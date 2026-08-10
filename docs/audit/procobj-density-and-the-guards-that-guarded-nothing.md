@@ -85,7 +85,7 @@ gates), `restrictions/{README,sa-target}.md`, `edge-cases/{sa-runtime-limits,con
 `commands.md`, `architecture/perfect-map-builder.md` + its rendered diagram, `open-issues/fixed/ghost-barriers.md`,
 `open-issues/bench-scene-transition-collision.md`, `plans/README.md`, `plans/102-…/readme.md`,
 `gta-sa-original/procedural-objects.md`, `features/procobj.md`, `benchmarks/index.md`, and the plans
-`lod-procobj-generator/{010,012,013}`, `asi/perfect-map/{readme,006}`, `tools-debug/sa-int16-repro/*`.
+`sa-procobj-placement/{010,012,013}`, `asi/perfect-map/{readme,006}`, `tools-debug/sa-int16-repro/*`.
 
 ## What this leaves open
 

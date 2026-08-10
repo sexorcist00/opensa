@@ -8,7 +8,7 @@ move anything. This is the record of what changed, what it cost, what it bought,
 
 | Commit | Subject |
 | --- | --- |
-| `e9582cfe` | **The target selector.** `BuildTarget` (`sa` \| `opensa`) + `parseBuildTarget` in `@opensa/tool-kit/target`; pmb `--target`, DERIVED from `--exclude` when omitted; refused when an `opensa` profile would ride a run that still builds `sa/`. Threaded pmb → lod-procobj-generator. Its first job: the layer's price per host (`buildStreamedIpl` returns the permanent `rows`; the generator prints objects · rows · rows/object). |
+| `e9582cfe` | **The target selector.** `BuildTarget` (`sa` \| `opensa`) + `parseBuildTarget` in `@opensa/tool-kit/target`; pmb `--target`, DERIVED from `--exclude` when omitted; refused when an `opensa` profile would ride a run that still builds `sa/`. Threaded pmb → sa-procobj-placement. Its first job: the layer's price per host (`buildStreamedIpl` returns the permanent `rows`; the generator prints objects · rows · rows/object). |
 | `a5b393b1` | **The guard move.** `checkTextIplSlotBudget` → `checkTextIplBudgets`, off the common baked build onto the built `sa/` tree beside `checkImgIdBudgets`, with its two ceilings split: int16 rows THROW, the 39 stock slots REPORT. `opensa/` runs neither and announces that it has no ceiling of its own (`OPENSA_BUDGET_NOTICE`). |
 | (this change) | **The density knob + the measurement record.** `--procobj-density` / `--procobj-max` / `CAP DROPPED`, the two benchmark files, the open issue, and the plan rewrites the measurement forced. |
 
@@ -43,7 +43,7 @@ move anything. This is the record of what changed, what it cost, what it bought,
    70, 80) clustered by surface family; the per-species number is `spacing`; and our own parser documents the
    field as *the draw/creation distance*. Its only consumer uses it as a 50–80 m exclusion radius.
    **Not concluded** — `CPlantMgr` has not been read, and the repo rule is to recover the original's meaning
-   first. Full evidence in [02 decision 5](../../tools/lod-procobj-generator/docs/plans/010-density-model.md).
+   first. Full evidence in [02 decision 5](../../tools/sa-procobj-placement/docs/plans/010-density-model.md).
 3. **+3.6 % clutter costs nothing measurable**: six scenes identical to ±0.0 % triangles with `gpuMs.pass`
    within ±0.03 ms; `country-dusk` +0.3 % triangles for +0.013 ms.
 4. **The bench harness drifts more than the content does.** Three of nine scenes disagreed by amounts no
@@ -58,7 +58,7 @@ move anything. This is the record of what changed, what it cost, what it bought,
   measured, and a cap taken from SA's numbers would be a guess wearing a measurement's clothes.
 - **The int16 THROW** — the user's call is that it goes: pmb ships the generated asi and every ceiling becomes
   a warning naming the ini knob (OLA `EntitiesPerIpl`/`EntityIpl`/`Buildings`, FLA `FILE_TYPE_*`). Recorded as
-  [04 decision 5b](../../tools/lod-procobj-generator/docs/plans/013-density-budgets-per-target.md),
+  [04 decision 5b](../../tools/sa-procobj-placement/docs/plans/013-density-budgets-per-target.md),
   ordered AFTER the perf budgets, and gated on the build actually shipping the asi — until then the throw is
   the stand-in for a dependency nothing checks.
 - **No test drives `buildPerfectMap`**, so the guard's PLACEMENT on the `sa/` branch is verified by a build

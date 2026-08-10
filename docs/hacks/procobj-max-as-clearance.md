@@ -1,11 +1,11 @@
 # `procObjMax = 100000` — a cap set so it cannot bind
 
-**Taken 2026-08-09**, in `tools/lod-procobj-generator/src/config.ts`.
+**Taken 2026-08-09**, in `tools/sa-procobj-placement/src/config.ts`.
 
 ## What it stands in for
 
 A **measured streaming/perf budget for the clutter layer**, which does not exist yet. The number that belongs
-here is the one [`013 — density budgets, per target`](../../tools/lod-procobj-generator/docs/plans/013-density-budgets-per-target.md)
+here is the one [`013 — density budgets, per target`](../../tools/sa-procobj-placement/docs/plans/013-density-budgets-per-target.md)
 has to measure in our own engine (and separately in real SA); until it does, any value would be a guess
 wearing a measurement's clothes.
 
@@ -33,7 +33,7 @@ budget is taken on.
 
 ## What else moves if it changes
 
-- **The per-category density model** ([010](../../tools/lod-procobj-generator/docs/plans/010-density-model.md)
+- **The per-category density model** ([010](../../tools/sa-procobj-placement/docs/plans/010-density-model.md)
   decision 8): a knob is only LOCAL below this cut. Lower the cap and boosting bushes starts displacing rocks.
 - **The `sa/` int16 gate.** Objects drive permanent text rows (currently 0.281 rows/object), and the map is
   already over int16 — so lowering this cap is also, accidentally, the crudest way to get a full `sa/` build

@@ -24,7 +24,7 @@ LODs randomly pick a wrong-variant texture.
 
 Affected consumers of `createTextureSource`:
 
-1. **lod-procobj-generator** — the reported repro. Double trouble: the shared `lod_procobj.txd` keys textures
+1. **sa-procobj-placement** — the reported repro. Double trouble: the shared `lod_procobj.txd` keys textures
    by bare name, so even with correct per-model resolution, two species carrying different pixels under one
    name would collide inside the shared dictionary.
 2. **sa-lod-generator** — `finalize.ts` reads the clone-TXD's texture NAMES from the correct source atlas, but
@@ -51,7 +51,7 @@ Affected consumers of `createTextureSource`:
   and `encodeLodTxd` work on renamed meshes without signature changes. Registries are plain data
   (worker-transferable).
 
-### lod-procobj-generator
+### sa-procobj-placement
 
 - `scanIdes` also returns `txdByModel` (the def's `txdName`).
 - Per species, after decimation: rename every mesh group's texture to `scopedTextureName(defTxd, raw)` and

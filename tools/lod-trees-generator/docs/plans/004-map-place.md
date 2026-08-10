@@ -56,7 +56,7 @@ ids. No re-index needed — the inverse of the Stage-1 removal, and just as inde
 
 Decision: **swap the HD DFF for every LOD'd model that is not a procobj species** (keep procobj species' meshes
 stock so their runtime scatter is unchanged). On the stock set this is 144 of the placed source models. procobj
-species are handled by a separate tool (`lod-procobj-generator`) — this tool never touches `procobj.dat`.
+species are handled by a separate tool (`sa-procobj-placement`) — this tool never touches `procobj.dat`.
 
 The swapped DFFs reference textures in the user's `--txd`, not the stock TXD their IDE names, so `retxd.ts` also:
 pack the custom TXD(s) into `gta3.img`, and rewrite each swapped model's IDE `txd` column to the custom TXD that
@@ -81,7 +81,7 @@ they render white.
 ## procobj (out of scope)
 
 procobj scatter species are **not** touched here — `procobj.dat` stays as-is. Converting procobj to static LODs is
-a separate tool (`lod-procobj-generator`), whose LODs are simplified-copy meshes (not impostors). See its
+a separate tool (`sa-procobj-placement`), whose LODs are simplified-copy meshes (not impostors). See its
 `docs/plans/001-architecture.md`.
 
 ## Module shape

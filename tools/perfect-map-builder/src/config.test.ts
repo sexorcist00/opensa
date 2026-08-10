@@ -1,6 +1,6 @@
 import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
-import { config as procobjDefaults } from '@opensa/lod-procobj-generator/config';
 import { config as lodDefaults } from '@opensa/opensa-lod-generator/lod.config';
+import { config as procobjDefaults } from '@opensa/sa-procobj-placement/config';
 import { describe, expect, it } from 'vitest';
 
 import { config, PACK_RECTS } from './config';

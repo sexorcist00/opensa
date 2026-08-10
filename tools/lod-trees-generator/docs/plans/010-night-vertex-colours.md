@@ -37,4 +37,4 @@ is present, and the later `stripExtraVertColour` would delete it anyway.
 
 Verified on real assets: `ash1_hi` (day 143 / night 24 → tint 42), `dead_tree_14` (per-channel `[16,21,24]`). See
 the `lod-generator-night-vertex-colours` memory. The sibling case (decimated copy, absolute night) is
-lod-procobj-generator plan 006.
+sa-procobj-placement plan 006.

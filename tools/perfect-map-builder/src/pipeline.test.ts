@@ -37,7 +37,7 @@ const opensaLods = vi.hoisted(() =>
     mkdirSync(step.outDir, { recursive: true });
   }),
 );
-vi.mock('@opensa/lod-procobj-generator/build', () => ({ buildProcobjLods: procobjLods }));
+vi.mock('@opensa/sa-procobj-placement/build', () => ({ buildProcobjLods: procobjLods }));
 vi.mock('@opensa/sa-lod-generator/build', () => ({ buildSaLods: saLods }));
 vi.mock('@opensa/opensa-lod-generator/build', () => ({ buildOpensaLods: opensaLods }));
 

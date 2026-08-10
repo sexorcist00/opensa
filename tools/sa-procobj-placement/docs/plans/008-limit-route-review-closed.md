@@ -1,6 +1,6 @@
 # 008 — Which limit do we lift, and who lifts it? (CLOSED)
 
-> **Moved here 2026-08-09 from `docs/roadmap/0.5.0/plans/07-lod-generators-extended/lod-procobj-generator/00`,
+> **Moved here 2026-08-09 from `docs/roadmap/0.5.0/plans/07-lod-generators-extended/sa-procobj-placement/00`,
 > closed with no live work left.** It was a go/no-go review, and its answer is what governs every ceiling this
 > tool's output crosses, so it belongs beside the tool rather than in a chain of unbuilt plans. The answer
 > shipped in three places: the target split (`--target`, `checkTextIplBudgets`, see

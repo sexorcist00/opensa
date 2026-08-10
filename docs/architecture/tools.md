@@ -31,7 +31,7 @@ never the app. The dependency picture is the tools cluster of
   yields a drop-in game dir; refuses geometry it can't provably remap. Lib `src/run.ts`.
 - **lod-trees-generator** — tree LOD impostors: crossed billboard cards + a baked DXT5 alpha atlas, placed
   via the IPL lod-index.
-- **lod-procobj-generator** — converts procobj scatter species into static IPL instances with decimated
+- **sa-procobj-placement** — converts procobj scatter species into static IPL instances with decimated
   LODs (own IDE ids, `plo*` aliases to dodge SA's big-building path).
 - **sa-lod-generator** — regenerates per-object LODs as HD clones (geometry clone + empty COL + halved
   textures) for the **real game** target.

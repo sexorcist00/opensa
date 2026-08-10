@@ -1,7 +1,7 @@
 /**
- * lod-procobj-generator CLI. Converts GTA-SA procobj scatter species into static IPL instances with
+ * sa-procobj-placement CLI. Converts GTA-SA procobj scatter species into static IPL instances with
  * simplified-copy (decimated) LODs. Usage:
- *   tsx tools/lod-procobj-generator/src/cli.ts --out <path> --game <path> [--in <dir>]
+ *   tsx tools/sa-procobj-placement/src/cli.ts --out <path> --game <path> [--in <dir>]
  *     --in      optional folder holding the HD procobj models (`<model>.dff` + `<model>.txd`), intersected with
  *               procobj.dat to pick the species; when omitted, **all** procobj.dat species are converted straight
  *               from the game's own gta3.img (no model/texture swap)
@@ -49,7 +49,7 @@ function main(): void {
   const gameArg = argValue('--game');
 
   if (!outArg || !gameArg) {
-    throw new Error('usage: tsx tools/lod-procobj-generator/src/cli.ts --out <path> --game <path> [--in <dir>]');
+    throw new Error('usage: tsx tools/sa-procobj-placement/src/cli.ts --out <path> --game <path> [--in <dir>]');
   }
 
   const inPath = inArg === undefined ? undefined : fromCwd(inArg);

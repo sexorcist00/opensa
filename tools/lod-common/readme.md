@@ -1,7 +1,7 @@
 # lod-common
 
 The shared **HD → LOD core** every LOD tool routes through, so a fix or feature lands once and applies to
-`opensa-lod-generator` (merged cell LODs), `sa-lod-generator` (per-object clones) and `lod-procobj-generator`
+`opensa-lod-generator` (merged cell LODs), `sa-lod-generator` (per-object clones) and `sa-procobj-placement`
 identically. Design of record: [`docs/plans/002`](./docs/plans/002-shared-hd-to-lod-core.md) (the core) and
 [`docs/plans/003`](./docs/plans/003-visibility-first-simplification.md) (the simplification chain + all
 measurements).

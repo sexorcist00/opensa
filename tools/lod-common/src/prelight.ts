@@ -4,7 +4,7 @@
  * surface looks wrong in-world. We take one representative ambient colour from the **stock** model's prelit and
  * write it onto the **trunk** (opaque surfaces) of the swapped HD DFF and its LOD; **foliage** (alpha-cutout)
  * keeps its own prelit so leaves stay natural. Shared by `lod-trees-generator` (HD swap + atlas bake) and
- * `lod-procobj-generator` (HD swap + decimated LOD mesh).
+ * `sa-procobj-placement` (HD swap + decimated LOD mesh).
  */
 import type { GeometryStruct } from '@opensa/rw-codec/geometry-struct';
 

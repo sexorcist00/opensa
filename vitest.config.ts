@@ -52,7 +52,7 @@ export default defineConfig({
       'tools/map-placement/**/*.test.ts',
       'tools/lod-common/**/*.test.ts',
       'tools/sa-lod-generator/**/*.test.ts',
-      'tools/lod-procobj-generator/**/*.test.ts',
+      'tools/sa-procobj-placement/**/*.test.ts',
       'tools/mod-installer/**/*.test.ts',
       'tools/fetch-pack/**/*.test.ts',
       'tools/vehicle-installer/**/*.test.ts',

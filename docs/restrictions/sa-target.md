@@ -86,7 +86,7 @@ Two things neither move fixed, and both are live:
   leaving it silent, which is the most that can be said honestly until the measurement exists.
 
 **Caught:** the enforcement half, yes. The unchecked half, no. Owned by
-[07/04](../../tools/lod-procobj-generator/docs/plans/013-density-budgets-per-target.md).
+[07/04](../../tools/sa-procobj-placement/docs/plans/013-density-budgets-per-target.md).
 
 ## In-game bisection of pool exhaustion gives false negatives
 

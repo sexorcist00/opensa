@@ -3,7 +3,7 @@
 Strict RenderWare/SA requirements every generated or byte-edited asset must satisfy. Violations are usually
 **silent** in-game (invisible model, corrupted collision) — they render fine in viewers. Detailed war
 stories: `tools/lod-trees-generator/docs/plans/005-sa-asset-format.md`,
-`tools/lod-procobj-generator/docs/plans/003-sa-asset-format.md`.
+`tools/sa-procobj-placement/docs/plans/003-sa-asset-format.md`.
 
 - **Model id ≤ 19000 on the target; 18630 is the STOCK ceiling.** Ids above 18630 silently fail to load on a
   plain 1.0 — "HD swapped but no LOD shows" — but the target always carries FLA, whose DFF range is

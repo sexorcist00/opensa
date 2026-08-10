@@ -28,7 +28,7 @@ the density is what the field has just validated everywhere except this crash).
 
 ## Why we spend 47 slots for 25 560 rows
 
-`linkedHeight` is **4** (`lod-procobj-generator/config.ts`), so a species taller than 4 m gets the vanilla
+`linkedHeight` is **4** (`sa-procobj-placement/config.ts`), so a species taller than 4 m gets the vanilla
 treatment: its LOD becomes a PERMANENT text row and the HD's binary `lod` field indexes that row, which is what
 makes SA hide the LOD while the HD is streamed in. Short species are emitted unlinked — both rows in the stream
 at `lod = -1`, no text row at all.
@@ -115,5 +115,18 @@ wrong shape from the start — SA draws procobj at ~50 m, PF's answer is one ent
 for a hand-modelled bush recovers ~0.2 % of its geometry while costing a whole entity. Dropping the twins removes
 the permanent rows and therefore the slot pressure **at its cause**, where this plan packs around it.
 
-**So treat the split here as the stopgap it is.** What survives either way is
-`checkInstBearingIplSlots` — the gate, and the reason plan 007's written-down budget went stale in silence.
+**And then the split's own cap crashed the game, which closed the question for good.** Raising
+`AREA_MAX_PAIRS` 2000 → 4800 was argued from ProperFixes' 9 627 rows — but that number is rows in a text IPL
+with **zero streams**, while a linked area passes text rows AND its stream records through the same
+`gpLoadedBuildings` boot buffer. The build put 4 260 rows + 9 tiles (~8 520 entries) into `plobj0` and the game
+died on it, having loaded `plotr0` (467 rows + 1 tile) first. Two numbers that look alike, one category error —
+the same shape of mistake as `EntityIpl`, made twice in one day.
+
+With the per-area cap back under 4 096 the arithmetic closes: 25 560 linked pairs at 2 entries each need **13**
+areas and only **12** slots exist. **The twin design does not fit at this density, at all.**
+
+**So this plan is superseded, and it was a stopgap that never shipped a working build.** The redesign is
+[`sa-procobj-placement/014`](../../../sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md):
+one permanent row per object at `lod = -1`, no twin and no stream, which makes the entries-per-area 1:1 and puts
+the layer on the exact path PF proves. What survives from here is `checkInstBearingIplSlots` — the gate, and the
+reason plan 007's written-down budget went stale in silence.
