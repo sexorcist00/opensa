@@ -595,6 +595,45 @@ change in it, so the deltas are attributed rather than isolated — the file lis
 `breakables` −991 that turned out to be the 6 breakable clutter species leaving the pak for a runtime path that
 already handles them (074/20).
 
+## 2026-08-10 — the clutter on the runtime path, measured on the user display
+
+[`opensa-engine/2026-08-10-ingame-user-display-clutter-runtime.json`](opensa-engine/2026-08-10-ingame-user-display-clutter-runtime.json),
+directly against the two 2026-08-09 arms of the same lane (`-oldmap-baseline` = 15 286 clutter objects baked,
+`-procobj-recovered` = 91 092 baked). All three run by him, same machine, same nine scenes.
+
+| scene | 15 286 baked | 91 092 baked | 91 092 RUNTIME | Δ vs 91 092 baked |
+| --- | --- | --- | --- | --- |
+| ls-noon | 9.452 / 105.8 | 9.564 / 104.6 | 9.651 / 103.6 | +0.9 % |
+| sf-fog-dawn | 9.025 / 110.8 | 9.019 / 110.9 | 9.052 / 110.5 | +0.4 % |
+| lv-night | 14.321 / 69.8 | 13.898 / 72.0 | 14.545 / 68.8 | **+4.7 %** |
+| **country-dusk** | 16.366 / 61.1 | **18.434 / 54.2** | **16.091 / 62.1** | **−12.7 %** |
+| ocean-horizon | 8.334 / 120 | 8.333 / 120 | 8.333 / 120 | 0.0 % |
+| ls-rain-night | 8.652 / 115.6 | 8.684 / 115.1 | 8.664 / 115.4 | −0.2 % |
+| ganton-noon | 13.550 / 73.8 | 13.644 / 73.3 | 13.668 / 73.2 | +0.2 % |
+| strip-noon | 10.166 / 98.4 | 10.464 / 95.6 | 10.358 / 96.5 | −1.0 % |
+| ganton-night | 13.655 / 73.2 | 13.730 / 72.8 | 13.735 / 72.8 | 0.0 % |
+
+**The verdict: moving the clutter to the runtime path costs no frame time anywhere, and gives back the one scene
+the baked layer had taken.** `country-dusk` — the only scene clutter has ever moved — goes 18.434 → 16.091 ms and
+is now faster than even the 15 286-object baseline. Seven of the other eight are inside ±1 %.
+
+**The honest caveat, and it is a content one.** country-dusk's triangles fell 1 442 102 → **1 218 261 (−15.5 %)**
+and its draws 907 → 851, so the runtime path is drawing **less clutter than the bake did** — its per-cell
+`procObjLimit` binds where the bake had none. The −12.7 % is therefore "less drawn AND faster", not "same content,
+cheaper mechanism". What is measured is that the change costs nothing; what is NOT measured is whether it is
+cheaper at equal content. That question is now askable at all, which it was not: the bake stripped `procobj.dat`
+to 9 rules, so density and `procObjLimit` were dead knobs on this target and plan 013 had to invent a two-pak A/B.
+
+**lv-night +4.7 % is the one number not to over-read.** That scene's own arm-to-arm spread across the two 08-09
+runs is 3.0 % (14.321 vs 13.898) in a scene with almost no clutter, so +4.7 % sits just outside its noise with
+−2.3 % fewer triangles. One sweep cannot separate that from run-to-run variance.
+
+**First hitch numbers on this lane** (the block shipped 2026-08-10, so the 08-09 arms have none — these are a
+reading, not a delta): only the two heaviest scenes show slow frames at all, `country-dusk` **5** (maxMs 34.6) and
+`ganton-night` **1** (maxMs 26.1); every other scene is 0. And `country-dusk` carries the highest
+`gpuMs.pass` of all nine (**12.03**) on the FEWEST draws and second-fewest triangles — high pass cost on little
+geometry is where to look when the runtime scatter is tuned.
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
