@@ -1,101 +1,96 @@
 # @opensa/sa-procobj-placement
 
-Convert **GTA-SA procobj scatter species** (bushes, rocks, scrub, joshua…) into **static IPL instances**.
+Bake **GTA-SA procobj scatter species** (bushes, rocks, scrub, joshua…) into **permanent static IPL instances**
+— one row per object at `lod = -1`, with the species' range raised in the stock `procobj.ide`.
 
-> **Renamed from `lod-procobj-generator` on 2026-08-10, ahead of the change that earns the name.** This still
-> generates a simplified-copy LOD per object; [plan 014](docs/plans/014-permanent-rows-no-lod-twins.md) removes
-> that entirely — the twin recovers ~0.2 % of a hand-modelled bush's geometry for the price of a whole entity,
-> and at the shipped density the twinned shape **cannot fit SA's ceilings at all**. What replaces it is one
-> permanent text row per object at `lod = -1` with range from the IDE, and the tool becomes SA-only: our own
-> engine scatters this clutter at runtime and needs no bake. Read that plan before touching the LOD paths here.
+**This tool builds for the real game only.** OpenSA scatters the same clutter at runtime, where draw distance is a
+setting and none of SA's ceilings exist, so a bake buys it nothing.
 
-Today's behaviour, until 014 lands: static IPL instances with **simplified-copy LODs** — a decimated low-poly
-mesh, not a billboard impostor (that's [`lod-trees-generator`](../lod-trees-generator/)). The companion to it for
-the procobj clutter the impostor tool deliberately leaves alone.
+> **Renamed from `lod-procobj-generator` and stripped of LOD generation on 2026-08-10**
+> ([plan 014](docs/plans/014-permanent-rows-no-lod-twins.md)). The HD+LOD twin per object is gone: a generated LOD
+> recovered ~0.2 % of a hand-modelled bush's geometry for the price of a whole entity, and at the shipped density
+> the twinned shape **could not fit SA's ceilings at all** — 13 inst-bearing areas needed against the 12 left.
+> Range now comes from the IDE (299, ProperFixes' value) rather than from a LOD, because a streamed row is not
+> even resident past ~190 m.
 
 ```sh
 tsx tools/sa-procobj-placement/src/cli.ts --out <path> --game <path> [--in <dir>]
 ```
 
 - `--in` — optional folder of HD procobj models (`<model>.dff` + `<model>.txd`), intersected with `procobj.dat` to
-  pick the species. **Omit it to convert every `procobj.dat` species straight from the game's own `gta3.img`** (no
-  model/texture swap). With `--in`, the LOD mesh decimates the **pack's DFF** (the model the HD is swapped to —
-  decimating the stock model instead showed a different plant at LOD range) and LOD textures downscale from its
-  TXDs, falling back to the stock game TXD. A path that does not exist, or a directory holding no `.dff`, means
-  the same as omitting the flag: the library logs a line and converts every species. That tolerance is for
-  callers that pass the folder unconditionally (perfect-map-builder passes `<mods-src>/procobj` either way) —
-  an `--in` typed EXPLICITLY on the CLI is still validated, so a typo is loud.
+  pick the species. **Omit it to bake every `procobj.dat` species straight from the game's own `gta3.img`** (no
+  model/texture swap). A path that does not exist, or a directory holding no `.dff`, means the same as omitting the
+  flag: the library logs a line and bakes every species. That tolerance is for callers that pass the folder
+  unconditionally (perfect-map-builder passes `<mods-src>/procobj` either way) — an `--in` typed EXPLICITLY on the
+  CLI is still validated, so a typo is loud.
 - `--out` — output drop-in directory
 - `--game` — game data (`gta.dat` + `data/` + `models/gta3.img`)
-- `--tris` — QEM target triangles per LOD model (default `200`)
-- `--tex` — LOD texture max size px (default `64`)
-- `--draw` — LOD draw distance (default `290`). **Keep it below 300**, and note the emitted aliases are
-  deliberately NOT `lod`-prefixed (`plo…`): SA classifies defs as big buildings/LODs by **either** trigger —
-  drawDistance ≥ 300 (FLA's "LOD distance") **or a model name starting with `lod`** — and MASS text-IPL
-  instances of big-building defs corrupt that path (script-gated IPLs — the barriers2 roadblocks — got
-  ghost-loaded on any save; verified by in-game bisection: 30k instances of a stock lod def reproduce it,
-  30k ordinary defs are fine).
-- `--max` — cap on converted procobj objects (default `20000`, `0` disables)
-- `--height` — optional min HD height (m) gate, drops short clutter (default `0` = off)
-- `--prelight [info.json]` — copy each model's **stock** trunk prelight (day ambient) onto its decimated LOD mesh
-  (and the swapped HD DFF when `--in`) so the simplified copy isn't black/washed-out next to stock geometry.
-  Applied **trunk-only** (opaque surfaces; foliage — alpha-cutout — keeps its own prelit). Optionally pass a JSON
-  of per-model overrides — `--prelight ./info.json` with `{ "cedar1_po": { "skip": true }, … }` opts those models
-  **out** (LOD keeps its source prelit; HD packed verbatim). Bare `--prelight` applies to every model. Shared with
-  `lod-trees-generator` via [`@opensa/sa-lod/prelight`](../lod-common/src/prelight.ts).
+- `--draw` — draw distance written onto the baked species' rows in the stock `data/maps/generic/procobj.ide`
+  (default `299`). **This is the layer's only range mechanism.** Stock declares all 107 procobj species at `59`,
+  which is why SA's runtime clutter pops in almost underfoot. **Keep it below 300**: SA classifies a def at
+  drawDistance ≥ 300 (FLA's "LOD distance") as a big building, and MASS text-IPL instances of big-building defs
+  corrupt that path — script-gated IPLs (the barriers2 roadblocks) got ghost-loaded on any save, verified by
+  in-game bisection 2026-07-06 (300 reproduces, 250 is clean). 299 is ProperFixes' value and the one their
+  57 583-row layer is measured running.
+- `--max` — cap on baked procobj objects (`0` disables)
+- `--height` — optional min HD height (m) gate, drops short clutter and leaves it on the runtime scatter
+  (default `0` = off)
+- `--prelight [info.json]` — copy each model's **stock** prelight onto its swapped HD DFF (needs `--in`), so a
+  pack's model isn't black/washed-out next to stock geometry. Applied **trunk-only** — opaque surfaces; foliage
+  (alpha-cutout) keeps its own prelit, decided by the texture's own alpha. Optionally pass a JSON of per-model
+  overrides — `--prelight ./info.json` with `{ "cedar1_po": { "skip": true }, … }` opts those models out. Bare
+  `--prelight` applies to every model. Shared with `lod-trees-generator` via
+  [`@opensa/sa-lod/prelight`](../lod-common/src/prelight.ts).
 - `--modloader` — emit **two** independent **Modloader mods** (real game) under `<out>`, so **no stock IDE is
   rewritten**:
-  - **`<out>/lod/`** — the LODs: LOD DFFs + `lod_procobj.txd`/`.col` in `gta3img/` (injected into `gta3.img` by
-    name; col auto-discovered), the new static IPL + stripped `procobj.dat` at their `data/` paths, and a
-    `loader.txt` (`IDE` + `IPL`).
+  - **`<out>/lod/`** — the placements: the permanent `plobj<i>.ipl` files, the raised `procobj.ide` and the
+    stripped `procobj.dat` at their `data/` paths, and a `loader.txt` of `IPL` lines. (The folder is still named
+    `lod/` for compatibility; it carries no LOD.)
   - **`<out>/hd/`** — the swapped (prelit) `--in` procobj HD models + the custom TXD in `gta3img/`, plus a `txdp`
-    IDE (`lod_procobj_hd.ide`) that **parents** each swapped model's stock TXD to the custom one — so the custom
-    textures resolve without rewriting the stock IDE (the same approach as `lod-trees-generator`). Omitted with no
-    `--in`.
+    IDE that **parents** each swapped model's stock TXD to the custom one — so the custom textures resolve without
+    rewriting the stock IDE (the same approach as `lod-trees-generator`). Omitted with no `--in`.
 
-  Without `--modloader`, repacks one `<out>/models/gta3.img` + patches `data/gta.dat` with the `--in` HD swap
-  inlined. See [`docs/plans/004-modloader-output.md`](./docs/plans/004-modloader-output.md).
+  Without `--modloader`, writes into `<out>` + patches `data/gta.dat`, with the `--in` HD swap inlined into
+  `gta3.img`. See [`docs/plans/004-modloader-output.md`](./docs/plans/004-modloader-output.md).
 
 ## What it does
 
-Per converted species (every `procobj.dat` species, or the subset shipped in `--in`): build a model-local mesh
-(frame-aware), **QEM-decimate** it, re-derive smooth normals, and encode a low-poly DFF. Textures resolve
-through each species' **own IDE TXD** and land in the shared `lod_procobj.txd` under **scoped names**
-(`<txd>_<name>` — SA reuses names across TXDs with different pixels; see lod-common plan 004). Then it reuses the engine's
-vanilla procobj scatter to place each species as **static instances** (HD instance → its LOD, thinned by MINDIST
+Reads each candidate species' geometry for one number — its **bbox height**, which feeds the `--height` gate —
+then reuses the engine's own vanilla procobj scatter to place the species as **permanent static instances**, and
+strips those species from `procobj.dat` so nothing scatters them twice. Nothing is decimated and no LOD is built:
+[plan 014](./docs/plans/014-permanent-rows-no-lod-twins.md) removed the twin.
 
-- a cap), strips those species from `procobj.dat`, swaps their HD DFF for the `--in` model (only when `--in` is
-  given), and packs a drop-in `gta3.img` + `data/` files. The LODs share one `lod_procobj.txd` + `lod_procobj.col`,
-  registered via `lod_procobj.ide` + a patched `gta.dat`. The never-touch `UNDERWATER_PROCOBJ` species
-  (seaweed/starfish/searock) are skipped.
+The placement is **one text row per object at `lod = -1`**, split across `plobj<i>.ipl` files of ≤ 9 600 rows.
+Two ceilings shape that, and both are real on the target:
 
-The placement ships **vanilla-style as binary IPL streams** (plan 007): per spatial area (≤1900 pairs, median
-split) a small text `plobj<i>.ipl` holds the permanent LOD layer, and binary `plobj<i>_stream<k>.ipl` tiles
-(≤512 inst, inside `gta3.img`; the short `plobj` base keeps names under IMG VER2's 23-byte cap) hold the HD
-layer with `lod` fields indexing the area's text rows. NEVER emit the placement as one big text IPL: SA's `LoadScene` pushes every
-text inst row through an unbounded 4096-slot static buffer, and overflowing it corrupts memory (the
-"ghost barriers" bug — see plan 007 for the full post-mortem). A `lod_procobj.models` manifest lists the
-converted species for downstream generators. Note the LOD layer is ~15k permanent buildings: the game needs
-a `Buildings` pool raise (FLA `[IPL] Buildings` or OLA `Buildings`) — and only ONE limit adjuster may patch
-the IPL limits (FLA+OLA both active on those zones crash at load).
+- **A text IPL carrying `inst` rows costs one of SA's 40 `IplEntityIndexArrays` slots.** 28 are stock, so the
+  layer has ~12. `EntityIpl = unlimited` does NOT lift this — measured twice on 2026-08-10.
+- **An area's rows pass through the `gpLoadedBuildings` boot buffer** (stock 4 096, lifted by OLA
+  `EntitiesPerIpl = unlimited`). The largest anyone is measured RUNNING is 9 627 — ProperFixes, text rows with no
+  streams. Read that number for the path it was measured on: the same cap applied to rows **plus** stream records
+  crashed on the first area.
 
-`lod_procobj.txd` ships in the real-SA **gamma** convention; a **linear**-convention copy is written to
-`<out>/linear-txd/` for the pmb opensa split (texel colour math must match the target renderer — see
-lod-trees plan 012).
+**Never emit the placement as binary IPL streams for range.** `CIplStore` only loads a stream's slot while the
+player is inside its bounding box grown by 190 units, so a streamed row is not resident far enough to use a long
+draw distance at all. A `lod_procobj.models` manifest lists the baked species for downstream generators, and the
+never-touch [`UNDERWATER_PROCOBJ`](../map-placement/src/procobj-strip.ts) species (seaweed/starfish/searock) are
+skipped.
+
+The layer costs one permanent `CBuilding` per object, so the game needs a `Buildings` pool raise (OLA
+`Buildings`) — see [`docs/gta-sa-original/reference-install.md`](../../docs/gta-sa-original/reference-install.md)
+for the number this install needs. Only ONE limit adjuster may patch the IPL zones (FLA + OLA both active there
+crash at load).
 
 A shared `--in` TXD is **trimmed** to just the textures the swapped procobj models use (via
 `@opensa/map-placement/retxd`), so a vegetation pack's tree/non-procobj textures don't bloat the output.
-`--prelight` optionally corrects the swapped HD + decimated LOD's trunk prelight from the stock model (see above).
-
-[`UNDERWATER_PROCOBJ`](../map-placement/src/procobj-strip.ts) species (seaweed/starfish/searock) are **never**
-converted.
 
 ## Architecture
 
-A thin orchestrator over two shared packages. Plans: [`001` architecture](./docs/plans/001-architecture.md) ·
-[`002` build pipeline](./docs/plans/002-build-pipeline.md) · [`003` SA asset format](./docs/plans/003-sa-asset-format.md).
+A thin orchestrator over one shared package. Plans: [`001` architecture](./docs/plans/001-architecture.md) ·
+[`002` build pipeline](./docs/plans/002-build-pipeline.md) · [`003` SA asset format](./docs/plans/003-sa-asset-format.md) ·
+[`014` permanent rows](./docs/plans/014-permanent-rows-no-lod-twins.md).
 
-- **[`@opensa/sa-lod`](../lod-common/)** — the simplified-copy LOD pipeline (decimate → normals → encode DFF/TXD/COL),
-  shared with [`opensa-lod-generator`](../opensa-lod-generator/).
-- **[`@opensa/map-placement`](../map-placement/)** — SA map-edit workflows (procobj scatter → static IPL, id
-  allocation, IDE/gta.dat edits, swapped-HD retexture), shared with `lod-trees-generator`.
+- **[`@opensa/map-placement`](../map-placement/)** — SA map-edit workflows (procobj scatter → permanent IPL rows,
+  the IDE draw-distance raise, `gta.dat` edits, swapped-HD retexture), shared with `lod-trees-generator`.
+- **[`@opensa/sa-lod`](../lod-common/)** — still used for the prelight transfer and the model-local mesh builder;
+  its decimate/encode half belongs to `lod-trees-generator` and `opensa-lod-generator` now.

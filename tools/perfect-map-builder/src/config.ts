@@ -33,8 +33,6 @@ export interface BuilderConfig {
   /** Safety cap on placed procobj objects. Raising density without raising this measures the CAP — the build
    *  says so when it binds. `undefined` keeps the generator's own default (20 000). */
   procobjMax?: number;
-  /** LOD texture size for the procobj bake. */
-  procobjTex: number;
   /** The `--in` (mods-src) subfolder names, one per stage. */
   subfolders: { mods: string; peds: string; procobj: string; vegetation: string; vehicles: string };
   /** LOD atlas texture size for the tree impostor bake. */
@@ -81,7 +79,6 @@ export const config: BuilderConfig = {
   // bridges and in canyons.
   pack: { ao: true, bakes: false },
   procobjDensity: 1,
-  procobjTex: 128,
   subfolders: { mods: 'mods', peds: 'peds', procobj: 'procobj', vegetation: 'vegetation', vehicles: 'vehicles' },
   treeTex: 512,
 };

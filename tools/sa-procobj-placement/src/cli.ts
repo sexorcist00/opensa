@@ -1,28 +1,27 @@
 /**
- * sa-procobj-placement CLI. Converts GTA-SA procobj scatter species into static IPL instances with
- * simplified-copy (decimated) LODs. Usage:
+ * sa-procobj-placement CLI. Bakes GTA-SA procobj scatter species into static, PERMANENT IPL instances at
+ * `lod = -1`, with their range raised in the stock `procobj.ide` (plan 014 — no LOD twin, no binary stream).
+ * Usage:
  *   tsx tools/sa-procobj-placement/src/cli.ts --out <path> --game <path> [--in <dir>]
  *     --in      optional folder holding the HD procobj models (`<model>.dff` + `<model>.txd`), intersected with
  *               procobj.dat to pick the species; when omitted, **all** procobj.dat species are converted straight
  *               from the game's own gta3.img (no model/texture swap)
  *     --out     output drop-in directory
  *     --game    game-data dir (gta.dat + data/ + models/gta3.img)
- *     --tris    QEM target triangles per LOD model (default from config)
- *     --tex     LOD texture max size px (default from config)
- *     --draw    LOD draw distance in game units (default from config)
+ *     --draw    draw distance written onto the baked species' stock procobj.ide rows, in game units — the
+ *               layer's only range mechanism. Must stay under 300 (default from config: 299)
  *     --max     cap on converted procobj objects (0 disables; default from config)
  *     --height  optional min HD height (m) gate, drops short clutter (0 = off; default from config)
  *     --density scatter density cutoff, 1 = vanilla, max 3 (the scatter's candidate ceiling). The placed
  *               count scales with it until MINDIST or `--max` binds; the run prints the density it used
  *     --target  the host this layer is built FOR (sa|opensa, default sa) — it names which ceilings the layer's
  *               cost is reported against; pmb passes the whole build's target down (see its `--target`)
- *     --prelight [info]  copy the stock model's trunk prelight onto each LOD (and swapped HD with `--in`); foliage
- *                        kept. Optionally pass `--prelight ./info.json` of per-model `{ "<model>": { "skip": true } }`
+ *     --prelight [info]  copy the stock model's prelight onto the swapped HD (with `--in`); foliage kept. Optionally pass `--prelight ./info.json` of per-model `{ "<model>": { "skip": true } }`
  *                        overrides to opt a model out of the transfer.
- *     --modloader emit TWO Modloader mods (real game) under `<out>`: `lod/` (LOD dff/txd/col in `gta3img/` + the
- *                 static IPL + stripped `procobj.dat` + a `loader.txt` of IDE/IPL lines) and `hd/` (the swapped HD
+ *     --modloader emit TWO Modloader mods (real game) under `<out>`: `lod/` (the permanent IPLs + the raised
+ *                 procobj.ide + stripped `procobj.dat` + a `loader.txt` of IPL lines) and `hd/` (the swapped HD
  *                 models + custom TXD, parented via a `txdp` IDE so NO stock IDE is rewritten). No `gta.dat` patch.
- *                 Without it, repacks one `<out>/models/gta3.img` + patches `data/gta.dat`, HD swap inlined.
+ *                 Without it, writes into `<out>` + patches `data/gta.dat`, HD swap inlined into gta3.img.
  *   All paths are relative to the current working directory (absolute paths pass through).
  */
 import { parsePrelightInfo, type PrelightInfo } from '@opensa/lod-common/prelight';
@@ -70,8 +69,6 @@ function main(): void {
     drawDistance: Number(argValue('--draw') ?? config.drawDistance),
     procObjHeight: Number(argValue('--height') ?? config.procObjHeight),
     procObjMax: Number(argValue('--max') ?? config.procObjMax),
-    textureSize: Number(argValue('--tex') ?? config.textureSize),
-    tris: Number(argValue('--tris') ?? config.tris),
   };
 
   const modloader = process.argv.includes('--modloader');

@@ -1,24 +1,10 @@
-import type { MergedMesh, Vec3 } from '@opensa/lod-common/mesh';
 import type { SourceTexture, TextureSource } from '@opensa/lod-common/texture-source';
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
 import type { RWClump } from '@opensa/renderware/parsers/binary/types';
 
-import { decimateMesh } from '@opensa/lod-common/decimate';
-import { encodeColLibrary } from '@opensa/lod-common/encode-col';
-import { encodeLodDff } from '@opensa/lod-common/encode-dff';
-import { encodeLodTxd } from '@opensa/lod-common/encode-txd';
 import { createModelSource, type ModelSource } from '@opensa/lod-common/model-source';
-import { rebuildMeshNormals } from '@opensa/lod-common/normals';
-import {
-  applyMeshTrunkPrelight,
-  applyStockPrelight,
-  type FoliagePredicate,
-  type PrelightInfo,
-  stockPrelightColor,
-} from '@opensa/lod-common/prelight';
-import { registerScopedName, type ScopedRegistry, scopedSource } from '@opensa/lod-common/scoped-texture';
+import { applyStockPrelight, type FoliagePredicate, type PrelightInfo } from '@opensa/lod-common/prelight';
 import { createTextureSource } from '@opensa/lod-common/texture-source';
-import { allocateLodIds, buildLodIde, lodAlias, patchGtaDat } from '@opensa/map-placement/ide';
 import { convertProcObj, type ProcObjCategoryCost, type ProcObjSpecies } from '@opensa/map-placement/procobj';
 import { densityLabel, type ProcObjDensityInput } from '@opensa/map-placement/procobj-density';
 import { UNDERWATER_PROCOBJ } from '@opensa/map-placement/procobj-strip';
@@ -63,8 +49,6 @@ export function buildProcobjLods(options: {
   });
 }
 
-const IDE_REL = 'data/maps/lod_procobj.ide';
-const IDE_DAT = 'DATA\\MAPS\\LOD_PROCOBJ.IDE';
 const IPL_NAME = 'lod_procobj';
 /** Area IPL base (`plobj<i>.ipl` + `plobj<i>_stream<k>.ipl`): short because IMG VER2 caps entry names at
  *  23 bytes — `lod_procobj0_stream0.ipl` (24) does not fit. */
@@ -92,57 +76,6 @@ export interface BuildOptions {
   target: BuildTarget;
 }
 
-/** A registered LOD (pass 2): a {@link BuiltMesh} with its allocated alias/id and encoded DFF. */
-interface BuiltLod {
-  alias: string;
-  bbox: { max: Vec3; min: Vec3 };
-  dff: Uint8Array;
-  height: number;
-  id: number;
-  model: string;
-  textures: string[];
-}
-
-/** A built LOD mesh (pass 1): the source procobj model, its decimated mesh, bounds, height + textures it uses. */
-interface BuiltMesh {
-  bbox: { max: Vec3; min: Vec3 };
-  height: number;
-  mesh: MergedMesh;
-  model: string;
-  textures: string[];
-}
-
-/**
- * Pass 1 for ONE species: model-local mesh (frame-aware) → height gate → QEM decimate → smooth normals →
- * **scoped texture rename** (lod-common plan 004): SA texture names are only unique per-TXD, and the shared
- * `lod_procobj.txd` mixes species from many TXDs — each texture becomes its (def txd, name) pair so every
- * species keeps its OWN variant (the global first-wins index used to hand e.g. `sand_josh1` a green
- * `sm_josh_leaf` from another dictionary). Null when the model is gated out (short clutter).
- */
-export function buildSpeciesLod(
-  model: string,
-  clump: RWClump,
-  defTxd: string,
-  config: Pick<ProcObjLodConfig, 'procObjHeight' | 'tris'>,
-  registry: ScopedRegistry,
-): BuiltMesh | null {
-  const raw = buildModelMesh(clump);
-  const bbox = meshBounds(raw);
-  const height = bbox.max[2] - bbox.min[2];
-  if (config.procObjHeight > 0 && height < config.procObjHeight) {
-    return null; // short clutter (grass) — leave on the runtime scatter
-  }
-  const mesh = rebuildMeshNormals(decimateMesh(raw, config.tris));
-  for (const group of mesh.groups) {
-    if (group.texture.length > 0) {
-      group.texture = registerScopedName(registry, defTxd, group.texture);
-    }
-  }
-  const textures = [...new Set(mesh.groups.map((group) => group.texture).filter((t) => t.length > 0))];
-
-  return { bbox, height, mesh, model, textures };
-}
-
 /**
  * The per-category breakdown (plan 010 task "logging"). It exists because a TOTAL cannot show DISPLACEMENT:
  * once the global `procObjMax` slice binds, raising one category takes objects from the others, and
@@ -163,22 +96,10 @@ export function categoryCostLines(categories: readonly ProcObjCategoryCost[]): s
 /** The changed IMG entries to emit: LOD DFFs + lod_procobj.txd/col + binary IPL streams (the HD placement
  *  layer, `<area>_streamN.ipl`) + the swapped HD DFFs + custom TXDs. */
 export function collectImgEntries(
-  lods: readonly { alias: string; dff: Uint8Array }[],
-  lodTxd: Uint8Array,
-  lodCol: Uint8Array,
   swap: ReadonlyMap<string, Uint8Array>,
   retxdTxds: ReadonlyMap<string, Uint8Array>,
-  streams: readonly [string, Uint8Array][] = [],
 ): Map<string, Uint8Array> {
   const entries = new Map<string, Uint8Array>();
-  for (const lod of lods) {
-    entries.set(`${lod.alias}.dff`, lod.dff);
-  }
-  entries.set(`${IPL_NAME}.txd`, lodTxd);
-  entries.set(`${IPL_NAME}.col`, lodCol);
-  for (const [name, bytes] of streams) {
-    entries.set(name, bytes);
-  }
   for (const [name, bytes] of [...swap, ...retxdTxds]) {
     entries.set(name, bytes);
   }
@@ -267,7 +188,7 @@ export function run(options: BuildOptions): void {
   const inPath = swapFolder(options.inPath);
   const archive = openArchive(readBytes(join(gamePath, 'models', 'gta3.img')));
   const dat = parseGtaDat(readFileSync(join(gamePath, 'data', 'gta.dat'), 'utf8'));
-  const { idByModel, txdByModel, usedIds } = scanIdes(gamePath, dat.ide);
+  const { idByModel } = scanIdes(gamePath, dat.ide);
   const procModels = procObjModels(gamePath);
 
   // Non-modloader: mirror the whole input game first so the drop-in is a **complete** build (our repacked gta3.img +
@@ -288,82 +209,44 @@ export function run(options: BuildOptions): void {
   const modelSource = inPath === undefined ? createModelSource([archive]) : combinedModelSource(inPath, archive);
   const textureSource = inPath === undefined ? createTextureSource([archive]) : combinedTextureSource(inPath, archive);
 
-  // Per species: build the simplified-copy mesh + bounds (height gate); ids/DFFs are assigned in a second pass.
-  const scopedRegistry: ScopedRegistry = new Map();
-  const built: BuiltMesh[] = [];
+  // Per species: only the bbox HEIGHT, which is all the gate reads. Nothing is decimated and no LOD is built —
+  // plan 014 removed the twin, so the placement layer needs nothing from a species but its stock id and height.
+  const heights = new Map<string, number>();
   for (const model of species) {
     const clump = modelSource.load(model);
     if (!clump) {
       continue;
     }
-    const one = buildSpeciesLod(model, clump, txdByModel.get(model) ?? '', config, scopedRegistry);
-    if (one) {
-      built.push(one);
+    const height = speciesHeight(clump);
+    if (config.procObjHeight > 0 && height < config.procObjHeight) {
+      continue; // short clutter (grass) — left on the runtime scatter
     }
+    heights.set(model, height);
   }
-  if (built.length === 0) {
+  if (heights.size === 0) {
     console.log('sa-procobj-placement: no `--dff ∩ procobj` species to convert');
 
     return;
   }
 
-  // `--prelight`: recolour each LOD mesh's trunk to its stock model's ambient (foliage kept) so the simplified
-  // copy isn't black/washed-out next to stock geometry — the procobj species are stock-present in gta3.img, so the
-  // ambient comes from each model's own DFF. Alpha-cutout textures are foliage; opaque ones are trunk/bark.
-  const scoped = scopedSource(textureSource, scopedRegistry);
-  const foliageTextures = new Set(
-    [...new Set(built.flatMap((b) => b.textures))].filter((t) => scoped.get(t)?.hasAlpha),
-  );
-  const isFoliage: FoliagePredicate = (name) => foliageTextures.has(name);
-  if (prelight) {
-    prelightLodMeshes(built, archive, isFoliage, prelightInfo);
-  }
+  // `--prelight` transfers each stock model's ambient onto its SWAPPED HD copy, foliage kept. Foliage is decided
+  // by the texture's own alpha, read UNSCOPED: the scoped-name registry existed only to disambiguate names inside
+  // the shared LOD txd, and there is no longer a shared LOD txd.
+  const isFoliage: FoliagePredicate = (name) => textureSource.get(name)?.hasAlpha ?? false;
 
-  // Register: allocate ids ≤ 18630 + a short alias each, then encode the LOD DFFs under their alias name.
-  // The alias must NOT start with `lod` (and the def's drawDistance stays < 300, see config): SA classifies
-  // lod-named OR dist ≥ 300 defs as BIG BUILDINGS, and MASS text-IPL instances of big-building defs corrupt
-  // that path's internal structures — script-gated IPLs (barriers2 bridge roadblocks) ghost-streamed in on any
-  // save. Verified by in-game bisection 2026-07-06: 30k instances of a STOCK lod def reproduce it; 30k of
-  // ordinary (non-LOD) defs are fine — which is also why Junior's 57k-instance vegetation mod never hits it.
-  const aliases = built.map((b, i) => lodAlias(`plo${b.model}`, i, 'plo'));
-  const ids = allocateLodIds(aliases, usedIds);
-  const lods: BuiltLod[] = built.map((b, i) => ({
-    alias: aliases[i],
-    bbox: b.bbox,
-    dff: encodeLodDff(b.mesh, aliases[i]),
-    height: b.height,
-    id: ids.get(aliases[i])!,
-    model: b.model,
-    textures: b.textures,
-  }));
-
-  // Shared LOD assets: one `lod_procobj.txd` (every texture, downscaled) + `lod_procobj.col` (empty-collision).
-  const allTextures = [...new Set(lods.flatMap((lod) => lod.textures))];
-  // Build-convention (real SA, gamma) TXD into the game; the linear variant is a sidecar the pmb opensa
-  // split swaps into its own gta3.img (plan 012 — one placement, per-target texel encoding).
-  const lodTxd = encodeLodTxd(allTextures, scoped, config.textureSize, 'gamma');
-  const lodTxdLinear = encodeLodTxd(allTextures, scoped, config.textureSize, 'linear');
-  const lodCol = encodeColLibrary(
-    lods.map((lod) => lod.bbox),
-    lods.map((lod) => lod.alias),
-  );
-  const ide = buildLodIde(new Map(lods.map((lod) => [lod.alias, lod.id])), IPL_NAME, config.drawDistance);
-
-  // Scatter → static IPL (HD inst → its LOD) + strip `procobj.dat`; swap the procobj HD DFFs + retxd their TXD.
   const species_ = new Map<string, ProcObjSpecies>(
-    lods.map((lod) => [lod.model, { hdId: idByModel.get(lod.model)!, height: lod.height }]),
+    [...heights].map(([model, height]) => [model, { hdId: idByModel.get(model)!, height }]),
   );
-  // `--modloader` ships two mods under `<out>`: `lod/` (this build) + `hd/` (the swapped HD models). So the LOD
-  // mod's files (IPL + procobj.dat from convertProcObj, the IDE, the IMG entries) go under `<out>/lod/`. Under
-  // `--modloader` procobj.dat is emitted as disable rows (survives Modloader's additive `.dat` merge), not stripped.
+  // `--modloader` ships two mods under `<out>`: `lod/` (this build's placements + data) and `hd/` (the swapped HD
+  // models). Under `--modloader` procobj.dat is emitted as disable rows (surviving Modloader's additive `.dat`
+  // merge) rather than stripped.
   const lodOut = modloader ? join(outPath, 'lod') : outPath;
-  // Linear-convention TXD sidecar for the pmb opensa split (plan 012) — the packed gta3.img stays gamma (real SA).
-  writeBytes(join(lodOut, 'linear-txd', `${IPL_NAME}.txd`), lodTxdLinear);
   const procObj = convertProcObj({
     archive,
     areaBase: AREA_BASE,
     density: config.density,
     disableScatter: modloader,
+    drawDistance: config.drawDistance,
     gamePath,
     heightThreshold: config.procObjHeight,
     iplName: IPL_NAME,
@@ -373,22 +256,21 @@ export function run(options: BuildOptions): void {
   });
   logLayerCost(target, config.density, procObj);
   // The swapped (prelit) HD DFFs — with `--in`, regardless of mode (the HD carries our prelight; we don't drop it).
-  const swapModels = lods.map((lod) => lod.model);
+  const swapModels = [...heights.keys()];
   const swap =
     inPath === undefined
       ? new Map<string, Uint8Array>()
       : swapEntries(inPath, swapModels, prelight ? archive : null, isFoliage, prelightInfo);
 
-  writeText(join(lodOut, IDE_REL), ide);
   emitRegistration({ gamePath, modloader, outPath: lodOut, procObj });
 
   if (modloader) {
     // LOD mod: only the LOD assets to `<out>/lod/gta3img/`; the HD swap is a separate `<out>/hd/` mod that parents
     // the stock TXDs to the custom one via `txdp` — so no stock IDE is rewritten (the `./5` approach).
-    emitImg(archive, collectImgEntries(lods, lodTxd, lodCol, new Map(), new Map(), []), lodOut, true);
+    emitImg(archive, collectImgEntries(new Map(), new Map()), lodOut, true);
     const swapped = emitHdMod(inPath, gamePath, dat, swap, swapModels, outPath);
     console.log(
-      `procobj→lod: ${lods.length} species · ${procObj?.objects ?? 0} static objects → ${outPath}/lod` +
+      `procobj→sa: ${species_.size} species · ${procObj?.objects ?? 0} static objects → ${outPath}/lod` +
         (swapped > 0 ? ` · ${swapped} HD swapped (txdp) → ${outPath}/hd` : ''),
     );
 
@@ -403,11 +285,22 @@ export function run(options: BuildOptions): void {
   for (const [idePath, text] of retxd.ides) {
     writeText(join(outPath, idePath.replace(/\\/g, '/')), text);
   }
-  emitImg(archive, collectImgEntries(lods, lodTxd, lodCol, swap, retxd.txds, []), outPath, false);
+  emitImg(archive, collectImgEntries(swap, retxd.txds), outPath, false);
   console.log(
-    `procobj→lod: ${lods.length} species · ${procObj?.objects ?? 0} static objects · ` +
+    `procobj→sa: ${species_.size} species · ${procObj?.objects ?? 0} static objects · ` +
       `${swap.size} HD swapped (${retxd.txds.size} custom TXD) → ${outPath}/models/gta3.img`,
   );
+}
+
+/**
+ * A species' bbox HEIGHT in model-local space (frame-aware), which is the only thing the placement layer reads
+ * from the geometry — it feeds `procObjHeight`, the gate that leaves short clutter (grass) on the runtime
+ * scatter. Plan 014: no mesh is decimated and no LOD is encoded here any more.
+ */
+export function speciesHeight(clump: RWClump): number {
+  const bbox = meshBounds(buildModelMesh(clump));
+
+  return bbox.max[2] - bbox.min[2];
 }
 
 /**
@@ -499,9 +392,13 @@ function emitImg(archive: ImgArchive, entries: ReadonlyMap<string, Uint8Array>, 
 }
 
 /**
- * Register the LODs (+ the static IPL) for the game to load: a Modloader `loader.txt` of `IDE`/`IPL` lines
- * (`--modloader`, no `gta.dat` edit — Modloader merges them), or a patched `data/gta.dat` (default). Either way
- * the IPL + stripped `procobj.dat` already sit at their `data/` paths (written by `convertProcObj`).
+ * Register the area IPLs for the game to load: a Modloader `loader.txt` of `IPL` lines (`--modloader`, no
+ * `gta.dat` edit — Modloader merges them), or a patched `data/gta.dat` (default). The IPLs, the raised
+ * `procobj.ide` and the stripped `procobj.dat` already sit at their `data/` paths (written by `convertProcObj`).
+ *
+ * **No `IDE` line of our own since plan 014**: the layer places STOCK species under their stock ids, so the
+ * declaration it needs is the stock `procobj.ide` the game already loads — the bake only raises its draw
+ * distance. An IDE we registered here would be a second declaration of models that already have one.
  */
 function emitRegistration(args: {
   gamePath: string;
@@ -511,7 +408,7 @@ function emitRegistration(args: {
 }): void {
   const { gamePath, modloader, outPath, procObj } = args;
   if (modloader) {
-    const lines = [`IDE ${IDE_REL}`];
+    const lines: string[] = [];
     for (const datLine of procObj?.datLines ?? []) {
       lines.push(datLine.replace(/\\/g, '/').replace('DATA/MAPS', 'data/maps'));
     }
@@ -519,7 +416,7 @@ function emitRegistration(args: {
 
     return;
   }
-  let gtaDat = patchGtaDat(readFileSync(join(gamePath, 'data', 'gta.dat'), 'utf8'), IDE_DAT);
+  let gtaDat = readFileSync(join(gamePath, 'data', 'gta.dat'), 'utf8');
   if (procObj && procObj.datLines.length > 0) {
     const eol = gtaDat.includes('\r\n') ? '\r\n' : '\n';
     gtaDat = `${gtaDat.replace(/\s*$/, '')}${eol}${procObj.datLines.join(eol)}${eol}`;
@@ -574,25 +471,6 @@ function logLayerCost(
   console.log(line);
   for (const line_ of categoryCostLines(procObj?.categories ?? [])) {
     console.log(line_);
-  }
-}
-
-/** `--prelight`: recolour each built LOD mesh's trunk to its stock model's ambient — foliage kept, skip-list honoured. */
-function prelightLodMeshes(
-  built: readonly BuiltMesh[],
-  archive: ImgArchive,
-  isFoliage: FoliagePredicate,
-  prelightInfo: PrelightInfo | undefined,
-): void {
-  for (const b of built) {
-    if (prelightInfo?.skip.has(b.model)) {
-      continue;
-    }
-    const stock = archive.get(`${b.model}.dff`);
-    const trunk = stock ? stockPrelightColor(new Uint8Array(stock)) : null;
-    if (trunk) {
-      applyMeshTrunkPrelight(b.mesh, trunk, isFoliage);
-    }
   }
 }
 

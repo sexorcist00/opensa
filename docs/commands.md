@@ -125,7 +125,7 @@ npx tsx tools/lod-trees-generator/src/cli.ts --in ./mods-src/vegetation --game <
 
 # Procobj → static IPL + LODs ([--target sa|opensa]: the host the layer's cost is reported against; pmb passes
 # its own. [--density n]: scatter cutoff, 1 = vanilla, max 3 — the run prints the density + rows/object it built)
-npx tsx tools/sa-procobj-placement/src/cli.ts --in ./mods-src/procobj --game <dir> --out <dir> --prelight --tex 128
+npx tsx tools/sa-procobj-placement/src/cli.ts --in ./mods-src/procobj --game <dir> --out <dir> --prelight --draw 299
 
 # OpenSA cell LODs ([--holes <json>]: hole-fill models merged verbatim past the reduction tracks)
 npx tsx tools/opensa-lod-generator/src/cli.ts --game <dir> --out <dir> --cell 250
