@@ -2,6 +2,12 @@
 
 > **UNBUILT.** Moved here 2026-08-09 from the roadmap chain `07-lod-generators-extended/04`, which was dissolved into the tools it touches — see
 > [roadmap 0.5.0](../../../../docs/roadmap/0.5.0/readme.md) for what the chain was and what shipped out of it.
+>
+> **Partly superseded 2026-08-10 by [014](./014-permanent-rows-no-lod-twins.md).** Three of this plan's premises
+> moved: `linkedHeight` no longer exists, the layer's price is now 1.000 permanent rows per object (so the ratio
+> it tracked is fixed), and the second price it never had — inst-bearing area IPLs against SA's 40 slots — is now
+> reported and gated. The perf budget for `opensa` this plan owns is UNAFFECTED and easier: clutter density is a
+> runtime knob again there, so the two-pak workaround it was forced into is retired.
 
 
 > The file is still named for the slot economy because its links are; the plan is not. Slots stopped being a

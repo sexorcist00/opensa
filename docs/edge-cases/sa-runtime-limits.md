@@ -12,14 +12,14 @@ runtime, but the converter guards stand for any build not running that ASI.
   only counts, via `reportTextIplCensus` on the built `sa/` tree. The invented 30,000-row `TEXT_ROW_CAP` and
   `--allow-text-row-overflow` are gone; nothing ever culled to fit them. Repro dial:
   `tools-debug/sa-int16-repro`.
-- **Per-area 4,000-row budget.** An area's text rows + binary-stream rows pass through SA's unbounded
-  4096-slot `LoadScene` buffer; overflow corrupts memory. `AREA_ROW_CAP = 4000`; over-budget instances
-  migrate to the shared `plotr`/`plobj` overflow areas. Mirrored in mod-installer's IPL slot merge, and
-  `AREA_MAX_PAIRS = 2000` in `map-placement` exists to fit it.
-  **OPEN — this one SHAPES OUTPUT against a ceiling the target lifted** (`EntitiesPerIpl = unlimited`, which
-  runs a 9,627-row file). Unlike the deleted int16 budget, these three do move content: they split areas and
-  migrate instances. Nobody has measured whether they still bind at the shipped density, or what the split
-  costs in streaming granularity — price that before either defending or removing them.
+- **Per-area row budget — the buffer is lifted, but it counts text rows AND stream records TOGETHER.** An area's
+  text rows plus its binary-stream rows pass through SA's `gpLoadedBuildings` buffer (stock 4 096; OLA's
+  `EntitiesPerIpl = unlimited` lifts it, and the install runs a **9 627-row** text IPL). **CLOSED 2026-08-10, by a
+  crash:** raising `AREA_MAX_PAIRS` 2 000 → 4 800 on the strength of that 9 627 put 4 260 rows + 9 stream tiles
+  (~8 520 entries) into one area and the game died on it. PF's 9 627 is a **text-only** file; it is not a budget
+  for the mixed path. Live numbers: `AREA_ROW_CAP = 4000` (lod-trees + mod-installer), `AREA_MAX_PAIRS = 4800`
+  (`map-placement`, pairs = 2 entries each = 9 600, and only lod-trees' overflow areas use it now), and
+  `AREA_MAX_ROWS = 9600` for the text-only procobj layer — the path PF's number actually covers.
 - **Text-IPL slot cap 40** (`IplEntityIndexArrays`; stock uses ~28-30). Only a file carrying `inst` rows takes
   a slot. **REAL on the target and NOT lifted by anything** — measured twice on 2026-08-10: a build shipping 75
   inst-bearing IPLs died loading the 40th (`plobj10.ipl`), with OLA's `EntityIpl = unlimited` set, and again with

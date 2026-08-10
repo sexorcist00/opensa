@@ -5,6 +5,15 @@ numbers and links to the raw records — so the result survives the session and 
 without re-deriving it. Runtime numbers live in [`../benchmarks/`](../benchmarks/); these docs summarise and
 interpret them.
 
+- [`procobj-permanent-rows-and-the-shape-that-could-not-fit.md`](./procobj-permanent-rows-and-the-shape-that-could-not-fit.md)
+  — the 2026-08-10 late arc: the clutter layer's HD+LOD twin turned out not to fit SA **at all** at the shipped
+  density (25 560 linked pairs need 13 inst-bearing areas; 12 exist), and binary streams could never have carried
+  its range — `CIplStore` keeps a stream's slot resident only within **190 units**, so the layer drew to ~190 m
+  while declared at 290. Replaced by ProperFixes' shape: one permanent row per object at `lod = -1`, range from
+  the stock `procobj.ide` raised **59 → 299**. Entities 182 184 → **91 092**, binary IPLs 522 → **191**, and
+  OpenSA's runtime scatter gets **95** rules back where a strip had left it 9. **Both field crashes on the way
+  were caused by changes made in that session**, one of them by reading a number measured on one path as a budget
+  for another — the same mistake as `EntityIpl`, twice in a day.
 - [`sa-build-verified-and-the-guards-that-lied.md`](./sa-build-verified-and-the-guards-that-lied.md) — the
   2026-08-10 arc: the `sa` target builds end to end at 91 092 objects (10 m 9 s), and the int16 throw was not
   the only blocker — FLA's IPL pool fired at **522 of 280**, correctly. Raising it surfaced the opposite

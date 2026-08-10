@@ -8,9 +8,10 @@ recovered from git history and generalised) — see `sa-procobj-placement`
 
 ## Why it exists
 
-`lod-trees-generator` (impostors) and `sa-procobj-placement` (simplified copies) place their LODs the **same** way
-— allocate ids, register IDE/`gta.dat`, edit IPLs, retxd swapped HD models, scatter procobj into static IPL — only
-the LOD model they point at differs. That placement machinery lives here so both import it instead of duplicating
+`lod-trees-generator` (impostors) and `sa-procobj-placement` place map content the **same** way — allocate ids,
+register IDE/`gta.dat`, edit IPLs, retxd swapped HD models, scatter procobj into static IPL. They diverged on
+2026-08-10: lod-trees still places HD+LOD pairs, while procobj places **permanent rows with no LOD at all**
+([014](../../../sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md)). Both emitters live here. That placement machinery lives here so both import it instead of duplicating
 it. `tool-kit` stays format-agnostic; this package is the SA-specific **write** layer.
 
 Layering: `@opensa/rw-codec` (bytes) → `@opensa/renderware` (read/parse) → **`map-placement`** (SA write
@@ -52,8 +53,32 @@ workflows) → the LOD tools (CLI). Sits beside `sa-lod` (mesh encode) under `to
 - `UNDERWATER_PROCOBJ` — the never-touch set (seaweed/starfish/searock, surface `P_UNDERWATERBARREN`): **never
   stripped, never converted**, regardless of `keep`. Shared land debris (`p_rubble*`) is intentionally **not** here.
 
-### `./procobj` (`convert.ts` + `world.ts`) — scatter → static IPL
+### `./permanent-areas` — placements → permanent text IPLs (plan 014)
 
+- `buildPermanentAreas(placements, areaBase, maxRows?)` → `{ datLines, files, instBearingFiles }` — one row per
+  placement at `lod = -1`, split spatially into `<areaBase><i>.ipl` files of ≤ `AREA_MAX_ROWS` (9 600, just under
+  the 9 627 the field has ProperFixes running). **No binary streams**: a stream's IPL slot is only resident within
+  190 units of the player, so a streamed row cannot carry draw distance.
+- `instBearingFiles` is returned because it is the budget — one of SA's 40 `IplEntityIndexArrays` slots each, and
+  a number in a comment is not a guard (plan 007's budget went stale in silence).
+
+### `./streamed-areas` — HD+LOD pairs, streamed (lod-trees only since 014)
+
+- `buildLinkedAreas(pairs, areaBase)` → text IPL of permanent LOD rows + `<area>_stream<k>.ipl` binary tiles whose
+  `lod` field indexes those rows. `isLinked(pair)` is the default-true test. Linked and unlinked pairs go to
+  SEPARATE areas: the link is decided per pair but a slot is spent per area, and splitting on position alone once
+  had 28 % of the pairs spending 100 % of the slots.
+
+### `./procobj` (`convert.ts` + `world.ts`) — scatter → permanent IPL rows
+
+- `buildPermanentIpl(final, species, areaBase)` → the emitter above, fed by the scatter; `rows` is the object
+  count now (one permanent row each), which is what the `CBuilding` pool pays.
+- `PROC_OBJ_DRAW_DISTANCE = 299` + `setIdeDrawDistance` (in `./ide`) — the layer's RANGE mechanism: the baked
+  species' rows in the stock `data/maps/generic/procobj.ide` are raised from SA's authored **59**. Only species
+  actually placed are raised; the rest keep 59 for the runtime scatter.
+- `removeStaleAreas` — the bake runs in place on a tree nobody wipes, so a run that emits fewer areas than the
+  last deletes the surplus. Without it a census over the directory reads two scatters at once (measured: 95 584
+  rows for a 91 092-row run).
 - `convertProcObj(options)` → `null | { datLine, objects }` — convert `--dff ∩ procobj` species from runtime
   scatter into **static IPL instances**: reuse the engine's vanilla `scatterProcObjects`, keep everything under
   the density cutoff and slice to a global `procObjMax` cap, emit each as an HD `inst` + its LOD `inst`

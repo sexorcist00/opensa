@@ -18,7 +18,7 @@ import { parseIde, parseTimedObjects } from '@opensa/renderware/parsers/text/ide
 import { decodeDxt } from '@opensa/rw-codec/dxt';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { type BuildTarget } from '@opensa/tool-kit/target';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 import type { ProcObjLodConfig } from './config';
@@ -145,6 +145,32 @@ export function combinedModelSource(inPath: string, archive: ImgArchive): ModelS
 }
 
 /**
+ * model → bbox height for every candidate that clears the `procObjHeight` gate — the only thing the placement
+ * layer reads from geometry. A model the source cannot load is skipped rather than failing the build: a TC's
+ * `procobj.dat` may name species it does not ship.
+ */
+export function gatedHeights(
+  species: readonly string[],
+  modelSource: ModelSource,
+  minHeight: number,
+): Map<string, number> {
+  const heights = new Map<string, number>();
+  for (const model of species) {
+    const clump = modelSource.load(model);
+    if (!clump) {
+      continue;
+    }
+    const height = speciesHeight(clump);
+    if (minHeight > 0 && height < minHeight) {
+      continue; // short clutter (grass) — left on the runtime scatter
+    }
+    heights.set(model, height);
+  }
+
+  return heights;
+}
+
+/**
  * The layer's PRICE, READ OFF the run: objects placed, the permanent text rows they cost (one each since plan
  * 014, so the ratio is 1.000 and stays there), and the inst-bearing area files they spend against SA's 40 slots.
  *
@@ -186,6 +212,25 @@ export function layerCostLine(
       ? " — permanent rows spend SA's int16 building-pool budget (perfect-map.asi past 32,767 map-wide)"
       : ' — no SA row ceiling on this target')
   );
+}
+
+/**
+ * Delete the outputs this tool USED to write and no longer does — the LOD IDE and the linear-TXD sidecar of the
+ * pre-014 shape.
+ *
+ * The bake runs in place on a tree that is not wiped between runs, so a retired output survives every later
+ * build. `lod_procobj.ide` was found in the artifact on 2026-08-10 declaring 48 models with zero DFFs behind
+ * them. Harmless as it stood — unregistered in `gta.dat` and nothing places those ids — but a stale declaration
+ * that nobody removed is indistinguishable from a live one a month later, and the whole reason this project
+ * gates dangling models is that such a thing is invisible until the field finds it.
+ *
+ * Silent by design here: these are OUR leftovers, not the user's data, and the first run after the change is the
+ * only one with anything to remove.
+ */
+export function removeRetiredOutputs(outPath: string): void {
+  for (const relative of [join('data', 'maps', `${IPL_NAME}.ide`), join('linear-txd', `${IPL_NAME}.txd`)]) {
+    rmSync(join(outPath, relative), { force: true });
+  }
 }
 
 /**
@@ -278,6 +323,7 @@ export function run(options: BuildOptions): void {
       : swapEntries(inPath, swapModels, prelight ? archive : null, isFoliage, prelightInfo);
 
   emitRegistration({ gamePath, modloader, outPath: lodOut, procObj });
+  removeRetiredOutputs(lodOut);
 
   if (modloader) {
     // LOD mod: only the LOD assets to `<out>/lod/gta3img/`; the HD swap is a separate `<out>/hd/` mod that parents
@@ -437,28 +483,6 @@ function emitRegistration(args: {
     gtaDat = `${gtaDat.replace(/\s*$/, '')}${eol}${procObj.datLines.join(eol)}${eol}`;
   }
   writeText(join(outPath, 'data', 'gta.dat'), gtaDat);
-}
-
-/**
- * model → bbox height for every candidate that clears the `procObjHeight` gate — the only thing the placement
- * layer reads from geometry. A model the source cannot load is skipped rather than failing the build: a TC's
- * `procobj.dat` may name species it does not ship.
- */
-function gatedHeights(species: readonly string[], modelSource: ModelSource, minHeight: number): Map<string, number> {
-  const heights = new Map<string, number>();
-  for (const model of species) {
-    const clump = modelSource.load(model);
-    if (!clump) {
-      continue;
-    }
-    const height = speciesHeight(clump);
-    if (minHeight > 0 && height < minHeight) {
-      continue; // short clutter (grass) — left on the runtime scatter
-    }
-    heights.set(model, height);
-  }
-
-  return heights;
 }
 
 /** Model names under `--dff` (a `.dff` file or a directory), lowercased without extension. */

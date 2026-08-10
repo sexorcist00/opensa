@@ -306,8 +306,10 @@ row but its chain was superseded by 097). Newest first:
   trees, plus the map strip + place stages (text↔binary IPL LOD-index coupling), the SA asset-format checklist,
   and aspect-aware atlas + `--prelight` trunk transfer. (procobj is now its own tool.)
   [`lod-trees-generator/docs/plans/`](../../tools/lod-trees-generator/docs/plans/) (`001`–`005`, `007`).
-- **sa-procobj-placement** — procobj scatter → static IPL with **simplified-copy** (decimated) LODs; reuses
-  `sa-lod` + `map-placement`. [`sa-procobj-placement/docs/plans/`](../../tools/sa-procobj-placement/docs/plans/)
+- **sa-procobj-placement** — procobj scatter → **permanent static IPL rows at `lod = -1`**, range from the stock
+  `procobj.ide` raised to 299. SA-only (OpenSA scatters at runtime), and no LODs since
+  [014](../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md) — renamed from
+  `lod-procobj-generator` the same day. Reuses `map-placement`. [`sa-procobj-placement/docs/plans/`](../../tools/sa-procobj-placement/docs/plans/)
   (`001` architecture · `002` build pipeline · `003` asset format).
 - **mod-installer** — layer mod folders onto a base game (files overwrite, `gta3img/` merges into `gta3.img`, a
   PNG folder merges into a sibling loose `.txd`), alphabetical.

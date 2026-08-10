@@ -178,7 +178,23 @@ from one mod's `Remove original/` folder read as a delete list).
 
 ---
 
-## 6. What is NOT a contract
+## 6. Two files a LATER build stage rewrites over your mod
+
+Mods are not the last writer in the chain. Two data files are edited again after every mod has been applied, on
+the `sa` target only, by the procobj bake
+([`sa-procobj-placement/014`](../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md)):
+
+- **`data/maps/generic/procobj.ide`** — the **draw distance** column of every species the bake places is set to
+  the configured range (299). Your rows survive; that one cell does not, and only for placed species. A mod that
+  ships this file to change a model or a TXD keeps those edits.
+- **`data/procobj.dat`** — the placed species are STRIPPED out of it, because they are static instances now and
+  the runtime scatterer would double them. A mod's added rules for species the bake does NOT place survive.
+
+Neither happens on the `opensa` target: it runs no bake, so both files reach our engine exactly as the mods left
+them. If you are debugging "my procobj edit did nothing in the real game", this is the reason, and the built
+`sa/` copy is the one to read — not `game-src/` and not `.work/`.
+
+## 7. What is NOT a contract
 
 - **The mod folder's name** — ordering only. Renaming a mod cannot change what it does.
 - **The path a Modloader-style mod uses internally** — bare names decide everything there.
@@ -187,7 +203,7 @@ from one mod's `Remove original/` folder read as a delete list).
 
 ---
 
-## 7. Adding a convention
+## 8. Adding a convention
 
 When a new folder/file name starts meaning something, it goes here in the same change, with what happens when
 it is misspelled. That last part is the point: nearly every rule on this page exists because some spelling of

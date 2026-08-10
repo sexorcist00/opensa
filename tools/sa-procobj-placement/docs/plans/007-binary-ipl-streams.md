@@ -1,7 +1,16 @@
 # 007 — Binary IPL streams for the static procobj placement
 
-**Status: ✅ SHIPPED; root cause pinned AND fix verified in-game on the full pmb build 2026-07-07
-(bridge clean, ~21k/30k text rows).**
+**Status: ✅ SHIPPED 2026-07-07 (root cause pinned and verified in-game, bridge clean at ~21k/30k text rows) —
+and SUPERSEDED for this layer on 2026-08-10 by
+[014](./014-permanent-rows-no-lod-twins.md).**
+
+> **Do not implement the shape below for a layer that needs RANGE.** Binary streams solved the problem this plan
+> was written for — mass instances without mass permanent rows — and they still solve it for lod-trees' overflow
+> areas. What they cannot do is carry draw distance: `CIplStore` loads a stream's IPL slot only while the player is
+> inside its bounding box grown by 190 units, so this layer drew to ~190 m while declared at 290, for months.
+> The procobj layer is now permanent text rows at `lod = -1` with range from the stock `procobj.ide`. The
+> root-cause analysis below (the 4 096 boot buffer, the big-building path, the `lod`-prefix trigger) is all still
+> true and still worth reading.
 
 ## THE final root cause (found by bisecting the full pmb build)
 

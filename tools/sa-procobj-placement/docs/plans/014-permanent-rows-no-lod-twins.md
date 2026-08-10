@@ -97,6 +97,15 @@ geometry per model type — ~48 of them — and draws instanced.
 
 ## Measured numbers
 
+**FIELD-CONFIRMED 2026-08-10.** He installed this build and played it: *"проверил в gta sa — все работает
+отлично"*. That closes step 4's first question — the game boots at 39 of 40 inst-bearing IPLs, with 110 055
+permanent rows against the raised `Buildings = 150000`, where the twinned shape had crashed twice (slot 40, then
+the boot buffer at 8 520 entries). The build he ran carries `sa-lod-generator`'s full output as well (353.6 s of
+it, 4 400 `lod*` entries), so the world's own far-LODs are intact and only the clutter is LOD-less by design.
+
+**Still unanswered by that run:** whether the clutter now reaches 299 m rather than ~190. Nobody looked at the
+pop-in radius, and it is the half of step 4 that prices the whole mechanism.
+
 **Steps 1–4 (build half) done 2026-08-10.** Same corpus, same density 1, read off the artifact:
 
 | | before | after |

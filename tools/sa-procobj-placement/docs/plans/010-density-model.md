@@ -2,6 +2,11 @@
 
 > **UNBUILT.** Moved here 2026-08-09 from the roadmap chain `07-lod-generators-extended/02`, which was dissolved into the tools it touches — see
 > [roadmap 0.5.0](../../../../docs/roadmap/0.5.0/readme.md) for what the chain was and what shipped out of it.
+>
+> **Partly superseded 2026-08-10 by [014](./014-permanent-rows-no-lod-twins.md):** density is no longer "one
+> profile for both hosts". It is a build constant on `sa` (which bakes) and a runtime setting on `opensa` (which
+> scatters at load), and `linkedHeight` — the knob this plan reasoned about — is gone with the LOD twin. The
+> density MODEL itself (per category, per category×surface, the candidate ceiling) is unaffected and shipped.
 
 
 Turn density from one hardcoded constant into a

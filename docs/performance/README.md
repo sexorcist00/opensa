@@ -30,6 +30,7 @@ stays, pointing at the new home).
 | Lever | Axis | Est. win | Status |
 | --- | --- | --- | --- |
 | [Bake vehicle sky-occlusion in opensa-pack](deferred-optimizations/vehicle-ao-baking.md) | spawn hitch | 8–78 ms per model, once per model, spawn path only | in reserve — not needed |
+| [Bake the procobj clutter into the pak](deferred-optimizations/procobj-baked-into-the-pak.md) | contact AO on clutter · per-cell scatter at stream-in | would cost 91 092 vertex-DUPLICATED instances in a pak already at 105.8 M HD verts (its AO bake: 1.01 G rays / 21 min), and take density back off the runtime knob | deferred 2026-08-10 — the runtime path is the cheaper side of both trades |
 | [Automatic render-scale / quality-tier ladder](deferred-optimizations/render-scale-tier.md) | GPU pass | 0.4–1.4 ms (measured ceiling), targets 345 → 88 MB | measured and refused |
 | [Per-ring texture laziness](deferred-optimizations/per-ring-texture-laziness.md) | memory | under the ~767 MB world-array floor | in reserve |
 | [Compress UV-animation keyframes in the `.osm` DESC](deferred-optimizations/uv-anim-keyframe-encoding.md) | pak bytes · spawn parse | 19 312 B on the one animated model — 94 % of its DESC, 0.49 % of its file | in reserve — noise until animated models are common |
