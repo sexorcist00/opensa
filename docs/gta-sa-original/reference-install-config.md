@@ -120,7 +120,8 @@ That is why FLA and OLA coexist here without the documented `LinkLods` boot cras
 alone.** The `#` reading is confirmed against FLA's own log, which reports exactly the settings that are
 uncommented and no IPL limit at all.
 
-Everything FLA actually applies:
+Everything FLA actually applies — **captured before the 2026-08-10 pool raise below; the two `FILE_TYPE_`
+lines here are the OLD values**:
 
 ```ini
 Accept any ID for car generator = 1
@@ -146,10 +147,49 @@ Register global exception handler = 0
 
 `fastman92limitAdjuster.log` closes with `Number of memory changes made: 3712`.
 
-**Note `FILE_TYPE_COL = 275` and `FILE_TYPE_IPL = 280`** — these are the FLA ID-pool budgets pmb's
-`IMG_ID_BUDGETS` guard is written against ([`edge-cases/sa-runtime-limits.md`](../edge-cases/sa-runtime-limits.md)
-records TXD 6000 / COL 275 / IPL 280). The install matches the guard, so the guard's numbers are the right
-ones for this target. `TxdStore` is not set in `[SALIMITS]`.
+### The ID pools — read them off FLA's LOG, not off the ini
+
+The ini is a request; the log is what FLA built. It prints the pools as ID RANGES, laid out consecutively, so
+raising one shifts every pool after it:
+
+```
+New ID limits:
+    0 - 19999 (20000) - DFF models defined within IDE files
+20000 - 24999  (5000) - TXD texture archives.
+25000 - 25274   (275) - COL collision archives.
+25275 - 25554   (280) - IPL Binary IPL files.
+25555 - 25618    (64) - DAT files limited to nodes*.dat
+25619 - 25798   (180) - IFP animation archives.
+25799 - 26273   (475) - RRR car recordings, carrec*.rrr files
+26274 - 26355    (82) - SCM scripts
+```
+
+**`TXD` is 5000, and this document used to say 6000.** `FILE_TYPE_TXD` carries a `#` in the ini above — it is
+one of the DISABLED lines — so the pool stays at FLA's default, which the log confirms. pmb's
+`IMG_ID_BUDGETS` claimed 6000 from the start and nothing ever checked it against the install, so a build
+measuring **4999 TXD archives** printed `4999 of 6000` while standing one archive short of a real wall. The
+error is the kind this folder exists to prevent: a guard whose number is HIGHER than the install's is silent
+by construction — it can only ever fail to fire.
+
+**Changed 2026-08-10 — three pools raised**, after the first `sa` build at the recovered procobj density
+(91 092 objects) exceeded the IPL pool with **522 binary IPL files of 280**. The layer's `plobj*_stream*`
+tiles went 50 → 331 across the column fix; 191 more are stock's own. Per the target rule in `CLAUDE.md` an
+FLA pool is a configured number, so it is raised rather than designed down to:
+
+| Pool | Was | Now | Build uses | Why this value |
+| --- | --- | --- | --- | --- |
+| `FILE_TYPE_TXD` | 5000 (line disabled — FLA's default) | **6000** | 4999 | the line must be UNCOMMENTED; 4999 + the guard's 50-slot runtime margin does not fit 5000 |
+| `FILE_TYPE_COL` | 275 | **400** | 264 | 264 + margin 8 left 3 slots — raised while the file was open, not because it bound |
+| `FILE_TYPE_IPL` | 280 | **1024** | 522 | ~2× headroom over the density that broke it, so the next density change does not re-open this |
+
+Both `COL` and `IPL` are already past 256, which is what makes FLA apply its `uint32_t` ID patches (its log
+says so for each). `TxdStore` is not set in `[SALIMITS]`.
+
+**The ini is SET** (confirmed by the user 2026-08-10, verbatim — `FILE_TYPE_TXD = 6000`, `FILE_TYPE_COL = 400`,
+`FILE_TYPE_IPL = 1024`, the TXD line now uncommented). **The LOG is not re-captured**: FLA rewrites
+`fastman92limitAdjuster.log` at boot, so the ranges printed above are still the old ones and nothing has yet
+proven FLA accepts these values. Re-capture the `New ID limits:` block after the next launch — that, not the
+ini, is what this section is read off.
 
 ## Streaming
 

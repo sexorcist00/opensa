@@ -18,6 +18,27 @@ import {
   writeStageTimings,
 } from './pipeline';
 
+/** The three map builders the split calls — mocked so the target-split test costs no map build. Each one
+ *  creates its output dir, which is all the pipeline needs from them between the call and the next stage. */
+const procobjLods = vi.hoisted(() =>
+  vi.fn<(step: { config: { density: unknown }; outPath: string }) => void>((step) => {
+    mkdirSync(step.outPath, { recursive: true });
+  }),
+);
+const saLods = vi.hoisted(() =>
+  vi.fn<(step: { gameDir: string; outDir: string }) => void>((step) => {
+    mkdirSync(step.outDir, { recursive: true });
+  }),
+);
+const opensaLods = vi.hoisted(() =>
+  vi.fn<(step: { gameDir: string; outDir: string }) => void>((step) => {
+    mkdirSync(step.outDir, { recursive: true });
+  }),
+);
+vi.mock('@opensa/lod-procobj-generator/build', () => ({ buildProcobjLods: procobjLods }));
+vi.mock('@opensa/sa-lod-generator/build', () => ({ buildSaLods: saLods }));
+vi.mock('@opensa/opensa-lod-generator/build', () => ({ buildOpensaLods: opensaLods }));
+
 /** A game dir whose gta.dat registers `n` text IPLs with one inst row each. */
 function writeGame(dir: string, n: number): void {
   mkdirSync(join(dir, 'data', 'maps'), { recursive: true });
@@ -190,6 +211,62 @@ describe('buildPerfectMap source/out overlap', () => {
       await expect(
         buildPerfectMap({ exclude: ['sa'], gamePath: '/nonexistent', inPath: mods, outPath: out }),
       ).rejects.toThrow(/--in .*is inside/);
+    });
+  });
+});
+
+/**
+ * The invariant that makes `sa/` and `opensa/` the SAME WORLD: the procobj scatter runs ONCE, in the common
+ * chain, and both targets are handed that one stage build. Measured 2026-08-10 across two separate runs
+ * (opensa 08-09 13:53, sa 08-10) — all 46 `plobj*.ipl` and all 331 `plobj*_stream*.ipl` byte-identical,
+ * 91 092 objects each side. Nothing tested it, and it can only break silently: procobj positions are
+ * DERIVED (seeded scatter over collision geometry), so two targets fed from different dirs would each hold a
+ * plausible-looking world, and every cross-target verdict — above all 013's "does the real game cope at the
+ * shipped density" — would be comparing two different maps while reading as one.
+ */
+describe('buildPerfectMap target split', () => {
+  let out: string;
+  let game: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-split-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-game-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    procobjLods.mockClear();
+    saLods.mockClear();
+    opensaLods.mockClear();
+  });
+
+  afterEach(() => {
+    rmSync(out, { force: true, recursive: true });
+    rmSync(game, { force: true, recursive: true });
+  });
+
+  describe('positive cases', () => {
+    it('scatters procobj ONCE and hands that same stage build to both targets', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: '/nonexistent', outPath: out });
+
+      // One scatter. A second call would mean two independent lotteries, i.e. two different worlds.
+      expect(procobjLods).toHaveBeenCalledTimes(1);
+      const scattered = procobjLods.mock.calls[0][0].outPath;
+      expect(saLods).toHaveBeenCalledTimes(1);
+      expect(opensaLods).toHaveBeenCalledTimes(1);
+      expect(saLods.mock.calls[0][0].gameDir).toBe(scattered);
+      expect(opensaLods.mock.calls[0][0].gameDir).toBe(scattered);
+    });
+
+    it('keeps the density a property of the build, not of the target it is being built for', async () => {
+      // Scope call 2026-08-09: `sa` ships the SAME density as `opensa`. The scatter takes the run's density
+      // and its own target only for REPORTING, so a density that varied by target could not reach it here.
+      await buildPerfectMap({
+        config: { procobjDensity: 2 },
+        exclude: ['optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        outPath: out,
+      });
+
+      expect(procobjLods.mock.calls[0][0].config.density).toBe(2);
     });
   });
 });
@@ -367,12 +444,12 @@ describe('checkImgIdBudgets', () => {
       expect(() => checkImgIdBudgets(dir)).toThrow(/TXD archives: 5960 of 6000/);
     });
 
-    it('throws when binary IPL files approach the FILE_TYPE_IPL 280-slot pool (the field boot-crash case)', () => {
+    it('throws when binary IPL files approach the FILE_TYPE_IPL pool (the field boot-crash case)', () => {
       writeImg(
         'gta3.img',
-        Array.from({ length: 275 }, (_, i) => `a${i}_stream0.ipl`),
+        Array.from({ length: 1019 }, (_, i) => `a${i}_stream0.ipl`),
       );
-      expect(() => checkImgIdBudgets(dir)).toThrow(/binary IPL files: 275 of 280/);
+      expect(() => checkImgIdBudgets(dir)).toThrow(/binary IPL files: 1019 of 1024/);
     });
   });
 
@@ -380,6 +457,16 @@ describe('checkImgIdBudgets', () => {
     it('passes a build comfortably under every pool, counting across all IMG archives', () => {
       writeImg('gta3.img', ['a.txd', 'b.col', 'lae_stream0.ipl', 'x.dff']);
       writeImg('gta_int.img', ['c.txd']);
+      expect(() => checkImgIdBudgets(dir)).not.toThrow();
+    });
+
+    it('passes the 522 binary IPLs the first sa build at the recovered density produced', () => {
+      // The build that found this gate (2026-08-10): 331 `plobj*_stream*` tiles + 191 stock ones. 242 over
+      // the old 280-slot pool, comfortably under the raised one — the regression test for the raise itself.
+      writeImg(
+        'gta3.img',
+        Array.from({ length: 522 }, (_, i) => `a${i}_stream0.ipl`),
+      );
       expect(() => checkImgIdBudgets(dir)).not.toThrow();
     });
   });

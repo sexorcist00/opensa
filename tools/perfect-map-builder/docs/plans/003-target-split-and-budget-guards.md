@@ -89,3 +89,15 @@ target, not for the whole pipeline"*, and its companion added 2026-08-09 after a
   ([lod-procobj-generator/009](../../../lod-procobj-generator/docs/plans/009-procobj-dat-columns-as-the-game-reads-them.md));
   the layer now costs 91 092 objects / 25 560 rows / 0.281 rows per object, and its map-wide total crosses
   int16 — so the `sa/` throw this plan installed now fires on a full build, exactly as designed.
+- **2026-08-10 — `checkImgIdBudgets` earned its keep, and its TXD number turned out to be wrong.** The first
+  `sa` build since the int16 guard was deleted completed every stage and then failed here on **522 binary
+  IPL files of 280** (FLA `FILE_TYPE_IPL`): the procobj layer's `plobj*_stream*` tiles went 50 → 331 across
+  the density fix. Answered by raising the install's pools (`TXD 6000 / COL 400 / IPL 1024`) rather than
+  shaping the build — the full record, including why `STREAM_MAX_INST` was left alone, is in
+  [lod-procobj-generator/013](../../../lod-procobj-generator/docs/plans/013-density-budgets-per-target.md).
+  **The lesson is the other pool.** `IMG_ID_BUDGETS` had carried `TXD 6000` since it was written, while the
+  install leaves `#FILE_TYPE_TXD` commented at FLA's default 5000 — the build measures 4999. A guard whose
+  limit is HIGHER than the install's cannot fire, so the pool with one slot of real headroom was the one
+  reporting comfortable headroom. **Take a pool from `fastman92limitAdjuster.log`, never from the ini** — a
+  disabled line still prints a value, which is exactly how this survived a verbatim capture that quoted the
+  `#` two paragraphs above its own summary.

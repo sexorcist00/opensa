@@ -521,14 +521,25 @@ async function buildOpensaTarget(step: {
 }
 
 /** FLA ID-pool budgets for the real-SA build — mirrors the operative FILE_TYPE_* values in the target
- *  install's fastman92limitAdjuster_GTASA.ini (TXD 6000, COL 275, IPL 280; stock pools: 5000/255/256).
- *  Each counts ARCHIVE FILES = ID slots. The margins leave room for SA's runtime slots (script/generic/
- *  ped-remap TXDs etc.) — exhausting a pool corrupts the heap during data load with a crash right after
- *  `shopping.dat` (field-diagnosed 2026-07: FILE_TYPE_IPL exhaustion; raising the ini fixed the boot). */
+ *  install's fastman92limitAdjuster_GTASA.ini (stock pools: 5000/255/256). Each counts ARCHIVE FILES = ID
+ *  slots. The margins leave room for SA's runtime slots (script/generic/ped-remap TXDs etc.) — exhausting a
+ *  pool corrupts the heap during data load with a crash right after `shopping.dat` (field-diagnosed 2026-07:
+ *  FILE_TYPE_IPL exhaustion; raising the ini fixed the boot).
+ *
+ *  **Raised 2026-08-10 after the first `sa` build at the recovered procobj density (91 092 objects) hit the
+ *  IPL pool: 522 binary IPL files of 280.** The layer's `plobj*_stream*` tiles went 50 → 331 across the
+ *  column fix, which is what a 5.96× object count buys at `STREAM_MAX_INST = 512`. Per the target rule in
+ *  `CLAUDE.md`, an FLA pool is a configured NUMBER — raised in the ini rather than designed down to.
+ *
+ *  **And TXD was never 6000 here.** These constants claimed it from the start, while the install's ini leaves
+ *  `#FILE_TYPE_TXD` commented — FLA's own log reports the pool it actually built: `20000 - 24999 (5000)`. The
+ *  build sat at 4999 of a real 5000 while this guard called it 4999 of 6000, so the one pool nothing warned
+ *  about was the one a single archive would have burst. Evidence and the new values:
+ *  `docs/gta-sa-original/reference-install-config.md`. */
 const IMG_ID_BUDGETS = [
   { ext: '.txd', label: 'TXD archives', limit: 6000, margin: 50 },
-  { ext: '.col', label: 'COL archives', limit: 275, margin: 8 },
-  { ext: '.ipl', label: 'binary IPL files', limit: 280, margin: 8 },
+  { ext: '.col', label: 'COL archives', limit: 400, margin: 8 },
+  { ext: '.ipl', label: 'binary IPL files', limit: 1024, margin: 8 },
 ] as const;
 
 /** One stage's wall clock. `seconds` is measured, never derived from a diff of two other numbers. */
@@ -587,9 +598,10 @@ export function checkImgIdBudgets(gameDir: string): void {
  *   `docs/gta-sa-original/reference-install.md` and `docs/open-issues/fixed/ghost-barriers.md`.
  *
  * **This is not "guards are bad".** {@link checkImgIdBudgets} beside it still THROWS, and correctly: FLA's
- * pools are what the target is actually configured with (TXD 6000 / COL 275 / IPL 280 — real numbers, not
- * `unlimited`), and exhausting one corrupts the heap during data load. A ceiling the target HAS is a gate; a
- * ceiling it lifted is a museum piece.
+ * pools are what the target is actually configured with — real numbers, not `unlimited` — and exhausting one
+ * corrupts the heap during data load. It proved that on the first `sa` build after the density fix, which is
+ * the difference between the two: a ceiling the target HAS is a gate, a ceiling it lifted is a museum piece.
+ * A gate is answered by raising the number in the install's ini, never by shaping the build down to it.
  *
  * **The census names its own scope**, because both halves of it used to read a missing file as zero rows: an
  * IPL listed in `gta.dat` but absent on disk silently subtracted its rows, and an absent `gta.dat` skipped the

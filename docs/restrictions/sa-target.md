@@ -18,13 +18,20 @@ we build for** (the user's call, reaffirmed 2026-08-09). So the useful column is
 | Text IPLs carrying `inst` rows | 39 slots | **lifted — OLA `EntityIpl = unlimited`** | `IplEntityIndexArrays` is written past without a bounds check |
 | Rows per text IPL + its boot streams | 4,096 | **lifted — OLA `EntitiesPerIpl = unlimited`** (runs a 9,627-row file) | `gpLoadedBuildings` static array is written past → trashed statics |
 | `CPool<CBuilding>` | 13,000 | **`Buildings = 100000`** (OLA) — a number, raisable again | pool exhaustion at load |
-| **FLA ID pools** | 5000/255/256 | **TXD 6000 / COL 275 / IPL 280 — REAL, not `unlimited`** | heap corruption during data load — the crash lands right after `shopping.dat` |
+| **FLA ID pools** | 5000/255/256 | **TXD 6000 / COL 400 / IPL 1024 — REAL, not `unlimited`; raised in the ini 2026-08-10** | heap corruption during data load — the crash lands right after `shopping.dat` |
 | **Model id** | **≤ 18630** | **≤ 18630 — unchanged** | silently fails to load; "HD swapped but nothing changed" |
 
 **The rule this table exists to enforce: do not design content down to a lifted ceiling, and do not add a
 guard, cap or migration that shapes output to one.** Budgeting against a stock number the target does not
 have silently under-builds, and it looks exactly like success. The bottom two rows are the ones that are
-still real — those a plan must respect, and `checkImgIdBudgets` still FAILS the build on the FLA pools.
+still real — those a plan must respect, and `checkImgIdBudgets` still FAILS the build on the FLA pools. **It
+did, on the first `sa` build at the recovered procobj density** (2026-08-10: 522 binary IPL files of 280),
+which is the row's proof that it is a gate and not a museum piece. The answer was to RAISE the pool in the
+ini — a real ceiling is a number to move, not a reason to ship less content — and the same build showed the
+opposite failure too: the guard's TXD limit had always read 6000 while the install's pool was 5000, so a
+4999-archive build reported comfortable headroom while standing one slot short. **A guard number ABOVE the
+install's is silent by construction — it can only fail to fire.** Take pool numbers from FLA's own log, never
+from the ini alone (a `#`-disabled line still prints a value).
 
 Where the numbers come from: [reference-install-config.md](../gta-sa-original/reference-install-config.md)
 (verbatim ini capture) and [reference-install.md](../gta-sa-original/reference-install.md) (what it means for

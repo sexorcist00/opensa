@@ -29,9 +29,14 @@ runtime, but the converter guards stand for any build not running that ASI.
   complaint. Which set applies is a property of the install, not of the game:
   [`gta-sa-original/reference-install.md`](../gta-sa-original/reference-install.md). Count either with
   `scripts/debug/ipl-row-census.ts`.
-- **FLA ID-pool budgets: TXD 6000 / COL 275 / IPL 280** (stock 5000/255/256). Archive-file counts are ID
-  slots; exhausting a pool corrupts the heap during data load (crash right after `shopping.dat`). pmb's
-  `IMG_ID_BUDGETS` guards the operative FLA ini values.
+- **FLA ID-pool budgets: TXD 6000 / COL 400 / IPL 1024** (stock 5000/255/256), raised in the install's ini
+  2026-08-10. Archive-file counts are ID slots; exhausting a pool corrupts the heap during data load (crash
+  right after `shopping.dat`). pmb's `IMG_ID_BUDGETS` guards the operative FLA ini values. **Measured on the
+  first `sa` build at 91 092 procobj objects:** TXD 4999, COL 264, **binary IPL 522** — the last one 242 over
+  the old 280-slot pool, because the layer's `plobj*_stream*` tiles went 50 → 331 across the column fix
+  (`STREAM_MAX_INST = 512` instances per tile, ~156 600 stream records). **Read a pool off
+  `fastman92limitAdjuster.log`, not off the ini**: a `#`-disabled line still prints its value, which is how
+  the guard carried TXD 6000 against a real 5000 for months.
 - **drawDistance ≥ 300 OR a `lod`-prefixed name = "big building" path.** Mass text-IPL instances of
   big-building defs corrupt streaming (ghost-loaded script-gated IPLs). Generated LODs keep draw distance
   below 300 and use non-`lod` aliases (`plo…`).
