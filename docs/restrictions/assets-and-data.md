@@ -260,3 +260,24 @@ directions (4–163× too many candidates, then 99.0 % of them culled), so every
 build was green, and the world looked populated. What catches it now is
 `scripts/debug/procobj-spacing-census.ts`, which prices both readings side by side and reports the
 nearest-neighbour signature — but only if someone runs it.
+
+## A model an IDE declares and an IPL places must have a `.dff` in some archive
+
+Discovered 2026-08-10, in the field, after a day of bisection. One mod's `gta3_img/Remove original/` folder was
+read as a delete list, so five stock models left `gta3.img` while their `.ide` rows and 23 inst rows stayed —
+the mod ships no IDE/IPL edit, and cannot: those are stock files.
+
+**What breaks is not the five objects.** The streaming request for an entry that does not exist can never
+complete, and the symptom is global: the whole world renders as LODs, permanently, with hitching. It reads as a
+performance regression or a map-layer bug, which is exactly where the day went — four wrong axes (ID pools,
+stream file count, entity count, a mod corrupting the map) before the user's own repro narrowed it.
+
+The rule for a new design: any step that RETIRES an asset — a delete list, a rename, a slot compaction, a
+container replaced wholesale — has to answer what still declares and places it. A model may be declared and
+unplaced (stock does it once, `carupg_int_rays`); it may never be placed and unloadable.
+
+**Caught:** yes, since the same day — `install()` ends with `checkDanglingModels` (`dangling-models.ts`) and
+THROWS, naming each model, its id, its placement count and the declaring IDE. Placements are counted from text
+IPLs and from binary streams inside the archives. It errs downward: only `objs`/`tobj`/`anim` are read, so a
+clean result means "none in those sections". Detail and the measurements:
+[`tools/mod-installer/docs/plans/010-remove-original-is-a-replacement.md`](../../tools/mod-installer/docs/plans/010-remove-original-is-a-replacement.md).

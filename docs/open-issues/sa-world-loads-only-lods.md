@@ -1,5 +1,27 @@
 # The real game loads the world as LODs only (2026-08-10)
 
+## CAUSE FOUND 2026-08-10 — awaiting the confirming field run
+
+**One mod: `60. Pacific Park Rotating Ferris Wheel`.** The user narrowed it himself — every mod before it
+installs and plays perfectly, adding it produces the symptom — and handed over both complete installs
+(`NO_COMMIT/gta_sa` working, `NO_COMMIT/gta_sa_bug` broken), which made the rest measurable.
+
+Its `gta3_img/Remove original/` folder was read by the installer as a **delete list**. It is not one: the five
+files are one 653-byte empty RW clump each, meant to REPLACE the stock geometry (Modloader has no delete
+mechanism at all). Deleting the entries left five stock models declared by `LAw2.IDE`/`LAxref.IDE` and placed by
+**23 inst rows** with no archive entry — a streaming request that can never complete. Declared-but-absent went
+1 → 6 between the two installs; of those, placed went **0 → 5**.
+
+Fixed in [`mod-installer/010`](../../tools/mod-installer/docs/plans/010-remove-original-is-a-replacement.md):
+the folder now injects as replacements, and `install()` THROWS on any model that is declared, placed and
+unloadable. The guard reads 0 on the working install and 5 on the broken one.
+
+**This file stays here until the field run confirms it.** Everything below is the record as it stood before the
+cause was known — including its own worst moment: the "5 object definitions with no DFF" line under *Related,
+real, and NOT this symptom* was this defect, measured and mis-ranked.
+
+---
+
 **Symptom, in the user's words:** after installing our build over his GTA:SA, leaving an interior takes a very
 long time to load the world; at first there is nothing, then only LOD geometry appears. HD models may arrive
 eventually. Two screenshots: missing ground with floating palms and a lone door, then a district rendered
