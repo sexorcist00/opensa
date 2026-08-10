@@ -62,12 +62,21 @@ export const EXCLUDABLE_STAGES = STAGE_NAMES.filter((name): name is ExcludableSt
  * exist yet (07/04 decisions 4–5 — it has to be measured in our engine, and a cap taken from SA's numbers
  * would be a guess wearing a measurement's clothes).
  *
+ * **The CLUTTER half of that budget was measured 2026-08-10 and yielded no number**, which is a result and not
+ * a gap: both runtime knobs saturate against the authored `procobj.dat` MINDIST spacing (`procObjLimit` at 300,
+ * density at ×4) long before the engine reacts, and the layer's entire span costs less than a single sweep's
+ * A/A drift on every column — see sa-procobj-placement plan 013. So the clutter layer is data-limited, and a
+ * cap on it would guard a case the data cannot produce. What remains unmeasured is the budget for everything
+ * ELSE the branch streams.
+ *
  * It is announced rather than left silent because an unguarded build and a well-behaved one look exactly
  * alike from the outside — the same reason the shared-stage guard survived a fortnight.
  */
 export const OPENSA_BUDGET_NOTICE =
   "opensa: SA's row/slot ceilings do not apply here — and no streaming budget guard exists yet " +
-  '(07/04 decision 5: the number must be measured in our engine, never inherited from SA)';
+  '(07/04 decision 5: the number must be measured in our engine, never inherited from SA). ' +
+  'The clutter half is measured and does not bind: its knobs saturate on the authored procobj.dat spacing ' +
+  'before the engine notices them, so that layer is data-limited and has no cap to enforce';
 
 export interface BuildPerfectMapOptions {
   config?: Partial<BuilderConfig>;

@@ -233,7 +233,8 @@ rather than a guard, because its number does not exist yet.
 
 **Then the numbers, one host at a time:**
 
-- [ ] **`opensa` perf budget.** Measure how much clutter the engine streams without hitching (perf HUD +
+- [x] **`opensa` perf budget — MEASURED 2026-08-10, and the answer is that it does not bind. See the
+      "ANSWERED" block at the end of this section.** Measure how much clutter the engine streams without hitching (perf HUD +
       streaming settle-watcher) and set `procObjMax`, the candidate ceiling and the per-cell `procObjLimit`
       from THAT. Record the rows in `docs/benchmarks/` before analysing them. This is the first real ceiling
       the target has ever been given.
@@ -266,6 +267,35 @@ rather than a guard, because its number does not exist yet.
       **So the per-cell `procObjLimit` cannot be swept in the field at all**, and the two arms this budget
       needs are two PAKS. One is already on disk: `NO_COMMIT/old_map` carries 15 286 objects against today's
       91 092 — a 5.96x load step, both real builds, nothing to rebuild.
+
+      **ANSWERED 2026-08-10 (late), on the unbaked pak, and the two-pak workaround was never needed.** Plan
+      014 took the bake out of the `opensa` branch, so `data/procobj.dat` is back to all **95** rules and both
+      knobs are live again. 15 single-scene `country-dusk` sweeps, two lanes, an A/A control in each:
+      [`2026-08-10-headless-procobj-runtime-knob-ladder.json`](../../../../docs/benchmarks/opensa-engine/2026-08-10-headless-procobj-runtime-knob-ladder.json).
+      - **The knob is live**: `?procobj=0` moves triangles **−2.72 %** (1 206 029 → 1 173 177) and draws
+        830 → 815, against an A/A drift of **0.007 %**. The 08-10 null result really was a SITE failure —
+        same code, same scene, same harness, only the pak changed.
+      - **`procObjLimit` saturates at 300**: 150 → 300 is +0.41 %; 300 / 600 / 1200 / 3000 agree to 0.015 %.
+      - **Density saturates at ×4** (cap held unbound): ×1 → ×2 → ×4 is +3.38 % → +6.66 %; ×8 and ×16 add
+        nothing. The limiter is the authored `procobj.dat` **MINDIST spacing** — the runtime path restating
+        this plan's own 2026-08-08 finding that the cutoff is not the density lever.
+      - **The layer's whole span is +10.11 % of the clutter scene's triangles**, and draws move only at the
+        on/off boundary — it is instanced, so a per-pixel cost, not a draw-count one.
+      - **There is no hitch to find.** `hitch.maxMs` 9.7–36.0 and `slowFrames` 0–4 across the 11 capped arms
+        with **no relation to load** (worst: `lim600` 35.4/4 and `d8` 36.0/1; the heaviest arm `d16` reads
+        12.3/0; the A/A pair alone spans 21.9 vs 9.7). `blobMaxMs`/`uploadMaxMs`/`pendingMax` 0 everywhere.
+      - **`UNCAPPED=1` works and retires the "needs his display" half**: `avgMs` unpins 8.33 → 5.42–5.64,
+        `p95Ms` 9.1 → 6.7–7.2. **But it destroys the hitch block** — 148–196 ms `maxMs` and 16–19 slow frames
+        in *every* arm including clutter-off. Capped for hitching, uncapped for cost, never mixed. Even
+        uncapped the layer is below the noise: `gpuMs.pass` A/A is 6.5 % apart, *wider* than off → max (6.3 %).
+
+      **So the three numbers this task was to SET are data-limited, not perf-limited.** `procObjLimit` stays
+      **150** (300 is the only defensible alternative and buys the last 0.41 %); `procObjMax` and the candidate
+      ceiling have no perf ceiling to be given on this host. **Decision 5's streaming guard therefore has no
+      number to guard with** — see the task below, which changes shape because of this.
+      **What is NOT covered**: one scene, camera flights rather than a drive, n=1 per arm. A streaming-shaped
+      hitch under continuous movement is sampled by no arm here, and the three streaming columns reading 0
+      everywhere means that pressure never arose, not that it was survived.
 - [ ] **`sa` perf budget — now a VERIFICATION, not a lever** (see the scope call above). On the real install
       under Wine, above the asi gate. Separate rows, separate conclusion, explicitly not comparable to the
       opensa numbers. **If SA does not cope at the shipped density, this plan has no lever left** — say so

@@ -387,11 +387,13 @@ function applyGraphicsParams(config: ReturnType<typeof createGameRuntimeConfig>,
     config.graphics.effects.drawDistanceScale = fxParam;
   }
   // `?procobj=<multiplier>` scales the RUNTIME clutter scatter across every category, `?procobj=0` turns it
-  // off. **It reaches only the rules the BUILD did not bake.** `convertProcObj` strips every species it
-  // scattered into static instances, so a built map ships a `procobj.dat` of leftovers — 9 rules of 96 on
-  // original 2026-08-10, all `P_UNDERWATERBARREN`. So this knob moves nothing on dry land, and an A/B that
-  // uses it as a clutter lever measures zero on any scene without water (measured: `country-dusk` identical
-  // across `?procobj=0` and a 3000× `?procobjLimit`). Map clutter is a BUILD-time quantity on this target.
+  // off. **It reaches only the rules the BUILD did not bake**, which since plan 014 is all 95 of them on
+  // `opensa` — the bake moved into the `sa` branch, so this is a live lever again. (It was not before: a
+  // baked `procobj.dat` carried 9 rules of 96, all `P_UNDERWATERBARREN`, and an A/B using this knob measured
+  // zero on any dry scene.) **What it can reach is bounded by the DATA, not by the cap**: the multiplier
+  // saturates at ×4 against the authored MINDIST spacing — ×8 and ×16 are inside 0.015 % of ×4 — and the
+  // whole layer is +10.1 % of `country-dusk`'s triangles, below the noise on every cost column
+  // (`benchmarks/opensa-engine/2026-08-10-headless-procobj-runtime-knob-ladder.json`).
   // Written so 0 reads as zero rather than as absent, like `?airCtl`.
   const procobjParam = Number(params.get('procobj') ?? Number.NaN);
   if (Number.isFinite(procobjParam) && procobjParam >= 0) {
@@ -531,9 +533,11 @@ async function boot(
 
       return setting.enabled ? setting.density : 0;
     },
-    // `?procobjLimit=<n>` sweeps the per-cell budget itself — the number lod-procobj 013 has to SET from a
-    // streaming measurement, and which has never been anything but this hand-picked 150. Same reach as
-    // `?procobj` above: on a BUILT map it governs the leftover (underwater) rules only.
+    // `?procobjLimit=<n>` sweeps the per-cell budget itself. **Measured 2026-08-10 and the hand-picked 150
+    // survives**: 150 → 300 buys +0.41 % triangles on `country-dusk` and 300 → 3000 buys nothing (flat to
+    // 0.015 %), because the authored MINDIST spacing runs out of candidates long before the cap does. So
+    // plan 013's "set this from a streaming measurement" has no measurement to make — the cap is
+    // data-limited, not perf-limited, and no value above 300 can be worth choosing.
     procObjLimit: Number(params.get('procobjLimit')) || 150,
   });
   await adapter.prepare();

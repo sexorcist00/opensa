@@ -435,6 +435,10 @@ describe('OPENSA_BUDGET_NOTICE', () => {
       expect(OPENSA_BUDGET_NOTICE).toMatch(/do not apply/);
       expect(OPENSA_BUDGET_NOTICE).toMatch(/no streaming budget guard exists yet/);
     });
+
+    it('names the one half that IS measured, so the notice cannot read as wholly unmeasured', () => {
+      expect(OPENSA_BUDGET_NOTICE).toMatch(/clutter half is measured and does not bind/);
+    });
   });
 });
 
