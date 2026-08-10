@@ -220,8 +220,9 @@ rather than a guard, because its number does not exist yet.
         rule is "delete the museum pieces, keep the gates", now a standing rule in `CLAUDE.md`.
       - tests: 35 pass, and the two that matter were **run against the reverted behaviour** — re-adding the
         throw and the silent zero fails exactly those two and nothing else.
-      *Not verified yet:* no full `sa` build has been run since. The throw is what blocked one; whether the
-      rest of the `sa` chain completes at 91 092 objects is unmeasured and belongs to the next `sa` run.
+      *Verified 2026-08-10:* the chain DOES complete at 91 092 objects — every stage, `sa/` at 2.3 GB in
+      ≈ 10.6 min. But the throw was not the only blocker: `checkImgIdBudgets` then failed on FLA's IPL pool
+      (522 of 280), which is the gate doing its job. See the measurement below.
 
 **Then the numbers, one host at a time:**
 
@@ -241,6 +242,23 @@ rather than a guard, because its number does not exist yet.
       uncapped display lane (which is why the density A/B could see `country-dusk` +12.6 % there and the
       headless lane cannot). Deciding WHICH lane, and how many repeats a `gpuMs.pass` claim needs, is the
       first task of the measurement rather than an assumption inside it.
+      **2026-08-10 — two things the measurement now knows, and both change its shape.**
+      *(a) The instrument grew a tail.* `avgMs` is not the only saturated column — `p95Ms` reads **9.1 on all
+      nine scenes in both A/A arms**, so this plan's own fallback ("read it from p95") was as dead as the
+      mean. The `[bench]` report now carries a **`hitch`** block (`maxMs`, `slowFrames` at the host's own
+      20 ms `[slow]` threshold, `p99Ms`, `blobMaxMs`, `uploadMaxMs`, `pendingMax`) plus per-frame stream
+      numbers, and it does print signal: `maxMs` 9.4-21 ms across five arms pinned at `avgMs` 8.33. `p99Ms`
+      needs 1 % of a leg to move, so it answers "is the budget exceeded", never "did it hitch once".
+      `UNCAPPED=1` on the harness drops the presentation clock for the cost question; untested so far.
+      *(b) The load knob is a BUILD, not a URL.* The runtime clutter layer (`updateClutter` ->
+      `adapter.cellClutter`, per-cell `procObjLimit`) **draws nothing on a built map**: `convertProcObj`
+      strips every species it bakes, so the shipped `procobj.dat` is 9 rules of 96, all underwater. Measured
+      as a null result — `?procobj=0` and `procObjLimit` 1 -> 3000 move `country-dusk` triangles by 0.007 %
+      against a 0.41 % A/A drift
+      ([`2026-08-10-headless-runtime-clutter-null-result.json`](../../../../docs/benchmarks/opensa-engine/2026-08-10-headless-runtime-clutter-null-result.json)).
+      **So the per-cell `procObjLimit` cannot be swept in the field at all**, and the two arms this budget
+      needs are two PAKS. One is already on disk: `NO_COMMIT/old_map` carries 15 286 objects against today's
+      91 092 — a 5.96x load step, both real builds, nothing to rebuild.
 - [ ] **`sa` perf budget — now a VERIFICATION, not a lever** (see the scope call above). On the real install
       under Wine, above the asi gate. Separate rows, separate conclusion, explicitly not comparable to the
       opensa numbers. **If SA does not cope at the shipped density, this plan has no lever left** — say so
@@ -291,6 +309,87 @@ in-game over 9 scenes ([`benchmarks/…/2026-08-08-ingame-07-04-density-ab.json`
   [`open-issues/bench-scene-transition-collision.md`](../../../../docs/open-issues/bench-scene-transition-collision.md)
   — collision is missing across a scene teleport. **The perf budgets below cannot be taken until it is
   fixed**: a sweep whose control scene moves by 107 % cannot resolve a cap.
+
+**2026-08-10 — the first `sa` build since the int16 guard came out, and the throw was NOT the only blocker.**
+Run: `pmb --exclude vehicles,peds,opensa --keep-work` on the 91 092-object layer.
+
+*The chain completes.* Every stage ran and `sa/` built out at 2.3 GB — `mods` 98.8 s · `optimize` 79.4 s ·
+`trees` 83.7 s · `procobj` 10.5 s · `sa` 366 s (≈ 10.6 min; the 44 m 54 s figure is a FULL build, whose pack
+is ~¾). The layer priced itself at **91 092 objects · 25 560 permanent text rows · 0.281 rows/object**.
+
+*The census closed its own caveat.* `read 97/97 listed` — no missing files, so the map-wide count is a total
+and not a lower bound: **44 523 permanent text-IPL rows, 75 inst-bearing IPLs.** (The 39 219 this plan carried
+was the lower bound the old silent-zero census produced.)
+
+*And then `checkImgIdBudgets` threw, correctly.* **Binary IPL files: 522 of 280** — FLA's `FILE_TYPE_IPL`
+pool, a configured number the target really has. Counted per archive, the cause is this layer:
+
+| | `plobj*_stream*` (ours) | all `.ipl` entries | vs the 280-slot pool (margin 8) |
+| --- | --- | --- | --- |
+| BEFORE — `NO_COMMIT/old_map`, 15 286 objects | 50 | 241 | fits, 31 slots spare |
+| AFTER — 91 092 objects | **331** | **522** | 250 over |
+
+50 → 331 is 6.62× against a 5.96× object count — slightly super-linear, from median-split underfill. The
+knob is **`STREAM_MAX_INST = 512`** (`tools/map-placement/src/streamed-areas.ts`), instances per binary tile:
+the streams hold ~156 600 records (25 560 linked at one row + 65 532 unlinked at two), and 156 600/512 ≈ 306
+against 331 measured, so tiles run ~92 % full. **`AREA_MAX_PAIRS` is not what sets the file count** — the
+tile size is. Note the BEFORE had only 31 slots of headroom, so this pool was near the wall before the
+density change and nobody had looked.
+
+*Resolved by raising the pool, not by shaping the build* (the user's call, and directive 3 applied directly):
+his ini now carries `FILE_TYPE_TXD = 6000` · `FILE_TYPE_COL = 400` · `FILE_TYPE_IPL = 1024`, and
+`IMG_ID_BUDGETS` mirrors them. The guard re-run on the built tree: TXD 4999/6000, COL 264/400, IPL 522/1024.
+**Streaming granularity was deliberately NOT traded** — raising `STREAM_MAX_INST` would have cut the file
+count 4× at the cost of 4× coarser position streaming, which is a behaviour change on both targets and
+belongs to the streaming measurement below, not to a build-fixing patch.
+
+*The second finding is the dangerous one, and it was silent.* `IMG_ID_BUDGETS` had always read **TXD 6000
+while the install's pool was 5000** — `FILE_TYPE_TXD` carries a `#` in the ini, so FLA left it at default, and
+its log says `20000 - 24999 (5000)`. The build measures 4999 TXD archives. So the pool with **one slot of
+real headroom** was the one printing `4999 of 6000`, and no build could ever have warned: a guard number
+ABOVE the install's can only fail to fire. Corrected in the guard and in
+[`reference-install-config.md`](../../../../docs/gta-sa-original/reference-install-config.md), which now says
+to read a pool off FLA's LOG rather than off the ini.
+
+*The clean re-run, with the raised pools* — **the `sa` target builds end to end at 91 092 objects.** This is
+P0's deliverable, and it is now measured rather than assumed:
+
+| Stage | Wall clock | Share |
+| --- | --- | --- |
+| mods | 1m 20s | 13 % |
+| optimize | 1m 19s | 13 % |
+| trees | 1m 21s | 13 % |
+| procobj | 5.7s | 1 % |
+| **sa** | **6m 3s** | **60 %** |
+| **TOTAL** | **10m 9s** | |
+
+Guard output on that run: `TXD 4999/6000 · COL 264/400 · binary IPL 522/1024`, and `build-timings.json` is
+written (the failed run lost its timings — the throw preempts the write, which is worth knowing before
+reading a missing timings file as a missing feature).
+
+**2026-08-10 — the two targets carry the SAME WORLD, and it is measured on both halves.** The scope call
+("`sa` ships the same density as `opensa`") is stronger than a density match: the two must hold the same
+objects at the same coordinates, or every cross-target verdict — above all this plan's own "does the real
+game cope at the shipped density" — compares two maps while reading as one engine comparison. procobj
+positions are DERIVED (seeded scatter over collision geometry), so a divergence would look entirely
+plausible on both sides.
+
+*Half one — the shared input.* `sa/` (built 08-10) against `opensa/` (built 08-09 13:53), two independent
+runs: **all 46 `plobj*.ipl` and all 331 `plobj*_stream*.ipl` byte-identical**, 91 092 HD objects / 25 560
+permanent LOD rows / 65 532 stream LODs each side. Being two separate runs, this also measures what the
+evening's "RNG untouched ⇒ bit-identical scatter" claimed on a reading: **the scatter is reproducible
+map-wide, so a rebuild does not move the world.** Now pinned by a test — `buildPerfectMap target split` in
+`perfect-map-builder/src/pipeline.test.ts` asserts the procobj stage runs ONCE and that both target builders
+receive that one stage dir (verified against the broken state: pointing `opensa` at another dir fails it).
+
+*Half two — the convert.* `opensa/` reads the pak, not the game dir, so the input parity is only half the
+claim. New verifier `scripts/debug/pak-placement-parity.ts`: **182 184 / 182 184 instances covered** (156 624
+binary + 25 560 text), each inside its own placement AABB within **0.05 u**. The 15.6 % that miss at slack 0
+are float32 rounding on the stored bounds, not displacement. **Positive control run before believing it** —
+the same game dir against `NO_COMMIT/old_map/pak` (15 286 objects) reports 98.3 % uncovered, so the
+instrument can print non-zero.
+
+*Still unproven:* FLA rewrites its log at boot, so nothing yet confirms it accepts 1024 — that needs a launch.
 
 _(the rows below are still to be recorded)_
 
