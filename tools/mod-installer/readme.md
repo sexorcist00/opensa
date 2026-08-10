@@ -44,10 +44,11 @@ Each mod applies onto the **accumulated** `--out`, so several mods that touch di
 textures / different `gta3.img` entries) all coexist; only when two mods change the **same** item does the later
 one win. The `*_img/` folder is a generic "loose IMG entries" convention — a binary `.img` can't be patched file-by-file,
 so a mod expresses "add/replace these entries" as a folder; any source (the LOD tools, hand-built mods, …) can ship
-one. A **`Remove original/` subfolder** inside an IMG folder DELETES its file names from the target archive (the
-contents are irrelevant — mods ship the retired originals for reference; a missing entry warns). The same
-convention works inside a Modloader-style mod (any `Remove original/` dir → names deleted from `gta3.img`,
-never injected) — the rotating-ferris-wheel pattern: retire the stock models a runtime script replaces.
+one. A **`Remove original/` subfolder** is NOT a delete list — it is organisational, and its files are injected as
+replacements like any other (`docs/contracts/mods.md` §2). It names _the files that remove the original_: empty RW
+clumps that make stock geometry invisible while a runtime script draws its own. Deleting the entries instead leaves
+the stock map placing a model the streamer cannot load, which renders the whole world as LODs — the install now
+THROWS on that state (`dangling-models.ts`).
 
 **`*.merge` data edits.** A mod that needs to EDIT a stock data file (not replace it) ships `<target>.merge`
 at the target's game path — e.g. `data/maps/generic/multiobj.ide.merge`. Directives apply to the CURRENT

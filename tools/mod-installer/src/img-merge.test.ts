@@ -70,23 +70,22 @@ describe('mergeImgDir', () => {
       expect(img.has('keep.dff')).toBe(true); // untouched
     });
 
-    it('deletes entries named in a "Remove original/" subfolder (contents irrelevant), warning on absentees', () => {
+    it('treats a "Remove original/" subfolder as organisational — its stubs REPLACE, never delete', () => {
       const imgPath = join(dir, 'gta3.img');
       const base = createImg();
-      base.set('ferris01_law2.dff', Uint8Array.from([9]));
+      base.set('ferris01_law2.dff', Uint8Array.from([9])); // the stock geometry
       base.set('keep.dff', Uint8Array.from([7]));
       writeFileSync(imgPath, base.build());
 
       const path = imgDir({ 'ferriswheel_wheel.dff': Uint8Array.from([1]) });
       mkdirSync(join(path, 'Remove original'));
-      writeFileSync(join(path, 'Remove original', 'ferris01_LAw2.dff'), Uint8Array.from([9])); // old copy, ignored
-      writeFileSync(join(path, 'Remove original', 'ghost.dff'), Uint8Array.from([0])); // not in the img → warns
+      writeFileSync(join(path, 'Remove original', 'ferris01_LAw2.dff'), Uint8Array.from([2])); // empty-clump stub
 
       const applied = mergeImgDir(path, imgPath);
 
       const img = openImg(new Uint8Array(readFileSync(imgPath)));
-      expect(applied).toBe(3); // 1 add + 2 removal ops
-      expect(img.has('ferris01_law2.dff')).toBe(false); // retired
+      expect(applied).toBe(2); // both files are entries
+      expect([...img.get('ferris01_law2.dff')!.slice(0, 1)]).toEqual([2]); // stubbed, NOT retired
       expect(img.has('ferriswheel_wheel.dff')).toBe(true); // added
       expect(img.has('keep.dff')).toBe(true); // untouched
     });

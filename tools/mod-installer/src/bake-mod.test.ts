@@ -122,26 +122,27 @@ describe('bakeMod', () => {
   });
 
   describe('positive cases', () => {
-    it('deletes "Remove original/" names from gta3.img and never injects their contents (rotating ferris case)', () => {
+    it('REPLACES "Remove original/" entries with the stubs the mod ships (rotating ferris case)', () => {
       const out = stockOut();
       const img = createImg();
       img.set('existing.dff', Uint8Array.of(9));
-      img.set('ferris01_law2.dff', Uint8Array.of(8));
+      img.set('ferris01_law2.dff', Uint8Array.of(8)); // the stock geometry
       write('out/models/gta3.img', img.build());
 
       write('mod/loader.txt', 'IDE data/maps/ferriswheel.ide');
       write('mod/data/maps/ferriswheel.ide', 'objs\n14644, ferriswheel_wheel, ferriswheel_wheel, 299, 0\nend\n');
       write('mod/gta3_img/ferriswheel_wheel.dff', Uint8Array.of(1));
-      write('mod/gta3_img/Remove original/ferris01_LAw2.dff', Uint8Array.of(8)); // retired original
+      write('mod/gta3_img/Remove original/ferris01_LAw2.dff', Uint8Array.of(7)); // the empty-clump stub
 
       const scan = scanModloaderMod(join(dir, 'mod'));
-      expect([...scan.removals]).toEqual(['ferris01_law2.dff']);
-      expect(scan.assets.has('ferris01_law2.dff')).toBe(false); // never bucketed as an asset
+      expect(scan.assets.has('ferris01_law2.dff')).toBe(true); // an ordinary asset, injected by bare name
 
       const result = bakeMod(join(dir, 'mod'), out);
       expect(result.baked).toBe(true);
       const baked = openImg(new Uint8Array(readFileSync(join(out, 'models', 'gta3.img'))));
-      expect(baked.has('ferris01_law2.dff')).toBe(false); // deleted
+      // The entry SURVIVES carrying the stub — deleting it would leave the stock map placing a model the
+      // streamer can never load (`docs/open-issues/sa-world-loads-only-lods.md`).
+      expect([...baked.get('ferris01_law2.dff')!.slice(0, 1)]).toEqual([7]);
       expect(baked.has('ferriswheel_wheel.dff')).toBe(true); // new model injected
       expect(baked.has('existing.dff')).toBe(true); // untouched neighbour
     });

@@ -4,7 +4,7 @@ import { basename, dirname, join, relative } from 'node:path';
 
 import { ADDITIVE_DAT, mergeDataFile } from './data-merge';
 import { mergeGtaDat } from './gta-dat-merge';
-import { injectImgEntries, isRemoveOriginalDir } from './img-merge';
+import { injectImgEntries } from './img-merge';
 import { parseLoader } from './loader';
 
 /** A binary IPL stream (`<area>_streamN.ipl`) — bytes injected into gta3.img, unlike a text (placement) IPL. */
@@ -23,8 +23,6 @@ export interface ModScan {
   loaderFound: boolean;
   /** `IDE`/`IPL`/`COLFILE` paths declared across every loader file → `gta.dat` patch + new-file destinations. */
   refs: { col: string[]; ide: string[]; ipl: string[] };
-  /** Bare entry names under a `Remove original/` folder → DELETED from gta3.img (never injected). */
-  removals: Set<string>;
   /** bare name → file path: `.ide` / text `.ipl` / whole-file `.dat` (surfinfo …) → written to disk. */
   texts: Map<string, string>;
 }
@@ -99,14 +97,12 @@ export function bakeMod(
     writeOut(dest, new Uint8Array(Buffer.from(merged)));
   }
 
-  // 4. Inject the scattered model/anim/collision assets into gta3.img by bare name; `Remove original/` names
-  //    are deleted first (a mod retiring stock entries its runtime script replaces — the rotating-ferris-wheel
-  //    pattern).
+  // 4. Inject the scattered model/anim/collision assets into gta3.img by bare name.
   const entries = new Map<string, Uint8Array>();
   for (const [base, src] of scan.assets) {
     entries.set(base, new Uint8Array(readFileSync(src)));
   }
-  const assets = injectImgEntries(entries, join(outPath, 'models', 'gta3.img'), [...scan.removals]);
+  const assets = injectImgEntries(entries, join(outPath, 'models', 'gta3.img'));
 
   // 5. Carry the mod's CLEO files to `<out>/cleo/` (the silent-drop era ends loudly — one line per file).
   for (const [rel, src] of scan.cleo) {
@@ -131,17 +127,11 @@ export function scanModloaderMod(modPath: string): ModScan {
     dataMerges: new Map(),
     loaderFound: false,
     refs: { col: [], ide: [], ipl: [] },
-    removals: new Set(),
     texts: new Map(),
   };
   for (const path of walk(modPath)) {
     const lower = path.toLowerCase();
     const base = basename(lower);
-    if (path.split(/[\\/]/).some((segment) => isRemoveOriginalDir(segment))) {
-      // `Remove original/` — the file NAMES retire gta3.img entries; the contents are never injected.
-      scan.removals.add(base);
-      continue;
-    }
     // The cleo segment is matched against the MOD-relative path only — the corpus itself may live under a
     // `cleo/` parent on disk, and that outer segment must not turn every file into script content.
     const modRel = relative(modPath, path).split(/[\\/]/);

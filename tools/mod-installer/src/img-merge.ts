@@ -38,42 +38,24 @@ export function applyStreamMergeDir(imgDir: string, imgPath: string): number {
   return merges.length;
 }
 
-/** A `Remove original/` subfolder inside an IMG folder — its FILE NAMES are deleted from the target archive. */
-const REMOVE_ORIGINAL_DIR = /^remove[ _-]?originals?$/i;
-
 /**
  * Set `name → bytes` entries into the `.img` at `imgPath` (add new / replace existing by name), rebuild + write;
- * seeds a fresh archive if `imgPath` is absent. `removals` (entry names) are DELETED first — the `Remove
- * original/` convention — so a mod can both retire stock entries and ship same-name replacements. Used both by
- * {@link mergeImgDir} (a `gta3_img/`/`gta_int_img/` folder) and by the Modloader baker (scattered
- * `.dff`/`.txd`/`.col`/`.ifp` collected by bare name). Returns the number of operations applied.
+ * seeds a fresh archive if `imgPath` is absent. Used both by {@link mergeImgDir} (a `gta3_img/`/`gta_int_img/`
+ * folder) and by the Modloader baker (scattered `.dff`/`.txd`/`.col`/`.ifp` collected by bare name). Returns the
+ * number of operations applied.
  */
-export function injectImgEntries(
-  entries: ReadonlyMap<string, Uint8Array>,
-  imgPath: string,
-  removals: readonly string[] = [],
-): number {
-  if (entries.size === 0 && removals.length === 0) {
+export function injectImgEntries(entries: ReadonlyMap<string, Uint8Array>, imgPath: string): number {
+  if (entries.size === 0) {
     return 0;
   }
   const img = existsSync(imgPath) ? openImg(readBytes(imgPath)) : createImg();
-  for (const name of removals) {
-    if (!img.delete(name)) {
-      console.warn(`mod-installer: Remove original — entry not in ${imgPath}: ${name}`);
-    }
-  }
   for (const [name, bytes] of entries) {
     warnDroppedCollisions(name, img.get(name) ?? undefined, bytes);
     img.set(name, bytes);
   }
   writeBytes(imgPath, img.build());
 
-  return entries.size + removals.length;
-}
-
-/** Whether this directory name is the remove-original convention (`Remove original`, `remove_originals`, …). */
-export function isRemoveOriginalDir(name: string): boolean {
-  return REMOVE_ORIGINAL_DIR.test(name.trim());
+  return entries.size;
 }
 
 /**
@@ -86,20 +68,18 @@ export function isRemoveOriginalDir(name: string): boolean {
  * rebase the streams first).
  *
  * Subfolders (plan 009):
- * - A `Remove original/` subfolder's file names are DELETED from the archive (the files' contents are
- *   irrelevant — mods ship the retired originals for reference).
  * - A subfolder containing PNGs is a **texture folder for an IMG-internal `.txd`**: its PNGs merge into the
  *   entry `<folder>.txd` (add/replace by texture name — the loose-txd convention of plan 003, reaching inside
  *   the archive). Applied AFTER this mod's file entries, so a `.txd` the mod also ships is patched, not lost.
  *   A texture folder whose entry is missing is a LOUD warning, not a silent skip.
  * - Any other subfolder is organisational: recurse, collecting files by bare name (real packs ship
- *   `gta3_img/LV/…` layouts — these were silently ignored before plan 009).
+ *   `gta3_img/LV/…` layouts — these were silently ignored before plan 009). **`Remove original/` is one of
+ *   them** — its files are REPLACEMENTS, not a delete list (`docs/contracts/mods.md`; field-found 2026-08-10).
  *
  * Returns the number of operations applied.
  */
 export function mergeImgDir(imgDir: string, imgPath: string): number {
   const entries = new Map<string, Uint8Array>();
-  const removals: string[] = [];
   const textureFolders: { name: string; path: string }[] = [];
   const collect = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -113,11 +93,7 @@ export function mergeImgDir(imgDir: string, imgPath: string): number {
       if (!entry.isDirectory()) {
         continue;
       }
-      if (isRemoveOriginalDir(entry.name)) {
-        for (const file of readdirSync(entryPath, { withFileTypes: true }).filter((e) => e.isFile())) {
-          removals.push(file.name);
-        }
-      } else if (readdirSync(entryPath, { withFileTypes: true }).some((e) => e.isFile() && /\.png$/i.test(e.name))) {
+      if (readdirSync(entryPath, { withFileTypes: true }).some((e) => e.isFile() && /\.png$/i.test(e.name))) {
         textureFolders.push({ name: entry.name, path: entryPath });
       } else {
         collect(entryPath);
@@ -125,16 +101,11 @@ export function mergeImgDir(imgDir: string, imgPath: string): number {
     }
   };
   collect(imgDir);
-  if (entries.size === 0 && removals.length === 0 && textureFolders.length === 0) {
+  if (entries.size === 0 && textureFolders.length === 0) {
     return 0;
   }
 
   const img = existsSync(imgPath) ? openImg(readBytes(imgPath)) : createImg();
-  for (const name of removals) {
-    if (!img.delete(name)) {
-      console.warn(`mod-installer: Remove original — entry not in ${imgPath}: ${name}`);
-    }
-  }
   for (const [name, bytes] of entries) {
     warnDroppedCollisions(name, img.get(name) ?? undefined, bytes);
     img.set(name, bytes);
@@ -156,7 +127,7 @@ export function mergeImgDir(imgDir: string, imgPath: string): number {
   }
   writeBytes(imgPath, img.build());
 
-  return entries.size + removals.length + merged;
+  return entries.size + merged;
 }
 
 function readBytes(path: string): Uint8Array {

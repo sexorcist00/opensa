@@ -48,8 +48,16 @@ A binary archive cannot be patched file-by-file, so a mod ships a folder instead
   it at runtime unless FLA's optional error reporting is on, which is how the first case was found: mod 60
   had dropped `ferseat01_LAx`, and the real game said "model ID 3752 does not have loaded collision" months
   after the install.
-- **`Remove original/`** (also `Remove originals`, `remove-original`, …): the file NAMES inside are DELETED
-  from the archive. The contents are irrelevant — mods ship the retired originals for reference.
+- **`Remove original/` carries NO special meaning — it is an ordinary organisational subfolder, and its files
+  are REPLACEMENTS.** The name reads as an instruction ("remove the original") and we implemented it as one
+  until 2026-08-10; it actually names *the files that remove the original*, i.e. empty RW clumps a mod ships to
+  make stock geometry invisible while its script draws its own. Three things settle it: Modloader has no delete
+  mechanism at all (it never touches an original file, it shadows one at runtime), the folder sits INSIDE
+  `gta3_img/` where everything is injected by bare name at any depth, and the payloads are valid empty clumps
+  (653 B each in the field case) rather than copies of the 4-66 KB originals.
+  *What happens if a tool reads it as a delete list:* the entry vanishes while the stock `.ide` row and its
+  inst rows survive, so the map places a model the streamer can never load. That is not a missing object —
+  the whole world renders as LODs with permanent hitching. Caught since 2026-08-10 by the gate below.
 - A subfolder holding PNGs is a **texture folder for an archive-internal `<folder>.txd`** (below).
 - Any other subfolder is organisational and is recursed — real packs ship `gta3_img/LV/…` layouts.
 - `<name>.ipl.merge` inside an IMG folder EDITS the named binary stream entry instead of replacing it; those
@@ -130,7 +138,7 @@ folder layout stops mattering; every file is bucketed by bare name:
 | `object.dat`, `procobj.dat` | Merged ADDITIVELY, row by row (keyed by model / by surface+model). |
 | `.ide`, text `.ipl`, other `.dat` | Written to disk: over the stock file with that bare name, else to the path the loader declared. |
 | the loader `.txt` itself | Its `IDE`/`IPL` lines are appended to `data/gta.dat` (canonicalised to the stock `DATA\MAPS\…` spelling); `COLFILE` is dropped — col rides in the archive. |
-| `Remove original/` (any depth) | The file NAMES retire `gta3.img` entries; contents are never injected. |
+| `Remove original/` (any depth) | Nothing special — organisational, its files are injected as REPLACEMENTS by bare name (see §2). |
 | a `cleo/`/`CLEO/` dir (any depth, any extension inside), loose `.cs`/`.ini`/`.fxt` | Copied to `<out>/cleo/…` — the dir's author-relative structure preserved, loose files by bare name — with a log line per file. A misspelled dir (`cleo2/`) is NOT a cleo dir: its `.cs`/`.ini`/`.fxt` still land via the loose-extension rule, other extensions are dropped as before. |
 | `*.settings.txt`, prose `.txt` | Ignored by the map baker. Vehicle settings belong to a vehicle mod — see [vehicles.md](./vehicles.md). |
 
@@ -156,15 +164,30 @@ vehicle-installer carries a vehicle mod's `cleo/` subfolder — see section 3 an
 
 ---
 
-## 5. What is NOT a contract
+## 5. What the install REFUSES
+
+**A model an `.ide` declares and an `.ipl` places must have a `.dff` in some archive.** The installer ends with
+`checkDanglingModels` over the built tree (`dangling-models.ts`) and THROWS, naming each model, its id, its
+placement count and the IDE that declares it. Placed is part of the test, not decoration: stock itself declares
+one model nothing places (`carupg_int_rays`), and that is harmless.
+
+It is a gate rather than a warning because the failure is global and does not point at its cause — the request
+can never complete, so the world renders as LODs everywhere with permanent hitching, which reads as a
+performance problem or a map-layer bug. It cost a day of bisection on 2026-08-10 (5 models, 23 placements,
+from one mod's `Remove original/` folder read as a delete list).
+
+---
+
+## 6. What is NOT a contract
 
 - **The mod folder's name** — ordering only. Renaming a mod cannot change what it does.
 - **The path a Modloader-style mod uses internally** — bare names decide everything there.
 - **A texture's format in the PNG folder** — it comes from the image's own alpha, not from a naming scheme.
+- **`Remove original/`** — the name looks like an instruction and is not one (§2).
 
 ---
 
-## 6. Adding a convention
+## 7. Adding a convention
 
 When a new folder/file name starts meaning something, it goes here in the same change, with what happens when
 it is misspelled. That last part is the point: nearly every rule on this page exists because some spelling of
