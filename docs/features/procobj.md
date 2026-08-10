@@ -36,10 +36,21 @@ screen.
 - Semantic categories (grass/flowers/bushes/cacti/trees/rocks/underwater; sea floor overrides
   to underwater) with per-category `{enabled, drawDistance, density}` in `graphics.procobj` +
   debug **ProcObj** screen.
-- **One `procObjLimit` (default 150/cell)** caps BOTH rendering and collision via the cell-wide
-  lottery threshold; vanilla pools at ~300 for the same physics-cost reason. **Its value is unowned since
-  the 2026-08-09 column fix** — the candidate pool it rations shrank ~19×, so it binds far less often and the
-  number was calibrated against a density that no longer exists.
+- **One `procObjLimit` (default 150/cell, `?procobjLimit=<n>`)** caps BOTH rendering and collision via the
+  cell-wide lottery threshold; vanilla pools at ~300 for the same physics-cost reason. **Its value is unowned
+  since the 2026-08-09 column fix** — the candidate pool it rations shrank ~19×, so it binds far less often
+  and the number was calibrated against a density that no longer exists.
+- **On a BUILT map the runtime scatter has almost nothing left to scatter, and that is by design.** The
+  converter STRIPS every species it baked into static instances (`convertProcObj`), so the shipped
+  `data/procobj.dat` carries only the rules it could not bake — 9 of 96 on original 2026-08-10, all
+  `P_UNDERWATERBARREN`. Everything you see on dry land is the PAK's baked layer, not this one. Measured as a
+  null result: `?procobj=0`, and `?procobjLimit` swept 1 → 3000, move `country-dusk` triangles by 0.007 %
+  against a 0.41 % A/A drift
+  ([bench row](../benchmarks/opensa-engine/2026-08-10-headless-runtime-clutter-null-result.json)).
+  **Consequences worth knowing before designing anything here:** the two layers are disjoint (no double
+  clutter); clutter load on `opensa` is a BUILD-time quantity, so a perf sweep varies PAKS, not URL params;
+  and a knob test on a dry scene cannot print non-zero, which is how the first attempt failed its own
+  positive control.
 - Collision = rendered set ∩ models that ship a COL (rocks/cacti/trees collide; grass/flowers
   walk-through); knob changes re-stream physics (debounced invalidate + reload).
 - Wind mod's `decoratePart` runs on clutter parts (procedural bushes sway when listed).

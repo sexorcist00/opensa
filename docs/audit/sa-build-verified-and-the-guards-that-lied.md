@@ -1,0 +1,138 @@
+# Audit — the sa build verified, and two guards that lied in opposite directions (2026-08-10)
+
+Commits `2d5f56d8..530e170f` (4), 23 files, +964 −27. Suites after: `tsc` and `eslint` clean, mod-installer
+121, perfect-map-builder 38, engine-perf-runs 12. **Three real builds were run** (two `sa` full, one `mods`
+stage twice for a positive control) — unlike the previous session, every load-bearing claim here comes from
+an artifact rather than from a read.
+
+The session was asked for one thing: **verify a full `sa` build completes** (P0's deliverable, unmeasured
+since the int16 guard came out). It does. But the throw was not the only blocker, and finding the real one
+opened a chain that ended three subsystems away — in a mod's collision archive.
+
+## What shipped
+
+| # | Change | Where |
+| --- | --- | --- |
+| 1 | FLA pools raised (IPL 280 → 1024, COL 275 → 400) after the real gate fired; TXD corrected 6000 → the install's actual configuration | `perfect-map-builder/src/pipeline.ts`, `docs/gta-sa-original/` |
+| 2 | The `[bench]` report grows a `hitch` block — the only cost columns a frame cap cannot pin | `apps/web/src/ui/engine-perf-runs.ts` + the host loop |
+| 3 | `UNCAPPED=1` on the harness; `?procobj` / `?procobjLimit` as runtime clutter knobs | `tools-debug/bench-harness/drive.js`, `engine-canvas-host.tsx` |
+| 4 | The target-split invariant is pinned by a test; a pak-vs-game-dir placement verifier | `pipeline.test.ts`, `scripts/debug/pak-placement-parity.ts` |
+| 5 | A partial `.col` replacement stops deleting collision in silence | `mod-installer/src/col-replace.ts` |
+
+## The chain, because no step of it was predictable from the one before
+
+**P0's verification failed on a different gate.** The `sa` chain completed every stage (2.3 GB tree, 10 m 9 s)
+and then `checkImgIdBudgets` threw: **binary IPL files 522 of 280**. That is FLA's `FILE_TYPE_IPL` — one of
+the ceilings the target really has, so the guard was right and the standing rule ("delete the museum pieces,
+keep the gates") had just been paid for.
+
+**The cause was the density change, three weeks downstream of itself.** Counted per archive: the layer's
+`plobj*_stream*` tiles went **50 → 331** across the column fix, against a 5.96× object count. The knob is
+`STREAM_MAX_INST = 512` (instances per binary tile) — **not `AREA_MAX_PAIRS`**, which had been the suspect on
+the backlog. The streams hold ~156 600 records at ~92 % tile utilisation, and 156 600 / 512 ≈ 306 against 331
+measured. Worth noting for anyone reading the old numbers: the BEFORE state had only 31 slots of headroom, so
+this pool was near the wall before anyone looked at it.
+
+**Answered by raising the number, not by shaping the build.** The user's call, and directive 3 applied
+directly: an FLA pool is a configured value in an ini. Raising `STREAM_MAX_INST` would have cut the file count
+4× at the cost of 4× coarser position streaming — a behaviour change on both targets, deliberately not taken
+as part of a build fix. It belongs to the streaming measurement.
+
+## The finding that was NOT asked for, and is the more dangerous one
+
+`IMG_ID_BUDGETS` had carried **TXD 6000 since it was written, while the install's pool was 5000.**
+`FILE_TYPE_TXD` carries a `#` in the ini — one of the disabled lines — so FLA left it at its default, and its
+own log says so: `20000 - 24999 (5000)`. The build measures **4999 TXD archives**.
+
+So the pool with **one slot of real headroom** was the one printing `4999 of 6000`, and no build could ever
+have warned. **A guard number ABOVE the install's is silent by construction: it can only fail to fire.** The
+verbatim capture in `docs/gta-sa-original/` quoted the disabled `#FILE_TYPE_TXD = 5000` line two paragraphs
+above its own summary claiming 6000, and nobody had read the two together — including, for a month, this
+project's own tooling.
+
+The rule that came out of it and is now in `docs/restrictions/sa-target.md`: **read a pool off
+`fastman92limitAdjuster.log`, never off the ini** — a disabled line still prints a value.
+
+## The field error, and where it actually came from
+
+The user launched the game and got `Error 0x534134, model ID 3752 does not have loaded collision`. Not the
+pools — model 3752 is `ferseat01_LAx`, a stock bench, and its collision was **missing from our build while
+present in the source game**.
+
+The chain, each step measured rather than assumed:
+
+| step | measurement |
+| --- | --- |
+| stock `laxref.col` | 148 collision models, has `ferseat01_LAx` |
+| mod 0 / mod 25 copies | 148 / 149 models, both have it |
+| **mod 60 copy** | **147 models, does NOT** — and it installs last |
+| built tree | 147, byte size matches mod 60's |
+| map-wide damage | **2 models lost across 216 archives** |
+
+**A `.col` is a LIBRARY, and the IMG contract replaces an entry whole.** So a mod shipping its own copy to
+change one object silently strips the collision of every model it omits. The objects are still placed; they
+just have nothing to stand on, which looks like nothing at all. The only reason this surfaced is that the
+user had FLA's optional error reporting on — otherwise it was a walk-through bench nobody would ever file.
+
+**Not a bug against the contract — a hole IN the contract**, now written into `docs/contracts/mods.md` (the
+author rule, plus what catches you) and `docs/edge-cases/converter-pipeline.md` (the measured scope).
+
+Fixed as the user chose: **B** — the mod's archive restored to 149 models from the stock copy, so the data is
+self-contained (`mods-src/` is gitignored, so that fix lives on his disk only); **C** — the installer now
+prints `<name>.col replaced — N collision model(s) LOST: …` naming them.
+
+**Confirmed on the artifact, not on the source**: the rebuild after the fix (10 m 1 s) carries
+`ferseat01_LAx`, and the census over all 216 archives reports **0 collision models lost** where it reported 2.
+The build printed no `LOST` line — which is a meaningful silence, because the same check on the reverted mod
+printed both names on a real `mods` stage.
+
+## What the measurement work actually bought
+
+**P1's instrument, and a correction to its plan.** `avgMs` was known to be saturated at the 120 fps period;
+`p95Ms` turns out to be pinned too — **9.1 on all nine scenes in both A/A arms** — so the fallback plan 013
+named ("read it from p95") was as dead as the mean. The `hitch` block replaces it and does carry signal:
+`maxMs` spans 9.4–21 ms across five arms whose `avgMs` is 8.329–8.334.
+
+**P1's load knob turned out not to exist.** The pak bakes the procobj layer into its cells AND the host feeds
+`adapter.cellClutter` into an instanced render every frame, which reads exactly like double clutter. It is
+not: `convertProcObj` strips every species it bakes, so a built `procobj.dat` is 9 rules of 96, all
+underwater. Measured as a null result (`?procobj=0` and `procObjLimit` 1 → 3000 both inside 0.007 %, against
+a 0.41 % A/A drift) — **and the positive control failed on the SITE, not the instrument**: `country-dusk` is
+dry, so the surviving rules could not have printed non-zero there. Consequence: clutter load on `opensa` is a
+BUILD-time quantity, so the perf budget needs two PAKS. One is already on disk (`NO_COMMIT/old_map`, 15 286
+objects against 91 092).
+
+**The two targets are the same world, and now both halves are measured.** Input: 46 text IPLs + 331 binary
+streams byte-identical between `sa/` (built 08-10) and `opensa/` (built 08-09) — two independent runs, which
+also makes the scatter's reproducibility a measurement rather than a claim. Convert: **182 184 / 182 184**
+placements found in the pak within 0.05 u. Both halves now have an instrument: a test for the first, a
+verifier with its own positive control for the second.
+
+## What it cost
+
+- **Build time**: 10 m 9 s per `sa` run (`sa` stage 60 % of it), three runs plus two `mods` stages.
+- **One wrong number published mid-session.** "227 759 placements" was a raw row count that summed two
+  different cell LEVELS (`hd` + `lod` rings, 569 cells each) and counted stock instances of shared model
+  names as ours. The user caught it. What survived the correction was the part that mattered — `plo*` names
+  are ours alone, and there are 110 852 of them in the pak.
+- **A lint failure at commit time** because the split test was written after the file's last lint run;
+  `vi.fn()` returns `any` and the type-aware rules refuse it.
+
+## What is still open
+
+- **FLA has not re-read the ini.** Its log is rewritten at boot, so nothing yet proves it accepts
+  `FILE_TYPE_IPL = 1024`. `reference-install-config.md` says so explicitly rather than implying a capture.
+- **The three streaming columns of `hitch` have never printed non-zero in the field** — a settled leg streams
+  nothing. Pinned in a unit test now, still owed a field positive control.
+- **`UNCAPPED=1` is untested.** If it unpins the headless cost columns, P1's "needs his display" half
+  collapses into the automated lane.
+- **The collision census compares against `game-src` only**, so a mod dropping a model that another MOD added
+  is invisible to it. The new warning catches that case, but only on the next build.
+
+## The lesson worth carrying
+
+**Two guards lied in opposite directions and neither could be caught by running the build.** The int16 one
+fired on every build to protect a ceiling the target does not have; the TXD one could never fire because its
+number was above the ceiling the target does have. The first was loud and wrong, the second silent and wrong,
+and the same question separates them: *what is the install actually configured with?* Not what the ini file
+contains, not what a doc summarised — what the adjuster's own log says it built.

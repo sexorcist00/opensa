@@ -50,7 +50,7 @@ flowchart TB
   opt["optimize · map-optimizer<br/>normals · prelit · dedupe"]:::stage
   trees["trees · lod-trees-generator<br/>impostor cards + atlas"]:::stage
   proc["procobj · lod-procobj-generator<br/>scatter → static IPL + LODs"]:::stage
-  guard{{"sa checks (on the BUILT sa/ tree)<br/>FLA pools THROW: TXD 6000 / COL 275 / IPL 280 ·<br/>map-cost census: rows · IPLs · coverage"}}:::guard
+  guard{{"sa checks (on the BUILT sa/ tree)<br/>FLA pools THROW: TXD 6000 / COL 400 / IPL 1024 ·<br/>map-cost census: rows · IPLs · coverage"}}:::guard
   osguard{{"opensa: no SA ceiling applies<br/>and no streaming budget measured yet"}}:::guard
   sa["sa · sa-lod-generator<br/>per-object HD-clone LODs"]:::stage
   oslod["opensa · opensa-lod-generator<br/>cell-LOD bake + linear TXDs"]:::stage

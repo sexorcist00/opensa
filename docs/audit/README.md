@@ -5,6 +5,13 @@ numbers and links to the raw records — so the result survives the session and 
 without re-deriving it. Runtime numbers live in [`../benchmarks/`](../benchmarks/); these docs summarise and
 interpret them.
 
+- [`sa-build-verified-and-the-guards-that-lied.md`](./sa-build-verified-and-the-guards-that-lied.md) — the
+  2026-08-10 arc: the `sa` target builds end to end at 91 092 objects (10 m 9 s), and the int16 throw was not
+  the only blocker — FLA's IPL pool fired at **522 of 280**, correctly. Raising it surfaced the opposite
+  defect: the TXD guard had read 6000 against an install configured at 5000, so **the pool with one slot of
+  headroom was the one reporting comfort**. Also: the two targets proven to be the same world on both halves
+  (byte-identical input, 182 184 / 182 184 placements through the convert), the runtime clutter layer shown
+  to draw nothing on a built map, and a mod's partial `.col` found deleting stock collision in silence.
 - [`procobj-density-and-the-guards-that-guarded-nothing.md`](./procobj-density-and-the-guards-that-guarded-nothing.md)
   — the 2026-08-09 evening arc: build-time density became a per-category/per-surface profile with a raisable
   candidate ceiling, and three guards were deleted for guarding a ceiling the target lifted. **Four separate

@@ -216,7 +216,8 @@ rather than a guard, because its number does not exist yet.
         the whole check without a line. The error only ever ran DOWNWARD, so 39 219 was a lower bound sold as
         a total. Missing files now WARN and the count is labelled as a lower bound.
       - `checkImgIdBudgets` **keeps its throw** — FLA's pools are what the target is really configured with
-        (TXD 6000 / COL 275 / IPL 280, not `unlimited`), and exhausting one corrupts the heap at boot. The
+        (not `unlimited` — TXD 6000 / COL 400 / IPL 1024 since 2026-08-10, and the numbers this line quoted
+        until then were partly wrong: see the measurement below), and exhausting one corrupts the heap at boot. The
         rule is "delete the museum pieces, keep the gates", now a standing rule in `CLAUDE.md`.
       - tests: 35 pass, and the two that matter were **run against the reverted behaviour** — re-adding the
         throw and the silent zero fails exactly those two and nothing else.

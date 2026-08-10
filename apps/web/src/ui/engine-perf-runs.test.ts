@@ -49,6 +49,12 @@ const STALE_POLL_FRAMES = 4;
 /** Frames after the teleport at which the NEW anchor's ring finishes loading (past the warmup on purpose). */
 const RING_DRAINED_FRAME = 260;
 
+/** The fields of a printed `[bench]` row the tests read back. */
+interface BenchRow {
+  hitch: Record<string, number>;
+  legStart: LegProbe;
+}
+
 /** What the leg-start probe sees the moment sampling begins — the plan-102 report row, taken in the test. */
 interface LegStart {
   frame: number;
@@ -58,7 +64,7 @@ interface LegStart {
 }
 
 /** The `[bench] {json}` rows a sweep printed, by scene key — that console line IS the deliverable. */
-const reports = new Map<string, { legStart: LegProbe }>();
+const reports = new Map<string, BenchRow>();
 
 afterEach(() => {
   reports.clear();
@@ -236,6 +242,35 @@ describe('setupPerfRuns settle', () => {
 
       // A settle that waits out its whole timeout on a world that is READY is the other way to be wrong.
       expect(legStart[0]?.frame ?? 0).toBeLessThan(SETTLE_TIMEOUT_MS / FRAME_MS);
+    });
+
+    it('carries the hitch block into the printed row, streaming columns included', async () => {
+      // The gap the unit tests above leave: `hitchStats` is proven, but nothing proved its numbers REACH
+      // the report. The field cannot close it either — a settled leg streams nothing, so `blobMaxMs`,
+      // `uploadMaxMs` and `pendingMax` printed 0 on all five arms of the 2026-08-10 run, and a zero from an
+      // instrument that has never printed non-zero is not evidence. Here they are made non-zero on purpose.
+      const swept = untilSweepComplete();
+      installFrameClock();
+      setupPerfRuns({
+        ...silentHost(),
+        params: new URLSearchParams(`bench=${OCEAN.key}`),
+        takeSamples: (): LegSample[] => [
+          frame({ frameMs: 8.333 }),
+          frame({ frameMs: 37.5, pendingCells: 9, streamBlobMs: 26.75, streamUploadMs: 3.25 }),
+          frame({ frameMs: 8.4, pendingCells: 2 }),
+        ],
+      });
+
+      await swept;
+
+      expect(reportOf(OCEAN.key).hitch).toEqual({
+        blobMaxMs: 26.75,
+        maxMs: 37.5,
+        p99Ms: 37.5,
+        pendingMax: 9,
+        slowFrames: 1,
+        uploadMaxMs: 3.25,
+      });
     });
   });
 });
@@ -498,7 +533,7 @@ async function physicalWorld(options: { groundArrivesAtFrame?: null | number; gr
 }
 
 /** The report row a sweep printed for a scene; throws rather than let a missing row read as a pass. */
-function reportOf(key: string): { legStart: LegProbe } {
+function reportOf(key: string): { hitch: Record<string, number>; legStart: LegProbe } {
   const row = reports.get(key);
   if (row === undefined) {
     throw new Error(`no [bench] row was printed for '${key}'`);
@@ -551,7 +586,7 @@ function untilSweepComplete(): Promise<void> {
   return new Promise<void>((resolve) => {
     vi.spyOn(console, 'log').mockImplementation((...parts: unknown[]): void => {
       if (parts[0] === '[bench]' && typeof parts[1] === 'string') {
-        const row = JSON.parse(parts[1]) as { key: string; legStart: LegProbe };
+        const row = JSON.parse(parts[1]) as { hitch: Record<string, number>; key: string; legStart: LegProbe };
         reports.set(row.key, row);
       }
       if (parts[0] === '[bench] sweep complete') {

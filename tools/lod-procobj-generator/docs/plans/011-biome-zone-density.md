@@ -6,7 +6,7 @@
 
 Depends on [02](010-density-model.md) (the density model). Delivers the user's actual ask: density that KNOWS the terrain — more cacti in the desert, more bushes in forest, more rocks on mountain slopes.
 
-**02 is per target now (2026-08-08), so this plan is too**: biome is a third axis on top of category×surface, and a biome profile inherits its target's gate. There are two targets — `sa` (OLA + FLA + our asi; int16 is the only ceiling, and past 32 767 map-wide rows the profile depends on `perfect-map.asi`) and `opensa` (no SA ceiling at all). Stock SA is not one. Same rule as 02's decision 3: a profile declares its target and its gate, and the build refuses a mismatch.
+**Density is NOT a per-target axis** (the user's call 2026-08-09, which reversed the 08-08 split this plan was written under): `sa` ships the same profile as `opensa`, so biome is a third axis on top of category×surface and nothing more. There is one profile, one biome table, and no per-target gate to inherit — the ceilings that motivated the split are lifted on the install we ship to (`docs/restrictions/sa-target.md`), and the one that is real (FLA's pools) is a number raised in the ini, measured 2026-08-10. Same rule as [02](010-density-model.md): the profile is a config value, never a flag an operator remembers.
 
 ## Context
 
