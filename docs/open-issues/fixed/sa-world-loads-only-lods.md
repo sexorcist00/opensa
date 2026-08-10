@@ -1,6 +1,6 @@
 # The real game loads the world as LODs only (2026-08-10)
 
-## CAUSE FOUND 2026-08-10 — awaiting the confirming field run
+## FIXED 2026-08-10 — field-confirmed the same day
 
 **One mod: `60. Pacific Park Rotating Ferris Wheel`.** The user narrowed it himself — every mod before it
 installs and plays perfectly, adding it produces the symptom — and handed over both complete installs
@@ -12,13 +12,16 @@ mechanism at all). Deleting the entries left five stock models declared by `LAw2
 **23 inst rows** with no archive entry — a streaming request that can never complete. Declared-but-absent went
 1 → 6 between the two installs; of those, placed went **0 → 5**.
 
-Fixed in [`mod-installer/010`](../../tools/mod-installer/docs/plans/010-remove-original-is-a-replacement.md):
+Fixed in [`mod-installer/010`](../../../tools/mod-installer/docs/plans/010-remove-original-is-a-replacement.md):
 the folder now injects as replacements, and `install()` THROWS on any model that is declared, placed and
 unloadable. The guard reads 0 on the working install and 5 on the broken one.
 
-**This file stays here until the field run confirms it.** Everything below is the record as it stood before the
-cause was known — including its own worst moment: the "5 object definitions with no DFF" line under *Related,
-real, and NOT this symptom* was this defect, measured and mis-ranked.
+**Confirmed in the field:** he rebuilt `sa` with the fix, installed it, and the game plays as it should —
+no slowdowns, the world loads. The two loose ends of the diagnosis are recorded at the bottom.
+
+Everything below is the record as it stood before the cause was known — including its own worst moment: the
+"5 object definitions with no DFF" line under *Related, real, and NOT this symptom* **was this defect**, measured
+and mis-ranked while the day went to pools and entity counts.
 
 ---
 
@@ -81,22 +84,29 @@ Each looked compelling and each was falsified by measurement, in this order:
    `readme.txt` reproduced the marker identically. **The bisection had no negative control; every arm was
    positive from the start**, and the marker was a feature.
 
-## Related, real, and NOT this symptom
-
-Found while chasing it, worth fixing on their own:
+## Related — one of these WAS the cause
 
 - **5 object definitions with no DFF** after the mods stage (`LAw2.ide` ×3, `LAxref.ide` ×2) against 1 in the
-  clean game — defined, placed, no geometry.
+  clean game — defined, placed, no geometry. **This was the defect**, written down and filed as a side-finding.
+  What made it look harmless was the clean game's own count of 1: that one (`carupg_int_rays`) is placed
+  NOWHERE, so a dangling declaration read as a thing SA tolerates. Placement was the discriminator, and it was
+  one query away.
 - **11 `IDE` lines land after the first `IPL` line in `gta.dat`**, and 137 placements reference ids those
   late IDEs define (`stadint` 135, `vegasE` 2). `gta.dat` loads top-down; our own `patchGtaDat` inserts before
-  the first IPL for exactly this reason, but mods append their own lines at the end.
+  the first IPL for exactly this reason, but mods append their own lines at the end. **Still open, still real,
+  and NOT this symptom** — the working install has the same late lines (`Missing Smokes Fix.ide` at 153) and
+  plays fine.
 
-## Where to pick it up
+## Loose ends left after the close
 
-The user is debugging the mod-installer side and will bring exact data. After that fix: rebuild `sa` at the
-same procobj count `opensa` carries, run it, and look. If it still misbehaves, restructure the placement layer
-the ProperFixes way — see
-[`gta-sa-original/reference-install-config.md`](../gta-sa-original/reference-install-config.md) for the shape
-(6 files, ~9 600 rows each, every row `lod = -1`, zero binary streams, range from the IDE at 299) and
-[`restrictions/sa-target.md`](../restrictions/sa-target.md) for the 40-slot ceiling that constrains any
-redesign.
+- **The two seat models keep their collision, and nobody has looked at the beach yet.** The 08-10 restore of the
+  mod's `laxref.col` to a full library undid the author's deliberate removal, so 10 stubbed seats on Santa Maria
+  may be invisible obstacles. Unobserved, not resolved — the confirming run did not go there. The trade and the
+  coherent fix are in
+  [mod-installer/010](../../../tools/mod-installer/docs/plans/010-remove-original-is-a-replacement.md).
+- **The late `IDE` lines** above are untouched.
+- **The ProperFixes-shaped placement restructure was never needed for this** and is not owed by it. If it is
+  ever wanted for its own reasons, the shape is in
+  [`gta-sa-original/reference-install-config.md`](../../gta-sa-original/reference-install-config.md) (6 files,
+  ~9 600 rows each, every row `lod = -1`, zero binary streams, range from the IDE at 299) and the constraint is
+  the 40-slot ceiling in [`restrictions/sa-target.md`](../../restrictions/sa-target.md).

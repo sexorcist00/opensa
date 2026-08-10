@@ -142,7 +142,7 @@ expensive part, and three of them were mine to avoid.
 | 1 | `model ID 3752 does not have loaded collision` | a mod's partial `.col` (fixed, see above) | census over 216 archives |
 | 2 | Access violation at `0x00405C3A` | **the 40-slot `IplEntityIndexArrays`** | modloader's log ends at `plobj10.ipl`, the stack carries the string `plobj10_`, and `plobj10` is the **40th** inst-bearing IPL |
 | 3 | NULL deref at `0x005381A5` | an entity pool exhausted | disassembly: `push 0x38` → allocator → `je` failure path → `xor eax,eax` → `mov eax,[esi]`. `EDX = 100000` = OLA's `Buildings` |
-| 4 | World loads as LODs only | **UNSOLVED** | see [`open-issues/sa-world-loads-only-lods.md`](../open-issues/sa-world-loads-only-lods.md) |
+| 4 | World loads as LODs only | **SOLVED the same day** — one mod, five stock models deleted from `gta3.img` while the map still placed them | HIS bisection (all mods up to `60. Pacific Park Rotating Ferris Wheel` play fine, adding it breaks) + the diff of two complete installs he handed over. See [`open-issues/fixed/sa-world-loads-only-lods.md`](../open-issues/fixed/sa-world-loads-only-lods.md) |
 
 **Finding 2 is the one that outlives the session.** `docs/restrictions/sa-target.md` recorded the 40-slot
 ceiling as *"lifted — OLA `EntityIpl = unlimited`"*. The setting IS in the install's ini, and the game died on
@@ -186,3 +186,32 @@ something crosses it and survives.
 And one about method rather than about SA: **an instrument that has only ever printed one answer has told you
 nothing.** It cost a whole bisection — six builds converging confidently on an innocent mod — and the guard
 against it is a single cheap run: the arm you expect to be NEGATIVE.
+
+---
+
+## The close, same day: symptom 4 solved, and the answer had been on this page all along
+
+**He bisected it himself and it was one mod:** every mod up to `60. Pacific Park Rotating Ferris Wheel` installs
+and plays perfectly, adding that one gives slowdowns and an empty world. He handed over both complete installs,
+which turned the rest into a diff instead of a theory.
+
+**Our installer read the mod's `gta3_img/Remove original/` folder as a delete list.** It is not one: the five
+files are one 653-byte empty RW clump each, meant to REPLACE the stock geometry so the mod's script can draw its
+own wheel (stock is 4 341-66 357 B of payload, all different). Deleting the entries left five stock models
+declared by `LAw2/LAxref.IDE` and placed by **23 inst rows** with nothing in any archive to stream. Fixed, gated
+and field-confirmed the same day — `tools/mod-installer/docs/plans/010-remove-original-is-a-replacement.md`.
+
+**What this audit has to admit.** The defect is written on this page, in the open-issue it links, under a heading
+that says *"Related, real, and NOT this symptom"*: **5 object definitions with no DFF after the mods stage, defined,
+placed, no geometry.** I measured it, wrote it down, ranked it as a side-finding, and spent the day on ID pools,
+stream file counts and entity counts. What made it look harmless was the clean game's own count of **1** — and that
+one, `carupg_int_rays`, is placed NOWHERE. Placement was the whole discriminator and it was one query away.
+
+So the fifth lesson of the day is not about SA at all: **when the leading hypothesis dies, re-read the discard pile
+before generating a new one.** A finding filed as unrelated is still a finding, and "unrelated" was my ranking, not
+a measurement. The four wrong axes each cost a 10-minute build; re-reading my own notes would have cost nothing.
+
+The sibling lesson, on the thing that made the misreading possible in the first place: **a convention's NAME is not
+its specification.** Three checks settle it and none needs the author — what are the BYTES (empty clumps, not
+backups), where does the name SIT (inside the injection path), and what can the real loader physically DO
+(Modloader has no delete mechanism at all). A folder name that reads as an imperative is exactly where to run them.

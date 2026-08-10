@@ -141,7 +141,7 @@ describe('bakeMod', () => {
       expect(result.baked).toBe(true);
       const baked = openImg(new Uint8Array(readFileSync(join(out, 'models', 'gta3.img'))));
       // The entry SURVIVES carrying the stub — deleting it would leave the stock map placing a model the
-      // streamer can never load (`docs/open-issues/sa-world-loads-only-lods.md`).
+      // streamer can never load (`docs/open-issues/fixed/sa-world-loads-only-lods.md`).
       expect([...baked.get('ferris01_law2.dff')!.slice(0, 1)]).toEqual([7]);
       expect(baked.has('ferriswheel_wheel.dff')).toBe(true); // new model injected
       expect(baked.has('existing.dff')).toBe(true); // untouched neighbour

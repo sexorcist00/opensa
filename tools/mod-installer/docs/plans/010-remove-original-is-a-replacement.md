@@ -1,7 +1,8 @@
 # 010 — mod-installer: `Remove original/` replaces, and a placed model must be loadable
 
-**SHIPPED 2026-08-10.** Closes the field defect written up in
-[`docs/open-issues/sa-world-loads-only-lods.md`](../../../../docs/open-issues/sa-world-loads-only-lods.md):
+**SHIPPED 2026-08-10, FIELD-CONFIRMED the same day** — he rebuilt `sa` with the fix, installed it, and the game
+plays as it should: no slowdowns, the world loads. Closes the field defect written up in
+[`docs/open-issues/fixed/sa-world-loads-only-lods.md`](../../../../docs/open-issues/fixed/sa-world-loads-only-lods.md):
 installing our build made the real game render the world as LODs only, with permanent hitching. One mod caused
 it, and the cause was our reading of a folder name.
 
@@ -68,6 +69,8 @@ on a mod that retires a model the map still places.
 
 ## Verified
 
+- **In the field, by the reporter, the same day.** `sa` rebuilt with the fix, installed over his game: the world
+  loads and the slowdowns are gone. That is the arm the whole diagnosis was for.
 - **End to end on the real corpus.** A standalone `mod-installer` run over all 60 mods (`--game
   game-src/original`) completes, and the gate at the end of `install()` does not fire — so the tree carries **0**
   declared-and-placed models it cannot stream. `gta3.img`: **16 387 entries** (the broken install had 16 382 —

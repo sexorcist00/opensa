@@ -39,7 +39,7 @@ export function checkDanglingModels(gameDir: string): void {
  *
  * Why this is a gate and not a report: the streaming entry does not exist, so the request can never complete, and
  * the field symptom is not the missing object — it is the whole world rendering as LODs with permanent hitching
- * (`docs/open-issues/sa-world-loads-only-lods.md`, 2026-08-10). One mod's five retired models cost a day of
+ * (`docs/open-issues/fixed/sa-world-loads-only-lods.md`, 2026-08-10). One mod's five retired models cost a day of
  * bisection because nothing in the build could see them.
  *
  * A model declared-but-NOT-placed is fine and is not reported — stock ships one (`carupg_int_rays`), which is why
