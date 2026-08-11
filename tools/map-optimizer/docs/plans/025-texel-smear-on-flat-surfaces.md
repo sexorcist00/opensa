@@ -244,7 +244,47 @@ sides, the stage is exonerated outright and this becomes a question about author
 anything, we are allowed to do about it). If it smears only on the `after` side, the timing premise is real
 and H-B1 (created normals) is what to chase.
 
-## Phase 1 — if the UVs moved: find every other model it happened to
+## Phase 1 — RAN 2026-08-11: the population kills the curated list, and the metric with it
+
+Family C added to `scripts/debug/scan-model-defects.ts` (`--aniso`, default 8), same shape as A and B:
+area-weighted, ranked by the SHARE of the model's own surface the flagged faces cover, with the map-wide
+population printed next to the ranking — because how many models carry it is what decides curated-list vs
+general-rule. 8 051 placed models, 7 148 with a DFF source, ~1 min.
+
+| share of the model's own surface flagged at > 8× | models | placements |
+|---|---|---|
+| any at all | **4 708** | 28 472 |
+| ≥ 1 % | 3 082 | 21 671 |
+| ≥ 5 % | 1 540 | 14 370 |
+| ≥ 10 % | 976 | 10 080 |
+| ≥ 20 % | 493 | 5 007 |
+| ≥ 50 % | 250 | 2 975 |
+
+3 306 models carry at least one outright COLLAPSED face.
+
+**So a curated list is out.** 66 % of the placed world is in this class at 8×, and even the strictest tier is
+250 models / 2 975 placements. This is the same wall plan 024 hit when Family B came back with 2 243 models
+and the answer stopped being per-model repair.
+
+**And the metric does not separate the class.** The whole top of the ranking is `cables`, `wires_01..18_sfs`
+and `ltslasky*` — power lines and cables, 100 % of their surface flagged, most of their faces collapsed
+outright. **That is how you texture a wire.** A long thin ribbon SHOULD map a texel far off square; it is
+authoring, not damage. Ranking by raw anisotropy therefore ranks "how ribbon-like is this geometry", which is
+the exact failure mode 024 round 1 already recorded once, when `standard01_lawn` topped a naive angle metric
+with a legal vegetation trick.
+
+**What actually distinguishes `road_lawn34` from `cables`** is not the magnitude — it is the DISAGREEMENT.
+A wire is uniformly stretched end to end; the road is a slab where most faces are healthy and a band of them
+is not, which is why the smear reads as a defect against its own neighbours rather than as a look. The next
+criterion has to be a per-face mapping discontinuity ACROSS SHARED EDGES (a face whose texel density or
+orientation departs from the adjacent faces of the same surface), not a threshold on the face alone. The
+53–97 % "has a good neighbour" numbers measured above are the same signal seen from the other side.
+
+**Owed**: the same run repeated with that criterion, and only then a threshold. Until it exists, the
+map-wide count for THIS defect class is unknown — 4 708 is the count for "extreme mapping", which is a
+strictly larger set that mostly is not broken.
+
+## Phase 1b — if a criterion ever separates it: find every model it happened to
 
 Extend `scripts/debug/scan-model-defects.ts` with the Phase 0 metric as criterion **(e)**, area-weighted and
 top-N with instance positions, the shape 024's criteria were rewritten into after an un-weighted metric was
