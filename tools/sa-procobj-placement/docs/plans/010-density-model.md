@@ -165,10 +165,26 @@ Four caps, and they are not interchangeable:
         test disagreed, and the precise statement is the one above.)
       Below 1 is refused outright: the scatter could not reach the authored density, so `base: 1` would
       silently thin the map.
-- [ ] **ONE shipped profile, priced before it is written** (decision 2, 2026-08-09): both targets get it.
-      It is perf-bounded by [013](013-density-budgets-per-target.md)'s `opensa` measurement; until that
-      number exists the profile does not exist rather than being guessed. The 1.0 default stays as the
-      regression baseline.
+- [x] **ONE shipped profile — DECIDED 2026-08-11 (his call): it is `base: 1`, and that is a RESULT rather
+      than a default nobody got round to changing.** The perf gate this task waited on was lifted by
+      [013](013-density-budgets-per-target.md) (there is no frame-time ceiling for this layer at all), which
+      turned the task into a pure look call — and the look was then answered by the data:
+      - **The total is already past the aiming point.** 91 379 objects at cutoff 1.0 against the
+        field-accepted reference's 57 583 — **1.58×** it. The 3.77× multiplier this plan was written under
+        was a ratio against the pre-2026-08-09 spacing defect, not against vanilla.
+      - **And so is the DISTRIBUTION, which is the half that decides the look.** This plan's own
+        qualification was that a profile has to *earn* the reference's hand-authored skew, and the authored
+        data lands on it unaided: **our top 2 species of 56 are 42.0 %** of the layer against the reference's
+        **40 % of 46**. Two independent readings of "what a good scatter looks like", 2 points apart.
+      - **A per-category move would be either invisible or unargued.** `flowers` is 0.25 % of the layer and
+        **cannot exceed 678 objects** at any cutoff — the category is rare in the DATA, not in our reading of
+        it; `bushes` at 64.3 % is the only category worth thinning and there is no perf reason to, which
+        leaves taste against [project-goals](../../../../docs/project-goals.md)' honour-the-authored-data.
+      So `density: 1` stays, now as the shipped decision with its evidence. **Any later multiplier is a new
+      argument, not the completion of this one** — and it starts from "the data already looks like the
+      reference", which is the opposite of where this plan began.
+      *Measured off `game-src/original`; the per-species table is
+      `scripts/debug/procobj-spacing-census.ts --json`, the per-category one is the build's own log.*
 - [~] ~~The mismatch guard of decision 3~~ — **struck with decision 3.** One density means one answer to
       "does this need the asi", so the guard would test a constant. Its job passes to
       [asi/perfect-map 006](../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md): ship the asi

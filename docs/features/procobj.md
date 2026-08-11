@@ -50,7 +50,13 @@ stock DFFs).
   `lottery < densityFor(category, surface)` — category-on-a-surface beats category beats base beats the
   authored density, default 1.0 everywhere so the scatter is unchanged. `tools/map-placement/src/procobj/
   density.ts`; the converter reports per-category `generated / objects / dropped-by-cap`. A bad entry throws
-  naming its key. **No shipped profile yet** — it waits on the `opensa` perf budget (plan 013).
+  naming its key. **The shipped profile is `base: 1`, decided 2026-08-11 — a result, not a placeholder.** The
+  authored density already places **1.58×** the field-accepted reference (91 379 against ProperFixes' 57 583)
+  AND reproduces its hand-authored skew unaided: **our top 2 species of 56 are 42.0 %** of the layer against
+  their **40 % of 46**. So the profile machinery has nothing left to earn, and `flowers` — the poorest
+  category at 0.25 % — **cannot exceed 678 objects at any cutoff**, because it is rare in the DATA. Raising
+  anything is a new argument, not the completion of this one
+  ([plan 010](../../tools/sa-procobj-placement/docs/plans/010-density-model.md) task 8).
 - Semantic categories (grass/flowers/bushes/cacti/trees/rocks/underwater; sea floor overrides
   to underwater) with per-category `{enabled, drawDistance, density}` in `graphics.procobj` +
   debug **ProcObj** screen.

@@ -189,6 +189,40 @@ load-bearing for this target rather than optional, which is the opposite of what
 [04](plans/013-density-budgets-per-target.md) is therefore a perf-budget plan **above** an
 int16-gated target, not a perf-budget plan instead of a ceiling story.
 
+## RE-DERIVED 2026-08-11 — the target is behind us, and the file below is history
+
+**This is the re-derivation the 2026-08-09 note above asks for, off the rebuilt layer's own counts.** Read
+this section first; everything after it is the record of how the aiming point was arrived at, stated against
+the 15 286-object defect, and **no ratio below this line is current**.
+
+| What | ProperFixes 2.2.1 | ours, cutoff 1.0 | |
+| --- | --- | --- | --- |
+| Static objects placed | 57 583 | **91 379** | **1.58× the reference** |
+| Permanent rows per object | 1.000 | **1.000** | identical since plan 014 dropped the LOD twin |
+| Rows in the largest area file | 9 520–9 627 | **9 109–9 110** | the same file shape, reached independently |
+| Area IPL slots the layer spends | 6 | **10** | of SA's 40; the whole map spends **39** |
+| Map-wide permanent `inst` rows | ~70 212 | **110 055** | both far past int16 — `perfect-map.asi` is load-bearing for either |
+| Top-2 species' share | **40 %** of 46 | **42.0 %** of 56 | the hand-authored skew, unaided |
+
+**Three things this settles.**
+
+1. **The 57 583 aiming point is met and passed at the AUTHORED density**, so it is no longer a target — it is
+   a sanity check that we are in the right range, and we are 1.58× above it. Nothing in the chain should
+   quote a multiplier against it again.
+2. **"Distribution beats total" is satisfied without a profile.** The qualification this file put on the
+   target — that the reference's 40 %-in-two skew is a hand-authored look our profiles would have to *earn*
+   — turns out to be earned by `procobj.dat`'s own spacing column against the map's own surface mix. That is
+   what closed [02](plans/010-density-model.md)'s shipped-profile task at `base: 1` on 2026-08-11.
+3. **Our per-object efficiency edge is GONE, and that is fine.** This file's headline advantage was 2.36×
+   rows per object, bought by the binary-stream LOD economy. Plan 014 deleted that economy on purpose
+   (a stream's IPL slot is not resident past ~190 m, so it could never carry the range), and both layouts now
+   cost exactly one permanent row per object. We are ahead on COUNT and level on cost.
+
+**What is NOT re-derived here:** the per-area/`LoadScene` and slot arithmetic further down still prices the
+target against STOCK ceilings, and stock is not a target of this project — those numbers stay as the record
+of what stock would have cost. And the layer's own counts above come from `game-src/original` plus the built
+`sa/` tree of 2026-08-10, which predates the species-roster floor by 312 objects (+0.34 %).
+
 ## The target this plan adopts
 
 > **2026-08-09: the aiming point is now known to sit BELOW vanilla, and the ratios below are ratios against

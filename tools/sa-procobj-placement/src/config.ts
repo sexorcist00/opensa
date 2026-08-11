@@ -43,7 +43,11 @@ export interface ProcObjLodConfig {
 
 /** Defaults tuned for medium-distance procobj clutter (bushes, rocks, scrub). */
 export const config: ProcObjLodConfig = {
-  density: 1, // vanilla; every profile 07/02 ships moves this, and every measurement states which one it ran
+  // 1 is the SHIPPED PROFILE, decided 2026-08-11, not a placeholder waiting for one (plan 010 task 8). The
+  // authored density already places 1.58× the field-accepted reference AND reproduces its hand-authored skew
+  // (our top-2 species of 56 = 42.0 %, theirs 40 % of 46), so a per-category profile had nothing left to earn.
+  // Raising it is a new argument with its own evidence; every measurement still states which cutoff it ran.
+  density: 1,
   drawDistance: 299, // ProperFixes' number, one metre under SA's big-building threshold
   procObjHeight: 0,
   // 20000 until 2026-08-09, when SPACING started being read as a length: the authored density is 91 067

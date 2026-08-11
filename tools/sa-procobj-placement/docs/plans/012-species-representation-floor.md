@@ -108,6 +108,18 @@ scarce price is unchanged: still **10 inst-bearing area IPLs of SA's 40**, still
 0.32 %, which is the same fact seen from both paths: a roster guarantee is cheap because the species it
 rescues are rare by construction.
 
+### The boundary of the guarantee: a species with no candidate ANYWHERE
+
+Neither floor can place a species the scatter never rolls, and **17 of the 95 stock rules are in exactly that
+state** — their surfaces (`p_grass_dry`, `p_flowerbed`, `p_wasteground`) carry zero collision area map-wide,
+so their authored expectation is 0.000 objects, including the densest rule in the file
+(`p_wasteground p_rubble`, spacing 4). Confirmed independently 2026-08-11 by the spacing census's per-rule
+table, against the 2026-08-09 measurement in
+[`gta-sa-original/procedural-objects.md`](../../../../docs/gta-sa-original/procedural-objects.md). Five
+models reach 0 across ALL of their rules and are therefore absent from the world however the knobs are set.
+**That is the original's data, not our pipeline** — a cutoff multiplies zero — and it is the honest limit of
+"every species appears": every species with somewhere to appear does.
+
 ### Does the runtime's own fix belong in `sa-procobj-placement`? No — that mechanism is not there
 
 **Checked against the code, not assumed.** The `sa` bake runs `selectPlacements`
