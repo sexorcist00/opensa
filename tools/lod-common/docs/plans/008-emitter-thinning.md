@@ -1,7 +1,28 @@
 # 008 — Emitter thinning (the far-view rate budget)
 
-> **UNBUILT.** Moved here 2026-08-09 from the roadmap chain `07-lod-generators-extended/lod-common/03`, which was dissolved into the tools it touches — see
-> [roadmap 0.5.0](../../../../docs/roadmap/0.5.0/readme.md) for what the chain was and what shipped out of it.
+> **CLOSED 2026-08-11 as NOT NEEDED — the table is 1.0s and there is no mechanism to build.** Moved here
+> 2026-08-09 from the roadmap chain `07-lod-generators-extended/lod-common/03`, which was dissolved into the
+> tools it touches — see [roadmap 0.5.0](../../../../docs/roadmap/0.5.0/readme.md).
+
+## The measurement this plan waited on came back empty
+
+Its own opening asked for exactly this: *"take the cost of the shipped carry first, and let the number say
+whether thinning is needed and how hard."* The number was taken on 2026-08-11 in
+[sa-lod-generator/008](../../../sa-lod-generator/docs/plans/008-far-view-emitter-budget.md) and it says NO.
+
+- **The worst viewpoint in the entire map holds 46 live emitters** of 943 anchors, and the long-range smokes
+  — the ones this plan's own framing is about ("forty refineries from a hillside") — peak at **28 of 77**.
+  Both are upper bounds; a frustum sees less than a sphere. Re-runnable: `fx-anchor-census.ts --worst`.
+- **Cost per emitter is below the instrument's noise floor**, established by plan 100/04 with a positive
+  control that collapsed every emitter quad in the map: 3.880 ms against arms of 3.867 and 3.875.
+- So thinning could remove at most ~23 quads at the worst point in San Andreas, at the price of the effect
+  the carry exists for. **The per-species table this plan was to deliver is therefore 1.0 for all 38
+  particle-bearing models**, which is a table with no code behind it.
+
+**What would reopen it:** a measurement on real SA (this chain's actual target, whose `FxSystem_c` is a
+different implementation and has never been measured), or a pipeline change that raises the anchor count or
+widens more systems to 1500 u. Both are re-checked by re-running `--worst`; the mechanism stays unbuilt until
+one of them produces a number.
 
 
 Depends on [01](005-2dfx-keep-policy.md) /
@@ -49,16 +70,15 @@ generator is the only place that can do it without new engine state.
 
 ## Tasks
 
-- [ ] Thinning in lod-common: keep a configured fraction / cap of a clump's type-1 entries; deterministic
-      positional selection; per-species and per-category config with defaults.
-- [ ] Unit tests: N entries with cap K keeps exactly `min(N, K)`; the same input always keeps the same ones;
-      the survivors are spread rather than clustered (assert against the positions, not the order).
-- [ ] Share the budget config with 03-asi/010 — one definition, imported by both.
-- [ ] (Only if thinning is not enough) payload rate-scaling through rw-codec/01's particle codec, with the
-      same round-trip guard.
-- [ ] Record the per-species table and what each factor was judged on. "It looked right at range" is a
-      legitimate answer as long as it says so — and if a factor is a fitted constant rather than a recovered
-      one, it needs a file in [`docs/hacks/`](../../../../docs/hacks) in the same change.
+- [~] ~~Thinning in lod-common: a fraction/cap of a clump's type-1 entries, deterministic positional
+      selection, per-species config~~
+- [~] ~~Unit tests for the cap, the determinism and the spread~~
+- [~] ~~Share the budget config with 03-asi/010~~
+- [~] ~~Payload rate-scaling through rw-codec/01's particle codec~~
+- [x] **Record the per-species table and what each factor was judged on.** It is **1.0 for all 38
+      particle-bearing models**, judged on a count rather than on a look: 46 live emitters at the worst point
+      in San Andreas, cost per emitter under a positive control's noise floor. A table of 1.0s needs no code,
+      and every task above is struck with it — **all five 2026-08-11, on the measurement at the top.**
 
 ## Verification
 
