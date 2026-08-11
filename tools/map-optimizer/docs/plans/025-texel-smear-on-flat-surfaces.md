@@ -100,6 +100,55 @@ model's boundary edges, because that is where the user says it lives.
 A control belongs in the same run: a model NOT in the report (any nearby building) through the same
 instrument, so a non-empty diff is known to mean "this model" and not "every model".
 
+### RAN 2026-08-11 — the chain never moves a UV, and the degenerate ones are AUTHORED
+
+Throwaway instrument (deleted; its metric is what Phase 1 folds into the scanner): resolve the source DFF the
+build way, run the five geometry plugins one at a time, and after each one compare the `position → {uv}`
+associations carried by the FACE CORNERS. Positions are never moved by any pass, so a position identifies a
+vertex across re-indexing.
+
+| model | source | authored normals | verts → | uv moved | uv lost | uv-degenerate faces before → after |
+|---|---|---|---|---|---|---|
+| `road_lawn34` | vanilla | **NO** | 359 → 368 | **0** | 0 | **30 → 30** |
+| `road_lawn08` | vanilla | **NO** | 223 → 223 | **0** | 0 | **0 → 0** |
+| `road_lawn32` | vanilla | **NO** | 330 → 328 | **0** | 0 | **26 → 26** |
+| `sbseabed3_las20` | vanilla | **NO** | 71 → 71 | **0** | 0 | **16 → 16** |
+| `lae2_roads17` (control) | `0. Map Fixes Pack` | yes | 168 → 211 | **0** | 2 | **8 → 8** |
+
+- **H-A is dead.** Not one UV moved, at any pass, on any model. The tool is exonerated on this axis.
+- **Positive control on the instrument**: `lae2_roads17` reads **8** UV-degenerate faces — the exact number
+  plan 024 recorded by hand for its parked non-goal. The metric reproduces an independently-measured value,
+  which is what makes the zeros above worth believing.
+- The control's `uv lost 2` is not a defect: it appears at `remove-degenerate-triangles` and is a
+  zero-position-area face taking its own corner association out with it.
+- **The degenerate UVs are authored and untouched** — same count in, same count out, on vanilla data.
+- **And they do not explain the report**: `road_lawn08` has **zero** of them and was reported anyway. So
+  degenerate UVs are a real property of this asset family but cannot be the whole cause.
+
+### The thing the run actually turned up: all four ship NO normals, and we give them some
+
+Every reported model carries **no authored normals** in vanilla — and `smooth-normals` runs with
+`addWhereAbsent: true`, so the chain CREATES them (`road_lawn34` even splits 359 → 368 verts doing it).
+
+Two lines in this repo already say that is dangerous, written before the report existed:
+
+- `createWhereAbsent`'s own skip branch is commented **`// real SA must not gain normals`**.
+- `run.ts` documents the flag as: *"`--no-add-normals` **if vanilla-renderer vertex lighting looks off**."*
+
+And it reaches the real game, because `perfect-map-builder` sets `optimizerPasses: { addNormals: true }`
+globally (`config.ts:75`, justified as "normals created for OpenSA's SSAO") while the `optimize` stage runs on
+the COMMON build (`pipeline.ts:182`) — the `sa`/`opensa` split happens later. **One optimize run feeds both
+targets, so the real game's own renderer receives world models carrying normals it never shipped.**
+
+That fits every constraint the report puts on a cause: present on BOTH targets (it is in the shared build),
+absent before this stage (nothing else creates normals), and worst on big flat objects (a road that was
+prelit-only now takes a directional term across a slab with a handful of vertices). It is now **H-B1**, the
+leading hypothesis, and Phase 2 tests it directly.
+
+Owed before it is treated as fact (standing rule — recover the original's formula, do not fit one): confirm
+against gta-reversed / SkyGfx **which SA building pipeline a geometry with normals selects**, and whether that
+is what changes the shading of a previously prelit-only road.
+
 ## Phase 1 — if the UVs moved: find every other model it happened to
 
 Extend `scripts/debug/scan-model-defects.ts` with the Phase 0 metric as criterion **(e)**, area-weighted and
@@ -107,18 +156,24 @@ top-N with instance positions, the shape 024's criteria were rewritten into afte
 field-falsified once already. Fix the pass, add the real-asset fixture (one manifest line in
 `scripts/test-fixtures.ts`), re-run the tool-kit + LOD-generator consumer sweep — `tool-kit/mesh` is shared.
 
-## Phase 2 — if the UVs did NOT move: find what did, on the same model
+## Phase 2 — NEXT: test H-B1 (created normals) on the model the field named
 
-Same lab loop, one variable at a time on `road_lawn34`, each arm sharing a viewpoint (a spawned player SLIDES
-on a slope, and three arms once returned the same diff because the diff was measuring the camera):
+Phase 0 settled that the UVs did not move, so this phase now owns the case. One variable at a time on
+`road_lawn34`, each arm sharing a viewpoint (a spawned player SLIDES on a slope, and three arms once returned
+the same diff because the diff was measuring the camera):
 
-1. **prelit off** (`debugPrelitScale = 0`, already in `apps/viewer`) — if the smear survives, every
+1. **normals not created** — `model-repack.ts` already runs the chain per model with per-pass options; the arm
+   is `addWhereAbsent: false` on the target model only. If the smear goes, H-B1 is confirmed on the data side
+   without touching the rest of the map. **This is the cheapest arm and the one the evidence points at.**
+2. **prelit off** (`debugPrelitScale = 0`, already in `apps/viewer`) — if the smear survives, every
    vertex-colour mechanism including `bake-vertex-ao` is dead.
-2. **`--no-textures`** — the mip chain suppressed, geometry untouched. This arm is data-side, so it is
-   testable on BOTH targets, which is what makes it worth more than any engine toggle here.
-3. **normals stripped** (`model-repack.ts --strip-normals`, built in 024) — isolates the shading rebuild.
+3. **`--no-textures`** — the mip chain suppressed, geometry untouched. Data-side, so it is testable on BOTH
+   targets, which is what makes it worth more than any engine toggle here.
 
 A zero from any arm counts only if the loop is first shown to REPRODUCE the smear with everything on.
+
+**The `sa` arm matters more than the `opensa` one here**, because the report's whole weight is that the class
+survives into the real game's renderer — and that is the half no engine change of ours can reach.
 
 ## Phase 3 — decide where the fix lives, once a phase has named it
 
