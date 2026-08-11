@@ -402,6 +402,49 @@ labels have to settle, which no amount of offline measurement can:
 2. **Is "vertical" really exempt?** The skirt is invisible, but a kerb face is not. `--up 0.5` currently
    throws both away.
 
+### THREE MORE LABELS, and they close the question the wrong way — 2026-08-11
+
+`backalleys1_sfe` (41.2 %) and `garse_85_sfe` (40.4 %): both **CLEAN**, both the same thing as `road03sfn`.
+User: *"the same situation — the neighbouring buildings STAND on these skirts, they are not visible."*
+
+So all three labels the field has produced are by-design hidden geometry, and every high-ranking model is one
+of two families: a ribbon (wire/neon/fence) or a skirt. Meanwhile the four models the field actually reported
+sit near the bottom of every ranking.
+
+**A per-face anisotropy profile of the VISIBLE surface says why, and it kills the model-local approach.**
+Up-facing faces only, area-weighted:
+
+| model | field label | 1–1.5× | 1.5–3× | 8–16× | 16×+ / collapsed |
+|---|---|---|---|---|---|
+| `road_lawn34` | BROKEN | 65.3 % | 26.4 % | **6.4 %** | 1.1 % |
+| `road_lawn08` | BROKEN | 46.2 % | 51.0 % | 1.0 % | 0 % |
+| `sbseabed3_las20` | BROKEN | 43.1 % | 49.7 % | 0 % | 7.1 % |
+| `road03sfn` | **CLEAN** | 24.8 % | 53.5 % | 0 % | **21.3 %** |
+| `backalleys1_sfe` | **CLEAN** | — | — | 0 % | **44.4 %** |
+| `garse_85_sfe` | **CLEAN** | — | — | 0 % | **40.4 %** |
+
+`road03sfn` carries **42 up-facing collapsed faces over 21 % of its visible area and looks fine**, while
+`road_lawn34` is called broken on 7.5 %. Signed vs absolute `nz` changes nothing — those faces genuinely
+point up. What makes them invisible is that **another placement stands on them**.
+
+**That is the finding, and it is about the method rather than the data: visibility is a property of the
+WORLD, not of the model, so no model-local metric can separate this class.** Five formulations failed for
+one reason, and it was never the formula.
+
+### What the next attempt has to be
+
+A world-context pass, not a metric tweak. map-optimizer already has the machinery to hang it on — plan 019's
+`buildPrelitContext` is a world pre-pass over every placement, and `seam-weld` already reasons about what a
+model's neighbours are at shared borders. The criterion becomes: a stretched face is a DEFECT only if it is
+exposed in the assembled world — nothing resting on it, nothing covering it.
+
+Cost and risk to price before starting: that is an occlusion query per candidate face over the placed world,
+which is a different order of work from the scans above, and its own failure modes (an interior, a model
+placed once vs 1 374 times, a face covered in one instance and open in another — `rdwarhus` is placed 13×).
+**Do not start it on the strength of six labels.** The cheap thing that must come first is more labels on the
+LOW end of the ranking, where the reported models actually live, because everything measured so far says the
+ranking's top is a different subject entirely.
+
 ## Phase 1b — if a criterion ever separates it: find every model it happened to
 
 Extend `scripts/debug/scan-model-defects.ts` with the Phase 0 metric as criterion **(e)**, area-weighted and

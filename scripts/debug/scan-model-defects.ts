@@ -36,7 +36,10 @@ import { indexModAssets, resolveDff } from '../lib/mod-assets';
  *     up-facing faces after the field labelled `road03sfn` CLEAN (its 40% was the invisible SKIRT under the
  *     road), yet still ranks that clean model 4x above the broken `road_lawn34`. Geometry alone has not
  *     told "stretched by design" from "stretched by mistake". Use it to SIZE the population, not to
- *     conclude a model is broken.
+ *     conclude a model is broken. The reason none of the five works is now measured and is about the METHOD:
+ *     `road03sfn` carries 42 UP-FACING collapsed faces over 21 % of its visible area and the field calls it
+ *     fine, because neighbouring buildings STAND on them. Visibility is a property of the assembled world,
+ *     not of the model, so a model-local criterion cannot separate this class at all.
  *
  * Run: npx tsx scripts/debug/scan-model-defects.ts [--game original] [--top 10] [--dz 0.5] [--aniso 8] [--discont 4] [--up 0.5]
  *      [--json <out.json>]
