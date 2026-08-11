@@ -46,7 +46,7 @@ Two things, and the honest answer is that only one of them is a measurement.
   So nothing about these values is a perf compromise; a different set would cost the same.
 - **Look — "it looks right", and it says so.** The user's rule was: own distance per type, large objects 300,
   small 100, never below 100; the split above is the assistant's distribution under that rule, accepted by
-  the user in the field on 2026-08-10 ("по картинке — да, всё хорошо"). Three headless screenshot attempts
+  the user in the field on 2026-08-10 (his verdict: by the picture, yes, it all looks right). Three headless screenshot attempts
   failed to find a clutter vista, so no capture backs it — the verdict is a human's, on his own display.
 
 ## What would retire it

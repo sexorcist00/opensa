@@ -166,3 +166,15 @@ interpret them.
   to be a second name for the surface, and the `sa` build now both states the install it needs and ships the
   asi into it. Also two A/Bs invalidated by their own instrument — a dead site, and a player who slides
   downhill so no two arms share a viewpoint (the tell: three DIFFERENT comparisons returning 86.81/86.82/86.83 %).
+
+- [`session-4-plan-hygiene-and-the-field-reports.md`](./session-4-plan-hygiene-and-the-field-reports.md)
+  — 2026-08-11, fifteen commits, **84 docs and zero source files** (suite unchanged at 4 106, which is the
+  point). Plan 013 closed on his procobj run (91 419 objects / 43 species / 110 382 rows, +327 on both — the
+  check that the roster floor ADDS rather than swaps). Then: **178 phantom tasks removed from the plan
+  record** — ten rendering chains closed since 2026-07-21 still carried 118 unticked boxes, and 074/080/081
+  plus `opensa-pack/000` carried 60 more for work already shipped. **The sweep's value is what it did NOT
+  touch**: 074/15 never happened (no `bakeNightLights` anywhere), vehicle lamp state and the near-shadow pass
+  are verified absent, and two closures are STRUCK because nothing shipped is there to judge. Also: every
+  deferred optimization now states its IMPACT, and most of that list cannot fix a frame. **The lesson is
+  mine — twice I answered from the cheap signal instead of the authoritative one** (checkboxes instead of
+  banners; one end of a lod link from each tree), and both cost a published wrong root cause.

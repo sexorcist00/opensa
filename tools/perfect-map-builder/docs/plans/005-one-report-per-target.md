@@ -60,7 +60,7 @@ itself or a closure variable is threaded by hand — which is what the (since-re
   `--until`/`--exclude` must not be able to skip it by accident (or if they can, that must be deliberate and
   stated).
 - **Written as `<out>/report-<target>.json`** — `report-opensa.json`, `report-sa.json` (user, 2026-08-11:
-  *"иначе перезатрем"*). Two targets share one `--out`, so a single unnamed `report.json` is not a summary of
+  *"otherwise we overwrite it"*). Two targets share one `--out`, so a single unnamed `report.json` is not a summary of
   a run, it is a summary of **whichever target happened to finish last** — which is exactly the state that
   produced today's confusion, where the file on disk was the opensa run's while the sa build had just ended.
   **There is no unnamed root report after this plan.** The name is the target, always, and a reader that

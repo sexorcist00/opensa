@@ -10,7 +10,7 @@ Commits: `a3013fce` (retire the pass) · `f5c1e2ac` (postmortem + docs) · fast-
 
 ## 1. The repair died at the only gate it had never faced
 
-The user walked the repaired intersection and reversed it in one sentence: *"мы сделали только хуже"*. The
+The user walked the repaired intersection and reversed it in one sentence: *"we only made it worse"*. The
 before was a soft continuous smear; the after was sharp triangular wedges of crisply mis-set texture. Both
 halves are structural, not bugs — the full reasoning is
 [`postmortem/uv-stretch-repair.md`](../postmortem/uv-stretch-repair.md):
