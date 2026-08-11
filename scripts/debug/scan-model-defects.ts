@@ -3,6 +3,14 @@ import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import type { Placement as Placement2, Vec3 } from '../../tools/map-optimizer/src/adapters/gta-sa/boundary';
+
+import {
+  buildCoverQuery,
+  type CoverQuery,
+  type PlacedBox,
+  toWorld,
+} from '../../tools/map-optimizer/src/adapters/gta-sa/world-cover';
 import { loadMapDefsAt, readBytes } from '../lib/game';
 import { indexModAssets, resolveDff } from '../lib/mod-assets';
 import { loadWaterField, type WaterField } from '../lib/water';
@@ -41,12 +49,15 @@ import { loadWaterField, type WaterField } from '../lib/water';
  *     `road03sfn` carries 42 UP-FACING collapsed faces over 21 % of its visible area and the field calls it
  *     fine, because neighbouring buildings STAND on them. Visibility is a property of the assembled world,
  *     not of the model, so a model-local criterion cannot separate this class at all.
- *     FIRST world-context gate (2026-08-11, branch `025-world-visibility`): a face whose every corner sits
- *     `--water-depth` under the sea, judged in WORLD space through the instance transform, is dropped —
- *     `sbseabed3_las20` leaves the ranking entirely on it. Geometry occlusion is the half still missing.
+ *     WORLD-CONTEXT GATES (2026-08-11, branch `025-world-visibility`) — the answer to that, in two halves,
+ *     both judged in WORLD space through the instance's own transform: a face whose every corner sits
+ *     `--water-depth` under the sea is dropped, and so is one another model RESTS on (`--reach`, via
+ *     `adapters/gta-sa/world-cover`). Together they take the population from 954 models at >=1% of surface
+ *     to 163, and two of the three field-labelled CLEAN models (`backalleys1_sfe`, `garse_85_sfe`) leave the
+ *     ranking outright. `road03sfn` does not — see plan 025 for what is still wrong.
  *
  * Run: npx tsx scripts/debug/scan-model-defects.ts [--game original] [--top 10] [--dz 0.5] [--aniso 8]
- *      [--discont 4] [--up 0.5] [--water-depth 0] [--json <out.json>]
+ *      [--discont 4] [--up 0.5] [--water-depth 0] [--reach 2] [--json <out.json>]
  * Output per hit: metrics, source mod, instance count + a position — paste into
  *   `npx tsx scripts/debug/teleport-spot.ts <model>` for a field spot.
  */
@@ -61,6 +72,8 @@ interface ModelRow {
   blackVerts: number;
   /** Faces whose UV triangle is degenerate outright (one axis maps to nothing). */
   collapsedUvFaces: number;
+  /** Faces dropped because another model rests on them — the geometry half of visibility. */
+  coveredFaces: number;
   dayP50: number;
   faces: number;
   from: string;
@@ -87,8 +100,11 @@ interface ModelRow {
 }
 
 interface Placement {
+  /** Is this world point covered from above by ANOTHER model resting on it? */
+  cover: CoverQuery;
   /** How far under the surface a face must sit before it counts as hidden (world units). */
   depth: number;
+  modelName: string;
   position: [number, number, number];
   rotation: [number, number, number, number];
   water: WaterField;
@@ -122,6 +138,7 @@ function analyzeModel(
   let stretchArea = 0;
   let stretchedFaces = 0;
   let submergedFaces = 0;
+  let coveredFaces = 0;
   let collapsedUvFaces = 0;
   let totalArea = 0;
   let worstAniso = 0;
@@ -137,6 +154,7 @@ function analyzeModel(
       stretchArea += stretch.area;
       stretchedFaces += stretch.stretched;
       submergedFaces += stretch.submergedFaces;
+      coveredFaces += stretch.coveredFaces;
       collapsedUvFaces += stretch.collapsed;
       totalArea += stretch.totalArea;
       worstAniso = Math.max(worstAniso, stretch.worst);
@@ -164,6 +182,7 @@ function analyzeModel(
     badNormalFaces,
     blackVerts,
     collapsedUvFaces,
+    coveredFaces,
     dayP50: p50(dayLumas),
     faces,
     hasAuthoredNormals,
@@ -281,6 +300,7 @@ function analyzeUvStretch(
 ): {
   area: number;
   collapsed: number;
+  coveredFaces: number;
   faces: number;
   stretched: number;
   submergedFaces: number;
@@ -295,6 +315,7 @@ function analyzeUvStretch(
   let worst = 0;
   let stretched = 0;
   let submergedFaces = 0;
+  let coveredFaces = 0;
 
   for (const { a, b, c } of triangles) {
     const e1p = [0, 1, 2].map((k) => positions[b * 3 + k] - positions[a * 3 + k]);
@@ -327,38 +348,17 @@ function analyzeUvStretch(
       sigmaMin.push(Number.NaN);
       continue;
     }
-    // UNDER THE SEA is the second way a face is there but unseen (user, 2026-08-11 — "water occlusion, as
-    // already happened with `sbseabed3_las20`"). Judged in WORLD space through the instance's own transform,
-    // and only when EVERY corner is under: a face breaking the surface is still looked at.
-    if (place && submerged(place, positions, [a, b, c])) {
-      submergedFaces += 1;
-      area.push(0);
+    const hiddenBy = place === null ? null : hidden(place, positions, [a, b, c]);
+    if (hiddenBy !== null) {
+      if (hiddenBy === 'water') submergedFaces += 1;
+      else coveredFaces += 1;
+      area.push(0); // there, but nobody looks at it
       aniso.push(0);
       sigmaMin.push(Number.NaN);
       continue;
     }
     area.push(faceArea);
-    const e1t = [uvs[b * 2] - uvs[a * 2], uvs[b * 2 + 1] - uvs[a * 2 + 1]];
-    const e2t = [uvs[c * 2] - uvs[a * 2], uvs[c * 2 + 1] - uvs[a * 2 + 1]];
-    const det = e1t[0] * e2t[1] - e1t[1] * e2t[0];
-    if (Math.abs(det) < 1e-14) {
-      collapsed += 1;
-      stretched += 1;
-      aniso.push(Number.POSITIVE_INFINITY);
-      sigmaMin.push(0);
-      worst = Number.POSITIVE_INFINITY;
-      continue;
-    }
-    const dPdu = [0, 1, 2].map((k) => (e1p[k] * e2t[1] - e2p[k] * e1t[1]) / det);
-    const dPdv = [0, 1, 2].map((k) => (e2p[k] * e1t[0] - e1p[k] * e2t[0]) / det);
-    const guu = dot3(dPdu, dPdu);
-    const gvv = dot3(dPdv, dPdv);
-    const guv = dot3(dPdu, dPdv);
-    const mean = (guu + gvv) / 2;
-    const spread = Math.sqrt(Math.max(0, ((guu - gvv) / 2) ** 2 + guv * guv));
-    const big = Math.sqrt(Math.max(0, mean + spread));
-    const small = Math.sqrt(Math.max(0, mean - spread));
-    const ratio = small > 1e-9 ? big / small : Number.POSITIVE_INFINITY;
+    const { ratio, small } = uvMetric(uvs, e1p, e2p, a, b, c);
     if (!Number.isFinite(ratio)) collapsed += 1;
     if (ratio > limit) stretched += 1;
     if (ratio > worst) worst = ratio;
@@ -376,7 +376,7 @@ function analyzeUvStretch(
   // wires and cables out by construction: a ribbon is stretched end to end, so its healthy set is empty and
   // its extreme mapping IS its design. Never a verdict without evidence.
   if (healthy.length < 3 || healthy.length < drawn * 0.2) {
-    return { area: 0, collapsed, faces: 0, stretched, submergedFaces, totalArea, worst };
+    return { area: 0, collapsed, coveredFaces, faces: 0, stretched, submergedFaces, totalArea, worst };
   }
   healthy.sort((x, y) => x - y);
   const baseline = healthy[healthy.length >> 1];
@@ -392,11 +392,43 @@ function analyzeUvStretch(
     }
   });
 
-  return { area: flaggedArea, collapsed, faces: flagged, stretched, submergedFaces, totalArea, worst };
+  return { area: flaggedArea, collapsed, coveredFaces, faces: flagged, stretched, submergedFaces, totalArea, worst };
+}
+
+/** Is this face's centroid covered from above by another model resting on it? */
+function coveredFace(place: Placement, positions: Float32Array, corners: readonly number[]): boolean {
+  let cx = 0;
+  let cy = 0;
+  let cz = 0;
+  for (const v of corners) {
+    cx += positions[v * 3] / 3;
+    cy += positions[v * 3 + 1] / 3;
+    cz += positions[v * 3 + 2] / 3;
+  }
+
+  return place.cover.covered(toWorld(place, cx, cy, cz), place.modelName);
 }
 
 function dot3(a: readonly number[], b: readonly number[]): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+/**
+ * The two ways a face is drawn and still never seen, or `null` when it is out in the open.
+ *
+ * `'water'` — every corner sits `depth` under the sea (user, 2026-08-11: "water occlusion, as already
+ * happened with `sbseabed3_las20`"). ALL corners, because a face breaking the surface is still looked at.
+ *
+ * `'cover'` — another model rests on it, which is what the three field labels turned out to be: skirts with
+ * the neighbouring buildings standing on them. Tested at the centroid; the occluder is already an outer box,
+ * so asking more precisely would be false precision.
+ */
+function hidden(place: Placement, positions: Float32Array, corners: readonly number[]): 'cover' | 'water' | null {
+  if (submerged(place, positions, corners)) {
+    return 'water';
+  }
+
+  return coveredFace(place, positions, corners) ? 'cover' : null;
 }
 
 function luma(rgba: Uint8Array, i: number): number {
@@ -446,6 +478,9 @@ function main(): void {
   }
   console.log(`· ${placed.size} placed models — scanning sources …`);
 
+  const cover = buildCoverQuery(worldBoxes(defs, mods, vanilla), args.reach);
+  console.log(`· world cover: ${cover.boxCount} placement boxes (reach ${args.reach} u)`);
+
   const rows: ModelRow[] = [];
   let scanned = 0;
   let sourceless = 0;
@@ -458,7 +493,14 @@ function main(): void {
     try {
       // One representative instance. A model placed many times can be submerged at one and dry at another
       // (`rdwarhus` is placed 13×) — the per-instance question belongs to the world pass this is scouting.
-      const place: Placement = { depth: args.waterDepth, position: info.position, rotation: info.rotation, water };
+      const place: Placement = {
+        cover,
+        depth: args.waterDepth,
+        modelName: model,
+        position: info.position,
+        rotation: info.rotation,
+        water,
+      };
       rows.push({
         from: source.from,
         model,
@@ -551,6 +593,34 @@ function main(): void {
   }
 }
 
+/** A model's LOCAL bounding box from its source DFF, or null when it has no source / does not parse. */
+function modelBounds(
+  model: string,
+  mods: ReturnType<typeof indexModAssets>,
+  vanilla: Parameters<typeof resolveDff>[2],
+): null | { max: Vec3; min: Vec3 } {
+  const source = resolveDff(model, mods, vanilla);
+  if (!source) return null;
+  try {
+    const bytes = source.bytes;
+    const clump = parseDff(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+    const min: Vec3 = [Infinity, Infinity, Infinity];
+    const max: Vec3 = [-Infinity, -Infinity, -Infinity];
+    for (const geo of clump.geometries) {
+      for (let v = 0; v < geo.positions.length; v += 3) {
+        for (let k = 0; k < 3; k += 1) {
+          min[k] = Math.min(min[k], geo.positions[v + k]);
+          max[k] = Math.max(max[k], geo.positions[v + k]);
+        }
+      }
+    }
+
+    return min[0] > max[0] ? null : { max, min };
+  } catch {
+    return null;
+  }
+}
+
 function p50(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
 
@@ -563,6 +633,7 @@ function parseArgs(): {
   dz: number;
   game: string;
   json: string | undefined;
+  reach: number;
   top: number;
   up: number;
   waterDepth: number;
@@ -575,6 +646,7 @@ function parseArgs(): {
   let discont = 4;
   let up = 0.5;
   let waterDepth = 0;
+  let reach = 2;
   let json: string | undefined;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--game') game = argv[++i];
@@ -584,11 +656,31 @@ function parseArgs(): {
     else if (argv[i] === '--discont') discont = Number(argv[++i]);
     else if (argv[i] === '--up') up = Number(argv[++i]);
     else if (argv[i] === '--water-depth') waterDepth = Number(argv[++i]);
+    else if (argv[i] === '--reach') reach = Number(argv[++i]);
     else if (argv[i] === '--json') json = argv[++i];
     else throw new Error(`unknown arg ${argv[i]}`);
   }
 
-  return { aniso, discont, dz, game, json, top, up, waterDepth };
+  return { aniso, discont, dz, game, json, reach, top, up, waterDepth };
+}
+
+/** A local AABB through a placement's transform: all 8 corners, re-bounded (a turned box is not its own). */
+function rotatedBox(local: { max: Vec3; min: Vec3 }, place: Placement2, model: string): PlacedBox {
+  const min: Vec3 = [Infinity, Infinity, Infinity];
+  const max: Vec3 = [-Infinity, -Infinity, -Infinity];
+  for (const x of [local.min[0], local.max[0]]) {
+    for (const y of [local.min[1], local.max[1]]) {
+      for (const z of [local.min[2], local.max[2]]) {
+        const corner = toWorld(place, x, y, z);
+        for (let k = 0; k < 3; k += 1) {
+          min[k] = Math.min(min[k], corner[k]);
+          max[k] = Math.max(max[k], corner[k]);
+        }
+      }
+    }
+  }
+
+  return { max, min, modelName: model };
 }
 
 /**
@@ -611,19 +703,66 @@ function submerged(place: Placement, positions: Float32Array, corners: readonly 
   return true;
 }
 
-/** Model-local → world: rotate by the instance quaternion (x, y, z, w), then translate. */
-function toWorld(place: Placement, x: number, y: number, z: number): [number, number, number] {
-  const [qx, qy, qz, qw] = place.rotation;
-  // v + 2 * cross(q.xyz, cross(q.xyz, v) + w * v) — the standard quaternion-vector product.
-  const tx = 2 * (qy * z - qz * y);
-  const ty = 2 * (qz * x - qx * z);
-  const tz = 2 * (qx * y - qy * x);
+/**
+ * One face's UV→world map: `ratio` is σmax/σmin (how many times longer than wide a texel is drawn there,
+ * `Infinity` for a degenerate UV triangle) and `small` is σmin itself, the crushed axis the model baseline
+ * is compared against.
+ */
+function uvMetric(
+  uvs: Float32Array,
+  e1p: readonly number[],
+  e2p: readonly number[],
+  a: number,
+  b: number,
+  c: number,
+): { ratio: number; small: number } {
+  const e1t = [uvs[b * 2] - uvs[a * 2], uvs[b * 2 + 1] - uvs[a * 2 + 1]];
+  const e2t = [uvs[c * 2] - uvs[a * 2], uvs[c * 2 + 1] - uvs[a * 2 + 1]];
+  const det = e1t[0] * e2t[1] - e1t[1] * e2t[0];
+  if (Math.abs(det) < 1e-14) {
+    return { ratio: Number.POSITIVE_INFINITY, small: 0 };
+  }
+  const dPdu = [0, 1, 2].map((k) => (e1p[k] * e2t[1] - e2p[k] * e1t[1]) / det);
+  const dPdv = [0, 1, 2].map((k) => (e2p[k] * e1t[0] - e1p[k] * e2t[0]) / det);
+  const guu = dot3(dPdu, dPdu);
+  const gvv = dot3(dPdv, dPdv);
+  const guv = dot3(dPdu, dPdv);
+  const mean = (guu + gvv) / 2;
+  const spread = Math.sqrt(Math.max(0, ((guu - gvv) / 2) ** 2 + guv * guv));
+  const big = Math.sqrt(Math.max(0, mean + spread));
+  const small = Math.sqrt(Math.max(0, mean - spread));
 
-  return [
-    place.position[0] + x + qw * tx + (qy * tz - qz * ty),
-    place.position[1] + y + qw * ty + (qz * tx - qx * tz),
-    place.position[2] + z + qw * tz + (qx * ty - qy * tx),
-  ];
+  return { ratio: small > 1e-9 ? big / small : Number.POSITIVE_INFINITY, small };
+}
+
+/**
+ * Every placement reduced to its world AABB — the input the cover query indexes. Each model's LOCAL bounds
+ * are parsed once and cached; the box is then expanded per instance through that instance's own transform,
+ * so a model placed 13× contributes 13 different boxes.
+ */
+function worldBoxes(
+  defs: ReturnType<typeof loadMapDefsAt>,
+  mods: ReturnType<typeof indexModAssets>,
+  vanilla: Parameters<typeof resolveDff>[2],
+): PlacedBox[] {
+  /** `null` caches "this model has no usable source", so a miss is parsed once and never retried. */
+  const localBounds = new Map<string, null | { max: Vec3; min: Vec3 }>();
+  const boxes: PlacedBox[] = [];
+  for (const instance of defs.instances) {
+    if (instance.isLod) continue;
+    const def = defs.catalog.get(instance.id);
+    if (!def) continue;
+    const model = def.modelName.toLowerCase();
+    if (!localBounds.has(model)) {
+      localBounds.set(model, modelBounds(model, mods, vanilla));
+    }
+    const local = localBounds.get(model);
+    if (!local) continue;
+    const box = rotatedBox(local, { position: instance.position, rotation: instance.rotation }, model);
+    boxes.push(box);
+  }
+
+  return boxes;
 }
 
 main();
