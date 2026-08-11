@@ -62,7 +62,7 @@ to cause discomfort, so it ships with a master off-switch and conservative defau
       snapshot (one number: peak contact force this frame).
 - [x] Config + Camera tab: `bobAmplitude`, `bobCyclesPerMetre`, `landingDipScale`, `shakeScale`,
       `sprintFovKick`, `reducedMotion` (+ the two "full at" references).
-- [ ] **Field round**: long walk (does bob read as life or as wobble?), stair runs, rooftop jumps,
+- [~] **Field round**: long walk (does bob read as life or as wobble?), stair runs, rooftop jumps,
       curb-hopping in a car, a deliberate wall crash. Explicitly ask for a comfort verdict, not
       only a looks verdict; tune down by default.
 

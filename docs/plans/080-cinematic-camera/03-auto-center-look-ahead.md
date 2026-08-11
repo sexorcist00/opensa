@@ -45,7 +45,7 @@ GTA V refinement (idle recenter, which 036 did not have):
       damp; zero at rest; capped at sprint).
 - [x] Config + Camera-tab rows: `recenterDelaySec`, `recenterRate`, `lookAheadDistance`,
       `lookAheadTime`, thresholds.
-- [ ] **Field round**: run a lap with no mouse input (does it settle behind you naturally?), zigzag
+- [~] **Field round**: run a lap with no mouse input (does it settle behind you naturally?), zigzag
       between buildings (turn-follow), strafe-circle an enemy stand-in (look-ahead must not fight
       orbiting). Freeze defaults.
 

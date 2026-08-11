@@ -461,7 +461,7 @@ it" path (object + compare), and the character viewer needs an IFP player on `if
       Gotcha re-paid: **no backticks in WGSL comments** — the shader modules are JS template literals
       and a stray backtick ends the string (the whole file then fails to parse).
 
-- [ ] ~~**4.6 DECISION OWED — the dropped viewer toggles.**~~ Options as offered, kept for the record:
+- [~] ~~**4.6 DECISION OWED — the dropped viewer toggles.**~~ Options as offered, kept for the record:
       (a) accept the loss (the viewer becomes "see exactly what the game draws", nothing more);
       (b) rebuild them as DATA readouts rather than shading modes — e.g. a panel that reports a model's
       prelit min/avg/max and whether it carries night colours, which answers the "too dark?" question

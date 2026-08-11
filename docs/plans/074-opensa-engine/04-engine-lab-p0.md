@@ -40,12 +40,12 @@ written verdict in the ledger before any workaround work starts.
 
 ## Tasks
 
-- [ ] Scaffold `apps/engine-lab` (vite entry like the standalone spikes) — after approval.
-- [ ] HUD + GPU timestamps first; verify timestamp-query availability path (feature check from 01).
-- [ ] Blob loader (main-thread fetch for M0; worker IO arrives in 05) + cell registry hookup.
-- [ ] Scripted camera: sweep + the ls-noon path replayed from the existing bench path data.
-- [ ] Alpha visual bench page (the three known-bad textures against grey; screenshot diff harness).
-- [ ] Run the P0 matrix (Chrome + Safari TP), fill the ledger, write the verdict in the umbrella readme.
+- [~] Scaffold `apps/engine-lab` (vite entry like the standalone spikes) — after approval.
+- [~] HUD + GPU timestamps first; verify timestamp-query availability path (feature check from 01).
+- [~] Blob loader (main-thread fetch for M0; worker IO arrives in 05) + cell registry hookup.
+- [~] Scripted camera: sweep + the ls-noon path replayed from the existing bench path data.
+- [~] Alpha visual bench page (the three known-bad textures against grey; screenshot diff harness).
+- [~] Run the P0 matrix (Chrome + Safari TP), fill the ledger, write the verdict in the umbrella readme.
 
 ## Measurement ledger
 

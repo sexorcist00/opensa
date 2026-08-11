@@ -73,7 +73,7 @@ single smoothing point.
 - [x] Director wiring: input → rig → resolveCamera; `?cam=legacy` still bypasses.
 - [x] Config defaults tuned to first-guess values (document them in the ledger with reasoning);
       Camera tab sliders for `inputSmoothTime`, `positionLagTime`, `verticalLagTime`, `deadZone`.
-- [ ] **Field round 1** (the chain's first feel checkpoint): walk/run/jump around Grove Street,
+- [~] **Field round 1** (the chain's first feel checkpoint): walk/run/jump around Grove Street,
       strafe hard, flick the mouse. Verdict per behaviour #2/#3/#11; freeze defaults in the ledger.
 
 ## Acceptance

@@ -1,6 +1,27 @@
 # 074 — OpenSA engine (own WebGPU framework + native formats) — chain umbrella
 
 **Goal: 60 fps on M3-class hardware with the FULL current WebGL effect set, on the same world data.**
+
+> ## Where this chain stands — verified against the tree, 2026-08-11
+>
+> **The engine SHIPPED and is the one the game runs.** Its per-step checklists were never ticked, so a
+> checkbox scan reported 46 live tasks in a chain that has been in production for weeks. Each step was checked
+> against the code rather than assumed, and the answer splits three ways:
+>
+> - **Struck as done (32 boxes, steps 01/02/04/05/11/13):** `packages/engine` and `packages/engine-formats`
+>   exist, `apps/engine-lab` exists, the bench harness runs (`bench-scenes.ts`, 75 recorded runs in
+>   `docs/benchmarks/opensa-engine/`, `bench-compare.ts`), and 13 already declared itself COMPLETE.
+> - **Genuinely NOT built — [15 (LOD baked lights)](15-lod-baked-lights.md).** There is no `bakeNightLights`
+>   anywhere in the tree. This is the one whole step of the chain that never happened, and its boxes stay open
+>   for that reason.
+> - **Part-shipped, so the boxes stay open and name their own tails** — 06, 07, 08, 09, 10, 12, 14. Verified
+>   present: god-rays, coronas/particles, skinning, breakables, IDE anim objects, the `_vlo` vehicle LOD band,
+>   water. Verified ABSENT: **vehicle lamp head/tail STATE** and the **dynamics-only near shadow pass** (08),
+>   and 14's full-profile conversions (anderius/carcer/gostown) and BC α-subset. 07's directional v2 is
+>   deferred to roadmap 0.6.0 by its own text; 12 ships default-off by the user's verdict.
+>
+> Nothing here is a debt list to work through. It is the honest inventory: what the engine has, and the four
+> places where a box means what it says.
 Graduated from the [00-concept](00-concept.md) research record after the
 [073 three-WebGPU migration](../073-webgpu-migration-threejs/readme.md) FAILED on three's side. Every design
 decision below traces to a 073 field measurement — this chain exists because we now know exactly what the

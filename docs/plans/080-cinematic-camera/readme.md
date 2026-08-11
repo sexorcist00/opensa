@@ -11,6 +11,13 @@ plan doc replaced by the REWORKED idea
 [`docs/ideas/aaa-camera-polish/`](../../ideas/aaa-camera-polish/readme.md), which carries the diagnosis and
 reorders the work (fix the vehicle chase first, then the effects). The archive of both attempts lives on
 branch `080-10-corner-peek`.**
+
+> **Checkbox sweep 2026-08-11: steps 01–07 struck (6 boxes), step 08 left OPEN.** Those six were the field
+> rounds of steps the banner above already calls DONE and ACCEPTED, so they were stale, not owed. **08 is the
+> real thing: verified unbuilt** — no `CameraPreset`, `cycleView` or `cameraView` exists anywhere in the tree.
+> It is the C-key preset ring that [`docs/ideas/first-person-camera/`](../../ideas/first-person-camera/readme.md)
+> would ride, and it stays deferred by the user's call.
+
 Planned 2026-07-19.: the damp/spring math and the
 `CameraDirector` in `apps/web/src/ui/camera/` (01), the smoothed rig — input dampening, a trailing look
 point with a dead zone, the steered-yaw channel, gliding zoom (02), the composition layer — turn-follow,

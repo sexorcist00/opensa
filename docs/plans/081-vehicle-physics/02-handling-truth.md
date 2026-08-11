@@ -79,7 +79,7 @@ free).
       a field report caught the first attempt and the clamp fixed it).
 - [x] Pre-step control hook + latency test.
 - [x] Replay A/B captures (4 cars × 9 scenes) into the ledger + the benchmark record.
-- [ ] **Field round**: the flip complaint specifically — aggressive city driving, the user tries to
+- [~] **Field round**: the flip complaint specifically — aggressive city driving, the user tries to
       flip a sedan honestly; plus "do different cars feel different now".
 
 ## Acceptance

@@ -73,7 +73,7 @@ for gameplay. Ships last, behind the field round.
 - [x] Look-behind key (§6 — this plan's own order: it ships after the field round; SHIPPED 2026-07-27
       after 09's rounds closed, see the ledger).
 - [x] Field round 1: the seated distance halved, the speed ramp raised to carry it back — ACCEPTED.
-- [ ] **Field round** (drive-heavy): city corners at speed, handbrake drifts, highway top speed,
+- [~] **Field round** (drive-heavy): city corners at speed, handbrake drifts, highway top speed,
       tunnel (collision + FOV together), enter/exit repeatedly. The bench-road-cars scenes give a
       dense traffic backdrop. Freeze the two tuning tables in the ledger.
 

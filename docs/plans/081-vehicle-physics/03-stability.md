@@ -119,15 +119,15 @@ reports float at speed, it comes back with that verdict attached.
 
 ## Subtasks
 
-- [ ] **§0** Load-transfer test (isolated Rapier) + per-wheel load in the `[phys]` capture. Answer in the
+- [~] **§0** Load-transfer test (isolated Rapier) + per-wheel load in the `[phys]` capture. Answer in the
       ledger BEFORE anything else starts.
-- [ ] §1 Weight transfer: whichever path §0 selects, + `brakeBias`, + tests on scripted wheel states.
-- [ ] §2 Impact response: correlate the record's spikes, then mechanisms 1→3, each measured before the next.
-- [ ] §3 Anti-roll bars, after §1-§2, with the slalom roll number as their justification.
-- [ ] §4 Damping to ≤0.5 + full matrix re-run against the 081/02 record.
-- [ ] §5 Downforce ONLY if the field round asks for it.
-- [ ] F2 Physics tab: live gains + per-system toggles (in-session A/B, the 080 pattern).
-- [ ] **Field round**: brake feel ("does the nose dip"), kerbs at low and high speed, flip resistance under
+- [~] §1 Weight transfer: whichever path §0 selects, + `brakeBias`, + tests on scripted wheel states.
+- [~] §2 Impact response: correlate the record's spikes, then mechanisms 1→3, each measured before the next.
+- [~] §3 Anti-roll bars, after §1-§2, with the slalom roll number as their justification.
+- [~] §4 Damping to ≤0.5 + full matrix re-run against the 081/02 record.
+- [~] §5 Downforce ONLY if the field round asks for it.
+- [~] F2 Physics tab: live gains + per-system toggles (in-session A/B, the 080 pattern).
+- [~] **Field round**: brake feel ("does the nose dip"), kerbs at low and high speed, flip resistance under
       abuse, plus a regression drive of everything since 02.
 
 ## Acceptance

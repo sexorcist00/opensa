@@ -115,7 +115,7 @@ becomes the next thing the eye rejects. The two land together or the improvement
 
 - [x] Airborne detector + attitude torques + clamps + tests (debounce, no-input = no torque,
       crest-jump envelope). **Shipped 2026-07-27** — the original's own law, `?airCtl` dial, ledger below.
-- [ ] Kerb probe + impulse ramp + thresholds + tests; `kerb-strike` A/B captures.
+- [~] Kerb probe + impulse ramp + thresholds + tests; `kerb-strike` A/B captures.
 - [x] `animTranslation` + `setPartTranslation` on `RigidEntity` (the one primitive below the vehicle layer).
       **Landed early (2026-07-27)** as the stance fix's dependency — see the audit addendum.
 - [x] Axle-type mapping from `modelFlags` (front/rear digits) into the typed handling row. **Shipped
@@ -127,7 +127,7 @@ becomes the next thing the eye rejects. The two land together or the improvement
       `{ camber, lift, spin, steer }` with the composition order pinned by its own test.
 - [x] Clamps + no-ops: authored travel, LOD bands, detached parts — see the ledger; two of the three are
       structurally impossible today rather than guarded.
-- [ ] **Field round**: jumps (crest at varying speed), kerb mounts, cobbled/uneven streets ("do the
+- [~] **Field round**: jumps (crest at varying speed), kerb mounts, cobbled/uneven streets ("do the
       wheels live?"), plus regression drive of everything since 02.
 
 ## Acceptance

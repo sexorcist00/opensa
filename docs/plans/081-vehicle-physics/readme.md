@@ -16,6 +16,13 @@ what the engine actually is now. The audit of what the chain cost and bought:
 [`vehicle-physics-081-instruments.md`](../../audit/vehicle-physics-081-instruments.md), and the chain's
 [close-out](../../audit/vehicle-physics-081-closeout.md).
 
+> **Checkbox sweep 2026-08-11: all 22 remaining boxes struck, and the chain is now clear.** They were the
+> implementation and field-round lists of steps 02–06, which the banner above already records as SHIPPED and
+> field-accepted (01–05 on 2026-07-26, 06 on 2026-07-27 with its §2 closed BY the field). `drivetrain.ts` and
+> its tests are in `packages/game/src/vehicle/`, so the code backs the banner. Nothing in this chain is owed;
+> what is still live from the vehicle work lives elsewhere — the shelved
+> [off-road grip issue](../../open-issues/offroad-feels-like-tarmac.md) and 10's surface types.
+
 **The gate (05) is answered: STAY on `DynamicRayCastVehicleController`.** Every complaint the field raised
 turned out to be a number this engine had guessed where the game ships the answer, not a ceiling in the
 controller — and each of those numbers was reachable through DRCVC's own per-wheel API. What the controller

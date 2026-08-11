@@ -58,13 +58,13 @@ seedReverse/phantom-speed die with it; parking brake + spawn lessons stay.
 
 ## Subtasks
 
-- [ ] Traction mapping + per-wheel application + tests (bias split, surface factor path).
-- [ ] `throttle-in-corner` scene + drive-type A/B captures (F vs R vs 4 on one chassis — synthetic
+- [~] Traction mapping + per-wheel application + tests (bias split, surface factor path).
+- [~] `throttle-in-corner` scene + drive-type A/B captures (F vs R vs 4 on one chassis — synthetic
       handling rows make this a clean experiment).
-- [ ] Steering v2 (named factors, counter-steer assist, speed recenter) + slalom retune + tests.
-- [ ] Gate run: G1–G3 captured on the tuned build, G4 field round; **verdict + reasoning recorded
+- [~] Steering v2 (named factors, counter-steer assist, speed recenter) + slalom retune + tests.
+- [~] Gate run: G1–G3 captured on the tuned build, G4 field round; **verdict + reasoning recorded
       here** (the decision record the 0.4.0 idea asked for, finally with data).
-- [ ] If FAIL: own controller bring-up as its own ledger section (scenes re-run, quirk tests
+- [~] If FAIL: own controller bring-up as its own ledger section (scenes re-run, quirk tests
       retired/kept explicitly).
 
 ## Acceptance

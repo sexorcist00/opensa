@@ -100,7 +100,7 @@ type CameraRigState = {
       pass-through stubs except the legacy-parity follow math.
 - [x] `resolveCamera` takes `fovYRad`; test updates.
 - [x] Host: snapshot assembly, director call.
-- [ ] `?cam=legacy` branch — DEFERRED to plan 02 (see the ledger): in this plan the director IS the legacy
+- [~] `?cam=legacy` branch — DEFERRED to plan 02 (see the ledger): in this plan the director IS the legacy
       math, so the flag would switch between two identical paths.
 - [x] Legacy-parity unit test (director output === old math for a scripted input sequence).
 - [x] **Fly mode**: move `flyStep`/`panStep` + the host's inline orbit/dolly/top-down-snap block into

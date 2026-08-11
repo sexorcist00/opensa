@@ -52,10 +52,10 @@ Target steady numbers (M1 ledger): JS heap **< 500 MB and flat** while driving; 
       hysteresis 60 + atomic HD↔LOD swap (unload same frame) + bounded ≤1 create/frame + eviction with margin;
       HUD line: loaded/pending/created/evicted/worst-create. Modes: `?pak=1&stream=1`, stress =
       `&bench=drive`.
-- [ ] Residency ledger + HUD panel + leak assertions (unload-all test).
-- [ ] Texture-array refcounting + border-thrash hysteresis.
-- [ ] Record-cost measurement; split-record fallback only if the number demands it.
-- [ ] Script the stress matrix; run in Chrome + Safari; fill the ledger; M1 verdict in the umbrella.
+- [~] Residency ledger + HUD panel + leak assertions (unload-all test).
+- [~] Texture-array refcounting + border-thrash hysteresis.
+- [~] Record-cost measurement; split-record fallback only if the number demands it.
+- [~] Script the stress matrix; run in Chrome + Safari; fill the ledger; M1 verdict in the umbrella.
 
 ## Measurement ledger
 
