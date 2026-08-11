@@ -195,6 +195,11 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       });
       if (optimized.uvStretch) {
         uvStretchLedger.value = optimized.uvStretch;
+        // Written HERE, not only merged into the pack's report: the root `report.json` is produced by the
+        // opensa branch alone, so a `--exclude opensa` run (the `sa` target) left the ledger nowhere on disk
+        // at all — measured 2026-08-11, the sa build printed its line and wrote no list. The optimize stage
+        // runs for BOTH targets, so this is the one place that always sees it.
+        writeFileSync(join(outPath, 'uv-stretch.json'), `${JSON.stringify(optimized.uvStretch, null, 2)}\n`);
       }
     },
   });
