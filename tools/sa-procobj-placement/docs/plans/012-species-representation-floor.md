@@ -44,10 +44,33 @@ character. The ask was "none may be dropped to zero", and 1 delivers it — the 
 species represented by a single object may read as an accident rather than as a species, which is a LOOK
 call and belongs to the field, not to this table.
 
-**Why the default is still OFF.** The value is a look decision on a picture nobody has judged yet, the same
-shape as the per-category ranges of plan 013 — and unlike a perf fix it changes what the world looks like.
-`?procobjFloor=1` is one field round away, and P1 already certified there is no frame-time budget to argue
-about. **Turning it on is the recommended next step, not a further measurement.**
+**Why the default is still OFF.** Not because anything is unmeasured — the picture has now been captured too
+(below) — but because what it changes is a LOOK, and a look is his call, the same shape as the per-category
+ranges of plan 013. P1 already certified there is no frame-time budget to argue about. **Turning it on is the
+recommended next step, and the evidence for it is complete.**
+
+### The field A/B, 2026-08-11 — and the first site was a dead one
+
+**The picture is checkable, and it was checked.** Headless, `?loader=http-dir` against
+`build/original/opensa`, `spawn=-1391,2044,55&look=-1361,2044,52&hour=12` — 30 m west of the `sand_josh2`
+the cap zeroes in cell `-5,7`, aimed at it. Same spot, one URL apart:
+
+| Arm | Changed pixels vs its pair | What it shows |
+| --- | --- | --- |
+| `?procobj=0` vs `?procobj=3` — **the positive control** | **9.81 %** (mean Δ 11.2) | bare sand against dense scrub: the layer draws here, so the site can answer |
+| `?procobjFloor=0` vs `?procobjFloor=1` — **the measurement** | **1.00 %** (mean Δ 0.85, max Δ 194) | one Joshua tree, standing in the floored arm and absent without it. `draws` 533 → 534 |
+| `?procobj=3` vs `?procobj=1` | 0.07 % | **the density knob does nothing here** — `procObjLimit` binds, which is exactly the regime the floor is for |
+
+**The first site chosen was a null, and the control is why that is known.** The census's worst cell (`8,-3`,
+the redwood forest at ~2125, −625) was the obvious place to stand, and four frames there showed no difference
+at all — because `?procobj=0` and `?procobj=3` showed no difference there either. The layer draws almost
+nothing under those redwoods, so the A/B was measuring an empty stage. **Most species lost is not the same
+question as most clutter drawn**, and only the control separates them (lesson 46, second instance).
+
+**What the picture says about N.** One plant per lost species is a variety change, not a density change: it
+moves 1 % of the frame where turning the whole layer off moves 10 %. On this frame the restored species is
+the only TALL thing in the patch, so it reads clearly; a restored grass tuft would not. That is an argument
+for the floor being about the roster, and against ever growing it into a quota.
 
 **Equivalence, checked rather than asserted:** with the floor off, `procObjCellBudget` returns byte-identical
 counts to the old `lottery < min(density, procObjLotteryCap(batches, limit))` cut — **0 mismatches over the
@@ -206,11 +229,11 @@ binding rate, which is already 97.9 % and says nothing on its own.
       share one budget by design ("what isn't rendered is never collided"), and a floor applied to only one
       of them would break that invariant. **DONE, structurally**: the two paths no longer each compute a
       cutoff, they spend one keep-count array, so agreement is not a rule anyone can forget to apply.
-- [ ] In-viewer check: a desert cell that previously showed only one shrub species shows its full roster.
-      **The flight plan, since this is now checkable on the shipped build**: `8,-3` (~2125, −625) loses 7
-      models at once — `genveg_bush01` (25 instances), `genveg_bush11` (7), `genveg_bush13` (2) and four
-      `dead_tree_*`; `-4,-4` (~−875, −875) loses `cedar1_po` (7) and `ash_po` (4). A/B is one URL:
-      `?procobjFloor=0` against `?procobjFloor=1` from the same spot.
+- [x] In-viewer check: a desert cell that previously showed only one shrub species shows its full roster.
+      **DONE 2026-08-11, headless, with a passing positive control** — see
+      [the field A/B](#the-field-ab-2026-08-11--and-the-first-site-was-a-dead-one) below. The
+      `sand_josh2` the cap had zeroed in cell `-5,7` stands in the `?procobjFloor=1` frame and is absent
+      from `?procobjFloor=0`; nothing else in the frame moves.
 
 ## Verification
 
