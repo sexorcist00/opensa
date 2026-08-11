@@ -580,11 +580,46 @@ collapsed UV samples a constant colour, so there is nothing to smear however ext
 `airtwer_las`'s p90 of 46 says a minority of its roof faces DO carry varying texture — plausibly the
 "maybe something small" the user allowed for.
 
-**Next, and it is a decision not a detail**: wiring this into the scanner means resolving and DECODING a TXD
-per model over 7 148 models, which is a different cost class from everything the scan does today. Options are
-to decode lazily only for models that already have a flagged face (a few hundred), or to cache decoded bases.
-Neither is hard; both should be measured rather than assumed, and the threshold (~15 on this evidence) needs
-more than eight labels before it becomes a default.
+### WIRED IN, lazily — and the full scan
+
+`scripts/lib/texture-probe.ts` (5 unit tests) + the gate in the scanner, `--texvar`, default **15** from the
+evidence above and marked provisional. **Lazy by construction**: a TXD is decoded only for a model that
+already has a geometrically-flagged face, so the cost lands on a few hundred models rather than 7 148 — the
+whole scan still runs in **12 s**. A face whose texture cannot be resolved is KEPT, never silently dropped:
+no verdict without evidence, the same rule the cover gate follows.
+
+**The eight labels, after all three gates:**
+
+| model | label | before any gate | after visibility | **after texture** |
+|---|---|---|---|---|
+| `road_lawn17` | **BROKEN** | — | 3.2 % | **3.2 %** ✓ top of the three |
+| `road_lawn34` | **BROKEN** | 3.7 % | 2.0 % | **2.0 %** ✓ |
+| `road_lawn32` | **BROKEN** | — | 0.5 % | **0.5 %** ✓ |
+| `road03sfn` | clean | 16.1 % | 1.5 % | **gone** ✓ |
+| `airtwer_las` | clean | 15.0 % | 15.0 % | **0.5 %** ✓ (77 → 32 faces) |
+| `wires_04c_sfs` | clean | 42.0 % | 42.0 % | **gone** ✓ (134 → 0) |
+| `road_lawn08` | clean | — | gone | gone ✓ |
+| `backalleys1_sfe` / `garse_85_sfe` | clean | 41–43 % | gone | gone ✓ |
+| `nwwarhus` | clean | 12.0 % | 12.0 % | **11.6 %** ✗ (18 → 4 faces) |
+
+**Seven of eight.** All three broken models are present and correctly ordered; five of six clean ones are out
+of the ranking entirely and `airtwer_las` fell from 15 % to 0.5 %. The one failure is `nwwarhus`: the gate
+removed 14 of its 18 faces, but 4 survive carrying real texture contrast on ~466 u², and the field calls the
+model clean. That is the next label to chase, and it is a specific one rather than a whole class.
+
+**Population, all three gates:**
+
+| | no gates | visibility | **+ texture** |
+|---|---|---|---|
+| models ≥ 1 % of surface | 954 | 151 | **41** |
+| models ≥ 5 % | 310 | ~45 | **7** |
+| any flagged face | 2 544 | 667 | **329** |
+
+From 2 544 models to **329 / 834 placements** — and for the first time the top of the ranking is not a
+by-design family. Every wire model left it.
+
+**Still owed before any of this becomes a repair pass**: the 15 threshold rests on eight labels; `nwwarhus`
+disagrees; and the two `airport_*` interiors now top the list without anyone having looked at them.
 
 Cost and risk still to price for the eventual PASS (this is the scanner, not the pass): the occlusion query is
 per candidate face over the placed world,

@@ -1,3 +1,5 @@
+import type { RWGeometry } from '@opensa/renderware/parsers/binary/types';
+
 import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { writeFileSync } from 'node:fs';
@@ -12,7 +14,8 @@ import {
   toWorld,
 } from '../../tools/map-optimizer/src/adapters/gta-sa/world-cover';
 import { loadMapDefsAt, readBytes } from '../lib/game';
-import { indexModAssets, resolveDff } from '../lib/mod-assets';
+import { indexModAssets, resolveDff, resolveTxd } from '../lib/mod-assets';
+import { decodeTxd, type Image, smearSpread } from '../lib/texture-probe';
 import { loadWaterField, type WaterField } from '../lib/water';
 
 /**
@@ -62,6 +65,13 @@ import { loadWaterField, type WaterField } from '../lib/water';
  *   `npx tsx scripts/debug/teleport-spot.ts <model>` for a field spot.
  */
 
+/** A face the geometric criteria flagged, carried out so the LAZY texture gate can judge it. */
+interface FlaggedFace {
+  area: number;
+  triangle: Triangleish;
+  uvs: Float32Array;
+}
+
 interface ModelRow {
   // Family B
   allBlackTris: number;
@@ -76,6 +86,8 @@ interface ModelRow {
   coveredFaces: number;
   dayP50: number;
   faces: number;
+  /** Faces dropped because the texture line they smear is FLAT — nothing to see at any anisotropy. */
+  flatFaces: number;
   from: string;
   hasAuthoredNormals: boolean;
   instances: number;
@@ -114,6 +126,7 @@ interface Triangleish {
   a: number;
   b: number;
   c: number;
+  materialIndex: number;
 }
 
 /** One model's metrics over all its geometries (counts summed, medians over concatenated verts). */
@@ -124,6 +137,8 @@ function analyzeModel(
   discont: number,
   up: number,
   place: null | Placement,
+  texVar: number,
+  loadTextures: () => Map<string, Image> | null,
 ): Omit<ModelRow, 'from' | 'instances' | 'model' | 'position' | 'timed' | 'txd'> {
   const clump = parseDff(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
   let badNormalFaces = 0;
@@ -134,8 +149,7 @@ function analyzeModel(
   let allBlackTris = 0;
   let blackVerts = 0;
   let verts = 0;
-  let stretchFaces = 0;
-  let stretchArea = 0;
+  const flagged: (FlaggedFace & { materials: RWGeometry['materials'] })[] = [];
   let stretchedFaces = 0;
   let submergedFaces = 0;
   let coveredFaces = 0;
@@ -150,8 +164,7 @@ function analyzeModel(
     faces += geo.triangles.length;
     if (geo.uvLayers[0]) {
       const stretch = analyzeUvStretch(geo.positions, geo.uvLayers[0], geo.triangles, aniso, discont, up, place);
-      stretchFaces += stretch.faces;
-      stretchArea += stretch.area;
+      flagged.push(...stretch.flagged.map((f) => ({ ...f, materials: geo.materials })));
       stretchedFaces += stretch.stretched;
       submergedFaces += stretch.submergedFaces;
       coveredFaces += stretch.coveredFaces;
@@ -176,6 +189,35 @@ function analyzeModel(
     worstDz = Math.max(worstDz, normals.worstDz);
   }
 
+  // THE TEXTURE GATE, and it is LAZY on purpose: a TXD is decoded only for a model that already has a
+  // flagged face — a few hundred models out of 7 148 rather than all of them. A stretched UV drags ONE LINE
+  // of texture across the face; if that line is flat there is nothing to see at any anisotropy, which is what
+  // the wires and the roofs turned out to be (plan 025: broken roads 23-26, every clean model 0-10).
+  let kept = flagged;
+  let flatFaces = 0;
+  if (flagged.length > 0 && texVar > 0) {
+    const images = loadTextures();
+    if (images) {
+      kept = flagged.filter((f) => {
+        const name = f.materials[f.triangle.materialIndex]?.texture?.name?.toLowerCase() ?? '';
+        const image = images.get(name);
+        if (!image) {
+          return true; // no texture to judge by — keep it rather than invent a verdict
+        }
+        const { a, b, c } = f.triangle;
+
+        return (
+          smearSpread(image, [
+            [f.uvs[a * 2], f.uvs[a * 2 + 1]],
+            [f.uvs[b * 2], f.uvs[b * 2 + 1]],
+            [f.uvs[c * 2], f.uvs[c * 2 + 1]],
+          ]) >= texVar
+        );
+      });
+      flatFaces = flagged.length - kept.length;
+    }
+  }
+
   return {
     allBlackTris,
     badNormalArea,
@@ -185,11 +227,12 @@ function analyzeModel(
     coveredFaces,
     dayP50: p50(dayLumas),
     faces,
+    flatFaces,
     hasAuthoredNormals,
     nightP50: p50(nightLumas),
-    stretchArea,
+    stretchArea: kept.reduce((sum, f) => sum + f.area, 0),
     stretchedFaces,
-    stretchFaces,
+    stretchFaces: kept.length,
     submergedFaces,
     totalArea,
     verts,
@@ -298,10 +341,10 @@ function analyzeUvStretch(
   up: number,
   place: null | Placement,
 ): {
-  area: number;
   collapsed: number;
   coveredFaces: number;
-  faces: number;
+  /** The flagged faces themselves — the texture gate needs their UVs and their material. */
+  flagged: FlaggedFace[];
   stretched: number;
   submergedFaces: number;
   totalArea: number;
@@ -376,23 +419,21 @@ function analyzeUvStretch(
   // wires and cables out by construction: a ribbon is stretched end to end, so its healthy set is empty and
   // its extreme mapping IS its design. Never a verdict without evidence.
   if (healthy.length < 3 || healthy.length < drawn * 0.2) {
-    return { area: 0, collapsed, coveredFaces, faces: 0, stretched, submergedFaces, totalArea, worst };
+    return { collapsed, coveredFaces, flagged: [], stretched, submergedFaces, totalArea, worst };
   }
   healthy.sort((x, y) => x - y);
   const baseline = healthy[healthy.length >> 1];
 
-  let flaggedArea = 0;
-  let flagged = 0;
+  const flagged: FlaggedFace[] = [];
   aniso.forEach((ratio, f) => {
     if (area[f] === 0 || ratio <= limit) return;
     // Flagged when the face crushes its fine axis far below the scale the rest of this model works at.
     if (baseline > 1e-9 && (sigmaMin[f] <= 1e-9 || baseline / sigmaMin[f] > discont)) {
-      flagged += 1;
-      flaggedArea += area[f];
+      flagged.push({ area: area[f], triangle: triangles[f], uvs });
     }
   });
 
-  return { area: flaggedArea, collapsed, coveredFaces, faces: flagged, stretched, submergedFaces, totalArea, worst };
+  return { collapsed, coveredFaces, flagged, stretched, submergedFaces, totalArea, worst };
 }
 
 /** Is this face's centroid covered from above by another model resting on it? */
@@ -505,7 +546,11 @@ function main(): void {
         from: source.from,
         model,
         ...info,
-        ...analyzeModel(source.bytes, args.dz, args.aniso, args.discont, args.up, place),
+        ...analyzeModel(source.bytes, args.dz, args.aniso, args.discont, args.up, place, args.texVar, () => {
+          const bytes = resolveTxd(info.txd, mods, vanilla);
+
+          return bytes ? decodeTxd(bytes) : null;
+        }),
       });
       scanned += 1;
     } catch {
@@ -634,6 +679,7 @@ function parseArgs(): {
   game: string;
   json: string | undefined;
   reach: number;
+  texVar: number;
   top: number;
   up: number;
   waterDepth: number;
@@ -647,6 +693,7 @@ function parseArgs(): {
   let up = 0.5;
   let waterDepth = 0;
   let reach = 5;
+  let texVar = 15;
   let json: string | undefined;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--game') game = argv[++i];
@@ -657,11 +704,12 @@ function parseArgs(): {
     else if (argv[i] === '--up') up = Number(argv[++i]);
     else if (argv[i] === '--water-depth') waterDepth = Number(argv[++i]);
     else if (argv[i] === '--reach') reach = Number(argv[++i]);
+    else if (argv[i] === '--texvar') texVar = Number(argv[++i]);
     else if (argv[i] === '--json') json = argv[++i];
     else throw new Error(`unknown arg ${argv[i]}`);
   }
 
-  return { aniso, discont, dz, game, json, reach, top, up, waterDepth };
+  return { aniso, discont, dz, game, json, reach, texVar, top, up, waterDepth };
 }
 
 /** A local AABB through a placement's transform: all 8 corners, re-bounded (a turned box is not its own). */
