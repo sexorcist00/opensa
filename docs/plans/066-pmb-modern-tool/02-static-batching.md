@@ -35,13 +35,13 @@ which only a format we own can do cheaply — collapses thousands of tiny draws 
 
 ## Tasks
 
-- [ ] Batcher in pmb: group welded cell geometry by (atlas page, blend, flags); concatenate buffers; emit a group table
+- [~] Batcher in pmb: group welded cell geometry by (atlas page, blend, flags); concatenate buffers; emit a group table
       into the 01 header. Deterministic ordering.
-- [ ] Sub-cell chunking with a configurable granularity; per-chunk bounds for frustum cull.
-- [ ] Mergeable predicate: exclude TOBJ / breakable / per-object-swapped instances (reuse IDE flags, plan 039).
-- [ ] Runtime: draw groups/sub-chunks from the header; frustum-cull per sub-chunk; graceful for non-batched cells.
-- [ ] Draw-count + triangle-count report per cell (before/after) in the pmb budget output.
-- [ ] Bench the granularity knob on `ls-noon` (must-not-regress GPU) and `lv-night`/`ls-rain-night` (target win).
+- [~] Sub-cell chunking with a configurable granularity; per-chunk bounds for frustum cull.
+- [~] Mergeable predicate: exclude TOBJ / breakable / per-object-swapped instances (reuse IDE flags, plan 039).
+- [~] Runtime: draw groups/sub-chunks from the header; frustum-cull per sub-chunk; graceful for non-batched cells.
+- [~] Draw-count + triangle-count report per cell (before/after) in the pmb budget output.
+- [~] Bench the granularity knob on `ls-noon` (must-not-regress GPU) and `lv-night`/`ls-rain-night` (target win).
 
 ## Verification
 

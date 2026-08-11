@@ -11,12 +11,12 @@ means re-applying it. Landing the fixes upstream deletes that liability and help
 
 ## Tasks
 
-- [ ] Split the patch: `bundledebug` logging OUT of the production patch (keep locally as a second optional patch
+- [~] Split the patch: `bundledebug` logging OUT of the production patch (keep locally as a second optional patch
       or drop — logs served their purpose). Production patch = fixes (1)(2)(3) only.
-- [ ] File the issue from the draft (user's GitHub account); attach the r185 measurements (30→5 ms, field 13 ms).
-- [ ] Offer the PR; if maintainers engage, port our build-file patch to proper `src/` changes + a minimal
+- [~] File the issue from the draft (user's GitHub account); attach the r185 measurements (30→5 ms, field 13 ms).
+- [~] Offer the PR; if maintainers engage, port our build-file patch to proper `src/` changes + a minimal
       streamed-scene example (the `webgpu-stream-compile` harness is a good seed).
-- [ ] Track the `referenceBuffer()` refactor thread — it obsoletes plan 08 if it lands.
+- [~] Track the `referenceBuffer()` refactor thread — it obsoletes plan 08 if it lands.
 
 ## Done
 

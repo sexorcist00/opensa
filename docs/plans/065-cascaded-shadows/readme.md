@@ -2,6 +2,13 @@
 
 **Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](../074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
 
+> **The unticked boxes below are VOID with the plan, and are struck rather than deleted (2026-08-11).**
+> They were left as `- [ ]` when the chain was closed, so every repo-wide scan for open work kept
+> reporting them — 118 phantom tasks across the ten closed chains. Nothing here is a debt: the banner
+> above is the authority. They stay readable because what these plans INTENDED is still the record of
+> why the own engine does what it does.
+
+
 Part of the [rendering overhaul chain](../062-rendering-overhaul/readme.md). Depends on [064](../064-hybrid-world-lighting/readme.md) (the world shader that consumes the shadow term). Delivers the headline feature: **buildings cast real, moving sun shadows** — fast.
 
 ## Context
@@ -38,14 +45,14 @@ Assets give us a unique lever: the LOD pipeline (opensa-lod-generator) already p
       ring only holds LOD meshes → the far cascade renders LOD proxies automatically; the near ring is HD).
       Alpha-BLENDED materials excluded (beams, water — depth casters would blob). Static cadence: mid/far
       re-render on ~0.6° sun rotation or camera travel > ⅛ cascade radius (needsRefresh), near = every frame.
-- [ ] Dynamics receive (MeshStandard path): kept three's plumbing on the near sun only (v1) — cars/peds receive
+- [~] Dynamics receive (MeshStandard path): kept three's plumbing on the near sun only (v1) — cars/peds receive
       building shadows within 45 m via the near map (world HD now casts into it). Mid/far receive on dynamics =
       later, by measured need.
 - [x] Config: `shadows.distance` (default 800) + debug slider (Graphics → CSM DISTANCE); quality tiers proper
       arrive in 072 (v1 = 3 cascades whenever pipeline is modern + shadows on).
-- [ ] Calibration: strength/bias per hour sweep; verify no acne on smoothed & flat roofs, no peter-panning at
+- [~] Calibration: strength/bias per hour sweep; verify no acne on smoothed & flat roofs, no peter-panning at
       bases of buildings. **USER session next.**
-- [ ] Bench: record GPU ms per cascade, caster draw calls, on all bench scenes (esp. LV night = shadows off ⇒
+- [~] Bench: record GPU ms per cascade, caster draw calls, on all bench scenes (esp. LV night = shadows off ⇒
       zero cost, and dusk long-shadows worst case). **After the first calibration.**
 
 ### How to try it (user)

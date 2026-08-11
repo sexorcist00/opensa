@@ -2,6 +2,13 @@
 
 **Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](../074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
 
+> **The unticked boxes below are VOID with the plan, and are struck rather than deleted (2026-08-11).**
+> They were left as `- [ ]` when the chain was closed, so every repo-wide scan for open work kept
+> reporting them — 118 phantom tasks across the ten closed chains. Nothing here is a debt: the banner
+> above is the authority. They stay readable because what these plans INTENDED is still the record of
+> why the own engine does what it does.
+
+
 Part of the [rendering overhaul chain](../062-rendering-overhaul/readme.md). Depends on [068](../068-unified-fog/readme.md) (shared fog chunk + horizon LUT). Replaces the current water shader with a modern one.
 
 ## Context
@@ -67,14 +74,14 @@ real vertex displacement, the waterline strip.
 
 ## Tasks
 
-- [ ] Water grid: near-camera tessellated ring following the camera + far flat plane; seams verified (skirt/blend zone).
-- [ ] Gerstner vertex displacement (3–4 octaves, wind-aligned by weather) + normal reconstruction; storm/calm sets per weather class.
-- [ ] Shore depth: depth-texture sampling, transparency ramp + foam band (noise-scrolled); verify against beaches, Verona/Santa Maria bench.
-- [ ] Reflection stage 1 (sky+LUT), stage 2 planar (half-res, LOD-only scene list, mirror camera) behind `graphics.water.reflection: 'sky'|'planar'|'ssr'`.
-- [ ] Sun glint upgrade (GGX-ish spec against the real sun dir) + glint on wave crests only.
-- [ ] Underwater state (fog params swap + waterline strip).
-- [ ] Fog: consume the 006 chunk (delete remaining private fog); horizon cut verified over open sea.
-- [ ] Config/debug sliders (`graphics.water` grows), bench numbers per stage.
+- [~] Water grid: near-camera tessellated ring following the camera + far flat plane; seams verified (skirt/blend zone).
+- [~] Gerstner vertex displacement (3–4 octaves, wind-aligned by weather) + normal reconstruction; storm/calm sets per weather class.
+- [~] Shore depth: depth-texture sampling, transparency ramp + foam band (noise-scrolled); verify against beaches, Verona/Santa Maria bench.
+- [~] Reflection stage 1 (sky+LUT), stage 2 planar (half-res, LOD-only scene list, mirror camera) behind `graphics.water.reflection: 'sky'|'planar'|'ssr'`.
+- [~] Sun glint upgrade (GGX-ish spec against the real sun dir) + glint on wave crests only.
+- [~] Underwater state (fog params swap + waterline strip).
+- [~] Fog: consume the 006 chunk (delete remaining private fog); horizon cut verified over open sea.
+- [~] Config/debug sliders (`graphics.water` grows), bench numbers per stage.
 
 ## Verification
 

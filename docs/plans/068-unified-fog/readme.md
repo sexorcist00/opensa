@@ -2,6 +2,13 @@
 
 **Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](../074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
 
+> **The unticked boxes below are VOID with the plan, and are struck rather than deleted (2026-08-11).**
+> They were left as `- [ ]` when the chain was closed, so every repo-wide scan for open work kept
+> reporting them — 118 phantom tasks across the ten closed chains. Nothing here is a debt: the banner
+> above is the authority. They stay readable because what these plans INTENDED is still the record of
+> why the own engine does what it does.
+
+
 Part of the [rendering overhaul chain](../062-rendering-overhaul/readme.md). Depends on [067](../067-pbr-sky-clouds/readme.md) (the horizon LUT). Fixes the reported bug-class: **the ocean/far world is visible through the haze at the horizon** — fog must actually terminate the world.
 
 ## Context
@@ -29,7 +36,7 @@ Today: scene `FogExp2` with density `2/config.fog.distance`, colour tracking a s
       (they use `buildWorldMaterial`).
 - [x] Water: private fog upgraded in place — same LUT-azimuth colour + cut on the modern path (`WaterPlugin`
       gains a `getFog` closure); classic path untouched. The sea/sky horizon seam dies by construction.
-- [ ] Particles/effects/corona materials: still on scene FogExp2 / far-fade — coherence check pending.
+- [~] Particles/effects/corona materials: still on scene FogExp2 / far-fade — coherence check pending.
 
 ### v1 debug arc (2026-07-10, user A/B — all fixed same day, final state CONFIRMED looking good)
 
@@ -62,10 +69,10 @@ Today: scene `FogExp2` with density `2/config.fog.distance`, colour tracking a s
 - [x] Particles/effects/coronas coherence: checked — both fade out by their own draw distances (effects 150 u,
       coronas ~120 u), far below any fog cut; additive sprites must NOT be fogged toward sky colour anyway
       (they should fade, and they do). No change needed.
-- [ ] Sky/background: `scene.background` no longer needed on the modern path (dome covers all); verify god-rays/moon fade against fogged horizon.
-- [ ] The cut: clamped tail + far-plane link; verify the LS→ocean bench at multiple hours — the water horizon line must be GONE (screenshot the old artefact first for the doc).
-- [ ] SF fog weather + rain showcase calibration; height-fog params per weather class.
-- [ ] Bench cost (expected ≈ free: one tex fetch + few ALU per fragment).
+- [~] Sky/background: `scene.background` no longer needed on the modern path (dome covers all); verify god-rays/moon fade against fogged horizon.
+- [~] The cut: clamped tail + far-plane link; verify the LS→ocean bench at multiple hours — the water horizon line must be GONE (screenshot the old artefact first for the doc).
+- [~] SF fog weather + rain showcase calibration; height-fog params per weather class.
+- [~] Bench cost (expected ≈ free: one tex fetch + few ALU per fragment).
 
 ## Verification
 

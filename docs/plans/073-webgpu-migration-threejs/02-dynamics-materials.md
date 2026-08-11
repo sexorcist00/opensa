@@ -25,7 +25,7 @@ skipped plugins (sky's sun/ambient/hemisphere) → lit path × no lights = black
       _Deferred 2026-07-11: the plugin is skipped so no envMap is ever assigned (nothing to neutralise) and
       `installSaReflection`'s GLSL patch is inert on node materials — paint is matte. Reflective materials stay on
       `MeshPhysicalNodeMaterial` so the port lands on the right class. Follow-up noted in night-fill-tsl.ts._
-- [ ] Player skinning sanity under WebGPU (SkinnedMesh + bones — three supports it; verify animations) —
+- [~] Player skinning sanity under WebGPU (SkinnedMesh + bones — three supports it; verify animations) —
       **field-verify** (player walked in earlier webgpu runs; confirm animations after the material swap).
 - [x] Headlights/brake glow (worldLocalLightUniforms consumers) — verify or stub without the GLSL pool.
       _Verified 2026-07-11: the producers (vehicle-headlight/street-light systems) run and only write pool

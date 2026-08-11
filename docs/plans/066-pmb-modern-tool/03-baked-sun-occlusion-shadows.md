@@ -41,15 +41,15 @@ direction only. Bake it once, evaluate it smoothly, and the map is never needed 
 
 ## Tasks
 
-- [ ] Sun-arc sampler + per-vertex occlusion raytrace over welded cell geometry (area-sampled sun disc for penumbra);
+- [~] Sun-arc sampler + per-vertex occlusion raytrace over welded cell geometry (area-sampled sun disc for penumbra);
       reuse LOD-generator occlusion helpers. Deterministic.
-- [ ] **v1**: bake scalar `sunVis` (1 byte) into the 01 format channel; world-shader receive term (`uDirectScale ×
+- [~] **v1**: bake scalar `sunVis` (1 byte) into the 01 format channel; world-shader receive term (`uDirectScale ×
     sunVis`), uniform-gated, graceful when absent.
-- [ ] **v2**: bake the directional representation (horizon angle / occlusion curve); world-shader evaluates a smooth
+- [~] **v2**: bake the directional representation (horizon angle / occlusion curve); world-shader evaluates a smooth
       moving-sun static shadow; unit-test the term against the raytraced ground truth at several sun elevations.
-- [ ] Seam test: bake on seam-weld fixtures → no discontinuity at cell borders.
-- [ ] Penumbra/softness knob (sun disc size) → tier parameter for [05](05-runtime-csm-scopedown-tiers.md)/072.
-- [ ] A/B screenshots: runtime-CSM static shadows vs baked (edges, camera-motion stability, under-bridge/north-face).
+- [~] Seam test: bake on seam-weld fixtures → no discontinuity at cell borders.
+- [~] Penumbra/softness knob (sun disc size) → tier parameter for [05](05-runtime-csm-scopedown-tiers.md)/072.
+- [~] A/B screenshots: runtime-CSM static shadows vs baked (edges, camera-motion stability, under-bridge/north-face).
 
 ## Verification
 

@@ -27,7 +27,7 @@ local light pool, window-glow overlay, beam handling nuances.
 - [x] Moon N·L term (`worldMoonUniforms`). _Done 2026-07-11: wrapped N·L on `normalWorld`; sky-lite tracks the
       moon (fixed azimuth from `SKY_LIGHT_TUNING.moonAzimuth` × config elevation) and `skyView` feeds the drive
       (`sunSin`/`moonDirection` no longer read the dead plugin)._
-- [ ] CSM/shadow sampling — after plan 05 provides maps (depth-texture comparison sampling in TSL).
+- [~] CSM/shadow sampling — after plan 05 provides maps (depth-texture comparison sampling in TSL).
 - [x] Local light pool (worldLocalLightUniforms — uniform arrays in TSL; pool of 12). _Done 2026-07-11:
       `uniformArray` wraps the engine's Vector4/Color arrays BY REFERENCE (UniformArrayNode re-uploads per
       render), TSL `Loop`/`If` port of `saLocalLight` — headlight/brake/street-lamp pools should light the
@@ -35,7 +35,7 @@ local light pool, window-glow overlay, beam handling nuances.
 - [x] Beam materials (vertex-alpha floodlights) parity check. _Fixed 2026-07-11: beams read the `color`
       attribute as vec4 (it was typed vec3 — WGSL type mismatch with the buffer) and fold the per-vertex cone
       alpha into `opacityNode`; blended, no alpha-test, no depth-write — parity with the GLSL path._
-- [ ] Pixel-compare pass across a day sweep vs WebGL (the map-viewer compare workflow) — after the LUT fog +
+- [~] Pixel-compare pass across a day sweep vs WebGL (the map-viewer compare workflow) — after the LUT fog +
       plan 05 shadows land (comparing now would just diff the known-missing terms).
 
 ## Done

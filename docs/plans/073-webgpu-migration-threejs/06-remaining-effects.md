@@ -4,13 +4,13 @@
 
 ## Tasks
 
-- [ ] `night-fill`/`uv-anim` (103/55 lines) — trivial TSL ports (uv scroll = `uv().add(time)`; fill in plan 02).
-- [ ] Coronas (`corona.ts`, Points + ShaderMaterial) → `PointsNodeMaterial`/sprite nodes; kill the
+- [~] `night-fill`/`uv-anim` (103/55 lines) — trivial TSL ports (uv scroll = `uv().add(time)`; fill in plan 02).
+- [~] Coronas (`corona.ts`, Points + ShaderMaterial) → `PointsNodeMaterial`/sprite nodes; kill the
       `ShaderMaterial is not compatible` console spam.
-- [ ] Particles (`build-particles.ts`, 298 lines) → TSL sprite/points path.
-- [ ] Wind mod (vertex sway) → TSL `positionNode` offset; verify against foliage.
-- [ ] Water plugin (392 lines Gerstner) → TSL; interacts with fog + reflections — schedule after plan 04 fog.
-- [ ] Vehicle reflection cube-probe under WebGPU (CubeCamera works on WebGPURenderer; re-enable the plugin).
+- [~] Particles (`build-particles.ts`, 298 lines) → TSL sprite/points path.
+- [~] Wind mod (vertex sway) → TSL `positionNode` offset; verify against foliage.
+- [~] Water plugin (392 lines Gerstner) → TSL; interacts with fog + reflections — schedule after plan 04 fog.
+- [~] Vehicle reflection cube-probe under WebGPU (CubeCamera works on WebGPURenderer; re-enable the plugin).
 
 ## Done
 

@@ -44,39 +44,39 @@ invalidation); that needs the real-engine integration and is a Phase-1 confirmat
 
 ## Step 1 — WebGPU renderer behind a flag
 
-- [ ] Add `?webgpu=1` boot flag in `canvas-host.tsx` (next to existing URL flags).
-- [ ] In `core/renderer.ts`, when the flag is set, construct `WebGPURenderer` from `three/webgpu` instead of
+- [~] Add `?webgpu=1` boot flag in `canvas-host.tsx` (next to existing URL flags).
+- [~] In `core/renderer.ts`, when the flag is set, construct `WebGPURenderer` from `three/webgpu` instead of
       `WebGLRenderer` (both paths compile; pick at boot). `await renderer.init()` if required by the API.
-- [ ] Confirm a **cleared canvas** renders (blank scene) under WebGPU — proves the renderer + canvas + `setSize` + animation loop work before any geometry.
-- [ ] Confirm `renderer.info` (draw calls / triangles) still reports under WebGPU so `PerfMonitor` keeps working;
+- [~] Confirm a **cleared canvas** renders (blank scene) under WebGPU — proves the renderer + canvas + `setSize` + animation loop work before any geometry.
+- [~] Confirm `renderer.info` (draw calls / triangles) still reports under WebGPU so `PerfMonitor` keeps working;
       if the field names differ, adapt the sampler for the spike.
 
 ## Step 2 — strip the scene to the static world only
 
-- [ ] Behind `?webgpu=1`, disable: post-FX plugin, sky plugin, water, particles, coronas, shadows/CSM, procobj,
+- [~] Behind `?webgpu=1`, disable: post-FX plugin, sky plugin, water, particles, coronas, shadows/CSM, procobj,
       dynamic entities. We want ONLY the streamed world cells on screen.
-- [ ] Replace the world material with a **flat unlit TSL material**: `texture(map, uv) * vertexColor`. No sun, no
+- [~] Replace the world material with a **flat unlit TSL material**: `texture(map, uv) * vertexColor`. No sun, no
       fog, no night. Ugly is fine — this isolates draw submission.
-- [ ] Verify the static world is visible and streams as the camera moves (cells appear/disappear).
+- [~] Verify the static world is visible and streams as the camera moves (cells appear/disappear).
 
 ## Step 3 — wire the render bundle
 
-- [ ] Record the streamed world's draws into a render bundle (three `0.177` surface — likely a `BundleGroup` /
+- [~] Record the streamed world's draws into a render bundle (three `0.177` surface — likely a `BundleGroup` /
       `renderer.renderBundle`-style API; confirm the exact call in the installed version's `three/webgpu` types).
-- [ ] Invalidation: when the visible cell set changes (a cell is added/removed by streaming), **re-record only
+- [~] Invalidation: when the visible cell set changes (a cell is added/removed by streaming), **re-record only
       what changed** if the API allows, else re-record the bundle. Note which granularity three supports — this is
       itself a key finding.
-- [ ] Add a runtime toggle `?bundle=0/1` to render the SAME scene with and without bundling, so the measurement is
+- [~] Add a runtime toggle `?bundle=0/1` to render the SAME scene with and without bundling, so the measurement is
       an A/B on one build.
 
 ## Step 4 — measure (the deliverable)
 
-- [ ] Reuse `PerfMonitor.cpu('render', …)` (the CPU phase timer). Fly the **same `ls-noon`** bench path.
-- [ ] Capture, on the same target hardware, three runs:
+- [~] Reuse `PerfMonitor.cpu('render', …)` (the CPU phase timer). Fly the **same `ls-noon`** bench path.
+- [~] Capture, on the same target hardware, three runs:
   - **WebGL baseline** (no flag): expect `cpuMs.render ≈ 65 ms`.
   - **WebGPU, `?bundle=0`**: WebGPU submission without bundles (measures Level 1 — cheaper-per-draw only).
   - **WebGPU, `?bundle=1`**: WebGPU with render bundles (measures Level 2 — the record-once win).
-- [ ] Record for each: `cpuMs.render`, `avgMs`, `gpuMs`, `draws`, and the streaming re-record cost on a cell swap
+- [~] Record for each: `cpuMs.render`, `avgMs`, `gpuMs`, `draws`, and the streaming re-record cost on a cell swap
       (does the boundary hitch?).
 
 ## Step 5 — decide

@@ -2,6 +2,13 @@
 
 **Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](../074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
 
+> **The unticked boxes below are VOID with the plan, and are struck rather than deleted (2026-08-11).**
+> They were left as `- [ ]` when the chain was closed, so every repo-wide scan for open work kept
+> reporting them — 118 phantom tasks across the ten closed chains. Nothing here is a debt: the banner
+> above is the authority. They stay readable because what these plans INTENDED is still the record of
+> why the own engine does what it does.
+
+
 Part of the [rendering overhaul chain](../062-rendering-overhaul/readme.md). Depends on [064](../064-hybrid-world-lighting/readme.md) — a world that can RECEIVE light is what makes real local lights possible at all (038's unlit world was why headlights became glow+corona MVP, plan 033). Delivers the requested move away from the corona concept — partially: coronas remain as distant impostors.
 
 ## Context
@@ -73,14 +80,14 @@ The user asked for the vehicle side first, done properly:
 
 ## Tasks
 
-- [ ] `LightDef` extraction from 2dfx light records (reuse `collectCoronas` walk — one collection, two consumers: corona points + light defs) incl. on-hours; unit tests on fixture models (streetlight DFFs).
-- [ ] `LocalLightSystem`: pool selection (distance/priority/hysteresis to avoid slot thrash), uniform packing, per-frame update in canvas-host.
-- [ ] World-shader light-pool term (point + spot cone, smooth falloff, night-gated); program-variant safety (pool size fixed at compile, count as uniform).
-- [ ] Dynamics path: mirrored capped three lights vs injected term — spike, measure, pick.
-- [ ] Headlights: 2 spot slots per active vehicle (player + nearest AI few), cookie projection texture, brake/reverse states; retire the "no road beam" MVP note in plan 033.
-- [ ] Corona handover: distance-based fade curve tied to pool membership; drive-by bench (no popping, no double-brightness at the crossover).
-- [ ] Config `graphics.lights` grows `{pool: 16|32, headlightProjection: bool}`; debug overlay: pool occupancy readout.
-- [ ] Bench: LV strip at night, downtown LS rain night (wet-look synergy noted for 009).
+- [~] `LightDef` extraction from 2dfx light records (reuse `collectCoronas` walk — one collection, two consumers: corona points + light defs) incl. on-hours; unit tests on fixture models (streetlight DFFs).
+- [~] `LocalLightSystem`: pool selection (distance/priority/hysteresis to avoid slot thrash), uniform packing, per-frame update in canvas-host.
+- [~] World-shader light-pool term (point + spot cone, smooth falloff, night-gated); program-variant safety (pool size fixed at compile, count as uniform).
+- [~] Dynamics path: mirrored capped three lights vs injected term — spike, measure, pick.
+- [~] Headlights: 2 spot slots per active vehicle (player + nearest AI few), cookie projection texture, brake/reverse states; retire the "no road beam" MVP note in plan 033.
+- [~] Corona handover: distance-based fade curve tied to pool membership; drive-by bench (no popping, no double-brightness at the crossover).
+- [~] Config `graphics.lights` grows `{pool: 16|32, headlightProjection: bool}`; debug overlay: pool occupancy readout.
+- [~] Bench: LV strip at night, downtown LS rain night (wet-look synergy noted for 009).
 
 ## Verification
 
