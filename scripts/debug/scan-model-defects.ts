@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { loadMapDefsAt, readBytes } from '../lib/game';
 import { indexModAssets, resolveDff } from '../lib/mod-assets';
+import { loadWaterField, type WaterField } from '../lib/water';
 
 /**
  * scan-model-defects — rank every PLACED world model by broken-authored-vertex-data criteria
@@ -40,9 +41,12 @@ import { indexModAssets, resolveDff } from '../lib/mod-assets';
  *     `road03sfn` carries 42 UP-FACING collapsed faces over 21 % of its visible area and the field calls it
  *     fine, because neighbouring buildings STAND on them. Visibility is a property of the assembled world,
  *     not of the model, so a model-local criterion cannot separate this class at all.
+ *     FIRST world-context gate (2026-08-11, branch `025-world-visibility`): a face whose every corner sits
+ *     `--water-depth` under the sea, judged in WORLD space through the instance transform, is dropped —
+ *     `sbseabed3_las20` leaves the ranking entirely on it. Geometry occlusion is the half still missing.
  *
- * Run: npx tsx scripts/debug/scan-model-defects.ts [--game original] [--top 10] [--dz 0.5] [--aniso 8] [--discont 4] [--up 0.5]
- *      [--json <out.json>]
+ * Run: npx tsx scripts/debug/scan-model-defects.ts [--game original] [--top 10] [--dz 0.5] [--aniso 8]
+ *      [--discont 4] [--up 0.5] [--water-depth 0] [--json <out.json>]
  * Output per hit: metrics, source mod, instance count + a position — paste into
  *   `npx tsx scripts/debug/teleport-spot.ts <model>` for a field spot.
  */
@@ -71,6 +75,8 @@ interface ModelRow {
   /** Faces stretched past `--aniso` REGARDLESS of their neighbours — the count the raw metric produced. */
   stretchedFaces: number;
   stretchFaces: number;
+  /** Faces dropped because every corner sits under the sea — the water half of visibility. */
+  submergedFaces: number;
   timed: boolean;
   /** Total drawable world area, so the flagged area can be read as a SHARE of the model. */
   totalArea: number;
@@ -78,6 +84,14 @@ interface ModelRow {
   verts: number;
   worstAniso: number;
   worstDz: number;
+}
+
+interface Placement {
+  /** How far under the surface a face must sit before it counts as hidden (world units). */
+  depth: number;
+  position: [number, number, number];
+  rotation: [number, number, number, number];
+  water: WaterField;
 }
 
 interface Triangleish {
@@ -93,6 +107,7 @@ function analyzeModel(
   aniso: number,
   discont: number,
   up: number,
+  place: null | Placement,
 ): Omit<ModelRow, 'from' | 'instances' | 'model' | 'position' | 'timed' | 'txd'> {
   const clump = parseDff(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
   let badNormalFaces = 0;
@@ -106,6 +121,7 @@ function analyzeModel(
   let stretchFaces = 0;
   let stretchArea = 0;
   let stretchedFaces = 0;
+  let submergedFaces = 0;
   let collapsedUvFaces = 0;
   let totalArea = 0;
   let worstAniso = 0;
@@ -116,10 +132,11 @@ function analyzeModel(
     verts += vertexCount;
     faces += geo.triangles.length;
     if (geo.uvLayers[0]) {
-      const stretch = analyzeUvStretch(geo.positions, geo.uvLayers[0], geo.triangles, aniso, discont, up);
+      const stretch = analyzeUvStretch(geo.positions, geo.uvLayers[0], geo.triangles, aniso, discont, up, place);
       stretchFaces += stretch.faces;
       stretchArea += stretch.area;
       stretchedFaces += stretch.stretched;
+      submergedFaces += stretch.submergedFaces;
       collapsedUvFaces += stretch.collapsed;
       totalArea += stretch.totalArea;
       worstAniso = Math.max(worstAniso, stretch.worst);
@@ -154,6 +171,7 @@ function analyzeModel(
     stretchArea,
     stretchedFaces,
     stretchFaces,
+    submergedFaces,
     totalArea,
     verts,
     worstAniso,
@@ -259,7 +277,16 @@ function analyzeUvStretch(
   limit: number,
   discont: number,
   up: number,
-): { area: number; collapsed: number; faces: number; stretched: number; totalArea: number; worst: number } {
+  place: null | Placement,
+): {
+  area: number;
+  collapsed: number;
+  faces: number;
+  stretched: number;
+  submergedFaces: number;
+  totalArea: number;
+  worst: number;
+} {
   const area: number[] = [];
   const aniso: number[] = [];
   const sigmaMin: number[] = [];
@@ -267,6 +294,7 @@ function analyzeUvStretch(
   let totalArea = 0;
   let worst = 0;
   let stretched = 0;
+  let submergedFaces = 0;
 
   for (const { a, b, c } of triangles) {
     const e1p = [0, 1, 2].map((k) => positions[b * 3 + k] - positions[a * 3 + k]);
@@ -295,6 +323,16 @@ function analyzeUvStretch(
     totalArea += faceArea;
     if (Math.abs(cross[2]) / crossLength < up) {
       area.push(0); // not a surface this defect class lives on — excluded from the numerator only
+      aniso.push(0);
+      sigmaMin.push(Number.NaN);
+      continue;
+    }
+    // UNDER THE SEA is the second way a face is there but unseen (user, 2026-08-11 — "water occlusion, as
+    // already happened with `sbseabed3_las20`"). Judged in WORLD space through the instance's own transform,
+    // and only when EVERY corner is under: a face breaking the surface is still looked at.
+    if (place && submerged(place, positions, [a, b, c])) {
+      submergedFaces += 1;
+      area.push(0);
       aniso.push(0);
       sigmaMin.push(Number.NaN);
       continue;
@@ -338,7 +376,7 @@ function analyzeUvStretch(
   // wires and cables out by construction: a ribbon is stretched end to end, so its healthy set is empty and
   // its extreme mapping IS its design. Never a verdict without evidence.
   if (healthy.length < 3 || healthy.length < drawn * 0.2) {
-    return { area: 0, collapsed, faces: 0, stretched, totalArea, worst };
+    return { area: 0, collapsed, faces: 0, stretched, submergedFaces, totalArea, worst };
   }
   healthy.sort((x, y) => x - y);
   const baseline = healthy[healthy.length >> 1];
@@ -354,7 +392,7 @@ function analyzeUvStretch(
     }
   });
 
-  return { area: flaggedArea, collapsed, faces: flagged, stretched, totalArea, worst };
+  return { area: flaggedArea, collapsed, faces: flagged, stretched, submergedFaces, totalArea, worst };
 }
 
 function dot3(a: readonly number[], b: readonly number[]): number {
@@ -374,11 +412,20 @@ function main(): void {
   const defs = loadMapDefsAt(builtDir, builtArchive);
   const vanilla = openArchive(readBytes(join('game-src', args.game, 'models', 'gta3.img')));
   const mods = indexModAssets(join('mods-src', args.game, 'mods'));
+  // The BUILT tree's water, because that is the sea the shipped map has (mods may edit `water.dat`).
+  const water = loadWaterField(builtDir);
+  console.log(`· water: ${water.quadCount} polygons`);
 
   // Placed models only, HD level (a LOD-only model never fills the screen); timed flagged for B.
   const placed = new Map<
     string,
-    { instances: number; position: [number, number, number]; timed: boolean; txd: string }
+    {
+      instances: number;
+      position: [number, number, number];
+      rotation: [number, number, number, number];
+      timed: boolean;
+      txd: string;
+    }
   >();
   for (const instance of defs.instances) {
     if (instance.isLod) continue;
@@ -391,6 +438,7 @@ function main(): void {
       placed.set(key, {
         instances: 1,
         position: instance.position,
+        rotation: instance.rotation,
         timed: def.time !== undefined,
         txd: def.txdName.toLowerCase(),
       });
@@ -408,11 +456,14 @@ function main(): void {
       continue;
     }
     try {
+      // One representative instance. A model placed many times can be submerged at one and dry at another
+      // (`rdwarhus` is placed 13×) — the per-instance question belongs to the world pass this is scouting.
+      const place: Placement = { depth: args.waterDepth, position: info.position, rotation: info.rotation, water };
       rows.push({
         from: source.from,
         model,
         ...info,
-        ...analyzeModel(source.bytes, args.dz, args.aniso, args.discont, args.up),
+        ...analyzeModel(source.bytes, args.dz, args.aniso, args.discont, args.up, place),
       });
       scanned += 1;
     } catch {
@@ -514,6 +565,7 @@ function parseArgs(): {
   json: string | undefined;
   top: number;
   up: number;
+  waterDepth: number;
 } {
   const argv = process.argv.slice(2);
   let game = 'original';
@@ -522,6 +574,7 @@ function parseArgs(): {
   let aniso = 8;
   let discont = 4;
   let up = 0.5;
+  let waterDepth = 0;
   let json: string | undefined;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--game') game = argv[++i];
@@ -530,11 +583,47 @@ function parseArgs(): {
     else if (argv[i] === '--aniso') aniso = Number(argv[++i]);
     else if (argv[i] === '--discont') discont = Number(argv[++i]);
     else if (argv[i] === '--up') up = Number(argv[++i]);
+    else if (argv[i] === '--water-depth') waterDepth = Number(argv[++i]);
     else if (argv[i] === '--json') json = argv[++i];
     else throw new Error(`unknown arg ${argv[i]}`);
   }
 
-  return { aniso, discont, dz, game, json, top, up };
+  return { aniso, discont, dz, game, json, top, up, waterDepth };
+}
+
+/**
+ * Is every corner of this face at least `depth` under the sea, in WORLD space?
+ *
+ * Model-local vertices go through the instance's own position + rotation quaternion rather than a
+ * translate-only shortcut — a map piece may be placed turned, and a wrong world XY asks the water field
+ * about the wrong place. ALL corners, not the centroid: a face breaking the surface is still looked at, and
+ * over-hiding is the expensive mistake.
+ */
+function submerged(place: Placement, positions: Float32Array, corners: readonly number[]): boolean {
+  for (const v of corners) {
+    const [wx, wy, wz] = toWorld(place, positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]);
+    const sea = place.water.heightAt(wx, wy);
+    if (sea === null || wz > sea - place.depth) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/** Model-local → world: rotate by the instance quaternion (x, y, z, w), then translate. */
+function toWorld(place: Placement, x: number, y: number, z: number): [number, number, number] {
+  const [qx, qy, qz, qw] = place.rotation;
+  // v + 2 * cross(q.xyz, cross(q.xyz, v) + w * v) — the standard quaternion-vector product.
+  const tx = 2 * (qy * z - qz * y);
+  const ty = 2 * (qz * x - qx * z);
+  const tz = 2 * (qx * y - qy * x);
+
+  return [
+    place.position[0] + x + qw * tx + (qy * tz - qz * ty),
+    place.position[1] + y + qw * ty + (qz * tx - qx * tz),
+    place.position[2] + z + qw * tz + (qx * ty - qy * tx),
+  ];
 }
 
 main();
