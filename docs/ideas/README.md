@@ -46,7 +46,9 @@ go/no-go). Something already understood and scheduled does NOT live here — it 
   bone id 5 / `Head`, dumped from a stock ped) and its live world matrix is already computed every rendered
   frame by `IfpSampler`; hiding it is a zero-scale palette slot, which takes hats and hair with it. Written
   at the 080 close-out with what that chain learned — the open question is not "can we", it is whether SA's
-  head animation and the ped's own torso across the near plane survive a field look.
+  head animation and the ped's own torso across the near plane survive a field look. **Step 0 is a gate: the
+  "Ultimate First Person" mod gets downloaded and studied first** (his call, 2026-08-11) — the page's
+  reasoning has never been checked against a shipped implementation.
 
 ## Editors
 

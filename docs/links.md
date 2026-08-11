@@ -43,6 +43,11 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
 - <https://www.youtube.com/watch?v=R24KBNuOiR4> — **must be shown to the user before any work starts from the
   original-game defect list** (his call, 2026-08-11). Gate at the top of
   [`docs/improvements/original-game-defects.md`](improvements/original-game-defects.md).
+- <https://libertycity.net/files/gta-san-andreas/239321-ultimate-first-person-beta.html> — "Ultimate First
+  Person (beta)". **Must be downloaded and studied before any work on the first-person camera idea** (his
+  call, 2026-08-11): prior art for the open questions that idea carries — head hiding without near-plane
+  clipping, weapon aim, vehicle interiors. Gate at the top of
+  [`docs/ideas/first-person-camera/readme.md`](ideas/first-person-camera/readme.md).
 
 ## The original game's own bugs
 
