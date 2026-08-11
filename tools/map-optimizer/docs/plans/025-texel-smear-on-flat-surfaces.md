@@ -602,24 +602,41 @@ no verdict without evidence, the same rule the cover gate follows.
 | `backalleys1_sfe` / `garse_85_sfe` | clean | 41–43 % | gone | gone ✓ |
 | `nwwarhus` | clean | 12.0 % | 12.0 % | **11.6 %** ✗ (18 → 4 faces) |
 
-**Seven of eight.** All three broken models are present and correctly ordered; five of six clean ones are out
-of the ranking entirely and `airtwer_las` fell from 15 % to 0.5 %. The one failure is `nwwarhus`: the gate
-removed 14 of its 18 faces, but 4 survive carrying real texture contrast on ~466 u², and the field calls the
-model clean. That is the next label to chase, and it is a specific one rather than a whole class.
+**Seven of eight at first** — the one failure was `nwwarhus`, and chasing its four surviving faces closed it.
+
+**They carry an EMPTY texture name.** Their material references no texture at all, only a colour. A face with
+no texture cannot smear one, so it is decidable — and the gate was keeping it under the "no verdict without
+evidence" rule, which is right for a texture that is NAMED but unresolvable and wrong for a material that
+names none. The two cases are now distinct: **untextured ⇒ dropped, unresolvable ⇒ kept**.
+
+That single distinction removed `nwwarhus` (confirmed CLEAN by the user on a second, longer look: *"turned it
+around, looks good"*) and both `airport_*` interiors, which were the same thing.
+
+**Every label now agrees.**
+
+| model | label | outcome |
+|---|---|---|
+| `road_lawn17` | BROKEN | **3.2 %**, top of the three |
+| `road_lawn34` | BROKEN | **2.0 %** |
+| `road_lawn32` | BROKEN | **0.5 %** |
+| `road03sfn`, `road_lawn08`, `backalleys1_sfe`, `garse_85_sfe`, `wires_04c_sfs`, `nwwarhus` | clean | **all out of the ranking** |
+| `airtwer_las` | clean | 0.5 % — 15 % → 0.5 %, down at the floor beside the weakest broken model |
 
 **Population, all three gates:**
 
-| | no gates | visibility | **+ texture** |
-|---|---|---|---|
-| models ≥ 1 % of surface | 954 | 151 | **41** |
-| models ≥ 5 % | 310 | ~45 | **7** |
-| any flagged face | 2 544 | 667 | **329** |
+| | no gates | visibility | + texture | **+ untextured** |
+|---|---|---|---|---|
+| models ≥ 1 % of surface | 954 | 151 | 41 | **34** |
+| models ≥ 5 % | 310 | ~45 | 7 | **3** |
+| any flagged face | 2 544 | 667 | 329 | **317 / 810 placements** |
 
-From 2 544 models to **329 / 834 placements** — and for the first time the top of the ranking is not a
-by-design family. Every wire model left it.
+From 2 544 models to **317**, in a 12-second scan, and the top of the ranking is no longer a by-design family
+— every wire, roof, skirt and interior has left it.
 
-**Still owed before any of this becomes a repair pass**: the 15 threshold rests on eight labels; `nwwarhus`
-disagrees; and the two `airport_*` interiors now top the list without anyone having looked at them.
+**Still owed before any of this becomes a repair pass**: the 15 threshold rests on nine labels and no more;
+`airtwer_las` is demoted rather than separated (0.5 %, level with a broken model); and the new top carries
+models nobody has looked at — `traincross1` reaches 10.2 % on a model of **8 u² total**, which is the
+minimum-area flaw this plan already recorded and still has not fixed.
 
 Cost and risk still to price for the eventual PASS (this is the scanner, not the pass): the occlusion query is
 per candidate face over the placed world,

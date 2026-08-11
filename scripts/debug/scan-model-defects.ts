@@ -200,9 +200,15 @@ function analyzeModel(
     if (images) {
       kept = flagged.filter((f) => {
         const name = f.materials[f.triangle.materialIndex]?.texture?.name?.toLowerCase() ?? '';
+        // An UNTEXTURED material (no texture reference at all) cannot smear a texture — that is decidable,
+        // so drop it. `nwwarhus` survived every gate on four such faces, 117 u² each, and the field could
+        // only say "maybe there is a skew somewhere". Distinct from the case below.
+        if (name === '') {
+          return false;
+        }
         const image = images.get(name);
         if (!image) {
-          return true; // no texture to judge by — keep it rather than invent a verdict
+          return true; // NAMED but unresolvable — we cannot judge, so keep rather than invent a verdict
         }
         const { a, b, c } = f.triangle;
 
