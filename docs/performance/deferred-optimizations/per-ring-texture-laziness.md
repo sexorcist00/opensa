@@ -4,6 +4,20 @@
 ([plan 074/05](../../plans/074-opensa-engine/05-streaming-runtime.md),
 [074/21](../../plans/074-opensa-engine/21-fog-draw-distance.md)).
 
+**Impact: VERY LOW on frame time, HIGH on memory — and the axis is the whole point.** The entry says it
+outright: this buys nothing on frame time directly. What it buys is up to several hundred MB under the
+**~767 MB world-array floor**, the largest single residency item left after the streaming arc. That is not
+speed, it is the ability to raise draw distance, keep more districts warm, or run on a smaller GPU without
+thrashing. The 30-minute soak shows residency FLAT at 1805 MB, so nothing is being wasted per frame today —
+only held. **Do not reach for this one when a frame is slow.**
+
+**Effort: high.** It is not a runtime-only change: the arrays are a converter product, so splitting their
+packing by ring means a re-pack and giving up the map-wide content dedup that packing depends on. On the
+runtime side it re-opens the residency race the whole streaming arc was spent closing (`lateCreates`,
+pop-in), which means the late-create counters have to be watched through every field round. **The two cheaper
+things at the bottom (`?draw=`, lowering the vehicle LRU floor) are very low effort** and sit on the same
+axis.
+
 ## What we do today
 
 A district's texture ARRAYS are resident as a block. Range-read IO already stopped the multi-GB pak from

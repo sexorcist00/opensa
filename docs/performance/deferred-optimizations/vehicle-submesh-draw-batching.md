@@ -3,6 +3,20 @@
 **Status:** in reserve — the knob the engine names in its own comment
 (`packages/engine/src/engine.ts`, the vehicle draw loop).
 
+**Impact: medium, and INFERRED — the only entry whose win has never been put in milliseconds.** What is
+measured is the axis: the scale ladder found the frame's floor is the draw/vertex side (a resolution-
+independent **1.9–2.5 ms**), not the pixel side, and the in-game sweeps run 841 road cars at up to 1678
+draws. So this attacks the real floor — but **today that floor is owned by world cells, not vehicles**, which
+is what holds it at medium rather than high. It becomes high on a street dense with hi-poly mod cars (20–30
+submeshes each) and stays near zero everywhere else. Measure `draws` with vehicles isolated before believing
+any of it.
+
+**Effort: high.** Per-submesh visibility is a shared invariant, not a local one — damage (`_ok`/`_dam`), the
+`_vlo` LOD band and the `extraN` selection all express themselves by gating a draw call. Batching means all
+three write GPU state instead, the translucent sort has to survive it, and any bind-group shape change
+invalidates the recorded cell bundles. Plan chain, not a commit. **The two cheaper cuts at the bottom of this
+entry are low effort** and go first.
+
 ## What we do today
 
 Every live instance of every vehicle model issues **one draw per visible submesh**. That is what makes the

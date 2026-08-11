@@ -4,6 +4,21 @@
 what it would cost to take back. See
 [`sa-procobj-placement/014`](../../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md).
 
+**Impact: VERY LOW on frame time — this lever is about LOOKS, and it costs performance rather than buying
+it.** The two named wins are contact AO on clutter (a visual term the instanced path has nowhere to keep) and
+no per-cell scatter at stream-in, which has never been measured and has never appeared in a `hitch` column.
+Against that, taking it back means **91 092 vertex-duplicated instances** in a pak already carrying 105.8 M
+HD vertices, whose AO bake ran **1.01 G rays / 21 minutes** — and density stops being a runtime knob, which
+is exactly what made the layer unmeasurable last time. **The only reason to pull it is a field verdict about
+the missing contact darkening**, not a frame.
+
+**Effort: medium to reinstate, high to do PROPERLY.** The bake path existed and was removed, so emitting
+placements into the common build again is the smaller half. The larger half is condition 3 at the bottom — a
+density knob that survives the species strip. Without it this is a straight revert to the state where clutter
+density could not be measured in the field at all, which is the thing that made the last attempt unmeasurable
+rather than merely expensive. **The honest cheaper alternative — a per-instance AO byte on the instanced path,
+sampled from the cell's own baked field — is low effort** and buys the visible half without any of this.
+
 ## What we do today
 
 The build-time bake runs **only for the `sa` target**. On `opensa` the stage does not run at all, so

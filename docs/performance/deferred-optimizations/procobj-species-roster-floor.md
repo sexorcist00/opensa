@@ -1,8 +1,18 @@
 # Turning the clutter species-roster floor back off
 
-**Status: the cost is TAKEN, deliberately, 2026-08-11 — effort to give it back: VERY LOW.** Two config
-values, no code. See
+**Status: the cost is TAKEN, deliberately, 2026-08-11.** See
 [`sa-procobj-placement/012`](../../../tools/sa-procobj-placement/docs/plans/012-species-representation-floor.md).
+
+**Impact: VERY LOW — measured on both targets, and one of them measures to nothing.** On `sa` it is **312
+objects of 91 379 (0.34 %)**, i.e. 312 permanent rows off a `CBuilding` pool raised to 150 000, and zero
+area-IPL slots. On `opensa` there is nothing to reclaim at all: four `country-dusk` legs put `avgDrawCalls`
+at 821 in every arm and triangles +0.002 % against a 0.011 % same-side spread, because the floor SWAPS a
+placement rather than adding one.
+
+**Effort: very low.** Two config values (`procObjSpeciesFloor` and the host's `procobjFloor` default), no
+code, revert in one commit. **This is the entry that shows why the two ratings are separate**: trivial to do,
+worth nothing to do, and it costs 17.7 % of clutter cells a species outright — terrain that simply has no
+cacti, with no warning. It is recorded as a deliberate cost for LOOK, not as a candidate.
 
 ## What we do today
 

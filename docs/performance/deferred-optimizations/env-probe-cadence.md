@@ -2,6 +2,16 @@
 
 **Status:** in reserve — already amortised once (074/16 step 2), can be cut further if the frame needs it.
 
+**Impact: low, medium when the probe is hot — measured.** The probe's own benchmark rows read **0.23–1.94 ms**
+and field frames have shown ~5.8 ms on a busy scene; halving the cadence halves that share. So it is a few
+tenths of a millisecond in the ordinary case and low single-digit milliseconds in exactly the frame that
+needed help. What caps it: on every field case so far the probe sat well behind the WORLD pass, so it can
+shave a frame that is already close, not rescue one that is not.
+
+**Effort: very low → low.** `PROBE_FRAME_INTERVAL` and the face size are constants — very low, and revert is
+the same line. The variant actually worth taking (refresh only while a reflective vehicle is on screen) needs
+a visibility answer in the frame loop, which is low and touches nothing else.
+
 ## What we do today
 
 The vehicle reflection probe is a 128²×6 cubemap of the real world around the player, refreshed **one face
