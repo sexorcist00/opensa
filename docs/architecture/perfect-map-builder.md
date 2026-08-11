@@ -14,8 +14,17 @@ stop anywhere (`--until <stage>`, inclusive, keeps intermediates). Intermediates
 `<out>/.work/<n>-<stage>` and are deleted as consumed unless `--keep-work`/`--until`. **`.work` is wiped at
 the top of every run, before any stage reads `--game`/`--in`** — so a source pointing into it is refused by
 name rather than eaten ([restrictions/architecture.md](../restrictions/architecture.md)). Every stage is
-timed and logged as it ends, and the run writes `<out>/build-timings.json` stating the target and the procobj
-knobs it was configured with.
+timed and logged as it ends, and the run writes `<out>/build-timings.json` stating the target, the procobj
+knobs and the **sha256 of the `perfect-map.asi` it shipped** — a map at this density is correct only with that
+asi, so the pairing is recorded rather than remembered.
+
+**What the `sa` branch emits BESIDE the map** (2026-08-11): after its ceiling checks it prints
+`reportInstallRequirements` — every stock ceiling the artifact crosses and the setting that lifts each (int16
+rows → `perfect-map.asi`, the `CBuilding` pool → OLA `Buildings`, rows-in-one-IPL → OLA `EntitiesPerIpl`, the
+three FLA pools) — and then `shipPerfectMapAsi` copies the asi into the built game ROOT. The order is the
+point: the report states what the map needs and the next line satisfies it. The artifact is pre-built
+(`npm run build:asi`, MinGW) and `dist/` is gitignored, so a fresh checkout ships none and the build **warns**
+rather than quietly emitting a tree that corrupts a plain install.
 
 **A run asks for a TARGET, not for the whole pipeline** (`--exclude <stage,stage>`, repeatable): the named
 stages are dropped and everything after them still runs. That is what the two `build:game:<id>:*` script

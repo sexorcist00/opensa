@@ -147,3 +147,13 @@ interpret them.
   nobody had noticed (`GROUND_PROBE_DROP` 60 m against an anchor 43.75 m up, silent when exceeded), a wrong
   diagnosis assembled from two correct systems, and one regression report that was a background process —
   caught by a scene that could not possibly have been affected moving with the rest.
+
+- [`procobj-chain-closed-and-three-plans-that-were-wrong.md`](./procobj-chain-closed-and-three-plans-that-were-wrong.md)
+  — 2026-08-11, thirteen commits: all seven procobj backlog bands closed plus plan 010's last task and
+  `asi/perfect-map` 006. **Three plans' premises were destroyed by measurement and a fourth returned the null
+  it had allowed for**, all in the same direction — `procobj.dat` is a finished design we were re-deriving,
+  not raw material we had to correct. The species roster is guaranteed on both targets (through DIFFERENT
+  gates, and that is forced), the shipped density profile is `base: 1` as a RESULT, the biome axis turned out
+  to be a second name for the surface, and the `sa` build now both states the install it needs and ships the
+  asi into it. Also two A/Bs invalidated by their own instrument — a dead site, and a player who slides
+  downhill so no two arms share a viewpoint (the tell: three DIFFERENT comparisons returning 86.81/86.82/86.83 %).

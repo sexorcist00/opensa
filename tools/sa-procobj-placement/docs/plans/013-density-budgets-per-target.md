@@ -334,10 +334,19 @@ rather than a guard, because its number does not exist yet.
       `base: 1` as the profile ([010](010-density-model.md)) and 011's biome multipliers were struck as
       redundant, so there is no denser build to test. **What IS untested: the roster floor and the slope gate**
       — both landed 2026-08-11, after that field run, and `build/original/sa` still predates them.
-- [ ] Docs/memory: update the procobj plans (007 binary streams), the ghost-barriers cross-ref (the density
-      this unlocks), and `docs/restrictions/` if the target split earns a new rule — it probably does, since
-      "a guard must live on the branch whose target it describes" is exactly the kind of thing that is
-      SILENT when violated.
+- [x] **Docs/memory sweep — DONE 2026-08-11.**
+      - **007 (binary streams)** already carries its superseded banner from 2026-08-10, with the reason
+        (`CIplStore` keeps a stream's slot resident only within 190 units, so it cannot carry range) and the
+        note that lod-trees' overflow areas still want the shape. Nothing to add.
+      - **[ghost-barriers](../../../../docs/open-issues/fixed/ghost-barriers.md)** gained the density this
+        unlocks and a banner over its "what shipped" list: items 1, 2 and 5 there are the WORK-AROUND era, and
+        two of them (streams, `linkedHeight`) no longer exist in the code. The number that makes the point is
+        **110 055 permanent rows — 3.4× the int16 ceiling the issue is about**, which exists because the cause
+        is fixed rather than dodged.
+      - **`docs/restrictions/`**: the rule the task guessed at ("a guard must live on the branch whose target
+        it describes") is already stated in `sa-target.md` — *delete the museum pieces, keep the gates* — and
+        it is in `CLAUDE.md` as a standing rule. No new entry: the target SPLIT stopped being an axis when
+        stock ceased to be a target, so there is no split for a rule to describe.
 
 ## Verification
 

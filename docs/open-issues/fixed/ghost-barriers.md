@@ -63,6 +63,21 @@ Each of these was hit for real during the investigation; fixing them was necessa
 
 ## What ultimately shipped (the fix)
 
+> **Read this first, added 2026-08-11.** Items 1, 2 and 5 below describe the WORK-AROUND era and are kept as
+> the record of it — the ceiling they fought is lifted now, and two of them no longer exist in the code.
+> **The procobj layer has carried no binary streams and no `linkedHeight` since
+> [014](../../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md)** (2026-08-10): a
+> stream's IPL slot is only resident within 190 units, so it could never carry the draw distance the layer
+> needed, and every object is a permanent text row at `lod = -1` instead. Streams survive only for lod-trees'
+> overflow areas (item 3), which want streaming and not range.
+>
+> **What the asi unlocks, in numbers.** The map ships **110 055 permanent text-IPL rows** map-wide — 3.4× the
+> 32 767 int16 ceiling this issue is about, and 3.7× the 30 000-row build guard that used to fail it. That
+> density exists BECAUSE the root cause is fixed rather than budgeted: the guard was deleted 2026-08-09, and
+> since 2026-08-11 the `sa` build both **states every stock ceiling it crosses** (`reportInstallRequirements`)
+> and **ships `perfect-map.asi` into the built game root** with its sha256 in `build-timings.json`. The
+> work-arounds below are what the same problem cost when it could only be dodged.
+
 1. **Binary-stream placement** (lod-procobj plan 007): vanilla-style per-area layout — small text
    `plobj<i>.ipl` (LOD layer) + `plobj<i>_stream<k>.ipl` binary tiles in gta3.img, HD `lod` fields
    indexing the area's text rows. `encodeBinaryIpl` + `buildLinkedAreas` in `@opensa/map-placement`.
