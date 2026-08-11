@@ -1,3 +1,5 @@
+import type * as MapOptimizerRun from '@opensa/map-optimizer/run';
+
 import { buildVer2Buffer } from '@opensa/renderware/archive/img-archive';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -43,6 +45,32 @@ const opensaLods = vi.hoisted(() =>
 vi.mock('@opensa/sa-procobj-placement/build', () => ({ buildProcobjLods: procobjLods }));
 vi.mock('@opensa/sa-lod-generator/build', () => ({ buildSaLods: saLods }));
 vi.mock('@opensa/opensa-lod-generator/build', () => ({ buildOpensaLods: opensaLods }));
+
+/** The optimizer, mocked ONLY where a test opts in — a real run needs a real game dir. Its report is what
+ *  the optimize stage turns into a report fragment, so the fake carries one recognizable failure. */
+const optimizer = vi.hoisted(() =>
+  vi.fn<
+    (options: { gameDir: string; outDir: string }) => Promise<{
+      assets: never[];
+      failures: { error: string; name: string }[];
+      game: string;
+      outDir: string;
+    }>
+  >((options) => {
+    mkdirSync(options.outDir, { recursive: true });
+
+    return Promise.resolve({
+      assets: [],
+      failures: [{ error: 'boom', name: 'broken.dff' }],
+      game: 'fake',
+      outDir: options.outDir,
+    });
+  }),
+);
+vi.mock('@opensa/map-optimizer/run', async (importOriginal) => ({
+  ...(await importOriginal<typeof MapOptimizerRun>()),
+  runOptimizer: optimizer,
+}));
 
 /** A game dir whose gta.dat registers `n` text IPLs with one inst row each. */
 function writeGame(dir: string, n: number): void {
@@ -418,6 +446,18 @@ describe('buildPerfectMap target reports (plan 005)', () => {
       });
 
       expect(report('opensa').fragments['pack']).toBeUndefined();
+    });
+
+    it("the optimize stage's fragment travels through the runner into BOTH target reports", async () => {
+      // The runner-collect half of the plan: a chain stage RETURNS its fragment, the runner keys it by stage,
+      // and every target report this run writes carries it — with the totals and the isolated failures.
+      await buildPerfectMap({ exclude: ['pack'], gamePath: game, inPath: '/nonexistent', outPath: out });
+
+      const fragment = (target: 'opensa' | 'sa'): { failures: unknown[]; summary: { models: number } } =>
+        report(target).fragments['optimize'] as { failures: unknown[]; summary: { models: number } };
+      expect(fragment('sa').failures).toEqual([{ error: 'boom', name: 'broken.dff' }]);
+      expect(fragment('sa').summary.models).toBe(0);
+      expect(fragment('opensa').failures).toEqual(fragment('sa').failures);
     });
   });
 });

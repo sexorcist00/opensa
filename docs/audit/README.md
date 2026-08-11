@@ -5,6 +5,15 @@ numbers and links to the raw records — so the result survives the session and 
 without re-deriving it. Runtime numbers live in [`../benchmarks/`](../benchmarks/); these docs summarise and
 interpret them.
 
+- [`uv-repair-retired-and-one-report-per-target.md`](./uv-repair-retired-and-one-report-per-target.md) — the
+  2026-08-11 session-3 close of the 025 arc: the field reversed the UV repair in one look (a partial repair
+  of a continuous defect is patchwork by construction, and the mapping it writes is invented — no authored
+  frame exists, fit residual ~1.8 UV), so the pass was retired the same hour and the problem shelved as an
+  open issue (127 models). Then the branch merged (ff) and pmb plan 005 shipped the same afternoon:
+  `report-<target>.json` per target with typed fragments, `.work-<target>`, the root `report.json` deleted
+  after measuring it was a byte-identical 852 KB copy nobody read. Carries the lesson that should have been
+  cheaper: the pass shipped in a build BEFORE its field round, against a restriction that already named the
+  field as the gate.
 - [`procobj-budget-answered-and-a-knob-nobody-had-connected.md`](./procobj-budget-answered-and-a-knob-nobody-had-connected.md)
   — the 2026-08-10 close: backlog bands **P1 and P2**. P1 asked for the clutter perf budget and found there is
   none to give — at 3× vanilla the layer costs less than one sweep's A/A drift and never hitches, so the caps
