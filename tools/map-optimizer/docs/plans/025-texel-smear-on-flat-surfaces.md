@@ -495,6 +495,35 @@ Where the seven labels stand at `reach 5`:
 `road03sfn` at 1.5 % sitting above `road_lawn32` at 0.5 % — a single-face margin on both sides, which is the
 weakest kind of disagreement and the first thing more labels would settle.
 
+### The whole top tier — 12 models at ≥ 10 % of surface, awaiting labels
+
+| model | share | flagged / total | ×inst | position | note |
+|---|---|---|---|---|---|
+| `wires_04d_sfs` | 43.0 % | 464 / 1 079 u² | 1 | −2679.9, −183.0, 12.0 | SF power lines |
+| `wires_04c_sfs` | 42.0 % | 742 / 1 766 u² | 1 | −2775.9, −206.8, 17.1 | biggest of the wire set |
+| `wires_07_sfs` | 32.1 % | 194 / 606 u² | 1 | −2717.5, 111.9, 14.0 | |
+| `airport_front` | 28.2 % | 10 088 / 35 800 u² | 1 | −1860.2, −24.1, 1076.7 | INTERIOR |
+| `wires_04_sfs` | 27.4 % | 386 / 1 410 u² | 1 | −2676.4, −105.1, 11.6 | |
+| `airport_int2` | 26.7 % | 1 253 / 4 696 u² | 1 | −1861.4, 7.7, 1073.1 | INTERIOR |
+| `airtwer_las` | 15.0 % | 1 942 / 12 955 u² | 1 | 1610.8, −2285.8, 52.8 | **informative unknown** |
+| `wires_05_sfs` | 14.2 % | 442 / 3 120 u² | 1 | −2758.7, 8.5, 15.9 | |
+| `wires_04b_sfs` | 12.2 % | 147 / 1 203 u² | 1 | −2777.8, −96.0, 16.7 | |
+| `nwwarhus` | 12.0 % | 481 / 4 021 u² | 4 | 2415.5, −2468.6, 16.7 | **informative unknown** |
+| `gdyn_barrier17` | 10.8 % | **2 / 16 u²** | 26 | 1393.8, 927.1, 10.7 | see the area note |
+| `traincross1` | 10.2 % | **1 / 8 u²** | 41 | 2204.3, −1650.3, 16.8 | see the area note |
+
+**Half the tier is one family.** Six of the twelve are the SF power-line set — the ribbon family the cover
+gate cannot touch by construction, because nothing stands on a wire. If they label CLEAN, that is the next
+thing to solve and it is not an occlusion problem.
+
+**A ranking flaw the tier exposes**: `gdyn_barrier17` and `traincross1` reach the top on a share of **16 u²
+and 8 u² of total surface** — 2 u² and 1 u² flagged. Share alone is meaningless at that size, and a minimum
+flagged AREA would drop both. Recorded rather than silently applied: it is a change to the ranking and it
+should land with a label behind it, not a hunch.
+
+So the labels worth the user's time are `airtwer_las` and `nwwarhus` (real area, genuinely unknown), plus one
+wire as the family's representative — `wires_04c_sfs`, the biggest.
+
 Cost and risk still to price for the eventual PASS (this is the scanner, not the pass): the occlusion query is
 per candidate face over the placed world,
 which is a different order of work from the scans above, and its own failure modes (an interior, a model
