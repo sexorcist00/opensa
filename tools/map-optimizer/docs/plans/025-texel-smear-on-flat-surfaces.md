@@ -469,9 +469,31 @@ the expensive mistake.
 `garse_85_sfe`, `sbseabed3_las20` are out of the ranking entirely. The population is a sixth of what it was
 and is now a set a person can label through.
 
-**The cost, stated rather than buried**: `road_lawn08`, labelled BROKEN, drops out at every reach — its whole
-case rested on ONE flagged face and the cover gate took it. A false negative the gates bought, and the reason
-the next labels should come from the low end rather than the top.
+### The label set corrected, and the recorded "cost" was never real
+
+User, same day: *"I re-checked — my mistake, the picker grabbed the wrong object. Not `road_lawn08`, it is
+fine. It is `road_lawn17` (txd `roads_lawn`, 1149.7, −1040.0, 31.0)."*
+
+So the false negative this plan recorded against the gates was a **mislabelled control**, not a gate failure —
+`road_lawn08` dropping out is the CORRECT answer, and the real broken model was never in the set. Worth
+keeping as a method note: a wrong label makes a right instrument look broken, and it is the kind of error that
+survives every amount of re-measurement because the measurement is not where it lives.
+
+Where the seven labels stand at `reach 5`:
+
+| model | label | rank |
+|---|---|---|
+| `road_lawn17` | BROKEN | **3.2 %** — highest of the three |
+| `road_lawn34` | BROKEN | 2.0 % |
+| `road03sfn` | CLEAN | 1.5 % |
+| `road_lawn32` | BROKEN | 0.5 % |
+| `road_lawn08` | CLEAN | not ranked ✓ |
+| `backalleys1_sfe` | CLEAN | not ranked ✓ |
+| `garse_85_sfe` | CLEAN | not ranked ✓ |
+
+**Six of seven are consistent**, and the newly-named broken model tops the three. The one blemish left is
+`road03sfn` at 1.5 % sitting above `road_lawn32` at 0.5 % — a single-face margin on both sides, which is the
+weakest kind of disagreement and the first thing more labels would settle.
 
 Cost and risk still to price for the eventual PASS (this is the scanner, not the pass): the occlusion query is
 per candidate face over the placed world,

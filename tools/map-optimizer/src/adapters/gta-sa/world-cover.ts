@@ -20,6 +20,8 @@ import type { Placement, Vec3 } from './boundary';
  * it by more than a metre. At 5 the ranking stops contradicting the field labels (no CLEAN model outranks a
  * BROKEN one); at 10 `road03sfn` leaves the ranking outright, at the cost of hiding more. 5 is the default
  * because the smaller value that satisfies the labels is the one that hides least — the standing bias here.
+ * At that setting six of the seven field labels agree with the ranking, and the newly-named broken model
+ * (`road_lawn17`) tops the three roads.
  */
 export interface CoverQuery {
   /** How many boxes the query holds — 0 means it answers `false` everywhere. */
