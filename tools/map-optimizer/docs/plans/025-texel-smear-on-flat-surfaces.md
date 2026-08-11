@@ -353,6 +353,55 @@ knows the answer. Near-identical siblings are collapsed to one entry — there i
 Positions and the exact per-model counts are in the run output; every row is reachable with
 `npx tsx scripts/debug/teleport-spot.ts <model> --game original`.
 
+### FIRST LABEL, 2026-08-11 — `road03sfn` is CLEAN, and it explains the ranking
+
+User looked at it: the 40 % flagged share is a **SKIRT hanging under the road** — a vertical apron authored
+to mask the gap below, textured by dragging the road's UV downward, so the vertical axis maps to no UV
+movement at all and every face of it collapses. *"It is hidden from the world… in game you cannot see it at
+all, there are no other anomalies there."* A false positive, and a label worth more than the four rankings
+above it: the same shape is what puts cables, neon strips and mesh fences on top. **All of them vertical.**
+The reported class is the opposite — a surface you look DOWN at.
+
+**So a 4th formulation: flag only UP-FACING faces** (`--up`, default `|nz| ≥ 0.5`; absolute because a
+two-sided sheet ships its mirror copy wound the other way). Building it exposed a self-inflicted bug worth
+recording — filtering the DENOMINATOR too made a vertical fence keep a 0 u² denominator, so one flagged face
+read as 99.9 % and signs with no measurable surface topped the list. The denominator is the whole model now.
+
+**And it still does not rank.** On the only labelled pair that exists:
+
+| model | field label | before the up-filter | after |
+|---|---|---|---|
+| `road03sfn` | **CLEAN** | 40.1 % | **16.1 %** (42/862 faces) |
+| `road_lawn34` | **BROKEN** | 7.5 % | **3.7 %** (6/203) |
+| `road_lawn32` | BROKEN | 3.3 % | 1.0 % (2/200) |
+| `sbseabed3_las20` | BROKEN | 23.6 % | 4.5 % (4/39) |
+| `road_lawn08` | BROKEN | 1.6 % | drops out entirely |
+
+The clean model still outranks the broken one by 4×. And the filter takes most of the flagged faces off the
+BROKEN models too — 69 of `road_lawn34`'s 75 were not up-facing — which says most of what the earlier
+criteria were counting on the reported models was their kerbs and skirts as well.
+
+Population after the filter: 959 models ≥1 % of surface, 314 ≥5 %, 144 ≥10 %, 54 ≥20 %, 4 ≥50 %. **These
+numbers are not to be quoted as a defect count** — the criterion producing them is inverted on its only
+labels.
+
+### Where this stops, and why
+
+Four formulations — raw magnitude, edge-neighbour disagreement, model baseline, up-facing — and the ranking
+is still backwards on the one labelled pair. Each was a reasonable idea and each failed differently, which is
+the pattern this repo already has a name for: several wrong axes in a row means **stop guessing and let the
+field answer.**
+
+What the next step needs is LABELS, not another metric. Concretely: the remaining spots in the table above,
+each answered CLEAN or BROKEN, so a criterion can be fitted to them rather than invented. Two questions the
+labels have to settle, which no amount of offline measurement can:
+
+1. **What is the visible smear actually ON?** If most of `road_lawn34`'s flagged faces are kerbs and skirts,
+   the faces the user photographs may be BELOW the 8× threshold entirely — in which case the threshold, not
+   the shape test, is what is wrong.
+2. **Is "vertical" really exempt?** The skirt is invisible, but a kerb face is not. `--up 0.5` currently
+   throws both away.
+
 ## Phase 1b — if a criterion ever separates it: find every model it happened to
 
 Extend `scripts/debug/scan-model-defects.ts` with the Phase 0 metric as criterion **(e)**, area-weighted and

@@ -27,16 +27,18 @@ import { indexModAssets, resolveDff } from '../lib/mod-assets';
  *     surface the flagged faces cover, and printed with the map-wide POPULATION, because how many models
  *     carry it is what decides curated list vs general rule. Original-game data — the optimizer moves no
  *     UV (025 phase 0), so a hit here is R*'s, not ours.
- *     **THIS CRITERION IS NOT SETTLED — read plan 025 before trusting its ranking.** Three formulations
- *     have been measured and all three mis-rank: raw anisotropy puts cables first (a ribbon SHOULD map a
+ *     **THIS CRITERION IS NOT SETTLED — read plan 025 before trusting its ranking.** FOUR formulations
+ *     have been measured and all four mis-rank: raw anisotropy puts cables first (a ribbon SHOULD map a
  *     texel off square); edge-neighbour disagreement under-detects a contiguous band (`sbseabed3_las20`
  *     scored 1 flagged face of 39 while the field calls a quarter of it wrong); and this one, the model
  *     baseline, catches the bands correctly but puts `wires_*` back on top, because a wire model also
- *     carries poles, so it HAS a healthy baseline its strands deviate from. Geometry alone has not yet
+ *     carries poles, so it HAS a healthy baseline its strands deviate from; and `--up`, which keeps only
+ *     up-facing faces after the field labelled `road03sfn` CLEAN (its 40% was the invisible SKIRT under the
+ *     road), yet still ranks that clean model 4x above the broken `road_lawn34`. Geometry alone has not
  *     told "stretched by design" from "stretched by mistake". Use it to SIZE the population, not to
  *     conclude a model is broken.
  *
- * Run: npx tsx scripts/debug/scan-model-defects.ts [--game original] [--top 10] [--dz 0.5] [--aniso 8]
+ * Run: npx tsx scripts/debug/scan-model-defects.ts [--game original] [--top 10] [--dz 0.5] [--aniso 8] [--discont 4] [--up 0.5]
  *      [--json <out.json>]
  * Output per hit: metrics, source mod, instance count + a position — paste into
  *   `npx tsx scripts/debug/teleport-spot.ts <model>` for a field spot.
@@ -87,6 +89,7 @@ function analyzeModel(
   dz: number,
   aniso: number,
   discont: number,
+  up: number,
 ): Omit<ModelRow, 'from' | 'instances' | 'model' | 'position' | 'timed' | 'txd'> {
   const clump = parseDff(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
   let badNormalFaces = 0;
@@ -110,7 +113,7 @@ function analyzeModel(
     verts += vertexCount;
     faces += geo.triangles.length;
     if (geo.uvLayers[0]) {
-      const stretch = analyzeUvStretch(geo.positions, geo.uvLayers[0], geo.triangles, aniso, discont);
+      const stretch = analyzeUvStretch(geo.positions, geo.uvLayers[0], geo.triangles, aniso, discont, up);
       stretchFaces += stretch.faces;
       stretchArea += stretch.area;
       stretchedFaces += stretch.stretched;
@@ -252,6 +255,7 @@ function analyzeUvStretch(
   triangles: readonly Triangleish[],
   limit: number,
   discont: number,
+  up: number,
 ): { area: number; collapsed: number; faces: number; stretched: number; totalArea: number; worst: number } {
   const area: number[] = [];
   const aniso: number[] = [];
@@ -264,20 +268,34 @@ function analyzeUvStretch(
   for (const { a, b, c } of triangles) {
     const e1p = [0, 1, 2].map((k) => positions[b * 3 + k] - positions[a * 3 + k]);
     const e2p = [0, 1, 2].map((k) => positions[c * 3 + k] - positions[a * 3 + k]);
-    const faceArea =
-      0.5 *
-      Math.hypot(
-        e1p[1] * e2p[2] - e1p[2] * e2p[1],
-        e1p[2] * e2p[0] - e1p[0] * e2p[2],
-        e1p[0] * e2p[1] - e1p[1] * e2p[0],
-      );
+    const cross = [
+      e1p[1] * e2p[2] - e1p[2] * e2p[1],
+      e1p[2] * e2p[0] - e1p[0] * e2p[2],
+      e1p[0] * e2p[1] - e1p[1] * e2p[0],
+    ];
+    const crossLength = Math.hypot(cross[0], cross[1], cross[2]);
+    const faceArea = 0.5 * crossLength;
+    // UP-FACING ONLY (field label 2026-08-11, `road03sfn`). Its 40 % flagged share is the SKIRT hanging
+    // under the road — a vertical apron authored to mask the gap below, textured by dragging the road's UV
+    // downward, so the vertical axis maps to no UV movement at all. Nobody ever sees it, and the user
+    // confirmed the model has no visible anomaly. The same shape is what puts cables, neon strips and mesh
+    // fences at the top: all of them vertical. The reported class is the opposite — a surface you look
+    // DOWN at. `|nz|` rather than `nz` because a two-sided sheet ships its mirror copy wound the other way.
     if (faceArea < 1e-6) {
       area.push(0); // a degenerate POSITION face draws nothing — kept in place so face indices line up
       aniso.push(0);
       sigmaMin.push(Number.NaN);
       continue;
     }
+    // The denominator is the WHOLE model, always: filtering it too was a self-inflicted bug — a vertical
+    // fence kept a 0 u² denominator and any single flagged face read as 99.9 %.
     totalArea += faceArea;
+    if (Math.abs(cross[2]) / crossLength < up) {
+      area.push(0); // not a surface this defect class lives on — excluded from the numerator only
+      aniso.push(0);
+      sigmaMin.push(Number.NaN);
+      continue;
+    }
     area.push(faceArea);
     const e1t = [uvs[b * 2] - uvs[a * 2], uvs[b * 2 + 1] - uvs[a * 2 + 1]];
     const e2t = [uvs[c * 2] - uvs[a * 2], uvs[c * 2 + 1] - uvs[a * 2 + 1]];
@@ -391,7 +409,7 @@ function main(): void {
         from: source.from,
         model,
         ...info,
-        ...analyzeModel(source.bytes, args.dz, args.aniso, args.discont),
+        ...analyzeModel(source.bytes, args.dz, args.aniso, args.discont, args.up),
       });
       scanned += 1;
     } catch {
@@ -492,6 +510,7 @@ function parseArgs(): {
   game: string;
   json: string | undefined;
   top: number;
+  up: number;
 } {
   const argv = process.argv.slice(2);
   let game = 'original';
@@ -499,6 +518,7 @@ function parseArgs(): {
   let dz = 0.5;
   let aniso = 8;
   let discont = 4;
+  let up = 0.5;
   let json: string | undefined;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--game') game = argv[++i];
@@ -506,11 +526,12 @@ function parseArgs(): {
     else if (argv[i] === '--dz') dz = Number(argv[++i]);
     else if (argv[i] === '--aniso') aniso = Number(argv[++i]);
     else if (argv[i] === '--discont') discont = Number(argv[++i]);
+    else if (argv[i] === '--up') up = Number(argv[++i]);
     else if (argv[i] === '--json') json = argv[++i];
     else throw new Error(`unknown arg ${argv[i]}`);
   }
 
-  return { aniso, discont, dz, game, json, top };
+  return { aniso, discont, dz, game, json, top, up };
 }
 
 main();
