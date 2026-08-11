@@ -289,26 +289,26 @@ Discovered 2026-08-11, from a field report that three buildings had no LOD. A te
 same text file of their area. So deleting one row repoints every link at or after it, in that file AND for
 objects that are not in it at all.
 
-One mod merge (`5. SA Xbox Map Features`, `remove from "inst"`) dropped a single row from `LAe.ipl` at index
-93. `laehospital1` — placed by `lae_stream0.ipl`, not by `LAe.ipl` — has link 133, which was `LODxhospital1`
-on its own footprint and is `LODxroad08` 105 u away in the built tree. Around the same one-row deletion in
-`LAw.ipl`, `LODgaz9_law` comes out 398.7 u off its object wearing its neighbour's rotation.
+**The removal path a MOD takes is handled, and that is exactly what makes the rest dangerous.** A
+`remove from "inst"` merge goes through `removeInstWithRebase` (which decrements every surviving link) and
+`patchAreaStreams` (which rewrites the `lod` field in the area's binary streams) — measured working:
+`5. SA Xbox Map Features` drops a row from `LAe.ipl` at index 93 and `laehospital1`'s stream link comes out
+133 → 132, still on its own LOD. **Every other way a row can leave a file has neither half.** `LAw.ipl` is one
+row short of stock with no mod involved: its id/name column took the deletion, its transform column did not,
+so `LODgaz9_law` sits 398.7 u off its object wearing a re-derived neighbouring rotation — and `law_stream2.ipl`
+was never patched, so the link lands on a tree the build had exiled to z = −300.
 
-**The point of this entry is that the removal path was DESIGNED for exactly this and it still went wrong.**
-`removeInstWithRebase` rebases the text links and `patchAreaStreams` rewrites the binary streams' `lod`
-fields; the contract promises both. So "we handle removals" is not an answer a new design may lean on — the
-removal has to keep holding through every later stage that rewrites an archive or an IPL, and that is a
-property of the whole build, not of one function.
+The rule for a new design: a pass may APPEND inst rows freely (every index it could disturb is below it), and
+may not REMOVE one. Retire a placement by exiling the row — the trees layer's z = −300/−1000 is the
+established shape — rather than deleting it: no renumbering, no stream patch to keep alive, and nothing
+downstream can undo it. "The merge handles removals" is not cover: that is one path, and the guarantee is a
+property of the whole build rather than of one function.
 
-The rule for a new design: a pass may APPEND inst rows freely (every index it could break is below it), and
-should not REMOVE one. Retire a placement by exiling the row — the trees stage's z = −1000 is the established
-shape — rather than deleting it: no renumbering, and nothing downstream can undo it.
-
-**Caught: NO, and by construction.** A shifted index lands on a VALID row of the same file, so row counts,
-well-formedness and every budget guard pass; the removal's own unit tests prove the FUNCTION rebases, which is
-not the same claim as the BUILD being consistent afterwards. The damage is only visible by resolving each link
-back to a MODEL NAME and comparing against the source tree — a check nothing performs today. Detail,
-measurements and the paste-able diagnosis:
+**Caught: NO, and by construction.** A shifted index lands on a VALID row of the same file, and a transform
+column off by one against its own name column is a perfectly legal file — row counts, well-formedness and
+every budget guard pass. `removeInstWithRebase`'s unit tests prove the FUNCTION rebases, which is not the
+claim that matters. The damage is only visible by resolving each link back to a MODEL NAME and comparing
+against the source tree, which nothing does today. Detail, measurements and the paste-able diagnosis:
 [`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../open-issues/ipl-row-removal-breaks-lod-links.md).
 
 ## A curated list may GATE a derived rule; it may never CARRY the correction

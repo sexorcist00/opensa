@@ -1,130 +1,145 @@
-# Removing an inst row from a text IPL silently breaks every LOD link after it
+# A LOD link that no longer points at its own LOD (`gaz9_law`), and two reports it does NOT explain
 
-**Status: 🔴 open, ROOT CAUSE FOUND 2026-08-11, fix deliberately deferred (the user's call: record it, do
-not fix it yet).** Field-reported as "the original SA build has no LOD for these objects"; the diagnosis below
-was taken the same hour off the built tree and the cause is ours, not the game's.
+**Status: 🔴 open, one defect CONFIRMED and two reports UNEXPLAINED (2026-08-11). Fix deferred — the user's
+call: record it, do not fix it yet.**
+
+> **Corrected the same evening.** The first version of this file blamed all three field reports on a shifted
+> row index and named `laehospital1` as the proof. **That was wrong**: it compared STOCK's link value against
+> the BUILT file. Resolving the built tree properly shows `laehospital1`'s link is **132, not 133**, and 132 is
+> `LODxhospital1` on the building's own footprint — the merge's rebase and its binary-stream patch both held.
+> What survives is one confirmed defect (`gaz9_law`) and two reports with no data-level explanation yet. The
+> lesson is the boring one and it is [[lessons-about-my-own-measurement]]'s: the built tree answers for the
+> built tree, and a link is a number in ONE file — read both ends from the same tree.
 
 ## Symptom
 
-Buildings and roads on the `sa` build render with **no LOD at all** — they simply are not there at distance,
-and pop in at their draw distance. Field-confirmed by the user (his words: these are only the ones he
-happened to see, not the full set):
+Buildings and roads on the `sa` build render with **no LOD at all**. Field-confirmed by the user (his words:
+only the ones he happened to see, not the full set):
 
-| model | txd | position |
-| --- | --- | --- |
-| `laehospital1` | `hospital_lae` | 2050.1, −1401.2, 41.7 |
-| `road_lawn33` | `roads_lawn` | 797.5, −1234.4, 17.7 |
-| `gaz9_law` | `venice_law` | 721.4, −1458.8, 18.7 |
+| model | txd | position | verdict after the check |
+| --- | --- | --- | --- |
+| `gaz9_law` | `venice_law` | 721.4, −1458.8, 18.7 | **CONFIRMED broken, twice over** |
+| `laehospital1` | `hospital_lae` | 2050.1, −1401.2, 41.7 | chain intact — unexplained |
+| `road_lawn33` | `roads_lawn` | 797.5, −1234.4, 17.7 | chain intact — unexplained |
 
-## Mechanism
+## The mechanism that matters
 
-**A SA text IPL's LOD link is a ROW INDEX into the `inst` section, not a name.** Delete one row and every
-index at or after it points one object too far — silently, because both the old and the new target are valid
-rows. The binary stream IPLs inside `gta3.img` use the same indices against the area's TEXT file, so a text
-row deleted map-side also breaks LODs for objects that are not in that file at all.
+**A SA text IPL's LOD link is a ROW INDEX into the `inst` section, not a name.** Change the row order and
+every index at or after the change points at a different object — silently, because the new target is a valid
+row. The binary stream IPLs inside `gta3.img` carry indices into the area's TEXT file, so a text row that
+moves also breaks LODs for objects that are not in that file at all.
 
-**Rows do get deleted.** `5. SA Xbox Map Features` ships `data/maps/LA/LAe.ipl.merge` whose whole body is:
+The build DOES handle the mod-merge case: `removeInstWithRebase` (`tools/mod-installer/src/ide-merge.ts`)
+decrements every surviving `lod > removed` and throws on a link pointing AT the removed row, and
+`apply-mod.ts` calls `patchAreaStreams` (`stream-merge.ts`) to rewrite the `lod` field of every 40-byte INST
+record in each `<area>_streamN.ipl`. **Measured: it works.** `5. SA Xbox Map Features` removes `LODroadbnj`
+from `LAe.ipl` at index 93; `laehospital1`'s stream link came out **133 → 132**, landing on `LODxhospital1`
+exactly as it should. `docs/contracts/mods.md` describes this and the description is accurate.
+
+## The confirmed defect: `LAw.ipl`'s stock tail is misaligned, and its stream links were not rebased
+
+`gaz9_law` is placed by `law_stream2.ipl` with `lod-link=158` into `LAw.ipl`. **Two independent things are
+wrong there, and either alone would remove the LOD.**
+
+**1. Three rows carry the transform of the row above them.** Built `LAw.ipl`, indices 153–157:
 
 ```
-remove from "inst":
-5538, LODroadbnj, 0, 2041.726563, -1752.320313, 12.28125, 0, 0, -1, 2.35597272e-005, -1
+153: 3760, LODcanhou01_LAx, 0, 793.859375,  -1729.820313, 16.4296875          <- stock text, float32
+154: 3760, LODcanhou01_LAx, 0, 790.8125,    -1749.851563, 16.4296875          <- stock text, float32
+155: 6253, LODhedge_law,    0, 790.8125,    -1749.8515625, 16.429689407348633 <- row 154's transform, float64
+156: 6255, lodmallb_law,    0, 1305.46875,  -1619.7421875, 13.39844036102295  <- hedge's transform, float64
+157: 6256, LODgaz9_law,     0, 1117.585938, -1490.007813, 32.71875            <- mallb's transform
+158: 729,  tree_hipoly07,   0, 864.5234375, -1694.328125, -300.0              <- appended trees layer
 ```
 
-**And this is exactly the case the merge was BUILT for, which is what makes the bug interesting.**
-`docs/contracts/mods.md` states the guarantee — `remove` "for `inst` rebases every surviving `lod` link and
-reports the removed indexes so the area's binary streams are patched the same way" — and the code is there:
-`removeInstWithRebase` (`tools/mod-installer/src/ide-merge.ts`) decrements every surviving `lod > removed`
-and throws on a link pointing AT the removed row, then `apply-mod.ts` calls `patchAreaStreams`
-(`stream-merge.ts`), which rewrites the `lod` field of every 40-byte INST record in each `<area>_streamN.ipl`
-inside `gta3.img`.
+Stock has **six** `LODcanhou01_LAx` rows, the build has five: the id/name column took the deletion and the
+transform column did not. **`LODgaz9_law` therefore sits at 1117.6, −1490.0, 32.7 instead of 721.4, −1450.9,
+10.2 — 398.7 u off its object**, and `LODhedge_law` even wears a re-derived rotation
+(`-0.02181999944150448` vs stock's `-0.02181491256`), so the row went through a float64 round-trip. No mod
+ships `LAw.ipl` or a `LAw.ipl.merge`; this is ours.
 
-**So the defect is that this machinery did not hold on the shipped build, not that it is missing.** The
-measurements below are what the built tree actually contains; which link of the chain broke is NOT yet
-established, and the two candidates are named at the bottom.
+**2. The stream link was not rebased.** `gaz9_law`'s link is **158 in both trees** — unlike `LAe.ipl`, nothing
+patched `law_stream2.ipl`. Built index 158 is the first row of the appended trees layer, a `tree_hipoly07`
+sunk to z = −300. So the game asks for a LOD and gets an exiled tree.
 
-**Measured on `build/original/sa` vs `game-src/original` (2026-08-11 18:04 build):**
+**Measured, `build/original/sa` vs `game-src/original` (2026-08-11 18:04 build):**
 
-| file | stock inst rows | built | first divergence | what was removed |
+| file | stock inst rows | built | first divergence | note |
 | --- | --- | --- | --- | --- |
-| `LA/LAe.ipl` | 303 | 478 | **index 93** | `LODroadbnj` (5538) |
-| `LA/LAw.ipl` | 172 | 476 | **index 155** | one of six `LODcanhou01_LAx` (3760) |
-| `LA/LaWn.ipl` | 293 | 435 | index 252 | a `sjmpalmtall` row (trees region) |
+| `LA/LAe.ipl` | 303 | 478 | index 93 | mod merge removed `LODroadbnj`; rebase + stream patch HELD |
+| `LA/LAw.ipl` | 172 | 476 | **index 155** | one `LODcanhou01_LAx` short, tail misaligned, stream NOT patched |
+| `LA/LaWn.ipl` | 293 | 435 | index 252 | past every link in question; no effect on the reports |
 
-(The row counts GROW because our own layers append; appending is safe, deleting is not.)
+(Row counts grow because our layers append. Appending is safe — every index it could disturb is below it.)
 
-Two of the three reports resolve straight out of that table:
+## The two reports this does NOT explain
 
-- **`laehospital1`** is placed by the binary stream `lae_stream0.ipl` with `lod-link=133` into `LAe.ipl`.
-  Stock index 133 is `LODxhospital1` at the building's own position; on our build it is **`LODxroad08` at
-  2155, −1382, 23** — a road LOD 105 u away. The hospital's LOD is not missing, it is drawing something else
-  somewhere else, because one row was deleted 40 rows earlier.
-- **`gaz9_law`** is placed by `law_stream2.ipl` with `lod-link=158` into `LAw.ipl`. Here the LOD does not need
-  a stale index to be wrong — **the row itself moved**: three LOD rows come out carrying the transform of the
-  row above them. `LODhedge_law` took the last `LODcanhou01_LAx` position AND rotation, `lodmallb_law` took
-  hedge's, and **`LODgaz9_law` sits at 1117.6, −1490.0, 32.7 instead of 721.4, −1450.9, 10.2 — 398.7 u off its
-  object** (confirmed twice: by text diff and by resolving the built tree through `loadMapDefsAt`). Those
-  three rows are also re-serialised at full float64 precision while every untouched row keeps stock's text
-  verbatim, which is both a cheap way to spot them and the clue about which pass wrote them.
+Checked against the built tree, both are clean at the data level, so **something else is producing the
+symptom** and neither should be assumed fixed when `LAw.ipl` is:
 
-**`road_lawn33` is a DIFFERENT defect and stays open.** Its chain is intact in the built data — `LaWn.ipl`
-diverges only at index 252, well past its `lod-link=115`, which still resolves to `LODroad30` at the road's
-exact position. What DID change is the LOD's texture dictionary: stock `LODroad30` reads `lawnlodbig`, our
-build writes **`salod0645`** (same for `LODgaz9_law`: `lod_a_law` → `salod0551`). So for this one the suspect
-is the generated `salod*` asset, not the link. Not investigated yet.
+- **`laehospital1`** — stream link 132 → `LODxhospital1` at 2050.07, −1401.21, 33.68, the building's own
+  footprint. DFF and TXD both resolve.
+- **`road_lawn33`** — text link 115 → `LODroad30` at 797.914, −1234.445, 17.719, the road's own position.
+  Resolves too.
+- **`standard01_lawn`** (his follow-up: "something very big looks like it slid or duplicated onto the
+  crossroads") — one placement, at stock's 1024.44, −990.49, 44.97, link 175 → `LODndard01_LAwN` at the same
+  spot. **Not moved and not duplicated in the map data.** Within 150 u of the crossroads the built map adds
+  nothing that stock does not have, so whatever he is seeing there is not a placement.
 
-## Why nothing caught it
+**The one thing all the LODs have in common is ours**: every stock LOD is repointed from the shared stock
+atlases to a generated per-LOD dictionary — `LODxhospital1` `lod2lae1` → **`salod0424`**, `LODroad30`
+`lawnlodbig` → **`salod0645`**, `LODgaz9_law` `lod_a_law` → **`salod0551`**. Sampled offline they are fine
+(`inspect-area` reports `dff ok` / `txd ok` for every LOD in the crossroads area, no failures at all), so this
+is a suspect and not a finding. It is where the next round should start, because it is the only edit that
+touches all three.
 
-Every guard we have counts rows or checks that a row is well-formed; **an index that lands on the wrong valid
-row passes all of them.** There is no assertion anywhere that a lod link still resolves to the same MODEL NAME
-it resolved to in the source data, and the binary-stream half means the damage is not even visible in the file
-that was edited. The unit tests for `removeInstWithRebase` prove the function rebases; nothing proves the
-BUILD's output is still consistent after every stage has had its turn.
+## Why nothing caught the confirmed half
+
+Every guard counts rows or checks that a row is well-formed; **an index that lands on a valid row passes all
+of them**, and a transform column that is off by one against its own name column is a perfectly legal file.
+The unit tests prove `removeInstWithRebase` rebases; nothing proves the BUILD is still consistent once every
+stage has had a turn at the file.
 
 ## For whoever picks it up
 
-Two candidates, and they are cheap to separate — the first thing to do is decide between them, not to write a
-fix:
+1. **Find the pass that rewrote `LAw.ipl`'s rows 155–157.** It is not the merge (`removeInstWithRebase` edits
+   only the last cell of a line, and preserves text). The output signature is greppable: full float64
+   serialisation of position and a re-derived quaternion, on rows that stock writes at float32 precision.
+   Whatever it is, it is dropping a row from one column stream and not the other.
+2. **Then ask why `law_stream2.ipl` was not patched** while `lae_stream0.ipl` was. `patchAreaStreams` only
+   runs off a `.merge`'s `removedInst`; a row that disappears through any other path gets no stream patch at
+   all. That is the actual hole in the design, and it is bigger than the one file.
+3. **Add the guard this went without**, which is what turns the class from silent to caught: after the build,
+   every lod link — text and binary-stream — must resolve to the same model NAME it resolved to in the source
+   tree. A few lines, and it prints the blast radius as a side effect (this file's "scope" section is exactly
+   what that guard would have printed).
+4. **Design rule regardless: appending is safe, removing is not.** Retire a placement by exiling the row (the
+   trees layer's z = −300/−1000 is the established shape) rather than deleting it — no renumbering, and
+   nothing downstream can undo it. Now stated in
+   [`docs/restrictions/assets-and-data.md`](../restrictions/assets-and-data.md).
 
-1. **The stream patch did not survive.** `patchAreaStreams` rewrites `gta3.img` in place, per merge, at the
-   moment that merge is applied. Any later mod that ships its own `<area>_streamN.ipl`, or any later stage
-   that rebuilds the archive from a pre-patch source, silently restores the stale index. Check by reading
-   `lae_stream0.ipl` out of `build/original/sa/models/gta3.img` and looking at `laehospital1`'s `lod` field:
-   **132 means the patch held and the bug is elsewhere; 133 means it was reverted.**
-2. **A second pass rewrites inst rows.** In `LAw.ipl` three rows — `LODhedge_law`, `lodmallb_law`,
-   `LODgaz9_law` — come out carrying the transform of the row ABOVE them and re-serialised at full float64
-   precision, while every untouched row keeps stock's text byte-for-byte. `removeInstWithRebase` only edits
-   the last cell of a line, so it cannot produce that; something else parses and re-emits these rows and is
-   off by one against the deletion. Find that pass (the float-precision signature makes its output greppable)
-   before anything is changed in the merge.
-
-Then, whichever it is, the design rule stands: **appending is safe, removing is not.** Retiring a placement
-should exile the row (the trees stage's z = −1000 is the established shape) rather than delete it — no
-renumbering, no cross-file patch to keep alive, and it costs one permanent row, which this target has room
-for (`docs/restrictions/sa-target.md`).
-
-**And add the guard this went without**, since it is what turns the whole class from silent to caught: after
-the mods stage, every lod link — text and binary-stream — must resolve to the same model NAME it resolved to
-in the source tree. A few lines, and it prints the blast radius as a side effect.
-
-Reproduce the whole diagnosis with the built tree beside the source one — the standing rule that a field
-report is chased against `build/<game>/…` and never `game-src/` is what made it findable:
+Reproduce with the built tree beside the source one — the standing rule that a field report is chased against
+`build/<game>/…` and never `game-src/` is what made this findable, and reading one end from each tree is what
+made the first version of this file wrong:
 
 ```sh
 # first row index where the built file stops agreeing with stock
-paste <(awk '/^inst/{f=1;next}/^end/{f=0}f' game-src/original/data/maps/LA/LAe.ipl | cut -d, -f1-2 | tr -d '\r') \
-      <(awk '/^inst/{f=1;next}/^end/{f=0}f' build/original/sa/data/maps/LA/LAe.ipl | cut -d, -f1-2 | tr -d '\r') \
+paste <(awk '/^inst/{f=1;next}/^end/{f=0}f' game-src/original/data/maps/LA/LAw.ipl | cut -d, -f1-2 | tr -d '\r') \
+      <(awk '/^inst/{f=1;next}/^end/{f=0}f' build/original/sa/data/maps/LA/LAw.ipl | cut -d, -f1-2 | tr -d '\r') \
   | awk -F'\t' '$1!=$2{print NR-1": "$1"  ->  "$2; exit}'
 
-# what a given lod-link resolves to, in each tree
-awk -v k=133 '/^inst/{f=1;n=0;next}/^end/{f=0}f{if(n==k)print;n++}' build/original/sa/data/maps/LA/LAe.ipl
+# what a given lod-link resolves to, in ONE tree (read the link from the same tree!)
+awk -v k=158 '/^inst/{f=1;n=0;next}/^end/{f=0}f{if(n==k)print;n++}' build/original/sa/data/maps/LA/LAw.ipl
 ```
 
-`scripts/debug/find-instances.ts <model>` prints a model's placement and its `lod-link` (it reads
-`game-src/`, so it answers for STOCK — the built side needs `loadMapDefsAt` pointed at `build/original/sa`).
+`scripts/debug/find-instances.ts <model>` prints a model's placement and its `lod-link`, and
+`inspect-area.ts <x> <y> [r]` prints everything around a point with DFF/TXD resolution — **both read
+`game-src/`**. To point them at a build, symlink it in (`ln -s "$PWD/build/original/sa" game-src/.tmp-built-sa`,
+then `--game .tmp-built-sa`) and remove the link afterwards; that is how the corrections above were taken.
 
 ## Scope, honestly stated
 
-The user saw three; the census above found the misalignment in **two LA files**, and it was not run map-wide
-for every area/stream pair. The true blast radius is "every object whose lod link is at or after a deleted
-row, in any file a mod merge removes from" — unknown, and cheap to measure once someone writes the
-name-resolution guard, which produces the list as a side effect.
+One confirmed defect, in one file. The census behind the table compared text IPLs map-wide by name and
+occurrence — it cannot see a row whose name stayed and whose transform moved except at a divergence point, and
+it does not read the binary streams at all. So the blast radius of the `LAw.ipl` class is **unknown**, and the
+two unexplained reports mean the field is seeing at least one defect this file does not describe.
