@@ -633,10 +633,31 @@ around, looks good"*) and both `airport_*` interiors, which were the same thing.
 From 2 544 models to **317**, in a 12-second scan, and the top of the ranking is no longer a by-design family
 — every wire, roof, skirt and interior has left it.
 
-**Still owed before any of this becomes a repair pass**: the 15 threshold rests on nine labels and no more;
-`airtwer_las` is demoted rather than separated (0.5 %, level with a broken model); and the new top carries
-models nobody has looked at — `traincross1` reaches 10.2 % on a model of **8 u² total**, which is the
-minimum-area flaw this plan already recorded and still has not fixed.
+### The minimum-area flaw, fixed — and the threshold is derived, not picked
+
+`--min-area`, default **10 u²** of flagged surface per INSTANCE. The number comes off the labels rather than
+taste: the three field-confirmed broken models carry **28 u²** (`road_lawn32`), **53 u²** (`road_lawn17`) and
+**72 u²** (`road_lawn34`), while `traincross1` reached 10.2 % on a model whose ENTIRE surface is **8 u²** —
+0.8 u² flagged, three orders of magnitude under the smallest real defect. 10 sits comfortably below every
+label and far above the noise.
+
+**Per instance, never multiplied by the placement count**: 41 copies of a 0.8 u² patch are 41 invisible
+patches, not one visible 33 u² one.
+
+| | + texture | **+ min-area** |
+|---|---|---|
+| models ≥ 1 % of surface | 34 | **31** |
+| models ≥ 5 % | 3 | **2** |
+| any flagged face | 317 models / 810 placements | **127 / 134** |
+
+The placement count is what moved most — 810 → 134 — because the tiny-but-numerous models were exactly the
+ones inflating it. All four labelled rows survive unchanged (`road_lawn17` 3.2 %, `road_lawn34` 2.0 %,
+`road_lawn32` 0.5 %, `airtwer_las` 0.5 %).
+
+**Still owed before any of this becomes a repair pass**: the 15 texture threshold rests on nine labels and no
+more; `airtwer_las` is demoted rather than separated (0.5 %, level with a broken model); and the models now
+at the top — `las_runsignsx_las`, the `cs_landbit_*` set, `smallshop_16_sfs` — have not been looked at by
+anyone.
 
 Cost and risk still to price for the eventual PASS (this is the scanner, not the pass): the occlusion query is
 per candidate face over the placed world,

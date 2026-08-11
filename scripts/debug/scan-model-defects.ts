@@ -60,7 +60,7 @@ import { loadWaterField, type WaterField } from '../lib/water';
  *     ranking outright. `road03sfn` does not — see plan 025 for what is still wrong.
  *
  * Run: npx tsx scripts/debug/scan-model-defects.ts [--game original] [--top 10] [--dz 0.5] [--aniso 8]
- *      [--discont 4] [--up 0.5] [--water-depth 0] [--reach 5] [--json <out.json>]
+ *      [--discont 4] [--up 0.5] [--water-depth 0] [--reach 5] [--texvar 15] [--min-area 10] [--json <out.json>]
  * Output per hit: metrics, source mod, instance count + a position — paste into
  *   `npx tsx scripts/debug/teleport-spot.ts <model>` for a field spot.
  */
@@ -598,7 +598,12 @@ function main(): void {
           .padEnd(26)} [${r.from}]`,
     );
   }
-  const withUv = rows.filter((r) => r.totalArea > 0);
+  // A MINIMUM FLAGGED AREA, and it is derived rather than picked: the three field-confirmed broken models
+  // carry 28 u² (`road_lawn32`), 53 u² (`road_lawn17`) and 72 u² (`road_lawn34`) of flagged surface, while
+  // `traincross1` reached 10.2 % on a model whose ENTIRE area is 8 u² — 0.8 u² flagged, three orders of
+  // magnitude below the smallest real defect. Share alone is meaningless at that size. Per INSTANCE, never
+  // multiplied by the placement count: 41 copies of a 0.8 u² patch is still 41 invisible patches.
+  const withUv = rows.filter((r) => r.totalArea > 0 && r.stretchArea >= args.minArea);
   const familyC = withUv
     .filter((r) => r.stretchFaces > 0)
     .sort((a, b) => b.stretchArea / b.totalArea - a.stretchArea / a.totalArea)
@@ -627,7 +632,7 @@ function main(): void {
 
     return `${String(set.length).padStart(5)} models / ${String(instances).padStart(6)} placements`;
   };
-  console.log(`\n  population (discontinuous faces), by the share of the model's own surface they cover:`);
+  console.log(`\n  population (discontinuous faces ≥ ${args.minArea} u²), by the share of the model's own surface:`);
   for (const min of [0.01, 0.02, 0.05, 0.1, 0.2, 0.5]) {
     console.log(`    ≥ ${String(Math.round(min * 100)).padStart(3)}% of surface: ${tier(min)}`);
   }
@@ -684,6 +689,7 @@ function parseArgs(): {
   dz: number;
   game: string;
   json: string | undefined;
+  minArea: number;
   reach: number;
   texVar: number;
   top: number;
@@ -700,6 +706,7 @@ function parseArgs(): {
   let waterDepth = 0;
   let reach = 5;
   let texVar = 15;
+  let minArea = 10;
   let json: string | undefined;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--game') game = argv[++i];
@@ -711,11 +718,12 @@ function parseArgs(): {
     else if (argv[i] === '--water-depth') waterDepth = Number(argv[++i]);
     else if (argv[i] === '--reach') reach = Number(argv[++i]);
     else if (argv[i] === '--texvar') texVar = Number(argv[++i]);
+    else if (argv[i] === '--min-area') minArea = Number(argv[++i]);
     else if (argv[i] === '--json') json = argv[++i];
     else throw new Error(`unknown arg ${argv[i]}`);
   }
 
-  return { aniso, discont, dz, game, json, reach, texVar, top, up, waterDepth };
+  return { aniso, discont, dz, game, json, minArea, reach, texVar, top, up, waterDepth };
 }
 
 /** A local AABB through a placement's transform: all 8 corners, re-bounded (a turned box is not its own). */
