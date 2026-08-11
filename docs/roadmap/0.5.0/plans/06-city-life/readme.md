@@ -1,5 +1,16 @@
 # 06 — City Life (THE flagship feature chain)
 
+> ## ⛔ STOP — step 0, before ANY work on this chain
+>
+> **Show the user this video and wait for his direction. Do not plan, do not research, do not write code
+> until he has seen it and said what it changes:**
+>
+> **https://www.youtube.com/watch?v=1dwufRp71EY**
+>
+> Set by the user on 2026-08-11, with the note that he will correct this entry afterwards — so what is
+> written below is provisional against whatever he takes from the video. This gate applies to every file in
+> the chain, not just this readme: reaching any of them is reaching this gate.
+
 **The most important system we will build (user, 2026-07-12; re-scoped 2026-08-02):** a living city —
 traffic and pedestrians with real routes, real trains, traffic lights and rail barriers, visible into the
 distance — running on the OpenSA engine **AND inside real GTA San Andreas through our own ASI**, with 100 %

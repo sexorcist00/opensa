@@ -54,6 +54,11 @@ the ASI traffic twin), `3-peds` (crowd rendering, generated silhouette LODs, sid
 
 Full chain: [plans/06-city-life/readme.md](plans/06-city-life/readme.md).
 
+> **⛔ Step 0 before ANY work on this chain: show the user
+> <https://www.youtube.com/watch?v=1dwufRp71EY> and wait for his direction** (his call, 2026-08-11 — he will
+> correct the entry afterwards, so the chain as written is provisional against what he takes from it). The
+> gate is stated at the top of the chain readme and applies to every file under it.
+
 ## Basic CLEO support — PULLED BACK into active work (2026-08-04)
 
 Rewritten against a full recon of the 7-mod target corpus and moved to

@@ -34,6 +34,13 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
 - <https://www.gtainside.com/en/sanandreas/skins/144069-endoskeleton-terminator-t800/> — the T800 ped mod
   used as the material-maps test case (`docs/improvements/character-material-maps.md`).
 
+## Reference the user wants watched before work starts
+
+- <https://www.youtube.com/watch?v=1dwufRp71EY> — **must be shown to the user before ANY work on the City
+  Life chain begins** (his call, 2026-08-11; he will say afterwards what it changes). The gate itself lives
+  at the top of
+  [`docs/roadmap/0.5.0/plans/06-city-life/readme.md`](roadmap/0.5.0/plans/06-city-life/readme.md).
+
 ## Articles & techniques
 
 - <https://discourse.threejs.org/t/starry-shader-for-sky-sphere/7578> — starfield shader survey (fed the
