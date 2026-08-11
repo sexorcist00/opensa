@@ -10,7 +10,7 @@ import type { CellCoord, City } from '@opensa/game';
 import type { LookDirectionSource } from '@opensa/game/character/character-controller.system';
 import type { PerfStats } from '@opensa/game/perf/perf-monitor';
 import type { TyreSmokeDials } from '@opensa/game/vehicle/vehicle-tyre-smoke.system';
-import type { ModelSearchHit } from '@opensa/renderware';
+import type { ModelSearchHit, ProcObjSlopeConfig } from '@opensa/renderware';
 import type { ReactElement } from 'react';
 
 import {
@@ -559,6 +559,13 @@ async function boot(
     // a placement, never adds one), and it puts `opensa` where `sa` already is, since a baked static row
     // cannot be capped at all. `?procobjFloor=0` is the A/B and is honoured as zero.
     procObjSpeciesFloor: params.has('procobjFloor') ? Number(params.get('procobjFloor')) : 1,
+    // `?procobjSlope=<steep>,<flat>` (plan 011): the ROCK categories' candidate multiplier on steep and on
+    // flat faces — scree collects on slopes, not on the plain beside them. Slope is the ONE terrain signal
+    // that is not already in the surface (measured: `p_mountain` is 48.8 % steep and carries all six rubble
+    // species, every other surface is under 20 %). Absent = unchanged, which is the shipped default until the
+    // look is judged. The scatter is re-rolled by it, so two settings compare statistically, never placement
+    // by placement.
+    ...procObjSlopeParam(params),
   });
   await adapter.prepare();
   const physics = new PhysicsWorld(await initRapier());
@@ -2082,17 +2089,6 @@ async function boot(
   });
 }
 
-/**
- * What the boot camera starts as: `?look=x,y,z` aims it at a GTA world point, otherwise the fixed spawn
- * facing. The ped is seeded with the same heading, which is what stops auto-centre swinging the aim away.
- *
- * **This knob exists because the headless harness has no mouse.** It presses keys, and look is pointer-only,
- * so without an aim every probe stares SOUTH — a subject then needs standable ground ~600 u to its NORTH to
- * be seen at LOD range, which the Las Payasadas boards do not have: the map ends ~350 u past them and a
- * spawn there falls through the void.
- *
- * The aim math itself is {@link aimAt}, beside the convention it inverts.
- */
 function bootAim(params: URLSearchParams, from: readonly [number, number, number]): { heading: number; pitch: number } {
   const look = (params.get('look') ?? '').split(',').map(Number);
 
@@ -2291,6 +2287,36 @@ function planarDistance(a: readonly number[], b: readonly number[]): number {
  */
 function probeCenterOf(enabled: boolean, focus: readonly [number, number, number]): [number, number, number] | null {
   return enabled ? [focus[0], focus[1] + 1.0, focus[2]] : null;
+}
+
+/**
+ * What the boot camera starts as: `?look=x,y,z` aims it at a GTA world point, otherwise the fixed spawn
+ * facing. The ped is seeded with the same heading, which is what stops auto-centre swinging the aim away.
+ *
+ * **This knob exists because the headless harness has no mouse.** It presses keys, and look is pointer-only,
+ * so without an aim every probe stares SOUTH — a subject then needs standable ground ~600 u to its NORTH to
+ * be seen at LOD range, which the Las Payasadas boards do not have: the map ends ~350 u past them and a
+ * spawn there falls through the void.
+ *
+ * The aim math itself is {@link aimAt}, beside the convention it inverts.
+ */
+/**
+ * `?procobjSlope=<steep>,<flat>` — the slope gate as a field A/B knob (plan 011). One pair of multipliers for
+ * the ROCK categories, because that is where the measurement put it: `p_mountain` carries all six `p_rubble*`
+ * species and is the only surface with a large steep share. `?procobjSlope=2,0.5` is "twice the scree on the
+ * slopes, half of it on the flat". Absent (or unparseable) leaves the scatter untouched.
+ */
+function procObjSlopeParam(params: URLSearchParams): { procObjSlope?: ProcObjSlopeConfig } {
+  const raw = params.get('procobjSlope');
+  if (raw === null) {
+    return {};
+  }
+  const [steep, flat] = raw.split(',').map(Number);
+  if (!Number.isFinite(steep) || steep < 0) {
+    return {};
+  }
+
+  return { procObjSlope: { flat: { rocks: Number.isFinite(flat) && flat >= 0 ? flat : 1 }, steep: { rocks: steep } } };
 }
 
 /**

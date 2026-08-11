@@ -316,6 +316,7 @@ export function run(options: BuildOptions): void {
     iplName: IPL_NAME,
     outPath: lodOut,
     procObjMax: config.procObjMax,
+    slope: config.procObjSlope,
     species: species_,
     speciesFloor: config.procObjSpeciesFloor,
   });

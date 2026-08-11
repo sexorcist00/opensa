@@ -1,10 +1,16 @@
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
 import type { ProcObjCategoryName } from '@opensa/renderware/map/procobj-categories';
 import type { ProcObjBatch, ProcObjPlacement } from '@opensa/renderware/map/procobj-scatter';
+import type { ProcObjSlopeConfig } from '@opensa/renderware/map/procobj-scatter';
 
 import { buildColliders } from '@opensa/renderware/collision/build-colliders';
 import { buildCollisionIndex } from '@opensa/renderware/collision/collision-index';
-import { groupRulesBySurface, PROC_OBJ_MAX_DENSITY, scatterProcObjects } from '@opensa/renderware/map/procobj-scatter';
+import {
+  groupRulesBySurface,
+  PROC_OBJ_MAX_DENSITY,
+  scatterProcObjects,
+  validateSlopeConfig,
+} from '@opensa/renderware/map/procobj-scatter';
 import { parseProcObj } from '@opensa/renderware/parsers/text/procobj.parser';
 import { parseSurfaceNames } from '@opensa/renderware/parsers/text/surfinfo.parser';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -72,6 +78,12 @@ export interface ProcObjConvertOptions {
   outPath: string;
   /** Safety cap on total placed objects (HD count); the set is thinned to the lowest-lottery survivors. */
   procObjMax: number;
+  /**
+   * Slope-aware candidate density (plan 011): scale a face's candidate count by whether it is steep, per
+   * category. The SAME config the runtime scatter takes — both targets read it through `scatterProcObjects`,
+   * which is the only place a per-FACE signal can be spent.
+   */
+  slope?: ProcObjSlopeConfig;
   /** sourceName → its stock object id + bbox height (the {@link heightThreshold} gate). */
   species: ReadonlyMap<string, ProcObjSpecies>;
   /**
@@ -154,11 +166,15 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
     iplName,
     outPath,
     procObjMax,
+    slope,
     species,
     speciesFloor = 0,
   } = options;
   const profile = densityProfile(density);
   validateDensityProfile(profile, PROC_OBJ_MAX_DENSITY);
+  if (slope) {
+    validateSlopeConfig(slope);
+  }
   // The scatter must GENERATE against the same headroom the cutoffs are read against, or a cutoff above the
   // default would keep candidates that were never rolled.
   const ceiling = densityCeiling(profile, PROC_OBJ_MAX_DENSITY);
@@ -181,7 +197,7 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
   const defs = buildMapDefinitions(gamePath, archive);
   const colliders = buildColliders(buildCollisionIndex(archive), defs, { center: [0, 0, 0], radius: Infinity });
   const surfaceNames = parseSurfaceNames(readFileSync(join(gamePath, 'data', 'surfinfo.dat'), 'utf8'));
-  const batches = scatterProcObjects(colliders, groupRulesBySurface(rules), surfaceNames, 0, 0, ceiling);
+  const batches = scatterProcObjects(colliders, groupRulesBySurface(rules), surfaceNames, 0, 0, ceiling, slope);
   const { categories, dropped, final, floored } = selectPlacements(batches, profile, procObjMax, speciesFloor);
 
   const { datLines, files, instBearingFiles, rows } = buildPermanentIpl(final, species, areaBase);

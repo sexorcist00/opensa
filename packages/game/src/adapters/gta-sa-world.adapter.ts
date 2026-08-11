@@ -38,6 +38,7 @@ import {
   procObjCellBudget,
   procObjColliders,
   type ProcObjRule,
+  type ProcObjSlopeConfig,
   type RegionColliders,
   resolveMap,
   scatterProcObjects,
@@ -158,6 +159,10 @@ export interface GtaSaWorldConfig {
    *  lotteries win). The vanilla CProcObjectMan pools at ~300 for the same perf reason.
    *  Default: unlimited. */
   procObjLimit?: number;
+  /** Slope-aware candidate density (plan 011): per category, a multiplier on how many candidates a STEEP or a
+   *  FLAT collision face generates. The SAME config the `sa` bake takes — slope is a per-FACE signal and the
+   *  scatter is the only place either target can spend one. Absent = unchanged. */
+  procObjSlope?: ProcObjSlopeConfig;
   /** Species floor N (sa-procobj-placement plan 012): while {@link procObjLimit} binds, every clutter
    *  species eligible in the cell keeps at least `min(N, its eligible count)` placements instead of
    *  possibly none — paid for at the top of the lottery order, so the budget itself is unchanged.
@@ -633,7 +638,15 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       return cached;
     }
     const colliders = buildCellColliders(buildCollisionIndex(this.fs), this.defs, this.grid, cx, cy);
-    const batches = scatterProcObjects(colliders, this.procObjRules, this.surfaceNames, cx, cy);
+    const batches = scatterProcObjects(
+      colliders,
+      this.procObjRules,
+      this.surfaceNames,
+      cx,
+      cy,
+      undefined,
+      this.config.procObjSlope,
+    );
     this.procObjBatchCache.set(key, batches);
 
     return batches;

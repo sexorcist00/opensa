@@ -8,12 +8,15 @@ export {
   groupRulesBySurface,
   placementMatrix,
   PROC_OBJ_MAX_DENSITY,
+  PROC_OBJ_STEEP_THRESHOLD,
   type ProcObjBatch,
   procObjCellBudget,
   type ProcObjCellBudgetOptions,
   procObjLotteryCap,
   type ProcObjPlacement,
+  type ProcObjSlopeConfig,
   scatterProcObjects,
+  validateSlopeConfig,
 } from './procobj-scatter';
 export { resolveMap, type ResolveMapOptions } from './resolve-map';
 export { flatWaterMesh, WATER_DEEP, WATER_VERTEX_FLOATS } from './water-mesh';

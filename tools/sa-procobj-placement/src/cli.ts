@@ -12,6 +12,7 @@
  *               layer's only range mechanism. Must stay under 300 (default from config: 299)
  *     --max     cap on converted procobj objects (0 disables; default from config)
  *     --species-floor  objects every species with a candidate is guaranteed per 250 u cell (default 1, 0 = off)
+ *     --slope <steep,flat>  ROCK candidate multipliers on steep vs flat faces (plan 011). Omitted = unchanged
  *     --height  optional min HD height (m) gate, drops short clutter (0 = off; default from config)
  *     --density scatter density cutoff, 1 = vanilla, max 3 (the scatter's candidate ceiling). The placed
  *               count scales with it until MINDIST or `--max` binds; the run prints the density it used
@@ -25,6 +26,8 @@
  *                 Without it, writes into `<out>` + patches `data/gta.dat`, HD swap inlined into gta3.img.
  *   All paths are relative to the current working directory (absolute paths pass through).
  */
+import type { ProcObjSlopeConfig } from '@opensa/renderware/map/procobj-scatter';
+
 import { parsePrelightInfo, type PrelightInfo } from '@opensa/lod-common/prelight';
 import { parseBuildTarget } from '@opensa/tool-kit/target';
 import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
@@ -71,6 +74,7 @@ function main(): void {
     procObjHeight: Number(argValue('--height') ?? config.procObjHeight),
     procObjMax: Number(argValue('--max') ?? config.procObjMax),
     procObjSpeciesFloor: Number(argValue('--species-floor') ?? config.procObjSpeciesFloor),
+    ...slopeArg(argValue('--slope')),
   };
 
   const modloader = process.argv.includes('--modloader');
@@ -97,6 +101,19 @@ function main(): void {
     prelightInfo,
     target: parseBuildTarget(argValue('--target')) ?? 'sa',
   });
+}
+
+/** `--slope <steep>,<flat>`: the rock-category multipliers, matching the host's `?procobjSlope=`. */
+function slopeArg(raw: string | undefined): { procObjSlope?: ProcObjSlopeConfig } {
+  if (raw === undefined) {
+    return {};
+  }
+  const [steep, flat] = raw.split(',').map(Number);
+  if (!Number.isFinite(steep) || steep < 0) {
+    throw new Error(`--slope wants <steep>[,<flat>] as non-negative numbers: got '${raw}'.`);
+  }
+
+  return { procObjSlope: { flat: { rocks: Number.isFinite(flat) && flat >= 0 ? flat : 1 }, steep: { rocks: steep } } };
 }
 
 main();

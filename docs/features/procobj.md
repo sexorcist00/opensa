@@ -101,6 +101,17 @@ stock DFFs).
   scatter on several surfaces — and **pays for them at the top of the lottery order**, so the budget is
   unchanged and the skew above the floor is untouched. Cost: 0.32 % of the drawn placements and **no
   measurable frame time** (`avgDrawCalls` identical across four legs). `?procobjFloor=0` is the A/B.
+- **Slope-aware candidate density (`--slope` / `?procobjSlope=`), built 2026-08-11, NEUTRAL by default.** Per
+  category, a multiplier on how many candidates a STEEP (`|normal.z| < 0.85`) or a FLAT face generates. It is
+  **the only terrain signal not already carried by the surface**: 12 of the 14 rule-bearing surfaces sit ≥90 %
+  inside one region and carry that region's species, but `p_mountain` splits **48.8 / 51.2 steep-flat** while
+  holding all six `p_rubble*` rock species. **It lives in the shared scatter, not in a density cutoff** —
+  slope is a per-FACE fact and both selection paths resolve a cutoff per BATCH, which pools every normal the
+  faces happened to have; so a cutoff cannot express it, generation can, and **both targets get it from one
+  place**. Priced: `2,0.5` nets **+14 % rock objects** (+1.05 % of the layer), which says the rock area is
+  already weighted toward steep ground. **It re-rolls the seeded scatter**, so two settings compare
+  statistically, never placement by placement
+  ([plan 011](../../tools/sa-procobj-placement/docs/plans/011-biome-zone-density.md)).
 - **The `sa` bake makes the same guarantee, through a WIDER gate** (`--species-floor`, default 1). Nothing
   caps that path — the global `procObjMax` slice does not bind at the shipped density — so what empties a
   species locally there is the density LOTTERY, not a budget: three candidates on a patch roll all three above

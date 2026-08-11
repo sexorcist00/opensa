@@ -1,4 +1,5 @@
 import type { ProcObjDensityInput } from '@opensa/map-placement/procobj-density';
+import type { ProcObjSlopeConfig } from '@opensa/renderware/map/procobj-scatter';
 
 /** Build knobs for the procobj placement bake (overridable via CLI flags). */
 export interface ProcObjLodConfig {
@@ -29,6 +30,12 @@ export interface ProcObjLodConfig {
    *  others instead of adding to them (07/02 decision 8). Keep it clear of the authored count — a build that
    *  is capped is measuring the cap. `CAP DROPPED n` says when it bit. */
   procObjMax: number;
+  /** Slope-aware candidate density (plan 011): per category, a multiplier on how many candidates a STEEP or a
+   *  FLAT collision face generates. **The one terrain signal not already carried by the surface** — measured
+   *  2026-08-11, `p_mountain` is 48.8 % steep and carries all six `p_rubble*` species while every other
+   *  surface is under 20 %. The SAME config `opensa` takes (`?procobjSlope=`), because the scatter is shared.
+   *  Undefined = unchanged, which is the shipped default until the look is judged. */
+  procObjSlope?: ProcObjSlopeConfig;
   /** Guarantee every species that scattered a candidate in a 250 u cell at least this many objects there, so a
    *  desert patch eligible for ten species shows all ten rather than probably-most (plan 012).
    *

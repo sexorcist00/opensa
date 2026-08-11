@@ -14,6 +14,7 @@ import {
   procObjCellBudget,
   procObjLotteryCap,
   scatterProcObjects,
+  validateSlopeConfig,
 } from './procobj-scatter';
 
 function rule(partial: Partial<ProcObjRule> = {}): ProcObjRule {
@@ -395,6 +396,118 @@ describe('procObjCellBudget', () => {
     it('is pure — the same cell decides the same way twice', () => {
       const options = { limit: 300, speciesFloor: 3 };
       expect(procObjCellBudget(skewedCell(), options)).toEqual(procObjCellBudget(skewedCell(), options));
+    });
+  });
+});
+
+/** The same right triangle, tipped up to `normal.z ≈ 0.55` — steep at the default 0.85 threshold. */
+function steepCollider(material: number): RegionColliders {
+  const col: ColModel = {
+    bounds: { center: [0, 0, 0], max: [100, 40, 60], min: [0, 0, 0], radius: 140 },
+    boxes: [],
+    faces: [{ a: 0, b: 1, c: 2, light: 0, material }],
+    modelId: 0,
+    name: 'slope',
+    spheres: [],
+    version: 1,
+    vertices: new Float32Array([0, 0, 0, 100, 0, 0, 0, 40, 60]),
+  };
+
+  return { col, name: 'slope', transforms: [new Matrix4()] };
+}
+
+const rockRule = (): ProcObjRule => rule({ model: 'p_rubble05col' });
+const countOfBatches = (batches: readonly ProcObjBatch[]): number =>
+  batches.reduce((sum, batch) => sum + batch.placements.length, 0);
+
+describe('procObjCellBudget — the slope gate', () => {
+  describe('negative cases', () => {
+    it('changes nothing when no slope config is given (the shipped default)', () => {
+      const rules = groupRulesBySurface([rockRule()]);
+      const before = scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0);
+      const after = scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, {});
+      expect(countOfBatches(after)).toBe(countOfBatches(before));
+    });
+
+    it('leaves a category the config does not name alone', () => {
+      const rules = groupRulesBySurface([rule()]); // sand_combush02 → bushes, not rocks
+      const before = scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0);
+      const after = scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, {
+        steep: { rocks: 4 },
+      });
+      expect(countOfBatches(after)).toBe(countOfBatches(before));
+    });
+
+    it('does not boost a FLAT face with a steep multiplier', () => {
+      const rules = groupRulesBySurface([rockRule()]);
+      const before = scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0);
+      const after = scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, {
+        steep: { rocks: 4 },
+      });
+      expect(countOfBatches(after)).toBe(countOfBatches(before));
+    });
+
+    it('refuses a config the scatter cannot serve, naming the key', () => {
+      expect(() => validateSlopeConfig({ steep: { rocks: Number.NaN } })).toThrow(/steep\.rocks/);
+      expect(() => validateSlopeConfig({ steep: { rocks: -1 } })).toThrow(/>= 0/);
+      expect(() => validateSlopeConfig({ threshold: 0 })).toThrow(/normal\.z/);
+      expect(() => validateSlopeConfig({ threshold: 1.5 })).toThrow(/normal\.z/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('multiplies a STEEP face’s candidates for the named category', () => {
+      const rules = groupRulesBySurface([rockRule()]);
+      const before = countOfBatches(scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0));
+      const after = countOfBatches(
+        scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, { steep: { rocks: 3 } }),
+      );
+      expect(after).toBeGreaterThan(before * 2.5); // 3x the expectation, +/- the fractional roll
+      expect(after).toBeLessThan(before * 3.5);
+    });
+
+    it('thins a FLAT face for the same category, which is the other half of the ask', () => {
+      const rules = groupRulesBySurface([rockRule()]);
+      const before = countOfBatches(scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0));
+      const after = countOfBatches(
+        scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, {
+          flat: { rocks: 0.5 },
+        }),
+      );
+      expect(after).toBeLessThan(before);
+      expect(after).toBeGreaterThan(0);
+    });
+
+    it('takes a factor of 0 as “none of this category here”', () => {
+      const rules = groupRulesBySurface([rockRule()]);
+      const batches = scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, {
+        flat: { rocks: 0 },
+      });
+      expect(countOfBatches(batches)).toBe(0);
+    });
+
+    it('moves the threshold, so what counts as steep is configurable', () => {
+      const rules = groupRulesBySurface([rockRule()]);
+      // The tipped face sits near |normal.z| = 0.55: steep at 0.85, flat at 0.4.
+      const asSteep = scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, {
+        steep: { rocks: 0 },
+      });
+      const asFlat = scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, {
+        steep: { rocks: 0 },
+        threshold: 0.4,
+      });
+      expect(countOfBatches(asSteep)).toBe(0);
+      expect(countOfBatches(asFlat)).toBeGreaterThan(0);
+    });
+
+    it('is deterministic — the same slope config scatters the same world twice', () => {
+      const rules = groupRulesBySurface([rockRule()]);
+      const config = { flat: { rocks: 0.5 }, steep: { rocks: 2 } };
+      const positions = (batches: readonly ProcObjBatch[]): string =>
+        batches.flatMap((batch) => batch.placements.map((p) => p.position.join(','))).join('|');
+      expect(positions(scatterProcObjects([steepCollider(1)], rules, SURFACES, 4, -2, 3, config))).toBe(
+        positions(scatterProcObjects([steepCollider(1)], rules, SURFACES, 4, -2, 3, config)),
+      );
     });
   });
 });

@@ -76,16 +76,29 @@ Depends on [02](010-density-model.md) (the density model). Delivers the user's a
       `scripts/debug/procobj-biome-vs-surface.ts`; what it proved is that nothing needs it.
 - [~] ~~Extend `densityFor` to `densityFor(category, surface, biome)`~~ **CLOSED** — `bySurface` already
       carries more information than a biome key would.
-- [ ] **Slope proxy — the one task that survives.** Expose the face `normal.z` to the density decision and
-      gate the rock categories on it (config: threshold + boost/thin factors, neutral by default). Priced:
-      it moves `p_mountain`'s 235 683 m², which is 48.8 % steep and carries all six `p_rubble*` species.
-      **It is a LOOK call like the ranges and the roster floor were** — there is no perf argument either way
-      ([013](013-density-budgets-per-target.md) found no ceiling), so it wants his eye before it ships.
-- [ ] Unit tests, if it is built: a steep face boosts rocks, a flat one does not; the surface rules still
-      gate which species may appear at all (a boost never places a species its rule forbids).
-- [ ] Field check, if it is built: Mount Chiliad / the Red County ridges, `?procobj` A/B from one spot, with
-      a positive control first (the 2026-08-11 lesson — the worst cell for a defect is not the best cell to
-      photograph it in).
+- [x] **Slope proxy — BUILT 2026-08-11, neutral by default.** `ProcObjSlopeConfig` in
+      `packages/renderware/src/map/procobj-scatter.ts`: per category, a multiplier on how many candidates a
+      STEEP or a FLAT face generates, `PROC_OBJ_STEEP_THRESHOLD = 0.85` (~32°, the value the map's own faces
+      separate at). **It lives in the scatter, and that is forced rather than chosen**: slope is a per-FACE
+      signal, and both selection paths resolve a cutoff per BATCH — a batch pools one model×surface with
+      every normal it happens to have, so a cutoff cannot express slope and generation can. Which is also why
+      **both targets get it from one place**: `sa` through `convertProcObj`, `opensa` through the adapter,
+      both landing in `scatterProcObjects`. Knobs: `--slope <steep>,<flat>` and `?procobjSlope=<steep>,<flat>`.
+      `validateSlopeConfig` refuses NaN, the trap that would otherwise empty the layer silently.
+- [x] **Unit tests — DONE**, 11 cases in `procobj-scatter.test.ts`: no config is byte-identical; an unnamed
+      category is untouched; a steep multiplier does not touch flat faces; a factor of 0 means "none here";
+      the threshold moves what counts as steep; and the whole thing stays deterministic.
+- [ ] **Field check — ATTEMPTED and NOT LANDED, and the failure is worth more than the shot.** The instrument
+      cannot hold a viewpoint on a slope: **the spawned player SLIDES**. At the densest steep-rock cluster
+      (cell `9,-2`, 73 rocks within 25 m of `2264.7, -418.7, 86.4`) he was placed at z 89 and every run ended
+      at ~`2271, -396, 55` — 34 m downhill, and a different spot each time. Three different comparisons then
+      returned **86.81 / 86.82 / 86.83 %** changed pixels with identical mean Δ, which is the tell: the diff
+      was measuring the CAMERA, not the clutter. Two earlier spawns 35 m off the cluster fell through the
+      world entirely (`grounded 0`, z −8222 and −9164) — 35 m from a cliff-face cluster is mid-air.
+      **What a shot here needs:** flat ground with a slope in view, or the photo camera (a K+M chord the
+      harness cannot send). **And note the pixel diff is weak here anyway by construction** — the gate changes
+      the candidate COUNT, which re-rolls the seeded sequence, so every instance in the frame moves whatever
+      the slope did.
 - [~] ~~Per-biome placed/dropped counts~~ **CLOSED with the biome axis.** The per-CATEGORY breakdown already
       ships and is the readable one.
 
@@ -108,4 +121,19 @@ colliders over `game-src/original`, area-weighted:
   `p_underwaterbarren`**, Los Santos `p_grass_short` 33.3 % / `p_grassmid1` 27.3 %.
 - Steep share (|normal.z| < 0.85) per surface: **`p_mountain` 48.8 %**, `p_underwaterbarren` 19.6 %,
   `p_foreststumps` 14.7 %, `p_grassmid1` 13.5 %, everything else under 13 % and the flat ones at 0.0 %.
-- slope threshold + rock boost factors: _(not yet — the one open task)_
+**The slope gate, priced 2026-08-11** on `game-src/original` at density 1, via `--slope <steep>,<flat>` on the
+rock categories (the layer-cost line's per-category row is the instrument):
+
+| `--slope` | rock objects | rock candidates | layer total |
+| --- | --- | --- | --- |
+| off (shipped) | 9 417 | 28 190 | 91 379 |
+| `2,0.5` | **10 749** (+14.1 %) | 31 842 | 92 341 (+1.05 %) |
+| `3,0.35` | **13 787** (+46.4 %) | 41 042 | 95 386 (+4.4 %) |
+
+**Steep ×2 with flat ×0.5 is not a wash, and that is the finding**: it nets +14 % rocks, so the rock
+categories' candidate area is already **weighted toward steep ground** — which is `p_mountain` (48.8 % steep)
+carrying all six `p_rubble*` species. A setting that reads as "the same rocks, moved onto the slopes" would
+be nearer `1.5,0.35`. The area IPL slot count (10 of 40) does not move at any of these.
+
+- slope threshold + rock boost factors: **threshold 0.85 shipped as the constant; the multipliers are
+  UNSET** — neutral by default, waiting on a look he has not been able to judge yet (see the field-check task).

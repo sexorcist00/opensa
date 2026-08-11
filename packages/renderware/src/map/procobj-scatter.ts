@@ -84,6 +84,71 @@ export interface ProcObjPlacement {
  */
 export const PROC_OBJ_MAX_DENSITY = 3;
 
+/**
+ * `|normal.z|` below which a collision face counts as STEEP. 0.85 is ~32° off horizontal, and it is where the
+ * map's own faces separate rather than a round number: measured 2026-08-11 over every rule-bearing face
+ * (`scripts/debug/procobj-biome-vs-surface.ts`), `p_mountain` is **48.8 %** steep at this threshold while
+ * every other surface is under 20 % and the flat ones read 0.0 %.
+ */
+export const PROC_OBJ_STEEP_THRESHOLD = 0.85;
+
+/**
+ * Slope-aware candidate density (plan 011, the one task that survived its 2026-08-11 re-scope): scale how many
+ * candidates a face generates by whether it is STEEP, per category.
+ *
+ * **Why it lives in the scatter rather than in a density cutoff.** Slope is a property of the FACE; both
+ * selection paths (`selectPlacements` on `sa`, `procObjCellBudget` on `opensa`) resolve a cutoff per BATCH,
+ * and a batch pools the faces of one model×surface with every normal they happen to have. So a cutoff cannot
+ * express it, and generation can — which is also why **both targets get this from one place**: they call this
+ * same function.
+ *
+ * **It is the only terrain signal that is NOT already in the surface.** The same measurement that closed the
+ * rest of plan 011 (12 of 14 rule-bearing surfaces sit ≥ 90 % inside one region, carrying that region's
+ * species) found `p_mountain` split 48.8/51.2 steep/flat while carrying all six `p_rubble*` rock species —
+ * one surface, two kinds of ground, and nothing else in the pipeline can tell them apart.
+ *
+ * **It moves the scatter from that face on**, like {@link PROC_OBJ_MAX_DENSITY} does: the candidate count is
+ * what the seeded sequence is consumed in proportion to. Two builds with different slope settings compare
+ * statistically, never placement by placement.
+ */
+export interface ProcObjSlopeConfig {
+  /** Multiplier on a FLAT face's candidate count, per category. Absent (or absent key) = 1, unchanged. */
+  flat?: Partial<Record<ProcObjCategoryName, number>>;
+  /** Multiplier on a STEEP face's candidate count, per category. Absent (or absent key) = 1, unchanged. */
+  steep?: Partial<Record<ProcObjCategoryName, number>>;
+  /** `|normal.z|` under which a face is steep. Default {@link PROC_OBJ_STEEP_THRESHOLD}. */
+  threshold?: number;
+}
+
+/**
+ * Refuse a slope config the scatter cannot serve. **NaN is the dangerous one**: it passes every comparison,
+ * after which `expected` is NaN, `count` is 0 and the layer is silently empty — the same trap
+ * `validateDensityProfile` exists for. A factor of exactly 0 is legal and means "none of this category here".
+ */
+export function validateSlopeConfig(config: ProcObjSlopeConfig): void {
+  const threshold = config.threshold ?? PROC_OBJ_STEEP_THRESHOLD;
+  if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 1) {
+    throw new Error(`procobj slope threshold must be in (0, 1] — it is |normal.z|: got ${threshold}.`);
+  }
+  for (const [where, factors] of [
+    ['steep', config.steep],
+    ['flat', config.flat],
+  ] as const) {
+    for (const [category, factor] of Object.entries(factors ?? {})) {
+      if (!Number.isFinite(factor) || factor < 0) {
+        throw new Error(`procobj slope ${where}.${category} must be a finite number >= 0: got ${factor}.`);
+      }
+    }
+  }
+}
+
+/** The candidate-count multiplier this face earns for this category — 1 whenever nothing is configured. */
+function slopeFactor(config: ProcObjSlopeConfig, category: ProcObjCategoryName, normalZ: number): number {
+  const steep = Math.abs(normalZ) < (config.threshold ?? PROC_OBJ_STEEP_THRESHOLD);
+
+  return (steep ? config.steep?.[category] : config.flat?.[category]) ?? 1;
+}
+
 const DEG_TO_RAD = Math.PI / 180;
 
 export interface ProcObjCellBudgetOptions {
@@ -217,6 +282,7 @@ export function scatterProcObjects(
   cx: number,
   cy: number,
   maxDensity: number = PROC_OBJ_MAX_DENSITY,
+  slope?: ProcObjSlopeConfig,
 ): ProcObjBatch[] {
   const random = mulberry32(cellSeed(cx, cy));
   const batches = new Map<string, ProcObjBatch>();
@@ -233,7 +299,18 @@ export function scatterProcObjects(
     const { faces, vertices } = collider.col;
     for (const transform of collider.transforms) {
       for (const face of faces) {
-        scatterTriangle(batches, random, rulesBySurface, surfaceNames, face, vertices, transform, scratch, maxDensity);
+        scatterTriangle(
+          batches,
+          random,
+          rulesBySurface,
+          surfaceNames,
+          face,
+          vertices,
+          transform,
+          scratch,
+          maxDensity,
+          slope,
+        );
       }
     }
   }
@@ -334,11 +411,16 @@ function scatterFace(
   normal: Vector3,
   area: number,
   maxDensity: number,
+  slope: ProcObjSlopeConfig | undefined,
 ): void {
+  // The category is only needed when a slope config exists, and this runs per face PER RULE over the whole
+  // map — so resolving it unconditionally would be a map-wide cost for a feature nobody switched on.
+  const category = slope ? procObjCategory(rule.model, surface) : undefined;
+  const slopeScale = slope && category ? slopeFactor(slope, category, normal.z) : 1;
   // maxDensity × the vanilla expectation — one object per `spacing × spacing` m², as the original
   // spends the column. The fractional part rolls one extra candidate so small faces still average
   // out to the authored spacing (SA's `for (density; density > 0; density -= 1)` does the same).
-  const expected = (area / (rule.spacing * rule.spacing)) * maxDensity;
+  const expected = (area / (rule.spacing * rule.spacing)) * maxDensity * slopeScale;
   const count = Math.floor(expected) + (random() < expected % 1 ? 1 : 0);
   if (count === 0) {
     return;
@@ -348,7 +430,7 @@ function scatterFace(
   const key = `${rule.model} ${surface}`;
   let batch = batches.get(key);
   if (!batch) {
-    batch = { category: procObjCategory(rule.model, surface), model: rule.model, placements: [], surface };
+    batch = { category: category ?? procObjCategory(rule.model, surface), model: rule.model, placements: [], surface };
     batches.set(key, batch);
   }
   for (let i = 0; i < count; i += 1) {
@@ -386,6 +468,7 @@ function scatterTriangle(
   transform: Matrix4,
   scratch: TriangleScratch,
   maxDensity: number,
+  slope: ProcObjSlopeConfig | undefined,
 ): void {
   const surface: string | undefined = surfaceNames[face.material];
   if (surface === undefined) {
@@ -411,7 +494,7 @@ function scatterTriangle(
     normal.negate();
   }
   for (const rule of rules) {
-    scatterFace(batches, random, rule, surface, a, b, c, normal, area, maxDensity);
+    scatterFace(batches, random, rule, surface, a, b, c, normal, area, maxDensity, slope);
   }
 }
 
