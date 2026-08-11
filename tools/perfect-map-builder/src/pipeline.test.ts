@@ -11,6 +11,7 @@ import {
   EXCLUDABLE_STAGES,
   type ExcludableStage,
   INST_BEARING_IPL_SLOTS,
+  installRequirements,
   OPENSA_BUDGET_NOTICE,
   parseExcludedStages,
   reportTextIplCensus,
@@ -520,6 +521,52 @@ describe('checkInstBearingIplSlots', () => {
 
     it('passes the budget plan 002 targets: 28 stock + 6 linked areas', () => {
       expect(() => checkInstBearingIplSlots(28 + 6)).not.toThrow();
+    });
+  });
+});
+
+describe('installRequirements', () => {
+  /** A build that fits stock: nothing crossed, so nothing is required. */
+  const tiny = { largestIpl: 100, rows: 1000 };
+  /** The shipped `sa` tree of 2026-08-11, read off the census: 110 055 rows, biggest file 9 110. */
+  const shipped = { largestIpl: 9110, rows: 110_055 };
+  const pools = { '.col': 300, '.ipl': 200, '.txd': 4999 };
+
+  describe('negative cases', () => {
+    it('asks for nothing when the build fits a stock 1.0', () => {
+      expect(installRequirements(tiny, { '.col': 10, '.ipl': 10, '.txd': 10 })).toEqual([]);
+    });
+
+    it('does not ask for a lift on a ceiling the build merely reaches', () => {
+      // Exactly AT the ceiling is not over it — an off-by-one here would demand an asi for a stock-safe build.
+      // Rows sit at the BUILDING pool's 13 000, which is the tightest of the two row ceilings and so the one
+      // that decides: 32 767 would be stock-safe for int16 and already three times over the pool.
+      expect(installRequirements({ largestIpl: 4096, rows: 13_000 }, { '.txd': 5000 })).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('names the asi for the int16 row ceiling, which no adjuster provides', () => {
+      const asi = installRequirements(shipped, pools).find((row) => row.ceiling === 32_767);
+      expect(asi?.lift).toMatch(/perfect-map\.asi/);
+      expect(asi?.spent).toBe(110_055);
+    });
+
+    it('names every ceiling the shipped tree crosses, and only those', () => {
+      const crossed = installRequirements(shipped, pools).map((row) => row.what);
+      // 110 055 rows cross int16 AND the building pool; 9 110 crosses the per-IPL buffer; COL 300 > 255.
+      expect(crossed).toEqual([
+        'permanent text-IPL rows, map-wide',
+        'CPool<CBuilding> entries',
+        'rows in one text IPL',
+        'COL archives',
+      ]);
+    });
+
+    it('reports the per-file buffer separately from the map-wide one — they are different ceilings', () => {
+      const perFile = installRequirements({ largestIpl: 9110, rows: 1000 }, {});
+      expect(perFile).toHaveLength(1);
+      expect(perFile[0].lift).toMatch(/EntitiesPerIpl/);
     });
   });
 });

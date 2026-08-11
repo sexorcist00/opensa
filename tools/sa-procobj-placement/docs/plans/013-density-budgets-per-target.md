@@ -182,26 +182,24 @@ rather than a guard, because its number does not exist yet.
 
 **What is left here:**
 
-- [ ] **Keep the permanent-row cost per object as a first-class knob.** 0.424 rows/object today
-      (6 487 / 15 286), and it is the whole reason our layout beats a text-IPL mod's by 2.36×. Every density
-      profile changes it — a profile that favours TALL species buys rows nobody costed.
-      **Half done 2026-08-08**: the number is now READ OFF the run (`buildStreamedIpl` returns `rows`; the
-      generator prints objects · rows · rows/object per target) instead of taking a script to recover. It is a
-      reported number, not yet a knob — `linkedHeight` is still what moves it, and moving it is the task below.
-- [ ] **What area size does STREAMING want?** `AREA_MAX_PAIRS = 2000` was picked to fit a 4 096-row buffer
-      that no longer binds, so the number is unowned rather than tuned. Measure it against settle time and
-      hitching (decision 4's opensa budget) and set it from that. This replaces the two slot-recovery tasks
-      struck above: same knob, a unit that still exists.
-- [ ] Report the slot, row and object cost of a build as a first-class output (like `checkImgIdBudgets`), per
-      target, so a density profile's price is visible when it is CHOSEN rather than when the build fails.
-      Today the number takes a script to recover, which is why this plan's premise went a fortnight without
-      being checked. **The procobj LAYER's share landed with the target selector** (objects · permanent rows ·
-      rows/object, per target); what is still missing is the MAP-wide roll-up — the layer does not know what
-      the rest of the build spends, and int16 is a map-wide ceiling.
-- [ ] Raise `linkedHeight` deliberately and measure it: every species pushed below it trades a permanent
-      text row for a binary-stream row. On `sa/` that is still the cheapest way to stay under int16 — the one
-      ceiling left — so it survives the stock cull with its purpose changed from slots to ROWS. Record what
-      it costs at range (a shorter species with no permanent LOD pops in later).
+- [~] ~~**Keep the permanent-row cost per object as a first-class knob.**~~ **STRUCK 2026-08-11: there is no
+      knob left to make.** The 0.424 rows/object it was protecting came from the binary-stream LOD economy, and
+      [014](014-permanent-rows-no-lod-twins.md) deleted that economy on purpose — a stream's IPL slot is not
+      resident past ~190 m, so it could never carry the range it was bought for. Every object is one permanent
+      row now: the ratio is **1.000 by construction** and cannot vary with a density profile. Still REPORTED,
+      because a ratio that cannot move is exactly the kind of thing that quietly starts moving again.
+- [~] ~~**What area size does STREAMING want?**~~ **STRUCK 2026-08-11 — the layer streams nothing.** 014 left
+      it 10 permanent text areas and zero binary streams, so there is no settle time to tune an area size
+      against. What the area split still decides is the **40-slot** budget, and that is guarded rather than
+      tuned (`checkInstBearingIplSlots`, and the field crash that set it).
+- [x] **Report the slot, row and object cost of a build as a first-class output — DONE.** The layer's share
+      prints with the target selector (objects · permanent rows · rows/object · inst-bearing areas), and the
+      MAP-wide roll-up it was missing is `reportTextIplCensus` on the built `sa/` tree: rows, inst-bearing
+      IPLs, and how many of the IPLs `gta.dat` lists it could actually read — that last column because both
+      halves used to read a missing file as zero and the error only ever ran DOWNWARD.
+- [~] ~~Raise `linkedHeight` deliberately and measure it~~ **STRUCK 2026-08-11: `linkedHeight` does not
+      exist.** It was the height at which a species earned a permanent row instead of a stream pair; 014
+      removed the streams, so there is no trade to make and nothing to raise.
 
 **FIRST, and it is the only thing blocking a full build: drop the int16 throw. — DONE 2026-08-09.**
 
@@ -308,20 +306,34 @@ rather than a guard, because its number does not exist yet.
       hitch under continuous movement is sampled by no arm here, and the three streaming columns reading 0
       everywhere means that pressure never arose, not that it was survived. **Nor what raising
       `PROC_OBJ_MAX_DENSITY` costs** — every arm above ×3 measured the same world.
-- [ ] **`sa` perf budget — now a VERIFICATION, not a lever** (see the scope call above). On the real install
-      under Wine, above the asi gate. Separate rows, separate conclusion, explicitly not comparable to the
-      opensa numbers. **If SA does not cope at the shipped density, this plan has no lever left** — say so
-      rather than quietly lowering it.
-- [ ] **DEFERRED — price the `CBuilding` pool at the shipped density**, when the work above is done and only
-      if it bites. `Buildings = 100000` (OLA); 39 219 spent by permanent rows before any streaming. Raising
-      it is OLA's ini or, past that, our own patch — a number, not a wall.
-- [ ] **The stock REPORT** (decision 8): print what the artifact requires — OLA, and `perfect-map.asi` past
-      32 767 rows — and what it would breach on a plain 1.0. A line in the build output, not a throw.
-- [ ] Target-gate the remaining procobj caps (`AREA_MAX_PAIRS`, `STREAM_MAX_INST`, `procObjMax`, candidate
-      ceiling) once the two budgets above exist.
-- [ ] End-to-end on `sa`: build a high-density map (02/03 profiles), install with
-      `perfect-map.asi`, in-game (Wine) → denser forests/desert/mountains, no ghost barriers, no int16
-      corruption, streaming smooth. Record counts + fps + hitch stats.
+- [x] **`sa` perf budget — ANSWERED IN PASSING 2026-08-10, in our favour.** He rebuilt `sa` at `opensa`'s
+      procobj count, installed it, and **the game plays**: the clutter reaches 299 m and nothing hitches. So
+      the open question this task carried — "if SA does not cope there is no lever left" — resolved without
+      the lever being needed. Not a bench run and not claimed as one; it is a field verification, which is
+      what the task asked for.
+- [x] **Price the `CBuilding` pool — DONE 2026-08-10, and it bit exactly as predicted.** The crash at
+      `0x005381A5` was this pool at exactly 100 000; `Buildings` went **100 000 → 150 000** in the install's
+      OLA ini and was verified there rather than assumed. Map-wide permanent rows are **110 055** today, so
+      the headroom is 39 945 — and `reportInstallRequirements` now names this pool on every build, which is
+      what makes the next approach visible before it is a crash.
+- [x] **The stock REPORT (decision 8) — SHIPPED 2026-08-11.** `reportInstallRequirements` prints, every `sa`
+      run, each stock ceiling this artifact crosses and **the setting that lifts it**: int16 rows →
+      `perfect-map.asi` (no adjuster provides it), the `CBuilding` pool → OLA `Buildings`, rows in one IPL →
+      OLA `EntitiesPerIpl`, and the three FLA id pools. A LINE, never a throw — the guards beside it own the
+      ceilings that are REAL on the target, and this one owns the ones we deliberately design past. It is the
+      honest replacement for the int16 throw deleted on 2026-08-09: the build stopped shaping its output down
+      to an install we do not ship to, so what it owes instead is a plain statement of the install it needs.
+      Pure `installRequirements` underneath, so the wording is tested without a game dir.
+- [~] ~~Target-gate the remaining procobj caps~~ **STRUCK 2026-08-11.** `STREAM_MAX_INST` guards a stream
+      layout 014 deleted; `procObjMax` and the candidate ceiling were measured NOT to bind (100 000 against
+      91 379) and the `opensa` budget found no frame-time ceiling to gate them from, so a target gate would
+      be a switch between two identical answers.
+- [~] **End-to-end on `sa` — DONE for the shipped density (2026-08-10, his field run), OPEN for a high-density
+      profile that no longer exists.** The build installs with `perfect-map.asi`, plays, shows no ghost
+      barriers and no int16 corruption at 91 092 objects. The "02/03 profiles" half is void: task 8 shipped
+      `base: 1` as the profile ([010](010-density-model.md)) and 011's biome multipliers were struck as
+      redundant, so there is no denser build to test. **What IS untested: the roster floor and the slope gate**
+      — both landed 2026-08-11, after that field run, and `build/original/sa` still predates them.
 - [ ] Docs/memory: update the procobj plans (007 binary streams), the ghost-barriers cross-ref (the density
       this unlocks), and `docs/restrictions/` if the target split earns a new rule — it probably does, since
       "a guard must live on the branch whose target it describes" is exactly the kind of thing that is

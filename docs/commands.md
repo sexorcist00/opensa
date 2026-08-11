@@ -62,6 +62,12 @@ true only because `cullByMinDistance` was deleting 99 % of the candidates with a
 distance. Since [009](../tools/sa-procobj-placement/docs/plans/009-procobj-dat-columns-as-the-game-reads-them.md)
 density 1 IS the authored density (91 092 objects) and `procObjMax` defaults to 100 000 so it does not bind.
 
+On the built `sa/` tree the build also prints its **install requirements** — every stock ceiling the artifact
+crosses and the setting that lifts it (int16 rows → `perfect-map.asi`, which no adjuster provides; the
+`CBuilding` pool → OLA `Buildings`; rows in one IPL → OLA `EntitiesPerIpl`; the three FLA id pools). A LINE,
+never a throw: the ceilings that are REAL on the target are guarded beside it, and this one states the ones we
+deliberately design past, so the install a build needs is read off the artifact rather than remembered.
+
 On the built `sa/` tree the build prints a **map-cost census** (`reportTextIplCensus`: permanent text-IPL rows,
 inst-bearing IPLs, and how many of the IPLs listed in `gta.dat` it could actually read) and enforces the **FLA
 ID pools** (`checkImgIdBudgets` — the one set of ceilings the target really has). An `--exclude sa` run does

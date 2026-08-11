@@ -278,8 +278,9 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     }
     // Every SA ceiling is checked HERE, on the tree the real game loads — not on the shared build. The LOD
     // stage appends hole-fill instances to the copied text IPLs, so the common build undercounts the rows.
-    checkInstBearingIplSlots(reportTextIplCensus(sa).instBearingIpls);
-    checkImgIdBudgets(sa);
+    const census = reportTextIplCensus(sa);
+    checkInstBearingIplSlots(census.instBearingIpls);
+    reportInstallRequirements(census, checkImgIdBudgets(sa));
     produced.push({ dir: sa, name: 'sa' });
   }
   if (runsStage('opensa', until, excluded)) {
@@ -569,7 +570,7 @@ export interface StageTiming {
  * Fail the build when a real-SA ID pool is at (or within `margin` of) its cap — loud at build time instead of
  * heap corruption at boot. Counts every entry across the build's IMG archives.
  */
-export function checkImgIdBudgets(gameDir: string): void {
+export function checkImgIdBudgets(gameDir: string): Record<string, number> {
   const names: string[] = [];
   for (const img of ['gta3.img', 'gta_int.img', 'player.img', 'cutscene.img']) {
     const path = join(gameDir, 'models', img);
@@ -580,8 +581,10 @@ export function checkImgIdBudgets(gameDir: string): void {
     const archive = openArchive(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
     names.push(...archive.names.map((name) => name.toLowerCase()));
   }
+  const counted: Record<string, number> = {};
   for (const budget of IMG_ID_BUDGETS) {
     const count = names.filter((name) => name.endsWith(budget.ext)).length;
+    counted[budget.ext] = count;
     const message = `${budget.label}: ${count} of ${budget.limit} ID slots (margin ${budget.margin} for SA's runtime slots)`;
     if (count > budget.limit - budget.margin) {
       throw new Error(
@@ -590,6 +593,86 @@ export function checkImgIdBudgets(gameDir: string): void {
       );
     }
     log(`  id budget — ${message}`);
+  }
+
+  return counted;
+}
+
+/**
+ * **Stock ceilings this artifact would breach** — plan 013 decision 8, and the honest replacement for the
+ * int16 throw deleted on 2026-08-09. The build stopped shaping its output down to a stock 1.0 that we do not
+ * ship to; what it owes instead is a plain statement of the install it DOES require, printed every run so the
+ * requirement is read off the artifact rather than remembered.
+ *
+ * Every number here is one the build already has. Each row is a stock ceiling, what we spend against it, and
+ * the setting that lifts it — the third column is the whole point: a breach is an instruction, not a fault.
+ */
+export const STOCK_CEILINGS = {
+  /** `CPool<CBuilding>` — every permanent row spends one, before anything streams. */
+  buildings: 13_000,
+  /** `gpLoadedBuildings`, per text IPL plus its boot streams. */
+  rowsPerIpl: 4_096,
+  /** `CIplStore::IncludeEntity` truncates the building-pool index to int16, map-wide. */
+  rowsTotal: 32_767,
+} as const;
+
+/** One stock ceiling this build crosses, and the setting that lifts it. */
+export interface InstallRequirement {
+  ceiling: number;
+  lift: string;
+  spent: number;
+  what: string;
+}
+
+/** The requirement list for a built tree — pure, so the wording is testable without a game dir. */
+export function installRequirements(
+  census: { largestIpl: number; rows: number },
+  imgCounts: Record<string, number>,
+): InstallRequirement[] {
+  const rows: InstallRequirement[] = [
+    {
+      ceiling: STOCK_CEILINGS.rowsTotal,
+      lift: 'perfect-map.asi (no adjuster provides it — measured 2026-08-07)',
+      spent: census.rows,
+      what: 'permanent text-IPL rows, map-wide',
+    },
+    {
+      ceiling: STOCK_CEILINGS.buildings,
+      lift: 'OLA `Buildings`',
+      spent: census.rows,
+      what: 'CPool<CBuilding> entries',
+    },
+    {
+      ceiling: STOCK_CEILINGS.rowsPerIpl,
+      lift: 'OLA `EntitiesPerIpl`',
+      spent: census.largestIpl,
+      what: 'rows in one text IPL',
+    },
+    ...IMG_ID_BUDGETS.map((budget) => ({
+      ceiling: budget.ext === '.txd' ? 5000 : budget.ext === '.col' ? 255 : 256,
+      lift: `FLA ${budget.label.split(' ')[0]} id pool`,
+      spent: imgCounts[budget.ext] ?? 0,
+      what: budget.label,
+    })),
+  ];
+
+  return rows.filter((row) => row.spent > row.ceiling);
+}
+
+/** Print it. A LINE, never a throw — the guards above own the ceilings that are real on the target. */
+export function reportInstallRequirements(
+  census: { largestIpl: number; rows: number },
+  imgCounts: Record<string, number>,
+): void {
+  const needed = installRequirements(census, imgCounts);
+  if (needed.length === 0) {
+    log('sa install requirements: none — this build fits a stock 1.0 unaided');
+
+    return;
+  }
+  log(`sa install requirements: ${needed.length} stock ceiling(s) crossed, each lifted by a setting:`);
+  for (const row of needed) {
+    log(`  needs ${row.lift} — ${row.what}: ${row.spent} over stock's ${row.ceiling}`);
   }
 }
 
@@ -633,17 +716,18 @@ export function checkImgIdBudgets(gameDir: string): void {
  * Runs on the BUILT `sa/` tree, like {@link checkImgIdBudgets} — never on the shared build, which undercounts
  * it (the sa LOD stage appends hole-fill instances to the text IPLs after the split).
  */
-export function reportTextIplCensus(gameDir: string): { instBearingIpls: number; rows: number } {
+export function reportTextIplCensus(gameDir: string): { instBearingIpls: number; largestIpl: number; rows: number } {
   const datPath = join(gameDir, 'data', 'gta.dat');
   if (!existsSync(datPath)) {
     console.warn(`  ! sa text-IPL census SKIPPED — no data/gta.dat under ${gameDir}; this build's row cost is unknown`);
 
-    return { instBearingIpls: 0, rows: 0 };
+    return { instBearingIpls: 0, largestIpl: 0, rows: 0 };
   }
   const listed: string[] = [];
   const missing: string[] = [];
   const used: string[] = [];
   let totalRows = 0;
+  let largestIpl = 0;
   for (const line of readFileSync(datPath, 'utf8').split(/\r?\n/)) {
     const match = /^IPL\s+(\S.*)$/i.exec(line.trim());
     if (!match || match[1].toLowerCase().endsWith('.zon')) {
@@ -659,6 +743,7 @@ export function reportTextIplCensus(gameDir: string): { instBearingIpls: number;
     if (rows > 0) {
       used.push(match[1]);
       totalRows += rows;
+      largestIpl = Math.max(largestIpl, rows);
     }
   }
   log(
@@ -673,7 +758,7 @@ export function reportTextIplCensus(gameDir: string): { instBearingIpls: number;
     );
   }
 
-  return { instBearingIpls: used.length, rows: totalRows };
+  return { instBearingIpls: used.length, largestIpl, rows: totalRows };
 }
 
 /** SA's `IplEntityIndexArrays` — one slot per text IPL that carries `inst` rows, written past without a bounds
