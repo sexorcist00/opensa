@@ -282,6 +282,35 @@ IPLs and from binary streams inside the archives. It errs downward: only `objs`/
 clean result means "none in those sections". Detail and the measurements:
 [`tools/mod-installer/docs/plans/010-remove-original-is-a-replacement.md`](../../tools/mod-installer/docs/plans/010-remove-original-is-a-replacement.md).
 
+## An inst row's POSITION in the file is a LOD link — no pass may delete one
+
+Discovered 2026-08-11, from a field report that three buildings had no LOD. A text IPL's `lod` column is a
+**row index into the `inst` section**, not a name — and the binary stream IPLs inside `gta3.img` index the
+same text file of their area. So deleting one row repoints every link at or after it, in that file AND for
+objects that are not in it at all.
+
+One mod merge (`5. SA Xbox Map Features`, `remove from "inst"`) dropped a single row from `LAe.ipl` at index
+93. `laehospital1` — placed by `lae_stream0.ipl`, not by `LAe.ipl` — has link 133, which was `LODxhospital1`
+on its own footprint and is `LODxroad08` 105 u away in the built tree. Around the same one-row deletion in
+`LAw.ipl`, `LODgaz9_law` comes out 398.7 u off its object wearing its neighbour's rotation.
+
+**The point of this entry is that the removal path was DESIGNED for exactly this and it still went wrong.**
+`removeInstWithRebase` rebases the text links and `patchAreaStreams` rewrites the binary streams' `lod`
+fields; the contract promises both. So "we handle removals" is not an answer a new design may lean on — the
+removal has to keep holding through every later stage that rewrites an archive or an IPL, and that is a
+property of the whole build, not of one function.
+
+The rule for a new design: a pass may APPEND inst rows freely (every index it could break is below it), and
+should not REMOVE one. Retire a placement by exiling the row — the trees stage's z = −1000 is the established
+shape — rather than deleting it: no renumbering, and nothing downstream can undo it.
+
+**Caught: NO, and by construction.** A shifted index lands on a VALID row of the same file, so row counts,
+well-formedness and every budget guard pass; the removal's own unit tests prove the FUNCTION rebases, which is
+not the same claim as the BUILD being consistent afterwards. The damage is only visible by resolving each link
+back to a MODEL NAME and comparing against the source tree — a check nothing performs today. Detail,
+measurements and the paste-able diagnosis:
+[`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../open-issues/ipl-row-removal-breaks-lod-links.md).
+
 ## A curated list may GATE a derived rule; it may never CARRY the correction
 
 Plan 025 needed to repair authored UVs on 127 models, and the obvious shape — "a list of models with the fix
