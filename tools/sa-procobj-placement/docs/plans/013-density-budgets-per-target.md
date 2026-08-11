@@ -1,6 +1,11 @@
 # 013 — Density budgets and integration, PER TARGET
 
-> **UNBUILT.** Moved here 2026-08-09 from the roadmap chain `07-lod-generators-extended/04`, which was dissolved into the tools it touches — see
+> **DONE 2026-08-11.** Every task is closed or struck; the last one — end-to-end on `sa` — closed on the
+> user's field run of the 18:04 rebuild, the first build carrying the species-roster floor (91 419 objects,
+> 43 species, 110 382 map-wide permanent rows). Both perf budgets were answered in our favour and neither
+> binds, so the plan ships no cap it was written to find. The measurement is at the bottom of this file.
+>
+> Moved here 2026-08-09 (UNBUILT at the time) from the roadmap chain `07-lod-generators-extended/04`, which was dissolved into the tools it touches — see
 > [roadmap 0.5.0](../../../../docs/roadmap/0.5.0/readme.md) for what the chain was and what shipped out of it.
 >
 > **Partly superseded 2026-08-10 by [014](./014-permanent-rows-no-lod-twins.md).** Three of this plan's premises
@@ -328,12 +333,17 @@ rather than a guard, because its number does not exist yet.
       layout 014 deleted; `procObjMax` and the candidate ceiling were measured NOT to bind (100 000 against
       91 379) and the `opensa` budget found no frame-time ceiling to gate them from, so a target gate would
       be a switch between two identical answers.
-- [~] **End-to-end on `sa` — DONE for the shipped density (2026-08-10, his field run), OPEN for a high-density
-      profile that no longer exists.** The build installs with `perfect-map.asi`, plays, shows no ghost
-      barriers and no int16 corruption at 91 092 objects. The "02/03 profiles" half is void: task 8 shipped
-      `base: 1` as the profile ([010](010-density-model.md)) and 011's biome multipliers were struck as
-      redundant, so there is no denser build to test. **What IS untested: the roster floor and the slope gate**
-      — both landed 2026-08-11, after that field run, and `build/original/sa` still predates them.
+- [x] **End-to-end on `sa` — DONE 2026-08-11, on the build that carries the roster floor.** The first field run
+      (2026-08-10) proved the build installs with `perfect-map.asi`, plays, and shows no ghost barriers and no
+      int16 corruption at 91 092 objects — but it predated `procObjSpeciesFloor: 1`. The rebuild of 2026-08-11
+      18:04 carries it, and **his field verdict on it is that the placement reads right: the objects sit where
+      they belong.** The layer is now **91 419 objects across 43 species** in `plobj0..9.ipl` (map-wide
+      permanent rows **110 382**) — **+327 against the pre-floor build on both counts**, which is the floor's
+      own cost, measured rather than modelled. The slope gate is NOT in this verdict and does not need to be:
+      `procObjSlope` ships undefined (= unchanged), so it is a knob awaiting a look judgement, not a behaviour
+      in the build. The "02/03 profiles" half stays void: task 8 shipped `base: 1` as the profile
+      ([010](010-density-model.md)) and 011's biome multipliers were struck as redundant, so there is no denser
+      build to test.
 - [x] **Docs/memory sweep — DONE 2026-08-11.**
       - **007 (binary streams)** already carries its superseded banner from 2026-08-10, with the reason
         (`CIplStore` keeps a stream's slot resident only within 190 units, so it cannot carry range) and the
@@ -460,6 +470,26 @@ the same game dir against `NO_COMMIT/old_map/pak` (15 286 objects) reports 98.3 
 instrument can print non-zero.
 
 *Still unproven:* FLA rewrites its log at boot, so nothing yet confirms it accepts 1024 — that needs a launch.
+
+**2026-08-11 — the field run that closes the plan, on the first build with the roster floor in it.** Full
+rebuild of both targets (`report-sa.json` 18:04, the first live run of pmb's per-target report — plan
+[005](../../../perfect-map-builder/docs/plans/005-one-report-per-target.md)). `sa` chain 586.6 s total:
+`mods` 74.9 · `optimize` 76.6 · `trees` 80.1 · `sa` 351.6 · `procobj` 3.4.
+
+| | 2026-08-10 (pre-floor) | 2026-08-11 (`procObjSpeciesFloor: 1`) | Δ |
+| --- | --- | --- | --- |
+| procobj objects (`plobj0..9.ipl`) | 91 092 | **91 419** | +327 (+0.36 %) |
+| map-wide permanent rows | 110 055 | **110 382** | +327 |
+| species placed | 43 | **43** | — |
+
+The two deltas being the same number is the check that the floor did what it says: it ADDS objects (it does
+not swap), and each added object is one permanent row. **The user's field verdict: the result is good, the
+objects are placed sensibly.** Which is the whole acceptance test this task ever had — the floor exists so a
+patch of ground shows its complete roster rather than a probable one, and that is a claim only the eye settles.
+
+Reported install requirements on this build, all inside the target's lifted ceilings: 110 382 rows against
+int16's 32 767 (our `perfect-map.asi`, sha `c6b87f95…`), 110 382 against OLA `Buildings` 150 000, largest IPL
+9 142 against `EntitiesPerIpl`, and the FLA id pools at TXD 4 998 / COL 263 / IPL 191.
 
 _(the rows below are still to be recorded)_
 

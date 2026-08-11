@@ -167,10 +167,13 @@ stock DFFs).
   `opensa` they shipped 2026-08-10 and are measured, so that step now has a reference set to argue against
   rather than a blank. Nothing measured asks for it on `sa`, where 299 flat is the proven value.
 - Density defaults left at 1 (authored). Since the column fix that IS the authored density: the build-time
-  layer places 91 092 objects against 15 286 before. Shaping it per category/surface/biome is
-  [`sa-procobj-placement/010`–`012`](../../tools/sa-procobj-placement/docs/plans/010-density-model.md);
-  the perf budget that should own `procObjLimit` and `procObjMax` is
-  [`013`](../../tools/sa-procobj-placement/docs/plans/013-density-budgets-per-target.md).
+  layer places **91 419** objects across 43 species against 15 286 before (91 092 before the species-roster
+  floor turned on, 2026-08-11). Shaping it per category/surface/biome is
+  [`sa-procobj-placement/010`–`012`](../../tools/sa-procobj-placement/docs/plans/010-density-model.md).
+  **The perf budget that was to own `procObjLimit` and `procObjMax`
+  ([`013`](../../tools/sa-procobj-placement/docs/plans/013-density-budgets-per-target.md)) is DONE and set
+  neither**: measured on both targets, frame time does not bind at this density, and the layer is
+  field-accepted on `sa` as of 2026-08-11. A cap here needs a new measurement, not this one.
 
 ## Test coverage anchors
 
