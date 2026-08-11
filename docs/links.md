@@ -8,6 +8,17 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
 - <https://github.com/gta-reversed/gta-reversed-modern> — reversed GTA SA source (the active repo; the
   catalogue's provenance lines cite it); the reference for engine internals (pools, `CIplStore`,
   streaming) behind our int16/pool guards and the `asi/` plugin work.
+- <https://github.com/in0finite/SanAndreasUnity> — **the other own-engine SA**: a C# / Unity
+  reimplementation that loads the player's own game assets, with the world, peds, vehicles and multiplayer
+  running. The closest thing to a peer project, so read it for the DECISIONS it had to take — how it split
+  streaming, what it kept from the original's structure and what it threw away — and for a second opinion
+  whenever we are about to conclude "SA's data cannot express X". **Not a source of truth**: its answers are
+  shaped by Unity's constraints the way ours are shaped by our own, and what SA's data MEANS still comes from
+  `gta-reversed`.
+- <https://github.com/gennariarmando/rubbish-sa> — a small C++ mod porting GTA III's blowing-rubbish system
+  into San Andreas (and letting you shoot it). Useful twice over: as a worked example of an ASI adding an
+  ambience system to the real game — the shape `asi/city-life` takes — and as a candidate for the ambience
+  itself, since SA dropped a system III had.
 - <https://github.com/JuniorDjjr/CLEOPlus> — CLEO extension reference (opcode surface for plan 097).
 - <https://github.com/cleolibrary/CLEO4> — CLEO 4's own source. `source/CCustomOpcodeSystem.cpp` is the
   ground truth for how `0AA5`-`0AA8` marshal their parameters (the push loop that makes the LAST listed
