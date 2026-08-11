@@ -5,6 +5,12 @@ day and was retired by the field — the full record is
 [`docs/postmortem/uv-stretch-repair.md`](../postmortem/uv-stretch-repair.md). No replacement approach is
 designed yet; the honest exits are listed at the bottom, and none is scheduled.
 
+**The retirement is field-verified (2026-08-11).** On the clean rebuild of both targets — the first build
+with no repaired models in it — the user confirms the smears are back exactly as authored. That is the
+intended state, not a regression: this issue's defect is R\*'s data, and the build now ships it untouched
+rather than shipping our correction of it. It also confirms the retirement was complete — no repaired
+geometry survived in the stage caches.
+
 ## Symptom
 
 Large and/or flat map objects (roads above all) render with long directional smears: one row of texels
@@ -41,7 +47,8 @@ passed every measured guard, and the first before/after retired it — see the
 1. every split is a hard UV seam, so a partial repair of a CONTINUOUS defect turns a soft smear into
    sharp-edged patchwork (roads repaired 16–21 % — a patchwork by construction);
 2. the authored intent is not in the data — there is no model frame to restore into (fit residual ~1.8 UV),
-   so a metric-approved correction is an invented mapping that reads as "сбитая текстура".
+   so a metric-approved correction is an invented mapping that reads, in the user's words, as a
+   mis-set/knocked-off texture.
 
 **Not a fix, recorded so nobody reaches for it**: anisotropic filtering
 (`docs/roadmap/0.6.0/plans/06-anisotropic-filtering/`) sharpens sampling; a stretch authored into the UVs
@@ -52,7 +59,7 @@ renders smeared at any sample count.
 - The known-viable exit is **hand-authored UV fixes shipped as data** (Blender, per model, eyes on the
   texture) — a "map fixes" mod the pipeline carries byte-faithfully. The field-confirmed set is small
   (the three roads above). Not opened as an idea yet — the right shape for doing this is undecided
-  (user, 2026-08-11: "пока ideas нет, как это делать правильно, возможно позже").
+  (user, 2026-08-11: there is no idea yet for how to do this properly, possibly later).
 - An automated second attempt only clears the bar if it repairs whole connected regions in ONE frame AND
   judges itself on sampled-texture continuity, not anisotropy — and it still invents intent, so it ends at
   the same field gate. Conditions spelled out in the postmortem.

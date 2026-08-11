@@ -4,7 +4,7 @@
 map-optimizer pass re-derived the UVs of faces whose authored mapping was collapsed along one axis — stock
 R\* data drawing a single texel row across a whole road slab as a directional smear. It repaired **3 849
 faces across 104 models** map-wide, passed every one of its own measured guards, and the first before/after
-look at the real map reversed it: *"мы сделали только хуже"* — the repair replaced a soft continuous smear
+look at the real map reversed it: *"we only made it worse"* — the repair replaced a soft continuous smear
 with hard-edged, visibly mis-set texture. The pass, its gate list (`data/uv-stretch-models.json`) and the
 report ledger were removed the same day.
 
