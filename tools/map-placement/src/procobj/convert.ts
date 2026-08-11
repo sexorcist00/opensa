@@ -74,6 +74,11 @@ export interface ProcObjConvertOptions {
   procObjMax: number;
   /** sourceName → its stock object id + bbox height (the {@link heightThreshold} gate). */
   species: ReadonlyMap<string, ProcObjSpecies>;
+  /**
+   * Guarantee every species that scattered a candidate in a {@link PROC_OBJ_FLOOR_CELL} cell at least this many
+   * objects there, so a desert patch eligible for ten species shows all ten (plan 012). 0 = off.
+   */
+  speciesFloor?: number;
 }
 
 export interface ProcObjConvertResult {
@@ -84,6 +89,8 @@ export interface ProcObjConvertResult {
   drawDistance: { changed: number; skipped: string[] };
   /** Placements the global `procObjMax` slice took, all categories. */
   dropped: number;
+  /** Objects the species floor promoted — candidates the density lottery had turned down (0 when off). */
+  floored: number;
   /** Area text IPLs carrying `inst` rows — one of SA's 40 `IplEntityIndexArrays` slots each. */
   instBearingFiles: number;
   /** HD objects shipped. */
@@ -148,6 +155,7 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
     outPath,
     procObjMax,
     species,
+    speciesFloor = 0,
   } = options;
   const profile = densityProfile(density);
   validateDensityProfile(profile, PROC_OBJ_MAX_DENSITY);
@@ -174,7 +182,7 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
   const colliders = buildColliders(buildCollisionIndex(archive), defs, { center: [0, 0, 0], radius: Infinity });
   const surfaceNames = parseSurfaceNames(readFileSync(join(gamePath, 'data', 'surfinfo.dat'), 'utf8'));
   const batches = scatterProcObjects(colliders, groupRulesBySurface(rules), surfaceNames, 0, 0, ceiling);
-  const { categories, dropped, final } = selectPlacements(batches, profile, procObjMax);
+  const { categories, dropped, final, floored } = selectPlacements(batches, profile, procObjMax, speciesFloor);
 
   const { datLines, files, instBearingFiles, rows } = buildPermanentIpl(final, species, areaBase);
   for (const [file, text] of files) {
@@ -203,6 +211,7 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
     datLines,
     drawDistance: distance,
     dropped,
+    floored,
     instBearingFiles,
     objects: final.length,
     rows,
@@ -243,6 +252,12 @@ export function removeStaleAreas(outPath: string, areaBase: string, written: Rea
 }
 
 /**
+ * The cell the species floor counts a roster in — the SAME 250 u grid the runtime scatter streams on
+ * (`engine-canvas-host`'s `CELL_SIZE`), so the two targets guarantee a roster over the same patch of ground.
+ */
+export const PROC_OBJ_FLOOR_CELL = 250;
+
+/**
  * Apply the density profile to the scattered batches, then the global `procObjMax` slice — the whole of what a
  * profile DOES, with no file or collision work in it, which is what makes it testable without a game dir.
  *
@@ -251,29 +266,77 @@ export function removeStaleAreas(outPath: string, areaBase: string, written: Rea
  * once. A measurement that does not state the drop is measuring the cap and calling it the density — and the
  * per-category breakdown is what makes displacement readable, since "bushes +8 000, rocks −8 000" and
  * "+0 objects" are the same total.
+ *
+ * **`speciesFloor` guarantees the ROSTER of a cell** (plan 012, the `sa` half): every species that scattered a
+ * candidate on that patch of ground keeps at least `min(N, its candidates)` objects. **It is a different gate
+ * from the runtime floor's, and deliberately so**: there the budget cap is what zeroes a species, here nothing
+ * caps anything (the global slice does not bind at the shipped density), so the only thing that can empty a
+ * species locally is the density LOTTERY — a species with 3 candidates on a desert patch rolls all three above
+ * the cutoff 30 % of the time. Widening the gate from "survived the density" to "had a candidate at all" is
+ * what makes "ten species on this surface, all ten present" true rather than probable.
+ *
+ * Floored placements are kept AHEAD of the lottery order, so a `procObjMax` that ever binds displaces ordinary
+ * objects rather than silently undoing the guarantee.
  */
 export function selectPlacements(
   batches: readonly ProcObjBatch[],
   profile: ProcObjDensityConfig,
   procObjMax: number,
-): { categories: ProcObjCategoryCost[]; dropped: number; final: SelectedPlacement[] } {
+  speciesFloor = 0,
+): { categories: ProcObjCategoryCost[]; dropped: number; final: SelectedPlacement[]; floored: number } {
   const generated = new Map<ProcObjCategoryName, number>();
   const placed: SelectedPlacement[] = [];
+  /** cell×model → the candidates that lost the lottery, lowest first — the floor's reserve pool. */
+  const spare = new Map<string, SelectedPlacement[]>();
+  /** cell×model → how many already survived the cutoff. */
+  const kept = new Map<string, number>();
+  const cellKey = (placement: ProcObjPlacement, model: string): string =>
+    `${Math.floor(placement.position[0] / PROC_OBJ_FLOOR_CELL)},${Math.floor(placement.position[1] / PROC_OBJ_FLOOR_CELL)} ${model}`;
+
   for (const batch of batches) {
     // A batch is one model on one SURFACE, so `densityFor` can answer on either axis without the converter
     // knowing which one a profile used.
     const cutoff = densityFor(profile, batch.category, batch.surface);
     generated.set(batch.category, (generated.get(batch.category) ?? 0) + batch.placements.length);
     for (const placement of batch.placements) {
+      const entry = { category: batch.category, model: batch.model, placement };
       if (placement.lottery < cutoff) {
-        placed.push({ category: batch.category, model: batch.model, placement });
+        placed.push(entry);
+        if (speciesFloor > 0) {
+          const key = cellKey(placement, batch.model);
+          kept.set(key, (kept.get(key) ?? 0) + 1);
+        }
+      } else if (speciesFloor > 0) {
+        const key = cellKey(placement, batch.model);
+        const pool = spare.get(key);
+        if (pool) {
+          pool.push(entry);
+        } else {
+          spare.set(key, [entry]);
+        }
       }
     }
   }
-  placed.sort((a, b) => a.placement.lottery - b.placement.lottery);
-  const final = placed.slice(0, procObjMax);
 
-  return { categories: categoryCosts(generated, placed, final), dropped: placed.length - final.length, final };
+  const promoted: SelectedPlacement[] = [];
+  for (const [key, pool] of spare) {
+    const owed = speciesFloor - (kept.get(key) ?? 0);
+    if (owed <= 0) {
+      continue;
+    }
+    // Its own lowest lotteries — the most vanilla of the ones the cutoff turned down.
+    pool.sort((a, b) => a.placement.lottery - b.placement.lottery);
+    promoted.push(...pool.slice(0, owed));
+  }
+  placed.sort((a, b) => a.placement.lottery - b.placement.lottery);
+  const final = [...promoted, ...placed].slice(0, procObjMax);
+
+  return {
+    categories: categoryCosts(generated, [...promoted, ...placed], final),
+    dropped: promoted.length + placed.length - final.length,
+    final,
+    floored: promoted.length,
+  };
 }
 
 /** Per category: candidates generated, survivors of the cutoff, and how many of those the global cap took. */

@@ -11,6 +11,7 @@
  *     --draw    draw distance written onto the baked species' stock procobj.ide rows, in game units — the
  *               layer's only range mechanism. Must stay under 300 (default from config: 299)
  *     --max     cap on converted procobj objects (0 disables; default from config)
+ *     --species-floor  objects every species with a candidate is guaranteed per 250 u cell (default 1, 0 = off)
  *     --height  optional min HD height (m) gate, drops short clutter (0 = off; default from config)
  *     --density scatter density cutoff, 1 = vanilla, max 3 (the scatter's candidate ceiling). The placed
  *               count scales with it until MINDIST or `--max` binds; the run prints the density it used
@@ -69,6 +70,7 @@ function main(): void {
     drawDistance: Number(argValue('--draw') ?? config.drawDistance),
     procObjHeight: Number(argValue('--height') ?? config.procObjHeight),
     procObjMax: Number(argValue('--max') ?? config.procObjMax),
+    procObjSpeciesFloor: Number(argValue('--species-floor') ?? config.procObjSpeciesFloor),
   };
 
   const modloader = process.argv.includes('--modloader');

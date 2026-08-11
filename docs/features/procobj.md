@@ -87,15 +87,22 @@ stock DFFs).
   same physics-cost reason. **Its value is unowned since the 2026-08-09 column fix** — the candidate pool it
   rations shrank ~19×, so it binds far less often and the number was calibrated against a density that no
   longer exists.
-- **The cap can zero a whole SPECIES, and `?procobjFloor=<n>` is the fix (default OFF).** It pools every
-  candidate in the cell and keeps the lowest lotteries, so what decides whether a species dies is how many
-  species compete there: measured on the shipping rule set, **17.7 % of clutter cells lose at least one
-  model** (worst `8,-3` at 16 of 23) and it reads as terrain that simply has no cacti. The floor guarantees
-  every eligible MODEL at least `min(n, its eligible count)` placements — per model, not per batch, because
-  19 of 56 models scatter on several surfaces — and **pays for them at the top of the lottery order**, so the
-  budget is unchanged and the skew above the floor is untouched. `n = 1` removes the defect completely for
-  0.32 % of the drawn placements. OFF by default because the value it changes is the PICTURE, and that call
-  is a field one ([plan 012](../../tools/sa-procobj-placement/docs/plans/012-species-representation-floor.md)).
+- **A patch of ground shows its whole species roster — `?procobjFloor=<n>`, ON at 1 since 2026-08-11.**
+  Without it the cap pools every candidate in the cell and keeps the lowest lotteries, so what decided whether
+  a species survived was how many species competed there: **17.7 % of clutter cells lost at least one model**
+  (worst `8,-3` at 16 of 23), reading as terrain that simply has no cacti. The floor guarantees every eligible
+  MODEL at least `min(n, its eligible count)` placements — per model, not per batch, because 19 of 56 models
+  scatter on several surfaces — and **pays for them at the top of the lottery order**, so the budget is
+  unchanged and the skew above the floor is untouched. Cost: 0.32 % of the drawn placements and **no
+  measurable frame time** (`avgDrawCalls` identical across four legs). `?procobjFloor=0` is the A/B.
+- **The `sa` bake makes the same guarantee, through a WIDER gate** (`--species-floor`, default 1). Nothing
+  caps that path — the global `procObjMax` slice does not bind at the shipped density — so what empties a
+  species locally there is the density LOTTERY, not a budget: three candidates on a patch roll all three above
+  the cutoff about 30 % of the time. Its gate is therefore "had a candidate in this 250 u cell" rather than
+  "survived the density", and it ADDS objects instead of swapping them: **+312 of 91 067 (+0.34 %)**, with the
+  layer still at 10 inst-bearing area IPLs of SA's 40. Floored objects sort ahead of the lottery order, so a
+  binding `procObjMax` would displace ordinary objects rather than silently undo the guarantee
+  ([plan 012](../../tools/sa-procobj-placement/docs/plans/012-species-representation-floor.md)).
 - **The bake left the `opensa` branch on 2026-08-10 (plan 014), so the runtime scatter is the WHOLE clutter
   layer there again.** `convertProcObj` STRIPS every species it bakes, so while the bake ran on this target the
   shipped `data/procobj.dat` carried 9 rules of 96 (all `P_UNDERWATERBARREN`) and the runtime knobs measured a

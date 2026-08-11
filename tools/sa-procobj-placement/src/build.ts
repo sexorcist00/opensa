@@ -183,6 +183,7 @@ export function layerCostLine(
   procObj: null | {
     drawDistance?: { changed: number };
     dropped?: number;
+    floored?: number;
     instBearingFiles?: number;
     objects: number;
     rows: number;
@@ -192,7 +193,7 @@ export function layerCostLine(
   if (!procObj) {
     return null; // nothing converted (a TC with no matching species) — there is no price to report
   }
-  const { drawDistance, dropped = 0, instBearingFiles, objects, rows, staleAreasRemoved } = procObj;
+  const { drawDistance, dropped = 0, floored = 0, instBearingFiles, objects, rows, staleAreasRemoved } = procObj;
   const perObject = objects > 0 ? (rows / objects).toFixed(3) : '0.000';
 
   return (
@@ -206,6 +207,9 @@ export function layerCostLine(
     // Never silent: an in-place bake that deletes a previous run's surplus says how much it deleted, or a
     // census taken over the directory reads two scatters at once (measured 2026-08-10: 46 files for 10 areas).
     (staleAreasRemoved ? ` · ${staleAreasRemoved} stale area file(s) from an earlier run removed` : '') +
+    // What the species-floor guarantee cost: these are objects the density lottery had turned down, so a build
+    // that reports a density is also reporting this, or the two numbers stop adding up.
+    (floored > 0 ? ` · ${floored} floored in (species-roster guarantee)` : '') +
     // A capped run is measuring procObjMax, not the density it says it ran at — so the cap says so itself.
     (dropped > 0 ? ` · CAP DROPPED ${dropped} (procObjMax binds — raise it or this density is not what shipped)` : '') +
     (target === 'sa'
@@ -313,6 +317,7 @@ export function run(options: BuildOptions): void {
     outPath: lodOut,
     procObjMax: config.procObjMax,
     species: species_,
+    speciesFloor: config.procObjSpeciesFloor,
   });
   logLayerCost(target, config.density, procObj);
   // The swapped (prelit) HD DFFs — with `--in`, regardless of mode (the HD carries our prelight; we don't drop it).

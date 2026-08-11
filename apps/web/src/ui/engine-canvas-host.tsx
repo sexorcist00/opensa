@@ -553,11 +553,12 @@ async function boot(
     // to make: the layer never hitches at any reachable setting.
     procObjLimit: Number(params.get('procobjLimit')) || 150,
     // `?procobjFloor=<n>` (plan 012): while the cap binds, keep at least n of every species the cell is
-    // eligible for, instead of letting the lowest-lottery cut zero one — measured on stock rules to hit
-    // 17.7 % of clutter cells, worst case 16 of 23 species. **Default OFF**: what we ship loses no species
-    // (the tall ones are static instances on `sa`, and `opensa`'s runtime set is few enough to fit), so this
-    // is the knob for a raised density (P4's biome profile) rather than a fix for today's picture.
-    procObjSpeciesFloor: Number(params.get('procobjFloor')) || 0,
+    // eligible for, instead of letting the lowest-lottery cut zero one — measured on the SHIPPING rule set to
+    // zero at least one model in 17.7 % of clutter cells, worst 16 of 23. **ON at 1 since 2026-08-11** (his
+    // call): it costs 0.32 % of the drawn placements, no frame time (the budget is conserved — the floor swaps
+    // a placement, never adds one), and it puts `opensa` where `sa` already is, since a baked static row
+    // cannot be capped at all. `?procobjFloor=0` is the A/B and is honoured as zero.
+    procObjSpeciesFloor: params.has('procobjFloor') ? Number(params.get('procobjFloor')) : 1,
   });
   await adapter.prepare();
   const physics = new PhysicsWorld(await initRapier());

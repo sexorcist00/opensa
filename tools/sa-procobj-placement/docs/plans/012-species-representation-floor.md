@@ -44,10 +44,9 @@ character. The ask was "none may be dropped to zero", and 1 delivers it — the 
 species represented by a single object may read as an accident rather than as a species, which is a LOOK
 call and belongs to the field, not to this table.
 
-**Why the default is still OFF.** Not because anything is unmeasured — the picture has now been captured too
-(below) — but because what it changes is a LOOK, and a look is his call, the same shape as the per-category
-ranges of plan 013. P1 already certified there is no frame-time budget to argue about. **Turning it on is the
-recommended next step, and the evidence for it is complete.**
+**ON by default since 2026-08-11 — his call, once the evidence was complete.** `?procobjFloor=0` is still the
+A/B and is honoured as zero. The look decision was his to make and he made it: a patch of ground should show
+its whole roster rather than probably-most of it.
 
 ### The field A/B, 2026-08-11 — and the first site was a dead one
 
@@ -82,7 +81,34 @@ one** — so "no cost" is a property of budget conservation, not a lucky reading
 in this lane and answer nothing. Gap: no positive control in this lane, so this says "no cost", not "an
 effect was present and cost nothing" — the effect is proven by the picture below instead.
 
-### Does this belong in `sa-procobj-placement` too? No — the mechanism is not there
+### The `sa` half — SHIPPED 2026-08-11, and it needed a WIDER gate than the runtime's
+
+**His call, and it corrected the answer below.** "If a desert surface is eligible for ten species, all ten
+should be there at least once." The section below is still right that the runtime's mechanism (a budget cap
+zeroing a species) does not exist on `sa` — but it was answering the wrong question. On `sa` nothing caps
+anything, so what empties a species locally is the **density LOTTERY**: a rule that fires three times on a
+patch rolls all three above the cutoff about 30 % of the time, and that species is simply absent there.
+
+So the `sa` gate reads **"had a candidate in this cell"**, not "survived the density" — and it **ADDS**
+objects where the runtime floor **SWAPS** them. That asymmetry is forced by the two paths, not a choice:
+there is no binding budget here to take the payment from.
+
+- `selectPlacements(batches, profile, procObjMax, speciesFloor)` — per 250 u cell (`PROC_OBJ_FLOOR_CELL`, the
+  runtime's own `CELL_SIZE`, so both targets guarantee a roster over the same patch of ground), every model
+  with a candidate keeps `min(N, its candidates)`, promoted from its **own lowest rejected lotteries** — the
+  most vanilla of the ones the cutoff turned down.
+- **Floored objects sort AHEAD of the lottery order**, so a `procObjMax` that ever binds displaces ordinary
+  objects instead of silently undoing the guarantee.
+- Config `procObjLodConfig.procObjSpeciesFloor`, **default 1**, CLI `--species-floor`. pmb passes only
+  `density`/`procObjMax`, so a pipeline build takes the default.
+
+**Measured on `game-src/original`, density 1:** **91 067 → 91 379 objects, +312 (+0.34 %)** — and the layer's
+scarce price is unchanged: still **10 inst-bearing area IPLs of SA's 40**, still 39 species raised, and
+`procObjMax` still does not bind (91 379 of 100 000). The number is the near-twin of the runtime floor's
+0.32 %, which is the same fact seen from both paths: a roster guarantee is cheap because the species it
+rescues are rare by construction.
+
+### Does the runtime's own fix belong in `sa-procobj-placement`? No — that mechanism is not there
 
 **Checked against the code, not assumed.** The `sa` bake runs `selectPlacements`
 (`tools/map-placement/src/procobj/convert.ts`): **one global lowest-lottery slice at `procObjMax`, no

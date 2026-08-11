@@ -29,6 +29,16 @@ export interface ProcObjLodConfig {
    *  others instead of adding to them (07/02 decision 8). Keep it clear of the authored count — a build that
    *  is capped is measuring the cap. `CAP DROPPED n` says when it bit. */
   procObjMax: number;
+  /** Guarantee every species that scattered a candidate in a 250 u cell at least this many objects there, so a
+   *  desert patch eligible for ten species shows all ten rather than probably-most (plan 012).
+   *
+   *  **It is a different gate from the runtime floor's, and it has to be.** On `opensa` the per-cell budget cap
+   *  is what zeroes a species, so the floor there rescues species the CAP took and pays for them by swapping.
+   *  Here nothing caps anything — the global `procObjMax` slice does not bind at the shipped density — so the
+   *  only thing that can empty a species locally is the density LOTTERY: three candidates on a patch roll all
+   *  three above the cutoff about 30 % of the time. This gate therefore reads "had a candidate", not "survived
+   *  the density", and it ADDS objects rather than swapping them. 0 = off. */
+  procObjSpeciesFloor: number;
 }
 
 /** Defaults tuned for medium-distance procobj clutter (bushes, rocks, scrub). */
@@ -40,4 +50,7 @@ export const config: ProcObjLodConfig = {
   // objects for the 43 converted species, so the old cap threw away 78 % of them and every field verdict
   // would have been about the cap. Clear of that count, not a budget — 07/04 sets the per-target one.
   procObjMax: 100000,
+  // 1 since 2026-08-11 (his call): the roster of a patch of ground should be complete, not probable. Measured
+  // cost is in plan 012 — it adds objects, so read the layer-cost line's `floored` term on every build.
+  procObjSpeciesFloor: 1,
 };

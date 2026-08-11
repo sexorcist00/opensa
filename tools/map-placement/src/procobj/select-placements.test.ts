@@ -22,8 +22,23 @@ function batch(category: ProcObjCategoryName, model: string, surfaceName: string
   };
 }
 
-function placement(lottery: number): ProcObjPlacement {
-  return { align: false, lottery, normal: [0, 0, 1], position: [0, 0, 0], rotation: 0, scale: 1, scaleZ: 1 };
+/** A batch with exactly these lotteries, all on one spot — the species-floor tests need the cell pinned. */
+function batchOfLotteries(
+  category: ProcObjCategoryName,
+  model: string,
+  lotteries: readonly number[],
+  position: [number, number, number] = [0, 0, 0],
+): ProcObjBatch {
+  return {
+    category,
+    model,
+    placements: lotteries.map((lottery) => placement(lottery, position)),
+    surface: surface.sand,
+  };
+}
+
+function placement(lottery: number, position: [number, number, number] = [0, 0, 0]): ProcObjPlacement {
+  return { align: false, lottery, normal: [0, 0, 1], position, rotation: 0, scale: 1, scaleZ: 1 };
 }
 
 const world = (): ProcObjBatch[] => [
@@ -120,6 +135,72 @@ describe('selectPlacements', () => {
       for (const cost of result.categories) {
         expect(cost.generated).toBe(30);
       }
+    });
+  });
+});
+
+/** A species whose every candidate lost the lottery — three rolls above the cutoff, which happens ~30 % of the
+ *  time for a rule that fires three times on a patch. It is the only way a species empties on this path. */
+const zeroed = (position: [number, number, number] = [0, 0, 0]): ProcObjBatch =>
+  batchOfLotteries('cacti', 'sjmcacti2', [1.4, 2.1, 2.7], position);
+
+describe('selectPlacements — the species-roster floor', () => {
+  describe('negative cases', () => {
+    it('changes nothing with the floor off (regression against the unfloored build)', () => {
+      const batches = [...world(), zeroed()];
+
+      expect(selectPlacements(batches, {}, 999, 0).final).toHaveLength(30);
+      expect(selectPlacements(batches, {}, 999, 0).floored).toBe(0);
+    });
+
+    it('does not floor a species the cutoff already kept', () => {
+      const batches = [batchOfLotteries('cacti', 'sjmcacti2', [0.2, 0.4, 2.7])];
+
+      const result = selectPlacements(batches, {}, 999, 1);
+
+      expect(result.floored).toBe(0);
+      expect(result.final).toHaveLength(2); // the two below the cutoff, and nothing promoted
+    });
+
+    it('never promotes more than the species has candidates', () => {
+      const batches = [batchOfLotteries('cacti', 'sjmcacti2', [2.9])];
+
+      const result = selectPlacements(batches, {}, 999, 3);
+
+      expect(result.floored).toBe(1);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('gives a species the lottery emptied one object back', () => {
+      const result = selectPlacements([...world(), zeroed()], {}, 999, 1);
+
+      expect(result.floored).toBe(1);
+      expect(result.final).toHaveLength(31);
+      expect(result.final.filter((entry) => entry.model === 'sjmcacti2')).toHaveLength(1);
+    });
+
+    it('promotes the species’ own LOWEST rejected lottery — the most vanilla of them', () => {
+      const result = selectPlacements([zeroed()], {}, 999, 1);
+
+      expect(result.final[0].placement.lottery).toBe(1.4);
+    });
+
+    it('guarantees the roster PER CELL, not once for the whole map', () => {
+      const far: [number, number, number] = [2000, -600, 0]; // eight cells east, one south
+      const result = selectPlacements([zeroed(), zeroed(far)], {}, 999, 1);
+
+      expect(result.floored).toBe(2);
+      expect(result.final.map((entry) => entry.placement.position[0]).sort()).toEqual([0, 2000]);
+    });
+
+    it('keeps the guarantee ahead of the lottery order when the cap binds', () => {
+      // Budget 5, and the woodland bushes alone would fill it with lotteries below every reject.
+      const result = selectPlacements([batch('bushes', 'genveg_bush01', surface.woodland), zeroed()], {}, 5, 1);
+
+      expect(result.final).toHaveLength(5);
+      expect(result.final.filter((entry) => entry.model === 'sjmcacti2')).toHaveLength(1);
+      expect(result.dropped).toBe(6); // 10 bushes + 1 floored cactus, minus the 5 that fit
     });
   });
 });
