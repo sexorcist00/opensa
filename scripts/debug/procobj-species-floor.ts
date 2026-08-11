@@ -3,7 +3,7 @@ import type { MapDefinitions } from '@opensa/renderware/parsers/text/types';
 import { buildCellColliders } from '@opensa/renderware/collision/build-cell-colliders';
 import { buildColliders } from '@opensa/renderware/collision/build-colliders';
 import { buildCollisionIndex } from '@opensa/renderware/collision/collision-index';
-import { groupRulesBySurface, procObjLotteryCap, scatterProcObjects } from '@opensa/renderware/map/procobj-scatter';
+import { groupRulesBySurface, procObjCellBudget, scatterProcObjects } from '@opensa/renderware/map/procobj-scatter';
 import { buildWorldGrid } from '@opensa/renderware/map/world-grid';
 import { parseProcObj } from '@opensa/renderware/parsers/text/procobj.parser';
 import { parseSurfaceNames } from '@opensa/renderware/parsers/text/surfinfo.parser';
@@ -21,7 +21,11 @@ import { gameArg, gameDir, loadMapDefs, openGameArchive } from '../lib/game';
  * that reads as simply having no cacti.
  *
  * Run: `npx tsx scripts/debug/procobj-species-floor.ts [--game original] [--limit 150] [--density 1]
- *       [--stride 7] [--cells 200]`
+ *       [--stride 7] [--cells 200] [--floor 0]`
+ *
+ * `--floor N` turns the FIX on (`procObjCellBudget`'s species floor, the engine's `?procobjFloor=<n>`): every
+ * eligible species keeps at least `min(N, its eligible count)`. Run it at 0 and at N over the same sample and
+ * the two "cells losing at least one species" numbers are the before/after.
  *
  * `--build-time` measures the OTHER cap site instead: `convertProcObj`'s whole-map pass, per species through
  * every stage — candidates → the `lottery < 1` cut → the global `procObjMax` slice. It runs the same
@@ -43,6 +47,8 @@ const argValue = (flag: string): string | undefined => {
 const limit = Number(argValue('--limit') ?? 150);
 /** Per-category density; the config ships 1 (vanilla) for every category. */
 const density = Number(argValue('--density') ?? 1);
+/** The species floor under test (plan 012); 0 is the unfixed behaviour. */
+const floor = Number(argValue('--floor') ?? 0);
 /** Sample every Nth populated cell — a full sweep builds colliders for the whole map. */
 const stride = Number(argValue('--stride') ?? 7);
 const maxCells = Number(argValue('--cells') ?? 200);
@@ -72,7 +78,7 @@ if (process.argv.includes('--build-time')) {
 const sampled = keys.filter((_, at) => at % stride === 0).slice(0, maxCells);
 console.log(
   `${game}: sampling ${sampled.length} cells (stride ${stride}) · runtime cap: procObjLimit ${limit}, ` +
-    `density ${density}`,
+    `density ${density}, species floor ${floor === 0 ? 'OFF' : floor}`,
 );
 
 interface Zeroed {
@@ -147,6 +153,8 @@ const lostByModel = new Map<string, { cells: number; instances: number }>();
 let cellsWithClutter = 0;
 let cellsCapBinding = 0;
 let identityFailures = 0;
+let drawnTotal = 0;
+let tradedInstances = 0;
 
 for (const key of sampled) {
   const [cx, cy] = key.split(',').map((part) => Number(part));
@@ -155,37 +163,59 @@ for (const key of sampled) {
   if (batches.length === 0) {
     continue;
   }
-  const cap = procObjLotteryCap(batches, limit);
-  const cutoff = Math.min(density, cap);
+  // The engine's own decision function — density knobs, the cell cap and the floor resolved together.
+  const densityOf = (): number => density;
+  const keep = procObjCellBudget(batches, { densityOf, limit, speciesFloor: floor });
+  // What the floor COSTS: the budget is conserved, so its price is placements traded from the abundant
+  // species to the rare ones. Counted against the same cell decided with the floor off.
+  const unfloored = floor > 0 ? procObjCellBudget(batches, { densityOf, limit }) : keep;
+  for (let at = 0; at < batches.length; at += 1) {
+    tradedInstances += Math.max(0, keep[at] - unfloored[at]);
+  }
+  // Counted per MODEL, which is the unit the floor protects and the unit a player sees: 19 of the 56 models
+  // scatter on several surfaces and are several batches, and a bush drawn from the neighbouring surface has
+  // not gone missing from the cell.
+  const perModel = new Map<string, { drawn: number; vanilla: number }>();
+  let drawn = 0;
+  let wouldDrawTotal = 0;
+  for (let at = 0; at < batches.length; at += 1) {
+    const batch = batches[at];
+    // Placements are sorted by lottery ascending, so a count is a scan to the first value at or above.
+    const atVanilla = batch.placements.filter((placement) => placement.lottery < density).length;
+    wouldDrawTotal += atVanilla;
+    drawn += keep[at];
+    const row = perModel.get(batch.model) ?? { drawn: 0, vanilla: 0 };
+    row.drawn += keep[at];
+    row.vanilla += atVanilla;
+    perModel.set(batch.model, row);
+  }
   const lost: { model: string; wouldDraw: number }[] = [];
   let eligible = 0;
   let placed = 0;
-  let drawn = 0;
-  let wouldDrawTotal = 0;
-  for (const batch of batches) {
-    // Placements are sorted by lottery ascending, so a count is a scan to the first value at or above.
-    const atVanilla = batch.placements.filter((placement) => placement.lottery < density).length;
-    const atCutoff = batch.placements.filter((placement) => placement.lottery < cutoff).length;
-    wouldDrawTotal += atVanilla;
-    drawn += atCutoff;
-    if (atVanilla > 0) {
-      eligible += 1;
+  for (const [model, row] of perModel) {
+    if (row.vanilla === 0) {
+      continue;
     }
-    if (atCutoff > 0) {
+    eligible += 1;
+    if (row.drawn > 0) {
       placed += 1;
-    } else if (atVanilla > 0) {
-      lost.push({ model: batch.model, wouldDraw: atVanilla });
+    } else {
+      lost.push({ model, wouldDraw: row.vanilla });
     }
   }
   if (eligible === 0) {
     continue;
   }
   cellsWithClutter += 1;
-  // Self-check: the cap IS the budget. It BINDS only when it lands below the density (a cell can hold more
-  // than `limit` candidates and still have its 150th lottery above 1 — then density is the cutoff and the
-  // cap costs nothing). Binding ⇒ exactly `limit` drawn; not binding ⇒ everything vanilla would draw. A
-  // failure means the cutoff rule has been read wrong, and every count below measures something else.
-  const binding = cap < density;
+  drawnTotal += drawn;
+  // Self-check: the cap IS the budget. It BINDS only when more placements sit below the density than the
+  // budget allows (a cell can hold more than `limit` candidates and still have its 150th lottery above 1 —
+  // then density is the cutoff and the cap costs nothing). Binding ⇒ exactly `limit` drawn; not binding ⇒
+  // everything vanilla would draw. **The floor does not change this** — it is paid for at the top of the
+  // lottery order — except where the floor alone over-subscribes the budget, which is what a failure here
+  // would be reporting. A failure means the budget rule has been read wrong and every count below measures
+  // something else.
+  const binding = wouldDrawTotal > limit;
   const expected = binding ? limit : wouldDrawTotal;
   if (drawn !== expected) {
     identityFailures += 1;
@@ -213,6 +243,13 @@ console.log(
   `cells losing at least one species to the cap: ${zeroedCells.length} ` +
     `(${((100 * zeroedCells.length) / Math.max(1, cellsWithClutter)).toFixed(1)} % of cells with clutter)`,
 );
+if (floor > 0) {
+  console.log(
+    `the floor's price: ${tradedInstances} of ${drawnTotal} drawn placements traded from the abundant ` +
+      `species to the rare ones (${((100 * tradedInstances) / Math.max(1, drawnTotal)).toFixed(2)} %) — ` +
+      'the budget itself is unchanged',
+  );
+}
 
 if (lostByModel.size > 0) {
   console.log('\nspecies dropped to zero (cells, and the instances vanilla would have drawn):');
