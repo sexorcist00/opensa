@@ -194,7 +194,10 @@ explain the smear and drops off this plan's critical path.
 One thing survives from the report and is now a SEPARATE finding: *"in SA we see them too, but not as harshly
 as in OpenSA."* Same data, worse on our side. That is where H-C legitimately lives — it does not CAUSE the
 defect, it AMPLIFIES it, and `maxAnisotropy` is exactly the term that decides how badly a stretched texel
-smears. It is a small independent engine win, not this plan's subject.
+smears. **Split out and DEFERRED by the user 2026-08-11 to
+[`docs/roadmap/0.6.0/plans/06-anisotropic-filtering`](../../../../docs/roadmap/0.6.0/plans/06-anisotropic-filtering/readme.md)**
+— it is a whole-world look change with an unmeasured frame cost, and running it now would confound this
+plan's own field rounds, since both change how the same spots look.
 
 ### Can it be REPAIRED here? — measured feasibility, 2026-08-11
 
@@ -281,9 +284,10 @@ survives into the real game's renderer — and that is the half no engine change
   Open question the threshold has to answer: a road legitimately carries 2–4× anisotropy (density along the
   road differs from across it), and 22–38 % of these models' area sits above 2× — so the cut is nowhere near
   the obvious place.
-- **Engine filtering** ⇒ `maxAnisotropy` is its own small plan under `docs/plans/`, with the bench ritual,
-  because anisotropic sampling has a real per-sample cost and performance is part of a feature's spec. Not a
-  substitute for whatever Phase 0/2 finds — at most a second, separate improvement.
+- **Engine filtering** ⇒ moved out of this plan entirely, to
+  [`roadmap/0.6.0/06-anisotropic-filtering`](../../../../docs/roadmap/0.6.0/plans/06-anisotropic-filtering/readme.md).
+  Not a substitute for whatever this plan finds: it sharpens what the mapping still carries and cannot undo a
+  stretch that is authored into the UVs.
 - Whichever way it goes, `--textures` is NOT the thing to switch off: it exists because single-level DXT
   shimmers at distance and WebGL cannot generate those mips at runtime.
 
