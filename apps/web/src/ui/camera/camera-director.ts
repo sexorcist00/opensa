@@ -30,7 +30,7 @@ import {
 import { createLookInput, type LookInputState, releaseLook } from './camera-input';
 import { createMotion, type MotionOffset, type MotionState, stepMotion } from './camera-motion';
 import { CAMERA_FOV_Y, forwardFrom, resolveCamera, screenBasis, type VideoCamera } from './engine-camera';
-import { dollyStep, FLY_SPEED, flyStep, panStep, TOP_DOWN_PITCH, topDownEye } from './fly-rig';
+import { dollyStep, FLY_SPEED, flyStep, MAP_YAW, panStep, TOP_DOWN_PITCH, topDownEye } from './fly-rig';
 import { createFollowPoint, type FollowPointState, resetFollowPoint, stepFollowPoint } from './follow-rig';
 import { createLookAhead, type LookAheadState, stepLookAhead } from './look-ahead';
 import { driftHeading, vehicleDistanceForSpeed, vehicleFovTarget, vehicleTuning } from './vehicle-camera';
@@ -200,10 +200,15 @@ export function setFlyEye(state: CameraRigState, eye: [number, number, number] |
   state.flyEye = eye;
 }
 
-/** Enter the map viewer: straight over the focus, looking down (074/22 — activation must be visible). */
+/**
+ * Enter the map viewer: straight over the focus, looking down (074/22 — activation must be visible) and
+ * oriented north-up ({@link MAP_YAW}). The yaw is RESET, not inherited: the eye carries the player's heading,
+ * so opening the viewer while he faced north drew the whole map upside down.
+ */
 export function snapTopDown(state: CameraRigState, focus: readonly [number, number, number]): void {
   state.flyEye = topDownEye(focus);
   state.pitch = TOP_DOWN_PITCH;
+  state.yaw = MAP_YAW;
 }
 
 /**

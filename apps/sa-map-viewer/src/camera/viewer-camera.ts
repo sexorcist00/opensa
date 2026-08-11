@@ -12,7 +12,7 @@
 import type { CameraState } from '@opensa/engine';
 
 import { CAMERA_FOV_Y, forwardFrom } from '@opensa/web/ui/camera/engine-camera';
-import { dollyStep, panStep, TOP_DOWN_HEIGHT, TOP_DOWN_PITCH } from '@opensa/web/ui/camera/fly-rig';
+import { dollyStep, MAP_YAW, panStep, TOP_DOWN_HEIGHT, TOP_DOWN_PITCH } from '@opensa/web/ui/camera/fly-rig';
 
 /** A fully-specified camera pose — everything `?at`/`?h`/`?pitch`/`?yaw` can say. */
 export interface ViewerPose {
@@ -26,12 +26,8 @@ export interface ViewerPose {
   yaw: number;
 }
 
-/**
- * The yaw that puts the map the way every SA map is drawn: north up, east right. At yaw 0 the top-down basis
- * comes out rotated a half turn (screen right = −X, screen up = −Y in GTA terms), so a screenshot would read
- * as a mirror of every reference anyone compares it against. Half a turn fixes it.
- */
-export const MAP_YAW = Math.PI;
+/** The map orientation both viewers open at — north up, east right (see `fly-rig`). */
+export { MAP_YAW };
 
 /** View far plane. A whole-map pose sits ~6 km from the far corner of SA's grid, so 12 km covers any of it. */
 export const CAMERA_FAR = 12000;
