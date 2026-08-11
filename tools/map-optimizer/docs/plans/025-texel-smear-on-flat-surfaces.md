@@ -149,6 +149,47 @@ Owed before it is treated as fact (standing rule — recover the original's form
 against gta-reversed / SkyGfx **which SA building pipeline a geometry with normals selects**, and whether that
 is what changes the shading of a previously prelit-only road.
 
+### RE-MEASURED the same day — the Phase 0 metric asked the wrong question
+
+The user's close-ups of `road_lawn34` reframed it: the texture **tiles correctly with its repeat neighbours**,
+so the UVs at the shared edges are right — but inside a band of faces it is *stretched*, with fine detail
+preserved ACROSS the streaks and destroyed ALONG them. That is a texel magnified on one axis, not a mip blur
+(which loses detail on both axes equally). So the question is not "is the UV triangle exactly collapsed" but
+**by what FACTOR is it stretched** — and a face does not have to be degenerate to smear.
+
+Metric: for each face solve the linear map `M` with `M·(t1−t0) = p1−p0`, `M·(t2−t0) = p2−p0`; its singular
+values are world units per UV unit along the mapping's principal axes, and `σmax / σmin` is how many times
+longer than wide a texel is drawn on that face.
+
+| model | faces | world area | aniso > 8 | aniso > 16 | worst face |
+|---|---|---|---|---|---|
+| `road_lawn34` | 203 | 3 619 u² | 80 (11.6 % area) | 66 (**5.3 %** area) | collapsed (σmin = 0) |
+| `road_lawn08` | 130 | 3 097 u² | 33 (2.5 % area) | 31 (1.5 % area) | **284×** (11.3 × 0.040) |
+| `road_lawn32` | 200 | 5 505 u² | 60 (3.3 % area) | 56 (2.3 % area) | collapsed |
+| `sbseabed3_las20` | 39 | 44 491 u² | 16 (**23.6 %** area) | 16 (23.6 % area) | collapsed, 443–678 u² each |
+
+- **`road_lawn08`'s zero was a threshold artefact.** It has no exactly-collapsed face, which is why Phase 0
+  scored it 0 — and a face stretched **284×** is what the field is looking at. The strict metric would have
+  sent the whole plan after the wrong model.
+- **`sbseabed3_las20` is the extreme**: 16 of its 39 faces map one UV axis to nothing, and they are **a
+  quarter of the model's surface**, 443–678 u² apiece. A single texel row is drawn across each.
+- All of it is **vanilla, authored, and untouched by the chain** (Phase 0 proved the chain moves no UV).
+
+**So the smear itself is explained, and it is authored data.** What is NOT explained is the user's timing —
+"absent before map-optimizer" — and that premise is now the thing under test, not a given. A plan's premise
+about what is BROKEN is as untrusted as its premise about code.
+
+### The arm that settles the timing, offline
+
+`sa-map-viewer` reads SA-native trees — `game-src/<game>` (untouched vanilla) AND `build/<game>/sa` (after the
+stage). The compare server already pairs them:
+`npx tsx tools/map-optimizer/src/compare-serve.ts --before ./game-src/original --after ./build/original/sa`.
+
+Same renderer, same camera, one variable, no rebuild and no field round. If `road_lawn34` smears on BOTH
+sides, the stage is exonerated outright and this becomes a question about authored SA data (and what, if
+anything, we are allowed to do about it). If it smears only on the `after` side, the timing premise is real
+and H-B1 (created normals) is what to chase.
+
 ## Phase 1 — if the UVs moved: find every other model it happened to
 
 Extend `scripts/debug/scan-model-defects.ts` with the Phase 0 metric as criterion **(e)**, area-weighted and
@@ -178,9 +219,17 @@ survives into the real game's renderer — and that is the half no engine change
 ## Phase 3 — decide where the fix lives, once a phase has named it
 
 - **Tool bug** ⇒ fixed here, with the fixture and the sweep.
-- **Authored data** ⇒ the user has parked this class once already, so re-opening it is his call, and any
-  repair pass touches only faces the asset's own numbers condemn (no per-model lists), with the
-  `docs/contracts/` + `docs/hacks/` treatment on the way in.
+- **Authored data** ⇒ **"that is what the original does" is the beginning of an argument, never the end**
+  (`docs/project-goals.md`). The user's own framing, 2026-08-11: *"maybe it is not transformed at all, maybe
+  it is just a bug of the game that we have to fix."* `road_lawn34` ships in NO mod — it is stock R\* geometry,
+  confirmed by the resolver — so nobody's authored intent is being overridden by repairing it; a texel drawn
+  284× longer than it is wide is a 2004 authoring slip, not a design.
+  The repair must still DERIVE from the asset: faces whose own `σmax/σmin` exceeds a threshold read off the
+  map-wide distribution, never a per-model list. It changes geometry a mod may also ship, so it lands with the
+  `docs/contracts/` + `docs/hacks/` treatment and a field verdict, and the threshold is picked from data.
+  Open question the threshold has to answer: a road legitimately carries 2–4× anisotropy (density along the
+  road differs from across it), and 22–38 % of these models' area sits above 2× — so the cut is nowhere near
+  the obvious place.
 - **Engine filtering** ⇒ `maxAnisotropy` is its own small plan under `docs/plans/`, with the bench ritual,
   because anisotropic sampling has a real per-sample cost and performance is part of a feature's spec. Not a
   substitute for whatever Phase 0/2 finds — at most a second, separate improvement.
