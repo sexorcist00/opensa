@@ -524,6 +524,34 @@ should land with a label behind it, not a hunch.
 So the labels worth the user's time are `airtwer_las` and `nwwarhus` (real area, genuinely unknown), plus one
 wire as the family's representative — `wires_04c_sfs`, the biggest.
 
+### `airtwer_las` labelled CLEAN — and it points off the geometric axis entirely
+
+User: *"visually I see no problems. Maybe something small."* A false positive at 15 % / 1 942 u², which is the
+largest one left.
+
+Dumping its 77 surviving faces: they are a **roof strip** — x 1592–1601, y −2275…−2298, world z median
+**37.6** (min 28.8, max 85.9), every one of them up-facing, uncovered, UV collapsed outright, and 55–76 u²
+each. Not small, and not hidden by anything this branch can query. A person walking the airport simply never
+looks at them.
+
+**Two readings, and they are not the same problem:**
+
+1. *Out of reach* — a third kind of hiding after water and cover: high enough that no ordinary viewpoint gets
+   close. Tempting, but it is a guess of the same shape as the five that already failed, and it is wrong on
+   its face for a game where you fly.
+2. **What the TEXTURE holds** — a collapsed UV smears *one texel row across the face*. If that row is
+   uniform, there is nothing to see however collapsed the mapping is. **This plan already priced exactly this
+   risk** ("some degenerate UVs may be deliberate — a face collapsed onto a single texel row to read as a
+   flat colour strip"), and it explains a plain roof panel precisely.
+
+Reading 2 is the stronger one and it is measurable offline: sample the texture along the face's own collapsed
+axis and take its variance. A flat-colour row is not a defect at any anisotropy. **That is a different axis
+from every criterion tried so far — none of them looked at the texture at all** — which is also the reason to
+run it before inventing a sixth geometric test.
+
+Label tally so far: BROKEN `road_lawn17`, `road_lawn34`, `road_lawn32`; CLEAN `road_lawn08`, `road03sfn`,
+`backalleys1_sfe`, `garse_85_sfe`, `airtwer_las`.
+
 Cost and risk still to price for the eventual PASS (this is the scanner, not the pass): the occlusion query is
 per candidate face over the placed world,
 which is a different order of work from the scans above, and its own failure modes (an interior, a model
