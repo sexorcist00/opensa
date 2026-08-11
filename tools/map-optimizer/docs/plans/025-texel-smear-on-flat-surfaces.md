@@ -552,6 +552,40 @@ run it before inventing a sixth geometric test.
 Label tally so far: BROKEN `road_lawn17`, `road_lawn34`, `road_lawn32`; CLEAN `road_lawn08`, `road03sfn`,
 `backalleys1_sfe`, `garse_85_sfe`, `airtwer_las`.
 
+### MEASURED — the texture separates the labels where five geometric criteria could not
+
+Two more labels closed the pattern: **`nwwarhus` is a roof** and **`wires_04c_sfs` is wires**, so the entire
+≥10 % tier is by-design (wires ×6, roofs ×2, interiors ×2, two sub-20 u² models) while every model the field
+calls broken sits at **0.5–3.2 %**. The ranking's top and the defect population do not overlap at all.
+
+So the texture was sampled directly: for each flagged face, walk the LINE its UVs span (the smeared texel
+row), 64 samples, and take the luma standard deviation.
+
+| model | label | what it is | luma spread p50 |
+|---|---|---|---|
+| `road_lawn32` | **BROKEN** | road | **25.7** |
+| `road_lawn17` | **BROKEN** | road | **23.2** |
+| `road_lawn34` | **BROKEN** | road | **23.2** |
+| `road03sfn` | clean | road skirt | 9.8 |
+| `nwwarhus` | clean | roof | 5.3 |
+| `airtwer_las` | clean | roof | 3.3 (p90 46.0) |
+| `wires_04c_sfs` | clean | wires | **0.0** (p90 0.0) |
+
+**The three broken models cluster at 23–26 and every clean one sits at 0–10.** A gap that wide, on eight
+independent field labels, is the first clean separation this investigation has produced — and it comes from
+the axis none of the five geometric criteria ever looked at.
+
+`wires_04c_sfs` reading exactly **0.0 at p90** is the by-design case proven rather than argued: a wire's
+collapsed UV samples a constant colour, so there is nothing to smear however extreme the mapping.
+`airtwer_las`'s p90 of 46 says a minority of its roof faces DO carry varying texture — plausibly the
+"maybe something small" the user allowed for.
+
+**Next, and it is a decision not a detail**: wiring this into the scanner means resolving and DECODING a TXD
+per model over 7 148 models, which is a different cost class from everything the scan does today. Options are
+to decode lazily only for models that already have a flagged face (a few hundred), or to cache decoded bases.
+Neither is hard; both should be measured rather than assumed, and the threshold (~15 on this evidence) needs
+more than eight labels before it becomes a default.
+
 Cost and risk still to price for the eventual PASS (this is the scanner, not the pass): the occlusion query is
 per candidate face over the placed world,
 which is a different order of work from the scans above, and its own failure modes (an interior, a model
