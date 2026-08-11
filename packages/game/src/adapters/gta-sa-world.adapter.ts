@@ -35,8 +35,8 @@ import {
   type PopcycleZone,
   type ProcObjBatch,
   type ProcObjCategoryName,
+  procObjCellBudget,
   procObjColliders,
-  procObjLotteryCap,
   type ProcObjRule,
   type RegionColliders,
   resolveMap,
@@ -158,6 +158,11 @@ export interface GtaSaWorldConfig {
    *  lotteries win). The vanilla CProcObjectMan pools at ~300 for the same perf reason.
    *  Default: unlimited. */
   procObjLimit?: number;
+  /** Species floor N (sa-procobj-placement plan 012): while {@link procObjLimit} binds, every clutter
+   *  species eligible in the cell keeps at least `min(N, its eligible count)` placements instead of
+   *  possibly none — paid for at the top of the lottery order, so the budget itself is unchanged.
+   *  Default: 0 (OFF — the plain cap, byte-identical to not passing it). */
+  procObjSpeciesFloor?: number;
 }
 
 type Rgb = [number, number, number];
@@ -269,23 +274,20 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     if (!batches || batches.length === 0 || !this.defByName) {
       return [];
     }
-    const cap = procObjLotteryCap(batches, this.config.procObjLimit);
+    const keep = this.cellProcObjBudget(batches);
     const out: CellClutterRender[] = [];
     const matrix = new Matrix4();
-    for (const batch of batches) {
+    for (let at = 0; at < batches.length; at += 1) {
+      const batch = batches[at];
       const def = this.defByName.get(batch.model);
       if (!def) {
         continue;
       }
-      const cutoff = Math.min(this.config.procObjDensityOf?.(batch.category) ?? 1, cap);
       const breakable = this.isClutterBreakable(def.modelName);
       const floats: number[] = [];
       const hashes: number[] = [];
-      for (const placement of batch.placements) {
-        if (placement.lottery >= cutoff) {
-          break; // placements are sorted by lottery ascending — the rest are all excluded
-        }
-        const elements = placementMatrix(placement, matrix).elements;
+      for (let i = 0; i < keep[at]; i += 1) {
+        const elements = placementMatrix(batch.placements[i], matrix).elements;
         floats.push(...elements);
         if (breakable) {
           // 074/20: the SAME key the collider carries (tagBreakable also reads the matrix translation).
@@ -447,10 +449,7 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       // that draws no clutter at all asks for none of it.
       const batches = this.config.clutterColliders === false ? null : this.cellProcObjBatches(cx, cy);
       if (batches) {
-        const clutter = procObjColliders(index, batches, {
-          densityOf: this.config.procObjDensityOf,
-          lotteryCap: procObjLotteryCap(batches, this.config.procObjLimit),
-        });
+        const clutter = procObjColliders(index, batches, { keep: this.cellProcObjBudget(batches) });
         // Breakable clutter (074/20): 6 of 56 procobj models shatter (cactus/rubble/rock) — tag their colliders
         // with the SAME per-instance key the render carries, so a hit resolves to the instance to degenerate.
         colliders.push(
@@ -638,6 +637,17 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     this.procObjBatchCache.set(key, batches);
 
     return batches;
+  }
+
+  /** The cell's clutter budget as one keep-count per batch — the SINGLE place the density knobs, the
+   *  `procObjLimit` cap and the species floor are resolved, so the render path and the collider path
+   *  spend the same decision and can never diverge. Cheap enough to recompute (the knobs are live). */
+  private cellProcObjBudget(batches: readonly ProcObjBatch[]): number[] {
+    return procObjCellBudget(batches, {
+      densityOf: this.config.procObjDensityOf,
+      limit: this.config.procObjLimit,
+      speciesFloor: this.config.procObjSpeciesFloor,
+    });
   }
 
   /** Lazily load popcycle.dat + cargrp.dat for random map-car resolution (plan 059) — absent-tolerant: either

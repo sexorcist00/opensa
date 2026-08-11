@@ -86,6 +86,18 @@ export const PROC_OBJ_MAX_DENSITY = 3;
 
 const DEG_TO_RAD = Math.PI / 180;
 
+export interface ProcObjCellBudgetOptions {
+  /** Effective density per category (0 = disabled). Default: vanilla density 1. */
+  densityOf?: (category: ProcObjCategoryName) => number;
+  /** The cell's `procObjLimit`. Default: unlimited. */
+  limit?: number;
+  /**
+   * Species floor N (plan 012): every MODEL with an eligible placement in the cell keeps at least
+   * `min(N, its eligible count)` of them. **0 (default) is OFF** and returns the plain cap's counts.
+   */
+  speciesFloor?: number;
+}
+
 /** Reused triangle temporaries (one allocation per cell, not per face). */
 interface TriangleScratch {
   a: Vector3;
@@ -109,6 +121,63 @@ export function groupRulesBySurface(rules: readonly ProcObjRule[]): Map<string, 
   }
 
   return bySurface;
+}
+
+/**
+ * How many of each batch's placements this cell draws (and therefore collides) — parallel to `batches`,
+ * and the ONE place the per-cell budget is decided. Placements are lottery-sorted, so a count is a prefix.
+ *
+ * Without a floor this is exactly `lottery < min(densityOf(category), procObjLotteryCap(batches, limit))`,
+ * the density knob capped by the cell budget, lowest lotteries winning.
+ *
+ * **The floor exists because that cut can zero a whole species** (plan 012): it pools every candidate and
+ * keeps the lowest, so what decides whether a species dies is how many species compete in the cell — 8
+ * underwater rules share a 150 budget comfortably, 26 desert ones do not, and a desert cell measured 18 of
+ * 26 species placed. Above the floor the lottery order still rules, so the skew a good scatter has is kept;
+ * only the zero case is outlawed. **The rescue is PAID FOR** at the top of the lottery order — the
+ * placements the cap would have cut next are the ones it now cuts — so the cell budget is conserved and
+ * `limit` stays a real number.
+ *
+ * **The floor's unit is the MODEL, not the batch.** 19 of the 56 models `procobj.dat` names scatter on
+ * several surfaces and are therefore several batches ({@link ProcObjBatch}) — but a bush still on screen
+ * from the neighbouring surface has not gone missing, so flooring per batch would reserve twice for one
+ * visible species. The model's floor is filled from its own lowest lotteries, whichever surface they grew on.
+ */
+export function procObjCellBudget(batches: readonly ProcObjBatch[], options: ProcObjCellBudgetOptions = {}): number[] {
+  const densityOf = options.densityOf ?? ((): number => 1);
+  const cap = procObjLotteryCap(batches, options.limit);
+  const densities = batches.map((batch) => densityOf(batch.category));
+  const keep = batches.map((batch, at) => countBelow(batch.placements, Math.min(densities[at], cap)));
+  const floor = options.speciesFloor ?? 0;
+  if (floor <= 0 || cap === Number.POSITIVE_INFINITY) {
+    return keep; // no floor asked for, or the budget is not binding — nothing can have been zeroed
+  }
+
+  const eligible = batches.map((batch, at) => countBelow(batch.placements, densities[at]));
+  const reserved = reserveFloor(batches, eligible, floor);
+  let owed = 0;
+  for (let at = 0; at < keep.length; at += 1) {
+    if (keep[at] < reserved[at]) {
+      owed += reserved[at] - keep[at];
+      keep[at] = reserved[at];
+    }
+  }
+  if (owed === 0) {
+    return keep;
+  }
+  // Everything above its own floor, highest lottery first: the next placements the cap was going to cut.
+  const spare: { at: number; lottery: number }[] = [];
+  for (let at = 0; at < keep.length; at += 1) {
+    for (let i = reserved[at]; i < keep[at]; i += 1) {
+      spare.push({ at, lottery: batches[at].placements[i].lottery });
+    }
+  }
+  spare.sort((left, right) => right.lottery - left.lottery);
+  for (let i = 0; i < owed && i < spare.length; i += 1) {
+    keep[spare[i].at] -= 1; // a batch's entries arrive highest-index-first, so this drops its top placements
+  }
+
+  return keep;
 }
 
 /**
@@ -182,6 +251,22 @@ function cellSeed(cx: number, cy: number): number {
   return (Math.imul(cx, 73856093) ^ Math.imul(cy, 19349663)) >>> 0;
 }
 
+/** How many of a lottery-sorted placement list fall below `cutoff` — the drawn set is that prefix. */
+function countBelow(placements: readonly ProcObjPlacement[], cutoff: number): number {
+  let low = 0;
+  let high = placements.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (placements[mid].lottery < cutoff) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+
+  return low;
+}
+
 /** Deterministic 32-bit PRNG (mulberry32) — tiny, seedable, plenty for decoration. */
 function mulberry32(seed: number): () => number {
   let state = seed >>> 0;
@@ -193,6 +278,49 @@ function mulberry32(seed: number): () => number {
 
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/**
+ * Per batch, how many of its placements the species floor protects: for every MODEL, its `floor` lowest
+ * lotteries among the eligible ones, spread over whatever batches (surfaces) hold them. Reserved for every
+ * model, not only the ones under pressure — the reservation is also what stops the payment pass below from
+ * cutting a model to zero on its way to funding another.
+ */
+function reserveFloor(batches: readonly ProcObjBatch[], eligible: readonly number[], floor: number): number[] {
+  const reserved = batches.map((): number => 0);
+  const byModel = new Map<string, number[]>();
+  for (let at = 0; at < batches.length; at += 1) {
+    const group = byModel.get(batches[at].model);
+    if (group) {
+      group.push(at);
+    } else {
+      byModel.set(batches[at].model, [at]);
+    }
+  }
+  for (const group of byModel.values()) {
+    const need = Math.min(
+      floor,
+      group.reduce((sum, at) => sum + eligible[at], 0),
+    );
+    // Take them one at a time from whichever of the model's batches offers the lowest lottery next.
+    for (let taken = 0; taken < need; taken += 1) {
+      let best = -1;
+      let bestLottery = Number.POSITIVE_INFINITY;
+      for (const at of group) {
+        if (reserved[at] >= eligible[at]) {
+          continue;
+        }
+        const lottery = batches[at].placements[reserved[at]].lottery;
+        if (lottery < bestLottery) {
+          best = at;
+          bestLottery = lottery;
+        }
+      }
+      reserved[best] += 1;
+    }
+  }
+
+  return reserved;
 }
 
 function scatterFace(

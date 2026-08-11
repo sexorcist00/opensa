@@ -552,6 +552,12 @@ async function boot(
     // look call rather than a perf one. Plan 013's "set this from a streaming measurement" has no measurement
     // to make: the layer never hitches at any reachable setting.
     procObjLimit: Number(params.get('procobjLimit')) || 150,
+    // `?procobjFloor=<n>` (plan 012): while the cap binds, keep at least n of every species the cell is
+    // eligible for, instead of letting the lowest-lottery cut zero one — measured on stock rules to hit
+    // 17.7 % of clutter cells, worst case 16 of 23 species. **Default OFF**: what we ship loses no species
+    // (the tall ones are static instances on `sa`, and `opensa`'s runtime set is few enough to fit), so this
+    // is the knob for a raised density (P4's biome profile) rather than a fix for today's picture.
+    procObjSpeciesFloor: Number(params.get('procobjFloor')) || 0,
   });
   await adapter.prepare();
   const physics = new PhysicsWorld(await initRapier());

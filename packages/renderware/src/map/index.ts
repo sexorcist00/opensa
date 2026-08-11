@@ -9,6 +9,8 @@ export {
   placementMatrix,
   PROC_OBJ_MAX_DENSITY,
   type ProcObjBatch,
+  procObjCellBudget,
+  type ProcObjCellBudgetOptions,
   procObjLotteryCap,
   type ProcObjPlacement,
   scatterProcObjects,

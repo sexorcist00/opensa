@@ -4,9 +4,17 @@ import { describe, expect, it } from 'vitest';
 import type { RegionColliders } from '../collision';
 import type { ColModel } from '../parsers/binary/col-types';
 import type { ProcObjRule } from '../parsers/text';
+import type { ProcObjCategoryName } from './procobj-categories';
+import type { ProcObjBatch } from './procobj-scatter';
 
 import { procObjCategory } from './procobj-categories';
-import { groupRulesBySurface, PROC_OBJ_MAX_DENSITY, procObjLotteryCap, scatterProcObjects } from './procobj-scatter';
+import {
+  groupRulesBySurface,
+  PROC_OBJ_MAX_DENSITY,
+  procObjCellBudget,
+  procObjLotteryCap,
+  scatterProcObjects,
+} from './procobj-scatter';
 
 function rule(partial: Partial<ProcObjRule> = {}): ProcObjRule {
   return {
@@ -263,6 +271,130 @@ describe('procObjLotteryCap', () => {
       const cap = procObjLotteryCap(batches, 25);
       const kept = batches.flatMap((batch) => batch.placements).filter((placement) => placement.lottery < cap);
       expect(kept).toHaveLength(25);
+    });
+  });
+});
+
+/** One species' batch from a lottery list (sorted, as the scatter leaves them). */
+function batchOf(model: string, category: ProcObjCategoryName, lotteries: readonly number[]): ProcObjBatch {
+  return {
+    category,
+    model,
+    placements: [...lotteries]
+      .sort((left, right) => left - right)
+      .map((lottery) => ({
+        align: false,
+        lottery,
+        normal: [0, 0, 1] as [number, number, number],
+        position: [0, 0, 0] as [number, number, number],
+        rotation: 0,
+        scale: 1,
+        scaleZ: 1,
+      })),
+    surface: 'p_sand',
+  };
+}
+
+/** `count` lotteries evenly spread over [0, 1) — the vanilla-eligible band. */
+const spread = (count: number): number[] => Array.from({ length: count }, (_, at) => at / count);
+
+/**
+ * Three species competing for one budget, skewed the way a real cell is: 400 abundant + 200 middling, both
+ * spread over the whole vanilla band, and 5 rare ones that only ever drew high lotteries. With `limit` 300
+ * the cut lands near 0.5, so the rare species is zeroed — the defect plan 012 is about.
+ */
+const skewedCell = (): ProcObjBatch[] => [
+  batchOf('veg_procgrasspatch', 'grass', spread(400)),
+  batchOf('sand_combush02', 'bushes', spread(200)),
+  batchOf('sjmcacti2', 'cacti', [0.9, 0.93, 0.95, 0.97, 0.99]),
+];
+
+const total = (keep: readonly number[]): number => keep.reduce((sum, count) => sum + count, 0);
+
+describe('procObjCellBudget', () => {
+  describe('negative cases', () => {
+    it('keeps every eligible placement when no limit is given', () => {
+      expect(procObjCellBudget(skewedCell())).toEqual([400, 200, 5]);
+    });
+
+    it('leaves the cap alone when it does not bind, floor or no floor', () => {
+      expect(procObjCellBudget(skewedCell(), { limit: 9999, speciesFloor: 3 })).toEqual([400, 200, 5]);
+    });
+
+    it('zeroes a species with the floor OFF — the defect, pinned', () => {
+      const keep = procObjCellBudget(skewedCell(), { limit: 300 });
+      expect(keep[2]).toBe(0); // the rare species loses every placement to the lowest-lottery cut
+      expect(total(keep)).toBe(300);
+    });
+
+    it('never resurrects a species the density knob excluded', () => {
+      const densityOf = (category: ProcObjCategoryName): number => (category === 'cacti' ? 0 : 1);
+      const keep = procObjCellBudget(skewedCell(), { densityOf, limit: 300, speciesFloor: 3 });
+      expect(keep[2]).toBe(0); // a disabled category is not eligible, so the floor has nothing to protect
+      expect(total(keep)).toBe(300);
+    });
+
+    it('does not rescue a model that is still drawn from its other surface', () => {
+      const batches = [
+        ...skewedCell(),
+        batchOf('p_rubble', 'rocks', [0.01, 0.02]), // on p_mountain, well under the cut
+        batchOf('p_rubble', 'rocks', [0.95, 0.96]), // the same model on p_wasteground, above it
+      ];
+      const keep = procObjCellBudget(batches, { limit: 300, speciesFloor: 2 });
+      expect(keep[4]).toBe(0); // the model is on screen from the other surface — nothing has gone missing
+      expect(keep[3]).toBe(2); // and its floor was already met there, so nothing was reserved twice
+    });
+
+    it('never floors a species above its own eligible count', () => {
+      const batches = [...skewedCell(), batchOf('sm_des_pcklypr1', 'cacti', [0.94])];
+      const keep = procObjCellBudget(batches, { limit: 300, speciesFloor: 3 });
+      expect(keep[3]).toBe(1); // one candidate is all it has — min(N, eligible)
+    });
+  });
+
+  describe('positive cases', () => {
+    it('cuts to the limit by lottery order, lowest first', () => {
+      const keep = procObjCellBudget(skewedCell(), { limit: 300 });
+      expect(total(keep)).toBe(300);
+      expect(keep[0]).toBeGreaterThan(keep[1]); // the abundant species keeps proportionally more
+    });
+
+    it('is byte-identical to the plain cap while the floor is off (regression guard)', () => {
+      const batches = scatterProcObjects([triangleCollider(1)], groupRulesBySurface([rule()]), SURFACES, 0, 0);
+      const cap = procObjLotteryCap(batches, 12);
+      const before = batches.map(
+        (batch) => batch.placements.filter((placement) => placement.lottery < Math.min(1, cap)).length,
+      );
+      expect(procObjCellBudget(batches, { limit: 12 })).toEqual(before);
+    });
+
+    it('keeps every eligible species alive, and the skew above the floor', () => {
+      const keep = procObjCellBudget(skewedCell(), { limit: 300, speciesFloor: 2 });
+      expect(keep.every((count) => count > 0)).toBe(true);
+      expect(keep[2]).toBe(2); // floored, not given a quota
+      expect(keep[0]).toBeGreaterThan(keep[1]); // the lottery order still decides everything above it
+    });
+
+    it('pays for the rescue at the top of the lottery order, so the budget is unchanged', () => {
+      const floored = procObjCellBudget(skewedCell(), { limit: 300, speciesFloor: 2 });
+      expect(total(floored)).toBe(300);
+      expect(floored[0] + floored[1]).toBe(298); // the two the rare species took came off the abundant ones
+    });
+
+    it('fills a multi-surface model’s floor from its own lowest lotteries', () => {
+      const batches = [
+        ...skewedCell(),
+        batchOf('p_rubble', 'rocks', [0.97, 0.98]), // both of the model's batches are above the cut
+        batchOf('p_rubble', 'rocks', [0.91, 0.99]),
+      ];
+      const keep = procObjCellBudget(batches, { limit: 300, speciesFloor: 2 });
+      expect([keep[3], keep[4]]).toEqual([1, 1]); // 0.91 and 0.97 — the model's two lowest, across surfaces
+      expect(total(keep)).toBe(300);
+    });
+
+    it('is pure — the same cell decides the same way twice', () => {
+      const options = { limit: 300, speciesFloor: 3 };
+      expect(procObjCellBudget(skewedCell(), options)).toEqual(procObjCellBudget(skewedCell(), options));
     });
   });
 });
