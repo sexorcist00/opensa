@@ -63,6 +63,13 @@ carried (all covered at 5–10 u, not 2); texture 15 from broken roads at 23–2
 
 ## The repair
 
+**RETIRED the next field round, 2026-08-11 — see
+[`docs/postmortem/uv-stretch-repair.md`](../postmortem/uv-stretch-repair.md).** The before/after at a
+repaired intersection reversed it (user: *"мы сделали только хуже"*): every split vertex is a hard UV seam
+between a repaired face and an unrepaired one, and the derived mapping satisfies the anisotropy limit while
+lying where no author put it. The record below is how it was built and what its guards measured; the
+diagnosis above it stands.
+
 `repair-uv-stretch` keeps the two corners a broken face shares with a healthy neighbour and re-derives the
 third by extending that neighbour's own affine world→UV map, onto a split copy so no shared UV moves.
 Coverage: `cs_landbit_10` 69 %, `smallshop_16_sfs` 46 %, the three confirmed roads 16–21 %; map-wide

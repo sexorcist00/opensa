@@ -10,17 +10,18 @@ chain — `opensa` and `sa` alike — instead of a side effect of one branch.
 writer, and therefore produces **no machine-readable summary at all** — for the target that ships into the
 real game.
 
-Two failures on 2026-08-11, the same shape both times:
+Two failures on 2026-08-11, the same shape both times (the UV repair itself was retired the same day —
+`docs/postmortem/uv-stretch-repair.md` — but the failures it exposed are about the CHAIN and outlive it):
 
 1. The UV-repair ledger (plan 025) was merged into the root report — and the `sa` build printed its console
    line while writing the list nowhere, because it never runs the opensa branch.
-2. The fix for that was a sidecar written by the optimize stage (`<out>/uv-stretch.json`). It works, and it
-   is the first crack of exactly the drift this plan exists to stop: **each tool writing its own file beside
+2. The fix for that was a sidecar written by the optimize stage (`<out>/uv-stretch.json`). It worked, and it
+   was the first crack of exactly the drift this plan exists to stop: **each tool writing its own file beside
    the build because there is no assembler to hand a fragment to.**
 
 The root cause is structural: **the stage runner discards stage return values** (`await timed(stage.name, ()
 => stage.run(game, out))`), so nothing a stage learns can reach a report unless the stage writes a file
-itself or a closure variable is threaded by hand — which is what `uvStretchLedger` is.
+itself or a closure variable is threaded by hand — which is what the (since-removed) `uvStretchLedger` was.
 
 ## The shape
 
@@ -69,7 +70,6 @@ change — a stale path here reads as "the build produced nothing".
   console output that nobody can diff.
 - The pack's own report stays beside its pak — this plan does not move it, it stops the ROOT copy from being
   the pack's report wearing the run's name.
-- `uv-stretch.json` is absorbed and deleted: the fragment goes back to being a fragment.
 
 ## Cost and risk, priced honestly
 
@@ -91,8 +91,6 @@ change — a stale path here reads as "the build produced nothing".
 - A full run produces BOTH `report-opensa.json` and `report-sa.json`, and building one target afterwards
   leaves the other's report untouched. That is the regression test for the whole plan: today the second build
   overwrites the first's report, and under `--keepWork` it also deletes the first's `.work`.
-- The UV ledger arrives through the fragment path with `uv-stretch.json` gone, and its `repairedModels` list
-  is byte-identical to what the sidecar wrote for the same input.
 - Every current consumer of the bare `report.json` is updated in the same change; a grep for the literal
   name comes back empty afterwards.
 - Under `--keepWork`, `sa` then `opensa` leaves BOTH `.work-sa` and `.work-opensa` intact — the failure this

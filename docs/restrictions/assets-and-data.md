@@ -292,27 +292,30 @@ draws, the mess is somewhere else. Nothing catches it.
 
 The shape that is allowed: the list says only **where the rule may run**, and the correction is derived from
 what the asset itself carries at build time. A mod replacing a listed model is then judged on its own
-geometry and, at worst, nothing happens. `data/uv-stretch-models.json` and `data/crease-overrides.json` are
-both this — the second stores a THRESHOLD, not a normal.
+geometry and, at worst, nothing happens. `data/crease-overrides.json` is this — it stores a THRESHOLD, not a
+normal. Plan 025's `uv-stretch-models.json` was the same shape (retired with its pass, 2026-08-11 — see
+`docs/postmortem/uv-stretch-repair.md`; the retirement was about the repair, not about this rule).
 
-**A generated list must also say it is generated**, and how to regenerate it: `uv-stretch-models.json` is
-produced by `scripts/debug/scan-model-defects.ts`, and hand-editing it is how it silently stops matching the
-data it was derived from.
+**A generated list must also say it is generated**, and how to regenerate it — hand-editing one is how it
+silently stops matching the data it was derived from.
 
 **Caught:** no. Nothing distinguishes a gate list from a patch list at build time — this is a review rule.
 
-## Repairing authored data is allowed, and it still has to be demonstrated
+## Repairing authored data is allowed, and it still has to be demonstrated — to the EYE
 
 "That is what the original does" is the beginning of an argument (`docs/project-goals.md`), so a 2004
-authoring slip may be corrected — plan 025 does it for UV mappings that draw a texel up to 284× longer than
-it is wide. Two constraints came out of building it, both measured:
+authoring slip may be corrected — and plan 025's UV repair is the measured warning about what "demonstrated"
+means. It corrected mappings that drew a texel up to 284× longer than wide, passed every one of its own
+guards (no shared UV moved — corrections went onto split vertices; a correction that could not verify itself
+refused), and the first field before/after retired it the same day: every split vertex is a hard UV seam, so
+a partial repair of a CONTINUOUS defect converts a soft smear into sharp patchwork, and the "corrected"
+mapping satisfies the metric while lying where no author put it
+(`docs/postmortem/uv-stretch-repair.md`).
 
-- **A repair may not move a UV a healthy face also uses.** Roads tile with their NEIGHBOURING MODELS, and
-  that joint is correct in stock data; a correction therefore goes onto a SPLIT copy of the vertex. Moving
-  the shared value re-tiles the street.
-- **A repair that cannot verify itself must refuse.** Deriving a corner across a UV SEAM produced 1324×
-  anisotropy where the defect had been 10× — worse than what it replaced. The pass now accepts a correction
-  only if the face demonstrably lands under the limit, and counts what it refused.
+The rule a new repair of authored data must satisfy: **its acceptance test has to measure what the eye
+judges, not a per-face metric** — a low-frequency defect and a high-frequency one are not ordered by any
+per-face number, and the eye forgives the smooth error. If the only honest test is a field round, the field
+round comes before the pass ships in a build the user will judge.
 
-**Caught:** partly. The pass's own `wouldFix` check catches a correction that fails to help; nothing catches
-a correction that helps the metric and looks wrong, which is why the field labels are the gate.
+**Caught:** no. Nothing at build time distinguishes "helps the metric" from "looks better" — this failure
+mode is exactly the one the pass's own checks cannot see, which is why it is a restriction now.

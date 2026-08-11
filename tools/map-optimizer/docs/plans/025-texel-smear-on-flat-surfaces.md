@@ -1,6 +1,14 @@
 # 025 — Texel smear on big flat surfaces: a UV broken at the model's edges
 
-**Status: PLANNED 2026-08-11.** Field report (user): large and/or flat map objects render with "broken
+**Status: CLOSED 2026-08-11 — diagnosis stands, the repair is RETIRED.** The scanner (family C + the three
+world gates) and the diagnosis are the surviving output: the smear is authored R\* data and the optimizer is
+innocent (0 UVs move at any pass). The `repair-uv-stretch` pass built on that diagnosis repaired 3 849 faces
+across 104 models and was reversed by the first field before/after the same day — a partial repair of a
+continuous UV defect trades a soft smear for hard-edged patchwork, and the mapping it writes is invented,
+because no authored frame exists to restore. Full reasoning and the revisit conditions:
+[`docs/postmortem/uv-stretch-repair.md`](../../../../docs/postmortem/uv-stretch-repair.md).
+
+Original status: PLANNED 2026-08-11. Field report (user): large and/or flat map objects render with "broken
 textures" — long directional smears — and **the class is absent before the map-optimizer stage runs**. Four
 named spots below. This plan is DIAGNOSIS-FIRST: the decisive measurement is offline and costs no rebuild and
 no field round, so it comes before anyone writes a fix.

@@ -53,8 +53,11 @@ stories: `tools/lod-trees-generator/docs/plans/005-sa-asset-format.md`,
   that is how the file keeps tunnels under land from flooding.
 - **A face's UV triangle can be degenerate while its position triangle is healthy** — stock SA ships them in
   quantity (30 faces on `road_lawn34`, 16 of 39 on `sbseabed3_las20`), and one texel row is then smeared
-  across the whole face. Nothing in the geometry says it is wrong; see
-  [`restrictions/assets-and-data.md`](../restrictions/assets-and-data.md) for what may be done about it.
+  across the whole face. Nothing in the geometry says it is wrong, and the class SHIPS AS-IS: an automated
+  repair was built and field-retired the same day (2026-08-11) — the authored intent needed to fix it is not
+  in the data, and a partial fix reads worse than the smear
+  ([`postmortem/uv-stretch-repair.md`](../postmortem/uv-stretch-repair.md)); the rule it left behind is in
+  [`restrictions/assets-and-data.md`](../restrictions/assets-and-data.md).
 - **`surfinfo.dat`'s `W_SPRAY` is set on `default` and every `tarmac*` row** — it means "throw water spray
   when the road is WET" (`CWeather` wetness gates the read in the original), NOT "this surface sprays".
   Read unconditionally it turns every road into a sprinkler (plan 089/05 field round 1). This game tracks
