@@ -101,6 +101,16 @@ stock DFFs).
   scatter on several surfaces — and **pays for them at the top of the lottery order**, so the budget is
   unchanged and the skew above the floor is untouched. Cost: 0.32 % of the drawn placements and **no
   measurable frame time** (`avgDrawCalls` identical across four legs). `?procobjFloor=0` is the A/B.
+- **The in-triangle sampler is a knob, and `corner` IS the original's routine rather than a copy of it**
+  (`--sampler` / `?procobjSampler=`, default `area`). Expand the recovered `pos = V1 + (V2−V1)·o1 +
+  (V3−V2)·o2` with `o2 = o1 × rand()` into barycentric weights and it is our own formula with `o1 = rand()`
+  where ours reads `o1 = sqrt(rand())` — **the whole difference is one `sqrt`**. `corner` pulls toward
+  whichever vertex the COL lists first (mean weight 0.5 against area-uniform's 1/3, unit-tested). Map-wide it
+  keeps the placement count identical and tightens only the close tail — same-species nearest neighbour p05
+  **3.5 → 3.2 m**, median unmoved. `area` is the default because V1 is a MESH fact, not a landscape one, so
+  the bias clumps on arbitrary tessellation corners; the knob exists because it is nonetheless the look the
+  world was tuned in front of ([plan 010](../../tools/sa-procobj-placement/docs/plans/010-density-model.md)
+  task 12).
 - **Slope-aware candidate density (`--slope` / `?procobjSlope=`), built 2026-08-11, NEUTRAL by default.** Per
   category, a multiplier on how many candidates a STEEP (`|normal.z| < 0.85`) or a FLAT face generates. It is
   **the only terrain signal not already carried by the surface**: 12 of the 14 rule-bearing surfaces sit ≥90 %

@@ -93,6 +93,25 @@ export const PROC_OBJ_MAX_DENSITY = 3;
 export const PROC_OBJ_STEEP_THRESHOLD = 0.85;
 
 /**
+ * Where inside a collision triangle a placement lands. **Both are the same three lines** — the whole
+ * difference is one `sqrt`, which is why the original's routine is reproducible here exactly rather than
+ * approximately.
+ *
+ * - `area` (ours, the default): `o1 = sqrt(rand())`, so points are uniform over the triangle's AREA.
+ * - `corner` (**the original's, recovered** — `gta-sa-original/procedural-objects.md`): `o1 = rand()`,
+ *   `o2 = o1 × rand()`, `pos = V1 + (V2−V1)·o1 + (V3−V2)·o2`. Expand that and the barycentric weights are
+ *   `1−o1`, `o1(1−s)`, `o1·s` — ours exactly, minus the warp. Sampling `o1` uniformly puts equal numbers of
+ *   points on cross-sections whose length grows with `o1`, so density falls as `1/o1` and the scatter
+ *   **pulls toward V1**: mean weight 0.5 on the first vertex against 1/3 for an area-uniform draw.
+ *
+ * The bias is a property of the MESH, not of the landscape — V1 is whichever vertex the COL happens to list
+ * first, so the clumps land on arbitrary tessellation corners. That is the argument for `area` being the
+ * default; the knob exists because it is a LOOK the authored world was tuned in front of, and a look is not
+ * settled by an argument.
+ */
+export type ProcObjSampler = 'area' | 'corner';
+
+/**
  * Slope-aware candidate density (plan 011, the one task that survived its 2026-08-11 re-scope): scale how many
  * candidates a face generates by whether it is STEEP, per category.
  *
@@ -161,6 +180,14 @@ export interface ProcObjCellBudgetOptions {
    * `min(N, its eligible count)` of them. **0 (default) is OFF** and returns the plain cap's counts.
    */
   speciesFloor?: number;
+}
+
+/** The scatter's optional knobs. An options bag rather than more positionals — `slope` was the seventh. */
+export interface ProcObjScatterOptions {
+  /** Where inside a triangle a placement lands. Default `area` (ours); `corner` is the original's. */
+  sampler?: ProcObjSampler;
+  /** Slope-aware candidate density — see {@link ProcObjSlopeConfig}. */
+  slope?: ProcObjSlopeConfig;
 }
 
 /** Reused triangle temporaries (one allocation per cell, not per face). */
@@ -282,7 +309,7 @@ export function scatterProcObjects(
   cx: number,
   cy: number,
   maxDensity: number = PROC_OBJ_MAX_DENSITY,
-  slope?: ProcObjSlopeConfig,
+  options: ProcObjScatterOptions = {},
 ): ProcObjBatch[] {
   const random = mulberry32(cellSeed(cx, cy));
   const batches = new Map<string, ProcObjBatch>();
@@ -309,7 +336,7 @@ export function scatterProcObjects(
           transform,
           scratch,
           maxDensity,
-          slope,
+          options,
         );
       }
     }
@@ -411,8 +438,9 @@ function scatterFace(
   normal: Vector3,
   area: number,
   maxDensity: number,
-  slope: ProcObjSlopeConfig | undefined,
+  options: ProcObjScatterOptions,
 ): void {
+  const { sampler = 'area', slope } = options;
   // The category is only needed when a slope config exists, and this runs per face PER RULE over the whole
   // map — so resolving it unconditionally would be a map-wide cost for a feature nobody switched on.
   const category = slope ? procObjCategory(rule.model, surface) : undefined;
@@ -434,8 +462,10 @@ function scatterFace(
     batches.set(key, batch);
   }
   for (let i = 0; i < count; i += 1) {
-    // Uniform point on the triangle (sqrt warp keeps it area-uniform, not corner-biased).
-    const r = Math.sqrt(random());
+    // Where in the triangle it lands — see {@link ProcObjSampler}. The `sqrt` IS the whole difference from
+    // the original's routine: without it the same three weights pull toward the first vertex.
+    const roll = random();
+    const r = sampler === 'corner' ? roll : Math.sqrt(roll);
     const s = random();
     const wa = 1 - r;
     const wb = r * (1 - s);
@@ -468,7 +498,7 @@ function scatterTriangle(
   transform: Matrix4,
   scratch: TriangleScratch,
   maxDensity: number,
-  slope: ProcObjSlopeConfig | undefined,
+  options: ProcObjScatterOptions,
 ): void {
   const surface: string | undefined = surfaceNames[face.material];
   if (surface === undefined) {
@@ -494,7 +524,7 @@ function scatterTriangle(
     normal.negate();
   }
   for (const rule of rules) {
-    scatterFace(batches, random, rule, surface, a, b, c, normal, area, maxDensity, slope);
+    scatterFace(batches, random, rule, surface, a, b, c, normal, area, maxDensity, options);
   }
 }
 

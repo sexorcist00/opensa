@@ -208,9 +208,32 @@ Four caps, and they are not interchangeable:
 - [x] **Wired through — SHIPPED 2026-08-09.** `ProcObjLodConfig.density` and pmb's `BuilderConfig.procobjDensity`
       both take `number | ProcObjDensityConfig`; **neither is keyed by target** (decision 2). Default stays 1.
       `--procobj-density` remains the scalar override the perf sweeps use.
-- [ ] **A/B the corner-biased sampler.** The original pulls placements toward a triangle's first vertex
-      (`offset1 = rand()`, `offset2 = offset1 × rand()`); ours is area-uniform. A difference in the LOOK,
-      cheap to test now that the density is right — and it interacts with decision 5's grouping.
+- [x] **A/B the corner-biased sampler — DONE 2026-08-11, and it is one `sqrt`.** Expand the original's
+      recovered routine (`pos = V1 + (V2−V1)·o1 + (V3−V2)·o2`, `o2 = o1 × rand()`) into barycentric weights
+      and you get `1−o1`, `o1(1−s)`, `o1·s` — **our formula exactly**, with `o1 = rand()` where ours reads
+      `o1 = sqrt(rand())`. So the alternative is not an approximation of the original; it IS the original.
+      `ProcObjSampler` (`'area'` | `'corner'`) in the shared scatter, so both targets take it from one place:
+      `--sampler corner` and `?procobjSampler=corner`, **default `area`**.
+      **Measured map-wide** (`procobj-spacing-census.ts --sampler corner`, whole-map colliders):
+
+      | | `area` (ours) | `corner` (the original's) |
+      | --- | --- | --- |
+      | placements | 103 122 | **103 122** — the count is untouched by construction |
+      | same-species nearest neighbour, p05 | 3.5 m | **3.2 m** (−8.6 %) |
+      | same-species nearest neighbour, median | 9.3 m | 9.4 m |
+      | any-species nearest neighbour, p05 | 2.2 m | **2.0 m** (−9.1 %) |
+
+      **It tightens the CLOSE TAIL and leaves the median alone**, which is exactly what a corner bias
+      predicts: a few more very-near pairs where a triangle's placements pile toward its first vertex, the
+      same overall spread everywhere else. Unit-tested on the property the recovered write-up quotes rather
+      than on a look — mean barycentric weight on V1 is **0.5** for `corner` against **1/3** for `area`,
+      which is an independent confirmation of the recovery.
+      **Why `area` stays the default, and the argument is not "ours is better":** V1 is whichever vertex the
+      COL happens to list FIRST, so the bias clumps on arbitrary tessellation corners — a property of the
+      MESH, not of the landscape. That makes it 2004 sampling logic rather than authored data
+      ([project-goals](../../../../docs/project-goals.md) directive 3), which is the case for departing.
+      **But it is also the look the world was tuned in front of**, and a look is not settled by an argument —
+      hence the knob, and hence the call is his.
 
 ## Verification
 

@@ -13,6 +13,8 @@
  *     --max     cap on converted procobj objects (0 disables; default from config)
  *     --species-floor  objects every species with a candidate is guaranteed per 250 u cell (default 1, 0 = off)
  *     --slope <steep,flat>  ROCK candidate multipliers on steep vs flat faces (plan 011). Omitted = unchanged
+ *     --sampler <area|corner>  where in a triangle a placement lands — ours, or the original's corner-biased
+ *               routine (plan 010 task 12). Default area
  *     --height  optional min HD height (m) gate, drops short clutter (0 = off; default from config)
  *     --density scatter density cutoff, 1 = vanilla, max 3 (the scatter's candidate ceiling). The placed
  *               count scales with it until MINDIST or `--max` binds; the run prints the density it used
@@ -75,6 +77,7 @@ function main(): void {
     procObjMax: Number(argValue('--max') ?? config.procObjMax),
     procObjSpeciesFloor: Number(argValue('--species-floor') ?? config.procObjSpeciesFloor),
     ...slopeArg(argValue('--slope')),
+    ...(argValue('--sampler') === 'corner' ? { procObjSampler: 'corner' as const } : {}),
   };
 
   const modloader = process.argv.includes('--modloader');

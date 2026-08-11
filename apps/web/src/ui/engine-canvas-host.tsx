@@ -566,6 +566,10 @@ async function boot(
     // look is judged. The scatter is re-rolled by it, so two settings compare statistically, never placement
     // by placement.
     ...procObjSlopeParam(params),
+    // `?procobjSampler=corner` (plan 010 task 12): the ORIGINAL's in-triangle routine instead of our
+    // area-uniform one — it pulls toward whichever vertex the COL lists first. Same placement COUNT either
+    // way; what moves is the close tail (map-wide p05 3.5 → 3.2 m). Default stays `area`.
+    ...(params.get('procobjSampler') === 'corner' ? { procObjSampler: 'corner' as const } : {}),
   });
   await adapter.prepare();
   const physics = new PhysicsWorld(await initRapier());

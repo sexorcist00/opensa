@@ -38,6 +38,7 @@ import {
   procObjCellBudget,
   procObjColliders,
   type ProcObjRule,
+  type ProcObjSampler,
   type ProcObjSlopeConfig,
   type RegionColliders,
   resolveMap,
@@ -162,6 +163,9 @@ export interface GtaSaWorldConfig {
   /** Slope-aware candidate density (plan 011): per category, a multiplier on how many candidates a STEEP or a
    *  FLAT collision face generates. The SAME config the `sa` bake takes — slope is a per-FACE signal and the
    *  scatter is the only place either target can spend one. Absent = unchanged. */
+  /** Where inside a collision triangle a placement lands — `area` (ours, default) or `corner` (the
+   *  original's recovered routine). The SAME knob the `sa` bake takes; it is one `sqrt` in the scatter. */
+  procObjSampler?: ProcObjSampler;
   procObjSlope?: ProcObjSlopeConfig;
   /** Species floor N (sa-procobj-placement plan 012): while {@link procObjLimit} binds, every clutter
    *  species eligible in the cell keeps at least `min(N, its eligible count)` placements instead of
@@ -638,15 +642,10 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       return cached;
     }
     const colliders = buildCellColliders(buildCollisionIndex(this.fs), this.defs, this.grid, cx, cy);
-    const batches = scatterProcObjects(
-      colliders,
-      this.procObjRules,
-      this.surfaceNames,
-      cx,
-      cy,
-      undefined,
-      this.config.procObjSlope,
-    );
+    const batches = scatterProcObjects(colliders, this.procObjRules, this.surfaceNames, cx, cy, undefined, {
+      sampler: this.config.procObjSampler,
+      slope: this.config.procObjSlope,
+    });
     this.procObjBatchCache.set(key, batches);
 
     return batches;

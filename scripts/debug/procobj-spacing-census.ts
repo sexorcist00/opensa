@@ -45,6 +45,9 @@ const density = Number(argValue('--density') ?? 1);
 const withNearest = (argValue('--nn') ?? '1') !== '0';
 const modelsPath = argValue('--models');
 const jsonPath = argValue('--json');
+/** `--sampler corner` runs the ORIGINAL's recovered in-triangle routine instead of our area-uniform one —
+ *  the A/B plan 010 task 12 asks for. It changes WHERE placements land, never how many. */
+const sampler = argValue('--sampler') === 'corner' ? 'corner' : 'area';
 
 const archive = openGameArchive(game);
 const { catalog, instances } = loadMapDefs(game, archive);
@@ -290,7 +293,9 @@ function reportStages(areaBySurface: ReadonlyMap<string, number>): void {
   for (const rule of rules) {
     minDistByModel.set(rule.model, Math.max(minDistByModel.get(rule.model) ?? 0, rule.minDistance));
   }
-  const batches = scatterProcObjects(colliders, groupRulesBySurface(rules), surfaceNames, 0, 0);
+  const batches = scatterProcObjects(colliders, groupRulesBySurface(rules), surfaceNames, 0, 0, undefined, {
+    sampler,
+  });
   let candidates = 0;
   let atDensity = 0;
   const placedByModel = new Map<string, ProcObjPlacement[]>();

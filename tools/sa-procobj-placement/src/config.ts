@@ -1,5 +1,5 @@
 import type { ProcObjDensityInput } from '@opensa/map-placement/procobj-density';
-import type { ProcObjSlopeConfig } from '@opensa/renderware/map/procobj-scatter';
+import type { ProcObjSampler, ProcObjSlopeConfig } from '@opensa/renderware/map/procobj-scatter';
 
 /** Build knobs for the procobj placement bake (overridable via CLI flags). */
 export interface ProcObjLodConfig {
@@ -30,6 +30,13 @@ export interface ProcObjLodConfig {
    *  others instead of adding to them (07/02 decision 8). Keep it clear of the authored count — a build that
    *  is capped is measuring the cap. `CAP DROPPED n` says when it bit. */
   procObjMax: number;
+  /** Where inside a collision triangle a placement lands. **`area` (ours) is the default and it is a
+   *  DELIBERATE departure**: `corner` is the original's recovered routine, which pulls toward whichever vertex
+   *  the COL lists first (mean barycentric weight 0.5 against an area-uniform 1/3). That bias is a property of
+   *  the MESH rather than of the landscape, and it is 2004 sampling logic rather than authored data — but it
+   *  is also the look the world was tuned in front of, so the knob exists and the call is a field one.
+   *  Measured map-wide: the same 103 122 placements either way, close-tail spacing (p05) 3.5 → 3.2 m. */
+  procObjSampler?: ProcObjSampler;
   /** Slope-aware candidate density (plan 011): per category, a multiplier on how many candidates a STEEP or a
    *  FLAT collision face generates. **The one terrain signal not already carried by the surface** — measured
    *  2026-08-11, `p_mountain` is 48.8 % steep and carries all six `p_rubble*` species while every other

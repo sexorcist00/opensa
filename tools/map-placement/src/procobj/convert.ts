@@ -1,7 +1,7 @@
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
 import type { ProcObjCategoryName } from '@opensa/renderware/map/procobj-categories';
 import type { ProcObjBatch, ProcObjPlacement } from '@opensa/renderware/map/procobj-scatter';
-import type { ProcObjSlopeConfig } from '@opensa/renderware/map/procobj-scatter';
+import type { ProcObjSampler, ProcObjSlopeConfig } from '@opensa/renderware/map/procobj-scatter';
 
 import { buildColliders } from '@opensa/renderware/collision/build-colliders';
 import { buildCollisionIndex } from '@opensa/renderware/collision/collision-index';
@@ -78,6 +78,12 @@ export interface ProcObjConvertOptions {
   outPath: string;
   /** Safety cap on total placed objects (HD count); the set is thinned to the lowest-lottery survivors. */
   procObjMax: number;
+  /**
+   * Where inside a collision triangle a placement lands — `area` (ours, the default) or `corner` (the
+   * original's recovered routine). The SAME knob the runtime scatter takes, because it is one `sqrt` inside
+   * the shared sampler.
+   */
+  sampler?: ProcObjSampler;
   /**
    * Slope-aware candidate density (plan 011): scale a face's candidate count by whether it is steep, per
    * category. The SAME config the runtime scatter takes — both targets read it through `scatterProcObjects`,
@@ -166,6 +172,7 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
     iplName,
     outPath,
     procObjMax,
+    sampler,
     slope,
     species,
     speciesFloor = 0,
@@ -197,7 +204,10 @@ export function convertProcObj(options: ProcObjConvertOptions): null | ProcObjCo
   const defs = buildMapDefinitions(gamePath, archive);
   const colliders = buildColliders(buildCollisionIndex(archive), defs, { center: [0, 0, 0], radius: Infinity });
   const surfaceNames = parseSurfaceNames(readFileSync(join(gamePath, 'data', 'surfinfo.dat'), 'utf8'));
-  const batches = scatterProcObjects(colliders, groupRulesBySurface(rules), surfaceNames, 0, 0, ceiling, slope);
+  const batches = scatterProcObjects(colliders, groupRulesBySurface(rules), surfaceNames, 0, 0, ceiling, {
+    sampler,
+    slope,
+  });
   const { categories, dropped, final, floored } = selectPlacements(batches, profile, procObjMax, speciesFloor);
 
   const { datLines, files, instBearingFiles, rows } = buildPermanentIpl(final, species, areaBase);

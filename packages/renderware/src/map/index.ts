@@ -14,6 +14,8 @@ export {
   type ProcObjCellBudgetOptions,
   procObjLotteryCap,
   type ProcObjPlacement,
+  type ProcObjSampler,
+  type ProcObjScatterOptions,
   type ProcObjSlopeConfig,
   scatterProcObjects,
   validateSlopeConfig,

@@ -433,7 +433,7 @@ describe('procObjCellBudget — the slope gate', () => {
       const rules = groupRulesBySurface([rule()]); // sand_combush02 → bushes, not rocks
       const before = scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0);
       const after = scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, {
-        steep: { rocks: 4 },
+        slope: { steep: { rocks: 4 } },
       });
       expect(countOfBatches(after)).toBe(countOfBatches(before));
     });
@@ -442,7 +442,7 @@ describe('procObjCellBudget — the slope gate', () => {
       const rules = groupRulesBySurface([rockRule()]);
       const before = scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0);
       const after = scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, {
-        steep: { rocks: 4 },
+        slope: { steep: { rocks: 4 } },
       });
       expect(countOfBatches(after)).toBe(countOfBatches(before));
     });
@@ -460,7 +460,9 @@ describe('procObjCellBudget — the slope gate', () => {
       const rules = groupRulesBySurface([rockRule()]);
       const before = countOfBatches(scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0));
       const after = countOfBatches(
-        scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, { steep: { rocks: 3 } }),
+        scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, {
+          slope: { steep: { rocks: 3 } },
+        }),
       );
       expect(after).toBeGreaterThan(before * 2.5); // 3x the expectation, +/- the fractional roll
       expect(after).toBeLessThan(before * 3.5);
@@ -471,7 +473,7 @@ describe('procObjCellBudget — the slope gate', () => {
       const before = countOfBatches(scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0));
       const after = countOfBatches(
         scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, {
-          flat: { rocks: 0.5 },
+          slope: { flat: { rocks: 0.5 } },
         }),
       );
       expect(after).toBeLessThan(before);
@@ -481,7 +483,7 @@ describe('procObjCellBudget — the slope gate', () => {
     it('takes a factor of 0 as “none of this category here”', () => {
       const rules = groupRulesBySurface([rockRule()]);
       const batches = scatterProcObjects([triangleCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, {
-        flat: { rocks: 0 },
+        slope: { flat: { rocks: 0 } },
       });
       expect(countOfBatches(batches)).toBe(0);
     });
@@ -490,11 +492,10 @@ describe('procObjCellBudget — the slope gate', () => {
       const rules = groupRulesBySurface([rockRule()]);
       // The tipped face sits near |normal.z| = 0.55: steep at 0.85, flat at 0.4.
       const asSteep = scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, {
-        steep: { rocks: 0 },
+        slope: { steep: { rocks: 0 } },
       });
       const asFlat = scatterProcObjects([steepCollider(1)], rules, SURFACES, 0, 0, PROC_OBJ_MAX_DENSITY, {
-        steep: { rocks: 0 },
-        threshold: 0.4,
+        slope: { steep: { rocks: 0 }, threshold: 0.4 },
       });
       expect(countOfBatches(asSteep)).toBe(0);
       expect(countOfBatches(asFlat)).toBeGreaterThan(0);
@@ -502,12 +503,81 @@ describe('procObjCellBudget — the slope gate', () => {
 
     it('is deterministic — the same slope config scatters the same world twice', () => {
       const rules = groupRulesBySurface([rockRule()]);
-      const config = { flat: { rocks: 0.5 }, steep: { rocks: 2 } };
+      const config = { slope: { flat: { rocks: 0.5 }, steep: { rocks: 2 } } };
       const positions = (batches: readonly ProcObjBatch[]): string =>
         batches.flatMap((batch) => batch.placements.map((p) => p.position.join(','))).join('|');
       expect(positions(scatterProcObjects([steepCollider(1)], rules, SURFACES, 4, -2, 3, config))).toBe(
         positions(scatterProcObjects([steepCollider(1)], rules, SURFACES, 4, -2, 3, config)),
       );
+    });
+  });
+});
+
+describe('scatterProcObjects — the sampler', () => {
+  const rules = (): ReturnType<typeof groupRulesBySurface> => groupRulesBySurface([rule({ spacing: 3 })]);
+  /** Mean barycentric weight on V1 (0,0,0) of the right triangle — the whole difference between the two. */
+  const meanV1Weight = (sampler: 'area' | 'corner'): number => {
+    const batches = scatterProcObjects([triangleCollider(1)], rules(), SURFACES, 7, 3, PROC_OBJ_MAX_DENSITY, {
+      sampler,
+    });
+    const points = batches.flatMap((batch) => batch.placements);
+    // V1 = (0,0), V2 = (100,0), V3 = (0,40): the weight on V1 is 1 - x/100 - y/40.
+    const total = points.reduce((sum, p) => sum + (1 - p.position[0] / 100 - p.position[1] / 40), 0);
+
+    return total / points.length;
+  };
+
+  describe('negative cases', () => {
+    it('defaults to area-uniform, so an absent option changes nothing', () => {
+      const withOption = scatterProcObjects([triangleCollider(1)], rules(), SURFACES, 1, 1, PROC_OBJ_MAX_DENSITY, {
+        sampler: 'area',
+      });
+      expect(withOption).toEqual(scatterProcObjects([triangleCollider(1)], rules(), SURFACES, 1, 1));
+    });
+
+    it('does not change how MANY placements there are — only where they land', () => {
+      const count = (sampler: 'area' | 'corner'): number =>
+        scatterProcObjects([triangleCollider(1)], rules(), SURFACES, 2, 2, PROC_OBJ_MAX_DENSITY, {
+          sampler,
+        })[0].placements.length;
+      expect(count('corner')).toBe(count('area'));
+    });
+  });
+
+  describe('positive cases', () => {
+    it('pulls toward the FIRST vertex — mean weight ~0.5 against area-uniform’s ~1/3', () => {
+      // The property the original's routine has and ours does not, stated as the number the recovered
+      // write-up quotes (`gta-sa-original/procedural-objects.md`) rather than as "it looks clumpier".
+      expect(meanV1Weight('corner')).toBeGreaterThan(0.45);
+      expect(meanV1Weight('corner')).toBeLessThan(0.55);
+      expect(meanV1Weight('area')).toBeGreaterThan(0.28);
+      expect(meanV1Weight('area')).toBeLessThan(0.39);
+    });
+
+    it('keeps every placement INSIDE the triangle, which the o2 = o1 x rand() coupling is what buys', () => {
+      const batches = scatterProcObjects([triangleCollider(1)], rules(), SURFACES, 5, 5, PROC_OBJ_MAX_DENSITY, {
+        sampler: 'corner',
+      });
+      for (const { position } of batches.flatMap((batch) => batch.placements)) {
+        const [x, y] = position;
+        expect(x / 100 + y / 40).toBeLessThanOrEqual(1.0001); // beyond the V2-V3 edge would be outside
+        expect(x).toBeGreaterThanOrEqual(0);
+        expect(y).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it('is deterministic, and spends the SAME rolls — only the warp differs', () => {
+      const twice = (): ProcObjBatch[] =>
+        scatterProcObjects([triangleCollider(1)], rules(), SURFACES, 9, -4, PROC_OBJ_MAX_DENSITY, {
+          sampler: 'corner',
+        });
+      expect(twice()).toEqual(twice());
+      // Same roll count means the lotteries are untouched: only the position warp moves.
+      const lotteries = (sampler: 'area' | 'corner'): number[] =>
+        scatterProcObjects([triangleCollider(1)], rules(), SURFACES, 9, -4, PROC_OBJ_MAX_DENSITY, {
+          sampler,
+        })[0].placements.map((p) => p.lottery);
+      expect(lotteries('corner')).toEqual(lotteries('area'));
     });
   });
 });
