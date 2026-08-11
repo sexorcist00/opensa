@@ -109,13 +109,19 @@ own plan with its own budget, and it is not blocked on anything here.
 - [~] ~~In-game (Wine, asi target), only if the measurement says thinning is needed~~ — **struck: the
       measurement says it is not.** The emitters already ride verbatim and decimate LODs by default; what this
       task would have verified is a thinning that is not being built.
-- [ ] Stock-target regression: particles fully stripped, byte-identical to today.
+- [~] ~~Stock-target regression: particles fully stripped, byte-identical to today~~ — **STRUCK 2026-08-11:
+      stock is not a target.** The declared configuration is OLA + FLA + our own `perfect-map.asi`
+      (`docs/restrictions/sa-target.md`), so there is no build this regression would protect. `--strip-particles`
+      survives in the CLI as an opt-out, and **the honest state of it is worth more than a tick**: no build
+      passes it, nothing exercises it, and it has no test. It is an unexercised flag, not a verified path —
+      whoever ever needs it should expect to fix it first.
 
 ## Verification
 
 - asi target: emitters ride verbatim AND decimate LODs; distant smoke visible; the game boots; the frame
   budget holds at the worst-case viewpoint.
-- stock target: byte-identical strip to today.
+- ~~stock target: byte-identical strip to today~~ — struck with its task: stock is not a target we build for,
+  and `--strip-particles` is an unexercised opt-out (no caller, no test).
 - Emitter count stays bounded map-wide — no smoke-storm.
 
 ## Measurements / notes

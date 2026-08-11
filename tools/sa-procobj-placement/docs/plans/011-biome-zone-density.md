@@ -1,6 +1,8 @@
 # 011 — Biome/zone-aware density (desert, forest, mountain)
 
-> **RE-SCOPED 2026-08-11, and most of it is CLOSED as redundant.** Moved here 2026-08-09 from the roadmap
+> **CLOSED 2026-08-11.** Re-scoped the same day and most of it closed as redundant; the last task — a field
+> check of the slope gate — is STRUCK rather than done, because `procObjSlope` ships undefined and there is
+> no shipped behaviour to judge. It returns the day a value is set. Moved here 2026-08-09 from the roadmap
 > chain `07-lod-generators-extended/03`, which was dissolved into the tools it touches — see
 > [roadmap 0.5.0](../../../../docs/roadmap/0.5.0/readme.md) for what the chain was and what shipped out of it.
 
@@ -88,8 +90,14 @@ Depends on [02](010-density-model.md) (the density model). Delivers the user's a
 - [x] **Unit tests — DONE**, 11 cases in `procobj-scatter.test.ts`: no config is byte-identical; an unnamed
       category is untouched; a steep multiplier does not touch flat faces; a factor of 0 means "none here";
       the threshold moves what counts as steep; and the whole thing stays deterministic.
-- [ ] **Field check — ATTEMPTED and NOT LANDED, and the failure is worth more than the shot.** The instrument
-      cannot hold a viewpoint on a slope: **the spawned player SLIDES**. At the densest steep-rock cluster
+- [~] ~~Field check~~ — **STRUCK 2026-08-11: there is nothing shipped to verify.** `procObjSlope` ships
+      **undefined** (= unchanged) in `ProcObjLodConfig`, so the slope gate is a knob awaiting a look
+      judgement, not behaviour in any build — no field run can accept or reject it while nothing turns it on.
+      **The check comes back the day a value is set**, and it comes back with the requirements the attempt
+      below discovered, which is why that record is kept in full rather than deleted.
+
+      *The attempt, 2026-08-11 — it failed, and the failure is worth more than the shot would have been.* The
+      instrument cannot hold a viewpoint on a slope: **the spawned player SLIDES**. At the densest steep-rock cluster
       (cell `9,-2`, 73 rocks within 25 m of `2264.7, -418.7, 86.4`) he was placed at z 89 and every run ended
       at ~`2271, -396, 55` — 34 m downhill, and a different spot each time. Three different comparisons then
       returned **86.81 / 86.82 / 86.83 %** changed pixels with identical mean Δ, which is the tell: the diff
