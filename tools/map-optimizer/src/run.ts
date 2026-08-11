@@ -8,7 +8,7 @@ import { basename } from 'node:path';
 import type { LevelVerdict, NightVerdict, PrelitContextOptions } from './adapters/gta-sa/prelit-context';
 
 export { type OnlyEntry, parseOnlyList, type PrelitContextOptions } from './adapters/gta-sa/prelit-context';
-import type { RunReport } from './core';
+import type { RunReport, UvStretchReport } from './core';
 import type { MapPlugin } from './core/asset';
 
 import { createGtaSaAdapter } from './adapters/gta-sa';
@@ -60,6 +60,8 @@ export interface RunOptimizerOptions {
   /** Tuning for the prelit pass (tolerances, curated `exclude` list from the review report). */
   prelitOptions?: PrelitContextOptions;
 }
+
+export type { UvStretchReport };
 
 /** Run the optimizer with the given passes; returns the run report. Mirrors the full game tree to `outDir`. */
 export async function runOptimizer(options: RunOptimizerOptions): Promise<RunReport> {
