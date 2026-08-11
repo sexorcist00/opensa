@@ -1,14 +1,27 @@
-# 080/08 — Switchable view presets (the C key), first-person included
+# 0.6.0 · 07 — Switchable view presets (the C key), first-person included
 
-**DEFERRED (2026-07-25, user's call): not next.** The rest of the chain (01–07) is closed and accepted; this
-plan waits. Its hardest half — first person — now has a researched idea doc with the feasibility questions
-already answered from the code: [`docs/ideas/first-person-camera/`](../../ideas/first-person-camera/readme.md)
-(the head IS a named bone with a live world matrix every rendered frame; hiding it is a zero-scale palette
-slot). Read that before starting this plan.
+**Status: DEFERRED to 0.6.0 (2026-08-11, the user's call).** Was `080/08`; moved here whole when the rest of
+[080](../../../../plans/080-cinematic-camera/readme.md) closed, so that chain has nothing left open and this
+step stops reading as a debt against it. Verified unbuilt at the move: no `CameraPreset`, `cycleView` or
+`cameraView` exists anywhere in the tree.
 
-**Added 2026-07-25 at the user's request.** SA cycles camera views with a key; we want the same, plus a
-first-person view — and, more importantly, we want the ARCHITECTURE for it in place while the chain is
-still being built, so no later plan hard-codes assumptions that make a second view impossible.
+> ## ⛔ Two things to read before any work starts
+>
+> 1. **[`docs/ideas/first-person-camera/`](../../../../ideas/first-person-camera/readme.md)** — the researched
+>    half of this plan, with the feasibility questions already answered from the code: the head IS a named
+>    bone (HAnim id 5) with a live world matrix every rendered frame, and hiding it is a zero-scale palette
+>    slot that takes hats and hair with it.
+> 2. **That idea's own step 0 is a GATE**, and it applies here: download and study the "Ultimate First Person"
+>    mod first. Everything below was reasoned from our own engine and has never been checked against a shipped
+>    implementation — near-plane clipping against the ped's own torso, weapon aim and vehicle interiors are
+>    exactly what it would correct.
+
+**Originally added 2026-07-25 at the user's request**, deliberately written while 080 was still being built
+so that no step in that chain hard-coded a value a preset would need to override. That constraint held, which
+is why this can be picked up later without reworking the rig.
+
+SA cycles camera views with a key; we want the same, plus a first-person view — and, more importantly, the
+ARCHITECTURE for it, so no plan hard-codes assumptions that make a second view impossible.
 
 ## The shape
 
@@ -63,13 +76,14 @@ Everything above is plumbing. The first-person VIEW is the part with real depend
 - **Vehicle first person** is the same mechanism with a car anchor (bumper / dash dummy from the model's
   frames) instead of a head bone — worth shipping in the same plan since the ring is per mode.
 
-## Where it sits in the chain
+## What it depends on — all of it already shipped
 
-**After 05 (vehicle camera) and before/with 07 (transitions).** It needs the vehicle rig to exist (the
-vehicle ring is half the feature) and the collision layer to be opt-out-able (04); its blends belong to the
-same audit 07 does. Nothing in 02–06 must hard-code a value the preset system would need to override —
-that is the standing constraint this plan places on the rest of the chain, and the reason it is written now
-rather than at the end.
+Written as "after 05, before/with 07" while [080](../../../../plans/080-cinematic-camera/readme.md) was live.
+That chain is now closed and accepted, so **every dependency this plan had is in place**: the vehicle rig
+exists (the vehicle ring is half the feature), the collision layer can be opted out of (04), and the
+transition blends (07) will cover a preset switch for free. The standing constraint it placed on the rest of
+the chain — that nothing in 02–06 hard-codes a value a preset would need to override — held, which is what
+makes this pickable up later rather than a rework.
 
 ## Subtasks
 

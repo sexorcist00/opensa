@@ -12,11 +12,13 @@ plan doc replaced by the REWORKED idea
 reorders the work (fix the vehicle chase first, then the effects). The archive of both attempts lives on
 branch `080-10-corner-peek`.**
 
-> **Checkbox sweep 2026-08-11: steps 01–07 struck (6 boxes), step 08 left OPEN.** Those six were the field
-> rounds of steps the banner above already calls DONE and ACCEPTED, so they were stale, not owed. **08 is the
-> real thing: verified unbuilt** — no `CameraPreset`, `cycleView` or `cameraView` exists anywhere in the tree.
-> It is the C-key preset ring that [`docs/ideas/first-person-camera/`](../../ideas/first-person-camera/readme.md)
-> would ride, and it stays deferred by the user's call.
+> **CLOSED 2026-08-11 — this chain has nothing left open.** The last six boxes were the field rounds of steps
+> the banner above already calls DONE and ACCEPTED, so they were stale rather than owed, and are struck.
+> **Step 08 (switchable view presets, the C key) MOVED OUT whole** to
+> [`roadmap/0.6.0/plans/07-camera-view-presets`](../../roadmap/0.6.0/plans/07-camera-view-presets/readme.md):
+> it was verified unbuilt (no `CameraPreset`, `cycleView` or `cameraView` anywhere), it is deferred work
+> rather than a debt against this chain, and it now sits beside the version that will do it. Every dependency
+> it had — the vehicle rig, the opt-out-able collision layer, the transition blends — shipped here.
 
 Planned 2026-07-19.: the damp/spring math and the
 `CameraDirector` in `apps/web/src/ui/camera/` (01), the smoothed rig — input dampening, a trailing look
@@ -35,8 +37,9 @@ those defaults; the drift channel's input re-measured and the wiring verified, s
 owed, the round is now judgeable). **Four field rounds ran on 05+06** and every
 report was fixed (bob frequency, the corner-swing latch, the backing-up spin, the shake burst, the exit
 snap, entry sinking); the landing dip ships OFF because it never read at a third-person orbit. **07 was
-ACCEPTED in the field on the same day** — the chain is closed for 0.5.0. **08 (view presets / first person)
-is DEFERRED at the user's request**; its feasibility research lives in
+ACCEPTED in the field on the same day** — the chain is closed for 0.5.0. **08 (view presets / first person) MOVED OUT to
+[roadmap 0.6.0·07](../../roadmap/0.6.0/plans/07-camera-view-presets/readme.md) on 2026-08-11**, so this chain
+is closed with nothing open; its feasibility research lives in
 [`docs/ideas/first-person-camera/`](../../ideas/first-person-camera/readme.md).
 
 **Goal: the camera feels "cinematic" the way GTA V's does — weighty, smooth, always composed — while
@@ -75,7 +78,7 @@ Additions beyond the request (they fall out of the same architecture and GTA V h
 
 **Switchable views are IN scope** (added 2026-07-25, user's request): a key (default C) cycles named view
 presets per mode — far / normal / close / **first-person** on foot, and a bumper view in cars. It gets its
-own sub-plan ([08](08-view-presets.md)) because first person has real dependencies (head-bone anchor, hiding
+own sub-plan ([0.6.0·07](../../roadmap/0.6.0/plans/07-camera-view-presets/readme.md)) because first person has real dependencies (head-bone anchor, hiding
 the player mesh, motion re-tuning), but its ARCHITECTURE constrains this whole chain from now on: every
 tuned value stays in `CameraConfig` and reaches the rig as one config-shaped object, so a preset is a
 different object handed to the same `stepCamera` — never a second code path. No sub-plan may hard-code a
@@ -181,7 +184,7 @@ offsets are amplitude-capped below the collision margin.
 | 05  | [Vehicle camera](05-vehicle-camera.md)                   | Speed distance/FOV curves, turn lag, drift framing, enter/exit blends, look-behind.                                 |
 | 06  | [Motion feel](06-motion-feel.md)                         | Bob, landing dip, impact shake, sprint FOV kick, motion-reduction toggle.                                           |
 | 07  | [Transitions + polish](07-transitions-polish.md)         | Mode blending, pitch-coupled framing, field-tuning rounds, bench guard, close-out.                                  |
-| 08  | [View presets](08-view-presets.md)                       | The C key cycles named view presets per mode (far/normal/close/**first-person**, bumper in cars).                   |
+| 08  | ~~View presets~~ **MOVED**                               | Out to [`roadmap/0.6.0/plans/07-camera-view-presets`](../../roadmap/0.6.0/plans/07-camera-view-presets/readme.md) on 2026-08-11 — deferred work, verified unbuilt, and every dependency it had shipped in this chain. |
 | 09  | [Follow-policy revision](09-follow-policy-revision.md)   | Movement never turns the camera (directional yaw authority), run/idle distance breathing, vehicle accel pull, the jump watchdog + dynamic-collision ease. |
 | 10  | AAA polish (shelved)                                     | SHELVED 2026-07-28 — corner peek field-rejected twice; reworked into the idea [`docs/ideas/aaa-camera-polish/`](../../ideas/aaa-camera-polish/readme.md) (camera rework first, then effects); code archive on branch `080-10-corner-peek`. |
 

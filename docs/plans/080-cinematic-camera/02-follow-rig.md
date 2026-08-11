@@ -3,7 +3,7 @@
 **The heart of the chain — after this plan the camera already "feels GTA".** Everything here is
 on-foot; the vehicle mode (05) reuses the same channels with different tuning.
 
-**Standing constraint from [08](08-view-presets.md):** every value tuned here lives in `CameraConfig` and
+**Standing constraint from [view presets](../../roadmap/0.6.0/plans/07-camera-view-presets/readme.md), moved to 0.6.0 — it still holds:** every value tuned here lives in `CameraConfig` and
 reaches the rig through the one config argument — no magic numbers in the rig code. That is what lets a view
 preset be a different config object rather than a second code path.
 
