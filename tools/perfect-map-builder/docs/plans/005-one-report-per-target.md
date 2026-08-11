@@ -32,10 +32,35 @@ itself or a closure variable is threaded by hand — which is what `uvStretchLed
   It builds no game dir, so it is a STEP and not a pipeline stage — `STAGE_NAMES` ordering and
   `--until`/`--exclude` must not be able to skip it by accident (or if they can, that must be deliberate and
   stated).
-- **Written to `<out>/<target>/report.json`**, with the root copy kept as a MIRROR of the last target built,
-  as it is now. Two targets share one `--out`, so a single root file cannot honestly represent both.
+- **Written as `<out>/report-<target>.json`** — `report-opensa.json`, `report-sa.json` (user, 2026-08-11:
+  *"иначе перезатрем"*). Two targets share one `--out`, so a single unnamed `report.json` is not a summary of
+  a run, it is a summary of **whichever target happened to finish last** — which is exactly the state that
+  produced today's confusion, where the file on disk was the opensa run's while the sa build had just ended.
+  **There is no unnamed root report after this plan.** The name is the target, always, and a reader that
+  cannot say which target it wants was never going to read the right file.
+  Every current consumer of the bare `report.json` therefore has to be found and updated in the same change —
+  see the risk section; a rename is exactly the kind of break that is silent at build time.
 - **Fragments are typed per stage**, a discriminated union rather than a bag — otherwise the report becomes a
   dumping ground and its consumers start doing `?.` archaeology.
+
+## `.work` follows the same rule: `.work-<target>`
+
+Same defect, one level down and older (user, 2026-08-11). **`<out>/.work` is wiped at the start of EVERY pmb
+run**, so building one target destroys the kept stages of the other — with `--keepWork` set for step-by-step
+debugging, a `sa` build silently throws away everything a previous `opensa` run was keeping, and the only
+symptom is that the folder you were about to look at is gone.
+
+`.work-opensa` / `.work-sa` makes the two runs independent, and it is what lets a target be re-run without
+disturbing the other's intermediates at all.
+
+**The cost, and it is real:** the two chains are NOT the same before the split — the `sa` target runs with
+`--exclude vehicles,peds`, so its common stages genuinely differ and cannot be shared. Under `--keepWork`
+that means two full sets of intermediate GAME DIRS, several GB each. Without `--keepWork` nothing changes:
+stages are still deleted as they are consumed, so only one lives at a time per chain.
+
+**Owed with it:** the `--until` flow keeps `.work` deliberately, and `docs/commands.md` plus anything that
+names `.work` by hand (debug recipes, the `model-repack` lab notes) has to move to the new names in the same
+change — a stale path here reads as "the build produced nothing".
 
 ## What it fixes beyond the immediate bug
 
@@ -50,6 +75,9 @@ itself or a closure variable is threaded by hand — which is what `uvStretchLed
 
 - **This is chain plumbing, and every build depends on it.** The runner change is small in lines and large in
   blast radius.
+- **A rename is a silent break.** `report.json` and `.work` are named by hand in debug recipes, in
+  `docs/commands.md`, in the crosstxd skill and in memory notes. Each one that is missed fails by reading an
+  absent file, which looks like "the build produced nothing" rather than "the path moved".
 - **Do not start it under a verification.** The user is about to check two builds and decide on merging
   `025-world-visibility`; changing how builds are assembled underneath that is precisely what invalidates a
   field round. **This lands after that merge, not before.**
@@ -58,9 +86,14 @@ itself or a closure variable is threaded by hand — which is what `uvStretchLed
 
 ## Verification
 
-- A `--exclude opensa` run (the `sa` target) produces a report containing its own stages' fragments — the
-  case that has no report today.
-- A full run produces both target reports, and the root mirror matches the last target built.
+- A `--exclude opensa` run (the `sa` target) produces `report-sa.json` containing its own stages' fragments —
+  the case that has no report today.
+- A full run produces BOTH `report-opensa.json` and `report-sa.json`, and building one target afterwards
+  leaves the other's report untouched. That is the regression test for the whole plan: today the second build
+  overwrites the first's report, and under `--keepWork` it also deletes the first's `.work`.
 - The UV ledger arrives through the fragment path with `uv-stretch.json` gone, and its `repairedModels` list
   is byte-identical to what the sidecar wrote for the same input.
-- Every current consumer of the root report still reads it, or is updated in the same change.
+- Every current consumer of the bare `report.json` is updated in the same change; a grep for the literal
+  name comes back empty afterwards.
+- Under `--keepWork`, `sa` then `opensa` leaves BOTH `.work-sa` and `.work-opensa` intact — the failure this
+  fixes, and the one that is invisible until you go looking for a folder that is no longer there.
