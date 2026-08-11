@@ -42,6 +42,19 @@ stories: `tools/lod-trees-generator/docs/plans/005-sa-asset-format.md`,
   byte reads triangles out of UV float data (garbage that masquerades as a lock). Handled in the parsers;
   keep honouring the flags in new code.
 - **COL v1 unsupported** (none shipped in SA); don't emit it.
+- **`water.dat` stores a quad's corners in GRID order, not around its perimeter** — bottom-left,
+  bottom-right, top-left, top-right (the vanilla file's first line is (−1584,−1826), (−1360,−1826),
+  (−1584,−1642), (−1360,−1642)). Walking them as a loop traces a self-intersecting bowtie, so any
+  perimeter-based point-in-polygon test hits NOTHING and does it silently: 311 polygons loaded and a
+  height lookup answered `null` over the entire map (plan 025, 2026-08-11). Triangulate the way
+  `flatWaterMesh` does — `0,1,2` + `2,1,3` — and the lookup cannot disagree with what the game draws.
+  The sea also extends past the authored polygons: `oceanFrame` fills out to the horizon around their
+  bounding box, so a query that omits it reads open water as dry land. Interior gaps stay dry ON PURPOSE —
+  that is how the file keeps tunnels under land from flooding.
+- **A face's UV triangle can be degenerate while its position triangle is healthy** — stock SA ships them in
+  quantity (30 faces on `road_lawn34`, 16 of 39 on `sbseabed3_las20`), and one texel row is then smeared
+  across the whole face. Nothing in the geometry says it is wrong; see
+  [`restrictions/assets-and-data.md`](../restrictions/assets-and-data.md) for what may be done about it.
 - **`surfinfo.dat`'s `W_SPRAY` is set on `default` and every `tarmac*` row** — it means "throw water spray
   when the road is WET" (`CWeather` wetness gates the read in the original), NOT "this surface sprays".
   Read unconditionally it turns every road into a sprinkler (plan 089/05 field round 1). This game tracks

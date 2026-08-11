@@ -281,3 +281,38 @@ THROWS, naming each model, its id, its placement count and the declaring IDE. Pl
 IPLs and from binary streams inside the archives. It errs downward: only `objs`/`tobj`/`anim` are read, so a
 clean result means "none in those sections". Detail and the measurements:
 [`tools/mod-installer/docs/plans/010-remove-original-is-a-replacement.md`](../../tools/mod-installer/docs/plans/010-remove-original-is-a-replacement.md).
+
+## A curated list may GATE a derived rule; it may never CARRY the correction
+
+Plan 025 needed to repair authored UVs on 127 models, and the obvious shape — "a list of models with the fix
+for each" — is the one rule this repo has held longest against: **every slot in this game is a mod target.**
+Store "model X, face 72 → uv (a, b)" and the day a mod ships a different `road_lawn34` with different
+topology, face 72 is a different face and we write a stranger's UV into it. The build succeeds, the model
+draws, the mess is somewhere else. Nothing catches it.
+
+The shape that is allowed: the list says only **where the rule may run**, and the correction is derived from
+what the asset itself carries at build time. A mod replacing a listed model is then judged on its own
+geometry and, at worst, nothing happens. `data/uv-stretch-models.json` and `data/crease-overrides.json` are
+both this — the second stores a THRESHOLD, not a normal.
+
+**A generated list must also say it is generated**, and how to regenerate it: `uv-stretch-models.json` is
+produced by `scripts/debug/scan-model-defects.ts`, and hand-editing it is how it silently stops matching the
+data it was derived from.
+
+**Caught:** no. Nothing distinguishes a gate list from a patch list at build time — this is a review rule.
+
+## Repairing authored data is allowed, and it still has to be demonstrated
+
+"That is what the original does" is the beginning of an argument (`docs/project-goals.md`), so a 2004
+authoring slip may be corrected — plan 025 does it for UV mappings that draw a texel up to 284× longer than
+it is wide. Two constraints came out of building it, both measured:
+
+- **A repair may not move a UV a healthy face also uses.** Roads tile with their NEIGHBOURING MODELS, and
+  that joint is correct in stock data; a correction therefore goes onto a SPLIT copy of the vertex. Moving
+  the shared value re-tiles the street.
+- **A repair that cannot verify itself must refuse.** Deriving a corner across a UV SEAM produced 1324×
+  anisotropy where the defect had been 10× — worse than what it replaced. The pass now accepts a correction
+  only if the face demonstrably lands under the limit, and counts what it refused.
+
+**Caught:** partly. The pass's own `wouldFix` check catches a correction that fails to help; nothing catches
+a correction that helps the metric and looks wrong, which is why the field labels are the gate.
