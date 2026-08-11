@@ -179,7 +179,52 @@ longer than wide a texel is drawn on that face.
 "absent before map-optimizer" — and that premise is now the thing under test, not a given. A plan's premise
 about what is BROKEN is as untrusted as its premise about code.
 
-### The arm that settles the timing, offline
+### TIMING SETTLED 2026-08-11 — the stage is exonerated
+
+User ran `sa-map-viewer.html` against the pre-optimizer original: **the defects are there too.** So this is
+original-game data, and map-optimizer neither causes nor worsens it. H-B1 (created normals) is not needed to
+explain the smear and drops off this plan's critical path.
+
+One thing survives from the report and is now a SEPARATE finding: *"in SA we see them too, but not as harshly
+as in OpenSA."* Same data, worse on our side. That is where H-C legitimately lives — it does not CAUSE the
+defect, it AMPLIFIES it, and `maxAnisotropy` is exactly the term that decides how badly a stretched texel
+smears. It is a small independent engine win, not this plan's subject.
+
+### Can it be REPAIRED here? — measured feasibility, 2026-08-11
+
+**The obvious mechanism failed its own test.** Plan A was: fit the affine world→UV map the good faces agree
+on, re-derive the broken faces from it, and the texture keeps tiling with the neighbouring MODELS for free.
+Measured residual of that fit **on the good faces themselves**: p50 **1.84** uv units on `road_lawn34`, 1.36
+on `road_lawn08`, 2.60 on `sbseabed3_las20`. A uv unit is one whole tile, so the good faces do not share one
+world→UV map at all — the authored UVs restart per strip rather than running continuously. There is nothing
+global to re-derive from, and any repair that assumed there was would have moved the texture by whole tiles.
+
+**A LOCAL repair is viable, and here is the share it can reach.** Extend a GOOD neighbour's mapping across the
+shared edge instead of fitting a global one. Broken = anisotropy > 8 for this probe:
+
+| model | broken faces | have a good neighbour | good-face texel density (world u per uv u): min … median … max |
+|---|---|---|---|
+| `road_lawn34` | 80 / 203 | 50 (**63 %**) | 0.33 … 5.15 … 7.45 |
+| `road_lawn08` | 33 / 130 | 32 (**97 %**) | 4.95 … 6.62 … 9.95 |
+| `road_lawn32` | 60 / 200 | 48 (**80 %**) | 3.63 … 5.83 … 8.15 |
+| `sbseabed3_las20` | 16 / 39 | 8 (**50 %**) | 20.49 … 28.49 … 36.98 |
+
+- **Reachable in one local pass: 50–97 % of broken faces.** The rest sit in the interior of a broken band with
+  no healthy edge to inherit from — they need the repair to propagate outward in rounds, or they stay broken
+  and get REPORTED. A pass that silently leaves half the seabed unfixed while claiming the model is repaired
+  is the failure mode to design against.
+- **There IS a per-model scale to match**: good-face texel density holds inside ~2× within a model (and
+  differs 5× BETWEEN models — the seabed is a far coarser mapping than a road). So the repair matches its own
+  model's median density, never a constant.
+- **The shared-edge UVs may not move**, because that is what makes the texture join the neighbouring models —
+  the user verified that joint is correct today. So a correction goes onto a SPLIT copy of the vertex, which
+  is machinery this tool already has (the count-changing re-encoder, plan 004; `smooth-normals` splits daily).
+
+**Risk to price before building it**: some degenerate UVs may be deliberate — a face collapsed onto a single
+texel row to read as a flat colour strip. Repairing one of those changes the look for the worse. The scan has
+to sample what the TEXTURE actually holds under the collapsed faces before the pass is allowed to touch them.
+
+### The arm that settled the timing, offline
 
 `sa-map-viewer` reads SA-native trees — `game-src/<game>` (untouched vanilla) AND `build/<game>/sa` (after the
 stage). The compare server already pairs them:
