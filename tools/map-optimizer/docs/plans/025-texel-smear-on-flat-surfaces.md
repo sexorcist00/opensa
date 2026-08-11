@@ -182,7 +182,13 @@ about what is BROKEN is as untrusted as its premise about code.
 ### TIMING SETTLED 2026-08-11 — the stage is exonerated
 
 User ran `sa-map-viewer.html` against the pre-optimizer original: **the defects are there too.** So this is
-original-game data, and map-optimizer neither causes nor worsens it. H-B1 (created normals) is not needed to
+original-game data, and map-optimizer neither causes nor worsens it. Confirmed per model, `sbseabed3_las20`
+included — its lower band "slips" in the untouched original exactly as it does in the build.
+
+**`sbseabed3_las20` is therefore the acceptance test for any repair, not the roads.** It is the model where
+the local pass reaches the fewest broken faces (50 %) while the broken ones are the largest share of surface
+(23.6 %, at 443–678 u² each). A design that fixes 97 % of `road_lawn08` and half of the seabed will read in
+the field as "still broken", because the unfixed half is the part anyone looks at. H-B1 (created normals) is not needed to
 explain the smear and drops off this plan's critical path.
 
 One thing survives from the report and is now a SEPARATE finding: *"in SA we see them too, but not as harshly
