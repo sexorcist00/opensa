@@ -22,8 +22,10 @@ import { buildProcobjLods } from '@opensa/sa-procobj-placement/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { type BuildTarget } from '@opensa/tool-kit/target';
 import { install as installVehicles } from '@opensa/vehicle-installer/install';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import type { BuilderConfig } from './config';
 
@@ -72,6 +74,16 @@ export const EXCLUDABLE_STAGES = STAGE_NAMES.filter((name): name is ExcludableSt
  * It is announced rather than left silent because an unguarded build and a well-behaved one look exactly
  * alike from the outside — the same reason the shared-stage guard survived a fortnight.
  */
+/**
+ * Where the cross-compiled `perfect-map.asi` is picked up from. `dist/` is GITIGNORED, so a fresh checkout has
+ * no artifact and {@link shipPerfectMapAsi} warns — which is the honest state, not a failure: the asi is built
+ * by `npm run build:asi` in `asi/perfect-map` and that needs MinGW, which a map build should not.
+ */
+export const PERFECT_MAP_ASI = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../asi/perfect-map/dist/perfect-map.asi',
+);
+
 export const OPENSA_BUDGET_NOTICE =
   "opensa: SA's row/slot ceilings do not apply here — and no streaming budget guard exists yet " +
   '(07/04 decision 5: the number must be measured in our engine, never inherited from SA). ' +
@@ -199,6 +211,8 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
 
   const produced: { dir: string; name: string }[] = [];
   const timings: StageTiming[] = [];
+  /** The asi shipped beside this map, for the manifest — a map at this density is correct only with it. */
+  let shippedAsi: null | { sha256: string } = null;
   // Timed per stage and logged AS EACH ONE ENDS, not only in the summary: a long build that is killed part
   // way still leaves its numbers in the log. Nothing recorded a build's duration before 2026-08-09, so the
   // first question asked of the procobj density change ("what did it cost in build time?") had no baseline.
@@ -281,6 +295,8 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     const census = reportTextIplCensus(sa);
     checkInstBearingIplSlots(census.instBearingIpls);
     reportInstallRequirements(census, checkImgIdBudgets(sa));
+    // Ship the fix beside the map that needs it — stating a requirement and not satisfying it is half a job.
+    shippedAsi = shipPerfectMapAsi(sa, PERFECT_MAP_ASI);
     produced.push({ dir: sa, name: 'sa' });
   }
   if (runsStage('opensa', until, excluded)) {
@@ -312,7 +328,12 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   if (!keepWork) {
     rmSync(work, { force: true, recursive: true });
   }
-  writeStageTimings(outPath, timings, { procobjDensity: config.procobjDensity, procobjMax: config.procobjMax, target });
+  writeStageTimings(outPath, timings, {
+    ...(shippedAsi ? { perfectMapAsiSha256: shippedAsi.sha256 } : {}),
+    procobjDensity: config.procobjDensity,
+    procobjMax: config.procobjMax,
+    target,
+  });
 
   return { produced, stoppedEarly: until !== undefined };
 }
@@ -761,6 +782,42 @@ export function reportTextIplCensus(gameDir: string): { instBearingIpls: number;
   return { instBearingIpls: used.length, largestIpl, rows: totalRows };
 }
 
+/**
+ * The asi this build's map REQUIRES, shipped beside it — plan 006 task 1, and the whole of what that plan
+ * still is. The build already emits maps a plain install cannot run (110 055 permanent rows against a stock
+ * 32 767), and until now nothing put the fix in the tree: the requirement was stated and then left to be
+ * satisfied by hand.
+ *
+ * **A pre-built artifact, not a build step.** `perfect-map.asi` is cross-compiled macOS→Win32 with MinGW
+ * (`npm run build:asi` in `asi/perfect-map`), and a map build has no business requiring a cross-compiler. So
+ * this copies what is there and **warns loudly when it is not** — `dist/` is gitignored, so absent is the
+ * common case on a fresh checkout and it must never be quiet: a `sa/` tree without it is a map that corrupts
+ * exactly as it did before the fix (decision 5, fallback honesty).
+ *
+ * **Into the game ROOT**, which is where the reference install's 23 plugins live
+ * (`gta-sa-original/reference-install-config.md`) — not `scripts/`, though the loader accepts both.
+ *
+ * Returns the pairing for the build manifest: a map built at this density is only correct with THIS asi, and
+ * a sha256 is what makes a mismatch detectable rather than a mystery crash (decision 4).
+ */
+export function shipPerfectMapAsi(saDir: string, asiPath: string): null | { sha256: string } {
+  if (!existsSync(asiPath)) {
+    console.warn(
+      `  ! perfect-map.asi NOT SHIPPED — no artifact at ${asiPath}. This build's map needs it (see the ` +
+        'install requirements above); build it with `npm run build:asi` in asi/perfect-map, or install it by ' +
+        'hand. Without it the game corrupts exactly as it did before the fix.',
+    );
+
+    return null;
+  }
+  const bytes = readFileSync(asiPath);
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  writeFileSync(join(saDir, 'perfect-map.asi'), bytes);
+  log(`sa asi: perfect-map.asi shipped into the game root (sha256 ${sha256.slice(0, 12)}…, ${bytes.length} B)`);
+
+  return { sha256 };
+}
+
 /** SA's `IplEntityIndexArrays` — one slot per text IPL that carries `inst` rows, written past without a bounds
  *  check. **Real on the target**, twice-measured 2026-08-10 (see {@link checkInstBearingIplSlots}). */
 export const INST_BEARING_IPL_SLOTS = 40;
@@ -797,14 +854,22 @@ export function checkInstBearingIplSlots(instBearingIpls: number): void {
 /**
  * The run's wall clock per stage → `<out>/build-timings.json`, plus a summary table in the log.
  *
- * **Self-describing** (the A/B rule): the file states the target and the procobj knobs it was produced with,
- * because a duration is only comparable against another run whose configuration is known. Comparing two
- * builds is otherwise a guess about what each one was told to do.
+ * **Self-describing** (the A/B rule): the file states the target, the procobj knobs and the asi it was
+ * produced with, because a duration is only comparable against another run whose configuration is known.
+ * Comparing two builds is otherwise a guess about what each one was told to do — and the asi hash is what
+ * turns "this map crashes" into "this map is paired with a different asi".
  */
 export function writeStageTimings(
   outPath: string,
   timings: readonly StageTiming[],
-  config: { procobjDensity: ProcObjDensityInput; procobjMax?: number; target: BuildTarget },
+  config: {
+    /** sha256 of the `perfect-map.asi` shipped into `sa/` — the map↔asi pairing (006 decision 4). Absent when
+     *  no artifact was available, which the run also warns about. */
+    perfectMapAsiSha256?: string;
+    procobjDensity: ProcObjDensityInput;
+    procobjMax?: number;
+    target: BuildTarget;
+  },
 ): void {
   if (timings.length === 0) {
     return;

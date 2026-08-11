@@ -1,4 +1,5 @@
 import { buildVer2Buffer } from '@opensa/renderware/archive/img-archive';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,6 +18,7 @@ import {
   reportTextIplCensus,
   resolveBuildTarget,
   runsStage,
+  shipPerfectMapAsi,
   type StageTiming,
   writeStageTimings,
 } from './pipeline';
@@ -567,6 +569,60 @@ describe('installRequirements', () => {
       const perFile = installRequirements({ largestIpl: 9110, rows: 1000 }, {});
       expect(perFile).toHaveLength(1);
       expect(perFile[0].lift).toMatch(/EntitiesPerIpl/);
+    });
+  });
+});
+
+describe('shipPerfectMapAsi', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'pmb-asi-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it('WARNS loudly when there is no artifact, and does not fail the build', () => {
+      // `dist/` is gitignored, so absent is the common case on a fresh checkout — and it must never be quiet:
+      // the map this build emits corrupts a plain install exactly as it did before the fix.
+      const warns: string[] = [];
+      const spy = vi.spyOn(console, 'warn').mockImplementation((m: unknown) => void warns.push(String(m)));
+      const shipped = shipPerfectMapAsi(dir, join(dir, 'nope', 'perfect-map.asi'));
+      spy.mockRestore();
+
+      expect(shipped).toBeNull();
+      expect(existsSync(join(dir, 'perfect-map.asi'))).toBe(false);
+      expect(warns.join('\n')).toMatch(/NOT SHIPPED/);
+      expect(warns.join('\n')).toMatch(/build:asi/); // says how to fix it, not just that it is broken
+    });
+  });
+
+  describe('positive cases', () => {
+    it('copies the artifact into the game ROOT and returns its sha256', () => {
+      const source = join(dir, 'perfect-map.asi.src');
+      writeFileSync(source, 'MZ-not-really-a-dll');
+      const game = join(dir, 'sa');
+      mkdirSync(game, { recursive: true });
+
+      const shipped = shipPerfectMapAsi(game, source);
+
+      // Root rather than scripts/: that is where the reference install's 23 plugins sit.
+      expect(readFileSync(join(game, 'perfect-map.asi'), 'utf8')).toBe('MZ-not-really-a-dll');
+      expect(shipped?.sha256).toBe(createHash('sha256').update('MZ-not-really-a-dll').digest('hex'));
+    });
+
+    it('pairs a map with the EXACT asi — two artifacts give two hashes', () => {
+      const game = join(dir, 'sa');
+      mkdirSync(game, { recursive: true });
+      const a = join(dir, 'a.asi');
+      const b = join(dir, 'b.asi');
+      writeFileSync(a, 'one');
+      writeFileSync(b, 'two');
+
+      expect(shipPerfectMapAsi(game, a)?.sha256).not.toBe(shipPerfectMapAsi(game, b)?.sha256);
     });
   });
 });

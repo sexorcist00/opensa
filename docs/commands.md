@@ -62,6 +62,12 @@ true only because `cullByMinDistance` was deleting 99 % of the candidates with a
 distance. Since [009](../tools/sa-procobj-placement/docs/plans/009-procobj-dat-columns-as-the-game-reads-them.md)
 density 1 IS the authored density (91 092 objects) and `procObjMax` defaults to 100 000 so it does not bind.
 
+An `sa` build also **ships `perfect-map.asi` into the built game root** (sha256 recorded in
+`build-timings.json`, so a map is paired with the exact asi that lifts its ceilings). The artifact comes from
+`asi/perfect-map/dist/` — build it with `npm run build:asi` in that workspace, which needs MinGW; `dist/` is
+gitignored, so a fresh checkout has none and the build **warns loudly** instead of quietly emitting a tree
+that corrupts a plain install.
+
 On the built `sa/` tree the build also prints its **install requirements** — every stock ceiling the artifact
 crosses and the setting that lifts it (int16 rows → `perfect-map.asi`, which no adjuster provides; the
 `CBuilding` pool → OLA `Buildings`; rows in one IPL → OLA `EntitiesPerIpl`; the three FLA id pools). A LINE,

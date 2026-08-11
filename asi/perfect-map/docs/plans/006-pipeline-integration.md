@@ -1,5 +1,20 @@
 # 006 — Pipeline integration & budget lift
 
+> **CLOSED 2026-08-11 except its Wine end-to-end.** The one surviving task — pmb SHIPS the asi into `sa/` —
+> is done: `shipPerfectMapAsi` copies `asi/perfect-map/dist/perfect-map.asi` into the built game ROOT (where
+> the reference install's 23 plugins live), records its **sha256 in `build-timings.json`** so a map is paired
+> with the exact asi that lifts its ceilings, and **warns loudly when no artifact exists** rather than leaving
+> a tree that corrupts a plain install. It runs right after `reportInstallRequirements`, which is the point:
+> that report states what the map needs, and this satisfies it — **stating a requirement and not meeting it
+> was half a job.**
+>
+> **A pre-built artifact, not a build step** — the plan's own "decide by build-time cost" question, answered:
+> the asi is cross-compiled with MinGW (`npm run build:asi`), and a map build has no business requiring a
+> cross-compiler. `dist/` is gitignored, so **absent is the normal state of a fresh checkout** and the warning
+> names the command that fixes it.
+>
+> What is NOT done, and it needs his machine: the **Wine end-to-end**. Everything else is struck below.
+
 Part of the [perfect-map ASI chain](readme.md). Depends on [004](004-limit-patches.md) (a working ASI) + [005](005-build-debug-test.md) (it's trustworthy). Closes the loop: **ship the ASI with our builds and relax the work-around budgets that only existed because of the bug**.
 
 > **Read this before decision 2 (2026-08-08).** Two of its premises moved. **Stock SA is not a target of this
@@ -29,12 +44,30 @@ Part of the [perfect-map ASI chain](readme.md). Depends on [004](004-limit-patch
 
 ## Tasks
 
-- [ ] pmb `sa` target: emit `perfect-map.asi` (built by `tools/opensa-asi`) into the correct ASI-loader location; wire the native build into the pmb flow (or consume a pre-built artifact from CI — decide by build-time cost).
-- [ ] `checkTextIplSlotBudget`: add stock vs opensa-asi target modes; new ceilings from 004's measured max; tests for both modes (mirrors the `checkImgIdBudgets` test style).
-- [ ] Build manifest: record shipped `.asi` sha256 + the effective limits it grants; installer-side presence/version check with a loud warning on mismatch/absence.
-- [ ] Generator budget knobs (lod-trees per-area 4000, lod-procobj, slot folding): expose their ceilings so the opensa-asi target can raise them; keep stock defaults for the stock target.
-- [ ] End-to-end: build an intentionally >30k-row full map for the opensa-asi target, install with the asi, boot in Wine → clean (the 004 ladder, now driven by the REAL pipeline, not a hand build).
-- [ ] Docs: update ghost-barriers.md status (🟡 → ✅ ROOT-FIXED, our own asi), the mod-installer memory (the "standing goal — own engine patch" line resolves), pmb readme (the two targets + the asi dependency).
+- [x] **pmb `sa` target: emit `perfect-map.asi` into the correct ASI-loader location — DONE 2026-08-11.**
+      `shipPerfectMapAsi` in `tools/perfect-map-builder/src/pipeline.ts`, into the game ROOT. **Pre-built
+      artifact, not wired native build** — that was the plan's own open question and the cost decides it.
+- [~] ~~`checkTextIplSlotBudget`: stock vs opensa-asi target modes~~ **STRUCK — the subject is gone** (see the
+      2026-08-09 banner): the guard became `reportTextIplCensus` and the throw was deleted. What replaced the
+      idea is `reportInstallRequirements` (plan 013 decision 8, shipped 2026-08-11): rather than two guard
+      MODES, the build states every stock ceiling it crosses and the setting that lifts each.
+- [x] **Build manifest: record the shipped `.asi` sha256 — DONE 2026-08-11.** `build-timings.json` carries
+      `config.perfectMapAsiSha256`, so a map at this density is pinned to the asi that makes it correct and a
+      mismatch is detectable rather than a mystery crash (decision 4). The **presence** half is satisfied by
+      construction now — the asi rides in the tree, so copying the tree copies the fix — and the ABSENCE half
+      is the loud warning. *Still open: nothing compares an INSTALLED asi against the manifest hash; that
+      wants the install step this repo does not own (he copies the tree into a CrossOver bottle by hand).*
+- [~] ~~Generator budget knobs, per target~~ **STRUCK 2026-08-11**, same day and same reason as its twin in
+      [013](../../../../tools/sa-procobj-placement/docs/plans/013-density-budgets-per-target.md): stock is not
+      a target of this project, so a "stock defaults" mode is a switch with one live position. The caps that
+      remain are guards over ceilings that are REAL on the target, and those are not per-target either.
+- [ ] **End-to-end in Wine — the one task left, and it needs his machine.** The ">30k-row map" half is
+      already true by default: the shipped build is **110 055** permanent rows. What has never been run is a
+      boot from a tree whose asi PMB put there, rather than one he installed by hand. Note the build he played
+      on 2026-08-10 predates this, so it proves the asi works — not that we ship it correctly.
+- [x] **Docs — DONE.** `ghost-barriers.md` already reads ✅ ROOT-FIXED BY OUR OWN ASI (it was updated when 004
+      landed); `docs/commands.md` now describes what an `sa` build emits beside the map, and
+      `docs/gta-sa-original/reference-install.md` is where the install's own copy is recorded.
 
 ## Verification
 
@@ -43,6 +76,12 @@ Part of the [perfect-map ASI chain](readme.md). Depends on [004](004-limit-patch
 
 ## Measurements / notes
 
-- new effective row/slot ceilings shipped: …
-- a real over-old-budget build's counts (rows/slots) + boot result: …
-- docs/memory updated: …
+- **New effective row/slot ceilings shipped: none, and that is the answer.** The plan expected to RAISE guard
+  numbers; instead the guards over lifted ceilings were deleted (2026-08-09) and replaced by a report. The
+  ceilings that remain — the 40 inst-bearing IPL slots, FLA's pools — are real on the target and are guarded,
+  not lifted.
+- **A real over-old-budget build's counts**: 110 055 permanent text-IPL rows, 39 of 40 inst-bearing IPLs,
+  largest single IPL 9 110 rows — every one of them past a stock ceiling, which is why the requirements report
+  and this asi ship together. Boot result: the 2026-08-10 field run played, with a hand-installed asi.
+- **Artifact**: `asi/perfect-map/dist/perfect-map.asi`, 20 480 B, sha256 recorded per build in
+  `build-timings.json`. `dist/` is gitignored — the artifact is built, never committed.
