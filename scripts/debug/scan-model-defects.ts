@@ -57,7 +57,7 @@ import { loadWaterField, type WaterField } from '../lib/water';
  *     ranking outright. `road03sfn` does not — see plan 025 for what is still wrong.
  *
  * Run: npx tsx scripts/debug/scan-model-defects.ts [--game original] [--top 10] [--dz 0.5] [--aniso 8]
- *      [--discont 4] [--up 0.5] [--water-depth 0] [--reach 2] [--json <out.json>]
+ *      [--discont 4] [--up 0.5] [--water-depth 0] [--reach 5] [--json <out.json>]
  * Output per hit: metrics, source mod, instance count + a position — paste into
  *   `npx tsx scripts/debug/teleport-spot.ts <model>` for a field spot.
  */
@@ -646,7 +646,7 @@ function parseArgs(): {
   let discont = 4;
   let up = 0.5;
   let waterDepth = 0;
-  let reach = 2;
+  let reach = 5;
   let json: string | undefined;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--game') game = argv[++i];

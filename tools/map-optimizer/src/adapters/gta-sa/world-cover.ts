@@ -12,9 +12,14 @@ import type { Placement, Vec3 } from './boundary';
  *
  * **What this is and is not.** A placement is reduced to its world AABB, and a point counts as covered when
  * another model's box encloses the space just above it. That is deliberately crude, and the `reach` is what
- * keeps it honest: a building RESTING on a skirt sits within a metre or two of it, while a bridge deck ten
- * metres up leaves the road under it plainly visible. A box is also the outer hull, so a hollow archway reads
- * as solid — this OVER-covers, and every threshold below is therefore set to err the other way.
+ * keeps it honest. A box is also the outer hull, so a hollow archway reads as solid — this OVER-covers, and
+ * every threshold below is therefore set to err the other way.
+ *
+ * **`reach` is measured, not guessed** (2026-08-11). Dumping the 30 faces `road03sfn` still carried at
+ * `reach = 2` showed every one of them covered at 5–10 units, not 2: the deck resting over that skirt clears
+ * it by more than a metre. At 5 the ranking stops contradicting the field labels (no CLEAN model outranks a
+ * BROKEN one); at 10 `road03sfn` leaves the ranking outright, at the cost of hiding more. 5 is the default
+ * because the smaller value that satisfies the labels is the one that hides least — the standing bias here.
  */
 export interface CoverQuery {
   /** How many boxes the query holds — 0 means it answers `false` everywhere. */

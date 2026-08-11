@@ -438,7 +438,43 @@ A world-context pass, not a metric tweak. map-optimizer already has the machiner
 model's neighbours are at shared borders. The criterion becomes: a stretched face is a DEFECT only if it is
 exposed in the assembled world — nothing resting on it, nothing covering it.
 
-Cost and risk to price before starting: that is an occlusion query per candidate face over the placed world,
+### BUILT 2026-08-11 on branch `025-world-visibility`
+
+Both halves, judged in WORLD space through each instance's own position AND rotation quaternion:
+
+- **Water** — `scripts/lib/water.ts` over the built tree's `data/water.dat`; a face whose EVERY corner sits
+  `--water-depth` under the sea is dropped. `sbseabed3_las20` leaves the ranking on it.
+  Two traps it cost: **`water.dat` stores a quad's corners in GRID order, not around its perimeter**, so a
+  perimeter point-in-polygon test traces a bowtie and hits nothing — 311 polygons loaded and `heightAt`
+  answered null over the whole map, silently. The triangulation is the engine's own now (`flatWaterMesh`:
+  `0,1,2` + `2,1,3`), and the same OCEAN FRAME is added, or a face past the authored bbox reads as dry while
+  the game draws sea over it.
+- **Cover** — `adapters/gta-sa/world-cover.ts`, beside the world pre-pass as the user directed; every
+  placement reduced to its world AABB, and a face whose centroid another model rests over is dropped.
+
+`--reach` was then MEASURED rather than guessed. Dumping the 30 faces `road03sfn` still carried at `reach 2`
+showed every one of them covered at **5–10 units**, not 2 — the deck over that skirt clears it by more than a
+metre. Default set to **5**: the smallest value that satisfies the labels, because hiding something visible is
+the expensive mistake.
+
+| | before the gates | reach 2 | **reach 5** | reach 10 |
+|---|---|---|---|---|
+| models ≥ 1 % of surface | 954 | 163 | **151** | 137 |
+| models ≥ 10 % | 141 | 16 | **12** | 12 |
+| any flagged face | 2 544 | 735 | **667** | 627 |
+| `road03sfn` (CLEAN) | 16.1 % | 10.1 % | **1.5 %** | gone |
+| `road_lawn34` (BROKEN) | 3.7 % | 3.0 % | **2.0 %** | 2.0 % |
+
+**The inverted pair is resolved**: at reach 5 no CLEAN model outranks a BROKEN one, and `backalleys1_sfe`,
+`garse_85_sfe`, `sbseabed3_las20` are out of the ranking entirely. The population is a sixth of what it was
+and is now a set a person can label through.
+
+**The cost, stated rather than buried**: `road_lawn08`, labelled BROKEN, drops out at every reach — its whole
+case rested on ONE flagged face and the cover gate took it. A false negative the gates bought, and the reason
+the next labels should come from the low end rather than the top.
+
+Cost and risk still to price for the eventual PASS (this is the scanner, not the pass): the occlusion query is
+per candidate face over the placed world,
 which is a different order of work from the scans above, and its own failure modes (an interior, a model
 placed once vs 1 374 times, a face covered in one instance and open in another — `rdwarhus` is placed 13×).
 **Do not start it on the strength of six labels.** The cheap thing that must come first is more labels on the
