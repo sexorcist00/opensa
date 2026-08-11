@@ -16,5 +16,6 @@ When one gets picked up, promote it to a `docs/plans/*` plan.
 
 | Improvement                                        | Doc                                                      | Status                 |
 | -------------------------------------------------- | -------------------------------------------------------- | ---------------------- |
+| **Original-game defects and quirks we intend to fix** — the collecting place | [original-game-defects.md](original-game-defects.md) | open list, nothing scheduled. **A video must be watched with the user before any work starts from it.** Seeded from SilentPatch's SA changelog, read as a defect INVENTORY rather than a fix list — note that our reference `sa` install already runs SilentPatch, so the gap it really tracks is our own engine |
 | Procedural stochastic texturing (de-tiling)        | [stochastic-texturing.md](stochastic-texturing.md)       | parked — not doing yet |
 | Character material maps (normal / emissive / spec) | [character-material-maps.md](character-material-maps.md) | parked — not doing yet |

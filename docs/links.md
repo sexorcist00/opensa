@@ -34,12 +34,25 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
 - <https://www.gtainside.com/en/sanandreas/skins/144069-endoskeleton-terminator-t800/> — the T800 ped mod
   used as the material-maps test case (`docs/improvements/character-material-maps.md`).
 
-## Reference the user wants watched before work starts
+## References the user wants watched before work starts
 
 - <https://www.youtube.com/watch?v=1dwufRp71EY> — **must be shown to the user before ANY work on the City
   Life chain begins** (his call, 2026-08-11; he will say afterwards what it changes). The gate itself lives
   at the top of
   [`docs/roadmap/0.5.0/plans/06-city-life/readme.md`](roadmap/0.5.0/plans/06-city-life/readme.md).
+- <https://www.youtube.com/watch?v=R24KBNuOiR4> — **must be shown to the user before any work starts from the
+  original-game defect list** (his call, 2026-08-11). Gate at the top of
+  [`docs/improvements/original-game-defects.md`](improvements/original-game-defects.md).
+
+## The original game's own bugs
+
+- <https://github.com/CookiePLMonster/SilentPatch> — the community's bug-fix patch for the 3D-era games; its
+  SA changelog
+  (<https://github.com/CookiePLMonster/SilentPatch/blob/dev/CHANGELOG-SA.md>) is the closest thing to a
+  catalogue of what is broken in stock San Andreas. **Read it as a defect inventory, not a fix list** — and
+  note our reference install already runs it, so its fixes are present on the `sa` target and absent in our
+  own engine. Used as a seed for
+  [`docs/improvements/original-game-defects.md`](improvements/original-game-defects.md).
 
 ## Articles & techniques
 
