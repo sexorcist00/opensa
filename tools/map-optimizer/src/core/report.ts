@@ -28,6 +28,8 @@ export interface RunReport {
   failures: AssetFailure[];
   game: string;
   outDir: string;
+  /** What the UV-stretch repair touched (plan 025) — present only when the pass ran. */
+  uvStretch?: UvStretchReport;
 }
 
 /** Aggregate run totals (pure — no I/O). */
@@ -39,6 +41,18 @@ export interface RunSummary {
   models: number;
   trianglesRemoved: number;
   verticesRemoved: number;
+}
+
+/** The before/after ledger for the UV-stretch repair: what it was allowed to touch, and what it changed. */
+export interface UvStretchReport {
+  /** Every model the gate list offered it. */
+  candidates: string[];
+  /** Faces left as authored because no healthy neighbour agreed on a shared edge. */
+  refusedFaces: number;
+  repairedFaces: number;
+  /** The models whose geometry actually CHANGED — the list a before/after comparison runs on. */
+  repairedModels: string[];
+  splitVertices: number;
 }
 
 /** Print a human-readable run summary (mirrors the old fetch-build console output). */
