@@ -1,6 +1,7 @@
 # 021 — Angle-weighted normal accumulation
 
-**Status: BUILT 2026-07-15 (core + tests; field A/B owed together with 020's).** Implements the weighting
+**Status: DONE — built 2026-07-15, closed 2026-08-11 with [020](020-preserve-authored-normals.md) on the same
+field verdict** (no problems seen; no A/B run). Implements the weighting
 half of option 2 of the 0.4.0 normals-smoothing idea (graduated here, idea doc deleted) (plans 020–023 are the normals batch).
 
 Landed: `accumulateGroupNormals` weight = `area × cornerAngle` (`cornerAngle` from the two edges leaving the
@@ -43,5 +44,7 @@ same change, with before/after screenshots in this doc.
       expectation, not a snapshot).
 - [x] Re-baseline affected fixtures — none needed: no existing fixture pins exact rebuilt normals
       (map-optimizer + lod suites green unchanged).
-- [ ] Field A/B on a road junction; record numbers/screens here (rides the same rebuild+reconvert+bench
-      round as 020).
+- [x] **Field A/B on a road junction — CLOSED 2026-08-11 with [020](020-preserve-authored-normals.md)'s, on
+      the same verdict and with the same caveat.** The user reports no problems and has not seen any across
+      the rebuilds since; no A/B was run, so this says "nothing visible went wrong" and not "the weighting
+      helped". The junction shot is still the right instrument if the question ever comes back.

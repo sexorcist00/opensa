@@ -80,18 +80,38 @@ story (no runtime SSAO exists).
 
 ## Tasks
 
-- [ ] Scaffold `tools/opensa-pack` (nx package; deps: renderware parsers + engine-formats) — after approval.
-- [ ] Cell resolve + gather (reuse grid/IPL logic; unit tests against a fixture district).
-- [ ] Mergeable predicate + group weld + per-vertex layer assignment (tests: group counts, winding/side
-      preservation, transform baking correctness vs a rendered reference).
-- [ ] α classification + override config + histogram tests on real textures (the issue names the cases).
-- [ ] Dilation port (from issue groundwork) + premultiply + alpha-weighted mips + coverage preservation —
-      golden-image tests per mip level.
-- [ ] BC3 encoder decision spike (own vs wasm; quality + speed table in the ledger) → implement.
-- [ ] Pow2 resample for odd sizes (quality check on the known 62×62 cases).
-- [ ] Array bucketing + manifest + pak writer + `--report`.
-- [ ] Determinism test (double run ⇒ identical hashes) + budget-guard failure tests.
-- [ ] M0 run: one LS district; ledger filled; hand blobs to 04.
+**CLOSED 2026-08-11 — the list had been stale since the tool shipped.** Every box below was still unticked
+while `opensa-pack` was building a 1 167 MB / 1 124-cell pak on every run, so anyone scanning the repo for
+open work found ten phantom items at the top of it. Ticked against the code that satisfies each, not by
+assumption; the one that is only PARTLY satisfied says so rather than being ticked.
+
+- [x] Scaffold `tools/opensa-pack` (nx package; deps: renderware parsers + engine-formats).
+      `@opensa/opensa-pack`, ~50 source modules, 22 test files.
+- [x] Cell resolve + gather (reuse grid/IPL logic; unit tests against a fixture district).
+      `pack-map-objects.ts` + its test; the grid is the one every tool shares.
+- [x] Mergeable predicate + group weld + per-vertex layer assignment. `packages/cell-weld` is now its own
+      package; `model-osm.ts` / `model-ostex.ts` carry the layer assignment.
+- [x] α classification + override config + histogram tests on real textures. `model-ostex.ts`, and the class
+      is baked per texture for good — the rules and their consequences are
+      [`edge-cases/converter-pipeline.md`](../../../../docs/edge-cases/converter-pipeline.md); the defect it was
+      written to kill is closed ([`alpha-edge`](../../../../docs/open-issues/fixed/alpha-edge.md)).
+- [x] Dilation + premultiply + alpha-weighted mips + coverage preservation. In `packages/cell-weld/src/alpha.ts`
+      and `model-ostex.ts`; this is the pipeline `alpha-edge` was fixed BY CONSTRUCTION with, field-confirmed
+      2026-07-11.
+- [x] BC encoder — decided and implemented. `packages/renderware/src/textures/dxt.ts`; BC1 is what took
+      `comet.osm` 136.6 → 20.3 MB in the vehicle-array work.
+- [x] Pow2 resample for odd sizes. `resampleToPow2` (`packages/cell-weld/src/alpha.ts`), with the 62×62 case
+      named in its own test — "the WebGPU BC alignment killer".
+- [x] Array bucketing + manifest + pak writer + `--report`. `cli.ts` writes `world.ospak`, `manifest.json`,
+      `water.bin` and `report.json` to `<out>/pak`; bucketing by size is the shipped
+      [texture-array policy](../../../../docs/performance/applied/vehicle-texture-array-buckets.md).
+- [~] Determinism + budget-guard failure tests — **PARTLY, and the gap is named rather than ticked.** Per-baker
+      determinism is tested (`ao.test.ts` "same input ⇒ identical values") and `no-data-loss.test.ts` guards the
+      conversion, but there is **no whole-run double-run hash test**, and the budget guards that exist live in
+      `perfect-map-builder`, not here. Whoever needs one should write it against a fixture district; nothing
+      currently depends on it.
+- [x] M0 run: one LS district; ledger filled. Long since superseded by whole-map runs — the current build is
+      **1 124 cells / 1 167 MB**, recorded per build in `report-opensa.json`.
 
 ## Measurement ledger
 

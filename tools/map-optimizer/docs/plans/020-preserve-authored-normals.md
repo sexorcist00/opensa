@@ -1,6 +1,7 @@
 # 020 — Preserve authored normals (sanity-gated, auto-detected)
 
-**Status: BUILT 2026-07-15 (gate + point-repair + counters + tests; field A/B owed).** Implements option 1 of
+**Status: DONE — built 2026-07-15, closed 2026-08-11 on the user's field verdict** (no shading problems across
+four weeks of rebuilds; the scripted A/B was never run, see the last task). Implements option 1 of
 the 0.4.0 normals-smoothing idea (graduated here, idea doc deleted) (plans 020–023 are the normals batch).
 
 ## Measured (vanilla `game-src/original`, 2026-07-15 probe — the phase-0 numbers)
@@ -72,8 +73,13 @@ The full-map numbers go into this doc after each phase (standing rule).
       (`normals — preserved / point-repaired / recomputed / created`).
 - [x] Tests: `validate-normals.test.ts` (7) + plugin gate cases (5) — 196 green across
       map-optimizer/tool-kit/opensa-lod-generator; tsc + eslint clean.
-- [ ] Verification in the field: rebuild the map + pak, A/B the 5 recomputed + a few preserved models on the
-      074 engine (noon N·L) — and re-run the in-game bench sweep (the 2026-07-15 ritual).
+- [x] **Verification in the field — CLOSED 2026-08-11 on the user's verdict: the normals are fine, and have
+      been through many rebuilds since.** No A/B session was ever run as scripted; what closed it is that the
+      gate has shipped in every build the field has judged for four weeks (the map has been rebuilt whole
+      several times, most recently 2026-08-11) and no shading complaint has ever come back. **That is a weaker
+      instrument than the planned A/B and it is recorded as such** — it can only say "nothing visible went
+      wrong", never "the repair helped". If a shading question ever arises, the A/B this box asked for is
+      still the right first move: the 5 recomputed models against a few preserved ones at noon N·L.
 
 ## Non-goals
 
