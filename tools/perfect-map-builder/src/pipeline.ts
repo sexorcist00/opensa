@@ -1,8 +1,9 @@
+import type { AssetFailure, RunSummary } from '@opensa/map-optimizer/run';
 import type { ProcObjDensityInput } from '@opensa/map-placement/procobj-density';
 
 import { parsePrelightInfo, type PrelightInfo } from '@opensa/lod-common/prelight';
 import { buildTreeLods } from '@opensa/lod-trees-generator/build';
-import { parseOnlyList, runOptimizer } from '@opensa/map-optimizer/run';
+import { parseOnlyList, runOptimizer, summarizeReport } from '@opensa/map-optimizer/run';
 import { SA_TREE_MODELS } from '@opensa/map-placement/vegetation';
 import { install as installMods } from '@opensa/mod-installer/install';
 import { buildOpensaLods } from '@opensa/opensa-lod-generator/build';
@@ -15,8 +16,10 @@ import { buildSaLods } from '@opensa/sa-lod-generator/build';
 /**
  * The perfect-map build pipeline (plan 001): chain every map tool via its Node API, each stage's output feeding the
  * next as a **complete** game dir (full passthrough), then split the common build into the `sa` (real game) and
- * `opensa` final LOD targets. Intermediate stages live under `<out>/.work` and are deleted as they're consumed —
- * unless `keepWork`/`until` is set, in which case every stage build is kept for step-by-step in-game debugging.
+ * `opensa` final LOD targets. Intermediate stages live under `<out>/.work-<target>` (plan 005 — one dir per
+ * target, so building one never destroys the other's kept stages) and are deleted as they're consumed — unless
+ * `keepWork`/`until` is set, in which case every stage build is kept for step-by-step in-game debugging.
+ * Each target that runs writes `<out>/report-<target>.json` at the end of its chain (plan 005).
  */
 import { buildProcobjLods } from '@opensa/sa-procobj-placement/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
@@ -102,15 +105,16 @@ export interface BuildPerfectMapOptions {
    * - `pack` alone — build `opensa/` and leave it in GAME format (same result as `--until opensa`).
    * - any common-chain stage (`mods`/`vehicles`/`peds`/`optimize`/`trees`/`procobj`) — dropped from the chain.
    *
-   * An excluded stage leaves whatever a previous run wrote in its place: the builder only clears `<out>/.work`,
-   * so an opensa-only run does not touch a `sa/` built earlier.
+   * An excluded stage leaves whatever a previous run wrote in its place: the builder only clears its own
+   * `<out>/.work-<target>` (plus the legacy shared `.work`), so an opensa-only run does not touch a `sa/`
+   * built earlier — nor the other target's kept `.work-<target>`.
    */
   exclude?: readonly ExcludableStage[];
   /** Clean base game dir (`gta.dat` + `data/` + `models/`). */
   gamePath: string;
   /** mods-src root — one subfolder per stage (`mods/`, `vehicles/`, `peds/`, `vegetation/`, `procobj/`). */
   inPath: string;
-  /** Keep all intermediate stage builds under `<out>/.work` (implied by `until`). */
+  /** Keep all intermediate stage builds under `<out>/.work-<target>` (implied by `until`). */
   keepWork?: boolean;
   /** Output root; the builder creates `<out>/sa` and `<out>/opensa`. */
   outPath: string;
@@ -134,7 +138,53 @@ export interface BuildResult {
 /** Every stage name except the `lod` alias — see {@link EXCLUDABLE_STAGES}. */
 export type ExcludableStage = Exclude<StageName, 'lod'>;
 
+/** The optimize stage's totals + isolated failures. The per-asset list lives and dies with the stage build. */
+export interface OptimizeFragment {
+  failures: AssetFailure[];
+  summary: RunSummary;
+}
+
+/** The pack stage's summary. `report` POINTS at the pack's own full report beside its pak — never a copy. */
+export interface PackFragment {
+  cells: number;
+  pakBytes: number;
+  report: string;
+}
+
+/** The `sa` branch's ceilings, read off the tree the real game loads — console-only before plan 005. */
+export interface SaFragment {
+  census: { instBearingIpls: number; largestIpl: number; rows: number };
+  imgBudgets: Record<string, number>;
+  perfectMapAsiSha256: null | string;
+  requirements: InstallRequirement[];
+}
+
 export type StageName = (typeof STAGE_NAMES)[number];
+
+/**
+ * One target's build report — `<out>/report-<target>.json`, assembled at the end of the target's chain (plan
+ * 005). The NAME is the target: two targets share one `--out`, so a single unnamed `report.json` was a
+ * summary of whichever run finished last. Fragments are typed per stage — a stage that learned nothing
+ * contributes nothing.
+ */
+export interface TargetReport {
+  builtAt: string;
+  fragments: TargetReportFragments;
+  /** The fetch game id — basename of the run's `--game`. */
+  game: string;
+  gamePath: string;
+  target: 'opensa' | 'sa';
+  timings: StageTiming[];
+}
+
+export interface TargetReportFragments {
+  optimize?: OptimizeFragment;
+  pack?: PackFragment;
+  sa?: SaFragment;
+}
+
+/** What a common-chain stage may hand the report assembler (plan 005); most stages produce nothing. */
+type ChainOutcome = undefined | void | { fragment: OptimizeFragment; stage: 'optimize' };
 
 /** Run the pipeline (optionally up to `until`). Returns each produced stage build. */
 export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<BuildResult> {
@@ -146,8 +196,15 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   const target = resolveBuildTarget(options.target, excluded);
   logTarget(target, options.target !== undefined, excluded);
 
-  const work = join(outPath, '.work');
+  // One work dir per resolved target (plan 005): under --keepWork a `sa` run used to silently delete
+  // everything a previous opensa run was keeping, because both shared `<out>/.work`.
+  const work = join(outPath, `.work-${target}`);
+  // The pre-005 shared dir is still cleared: it was wiped at the start of every run by contract, and left
+  // alone it is multi-GB garbage no new build will ever read.
+  const legacyWork = join(outPath, '.work');
   refuseSourceInsideWork(work, gamePath, inPath);
+  refuseSourceInsideWork(legacyWork, gamePath, inPath);
+  rmSync(legacyWork, { force: true, recursive: true });
   rmSync(work, { force: true, recursive: true });
   mkdirSync(work, { recursive: true });
 
@@ -155,7 +212,9 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   const populated = (sub: string): boolean => existsSync(source(sub)) && readdirSync(source(sub)).length > 0;
 
   // The common chain (installers → optimizer → LODs). Conditional stages are skipped when their source is empty.
-  const chain: { name: ExcludableStage; run: (game: string, out: string) => Promise<unknown> | void }[] = [];
+  // A stage may RETURN a fragment for the target report (plan 005) — the runner collects them, keyed by stage.
+  const chain: { name: ExcludableStage; run: (game: string, out: string) => ChainOutcome | Promise<ChainOutcome> }[] =
+    [];
   if (populated(subfolders.mods)) {
     chain.push({
       name: 'mods',
@@ -180,13 +239,18 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   const prelitForce = loadPrelitOnly(inPath, source(subfolders.mods));
   chain.push({
     name: 'optimize',
-    run: (game, out) =>
-      runOptimizer({
+    // The per-asset report would sit in `.work/<n>-optimize`, which is deleted as the stage is consumed —
+    // so the fragment carries the totals and the isolated failures, the two things a build summary needs.
+    run: async (game, out) => {
+      const report = await runOptimizer({
         gameDir: game,
         outDir: out,
         passes: config.optimizerPasses,
         ...(prelitForce ? { prelitOptions: { force: prelitForce } } : {}),
-      }),
+      });
+
+      return { fragment: { failures: report.failures, summary: summarizeReport(report) }, stage: 'optimize' as const };
+    },
   });
   if (populated(subfolders.vegetation)) {
     chain.push({
@@ -211,6 +275,10 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
 
   const produced: { dir: string; name: string }[] = [];
   const timings: StageTiming[] = [];
+  /** The fetch game id — the user-facing `--game` folder name, stamped into each target report. */
+  const gameId = basename(resolve(gamePath));
+  /** Fragments the COMMON chain produced — shared by every target report this run writes (plan 005). */
+  const common: TargetReportFragments = {};
   /** The asi shipped beside this map, for the manifest — a map at this density is correct only with it. */
   let shippedAsi: null | { sha256: string } = null;
   // Timed per stage and logged AS EACH ONE ENDS, not only in the summary: a long build that is killed part
@@ -233,7 +301,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     }
     log(stage.name);
     const out = join(work, `${index + 1}-${stage.name}`);
-    await timed(stage.name, () => stage.run(game, out));
+    collectFragment(common, await timed(stage.name, () => stage.run(game, out)));
     if (!keepWork && game !== gamePath) {
       rmSync(game, { force: true, recursive: true }); // consumed → free disk
     }
@@ -264,59 +332,55 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // pak welds them into BOTH levels; the cell bake still skips them (it bakes HD, i.e. the stub).
   const alwaysOnLods = loadLodAlways(inPath, source(subfolders.mods));
   if (runsStage('sa', until, excluded)) {
-    const sa = join(outPath, 'sa');
-    log('sa → sa/');
-    await timed('sa', () => buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa }));
-    // The procobj clutter is baked into the FINISHED sa tree, in place (plan 014). It belongs to this target
-    // alone: OpenSA scatters the same species at runtime, where draw distance is a setting and none of SA's
-    // ceilings exist, so baking it into the common build would cost that target a stripped `procobj.dat` (9
-    // rules of 96 survived it) and 91 092 vertex-duplicated instances in its pak for nothing.
-    //
-    // After `buildSaLods`, not before: the LOD generators work from placements, so clutter that does not exist
-    // yet gets no far-LODs — which is what we want for objects whose range now comes from their IDE row.
-    if (runsStage('procobj', until, excluded)) {
-      log('procobj → sa/');
-      await timed('procobj', () =>
-        buildProcobjLods({
-          config: {
-            density: config.procobjDensity,
-            ...(config.procobjMax !== undefined ? { procObjMax: config.procobjMax } : {}),
-          },
-          gamePath: sa,
-          inPath: source(subfolders.procobj),
-          outPath: sa,
-          prelight: true,
-          target: 'sa',
-        }),
-      );
-    }
-    // Every SA ceiling is checked HERE, on the tree the real game loads — not on the shared build. The LOD
-    // stage appends hole-fill instances to the copied text IPLs, so the common build undercounts the rows.
-    const census = reportTextIplCensus(sa);
-    checkInstBearingIplSlots(census.instBearingIpls);
-    reportInstallRequirements(census, checkImgIdBudgets(sa));
-    // Ship the fix beside the map that needs it — stating a requirement and not satisfying it is half a job.
-    shippedAsi = shipPerfectMapAsi(sa, PERFECT_MAP_ASI);
-    produced.push({ dir: sa, name: 'sa' });
+    const built = await buildSaTarget({
+      config,
+      excluded,
+      excludeItems,
+      game,
+      holeFillModels,
+      outPath,
+      procobjIn: source(subfolders.procobj),
+      timed,
+      until,
+    });
+    shippedAsi = built.shippedAsi;
+    produced.push(built.produced);
+    // The report this target never had (plan 005): the census, the FLA pools and the lift requirements used
+    // to exist only as console output nobody could diff.
+    writeTargetReport(outPath, {
+      builtAt: new Date().toISOString(),
+      fragments: { ...common, sa: built.fragment },
+      game: gameId,
+      gamePath,
+      target: 'sa',
+      timings: [...timings],
+    });
   }
   if (runsStage('opensa', until, excluded)) {
     log(OPENSA_BUDGET_NOTICE);
-    produced.push(
-      ...(await timed('opensa', () =>
-        buildOpensaTarget({
-          alwaysOnLods,
-          config,
-          excludeItems,
-          game,
-          gamePath,
-          holeFillModels,
-          log,
-          outPath,
-          packing: until !== 'opensa' && !excluded.has('pack'),
-          work,
-        }),
-      )),
+    const built = await timed('opensa', () =>
+      buildOpensaTarget({
+        alwaysOnLods,
+        config,
+        excludeItems,
+        game,
+        gamePath,
+        holeFillModels,
+        log,
+        outPath,
+        packing: until !== 'opensa' && !excluded.has('pack'),
+        work,
+      }),
     );
+    produced.push(...built.produced);
+    writeTargetReport(outPath, {
+      builtAt: new Date().toISOString(),
+      fragments: { ...common, ...(built.pack ? { pack: built.pack } : {}) },
+      game: gameId,
+      gamePath,
+      target: 'opensa',
+      timings: [...timings],
+    });
   }
 
   // The sidecars are split-time inputs, not game content — keep the final targets clean. (The opensa side
@@ -483,6 +547,16 @@ export function swapLinearTxds(commonDir: string, opensaDir: string): void {
 }
 
 /**
+ * Written whenever the target's branch RAN — `--until opensa` / `--exclude pack` still get a (pack-less)
+ * `report-opensa.json`; a run stopped in the common chain writes none, deliberately: no target finished.
+ */
+export function writeTargetReport(outPath: string, report: TargetReport): void {
+  const path = join(outPath, `report-${report.target}.json`);
+  writeFileSync(path, `${JSON.stringify(report, null, 2)}\n`);
+  log(`${report.target}: report → ${path}`);
+}
+
+/**
  * The `opensa` target: the cell-LOD build, then OUR conversion of it.
  *
  * `--until opensa` (or `--exclude pack`) asks for the LOD build itself, so it lands in the final directory and
@@ -505,11 +579,11 @@ async function buildOpensaTarget(step: {
   /** Whether the convert runs. False (`--until opensa` / `--exclude pack`) leaves `opensa/` in GAME format. */
   packing: boolean;
   work: string;
-}): Promise<{ dir: string; name: string }[]> {
+}): Promise<{ pack: null | PackFragment; produced: { dir: string; name: string }[] }> {
   const { alwaysOnLods, config, excludeItems, game, holeFillModels, log, outPath, packing, work } = step;
   const opensa = join(outPath, 'opensa');
   const lodDir = packing ? join(work, 'opensa-lod') : opensa;
-  log(`opensa → ${packing ? '.work/opensa-lod' : 'opensa/'} (baking cells — can take several minutes)`);
+  log(`opensa → ${packing ? `${basename(work)}/opensa-lod` : 'opensa/'} (baking cells — can take several minutes)`);
   await buildOpensaLods({
     cellSize: config.lodCellSize,
     config: { excludeItems, holeFillModels },
@@ -524,7 +598,7 @@ async function buildOpensaTarget(step: {
   swapLinearTxds(game, lodDir);
   rmSync(join(lodDir, 'linear-txd'), { force: true, recursive: true });
   if (!packing) {
-    return [{ dir: opensa, name: 'opensa' }];
+    return { pack: null, produced: [{ dir: opensa, name: 'opensa' }] };
   }
   log('pack → opensa/ (converting the map into our format — several minutes)');
   // The fetch game id (plan 086): the USER-FACING --game folder, not this work-stage intermediate.
@@ -544,26 +618,92 @@ async function buildOpensaTarget(step: {
     outDir: opensa,
     ...(packRect !== undefined ? { rect: packRect } : {}),
   });
-  // The pack writes its report beside the pak it belongs to (`<out>/opensa/pak/`). Mirror it at the root:
-  // that is where a run's summary is looked for, and the pak-side copy stays the pak's own.
-  const reportPath = join(outPath, 'report.json');
-  writeFileSync(
-    reportPath,
-    JSON.stringify(
-      {
-        ...packed.report,
-        ...(packed.models ? { models: packed.models } : {}),
-      },
-      null,
-      2,
-    ),
-  );
-  log(`pack: report → ${reportPath}`);
 
-  return [
-    { dir: lodDir, name: 'opensa-lod' },
-    { dir: opensa, name: 'pack' },
-  ];
+  // The pack's FULL report stays beside its pak (`<out>/opensa/pak/report.json`) — the fragment is a summary
+  // plus that pointer, never a root-level copy of the pack's report wearing the run's name (plan 005).
+  return {
+    pack: {
+      cells: packed.report.cells.length,
+      pakBytes: packed.report.pakBytes,
+      report: join('opensa', 'pak', 'report.json'),
+    },
+    produced: [
+      { dir: lodDir, name: 'opensa-lod' },
+      { dir: opensa, name: 'pack' },
+    ],
+  };
+}
+
+/**
+ * The `sa` (real game) target: the LOD build, the in-place procobj bake, every ceiling gate on the FINISHED
+ * tree, and the asi shipped beside the map. Returns the tree it produced and its report fragment (plan 005).
+ */
+async function buildSaTarget(step: {
+  config: BuilderConfig;
+  excluded: ReadonlySet<ExcludableStage>;
+  excludeItems: string[];
+  /** The common baked build both targets are fed from. */
+  game: string;
+  holeFillModels: string[];
+  outPath: string;
+  /** The mods-src `procobj/` subfolder (may be absent — the bake falls back to the built-in roster). */
+  procobjIn: string;
+  timed: <T>(name: string, run: () => Promise<T> | T) => Promise<T>;
+  until: StageName | undefined;
+}): Promise<{ fragment: SaFragment; produced: { dir: string; name: string }; shippedAsi: null | { sha256: string } }> {
+  const { config, excluded, excludeItems, game, holeFillModels, outPath, procobjIn, timed, until } = step;
+  const sa = join(outPath, 'sa');
+  log('sa → sa/');
+  await timed('sa', () => buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa }));
+  // The procobj clutter is baked into the FINISHED sa tree, in place (plan 014). It belongs to this target
+  // alone: OpenSA scatters the same species at runtime, where draw distance is a setting and none of SA's
+  // ceilings exist, so baking it into the common build would cost that target a stripped `procobj.dat` (9
+  // rules of 96 survived it) and 91 092 vertex-duplicated instances in its pak for nothing.
+  //
+  // After `buildSaLods`, not before: the LOD generators work from placements, so clutter that does not exist
+  // yet gets no far-LODs — which is what we want for objects whose range now comes from their IDE row.
+  if (runsStage('procobj', until, excluded)) {
+    log('procobj → sa/');
+    await timed('procobj', () =>
+      buildProcobjLods({
+        config: {
+          density: config.procobjDensity,
+          ...(config.procobjMax !== undefined ? { procObjMax: config.procobjMax } : {}),
+        },
+        gamePath: sa,
+        inPath: procobjIn,
+        outPath: sa,
+        prelight: true,
+        target: 'sa',
+      }),
+    );
+  }
+  // Every SA ceiling is checked HERE, on the tree the real game loads — not on the shared build. The LOD
+  // stage appends hole-fill instances to the copied text IPLs, so the common build undercounts the rows.
+  const census = reportTextIplCensus(sa);
+  checkInstBearingIplSlots(census.instBearingIpls);
+  const imgBudgets = checkImgIdBudgets(sa);
+  reportInstallRequirements(census, imgBudgets);
+  // Ship the fix beside the map that needs it — stating a requirement and not satisfying it is half a job.
+  const shippedAsi = shipPerfectMapAsi(sa, PERFECT_MAP_ASI);
+
+  return {
+    fragment: {
+      census,
+      imgBudgets,
+      perfectMapAsiSha256: shippedAsi?.sha256 ?? null,
+      requirements: installRequirements(census, imgBudgets),
+    },
+    produced: { dir: sa, name: 'sa' },
+    shippedAsi,
+  };
+}
+
+/** File a stage's outcome under its stage name — the runner-side half of the fragment contract (plan 005). */
+function collectFragment(fragments: TargetReportFragments, outcome: ChainOutcome): void {
+  if (outcome) {
+    fragments[outcome.stage] = outcome.fragment;
+  }
 }
 
 /** FLA ID-pool budgets for the real-SA build — mirrors the operative FILE_TYPE_* values in the target
@@ -1015,17 +1155,19 @@ function planChain<T extends { name: ExcludableStage }>(
 }
 
 /**
- * `<out>/.work` is wiped unconditionally before any stage reads `--game`/`--in`, so a source pointing INTO it
- * (the obvious fast path for re-running one stage: `--game <out>/.work/5-trees`) is deleted before it is
- * read. Silent otherwise — the run dies on a missing `gta3.img` seconds after the intermediates are already
- * gone, naming the symptom and never the cause. It cost a full rebuild on 2026-08-09.
+ * The run's work dir (`.work-<target>`, plus the legacy shared `.work`) is wiped before any stage reads
+ * `--game`/`--in`, so a source pointing INTO it (the obvious fast path for re-running one stage:
+ * `--game <out>/.work-sa/5-trees`) is deleted before it is read. Silent otherwise — the run dies on a missing
+ * `gta3.img` seconds after the intermediates are already gone, naming the symptom and never the cause. It
+ * cost a full rebuild on 2026-08-09. The OTHER target's work dir is not touched, so a source there is safe.
  */
 function refuseSourceInsideWork(work: string, gamePath: string, inPath: string): void {
   for (const [flag, path] of [
     ['--game', gamePath],
     ['--in', inPath],
   ] as const) {
-    if (resolve(path).startsWith(resolve(work))) {
+    // Segment-aware: `.work-opensa` must not read as inside `.work` — only that dir itself or its children.
+    if (resolve(path) === resolve(work) || resolve(path).startsWith(`${resolve(work)}/`)) {
       throw new Error(
         `${flag} ${path} is inside ${work}, which this run wipes before it reads anything. Copy the ` +
           'intermediate out of `.work` first, or point --out somewhere else.',

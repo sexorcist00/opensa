@@ -1,7 +1,33 @@
 # 005 — One report per target, assembled at the end of the chain
 
-**Status: PLANNED 2026-08-11 (user's proposal).** Make report generation its own step at the end of EACH
-chain — `opensa` and `sa` alike — instead of a side effect of one branch.
+**Status: SHIPPED 2026-08-11 (planned the same day, user's proposal).** Make report generation its own step
+at the end of EACH chain — `opensa` and `sa` alike — instead of a side effect of one branch.
+
+## Landed — what was decided while building it
+
+- **The runner collects typed outcomes** (`ChainOutcome`): a common-chain stage may return
+  `{ stage, fragment }`, and the runner keys it by stage. Today only `optimize` produces one (totals +
+  isolated failures via `summarizeReport` — the per-asset list lives and dies with the stage build).
+- **`report-<target>.json` is written whenever the target's BRANCH ran** — `--until opensa` / `--exclude
+  pack` still get a pack-less `report-opensa.json`. A run stopped in the common chain writes none,
+  deliberately: no target finished. Fragments: `optimize` (both targets), `sa` (census + FLA pools + lift
+  requirements + asi sha — console-only before this plan), `pack` (cells/pakBytes summary + a POINTER to
+  `opensa/pak/report.json`).
+- **The root copy was pure duplication, measured**: `build/original/report.json` was byte-identical to
+  `opensa/pak/report.json` (852 651 B both). No code ever read the root one — `crosstxd-fix`, `txd-retune`
+  and the engine-lab bench all read the pak's own report — so the rename broke zero consumers; only docs
+  moved (`docs/commands.md`, `docs/architecture/perfect-map-builder.md`).
+- **`build-timings.json` stays as it was** (single, self-describing — `docs/benchmarks/` and the audits
+  reference it by name); each target report additionally embeds the timings gathered by its write time.
+- **The legacy shared `.work` is still cleared at run start** — it was wiped every run by contract, and left
+  alone it is multi-GB garbage no new build reads. The overlap guard became segment-aware on the way:
+  `resolve(path).startsWith(resolve(work))` read `.work-opensa` as inside `.work`, so a source in the OTHER
+  target's kept dir would have been refused for a wipe that never touches it.
+- Verification is the test suite: 11 new cases in `pipeline.test.ts` (reports per target, overwrite
+  regression, stopped-early writes none, `.work-<target>` coexistence under `--keepWork`, legacy `.work`
+  cleared, other-target source allowed). 69/69 pmb tests green; repo tsc clean. No full field build was
+  re-run for this — the first real `build:game:original:*` run after merge is the live check, and its
+  reports land as `report-opensa.json` / `report-sa.json`.
 
 ## The problem, and it has already cost two rounds in one hour
 

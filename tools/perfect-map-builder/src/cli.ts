@@ -10,7 +10,8 @@ import { parseBuildTarget } from '@opensa/tool-kit/target';
  *                      surface reads (the lab, the harness and the object-viewer's AFTER side all mount
  *                      `./build/original/opensa`). Pass it only to build somewhere else.
  *     --until <stage>  stop after a stage (mods|vehicles|peds|optimize|trees|procobj|sa|opensa|pack) and KEEP
- *                      every intermediate build under `<out>/.work` — for step-by-step in-game debugging.
+ *                      every intermediate build under `<out>/.work-<target>` — for step-by-step in-game
+ *                      debugging.
  *                      The list is the pipeline ORDER and the stop point is INCLUSIVE, so every stage at or
  *                      before it runs: `--until pack` still builds the `sa` target, since `sa` precedes it.
  *                      `--until lod` runs the WHOLE pipeline (both sa + opensa) while keeping every step.
@@ -22,8 +23,9 @@ import { parseBuildTarget } from '@opensa/tool-kit/target';
  *                      our target (the `build:game:<id>:opensa` scripts), `--exclude vehicles,peds,opensa`
  *                      builds only the real game's (`build:game:original:sa`). Excluding `opensa` drops
  *                      `pack` with it; excluding `pack` alone leaves `opensa/` in GAME format. An excluded
- *                      stage leaves whatever an earlier run wrote in its place — only `<out>/.work` is
- *                      cleared — so the two targets can be rebuilt independently in the same `--out`.
+ *                      stage leaves whatever an earlier run wrote in its place — only the run's own
+ *                      `<out>/.work-<target>` is cleared (plan 005) — so the two targets can be rebuilt
+ *                      independently in the same `--out`, each with its own `report-<target>.json`.
  *     --target <host>  the host this build is FOR (sa|opensa) — it picks every knob whose right value is a
  *                      fact about the host: limits, particle policy, procobj density. Omitted, it is DERIVED
  *                      from `--exclude` (`--exclude sa` builds for opensa; a run that builds BOTH targets
@@ -35,7 +37,7 @@ import { parseBuildTarget } from '@opensa/tool-kit/target';
  *                      it built at, so a capture states its own configuration.
  *     --procobj-max <n>  raise the placed-object safety cap with the density (default 20000). Without it a
  *                      high-density run measures the CAP — the build prints CAP DROPPED when it binds.
- *     --keep-work      keep the intermediate `.work` builds even on a full run.
+ *     --keep-work      keep the intermediate `.work-<target>` builds even on a full run.
  *     --no-<pass>      disable a map-optimizer pass to bisect it: --no-weld-seams | --no-textures.
  * A `broken-prelight.json` at the mods-src root (or inside its `mods/` subfolder) is the map-optimizer
  * prelight FORCE list: the statistical pass runs map-wide and the listed models are additionally forced past

@@ -11,12 +11,18 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
 
 Each stage is another tool's Node API; every stage hands the next a **complete game dir**, so the chain can
 stop anywhere (`--until <stage>`, inclusive, keeps intermediates). Intermediates live under
-`<out>/.work/<n>-<stage>` and are deleted as consumed unless `--keep-work`/`--until`. **`.work` is wiped at
-the top of every run, before any stage reads `--game`/`--in`** — so a source pointing into it is refused by
-name rather than eaten ([restrictions/architecture.md](../restrictions/architecture.md)). Every stage is
-timed and logged as it ends, and the run writes `<out>/build-timings.json` stating the target, the procobj
-knobs and the **sha256 of the `perfect-map.asi` it shipped** — a map at this density is correct only with that
-asi, so the pairing is recorded rather than remembered.
+`<out>/.work-<target>/<n>-<stage>` (plan 005: one work dir per target, so building one target never deletes
+the other's kept stages) and are deleted as consumed unless `--keep-work`/`--until`. **The run's own work dir
+is wiped at the top of every run, before any stage reads `--game`/`--in`** — so a source pointing into it is
+refused by name rather than eaten ([restrictions/architecture.md](../restrictions/architecture.md)); the
+other target's dir is not touched. Every stage is timed and logged as it ends, and the run writes
+`<out>/build-timings.json` stating the target, the procobj knobs and the **sha256 of the `perfect-map.asi` it
+shipped** — a map at this density is correct only with that asi, so the pairing is recorded rather than
+remembered. Each target that runs also writes **`<out>/report-<target>.json`** (plan 005) at the end of its
+chain: the target, the fetch game id, the timings and one typed fragment per stage that produced one —
+optimize totals + failures; the sa census, FLA pools, lift requirements and asi sha (console-only before);
+the pack summary with a pointer to `opensa/pak/report.json`. There is no unnamed root `report.json`: with two
+targets in one `--out` it was a summary of whichever run finished last.
 
 **What the `sa` branch emits BESIDE the map** (2026-08-11): after its ceiling checks it prints
 `reportInstallRequirements` — every stock ceiling the artifact crosses and the setting that lifts each (int16
@@ -30,8 +36,8 @@ rather than quietly emitting a tree that corrupts a plain install.
 stages are dropped and everything after them still runs. That is what the two `build:game:<id>:*` script
 families are — `:opensa` is `--exclude sa`, `:sa` is `--exclude vehicles,peds,opensa` — and it exists because
 the opensa target is rebuilt far more often than the real game's. The two write disjoint subtrees of the same
-`--out` (`opensa/` + `opensa-pack/` vs `sa/`) and only `<out>/.work` is ever cleared, so an excluded target
-keeps whatever an earlier run left. Excluding `opensa` drops `pack` with it; excluding `pack` alone leaves
+`--out` (`opensa/` + `opensa-pack/` vs `sa/`) and only the run's own `<out>/.work-<target>` is ever cleared,
+so an excluded target keeps whatever an earlier run left. Excluding `opensa` drops `pack` with it; excluding `pack` alone leaves
 `opensa/` in GAME format (the `--until opensa` result); excluding `sa` drops its `checkImgIdBudgets` guard,
 which reads the `sa/` tree. An unknown `--exclude` name is an error — a typo must not silently produce a build
 missing the target it was meant to keep.
@@ -93,7 +99,7 @@ flowchart TB
 | 6   | `procobj`  | `buildProcobjLods`                            | **inside the `sa` branch, in place, AFTER its LOD build** (plan 014): the layer is that target's alone — OpenSA scatters the same species at runtime, so baking it into the common build would only cost that target a stripped `procobj.dat` and 91 092 vertex-duplicated instances in its pak. Always runs (original ships no `procobj/` — bakes the built-in roster, no-op on a TC). Its place in `STAGE_NAMES` is its place in the RUN order, so `--until sa` stops before the clutter |
 | 7   | `sa`       | `buildSaLods` → `<out>/sa`, then `reportTextIplCensus` + `checkImgIdBudgets` | the real-game (RenderWare) target; **both read the built `sa/` tree and go with it** — the FLA ID pools THROW (a ceiling the target really has), the text-IPL cost is a census with no ceiling quoted (2026-08-09: the target always runs OLA + FLA + `perfect-map.asi`) |
 | 8   | `opensa`   | `buildOpensaLods` + `swapLinearTxds`          | cell 250 bake (= the render grid, plan 087), `stripLods`, linear-convention TXD swap. No SA ceiling applies and no budget guard of its own exists yet — the run says so (`OPENSA_BUDGET_NOTICE`) |
-| 9   | `pack`     | `packGameDir` (opensa-pack) → `<out>/opensa`  | the OpenSA target, self-contained (pak → `<out>/opensa/pak`, 086 phase 8); convert rect = the game's `PACK_RECTS.full` (auto-fit when unpinned, plan 087); report mirrored to `<out>/report.json` |
+| 9   | `pack`     | `packGameDir` (opensa-pack) → `<out>/opensa`  | the OpenSA target, self-contained (pak → `<out>/opensa/pak`, 086 phase 8); convert rect = the game's `PACK_RECTS.full` (auto-fit when unpinned, plan 087); the pack's full report stays at `opensa/pak/report.json`, and `report-opensa.json` carries a summary + pointer (plan 005) |
 | 10  | `lod`      | —                                             | special `--until` value: run everything, keep every intermediate. **Not an `--exclude` value** — it names no stage to skip |
 
 Every row but `lod` is an `--exclude` value (`EXCLUDABLE_STAGES`). Between stages 6 and 7 the pipeline

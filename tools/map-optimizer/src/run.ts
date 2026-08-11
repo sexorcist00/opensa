@@ -12,6 +12,10 @@ import type { RunReport } from './core';
 
 import { createGtaSaAdapter } from './adapters/gta-sa';
 import { runPipeline } from './core';
+
+// Re-exported for report assemblers (pmb plan 005): the run's totals without the per-asset bulk.
+export { summarizeReport } from './core';
+export type { AssetFailure, RunSummary } from './core';
 import { loadCreaseOverrides } from './crease-overrides';
 import { config } from './optimizer.config';
 import { createApplyPrelitLevel } from './plugins/apply-prelit-level';

@@ -23,7 +23,7 @@ import { gameArg, gameDir, readBytes } from '../lib/game';
  *       [--flips] [--below 0.05] [--above 0.05] [--near 0.10] [--txd <substring>]`
  *
  * The archive defaults to `build/<game>/sa/models/gta3.img` — the merged, mods-installed tree, which is the
- * closest standing stand-in for what the pack actually reads (`.work/opensa-lod`, kept only under `--until`).
+ * closest standing stand-in for what the pack actually reads (`.work-opensa/opensa-lod`, kept only under `--until`).
  */
 
 /** With no threshold flag the census reports the rule the PACK SHIPS ({@link isAlphaMask}); passing one

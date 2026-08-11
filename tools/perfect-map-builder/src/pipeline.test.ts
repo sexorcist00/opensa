@@ -2,7 +2,7 @@ import { buildVer2Buffer } from '@opensa/renderware/archive/img-archive';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -205,7 +205,18 @@ describe('buildPerfectMap source/out overlap', () => {
   });
 
   describe('negative cases', () => {
-    it('refuses a source inside <out>/.work instead of wiping it, and leaves the intermediate intact', async () => {
+    it("refuses a source inside the run's own .work-<target> instead of wiping it, leaving the intermediate intact", async () => {
+      const stage = join(out, '.work-opensa', '5-trees');
+      mkdirSync(join(stage, 'models'), { recursive: true });
+      writeFileSync(join(stage, 'models', 'gta3.img'), 'intermediate');
+
+      await expect(
+        buildPerfectMap({ exclude: ['sa'], gamePath: stage, inPath: '/nonexistent', outPath: out }),
+      ).rejects.toThrow(/inside .*\.work-opensa/);
+      expect(existsSync(join(stage, 'models', 'gta3.img'))).toBe(true);
+    });
+
+    it('refuses a source inside the legacy shared .work, which the run still clears', async () => {
       const stage = join(out, '.work', '5-trees');
       mkdirSync(join(stage, 'models'), { recursive: true });
       writeFileSync(join(stage, 'models', 'gta3.img'), 'intermediate');
@@ -216,13 +227,31 @@ describe('buildPerfectMap source/out overlap', () => {
       expect(existsSync(join(stage, 'models', 'gta3.img'))).toBe(true);
     });
 
-    it('refuses a mods root inside <out>/.work for the same reason', async () => {
-      const mods = join(out, '.work', 'mods-src');
+    it('refuses a mods root inside a wiped work dir for the same reason', async () => {
+      const mods = join(out, '.work-opensa', 'mods-src');
       mkdirSync(mods, { recursive: true });
 
       await expect(
         buildPerfectMap({ exclude: ['sa'], gamePath: '/nonexistent', inPath: mods, outPath: out }),
       ).rejects.toThrow(/--in .*is inside/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it("does NOT refuse a source inside the OTHER target's work dir — that dir is not touched", async () => {
+      // `.work-sa` starts with `.work`, so a prefix-string check would refuse it; only the run's own dir
+      // (here `.work-opensa`) and the legacy `.work` are wiped, so a kept sa intermediate is a valid source.
+      const stage = join(out, '.work-sa', '5-trees');
+      mkdirSync(join(stage, 'data', 'maps'), { recursive: true });
+
+      await buildPerfectMap({
+        exclude: ['sa', 'optimize', 'pack'],
+        gamePath: stage,
+        inPath: '/nonexistent',
+        outPath: out,
+      });
+
+      expect(existsSync(stage)).toBe(true);
     });
   });
 });
@@ -289,6 +318,174 @@ describe('buildPerfectMap target split', () => {
       });
 
       expect(procobjLods.mock.calls[0][0].config.density).toBe(2);
+    });
+  });
+});
+
+/**
+ * Plan 005: one report per target, `.work` split the same way. The regression the whole plan exists for:
+ * before it, the second target's build overwrote the first's `report.json`, and under `--keepWork` it also
+ * deleted the first's `.work`.
+ */
+describe('buildPerfectMap target reports (plan 005)', () => {
+  let out: string;
+  let game: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-report-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-report-game-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    procobjLods.mockClear();
+    saLods.mockClear();
+    opensaLods.mockClear();
+  });
+
+  afterEach(() => {
+    rmSync(out, { force: true, recursive: true });
+    rmSync(game, { force: true, recursive: true });
+  });
+
+  const report = (target: 'opensa' | 'sa'): { fragments: Record<string, unknown>; game: string; target: string } =>
+    JSON.parse(readFileSync(join(out, `report-${target}.json`), 'utf8')) as {
+      fragments: Record<string, unknown>;
+      game: string;
+      target: string;
+    };
+
+  describe('negative cases', () => {
+    it('writes NO unnamed report.json — the name is the target, always', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: '/nonexistent', outPath: out });
+
+      expect(existsSync(join(out, 'report.json'))).toBe(false);
+    });
+
+    it('writes no target report when the run stops in the common chain — no target finished', async () => {
+      await buildPerfectMap({
+        exclude: ['optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        outPath: out,
+        until: 'trees',
+      });
+
+      expect(existsSync(join(out, 'report-sa.json'))).toBe(false);
+      expect(existsSync(join(out, 'report-opensa.json'))).toBe(false);
+    });
+
+    it("building one target leaves the OTHER's report untouched — the overwrite this plan retires", async () => {
+      writeFileSync(join(out, 'report-sa.json'), '{"target":"sa","sentinel":true}');
+
+      await buildPerfectMap({
+        exclude: ['sa', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        outPath: out,
+      });
+
+      expect(readFileSync(join(out, 'report-sa.json'), 'utf8')).toBe('{"target":"sa","sentinel":true}');
+      expect(report('opensa').target).toBe('opensa');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('a full run writes BOTH reports, each naming its own target and the fetch game id', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: '/nonexistent', outPath: out });
+
+      expect(report('sa').target).toBe('sa');
+      expect(report('opensa').target).toBe('opensa');
+      expect(report('sa').game).toBe(basename(game));
+    });
+
+    it('the sa report carries the ceilings that used to be console-only, and only the sa report does', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: '/nonexistent', outPath: out });
+
+      const sa = report('sa').fragments['sa'] as {
+        census: { rows: number };
+        imgBudgets: Record<string, number>;
+        requirements: unknown[];
+      };
+      expect(sa.census.rows).toBe(0); // the test game has no gta.dat — the census reports, never invents
+      expect(sa.requirements).toEqual([]);
+      expect(report('opensa').fragments['sa']).toBeUndefined();
+    });
+
+    it('an opensa run without the pack stage still gets a report — just no pack fragment', async () => {
+      await buildPerfectMap({
+        exclude: ['sa', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        outPath: out,
+      });
+
+      expect(report('opensa').fragments['pack']).toBeUndefined();
+    });
+  });
+});
+
+describe('buildPerfectMap work dirs per target (plan 005)', () => {
+  let out: string;
+  let game: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-workdir-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-workdir-game-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(out, { force: true, recursive: true });
+    rmSync(game, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it("still wipes the run's OWN work dir — re-running a target keeps the old contract", async () => {
+      mkdirSync(join(out, '.work-opensa', 'junk'), { recursive: true });
+
+      await buildPerfectMap({
+        exclude: ['sa', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        outPath: out,
+      });
+
+      expect(existsSync(join(out, '.work-opensa', 'junk'))).toBe(false);
+    });
+
+    it('clears the legacy shared .work a pre-005 build left behind — it was wiped every run by contract', async () => {
+      mkdirSync(join(out, '.work', 'junk'), { recursive: true });
+
+      await buildPerfectMap({
+        exclude: ['sa', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        outPath: out,
+      });
+
+      expect(existsSync(join(out, '.work'))).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it("keeps both targets' intermediates side by side under --keepWork — the deletion this plan retires", async () => {
+      await buildPerfectMap({
+        exclude: ['sa', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        keepWork: true,
+        outPath: out,
+      });
+      expect(existsSync(join(out, '.work-opensa'))).toBe(true);
+
+      await buildPerfectMap({
+        exclude: ['opensa', 'vehicles', 'peds', 'optimize'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        keepWork: true,
+        outPath: out,
+      });
+
+      expect(existsSync(join(out, '.work-sa'))).toBe(true);
+      expect(existsSync(join(out, '.work-opensa'))).toBe(true);
     });
   });
 });

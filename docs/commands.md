@@ -17,13 +17,19 @@ npm run build:game:gostown:opensa      # TCs are opensa-only (also :carcer :ande
 ```
 
 Both write into the same `./build/<id>`: `:opensa` fills `opensa/` + `opensa-pack/`, `:sa` fills `sa/`, and
-neither touches the other's directory (the builder only clears `<out>/.work`).
+neither touches the other's directory (the builder only clears its own `<out>/.work-<target>`, plus a legacy
+shared `.work` if one is left from a pre-005 build).
 
-**`<out>/.work` is wiped before any stage reads `--game`**, so re-running one stage off an intermediate
-(`--game <out>/.work/5-trees`) deletes the intermediate first. Copy it out of `.work`, or point `--out`
-elsewhere; the builder refuses the overlap rather than wiping it. Every run writes
-`<out>/build-timings.json` — per-stage wall clock plus the target and procobj knobs it was built with, so two
-durations are comparable. Standalone:
+**`<out>/.work-<target>` is wiped before any stage reads `--game`** (pmb plan 005: one work dir per target,
+so building one target keeps the other's intermediates), so re-running one stage off an intermediate
+(`--game <out>/.work-sa/5-trees`) inside the SAME target's dir deletes the intermediate first. Copy it out,
+point `--out` elsewhere, or read the OTHER target's kept dir — the builder refuses the overlap rather than
+wiping it. Every run writes `<out>/build-timings.json` — per-stage wall clock plus the target and procobj
+knobs it was built with, so two durations are comparable — and each target that runs writes
+`<out>/report-<target>.json` (`report-sa.json`, `report-opensa.json`): the target, the fetch game id, the
+timings and one typed fragment per stage that produced one (optimize totals; the sa census/FLA pools/lift
+requirements/asi sha; the pack summary with a POINTER to `opensa/pak/report.json` — there is no root
+`report.json` any more). Standalone:
 
 ```bash
 NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cli.ts \
@@ -31,7 +37,7 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
 ```
 
 Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|peds|optimize|trees|sa|procobj|opensa|pack|lod>` (that IS the run order — `procobj` is baked inside the `sa` branch since plan 014, so `--until sa` stops BEFORE the clutter)
-(inclusive, keeps `.work/`) · **`--exclude <stage,stage>`** · **`--target <sa|opensa>`** ·
+(inclusive, keeps `.work-<target>/`) · **`--exclude <stage,stage>`** · **`--target <sa|opensa>`** ·
 `--procobj-density <n>` · `--procobj-max <n>` · `--keep-work` · `--no-weld-seams` · `--no-textures`.
 
 `--exclude` says WHICH STAGES run where `--until` is the stop point: it drops the named stages and keeps
