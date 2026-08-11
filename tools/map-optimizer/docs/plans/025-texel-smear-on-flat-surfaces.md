@@ -280,9 +280,47 @@ criterion has to be a per-face mapping discontinuity ACROSS SHARED EDGES (a face
 orientation departs from the adjacent faces of the same surface), not a threshold on the face alone. The
 53–97 % "has a good neighbour" numbers measured above are the same signal seen from the other side.
 
-**Owed**: the same run repeated with that criterion, and only then a threshold. Until it exists, the
-map-wide count for THIS defect class is unknown — 4 708 is the count for "extreme mapping", which is a
-strictly larger set that mostly is not broken.
+### RAN the same day — the edge criterion, and then a third, and BOTH mis-rank
+
+**Attempt 2 — disagreement with edge-neighbours.** A face flagged only when it is stretched past 8× AND its
+crushed axis is 4× finer than the median of the faces across its edges. Population collapsed exactly as
+hoped — 584 models ≥1 % of surface (from 3 082), 89 ≥5 %, 32 ≥10 %, 5 ≥20 % — and most wires left the top.
+
+But the positive control failed: **`sbseabed3_las20` scored 1 flagged face of 39** (0.5 % of surface) while
+the field calls a quarter of it wrong, and the three roads landed at 0.5–2.1 %. The reason is structural and
+was visible in the earlier feasibility numbers: a face in the MIDDLE of a broken band has broken neighbours,
+so nothing disagrees. The criterion detects isolated bad faces among good ones; the field's worst case is a
+whole band.
+
+**Attempt 3 — disagreement with the MODEL's own healthy median**, refusing a verdict when the healthy set is
+under 20 % of the faces (meant to exclude ribbons by construction). The control now passes:
+`sbseabed3_las20` **16/39, 23.6 % of surface** and `road_lawn34` **75/203, 7.5 %** — the bands are caught,
+and both numbers match the hand measurement above.
+
+And the wires came straight back to the top: `wires_04c_sfs` 81.1 %, `vgsewires04/05_lvs`, `vgntelwires21`.
+The refusal gate does not fire on them **because a wire model also carries its poles** — so it HAS a healthy
+baseline, and the strands duly deviate from it.
+
+### Where that leaves the criterion, stated plainly
+
+Three formulations, three mis-rankings, and they fail in opposite directions: raw magnitude ranks ribbons
+first, neighbour-disagreement misses bands, model-baseline catches bands and ranks ribbons first again.
+**Geometry alone has not separated "stretched by design" from "stretched by mistake"**, and it may not be
+able to — in the mesh the two are the same thing. What differs is what the surface IS.
+
+The next idea, recorded as a hypothesis and NOT implemented: compare a face's UV anisotropy against its own
+GEOMETRIC elongation. A wire strand is a long thin triangle, so its stretched mapping matches the shape it
+sits on; a road-band face is a broad triangle carrying a sliver UV, and that mismatch is the defect. Related
+form: check whether the UV's crushed axis lines up with the face's own thin axis.
+
+**But the standing lesson applies before another metric is written** — several wrong axes in a row means
+stop guessing and let the FIELD answer. The cheap move is to take the ~32 models at ≥10 % of surface, have
+the user look at a handful, and FIT a criterion to labels instead of guessing one. That also finally gives
+the population an honest denominator.
+
+**Until then the map-wide count for this defect class is UNKNOWN.** 4 708 is the count for "extreme mapping"
+and 3 464 for "extreme and off the model's baseline"; both are strictly larger sets that mostly are not
+broken, and quoting either as the defect count would be a scope error.
 
 ## Phase 1b — if a criterion ever separates it: find every model it happened to
 

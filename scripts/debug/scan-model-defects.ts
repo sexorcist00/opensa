@@ -22,10 +22,19 @@ import { indexModAssets, resolveDff } from '../lib/mod-assets';
  *
  *   Family C — UV mappings stretched far off square (`road_lawn34`, `sbseabed3_las20`, plan 025): faces
  *     whose UV→world map draws a texel `--aniso` (default 8) times longer than wide, up to a collapsed
- *     axis where a single texel row is smeared across the face. Ranked by the SHARE of the model's own
+ *     axis where a single texel row is smeared across the face, AND whose crushed axis is `--discont`
+ *     (default 4) times finer than the model's own healthy median. Ranked by the SHARE of the model's own
  *     surface the flagged faces cover, and printed with the map-wide POPULATION, because how many models
  *     carry it is what decides curated list vs general rule. Original-game data — the optimizer moves no
  *     UV (025 phase 0), so a hit here is R*'s, not ours.
+ *     **THIS CRITERION IS NOT SETTLED — read plan 025 before trusting its ranking.** Three formulations
+ *     have been measured and all three mis-rank: raw anisotropy puts cables first (a ribbon SHOULD map a
+ *     texel off square); edge-neighbour disagreement under-detects a contiguous band (`sbseabed3_las20`
+ *     scored 1 flagged face of 39 while the field calls a quarter of it wrong); and this one, the model
+ *     baseline, catches the bands correctly but puts `wires_*` back on top, because a wire model also
+ *     carries poles, so it HAS a healthy baseline its strands deviate from. Geometry alone has not yet
+ *     told "stretched by design" from "stretched by mistake". Use it to SIZE the population, not to
+ *     conclude a model is broken.
  *
  * Run: npx tsx scripts/debug/scan-model-defects.ts [--game original] [--top 10] [--dz 0.5] [--aniso 8]
  *      [--json <out.json>]
@@ -54,6 +63,8 @@ interface ModelRow {
   // Family C
   /** Summed world area of the over-stretched faces — the visibility weight, as Family A learned to use. */
   stretchArea: number;
+  /** Faces stretched past `--aniso` REGARDLESS of their neighbours — the count the raw metric produced. */
+  stretchedFaces: number;
   stretchFaces: number;
   timed: boolean;
   /** Total drawable world area, so the flagged area can be read as a SHARE of the model. */
@@ -75,6 +86,7 @@ function analyzeModel(
   bytes: Uint8Array,
   dz: number,
   aniso: number,
+  discont: number,
 ): Omit<ModelRow, 'from' | 'instances' | 'model' | 'position' | 'timed' | 'txd'> {
   const clump = parseDff(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
   let badNormalFaces = 0;
@@ -87,6 +99,7 @@ function analyzeModel(
   let verts = 0;
   let stretchFaces = 0;
   let stretchArea = 0;
+  let stretchedFaces = 0;
   let collapsedUvFaces = 0;
   let totalArea = 0;
   let worstAniso = 0;
@@ -97,9 +110,10 @@ function analyzeModel(
     verts += vertexCount;
     faces += geo.triangles.length;
     if (geo.uvLayers[0]) {
-      const stretch = analyzeUvStretch(geo.positions, geo.uvLayers[0], geo.triangles, aniso);
+      const stretch = analyzeUvStretch(geo.positions, geo.uvLayers[0], geo.triangles, aniso, discont);
       stretchFaces += stretch.faces;
       stretchArea += stretch.area;
+      stretchedFaces += stretch.stretched;
       collapsedUvFaces += stretch.collapsed;
       totalArea += stretch.totalArea;
       worstAniso = Math.max(worstAniso, stretch.worst);
@@ -132,6 +146,7 @@ function analyzeModel(
     hasAuthoredNormals,
     nightP50: p50(nightLumas),
     stretchArea,
+    stretchedFaces,
     stretchFaces,
     totalArea,
     verts,
@@ -211,29 +226,41 @@ function analyzePrelit(
 }
 
 /**
- * Family C per geometry: how ANISOTROPIC is each face's UV→world map. Solve the linear `M` with
- * `M·(t1−t0) = p1−p0` and `M·(t2−t0) = p2−p0`; its singular values are world units per UV unit along the
- * map's principal axes, so `σmax/σmin` is how many times longer than wide a texel is drawn there. A
- * degenerate UV triangle (one axis mapping to nothing) counts as infinite — the texture is constant across
- * the face and a single texel row is smeared over it.
+ * Family C per geometry: a face whose UV→world map DISAGREES with the faces it shares an edge with.
  *
- * Area-weighted for the same reason Family A had to be (plan 024 round 1): a count of faces ranks slivers
- * above the road slabs anyone actually looks at.
+ * Per face, solve the linear `M` with `M·(t1−t0) = p1−p0` and `M·(t2−t0) = p2−p0`; its singular values are
+ * world units per UV unit along the map's principal axes. `σmax/σmin` is how many times longer than wide a
+ * texel is drawn there — the smear the field sees.
  *
- * NOT a defect on its own — a road legitimately carries 2–4× (density along it differs from across it), so
- * the threshold has to come from this scan's own distribution rather than from taste.
+ * **But magnitude alone does not separate a defect from a look, and the first map-wide run proved it** (plan
+ * 025 phase 1): ranking by raw anisotropy put `cables` and `wires_01..18_sfs` at the top with 100 % of their
+ * surface flagged, because that IS how you texture a wire. A long thin ribbon should map a texel far off
+ * square. Same failure 024 round 1 recorded when `standard01_lawn` topped a naive angle metric with a legal
+ * vegetation trick.
+ *
+ * What separates `road_lawn34` from a cable is that the cable is stretched UNIFORMLY end to end, while the
+ * road is a slab whose faces mostly agree and a band of which does not. So a face is flagged only when it is
+ * BOTH stretched past `limit` AND its crushed axis is `discont`× finer than the median of its edge-neighbours'
+ * — a discontinuity in the mapping, which is what reads as damage against its own surface. A face with no
+ * neighbour is never flagged: with nothing to disagree with, there is no evidence either way.
+ *
+ * Area-weighted, for the reason Family A had to be: a count ranks slivers above the road slabs anyone looks at.
  */
 function analyzeUvStretch(
   positions: Float32Array,
   uvs: Float32Array,
   triangles: readonly Triangleish[],
   limit: number,
-): { area: number; collapsed: number; faces: number; totalArea: number; worst: number } {
-  let area = 0;
+  discont: number,
+): { area: number; collapsed: number; faces: number; stretched: number; totalArea: number; worst: number } {
+  const area: number[] = [];
+  const aniso: number[] = [];
+  const sigmaMin: number[] = [];
   let collapsed = 0;
-  let flagged = 0;
   let totalArea = 0;
   let worst = 0;
+  let stretched = 0;
+
   for (const { a, b, c } of triangles) {
     const e1p = [0, 1, 2].map((k) => positions[b * 3 + k] - positions[a * 3 + k]);
     const e2p = [0, 1, 2].map((k) => positions[c * 3 + k] - positions[a * 3 + k]);
@@ -244,15 +271,22 @@ function analyzeUvStretch(
         e1p[2] * e2p[0] - e1p[0] * e2p[2],
         e1p[0] * e2p[1] - e1p[1] * e2p[0],
       );
-    if (faceArea < 1e-6) continue; // a degenerate POSITION face draws nothing
+    if (faceArea < 1e-6) {
+      area.push(0); // a degenerate POSITION face draws nothing — kept in place so face indices line up
+      aniso.push(0);
+      sigmaMin.push(Number.NaN);
+      continue;
+    }
     totalArea += faceArea;
+    area.push(faceArea);
     const e1t = [uvs[b * 2] - uvs[a * 2], uvs[b * 2 + 1] - uvs[a * 2 + 1]];
     const e2t = [uvs[c * 2] - uvs[a * 2], uvs[c * 2 + 1] - uvs[a * 2 + 1]];
     const det = e1t[0] * e2t[1] - e1t[1] * e2t[0];
     if (Math.abs(det) < 1e-14) {
       collapsed += 1;
-      flagged += 1;
-      area += faceArea;
+      stretched += 1;
+      aniso.push(Number.POSITIVE_INFINITY);
+      sigmaMin.push(0);
       worst = Number.POSITIVE_INFINITY;
       continue;
     }
@@ -267,14 +301,39 @@ function analyzeUvStretch(
     const small = Math.sqrt(Math.max(0, mean - spread));
     const ratio = small > 1e-9 ? big / small : Number.POSITIVE_INFINITY;
     if (!Number.isFinite(ratio)) collapsed += 1;
+    if (ratio > limit) stretched += 1;
     if (ratio > worst) worst = ratio;
-    if (ratio > limit) {
-      flagged += 1;
-      area += faceArea;
-    }
+    aniso.push(ratio);
+    sigmaMin.push(small);
   }
 
-  return { area, collapsed, faces: flagged, totalArea, worst };
+  // The model's OWN baseline: the median fine-axis texel size over its healthy faces. Comparing against
+  // immediate edge-neighbours was tried first and UNDER-DETECTS a contiguous band — a face in the middle of
+  // a broken strip has broken neighbours, so nothing disagrees, and `sbseabed3_las20` scored 1 flagged face
+  // of 39 while the field calls a quarter of it wrong. The model baseline catches the whole band.
+  const healthy = aniso.map((r, f) => (area[f] > 0 && r <= limit ? sigmaMin[f] : Number.NaN)).filter(Number.isFinite);
+  const drawn = area.filter((a) => a > 0).length;
+  // Too few healthy faces = no baseline to judge against, so REFUSE rather than guess. This is what keeps
+  // wires and cables out by construction: a ribbon is stretched end to end, so its healthy set is empty and
+  // its extreme mapping IS its design. Never a verdict without evidence.
+  if (healthy.length < 3 || healthy.length < drawn * 0.2) {
+    return { area: 0, collapsed, faces: 0, stretched, totalArea, worst };
+  }
+  healthy.sort((x, y) => x - y);
+  const baseline = healthy[healthy.length >> 1];
+
+  let flaggedArea = 0;
+  let flagged = 0;
+  aniso.forEach((ratio, f) => {
+    if (area[f] === 0 || ratio <= limit) return;
+    // Flagged when the face crushes its fine axis far below the scale the rest of this model works at.
+    if (baseline > 1e-9 && (sigmaMin[f] <= 1e-9 || baseline / sigmaMin[f] > discont)) {
+      flagged += 1;
+      flaggedArea += area[f];
+    }
+  });
+
+  return { area: flaggedArea, collapsed, faces: flagged, stretched, totalArea, worst };
 }
 
 function dot3(a: readonly number[], b: readonly number[]): number {
@@ -328,7 +387,12 @@ function main(): void {
       continue;
     }
     try {
-      rows.push({ from: source.from, model, ...info, ...analyzeModel(source.bytes, args.dz, args.aniso) });
+      rows.push({
+        from: source.from,
+        model,
+        ...info,
+        ...analyzeModel(source.bytes, args.dz, args.aniso, args.discont),
+      });
       scanned += 1;
     } catch {
       // unparseable (locked/exotic) — the converter has its own lane for those
@@ -375,13 +439,16 @@ function main(): void {
     .sort((a, b) => b.stretchArea / b.totalArea - a.stretchArea / a.totalArea)
     .slice(0, args.top);
 
-  console.log(`\n═══ Family C — UV stretched over ${args.aniso}× (top ${args.top} by AREA SHARE) ═══`);
+  console.log(
+    `\n═══ Family C — UV stretched over ${args.aniso}× AND ${args.discont}× off its neighbours ` +
+      `(top ${args.top} by AREA SHARE) ═══`,
+  );
   for (const r of familyC) {
     const share = ((r.stretchArea / r.totalArea) * 100).toFixed(1);
     console.log(
       `  ${r.model.padEnd(22)} ${share.padStart(5)}% of ${r.totalArea.toFixed(0).padStart(6)}u² ` +
-        `faces ${String(r.stretchFaces).padStart(5)}/${String(r.faces).padEnd(6)} ` +
-        `collapsed ${String(r.collapsedUvFaces).padStart(5)}  ×${String(r.instances).padEnd(4)} ` +
+        `discont ${String(r.stretchFaces).padStart(5)}/${String(r.faces).padEnd(6)} ` +
+        `(stretched ${String(r.stretchedFaces).padStart(5)}) collapsed ${String(r.collapsedUvFaces).padStart(5)}  ×${String(r.instances).padEnd(4)} ` +
         `@ ${r.position
           .map((v) => v.toFixed(1))
           .join(', ')
@@ -395,7 +462,7 @@ function main(): void {
 
     return `${String(set.length).padStart(5)} models / ${String(instances).padStart(6)} placements`;
   };
-  console.log(`\n  population over ${args.aniso}×, by the share of the model's own surface it covers:`);
+  console.log(`\n  population (discontinuous faces), by the share of the model's own surface they cover:`);
   for (const min of [0.01, 0.02, 0.05, 0.1, 0.2, 0.5]) {
     console.log(`    ≥ ${String(Math.round(min * 100)).padStart(3)}% of surface: ${tier(min)}`);
   }
@@ -418,23 +485,32 @@ function p50(values: number[]): number {
   return sorted.length === 0 ? -1 : sorted[Math.floor(sorted.length / 2)];
 }
 
-function parseArgs(): { aniso: number; dz: number; game: string; json: string | undefined; top: number } {
+function parseArgs(): {
+  aniso: number;
+  discont: number;
+  dz: number;
+  game: string;
+  json: string | undefined;
+  top: number;
+} {
   const argv = process.argv.slice(2);
   let game = 'original';
   let top = 10;
   let dz = 0.5;
   let aniso = 8;
+  let discont = 4;
   let json: string | undefined;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--game') game = argv[++i];
     else if (argv[i] === '--top') top = Number(argv[++i]);
     else if (argv[i] === '--dz') dz = Number(argv[++i]);
     else if (argv[i] === '--aniso') aniso = Number(argv[++i]);
+    else if (argv[i] === '--discont') discont = Number(argv[++i]);
     else if (argv[i] === '--json') json = argv[++i];
     else throw new Error(`unknown arg ${argv[i]}`);
   }
 
-  return { aniso, dz, game, json, top };
+  return { aniso, discont, dz, game, json, top };
 }
 
 main();
