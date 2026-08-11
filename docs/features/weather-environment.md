@@ -31,7 +31,9 @@
   (`renderware/map/water-mesh.ts`) tessellates the quads plus the ocean frame with a constant "deep" field
   — no foam, no beach damping — and it is shared by the game host and sa-map-viewer, so both draw one sea.
   `Engine.waterEnabled` gates the DRAW (plan 094/07) without dropping the mesh: an inspector switches the
-  sheet off to look under it, and a pixel A/B has to, because the waves ride the frame clock.
+  sheet off to look under it, and a pixel A/B has to, because the waves ride the frame clock. The in-game
+  Map Viewer got the "Show water" checkbox 2026-08-11, when its host implemented the `setShowWater` the
+  inspector had been gating on since 094/07; leaving the viewer restores the sea.
 - **Fog**: distance fog blended into the sky horizon colour from the same LUT, driven by timecyc
   (`engine-environment-driver.ts`). Since plan 074/21 fog is a strict SUBSET of the LOD ring — the cap
   follows `?draw=` so the cull edge can never be exposed — and clouds composite into the fog colour at

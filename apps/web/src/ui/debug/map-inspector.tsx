@@ -37,6 +37,8 @@ export interface MapGame {
   setManualCells: (cells: CellCoord[] | null, lod?: boolean) => void;
   /** Enter/leave map-viewer mode (detached camera + pinned cells). */
   setMapViewer: (enabled: boolean) => void;
+  /** Draw the scattered procobj clutter or not — what is GENERATED, subtracted from what the IPLs place. */
+  setShowClutter?: (enabled: boolean) => void;
   setShowCollision?: (enabled: boolean) => void;
   /** Draw the water surface or not — an inspector has to be able to look UNDER the sea sheet. */
   setShowWater?: (enabled: boolean) => void;
@@ -71,6 +73,7 @@ export function MapInspector({ game }: { game: MapGame }): ReactElement {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [showLods, setShowLods] = useState(false);
   const [showWater, setShowWater] = useState(true);
+  const [showClutter, setShowClutter] = useState(true);
 
   const cellSize = game.cellSize();
 
@@ -214,6 +217,17 @@ export function MapInspector({ game }: { game: MapGame }): ReactElement {
               const next = !showWater;
               setShowWater(next);
               game.setShowWater?.(next);
+            }}
+          />
+        ) : null}
+        {game.setShowClutter ? (
+          <Checkbox
+            checked={showClutter}
+            label="Show procobj"
+            onToggle={() => {
+              const next = !showClutter;
+              setShowClutter(next);
+              game.setShowClutter?.(next);
             }}
           />
         ) : null}

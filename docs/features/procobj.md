@@ -150,6 +150,10 @@ stock DFFs).
 - Wind mod's `decoratePart` runs on clutter parts (procedural bushes sway when listed).
 - Clutter is pickable through the engine Map screen (`CellStore.pick` over the placement mapper, plan
   074/22). Offline sanity tool: `scripts/debug/procobj-stats.ts`.
+- **"Show procobj"** (Map Viewer checkbox, 2026-08-11): `Engine.clutterEnabled` gates the DRAW, so the
+  generated layer subtracts out of the frame and leaves the map the IPLs actually place. The scatter, its
+  buffers and its COLLIDERS are untouched — switching back costs no re-upload, and the draw/triangle counters
+  move by exactly what procobj costs at that pose. Restored on map-viewer exit.
 
 ## Known gaps / candidates
 

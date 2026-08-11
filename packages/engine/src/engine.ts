@@ -588,6 +588,16 @@ const LIGHT_POINT = 2;
 
 export class Engine {
   cells!: CellStore;
+
+  /**
+   * Draw the scattered procedural clutter at all. A debug toggle in the same shape as {@link waterEnabled}:
+   * procobj is GENERATED, not authored, so an inspector has to be able to subtract it and see the map the
+   * IPLs actually place — and read its cost straight off the draw/triangle counters.
+   *
+   * It gates the DRAW only. The scatter, its buffers and its COLLIDERS stay exactly as they were, so this
+   * hides the bushes without moving anything a run would notice.
+   */
+  clutterEnabled = true;
   /**
    * Debug normals (074/22): shade every surface by its world normal instead of its material — the three
    * build's scene-wide `MeshNormalMaterial` override, which WebGPU has no equivalent of. Shares one frame
@@ -2429,6 +2439,9 @@ export class Engine {
   /** Debug wireframes (074/13 phase 4) — one draw per registered set, skipped entirely when there are none. */
 
   private drawClutter(pass: GPURenderPassEncoder, camera: CameraState): number {
+    if (!this.clutterEnabled) {
+      return 0;
+    }
     let draws = 0;
     const [eyeX, eyeY, eyeZ] = camera.eye;
     for (const cellDraws of this.clutterCells.values()) {

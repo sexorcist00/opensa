@@ -1365,6 +1365,12 @@ async function boot(
         }
         if (!enabled) {
           setShowCollision(false); // the overlay belongs to the viewer; leaving must not strand it on screen
+          // Same rule for the two SUBTRACTIVE toggles, and here it cuts twice: the checkboxes live in the
+          // inspector, so leaving with the sea or the clutter switched off strands the world without them AND
+          // with no control left to bring them back — and the inspector's own state re-mounts checked, which
+          // would make the panel lie about a world it no longer matches.
+          engine.clutterEnabled = true;
+          engine.waterEnabled = true;
           setup.driver.setManualCells(null);
           selectedPlacement = null;
           hiddenPlacements = 0;
@@ -1372,7 +1378,13 @@ async function boot(
         }
         events.emit('map-viewer', { enabled });
       },
+      setShowClutter: (enabled): void => {
+        engine.clutterEnabled = enabled;
+      },
       setShowCollision,
+      setShowWater: (enabled): void => {
+        engine.waterEnabled = enabled;
+      },
       viewCell: (): [number, number] | null => {
         const [gx, gy] = viewOf();
 

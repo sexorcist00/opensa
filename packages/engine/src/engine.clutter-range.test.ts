@@ -128,3 +128,45 @@ describe('Engine clutter draw distance', () => {
     });
   });
 });
+
+/**
+ * The map viewer's "Show procobj" gate. It shares this file's rig because it acts on the same draw, and what
+ * has to be pinned is that it is a DRAW gate: the scatter survives it, so switching back costs no re-upload.
+ */
+describe('Engine clutter gate', () => {
+  describe('negative cases', () => {
+    it('issues no draw and counts no triangles while the gate is off', async () => {
+      const engine = new Engine();
+      await engine.init(harness.canvas);
+      const id = engine.createClutterModel(model());
+      engine.setCellClutter('near', [{ drawDistance: 500, matrices: instanceAt(0), model: id }]);
+      engine.clutterEnabled = false;
+
+      gpu.reset();
+      const stats = engine.frame(cameraLookingDownX(0));
+
+      expect(clutterDraws(gpu)).toEqual([]);
+      expect(stats.trianglesRecorded).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('draws again from the SAME buffers once it is back on', async () => {
+      const engine = new Engine();
+      await engine.init(harness.canvas);
+      const id = engine.createClutterModel(model());
+      engine.setCellClutter('near', [{ drawDistance: 500, matrices: instanceAt(0), model: id }]);
+
+      engine.clutterEnabled = false;
+      engine.frame(cameraLookingDownX(0));
+
+      engine.clutterEnabled = true;
+      gpu.reset();
+      engine.frame(cameraLookingDownX(0));
+
+      expect(clutterDraws(gpu)).toHaveLength(1);
+      // A re-upload would mean the gate dropped the scatter — the whole point is that it did not.
+      expect(gpu.writes.filter((write) => String(write.label).startsWith('clutter-range:'))).toEqual([]);
+    });
+  });
+});
