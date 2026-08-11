@@ -722,6 +722,36 @@ is determinism as much as reach. And **`avgTriangles` under-reports this feature
 instances, so a group the camera stands inside is counted whole and culled per instance in the shader. The
 column is accurate about vertex load and blind to the fill saving.
 
+## 2026-08-11 — the species floor, and what "the budget is conserved" is worth in frame terms
+
+[`opensa-engine/2026-08-11-headless-procobj-species-floor.json`](opensa-engine/2026-08-11-headless-procobj-species-floor.json)
+— four `country-dusk` legs, same lane and pak as the two 08-10 rows above: **two `?procobjFloor=0` arms and
+two `?procobjFloor=1` arms**, so each side carries its own A/A drift. The floor guarantees every eligible
+clutter MODEL at least one placement in a cell where `procObjLimit` binds, paying for it with the
+highest-lottery survivor ([plan 012](../../tools/sa-procobj-placement/docs/plans/012-species-representation-floor.md)).
+
+| arm | draws | triangles | `gpuMs.pass` | `hitch.maxMs` |
+| --- | --- | --- | --- | --- |
+| floor 0 (A) | 821 | 1 191 107 | 3.661 | 16.7 |
+| floor 0 (A′) | 821 | 1 191 235 | 3.672 | 9.5 |
+| floor 1 (B) | 821 | 1 191 176 | 3.688 | 31.8 |
+| floor 1 (B′) | 821 | 1 191 206 | 3.683 | 15.2 |
+
+**No resolvable cost.** Triangles move **+0.002 %** on the pair means against a floor-0 pair spread of
+0.011 %, and `avgDrawCalls` is **821 in every arm** — which is what the design predicts rather than a lucky
+result: the floor never adds a placement, it swaps one. `gpuMs.pass` +0.52 % is the only column that moves
+and it sits between the two pairs' own drifts (0.30 % and 0.14 %).
+
+**Read the saturation before the columns.** This is the capped lane, so `avgMs` sits on 8.33 and `p95Ms` on
+9.0–9.2 in all four arms; neither could have answered a cost question here (the same trap as the 08-10
+ladder). `hitch.maxMs` spans 9.5–31.8 with no relation to the arm — one slow frame in B, none in B′.
+
+**The honest gap, and it is the one the 08-10 null taught:** no positive control was run in THIS lane, so
+nothing here establishes that the floor changes anything in `country-dusk` specifically. The proof that the
+knob does something is a picture taken elsewhere — cell `-5,7` in the desert, 1.00 % of the frame against a
+9.81 % clutter-off control, recorded in plan 012. **This run supports "no cost", not "an effect was present
+and still cost nothing".**
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

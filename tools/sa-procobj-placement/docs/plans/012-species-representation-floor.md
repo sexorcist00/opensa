@@ -72,6 +72,36 @@ moves 1 % of the frame where turning the whole layer off moves 10 %. On this fra
 the only TALL thing in the patch, so it reads clearly; a restored grass tuft would not. That is an argument
 for the floor being about the roster, and against ever growing it into a quota.
 
+### Frame cost, measured 2026-08-11 — none, and the design is why
+
+Four `country-dusk` legs, two per side so each carries its own A/A drift
+([the run](../../../../docs/benchmarks/opensa-engine/2026-08-11-headless-procobj-species-floor.json)):
+`avgDrawCalls` **821 in every arm**, triangles **+0.002 %** against a 0.011 % same-side spread, `gpuMs.pass`
++0.52 % between the two pairs' own drifts of 0.30 % and 0.14 %. **The floor never adds a placement, it swaps
+one** — so "no cost" is a property of budget conservation, not a lucky reading. `avgMs`/`p95Ms` are saturated
+in this lane and answer nothing. Gap: no positive control in this lane, so this says "no cost", not "an
+effect was present and cost nothing" — the effect is proven by the picture below instead.
+
+### Does this belong in `sa-procobj-placement` too? No — the mechanism is not there
+
+**Checked against the code, not assumed.** The `sa` bake runs `selectPlacements`
+(`tools/map-placement/src/procobj/convert.ts`): **one global lowest-lottery slice at `procObjMax`, no
+per-cell cap and no MINDIST thinning**. The defect this plan fixes is per-CELL competition for a shared
+budget, and that regime does not exist on that path — a species can only be zeroed there if the global cut
+binds, which it does not (**91 092 placed against a `procObjMax` of 100 000**, `config.ts:42`) and which says
+so loudly when it ever does (`build.ts:210` prints `CAP DROPPED …`).
+
+**So on `sa` every baked species already appears everywhere it was placed** — the 43 species in
+`lod_procobj.models` are permanent static IPL rows at `lod = -1`, and nothing caps a static instance. The
+species the bake does NOT take (the short ones and the underwater set) still scatter through **SA's own**
+`CProcObjectMan` with the original's own pooling, which our floor cannot reach and should not try to.
+
+**Which answers the question the other way round:** turning the floor ON for `opensa` moves the two targets
+CLOSER together, because `sa` already behaves as if the floor were on. It is `opensa`'s default that is the
+odd one out. **The one thing to re-check if density ever rises on `sa`**: once `procObjMax` binds, the global
+slice takes from every category at once and could zero a species map-wide — the same idea would then be
+needed there, and the cap's own log line is the tripwire.
+
 **Equivalence, checked rather than asserted:** with the floor off, `procObjCellBudget` returns byte-identical
 counts to the old `lottery < min(density, procObjLotteryCap(batches, limit))` cut — **0 mismatches over the
 96 real clutter cells** of the same sample (throwaway `.tmp-` script, deleted).
