@@ -322,6 +322,37 @@ the population an honest denominator.
 and 3 464 for "extreme and off the model's baseline"; both are strictly larger sets that mostly are not
 broken, and quoting either as the defect count would be a scope error.
 
+### The labelling set — Phase 1c, awaiting the user's eyes
+
+Population under the model-baseline criterion (a tier is "flagged faces cover ≥ N % of the model's own
+surface"; the last column drops models too small to be worth a trip):
+
+| tier | models | placements | over 200 u² |
+|---|---|---|---|
+| ≥ 1 % | 2 114 | 15 836 | 1 733 |
+| ≥ 5 % | 825 | 5 011 | 643 |
+| ≥ 10 % | 417 | 2 160 | 326 |
+| ≥ 20 % | 169 | 614 | 134 |
+| ≥ 50 % | 35 | 37 | 25 |
+
+Thirty models to look at, chosen to make the labels DECIDE something rather than confirm: the four the field
+already reported (they must come back TRUE or the criterion is worthless), the ribbon families it is
+suspected of over-flagging (they must come back FALSE), and a spread of ordinary world surfaces where nobody
+knows the answer. Near-identical siblings are collapsed to one entry — there is no information in the second
+`vgntelwires`.
+
+| group | models | what a verdict decides |
+|---|---|---|
+| field-known controls | `road_lawn34` 7.5 % · `road_lawn32` 3.3 % · `road_lawn08` 1.6 % · `sbseabed3_las20` 23.6 % | the criterion's floor: it must rank these as defects, and today three of them sit BELOW its 10 % tier |
+| wires / cables | `wires_04c_sfs` 81.1 % · `vgsewires04_lvs` 74.8 % · `vgntelwires21` 62.1 % · `cewirestown09` 61.6 % · `ce_wires01` 50.4 % | the suspected false positives. If these read fine in the field, the ranking is upside down and the geometric-elongation idea is the fix |
+| thin signage / neon | `triadneon01` 63.3 % · `burgershotneon1` 57.3 % · `vgsn_burgsht_neon01` 59.5 % · `drvin_sign` 35.8 % | whether "thin emissive strip" is a second by-design family alongside cables |
+| fences / mesh | `snpedteew1vv_las` 69.9 % · `snpedteew8_las06` 54.6 % · `snpedteairt_las` 39.7 % | same question for wire mesh |
+| ordinary surfaces — the informative ones | `road03sfn` 40.1 % · `backalleys1_sfe` 43.2 % · `track01_sfn` 41.5 % · `ferrybit3_sfw` 45.8 % · `garse_85_sfe` 40.4 % · `pigpenblok1tr_lae` 72.4 % · `cstwnland03` 44.7 % · `archbuild_wins` 35.2 % · `stationstuff` 41.8 % · `rdwarhus` 40.4 % · `wc_lift_sfse` 48.2 % | the actual unknown. `road03sfn` is the single most valuable spot: a ROAD at 40 %, five times `road_lawn34`'s share |
+| interiors, skip unless convenient | `airport_int2` 54.6 % · `airport_front` 35.6 % · `snowover04` 64.7 % | z > 1 000 — interior space, needs its own access |
+
+Positions and the exact per-model counts are in the run output; every row is reachable with
+`npx tsx scripts/debug/teleport-spot.ts <model> --game original`.
+
 ## Phase 1b — if a criterion ever separates it: find every model it happened to
 
 Extend `scripts/debug/scan-model-defects.ts` with the Phase 0 metric as criterion **(e)**, area-weighted and
