@@ -80,10 +80,22 @@ stock DFFs).
   ring, `100` is SA's own). **Caveat for anyone measuring this**: `frameTriangles` counts SUBMITTED instances,
   so a group the camera stands inside is counted whole — the column is accurate about vertex load and blind to
   the fill saving.
-- **One `procObjLimit` (default 150/cell, `?procobjLimit=<n>`)** caps BOTH rendering and collision via the
-  cell-wide lottery threshold; vanilla pools at ~300 for the same physics-cost reason. **Its value is unowned
-  since the 2026-08-09 column fix** — the candidate pool it rations shrank ~19×, so it binds far less often
-  and the number was calibrated against a density that no longer exists.
+- **One `procObjLimit` (default 150/cell, `?procobjLimit=<n>`)** caps BOTH rendering and collision, and since
+  2026-08-11 through **one function**: `procObjCellBudget` resolves the per-category density, the cap and the
+  species floor into a keep-count per batch, and the render path and the collider path each spend that array
+  — so they cannot diverge by anyone forgetting to apply the same rule twice. Vanilla pools at ~300 for the
+  same physics-cost reason. **Its value is unowned since the 2026-08-09 column fix** — the candidate pool it
+  rations shrank ~19×, so it binds far less often and the number was calibrated against a density that no
+  longer exists.
+- **The cap can zero a whole SPECIES, and `?procobjFloor=<n>` is the fix (default OFF).** It pools every
+  candidate in the cell and keeps the lowest lotteries, so what decides whether a species dies is how many
+  species compete there: measured on the shipping rule set, **17.7 % of clutter cells lose at least one
+  model** (worst `8,-3` at 16 of 23) and it reads as terrain that simply has no cacti. The floor guarantees
+  every eligible MODEL at least `min(n, its eligible count)` placements — per model, not per batch, because
+  19 of 56 models scatter on several surfaces — and **pays for them at the top of the lottery order**, so the
+  budget is unchanged and the skew above the floor is untouched. `n = 1` removes the defect completely for
+  0.32 % of the drawn placements. OFF by default because the value it changes is the PICTURE, and that call
+  is a field one ([plan 012](../../tools/sa-procobj-placement/docs/plans/012-species-representation-floor.md)).
 - **The bake left the `opensa` branch on 2026-08-10 (plan 014), so the runtime scatter is the WHOLE clutter
   layer there again.** `convertProcObj` STRIPS every species it bakes, so while the bake ran on this target the
   shipped `data/procobj.dat` carried 9 rules of 96 (all `P_UNDERWATERBARREN`) and the runtime knobs measured a

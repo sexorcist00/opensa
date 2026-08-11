@@ -1,7 +1,63 @@
 # 012 — Every species survives the cap (no silently missing type)
 
-> **UNBUILT.** Moved here 2026-08-09 from the roadmap chain `07-lod-generators-extended/01`, which was dissolved into the tools it touches — see
+> **SHIPPED 2026-08-11, default OFF.** Moved here 2026-08-09 from the roadmap chain
+> `07-lod-generators-extended/01`, which was dissolved into the tools it touches — see
 > [roadmap 0.5.0](../../../../docs/roadmap/0.5.0/readme.md) for what the chain was and what shipped out of it.
+
+## SHIPPED 2026-08-11 — and the "latent on what we ship" verdict was DEAD before it was written down
+
+**The defect is live on the build we run.** Every earlier reading of this plan closed with "latent, because
+`convertProcObj` strips the converted species and leaves the runtime path 8 underwater rules". That stopped
+being true on 2026-08-10, when the redesign moved the procobj bake inside the `sa` branch: `opensa` runs no
+bake at all, so `build/original/opensa/data/procobj.dat` ships **95 rules** and measures **identically to
+stock** — 17 of 96 clutter cells (**17.7 %**) lose at least one species, worst cell `8,-3` at **16 of 23**.
+The fix's own plan said it would return "the moment a game does not run the placement tool", and that is
+exactly what `opensa` now is. Nothing re-read this page when the shape changed; the same family as lesson 51.
+
+**What shipped.** `procObjCellBudget` (`packages/renderware/src/map/procobj-scatter.ts`) — **one** function
+resolving the per-category density knobs, the `procObjLimit` cap and the floor into **one keep-count per
+batch**, which both the render path (`cellClutter`) and the collider path (`procObjColliders`) now spend.
+That is task 5 satisfied by construction rather than by a matching rule: `procObjColliders` no longer computes
+a cutoff at all, it takes the counts, so the render set and the collider set cannot diverge. Config:
+`GtaSaWorldAdapterConfig.procObjSpeciesFloor`, **default 0 = OFF**, field knob `?procobjFloor=<n>`.
+
+**The floor's unit is the MODEL, not the batch — decided here, and it is not cosmetic.** Batches are keyed
+model×surface since 010, and 19 of the 56 models scatter on several surfaces; a bush still drawn from the
+neighbouring surface has not gone missing, so a per-batch floor reserves twice for one visible species. The
+model's floor is filled from its own lowest lotteries wherever they grew.
+
+**The rescue is PAID FOR**, at the top of the lottery order: the placements the cap was about to cut are the
+ones it now cuts, and no model is taken below its own floor. So `procObjLimit` stays a real number — the
+script's binding identity (binding ⇒ exactly `limit` drawn) passes with the floor on, over all 96 cells.
+
+### Measured 2026-08-11 — same sample, `--stride 3`, stock rules, `procObjLimit` 150, density 1
+
+| Floor | Cells losing ≥1 species | Price (placements traded, of 10 825 drawn) |
+| --- | --- | --- |
+| OFF (0) | **17 of 96 (17.7 %)** | — |
+| 1 | **0** | 35 (**0.32 %**) |
+| 2 | **0** | 104 (0.96 %) |
+| 3 | **0** | 197 (1.82 %) |
+
+**Floor 1 is the whole fix**; 2 and 3 buy nothing measurable on this corpus and cost 3× and 6× as much
+character. The ask was "none may be dropped to zero", and 1 delivers it — the case for 2 is only that a
+species represented by a single object may read as an accident rather than as a species, which is a LOOK
+call and belongs to the field, not to this table.
+
+**Why the default is still OFF.** The value is a look decision on a picture nobody has judged yet, the same
+shape as the per-category ranges of plan 013 — and unlike a perf fix it changes what the world looks like.
+`?procobjFloor=1` is one field round away, and P1 already certified there is no frame-time budget to argue
+about. **Turning it on is the recommended next step, not a further measurement.**
+
+**Equivalence, checked rather than asserted:** with the floor off, `procObjCellBudget` returns byte-identical
+counts to the old `lottery < min(density, procObjLotteryCap(batches, limit))` cut — **0 mismatches over the
+96 real clutter cells** of the same sample (throwaway `.tmp-` script, deleted).
+
+**Instrument correction, and it matters for reading this page's history:** the sizing script counted a
+species per BATCH, which reads **19 cells / 19.8 %** and a worst cell of 18 of 26. Counted per MODEL — the
+unit the floor protects and the unit a player sees — it reads **17 / 17.7 %** and 16 of 23, reproducing this
+plan's own 2026-08-09 table exactly. The per-batch reading was measuring the model×surface split, not the
+world. The script counts per model now; do not compare a number from it against a pre-2026-08-11 per-batch run.
 
 
 Independent of the ASI question
@@ -137,14 +193,24 @@ binding rate, which is already 97.9 % and says nothing on its own.
       CELL, and only it** — the global cut has no zeroing to prevent, so ~~a per-species floor on
       `procObjMax`~~ is struck along with decision 2's second half. N is still open and is 02's to pick,
       against the density it lands on.
-- [ ] Implement the chosen algorithm behind a config flag, defaulting OFF until the numbers justify it.
-- [ ] Unit tests: three species with skewed rule densities and a budget of 300 — all three present, and the
+- [x] Implement the chosen algorithm behind a config flag, defaulting OFF until the numbers justify it.
+      **DONE 2026-08-11** — `procObjCellBudget`, `procObjSpeciesFloor` / `?procobjFloor=<n>`, default 0.
+      Not the largest-remainder apportionment decision 3 leaned toward: a reservation + a payment at the top
+      of the lottery order is the same guarantee with none of the quota, and apportionment would have
+      flattened the skew the reference set says a good scatter has.
+- [x] Unit tests: three species with skewed rule densities and a budget of 300 — all three present, and the
       proportions still follow the lottery order above the floor; with the flag off, the placement set is
-      byte-identical to today (regression).
-- [ ] Apply the same rule to `procObjLotteryCap` so the RENDER set and the COLLIDER set agree — the two
+      byte-identical to today (regression). **DONE** — `procobj-scatter.test.ts`, plus the two multi-surface
+      cases the model-not-batch unit needs and a real-scatter regression against the old cut.
+- [x] Apply the same rule to `procObjLotteryCap` so the RENDER set and the COLLIDER set agree — the two
       share one budget by design ("what isn't rendered is never collided"), and a floor applied to only one
-      of them would break that invariant.
+      of them would break that invariant. **DONE, structurally**: the two paths no longer each compute a
+      cutoff, they spend one keep-count array, so agreement is not a rule anyone can forget to apply.
 - [ ] In-viewer check: a desert cell that previously showed only one shrub species shows its full roster.
+      **The flight plan, since this is now checkable on the shipped build**: `8,-3` (~2125, −625) loses 7
+      models at once — `genveg_bush01` (25 instances), `genveg_bush11` (7), `genveg_bush13` (2) and four
+      `dead_tree_*`; `-4,-4` (~−875, −875) loses `cedar1_po` (7) and `ash_po` (4). A/B is one URL:
+      `?procobjFloor=0` against `?procobjFloor=1` from the same spot.
 
 ## Verification
 
@@ -210,5 +276,21 @@ MINDIST; `sm_des_pcklypr1` 336 → 113 → **2**; `veg_pflowers03` 14 431 → 48
 `dead_tree_*` land on 140–149 each. A rare species is rare because of its MINDIST column, not because a cap
 took it.
 
-- floor N chosen + why: _(not yet — the fix is deferred, see the verdict above)_
-- proportion shift against vanilla (how much character the floor costs): _(not yet)_
+### The shipping rule set, re-measured 2026-08-11 — the row that killed the "latent" verdict
+
+| Rule set | Cells sampled | With clutter | Cap binding | Cells losing ≥1 species |
+| --- | --- | --- | --- | --- |
+| stock `procobj.dat` (95 rules) | 188 (stride 3) | 96 | 56 (58.3 %) | **17 (17.7 %)** |
+| `build/original/opensa/data/procobj.dat` — **95 rules**, no bake since 2026-08-10 | 188 | 96 | 56 (58.3 %) | **17 (17.7 %)** |
+
+The shipping set is now the stock set. The 8-underwater-rules row in the table above is the pre-2026-08-10
+build and says nothing about what runs today.
+
+- floor N chosen + why: **1**, and OFF by default. 1 is the smallest number that satisfies the ask, removes
+  the defect completely on this corpus (17.7 % → 0), and costs 0.32 % of the drawn placements; 2 and 3 remove
+  nothing further at 3× and 6× the price. It stays OFF because what it changes is the PICTURE and nobody has
+  judged that picture yet.
+- proportion shift against vanilla (how much character the floor costs): **35 of 10 825 drawn placements
+  traded at N=1** (0.32 %), 104 at N=2, 197 at N=3. The budget itself never moves — every rescued placement
+  is paid for by the highest-lottery placement that survived, so the shift is entirely from the abundant
+  species to the rare ones, which is the trade the plan is asking for.

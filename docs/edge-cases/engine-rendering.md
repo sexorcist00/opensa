@@ -113,3 +113,12 @@ Limits and deliberate approximations of the own WebGPU engine.
   saving** — measure a clutter-range change on `gpuMs.pass`, and read `avgTriangles` only as a direction.
   (Shipped 2026-08-10 with the ranges; the honest fix would be a counter the shader can decrement, which
   nothing else in the engine needs yet.)
+- **On the shipped default, a clutter cell can draw NONE of a species it is eligible for.** `procObjLimit`
+  pools every candidate in the cell and keeps the lowest lotteries, so a species competing against many
+  others can lose all of its placements: measured 2026-08-11 on the shipping rule set, **17 of 96 clutter
+  cells (17.7 %)** lose at least one model, worst `8,-3` (~2125, −625) at 16 of 23 — seven models at once,
+  including four `dead_tree_*`. It reads as terrain that simply has no cacti, and nothing warns. **The fix
+  exists and is OFF by default**: `?procobjFloor=1` reserves every eligible model at least one placement and
+  takes it from the top of the lottery order, which removes the loss entirely for 0.32 % of the drawn
+  placements. Left off because it changes the picture and the picture has not been judged
+  ([plan 012](../../tools/sa-procobj-placement/docs/plans/012-species-representation-floor.md)).
