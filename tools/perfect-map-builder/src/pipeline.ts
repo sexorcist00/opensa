@@ -1,4 +1,3 @@
-import type { UvStretchReport } from '@opensa/map-optimizer/run';
 import type { ProcObjDensityInput } from '@opensa/map-placement/procobj-density';
 
 import { parsePrelightInfo, type PrelightInfo } from '@opensa/lod-common/prelight';
@@ -179,29 +178,15 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // corrects the whole map by default, and `broken-prelight.json` (mods-src root or the mods subfolder)
   // ADDITIONALLY forces the listed models past the skip-guards — see plan 019 iterations 5/6 for the formats.
   const prelitForce = loadPrelitOnly(inPath, source(subfolders.mods));
-  // A box rather than a plain `let`: the value is written inside a stage closure and read after the split.
-  const uvStretchLedger: { value?: UvStretchReport } = {};
   chain.push({
     name: 'optimize',
-    // The stage runner discards return values, so the UV-repair ledger is caught here and written beside the
-    // build. The user's before/after comparison needs the list of models the pass actually CHANGED, and
-    // `.work/<n>-optimize` is deleted as the stage is consumed.
-    run: async (game, out) => {
-      const optimized = await runOptimizer({
+    run: (game, out) =>
+      runOptimizer({
         gameDir: game,
         outDir: out,
         passes: config.optimizerPasses,
         ...(prelitForce ? { prelitOptions: { force: prelitForce } } : {}),
-      });
-      if (optimized.uvStretch) {
-        uvStretchLedger.value = optimized.uvStretch;
-        // Written HERE, not only merged into the pack's report: the root `report.json` is produced by the
-        // opensa branch alone, so a `--exclude opensa` run (the `sa` target) left the ledger nowhere on disk
-        // at all — measured 2026-08-11, the sa build printed its line and wrote no list. The optimize stage
-        // runs for BOTH targets, so this is the one place that always sees it.
-        writeFileSync(join(outPath, 'uv-stretch.json'), `${JSON.stringify(optimized.uvStretch, null, 2)}\n`);
-      }
-    },
+      }),
   });
   if (populated(subfolders.vegetation)) {
     chain.push({
@@ -328,7 +313,6 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
           log,
           outPath,
           packing: until !== 'opensa' && !excluded.has('pack'),
-          uvStretch: uvStretchLedger.value,
           work,
         }),
       )),
@@ -520,11 +504,9 @@ async function buildOpensaTarget(step: {
   outPath: string;
   /** Whether the convert runs. False (`--until opensa` / `--exclude pack`) leaves `opensa/` in GAME format. */
   packing: boolean;
-  /** The UV-repair ledger from the optimize stage — merged into the root report for before/after work. */
-  uvStretch?: UvStretchReport;
   work: string;
 }): Promise<{ dir: string; name: string }[]> {
-  const { alwaysOnLods, config, excludeItems, game, holeFillModels, log, outPath, packing, uvStretch, work } = step;
+  const { alwaysOnLods, config, excludeItems, game, holeFillModels, log, outPath, packing, work } = step;
   const opensa = join(outPath, 'opensa');
   const lodDir = packing ? join(work, 'opensa-lod') : opensa;
   log(`opensa → ${packing ? '.work/opensa-lod' : 'opensa/'} (baking cells — can take several minutes)`);
@@ -571,7 +553,6 @@ async function buildOpensaTarget(step: {
       {
         ...packed.report,
         ...(packed.models ? { models: packed.models } : {}),
-        ...(uvStretch ? { uvStretch } : {}),
       },
       null,
       2,

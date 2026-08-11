@@ -8,8 +8,7 @@ import { basename } from 'node:path';
 import type { LevelVerdict, NightVerdict, PrelitContextOptions } from './adapters/gta-sa/prelit-context';
 
 export { type OnlyEntry, parseOnlyList, type PrelitContextOptions } from './adapters/gta-sa/prelit-context';
-import type { RunReport, UvStretchReport } from './core';
-import type { MapPlugin } from './core/asset';
+import type { RunReport } from './core';
 
 import { createGtaSaAdapter } from './adapters/gta-sa';
 import { runPipeline } from './core';
@@ -18,7 +17,6 @@ import { config } from './optimizer.config';
 import { createApplyPrelitLevel } from './plugins/apply-prelit-level';
 import { createBakeVertexAo } from './plugins/bake-vertex-ao';
 import { createConformNight } from './plugins/conform-night';
-import { createRepairUvStretch, loadUvStretchModels, type RepairStats } from './plugins/repair-uv-stretch';
 import { createSmoothNormals, emptySmoothNormalsStats } from './plugins/smooth-normals';
 import { createWeldSeamPrelit } from './plugins/weld-seam-prelit';
 
@@ -30,19 +28,17 @@ export interface OptimizerPasses {
   addNormals: boolean;
   /** World-context prelight — day level + night repair/synthesis by neighbourhood (plan 019). */
   prelit: boolean;
-  /** UV-stretch repair over the scanner's model list (plan 025). */
-  repairUv: boolean;
   /** Texture mip pass before the model run (plan on `--textures`). */
   textures: boolean;
   /** Cross-model prelit seam weld (plan 016). */
   weldSeams: boolean;
 }
 
-/** Default passes. (`refine`/plan 014 and `stitchGaps`/plan 017 were retired — see their plans for why.) */
+/** Default passes. (`refine`/plan 014, `stitchGaps`/plan 017 and `repairUv`/plan 025 were retired — see
+ *  their plans for why; 025's record is `docs/postmortem/uv-stretch-repair.md`.) */
 export const DEFAULT_PASSES: OptimizerPasses = {
   addNormals: true,
   prelit: true,
-  repairUv: true,
   textures: true,
   weldSeams: true,
 };
@@ -60,8 +56,6 @@ export interface RunOptimizerOptions {
   /** Tuning for the prelit pass (tolerances, curated `exclude` list from the review report). */
   prelitOptions?: PrelitContextOptions;
 }
-
-export type { UvStretchReport };
 
 /** Run the optimizer with the given passes; returns the run report. Mirrors the full game tree to `outDir`. */
 export async function runOptimizer(options: RunOptimizerOptions): Promise<RunReport> {
@@ -124,8 +118,6 @@ export async function runOptimizer(options: RunOptimizerOptions): Promise<RunRep
   } else if (passes.weldSeams) {
     pushSeamWeld(plugins, adapter);
   }
-  const uv = pushUvRepair(plugins, passes.repairUv);
-
   const report = await runPipeline(
     adapter,
     { ...config, concurrency: options.concurrency ?? config.concurrency, plugins },
@@ -136,21 +128,6 @@ export async function runOptimizer(options: RunOptimizerOptions): Promise<RunRep
       `vert(s) in ${normalsStats.repairedMeshes} mesh(es), recomputed ${normalsStats.recomputedMeshes}, ` +
       `created ${normalsStats.createdMeshes} (plan 020)`,
   );
-  if (uv.models.size > 0) {
-    console.log(
-      `  uv-stretch — repaired ${uv.stats.repaired} face(s) across ${uv.repaired.length} model(s) ` +
-        `(+${uv.stats.split} split verts, ${uv.stats.refused} refused for want of a healthy neighbour)`,
-    );
-    report.uvStretch = {
-      candidates: [...uv.models].sort(),
-      refusedFaces: uv.stats.refused,
-      repairedFaces: uv.stats.repaired,
-      // The models actually CHANGED, which is the list a before/after comparison needs — a candidate whose
-      // faces were all refused is not one of them.
-      repairedModels: [...uv.repaired].sort(),
-      splitVertices: uv.stats.split,
-    };
-  }
 
   return report;
 }
@@ -189,23 +166,4 @@ function pushSeamWeld(
       `feathered ${stats.feathered} vertex(es), ${stats.skippedSpread} skipped (spread)`,
   );
   plugins.push(createWeldSeamPrelit(overrides));
-}
-
-/**
- * Append the UV-stretch repair (plan 025), LAST so it reads the geometry every other pass has finished with.
- * The model list gates WHERE it runs; the correction itself derives from each asset's own neighbours, so a
- * mod replacing one of these is judged on its own numbers rather than handed a stored patch.
- */
-function pushUvRepair(
-  plugins: MapPlugin[],
-  enabled: boolean,
-): { models: ReadonlySet<string>; repaired: string[]; stats: RepairStats } {
-  const stats: RepairStats = { refused: 0, repaired: 0, split: 0 };
-  const repaired: string[] = [];
-  const models = enabled ? loadUvStretchModels() : new Set<string>();
-  if (models.size > 0) {
-    plugins.push(createRepairUvStretch(models, stats, { onModel: (name) => repaired.push(name) }));
-  }
-
-  return { models, repaired, stats };
 }
