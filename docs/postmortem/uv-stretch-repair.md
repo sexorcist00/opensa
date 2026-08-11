@@ -10,6 +10,9 @@ report ledger were removed the same day.
 
 ## Where the record lives
 
+- The LIVING entry — symptom, population, exits — is
+  [`docs/open-issues/texel-smear-authored-uv.md`](../open-issues/texel-smear-authored-uv.md): the problem is
+  shelved, not solved, and this postmortem is only the repair attempt's grave
 - Diagnosis (six failed criteria, three world gates, the scanner):
   [`tools/map-optimizer/docs/plans/025-texel-smear-on-flat-surfaces.md`](../../tools/map-optimizer/docs/plans/025-texel-smear-on-flat-surfaces.md)
 - Build record of the pass and its three measured guards:
