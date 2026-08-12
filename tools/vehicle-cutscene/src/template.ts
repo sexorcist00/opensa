@@ -3,25 +3,46 @@ import type { RWClump, RWGeometry } from '@opensa/renderware/parsers/binary/type
 /**
  * The per-slot conversion TEMPLATE, read from the vanilla cutscene model at run time — never generated.
  * Bone ids, the root frame name, part frame names (`door_lf_hi_ok` vs `door_lf_ok`), wheel-node names
- * (`Box01` / `wheel_lf_node` / `axis_lf` / `wheelLFNode`) and the vertical convention are all
- * hand-authored and inconsistent across the 23 vanilla models (001's research record); the cutscene
- * animations target exactly those bone ids, so the vanilla file is the only honest source.
+ * (`Box01` / `wheel_lf_node` / `axis_lf` / `wheelLFNode` / `dummywheel_rr`) and the vertical convention
+ * are all hand-authored and inconsistent across the 23 vanilla models (001's research record + the
+ * step-3 full-fleet run); the cutscene animations target exactly those bone ids, so the vanilla file is
+ * the only honest source.
+ *
+ * Styles the extractor handles (all measured on the real fleet):
+ *   - wheels as node+mesh pairs (bobcat's `Box01`→`wheel`) or as ONE mesh frame at the corner
+ *     (bravura/glendale/sadler/washington);
+ *   - the chassis directly under the skeleton root, or under an intermediate body frame
+ *     (csmonster's `COG`, carried into the template);
+ *   - parts NESTED under other parts (csfirela's `misc_c` under `misc_b`);
+ *   - vanilla's own `winscreen_ok` typo (cssadler), canonicalised to `windscreen_ok`.
  */
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 
+/** The intermediate body frame some templates put between the root and the chassis (csmonster's COG). */
+export interface CsIntermediateTemplate {
+  boneId: number;
+  frameName: string;
+  position: [number, number, number];
+  rotation: number[];
+}
+
 export interface CsPartTemplate {
   boneId: number;
-  /** The template's exact frame name (keeps the `_hi` spelling where vanilla uses it). */
+  /** The template's exact frame name (keeps the `_hi` spelling / vanilla typos where they exist). */
   frameName: string;
+  /** Canonical name of the template parent (`chassis` for direct children; a part for nested ones). */
+  parentCanonical: string;
 }
 
 export interface CsTemplate {
   chassisBoneId: number;
   /** The template's chassis frame name (`chassis` on every vanilla style — kept for fidelity). */
   chassisName: string;
-  /** Canonical part name → template info, in the template's frame order (= vanilla bone-id order). */
+  /** Present when the chassis + wheels hang under an intermediate frame instead of the root. */
+  intermediate?: CsIntermediateTemplate;
+  /** Canonical part name → template info, in the template's DFS order (= vanilla bone-id order). */
   parts: Map<string, CsPartTemplate>;
-  /** Skeleton root frame name (`bobcat_dummy` / `taxi` / `zr350` / `remingtn` — per-car, hand-made). */
+  /** Skeleton root frame name (`bobcat_dummy` / `taxi` / `remingtn` / `Monster92` — per-car). */
   rootName: string;
   /** Vanilla wheel radius: the wheel mesh geometry's z half-extent (bobcat: 0.349, byte-equal to gta3). */
   wheelRadius: number;
@@ -31,25 +52,29 @@ export interface CsTemplate {
 export interface CsWheelTemplate {
   meshBoneId: number;
   meshName: string;
+  /** The wheel MESH frame position (usually 0; cscopcarla92 authors a -0.02 x). */
+  meshPosition: [number, number, number];
   /** The wheel MESH frame rotation — identity on the right side, 180° about z on the left (measured). */
   meshRotation: number[];
   nodeBoneId: number;
   nodeName: string;
-  /** The node's z in cs space — one side of the ground-plane formula (plan 002 step 2a). */
+  /** The node's z in SKELETON-ROOT space — one side of the ground-plane formula (plan 002 step 2a). */
   nodeZ: number;
+  /** `pair` = node frame + mesh child; `single` = one mesh frame at the corner. */
+  style: 'pair' | 'single';
 }
 
 /** Wheel corner key: `r`/`l` side + `f`/`b` end, matching the game rig's `wheel_<corner>_dummy` names. */
 export type WheelCorner = 'lb' | 'lf' | 'rb' | 'rf';
 
-/** Canonical part name: vanilla taxi spells its parts `<part>_hi_ok`; everyone else `<part>_ok`. */
+/** Canonical part name: strip the taxi-style `_hi` segment, fix vanilla's `winscreen` typo (cssadler). */
 export function canonicalPartName(name: string): string {
-  return name.trim().toLowerCase().replace('_hi_', '_');
+  return name.trim().toLowerCase().replace('_hi_', '_').replace('winscreen', 'windscreen');
 }
 
 /**
  * Extract the car template from a vanilla cutscene DFF. Throws when the model is not a cutscene car rig
- * (no HAnim skeleton root, no chassis child, or anything but four one-mesh wheel nodes).
+ * (no HAnim skeleton root, no chassis, or anything but four wheel corners).
  */
 export function extractCarTemplate(csDff: Uint8Array): CsTemplate {
   const clump = parseDff(toArrayBuffer(csDff));
@@ -59,18 +84,18 @@ export function extractCarTemplate(csDff: Uint8Array): CsTemplate {
     throw new Error('cutscene template has no HAnim skeleton root (bone 0)');
   }
 
-  const rootChildren = children[rootIndex];
-  const chassisIndex = rootChildren.find((index) => canonicalPartName(clump.frames[index].name) === 'chassis');
-  if (chassisIndex === undefined) {
-    throw new Error('cutscene template has no chassis under the skeleton root');
+  const chassisIndex = clump.frames.findIndex((frame) => canonicalPartName(frame.name) === 'chassis');
+  if (chassisIndex < 0) {
+    throw new Error('cutscene template has no chassis frame');
   }
-
-  const wheels = extractWheels(clump, children, rootChildren, chassisIndex);
+  const bodyParentIndex = clump.frames[chassisIndex].parentIndex;
+  const wheels = extractWheels(clump, children, bodyParentIndex, chassisIndex);
 
   return {
     chassisBoneId: requireBoneId(clump, chassisIndex),
     chassisName: clump.frames[chassisIndex].name.trim(),
-    parts: extractParts(clump, children[chassisIndex]),
+    ...intermediateOf(clump, bodyParentIndex, rootIndex),
+    parts: extractParts(clump, children, chassisIndex),
     rootName: clump.frames[rootIndex].name.trim(),
     wheelRadius: wheelRadius(clump, wheels),
     wheels,
@@ -108,12 +133,22 @@ function cornerOf(position: readonly number[]): WheelCorner {
   return `${position[0] >= 0 ? 'r' : 'l'}${position[1] >= 0 ? 'f' : 'b'}`;
 }
 
-function extractParts(clump: RWClump, chassisChildren: readonly number[]): Map<string, CsPartTemplate> {
+/** All descendant frames of the chassis, DFS in frame order — nested parts keep their template parent. */
+function extractParts(
+  clump: RWClump,
+  children: readonly number[][],
+  chassisIndex: number,
+): Map<string, CsPartTemplate> {
   const parts = new Map<string, CsPartTemplate>();
-  for (const index of chassisChildren) {
-    const frameName = clump.frames[index].name.trim();
-    parts.set(canonicalPartName(frameName), { boneId: requireBoneId(clump, index), frameName });
-  }
+  const visit = (index: number, parentCanonical: string): void => {
+    for (const childIndex of children[index]) {
+      const frameName = clump.frames[childIndex].name.trim();
+      const canonical = canonicalPartName(frameName);
+      parts.set(canonical, { boneId: requireBoneId(clump, childIndex), frameName, parentCanonical });
+      visit(childIndex, canonical);
+    }
+  };
+  visit(chassisIndex, 'chassis');
 
   return parts;
 }
@@ -121,34 +156,66 @@ function extractParts(clump: RWClump, chassisChildren: readonly number[]): Map<s
 function extractWheels(
   clump: RWClump,
   children: readonly number[][],
-  rootChildren: readonly number[],
+  bodyParentIndex: number,
   chassisIndex: number,
 ): Map<WheelCorner, CsWheelTemplate> {
+  // Root-space z: the body parent is either the root (position 0) or the intermediate frame (COG's 1.20).
+  const bodyParentZ = clump.frames[bodyParentIndex].position[2];
   const wheels = new Map<WheelCorner, CsWheelTemplate>();
-  for (const nodeIndex of rootChildren) {
+  for (const nodeIndex of children[bodyParentIndex]) {
     if (nodeIndex === chassisIndex) {
       continue;
     }
     const node = clump.frames[nodeIndex];
     const meshIndex = children[nodeIndex].find((index) => clump.atomics.some((atomic) => atomic.frameIndex === index));
-    if (meshIndex === undefined) {
-      throw new Error(`cutscene template wheel node '${node.name.trim()}' has no mesh child`);
+    const wheel = meshIndex === undefined ? singleWheel(clump, nodeIndex) : pairWheel(clump, nodeIndex, meshIndex);
+    if (!wheel) {
+      throw new Error(`cutscene template wheel node '${node.name.trim()}' has no mesh`);
     }
-    const mesh = clump.frames[meshIndex];
-    wheels.set(cornerOf(node.position), {
-      meshBoneId: requireBoneId(clump, meshIndex),
-      meshName: mesh.name.trim(),
-      meshRotation: [...mesh.rotation],
-      nodeBoneId: requireBoneId(clump, nodeIndex),
-      nodeName: node.name.trim(),
-      nodeZ: node.position[2],
-    });
+    wheels.set(cornerOf(node.position), { ...wheel, nodeZ: bodyParentZ + node.position[2] });
   }
   if (wheels.size !== 4) {
     throw new Error(`cutscene template has ${wheels.size} wheel corner(s), expected 4`);
   }
 
   return wheels;
+}
+
+function intermediateOf(
+  clump: RWClump,
+  bodyParentIndex: number,
+  rootIndex: number,
+): { intermediate?: CsIntermediateTemplate } {
+  if (bodyParentIndex === rootIndex) {
+    return {};
+  }
+  const frame = clump.frames[bodyParentIndex];
+  if (frame.parentIndex !== rootIndex) {
+    throw new Error(`cutscene template body parent '${frame.name.trim()}' is not a direct child of the root`);
+  }
+
+  return {
+    intermediate: {
+      boneId: requireBoneId(clump, bodyParentIndex),
+      frameName: frame.name.trim(),
+      position: [...frame.position],
+      rotation: [...frame.rotation],
+    },
+  };
+}
+
+function pairWheel(clump: RWClump, nodeIndex: number, meshIndex: number): Omit<CsWheelTemplate, 'nodeZ'> {
+  const mesh = clump.frames[meshIndex];
+
+  return {
+    meshBoneId: requireBoneId(clump, meshIndex),
+    meshName: mesh.name.trim(),
+    meshPosition: [...mesh.position],
+    meshRotation: [...mesh.rotation],
+    nodeBoneId: requireBoneId(clump, nodeIndex),
+    nodeName: clump.frames[nodeIndex].name.trim(),
+    style: 'pair',
+  };
 }
 
 function requireBoneId(clump: RWClump, frameIndex: number): number {
@@ -158,6 +225,24 @@ function requireBoneId(clump: RWClump, frameIndex: number): number {
   }
 
   return boneId;
+}
+
+function singleWheel(clump: RWClump, nodeIndex: number): null | Omit<CsWheelTemplate, 'nodeZ'> {
+  if (!clump.atomics.some((atomic) => atomic.frameIndex === nodeIndex)) {
+    return null;
+  }
+  const node = clump.frames[nodeIndex];
+  const boneId = requireBoneId(clump, nodeIndex);
+
+  return {
+    meshBoneId: boneId,
+    meshName: node.name.trim(),
+    meshPosition: [0, 0, 0],
+    meshRotation: [...node.rotation],
+    nodeBoneId: boneId,
+    nodeName: node.name.trim(),
+    style: 'single',
+  };
 }
 
 function wheelRadius(clump: RWClump, wheels: Map<WheelCorner, CsWheelTemplate>): number {

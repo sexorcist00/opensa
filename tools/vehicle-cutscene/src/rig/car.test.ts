@@ -136,6 +136,43 @@ describe('convertCar', () => {
       expect(new Set(hierarchy.map((node) => node.id)).size).toBe(hierarchy.length);
     });
 
+    it('glendale (single-frame wheels): one frame per corner, vanilla hierarchy verbatim', () => {
+      const csGlendale = new Uint8Array(readFileSync('tests/original/dff/cutscene/csglendale92.dff'));
+      const glendale = new Uint8Array(readFileSync('tests/original/dff/cutscene/glendale.dff'));
+      const template = extractCarTemplate(csGlendale);
+      const vanilla = readClump(csGlendale);
+      const { dff, report } = convertCar(glendale, template);
+      const converted = readClump(dff);
+
+      expect(report.missingInMod).toEqual([]);
+      expect(converted.frames[1].hierarchy).toEqual(vanilla.frames[1].hierarchy);
+      // Single-style wheels: the mesh frame IS the corner frame, no node in between.
+      const wheel = frameByName(converted, 'wheel03')!;
+      expect(converted.frames[wheel.parentIndex].name).toBe('glendale');
+      expect(wheel.rotation[0]).toBeCloseTo(-1, 4); // left mesh z-180 baked on the single frame
+      expect(wheel.position[2]).toBeCloseTo(frameByName(vanilla, 'wheel03')!.position[2], 2);
+    });
+
+    it('monster (intermediate COG): the body frame is kept at its vanilla transform', () => {
+      const csMonster = new Uint8Array(readFileSync('tests/original/dff/cutscene/csmonster.dff'));
+      const monster = new Uint8Array(readFileSync('tests/original/dff/cutscene/monster.dff'));
+      const template = extractCarTemplate(csMonster);
+      const vanilla = readClump(csMonster);
+      const { dff, report } = convertCar(monster, template);
+      const converted = readClump(dff);
+
+      expect(converted.frames[1].hierarchy).toEqual(
+        vanilla.frames[1].hierarchy?.filter((node) => converted.frames.some((frame) => frame.boneId === node.id)),
+      );
+      const cog = frameByName(converted, 'COG')!;
+      expect(cog.position[2]).toBeCloseTo(1.2, 3);
+      expect(converted.frames[frameByName(converted, 'chassis')!.parentIndex].name).toBe('COG');
+      // The mod's wheels sit under the COG, re-expressed in its space — ground contact preserved.
+      const axis = frameByName(converted, 'axis_rf')!;
+      expect(converted.frames[axis.parentIndex].name).toBe('COG');
+      expect(report.parts).toContain('door_lf_ok');
+    });
+
     it('keeps identity rotations identity through the emit path', () => {
       const template = extractCarTemplate(CS_BOBCAT);
       const { dff } = convertCar(BOBCAT, template);

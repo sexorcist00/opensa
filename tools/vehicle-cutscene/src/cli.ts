@@ -13,6 +13,7 @@ import { statSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 
 import { type Census, loadCensus, matchMods, type SlotReadiness } from './census';
+import { type CutsceneInstallSummary, installCutscene } from './install';
 
 function argValue(flag: string): string | undefined {
   const index = process.argv.indexOf(flag);
@@ -63,10 +64,21 @@ function main(): void {
   if (inspect) {
     return;
   }
-  if (!argValue('--out')) {
+  const outArg = argValue('--out');
+  if (!outArg) {
     throw new Error('--out is required (or pass --inspect for the report alone)');
   }
-  throw new Error('conversion is not implemented yet — vehicle-cutscene plan 002 steps 2+; run with --inspect');
+
+  const summary = installCutscene({
+    gamePath,
+    inPath,
+    only: only ? new Set(only.split(',').map((model) => model.trim().toLowerCase())) : undefined,
+    outPath: fromCwd(outArg),
+  });
+  printSummary(summary);
+  if (summary.errors.length > 0) {
+    process.exitCode = 1;
+  }
 }
 
 function printCensus(census: Census, readiness: SlotReadiness[]): void {
@@ -88,6 +100,20 @@ function printCensus(census: Census, readiness: SlotReadiness[]): void {
       ? `  all ${readiness.length} model(s) ready`
       : `  NOT ready: ${notReady.map((entry) => `${entry.slot.csName} (${entry.status})`).join(', ')}`,
   );
+}
+
+function printSummary(summary: CutsceneInstallSummary): void {
+  const megabytes = (bytes: number): string => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  console.log(
+    `vehicle-cutscene: ${summary.converted.length} converted, ${summary.skipped.length} skipped,` +
+      ` ${summary.errors.length} error(s); cutscene.img ${megabytes(summary.imgBytesBefore)} → ${megabytes(summary.imgBytesAfter)}`,
+  );
+  for (const { csName, reason } of summary.skipped) {
+    console.log(`  skipped ${csName}: ${reason}`);
+  }
+  for (const { csName, message } of summary.errors) {
+    console.log(`  ERROR ${csName}: ${message}`);
+  }
 }
 
 main();

@@ -120,6 +120,9 @@ const CLEO_MANIFEST: readonly Fixture[] = [
   // emit as a part, which is why it was a silent no-op on our runtime while every headless test on a
   // permissive mock passed (plan `cleo/scripts` 001 step 2).
   cleoFile('vehicles/rhino - GTA 5 Rhino - _F_/rhino.dff', 'vehicles/rhino.dff'),
+  // A LOCKED mod DFF (anti-rip container sizes): vehicle-cutscene's clump reader must recover it —
+  // half the real vehicle fleet ships this lock (plan 002 step 3 finding).
+  cleoFile('vehicles/taxi - 1992 Chevrolet Caprice Taxi - funky/taxi.dff', 'vehicles/taxi-locked.dff'),
   cleoFile('mods/61. Wind Farm/CLEO/Wind Farm (Junior_Djjr).cs', 'cleo/windfarm.cs'),
 ];
 
@@ -148,6 +151,11 @@ const MANIFEST: readonly Fixture[] = [
   extract('csremington92.dff', 'dff/cutscene/csremington92.dff'),
   extract('bobcat.dff', 'dff/cutscene/bobcat.dff'),
   extract('taxi.dff', 'dff/cutscene/taxi.dff'),
+  // One-frame-wheel + intermediate-COG template styles (the step-3 real run surfaced them) + donors.
+  extract('csglendale92.dff', 'dff/cutscene/csglendale92.dff'),
+  extract('csmonster.dff', 'dff/cutscene/csmonster.dff'),
+  extract('glendale.dff', 'dff/cutscene/glendale.dff'),
+  extract('monster.dff', 'dff/cutscene/monster.dff'),
   copy('data/peds.ide', 'data/peds.ide'),
   copy('data/handling.cfg', 'data/handling.cfg'),
   copy('data/info.zon', 'data/info.zon'),

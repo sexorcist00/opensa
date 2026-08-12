@@ -1,4 +1,3 @@
-import { writeRw } from '@opensa/rw-codec/chunk';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
@@ -41,6 +40,15 @@ describe('clump-io', () => {
       expect(chassis?.position[2]).toBeCloseTo(0.9, 3);
     });
 
+    it('recovers a LOCKED mod DFF (anti-rip container sizes) via the engine walk', () => {
+      const locked = new Uint8Array(readFileSync('tests/original/vehicles/taxi-locked.dff'));
+      const model = readClump(locked);
+      expect(model.frames.length).toBeGreaterThan(10);
+      expect(model.frames.some((frame) => frame.name === 'chassis')).toBe(true);
+      expect(model.geometries.length).toBeGreaterThan(0);
+      expect(model.atomics.length).toBeGreaterThan(0);
+    });
+
     it('round-trips the model: frames, atomics and geometry bytes survive write → read', () => {
       const model = readClump(CS_BOBCAT);
       const reread = readClump(writeClump(model));
@@ -49,12 +57,8 @@ describe('clump-io', () => {
       expect(
         reread.atomics.map(({ flags, frameIndex, geometryIndex }) => ({ flags, frameIndex, geometryIndex })),
       ).toEqual(model.atomics.map(({ flags, frameIndex, geometryIndex }) => ({ flags, frameIndex, geometryIndex })));
-      const bytes = (chunk: Parameters<typeof writeRw>[0]['chunks'][number]): Uint8Array =>
-        writeRw({ chunks: [chunk], trailing: new Uint8Array(0) });
-      expect(bytes(reread.geometries[8])).toEqual(bytes(model.geometries[8]));
-      expect(reread.atomics[0].extension && bytes(reread.atomics[0].extension)).toEqual(
-        model.atomics[0].extension && bytes(model.atomics[0].extension),
-      );
+      expect(reread.geometries[8].body).toEqual(model.geometries[8].body);
+      expect(reread.atomics[0].extension?.body).toEqual(model.atomics[0].extension?.body);
     });
   });
 });

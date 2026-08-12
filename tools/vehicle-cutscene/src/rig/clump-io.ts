@@ -1,18 +1,33 @@
 /**
- * Clump-level DFF surgery over rw-codec's byte-faithful chunk tree: read a clump into frames (with names
- * + HAnim), atomics (with their extension chunks verbatim) and geometry chunks (verbatim bytes), and
- * write the same shape back. Geometry, material and atomic-extension bytes are never re-encoded — the
- * mod-installer principle — only the frame list, the HAnim plugins and the atomic indices are ours.
+ * Clump-level DFF surgery: read a clump into frames (with names + HAnim), atomics (with their extension
+ * bodies verbatim) and geometry chunk bodies (verbatim bytes), and write the same shape back. Geometry,
+ * material and atomic-extension bytes are never re-encoded — the mod-installer principle — only the
+ * frame list, the HAnim plugins and the atomic indices are ours.
  *
- * Binary facts this file encodes were measured on the vanilla cutscene fleet (probe 2026-08-12, plan 002
+ * READING reuses the engine parser's anti-rip machinery (`forEachClumpChild` / `recoverLockedList`,
+ * read-only): half the real mod fleet ships "locked" DFFs whose container sizes lie (taxi, zr350,
+ * copcarla, firela, burrito, securica…), which a naive size-respecting walk reads as an empty clump.
+ * Inner leaf sizes stay honest — only outer container sizes are tampered — so bodies sliced by the
+ * recovered bounds are sound, and WRITING emits honest headers around them (a converted file never
+ * carries the donor's lock). A leading UVAnimDict (or any pre-clump chunk) is dropped on conversion.
+ *
+ * Binary facts encoded here were measured on the vanilla cutscene fleet (probe 2026-08-12, plan 002
  * step 2): clump struct is 12 B (atomics/lights/cameras), frame-list rows are 56 B, every frame gets an
  * Extension chunk (empty on the unnamed top frame), the HAnim hierarchy sits on the skeleton root with
  * `flags 0` / `keyFrameSize 36`, and the clump-level Extension of every vanilla cs model is EMPTY (no
  * embedded collision — a converted mod's COL3 is deliberately dropped).
  */
+import { BinaryStream } from '@opensa/renderware/parsers/binary/binary-stream';
+import {
+  type ChunkHeader,
+  findChild,
+  forEachClumpChild,
+  readChunkHeader,
+  recoverLockedList,
+} from '@opensa/renderware/parsers/binary/chunks';
+import { RwSection } from '@opensa/renderware/parsers/binary/constants';
 import {
   readRw,
-  RW_CLUMP,
   RW_EXTENSION,
   RW_GEOMETRY,
   RW_GEOMETRY_LIST,
@@ -22,6 +37,7 @@ import {
 } from '@opensa/rw-codec/chunk';
 
 export const RW_ATOMIC = 0x14;
+export const RW_CLUMP = 0x10;
 export const RW_FRAME_LIST = 0x0e;
 export const RW_FRAME_NAME = 0x253f2fe;
 export const RW_HANIM = 0x11e;
@@ -29,10 +45,19 @@ export const RW_HANIM = 0x11e;
 const FRAME_ROW_BYTES = 56;
 const HANIM_VERSION = 0x100;
 const HANIM_KEYFRAME_SIZE = 36;
+const CHUNK_HEADER_BYTES = 12;
+
+/** Direct children of an Atomic / a Geometry — the honest-sized anchors the lock recovery walks. */
+const ATOMIC_CHILDREN: ReadonlySet<number> = new Set([RwSection.EXTENSION, RwSection.STRUCT]);
+const GEOMETRY_CHILDREN: ReadonlySet<number> = new Set([
+  RwSection.EXTENSION,
+  RwSection.MATERIAL_LIST,
+  RwSection.STRUCT,
+]);
 
 export interface ClumpAtomic {
-  /** The atomic's Extension chunk, verbatim (matfx flag / right-to-render / SA pipeline plugins). */
-  extension: null | RwChunk;
+  /** The atomic's Extension BODY bytes, verbatim (matfx flag / right-to-render / SA pipeline plugins). */
+  extension: null | OpaqueChunk;
   flags: number;
   frameIndex: number;
   geometryIndex: number;
@@ -52,8 +77,8 @@ export interface ClumpFrame {
 export interface ClumpModel {
   atomics: ClumpAtomic[];
   frames: ClumpFrame[];
-  /** Geometry chunks, verbatim — serialized back byte-for-byte. */
-  geometries: RwChunk[];
+  /** Geometry chunk BODIES, verbatim — re-emitted byte-for-byte under honest headers. */
+  geometries: OpaqueChunk[];
   version: number;
 }
 
@@ -66,22 +91,54 @@ export interface HierarchyNode {
   index: number;
 }
 
-/** Parse a DFF's clump into the editable model. Throws on a non-clump file. */
+/** A chunk carried by body bytes + version (its emitted header is rebuilt honest). */
+export interface OpaqueChunk {
+  body: Uint8Array;
+  version: number;
+}
+
+/** Parse a DFF's clump into the editable model, tolerant of locked/anti-rip container sizes. */
 export function readClump(bytes: Uint8Array): ClumpModel {
-  const clump = readRw(bytes).chunks.find((chunk) => chunk.type === RW_CLUMP);
-  if (!clump?.children) {
-    throw new Error('not a DFF: no clump chunk');
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const stream = new BinaryStream(buffer);
+  const clump = findClumpHeader(stream);
+
+  let frames: ClumpFrame[] | null = null;
+  let geometryList: ChunkHeader | null = null;
+  let declaredAtomics = 0;
+  let atomicHeaders: ChunkHeader[] = [];
+  if (clump.end - clump.dataStart >= CHUNK_HEADER_BYTES) {
+    forEachClumpChild(stream, clump, (child) => {
+      if (child.type === RwSection.STRUCT && declaredAtomics === 0 && child.end - child.dataStart >= 4) {
+        stream.seek(child.dataStart);
+        declaredAtomics = stream.u32();
+      } else if (child.type === RwSection.FRAME_LIST) {
+        frames = readFrames(new Uint8Array(buffer, child.dataStart, child.end - child.dataStart));
+      } else if (child.type === RwSection.GEOMETRY_LIST) {
+        geometryList = child;
+      } else if (child.type === RwSection.ATOMIC) {
+        atomicHeaders.push(child);
+      }
+    });
   }
-  const frameList = clump.children.find((chunk) => chunk.type === RW_FRAME_LIST);
-  const geometryList = clump.children.find((chunk) => chunk.type === RW_GEOMETRY_LIST);
-  if (!frameList?.data || !geometryList?.children) {
+  if (!frames || !geometryList) {
     throw new Error('clump has no frame list / geometry list');
+  }
+  if (atomicHeaders.length < declaredAtomics) {
+    atomicHeaders = recoverLockedList(
+      stream,
+      clump.dataStart,
+      clump.end,
+      declaredAtomics,
+      RwSection.ATOMIC,
+      ATOMIC_CHILDREN,
+    );
   }
 
   return {
-    atomics: clump.children.filter((chunk) => chunk.type === RW_ATOMIC).map(readAtomic),
-    frames: readFrames(frameList.data),
-    geometries: geometryList.children.filter((chunk) => chunk.type === RW_GEOMETRY),
+    atomics: atomicHeaders.map((header) => readAtomic(stream, buffer, header)),
+    frames,
+    geometries: readGeometries(stream, buffer, geometryList),
     version: clump.version,
   };
 }
@@ -105,10 +162,10 @@ function atomicChunk(atomic: ClumpAtomic, version: number): RwChunk {
   view.setUint32(0, atomic.frameIndex, true);
   view.setUint32(4, atomic.geometryIndex, true);
   view.setUint32(8, atomic.flags, true);
-  const body = [
-    chunkBytes(structChunk(struct, version)),
-    chunkBytes(atomic.extension ?? { children: [], type: RW_EXTENSION, version }),
-  ];
+  const extension: RwChunk = atomic.extension
+    ? { data: atomic.extension.body, type: RW_EXTENSION, version: atomic.extension.version }
+    : { children: [], type: RW_EXTENSION, version };
+  const body = [chunkBytes(structChunk(struct, version)), chunkBytes(extension)];
 
   return { data: concat(body), type: RW_ATOMIC, version };
 }
@@ -133,6 +190,23 @@ function concat(parts: readonly Uint8Array[]): Uint8Array {
   }
 
   return out;
+}
+
+/** Mirror `parseDff`'s leading-chunk skip: some DFFs carry a UVAnimDict (or junk) before the clump. */
+function findClumpHeader(stream: BinaryStream): ChunkHeader {
+  if (stream.remaining < CHUNK_HEADER_BYTES) {
+    throw new Error('not a DFF: no clump chunk');
+  }
+  let header = readChunkHeader(stream);
+  while (header.type !== RwSection.CLUMP) {
+    stream.seek(Math.max(header.end, header.dataStart));
+    if (stream.remaining < CHUNK_HEADER_BYTES) {
+      throw new Error('not a DFF: no clump chunk');
+    }
+    header = readChunkHeader(stream);
+  }
+
+  return { ...header, end: Math.min(header.end, stream.length) };
 }
 
 function frameExtension(frame: ClumpFrame, version: number): RwChunk {
@@ -171,7 +245,12 @@ function geometryListChunk(model: ClumpModel): RwChunk {
   new DataView(struct.buffer).setUint32(0, model.geometries.length, true);
 
   return {
-    children: [structChunk(struct, model.version), ...model.geometries],
+    children: [
+      structChunk(struct, model.version),
+      ...model.geometries.map(
+        (geometry): RwChunk => ({ data: geometry.body, type: RW_GEOMETRY, version: geometry.version }),
+      ),
+    ],
     type: RW_GEOMETRY_LIST,
     version: model.version,
   };
@@ -196,19 +275,29 @@ function hanimBody(frame: ClumpFrame): Uint8Array {
   return body;
 }
 
-function readAtomic(chunk: RwChunk): ClumpAtomic {
-  const body = readRw(chunk.data ?? new Uint8Array(0));
-  const struct = body.chunks.find((child) => child.type === RW_STRUCT);
-  if (!struct?.data || struct.data.length < 12) {
+function readAtomic(stream: BinaryStream, buffer: ArrayBuffer, header: ChunkHeader): ClumpAtomic {
+  const struct = findChild(stream, header.dataStart, header.end, RwSection.STRUCT);
+  if (!struct || struct.end - struct.dataStart < 12) {
     throw new Error('atomic missing struct');
   }
-  const view = new DataView(struct.data.buffer, struct.data.byteOffset, struct.data.byteLength);
+  stream.seek(struct.dataStart);
+  const frameIndex = stream.u32();
+  const geometryIndex = stream.u32();
+  const flags = stream.u32();
+  const extension = findChild(stream, struct.end, header.end, RwSection.EXTENSION);
+  const extensionEnd = extension ? Math.min(extension.end, header.end) : 0;
 
   return {
-    extension: body.chunks.find((child) => child.type === RW_EXTENSION) ?? null,
-    flags: view.getUint32(8, true),
-    frameIndex: view.getUint32(0, true),
-    geometryIndex: view.getUint32(4, true),
+    extension:
+      extension && extensionEnd > extension.dataStart
+        ? {
+            body: new Uint8Array(buffer, extension.dataStart, extensionEnd - extension.dataStart),
+            version: extension.version,
+          }
+        : null,
+    flags,
+    frameIndex,
+    geometryIndex,
   };
 }
 
@@ -223,6 +312,7 @@ function readFramePlugins(extension: RwChunk, frame: ClumpFrame): void {
   }
 }
 
+/** Parse the frame-list BODY (struct + per-frame extensions — inner sizes are honest even on locks). */
 function readFrames(frameListBody: Uint8Array): ClumpFrame[] {
   const body = readRw(frameListBody);
   const struct = body.chunks[0];
@@ -249,6 +339,24 @@ function readFrames(frameListBody: Uint8Array): ClumpFrame[] {
   });
 
   return frames;
+}
+
+function readGeometries(stream: BinaryStream, buffer: ArrayBuffer, list: ChunkHeader): OpaqueChunk[] {
+  const struct = findChild(stream, list.dataStart, list.end, RwSection.STRUCT);
+  if (!struct || struct.end - struct.dataStart < 4) {
+    throw new Error('geometry list missing struct');
+  }
+  stream.seek(struct.dataStart);
+  const count = stream.u32();
+  const items = recoverLockedList(stream, struct.end, list.end, count, RwSection.GEOMETRY, GEOMETRY_CHILDREN);
+  if (items.length < count) {
+    throw new Error(`geometry list declares ${count} geometries, found ${items.length}`);
+  }
+
+  return items.map((item) => ({
+    body: new Uint8Array(buffer, item.dataStart, item.end - item.dataStart),
+    version: item.version,
+  }));
 }
 
 function readHAnim(data: Uint8Array, frame: ClumpFrame): void {
