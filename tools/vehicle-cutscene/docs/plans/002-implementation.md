@@ -249,19 +249,24 @@ gameplay colours — the user's step-5 field look rides the next intro run.
 
 ---
 
-## Step 6 (P1) — TXD policy + texture closure
+## Step 6 (P1) — TXD policy + texture closure ✅ SHIPPED 2026-08-12
 
-- [ ] Emit an **empty** `cs*.txd` per converted slot (kilobytes; txdp does the work — the 001 research).
-- [ ] `txd.ts` closure check, fail-loud per slot: every texture name referenced by the converted DFF must
-      resolve in (mod's installed TXD under the parent name) ∪ (generic `vehicle.txd`) ∪ (`carplate`,
-      `carpback`). Unresolvable → error listing the names, slot skipped.
-- [ ] Fallback behind `--self-contained-txd`: copy the mod TXD bytes into the cs TXD for slots where
-      closure needs it (not expected; the flag documents the escape hatch instead of a silent fallback).
-- [ ] Tests: negative — a DFF referencing a texture absent everywhere fails the slot with the name in the
-      message; positive — bobcat mod closure resolves fully with an empty TXD.
+- [x] Every converted slot ships an **empty** `cs*.txd` (40 B each — a valid zero-entry dictionary,
+      mirroring SA's own empty TXDs); txdp resolves through the parent in gta3.img + the resident
+      generic `vehicle.txd`.
+- [x] `txd.ts` closure check, fail-loud per slot: DFF texture names (diffuse + mask) must resolve in
+      (txdp parent TXD) ∪ (generic vehicle.txd) ∪ (`carplate`/`carpback`, runtime-generated).
+      Unresolvable → the slot errors with the missing names listed.
+- [x] `--self-contained-txd` escape hatch: the parent TXD bytes verbatim instead of erroring.
+- [x] Tests: 4 in `txd.test.ts` (negative first, real bobcat pair + real vehicle.txd) + 2 install e2e
+      (empty-TXD emit; missing-parent slot fails naming `bobcat92interior128`).
 
-**Verification:** all 21 slots pass closure with empty TXDs on the real mod set. **Record:** total TXD
-bytes emitted vs the hand-made pack's 11.5 MB-per-car baseline.
+**Verification (run 2026-08-12):** parity run over stock donors — 21/21 slots pass closure with empty
+TXDs, 0 errors; 54/54 tests, lint + tsc clean. **Record:** **840 B total** of emitted cs TXDs across 21
+slots vs the hand-made pack's ~11.5 MB per car (≈242 MB for the same coverage — a 288 000× reduction);
+cutscene.img 25.7 → 24.4 MB (the vanilla livery TXDs the '92 models carried are replaced by empty ones —
+their look now comes from the donor + carcols, per decision 1). Field validation of txdp resolution over
+empty TXDs rides the user's next intro run.
 
 ---
 
