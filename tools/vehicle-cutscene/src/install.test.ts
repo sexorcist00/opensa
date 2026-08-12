@@ -62,7 +62,10 @@ beforeEach(() => {
 
   mkdirSync(join(inPath, 'bobcat - some truck - author'), { recursive: true });
   writeFileSync(join(inPath, 'bobcat - some truck - author', 'bobcat.dff'), BOBCAT);
-  writeFileSync(join(inPath, 'bobcat - some truck - author', 'bobcat.txd'), new Uint8Array(16));
+  writeFileSync(
+    join(inPath, 'bobcat - some truck - author', 'bobcat.txd'),
+    readFileSync('tests/original/dff/cutscene/bobcat.txd'),
+  );
   mkdirSync(join(inPath, 'mtbike - a bike - author'), { recursive: true });
   writeFileSync(join(inPath, 'mtbike - a bike - author', 'mtbike.dff'), new Uint8Array(8));
   writeFileSync(join(inPath, 'mtbike - a bike - author', 'mtbike.txd'), new Uint8Array(8));
@@ -138,6 +141,16 @@ describe('installCutscene', () => {
       expect(text).not.toMatch(/^csopcarla,/m);
       expect(text).toContain('cscopcarsf, copcarsf');
       expect(text.trim().endsWith('end')).toBe(true);
+    });
+
+    it('embeds the MOD txd under --self-contained-txd when the parent cannot resolve', () => {
+      const gta3 = createImg();
+      writeImgFile(gta3, join(gamePath, 'models', 'gta3.img')); // stock-like parent: no bobcat.txd
+      const summary = installCutscene({ gamePath, inPath, outPath, selfContainedTxd: true });
+      expect(summary.errors).toEqual([]);
+      expect(summary.converted).toEqual(['csbobcat92']);
+      const img = openImg(new Uint8Array(readFileSync(join(outPath, 'models', 'cutscene.img'))));
+      expect(textureNames(img.get('csbobcat92.txd')!)).toContain('bobcat92interior128');
     });
 
     it('honours --only, converting nothing else', () => {

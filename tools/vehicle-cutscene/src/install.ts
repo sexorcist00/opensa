@@ -123,7 +123,7 @@ function convertSlot(
     const modDff = new Uint8Array(readFileSync(join(inPath, folder!, `${slot.model}.dff`)));
     const { dff } = convertCar(modDff, template);
     const { baked, bytes } = bakePaintMarkers(dff, paintColoursFor(context.carcols, slot.model));
-    const txd = slotTxd(slot, bytes, context);
+    const txd = slotTxd(slot, bytes, join(inPath, folder!, `${slot.model}.txd`), context);
 
     img.set(`${slot.csName}.dff`, bytes);
     img.set(`${slot.csName}.txd`, txd);
@@ -162,19 +162,28 @@ function rowIsMissing(text: string, slot: CutsceneSlot): boolean {
 
 /**
  * The slot's `cs*.txd`: EMPTY when the closure resolves through the txdp parent + generic vehicle.txd
- * (the normal case), the parent TXD verbatim under `--self-contained-txd`, an error otherwise —
- * an unresolvable texture is never a silently-white cutscene car.
+ * (the normal case — the pipeline's gta3.img carries the installed mod TXD as the parent). Under
+ * `--self-contained-txd` a closure miss embeds the MOD's own TXD instead (the bottle-gate case, where
+ * the runtime parent is stock); the chain cs-TXD → parent → generic must then close, or the slot still
+ * errors — an unresolvable texture is never a silently-white cutscene car.
  */
-function slotTxd(slot: CutsceneSlot, dff: Uint8Array, context: SlotContext): Uint8Array {
+function slotTxd(slot: CutsceneSlot, dff: Uint8Array, modTxdPath: string, context: SlotContext): Uint8Array {
   const parent = context.gta3.get(`${slot.txd}.txd`);
-  const parentBytes = parent ? new Uint8Array(parent) : null;
-  const available = new Set([...context.genericNames, ...(parentBytes ? textureNames(parentBytes) : [])]);
+  const parentNames = parent ? textureNames(new Uint8Array(parent)) : [];
+  const available = new Set([...context.genericNames, ...parentNames]);
   const missing = unresolvedTextures(dff, available);
   if (missing.length === 0) {
     return emptyTxd();
   }
-  if (context.selfContainedTxd && parentBytes) {
-    return parentBytes;
+  if (context.selfContainedTxd) {
+    const modTxd = new Uint8Array(readFileSync(modTxdPath));
+    const chain = new Set([...available, ...textureNames(modTxd)]);
+    const stillMissing = unresolvedTextures(dff, chain);
+    if (stillMissing.length > 0) {
+      throw new Error(`unresolved textures even self-contained: ${stillMissing.join(', ')}`);
+    }
+
+    return modTxd;
   }
   throw new Error(`unresolved textures (txdp parent ${slot.txd}.txd): ${missing.join(', ')}`);
 }
