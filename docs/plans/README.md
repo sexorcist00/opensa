@@ -334,6 +334,11 @@ row but its chain was superseded by 097). Newest first:
   `vehicles.ide`/`carcols.dat` (car/car4, alpha-sorted, custom `col` palettes)/`carmods.dat`; `--strip` to keep
   only the installed cars. [`vehicle-installer/docs/plans/`](../../tools/vehicle-installer/docs/plans/) (`001`
   architecture · `002` install · `003` palette · `004` strip).
+- **vehicle-cutscene** — convert installed vehicle mods into their cutscene counterparts: the 23 `cs*` models
+  in `models/cutscene.img` (flattened HAnim rig with the vanilla bone ids, four instantiated wheels, baked
+  carcols paint, empty `txdp`-resolved TXD), so real-game cutscenes show the same custom cars as gameplay.
+  [`vehicle-cutscene/docs/plans/`](../../tools/vehicle-cutscene/docs/plans/) (`001` architecture + research ·
+  `002` implementation — PLANNED).
 - **ped-installer** — install ped mod folders: dff/txd → `gta3.img`; a new ped's line → `peds.ide` (replace by
   model, append if new); `--strip` to keep only the installed peds + the player ped (`--player`, default
   `BMYPOL1`). [`ped-installer/docs/plans/`](../../tools/ped-installer/docs/plans/) (`001` architecture · `002`
