@@ -1,6 +1,9 @@
 # vehicle-cutscene
 
-**Status: step 1 shipped (census + `--inspect`); conversion lands in [plan 002](docs/plans/002-implementation.md) steps 2+.**
+**Status: plan 002 steps 1–7 shipped, both field gates PASSED (2026-08-12) — the whole car fleet
+converts and the intro cutscenes field-verified against vanilla. Remaining: bike/boat branches, the
+full-fleet numbers, pipeline integration ([002](docs/plans/002-implementation.md) steps 8–11) and the
+[plate bake](docs/plans/003-plate-bake.md).**
 
 Converts installed **vehicle mods** into their **cutscene counterparts** — the `cs*` models in
 `models/cutscene.img` — so the real game's cutscenes show the same custom cars the player drives.
@@ -12,7 +15,7 @@ four instantiated wheels, baked carcols paint, empty `txdp`-resolved TXD.
 # census + readiness report (writes nothing):
 npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --inspect
 
-# conversion (steps 2+, not implemented yet):
+# convert the fleet into an output game (--self-contained-txd embeds mod TXDs for a stock-gameplay target):
 npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --out <dir>
 ```
 
