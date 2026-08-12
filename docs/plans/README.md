@@ -241,7 +241,10 @@ row but its chain was superseded by 097). Newest first:
   — every dev surface (lab, bench harness, viewers) reads ONE canonical build (`./build/original`), served in
   place (NOT copied into `public/`), via a new `http-dir` loader + the loading-MODE-selects-the-world fix +
   `buildTime`. Depends on [opensa-pack 003](../../tools/opensa-pack/docs/plans/003-game-shaped-output.md).
-  **Phases 0–5 DONE 2026-07-21; phase 6 (docs) open.**
+  **🔒 CLOSED 2026-08-12** — phases 0–6 DONE 2026-07-21, close-out taken 2026-08-12 (lint clean, coverage
+  floors held: 4 108 tests, 91.92 / 82.6 / 92.09 / 92 vs 86 / 77 / 88 / 86, `docs/development/` verified
+  repointed). Its measurement ledger stays EMPTY on purpose and says why — the phase 2–5 numbers were never
+  taken and the builds they would have described are gone.
 - **[078 — Global bug fixing](./078-global-bug-fixing/readme.md)** — the umbrella ledger for the bugs the
   first FULL pmb map convert surfaced (2026-07-19, >1 h run): engine and tool fixes tracked in one place.
   **OPEN — awaiting the detailed bug report; runs before 079.**
