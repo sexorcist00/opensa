@@ -306,7 +306,7 @@ function emitBody(
   order.sort((a, b) => a.boneId - b.boneId);
   for (const entry of order) {
     if (entry.corner) {
-      emitWheel(emit, template, analysis, entry.corner);
+      emitWheel(emit, template, analysis, shiftZ, entry.corner);
     } else {
       emitChassisAndParts(emit, template, analysis, shiftZ, report);
     }
@@ -392,14 +392,19 @@ function emitPart(
   report.baked.push(canonical);
 }
 
-function emitWheel(emit: Emit, template: CsTemplate, analysis: ModAnalysis, corner: WheelCorner): void {
+/** Wheels stand at the MOD's dummy corners (lifted onto the template's ground plane) — the mod's body
+ *  owns its arches (the sheriff's ±0.79 track poked out of vanilla's ±0.92 at gate 7). If a scene ever
+ *  drives the node translations, the fallback is baking the x-delta into the mesh (spin-safe axis). */
+function emitWheel(emit: Emit, template: CsTemplate, analysis: ModAnalysis, shiftZ: number, corner: WheelCorner): void {
   const wheel = template.wheels.get(corner)!;
+  const dummyWorld = lift(analysis.relativeToRoot(analysis.wheelDummies.get(corner)!), shiftZ);
+  const node = compose(invert(emit.worlds[emit.bodyParentIndex]), dummyWorld);
   if (wheel.style === 'single') {
     const meshIndex = pushFrame(emit, {
       boneId: wheel.meshBoneId,
       name: wheel.meshName,
       parentIndex: emit.bodyParentIndex,
-      position: [...wheel.nodePosition],
+      position: node.position,
       rotation: [...wheel.meshRotation],
     });
     emitAtomic(emit, analysis, analysis.wheelAtomic, meshIndex);
@@ -410,8 +415,8 @@ function emitWheel(emit: Emit, template: CsTemplate, analysis: ModAnalysis, corn
     boneId: wheel.nodeBoneId,
     name: wheel.nodeName,
     parentIndex: emit.bodyParentIndex,
-    position: [...wheel.nodePosition],
-    rotation: [...IDENTITY_ROTATION],
+    position: node.position,
+    rotation: node.rotation,
   });
   const meshIndex = pushFrame(emit, {
     boneId: wheel.meshBoneId,
