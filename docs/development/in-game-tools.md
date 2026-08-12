@@ -14,7 +14,10 @@ multi-level menu:
   Turning it **off** — or closing the debugger — drops the player onto the ground directly beneath them. (This
   moves the **player**, unlike the K+M screenshot camera below, which moves only the camera.) Then Respawn
   (unstick on the spot), To Ganton.
-- **Vehicles** — spawn Admiral/Camper in front of you; Flip the car you're in (wheels ↔ roof).
+- **Vehicles** — spawn a car by name in front of you (filter box narrows the list); Flip the car you're in
+  (wheels ↔ roof). **"Plate (blank = auto)"** types an explicit license plate for the next spawns — up to
+  eight characters, upper-cased, stored with the placement so a LOD respawn keeps it; blank = the
+  deterministic plate the position resolves to.
 - **Game** — Show / Copy current coords.
 - **Map** — Activate **Map Viewer**: the camera lifts overhead and detaches — **right-drag orbits,
   left-drag pans, the wheel dollies**, and a left **click** (under a small travel threshold, so panning

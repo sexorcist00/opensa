@@ -28,6 +28,7 @@ import type { PerfStats } from '@opensa/game/perf/perf-monitor';
 
 import { PRESETS } from '@opensa/game/plugins/vehicle-reflection/presets';
 import { GameClock } from '@opensa/game/time/game-clock';
+import { PLATE_TEXT_LENGTH } from '@opensa/game/vehicle/plate-raster';
 import { type ReactElement, useCallback, useEffect, useState } from 'react';
 
 import type { Teleport } from '../../game-config';
@@ -201,8 +202,9 @@ export interface DebugActions {
   sky(): SkyConfig;
   /** Active sky model (plan 067). */
   skyModel(): 'classic' | 'pbr';
-  /** Spawn a car (by model name) just in front of the player. */
-  spawnVehicle(model: string): Promise<void>;
+  /** Spawn a car (by model name) just in front of the player. `plate` overrides the deterministic
+   *  number the placement would otherwise resolve to (plan 082/04); omit for the generated one. */
+  spawnVehicle(model: string, plate?: string): Promise<void>;
   /** Current SSAO tuning. */
   ssao(): SsaoConfig;
   /** Whether night stars are on. */
@@ -1419,6 +1421,7 @@ function MapScreen({
 /** The Vehicles screen: filter + one spawn button per model, and the spawn ERROR the button used to eat. */
 function VehicleScreen({ actions }: { actions: DebugActions }): ReactElement {
   const [filter, setFilter] = useState('');
+  const [plate, setPlate] = useState('');
   const [error, setError] = useState<null | string>(null);
 
   return (
@@ -1429,6 +1432,16 @@ function VehicleScreen({ actions }: { actions: DebugActions }): ReactElement {
         style={styles.filterInput}
         type="text"
         value={filter}
+      />
+      {/* Blank = the placement's own deterministic plate. A value here rides the placement, so a LOD
+          respawn re-applies it (plan 082/04) — the eight cells a plate has, longer text is cut. */}
+      <input
+        maxLength={PLATE_TEXT_LENGTH}
+        onChange={(e) => setPlate(e.target.value.toUpperCase())}
+        placeholder="Plate (blank = auto)"
+        style={styles.filterInput}
+        type="text"
+        value={plate}
       />
       {actions
         .vehicleModels()
@@ -1441,7 +1454,7 @@ function VehicleScreen({ actions }: { actions: DebugActions }): ReactElement {
               // model the pack could not convert) used to vanish into an unhandled rejection, and the button
               // simply did nothing. This panel is the only place the user can see why.
               setError(null);
-              actions.spawnVehicle(model).catch((cause: unknown) => {
+              actions.spawnVehicle(model, plate.trim() || undefined).catch((cause: unknown) => {
                 setError(`${model}: ${cause instanceof Error ? cause.message : String(cause)}`);
               });
             }}

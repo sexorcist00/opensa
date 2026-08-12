@@ -9,6 +9,8 @@ import { installFakeWebGpu } from './test/fake-device';
 /** What the builder writes for a plate face: MaterialClass.plateFace (5) in the HIGH nibble of meta.w. */
 const META_PLATE_FACE = 5 << 4;
 const PLATE_TEXT_BYTES = 64 * 16 * 4;
+/** A detached panel's own world matrix (identity, translated) — what `detachPart` hands the entity. */
+const DETACHED_WORLD = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3, 0, 4, 1];
 
 /** A one-triangle car whose single submesh is a plate face. */
 function plateCarInit(): VehicleModelInit {
@@ -173,6 +175,27 @@ describe('license plates on a fake device', () => {
       // A model built BEFORE the real backgrounds landed would otherwise keep the 1×1 placeholder view.
       expect(() => engine.uploadPlateBackgrounds([raster, raster, raster])).not.toThrow();
       expect(() => engine.frame(camera())).not.toThrow();
+    });
+
+    it('keeps the plate through a damage swap and a detach — the plate is instance state', async () => {
+      const engine = new Engine();
+      await engine.init(harness.canvas);
+      const model = engine.createVehicleModel(plateCarInit());
+      const vehicle = engine.createVehicle(model);
+      vehicle.setPlate(6, 1);
+      gpu.reset();
+
+      // What the handle does to damage and then cut a panel loose: the `_ok` submeshes hide and the part
+      // gets its own world matrix. A plate face lives INSIDE a part mesh, so both paths run over it.
+      vehicle.setSubmeshVisible(0, false);
+      vehicle.entity.setPartWorldMatrix(0, DETACHED_WORLD);
+
+      expect(plateRows(gpu)).toHaveLength(0); // neither path rewrites the plate row
+      // And the state is retained, not merely unwritten: a capacity grow re-sends every live plate.
+      for (let at = 1; at < 9; at += 1) {
+        engine.createVehicle(model);
+      }
+      expect(plateRows(gpu).some((row) => row[0] === 6 && row[1] === 1)).toBe(true);
     });
 
     it('restores the plate across a capacity grow, like paint', async () => {

@@ -55,10 +55,20 @@ The city is read at the CAR's position, not the player's — a San Fierro car st
 stands in Los Santos wears SF plates. Countryside and desert have no design of their own and take a
 deterministic one of the three off the same seed, so a country road shows a stable mix.
 
+## Typing a plate by hand
+
+**F2 → Vehicles → "Plate (blank = auto)"** (2026-08-12): whatever is typed there is upper-cased, cut to the
+eight cells a plate has, and stored ON THE PLACEMENT — so a LOD respawn re-applies the same number instead
+of falling back to the hash. Leave it blank for the generated plate. This is the debug surface of the
+`plate` field any placement may carry (a mission car would use the same one).
+
 ## Known gaps
 
-- **No field verdict yet.** Distribution across LS/SF/LV, the countryside mix, and the damage behaviour
-  have not been driven.
+- **The field verdict is the LOOK one only** (2026-07-28: plates are on the cars and read correctly).
+  Distribution across LS/SF/LV, the countryside mix, atlas slots on a full-map drive and a ram test are
+  carried by [098/08](../plans/098-all-land-vehicles/08-acceptance-close.md). The damage/detach BEHAVIOUR
+  is unit-guarded since 2026-08-12 (the plate survives a deform swap, a detach and debris expiry), so what
+  the drive owes is confirmation, not discovery.
 - 5 of the 143 plated models author a plate face on their `_vlo` LOD mesh; those are deliberately NOT
   tagged (past the LOD swap the quad is a fraction of a pixel), so they keep the stock placeholder at
   distance.
