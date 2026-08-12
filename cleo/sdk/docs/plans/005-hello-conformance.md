@@ -32,8 +32,9 @@ from.
    `docs/contracts/mods.md` like any other CLEO mod — explicitly out of this plan's scope.
 4. **Docs sweep in the same change** (the CLAUDE.md maintenance rules, applied once at the chain's
    close): `docs/features/cleo.md` gains the SDK state row; `docs/commands.md` already carries the
-   build command (001) — verify it still matches; `docs/plans/097-cleo-basic/08-authoring-sdk.md`
-   ledger updated with this chain's outcome; `docs/architecture/cleo-scripts.md` gains the SDK as
+   build command (001) — verify it still matches; the chain readme's ledger updated with this chain's
+   outcome (it was `docs/plans/097-cleo-basic/08-authoring-sdk.md` until the 2026-08-12 move);
+   `docs/architecture/cleo-scripts.md` gains the SDK as
    a producer arrow (+ re-render the diagram) — the module map pointer goes to
    `cleo/sdk/README.md`.
 

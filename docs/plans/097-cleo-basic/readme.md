@@ -5,7 +5,13 @@
 CLEO is ON BY DEFAULT since the 06 decision-6 verdict, `?cleo=0` opts out). 08 (authoring SDK)
 DONE 2026-08-06 as the project-local chain `cleo/sdk/docs/plans/` — hello-conformance
 field-verified on BOTH runtimes (our engine AND real CLEO under Wine, user-confirmed). The whole
-097 chain is CLOSED.** Supersedes `roadmap/0.5.0/plans/08-cleo-basic/` (deleted in the same
+097 chain is CLOSED.**
+
+**Scope note (2026-08-12):** this folder holds the ENGINE side — the CLEO integration. Everything about
+the authoring SDK moved to [`cleo/sdk/docs/plans/`](../../../cleo/sdk/docs/plans/readme.md), beside its
+code: the `08-authoring-sdk.md` file here was a duplicate of a chain that had already shipped, down to
+six task boxes for finished work, and it is deleted. The same sweep struck 05's field-checkpoint-2 box
+(taken; its rhino third was removed by the user's 2026-08-05 call). **Zero open boxes in this chain.** Supersedes `roadmap/0.5.0/plans/08-cleo-basic/` (deleted in the same
 change), which was itself the unstarted 083 rethink of the three-era idea chain. This version is grounded
 in a fresh recon: **all seven `.cs` scripts of the user's target corpus were fully disassembled** (against
 the vendored Sanny Builder opcode DB) and the engine/pipeline seams were re-verified file-by-line. The
@@ -117,7 +123,7 @@ Doctrine:
 | 05 | [Native atlas](05-native-atlas.md) | Virtual address space + SA 1.0 atlas; class B alive; **field checkpoint 2: ladder, door, tracks**. |
 | 06 | [Packaging + pipeline](06-packaging-pipeline.md) | mod-installer/vehicle-installer carry CLEO files; contracts rows; VFS discovery; **field checkpoint 3: full build**. |
 | 07 | [Extensibility + debug surface](07-extensibility-debug.md) | F2 CLEO screen, tracer, coverage in CI, tier registry, add-an-opcode flow, docs + audit close-out. |
-| 08 | [CLEO authoring SDK](08-authoring-sdk.md) | Root `cleo/sdk` subproject (the `asi/` pattern): author OUR scripts in TS → standard `.cs`, dual-target SA + OpenSA; city-life's future home. Project-local chain: [`cleo/sdk/docs/`](../../../cleo/sdk/docs/plans/readme.md) (planned 2026-08-06). |
+| 08 | **Moved out** → [`cleo/sdk/docs/plans/`](../../../cleo/sdk/docs/plans/readme.md) | The CLEO authoring SDK (root `cleo/sdk`, the `asi/` pattern): author OUR scripts in TS → standard `.cs`, dual-target SA + OpenSA; city-life's future home. **DONE 2026-08-06**, and its plan file was deleted from here 2026-08-12 — the chain shipped beside the code and this folder had kept a stale copy of its task list. Everything SDK (goals check, decisions, ledger) lives in that chain readme; this folder keeps ENGINE work only. |
 
 Order and rationale: [priority.md](priority.md).
 

@@ -11,7 +11,9 @@ script instead"* — which the 097/08 scope-cut paragraph then contradicted ("rh
 author's script"). For no_lights it REVERSES the 2026-08-05 skip (the native light-damage recipe in
 [`docs/postmortem/097-hotring-hotknife-intake.md`](../../../../docs/postmortem/097-hotring-hotknife-intake.md)
 remains the engine half of plan 002, not an alternative to it). The superseded scope-cut lines in
-`docs/plans/097-cleo-basic/08-authoring-sdk.md` and `cleo/sdk/docs/plans/readme.md` now point here.
+the SDK chain's readme now point here (that scope-cut text moved into
+[`cleo/sdk/docs/plans/readme.md`](../../../sdk/docs/plans/readme.md) on 2026-08-12, when
+`docs/plans/097-cleo-basic/08-authoring-sdk.md` was deleted as a duplicate of the shipped SDK chain).
 
 ## The chain
 

@@ -85,11 +85,15 @@ recover-the-real-formula rule. No fitted constants: an offset we cannot name doe
       operations ("natives.setPartRotation car#257 misc_a#0 …"), never raw addresses.
 - [x] Headless integration: firela + van door decoded scripts drive the expected part
       rotations/translations on a fake vehicle; rhino's walk finds the fake pool's rhinos.
-- [ ] **Field checkpoint 2**: firela/newsvan/rhino installed as vehicle mods (vehicle-installer) +
-      scripts hand-placed; ladder rises on the parked firela, van door slides open with the door,
-      rhino tracks animate while driving. Judged from the reporter's angle rule: each mod's OWN
-      visible behaviour, on video/screenshots, into the ledger. Per-frame cost of rhino's math
-      measured through the frame-span ledger.
+- [x] **Field checkpoint 2** — taken; struck 2026-08-12 after reading the close-out. Two of the three
+      behaviours are field-confirmed in the chain audit (`docs/audit/cleo-basic-097.md`): *"firela pins
+      its ladder, vandoor slides doors"*. The third, **rhino's tracks, was removed by the user's call
+      2026-08-05** — we author our own track script instead of driving the mod author's
+      ([`cleo/scripts/docs/plans/001-rhino-tracks.md`](../../../cleo/scripts/docs/plans/001-rhino-tracks.md),
+      and the frame-order stand-in it rests on is `docs/hacks/cleo-frame-sibling-order.md`), so there is
+      no checkpoint left to take here. Rhino's cost was measured **headless** (295–364 µs of the 465 µs/tick
+      whole-corpus steady state) rather than through the frame-span ledger this box asked for — the
+      cheaper instrument answered the same question, and the number is in the audit.
 
 ## Verification
 
