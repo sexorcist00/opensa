@@ -85,6 +85,8 @@ interface Emit {
   bakedGeometryIndex: Map<OpaqueChunk, number>;
   /** Frame index the wheels + chassis hang off (the skeleton root, or the intermediate body frame). */
   bodyParentIndex: number;
+  /** Source geometry indexes carried in ANY form (original or derived) — `collectDropped`'s ledger. */
+  carriedSources: Set<number>;
   frames: ClumpFrame[];
   geometries: OpaqueChunk[];
   /** Fresh bone ids for shims + adopted parts, allocated past the template's. */
@@ -265,9 +267,8 @@ function childrenByFrame(model: ClumpModel): number[][] {
 }
 
 function collectDropped(emit: Emit, analysis: ModAnalysis, report: CarConvertReport): void {
-  const carried = new Set(emit.sourceGeometryIndex.keys());
   for (const atomic of analysis.model.atomics) {
-    if (!carried.has(atomic.geometryIndex)) {
+    if (!emit.carriedSources.has(atomic.geometryIndex)) {
       report.droppedFromMod.push(analysis.model.frames[atomic.frameIndex].name || `frame ${atomic.frameIndex}`);
     }
   }
@@ -283,6 +284,8 @@ function emitAtomic(
 ): void {
   let geometryIndex: number;
   if (derived) {
+    // A derived copy NEVER aliases the source's dedupe slot — doing so handed the mirrored LEFT wheel
+    // to the right side too (whichever side emitted first won; gate-7 "wheels splayed" round).
     const shared = emit.bakedGeometryIndex.get(derived);
     if (shared === undefined) {
       geometryIndex = emit.geometries.length;
@@ -291,9 +294,7 @@ function emitAtomic(
     } else {
       geometryIndex = shared;
     }
-    if (!emit.sourceGeometryIndex.has(source.geometryIndex)) {
-      emit.sourceGeometryIndex.set(source.geometryIndex, geometryIndex);
-    }
+    emit.carriedSources.add(source.geometryIndex);
   } else {
     const existing = emit.sourceGeometryIndex.get(source.geometryIndex);
     if (existing === undefined) {
@@ -303,6 +304,7 @@ function emitAtomic(
     } else {
       geometryIndex = existing;
     }
+    emit.carriedSources.add(source.geometryIndex);
   }
   emit.atomics.push({ extension: source.extension, flags: source.flags, frameIndex, geometryIndex });
 }
@@ -473,6 +475,7 @@ function emptyEmit(template: CsTemplate): Emit {
     atomics: [],
     bakedGeometryIndex: new Map(),
     bodyParentIndex: 1,
+    carriedSources: new Set(),
     frames: [],
     geometries: [],
     nextBoneId: nextFreeBoneId(template),
