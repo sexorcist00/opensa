@@ -63,11 +63,18 @@ export interface StreamStats {
    * per-frame like the rest.
    */
   blobMs: number;
+  /** RUNNING TOTAL since the driver was constructed — not a per-update count, unlike {@link blobMs} and
+   *  {@link uploadMs}. A host that ADDS it up per frame counts every earlier create again on every later
+   *  frame, and gets a plausible-looking number that means nothing: the 2026-08-12 phone capture reported
+   *  2454 creates against 4 resident cells and 0 evictions for exactly that reason. Read it, or difference
+   *  two readings — never sum it. Same for {@link evicted} and {@link lateCreates}. */
   created: number;
+  /** Running total since construction — see {@link created}. */
   evicted: number;
   /** Creates whose cell already sat INSIDE the effective fog cut (074/21 P3) — each one is a pop the
    *  player could have seen. The fog-mask honesty metric: 0 in steady driving; teleports/boot are
-   *  graced until their pending queue drains. */
+   *  graced until their pending queue drains. Running total since construction — see {@link created};
+   *  `apps/web` differences two readings around a leg, which is the pattern. */
   lateCreates: number;
   loadedCells: number;
   pendingCells: number;

@@ -52,6 +52,7 @@ const CONTEXT = {
   district: 'los-santos-centre',
   errors: [],
   hasTimestamps: true,
+  surface: { cssHeight: 364, cssWidth: 360, deviceHeight: 728, deviceWidth: 720, dpr: 2, renderScale: 1 },
 };
 
 describe('FrameInventory', () => {
@@ -174,6 +175,23 @@ describe('FrameInventory', () => {
       inventory.sample(16, stats(), NO_SPANS, cpu(40), IDLE);
 
       expect(inventory.report(CONTEXT).cpu.outsideMeanMs).toBe(0);
+    });
+
+    it('READS the streamer running totals instead of summing them, whatever the window length', () => {
+      const inventory = new FrameInventory();
+      // Four cells created at boot and nothing since — what a settled district reports on every update.
+      const settled: StreamStats = { ...IDLE, created: 4, worstCreateMs: 25.5 };
+      for (let i = 0; i < 101; i += 1) {
+        inventory.sample(32, stats(), NO_SPANS, NO_CPU, settled);
+      }
+
+      const { streaming } = inventory.report(CONTEXT);
+
+      // Summed, this read 2454 against 4 resident cells and 0 evictions on the 2026-08-12 phone capture:
+      // the same handful of creates counted again on every one of 685 frames, which looks like churn.
+      expect(streaming.cellsCreated).toBe(4);
+      expect(streaming.cellsEvicted).toBe(0);
+      expect(streaming.worstCreateMs).toBe(25.5);
     });
   });
 
@@ -298,7 +316,16 @@ describe('FrameInventory', () => {
         worstBlobMs: 38,
         worstCreateMs: 12,
       });
-      inventory.sample(32, stats(), NO_SPANS, NO_CPU, { ...IDLE, blobMs: 10, evicted: 1, worstBlobMs: 9 });
+      // The driver's counters are cumulative, so a later update still reports the creates it has made.
+      inventory.sample(32, stats(), NO_SPANS, NO_CPU, {
+        ...IDLE,
+        blobMs: 10,
+        created: 2,
+        evicted: 1,
+        lateCreates: 1,
+        worstBlobMs: 9,
+        worstCreateMs: 12,
+      });
 
       const { streaming } = inventory.report(CONTEXT);
 

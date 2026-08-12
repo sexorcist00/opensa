@@ -146,6 +146,7 @@ has an opaque origin and cannot own its URL — a `content://` or `file://` host
 | `hd=` · `lod=` | streaming ring radii |
 | `fog=1` · `fogscale=` | restore the game's own fog instead of pushing the cut to the far plane |
 | `weather=` | weather id for the environment driver |
+| `scale=` | render scale, clamped to `0.5..1` — the same manual knob `apps/web` has. It shrinks the scene and bloom targets (never the swapchain), which is the only lever that moves the `target` residency category: 34.66 MB of it at 1, 19.50 at 0.75, 8.66 at 0.5 on a 720×728 surface. Manual by decision — [the automatic ladder was measured and refused](../performance/deferred-optimizations/render-scale-tier.md) |
 | **`inventory=1`** | **201/1-01**: collect the frame before-table and show a panel with a copy button |
 | **`district=`** | the measurement district: names the capture AND, with no `at=`, opens the camera over it (`apps/dispatch/src/world/districts.ts`) |
 
@@ -190,6 +191,7 @@ device can produce:
 | `cpu.shareOfFrame` | the first of those over the frame. Low = the frame is WAITING; high = it is working |
 | `cpu.segmentsMs` | where the body went (`engine-frame`, `overlay-2d`, `board`, `stream`, `readout`, `other`) |
 | `frame.dtHistogramMs` | dt counts per 2 ms bin. Piled at 16.7/33.3 = locked to vsync; spread = simply slow |
+| `surface` | CSS size, DPR, drawing buffer and `renderScale` — **the whole of `world.byCategoryMb.target` is a function of these four numbers and of nothing else**, so a capture without them cannot be read for its largest category. It was three sentences written by hand until 2026-08-12 |
 
 The last two rows answer the open question the mobile row could not: a frame missing a 60 Hz deadline and a
 frame that is genuinely 32 ms of work look identical in a p50 and are fixed in opposite directions.

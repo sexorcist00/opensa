@@ -128,6 +128,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
 
   const engine = new Engine();
   await engine.init(canvas);
+  // `?scale=` — the same manual knob `apps/web` has, and the only one that moves the `target` category:
+  // 36.54 MB of the 2026-08-12 capture's 74.9 MB is scene + bloom targets, which scale with the square of
+  // this number. Manual, per the refusal in performance/deferred-optimizations/render-scale-tier.md — the
+  // console picks no tier for anybody. The report records it, so a capture says what it was drawn at.
+  engine.renderScale = Math.min(1, Math.max(0.5, numberParam(params, 'scale', 1)));
   // Picking must be armed BEFORE the first cell loads — `debugPicking` only takes effect on load, and it is
   // what retains the per-placement mapper a click resolves against. It costs memory on a full map; this app
   // is a map inspector with a dispatch board on top, so it pays that cost by design.
@@ -257,6 +262,14 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         district: params.get('district') ?? UNNAMED_DISTRICT,
         errors: errorLog.entries(),
         hasTimestamps: !engine.deviceReport.missing.includes('timestamp-query'),
+        surface: {
+          cssHeight: canvas.clientHeight,
+          cssWidth: canvas.clientWidth,
+          deviceHeight: canvas.height,
+          deviceWidth: canvas.width,
+          dpr,
+          renderScale: engine.renderScale,
+        },
       });
     },
     locate(at: GtaGround): void {

@@ -520,3 +520,29 @@ without knowing it is wrong.
 accepted on a GPU with ASTC and no BC) — and both were verified by reintroducing the defect. Before that,
 **silent**: the manifest gate passed, the build's `--platforms mobile` gate passed, every test passed, and
 only a real GPU said otherwise.
+
+## A counter that runs is READ, never summed — and the same struct carries both kinds
+
+`StreamStats` (`packages/engine/src/stream/streaming.ts`) is returned once per `update()` and mixes two
+different kinds of number in one flat object:
+
+| Kind | Fields | How a host reads it |
+| --- | --- | --- |
+| **per-update** | `blobMs` (reset each update), `uploadMs` (assigned each update), `pendingCells`, `loadedCells` | sum it, or average it over the window |
+| **running total since construction** | `created`, `evicted`, `lateCreates`, `worstBlobMs`… (`worstBlobMs`/`worstCreateMs` are running maxima) | read the latest, or difference two readings around a leg |
+
+Summing a running total is the failure, and it produces a number that looks like a finding. The dispatch
+console's inventory collector added all five up per frame, so the 2026-08-12 phone capture reported
+**`cellsCreated` 2454 against 4 resident cells and 0 evictions** — four creates counted again on every one of
+685 frames. It read as streamer churn, it was filed as an open question that blocked the capture from being
+cited, and nothing else in the capture agreed with it (`blobMean` 0.02 ms, `uploadMean` 0.18).
+
+`apps/web` had the pattern right the whole time and it is the one to copy — `engine-perf-runs.ts` takes
+`lateCreates` before a leg and subtracts, because a *delta over a window* is the only meaning a running total
+has inside a measurement.
+
+**Caught:** now yes, in `apps/dispatch/src/world/inventory.test.ts` — a 101-frame window of a settled world
+must still report 4 creates, and the defect was reintroduced to prove it fails (`expected 400 to be 4`). The
+field is documented on the interface itself, which is where a host looks. Before that, **silent, and worse
+than silent**: the wrong number is plausible, self-consistent across a whole window, and grows with window
+length, so a longer capture makes it *more* convincing rather than obviously broken.

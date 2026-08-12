@@ -31,6 +31,7 @@ stays, pointing at the new home).
 | --- | --- | --- | --- |
 | [Bake vehicle sky-occlusion in opensa-pack](deferred-optimizations/vehicle-ao-baking.md) | spawn hitch | 8–78 ms per model, once per model, spawn path only | in reserve — not needed |
 | [Automatic render-scale / quality-tier ladder](deferred-optimizations/render-scale-tier.md) | GPU pass | 0.4–1.4 ms (measured ceiling), targets 345 → 88 MB | measured and refused |
+| [MSAA sample count as a budget number](deferred-optimizations/msaa-sample-count.md) | memory (render targets) | ~22 MB on a phone — 65.7 % of the `target` category, 29 % of the whole 74.9 MB residency measured 2026-08-12 | in reserve — residency does not press yet, and the cost is aliasing on a view made of silhouettes |
 | [Per-ring texture laziness](deferred-optimizations/per-ring-texture-laziness.md) | memory | under the ~767 MB world-array floor | in reserve |
 | [Compress UV-animation keyframes in the `.osm` DESC](deferred-optimizations/uv-anim-keyframe-encoding.md) | pak bytes · spawn parse | 19 312 B on the one animated model — 94 % of its DESC, 0.49 % of its file | in reserve — noise until animated models are common |
 | [One draw per visible vehicle submesh](deferred-optimizations/vehicle-submesh-draw-batching.md) | draw count | unmeasured; the axis the pass floor lives on | in reserve |

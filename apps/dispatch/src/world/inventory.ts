@@ -104,6 +104,20 @@ export interface InventoryReport {
   readonly spans: readonly (readonly [string, number])[];
   /** What the streamer did over the window — the engine's own numbers, which the console used to drop. */
   readonly streaming: InventoryStreaming;
+  /** What the frame was DRAWN AT. The `target` category below is a cost of resolution and of nothing else —
+   *  36.54 MB of the 2026-08-12 capture's 74.9, larger than every texture in the district — and until this
+   *  block existed a capture could not be read for it at all: the CSS size, the DPR and the render scale
+   *  were sentences somebody wrote by hand afterwards. An A/B must be self-describing (`CLAUDE.md`). */
+  readonly surface: {
+    readonly cssHeight: number;
+    readonly cssWidth: number;
+    /** The drawing buffer, device pixels — what the swapchain and the post pass are sized at. */
+    readonly deviceHeight: number;
+    readonly deviceWidth: number;
+    readonly dpr: number;
+    /** `?scale=` — the engine's own knob, which shrinks the scene and bloom targets (never the swapchain). */
+    readonly renderScale: number;
+  };
   /** Human-readable reasons a column above is absent on this device. */
   readonly unavailable: readonly string[];
   /** Reasons this capture may NOT be cited as a before-table. Empty = nothing obviously wrong with it.
@@ -135,9 +149,13 @@ export interface InventoryReport {
  *  and a 1068 ms body with no owner, which is the same shape of question. */
 export interface InventoryStreaming {
   readonly blobMeanMs: number;
+  /** Cells created SINCE THE PAGE BOOTED, not over the sampled window — the driver keeps this as a running
+   *  total and the collector reads it. The collector starts with the page, so the two are the same span in
+   *  practice, and boot's own creates are inside it by design. */
   readonly cellsCreated: number;
   readonly cellsEvicted: number;
-  /** Creates whose cell was already inside the fog cut — each one a visible pop. */
+  /** Creates whose cell was already inside the fog cut — each one a visible pop. Since boot, like
+   *  {@link cellsCreated}. */
   readonly lateCreates: number;
   readonly uploadMeanMs: number;
   /** The single most expensive worker-handler call in the window: one huge upload and a pile-up of small
@@ -208,6 +226,7 @@ export class FrameInventory {
     district: string;
     errors: readonly string[];
     hasTimestamps: boolean;
+    surface: InventoryReport['surface'];
   }): InventoryReport {
     const sorted = [...this.dts].sort((a, b) => a - b);
     const frames = Math.max(1, this.dts.length);
@@ -265,6 +284,7 @@ export class FrameInventory {
         worstBlobMs: this.stream.worstBlobMs,
         worstCreateMs: this.stream.worstCreateMs,
       },
+      surface: context.surface,
       unavailable,
       warnings: warningsFor({
         bodyMeanMs,
@@ -318,13 +338,18 @@ export class FrameInventory {
     if (cpu.bodyMs > this.worst.bodyMs) {
       this.worst = { bodyMs: cpu.bodyMs, segmentsMs: cpu.segments.byName };
     }
-    // The streamer's own numbers are per-UPDATE and reset each one, so they sum like the spans do. The two
-    // worsts are kept rather than averaged: one 85 ms upload and twenty 4 ms ones are different problems.
+    // Only HALF the streamer's numbers are per-update. `blobMs` is reset every update and `uploadMs` is
+    // assigned every update, so those two sum like the spans do; `created`, `evicted` and `lateCreates` are
+    // RUNNING TOTALS the driver never resets, so they are READ. Summing them added the whole history to
+    // every later frame — the 2026-08-12 capture reported 2454 creates against 4 resident cells and 0
+    // evictions, which is 4 creates counted once per frame for the rest of a 685-frame window.
+    // The two worsts are kept rather than averaged: one 85 ms upload and twenty 4 ms ones are different
+    // problems, and both are running maxima, so a max over the samples is the same number either way.
     this.stream.blobMs += stream.blobMs;
     this.stream.uploadMs += stream.uploadMs;
-    this.stream.created += stream.created;
-    this.stream.evicted += stream.evicted;
-    this.stream.lateCreates += stream.lateCreates;
+    this.stream.created = stream.created;
+    this.stream.evicted = stream.evicted;
+    this.stream.lateCreates = stream.lateCreates;
     this.stream.worstBlobMs = Math.max(this.stream.worstBlobMs, stream.worstBlobMs);
     this.stream.worstCreateMs = Math.max(this.stream.worstCreateMs, stream.worstCreateMs);
     for (const [key] of TIMED) {
