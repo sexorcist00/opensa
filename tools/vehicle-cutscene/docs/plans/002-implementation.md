@@ -11,28 +11,61 @@ correct in the field; **P2** = full fleet coverage (bike/boat, all 23) and pipel
 
 ---
 
-## Step 1 (P0) — scaffold + census + inspect
+## Step 1 (P0) — scaffold + census + inspect ✅ SHIPPED 2026-08-12
 
 The read path: know the slots, match the mods, report readiness. No writes.
 
-- [ ] Scaffold `tools/vehicle-cutscene/`: `package.json` (`@opensa/vehicle-cutscene`, nx tag
+- [x] Scaffold `tools/vehicle-cutscene/`: `package.json` (`@opensa/vehicle-cutscene`, nx tag
       `type:tool`), `readme.md`, `src/cli.ts` with `--game/--in/--out/--only/--inspect` validation
-      (mirror `vehicle-installer/src/cli.ts` arg handling verbatim).
-- [ ] `census.ts`: derive the cs-vehicle table from the `--game` tree — scan `models/cutscene.img` names,
-      parse `data/vehicles.ide` (all sections that name land/boat models) and `data/txdcut.ide`, match by
-      **stripped stem against the 8-char IDE model name with exact-match priority over prefix** (the
-      `csfirela`→`firela`-not-`firetruk` and `csremington92`→`remingtn` traps from 001). Explicitly:
-      exclude non-vehicle `cs*` entries (no IDE match), report dead txdcut rows (`csopcarla`,
-      `csandrom92`) and missing rows (`cscopcarsf`, `csdinghy`).
-- [ ] Match census slots against `--in` mod folders (`<model>.dff/.txd` present) → per-slot status:
-      `ready` / `no mod` / `mod incomplete`.
-- [ ] `--inspect` prints the table (slot, cs name(s), donor mod, branch car/bike/boat, status).
-- [ ] Tests (real fixtures via the manifest, one line each: vanilla `cutscene.img` slice or the individual
-      cs DFFs + `vehicles.ide` + `txdcut.ide`): negative describes first — unknown `cs*` entry is not a
-      vehicle; dead txdcut row reported; then positive — 23 models, 21 slots, csho excluded.
+      (mirror `vehicle-installer/src/cli.ts` arg handling verbatim). Also registered in
+      `vitest.config.ts`'s include list (tools are enumerated there — a new tool's tests silently don't
+      run until added).
+- [x] `census.ts`: derive the cs-vehicle table from the `--game` tree. **The matcher came out simpler and
+      stricter than planned**: no prefix rules at all — a `cs*` entry is a vehicle iff its txdcut.ide
+      row's parent names an IDE row (covers `csremington92` → `remingtn`, which NO prefix rule can link:
+      the truncation drops an interior letter), or its bare stem equals an IDE model name exactly (covers
+      the three rows R* left out: `cscopcarla` typo'd, `cscopcarsf` + `csdinghy` missing). `csho`,
+      `csfirela` and every prop/ped fall out with no special case. Boats survive via a tool-local
+      tolerant `cars`-section parse — the shared `parseVehicleDefs` column guard drops them (098 recon).
+- [x] Match census slots against `--in` mod folders (by dff basename, not folder name; alphabetically
+      last folder wins a duplicate, matching the installer) → `ready` / `no mod` / `mod incomplete`.
+- [x] `--inspect` prints the table (cs name, donor model, branch, txdcut row state, status, folder).
+- [x] Tests: 14 (negative describes first) on the real `vehicles.ide` + `txdcut.ide` fixtures
+      (`data/txdcut.ide` added to the `test:fixtures` manifest) + composed entry maps and temp mod
+      folders. No cs DFF fixtures needed — census reads names and sizes only.
 
-**Verification:** `--inspect` over `game-src/original` + `mods-src/original/vehicles` lists 23 cs models
-/ 21 slots, all `ready`. **Record:** the printed census table into this doc.
+**Verification (run 2026-08-12):** `--inspect` over `game-src/original` + `mods-src/original/vehicles`
+→ **23 cutscene model(s), 21 donor slot(s), all 23 ready**; both dead txdcut rows reported
+(`csandrom92`, `csopcarla`). Census tests 14/14 green.
+
+**Record — the census table (2026-08-12, game-src/original):**
+
+```
+csbobcat92     bobcat    car   txdcut yes      ready  bobcat - 1988 GMC Sierra 1500 1.2 - mad max
+csbravura      bravura   car   txdcut yes      ready  bravura - 1988 Toyota MR2 Supercharged T-Bar - alfamodding
+csburrito92    burrito   car   txdcut yes      ready  burrito - 1985 GMC Vandura - 533
+cscopcarla     copcarla  car   txdcut MISSING  ready  copcarla - 1978 Ford Fairmont LS County Sheriff - funky
+cscopcarla92   copcarla  car   txdcut yes      ready  (same donor)
+cscopcarsf     copcarsf  car   txdcut MISSING  ready  copcarsf - 1985 Chevrolet Impala SFPD - mad max
+csdinghy       dinghy    boat  txdcut MISSING  ready  dinghy - Dinghy HD - michelle works
+csfirela       firela    car   txdcut yes      ready  firela - 1986 Sutphen 75 Mid-Mounted Ladder - stratumx
+csglendale92   glendale  car   txdcut yes      ready  glendale - 1953 Ford Mainline Fordor Sedan - stratumx
+csgreenwood    greenwoo  car   txdcut yes      ready  greenwoo - 1986 Ford LTD - mad max
+csmonster      monster   car   txdcut yes      ready  monster - 1986 Chevrolet Silverado 2500 MT - klarnetist
+csmothership   camper    car   txdcut yes      ready  camper - 1967 Volkswagen Transporter T1 - stratumx
+csmtbike92     mtbike    bike  txdcut yes      ready  mtbike - Smooth Criminal Bicycles 3.0 MTB - zeneric
+csremington92  remingtn  car   txdcut yes      ready  remingtn - 1979 Lincoln Continental - k1real24
+cssabre92      sabre     car   txdcut yes      ready  sabre - 1972 Ford Gran Torino Sport - mad driver
+cssadler       sadler    car   txdcut yes      ready  sadler - 1970 Ford F-100 - stratumx
+cssavanna      savanna   car   txdcut yes      ready  savanna - 1964 Chevrolet Impala SS 2.1 - mad max
+cssecurica92   securica  car   txdcut yes      ready  securica - 1985 Ford F-800 Security Car - mad driver
+cstaxi92       taxi      car   txdcut yes      ready  taxi - 1992 Chevrolet Caprice Taxi - funky
+csvoodoo       voodoo    car   txdcut yes      ready  voodoo - 1960 Chevrolet Impala - chezy
+cswashington   washing   car   txdcut yes      ready  washing - 1983 Lincoln Town Car 1.1 - stratumx
+cszr350        zr350     car   txdcut yes      ready  zr350 - 1982 Pontiac Firebird - funky
+cszr350b       zr350     car   txdcut yes      ready  (same donor)
+dead txdcut.ide rows: csandrom92, csopcarla
+```
 
 ---
 

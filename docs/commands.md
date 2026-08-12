@@ -104,6 +104,18 @@ tool never allocates an id (it must match what a full build would write) and ref
 to another model. An added car has no traffic or parked presence until a full build writes the placements —
 spawn it by name to look at it ([plan 006](../tools/vehicle-installer/docs/plans/006-rebake.md)).
 
+### Cutscene vehicles: census / conversion
+
+```bash
+# which cutscene models exist, which mod is the donor, is everything in place (writes nothing):
+npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --inspect
+# conversion (--out <dir>, --only <model,…>) lands with plan 002 steps 2+ — the CLI throws until then
+```
+
+23 cutscene vehicle models / 21 donor slots; the census derives from `models/cutscene.img` +
+`data/txdcut.ide` + `data/vehicles.ide`, never a hardcoded list
+([plans](../tools/vehicle-cutscene/docs/plans/)).
+
 ## Serving & running
 
 ```bash
