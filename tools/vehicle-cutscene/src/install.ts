@@ -40,6 +40,8 @@ export interface CutsceneInstallSummary {
   skipped: { csName: string; reason: string }[];
   /** Total bytes of the emitted `cs*.txd` entries (empty dictionaries unless self-contained). */
   txdBytes: number;
+  /** Non-fatal findings, e.g. a mod's PRE-EXISTING texture holes (missing in gameplay too). */
+  warnings: { csName: string; message: string }[];
 }
 
 interface SlotContext {
@@ -84,6 +86,7 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
     painted: [],
     skipped: [],
     txdBytes: 0,
+    warnings: [],
   };
   for (const entry of readiness) {
     convertSlot(entry, img, inPath, context, summary);
@@ -126,9 +129,15 @@ function convertSlot(
     const txd = slotTxd(slot, bytes, join(inPath, folder!, `${slot.model}.txd`), context);
 
     img.set(`${slot.csName}.dff`, bytes);
-    img.set(`${slot.csName}.txd`, txd);
-    summary.txdBytes += txd.byteLength;
+    img.set(`${slot.csName}.txd`, txd.bytes);
+    summary.txdBytes += txd.bytes.byteLength;
     summary.converted.push(slot.csName);
+    if (txd.preExisting.length > 0) {
+      summary.warnings.push({
+        csName: slot.csName,
+        message: `pre-existing texture holes (missing in gameplay too): ${txd.preExisting.join(', ')}`,
+      });
+    }
     if (baked > 0) {
       summary.painted.push({ csName: slot.csName, materials: baked });
     }
@@ -163,27 +172,34 @@ function rowIsMissing(text: string, slot: CutsceneSlot): boolean {
 /**
  * The slot's `cs*.txd`: EMPTY when the closure resolves through the txdp parent + generic vehicle.txd
  * (the normal case — the pipeline's gta3.img carries the installed mod TXD as the parent). Under
- * `--self-contained-txd` a closure miss embeds the MOD's own TXD instead (the bottle-gate case, where
- * the runtime parent is stock); the chain cs-TXD → parent → generic must then close, or the slot still
- * errors — an unresolvable texture is never a silently-white cutscene car.
+ * `--self-contained-txd` a parent miss embeds the MOD's own TXD instead (the bottle-gate case, where
+ * the runtime parent is stock).
+ *
+ * A name missing even from the MOD's OWN dictionary is a PRE-EXISTING hole (gameplay shows the same
+ * white face — three of the real mods ship them: `lights_f`, `t_chrome2`,
+ * `vehicle_generic_doorshut2`): reported as a warning, never a failure. A name the mod's TXD HAS but
+ * the parent chain lacks is actionable (the base is not installed / no self-contained flag) — that one
+ * still fails the slot.
  */
-function slotTxd(slot: CutsceneSlot, dff: Uint8Array, modTxdPath: string, context: SlotContext): Uint8Array {
+function slotTxd(
+  slot: CutsceneSlot,
+  dff: Uint8Array,
+  modTxdPath: string,
+  context: SlotContext,
+): { bytes: Uint8Array; preExisting: string[] } {
   const parent = context.gta3.get(`${slot.txd}.txd`);
   const parentNames = parent ? textureNames(new Uint8Array(parent)) : [];
-  const available = new Set([...context.genericNames, ...parentNames]);
-  const missing = unresolvedTextures(dff, available);
-  if (missing.length === 0) {
-    return emptyTxd();
+  const parentChain = new Set([...context.genericNames, ...parentNames]);
+  const modTxd = new Uint8Array(readFileSync(modTxdPath));
+  const fullChain = new Set([...parentChain, ...textureNames(modTxd)]);
+
+  const preExisting = unresolvedTextures(dff, fullChain);
+  const fixable = unresolvedTextures(dff, parentChain).filter((name) => !preExisting.includes(name));
+  if (fixable.length === 0) {
+    return { bytes: emptyTxd(), preExisting };
   }
   if (context.selfContainedTxd) {
-    const modTxd = new Uint8Array(readFileSync(modTxdPath));
-    const chain = new Set([...available, ...textureNames(modTxd)]);
-    const stillMissing = unresolvedTextures(dff, chain);
-    if (stillMissing.length > 0) {
-      throw new Error(`unresolved textures even self-contained: ${stillMissing.join(', ')}`);
-    }
-
-    return modTxd;
+    return { bytes: modTxd, preExisting };
   }
-  throw new Error(`unresolved textures (txdp parent ${slot.txd}.txd): ${missing.join(', ')}`);
+  throw new Error(`unresolved textures (txdp parent ${slot.txd}.txd): ${fixable.join(', ')}`);
 }

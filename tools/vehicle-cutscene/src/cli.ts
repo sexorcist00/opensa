@@ -117,6 +117,9 @@ function printSummary(summary: CutsceneInstallSummary): void {
   for (const { csName, reason } of summary.skipped) {
     console.log(`  skipped ${csName}: ${reason}`);
   }
+  for (const { csName, message } of summary.warnings) {
+    console.log(`  warning ${csName}: ${message}`);
+  }
   for (const { csName, message } of summary.errors) {
     console.log(`  ERROR ${csName}: ${message}`);
   }
