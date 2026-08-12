@@ -1,28 +1,32 @@
 /**
  * The car branch: a mod's gameplay DFF → its cutscene counterpart, shaped by the vanilla template.
  *
- * THE EMIT MODEL (rebuilt after gate 4's two field rounds, 2026-08-12): cutscene animations bind by frame
- * NAME (`CAnimBlendAssociation`, gta-reversed `CCutsceneMgr`) and their channels drive every animated
- * bone to the VANILLA model's locals — the converted rig's own frame transforms only survive on frames
- * the anim leaves alone. So every template-matched frame is emitted with the VANILLA local (the anims'
- * bind pose), and the donor's differing hinge placement is BAKED INTO THE PART'S VERTICES
- * (`rig/bake.ts`): `delta = inv(W_vanilla) ∘ shift_z ∘ W_donor`. Stock donors on body-reusing templates
- * yield identity deltas and byte-identical geometry.
+ * THE EMIT MODEL (v3, after gate 7's door/wheelbase round, 2026-08-12): cutscene animations bind by
+ * frame NAME (`CAnimBlendAssociation`, gta-reversed `CCutsceneMgr`) and drive every animated bone's
+ * LOCAL — relative to its PARENT — to the vanilla model's values. So each template-matched bone keeps
+ * the VANILLA local (the anims' bind pose), and the donor's differing placement is absorbed by an
+ * un-animated SHIM frame inserted between the bone and its parent: `shim = inv(W_parent) ∘ shift_z ∘
+ * W_donor ∘ inv(L_vanilla)`. The anim then swings a door around the MOD's hinge (the shim moved the
+ * pivot), wheels stand on the MOD's corners including the wheelbase, and geometry is carried UNBAKED —
+ * closed pose AND animated pose are both exact, which the earlier vertex-bake could not do (a door
+ * opened around the vanilla hinge with a baked mesh detached by the hinge delta — the gate-7 field
+ * round). Stock donors yield identity shims, i.e. none at all.
  *
- * Everything else from the earlier rounds still holds:
- *   - part set = template ∩ mod by canonical name, holes in the id sequence are fine; visible mod parts
- *     with no template slot are ADOPTED with fresh bone ids (donor glass — '92 bodies bake theirs);
- *   - a mesh frame under its OWN `<base>_dummy` carries junk the game destroys — the hinge is the dummy;
- *   - wheels sit at the template's corners (the anims drive the node translations there — field-proven);
- *     the mod's TRACK-WIDTH delta is baked into the wheel mesh along x, the spin axis (no orbit), one
- *     shared geometry per axle (the left side's 180°-about-z flips the sign itself);
- *   - `shift = (tplNodeZ − tplRadius) − (modDummyZ − modRadius)` aligns the donor's ground plane before
- *     baking; a mod wheel-radius/wheelbase mismatch shows as the radius/y delta (known limits).
+ * Still true from the earlier rounds:
+ *   - part set = template ∩ mod by canonical name; every other visible mod mesh is ADOPTED under its
+ *     nearest carried ancestor (fresh bone ids, un-animated) — only `_dam`/`_vlo` and f_wheel variant
+ *     containers stay out, one mesh per `f_extras`/`f_class` container;
+ *   - a `<part>_ok/_dam` frame under its own dummy carries junk the game destroys — the hinge is the
+ *     dummy; every OTHER mesh frame (stock copcarla's junk-space chassis) keeps its transform;
+ *   - LEFT wheels on identity-rotation templates (cscopcarla/cstaxi92 style) get a MIRRORED geometry
+ *     copy (x flipped, triangles rewound) — the shared unmirrored wheel showed its inner barrel
+ *     outward; z-180 templates (bobcat style) mirror through their own bind rotation;
+ *   - `shift = (tplNodeZ − tplRadius) − (modDummyZ − modRadius)` aligns the donor's ground plane.
  */
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 
 import { canonicalPartName, type CsTemplate, geometryZHalfExtent, toArrayBuffer, type WheelCorner } from '../template';
-import { bakeGeometryBody, isIdentityDelta } from './bake';
+import { isIdentityDelta, mirrorGeometryBodyX } from './bake';
 import {
   type ClumpAtomic,
   type ClumpFrame,
@@ -43,38 +47,49 @@ const WHEEL_DUMMY_RE = /^wheel_([lr])([fmb])_dummy$/;
 /** `f_wheel_<mask>` container frames — the IVF-style wheel sub-model four of the real mods ship instead
  *  of a mesh under the dummies (mirrors the engine builder's WHEEL_CONTAINER_RE + first-atomic pick). */
 const WHEEL_CONTAINER_RE = /^f_wheel/;
-/** Mod meshes NEVER adopted: damage twins and LOD copies. Everything else the game renders in gameplay
- *  (a funky-style mod carries its whole shell as `body`/`interior`/`glass`/`chrome` sub-meshes under the
- *  chassis — dropping them dismantled the sheriff at gate 7's mod round). */
+/** Mod meshes NEVER adopted: damage twins and LOD copies. Everything else the game renders in gameplay. */
 const ORPHAN_SKIP_RE = /_dam$|_vlo$/;
-/** IVF-style VARIANT containers: the runtime plugin shows ONE mesh per container (the sheriff's two roof
- *  `f_extras:1` each hold ten lightbar/antenna variants). Adoption takes the FIRST variant only. */
+/** IVF-style VARIANT containers: the runtime plugin shows ONE mesh per container. */
 const VARIANT_CONTAINER_RE = /^f_(?:extras|class)/;
+/** Shim frame name suffix — must never collide with an anim channel name (vanilla frame names). */
+const SHIM_SUFFIX = '_pv';
 
 export interface CarConvertReport {
-  /** Visible mod parts the template has no slot for, carried with fresh bone ids (donor glass, misc). */
+  /** Visible mod parts the template has no slot for, carried with fresh bone ids (shell, glass, misc). */
   adoptedFromMod: string[];
-  /** Parts whose geometry was vertex-baked (non-identity donor-vs-vanilla hinge delta). */
-  baked: string[];
-  /** Mod meshes with no place in the template (chassis_vlo, damage twins, …) — not carried. */
+  /** Mod meshes with no place in the template (damage twins, LOD copies, surplus variants). */
   droppedFromMod: string[];
   /** Template parts the mod does not ship — their bones drop out of the emitted hierarchy. */
   missingInMod: string[];
   /** Canonical names of the emitted template parts. */
   parts: string[];
-  /** The vertical rebase applied to the donor before baking. */
+  /** The vertical rebase applied to the donor. */
   shiftZ: number;
+  /** Bones that needed a shim frame (non-identity donor-vs-vanilla placement delta). */
+  shimmed: string[];
+}
+
+interface BoneSpec {
+  boneId: number;
+  /** The VANILLA local — what the anims replay. */
+  local: { position: readonly number[]; rotation: readonly number[] };
+  name: string;
+  parentFrame: number;
+  /** Where the bone must LAND (body-parent-relative world) — the donor's placement, ground-lifted. */
+  targetWorld: Transform;
 }
 
 interface Emit {
   atomics: ClumpAtomic[];
-  /** Dedupe map for BAKED geometry copies shared by several atomics (the per-axle wheel bakes). */
+  /** Dedupe map for derived geometry copies (the mirrored left wheel). */
   bakedGeometryIndex: Map<OpaqueChunk, number>;
   /** Frame index the wheels + chassis hang off (the skeleton root, or the intermediate body frame). */
   bodyParentIndex: number;
   frames: ClumpFrame[];
   geometries: OpaqueChunk[];
-  /** Dedupe map for UNBAKED source geometries. */
+  /** Fresh bone ids for shims + adopted parts, allocated past the template's. */
+  nextBoneId: number;
+  /** Dedupe map for source geometries. */
   sourceGeometryIndex: Map<number, number>;
   /** Root-space transform of each emitted frame (parallel to `frames`). */
   worlds: Transform[];
@@ -84,8 +99,8 @@ interface ModAnalysis {
   atomicByFrame: Map<number, ClumpAtomic>;
   chassisIndex: number;
   chassisTransform: Transform;
-  /** The part's HINGE transform: the parent dummy's when that parent is the part's own `<base>_dummy`
-   *  (the mesh frame's junk transform is destroyed, like the game does), the frame's own otherwise. */
+  /** The space the frame's GEOMETRY is authored in: the dummy's for a `<part>_ok/_dam` under its own
+   *  dummy (the game destroys that junk), the frame's own full world otherwise. */
   hingeOf: (frameIndex: number) => Transform;
   model: ClumpModel;
   /** frame transform relative to the mod's root frame. */
@@ -106,11 +121,11 @@ export function convertCar(modDff: Uint8Array, template: CsTemplate): { dff: Uin
   const emit = emptyEmit(template);
   const report: CarConvertReport = {
     adoptedFromMod: [],
-    baked: [],
     droppedFromMod: [],
     missingInMod: [],
     parts: [],
     shiftZ,
+    shimmed: [],
   };
 
   emitBody(emit, template, analysis, shiftZ, report);
@@ -128,18 +143,15 @@ export function convertCar(modDff: Uint8Array, template: CsTemplate): { dff: Uin
 }
 
 /** Carry every remaining mod mesh (the game renders them all in gameplay) as a child of its nearest
- *  CARRIED ancestor — door glass swings with its door; body/interior shells ride the chassis. Fresh
- *  bone ids past the template's keep them un-animated by the cutscene anims (no name match). */
+ *  CARRIED ancestor — door glass swings with its door; body/interior shells ride the chassis. */
 function adoptOrphanParts(
   emit: Emit,
-  template: CsTemplate,
   analysis: ModAnalysis,
   shiftZ: number,
   chassisFrame: number,
   carriedFrames: ReadonlyMap<number, number>,
   report: CarConvertReport,
 ): void {
-  let nextBoneId = nextFreeBoneId(template);
   const servedVariantContainers = new Set<number>();
   for (const atomic of analysis.model.atomics) {
     const index = atomic.frameIndex;
@@ -162,7 +174,7 @@ function adoptOrphanParts(
     const parentFrame = nearestCarriedAncestor(analysis, carriedFrames, index) ?? chassisFrame;
     const local = compose(invert(emit.worlds[parentFrame]), lift(analysis.hingeOf(index), shiftZ));
     const frameIndex = pushFrame(emit, {
-      boneId: nextBoneId,
+      boneId: emit.nextBoneId++,
       name: analysis.model.frames[index].name.trim(),
       parentIndex: parentFrame,
       position: local.position,
@@ -170,7 +182,6 @@ function adoptOrphanParts(
     });
     emitAtomic(emit, analysis, atomic, frameIndex);
     report.adoptedFromMod.push(canonical);
-    nextBoneId += 1;
   }
 }
 
@@ -187,9 +198,6 @@ function analyzeMod(modDff: Uint8Array, template: CsTemplate): ModAnalysis {
     const isComponent = /_(?:ok|dam)$/.test(name);
     const base = name.replace(/_(?:ok|dam)$/, '');
 
-    // The game's collapse destroys ONLY a `<part>_ok/_dam` frame under its own dummy. Every other mesh
-    // frame KEEPS its transform in gameplay — stock copcarla's chassis carries [0,1.637,-0.35] and its
-    // geometry is authored in that space (gate-4 round 3: discarding it shifted the whole body).
     return isComponent && parentName === `${base}_dummy` ? relativeToRoot(parentIndex) : relativeToRoot(frameIndex);
   };
 
@@ -265,22 +273,21 @@ function collectDropped(emit: Emit, analysis: ModAnalysis, report: CarConvertRep
   }
 }
 
-/** Append an atomic. Unbaked geometries dedupe by source index (the shared wheel); a baked copy is
- *  always its own entry. Either way the SOURCE index is registered so `collectDropped` sees it carried. */
+/** Append an atomic; source geometries dedupe by index, derived copies (mirrored wheel) by identity. */
 function emitAtomic(
   emit: Emit,
   analysis: ModAnalysis,
   source: ClumpAtomic,
   frameIndex: number,
-  baked?: OpaqueChunk,
+  derived?: OpaqueChunk,
 ): void {
   let geometryIndex: number;
-  if (baked) {
-    const shared = emit.bakedGeometryIndex.get(baked);
+  if (derived) {
+    const shared = emit.bakedGeometryIndex.get(derived);
     if (shared === undefined) {
       geometryIndex = emit.geometries.length;
-      emit.geometries.push(baked);
-      emit.bakedGeometryIndex.set(baked, geometryIndex);
+      emit.geometries.push(derived);
+      emit.bakedGeometryIndex.set(derived, geometryIndex);
     } else {
       geometryIndex = shared;
     }
@@ -313,17 +320,42 @@ function emitBody(
     { boneId: template.chassisBoneId },
   ];
   order.sort((a, b) => a.boneId - b.boneId);
-  const trackBakes = wheelTrackBakes(template, analysis);
-  if (trackBakes.size > 0) {
-    report.baked.push('wheel-track');
-  }
+  const mirrored = mirroredLeftWheel(template, analysis);
   for (const entry of order) {
     if (entry.corner) {
-      emitWheel(emit, template, analysis, entry.corner, trackBakes.get(entry.corner));
+      emitWheel(emit, template, analysis, shiftZ, entry.corner, mirrored, report);
     } else {
       emitChassisAndParts(emit, template, analysis, shiftZ, report);
     }
   }
+}
+
+/**
+ * Emit an anim-targeted bone: the VANILLA local (what the anims replay), with an un-animated SHIM frame
+ * absorbing the donor delta when the target placement differs. Returns the bone's frame index.
+ */
+function emitBone(emit: Emit, spec: BoneSpec, report: CarConvertReport): number {
+  const local: Transform = { position: [...spec.local.position] as never, rotation: [...spec.local.rotation] };
+  const shim = compose(invert(emit.worlds[spec.parentFrame]), compose(spec.targetWorld, invert(local)));
+  let parentIndex = spec.parentFrame;
+  if (!isIdentityDelta(shim)) {
+    parentIndex = pushFrame(emit, {
+      boneId: emit.nextBoneId++,
+      name: `${spec.name}${SHIM_SUFFIX}`,
+      parentIndex: spec.parentFrame,
+      position: shim.position,
+      rotation: shim.rotation,
+    });
+    report.shimmed.push(spec.name);
+  }
+
+  return pushFrame(emit, {
+    boneId: spec.boneId,
+    name: spec.name,
+    parentIndex,
+    position: local.position,
+    rotation: local.rotation,
+  });
 }
 
 function emitChassisAndParts(
@@ -333,14 +365,18 @@ function emitChassisAndParts(
   shiftZ: number,
   report: CarConvertReport,
 ): void {
-  const chassisFrame = pushFrame(emit, {
-    boneId: template.chassisBoneId,
-    name: template.chassisName,
-    parentIndex: emit.bodyParentIndex,
-    position: [...template.chassisLocal.position],
-    rotation: [...template.chassisLocal.rotation],
-  });
-  emitPart(emit, analysis, shiftZ, 'chassis', analysis.chassisIndex, chassisFrame, report);
+  const chassisFrame = emitBone(
+    emit,
+    {
+      boneId: template.chassisBoneId,
+      local: template.chassisLocal,
+      name: template.chassisName,
+      parentFrame: emit.bodyParentIndex,
+      targetWorld: lift(analysis.chassisTransform, shiftZ),
+    },
+    report,
+  );
+  emitAtomic(emit, analysis, analysis.atomicByFrame.get(analysis.chassisIndex)!, chassisFrame);
 
   const emittedByCanonical = new Map<string, { frameIndex: number; modIndex: number }>([
     ['chassis', { frameIndex: chassisFrame, modIndex: analysis.chassisIndex }],
@@ -356,20 +392,23 @@ function emitChassisAndParts(
       }
       continue;
     }
-    const frameIndex = pushFrame(emit, {
-      boneId: part.boneId,
-      name: part.frameName,
-      parentIndex: parent.frameIndex,
-      position: [...part.position],
-      rotation: [...part.rotation],
-    });
-    emitPart(emit, analysis, shiftZ, canonical, modIndex, frameIndex, report);
+    const frameIndex = emitBone(
+      emit,
+      {
+        boneId: part.boneId,
+        local: { position: part.position, rotation: part.rotation },
+        name: part.frameName,
+        parentFrame: parent.frameIndex,
+        targetWorld: lift(analysis.hingeOf(modIndex), shiftZ),
+      },
+      report,
+    );
+    emitAtomic(emit, analysis, analysis.atomicByFrame.get(modIndex)!, frameIndex);
     emittedByCanonical.set(canonical, { frameIndex, modIndex });
     report.parts.push(canonical);
   }
   adoptOrphanParts(
     emit,
-    template,
     analysis,
     shiftZ,
     chassisFrame,
@@ -378,64 +417,47 @@ function emitChassisAndParts(
   );
 }
 
-/** Emit one part's atomic, vertex-baking the donor-vs-vanilla hinge delta when it is not identity. */
-function emitPart(
-  emit: Emit,
-  analysis: ModAnalysis,
-  shiftZ: number,
-  canonical: string,
-  modIndex: number,
-  frameIndex: number,
-  report: CarConvertReport,
-): void {
-  const atomic = analysis.atomicByFrame.get(modIndex)!;
-  const delta = compose(invert(emit.worlds[frameIndex]), lift(analysis.hingeOf(modIndex), shiftZ));
-  if (isIdentityDelta(delta)) {
-    emitAtomic(emit, analysis, atomic, frameIndex);
-
-    return;
-  }
-  emitAtomic(
-    emit,
-    analysis,
-    atomic,
-    frameIndex,
-    bakeGeometryBody(analysis.model.geometries[atomic.geometryIndex], delta),
-  );
-  report.baked.push(canonical);
-}
-
-/** Wheels stand at the TEMPLATE corners (the anims drive the node translations there — field-proven at
- *  gate 7: mod-corner locals changed nothing on screen). The mod's track-width delta is baked into the
- *  wheel MESH along x — the spin axis, so no orbit — and the left side reuses the same geometry through
- *  its 180°-about-z (the sign flips itself). Per-axle copies when front/rear deltas differ. */
+/** Wheels: the node bone lands on the MOD's corner (shim absorbs track/wheelbase/height deltas), the
+ *  mesh keeps the template's local. LEFT corners take the mirrored copy on identity-rotation templates. */
 function emitWheel(
   emit: Emit,
   template: CsTemplate,
   analysis: ModAnalysis,
+  shiftZ: number,
   corner: WheelCorner,
-  baked: OpaqueChunk | undefined,
+  mirrored: null | OpaqueChunk,
+  report: CarConvertReport,
 ): void {
   const wheel = template.wheels.get(corner)!;
+  const dummyWorld = lift(analysis.relativeToRoot(analysis.wheelDummies.get(corner)!), shiftZ);
+  const useMirror = corner.startsWith('l') && mirrored !== null;
   if (wheel.style === 'single') {
-    const meshIndex = pushFrame(emit, {
-      boneId: wheel.meshBoneId,
-      name: wheel.meshName,
-      parentIndex: emit.bodyParentIndex,
-      position: [...wheel.nodePosition],
-      rotation: [...wheel.meshRotation],
-    });
-    emitAtomic(emit, analysis, analysis.wheelAtomic, meshIndex, baked);
+    const meshIndex = emitBone(
+      emit,
+      {
+        boneId: wheel.meshBoneId,
+        local: { position: wheel.nodePosition, rotation: wheel.meshRotation },
+        name: wheel.meshName,
+        parentFrame: emit.bodyParentIndex,
+        targetWorld: { position: dummyWorld.position, rotation: [...wheel.meshRotation] },
+      },
+      report,
+    );
+    emitAtomic(emit, analysis, analysis.wheelAtomic, meshIndex, useMirror ? mirrored : undefined);
 
     return;
   }
-  const nodeIndex = pushFrame(emit, {
-    boneId: wheel.nodeBoneId,
-    name: wheel.nodeName,
-    parentIndex: emit.bodyParentIndex,
-    position: [...wheel.nodePosition],
-    rotation: [...IDENTITY_ROTATION],
-  });
+  const nodeIndex = emitBone(
+    emit,
+    {
+      boneId: wheel.nodeBoneId,
+      local: { position: wheel.nodePosition, rotation: IDENTITY_ROTATION },
+      name: wheel.nodeName,
+      parentFrame: emit.bodyParentIndex,
+      targetWorld: dummyWorld,
+    },
+    report,
+  );
   const meshIndex = pushFrame(emit, {
     boneId: wheel.meshBoneId,
     name: wheel.meshName,
@@ -443,7 +465,7 @@ function emitWheel(
     position: [...wheel.meshPosition],
     rotation: [...wheel.meshRotation],
   });
-  emitAtomic(emit, analysis, analysis.wheelAtomic, meshIndex, baked);
+  emitAtomic(emit, analysis, analysis.wheelAtomic, meshIndex, useMirror ? mirrored : undefined);
 }
 
 function emptyEmit(template: CsTemplate): Emit {
@@ -453,6 +475,7 @@ function emptyEmit(template: CsTemplate): Emit {
     bodyParentIndex: 1,
     frames: [],
     geometries: [],
+    nextBoneId: nextFreeBoneId(template),
     sourceGeometryIndex: new Map(),
     worlds: [],
   };
@@ -543,6 +566,19 @@ function lift(transform: Transform, shiftZ: number): Transform {
   };
 }
 
+/** A mirrored wheel copy for the LEFT side of identity-rotation templates: their anims replay identity
+ *  (no z-180 mirror), so the shared wheel geometry showed its inner barrel outward (gate-7 field). */
+function mirroredLeftWheel(template: CsTemplate, analysis: ModAnalysis): null | OpaqueChunk {
+  const leftHasFlip = [...template.wheels.entries()].some(
+    ([corner, wheel]) => corner.startsWith('l') && wheel.meshRotation[0] < 0,
+  );
+  if (leftHasFlip) {
+    return null; // bobcat-style: the bind rotation mirrors, and the anims replay it
+  }
+
+  return mirrorGeometryBodyX(analysis.model.geometries[analysis.wheelAtomic.geometryIndex]);
+}
+
 /** The emitted frame of the closest carried (template-matched) ancestor of a mod frame, if any. */
 function nearestCarriedAncestor(
   analysis: ModAnalysis,
@@ -559,7 +595,7 @@ function nearestCarriedAncestor(
   return undefined;
 }
 
-/** One past the template's highest bone id — where adopted parts' fresh ids start. */
+/** One past the template's highest bone id — where shim + adopted bones' fresh ids start. */
 function nextFreeBoneId(template: CsTemplate): number {
   let max = template.chassisBoneId;
   if (template.intermediate) {
@@ -631,38 +667,6 @@ function wheelContainerMesh(model: ClumpModel): number {
   }
 
   return -1;
-}
-
-/**
- * Per-corner track-width bakes. The WORLD delta pulls each wheel from the template corner onto the
- * mod's arch: `worldΔ = sign(corner x) · (|mod x| − |tpl x|)`. The MESH-LOCAL bake flips with the
- * mesh's own bind rotation (`z180` templates like bobcat mirror the sign themselves; identity-rotation
- * templates like cscopcarla need per-side copies — the gate-7 asymmetric round: passenger side fixed,
- * driver side not). Corners sharing a local delta share one baked copy; under 5 mm keeps the original.
- */
-function wheelTrackBakes(template: CsTemplate, analysis: ModAnalysis): Map<WheelCorner, OpaqueChunk> {
-  const geometry = analysis.model.geometries[analysis.wheelAtomic.geometryIndex];
-  const bakes = new Map<WheelCorner, OpaqueChunk>();
-  const chunks = new Map<string, OpaqueChunk>();
-  for (const [corner, wheel] of template.wheels) {
-    const dummy = analysis.relativeToRoot(analysis.wheelDummies.get(corner)!);
-    const side = wheel.nodePosition[0] < 0 ? -1 : 1;
-    const worldDelta = side * (Math.abs(dummy.position[0]) - Math.abs(wheel.nodePosition[0]));
-    const meshFlipsX = wheel.meshRotation[0] < 0; // the left-side 180°-about-z carries -1 here
-    const localDelta = meshFlipsX ? -worldDelta : worldDelta;
-    if (Math.abs(localDelta) < 0.005) {
-      continue;
-    }
-    const key = localDelta.toFixed(3);
-    let chunk = chunks.get(key);
-    if (!chunk) {
-      chunk = bakeGeometryBody(geometry, { position: [localDelta, 0, 0], rotation: [...IDENTITY_ROTATION] });
-      chunks.set(key, chunk);
-    }
-    bakes.set(corner, chunk);
-  }
-
-  return bakes;
 }
 
 /** Memoized frame transforms relative to the mod's root frame (the root's own transform excluded). */

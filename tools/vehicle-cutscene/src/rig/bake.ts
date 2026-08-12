@@ -47,6 +47,38 @@ export function isIdentityDelta(delta: Transform, epsilon = 1e-3): boolean {
   return isIdentityRotation(delta.rotation, epsilon) && delta.position.every((value) => Math.abs(value) <= epsilon);
 }
 
+/**
+ * A mirrored copy across x: positions and normals flip their x, triangles rewind (b ↔ c) so the faces
+ * keep pointing outward. The LEFT wheel of identity-rotation templates uses this — their anims replay
+ * identity rotations, so nothing else can mirror the shared wheel geometry (gate-7 field round).
+ */
+export function mirrorGeometryBodyX(geometry: OpaqueChunk): OpaqueChunk {
+  const file = readRw(geometry.body.slice());
+  const struct = file.chunks.find((chunk) => chunk.type === RW_STRUCT);
+  if (!struct?.data) {
+    throw new Error('geometry has no struct to mirror');
+  }
+  const decoded = decodeGeometryStruct(struct.data);
+  for (const morph of decoded.morphs) {
+    for (const values of [morph.positions, morph.normals]) {
+      if (values) {
+        for (let at = 0; at < values.length; at += 3) {
+          values[at] = -values[at];
+        }
+      }
+    }
+    morph.bounds = [-morph.bounds[0], morph.bounds[1], morph.bounds[2], morph.bounds[3]];
+  }
+  for (const triangle of decoded.triangles) {
+    const swap = triangle.b;
+    triangle.b = triangle.c;
+    triangle.c = swap;
+  }
+  struct.data = encodeGeometryStruct(decoded);
+
+  return { body: writeRw(file), version: geometry.version };
+}
+
 function applyToTriples(values: Float32Array, transform: (point: Vec3) => Vec3): void {
   for (let at = 0; at + 2 < values.length; at += 3) {
     const [x, y, z] = transform([values[at], values[at + 1], values[at + 2]]);

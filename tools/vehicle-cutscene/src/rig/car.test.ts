@@ -66,10 +66,20 @@ describe('convertCar', () => {
       // not dropped: a car without glass was gate 4's field finding.
       expect(report.adoptedFromMod).toEqual(['windscreen_ok']);
 
-      // The emitted hierarchy is the vanilla table plus the adopted bone appended under the chassis.
-      const hierarchy = converted.frames[1].hierarchy!;
-      expect(hierarchy.map((node) => node.id)).toEqual([...vanilla.frames[1].hierarchy!.map((node) => node.id), 19]);
-      expect(converted.frames.find((frame) => frame.name === 'windscreen_ok')?.boneId).toBe(19);
+      // Vanilla ids survive as an ordered subsequence (shims for the repositioned extras + the adopted
+      // windscreen add fresh ids in between).
+      const vanillaIds = vanilla.frames[1].hierarchy!.map((node) => node.id);
+      const convertedIds = converted.frames[1].hierarchy!.map((node) => node.id);
+      let matched = 0;
+      for (const id of convertedIds) {
+        if (id === vanillaIds[matched]) {
+          matched += 1;
+        }
+      }
+      expect(matched).toBe(vanillaIds.length);
+      expect(converted.frames.find((frame) => frame.name === 'windscreen_ok')?.boneId).toBeGreaterThanOrEqual(19);
+      expect(report.shimmed).toEqual(expect.arrayContaining(['extra1', 'extra2']));
+      expect(report.shimmed).not.toContain('door_lf_ok'); // identity delta needs no shim
       expect(converted.frames[1].name).toBe('bobcat_dummy');
 
       // Bone ids per frame name match vanilla for every SHARED frame (adopted ones are ours alone).
@@ -88,8 +98,6 @@ describe('convertCar', () => {
           expect(actual[axis], `${name}[${axis}]`).toBeCloseTo(expected[axis], 3);
         }
       }
-      expect(report.baked).toEqual(expect.arrayContaining(['extra1', 'extra2']));
-      expect(report.baked).not.toContain('door_lf_ok'); // identity delta stays byte-identical
       expect(frameByName(converted, 'chassis')?.position[2]).toBeCloseTo(0.9, 3);
       expect(frameByName(converted, 'Box01')?.position[2]).toBeCloseTo(0.35, 3);
       expect(frameByName(converted, 'wheel03')?.rotation[0]).toBeCloseTo(-1, 4); // left mesh z-180
@@ -123,7 +131,14 @@ describe('convertCar', () => {
 
       expect(report.missingInMod).toEqual([]);
       const vanillaIds = vanilla.frames[1].hierarchy!.map((node) => node.id);
-      expect(converted.frames[1].hierarchy!.map((node) => node.id).slice(0, vanillaIds.length)).toEqual(vanillaIds);
+      const convertedIds = converted.frames[1].hierarchy!.map((node) => node.id);
+      let matched = 0;
+      for (const id of convertedIds) {
+        if (id === vanillaIds[matched]) {
+          matched += 1;
+        }
+      }
+      expect(matched).toBe(vanillaIds.length);
       expect(frameByName(converted, 'door_lr_hi_ok')?.boneId).toBe(15);
       expect(report.adoptedFromMod.sort()).toEqual(['exhaust_ok', 'windscreen_ok']);
       expect(report.droppedFromMod).not.toContain('exhaust_ok');
@@ -185,13 +200,29 @@ describe('convertCar', () => {
       const vanillaKept = vanilla.frames[1]
         .hierarchy!.map((node) => node.id)
         .filter((id) => converted.frames.some((frame) => frame.boneId === id));
-      expect(converted.frames[1].hierarchy!.map((node) => node.id).slice(0, vanillaKept.length)).toEqual(vanillaKept);
+      const monsterIds = converted.frames[1].hierarchy!.map((node) => node.id);
+      let keptMatched = 0;
+      for (const id of monsterIds) {
+        if (id === vanillaKept[keptMatched]) {
+          keptMatched += 1;
+        }
+      }
+      expect(keptMatched).toBe(vanillaKept.length);
       const cog = frameByName(converted, 'COG')!;
       expect(cog.position[2]).toBeCloseTo(1.2, 3);
-      expect(converted.frames[frameByName(converted, 'chassis')!.parentIndex].name).toBe('COG');
-      // The mod's wheels sit under the COG, re-expressed in its space — ground contact preserved.
+      // The chassis may hang under a shim absorbing the donor delta — the chain still ends at COG.
+      let chassisParent = converted.frames[frameByName(converted, 'chassis')!.parentIndex];
+      if (chassisParent.name.endsWith('_pv')) {
+        chassisParent = converted.frames[chassisParent.parentIndex];
+      }
+      expect(chassisParent.name).toBe('COG');
+      // The mod's wheels sit under the COG (possibly through a shim) — ground contact preserved.
       const axis = frameByName(converted, 'axis_rf')!;
-      expect(converted.frames[axis.parentIndex].name).toBe('COG');
+      let axisParent = converted.frames[axis.parentIndex];
+      if (axisParent.name.endsWith('_pv')) {
+        axisParent = converted.frames[axisParent.parentIndex];
+      }
+      expect(axisParent.name).toBe('COG');
       expect(report.parts).toContain('door_lf_ok');
     });
 
@@ -217,21 +248,12 @@ describe('convertCar', () => {
       }
 
       // The donor's chassis GEOMETRY is authored in the junk frame's space (the game keeps non-ok/dam
-      // transforms) — the bake must land the body where vanilla's body sits (gate-4 round 3 regression).
-      const bboxCenterY = (bytes: Uint8Array, of: 'chassis'): number => {
-        const clump = parseDff(toArrayBuffer(bytes));
-        const atomic = clump.atomics.find((entry) => clump.frames[entry.frameIndex].name.trim() === of)!;
-        const positions = clump.geometries[atomic.geometryIndex].positions;
-        let min = Infinity;
-        let max = -Infinity;
-        for (let at = 1; at < positions.length; at += 3) {
-          min = Math.min(min, positions[at]);
-          max = Math.max(max, positions[at]);
-        }
-
-        return (min + max) / 2;
-      };
-      expect(bboxCenterY(dff, 'chassis')).toBeCloseTo(bboxCenterY(csCopcarla, 'chassis'), 1);
+      // transforms) — the SHIM frame carries that junk, so the body lands where vanilla's body sits
+      // while the bone keeps the vanilla local for the anims (gate-4 round 3 + gate-7 regression).
+      const shim = frameByName(converted, 'chassis_pv')!;
+      expect(shim.position[1]).toBeCloseTo(1.637, 2);
+      expect(shim.position[2]).toBeCloseTo(-0.35, 1);
+      expect(converted.frames[shim.parentIndex].name).toBe('copcarla');
     });
 
     it('keeps identity rotations identity through the emit path', () => {
