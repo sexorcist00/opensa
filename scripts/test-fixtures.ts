@@ -160,6 +160,7 @@ const MANIFEST: readonly Fixture[] = [
   // frame carries `[0, 1.637, -0.35]` that the game destroys at load — the converter must too.
   extract('cscopcarla92.dff', 'dff/cutscene/cscopcarla92.dff'),
   extract('copcarla.dff', 'dff/cutscene/copcarla.dff'),
+  extract('bobcat.txd', 'dff/cutscene/bobcat.txd'), // the txdp parent of the closure-check tests
   copy('data/peds.ide', 'data/peds.ide'),
   copy('data/handling.cfg', 'data/handling.cfg'),
   copy('data/info.zon', 'data/info.zon'),

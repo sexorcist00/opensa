@@ -7,6 +7,8 @@
  *     --out      output game tree (base copied, models/cutscene.img rebuilt, data/txdcut.ide patched)
  *     --only     restrict to specific donor models (comma-separated) while iterating
  *     --inspect  print the census + per-slot readiness, write nothing (no --out needed)
+ *     --self-contained-txd  on a texture-closure miss, copy the txdp parent TXD into the cs TXD
+ *                instead of erroring (the documented escape hatch; plan 002 step 6)
  *   All paths are relative to the current working directory (absolute paths pass through).
  */
 import { statSync } from 'node:fs';
@@ -74,6 +76,7 @@ function main(): void {
     inPath,
     only: only ? new Set(only.split(',').map((model) => model.trim().toLowerCase())) : undefined,
     outPath: fromCwd(outArg),
+    selfContainedTxd: process.argv.includes('--self-contained-txd'),
   });
   printSummary(summary);
   if (summary.errors.length > 0) {
@@ -107,7 +110,8 @@ function printSummary(summary: CutsceneInstallSummary): void {
   const paintedMaterials = summary.painted.reduce((sum, entry) => sum + entry.materials, 0);
   console.log(
     `vehicle-cutscene: ${summary.converted.length} converted, ${summary.skipped.length} skipped,` +
-      ` ${summary.errors.length} error(s), ${paintedMaterials} paint material(s) baked on ${summary.painted.length} model(s);` +
+      ` ${summary.errors.length} error(s), ${paintedMaterials} paint material(s) baked on ${summary.painted.length} model(s),` +
+      ` ${summary.txdBytes} B of cs TXDs;` +
       ` cutscene.img ${megabytes(summary.imgBytesBefore)} → ${megabytes(summary.imgBytesAfter)}`,
   );
   for (const { csName, reason } of summary.skipped) {

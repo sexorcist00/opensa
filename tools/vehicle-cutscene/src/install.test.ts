@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { installCutscene } from './install';
 import { readClump } from './rig/clump-io';
 import { toArrayBuffer } from './template';
+import { textureNames } from './txd';
 
 const CS_BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/csbobcat92.dff'));
 const BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.dff'));
@@ -38,10 +39,17 @@ beforeEach(() => {
   outPath = join(dir, 'out');
 
   mkdirSync(join(gamePath, 'data'), { recursive: true });
-  mkdirSync(join(gamePath, 'models'), { recursive: true });
+  mkdirSync(join(gamePath, 'models', 'generic'), { recursive: true });
   writeFileSync(join(gamePath, 'data', 'vehicles.ide'), VEHICLES_IDE);
   writeFileSync(join(gamePath, 'data', 'txdcut.ide'), TXDCUT_IDE);
   writeFileSync(join(gamePath, 'data', 'carcols.dat'), CARCOLS_DAT);
+  writeFileSync(
+    join(gamePath, 'models', 'generic', 'vehicle.txd'),
+    readFileSync('tests/original/models/generic/vehicle.txd'),
+  );
+  const gta3 = createImg();
+  gta3.set('bobcat.txd', new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.txd')));
+  writeImgFile(gta3, join(gamePath, 'models', 'gta3.img'));
   const img = createImg();
   img.set('csbobcat92.dff', CS_BOBCAT);
   img.set('csbobcat92.txd', new Uint8Array(16));
@@ -78,6 +86,15 @@ describe('installCutscene', () => {
       expect(summary.errors[0].csName).toBe('csbobcat92');
       expect(summary.errors[0].message).toContain('not a DFF');
     });
+
+    it('fails the slot loudly when the txdp parent cannot resolve the textures', () => {
+      const gta3 = createImg();
+      writeImgFile(gta3, join(gamePath, 'models', 'gta3.img')); // no bobcat.txd parent any more
+      const summary = installCutscene({ gamePath, inPath, outPath });
+      expect(summary.converted).toEqual([]);
+      expect(summary.errors[0].message).toContain('unresolved textures');
+      expect(summary.errors[0].message).toContain('bobcat92interior128');
+    });
   });
 
   describe('positive cases', () => {
@@ -97,7 +114,9 @@ describe('installCutscene', () => {
       expect(converted.geometries).toHaveLength(12); // rebuilt (shared wheel, adopted glass), not copied
       // IMG VER2 pads entries to 2 048-byte sectors — presence + one-sector size says "untouched".
       expect(img.get('csbarrel.dff')?.byteLength).toBe(2048);
-      expect(img.get('csbobcat92.txd')?.byteLength).toBe(2048); // vanilla TXDs stay until step 6
+      // The slot's TXD is replaced with an EMPTY dictionary — txdp does the resolving (step 6).
+      expect(textureNames(img.get('csbobcat92.txd')!)).toEqual([]);
+      expect(summary.txdBytes).toBeLessThan(64);
 
       // The paint bake ran: markers replaced by the fake palette, none of the marker RGBs survive.
       expect(summary.painted).toHaveLength(1);

@@ -1,3 +1,4 @@
+import { openArchive } from '@opensa/renderware/archive/img-archive';
 /**
  * The emit path: wipe `--out`, copy the `--game` base in (vehicle-installer's pattern), convert every
  * ready car slot and rebuild `models/cutscene.img` with the converted entries, then patch
@@ -17,6 +18,7 @@ import { type Census, type CutsceneSlot, loadCensus, matchMods, type SlotReadine
 import { bakePaintMarkers, paintColoursFor } from './materials';
 import { convertCar } from './rig/car';
 import { extractCarTemplate } from './template';
+import { emptyTxd, textureNames, unresolvedTextures } from './txd';
 
 export interface CutsceneInstallOptions {
   gamePath: string;
@@ -24,6 +26,8 @@ export interface CutsceneInstallOptions {
   /** Restrict conversion to these donor models / cs names (the CLI's `--only`). */
   only?: ReadonlySet<string>;
   outPath: string;
+  /** Escape hatch: on a closure miss, copy the parent TXD into the cs TXD instead of erroring. */
+  selfContainedTxd?: boolean;
 }
 
 export interface CutsceneInstallSummary {
@@ -34,6 +38,17 @@ export interface CutsceneInstallSummary {
   /** Per-model count of paint-marker materials baked with the carcols colours (plan 002 step 5). */
   painted: { csName: string; materials: number }[];
   skipped: { csName: string; reason: string }[];
+  /** Total bytes of the emitted `cs*.txd` entries (empty dictionaries unless self-contained). */
+  txdBytes: number;
+}
+
+interface SlotContext {
+  carcols: VehicleColours;
+  /** Texture names of the resident generic `models/generic/vehicle.txd`. */
+  genericNames: readonly string[];
+  /** The `--game` tree's gta3.img — the txdp parents (the installed mod TXDs) live here. */
+  gta3: ReturnType<typeof openArchive>;
+  selfContainedTxd: boolean;
 }
 
 /** Build the output game: base copy + converted cutscene.img + patched txdcut.ide. */
@@ -54,7 +69,12 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
   const imgPath = join(outPath, 'models', 'cutscene.img');
   const imgBytesBefore = statSync(imgPath).size;
   const img = openImg(new Uint8Array(readFileSync(imgPath)));
-  const carcols = parseCarcols(readFileSync(join(gamePath, 'data', 'carcols.dat'), 'utf8'));
+  const context: SlotContext = {
+    carcols: parseCarcols(readFileSync(join(gamePath, 'data', 'carcols.dat'), 'utf8')),
+    genericNames: textureNames(new Uint8Array(readFileSync(join(gamePath, 'models', 'generic', 'vehicle.txd')))),
+    gta3: openArchive(new Uint8Array(readFileSync(join(gamePath, 'models', 'gta3.img')))),
+    selfContainedTxd: options.selfContainedTxd === true,
+  };
 
   const summary: CutsceneInstallSummary = {
     converted: [],
@@ -63,9 +83,10 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
     imgBytesBefore,
     painted: [],
     skipped: [],
+    txdBytes: 0,
   };
   for (const entry of readiness) {
-    convertSlot(entry, img, inPath, carcols, summary);
+    convertSlot(entry, img, inPath, context, summary);
   }
 
   writeImgFile(img, imgPath);
@@ -79,7 +100,7 @@ function convertSlot(
   entry: SlotReadiness,
   img: ReturnType<typeof openImg>,
   inPath: string,
-  carcols: VehicleColours,
+  context: SlotContext,
   summary: CutsceneInstallSummary,
 ): void {
   const { folder, slot, status } = entry;
@@ -101,8 +122,12 @@ function convertSlot(
     const template = extractCarTemplate(vanilla);
     const modDff = new Uint8Array(readFileSync(join(inPath, folder!, `${slot.model}.dff`)));
     const { dff } = convertCar(modDff, template);
-    const { baked, bytes } = bakePaintMarkers(dff, paintColoursFor(carcols, slot.model));
+    const { baked, bytes } = bakePaintMarkers(dff, paintColoursFor(context.carcols, slot.model));
+    const txd = slotTxd(slot, bytes, context);
+
     img.set(`${slot.csName}.dff`, bytes);
+    img.set(`${slot.csName}.txd`, txd);
+    summary.txdBytes += txd.byteLength;
     summary.converted.push(slot.csName);
     if (baked > 0) {
       summary.painted.push({ csName: slot.csName, materials: baked });
@@ -133,4 +158,23 @@ function patchTxdcut(outPath: string, census: Census): void {
 
 function rowIsMissing(text: string, slot: CutsceneSlot): boolean {
   return !new RegExp(`^${slot.csName}\\s*,`, 'm').test(text);
+}
+
+/**
+ * The slot's `cs*.txd`: EMPTY when the closure resolves through the txdp parent + generic vehicle.txd
+ * (the normal case), the parent TXD verbatim under `--self-contained-txd`, an error otherwise —
+ * an unresolvable texture is never a silently-white cutscene car.
+ */
+function slotTxd(slot: CutsceneSlot, dff: Uint8Array, context: SlotContext): Uint8Array {
+  const parent = context.gta3.get(`${slot.txd}.txd`);
+  const parentBytes = parent ? new Uint8Array(parent) : null;
+  const available = new Set([...context.genericNames, ...(parentBytes ? textureNames(parentBytes) : [])]);
+  const missing = unresolvedTextures(dff, available);
+  if (missing.length === 0) {
+    return emptyTxd();
+  }
+  if (context.selfContainedTxd && parentBytes) {
+    return parentBytes;
+  }
+  throw new Error(`unresolved textures (txdp parent ${slot.txd}.txd): ${missing.join(', ')}`);
 }
