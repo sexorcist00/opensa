@@ -270,15 +270,44 @@ empty TXDs rides the user's next intro run.
 
 ---
 
-## Step 7 (P1) — FIELD GATE: modded cars in cutscenes
+## Step 7 (P1) — FIELD GATE: modded cars in cutscenes ✅ PASSED for the intro, 2026-08-12 (six rounds)
 
-- [ ] Full run over `mods-src/original/vehicles`, all 21 slots, into a bootable install (vehicle-installer
-      first, then this tool — order matters: closure checks read the installed TXDs).
-- [ ] Field run (user): intro sequence (taxi, bobcat, copcarla '92 slots now modern customs) + one
-      Los Santos story cutscene with savanna/voodoo/greenwood; verdict on paint, plates, ground contact,
-      door animation.
+Delivery for the gate: `--self-contained-txd` build over stock `game-src/original` (the bottle keeps
+stock gameplay — cutscene-only A/B; 21/21 converted, 306.7 MB archive, 4 pre-existing-texture-hole
+warnings). **Verdict (round 6, verbatim): "дверь открылась, все идеально … по первой катсцене все
+отлично"** — sheriff and taxi complete, wheels in the arches both sides, doors swing on the mod hinges,
+the taxi's rear door opens for CJ like vanilla.
 
-**STOP point — same rule as step 4.** **Record:** verdict + screenshots reference.
+### What the gate taught — the EMIT MODEL was rebuilt twice on field evidence
+
+1. **Adopt the WHOLE mod shell.** A funky-style mod carries its body as `body`/`interior`/`glass`/
+   `chrome`/`tail` sub-meshes under the chassis; the `_ok`-only adoption dismantled the sheriff. The
+   game renders every clump atomic — so does the conversion now; only `_dam`/`_vlo` stay out. Door glass
+   hangs under its DOOR (nearest carried ancestor), swinging with it.
+2. **Variant containers show ONE mesh.** `f_extras`/`f_class` (ten roof lightbars each on the sheriff)
+   take the first variant; year-variant subtrees (`_[1991]:2` — the mod's own `}` typo tolerated) are
+   ALTERNATIVES to carried base parts and are never adopted (the taxi stacked three door sets).
+3. **SHIM frames beat vertex bakes.** Anim channels drive a bone's LOCAL relative to its PARENT — an
+   un-animated shim between bone and parent absorbs the whole donor delta (hinge, track, wheelbase,
+   junk-space chassis) while the bone keeps the vanilla local the anims replay. Doors open around MOD
+   hinges (bakes broke exactly there), wheels stand on MOD corners including the 35 cm wheelbase delta
+   nothing could bake (orbit), geometry rides untouched. Stock donors ⇒ zero shims.
+4. **LEFT wheels of identity-rotation templates need a MIRRORED geometry copy** (x flip + triangle
+   rewind): their anims replay identity, so nothing else can mirror the shared wheel — the dish faced
+   outward. And a derived copy must NEVER alias the source's dedupe slot (whichever side emitted first
+   handed its geometry to the other — the asymmetric splayed-wheels round).
+5. **Missing template parts fall back to the DUMMY's `_ok` child, whatever its name** — the game keys
+   components by dummy, and the taxi mod ships `door_lr_ok` under `door_rr_dummy` (copy-paste misname):
+   gameplay works, the cutscene channel bound to nothing, the door never opened.
+6. **The decisive instrument was reading the cutscene anims themselves**: `anim/cuts.img` IFPs are the
+   old ANPK format (engine parser is ANP3-only); a new kept script
+   (`scripts/debug/cutscene-anim-channels.ts`, row in `docs/debug/README.md`) lists per-object channels
+   with keyframe kinds. Ground truth recorded: EVERY bone gets a NAME-bound channel (2-frame static
+   KRT0s included) — the vanilla-locals-as-bind-pose rule is not optional; wheels spin via KR00 on the
+   MESH bones; the intro vehicles live in `prolog1/prolog3`, not `intro*`.
+
+**Remaining scope for this gate's fleet:** further story cutscenes ride ongoing play (steps 10/11 close
+the loop); paint = stock carcols until the full pipeline supplies the mod palettes (step 11).
 
 ---
 
