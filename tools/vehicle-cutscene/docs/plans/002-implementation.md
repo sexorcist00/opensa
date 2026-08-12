@@ -227,20 +227,25 @@ parity build installed (`.vanilla` files beside it for rollback).
 
 ---
 
-## Step 5 (P1) — materials: paint bake + plate closure
+## Step 5 (P1) — materials: paint bake + plate closure ✅ SHIPPED 2026-08-12
 
-- [ ] `materials.ts`: read the slot's `carcols.dat` colour rows from the **built** data (the merged
-      result of vehicle-installer — a mod's own palette must win; field-run rule: the built `data/*` is
-      the truth). Bake colour 1 of the first row into every primary-marker material (60,255,0), colour 2
-      into secondary (255,0,175); handle the tertiary/quaternary markers (255,255,0 / 0,255,255) the same
-      way if the mod uses them. Preserve material alpha (glass at 77/128 stays glass).
-- [ ] Keep `carplate`/`carpback` materials untouched (resident vehicle.txd resolves them — vanilla
-      proves it).
-- [ ] Tests: negative first (a marker colour with no carcols row for the slot throws), then bake
-      correctness on a real mod DFF fixture.
+- [x] `materials.ts`: reads the `--game` tree's `carcols.dat` (= the BUILT data when the tool runs after
+      vehicle-installer), bakes the model's FIRST combo into all four paint markers (primary 60,255,0 /
+      secondary 255,0,175 / tertiary 0,255,255 / quaternary 255,255,0 — mirrored from
+      `build-vehicle-model.ts`), alpha preserved. 2-colour `car` rows default slots 3/4 to palette 0,
+      like the game's zero-initialised extra colours. The patch rewrites ONLY the material Struct colour
+      bytes in place — file size and everything else byte-identical.
+- [x] LAMP markers (`vehiclelights*` tints) and `carplate`/`carpback` untouched — vanilla cs models keep
+      both.
+- [x] A marker with no carcols row THROWS (collected as the slot's error) — a marker the game would
+      render raw is never silent.
+- [x] Tests: 5 new (negative first) on the real bobcat donor + real carcols fixture; install e2e asserts
+      marker RGBs are gone from the emitted model.
 
-**Verification:** converted savanna carries its carcols colour on body materials; grep of emitted
-materials finds zero paint-marker RGB values. **Record:** per-slot count of baked materials.
+**Verification (run 2026-08-12):** parity rebuild over stock donors + stock carcols —
+**271 paint materials baked across 21 models, 0 errors**; 49/49 tests, lint + tsc clean.
+**Record:** 271 materials / 21 models (stock corpus); the parity build in the bottle now carries
+gameplay colours — the user's step-5 field look rides the next intro run.
 
 ---
 
