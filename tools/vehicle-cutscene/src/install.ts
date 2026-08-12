@@ -7,12 +7,14 @@
  * Per-slot conversion failures are collected and reported, never silently skipped; bike/boat slots are
  * reported as pending their branches (plan 002 steps 8/9).
  */
+import { parseCarcols, type VehicleColours } from '@opensa/renderware/parsers/text/carcols.parser';
 import { openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { guardOut } from '@opensa/vehicle-installer/install';
 import { cpSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { type Census, type CutsceneSlot, loadCensus, matchMods, type SlotReadiness } from './census';
+import { bakePaintMarkers, paintColoursFor } from './materials';
 import { convertCar } from './rig/car';
 import { extractCarTemplate } from './template';
 
@@ -29,6 +31,8 @@ export interface CutsceneInstallSummary {
   errors: { csName: string; message: string }[];
   imgBytesAfter: number;
   imgBytesBefore: number;
+  /** Per-model count of paint-marker materials baked with the carcols colours (plan 002 step 5). */
+  painted: { csName: string; materials: number }[];
   skipped: { csName: string; reason: string }[];
 }
 
@@ -50,16 +54,18 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
   const imgPath = join(outPath, 'models', 'cutscene.img');
   const imgBytesBefore = statSync(imgPath).size;
   const img = openImg(new Uint8Array(readFileSync(imgPath)));
+  const carcols = parseCarcols(readFileSync(join(gamePath, 'data', 'carcols.dat'), 'utf8'));
 
   const summary: CutsceneInstallSummary = {
     converted: [],
     errors: [],
     imgBytesAfter: 0,
     imgBytesBefore,
+    painted: [],
     skipped: [],
   };
   for (const entry of readiness) {
-    convertSlot(entry, img, inPath, summary);
+    convertSlot(entry, img, inPath, carcols, summary);
   }
 
   writeImgFile(img, imgPath);
@@ -73,6 +79,7 @@ function convertSlot(
   entry: SlotReadiness,
   img: ReturnType<typeof openImg>,
   inPath: string,
+  carcols: VehicleColours,
   summary: CutsceneInstallSummary,
 ): void {
   const { folder, slot, status } = entry;
@@ -94,8 +101,12 @@ function convertSlot(
     const template = extractCarTemplate(vanilla);
     const modDff = new Uint8Array(readFileSync(join(inPath, folder!, `${slot.model}.dff`)));
     const { dff } = convertCar(modDff, template);
-    img.set(`${slot.csName}.dff`, dff);
+    const { baked, bytes } = bakePaintMarkers(dff, paintColoursFor(carcols, slot.model));
+    img.set(`${slot.csName}.dff`, bytes);
     summary.converted.push(slot.csName);
+    if (baked > 0) {
+      summary.painted.push({ csName: slot.csName, materials: baked });
+    }
   } catch (error) {
     summary.errors.push({ csName: slot.csName, message: (error as Error).message });
   }

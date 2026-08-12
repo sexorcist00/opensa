@@ -1,3 +1,4 @@
+import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { createImg, openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -6,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { installCutscene } from './install';
 import { readClump } from './rig/clump-io';
+import { toArrayBuffer } from './template';
 
 const CS_BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/csbobcat92.dff'));
 const BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.dff'));
@@ -20,6 +22,9 @@ const VEHICLES_IDE = [
 
 /** The stock file's shape, R*'s `csopcarla` typo row included. */
 const TXDCUT_IDE = ['txdp', 'csopcarla, copcarla', 'csbobcat92, bobcat', 'csmtbike92, mtbike', 'end'].join('\n');
+
+/** A two-colour palette + the bobcat row (indexes into it) — enough for the paint bake to run. */
+const CARCOLS_DAT = ['col', '10,20,30', '40,50,60', 'end', 'car', 'bobcat, 0,1', 'end'].join('\n');
 
 let dir: string;
 let gamePath: string;
@@ -36,6 +41,7 @@ beforeEach(() => {
   mkdirSync(join(gamePath, 'models'), { recursive: true });
   writeFileSync(join(gamePath, 'data', 'vehicles.ide'), VEHICLES_IDE);
   writeFileSync(join(gamePath, 'data', 'txdcut.ide'), TXDCUT_IDE);
+  writeFileSync(join(gamePath, 'data', 'carcols.dat'), CARCOLS_DAT);
   const img = createImg();
   img.set('csbobcat92.dff', CS_BOBCAT);
   img.set('csbobcat92.txd', new Uint8Array(16));
@@ -92,6 +98,18 @@ describe('installCutscene', () => {
       // IMG VER2 pads entries to 2 048-byte sectors — presence + one-sector size says "untouched".
       expect(img.get('csbarrel.dff')?.byteLength).toBe(2048);
       expect(img.get('csbobcat92.txd')?.byteLength).toBe(2048); // vanilla TXDs stay until step 6
+
+      // The paint bake ran: markers replaced by the fake palette, none of the marker RGBs survive.
+      expect(summary.painted).toHaveLength(1);
+      expect(summary.painted[0].csName).toBe('csbobcat92');
+      expect(summary.painted[0].materials).toBeGreaterThan(0);
+      const parsed = parseDff(toArrayBuffer(img.get('csbobcat92.dff')!));
+      const colours = parsed.geometries.flatMap((geometry) =>
+        geometry.materials.map((material) => `${material.color[0]},${material.color[1]},${material.color[2]}`),
+      );
+      expect(colours).not.toContain('60,255,0');
+      expect(colours).not.toContain('255,0,175');
+      expect(colours).toContain('10,20,30');
     });
 
     it('patches txdcut.ide: fixes the csopcarla typo, appends the rows R* left out', () => {

@@ -104,9 +104,11 @@ function printCensus(census: Census, readiness: SlotReadiness[]): void {
 
 function printSummary(summary: CutsceneInstallSummary): void {
   const megabytes = (bytes: number): string => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  const paintedMaterials = summary.painted.reduce((sum, entry) => sum + entry.materials, 0);
   console.log(
     `vehicle-cutscene: ${summary.converted.length} converted, ${summary.skipped.length} skipped,` +
-      ` ${summary.errors.length} error(s); cutscene.img ${megabytes(summary.imgBytesBefore)} → ${megabytes(summary.imgBytesAfter)}`,
+      ` ${summary.errors.length} error(s), ${paintedMaterials} paint material(s) baked on ${summary.painted.length} model(s);` +
+      ` cutscene.img ${megabytes(summary.imgBytesBefore)} → ${megabytes(summary.imgBytesAfter)}`,
   );
   for (const { csName, reason } of summary.skipped) {
     console.log(`  skipped ${csName}: ${reason}`);
