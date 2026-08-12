@@ -634,23 +634,29 @@ function wheelContainerMesh(model: ClumpModel): number {
 }
 
 /**
- * Per-axle track-width bakes: `Δx = |mod dummy x| − |template corner x|` (negative = inward). Front and
- * rear share one baked copy when their deltas agree; anything under 5 mm keeps the original geometry.
+ * Per-corner track-width bakes. The WORLD delta pulls each wheel from the template corner onto the
+ * mod's arch: `worldΔ = sign(corner x) · (|mod x| − |tpl x|)`. The MESH-LOCAL bake flips with the
+ * mesh's own bind rotation (`z180` templates like bobcat mirror the sign themselves; identity-rotation
+ * templates like cscopcarla need per-side copies — the gate-7 asymmetric round: passenger side fixed,
+ * driver side not). Corners sharing a local delta share one baked copy; under 5 mm keeps the original.
  */
 function wheelTrackBakes(template: CsTemplate, analysis: ModAnalysis): Map<WheelCorner, OpaqueChunk> {
   const geometry = analysis.model.geometries[analysis.wheelAtomic.geometryIndex];
   const bakes = new Map<WheelCorner, OpaqueChunk>();
   const chunks = new Map<string, OpaqueChunk>();
-  for (const corner of template.wheels.keys()) {
+  for (const [corner, wheel] of template.wheels) {
     const dummy = analysis.relativeToRoot(analysis.wheelDummies.get(corner)!);
-    const delta = Math.abs(dummy.position[0]) - Math.abs(template.wheels.get(corner)!.nodePosition[0]);
-    if (Math.abs(delta) < 0.005) {
+    const side = wheel.nodePosition[0] < 0 ? -1 : 1;
+    const worldDelta = side * (Math.abs(dummy.position[0]) - Math.abs(wheel.nodePosition[0]));
+    const meshFlipsX = wheel.meshRotation[0] < 0; // the left-side 180°-about-z carries -1 here
+    const localDelta = meshFlipsX ? -worldDelta : worldDelta;
+    if (Math.abs(localDelta) < 0.005) {
       continue;
     }
-    const key = delta.toFixed(3);
+    const key = localDelta.toFixed(3);
     let chunk = chunks.get(key);
     if (!chunk) {
-      chunk = bakeGeometryBody(geometry, { position: [delta, 0, 0], rotation: [...IDENTITY_ROTATION] });
+      chunk = bakeGeometryBody(geometry, { position: [localDelta, 0, 0], rotation: [...IDENTITY_ROTATION] });
       chunks.set(key, chunk);
     }
     bakes.set(corner, chunk);
