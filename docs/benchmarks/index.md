@@ -752,6 +752,36 @@ knob does something is a picture taken elsewhere — cell `-5,7` in the desert, 
 9.81 % clutter-off control, recorded in plan 012. **This run supports "no cost", not "an effect was present
 and still cost nothing".**
 
+## 2026-08-12 — the UV-anim lane guard: a standing sweep, and a pair that cannot be measured
+
+[`opensa-engine/2026-08-12-ingame-uv-anim-lane-guard.json`](opensa-engine/2026-08-12-ingame-uv-anim-lane-guard.json)
+— 8 of the 9 `?bench=all` scenes in Claude's headless lane, **uncapped** (DPR=2), on the user's
+2026-08-11 18:04 pak. The frame numbers of the day, for the record and as the baseline the next UV-lane
+question is asked against: `avgMs` 2.85 (ocean-horizon) → 5.03 (lv-night / country-dusk), `gpuMs.pass`
+1.84 → 3.70, draws 39 → 2 213.
+
+**This is a standing number, not a delta — and that is the finding.** Plan 099/02 owed a before/after on a
+scene with no animated models. Both ways of building the "before" arm failed, and they failed for reasons
+worth keeping:
+
+- **Reverting the commit onto HEAD** (`git revert -n 402a450d`) conflicts in three places with later engine
+  work, one of them an unrelated `drawClutter` signature change. A hand-merged engine is the instrument
+  this project has already been burned by; the arm was abandoned rather than resolved.
+- **A worktree at the pair itself** (`402a450d^` = `fc0f89c8`, and `402a450d`) boots, runs CLEO, prints the
+  bench protocol — and renders **zero frames**. Both sides die identically: `texture array 5 not loaded
+  (cells must load after their arrays)`, then an index-range overflow on a LOD render bundle (65 538
+  indices into a 27 284-byte buffer). The incompatibility is between the 2026-08-07 engine era and the
+  2026-08-11 pak; it says nothing about the UV lane. Both arms also registered **1 196 road cars against
+  today's 1 219**, so even a rendering old arm would not have shared the workload.
+
+A true delta needs an era-matched pak, and such a pak would no longer describe today's world (mod 39 gone,
+the procobj species floor added since). What stands without it: the always-on cost of the lane is one
+integer compare per rigid submesh bind — a model with no animations allocates no uniform, writes nothing
+per frame and binds dynamic offset 0 everywhere (pinned by `engine.uv-anim.test.ts` on the fake device).
+Companion numbers from the built ferris fixture the same day: `stepUvAnimation` **132.2 ns/call** over
+2 000 000 calls with the real 261-keyframe `f13d`, and an observed strip cadence of **0.225 s exactly**
+(130 steps across the 29.25 s loop) — the authored value, reproduced by the engine's own walker.
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

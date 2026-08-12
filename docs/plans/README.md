@@ -65,7 +65,12 @@ row but its chain was superseded by 097). Newest first:
   (per-model uniform, identity slot 0, dynamic offsets — unbundled draws, so no bundle staleness; zero
   allocation and zero per-frame writes for models without animations), and the user's own rebuild +
   field run closed it: **the wheel blinks**. The edge-cases row is removed — the limitation is lifted.
-  Open: the bench guard was never run, so "zero cost" is proven CPU-side only (099/02 ledger).
+  **🔒 CLOSED 2026-08-12** with the numbers it owed: observed cadence **0.225 s exactly** (130 strip steps
+  across the 29.25 s loop, off the built fixture), advance **132.2 ns/call** + one 16-byte write, and a
+  recorded sweep ([`2026-08-12-ingame-uv-anim-lane-guard.json`](../benchmarks/opensa-engine/2026-08-12-ingame-uv-anim-lane-guard.json)).
+  The before/after frame delta is NOT obtainable — the pre-change engine cannot render the 2026-08-11 pak,
+  both sides of the commit pair failing identically — so the chain closes on a stated bound instead: one
+  integer compare per rigid submesh bind, nothing else, for a model that animates nothing.
 
 - **[098 — All land vehicle types](./098-all-land-vehicles/readme.md)** — **PLANNED 2026-08-04**,
   supersedes `roadmap/0.5.0/plans/04-all-vehicle-types/` (deleted). Rewritten from a four-way recon

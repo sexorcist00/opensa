@@ -1,10 +1,16 @@
 # Plan 099 — UV animations on script objects (the ferris wheel's blinking lights)
 
-**STATUS: DONE 2026-08-07** — all three steps shipped; the user rebuilt and ran the game and the bulbs
-step ("looks perfect"). The `docs/edge-cases/engine-rendering.md` row is removed, the limitation is
-lifted. ONE open item, named in 02's and 03's ledgers: the bench guard was never run, so "zero cost for
-a model without animations" is proven CPU-side (no allocation, no per-frame write) and unmeasured on
-the GPU. The edge-cases text below is kept as the diagnosis record.
+**STATUS: 🔒 CLOSED 2026-08-12** — all three steps shipped 2026-08-07; the user rebuilt and ran the game and
+the bulbs step ("looks perfect"), and the `docs/edge-cases/engine-rendering.md` row is removed, the
+limitation lifted. The numbers the chain still owed were taken 2026-08-12: **observed cadence 0.225 s
+exactly** (130 strip steps across the 29.25 s loop, off the built fixture), **advance 132.2 ns/call** plus
+one 16-byte write, and a recorded bench sweep
+([`2026-08-12-ingame-uv-anim-lane-guard.json`](../../benchmarks/opensa-engine/2026-08-12-ingame-uv-anim-lane-guard.json)).
+**The before/after frame delta was NOT obtainable and the chain closes saying so**: the pre-change engine
+does not render against the 2026-08-11 pak — both sides of the commit pair fail identically on `texture
+array 5 not loaded`, an era mismatch unrelated to this lane. In its place stands a bound: the lane's
+always-on cost is one integer compare per rigid submesh bind, with no allocation, no per-frame write and no
+extra rebind for any model that animates nothing. The edge-cases text below is kept as the diagnosis record.
 
 **Field report (2026-08-05, the 097/07 bug round):** the Pacific Park ferris wheel spins but its light
 bulbs do not BLINK the way the original mod does under SA. Diagnosis is complete and recorded in
