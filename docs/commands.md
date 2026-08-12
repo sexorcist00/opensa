@@ -111,8 +111,13 @@ spawn it by name to look at it ([plan 006](../tools/vehicle-installer/docs/plans
 npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --inspect
 # convert the fleet into an output game (base copied; cutscene.img rebuilt; txdcut.ide patched):
 npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --out <dir>
-# --only bobcat,cszr350 restricts slots while iterating; bike/boat slots pend plan 002 steps 8/9
+# --only bobcat,cszr350 restricts slots; --self-contained-txd embeds each MOD's TXD (for a target whose
+# gameplay stays stock, e.g. the reference bottle); bike/boat slots pend plan 002 steps 8/9
 ```
+
+Field delivery to the reference bottle = drop `models/cutscene.img` + `data/txdcut.ide` in (originals
+renamed to `.vanilla` beside them) — the bottle streams cutscene.img directly, no modloader override
+([gta-sa-original/cutscenes.md](gta-sa-original/cutscenes.md)).
 
 23 cutscene vehicle models / 21 donor slots; the census derives from `models/cutscene.img` +
 `data/txdcut.ide` + `data/vehicles.ide`, never a hardcoded list

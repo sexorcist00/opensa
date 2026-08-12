@@ -367,16 +367,18 @@ the loop); paint = stock carcols until the full pipeline supplies the mod palett
 
 1. ~~**Left-wheel mirroring mechanism**~~ **SETTLED (step 2 probe)**: 180° about z on the wheel MESH
    frame, identity on the node — measured on csbobcat92 + csremington92, encoded in `rig/matrix.ts`.
-2. **Shared vs duplicated wheel geometry** — SHARED emitted (step 2 decision); the parity gate (step 4)
-   arbitrates, fallback is a 4× copy.
+2. ~~**Shared vs duplicated wheel geometry**~~ **SETTLED (gates 4+7)**: shared geometry field-passed
+   both gates; the only derived copies are the mirrored LEFT wheel (identity-rotation templates) and —
+   a hard rule from the splayed-wheels round — a derived copy NEVER aliases the source's dedupe slot.
 3. ~~**Hierarchy node flags semantics**~~ **SETTLED (step 2 probe)**: `flags = (siblings follow ? 2 : 0)
    | (leaf ? 1 : 0)` in DFS order reproduces all five vanilla tables verbatim — recomputed at emit, never
    copied, so partial hierarchies stay consistent.
-4. **Cutscene animation coverage** — if a scene animates a part the donor lacks (dropped bone), the part
-   simply doesn't move/exists; the hand-made pack shipped with 9 of 19 bones and field-passed. Watch at
-   gates 4/7.
-5. **cutscene.img growth** — MB-scale mod DFFs × 23 entries; recorded at step 3/10. No target ceiling is
-   implicated (001 restrictions check); if the size offends, `--only` ships a subset.
-6. **NEW (step 2 finding): vanilla wheel-node junk meshes are not emitted** — the degenerate 24-vert
-   boxes under Box/node frames are export leftovers; if the parity gate shows anything relying on an
-   atomic-per-bone, emit them back.
+4. ~~**Cutscene animation coverage**~~ **SETTLED (gate 7 + the ANPK reader)**: anims carry a NAME-bound
+   channel for every VANILLA bone; extra bones (shims, adopted) are simply un-animated, missing bones
+   simply unbound — both field-proven. The real coverage risk turned out to be the inverse: a mod
+   MISNAMING a part leaves its channel unbound (the taxi door) — the dummy-keyed fallback covers it.
+5. **cutscene.img growth** — MB-scale mod DFFs × 23 entries; gate-7 self-contained build measured
+   **306.7 MB** (pipeline empty-TXD route will be far smaller); recorded fully at step 10. No target
+   ceiling is implicated (001 restrictions check); if the size offends, `--only` ships a subset.
+6. ~~**Vanilla wheel-node junk meshes are not emitted**~~ **SETTLED (gates 4+7)**: nothing needed an
+   atomic-per-bone; both gates passed without them.
