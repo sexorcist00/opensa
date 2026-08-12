@@ -178,3 +178,16 @@ interpret them.
   deferred optimization now states its IMPACT, and most of that list cannot fix a frame. **The lesson is
   mine — twice I answered from the cheap signal instead of the authoritative one** (checkboxes instead of
   banners; one end of a lod link from each tree), and both cost a published wrong root cause.
+
+- [`session-5-five-chains-closed-and-one-delta-that-cannot-exist.md`](./session-5-five-chains-closed-and-one-delta-that-cannot-exist.md)
+  — 2026-08-12, nine commits, 33 files (three source, two test). Session 4's audit finished: the seven
+  unverified chains resolved, six closed. **Nineteen of twenty-one open boxes were record, not work** — 097's
+  six were a duplicate of a chain that had shipped beside its code (moved out, five references repointed),
+  085's four were answered elsewhere in the same file, 079's one was already satisfied. The two real ones
+  shipped: an F2 plate field that rides the placement, and the damage/detach lifetime pinned from both ends.
+  **099 closed on numbers plus a delta that cannot exist** — cadence 0.225 s exactly and ~130 ns/advance off
+  the built fixture, but the before/after arm renders zero frames (engine era vs pak era, proven from both
+  sides of the commit pair), so a stated bound replaces it. **The lesson: a cross-reference is a claim about
+  a file you have not opened** — two of them were false here, one calling dropped work "deferred" (082 → 098,
+  which had never heard of it) and one calling done work "NOT CLOSED" (100's insects row, judged the same day
+  in its hack file). Suite 4 106 → 4 110.

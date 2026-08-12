@@ -78,6 +78,17 @@ describe('createEngineDebugActions', () => {
       }).not.toThrow();
     });
 
+    it('spawns with NO plate when the F2 field is empty — the placement resolves its own', async () => {
+      const spawnVehicle = vi.fn(() => Promise.resolve());
+      const actions = createEngineDebugActions(deps({ spawnVehicle }));
+
+      await actions.spawnVehicle('infernus');
+
+      // The argument is ABSENT, not an empty string: the host reads `plate === undefined` to leave the
+      // placement's own hash in charge, and '' would give the car a blank plate instead (plan 082/04).
+      expect(spawnVehicle).toHaveBeenCalledWith('infernus');
+    });
+
     it('answers inertly for CLEO when no runner booted (a build without cleo/*.cs)', () => {
       const actions = createEngineDebugActions(deps());
 
@@ -156,6 +167,15 @@ describe('createEngineDebugActions', () => {
       actions.breakNearest();
 
       expect(breakNearest).toHaveBeenCalledWith([10, 20, 30], 8);
+    });
+
+    it('carries the typed plate through to the spawn, unchanged', async () => {
+      const spawnVehicle = vi.fn(() => Promise.resolve());
+      const actions = createEngineDebugActions(deps({ spawnVehicle }));
+
+      await actions.spawnVehicle('infernus', 'LVA 123');
+
+      expect(spawnVehicle).toHaveBeenCalledWith('infernus', 'LVA 123');
     });
 
     it('lists every timecyc weather, marking the live one by index', () => {
