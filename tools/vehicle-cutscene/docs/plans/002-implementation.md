@@ -69,63 +69,78 @@ dead txdcut.ide rows: csandrom92, csopcarla
 
 ---
 
-## Step 2 (P0) — template extraction + car rig transform
+## Step 2 (P0) — template extraction + car rig transform ✅ SHIPPED 2026-08-12
 
 The heart of the tool. Input: mod DFF (game rig) + vanilla cs DFF (template). Output: converted cs DFF.
 
+**Probe findings that shaped the code** (measured on csbobcat92/cstaxi92/cszr350/csremington92/csdinghy/
+csmtbike92 before writing it; the binary facts live as comments in `rig/clump-io.ts` and `rig/car.ts`):
+
+- **Left wheels are 180°-about-z on the wheel MESH frame** (`[-1,0,0, 0,-1,0, 0,0,1]`), nodes identity —
+  risk 1 settled.
+- **Hierarchy flags follow one rule on all five vanilla rig styles**:
+  `flags = (siblings follow ? 2 : 0) | (leaf ? 1 : 0)`, table in DFS order (frame-index child order),
+  `nodeIndex` = row, vanilla bone ids are DFS-sequential — risk 3 settled by reproduction, not by copying.
+- **Vanilla clump extension is EMPTY** on every cs model — a mod's embedded COL3 is dropped by design.
+- Frame-list matrix-flags words: `0x20003` top frame, `3` everywhere else; HAnim `flags 0 / keyFrameSize
+  36`; every frame carries an Extension chunk (empty on the unnamed top frame).
+- Wheel-node junk: vanilla Box/node frames carry degenerate 24-vert meshes (3ds-max export leftovers) —
+  not emitted; the parity gate will confirm nothing needs them.
+
 ### 2a — template (`template.ts`)
 
-- [ ] Parse the vanilla cs model per slot and extract: root frame name; the part list with **canonical
-      names** (strip `_hi` — `bonnet_hi_ok` ≡ `bonnet_ok`; wheel-node aliases `Box01`/`wheel_lf_node`/
-      `axis_lf`/`wheelLFNode` normalise by position sign, not by name); bone id **per canonical part**;
-      the hierarchy table node order + flags (copied raw from the vanilla root); per-slot vertical rebase
-      delta (below); wheel-node frames' rotation matrices (the left-wheel mirroring answer — measure,
-      then encode what vanilla actually does).
-- [ ] Ground-plane formula, fully derived: `shift_z = (van_cs_wheel_node.z − van_wheel_radius) −
-      (mod_wheel_dummy.z − mod_wheel_radius)` where each radius is the wheel geometry's bbox half-height.
-      Applied to every root-child frame position. Bobcat check: vanilla-on-vanilla yields shift 0.900
-      exactly (0.349 radius + |−0.550| axle, measured in 001).
-- [ ] Tests: negative — a template missing `chassis` throws; positive — bobcat template reports root
-      `bobcat_dummy`, chassis bone 9, 19-entry hierarchy; remington reports chassis bone 1 (the
-      inconsistency is the point of reading it from the file).
+- [x] Parse the vanilla cs model per slot and extract: root frame name; the part list with **canonical
+      names** (strip `_hi`); bone id per canonical part; wheel corners normalised by position sign;
+      wheel-mesh rotation matrices copied (the left z-180). The hierarchy table is NOT copied — the flags
+      rule reproduced it verbatim on every style, so the emit recomputes it (works with holes too).
+- [x] Ground-plane formula as planned; vanilla-on-vanilla bobcat yields shift 0.900 exactly.
+- [x] Tests: negative — no-HAnim clump throws; positive — bobcat (root `bobcat_dummy`, chassis bone 9,
+      radius 0.349), taxi (`door_lf_hi_ok` kept, canonical stripped), remington (chassis bone 1).
 
-### 2b — frame surgery over rw-codec chunks (`rig/car.ts` + shared)
+### 2b — frame surgery over rw-codec chunks (`rig/car.ts`, `rig/clump-io.ts`, `rig/matrix.ts`)
 
 Chunk-level clump rebuild via `readRw`/`writeRw` — geometry/material/atomic chunks byte-copied from the
 mod, frame list and atomic→frame/geometry indices rewritten:
 
-- [ ] Drop list: `*_dam`, `chassis_vlo`, `ug_*`, `ped_*`, `engine`, `exhaust` (dummy — `exhaust_ok` the
-      part stays if the template has it), `headlights`, `taillights*`, `petrolcap`, `bargrip`,
-      `misc_*` unless the template carries a matching part.
-- [ ] Hinge collapse: each kept movable part (`door_*_ok`, `bonnet_ok`, `boot_ok`, `bump_*_ok`,
-      `windscreen_ok`, `exhaust_ok`, `extra*`) is reparented to `chassis` with frame transform =
-      compose(dummy transform, own transform) — for stock-shaped mods own is identity and the result
-      equals the dummy transform, matching 001's measurement. Non-identity `_ok` transforms compose
-      instead of being silently kept (the `dump-vehicle-rig` trap).
-- [ ] Part-set policy = **template ∩ mod**, by canonical name: template part missing in the mod → drop
-      the bone from the emitted hierarchy (the hand-made pack proves partial hierarchies work) + log;
-      mod part absent in template (e.g. extra tuning meshes) → drop + log. `extra1/extra2` follow the
-      same rule (vanilla cs keeps them as separate bones — show/hide is the animator's job).
-- [ ] Wheels: read the mod's single `wheel` geometry + the four `wheel_*_dummy` positions; emit four
-      wheel nodes at those positions (z shifted per 2a) with the template's per-node bone ids and the
-      vanilla nodes' rotation matrices (left-side mirroring exactly as vanilla does it); four atomics.
-      Decision recorded here after measuring: duplicate the geometry chunk 4× like vanilla, or share one
-      geometry across atomics if the format allows — try shared first, fall back to duplicate.
-- [ ] Root: rename to the template's root name; add the empty top frame (vanilla has a nameless frame 0).
+- [x] Drop is the complement of keep — anything without a place in the template is simply not carried
+      and lands in `report.droppedFromMod` (damage twins, `chassis_vlo`, `misc_*`, service dummies,
+      middle-axle wheels). No explicit drop list needed.
+- [x] Hinge collapse via full transform composition relative to the chassis mesh (`rig/matrix.ts`,
+      orthonormal inverse) — works wherever the part hangs (zr350's `exhaust_ok` lives under the chassis
+      MESH, not the dummy) and composes non-identity `_ok` transforms instead of keeping them.
+- [x] Part-set policy = template ∩ mod by canonical name; misses → `missingInMod`, extras follow the
+      same rule.
+- [x] Wheels: four nodes at the mod's `wheel_*_dummy` transforms (z shifted), template bone ids and
+      names, left mesh z-180. **Decision: all four atomics SHARE one geometry chunk** (vanilla
+      duplicates; shared is the smaller emission) — the parity gate arbitrates, fallback is a 4× copy.
+- [x] Root renamed to the template's; nameless top frame emitted with vanilla's `0x20003` flags word.
 
-### 2c — HAnim emit (`hanim.ts`)
+### 2c — HAnim emit (in `rig/clump-io.ts`, not a separate file)
 
-- [ ] Write the HAnim plugin (0x11E) into each kept frame's extension: version 0x100, bone id from the
-      template; the root additionally carries the hierarchy table (node count, per-node id/index/flags —
-      flags copied from the vanilla template, order = our emitted depth-first order).
-- [ ] Tests: negative — emitting a hierarchy whose ids duplicate throws; positive — parse-back via
-      `@opensa/renderware` yields the same boneId per frame name as vanilla for a stock conversion.
+- [x] HAnim plugin per boned frame (version 0x100, `flags 0`, `keyFrameSize 36`); the hierarchy table is
+      RECOMPUTED from the emitted tree by the measured flags rule rather than copied — reproducing every
+      vanilla table verbatim is the committed test of it.
+- [x] Tests: clump-io round-trip on the real csbobcat92 (frames/hierarchy/atomics/geometry bytes
+      survive), parse-back via `@opensa/renderware` in the golden tests.
 
-**Verification (the golden structural diff):** convert STOCK `gta3.img` bobcat, taxi, zr350 → compare
-against vanilla csbobcat92/cstaxi92/cszr350: same canonical part set (minus documented vanilla
-extras/differences), same bone id per part, frame positions within 1e-3, wheel radius byte-equal. This is
-a committed test, not a one-off. **Record:** per-model diff summary (parts matched / dropped / positions
-max delta) into this doc.
+**Verification (run 2026-08-12): 35/35 tests green — the golden pairs are committed tests
+(`rig/car.test.ts`), lint + tsc clean.**
+
+**Record — golden diff summary (stock donors, 2026-08-12):**
+
+```
+csbobcat92: parts=9 missing=[] dropped=9  shift=0.900 maxPosDelta=0.0000 hierarchy=EQUAL  165 476 B
+cstaxi92:   parts=8 missing=[] dropped=12 shift=0.013 maxPosDelta=0.80   hierarchy=EQUAL  169 158 B
+cszr350:    parts=6 missing=[extra2, steering_wheel] dropped=8 shift=0.699 maxPosDelta=1.23
+            hierarchy=holes-as-designed (indexes contiguous, ids unique)                  135 780 B
+```
+
+The bobcat pair — the one slot whose vanilla cutscene model reuses the gameplay body verbatim — matches
+to **0.0000** on every shared frame; that is the transform's real validation. The taxi/zr350 deltas are
+**measured evidence the `cs*92` bodies were re-authored**, not a transform bug: the '92 taxi is narrower
+(doors ±1.06 vs the donor's ±1.10), its bumpers are re-centred at x=0 where the donor hinges them at
+±0.8, cszr350's track is 4 cm narrower and its exhaust sits on the OTHER side. Our output follows the
+DONOR's geometry — exactly what "the '92 look is replaced by the mod" (001 decision 1) means in numbers.
 
 ---
 
@@ -263,15 +278,18 @@ bytes emitted vs the hand-made pack's 11.5 MB-per-car baseline.
 
 ## Risks and open questions (tracked, none blocking start)
 
-1. **Left-wheel mirroring mechanism** — presumed 180° z-rotation; measured from vanilla matrices in 2a
-   before any wheel is emitted.
-2. **Shared vs duplicated wheel geometry** — try shared (smaller), vanilla duplicates; the parity gate
-   decides.
-3. **Hierarchy node flags semantics** (PUSH/POP in the HAnim table) — copied from vanilla templates;
-   our emitted tree order must be made consistent with the copied flags, or flags recomputed by the
-   standard depth-first rule. Settled in 2c with a parse-back test.
+1. ~~**Left-wheel mirroring mechanism**~~ **SETTLED (step 2 probe)**: 180° about z on the wheel MESH
+   frame, identity on the node — measured on csbobcat92 + csremington92, encoded in `rig/matrix.ts`.
+2. **Shared vs duplicated wheel geometry** — SHARED emitted (step 2 decision); the parity gate (step 4)
+   arbitrates, fallback is a 4× copy.
+3. ~~**Hierarchy node flags semantics**~~ **SETTLED (step 2 probe)**: `flags = (siblings follow ? 2 : 0)
+   | (leaf ? 1 : 0)` in DFS order reproduces all five vanilla tables verbatim — recomputed at emit, never
+   copied, so partial hierarchies stay consistent.
 4. **Cutscene animation coverage** — if a scene animates a part the donor lacks (dropped bone), the part
    simply doesn't move/exists; the hand-made pack shipped with 9 of 19 bones and field-passed. Watch at
    gates 4/7.
 5. **cutscene.img growth** — MB-scale mod DFFs × 23 entries; recorded at step 3/10. No target ceiling is
    implicated (001 restrictions check); if the size offends, `--only` ships a subset.
+6. **NEW (step 2 finding): vanilla wheel-node junk meshes are not emitted** — the degenerate 24-vert
+   boxes under Box/node frames are export leftovers; if the parity gate shows anything relying on an
+   atomic-per-bone, emit them back.
