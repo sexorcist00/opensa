@@ -1361,7 +1361,7 @@ async function boot(
         mapViewer = enabled;
         // The mapper + retained index bytes are tens of MB on a full map, so they are viewer-only. This
         // takes effect on the next LOAD — `unloadAll` below is what makes that immediate, in both directions.
-        engine.cells.debugPicking = enabled;
+        engine.cells.picking = enabled;
         setup.driver.unloadAll();
         setFlyMode(enabled);
         if (enabled) {

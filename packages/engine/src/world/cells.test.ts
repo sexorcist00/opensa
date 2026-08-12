@@ -447,8 +447,9 @@ describe('CellStore', () => {
 });
 
 /** A cell whose mapper holds two boxed placements 100 u apart along +x, both at the origin's height. */
-function mapperCellBytes(origin: [number, number, number] = [0, 0, 0]): Uint8Array {
+function mapperCellBytes(origin: [number, number, number] = [0, 0, 0], indexData?: Uint8Array): Uint8Array {
   return cellBytes({
+    ...(indexData ? { indexCount: indexData.byteLength / 4, indexData } : {}),
     names: ['near_shop', 'shoptxd', 'far_shop'],
     origin,
     placements: [
@@ -469,7 +470,7 @@ describe('CellStore placement mapper (074/22 picking)', () => {
 
     it('misses when the ray passes beside every box', async () => {
       const engine = await bootedEngine();
-      engine.cells.debugPicking = true;
+      engine.cells.picking = true;
       engine.cells.load('0,0', mapperCellBytes());
 
       expect(engine.cells.pick([-100, 50, 0], [1, 0, 0])).toBeNull();
@@ -477,7 +478,7 @@ describe('CellStore placement mapper (074/22 picking)', () => {
 
     it('misses when every box is BEHIND the ray origin', async () => {
       const engine = await bootedEngine();
-      engine.cells.debugPicking = true;
+      engine.cells.picking = true;
       engine.cells.load('0,0', mapperCellBytes());
 
       expect(engine.cells.pick([200, 0, 0], [1, 0, 0])).toBeNull();
@@ -485,17 +486,25 @@ describe('CellStore placement mapper (074/22 picking)', () => {
 
     it('hides nothing for an id no loaded cell carries', async () => {
       const engine = await bootedEngine();
-      engine.cells.debugPicking = true;
+      engine.cells.picking = true;
       engine.cells.load('0,0', mapperCellBytes());
 
       expect(engine.cells.hidePlacement(999)).toBe(0);
+    });
+
+    it('costs NOTHING while the capability is off — neither the mapper nor the retained index bytes', async () => {
+      const engine = await bootedEngine();
+      engine.cells.load('0,0', mapperCellBytes());
+
+      // A cell with nothing smashable drops its index bytes after upload, so the whole price is the flag's.
+      expect(engine.cells.pickingBytes).toBe(0);
     });
   });
 
   describe('positive cases', () => {
     it('returns the FRONTMOST placement, named, when the ray crosses both', async () => {
       const engine = await bootedEngine();
-      engine.cells.debugPicking = true;
+      engine.cells.picking = true;
       engine.cells.load('0,0', mapperCellBytes());
 
       const hit = engine.cells.pick([-100, 0, 0], [1, 0, 0]);
@@ -509,7 +518,7 @@ describe('CellStore placement mapper (074/22 picking)', () => {
 
     it('resolves the mapper against the cell ORIGIN, not cell-local space', async () => {
       const engine = await bootedEngine();
-      engine.cells.debugPicking = true;
+      engine.cells.picking = true;
       engine.cells.load('0,0', mapperCellBytes([1000, 0, -500]));
 
       // The same box now lives at world (1000, 0, -500): a ray down cell-local x must MISS it...
@@ -520,7 +529,7 @@ describe('CellStore placement mapper (074/22 picking)', () => {
 
     it('hits a box the ray STARTS inside, at distance zero', async () => {
       const engine = await bootedEngine();
-      engine.cells.debugPicking = true;
+      engine.cells.picking = true;
       engine.cells.load('0,0', mapperCellBytes());
 
       const hit = engine.cells.pick([0, 0, 0], [1, 0, 0]);
@@ -531,12 +540,51 @@ describe('CellStore placement mapper (074/22 picking)', () => {
 
     it('hides a placement and stops picking it, leaving its neighbour alone', async () => {
       const engine = await bootedEngine();
-      engine.cells.debugPicking = true;
+      engine.cells.picking = true;
       engine.cells.load('0,0', mapperCellBytes());
 
       expect(engine.cells.hidePlacement(111)).toBe(1);
 
       expect(engine.cells.pick([-100, 0, 0], [1, 0, 0])?.id).toBe(222);
+    });
+
+    it('STATES what it costs, and gives every byte back when the cell unloads', async () => {
+      const engine = await bootedEngine();
+      engine.cells.picking = true;
+      engine.cells.load('0,0', mapperCellBytes());
+
+      // Two mapper rows plus the index bytes this cell would otherwise have dropped. 201/5-01 asks for the
+      // number measured rather than estimated, and a capability whose price reads 0 is the failure it names.
+      const cost = engine.cells.pickingBytes;
+      const retainedIndexBytes = [...engine.cells.all()][0].indexData.byteLength;
+
+      // BOTH halves, or the number is not the capability's price: the index bytes this cell would have
+      // dropped after upload, AND the mapper rows on top of them. Counting one and calling it the cost is
+      // the same lie as reporting zero, only harder to notice.
+      expect(retainedIndexBytes).toBeGreaterThan(0);
+      expect(cost).toBeGreaterThan(retainedIndexBytes);
+
+      engine.cells.load('1,0', mapperCellBytes([250, 0, 0]));
+
+      expect(engine.cells.pickingBytes).toBe(2 * cost);
+
+      engine.cells.unload('1,0');
+
+      expect(engine.cells.pickingBytes).toBe(cost);
+    });
+
+    it('counts the RETAINED INDEX BYTES too, not only the mapper rows', async () => {
+      const engine = await bootedEngine();
+      engine.cells.picking = true;
+      // The same two placements, one cell carrying 40 more index bytes than the other. Everything else is
+      // identical, so the difference in the reported cost can only be the geometry the capability retained.
+      engine.cells.load('0,0', mapperCellBytes());
+      const lean = engine.cells.pickingBytes;
+      engine.cells.unload('0,0');
+      // 13 indices where the lean cell has 3 — the group still draws the first three of them.
+      engine.cells.load('0,0', mapperCellBytes([0, 0, 0], new Uint8Array(new Uint32Array(13).buffer)));
+
+      expect(engine.cells.pickingBytes - lean).toBe(40);
     });
   });
 });

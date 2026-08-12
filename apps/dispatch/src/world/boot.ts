@@ -133,10 +133,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // this number. Manual, per the refusal in performance/deferred-optimizations/render-scale-tier.md — the
   // console picks no tier for anybody. The report records it, so a capture says what it was drawn at.
   engine.renderScale = Math.min(1, Math.max(0.5, numberParam(params, 'scale', 1)));
-  // Picking must be armed BEFORE the first cell loads — `debugPicking` only takes effect on load, and it is
-  // what retains the per-placement mapper a click resolves against. It costs memory on a full map; this app
-  // is a map inspector with a dispatch board on top, so it pays that cost by design.
-  engine.cells.debugPicking = true;
+  // Picking must be armed BEFORE the first cell loads — the capability only takes effect on load, and it is
+  // what retains the per-placement mapper a click resolves against. It costs memory on a full map (read back
+  // as `engine.cells.pickingBytes`, and reported by `?inventory=1`); this app is a map inspector with a
+  // dispatch board on top, so it pays that cost by design and says so rather than borrowing a debug switch.
+  engine.cells.picking = true;
 
   // `?demo=1` skips the pak entirely and builds a synthetic block grid, so the console can be driven on a
   // machine with no built game. Everything above the world — camera, beacons, symbology, picking — is the
@@ -262,6 +263,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         district: params.get('district') ?? UNNAMED_DISTRICT,
         errors: errorLog.entries(),
         hasTimestamps: !engine.deviceReport.missing.includes('timestamp-query'),
+        pickingBytes: engine.cells.pickingBytes,
         surface: {
           cssHeight: canvas.clientHeight,
           cssWidth: canvas.clientWidth,

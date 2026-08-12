@@ -53,6 +53,7 @@ const CONTEXT = {
   district: 'los-santos-centre',
   errors: [],
   hasTimestamps: true,
+  pickingBytes: 0,
   surface: { cssHeight: 364, cssWidth: 360, deviceHeight: 728, deviceWidth: 720, dpr: 2, renderScale: 1 },
 };
 
@@ -390,13 +391,15 @@ describe('FrameInventory', () => {
       const inventory = new FrameInventory();
       inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
 
-      const report = inventory.report(CONTEXT);
+      const report = inventory.report({ ...CONTEXT, pickingBytes: 2 * 1024 * 1024 });
 
       expect(report.world).toEqual({
         byCategoryMb: [],
         cellsTotal: 144,
         cellsVisible: 38,
         draws: 162,
+        // The capability's HOST cost, kept apart from `residencyMb` because that ledger counts GPU bytes.
+        pickingMb: 2,
         residencyMb: 37,
         triangles: 120_000,
       });

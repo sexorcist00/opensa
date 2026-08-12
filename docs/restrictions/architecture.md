@@ -472,8 +472,21 @@ that selects nothing. There is no throw, no warning, and no missing pixel: the m
 Either the capability gets an honest name and an owner outside the debug surface, or every consumer of it is
 listed where the flag is defined. See `docs/plans/201-dispatch-console/5-symbology-and-picking-as-product/`.
 
-**Caught:** no — and worse than silent at runtime, it is silent at review: the flag reads as debug-only, so a
-change that disables it looks safe.
+**RESOLVED 2026-08-12 by taking the first option** (201/5-01). The flag is `CellStore.picking`, a named
+capability with no `debug` in it, and the three hosts that arm it — the console, the map viewer and the game
+shell's debug overlay — now say which capability they are asking for rather than which mode they think they
+are in. The rule itself stays, because the shape recurs and the next one will not be picking.
+
+The half that made it worth more than a rename: **a capability with no stated price is one nobody can budget
+against, and this one had none.** What picking retains is CPU-side — the placement mapper's rows and the cell
+index bytes a cell would otherwise drop after upload — and `Engine.ledger()` counts GPU residency, so every
+instrument in the repo reported the cost as zero. `CellStore.pickingBytes` now counts both halves, the
+console reports it in `?inventory=1`, and a test pins each half separately (both verified by reintroducing a
+half-count, which the older single-assertion test did not catch).
+
+**Caught:** the NAME, now, by being a name — a `debug*` sweep no longer hits a production feature. The COST is
+caught by test rather than by review. Before this, both were silent, and the flag was worse than silent at
+review: it read as debug-only, so a change disabling it looked safe.
 
 ## A camera at city height must push the fog cut out, or the world renders EMPTY
 

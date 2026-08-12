@@ -20,6 +20,22 @@ not silently kill click-to-inspect. This is the restriction recorded in the same
 **Owes:** the memory cost of the mapper on the [2/01](../2-real-device-truth/readme.md) district, and a test
 that picking survives a production-shaped build.
 
+**DONE IN THE ENGINE 2026-08-12; the district number is owed by the next field run.** `debugPicking` is
+`CellStore.picking` — a named capability, no `debug` in it — and the three hosts that arm it (the console,
+the map viewer, the game shell's debug overlay) now name the capability rather than the mode. The
+[restriction](../../../restrictions/architecture.md) is marked resolved in the same change.
+
+The rename alone would have been cosmetic. What the step really owed was the price, and there was none to
+read: what picking retains is **CPU-side** — the mapper rows plus the cell index bytes a cell would otherwise
+drop after upload — while `Engine.ledger()` counts GPU residency, so every instrument in this repo reported
+this capability as free. `CellStore.pickingBytes` counts both halves; `?inventory=1` carries it as
+`world.pickingMb`, so **the next capture on the pinned district hands over the number this step owes without
+anyone having to remember to measure it**. Two tests pin it — the cost is zero with the capability off, and
+each half is verified separately by reintroducing a half-count.
+
+Still open here, and it needs a device: `PLACEMENT_ROW_BYTES` is an ACCOUNTING figure derived from the shapes
+allocated, not a heap reading. `performance.measureUserAgentSpecificMemory()` is how it gets checked.
+
 ### 02 — Units as instanced symbols
 
 Beacons are `engine.createDebugLines(..., { throughDepth: true })` — an engine debug primitive, drawn over the

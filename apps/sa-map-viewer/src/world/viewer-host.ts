@@ -70,8 +70,8 @@ export async function bootViewer(
   }
   // Picking is ALWAYS on here (phase 3). In the game it is viewer-only because the placement mapper and the
   // retained index bytes cost tens of MB on a full map; this app is nothing but that viewer, and it must be
-  // set BEFORE the first cell loads — `debugPicking` only takes effect on load.
-  engine.cells.debugPicking = true;
+  // set BEFORE the first cell loads — the picking capability only takes effect on load.
+  engine.cells.picking = true;
 
   const camera = new ViewerCamera(poseFromQuery(window.location.search, mapCenterGta(map)));
   const renderer = new CellRenderer(engine, map);

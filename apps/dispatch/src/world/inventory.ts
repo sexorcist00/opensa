@@ -135,6 +135,12 @@ export interface InventoryReport {
     readonly cellsTotal: number;
     readonly cellsVisible: number;
     readonly draws: number;
+    /** What click-to-inspect is costing, HOST megabytes (`engine.cells.pickingBytes`): the placement mapper
+     *  plus the index bytes retained with it. It is NOT part of `residencyMb` — that ledger counts GPU
+     *  bytes — and it is here because 201/5-01 asks for this number measured on a real district rather than
+     *  estimated. The console arms picking at boot, so a capture always carries the cost of its own best
+     *  feature instead of leaving it to be discovered when a budget is blown. */
+    readonly pickingMb: number;
     readonly residencyMb: number;
     readonly triangles: number;
   };
@@ -226,6 +232,8 @@ export class FrameInventory {
     district: string;
     errors: readonly string[];
     hasTimestamps: boolean;
+    /** `engine.cells.pickingBytes` — the host cost of the placement mapper the console picks against. */
+    pickingBytes: number;
     surface: InventoryReport['surface'];
   }): InventoryReport {
     const sorted = [...this.dts].sort((a, b) => a - b);
@@ -301,6 +309,7 @@ export class FrameInventory {
         cellsTotal: this.worldLast.cellsTotal,
         cellsVisible: this.worldLast.cellsVisible,
         draws: this.worldLast.draws,
+        pickingMb: context.pickingBytes / (1024 * 1024),
         residencyMb: this.worldLast.residencyBytes / (1024 * 1024),
         triangles: this.worldLast.triangles,
       },

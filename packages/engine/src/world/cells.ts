@@ -68,7 +68,7 @@ export interface CellHandle {
    *  the instance buffers; the cell only carries the anchors. */
   particles: { effectName: string; x: number; y: number; z: number }[];
   /**
-   * The placement mapper (minor 6), WORLD-space bounds — populated ONLY while `debugPicking` is on.
+   * The placement mapper (minor 6), WORLD-space bounds — populated ONLY while {@link CellStore.picking} is on.
    *
    * Kept as one flat row list rather than a per-id map because a pick WALKS it and a hide filters it; the
    * whole point of the table is that it is cheap enough to scan. It stays empty in normal play: a full map's
@@ -94,6 +94,15 @@ export interface CellHandle {
   visible: boolean;
 }
 
+/**
+ * Host bytes one mapper row costs: the `Float64Array(6)` of world bounds (48) plus the row object holding
+ * it — three numbers, two string references and the array reference, at 8 bytes a slot on a 64-bit engine,
+ * over a ~16-byte object header. It is an ACCOUNTING figure, not a heap measurement: no browser API reports
+ * the real retained size, and a number derived from the shapes we allocate is the honest available answer.
+ * A `performance.measureUserAgentSpecificMemory()` reading is the way to check it, and it needs a device.
+ */
+const PLACEMENT_ROW_BYTES = 48 + 16 + 6 * 8;
+
 /** What a map-inspector click resolved to. */
 export interface PickHit {
   /** Distance along the pick ray (world units) — the frontmost hit wins. */
@@ -106,12 +115,44 @@ export interface PickHit {
 }
 
 export class CellStore {
-  /** Debugger only (074/22): parse the placement mapper and RETAIN index bytes on load, so the map inspector
-   *  can pick and hide. Off in play — both cost real memory on a full map. Takes effect on the NEXT load,
-   *  which the map viewer triggers anyway by pinning its cell set. */
-  debugPicking = false;
+  /**
+   * Parse the placement mapper and RETAIN index bytes on load, so a host can pick a placement out of the
+   * world and hide it. Off by default — both cost real memory on a full map. Takes effect on the NEXT load.
+   *
+   * **It is a CAPABILITY, not a debug switch, and the name is the point** (201/5-01). It was
+   * `debugPicking` until 2026-08-12, and `apps/dispatch` — a production surface whose central interaction is
+   * click-to-inspect — armed it at boot. A build that switched debug off in production would have removed
+   * the console's best feature with nothing saying so, which is the failure
+   * [restrictions/architecture.md](../../../../docs/restrictions/architecture.md) records: a production
+   * surface may not stand on a `debug*` switch. The map inspector still uses it, and now says which
+   * capability it is asking for rather than which mode it thinks it is in.
+   *
+   * What it costs is not free and not hidden either: read {@link pickingBytes}.
+   */
+  picking = false;
   get count(): number {
     return this.cells.size;
+  }
+  /**
+   * What {@link picking} is costing right now, in HOST bytes, summed over the loaded cells.
+   *
+   * Two things, because the capability retains two (201/5-01 asked for the number *measured, not
+   * estimated*): the mapper rows themselves — a `Float64Array(6)` per placement plus the row's own fields —
+   * and the cell index bytes, which a cell with nothing smashable would otherwise drop on the floor after
+   * upload. Both are CPU-side, which is exactly why they were invisible: `Engine.ledger()` counts GPU
+   * residency by category, and a host reading only that sees a capability whose price is zero.
+   *
+   * The model and TXD names are NOT counted. They are references into the cell's own name table, which the
+   * decode allocated either way, and counting a shared string per row would inflate the number that has to
+   * be compared against a real budget.
+   */
+  get pickingBytes(): number {
+    let bytes = 0;
+    for (const cell of this.cells.values()) {
+      bytes += cell.indexData.byteLength + cell.placements.length * PLACEMENT_ROW_BYTES;
+    }
+
+    return bytes;
   }
   private readonly cells = new Map<string, CellHandle>();
   private readonly colorFormat: GPUTextureFormat;
@@ -279,7 +320,7 @@ export class CellStore {
       draws: bundleGroups.length,
       index16: cell.index16,
       indexBuffer,
-      indexData: cell.breakables.length > 0 || this.debugPicking ? cell.indexData : new Uint8Array(0),
+      indexData: cell.breakables.length > 0 || this.picking ? cell.indexData : new Uint8Array(0),
       key,
       lights: cell.lights.map((light) => ({
         color: light.color,
@@ -327,7 +368,7 @@ export class CellStore {
         y: particle.position[1] + cell.origin[1],
         z: particle.position[2] + cell.origin[2],
       })),
-      placements: this.debugPicking ? worldPlacements(cell) : [],
+      placements: this.picking ? worldPlacements(cell) : [],
       roadsignQuads: cell.roadsignQuads,
       triangles: bundleGroups.reduce((sum, group) => sum + group.indexCount / 3, 0),
       uniform,
