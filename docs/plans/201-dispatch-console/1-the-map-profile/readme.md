@@ -212,6 +212,21 @@ Dead code only: what the console ships and never runs.
 **Owes:** kB before/after on the single-file artifact (~490 kB today). Note that the artifact is single-file
 for `?demo=1` only — [2/02](../2-real-device-truth/readme.md) owns the pak-worker chunk beside it.
 
+**DONE 2026-08-12 — [the table](../../../benchmarks/opensa-engine/2026-08-12-dispatch-bundle-inventory.json),
+and the answer is that there is nothing here to cut.** 506.5 kB raw / 167.6 kB gzip; knip's two unused
+exports are both used inside their own file, so what was dead is the `export` keyword and removing it saves
+zero bytes. Two things the step found that outlive it:
+
+- **The 08-09 before-table had a 107.3 kB hole** — `shaders.ts`, dropped by a one-off sourcemap walk
+  (394.2 attributed + 107.3 = 501.5, its own stated total). The conclusion drawn from it, *"react is the
+  largest thing a map ships, more than the entire engine"*, is false: the engine is 48.8 % of the bundle and
+  all of React 36.5 %. The instrument is committed now
+  ([`bundle-inventory.ts`](../../../debug/README.md)) precisely so the next reading is the same measurement.
+- **The one lever is not code, it is text.** WGSL ships as written, comments and indentation included —
+  [22.1 kB of gzip, 13.2 % of the download](../../../performance/deferred-optimizations/wgsl-source-text.md).
+  Priced and not taken: it renumbers every shader error, which is the one defect class no test here can see,
+  and it cannot be verified without a GPU.
+
 ## Verification
 
 - The protected list from 02 is re-read at the end of the chain against a running console: cars and peds

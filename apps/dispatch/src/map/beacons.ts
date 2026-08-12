@@ -22,7 +22,7 @@ export type Rgba = readonly [number, number, number, number];
 export type SetKey = 'call1' | 'call2' | 'call3' | 'callClosed' | 'route' | 'selection' | UnitStatus;
 
 /** Markers a single set can hold before it starts dropping them. */
-export const MARKER_CAPACITY = 96;
+const MARKER_CAPACITY = 96;
 
 /**
  * The one colour table in the app — the 2D overlay reads it too, so a unit's pillar and its label chip can

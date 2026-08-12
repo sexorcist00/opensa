@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 
 /** Below this the two side panels stop fitting next to a usable map. */
-export const COMPACT_MAX_WIDTH = 860;
+const COMPACT_MAX_WIDTH = 860;
 
 export function useCompactLayout(): boolean {
   const [compact, setCompact] = useState(() => matches());
