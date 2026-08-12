@@ -207,7 +207,7 @@ describe('convertCar', () => {
 
       const chassis = frameByName(converted, 'chassis')!;
       expect(chassis.position[0]).toBeCloseTo(0, 3);
-      expect(chassis.position[1]).toBeCloseTo(0, 3); // the junk 1.637 is GONE
+      expect(chassis.position[1]).toBeCloseTo(0, 3); // the junk 1.637 never reaches the frame local
       for (const name of ['door_rf_ok', 'bump_front_ok', 'bonnet_ok']) {
         const expected = frameByName(vanilla, name)!.position;
         const actual = frameByName(converted, name)!.position;
@@ -215,6 +215,23 @@ describe('convertCar', () => {
           expect(actual[axis], `${name}[${axis}]`).toBeCloseTo(expected[axis], 2);
         }
       }
+
+      // The donor's chassis GEOMETRY is authored in the junk frame's space (the game keeps non-ok/dam
+      // transforms) — the bake must land the body where vanilla's body sits (gate-4 round 3 regression).
+      const bboxCenterY = (bytes: Uint8Array, of: 'chassis'): number => {
+        const clump = parseDff(toArrayBuffer(bytes));
+        const atomic = clump.atomics.find((entry) => clump.frames[entry.frameIndex].name.trim() === of)!;
+        const positions = clump.geometries[atomic.geometryIndex].positions;
+        let min = Infinity;
+        let max = -Infinity;
+        for (let at = 1; at < positions.length; at += 3) {
+          min = Math.min(min, positions[at]);
+          max = Math.max(max, positions[at]);
+        }
+
+        return (min + max) / 2;
+      };
+      expect(bboxCenterY(dff, 'chassis')).toBeCloseTo(bboxCenterY(csCopcarla, 'chassis'), 1);
     });
 
     it('keeps identity rotations identity through the emit path', () => {

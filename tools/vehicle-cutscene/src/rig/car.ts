@@ -168,12 +168,14 @@ function analyzeMod(modDff: Uint8Array, template: CsTemplate): ModAnalysis {
     const frame = model.frames[frameIndex];
     const parentIndex = frame.parentIndex;
     const parentName = parentIndex >= 0 ? model.frames[parentIndex].name.trim().toLowerCase() : '';
-    const base = frame.name
-      .trim()
-      .toLowerCase()
-      .replace(/_(?:ok|dam)$/, '');
+    const name = frame.name.trim().toLowerCase();
+    const isComponent = /_(?:ok|dam)$/.test(name);
+    const base = name.replace(/_(?:ok|dam)$/, '');
 
-    return parentName === `${base}_dummy` ? relativeToRoot(parentIndex) : relativeToRoot(frameIndex);
+    // The game's collapse destroys ONLY a `<part>_ok/_dam` frame under its own dummy. Every other mesh
+    // frame KEEPS its transform in gameplay — stock copcarla's chassis carries [0,1.637,-0.35] and its
+    // geometry is authored in that space (gate-4 round 3: discarding it shifted the whole body).
+    return isComponent && parentName === `${base}_dummy` ? relativeToRoot(parentIndex) : relativeToRoot(frameIndex);
   };
 
   const chassisIndex = model.frames.findIndex(
