@@ -144,20 +144,45 @@ DONOR's geometry — exactly what "the '92 look is replaced by the mod" (001 dec
 
 ---
 
-## Step 3 (P0) — game emit (`install.ts`)
+## Step 3 (P0) — game emit (`install.ts`) ✅ SHIPPED 2026-08-12
 
 Needed this early so step 4 can run in the field.
 
-- [ ] Copy `--game` → `--out` (vehicle-installer's wiped-and-rebuilt pattern), rebuild
-      `models/cutscene.img` via tool-kit `EditableImg`: replace the converted `cs*.dff` entries (+ TXDs,
-      step 6; until then vanilla TXDs stay).
-- [ ] Patch `data/txdcut.ide` in `--out`: add `cscopcarsf, copcarsf` and `csdinghy, dinghy`, fix the
-      `csopcarla` typo row to `cscopcarla, copcarla`. (Data rows only — no pool impact, per 001's
-      restrictions check.)
-- [ ] `--only` limits conversion to named slots (iteration speed).
+- [x] Copy `--game` → `--out` (vehicle-installer's pattern; `guardOut` REUSED from
+      `@opensa/vehicle-installer/install`), rebuild `models/cutscene.img` via tool-kit `EditableImg`.
+      Vanilla TXDs stay until step 6. Per-slot failures collected and reported, never silent; exit 1.
+- [x] `data/txdcut.ide` patched: typo row fixed, missing rows appended — derived from the census
+      (`hasTxdcutRow`), not a hardcoded list.
+- [x] `--only` limits conversion to named slots.
+- [x] Tests: 5 install e2e on a synthetic game tree carrying real fixtures (guard, error collection,
+      branch skips, txdcut patch, `--only`).
 
-**Verification:** rebuilt game tree diffs from base ONLY in `models/cutscene.img` + `data/txdcut.ide`;
-archive opens and round-trips. **Record:** cutscene.img size before/after.
+**The full-fleet run earned its place in the plan — it found two mod-corpus facts no fixture had:**
+
+1. **Half the fleet ships LOCKED (anti-rip) DFFs** — taxi, zr350, copcarla, firela, burrito, securica +2:
+   container sizes lie, a naive size-respecting chunk walk reads an empty clump. Fixed by REUSING the
+   engine parser's recovery machinery (`forEachClumpChild` / `recoverLockedList`, read-only) in
+   `clump-io.ts`; converted output always carries honest headers (the lock never propagates). A real
+   locked mod DFF is now a committed fixture (`taxi-locked.dff`) with a recovery test.
+2. **Four mods ship wheels as `f_wheel_*` container sub-models** (IVF convention) instead of a mesh under
+   the dummies — the engine builder already knew this (`WHEEL_CONTAINER_RE`); the same rule + first-atomic
+   pick is now the third wheel-source fallback in `car.ts`.
+
+**And six more vanilla template styles** (probed, then handled + golden-tested on glendale/monster):
+single-frame wheels (bravura, glendale, sadler, washington), an intermediate body frame between root and
+chassis (csmonster's `COG`, bone 1, z 1.20 — kept at its vanilla transform), parts nested under parts
+(csfirela's `misc_c` under `misc_b`), vanilla's own `winscreen_ok` typo (cssadler — canonicalised), root
+names that are neither the model nor `_dummy` (`Root`, `Dummy01`, `Monster92`), and wheel-node aliases
+`dummywheel_rr` / `wheelRRnode` (position-sign classification already covered them).
+
+**Verification (run 2026-08-12):** full run over `game-src/original` + `mods-src/original/vehicles` —
+**21/21 car models converted, 0 errors** (csdinghy/csmtbike92 skipped pending their branches); output
+tree diffs from base in EXACTLY `models/cutscene.img` + `data/txdcut.ide`; all 317 DFFs in the rebuilt
+archive parse, all 286 skeletons consistent (hierarchy size = boned frames); 43/43 tests, lint + tsc
+clean.
+
+**Record:** cutscene.img **25.7 MB → 82.6 MB** (+56.9 MB, mod-geometry scale as predicted by risk 5 —
+no target ceiling implicated).
 
 ---
 
