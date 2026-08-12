@@ -5,12 +5,13 @@ Two groups: what works on the CURRENT pak right now, and what needs the NEXT pak
 
 ## Needs NOTHING (test on the current build right away)
 
-- [ ] **Missing-texture highlight toggle (row B, engine half)** — F2 → Map → "Missing Textures:
-      magenta ON/OFF". On the CURRENT (old) pak the button exists but has nothing to repaint (no
-      `missingLayers` in the old manifest) — just confirm it doesn't crash. Real check after rebuild.
-- [ ] **Ten Green Bottles ground glow (row E / 078 #11): CLOSED for this iteration 2026-07-23** — the
+- [x] **Missing-texture highlight toggle (row B, engine half)** — F2 → Map → "Missing Textures:
+      magenta ON/OFF". VERIFIED by the user (confirmed again 2026-08-12): the toggle works and paints
+      exactly the broken spots on the rebuilt pak — see row B below.
+- [x] **Ten Green Bottles ground glow (row E / 078 #11): CLOSED for this iteration 2026-07-23** — the
       restore stays reverted; the wanted behaviour is now specced as blink-synced 2dfx point lights,
-      deferred to `docs/roadmap/0.6.0/plans/04-graphic-improvements/04-2dfx-real-lights.md`. Nothing to test.
+      deferred to `docs/roadmap/0.6.0/plans/04-graphic-improvements/04-2dfx-real-lights.md`. Nothing to
+      test here — the proper lighting is that roadmap plan's job (user's call, re-confirmed 2026-08-12).
 
 ## Needs the NEXT pak rebuild (pmb full run) first
 
@@ -19,24 +20,36 @@ compare against older paks. Expect 0 converter failures. `NODE_OPTIONS=--max-old
 Sanity: 1123 cells / ~1 GB / AO ~375 s. Also owed on this rebuild (078): map-objects stage time
 (lazy-TXD), wheels on admiral/comet/petro (084).
 
-- [ ] **Row A — neon rope palms** (`vgsn_nitree_r01`, LV strip / user's palm spot): at night the
-      red/pink rope spiral GLOWS (was: only the trunk lit). Blue (`b01`) ropes glow at full strength too.
+- [x] **Row A — neon rope palms** (`vgsn_nitree_r01`, LV strip / user's palm spot): at night the
+      red/pink rope spiral GLOWS (was: only the trunk lit). CONFIRMED by the user on the rebuilt pak
+      2026-07-22 late — see "Field results" below.
 - [x] **Row B — missing textures render grey, not magenta** — VERIFIED by the user 2026-07-23 on the
       rebuilt pak: visagesign04's arch (LV Visage) turns untextured grey like prod, the F2 magenta
       toggle paints exactly the broken spots (known-broken data: mod 42/now-40 names `_257` textures
       that exist nowhere).
-- [ ] **Row C — additive neon** (`vgncircus2neon`, Circus casino + the whole LV strip's flags-0x8
-      overlays): night dressing ADDS light onto the buildings (was: dull). Check 22:00–06:00.
-- [ ] **Row D — night-only timed models** (`casinoblock41_nt`, Fremont): the facade runs FULLBRIGHT
-      after the 22:00 swap (was ~18 % brightness) **and the stripes SCROLL down** (kind 5 — the scroll
-      also stops showing by day and no longer double-draws at night).
+- [x] **Row C — additive neon** (`vgncircus2neon`, Circus casino + the whole LV strip's flags-0x8
+      overlays): night dressing ADDS light onto the buildings. CONFIRMED 2026-07-22 late. (Its class rule
+      was NARROWED the next day by row H — additive now requires an alpha material; the circus neon keeps
+      class 4 because its glow textures are DXT3 with alpha, so this verdict still stands.)
+- [x] **Row D — night-only timed models** (`casinoblock41_nt`, Fremont): the facade runs FULLBRIGHT
+      after the 22:00 swap (was ~18 % brightness) **and the stripes SCROLL down**. CONFIRMED 2026-07-22 late.
 - [x] **Row F — the magenta roster resolves** — VERIFIED by the user 2026-07-23 on the rebuilt pak: the
       magenta-roster spots resolve, AND `report.json` carries **no `textures.crossTxd` at all** — the
       reviewed crossTxd PNG fixes (the `/crosstxd-fix` batch moved into `mods-src/original/mods`) made
       the data self-contained, so nothing needs a donor TXD any more.
-- [ ] **084 vehicle round (2026-07-22, still unverified in field)**: AO under cars, indirect level,
-      reflectivity gate, extras at spawn, matte tyres on admiral/comet/petro (the wheel fix rides
-      `.osm` DESC — old paks keep the bug).
+- [x] **084 vehicle round** — NOT this plan's row. It belongs to
+      [084](../084-vehicle-appearance/) and is tracked there; what this checklist saw of it is verified
+      (matte tyres 2026-07-23, AO night speckles closed 2026-07-23 — both below). Closed here 2026-08-12
+      so one plan's checklist stops holding another plan's work open.
+
+## The ONE item still open (2026-08-12)
+
+- [ ] **Row H — LV facade "holes"**: Old Venturas Strip entrance (~2110, 2076), 23:30–04:00. Expect a
+      SOLID black fascia band under the pink arches, no see-through into the block interior, bulb canopies
+      fullbright. The dark sloped marquee silhouette is vanilla — not a regression.
+      **Everything but the eyes is already verified**: `dump-cell.ts 2110 2076` on the 2026-08-11 build
+      reads the 23→4 night row as three groups, all `cls=0` — the additive class that caused the holes is
+      gone from the pak bytes. This is the last box in 085; ticking it closes the plan.
 
 ## Field results 2026-07-22 late (first run on the rebuilt pak)
 

@@ -184,9 +184,12 @@ row but its chain was superseded by 097). Newest first:
   `build/original`→`build/original`), pak manifest identity, the fetch-pack finishing tool replacing
   `build-game.ts`, the fetch client booting the pak, TC trial runs (gostown/carcer/anderius).
 - **[085 — Map-object appearance](./085-map-object-appearance/readme.md)** — the 2026-07-22 field round
-  (after vehicles, before peds): row A SHIPPED — the night emissive mask went per-channel (the luma delta
-  systematically killed saturated neon: the LV strip's red rope lights never glowed); further rows as the
-  user reports them.
+  (after vehicles, before peds): rows A–G SHIPPED and field-confirmed — the night emissive mask went
+  per-channel (the luma delta systematically killed saturated neon: the LV strip's red rope lights never
+  glowed), missing textures render vanilla grey, additive neon adds light, night-only timed models run
+  fullbright. **ONE item open (2026-08-12 sweep): row H's field verdict** — the additive-class narrowing
+  (`classOf`: class 4 only for alpha materials) is verified present in the built pak's bytes, and what is
+  owed is a night look at the Old Venturas Strip entrance.
 
 - **[084 — Vehicle appearance and dynamic-model lighting](./084-vehicle-appearance/readme.md)** — the 2026-07-20
   field round: wheel-side/scale conventions and the flat dynamic indirect term SHIPPED (with measurements);

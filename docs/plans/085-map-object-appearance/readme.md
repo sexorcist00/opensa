@@ -1,6 +1,12 @@
 # 085 — map-object appearance
 
-**Status: OPENED 2026-07-22**, the field round the user queued after vehicles ([084](../084-vehicle-appearance/))
+**Status: OPENED 2026-07-22 — rows A–G all CLOSED; ONE item open (2026-08-12 sweep): row H's field
+verdict.** Its fix is shipped and verified present in the built pak's bytes; what is owed is a look at
+the Old Venturas Strip entrance at night. Everything else on the checklist was either confirmed in the
+field or belongs to another plan — the sweep struck four boxes that were already answered elsewhere in
+this same file.
+
+The field round the user queued after vehicles ([084](../084-vehicle-appearance/))
 and before peds. Same method: the user reports what they see in game, each symptom is traced to data
 (DFF → pipeline stage → pak bytes → shader) before any code is touched.
 
@@ -244,9 +250,18 @@ brightness), and black texels now write depth and occlude. Offline re-weld of ce
 its blend/cutout groups `[0,0,0,0,2,1]`. Tests: weld routes flags-140 + DXT3-alpha (bin fixture) to
 class 4, flags-140 + DXT1-opaque (trafficlight fixture) to class 0.
 
-**Field check: PENDING the next pak rebuild** (class is assigned at weld time) — expect: solid black
-fascia band under the arches, no see-through, bulb canopies fullbright, dark marquee silhouette
-matching the original build's screenshots.
+**The fix is IN the built pak — verified offline 2026-08-12** (`dump-cell.ts 2110 2076` against
+`build/original/opensa`, the 2026-08-11 18:04 build). The night row reads
+`#4 timed on=23 off=4 groups=3 [cls=0 …] [cls=0 …] [cls=0 …]` — **no class 4 anywhere in the 23→4
+window**, which is the whole content of the fix; the class is assigned at weld time, so this is the pak
+bytes, not an intention. (The 2026-07-23 offline re-weld predicted five groups for cell 8,8; this cell
+welds three. The group COUNT is a welding detail, the CLASS is the claim.) `weld.ts` carries the rule at
+`classOf`: `if (additive && alphaClass !== 'opaque')`.
+
+**Field check: still owed — the VISUAL verdict only.** Old Venturas Strip entrance (~2110, 2076) at
+23:30–04:00: expect a solid black fascia band under the pink arches, no see-through into the block
+interior, bulb canopies fullbright. The dark sloped marquee silhouette IS vanilla (authored `roof10L256`
+night prelit 12/15/13) — do not read it as a regression.
 
 ### Row G — mod 46 "Animated Radars" (CLOSED 2026-07-22 late — engine correct, the DARK look is the mod's own texture)
 
