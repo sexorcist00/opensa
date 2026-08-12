@@ -37,13 +37,24 @@ const WHEEL_DUMMY_RE = /^wheel_([lr])([fmb])_dummy$/;
 /** `f_wheel_<mask>` container frames — the IVF-style wheel sub-model four of the real mods ship instead
  *  of a mesh under the dummies (mirrors the engine builder's WHEEL_CONTAINER_RE + first-atomic pick). */
 const WHEEL_CONTAINER_RE = /^f_wheel/;
+// The junk-mesh-frame rule (gate-4 field finding, 2026-08-12): a mesh frame sitting under its OWN
+// `<base>_dummy` hinge has its transform DESTROYED by the game (`PreprocessHierarchy` →
+// `CollapseFramesCB`) — trusting it poisoned the whole rig on stock copcarla, whose `chassis` frame
+// carries junk `[0, 1.637, -0.35]`. See `hingeOf` in `analyzeMod`.
+/** Mod parts worth ADOPTING when the template has no slot for them: visible movable/extra meshes. The
+ *  '92 templates bake glass into the chassis, so a donor's separate `windscreen_ok` would otherwise be
+ *  dropped — a hole where glass should be (gate-4 field finding). Adopted parts get fresh bone ids past
+ *  the template's; cutscene anims bind by bone id, so extra bones simply stay un-animated. */
+const ORPHAN_PART_RE = /_ok$|^extra\d+$|^misc_[a-h]$/;
 
 export interface CarConvertReport {
-  /** Mod meshes with no place in the template (chassis_vlo, damage twins, misc_*, …) — not carried. */
+  /** Visible mod parts the template has no slot for, carried with fresh bone ids (donor glass, misc). */
+  adoptedFromMod: string[];
+  /** Mod meshes with no place in the template (chassis_vlo, damage twins, …) — not carried. */
   droppedFromMod: string[];
   /** Template parts the mod does not ship — their bones drop out of the emitted hierarchy. */
   missingInMod: string[];
-  /** Canonical names of the emitted parts. */
+  /** Canonical names of the emitted template parts. */
   parts: string[];
   /** The vertical rebase applied to the body and wheels. */
   shiftZ: number;
@@ -63,11 +74,17 @@ interface ModAnalysis {
   atomicByFrame: Map<number, ClumpAtomic>;
   chassisIndex: number;
   chassisTransform: Transform;
+  /** The part's HINGE transform: the parent dummy's when the parent is a `*_dummy` (the mesh frame's own
+   *  junk transform is destroyed, like the game does), the frame's own otherwise (bobcat's exhaust_ok). */
+  hingeOf: (frameIndex: number) => Transform;
   model: ClumpModel;
   /** frame transform relative to the mod's root frame. */
   relativeToRoot: (frameIndex: number) => Transform;
   wheelAtomic: ClumpAtomic;
+  /** Frames inside `f_wheel_*` containers — never adopted as parts. */
+  wheelContainerFrames: ReadonlySet<number>;
   wheelDummies: Map<WheelCorner, number>;
+  wheelMeshIndex: number;
   wheelRadius: number;
 }
 
@@ -77,7 +94,7 @@ export function convertCar(modDff: Uint8Array, template: CsTemplate): { dff: Uin
   const analysis = analyzeMod(modDff, template);
   const shiftZ = groundShift(template, analysis);
   const emit = emptyEmit(template);
-  const report: CarConvertReport = { droppedFromMod: [], missingInMod: [], parts: [], shiftZ };
+  const report: CarConvertReport = { adoptedFromMod: [], droppedFromMod: [], missingInMod: [], parts: [], shiftZ };
 
   emitBody(emit, template, analysis, shiftZ, report);
   emit.frames[1].hierarchy = buildHierarchy(emit.frames);
@@ -93,11 +110,64 @@ export function convertCar(modDff: Uint8Array, template: CsTemplate): { dff: Uin
   return { dff, report };
 }
 
+/** Carry visible mod parts the template has no slot for (donor glass, misc pods, extras) as chassis
+ *  children with fresh bone ids past the template's — un-animated by cutscene anims, but PRESENT. */
+function adoptOrphanParts(
+  emit: Emit,
+  template: CsTemplate,
+  analysis: ModAnalysis,
+  chassisFrame: number,
+  emittedByCanonical: ReadonlyMap<string, { frameIndex: number; modIndex: number }>,
+  report: CarConvertReport,
+): void {
+  const carriedModFrames = new Set([...emittedByCanonical.values()].map((entry) => entry.modIndex));
+  const inverseChassis = invert(analysis.chassisTransform);
+  let nextBoneId = nextFreeBoneId(template);
+  for (const atomic of analysis.model.atomics) {
+    const index = atomic.frameIndex;
+    const canonical = canonicalPartName(analysis.model.frames[index].name);
+    const skip =
+      carriedModFrames.has(index) ||
+      index === analysis.wheelMeshIndex ||
+      analysis.wheelContainerFrames.has(index) ||
+      !ORPHAN_PART_RE.test(canonical) ||
+      canonical.endsWith('_dam') ||
+      template.parts.has(canonical);
+    if (skip) {
+      continue;
+    }
+    const relative = compose(inverseChassis, analysis.hingeOf(index));
+    const frameIndex = pushFrame(emit, {
+      boneId: nextBoneId,
+      name: analysis.model.frames[index].name.trim(),
+      parentIndex: chassisFrame,
+      position: relative.position,
+      rotation: relative.rotation,
+    });
+    emitAtomic(emit, atomic, frameIndex);
+    report.adoptedFromMod.push(canonical);
+    nextBoneId += 1;
+  }
+}
+
 function analyzeMod(modDff: Uint8Array, template: CsTemplate): ModAnalysis {
   const model = readClump(modDff);
   const children = childrenByFrame(model);
   const atomicByFrame = new Map(model.atomics.map((atomic) => [atomic.frameIndex, atomic]));
   const relativeToRoot = worldTransforms(model);
+  const hingeOf = (frameIndex: number): Transform => {
+    const frame = model.frames[frameIndex];
+    const parentIndex = frame.parentIndex;
+    const parentName = parentIndex >= 0 ? model.frames[parentIndex].name.trim().toLowerCase() : '';
+    const base = frame.name
+      .trim()
+      .toLowerCase()
+      .replace(/_(?:ok|dam)$/, '');
+
+    // The mesh frame's own transform is junk ONLY under the part's own `<base>_dummy` (the game destroys
+    // it there); elsewhere it is real authoring (bobcat's exhaust_ok under chassis_dummy carries 0.415).
+    return parentName === `${base}_dummy` ? relativeToRoot(parentIndex) : relativeToRoot(frameIndex);
+  };
 
   const chassisIndex = model.frames.findIndex(
     (frame, index) => canonicalPartName(frame.name) === 'chassis' && atomicByFrame.has(index),
@@ -114,11 +184,14 @@ function analyzeMod(modDff: Uint8Array, template: CsTemplate): ModAnalysis {
   return {
     atomicByFrame,
     chassisIndex,
-    chassisTransform: relativeToRoot(chassisIndex),
+    chassisTransform: hingeOf(chassisIndex),
+    hingeOf,
     model,
     relativeToRoot,
     wheelAtomic,
+    wheelContainerFrames: wheelContainerFrameSet(model),
     wheelDummies,
+    wheelMeshIndex,
     wheelRadius: geometryZHalfExtent(analysis.geometries[wheelAtomic.geometryIndex]),
   };
 }
@@ -231,7 +304,7 @@ function emitChassisAndParts(
       }
       continue;
     }
-    const relative = compose(invert(analysis.relativeToRoot(parent.modIndex)), analysis.relativeToRoot(modIndex));
+    const relative = compose(invert(analysis.hingeOf(parent.modIndex)), analysis.hingeOf(modIndex));
     const frameIndex = pushFrame(emit, {
       boneId: part.boneId,
       name: part.frameName,
@@ -243,6 +316,7 @@ function emitChassisAndParts(
     emittedByCanonical.set(canonical, { frameIndex, modIndex });
     report.parts.push(canonical);
   }
+  adoptOrphanParts(emit, template, analysis, chassisFrame, emittedByCanonical, report);
 }
 
 function emitWheel(emit: Emit, template: CsTemplate, analysis: ModAnalysis, shiftZ: number, corner: WheelCorner): void {
@@ -362,6 +436,22 @@ function groundShift(template: CsTemplate, analysis: ModAnalysis): number {
   return templateGround - (dummy.position[2] - analysis.wheelRadius);
 }
 
+/** One past the template's highest bone id — where adopted parts' fresh ids start. */
+function nextFreeBoneId(template: CsTemplate): number {
+  let max = template.chassisBoneId;
+  if (template.intermediate) {
+    max = Math.max(max, template.intermediate.boneId);
+  }
+  for (const part of template.parts.values()) {
+    max = Math.max(max, part.boneId);
+  }
+  for (const wheel of template.wheels.values()) {
+    max = Math.max(max, wheel.meshBoneId, wheel.nodeBoneId);
+  }
+
+  return max + 1;
+}
+
 function pushFrame(emit: Emit, frame: Omit<ClumpFrame, 'flags'> & { flags?: number }): number {
   emit.frames.push({ flags: FRAME_FLAGS, ...frame });
 
@@ -379,8 +469,8 @@ function shifted(emit: Emit, transform: Transform, shiftZ: number): Transform {
   return compose(emit.intoBodyParent, lifted);
 }
 
-/** First atomic (in atomic order, like the engine builder) inside an `f_wheel_*` container subtree. */
-function wheelContainerMesh(model: ClumpModel): number {
+/** `f_wheel_*` container frames plus every descendant. */
+function wheelContainerFrameSet(model: ClumpModel): Set<number> {
   const containers = new Set<number>();
   model.frames.forEach((frame, index) => {
     if (WHEEL_CONTAINER_RE.test(frame.name.trim().toLowerCase())) {
@@ -388,13 +478,26 @@ function wheelContainerMesh(model: ClumpModel): number {
     }
   });
   if (containers.size === 0) {
-    return -1;
+    return containers;
   }
-  for (const atomic of model.atomics) {
-    for (let at = atomic.frameIndex; at >= 0; at = model.frames[at].parentIndex) {
+  model.frames.forEach((frame, index) => {
+    for (let at = frame.parentIndex; at >= 0; at = model.frames[at].parentIndex) {
       if (containers.has(at)) {
-        return atomic.frameIndex;
+        containers.add(index);
+        break;
       }
+    }
+  });
+
+  return containers;
+}
+
+/** First atomic (in atomic order, like the engine builder) inside an `f_wheel_*` container subtree. */
+function wheelContainerMesh(model: ClumpModel): number {
+  const containers = wheelContainerFrameSet(model);
+  for (const atomic of model.atomics) {
+    if (containers.has(atomic.frameIndex)) {
+      return atomic.frameIndex;
     }
   }
 

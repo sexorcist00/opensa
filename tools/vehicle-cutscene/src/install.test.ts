@@ -88,7 +88,7 @@ describe('installCutscene', () => {
       const img = openImg(new Uint8Array(readFileSync(join(outPath, 'models', 'cutscene.img'))));
       const converted = readClump(img.get('csbobcat92.dff')!);
       expect(converted.frames[1].name).toBe('bobcat_dummy');
-      expect(converted.geometries).toHaveLength(11); // rebuilt (shared wheel, no junk boxes), not copied
+      expect(converted.geometries).toHaveLength(12); // rebuilt (shared wheel, adopted glass), not copied
       // IMG VER2 pads entries to 2 048-byte sectors — presence + one-sector size says "untouched".
       expect(img.get('csbarrel.dff')?.byteLength).toBe(2048);
       expect(img.get('csbobcat92.txd')?.byteLength).toBe(2048); // vanilla TXDs stay until step 6

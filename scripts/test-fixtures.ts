@@ -156,6 +156,10 @@ const MANIFEST: readonly Fixture[] = [
   extract('csmonster.dff', 'dff/cutscene/csmonster.dff'),
   extract('glendale.dff', 'dff/cutscene/glendale.dff'),
   extract('monster.dff', 'dff/cutscene/monster.dff'),
+  // The junk-chassis-transform regression pair (gate-4 field finding): STOCK copcarla's `chassis` mesh
+  // frame carries `[0, 1.637, -0.35]` that the game destroys at load — the converter must too.
+  extract('cscopcarla92.dff', 'dff/cutscene/cscopcarla92.dff'),
+  extract('copcarla.dff', 'dff/cutscene/copcarla.dff'),
   copy('data/peds.ide', 'data/peds.ide'),
   copy('data/handling.cfg', 'data/handling.cfg'),
   copy('data/info.zon', 'data/info.zon'),

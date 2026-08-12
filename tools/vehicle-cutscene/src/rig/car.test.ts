@@ -61,15 +61,20 @@ describe('convertCar', () => {
       expect(report.missingInMod).toEqual([]);
       expect(report.shiftZ).toBeCloseTo(0.9, 2);
       expect(report.parts).toHaveLength(9);
-      expect(report.droppedFromMod).toEqual(expect.arrayContaining(['chassis_vlo', 'door_lf_dam', 'windscreen_ok']));
+      expect(report.droppedFromMod).toEqual(expect.arrayContaining(['chassis_vlo', 'door_lf_dam']));
+      // The donor's windscreen has no template slot ('92 bodies bake glass into the chassis) — ADOPTED,
+      // not dropped: a car without glass was gate 4's field finding.
+      expect(report.adoptedFromMod).toEqual(['windscreen_ok']);
 
-      // The emitted hierarchy equals the vanilla table verbatim — ids, order and flags.
-      expect(converted.frames[1].hierarchy).toEqual(vanilla.frames[1].hierarchy);
+      // The emitted hierarchy is the vanilla table plus the adopted bone appended under the chassis.
+      const hierarchy = converted.frames[1].hierarchy!;
+      expect(hierarchy.map((node) => node.id)).toEqual([...vanilla.frames[1].hierarchy!.map((node) => node.id), 19]);
+      expect(converted.frames.find((frame) => frame.name === 'windscreen_ok')?.boneId).toBe(19);
       expect(converted.frames[1].name).toBe('bobcat_dummy');
 
-      // Bone ids per frame name match vanilla for every shared frame.
+      // Bone ids per frame name match vanilla for every SHARED frame (adopted ones are ours alone).
       const vanillaBones = new Map(vanilla.frames.filter((f) => f.name).map((f) => [f.name, f.boneId]));
-      for (const frame of converted.frames.filter((f) => f.name)) {
+      for (const frame of converted.frames.filter((f) => f.name && vanillaBones.has(f.name))) {
         expect(frame.boneId, frame.name).toBe(vanillaBones.get(frame.name));
       }
 
@@ -97,7 +102,7 @@ describe('convertCar', () => {
         converted.atomics.filter((atomic) => wheelFrames.has(atomic.frameIndex)).map((atomic) => atomic.geometryIndex),
       );
       expect(wheelGeometries.size).toBe(1);
-      expect(converted.geometries).toHaveLength(11); // 1 wheel + chassis + 9 parts
+      expect(converted.geometries).toHaveLength(12); // 1 wheel + chassis + 9 parts + adopted windscreen
 
       // The converted DFF parses as a well-formed clump and keeps the mod's chassis geometry intact.
       const parsed = parseDff(toArrayBuffer(dff));
@@ -107,16 +112,18 @@ describe('convertCar', () => {
       expect(parsed.geometries[chassisGeometry!.geometryIndex].positions.length / 3).toBe(1750);
     });
 
-    it('taxi: _hi frame names emitted, vanilla hierarchy verbatim, exhaust dropped with the template', () => {
+    it('taxi: _hi frame names emitted, vanilla ids kept, template-less exhaust + glass adopted', () => {
       const template = extractCarTemplate(CS_TAXI);
       const vanilla = readClump(CS_TAXI);
       const { dff, report } = convertCar(TAXI, template);
       const converted = readClump(dff);
 
       expect(report.missingInMod).toEqual([]);
-      expect(converted.frames[1].hierarchy).toEqual(vanilla.frames[1].hierarchy);
+      const vanillaIds = vanilla.frames[1].hierarchy!.map((node) => node.id);
+      expect(converted.frames[1].hierarchy!.map((node) => node.id).slice(0, vanillaIds.length)).toEqual(vanillaIds);
       expect(frameByName(converted, 'door_lr_hi_ok')?.boneId).toBe(15);
-      expect(report.droppedFromMod).toContain('exhaust_ok'); // cstaxi92's template has no exhaust part
+      expect(report.adoptedFromMod.sort()).toEqual(['exhaust_ok', 'windscreen_ok']);
+      expect(report.droppedFromMod).not.toContain('exhaust_ok');
     });
 
     it('zr350: template parts the mod lacks drop out of the hierarchy, mod-only parts are dropped', () => {
@@ -125,7 +132,8 @@ describe('convertCar', () => {
       const converted = readClump(dff);
 
       expect(report.missingInMod.sort()).toEqual(['extra2', 'steering_wheel']);
-      expect(report.droppedFromMod).toEqual(expect.arrayContaining(['chassis_vlo', 'misc_a', 'extra1']));
+      expect(report.droppedFromMod).toContain('chassis_vlo');
+      expect(report.adoptedFromMod.sort()).toEqual(['extra1', 'misc_a']); // visible pods stay on the car
       expect(frameByName(converted, 'windscreen_ok')?.boneId).toBe(17);
 
       // Holes in the id sequence, contiguous indexes — the hand-made pack's precedent.
@@ -145,7 +153,17 @@ describe('convertCar', () => {
       const converted = readClump(dff);
 
       expect(report.missingInMod).toEqual([]);
-      expect(converted.frames[1].hierarchy).toEqual(vanilla.frames[1].hierarchy);
+      // Vanilla ids survive as an ordered subsequence (adopted bones land inside the chassis subtree,
+      // BEFORE glendale's trailing wheel bones — DFS order, ids bind the anims, order is free).
+      const vanillaIds = vanilla.frames[1].hierarchy!.map((node) => node.id);
+      const convertedIds = converted.frames[1].hierarchy!.map((node) => node.id);
+      let matched = 0;
+      for (const id of convertedIds) {
+        if (id === vanillaIds[matched]) {
+          matched += 1;
+        }
+      }
+      expect(matched).toBe(vanillaIds.length);
       // Single-style wheels: the mesh frame IS the corner frame, no node in between.
       const wheel = frameByName(converted, 'wheel03')!;
       expect(converted.frames[wheel.parentIndex].name).toBe('glendale');
@@ -161,9 +179,10 @@ describe('convertCar', () => {
       const { dff, report } = convertCar(monster, template);
       const converted = readClump(dff);
 
-      expect(converted.frames[1].hierarchy).toEqual(
-        vanilla.frames[1].hierarchy?.filter((node) => converted.frames.some((frame) => frame.boneId === node.id)),
-      );
+      const vanillaKept = vanilla.frames[1]
+        .hierarchy!.map((node) => node.id)
+        .filter((id) => converted.frames.some((frame) => frame.boneId === id));
+      expect(converted.frames[1].hierarchy!.map((node) => node.id).slice(0, vanillaKept.length)).toEqual(vanillaKept);
       const cog = frameByName(converted, 'COG')!;
       expect(cog.position[2]).toBeCloseTo(1.2, 3);
       expect(converted.frames[frameByName(converted, 'chassis')!.parentIndex].name).toBe('COG');
@@ -171,6 +190,28 @@ describe('convertCar', () => {
       const axis = frameByName(converted, 'axis_rf')!;
       expect(converted.frames[axis.parentIndex].name).toBe('COG');
       expect(report.parts).toContain('door_lf_ok');
+    });
+
+    it('copcarla (junk chassis transform): the mesh frame junk is destroyed, like the game does', () => {
+      // Stock copcarla's `chassis` frame carries [0, 1.637, -0.35] under chassis_dummy — the gate-4
+      // field regression: trusting it shifted the whole body and every part.
+      const csCopcarla = new Uint8Array(readFileSync('tests/original/dff/cutscene/cscopcarla92.dff'));
+      const copcarla = new Uint8Array(readFileSync('tests/original/dff/cutscene/copcarla.dff'));
+      const template = extractCarTemplate(csCopcarla);
+      const vanilla = readClump(csCopcarla);
+      const { dff } = convertCar(copcarla, template);
+      const converted = readClump(dff);
+
+      const chassis = frameByName(converted, 'chassis')!;
+      expect(chassis.position[0]).toBeCloseTo(0, 3);
+      expect(chassis.position[1]).toBeCloseTo(0, 3); // the junk 1.637 is GONE
+      for (const name of ['door_rf_ok', 'bump_front_ok', 'bonnet_ok']) {
+        const expected = frameByName(vanilla, name)!.position;
+        const actual = frameByName(converted, name)!.position;
+        for (const axis of [0, 1, 2]) {
+          expect(actual[axis], `${name}[${axis}]`).toBeCloseTo(expected[axis], 2);
+        }
+      }
     });
 
     it('keeps identity rotations identity through the emit path', () => {
