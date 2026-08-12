@@ -42,8 +42,13 @@ const WHEEL_DUMMY_RE = /^wheel_([lr])([fmb])_dummy$/;
 /** `f_wheel_<mask>` container frames — the IVF-style wheel sub-model four of the real mods ship instead
  *  of a mesh under the dummies (mirrors the engine builder's WHEEL_CONTAINER_RE + first-atomic pick). */
 const WHEEL_CONTAINER_RE = /^f_wheel/;
-/** Mod parts worth ADOPTING when the template has no slot for them: visible movable/extra meshes. */
-const ORPHAN_PART_RE = /_ok$|^extra\d+$|^misc_[a-h]$/;
+/** Mod meshes NEVER adopted: damage twins and LOD copies. Everything else the game renders in gameplay
+ *  (a funky-style mod carries its whole shell as `body`/`interior`/`glass`/`chrome` sub-meshes under the
+ *  chassis — dropping them dismantled the sheriff at gate 7's mod round). */
+const ORPHAN_SKIP_RE = /_dam$|_vlo$/;
+/** IVF-style VARIANT containers: the runtime plugin shows ONE mesh per container (the sheriff's two roof
+ *  `f_extras:1` each hold ten lightbar/antenna variants). Adoption takes the FIRST variant only. */
+const VARIANT_CONTAINER_RE = /^f_(?:extras|class)/;
 
 export interface CarConvertReport {
   /** Visible mod parts the template has no slot for, carried with fresh bone ids (donor glass, misc). */
@@ -119,37 +124,44 @@ export function convertCar(modDff: Uint8Array, template: CsTemplate): { dff: Uin
   return { dff, report };
 }
 
-/** Carry visible mod parts the template has no slot for as chassis children with fresh bone ids —
- *  un-animated by cutscene anims (no name match), so their frame locals are safe to use. */
+/** Carry every remaining mod mesh (the game renders them all in gameplay) as a child of its nearest
+ *  CARRIED ancestor — door glass swings with its door; body/interior shells ride the chassis. Fresh
+ *  bone ids past the template's keep them un-animated by the cutscene anims (no name match). */
 function adoptOrphanParts(
   emit: Emit,
   template: CsTemplate,
   analysis: ModAnalysis,
   shiftZ: number,
   chassisFrame: number,
-  carriedModFrames: ReadonlySet<number>,
+  carriedFrames: ReadonlyMap<number, number>,
   report: CarConvertReport,
 ): void {
-  const intoChassis = invert(emit.worlds[chassisFrame]);
   let nextBoneId = nextFreeBoneId(template);
+  const servedVariantContainers = new Set<number>();
   for (const atomic of analysis.model.atomics) {
     const index = atomic.frameIndex;
     const canonical = canonicalPartName(analysis.model.frames[index].name);
     const skip =
-      carriedModFrames.has(index) ||
+      carriedFrames.has(index) ||
       index === analysis.wheelMeshIndex ||
       analysis.wheelContainerFrames.has(index) ||
-      !ORPHAN_PART_RE.test(canonical) ||
-      canonical.endsWith('_dam') ||
-      template.parts.has(canonical);
+      ORPHAN_SKIP_RE.test(canonical);
     if (skip) {
       continue;
     }
-    const local = compose(intoChassis, lift(analysis.hingeOf(index), shiftZ));
+    const container = variantContainerOf(analysis, index);
+    if (container >= 0) {
+      if (servedVariantContainers.has(container)) {
+        continue; // one variant per f_extras/f_class container, like the runtime plugin
+      }
+      servedVariantContainers.add(container);
+    }
+    const parentFrame = nearestCarriedAncestor(analysis, carriedFrames, index) ?? chassisFrame;
+    const local = compose(invert(emit.worlds[parentFrame]), lift(analysis.hingeOf(index), shiftZ));
     const frameIndex = pushFrame(emit, {
       boneId: nextBoneId,
       name: analysis.model.frames[index].name.trim(),
-      parentIndex: chassisFrame,
+      parentIndex: parentFrame,
       position: local.position,
       rotation: local.rotation,
     });
@@ -348,7 +360,7 @@ function emitChassisAndParts(
     analysis,
     shiftZ,
     chassisFrame,
-    new Set([...emittedByCanonical.values()].map((entry) => entry.modIndex)),
+    new Map([...emittedByCanonical.values()].map((entry) => [entry.modIndex, entry.frameIndex])),
     report,
   );
 }
@@ -507,6 +519,22 @@ function lift(transform: Transform, shiftZ: number): Transform {
   };
 }
 
+/** The emitted frame of the closest carried (template-matched) ancestor of a mod frame, if any. */
+function nearestCarriedAncestor(
+  analysis: ModAnalysis,
+  carriedFrames: ReadonlyMap<number, number>,
+  frameIndex: number,
+): number | undefined {
+  for (let at = analysis.model.frames[frameIndex].parentIndex; at >= 0; at = analysis.model.frames[at].parentIndex) {
+    const emitted = carriedFrames.get(at);
+    if (emitted !== undefined) {
+      return emitted;
+    }
+  }
+
+  return undefined;
+}
+
 /** One past the template's highest bone id — where adopted parts' fresh ids start. */
 function nextFreeBoneId(template: CsTemplate): number {
   let max = template.chassisBoneId;
@@ -533,6 +561,17 @@ function pushFrame(emit: Emit, frame: Omit<ClumpFrame, 'flags'> & { flags?: numb
   emit.worlds.push(compose(parentWorld, { position: full.position, rotation: full.rotation }));
 
   return emit.frames.length - 1;
+}
+
+/** The closest `f_extras`/`f_class` VARIANT container above (or at) a mod frame, or -1. */
+function variantContainerOf(analysis: ModAnalysis, frameIndex: number): number {
+  for (let at = frameIndex; at >= 0; at = analysis.model.frames[at].parentIndex) {
+    if (VARIANT_CONTAINER_RE.test(analysis.model.frames[at].name.trim().toLowerCase())) {
+      return at;
+    }
+  }
+
+  return -1;
 }
 
 /** `f_wheel_*` container frames plus every descendant. */
