@@ -648,6 +648,8 @@ export function compileAll(
       { binding: 0, buffer: { type: 'read-only-storage' }, visibility: GPUShaderStage.VERTEX },
       { binding: 1, texture: { viewDimension: '2d-array' }, visibility: GPUShaderStage.FRAGMENT },
       { binding: 2, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+      // The group's squared draw distance — the per-instance visibility test (P2 per-category ranges).
+      { binding: 3, buffer: { type: 'uniform' }, visibility: GPUShaderStage.VERTEX },
     ],
     label: 'clutter',
   });

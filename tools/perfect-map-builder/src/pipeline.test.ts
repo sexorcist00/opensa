@@ -1,16 +1,76 @@
+import type * as MapOptimizerRun from '@opensa/map-optimizer/run';
+
 import { buildVer2Buffer } from '@opensa/renderware/archive/img-archive';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { basename, join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  buildPerfectMap,
   checkImgIdBudgets,
-  checkTextIplSlotBudget,
+  checkInstBearingIplSlots,
   EXCLUDABLE_STAGES,
+  type ExcludableStage,
+  INST_BEARING_IPL_SLOTS,
+  installRequirements,
+  OPENSA_BUDGET_NOTICE,
   parseExcludedStages,
+  reportTextIplCensus,
+  resolveBuildTarget,
   runsStage,
+  shipPerfectMapAsi,
+  type StageTiming,
+  writeStageTimings,
 } from './pipeline';
+
+/** The three map builders the split calls — mocked so the target-split test costs no map build. Each one
+ *  creates its output dir, which is all the pipeline needs from them between the call and the next stage. */
+const procobjLods = vi.hoisted(() =>
+  vi.fn<(step: { config: { density: unknown }; gamePath: string; outPath: string; target: string }) => void>((step) => {
+    mkdirSync(step.outPath, { recursive: true });
+  }),
+);
+const saLods = vi.hoisted(() =>
+  vi.fn<(step: { gameDir: string; outDir: string }) => void>((step) => {
+    mkdirSync(step.outDir, { recursive: true });
+  }),
+);
+const opensaLods = vi.hoisted(() =>
+  vi.fn<(step: { gameDir: string; outDir: string }) => void>((step) => {
+    mkdirSync(step.outDir, { recursive: true });
+  }),
+);
+vi.mock('@opensa/sa-procobj-placement/build', () => ({ buildProcobjLods: procobjLods }));
+vi.mock('@opensa/sa-lod-generator/build', () => ({ buildSaLods: saLods }));
+vi.mock('@opensa/opensa-lod-generator/build', () => ({ buildOpensaLods: opensaLods }));
+
+/** The optimizer, mocked ONLY where a test opts in — a real run needs a real game dir. Its report is what
+ *  the optimize stage turns into a report fragment, so the fake carries one recognizable failure. */
+const optimizer = vi.hoisted(() =>
+  vi.fn<
+    (options: { gameDir: string; outDir: string }) => Promise<{
+      assets: never[];
+      failures: { error: string; name: string }[];
+      game: string;
+      outDir: string;
+    }>
+  >((options) => {
+    mkdirSync(options.outDir, { recursive: true });
+
+    return Promise.resolve({
+      assets: [],
+      failures: [{ error: 'boom', name: 'broken.dff' }],
+      game: 'fake',
+      outDir: options.outDir,
+    });
+  }),
+);
+vi.mock('@opensa/map-optimizer/run', async (importOriginal) => ({
+  ...(await importOriginal<typeof MapOptimizerRun>()),
+  runOptimizer: optimizer,
+}));
 
 /** A game dir whose gta.dat registers `n` text IPLs with one inst row each. */
 function writeGame(dir: string, n: number): void {
@@ -40,8 +100,10 @@ describe('EXCLUDABLE_STAGES', () => {
         'peds',
         'optimize',
         'trees',
-        'procobj',
         'sa',
+        // procobj sits AFTER sa since plan 014: it is baked inside that branch, so its place in the pipeline
+        // order — which is what `--until` reads — is after the LOD build it follows.
+        'procobj',
         'opensa',
         'pack',
       ]);
@@ -76,6 +138,38 @@ describe('parseExcludedStages', () => {
   });
 });
 
+describe('resolveBuildTarget', () => {
+  const excluding = (...stages: ExcludableStage[]): ReadonlySet<ExcludableStage> => new Set(stages);
+
+  describe('negative cases', () => {
+    it('refuses an opensa profile while the sa target is still being built', () => {
+      expect(() => resolveBuildTarget('opensa', excluding())).toThrow(/--exclude sa/);
+      expect(() => resolveBuildTarget('opensa', excluding('peds', 'vehicles'))).toThrow(/no building pool/);
+    });
+
+    it('never derives opensa from a run that builds both targets', () => {
+      expect(resolveBuildTarget(undefined, excluding())).not.toBe('opensa');
+      expect(resolveBuildTarget(undefined, excluding('pack'))).not.toBe('opensa');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('derives the target from --exclude when none is given (what the build scripts already declare)', () => {
+      expect(resolveBuildTarget(undefined, excluding('sa'))).toBe('opensa');
+      expect(resolveBuildTarget(undefined, excluding('opensa', 'peds', 'vehicles'))).toBe('sa');
+      expect(resolveBuildTarget(undefined, excluding())).toBe('sa');
+    });
+
+    it('allows the conservative mismatch — an opensa-only build carrying the sa profile', () => {
+      expect(resolveBuildTarget('sa', excluding('sa'))).toBe('sa');
+    });
+
+    it('honours an explicit opensa once the sa target is excluded', () => {
+      expect(resolveBuildTarget('opensa', excluding('sa'))).toBe('opensa');
+    });
+  });
+});
+
 describe('runsStage', () => {
   describe('negative cases', () => {
     it('does not run opensa when the run stops at sa', () => {
@@ -83,8 +177,13 @@ describe('runsStage', () => {
     });
 
     it('does not run either target when the run stops in the common chain', () => {
-      expect(runsStage('sa', 'procobj')).toBe(false);
-      expect(runsStage('opensa', 'procobj')).toBe(false);
+      expect(runsStage('sa', 'trees')).toBe(false);
+      expect(runsStage('opensa', 'trees')).toBe(false);
+    });
+
+    it('does not bake procobj when the run stops at sa — the clutter follows the LOD build', () => {
+      expect(runsStage('procobj', 'sa')).toBe(false);
+      expect(runsStage('procobj', undefined, new Set(['procobj']))).toBe(false);
     });
 
     it('does not run an EXCLUDED target on an otherwise full run (the :opensa / :sa split)', () => {
@@ -122,7 +221,368 @@ describe('runsStage', () => {
   });
 });
 
-describe('checkTextIplSlotBudget', () => {
+describe('buildPerfectMap source/out overlap', () => {
+  let out: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-work-'));
+  });
+
+  afterEach(() => {
+    rmSync(out, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it("refuses a source inside the run's own .work-<target> instead of wiping it, leaving the intermediate intact", async () => {
+      const stage = join(out, '.work-opensa', '5-trees');
+      mkdirSync(join(stage, 'models'), { recursive: true });
+      writeFileSync(join(stage, 'models', 'gta3.img'), 'intermediate');
+
+      await expect(
+        buildPerfectMap({ exclude: ['sa'], gamePath: stage, inPath: '/nonexistent', outPath: out }),
+      ).rejects.toThrow(/inside .*\.work-opensa/);
+      expect(existsSync(join(stage, 'models', 'gta3.img'))).toBe(true);
+    });
+
+    it('refuses a source inside the legacy shared .work, which the run still clears', async () => {
+      const stage = join(out, '.work', '5-trees');
+      mkdirSync(join(stage, 'models'), { recursive: true });
+      writeFileSync(join(stage, 'models', 'gta3.img'), 'intermediate');
+
+      await expect(
+        buildPerfectMap({ exclude: ['sa'], gamePath: stage, inPath: '/nonexistent', outPath: out }),
+      ).rejects.toThrow(/inside .*\.work/);
+      expect(existsSync(join(stage, 'models', 'gta3.img'))).toBe(true);
+    });
+
+    it('refuses a mods root inside a wiped work dir for the same reason', async () => {
+      const mods = join(out, '.work-opensa', 'mods-src');
+      mkdirSync(mods, { recursive: true });
+
+      await expect(
+        buildPerfectMap({ exclude: ['sa'], gamePath: '/nonexistent', inPath: mods, outPath: out }),
+      ).rejects.toThrow(/--in .*is inside/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it("does NOT refuse a source inside the OTHER target's work dir — that dir is not touched", async () => {
+      // `.work-sa` starts with `.work`, so a prefix-string check would refuse it; only the run's own dir
+      // (here `.work-opensa`) and the legacy `.work` are wiped, so a kept sa intermediate is a valid source.
+      const stage = join(out, '.work-sa', '5-trees');
+      mkdirSync(join(stage, 'data', 'maps'), { recursive: true });
+
+      await buildPerfectMap({
+        exclude: ['sa', 'optimize', 'pack'],
+        gamePath: stage,
+        inPath: '/nonexistent',
+        outPath: out,
+      });
+
+      expect(existsSync(stage)).toBe(true);
+    });
+  });
+});
+
+/**
+ * The invariant that makes `sa/` and `opensa/` the SAME WORLD: the procobj scatter runs ONCE, in the common
+ * chain, and both targets are handed that one stage build. Measured 2026-08-10 across two separate runs
+ * (opensa 08-09 13:53, sa 08-10) — all 46 `plobj*.ipl` and all 331 `plobj*_stream*.ipl` byte-identical,
+ * 91 092 objects each side. Nothing tested it, and it can only break silently: procobj positions are
+ * DERIVED (seeded scatter over collision geometry), so two targets fed from different dirs would each hold a
+ * plausible-looking world, and every cross-target verdict — above all 013's "does the real game cope at the
+ * shipped density" — would be comparing two different maps while reading as one.
+ */
+describe('buildPerfectMap target split', () => {
+  let out: string;
+  let game: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-split-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-game-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    procobjLods.mockClear();
+    saLods.mockClear();
+    opensaLods.mockClear();
+  });
+
+  afterEach(() => {
+    rmSync(out, { force: true, recursive: true });
+    rmSync(game, { force: true, recursive: true });
+  });
+
+  describe('positive cases', () => {
+    it('bakes procobj into the sa tree ALONE, and never into what opensa is built from', async () => {
+      // Plan 014 retired the old invariant here ("one scatter handed to both targets"): the clutter is an SA
+      // layer now. OpenSA scatters the same species at runtime, so a bake in the common build would only cost
+      // it a stripped procobj.dat and 91 092 vertex-duplicated instances in its pak.
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: '/nonexistent', outPath: out });
+
+      expect(procobjLods).toHaveBeenCalledTimes(1); // one scatter — a second is a second lottery, another world
+      const bake = procobjLods.mock.calls[0][0];
+      expect(saLods).toHaveBeenCalledTimes(1);
+      expect(opensaLods).toHaveBeenCalledTimes(1);
+
+      // Baked IN PLACE into the finished sa tree, after its LOD build.
+      const saDir = saLods.mock.calls[0][0].outDir;
+      expect(bake.gamePath).toBe(saDir);
+      expect(bake.outPath).toBe(saDir);
+      expect(bake.target).toBe('sa');
+
+      // Both targets are still built from the same common build — the split point is unchanged.
+      expect(opensaLods.mock.calls[0][0].gameDir).toBe(saLods.mock.calls[0][0].gameDir);
+      expect(opensaLods.mock.calls[0][0].gameDir).not.toBe(saDir);
+    });
+
+    it('keeps the density a property of the build, not of the target it is being built for', async () => {
+      // Scope call 2026-08-09: `sa` ships the SAME density as `opensa`. The scatter takes the run's density
+      // and its own target only for REPORTING, so a density that varied by target could not reach it here.
+      await buildPerfectMap({
+        config: { procobjDensity: 2 },
+        exclude: ['optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        outPath: out,
+      });
+
+      expect(procobjLods.mock.calls[0][0].config.density).toBe(2);
+    });
+  });
+});
+
+/**
+ * Plan 005: one report per target, `.work` split the same way. The regression the whole plan exists for:
+ * before it, the second target's build overwrote the first's `report.json`, and under `--keepWork` it also
+ * deleted the first's `.work`.
+ */
+describe('buildPerfectMap target reports (plan 005)', () => {
+  let out: string;
+  let game: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-report-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-report-game-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    procobjLods.mockClear();
+    saLods.mockClear();
+    opensaLods.mockClear();
+  });
+
+  afterEach(() => {
+    rmSync(out, { force: true, recursive: true });
+    rmSync(game, { force: true, recursive: true });
+  });
+
+  const report = (target: 'opensa' | 'sa'): { fragments: Record<string, unknown>; game: string; target: string } =>
+    JSON.parse(readFileSync(join(out, `report-${target}.json`), 'utf8')) as {
+      fragments: Record<string, unknown>;
+      game: string;
+      target: string;
+    };
+
+  describe('negative cases', () => {
+    it('writes NO unnamed report.json — the name is the target, always', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: '/nonexistent', outPath: out });
+
+      expect(existsSync(join(out, 'report.json'))).toBe(false);
+    });
+
+    it('writes no target report when the run stops in the common chain — no target finished', async () => {
+      await buildPerfectMap({
+        exclude: ['optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        outPath: out,
+        until: 'trees',
+      });
+
+      expect(existsSync(join(out, 'report-sa.json'))).toBe(false);
+      expect(existsSync(join(out, 'report-opensa.json'))).toBe(false);
+    });
+
+    it("building one target leaves the OTHER's report untouched — the overwrite this plan retires", async () => {
+      writeFileSync(join(out, 'report-sa.json'), '{"target":"sa","sentinel":true}');
+
+      await buildPerfectMap({
+        exclude: ['sa', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        outPath: out,
+      });
+
+      expect(readFileSync(join(out, 'report-sa.json'), 'utf8')).toBe('{"target":"sa","sentinel":true}');
+      expect(report('opensa').target).toBe('opensa');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('a full run writes BOTH reports, each naming its own target and the fetch game id', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: '/nonexistent', outPath: out });
+
+      expect(report('sa').target).toBe('sa');
+      expect(report('opensa').target).toBe('opensa');
+      expect(report('sa').game).toBe(basename(game));
+    });
+
+    it('the sa report carries the ceilings that used to be console-only, and only the sa report does', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: '/nonexistent', outPath: out });
+
+      const sa = report('sa').fragments['sa'] as {
+        census: { rows: number };
+        imgBudgets: Record<string, number>;
+        requirements: unknown[];
+      };
+      expect(sa.census.rows).toBe(0); // the test game has no gta.dat — the census reports, never invents
+      expect(sa.requirements).toEqual([]);
+      expect(report('opensa').fragments['sa']).toBeUndefined();
+    });
+
+    it('an opensa run without the pack stage still gets a report — just no pack fragment', async () => {
+      await buildPerfectMap({
+        exclude: ['sa', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        outPath: out,
+      });
+
+      expect(report('opensa').fragments['pack']).toBeUndefined();
+    });
+
+    it("the optimize stage's fragment travels through the runner into BOTH target reports", async () => {
+      // The runner-collect half of the plan: a chain stage RETURNS its fragment, the runner keys it by stage,
+      // and every target report this run writes carries it — with the totals and the isolated failures.
+      await buildPerfectMap({ exclude: ['pack'], gamePath: game, inPath: '/nonexistent', outPath: out });
+
+      const fragment = (target: 'opensa' | 'sa'): { failures: unknown[]; summary: { models: number } } =>
+        report(target).fragments['optimize'] as { failures: unknown[]; summary: { models: number } };
+      expect(fragment('sa').failures).toEqual([{ error: 'boom', name: 'broken.dff' }]);
+      expect(fragment('sa').summary.models).toBe(0);
+      expect(fragment('opensa').failures).toEqual(fragment('sa').failures);
+    });
+  });
+});
+
+describe('buildPerfectMap work dirs per target (plan 005)', () => {
+  let out: string;
+  let game: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-workdir-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-workdir-game-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(out, { force: true, recursive: true });
+    rmSync(game, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it("still wipes the run's OWN work dir — re-running a target keeps the old contract", async () => {
+      mkdirSync(join(out, '.work-opensa', 'junk'), { recursive: true });
+
+      await buildPerfectMap({
+        exclude: ['sa', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        outPath: out,
+      });
+
+      expect(existsSync(join(out, '.work-opensa', 'junk'))).toBe(false);
+    });
+
+    it('clears the legacy shared .work a pre-005 build left behind — it was wiped every run by contract', async () => {
+      mkdirSync(join(out, '.work', 'junk'), { recursive: true });
+
+      await buildPerfectMap({
+        exclude: ['sa', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        outPath: out,
+      });
+
+      expect(existsSync(join(out, '.work'))).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it("keeps both targets' intermediates side by side under --keepWork — the deletion this plan retires", async () => {
+      await buildPerfectMap({
+        exclude: ['sa', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        keepWork: true,
+        outPath: out,
+      });
+      expect(existsSync(join(out, '.work-opensa'))).toBe(true);
+
+      await buildPerfectMap({
+        exclude: ['opensa', 'vehicles', 'peds', 'optimize'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        keepWork: true,
+        outPath: out,
+      });
+
+      expect(existsSync(join(out, '.work-sa'))).toBe(true);
+      expect(existsSync(join(out, '.work-opensa'))).toBe(true);
+    });
+  });
+});
+
+describe('writeStageTimings', () => {
+  let out: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-timings-'));
+  });
+
+  afterEach(() => {
+    rmSync(out, { force: true, recursive: true });
+  });
+
+  const knobs = { procobjDensity: 1, procobjMax: 100000, target: 'opensa' } as const;
+
+  describe('negative cases', () => {
+    it('writes nothing when no stage ran — an empty file would read as a build that took no time', () => {
+      writeStageTimings(out, [], knobs);
+
+      expect(existsSync(join(out, 'build-timings.json'))).toBe(false);
+    });
+  });
+
+  const written = (): { config: unknown; stages: StageTiming[]; total: number } =>
+    JSON.parse(readFileSync(join(out, 'build-timings.json'), 'utf8')) as {
+      config: unknown;
+      stages: StageTiming[];
+      total: number;
+    };
+
+  describe('positive cases', () => {
+    it('records the knobs the run was configured with, so two durations are comparable', () => {
+      writeStageTimings(out, [{ name: 'procobj', seconds: 420 }], knobs);
+
+      expect(written().config).toEqual(knobs);
+      expect(written().stages).toEqual([{ name: 'procobj', seconds: 420 }]);
+      expect(written().total).toBe(420);
+    });
+
+    it('totals the stages it was given rather than re-deriving them', () => {
+      writeStageTimings(
+        out,
+        [
+          { name: 'mods', seconds: 84 },
+          { name: 'opensa', seconds: 2221.5 },
+        ],
+        knobs,
+      );
+
+      expect(written().total).toBe(2305.5);
+    });
+  });
+});
+
+describe('reportTextIplCensus', () => {
   let dir: string;
 
   beforeEach(() => {
@@ -133,28 +593,92 @@ describe('checkTextIplSlotBudget', () => {
     rmSync(dir, { force: true, recursive: true });
   });
 
-  describe('negative cases', () => {
-    it('throws when more than 39 text IPLs carry inst rows', () => {
-      writeGame(dir, 40);
+  /** A game dir whose whole map is one text IPL of `n` inst rows. */
+  const writeRows = (n: number): void => {
+    mkdirSync(join(dir, 'data', 'maps'), { recursive: true });
+    const rows = Array.from({ length: n }, (_, i) => `${i}, thing, 0, 0,0,0, 0,0,0,1, -1`).join('\n');
+    writeFileSync(join(dir, 'data', 'maps', 'big.IPL'), `inst\n${rows}\nend\n`);
+    writeFileSync(join(dir, 'data', 'gta.dat'), 'IPL DATA\\MAPS\\big.IPL\n');
+  };
 
-      expect(() => checkTextIplSlotBudget(dir)).toThrow(/IplEntityIndexArrays/);
+  /** The reported lines, `console.log` and `console.warn` kept apart — severity is part of what is asserted. */
+  const capture = (): { logs: string[]; warns: string[] } => {
+    const logs: string[] = [];
+    const warns: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((m: unknown) => void logs.push(String(m)));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation((m: unknown) => void warns.push(String(m)));
+    reportTextIplCensus(dir);
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+
+    return { logs, warns };
+  };
+
+  describe('negative cases', () => {
+    it("does NOT throw past stock SA's int16 pool ceiling — the target lifts it, so the count is only reported", () => {
+      writeRows(32768); // one past 2^15, the row count that used to fail the build
+
+      expect(() => reportTextIplCensus(dir)).not.toThrow();
+      expect(capture().logs.join('\n')).toMatch(/sa map cost: 32768 permanent text-IPL rows/);
     });
 
-    it('throws when total permanent rows exceed the int16 building-pool budget', () => {
-      mkdirSync(join(dir, 'data', 'maps'), { recursive: true });
-      const rows = Array.from({ length: 30001 }, (_, i) => `${i}, thing, 0, 0,0,0, 0,0,0,1, -1`).join('\n');
-      writeFileSync(join(dir, 'data', 'maps', 'big.IPL'), `inst\n${rows}\nend\n`);
-      writeFileSync(join(dir, 'data', 'gta.dat'), 'IPL DATA\\MAPS\\big.IPL\n');
+    it('MEASURES the slot count past 40 and leaves the failing to the gate beside it', () => {
+      // The census reports; `checkInstBearingIplSlots` is what fails the build. Kept apart so the gate is a
+      // pure function testable without a game dir — and because the census must still print a number when the
+      // gate is about to throw, which is how the field crash got its count (75 of 40, plan 002).
+      writeGame(dir, 45);
 
-      expect(() => checkTextIplSlotBudget(dir)).toThrow(/int16/);
+      expect(() => reportTextIplCensus(dir)).not.toThrow();
+      expect(reportTextIplCensus(dir).instBearingIpls).toBe(45);
+      expect(capture().logs.join('\n')).toMatch(/45 inst-bearing IPLs/);
+    });
+
+    it('WARNS that the count is a lower bound when a listed IPL is missing on disk, instead of reading it as zero rows', () => {
+      writeGame(dir, 3);
+      rmSync(join(dir, 'data', 'maps', 'a1.IPL'));
+
+      const { logs, warns } = capture();
+
+      expect(warns.join('\n')).toMatch(/1 of 4 IPLs listed in gta\.dat are MISSING on disk .*LOWER BOUND/);
+      expect(logs.join('\n')).toMatch(/read 3\/4 listed/);
+    });
+
+    it('WARNS rather than passing silently when the built tree has no gta.dat to count', () => {
+      const { logs, warns } = capture();
+
+      expect(warns.join('\n')).toMatch(/census SKIPPED — no data\/gta\.dat/);
+      expect(logs).toHaveLength(0);
     });
   });
 
   describe('positive cases', () => {
-    it('passes at exactly 39 slots (inst-less IPLs do not count)', () => {
-      writeGame(dir, 39);
+    it('counts every listed IPL, and an inst-less one is listed but takes no slot and no rows', () => {
+      writeGame(dir, 2);
 
-      expect(() => checkTextIplSlotBudget(dir)).not.toThrow();
+      const { logs, warns } = capture();
+
+      expect(logs.join('\n')).toMatch(/sa map cost: 2 permanent text-IPL rows, 2 inst-bearing IPLs, read 3\/3 listed/);
+      expect(warns).toHaveLength(0);
+    });
+
+    it('reports the cost alone — no stock ceiling is quoted at a build that never runs on one', () => {
+      writeGame(dir, 45);
+
+      expect(capture().logs.join('\n')).not.toMatch(/32767|\b39\b|stock/i);
+    });
+  });
+});
+
+describe('OPENSA_BUDGET_NOTICE', () => {
+  describe('positive cases', () => {
+    it('says both halves: no SA ceiling here, and no measured budget of our own yet', () => {
+      expect(OPENSA_BUDGET_NOTICE).toMatch(/do not apply/);
+      expect(OPENSA_BUDGET_NOTICE).toMatch(/no streaming budget guard exists yet/);
+    });
+
+    it('names the one half that IS measured, so the notice cannot read as wholly unmeasured', () => {
+      expect(OPENSA_BUDGET_NOTICE).toMatch(/clutter half is measured and does not bind/);
+      expect(OPENSA_BUDGET_NOTICE).toMatch(/no frame-time ceiling to cap it at/);
     });
   });
 });
@@ -188,12 +712,12 @@ describe('checkImgIdBudgets', () => {
       expect(() => checkImgIdBudgets(dir)).toThrow(/TXD archives: 5960 of 6000/);
     });
 
-    it('throws when binary IPL files approach the FILE_TYPE_IPL 280-slot pool (the field boot-crash case)', () => {
+    it('throws when binary IPL files approach the FILE_TYPE_IPL pool (the field boot-crash case)', () => {
       writeImg(
         'gta3.img',
-        Array.from({ length: 275 }, (_, i) => `a${i}_stream0.ipl`),
+        Array.from({ length: 1019 }, (_, i) => `a${i}_stream0.ipl`),
       );
-      expect(() => checkImgIdBudgets(dir)).toThrow(/binary IPL files: 275 of 280/);
+      expect(() => checkImgIdBudgets(dir)).toThrow(/binary IPL files: 1019 of 1024/);
     });
   });
 
@@ -202,6 +726,140 @@ describe('checkImgIdBudgets', () => {
       writeImg('gta3.img', ['a.txd', 'b.col', 'lae_stream0.ipl', 'x.dff']);
       writeImg('gta_int.img', ['c.txd']);
       expect(() => checkImgIdBudgets(dir)).not.toThrow();
+    });
+
+    it('passes the 522 binary IPLs the first sa build at the recovered density produced', () => {
+      // The build that found this gate (2026-08-10): 331 `plobj*_stream*` tiles + 191 stock ones. 242 over
+      // the old 280-slot pool, comfortably under the raised one — the regression test for the raise itself.
+      writeImg(
+        'gta3.img',
+        Array.from({ length: 522 }, (_, i) => `a${i}_stream0.ipl`),
+      );
+      expect(() => checkImgIdBudgets(dir)).not.toThrow();
+    });
+  });
+});
+
+describe('checkInstBearingIplSlots', () => {
+  describe('negative cases', () => {
+    it('fails the build the field crashed on: 75 inst-bearing IPLs against 40 slots', () => {
+      // The `sa` build at the shipped density, 2026-08-10. The game died loading `plobj10.ipl` — slot 40 — with
+      // OLA's `EntityIpl = unlimited` set, measured twice (with and without our own asi's int16 patch).
+      expect(() => checkInstBearingIplSlots(75)).toThrow(/75 inst-bearing text IPLs of 40 SA slots/);
+    });
+
+    it('fails on the first slot past the array, not one later', () => {
+      expect(() => checkInstBearingIplSlots(INST_BEARING_IPL_SLOTS + 1)).toThrow(/IplEntityIndexArrays/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('passes a tree that exactly fills the array', () => {
+      expect(() => checkInstBearingIplSlots(INST_BEARING_IPL_SLOTS)).not.toThrow();
+    });
+
+    it('passes the budget plan 002 targets: 28 stock + 6 linked areas', () => {
+      expect(() => checkInstBearingIplSlots(28 + 6)).not.toThrow();
+    });
+  });
+});
+
+describe('installRequirements', () => {
+  /** A build that fits stock: nothing crossed, so nothing is required. */
+  const tiny = { largestIpl: 100, rows: 1000 };
+  /** The shipped `sa` tree of 2026-08-11, read off the census: 110 055 rows, biggest file 9 110. */
+  const shipped = { largestIpl: 9110, rows: 110_055 };
+  const pools = { '.col': 300, '.ipl': 200, '.txd': 4999 };
+
+  describe('negative cases', () => {
+    it('asks for nothing when the build fits a stock 1.0', () => {
+      expect(installRequirements(tiny, { '.col': 10, '.ipl': 10, '.txd': 10 })).toEqual([]);
+    });
+
+    it('does not ask for a lift on a ceiling the build merely reaches', () => {
+      // Exactly AT the ceiling is not over it — an off-by-one here would demand an asi for a stock-safe build.
+      // Rows sit at the BUILDING pool's 13 000, which is the tightest of the two row ceilings and so the one
+      // that decides: 32 767 would be stock-safe for int16 and already three times over the pool.
+      expect(installRequirements({ largestIpl: 4096, rows: 13_000 }, { '.txd': 5000 })).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('names the asi for the int16 row ceiling, which no adjuster provides', () => {
+      const asi = installRequirements(shipped, pools).find((row) => row.ceiling === 32_767);
+      expect(asi?.lift).toMatch(/perfect-map\.asi/);
+      expect(asi?.spent).toBe(110_055);
+    });
+
+    it('names every ceiling the shipped tree crosses, and only those', () => {
+      const crossed = installRequirements(shipped, pools).map((row) => row.what);
+      // 110 055 rows cross int16 AND the building pool; 9 110 crosses the per-IPL buffer; COL 300 > 255.
+      expect(crossed).toEqual([
+        'permanent text-IPL rows, map-wide',
+        'CPool<CBuilding> entries',
+        'rows in one text IPL',
+        'COL archives',
+      ]);
+    });
+
+    it('reports the per-file buffer separately from the map-wide one — they are different ceilings', () => {
+      const perFile = installRequirements({ largestIpl: 9110, rows: 1000 }, {});
+      expect(perFile).toHaveLength(1);
+      expect(perFile[0].lift).toMatch(/EntitiesPerIpl/);
+    });
+  });
+});
+
+describe('shipPerfectMapAsi', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'pmb-asi-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it('WARNS loudly when there is no artifact, and does not fail the build', () => {
+      // `dist/` is gitignored, so absent is the common case on a fresh checkout — and it must never be quiet:
+      // the map this build emits corrupts a plain install exactly as it did before the fix.
+      const warns: string[] = [];
+      const spy = vi.spyOn(console, 'warn').mockImplementation((m: unknown) => void warns.push(String(m)));
+      const shipped = shipPerfectMapAsi(dir, join(dir, 'nope', 'perfect-map.asi'));
+      spy.mockRestore();
+
+      expect(shipped).toBeNull();
+      expect(existsSync(join(dir, 'perfect-map.asi'))).toBe(false);
+      expect(warns.join('\n')).toMatch(/NOT SHIPPED/);
+      expect(warns.join('\n')).toMatch(/build:asi/); // says how to fix it, not just that it is broken
+    });
+  });
+
+  describe('positive cases', () => {
+    it('copies the artifact into the game ROOT and returns its sha256', () => {
+      const source = join(dir, 'perfect-map.asi.src');
+      writeFileSync(source, 'MZ-not-really-a-dll');
+      const game = join(dir, 'sa');
+      mkdirSync(game, { recursive: true });
+
+      const shipped = shipPerfectMapAsi(game, source);
+
+      // Root rather than scripts/: that is where the reference install's 23 plugins sit.
+      expect(readFileSync(join(game, 'perfect-map.asi'), 'utf8')).toBe('MZ-not-really-a-dll');
+      expect(shipped?.sha256).toBe(createHash('sha256').update('MZ-not-really-a-dll').digest('hex'));
+    });
+
+    it('pairs a map with the EXACT asi — two artifacts give two hashes', () => {
+      const game = join(dir, 'sa');
+      mkdirSync(game, { recursive: true });
+      const a = join(dir, 'a.asi');
+      const b = join(dir, 'b.asi');
+      writeFileSync(a, 'one');
+      writeFileSync(b, 'two');
+
+      expect(shipPerfectMapAsi(game, a)?.sha256).not.toBe(shipPerfectMapAsi(game, b)?.sha256);
     });
   });
 });

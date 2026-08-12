@@ -22,16 +22,29 @@ phase 5 a `?engine=three` override booted the old WebGL renderer for side-by-sid
 renderer is deleted, so pre-2026-07-18 prod columns in the series can no longer be reproduced.)
 
 ```
-http://localhost:5173/?bench=all          # the full 8-scene sweep
+http://localhost:5173/?bench=all          # the full 9-scene sweep
 http://localhost:5173/?bench=country-dusk # one scene
 ```
 
-Scenes live in `apps/web/src/bench-scenes.ts` (plan 063 protocol — the camera paths are unchanged from
-the WebGL era, which is what makes the historical rows comparable): `ls-noon` · `sf-fog-dawn` · `lv-night` · `country-dusk` · `ocean-horizon` · `ls-rain-night`.
-Each scene: teleport to the anchor → streaming ring settles → 1.5 s warmup → 15 s camera flight with
-per-frame sampling. **Road cars** (841 across the scenes, from vehicles.ide on the NODES.DAT road
-graph) register automatically — the realistic vehicle load every row must share; `?benchcar=`
-pins one model.
+Scenes live in `apps/web/src/bench-scenes.ts` (plan 063 protocol — the camera paths are unchanged from the
+WebGL era, which is what makes the historical rows comparable): `ls-noon` · `sf-fog-dawn` · `lv-night` ·
+`country-dusk` · `ocean-horizon` · `ls-rain-night` · `ganton-noon` · `strip-noon` · `ganton-night`.
+
+Each scene: teleport to the anchor → **1 s teleport notice** → the streaming ring drains → **ground is found
+under the anchor** → **the player is warped onto THAT GROUND** (not the anchor) → **wait until he is at rest**
+(capped at 3 s) → 1.5 s warmup → 15 s camera flight with per-frame sampling. Everything after the ring is
+plan 102: the first polls after a teleport still describe the ring the player LEFT (drained, so they answer
+0), the ring says nothing about COLLISION (built in a promise continuation behind it), and **a scene anchor
+is authored for the CAMERA** — six of the nine sit 3.65–26.29 m above their ground and `ocean-horizon`'s is
+43.75 m up, so warping to it means a fall.
+
+**A scene anchor may not stand more than 60 m above its ground** (`GROUND_PROBE_DROP`). Further than that
+the floor is not found, and the settle falls back to the authored anchor — silently, and the row then reports
+whatever the fall left. The probe catches the consequence; nothing catches the cause.
+
+**Road cars** (1219 across the nine scenes as of 2026-08-09, from vehicles.ide on the NODES.DAT road graph)
+register automatically — the realistic vehicle load every row must share; `?benchcar=` pins one model. The
+count is a function of the scene ANCHORS, so moving one changes it (`strip-noon`'s move added 23).
 
 Report line (the deliverable IS this console line):
 
@@ -46,8 +59,32 @@ Report line (the deliverable IS this console line):
   overlap artifact — begin timestamps fire at vertex start; the plan-09 fix).
 - `gpuMs.probe` — **contaminated by the same Metal begin-overlap; judge the env probe ONLY by on/off
   A/B (`?probe=0`), never by this column** (plan-16 lesson).
+- `hitch` — `{blobMaxMs, maxMs, p99Ms, pendingMax, slowFrames, uploadMaxMs}`: the leg's WORST frames, and
+  the only cost columns a frame cap cannot pin. **Read these, not `avgMs`, on a vsync-capped lane** — the
+  2026-08-09 A/A floor measured `avgMs` at 8.333 on seven of nine scenes and `p95Ms` at 9.1 on all nine, in
+  both arms, so neither carries signal there. A cap bounds how FAST a frame may be and says nothing about
+  how slow one gets. `maxMs`/`slowFrames` (the same 20 ms threshold the `[slow]` line prints at) catch the
+  seen-once stall; `p99Ms` needs the degradation to reach 1 % of the leg, so it answers about a budget being
+  exceeded rather than about one hitch. `blobMaxMs`/`uploadMaxMs`/`pendingMax` say whether a stall was
+  STREAMING — blob-handler work lands between frames, where no in-frame block timer can see it.
+  **A clutter lever again, and a small one:** `?procobj` / `?procobjLimit` reach only the rules the BUILD did
+  not bake, which since plan 014 is all 95 on `opensa` (the bake moved into the `sa` branch). They move
+  content — `?procobj=0` is −2.72 % triangles on `country-dusk` against a 0.007 % A/A drift — but **both
+  saturate against the authored MINDIST spacing**: the cap at 300, the multiplier at ×4, and the whole layer
+  is +10.1 % of that scene, below the noise on every cost column
+  ([the ladder](../benchmarks/opensa-engine/2026-08-10-headless-procobj-runtime-knob-ladder.json)).
+  **And pick your lane:** the `hitch` block is only readable CAPPED — every `UNCAPPED=1` arm reads `maxMs`
+  148–196 ms and `slowFrames` 16–19 regardless of content, because the loop runs flat out. Uncapped answers
+  cost (`avgMs` unpins 8.33 → 5.4–5.6, `p95Ms` 9.1 → 6.7–7.2); capped answers hitching. Never both, never mixed.
 - `lateCreates` — streaming honesty (074/21): creates inside the fog cut during the measure window;
   0 in a healthy run.
+- `legStart` — `{dz, grounded, ok, pendingCells, targetZ, worstDrop}` (plan 102). `targetZ` is where the
+  settle PUT him (found ground + 1 m), `dz` is how far he had moved from it when the capture began, and
+  `worstDrop` is the worst single-frame descent over the leg. **`ok: false` means the row measured a moving
+  camera** — read nothing else in it; the run also prints a `[fall]` warning so the fallwatch
+  (`TAG='[fall]'`) catches it. `ok` judges **grounded**, `worstDrop ≤ 2 m` and no pending cells — *not* `dz`,
+  because where he stands is the scene's business while a player still MOVING is what invalidates a row.
+  The falls were invisible for a month because no instrument could print non-zero; this is it.
 - `residency` — GPU ledger by category, MB; `texture` is the plan-21 accumulation watch.
 - `vehicles` — `{live, meanMs, maxMs}`: the vehicle slice of ONE fixed step (081/07 §3) — the raycast
   controllers plus the vehicle system's own fixed update, apart from the solver (`physicsMs`) and from the
@@ -176,6 +213,12 @@ SRC="http://localhost:3001/build/original/opensa"
 DPR=2 NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
   "http://localhost:5173/?loader=http-dir&src=$SRC&bench=all" sweep 600000 8
 
+# UNCAPPED=1 drops the presentation clock (--disable-frame-rate-limit --disable-gpu-vsync) when the
+# question is COST rather than hitching — the capped lane's avgMs/p95Ms sit on the vsync period. The run
+# prints frameClock=uncapped|vsync; an uncapped arm may never be compared against a capped record.
+UNCAPPED=1 DPR=2 NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
+  "http://localhost:5173/?loader=http-dir&src=$SRC&bench=all" sweep-uncapped 600000 8
+
 # a soak run: TAG switches the captured protocol, expect count is bypassed by the verdict line
 DPR=2 TAG='[soak]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
   "http://localhost:5173/?loader=http-dir&src=$SRC&soak=30" soak30 2700000 999
@@ -231,10 +274,29 @@ load path — `fetchInstallSource` reads the served dir's `/__index` + files ove
   anything: the shell fails with `command not found` and exit 127 before the harness ever starts, which
   reads exactly like the harness dying at launch. Use `drive.js`'s own budget argument (the millisecond
   value after the tag) instead; there is nothing to wrap.
-- **The boot camera faces SOUTH.** Anything `?spawncar` places north of `?spawn` is behind the camera —
-  a car 8 m north "spawns" but never appears on a screenshot (and one placed 4–6 m north puts the
-  FOLLOW camera inside it). Place field-check targets at `y − 10` or lower. `?spawncar`'s heading is
-  RADIANS: 0 faces north (front toward the boot camera), `4.712` (3π/2) shows the DRIVER side.
+- **The boot camera faces SOUTH** unless `?look` says otherwise. Anything `?spawncar` places north of
+  `?spawn` is behind the camera — a car 8 m north "spawns" but never appears on a screenshot (and one
+  placed 4–6 m north puts the FOLLOW camera inside it). Place field-check targets at `y − 10` or lower.
+  `?spawncar`'s heading is RADIANS: 0 faces north (front toward the boot camera), `4.712` (3π/2) shows
+  the DRIVER side.
+- **`?look=x,y,z` aims the boot camera at a GTA point** (and turns the ped with it, so auto-centre holds
+  the aim). The harness has no mouse and look is pointer-only, so before this knob a subject had to sit
+  SOUTH of a standable spawn to be seen at all — which is unsatisfiable near the map's north edge
+  (`y ≈ 3000`): a spawn past it falls through the void, HUD `grounded 0` and `draws 12`.
+- **Aim is not sight.** Two spawns 600 u from a subject with a clean bearing still showed a fence and a
+  rooftop wall — LS geometry blocks nearly every ground-level sight line. Pick the approach over open
+  terrain (desert, water's edge), and confirm from the shot, not from the coordinates.
+- **Angular size decides what a screenshot can answer.** A 2.4 m roadsign plate at 440 u is ~8 px in a
+  1440-wide capture: "is it readable" has no answer there at any build quality. Judge distance checks on
+  something big (a smoke plume) or add a counter to the engine; do not spend runs on a smudge. The roadsign
+  case took the second road: the HUD's `signs N` (`EngineStats.roadsignQuadsRecorded`, `.oscell` minor 8)
+  counts roadsign glyph quads in the cells drawn this frame. **`signs 0` on a pre-minor-8 pak means UNKNOWN,
+  not none** — check the pak's `buildTime` before reading it as a verdict. The canonical `build/original`
+  pak carries it from `13:19 08-08-2026` on.
+- **A diagnostic that needs new pak bytes does NOT need a full rebuild.** With `.work-opensa` kept, re-pack a RECT
+  (`opensa-pack --game build/<game>/.work-opensa/opensa-lod --out build/<probe> --rect x0,y0,x1,y1 --no-ao`) and
+  serve that dir: 80 cells in a minute instead of 1137 in an hour. It is a diagnostic pak, not a shipping
+  one — say so wherever its numbers land, and do not benchmark against it.
 
 ### `warnings.js` — the warning catcher (bug rounds)
 

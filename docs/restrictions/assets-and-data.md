@@ -144,6 +144,25 @@ not being read yet.
 
 **Caught:** no.
 
+## A 2dfx entry's coordinate SPACE decides both its transform and its OWNER
+
+Read the type's `space` off `@opensa/lod-common`'s carry policy (`spaceOf`, measured by
+`scripts/debug/two-dfx-space.ts`) before writing any code that moves or files an entry. Type 7 roadsign is
+**world**, unanimously (489/489); every other type is model-local. Two rules follow, and a design that
+breaks either produces content that looks placed and is not:
+
+1. **Transform by the space, not by the type.** A world-space entry is re-based by the cell origin alone —
+   never by the instance transform, never by the geometry frame. The dead first attempt at plan 100 would
+   have routed plates through the instance transform and thrown every one about a kilometre.
+2. **A world-space entry belongs to the cell its POSITION falls in, not to the cell of the instance
+   carrying it.** These differ for **131 of the map's 489 plates**. File it by the owning instance in one
+   consumer and by world position in another and the same plate lands on two cell keys — which defeats the
+   streamer's one-level-per-slot rule and draws it twice. This is why `cell-weld` takes LOD roadsigns from
+   `opensa-pack`'s world-keyed pre-pass while it takes lights and emitters off the LOD model itself.
+
+**Caught:** no, in both directions. A misplaced plate renders perfectly a kilometre away, and a doubled one
+is two correct plates in the same spot — z-fighting at best, invisible at worst. Nothing asserts either.
+
 ## `.osm` indices are BYTES
 
 Decode by `index16` or every number belongs to somebody else. This mis-read already produced one wrong
@@ -272,3 +291,114 @@ still be unspawnable on a phone. `--textures` moves both halves together (the mo
 re-encoded in `packGameDir` before the check reads their formats), but the check still reads both, because
 the halves are separately reachable and a per-class subset (`--vehicles`, `--peds`) leaves models behind in
 their ORIGINAL format by design. Naming a platform is worth doing rather than eyeballing the flag.
+## A stock data column means what the CODE does with it, not what the file's header says
+
+`procobj.dat` documents SPACING as *"1 object every n square metres"* and MINDIST as *"no objects created
+closer than this"*. Both readings are wrong at the point that matters: the game squares SPACING
+(`density = triangleArea / spacing²`, so the column is a LENGTH) and measures MINDIST **from the camera** to
+the triangle, clamped up to 80 — never between two objects. We read both the way the header reads, and the
+result was a clutter layer at 16.8 % of the authored density with an even, one-of-each-species look nothing
+in the game produces. The mechanism and the numbers:
+[`gta-sa-original/procedural-objects.md`](../gta-sa-original/procedural-objects.md). Fixed in the code
+2026-08-09 (`area / spacing²`, no inter-object cull), which is why the example is safe to state — the rule
+below is what the fix cost, not a live defect.
+
+The rule for a new design: before a plan spends an authored column, the column's meaning comes from the
+reversed source (`docs/links.md` → gta-reversed) — Rockstar's own comments, our parser's doc comments and a
+modding wiki are leads, not the spec. This is the same directive that says to recover the original's formula
+before fitting a constant (`CLAUDE.md`); the addition here is that a data file's own header is one of the
+sources it applies to.
+
+**Caught:** no, and it is the worst kind of silent: two misread columns whose errors ran in opposite
+directions (4–163× too many candidates, then 99.0 % of them culled), so every count looked reasonable, the
+build was green, and the world looked populated. What catches it now is
+`scripts/debug/procobj-spacing-census.ts`, which prices both readings side by side and reports the
+nearest-neighbour signature — but only if someone runs it.
+
+## A model an IDE declares and an IPL places must have a `.dff` in some archive
+
+Discovered 2026-08-10, in the field, after a day of bisection. One mod's `gta3_img/Remove original/` folder was
+read as a delete list, so five stock models left `gta3.img` while their `.ide` rows and 23 inst rows stayed —
+the mod ships no IDE/IPL edit, and cannot: those are stock files.
+
+**What breaks is not the five objects.** The streaming request for an entry that does not exist can never
+complete, and the symptom is global: the whole world renders as LODs, permanently, with hitching. It reads as a
+performance regression or a map-layer bug, which is exactly where the day went — four wrong axes (ID pools,
+stream file count, entity count, a mod corrupting the map) before the user's own repro narrowed it.
+
+The rule for a new design: any step that RETIRES an asset — a delete list, a rename, a slot compaction, a
+container replaced wholesale — has to answer what still declares and places it. A model may be declared and
+unplaced (stock does it once, `carupg_int_rays`); it may never be placed and unloadable.
+
+**Caught:** yes, since the same day — `install()` ends with `checkDanglingModels` (`dangling-models.ts`) and
+THROWS, naming each model, its id, its placement count and the declaring IDE. Placements are counted from text
+IPLs and from binary streams inside the archives. It errs downward: only `objs`/`tobj`/`anim` are read, so a
+clean result means "none in those sections". Detail and the measurements:
+[`tools/mod-installer/docs/plans/010-remove-original-is-a-replacement.md`](../../tools/mod-installer/docs/plans/010-remove-original-is-a-replacement.md).
+
+## An inst row's POSITION in the file is a LOD link — no pass may delete one
+
+Discovered 2026-08-11, from a field report that three buildings had no LOD. A text IPL's `lod` column is a
+**row index into the `inst` section**, not a name — and the binary stream IPLs inside `gta3.img` index the
+same text file of their area. So deleting one row repoints every link at or after it, in that file AND for
+objects that are not in it at all.
+
+**The removal path a MOD takes is handled, and that is exactly what makes the rest dangerous.** A
+`remove from "inst"` merge goes through `removeInstWithRebase` (which decrements every surviving link) and
+`patchAreaStreams` (which rewrites the `lod` field in the area's binary streams) — measured working:
+`5. SA Xbox Map Features` drops a row from `LAe.ipl` at index 93 and `laehospital1`'s stream link comes out
+133 → 132, still on its own LOD. **Every other way a row can leave a file has neither half.** `LAw.ipl` is one
+row short of stock with no mod involved: its id/name column took the deletion, its transform column did not,
+so `LODgaz9_law` sits 398.7 u off its object wearing a re-derived neighbouring rotation — and `law_stream2.ipl`
+was never patched, so the link lands on a tree the build had exiled to z = −300.
+
+The rule for a new design: a pass may APPEND inst rows freely (every index it could disturb is below it), and
+may not REMOVE one. Retire a placement by exiling the row — the trees layer's z = −300/−1000 is the
+established shape — rather than deleting it: no renumbering, no stream patch to keep alive, and nothing
+downstream can undo it. "The merge handles removals" is not cover: that is one path, and the guarantee is a
+property of the whole build rather than of one function.
+
+**Caught: NO, and by construction.** A shifted index lands on a VALID row of the same file, and a transform
+column off by one against its own name column is a perfectly legal file — row counts, well-formedness and
+every budget guard pass. `removeInstWithRebase`'s unit tests prove the FUNCTION rebases, which is not the
+claim that matters. The damage is only visible by resolving each link back to a MODEL NAME and comparing
+against the source tree, which nothing does today. Detail, measurements and the paste-able diagnosis:
+[`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../open-issues/ipl-row-removal-breaks-lod-links.md).
+
+## A curated list may GATE a derived rule; it may never CARRY the correction
+
+Plan 025 needed to repair authored UVs on 127 models, and the obvious shape — "a list of models with the fix
+for each" — is the one rule this repo has held longest against: **every slot in this game is a mod target.**
+Store "model X, face 72 → uv (a, b)" and the day a mod ships a different `road_lawn34` with different
+topology, face 72 is a different face and we write a stranger's UV into it. The build succeeds, the model
+draws, the mess is somewhere else. Nothing catches it.
+
+The shape that is allowed: the list says only **where the rule may run**, and the correction is derived from
+what the asset itself carries at build time. A mod replacing a listed model is then judged on its own
+geometry and, at worst, nothing happens. `data/crease-overrides.json` is this — it stores a THRESHOLD, not a
+normal. Plan 025's `uv-stretch-models.json` was the same shape (retired with its pass, 2026-08-11 — see
+`docs/postmortem/uv-stretch-repair.md`; the retirement was about the repair, not about this rule).
+
+**A generated list must also say it is generated**, and how to regenerate it — hand-editing one is how it
+silently stops matching the data it was derived from.
+
+**Caught:** no. Nothing distinguishes a gate list from a patch list at build time — this is a review rule.
+
+## Repairing authored data is allowed, and it still has to be demonstrated — to the EYE
+
+"That is what the original does" is the beginning of an argument (`docs/project-goals.md`), so a 2004
+authoring slip may be corrected — and plan 025's UV repair is the measured warning about what "demonstrated"
+means. It corrected mappings that drew a texel up to 284× longer than wide, passed every one of its own
+guards (no shared UV moved — corrections went onto split vertices; a correction that could not verify itself
+refused), and the first field before/after retired it the same day: every split vertex is a hard UV seam, so
+a partial repair of a CONTINUOUS defect converts a soft smear into sharp patchwork, and the "corrected"
+mapping satisfies the metric while lying where no author put it
+(`docs/postmortem/uv-stretch-repair.md`).
+
+The rule a new repair of authored data must satisfy: **its acceptance test has to measure what the eye
+judges, not a per-face metric** — a low-frequency defect and a high-frequency one are not ordered by any
+per-face number, and the eye forgives the smooth error. If the only honest test is a field round, the field
+round comes before the pass ships in a build the user will judge.
+
+**Caught:** no. Nothing at build time distinguishes "helps the metric" from "looks better" — this failure
+mode is exactly the one the pass's own checks cannot see, which is why it is a restriction now.

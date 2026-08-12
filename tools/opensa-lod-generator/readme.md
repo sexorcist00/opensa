@@ -85,7 +85,7 @@ stage from independent cameras — tune any knob by number, not by eye.
 **What's baked:** exterior building/terrain instances only. **Trees** (the `@opensa/map-placement/vegetation`
 roster) are excluded — they get billboard impostors from [`lod-trees-generator`](../lod-trees-generator/), and
 decimated alpha foliage looks bad / would duplicate those. **procobj** scatter is never seen here (it lives in
-`procobj.dat`, not the IPLs) — its LODs come from [`lod-procobj-generator`](../lod-procobj-generator/).
+`procobj.dat`, not the IPLs) — its LODs come from [`sa-procobj-placement`](../sa-procobj-placement/).
 Interiors are dropped; **IPL `lod`-target instances** are skipped by ground truth (their HD is baked — name
 matching missed renamed twins and z-fought); **tobj (timed) instances** are excluded — the engine renders the
 real hour-gated instance at LOD range instead (lit windows don't glow at noon). **Script-gated binary IPL

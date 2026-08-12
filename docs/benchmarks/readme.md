@@ -65,6 +65,13 @@ file, **say so in `note`** — pastes lose fields, and a later reader must not m
 A perf comparison is worthless without these held equal, so record them in `note` when they are not obvious:
 
 - **machine and DPR** (the series is M3 Pro @2× retina)
+- **a single DISPLAY-lane run is not a measurement.** On 2026-08-09 one `?bench=all` sweep came back with
+  every scene's `p95` 2–3× worse (`lv-night` 16.4 → 50.0) on unchanged content; a re-run of the same pak and
+  the same code matched the earlier numbers to the millisecond. Something outside the app had the machine.
+  **The tell was `ocean-horizon`** — no cars, identical `avgTriangles`, untouched by the change under test,
+  and its `p95` doubled anyway: a scene that CANNOT have been affected moving with the rest means the cause
+  is session-wide. Keep one such scene in view as the control, and re-run before reporting a regression
+  ([the anomaly](opensa-engine/2026-08-09-ingame-user-display-102-before-after.json))
 - **the road-car population** (`[bench] road cars registered: N` — the series ran 841)
 - **the pak** the run read. Converter output changes what the world contains; a pak that is missing far
   LODs benchmarks faster than one that has them, and the numbers look like a code regression when nothing
@@ -120,6 +127,14 @@ Three rules, all learned from the one mobile row this record has:
 - **`world.platforms` closes the loop with the build.** `opensa-pack` records which GPU families a build's
   textures allow; a mobile row that does not name it cannot be reproduced, because the pak is the variable
   that decides whether the world loads at all.
+**And check `avgTriangles` BEFORE reading any `gpuMs.pass` delta.** Two arms of the same scene must draw the
+same world; when the triangle count moves by more than the content change can explain, the row is measuring
+the harness, not the build. Earned 2026-08-08 on the 07/04 density A/B: three of nine scenes disagreed — the
+control scene `ocean-horizon`, which no map layer moves, by **+107 %** — while `lateCreates` stayed 0 and
+every report looked normal. The cause is a live defect
+([`open-issues/bench-scene-transition-collision.md`](../open-issues/bench-scene-transition-collision.md)):
+collision is missing across a scene teleport, so what streamed in differs run to run. Until it is fixed, a
+scene-to-scene A/B on this harness cannot resolve anything smaller than its own drift.
 
 ## Runs
 

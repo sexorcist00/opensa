@@ -35,9 +35,11 @@ import {
   type PopcycleZone,
   type ProcObjBatch,
   type ProcObjCategoryName,
+  procObjCellBudget,
   procObjColliders,
-  procObjLotteryCap,
   type ProcObjRule,
+  type ProcObjSampler,
+  type ProcObjSlopeConfig,
   type RegionColliders,
   resolveMap,
   scatterProcObjects,
@@ -98,6 +100,10 @@ export interface AnimatedPlacement {
 
 /** One clutter model's instances in a cell (074/19), for the own-engine host to render instanced. */
 export interface CellClutterRender {
+  /** The batch's semantic category — the key the host's per-category draw distance is read with. It rides
+   *  here because a cell's clutter is split by model×SURFACE and the category follows the surface, so the
+   *  host cannot recover it from `modelName` alone (19 of 56 models scatter on several surfaces). */
+  category: ProcObjCategoryName;
   /** Per-instance breakable key hash (074/20), aligned with `matrices` — present only for breakable clutter
    *  models (cactus/rubble/rock), so a hit can resolve to the instance to degenerate. */
   keyHashes?: Uint32Array;
@@ -160,6 +166,18 @@ export interface GtaSaWorldConfig {
    *  lotteries win). The vanilla CProcObjectMan pools at ~300 for the same perf reason.
    *  Default: unlimited. */
   procObjLimit?: number;
+  /** Slope-aware candidate density (plan 011): per category, a multiplier on how many candidates a STEEP or a
+   *  FLAT collision face generates. The SAME config the `sa` bake takes — slope is a per-FACE signal and the
+   *  scatter is the only place either target can spend one. Absent = unchanged. */
+  /** Where inside a collision triangle a placement lands — `area` (ours, default) or `corner` (the
+   *  original's recovered routine). The SAME knob the `sa` bake takes; it is one `sqrt` in the scatter. */
+  procObjSampler?: ProcObjSampler;
+  procObjSlope?: ProcObjSlopeConfig;
+  /** Species floor N (sa-procobj-placement plan 012): while {@link procObjLimit} binds, every clutter
+   *  species eligible in the cell keeps at least `min(N, its eligible count)` placements instead of
+   *  possibly none — paid for at the top of the lottery order, so the budget itself is unchanged.
+   *  Default: 0 (OFF — the plain cap, byte-identical to not passing it). */
+  procObjSpeciesFloor?: number;
 }
 
 type Rgb = [number, number, number];
@@ -287,23 +305,20 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     if (!batches || batches.length === 0 || !this.defByName) {
       return [];
     }
-    const cap = procObjLotteryCap(batches, this.config.procObjLimit);
+    const keep = this.cellProcObjBudget(batches);
     const out: CellClutterRender[] = [];
     const matrix = new Matrix4();
-    for (const batch of batches) {
+    for (let at = 0; at < batches.length; at += 1) {
+      const batch = batches[at];
       const def = this.defByName.get(batch.model);
       if (!def) {
         continue;
       }
-      const cutoff = Math.min(this.config.procObjDensityOf?.(batch.category) ?? 1, cap);
-      const breakable = this.isBreakableModel(def.modelName);
+      const breakable = this.isClutterBreakable(def.modelName);
       const floats: number[] = [];
       const hashes: number[] = [];
-      for (const placement of batch.placements) {
-        if (placement.lottery >= cutoff) {
-          break; // placements are sorted by lottery ascending — the rest are all excluded
-        }
-        const elements = placementMatrix(placement, matrix).elements;
+      for (let i = 0; i < keep[at]; i += 1) {
+        const elements = placementMatrix(batch.placements[i], matrix).elements;
         floats.push(...elements);
         if (breakable) {
           // 074/20: the SAME key the collider carries (tagBreakable also reads the matrix translation).
@@ -315,6 +330,7 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       if (floats.length > 0) {
         out.push({
           ...(breakable ? { keyHashes: new Uint32Array(hashes) } : {}),
+          category: batch.category,
           matrices: new Float32Array(floats),
           modelName: def.modelName,
           txdName: def.txdName,
@@ -665,10 +681,24 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       return cached;
     }
     const colliders = buildCellColliders(buildCollisionIndex(this.fs), this.defs, this.grid, cx, cy);
-    const batches = scatterProcObjects(colliders, this.procObjRules, this.surfaceNames, cx, cy);
+    const batches = scatterProcObjects(colliders, this.procObjRules, this.surfaceNames, cx, cy, undefined, {
+      sampler: this.config.procObjSampler,
+      slope: this.config.procObjSlope,
+    });
     this.procObjBatchCache.set(key, batches);
 
     return batches;
+  }
+
+  /** The cell's clutter budget as one keep-count per batch — the SINGLE place the density knobs, the
+   *  `procObjLimit` cap and the species floor are resolved, so the render path and the collider path
+   *  spend the same decision and can never diverge. Cheap enough to recompute (the knobs are live). */
+  private cellProcObjBudget(batches: readonly ProcObjBatch[]): number[] {
+    return procObjCellBudget(batches, {
+      densityOf: this.config.procObjDensityOf,
+      limit: this.config.procObjLimit,
+      speciesFloor: this.config.procObjSpeciesFloor,
+    });
   }
 
   /**
@@ -685,9 +715,11 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     if (!batches) {
       return [];
     }
+    // The budget comes from {@link cellProcObjBudget} and never from a second computation here: the render
+    // path spends the same decision, and a collider set built off its own density read is an invisible
+    // obstacle nobody can see (upstream centralised this 2026-08-09; the divergence it removes is silent).
     const clutter = procObjColliders(buildCollisionIndex(this.fs), batches, {
-      densityOf: this.config.procObjDensityOf,
-      lotteryCap: procObjLotteryCap(batches, this.config.procObjLimit),
+      keep: this.cellProcObjBudget(batches),
     });
 
     // Breakable clutter (074/20): 6 of 56 procobj models shatter (cactus/rubble/rock) — tag their colliders
@@ -725,7 +757,7 @@ export class GtaSaWorldAdapter implements WorldAdapter {
 
   /** A model that shatters (plan 045 / 074/20): a DFF Breakable shatter mesh or an object.dat smash effect.
    *  ONE gate for map props and clutter alike — the render registry keys both the same way. */
-  private isBreakableModel(name: string): boolean {
+  private isClutterBreakable(name: string): boolean {
     return getBreakable(this.fs, name) !== undefined || this.breakableModels.has(name);
   }
 
@@ -818,7 +850,7 @@ export class GtaSaWorldAdapter implements WorldAdapter {
    *  so a smashed prop's one static body can be dropped — keyed exactly the way the render registry keys the
    *  placement. A pass-through for everything else. */
   private withBreakableKeys(model: ModelColliders): ModelColliders {
-    return tagBreakable(model, this.isBreakableModel(model.name));
+    return tagBreakable(model, this.isClutterBreakable(model.name));
   }
 }
 

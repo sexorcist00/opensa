@@ -116,7 +116,7 @@ export function writeBuild(options: BuildOptions): void {
   );
   // SA faults on any streamed model with no collision (fastman92: MODEL_DOES_NOT_HAVE_COLLISION_LOADED). The LODs
   // need no real collision, so pack one bounds-only COL3 per cell (named to its model); SA auto-discovers .col in
-  // the IMG. Same approach as lod-procobj-generator / lod-trees-generator.
+  // the IMG. Same approach as sa-procobj-placement / lod-trees-generator.
   img.set('lods.col', encodeColLibrary(colBounds, colNames));
 
   writeFileSync(join(options.outDir, 'models', 'lods.img'), img.build());

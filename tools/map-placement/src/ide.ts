@@ -3,11 +3,15 @@
  * and splice an `IDE` line into `gta.dat` (IDEs load before IPLs). Shared by the LOD tools.
  */
 
-/** Search window for free object ids: above the low special-model ranges, **at or below the stock model ceiling
- *  of 18630** — ids above it silently fail to load on stock SA (no adjuster), which is the "HD swapped, no LOD"
- *  symptom. The window must stay ≤ 18630; do not widen it. */
+/** Search window for free object ids: above the low special-model ranges, below the model ceiling.
+ *
+ *  **19000, raised from the stock 18630 (the user's call, 2026-08-10).** 18630 is a fact about a plain 1.0 —
+ *  ids above it silently fail to load there, which is the "HD swapped, no LOD" symptom. The target always
+ *  carries FLA, whose DFF range is `0 - 19999` (its own log prints it), so budgeting to the stock number was
+ *  designing down to a ceiling the target does not have — silent by construction, per
+ *  `docs/restrictions/sa-target.md`. 19000 keeps ~1000 ids of FLA headroom rather than spending the range. */
 const ID_MIN = 4000;
-const ID_MAX = 18630;
+const ID_MAX = 19000;
 /** Default object flags for LOD billboards — the value the Proper-Fixes LOD-vegetation mod uses for tree LODs.
  *  (0x200084: alpha + draw-last + LOD-friendly.) */
 const DEFAULT_FLAGS = 2097284;
@@ -17,8 +21,8 @@ const MAX_MODEL = 19;
 
 /**
  * Assign each model a free object id — the lowest unused ids in the stock space (**not** necessarily contiguous;
- * ids needn't be consecutive, and a heavily-modded game rarely has a wide contiguous gap left below 18630).
- * Deterministic (models sorted, ids ascending). Staying ≤ 18630 means they load without an adjuster.
+ * ids needn't be consecutive, and a heavily-modded game rarely has a wide contiguous gap left below the
+ * ceiling). Deterministic (models sorted, ids ascending). See {@link ID_MAX} for what the ceiling is a fact about.
  */
 export function allocateLodIds(models: readonly string[], used: ReadonlySet<number>): Map<string, number> {
   const sorted = [...new Set(models.map((m) => m.toLowerCase()))].sort();
@@ -83,6 +87,59 @@ export function patchGtaDat(dat: string, idePath: string): string {
   }
 
   return lines.join(eol);
+}
+
+/**
+ * Rewrite the DRAW DISTANCE of the named `objs` models in an IDE text, leaving every other row, comment and
+ * line ending untouched. Returns the new text and which models were changed.
+ *
+ * This is how a baked clutter layer gets its range (plan 014). Stock `data/maps/generic/procobj.ide` declares
+ * all 107 procobj models at **59**, which is why SA's runtime scatter pops in so close; ProperFixes ships the
+ * same file at **299** — one metre under the 300 threshold that puts an object on SA's big-building path — and
+ * that is the whole mechanism behind their layer's range. No new ids: the stock row IS the declaration.
+ *
+ * **Only the 5-cell `id, model, txd, drawDist, flags` form is edited.** SA also has a variant carrying a mesh
+ * count and several draw distances; a requested model in any other shape is returned in `skipped` rather than
+ * guessed at, because a silently unchanged draw distance is invisible until someone measures the range.
+ */
+export function setIdeDrawDistance(
+  text: string,
+  models: ReadonlySet<string>,
+  distance: number,
+): { changed: string[]; skipped: string[]; text: string } {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const changed: string[] = [];
+  const skipped: string[] = [];
+  let section = '';
+  const lines = text.split(/\r?\n/).map((line) => {
+    const bare = line.split('#')[0].trim();
+    if (bare === '') {
+      return line;
+    }
+    if (!bare.includes(',')) {
+      section = bare.toLowerCase() === 'end' ? '' : bare.toLowerCase();
+
+      return line;
+    }
+    if (section !== 'objs') {
+      return line;
+    }
+    const cells = bare.split(',').map((cell) => cell.trim());
+    const model = (cells[1] ?? '').toLowerCase();
+    if (!models.has(model)) {
+      return line;
+    }
+    if (cells.length !== 5) {
+      skipped.push(model);
+
+      return line;
+    }
+    changed.push(model);
+
+    return `${cells[0]}, ${cells[1]}, ${cells[2]}, ${distance}, ${cells[4]}`;
+  });
+
+  return { changed, skipped, text: lines.join(eol) };
 }
 
 /** The lowest `count` unused ids within `[ID_MIN, ID_MAX]` (ascending; gaps allowed). */

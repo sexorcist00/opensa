@@ -160,5 +160,26 @@ describe('compactStockInstIpls', () => {
       const host = readFileSync(join(out, 'data', 'maps', 'host.ipl'), 'utf8');
       expect(host).toContain('7, d, 5, 9,9,9'); // interior field preserved
     });
+
+    it('loses NOTHING: every row the donor gives up is in the host, whatever the donor held', () => {
+      // The property this compaction lives or dies on, and the one nothing pinned. On the real map the
+      // donors are `gen_int1` (206 rows) and `int_cont` (8) — emptying them is how the layer buys back two
+      // of SA's 40 `IplEntityIndexArrays` slots, and 2026-08-10 a whole bisection went into asking whether
+      // those 206 rows had been DELETED. They had not (399 placements before, 400 after, the +1 a mod's).
+      // A count test says that in one line, where reading the emptied file says the opposite.
+      const rows = Array.from({ length: 12 }, (_, i) => `${100 + i}, d${i}, ${i % 3}, ${i},${i},${i}, 0,0,0,1, -1`);
+      writeFileSync(join(out, 'data', 'maps', 'donor.ipl'), `inst\n${rows.join('\n')}\nend\nenex\n1, foo\nend\n`);
+
+      const result = compactStockInstIpls(game, out);
+
+      expect(result.rows).toBe(rows.length);
+      const host = readFileSync(join(out, 'data', 'maps', 'host.ipl'), 'utf8');
+      for (const row of rows) {
+        expect(host).toContain(row);
+      }
+      // And the donor really is empty — the slot is only reclaimed if its `inst` block has nothing left.
+      const donorInst = readFileSync(join(out, 'data', 'maps', 'donor.ipl'), 'utf8').split(/\r?\n/);
+      expect(donorInst.filter((line) => /^\d/.test(line.trim()) && line.includes(', d'))).toEqual([]);
+    });
   });
 });

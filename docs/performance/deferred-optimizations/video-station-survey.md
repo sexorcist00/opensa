@@ -3,6 +3,20 @@
 **Status:** in reserve — costs almost nothing today (205 casts across 25 scenes, ≤ 3 in any frame), and the
 alternative would put a camera decision into the build, where a modded map could never move it.
 
+**Impact: VERY LOW — measured, and the entry is honest that the win is headroom rather than milliseconds.**
+The survey spends **205 casts across 25 scenes, never more than 3 in a frame**, reaches a verdict inside 14
+frames, and has never appeared in a `[slow]` line; with the second consumer added, `stepMs` reads
+0.0153–0.0180 against a drive-only 0.0172 — no measurable cost at all. Baking would take 3 casts/frame to 0
+and remove ~0.2 s of survey latency. What that actually buys is the ability to run several tripods at once
+without breaking the 5-casts-a-frame ground rule — a feature ceiling, not a frame.
+
+**Effort: high, and it does not even remove the runtime pass.** A new pak product to emit, version and
+invalidate in step with the map — and the dwell/framing tests are per-SHOT, so a baked table could only
+pre-filter geometry while the window pass stays. Two consumers already share the cast budget, so both would
+have to be moved onto it. **The cheap lever nobody has needed yet is simply raising the 3-cast allowance**;
+the ground rule it lives under is `docs/restrictions/architecture.md`, and changing a budget is very low
+effort compared with baking one.
+
 ## What we do today
 
 A tripod shot's stand is chosen live (plan [096/04](../../plans/096-video-mode/04-stations-and-occlusion.md),

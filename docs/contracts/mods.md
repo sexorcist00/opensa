@@ -36,8 +36,28 @@ A binary archive cannot be patched file-by-file, so a mod ships a folder instead
 - **Place an asset in the archive its STOCK copy lives in.** An interior model belongs in `gta_int_img/`; put
   it in `gta3_img/` and it shadows nothing.
 - Loose files inside become entries by name — added if new, replacing an existing entry otherwise.
-- **`Remove original/`** (also `Remove originals`, `remove-original`, …): the file NAMES inside are DELETED
-  from the archive. The contents are irrelevant — mods ship the retired originals for reference.
+- **A `.col` is a LIBRARY, and replacing it DELETES every model it does not carry.** `laxref.col` holds 148
+  named collision models; a mod shipping its own copy to change one bench replaces the entry whole, and the
+  other 147 lose their collision. The objects still exist — they are simply placed with nothing to stand on,
+  which shows in-game as walking through a bench, never as an error. **Ship the whole library, not your
+  edit of it**, and if you started from another mod's copy check that it was whole first. Same shape as
+  `Remove original/`, except nothing declared the intent.
+  *What catches you:* since 2026-08-10 the installer prints
+  `mod-installer: <name>.col replaced — N collision model(s) LOST: …` naming the models, so the loss is at
+  least loud at build time. It is still a WARNING — the replacement wins, per this contract. Nothing catches
+  it at runtime unless FLA's optional error reporting is on, which is how the first case was found: mod 60
+  had dropped `ferseat01_LAx`, and the real game said "model ID 3752 does not have loaded collision" months
+  after the install.
+- **`Remove original/` carries NO special meaning — it is an ordinary organisational subfolder, and its files
+  are REPLACEMENTS.** The name reads as an instruction ("remove the original") and we implemented it as one
+  until 2026-08-10; it actually names *the files that remove the original*, i.e. empty RW clumps a mod ships to
+  make stock geometry invisible while its script draws its own. Three things settle it: Modloader has no delete
+  mechanism at all (it never touches an original file, it shadows one at runtime), the folder sits INSIDE
+  `gta3_img/` where everything is injected by bare name at any depth, and the payloads are valid empty clumps
+  (653 B each in the field case) rather than copies of the 4-66 KB originals.
+  *What happens if a tool reads it as a delete list:* the entry vanishes while the stock `.ide` row and its
+  inst rows survive, so the map places a model the streamer can never load. That is not a missing object —
+  the whole world renders as LODs with permanent hitching. Caught since 2026-08-10 by the gate below.
 - A subfolder holding PNGs is a **texture folder for an archive-internal `<folder>.txd`** (below).
 - Any other subfolder is organisational and is recursed — real packs ship `gta3_img/LV/…` layouts.
 - `<name>.ipl.merge` inside an IMG folder EDITS the named binary stream entry instead of replacing it; those
@@ -118,7 +138,7 @@ folder layout stops mattering; every file is bucketed by bare name:
 | `object.dat`, `procobj.dat` | Merged ADDITIVELY, row by row (keyed by model / by surface+model). |
 | `.ide`, text `.ipl`, other `.dat` | Written to disk: over the stock file with that bare name, else to the path the loader declared. |
 | the loader `.txt` itself | Its `IDE`/`IPL` lines are appended to `data/gta.dat` (canonicalised to the stock `DATA\MAPS\…` spelling); `COLFILE` is dropped — col rides in the archive. |
-| `Remove original/` (any depth) | The file NAMES retire `gta3.img` entries; contents are never injected. |
+| `Remove original/` (any depth) | Nothing special — organisational, its files are injected as REPLACEMENTS by bare name (see §2). |
 | a `cleo/`/`CLEO/` dir (any depth, any extension inside), loose `.cs`/`.ini`/`.fxt` | Copied to `<out>/cleo/…` — the dir's author-relative structure preserved, loose files by bare name — with a log line per file. A misspelled dir (`cleo2/`) is NOT a cleo dir: its `.cs`/`.ini`/`.fxt` still land via the loose-extension rule, other extensions are dropped as before. |
 | `*.settings.txt`, prose `.txt` | Ignored by the map baker. Vehicle settings belong to a vehicle mod — see [vehicles.md](./vehicles.md). |
 
@@ -144,15 +164,46 @@ vehicle-installer carries a vehicle mod's `cleo/` subfolder — see section 3 an
 
 ---
 
-## 5. What is NOT a contract
+## 5. What the install REFUSES
+
+**A model an `.ide` declares and an `.ipl` places must have a `.dff` in some archive.** The installer ends with
+`checkDanglingModels` over the built tree (`dangling-models.ts`) and THROWS, naming each model, its id, its
+placement count and the IDE that declares it. Placed is part of the test, not decoration: stock itself declares
+one model nothing places (`carupg_int_rays`), and that is harmless.
+
+It is a gate rather than a warning because the failure is global and does not point at its cause — the request
+can never complete, so the world renders as LODs everywhere with permanent hitching, which reads as a
+performance problem or a map-layer bug. It cost a day of bisection on 2026-08-10 (5 models, 23 placements,
+from one mod's `Remove original/` folder read as a delete list).
+
+---
+
+## 6. Two files a LATER build stage rewrites over your mod
+
+Mods are not the last writer in the chain. Two data files are edited again after every mod has been applied, on
+the `sa` target only, by the procobj bake
+([`sa-procobj-placement/014`](../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md)):
+
+- **`data/maps/generic/procobj.ide`** — the **draw distance** column of every species the bake places is set to
+  the configured range (299). Your rows survive; that one cell does not, and only for placed species. A mod that
+  ships this file to change a model or a TXD keeps those edits.
+- **`data/procobj.dat`** — the placed species are STRIPPED out of it, because they are static instances now and
+  the runtime scatterer would double them. A mod's added rules for species the bake does NOT place survive.
+
+Neither happens on the `opensa` target: it runs no bake, so both files reach our engine exactly as the mods left
+them. If you are debugging "my procobj edit did nothing in the real game", this is the reason, and the built
+`sa/` copy is the one to read — not `game-src/` and not `.work/`.
+
+## 7. What is NOT a contract
 
 - **The mod folder's name** — ordering only. Renaming a mod cannot change what it does.
 - **The path a Modloader-style mod uses internally** — bare names decide everything there.
 - **A texture's format in the PNG folder** — it comes from the image's own alpha, not from a naming scheme.
+- **`Remove original/`** — the name looks like an instruction and is not one (§2).
 
 ---
 
-## 6. Adding a convention
+## 8. Adding a convention
 
 When a new folder/file name starts meaning something, it goes here in the same change, with what happens when
 it is misspelled. That last part is the point: nearly every rule on this page exists because some spelling of

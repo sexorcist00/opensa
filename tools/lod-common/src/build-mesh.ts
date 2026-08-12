@@ -8,7 +8,7 @@ const ZERO: Vec3 = [0, 0, 0];
 /**
  * How a source geometry's vertices map into the merged mesh's target space. Kept abstract so each caller supplies
  * its own maths **exactly** (no lossy conversion): opensa-lod-generator rotates by the conjugated IPL quaternion +
- * offsets to the cell centre; lod-procobj-generator applies the DFF frame matrix (model-local).
+ * offsets to the cell centre; sa-procobj-placement applies the DFF frame matrix (model-local).
  */
 export interface VertexTransform {
   /** Rotate a normal into target space (rotation only, no translation). */
@@ -121,7 +121,7 @@ export class MeshBuilder {
  * Build a **model-local** {@link MergedMesh} from a whole clump — each atomic placed by its DFF **frame** transform
  * (right/up/at basis + translation), so multi-atomic / frame-offset models assemble correctly. The verbatim
  * per-model LOD geometry; the instance's world placement is applied later by the IPL `inst`. Shared by
- * lod-procobj-generator (its LODs) and sa-lod-generator (the future mesh path of a per-object clone).
+ * sa-procobj-placement (its LODs) and sa-lod-generator (the future mesh path of a per-object clone).
  */
 export function buildClumpMesh(clump: RWClump): MergedMesh {
   const builder = new MeshBuilder();

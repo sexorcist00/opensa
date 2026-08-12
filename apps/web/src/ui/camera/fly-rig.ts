@@ -29,6 +29,16 @@ export const TOP_DOWN_PITCH = -Math.PI / 2 + 0.01;
  *  250 u section with margin. */
 export const TOP_DOWN_HEIGHT = 400;
 
+/**
+ * The yaw that puts the map the way every SA map is drawn: north up, east right. At yaw 0 the top-down basis
+ * comes out rotated a half turn (screen right = −X, screen up = −Y in GTA terms), so the view reads as a
+ * mirror of every reference anyone compares it against. Half a turn fixes it.
+ *
+ * A map viewer's top-down reset therefore has to SET the yaw: inheriting the player's heading orients the map
+ * by whichever way he happened to be facing, and facing north-ish is what flips it.
+ */
+export const MAP_YAW = Math.PI;
+
 /** Wheel dolly step as a fraction of the eye's height above the ground (per notch). */
 const DOLLY_STEP = 0.12;
 /** The dolly never pushes the eye below this — the viewer must not fall into the terrain it inspects. */

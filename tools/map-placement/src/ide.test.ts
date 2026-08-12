@@ -1,6 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { allocateLodIds, buildLodIde, lodAlias, patchGtaDat } from './ide';
+import { allocateLodIds, buildLodIde, lodAlias, patchGtaDat, setIdeDrawDistance } from './ide';
 
 describe('allocateLodIds', () => {
   describe('negative cases', () => {
@@ -8,10 +9,10 @@ describe('allocateLodIds', () => {
       expect(allocateLodIds([], new Set()).size).toBe(0);
     });
 
-    it('throws when the stock id window cannot fit every model (≤ 18630)', () => {
+    it('throws when the id window cannot fit every model rather than spilling past the ceiling', () => {
       const used = new Set<number>();
-      for (let id = 4000; id <= 18630; id += 1) {
-        if (id !== 18630) {
+      for (let id = 4000; id <= 19000; id += 1) {
+        if (id !== 19000) {
           used.add(id); // leave a single free id, ask for two
         }
       }
@@ -114,6 +115,57 @@ describe('patchGtaDat', () => {
         'IPL mod.ipl',
         '',
       ]);
+    });
+  });
+});
+
+describe('setIdeDrawDistance', () => {
+  /** The real stock file the baked layer's range comes from — 107 models, every one declared at 59. */
+  const STOCK = 'game-src/original/data/maps/generic/procobj.ide';
+
+  describe('negative cases', () => {
+    it('reports a model it will not guess at instead of leaving the range silently unchanged', () => {
+      const text = 'objs\n800, genVEG_bush07, gta_proc_bush, 4, 59, 8324\nend\n'; // mesh-count variant
+      const result = setIdeDrawDistance(text, new Set(['genveg_bush07']), 299);
+
+      expect(result.changed).toEqual([]);
+      expect(result.skipped).toEqual(['genveg_bush07']);
+      expect(result.text).toBe(text);
+    });
+
+    it('leaves rows in other sections alone', () => {
+      const text = 'tobj\n800, genVEG_bush07, gta_proc_bush, 59, 8324, 5, 20\nend\n';
+
+      expect(setIdeDrawDistance(text, new Set(['genveg_bush07']), 299).text).toBe(text);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('raises only the named models, keeping every other row byte-identical', () => {
+      const text = 'objs\n800, a, txd, 59, 8324\n801, b, txd, 59, 8324\nend\n';
+      const result = setIdeDrawDistance(text, new Set(['a']), 299);
+
+      expect(result.changed).toEqual(['a']);
+      expect(result.text).toBe('objs\n800, a, txd, 299, 8324\n801, b, txd, 59, 8324\nend\n');
+    });
+
+    it('raises the whole stock procobj.ide from 59 to 299 — the ProperFixes mechanism', () => {
+      const text = readFileSync(STOCK, 'utf8');
+      const models = new Set([...text.matchAll(/^\s*\d+,([^,]*),/gm)].map((match) => match[1].trim().toLowerCase()));
+      const result = setIdeDrawDistance(text, models, 299);
+
+      expect(result.skipped).toEqual([]);
+      expect(result.changed).toHaveLength(107); // every objs row in the stock file
+      expect(result.text).not.toMatch(/,\s*59,/); // no 59 left as a draw distance
+      expect(result.text.split(/\r?\n/)).toHaveLength(text.split(/\r?\n/).length); // no row added or lost
+    });
+
+    it('preserves CRLF, comments and blank lines', () => {
+      const text = '# header\r\n\r\nobjs\r\n800, a, txd, 59, 8324 # trailing\r\nend\r\n';
+      const result = setIdeDrawDistance(text, new Set(['a']), 299);
+
+      expect(result.text).toContain('# header\r\n\r\nobjs\r\n');
+      expect(result.text).toContain('800, a, txd, 299, 8324');
     });
   });
 });

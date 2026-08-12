@@ -22,7 +22,7 @@ import { createStageProfiler, type StageProfiler } from '../../core/profiling';
 import { cullTinyInstances } from './cull';
 import { writeBuild } from './finalize';
 import { type Archive, openArchives } from './io';
-import { collectCellLightEffects, mergeCell } from './merge';
+import { collectCellEffects, mergeCell } from './merge';
 import { maxObjectId, resolveCells } from './resolve';
 
 export { stripOldLods } from './strip';
@@ -117,7 +117,7 @@ export function createGtaSaLodAdapter(
         }
         const mesh = profiler.time('normals', () => rebuildMeshNormals(shaped));
         const effects = profiler.time('2dfx', () =>
-          build2dfxSection(collectCellLightEffects(cell, config.cellSize, loadRaw, source, effectsCache)),
+          build2dfxSection(collectCellEffects(cell, config.cellSize, loadRaw, source, effectsCache)),
         );
         // The cell's scoped-name meanings ride along as plain data — bake workers each hold their own
         // registry, and the coordinator/finalize re-merges the per-cell maps (plan 004).

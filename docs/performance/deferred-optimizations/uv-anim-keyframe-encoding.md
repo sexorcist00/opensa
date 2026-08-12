@@ -3,6 +3,17 @@
 **Status:** in reserve — opened 2026-08-07 alongside the change it describes
 ([plan 099/01](../../plans/099-script-object-uv-anim/01-bake-the-animation-through.md)).
 
+**Impact: VERY LOW — measured, and the entry says so itself: noise.** 19 312 B on the ONE model in the corpus
+that animates at all, which is 94 % of that model's description and **0.49 % of its file**; every other `.osm`
+carries no key. The spawn-side win is a `JSON.parse` over that array, against 4 MB of geometry for the same
+model. It only stops being noise if animated models become common — a mod pack of animated billboards — and
+then the number to beat is the DESC parse at spawn, not the disk bytes.
+
+**Effort: medium.** Small surface, but it is a second encoding that has to be written in the builder, read in
+the runtime stepper, and kept honest against the verbatim form forever. The part that makes it medium rather
+than low is not the code: recognising a shape is a CLAIM ABOUT THE DATA, and our data is a mod author's, so
+it owes a corpus survey before it is written — plus a fallback for the animation neither shape describes.
+
 ## What we do today
 
 The rigid builder copies a model's referenced UVAnimDict entries into the `.osm` `DESC` **verbatim**: every

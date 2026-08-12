@@ -3,6 +3,18 @@
 **Status:** in reserve — costs nothing today because it runs on ONE car, and the alternative is a pipeline
 change nobody needs yet.
 
+**Impact: VERY LOW today, low if traffic ever needs a surface — measured on both sides.** The whole vehicle
+slice is **~8 µs per car per fixed step** (0.605 ms at 80 live cars), and today the probe runs for the DRIVEN
+car only: four rays inside a 0.07 ms slice for eight cars, i.e. free. The number that would change the rating
+is running it on every live car — roughly **0.6 → 1.2 ms per step at 80 cars** — and that only happens if
+traffic ever leaves tarmac. Against a ≤ 0.5 ms budget for eight cars, there is nothing here to reclaim now.
+
+**Effort: high.** Splitting cell collision by adhesion group is a converter and streaming change, and it
+creates a SECOND place where surface truth lives — today there is exactly one (the COL material byte, carried
+verbatim), and that is the property worth more than the milliseconds. **The half-measures named at the end
+(probe traffic every N steps, or only when a contact point moves) are very low effort** and buy the same
+headroom whenever traffic ever needs a surface.
+
 ## What we do today
 
 A wheel's grip comes from what it stands on (plan

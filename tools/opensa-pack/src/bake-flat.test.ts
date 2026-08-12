@@ -106,6 +106,7 @@ function testCell(lod = false): WeldedCell {
       indices: 6,
       particles: 0,
       placements: 0,
+      roadsignQuads: 0,
       roadsigns: 0,
       skippedTimed: 0,
       timedObjects: 0,

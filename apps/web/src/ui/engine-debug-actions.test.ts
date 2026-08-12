@@ -55,11 +55,11 @@ function deps(overrides: Partial<EngineDebugActionsDeps> = {}): EngineDebugActio
 
 describe('createEngineDebugActions', () => {
   describe('negative cases', () => {
-    it('does not re-scatter clutter for a draw-distance-only procobj change', () => {
+    it('does not reload clutter for a procobj change that touches no live knob', () => {
       const reloadClutter = vi.fn();
       const actions = createEngineDebugActions(deps({ reloadClutter }));
 
-      actions.setProcObj('grass', { drawDistance: 90 });
+      actions.setProcObj('grass', {});
 
       expect(reloadClutter).not.toHaveBeenCalled();
     });
@@ -125,6 +125,17 @@ describe('createEngineDebugActions', () => {
       expect(config.graphics.procobj.grass.enabled).toBe(false);
       expect(config.graphics.procobj.rocks.density).toBe(0.5);
       expect(reloadClutter).toHaveBeenCalledTimes(2);
+    });
+
+    it('re-issues the cells when a draw distance changes — the range is baked in per draw', () => {
+      const reloadClutter = vi.fn();
+      const config = createGameRuntimeConfig();
+      const actions = createEngineDebugActions(deps({ config, reloadClutter }));
+
+      actions.setProcObj('grass', { drawDistance: 90 });
+
+      expect(config.graphics.procobj.grass.drawDistance).toBe(90);
+      expect(reloadClutter).toHaveBeenCalledTimes(1);
     });
 
     it('re-drops the player slightly above their spot on respawn and teleports to the spawn point', () => {

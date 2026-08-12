@@ -1,5 +1,18 @@
 # First-person camera
 
+> ## ⛔ Step 0 — before ANY work on this idea
+>
+> **Download this mod and study how it does it, then report back before anything is designed or built:**
+>
+> **<https://libertycity.net/files/gta-san-andreas/239321-ultimate-first-person-beta.html>** — "Ultimate
+> First Person (beta)"
+>
+> The user's call, 2026-08-11. It is prior art for exactly the questions section 5 leaves open — how the
+> head is hidden without clipping, what happens to weapon aim and vehicle interiors, and how much of it is
+> camera work versus model work. **What is written below was reasoned from our own engine and has never
+> been checked against a shipped implementation**, so treat the mod as evidence and this page as the
+> hypothesis it gets to correct.
+
 **Status: IDEA (2026-07-25).** Written at the close of the [080 cinematic-camera
 chain](../../plans/080-cinematic-camera/readme.md), while everything it learned is still fresh. Nothing here
 is scheduled — [plan 080/08](../../plans/080-cinematic-camera/08-view-presets.md) holds the C-key preset
@@ -113,7 +126,8 @@ This is why the idea is worth writing down now:
 
 ## 6. What would make it a plan
 
-Measure, in this order, before committing:
+**Step 0 is the mod at the top of this file** — study a shipped first-person implementation before spending a
+measurement on a question it may already answer. Then measure, in this order, before committing:
 
 1. Expose `boneWorld` and print the head's world position across a walk cycle — confirm it tracks the drawn
    head and quantify how much it shakes (this is question 1, answered with numbers).

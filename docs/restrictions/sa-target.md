@@ -7,27 +7,88 @@ not because the build might fail, but because it might NOT fail and corrupt the 
 The measured numbers live in [`edge-cases/sa-runtime-limits.md`](../edge-cases/sa-runtime-limits.md) and
 [`edge-cases/sa-formats.md`](../edge-cases/sa-formats.md). This page is the planning gate over them.
 
-## Budget first: the four ceilings a content plan can hit
+## Budget first — and against the TARGET's numbers, not stock's
 
-| Ceiling | Value | What overflowing does |
-| --- | --- | --- |
-| Permanent text-IPL rows, map-wide | **30,000** | `CIplStore::IncludeEntity` truncates building-pool indexes to int16; past ~32.7k it corrupts stream-out ranges (the "ghost barriers" family) |
-| Text IPLs carrying `inst` rows | **39 slots** | `IplEntityIndexArrays` is written past without a bounds check |
-| FLA ID pools | TXD 6000 / COL 275 / IPL 280 | heap corruption during data load — the crash lands right after `shopping.dat` |
-| Model id | **≤ 18630** | silently fails to load; "HD swapped but nothing changed" |
+**The `sa` target always runs OLA + FLA + our own `perfect-map.asi`, and a stock 1.0 is not a configuration
+we build for** (the user's call, reaffirmed 2026-08-09). So the useful column is the third one:
 
-The first three are **checked by the pmb build** (`checkTextIplSlotBudget`, `checkImgIdBudgets`) — but
-`checkImgIdBudgets` reads the built `sa/` tree, so **an `--exclude sa` run never runs it.** An opensa-only
-build cannot tell you that you blew the real game's pools.
+| Ceiling | Stock | **On the target** | What overflowing does |
+| --- | --- | --- | --- |
+| Permanent text-IPL rows, map-wide | 32,767 (int16) | **lifted — `perfect-map.asi` patch #1** (the install runs 72,914) | `CIplStore::IncludeEntity` truncates building-pool indexes to int16; past 2^15 it corrupts stream-out ranges (the "ghost barriers" family) |
+| Text IPLs carrying `inst` rows | 39/40 slots | **NOT lifted in practice — treat 40 as REAL** (2026-08-10, field) | `IplEntityIndexArrays` is written past without a bounds check |
+| Rows per text IPL + its boot streams | 4,096 | **lifted — OLA `EntitiesPerIpl = unlimited`** (runs a 9,627-row file) | `gpLoadedBuildings` static array is written past → trashed statics |
+| `CPool<CBuilding>` | 13,000 | **`Buildings = 150000`** (OLA) — raised 2026-08-10 for the permanent-row clutter layer, which took map-wide rows to **110 055**; verified in the install, not assumed | pool exhaustion at load — the `0x005381A5` crash was this pool at exactly 100 000 |
+| **FLA ID pools** | 5000/255/256 | **TXD 6000 / COL 400 / IPL 1024 — REAL, not `unlimited`; raised in the ini 2026-08-10** | heap corruption during data load — the crash lands right after `shopping.dat` |
+| **Model id** | **≤ 18630** | **≤ 18630 — unchanged** | silently fails to load; "HD swapped but nothing changed" |
 
-**Caught:** on a `:sa` build, yes, loudly. On a `:opensa` build, no — and that is now the common case.
+### The row that was WRONG, and it cost a crash (2026-08-10)
 
-> **The install we actually target lifts two of these.** [reference-install.md](../gta-sa-original/reference-install.md) records
-> the declared baseline (`NO_COMMIT/gta_sa`, 2026-08-07): OLA sets `EntitiesPerIpl = unlimited` (the 4 096
-> per-file buffer) and `EntityIpl = unlimited` (the 40 slots), and it runs 72 914 permanent rows in files of
-> up to 9 627. So the row-count table above is the **stock** budget; costing a plan against it when the
-> target has neither ceiling silently under-builds. The one ceiling no adjuster lifts is int16 — that is
-> `perfect-map.asi`'s, and at 2.23× the ceiling this install depends on it.
+**`EntityIpl = unlimited` is set in the install's OLA ini and the game still died on the 40th inst-bearing
+IPL.** The `sa` build shipped **75** of them at the time (46 `plobj` areas + stock); the game loaded 39 and
+crashed on `plobj10.ipl`, which is **slot 40**. (The layer ships **10** areas since
+[014](../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md), 39 map-wide — the numbers
+below are the crash's, not today's.) Three independent lines agree: modloader's log ends at that file, the
+crash stack carries the string `plobj10_`, and 40 is the documented size of `IplEntityIndexArrays`.
+
+This row previously read "lifted", on the strength of the ini alone — and the reference install has only
+**36** inst-bearing IPLs, so **nothing had ever exercised the setting**. A ceiling nobody has crossed is not
+a ceiling anyone has lifted. **Design to ≤ 40 inst-bearing text IPLs until something proves otherwise in the
+field**, and note the corollary for the shape of a placement layer: an area split that multiplies text IPLs
+spends a scarce, hard resource, while rows inside one file are cheap
+([ProperFixes ships 9 627 of them per file](../gta-sa-original/reference-install-config.md)). A text IPL with
+**no** `inst` rows takes no slot.
+
+**The rule this table exists to enforce: do not design content down to a lifted ceiling, and do not add a
+guard, cap or migration that shapes output to one.** Its mirror image, learnt the same day: **do not trust a
+lift you have never exercised.** Both are answered the same way — by measuring the target, not by reading its
+ini. Budgeting against a stock number the target does not
+have silently under-builds, and it looks exactly like success. The bottom two rows are the ones that are
+still real — those a plan must respect, and `checkImgIdBudgets` still FAILS the build on the FLA pools. **It
+did, on the first `sa` build at the recovered procobj density** (2026-08-10: 522 binary IPL files of 280),
+which is the row's proof that it is a gate and not a museum piece. The answer was to RAISE the pool in the
+ini — a real ceiling is a number to move, not a reason to ship less content — and the same build showed the
+opposite failure too: the guard's TXD limit had always read 6000 while the install's pool was 5000, so a
+4999-archive build reported comfortable headroom while standing one slot short. **A guard number ABOVE the
+install's is silent by construction — it can only fail to fire.** Take pool numbers from FLA's own log, never
+from the ini alone (a `#`-disabled line still prints a value).
+
+Where the numbers come from: [reference-install-config.md](../gta-sa-original/reference-install-config.md)
+(verbatim ini capture) and [reference-install.md](../gta-sa-original/reference-install.md) (what it means for
+a plan). Read that table rather than assuming a stock value.
+
+**Caught:** the FLA pools and the model id, yes — on a `:sa` build only, since `checkImgIdBudgets` reads the
+built `sa/` tree and an `--exclude sa` run never reaches it. Everything else in the table is not enforced
+because it is not a limit here. **Designing down to a lifted ceiling is caught by nothing at all.**
+
+## A ceiling is enforced on the branch whose target has it — never on the shared build
+
+The rule for a new plan: **decide which target a ceiling belongs to, and put its guard on that branch.** A
+shared-stage guard is not "safe by default" — it silently rations the target that does not have the limit,
+and the build still succeeds, which is indistinguishable from success.
+
+**Enforced since 2026-08-08** (07/04): the text-IPL check moved off the common baked build onto the `sa/`
+branch, beside `checkImgIdBudgets`. Moving it also fixed a false PASS in the other direction: the sa LOD stage
+appends hole-fill instances to the text IPLs *after* the split, so the shared-build count was never the count
+SA loads.
+
+**And on 2026-08-09 the other half of the rule landed: a guard for a ceiling the target LIFTED is not a guard
+at all.** `checkTextIplBudgets` threw past an invented 30,000-row budget; after the procobj column fix the
+layer alone costs 39,219 rows, so the condition was constant and the throw failed every `sa` build to ration
+an install we never ship to. It is now `reportTextIplCensus` — rows, inst-bearing IPLs, census coverage, no
+ceiling quoted — and the 30,000 budget, the 39-slot line and `--allow-text-row-overflow` are deleted with it.
+Nothing had ever culled to fit that cap, so no content moved.
+
+Two things neither move fixed, and both are live:
+
+- `checkImgIdBudgets` reads the built `sa/` tree, so an opensa-only run never checks the FLA pools — a ceiling
+  the target really HAS going unchecked on the common case;
+- the `opensa/` branch has **no budget guard of its own**. SA's numbers reach no OpenSA code path (our engine
+  reads a pak: no building pool, no int16 index, no `IplEntityIndexArrays`), and the streaming budget that
+  should replace them has never been measured. The build ANNOUNCES the gap on every opensa run rather than
+  leaving it silent, which is the most that can be said honestly until the measurement exists.
+
+**Caught:** the enforcement half, yes. The unchecked half, no. Owned by
+[07/04](../../tools/sa-procobj-placement/docs/plans/013-density-budgets-per-target.md).
 
 ## In-game bisection of pool exhaustion gives false negatives
 
@@ -83,3 +144,19 @@ baked IDE redefining a stock id must strip the older definition. Binary IPL stre
 index**, so removing a row renumbers everything after it.
 
 **Caught:** no — wrong or missing objects, no error.
+
+## Range comes from a permanent row, never from a binary stream
+
+`CIplStore` loads a binary stream's IPL slot only while the player is inside its bounding box grown by **190
+units**, so an instance in a stream is not resident far enough to use a long draw distance at all. Our clutter
+layer was declared at 290 and effectively capped at ~190 m for months because of it; the measurement is in
+[`edge-cases/sa-runtime-limits.md`](../edge-cases/sa-runtime-limits.md).
+
+The rule for a new design: **decide the mechanism by what you want from it.** Streams buy position streaming and
+cost no permanent rows; a permanent text row buys unconditional residency, i.e. range, and costs one `CBuilding`.
+A layer that wants to be seen at distance has to be permanent rows — which then puts it against the 40-slot array
+and the building pool instead, and those are the numbers to budget.
+
+**Caught:** no, and it is silent in the worst way — the objects are there, they draw, they just stop appearing at
+a distance nobody wrote down. What surfaces it is a field observation of the pop-in radius, or reading
+`IplStore.cpp`.

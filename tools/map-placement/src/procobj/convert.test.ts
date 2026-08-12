@@ -1,43 +1,35 @@
 import type { ProcObjPlacement } from '@opensa/renderware/map/procobj-scatter';
 
-import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
-import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-import { buildStreamedIpl, cullByMinDistance, iplQuaternion } from './convert';
+import { buildPermanentIpl, convertProcObj, iplQuaternion, removeStaleAreas } from './convert';
 
-/** A placement at (x, y) with the given lottery — only the fields the cull reads matter. */
-function place(x: number, y: number, lottery: number): ProcObjPlacement {
-  return { align: false, lottery, normal: [0, 0, 1], position: [x, y, 0], rotation: 0, scale: 1, scaleZ: 1 };
-}
+describe('convertProcObj density', () => {
+  /** Only the fields the density gate reads — it runs before any file is touched, which is the point. */
+  const options = (density: number): Parameters<typeof convertProcObj>[0] =>
+    ({ areaBase: 'plobj', density, gamePath: '/nonexistent', iplName: 'x', outPath: '/nonexistent' }) as never;
 
-describe('cullByMinDistance', () => {
   describe('negative cases', () => {
-    it('returns every placement when the min distance is 0', () => {
-      const points = [place(0, 0, 0), place(1, 0, 1)];
-
-      expect(cullByMinDistance(points, 0)).toHaveLength(2);
-    });
-  });
-
-  describe('positive cases', () => {
-    it('drops placements within the min distance, keeping the earlier (lower-lottery) one', () => {
-      // (5,0) is within 10 of (0,0) → culled; (100,0) is far → kept.
-      const kept = cullByMinDistance([place(0, 0, 0), place(5, 0, 1), place(100, 0, 2)], 10);
-
-      expect(kept.map((p) => p.position[0])).toEqual([0, 100]);
+    it('refuses a cutoff above the scatter candidate ceiling, naming what has to be raised first', () => {
+      expect(() => convertProcObj(options(4))).toThrow(/raise the profile's `maxDensity`/);
+      expect(() => convertProcObj(options(3.77))).toThrow(/got 3.77/);
     });
 
-    it('keeps placements exactly at the min distance apart (uses < , not ≤)', () => {
-      const kept = cullByMinDistance([place(0, 0, 0), place(10, 0, 1)], 10);
-
-      expect(kept).toHaveLength(2);
+    it('refuses a non-positive density instead of silently emptying the layer', () => {
+      expect(() => convertProcObj(options(0))).toThrow(/must be in \(0, 3\]/);
+      expect(() => convertProcObj(options(-1))).toThrow(/must be in \(0, 3\]/);
     });
 
-    it('measures distance in XY only (ignores Z)', () => {
-      const a = place(0, 0, 0);
-      const b: ProcObjPlacement = { ...place(0, 0, 1), position: [0, 0, 999] };
+    it('refuses NaN — it passes both range comparisons and would empty the layer in silence', () => {
+      expect(() => convertProcObj(options(Number.NaN))).toThrow(/must be in \(0, 3\]/);
+      expect(() => convertProcObj(options(Number.POSITIVE_INFINITY))).toThrow(/must be in \(0, 3\]/);
+    });
 
-      expect(cullByMinDistance([a, b], 10)).toHaveLength(1);
+    it('fails on the file read, not the gate, at the ceiling itself (3 is legal)', () => {
+      expect(() => convertProcObj(options(3))).toThrow(/ENOENT/);
     });
   });
 });
@@ -59,101 +51,130 @@ describe('iplQuaternion', () => {
   });
 });
 
-describe('buildStreamedIpl', () => {
-  const species = new Map([['bush', { hdId: 800, height: 2, lodId: 6500, lodModel: 'plobush' }]]);
-  const pair = (x: number): { model: string; placement: ProcObjPlacement } => ({
+describe('buildPermanentIpl', () => {
+  const species = new Map([['bush', { hdId: 800, height: 2 }]]);
+  const one = (x: number): { model: string; placement: ProcObjPlacement } => ({
     model: 'bush',
     placement: { align: false, lottery: 0, normal: [0, 0, 1], position: [x, 0, 0], rotation: 0, scale: 1, scaleZ: 1 },
   });
-  const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer =>
-    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const rowsOf = (text: string): string[] => text.split('\r\n').filter((line) => /^\d/.test(line));
 
   describe('negative cases', () => {
     it('emits nothing for an empty placement list', () => {
-      const { datLines, files, imgFiles } = buildStreamedIpl([], species, 'plobj');
-      expect(files).toEqual([]);
-      expect(datLines).toEqual([]);
-      expect(imgFiles).toEqual([]);
+      expect(buildPermanentIpl([], species, 'plobj')).toEqual({
+        datLines: [],
+        files: [],
+        instBearingFiles: 0,
+        rows: 0,
+      });
+    });
+
+    it('never emits a lod link, and ships no binary stream at all (plan 014)', () => {
+      const result = buildPermanentIpl([one(0), one(5)], species, 'plobj');
+
+      expect(Object.keys(result).sort()).toEqual(['datLines', 'files', 'instBearingFiles', 'rows']);
+      for (const row of rowsOf(result.files[0][1])) {
+        expect(row.endsWith(', -1')).toBe(true);
+      }
     });
   });
 
   describe('positive cases', () => {
-    it('linkedHeight splits species: tall keep the text link, short go fully binary', () => {
-      const mixed = new Map([
-        ['bush', { hdId: 800, height: 2, lodId: 6500, lodModel: 'plobush' }], // short → unlinked
-        ['cedar', { hdId: 801, height: 12, lodId: 6501, lodModel: 'plocedar' }], // tall → linked
-      ]);
-      const pairs = [
-        { model: 'bush', placement: pair(0).placement },
-        { model: 'cedar', placement: pair(1).placement },
-      ];
-      const { files, imgFiles } = buildStreamedIpl(pairs, mixed, 'plobj', 4);
+    it('writes one permanent row per object under its STOCK id and model name', () => {
+      const { datLines, files, instBearingFiles, rows } = buildPermanentIpl([one(12.5)], species, 'plobj');
 
-      const textRows = files[0][1].split('\r\n').filter((l) => /^\d/.test(l));
-      expect(textRows).toHaveLength(1); // only the cedar LOD is a permanent row
-      expect(textRows[0]).toMatch(/^6501, plocedar/);
-
-      const insts = parseBinaryIpl(toArrayBuffer(imgFiles[0][1]));
-      expect(insts).toHaveLength(3); // bush HD + bush LOD (both unlinked) + cedar HD (linked)
-      expect(
-        insts
-          .filter((i) => i.lod === -1)
-          .map((i) => i.id)
-          .sort((a, b) => a - b),
-      ).toEqual([800, 6500]);
-      expect(insts.find((i) => i.id === 801)?.lod).toBe(0); // cedar HD → its text row
-    });
-
-    it('emits a text LOD layer plus a binary HD stream whose lod indexes the text rows', () => {
-      const pairs = Array.from({ length: 3 }, (_, i) => pair(i));
-      const { datLines, files, imgFiles } = buildStreamedIpl(pairs, species, 'plobj');
-
-      expect(files.map(([name]) => name)).toEqual(['plobj0.ipl']);
+      expect(rows).toBe(1); // the price is now the object count, not a subset of linked pairs
+      expect(instBearingFiles).toBe(1);
       expect(datLines).toEqual(['IPL DATA\\MAPS\\plobj0.IPL']);
-      expect(imgFiles.map(([name]) => name)).toEqual(['plobj0_stream0.ipl']);
-
-      const lodRows = files[0][1].split('\r\n').filter((l) => l.includes(','));
-      expect(lodRows).toHaveLength(3); // LOD layer only — HD lives in the stream
-      expect(lodRows[0]).toMatch(/^6500, plobush, 0, /);
-      expect(lodRows.every((row) => row.endsWith(', -1'))).toBe(true);
-
-      const hd = parseBinaryIpl(toArrayBuffer(imgFiles[0][1]));
-      expect(hd.map((i) => i.id)).toEqual([800, 800, 800]);
-      expect(hd.map((i) => i.lod)).toEqual([0, 1, 2]); // each HD → its LOD row in the area text IPL
-      expect(hd[1].position[0]).toBeCloseTo(lodFloat(lodRows[1], 3), 5);
+      expect(rowsOf(files[0][1])).toEqual(['800, bush, 0, 12.5, 0, 0, 0, 0, 0, 1, -1']);
     });
 
-    it('splits areas so text+binary rows per area stay under the 4096 boot buffer', () => {
-      const pairs = Array.from({ length: 4000 }, (_, i) => pair(i));
-      const { datLines, files, imgFiles } = buildStreamedIpl(pairs, species, 'plobj');
+    it('carries the placement rotation through as the IPL quaternion', () => {
+      const yawed = {
+        model: 'bush',
+        placement: {
+          align: false,
+          lottery: 0,
+          normal: [0, 0, 1],
+          position: [0, 0, 0],
+          rotation: Math.PI / 2,
+          scale: 1,
+          scaleZ: 1,
+        },
+      } as { model: string; placement: ProcObjPlacement };
+      const row = rowsOf(buildPermanentIpl([yawed], species, 'plobj')['files'][0][1])[0];
+      const [, , , , , , rx, ry, rz, rw] = row.split(',').map((cell) => cell.trim());
 
-      expect(files.length).toBe(2); // exactly ⌈4000/2000⌉ — every area costs one of SA's 40 text-IPL slots
-      expect(datLines).toHaveLength(files.length);
-      for (const [, text] of files) {
-        const lodRows = text.split('\r\n').filter((l) => l.includes(',')).length;
-        expect(2 * lodRows).toBeLessThanOrEqual(4096); // text LOD rows + streamed HD rows share the boot buffer
-      }
-      for (const [name, bytes] of imgFiles) {
-        expect(name).toMatch(/^plobj\d+_stream\d+\.ipl$/);
-        expect(parseBinaryIpl(toArrayBuffer(bytes)).length).toBeLessThanOrEqual(512);
-      }
+      expect([rx, ry].map(Number)).toEqual([0, 0]);
+      expect(Number(rz)).toBeCloseTo(iplQuaternion(Math.PI / 2)[2], 6);
+      expect(Number(rw)).toBeCloseTo(iplQuaternion(Math.PI / 2)[3], 6);
+    });
 
-      // Every HD instance's lod index stays inside its own area's text IPL.
-      files.forEach(([areaFile, text], areaIndex) => {
-        const areaRowCount = text.split('\r\n').filter((l) => l.includes(',')).length;
-        const areaName = areaFile.replace('.ipl', '');
-        for (const [name, bytes] of imgFiles.filter(([n]) => n.startsWith(`${areaName}_stream`))) {
-          for (const inst of parseBinaryIpl(toArrayBuffer(bytes))) {
-            expect(inst.lod, `${name} in area ${areaIndex}`).toBeGreaterThanOrEqual(0);
-            expect(inst.lod).toBeLessThan(areaRowCount);
-          }
-        }
-      });
+    it("splits into areas and counts every one against SA's 40 slots", () => {
+      const placements = Array.from({ length: 20_000 }, (_, i) => one(i % 200));
+      const { files, instBearingFiles, rows } = buildPermanentIpl(placements, species, 'plobj');
+
+      expect(rows).toBe(20_000);
+      expect(instBearingFiles).toBe(files.length);
+      expect(files.length).toBe(3); // ⌈20000/9600⌉
+      expect(files.reduce((n, [, text]) => n + rowsOf(text).length, 0)).toBe(20_000);
     });
   });
 });
 
-/** The n-th comma field of a text inst row, as a float (0-based; field 3 = position X). */
-function lodFloat(row: string, field: number): number {
-  return Number(row.split(',')[field]);
-}
+describe('removeStaleAreas', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'stale-areas-'));
+    mkdirSync(join(dir, 'data', 'maps'), { recursive: true });
+  });
+
+  const write = (name: string): void => writeFileSync(join(dir, 'data', 'maps', name), 'inst\nend\n');
+  const left = (): string[] => readdirSync(join(dir, 'data', 'maps')).sort();
+
+  describe('negative cases', () => {
+    it('leaves every file alone when this run wrote them all', () => {
+      write('plobj0.ipl');
+      write('plobj1.ipl');
+
+      expect(removeStaleAreas(dir, 'plobj', new Set(['plobj0.ipl', 'plobj1.ipl']))).toBe(0);
+      expect(left()).toEqual(['plobj0.ipl', 'plobj1.ipl']);
+    });
+
+    it('never touches a file outside its own area-base numbering', () => {
+      write('plotr0.ipl'); // the trees layer's areas
+      write('LAw2.ipl'); // stock
+      write('plobj_notes.ipl'); // not <base><digits>
+      write('plobjX.ipl');
+
+      expect(removeStaleAreas(dir, 'plobj', new Set())).toBe(0);
+      expect(left()).toEqual(['LAw2.ipl', 'plobjX.ipl', 'plobj_notes.ipl', 'plotr0.ipl']);
+    });
+
+    it('reports nothing when the tree has no data/maps at all', () => {
+      expect(removeStaleAreas(mkdtempSync(join(tmpdir(), 'empty-')), 'plobj', new Set())).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('deletes the surplus a smaller run left behind (the 46-files-for-10-areas case)', () => {
+      // Measured on the real artifact 2026-08-10: the in-place bake wrote 10 areas into an sa tree still
+      // holding 36 from earlier runs, and a census over the directory then read 95 584 rows for a 91 092-row run.
+      for (let i = 0; i < 46; i += 1) {
+        write(`plobj${i}.ipl`);
+      }
+      const written = new Set(Array.from({ length: 10 }, (_, i) => `plobj${i}.ipl`));
+
+      expect(removeStaleAreas(dir, 'plobj', written)).toBe(36);
+      expect(left()).toEqual([...written].sort());
+    });
+
+    it('matches case-insensitively — SA data ships mixed case', () => {
+      write('PLOBJ7.IPL');
+
+      expect(removeStaleAreas(dir, 'plobj', new Set(['plobj0.ipl']))).toBe(1);
+      expect(left()).toEqual([]);
+    });
+  });
+});

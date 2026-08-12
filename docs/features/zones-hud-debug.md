@@ -65,6 +65,16 @@
   a hidden counter + **Restore all** appear, and every hide is restored automatically on map-viewer exit /
   debugger close (`setMapViewer(false)` calls `restoreAll` — hides can't leak into gameplay). Transient by
   design: a rebuilt cell brings the instance back.
+- **Show water / Show procobj** (Map Viewer checkboxes, 2026-08-11): the two SUBTRACTIVE layers — the sea
+  sheet (`Engine.waterEnabled`) and the generated clutter (`Engine.clutterEnabled`). Both gate the DRAW only,
+  so a dozen toggles cost nothing and the colliders never move, and both are restored on map-viewer exit —
+  the checkboxes live in the inspector, so leaving with one off would strand the world without it and take
+  the control away with the panel. `MapGame.setShowWater` had been optional and unimplemented on this host
+  since 094/07; the checkbox was already written and simply never rendered.
+- **The Map Viewer opens NORTH-UP** (`MAP_YAW`, fixed 2026-08-11). `snapTopDown` inherited the player's yaw,
+  and the default spawn faces such that the rig sits at yaw 0 — where the top-down basis comes out a half
+  turn round (screen right = −X, screen up = −Y in GTA terms), i.e. the map upside down, every time. The
+  standalone `sa-map-viewer` had found this in 094 and fixed it only there; the constant is shared now.
 - Debug URL params: `?nocull=1`, `?shadowdebug=1`.
 
 ## Known gaps / candidates

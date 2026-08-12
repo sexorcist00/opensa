@@ -1,7 +1,7 @@
 # 006 — One transform for a 2dfx entry
 
 **Shipped 2026-08-07.** Came from
-[07 — LOD generators, extended](../../../../docs/roadmap/0.5.0/plans/07-lod-generators-extended/readme.md)
+[07 — LOD generators, extended](../../../../docs/roadmap/0.5.0/readme.md)
 (`lod-common/02`) and moved here when it landed. Depended on
 [rw-codec/001](../../../rw-codec/docs/plans/001-typed-2dfx-payload-codecs.md) (the typed payloads) and
 [005](005-2dfx-keep-policy.md) (the keep-policy).

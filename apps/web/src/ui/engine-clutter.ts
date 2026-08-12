@@ -22,7 +22,33 @@ export interface EngineClutter {
   removeCell(key: string): void;
 }
 
-export function setupEngineClutter(engine: Engine, fs: AssetFileSystem): EngineClutter {
+/**
+ * How far clutter CELLS must stream: the widest per-category range, because a category cannot be drawn past
+ * the radius its cell is loaded at. Each category is then brought back to its own distance by the shader's
+ * per-instance cull, so widening this ring costs scatter and upload — never fill.
+ */
+export function clutterRingRadius(
+  procobj: Readonly<Record<string, { drawDistance: number; enabled: boolean }>>,
+): number {
+  let widest = 0;
+  for (const setting of Object.values(procobj)) {
+    if (setting.enabled && setting.drawDistance > widest) {
+      widest = setting.drawDistance;
+    }
+  }
+
+  return widest;
+}
+
+/**
+ * `drawDistanceOf` reads the host's per-category range (`graphics.procobj[category].drawDistance`). It is
+ * passed in rather than read here so the engine layer stays free of the app's config shape.
+ */
+export function setupEngineClutter(
+  engine: Engine,
+  fs: AssetFileSystem,
+  drawDistanceOf: (category: CellClutterRender['category']) => number,
+): EngineClutter {
   // One upload per clutter model TYPE (a handful map-wide); null = not renderable (skipped, never crashes).
   const models = new Map<string, ClutterModelId | null>();
 
@@ -50,6 +76,7 @@ export function setupEngineClutter(engine: Engine, fs: AssetFileSystem): EngineC
         if (model !== null) {
           entries.push({
             ...(render.keyHashes ? { keyHashes: render.keyHashes } : {}),
+            drawDistance: drawDistanceOf(render.category),
             matrices: gtaMatricesToEngine(render.matrices),
             model,
           });

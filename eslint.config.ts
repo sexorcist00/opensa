@@ -227,7 +227,7 @@ const scriptsConfig = {
     'tools/lod-common/**/*.{js,mjs,cjs,ts}',
     'tools/sa-lod-generator/**/*.{js,mjs,cjs,ts}',
     'tools/perfect-map-builder/**/*.{js,mjs,cjs,ts}',
-    'tools/lod-procobj-generator/**/*.{js,mjs,cjs,ts}',
+    'tools/sa-procobj-placement/**/*.{js,mjs,cjs,ts}',
     'tools/mod-installer/**/*.{js,mjs,cjs,ts}',
     'tools/vehicle-installer/**/*.{js,mjs,cjs,ts}',
     'tools/ped-installer/**/*.{js,mjs,cjs,ts}',

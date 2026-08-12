@@ -41,9 +41,10 @@
   `LODEnsemble*` forests — IS the content and must survive the HD ring).
 - Cell building now happens OFFLINE in `tools/opensa-pack` (`weld.ts`): every cell is welded into
   merged per-material batches recorded as render bundles, with per-def IDE-flag treatment, hour-gated
-  timed objects as objectTable kind-0 entries, 2dfx corona collection
-  (HD only), animated `anim`-section objects (per-instance groups), road-sign text meshes,
-  procobj clutter. The convert covers the game's `PACK_RECTS.full` rect (per-game since plan 087 — one
+  timed objects as objectTable kind-0 entries, 2dfx corona and emitter collection
+  (**both levels** since plan 100 — a LOD bundle reads the baked cell model's own 2dfx section, so a
+  district past the HD ring keeps its lamps and plumes), animated `anim`-section objects (per-instance
+  groups), road-sign text meshes, procobj clutter. The convert covers the game's `PACK_RECTS.full` rect (per-game since plan 087 — one
   hardcoded ±12 dropped gostown's far islands), auto-fitting to content when a game has no pinned rect.
 - Map meshes ignore DFF frame transforms (SA re-frames atomic model infos — junk-frame proof). **True since
   plan 095, not before:** the welder applied the frame chain to every model, and the gate that fixes it is

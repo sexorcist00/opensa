@@ -162,15 +162,36 @@ can differ from `game-src/<game>/data/*` completely. Diagnosing against the sour
 
 ## A build asks for a target, not for the whole pipeline
 
-`sa` and `opensa` are independent targets of the same source tree, selected with pmb's `--exclude`
-(`build:game:<id>:opensa` / `build:game:original:sa`). They write disjoint subtrees of the same `--out` and
-only `<out>/.work` is cleared, so an excluded target keeps whatever an earlier run left.
+`sa` and `opensa` are independent targets of the same source tree. Which STAGES run is pmb's `--exclude`
+(`build:game:<id>:opensa` / `build:game:original:sa`); which HOST they are built for is pmb's `--target`,
+derived from `--exclude` when it is omitted. They write disjoint subtrees of the same `--out` and only the
+run's own `<out>/.work-<target>` is cleared (pmb plan 005), so an excluded target keeps whatever an earlier
+run left — including its kept work dir; each target that runs writes its own `report-<target>.json`.
+
+The two are not interchangeable, and the common chain is why: the stages before the split are SHARED, so a
+run that still builds `sa/` cannot carry an `opensa` profile — pmb refuses that pair at config time. The
+reverse (an opensa-only build priced for `sa`) is merely conservative, and is logged as leaving headroom.
 
 A plan that says "rebuild the game" has to say **which target**, because they no longer carry the same
 content: the `:sa` script excludes `vehicles` and `peds`, so the real-game build ships the stock roster.
 
-**Caught:** partly — an unknown `--exclude` name is a hard error, but a STALE target left by an older run is
-indistinguishable from a fresh one.
+**Caught:** partly — an unknown `--exclude`/`--target` name is a hard error and the resolved target is
+printed at the top of every run, but a STALE target left by an older run is indistinguishable from a fresh
+one.
+
+## A build's SOURCE may not live inside its own output
+
+The run's own `<out>/.work-<target>` (plus the legacy shared `.work`) is wiped at the top of every run,
+before any stage reads `--game` or `--in`. So the obvious fast path for re-running one stage —
+`--game <out>/.work-sa/5-trees --out <out>` — deletes the intermediate it was about to read when it sits in
+the SAME target's dir. Copy the stage build out, point `--out` somewhere else, or read the OTHER target's
+kept dir (plan 005 made that safe: it is never touched). The same applies to `--in`.
+
+**Caught:** yes, since 2026-08-09 — pmb refuses the overlap by name before the wipe
+(`pipeline.ts`, tests in `pipeline.test.ts`; segment-aware since plan 005, so `.work-opensa` no longer reads
+as inside `.work`). Before that it was silent in the worst way: the run died on a missing `gta3.img` several
+seconds AFTER the intermediates were already gone, so the error named the symptom and never the cause. It
+cost a full rebuild that day.
 
 Detail: [`architecture/perfect-map-builder.md`](../architecture/perfect-map-builder.md).
 

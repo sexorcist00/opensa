@@ -10,7 +10,7 @@ import type { CellCoord, City } from '@opensa/game';
 import type { LookDirectionSource } from '@opensa/game/character/character-controller.system';
 import type { PerfStats } from '@opensa/game/perf/perf-monitor';
 import type { TyreSmokeDials } from '@opensa/game/vehicle/vehicle-tyre-smoke.system';
-import type { ModelSearchHit } from '@opensa/renderware';
+import type { ModelSearchHit, ProcObjSlopeConfig } from '@opensa/renderware';
 import type { ReactElement } from 'react';
 
 import {
@@ -77,7 +77,7 @@ import type { PlayerPose } from './engine-video-runs';
 import { IS_DEV } from '../dev-mode';
 import { GAME_CONFIG } from '../game-config';
 import { vehicleModelsFromIde } from '../vehicle-models';
-import { yawBehind } from './camera/auto-center';
+import { aimAt, yawBehind } from './camera/auto-center';
 import { type CameraProbe, type GroundProbe } from './camera/camera-collision';
 import {
   type CameraRigState,
@@ -101,7 +101,7 @@ import { type MapGame } from './debug/map-inspector';
 import { setupEngineAnimObjects } from './engine-anim-objects';
 import { setupEngineBreakables } from './engine-breakables';
 import { setupEngineCleo } from './engine-cleo-setup';
-import { setupEngineClutter } from './engine-clutter';
+import { clutterRingRadius, setupEngineClutter } from './engine-clutter';
 import { createEngineDebugActions, type EnginePerfSnapshot } from './engine-debug-actions';
 import { type DynamicFxEmitter, loadCoronaSprites, loadSkidSprite, setupEngineParticles } from './engine-particles';
 import { ledgerBreakdown, type LegSample, setupPerfRuns } from './engine-perf-runs';
@@ -180,9 +180,15 @@ const SLOW_FRAME_MS = 20;
  *  exists to catch the seen-once jump class, not to narrate ordinary motion. */
 const CAM_JUMP_TARGET = 1.5;
 const CAM_JUMP_YAW = 0.35;
+/** Consecutive watched frames that must each report a jump before the run calls it a FALL rather than a
+ *  discontinuity. A jump is a seen-once event by definition; a hundred in a row is the camera chasing a
+ *  player nothing is holding up, and that reads as a wall of `[cam]` lines nobody counts by hand. */
+const CAM_FALL_STREAK = 100;
 
 /** The GTA heading the player spawns facing — the camera seeds behind it, the pose falls back to it. */
 const SPAWN_FACING = Math.PI;
+/** The rig's boot pitch (radians, positive = up): slightly down at the player. `?look` computes its own. */
+const DEFAULT_CAMERA_PITCH = -0.25;
 /** How long the camera keeps EASING its collision response after a scripted enter/exit ends (seconds). */
 const EXIT_EASE_SECONDS = 0.8;
 /** How close (world units) the player must stay to the car they left for the camera to keep ignoring it. */
@@ -206,6 +212,8 @@ let touchRef: null | { canEnterExit: () => boolean; source: TouchInputSource } =
 /** The [cam] jump watchdog's last frame (plan 080/09 §4.1) — null until the first watched frame. */
 interface CamWatch {
   focus: [number, number, number] | null;
+  /** Watched frames in a row that reported a jump — {@link CAM_FALL_STREAK} of them is a fall. */
+  jumpStreak: number;
   mode: string;
   target: [number, number, number] | null;
   yaw: number;
@@ -353,15 +361,13 @@ function applyCleoOverride(config: ReturnType<typeof createGameRuntimeConfig>, p
 }
 
 /**
- * Post-chain A/B overrides (074/09): `?aces=0` drops tone mapping, `?bloom=0|N` turns bloom off or sets its
- * intensity, `?scale=0.75` sets the render scale. They fold into the LIVE config rather than into the
- * renderer, so the debug readout keeps telling the truth about what is running.
- *
- * Extracted from `boot` when merging upstream: both sides had grown query-param branches there and the
- * function crossed the cognitive-complexity gate. MSAA and bloom-level knobs were field-tested and dropped
- * (WebGPU allows sampleCount 1|4 only; bloom levels saved ~0.05 ms).
+ * The graphics A/B knobs, folded into the LIVE config so the debugger keeps telling the truth about what is
+ * running: `?aces=0` and `?bloom=0|N` (the 074/09 post A/Bs), `?scale=0.75` (the 074/09 render-scale tier —
+ * MSAA/bloomq were field-tested and dropped — WebGPU allows sampleCount 1|4 only, and bloom levels saved ~0.05 ms), and `?fx=N`, a multiplier over every fx system's shipped draw
+ * distance (100/04). `?fx` doubles as the POSITIVE CONTROL a distance capture needs: a tiny value culls the
+ * emitters, which is the only way a shot can prove the specks in it are particles at all.
  */
-function applyPostOverrides(config: ReturnType<typeof createGameRuntimeConfig>, params: URLSearchParams): void {
+function applyGraphicsParams(config: ReturnType<typeof createGameRuntimeConfig>, params: URLSearchParams): void {
   if (params.get('aces') === '0') {
     config.graphics.toneMapping = false;
   }
@@ -375,6 +381,38 @@ function applyPostOverrides(config: ReturnType<typeof createGameRuntimeConfig>, 
   const scaleParam = Number(params.get('scale') ?? Number.NaN);
   if (Number.isFinite(scaleParam)) {
     config.graphics.renderScale = scaleParam;
+  }
+  const fxParam = Number(params.get('fx') ?? Number.NaN);
+  if (Number.isFinite(fxParam) && fxParam > 0) {
+    config.graphics.effects.drawDistanceScale = fxParam;
+  }
+  // `?procobj=<multiplier>` scales the RUNTIME clutter scatter across every category, `?procobj=0` turns it
+  // off. **It reaches only the rules the BUILD did not bake**, which since plan 014 is all 95 of them on
+  // `opensa` — the bake moved into the `sa` branch, so this is a live lever again. (It was not before: a
+  // baked `procobj.dat` carried 9 rules of 96, all `P_UNDERWATERBARREN`, and an A/B using this knob measured
+  // zero on any dry scene.) **Its ceiling is `PROC_OBJ_MAX_DENSITY` (3), which is ours, not the data's**: the
+  // lottery is uniform in `[0, 3)` and the renderer keeps `lottery < density`, so a multiplier of 3 or more
+  // keeps every candidate and ×4/×8/×16 all draw the same world. Measured, and it is exactly linear below
+  // that — clutter triangles run 1 : 2.08 : 3.13 for ×1/×2/×4, the whole layer being +10.1 % of
+  // `country-dusk` at ×3 and below the noise on every cost column
+  // (`benchmarks/opensa-engine/2026-08-10-headless-procobj-runtime-knob-ladder.json`).
+  // Written so 0 reads as zero rather than as absent, like `?airCtl`.
+  const procobjParam = Number(params.get('procobj') ?? Number.NaN);
+  if (Number.isFinite(procobjParam) && procobjParam >= 0) {
+    for (const setting of Object.values(config.graphics.procobj)) {
+      setting.density *= procobjParam;
+      setting.enabled = setting.enabled && procobjParam > 0;
+    }
+  }
+  // `?procobjRange=<units>` OVERRIDES every category's draw distance with one number — the A/B knob for the
+  // per-category ranges, and the only way to reproduce a uniform world: `150` is what the engine really drew
+  // before the ranges were wired (the collision ring), `100` is SA's own flat `PLANTS_MAX_DISTANCE`. An
+  // override rather than a multiplier precisely so those two are reachable exactly.
+  const procobjRangeParam = Number(params.get('procobjRange') ?? Number.NaN);
+  if (Number.isFinite(procobjRangeParam) && procobjRangeParam > 0) {
+    for (const setting of Object.values(config.graphics.procobj)) {
+      setting.drawDistance = procobjRangeParam;
+    }
   }
 }
 
@@ -406,7 +444,7 @@ async function boot(
   const params = new URLSearchParams(window.location.search);
   const hud = document.getElementById('engine-hud') as HTMLPreElement;
   const config = createGameRuntimeConfig();
-  applyPostOverrides(config, params);
+  applyGraphicsParams(config, params);
   // `?probe=0` — the 074/16 env-probe A/B: keeps reflections on the analytic-sky fallback.
   const probeEnabled = params.get('probe') !== '0';
   // `?probeview=1` — replace the frame with the probe cube panorama (orientation/content debug).
@@ -426,6 +464,7 @@ async function boot(
     spawnParam.length === 3 && spawnParam.every(Number.isFinite)
       ? [spawnParam[0], spawnParam[1], spawnParam[2]]
       : [...GAME_CONFIG[gameId].playerSpawn];
+  const aim = bootAim(params, spawn);
   hud.textContent = 'own engine: initializing…';
 
   const dpr = window.devicePixelRatio;
@@ -510,7 +549,31 @@ async function boot(
 
       return setting.enabled ? setting.density : 0;
     },
-    procObjLimit: 150,
+    // `?procobjLimit=<n>` sweeps the per-cell budget itself. **Measured 2026-08-10**: 300 → 3000 buys nothing
+    // (flat to 0.015 %), because the candidate pool per face is `area / spacing²` and at cutoff 1 a cell does
+    // not hold 300 placements — so no value above 300 can bind. 150 → 300 buys +0.41 % of `country-dusk`'s
+    // triangles, which is **13 % of the clutter layer** — small in scene terms, real in layer terms, and a
+    // look call rather than a perf one. Plan 013's "set this from a streaming measurement" has no measurement
+    // to make: the layer never hitches at any reachable setting.
+    procObjLimit: Number(params.get('procobjLimit')) || 150,
+    // `?procobjFloor=<n>` (plan 012): while the cap binds, keep at least n of every species the cell is
+    // eligible for, instead of letting the lowest-lottery cut zero one — measured on the SHIPPING rule set to
+    // zero at least one model in 17.7 % of clutter cells, worst 16 of 23. **ON at 1 since 2026-08-11** (his
+    // call): it costs 0.32 % of the drawn placements, no frame time (the budget is conserved — the floor swaps
+    // a placement, never adds one), and it puts `opensa` where `sa` already is, since a baked static row
+    // cannot be capped at all. `?procobjFloor=0` is the A/B and is honoured as zero.
+    procObjSpeciesFloor: params.has('procobjFloor') ? Number(params.get('procobjFloor')) : 1,
+    // `?procobjSlope=<steep>,<flat>` (plan 011): the ROCK categories' candidate multiplier on steep and on
+    // flat faces — scree collects on slopes, not on the plain beside them. Slope is the ONE terrain signal
+    // that is not already in the surface (measured: `p_mountain` is 48.8 % steep and carries all six rubble
+    // species, every other surface is under 20 %). Absent = unchanged, which is the shipped default until the
+    // look is judged. The scatter is re-rolled by it, so two settings compare statistically, never placement
+    // by placement.
+    ...procObjSlopeParam(params),
+    // `?procobjSampler=corner` (plan 010 task 12): the ORIGINAL's in-triangle routine instead of our
+    // area-uniform one — it pulls toward whichever vertex the COL lists first. Same placement COUNT either
+    // way; what moves is the close tail (map-wide p05 3.5 → 3.2 m). Default stays `area`.
+    ...(params.get('procobjSampler') === 'corner' ? { procObjSampler: 'corner' as const } : {}),
   });
   await adapter.prepare();
   const physics = new PhysicsWorld(await initRapier());
@@ -553,7 +616,9 @@ async function boot(
   Velocity.y[playerEid] = 0;
   Velocity.z[playerEid] = 0;
   Velocity.grounded[playerEid] = 0;
-  Locomotion.heading[playerEid] = SPAWN_FACING; // spawn facing, mirrors the pose fallback below
+  // Spawn facing, mirrors the pose fallback below — `?look` re-points it so the rig's auto-centre HOLDS the
+  // aim instead of swinging back behind a ped still facing south.
+  Locomotion.heading[playerEid] = aim.heading;
   Locomotion.state[playerEid] = 0; // LOCOMOTION_GROUNDED
   Locomotion.stateTime[playerEid] = 0;
   Locomotion.fallSpeed[playerEid] = 0;
@@ -602,7 +667,7 @@ async function boot(
   // camera shim (the only three-shaped seam in CharacterControllerSystem).
   // Seat the camera BEHIND the spawn facing (the ped spawns facing π; behind it is yawBehind(π) = 0). Seeding
   // it at π put the camera nose-to-nose with a stationary player until they first moved.
-  const rig = createRigState(config.camera, yawBehind(SPAWN_FACING), -0.25);
+  const rig = createRigState(config.camera, yawBehind(aim.heading), aim.pitch);
   /** This frame's raw camera input, drained by the loop: pointer deltas in pixels, drag pan in NDC, wheel
    *  notches. Accumulating instead of mutating the rig is what lets ONE pure step own the smoothing. */
   const pendingInput = { look: { x: 0, y: 0 }, pan: null as null | { x: number; y: number }, zoom: 0 };
@@ -814,7 +879,7 @@ async function boot(
   const player = loadEnginePlayer(engine, fs, GAME_CONFIG[gameId].mainCharacter, config.movement);
   // 2dfx particles (B6): the pak carries the emitter anchors, this reads effects.fxp + effectsPC.txd and
   // bakes them. Absent-tolerant — a profile without the FX files simply renders no particles.
-  const particles = setupEngineParticles(engine, fs);
+  const particles = setupEngineParticles(engine, fs, drawDistance, config.graphics.effects.drawDistanceScale);
   // Skid-mark decal lane (089/03): SA's particleskid sprite, installed once — absent-tolerant like the FX.
   const skidSprite = loadSkidSprite(fs);
   if (skidSprite) {
@@ -836,10 +901,16 @@ async function boot(
   const breakables = setupEngineBreakables(engine, physics, collision, adapter, fs, props);
   // Procedural clutter (074/19 B7·d): grass/bushes/rocks scattered per cell, rendered instanced. Streamed on
   // the SAME cells + budget as the colliders (adapter memoizes the scatter), so render and collision agree.
-  const engineClutter = setupEngineClutter(engine, fs);
+  const engineClutter = setupEngineClutter(engine, fs, (category) => config.graphics.procobj[category].drawDistance);
   const clutterLoaded = new Set<string>();
   const updateClutter = (): void => {
-    const cells = cellsWithin(viewOf(), config.streaming.collisionDrawDistance, adapter.cellSize);
+    // The ring is the WIDEST per-category range, not `collisionDrawDistance` — a category cannot be visible
+    // past the radius its cell is streamed at, so tying the two capped every category at the collision ring
+    // (150) whatever its own number said. The per-instance cull in the clutter shader is what brings each
+    // category back to its own distance inside this ring, so a wider ring costs scatter and upload, never
+    // fill. Clutter COLLIDERS deliberately stay on the collision ring: a bush 300 units away is scenery, and
+    // Rapier static bodies at that radius are the cost that once bought 17 ms/step.
+    const cells = cellsWithin(viewOf(), clutterRingRadius(config.graphics.procobj), adapter.cellSize);
     const desired = new Set(cells.map(([cx, cy]) => `${cx},${cy}`));
     for (const key of clutterLoaded) {
       if (!desired.has(key)) {
@@ -1298,6 +1369,12 @@ async function boot(
         }
         if (!enabled) {
           setShowCollision(false); // the overlay belongs to the viewer; leaving must not strand it on screen
+          // Same rule for the two SUBTRACTIVE toggles, and here it cuts twice: the checkboxes live in the
+          // inspector, so leaving with the sea or the clutter switched off strands the world without them AND
+          // with no control left to bring them back — and the inspector's own state re-mounts checked, which
+          // would make the panel lie about a world it no longer matches.
+          engine.clutterEnabled = true;
+          engine.waterEnabled = true;
           setup.driver.setManualCells(null);
           selectedPlacement = null;
           hiddenPlacements = 0;
@@ -1305,7 +1382,13 @@ async function boot(
         }
         events.emit('map-viewer', { enabled });
       },
+      setShowClutter: (enabled): void => {
+        engine.clutterEnabled = enabled;
+      },
       setShowCollision,
+      setShowWater: (enabled): void => {
+        engine.waterEnabled = enabled;
+      },
       viewCell: (): [number, number] | null => {
         const [gx, gy] = viewOf();
 
@@ -1426,7 +1509,7 @@ async function boot(
   let perfHud = IS_DEV;
   let perfLogs = IS_DEV;
   // The [cam] jump watchdog's last frame (plan 080/09 §4.1) — see `watchCameraJump`.
-  const camWatch: CamWatch = { focus: null, mode: '', target: null, yaw: 0 };
+  const camWatch: CamWatch = { focus: null, jumpStreak: 0, mode: '', target: null, yaw: 0 };
   // Missing-texture highlight (plan 085 row B): magenta stand-ins ON while developing, the quiet material
   // colour in a production build; toggled live from the debugger's Map screen. Applying the flag here is
   // early enough — arrays stream in later and paint on load.
@@ -1713,7 +1796,8 @@ async function boot(
     const streamStarted = performance.now();
     const streamStats: StreamStats = setup.driver.update(playerEngine);
     // Emitters follow the streamed cell set; the call self-gates on a signature, so this is not per-frame work.
-    particles?.rebuild();
+    // The live distance scale rides in on the same call — a changed value re-bakes both lanes.
+    particles?.rebuild(config.graphics.effects.drawDistanceScale);
     void refreshCollision(); // self-gates on the camera's cell set — a no-op unless the overlay is on and moved
     streamMs = performance.now() - streamStarted;
     lastStream = streamStats;
@@ -1818,8 +1902,11 @@ async function boot(
       frameMs: dt * 1000,
       gpuMs: stats.gpuPassMs,
       liveVehicles: physics.census().vehicles,
+      pendingCells: streamStats.pendingCells,
       postMs: stats.gpuPostMs,
       probeMs: stats.gpuProbeMs,
+      streamBlobMs: streamStats.blobMs,
+      streamUploadMs: streamStats.uploadMs,
       submitMs: stats.submitMs,
       triangles: stats.trianglesRecorded,
       vehicleFixedMs,
@@ -1875,7 +1962,15 @@ async function boot(
     fs,
     getStream: (): null | StreamStats => lastStream,
     getVehicles: (): EngineVehicles | null => vehicles,
+    // The player's OWN capsule is excluded, or the probe answers with the body it is testing the ground
+    // under: the settle asks about the anchor, and the player is standing exactly on it.
+    groundBelow: (at, maxDrop): null | number =>
+      physics.groundBelow([at[0], at[1], at[2]], maxDrop, RigidBody.handle[playerEid]),
     params,
+    playerProbe: (): { grounded: boolean; z: number } => ({
+      grounded: Velocity.grounded[playerEid] === 1,
+      z: Transform.z[playerEid],
+    }),
     setBenchCamera: (camera): void => {
       benchCamera = camera;
     },
@@ -1897,11 +1992,10 @@ async function boot(
 
       return samples;
     },
+    // The SAME warp the debugger and the phys/video runs take (plan 102): its own inline teleport skipped
+    // the interpolation snap, so a bench leg streaked the ped across the map for a frame.
     teleportPlayer: (anchor): void => {
-      physics.teleport(RigidBody.handle[playerEid], [anchor[0], anchor[1], anchor[2]]);
-      Transform.x[playerEid] = anchor[0];
-      Transform.y[playerEid] = anchor[1];
-      Transform.z[playerEid] = anchor[2];
+      teleportPlayer([anchor[0], anchor[1], anchor[2]]);
     },
     toEngine,
   });
@@ -2015,6 +2109,14 @@ async function boot(
   });
 }
 
+function bootAim(params: URLSearchParams, from: readonly [number, number, number]): { heading: number; pitch: number } {
+  const look = (params.get('look') ?? '').split(',').map(Number);
+
+  return look.length === 3 && look.every(Number.isFinite)
+    ? aimAt(from, [look[0], look[1], look[2]])
+    : { heading: SPAWN_FACING, pitch: DEFAULT_CAMERA_PITCH };
+}
+
 /** Which rig frames this frame: a detached eye wins over a seat, a seat over the on-foot follow. */
 function cameraModeOf(flying: boolean, seated: boolean): CameraSnapshot['mode'] {
   if (flying) {
@@ -2111,7 +2213,7 @@ function hudText(frame: {
     `OWN ENGINE (074/10 B3) — walk: WASD, run: Shift, jump: Space, click = capture mouse (Esc frees)\n` +
     `        F2 = debugger · K+M = photo camera (ARROWS move, PgUp/PgDn lift, mouse looks)\n` +
     `frame   ${avg.toFixed(2)} ms (${(1000 / Math.max(avg, 0.001)).toFixed(0)} fps)\n` +
-    `submit  ${stats.submitMs.toFixed(2)} ms · GPU ${ms(stats.gpuPassMs)} ms · post ${ms(stats.gpuPostMs)} ms · probe ${ms(stats.gpuProbeMs, 'off')} ms · draws ${stats.drawsRecorded}\n` +
+    `submit  ${stats.submitMs.toFixed(2)} ms · GPU ${ms(stats.gpuPassMs)} ms · post ${ms(stats.gpuPostMs)} ms · probe ${ms(stats.gpuProbeMs, 'off')} ms · draws ${stats.drawsRecorded} · signs ${stats.roadsignQuadsRecorded}\n` +
     `stream  ${stream.loadedCells} cells, ${stream.pendingCells} pending, late ${stream.lateCreates} · ` +
     `residency ${(stats.residencyBytes / 1048576).toFixed(0)} MB (${frame.residency})\n` +
     `GTA     ${gta[0].toFixed(1)}, ${gta[1].toFixed(1)}, ${gta[2].toFixed(1)} · ${clock}\n` +
@@ -2205,6 +2307,36 @@ function planarDistance(a: readonly number[], b: readonly number[]): number {
  */
 function probeCenterOf(enabled: boolean, focus: readonly [number, number, number]): [number, number, number] | null {
   return enabled ? [focus[0], focus[1] + 1.0, focus[2]] : null;
+}
+
+/**
+ * What the boot camera starts as: `?look=x,y,z` aims it at a GTA world point, otherwise the fixed spawn
+ * facing. The ped is seeded with the same heading, which is what stops auto-centre swinging the aim away.
+ *
+ * **This knob exists because the headless harness has no mouse.** It presses keys, and look is pointer-only,
+ * so without an aim every probe stares SOUTH — a subject then needs standable ground ~600 u to its NORTH to
+ * be seen at LOD range, which the Las Payasadas boards do not have: the map ends ~350 u past them and a
+ * spawn there falls through the void.
+ *
+ * The aim math itself is {@link aimAt}, beside the convention it inverts.
+ */
+/**
+ * `?procobjSlope=<steep>,<flat>` — the slope gate as a field A/B knob (plan 011). One pair of multipliers for
+ * the ROCK categories, because that is where the measurement put it: `p_mountain` carries all six `p_rubble*`
+ * species and is the only surface with a large steep share. `?procobjSlope=2,0.5` is "twice the scree on the
+ * slopes, half of it on the flat". Absent (or unparseable) leaves the scatter untouched.
+ */
+function procObjSlopeParam(params: URLSearchParams): { procObjSlope?: ProcObjSlopeConfig } {
+  const raw = params.get('procobjSlope');
+  if (raw === null) {
+    return {};
+  }
+  const [steep, flat] = raw.split(',').map(Number);
+  if (!Number.isFinite(steep) || steep < 0) {
+    return {};
+  }
+
+  return { procObjSlope: { flat: { rocks: Number.isFinite(flat) && flat >= 0 ? flat : 1 }, steep: { rocks: steep } } };
 }
 
 /**
@@ -2348,12 +2480,26 @@ function watchCameraJump(
   const yawJump = Math.abs(angleDelta(watch.yaw, rig.yaw));
   const looked = snapshot.look.x !== 0 || snapshot.look.y !== 0;
   if (!legit && (targetJump > CAM_JUMP_TARGET || (!looked && yawJump > CAM_JUMP_YAW))) {
+    watch.jumpStreak += 1;
     // eslint-disable-next-line no-console -- deliberate field diagnostic: the seen-once jump needs a name
     console.log(
       `[cam] jump target ${targetJump.toFixed(2)} · yaw ${((yawJump * 180) / Math.PI).toFixed(1)}° · ` +
         `mode ${snapshot.mode} · dt ${(snapshot.dt * 1000).toFixed(1)} · dist ${rig.distance.toFixed(2)} ` +
         `shown ${rig.collision.shown.toFixed(2)} · look ${looked}`,
     );
+    // Once per streak (`===`, not `>=`): the wall of jump lines is the symptom, this is the diagnosis, and a
+    // diagnosis repeated every frame is another wall. `focus[1]` is the engine's up axis, so the drop per
+    // frame is what separates a fall from a camera that merely lost its target.
+    if (watch.jumpStreak === CAM_FALL_STREAK) {
+      const drop = watch.focus === null ? 0 : watch.focus[1] - snapshot.focus[1];
+      // eslint-disable-next-line no-console -- the marker IS the deliverable (see CAM_FALL_STREAK)
+      console.log(
+        `[fall] ${CAM_FALL_STREAK} jump frames in a row — nothing is holding the focus up · ` +
+          `height ${snapshot.focus[1].toFixed(1)} · dropping ${drop.toFixed(2)}/frame · mode ${snapshot.mode}`,
+      );
+    }
+  } else {
+    watch.jumpStreak = 0;
   }
   watch.focus = [snapshot.focus[0], snapshot.focus[1], snapshot.focus[2]];
   watch.mode = snapshot.mode;

@@ -15,7 +15,7 @@ import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
-import { build2dfxSection, stripParticleEffects } from '@opensa/rw-codec/dff';
+import { build2dfxSection } from '@opensa/rw-codec/dff';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { cpSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -24,6 +24,7 @@ import type { LodLink } from '../../core/types';
 import type { Archives } from './io';
 
 import { perObjectLinks } from '../../core/report';
+import { cloneKeepTypes, stripCloneTo } from './clone-2dfx';
 import { fillMissingLods } from './fill-holes';
 import { areaKey, walk } from './resolve';
 
@@ -60,6 +61,45 @@ export interface BuildStats {
   retransformedLods: number;
   skippedHoles: number;
   skippedShared: number;
+}
+
+/**
+ * One clone's DFF bytes (plan 003, Phase 5). With a decimator, the HD mesh is QEM-decimated under the pixel
+ * budget and re-encoded — night prelit and tinted materials ride the mesh path, and the HD's 2dfx entries are
+ * transplanted byte-for-byte with frame-transformed positions, in the set `cloneKeepTypes` resolves (plan
+ * 100/05: emitters included by default). When the budget rejects every target (or decimation is off), the
+ * clone stays the **verbatim byte-copy** — keeping plugins the mesh path can't carry (e.g. breakable) at zero
+ * risk — with the same set applied subtractively.
+ *
+ * Exported for its tests: the 2dfx set a clone carries is this function's decision, and nothing else in the
+ * package can be asked what it made of a real model's entries.
+ */
+export function cloneLodDff(
+  hdDff: Uint8Array,
+  link: LodLink,
+  decimate: null | ReturnType<typeof createBudgetedDecimate>,
+  textures: TextureSource,
+  stats: BuildStats,
+  keepParticles: boolean,
+): Uint8Array {
+  const keep = cloneKeepTypes(keepParticles);
+  if (decimate !== null) {
+    const clump = parseDff(toArrayBuffer(hdDff));
+    const mesh = buildClumpMesh(clump);
+    const ctx = { textures, view: lodView(link.hdDrawDistance || 300) };
+    const decimated = decimate(mesh, ctx);
+    if (decimated !== mesh) {
+      stats.decimatedLods += 1;
+      // One pass over the policy's set, so emitters ride by default and keep their AUTHORED order among the
+      // coronas — the old two-pass shape (everything-but-particles, then particles appended) reordered them.
+      const effects = build2dfxSection(collectClumpEffects(hdDff, clump, keep));
+
+      return encodeLodDff(decimated, link.lodModel, { ...(effects ? { effects } : {}) });
+    }
+  }
+
+  // Verbatim: SUBTRACTIVE, never re-encoded — see `stripCloneTo`.
+  return stripCloneTo(hdDff, keep);
 }
 
 /**
@@ -182,42 +222,6 @@ function atlasView(source: TextureSource, hdTxd: string): TextureSource {
     get: (name) => resolveFrom(source, hdTxd, name),
     getFrom: (txd, name) => source.getFrom?.(txd, name) ?? null,
   };
-}
-
-/**
- * One clone's DFF bytes (plan 003, Phase 5). With a decimator, the HD mesh is QEM-decimated under the pixel
- * budget and re-encoded — night prelit and tinted materials ride the mesh path, and the HD's 2dfx entries
- * (coronas etc., minus particles) are transplanted byte-for-byte with frame-transformed positions. When the
- * budget rejects every target (or decimation is off), the clone stays the **verbatim byte-copy** — keeping
- * plugins the mesh path can't carry (e.g. breakable) at zero risk.
- */
-function cloneLodDff(
-  hdDff: Uint8Array,
-  link: LodLink,
-  decimate: null | ReturnType<typeof createBudgetedDecimate>,
-  textures: TextureSource,
-  stats: BuildStats,
-  keepParticles: boolean,
-): Uint8Array {
-  if (decimate) {
-    const clump = parseDff(toArrayBuffer(hdDff));
-    const mesh = buildClumpMesh(clump);
-    const ctx = { textures, view: lodView(link.hdDrawDistance || 300) };
-    const decimated = decimate(mesh, ctx);
-    if (decimated !== mesh) {
-      stats.decimatedLods += 1;
-      // Default drops particles (type 1); the repro switch adds them back so the decimated clones emit too.
-      const entries = collectClumpEffects(hdDff, clump);
-      if (keepParticles) {
-        entries.push(...collectClumpEffects(hdDff, clump, new Set([1])));
-      }
-      const effects = build2dfxSection(entries);
-
-      return encodeLodDff(decimated, link.lodModel, { ...(effects ? { effects } : {}) });
-    }
-  }
-
-  return keepParticles ? hdDff : stripParticleEffects(hdDff);
 }
 
 /** Distinct LOD models across the given links. */

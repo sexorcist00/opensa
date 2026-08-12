@@ -38,65 +38,87 @@ const index: CollisionIndex = new Map([['p_rubble05col', rockCol()]]);
 describe('procObjColliders', () => {
   describe('negative cases', () => {
     it('skips models without a COL (grass/flowers stay walk-through)', () => {
-      const batch: ProcObjBatch = { category: 'grass', model: 'veg_procgrasspatch', placements: [placement()] };
-      expect(procObjColliders(index, [batch])).toEqual([]);
-    });
-
-    it('skips batches whose placements are all above the vanilla density', () => {
       const batch: ProcObjBatch = {
-        category: 'rocks',
-        model: 'p_rubble05col',
-        placements: [placement({ lottery: 1.5 }), placement({ lottery: 2.5 })],
+        category: 'grass',
+        model: 'veg_procgrasspatch',
+        placements: [placement()],
+        surface: 'p_grass_short',
       };
       expect(procObjColliders(index, [batch])).toEqual([]);
     });
 
-    it('collides nothing for a disabled category (densityOf → 0)', () => {
-      const batch: ProcObjBatch = { category: 'rocks', model: 'p_rubble05col', placements: [placement()] };
-      expect(procObjColliders(index, [batch], { densityOf: () => 0 })).toEqual([]);
+    it('collides nothing for a batch the budget kept nothing of (a disabled category)', () => {
+      const batch: ProcObjBatch = {
+        category: 'rocks',
+        model: 'p_rubble05col',
+        placements: [placement(), placement()],
+        surface: 'p_mountain',
+      };
+      expect(procObjColliders(index, [batch], { keep: [0] })).toEqual([]);
+    });
+
+    it('collides nothing for a batch the budget has no count for', () => {
+      const batch: ProcObjBatch = {
+        category: 'rocks',
+        model: 'p_rubble05col',
+        placements: [placement()],
+        surface: 'p_mountain',
+      };
+      expect(procObjColliders(index, [batch], { keep: [] })).toEqual([]);
     });
   });
 
   describe('positive cases', () => {
-    it('collides the vanilla (lottery < 1) subset at the render pose', () => {
+    it('collides every placement at the render pose when no budget is given', () => {
       const batch: ProcObjBatch = {
         category: 'rocks',
         model: 'p_rubble05col',
         placements: [placement({ lottery: 0.2, position: [10, 20, 5] }), placement({ lottery: 1.2 })],
+        surface: 'p_mountain',
       };
       const colliders = procObjColliders(index, [batch]);
       expect(colliders).toHaveLength(1);
       expect(colliders[0].name).toBe('p_rubble05col');
       expect(colliders[0].col).toBe(index.get('p_rubble05col'));
-      expect(colliders[0].transforms).toHaveLength(1); // only the vanilla-density placement
+      expect(colliders[0].transforms).toHaveLength(2);
       const position = new Vector3().setFromMatrixPosition(colliders[0].transforms[0]);
       expect([position.x, position.y, position.z]).toEqual([10, 20, 5]);
     });
 
-    it('follows the live per-category density (collision matches the rendered set)', () => {
-      const batch: ProcObjBatch = {
-        category: 'rocks',
-        model: 'p_rubble05col',
-        placements: [placement({ lottery: 0.2 }), placement({ lottery: 1.2 }), placement({ lottery: 2.4 })],
-      };
-      expect(procObjColliders(index, [batch], { densityOf: () => 3 })[0].transforms).toHaveLength(3);
-      expect(procObjColliders(index, [batch], { densityOf: () => 1.5 })[0].transforms).toHaveLength(2);
-      expect(procObjColliders(index, [batch], { densityOf: () => 0.1 })).toEqual([]);
-    });
-
-    it('never collides what the procObjLimit hides (lotteryCap = rendered set)', () => {
+    it('collides exactly the budget’s keep count, lowest lottery first (= the rendered set)', () => {
       const batch: ProcObjBatch = {
         category: 'rocks',
         model: 'p_rubble05col',
         placements: [
           placement({ lottery: 0.2, position: [1, 0, 0] }),
           placement({ lottery: 0.8, position: [2, 0, 0] }),
+          placement({ lottery: 2.4, position: [3, 0, 0] }),
         ],
+        surface: 'p_mountain',
       };
-      const colliders = procObjColliders(index, [batch], { densityOf: () => 3, lotteryCap: 0.5 });
-      expect(colliders[0].transforms).toHaveLength(1); // lottery 0.8 is beyond the limit → no body
+      const colliders = procObjColliders(index, [batch], { keep: [1] });
+      expect(colliders[0].transforms).toHaveLength(1); // the other two are beyond the budget → no body
       const x = new Vector3().setFromMatrixPosition(colliders[0].transforms[0]).x;
       expect(x).toBe(1); // the lowest-lottery (rendered) placement survives
+      expect(procObjColliders(index, [batch], { keep: [3] })[0].transforms).toHaveLength(3);
+    });
+
+    it('reads the keep count by batch position, skipping models without a COL', () => {
+      const grass: ProcObjBatch = {
+        category: 'grass',
+        model: 'veg_procgrasspatch',
+        placements: [placement(), placement()],
+        surface: 'p_grass_short',
+      };
+      const rocks: ProcObjBatch = {
+        category: 'rocks',
+        model: 'p_rubble05col',
+        placements: [placement(), placement(), placement()],
+        surface: 'p_mountain',
+      };
+      const colliders = procObjColliders(index, [grass, rocks], { keep: [2, 3] });
+      expect(colliders).toHaveLength(1);
+      expect(colliders[0].transforms).toHaveLength(3); // the rock batch's own count, not the grass one's
     });
   });
 });

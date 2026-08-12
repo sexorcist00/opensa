@@ -17,24 +17,77 @@ npm run build:game:gostown:opensa      # TCs are opensa-only (also :carcer :ande
 ```
 
 Both write into the same `./build/<id>`: `:opensa` fills `opensa/` + `opensa-pack/`, `:sa` fills `sa/`, and
-neither touches the other's directory (the builder only clears `<out>/.work`). Standalone:
+neither touches the other's directory (the builder only clears its own `<out>/.work-<target>`, plus a legacy
+shared `.work` if one is left from a pre-005 build).
+
+**`<out>/.work-<target>` is wiped before any stage reads `--game`** (pmb plan 005: one work dir per target,
+so building one target keeps the other's intermediates), so re-running one stage off an intermediate
+(`--game <out>/.work-sa/5-trees`) inside the SAME target's dir deletes the intermediate first. Copy it out,
+point `--out` elsewhere, or read the OTHER target's kept dir — the builder refuses the overlap rather than
+wiping it. Every run writes `<out>/build-timings.json` — per-stage wall clock plus the target and procobj
+knobs it was built with, so two durations are comparable — and each target that runs writes
+`<out>/report-<target>.json` (`report-sa.json`, `report-opensa.json`): the target, the fetch game id, the
+timings and one typed fragment per stage that produced one (optimize totals; the sa census/FLA pools/lift
+requirements/asi sha; the pack summary with a POINTER to `opensa/pak/report.json` — there is no root
+`report.json` any more). Standalone:
 
 ```bash
 NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cli.ts \
   --game ./game-src/original --in ./mods-src --exclude sa
 ```
 
-Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|peds|optimize|trees|procobj|sa|opensa|pack|lod>`
-(inclusive, keeps `.work/`) · **`--exclude <stage,stage>`** · `--keep-work` · `--no-weld-seams` ·
-`--no-textures` · `--allow-text-row-overflow` · **`--bake-collision`** (write every cell's collision into the
-pak — plan 200/3-01; off by default, and the same tree built with and without it is the A/B the claim is read
-on: the runtime reads a bake when the pak has one and parses COL when it does not).
+Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|peds|optimize|trees|sa|procobj|opensa|pack|lod>` (that IS the run order — `procobj` is baked inside the `sa` branch since plan 014, so `--until sa` stops BEFORE the clutter)
+(inclusive, keeps `.work-<target>/`) · **`--exclude <stage,stage>`** · **`--target <sa|opensa>`** ·
+`--procobj-density <n>` · `--procobj-max <n>` · `--keep-work` · `--no-weld-seams` · `--no-textures` ·
+**`--bake-collision`** (write every cell's collision into the pak — plan
+200/3-01; off by default, and the same tree built with and without it is the A/B the claim is read on: the
+runtime reads a bake when the pak has one and parses COL when it does not).
 
-`--exclude` is the TARGET directive where `--until` is the stop point: it drops the named stages and keeps
+`--exclude` says WHICH STAGES run where `--until` is the stop point: it drops the named stages and keeps
 everything after them (repeatable, comma-separated, same names as `--until` minus the `lod` alias; an unknown
 name is an error, never a silent skip). Excluding `opensa` drops `pack` with it; excluding `pack` alone leaves
 `opensa/` in GAME format; excluding `sa` also drops its `checkImgIdBudgets` guard, which reads the `sa/` tree.
 **`:sa` builds no mod vehicles or peds** — that is what `--exclude vehicles,peds` means.
+
+`--target` says which HOST the build is for, and it picks every knob whose right value is a fact about the
+host rather than about the source data (limits, particle policy, procobj density). Omit it and it is DERIVED
+from `--exclude` — `--exclude sa` builds for `opensa`, anything that still builds `sa/` is `sa`, because the
+common chain is shared and its content has to satisfy the host that still has ceilings. `--target opensa`
+without `--exclude sa` is refused for the same reason. The run prints the target it resolved, and the procobj
+stage prints that layer's price against it (objects · permanent text rows · rows/object).
+NB `--target` means a DIRECTORY in `vehicle-installer --rebake` — same word, unrelated meaning.
+
+`--procobj-density` is the scatter density cutoff for the procobj stage — **1 = vanilla, max 3** (the
+scatter's candidate ceiling; above it there are no candidates left to keep and the build refuses). The run
+prints the density it built at, so a capture states its own configuration. **The flag is the whole-map
+number; a PROFILE** — per category and per category×surface, plus a `maxDensity` that raises the candidate
+ceiling — **is a config value, not a flag** (`BuilderConfig.procobjDensity` / `ProcObjLodConfig.density`
+accept `number | ProcObjDensityConfig`). The build then prints every key (`base=1 rocks=2`) and a
+per-category `objects / candidates / taken by the cap` breakdown. One density for both targets: it is not
+keyed by host. `--procobj-max` raises the placed
+-object safety cap with it; without that a high-density run measures the CAP, and the build says so with a
+`CAP DROPPED n` line. **The 2026-08-08 finding that "the cutoff is not the density lever" is retired**: it was
+true only because `cullByMinDistance` was deleting 99 % of the candidates with a column that is a camera
+distance. Since [009](../tools/sa-procobj-placement/docs/plans/009-procobj-dat-columns-as-the-game-reads-them.md)
+density 1 IS the authored density (91 092 objects) and `procObjMax` defaults to 100 000 so it does not bind.
+
+An `sa` build also **ships `perfect-map.asi` into the built game root** (sha256 recorded in
+`build-timings.json`, so a map is paired with the exact asi that lifts its ceilings). The artifact comes from
+`asi/perfect-map/dist/` — build it with `npm run build:asi` in that workspace, which needs MinGW; `dist/` is
+gitignored, so a fresh checkout has none and the build **warns loudly** instead of quietly emitting a tree
+that corrupts a plain install.
+
+On the built `sa/` tree the build also prints its **install requirements** — every stock ceiling the artifact
+crosses and the setting that lifts it (int16 rows → `perfect-map.asi`, which no adjuster provides; the
+`CBuilding` pool → OLA `Buildings`; rows in one IPL → OLA `EntitiesPerIpl`; the three FLA id pools). A LINE,
+never a throw: the ceilings that are REAL on the target are guarded beside it, and this one states the ones we
+deliberately design past, so the install a build needs is read off the artifact rather than remembered.
+
+On the built `sa/` tree the build prints a **map-cost census** (`reportTextIplCensus`: permanent text-IPL rows,
+inst-bearing IPLs, and how many of the IPLs listed in `gta.dat` it could actually read) and enforces the **FLA
+ID pools** (`checkImgIdBudgets` — the one set of ceilings the target really has). An `--exclude sa` run does
+neither. There is no int16 row guard any more: the target always runs `perfect-map.asi` + OLA + FLA, so that
+ceiling is lifted where our data lands — `--allow-text-row-overflow` was deleted with it (2026-08-09).
 
 ### Vehicle round: rebake instead of rebuilding
 
@@ -97,6 +150,7 @@ vite is not started at all — which is the only way in on a device whose rolldo
 | Game on the served build | `http://localhost:5173/?loader=http-dir&src=http://localhost:3001/build/original/opensa`                            |
 | Bench sweep (8 scenes)   | `http://localhost:5173/?bench=all` (one scene: `?bench=country-dusk`)                                              |
 | Soak (minutes)           | `http://localhost:5173/?soak=30`                                                                                   |
+| Clutter A/B              | `&procobj=<×density, 0=off, saturates at 3>` · `&procobjLimit=<per-cell, saturates at 300>` · `&procobjRange=<units, overrides every category's draw distance — 150 = the pre-2026-08-10 ring, 100 = SA's own flat PLANTS_MAX_DISTANCE>` · `&procobjSampler=<area|corner — corner is the original's in-triangle routine, one sqrt apart>` · `&procobjSlope=<steep>,<flat> — ROCK candidate multipliers on steep vs flat faces; re-rolls the scatter>` · `&procobjFloor=<n, DEFAULT 1 since 2026-08-11 — keep at least n of every species the cell is eligible for; 0 is the A/B and brings back the 17.7 % species loss>`. Full table: [query-parameters.md](development/query-parameters.md) |
 | Physics lap (081/01)     | `http://localhost:5173/?phys=all&car=infernus` (one scene: `?phys=brake-strip`) → `[phys]` JSON per lap            |
 | Video mode (096)         | `http://localhost:5173/?video=1&seed=47` (`&car=` pins the car, `&at=x,y` pins the start, `&scenes=N` shortens the sequence, `&scene=N` starts at scene N — `&scene=57&scenes=1` plays exactly scene 57, `&diag=1` adds the per-frame camera capture) → a seeded SEQUENCE of drive scenes, scenes 1…100 of the seed (`&scenes=N` for a shorter one), one per region (LA→VEGAS→SF→COUNTRYSIDE→DESERT), `[video]` JSON per scene. **The URL rewrites itself as the reel plays** — `&seed=` and `&scene=` name the scene on screen, so the bar always points at what you are watching and can be copied to come back to it. `&car=` pins the car, else each scene picks one off the MOD-CAR roster when the build has any (`data/vehicle-mods.txt`), and off the stock road-car roster when it has none |
 | Lab                      | `npx vite --config apps/engine-lab/vite.config.ts` → `http://localhost:4300/`                                      |
@@ -128,8 +182,13 @@ npx tsx tools/map-optimizer/src/cli.ts --game <dir> --out <dir>
 npx tsx tools/lod-trees-generator/src/cli.ts --in ./mods-src/vegetation --game <dir> --out <dir> \
   --prelight ./mods-src/vegetation/prelight/info.json --tex 512
 
-# Procobj → static IPL + LODs
-npx tsx tools/lod-procobj-generator/src/cli.ts --in ./mods-src/procobj --game <dir> --out <dir> --prelight --tex 128
+# Procobj → static IPL + LODs ([--target sa|opensa]: the host the layer's cost is reported against; pmb passes
+# its own. [--density n]: scatter cutoff, 1 = vanilla, max 3 — the run prints the density + rows/object it built)
+npx tsx tools/sa-procobj-placement/src/cli.ts --in ./mods-src/procobj --game <dir> --out <dir> --prelight --draw 299
+#   --sampler <area|corner>  where in a triangle a placement lands; corner is the original's recovered routine
+#   --species-floor <n>  objects every species with a candidate is guaranteed per 250 u cell (default 1, 0 = off).
+#   Its own gate, WIDER than the runtime's: nothing caps this path, so what empties a species locally is the
+#   density lottery, and the floor ADDS objects rather than swapping them (+312 of 91 067 measured, +0.34 %).
 
 # OpenSA cell LODs ([--holes <json>]: hole-fill models merged verbatim past the reduction tracks)
 npx tsx tools/opensa-lod-generator/src/cli.ts --game <dir> --out <dir> --cell 250
@@ -213,6 +272,17 @@ npx tsx scripts/debug/touch-controls-check.ts \
 #   ?osmspike=<model> renders one map-object .osm beside the player (the 04 phase-0 spike hook) ·
 #   F2 → CLEO (097/07): runner/trace toggles, thread list with per-tick cost, unimplemented/atlas
 #   coverage with tiers, per-thread trace, step-one
+# HUD `signs N` — roadsign glyph quads in the cells drawn this frame (.oscell minor 8). The instrument for
+#   "do plates survive to LOD range", which a screenshot cannot answer (~8 px at 440 u). 0 on a pre-minor-8
+#   pak means UNKNOWN, not none — check the pak manifest's buildTime first (canonical: 13:19 08-08-2026 on)
+# Effect draw distance — ?fx=N scales EVERY fx system's shipped distance (its authored cullDist with the
+#   recorded departures and the dynamic lane's 300 u floor applied). 1 = as the data says; the debugger's
+#   Graphics → EFFECTS DISTANCE slider is the same knob live. A tiny value (?fx=0.02) is the POSITIVE
+#   CONTROL a distance capture needs: it culls the emitters, which is the only way a shot can prove the
+#   specks in it are particles. Find something to aim at with scripts/debug/fx-anchor-census.ts
+# Camera aim (100 field checks) — ?look=x,y,z points the boot camera at a GTA world point and turns the
+#   ped with it (auto-centre then holds the aim). Without it every headless probe stares SOUTH, since
+#   look is pointer-only and the harness has no mouse. Pair with ?spawn: `?spawn=2033,2832,80&look=2632,2832,127`
 # Vehicle field checks (097/05) — ?spawncar=model[,x,y,z[,heading]] spawns one car (retries until the
 #   ground streams in; default spot 8 m north of spawn; heading is RADIANS — 0 faces north, the boot
 #   camera looks SOUTH, so put a car you want in frame at y − 10) · ?autoseat=1 seats the player once

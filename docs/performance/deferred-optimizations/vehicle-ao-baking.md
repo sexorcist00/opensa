@@ -5,6 +5,18 @@ describes ([plan 084](../../plans/084-vehicle-appearance/readme.md), commit `e50
 when the runtime DFF path was removed
 ([postmortem](../../postmortem/runtime-modloader-overlay.md)).
 
+**Impact: VERY LOW — the half that was worth milliseconds no longer exists.** The measured table is a car's:
+3–4 ms for a stock model, **64–76 ms for a 91 746-vertex mod car**, once per MODEL on the on-demand build
+path. Every one of those numbers is now void — cars are baked in `opensa-pack` and their occlusion is already
+in the `.osm`. What remains is props, clutter and animated map objects, which are far smaller than a car and
+sit at the LOW end of that table. It would be a spawn-path hitch lever if anything on that path ever hitched,
+and nothing has.
+
+**Effort: medium** for what is left of it — props, clutter and animated map objects still build on demand, so
+baking them means a new field in the converted-model fixture and a re-convert before any occlusion change is
+visible again. That turnaround loss is most of the price. **The cheaper thing at the bottom (lowering `GRID` /
+`AZIMUTHS` / `MARCH_CELLS`) is very low effort** and halves the cost without touching a format.
+
 ## What we do today
 
 `packages/renderware/src/vehicle/sky-occlusion.ts` computes self-occlusion **in the shared builder**, inside

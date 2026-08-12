@@ -26,6 +26,7 @@ function sampleCellBytes(index16 = false): Uint8Array {
     origin: [2500, -1600, 0],
     particles: [],
     placements: [],
+    roadsignQuads: 0,
     vertexCount,
     vertexData,
   };

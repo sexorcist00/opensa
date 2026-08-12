@@ -14,7 +14,12 @@ import { ByteReader, ByteWriter } from './binary';
 
 export const OSCELL_MAGIC = 0x3143534f; // 'OSC1' little-endian
 export const OSCELL_VERSION_MAJOR = 0;
-/** Minor 6 (074/22 phase 8): the PLACEMENT MAPPER — a row per merged placement range, naming the model it
+/** Minor 8 (plan 100 field close-out): the cell records how many ROADSIGN GLYPH QUADS it welded. Roadsign
+ *  text is baked into an ordinary beam bucket, so once welded it is indistinguishable from any other
+ *  geometry — which left "does a plate still draw at LOD range" answerable only by eye, and a 2.4 m plate at
+ *  440 u is ~8 px. One number per cell, summed over VISIBLE cells, turns that into a reading. It is a COUNT,
+ *  not a table: nothing renders from it.
+ *  Minor 6 (074/22 phase 8): the PLACEMENT MAPPER — a row per merged placement range, naming the model it
  *  came from and the index range it owns, plus a per-cell name table. Welding destroys per-object identity
  *  (that is the point: 4.5x fewer draws), so the debugger could not answer "what did I just click". This is
  *  the identity the weld already knows, written down. Same shape as the breakable table, generalised to
@@ -33,7 +38,7 @@ export const OSCELL_VERSION_MAJOR = 0;
  *  bundle and without splitting the prop out of the merged batch (which measured 4.5x the draw calls).
  *  Minor 2 (B6): the cell gained a PARTICLE table (2dfx type-1 emitter anchors). Readers accept minor 1
  *  paks — they simply carry no particles. */
-export const OSCELL_VERSION_MINOR = 7;
+export const OSCELL_VERSION_MINOR = 8;
 export const OSCELL_VERTEX_STRIDE = 36;
 
 /** Header `flags` bits. */
@@ -70,6 +75,9 @@ export interface Oscell {
   particles: OscellParticle[];
   /** The placement mapper (minor 6): which merged triangles belong to which placed object. */
   placements: OscellPlacement[];
+  /** Roadsign glyph quads welded into this cell (minor 8) — a diagnostic COUNT, drawn from no table of its
+   *  own. Summed over visible cells it is the only way to ask whether plates survive to LOD range. */
+  roadsignQuads: number;
   vertexCount: number;
   /** Interleaved vertex payload, stride {@link OSCELL_VERTEX_STRIDE}. */
   vertexData: Uint8Array;
@@ -194,6 +202,9 @@ export function decodeOscell(bytes: Uint8Array): Oscell {
   // Minor 6 appends the placement count on the same rule — a pre-mapper pak reads 0 and keeps every
   // following offset where it is. The debugger's Map screen degrades to "no picking" on such a pak.
   const placementCount = minor >= 6 ? r.u32() : 0;
+  // Minor 8 appends the roadsign glyph-quad COUNT on the same rule — a pre-minor-8 pak reads 0, which is
+  // "unknown" rather than "none", and every following offset stays where it is.
+  const roadsignQuads = minor >= 8 ? r.u32() : 0;
   const vertexOffset = r.u32();
   const indexOffset = r.u32();
   const tableOffset = r.u32();
@@ -244,6 +255,7 @@ export function decodeOscell(bytes: Uint8Array): Oscell {
     origin,
     particles,
     placements,
+    roadsignQuads,
     vertexCount,
     vertexData,
   };
@@ -280,6 +292,7 @@ export function encodeOscell(cell: Oscell): Uint8Array {
   w.u32(cell.particles.length);
   w.u32(cell.breakables.length);
   w.u32(cell.placements.length);
+  w.u32(cell.roadsignQuads);
   const vertexOffsetSlot = w.reserveU32();
   const indexOffsetSlot = w.reserveU32();
   const tableOffsetSlot = w.reserveU32();

@@ -8,6 +8,17 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
 - <https://github.com/gta-reversed/gta-reversed-modern> — reversed GTA SA source (the active repo; the
   catalogue's provenance lines cite it); the reference for engine internals (pools, `CIplStore`,
   streaming) behind our int16/pool guards and the `asi/` plugin work.
+- <https://github.com/in0finite/SanAndreasUnity> — **the other own-engine SA**: a C# / Unity
+  reimplementation that loads the player's own game assets, with the world, peds, vehicles and multiplayer
+  running. The closest thing to a peer project, so read it for the DECISIONS it had to take — how it split
+  streaming, what it kept from the original's structure and what it threw away — and for a second opinion
+  whenever we are about to conclude "SA's data cannot express X". **Not a source of truth**: its answers are
+  shaped by Unity's constraints the way ours are shaped by our own, and what SA's data MEANS still comes from
+  `gta-reversed`.
+- <https://github.com/gennariarmando/rubbish-sa> — a small C++ mod porting GTA III's blowing-rubbish system
+  into San Andreas (and letting you shoot it). Useful twice over: as a worked example of an ASI adding an
+  ambience system to the real game — the shape `asi/city-life` takes — and as a candidate for the ambience
+  itself, since SA dropped a system III had.
 - <https://github.com/JuniorDjjr/CLEOPlus> — CLEO extension reference (opcode surface for plan 097).
 - <https://github.com/cleolibrary/CLEO4> — CLEO 4's own source. `source/CCustomOpcodeSystem.cpp` is the
   ground truth for how `0AA5`-`0AA8` marshal their parameters (the push loop that makes the LAST listed
@@ -95,6 +106,30 @@ decided against real-world geography, so a globe and its CRS machinery buy nothi
 - <https://sonorancad.com/fivem> — the commercial leader for FiveM. Its live map is a 2D tile canvas with
   blips; the only 3D live map it ships is for a Roblox game. Both it and SnailyCAD are FiveM, which is why
   SA-MP/open.mp is the opening.
+## References the user wants watched before work starts
+
+- <https://www.youtube.com/watch?v=1dwufRp71EY> — **must be shown to the user before ANY work on the City
+  Life chain begins** (his call, 2026-08-11; he will say afterwards what it changes). The gate itself lives
+  at the top of
+  [`docs/roadmap/0.5.0/plans/06-city-life/readme.md`](roadmap/0.5.0/plans/06-city-life/readme.md).
+- <https://www.youtube.com/watch?v=R24KBNuOiR4> — **must be shown to the user before any work starts from the
+  original-game defect list** (his call, 2026-08-11). Gate at the top of
+  [`docs/improvements/original-game-defects.md`](improvements/original-game-defects.md).
+- <https://libertycity.net/files/gta-san-andreas/239321-ultimate-first-person-beta.html> — "Ultimate First
+  Person (beta)". **Must be downloaded and studied before any work on the first-person camera idea** (his
+  call, 2026-08-11): prior art for the open questions that idea carries — head hiding without near-plane
+  clipping, weapon aim, vehicle interiors. Gate at the top of
+  [`docs/ideas/first-person-camera/readme.md`](ideas/first-person-camera/readme.md).
+
+## The original game's own bugs
+
+- <https://github.com/CookiePLMonster/SilentPatch> — the community's bug-fix patch for the 3D-era games; its
+  SA changelog
+  (<https://github.com/CookiePLMonster/SilentPatch/blob/dev/CHANGELOG-SA.md>) is the closest thing to a
+  catalogue of what is broken in stock San Andreas. **Read it as a defect inventory, not a fix list** — and
+  note our reference install already runs it, so its fixes are present on the `sa` target and absent in our
+  own engine. Used as a seed for
+  [`docs/improvements/original-game-defects.md`](improvements/original-game-defects.md).
 
 ## Articles & techniques
 

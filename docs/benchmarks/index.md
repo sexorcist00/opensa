@@ -398,6 +398,376 @@ Not comparable with anything above it: different host, different world, no p95, 
 gap `docs/features/mobile-controls.md` names ("no touch-device frame-time row exists"), and it is owed a
 successor on a real `--rgba8` district.
 
+### 100/04 — per-system fx cull distance (2026-08-08)
+
+A/B on `build/original/opensa`, headless DPR=2: replacing the flat `DRAW_DISTANCE = 300` with each fx
+system's authored `cullDist` (plus two recorded departures) is **below what the bench can measure**. The
+verdict rests on a POSITIVE CONTROL, not on the A/B: forcing every emitter quad to collapse gives
+`country-dusk` a GPU pass of 3.880 ms against 3.875 (after) and 3.867 (before) — culling every particle in
+the map is indistinguishable from drawing them, so the scene has no power to judge this change either way.
+The only column that moves is `avgTriangles`: `lv-night` −2890 of 2 049 828 (−0.14 %), which is 26 `fire`
+anchors going from 300 u to their authored 35. `avgMs` is pinned at the 120 fps cap in every row. Rows:
+[`2026-08-08-ingame-fx-cull-distance.json`](opensa-engine/2026-08-08-ingame-fx-cull-distance.json).
+
+### Post-plan-100 rebuild — the density baseline (2026-08-08)
+
+The first full rebuild after plan 100 shipped, and the "before" plan 07/04 owes: an 8-scene sweep at
+TODAY's procobj density, against a pak that now carries 2dfx at **both** levels (particles 943 → **1831**,
+roadsigns 481 → **962**, 1137 cells, buildTime `11:42 08-08-2026`). Nothing moved: `country-dusk` 3.868 ms
+GPU pass against 3.875 on the pre-100 pak, `lv-night` 3.603 against 3.600, `avgMs` pinned at the 120 fps cap
+throughout. **That is a baseline, not a verdict** — the positive control in the row above proves this sweep
+cannot price emitter cost at all, and it never enters the 440–1000 u transition band where the doubling
+question lives. Rows: [`2026-08-08-ingame-post-100-rebuild.json`](opensa-engine/2026-08-08-ingame-post-100-rebuild.json).
+
+### Minor-8 re-pack — the baseline that still exists (2026-08-08)
+
+The post-100 sweep above named a pak that was then replaced: the canonical build was re-packed onto `.oscell`
+minor 8 (the roadsign glyph-quad count), so its rows point at a `buildTime` nothing on disk matches. The same
+8 scenes re-taken on the pak that DOES exist (`13:19 08-08-2026`) are
+[`2026-08-08-ingame-minor8-repack.json`](opensa-engine/2026-08-08-ingame-minor8-repack.json) — **this is the
+density baseline plan 07/04 compares against**. Scene-to-scene `gpuMs.pass` moves between −0.16 and +0.14 ms
+in both directions, which is run-to-run spread: minor 8 adds one header word per cell and no geometry, and the
+positive control two rows up already showed this sweep cannot resolve differences of that size.
+
+### Procobj density sweep — the arm that was cut, and why the sweep could not answer anything (2026-08-08)
+
+Two builds were made for 07/04's opensa perf budget, both from the canonical build's kept `.work/5-trees`
+stage so the ONLY variable is the procobj density: `bench-d1` (`--procobj-density 1`, vanilla) and `bench-d3`
+(`--procobj-density 3`, the scatter's candidate ceiling, cap raised to 200 000 so it could not bind).
+
+**The builds already answered the question the bench was meant to ask, and the answer is that the arms are not
+arms.** Three times the candidates yields **15 840 objects against 15 286 — +3.6 %, not 3×** (rows 6 728 vs
+6 487; pak 1 275 777 024 vs 1 272 020 992 B, +0.30 %; 1139 cells in both). No `CAP DROPPED`, so `procObjMax`
+never bound: the extra candidates were culled by **MINDIST**, which is already saturated at vanilla density.
+Two builds 3.6 % apart cannot price a streaming budget — the layer's whole GPU cost is 0.07–0.38 ms
+([layer decomposition](opensa-engine/2026-07-21-layer-decomposition.md)), so 3.6 % of it is far below what
+this instrument resolves.
+
+The headless `d1` sweep was killed externally after 5 of 6 scenes and `d3` never ran headless; those partial
+rows are [`2026-08-08-headless-07-04-density-d1-partial.json`](opensa-engine/2026-08-08-headless-07-04-density-d1-partial.json).
+**The user then ran both arms in full on his own machine** (9 scenes each, in-game `?bench=all`):
+[`2026-08-08-ingame-07-04-density-ab.json`](opensa-engine/2026-08-08-ingame-07-04-density-ab.json).
+
+**Result: +3.6 % clutter costs nothing this instrument can see.** Six scenes come back with triangle counts
+identical to ±0.0 % and `gpuMs.pass` within ±0.03 ms; `country-dusk` — the clutter scene — moves **+0.3 %
+triangles for +0.013 ms**. That is the whole verdict, and it is a statement about 3.6 %, not about density.
+
+**Three rows are contaminated, and the partial headless run is what identifies which arm is wrong.** The
+scenes where the arms disagree do so by amounts no 3.6 % content change can produce — `sf-fog-dawn` −4.2 %
+triangles, `lv-night` +15.5 %, `ocean-horizon` **+107.3 %** (the control scene, which
+[the layer decomposition](opensa-engine/2026-07-21-layer-decomposition.md) showed does not move for ANY map
+layer). In all three the `d3` arm agrees with the independent headless `d1` run (ocean-horizon 848 670 vs
+846 535 triangles; lv-night 2 070 601 vs 2 058 684; sf-fog-dawn 1 483 818 vs 1 482 512) while the user's `d1`
+arm is the outlier — so the content is the same and the **`d1` run's scene states drifted**, under-streaming
+two scenes and over-streaming one.
+
+That matches the defect the user reported on both runs: collision is lost across scene transitions (cars fall
+through the ground) and the player falls when the sweep ends —
+[`open-issues/bench-scene-transition-collision.md`](../open-issues/bench-scene-transition-collision.md).
+**Until that is fixed, no scene-to-scene A/B on this harness can be trusted below its own drift**, which
+these rows measure at up to 107 % of a scene's triangles.
+
+What a real density measurement needs is a lever that MOVES the count, and the only one left is the authored
+`procobj.dat` MINDIST — a data-honesty decision, not a knob.
+
+### A/A reproducibility — is this harness a measuring instrument? (2026-08-08)
+
+**No, not yet.** Two headless `?bench=all` sweeps of the SAME canonical pak (buildTime `13:19 08-08-2026`,
+verified on disk) with **no content and no code change between them**, plus the minor-8 row set as a third
+point. `avgTriangles` swings up to **10.19 %** (`lv-night`), 6.00 % (`sf-fog-dawn`), 3.27 %
+(`ocean-horizon`) — and the outlier lands on a **different scene in each run**, so this is a lottery, not a
+drift. `lateCreates` is **0 on every row**, including the ones 10 % apart.
+
+Two candidate causes are ruled out by the rows themselves: `vehicles.live` is identical scene for scene
+(24→24, 43→43, ocean-horizon 0→0) and so is `residency` to the megabyte (`cellVertex 193→193`). The world
+loaded is the same; what is SUBMITTED differs, because the settle exits on a signal that answers for the
+previous scene — four of nine settle in ONE frame, and `lv-night` begins measuring at 11 cells loaded / 81
+queued. Full forensics, exact repro and the eight killed hypotheses:
+[`open-issues/bench-scene-transition-collision.md`](../open-issues/bench-scene-transition-collision.md).
+
+Rows: [`2026-08-08-headless-bench-aa-reproducibility.json`](opensa-engine/2026-08-08-headless-bench-aa-reproducibility.json)
+— **evidence about the instrument, not a performance baseline; do not compare against them.**
+
+### A/A again, after plan 102 — yes, it is an instrument now (2026-08-09)
+
+Same question, same pak, same harness, one day later, with the settle chain fixed (notice → ring → **ground
+under the anchor** → warp onto that ground → wait until he is **at rest** → warmup) and a warp reset derived
+inside the character controller. `avgTriangles` spread per scene is **0.00–0.36 %** — `lv-night` went 10.19 %
+→ **0.14 %**, `sf-fog-dawn` 6.00 % → **0.36 %** — and `avgMs` agrees to **≤ 0.02 %**. The camera-jump wall is
+gone: **1** `[cam]` line per run against a baseline of **89 255**.
+
+Eight of nine scenes now report `legStart.ok` true (`dz −0.08 m`, grounded, worst frame drop 0): the player
+stands still where the settle put him for the whole leg. The ninth, `strip-noon`, is RED in both arms, and
+the row says so instead of quietly measuring a falling camera — **its anchor was authored inside the
+Flamingo**, fixed hours later the same day
+([`open-issues/fixed/strip-noon-anchor-inside-a-building.md`](../open-issues/fixed/strip-noon-anchor-inside-a-building.md)):
+moved to `[1933, 1127, 18]`, re-run clean (`dz −0.08 m`, grounded, 27 cars live, `avgTriangles` 1 893 061).
+**Every `strip-noon` row in this record, including the two arms above, predates that fix and measured a
+falling player.**
+
+### The density A/B, re-taken on the repaired harness (2026-08-09)
+
+The 07/04 question, asked again now that the instrument holds still. Three sweeps on the user's display lane
+(oldmap · `bench-d1` · `bench-d3`, 1219 road cars and 212 parked on every arm, all nine scenes `legStart.ok`):
+**d1 and d3 are indistinguishable** — `avgTriangles` 0.00–0.25 % apart, `avgDrawCalls` 0–3 calls, `avgMs`
+≤ 1.6 % with the sign flipping between scenes, all of it under the harness's own 0.36 % A/A floor. The
+2026-08-08 audit's finding stands, now on evidence: the selector shipped, the lever does not move anything.
+
+Both d-builds do differ from the oldmap pak (+0.2…+1.5 % triangles, +5–7 % draws, same direction on both
+arms) — so they carry something the old map does not; it is not the density value.
+Rows: [`2026-08-09-ingame-user-display-density-ab.json`](opensa-engine/2026-08-09-ingame-user-display-density-ab.json)
+and [`…-oldmap-baseline.json`](opensa-engine/2026-08-09-ingame-user-display-oldmap-baseline.json).
+**`ocean-horizon` sits at the 120 fps cap on every arm — read its content columns, never its milliseconds.**
+
+Rows: [`2026-08-09-headless-bench-aa-after-102.json`](opensa-engine/2026-08-09-headless-bench-aa-after-102.json).
+The arm-A run that found the anchor-height defect on the way there:
+[`2026-08-09-ingame-102-probe-arm-a.json`](opensa-engine/2026-08-09-ingame-102-probe-arm-a.json) —
+**diagnostic, not a baseline.**
+
+### A/A on the CURRENT pak — the content column is solid, the cost column is not (2026-08-09)
+
+Plan 102's floor (worst-of-nine **0.36 %** triangles) was taken on the minor-8 pak of 08-08. lod-procobj
+013's `opensa` perf budget will be read on the post-column-fix pak (13:53, **91 092** clutter objects), so
+the floor was re-established there: two back-to-back headless `?bench=all` sweeps of the SAME build, Claude's
+lane, M3 Pro, DPR=2, 1219 road cars, `legStart.ok` on all nine scenes in both arms, `lateCreates` 0.
+Rows: [`2026-08-09-headless-aa-floor-current-pak.json`](opensa-engine/2026-08-09-headless-aa-floor-current-pak.json).
+
+| column | worst-of-nine A/A spread | verdict |
+| --- | --- | --- |
+| `avgTriangles` | **0.094 %** (lv-night) | trustworthy — better than the 0.36 % of the lighter pak |
+| `avgDrawCalls` | 0.52 % | trustworthy |
+| `avgMs` | 0.62 % — but **SATURATED at the 120 fps cap** (8.333 ms) on 7 of 9 scenes, both arms | carries no signal on this machine at DPR=2 |
+| `gpuMs.pass` | **13.37 %** (sf-fog-dawn) | the real cost floor, and it is large |
+
+**What this bounds.** The harness holds still on CONTENT, so an A/B may be read on triangles and draws. It
+does NOT hold still on cost: a single sweep's `gpuMs.pass` cannot resolve anything under ~13 %, and `avgMs`
+is a frame cap rather than a measurement. So 013's perf budget has to come from HITCHING — `p95Ms`, `[slow]`
+frames, stream stats — plus repeated `gpuMs.pass` samples, and never from one sweep's `avgMs`. The earlier
+density A/B read `avgMs` on the user's uncapped display lane, which is why it could see 12.6 % there.
+
+### The procobj density recovery — one scene moved, and it is the rural one (2026-08-09)
+
+The first sweep on a pak built with `procobj.dat` read the way the game reads it (`area / spacing²`, no
+MINDIST cull): the clutter layer went **15 286 → 91 092 objects**. User display lane, his run, same nine
+scenes, 1219 road cars / 212 parked on both arms, all nine `legStart.ok`. Baseline is the same-day
+[oldmap row](opensa-engine/2026-08-09-ingame-user-display-oldmap-baseline.json).
+Rows: [`2026-08-09-ingame-user-display-procobj-recovered.json`](opensa-engine/2026-08-09-ingame-user-display-procobj-recovered.json).
+
+| scene | avgMs | Δ | gpu.pass Δ | triangles Δ |
+| --- | --- | --- | --- | --- |
+| **country-dusk** | 16.366 → **18.434** | **+12.6 %** (61.1 → 54.2 fps) | **+16.3 %** | **+16.4 %** |
+| strip-noon | 10.166 → 10.464 | +2.9 % | +2.3 % | +2.4 % |
+| ls-noon | 9.452 → 9.564 | +1.2 % | +0.3 % | +0.9 % |
+| ganton-noon / -night | 13.55 / 13.655 → 13.644 / 13.73 | +0.7 / +0.6 % | +1.5 / +0.6 % | +0.6 / +0.8 % |
+| ls-rain-night · sf-fog-dawn · ocean-horizon | — | +0.4 / −0.1 / −0.0 % | +1.5 / +1.5 / +1.5 % | +0.9 / −0.1 / +6.7 % |
+| lv-night | 14.321 → 13.898 | **−3.0 %** | +1.8 % | +1.7 % |
+
+**Read it as one scene, not a regression.** Eight of nine sit inside ±3 %, and `lv-night` moved the wrong
+way while its triangles rose — a car-heavy scene's run-to-run spread (`vehicles.maxMs` 1.1 → 0.7), not a
+saving. The one real move is `country-dusk`, the only RURAL scene in the set, which is exactly where a
+ground-clutter layer lives.
+
+**The cost is GPU geometry, and the columns say so without inference**: `country-dusk`'s frame grew
+**+2.07 ms** while its `gpu.pass` grew **+2.03 ms** — the whole delta is raster of the added triangles, with
+CPU flat (`avgDrawCalls` +1.7 %, so it is not batching either). Across all nine scenes the ms delta tracks
+the triangle delta; that is the relationship to watch when 07/04 sets a budget.
+
+**What this run cannot say**, and it bounds any decision taken on it: the two paks differ in more than
+procobj — their `report.json` says particles 943 → 1 831 and roadsigns 481 → 962 (`a48ffa2f`, `493fe926`
+landed between the builds). Every rise above is an UPPER BOUND on the density's cost. `ocean-horizon` is at
+the 120 fps cap as always — its +6.7 % triangles are the only readable column.
+
+### The runtime clutter layer draws nothing on a built map — a NULL result (2026-08-10)
+
+The pak bakes the procobj layer into its cells AND `updateClutter` feeds `adapter.cellClutter` into an
+instanced render every frame, which reads like the clutter is drawn twice. It is not. Five single-scene
+`country-dusk` sweeps, Claude's headless lane: `?procobj=0` and a per-cell cap swept **1 → 3000** both leave
+`avgTriangles` unchanged to **0.007 %**, against this pair's own same-config A/A drift of **0.41 %**.
+**Cause, by construction:** `convertProcObj` strips every species it bakes, so a built `data/procobj.dat`
+carries **9 rules of 96**, all `P_UNDERWATERBARREN` — the runtime layer is alive with nothing to scatter on
+dry land. The positive control failed on the SITE, not on the instrument.
+Rows: [`2026-08-10-headless-runtime-clutter-null-result.json`](opensa-engine/2026-08-10-headless-runtime-clutter-null-result.json).
+
+**What this settles for lod-procobj 013:** clutter load on `opensa` is a **BUILD-time** quantity. Neither
+`?procobj` nor `?procobjLimit` is a lever for the streaming budget, so that measurement needs two BUILDS —
+and one already exists on disk (`NO_COMMIT/old_map`, 15 286 objects, against today's 91 092).
+
+**Also from these runs:** the new `hitch` block carries signal where the averages do not — `maxMs` spans
+9.4–21 ms across five arms whose `avgMs` is 8.329–8.334 and whose `p95Ms` is 9–9.1. Its three streaming
+columns (`blobMaxMs`, `uploadMaxMs`, `pendingMax`) printed 0 on every arm; a settled leg streams nothing, so
+they still owe a positive control before a zero from them counts as evidence.
+
+## 2026-08-10 — the pak, before and after the clutter moved to the runtime scatter
+
+[`opensa-engine/2026-08-10-pak-clutter-runtime-vs-baked.json`](opensa-engine/2026-08-10-pak-clutter-runtime-vs-baked.json)
+— a BUILD measurement, not a frame one, and it does not mix with the rows above. Plan 014 took the procobj
+clutter off the bake for `opensa`: **pak 1 551 → 1 168 MB (−24.7 %)**, **AO bake 21 m 14 s → 14 m 25 s
+(−32 %)**, **welded HD vertices 105.8 M → 60.4 M (−42.9 %)**. The cause is that welding duplicates vertices per
+instance, so 91 092 baked objects were ~45.4 M vertices of copies; the runtime path uploads ~48 geometries.
+
+**No frame number attaches to this yet.** Whether per-cell scatter at stream-in costs more than a baked cell is
+a hitch question, and it is the user's `?bench=all` run to make. The pair is also 30 h apart with one mods-stage
+change in it, so the deltas are attributed rather than isolated — the file lists the confounds, including a
+`breakables` −991 that turned out to be the 6 breakable clutter species leaving the pak for a runtime path that
+already handles them (074/20).
+
+## 2026-08-10 — the clutter on the runtime path, measured on the user display
+
+[`opensa-engine/2026-08-10-ingame-user-display-clutter-runtime.json`](opensa-engine/2026-08-10-ingame-user-display-clutter-runtime.json),
+directly against the two 2026-08-09 arms of the same lane (`-oldmap-baseline` = 15 286 clutter objects baked,
+`-procobj-recovered` = 91 092 baked). All three run by him, same machine, same nine scenes.
+
+| scene | 15 286 baked | 91 092 baked | 91 092 RUNTIME | Δ vs 91 092 baked |
+| --- | --- | --- | --- | --- |
+| ls-noon | 9.452 / 105.8 | 9.564 / 104.6 | 9.651 / 103.6 | +0.9 % |
+| sf-fog-dawn | 9.025 / 110.8 | 9.019 / 110.9 | 9.052 / 110.5 | +0.4 % |
+| lv-night | 14.321 / 69.8 | 13.898 / 72.0 | 14.545 / 68.8 | **+4.7 %** |
+| **country-dusk** | 16.366 / 61.1 | **18.434 / 54.2** | **16.091 / 62.1** | **−12.7 %** |
+| ocean-horizon | 8.334 / 120 | 8.333 / 120 | 8.333 / 120 | 0.0 % |
+| ls-rain-night | 8.652 / 115.6 | 8.684 / 115.1 | 8.664 / 115.4 | −0.2 % |
+| ganton-noon | 13.550 / 73.8 | 13.644 / 73.3 | 13.668 / 73.2 | +0.2 % |
+| strip-noon | 10.166 / 98.4 | 10.464 / 95.6 | 10.358 / 96.5 | −1.0 % |
+| ganton-night | 13.655 / 73.2 | 13.730 / 72.8 | 13.735 / 72.8 | 0.0 % |
+
+**The verdict: moving the clutter to the runtime path costs no frame time anywhere, and gives back the one scene
+the baked layer had taken.** `country-dusk` — the only scene clutter has ever moved — goes 18.434 → 16.091 ms and
+is now faster than even the 15 286-object baseline. Seven of the other eight are inside ±1 %.
+
+**The honest caveat, and it is a content one.** country-dusk's triangles fell 1 442 102 → **1 218 261 (−15.5 %)**
+and its draws 907 → 851, so the runtime path is drawing **less clutter than the bake did** — its per-cell
+`procObjLimit` binds where the bake had none. The −12.7 % is therefore "less drawn AND faster", not "same content,
+cheaper mechanism". What is measured is that the change costs nothing; what is NOT measured is whether it is
+cheaper at equal content. That question is now askable at all, which it was not: the bake stripped `procobj.dat`
+to 9 rules, so density and `procObjLimit` were dead knobs on this target and plan 013 had to invent a two-pak A/B.
+
+**lv-night +4.7 % is the one number not to over-read.** That scene's own arm-to-arm spread across the two 08-09
+runs is 3.0 % (14.321 vs 13.898) in a scene with almost no clutter, so +4.7 % sits just outside its noise with
+−2.3 % fewer triangles. One sweep cannot separate that from run-to-run variance.
+
+**First hitch numbers on this lane** (the block shipped 2026-08-10, so the 08-09 arms have none — these are a
+reading, not a delta): only the two heaviest scenes show slow frames at all, `country-dusk` **5** (maxMs 34.6) and
+`ganton-night` **1** (maxMs 26.1); every other scene is 0. And `country-dusk` carries the highest
+`gpuMs.pass` of all nine (**12.03**) on the FEWEST draws and second-fewest triangles — high pass cost on little
+geometry is where to look when the runtime scatter is tuned.
+
+## 2026-08-10 — the runtime clutter knobs, swept on the unbaked pak: BOTH saturate before the engine notices
+
+[`opensa-engine/2026-08-10-headless-procobj-runtime-knob-ladder.json`](opensa-engine/2026-08-10-headless-procobj-runtime-knob-ladder.json)
+— 15 single-scene `country-dusk` sweeps in Claude's headless lane, on the pak rebuilt 2026-08-10 17:47 **without**
+the procobj bake (`data/procobj.dat` back to all 95 source rules). This is the P1 measurement plan 013 owns.
+
+**The null result above is now closed as a SITE failure, exactly as it was diagnosed.** Same code, same scene,
+same harness, different pak: `?procobj=0` moves triangles **1 206 029 → 1 173 177 (−2.72 %)** and draws 830 → 815,
+against this session's own A/A drift of **0.007 %** (a vs a2). On the baked pak the identical arm moved 0.007 %.
+
+**Both knobs saturate, neither saturates on the engine — and they stop for two DIFFERENT reasons.**
+
+| knob | ladder | triangles | verdict |
+| --- | --- | --- | --- |
+| `procObjLimit` (per-cell cap) | 150 → 300 | 1 206 029 → 1 210 952 (+0.41 %) | +0.41 % of the SCENE is **13.0 % of the LAYER** |
+| | 300 → 600 → 1200 → 3000 | 1 210 952 / 1 210 827 / 1 211 008 / 1 210 965 | flat to 0.015 %, 20× the cap for nothing |
+| `?procobj` (density ×) | 1 → 2 → 4 | 1 210 965 → 1 251 866 → 1 291 582 (+6.66 %) | linear in the cutoff |
+| | 4 → 8 → 16 | 1 291 582 / 1 291 753 / 1 291 717 | flat — the ceiling is ×3, and it is OURS |
+
+**The cap's ceiling is the data.** The candidate pool per face is `area / spacing²`
+([009](../../tools/sa-procobj-placement/docs/plans/009-procobj-dat-columns-as-the-game-reads-them.md)), so at
+cutoff 1 a cell does not hold 300 placements and no cap above 300 can bind. What it *does* trim at the shipped
+150 is 4 923 triangles of a 37 775-triangle layer — read that +0.41 % with its scope.
+
+**The multiplier's ceiling is ours.** `scatterProcObjects` generates `area / spacing² × PROC_OBJ_MAX_DENSITY`
+candidates with a lottery uniform in `[0, PROC_OBJ_MAX_DENSITY)`, the renderer keeps `lottery < density`, and
+the runtime adapter takes the default **3** (`gta-sa-world.adapter.ts:632`, no argument). So a cutoff of 3 or
+more keeps every candidate. The arms measure exactly that: clutter triangles over the clutter-off baseline run
+**37 788 : 78 689 : 118 405 : 118 576 : 118 540 = 1 : 2.08 : 3.13 : 3.14 : 3.14** — linear, then flat at 3.
+(The ~4 % over an exact 1:2:3 is species mix; models do not carry equal triangle counts.) **So "+10.11 % of the
+scene" is what the layer costs at 3× vanilla, not a ceiling** — raising `PROC_OBJ_MAX_DENSITY` buys more at a
+linear cost in candidates. Draws move only at the on/off boundary: the clutter is instanced, so its cost is
+per-pixel, not per-draw.
+
+**And there is no hitch to find.** Across the 11 capped arms `hitch.maxMs` reads 9.7–36.0 ms and `slowFrames` 0–4
+with **no relation to load** — the two worst arms are `lim600` (35.4 / 4) and `d8` (36.0 / 1), while `d16`, the
+heaviest world of the ladder, reads 12.3 / 0 and the A/A pair alone spans 21.9 vs 9.7. `blobMaxMs`, `uploadMaxMs`
+and `pendingMax` are 0 on every arm. The hitch columns' own noise on this lane is larger than anything the layer
+can produce.
+
+**`UNCAPPED=1` works, and it costs the other half of the report.** `avgMs` unpins 8.33 → **5.42–5.64** and `p95Ms`
+9.1–9.2 → **6.7–7.2**, at 177–185 fps — so the "this needs the user's display" half of P1 is retired. But every
+uncapped arm, clutter-off included, reads `maxMs` 148–196 ms and `slowFrames` 16–19: the loop runs flat out and
+scheduling stalls swamp the hitch block. **Capped for hitching, uncapped for cost, and the two lanes are never
+comparable.** Even uncapped the layer stays below the noise: `gpuMs.pass` A/A is 6.5 % apart (4.164 vs 3.910),
+*wider* than off → max (3.952 → 4.201), and on `avgMs` the two default arms bracket the maximum arm outright.
+
+**What this settles for plan 013:** at 3× vanilla density the whole layer still costs less than one sweep's A/A
+drift, so there is no perf number to set `procObjMax`, the candidate ceiling or `procObjLimit` from — the budget
+cannot be read off a hitch measurement because the layer cannot be pushed into one. Keep `procObjLimit` at 150
+unless the look wants back the 13 % of the layer it trims (300 is the only value above it worth choosing), and
+treat the density ceiling as **available headroom, not a measured maximum**. The certified room goes to the P2
+draw distances, which is a look decision.
+**Not covered:** one scene, camera flights rather than a drive, n=1 per arm — a streaming-shaped hitch under
+continuous movement is sampled by no arm here, and the three streaming columns reading 0 everywhere means that
+pressure never arose rather than that it was survived. **Nor what raising `PROC_OBJ_MAX_DENSITY` would cost:**
+every arm above ×3 measured the same world.
+
+## 2026-08-10 — the per-category clutter ranges, which had never been connected to anything
+
+[`opensa-engine/2026-08-10-headless-procobj-per-category-ranges.json`](opensa-engine/2026-08-10-headless-procobj-per-category-ranges.json)
+— five `country-dusk` sweeps, same lane and pak as the knob ladder above. **The seven per-category draw
+distances were dead config**: written by the debug slider, read by nothing, so every category really drew at
+whatever its 256-unit cell reached and the cell ring was `streaming.collisionDrawDistance` = 150. They are now
+applied per INSTANCE in the clutter vertex shader, with the streaming ring widened to the widest enabled
+category.
+
+| range | draws | triangles | layer on screen¹ | `gpuMs.pass` |
+| --- | --- | --- | --- | --- |
+| 100 — SA's flat `PLANTS_MAX_DISTANCE` | 818 | 1 182 287 | 9 110 | 3.636 |
+| 150 — the collision ring | 819 | 1 186 367 | 13 190 | 3.633 |
+| **per-category (shipped)** | **821** | **1 191 188** | **18 011** | **3.694** |
+| 300 — every category at the widest | 830 | 1 209 368 | 36 191 | 3.678 |
+
+¹ against the same pak's clutter-off baseline of 1 173 177 triangles.
+
+Four points, one direction, against an A/A control of **0.020 %** on triangles and **zero** on draws. **In
+layer terms the range is a 4× lever** (9 110 → 36 191) while reading as +2.3 % of the scene — the scope matters
+or it sounds like nothing. And it is **free in frame terms**: `gpuMs.pass` spans 1.7 % across the whole ladder,
+inside this column's own 6.5 % A/A drift, with every hitch column flat. **Choosing a range is a look decision
+with a free budget**, which is what the P1 measurement above predicted for this layer.
+
+**Two things to carry forward.** The old behaviour was never "150" — it was "every instance of whatever cell you
+are in", so the effective reach depended on where in the cell the camera stood (~360 units at a corner); the win
+is determinism as much as reach. And **`avgTriangles` under-reports this feature**: it counts SUBMITTED
+instances, so a group the camera stands inside is counted whole and culled per instance in the shader. The
+column is accurate about vertex load and blind to the fill saving.
+
+## 2026-08-11 — the species floor, and what "the budget is conserved" is worth in frame terms
+
+[`opensa-engine/2026-08-11-headless-procobj-species-floor.json`](opensa-engine/2026-08-11-headless-procobj-species-floor.json)
+— four `country-dusk` legs, same lane and pak as the two 08-10 rows above: **two `?procobjFloor=0` arms and
+two `?procobjFloor=1` arms**, so each side carries its own A/A drift. The floor guarantees every eligible
+clutter MODEL at least one placement in a cell where `procObjLimit` binds, paying for it with the
+highest-lottery survivor ([plan 012](../../tools/sa-procobj-placement/docs/plans/012-species-representation-floor.md)).
+
+| arm | draws | triangles | `gpuMs.pass` | `hitch.maxMs` |
+| --- | --- | --- | --- | --- |
+| floor 0 (A) | 821 | 1 191 107 | 3.661 | 16.7 |
+| floor 0 (A′) | 821 | 1 191 235 | 3.672 | 9.5 |
+| floor 1 (B) | 821 | 1 191 176 | 3.688 | 31.8 |
+| floor 1 (B′) | 821 | 1 191 206 | 3.683 | 15.2 |
+
+**No resolvable cost.** Triangles move **+0.002 %** on the pair means against a floor-0 pair spread of
+0.011 %, and `avgDrawCalls` is **821 in every arm** — which is what the design predicts rather than a lucky
+result: the floor never adds a placement, it swaps one. `gpuMs.pass` +0.52 % is the only column that moves
+and it sits between the two pairs' own drifts (0.30 % and 0.14 %).
+
+**Read the saturation before the columns.** This is the capped lane, so `avgMs` sits on 8.33 and `p95Ms` on
+9.0–9.2 in all four arms; neither could have answered a cost question here (the same trap as the 08-10
+ladder). `hitch.maxMs` spans 9.5–31.8 with no relation to the arm — one slow frame in B, none in B′.
+
+**The honest gap, and it is the one the 08-10 null taught:** no positive control was run in THIS lane, so
+nothing here establishes that the floor changes anything in `country-dusk` specifically. The proof that the
+knob does something is a picture taken elsewhere — cell `-5,7` in the desert, 1.00 % of the frame against a
+9.81 % clutter-off control, recorded in plan 012. **This run supports "no cost", not "an effect was present
+and still cost nothing".**
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

@@ -81,6 +81,6 @@ blocker, worth recording:
   shared across ALL clutter categories) culls sparse breakable species hard, and `rockbrkq` is only ~1 m — a car
   drives over it. The reliable field-test spot is the dense **cactus** field (`sjmcacti2`, ~5.3 m tall, box COL)
   in Bone County cell 0,9 (~150 of them at z 15.3) — teleport "Desert - Breakable cacti".
-- **NOT applicable to `lod-procobj-generator`:** that tool is a Node build-time CLI that reads the full
+- **NOT applicable to `sa-procobj-placement`:** that tool is a Node build-time CLI that reads the full
   `gta3.img` directly and iterates `procobj.dat` species itself, so every procobj DFF is inherently available.
   The missing-DFF bug is specific to the browser VFS subset selection.

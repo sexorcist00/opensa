@@ -11,6 +11,47 @@ interpret them.
   was discarding. Two capabilities taken (the streamer's `StreamStats`, the residency `ledger()`), ten found
   and left with the step that will want each. The method is the point: read the PROVIDER's surface, because
   neither gap was visible in a review of the consumer
+- [`uv-repair-retired-and-one-report-per-target.md`](./uv-repair-retired-and-one-report-per-target.md) — the
+  2026-08-11 session-3 close of the 025 arc: the field reversed the UV repair in one look (a partial repair
+  of a continuous defect is patchwork by construction, and the mapping it writes is invented — no authored
+  frame exists, fit residual ~1.8 UV), so the pass was retired the same hour and the problem shelved as an
+  open issue (127 models). Then the branch merged (ff) and pmb plan 005 shipped the same afternoon:
+  `report-<target>.json` per target with typed fragments, `.work-<target>`, the root `report.json` deleted
+  after measuring it was a byte-identical 852 KB copy nobody read. Carries the lesson that should have been
+  cheaper: the pass shipped in a build BEFORE its field round, against a restriction that already named the
+  field as the gate.
+- [`procobj-budget-answered-and-a-knob-nobody-had-connected.md`](./procobj-budget-answered-and-a-knob-nobody-had-connected.md)
+  — the 2026-08-10 close: backlog bands **P1 and P2**. P1 asked for the clutter perf budget and found there is
+  none to give — at 3× vanilla the layer costs less than one sweep's A/A drift and never hitches, so the caps
+  are limited by data and by our own `PROC_OBJ_MAX_DENSITY`, not by frame time. P2 asked for seven VALUES and
+  found seven **dead constants**: `procobj[*].drawDistance` had a slider, a setter and a test, and no reader —
+  clutter really drew at whatever its 256-unit cell reached. Now applied per instance in the clutter shader,
+  100 (SA's own flat `PLANTS_MAX_DISTANCE`) as the floor and 300 for trees/cacti, measured monotone against a
+  0.020 % control and free in frame terms. **Also carries a mistake of mine that reached a commit**: I named
+  the wrong limiter for the density ladder (the data's spacing, when it was our own constant) by reading the
+  curve instead of the function.
+- [`procobj-permanent-rows-and-the-shape-that-could-not-fit.md`](./procobj-permanent-rows-and-the-shape-that-could-not-fit.md)
+  — the 2026-08-10 late arc: the clutter layer's HD+LOD twin turned out not to fit SA **at all** at the shipped
+  density (25 560 linked pairs need 13 inst-bearing areas; 12 exist), and binary streams could never have carried
+  its range — `CIplStore` keeps a stream's slot resident only within **190 units**, so the layer drew to ~190 m
+  while declared at 290. Replaced by ProperFixes' shape: one permanent row per object at `lod = -1`, range from
+  the stock `procobj.ide` raised **59 → 299**. Entities 182 184 → **91 092**, binary IPLs 522 → **191**, and
+  OpenSA's runtime scatter gets **95** rules back where a strip had left it 9. **Both field crashes on the way
+  were caused by changes made in that session**, one of them by reading a number measured on one path as a budget
+  for another — the same mistake as `EntityIpl`, twice in a day.
+- [`sa-build-verified-and-the-guards-that-lied.md`](./sa-build-verified-and-the-guards-that-lied.md) — the
+  2026-08-10 arc: the `sa` target builds end to end at 91 092 objects (10 m 9 s), and the int16 throw was not
+  the only blocker — FLA's IPL pool fired at **522 of 280**, correctly. Raising it surfaced the opposite
+  defect: the TXD guard had read 6000 against an install configured at 5000, so **the pool with one slot of
+  headroom was the one reporting comfort**. Also: the two targets proven to be the same world on both halves
+  (byte-identical input, 182 184 / 182 184 placements through the convert), the runtime clutter layer shown
+  to draw nothing on a built map, and a mod's partial `.col` found deleting stock collision in silence.
+- [`procobj-density-and-the-guards-that-guarded-nothing.md`](./procobj-density-and-the-guards-that-guarded-nothing.md)
+  — the 2026-08-09 evening arc: build-time density became a per-category/per-surface profile with a raisable
+  candidate ceiling, and three guards were deleted for guarding a ceiling the target lifted. **Four separate
+  documents described a state the code was not in** — including "P1 is blocked", which had been fixed and
+  merged days' worth of commits earlier. Also the instrument's floor per COLUMN: content 0.094 %, but `avgMs`
+  saturated at the frame cap and `gpuMs.pass` at 13.37 %.
 - [`vehicle-physics-081.md`](./vehicle-physics-081.md) — the plan-081 driving chain: `handling.cfg` went from
   5 fields consumed to 21, six global constants died, and the five bugs seven field rounds found were all the
   same mistake — a number guessed where the game ships the answer.
@@ -75,3 +116,59 @@ interpret them.
   the behavioural oracle is the one verdict still open. The method lesson: **the measurement rig failed more
   often than the thing measured** — two of three surprises were harness bugs, caught only by giving each row a
   verdict from a different channel than the number.
+- [`plan-07-review-and-100-field-close.md`](./plan-07-review-and-100-field-close.md) — the 2026-08-08 review
+  session: plan 07's density chain was costed against a number that counted STREAM RECORDS, not objects (24 552
+  vs the real 15 286), and correcting it inverts the chain's conclusion — the int16 lift is back on the
+  critical path, and a stock target has 1.18× of headroom in total. Three of its steps' premises were falsified
+  by the code. Plan 100's owed field check then ran and passed three rows; the fourth, "is a plate readable at
+  LOD range", turned out to be unanswerable by screenshot at ~8 px, so it got an instrument instead
+  (`.oscell` minor 8 + HUD `signs N`). Also what the session got wrong: a census scoped by model id, a
+  no-op mutation offered as proof, and a grep that hid `.tsx`.
+- [`2dfx-at-lod-range-100.md`](./2dfx-at-lod-range-100.md) — plan 100 (five steps, one day): lamps, chimney
+  plumes and street-name plates now survive past the HD ring instead of leaving a 560-unit dark, smokeless,
+  blank-signed band, and every fx system draws for the `cullDist` it authors rather than one flat 300 (836 of
+  878 anchors got 3–12× tighter). **The frame win the plan predicted is not there and cannot be claimed
+  either way** — a positive control proved the bench cannot see the particle system at all. Three things the
+  plan did not know were found by measuring: a plate's world position lands outside its instance's own cell
+  131 times in 489 (now a restriction), steps 01 and 02 could not ship apart, and step 05 fixed nothing that
+  was broken. The field check is owed to the chain's single rebuild. The audit itself found a debugger slider
+  wired to nothing.
+- [`plan-07-per-target-and-effect-distance.md`](./plan-07-per-target-and-effect-distance.md) — the session
+  after: plan 100's last row closed (the `insects` floor is field-judged and **inert** — a 2 cm sprite is
+  under half a pixel at its cull distance), the dead slider wired as a SCALE over the authored table rather
+  than a replacement, `?fx=N` added as the positive control a distance capture needs, and the `prt_*` lane
+  floored back at 300 u. Then plan 07 from three open decisions to none: `01` sized (both build-time caps
+  zero nothing — MINDIST provably cannot — while the runtime cell cap zeroes species in 19.8 % of scattering
+  cells, latent in the shipping build only because our own generator strips them), and 02/04 rewritten per
+  target, then narrowed to TWO when stock SA was ruled out of scope — which retired the slot economy 04 is
+  named after and left int16, ours, as the only ceiling. Two new instruments, and **both self-checks fired on
+  their first run**: pak particle positions are cell-LOCAL, and "the cap is finite" is not "the cap binds".
+- [`plan-07-target-selector-and-density-lever.md`](./plan-07-target-selector-and-density-lever.md) — 07/04's
+  first two tasks shipped (the target selector, DERIVED from `--exclude` so no operator can forget it; the
+  guard move onto the built `sa/` tree, which also fixed a false PASS nobody was looking for), and then the
+  perf budget could not be taken. The knob built for the measurement **falsified the plan's density
+  premise**: 3× the cutoff yields **+3.6 %** objects, because `cullByMinDistance` culls with the
+  `procobj.dat` MINDIST column — four values map-wide, clustered by surface family, and documented by our own
+  parser as the *draw* distance. The A/B also found the harness drifting further than the content (control
+  scene +107 % triangles → a filed collision defect). The audit itself caught a NaN hole in the new guard
+  that would have emptied the clutter layer in silence.
+- [`bench-settle-fall-102.md`](./bench-settle-fall-102.md) — plan 102, the day the sweep learned to measure
+  itself: A/A `avgTriangles` spread **10.19 % → 0.14 %**, `[cam]` jump lines **89 255 → 1**, and the density
+  A/B re-taken to say **d1 ≡ d3** under the noise floor. The audit is mostly about what did NOT hold: two of
+  the three red tests pinned less than they claimed (the suite chose a world where the distinction under test
+  did not exist — a floor exactly under the capsule's feet), the replacement test written here **passed twice
+  with the fix reverted** before the third form discriminated, and the ground-warp turns out to buy less than
+  the plan said (the rest gate decides the leg-start state; the warp only halves the descent). Plus a ceiling
+  nobody had noticed (`GROUND_PROBE_DROP` 60 m against an anchor 43.75 m up, silent when exceeded), a wrong
+  diagnosis assembled from two correct systems, and one regression report that was a background process —
+  caught by a scene that could not possibly have been affected moving with the rest.
+
+- [`procobj-chain-closed-and-three-plans-that-were-wrong.md`](./procobj-chain-closed-and-three-plans-that-were-wrong.md)
+  — 2026-08-11, thirteen commits: all seven procobj backlog bands closed plus plan 010's last task and
+  `asi/perfect-map` 006. **Three plans' premises were destroyed by measurement and a fourth returned the null
+  it had allowed for**, all in the same direction — `procobj.dat` is a finished design we were re-deriving,
+  not raw material we had to correct. The species roster is guaranteed on both targets (through DIFFERENT
+  gates, and that is forced), the shipped density profile is `base: 1` as a RESULT, the biome axis turned out
+  to be a second name for the surface, and the `sa` build now both states the install it needs and ships the
+  asi into it. Also two A/Bs invalidated by their own instrument — a dead site, and a player who slides
+  downhill so no two arms share a viewpoint (the tell: three DIFFERENT comparisons returning 86.81/86.82/86.83 %).

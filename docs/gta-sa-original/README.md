@@ -15,6 +15,7 @@ exists to prevent.
 | --- | --- |
 | [reference-install-config.md](reference-install-config.md) | **The verbatim capture** of that install — exe fingerprint, every plugin, both adjuster inis, our ASI log, the installed mods. Written to survive the deletion of the `NO_COMMIT/` copy |
 | [reference-install.md](reference-install.md) | **The declared baseline install** (`NO_COMMIT/gta_sa`, 2026-08-07): which plugins own which limits, which stock ceilings it lifts and which it does not, and the numbers it actually runs (72 914 permanent text rows, a 9 627-row IPL file) |
+| [procedural-objects.md](procedural-objects.md) | **What `procobj.dat`'s columns mean** (recovered 2026-08-09): SPACING is a LENGTH (`area / spacing²`, and the file's own header comment says otherwise), MINDIST is a camera radius clamped to 80 and never a distance between objects, nothing prevents clumping, and the surface/entity gates that decide what scatters at all |
 
 ## What belongs here, and what does not
 

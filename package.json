@@ -59,7 +59,7 @@
     "tools/lod-common",
     "tools/sa-lod-generator",
     "tools/perfect-map-builder",
-    "tools/lod-procobj-generator",
+    "tools/sa-procobj-placement",
     "tools/mod-installer",
     "tools/vehicle-installer",
     "tools/ped-installer",

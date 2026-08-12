@@ -256,9 +256,10 @@ export interface DynamicObjectsFillConfig {
 
 /** World 2dfx particle effects (fires/smoke/fountains; plan 044) — live-tunable. */
 export interface EffectsConfig {
-  /** Visibility distance (world units; fade-out over the last 20%). Replaces each FX system's
-   *  authored CULLDIST (vanilla culls e.g. fire at 35 m — too close), so it works both ways. */
-  drawDistance: number;
+  /** Multiplier over every fx system's SHIPPED draw distance — its authored `cullDist` with the two
+   *  recorded departures and the dynamic lane's floor already applied (`fxDrawDistance`). 1 = as the data
+   *  says; it scales the whole set rather than replacing it, so the authored table still wins the shape. */
+  drawDistanceScale: number;
   /** Master toggle (off = no particle emitters render). */
   enabled: boolean;
 }
@@ -481,7 +482,14 @@ export type ProcObjConfig = Record<ProcObjCategory, ProcObjTypeConfig>;
 export interface ProcObjTypeConfig {
   /** Density multiplier on the authored spacing (1 = vanilla, 0.5 = half the objects). */
   density: number;
-  /** Visibility distance (world units) for this category's scattered objects. */
+  /**
+   * Visibility distance (world units) for this category's scattered objects, applied PER INSTANCE. The
+   * widest enabled category also sets the radius clutter cells stream at, so a category can never be visible
+   * past its own number nor past the widest one.
+   *
+   * SA has no per-category equivalent — it draws all procedural clutter at a flat `PLANTS_MAX_DISTANCE = 100`
+   * — so this is deliberately not the original's shape. 100 is the FLOOR here, not the target.
+   */
   drawDistance: number;
   enabled: boolean;
 }

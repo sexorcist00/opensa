@@ -1,5 +1,6 @@
 import type { AssetFileSystem, IdeObjectDef, MapDefinitions } from '@opensa/renderware';
 import type { GridCell } from '@opensa/renderware/map/world-grid';
+import type { RoadsignGlyphQuads } from '@opensa/renderware/roadsign/glyph-quads';
 
 import { decodeOscell, OSCELL_VERTEX_STRIDE, OscellChannel } from '@opensa/engine-formats';
 import { buildArchiveBuffer, openArchive } from '@opensa/renderware';
@@ -9,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { TexturePlanner } from './textures';
-import { createUvAnimRegistry, uvAnimList, weldCell } from './weld';
+import { createUvAnimRegistry, uvAnimList, weldCell, weldCellParts } from './weld';
 
 // Real committed fixtures (same case build-region tests use).
 const DFF = 'tests/custom/proper-fixes-models/trafficlight1.dff';
@@ -141,18 +142,37 @@ function spread(bytes: Uint8Array): number {
 
 describe('weldCell 2dfx particles', () => {
   describe('negative cases', () => {
-    it('welds NO particles into a LOD cell — the anchors would double every emitter', () => {
+    it('welds a cell LOD’s anchors ONCE, never once per level into one bundle', () => {
+      // The hazard the HD-only gate used to answer. Doubling is now the streamer's job — a slot holds one
+      // level and the swap unloads the old key in the same call — so what a bundle must guarantee is that it
+      // carries each anchor a single time. Both bundles of one cell exist; neither is ever resident twice.
       const fs = fountainFs();
-      const cell: GridCell = { ...fountainCell(), hd: [], lod: fountainCell().hd };
+      const origin: [number, number, number] = [-1900, 0, -900];
+      const lodCell: GridCell = { ...fountainCell(), hd: [], lod: fountainCell().hd };
 
-      const welded = weldCell(fs, fountainDefs(), cell, true, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+      const hd = weldCell(fs, fountainDefs(), fountainCell(), false, new TexturePlanner(fs, new Map()), origin);
+      const lodded = weldCell(fs, fountainDefs(), lodCell, true, new TexturePlanner(fs, new Map()), origin);
 
-      expect(welded!.stats.particles).toBe(0);
-      expect(decodeOscell(welded!.bytes).particles).toHaveLength(0);
+      expect(hd!.stats.particles).toBe(3);
+      expect(lodded!.stats.particles).toBe(3);
+      expect(decodeOscell(lodded!.bytes).particles.map((p) => p.position)).toEqual(
+        decodeOscell(hd!.bytes).particles.map((p) => p.position),
+      );
     });
   });
 
   describe('positive cases', () => {
+    it('carries the anchors into a LOD cell too — an emitter has to survive past the HD ring', () => {
+      const fs = fountainFs();
+      const cell: GridCell = { ...fountainCell(), hd: [], lod: fountainCell().hd };
+
+      const welded = weldCell(fs, fountainDefs(), cell, true, new TexturePlanner(fs, new Map()), [-1900, 0, -900]);
+
+      const particles = decodeOscell(welded!.bytes).particles;
+      expect(particles).toHaveLength(3);
+      expect(new Set(particles.map((particle) => particle.effectName))).toEqual(new Set(['water_fountain']));
+    });
+
     it('welds the DFF 2dfx anchors into the cell, in ENGINE space, relative to the cell origin', () => {
       const fs = fountainFs();
       const origin: [number, number, number] = [-1900, 0, -900];
@@ -1061,6 +1081,96 @@ describe('weldCell placement mapper (minor 6)', () => {
 
       // A gap would be an unpickable object; an overlap would mean two objects claim the same triangles.
       expect(covered).toBe(cell.indexCount);
+    });
+  });
+});
+
+/** A LOD-level copy of the traffic-light cell: the same instances, filed under `lod`. */
+function lodFixtureCell(): GridCell {
+  return { ...fixtureCell(1), hd: [], lod: fixtureCell(1).hd };
+}
+
+/** One plate's worth of glyph quads at a world position, in the shape the pre-pass produces. */
+function plate(x: number, y: number, z: number, quads = 1): RoadsignGlyphQuads {
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  for (let q = 0; q < quads; q += 1) {
+    const left = x + q;
+    positions.push(left, y, z, left + 1, y, z, left + 1, y, z + 1, left, y, z + 1);
+    uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+  }
+
+  return { colour: 0, positions, uvs };
+}
+
+/** Weld one level with an optional roadsign list, at the traffic-light cell's origin. */
+function weldWithSigns(
+  lod: boolean,
+  cell: GridCell,
+  signs?: RoadsignGlyphQuads[],
+): null | { quads: number; rows: number; signs: number } {
+  const fs = fixtureFs();
+  const welded = weldCellParts(
+    fs,
+    fixtureDefs(),
+    cell,
+    lod,
+    new TexturePlanner(fs, new Map()),
+    [2350, 0, 1650],
+    undefined,
+    undefined,
+    signs,
+  );
+  if (!welded) {
+    return null;
+  }
+
+  // `stats.vertices` only fills during the later encode pass, so count the scratch buckets themselves.
+  return {
+    quads: welded.stats.roadsignQuads,
+    rows: welded.buckets.reduce((total, bucket) => total + bucket.vertices.length, 0),
+    signs: welded.stats.roadsigns,
+  };
+}
+
+describe('weldCell roadsign text', () => {
+  describe('negative cases', () => {
+    it('welds each plate ONCE into a bundle, however many bundles the cell has', () => {
+      // A plate is world-space, so the pre-pass files it under exactly one cell key and hands the SAME list
+      // to both levels. Neither bundle may contain it twice, and the two bundles are never resident together
+      // — one slot, one level, and the HD↔LOD swap unloads the old key inside the same call.
+      const signs = [plate(2350, -1650, 20), plate(2360, -1650, 20)];
+
+      expect(weldWithSigns(false, fixtureCell(1), signs)?.signs).toBe(2);
+      expect(weldWithSigns(true, lodFixtureCell(), signs)?.signs).toBe(2);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('counts GLYPH QUADS, not signs — the number the LOD-range reading is taken from', () => {
+      // `roadsigns` is how many plates welded; `roadsignQuads` is how much TEXT, and only the second can
+      // answer "is this plate blank at LOD range" (minor 8). One sign of three glyphs must read 1 and 3.
+      const withText = weldWithSigns(true, lodFixtureCell(), [plate(2350, -1650, 20, 3)]);
+
+      expect(withText?.signs).toBe(1);
+      expect(withText?.quads).toBe(3);
+    });
+
+    it('counts the same quads on BOTH levels — a plate that thins at range is the defect', () => {
+      const signs = [plate(2350, -1650, 20, 2), plate(2360, -1650, 20, 4)];
+
+      expect(weldWithSigns(false, fixtureCell(1), signs)?.quads).toBe(6);
+      expect(weldWithSigns(true, lodFixtureCell(), signs)?.quads).toBe(6);
+    });
+
+    it('welds the text into a LOD bundle — the 440→1000 u band used to draw a blank plate', () => {
+      const bare = weldWithSigns(true, lodFixtureCell());
+      const withText = weldWithSigns(true, lodFixtureCell(), [plate(2350, -1650, 20)]);
+
+      expect(bare?.signs).toBe(0);
+      expect(withText?.signs).toBe(1);
+      // The glyphs are real geometry, not just a counter: the bundle grows by the quad.
+      expect(withText!.rows).toBeGreaterThan(bare!.rows);
     });
   });
 });

@@ -11,8 +11,8 @@ import {
   stepCamera,
 } from './camera-director';
 import { TEST_CAMERA_CONFIG } from './camera-test-config';
-import { CAMERA_FOV_Y } from './engine-camera';
-import { FLY_SPEED, TOP_DOWN_HEIGHT, TOP_DOWN_PITCH } from './fly-rig';
+import { CAMERA_FOV_Y, forwardFrom, screenBasis } from './engine-camera';
+import { FLY_SPEED, MAP_YAW, TOP_DOWN_HEIGHT, TOP_DOWN_PITCH } from './fly-rig';
 
 const CONFIG = TEST_CAMERA_CONFIG;
 
@@ -186,11 +186,24 @@ describe('stepCamera', () => {
 
       expect(state.flyEye).toEqual([10, 2 + TOP_DOWN_HEIGHT, 30]);
       expect(state.pitch).toBe(TOP_DOWN_PITCH);
+      expect(state.yaw).toBe(MAP_YAW);
 
       setFlyEye(state, null);
       const camera = stepCamera(state, snapshot(), CONFIG);
 
       expect(camera.eye[1]).toBeLessThan(TOP_DOWN_HEIGHT);
+    });
+
+    it('opens the map north-up whatever heading the player carried into it', () => {
+      // Yaw 0 is the heading that drew the map upside down — the eye inherited it before the reset existed.
+      const state = createRigState(CONFIG, 0, -0.25);
+      snapTopDown(state, [10, 2, 30]);
+
+      const { right, up } = screenBasis(forwardFrom(state.yaw, state.pitch));
+
+      // GTA (x, y) sits at engine (x, −y): screen right must run EAST (+x), screen up NORTH (−z).
+      expect(right[0]).toBeGreaterThan(0.99);
+      expect(up[2]).toBeLessThan(-0.99);
     });
 
     it('re-seeds the zoom from an authored distance the debugger changed', () => {

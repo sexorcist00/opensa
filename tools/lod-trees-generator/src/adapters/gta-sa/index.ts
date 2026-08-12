@@ -52,7 +52,7 @@ export function createGtaSaTreeLodAdapter(options: GtaSaTreeLodOptions): TreeLod
   const isDir = inPath !== undefined && statSync(inPath).isDirectory();
   // Model list (dff file names) + their textures: from `--in` when given, else the built-in SA roster from gta3.img.
   // A `--in` directory is filtered the same way the no-`--in` roster is curated — drop `procobj.dat` scatter species
-  // (those go to lod-procobj-generator) and non-foliage "types" (rocks/grass/rubble/pots/proc-patches/already-LOD).
+  // (those go to sa-procobj-placement) and non-foliage "types" (rocks/grass/rubble/pots/proc-patches/already-LOD).
   // A single-file `--in` is taken as-is (an explicit pick).
   const inputs =
     inPath === undefined

@@ -28,10 +28,33 @@ columns, steam vents, fountains — 113 entries across the shipped map, each nam
   are rebuilt only when the streamed cell set changes.
 - **Map plumbing** — 2dfx type-1 entries are frame-transformed to world space by the converter
   (`tools/opensa-pack`) and stored as per-cell anchors; the host resolves each anchor's `effectName`
-  against the loaded library.
-- **Live config** — `graphics.effects { enabled, drawDistance }` (init config + debugger →
-  Graphics → "World effects"): `drawDistance` REPLACES each system's authored CULLDIST (vanilla fire
-  culls at 35 m — too close), so the CPU cutoff lands where the GPU fade hits zero.
+  against the loaded library. **Both levels since plan 100/03**: a LOD bundle takes its anchors from the
+  baked cell model's own 2dfx section, so an emitter survives the HD ring instead of vanishing at ~440 u.
+  The shipping pak carries **943 anchors across 13 systems** in its 569 HD cells (`insects` 336, `vent` 209,
+  `vent2` 162, `cigarette_smoke` 87, `fire` 53, the four smokes 77 between them, the rest single digits);
+  the LOD level carries 888 of the same anchors, so the two levels must not be summed. Read off the bytes by
+  `scripts/debug/fx-anchor-census.ts` — plan 100's ledgers quote 878/`insects` 402/`cigarette_smoke` none
+  from an in-process bake count, which the pak does not bear out.
+- **Draw distance is each system's authored `cullDist`** (plan 100/04). Until then one flat 300 was written
+  into every system record, so a cigarette plume rendered 20× further than authored while a factory plume
+  stopped at 300 whatever the streamer kept resident. `fxDrawDistance` reads the fxp value per system, with
+  exactly two recorded departures: the four smoke systems take the host's LOD radius (so a plume lives as
+  long as the chimney it rises from — [hack](../hacks/smoke-drawn-to-world-edge.md)) and
+  `insects`/`cigarette_smoke` are floored at 100 instead of their authored 15
+  ([hack](../hacks/tiny-fx-distance-floor.md)). 300 survives only as the fallback for a modded system that
+  authors no `cullDist`. Shipped values: `vent`/`vent2`/`waterfall_end` 25, `water_fountain` 30,
+  `fire`/`flame` 35, `carwashspray` 70, `insects`/`cigarette_smoke` 100, `prt_*` 300, smoke → LOD radius.
+- **The DYNAMIC lane is floored at 300** ([hack](../hacks/vehicle-fx-lane-reach.md)) — a floor on the LANE,
+  applied by `buildDynamicLibrary` alone, not a row in the departures table. Every `prt_*` system authors 50,
+  which is a cheap guard on effects SA only spawns around the player; we spawn them for every vehicle, so read
+  literally it ended another car's tyre smoke 50 m away.
+- **Live config** — `graphics.effects { enabled, drawDistanceScale }` (init config + debugger → Graphics →
+  "World effects"). `enabled` gates both lanes (`engine.particlesEnabled`); `drawDistanceScale` (default 1,
+  slider ×0.25–×4) multiplies every system's SHIPPED distance — authored, departed or floored — and is applied
+  last, inside `fxDrawDistance`. It rides in on `rebuild(scale)`: a changed value re-bakes the placed lane
+  (it is in the upload signature) and re-installs the dynamic lane's records, which are otherwise built once
+  at boot. It replaces the plan-044 `drawDistance` knob, which had REPLACED each system's authored cullDist
+  and, since the three renderer went, reached no code at all (found by the plan-100 audit).
 - **Escalators (2dfx type 10)** — `RWEscalator` parsing only (geometry-local path
   start → bottom → top → end + direction). The moving-step RENDERER was deleted with the three
   renderer (074/13) and has **no replacement on the engine** — escalators currently do not move.

@@ -9,14 +9,26 @@ export interface ProcObjRule {
   /** Max XY scale (vanilla note: collision is never scaled — pure decoration here). */
   maxScale: number;
   maxScaleZ: number;
-  /** Vanilla draw/creation distance for this rule (the dat's MINDIST column). */
+  /**
+   * The dat's MINDIST column: the minimum distance **from the CAMERA** at which the rule's triangle may
+   * create its objects (anti-pop-in), clamped up to 80 by the game and therefore constant across all four
+   * authored values. It is NOT a distance between two placements — see
+   * `docs/gta-sa-original/procedural-objects.md`. **Nothing in the engine or the build consumes it**: our
+   * placements are static per cell and pop-in is the per-category drawDistance, so the column is parsed to
+   * keep the row round-trippable and for census tooling, not to be spent.
+   */
   minDistance: number;
   minRotation: number;
   minScale: number;
   minScaleZ: number;
   /** Object model name, lowercased (defs live in the regular IDE catalog). */
   model: string;
-  /** Average spacing: one object per `spacing` square metres of face area. */
+  /**
+   * The dat's SPACING column. The file's header calls it "1 object every n square metres" and the game
+   * squares it — one object per `spacing × spacing` m² (`ProcSurfaceInfo_c`: `1/(spacing*spacing)`, and the
+   * grid path steps `spacing` world units), so the header comment is wrong and the scatter squares it too —
+   * see `docs/gta-sa-original/procedural-objects.md`.
+   */
   spacing: number;
   /** Surface name, lowercased — matches a `surfinfo.dat` row name (e.g. `p_grass_dry`). */
   surface: string;

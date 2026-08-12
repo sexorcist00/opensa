@@ -65,3 +65,29 @@ Its friction-circle scaling runs `if wheel.side_impulse != 0.0` — a car accele
 AHEAD has no longitudinal grip limit at all inside Rapier. The engine clamps engine force and brake
 impulse to `μ × load` itself (`setVehicleControls`, the 081/04 five-g-launch fix); any new force channel
 must apply the same clamp or it will push arbitrary force into the road.
+
+## `groundBelow` answers with the CASTER's own body unless it is excluded
+
+`PhysicsWorld.groundBelow(at, maxDrop)` casts a downward ray from `at` with `solid: true`, so a point INSIDE
+a body hits that body's own surface: probing "is there ground under the anchor?" while the player stands on
+that anchor returns his capsule, at ~0.9 m below the probe point. The answer looks exactly like real ground —
+a number, in range, every time. It cost the plan-102 settle gate a full cycle: the gate opened instantly on a
+world with no collision at all, and only the leg-start probe (a player 11 m under his anchor) said otherwise.
+
+Pass the body to skip: `groundBelow(at, maxDrop, RigidBody.handle[playerEid])`. The same applies to
+`groundNormalBelow`. Nothing catches a missing exclusion — the reading is plausible, not absent.
+
+## Clutter you can SEE has no collision until 150 m
+
+Since 2026-08-10 the procedural clutter renders per category out to its own range — cacti and trees to **300**
+— while its colliders still stream on `streaming.collisionDrawDistance` (**150**), deliberately. So a rock or
+a cactus visible at 250 m is scenery: it gains a Rapier static body only when the player closes to 150.
+
+This is not an oversight to fix by raising the collider ring. Clutter colliders are the cost that once put
+9 803 static bodies in Rapier (17 ms/step, 12 fps standing still, plan 074/19), and the radius is squared —
+150 → 300 is 4× the area. Render and collision still share ONE scatter and one budget, so the two can never
+disagree about WHICH objects exist; they disagree only about how far out the bodies are built.
+
+**What this can look like in the field:** a car driven fast at a distant boulder reaches it at roughly the
+moment its collider appears. If a report ever describes clutter "turning solid late", this is the mechanism —
+check `procobj.drawDistance` for the category against `collisionDrawDistance` before looking anywhere else.

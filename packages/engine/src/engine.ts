@@ -81,6 +81,12 @@ export interface CameraState {
 
 /** One cell's clutter (074/19): per model, the instance world matrices (16 floats each, engine space). */
 export interface CellClutter {
+  /**
+   * How far this group is visible, world units — the host's per-category number, applied PER INSTANCE in the
+   * vertex shader. The clutter grid is 256 units, so a whole-group test could not express a radius smaller
+   * than a cell diagonal: standing in one corner would still show the far corner's grass 360 units away.
+   */
+  drawDistance: number;
   /** Per-instance breakable key hash (074/20), aligned with `matrices`; present only for breakable models
    *  (cactus/rubble/rock). A hit resolves to the hash and `breakClutterInstance` collapses that instance. */
   keyHashes?: Uint32Array;
@@ -167,6 +173,15 @@ export interface EngineStats {
   /** Env-probe span (face render + mips), ms — the plan-16 ≤0.5 ms gate is measured. 0 when skipped. */
   gpuProbeMs: number;
   residencyBytes: number;
+  /**
+   * Roadsign GLYPH QUADS in the cells drawn this frame (`.oscell` minor 8). Roadsign text welds into an
+   * ordinary beam bucket, so nothing downstream can tell it apart — and a 2.4 m plate at LOD range is ~8 px,
+   * which is below what a screenshot can be asked. This is the reading that answers "do plates survive to
+   * LOD range" (plan 100/03): drive out past the HD boundary and watch whether it holds or falls to zero.
+   * Counted per cell at LOAD and summed over VISIBLE cells, exactly like {@link trianglesRecorded}, so it
+   * costs one add per cell per frame. 0 on a pre-minor-8 pak means UNKNOWN, not none.
+   */
+  roadsignQuadsRecorded: number;
   submitMs: number;
   /**
    * Triangles submitted this frame — baked cell bundles (counted at load) plus every out-of-bundle
@@ -480,6 +495,12 @@ interface ClutterCellDraw {
   bindGroup: GPUBindGroup;
   /** World-space bounding sphere [x, y, z, r] of the instances — frustum-culled per frame. */
   bounds: readonly [number, number, number, number];
+  /** The group's visibility radius (see {@link CellClutter.drawDistance}). Kept on the CPU as well as in the
+   *  shader uniform so a group that is ENTIRELY beyond it is skipped before the draw is issued — the shader
+   *  cull alone would still pay vertex work and still count the triangles. */
+  drawDistance: number;
+  /** The per-draw uniform the vertex shader reads its radius from; released with the cell. */
+  drawDistanceBuffer: GPUBuffer;
   instanceCount: number;
   /** Registered breakable key hashes (074/20) — purged from `clutterBreakables` when the cell unloads. */
   keyHashes: number[];
@@ -567,6 +588,16 @@ const LIGHT_POINT = 2;
 
 export class Engine {
   cells!: CellStore;
+
+  /**
+   * Draw the scattered procedural clutter at all. A debug toggle in the same shape as {@link waterEnabled}:
+   * procobj is GENERATED, not authored, so an inspector has to be able to subtract it and see the map the
+   * IPLs actually place — and read its cost straight off the draw/triangle counters.
+   *
+   * It gates the DRAW only. The scatter, its buffers and its COLLIDERS stay exactly as they were, so this
+   * hides the bushes without moving anything a run would notice.
+   */
+  clutterEnabled = true;
   /**
    * Debug normals (074/22): shade every surface by its world normal instead of its material — the three
    * build's scene-wide `MeshNormalMaterial` override, which WebGPU has no equivalent of. Shares one frame
@@ -793,6 +824,7 @@ export class Engine {
     gpuPostMs: 0,
     gpuProbeMs: 0,
     residencyBytes: 0,
+    roadsignQuadsRecorded: 0,
     submitMs: 0,
     trianglesRecorded: 0,
   };
@@ -1192,6 +1224,7 @@ export class Engine {
     let draws = 0;
     let total = 0;
     let triangles = 0;
+    let roadsignQuads = 0;
     this.frameTriangles = 0;
     for (const cell of this.cells.all()) {
       total += 1;
@@ -1221,6 +1254,7 @@ export class Engine {
         }
         draws += cell.draws;
         triangles += cell.triangles;
+        roadsignQuads += cell.roadsignQuads;
       }
     }
     // Blend phase back-to-front by CELL distance — cross-cell transparency ordering (per-group order inside
@@ -1271,7 +1305,7 @@ export class Engine {
     this.advanceModelUvAnimations(seconds);
     draws += this.drawObjects(pass);
     // Procedural clutter (074/19): grass/bushes/rocks, instanced, in the opaque phase before the sky.
-    draws += this.drawClutter(pass);
+    draws += this.drawClutter(pass, camera);
     draws += this.drawPed(pass);
     draws += this.drawVehicles(pass, false, camera.eye);
     pass.setPipeline(this.pipelines.get('sky'));
@@ -1356,6 +1390,7 @@ export class Engine {
     this.statsValue.cellsVisible = bundles.length;
     this.statsValue.drawsRecorded = draws;
     this.statsValue.trianglesRecorded = triangles + this.frameTriangles;
+    this.statsValue.roadsignQuadsRecorded = roadsignQuads;
     this.statsValue.residencyBytes = this.resources.totalBytes();
 
     return this.statsValue;
@@ -1580,6 +1615,7 @@ export class Engine {
         this.clutterBreakables.delete(hash);
       }
       this.resources.destroyBuffer('uniform', draw.matrixBuffer);
+      this.resources.destroyBuffer('uniform', draw.drawDistanceBuffer);
     }
     this.clutterCells.delete(key);
   }
@@ -1640,6 +1676,18 @@ export class Engine {
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
       });
       this.device.queue.writeBuffer(matrixBuffer, 0, entry.matrices);
+      // The group's visibility radius, squared, for the vertex shader's per-instance test (16 bytes is the
+      // uniform-buffer minimum; only .x is read).
+      const drawDistanceBuffer = this.resources.createBuffer('uniform', {
+        label: `clutter-range:${key}:${entry.model}`,
+        size: 16,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+      this.device.queue.writeBuffer(
+        drawDistanceBuffer,
+        0,
+        new Float32Array([entry.drawDistance * entry.drawDistance, 0, 0, 0]),
+      );
       // Breakable clutter (074/20): register each instance's key → its matrix slot, so a hit can degenerate it.
       const keyHashes: number[] = [];
       const instanceCount = entry.matrices.length / 16;
@@ -1658,11 +1706,14 @@ export class Engine {
             { binding: 0, resource: { buffer: matrixBuffer } },
             { binding: 1, resource: model.texture.createView({ dimension: '2d-array' }) },
             { binding: 2, resource: this.clutterSampler },
+            { binding: 3, resource: { buffer: drawDistanceBuffer } },
           ],
           label: `clutter:${key}:${entry.model}`,
           layout: this.pipelines.clutterLayout,
         }),
         bounds: clutterBounds(entry.matrices),
+        drawDistance: entry.drawDistance,
+        drawDistanceBuffer,
         instanceCount,
         keyHashes,
         matrixBuffer,
@@ -2394,11 +2445,24 @@ export class Engine {
   /** Draw the live breaks and retire the finished ones (their GPU resources go back immediately). */
   /** Debug wireframes (074/13 phase 4) — one draw per registered set, skipped entirely when there are none. */
 
-  private drawClutter(pass: GPURenderPassEncoder): number {
+  private drawClutter(pass: GPURenderPassEncoder, camera: CameraState): number {
+    if (!this.clutterEnabled) {
+      return 0;
+    }
     let draws = 0;
+    const [eyeX, eyeY, eyeZ] = camera.eye;
     for (const cellDraws of this.clutterCells.values()) {
       for (const draw of cellDraws) {
         const model = this.clutterModels.get(draw.model);
+        // Per-category RANGE, whole-group half (the per-instance half is in `vsClutter`): a group whose
+        // bounding sphere lies entirely past its draw distance is skipped here, so it costs neither vertex
+        // work nor a triangle in the frame count. The shader's test is what handles a group the camera is
+        // standing inside — it cannot be done here, because one group spans a 256-unit cell.
+        const [boundX, boundY, boundZ, boundRadius] = draw.bounds;
+        const nearest = Math.hypot(boundX - eyeX, boundY - eyeY, boundZ - eyeZ) - boundRadius;
+        if (nearest > draw.drawDistance) {
+          continue;
+        }
         // Frustum-cull each cell-model group — clutter is streamed by DISTANCE (all around the player), so
         // most groups are off-screen; without this a dense area pays hundreds of behind-camera draws. Also skip
         // empty groups: a clutter DFF that built no geometry (indexCount 0) or a fully-broken cell (every

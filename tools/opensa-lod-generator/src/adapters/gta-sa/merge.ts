@@ -5,27 +5,37 @@ import type { ModelSource } from '@opensa/lod-common/model-source';
 import { MeshBuilder, type VertexTransform } from '@opensa/lod-common/build-mesh';
 import { collectClumpEffects } from '@opensa/lod-common/clump-effects';
 import { registerScopedName, type ScopedRegistry } from '@opensa/lod-common/scoped-texture';
-import { keepTypesFor } from '@opensa/lod-common/two-dfx-policy';
+import { keepTypesFor, spaceOf } from '@opensa/lod-common/two-dfx-policy';
 import { transform2dfxEntry } from '@opensa/lod-common/two-dfx-transform';
 
 import type { Cell } from '../../core/types';
 
 /**
- * Gather the cell's 2dfx entries in cell-centre-relative space — the same instance transform {@link mergeCell}
- * applies to vertices, so the baked cell's coronas glow exactly where the source models' did (plan 003,
- * Phase 5: distant night city lights). WHICH types ride is not decided here: it is
- * `@opensa/lod-common`'s declared policy for the `cell` target, which resolves to lights alone today and
- * carries the reason with it. Each entry goes through `transform2dfxEntry`; per-model entries are memoized.
+ * Gather the cell's 2dfx entries in cell-centre-relative space, so a baked cell's coronas glow, its chimneys
+ * smoke and its street-name plates read exactly where the source models' did (plan 003 Phase 5, widened to
+ * emitters and plates by plan 100). WHICH types ride is not decided here: it is `@opensa/lod-common`'s
+ * declared policy for the `cell` target, which carries the reason with it.
+ *
+ * The transform is chosen by the entry's SPACE, not by its type, so a type declared later inherits the right
+ * behaviour:
+ *
+ * - **model-local** (lights, emitters): the instance transform {@link mergeCell} gives vertices — two chimneys
+ *   are two plumes — with the per-model entries memoized untransformed;
+ * - **world** (roadsigns): a translation by `−origin` and nothing else. The position is already a city
+ *   coordinate; rotating it by the instance would throw the plate about a kilometre. It is emitted ONCE per
+ *   model per cell, because every placement of that model would otherwise stack an identical plate.
  */
-export function collectCellLightEffects(
+export function collectCellEffects(
   cell: Cell,
   cellSize: number,
   loadRaw: (model: string) => null | Uint8Array,
   source: ModelSource,
   cache: Map<string, ClumpEffect[]>,
-): { bytes: Uint8Array; position: Vec3 }[] {
+): ClumpEffect[] {
   const origin: Vec3 = [(cell.cx + 0.5) * cellSize, (cell.cy + 0.5) * cellSize, 0];
-  const out: { bytes: Uint8Array; position: Vec3 }[] = [];
+  const rebase = originTransform(origin);
+  const out: ClumpEffect[] = [];
+  const worldModelsDone = new Set<string>();
   for (const instance of cell.instances) {
     let effects = cache.get(instance.model);
     if (!effects) {
@@ -38,8 +48,14 @@ export function collectCellLightEffects(
       continue;
     }
     const transform = instanceTransform(conjugate(instance.rotation), instance.position, origin);
+    const firstOfModel = !worldModelsDone.has(instance.model);
+    worldModelsDone.add(instance.model);
     for (const effect of effects) {
-      out.push(transform2dfxEntry(effect, transform));
+      if (spaceOf(effect.type) !== 'world') {
+        out.push(transform2dfxEntry(effect, transform));
+      } else if (firstOfModel) {
+        out.push(transform2dfxEntry(effect, rebase));
+      }
     }
   }
 
@@ -93,6 +109,18 @@ function instanceTransform(q: Quat, position: Vec3, origin: Vec3): VertexTransfo
 
       return [rx + position[0] - origin[0], ry + position[1] - origin[1], rz + position[2] - origin[2]];
     },
+  };
+}
+
+/**
+ * The map for a WORLD-space position: re-base it on the cell centre, rotate it by nothing. The identity
+ * `normal` is what keeps a plate's authored facing byte-verbatim — `transform2dfxEntry` rewrites the payload
+ * only when something actually turned it.
+ */
+function originTransform(origin: Vec3): VertexTransform {
+  return {
+    normal: (x, y, z): Vec3 => [x, y, z],
+    point: (x, y, z): Vec3 => [x - origin[0], y - origin[1], z - origin[2]],
   };
 }
 

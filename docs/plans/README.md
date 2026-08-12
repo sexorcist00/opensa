@@ -70,6 +70,18 @@ Newest first:
 
 Newest first:
 
+- **[102 — The bench settle lies, and a fall poisons the sweep](./102-bench-settle-fall/readme.md)** —
+  **DONE and MERGED 2026-08-09** (`ed6b90ba`; close-out audit `6202503e`). The perf-runs
+  settle exited on a stale `pendingCells` read, nothing waited for collision, and a teleport preserved
+  `Velocity.z` — one lost race sent the player under the mesh at terminal velocity for the rest of the
+  sweep. Three red tests → the fix (notice → ring → ground → warp onto that ground → wait for rest) + a
+  derived warp reset in the character controller + a permanent leg-start probe in the report. Measured:
+  A/A `avgTriangles` spread **10.19 % → 0.14 %**, `[cam]` jump lines **89 255 → 1**, all nine scenes
+  `legStart.ok`. The field then forced a second fix — a scene anchor is authored for the CAMERA, six of
+  nine sit 3.65–26.29 m above the ground — and exposed `strip-noon`'s anchor standing inside the Flamingo
+  ([fixed](../open-issues/fixed/strip-noon-anchor-inside-a-building.md)). The re-taken density A/B says
+  d1 and d3 are indistinguishable under the noise floor, confirming the 07/04 audit on an instrument that
+  can now be trusted.
 - **[101 — Escalators in OpenSA](./101-escalators/readme.md)** — **PLANNED 2026-08-07**: the steps have
   never moved in our engine. `renderware` decodes the type-10 entry (plan 044) and there is a debug waypoint;
   `engine`, `cell-weld` and `engine-formats` have no escalator code at all, so the staircase draws and
@@ -78,16 +90,24 @@ Newest first:
   behaviour does not exist. Step 00 is research first: recover SA's own step spacing, speed and carry rule
   (and find out whether the steps are objects or a texture scroll — if the latter, plan 099's UV lane may
   already do it) before any constant of ours is fitted. Corpus is 5 entries in 4 models, fully enumerable.
-- **[100 — 2dfx survives to LOD range](./100-2dfx-at-lod-range/readme.md)** — **PLANNED 2026-08-07**:
-  chimney smoke, street lamps and street-name plates die at the HD boundary (`HD_RADIUS` 380), so a
-  district past ~440 u draws to 1000 u dark, smokeless and unsigned. Both LOD generators bake the three
-  types that have a consumer (0 light, 1 particle, 7 roadsign) and `cell-weld` starts reading what the cell
-  bake produces — the half that makes the other half real, since nothing reads a cell LOD's 2dfx today. Also
-  fixes the flat `DRAW_DISTANCE = 300` that overrides every fx system's authored `cullDist`. Step 00 is the
-  research: it began as a killed plan (postmortem) and was revived the same day by a reversed decision.
-  The six types our engine does not consume (16 934 stock entries) stay out of the OpenSA line — escalators
-  among them, because our engine has no escalator code at all, while real SA implements them natively and the
-  SA clones keep carrying the entry.
+- **[100 — 2dfx survives to LOD range](./100-2dfx-at-lod-range/readme.md)** — **ALL FIVE STEPS SHIPPED
+  2026-08-08** (planned 2026-08-07), **field check owed to the chain's single rebuild**. Steps moved into
+  [lod-common/007](../../tools/lod-common/docs/plans/007-2dfx-space-and-cell-carry.md),
+  [opensa-lod-generator/006](../../tools/opensa-lod-generator/docs/plans/006-cell-bake-carries-effects.md) and
+  [sa-lod-generator/007](../../tools/sa-lod-generator/docs/plans/007-clone-2dfx-policy.md); 03 and 04 stayed
+  central (`cell-weld`/`opensa-pack` and `apps/web` keep no plan chains). Chimney smoke, street lamps and
+  street-name plates died at the HD boundary (`HD_RADIUS` 380), so a district past ~440 u drew to 1000 u dark,
+  smokeless and unsigned. Both LOD generators now bake the three types that have a consumer (0 light,
+  1 particle, 7 roadsign) and `cell-weld` reads what the cell bake produces — the half that makes the other
+  half real. The flat `DRAW_DISTANCE = 300` is gone; every fx system takes its authored `cullDist` bar two
+  recorded departures. Step 00 is the research: it began as a killed plan (postmortem) and was revived the
+  same day by a reversed decision. The six types our engine does not consume (16 934 stock entries) stay out
+  of the OpenSA line — escalators among them, because our engine has no escalator code at all, while real SA
+  implements them natively and the SA clones keep carrying the entry. **Three things the chain measured that
+  its plan had not**: a plate's world position lands outside its instance's own cell 131 times in 489 (so LOD
+  roadsigns come from the world-keyed pre-pass, not the LOD model, or they double across cell keys); the bench
+  cannot see emitter cost at all (proven by a positive control, not assumed); and 05 fixed nothing that was
+  broken — its premise that the decimate path lost emitters was already false.
 - **[099 — UV animations on script objects](./099-script-object-uv-anim/readme.md)** — **DONE
   2026-08-07** (planned 2026-08-05 from the 097/07 field bug round): the ferris wheel's blinking bulbs
   are a UVAnimDict step animation (`f13d`, a 13-frame film strip stepping every 0.225 s) that the
@@ -337,8 +357,10 @@ Newest first:
   trees, plus the map strip + place stages (text↔binary IPL LOD-index coupling), the SA asset-format checklist,
   and aspect-aware atlas + `--prelight` trunk transfer. (procobj is now its own tool.)
   [`lod-trees-generator/docs/plans/`](../../tools/lod-trees-generator/docs/plans/) (`001`–`005`, `007`).
-- **lod-procobj-generator** — procobj scatter → static IPL with **simplified-copy** (decimated) LODs; reuses
-  `sa-lod` + `map-placement`. [`lod-procobj-generator/docs/plans/`](../../tools/lod-procobj-generator/docs/plans/)
+- **sa-procobj-placement** — procobj scatter → **permanent static IPL rows at `lod = -1`**, range from the stock
+  `procobj.ide` raised to 299. SA-only (OpenSA scatters at runtime), and no LODs since
+  [014](../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md) — renamed from
+  `lod-procobj-generator` the same day. Reuses `map-placement`. [`sa-procobj-placement/docs/plans/`](../../tools/sa-procobj-placement/docs/plans/)
   (`001` architecture · `002` build pipeline · `003` asset format).
 - **mod-installer** — layer mod folders onto a base game (files overwrite, `gta3img/` merges into `gta3.img`, a
   PNG folder merges into a sibling loose `.txd`), alphabetical.
@@ -353,10 +375,10 @@ Newest first:
   add/replace · `003` strip).
 - **tool-kit** — shared building blocks (mesh smooth-normals + QEM simplify, editable IMG). No plans doc yet.
 - **map-placement** — shared SA map-edit workflows (id allocation, IDE/gta.dat edits, swapped-HD retexture,
-  procobj convert/strip), used by lod-trees-generator + lod-procobj-generator.
+  procobj convert/strip), used by lod-trees-generator + sa-procobj-placement.
   [`map-placement/docs/plans/`](../../tools/map-placement/docs/plans/) (`001` architecture & API).
 - **sa-lod** — shared simplified-copy LOD pipeline (decimate → normals → encode DFF/TXD/COL), extracted from
-  opensa-lod-generator, used by it + lod-procobj-generator.
+  opensa-lod-generator, used by it + sa-procobj-placement.
   [`sa-lod/docs/plans/`](../../tools/lod-common/docs/plans/) (`001` architecture & API · `005` the 2dfx
   keep-policy + `006` `transform2dfxEntry` — both SHIPPED 2026-08-07, arrived from roadmap 0.5.0 plan 07).
 - **rw-codec** — shared pure RW chunk/DFF/DXT/geometry-struct/2dfx codec, extracted from map-optimizer

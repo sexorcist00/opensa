@@ -230,6 +230,17 @@ Never edit generated code manually.
   the first build. When a new restriction is discovered, it goes there in the SAME change, and every entry
   must say whether a violation is caught by a test/guard/lint or is SILENT — the silent ones are why the
   folder exists
+- **The `sa` target ALWAYS runs OLA + FLA + our own `perfect-map.asi`. That is the only configuration we
+  build for, and a stock 1.0 is not one.** So a stock ceiling is a fact about a 2004 machine, never a budget
+  our content is cut to: `EntitiesPerIpl`, `EntityIpl`, `Buildings`, `Dummys` are raised or `unlimited` on the
+  target, and int16 `IplDef` — the one thing no adjuster reaches — is lifted by our asi. **Do not add a guard,
+  a cap or a migration that shapes output to a limit the target does not have**, and when you meet one that
+  already exists, price whether it still binds before defending it. The measured configuration is
+  `docs/gta-sa-original/reference-install-config.md` (verbatim capture) and what it MEANS for a plan is
+  `reference-install.md` — read the table there rather than assuming a stock number.
+  **The converse is the same rule, and it is the one that bites**: a limit the target really HAS stays a hard
+  guard — FLA's pools are configured numbers, not `unlimited` (TXD 6000 / COL 275 / IPL 280), and exhausting
+  one corrupts the heap at boot. Delete the museum pieces, keep the gates.
 - English only, repo-wide: no Cyrillic in any doc, comment, or committed file — paraphrase field verdicts
   in English (chat language stays whatever the user speaks)
 - Record measured numbers into the plan doc after EVERY phase/step (before/after, representative log lines);
@@ -286,10 +297,12 @@ The documentation lifecycle (idea → concept → plan / postmortem; roadmap for
   steps, each ending with verification + measured numbers. Add a row in `docs/plans/README.md`
 - `docs/roadmap/` — decided work deferred to a later version (`0.5.0/`, `0.6.0/`); same plan-chain shape as
   `docs/plans/`, just not this version
-- `tools/<tool>/docs/plans/` — **where a plan step LANDS once it is built.** Every tool keeps its own numbered
-  chain beside its code; when a step from `docs/plans/` or `docs/roadmap/` ships inside one tool, its file
-  MOVES there (next free number, measured numbers filled in) and the central row is repointed. The central
-  folders carry what is still unbuilt or spans several tools
+- `tools/<tool>/docs/plans/` — **a tool's own numbered chain, beside its code.** A step from `docs/plans/` or
+  `docs/roadmap/` MOVES here when it ships (next free number, measured numbers filled in) and the central row
+  is repointed. **A plan also moves here once its work no longer spans tools, built or not** (the user's call,
+  2026-08-09, when `07-lod-generators-extended` was dissolved): a chain whose every remaining task belongs to
+  one tool is a chain that will drift from that tool's code, so it lives beside it and the central folder
+  keeps only a pointer. The central folders carry what genuinely spans several tools, or has no tool yet
 - `docs/audit/` — a post-big-rework audit (see the Standing Workflow rule above): what changed, its cost, its
   gain
 

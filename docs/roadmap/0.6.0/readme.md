@@ -50,3 +50,16 @@ v2 candidates); (04) real light from 2dfx coronas — 085 row E's Ten Green Bott
 properly (blink-synced diffuse wash, wet-road specular, clustered lighting for the full strip).
 
 Full bundle: [plans/04-graphic-improvements/readme.md](plans/04-graphic-improvements/readme.md).
+
+## Anisotropic texture filtering (IDEA)
+
+Every sampler in the engine runs at anisotropy 1 — `maxAnisotropy` appears nowhere in `packages/engine/src`.
+Trilinear picks the mip from the LARGER UV derivative, so a grazing-angle surface (most of the ground, with a
+chase camera) loses detail on the axis that was fine. That is why the original's authored UV stretch reads
+harsher in OpenSA than in real SA, which is what the [025 texel-smear
+investigation](../../../tools/map-optimizer/docs/plans/025-texel-smear-on-flat-surfaces.md) turned up next to
+the data defect it was actually chasing. It SHARPENS rather than smooths, and it cannot repair a stretched
+mapping — the two are independent. Deferred because it is a whole-world look change with an unmeasured frame
+cost, and because doing it now would confound 025's field rounds.
+
+Full plan: [plans/06-anisotropic-filtering/readme.md](plans/06-anisotropic-filtering/readme.md).

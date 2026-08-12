@@ -16,7 +16,7 @@ tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/original --in ./mods-
 - `--game <path>` — the clean base game (`gta.dat` + `data/` + `models/`).
 - `--in <mods-src>` — a folder of source assets, one subfolder per stage:
   - `mods/` → mod-installer · `vehicles/` → vehicle-installer · `peds/` → ped-installer
-  - `vegetation/` → lod-trees-generator (+ `vegetation/prelight.json` if present) · `procobj/` → lod-procobj-generator
+  - `vegetation/` → lod-trees-generator (+ `vegetation/prelight.json` if present) · `procobj/` → sa-procobj-placement
 - `--out <path>` — output root; the builder creates `<out>/sa` and `<out>/opensa`.
 
 `vehicles/` and `peds/` are **skipped** when their source subfolder is missing/empty (output = the previous
@@ -33,7 +33,7 @@ the built-in SA tree roster / converts every `procobj.dat` species from the game
 | 3   | ped-installer                                   | `peds/`       | (skip if empty)                                                                                                        |
 | 4   | map-optimizer                                   | —             | **all passes on** (textures + weld-seams + prelit + add-normals; stitch-gaps/refine retired — shared config, plan 018) |
 | 5   | lod-trees-generator                             | `vegetation/` | non-modloader (**full mirror**), `prelight vegetation/prelight.json`, `tex 512`                                        |
-| 6   | lod-procobj-generator                           | `procobj/`    | non-modloader (**full mirror**), `prelight` (bare), `tex 128`                                                          |
+| 6   | sa-procobj-placement                           | `procobj/`    | non-modloader (**full mirror**), `prelight` (bare), `tex 128`                                                          |
 | —   | **split** from step 6 (the common baked build): |               |                                                                                                                        |
 | 7a  | sa-lod-generator                                | —             | `--game step6 --out <out>/sa`                                                                                          |
 | 7b  | opensa-lod-generator                            | —             | `--game step6 --out <out>/opensa`, `cell 256`, `strip-lods`                                                            |

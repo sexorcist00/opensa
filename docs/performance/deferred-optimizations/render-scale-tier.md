@@ -4,6 +4,18 @@
 closed; the deciding run is
 [2026-07-21 scale ladder](../../benchmarks/opensa-engine/2026-07-21-scale-ladder.md) (index row #19).
 
+**Impact: low on frame time, medium on memory — measured, and the measurement is why it was refused.**
+Quartering the pixel count (scale 1.0 → 0.5) recovers **0.4–1.4 ms** of GPU pass across four scenes, −4 % to
+−32 %, because `pass` carries a large resolution-INDEPENDENT floor (vertex/draw, ~1.9–2.5 ms). `post` is the
+part that actually scales (−35…−45 %). Render-target residency does fall properly: **345 → 195 → 88 MB**. So
+on the dev host it is a fraction of a millisecond against 8.33 ms of budget, and **it cannot touch the floor
+at all** — the axis that dominates these scenes is the one `?draw=` reduces, not the one resolution does.
+
+**Effort: medium.** The scaling itself already exists (`?scale=`); what does not is the policy — a detector,
+a hysteresis that will not oscillate, and a tier definition per quality level. That is frame-loop work with
+its own tuning round, and a tier that flickers is worse than a slow frame. **Refused on the WIN, not on the
+effort**: it cannot touch the measured floor at all, which is the draw/vertex side.
+
 ## What we do today
 
 One manual knob: `?scale=<0..1>` scales every render target (and `?draw=` scales the draw distance). Nothing

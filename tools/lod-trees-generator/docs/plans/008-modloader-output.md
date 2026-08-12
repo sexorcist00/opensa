@@ -103,7 +103,7 @@ data/maps/lodtrees.ide`. Matches the LOD Vegetation reference layout.
 
 ## Relationship
 
-- Mirrors **lod-procobj-generator 004** for the shared `--modloader` packaging (`gta3img/` + `loader.txt`). Note
+- Mirrors **sa-procobj-placement 004** for the shared `--modloader` packaging (`gta3img/` + `loader.txt`). Note
   lod-procobj is structurally different — its LODs are **new** standalone placements (procobj scatter has no static
   IPL to attach to; it also strips `procobj.dat` so there's no runtime double-draw), so it has no mode-A/B split.
 - `004-map-place.md` + [`ipl-lod-index-coupling`] — the text↔binary LOD-index coupling that mode A relies on (a

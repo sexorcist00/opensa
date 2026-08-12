@@ -12,6 +12,10 @@ import type { RunReport } from './core';
 
 import { createGtaSaAdapter } from './adapters/gta-sa';
 import { runPipeline } from './core';
+
+// Re-exported for report assemblers (pmb plan 005): the run's totals without the per-asset bulk.
+export { summarizeReport } from './core';
+export type { AssetFailure, RunSummary } from './core';
 import { loadCreaseOverrides } from './crease-overrides';
 import { config } from './optimizer.config';
 import { createApplyPrelitLevel } from './plugins/apply-prelit-level';
@@ -34,7 +38,8 @@ export interface OptimizerPasses {
   weldSeams: boolean;
 }
 
-/** Default passes. (`refine`/plan 014 and `stitchGaps`/plan 017 were retired — see their plans for why.) */
+/** Default passes. (`refine`/plan 014, `stitchGaps`/plan 017 and `repairUv`/plan 025 were retired — see
+ *  their plans for why; 025's record is `docs/postmortem/uv-stretch-repair.md`.) */
 export const DEFAULT_PASSES: OptimizerPasses = {
   addNormals: true,
   prelit: true,
@@ -117,7 +122,6 @@ export async function runOptimizer(options: RunOptimizerOptions): Promise<RunRep
   } else if (passes.weldSeams) {
     pushSeamWeld(plugins, adapter);
   }
-
   const report = await runPipeline(
     adapter,
     { ...config, concurrency: options.concurrency ?? config.concurrency, plugins },

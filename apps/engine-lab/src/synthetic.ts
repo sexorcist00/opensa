@@ -123,6 +123,7 @@ export function syntheticCell(cx: number, cy: number, cellSize: number, boxesPer
     origin: [originX, 0, originZ],
     particles: [],
     placements: [],
+    roadsignQuads: 0,
     vertexCount,
     vertexData,
   });

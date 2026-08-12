@@ -4,7 +4,7 @@
  * (the generic `lod<name>` convention covers buildings too), so this is a curated list.
  *
  * Derived (then hand-curated): the model names of a large vegetation mod ∩ the stock game IDEs, minus the
- * `procobj.dat` scatter species (those go to `lod-procobj-generator`) and minus non-foliage the mod bundles
+ * `procobj.dat` scatter species (those go to `sa-procobj-placement`) and minus non-foliage the mod bundles
  * (rocks/columns, grass/flower/fern ground-cover, rubble, pots/planters, and already-`lod*` models). Models not
  * present in the target `gta3.img` are skipped (logged), so extra names are harmless.
  *

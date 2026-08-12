@@ -4,7 +4,7 @@ import { resolveFrom } from './texture-source';
 
 /**
  * Scoped texture names for SHARED LOD dictionaries (plan 004): SA texture names are only unique per-TXD, so a
- * shared TXD (lod_procobj.txd, the opensa cell-LOD TXD) mixing textures from many source TXDs must rename them
+ * shared TXD (lod-trees' impostor atlas, the opensa cell-LOD TXD) mixing textures from many source TXDs must rename them
  * uniquely per (txd, name) pair — otherwise two species'/models' different pixels collide under one name.
  * The scheme is PURELY DERIVED from the pair (no shared state), so parallel bake workers assign identical
  * names without coordination; a {@link ScopedRegistry} records what each scoped name means so the encoder can

@@ -218,7 +218,7 @@ in a runtime costume:
   models (aspect-aware textures, stock prelight + night-colour transfer), attached by editing the stock
   streams/IPLs (repoint or append + link), with a per-area row budget that migrates overflow into its own
   streamed areas.
-- **`lod-procobj-generator`** — converts procobj scatter species (bushes, rocks) into **static placements
+- **`sa-procobj-placement`** — converts procobj scatter species (bushes, rocks) into **static placements
   with decimated-copy LODs**: QEM-decimated meshes, per-species scoped textures, trunk prelight transfer,
   and the runtime scatter stripped for converted species.
 - **Vanilla-style binary-stream placement** (shared `@opensa/map-placement`) — generated placements ship as

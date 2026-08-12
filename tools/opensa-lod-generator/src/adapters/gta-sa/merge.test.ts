@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Cell } from '../../core/types';
 
-import { collectCellLightEffects, mergeCell } from './merge';
+import { collectCellEffects, mergeCell } from './merge';
 
 /** A clump of one atomic → one geometry. */
 function clump(geom: RWGeometry): RWClump {
@@ -21,6 +21,29 @@ function clump(geom: RWGeometry): RWClump {
     frames: [{ name: 'root', parentIndex: -1, position: [0, 0, 0], rotation: [1, 0, 0, 0, 1, 0, 0, 0, 1] }],
     geometries: [geom],
   };
+}
+
+/** A real DFF carrying a type-9 cover point — a type the cell policy drops. */
+function coverDff(): Uint8Array {
+  const entry = new Uint8Array(20 + 8);
+  const view = new DataView(entry.buffer);
+  view.setUint32(12, 9, true);
+  view.setUint32(16, 8, true);
+
+  return fxDff(entry, [1, 0, 0], 'crate');
+}
+
+/** A real DFF of one triangle carrying one 2dfx entry at `position`. */
+function fxDff(entry: Uint8Array, position: [number, number, number], texture: string): Uint8Array {
+  const mesh: MergedMesh = {
+    colors: new Uint8Array(12).fill(255),
+    groups: [{ indices: Uint32Array.of(0, 1, 2), texture }],
+    normals: new Float32Array(9),
+    positions: Float32Array.from([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+    uvs: new Float32Array(6),
+  };
+
+  return encodeLodDff(mesh, texture, { effects: build2dfxSection([{ bytes: entry, position }])! });
 }
 
 /** A one-triangle geometry with the given texture, at the given local positions. */
@@ -57,21 +80,15 @@ function lampDff(): Uint8Array {
   return encodeLodDff(mesh, 'lamp', { effects: build2dfxSection([{ bytes: entry, position: [1, 0, 0] }])! });
 }
 
-/** A real DFF carrying a type-7 roadsign entry — a type the cell policy drops. */
-function signDff(): Uint8Array {
+/** A real DFF carrying a type-7 roadsign entry at a WORLD position, as the stock corpus authors them. */
+function signDff(world: [number, number, number]): Uint8Array {
   const entry = new Uint8Array(20 + 88);
   const view = new DataView(entry.buffer);
   view.setUint32(12, 7, true);
   view.setUint32(16, 88, true);
-  const mesh: MergedMesh = {
-    colors: new Uint8Array(12).fill(255),
-    groups: [{ indices: Uint32Array.of(0, 1, 2), texture: 'board' }],
-    normals: new Float32Array(9),
-    positions: Float32Array.from([0, 0, 0, 1, 0, 0, 0, 1, 0]),
-    uvs: new Float32Array(6),
-  };
+  entry.fill(0xab, 20); // a payload we never decode: an untouched carry must return these bytes verbatim
 
-  return encodeLodDff(mesh, 'board', { effects: build2dfxSection([{ bytes: entry, position: [0, 0, 0] }])! });
+  return fxDff(entry, world, 'board');
 }
 
 function source(models: Record<string, RWClump>): ModelSource {
@@ -83,16 +100,32 @@ const IDENTITY = [0, 0, 0, 1] as const; // no rotation
 describe('mergeCell', () => {
   describe('negative cases', () => {
     it('carries no type the shared policy drops from cells — the fate is decided in one place', () => {
-      const dff = signDff();
-      const models = { board: parseDff(toArrayBuffer(dff)) };
+      const dff = coverDff();
+      const models = { crate: parseDff(toArrayBuffer(dff)) };
       const cell: Cell = {
         cx: 0,
         cy: 0,
-        instances: [{ model: 'board', position: [128, 128, 0], rotation: IDENTITY, txd: '' }],
+        instances: [{ model: 'crate', position: [128, 128, 0], rotation: IDENTITY, txd: '' }],
       };
 
-      expect(collectCellLightEffects(cell, 256, () => dff, source(models), new Map())).toEqual([]);
-      expect([...keepTypesFor('cell')]).toEqual([0]); // and this is the set it read
+      expect(collectCellEffects(cell, 256, () => dff, source(models), new Map())).toEqual([]);
+      expect(keepTypesFor('cell').has(9)).toBe(false); // and this is the set it read
+    });
+
+    it('emits ONE plate for a model placed twice — a world position does not repeat per instance', () => {
+      const dff = signDff([200, 300, 10]);
+      const models = { board: parseDff(toArrayBuffer(dff)) };
+      const at = (x: number): Cell['instances'][number] => ({
+        model: 'board',
+        position: [x, 128, 0],
+        rotation: IDENTITY,
+        txd: '',
+      });
+      const cell: Cell = { cx: 0, cy: 0, instances: [at(128), at(140)] };
+
+      const effects = collectCellEffects(cell, 256, () => dff, source(models), new Map());
+
+      expect(effects).toHaveLength(1);
     });
 
     it('skips instances whose model is missing', () => {
@@ -169,7 +202,7 @@ describe('mergeCell', () => {
         instances: [{ model: 'lamp', position: [130, 128, 5], rotation: IDENTITY, txd: '' }],
       };
 
-      const effects = collectCellLightEffects(cell, 256, () => null, source(models), cache);
+      const effects = collectCellEffects(cell, 256, () => null, source(models), cache);
 
       expect(effects).toHaveLength(1);
       // Instance (130,128,5) + local (1,0,0) − cell centre (128,128,0) = (3, 0, 5) — same maths as mergeCell.
@@ -191,13 +224,56 @@ describe('mergeCell', () => {
       };
 
       const mesh: MergedMesh = mergeCell(cell, 256, source(models));
-      const effects = collectCellLightEffects(cell, 256, () => dff, source(models), new Map());
+      const effects = collectCellEffects(cell, 256, () => dff, source(models), new Map());
 
       expect(effects).toHaveLength(1);
       const vertex = [mesh.positions[3], mesh.positions[4], mesh.positions[5]]; // vertex 1 = local (1,0,0)
       effects[0].position.forEach((axis, component) => {
         expect(axis).toBeCloseTo(vertex[component], 5);
       });
+    });
+
+    it('re-bases a plate on the cell origin alone, even on a rotated instance', () => {
+      // The failure this pins: routing a world-space entry through the instance transform, which for
+      // `cen_bit_08` would have thrown its plates about a kilometre (plan 100/00). The instance is rotated
+      // and off-centre precisely so that any use of its transform shows up.
+      const dff = signDff([200, 300, 10]);
+      const models = { board: parseDff(toArrayBuffer(dff)) };
+      const cell: Cell = {
+        cx: 0,
+        cy: 0,
+        instances: [{ model: 'board', position: [130, 140, 5], rotation: [0, 0, Math.SQRT1_2, Math.SQRT1_2], txd: '' }],
+      };
+
+      const effects = collectCellEffects(cell, 256, () => dff, source(models), new Map());
+
+      expect(effects).toHaveLength(1);
+      // World (200,300,10) − cell centre (128,128,0) = (72, 172, 10). The instance moved nothing.
+      expect([...effects[0].position]).toEqual([72, 172, 10]);
+      expect([...effects[0].bytes.slice(20)]).toEqual(Array(88).fill(0xab)); // payload never decoded
+    });
+
+    it('gives two instances of an emitter-carrying model two emitters, each at its own place', () => {
+      // The other half of the space branch: a model-local type stays per-instance — two chimneys, two plumes.
+      const cache = new Map<string, ClumpEffect[]>([
+        ['chimney', [{ bytes: Uint8Array.of(7, 7), position: [0, 0, 20], type: 1 }]],
+      ]);
+      const models = { chimney: clump(geometry('brick', [0, 0, 0, 1, 0, 0, 0, 1, 0])) };
+      const at = (x: number): Cell['instances'][number] => ({
+        model: 'chimney',
+        position: [x, 128, 0],
+        rotation: IDENTITY,
+        txd: '',
+      });
+      const cell: Cell = { cx: 0, cy: 0, instances: [at(128), at(140)] };
+
+      const effects = collectCellEffects(cell, 256, () => null, source(models), cache);
+
+      expect(effects.map((effect) => effect.type)).toEqual([1, 1]);
+      expect(effects.map((effect) => [...effect.position])).toEqual([
+        [0, 0, 20],
+        [12, 0, 20],
+      ]);
     });
 
     it('groups triangles by texture across materials', () => {

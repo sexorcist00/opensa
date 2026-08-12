@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 
 import { applyMod } from './apply-mod';
 import { bakeMod } from './bake-mod';
+import { checkDanglingModels } from './dangling-models';
 import { compactStockInstIpls, mergeModInstIpls } from './ipl-slot-merge';
 
 export interface InstallOptions {
@@ -49,6 +50,10 @@ export function install(options: InstallOptions): void {
   // and empty the stream-less stock inst blocks (int_cont/gen_int1) the same way.
   const slots = mergeModInstIpls(gamePath, outPath);
   const compact = compactStockInstIpls(gamePath, outPath);
+
+  // A mod that retires a model the stock map still places leaves a request the streamer can never satisfy —
+  // the world then renders as LODs with permanent hitching. Silent until the field; gated here.
+  checkDanglingModels(outPath);
 
   console.log(
     `mod-installer: ${mods.length} mod(s) (${baked} baked) → ${outPath} ` +

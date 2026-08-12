@@ -104,7 +104,7 @@ Crucially this runs on **both surfaces so they stay consistent**:
 
 ### Code touch
 
-- `@opensa/sa-lod/prelight` (shared with `lod-procobj-generator`) — `applyStockPrelight(customDff, stockDff,
+- `@opensa/sa-lod/prelight` (shared with `sa-procobj-placement`) — `applyStockPrelight(customDff, stockDff,
 isFoliage)`, plus exported `stockPrelightColor`, `trunkOnlyPrelit`, and `parsePrelightInfo`/`PrelightInfo`.
 - `io.ts` — `applyTrunkPrelight(tree, colour)` (LOD-bake trunk recolour; HdTree-specific, stays in this tool).
 - `adapters/gta-sa/index.ts` — build the `foliageTextures` set (`hasAlpha`); in the adapter's `loadTree`, when
@@ -134,7 +134,7 @@ own prelit is correct, where the stock-ambient overwrite would look wrong.)
 
 Only touches the **swapped HD DFFs** and their **LOD atlas**. Non-`--prelight` runs are unchanged. procobj species
 are never swapped here (they keep their stock HD + runtime scatter), so they're unaffected — their LODs are a
-separate tool (`lod-procobj-generator`).
+separate tool (`sa-procobj-placement`).
 
 ---
 

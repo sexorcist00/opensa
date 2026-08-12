@@ -23,7 +23,7 @@
 
 ## Symptom
 
-- Real SA (1.0 US + FLA): after installing the `lod-procobj-generator` output, `barriers2.ipl` props
+- Real SA (1.0 US + FLA): after installing the `sa-procobj-placement` output, `barriers2.ipl` props
   ghost-streamed in at the bridge on every save — even full-progress saves where all bridges are open.
 - Teleport-then-save near the bridge crashed the game.
 - OpenSA (browser engine): the same roadblocks appeared baked into far-LOD cells (`lod_2_1`,
@@ -63,6 +63,21 @@ Each of these was hit for real during the investigation; fixing them was necessa
 
 ## What ultimately shipped (the fix)
 
+> **Read this first, added 2026-08-11.** Items 1, 2 and 5 below describe the WORK-AROUND era and are kept as
+> the record of it — the ceiling they fought is lifted now, and two of them no longer exist in the code.
+> **The procobj layer has carried no binary streams and no `linkedHeight` since
+> [014](../../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md)** (2026-08-10): a
+> stream's IPL slot is only resident within 190 units, so it could never carry the draw distance the layer
+> needed, and every object is a permanent text row at `lod = -1` instead. Streams survive only for lod-trees'
+> overflow areas (item 3), which want streaming and not range.
+>
+> **What the asi unlocks, in numbers.** The map ships **110 055 permanent text-IPL rows** map-wide — 3.4× the
+> 32 767 int16 ceiling this issue is about, and 3.7× the 30 000-row build guard that used to fail it. That
+> density exists BECAUSE the root cause is fixed rather than budgeted: the guard was deleted 2026-08-09, and
+> since 2026-08-11 the `sa` build both **states every stock ceiling it crosses** (`reportInstallRequirements`)
+> and **ships `perfect-map.asi` into the built game root** with its sha256 in `build-timings.json`. The
+> work-arounds below are what the same problem cost when it could only be dodged.
+
 1. **Binary-stream placement** (lod-procobj plan 007): vanilla-style per-area layout — small text
    `plobj<i>.ipl` (LOD layer) + `plobj<i>_stream<k>.ipl` binary tiles in gta3.img, HD `lod` fields
    indexing the area's text rows. `encodeBinaryIpl` + `buildLinkedAreas` in `@opensa/map-placement`.
@@ -74,9 +89,11 @@ Each of these was hit for real during the investigation; fixing them was necessa
 4. **Slot/row economy in mod-installer**: mod-added inst-only IPLs and the stream-less stock
    `int_cont`/`gen_int1` inst blocks are appended into the least-loaded stock host IPL (appends never
    shift binary lod indexes; internal links rebased).
-5. **Build guards in perfect-map-builder** (`checkTextIplSlotBudget`): fails the build over 39 text-IPL
-   slots or 30,000 total text rows — loud error instead of silent in-game corruption. Full build now
-   runs ~21–22k/30k rows, ~37/39 slots.
+5. **Build guards in perfect-map-builder** (`checkTextIplBudgets`, `checkTextIplSlotBudget` until
+   2026-08-08): fails the build over 30,000 total text rows — loud error instead of silent in-game
+   corruption. Full build then ran ~21–22k/30k rows, ~37/39 slots. **The slot half is a REPORT since
+   2026-08-08** (the target's OLA lifts that array), and both ceilings moved onto the built `sa/` tree —
+   an `--exclude sa` run checks neither (07/04).
 
 ## The ProperFixes.asi influence (MixMods)
 
@@ -117,10 +134,12 @@ the build output.
 
 ## Pointers
 
-- `tools/lod-procobj-generator/docs/plans/007-binary-ipl-streams.md` — layout + full post-mortem.
+- `tools/sa-procobj-placement/docs/plans/007-binary-ipl-streams.md` — layout + full post-mortem.
 - `tools/lod-trees-generator/docs/plans/011-area-row-budget.md` — area budgets, migration, slot economy.
 - `tools/map-placement/src/streamed-areas.ts` / `ipl-binary-write.ts` — the shared machinery.
 - `tools/mod-installer/src/ipl-slot-merge.ts` — mod-IPL folding + stock inst-block compaction.
-- `tools/perfect-map-builder/src/pipeline.ts` — `checkTextIplSlotBudget` (both guards).
+- `tools/perfect-map-builder/src/pipeline.ts` — `reportTextIplCensus` (a cost census since 2026-08-09; the
+  int16 throw and the slot report were deleted once the target's always-present `perfect-map.asi` + OLA made
+  both ceilings inapplicable).
 - gta-reversed: `IplStore.cpp` (`IncludeEntity`, `LoadIplBoundingBox`), `FileLoader.cpp` (`LoadScene`,
   `LinkLods`) — the decompiled ground truth all of this was read from.

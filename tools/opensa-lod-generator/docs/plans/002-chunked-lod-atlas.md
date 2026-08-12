@@ -125,7 +125,7 @@ world → grid of N×N-unit cells   (= the engine's streaming cellSize)
   - **2b — cell TXD writer. ✅ Done** (shared `@opensa/sa-lod/encode-txd`): downscale (2× box, mip lib) →
     **DXT-compress** (DXT1 opaque / DXT5 alpha) + mip chain via `encodeDxtStruct` → TEXTURE_NATIVE →
     TEXTURE_DICTIONARY. Round-trips through the engine `parseTxd`. DXT shrank the full build's TXDs from ~324 MB
-    raw to ~61 MB (`lods.img` 458 → 196 MB) — shared with `lod-procobj-generator`.
+    raw to ~61 MB (`lods.img` 458 → 196 MB) — shared with `sa-procobj-placement`.
 - **Phase 3 — integrate + remove old.** Strip the SA `lod*` models + their IPL entries, emit the new cell-LOD
   instances, set the bake cell size = the engine `cellSize`. Emits the **dual-target** build below (no engine
   code — see "Engine fit").
@@ -187,7 +187,7 @@ always faces the camera; OpenSA's `FrontSide` cull keeps that one and drops the 
 the world, so it draws both coincident copies (identical pixels — harmless). Generation-only, no engine change.
 
 **Opt-in** (`EncodeLodDffOptions.doubleSided`, default **off**): the cell-LOD bake turns it on
-(`finalize.ts`); the _other_ `encode-dff` reuser — `lod-procobj-generator`, a **real-game** target — leaves it
+(`finalize.ts`); the _other_ `encode-dff` reuser — `sa-procobj-placement`, a **real-game** target — leaves it
 **off**, because a single authored impostor has consistent winding and renders fine single-sided, and doubling is
 just an unproven structural change + wasted triangles for the real game. (`lod-trees-generator` has its own
 billboard encoder and is unaffected.) Cost: ~2× the cell-LOD's triangle/index count — fine for OpenSA, and the

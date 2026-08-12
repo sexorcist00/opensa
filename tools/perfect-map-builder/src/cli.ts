@@ -1,6 +1,7 @@
 import type { OptimizerPasses } from '@opensa/map-optimizer/run';
 
 import { argValue, fromCwd } from '@opensa/tool-kit/cli';
+import { parseBuildTarget } from '@opensa/tool-kit/target';
 /**
  * perfect-map-builder CLI. Chains every map tool into one build and splits it into the `sa` (real game) and
  * `opensa` LOD targets. Usage:
@@ -9,7 +10,8 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  *                      surface reads (the lab, the harness and the object-viewer's AFTER side all mount
  *                      `./build/original/opensa`). Pass it only to build somewhere else.
  *     --until <stage>  stop after a stage (mods|vehicles|peds|optimize|trees|procobj|sa|opensa|pack) and KEEP
- *                      every intermediate build under `<out>/.work` — for step-by-step in-game debugging.
+ *                      every intermediate build under `<out>/.work-<target>` — for step-by-step in-game
+ *                      debugging.
  *                      The list is the pipeline ORDER and the stop point is INCLUSIVE, so every stage at or
  *                      before it runs: `--until pack` still builds the `sa` target, since `sa` precedes it.
  *                      `--until lod` runs the WHOLE pipeline (both sa + opensa) while keeping every step.
@@ -21,16 +23,26 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  *                      our target (the `build:game:<id>:opensa` scripts), `--exclude vehicles,peds,opensa`
  *                      builds only the real game's (`build:game:original:sa`). Excluding `opensa` drops
  *                      `pack` with it; excluding `pack` alone leaves `opensa/` in GAME format. An excluded
- *                      stage leaves whatever an earlier run wrote in its place — only `<out>/.work` is
- *                      cleared — so the two targets can be rebuilt independently in the same `--out`.
- *     --keep-work      keep the intermediate `.work` builds even on a full run.
+ *                      stage leaves whatever an earlier run wrote in its place — only the run's own
+ *                      `<out>/.work-<target>` is cleared (plan 005) — so the two targets can be rebuilt
+ *                      independently in the same `--out`, each with its own `report-<target>.json`.
+ *     --target <host>  the host this build is FOR (sa|opensa) — it picks every knob whose right value is a
+ *                      fact about the host: limits, particle policy, procobj density. Omitted, it is DERIVED
+ *                      from `--exclude` (`--exclude sa` builds for opensa; a run that builds BOTH targets
+ *                      shares one common chain and so resolves to `sa`, the host that still has ceilings).
+ *                      `--target opensa` without `--exclude sa` is refused: the shared chain cannot carry a
+ *                      profile the real game could not run.
+ *     --procobj-density <n>  scatter density cutoff for the procobj stage: 1 = vanilla, max 3 (the scatter's
+ *                      candidate ceiling). The knob 07/04's perf budgets sweep — the run prints the density
+ *                      it built at, so a capture states its own configuration.
+ *     --procobj-max <n>  raise the placed-object safety cap with the density (default 20000). Without it a
+ *                      high-density run measures the CAP — the build prints CAP DROPPED when it binds.
+ *     --keep-work      keep the intermediate `.work-<target>` builds even on a full run.
  *     --bake-collision write every cell's COLLISION into the pak (plan 200/3-01), so the browser never parses
  *                      a COL for a cell the bake covers. Costs build time; OFF by default, because it is the
  *                      A/B switch — the runtime reads the bake when it is there and parses COL when it is
  *                      not, so the SAME tree built twice, one flag apart, is what the claim is measured on.
  *     --no-<pass>      disable a map-optimizer pass to bisect it: --no-weld-seams | --no-textures.
- *     --allow-text-row-overflow  build past the int16 30k text-row budget (the 03-asi ghost-barriers repro —
- *                      an intentionally over-2^15 full build); the 39-slot guard stays hard. Never for shipping.
  * A `broken-prelight.json` at the mods-src root (or inside its `mods/` subfolder) is the map-optimizer
  * prelight FORCE list: the statistical pass runs map-wide and the listed models are additionally forced past
  * the skip-guards (same entry format as `--prelit-force` — see the map-optimizer README).
@@ -56,7 +68,8 @@ async function main(): Promise<void> {
   if (!gameArg || !inArg) {
     throw new Error(
       'usage: tsx tools/perfect-map-builder/src/cli.ts --game <path> --in <mods-src> [--out <path>] ' +
-        '[--until <stage>] [--exclude <stage,stage>] [--keep-work] [--no-<pass>] [--bake-collision]',
+        '[--target <sa|opensa>] [--until <stage>] [--exclude <stage,stage>] [--keep-work] [--no-<pass>] ' +
+        '[--bake-collision]',
     );
   }
 
@@ -76,6 +89,9 @@ async function main(): Promise<void> {
     throw new Error(`--until must be one of: ${STAGE_NAMES.join(' | ')}`);
   }
 
+  const procobjDensity = numberArg('--procobj-density');
+  const procobjMax = numberArg('--procobj-max');
+
   const optimizerPasses: Partial<OptimizerPasses> = {
     ...(process.argv.includes('--no-textures') ? { textures: false } : {}),
     ...(process.argv.includes('--no-weld-seams') ? { weldSeams: false } : {}),
@@ -86,13 +102,18 @@ async function main(): Promise<void> {
   const bakeCollision = process.argv.includes('--bake-collision');
 
   const { produced, stoppedEarly } = await buildPerfectMap({
-    allowTextRowOverflow: process.argv.includes('--allow-text-row-overflow'),
-    config: { optimizerPasses, ...(bakeCollision ? { pack: { ...defaultConfig.pack, bakeCollision: true } } : {}) },
+    config: {
+      optimizerPasses,
+      ...(bakeCollision ? { pack: { ...defaultConfig.pack, bakeCollision: true } } : {}),
+      ...(procobjDensity !== undefined ? { procobjDensity } : {}),
+      ...(procobjMax !== undefined ? { procobjMax } : {}),
+    },
     exclude: parseExcludedStages(process.argv),
     gamePath,
     inPath,
     keepWork: process.argv.includes('--keep-work'),
     outPath: fromCwd(outArg),
+    target: parseBuildTarget(argValue('--target')),
     until: until as StageName | undefined,
   });
 
@@ -100,6 +121,21 @@ async function main(): Promise<void> {
   for (const stage of produced) {
     console.log(`  ${stage.name.padEnd(9)} → ${stage.dir}`);
   }
+}
+
+/** A numeric flag, or undefined when absent. A typo has to fail loudly — `Number('x')` is NaN, and a NaN
+ *  density silently keeps NOTHING (every `lottery < NaN` is false), i.e. an empty layer nobody asked for. */
+function numberArg(flag: string): number | undefined {
+  const raw = argValue(flag);
+  if (raw === undefined) {
+    return undefined;
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    throw new Error(`${flag} must be a number: got '${raw}'`);
+  }
+
+  return value;
 }
 
 main().catch((error: unknown) => {

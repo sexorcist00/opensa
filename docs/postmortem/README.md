@@ -15,6 +15,13 @@ observations that killed it, and the conditions under which it might be worth re
 
 ## Postmortems
 
+- [uv-stretch-repair.md](./uv-stretch-repair.md) — the `repair-uv-stretch` map-optimizer pass (plan 025),
+  built and retired the SAME day (2026-08-11) on the field's verdict. It repaired 3 849 faces across 104
+  models and passed every measured guard, and the first before/after look reversed it: a partial repair of a
+  *continuous* UV defect converts a soft smear into hard-edged patchwork, and the "correct" mapping it wrote
+  is invented — there is no authored frame to restore (model fit residual ~1.8 UV). Keeps the two structural
+  reasons no automated repair survives here, what IS still valid (the scanner, the diagnosis that it is R\*'s
+  own data), and the one real exit: hand-authored UV fixes shipped as data
 - ~~07-2dfx-on-baked-cells.md~~ — **REVIVED the same day, 2026-08-07**, and no longer rests here. Roadsigns
   and escalators onto `opensa-lod-generator`'s baked cells died when its two premises failed measurement and
   the user closed its last route; hours later that decision was reversed and the scope widened to both LOD

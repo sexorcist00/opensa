@@ -164,6 +164,9 @@ fn fsCloudField(in: CloudFieldOut) -> @location(0) vec4f {
 @group(1) @binding(0) var<storage, read> clutterMatrices: array<mat4x4f>;
 @group(1) @binding(1) var clutterTexture: texture_2d_array<f32>;
 @group(1) @binding(2) var clutterSampler: sampler;
+// .x = this group's SQUARED draw distance — the per-category visibility range. Applied per INSTANCE because
+// the clutter grid is 256 units: a whole-group test cannot express a radius under a cell diagonal.
+@group(1) @binding(3) var<uniform> clutterRange: vec4f;
 
 // Geometry is the shared vehicle-model layout (buildVehicleModel): slots.x = texture-array layer (the only
 // meta clutter uses — paint slot / lamp tags are ignored). One draw covers every submesh; the per-vertex
@@ -206,6 +209,15 @@ fn vsClutter(in: ClutterIn) -> ClutterOut {
   let n = normalize((model * vec4f(in.normal, 0.0)).xyz);
   out.sunNdl = max(dot(n, frame.sunDir.xyz), 0.0);
   out.moonNdl = clamp((dot(n, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0);
+  // Per-category range: an instance whose ORIGIN is past this group's draw distance is pushed outside the
+  // clip volume, so the triangle is rejected before any fragment work. Every vertex of the instance takes the
+  // same branch and lands on the same point, so the rejection is total rather than a torn primitive. Measured
+  // from the instance ORIGIN (not the vertex) so a species never half-disappears, and squared to keep the
+  // sqrt out of the vertex path.
+  let toInstance = model[3].xyz - frame.camera.xyz;
+  if (dot(toInstance, toInstance) > clutterRange.x) {
+    out.clip = vec4f(2.0, 2.0, 2.0, 1.0);
+  }
   return out;
 }
 

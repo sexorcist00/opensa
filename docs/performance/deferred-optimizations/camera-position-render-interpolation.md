@@ -1,5 +1,11 @@
 # Render interpolation for the camera position weight
 
+**Impact: none, and it was never the point — kept here as the calibration case.** This is the one entry on
+the list that is not a performance lever: it bought camera FEEL (the position weight, and the ped "doubling"
+at a run), and its measured cost when it shipped was **none — `ls-noon` vsync-capped at 120 fps with draws
+and triangles identical to the rigid-position row**. A lerp/slerp per drawn body is free at this scale. Read
+it as the reminder that this rubric collects deliberate costs, not only frame time.
+
 **Status: PULLED 2026-07-25.** Render interpolation SHIPPED, and the position weight
 (`positionLagTime`/`verticalLagTime`/`deadZone`) is back on. This entry is kept as the record of the lever
 and its price; what follows describes what it looked like BEFORE, and the note at the end is what was

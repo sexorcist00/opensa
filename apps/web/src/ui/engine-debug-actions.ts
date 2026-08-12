@@ -216,8 +216,11 @@ export function createEngineDebugActions(deps: EngineDebugActionsDeps): DebugAct
     setPhysicsCapture: deps.setPhysicsCapture,
     setProcObj: (category: ProcObjCategory, patch): void => {
       Object.assign(graphics.procobj[category], patch);
-      if (patch.density !== undefined || patch.enabled !== undefined) {
-        deps.reloadClutter(); // render + colliders come from ONE scatter, so both must re-run
+      // `drawDistance` joined this list on 2026-08-10, when the range stopped being dead config: it is baked
+      // into a per-draw uniform (and into the streaming ring) at apply time, so moving the slider has to
+      // re-issue the cells. Density and enabled re-run the SCATTER, which render + colliders share.
+      if (patch.density !== undefined || patch.drawDistance !== undefined || patch.enabled !== undefined) {
+        deps.reloadClutter();
       }
     },
     setShadows: (patch): void => void Object.assign(graphics.shadows, patch),

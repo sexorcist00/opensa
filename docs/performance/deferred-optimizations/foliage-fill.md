@@ -3,6 +3,20 @@
 **Status:** in reserve — parked by decision 2026-07-21 after the cause was found and removed. Evidence:
 [layer decomposition](../../benchmarks/opensa-engine/2026-07-21-layer-decomposition.md), index rows #21/#22.
 
+**Impact: HIGH on the axis, unmeasured per lever — the biggest demonstrated number on this whole list.** The
+A/B that closed the 07-21 investigation moved ganton-noon **13.72 → 7.63 ms of pass, 53 → 82 fps**. That is
+what the foliage-fill axis is worth when it is the thing that is slow. **What the number does NOT say** is
+what any lever below buys: it was produced by deleting one mod's 233 placements, not by pulling a lever, and
+each of the four is unmeasured on its own. Treat this as "the axis where the milliseconds are", then A/B the
+specific lever.
+
+**Effort: very low → high, and the whole spread lives in this one entry.** The impostor swap distance is a
+knob and a per-cell density cap is converter config — **very low**, and both attack overdraw directly, which
+is what the measurement says actually costs. Cutout-vs-blend on canopies changes the welder's alpha policy
+map-wide and needs a re-convert to judge — **medium**. Cheaper canopy shading means a second world fragment
+path with its own correctness surface (fog, prelit, AO, sun-vis all still have to agree) — **high**. Start at
+the cheap end: it is where the measured mechanism points.
+
 ## What we know
 
 The 07-18 → 07-20 "regression" was not a code change: rebuilding the map one pmb stage at a time put **~90 %

@@ -104,3 +104,19 @@ Limits and deliberate approximations of the own WebGPU engine.
   sa-map-viewer pose with the sea in view differ by mean Δ 0.006/255, max Δ 14.6/255 (094 phase 7). The gate
   is `Engine.waterEnabled` — switch the surface OFF for a pixel A/B (the viewer's `?water=0`, which
   `map-viewer-shot.ts` now sets by default); with it off, two runs are byte-identical again.
+- **`trianglesRecorded` counts SUBMITTED clutter instances, so it is blind to the per-category range cull.**
+  A clutter group whose bounding sphere lies entirely past its `drawDistance` is skipped on the CPU, and that
+  group's triangles do leave the count. But a group the camera stands INSIDE is submitted whole and culled per
+  instance in `vsClutter` (the instance is pushed outside the clip volume), and the counter has already added
+  `indexCount / 3 × instanceCount` by then. Clutter cells are 256 units against ranges of 100–300, so the
+  straddling case is the common one. **The column is accurate about vertex load and under-reports the fill
+  saving** — measure a clutter-range change on `gpuMs.pass`, and read `avgTriangles` only as a direction.
+  (Shipped 2026-08-10 with the ranges; the honest fix would be a counter the shader can decrement, which
+  nothing else in the engine needs yet.)
+- **`?procobjFloor=0` brings back a real defect, so treat it as an A/B knob and not a tuning one.** Without the
+  species floor `procObjLimit` pools every candidate in a cell and keeps the lowest lotteries, so a species
+  competing against many others loses all of its placements: measured 2026-08-11, **17 of 96 clutter cells
+  (17.7 %)** lose at least one model, worst `8,-3` (~2125, −625) at 16 of 23. It reads as terrain that simply
+  has no cacti, and nothing warns. **Fixed and ON by default since 2026-08-11**
+  ([plan 012](../../tools/sa-procobj-placement/docs/plans/012-species-representation-floor.md)) — this entry
+  stays only because the old behaviour is one URL parameter away.

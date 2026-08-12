@@ -1,10 +1,11 @@
-import type { DynamicParticleLibrary, Engine } from '@opensa/engine';
+import type { DynamicParticleLibrary, Engine, ParticleUpload } from '@opensa/engine';
 import type { AssetFileSystem, FxBakedEmitter } from '@opensa/renderware';
 
+import { parseFxp } from '@opensa/renderware';
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { setupEngineParticles, toEngineSpace } from './engine-particles';
+import { fxDrawDistance, setupEngineParticles, toEngineSpace } from './engine-particles';
 
 /** A fountain: SA authors "up" as +Z, and buoyant force the same way. */
 function fountain(): FxBakedEmitter {
@@ -56,6 +57,8 @@ describe('engine particles', () => {
 // list resolves against what SA actually ships (system names, textures, the tint/size overrides).
 const EFFECTS_FXP = 'tests/original/models/effects.fxp';
 const EFFECTS_TXD = 'tests/original/models/effectsPC.txd';
+/** A host LOD radius unlike any authored cullDist, so "drawn as far as the world" cannot pass by accident. */
+const WORLD_DRAW_DISTANCE = 1500;
 
 interface RecordedSpawn {
   alpha: number;
@@ -63,17 +66,24 @@ interface RecordedSpawn {
   system: number;
 }
 
-/** A recording Engine stand-in: the two calls setupEngineParticles makes for the dynamic lane. */
+/** A recording Engine stand-in: the calls setupEngineParticles makes for the dynamic lane, plus the empty
+ *  cell set `rebuild` walks (no streamed cells, so the PLACED lane uploads nothing). */
 function fakeEngine(): {
   engine: Engine;
   library: () => DynamicParticleLibrary | null;
   spawns: RecordedSpawn[];
+  uploads: ParticleUpload[];
 } {
   let library: DynamicParticleLibrary | null = null;
   const spawns: RecordedSpawn[] = [];
+  const uploads: ParticleUpload[] = [];
   const engine = {
+    cells: { all: (): [] => [] },
     initDynamicParticles: (upload: DynamicParticleLibrary): void => {
       library = upload;
+    },
+    setParticles: (upload: ParticleUpload): void => {
+      uploads.push(upload);
     },
     spawnParticle: (
       system: number,
@@ -92,7 +102,7 @@ function fakeEngine(): {
     },
   } as unknown as Engine;
 
-  return { engine, library: () => library, spawns };
+  return { engine, library: () => library, spawns, uploads };
 }
 
 /** The two fixture files behind the AssetFileSystem surface setupEngineParticles reads. */
@@ -121,7 +131,7 @@ describe.skipIf(!existsSync(EFFECTS_FXP) || !existsSync(EFFECTS_TXD))('dynamic l
   describe('negative cases', () => {
     it('returns null for a system outside the boot-time list', () => {
       const { engine } = fakeEngine();
-      const particles = setupEngineParticles(engine, fixtureFs());
+      const particles = setupEngineParticles(engine, fixtureFs(), WORLD_DRAW_DISTANCE);
 
       expect(particles?.createEmitter('prt_blood')).toBeNull();
     });
@@ -130,7 +140,7 @@ describe.skipIf(!existsSync(EFFECTS_FXP) || !existsSync(EFFECTS_TXD))('dynamic l
       const { engine, library } = fakeEngine();
       const empty = { get: (): null => null, getText: (): null => null } as unknown as AssetFileSystem;
 
-      expect(setupEngineParticles(engine, empty)).toBeNull();
+      expect(setupEngineParticles(engine, empty, WORLD_DRAW_DISTANCE)).toBeNull();
       expect(library()).toBeNull();
     });
   });
@@ -138,7 +148,7 @@ describe.skipIf(!existsSync(EFFECTS_FXP) || !existsSync(EFFECTS_TXD))('dynamic l
   describe('positive cases', () => {
     it('every boot-time system resolves against the real library, aliases included', () => {
       const { engine } = fakeEngine();
-      const particles = setupEngineParticles(engine, fixtureFs());
+      const particles = setupEngineParticles(engine, fixtureFs(), WORLD_DRAW_DISTANCE);
 
       for (const name of [
         'prt_collisionsmoke',
@@ -154,7 +164,7 @@ describe.skipIf(!existsSync(EFFECTS_FXP) || !existsSync(EFFECTS_TXD))('dynamic l
 
     it('a burst spawns count particles with the emitter look applied', () => {
       const { engine, spawns } = fakeEngine();
-      const particles = setupEngineParticles(engine, fixtureFs());
+      const particles = setupEngineParticles(engine, fixtureFs(), WORLD_DRAW_DISTANCE);
       const emitter = particles!.createEmitter('wheeldirt-grass')!;
       emitter.lifeScale = 0.5;
       emitter.alphaScale = 0.25;
@@ -171,7 +181,7 @@ describe.skipIf(!existsSync(EFFECTS_FXP) || !existsSync(EFFECTS_TXD))('dynamic l
 
     it('the grass alias carries its earthy tint and prt_sand its size cut in the baked records', () => {
       const { engine, library, spawns } = fakeEngine();
-      const particles = setupEngineParticles(engine, fixtureFs());
+      const particles = setupEngineParticles(engine, fixtureFs(), WORLD_DRAW_DISTANCE);
 
       particles!.createEmitter('wheeldirt-grass')!.burst(1);
       const grassIndex = spawns[0].system;
@@ -185,6 +195,89 @@ describe.skipIf(!existsSync(EFFECTS_FXP) || !existsSync(EFFECTS_TXD))('dynamic l
       expect(systems[grassIndex * 20 + 10]).toBeCloseTo(0.3, 3);
       // prt_sand's authored size-at-0 is 8 m (a bullet plume); the lane cuts it 0.35×.
       expect(systems[sandIndex * 20 + 4]).toBeCloseTo(8 * 0.35, 3);
+    });
+  });
+});
+
+describe.skipIf(!existsSync(EFFECTS_FXP))('fx draw distance (real effects.fxp)', () => {
+  const systems = parseFxp(readFileSync(EFFECTS_FXP).toString('latin1'));
+  const distanceOf = (name: string): number => fxDrawDistance(systems.get(name)!, WORLD_DRAW_DISTANCE);
+
+  describe('negative cases', () => {
+    it('does not apply a departure to a system that is not in the table', () => {
+      // The whole point of the step: the fxp wins everywhere except the two recorded places. These four are
+      // the ones the flat 300 stretched hardest — a vent used to be drawn 12× further than SA drew it.
+      expect(distanceOf('vent')).toBe(25);
+      expect(distanceOf('vent2')).toBe(25);
+      expect(distanceOf('fire')).toBe(35);
+      expect(distanceOf('carwashspray')).toBe(70);
+    });
+
+    it('falls back for a system that authors no cullDist at all', () => {
+      expect(fxDrawDistance({ boundingSphere: [0, 0, 0, 0], cullDist: 0, emitters: [], name: 'modded' }, 1500)).toBe(
+        300,
+      );
+    });
+
+    it('leaves every system where it was at scale 1 — the knob is a multiplier, not a replacement', () => {
+      for (const name of ['vent', 'fire', 'insects', 'ws_factorysmoke']) {
+        expect(fxDrawDistance(systems.get(name)!, WORLD_DRAW_DISTANCE, { scale: 1 }), name).toBe(distanceOf(name));
+      }
+    });
+
+    it('does not give a PLACED system the dynamic lane floor', () => {
+      // The floor is the calling lane's, not a property of the system — a vent stays at its authored 25.
+      expect(distanceOf('vent')).toBe(25);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('draws every smoke system as far as the world is drawn, not the authored 150-255', () => {
+      for (const name of ['ws_factorysmoke', 'smoke30m', 'smoke30lit', 'smoke50lit']) {
+        expect(systems.get(name)!.cullDist, name).toBeLessThan(WORLD_DRAW_DISTANCE); // the departure is real
+        expect(distanceOf(name), name).toBe(WORLD_DRAW_DISTANCE);
+      }
+    });
+
+    it('floors the two tiny systems at 100 rather than their authored 15', () => {
+      expect(systems.get('insects')!.cullDist).toBe(15);
+      expect(distanceOf('insects')).toBe(100);
+      expect(distanceOf('cigarette_smoke')).toBe(100);
+    });
+
+    it('scales every distance by the live knob, floors and departures included', () => {
+      expect(fxDrawDistance(systems.get('vent')!, WORLD_DRAW_DISTANCE, { scale: 2 })).toBe(50); // authored 25
+      expect(fxDrawDistance(systems.get('insects')!, WORLD_DRAW_DISTANCE, { scale: 0.5 })).toBe(50); // floored 100
+      expect(fxDrawDistance(systems.get('smoke30m')!, WORLD_DRAW_DISTANCE, { scale: 0.5 })).toBe(
+        WORLD_DRAW_DISTANCE / 2,
+      );
+      // The lane floor is applied BEFORE the scale, so the knob can still pull the dynamic lane back in.
+      expect(fxDrawDistance(systems.get('prt_sand')!, WORLD_DRAW_DISTANCE, { floor: 300, scale: 0.5 })).toBe(150);
+    });
+
+    it('gives the dynamic lane its 300 u floor, not the 50 every prt_* system authors', () => {
+      const { engine, library } = fakeEngine();
+      setupEngineParticles(engine, fixtureFs(), WORLD_DRAW_DISTANCE);
+
+      // SA authors all four prt_* systems at 50, which reads as another car's tyre smoke ending 50 m away.
+      // The lane floors them (docs/hacks/vehicle-fx-lane-reach.md). Read off the real records; the value is
+      // at offset 7 of each 20-float system stride.
+      expect(systems.get('prt_sand')!.cullDist).toBe(50); // the floor is a real departure, not a no-op
+      const records = library()!.systems;
+      const distances = new Set<number>();
+      for (let index = 0; index * 20 < records.length; index += 1) {
+        distances.add(records[index * 20 + 7]);
+      }
+      expect([...distances]).toEqual([300]);
+    });
+
+    it('re-bakes the dynamic lane when the live scale changes', () => {
+      const { engine, library } = fakeEngine();
+      const particles = setupEngineParticles(engine, fixtureFs(), WORLD_DRAW_DISTANCE)!;
+
+      particles.rebuild(0.5);
+
+      expect(library()!.systems[7]).toBe(150); // the floored 300, halved
     });
   });
 });

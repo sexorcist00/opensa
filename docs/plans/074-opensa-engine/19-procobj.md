@@ -10,7 +10,7 @@ selection (`asset-local-loader/build-vfs.ts`) only ingests IPL-**placed** models
 species are scattered from `procobj.dat` and never IPL-placed, so their DFF+TXD were dropped → `getClump` returned
 `EMPTY_CLUMP` → `buildVehicleModel` produced 0 geometry → nothing drawn (and `getBreakable` failed too, breaking
 plan 20). Fix: `procObjModelRefs` adds every `procobj.dat` model (+ IDE TXD) to the VFS, like peds/vehicles;
-covered by a `build-vfs` test. NOT applicable to `lod-procobj-generator` (a Node CLI that reads full `gta3.img`
+covered by a `build-vfs` test. NOT applicable to `sa-procobj-placement` (a Node CLI that reads full `gta3.img`
 directly and iterates `procobj.dat` itself). After the fix: clutter renders, density sane, body count bounded.
 
 ## What shipped

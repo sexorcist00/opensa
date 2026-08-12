@@ -62,6 +62,7 @@ function sampleCell(overrides: Partial<Oscell> = {}): Oscell {
       { bounds: [-1, -2, -3, 4, 5, 6], id: 3141592653, indexCount: 33, indexOffset: 0, nameRef: 0, txdRef: 1 },
       { bounds: [7, 8, 9, 10, 11, 12], id: 2718281828, indexCount: 12, indexOffset: 33, nameRef: 2, txdRef: 1 },
     ],
+    roadsignQuads: 5,
     vertexCount,
     vertexData,
     ...overrides,
@@ -165,6 +166,22 @@ describe('oscell codec', () => {
 
       expect(back.placements).toEqual([]);
       expect(back.names).toEqual([]);
+    });
+
+    it('round-trips the roadsign glyph-quad count (minor 8)', () => {
+      const back = decodeOscell(encodeOscell(sampleCell({ roadsignQuads: 137 })));
+
+      expect(back.roadsignQuads).toBe(137);
+    });
+
+    it('keeps every later offset intact when the quad count is zero', () => {
+      // The count is a header word, so a zero must still be WRITTEN — reading it back as a table offset is
+      // the failure mode every minor bump in this file has had to defend against.
+      const back = decodeOscell(encodeOscell(sampleCell({ roadsignQuads: 0 })));
+
+      expect(back.roadsignQuads).toBe(0);
+      expect(back.placements).toEqual(sampleCell().placements);
+      expect(back.particles).toEqual(sampleCell().particles);
     });
 
     it('encodes deterministically (same input ⇒ identical bytes)', () => {

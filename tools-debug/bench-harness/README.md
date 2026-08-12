@@ -10,6 +10,9 @@ scenes, report protocols, the recording ritual, DPR caveats. This README is just
 
 - `drive.js` — boots the app via `?loader=http-dir&src=`, clicks the game, waits for `[bench]` (or
   `TAG='[soak]'`) report lines, screenshots on exit. `DPR=2` gives retina-equivalent render targets.
+  **`UNCAPPED=1`** drops the presentation clock (`--disable-frame-rate-limit --disable-gpu-vsync`) so the
+  frame-time columns stop sitting on the vsync period — the run prints `frameClock=uncapped|vsync`, and a
+  capture must say which it was, because the two modes are not comparable.
 - `gate-check.js` — WebGPU boot-gate verification: `canvas` mode reports which context type the game
   canvas holds (WebGPU is the only one since 074/13 deleted the three path); `sorry` mode launches WITHOUT
   WebGPU and expects the sorry screen.

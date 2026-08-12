@@ -1,7 +1,7 @@
 # 001 — Typed 2dfx payload codecs
 
 **Shipped 2026-08-07.** Came from
-[07 — LOD generators, extended](../../../../docs/roadmap/0.5.0/plans/07-lod-generators-extended/readme.md)
+[07 — LOD generators, extended](../../../../docs/roadmap/0.5.0/readme.md)
 (`rw-codec/01`) and moved here when it landed, per that plan's working rules. Gated on nothing; split out of
 the old A2/A3 so the codec ships and is proven on its own, before anything transforms a payload with it.
 
@@ -20,7 +20,7 @@ research, they are a port):
 | --- | --- | --- |
 | **7 — roadsign** | plate size, **rotation**, flags, 4×16 chars of text | orientation is in the payload; a position-only transplant leaves the plate facing the wrong way |
 | **10 — escalator** | bottom / top / end **vec3s**, direction | the geometry IS three points; moving the entry without moving them is meaningless |
-| **1 — particle** | `effects.fxp` system name (24 bytes) + parameters | needed by [lod-common/03](../../../../docs/roadmap/0.5.0/plans/07-lod-generators-extended/lod-common/03-emitter-thinning.md) only if rate-scaling turns out to need a payload edit — decode it here, decide there |
+| **1 — particle** | `effects.fxp` system name (24 bytes) + parameters | needed by [lod-common/03](../../../lod-common/docs/plans/008-emitter-thinning.md) only if rate-scaling turns out to need a payload edit — decode it here, decide there |
 
 Everything else stays opaque and byte-verbatim. Do not build codecs for types nobody sees at LOD range.
 

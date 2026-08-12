@@ -1,13 +1,9 @@
+import type { AssetFailure, RunSummary } from '@opensa/map-optimizer/run';
+import type { ProcObjDensityInput } from '@opensa/map-placement/procobj-density';
+
 import { parsePrelightInfo, type PrelightInfo } from '@opensa/lod-common/prelight';
-/**
- * The perfect-map build pipeline (plan 001): chain every map tool via its Node API, each stage's output feeding the
- * next as a **complete** game dir (full passthrough), then split the common build into the `sa` (real game) and
- * `opensa` final LOD targets. Intermediate stages live under `<out>/.work` and are deleted as they're consumed —
- * unless `keepWork`/`until` is set, in which case every stage build is kept for step-by-step in-game debugging.
- */
-import { buildProcobjLods } from '@opensa/lod-procobj-generator/build';
 import { buildTreeLods } from '@opensa/lod-trees-generator/build';
-import { parseOnlyList, runOptimizer } from '@opensa/map-optimizer/run';
+import { parseOnlyList, runOptimizer, summarizeReport } from '@opensa/map-optimizer/run';
 import { SA_TREE_MODELS } from '@opensa/map-placement/vegetation';
 import { install as installMods } from '@opensa/mod-installer/install';
 import { buildOpensaLods } from '@opensa/opensa-lod-generator/build';
@@ -17,10 +13,22 @@ import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { parseIde } from '@opensa/renderware/parsers/text/ide.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { buildSaLods } from '@opensa/sa-lod-generator/build';
+/**
+ * The perfect-map build pipeline (plan 001): chain every map tool via its Node API, each stage's output feeding the
+ * next as a **complete** game dir (full passthrough), then split the common build into the `sa` (real game) and
+ * `opensa` final LOD targets. Intermediate stages live under `<out>/.work-<target>` (plan 005 — one dir per
+ * target, so building one never destroys the other's kept stages) and are deleted as they're consumed — unless
+ * `keepWork`/`until` is set, in which case every stage build is kept for step-by-step in-game debugging.
+ * Each target that runs writes `<out>/report-<target>.json` at the end of its chain (plan 005).
+ */
+import { buildProcobjLods } from '@opensa/sa-procobj-placement/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
+import { type BuildTarget } from '@opensa/tool-kit/target';
 import { install as installVehicles } from '@opensa/vehicle-installer/install';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import type { BuilderConfig } from './config';
 
@@ -36,8 +44,11 @@ export const STAGE_NAMES = [
   'peds',
   'optimize',
   'trees',
-  'procobj',
   'sa',
+  // procobj is baked INSIDE the sa branch, after the LOD build (plan 014) — it is that target's layer alone, so
+  // it must not reach the common build both targets share. Its place in this list is its place in the RUN order,
+  // which is what `--until` reads: `--until sa` stops before the clutter, `--until procobj` includes it.
+  'procobj',
   'opensa',
   'pack',
   'lod',
@@ -49,11 +60,40 @@ export const STAGE_NAMES = [
  */
 export const EXCLUDABLE_STAGES = STAGE_NAMES.filter((name): name is ExcludableStage => name !== 'lod');
 
+/**
+ * What the `opensa` target gets in place of SA's ceilings — today, an announcement that it has none. Our
+ * engine has no building pool, no int16 `IplDef` index and no `IplEntityIndexArrays`, so
+ * {@link reportTextIplCensus} does not run here; what replaces it is a STREAMING budget whose number does not
+ * exist yet (07/04 decisions 4–5 — it has to be measured in our engine, and a cap taken from SA's numbers
+ * would be a guess wearing a measurement's clothes).
+ *
+ * **The CLUTTER half of that budget was measured 2026-08-10 and yielded no number**, which is a result and not
+ * a gap: at 3× vanilla density — every candidate the current headroom generates — the layer costs less than a
+ * single sweep's A/A drift on every column and never hitches, so there is no frame-time ceiling to cap it at.
+ * See sa-procobj-placement plan 013, and note that its two knobs stop for different reasons (`procObjLimit` at
+ * 300 because the authored SPACING column runs out; density at ×3 because `PROC_OBJ_MAX_DENSITY` is ours).
+ * What remains unmeasured is the budget for everything ELSE the branch streams.
+ *
+ * It is announced rather than left silent because an unguarded build and a well-behaved one look exactly
+ * alike from the outside — the same reason the shared-stage guard survived a fortnight.
+ */
+/**
+ * Where the cross-compiled `perfect-map.asi` is picked up from. `dist/` is GITIGNORED, so a fresh checkout has
+ * no artifact and {@link shipPerfectMapAsi} warns — which is the honest state, not a failure: the asi is built
+ * by `npm run build:asi` in `asi/perfect-map` and that needs MinGW, which a map build should not.
+ */
+export const PERFECT_MAP_ASI = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../asi/perfect-map/dist/perfect-map.asi',
+);
+
+export const OPENSA_BUDGET_NOTICE =
+  "opensa: SA's row/slot ceilings do not apply here — and no streaming budget guard exists yet " +
+  '(07/04 decision 5: the number must be measured in our engine, never inherited from SA). ' +
+  'The clutter half is measured and does not bind: at 3x vanilla density the layer stays under one sweep of ' +
+  'measurement noise and never hitches, so there is no frame-time ceiling to cap it at';
+
 export interface BuildPerfectMapOptions {
-  /** Downgrade the int16 text-ROW budget from a build-stopping error to a warning — the 03-asi ghost-barriers
-   *  repro path (an intentionally over-2^15 full build). The 39-slot guard stays hard so the other structures
-   *  remain in-bounds. Never set for a shipping build. */
-  allowTextRowOverflow?: boolean;
   config?: Partial<BuilderConfig>;
   /**
    * Stages to SKIP, whatever else the run asks for — the target-split directive. Unlike `--until` (which cuts
@@ -65,18 +105,25 @@ export interface BuildPerfectMapOptions {
    * - `pack` alone — build `opensa/` and leave it in GAME format (same result as `--until opensa`).
    * - any common-chain stage (`mods`/`vehicles`/`peds`/`optimize`/`trees`/`procobj`) — dropped from the chain.
    *
-   * An excluded stage leaves whatever a previous run wrote in its place: the builder only clears `<out>/.work`,
-   * so an opensa-only run does not touch a `sa/` built earlier.
+   * An excluded stage leaves whatever a previous run wrote in its place: the builder only clears its own
+   * `<out>/.work-<target>` (plus the legacy shared `.work`), so an opensa-only run does not touch a `sa/`
+   * built earlier — nor the other target's kept `.work-<target>`.
    */
   exclude?: readonly ExcludableStage[];
   /** Clean base game dir (`gta.dat` + `data/` + `models/`). */
   gamePath: string;
   /** mods-src root — one subfolder per stage (`mods/`, `vehicles/`, `peds/`, `vegetation/`, `procobj/`). */
   inPath: string;
-  /** Keep all intermediate stage builds under `<out>/.work` (implied by `until`). */
+  /** Keep all intermediate stage builds under `<out>/.work-<target>` (implied by `until`). */
   keepWork?: boolean;
   /** Output root; the builder creates `<out>/sa` and `<out>/opensa`. */
   outPath: string;
+  /**
+   * The HOST this build is for (`--target`) — what picks every knob whose right value is a fact about the
+   * host rather than about the source data. Omitted, it is DERIVED from `exclude` (see
+   * {@link resolveBuildTarget}), which is what already declares a target today.
+   */
+  target?: BuildTarget;
   /** Stop after this stage and keep every stage build (for step-by-step in-game debugging). */
   until?: StageName;
 }
@@ -91,7 +138,53 @@ export interface BuildResult {
 /** Every stage name except the `lod` alias — see {@link EXCLUDABLE_STAGES}. */
 export type ExcludableStage = Exclude<StageName, 'lod'>;
 
+/** The optimize stage's totals + isolated failures. The per-asset list lives and dies with the stage build. */
+export interface OptimizeFragment {
+  failures: AssetFailure[];
+  summary: RunSummary;
+}
+
+/** The pack stage's summary. `report` POINTS at the pack's own full report beside its pak — never a copy. */
+export interface PackFragment {
+  cells: number;
+  pakBytes: number;
+  report: string;
+}
+
+/** The `sa` branch's ceilings, read off the tree the real game loads — console-only before plan 005. */
+export interface SaFragment {
+  census: { instBearingIpls: number; largestIpl: number; rows: number };
+  imgBudgets: Record<string, number>;
+  perfectMapAsiSha256: null | string;
+  requirements: InstallRequirement[];
+}
+
 export type StageName = (typeof STAGE_NAMES)[number];
+
+/**
+ * One target's build report — `<out>/report-<target>.json`, assembled at the end of the target's chain (plan
+ * 005). The NAME is the target: two targets share one `--out`, so a single unnamed `report.json` was a
+ * summary of whichever run finished last. Fragments are typed per stage — a stage that learned nothing
+ * contributes nothing.
+ */
+export interface TargetReport {
+  builtAt: string;
+  fragments: TargetReportFragments;
+  /** The fetch game id — basename of the run's `--game`. */
+  game: string;
+  gamePath: string;
+  target: 'opensa' | 'sa';
+  timings: StageTiming[];
+}
+
+export interface TargetReportFragments {
+  optimize?: OptimizeFragment;
+  pack?: PackFragment;
+  sa?: SaFragment;
+}
+
+/** What a common-chain stage may hand the report assembler (plan 005); most stages produce nothing. */
+type ChainOutcome = undefined | void | { fragment: OptimizeFragment; stage: 'optimize' };
 
 /** Run the pipeline (optionally up to `until`). Returns each produced stage build. */
 export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<BuildResult> {
@@ -100,8 +193,18 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   const { subfolders } = config;
   const keepWork = options.keepWork || until !== undefined;
   const excluded: ReadonlySet<ExcludableStage> = new Set(options.exclude ?? []);
+  const target = resolveBuildTarget(options.target, excluded);
+  logTarget(target, options.target !== undefined, excluded);
 
-  const work = join(outPath, '.work');
+  // One work dir per resolved target (plan 005): under --keepWork a `sa` run used to silently delete
+  // everything a previous opensa run was keeping, because both shared `<out>/.work`.
+  const work = join(outPath, `.work-${target}`);
+  // The pre-005 shared dir is still cleared: it was wiped at the start of every run by contract, and left
+  // alone it is multi-GB garbage no new build will ever read.
+  const legacyWork = join(outPath, '.work');
+  refuseSourceInsideWork(work, gamePath, inPath);
+  refuseSourceInsideWork(legacyWork, gamePath, inPath);
+  rmSync(legacyWork, { force: true, recursive: true });
   rmSync(work, { force: true, recursive: true });
   mkdirSync(work, { recursive: true });
 
@@ -109,7 +212,9 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   const populated = (sub: string): boolean => existsSync(source(sub)) && readdirSync(source(sub)).length > 0;
 
   // The common chain (installers → optimizer → LODs). Conditional stages are skipped when their source is empty.
-  const chain: { name: ExcludableStage; run: (game: string, out: string) => Promise<unknown> | void }[] = [];
+  // A stage may RETURN a fragment for the target report (plan 005) — the runner collects them, keyed by stage.
+  const chain: { name: ExcludableStage; run: (game: string, out: string) => ChainOutcome | Promise<ChainOutcome> }[] =
+    [];
   if (populated(subfolders.mods)) {
     chain.push({
       name: 'mods',
@@ -134,13 +239,18 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   const prelitForce = loadPrelitOnly(inPath, source(subfolders.mods));
   chain.push({
     name: 'optimize',
-    run: (game, out) =>
-      runOptimizer({
+    // The per-asset report would sit in `.work/<n>-optimize`, which is deleted as the stage is consumed —
+    // so the fragment carries the totals and the isolated failures, the two things a build summary needs.
+    run: async (game, out) => {
+      const report = await runOptimizer({
         gameDir: game,
         outDir: out,
         passes: config.optimizerPasses,
         ...(prelitForce ? { prelitOptions: { force: prelitForce } } : {}),
-      }),
+      });
+
+      return { fragment: { failures: report.failures, summary: summarizeReport(report) }, stage: 'optimize' as const };
+    },
   });
   if (populated(subfolders.vegetation)) {
     chain.push({
@@ -156,20 +266,6 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
         }),
     });
   }
-  // procobj stays unconditional: original ships NO procobj/ folder — the no-`--in` mode bakes the built-in
-  // roster from the game's own gta3.img/procobj.dat and exits gracefully when no species matches (a TC).
-  chain.push({
-    name: 'procobj',
-    run: (game, out) =>
-      buildProcobjLods({
-        config: { textureSize: config.procobjTex },
-        gamePath: game,
-        inPath: source(subfolders.procobj),
-        outPath: out,
-        prelight: true,
-      }),
-  });
-
   const runnable = planChain(chain, excluded, {
     mods: subfolders.mods,
     peds: subfolders.peds,
@@ -178,6 +274,25 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   });
 
   const produced: { dir: string; name: string }[] = [];
+  const timings: StageTiming[] = [];
+  /** The fetch game id — the user-facing `--game` folder name, stamped into each target report. */
+  const gameId = basename(resolve(gamePath));
+  /** Fragments the COMMON chain produced — shared by every target report this run writes (plan 005). */
+  const common: TargetReportFragments = {};
+  /** The asi shipped beside this map, for the manifest — a map at this density is correct only with it. */
+  let shippedAsi: null | { sha256: string } = null;
+  // Timed per stage and logged AS EACH ONE ENDS, not only in the summary: a long build that is killed part
+  // way still leaves its numbers in the log. Nothing recorded a build's duration before 2026-08-09, so the
+  // first question asked of the procobj density change ("what did it cost in build time?") had no baseline.
+  const timed = async <T>(name: string, run: () => Promise<T> | T): Promise<T> => {
+    const started = Date.now();
+    const result = await run();
+    const seconds = Number(((Date.now() - started) / 1000).toFixed(1));
+    timings.push({ name, seconds });
+    log(`${name} — ${seconds}s`);
+
+    return result;
+  };
   const untilIndex = until === undefined ? Infinity : STAGE_NAMES.indexOf(until);
   let game = gamePath;
   for (const [index, stage] of runnable.entries()) {
@@ -186,7 +301,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     }
     log(stage.name);
     const out = join(work, `${index + 1}-${stage.name}`);
-    await stage.run(game, out);
+    collectFragment(common, await timed(stage.name, () => stage.run(game, out)));
     if (!keepWork && game !== gamePath) {
       rmSync(game, { force: true, recursive: true }); // consumed → free disk
     }
@@ -203,8 +318,6 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // User-curated LOD exclusions (`lod-exclude.json` at the mods-src root or inside mods/): models that must
   // not enter the far LODs at all — e.g. HD street-furniture replacements (a 22k-tri ELECTRICA traffic light
   // placed 729× exploded the cell bake ~50×; at 300+ u it is a few unreadable pixels anyway).
-  checkTextIplSlotBudget(game, options.allowTextRowOverflow);
-
   const userExcluded = loadLodExclude(inPath, source(subfolders.mods));
   const excludeItems = [...collectGeneratedModels(game), ...userExcluded];
   log(
@@ -219,15 +332,34 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // pak welds them into BOTH levels; the cell bake still skips them (it bakes HD, i.e. the stub).
   const alwaysOnLods = loadLodAlways(inPath, source(subfolders.mods));
   if (runsStage('sa', until, excluded)) {
-    const sa = join(outPath, 'sa');
-    log('sa → sa/');
-    buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa });
-    checkImgIdBudgets(sa);
-    produced.push({ dir: sa, name: 'sa' });
+    const built = await buildSaTarget({
+      config,
+      excluded,
+      excludeItems,
+      game,
+      holeFillModels,
+      outPath,
+      procobjIn: source(subfolders.procobj),
+      timed,
+      until,
+    });
+    shippedAsi = built.shippedAsi;
+    produced.push(built.produced);
+    // The report this target never had (plan 005): the census, the FLA pools and the lift requirements used
+    // to exist only as console output nobody could diff.
+    writeTargetReport(outPath, {
+      builtAt: new Date().toISOString(),
+      fragments: { ...common, sa: built.fragment },
+      game: gameId,
+      gamePath,
+      target: 'sa',
+      timings: [...timings],
+    });
   }
   if (runsStage('opensa', until, excluded)) {
-    produced.push(
-      ...(await buildOpensaTarget({
+    log(OPENSA_BUDGET_NOTICE);
+    const built = await timed('opensa', () =>
+      buildOpensaTarget({
         alwaysOnLods,
         config,
         excludeItems,
@@ -238,8 +370,17 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
         outPath,
         packing: until !== 'opensa' && !excluded.has('pack'),
         work,
-      })),
+      }),
     );
+    produced.push(...built.produced);
+    writeTargetReport(outPath, {
+      builtAt: new Date().toISOString(),
+      fragments: { ...common, ...(built.pack ? { pack: built.pack } : {}) },
+      game: gameId,
+      gamePath,
+      target: 'opensa',
+      timings: [...timings],
+    });
   }
 
   // The sidecars are split-time inputs, not game content — keep the final targets clean. (The opensa side
@@ -251,6 +392,12 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   if (!keepWork) {
     rmSync(work, { force: true, recursive: true });
   }
+  writeStageTimings(outPath, timings, {
+    ...(shippedAsi ? { perfectMapAsiSha256: shippedAsi.sha256 } : {}),
+    procobjDensity: config.procobjDensity,
+    procobjMax: config.procobjMax,
+    target,
+  });
 
   return { produced, stoppedEarly: until !== undefined };
 }
@@ -325,14 +472,44 @@ export function parseExcludedStages(argv: readonly string[]): ExcludableStage[] 
 }
 
 /**
- * Whether a post-split target (`sa`/`opensa`) runs under the given `--until` and `--exclude`. `STAGE_NAMES` is
- * the pipeline ORDER, so `--until <stage>` means "run everything up to and including it" — `--until pack`
- * builds `sa` too, because `sa` precedes `pack`. (It used to be an explicit name list, which silently dropped
- * the whole `sa` target from `--until pack`/`--until opensa` runs: no log line, no error, just a missing
- * build.) `--exclude` overrides that ordering: an excluded target never runs, whatever `--until` says.
+ * The host a run is building FOR — `--target`, or DERIVED from `--exclude` when it is omitted, because the
+ * exclusion set is already what declares a target today (`build:game:<id>:opensa` is `--exclude sa`; see
+ * `docs/restrictions/architecture.md`). A run that builds BOTH resolves to `sa`: the common chain is shared,
+ * so its content has to satisfy the host that still has ceilings.
+ *
+ * One combination cannot be honest and is refused at CONFIG time rather than by a guard three stages later
+ * (07/02 decision 3): `--target opensa` while the `sa` target is still being built would hand the real game a
+ * layer priced against a host with no building pool and no RenderWare streaming at all. The reverse — an
+ * opensa-only build carrying the `sa` profile — is merely conservative, so it is allowed and logged.
+ *
+ * The differences that remain are the HOST's, not a ceiling's: SA's `CBuilding` pool and its particle policy.
+ * int16 stopped being one of them on 2026-08-09 (see {@link reportTextIplCensus}) — the target lifts it.
+ */
+export function resolveBuildTarget(
+  explicit: BuildTarget | undefined,
+  excluded: ReadonlySet<ExcludableStage>,
+): BuildTarget {
+  if (explicit === 'opensa' && !excluded.has('sa')) {
+    throw new Error(
+      '--target opensa builds the `sa` target too: add --exclude sa, or build with --target sa. The common ' +
+        "chain is shared, so an opensa profile would price the real game's content against a host that has no " +
+        'building pool and no RenderWare streaming.',
+    );
+  }
+
+  return explicit ?? (excluded.has('sa') ? 'opensa' : 'sa');
+}
+
+/**
+ * Whether a POST-SPLIT stage runs under the given `--until` and `--exclude` — the two targets, and `procobj`,
+ * which is baked inside the `sa` branch since plan 014. `STAGE_NAMES` is the pipeline ORDER, so
+ * `--until <stage>` means "run everything up to and including it" — `--until pack` builds `sa` too, because
+ * `sa` precedes `pack`. (It used to be an explicit name list, which silently dropped the whole `sa` target from
+ * `--until pack`/`--until opensa` runs: no log line, no error, just a missing build.) `--exclude` overrides that
+ * ordering: an excluded stage never runs, whatever `--until` says.
  */
 export function runsStage(
-  stage: 'opensa' | 'sa',
+  stage: 'opensa' | 'procobj' | 'sa',
   until: StageName | undefined,
   exclude: ReadonlySet<ExcludableStage> = new Set(),
 ): boolean {
@@ -370,6 +547,16 @@ export function swapLinearTxds(commonDir: string, opensaDir: string): void {
 }
 
 /**
+ * Written whenever the target's branch RAN — `--until opensa` / `--exclude pack` still get a (pack-less)
+ * `report-opensa.json`; a run stopped in the common chain writes none, deliberately: no target finished.
+ */
+export function writeTargetReport(outPath: string, report: TargetReport): void {
+  const path = join(outPath, `report-${report.target}.json`);
+  writeFileSync(path, `${JSON.stringify(report, null, 2)}\n`);
+  log(`${report.target}: report → ${path}`);
+}
+
+/**
  * The `opensa` target: the cell-LOD build, then OUR conversion of it.
  *
  * `--until opensa` (or `--exclude pack`) asks for the LOD build itself, so it lands in the final directory and
@@ -392,11 +579,11 @@ async function buildOpensaTarget(step: {
   /** Whether the convert runs. False (`--until opensa` / `--exclude pack`) leaves `opensa/` in GAME format. */
   packing: boolean;
   work: string;
-}): Promise<{ dir: string; name: string }[]> {
+}): Promise<{ pack: null | PackFragment; produced: { dir: string; name: string }[] }> {
   const { alwaysOnLods, config, excludeItems, game, holeFillModels, log, outPath, packing, work } = step;
   const opensa = join(outPath, 'opensa');
   const lodDir = packing ? join(work, 'opensa-lod') : opensa;
-  log(`opensa → ${packing ? '.work/opensa-lod' : 'opensa/'} (baking cells — can take several minutes)`);
+  log(`opensa → ${packing ? `${basename(work)}/opensa-lod` : 'opensa/'} (baking cells — can take several minutes)`);
   await buildOpensaLods({
     cellSize: config.lodCellSize,
     config: { excludeItems, holeFillModels },
@@ -411,7 +598,7 @@ async function buildOpensaTarget(step: {
   swapLinearTxds(game, lodDir);
   rmSync(join(lodDir, 'linear-txd'), { force: true, recursive: true });
   if (!packing) {
-    return [{ dir: opensa, name: 'opensa' }];
+    return { pack: null, produced: [{ dir: opensa, name: 'opensa' }] };
   }
   log('pack → opensa/ (converting the map into our format — several minutes)');
   // The fetch game id (plan 086): the USER-FACING --game folder, not this work-stage intermediate.
@@ -434,53 +621,127 @@ async function buildOpensaTarget(step: {
     outDir: opensa,
     ...(packRect !== undefined ? { rect: packRect } : {}),
   });
-  // The pack writes its report beside the pak it belongs to (`<out>/opensa/pak/`). Mirror it at the root:
-  // that is where a run's summary is looked for, and the pak-side copy stays the pak's own.
-  const reportPath = join(outPath, 'report.json');
-  writeFileSync(
-    reportPath,
-    JSON.stringify({ ...packed.report, ...(packed.models ? { models: packed.models } : {}) }, null, 2),
-  );
-  log(`pack: report → ${reportPath}`);
 
-  return [
-    { dir: lodDir, name: 'opensa-lod' },
-    { dir: opensa, name: 'pack' },
-  ];
+  // The pack's FULL report stays beside its pak (`<out>/opensa/pak/report.json`) — the fragment is a summary
+  // plus that pointer, never a root-level copy of the pack's report wearing the run's name (plan 005).
+  return {
+    pack: {
+      cells: packed.report.cells.length,
+      pakBytes: packed.report.pakBytes,
+      report: join('opensa', 'pak', 'report.json'),
+    },
+    produced: [
+      { dir: lodDir, name: 'opensa-lod' },
+      { dir: opensa, name: 'pack' },
+    ],
+  };
 }
 
-/** SA's `IplEntityIndexArrays` usable capacity: one slot per gta.dat text IPL with inst rows, and the game
- *  writes past the array without a bounds check (the "ghost barriers" corruption family — lod-procobj plan
- *  007, lod-trees plan 011). The struct is declared 40 long, but a build with EXACTLY 40 crashed in-game on
- *  the 40th slot (perfect5) — treat 39 as the hard line. Stock uses 30 (mod-installer compacts int_cont +
- *  gen_int1 down to 28 and folds mod IPLs into a stock host); the generators add ~9 (`plobj*`, `plotr*`). */
-const TEXT_IPL_SLOT_CAP = 39;
+/**
+ * The `sa` (real game) target: the LOD build, the in-place procobj bake, every ceiling gate on the FINISHED
+ * tree, and the asi shipped beside the map. Returns the tree it produced and its report fragment (plan 005).
+ */
+async function buildSaTarget(step: {
+  config: BuilderConfig;
+  excluded: ReadonlySet<ExcludableStage>;
+  excludeItems: string[];
+  /** The common baked build both targets are fed from. */
+  game: string;
+  holeFillModels: string[];
+  outPath: string;
+  /** The mods-src `procobj/` subfolder (may be absent — the bake falls back to the built-in roster). */
+  procobjIn: string;
+  timed: <T>(name: string, run: () => Promise<T> | T) => Promise<T>;
+  until: StageName | undefined;
+}): Promise<{ fragment: SaFragment; produced: { dir: string; name: string }; shippedAsi: null | { sha256: string } }> {
+  const { config, excluded, excludeItems, game, holeFillModels, outPath, procobjIn, timed, until } = step;
+  const sa = join(outPath, 'sa');
+  log('sa → sa/');
+  await timed('sa', () => buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa }));
+  // The procobj clutter is baked into the FINISHED sa tree, in place (plan 014). It belongs to this target
+  // alone: OpenSA scatters the same species at runtime, where draw distance is a setting and none of SA's
+  // ceilings exist, so baking it into the common build would cost that target a stripped `procobj.dat` (9
+  // rules of 96 survived it) and 91 092 vertex-duplicated instances in its pak for nothing.
+  //
+  // After `buildSaLods`, not before: the LOD generators work from placements, so clutter that does not exist
+  // yet gets no far-LODs — which is what we want for objects whose range now comes from their IDE row.
+  if (runsStage('procobj', until, excluded)) {
+    log('procobj → sa/');
+    await timed('procobj', () =>
+      buildProcobjLods({
+        config: {
+          density: config.procobjDensity,
+          ...(config.procobjMax !== undefined ? { procObjMax: config.procobjMax } : {}),
+        },
+        gamePath: sa,
+        inPath: procobjIn,
+        outPath: sa,
+        prelight: true,
+        target: 'sa',
+      }),
+    );
+  }
+  // Every SA ceiling is checked HERE, on the tree the real game loads — not on the shared build. The LOD
+  // stage appends hole-fill instances to the copied text IPLs, so the common build undercounts the rows.
+  const census = reportTextIplCensus(sa);
+  checkInstBearingIplSlots(census.instBearingIpls);
+  const imgBudgets = checkImgIdBudgets(sa);
+  reportInstallRequirements(census, imgBudgets);
+  // Ship the fix beside the map that needs it — stating a requirement and not satisfying it is half a job.
+  const shippedAsi = shipPerfectMapAsi(sa, PERFECT_MAP_ASI);
 
-/** SA truncates building-pool indexes to **int16** in `IplDef::firstBuilding/lastBuilding`
- *  (`CIplStore::IncludeEntity`) — permanent text-IPL instances fill the pool's low indexes, and once they
- *  push streamed binary instances past index 32,767 the wrap corrupts CIplStore's stream-out ranges (the
- *  FINAL "ghost barriers" root cause; bisected to exactly 32,768 total rows). Cap at 30k to leave headroom
- *  for the runtime-resident binary instances that share the pool. */
-const TEXT_ROW_CAP = 30000;
+  return {
+    fragment: {
+      census,
+      imgBudgets,
+      perfectMapAsiSha256: shippedAsi?.sha256 ?? null,
+      requirements: installRequirements(census, imgBudgets),
+    },
+    produced: { dir: sa, name: 'sa' },
+    shippedAsi,
+  };
+}
 
-/** Fail the build when the baked game registers more inst-bearing text IPLs than SA can hold. */
+/** File a stage's outcome under its stage name — the runner-side half of the fragment contract (plan 005). */
+function collectFragment(fragments: TargetReportFragments, outcome: ChainOutcome): void {
+  if (outcome) {
+    fragments[outcome.stage] = outcome.fragment;
+  }
+}
 
 /** FLA ID-pool budgets for the real-SA build — mirrors the operative FILE_TYPE_* values in the target
- *  install's fastman92limitAdjuster_GTASA.ini (TXD 6000, COL 275, IPL 280; stock pools: 5000/255/256).
- *  Each counts ARCHIVE FILES = ID slots. The margins leave room for SA's runtime slots (script/generic/
- *  ped-remap TXDs etc.) — exhausting a pool corrupts the heap during data load with a crash right after
- *  `shopping.dat` (field-diagnosed 2026-07: FILE_TYPE_IPL exhaustion; raising the ini fixed the boot). */
+ *  install's fastman92limitAdjuster_GTASA.ini (stock pools: 5000/255/256). Each counts ARCHIVE FILES = ID
+ *  slots. The margins leave room for SA's runtime slots (script/generic/ped-remap TXDs etc.) — exhausting a
+ *  pool corrupts the heap during data load with a crash right after `shopping.dat` (field-diagnosed 2026-07:
+ *  FILE_TYPE_IPL exhaustion; raising the ini fixed the boot).
+ *
+ *  **Raised 2026-08-10 after the first `sa` build at the recovered procobj density (91 092 objects) hit the
+ *  IPL pool: 522 binary IPL files of 280.** The layer's `plobj*_stream*` tiles went 50 → 331 across the
+ *  column fix, which is what a 5.96× object count buys at `STREAM_MAX_INST = 512`. Per the target rule in
+ *  `CLAUDE.md`, an FLA pool is a configured NUMBER — raised in the ini rather than designed down to.
+ *
+ *  **And TXD was never 6000 here.** These constants claimed it from the start, while the install's ini leaves
+ *  `#FILE_TYPE_TXD` commented — FLA's own log reports the pool it actually built: `20000 - 24999 (5000)`. The
+ *  build sat at 4999 of a real 5000 while this guard called it 4999 of 6000, so the one pool nothing warned
+ *  about was the one a single archive would have burst. Evidence and the new values:
+ *  `docs/gta-sa-original/reference-install-config.md`. */
 const IMG_ID_BUDGETS = [
   { ext: '.txd', label: 'TXD archives', limit: 6000, margin: 50 },
-  { ext: '.col', label: 'COL archives', limit: 275, margin: 8 },
-  { ext: '.ipl', label: 'binary IPL files', limit: 280, margin: 8 },
+  { ext: '.col', label: 'COL archives', limit: 400, margin: 8 },
+  { ext: '.ipl', label: 'binary IPL files', limit: 1024, margin: 8 },
 ] as const;
+
+/** One stage's wall clock. `seconds` is measured, never derived from a diff of two other numbers. */
+export interface StageTiming {
+  name: string;
+  seconds: number;
+}
 
 /**
  * Fail the build when a real-SA ID pool is at (or within `margin` of) its cap — loud at build time instead of
  * heap corruption at boot. Counts every entry across the build's IMG archives.
  */
-export function checkImgIdBudgets(gameDir: string): void {
+export function checkImgIdBudgets(gameDir: string): Record<string, number> {
   const names: string[] = [];
   for (const img of ['gta3.img', 'gta_int.img', 'player.img', 'cutscene.img']) {
     const path = join(gameDir, 'models', img);
@@ -491,8 +752,10 @@ export function checkImgIdBudgets(gameDir: string): void {
     const archive = openArchive(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
     names.push(...archive.names.map((name) => name.toLowerCase()));
   }
+  const counted: Record<string, number> = {};
   for (const budget of IMG_ID_BUDGETS) {
     const count = names.filter((name) => name.endsWith(budget.ext)).length;
+    counted[budget.ext] = count;
     const message = `${budget.label}: ${count} of ${budget.limit} ID slots (margin ${budget.margin} for SA's runtime slots)`;
     if (count > budget.limit - budget.margin) {
       throw new Error(
@@ -502,50 +765,278 @@ export function checkImgIdBudgets(gameDir: string): void {
     }
     log(`  id budget — ${message}`);
   }
+
+  return counted;
 }
 
-export function checkTextIplSlotBudget(gameDir: string, allowTextRowOverflow = false): void {
-  const datPath = join(gameDir, 'data', 'gta.dat');
-  if (!existsSync(datPath)) {
+/**
+ * **Stock ceilings this artifact would breach** — plan 013 decision 8, and the honest replacement for the
+ * int16 throw deleted on 2026-08-09. The build stopped shaping its output down to a stock 1.0 that we do not
+ * ship to; what it owes instead is a plain statement of the install it DOES require, printed every run so the
+ * requirement is read off the artifact rather than remembered.
+ *
+ * Every number here is one the build already has. Each row is a stock ceiling, what we spend against it, and
+ * the setting that lifts it — the third column is the whole point: a breach is an instruction, not a fault.
+ */
+export const STOCK_CEILINGS = {
+  /** `CPool<CBuilding>` — every permanent row spends one, before anything streams. */
+  buildings: 13_000,
+  /** `gpLoadedBuildings`, per text IPL plus its boot streams. */
+  rowsPerIpl: 4_096,
+  /** `CIplStore::IncludeEntity` truncates the building-pool index to int16, map-wide. */
+  rowsTotal: 32_767,
+} as const;
+
+/** One stock ceiling this build crosses, and the setting that lifts it. */
+export interface InstallRequirement {
+  ceiling: number;
+  lift: string;
+  spent: number;
+  what: string;
+}
+
+/** The requirement list for a built tree — pure, so the wording is testable without a game dir. */
+export function installRequirements(
+  census: { largestIpl: number; rows: number },
+  imgCounts: Record<string, number>,
+): InstallRequirement[] {
+  const rows: InstallRequirement[] = [
+    {
+      ceiling: STOCK_CEILINGS.rowsTotal,
+      lift: 'perfect-map.asi (no adjuster provides it — measured 2026-08-07)',
+      spent: census.rows,
+      what: 'permanent text-IPL rows, map-wide',
+    },
+    {
+      ceiling: STOCK_CEILINGS.buildings,
+      lift: 'OLA `Buildings`',
+      spent: census.rows,
+      what: 'CPool<CBuilding> entries',
+    },
+    {
+      ceiling: STOCK_CEILINGS.rowsPerIpl,
+      lift: 'OLA `EntitiesPerIpl`',
+      spent: census.largestIpl,
+      what: 'rows in one text IPL',
+    },
+    ...IMG_ID_BUDGETS.map((budget) => ({
+      ceiling: budget.ext === '.txd' ? 5000 : budget.ext === '.col' ? 255 : 256,
+      lift: `FLA ${budget.label.split(' ')[0]} id pool`,
+      spent: imgCounts[budget.ext] ?? 0,
+      what: budget.label,
+    })),
+  ];
+
+  return rows.filter((row) => row.spent > row.ceiling);
+}
+
+/** Print it. A LINE, never a throw — the guards above own the ceilings that are real on the target. */
+export function reportInstallRequirements(
+  census: { largestIpl: number; rows: number },
+  imgCounts: Record<string, number>,
+): void {
+  const needed = installRequirements(census, imgCounts);
+  if (needed.length === 0) {
+    log('sa install requirements: none — this build fits a stock 1.0 unaided');
+
     return;
   }
+  log(`sa install requirements: ${needed.length} stock ceiling(s) crossed, each lifted by a setting:`);
+  for (const row of needed) {
+    log(`  needs ${row.lift} — ${row.what}: ${row.spent} over stock's ${row.ceiling}`);
+  }
+}
+
+/**
+ * What the built `sa/` tree COSTS in permanent text-IPL rows and inst-bearing IPL slots. **A census for the
+ * ROWS, a gate for the SLOTS** — the row half stayed a census on 2026-08-09 (the user's call: `perfect-map.asi`
+ * lifts the int16 pool index where our data lands, so it is not a limit our content is designed against —
+ * `docs/project-goals.md` directive 3). The slot half became {@link checkInstBearingIplSlots} on 2026-08-10,
+ * when the field killed the belief that OLA lifts it too. The two halves of this function are now the two sides
+ * of the same rule: **delete the museum pieces, keep the gates** — and which is which is answered by the
+ * target, never by an ini.
+ *
+ * What died with the gate, and why it was never a gate worth having:
+ *
+ * - **the throw** failed every `sa` build to ration an install we do not build for. Past the 2026-08-09
+ *   procobj column fix the layer alone costs 39 219 rows, so the condition was constant — and a condition that
+ *   is always true is a print statement wearing a guard's clothes.
+ * - **the `TEXT_ROW_CAP = 30000` budget** under it, 2 767 of unmeasured headroom below a ceiling that is itself
+ *   lifted. It never shaped content: nothing culled to fit it. (What DOES shape rows is `linkedHeight` — short
+ *   species ride binary streams at zero permanent rows — and lod-trees' per-area `AREA_ROW_CAP` migration.)
+ * - **`--allow-text-row-overflow`**, which had nothing left to permit.
+ * - **int16's 32 767 as printed scale** (field-bisected to exactly 2^15: 31 300 rows clean, 33 210 corrupt) —
+ *   lifted by our asi, so printing it measured our build against a machine it never runs on. It lives in
+ *   `docs/gta-sa-original/reference-install.md` and `docs/open-issues/fixed/ghost-barriers.md`.
+ *   **`IplEntityIndexArrays` was dropped alongside it on the same reasoning and that was WRONG** — it is real,
+ *   and it is back as a gate. The lesson is not "keep every ceiling": it is that "lifted" needs the artifact
+ *   that enforces the limit to say so, and for this one nothing ever had.
+ *
+ * **This is not "guards are bad".** {@link checkImgIdBudgets} beside it still THROWS, and correctly: FLA's
+ * pools are what the target is actually configured with — real numbers, not `unlimited` — and exhausting one
+ * corrupts the heap during data load. It proved that on the first `sa` build after the density fix, which is
+ * the difference between the two: a ceiling the target HAS is a gate, a ceiling it lifted is a museum piece.
+ * A gate is answered by raising the number in the install's ini, never by shaping the build down to it.
+ *
+ * **The census names its own scope**, because both halves of it used to read a missing file as zero rows: an
+ * IPL listed in `gta.dat` but absent on disk silently subtracted its rows, and an absent `gta.dat` skipped the
+ * whole thing without a line. The error only ever ran DOWNWARD, so the count could only ever be falsely quiet —
+ * and it is the number that prices the `CBuilding` pool (013's deferred task), so a lower bound sold as a total
+ * is a wrong answer to a question we have not asked yet.
+ *
+ * Runs on the BUILT `sa/` tree, like {@link checkImgIdBudgets} — never on the shared build, which undercounts
+ * it (the sa LOD stage appends hole-fill instances to the text IPLs after the split).
+ */
+export function reportTextIplCensus(gameDir: string): { instBearingIpls: number; largestIpl: number; rows: number } {
+  const datPath = join(gameDir, 'data', 'gta.dat');
+  if (!existsSync(datPath)) {
+    console.warn(`  ! sa text-IPL census SKIPPED — no data/gta.dat under ${gameDir}; this build's row cost is unknown`);
+
+    return { instBearingIpls: 0, largestIpl: 0, rows: 0 };
+  }
+  const listed: string[] = [];
+  const missing: string[] = [];
   const used: string[] = [];
   let totalRows = 0;
+  let largestIpl = 0;
   for (const line of readFileSync(datPath, 'utf8').split(/\r?\n/)) {
     const match = /^IPL\s+(\S.*)$/i.exec(line.trim());
     if (!match || match[1].toLowerCase().endsWith('.zon')) {
       continue;
     }
+    listed.push(match[1]);
     const file = join(gameDir, match[1].replace(/\\/g, '/'));
-    const rows = existsSync(file) ? parseIpl(readFileSync(file, 'utf8')).length : 0;
+    if (!existsSync(file)) {
+      missing.push(match[1]);
+      continue;
+    }
+    const rows = parseIpl(readFileSync(file, 'utf8')).length;
     if (rows > 0) {
       used.push(match[1]);
       totalRows += rows;
+      largestIpl = Math.max(largestIpl, rows);
     }
   }
-  log(`text-IPL slots: ${used.length}/${TEXT_IPL_SLOT_CAP} (IplEntityIndexArrays), rows: ${totalRows}/${TEXT_ROW_CAP}`);
-  if (totalRows > TEXT_ROW_CAP) {
-    const message =
-      `${totalRows} permanent text-IPL rows exceed the ${TEXT_ROW_CAP} budget: SA stores building-pool ` +
-      'indexes as int16 in IplDef (CIplStore::IncludeEntity) and permanent rows past ~32.7k corrupt ' +
-      'stream-out ranges. Convert placements to binary streams (unlinked pairs) or cull.';
-    if (!allowTextRowOverflow) {
-      throw new Error(message);
-    }
-    console.warn(`  ! --allow-text-row-overflow: ${message}`);
-  }
-  if (used.length === TEXT_IPL_SLOT_CAP) {
+  log(
+    `sa map cost: ${totalRows} permanent text-IPL rows, ${used.length} inst-bearing IPLs, ` +
+      `read ${listed.length - missing.length}/${listed.length} listed`,
+  );
+  if (missing.length > 0) {
+    const named = missing.slice(0, 3).join(', ');
     console.warn(
-      '  ! zero slot headroom: any modloader mod adding a text IPL with inst rows will overflow ' +
-        'IplEntityIndexArrays in-game',
+      `  ! ${missing.length} of ${listed.length} IPLs listed in gta.dat are MISSING on disk (${named}` +
+        `${missing.length > 3 ? ', …' : ''}) — ${totalRows} is a LOWER BOUND, not this build's row cost`,
     );
   }
-  if (used.length > TEXT_IPL_SLOT_CAP) {
-    throw new Error(
-      `${used.length} text IPLs with inst rows exceed SA's ${TEXT_IPL_SLOT_CAP}-slot IplEntityIndexArrays ` +
-        `(unbounded — overflowing corrupts CIplStore). Merge or drop mod IPLs:\n  ${used.join('\n  ')}`,
+
+  return { instBearingIpls: used.length, largestIpl, rows: totalRows };
+}
+
+/**
+ * The asi this build's map REQUIRES, shipped beside it — plan 006 task 1, and the whole of what that plan
+ * still is. The build already emits maps a plain install cannot run (110 055 permanent rows against a stock
+ * 32 767), and until now nothing put the fix in the tree: the requirement was stated and then left to be
+ * satisfied by hand.
+ *
+ * **A pre-built artifact, not a build step.** `perfect-map.asi` is cross-compiled macOS→Win32 with MinGW
+ * (`npm run build:asi` in `asi/perfect-map`), and a map build has no business requiring a cross-compiler. So
+ * this copies what is there and **warns loudly when it is not** — `dist/` is gitignored, so absent is the
+ * common case on a fresh checkout and it must never be quiet: a `sa/` tree without it is a map that corrupts
+ * exactly as it did before the fix (decision 5, fallback honesty).
+ *
+ * **Into the game ROOT**, which is where the reference install's 23 plugins live
+ * (`gta-sa-original/reference-install-config.md`) — not `scripts/`, though the loader accepts both.
+ *
+ * Returns the pairing for the build manifest: a map built at this density is only correct with THIS asi, and
+ * a sha256 is what makes a mismatch detectable rather than a mystery crash (decision 4).
+ */
+export function shipPerfectMapAsi(saDir: string, asiPath: string): null | { sha256: string } {
+  if (!existsSync(asiPath)) {
+    console.warn(
+      `  ! perfect-map.asi NOT SHIPPED — no artifact at ${asiPath}. This build's map needs it (see the ` +
+        'install requirements above); build it with `npm run build:asi` in asi/perfect-map, or install it by ' +
+        'hand. Without it the game corrupts exactly as it did before the fix.',
     );
+
+    return null;
   }
+  const bytes = readFileSync(asiPath);
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  writeFileSync(join(saDir, 'perfect-map.asi'), bytes);
+  log(`sa asi: perfect-map.asi shipped into the game root (sha256 ${sha256.slice(0, 12)}…, ${bytes.length} B)`);
+
+  return { sha256 };
+}
+
+/** SA's `IplEntityIndexArrays` — one slot per text IPL that carries `inst` rows, written past without a bounds
+ *  check. **Real on the target**, twice-measured 2026-08-10 (see {@link checkInstBearingIplSlots}). */
+export const INST_BEARING_IPL_SLOTS = 40;
+
+/**
+ * Fail the build when the tree carries more inst-bearing text IPLs than SA has slots for.
+ *
+ * **This one was a museum piece until the field made it a gate.** The census above used to print the 39/40
+ * `IplEntityIndexArrays` figure and then stopped, on the grounds that OLA lifts it — `EntityIpl = unlimited` is
+ * set in the reference install and documents itself as *"Maximum number of IPL files that creates entities"*.
+ * The lift does not work. The `sa` build at the shipped density ships **75** inst-bearing IPLs and the game dies
+ * loading the **40th** (`plobj10.ipl`), measured twice: with the shipping `perfect-map.asi` and with an
+ * `-DPM_FIX_INT16=0` probe of it, so our own asi is not the cause.
+ *
+ * A ceiling nobody had crossed was not a ceiling anyone had lifted, and the reference install carries only 36 —
+ * which is why nothing caught this for a month. The number a plan writes down has to be READ by something:
+ * plan 007 budgeted *"stock 30 + 8 = 38 ≤ the 40-slot array"* at 15 283 objects, the density fix took the layer's
+ * areas 8 → 46, and no code re-checked it. Pure so it is testable without a game dir — the layer's own share is
+ * reported at emit time by `buildLinkedAreas`.
+ */
+export function checkInstBearingIplSlots(instBearingIpls: number): void {
+  if (instBearingIpls <= INST_BEARING_IPL_SLOTS) {
+    return;
+  }
+  throw new Error(
+    `${instBearingIpls} inst-bearing text IPLs of ${INST_BEARING_IPL_SLOTS} SA slots ` +
+      "(IplEntityIndexArrays) — the game crashes loading the slot past the last, and OLA's EntityIpl " +
+      "lift does not work (measured 2026-08-10). Group the layer's permanent rows into FEWER areas: a text " +
+      'IPL with no inst rows costs no slot, and rows inside one file are cheap (the field runs 9 627 of them). ' +
+      'See tools/map-placement/docs/plans/002-ipl-slot-budget.md.',
+  );
+}
+
+/**
+ * The run's wall clock per stage → `<out>/build-timings.json`, plus a summary table in the log.
+ *
+ * **Self-describing** (the A/B rule): the file states the target, the procobj knobs and the asi it was
+ * produced with, because a duration is only comparable against another run whose configuration is known.
+ * Comparing two builds is otherwise a guess about what each one was told to do — and the asi hash is what
+ * turns "this map crashes" into "this map is paired with a different asi".
+ */
+export function writeStageTimings(
+  outPath: string,
+  timings: readonly StageTiming[],
+  config: {
+    /** sha256 of the `perfect-map.asi` shipped into `sa/` — the map↔asi pairing (006 decision 4). Absent when
+     *  no artifact was available, which the run also warns about. */
+    perfectMapAsiSha256?: string;
+    procobjDensity: ProcObjDensityInput;
+    procobjMax?: number;
+    target: BuildTarget;
+  },
+): void {
+  if (timings.length === 0) {
+    return;
+  }
+  const total = timings.reduce((sum, stage) => sum + stage.seconds, 0);
+  log('build time');
+  for (const { name, seconds } of timings) {
+    const share = total > 0 ? ((100 * seconds) / total).toFixed(0) : '0';
+    console.log(`  ${name.padEnd(10)} ${formatMinutes(seconds).padStart(8)}  ${share.padStart(3)} %`);
+  }
+  console.log(`  ${'TOTAL'.padEnd(10)} ${formatMinutes(total).padStart(8)}`);
+  writeFileSync(join(outPath, 'build-timings.json'), JSON.stringify({ config, stages: timings, total }, null, 2));
+}
+
+/** `1234.5` → `20m 34s` — the unit a build is actually discussed in. */
+function formatMinutes(seconds: number): string {
+  return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 }
 
 /** The first `lod-always.json` found among `dirs` → lowercased lod-TARGET models that are the real content
@@ -634,6 +1125,18 @@ function log(message: string): void {
  * both reasons, separately: a stage whose source folder is empty, and a stage the run excluded on purpose. A
  * silently missing stage reads as a broken build, and the two causes need different fixes.
  */
+/**
+ * Announce the resolved target, and whether it was asked for or DERIVED — a run has to say which host it
+ * priced itself against, because designing down to a ceiling the target does not have is silent (the build
+ * succeeds and just carries less). The conservative mismatch is legal, so it is named rather than refused.
+ */
+function logTarget(target: BuildTarget, explicit: boolean, excluded: ReadonlySet<ExcludableStage>): void {
+  log(`target: ${target}${explicit ? '' : ' (derived from --exclude)'}`);
+  if (target === 'sa' && excluded.has('sa')) {
+    log('  ! an opensa-only build carrying the sa profile — allowed, but it leaves opensa headroom unused');
+  }
+}
+
 function planChain<T extends { name: ExcludableStage }>(
   chain: readonly T[],
   excluded: ReadonlySet<ExcludableStage>,
@@ -652,4 +1155,26 @@ function planChain<T extends { name: ExcludableStage }>(
   }
 
   return chain.filter((stage) => !excluded.has(stage.name));
+}
+
+/**
+ * The run's work dir (`.work-<target>`, plus the legacy shared `.work`) is wiped before any stage reads
+ * `--game`/`--in`, so a source pointing INTO it (the obvious fast path for re-running one stage:
+ * `--game <out>/.work-sa/5-trees`) is deleted before it is read. Silent otherwise — the run dies on a missing
+ * `gta3.img` seconds after the intermediates are already gone, naming the symptom and never the cause. It
+ * cost a full rebuild on 2026-08-09. The OTHER target's work dir is not touched, so a source there is safe.
+ */
+function refuseSourceInsideWork(work: string, gamePath: string, inPath: string): void {
+  for (const [flag, path] of [
+    ['--game', gamePath],
+    ['--in', inPath],
+  ] as const) {
+    // Segment-aware: `.work-opensa` must not read as inside `.work` — only that dir itself or its children.
+    if (resolve(path) === resolve(work) || resolve(path).startsWith(`${resolve(work)}/`)) {
+      throw new Error(
+        `${flag} ${path} is inside ${work}, which this run wipes before it reads anything. Copy the ` +
+          'intermediate out of `.work` first, or point --out somewhere else.',
+      );
+    }
+  }
 }

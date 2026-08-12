@@ -31,8 +31,11 @@ never the app. The dependency picture is the tools cluster of
   yields a drop-in game dir; refuses geometry it can't provably remap. Lib `src/run.ts`.
 - **lod-trees-generator** — tree LOD impostors: crossed billboard cards + a baked DXT5 alpha atlas, placed
   via the IPL lod-index.
-- **lod-procobj-generator** — converts procobj scatter species into static IPL instances with decimated
-  LODs (own IDE ids, `plo*` aliases to dodge SA's big-building path).
+- **sa-procobj-placement** — bakes procobj scatter species into **permanent static IPL rows at `lod = -1`**, with
+  range from the stock `data/maps/generic/procobj.ide` raised 59 → 299. **`sa` only** — OpenSA scatters the same
+  species at runtime, where draw distance is a setting. No LODs and no binary streams since plan 014: a stream's
+  IPL slot is only resident within 190 units of the player, so it cannot carry range, and a generated LOD for a
+  hand-modelled bush recovered ~0.2 % of its geometry for the price of a whole entity.
 - **sa-lod-generator** — regenerates per-object LODs as HD clones (geometry clone + empty COL + halved
   textures) for the **real game** target.
 - **opensa-lod-generator** — the OpenSA cell-LOD bake: merge per 250-cell (= the render grid, plan 087) → budgeted QEM decimate →

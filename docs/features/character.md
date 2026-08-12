@@ -51,6 +51,13 @@
   0.12 s coyote window (a press inside it still jumps); a press ≤0.15 s before touchdown fires on the
   landing frame (rising-edge armed — holding jump never auto-hops); feather touches (<1 m/s) take no
   beat. Touchdown impact is recorded in `Locomotion.fallSpeed` (the 080 camera shake's future input).
+- **Warp reset** (plan 102, `CharacterControllerSystem.resetIfWarped`): the controller drives a kinematic
+  capsule, so the body lands exactly on the translation it asked for — a body more than 5 m from where the
+  controller left it was moved by something else (debugger teleport, bench anchor, respawn, a script), and
+  its velocity + air FSM + `fallSpeed` are dropped on the next fixed step. DERIVED, so no warp path has to
+  remember to ask: the bench harness's own teleport did not, and an inherited 20 m/s fall then rode from
+  scene to scene. The seated rider is exempt because the controller is disabled while riding, and fly mode's
+  own placements record themselves.
 - **Slope slide** (plan 088/08): ground steeper than `slideSlopeDeg` (40°, from a per-step
   `groundNormalBelow` probe) enters `LOCOMOTION_SLIDE` — the CONTROLLER pushes downhill (gravity's
   along-slope component, capped 12 u/s; Rapier's kinematic controller never accelerates a slide
