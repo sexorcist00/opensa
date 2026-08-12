@@ -44,7 +44,7 @@ type Fixture =
 const gameIndex = process.argv.indexOf('--game');
 const GAME = gameIndex >= 0 ? process.argv[gameIndex + 1] : 'original';
 const ROOT = join('game-src', GAME);
-const ARCHIVES = ['models/gta3.img', 'models/gta_int.img'];
+const ARCHIVES = ['models/gta3.img', 'models/gta_int.img', 'models/cutscene.img'];
 const OUT = 'tests/original';
 
 const copy = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, from, type: 'copy' });
@@ -139,6 +139,15 @@ const MANIFEST: readonly Fixture[] = [
   copy('data/water.dat', 'data/water.dat'),
   copy('data/vehicles.ide', 'data/vehicles.ide'),
   copy('data/txdcut.ide', 'data/txdcut.ide'), // cutscene-TXD txdp dictionary — the vehicle-cutscene census link
+  // The vehicle-cutscene golden pairs (plan 002 step 2): three vanilla cutscene rigs covering the three
+  // hand-authoring styles (Box01 / wheel_*_node+_hi / axis_*), plus their stock gta3 donors — converting
+  // the STOCK donor must reproduce the vanilla cutscene structure (bone ids, hierarchy flags, positions).
+  extract('csbobcat92.dff', 'dff/cutscene/csbobcat92.dff'),
+  extract('cstaxi92.dff', 'dff/cutscene/cstaxi92.dff'),
+  extract('cszr350.dff', 'dff/cutscene/cszr350.dff'),
+  extract('csremington92.dff', 'dff/cutscene/csremington92.dff'),
+  extract('bobcat.dff', 'dff/cutscene/bobcat.dff'),
+  extract('taxi.dff', 'dff/cutscene/taxi.dff'),
   copy('data/peds.ide', 'data/peds.ide'),
   copy('data/handling.cfg', 'data/handling.cfg'),
   copy('data/info.zon', 'data/info.zon'),

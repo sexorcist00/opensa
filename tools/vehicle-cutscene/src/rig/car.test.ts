@@ -1,0 +1,146 @@
+import { parseDff } from '@opensa/renderware/parsers/binary/dff';
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+
+import { extractCarTemplate, toArrayBuffer } from '../template';
+import { convertCar } from './car';
+import { type ClumpModel, readClump, writeClump } from './clump-io';
+import { IDENTITY_ROTATION } from './matrix';
+
+const CS_BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/csbobcat92.dff'));
+const CS_TAXI = new Uint8Array(readFileSync('tests/original/dff/cutscene/cstaxi92.dff'));
+const CS_ZR350 = new Uint8Array(readFileSync('tests/original/dff/cutscene/cszr350.dff'));
+const BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.dff'));
+const TAXI = new Uint8Array(readFileSync('tests/original/dff/cutscene/taxi.dff'));
+const ZR350 = new Uint8Array(readFileSync('tests/original/vehicles/zr350.dff'));
+
+function frameByName(model: ClumpModel, name: string): ClumpModel['frames'][number] | undefined {
+  return model.frames.find((frame) => frame.name === name);
+}
+
+/** A stock-shaped mod with the named frames neutralized (renamed + their meshes detached) — the
+ *  negative-case donor. */
+function without(donor: Uint8Array, names: string[]): Uint8Array {
+  const model = readClump(donor);
+  for (const name of names) {
+    const index = model.frames.findIndex((frame) => frame.name === name);
+    if (index >= 0) {
+      model.frames[index].name = `gone_${name}`;
+      model.atomics = model.atomics.filter((atomic) => atomic.frameIndex !== index);
+    }
+  }
+
+  return writeClump(model);
+}
+
+describe('convertCar', () => {
+  describe('negative cases', () => {
+    it('throws when the mod has no chassis mesh', () => {
+      const template = extractCarTemplate(CS_BOBCAT);
+      expect(() => convertCar(without(BOBCAT, ['chassis']), template)).toThrow('no chassis mesh');
+    });
+
+    it('throws when a wheel dummy the template needs is missing', () => {
+      const template = extractCarTemplate(CS_BOBCAT);
+      expect(() => convertCar(without(BOBCAT, ['wheel_lb_dummy']), template)).toThrow('no wheel_lb_dummy');
+    });
+
+    it('throws when no wheel mesh hangs under the wheel dummies', () => {
+      const template = extractCarTemplate(CS_BOBCAT);
+      expect(() => convertCar(without(BOBCAT, ['wheel']), template)).toThrow('no wheel mesh');
+    });
+  });
+
+  describe('positive cases (the golden pairs: stock donor must reproduce the vanilla cutscene rig)', () => {
+    it('bobcat: full part set, vanilla hierarchy verbatim, vanilla positions, 0.900 shift', () => {
+      const template = extractCarTemplate(CS_BOBCAT);
+      const vanilla = readClump(CS_BOBCAT);
+      const { dff, report } = convertCar(BOBCAT, template);
+      const converted = readClump(dff);
+
+      expect(report.missingInMod).toEqual([]);
+      expect(report.shiftZ).toBeCloseTo(0.9, 2);
+      expect(report.parts).toHaveLength(9);
+      expect(report.droppedFromMod).toEqual(expect.arrayContaining(['chassis_vlo', 'door_lf_dam', 'windscreen_ok']));
+
+      // The emitted hierarchy equals the vanilla table verbatim — ids, order and flags.
+      expect(converted.frames[1].hierarchy).toEqual(vanilla.frames[1].hierarchy);
+      expect(converted.frames[1].name).toBe('bobcat_dummy');
+
+      // Bone ids per frame name match vanilla for every shared frame.
+      const vanillaBones = new Map(vanilla.frames.filter((f) => f.name).map((f) => [f.name, f.boneId]));
+      for (const frame of converted.frames.filter((f) => f.name)) {
+        expect(frame.boneId, frame.name).toBe(vanillaBones.get(frame.name));
+      }
+
+      // Hinge transforms land where vanilla put them (extras excluded: vanilla repositioned those).
+      for (const name of ['bonnet_ok', 'boot_ok', 'bump_front_ok', 'bump_rear_ok', 'door_lf_ok', 'exhaust_ok']) {
+        const expected = frameByName(vanilla, name)!.position;
+        const actual = frameByName(converted, name)!.position;
+        for (const axis of [0, 1, 2]) {
+          expect(actual[axis], `${name}[${axis}]`).toBeCloseTo(expected[axis], 3);
+        }
+      }
+      expect(frameByName(converted, 'extra1')?.position[0]).toBeCloseTo(0.169, 3); // the GAME position
+      expect(frameByName(converted, 'chassis')?.position[2]).toBeCloseTo(0.9, 3);
+      expect(frameByName(converted, 'Box01')?.position[2]).toBeCloseTo(0.35, 3);
+      expect(frameByName(converted, 'wheel03')?.rotation[0]).toBeCloseTo(-1, 4); // left mesh z-180
+
+      // All four wheel atomics SHARE one geometry (vanilla duplicates it — ours is the smaller emission).
+      const wheelFrames = new Set(
+        converted.frames
+          .map((frame, index) => ({ frame, index }))
+          .filter(({ frame }) => frame.name.startsWith('wheel'))
+          .map(({ index }) => index),
+      );
+      const wheelGeometries = new Set(
+        converted.atomics.filter((atomic) => wheelFrames.has(atomic.frameIndex)).map((atomic) => atomic.geometryIndex),
+      );
+      expect(wheelGeometries.size).toBe(1);
+      expect(converted.geometries).toHaveLength(11); // 1 wheel + chassis + 9 parts
+
+      // The converted DFF parses as a well-formed clump and keeps the mod's chassis geometry intact.
+      const parsed = parseDff(toArrayBuffer(dff));
+      const chassisGeometry = parsed.atomics.find(
+        (atomic) => parsed.frames[atomic.frameIndex].name.trim() === 'chassis',
+      );
+      expect(parsed.geometries[chassisGeometry!.geometryIndex].positions.length / 3).toBe(1750);
+    });
+
+    it('taxi: _hi frame names emitted, vanilla hierarchy verbatim, exhaust dropped with the template', () => {
+      const template = extractCarTemplate(CS_TAXI);
+      const vanilla = readClump(CS_TAXI);
+      const { dff, report } = convertCar(TAXI, template);
+      const converted = readClump(dff);
+
+      expect(report.missingInMod).toEqual([]);
+      expect(converted.frames[1].hierarchy).toEqual(vanilla.frames[1].hierarchy);
+      expect(frameByName(converted, 'door_lr_hi_ok')?.boneId).toBe(15);
+      expect(report.droppedFromMod).toContain('exhaust_ok'); // cstaxi92's template has no exhaust part
+    });
+
+    it('zr350: template parts the mod lacks drop out of the hierarchy, mod-only parts are dropped', () => {
+      const template = extractCarTemplate(CS_ZR350);
+      const { dff, report } = convertCar(ZR350, template);
+      const converted = readClump(dff);
+
+      expect(report.missingInMod.sort()).toEqual(['extra2', 'steering_wheel']);
+      expect(report.droppedFromMod).toEqual(expect.arrayContaining(['chassis_vlo', 'misc_a', 'extra1']));
+      expect(frameByName(converted, 'windscreen_ok')?.boneId).toBe(17);
+
+      // Holes in the id sequence, contiguous indexes — the hand-made pack's precedent.
+      const hierarchy = converted.frames[1].hierarchy!;
+      expect(hierarchy.map((node) => node.index)).toEqual(hierarchy.map((_, at) => at));
+      expect(hierarchy.some((node) => node.id === 15)).toBe(false); // extra2's bone is gone
+      expect(hierarchy.some((node) => node.id === 16)).toBe(false); // steering_wheel's bone is gone
+      expect(new Set(hierarchy.map((node) => node.id)).size).toBe(hierarchy.length);
+    });
+
+    it('keeps identity rotations identity through the emit path', () => {
+      const template = extractCarTemplate(CS_BOBCAT);
+      const { dff } = convertCar(BOBCAT, template);
+      const converted = readClump(dff);
+      expect(frameByName(converted, 'Box01')?.rotation).toEqual([...IDENTITY_ROTATION]);
+    });
+  });
+});
