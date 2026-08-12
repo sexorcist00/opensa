@@ -13,10 +13,11 @@
  *   - part set = template ∩ mod by canonical name, holes in the id sequence are fine; visible mod parts
  *     with no template slot are ADOPTED with fresh bone ids (donor glass — '92 bodies bake theirs);
  *   - a mesh frame under its OWN `<base>_dummy` carries junk the game destroys — the hinge is the dummy;
- *   - wheels sit at the template's corners (spin channels own them; baking would orbit), the mod's wheel
- *     geometry rides all four atomics SHARED; left meshes carry the template's 180°-about-z;
+ *   - wheels sit at the template's corners (the anims drive the node translations there — field-proven);
+ *     the mod's TRACK-WIDTH delta is baked into the wheel mesh along x, the spin axis (no orbit), one
+ *     shared geometry per axle (the left side's 180°-about-z flips the sign itself);
  *   - `shift = (tplNodeZ − tplRadius) − (modDummyZ − modRadius)` aligns the donor's ground plane before
- *     baking; a mod wheel-radius mismatch sinks/floats the tyre by the radius delta (known limit).
+ *     baking; a mod wheel-radius/wheelbase mismatch shows as the radius/y delta (known limits).
  */
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 
@@ -67,11 +68,13 @@ export interface CarConvertReport {
 
 interface Emit {
   atomics: ClumpAtomic[];
+  /** Dedupe map for BAKED geometry copies shared by several atomics (the per-axle wheel bakes). */
+  bakedGeometryIndex: Map<OpaqueChunk, number>;
   /** Frame index the wheels + chassis hang off (the skeleton root, or the intermediate body frame). */
   bodyParentIndex: number;
   frames: ClumpFrame[];
   geometries: OpaqueChunk[];
-  /** Dedupe map for UNBAKED source geometries (baked copies are always their own entry). */
+  /** Dedupe map for UNBAKED source geometries. */
   sourceGeometryIndex: Map<number, number>;
   /** Root-space transform of each emitted frame (parallel to `frames`). */
   worlds: Transform[];
@@ -273,8 +276,14 @@ function emitAtomic(
 ): void {
   let geometryIndex: number;
   if (baked) {
-    geometryIndex = emit.geometries.length;
-    emit.geometries.push(baked);
+    const shared = emit.bakedGeometryIndex.get(baked);
+    if (shared === undefined) {
+      geometryIndex = emit.geometries.length;
+      emit.geometries.push(baked);
+      emit.bakedGeometryIndex.set(baked, geometryIndex);
+    } else {
+      geometryIndex = shared;
+    }
     if (!emit.sourceGeometryIndex.has(source.geometryIndex)) {
       emit.sourceGeometryIndex.set(source.geometryIndex, geometryIndex);
     }
@@ -304,9 +313,13 @@ function emitBody(
     { boneId: template.chassisBoneId },
   ];
   order.sort((a, b) => a.boneId - b.boneId);
+  const trackBakes = wheelTrackBakes(template, analysis);
+  if (trackBakes.size > 0) {
+    report.baked.push('wheel-track');
+  }
   for (const entry of order) {
     if (entry.corner) {
-      emitWheel(emit, template, analysis, shiftZ, entry.corner);
+      emitWheel(emit, template, analysis, entry.corner, trackBakes.get(entry.corner));
     } else {
       emitChassisAndParts(emit, template, analysis, shiftZ, report);
     }
@@ -392,22 +405,27 @@ function emitPart(
   report.baked.push(canonical);
 }
 
-/** Wheels stand at the MOD's dummy corners (lifted onto the template's ground plane) — the mod's body
- *  owns its arches (the sheriff's ±0.79 track poked out of vanilla's ±0.92 at gate 7). If a scene ever
- *  drives the node translations, the fallback is baking the x-delta into the mesh (spin-safe axis). */
-function emitWheel(emit: Emit, template: CsTemplate, analysis: ModAnalysis, shiftZ: number, corner: WheelCorner): void {
+/** Wheels stand at the TEMPLATE corners (the anims drive the node translations there — field-proven at
+ *  gate 7: mod-corner locals changed nothing on screen). The mod's track-width delta is baked into the
+ *  wheel MESH along x — the spin axis, so no orbit — and the left side reuses the same geometry through
+ *  its 180°-about-z (the sign flips itself). Per-axle copies when front/rear deltas differ. */
+function emitWheel(
+  emit: Emit,
+  template: CsTemplate,
+  analysis: ModAnalysis,
+  corner: WheelCorner,
+  baked: OpaqueChunk | undefined,
+): void {
   const wheel = template.wheels.get(corner)!;
-  const dummyWorld = lift(analysis.relativeToRoot(analysis.wheelDummies.get(corner)!), shiftZ);
-  const node = compose(invert(emit.worlds[emit.bodyParentIndex]), dummyWorld);
   if (wheel.style === 'single') {
     const meshIndex = pushFrame(emit, {
       boneId: wheel.meshBoneId,
       name: wheel.meshName,
       parentIndex: emit.bodyParentIndex,
-      position: node.position,
+      position: [...wheel.nodePosition],
       rotation: [...wheel.meshRotation],
     });
-    emitAtomic(emit, analysis, analysis.wheelAtomic, meshIndex);
+    emitAtomic(emit, analysis, analysis.wheelAtomic, meshIndex, baked);
 
     return;
   }
@@ -415,8 +433,8 @@ function emitWheel(emit: Emit, template: CsTemplate, analysis: ModAnalysis, shif
     boneId: wheel.nodeBoneId,
     name: wheel.nodeName,
     parentIndex: emit.bodyParentIndex,
-    position: node.position,
-    rotation: node.rotation,
+    position: [...wheel.nodePosition],
+    rotation: [...IDENTITY_ROTATION],
   });
   const meshIndex = pushFrame(emit, {
     boneId: wheel.meshBoneId,
@@ -425,12 +443,13 @@ function emitWheel(emit: Emit, template: CsTemplate, analysis: ModAnalysis, shif
     position: [...wheel.meshPosition],
     rotation: [...wheel.meshRotation],
   });
-  emitAtomic(emit, analysis, analysis.wheelAtomic, meshIndex);
+  emitAtomic(emit, analysis, analysis.wheelAtomic, meshIndex, baked);
 }
 
 function emptyEmit(template: CsTemplate): Emit {
   const emit: Emit = {
     atomics: [],
+    bakedGeometryIndex: new Map(),
     bodyParentIndex: 1,
     frames: [],
     geometries: [],
@@ -612,6 +631,32 @@ function wheelContainerMesh(model: ClumpModel): number {
   }
 
   return -1;
+}
+
+/**
+ * Per-axle track-width bakes: `Δx = |mod dummy x| − |template corner x|` (negative = inward). Front and
+ * rear share one baked copy when their deltas agree; anything under 5 mm keeps the original geometry.
+ */
+function wheelTrackBakes(template: CsTemplate, analysis: ModAnalysis): Map<WheelCorner, OpaqueChunk> {
+  const geometry = analysis.model.geometries[analysis.wheelAtomic.geometryIndex];
+  const bakes = new Map<WheelCorner, OpaqueChunk>();
+  const chunks = new Map<string, OpaqueChunk>();
+  for (const corner of template.wheels.keys()) {
+    const dummy = analysis.relativeToRoot(analysis.wheelDummies.get(corner)!);
+    const delta = Math.abs(dummy.position[0]) - Math.abs(template.wheels.get(corner)!.nodePosition[0]);
+    if (Math.abs(delta) < 0.005) {
+      continue;
+    }
+    const key = delta.toFixed(3);
+    let chunk = chunks.get(key);
+    if (!chunk) {
+      chunk = bakeGeometryBody(geometry, { position: [delta, 0, 0], rotation: [...IDENTITY_ROTATION] });
+      chunks.set(key, chunk);
+    }
+    bakes.set(corner, chunk);
+  }
+
+  return bakes;
 }
 
 /** Memoized frame transforms relative to the mod's root frame (the root's own transform excluded). */
