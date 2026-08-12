@@ -51,6 +51,9 @@ const WHEEL_CONTAINER_RE = /^f_wheel/;
 const ORPHAN_SKIP_RE = /_dam$|_vlo$/;
 /** IVF-style VARIANT containers: the runtime plugin shows ONE mesh per container. */
 const VARIANT_CONTAINER_RE = /^f_(?:extras|class)/;
+/** Year-variant subtrees (`_[1991]:2`, with the mod's own `}` typo tolerated): ALTERNATIVES to base
+ *  parts the rig already carries — never adopted at all (the taxi stacked three door sets). */
+const YEAR_VARIANT_RE = /\[\d{4}[\]}]/;
 /** Shim frame name suffix — must never collide with an anim channel name (vanilla frame names). */
 const SHIM_SUFFIX = '_pv';
 
@@ -162,7 +165,8 @@ function adoptOrphanParts(
       carriedFrames.has(index) ||
       index === analysis.wheelMeshIndex ||
       analysis.wheelContainerFrames.has(index) ||
-      ORPHAN_SKIP_RE.test(canonical);
+      ORPHAN_SKIP_RE.test(canonical) ||
+      inYearVariantSubtree(analysis, index);
     if (skip) {
       continue;
     }
@@ -272,6 +276,29 @@ function collectDropped(emit: Emit, analysis: ModAnalysis, report: CarConvertRep
       report.droppedFromMod.push(analysis.model.frames[atomic.frameIndex].name || `frame ${atomic.frameIndex}`);
     }
   }
+}
+
+/**
+ * The game keys a component by its DUMMY, not the mesh child's name — a mod that misnames the child
+ * still works in gameplay (the taxi ships `door_lr_ok` under `door_rr_dummy`). Mirror it: for a missing
+ * `<base>_ok`, take the `<base>_dummy`'s `_ok`-suffixed mesh child, whatever it is called.
+ */
+function dummyChildFallback(analysis: ModAnalysis, canonical: string): number {
+  if (!canonical.endsWith('_ok')) {
+    return -1;
+  }
+  const dummyName = `${canonical.slice(0, -3)}_dummy`;
+  const dummyIndex = analysis.model.frames.findIndex((frame) => frame.name.trim().toLowerCase() === dummyName);
+  if (dummyIndex < 0) {
+    return -1;
+  }
+
+  return analysis.model.frames.findIndex(
+    (frame, index) =>
+      frame.parentIndex === dummyIndex &&
+      analysis.atomicByFrame.has(index) &&
+      frame.name.trim().toLowerCase().endsWith('_ok'),
+  );
 }
 
 /** Append an atomic; source geometries dedupe by index, derived copies (mirrored wheel) by identity. */
@@ -384,9 +411,12 @@ function emitChassisAndParts(
     ['chassis', { frameIndex: chassisFrame, modIndex: analysis.chassisIndex }],
   ]);
   for (const [canonical, part] of template.parts) {
-    const modIndex = analysis.model.frames.findIndex(
+    let modIndex = analysis.model.frames.findIndex(
       (frame, index) => canonicalPartName(frame.name) === canonical && analysis.atomicByFrame.has(index),
     );
+    if (modIndex < 0) {
+      modIndex = dummyChildFallback(analysis, canonical);
+    }
     const parent = emittedByCanonical.get(part.parentCanonical);
     if (modIndex < 0 || modIndex === analysis.chassisIndex || !parent) {
       if (modIndex < 0 || !parent) {
@@ -559,6 +589,17 @@ function groundShift(template: CsTemplate, analysis: ModAnalysis): number {
   const dummy = analysis.relativeToRoot(analysis.wheelDummies.get(corner)!);
 
   return templateGround - (dummy.position[2] - analysis.wheelRadius);
+}
+
+/** Whether the frame (or an ancestor) carries a year-variant tag — an alternative part set. */
+function inYearVariantSubtree(analysis: ModAnalysis, frameIndex: number): boolean {
+  for (let at = frameIndex; at >= 0; at = analysis.model.frames[at].parentIndex) {
+    if (YEAR_VARIANT_RE.test(analysis.model.frames[at].name)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /** The donor transform lifted onto the template's ground plane. */
