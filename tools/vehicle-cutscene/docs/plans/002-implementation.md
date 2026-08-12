@@ -186,21 +186,44 @@ no target ceiling implicated).
 
 ---
 
-## Step 4 (P0) — FIELD GATE: vanilla parity
+## Step 4 (P0) — FIELD GATE: vanilla parity ✅ PASSED 2026-08-12 (four rounds, three root causes)
 
 The strongest possible check of the transform, zero mods involved: convert the STOCK gta3 cars onto their
-cs slots and play the intro. If the transform is right, the cutscene is near-indistinguishable from
-vanilla (same-generation models, gameplay-grade paint instead of baked '92 colours being the only
-expected difference).
+cs slots and play the intro.
 
-- [ ] Build `--out` from stock donors (`--game game-src/original --in <stock-extracted>` or an internal
-      parity mode), full pipeline into a bootable install.
-- [ ] Field run (user): new game → intro cutscenes (cstaxi92/csbobcat92/cscopcarla92 all appear in the
-      opening sequence); verdict on: cars present, on the ground, wheels in place, doors animate where
-      the scene animates them, no missing textures.
+- [x] Stock donors extracted from gta3.img (21 slots → `NO_COMMIT/cs-stock-donors/`), converted
+      (21/21, archive 25.7 → 25.2 MB — SMALLER: shared wheels + dropped junk), dropped into the
+      CrossOver bottle (its cutscene.img/txdcut.ide verified byte-identical to stock first; originals
+      kept as `.vanilla` beside them).
+- [x] Field rounds (user, "In the Beginning" intro — cstaxi92, csbobcat92, cscopcarla): four runs,
+      each finding recorded below; a mid-gate VANILLA A/B (restore originals, same shot) settled round 3.
 
-**STOP point — work does not proceed past this gate without the field verdict.**
-**Record:** the verdict verbatim + screenshots reference; any deviation becomes a step-2 fix before P1.
+**Verdict (round 4, verbatim): "все отлично" — taxi and police complete and vanilla-shaped; the only
+remaining difference is the raw carcols markers (green/pink), which is step 5's job by design.**
+
+### What the gate caught — three root causes no offline check had
+
+1. **Junk mesh-frame transforms are real and the game's collapse rule is NARROW.** Stock copcarla's
+   `chassis` frame carries `[0, 1.637, −0.35]`. Round 1 trusted it (whole rig poisoned); the first fix
+   over-generalised the discard rule and round 3 shifted the BODY 1.6 m (the game destroys ONLY
+   `<part>_ok/_dam` frames under their own dummy — `PreprocessHierarchy`/`CollapseFramesCB`; every other
+   frame KEEPS its transform, and the donor's chassis GEOMETRY is authored in that junk space). Final
+   rule in `hingeOf` + a bbox regression test on the real copcarla pair.
+2. **Cutscene anims bind by frame NAME and drive bones to the VANILLA locals** (gta-reversed
+   `CCutsceneMgr` → `CAnimBlendAssociation`). A converted rig's own frame positions only survive
+   un-animated frames — so round 2's "donor hinges as locals" left bumpers hanging wherever the '92
+   anims put the vanilla hinges. The emit now carries the VANILLA locals (the anims' bind pose) and
+   vertex-bakes the donor delta (`rig/bake.ts`, byte-exact Struct-only patch; identity deltas stay
+   byte-identical). The hand-made pack's whole-car-in-one-chassis approach was this same lesson.
+3. **Dropping donor parts the template lacks leaves holes** — the '92 bodies bake glass into the
+   chassis, so a donor's separate `windscreen_ok` vanished (car without glass, round 1). Visible
+   orphans (`*_ok`, `extra*`, `misc_*`) are now ADOPTED with fresh bone ids past the template's; anims
+   bind by name, so extra bones simply stay un-animated.
+
+**Record:** parity build 25.2 MB; converted cscopcarla chassis bbox equals vanilla to the centimetre
+(y −2.78..2.44, z −0.60..1.00); the method that closed round 3 was a mid-gate vanilla A/B of the same
+frame — one screenshot settled what three rounds of model forensics could not. The bottle keeps the
+parity build installed (`.vanilla` files beside it for rollback).
 
 ---
 
