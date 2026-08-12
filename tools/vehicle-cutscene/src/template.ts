@@ -32,10 +32,15 @@ export interface CsPartTemplate {
   frameName: string;
   /** Canonical name of the template parent (`chassis` for direct children; a part for nested ones). */
   parentCanonical: string;
+  /** The VANILLA local transform — the anims' bind pose the emitted frame must carry (gate-4 lesson). */
+  position: [number, number, number];
+  rotation: number[];
 }
 
 export interface CsTemplate {
   chassisBoneId: number;
+  /** The chassis frame's VANILLA local transform (relative to its body parent). */
+  chassisLocal: { position: [number, number, number]; rotation: number[] };
   /** The template's chassis frame name (`chassis` on every vanilla style — kept for fidelity). */
   chassisName: string;
   /** Present when the chassis + wheels hang under an intermediate frame instead of the root. */
@@ -58,6 +63,8 @@ export interface CsWheelTemplate {
   meshRotation: number[];
   nodeBoneId: number;
   nodeName: string;
+  /** The node's VANILLA position, relative to its body parent — emitted verbatim (the anims' pose). */
+  nodePosition: [number, number, number];
   /** The node's z in SKELETON-ROOT space — one side of the ground-plane formula (plan 002 step 2a). */
   nodeZ: number;
   /** `pair` = node frame + mesh child; `single` = one mesh frame at the corner. */
@@ -93,6 +100,10 @@ export function extractCarTemplate(csDff: Uint8Array): CsTemplate {
 
   return {
     chassisBoneId: requireBoneId(clump, chassisIndex),
+    chassisLocal: {
+      position: [...clump.frames[chassisIndex].position],
+      rotation: [...clump.frames[chassisIndex].rotation],
+    },
     chassisName: clump.frames[chassisIndex].name.trim(),
     ...intermediateOf(clump, bodyParentIndex, rootIndex),
     parts: extractParts(clump, children, chassisIndex),
@@ -142,9 +153,15 @@ function extractParts(
   const parts = new Map<string, CsPartTemplate>();
   const visit = (index: number, parentCanonical: string): void => {
     for (const childIndex of children[index]) {
-      const frameName = clump.frames[childIndex].name.trim();
-      const canonical = canonicalPartName(frameName);
-      parts.set(canonical, { boneId: requireBoneId(clump, childIndex), frameName, parentCanonical });
+      const frame = clump.frames[childIndex];
+      const canonical = canonicalPartName(frame.name);
+      parts.set(canonical, {
+        boneId: requireBoneId(clump, childIndex),
+        frameName: frame.name.trim(),
+        parentCanonical,
+        position: [...frame.position],
+        rotation: [...frame.rotation],
+      });
       visit(childIndex, canonical);
     }
   };
@@ -214,6 +231,7 @@ function pairWheel(clump: RWClump, nodeIndex: number, meshIndex: number): Omit<C
     meshRotation: [...mesh.rotation],
     nodeBoneId: requireBoneId(clump, nodeIndex),
     nodeName: clump.frames[nodeIndex].name.trim(),
+    nodePosition: [...clump.frames[nodeIndex].position] as [number, number, number],
     style: 'pair',
   };
 }
@@ -241,6 +259,7 @@ function singleWheel(clump: RWClump, nodeIndex: number): null | Omit<CsWheelTemp
     meshRotation: [...node.rotation],
     nodeBoneId: boneId,
     nodeName: node.name.trim(),
+    nodePosition: [...node.position] as [number, number, number],
     style: 'single',
   };
 }

@@ -78,15 +78,18 @@ describe('convertCar', () => {
         expect(frame.boneId, frame.name).toBe(vanillaBones.get(frame.name));
       }
 
-      // Hinge transforms land where vanilla put them (extras excluded: vanilla repositioned those).
-      for (const name of ['bonnet_ok', 'boot_ok', 'bump_front_ok', 'bump_rear_ok', 'door_lf_ok', 'exhaust_ok']) {
+      // Every template frame carries the VANILLA local — the anims' bind pose (gate-4 lesson). The
+      // donor's differing placement is baked into vertices instead; on this body-reusing pair only the
+      // repositioned extras and the exhaust need it.
+      for (const name of ['bonnet_ok', 'boot_ok', 'bump_front_ok', 'bump_rear_ok', 'door_lf_ok', 'extra1']) {
         const expected = frameByName(vanilla, name)!.position;
         const actual = frameByName(converted, name)!.position;
         for (const axis of [0, 1, 2]) {
           expect(actual[axis], `${name}[${axis}]`).toBeCloseTo(expected[axis], 3);
         }
       }
-      expect(frameByName(converted, 'extra1')?.position[0]).toBeCloseTo(0.169, 3); // the GAME position
+      expect(report.baked).toEqual(expect.arrayContaining(['extra1', 'extra2']));
+      expect(report.baked).not.toContain('door_lf_ok'); // identity delta stays byte-identical
       expect(frameByName(converted, 'chassis')?.position[2]).toBeCloseTo(0.9, 3);
       expect(frameByName(converted, 'Box01')?.position[2]).toBeCloseTo(0.35, 3);
       expect(frameByName(converted, 'wheel03')?.rotation[0]).toBeCloseTo(-1, 4); // left mesh z-180

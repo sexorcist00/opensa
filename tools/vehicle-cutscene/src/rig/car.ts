@@ -1,28 +1,33 @@
 /**
  * The car branch: a mod's gameplay DFF → its cutscene counterpart, shaped by the vanilla template.
  *
- * The transform (measured on the vanilla pairs, 001's research record + the step-2/3 probes):
- *   - flattened tree: `*_dam` twins, `chassis_vlo`, `ug_*`, service dummies and embedded collision are
- *     dropped; each kept part hangs off its TEMPLATE parent (`chassis`, or a nested part like csfirela's
- *     `misc_b`) carrying its composed hinge transform;
- *   - a HAnim skeleton over the whole tree, bone ids copied from the template per canonical part name —
- *     dropped parts leave holes in the id sequence (the hand-made pack proves partial hierarchies work);
- *   - four wheels at the mod's `wheel_*_dummy` positions, emitted in the template's own style: a node
- *     frame with a mesh child, or ONE mesh frame at the corner (bravura/glendale/sadler/washington);
- *     LEFT meshes carry the template's 180°-about-z; all wheel atomics SHARE one geometry;
- *   - templates with an intermediate body frame (csmonster's COG) keep it, at its vanilla transform;
- *   - the whole car rises by `shift` so the mod's tyres touch the template's ground plane:
- *     `shift = (tplNodeZ − tplRadius) − (modDummyZ − modRadius)`, radii = wheel-geometry z half-extents
- *     (vanilla donor ⇒ 0.900 on bobcat, reproducing the vanilla rig exactly).
+ * THE EMIT MODEL (rebuilt after gate 4's two field rounds, 2026-08-12): cutscene animations bind by frame
+ * NAME (`CAnimBlendAssociation`, gta-reversed `CCutsceneMgr`) and their channels drive every animated
+ * bone to the VANILLA model's locals — the converted rig's own frame transforms only survive on frames
+ * the anim leaves alone. So every template-matched frame is emitted with the VANILLA local (the anims'
+ * bind pose), and the donor's differing hinge placement is BAKED INTO THE PART'S VERTICES
+ * (`rig/bake.ts`): `delta = inv(W_vanilla) ∘ shift_z ∘ W_donor`. Stock donors on body-reusing templates
+ * yield identity deltas and byte-identical geometry.
+ *
+ * Everything else from the earlier rounds still holds:
+ *   - part set = template ∩ mod by canonical name, holes in the id sequence are fine; visible mod parts
+ *     with no template slot are ADOPTED with fresh bone ids (donor glass — '92 bodies bake theirs);
+ *   - a mesh frame under its OWN `<base>_dummy` carries junk the game destroys — the hinge is the dummy;
+ *   - wheels sit at the template's corners (spin channels own them; baking would orbit), the mod's wheel
+ *     geometry rides all four atomics SHARED; left meshes carry the template's 180°-about-z;
+ *   - `shift = (tplNodeZ − tplRadius) − (modDummyZ − modRadius)` aligns the donor's ground plane before
+ *     baking; a mod wheel-radius mismatch sinks/floats the tyre by the radius delta (known limit).
  */
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 
 import { canonicalPartName, type CsTemplate, geometryZHalfExtent, toArrayBuffer, type WheelCorner } from '../template';
+import { bakeGeometryBody, isIdentityDelta } from './bake';
 import {
   type ClumpAtomic,
   type ClumpFrame,
   type ClumpModel,
   type HierarchyNode,
+  type OpaqueChunk,
   readClump,
   writeClump,
 } from './clump-io';
@@ -37,26 +42,21 @@ const WHEEL_DUMMY_RE = /^wheel_([lr])([fmb])_dummy$/;
 /** `f_wheel_<mask>` container frames — the IVF-style wheel sub-model four of the real mods ship instead
  *  of a mesh under the dummies (mirrors the engine builder's WHEEL_CONTAINER_RE + first-atomic pick). */
 const WHEEL_CONTAINER_RE = /^f_wheel/;
-// The junk-mesh-frame rule (gate-4 field finding, 2026-08-12): a mesh frame sitting under its OWN
-// `<base>_dummy` hinge has its transform DESTROYED by the game (`PreprocessHierarchy` →
-// `CollapseFramesCB`) — trusting it poisoned the whole rig on stock copcarla, whose `chassis` frame
-// carries junk `[0, 1.637, -0.35]`. See `hingeOf` in `analyzeMod`.
-/** Mod parts worth ADOPTING when the template has no slot for them: visible movable/extra meshes. The
- *  '92 templates bake glass into the chassis, so a donor's separate `windscreen_ok` would otherwise be
- *  dropped — a hole where glass should be (gate-4 field finding). Adopted parts get fresh bone ids past
- *  the template's; cutscene anims bind by bone id, so extra bones simply stay un-animated. */
+/** Mod parts worth ADOPTING when the template has no slot for them: visible movable/extra meshes. */
 const ORPHAN_PART_RE = /_ok$|^extra\d+$|^misc_[a-h]$/;
 
 export interface CarConvertReport {
   /** Visible mod parts the template has no slot for, carried with fresh bone ids (donor glass, misc). */
   adoptedFromMod: string[];
+  /** Parts whose geometry was vertex-baked (non-identity donor-vs-vanilla hinge delta). */
+  baked: string[];
   /** Mod meshes with no place in the template (chassis_vlo, damage twins, …) — not carried. */
   droppedFromMod: string[];
   /** Template parts the mod does not ship — their bones drop out of the emitted hierarchy. */
   missingInMod: string[];
   /** Canonical names of the emitted template parts. */
   parts: string[];
-  /** The vertical rebase applied to the body and wheels. */
+  /** The vertical rebase applied to the donor before baking. */
   shiftZ: number;
 }
 
@@ -65,17 +65,19 @@ interface Emit {
   /** Frame index the wheels + chassis hang off (the skeleton root, or the intermediate body frame). */
   bodyParentIndex: number;
   frames: ClumpFrame[];
-  geometryIndexes: number[];
-  /** Inverse of the body parent's root-space transform (identity when the body parent IS the root). */
-  intoBodyParent: Transform;
+  geometries: OpaqueChunk[];
+  /** Dedupe map for UNBAKED source geometries (baked copies are always their own entry). */
+  sourceGeometryIndex: Map<number, number>;
+  /** Root-space transform of each emitted frame (parallel to `frames`). */
+  worlds: Transform[];
 }
 
 interface ModAnalysis {
   atomicByFrame: Map<number, ClumpAtomic>;
   chassisIndex: number;
   chassisTransform: Transform;
-  /** The part's HINGE transform: the parent dummy's when the parent is a `*_dummy` (the mesh frame's own
-   *  junk transform is destroyed, like the game does), the frame's own otherwise (bobcat's exhaust_ok). */
+  /** The part's HINGE transform: the parent dummy's when that parent is the part's own `<base>_dummy`
+   *  (the mesh frame's junk transform is destroyed, like the game does), the frame's own otherwise. */
   hingeOf: (frameIndex: number) => Transform;
   model: ClumpModel;
   /** frame transform relative to the mod's root frame. */
@@ -94,7 +96,14 @@ export function convertCar(modDff: Uint8Array, template: CsTemplate): { dff: Uin
   const analysis = analyzeMod(modDff, template);
   const shiftZ = groundShift(template, analysis);
   const emit = emptyEmit(template);
-  const report: CarConvertReport = { adoptedFromMod: [], droppedFromMod: [], missingInMod: [], parts: [], shiftZ };
+  const report: CarConvertReport = {
+    adoptedFromMod: [],
+    baked: [],
+    droppedFromMod: [],
+    missingInMod: [],
+    parts: [],
+    shiftZ,
+  };
 
   emitBody(emit, template, analysis, shiftZ, report);
   emit.frames[1].hierarchy = buildHierarchy(emit.frames);
@@ -103,25 +112,25 @@ export function convertCar(modDff: Uint8Array, template: CsTemplate): { dff: Uin
   const dff = writeClump({
     atomics: emit.atomics,
     frames: emit.frames,
-    geometries: emit.geometryIndexes.map((index) => analysis.model.geometries[index]),
+    geometries: emit.geometries,
     version: analysis.model.version,
   });
 
   return { dff, report };
 }
 
-/** Carry visible mod parts the template has no slot for (donor glass, misc pods, extras) as chassis
- *  children with fresh bone ids past the template's — un-animated by cutscene anims, but PRESENT. */
+/** Carry visible mod parts the template has no slot for as chassis children with fresh bone ids —
+ *  un-animated by cutscene anims (no name match), so their frame locals are safe to use. */
 function adoptOrphanParts(
   emit: Emit,
   template: CsTemplate,
   analysis: ModAnalysis,
+  shiftZ: number,
   chassisFrame: number,
-  emittedByCanonical: ReadonlyMap<string, { frameIndex: number; modIndex: number }>,
+  carriedModFrames: ReadonlySet<number>,
   report: CarConvertReport,
 ): void {
-  const carriedModFrames = new Set([...emittedByCanonical.values()].map((entry) => entry.modIndex));
-  const inverseChassis = invert(analysis.chassisTransform);
+  const intoChassis = invert(emit.worlds[chassisFrame]);
   let nextBoneId = nextFreeBoneId(template);
   for (const atomic of analysis.model.atomics) {
     const index = atomic.frameIndex;
@@ -136,15 +145,15 @@ function adoptOrphanParts(
     if (skip) {
       continue;
     }
-    const relative = compose(inverseChassis, analysis.hingeOf(index));
+    const local = compose(intoChassis, lift(analysis.hingeOf(index), shiftZ));
     const frameIndex = pushFrame(emit, {
       boneId: nextBoneId,
       name: analysis.model.frames[index].name.trim(),
       parentIndex: chassisFrame,
-      position: relative.position,
-      rotation: relative.rotation,
+      position: local.position,
+      rotation: local.rotation,
     });
-    emitAtomic(emit, atomic, frameIndex);
+    emitAtomic(emit, analysis, atomic, frameIndex);
     report.adoptedFromMod.push(canonical);
     nextBoneId += 1;
   }
@@ -164,8 +173,6 @@ function analyzeMod(modDff: Uint8Array, template: CsTemplate): ModAnalysis {
       .toLowerCase()
       .replace(/_(?:ok|dam)$/, '');
 
-    // The mesh frame's own transform is junk ONLY under the part's own `<base>_dummy` (the game destroys
-    // it there); elsewhere it is real authoring (bobcat's exhaust_ok under chassis_dummy carries 0.415).
     return parentName === `${base}_dummy` ? relativeToRoot(parentIndex) : relativeToRoot(frameIndex);
   };
 
@@ -233,7 +240,7 @@ function childrenByFrame(model: ClumpModel): number[][] {
 }
 
 function collectDropped(emit: Emit, analysis: ModAnalysis, report: CarConvertReport): void {
-  const carried = new Set(emit.geometryIndexes);
+  const carried = new Set(emit.sourceGeometryIndex.keys());
   for (const atomic of analysis.model.atomics) {
     if (!carried.has(atomic.geometryIndex)) {
       report.droppedFromMod.push(analysis.model.frames[atomic.frameIndex].name || `frame ${atomic.frameIndex}`);
@@ -241,12 +248,31 @@ function collectDropped(emit: Emit, analysis: ModAnalysis, report: CarConvertRep
   }
 }
 
-/** Append an atomic, registering its geometry (shared geometries keep their first emitted index). */
-function emitAtomic(emit: Emit, source: ClumpAtomic, frameIndex: number): void {
-  let geometryIndex = emit.geometryIndexes.indexOf(source.geometryIndex);
-  if (geometryIndex < 0) {
-    geometryIndex = emit.geometryIndexes.length;
-    emit.geometryIndexes.push(source.geometryIndex);
+/** Append an atomic. Unbaked geometries dedupe by source index (the shared wheel); a baked copy is
+ *  always its own entry. Either way the SOURCE index is registered so `collectDropped` sees it carried. */
+function emitAtomic(
+  emit: Emit,
+  analysis: ModAnalysis,
+  source: ClumpAtomic,
+  frameIndex: number,
+  baked?: OpaqueChunk,
+): void {
+  let geometryIndex: number;
+  if (baked) {
+    geometryIndex = emit.geometries.length;
+    emit.geometries.push(baked);
+    if (!emit.sourceGeometryIndex.has(source.geometryIndex)) {
+      emit.sourceGeometryIndex.set(source.geometryIndex, geometryIndex);
+    }
+  } else {
+    const existing = emit.sourceGeometryIndex.get(source.geometryIndex);
+    if (existing === undefined) {
+      geometryIndex = emit.geometries.length;
+      emit.geometries.push(analysis.model.geometries[source.geometryIndex]);
+      emit.sourceGeometryIndex.set(source.geometryIndex, geometryIndex);
+    } else {
+      geometryIndex = existing;
+    }
   }
   emit.atomics.push({ extension: source.extension, flags: source.flags, frameIndex, geometryIndex });
 }
@@ -266,7 +292,7 @@ function emitBody(
   order.sort((a, b) => a.boneId - b.boneId);
   for (const entry of order) {
     if (entry.corner) {
-      emitWheel(emit, template, analysis, shiftZ, entry.corner);
+      emitWheel(emit, template, analysis, entry.corner);
     } else {
       emitChassisAndParts(emit, template, analysis, shiftZ, report);
     }
@@ -280,15 +306,14 @@ function emitChassisAndParts(
   shiftZ: number,
   report: CarConvertReport,
 ): void {
-  const chassis = shifted(emit, analysis.chassisTransform, shiftZ);
   const chassisFrame = pushFrame(emit, {
     boneId: template.chassisBoneId,
     name: template.chassisName,
     parentIndex: emit.bodyParentIndex,
-    position: chassis.position,
-    rotation: chassis.rotation,
+    position: [...template.chassisLocal.position],
+    rotation: [...template.chassisLocal.rotation],
   });
-  emitAtomic(emit, analysis.atomicByFrame.get(analysis.chassisIndex)!, chassisFrame);
+  emitPart(emit, analysis, shiftZ, 'chassis', analysis.chassisIndex, chassisFrame, report);
 
   const emittedByCanonical = new Map<string, { frameIndex: number; modIndex: number }>([
     ['chassis', { frameIndex: chassisFrame, modIndex: analysis.chassisIndex }],
@@ -304,33 +329,66 @@ function emitChassisAndParts(
       }
       continue;
     }
-    const relative = compose(invert(analysis.hingeOf(parent.modIndex)), analysis.hingeOf(modIndex));
     const frameIndex = pushFrame(emit, {
       boneId: part.boneId,
       name: part.frameName,
       parentIndex: parent.frameIndex,
-      position: relative.position,
-      rotation: relative.rotation,
+      position: [...part.position],
+      rotation: [...part.rotation],
     });
-    emitAtomic(emit, analysis.atomicByFrame.get(modIndex)!, frameIndex);
+    emitPart(emit, analysis, shiftZ, canonical, modIndex, frameIndex, report);
     emittedByCanonical.set(canonical, { frameIndex, modIndex });
     report.parts.push(canonical);
   }
-  adoptOrphanParts(emit, template, analysis, chassisFrame, emittedByCanonical, report);
+  adoptOrphanParts(
+    emit,
+    template,
+    analysis,
+    shiftZ,
+    chassisFrame,
+    new Set([...emittedByCanonical.values()].map((entry) => entry.modIndex)),
+    report,
+  );
 }
 
-function emitWheel(emit: Emit, template: CsTemplate, analysis: ModAnalysis, shiftZ: number, corner: WheelCorner): void {
+/** Emit one part's atomic, vertex-baking the donor-vs-vanilla hinge delta when it is not identity. */
+function emitPart(
+  emit: Emit,
+  analysis: ModAnalysis,
+  shiftZ: number,
+  canonical: string,
+  modIndex: number,
+  frameIndex: number,
+  report: CarConvertReport,
+): void {
+  const atomic = analysis.atomicByFrame.get(modIndex)!;
+  const delta = compose(invert(emit.worlds[frameIndex]), lift(analysis.hingeOf(modIndex), shiftZ));
+  if (isIdentityDelta(delta)) {
+    emitAtomic(emit, analysis, atomic, frameIndex);
+
+    return;
+  }
+  emitAtomic(
+    emit,
+    analysis,
+    atomic,
+    frameIndex,
+    bakeGeometryBody(analysis.model.geometries[atomic.geometryIndex], delta),
+  );
+  report.baked.push(canonical);
+}
+
+function emitWheel(emit: Emit, template: CsTemplate, analysis: ModAnalysis, corner: WheelCorner): void {
   const wheel = template.wheels.get(corner)!;
-  const dummy = shifted(emit, analysis.relativeToRoot(analysis.wheelDummies.get(corner)!), shiftZ);
   if (wheel.style === 'single') {
     const meshIndex = pushFrame(emit, {
       boneId: wheel.meshBoneId,
       name: wheel.meshName,
       parentIndex: emit.bodyParentIndex,
-      position: dummy.position,
+      position: [...wheel.nodePosition],
       rotation: [...wheel.meshRotation],
     });
-    emitAtomic(emit, analysis.wheelAtomic, meshIndex);
+    emitAtomic(emit, analysis, analysis.wheelAtomic, meshIndex);
 
     return;
   }
@@ -338,8 +396,8 @@ function emitWheel(emit: Emit, template: CsTemplate, analysis: ModAnalysis, shif
     boneId: wheel.nodeBoneId,
     name: wheel.nodeName,
     parentIndex: emit.bodyParentIndex,
-    position: dummy.position,
-    rotation: dummy.rotation,
+    position: [...wheel.nodePosition],
+    rotation: [...IDENTITY_ROTATION],
   });
   const meshIndex = pushFrame(emit, {
     boneId: wheel.meshBoneId,
@@ -348,40 +406,43 @@ function emitWheel(emit: Emit, template: CsTemplate, analysis: ModAnalysis, shif
     position: [...wheel.meshPosition],
     rotation: [...wheel.meshRotation],
   });
-  emitAtomic(emit, analysis.wheelAtomic, meshIndex);
+  emitAtomic(emit, analysis, analysis.wheelAtomic, meshIndex);
 }
 
 function emptyEmit(template: CsTemplate): Emit {
-  const frames: ClumpFrame[] = [
-    { flags: TOP_FRAME_FLAGS, name: '', parentIndex: -1, position: [0, 0, 0], rotation: [...IDENTITY_ROTATION] },
-    {
-      boneId: 0,
-      flags: FRAME_FLAGS,
-      name: template.rootName,
-      parentIndex: 0,
-      position: [0, 0, 0],
-      rotation: [...IDENTITY_ROTATION],
-    },
-  ];
-  let bodyParentIndex = 1;
-  let intoBodyParent: Transform = { position: [0, 0, 0], rotation: [...IDENTITY_ROTATION] };
+  const emit: Emit = {
+    atomics: [],
+    bodyParentIndex: 1,
+    frames: [],
+    geometries: [],
+    sourceGeometryIndex: new Map(),
+    worlds: [],
+  };
+  pushFrame(emit, {
+    flags: TOP_FRAME_FLAGS,
+    name: '',
+    parentIndex: -1,
+    position: [0, 0, 0],
+    rotation: [...IDENTITY_ROTATION],
+  });
+  pushFrame(emit, {
+    boneId: 0,
+    name: template.rootName,
+    parentIndex: 0,
+    position: [0, 0, 0],
+    rotation: [...IDENTITY_ROTATION],
+  });
   if (template.intermediate) {
-    frames.push({
+    emit.bodyParentIndex = pushFrame(emit, {
       boneId: template.intermediate.boneId,
-      flags: FRAME_FLAGS,
       name: template.intermediate.frameName,
       parentIndex: 1,
       position: [...template.intermediate.position],
       rotation: [...template.intermediate.rotation],
     });
-    bodyParentIndex = 2;
-    intoBodyParent = invert({
-      position: [...template.intermediate.position],
-      rotation: [...template.intermediate.rotation],
-    });
   }
 
-  return { atomics: [], bodyParentIndex, frames, geometryIndexes: [], intoBodyParent };
+  return emit;
 }
 
 function findWheelDummies(model: ClumpModel, template: CsTemplate): Map<WheelCorner, number> {
@@ -436,6 +497,14 @@ function groundShift(template: CsTemplate, analysis: ModAnalysis): number {
   return templateGround - (dummy.position[2] - analysis.wheelRadius);
 }
 
+/** The donor transform lifted onto the template's ground plane. */
+function lift(transform: Transform, shiftZ: number): Transform {
+  return {
+    position: [transform.position[0], transform.position[1], transform.position[2] + shiftZ],
+    rotation: transform.rotation,
+  };
+}
+
 /** One past the template's highest bone id — where adopted parts' fresh ids start. */
 function nextFreeBoneId(template: CsTemplate): number {
   let max = template.chassisBoneId;
@@ -453,20 +522,15 @@ function nextFreeBoneId(template: CsTemplate): number {
 }
 
 function pushFrame(emit: Emit, frame: Omit<ClumpFrame, 'flags'> & { flags?: number }): number {
-  emit.frames.push({ flags: FRAME_FLAGS, ...frame });
+  const full: ClumpFrame = { flags: FRAME_FLAGS, ...frame };
+  emit.frames.push(full);
+  const parentWorld =
+    full.parentIndex >= 0
+      ? emit.worlds[full.parentIndex]
+      : { position: [0, 0, 0] as [number, number, number], rotation: [...IDENTITY_ROTATION] };
+  emit.worlds.push(compose(parentWorld, { position: full.position, rotation: full.rotation }));
 
   return emit.frames.length - 1;
-}
-
-/** A mod root-space transform re-expressed in the emitted body parent's space, z-shifted onto the
- *  template's ground plane. With no intermediate frame this is just the shift. */
-function shifted(emit: Emit, transform: Transform, shiftZ: number): Transform {
-  const lifted: Transform = {
-    position: [transform.position[0], transform.position[1], transform.position[2] + shiftZ],
-    rotation: transform.rotation,
-  };
-
-  return compose(emit.intoBodyParent, lifted);
 }
 
 /** `f_wheel_*` container frames plus every descendant. */
