@@ -121,8 +121,12 @@ Order + rationale: [priority.md](priority.md).
 ## Left unmeasured
 
 **Deferred to 0.5.0 on 2026-08-01** by the user's call while closing out 0.4.0 — they belong to the next
-vehicle round ([`roadmap/0.5.0/plans/04-all-vehicle-types/`](../098-all-land-vehicles/readme.md)),
-not to a pass of their own. The plan itself stays closed and shipped in 0.4.0.
+vehicle round, [098 — all land vehicles](../098-all-land-vehicles/readme.md) (which superseded
+`roadmap/0.5.0/plans/04-all-vehicle-types/`), not to a pass of their own. The plan itself stays closed and
+shipped in 0.4.0. **The handoff is now a real row over there**, in
+[098/08 — acceptance & close-out](../098-all-land-vehicles/08-acceptance-close.md) (added 2026-08-12: from
+2026-08-01 to then this section pointed at a chain that carried no plate task at all, so "deferred" meant
+"dropped" in practice).
 
 Closed on a binary verdict (plates are there and look right), which is what this feature was gated on.
 These stayed open and are worth a single pass whenever a vehicle round comes up again:
@@ -133,4 +137,10 @@ These stayed open and are worth a single pass whenever a vehicle round comes up 
   owes: slots used on a full-map drive, spawn overhead.
 - **Damage/detach in the field** — ram a plated car. Structural by construction (02 measured 87 of 143
   models carrying a plate on their `_dam` twin), so this is a confirmation, not a risk.
-- The **F2 debug-spawner plate input** and the damage/detach integration tests.
+- ~~The **F2 debug-spawner plate input** and the damage/detach integration tests.~~ **Both DONE
+  2026-08-12** — F2 → Vehicles has a "Plate (blank = auto)" field that rides the placement (so a LOD
+  respawn re-applies it), and two tests pin the lifetime claim from both ends: the engine keeps the plate
+  row through a damage swap and a detach, and the real damage system's full hit → deform → detach → debris
+  expiry never releases the atlas layer. Detail in
+  [04's close-out ledger](04-config-seeding-damage.md#close-out-ledger-2026-08-12). **What remains under
+  this heading is field MEASUREMENT only** — three bullets above, now carried by 098/08.

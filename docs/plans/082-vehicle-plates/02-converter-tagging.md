@@ -53,8 +53,8 @@ silently take the plate sources with it.
       now names plates as a second reason, so a future edit cannot drop it unknowingly.
 - [x] Census sweep + ledger numbers. **The standalone-atomic edge case does not exist** (0 hits) — no
       reparent fix owed.
-- [ ] Reconvert: owed by the user (they will rebuild the pak). Old `.osm` files simply carry no `plate`
-      field and render exactly as today.
+- [x] Reconvert — done by the user 2026-07-28; the field verdict on that pak is what closed the chain
+      (every car wears its plate). Box struck 2026-08-12; it had outlived its own answer.
 
 ## Acceptance
 

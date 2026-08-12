@@ -54,9 +54,12 @@ cityBoxes) → { text, city }` — `cityAt(spawn position)` (NOT the player's ci
 - [x] `vehicle-plates.ts` + tests (9): city boxes → mask, countryside stable pick, override wins, hash
       determinism, model and position both in the seed.
 - [x] Host wiring — ONE call site in `spawnVehicle`, and the release path frees the layer.
-- [ ] Debug-spawner plate input (the placement field exists; the F2 control is not wired).
-- [ ] Damage/detach integration tests + refcount-through-detach check.
-- [ ] Field session + measurements + close-out sweep. **Blocked on the pak rebuild** (user's).
+- [x] Debug-spawner plate input — **done 2026-08-12**: F2 → Vehicles carries a "Plate (blank = auto)"
+      field (8 cells, upper-cased) that rides the PLACEMENT, so a LOD respawn re-applies the typed number.
+- [x] Damage/detach integration tests + refcount-through-detach check — **done 2026-08-12**, two tests
+      (see the ledger). Both assert the plate SURVIVES; nothing in the damage path may hand a layer back.
+- [x] Field session — done 2026-07-28 on the rebuilt pak (binary verdict: every car wears its plate). Its
+      MEASURED half was deliberately not taken; it is carried in the readme's "Left unmeasured".
 
 ## Acceptance
 
@@ -93,6 +96,28 @@ cityBoxes) → { text, city }` — `cityAt(spawn position)` (NOT the player's ci
 - The field session's MEASURED half was not taken and the chain closed without it: LS→SF→LV distribution,
   the countryside mix, ram a plated car for the deform/detach behaviour, slots used on a full-map drive,
   spawn overhead. Carried in the plan readme's "Left unmeasured".
-- The F2 debug-spawner plate input, and the damage/detach integration tests. The damage BEHAVIOUR is
-  structural (plan 02 measured 87 of 143 models carrying a plate on their `_dam` twin), but "structural"
-  is a prediction until something drives into a wall.
+- ~~The F2 debug-spawner plate input, and the damage/detach integration tests~~ — **both landed
+  2026-08-12** (see the close-out ledger below). What stays a prediction until something drives into a
+  wall is the LOOK of it: plan 02 measured 87 of 143 models carrying a plate on their `_dam` twin, and a
+  missing plate on a damaged panel is acceptable (SA behaves likewise) — only a crash would be a bug.
+
+### Close-out ledger (2026-08-12)
+
+Suite **4 108 green** (+2), `tsc` and `eslint` clean. Both additions guard the SAME claim from the two
+ends it can break at:
+
+- **`engine.plates.test.ts` — "keeps the plate through a damage swap and a detach".** The plate is
+  INSTANCE state, and neither path may rewrite it: the test hides the `_ok` submeshes and hands the part
+  its own world matrix (exactly what `EngineVehicleHandle.detachPart` does), asserts zero writes to the
+  `vehicle-plates` buffer, then forces a capacity grow and asserts the row comes back as `[6, 1]` — proof
+  the state was RETAINED, not merely left unwritten.
+- **`vehicle-damage.system.test.ts` — "holds the plate refcount through deform, detach and debris
+  expiry".** The real `VehicleDamageSystem` drives the whole lifecycle (strong hit → deform → second hit →
+  detach → past `FALL_TTL`) against a real `PlateSlots` of capacity 3. Afterwards a second plate fills the
+  atlas and a third claim returns `BLANK_PLATE_SLOT` — nothing is evictable, because the car never
+  released its layer — and re-claiming the car's own text hits without recomposing. If anyone ever wires a
+  release into the detach path, this is the test that fails.
+- **The F2 control is a pass-through, by design.** `PlatePlacement.plate` and `VehiclePlacement.plate`
+  already existed; the only new code is the input in `VehicleScreen`, the widened `spawnVehicle(model,
+  plate?)` signature, and one spread into the placement in `engine-canvas-host.tsx`. No new plate logic —
+  the override still resolves through the same `resolvePlate` call every other spawn path uses.

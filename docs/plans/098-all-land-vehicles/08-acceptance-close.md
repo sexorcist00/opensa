@@ -10,6 +10,15 @@ the chain touched settled in the same state as the code.
       BMX), quad/mtruck, an artic combination, a lowrider, plus the sedan control. Each verdict recorded
       from the reporter's exact angle; a complaint that survives a fix triggers the second-cause rule
       before re-tuning (the 081 lesson).
+- [ ] **License plates — the measured half 082 deferred here** (that plan's "Left unmeasured", user's call
+      2026-08-01; the handoff was named there but never landed as a row until 2026-08-12). Four readings, all
+      on the acceptance drive rather than a pass of their own: the **city distribution** over LS→SF→LV
+      (parked plates match their district) and the countryside mix; **slots used** on a full-map drive plus
+      the per-spawn overhead (`PlateSlots.used` is the ledger number); the plan-03 **bench guard** — draws
+      and GPU time on the vehicle scene unchanged by plates; and **ram a plated car** — deformed panel keeps
+      its plate, second hit drops it with the part. The behaviour is structural and unit-guarded (082/04's
+      close-out ledger), so this is a confirmation, not a risk: a missing plate on a `_dam` twin is
+      acceptable (SA behaves likewise), a crash is a bug.
 - [ ] **Regression gate.** `phys-regression.ts` bands cover the new scenes (bike straight/slalom/
       wheelie, trailer stability) against reference captures committed to
       `docs/benchmarks/vehicle-physics/`; the pre-098 car bands are unchanged — proof the fleet work

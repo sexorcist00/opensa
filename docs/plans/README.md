@@ -205,7 +205,10 @@ row but its chain was superseded by 097). Newest first:
   backwards, and a plate is two quads, not one), and the first real boot cost one fix: a WGSL uniformity
   error in `rigidTexel`, which no test can see. Closed on the look verdict — the distribution drive, the
   bench guard and a ram test are listed unmeasured in the plan's readme; **that unmeasured tail was deferred
-  to 0.5.0 on 2026-08-01** (the plan itself stays here — it shipped in 0.4.0).
+  to 0.5.0 on 2026-08-01** (the plan itself stays here — it shipped in 0.4.0). **Finished off 2026-08-12**:
+  the F2 debug-spawner plate input and the damage/detach lifetime tests landed, and the deferred FIELD
+  measurements became a real row in [098/08](./098-all-land-vehicles/08-acceptance-close.md) — until then
+  they pointed at a chain that carried no plate task at all.
 - **[081 — Vehicle driving physics](./081-vehicle-physics/readme.md)** — feel overhaul on the own engine.
   **01–05 DONE 2026-07-26, field-accepted**: `handling.cfg` went from 5 fields consumed to 21, every one a
   translation of the original's own code (spring law, `cTransmission` gearbox, air drag, tyre grip and
