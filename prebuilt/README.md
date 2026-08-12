@@ -19,6 +19,23 @@ npm run phone      # sees build/webapp/index.html and skips vite entirely
 `phone.sh` then serves the app and the pak from the SAME static origin, so there is no CORS, no second port
 and no dev server.
 
+## Re-unpack it after every pull that touched the engine
+
+`git pull` updates the ARCHIVE. It does not update `build/webapp`, which is the unpacked copy and is
+gitignored — so a device that pulls a fix and does not extract keeps running the old app, and the symptom is
+the bug still happening after it was fixed.
+
+```bash
+rm -rf build/webapp/assets      # NOT `rm -rf build/webapp` — that path is often a symlink to shared storage
+tar -xzf prebuilt/opensa-webapp.tar.gz -C build/webapp
+```
+
+**Clear `assets/` rather than extracting over it.** Chunk filenames carry a content hash, so an overlay leaves
+every old chunk in place beside the new ones. They are never loaded — `index.html` names the new hashes — but
+they are indistinguishable from live files when something is being diagnosed by grep, and on 2026-08-12 that
+cost a round of confusion: a search for the old error text found it in an orphan chunk minutes after the fix
+had, in fact, arrived correctly.
+
 ## Rebuild it
 
 **Anywhere except the phone.** `npm run build` is `tsc -b && vite build`, so refreshing this archive on the

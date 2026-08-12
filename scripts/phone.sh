@@ -66,6 +66,13 @@ TEXTURES="${TEXTURES:-astc}"
 # because it is what has been proven on this device; the cost is speed only (astcenc's pool measured 2.38x one
 # thread on 2026-08-07, bit-identical either way). `ASTC_THREADS=0` restores one-per-core for a machine that
 # can afford it.
+#
+# WORTH RETRYING, and nobody has: the three deaths were caused by the bug FIXED on 2026-08-09, not by the
+# thread count surviving it. `2` has not been tried since. The pool measured 2.38x one thread and is
+# bit-identical, so it is a free 2x if the address space allows — pair it with a smaller HEAP (the isolates
+# need room the 4096 MB reservation is holding) and a separate OUT, so a failed experiment costs nothing:
+#
+#   HEAP=1536 ASTC_THREADS=2 REBUILD=1 OUT=./build/phone-ls-t2 npm run phone
 ASTC_THREADS="${ASTC_THREADS:-1}"
 # The default is a SUBSET, because converting the roster costs hours on a phone and a field run needs a
 # handful of models. `all` restores the full convert. The player's model is added below whatever is asked

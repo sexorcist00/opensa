@@ -489,3 +489,34 @@ branch bolted into the frame.
 
 **Caught:** no. A platform branch lints clean, tests clean on whichever platform CI runs, and is only found
 when somebody compares the two screens.
+
+## The GPU feature a payload demands is read from the format table, never re-derived
+
+`OSTEX_FORMAT_FEATURE` (`packages/engine-formats/src/ostex.ts`) maps every `.ostex` format to the WebGPU
+feature it requires, or to `undefined` when it uploads anywhere. That table is the rule. Anything that needs
+to know whether a device can read a payload — the manifest gate, the per-array upload, a future backend —
+reads it, and computes nothing of its own.
+
+The reason is a bug that shipped and cost a field session. `requireFormatSupport`
+(`packages/engine/src/core/ostex-upload.ts`) derived the demand itself:
+
+```ts
+const isBc = format !== OstexFormat.RGBA8;
+```
+
+True while BC was the only compressed format we wrote, and a lie the day `opensa-pack --textures astc`
+shipped. `requireWorldSupport` already read the table, so an ASTC pak **passed** the manifest gate and was
+then refused **per array** by this second copy, on a Mali-G51 that carries `texture-compression-astc`. All 20
+world arrays were rejected, `cellsTotal` stayed 0, and the error told the operator to rebuild the pak with
+textures the device could read — which it already was. Measured 2026-08-12; the capture VOIDed itself and the
+pak was innocent (`texture-budget.ts` read it back as ASTC4x4, and `report.json`'s recipe said `astc`).
+
+The shape is the same one [the cell size](#one-cell-size-agreed-by-four-places) has: a rule with more than one
+owner. It differs in how it fails — a second copy does not diverge when the world changes, it diverges when a
+NEW MEMBER is added to the set, and the copy that was never taught about it keeps answering for the old set
+without knowing it is wrong.
+
+**Caught:** now yes, by `ostex-upload.test.ts` in both directions (ASTC refused where there is no ASTC, ASTC
+accepted on a GPU with ASTC and no BC) — and both were verified by reintroducing the defect. Before that,
+**silent**: the manifest gate passed, the build's `--platforms mobile` gate passed, every test passed, and
+only a real GPU said otherwise.
