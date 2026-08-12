@@ -9,7 +9,13 @@
  * objects) started arriving as `.ostex` too — world arrays and model arrays differ only in the bind group
  * built on top, which is why that stays with each caller.
  */
-import { decodeOstex, OstexFormat, type OstexFormatId, ostexMipLayout } from '@opensa/engine-formats';
+import {
+  decodeOstex,
+  OSTEX_FORMAT_FEATURE,
+  OstexFormat,
+  type OstexFormatId,
+  ostexMipLayout,
+} from '@opensa/engine-formats';
 
 import type { Resources } from './resources';
 
@@ -114,18 +120,24 @@ export function uploadOstexTexture(
 }
 
 /**
- * The BC demand, moved off the device and onto the CONTENT (see `device.ts`). A pak built from SA assets is
- * BC throughout, so on a device without BC this throws on the first world array — early, and naming the
- * texture, which is the difference between "this world needs a BC-capable GPU" and a driver-level validation
- * error thousands of lines away. RGBA8 payloads upload anywhere, which is what lets a non-BC device run
- * content that was never BC to begin with.
+ * The format demand, moved off the device and onto the CONTENT (see `device.ts`). A payload throws on the
+ * first array its GPU cannot read — early, and naming the texture, which is the difference between "this
+ * world needs another GPU" and a driver-level validation error thousands of lines away.
+ *
+ * **The demand is read from {@link OSTEX_FORMAT_FEATURE}, never re-derived here.** This function used to
+ * compute it as `format !== RGBA8 ⇒ BC`, which was true while BC was the only compressed format we wrote and
+ * became a lie the day `--textures astc` shipped: an ASTC pak passed `requireWorldSupport` at manifest time
+ * (that gate already read the map) and was then refused HERE, per array, on a GPU that carries ASTC — the
+ * message even told the operator to rebuild the pak in a format the device could read, which it already was.
+ * Measured 2026-08-12 on a Mali-G51: 20 of 20 world arrays refused, `cellsTotal` 0, and a capture that VOIDed
+ * itself. A second copy of a rule is the bug; the map is the rule.
  */
 function requireFormatSupport(device: GPUDevice, format: OstexFormatId, label: string): void {
-  const isBc = format !== OstexFormat.RGBA8;
-  if (isBc && !device.features.has('texture-compression-bc')) {
+  const feature = OSTEX_FORMAT_FEATURE[format];
+  if (feature !== undefined && !device.features.has(feature)) {
     throw new Error(
-      `${label}: this texture is BC-compressed and the GPU has no texture-compression-bc ` +
-        `(mobile GPUs ship ETC2/ASTC instead). The world's pak must be built with textures this device can read.`,
+      `${label}: this texture is ${GPU_FORMAT[format]} and the GPU has no ${feature}. ` +
+        `The world's pak must be built with textures this device can read.`,
     );
   }
 }

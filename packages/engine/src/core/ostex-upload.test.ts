@@ -58,8 +58,14 @@ function ostexOf(format: Ostex['format'], layers: number): Uint8Array {
 }
 
 /** Records what reached the GPU: every texture descriptor and every `writeTexture` payload.
- *  `hasBc` models the adapter feature the upload now checks — false is a mobile GPU (ETC2/ASTC, never BC). */
-function recorder(hasBc = true): {
+ *
+ *  The feature set is the whole point of these tests: a desktop carries BC and no ASTC, a phone carries ASTC
+ *  and no BC, and the upload must read the CONTENT's demand rather than assume either. `features` overrides
+ *  the `hasBc` shorthand for the mobile case. */
+function recorder(
+  hasBc = true,
+  features?: readonly string[],
+): {
   descriptors: GPUTextureDescriptor[];
   device: GPUDevice;
   resources: Resources;
@@ -68,7 +74,7 @@ function recorder(hasBc = true): {
   const descriptors: GPUTextureDescriptor[] = [];
   const writes: RecordedWrite[] = [];
   const device = {
-    features: new Set<string>(hasBc ? ['texture-compression-bc'] : []),
+    features: new Set<string>(features ?? (hasBc ? ['texture-compression-bc'] : [])),
     queue: {
       writeTexture: (
         destination: { origin?: { z?: number } },
@@ -107,6 +113,14 @@ describe('uploadOstexTexture', () => {
       expect(descriptors).toEqual([]);
     });
 
+    it('refuses an ASTC payload on a GPU without ASTC, naming the format and the feature it needs', () => {
+      const { device, resources } = recorder();
+
+      expect(() => uploadOstexTexture(device, resources, ostexOf(OstexFormat.ASTC4x4, 1), 'world-array-3')).toThrow(
+        /world-array-3.*astc-4x4-unorm-srgb.*texture-compression-astc/s,
+      );
+    });
+
     it('never expands a compressed payload — BC3 reaches the GPU at a quarter of RGBA8', () => {
       const { device, resources, writes } = recorder();
 
@@ -136,6 +150,17 @@ describe('uploadOstexTexture', () => {
       uploadOstexTexture(device, resources, ostexOf(OstexFormat.BC1, 1), 'model-texture');
 
       expect(descriptors[0].format).toBe('bc1-rgba-unorm-srgb');
+    });
+
+    it('uploads an ASTC array on a phone that has ASTC and no BC — the 2026-08-12 field failure', () => {
+      // The regression this pins: the check read `format !== RGBA8 ⇒ BC`, so an ASTC pak built for exactly
+      // this GPU was refused on all 20 world arrays and the district streamed nothing.
+      const { descriptors, device, resources } = recorder(false, ['texture-compression-astc']);
+
+      uploadOstexTexture(device, resources, ostexOf(OstexFormat.ASTC4x4, 1), 'world-array-0');
+
+      expect(descriptors).toHaveLength(1);
+      expect(descriptors[0].format).toBe('astc-4x4-unorm-srgb');
     });
 
     it('uploads an RGBA8 dictionary on a GPU without BC — only BC CONTENT needs the feature', () => {
