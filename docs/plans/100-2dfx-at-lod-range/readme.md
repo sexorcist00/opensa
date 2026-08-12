@@ -1,5 +1,11 @@
 # 100 — 2dfx survives to LOD range
 
+**Status: 🔒 CLOSED 2026-08-08** — all five steps shipped that day and the field check ran on the pak built
+after them (`11:42 08-08-2026`): chimneys smoke to 600 u, nothing doubles at the transition, the per-system
+departure table is live, and plates survive to LOD range by COUNT (the instrument that answers what a
+screenshot cannot). Banner added 2026-08-12 by the plan sweep, which also found the last verdict row stale —
+the `insects` floor WAS field-judged the same day, in the hack file. **Nothing open.**
+
 **Chimney smoke, street lamps and street-name plates keep working when an area is only its LOD.** Decided
 2026-08-07 by the user, after the research in [00](00-research-and-findings.md) killed the first attempt and
 then reversed one of its conclusions.
@@ -53,7 +59,7 @@ pipeline deletes as it consumes it, so no earlier tree could be asked whether a 
 | nothing doubles at the transition ([03](03-lod-bundle-reads-2dfx.md)) | **PASS** — one plume per stack at every distance, including inside the hysteresis band |
 | the smoke departure's look ([04](04-authored-cull-distance.md), [hack](../../hacks/smoke-drawn-to-world-edge.md)) | **PASS** — and the cooling-tower puffs visible at 300 u are gone by 600, so the per-system table is live, not a blanket raise |
 | plates survive to LOD range ([03](03-lod-bundle-reads-2dfx.md)) | **PASS, by COUNT not by eye** — `.oscell` minor 8 + `EngineStats.roadsignQuadsRecorded`: map-wide 334 of 1137 cells carry plates and 50 552 quads with ZERO hd/lod disagreements, and the field reads 2460 quads at 200 u, 1594 at 600 u |
-| `insects`/`cigarette_smoke` floor ([hack](../../hacks/tiny-fx-distance-floor.md)) | **NOT CLOSED** — no shot framed one |
+| `insects`/`cigarette_smoke` floor ([hack](../../hacks/tiny-fx-distance-floor.md)) | **CLOSED for `insects`, and this row was stale** — the chain's own rebuild capture framed none, but a dedicated A/B was taken the SAME DAY and lives in the hack file: Santa Maria pier `388.9, −2071.6, 8.4` (plus the LS alley anchor), `?fx=1` against a `?fx=0.02` positive control, insects detectable at ~9 m, marginal at ~19 m, gone by ~26 m. Verdict: the floor is **inert above ~25 u** and costs nothing measurable, because the authored sprite is 2 cm. `cigarette_smoke` was never framed on its own — same rule, same size class, no separate evidence |
 
 The rebuild that carried this was granted by lifting plan 07's ban on rebuilding mid-chain: a rebuild is now
 gated on what it CAPTURES, and the manifest lives in

@@ -39,8 +39,10 @@ row but its chain was superseded by 097). Newest first:
   behaviour does not exist. Step 00 is research first: recover SA's own step spacing, speed and carry rule
   (and find out whether the steps are objects or a texture scroll — if the latter, plan 099's UV lane may
   already do it) before any constant of ours is fitted. Corpus is 5 entries in 4 models, fully enumerable.
-- **[100 — 2dfx survives to LOD range](./100-2dfx-at-lod-range/readme.md)** — **ALL FIVE STEPS SHIPPED
-  2026-08-08** (planned 2026-08-07), **field check owed to the chain's single rebuild**. Steps moved into
+- **[100 — 2dfx survives to LOD range](./100-2dfx-at-lod-range/readme.md)** — **🔒 CLOSED 2026-08-08** — all
+  five steps shipped that day (planned 2026-08-07) and the field check ran on the pak built after them; the
+  2026-08-12 sweep added the banner and corrected the one verdict row that still read NOT CLOSED (the
+  `insects` floor was field-judged the same day, in its hack file, with a positive control). Steps moved into
   [lod-common/007](../../tools/lod-common/docs/plans/007-2dfx-space-and-cell-carry.md),
   [opensa-lod-generator/006](../../tools/opensa-lod-generator/docs/plans/006-cell-bake-carries-effects.md) and
   [sa-lod-generator/007](../../tools/sa-lod-generator/docs/plans/007-clone-2dfx-policy.md); 03 and 04 stayed
