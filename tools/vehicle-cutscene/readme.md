@@ -19,3 +19,4 @@ npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src
 - [001 — architecture + research record](docs/plans/001-architecture.md) (the census, the rig contract,
   the decisions)
 - [002 — implementation](docs/plans/002-implementation.md) (prioritized steps, field gates)
+- [003 — plate bake](docs/plans/003-plate-bake.md) (readable cutscene license plates — vanilla shows blanks)
