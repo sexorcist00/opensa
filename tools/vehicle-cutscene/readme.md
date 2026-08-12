@@ -1,6 +1,6 @@
 # vehicle-cutscene
 
-**Status: PLANNED — no code yet; see [docs/plans/](docs/plans/).**
+**Status: step 1 shipped (census + `--inspect`); conversion lands in [plan 002](docs/plans/002-implementation.md) steps 2+.**
 
 Converts installed **vehicle mods** into their **cutscene counterparts** — the `cs*` models in
 `models/cutscene.img` — so the real game's cutscenes show the same custom cars the player drives.
@@ -9,6 +9,10 @@ the mod's gameplay DFF by frame surgery: flattened rig, HAnim skeleton with the 
 four instantiated wheels, baked carcols paint, empty `txdp`-resolved TXD.
 
 ```bash
+# census + readiness report (writes nothing):
+npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --inspect
+
+# conversion (steps 2+, not implemented yet):
 npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --out <dir>
 ```
 

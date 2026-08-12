@@ -56,6 +56,7 @@ export default defineConfig({
       'tools/mod-installer/**/*.test.ts',
       'tools/fetch-pack/**/*.test.ts',
       'tools/vehicle-installer/**/*.test.ts',
+      'tools/vehicle-cutscene/**/*.test.ts',
       'tools/ped-installer/**/*.test.ts',
       'tools/perfect-map-builder/**/*.test.ts',
       'tools-debug/sa-int16-repro/**/*.test.ts',

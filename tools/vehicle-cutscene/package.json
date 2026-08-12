@@ -1,0 +1,14 @@
+{
+  "name": "@opensa/vehicle-cutscene",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Convert installed vehicle mods into their cutscene counterparts: cs* DFFs in models/cutscene.img (HAnim rig, baked paint, txdp-resolved TXD).",
+  "exports": {
+    "./census": "./src/census.ts"
+  },
+  "nx": {
+    "tags": [
+      "type:tool"
+    ]
+  }
+}
