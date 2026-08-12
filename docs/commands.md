@@ -109,7 +109,9 @@ spawn it by name to look at it ([plan 006](../tools/vehicle-installer/docs/plans
 ```bash
 # which cutscene models exist, which mod is the donor, is everything in place (writes nothing):
 npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --inspect
-# conversion (--out <dir>, --only <model,…>) lands with plan 002 steps 2+ — the CLI throws until then
+# convert the fleet into an output game (base copied; cutscene.img rebuilt; txdcut.ide patched):
+npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --out <dir>
+# --only bobcat,cszr350 restricts slots while iterating; bike/boat slots pend plan 002 steps 8/9
 ```
 
 23 cutscene vehicle models / 21 donor slots; the census derives from `models/cutscene.img` +
