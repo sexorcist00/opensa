@@ -42,14 +42,13 @@ Sanity: 1123 cells / ~1 GB / AO ~375 s. Also owed on this rebuild (078): map-obj
       (matte tyres 2026-07-23, AO night speckles closed 2026-07-23 — both below). Closed here 2026-08-12
       so one plan's checklist stops holding another plan's work open.
 
-## The ONE item still open (2026-08-12)
+## The last item — closed 2026-08-12
 
-- [ ] **Row H — LV facade "holes"**: Old Venturas Strip entrance (~2110, 2076), 23:30–04:00. Expect a
-      SOLID black fascia band under the pink arches, no see-through into the block interior, bulb canopies
-      fullbright. The dark sloped marquee silhouette is vanilla — not a regression.
-      **Everything but the eyes is already verified**: `dump-cell.ts 2110 2076` on the 2026-08-11 build
-      reads the 23→4 night row as three groups, all `cls=0` — the additive class that caused the holes is
-      gone from the pak bytes. This is the last box in 085; ticking it closes the plan.
+- [x] **Row H — LV facade "holes"**: VERIFIED by the user 2026-08-12 — drove the Old Venturas Strip
+      entrance at night, everything reads right: no see-through, the facade is solid. The offline half
+      matched it (`dump-cell.ts 2110 2076` on the 2026-08-11 build reads the 23→4 night row as three
+      groups, all `cls=0` — the additive class that caused the holes is gone from the pak bytes).
+      **This was the last box in 085.**
 
 ## Field results 2026-07-22 late (first run on the rebuilt pak)
 

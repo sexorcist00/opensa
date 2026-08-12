@@ -1,10 +1,10 @@
 # 085 — map-object appearance
 
-**Status: OPENED 2026-07-22 — rows A–G all CLOSED; ONE item open (2026-08-12 sweep): row H's field
-verdict.** Its fix is shipped and verified present in the built pak's bytes; what is owed is a look at
-the Old Venturas Strip entrance at night. Everything else on the checklist was either confirmed in the
-field or belongs to another plan — the sweep struck four boxes that were already answered elsewhere in
-this same file.
+**Status: 🔒 CLOSED 2026-08-12** — rows A–H all shipped and field-confirmed. Row H was the last one: the
+user drove the Old Venturas Strip entrance at night on the 2026-08-11 build and reported it right (no
+see-through, solid facade), matching what the pak bytes already said. The 2026-08-12 sweep also struck
+four checklist boxes that had been answered elsewhere in this same file (the F2 magenta toggle, rows A/C/D)
+and handed the 084 row back to 084.
 
 The field round the user queued after vehicles ([084](../084-vehicle-appearance/))
 and before peds. Same method: the user reports what they see in game, each symptom is traced to data
@@ -207,9 +207,9 @@ another archive TXD, ledgered as crossTxd, missing stays empty.
 
 ---
 
-## Open rows
+## Rows closed on a later build
 
-### Row H — LV facade "holes": row C's ADDITIVE class erased a no-alpha night facade (FIXED 2026-07-23, pending rebuild)
+### Row H — LV facade "holes": row C's ADDITIVE class erased a no-alpha night facade (FIXED 2026-07-23, field-PASSED 2026-08-12)
 
 **Symptom (user, field, night 23:50):** see-through "holes" + a translucent look on the Old Venturas
 Strip entrance facade; day is clean. The picked names (`vgsn_blucasign`, `vgnlowmall3`) were RED
@@ -258,10 +258,10 @@ bytes, not an intention. (The 2026-07-23 offline re-weld predicted five groups f
 welds three. The group COUNT is a welding detail, the CLASS is the claim.) `weld.ts` carries the rule at
 `classOf`: `if (additive && alphaClass !== 'opaque')`.
 
-**Field check: still owed — the VISUAL verdict only.** Old Venturas Strip entrance (~2110, 2076) at
-23:30–04:00: expect a solid black fascia band under the pink arches, no see-through into the block
-interior, bulb canopies fullbright. The dark sloped marquee silhouette IS vanilla (authored `roof10L256`
-night prelit 12/15/13) — do not read it as a regression.
+**Field check: PASSED 2026-08-12** — the user drove the Old Venturas Strip entrance (~2110, 2076) at
+night and reported it correct: no see-through, the facade reads solid. Row H closed, and with it the plan.
+(The dark sloped marquee silhouette IS vanilla — authored `roof10L256` night prelit 12/15/13 — and was
+called out in advance so it would not be read as a regression.)
 
 ### Row G — mod 46 "Animated Radars" (CLOSED 2026-07-22 late — engine correct, the DARK look is the mod's own texture)
 

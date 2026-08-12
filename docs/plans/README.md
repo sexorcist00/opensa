@@ -187,9 +187,9 @@ row but its chain was superseded by 097). Newest first:
   (after vehicles, before peds): rows A–G SHIPPED and field-confirmed — the night emissive mask went
   per-channel (the luma delta systematically killed saturated neon: the LV strip's red rope lights never
   glowed), missing textures render vanilla grey, additive neon adds light, night-only timed models run
-  fullbright. **ONE item open (2026-08-12 sweep): row H's field verdict** — the additive-class narrowing
-  (`classOf`: class 4 only for alpha materials) is verified present in the built pak's bytes, and what is
-  owed is a night look at the Old Venturas Strip entrance.
+  fullbright. **🔒 CLOSED 2026-08-12** on row H's field verdict — the additive-class narrowing (`classOf`:
+  class 4 only for alpha materials) was verified in the pak bytes and then driven at the Old Venturas Strip
+  entrance at night: no see-through, solid facade.
 
 - **[084 — Vehicle appearance and dynamic-model lighting](./084-vehicle-appearance/readme.md)** — the 2026-07-20
   field round: wheel-side/scale conventions and the flat dynamic indirect term SHIPPED (with measurements);
