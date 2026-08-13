@@ -22,83 +22,42 @@
  *     copy (x flipped, triangles rewound) — the shared unmirrored wheel showed its inner barrel
  *     outward; z-180 templates (bobcat style) mirror through their own bind rotation;
  *   - `shift = (tplNodeZ − tplRadius) − (modDummyZ − modRadius)` aligns the donor's ground plane.
+ *
+ * The branch-agnostic emit machinery lives in `rig/emit.ts` (shared with the bike branch).
  */
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 
 import { canonicalPartName, type CsTemplate, geometryZHalfExtent, toArrayBuffer, type WheelCorner } from '../template';
-import { isIdentityDelta, mirrorGeometryBodyX } from './bake';
+import { mirrorGeometryBodyX } from './bake';
+import { type ClumpAtomic, type ClumpModel, type OpaqueChunk, readClump, writeClump } from './clump-io';
 import {
-  type ClumpAtomic,
-  type ClumpFrame,
-  type ClumpModel,
-  type HierarchyNode,
-  type OpaqueChunk,
-  readClump,
-  writeClump,
-} from './clump-io';
+  buildHierarchy,
+  childrenByFrame,
+  collectDropped,
+  type ConvertReport,
+  type Emit,
+  emitAtomic,
+  emitBone,
+  emptyEmit,
+  hingeFactory,
+  inYearVariantSubtree,
+  lift,
+  nearestCarriedAncestor,
+  ORPHAN_SKIP_RE,
+  pushFrame,
+  variantContainerOf,
+  worldTransforms,
+} from './emit';
 import { compose, IDENTITY_ROTATION, invert, type Transform } from './matrix';
 
-/** Frame-list matrix-flags words, mirrored from every vanilla cutscene model. */
-const TOP_FRAME_FLAGS = 0x00020003;
-const FRAME_FLAGS = 0x00000003;
 /** The game rig's wheel dummies (mirrors `build-vehicle-model.ts`'s WHEEL_DUMMY_RE; `m` = 3-axle middles,
  *  which no cutscene template has — they land in `droppedFromMod`). */
 const WHEEL_DUMMY_RE = /^wheel_([lr])([fmb])_dummy$/;
 /** `f_wheel_<mask>` container frames — the IVF-style wheel sub-model four of the real mods ship instead
  *  of a mesh under the dummies (mirrors the engine builder's WHEEL_CONTAINER_RE + first-atomic pick). */
 const WHEEL_CONTAINER_RE = /^f_wheel/;
-/** Mod meshes NEVER adopted: damage twins and LOD copies. Everything else the game renders in gameplay. */
-const ORPHAN_SKIP_RE = /_dam$|_vlo$/;
-/** IVF-style VARIANT containers: the runtime plugin shows ONE mesh per container. */
-const VARIANT_CONTAINER_RE = /^f_(?:extras|class)/;
-/** Year-variant subtrees (`_[1991]:2`, with the mod's own `}` typo tolerated): ALTERNATIVES to base
- *  parts the rig already carries — never adopted at all (the taxi stacked three door sets). */
-const YEAR_VARIANT_RE = /\[\d{4}[\]}]/;
-/** Shim frame name suffix — must never collide with an anim channel name (vanilla frame names). */
-const SHIM_SUFFIX = '_pv';
 
-export interface CarConvertReport {
-  /** Visible mod parts the template has no slot for, carried with fresh bone ids (shell, glass, misc). */
-  adoptedFromMod: string[];
-  /** Mod meshes with no place in the template (damage twins, LOD copies, surplus variants). */
-  droppedFromMod: string[];
-  /** Template parts the mod does not ship — their bones drop out of the emitted hierarchy. */
-  missingInMod: string[];
-  /** Canonical names of the emitted template parts. */
-  parts: string[];
-  /** The vertical rebase applied to the donor. */
-  shiftZ: number;
-  /** Bones that needed a shim frame (non-identity donor-vs-vanilla placement delta). */
-  shimmed: string[];
-}
-
-interface BoneSpec {
-  boneId: number;
-  /** The VANILLA local — what the anims replay. */
-  local: { position: readonly number[]; rotation: readonly number[] };
-  name: string;
-  parentFrame: number;
-  /** Where the bone must LAND (body-parent-relative world) — the donor's placement, ground-lifted. */
-  targetWorld: Transform;
-}
-
-interface Emit {
-  atomics: ClumpAtomic[];
-  /** Dedupe map for derived geometry copies (the mirrored left wheel). */
-  bakedGeometryIndex: Map<OpaqueChunk, number>;
-  /** Frame index the wheels + chassis hang off (the skeleton root, or the intermediate body frame). */
-  bodyParentIndex: number;
-  /** Source geometry indexes carried in ANY form (original or derived) — `collectDropped`'s ledger. */
-  carriedSources: Set<number>;
-  frames: ClumpFrame[];
-  geometries: OpaqueChunk[];
-  /** Fresh bone ids for shims + adopted parts, allocated past the template's. */
-  nextBoneId: number;
-  /** Dedupe map for source geometries. */
-  sourceGeometryIndex: Map<number, number>;
-  /** Root-space transform of each emitted frame (parallel to `frames`). */
-  worlds: Transform[];
-}
+export type CarConvertReport = ConvertReport;
 
 interface ModAnalysis {
   atomicByFrame: Map<number, ClumpAtomic>;
@@ -123,7 +82,11 @@ interface ModAnalysis {
 export function convertCar(modDff: Uint8Array, template: CsTemplate): { dff: Uint8Array; report: CarConvertReport } {
   const analysis = analyzeMod(modDff, template);
   const shiftZ = groundShift(template, analysis);
-  const emit = emptyEmit(template);
+  const emit = emptyEmit({
+    intermediate: template.intermediate,
+    nextBoneId: nextFreeBoneId(template),
+    rootName: template.rootName,
+  });
   const report: CarConvertReport = {
     adoptedFromMod: [],
     droppedFromMod: [],
@@ -135,7 +98,7 @@ export function convertCar(modDff: Uint8Array, template: CsTemplate): { dff: Uin
 
   emitBody(emit, template, analysis, shiftZ, report);
   emit.frames[1].hierarchy = buildHierarchy(emit.frames);
-  collectDropped(emit, analysis, report);
+  collectDropped(emit, analysis.model, report);
 
   const dff = writeClump({
     atomics: emit.atomics,
@@ -166,18 +129,18 @@ function adoptOrphanParts(
       index === analysis.wheelMeshIndex ||
       analysis.wheelContainerFrames.has(index) ||
       ORPHAN_SKIP_RE.test(canonical) ||
-      inYearVariantSubtree(analysis, index);
+      inYearVariantSubtree(analysis.model, index);
     if (skip) {
       continue;
     }
-    const container = variantContainerOf(analysis, index);
+    const container = variantContainerOf(analysis.model, index);
     if (container >= 0) {
       if (servedVariantContainers.has(container)) {
         continue; // one variant per f_extras/f_class container, like the runtime plugin
       }
       servedVariantContainers.add(container);
     }
-    const parentFrame = nearestCarriedAncestor(analysis, carriedFrames, index) ?? chassisFrame;
+    const parentFrame = nearestCarriedAncestor(analysis.model, carriedFrames, index) ?? chassisFrame;
     const local = compose(invert(emit.worlds[parentFrame]), lift(analysis.hingeOf(index), shiftZ));
     const frameIndex = pushFrame(emit, {
       boneId: emit.nextBoneId++,
@@ -186,7 +149,7 @@ function adoptOrphanParts(
       position: local.position,
       rotation: local.rotation,
     });
-    emitAtomic(emit, analysis, atomic, frameIndex);
+    emitAtomic(emit, analysis.model.geometries, atomic, frameIndex);
     report.adoptedFromMod.push(canonical);
   }
 }
@@ -196,16 +159,7 @@ function analyzeMod(modDff: Uint8Array, template: CsTemplate): ModAnalysis {
   const children = childrenByFrame(model);
   const atomicByFrame = new Map(model.atomics.map((atomic) => [atomic.frameIndex, atomic]));
   const relativeToRoot = worldTransforms(model);
-  const hingeOf = (frameIndex: number): Transform => {
-    const frame = model.frames[frameIndex];
-    const parentIndex = frame.parentIndex;
-    const parentName = parentIndex >= 0 ? model.frames[parentIndex].name.trim().toLowerCase() : '';
-    const name = frame.name.trim().toLowerCase();
-    const isComponent = /_(?:ok|dam)$/.test(name);
-    const base = name.replace(/_(?:ok|dam)$/, '');
-
-    return isComponent && parentName === `${base}_dummy` ? relativeToRoot(parentIndex) : relativeToRoot(frameIndex);
-  };
+  const hingeOf = hingeFactory(model, relativeToRoot);
 
   const chassisIndex = model.frames.findIndex(
     (frame, index) => canonicalPartName(frame.name) === 'chassis' && atomicByFrame.has(index),
@@ -234,50 +188,6 @@ function analyzeMod(modDff: Uint8Array, template: CsTemplate): ModAnalysis {
   };
 }
 
-/** DFS over the emitted tree; flags = (siblings follow ? 2 : 0) | (leaf ? 1 : 0) — the rule reproduced
- *  verbatim from all five vanilla cutscene rig styles (step-2 probe). */
-function buildHierarchy(frames: readonly ClumpFrame[]): HierarchyNode[] {
-  const children: number[][] = frames.map(() => []);
-  frames.forEach((frame, index) => {
-    if (frame.parentIndex >= 0 && frames[frame.parentIndex].boneId !== undefined) {
-      children[frame.parentIndex].push(index);
-    }
-  });
-  const nodes: HierarchyNode[] = [];
-  const visit = (index: number, siblingsFollow: boolean): void => {
-    const kids = children[index];
-    nodes.push({
-      flags: (siblingsFollow ? 2 : 0) | (kids.length === 0 ? 1 : 0),
-      id: frames[index].boneId!,
-      index: nodes.length,
-    });
-    kids.forEach((kid, at) => visit(kid, at < kids.length - 1));
-  };
-  const skeletonRoot = frames.findIndex((frame) => frame.boneId === 0);
-  visit(skeletonRoot, false);
-
-  return nodes;
-}
-
-function childrenByFrame(model: ClumpModel): number[][] {
-  const children: number[][] = model.frames.map(() => []);
-  model.frames.forEach((frame, index) => {
-    if (frame.parentIndex >= 0) {
-      children[frame.parentIndex].push(index);
-    }
-  });
-
-  return children;
-}
-
-function collectDropped(emit: Emit, analysis: ModAnalysis, report: CarConvertReport): void {
-  for (const atomic of analysis.model.atomics) {
-    if (!emit.carriedSources.has(atomic.geometryIndex)) {
-      report.droppedFromMod.push(analysis.model.frames[atomic.frameIndex].name || `frame ${atomic.frameIndex}`);
-    }
-  }
-}
-
 /**
  * The game keys a component by its DUMMY, not the mesh child's name — a mod that misnames the child
  * still works in gameplay (the taxi ships `door_lr_ok` under `door_rr_dummy`). Mirror it: for a missing
@@ -299,41 +209,6 @@ function dummyChildFallback(analysis: ModAnalysis, canonical: string): number {
       analysis.atomicByFrame.has(index) &&
       frame.name.trim().toLowerCase().endsWith('_ok'),
   );
-}
-
-/** Append an atomic; source geometries dedupe by index, derived copies (mirrored wheel) by identity. */
-function emitAtomic(
-  emit: Emit,
-  analysis: ModAnalysis,
-  source: ClumpAtomic,
-  frameIndex: number,
-  derived?: OpaqueChunk,
-): void {
-  let geometryIndex: number;
-  if (derived) {
-    // A derived copy NEVER aliases the source's dedupe slot — doing so handed the mirrored LEFT wheel
-    // to the right side too (whichever side emitted first won; gate-7 "wheels splayed" round).
-    const shared = emit.bakedGeometryIndex.get(derived);
-    if (shared === undefined) {
-      geometryIndex = emit.geometries.length;
-      emit.geometries.push(derived);
-      emit.bakedGeometryIndex.set(derived, geometryIndex);
-    } else {
-      geometryIndex = shared;
-    }
-    emit.carriedSources.add(source.geometryIndex);
-  } else {
-    const existing = emit.sourceGeometryIndex.get(source.geometryIndex);
-    if (existing === undefined) {
-      geometryIndex = emit.geometries.length;
-      emit.geometries.push(analysis.model.geometries[source.geometryIndex]);
-      emit.sourceGeometryIndex.set(source.geometryIndex, geometryIndex);
-    } else {
-      geometryIndex = existing;
-    }
-    emit.carriedSources.add(source.geometryIndex);
-  }
-  emit.atomics.push({ extension: source.extension, flags: source.flags, frameIndex, geometryIndex });
 }
 
 /** Wheel nodes + chassis under the body parent, in template bone order (vanilla interleaves per style). */
@@ -359,34 +234,6 @@ function emitBody(
   }
 }
 
-/**
- * Emit an anim-targeted bone: the VANILLA local (what the anims replay), with an un-animated SHIM frame
- * absorbing the donor delta when the target placement differs. Returns the bone's frame index.
- */
-function emitBone(emit: Emit, spec: BoneSpec, report: CarConvertReport): number {
-  const local: Transform = { position: [...spec.local.position] as never, rotation: [...spec.local.rotation] };
-  const shim = compose(invert(emit.worlds[spec.parentFrame]), compose(spec.targetWorld, invert(local)));
-  let parentIndex = spec.parentFrame;
-  if (!isIdentityDelta(shim)) {
-    parentIndex = pushFrame(emit, {
-      boneId: emit.nextBoneId++,
-      name: `${spec.name}${SHIM_SUFFIX}`,
-      parentIndex: spec.parentFrame,
-      position: shim.position,
-      rotation: shim.rotation,
-    });
-    report.shimmed.push(spec.name);
-  }
-
-  return pushFrame(emit, {
-    boneId: spec.boneId,
-    name: spec.name,
-    parentIndex,
-    position: local.position,
-    rotation: local.rotation,
-  });
-}
-
 function emitChassisAndParts(
   emit: Emit,
   template: CsTemplate,
@@ -405,7 +252,7 @@ function emitChassisAndParts(
     },
     report,
   );
-  emitAtomic(emit, analysis, analysis.atomicByFrame.get(analysis.chassisIndex)!, chassisFrame);
+  emitAtomic(emit, analysis.model.geometries, analysis.atomicByFrame.get(analysis.chassisIndex)!, chassisFrame);
 
   const emittedByCanonical = new Map<string, { frameIndex: number; modIndex: number }>([
     ['chassis', { frameIndex: chassisFrame, modIndex: analysis.chassisIndex }],
@@ -435,7 +282,7 @@ function emitChassisAndParts(
       },
       report,
     );
-    emitAtomic(emit, analysis, analysis.atomicByFrame.get(modIndex)!, frameIndex);
+    emitAtomic(emit, analysis.model.geometries, analysis.atomicByFrame.get(modIndex)!, frameIndex);
     emittedByCanonical.set(canonical, { frameIndex, modIndex });
     report.parts.push(canonical);
   }
@@ -475,7 +322,7 @@ function emitWheel(
       },
       report,
     );
-    emitAtomic(emit, analysis, analysis.wheelAtomic, meshIndex, useMirror ? mirrored : undefined);
+    emitAtomic(emit, analysis.model.geometries, analysis.wheelAtomic, meshIndex, useMirror ? mirrored : undefined);
 
     return;
   }
@@ -497,46 +344,7 @@ function emitWheel(
     position: [...wheel.meshPosition],
     rotation: [...wheel.meshRotation],
   });
-  emitAtomic(emit, analysis, analysis.wheelAtomic, meshIndex, useMirror ? mirrored : undefined);
-}
-
-function emptyEmit(template: CsTemplate): Emit {
-  const emit: Emit = {
-    atomics: [],
-    bakedGeometryIndex: new Map(),
-    bodyParentIndex: 1,
-    carriedSources: new Set(),
-    frames: [],
-    geometries: [],
-    nextBoneId: nextFreeBoneId(template),
-    sourceGeometryIndex: new Map(),
-    worlds: [],
-  };
-  pushFrame(emit, {
-    flags: TOP_FRAME_FLAGS,
-    name: '',
-    parentIndex: -1,
-    position: [0, 0, 0],
-    rotation: [...IDENTITY_ROTATION],
-  });
-  pushFrame(emit, {
-    boneId: 0,
-    name: template.rootName,
-    parentIndex: 0,
-    position: [0, 0, 0],
-    rotation: [...IDENTITY_ROTATION],
-  });
-  if (template.intermediate) {
-    emit.bodyParentIndex = pushFrame(emit, {
-      boneId: template.intermediate.boneId,
-      name: template.intermediate.frameName,
-      parentIndex: 1,
-      position: [...template.intermediate.position],
-      rotation: [...template.intermediate.rotation],
-    });
-  }
-
-  return emit;
+  emitAtomic(emit, analysis.model.geometries, analysis.wheelAtomic, meshIndex, useMirror ? mirrored : undefined);
 }
 
 function findWheelDummies(model: ClumpModel, template: CsTemplate): Map<WheelCorner, number> {
@@ -591,25 +399,6 @@ function groundShift(template: CsTemplate, analysis: ModAnalysis): number {
   return templateGround - (dummy.position[2] - analysis.wheelRadius);
 }
 
-/** Whether the frame (or an ancestor) carries a year-variant tag — an alternative part set. */
-function inYearVariantSubtree(analysis: ModAnalysis, frameIndex: number): boolean {
-  for (let at = frameIndex; at >= 0; at = analysis.model.frames[at].parentIndex) {
-    if (YEAR_VARIANT_RE.test(analysis.model.frames[at].name)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/** The donor transform lifted onto the template's ground plane. */
-function lift(transform: Transform, shiftZ: number): Transform {
-  return {
-    position: [transform.position[0], transform.position[1], transform.position[2] + shiftZ],
-    rotation: transform.rotation,
-  };
-}
-
 /** A mirrored wheel copy for the LEFT side of identity-rotation templates: their anims replay identity
  *  (no z-180 mirror), so the shared wheel geometry showed its inner barrel outward (gate-7 field). */
 function mirroredLeftWheel(template: CsTemplate, analysis: ModAnalysis): null | OpaqueChunk {
@@ -621,22 +410,6 @@ function mirroredLeftWheel(template: CsTemplate, analysis: ModAnalysis): null | 
   }
 
   return mirrorGeometryBodyX(analysis.model.geometries[analysis.wheelAtomic.geometryIndex]);
-}
-
-/** The emitted frame of the closest carried (template-matched) ancestor of a mod frame, if any. */
-function nearestCarriedAncestor(
-  analysis: ModAnalysis,
-  carriedFrames: ReadonlyMap<number, number>,
-  frameIndex: number,
-): number | undefined {
-  for (let at = analysis.model.frames[frameIndex].parentIndex; at >= 0; at = analysis.model.frames[at].parentIndex) {
-    const emitted = carriedFrames.get(at);
-    if (emitted !== undefined) {
-      return emitted;
-    }
-  }
-
-  return undefined;
 }
 
 /** One past the template's highest bone id — where shim + adopted bones' fresh ids start. */
@@ -653,29 +426,6 @@ function nextFreeBoneId(template: CsTemplate): number {
   }
 
   return max + 1;
-}
-
-function pushFrame(emit: Emit, frame: Omit<ClumpFrame, 'flags'> & { flags?: number }): number {
-  const full: ClumpFrame = { flags: FRAME_FLAGS, ...frame };
-  emit.frames.push(full);
-  const parentWorld =
-    full.parentIndex >= 0
-      ? emit.worlds[full.parentIndex]
-      : { position: [0, 0, 0] as [number, number, number], rotation: [...IDENTITY_ROTATION] };
-  emit.worlds.push(compose(parentWorld, { position: full.position, rotation: full.rotation }));
-
-  return emit.frames.length - 1;
-}
-
-/** The closest `f_extras`/`f_class` VARIANT container above (or at) a mod frame, or -1. */
-function variantContainerOf(analysis: ModAnalysis, frameIndex: number): number {
-  for (let at = frameIndex; at >= 0; at = analysis.model.frames[at].parentIndex) {
-    if (VARIANT_CONTAINER_RE.test(analysis.model.frames[at].name.trim().toLowerCase())) {
-      return at;
-    }
-  }
-
-  return -1;
 }
 
 /** `f_wheel_*` container frames plus every descendant. */
@@ -711,25 +461,4 @@ function wheelContainerMesh(model: ClumpModel): number {
   }
 
   return -1;
-}
-
-/** Memoized frame transforms relative to the mod's root frame (the root's own transform excluded). */
-function worldTransforms(model: ClumpModel): (frameIndex: number) => Transform {
-  const rootIndex = model.frames.findIndex((frame) => frame.parentIndex < 0);
-  const memo = new Map<number, Transform>();
-  const resolve = (index: number): Transform => {
-    if (index === rootIndex || index < 0) {
-      return { position: [0, 0, 0], rotation: [...IDENTITY_ROTATION] };
-    }
-    let transform = memo.get(index);
-    if (!transform) {
-      const frame = model.frames[index];
-      transform = compose(resolve(frame.parentIndex), { position: frame.position, rotation: frame.rotation });
-      memo.set(index, transform);
-    }
-
-    return transform;
-  };
-
-  return resolve;
 }
