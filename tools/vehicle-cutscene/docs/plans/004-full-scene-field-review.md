@@ -38,7 +38,7 @@ scene-specific anims).
 | 2 | PROLOG3 | cscopcarla92, cstaxi92 | ✅ (gate 4/7 + 003) |
 | 3 | STRP4B2 | csmtbike92 | ✅ (002 step 8) |
 | 4 | DESERT9 | csbobcat92 | ✅ after rounds 1–2 ("glass with the door, one rack") |
-| 5 | BCESA4W | csbravura, cszr350b | |
+| 5 | BCESA4W | csbravura, cszr350b | ✅ (2026-08-13, "good") |
 | 6 | BCESAR4 | cssavanna, cszr350 | ✅ after round 3 ("lights are normal now") |
 | 7 | BCESAR5 | cssadler, cszr350, cszr350b | |
 | 8 | DES_10B | csmothership | |
