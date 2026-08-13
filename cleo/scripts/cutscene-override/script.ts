@@ -136,6 +136,10 @@ export const script = defineScript({
           () => s.wait(50),
         );
         s.op('SET_PLAYER_CONTROL', int(PLAYER), int(0));
+        // Field round 11: the world keeps LIVING around the frozen player — fresh traffic spawned
+        // and drove through the collisionless cutscene cars. Missions suppress it; so do we.
+        s.op('SET_CAR_DENSITY_MULTIPLIER', float(0));
+        s.op('SET_PED_DENSITY_MULTIPLIER', float(0));
 
         // Field round 6: the scene plays at ITS world site (the .cut's own offset), and the world
         // only streams around the PLAYER — a scene 300 m from where CJ stands renders in a void.
@@ -188,6 +192,8 @@ export const script = defineScript({
         s.op('RESTORE_CAMERA_JUMPCUT');
         s.op('SET_CAMERA_BEHIND_PLAYER');
         s.op('SET_AREA_VISIBLE', int(0));
+        s.op('SET_CAR_DENSITY_MULTIPLIER', float(1));
+        s.op('SET_PED_DENSITY_MULTIPLIER', float(1));
         s.op('SET_PLAYER_CONTROL', int(PLAYER), int(1));
         s.op('DO_FADE', int(FADE_IN_MS), int(FADE_IN));
       },
