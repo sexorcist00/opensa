@@ -31,12 +31,13 @@ export const VARIANT_CONTAINER_RE = /^f_(?:extras|class)/;
 export const YEAR_VARIANT_RE = /\[\d{4}[\]}]/;
 /** Shim frame name suffix — must never collide with an anim channel name (vanilla frame names). */
 export const SHIM_SUFFIX = '_pv';
-/** Adopted-frame rename suffix for a mod mesh whose name an EMITTED frame already carries. Anim
- *  binding is NOT first-match-only: a later duplicate of a vanilla name still binds its channel and
- *  gets driven to the vanilla LOCAL under its own parent — a double transform (DESERT9, plan 004
- *  round 1: the GMC Sierra ships door glass as a second `door_lf_ok` nested under the first; the
- *  scene swung the door and the glass floated midair). A renamed frame binds nothing and simply
- *  rides its parent. */
+/** Rename suffix EVERY adopted frame gets. An adopted mesh is un-animated by definition, and anim
+ *  binding is by NAME against a per-scene channel table that is unknowable at convert time — scenes
+ *  even carry channels for frames NO vanilla model has (DESERT9 drives `windscreen_ok` on a rig
+ *  without one; plan 004 round 2), and a duplicate of a bound name is NOT skipped as "second match":
+ *  it binds too and double-transforms (round 1, the GMC's nested door-glass `door_lf_ok` floating
+ *  midair). The only safe adopted name is an unbindable one; a renamed frame simply rides its
+ *  parent. */
 export const ADOPT_SUFFIX = '_ad';
 
 export interface BoneSpec {
@@ -103,11 +104,10 @@ export interface PartsRigTemplate {
   parts: ReadonlyMap<string, CsPartTemplate>;
 }
 
-/** An adopted frame's emitted name: the mod's own, unless a RESERVED (pre-adoption) frame carries it —
- *  then suffixed with {@link ADOPT_SUFFIX} so no anim channel can bind it. Duplicates among adopted
- *  frames stay verbatim: nothing binds them (only vanilla names are channels). */
-export function adoptedFrameName(reserved: ReadonlySet<string>, name: string): string {
-  return reserved.has(name) ? `${name}${ADOPT_SUFFIX}` : name;
+/** An adopted frame's emitted name: the mod's own + {@link ADOPT_SUFFIX}, ALWAYS — no anim channel
+ *  may ever bind an adopted mesh (see the suffix's comment for the two field rounds behind this). */
+export function adoptedFrameName(name: string): string {
+  return `${name}${ADOPT_SUFFIX}`;
 }
 
 /** Every remaining visible mod mesh rides its nearest CARRIED ancestor (a wheel mesh spins with its
@@ -120,7 +120,6 @@ export function adoptOrphans(
   carriedFrames: ReadonlyMap<number, number>,
   report: ConvertReport,
 ): void {
-  const reserved = reservedFrameNames(emit);
   for (const atomic of analysis.model.atomics) {
     const index = atomic.frameIndex;
     const canonical = canonicalPartName(analysis.model.frames[index].name);
@@ -136,7 +135,7 @@ export function adoptOrphans(
     const local = compose(invert(emit.worlds[parentFrame]), lift(analysis.hingeOf(index), shiftZ));
     const frameIndex = pushFrame(emit, {
       boneId: emit.nextBoneId++,
-      name: adoptedFrameName(reserved, analysis.model.frames[index].name.trim()),
+      name: adoptedFrameName(analysis.model.frames[index].name.trim()),
       parentIndex: parentFrame,
       position: local.position,
       rotation: local.rotation,
@@ -519,12 +518,6 @@ export function pushFrame(emit: Emit, frame: Omit<ClumpFrame, 'flags'> & { flags
   emit.worlds.push(compose(parentWorld, { position: full.position, rotation: full.rotation }));
 
   return emit.frames.length - 1;
-}
-
-/** The emitted frame names BEFORE adoption begins — the template bones (the anim channel names) plus
- *  the shims; the set an adopted frame's name must not collide with. */
-export function reservedFrameNames(emit: Emit): ReadonlySet<string> {
-  return new Set(emit.frames.map((frame) => frame.name));
 }
 
 /** The closest `f_extras`/`f_class` VARIANT container above (or at) a mod frame, or -1. */

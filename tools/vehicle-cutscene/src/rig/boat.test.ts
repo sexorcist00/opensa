@@ -67,7 +67,7 @@ describe('convertBoat', () => {
         }
       }
       expect(converted.frames[1].name).toBe('dinghy');
-      const prop = frameByName(converted, 'moving_prop')!;
+      const prop = frameByName(converted, 'moving_prop_ad')!; // adopted = renamed, unbindable
       expect(converted.frames[prop.parentIndex].name).toBe('boat_rearflap_right');
 
       // Well-formed emit: contiguous hierarchy indexes, unique ids, parseable clump.
@@ -96,7 +96,7 @@ describe('convertBoat', () => {
       );
       expect(report.droppedFromMod).toEqual(['boat_vlo']);
       // Propellers ride their transom flaps, like the donor authors them.
-      const prop = frameByName(converted, 'moving_prop')!;
+      const prop = frameByName(converted, 'moving_prop_ad')!;
       expect(converted.frames[prop.parentIndex].name).toBe('boat_rearflap_left');
     });
   });

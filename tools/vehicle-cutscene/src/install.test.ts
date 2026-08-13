@@ -115,7 +115,7 @@ describe('installCutscene', () => {
       const img = openImg(new Uint8Array(readFileSync(join(outPath, 'models', 'cutscene.img'))));
       const converted = readClump(img.get('csbobcat92.dff')!);
       expect(converted.frames[1].name).toBe('bobcat_dummy');
-      expect(converted.geometries).toHaveLength(12); // rebuilt (shared wheel, adopted glass), not copied
+      expect(converted.geometries).toHaveLength(11); // rebuilt (shared wheel, one extra by policy), not copied
       expect(readClump(img.get('csmtbike92.dff')!).frames[1].name).toBe('csbikechassis_dummy');
       // IMG VER2 pads entries to 2 048-byte sectors — presence + one-sector size says "untouched".
       expect(img.get('csbarrel.dff')?.byteLength).toBe(2048);

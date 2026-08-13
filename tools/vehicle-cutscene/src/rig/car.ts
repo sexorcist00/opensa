@@ -46,7 +46,6 @@ import {
   nearestCarriedAncestor,
   ORPHAN_SKIP_RE,
   pushFrame,
-  reservedFrameNames,
   variantContainerOf,
   worldTransforms,
 } from './emit';
@@ -58,6 +57,11 @@ const WHEEL_DUMMY_RE = /^wheel_([lr])([fmb])_dummy$/;
 /** `f_wheel_<mask>` container frames — the IVF-style wheel sub-model four of the real mods ship instead
  *  of a mesh under the dummies (mirrors the engine builder's WHEEL_CONTAINER_RE + first-atomic pick). */
 const WHEEL_CONTAINER_RE = /^f_wheel/;
+/** SA's mutually-exclusive spawn variants: never template-matched (the '92 extras are hand-authored
+ *  SCENE FURNITURE the anims pose — a mod's spawn variants are semantically unrelated; DESERT9 swung
+ *  a whole GMC bed rack 50° through the air, plan 004 round 2), and adopted ONE like a variant
+ *  container. The unbound scene channels are field-proven safe (zr350 shipped missing extras). */
+const EXTRA_RE = /^extra\d+$/;
 
 export type CarConvertReport = ConvertReport;
 
@@ -122,8 +126,8 @@ function adoptOrphanParts(
   carriedFrames: ReadonlyMap<number, number>,
   report: CarConvertReport,
 ): void {
-  const reserved = reservedFrameNames(emit);
   const servedVariantContainers = new Set<number>();
+  let extraTaken = false;
   for (const atomic of analysis.model.atomics) {
     const index = atomic.frameIndex;
     const canonical = canonicalPartName(analysis.model.frames[index].name);
@@ -143,13 +147,20 @@ function adoptOrphanParts(
       }
       servedVariantContainers.add(container);
     }
+    // `extra1..extraN` are SA's mutually-exclusive spawn variants (contracts §3): the game shows at
+    // most ONE, so the conversion carries one — the GMC ships five whole-bed rack variants, and all
+    // five stacked (plan 004 round 2). First by atomic order, like the containers above.
+    if (EXTRA_RE.test(canonical)) {
+      if (extraTaken) {
+        continue;
+      }
+      extraTaken = true;
+    }
     const parentFrame = nearestCarriedAncestor(analysis.model, carriedFrames, index) ?? chassisFrame;
     const local = compose(invert(emit.worlds[parentFrame]), lift(analysis.hingeOf(index), shiftZ));
     const frameIndex = pushFrame(emit, {
       boneId: emit.nextBoneId++,
-      // Renamed on a name collision with an emitted frame — a duplicate of a vanilla name still
-      // BINDS its anim channel and double-transforms (DESERT9 door glass, plan 004 round 1).
-      name: adoptedFrameName(reserved, analysis.model.frames[index].name.trim()),
+      name: adoptedFrameName(analysis.model.frames[index].name.trim()),
       parentIndex: parentFrame,
       position: local.position,
       rotation: local.rotation,
@@ -263,6 +274,11 @@ function emitChassisAndParts(
     ['chassis', { frameIndex: chassisFrame, modIndex: analysis.chassisIndex }],
   ]);
   for (const [canonical, part] of template.parts) {
+    if (EXTRA_RE.test(canonical)) {
+      report.missingInMod.push(canonical); // by policy — see EXTRA_RE; the bone drops out like a hole
+
+      continue;
+    }
     let modIndex = analysis.model.frames.findIndex(
       (frame, index) => canonicalPartName(frame.name) === canonical && analysis.atomicByFrame.has(index),
     );

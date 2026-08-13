@@ -99,6 +99,34 @@ scene-specific anims).
   channel names; the rebuilt fleet measures **0** (was 20). Suite 79/79.
 - [ ] **Re-check (user):** DESERT9 re-armed on the fixed build — the glass must swing WITH the door.
 
+### Round 2 — DESERT9: whole bed rack swung 50° through the air; stacked racks (2026-08-13, screenshot)
+
+- **Seen (same scene, second run):** a plank-like piece floating midair by the left truck's bed —
+  "something wrong with the bed they load the boxes into".
+- **Root causes (two, both measured offline by decoding the scene's ANPK poses — KRT0 = 8×f32:
+  quat, trans, time):**
+  1. **The scene poses `extra1` with a 50° z-rotation.** Vanilla csbobcat92's extras are SMALL
+     hand-authored SCENE FURNITURE (a 0.7 m crate, a 0.6 m prop) the choreography poses; the GMC
+     mod's `extra1..extra5` are five WHOLE-BED RACK variants (2×4 m each). Template-matching mod
+     extras to vanilla extras posed an entire rack 50° through the air — and adopting the rest
+     stacked five racks on the bed.
+  2. **The scene drives `windscreen_ok` — a frame the vanilla model does not even have** (R*
+     authored the anims against a richer rig; the channel is unbound in vanilla). The mod's adopted
+     windscreen carried that exact name and caught the channel — round 1's collision-only rename
+     could never see it: the channel-name universe is per-scene and unknowable at convert time.
+- **Fixes (policy, derived — never per-asset):**
+  1. `extra1..extraN` are SA's mutually-exclusive spawn variants (contracts §3): NEVER
+     template-matched (the '92 furniture bones drop out as holes — unbound channels are the
+     field-proven zr350 case), and adopted ONE per model (first in atomic order), like the
+     `f_extras` containers.
+  2. **EVERY adopted frame is renamed with `_ad`** — an adopted mesh is un-animated by definition,
+     so its name must be unbindable; round 1's reserved-set rename is superseded.
+- Fleet rebuilt: 23/23, 0 errors, 0 duplicate channel names; suite 154/154 (tool + pmb). Paint
+  materials 400 → 395 (the dropped surplus extras carried five markers); cutscene.img 311.1 →
+  307.3 MB (four surplus GMC racks alone).
+- [ ] **Re-check (user):** DESERT9 on this build — bed shows ONE rack, nothing floats, glass rides
+      the door.
+
 ## Step 3 — the approval
 
 - [ ] All 35 rows carry a verdict; open findings zero. **The user's blanket approval closes the

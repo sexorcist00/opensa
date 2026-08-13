@@ -119,7 +119,7 @@ describe('convertBike', () => {
       // BONES, so the spin channels carry them.
       const wheelMeshes = converted.frames
         .map((frame, index) => ({ frame, index }))
-        .filter(({ frame }) => frame.name === 'wheel_pj=0-2c');
+        .filter(({ frame }) => frame.name === 'wheel_pj=0-2c_ad'); // adopted = renamed, unbindable
       expect(wheelMeshes).toHaveLength(2);
       expect(wheelMeshes.map(({ frame }) => converted.frames[frame.parentIndex].name).sort()).toEqual([
         'wheel_front',

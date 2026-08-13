@@ -58,27 +58,34 @@ describe('convertCar', () => {
       const { dff, report } = convertCar(BOBCAT, template);
       const converted = readClump(dff);
 
-      expect(report.missingInMod).toEqual([]);
+      // extras are missing BY POLICY (plan 004 round 2): the '92 extras are scene furniture the anims
+      // pose; a mod's spawn variants are semantically unrelated and one adopted rack was swung 50°
+      // through the air by DESERT9.
+      expect(report.missingInMod).toEqual(['extra1', 'extra2']);
       expect(report.shiftZ).toBeCloseTo(0.9, 2);
-      expect(report.parts).toHaveLength(9);
+      expect(report.parts).toHaveLength(7);
       expect(report.droppedFromMod).toEqual(expect.arrayContaining(['chassis_vlo', 'door_lf_dam']));
       // The donor's windscreen has no template slot ('92 bodies bake glass into the chassis) — ADOPTED,
-      // not dropped: a car without glass was gate 4's field finding.
-      expect(report.adoptedFromMod).toEqual(['windscreen_ok']);
+      // not dropped (a car without glass was gate 4's field finding) — along with ONE of the donor's
+      // extras (SA shows at most one; extra2 is first in atomic order on this donor).
+      expect(report.adoptedFromMod.sort()).toEqual(['extra2', 'windscreen_ok']);
 
-      // Vanilla ids survive as an ordered subsequence (shims for the repositioned extras + the adopted
-      // windscreen add fresh ids in between).
-      const vanillaIds = vanilla.frames[1].hierarchy!.map((node) => node.id);
+      // Vanilla ids present in the emit survive as an ordered subsequence (the extras bones are gone
+      // by policy; the adopted windscreen adds a fresh id).
+      const vanillaKept = vanilla.frames[1]
+        .hierarchy!.map((node) => node.id)
+        .filter((id) => converted.frames.some((frame) => frame.boneId === id));
       const convertedIds = converted.frames[1].hierarchy!.map((node) => node.id);
       let matched = 0;
       for (const id of convertedIds) {
-        if (id === vanillaIds[matched]) {
+        if (id === vanillaKept[matched]) {
           matched += 1;
         }
       }
-      expect(matched).toBe(vanillaIds.length);
-      expect(converted.frames.find((frame) => frame.name === 'windscreen_ok')?.boneId).toBeGreaterThanOrEqual(19);
-      expect(report.shimmed).toEqual(expect.arrayContaining(['extra1', 'extra2']));
+      expect(matched).toBe(vanillaKept.length);
+      // EVERY adopted frame is renamed _ad — no anim channel may bind an adopted mesh (rounds 1+2).
+      expect(converted.frames.find((frame) => frame.name === 'windscreen_ok_ad')?.boneId).toBeGreaterThanOrEqual(19);
+      expect(converted.frames.some((frame) => frame.name === 'windscreen_ok')).toBe(false);
       expect(report.shimmed).not.toContain('door_lf_ok'); // identity delta needs no shim
       expect(converted.frames[1].name).toBe('bobcat_dummy');
 
@@ -91,7 +98,7 @@ describe('convertCar', () => {
       // Every template frame carries the VANILLA local — the anims' bind pose (gate-4 lesson). The
       // donor's differing placement is baked into vertices instead; on this body-reusing pair only the
       // repositioned extras and the exhaust need it.
-      for (const name of ['bonnet_ok', 'boot_ok', 'bump_front_ok', 'bump_rear_ok', 'door_lf_ok', 'extra1']) {
+      for (const name of ['bonnet_ok', 'boot_ok', 'bump_front_ok', 'bump_rear_ok', 'door_lf_ok']) {
         const expected = frameByName(vanilla, name)!.position;
         const actual = frameByName(converted, name)!.position;
         for (const axis of [0, 1, 2]) {
@@ -113,7 +120,7 @@ describe('convertCar', () => {
         converted.atomics.filter((atomic) => wheelFrames.has(atomic.frameIndex)).map((atomic) => atomic.geometryIndex),
       );
       expect(wheelGeometries.size).toBe(1);
-      expect(converted.geometries).toHaveLength(12); // 1 wheel + chassis + 9 parts + adopted windscreen
+      expect(converted.geometries).toHaveLength(11); // 1 wheel + chassis + 7 parts + windscreen + 1 extra
 
       // The converted DFF parses as a well-formed clump and keeps the mod's chassis geometry intact.
       const parsed = parseDff(toArrayBuffer(dff));
@@ -141,6 +148,7 @@ describe('convertCar', () => {
       expect(matched).toBe(vanillaIds.length);
       expect(frameByName(converted, 'door_lr_hi_ok')?.boneId).toBe(15);
       expect(report.adoptedFromMod.sort()).toEqual(['exhaust_ok', 'windscreen_ok']);
+      expect(frameByName(converted, 'exhaust_ok_ad')).toBeDefined(); // adopted = renamed, unbindable
       expect(report.droppedFromMod).not.toContain('exhaust_ok');
     });
 
