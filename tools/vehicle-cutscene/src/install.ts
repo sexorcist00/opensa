@@ -16,11 +16,12 @@ import { join, resolve } from 'node:path';
 
 import { type Census, type CutsceneSlot, loadCensus, matchMods, type SlotReadiness } from './census';
 import { bakePaintMarkers, paintColoursFor } from './materials';
+import { appendTextures, composePlatePair, PLATE_TOWNS, plateTextFor } from './plate';
 import { convertBike } from './rig/bike';
 import { convertBoat } from './rig/boat';
 import { convertCar } from './rig/car';
 import { extractBikeTemplate, extractBoatTemplate, extractCarTemplate } from './template';
-import { emptyTxd, textureNames, unresolvedTextures } from './txd';
+import { emptyTxd, referencesPlates, textureNames, unresolvedTextures } from './txd';
 
 export interface CutsceneInstallOptions {
   gamePath: string;
@@ -28,6 +29,10 @@ export interface CutsceneInstallOptions {
   /** Restrict conversion to these donor models / cs names (the CLI's `--only`). */
   only?: ReadonlySet<string>;
   outPath: string;
+  /** Plate-text override for ALL slots (default: per-slot deterministic text; plan 003). */
+  plate?: string;
+  /** Which town's plate background the bake wears (`ls` default — the intro's scenes; plan 003). */
+  plateTown?: string;
   /** Escape hatch: on a closure miss, copy the parent TXD into the cs TXD instead of erroring. */
   selfContainedTxd?: boolean;
 }
@@ -39,6 +44,8 @@ export interface CutsceneInstallSummary {
   imgBytesBefore: number;
   /** Per-model count of paint-marker materials baked with the carcols colours (plan 002 step 5). */
   painted: { csName: string; materials: number }[];
+  /** Slots whose cs TXD carries a baked readable plate pair, with the composed text (plan 003). */
+  plates: { csName: string; text: string }[];
   skipped: { csName: string; reason: string }[];
   /** Total bytes of the emitted `cs*.txd` entries (empty dictionaries unless self-contained). */
   txdBytes: number;
@@ -50,8 +57,13 @@ interface SlotContext {
   carcols: VehicleColours;
   /** Texture names of the resident generic `models/generic/vehicle.txd`. */
   genericNames: readonly string[];
+  /** The resident generic `models/generic/vehicle.txd` bytes — plate-source art lives here. */
+  genericTxd: Uint8Array;
   /** The `--game` tree's gta3.img — the txdp parents (the installed mod TXDs) live here. */
   gta3: ReturnType<typeof openArchive>;
+  /** Plate-text override (`--plate`), already cut to eight cells; undefined = per-slot text. */
+  plateOverride?: string;
+  plateTown: (typeof PLATE_TOWNS)[string];
   selfContainedTxd: boolean;
 }
 
@@ -70,13 +82,22 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
     (entry) => !options.only || options.only.has(entry.slot.model) || options.only.has(entry.slot.csName),
   );
 
+  const town = options.plateTown ?? 'ls';
+  if (!(town in PLATE_TOWNS)) {
+    throw new Error(`--plate-town must be one of ${Object.keys(PLATE_TOWNS).join(' | ')} (got '${town}')`);
+  }
   const imgPath = join(outPath, 'models', 'cutscene.img');
   const imgBytesBefore = statSync(imgPath).size;
   const img = openImg(new Uint8Array(readFileSync(imgPath)));
+  const genericTxd = new Uint8Array(readFileSync(join(gamePath, 'models', 'generic', 'vehicle.txd')));
+  const plateOverride = options.plate === undefined ? undefined : plateTextFor('', options.plate);
   const context: SlotContext = {
     carcols: parseCarcols(readFileSync(join(gamePath, 'data', 'carcols.dat'), 'utf8')),
-    genericNames: textureNames(new Uint8Array(readFileSync(join(gamePath, 'models', 'generic', 'vehicle.txd')))),
+    genericNames: textureNames(genericTxd),
+    genericTxd,
     gta3: openArchive(new Uint8Array(readFileSync(join(gamePath, 'models', 'gta3.img')))),
+    ...(plateOverride !== undefined ? { plateOverride } : {}),
+    plateTown: PLATE_TOWNS[town],
     selfContainedTxd: options.selfContainedTxd === true,
   };
 
@@ -86,10 +107,17 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
     imgBytesAfter: 0,
     imgBytesBefore,
     painted: [],
+    plates: [],
     skipped: [],
     txdBytes: 0,
     warnings: [],
   };
+  if (options.plate !== undefined && plateOverride !== undefined && options.plate.length > plateOverride.length) {
+    summary.warnings.push({
+      csName: '--plate',
+      message: `text '${options.plate}' is longer than a plate's 8 cells — truncated to '${plateOverride}'`,
+    });
+  }
   for (const entry of readiness) {
     convertSlot(entry, img, inPath, context, summary);
   }
@@ -124,9 +152,22 @@ function convertSlot(
     const { baked, bytes } = bakePaintMarkers(dff, paintColoursFor(context.carcols, slot.model));
     const txd = slotTxd(slot, bytes, join(inPath, folder!, `${slot.model}.txd`), context);
 
+    // The plate bake (plan 003): a slot whose model wears the placeholder quads gets a READABLE pair in
+    // its own TXD — own-TXD-first resolution overrides the runtime placeholders, zero DFF changes.
+    let txdBytes = txd.bytes;
+    if (referencesPlates(bytes)) {
+      const text = plateTextFor(slot.csName, context.plateOverride);
+      const pair = composePlatePair(context.genericTxd, text, context.plateTown);
+      txdBytes = appendTextures(txdBytes, [
+        { name: 'carplate', raster: pair.carplate },
+        { name: 'carpback', raster: pair.carpback },
+      ]);
+      summary.plates.push({ csName: slot.csName, text });
+    }
+
     img.set(`${slot.csName}.dff`, bytes);
-    img.set(`${slot.csName}.txd`, txd.bytes);
-    summary.txdBytes += txd.bytes.byteLength;
+    img.set(`${slot.csName}.txd`, txdBytes);
+    summary.txdBytes += txdBytes.byteLength;
     summary.converted.push(slot.csName);
     if (txd.preExisting.length > 0) {
       summary.warnings.push({

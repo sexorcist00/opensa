@@ -1,6 +1,6 @@
 # 003 — plate bake: readable license plates in cutscenes
 
-**Status: PLANNED 2026-08-12.** An IMPROVEMENT over the original, in the goals-doc sense: vanilla
+**Status: steps 1–3 SHIPPED 2026-08-13 — the field demonstration (step 4) remains.** An IMPROVEMENT over the original, in the goals-doc sense: vanilla
 cutscene cars show a BLANK white plate — the user's own gate-7 vanilla A/B screenshot is the recorded
 evidence — because `CCustomCarPlateMgr` generates plate textures only for GAMEPLAY vehicles, and a
 cutscene object renders the raw placeholders. The converted models can do better offline: bake a real,
@@ -14,8 +14,10 @@ readable plate into each slot's cs TXD. Zero DFF changes, zero runtime cost, kil
 - At gameplay model setup the manager swaps `carpback` → `plateback<town>` and `carplate` → a texture it
   RENDERS from the `platecharset` glyph strip. Cutscene objects never get that call.
 - All source art lives in the resident `models/generic/vehicle.txd`, **uncompressed RGBA8888** (no DXT
-  round-trip needed): `platecharset` 32×256, `plateback1/2/3` 64×32 (LS/SF/LV), the blank `carplate`
-  16×16 (measured 2026-08-12).
+  round-trip needed): `platecharset` 32×256, `plateback1/2/3` 64×32, the blank `carplate` 16×16
+  (measured 2026-08-12). **Town order corrected 2026-08-13**: `eCarPlateType` is SF = 0, LV = 1,
+  LA = 2 — `plateback1` is SAN FIERRO and `plateback3` is LOS SANTOS (the engine's measured mapping,
+  plan 082/01), not the LS/SF/LV this plan first guessed.
 - **Texture resolution prefers the model's OWN TXD over the txdp chain** — so shipping textures NAMED
   `carplate`/`carpback` inside the emitted `cs*.txd` overrides the placeholders with no DFF surgery at
   all. This is the whole trick.
@@ -24,51 +26,64 @@ readable plate into each slot's cs TXD. Zero DFF changes, zero runtime cost, kil
 
 ## Steps
 
-### 1 — recover the original's plate-render formula
+### 1 — recover the original's plate-render formula ✅ 2026-08-13 (by REUSE — plan 082/01)
 
-- [ ] Read `CCustomCarPlateMgr` in gta-reversed (`CreatePlateTexture`, `RenderLicensePlate`): the glyph
-      cell layout inside `platecharset` (which rows map to which characters), the generated raster's
-      dimensions, per-character advance/spacing, and how `plateback<town>` is chosen. Record the layout
-      here — per the standing rule, the formula is recovered, never fitted.
-- [ ] Confirm the `carplate` quad's UVs span the whole texture on 2–3 real DFFs (stock bobcat + one mod)
-      so a differently-sized baked texture cannot mis-map.
+- [x] The formula was ALREADY recovered for the engine's own gameplay plates:
+      `packages/game/src/vehicle/plate-raster.ts` (plan 082/01 — measured off the real rasters and
+      independently confirmed against the reversed `CCustomCarPlateMgr`). The layout: the text raster
+      is `RwRasterCreate(64, 16, 32)`, 8 cells of 8×16; the charset atlas is 4 columns, A–Z row-major
+      then 0–9, index 36 = the blank cell (the fallback for unmapped chars); the blit is an OPAQUE
+      memcpy (`rwRASTERFORMAT888`, no colour key — the charset's light ground IS the blank field);
+      the mask is `LLDD DLL`. The tool REUSES that module rather than re-deriving it — the standing
+      rule's best case.
+- [x] UV check on the real corpus (probe 2026-08-13): every `carplate`/`carpback` quad spans the full
+      0..1 (stock bobcat 4 quad pairs exact; taxi/glendale within 0.003 export rounding). The bike and
+      boat mods carry NO plate materials at all — the bake derives from the asset and skips them.
 
-**Verification:** a documented byte-accurate glyph map (char → cell) reproduced from the source, cited
-by file/function. **Record:** the layout table in this doc.
+**Record:** formula citation above; risk 1 (UV sub-rects) measured away.
 
-### 2 — `plate.ts`: compose + encode
+### 2 — `plate.ts`: compose + encode ✅ 2026-08-13
 
-- [ ] Compose the plate raster in plain RGBA: `plateback<town>` pixels as base, glyphs blitted per the
-      recovered formula. Text is DETERMINISTIC per slot — derived from the cs model name (stable across
-      rebuilds; reproducible-build rule) — with a `--plate <text>` CLI override for all slots.
-- [ ] Encode two TextureNative entries (`carplate` = the composed raster, `carpback` = the town
-      background copy) as RGBA8888 singles-mip, byte-built like `clump-io` builds its chunks (rw-codec
-      writer; no engine writes).
-- [ ] Tests first-negative: an unknown town index throws; a text longer than the plate truncates loudly
-      (warning, not silence). Positive: composed pixels contain the glyph rows (compare a rendered
-      char's cell against the charset source), both entries parse back via `parseTxd` with the right
-      names/sizes.
+- [x] Compose REUSES the engine module (`composePlateText`/`generatePlateText`): `carplate` = the
+      64×16 text strip, `carpback` = the town background verbatim (the two-quad mechanism needs no
+      compositing of one onto the other). Text is deterministic per slot —
+      `generatePlateText('LLDD DLL', fnv1a(csName))` — with the `--plate <text>` override (truncated
+      to 8 cells with a summary warning).
+- [x] Encode (`textureNative` in `plate.ts`): the stock plate art's EXACT shape, measured off
+      `generic/vehicle.txd` 2026-08-13 — platform 9 (D3D9), filter 0x1101, rasterFormat 0x600 (C888),
+      d3dFormat 22 (X8R8G8B8), depth 32, one mip, rasterType 4, no alpha, pixels stored BGRX.
+      `appendTextures` rebuilds the dictionary chunk-level (rw-codec), REPLACING same-named entries
+      (risk 2: a mod shipping its own `carplate` deliberately gets ours).
+- [x] Tests 10 (negative first): unknown town throws at install, no-plate-sources throws, long text
+      truncates with a warning; round-trip via `parseTxd` (BGRX→RGBA swizzle exact), replace-not-
+      duplicate, the real generic dictionary survives an append intact.
 
-**Verification:** unit round-trip — `textureNames` sees `carplate`+`carpback`, decoded pixels match the
-composition. **Record:** bytes per baked TXD entry pair.
+**Verification:** unit round-trip green; a baked pair rendered to PNG reads "YI08 OSJ" over the LOS
+SANTOS background (offline visual check, 2026-08-13). **Record:** the pair costs **~12.5 KB** per slot
+against the 40 B empty dictionary (64×16 + 64×32 X8R8G8B8 + headers; measured fleet-wide below).
 
-### 3 — wire into the emit
+### 3 — wire into the emit ✅ 2026-08-13
 
-- [ ] `slotTxd` gains the pair in BOTH routes: appended to the empty dictionary (the pipeline route) and
-      into the self-contained TXD (the bottle route). The closure check already treats these names as
-      resolvable — now they resolve one hop earlier.
-- [ ] Town selection: default LS (`plateback1`) — the intro's scenes; expose `--plate-town ls|sf|lv`
-      for later scenes if the field ever shows a wrong-town plate mattering.
-- [ ] Summary line reports plates baked; plan 002's step-10 numbers pick the TXD growth up.
+- [x] The pair lands in BOTH routes (after `slotTxd`, appended to whatever bytes the route chose) —
+      but ONLY on slots whose converted DFF actually wears the placeholder quads
+      (`referencesPlates`, derived from the asset): the bike and boat mods carry none and get none.
+- [x] Town selection: default LS = `plateback3` (`eCarPlateType` 2 — the corrected mapping above);
+      `--plate-town ls|sf|lv`, unknown value throws.
+- [x] Summary + CLI + the pmb `cutscene` fragment report plates baked.
 
-**Verification:** full mod run — 21/21 slots carry the pair; converted intro build installed in the
-bottle. **Record:** per-slot TXD bytes before/after (expect ≈ +6 KB against the 40 B empty dictionary).
+**Verification (run 2026-08-13):** full mod run over `game-src/original` — **23/23 converted,
+21/21 plated slots carry the pair** (the two unplated are the bike + boat, by asset), 0 errors;
+suite 78/78 for the tool, lint + tsc clean. **Record:** fleet cs TXDs 148 828 601 → 149 092 025 B —
+**+263 424 B across 21 plated slots (~12.5 KB each**; self-contained slots replacing a mod's own
+placeholder entries vary slightly); the composed `csbobcat92` pair rendered offline reads as a real
+plate.
 
 ### 4 — FIELD: the improvement demonstrated
 
 - [ ] Intro run (user): the sheriff's and taxi's plates READ as plates — text on a town background —
       where the vanilla A/B frame shows a white blank. Screenshot pair goes into the record; that pair
-      IS the "better must be demonstrated" evidence for this improvement.
+      IS the "better must be demonstrated" evidence for this improvement. (The plates build is in the
+      bottle; PROLOG3 via the override shows both cars in one scene.)
 
 **STOP: the user's verdict closes the plan.** **Record:** verdict + screenshot reference.
 

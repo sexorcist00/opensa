@@ -122,6 +122,7 @@ channel, exactly like the taxi's misnamed door (gate 7).
 | `f_extras:<n>`, `f_class:<n>` | Variant containers. CARS: one MESH per container (field-frozen, gates 4+7). BIKES/BOATS: the first child SUBTREE with a mesh is adopted whole (handlebar sets carry brake levers/grips as sub-meshes), later children dropped. |
 | `f_extras:<n>+` | Additive container (bikes/boats): every child kept — the MTB ships both wheel reflectors in one. |
 | `<part>_ok`/`_dam` under its own `<part>_dummy` | The frame's transform is junk the game destroys — the dummy is the hinge; every OTHER mesh frame keeps its transform. |
+| `carplate`, `carpback` (MATERIAL texture names) | A model wearing these placeholder quads gets a READABLE plate pair baked into its emitted `cs*.txd` (vehicle-cutscene plan 003) — own-TXD-first resolution overrides the placeholders the runtime never fills for cutscene objects. A mod shipping its OWN texture under these exact names gets ours instead (same look class); any other name is untouched. Models without the quads (the bike/boat mods) get no pair. |
 
 ### Tracked vehicles (`track_*` — read by our shipped `rhino-tracks.cs`)
 

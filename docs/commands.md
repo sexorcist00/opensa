@@ -113,7 +113,9 @@ npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src
 npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --out <dir>
 # --only bobcat,cszr350 restricts slots; --self-contained-txd embeds each MOD's TXD (for a target whose
 # gameplay stays stock, e.g. the reference bottle). All three branches convert (car/bike/boat) —
-# the full 23-model fleet; ~3.5 s wall-clock (docs/benchmarks/tools/)
+# the full 23-model fleet; ~3.5 s wall-clock (docs/benchmarks/tools/).
+# Plated slots get a READABLE license plate baked into the cs TXD (vanilla cutscenes show blanks):
+# --plate <text> overrides the per-slot deterministic text, --plate-town <ls|sf|lv> picks the background
 ```
 
 Field delivery to the reference bottle = drop `models/cutscene.img` + `data/txdcut.ide` in (originals

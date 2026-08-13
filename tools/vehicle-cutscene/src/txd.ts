@@ -41,6 +41,20 @@ export function emptyTxd(version = SA_RW_VERSION): Uint8Array {
   });
 }
 
+/** Whether the model wears the plate placeholder quads — the slots the plate bake (plan 003) serves.
+ *  Derived from the asset, never from the branch: bikes/boats ship no plate materials and get none. */
+export function referencesPlates(dff: Uint8Array): boolean {
+  const clump = parseDff(toArrayBuffer(dff));
+
+  return clump.geometries.some((geometry) =>
+    geometry.materials.some((material) => {
+      const name = material.texture?.name?.trim().toLowerCase();
+
+      return name !== undefined && RUNTIME_TEXTURES.has(name);
+    }),
+  );
+}
+
 /** Lowercased texture names a dictionary carries (name field of each TextureNative struct). */
 export function textureNames(txd: Uint8Array): string[] {
   const dictionary = readRw(txd).chunks.find((chunk) => chunk.type === RW_TEXTURE_DICTIONARY);

@@ -9,6 +9,8 @@
  *     --inspect  print the census + per-slot readiness, write nothing (no --out needed)
  *     --self-contained-txd  on a texture-closure miss, copy the txdp parent TXD into the cs TXD
  *                instead of erroring (the documented escape hatch; plan 002 step 6)
+ *     --plate <text>        plate-text override for all slots (default: deterministic per slot; plan 003)
+ *     --plate-town <ls|sf|lv>  which town background the baked plates wear (default ls)
  *   All paths are relative to the current working directory (absolute paths pass through).
  */
 import { statSync } from 'node:fs';
@@ -71,11 +73,15 @@ function main(): void {
     throw new Error('--out is required (or pass --inspect for the report alone)');
   }
 
+  const plate = argValue('--plate');
+  const plateTown = argValue('--plate-town');
   const summary = installCutscene({
     gamePath,
     inPath,
     only: only ? new Set(only.split(',').map((model) => model.trim().toLowerCase())) : undefined,
     outPath: fromCwd(outArg),
+    ...(plate !== undefined ? { plate } : {}),
+    ...(plateTown !== undefined ? { plateTown } : {}),
     selfContainedTxd: process.argv.includes('--self-contained-txd'),
   });
   printSummary(summary);
@@ -111,7 +117,7 @@ function printSummary(summary: CutsceneInstallSummary): void {
   console.log(
     `vehicle-cutscene: ${summary.converted.length} converted, ${summary.skipped.length} skipped,` +
       ` ${summary.errors.length} error(s), ${paintedMaterials} paint material(s) baked on ${summary.painted.length} model(s),` +
-      ` ${summary.txdBytes} B of cs TXDs;` +
+      ` ${summary.plates.length} plate(s) baked, ${summary.txdBytes} B of cs TXDs;` +
       ` cutscene.img ${megabytes(summary.imgBytesBefore)} → ${megabytes(summary.imgBytesAfter)}`,
   );
   for (const { csName, reason } of summary.skipped) {

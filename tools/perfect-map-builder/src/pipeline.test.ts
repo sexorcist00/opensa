@@ -61,6 +61,7 @@ const cutsceneInstall = vi.hoisted(() =>
       imgBytesAfter: number;
       imgBytesBefore: number;
       painted: never[];
+      plates: { csName: string; text: string }[];
       skipped: { csName: string; reason: string }[];
       txdBytes: number;
       warnings: never[];
@@ -74,6 +75,7 @@ const cutsceneInstall = vi.hoisted(() =>
       imgBytesAfter: 2048,
       imgBytesBefore: 1024,
       painted: [],
+      plates: [{ csName: 'csbobcat92', text: 'BX41 KHT' }],
       skipped: [{ csName: 'cscopcarsf', reason: 'no mod' }],
       txdBytes: 40,
       warnings: [],
@@ -428,6 +430,7 @@ describe('buildPerfectMap cutscene stage', () => {
         imgBytesAfter: 0,
         imgBytesBefore: 0,
         painted: [],
+        plates: [],
         skipped: [],
         txdBytes: 0,
         warnings: [],

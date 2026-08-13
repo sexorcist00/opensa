@@ -119,9 +119,15 @@ describe('installCutscene', () => {
       expect(readClump(img.get('csmtbike92.dff')!).frames[1].name).toBe('csbikechassis_dummy');
       // IMG VER2 pads entries to 2 048-byte sectors — presence + one-sector size says "untouched".
       expect(img.get('csbarrel.dff')?.byteLength).toBe(2048);
-      // The slot's TXD is replaced with an EMPTY dictionary — txdp does the resolving (step 6).
-      expect(textureNames(img.get('csbobcat92.txd')!)).toEqual([]);
-      expect(summary.txdBytes).toBeLessThan(128);
+      // The slot's TXD is an empty dictionary (txdp does the resolving, step 6) PLUS the baked plate
+      // pair (plan 003) — the bobcat wears the placeholder quads, the bike does not.
+      expect(textureNames(img.get('csbobcat92.txd')!)).toEqual(['carplate', 'carpback']);
+      expect(textureNames(img.get('csmtbike92.txd')!)).toEqual([]);
+      expect(summary.plates).toHaveLength(1);
+      expect(summary.plates[0].csName).toBe('csbobcat92');
+      expect(summary.plates[0].text).toMatch(/^[A-Z]{2}\d{2} \d[A-Z]{2}$/); // the game's own LLDD DLL mask
+      expect(summary.txdBytes).toBeGreaterThan(12_000); // the pair is ~12.5 KB against the 40 B empties
+      expect(summary.txdBytes).toBeLessThan(20_000);
 
       // The paint bake ran: markers replaced by the fake palette, none of the marker RGBs survive.
       const paintedBobcat = summary.painted.find((entry) => entry.csName === 'csbobcat92');

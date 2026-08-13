@@ -146,6 +146,8 @@ export interface BuildResult {
 export interface CutsceneFragment {
   converted: string[];
   imgBytesAfter: number;
+  /** Slots that got a baked readable plate pair (vehicle-cutscene plan 003). */
+  plates: { csName: string; text: string }[];
   skipped: { csName: string; reason: string }[];
   txdBytes: number;
   warnings: { csName: string; message: string }[];
@@ -756,6 +758,7 @@ function runCutsceneStage(
   }
   log(
     `  cutscene — ${summary.converted.length} converted, ${summary.skipped.length} skipped, ` +
+      `${summary.plates.length} plate(s) baked, ` +
       `img ${(summary.imgBytesBefore / 1e6).toFixed(1)} → ${(summary.imgBytesAfter / 1e6).toFixed(1)} MB, ` +
       `${summary.txdBytes} B of cs TXDs`,
   );
@@ -764,6 +767,7 @@ function runCutsceneStage(
     fragment: {
       converted: summary.converted,
       imgBytesAfter: summary.imgBytesAfter,
+      plates: summary.plates,
       skipped: summary.skipped,
       txdBytes: summary.txdBytes,
       warnings: summary.warnings,
