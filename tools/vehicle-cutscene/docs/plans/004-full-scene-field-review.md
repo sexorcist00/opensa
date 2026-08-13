@@ -212,7 +212,27 @@ scene-specific anims).
   attribute separately: transparency → round 5, shine vs gameplay → round 6). Suite 86/86; verify
   green (317 DFFs, 0 duplicate channels); bottle updated (`cs-mods-plates-prepipe` holds the round-4
   build).
-- [ ] **Re-check (user):** BCESAR5 re-run.
+- [x] **Re-check (user):** SPLIT (2026-08-13). Round 6 PASSED — "chrome is excellent". Round 5's
+      mechanism confirmed (the car behind the pane renders again) but the glass now shows NOTHING:
+      no tint, no sheen — the same mod in gameplay wears a light tint and a glass gloss. The round-4
+      alpha clamp (26 on the zr350) was the wrong-mechanism fix and now overshoots → round 7.
+
+### Round 7 — BCESAR5: glass invisible — the round-4 alpha clamp retired (2026-08-13, two screenshots)
+
+- **Seen:** cutscene zr350 glass renders as nothing at all; the same mod in gameplay shows a light
+  tint + glass sheen (user's side-by-side screenshots).
+- **Root cause:** round 4 diagnosed the stacked-window opacity as authored-alpha compounding and
+  clamped mod panes to the vanilla twin's floor (zr350 → 26, ~10 %). The TRUE mechanism was round 5's
+  render order — the pane z-erasing the car behind it. With panes drawn last they composite exactly as
+  the sorted gameplay pipeline composites them, so the mod's own gameplay alpha (125) is the correct
+  cutscene value too — and at 26 the pane contributes nothing (no tint, and the round-6 pipeline's
+  spec/env on the pane is scaled away with it).
+- **Fix (one variable):** the window-glass alpha clamp is REMOVED (`clampWindowGlass` /
+  `vanillaGlassFloor` deleted; the window-pane CLASSIFIER stays — it drives round 5's atomic
+  ordering). Converted glass keeps the mod's authored gameplay alpha, contracts §3 row rewritten.
+  Suite 80/80; verify green; bottle updated (`cs-mods-plates-pretint` holds the round-5/6 build).
+- [ ] **Re-check (user):** BCESAR5 re-run — glass should now match the gameplay look (light tint +
+      sheen), stacked panes darken honestly like gameplay, see-through everywhere.
 
 ## Step 3 — the approval
 

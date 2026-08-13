@@ -3,18 +3,10 @@ import { parseCarcols } from '@opensa/renderware/parsers/text/carcols.parser';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import {
-  bakePaintMarkers,
-  clampWindowGlass,
-  FLEET_GLASS_FLOOR,
-  type PaintColours,
-  paintColoursFor,
-  vanillaGlassFloor,
-} from './materials';
+import { bakePaintMarkers, type PaintColours, paintColoursFor } from './materials';
 import { toArrayBuffer } from './template';
 
 const BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.dff'));
-const CS_ZR350 = new Uint8Array(readFileSync('tests/original/dff/cutscene/cszr350.dff'));
 const CARCOLS = parseCarcols(readFileSync('tests/original/data/carcols.dat', 'utf8'));
 
 const COLOURS: PaintColours = [
@@ -61,59 +53,6 @@ describe('bakePaintMarkers', () => {
 
     it('does not disturb the rest of the file: same size, geometry parses identically', () => {
       const { bytes } = bakePaintMarkers(BOBCAT, COLOURS);
-      expect(bytes.length).toBe(BOBCAT.length);
-      const before = parseDff(toArrayBuffer(BOBCAT));
-      const after = parseDff(toArrayBuffer(bytes));
-      expect(after.geometries.map((geometry) => geometry.positions.length)).toEqual(
-        before.geometries.map((geometry) => geometry.positions.length),
-      );
-    });
-  });
-});
-
-describe('vanillaGlassFloor', () => {
-  describe('negative cases', () => {
-    it('returns null for a model with no window glass', () => {
-      // An empty DFF-shaped buffer: no clump at all.
-      expect(vanillaGlassFloor(new Uint8Array(0))).toBeNull();
-    });
-  });
-
-  describe('positive cases', () => {
-    it("reads the vanilla zr350's authored big-pane alpha of 26", () => {
-      expect(vanillaGlassFloor(CS_ZR350)).toBe(26);
-    });
-  });
-});
-
-describe('clampWindowGlass', () => {
-  describe('negative cases', () => {
-    it('leaves lenses and decals alone (the bobcat logo at alpha 242 is above the window band)', () => {
-      const { bytes } = clampWindowGlass(BOBCAT, 26);
-      const logos = materialColours(bytes).filter((colour) => colour === '255,255,255,242');
-      expect(logos).toEqual(materialColours(BOBCAT).filter((colour) => colour === '255,255,255,242'));
-    });
-
-    it('does not raise a pane already below the floor', () => {
-      const { bytes, clamped } = clampWindowGlass(BOBCAT, 254);
-      expect(clamped).toBe(0);
-      expect(materialColours(bytes)).toEqual(materialColours(BOBCAT));
-    });
-  });
-
-  describe('positive cases', () => {
-    it('clamps window panes down to the fleet floor when the twin has none', () => {
-      const { bytes, clamped } = clampWindowGlass(BOBCAT, null);
-      expect(clamped).toBe(6);
-      const colours = materialColours(bytes);
-      // The bobcat's windows (255,255,255,128 ×4) and dark glass (0,0,0,128 ×2) cap at the floor.
-      expect(colours.filter((colour) => colour === `255,255,255,${FLEET_GLASS_FLOOR}`)).toHaveLength(4);
-      expect(colours.filter((colour) => colour === `0,0,0,${FLEET_GLASS_FLOOR}`)).toHaveLength(2);
-      expect(colours.some((colour) => colour.endsWith(',128'))).toBe(false);
-    });
-
-    it('same size, geometry parses identically', () => {
-      const { bytes } = clampWindowGlass(BOBCAT, 26);
       expect(bytes.length).toBe(BOBCAT.length);
       const before = parseDff(toArrayBuffer(BOBCAT));
       const after = parseDff(toArrayBuffer(bytes));

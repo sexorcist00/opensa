@@ -15,7 +15,7 @@ import { cpSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { type Census, type CutsceneSlot, loadCensus, matchMods, type SlotReadiness } from './census';
-import { bakePaintMarkers, clampWindowGlass, FLEET_GLASS_FLOOR, paintColoursFor, vanillaGlassFloor } from './materials';
+import { bakePaintMarkers, paintColoursFor } from './materials';
 import { appendTextures, composePlatePair, PLATE_TOWNS, plateTextFor } from './plate';
 import { convertBike } from './rig/bike';
 import { convertBoat } from './rig/boat';
@@ -40,8 +40,6 @@ export interface CutsceneInstallOptions {
 export interface CutsceneInstallSummary {
   converted: string[];
   errors: { csName: string; message: string }[];
-  /** Per-model count of window panes alpha-clamped to the vanilla twin's glass floor (plan 004). */
-  glass: { csName: string; floor: number; panes: number }[];
   imgBytesAfter: number;
   imgBytesBefore: number;
   /** Per-model count of paint-marker materials baked with the carcols colours (plan 002 step 5). */
@@ -106,7 +104,6 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
   const summary: CutsceneInstallSummary = {
     converted: [],
     errors: [],
-    glass: [],
     imgBytesAfter: 0,
     imgBytesBefore,
     painted: [],
@@ -152,13 +149,7 @@ function convertSlot(
     }
     const modDff = new Uint8Array(readFileSync(join(inPath, folder!, `${slot.model}.dff`)));
     const { dff } = convertSlotDff(slot.branch, modDff, vanilla);
-    const painted = bakePaintMarkers(dff, paintColoursFor(context.carcols, slot.model));
-    const baked = painted.baked;
-    const floor = vanillaGlassFloor(vanilla);
-    const { bytes, clamped } = clampWindowGlass(painted.bytes, floor);
-    if (clamped > 0) {
-      summary.glass.push({ csName: slot.csName, floor: floor ?? FLEET_GLASS_FLOOR, panes: clamped });
-    }
+    const { baked, bytes } = bakePaintMarkers(dff, paintColoursFor(context.carcols, slot.model));
     const txd = slotTxd(slot, bytes, join(inPath, folder!, `${slot.model}.txd`), context);
 
     // The plate bake (plan 003): a slot whose model wears the placeholder quads gets a READABLE pair in
