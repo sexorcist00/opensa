@@ -24,6 +24,7 @@ import { buildSaLods } from '@opensa/sa-lod-generator/build';
 import { buildProcobjLods } from '@opensa/sa-procobj-placement/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { type BuildTarget } from '@opensa/tool-kit/target';
+import { installCutscene } from '@opensa/vehicle-cutscene/install';
 import { install as installVehicles } from '@opensa/vehicle-installer/install';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -41,6 +42,10 @@ import { config as defaultConfig, PACK_RECTS } from './config';
 export const STAGE_NAMES = [
   'mods',
   'vehicles',
+  // The cutscene fleet is the vehicles stage's shadow (plan 002 step 11): it reads the INSTALLED game —
+  // the merged carcols.dat and the mod TXDs already in gta3.img are what the conversion bakes/resolves
+  // against — so it sits right after `vehicles` and shares its source folder and its populated-check.
+  'cutscene',
   'peds',
   'optimize',
   'trees',
@@ -103,7 +108,8 @@ export interface BuildPerfectMapOptions {
    * - `sa` — no real-game LOD build, and no `checkImgIdBudgets` with it (that guard reads the `sa/` tree).
    * - `opensa` — no cell-LOD build and no convert; `pack` goes with it, being that target's tail.
    * - `pack` alone — build `opensa/` and leave it in GAME format (same result as `--until opensa`).
-   * - any common-chain stage (`mods`/`vehicles`/`peds`/`optimize`/`trees`/`procobj`) — dropped from the chain.
+   * - any common-chain stage (`mods`/`vehicles`/`cutscene`/`peds`/`optimize`/`trees`/`procobj`) — dropped
+   *   from the chain.
    *
    * An excluded stage leaves whatever a previous run wrote in its place: the builder only clears its own
    * `<out>/.work-<target>` (plus the legacy shared `.work`), so an opensa-only run does not touch a `sa/`
@@ -133,6 +139,16 @@ export interface BuildResult {
   produced: { dir: string; name: string }[];
   /** Whether the run stopped early at `until` (before the sa/opensa split). */
   stoppedEarly: boolean;
+}
+
+/** The cutscene stage's summary (plan `vehicle-cutscene` 002 step 11) — per-slot errors FAIL the stage,
+ *  so a report only ever carries the converted/skipped/warning shape of a build that succeeded. */
+export interface CutsceneFragment {
+  converted: string[];
+  imgBytesAfter: number;
+  skipped: { csName: string; reason: string }[];
+  txdBytes: number;
+  warnings: { csName: string; message: string }[];
 }
 
 /** Every stage name except the `lod` alias — see {@link EXCLUDABLE_STAGES}. */
@@ -178,13 +194,18 @@ export interface TargetReport {
 }
 
 export interface TargetReportFragments {
+  cutscene?: CutsceneFragment;
   optimize?: OptimizeFragment;
   pack?: PackFragment;
   sa?: SaFragment;
 }
 
 /** What a common-chain stage may hand the report assembler (plan 005); most stages produce nothing. */
-type ChainOutcome = undefined | void | { fragment: OptimizeFragment; stage: 'optimize' };
+type ChainOutcome =
+  | undefined
+  | void
+  | { fragment: CutsceneFragment; stage: 'cutscene' }
+  | { fragment: OptimizeFragment; stage: 'optimize' };
 
 /** Run the pipeline (optionally up to `until`). Returns each produced stage build. */
 export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<BuildResult> {
@@ -227,6 +248,11 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       run: (game, out) => installVehicles({ gamePath: game, inPath: source(subfolders.vehicles), outPath: out }),
     });
   }
+  // The cutscene stage exists only downstream of a RUN vehicles stage: the conversion reads the installed
+  // game (merged carcols, mod TXDs as txdp parents), so on a tree without them every slot fails closure.
+  // `--exclude vehicles` therefore drops this stage too — loudly, because a silently missing stage reads
+  // as a broken build (build:game:original:sa excludes vehicles today).
+  stageCutscene(chain, excluded, populated(subfolders.vehicles), source(subfolders.vehicles));
   if (populated(subfolders.peds)) {
     chain.push({
       name: 'peds',
@@ -267,6 +293,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     });
   }
   const runnable = planChain(chain, excluded, {
+    cutscene: subfolders.vehicles,
     mods: subfolders.mods,
     peds: subfolders.peds,
     trees: subfolders.vegetation,
@@ -701,9 +728,72 @@ async function buildSaTarget(step: {
 
 /** File a stage's outcome under its stage name — the runner-side half of the fragment contract (plan 005). */
 function collectFragment(fragments: TargetReportFragments, outcome: ChainOutcome): void {
-  if (outcome) {
-    fragments[outcome.stage] = outcome.fragment;
+  if (!outcome) {
+    return;
   }
+  if (outcome.stage === 'cutscene') {
+    fragments.cutscene = outcome.fragment;
+  } else {
+    fragments.optimize = outcome.fragment;
+  }
+}
+
+/**
+ * The cutscene stage (vehicle-cutscene plan 002 step 11): reads the INSTALLED game the vehicles stage
+ * produced — merged carcols for the paint bake, mod TXDs in gta3.img as the empty-TXD route's txdp
+ * parents. A slot error here is a broken build, not a per-slot condition to carry: with the parents
+ * installed, a closure miss means the vehicle install itself is incomplete — fail loudly, every slot named.
+ */
+function runCutsceneStage(
+  game: string,
+  inPath: string,
+  out: string,
+): { fragment: CutsceneFragment; stage: 'cutscene' } {
+  const summary = installCutscene({ gamePath: game, inPath, outPath: out });
+  if (summary.errors.length > 0) {
+    const named = summary.errors.map((error) => `${error.csName}: ${error.message}`).join('\n  ');
+    throw new Error(`cutscene conversion failed for ${summary.errors.length} slot(s):\n  ${named}`);
+  }
+  log(
+    `  cutscene — ${summary.converted.length} converted, ${summary.skipped.length} skipped, ` +
+      `img ${(summary.imgBytesBefore / 1e6).toFixed(1)} → ${(summary.imgBytesAfter / 1e6).toFixed(1)} MB, ` +
+      `${summary.txdBytes} B of cs TXDs`,
+  );
+
+  return {
+    fragment: {
+      converted: summary.converted,
+      imgBytesAfter: summary.imgBytesAfter,
+      skipped: summary.skipped,
+      txdBytes: summary.txdBytes,
+      warnings: summary.warnings,
+    },
+    stage: 'cutscene',
+  };
+}
+
+/**
+ * Stage the cutscene conversion — only downstream of a RUN vehicles stage: on a tree without the
+ * installed parents every slot fails closure, so `--exclude vehicles` drops this stage too, loudly (a
+ * silently missing stage reads as a broken build; `build:game:original:sa` excludes vehicles today).
+ */
+function stageCutscene(
+  chain: { name: ExcludableStage; run: (game: string, out: string) => ChainOutcome | Promise<ChainOutcome> }[],
+  excluded: ReadonlySet<ExcludableStage>,
+  vehiclesPopulated: boolean,
+  vehiclesSource: string,
+): void {
+  if (!vehiclesPopulated) {
+    return;
+  }
+  if (excluded.has('vehicles')) {
+    if (!excluded.has('cutscene')) {
+      log('cutscene — skipped (vehicles stage excluded; the conversion needs the INSTALLED game)');
+    }
+
+    return;
+  }
+  chain.push({ name: 'cutscene', run: (game, out) => runCutsceneStage(game, vehiclesSource, out) });
 }
 
 /** FLA ID-pool budgets for the real-SA build — mirrors the operative FILE_TYPE_* values in the target
@@ -1137,10 +1227,10 @@ function logTarget(target: BuildTarget, explicit: boolean, excluded: ReadonlySet
 function planChain<T extends { name: ExcludableStage }>(
   chain: readonly T[],
   excluded: ReadonlySet<ExcludableStage>,
-  stageSource: Readonly<Record<'mods' | 'peds' | 'trees' | 'vehicles', string>>,
+  stageSource: Readonly<Record<'cutscene' | 'mods' | 'peds' | 'trees' | 'vehicles', string>>,
 ): T[] {
   const staged = new Set(chain.map((stage) => stage.name));
-  for (const name of ['mods', 'vehicles', 'peds', 'trees'] as const) {
+  for (const name of ['mods', 'vehicles', 'cutscene', 'peds', 'trees'] as const) {
     if (!staged.has(name) && !excluded.has(name)) {
       log(`${name} — skipped (${stageSource[name]}/ empty)`);
     }

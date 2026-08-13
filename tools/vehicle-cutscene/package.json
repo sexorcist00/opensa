@@ -4,7 +4,8 @@
   "private": true,
   "description": "Convert installed vehicle mods into their cutscene counterparts: cs* DFFs in models/cutscene.img (HAnim rig, baked paint, txdp-resolved TXD).",
   "exports": {
-    "./census": "./src/census.ts"
+    "./census": "./src/census.ts",
+    "./install": "./src/install.ts"
   },
   "nx": {
     "tags": [

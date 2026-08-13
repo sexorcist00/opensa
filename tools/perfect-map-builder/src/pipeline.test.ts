@@ -46,6 +46,46 @@ vi.mock('@opensa/sa-procobj-placement/build', () => ({ buildProcobjLods: procobj
 vi.mock('@opensa/sa-lod-generator/build', () => ({ buildSaLods: saLods }));
 vi.mock('@opensa/opensa-lod-generator/build', () => ({ buildOpensaLods: opensaLods }));
 
+/** The two vehicle-family installers, mocked so the cutscene-stage tests cost no real conversion. The
+ *  cutscene fake mirrors the real summary shape: per-slot ERRORS fail the stage, the rest is a fragment. */
+const vehicleInstall = vi.hoisted(() =>
+  vi.fn<(options: { gamePath: string; inPath: string; outPath: string }) => void>((options) => {
+    mkdirSync(options.outPath, { recursive: true });
+  }),
+);
+const cutsceneInstall = vi.hoisted(() =>
+  vi.fn<
+    (options: { gamePath: string; inPath: string; outPath: string }) => {
+      converted: string[];
+      errors: { csName: string; message: string }[];
+      imgBytesAfter: number;
+      imgBytesBefore: number;
+      painted: never[];
+      skipped: { csName: string; reason: string }[];
+      txdBytes: number;
+      warnings: never[];
+    }
+  >((options) => {
+    mkdirSync(options.outPath, { recursive: true });
+
+    return {
+      converted: ['csbobcat92'],
+      errors: [],
+      imgBytesAfter: 2048,
+      imgBytesBefore: 1024,
+      painted: [],
+      skipped: [{ csName: 'cscopcarsf', reason: 'no mod' }],
+      txdBytes: 40,
+      warnings: [],
+    };
+  }),
+);
+vi.mock('@opensa/vehicle-installer/install', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  install: vehicleInstall,
+}));
+vi.mock('@opensa/vehicle-cutscene/install', () => ({ installCutscene: cutsceneInstall }));
+
 /** The optimizer, mocked ONLY where a test opts in — a real run needs a real game dir. Its report is what
  *  the optimize stage turns into a report fragment, so the fake carries one recognizable failure. */
 const optimizer = vi.hoisted(() =>
@@ -97,6 +137,9 @@ describe('EXCLUDABLE_STAGES', () => {
       expect(EXCLUDABLE_STAGES).toEqual([
         'mods',
         'vehicles',
+        // cutscene is the vehicles stage's shadow (vehicle-cutscene plan 002 step 11): it reads the
+        // INSTALLED game, so it sits right after `vehicles` and shares its source folder.
+        'cutscene',
         'peds',
         'optimize',
         'trees',
@@ -346,6 +389,107 @@ describe('buildPerfectMap target split', () => {
       });
 
       expect(procobjLods.mock.calls[0][0].config.density).toBe(2);
+    });
+  });
+});
+
+/**
+ * The cutscene stage (vehicle-cutscene plan 002 step 11): the vehicles stage's shadow — same source
+ * folder, same populated-check, runs right after it on the INSTALLED game. Per-slot errors FAIL the
+ * build; a clean run contributes a fragment to every target report.
+ */
+describe('buildPerfectMap cutscene stage', () => {
+  let out: string;
+  let game: string;
+  let mods: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-cutscene-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-cutscene-game-'));
+    mods = mkdtempSync(join(tmpdir(), 'pmb-cutscene-mods-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    mkdirSync(join(mods, 'vehicles', 'bobcat - a truck - author'), { recursive: true });
+    writeFileSync(join(mods, 'vehicles', 'bobcat - a truck - author', 'bobcat.dff'), 'x');
+    vehicleInstall.mockClear();
+    cutsceneInstall.mockClear();
+  });
+
+  afterEach(() => {
+    rmSync(out, { force: true, recursive: true });
+    rmSync(game, { force: true, recursive: true });
+    rmSync(mods, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it('FAILS the build when a slot errors — installed parents make a closure miss a broken build', async () => {
+      cutsceneInstall.mockReturnValueOnce({
+        converted: [],
+        errors: [{ csName: 'cstaxi92', message: 'unresolved textures (txdp parent taxi.txd): tx_body_taxi' }],
+        imgBytesAfter: 0,
+        imgBytesBefore: 0,
+        painted: [],
+        skipped: [],
+        txdBytes: 0,
+        warnings: [],
+      });
+
+      await expect(
+        buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out }),
+      ).rejects.toThrow(/cutscene conversion failed for 1 slot\(s\)[\s\S]*cstaxi92/);
+    });
+
+    it('does not run under --exclude cutscene, and the vehicles stage still does', async () => {
+      await buildPerfectMap({
+        exclude: ['cutscene', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: mods,
+        outPath: out,
+      });
+
+      expect(vehicleInstall).toHaveBeenCalledTimes(1);
+      expect(cutsceneInstall).not.toHaveBeenCalled();
+    });
+
+    it('drops out with --exclude vehicles — no installed parents, every slot would fail closure', async () => {
+      // build:game:original:sa excludes vehicles today; the cutscene shadow must follow it out, loudly.
+      const logs: string[] = [];
+      const spy = vi.spyOn(console, 'log').mockImplementation((m: unknown) => void logs.push(String(m)));
+      await buildPerfectMap({
+        exclude: ['vehicles', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: mods,
+        outPath: out,
+      });
+      spy.mockRestore();
+
+      expect(vehicleInstall).not.toHaveBeenCalled();
+      expect(cutsceneInstall).not.toHaveBeenCalled();
+      expect(logs.join('\n')).toMatch(/cutscene — skipped \(vehicles stage excluded/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('runs right after vehicles, reading the INSTALLED game that stage produced', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+
+      expect(cutsceneInstall).toHaveBeenCalledTimes(1);
+      const installedDir = vehicleInstall.mock.calls[0][0].outPath;
+      expect(cutsceneInstall.mock.calls[0][0].gamePath).toBe(installedDir);
+      expect(cutsceneInstall.mock.calls[0][0].inPath).toBe(join(mods, 'vehicles'));
+    });
+
+    it('contributes its fragment to BOTH target reports', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+
+      const fragment = (target: 'opensa' | 'sa'): { converted: string[]; txdBytes: number } =>
+        (
+          JSON.parse(readFileSync(join(out, `report-${target}.json`), 'utf8')) as {
+            fragments: { cutscene: { converted: string[]; txdBytes: number } };
+          }
+        ).fragments.cutscene;
+      expect(fragment('sa').converted).toEqual(['csbobcat92']);
+      expect(fragment('sa').txdBytes).toBe(40);
+      expect(fragment('opensa').converted).toEqual(fragment('sa').converted);
     });
   });
 });

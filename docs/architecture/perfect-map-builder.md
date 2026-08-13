@@ -61,6 +61,7 @@ flowchart TB
   src[("game-src/original<br/>+ mods-src/")]:::data
   mods["mods · mod-installer"]:::stage
   veh["vehicles · vehicle-installer"]:::stage
+  cs["cutscene · vehicle-cutscene<br/>mod fleet → cs* models<br/>(needs the INSTALLED game)"]:::stage
   peds["peds · ped-installer"]:::stage
   opt["optimize · map-optimizer<br/>normals · prelit · dedupe"]:::stage
   trees["trees · lod-trees-generator<br/>impostor cards + atlas"]:::stage
@@ -75,7 +76,7 @@ flowchart TB
   fetch["fetch-pack (chained by build:game:&lt;id&gt;:opensa)<br/>content-hashed zip chunks + manifest"]:::stage
   outpak[("&lt;out&gt;/opensa-pack/&lt;game&gt;-&lt;version&gt;<br/>the FETCH build — deploy as games/&lt;game&gt;-&lt;version&gt;")]:::data
 
-  src --> mods --> veh --> peds --> opt --> trees
+  src --> mods --> veh --> cs --> peds --> opt --> trees
   trees --> sa --> proc --> guard --> outsa
   trees --> osguard --> oslod --> pack --> outos
   outos --> fetch --> outpak
@@ -93,16 +94,17 @@ flowchart TB
 | --- | ---------- | --------------------------------------------- | ---------------------------------------------------------------- |
 | 1   | `mods`     | `installMods` (mod-installer)                 | skipped when `--in`'s `mods/` is empty; overlays + Modloader bake into `gta.dat`/`gta3.img` |
 | 2   | `vehicles` | `installVehicles`                             | skipped when `vehicles/` is empty                                |
-| 3   | `peds`     | `installPeds`                                 | skipped when `peds/` is empty                                    |
-| 4   | `optimize` | `runOptimizer` (map-optimizer)                | lossless conditioning; `broken-prelight.json` force-list         |
-| 5   | `trees`    | `buildTreeLods`                               | skipped when `vegetation/` is empty; `--tex` 512 atlas, `prelight.json` |
-| 6   | `procobj`  | `buildProcobjLods`                            | **inside the `sa` branch, in place, AFTER its LOD build** (plan 014): the layer is that target's alone — OpenSA scatters the same species at runtime, so baking it into the common build would only cost that target a stripped `procobj.dat` and 91 092 vertex-duplicated instances in its pak. Always runs (original ships no `procobj/` — bakes the built-in roster, no-op on a TC). Its place in `STAGE_NAMES` is its place in the RUN order, so `--until sa` stops before the clutter |
-| 7   | `sa`       | `buildSaLods` → `<out>/sa`, then `reportTextIplCensus` + `checkImgIdBudgets` | the real-game (RenderWare) target; **both read the built `sa/` tree and go with it** — the FLA ID pools THROW (a ceiling the target really has), the text-IPL cost is a census with no ceiling quoted (2026-08-09: the target always runs OLA + FLA + `perfect-map.asi`) |
-| 8   | `opensa`   | `buildOpensaLods` + `swapLinearTxds`          | cell 250 bake (= the render grid, plan 087), `stripLods`, linear-convention TXD swap. No SA ceiling applies and no budget guard of its own exists yet — the run says so (`OPENSA_BUDGET_NOTICE`) |
-| 9   | `pack`     | `packGameDir` (opensa-pack) → `<out>/opensa`  | the OpenSA target, self-contained (pak → `<out>/opensa/pak`, 086 phase 8); convert rect = the game's `PACK_RECTS.full` (auto-fit when unpinned, plan 087); the pack's full report stays at `opensa/pak/report.json`, and `report-opensa.json` carries a summary + pointer (plan 005) |
-| 10  | `lod`      | —                                             | special `--until` value: run everything, keep every intermediate. **Not an `--exclude` value** — it names no stage to skip |
+| 3   | `cutscene` | `installCutscene` (vehicle-cutscene)          | the vehicles stage's shadow (vehicle-cutscene plan 002 step 11): converts the mod fleet into the `cs*` models of `models/cutscene.img` + patches `data/txdcut.ide`, reading the INSTALLED game (merged carcols, mod TXDs as txdp parents → the empty-TXD route, ~40 B per slot). Skipped when `vehicles/` is empty AND dropped — loudly — under `--exclude vehicles` (no installed parents = every slot fails closure). A slot error FAILS the build; the summary lands in every target report as the `cutscene` fragment |
+| 4   | `peds`     | `installPeds`                                 | skipped when `peds/` is empty                                    |
+| 5   | `optimize` | `runOptimizer` (map-optimizer)                | lossless conditioning; `broken-prelight.json` force-list         |
+| 6   | `trees`    | `buildTreeLods`                               | skipped when `vegetation/` is empty; `--tex` 512 atlas, `prelight.json` |
+| 7   | `procobj`  | `buildProcobjLods`                            | **inside the `sa` branch, in place, AFTER its LOD build** (plan 014): the layer is that target's alone — OpenSA scatters the same species at runtime, so baking it into the common build would only cost that target a stripped `procobj.dat` and 91 092 vertex-duplicated instances in its pak. Always runs (original ships no `procobj/` — bakes the built-in roster, no-op on a TC). Its place in `STAGE_NAMES` is its place in the RUN order, so `--until sa` stops before the clutter |
+| 8   | `sa`       | `buildSaLods` → `<out>/sa`, then `reportTextIplCensus` + `checkImgIdBudgets` | the real-game (RenderWare) target; **both read the built `sa/` tree and go with it** — the FLA ID pools THROW (a ceiling the target really has), the text-IPL cost is a census with no ceiling quoted (2026-08-09: the target always runs OLA + FLA + `perfect-map.asi`) |
+| 9   | `opensa`   | `buildOpensaLods` + `swapLinearTxds`          | cell 250 bake (= the render grid, plan 087), `stripLods`, linear-convention TXD swap. No SA ceiling applies and no budget guard of its own exists yet — the run says so (`OPENSA_BUDGET_NOTICE`) |
+| 10  | `pack`     | `packGameDir` (opensa-pack) → `<out>/opensa`  | the OpenSA target, self-contained (pak → `<out>/opensa/pak`, 086 phase 8); convert rect = the game's `PACK_RECTS.full` (auto-fit when unpinned, plan 087); the pack's full report stays at `opensa/pak/report.json`, and `report-opensa.json` carries a summary + pointer (plan 005) |
+| 11  | `lod`      | —                                             | special `--until` value: run everything, keep every intermediate. **Not an `--exclude` value** — it names no stage to skip |
 
-Every row but `lod` is an `--exclude` value (`EXCLUDABLE_STAGES`). Between stages 6 and 7 the pipeline
+Every row but `lod` is an `--exclude` value (`EXCLUDABLE_STAGES`). Between stages 7 and 8 the pipeline
 collects generated models + `lod-exclude.json` into `excludeItems` for both final LOD generators.
 
 ## Per-game data files (`mods-src/<game>/`, also honoured at the mods-src root)

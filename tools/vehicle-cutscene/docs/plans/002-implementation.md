@@ -403,12 +403,23 @@ same machinery the 21 field-verified car slots ride.
 
 ---
 
-## Step 11 (P2) — pipeline integration + acceptance
+## Step 11 (P2) — pipeline integration + acceptance — WIRED 2026-08-13, field acceptance pending
 
-- [ ] Wire into the build pipeline after vehicle-installer (pmb stage or documented manual step — decide
-      with the user; the tool must read the INSTALLED game, not the raw base, for carcols/TXD closure).
+- [x] Wired as a pmb STAGE (the user's call, 2026-08-13): `cutscene` sits in the common chain right
+      after `vehicles` — same source folder, same populated-check — reading the INSTALLED game (merged
+      carcols, mod TXDs in gta3.img as txdp parents, so the empty-TXD route finally runs where it was
+      designed to). A slot error FAILS the build (with installed parents a closure miss means the
+      vehicle install is incomplete); the summary lands in every target report as the `cutscene`
+      fragment. `--exclude vehicles` drops the stage too, loudly — no installed parents means every
+      slot fails closure by construction. pmb suite 75/75; architecture doc + diagram re-rendered;
+      `docs/commands.md` updated. Also fixed on the way: `tools/vehicle-cutscene` was missing from the
+      root `workspaces` list (the enumerate-everything trap, this time in package.json — nothing could
+      import `@opensa/vehicle-cutscene/*` across packages until now).
 - [ ] Full pipeline build → field acceptance run (user): story progression across at least LS-era
-      cutscenes with the full fleet; verdict recorded.
+      cutscenes with the full fleet; verdict recorded. **Note for the run**: the stock
+      `build:game:original:sa` script excludes `vehicles` (the real-game map build installs no mod
+      vehicles), so a field build with mod vehicles + cutscenes needs a run WITHOUT that exclude —
+      which npm script (or a new one) carries it is the user's packaging call.
 - [ ] Close-out: audit note if the chain qualifies as a big rework (per CLAUDE.md), else the step-10
       numbers stand.
 

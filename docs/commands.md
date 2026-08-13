@@ -36,7 +36,7 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
   --game ./game-src/original --in ./mods-src --exclude sa
 ```
 
-Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|peds|optimize|trees|sa|procobj|opensa|pack|lod>` (that IS the run order — `procobj` is baked inside the `sa` branch since plan 014, so `--until sa` stops BEFORE the clutter)
+Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|cutscene|peds|optimize|trees|sa|procobj|opensa|pack|lod>` (that IS the run order — `procobj` is baked inside the `sa` branch since plan 014, so `--until sa` stops BEFORE the clutter; `cutscene` is the vehicles stage's shadow and drops out with `--exclude vehicles`)
 (inclusive, keeps `.work-<target>/`) · **`--exclude <stage,stage>`** · **`--target <sa|opensa>`** ·
 `--procobj-density <n>` · `--procobj-max <n>` · `--keep-work` · `--no-weld-seams` · `--no-textures`.
 

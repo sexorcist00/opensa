@@ -62,6 +62,7 @@
     "tools/sa-procobj-placement",
     "tools/mod-installer",
     "tools/vehicle-installer",
+    "tools/vehicle-cutscene",
     "tools/ped-installer",
     "tools/opensa-pack",
     "tools-debug/sa-int16-repro",
