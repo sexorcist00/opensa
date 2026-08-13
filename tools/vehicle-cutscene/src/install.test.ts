@@ -12,6 +12,9 @@ import { textureNames } from './txd';
 
 const CS_BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/csbobcat92.dff'));
 const BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.dff'));
+const CS_MTBIKE = new Uint8Array(readFileSync('tests/original/dff/cutscene/csmtbike92.dff'));
+const MTBIKE = new Uint8Array(readFileSync('tests/original/dff/cutscene/mtbike.dff'));
+const MTBIKE_TXD = new Uint8Array(readFileSync('tests/original/dff/cutscene/mtbike.txd'));
 
 const VEHICLES_IDE = [
   'cars',
@@ -24,8 +27,8 @@ const VEHICLES_IDE = [
 /** The stock file's shape, R*'s `csopcarla` typo row included. */
 const TXDCUT_IDE = ['txdp', 'csopcarla, copcarla', 'csbobcat92, bobcat', 'csmtbike92, mtbike', 'end'].join('\n');
 
-/** A two-colour palette + the bobcat row (indexes into it) — enough for the paint bake to run. */
-const CARCOLS_DAT = ['col', '10,20,30', '40,50,60', 'end', 'car', 'bobcat, 0,1', 'end'].join('\n');
+/** A two-colour palette + the bobcat/mtbike rows (indexes into it) — enough for the paint bake to run. */
+const CARCOLS_DAT = ['col', '10,20,30', '40,50,60', 'end', 'car', 'bobcat, 0,1', 'mtbike, 0,1', 'end'].join('\n');
 
 let dir: string;
 let gamePath: string;
@@ -49,11 +52,12 @@ beforeEach(() => {
   );
   const gta3 = createImg();
   gta3.set('bobcat.txd', new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.txd')));
+  gta3.set('mtbike.txd', MTBIKE_TXD);
   writeImgFile(gta3, join(gamePath, 'models', 'gta3.img'));
   const img = createImg();
   img.set('csbobcat92.dff', CS_BOBCAT);
   img.set('csbobcat92.txd', new Uint8Array(16));
-  img.set('csmtbike92.dff', new Uint8Array(8));
+  img.set('csmtbike92.dff', CS_MTBIKE);
   img.set('csmtbike92.txd', new Uint8Array(8));
   img.set('cscopcarsf.dff', CS_BOBCAT); // stands in for the SFPD cutscene rig
   img.set('cscopcarsf.txd', new Uint8Array(8));
@@ -67,8 +71,8 @@ beforeEach(() => {
     readFileSync('tests/original/dff/cutscene/bobcat.txd'),
   );
   mkdirSync(join(inPath, 'mtbike - a bike - author'), { recursive: true });
-  writeFileSync(join(inPath, 'mtbike - a bike - author', 'mtbike.dff'), new Uint8Array(8));
-  writeFileSync(join(inPath, 'mtbike - a bike - author', 'mtbike.txd'), new Uint8Array(8));
+  writeFileSync(join(inPath, 'mtbike - a bike - author', 'mtbike.dff'), MTBIKE);
+  writeFileSync(join(inPath, 'mtbike - a bike - author', 'mtbike.txd'), MTBIKE_TXD);
 });
 
 afterEach(() => {
@@ -84,7 +88,7 @@ describe('installCutscene', () => {
     it('collects a conversion error instead of aborting the run', () => {
       writeFileSync(join(inPath, 'bobcat - some truck - author', 'bobcat.dff'), new Uint8Array([1, 2, 3]));
       const summary = installCutscene({ gamePath, inPath, outPath });
-      expect(summary.converted).toEqual([]);
+      expect(summary.converted).toEqual(['csmtbike92']);
       expect(summary.errors).toHaveLength(1);
       expect(summary.errors[0].csName).toBe('csbobcat92');
       expect(summary.errors[0].message).toContain('not a DFF');
@@ -101,30 +105,27 @@ describe('installCutscene', () => {
   });
 
   describe('positive cases', () => {
-    it('converts the ready car, skips the pending branches, leaves props alone', () => {
+    it('converts the ready car and bike, skips the pending boat-less slot, leaves props alone', () => {
       const summary = installCutscene({ gamePath, inPath, outPath });
 
-      expect(summary.converted).toEqual(['csbobcat92']);
-      expect(summary.skipped).toEqual([
-        { csName: 'cscopcarsf', reason: 'no mod' },
-        { csName: 'csmtbike92', reason: 'bike branch pending (plan 002 step 8/9)' },
-      ]);
+      expect(summary.converted).toEqual(['csbobcat92', 'csmtbike92']);
+      expect(summary.skipped).toEqual([{ csName: 'cscopcarsf', reason: 'no mod' }]);
       expect(summary.errors).toEqual([]);
 
       const img = openImg(new Uint8Array(readFileSync(join(outPath, 'models', 'cutscene.img'))));
       const converted = readClump(img.get('csbobcat92.dff')!);
       expect(converted.frames[1].name).toBe('bobcat_dummy');
       expect(converted.geometries).toHaveLength(12); // rebuilt (shared wheel, adopted glass), not copied
+      expect(readClump(img.get('csmtbike92.dff')!).frames[1].name).toBe('csbikechassis_dummy');
       // IMG VER2 pads entries to 2 048-byte sectors — presence + one-sector size says "untouched".
       expect(img.get('csbarrel.dff')?.byteLength).toBe(2048);
       // The slot's TXD is replaced with an EMPTY dictionary — txdp does the resolving (step 6).
       expect(textureNames(img.get('csbobcat92.txd')!)).toEqual([]);
-      expect(summary.txdBytes).toBeLessThan(64);
+      expect(summary.txdBytes).toBeLessThan(128);
 
       // The paint bake ran: markers replaced by the fake palette, none of the marker RGBs survive.
-      expect(summary.painted).toHaveLength(1);
-      expect(summary.painted[0].csName).toBe('csbobcat92');
-      expect(summary.painted[0].materials).toBeGreaterThan(0);
+      const paintedBobcat = summary.painted.find((entry) => entry.csName === 'csbobcat92');
+      expect(paintedBobcat?.materials).toBeGreaterThan(0);
       const parsed = parseDff(toArrayBuffer(img.get('csbobcat92.dff')!));
       const colours = parsed.geometries.flatMap((geometry) =>
         geometry.materials.map((material) => `${material.color[0]},${material.color[1]},${material.color[2]}`),
@@ -148,15 +149,15 @@ describe('installCutscene', () => {
       writeImgFile(gta3, join(gamePath, 'models', 'gta3.img')); // stock-like parent: no bobcat.txd
       const summary = installCutscene({ gamePath, inPath, outPath, selfContainedTxd: true });
       expect(summary.errors).toEqual([]);
-      expect(summary.converted).toEqual(['csbobcat92']);
+      expect(summary.converted).toEqual(['csbobcat92', 'csmtbike92']);
       const img = openImg(new Uint8Array(readFileSync(join(outPath, 'models', 'cutscene.img'))));
       expect(textureNames(img.get('csbobcat92.txd')!)).toContain('bobcat92interior128');
     });
 
     it('honours --only, converting nothing else', () => {
       const summary = installCutscene({ gamePath, inPath, only: new Set(['mtbike']), outPath });
-      expect(summary.converted).toEqual([]);
-      expect(summary.skipped).toHaveLength(1);
+      expect(summary.converted).toEqual(['csmtbike92']);
+      expect(summary.skipped).toHaveLength(0);
       const img = openImg(new Uint8Array(readFileSync(join(outPath, 'models', 'cutscene.img'))));
       expect(img.get('csbobcat92.dff')).toHaveLength(CS_BOBCAT.length); // untouched
     });

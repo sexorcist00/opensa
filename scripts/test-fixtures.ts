@@ -123,6 +123,13 @@ const CLEO_MANIFEST: readonly Fixture[] = [
   // A LOCKED mod DFF (anti-rip container sizes): vehicle-cutscene's clump reader must recover it —
   // half the real vehicle fleet ships this lock (plan 002 step 3 finding).
   cleoFile('vehicles/taxi - 1992 Chevrolet Caprice Taxi - funky/taxi.dff', 'vehicles/taxi-locked.dff'),
+  // The Smooth Criminal MTB (plan 002 step 8): the bike variant-subtree policy's real subject —
+  // `f_extras:<n>` containers whose chosen subtree carries sub-meshes (brake levers, grips), additive
+  // `f_extras:<n>+` containers (both wheel reflectors), template parts shipped as meshless dummies.
+  cleoFile(
+    'vehicles/mtbike - Smooth Criminal Bicycles 3.0 Mountain Bike - zeneric/mtbike.dff',
+    'vehicles/mtbike-smooth-criminal.dff',
+  ),
   cleoFile('mods/61. Wind Farm/CLEO/Wind Farm (Junior_Djjr).cs', 'cleo/windfarm.cs'),
 ];
 
@@ -160,6 +167,11 @@ const MANIFEST: readonly Fixture[] = [
   // frame carries `[0, 1.637, -0.35]` that the game destroys at load — the converter must too.
   extract('cscopcarla92.dff', 'dff/cutscene/cscopcarla92.dff'),
   extract('copcarla.dff', 'dff/cutscene/copcarla.dff'),
+  // The bike golden pair (plan 002 step 8): the vanilla bike rig has no wheel corners — every part is a
+  // mesh bone in the chassis subtree; the stock donor must reproduce it.
+  extract('csmtbike92.dff', 'dff/cutscene/csmtbike92.dff'),
+  extract('mtbike.dff', 'dff/cutscene/mtbike.dff'),
+  extract('mtbike.txd', 'dff/cutscene/mtbike.txd'), // the bike slot's txdp parent in the install e2e
   extract('bobcat.txd', 'dff/cutscene/bobcat.txd'), // the txdp parent of the closure-check tests
   copy('data/peds.ide', 'data/peds.ide'),
   copy('data/handling.cfg', 'data/handling.cfg'),

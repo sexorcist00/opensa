@@ -3,11 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 import { type ClumpModel, writeClump } from './rig/clump-io';
 import { IDENTITY_ROTATION } from './rig/matrix';
-import { canonicalPartName, extractCarTemplate } from './template';
+import { canonicalPartName, extractBikeTemplate, extractCarTemplate } from './template';
 
 const CS_BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/csbobcat92.dff'));
 const CS_TAXI = new Uint8Array(readFileSync('tests/original/dff/cutscene/cstaxi92.dff'));
 const CS_REMINGTON = new Uint8Array(readFileSync('tests/original/dff/cutscene/csremington92.dff'));
+const CS_MTBIKE = new Uint8Array(readFileSync('tests/original/dff/cutscene/csmtbike92.dff'));
 
 /** A minimal synthetic clump: named frames under a root, no HAnim — not a cutscene rig. */
 function clumpWithoutBones(): Uint8Array {
@@ -87,6 +88,40 @@ describe('extractCarTemplate', () => {
       expect(template.chassisBoneId).toBe(1);
       expect(template.wheels.get('lf')?.nodeName).toBe('wheelLFNode');
       expect(template.wheels.get('lf')?.nodeZ).toBeCloseTo(-0.35, 3);
+    });
+  });
+});
+
+describe('extractBikeTemplate', () => {
+  describe('negative cases', () => {
+    it('throws on a model with no HAnim skeleton root', () => {
+      expect(() => extractBikeTemplate(clumpWithoutBones())).toThrow('no HAnim skeleton root');
+    });
+
+    it('throws on a car rig (no wheel_rear part)', () => {
+      expect(() => extractBikeTemplate(CS_BOBCAT)).toThrow('no wheel_rear part');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reads csmtbike92: seven mesh-bone parts under the chassis, rear-wheel ground reference', () => {
+      const template = extractBikeTemplate(CS_MTBIKE);
+      expect(template.rootName).toBe('csbikechassis_dummy');
+      expect(template.chassisBoneId).toBe(1);
+      expect([...template.parts.keys()]).toEqual([
+        'wheel_rear',
+        'chainset',
+        'pedal_r',
+        'pedal_l',
+        'handlebars',
+        'forks_front',
+        'wheel_front',
+      ]);
+      expect(template.parts.get('wheel_rear')?.boneId).toBe(2);
+      expect(template.parts.get('wheel_front')?.parentCanonical).toBe('forks_front');
+      expect(template.parts.get('pedal_l')?.parentCanonical).toBe('chainset');
+      expect(template.groundZ).toBeCloseTo(-0.256, 3);
+      expect(template.wheelRadius).toBeGreaterThan(0.25);
     });
   });
 });

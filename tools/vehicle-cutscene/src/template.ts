@@ -18,6 +18,25 @@ import type { RWClump, RWGeometry } from '@opensa/renderware/parsers/binary/type
  */
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 
+import { compose } from './rig/matrix';
+
+/** The bike-branch template (plan 002 step 8): the vanilla bike rig has NO wheel corners — every part
+ *  (wheel_rear, chainset, pedal_l/r, handlebars, forks_front, wheel_front) is a bone in the chassis
+ *  subtree, so the template is the part map plus the rear-wheel ground reference. */
+export interface CsBikeTemplate {
+  chassisBoneId: number;
+  /** The chassis frame's VANILLA local transform (relative to the skeleton root). */
+  chassisLocal: { position: [number, number, number]; rotation: number[] };
+  chassisName: string;
+  /** `wheel_rear`'s z in skeleton-root space — one side of the ground-plane formula. */
+  groundZ: number;
+  /** Canonical part name → template info, in the template's DFS order (= vanilla bone-id order). */
+  parts: Map<string, CsPartTemplate>;
+  rootName: string;
+  /** Vanilla wheel radius: the `wheel_rear` mesh geometry's z half-extent. */
+  wheelRadius: number;
+}
+
 /** The intermediate body frame some templates put between the root and the chassis (csmonster's COG). */
 export interface CsIntermediateTemplate {
   boneId: number;
@@ -77,6 +96,59 @@ export type WheelCorner = 'lb' | 'lf' | 'rb' | 'rf';
 /** Canonical part name: strip the taxi-style `_hi` segment, fix vanilla's `winscreen` typo (cssadler). */
 export function canonicalPartName(name: string): string {
   return name.trim().toLowerCase().replace('_hi_', '_').replace('winscreen', 'windscreen');
+}
+
+/**
+ * Extract the bike template from a vanilla cutscene DFF (csmtbike92 is the only stock bike slot).
+ * Throws when the model is not a cutscene bike rig: no HAnim skeleton root, no chassis directly under
+ * it, or no `wheel_rear` mesh (the ground-plane reference — a bike that cannot stand is an error).
+ */
+export function extractBikeTemplate(csDff: Uint8Array): CsBikeTemplate {
+  const clump = parseDff(toArrayBuffer(csDff));
+  const children = childrenByFrame(clump);
+  const rootIndex = clump.frames.findIndex((frame) => frame.boneId === 0);
+  if (rootIndex < 0) {
+    throw new Error('cutscene template has no HAnim skeleton root (bone 0)');
+  }
+  const chassisIndex = clump.frames.findIndex((frame) => canonicalPartName(frame.name) === 'chassis');
+  if (chassisIndex < 0 || clump.frames[chassisIndex].parentIndex !== rootIndex) {
+    throw new Error('cutscene template has no chassis frame directly under the skeleton root');
+  }
+
+  const parts = extractParts(clump, children, chassisIndex);
+  const wheelRear = parts.get('wheel_rear');
+  if (!wheelRear) {
+    throw new Error('cutscene template has no wheel_rear part');
+  }
+  const wheelRearIndex = clump.frames.findIndex((frame) => frame.name.trim() === wheelRear.frameName);
+  const wheelAtomic = clump.atomics.find((atomic) => atomic.frameIndex === wheelRearIndex);
+  if (!wheelAtomic) {
+    throw new Error('cutscene template wheel_rear has no geometry');
+  }
+  const chassis = clump.frames[chassisIndex];
+  // wheel_rear's transform in skeleton-root space, walking the real parent chain (vanilla nests it
+  // directly under the chassis, but the formula must not assume that).
+  let rearWorld = { position: [0, 0, 0] as [number, number, number], rotation: [1, 0, 0, 0, 1, 0, 0, 0, 1] };
+  const chain: number[] = [];
+  for (let at = wheelRearIndex; at >= 0 && at !== rootIndex; at = clump.frames[at].parentIndex) {
+    chain.unshift(at);
+  }
+  for (const at of chain) {
+    rearWorld = compose(rearWorld, {
+      position: [...clump.frames[at].position],
+      rotation: [...clump.frames[at].rotation],
+    });
+  }
+
+  return {
+    chassisBoneId: requireBoneId(clump, chassisIndex),
+    chassisLocal: { position: [...chassis.position], rotation: [...chassis.rotation] },
+    chassisName: chassis.name.trim(),
+    groundZ: rearWorld.position[2],
+    parts,
+    rootName: clump.frames[rootIndex].name.trim(),
+    wheelRadius: geometryZHalfExtent(clump.geometries[wheelAtomic.geometryIndex]),
+  };
 }
 
 /**
