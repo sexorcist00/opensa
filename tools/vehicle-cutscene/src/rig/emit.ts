@@ -9,7 +9,7 @@
  */
 import { readRw, writeRw } from '@opensa/rw-codec/chunk';
 
-import { geometryBodyHasWindowPane } from '../materials';
+import { geometryBodyHasTranslucency, geometryBodyHasWindowPane } from '../materials';
 import { canonicalPartName, type CsPartTemplate } from '../template';
 import { isIdentityDelta } from './bake';
 import {
@@ -436,21 +436,25 @@ export function excludedVariantFrames(model: ClumpModel): Set<number> {
  *     final atomic of every vanilla car): the cutscene path renders clump atomics in file order with
  *     z-write on, so a pane emitted before the interior erases everything behind it (BCESAR5, the
  *     see-through-the-car windscreen);
- *  2. every atomic's Extension gains the vehicle Pipeline Set plugin when missing, like vanilla.
+ *  2. every OPAQUE atomic's Extension gains the vehicle Pipeline Set plugin when missing, like
+ *     vanilla. Atomics carrying ANY translucent material stay on the DEFAULT pipeline: the vehicle
+ *     pipe does not composite translucents outside a real CVehicle — stamped panes vanished at any
+ *     alpha (rounds 5–8), and lamp lenses / decals sit ABOVE the window band, so the pane-only
+ *     exception still lost them (the burrito's tail lights, round 9). The default pipe blends them
+ *     and still renders the mod's MatFX env sheen. Vanilla ships the plugin on its own translucents
+ *     too, but those are 26–128-alpha whispers whose absence nobody would ever see.
  */
 export function finalizeAtomics(emit: Emit, version: number): void {
   const panes = new Map(emit.geometries.map((geometry, index) => [index, geometryBodyHasWindowPane(geometry.body)]));
+  const translucent = new Map(
+    emit.geometries.map((geometry, index) => [index, geometryBodyHasTranslucency(geometry.body)]),
+  );
   emit.atomics = [
     ...emit.atomics.filter((atomic) => !panes.get(atomic.geometryIndex)),
     ...emit.atomics.filter((atomic) => panes.get(atomic.geometryIndex)),
   ];
   for (const atomic of emit.atomics) {
-    // Window-pane atomics stay on the DEFAULT pipeline (plan 004 round 8): the vehicle pipe does not
-    // composite translucent materials outside a real CVehicle — with the plugin stamped the panes
-    // vanished entirely, at any alpha (rounds 5–7 field evidence). The default pipe blends them and
-    // still renders the mod's MatFX env sheen. Vanilla ships the plugin on its windscreens too, but
-    // vanilla glass is a 26-alpha whisper nobody would ever see missing.
-    if (!panes.get(atomic.geometryIndex)) {
+    if (!translucent.get(atomic.geometryIndex)) {
       atomic.extension = withVehiclePipeline(atomic.extension, version);
     }
   }

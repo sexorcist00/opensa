@@ -17,8 +17,9 @@
  *     are scene furniture the anims pose; a mod's spawn variants are unrelated — plan 004 round 2) —
  *     and every other visible mod mesh is ADOPTED under its nearest carried ancestor (fresh bone ids,
  *     RENAMED `_ad` so no scene channel can bind it — plan 004 rounds 1–2) — only `_dam`/`_vlo` and
- *     f_wheel variant containers stay out, one mesh per `f_extras`/`f_class` container and ONE
- *     `extra*` per model;
+ *     f_wheel variant containers stay out, the chosen selector path per `f_extras`/`f_class`
+ *     container (VehFuncs-style `<name>:K` groups — see chosenVariantFrames; plan 004 round 11) and
+ *     ONE `extra*` per model;
  *   - a `<part>_ok/_dam` frame under its own dummy carries junk the game destroys — the hinge is the
  *     dummy; every OTHER mesh frame (stock copcarla's junk-space chassis) keeps its transform;
  *   - LEFT wheels on identity-rotation templates (cscopcarla/cstaxi92 style) get a MIRRORED geometry
@@ -50,8 +51,10 @@ import {
   nearestCarriedAncestor,
   ORPHAN_SKIP_RE,
   pushFrame,
+  VARIANT_CONTAINER_RE,
   variantContainerOf,
   worldTransforms,
+  YEAR_VARIANT_RE,
 } from './emit';
 import { compose, IDENTITY_ROTATION, invert, type Transform } from './matrix';
 
@@ -73,17 +76,21 @@ interface ModAnalysis {
   atomicByFrame: Map<number, ClumpAtomic>;
   chassisIndex: number;
   chassisTransform: Transform;
+  /** Frames on the chosen path of every `f_extras`/`f_class` container — see chosenVariantFrames. */
+  chosenVariants: ReadonlySet<number>;
   /** The space the frame's GEOMETRY is authored in: the dummy's for a `<part>_ok/_dam` under its own
    *  dummy (the game destroys that junk), the frame's own full world otherwise. */
   hingeOf: (frameIndex: number) => Transform;
   model: ClumpModel;
   /** frame transform relative to the mod's root frame. */
   relativeToRoot: (frameIndex: number) => Transform;
-  wheelAtomic: ClumpAtomic;
+  /** The wheel's meshes — ONE for dummy-child/named wheels, the chosen tire+cap set for container
+   *  wheels (the burrito's whole wheel is three meshes; one alone was a hollow tyre, round 11). */
+  wheelAtomics: ClumpAtomic[];
   /** Frames inside `f_wheel_*` containers — never adopted as parts. */
   wheelContainerFrames: ReadonlySet<number>;
   wheelDummies: Map<WheelCorner, number>;
-  wheelMeshIndex: number;
+  wheelMeshIndices: ReadonlySet<number>;
   wheelRadius: number;
 }
 
@@ -131,26 +138,21 @@ function adoptOrphanParts(
   carriedFrames: ReadonlyMap<number, number>,
   report: CarConvertReport,
 ): void {
-  const servedVariantContainers = new Set<number>();
   let extraTaken = false;
   for (const atomic of analysis.model.atomics) {
     const index = atomic.frameIndex;
     const canonical = canonicalPartName(analysis.model.frames[index].name);
     const skip =
       carriedFrames.has(index) ||
-      index === analysis.wheelMeshIndex ||
+      analysis.wheelMeshIndices.has(index) ||
       analysis.wheelContainerFrames.has(index) ||
       ORPHAN_SKIP_RE.test(canonical) ||
       inYearVariantSubtree(analysis.model, index);
     if (skip) {
       continue;
     }
-    const container = variantContainerOf(analysis.model, index);
-    if (container >= 0) {
-      if (servedVariantContainers.has(container)) {
-        continue; // one variant per f_extras/f_class container, like the runtime plugin
-      }
-      servedVariantContainers.add(container);
+    if (variantContainerOf(analysis.model, index) >= 0 && !analysis.chosenVariants.has(index)) {
+      continue; // not on the container's chosen path — see chosenVariantFrames
     }
     // `extra1..extraN` are SA's mutually-exclusive spawn variants (contracts §3): the game shows at
     // most ONE, so the conversion carries one — the GMC ships five whole-bed rack variants, and all
@@ -190,23 +192,50 @@ function analyzeMod(modDff: Uint8Array, template: CsTemplate): ModAnalysis {
   }
 
   const wheelDummies = findWheelDummies(model, template);
-  const wheelMeshIndex = findWheelMesh(model, children, atomicByFrame, wheelDummies);
-  const wheelAtomic = atomicByFrame.get(wheelMeshIndex)!;
+  const wheelMeshIndices = findWheelMeshes(model, children, atomicByFrame, wheelDummies);
+  const wheelAtomics = [...wheelMeshIndices].map((index) => atomicByFrame.get(index)!);
   const analysis = parseDff(toArrayBuffer(modDff));
 
   return {
     atomicByFrame,
     chassisIndex,
     chassisTransform: hingeOf(chassisIndex),
+    chosenVariants: chosenVariantFrames(model, children),
     hingeOf,
     model,
     relativeToRoot,
-    wheelAtomic,
+    wheelAtomics,
     wheelContainerFrames: wheelContainerFrameSet(model),
     wheelDummies,
-    wheelMeshIndex,
-    wheelRadius: geometryZHalfExtent(analysis.geometries[wheelAtomic.geometryIndex]),
+    wheelMeshIndices,
+    wheelRadius: Math.max(
+      ...wheelAtomics.map((atomic) => geometryZHalfExtent(analysis.geometries[atomic.geometryIndex])),
+    ),
   };
+}
+
+/**
+ * The chosen path of every top-level `f_extras`/`f_class` variant container, VehFuncs-style (measured
+ * on the burrito, plan 004 rounds 10–11): a `<name>:K` frame shows K of its children; a bare name
+ * shows one. At every level the FIRST eligible child is taken in atomic order (`_dam`/`_vlo` and
+ * year-variant children never count) — that is the author's default: a leading meshless `no*` child
+ * (`nofogs`, `noadd`) deliberately selects NOTHING from its group. `+` containers are additive: the
+ * whole subtree is chosen. Replaces the earlier one-mesh-per-container rule, which starved
+ * multi-group containers (the burrito's rear-door f_extras:4 lost its window to a logo).
+ */
+function chosenVariantFrames(model: ClumpModel, children: readonly number[][]): Set<number> {
+  const chosen = new Set<number>();
+  model.frames.forEach((frame, index) => {
+    const name = frame.name.trim().toLowerCase();
+    const parent = frame.parentIndex;
+    if (VARIANT_CONTAINER_RE.test(name) && (parent < 0 || variantContainerOf(model, parent) < 0)) {
+      for (const picked of pickVariantPath(model, children, index)) {
+        chosen.add(picked);
+      }
+    }
+  });
+
+  return chosen;
 }
 
 /**
@@ -312,14 +341,22 @@ function emitChassisAndParts(
     emittedByCanonical.set(canonical, { frameIndex, modIndex });
     report.parts.push(canonical);
   }
-  adoptOrphanParts(
-    emit,
-    analysis,
-    shiftZ,
-    chassisFrame,
-    new Map([...emittedByCanonical.values()].map((entry) => [entry.modIndex, entry.frameIndex])),
-    report,
-  );
+  const carriedFrames = new Map([...emittedByCanonical.values()].map((entry) => [entry.modIndex, entry.frameIndex]));
+  // A matched part's DUMMY also maps to the part's bone: the game keys the component by its dummy, so
+  // mods hang door-attached variants (the burrito's rear-door windows) under `door_*_dummy`, beside the
+  // `_ok` mesh — without this they resolved to the chassis and stayed put while the door swung
+  // (plan 004 round 10). The `_dam` children never adopt anyway (ORPHAN_SKIP_RE).
+  for (const entry of emittedByCanonical.values()) {
+    const parentIndex = analysis.model.frames[entry.modIndex]?.parentIndex ?? -1;
+    if (
+      parentIndex >= 0 &&
+      analysis.model.frames[parentIndex].name.trim().toLowerCase().endsWith('_dummy') &&
+      !carriedFrames.has(parentIndex)
+    ) {
+      carriedFrames.set(parentIndex, entry.frameIndex);
+    }
+  }
+  adoptOrphanParts(emit, analysis, shiftZ, chassisFrame, carriedFrames, report);
 }
 
 /** Wheels: the node bone lands on the MOD's corner (shim absorbs track/wheelbase/height deltas), the
@@ -330,14 +367,15 @@ function emitWheel(
   analysis: ModAnalysis,
   shiftZ: number,
   corner: WheelCorner,
-  mirrored: null | OpaqueChunk,
+  mirrored: null | OpaqueChunk[],
   report: CarConvertReport,
 ): void {
   const wheel = template.wheels.get(corner)!;
   const dummyWorld = lift(analysis.relativeToRoot(analysis.wheelDummies.get(corner)!), shiftZ);
   const useMirror = corner.startsWith('l') && mirrored !== null;
+  let meshIndex: number;
   if (wheel.style === 'single') {
-    const meshIndex = emitBone(
+    meshIndex = emitBone(
       emit,
       {
         boneId: wheel.meshBoneId,
@@ -348,29 +386,29 @@ function emitWheel(
       },
       report,
     );
-    emitAtomic(emit, analysis.model.geometries, analysis.wheelAtomic, meshIndex, useMirror ? mirrored : undefined);
-
-    return;
+  } else {
+    const nodeIndex = emitBone(
+      emit,
+      {
+        boneId: wheel.nodeBoneId,
+        local: { position: wheel.nodePosition, rotation: IDENTITY_ROTATION },
+        name: wheel.nodeName,
+        parentFrame: emit.bodyParentIndex,
+        targetWorld: dummyWorld,
+      },
+      report,
+    );
+    meshIndex = pushFrame(emit, {
+      boneId: wheel.meshBoneId,
+      name: wheel.meshName,
+      parentIndex: nodeIndex,
+      position: [...wheel.meshPosition],
+      rotation: [...wheel.meshRotation],
+    });
   }
-  const nodeIndex = emitBone(
-    emit,
-    {
-      boneId: wheel.nodeBoneId,
-      local: { position: wheel.nodePosition, rotation: IDENTITY_ROTATION },
-      name: wheel.nodeName,
-      parentFrame: emit.bodyParentIndex,
-      targetWorld: dummyWorld,
-    },
-    report,
-  );
-  const meshIndex = pushFrame(emit, {
-    boneId: wheel.meshBoneId,
-    name: wheel.meshName,
-    parentIndex: nodeIndex,
-    position: [...wheel.meshPosition],
-    rotation: [...wheel.meshRotation],
+  analysis.wheelAtomics.forEach((atomic, at) => {
+    emitAtomic(emit, analysis.model.geometries, atomic, meshIndex, useMirror ? mirrored[at] : undefined);
   });
-  emitAtomic(emit, analysis.model.geometries, analysis.wheelAtomic, meshIndex, useMirror ? mirrored : undefined);
 }
 
 function findWheelDummies(model: ClumpModel, template: CsTemplate): Map<WheelCorner, number> {
@@ -390,26 +428,26 @@ function findWheelDummies(model: ClumpModel, template: CsTemplate): Map<WheelCor
   return dummies;
 }
 
-function findWheelMesh(
+function findWheelMeshes(
   model: ClumpModel,
   children: readonly number[][],
   atomicByFrame: ReadonlyMap<number, ClumpAtomic>,
   wheelDummies: ReadonlyMap<WheelCorner, number>,
-): number {
+): Set<number> {
   for (const dummyIndex of wheelDummies.values()) {
     const mesh = children[dummyIndex].find((index) => atomicByFrame.has(index));
     if (mesh !== undefined) {
-      return mesh;
+      return new Set([mesh]);
     }
   }
   const named = model.frames.findIndex(
     (frame, index) => frame.name.trim().toLowerCase() === 'wheel' && atomicByFrame.has(index),
   );
   if (named >= 0) {
-    return named;
+    return new Set([named]);
   }
-  const container = wheelContainerMesh(model);
-  if (container < 0) {
+  const container = wheelContainerMeshes(model, children, atomicByFrame);
+  if (container.size === 0) {
     throw new Error('mod has no wheel mesh under its wheel dummies');
   }
 
@@ -425,9 +463,10 @@ function groundShift(template: CsTemplate, analysis: ModAnalysis): number {
   return templateGround - (dummy.position[2] - analysis.wheelRadius);
 }
 
-/** A mirrored wheel copy for the LEFT side of identity-rotation templates: their anims replay identity
- *  (no z-180 mirror), so the shared wheel geometry showed its inner barrel outward (gate-7 field). */
-function mirroredLeftWheel(template: CsTemplate, analysis: ModAnalysis): null | OpaqueChunk {
+/** Mirrored wheel copies for the LEFT side of identity-rotation templates: their anims replay identity
+ *  (no z-180 mirror), so the shared wheel geometry showed its inner barrel outward (gate-7 field).
+ *  One derived copy per wheel mesh, parallel to `wheelAtomics`. */
+function mirroredLeftWheel(template: CsTemplate, analysis: ModAnalysis): null | OpaqueChunk[] {
   const leftHasFlip = [...template.wheels.entries()].some(
     ([corner, wheel]) => corner.startsWith('l') && wheel.meshRotation[0] < 0,
   );
@@ -435,7 +474,7 @@ function mirroredLeftWheel(template: CsTemplate, analysis: ModAnalysis): null | 
     return null; // bobcat-style: the bind rotation mirrors, and the anims replay it
   }
 
-  return mirrorGeometryBodyX(analysis.model.geometries[analysis.wheelAtomic.geometryIndex]);
+  return analysis.wheelAtomics.map((atomic) => mirrorGeometryBodyX(analysis.model.geometries[atomic.geometryIndex]));
 }
 
 /** One past the template's highest bone id — where shim + adopted bones' fresh ids start. */
@@ -452,6 +491,46 @@ function nextFreeBoneId(template: CsTemplate): number {
   }
 
   return max + 1;
+}
+
+/** The chosen path from one selector root down — the `<name>:K` / first-eligible-child walk shared by
+ *  the variant containers and the `f_wheel` wheel sub-model (see chosenVariantFrames). Inside f_wheel
+ *  a year bracket is a wheel STYLE name (the taxi's `wheel[1992]`/`wheelFS[1991]`), not a year-variant
+ *  subtree — `skipYearVariants: false` there. */
+function pickVariantPath(
+  model: ClumpModel,
+  children: readonly number[][],
+  rootIndex: number,
+  skipYearVariants = true,
+): Set<number> {
+  const chosen = new Set<number>();
+  const frameName = (index: number): string => model.frames[index].name.trim().toLowerCase();
+  const eligible = (index: number): boolean =>
+    !ORPHAN_SKIP_RE.test(canonicalPartName(frameName(index))) &&
+    (!skipYearVariants || !YEAR_VARIANT_RE.test(frameName(index)));
+  const pickAll = (index: number): void => {
+    chosen.add(index);
+    for (const child of children[index]) {
+      pickAll(child);
+    }
+  };
+  const pick = (index: number): void => {
+    chosen.add(index);
+    const name = frameName(index);
+    if (name.endsWith('+')) {
+      pickAll(index);
+
+      return;
+    }
+    const match = /:(\d+)$/.exec(name);
+    const count = match ? Number(match[1]) : 1;
+    for (const child of children[index].filter(eligible).slice(0, count)) {
+      pick(child);
+    }
+  };
+  pick(rootIndex);
+
+  return chosen;
 }
 
 /** `f_wheel_*` container frames plus every descendant. */
@@ -477,14 +556,27 @@ function wheelContainerFrameSet(model: ClumpModel): Set<number> {
   return containers;
 }
 
-/** First atomic (in atomic order, like the engine builder) inside an `f_wheel_*` container subtree. */
-function wheelContainerMesh(model: ClumpModel): number {
-  const containers = wheelContainerFrameSet(model);
-  for (const atomic of model.atomics) {
-    if (containers.has(atomic.frameIndex)) {
-      return atomic.frameIndex;
+/**
+ * The whole wheel inside an `f_wheel_*` container: the chosen-path selection (see chosenVariantFrames)
+ * applied at the container root — the burrito's wheel is tire mesh + cap mesh + cap-style mesh, and
+ * adopting only the first atomic left a hollow tyre ring (plan 004 round 11).
+ */
+function wheelContainerMeshes(
+  model: ClumpModel,
+  children: readonly number[][],
+  atomicByFrame: ReadonlyMap<number, ClumpAtomic>,
+): Set<number> {
+  const meshes = new Set<number>();
+  model.frames.forEach((frame, index) => {
+    if (!WHEEL_CONTAINER_RE.test(frame.name.trim().toLowerCase()) || meshes.size > 0) {
+      return;
     }
-  }
+    for (const chosen of pickVariantPath(model, children, index, false)) {
+      if (atomicByFrame.has(chosen)) {
+        meshes.add(chosen);
+      }
+    }
+  });
 
-  return -1;
+  return meshes;
 }

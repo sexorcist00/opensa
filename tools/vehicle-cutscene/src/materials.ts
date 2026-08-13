@@ -71,6 +71,23 @@ export function bakePaintMarkers(dff: Uint8Array, colours: null | PaintColours):
 }
 
 /**
+ * Whether a geometry chunk BODY carries ANY translucent material (alpha < 255) — the pipeline pass
+ * keeps such atomics on the DEFAULT pipeline (plan 004 round 9): the vehicle pipe drops translucents
+ * outside a real CVehicle, and lamp lenses / decals / badges sit ABOVE the window band (alpha 200+),
+ * so the round-8 pane-only exception still lost them (the burrito's tail lights).
+ */
+export function geometryBodyHasTranslucency(body: Uint8Array): boolean {
+  const materialList = readRw(body).chunks.find((chunk) => chunk.type === RW_MATERIAL_LIST);
+  for (const { struct } of listMaterialStructs(materialList)) {
+    if (struct.data![7] < 255) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Whether a geometry chunk BODY (its children stream: Struct / MaterialList / Extension) carries at
  * least one window-pane material — the render-order pass moves such atomics last, mirroring vanilla's
  * windscreen_ok-last layout (the cutscene path draws clump atomics in file order with z-write on, so an

@@ -3,7 +3,7 @@ import { readRw } from '@opensa/rw-codec/chunk';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { geometryBodyHasWindowPane } from '../materials';
+import { geometryBodyHasTranslucency, geometryBodyHasWindowPane } from '../materials';
 import { extractCarTemplate, toArrayBuffer } from '../template';
 import { convertCar } from './car';
 import { type ClumpModel, readClump, writeClump } from './clump-io';
@@ -285,14 +285,19 @@ describe('convertCar', () => {
       expect(paneFlags.some(Boolean)).toBe(true);
       expect(paneFlags.slice(paneFlags.indexOf(true)).every(Boolean)).toBe(true);
 
-      // Opaque atomics carry PipelineSet 0x53F2009A (the vanilla-cs shine recipe); window panes stay
-      // on the DEFAULT pipeline — the vehicle pipe drops translucents outside a real CVehicle
-      // (round 8: the panes vanished entirely with the plugin stamped, at any alpha).
+      // Fully-opaque atomics carry PipelineSet 0x53F2009A (the vanilla-cs shine recipe); any atomic
+      // with a translucent material stays on the DEFAULT pipeline — the vehicle pipe drops
+      // translucents outside a real CVehicle (rounds 8–9: stamped panes vanished at any alpha, and
+      // the burrito's 210-alpha tail lenses vanished under the pane-only exception).
+      const translucentFlags = converted.atomics.map((atomic) =>
+        geometryBodyHasTranslucency(converted.geometries[atomic.geometryIndex].body),
+      );
+      expect(translucentFlags.some(Boolean)).toBe(true);
       converted.atomics.forEach((atomic, index) => {
         const plugins = atomic.extension ? readRw(atomic.extension.body).chunks : [];
         const pipeline = plugins.find((chunk) => chunk.type === 0x253f2f3);
-        if (paneFlags[index]) {
-          expect(pipeline, `pane atomic ${index}`).toBeUndefined();
+        if (translucentFlags[index]) {
+          expect(pipeline, `translucent atomic ${index}`).toBeUndefined();
         } else {
           expect(pipeline?.data, `atomic ${index}`).toBeDefined();
           expect(new DataView(pipeline!.data!.buffer, pipeline!.data!.byteOffset, 4).getUint32(0, true)).toBe(

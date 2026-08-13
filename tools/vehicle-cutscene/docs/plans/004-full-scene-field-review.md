@@ -41,9 +41,9 @@ scene-specific anims).
 | 5 | BCESA4W | csbravura, cszr350b | ✅ (2026-08-13, "good") |
 | 6 | BCESAR4 | cssavanna, cszr350 | ✅ after round 3 ("lights are normal now") |
 | 7 | BCESAR5 | cssadler, cszr350, cszr350b | ✅ after rounds 4–8 ("glass renders normally now, tint and sheen in place") |
-| 8 | DES_10B | csmothership | |
-| 9 | DESERT1 | csmonster | |
-| 10 | FARL_3B | csburrito92 | |
+| 8 | DES_10B | csmothership | ✅ (2026-08-13) |
+| 9 | DESERT1 | csmonster | ✅ (2026-08-13) |
+| 10 | FARL_3B | csburrito92 | 4 findings (2026-08-13) → rounds 9–11; re-run pending |
 | 11 | FINAL2B | csbravura, cssabre92 | |
 | 12 | GARAG3A | csremington92 | |
 | 13 | HEIST8A | cssecurica92 | |
@@ -255,6 +255,38 @@ scene-specific anims).
 - **Re-open note:** rounds 5–8 changed the shared emit fleet-wide (pane ordering + per-atomic
   pipeline). The six earlier ✅ scenes stay checked, but each gets a one-eye glass/shine glance the
   next time it naturally plays; anything off re-opens its row.
+
+### Rounds 9–11 — FARL_3B: four burrito findings, three mechanisms (2026-08-13, four screenshots)
+
+**Seen:** (1) tyres see-through (hollow centres); (2) tail lights missing; (3) a rear door swings
+open and its window stays hanging at the closed position; (4) one rear-door window absent entirely.
+All four decomposed against the GMC Vandura mod's own structure — the first VehFuncs-style mod in
+the sweep (nested `<name>:K` selector groups, a three-mesh wheel sub-model).
+
+- **Round 9 — pipeline (fixes 2):** the tail/fog lenses ride translucent materials at alpha 210–254 —
+  ABOVE the round-8 window band — so they kept the vehicle PipelineSet and vanished by the round-8
+  mechanism. Generalized: an atomic carrying ANY translucent material stays on the DEFAULT pipeline;
+  only fully-opaque atomics get the vehicle pipe (`finalizeAtomics`, all branches).
+- **Round 10 — adoption ancestry (fixes 3):** the rear-door windows hang under `door_*_dummy` beside
+  the `_ok` mesh (the game keys components by DUMMY), and `nearestCarriedAncestor` resolved them to
+  the CHASSIS — the pane stood still while the door swung. A matched part's dummy now maps to the
+  part's bone in `carriedFrames`; `wind_rr_ok_ad`/`wind_lr_ok_ad` emit under their door bones.
+- **Round 11 — selector containers (fixes 4 and 1):** the mod's `f_extras:4` holds FOUR groups
+  (logo/spare/window/add) and the field-frozen one-mesh-per-container rule took the logo, starving
+  the window. Replaced with the VehFuncs-style chosen path (`chosenVariantFrames`): `<name>:K` shows
+  K children, at every level the FIRST eligible child in atomic order wins (`_dam`/`_vlo`/year-variant
+  children never count) — a leading meshless `no*` child is the author's "off" default (fogs stay
+  off, the front `guard_ok` and rear-door `spare_ok` come on: their groups have no "none" option).
+  The same walk applied inside `f_wheel` yields the WHOLE wheel — tire + cap + cap-style, three
+  meshes per corner (one was a hollow tyre ring = finding 1); the taxi's `wheel[1992]` style names
+  need `skipYearVariants: false` there (year brackets inside f_wheel are wheel styles, and the fleet
+  build caught the miss loudly). Wheel radius = max z-half-extent across the set.
+- Fleet 23/23, verify green (317 DFFs, 0 duplicate channels); suite 80/80; bottle updated
+  (`cs-mods-plates-prevan` holds the rounds-5–9 build). Contracts §3 rows updated (pipeline,
+  selector containers, dummy ancestry).
+- **Re-check scope:** rounds 9–11 change the shared emit fleet-wide — earlier ✅ scenes keep their
+  one-eye glance rule; FARL_3B re-run decides all four findings.
+- [ ] **Re-check (user):** FARL_3B re-run.
 
 ## Step 3 — the approval
 
