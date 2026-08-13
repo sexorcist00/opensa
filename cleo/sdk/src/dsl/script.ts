@@ -93,7 +93,11 @@ export class ScriptBuilder {
     return this.instructions;
   }
 
-  /** A global numeric variable by its u16 index — touching the global space is always explicit. */
+  /**
+   * A global numeric variable by its RAW stream u16 — on real SA that is the BYTE offset, i.e.
+   * `$n` × 4 (`$409` → 1636). Passing the `$n` slot number reads garbage inside `$(n/4)` — it cost
+   * a game crash in the field (cutscene-override round 7). The disasm prints the raw value.
+   */
   global(index: number): Operand {
     return gvar(index);
   }

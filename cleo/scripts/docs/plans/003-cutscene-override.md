@@ -272,6 +272,17 @@ section plays where the player stands, as before. Deliberate consequence: after 
 player REMAINS at the site — for a field instrument that is a feature (you are standing on the
 stage you just inspected). 647 B + the 9.7 KB ini reinstalled.
 
+**Round 7 (2026-08-13): CRASH — access violation in `00A1 SET_CHAR_COORDINATES` (the opcode id is
+sitting in the crash log's stack dump; the call comes through CLEO's script hook at `0x0053E981`).
+My encoding bug, and a general trap now recorded in `docs/edge-cases/cleo-vm.md`: a global-var
+operand carries the BYTE offset, not the `$n` slot — `$3` must go into the stream as 12. I passed
+`3`; `00A1` collected a garbage char handle from inside `$0` and dereferenced it. The same bug
+RETRO-CORRECTS round 5: the old ONMISSION gate was reading offset 409 (garbage inside `$102`), not
+`$409` — its "never opens" verdict was this encoding bug, not (only) the bike mission. ONMISSION
+stays out anyway — the manager-only gate is the user's design call and round 6 proved it. FIX:
+`PLAYER_ACTOR = 3 * 4`, `s.global()` doc rewritten (the raw stream value IS the byte offset), the
+edge-cases row added. 647 B reinstalled.**
+
 **STOP: user's verdict closes the plan.** **Record:** verdict + the ini row count + any scene that
 needed the timeout path (each is a fact about that scene worth a line).
 

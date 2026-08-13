@@ -133,7 +133,7 @@ describe('cutscene-override', () => {
         000385: 0AF2 READ_FLOAT_FROM_INI_FILE 'cleo\\cutscene-override.ini' 0@s 'z' 6@
         000424: 004D GOTO_IF_FALSE -492
         000431: 000B ADD_VAL_TO_FLOAT_LVAR 6@ 1.0
-        000441: 00A1 SET_CHAR_COORDINATES $3 4@ 5@ 6@
+        000441: 00A1 SET_CHAR_COORDINATES $12 4@ 5@ 6@
         000455: 04E4 REQUEST_COLLISION 4@ 5@
         000463: 03CB LOAD_SCENE 4@ 5@ 6@
         000474: 0395 CLEAR_AREA 4@ 5@ 6@ 300.0 1

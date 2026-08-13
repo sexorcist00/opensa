@@ -19,8 +19,12 @@ import { float, int, lvar, str } from '../../sdk/src/ir';
 
 const INI = 'cleo\\cutscene-override.ini';
 const PLAYER = 0;
-/** `$3 = GET_PLAYER_CHAR($2)` — measured in main.scm's MAIN block @ 0xdc15; a CLEO-safe global. */
-const PLAYER_ACTOR = 3;
+/**
+ * `$3 = GET_PLAYER_CHAR($2)` — measured in main.scm's MAIN block @ 0xdc15; a CLEO-safe global.
+ * SCM global operands carry BYTE offsets, so $3 goes into the stream as 12 (field round 7: passing
+ * the slot number made `00A1` read a garbage handle at offset 3 and crash the game).
+ */
+const PLAYER_ACTOR = 3 * 4;
 const FADE_OUT = 0;
 const FADE_IN = 1;
 const FADE_MS = 500;
