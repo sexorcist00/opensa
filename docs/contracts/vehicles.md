@@ -125,6 +125,7 @@ channel, exactly like the taxi's misnamed door (gate 7).
 | EVERY adopted mod mesh | Renamed with an `_ad` suffix (`door_lf_ok_ad`, `wheel_pj=0-2c_ad`): an adopted mesh is un-animated by definition and anim binding is by NAME against a per-scene channel table unknowable at convert time — scenes even drive names NO vanilla model has (`windscreen_ok` in DESERT9), and a duplicate of a bound name binds TOO and double-transforms (plan 004 rounds 1–2). The renamed mesh rides its parent bone; nothing is lost. |
 | `extra1` … `extraN` (cutscene conversion) | NEVER template-matched — the '92 extras are hand-authored scene furniture the anims pose; a mod's spawn variants are semantically unrelated (DESERT9 swung a whole bed rack 50° midair). Adopted ONE per model (first in atomic order), mirroring SA's at-most-one-extra spawn rule; the rest are dropped + logged. |
 | `carplate`, `carpback` (MATERIAL texture names) | A model wearing these placeholder quads gets a READABLE plate pair baked into its emitted `cs*.txd` (vehicle-cutscene plan 003) — own-TXD-first resolution overrides the placeholders the runtime never fills for cutscene objects. A mod shipping its OWN texture under these exact names gets ours instead (same look class); any other name is untouched. Models without the quads (the bike/boat mods) get no pair. |
+| lamp ID marker colours (`(255,175,0)`/`(0,255,200)` head, `(185,255,0)`/`(255,60,0)` tail — see §4) | Baked to WHITE, alpha kept (plan 004, BCESAR4 round): the gameplay renderer swaps these per frame, the cutscene renderer swaps nothing, so left raw they render as green/amber lenses. Vanilla cs models ship them white the same way (measured fleet-wide; csbobcat92/cslegend566/cssabre92 kept raw markers — R* slips, visible in the vanilla scenes too). Carcols paint markers get the same in-place bake to the model's first combo (plan 002 step 5). |
 
 ### Tracked vehicles (`track_*` — read by our shipped `rhino-tracks.cs`)
 
@@ -210,7 +211,7 @@ models author (`taillights2`), and anything else the author left.
 
 | Name | Meaning |
 | --- | --- |
-| `vehiclelights*` | The lamp atlas. A material on it whose colour is a marker IS a lamp: `(255,175,0)` / `(0,255,200)` = head, `(185,255,0)` / `(255,60,0)` = tail. The colours are metadata and are never rendered. |
+| `vehiclelights*` | The lamp atlas. A material on it whose colour is a marker IS a lamp: `(255,175,0)` / `(0,255,200)` = head, `(185,255,0)` / `(255,60,0)` = tail. The colours are metadata and are never rendered — by a renderer that KNOWS them; the SA cutscene path does not, which is why `vehicle-cutscene` bakes them white (§3). |
 | `carplate` | The plate's text strip — a generated 64×16 raster per car. |
 | `carpback` | The plate's background quad — one of three static city designs. |
 | `platecharset` | The glyph atlas, in `models/generic/vehicle.txd`. |

@@ -127,6 +127,30 @@ scene-specific anims).
 - [x] **Re-check (user):** PASSED (2026-08-13): "now everything's ok — the glass with the door, one
       rack." DESERT9 ✅ in the ledger; the sweep resumes at row 5 (BCESA4W).
 
+### Round 3 — BCESAR4 + the intro cop scene: green/amber headlight lenses (2026-08-13, screenshot)
+
+- **Seen:** cssavanna's headlights render one pair green-teal, the other amber (BCESAR4); the same on
+  the cop car in the intro. These are SA's per-lamp ID marker colours — `(255,175,0)`/`(0,255,200)`
+  head, `(185,255,0)`/`(255,60,0)` tail (the plan-074 vehicle-builder palette, `build-vehicle-model.ts`
+  `LAMP_MARKERS`) — metadata saying WHICH lamp a material is, never meant to reach a pixel.
+- **Root cause:** the tool's paint bake (002 step 5) left lamp markers untouched on the claim "vanilla
+  cs models keep those too". Measured against the vanilla `cutscene.img`, that claim is BACKWARDS: the
+  vanilla fleet bakes its lamp materials to WHITE with the authored alpha kept (204/128/250 alphas
+  survive); only csbobcat92/cslegend566/cssabre92 kept raw markers — R* slips, not a rule. The gameplay
+  renderer substitutes lamp material colours every frame, so markers are invisible on spawned cars; the
+  cutscene renderer substitutes nothing, so on our converted models every marker rendered raw. Latent
+  fleet-wide: 137 lamp materials across the 23 models.
+- **Fix (one variable):** `materials.ts` bakes the four lamp marker colours to `(255,255,255)`, alpha
+  preserved — same in-place Struct rewrite as the paint bake, no size change. The old test pinned the
+  wrong behaviour ("leaves lamp markers alone") — flipped to assert no marker survives. Baked
+  materials 395 → 532; fleet rebuilt 23/23, verify green (317 DFFs, 0 duplicate channels); bottle
+  updated (build rotated: `cs-mods-plates-prelamps` holds the old one). Contract recorded in
+  contracts/vehicles.md §3 + §4.
+- **Re-check scope:** a fleet-wide material fix — BCESAR4 re-run decides the row; the four ✅ scenes
+  need one lamp glance next time they naturally play (PROLOG1/PROLOG3 cop car and taxi carried the
+  same markers).
+- [ ] **Re-check (user):** BCESAR4 re-run.
+
 ## Step 3 — the approval
 
 - [ ] All 35 rows carry a verdict; open findings zero. **The user's blanket approval closes the

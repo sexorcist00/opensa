@@ -34,7 +34,7 @@ describe('bakePaintMarkers', () => {
   });
 
   describe('positive cases', () => {
-    it('replaces every paint marker, preserves alpha, leaves lamp markers alone', () => {
+    it('replaces every paint marker, preserves alpha, bakes lamp markers white', () => {
       const { baked, bytes } = bakePaintMarkers(BOBCAT, COLOURS);
       expect(baked).toBeGreaterThan(0);
 
@@ -43,8 +43,10 @@ describe('bakePaintMarkers', () => {
       expect(colours.some((colour) => colour.startsWith('255,0,175'))).toBe(false);
       expect(colours).toContain('11,22,33,255');
       expect(colours).toContain('44,55,66,255');
-      // Lamp markers are engine metadata vanilla cs models keep — untouched.
-      expect(colours.some((colour) => colour.startsWith('255,175,0'))).toBe(true);
+      // Lamp ID markers render raw in the cutscene path — baked white like vanilla cs models.
+      for (const marker of ['0,255,200', '185,255,0', '255,175,0', '255,60,0']) {
+        expect(colours.some((colour) => colour.startsWith(marker))).toBe(false);
+      }
       // Non-marker alpha materials (glass at 128) survive byte-identically.
       expect(colours).toContain('0,0,0,128');
     });
