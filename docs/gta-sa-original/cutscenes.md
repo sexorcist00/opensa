@@ -45,8 +45,14 @@ the reference install — not OpenSA.
   channel for EVERY bone of the vanilla model — 2-frame static `KRT0`s included — so an animated
   bone's local transform is fully anim-owned; a converted model's own frame locals only survive on
   frames the anim has no channel for. Wheels spin via `KR00` on the MESH bones; wheel NODES get static
-  `KRT0` translations. In SA (unlike III/VC) the scene's object list + anims come from `<name>.dat`
-  inside cuts.img — main.scm only loads-by-name and starts.
+  `KRT0` translations. In SA (unlike III/VC) main.scm only loads-by-name and starts; the scene's
+  OBJECT list is the IFP's `NAME` chunks themselves (one per `DGAN`, mixed-case: `CsCopcarSF`,
+  `CsFirela`), and the `<name>.dat` beside it is CAMERA data — zoom/FOV keyframe rows, no model
+  names anywhere (measured 2026-08-13; this line previously claimed the object list came from the
+  `.dat`).
+- **`csdinghy` is driven by NO cutscene**: across the 35 scenes that animate cs vehicles, 22 of the
+  23 census models appear; the boat alone is scene-less — a cutscene model with no cutscene, cut
+  content like `csandrom92`'s dead txdcut row.
 - **The intro's vehicles live in `prolog1.ifp`/`prolog3.ifp`, not `intro*.ifp`** (intro1a drives
   csbat/csplay/props only).
 - License plates: `CCustomCarPlateMgr` generates plate textures for GAMEPLAY vehicles only — cutscene
@@ -61,7 +67,8 @@ the reference install — not OpenSA.
   `06B9 HAS_CUTSCENE_LOADED` → `02E7 START_CUTSCENE` → `016A DO_FADE` in → loop until
   `02E9 HAS_CUTSCENE_FINISHED` → fade out (`016A` + `016B IS_FADING` wait) → `02EA CLEAR_CUTSCENE`
   → `04BB` restore. All waits are condition-driven; no fixed sleeps.
-- `02E4` alone loads the `.ifp` anims and the `.dat` objects+camera from cuts.img; the III/VC-era
+- `02E4` alone loads the `.ifp` anims (whose `NAME` chunks are the object list) and the `.dat`
+  camera from cuts.img; the III/VC-era
   `02E5 CREATE_CUTSCENE_OBJECT`/`02E6 SET_CUTSCENE_ANIM` are `is_nop` in SA (Sanny SA library).
 - **`06B9` is mandatory before `02E7`**: gta-reversed's `CCutsceneMgr::StartCutscene` on
   not-yet-loaded data flips play status but SKIPS camera setup and widescreen — a silent degraded

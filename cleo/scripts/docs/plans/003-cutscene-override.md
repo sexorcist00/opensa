@@ -98,15 +98,32 @@ test covers the emitted opcode structure and budget; the behaviour verdict is th
   `PROLOG3=0`, `PROLOG1=14`, `INTRO1A=3`, `INTRO2A=2`; histogram of decoded sites
   `{0:3, 1:21, 2:11, 3:8, 5:4, 6:1, 10:1, 11:3, 12:1, 14:1}`.
 
-### 1 — the ini generator
+### 1 — the ini generator — DONE 2026-08-13
 
-- [ ] A vehicle-cutscene-side debug script (reuses the census + the ANPK walk) emits
-      `cutscene-override.ini`: the comment header (one row per vehicle scene,
-      `; name = cs vehicles present`) + `[cutscene]` with `scene =` empty + the `[areas]` section
-      (decoded from main.scm's `04BB` before each `02E4` site — the adjacent-byte decode from step 0
-      covers 54/135, the generator finishes the job; scenes with area 0 may omit their row).
-- [ ] Row count recorded here; spot-check three entries against `cutscene-anim-channels.ts` output
-      and the step-0 area histogram.
+- [x] `scripts/debug/cutscene-override-ini.ts` (imports the tool's census + the ANPK walk) emits
+      `cutscene-override.ini`: the comment header (one row per vehicle scene), `[cutscene]` with
+      `scene =` empty, and `[areas]` decoded from main.scm (nearest immediate-arg `04BB` within 64
+      bytes before each `02E4`; only non-zero rows are emitted).
+- [x] **35 vehicle scenes, 65 area rows.** Spot-checked against `cutscene-anim-channels.ts`:
+      PROLOG3 = cscopcarla92+cstaxi92 (the known pair), STRP4B2 = csmtbike92, RIOT4E1 =
+      CsCopcarSF+CsFirela, GARAG3A = csremington92 — all match.
+
+**Record:**
+
+- **The scene's OBJECT list comes from the IFP's `NAME` chunks, not the `.dat`** — the `.dat` inside
+  cuts.img is CAMERA data (zoom/FOV keyframes; measured on prolog3.dat, and no `.dat` names any
+  model). The 2026-08-12 note saying objects come from the `.dat` was wrong; cutscenes.md fixed in
+  the same change.
+- **`csdinghy` appears in NO cutscene** — 22 of the census's 23 cs vehicles are driven somewhere
+  across the 35 vehicle scenes; the boat alone is scene-less (a cutscene model with no cutscene —
+  cut content, like `csandrom92`'s dead txdcut row). Consequence for vehicle-cutscene plan 002 step
+  9: the boat conversion has NO stock scene to field-test in; its verdict needs another route.
+- Anim object names are mixed-case in the ANPK (`CsCopcarSF`, `CsFirela`) — the generator matches
+  case-insensitively, and the ini prints the census's lowercase cs names.
+- Area decode coverage across ALL 135 main.scm sites: 68 decoded from an immediate arg, 67 have no
+  `04BB` within 64 bytes (second scenes of a mission inherit the area from earlier flow — the
+  generator deliberately does not chase control flow; those scenes ride the default-0 note in the
+  ini header).
 
 ### 2 — SDK vocabulary
 
