@@ -15,10 +15,12 @@
 import { TIMER_A } from '@opensa/cleo/vm/thread';
 
 import { defineScript } from '../../sdk/src/dsl/script';
-import { int, lvar, str } from '../../sdk/src/ir';
+import { float, int, lvar, str } from '../../sdk/src/ir';
 
 const INI = 'cleo\\cutscene-override.ini';
 const PLAYER = 0;
+/** `$3 = GET_PLAYER_CHAR($2)` — measured in main.scm's MAIN block @ 0xdc15; a CLEO-safe global. */
+const PLAYER_ACTOR = 3;
 const FADE_OUT = 0;
 const FADE_IN = 1;
 const FADE_MS = 500;
@@ -40,6 +42,9 @@ export const script = defineScript({
     const scene = s.localString('scene');
     const area = s.local('area');
     const gateDone = s.local('gateDone');
+    const siteX = s.local('siteX');
+    const siteY = s.local('siteY');
+    const siteZ = s.local('siteZ');
     const timer = lvar(TIMER_A);
     const debounce = lvar(TIMER_A + 1);
 
@@ -102,6 +107,29 @@ export const script = defineScript({
           () => s.wait(50),
         );
         s.op('SET_PLAYER_CONTROL', int(PLAYER), int(0));
+
+        // Field round 6: the scene plays at ITS world site (the .cut's own offset), and the world
+        // only streams around the PLAYER — a scene 300 m from where CJ stands renders in a void.
+        // main.scm's answer is preloading at the site; ours is the same plus the warp: put the
+        // frozen player AT the site (he is the streaming center), then load the world there. A
+        // scene with no [SCENE] section in the ini plays wherever the player already is.
+        s.if(
+          () => {
+            s.op('READ_FLOAT_FROM_INI_FILE', str(INI), scene, str('x'), siteX);
+            s.op('READ_FLOAT_FROM_INI_FILE', str(INI), scene, str('y'), siteY);
+            s.op('READ_FLOAT_FROM_INI_FILE', str(INI), scene, str('z'), siteZ);
+          },
+          {
+            then: () => {
+              s.op('ADD_VAL_TO_FLOAT_LVAR', siteZ, float(1));
+              s.op('SET_CHAR_COORDINATES', s.global(PLAYER_ACTOR), siteX, siteY, siteZ);
+              s.op('REQUEST_COLLISION', siteX, siteY);
+              s.op('LOAD_SCENE', siteX, siteY, siteZ);
+              s.op('CLEAR_AREA', siteX, siteY, siteZ, float(300), int(1));
+            },
+          },
+        );
+
         s.op('SET_AREA_VISIBLE', area);
         s.op('LOAD_CUTSCENE', scene);
         s.op('SET_LVAR_INT', timer, int(0));

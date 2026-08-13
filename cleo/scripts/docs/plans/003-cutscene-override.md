@@ -257,6 +257,21 @@ player playing + no fade + `06B9` free, held 10 s. Deliberate consequence, recor
 mid-mission save the scene fires during the mission — acceptable for a debug instrument. 458 B
 rebuilt + reinstalled. Flow: new game → skip the intro with one key → ~10–15 s → the scene.
 
+**Round 6 (2026-08-13): the gate is CLOSED as a subject — the scene fires from the start, clean
+anims, camera on its spline. Last defect: the WORLD is missing** (cars and actors against bare sky
+— the user's three screenshots). Cause: the scene plays at ITS world site — the `.cut`'s own
+`info / offset x y z` row (PROLOG3: 2484.1, −1722.3, 12.6) — while the world only streams around
+the PLAYER, who stands ~300 m away at the intro drop point. FIX (main.scm parity, completed): the
+generator now reads every scene's `.cut` offset out of cuts.img and emits a per-scene `[SCENE]
+x/y/z` section (148 sections, full coverage — no main.scm heuristics needed); the script reads it
+back (`0AF2` with the scene string as the section name) and, under the fade, WARPS the frozen
+player to the site (+1 m z; he is the streaming center), then `04E4 REQUEST_COLLISION` + `03CB
+LOAD_SCENE` + `0395 CLEAR_AREA r=300`, then area/load/start as before. `$PLAYER_ACTOR = $3`
+(measured: `01F5 $2 → $3` @ 0xdc15 in MAIN; one of the three CLEO-safe globals). A scene with no
+section plays where the player stands, as before. Deliberate consequence: after the scene the
+player REMAINS at the site — for a field instrument that is a feature (you are standing on the
+stage you just inspected). 647 B + the 9.7 KB ini reinstalled.
+
 **STOP: user's verdict closes the plan.** **Record:** verdict + the ini row count + any scene that
 needed the timeout path (each is a fact about that scene worth a line).
 

@@ -34,6 +34,19 @@ for (const entry of cuts.names) {
   }
 }
 
+// scene → world site, from each .cut's own `info / offset x y z` (the origin the engine itself
+// reads — the override warps the player there so the world streams around the scene)
+const sceneSites = new Map<string, [string, string, string]>();
+for (const entry of cuts.names) {
+  if (!entry.toLowerCase().endsWith('.cut')) continue;
+  const bytes = cuts.get(entry);
+  if (!bytes) continue;
+  const match = /^\s*offset\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)/m.exec(Buffer.from(bytes).toString('latin1'));
+  if (match) {
+    sceneSites.set(entry.slice(0, -'.cut'.length).toUpperCase(), [match[1], match[2], match[3]]);
+  }
+}
+
 // scene → interior area, from main.scm: the nearest 04BB SET_AREA_VISIBLE before each 02E4 site
 const scm = readFileSync(gameDir(game, 'data', 'script', 'main.scm'));
 const areas = new Map<string, number>();
@@ -60,22 +73,28 @@ const lines = [
   ';',
   '; [areas] is the interior area main.scm sets before starting that scene; a scene without a',
   '; row plays in area 0 (outside). A scene that shows empty blue void has an unrecorded area.',
+  "; Per-scene [SCENE] x/y/z sections carry the world site from the .cut's own offset row — the",
+  '; override warps the player there (under the fade) so the world streams around the scene.',
   '',
   '[cutscene]',
   'scene =',
   '',
   '[areas]',
   ...[...areas.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([scene, area]) => `${scene}=${area}`),
+  ...[...sceneSites.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .flatMap(([scene, [x, y, z]]) => ['', `[${scene}]`, `x=${x}`, `y=${y}`, `z=${z}`]),
   '',
 ];
 
 const text = lines.join('\n');
+const summary = `${sceneRows.length} vehicle scenes, ${areas.size} area rows, ${sceneSites.size} site sections`;
 if (outPath) {
   writeFileSync(outPath, text);
-  console.log(`wrote ${outPath}: ${sceneRows.length} vehicle scenes, ${areas.size} area rows`);
+  console.log(`wrote ${outPath}: ${summary}`);
 } else {
   console.log(text);
-  console.error(`\n${sceneRows.length} vehicle scenes, ${areas.size} area rows`);
+  console.error(`\n${summary}`);
 }
 
 /** All ANPK `NAME` chunk values (lowercased) — the objects the scene's anims drive. */
