@@ -114,12 +114,17 @@ function printCensus(census: Census, readiness: SlotReadiness[]): void {
 function printSummary(summary: CutsceneInstallSummary): void {
   const megabytes = (bytes: number): string => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   const paintedMaterials = summary.painted.reduce((sum, entry) => sum + entry.materials, 0);
+  const glassPanes = summary.glass.reduce((sum, entry) => sum + entry.panes, 0);
   console.log(
     `vehicle-cutscene: ${summary.converted.length} converted, ${summary.skipped.length} skipped,` +
       ` ${summary.errors.length} error(s), ${paintedMaterials} paint material(s) baked on ${summary.painted.length} model(s),` +
+      ` ${glassPanes} window pane(s) clamped on ${summary.glass.length} model(s),` +
       ` ${summary.plates.length} plate(s) baked, ${summary.txdBytes} B of cs TXDs;` +
       ` cutscene.img ${megabytes(summary.imgBytesBefore)} → ${megabytes(summary.imgBytesAfter)}`,
   );
+  for (const { csName, floor, panes } of summary.glass) {
+    console.log(`  glass ${csName}: ${panes} pane(s) → alpha ${floor}`);
+  }
   for (const { csName, reason } of summary.skipped) {
     console.log(`  skipped ${csName}: ${reason}`);
   }

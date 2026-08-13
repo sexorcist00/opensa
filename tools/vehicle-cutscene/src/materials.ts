@@ -36,6 +36,24 @@ const PAINT_MARKERS = new Map<string, number>([
 /** SA per-lamp ID colours (mirrors `build-vehicle-model.ts` LAMP_MARKERS): FL / FR / RL / RR. */
 const LAMP_MARKERS = new Set<string>(['0,255,200', '185,255,0', '255,60,0', '255,175,0']);
 
+const RW_TEXTURE = 0x06;
+const RW_STRING = 0x02;
+
+/**
+ * The cutscene path draws a clump's translucent panes unsorted, so stacked windows COMPOUND: R* answered
+ * by authoring each cs model's window alpha to its scenes' stacking depth (zr350's big panes 26 — the
+ * camera always crosses two or three; savanna's boxy side glass 128). Mod glass ships its GAMEPLAY tint
+ * (alpha ~100–190, dark RGB), which the sorted vehicle pipeline composites fine and the cutscene path
+ * turns into an opaque wall two panes deep (BCESAR5). A WINDOW pane is classified by data, never name:
+ * translucent below {@link WINDOW_ALPHA_CEILING}, off the lamp atlas, and either dark-tinted
+ * (luminance < 128) or in R*'s bright-glass alpha range (≤ 128, the `255,255,255,26..128` recipes).
+ * Lenses/decals ride bright colours at alpha 150+ or `vehiclelights*` and stay untouched.
+ */
+const WINDOW_ALPHA_CEILING = 200;
+
+/** Fleet median of the vanilla per-slot window minima — the floor for slots whose twin has no glass. */
+export const FLEET_GLASS_FLOOR = 102;
+
 /**
  * Replace every paint-marker material colour with the model's paint, alpha preserved. Returns the baked
  * copy + the number of materials touched. Throws when the model carries markers but `colours` is null
@@ -56,6 +74,25 @@ export function bakePaintMarkers(dff: Uint8Array, colours: null | PaintColours):
 }
 
 /**
+ * Clamp every mod WINDOW pane's alpha to the vanilla twin's floor (fallback: the fleet median). Returns
+ * the clamped copy + panes touched. Same surgical in-place rewrite as the paint bake.
+ */
+export function clampWindowGlass(dff: Uint8Array, floor: null | number): { bytes: Uint8Array; clamped: number } {
+  const bytes = dff.slice();
+  const target = floor ?? FLEET_GLASS_FLOOR;
+  let clamped = 0;
+  for (const { material, struct } of materialStructs(bytes)) {
+    if (!isWindowPane(material, struct) || struct.data![7] <= target) {
+      continue;
+    }
+    struct.data![7] = target;
+    clamped += 1;
+  }
+
+  return { bytes, clamped };
+}
+
+/**
  * The model's first carcols combo as four RGBs. `car` rows carry two colours; slots 3/4 fall back to
  * palette 0 (black) — the game zero-initialises the extra colours the same way. Returns null when the
  * model has no row at all.
@@ -71,6 +108,21 @@ export function paintColoursFor(carcols: VehicleColours, model: string): null | 
   const rgb = (index: number): Rgb => carcols.palette[index] ?? [0, 0, 0];
 
   return [rgb(combo[0]), rgb(combo[1]), rgb(combo[2]), rgb(combo[3])];
+}
+
+/**
+ * The vanilla twin's most transparent window pane (its authored answer to this model's scene stacking),
+ * or null when the twin carries no window glass at all (cssadler's cab has none modelled).
+ */
+export function vanillaGlassFloor(vanilla: Uint8Array): null | number {
+  let floor: null | number = null;
+  for (const { material, struct } of materialStructs(vanilla)) {
+    if (isWindowPane(material, struct)) {
+      floor = floor === null ? struct.data![7] : Math.min(floor, struct.data![7]);
+    }
+  }
+
+  return floor;
 }
 
 function bakeGeometry(geometry: RwChunk, colours: null | PaintColours): number {
@@ -106,4 +158,64 @@ function bakeGeometry(geometry: RwChunk, colours: null | PaintColours): number {
   }
 
   return baked;
+}
+
+function isLampAtlas(material: RwChunk): boolean {
+  return textureName(material)?.toLowerCase().startsWith('vehiclelights') ?? false;
+}
+
+/** The shared window-pane classifier (see {@link WINDOW_ALPHA_CEILING}'s doc for the derivation). */
+function isWindowPane(material: RwChunk, struct: RwChunk): boolean {
+  const alpha = struct.data![7];
+  if (alpha === 0 || alpha >= WINDOW_ALPHA_CEILING || isLampAtlas(material)) {
+    return false;
+  }
+
+  return luminance(struct.data!) < 128 || alpha <= 128;
+}
+
+/** Rec.601 luminance of the material Struct colour at `data[4..6]`. */
+function luminance(data: Uint8Array): number {
+  return 0.299 * data[4] + 0.587 * data[5] + 0.114 * data[6];
+}
+
+function* materialStructs(dff: Uint8Array): Generator<{ material: RwChunk; struct: RwChunk }> {
+  const clump = readRw(dff).chunks.find((chunk) => chunk.type === RW_CLUMP);
+  const geometryList = clump?.children?.find((chunk) => chunk.type === RW_GEOMETRY_LIST);
+  for (const geometry of geometryList?.children ?? []) {
+    if (geometry.type !== RW_GEOMETRY) {
+      continue;
+    }
+    const materialList = geometry.children?.find((chunk) => chunk.type === RW_MATERIAL_LIST);
+    if (!materialList?.data) {
+      continue;
+    }
+    for (const material of readRw(materialList.data).chunks) {
+      if (material.type !== RW_MATERIAL || !material.data) {
+        continue;
+      }
+      const struct = readRw(material.data).chunks.find((chunk) => chunk.type === RW_STRUCT);
+      if (struct?.data && struct.data.length >= 8) {
+        yield { material, struct };
+      }
+    }
+  }
+}
+
+/** The material's diffuse texture name, or null when untextured. */
+function textureName(material: RwChunk): null | string {
+  if (!material.data) {
+    return null;
+  }
+  const texture = readRw(material.data).chunks.find((chunk) => chunk.type === RW_TEXTURE);
+  if (!texture?.data) {
+    return null;
+  }
+  const name = readRw(texture.data).chunks.find((chunk) => chunk.type === RW_STRING);
+  if (!name?.data) {
+    return null;
+  }
+  const end = name.data.indexOf(0);
+
+  return new TextDecoder('ascii').decode(name.data.subarray(0, end < 0 ? name.data.length : end));
 }

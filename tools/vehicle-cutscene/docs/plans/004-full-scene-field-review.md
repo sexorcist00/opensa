@@ -152,6 +152,32 @@ scene-specific anims).
 - [x] **Re-check (user):** PASSED (2026-08-13): "BCESAR4 is ok now, lights are normal." BCESAR4 ✅ in
       the ledger.
 
+### Round 4 — BCESAR5: stacked windows opaque on the zr350 (+ sadler) (2026-08-13, two screenshots)
+
+- **Seen:** "glass looks strange — as if through 2 panes there's no transparency"; the same on the
+  sadler; single panes look fine. The zr350's cabin reads as a bright opaque wall from angles that
+  cross two or three panes.
+- **Root cause (measured):** the cutscene path draws a clump's translucent panes unsorted, so stacked
+  windows COMPOUND. R* tuned each cs model's window alpha to its scenes' stacking depth — the vanilla
+  cszr350's big panes are `255,255,255,26` (the camera crosses 2–3 panes in exactly these BCESAR
+  scenes), boxy cars sit at 77–128; the vanilla fleet's window band never exceeds 128 while lenses run
+  204–250. Mod glass ships its GAMEPLAY tint (`51,51,51,125` on the zr350; fleet 101–193, dark RGB) —
+  fine in the sorted vehicle pipeline, an opaque wall two panes deep in the cutscene path. The mod's
+  `glass` texture itself is a flat opaque grey (8×8, avg 102/102/102/255) — all transparency lives in
+  the material alpha.
+- **Fix (one variable, derived per slot — never per car):** `clampWindowGlass` in `materials.ts`: a
+  WINDOW pane (classified by data — translucent below alpha 200, off the `vehiclelights*` atlas,
+  dark-tinted OR alpha ≤ 128) is clamped to `vanillaGlassFloor` — the vanilla twin's most transparent
+  window pane, its authored answer to this model's stacking; slots whose twin has no glass modelled
+  (sadler, bravura, glendale) fall back to the fleet median 102. Lenses/decals untouched. Fleet: 91
+  panes clamped on 16 models (zr350/zr350b→26, copcarsf→76, bobcat/securica/washington→77,
+  firela→94, monster/sabre/voodoo→128, the rest→102; savanna/greenwood/mothership/remington/burrito
+  already at or below their floors). Rebuilt 23/23, verify green (317 DFFs, 0 duplicate channels);
+  suite 85/85; bottle updated (`cs-mods-plates-preglass` holds the previous build).
+- **Re-check scope:** fleet-wide material fix — BCESAR5 re-run decides; earlier ✅ scenes get a glass
+  glance next time they naturally play.
+- [ ] **Re-check (user):** BCESAR5 re-run.
+
 ## Step 3 — the approval
 
 - [ ] All 35 rows carry a verdict; open findings zero. **The user's blanket approval closes the
