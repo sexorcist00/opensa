@@ -130,6 +130,9 @@ const CLEO_MANIFEST: readonly Fixture[] = [
     'vehicles/mtbike - Smooth Criminal Bicycles 3.0 Mountain Bike - zeneric/mtbike.dff',
     'vehicles/mtbike-smooth-criminal.dff',
   ),
+  // The Dinghy HD boat (plan 002 step 9): real adoption subjects — propellers under the transom flaps,
+  // movsteer steering under the hull, a details mesh; the hull authored at the origin (shim absorbs).
+  cleoFile('vehicles/dinghy - Dinghy HD - michelle works/dinghy.dff', 'vehicles/dinghy-hd.dff'),
   cleoFile('mods/61. Wind Farm/CLEO/Wind Farm (Junior_Djjr).cs', 'cleo/windfarm.cs'),
 ];
 
@@ -172,6 +175,10 @@ const MANIFEST: readonly Fixture[] = [
   extract('csmtbike92.dff', 'dff/cutscene/csmtbike92.dff'),
   extract('mtbike.dff', 'dff/cutscene/mtbike.dff'),
   extract('mtbike.txd', 'dff/cutscene/mtbike.txd'), // the bike slot's txdp parent in the install e2e
+  // The boat golden pair (plan 002 step 9): body boat_hi + transom flaps; donor and vanilla author
+  // identical frame positions — the pair reproduces exactly, no shims, no shift.
+  extract('csdinghy.dff', 'dff/cutscene/csdinghy.dff'),
+  extract('dinghy.dff', 'dff/cutscene/dinghy.dff'),
   extract('bobcat.txd', 'dff/cutscene/bobcat.txd'), // the txdp parent of the closure-check tests
   copy('data/peds.ide', 'data/peds.ide'),
   copy('data/handling.cfg', 'data/handling.cfg'),

@@ -37,6 +37,19 @@ export interface CsBikeTemplate {
   wheelRadius: number;
 }
 
+/** The boat-branch template (plan 002 step 9): body `boat_hi` under the root, transom flaps as parts.
+ *  No ground/waterline formula — the donor's own placement is the gameplay-correct one, and no stock
+ *  scene plays csdinghy to anchor anything else. */
+export interface CsBoatTemplate {
+  bodyBoneId: number;
+  /** The `boat_hi` frame's VANILLA local transform (relative to the skeleton root). */
+  bodyLocal: { position: [number, number, number]; rotation: number[] };
+  bodyName: string;
+  /** Canonical part name → template info, in the template's DFS order (= vanilla bone-id order). */
+  parts: Map<string, CsPartTemplate>;
+  rootName: string;
+}
+
 /** The intermediate body frame some templates put between the root and the chassis (csmonster's COG). */
 export interface CsIntermediateTemplate {
   boneId: number;
@@ -115,7 +128,7 @@ export function extractBikeTemplate(csDff: Uint8Array): CsBikeTemplate {
     throw new Error('cutscene template has no chassis frame directly under the skeleton root');
   }
 
-  const parts = extractParts(clump, children, chassisIndex);
+  const parts = extractParts(clump, children, chassisIndex, 'chassis');
   const wheelRear = parts.get('wheel_rear');
   if (!wheelRear) {
     throw new Error('cutscene template has no wheel_rear part');
@@ -152,6 +165,33 @@ export function extractBikeTemplate(csDff: Uint8Array): CsBikeTemplate {
 }
 
 /**
+ * Extract the boat template from a vanilla cutscene DFF (csdinghy is the only stock boat slot).
+ * Throws when the model is not a cutscene boat rig: no HAnim skeleton root, or no `boat_hi` frame
+ * directly under it.
+ */
+export function extractBoatTemplate(csDff: Uint8Array): CsBoatTemplate {
+  const clump = parseDff(toArrayBuffer(csDff));
+  const children = childrenByFrame(clump);
+  const rootIndex = clump.frames.findIndex((frame) => frame.boneId === 0);
+  if (rootIndex < 0) {
+    throw new Error('cutscene template has no HAnim skeleton root (bone 0)');
+  }
+  const bodyIndex = clump.frames.findIndex((frame) => canonicalPartName(frame.name) === 'boat_hi');
+  if (bodyIndex < 0 || clump.frames[bodyIndex].parentIndex !== rootIndex) {
+    throw new Error('cutscene template has no boat_hi frame directly under the skeleton root');
+  }
+  const body = clump.frames[bodyIndex];
+
+  return {
+    bodyBoneId: requireBoneId(clump, bodyIndex),
+    bodyLocal: { position: [...body.position], rotation: [...body.rotation] },
+    bodyName: body.name.trim(),
+    parts: extractParts(clump, children, bodyIndex, 'boat_hi'),
+    rootName: clump.frames[rootIndex].name.trim(),
+  };
+}
+
+/**
  * Extract the car template from a vanilla cutscene DFF. Throws when the model is not a cutscene car rig
  * (no HAnim skeleton root, no chassis, or anything but four wheel corners).
  */
@@ -178,7 +218,7 @@ export function extractCarTemplate(csDff: Uint8Array): CsTemplate {
     },
     chassisName: clump.frames[chassisIndex].name.trim(),
     ...intermediateOf(clump, bodyParentIndex, rootIndex),
-    parts: extractParts(clump, children, chassisIndex),
+    parts: extractParts(clump, children, chassisIndex, 'chassis'),
     rootName: clump.frames[rootIndex].name.trim(),
     wheelRadius: wheelRadius(clump, wheels),
     wheels,
@@ -216,11 +256,12 @@ function cornerOf(position: readonly number[]): WheelCorner {
   return `${position[0] >= 0 ? 'r' : 'l'}${position[1] >= 0 ? 'f' : 'b'}`;
 }
 
-/** All descendant frames of the chassis, DFS in frame order — nested parts keep their template parent. */
+/** All descendant frames of the body, DFS in frame order — nested parts keep their template parent. */
 function extractParts(
   clump: RWClump,
   children: readonly number[][],
-  chassisIndex: number,
+  bodyIndex: number,
+  bodyCanonical: string,
 ): Map<string, CsPartTemplate> {
   const parts = new Map<string, CsPartTemplate>();
   const visit = (index: number, parentCanonical: string): void => {
@@ -237,7 +278,7 @@ function extractParts(
       visit(childIndex, canonical);
     }
   };
-  visit(chassisIndex, 'chassis');
+  visit(bodyIndex, bodyCanonical);
 
   return parts;
 }

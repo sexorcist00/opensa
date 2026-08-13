@@ -3,12 +3,13 @@ import { describe, expect, it } from 'vitest';
 
 import { type ClumpModel, writeClump } from './rig/clump-io';
 import { IDENTITY_ROTATION } from './rig/matrix';
-import { canonicalPartName, extractBikeTemplate, extractCarTemplate } from './template';
+import { canonicalPartName, extractBikeTemplate, extractBoatTemplate, extractCarTemplate } from './template';
 
 const CS_BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/csbobcat92.dff'));
 const CS_TAXI = new Uint8Array(readFileSync('tests/original/dff/cutscene/cstaxi92.dff'));
 const CS_REMINGTON = new Uint8Array(readFileSync('tests/original/dff/cutscene/csremington92.dff'));
 const CS_MTBIKE = new Uint8Array(readFileSync('tests/original/dff/cutscene/csmtbike92.dff'));
+const CS_DINGHY = new Uint8Array(readFileSync('tests/original/dff/cutscene/csdinghy.dff'));
 
 /** A minimal synthetic clump: named frames under a root, no HAnim — not a cutscene rig. */
 function clumpWithoutBones(): Uint8Array {
@@ -122,6 +123,32 @@ describe('extractBikeTemplate', () => {
       expect(template.parts.get('pedal_l')?.parentCanonical).toBe('chainset');
       expect(template.groundZ).toBeCloseTo(-0.256, 3);
       expect(template.wheelRadius).toBeGreaterThan(0.25);
+    });
+  });
+});
+
+describe('extractBoatTemplate', () => {
+  describe('negative cases', () => {
+    it('throws on a model with no HAnim skeleton root', () => {
+      expect(() => extractBoatTemplate(clumpWithoutBones())).toThrow('no HAnim skeleton root');
+    });
+
+    it('throws on a car rig (no boat_hi frame)', () => {
+      expect(() => extractBoatTemplate(CS_BOBCAT)).toThrow('no boat_hi frame');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reads csdinghy: boat_hi body bone 1, two transom-flap parts', () => {
+      const template = extractBoatTemplate(CS_DINGHY);
+      expect(template.rootName).toBe('dinghy');
+      expect(template.bodyName).toBe('boat_hi');
+      expect(template.bodyBoneId).toBe(1);
+      expect(template.bodyLocal.position[2]).toBeCloseTo(0.357, 3);
+      expect([...template.parts.keys()]).toEqual(['boat_rearflap_right', 'boat_rearflap_left']);
+      expect(template.parts.get('boat_rearflap_right')?.boneId).toBe(2);
+      expect(template.parts.get('boat_rearflap_left')?.boneId).toBe(3);
+      expect(template.parts.get('boat_rearflap_left')?.parentCanonical).toBe('boat_hi');
     });
   });
 });

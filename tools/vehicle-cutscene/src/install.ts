@@ -5,8 +5,8 @@ import { openArchive } from '@opensa/renderware/archive/img-archive';
  * `data/txdcut.ide` (fix R*'s `csopcarla` typo row, add the rows R* left out) so the empty-TXD route
  * (step 6) has a parent for every slot. Vanilla cs TXDs stay in place until step 6.
  *
- * Per-slot conversion failures are collected and reported, never silently skipped; boat slots are
- * reported as pending their branch (plan 002 step 9).
+ * Per-slot conversion failures are collected and reported, never silently skipped. All three branches
+ * (car / bike / boat) convert; the branch comes from the slot's `vehicles.ide` type.
  */
 import { parseCarcols, type VehicleColours } from '@opensa/renderware/parsers/text/carcols.parser';
 import { openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
@@ -17,8 +17,9 @@ import { join, resolve } from 'node:path';
 import { type Census, type CutsceneSlot, loadCensus, matchMods, type SlotReadiness } from './census';
 import { bakePaintMarkers, paintColoursFor } from './materials';
 import { convertBike } from './rig/bike';
+import { convertBoat } from './rig/boat';
 import { convertCar } from './rig/car';
-import { extractBikeTemplate, extractCarTemplate } from './template';
+import { extractBikeTemplate, extractBoatTemplate, extractCarTemplate } from './template';
 import { emptyTxd, textureNames, unresolvedTextures } from './txd';
 
 export interface CutsceneInstallOptions {
@@ -113,21 +114,13 @@ function convertSlot(
 
     return;
   }
-  if (slot.branch === 'boat') {
-    summary.skipped.push({ csName: slot.csName, reason: 'boat branch pending (plan 002 step 9)' });
-
-    return;
-  }
   try {
     const vanilla = img.get(`${slot.csName}.dff`);
     if (!vanilla) {
       throw new Error(`cutscene.img has no ${slot.csName}.dff`);
     }
     const modDff = new Uint8Array(readFileSync(join(inPath, folder!, `${slot.model}.dff`)));
-    const { dff } =
-      slot.branch === 'bike'
-        ? convertBike(modDff, extractBikeTemplate(vanilla))
-        : convertCar(modDff, extractCarTemplate(vanilla));
+    const { dff } = convertSlotDff(slot.branch, modDff, vanilla);
     const { baked, bytes } = bakePaintMarkers(dff, paintColoursFor(context.carcols, slot.model));
     const txd = slotTxd(slot, bytes, join(inPath, folder!, `${slot.model}.txd`), context);
 
@@ -147,6 +140,17 @@ function convertSlot(
   } catch (error) {
     summary.errors.push({ csName: slot.csName, message: (error as Error).message });
   }
+}
+
+function convertSlotDff(branch: CutsceneSlot['branch'], modDff: Uint8Array, vanilla: Uint8Array): { dff: Uint8Array } {
+  if (branch === 'bike') {
+    return convertBike(modDff, extractBikeTemplate(vanilla));
+  }
+  if (branch === 'boat') {
+    return convertBoat(modDff, extractBoatTemplate(vanilla));
+  }
+
+  return convertCar(modDff, extractCarTemplate(vanilla));
 }
 
 /**
