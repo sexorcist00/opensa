@@ -37,7 +37,7 @@ scene-specific anims).
 | 1 | PROLOG1 | cstaxi92 | ✅ (gate 4/7 + 003) |
 | 2 | PROLOG3 | cscopcarla92, cstaxi92 | ✅ (gate 4/7 + 003) |
 | 3 | STRP4B2 | csmtbike92 | ✅ (002 step 8) |
-| 4 | DESERT9 | csbobcat92 | |
+| 4 | DESERT9 | csbobcat92 | ✅ after rounds 1–2 ("glass with the door, one rack") |
 | 5 | BCESA4W | csbravura, cszr350b | |
 | 6 | BCESAR4 | cssavanna, cszr350 | |
 | 7 | BCESAR5 | cssadler, cszr350, cszr350b | |
@@ -97,7 +97,7 @@ scene-specific anims).
   parent. Duplicates among adopted frames stay verbatim (nothing binds them — the MTB's two
   `wheel_pj=0-2c` wheels keep their names). `cutscene-fleet-verify.ts` now FAILS on duplicate
   channel names; the rebuilt fleet measures **0** (was 20). Suite 79/79.
-- [ ] **Re-check (user):** DESERT9 re-armed on the fixed build — the glass must swing WITH the door.
+- [x] **Re-check (user):** PASSED with round 2's fix (2026-08-13) — the glass swings with the door.
 
 ### Round 2 — DESERT9: whole bed rack swung 50° through the air; stacked racks (2026-08-13, screenshot)
 
@@ -124,8 +124,8 @@ scene-specific anims).
 - Fleet rebuilt: 23/23, 0 errors, 0 duplicate channel names; suite 154/154 (tool + pmb). Paint
   materials 400 → 395 (the dropped surplus extras carried five markers); cutscene.img 311.1 →
   307.3 MB (four surplus GMC racks alone).
-- [ ] **Re-check (user):** DESERT9 on this build — bed shows ONE rack, nothing floats, glass rides
-      the door.
+- [x] **Re-check (user):** PASSED (2026-08-13): "now everything's ok — the glass with the door, one
+      rack." DESERT9 ✅ in the ledger; the sweep resumes at row 5 (BCESA4W).
 
 ## Step 3 — the approval
 

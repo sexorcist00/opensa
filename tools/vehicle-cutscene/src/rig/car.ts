@@ -13,9 +13,12 @@
  * round). Stock donors yield identity shims, i.e. none at all.
  *
  * Still true from the earlier rounds:
- *   - part set = template ∩ mod by canonical name; every other visible mod mesh is ADOPTED under its
- *     nearest carried ancestor (fresh bone ids, un-animated) — only `_dam`/`_vlo` and f_wheel variant
- *     containers stay out, one mesh per `f_extras`/`f_class` container;
+ *   - part set = template ∩ mod by canonical name — EXCEPT `extra*`, never matched (the '92 extras
+ *     are scene furniture the anims pose; a mod's spawn variants are unrelated — plan 004 round 2) —
+ *     and every other visible mod mesh is ADOPTED under its nearest carried ancestor (fresh bone ids,
+ *     RENAMED `_ad` so no scene channel can bind it — plan 004 rounds 1–2) — only `_dam`/`_vlo` and
+ *     f_wheel variant containers stay out, one mesh per `f_extras`/`f_class` container and ONE
+ *     `extra*` per model;
  *   - a `<part>_ok/_dam` frame under its own dummy carries junk the game destroys — the hinge is the
  *     dummy; every OTHER mesh frame (stock copcarla's junk-space chassis) keeps its transform;
  *   - LEFT wheels on identity-rotation templates (cscopcarla/cstaxi92 style) get a MIRRORED geometry

@@ -79,6 +79,16 @@ commits; suite 4 175 → **4 203** green; the tool's plans:
   progression across LS-era cutscenes.
 - Deferred from earlier sessions: 101-escalators audit, 098 timing, the three gates.
 
+## Plan 004's first scene already paid for the sweep (post-close, same day)
+
+DESERT9 — the sweep's first new scene — found TWO emit-model defects in two rounds, both fixed the
+same day (the plan's round records carry the ledger): anim binding is NOT first-match-only (the
+GMC's nested door-glass duplicate bound the door channel and floated midair — the step-10
+"bind-safe" claim above is corrected in place), and scenes drive channels for frames NO vanilla
+model has (`windscreen_ok`), so EVERY adopted frame is now renamed `_ad`; plus the extras policy
+(vanilla extras are posed scene furniture; a mod's spawn variants never match — one adopted, like
+SA's own at-most-one rule). Field re-check passed: "glass with the door, one rack".
+
 ## Session-close audit sweep (docs + tests)
 
 Coverage re-run at close: **91.92 / 82.6 / 92.09 / 92** vs floors 86 / 77 / 88 / 86 — floors hold.

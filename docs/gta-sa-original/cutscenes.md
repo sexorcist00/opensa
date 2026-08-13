@@ -44,7 +44,15 @@ the reference install — not OpenSA.
 - **Binding is by frame NAME** (`CAnimBlendAssociation` via `CCutsceneMgr`), and the anims carry a
   channel for EVERY bone of the vanilla model — 2-frame static `KRT0`s included — so an animated
   bone's local transform is fully anim-owned; a converted model's own frame locals only survive on
-  frames the anim has no channel for. Wheels spin via `KR00` on the MESH bones; wheel NODES get static
+  frames the anim has no channel for. **Binding is NOT first-match-only** (field-measured 2026-08-13,
+  DESERT9): a SECOND frame carrying a bound name is driven too — the channel's local applied under
+  that frame's own parent, a double transform. **And scenes carry channels for frames NO vanilla
+  model has** (DESERT9 drives `windscreen_ok` on csbobcat92, which ships none — R* authored anims
+  against a richer rig; the channel is simply unbound in vanilla). Both are why the converter
+  renames every adopted mod mesh (`_ad`).
+- **KRT0 keyframe layout: 8×f32 per frame** — quat x,y,z,w · trans x,y,z · time (decoded 2026-08-13
+  against known bind locals; KR00 omits the translation). A 1-frame channel is a static POSE — the
+  scene may hold a door OPEN with it, so "static" never means "bind pose". Wheels spin via `KR00` on the MESH bones; wheel NODES get static
   `KRT0` translations. In SA (unlike III/VC) main.scm only loads-by-name and starts; the scene's
   OBJECT list is the IFP's `NAME` chunks themselves (one per `DGAN`, mixed-case: `CsCopcarSF`,
   `CsFirela`), and the `<name>.dat` beside it is CAMERA data — zoom/FOV keyframe rows, no model
