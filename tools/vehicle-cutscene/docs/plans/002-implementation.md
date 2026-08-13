@@ -387,8 +387,11 @@ same machinery the 21 field-verified car slots ride.
       all slots — 317/317 archive DFFs parse, 317 skeletons consistent, first-frame-per-vanilla-name
       carries the vanilla bone id everywhere, hierarchy ids unique, indexes contiguous. The sweep also
       measured **20 adopted duplicate names** across the fleet (a mod mesh named like a vanilla part,
-      landing via adoption) — bind-safe because anims take the FIRST matching frame and template bones
-      are emitted before adoption; the gate-7 sheriff field-passed carrying exactly this pattern.
+      landing via adoption) — recorded then as "bind-safe: the first matching frame wins".
+      **FALSIFIED by plan 004 round 1 (same day): a duplicate of a vanilla name still BINDS and
+      double-transforms** (DESERT9's floating door glass); gate 7 never animated a duplicated frame,
+      which is why it passed. The emit now renames adopted collisions with `_ad` and the fleet
+      measures 0 duplicates.
 - [x] Numbers into `docs/benchmarks/tools/2026-08-13-vehicle-cutscene-fleet.md` — a NEW benchmarks
       family (tool builds; neither frame-cost nor physics fits a build measurement): wall-clock
       **3.55 s** for the whole run (APFS COW makes the 1.7 GB base copy near-free), cutscene.img

@@ -31,6 +31,13 @@ export const VARIANT_CONTAINER_RE = /^f_(?:extras|class)/;
 export const YEAR_VARIANT_RE = /\[\d{4}[\]}]/;
 /** Shim frame name suffix — must never collide with an anim channel name (vanilla frame names). */
 export const SHIM_SUFFIX = '_pv';
+/** Adopted-frame rename suffix for a mod mesh whose name an EMITTED frame already carries. Anim
+ *  binding is NOT first-match-only: a later duplicate of a vanilla name still binds its channel and
+ *  gets driven to the vanilla LOCAL under its own parent — a double transform (DESERT9, plan 004
+ *  round 1: the GMC Sierra ships door glass as a second `door_lf_ok` nested under the first; the
+ *  scene swung the door and the glass floated midair). A renamed frame binds nothing and simply
+ *  rides its parent. */
+export const ADOPT_SUFFIX = '_ad';
 
 export interface BoneSpec {
   boneId: number;
@@ -96,6 +103,13 @@ export interface PartsRigTemplate {
   parts: ReadonlyMap<string, CsPartTemplate>;
 }
 
+/** An adopted frame's emitted name: the mod's own, unless a RESERVED (pre-adoption) frame carries it —
+ *  then suffixed with {@link ADOPT_SUFFIX} so no anim channel can bind it. Duplicates among adopted
+ *  frames stay verbatim: nothing binds them (only vanilla names are channels). */
+export function adoptedFrameName(reserved: ReadonlySet<string>, name: string): string {
+  return reserved.has(name) ? `${name}${ADOPT_SUFFIX}` : name;
+}
+
 /** Every remaining visible mod mesh rides its nearest CARRIED ancestor (a wheel mesh spins with its
  *  wheel bone; brake calipers ride the forks; a propeller rides its transom flap). */
 export function adoptOrphans(
@@ -106,6 +120,7 @@ export function adoptOrphans(
   carriedFrames: ReadonlyMap<number, number>,
   report: ConvertReport,
 ): void {
+  const reserved = reservedFrameNames(emit);
   for (const atomic of analysis.model.atomics) {
     const index = atomic.frameIndex;
     const canonical = canonicalPartName(analysis.model.frames[index].name);
@@ -121,7 +136,7 @@ export function adoptOrphans(
     const local = compose(invert(emit.worlds[parentFrame]), lift(analysis.hingeOf(index), shiftZ));
     const frameIndex = pushFrame(emit, {
       boneId: emit.nextBoneId++,
-      name: analysis.model.frames[index].name.trim(),
+      name: adoptedFrameName(reserved, analysis.model.frames[index].name.trim()),
       parentIndex: parentFrame,
       position: local.position,
       rotation: local.rotation,
@@ -504,6 +519,12 @@ export function pushFrame(emit: Emit, frame: Omit<ClumpFrame, 'flags'> & { flags
   emit.worlds.push(compose(parentWorld, { position: full.position, rotation: full.rotation }));
 
   return emit.frames.length - 1;
+}
+
+/** The emitted frame names BEFORE adoption begins — the template bones (the anim channel names) plus
+ *  the shims; the set an adopted frame's name must not collide with. */
+export function reservedFrameNames(emit: Emit): ReadonlySet<string> {
+  return new Set(emit.frames.map((frame) => frame.name));
 }
 
 /** The closest `f_extras`/`f_class` VARIANT container above (or at) a mod frame, or -1. */

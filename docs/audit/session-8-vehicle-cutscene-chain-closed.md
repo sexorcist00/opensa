@@ -36,8 +36,11 @@ commits; suite 4 175 → **4 203** green; the tool's plans:
   `scripts/debug/cutscene-fleet-verify.ts` — its first draft over-asserted two non-requirements
   (name-unique bone ids; vanilla-id order) and was corrected to the honest invariants: the FIRST
   frame per vanilla name carries the vanilla id (anims bind to the first match; template bones emit
-  before adoption), ids unique, indexes contiguous. The fleet's 20 adopted duplicate names are
-  bind-safe — the pattern gate-7's sheriff field-passed.
+  before adoption), ids unique, indexes contiguous. The fleet's 20 adopted duplicate names were
+  recorded as bind-safe — **falsified the same day by plan 004 round 1** (DESERT9's floating door
+  glass: a duplicate of a vanilla name still binds and double-transforms; gate 7 simply never
+  animated one). Fixed by the `_ad` adopted-rename; the fleet now measures 0 duplicates and the
+  verify script fails on any.
 - **Step 11 — pmb `cutscene` stage** (the user's call: stage, not manual step). Sits right after
   `vehicles` — same source folder, same populated-check — reading the INSTALLED game, so the
   empty-TXD route finally runs where it was designed to (~40 B per slot vs 148 MB self-contained).

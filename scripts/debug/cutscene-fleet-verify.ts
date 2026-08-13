@@ -5,9 +5,11 @@
  * Checks the honest invariants, and ONLY those:
  *   - every DFF in the built archive parses; every skeleton is consistent (hierarchy size = boned
  *     frames);
- *   - per converted slot, the FIRST frame carrying a vanilla name carries the vanilla bone id — anims
- *     bind by NAME to the first matching frame, and the emit orders template bones before adoption. A
- *     LATER duplicate is an adopted mod mesh (field-accepted: gate 7's sheriff) — counted, not failed;
+ *   - per converted slot, the frame carrying a vanilla name carries the vanilla bone id, and NO
+ *     emitted frame duplicates a vanilla name — anim binding is NOT first-match-only: a duplicate
+ *     still binds and double-transforms (DESERT9 door glass, plan 004 round 1; the first draft of
+ *     this script called duplicates "bind-safe" and the field falsified it). The emit renames
+ *     adopted collisions with `_ad`;
  *   - hierarchy ids unique, node indexes contiguous. Vanilla-id ORDER is deliberately NOT checked
  *     ("ids bind the anims, order is free" — the glendale golden test).
  *
@@ -98,6 +100,8 @@ for (const slot of slots) {
       firstByName.set(frame.name, frame.boneId);
     } else {
       duplicateNames += 1;
+      diffFailures += 1;
+      console.log(`DUPLICATE CHANNEL NAME ${slot}/${frame.name}: a second frame would bind the anim too`);
     }
   }
   for (const [name, boneId] of firstByName) {
@@ -123,6 +127,6 @@ for (const slot of slots) {
 }
 console.log(
   `structural diff vs vanilla: ${slots.length} slots, ${diffFailures} failure(s), ` +
-    `${duplicateNames} adopted duplicate name(s) (bind-safe: template bone comes first)`,
+    `${duplicateNames} duplicate channel name(s) (must be 0 — a duplicate binds and double-transforms)`,
 );
 process.exitCode = failures + diffFailures > 0 ? 1 : 0;

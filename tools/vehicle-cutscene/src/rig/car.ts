@@ -31,6 +31,7 @@ import { canonicalPartName, type CsTemplate, geometryZHalfExtent, toArrayBuffer,
 import { mirrorGeometryBodyX } from './bake';
 import { type ClumpAtomic, type ClumpModel, type OpaqueChunk, readClump, writeClump } from './clump-io';
 import {
+  adoptedFrameName,
   buildHierarchy,
   childrenByFrame,
   collectDropped,
@@ -45,6 +46,7 @@ import {
   nearestCarriedAncestor,
   ORPHAN_SKIP_RE,
   pushFrame,
+  reservedFrameNames,
   variantContainerOf,
   worldTransforms,
 } from './emit';
@@ -120,6 +122,7 @@ function adoptOrphanParts(
   carriedFrames: ReadonlyMap<number, number>,
   report: CarConvertReport,
 ): void {
+  const reserved = reservedFrameNames(emit);
   const servedVariantContainers = new Set<number>();
   for (const atomic of analysis.model.atomics) {
     const index = atomic.frameIndex;
@@ -144,7 +147,9 @@ function adoptOrphanParts(
     const local = compose(invert(emit.worlds[parentFrame]), lift(analysis.hingeOf(index), shiftZ));
     const frameIndex = pushFrame(emit, {
       boneId: emit.nextBoneId++,
-      name: analysis.model.frames[index].name.trim(),
+      // Renamed on a name collision with an emitted frame — a duplicate of a vanilla name still
+      // BINDS its anim channel and double-transforms (DESERT9 door glass, plan 004 round 1).
+      name: adoptedFrameName(reserved, analysis.model.frames[index].name.trim()),
       parentIndex: parentFrame,
       position: local.position,
       rotation: local.rotation,

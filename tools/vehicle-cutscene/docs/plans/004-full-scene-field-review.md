@@ -78,6 +78,27 @@ scene-specific anims).
 - [ ] Anything that becomes a permanent rule lands where its family lives in the same change
       (contracts / edge-cases / the plan-002 emit header).
 
+### Round 1 — DESERT9: door glass floating midair (2026-08-13, screenshot on record)
+
+- **Seen:** csbobcat92's driver door swings open in the scene; a glass pane hovers in the air beside
+  the cab, detached from the door.
+- **Root cause:** the GMC Sierra mod ships its door as TWO meshes with the SAME name — `door_lf_ok`
+  (panel) with a second `door_lf_ok` (glass) nested under it. The panel became the template bone;
+  the glass was adopted under that bone at ~identity — correct placement. But **anim binding is NOT
+  first-match-only**: the duplicate of the vanilla name also bound the door channel and was driven
+  to the vanilla DOOR local under its own parent (the already-animated door bone) — a double
+  transform. This falsifies step 10's "bind-safe: template bone comes first" claim; gate 7 never
+  caught it because none of its scenes animated a duplicated frame — DESERT9 is the first that does.
+  The same defect was latent on csfirela's adopted `wheel_rf/lb/rb` duplicates (RIOT4E1/2 would
+  have shown spinning-wheel ghosts) and the other 18 fleet duplicates.
+- **Fix (one variable):** an adopted frame whose name collides with a PRE-ADOPTION emitted frame
+  (the template bones = the channel-name set) is renamed with `_ad` (`adoptedFrameName` in
+  `rig/emit.ts`, shared by all three branches) — a renamed frame binds nothing and simply rides its
+  parent. Duplicates among adopted frames stay verbatim (nothing binds them — the MTB's two
+  `wheel_pj=0-2c` wheels keep their names). `cutscene-fleet-verify.ts` now FAILS on duplicate
+  channel names; the rebuilt fleet measures **0** (was 20). Suite 79/79.
+- [ ] **Re-check (user):** DESERT9 re-armed on the fixed build — the glass must swing WITH the door.
+
 ## Step 3 — the approval
 
 - [ ] All 35 rows carry a verdict; open findings zero. **The user's blanket approval closes the

@@ -262,5 +262,24 @@ describe('convertCar', () => {
       const converted = readClump(dff);
       expect(frameByName(converted, 'Box01')?.rotation).toEqual([...IDENTITY_ROTATION]);
     });
+
+    it('RENAMES an adopted mesh that duplicates an emitted frame name — a duplicate still binds its channel', () => {
+      // DESERT9 (plan 004 round 1): the GMC Sierra ships door glass as a SECOND `door_lf_ok` nested
+      // under the first; anim binding is not first-match-only, so the duplicate was driven to the
+      // vanilla door local under the door bone — a double transform, glass floating midair.
+      // Synthesized here on the stock donor: the windscreen mesh renamed to the door's exact name.
+      const model = readClump(BOBCAT);
+      const windscreen = model.frames.findIndex((frame) => frame.name === 'windscreen_ok');
+      model.frames[windscreen].name = 'door_lf_ok';
+      const template = extractCarTemplate(CS_BOBCAT);
+      const { dff, report } = convertCar(writeClump(model), template);
+      const converted = readClump(dff);
+
+      const doorFrames = converted.frames.filter((frame) => frame.name === 'door_lf_ok');
+      expect(doorFrames).toHaveLength(1); // the template bone alone keeps the channel name
+      expect(doorFrames[0].boneId).toBe(14); // vanilla id
+      expect(frameByName(converted, 'door_lf_ok_ad')).toBeDefined(); // the adopted mesh, unbindable
+      expect(report.adoptedFromMod).toContain('door_lf_ok');
+    });
   });
 });

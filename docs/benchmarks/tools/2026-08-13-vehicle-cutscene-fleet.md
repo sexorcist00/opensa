@@ -70,5 +70,8 @@ carry no plate quads and gain nothing.
 - Converted-vs-vanilla diff over all 23 slots: **0 failures** — on every slot the FIRST frame carrying
   a vanilla name carries the vanilla bone id (anims bind by name to the first match, and template
   bones are emitted before adoption), hierarchy ids unique, node indexes contiguous.
-- 20 adopted duplicate names across the fleet (a mod mesh named like a vanilla part landing via
-  adoption) — bind-safe by frame order, the same pattern gate 7's sheriff field-passed.
+- 20 adopted duplicate names across the fleet at THIS run (a mod mesh named like a vanilla part
+  landing via adoption) — recorded as bind-safe by frame order. **Falsified the same day by plan 004
+  round 1** (a duplicate still binds and double-transforms — DESERT9's floating door glass): the
+  emit now renames adopted collisions with `_ad`, and the rebuilt fleet measures **0 duplicates**
+  (`cutscene-fleet-verify.ts` fails on any).
