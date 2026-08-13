@@ -221,6 +221,21 @@ user's answers:
   2493.4, −1734.3, 12.4, heading 258.8 — Grove Street). Held back deliberately — one variable per
   field round.
 
+**Round 3 (2026-08-13): the user's screenshot sequence SOLVED it — not a camera bug, a BOOT RACE.**
+Right after the loading screen his shots show ~1 s of OUR PROLOG3 (the sheriff car + taxi floating
+in an unstreamed void), then the game's own intro title card ("Francis INTL. Airport"), then the
+intro playing 10 s late with the audio ahead and the framing off. Root cause: **CLEO threads outrun
+main.scm on a new game** — in the first moments `IS_PLAYER_PLAYING` is already true and ONMISSION
+is still 0, so the gate passed DURING loading, our `02E7` ran first, and main.scm's intro then
+started on top — two cutscenes on one manager, whose clock had already advanced (the 10 s offset,
+the desync, round 1's "airport scene" — that was the STOCK intro over our scene all along, which
+also retro-explains round 1's white stuck: the intro's own white shutter). FIX: 5 s grace before
+the gate + a third OR-condition `GET_FADING_STATUS` (never fire during any fade main.scm owns).
+360 B rebuilt + reinstalled. Consequence for the user's flow: on NEW GAME the scene now fires only
+after the intro MISSION fully passes (bike ride included) — the cheap loop is a POST-INTRO SAVE:
+load → 5 s → scene. The unstreamed-void shot is the recorded evidence for the `0A0B` parity gap —
+next variable if a far-from-site scene still shows a broken world.
+
 **STOP: user's verdict closes the plan.** **Record:** verdict + the ini row count + any scene that
 needed the timeout path (each is a fact about that scene worth a line).
 

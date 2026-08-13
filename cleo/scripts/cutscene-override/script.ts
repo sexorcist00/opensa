@@ -30,6 +30,8 @@ const FADE_IN_MS = 1000;
 const LOAD_TIMEOUT_MS = 15_000;
 /** Belt for a `02E9` that never fires: no scene runs longer than this — restore instead of hang. */
 const FINISH_TIMEOUT_MS = 300_000;
+/** New-game boot race: main.scm needs a beat to set ONMISSION before the gate may trust it. */
+const GRACE_MS = 5000;
 const POLL_MS = 250;
 
 export const script = defineScript({
@@ -46,11 +48,17 @@ export const script = defineScript({
         s.op('SET_LVAR_INT', area, int(0));
         s.op('READ_INT_FROM_INI_FILE', str(INI), str('areas'), scene, area);
 
-        // Wait until main.scm's intro is done or skipped: player playing AND ONMISSION == 0.
+        // Field round 3: CLEO threads outrun main.scm on a NEW GAME — for the first moments the
+        // player "plays" and ONMISSION is still 0, so an ungated script starts its scene DURING
+        // loading and the game's own intro then starts on top (two cutscenes, one manager, clocks
+        // and camera desync). The grace wait lets main.scm claim ONMISSION first; the fading check
+        // keeps us out of the boot fade and every later fade main.scm owns.
+        s.wait(GRACE_MS);
         s.while(
           () => {
             s.not('IS_PLAYER_PLAYING', int(PLAYER));
             s.not('IS_INT_VAR_EQUAL_TO_NUMBER', s.global(ONMISSION), int(0));
+            s.op('GET_FADING_STATUS');
           },
           () => s.wait(POLL_MS),
           { any: true },
