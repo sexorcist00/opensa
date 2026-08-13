@@ -311,7 +311,11 @@ the loop); paint = stock carcols until the full pipeline supplies the mod palett
 
 ---
 
-## Step 8 (P2) — bike branch (`rig/bike.ts`, csmtbike92) ✅ SHIPPED 2026-08-13 (field verdict pending)
+## Step 8 (P2) — bike branch (`rig/bike.ts`, csmtbike92) ✅ SHIPPED + FIELD-PASSED 2026-08-13
+
+**Field verdict (2026-08-13, one round, scene STRP4B2 via the cutscene-override instrument):
+"everything's great" — the mod MTB stands on the ground, wheels/brakes/reflectors/handlebars/fenders
+all in place, the bike rides the scene as one body. First-round pass; no regressions reported.**
 
 - [x] Template from vanilla csmtbike92 (`extractBikeTemplate`): root `csbikechassis_dummy`, bones DFS
       0–8 — chassis 1, wheel_rear 2, chainset 3, pedal_r 4, pedal_l 5, handlebars 6, forks_front 7,
@@ -334,8 +338,9 @@ the loop); paint = stock carcols until the full pipeline supplies the mod palett
       `chassis_vlo`, shift 0.000, vanilla bone ids verbatim, hierarchy ids ordered-subsequence,
       145 408 → 123 627 B. Field scene is REACHABLE: `STRP4B2` is the ONLY scene in all 148 cuts.img
       IFPs that plays csmtbike92 — and every bone except the root is a 2-frame static KRT0 (the root
-      carries 67 KRT0 frames): the bike moves as one rigid body. Field round rides the
-      cutscene-override instrument (cleo/scripts plan 003); verdict pending below.
+      carries 67 KRT0 frames): the bike moves as one rigid body. The field round rode the
+      cutscene-override instrument (cleo/scripts plan 003) — verdict above; the ini was disarmed
+      (`scene =`) after the pass.
 
 **Record (2026-08-13):** Smooth Criminal MTB 2 972 598 → 2 581 896 B: parts 6 (handlebars MISSING —
 the mod ships no such frame; its bars are `f_extras` variants adopted under the chassis, un-animated,

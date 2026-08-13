@@ -1,9 +1,9 @@
 # vehicle-cutscene
 
-**Status: plan 002 steps 1–8 shipped, both car field gates PASSED (2026-08-12) — the whole car fleet
-converts and the intro cutscenes field-verified against vanilla; the bike branch shipped 2026-08-13
-(22/22 converted, field verdict pending via scene STRP4B2). Remaining: the boat branch, the
-full-fleet numbers, pipeline integration ([002](docs/plans/002-implementation.md) steps 9–11) and the
+**Status: plan 002 steps 1–8 shipped and field-verified — both car gates PASSED (2026-08-12) and the
+bike branch FIELD-PASSED first round (2026-08-13, scene STRP4B2; 22/22 fleet converts). Remaining:
+the boat branch, the full-fleet numbers, pipeline integration
+([002](docs/plans/002-implementation.md) steps 9–11) and the
 [plate bake](docs/plans/003-plate-bake.md).**
 
 Converts installed **vehicle mods** into their **cutscene counterparts** — the `cs*` models in
