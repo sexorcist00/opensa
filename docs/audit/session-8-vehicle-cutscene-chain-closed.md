@@ -19,8 +19,10 @@ commits; suite 4 175 → **4 203** green; the tool's plans:
   paid gate-7's missing-contract debt): `f_extras:<n>`/`f_class:<n>` adopt the first meshed child
   SUBTREE whole (the b-handlebar set keeps its brake levers + grips), `+` containers are additive;
   cars keep their field-frozen one-mesh rule. Field: scene `STRP4B2` — the ONLY scene in all 148
-  IFPs that plays csmtbike92, static except its 67-frame root channel; cutscene wheels never spin
-  anywhere, so spin adoption is field-unverifiable by construction (named in the plan).
+  IFPs that plays csmtbike92, static except its 67-frame root channel — so BIKE wheel/pedal
+  animation (and with it the adopted-mesh spin path) is exercised by no scene in the game; CAR
+  wheels do spin in scenes (42-frame `KR00`s in the intro) and were field-verified at gates 4/7.
+  (Scoped 2026-08-13 — an earlier phrasing over-generalized this to all cutscene wheels.)
 - **Step 9 — the boat branch, structurally verified.** The bike part-loop generalized into the
   shared parts-rig pass (`emitPartsRig`/`analyzePartsRig` in `rig/emit.ts` — bike golden tests green
   through the move); `rig/boat.ts` is the thin `boat_hi` + transom-flaps vocabulary. NO vertical
@@ -64,9 +66,20 @@ commits; suite 4 175 → **4 203** green; the tool's plans:
   improvement); the shared parts-rig pass makes any future wheel-less branch a vocabulary file;
   the conversion's frame-name behaviour is now a CONTRACT mod authors can read.
 
-## Still open (both the user's)
+## Still open (all the user's)
 
+- **Plan 004 (opened at session close, the user's order): the full scene field review** — all 35
+  vehicle scenes swept via the override, per-scene verdict ledger, blanket approval closes it
+  (3 rows pre-passed; 32 to run).
 - 002 step 11 field acceptance: a full-pipeline build with vehicles + cutscene stages (the stock
   `:sa` script excludes vehicles — which npm script carries it is a packaging call), then story
   progression across LS-era cutscenes.
 - Deferred from earlier sessions: 101-escalators audit, 098 timing, the three gates.
+
+## Session-close audit sweep (docs + tests)
+
+Coverage re-run at close: **91.92 / 82.6 / 92.09 / 92** vs floors 86 / 77 / 88 / 86 — floors hold.
+Two doc defects found and fixed in the same sweep: `gta-sa-original/cutscenes.md`'s scene-coverage
+count was 22/23 (an exact-name scan shows `cscopcarla` appears in no scene either — 21/23; the first
+count read `cscopcarla92` hits as covering both slots), and this audit's own wheels claim was
+over-generalized (scoped above). The plates TXD delta was appended to the benchmarks record.

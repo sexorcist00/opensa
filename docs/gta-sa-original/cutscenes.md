@@ -50,9 +50,14 @@ the reference install — not OpenSA.
   `CsFirela`), and the `<name>.dat` beside it is CAMERA data — zoom/FOV keyframe rows, no model
   names anywhere (measured 2026-08-13; this line previously claimed the object list came from the
   `.dat`).
-- **`csdinghy` is driven by NO cutscene**: across the 35 scenes that animate cs vehicles, 22 of the
-  23 census models appear; the boat alone is scene-less — a cutscene model with no cutscene, cut
-  content like `csandrom92`'s dead txdcut row.
+- **`csdinghy` AND `cscopcarla` are driven by NO cutscene**: across the 35 scenes that animate cs
+  vehicles, 21 of the 23 census models appear (corrected 2026-08-13 by an exact-name scan — the first
+  count read `cscopcarla92` hits as covering both slots). The boat is cut content like `csandrom92`'s
+  dead txdcut row; `cscopcarla` shares its donor and conversion byte-for-byte with `cscopcarla92`,
+  so only the slot NAME goes unexercised.
+- **Car wheels DO spin in scenes** (multi-frame `KR00` on the wheel MESH bones — cstaxi92's `wheel`
+  carries 42 frames in PROLOG1); the BIKE's one scene (`STRP4B2`) is static except its 67-frame root
+  channel, so bike wheel/pedal animation is exercised by no scene in the game (measured 2026-08-13).
 - **The intro's vehicles live in `prolog1.ifp`/`prolog3.ifp`, not `intro*.ifp`** (intro1a drives
   csbat/csplay/props only).
 - License plates: `CCustomCarPlateMgr` generates plate textures for GAMEPLAY vehicles only — cutscene

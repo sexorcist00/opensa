@@ -55,6 +55,14 @@ models.
 (`cszr350`/`cszr350b` and `cscopcarla`/`cscopcarla92` share a donor — the entries are equal-sized but
 emitted per slot; IMG carries no dedupe.)
 
+## Addendum — the plate bake (plan 003, same day)
+
+The plates build (`NO_COMMIT/cs-mods-plates/`, commit after the table above) adds the baked
+`carplate`+`carpback` pair to every plated slot: the run summary's RAW cs-TXD total (unpadded — a
+different base than the sector-padded table above) went **148 828 601 → 149 092 025 B, +263 424 B
+across 21 plated slots (~12.5 KB each)**; cutscene.img 310.8 → 311.1 MB. The bike and boat slots
+carry no plate quads and gain nothing.
+
 ## Structural verification (the step-10 gate)
 
 - All **317** DFFs in the rebuilt archive parse; all **317** skeletons consistent (hierarchy size =
