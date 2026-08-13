@@ -46,6 +46,7 @@ export const script = defineScript({
     const scene = s.localString('scene');
     const area = s.local('area');
     const gateDone = s.local('gateDone');
+    const siteOk = s.local('siteOk');
     const siteX = s.local('siteX');
     const siteY = s.local('siteY');
     const siteZ = s.local('siteZ');
@@ -102,6 +103,25 @@ export const script = defineScript({
             );
           },
         );
+        // Read the scene's world site ([sitex]/[sitey]/[sitez], key = the scene name — the same
+        // var-key read shape as [areas]) and SAY which path was taken: the reads are silent
+        // encodings under real CLEO, and field round 8 could not tell a failed read from a
+        // failed warp. The print doubles as the "override is about to fire" warning.
+        s.op('SET_LVAR_INT', siteOk, int(0));
+        s.if(
+          () => {
+            s.op('READ_FLOAT_FROM_INI_FILE', str(INI), str('sitex'), scene, siteX);
+            s.op('READ_FLOAT_FROM_INI_FILE', str(INI), str('sitey'), scene, siteY);
+            s.op('READ_FLOAT_FROM_INI_FILE', str(INI), str('sitez'), scene, siteZ);
+          },
+          {
+            else: () => s.op('PRINT_STRING_NOW', str('CSOVRD: NO SITE ROW'), int(3000)),
+            then: () => {
+              s.op('SET_LVAR_INT', siteOk, int(1));
+              s.op('PRINT_STRING_NOW', str('CSOVRD: SITE OK'), int(3000));
+            },
+          },
+        );
         s.wait(FADE_MS);
 
         // main.scm's start sequence: fade to black, freeze, area, load, wait for LOADED.
@@ -116,23 +136,16 @@ export const script = defineScript({
         // only streams around the PLAYER — a scene 300 m from where CJ stands renders in a void.
         // main.scm's answer is preloading at the site; ours is the same plus the warp: put the
         // frozen player AT the site (he is the streaming center), then load the world there. A
-        // scene with no [SCENE] section in the ini plays wherever the player already is.
-        s.if(
-          () => {
-            s.op('READ_FLOAT_FROM_INI_FILE', str(INI), scene, str('x'), siteX);
-            s.op('READ_FLOAT_FROM_INI_FILE', str(INI), scene, str('y'), siteY);
-            s.op('READ_FLOAT_FROM_INI_FILE', str(INI), scene, str('z'), siteZ);
+        // scene with no site rows in the ini plays wherever the player already is.
+        s.if(() => s.op('IS_INT_LVAR_EQUAL_TO_NUMBER', siteOk, int(1)), {
+          then: () => {
+            s.op('ADD_VAL_TO_FLOAT_LVAR', siteZ, float(1));
+            s.op('SET_CHAR_COORDINATES', s.global(PLAYER_ACTOR), siteX, siteY, siteZ);
+            s.op('REQUEST_COLLISION', siteX, siteY);
+            s.op('LOAD_SCENE', siteX, siteY, siteZ);
+            s.op('CLEAR_AREA', siteX, siteY, siteZ, float(300), int(1));
           },
-          {
-            then: () => {
-              s.op('ADD_VAL_TO_FLOAT_LVAR', siteZ, float(1));
-              s.op('SET_CHAR_COORDINATES', s.global(PLAYER_ACTOR), siteX, siteY, siteZ);
-              s.op('REQUEST_COLLISION', siteX, siteY);
-              s.op('LOAD_SCENE', siteX, siteY, siteZ);
-              s.op('CLEAR_AREA', siteX, siteY, siteZ, float(300), int(1));
-            },
-          },
-        );
+        });
 
         s.op('SET_AREA_VISIBLE', area);
         s.op('LOAD_CUTSCENE', scene);

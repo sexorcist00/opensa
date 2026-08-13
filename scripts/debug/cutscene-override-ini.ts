@@ -73,7 +73,7 @@ const lines = [
   ';',
   '; [areas] is the interior area main.scm sets before starting that scene; a scene without a',
   '; row plays in area 0 (outside). A scene that shows empty blue void has an unrecorded area.',
-  "; Per-scene [SCENE] x/y/z sections carry the world site from the .cut's own offset row — the",
+  "; [sitex]/[sitey]/[sitez] carry each scene's world site from the .cut's own offset row — the",
   '; override warps the player there (under the fade) so the world streams around the scene.',
   '',
   '[cutscene]',
@@ -81,9 +81,13 @@ const lines = [
   '',
   '[areas]',
   ...[...areas.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([scene, area]) => `${scene}=${area}`),
-  ...[...sceneSites.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .flatMap(([scene, [x, y, z]]) => ['', `[${scene}]`, `x=${x}`, `y=${y}`, `z=${z}`]),
+  ...(['sitex', 'sitey', 'sitez'] as const).flatMap((section, axis) => [
+    '',
+    `[${section}]`,
+    ...[...sceneSites.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([scene, site]) => `${scene}=${site[axis]}`),
+  ]),
   '',
 ];
 
