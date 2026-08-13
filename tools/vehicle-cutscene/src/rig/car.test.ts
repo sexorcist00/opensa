@@ -307,6 +307,61 @@ describe('convertCar', () => {
       });
     });
 
+    it('selector containers: <name>:K groups, no* defaults, year options vs year alternatives (rounds 11–12)', () => {
+      // The burrito's VehFuncs shapes, synthesized on the stock donor (the real mod cannot be a
+      // committed fixture — mods-src is git-ignored). One f_extras with three groups:
+      //   fogs:1   → nofogs (meshless first child = authored OFF) | fogs:2 → fog_ok(mesh)
+      //   year:1   → ver[1983]:1(mesh, unique cluster) | ver[1985]:1(mesh)  — year OPTIONS
+      //   win:1    → win[on]:2 → windy_ok(mesh) | win[off]:2 → nowindy_ok(mesh)
+      // plus a second container holding a year ALTERNATIVE (_[1991]:2 re-offering door_lf_ok).
+      const model = readClump(BOBCAT);
+      const chassisDummy = model.frames.findIndex((frame) => frame.name === 'chassis_dummy');
+      const meshGeometry = model.atomics.find(
+        (atomic) => model.frames[atomic.frameIndex].name === 'windscreen_ok',
+      )!.geometryIndex;
+      const addFrame = (name: string, parentIndex: number): number => {
+        model.frames.push({
+          flags: 3,
+          name,
+          parentIndex,
+          position: [0, 0, 0],
+          rotation: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+        });
+
+        return model.frames.length - 1;
+      };
+      const addMesh = (frameIndex: number): void => {
+        model.atomics.push({ extension: null, flags: 5, frameIndex, geometryIndex: meshGeometry });
+      };
+      const container = addFrame('f_extras:3', chassisDummy);
+      const fogs = addFrame('fogs:1', container);
+      addFrame('nofogs', fogs);
+      addMesh(addFrame('fog_ok', addFrame('fogs:2', fogs)));
+      const year = addFrame('year:1', container);
+      addMesh(addFrame('ver[1983]:1', year));
+      addMesh(addFrame('ver[1985]:1', year));
+      const win = addFrame('win:1', container);
+      addMesh(addFrame('windy_ok', addFrame('win[on]:2', win)));
+      addMesh(addFrame('nowindy_ok', addFrame('win[off]:2', win)));
+      const alternative = addFrame('f_extras:1', chassisDummy);
+      addMesh(addFrame('door_lf_ok', addFrame('_[1991]:2', alternative)));
+
+      const { dff, report } = convertCar(writeClump(model), extractCarTemplate(CS_BOBCAT));
+      const converted = readClump(dff);
+      const has = (name: string): boolean => converted.frames.some((frame) => frame.name === name);
+
+      expect(report.adoptedFromMod).toContain('ver[1983]:1'); // year OPTION: first eligible picked
+      expect(report.adoptedFromMod).toContain('windy_ok'); // first child of its group wins
+      expect(has('ver[1983]:1_ad')).toBe(true);
+      expect(has('windy_ok_ad')).toBe(true);
+      expect(has('ver[1985]:1_ad')).toBe(false); // the non-chosen year
+      expect(has('fog_ok_ad')).toBe(false); // leading meshless no* = authored OFF
+      expect(has('nowindy_ok_ad')).toBe(false);
+      // The year ALTERNATIVE re-offers the carried door — never picked (the taxi's stacked doors).
+      expect(has('door_lf_ok_ad')).toBe(false);
+      expect(converted.frames.filter((frame) => frame.name === 'door_lf_ok')).toHaveLength(1);
+    });
+
     it('RENAMES an adopted mesh that duplicates an emitted frame name — a duplicate still binds its channel', () => {
       // DESERT9 (plan 004 round 1): the GMC Sierra ships door glass as a SECOND `door_lf_ok` nested
       // under the first; anim binding is not first-match-only, so the duplicate was driven to the

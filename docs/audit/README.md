@@ -215,3 +215,15 @@ interpret them.
   edit instead of story progression. Also fixed: `tools/vehicle-cutscene` missing from root
   `workspaces` (the enumerate-everything trap in package.json). Suite 4 175 → 4 203. Remaining:
   the step-11 full-pipeline field acceptance (needs a build without `--exclude vehicles`).
+
+- [`session-9-cutscene-sweep-rounds-3-12.md`](./session-9-cutscene-sweep-rounds-3-12.md)
+  — 2026-08-13, the plan-004 sweep's heavy day: six ledger rows closed (10/35 ✅) through ten field
+  rounds that recovered THREE render laws of the SA cutscene path (atomics draw in file order with
+  z-write on → panes emit last, vanilla's own windscreen_ok-last layout; the vehicle PipelineSet is
+  the gameplay shine AND drops translucents outside a CVehicle → stamped on fully-opaque atomics
+  only; lamp ID markers render raw → baked white like vanilla) plus the VehFuncs selector semantics
+  (`<name>:K` chosen path, `no*` = authored off, year options vs year alternatives via
+  `reoffersCarried`, the whole multi-mesh f_wheel). One wrong-mechanism fix (glass-alpha clamp)
+  taken and retired the same day, recorded as such. The field method is now
+  `docs/development/cutscene-field-testing.md`. Suite 79 → 81 tool tests; no per-model hardcode
+  (grep-checked at the user's ask).
