@@ -340,7 +340,9 @@ row but its chain was superseded by 097). Newest first:
   [`vehicle-cutscene/docs/plans/`](../../tools/vehicle-cutscene/docs/plans/) (`001` architecture + research ·
   `002` implementation — both car field gates passed, bike field-passed, boat structurally verified,
   the full 23-model fleet converts as pmb's `cutscene` stage; the full-pipeline field acceptance
-  remains · `003` plate bake — CLOSED, field-passed: readable plates where vanilla shows blanks).
+  remains · `003` plate bake — CLOSED, field-passed: readable plates where vanilla shows blanks ·
+  `004` full scene field review — PLANNED: all 35 vehicle scenes swept via the override, then the
+  user's approval).
 - **ped-installer** — install ped mod folders: dff/txd → `gta3.img`; a new ped's line → `peds.ide` (replace by
   model, append if new); `--strip` to keep only the installed peds + the player ped (`--player`, default
   `BMYPOL1`). [`ped-installer/docs/plans/`](../../tools/ped-installer/docs/plans/) (`001` architecture · `002`
