@@ -1,13 +1,22 @@
-import type { ClumpAtomic, ClumpFrame, ClumpModel, HierarchyNode, OpaqueChunk } from './clump-io';
-
 /**
- * Branch-agnostic emit machinery shared by the rig branches (car, bike; boat is plan 002 step 9): the
- * Emit accumulator, vanilla-local bone emission with shim frames, atomic/geometry dedupe, hierarchy
- * recomputation and the adoption vocabulary. The emit model itself — vanilla locals as the anims' bind
- * pose, un-animated `_pv` shims absorbing the donor deltas, whole-shell adoption — is documented at the
- * top of `rig/car.ts`, where it was field-won (plan 002 gates 4 and 7).
+ * Branch-agnostic emit machinery shared by the rig branches (car, bike, boat): the Emit accumulator,
+ * vanilla-local bone emission with shim frames, atomic/geometry dedupe, hierarchy recomputation and
+ * the adoption vocabulary — plus the shared "body + parts subtree" conversion the wheel-less branches
+ * (bike, boat) are: one body bone under the skeleton root, template parts matched by canonical name,
+ * everything else adopted. The emit model itself — vanilla locals as the anims' bind pose, un-animated
+ * `_pv` shims absorbing the donor deltas, whole-shell adoption — is documented at the top of
+ * `rig/car.ts`, where it was field-won (plan 002 gates 4 and 7).
  */
+import { canonicalPartName, type CsPartTemplate } from '../template';
 import { isIdentityDelta } from './bake';
+import {
+  type ClumpAtomic,
+  type ClumpFrame,
+  type ClumpModel,
+  type HierarchyNode,
+  type OpaqueChunk,
+  readClump,
+} from './clump-io';
 import { compose, IDENTITY_ROTATION, invert, type Transform } from './matrix';
 
 /** Frame-list matrix-flags words, mirrored from every vanilla cutscene model. */
@@ -64,6 +73,82 @@ export interface Emit {
   sourceGeometryIndex: Map<number, number>;
   /** Root-space transform of each emitted frame (parallel to `frames`). */
   worlds: Transform[];
+}
+
+/** The mod-side analysis every "body + parts subtree" branch (bike, boat) shares. */
+export interface PartsRigAnalysis {
+  atomicByFrame: Map<number, ClumpAtomic>;
+  bodyIndex: number;
+  /** Frames inside non-chosen variant subtrees — never adopted (see `excludedVariantFrames`). */
+  excludedVariants: ReadonlySet<number>;
+  hingeOf: (frameIndex: number) => Transform;
+  model: ClumpModel;
+  relativeToRoot: (frameIndex: number) => Transform;
+}
+
+/** The template side of a "body + parts subtree" branch, in branch-neutral terms. */
+export interface PartsRigTemplate {
+  bodyBoneId: number;
+  /** The body's canonical name (`chassis` on bikes, `boat_hi` on boats) — the part-map parent key. */
+  bodyCanonical: string;
+  bodyLocal: { position: readonly number[]; rotation: readonly number[] };
+  bodyName: string;
+  parts: ReadonlyMap<string, CsPartTemplate>;
+}
+
+/** Every remaining visible mod mesh rides its nearest CARRIED ancestor (a wheel mesh spins with its
+ *  wheel bone; brake calipers ride the forks; a propeller rides its transom flap). */
+export function adoptOrphans(
+  emit: Emit,
+  analysis: PartsRigAnalysis,
+  shiftZ: number,
+  fallbackFrame: number,
+  carriedFrames: ReadonlyMap<number, number>,
+  report: ConvertReport,
+): void {
+  for (const atomic of analysis.model.atomics) {
+    const index = atomic.frameIndex;
+    const canonical = canonicalPartName(analysis.model.frames[index].name);
+    const skip =
+      carriedFrames.has(index) ||
+      ORPHAN_SKIP_RE.test(canonical) ||
+      analysis.excludedVariants.has(index) ||
+      inYearVariantSubtree(analysis.model, index);
+    if (skip) {
+      continue;
+    }
+    const parentFrame = nearestCarriedAncestor(analysis.model, carriedFrames, index) ?? fallbackFrame;
+    const local = compose(invert(emit.worlds[parentFrame]), lift(analysis.hingeOf(index), shiftZ));
+    const frameIndex = pushFrame(emit, {
+      boneId: emit.nextBoneId++,
+      name: analysis.model.frames[index].name.trim(),
+      parentIndex: parentFrame,
+      position: local.position,
+      rotation: local.rotation,
+    });
+    emitAtomic(emit, analysis.model.geometries, atomic, frameIndex);
+    report.adoptedFromMod.push(canonical);
+  }
+}
+
+/** Read a mod clump and locate its body frame. Throws when the mod has no body frame at all. */
+export function analyzePartsRig(modDff: Uint8Array, bodyCanonical: string): PartsRigAnalysis {
+  const model = readClump(modDff);
+  const atomicByFrame = new Map(model.atomics.map((atomic) => [atomic.frameIndex, atomic]));
+  const relativeToRoot = worldTransforms(model);
+  const bodyIndex = matchPart(model, atomicByFrame, bodyCanonical);
+  if (bodyIndex < 0) {
+    throw new Error(`mod has no ${bodyCanonical} frame`);
+  }
+
+  return {
+    atomicByFrame,
+    bodyIndex,
+    excludedVariants: excludedVariantFrames(model),
+    hingeOf: hingeFactory(model, relativeToRoot),
+    model,
+    relativeToRoot,
+  };
 }
 
 /** DFS over the emitted tree; flags = (siblings follow ? 2 : 0) | (leaf ? 1 : 0) — the rule reproduced
@@ -173,6 +258,71 @@ export function emitBone(emit: Emit, spec: BoneSpec, report: ConvertReport): num
   });
 }
 
+/** The body bone (+ its atomic when the mod ships one), the template parts in template order, then
+ *  the adoption pass. The whole conversion of a wheel-less branch. */
+export function emitPartsRig(
+  emit: Emit,
+  template: PartsRigTemplate,
+  analysis: PartsRigAnalysis,
+  shiftZ: number,
+  report: ConvertReport,
+): void {
+  const bodyFrame = emitBone(
+    emit,
+    {
+      boneId: template.bodyBoneId,
+      local: template.bodyLocal,
+      name: template.bodyName,
+      parentFrame: emit.bodyParentIndex,
+      targetWorld: lift(analysis.hingeOf(analysis.bodyIndex), shiftZ),
+    },
+    report,
+  );
+  const bodyAtomic = analysis.atomicByFrame.get(analysis.bodyIndex);
+  if (bodyAtomic) {
+    emitAtomic(emit, analysis.model.geometries, bodyAtomic, bodyFrame);
+  }
+
+  const emittedByCanonical = new Map<string, { frameIndex: number; modIndex: number }>([
+    [template.bodyCanonical, { frameIndex: bodyFrame, modIndex: analysis.bodyIndex }],
+  ]);
+  for (const [canonical, part] of template.parts) {
+    const modIndex = matchPart(analysis.model, analysis.atomicByFrame, canonical);
+    const parent = emittedByCanonical.get(part.parentCanonical);
+    if (modIndex < 0 || modIndex === analysis.bodyIndex || !parent) {
+      if (modIndex < 0 || !parent) {
+        report.missingInMod.push(canonical);
+      }
+      continue;
+    }
+    const frameIndex = emitBone(
+      emit,
+      {
+        boneId: part.boneId,
+        local: { position: part.position, rotation: part.rotation },
+        name: part.frameName,
+        parentFrame: parent.frameIndex,
+        targetWorld: lift(analysis.hingeOf(modIndex), shiftZ),
+      },
+      report,
+    );
+    const atomic = analysis.atomicByFrame.get(modIndex);
+    if (atomic) {
+      emitAtomic(emit, analysis.model.geometries, atomic, frameIndex);
+    }
+    emittedByCanonical.set(canonical, { frameIndex, modIndex });
+    report.parts.push(canonical);
+  }
+  adoptOrphans(
+    emit,
+    analysis,
+    shiftZ,
+    bodyFrame,
+    new Map([...emittedByCanonical.values()].map((entry) => [entry.modIndex, entry.frameIndex])),
+    report,
+  );
+}
+
 /** The nameless top frame + the skeleton root (+ the intermediate body frame when the template has one). */
 export function emptyEmit(shape: {
   intermediate?: { boneId: number; frameName: string; position: [number, number, number]; rotation: number[] };
@@ -217,6 +367,62 @@ export function emptyEmit(shape: {
   return emit;
 }
 
+/**
+ * Frames excluded by the variant-container policy of the wheel-less branches: inside an
+ * `f_extras`/`f_class` container (name not ending `+`), the first direct child subtree containing a
+ * mesh is CHOSEN and every later child subtree is excluded. `+` containers are additive — nothing
+ * excluded. Containers with no meshed child (the MTB's `f_class:1` switch groups) exclude nothing.
+ * (The car branch keeps its own field-frozen one-mesh rule — gates 4+7.)
+ */
+export function excludedVariantFrames(model: ClumpModel): Set<number> {
+  const children = childrenByFrame(model);
+  const atomicFrames = new Set(model.atomics.map((atomic) => atomic.frameIndex));
+  const subtreeHasMesh = (index: number): boolean =>
+    atomicFrames.has(index) || children[index].some((child) => subtreeHasMesh(child));
+  const excludeSubtree = (index: number, excluded: Set<number>): void => {
+    excluded.add(index);
+    for (const child of children[index]) {
+      excludeSubtree(child, excluded);
+    }
+  };
+
+  const excluded = new Set<number>();
+  model.frames.forEach((frame, index) => {
+    const name = frame.name.trim().toLowerCase();
+    if (!VARIANT_CONTAINER_RE.test(name) || name.endsWith('+')) {
+      return;
+    }
+    let chosen = false;
+    for (const child of children[index]) {
+      if (chosen) {
+        excludeSubtree(child, excluded);
+      } else if (subtreeHasMesh(child)) {
+        chosen = true;
+      }
+    }
+  });
+
+  return excluded;
+}
+
+/** First atomic (in atomic order) whose frame sits in the given frame's subtree, if any. */
+export function firstAtomicInSubtree(model: ClumpModel, rootIndex: number): ClumpAtomic | undefined {
+  if (rootIndex < 0) {
+    return undefined;
+  }
+  const inSubtree = (index: number): boolean => {
+    for (let at = index; at >= 0; at = model.frames[at].parentIndex) {
+      if (at === rootIndex) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  return model.atomics.find((atomic) => inSubtree(atomic.frameIndex));
+}
+
 /** The space a frame's GEOMETRY is authored in: the dummy's for a `<part>_ok/_dam` under its own dummy
  *  (the game destroys that junk — `PreprocessHierarchy`/`CollapseFramesCB`), the frame's own full world
  *  otherwise (stock copcarla's junk-space chassis KEEPS its transform; gate-4 rounds 1+3). */
@@ -253,6 +459,23 @@ export function lift(transform: Transform, shiftZ: number): Transform {
     position: [transform.position[0], transform.position[1], transform.position[2] + shiftZ],
     rotation: transform.rotation,
   };
+}
+
+/** The mod frame for a template part: canonical name match, mesh-bearing frames preferred (the corpus
+ *  ships both shapes — stock parts ARE meshes, the MTB mod's are dummies over mesh kids). */
+export function matchPart(
+  model: ClumpModel,
+  atomicByFrame: ReadonlyMap<number, ClumpAtomic>,
+  canonical: string,
+): number {
+  const meshed = model.frames.findIndex(
+    (frame, index) => canonicalPartName(frame.name) === canonical && atomicByFrame.has(index),
+  );
+  if (meshed >= 0) {
+    return meshed;
+  }
+
+  return model.frames.findIndex((frame) => canonicalPartName(frame.name) === canonical);
 }
 
 /** The emitted frame of the closest carried (template-matched) ancestor of a mod frame, if any. */
