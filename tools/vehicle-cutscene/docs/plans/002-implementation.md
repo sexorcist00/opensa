@@ -352,15 +352,32 @@ materials on 19 models, cutscene.img 25.7 → 309.6 MB. Suite 62/62, lint + tsc 
 
 ---
 
-## Step 9 (P2) — boat branch (`rig/boat.ts`, csdinghy)
+## Step 9 (P2) — boat branch (`rig/boat.ts`, csdinghy) ✅ SHIPPED 2026-08-13 (structural verification)
 
-- [ ] Template from vanilla csdinghy (`boat_hi`, `boat_rearflap_left/right`; root `dinghy`).
-- [ ] Transform from the mod boat rig: keep `boat_hi` subtree parts that match the template; the mod's
-      `static_prop`/`moving_prop`/`movsteer` meshes under kept parts follow the same bake-or-drop policy
-      as step 8.
-- [ ] Golden diff vs vanilla (stock dinghy donor).
+- [x] Template from vanilla csdinghy (`extractBoatTemplate`): root `dinghy` bone 0, body `boat_hi`
+      bone 1, transom flaps `boat_rearflap_right/left` bones 2/3. The vanilla cutscene model carries
+      NO propellers — 3 atomics total.
+- [x] Transform: the bike's part-loop + adoption generalized into the shared "body + parts subtree"
+      pass (`emitPartsRig`/`analyzePartsRig` in `rig/emit.ts`, bike.ts rewritten onto it — its golden
+      tests green through the move); `rig/boat.ts` is the thin boat vocabulary on top. The mod's
+      `moving_prop*`/`static_prop*` ride their flap bones, `movsteer`/`dinghy_details` ride the hull —
+      the step-8 adoption policy verbatim, no bake needed anywhere. **No vertical shift by design**:
+      nothing anchors a waterline (no wheel radius, no scene), the donor's own placement is the
+      gameplay-correct hull, and the stock pair (identical positions on both sides) confirms shift 0
+      is the reproducing choice.
+- [x] Golden diff vs vanilla (stock dinghy donor, committed test): parts 2/2, missing=[], NO shims
+      (donor and vanilla author identical frame positions), props adopted under their flaps, only
+      `boat_vlo` dropped; 96 256 → 77 116 B; vanilla bone ids verbatim, ordered-subsequence holds.
 
-**Record:** parts kept/dropped for the real dinghy mod.
+**Record (2026-08-13):** Dinghy HD 689 440 → 627 611 B: parts 2/2, hull authored at the ORIGIN — the
+bone keeps the vanilla local [0, 0.313, 0.357] and the shim absorbs the delta (flaps likewise);
+adopted 6 (`dinghy_details`, `movsteer_1.0`, both prop pairs), dropped only `boat_vlo`. Full fleet:
+**23/23 converted, 0 skipped, 0 errors**, 400 paint materials on 20 models (csdinghy's carcols row
+bakes), cutscene.img 25.7 → 310.8 MB self-contained. Suite 68/68, lint + tsc clean.
+**The named field gap: NO stock scene plays csdinghy** (148-IFP scan, step 8) — there is nothing in
+the game that can display the converted model, so structural verification is the strongest check this
+slot can ever get; the txdcut row the tool patches in and the empty-TXD closure are exercised by the
+same machinery the 21 field-verified car slots ride.
 
 ---
 
