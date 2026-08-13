@@ -30,8 +30,10 @@ const FADE_IN_MS = 1000;
 const LOAD_TIMEOUT_MS = 15_000;
 /** Belt for a `02E9` that never fires: no scene runs longer than this — restore instead of hang. */
 const FINISH_TIMEOUT_MS = 300_000;
-/** New-game boot race: main.scm needs a beat to set ONMISSION before the gate may trust it. */
+/** New-game boot settle before the gate starts judging anything. */
 const GRACE_MS = 5000;
+/** The quiet must HOLD this long — bridges the intro's between-scenes loading gaps (rounds 3-4). */
+const DEBOUNCE_MS = 10_000;
 const POLL_MS = 250;
 
 export const script = defineScript({
@@ -39,7 +41,9 @@ export const script = defineScript({
   build(s) {
     const scene = s.localString('scene');
     const area = s.local('area');
+    const gateDone = s.local('gateDone');
     const timer = lvar(TIMER_A);
+    const debounce = lvar(TIMER_A + 1);
 
     // The inert gate: no ini / no key → not a viewer session, vanish without touching anything.
     s.if(() => s.op('READ_STRING_FROM_INI_FILE', str(INI), str('cutscene'), str('scene'), scene), {
@@ -48,20 +52,48 @@ export const script = defineScript({
         s.op('SET_LVAR_INT', area, int(0));
         s.op('READ_INT_FROM_INI_FILE', str(INI), str('areas'), scene, area);
 
-        // Field round 3: CLEO threads outrun main.scm on a NEW GAME — for the first moments the
-        // player "plays" and ONMISSION is still 0, so an ungated script starts its scene DURING
-        // loading and the game's own intro then starts on top (two cutscenes, one manager, clocks
-        // and camera desync). The grace wait lets main.scm claim ONMISSION first; the fading check
-        // keeps us out of the boot fade and every later fade main.scm owns.
+        // Field rounds 3-4: the gate cannot trust ONMISSION alone — SA's new-game INTRO is not a
+        // mission (ONMISSION stays 0 while the airport scene plays), and CLEO threads outrun
+        // main.scm at boot. What does mark the intro is the cutscene manager itself:
+        // HAS_CUTSCENE_LOADED is true through every intro scene. So the gate is "the manager is
+        // free AND nothing else is happening, held CONTINUOUSLY for the debounce" — the debounce
+        // bridges the between-scenes gaps where the next intro scene is still loading.
         s.wait(GRACE_MS);
+        s.op('SET_LVAR_INT', gateDone, int(0));
         s.while(
+          () => s.op('IS_INT_LVAR_EQUAL_TO_NUMBER', gateDone, int(0)),
           () => {
-            s.not('IS_PLAYER_PLAYING', int(PLAYER));
-            s.not('IS_INT_VAR_EQUAL_TO_NUMBER', s.global(ONMISSION), int(0));
-            s.op('GET_FADING_STATUS');
+            s.while(
+              () => {
+                s.not('IS_PLAYER_PLAYING', int(PLAYER));
+                s.not('IS_INT_VAR_EQUAL_TO_NUMBER', s.global(ONMISSION), int(0));
+                s.op('GET_FADING_STATUS');
+                s.op('HAS_CUTSCENE_LOADED');
+              },
+              () => s.wait(POLL_MS),
+              { any: true },
+            );
+            s.op('SET_LVAR_INT', debounce, int(0));
+            s.while(
+              () => {
+                s.op('IS_PLAYER_PLAYING', int(PLAYER));
+                s.op('IS_INT_VAR_EQUAL_TO_NUMBER', s.global(ONMISSION), int(0));
+                s.not('GET_FADING_STATUS');
+                s.not('HAS_CUTSCENE_LOADED');
+                s.not('IS_INT_LVAR_GREATER_THAN_NUMBER', debounce, int(DEBOUNCE_MS));
+              },
+              () => s.wait(100),
+            );
+            s.if(
+              () => {
+                s.op('IS_PLAYER_PLAYING', int(PLAYER));
+                s.op('IS_INT_VAR_EQUAL_TO_NUMBER', s.global(ONMISSION), int(0));
+                s.not('GET_FADING_STATUS');
+                s.not('HAS_CUTSCENE_LOADED');
+              },
+              { then: () => s.op('SET_LVAR_INT', gateDone, int(1)) },
+            );
           },
-          () => s.wait(POLL_MS),
-          { any: true },
         );
         s.wait(FADE_MS);
 

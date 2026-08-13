@@ -236,6 +236,18 @@ after the intro MISSION fully passes (bike ride included) — the cheap loop is 
 load → 5 s → scene. The unstreamed-void shot is the recorded evidence for the `0A0B` parity gap —
 next variable if a far-from-site scene still shows a broken world.
 
+**Round 4 (2026-08-13): the grace was not enough — SA's new-game INTRO is NOT a mission.** The
+stock airport scene got interrupted at second ~5 (the grace expiring): ONMISSION is STILL 0 while
+the intro plays, so the gate opened mid-intro, our PROLOG3 stomped the manager (worldless, animы
+glitching on the contaminated clock — CJ leaving the car in 2 frames), and main.scm then recovered
+and played ITS OWN prolog3 with the world streamed (the second cops scene of the round). The
+condition that DOES mark the whole intro is the manager itself: `06B9 HAS_CUTSCENE_LOADED` is true
+through every intro scene. FIX: the gate becomes "the manager is FREE and everything quiet
+(playing, ONMISSION 0, no fade, no cutscene loaded), held CONTINUOUSLY for 10 s on TIMERB" — the
+debounce bridges the between-scenes gaps where the next intro scene is still loading and `06B9`
+momentarily reads false. 479 B rebuilt + reinstalled. New-game flow bonus: the scene now fires ~10 s
+after the cops drop CJ at Grove (no bike ride needed); load-save flow = 5 s grace + 10 s debounce.
+
 **STOP: user's verdict closes the plan.** **Record:** verdict + the ini row count + any scene that
 needed the timeout path (each is a fact about that scene worth a line).
 
