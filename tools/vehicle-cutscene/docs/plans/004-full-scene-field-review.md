@@ -39,7 +39,7 @@ scene-specific anims).
 | 3 | STRP4B2 | csmtbike92 | ✅ (002 step 8) |
 | 4 | DESERT9 | csbobcat92 | ✅ after rounds 1–2 ("glass with the door, one rack") |
 | 5 | BCESA4W | csbravura, cszr350b | |
-| 6 | BCESAR4 | cssavanna, cszr350 | |
+| 6 | BCESAR4 | cssavanna, cszr350 | ✅ after round 3 ("lights are normal now") |
 | 7 | BCESAR5 | cssadler, cszr350, cszr350b | |
 | 8 | DES_10B | csmothership | |
 | 9 | DESERT1 | csmonster | |
@@ -149,7 +149,8 @@ scene-specific anims).
 - **Re-check scope:** a fleet-wide material fix — BCESAR4 re-run decides the row; the four ✅ scenes
   need one lamp glance next time they naturally play (PROLOG1/PROLOG3 cop car and taxi carried the
   same markers).
-- [ ] **Re-check (user):** BCESAR4 re-run.
+- [x] **Re-check (user):** PASSED (2026-08-13): "BCESAR4 is ok now, lights are normal." BCESAR4 ✅ in
+      the ledger.
 
 ## Step 3 — the approval
 
