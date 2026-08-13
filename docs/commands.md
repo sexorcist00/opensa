@@ -112,7 +112,8 @@ npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src
 # convert the fleet into an output game (base copied; cutscene.img rebuilt; txdcut.ide patched):
 npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --out <dir>
 # --only bobcat,cszr350 restricts slots; --self-contained-txd embeds each MOD's TXD (for a target whose
-# gameplay stays stock, e.g. the reference bottle); bike/boat slots pend plan 002 steps 8/9
+# gameplay stays stock, e.g. the reference bottle). All three branches convert (car/bike/boat) —
+# the full 23-model fleet; ~3.5 s wall-clock (docs/benchmarks/tools/)
 ```
 
 Field delivery to the reference bottle = drop `models/cutscene.img` + `data/txdcut.ide` in (originals

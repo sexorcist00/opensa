@@ -338,7 +338,9 @@ row but its chain was superseded by 097). Newest first:
   in `models/cutscene.img` (flattened HAnim rig with the vanilla bone ids, four instantiated wheels, baked
   carcols paint, empty `txdp`-resolved TXD), so real-game cutscenes show the same custom cars as gameplay.
   [`vehicle-cutscene/docs/plans/`](../../tools/vehicle-cutscene/docs/plans/) (`001` architecture + research ·
-  `002` implementation, steps 1–7 shipped with both field gates passed · `003` plate bake — PLANNED).
+  `002` implementation, steps 1–10 shipped — both car field gates passed, bike field-passed, boat
+  structurally verified, the full 23-model fleet converts; step 11 pipeline integration remains ·
+  `003` plate bake — PLANNED).
 - **ped-installer** — install ped mod folders: dff/txd → `gta3.img`; a new ped's line → `peds.ide` (replace by
   model, append if new); `--strip` to keep only the installed peds + the player ped (`--player`, default
   `BMYPOL1`). [`ped-installer/docs/plans/`](../../tools/ped-installer/docs/plans/) (`001` architecture · `002`

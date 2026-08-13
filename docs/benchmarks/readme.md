@@ -4,12 +4,15 @@
 summarised into a plan doc, not left in chat. A number that exists only in a conversation is gone the moment
 the session ends, and a regression cannot be diagnosed without the run it regressed from.
 
-**Two families live here**, because the repo measures two different things and their schemas do not mix:
+**Three families live here**, because the repo measures three different things and their schemas do not
+mix:
 
 - **Performance** — what a frame COSTS (fps, frame/GPU ms, draws, residency). Everything below is this
   family; it was consolidated into this folder on 2026-07-20, split by renderer.
 - **Vehicle physics** — what a car DOES (stopping distance, roll, slip, flips). Its own schema and
   chronology: [`vehicle-physics/`](vehicle-physics/) (plan 081, the `[phys]` capture protocol).
+- **Tool builds** — what a build tool PRODUCES and how long it takes (run wall-clock, input/output
+  sizes, per-item tables). Its own chronology: [`tools/`](tools/).
 
 The performance family, split by renderer:
 

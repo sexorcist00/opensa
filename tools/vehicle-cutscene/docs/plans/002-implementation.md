@@ -381,16 +381,25 @@ same machinery the 21 field-verified car slots ride.
 
 ---
 
-## Step 10 (P2) — full-fleet run, budget numbers, docs
+## Step 10 (P2) — full-fleet run, budget numbers, docs ✅ SHIPPED 2026-08-13
 
-- [ ] Full 23-model emit over the real mod set; converted-vs-vanilla structural diff green for all.
-- [ ] Numbers into `docs/benchmarks/` (per its schema): cutscene.img size before/after, per-model DFF
-      sizes, total TXD bytes, tool wall-clock.
-- [ ] `docs/commands.md`: the CLI row. `docs/gta-sa-original/`: the txdcut.ide findings (typo row, two
-      missing rows, csandrom92 dead entry) — facts about the original game discovered here, recorded in
-      the same change per the standing rule.
-- [ ] Central `docs/plans/README.md` row updated (already points here); this doc's step ledger closed
-      with measured numbers.
+- [x] Full 23-model emit over the real mod set: **23/23 converted, 0 errors**; structural diff green on
+      all slots — 317/317 archive DFFs parse, 317 skeletons consistent, first-frame-per-vanilla-name
+      carries the vanilla bone id everywhere, hierarchy ids unique, indexes contiguous. The sweep also
+      measured **20 adopted duplicate names** across the fleet (a mod mesh named like a vanilla part,
+      landing via adoption) — bind-safe because anims take the FIRST matching frame and template bones
+      are emitted before adoption; the gate-7 sheriff field-passed carrying exactly this pattern.
+- [x] Numbers into `docs/benchmarks/tools/2026-08-13-vehicle-cutscene-fleet.md` — a NEW benchmarks
+      family (tool builds; neither frame-cost nor physics fits a build measurement): wall-clock
+      **3.55 s** for the whole run (APFS COW makes the 1.7 GB base copy near-free), cutscene.img
+      **25.7 → 310.8 MB**, per-model DFF/TXD table, converted DFF entries 4.46 → 155.5 MB,
+      self-contained TXDs 148.8 MB (the empty-TXD pipeline route stays ~40 B/slot — step 6's 840 B).
+- [x] `docs/commands.md` row updated (all three branches convert; wall-clock noted).
+      `docs/gta-sa-original/cutscenes.md` already carries the full txdcut record (typo row, two
+      missing rows, cssabre92 duplicate, csandrom92 dead row) — recorded in the same change as their
+      discovery, session 7; nothing new surfaced here.
+- [x] Central `docs/plans/README.md` row updated (steps 1–10 shipped, step 11 remains); this ledger
+      carries the measured numbers above.
 
 ---
 

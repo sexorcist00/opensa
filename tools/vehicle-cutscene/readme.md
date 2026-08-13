@@ -1,10 +1,10 @@
 # vehicle-cutscene
 
-**Status: plan 002 steps 1–9 shipped — both car gates PASSED (2026-08-12), the bike branch
+**Status: plan 002 steps 1–10 shipped — both car gates PASSED (2026-08-12), the bike branch
 FIELD-PASSED first round (2026-08-13, scene STRP4B2), the boat branch structurally verified
 (2026-08-13; no stock scene plays csdinghy — the named gap). The FULL 23-model fleet converts with
-0 errors. Remaining: full-fleet numbers + pipeline integration
-([002](docs/plans/002-implementation.md) steps 10–11) and the
+0 errors in ~3.5 s ([numbers](../../docs/benchmarks/tools/2026-08-13-vehicle-cutscene-fleet.md)).
+Remaining: pipeline integration ([002](docs/plans/002-implementation.md) step 11) and the
 [plate bake](docs/plans/003-plate-bake.md).**
 
 Converts installed **vehicle mods** into their **cutscene counterparts** — the `cs*` models in
