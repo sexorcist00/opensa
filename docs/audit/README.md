@@ -204,3 +204,14 @@ interpret them.
   a file you have not opened** — two of them were false here, one calling dropped work "deferred" (082 → 098,
   which had never heard of it) and one calling done work "NOT CLOSED" (100's insects row, judged the same day
   in its hack file). Suite 4 106 → 4 110.
+
+- [`session-8-vehicle-cutscene-chain-closed.md`](./session-8-vehicle-cutscene-chain-closed.md)
+  — 2026-08-13, 11 commits: the chain the override was built FOR, closed in one day — 002 steps 8–11
+  (bike FIELD-PASSED first round via STRP4B2; boat structurally verified with the field gap NAMED —
+  no stock scene plays csdinghy; fleet numbers into the NEW `docs/benchmarks/tools/` family, 23/23
+  in 3.55 s; pmb `cutscene` stage right after `vehicles`, dropping out loudly with it) + plan 003
+  plates FIELD-PASSED first round (the engine's recovered formula REUSED; readable plates where
+  vanilla shows blanks — the demonstrated improvement). Two first-round field passes, each an ini
+  edit instead of story progression. Also fixed: `tools/vehicle-cutscene` missing from root
+  `workspaces` (the enumerate-everything trap in package.json). Suite 4 175 → 4 203. Remaining:
+  the step-11 full-pipeline field acceptance (needs a build without `--exclude vehicles`).
