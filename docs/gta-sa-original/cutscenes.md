@@ -54,8 +54,31 @@ the reference install — not OpenSA.
   user's gate-7 vanilla A/B screenshot is the recorded evidence). The plate art all sits uncompressed
   RGBA8888 in `vehicle.txd`: `platecharset` 32×256, `plateback1/2/3` 64×32, `carplate` 16×16.
 
+## The script API (measured off the bottle's main.scm + gta-reversed, 2026-08-13)
+
+- main.scm plays every one of its 135 cutscenes with the same sequence (PROLOG1 @ 0x43300,
+  PROLOG3 @ 0x434f7): `04BB SET_AREA_VISIBLE <area>` → `02E4 LOAD_CUTSCENE 'NAME'` → loop until
+  `06B9 HAS_CUTSCENE_LOADED` → `02E7 START_CUTSCENE` → `016A DO_FADE` in → loop until
+  `02E9 HAS_CUTSCENE_FINISHED` → fade out (`016A` + `016B IS_FADING` wait) → `02EA CLEAR_CUTSCENE`
+  → `04BB` restore. All waits are condition-driven; no fixed sleeps.
+- `02E4` alone loads the `.ifp` anims and the `.dat` objects+camera from cuts.img; the III/VC-era
+  `02E5 CREATE_CUTSCENE_OBJECT`/`02E6 SET_CUTSCENE_ANIM` are `is_nop` in SA (Sanny SA library).
+- **`06B9` is mandatory before `02E7`**: gta-reversed's `CCutsceneMgr::StartCutscene` on
+  not-yet-loaded data flips play status but SKIPS camera setup and widescreen — a silent degraded
+  start, not an error.
+- `CCutsceneMgr` itself sets widescreen on start and fades in; main.scm's fades are framing only.
+  Scene names are stored UPPERCASE in main.scm, compared case-insensitively by the manager.
+- The interior AREA comes from main.scm, not the `.dat`: `PROLOG3=0`, `PROLOG1=14`, `INTRO1A=3`,
+  `INTRO2A=2` (adjacent-byte decode reaches 54/135 sites; histogram
+  `{0:3, 1:21, 2:11, 3:8, 5:4, 6:1, 10:1, 11:3, 12:1, 14:1}`).
+- The ONMISSION global in SA's main.scm is `$409` (`0180 SET_ON_MISSION_FLAG` @ 0xdce4); it is one
+  of the three globals documented safe for CLEO scripts (`$PLAYER_CHAR`, `$PLAYER_ACTOR`,
+  `$ONMISSION`).
+
 ## The reference install (cutscene angle)
 
+The bottle runs **CLEO 4.4.4** (version string in `CLEO.asi`; cleo.log confirms `IniFiles.cleo`
+loads → the `0AF0`/`0AF4` INI opcodes are served). Its `data/script/main.scm` is 3 079 599 B.
 The bottle streams `models\cutscene.img` DIRECTLY (modloader.log) and its modloader tree carries no
 `.img` overrides — its `cutscene.img`/`data/txdcut.ide` were byte-identical to stock 1.0 when measured
 (2026-08-12), so a drop-in of those two files is a clean, fully reversible cutscene-only A/B (the

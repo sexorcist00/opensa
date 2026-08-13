@@ -49,42 +49,71 @@ test covers the emitted opcode structure and budget; the behaviour verdict is th
 - **The comment list is generated OFFLINE by our own tooling** — never hand-maintained. The census
   knows the 23 cs vehicle names; the ANPK channel reader (`scripts/debug/cutscene-anim-channels.ts`)
   knows which cutscenes drive which objects.
-- **Script flow, one shot:** session start → read ini → (empty → terminate) → wait until the player
-  is in control (main.scm's intro finished or skipped — the user skips it with one keypress) → fade,
-  freeze player, `02E4` name → `02E7` → poll `02E9` → `02EA`, unfreeze, fade back → terminate.
-  A scene that fails to start gets a timeout + clean restore, never a hang.
+- **Script flow, one shot (the opcode sequence is main.scm's own, measured in step 0):** session
+  start → read ini → (empty → terminate) → wait until the player is in control (`0256
+  IS_PLAYER_PLAYING` AND `$409 ONMISSION == 0` — main.scm's intro finished or skipped, the user
+  skips it with one keypress) → fade out, freeze player, `04BB SET_AREA_VISIBLE` (from `[areas]`,
+  default 0) → `02E4` name → **wait `06B9 HAS_CUTSCENE_LOADED`** (required: `02E7` on unloaded data
+  starts degraded — no camera, no widescreen; a name that never loads, e.g. an ini typo, hits the
+  timeout → clean restore) → `02E7` (the MANAGER sets widescreen and fades in itself) → poll `02E9`
+  → fade, `02EA`, `04BB` back to 0, unfreeze, fade back → terminate. Never a hang.
+- **The `[areas]` section rides in the same generated ini**: main.scm sets the interior area per
+  scene BEFORE loading (the `.dat` does not carry it), so the generator emits `PROLOG1=14`-style
+  rows and the script reads the key named by the chosen scene (missing row → 0). No hand-copying.
 - **The cheapest round is a save, not a new game:** CLEO scripts start on ANY session start, so
   loading a save right after the intro plays the ini scene immediately — no intro to skip at all.
   Field loop: edit ini → load save → watch.
 
 ## Steps
 
-### 0 — recon: pin the start sequence and the runtime facts
+### 0 — recon: pin the start sequence and the runtime facts — DONE 2026-08-13
 
-- [ ] Verify against the decompiled main.scm / gta-reversed that SA's `02E7` needs nothing beyond
-      `02E4` (no per-object `02E5/02E6`), and whether interior scenes need `04BB`/area handling or the
-      `.dat` carries it. Record the exact call sequence main.scm uses (fades, player control,
-      widescreen) — the override copies the parts that matter for stability and skips ceremony.
-- [ ] Pin the safe start point: what "player in control after the intro" looks like from a CLEO
-      script (the wait condition), and that one scene start from that state is clean — main.scm has
-      already `02EA`-cleared its own scene by then, so this is the mild case of the transition
-      problem, not the back-to-back one.
-- [ ] Confirm the bottle's CLEO version serves the INI-read opcodes (its installed scripts already
-      use CLEO4 opcodes — verify, don't assume).
+- [x] Verified against the Sanny SA opcode library + gta-reversed + the bottle's own main.scm:
+      `02E5/02E6` are `is_nop` in SA (they exist and do nothing); `02E4` alone loads the `.ifp` anims
+      and the `.dat` objects+camera from cuts.img. Interior scenes DO need `04BB` from the script —
+      main.scm sets the area immediately before every one of its 135 `02E4` sites; the `.dat` does
+      not carry it.
+- [x] Pinned the safe start point: `0256 IS_PLAYER_PLAYING` AND `ONMISSION == 0`; the ONMISSION
+      global is `$409`, measured from the bottle's main.scm (`0180 SET_ON_MISSION_FLAG` @ 0xdce4 →
+      offset 1636/4). One scene start from that state is the mild transition case — main.scm has
+      already `02EA`-cleared its intro scene.
+- [x] The bottle runs **CLEO 4.4.4** (version string in CLEO.asi) and cleo.log confirms
+      `IniFiles.cleo` loads → `0AF0`/`0AF4` INI reads are served.
 
-**Record:** the verified sequence + the wait condition that proved stable.
+**Record (measured off the bottle's main.scm, 3 079 599 B, and gta-reversed `CCutsceneMgr`):**
+
+- main.scm's sequence at every site (PROLOG1 @ 0x43300, PROLOG3 @ 0x434f7 are the vehicle pair):
+  `04BB area` → `02E4 'NAME'` → **loop until `06B9 HAS_CUTSCENE_LOADED`** → `02E7` → `016A DO_FADE`
+  in → loop until `02E9` → `016A` fade out + `016B IS_FADING` wait → `02EA` → `04BB` restore. The
+  waits are all CONDITION-driven (`06B9`/`02E9`/`016B`) — no fixed settle sleeps anywhere, which
+  retires the old viewer plan's "budget explicit settle waits" worry.
+- **`06B9` is the load-bearing discovery**: gta-reversed's `StartCutscene` on not-yet-loaded data
+  still flips play status but SKIPS camera setup and widescreen — a degraded half-start, not an
+  error. The override's timeout path exists exactly for a name that never reaches LOADED.
+- The manager itself sets widescreen on start and fades in (`TheCamera.SetWideScreenOn()`,
+  `Update_overlay`) — main.scm's fades are courtesy framing, and the script copies only those.
+- Scene names: main.scm stores them UPPERCASE; the manager compares case-insensitively. 135 unique
+  scenes are referenced by main.scm (vs ~148 in cuts.img — the census list is the superset).
+- Areas measured (adjacent-`04BB` decode reaches 54/135 sites; the generator owns the full decode):
+  `PROLOG3=0`, `PROLOG1=14`, `INTRO1A=3`, `INTRO2A=2`; histogram of decoded sites
+  `{0:3, 1:21, 2:11, 3:8, 5:4, 6:1, 10:1, 11:3, 12:1, 14:1}`.
 
 ### 1 — the ini generator
 
 - [ ] A vehicle-cutscene-side debug script (reuses the census + the ANPK walk) emits
       `cutscene-override.ini`: the comment header (one row per vehicle scene,
-      `; name = cs vehicles present`) + `[cutscene]` with `scene =` empty.
-- [ ] Row count recorded here; spot-check three entries against `cutscene-anim-channels.ts` output.
+      `; name = cs vehicles present`) + `[cutscene]` with `scene =` empty + the `[areas]` section
+      (decoded from main.scm's `04BB` before each `02E4` site — the adjacent-byte decode from step 0
+      covers 54/135, the generator finishes the job; scenes with area 0 may omit their row).
+- [ ] Row count recorded here; spot-check three entries against `cutscene-anim-channels.ts` output
+      and the step-0 area histogram.
 
 ### 2 — SDK vocabulary
 
-- [ ] Add the missing opcodes to the SDK DSL table (cutscene four, INI string read, fade /
-      player-control if absent — whichever are missing), each with the SDK's usual emission test.
+- [ ] Add the missing opcodes to the SDK DSL table — the full set the flow needs is now pinned:
+      `02E4/02E7/02E9/02EA/06B9` (cutscene), `04BB` (area), `016A/016B` (fade), `0256/01B4`
+      (player), `0AF4`/`0AF0` (ini), plus a read of global `$409` — whichever are absent, each with
+      the SDK's usual emission test.
 
 ### 3 — the script
 
