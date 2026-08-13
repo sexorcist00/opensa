@@ -49,6 +49,14 @@ describe('ScriptBuilder', () => {
     it('rejects a label queued after the last instruction', () => {
       expect(() => buildScript(definition((s) => s.label('dangling')))).toThrow('after the last instruction');
     });
+
+    it('rejects the same local name asked for as two different kinds', () => {
+      const bad = definition((s) => {
+        s.op('SET_LVAR_INT', s.local('x'), int(1));
+        s.localString('x');
+      });
+      expect(() => buildScript(bad)).toThrow('different kind');
+    });
   });
 
   describe('positive cases', () => {
@@ -59,6 +67,15 @@ describe('ScriptBuilder', () => {
       });
       const built = buildScript(script);
       expect(built.instructions[1].operands[0]).toEqual(built.instructions[2].operands[0]);
+    });
+
+    it('allocates a string8 local across two slots (the next int local lands at slot 2)', () => {
+      const script = definition((s) => {
+        s.localString('scene');
+        s.op('SET_LVAR_INT', s.local('tick'), int(0));
+      });
+      const built = buildScript(script);
+      expect(built.instructions[1].operands[0]).toMatchObject({ index: 2, kind: 'var', scope: 'local' });
     });
 
     it('lowers if/else to the SCM convention (the listing is the semantics)', () => {

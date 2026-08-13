@@ -1,20 +1,26 @@
 /**
- * The whitelist gate (plan cleo-sdk/003 decisions 4-5): walks IR before assembly. The VM half
- * always holds — we never emit what we cannot run; the real-CLEO half is lifted only by an explicit
- * `target: 'opensa-only'`, and that choice is carried in the artifact NAME
- * (`docs/contracts/mods.md`) so a `.cs` that cannot run on real SA is never mistaken for one that
- * can.
+ * The whitelist gate (plan cleo-sdk/003 decisions 4-5): walks IR before assembly. For `dual` and
+ * `opensa-only` the VM half always holds — we never emit what we cannot run; the real-CLEO half is
+ * lifted only by an explicit `target: 'opensa-only'`. `sa-only` (cleo/scripts plan 003) is the
+ * mirror image: the script drives real-SA systems our engine does not have (cutscenes), so the
+ * REAL-CLEO half always holds (the reference install's CLEO 4.4 surface, `servedByRealCleo44`) and
+ * the VM half is lifted. Either lift is carried in the artifact NAME (`docs/contracts/mods.md`) so
+ * a `.cs` that cannot run on one runtime is never mistaken for one that can.
  */
 import { opcodeDef } from '@opensa/cleo';
 
 import type { IrInstruction } from '../ir';
 
+import { servedByRealCleo44 } from './derive';
 import { DUAL_TARGET_OPCODES, VM_SERVED_OPCODES } from './whitelist.generated';
 
-export type ScriptTarget = 'dual' | 'opensa-only';
+export type ScriptTarget = 'dual' | 'opensa-only' | 'sa-only';
 
 export interface WhitelistViolation {
-  /** Which runtime cannot run it: `vm` is fatal for any target, `real-cleo` only for `dual`. */
+  /**
+   * Which runtime cannot run it: `vm` is fatal for `dual`/`opensa-only`, `real-cleo` for `dual`/
+   * `sa-only` — each target keeps the half (or halves) it claims to run on.
+   */
   readonly missing: 'real-cleo' | 'vm';
   readonly opcode: number;
 }
@@ -28,7 +34,7 @@ export class WhitelistError extends Error {
 
 /** The artifact filename carries the target — the NAME rule of `docs/contracts/mods.md`. */
 export function artifactName(scriptName: string, target: ScriptTarget): string {
-  return target === 'dual' ? `${scriptName}.cs` : `${scriptName}.opensa-only.cs`;
+  return target === 'dual' ? `${scriptName}.cs` : `${scriptName}.${target}.cs`;
 }
 
 /** Every violation in the script, or a clean pass — a build error names them all at once. */
@@ -40,6 +46,13 @@ export function checkWhitelist(instructions: readonly IrInstruction[], target: S
       continue;
     }
     seen.add(ins.opcode);
+    if (target === 'sa-only') {
+      const def = opcodeDef(ins.opcode);
+      if (!def || !servedByRealCleo44(def)) {
+        violations.push({ missing: 'real-cleo', opcode: ins.opcode });
+      }
+      continue;
+    }
     if (!VM_SERVED_OPCODES.has(ins.opcode)) {
       violations.push({ missing: 'vm', opcode: ins.opcode });
     } else if (target === 'dual' && !DUAL_TARGET_OPCODES.has(ins.opcode)) {

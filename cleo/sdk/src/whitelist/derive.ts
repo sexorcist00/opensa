@@ -9,11 +9,18 @@
  * positives not — a script passing the gate never needs more than plain CLEO 4 on SA 1.0 US.
  * Residual recorded in the plan's Measurements.
  */
-import { createRecordingHost, opcodeTable, ScriptRunner } from '@opensa/cleo';
+import { createRecordingHost, type OpcodeDef, opcodeTable, ScriptRunner } from '@opensa/cleo';
 
 /** The contiguous classic CLEO 4 opcode block on SA 1.0 US. */
 export const CLEO4_BLOCK_FIRST = 0x0a8c;
 export const CLEO4_BLOCK_LAST = 0x0aef;
+
+/**
+ * The IniFiles module block. CLEO 4.4's standard distribution ships the module, and the reference
+ * install MEASURABLY loads it (`IniFiles.cleo` in cleo.log — `docs/gta-sa-original/cutscenes.md`).
+ */
+export const INI_MODULE_FIRST = 0x0af0;
+export const INI_MODULE_LAST = 0x0af5;
 
 export interface DerivedWhitelist {
   /** Served by our VM AND runnable under plain real CLEO 4 — the default authoring surface. */
@@ -34,4 +41,22 @@ export function deriveWhitelist(): DerivedWhitelist {
   }
 
   return { dual: vmServed.filter((id) => real4.has(id)), vmServed };
+}
+
+/**
+ * The `sa-only` target's half: what real CLEO 4.4 on the REFERENCE install serves — the game's own
+ * opcodes, the classic CLEO 4 core, and the IniFiles module. Wider than the dual rule's "plain
+ * CLEO 4" on purpose (dual stays conservative: no module opcodes); still conservative against the
+ * install itself, whose other loaded modules (FileSystemOperations, IntOperations, CLEO+) are not
+ * claimed until a script needs one — extending this predicate is the way to claim them.
+ */
+export function servedByRealCleo44(def: OpcodeDef): boolean {
+  if (def.extension === 'default') {
+    return true;
+  }
+  if (def.extension === 'CLEO' && def.id >= CLEO4_BLOCK_FIRST && def.id <= CLEO4_BLOCK_LAST) {
+    return true;
+  }
+
+  return def.extension === 'ini' && def.id >= INI_MODULE_FIRST && def.id <= INI_MODULE_LAST;
 }

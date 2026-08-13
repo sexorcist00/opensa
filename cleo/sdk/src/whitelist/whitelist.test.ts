@@ -26,6 +26,14 @@ describe('checkWhitelist', () => {
       expect(() => checkWhitelist(script, 'dual')).toThrow("declare target: 'opensa-only'");
     });
 
+    it('rejects a VM-only opcode under the sa-only target — real CLEO does not serve it either', () => {
+      expect(() => checkWhitelist([instruction(0x0e40, [lvar(0)])], 'sa-only')).toThrow(WhitelistError);
+    });
+
+    it('rejects a module opcode outside the claimed CLEO 4.4 surface under sa-only (0B00 file module)', () => {
+      expect(() => checkWhitelist([instruction(0x0b00, [str8('x')])], 'sa-only')).toThrow(WhitelistError);
+    });
+
     it('aggregates every violating opcode once, with the Sanny name', () => {
       const script = [
         instruction(0x0e40, [lvar(0)]),
@@ -55,6 +63,19 @@ describe('checkWhitelist', () => {
     it('passes a VM-served CLEO+ opcode under the opensa-only target', () => {
       expect(() => checkWhitelist([instruction(0x0e40, [lvar(0)])], 'opensa-only')).not.toThrow();
     });
+
+    it('passes the cutscene sequence + an ini read under sa-only — opcodes the VM does not serve', () => {
+      const script = [
+        instruction('LOAD_CUTSCENE', [str8('PROLOG3')]),
+        instruction('HAS_CUTSCENE_LOADED'),
+        instruction('START_CUTSCENE'),
+        instruction('HAS_CUTSCENE_FINISHED'),
+        instruction('CLEAR_CUTSCENE'),
+        instruction(0x0af4, [str8('a'), str8('b'), str8('c'), lvar(0)]),
+      ];
+      expect(() => checkWhitelist(script, 'sa-only')).not.toThrow();
+      expect(() => checkWhitelist(script, 'opensa-only')).toThrow('not served by the OpenSA VM');
+    });
   });
 });
 
@@ -63,6 +84,7 @@ describe('artifactName', () => {
     it('carries the target in the name — the contract rule', () => {
       expect(artifactName('hello-conformance', 'dual')).toBe('hello-conformance.cs');
       expect(artifactName('city-life', 'opensa-only')).toBe('city-life.opensa-only.cs');
+      expect(artifactName('cutscene-override', 'sa-only')).toBe('cutscene-override.sa-only.cs');
     });
   });
 });

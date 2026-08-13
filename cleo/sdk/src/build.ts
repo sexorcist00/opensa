@@ -17,7 +17,7 @@ import { artifactName, checkWhitelist } from './whitelist/gate';
 export const SCRIPT_ENTRY = 'script.ts';
 
 export interface CompiledScript {
-  /** The contract-carrying filename: `<name>.cs` or `<name>.opensa-only.cs`. */
+  /** The contract-carrying filename: `<name>.cs`, `<name>.opensa-only.cs` or `<name>.sa-only.cs`. */
   readonly artifact: string;
   readonly bytes: Uint8Array;
   /** The disasm listing of the emitted bytes — the human review surface (snapshot in tests). */
