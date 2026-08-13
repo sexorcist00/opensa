@@ -231,8 +231,27 @@ scene-specific anims).
   `vanillaGlassFloor` deleted; the window-pane CLASSIFIER stays — it drives round 5's atomic
   ordering). Converted glass keeps the mod's authored gameplay alpha, contracts §3 row rewritten.
   Suite 80/80; verify green; bottle updated (`cs-mods-plates-pretint` holds the round-5/6 build).
-- [ ] **Re-check (user):** BCESAR5 re-run — glass should now match the gameplay look (light tint +
-      sheen), stacked panes darken honestly like gameplay, see-through everywhere.
+- [x] **Re-check (user):** FAILED (2026-08-13, screenshot) — glass still renders as NOTHING at the
+      mod's own alpha 125, where a dark tint is unmissable. The alpha was never the lever: the panes
+      stopped RENDERING → round 8.
+
+### Round 8 — BCESAR5: the vehicle pipeline drops translucent panes — panes stay on the default pipe (2026-08-13)
+
+- **Field bisect across builds (the decisive evidence):** rounds 1–4 builds (no PipelineSet) — glass
+  RENDERS (up to an opaque wall); rounds 5–7 builds (PipelineSet on every atomic) — glass GONE, at
+  alpha 26 and at alpha 125 alike, while opaque chrome/body improved. The variable is the pipeline,
+  not the alpha. Mechanism: the SA vehicle pipe (`0x53F2009A`) does not composite translucent
+  materials outside a real CVehicle's render path; modding practice applies it to OPAQUE
+  reflective parts only (upgrade parts). Vanilla ships the plugin on its windscreens too — but
+  vanilla glass is a 26-alpha whisper whose absence nobody would ever see; the GTAMods Pipeline Set
+  page documents `0x53F2009A` as the vehicles/upgrade-parts/cutscene-objects pipeline with no glass
+  variant.
+- **Fix (one variable):** `finalizeAtomics` stamps PipelineSet only on NON-pane atomics; window-pane
+  atomics keep the mod's default (no plugin → default pipeline, which blends translucents and still
+  renders the mod's MatFX env sheen). The round-5 pane-last ordering stays. Suite 80/80; verify
+  green; bottle updated (`cs-mods-plates-prepanepipe` holds the round-7 build).
+- [ ] **Re-check (user):** BCESAR5 re-run — expected: tint + sheen like the gameplay screenshot,
+      chrome unchanged (round 6's fix untouched on opaque atomics).
 
 ## Step 3 — the approval
 

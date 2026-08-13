@@ -285,14 +285,21 @@ describe('convertCar', () => {
       expect(paneFlags.some(Boolean)).toBe(true);
       expect(paneFlags.slice(paneFlags.indexOf(true)).every(Boolean)).toBe(true);
 
-      // Every vanilla cs atomic carries PipelineSet 0x53F2009A; without it a cutscene object renders
-      // on the default pipeline and the mod's Reflection/Specular material plugins go unread.
-      for (const atomic of converted.atomics) {
+      // Opaque atomics carry PipelineSet 0x53F2009A (the vanilla-cs shine recipe); window panes stay
+      // on the DEFAULT pipeline — the vehicle pipe drops translucents outside a real CVehicle
+      // (round 8: the panes vanished entirely with the plugin stamped, at any alpha).
+      converted.atomics.forEach((atomic, index) => {
         const plugins = atomic.extension ? readRw(atomic.extension.body).chunks : [];
         const pipeline = plugins.find((chunk) => chunk.type === 0x253f2f3);
-        expect(pipeline?.data).toBeDefined();
-        expect(new DataView(pipeline!.data!.buffer, pipeline!.data!.byteOffset, 4).getUint32(0, true)).toBe(0x53f2009a);
-      }
+        if (paneFlags[index]) {
+          expect(pipeline, `pane atomic ${index}`).toBeUndefined();
+        } else {
+          expect(pipeline?.data, `atomic ${index}`).toBeDefined();
+          expect(new DataView(pipeline!.data!.buffer, pipeline!.data!.byteOffset, 4).getUint32(0, true)).toBe(
+            0x53f2009a,
+          );
+        }
+      });
     });
 
     it('RENAMES an adopted mesh that duplicates an emitted frame name — a duplicate still binds its channel', () => {

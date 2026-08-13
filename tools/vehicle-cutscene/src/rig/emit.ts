@@ -445,7 +445,14 @@ export function finalizeAtomics(emit: Emit, version: number): void {
     ...emit.atomics.filter((atomic) => panes.get(atomic.geometryIndex)),
   ];
   for (const atomic of emit.atomics) {
-    atomic.extension = withVehiclePipeline(atomic.extension, version);
+    // Window-pane atomics stay on the DEFAULT pipeline (plan 004 round 8): the vehicle pipe does not
+    // composite translucent materials outside a real CVehicle — with the plugin stamped the panes
+    // vanished entirely, at any alpha (rounds 5–7 field evidence). The default pipe blends them and
+    // still renders the mod's MatFX env sheen. Vanilla ships the plugin on its windscreens too, but
+    // vanilla glass is a 26-alpha whisper nobody would ever see missing.
+    if (!panes.get(atomic.geometryIndex)) {
+      atomic.extension = withVehiclePipeline(atomic.extension, version);
+    }
   }
 }
 
