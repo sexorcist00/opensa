@@ -272,6 +272,23 @@ section plays where the player stands, as before. Deliberate consequence: after 
 player REMAINS at the site — for a field instrument that is a feature (you are standing on the
 stage you just inspected). 647 B + the 9.7 KB ini reinstalled.
 
+**Rounds 8-10 (2026-08-13): the empty world SOLVED — it was never streaming.** Round 8 (warp via
+per-scene ini SECTIONS): world still empty; could not tell a failed var-SECTION read from a failed
+warp → round 9 moved the site rows to flat `[sitex]/[sitey]/[sitez]` with the scene name as the KEY
+(the proven `[areas]` shape) and added an on-screen verdict (`CSOVRD: SITE OK` / `NO SITE ROW`)
+before the fade. Still empty → the streaming theory itself was wrong. The real cause (round 10,
+CONFIRMED): **a failed CLEO ini read writes a failure marker INTO the target var** — PROLOG3 had no
+`[areas]` row (only non-zero areas were emitted), the failed `0AF0` corrupted the area var, and
+`04BB SET_AREA_VISIBLE <garbage>` HID the entire exterior world. Cutscene objects + sky render,
+map does not — looks exactly like streaming, diagnosed as streaming for four rounds. It also
+retro-explains round 4's "main.scm's own scene had world right after ours" (our cleanup `04BB 0`
+had just fixed the area for it). FIX: `[areas]` rows for ALL 148 scenes (0 included) + a guard that
+re-sets 0 when the read fails; trap recorded in `docs/edge-cases/cleo-vm.md`. **Round 10 verdict:
+SITE OK on screen, the world present, CJ standing at the Grove site after the scene — the
+var-key ini reads, the warp AND the area handling all proven in one run.** The round-6/8 streaming
+work (site warp + `LOAD_SCENE`) stays: it is main.scm parity and it is what puts the world AT the
+site for far scenes.
+
 **Round 7 (2026-08-13): CRASH — access violation in `00A1 SET_CHAR_COORDINATES` (the opcode id is
 sitting in the crash log's stack dump; the call comes through CLEO's script hook at `0x0053E981`).
 My encoding bug, and a general trap now recorded in `docs/edge-cases/cleo-vm.md`: a global-var

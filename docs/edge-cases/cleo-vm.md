@@ -24,6 +24,15 @@ model-side facts a script author trips over. The VM's design and served surface 
   `$PLAYER_ACTOR`, `00A1` collected a garbage char handle and the game crashed with an access
   violation. Nothing catches it — the number is valid bytecode either way.
 
+- **A FAILED CLEO ini read (`0AF0`-family) does not leave the target var alone — it writes a
+  failure marker into it.** The "set a default, then try the read" pattern is therefore wrong: the
+  failed read replaces the default with garbage. cutscene-override spent four field rounds playing
+  every scene against an empty sky because a missing `[areas]` row corrupted the area var and
+  `04BB SET_AREA_VISIBLE <garbage>` hid the whole exterior world — cutscene objects and sky render,
+  the map does not, which reads as a STREAMING problem and sends the diagnosis the wrong way.
+  Guard: check the read's condition flag and re-set the default on failure (and generate rows so
+  reads succeed). Nothing catches it — the write is silent and the bytecode valid.
+
 ## Vehicle models
 
 - **Only MESH-bearing frames become parts — a dummy frame cannot be addressed at all.** The vehicle
