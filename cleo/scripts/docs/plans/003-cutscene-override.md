@@ -125,12 +125,27 @@ test covers the emitted opcode structure and budget; the behaviour verdict is th
   generator deliberately does not chase control flow; those scenes ride the default-0 note in the
   ini header).
 
-### 2 — SDK vocabulary
+### 2 — SDK vocabulary — DONE 2026-08-13
 
-- [ ] Add the missing opcodes to the SDK DSL table — the full set the flow needs is now pinned:
-      `02E4/02E7/02E9/02EA/06B9` (cutscene), `04BB` (area), `016A/016B` (fade), `0256/01B4`
-      (player), `0AF4`/`0AF0` (ini), plus a read of global `$409` — whichever are absent, each with
-      the SDK's usual emission test.
+- [x] The opcode TABLE needed nothing: the vendored Sanny DB already knows every opcode the flow
+      uses (`02E4/02E7/02E9/02EA/06B9`, `04BB`, `016A/016B`, `0256/01B4`, `0AF4/0AF0`), with names,
+      arity and condition flags. The real gaps were two:
+- [x] **A target for real-SA-only scripts.** The gate's rule was "the VM half always holds", and the
+      VM serves no cutscene opcode — so `dual`/`opensa-only` both refuse this script by design. Added
+      `target: 'sa-only'`, the MIRROR of `opensa-only`: the real-CLEO half always holds (new
+      `servedByRealCleo44` — game opcodes + classic CLEO 4 core + the IniFiles module `0AF0–0AF5`
+      the bottle measurably loads), the VM half is lifted, and the artifact name carries it
+      (`<name>.sa-only.cs`; contract row added to `docs/contracts/mods.md` in the same change). The
+      other bottle modules (FileSystemOperations, IntOperations, CLEO+) stay unclaimed until a
+      script needs one — extending the predicate is the way to claim them.
+- [x] **Local string8 vars** for the ini read: `lvarStr8` (IR) + `s.localString(name)` (DSL,
+      allocator's 2-slot `string8` kind — the allocator and the byte writer both already knew the
+      type). Same-name-different-kind is a build error.
+- [x] Tests: whitelist gains 4 cases (the cutscene sequence + ini read passes `sa-only` and fails
+      `opensa-only`; a VM-only opcode and a file-module opcode both fail `sa-only`; the artifact
+      name), DSL gains 2 (string8 takes two slots; kind collision throws). cleo/sdk + cleo/scripts:
+      **91 tests / 11 files green.** No whitelist regeneration needed — `sa-only` is a predicate
+      over the vendored DB, not a generated set.
 
 ### 3 — the script
 
