@@ -56,9 +56,14 @@ export const script = defineScript({
     // The inert gate: no ini / no key → not a viewer session, vanish without touching anything.
     s.if(() => s.op('READ_STRING_FROM_INI_FILE', str(INI), str('cutscene'), str('scene'), scene), {
       then: () => {
-        // The scene's interior area (generated [areas] section); no row leaves 0 = outside.
+        // The scene's interior area (generated [areas] section). A FAILED CLEO ini read does not
+        // leave the var alone — it writes a failure marker into it, and `04BB` with that garbage
+        // hides the whole exterior world (field rounds 6-9: every scene played against bare sky).
+        // The guard resets 0 on failure, and the generator now emits a row for EVERY scene.
         s.op('SET_LVAR_INT', area, int(0));
-        s.op('READ_INT_FROM_INI_FILE', str(INI), str('areas'), scene, area);
+        s.if(() => s.not('READ_INT_FROM_INI_FILE', str(INI), str('areas'), scene, area), {
+          then: () => s.op('SET_LVAR_INT', area, int(0)),
+        });
 
         // Field rounds 3-5: the gate keys on the CUTSCENE MANAGER, nothing else. ONMISSION is
         // useless here twice over — SA's new-game intro is NOT a mission (it stays 0 through the

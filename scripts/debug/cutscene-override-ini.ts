@@ -80,7 +80,7 @@ const lines = [
   'scene =',
   '',
   '[areas]',
-  ...[...areas.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([scene, area]) => `${scene}=${area}`),
+  ...[...sceneSites.keys()].sort((a, b) => a.localeCompare(b)).map((scene) => `${scene}=${areas.get(scene) ?? 0}`),
   ...(['sitex', 'sitey', 'sitez'] as const).flatMap((section, axis) => [
     '',
     `[${section}]`,
