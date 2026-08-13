@@ -1,6 +1,16 @@
 # 003 — cutscene override: play a chosen cutscene at new game, picked by ini
 
-**Status: PLANNED 2026-08-12, REWRITTEN 2026-08-13 (user's call).** A debug instrument, not a corpus
+**Status: CLOSED 2026-08-13 — all three field verdicts in.** (1) `scene = PROLOG3`: plays from the
+start, in the streamed world, camera on its spline, control + menu return, CJ standing on the
+site; (2) `scene = DESERT1`: the ini is the knob — monster truck in the desert, a cross-map warp,
+no stray traffic; (3) `scene =` empty: fully inert, nothing happens. Final artifact 792 B
+(`cutscene-override.sa-only.cs`) + the generated ini (148 scenes listed, 148 area rows, 148 site
+rows). It took 12 field rounds — every one bought a recorded fact (the round records below), and
+FOUR of them are traps now written into `docs/edge-cases/cleo-vm.md` / the SDK docs: the new-game
+boot race, ONMISSION not covering the intro, global operands as byte offsets, and failed CLEO ini
+reads corrupting the target var.
+
+**Status history: PLANNED 2026-08-12, REWRITTEN 2026-08-13 (user's call).** A debug instrument, not a corpus
 replacement: every vehicle-cutscene field round so far cost "new game → sit through the intro" per
 look. The override turns that into: write a scene name into an ini, start a new game, watch that
 scene. It is the field-testing multiplier for vehicle-cutscene plan 002 steps 8–11 and plan 003
