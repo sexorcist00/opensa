@@ -40,7 +40,7 @@ scene-specific anims).
 | 4 | DESERT9 | csbobcat92 | ✅ after rounds 1–2 ("glass with the door, one rack") |
 | 5 | BCESA4W | csbravura, cszr350b | ✅ (2026-08-13, "good") |
 | 6 | BCESAR4 | cssavanna, cszr350 | ✅ after round 3 ("lights are normal now") |
-| 7 | BCESAR5 | cssadler, cszr350, cszr350b | |
+| 7 | BCESAR5 | cssadler, cszr350, cszr350b | ✅ after rounds 4–8 ("glass renders normally now, tint and sheen in place") |
 | 8 | DES_10B | csmothership | |
 | 9 | DESERT1 | csmonster | |
 | 10 | FARL_3B | csburrito92 | |
@@ -250,8 +250,11 @@ scene-specific anims).
   atomics keep the mod's default (no plugin → default pipeline, which blends translucents and still
   renders the mod's MatFX env sheen). The round-5 pane-last ordering stays. Suite 80/80; verify
   green; bottle updated (`cs-mods-plates-prepanepipe` holds the round-7 build).
-- [ ] **Re-check (user):** BCESAR5 re-run — expected: tint + sheen like the gameplay screenshot,
-      chrome unchanged (round 6's fix untouched on opaque atomics).
+- [x] **Re-check (user):** PASSED (2026-08-13): "glass renders normally now, tint and sheen in
+      place." BCESAR5 ✅ in the ledger.
+- **Re-open note:** rounds 5–8 changed the shared emit fleet-wide (pane ordering + per-atomic
+  pipeline). The six earlier ✅ scenes stay checked, but each gets a one-eye glass/shine glance the
+  next time it naturally plays; anything off re-opens its row.
 
 ## Step 3 — the approval
 
