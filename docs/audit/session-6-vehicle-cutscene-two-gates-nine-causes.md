@@ -12,8 +12,9 @@ whose output the user field-verified frame-against-frame with vanilla: **plan 00
   escape hatch for stock-gameplay targets), game emit with txdcut.ide patching. 55 tests in the tool;
   registered in vitest/eslint tool lists (both enumerate tools explicitly).
 - **Plans**: 001 (architecture + banked research), 002 (steps 1–7 recorded with numbers and verdicts;
-  8–11 remain), 003 (plate bake — planned), and `cleo/scripts/docs/plans/003-cutscene-viewer.md`
-  (tomorrow's first job: the field-testing multiplier).
+  8–11 remain), 003 (plate bake — planned), and `cleo/scripts/docs/plans/003-cutscene-override.md`
+  (tomorrow's first job: the field-testing multiplier; planned as a cheat-code viewer, rewritten
+  2026-08-13 to the ini-driven start override — the file was renamed with it).
 - **Kept instruments**: `scripts/debug/cutscene-anim-channels.ts` — reads the ANPK cutscene anims the
   engine parser cannot; it closed gate 7 in one shot. Fixtures: 8 cutscene DFF pairs + txdcut.ide +
   bobcat.txd + a real LOCKED mod DFF, all one manifest line each.
