@@ -106,6 +106,23 @@ track chain — `docs/hacks/cleo-frame-sibling-order.md`) and flattens parent li
 run in rig order. What that costs a script is measured in `docs/edge-cases/cleo-vm.md`: a script
 anchored on a dummy does nothing at all, silently.
 
+### Cutscene conversion (read by `vehicle-cutscene` at build time)
+
+The converter (tool `vehicle-cutscene`, plan 002) rebuilds each `cs*` model from the mod's gameplay
+DFF; these mod frame names decide what the CUTSCENE copy carries. Misspelling one is SILENT: the mesh
+is still adopted (it rides the nearest carried ancestor un-animated) — what is lost is its animation
+channel, exactly like the taxi's misnamed door (gate 7).
+
+| Name | What the converter does |
+| --- | --- |
+| template part names (`chassis`, `door_lf_ok`…; bikes: `wheel_rear`, `chainset`, `pedal_l/r`, `handlebars`, `forks_front`, `wheel_front`) | Matched by canonical name to the vanilla cutscene bone; the bone keeps the VANILLA local (the anims' bind pose) and an un-animated `_pv` shim absorbs the mod's placement delta. On bikes the matched frame may be a meshless dummy — its subtree meshes ride the bone. |
+| `<anything>_dam`, `<anything>_vlo` | Never carried into the cutscene copy. |
+| `_[<year>]…` subtrees (`_[1991]:2`) | Year-variant ALTERNATIVES to base parts — never adopted (the taxi stacked three door sets). |
+| `f_wheel_<mask>` | Wheel sub-model container (cars): the first atomic is the shared wheel; the container is never adopted as body parts. |
+| `f_extras:<n>`, `f_class:<n>` | Variant containers. CARS: one MESH per container (field-frozen, gates 4+7). BIKES: the first child SUBTREE with a mesh is adopted whole (handlebar sets carry brake levers/grips as sub-meshes), later children dropped. |
+| `f_extras:<n>+` | Additive container (bikes): every child kept — the MTB ships both wheel reflectors in one. |
+| `<part>_ok`/`_dam` under its own `<part>_dummy` | The frame's transform is junk the game destroys — the dummy is the hinge; every OTHER mesh frame keeps its transform. |
+
 ### Tracked vehicles (`track_*` — read by our shipped `rhino-tracks.cs`)
 
 A model carrying these names gets its tread and road wheels animated by the script we ship

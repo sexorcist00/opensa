@@ -311,19 +311,39 @@ the loop); paint = stock carcols until the full pipeline supplies the mod palett
 
 ---
 
-## Step 8 (P2) — bike branch (`rig/bike.ts`, csmtbike92)
+## Step 8 (P2) — bike branch (`rig/bike.ts`, csmtbike92) ✅ SHIPPED 2026-08-13 (field verdict pending)
 
-- [ ] Template from vanilla csmtbike92 (bone ids for `chassis`, `wheel_rear`, `chainset`, `pedal_l/r`,
-      `handlebars`, `forks_front`, `wheel_front`; note `wheel_front` parents under `forks_front`).
-- [ ] Transform from the mod bmx rig: same drop/collapse machinery as cars, bike part vocabulary; wheels
-      are already distinct parts (no duplication step).
-- [ ] Policy for the Smooth Criminal pack's procedural frames (`f_class:*`, `f_extras:*`, `a_drt=*`,
-      `f_fpeg*`): meshes parented under kept parts are baked into that part's geometry only if trivially
-      possible at chunk level, otherwise dropped + logged. Decide on the real file, record the choice.
-- [ ] Golden diff vs vanilla (stock bmx donor) + field appearance in a bike cutscene if one is reachable;
-      otherwise structural verification stands and the gap is named here.
+- [x] Template from vanilla csmtbike92 (`extractBikeTemplate`): root `csbikechassis_dummy`, bones DFS
+      0–8 — chassis 1, wheel_rear 2, chainset 3, pedal_r 4, pedal_l 5, handlebars 6, forks_front 7,
+      wheel_front 8 (under forks_front). The bike rig has NO wheel corners: every part is a MESH bone in
+      the chassis subtree, so the car extractor's 4-corner requirement can never fit — a separate
+      template type with the rear-wheel ground reference (`groundZ` −0.256, radius 0.343).
+- [x] Transform (`rig/bike.ts`): the branch-agnostic emit machinery was EXTRACTED into `rig/emit.ts`
+      (shims, vanilla-local bones, hierarchy recompute, adoption vocabulary — car.ts keeps its wheel
+      logic and its field-frozen behaviour, 55/55 pre-bike tests green through the move). Bike-specific:
+      a template part may match a mod DUMMY (the MTB's `chassis`/`wheel_rear`/`forks_front` carry no
+      mesh) — the bone is emitted meshless and the subtree meshes adopt under it, riding its channel.
+- [x] Variant policy DECIDED on the real file (probed + committed as the `mtbike-smooth-criminal.dff`
+      fixture): `f_extras:<n>`/`f_class:<n>` containers hold variant SUBTREES — the first child subtree
+      with a mesh is adopted WHOLE (the b-handlebar set carries brake levers + grips as sub-meshes;
+      the car branch's one-mesh rule would strip them), later children are dropped + logged.
+      `f_extras:<n>+` containers are ADDITIVE (both wheel reflectors) — every child kept. No vertex
+      bake anywhere — chunk-level adoption covers everything the mod ships. Car keeps one-mesh (gates
+      4+7 field-frozen). Recorded in `docs/contracts/vehicles.md` §3.
+- [x] Golden diff vs vanilla (stock bmx donor, committed test): parts 7/7, missing=[], dropped only
+      `chassis_vlo`, shift 0.000, vanilla bone ids verbatim, hierarchy ids ordered-subsequence,
+      145 408 → 123 627 B. Field scene is REACHABLE: `STRP4B2` is the ONLY scene in all 148 cuts.img
+      IFPs that plays csmtbike92 — and every bone except the root is a 2-frame static KRT0 (the root
+      carries 67 KRT0 frames): the bike moves as one rigid body. Field round rides the
+      cutscene-override instrument (cleo/scripts plan 003); verdict pending below.
 
-**Record:** parts kept/dropped for the real mtbike mod.
+**Record (2026-08-13):** Smooth Criminal MTB 2 972 598 → 2 581 896 B: parts 6 (handlebars MISSING —
+the mod ships no such frame; its bars are `f_extras` variants adopted under the chassis, un-animated,
+which the one bike scene cannot distinguish anyway), shimmed chassis+pedals+forks+wheel_front (the mod
+authors pedals in opposite crank phase and un-pitched forks — shims absorb both), adopted 41, dropped 8
+(`chassis_vlo`, the a-handlebar set + its levers/grip, the second fork-leg and chassis-dirt variants).
+Full-fleet self-contained run: **22/22 converted, 0 errors** (csdinghy pending step 9), 398 paint
+materials on 19 models, cutscene.img 25.7 → 309.6 MB. Suite 62/62, lint + tsc clean.
 
 ---
 
