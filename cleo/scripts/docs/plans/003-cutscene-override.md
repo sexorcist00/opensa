@@ -199,6 +199,28 @@ what it broke:
   (`WAIT 0`, main.scm's own cadence) with a 5-minute belt timeout so even a `02E9` that never fires
   restores instead of hanging. 353 B rebuilt + reinstalled in the bottle.
 
+**Round 2 (2026-08-13): restore PASSED** — control and the Esc menu return cleanly after the
+scene. OPEN: the camera during the scene is wrong ("strongly zoomed at the objects / as if the
+scene is one and the camera is another"). Facts banked for the diagnosis, verdict pending the
+user's answers:
+
+- The user's content description across both rounds ("airport → boarding the taxi") matches
+  **PROLOG1**'s object list (csplay, suitcases, csbogman, cstaxi92), while the delivered ini says
+  `scene = PROLOG3` — whose content is the COPS scene (cstenpenny, cspulaski, cshernandez,
+  cscopcarla92, handcuffs, money stack). If the airport scene really played, the bug is
+  which-scene-loads, not camera framing.
+- gta-reversed: the camera rides `TheCamera.LoadPathSplines(<name>.dat)` +
+  `TakeControlWithSpline`; `ms_cutsceneOffset` comes from the `.cut`'s own INFO `offset` row
+  (reset to 0,0,0 at preload — SA main.scm calls `0244 SET_CUTSCENE_OFFSET` exactly ONCE in the
+  whole script, so per-scene offsets are file-owned, not script-owned). **If the `.dat` fails to
+  apply, the manager's fallback is SILENT: the scene plays and the camera just stays put** — the
+  exact "scene is one, camera is another" shape. `SetWideScreenOn` happens only on the
+  with-camera path, so missing letterbox bars during the scene are the fallback's fingerprint.
+- Known main.scm pre-start parity we do NOT yet do (streaming, not camera): `0A0B
+  LOAD_SCENE_IN_DIRECTION <site>` + `0395 CLEAR_AREA` before `02E7` (decoded at the PROLOG3 site:
+  2493.4, −1734.3, 12.4, heading 258.8 — Grove Street). Held back deliberately — one variable per
+  field round.
+
 **STOP: user's verdict closes the plan.** **Record:** verdict + the ini row count + any scene that
 needed the timeout path (each is a fact about that scene worth a line).
 
