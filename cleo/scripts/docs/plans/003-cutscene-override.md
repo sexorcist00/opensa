@@ -248,6 +248,15 @@ debounce bridges the between-scenes gaps where the next intro scene is still loa
 momentarily reads false. 479 B rebuilt + reinstalled. New-game flow bonus: the scene now fires ~10 s
 after the cops drop CJ at Grove (no bike ride needed); load-save flow = 5 s grace + 10 s debounce.
 
+**Round 5 (2026-08-13): the intro plays untouched (gate holds), but the scene never fired — the
+bike-home phase IS a mission.** cleo.log showed csovrd alive until session end: standing at the
+drop point keeps ONMISSION = 1 (399 `SET $409 1` sites in main.scm — missions own that flag), so
+the mission-free wait meant "finish In the Beginning first". **The user's call: the trigger is NEW
+GAME, not mission-passed — ONMISSION leaves the gate entirely.** The gate is now manager-only:
+player playing + no fade + `06B9` free, held 10 s. Deliberate consequence, recorded: on a
+mid-mission save the scene fires during the mission — acceptable for a debug instrument. 458 B
+rebuilt + reinstalled. Flow: new game → skip the intro with one key → ~10–15 s → the scene.
+
 **STOP: user's verdict closes the plan.** **Record:** verdict + the ini row count + any scene that
 needed the timeout path (each is a fact about that scene worth a line).
 

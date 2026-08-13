@@ -18,8 +18,6 @@ import { defineScript } from '../../sdk/src/dsl/script';
 import { int, lvar, str } from '../../sdk/src/ir';
 
 const INI = 'cleo\\cutscene-override.ini';
-/** SA's ONMISSION global — measured from main.scm's `0180 SET_ON_MISSION_FLAG` (plan 003 step 0). */
-const ONMISSION = 409;
 const PLAYER = 0;
 const FADE_OUT = 0;
 const FADE_IN = 1;
@@ -52,12 +50,15 @@ export const script = defineScript({
         s.op('SET_LVAR_INT', area, int(0));
         s.op('READ_INT_FROM_INI_FILE', str(INI), str('areas'), scene, area);
 
-        // Field rounds 3-4: the gate cannot trust ONMISSION alone — SA's new-game INTRO is not a
-        // mission (ONMISSION stays 0 while the airport scene plays), and CLEO threads outrun
-        // main.scm at boot. What does mark the intro is the cutscene manager itself:
-        // HAS_CUTSCENE_LOADED is true through every intro scene. So the gate is "the manager is
-        // free AND nothing else is happening, held CONTINUOUSLY for the debounce" — the debounce
-        // bridges the between-scenes gaps where the next intro scene is still loading.
+        // Field rounds 3-5: the gate keys on the CUTSCENE MANAGER, nothing else. ONMISSION is
+        // useless here twice over — SA's new-game intro is NOT a mission (it stays 0 through the
+        // airport scene, round 4), and the bike-home phase IS one (waiting for 0 means finishing
+        // it, round 5 — and the user's call is that the trigger is NEW GAME, not mission-passed).
+        // HAS_CUTSCENE_LOADED is true through every intro scene, so the gate is "the manager is
+        // free, no fade, player playing — held CONTINUOUSLY for the debounce"; the debounce
+        // bridges the between-scenes gaps where the next intro scene is still loading. Deliberate
+        // consequence: on a mid-mission save the scene fires during the mission — fine for a
+        // debug instrument.
         s.wait(GRACE_MS);
         s.op('SET_LVAR_INT', gateDone, int(0));
         s.while(
@@ -66,7 +67,6 @@ export const script = defineScript({
             s.while(
               () => {
                 s.not('IS_PLAYER_PLAYING', int(PLAYER));
-                s.not('IS_INT_VAR_EQUAL_TO_NUMBER', s.global(ONMISSION), int(0));
                 s.op('GET_FADING_STATUS');
                 s.op('HAS_CUTSCENE_LOADED');
               },
@@ -77,7 +77,6 @@ export const script = defineScript({
             s.while(
               () => {
                 s.op('IS_PLAYER_PLAYING', int(PLAYER));
-                s.op('IS_INT_VAR_EQUAL_TO_NUMBER', s.global(ONMISSION), int(0));
                 s.not('GET_FADING_STATUS');
                 s.not('HAS_CUTSCENE_LOADED');
                 s.not('IS_INT_LVAR_GREATER_THAN_NUMBER', debounce, int(DEBOUNCE_MS));
@@ -87,7 +86,6 @@ export const script = defineScript({
             s.if(
               () => {
                 s.op('IS_PLAYER_PLAYING', int(PLAYER));
-                s.op('IS_INT_VAR_EQUAL_TO_NUMBER', s.global(ONMISSION), int(0));
                 s.not('GET_FADING_STATUS');
                 s.not('HAS_CUTSCENE_LOADED');
               },
