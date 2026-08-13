@@ -43,7 +43,7 @@ scene-specific anims).
 | 7 | BCESAR5 | cssadler, cszr350, cszr350b | ✅ after rounds 4–8 ("glass renders normally now, tint and sheen in place") |
 | 8 | DES_10B | csmothership | ✅ (2026-08-13) |
 | 9 | DESERT1 | csmonster | ✅ (2026-08-13) |
-| 10 | FARL_3B | csburrito92 | 4 findings (2026-08-13) → rounds 9–11; re-run pending |
+| 10 | FARL_3B | csburrito92 | ✅ after rounds 9–12 ("all fixed") |
 | 11 | FINAL2B | csbravura, cssabre92 | |
 | 12 | GARAG3A | csremington92 | |
 | 13 | HEIST8A | cssecurica92 | |
@@ -304,7 +304,10 @@ the sweep (nested `<name>:K` selector groups, a three-mesh wheel sub-model).
   blanket year drop stands. The burrito adopts `version[1983]:1` + `grill83[gmc]` (first eligible
   year); the taxi keeps its single door set (suite golden pair green). Fleet 23/23, verify green;
   suite 80/80; bottle updated (`cs-mods-plates-pretail` holds the rounds-9–11 build).
-- [ ] **Re-check (user):** FARL_3B re-run — tail lamps + the '83 grille in the nose.
+- [x] **Re-check (user):** PASSED (2026-08-13): "all fixed, FARL_3B can be closed." FARL_3B ✅ in
+      the ledger. No per-model hardcode anywhere in the chain: every rule derives from the mod's own
+      structure and the slot's vanilla template at convert time (checked — the only model name in
+      the tool source is a comment).
 
 ## Step 3 — the approval
 
