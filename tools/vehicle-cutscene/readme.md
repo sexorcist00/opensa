@@ -1,11 +1,13 @@
 # vehicle-cutscene
 
-**Status: plan 002 steps 1–10 shipped — both car gates PASSED (2026-08-12), the bike branch
-FIELD-PASSED first round (2026-08-13, scene STRP4B2), the boat branch structurally verified
-(2026-08-13; no stock scene plays csdinghy — the named gap). The FULL 23-model fleet converts with
-0 errors in ~3.5 s ([numbers](../../docs/benchmarks/tools/2026-08-13-vehicle-cutscene-fleet.md)).
-Remaining: pipeline integration ([002](docs/plans/002-implementation.md) step 11) and the
-[plate bake](docs/plans/003-plate-bake.md).**
+**Status: plans 002 (steps 1–10 + the step-11 wiring) and 003 are DONE — both car gates PASSED
+(2026-08-12), the bike branch FIELD-PASSED first round (2026-08-13, scene STRP4B2), the boat branch
+structurally verified (no stock scene plays csdinghy — the named gap), the full 23-model fleet
+converts with 0 errors in ~3.5 s
+([numbers](../../docs/benchmarks/tools/2026-08-13-vehicle-cutscene-fleet.md)), the tool runs as
+pmb's `cutscene` stage, and the [plate bake](docs/plans/003-plate-bake.md) FIELD-PASSED first round
+(2026-08-13) — cutscene cars now carry readable plates where vanilla shows blanks. Remaining: the
+step-11 full-pipeline field acceptance ([002](docs/plans/002-implementation.md)).**
 
 Converts installed **vehicle mods** into their **cutscene counterparts** — the `cs*` models in
 `models/cutscene.img` — so the real game's cutscenes show the same custom cars the player drives.

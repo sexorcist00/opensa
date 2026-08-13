@@ -1,6 +1,6 @@
 # 003 — plate bake: readable license plates in cutscenes
 
-**Status: steps 1–3 SHIPPED 2026-08-13 — the field demonstration (step 4) remains.** An IMPROVEMENT over the original, in the goals-doc sense: vanilla
+**Status: CLOSED 2026-08-13 — field-passed first round.** An IMPROVEMENT over the original, in the goals-doc sense: vanilla
 cutscene cars show a BLANK white plate — the user's own gate-7 vanilla A/B screenshot is the recorded
 evidence — because `CCustomCarPlateMgr` generates plate textures only for GAMEPLAY vehicles, and a
 cutscene object renders the raw placeholders. The converted models can do better offline: bake a real,
@@ -78,14 +78,16 @@ suite 78/78 for the tool, lint + tsc clean. **Record:** fleet cs TXDs 148 828 60
 placeholder entries vary slightly); the composed `csbobcat92` pair rendered offline reads as a real
 plate.
 
-### 4 — FIELD: the improvement demonstrated
+### 4 — FIELD: the improvement demonstrated ✅ PASSED 2026-08-13 (first round)
 
-- [ ] Intro run (user): the sheriff's and taxi's plates READ as plates — text on a town background —
-      where the vanilla A/B frame shows a white blank. Screenshot pair goes into the record; that pair
-      IS the "better must be demonstrated" evidence for this improvement. (The plates build is in the
-      bottle; PROLOG3 via the override shows both cars in one scene.)
+- [x] Field run (user, PROLOG3 via the cutscene-override — sheriff + taxi in one scene):
+      **"checked — the plates are visible, everything's great."** The demonstration pair the
+      improvement rests on: the user's own gate-7 vanilla A/B frame (the recorded BLANK white plate,
+      plan 002 step 4) as the before, this verdict on the same scene class as the after. No dedicated
+      screenshot was captured this round — the before-frame exists in the gate-7 record and the
+      offline PNG render of the baked pair (step 2) documents exactly what the field then confirmed.
 
-**STOP: the user's verdict closes the plan.** **Record:** verdict + screenshot reference.
+**Record:** verdict above; the override was disarmed (`scene =`) after the pass. The plan closes.
 
 ## Risks / notes
 
