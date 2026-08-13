@@ -147,18 +147,35 @@ test covers the emitted opcode structure and budget; the behaviour verdict is th
       **91 tests / 11 files green.** No whitelist regeneration needed — `sa-only` is a predicate
       over the vendored DB, not a generated set.
 
-### 3 — the script
+### 3 — the script — DONE 2026-08-13
 
-- [ ] `cleo/scripts/cutscene-override/script.ts` + `story.test.ts` (headless: the inert path
-      terminates without touching a cutscene opcode; the set path emits wait → fade/freeze → `02E4`
-      → `02E7` → `02E9` poll → `02EA` → restore → terminate; the timeout path restores and
-      terminates. Budget: the wait/poll loop cost per tick — the rhino lesson: idle cost is the
-      number that matters).
+- [x] `cleo/scripts/cutscene-override/script.ts` + `story.test.ts`. The story is STRUCTURAL — the
+      VM cannot execute an sa-only script, so the review surface is the emitted sequence and the
+      committed disasm listing (46 instructions, 358 bytes as `cutscene-override.sa-only.cs`).
+      5 tests: the dual/opensa-only gates refuse it (the reason sa-only exists); a failed ini read
+      jumps straight to TERMINATE with no cutscene opcode on the path; the sequence is main.scm's
+      own (area before load, LOADED wait between load and start, FINISHED poll after start, one
+      CLEAR outside the started-guard so the timeout path clears too); the longest WAIT-free
+      stretch (linear over-approximation) fits `budgetPerTick: 24` and no loop warns; deterministic
+      bytes + listing snapshot. cleo scope: **253 tests / 31 files green.**
+- [x] Flow decisions the plan text did not fix: a 500 ms settle after control returns; fade-out
+      completes BEFORE freeze/area/load (mirrors main.scm's framing); `[areas]` read keyed by the
+      scene string itself (`0AF0` with the string8 local as the key), defaulting 0; load timeout
+      15 s on TIMERA; the finish poll trusts `02E9` (no timeout — main.scm doesn't have one either).
+- **The one unproven encoding, and it is what field round 1 proves:** a string8 LOCAL (`0@s`) as
+  the string arg of a game opcode (`02E4`) and as an ini KEY (`0AF0`). CLEO documents var-strings
+  in any string slot; this bottle has never demonstrated it. If round 1 black-screens into the
+  timeout path with a correct ini, suspect this first.
 
 ### 4 — FIELD: the instrument proves itself
 
-- [ ] Drop the compiled `.cs` + ini into the bottle's CLEO folder. Three rounds: `scene = prolog3`
-      → new game → skip intro → the scene plays and control returns cleanly; a second scene name to
+**Delivered to the bottle 2026-08-13**: `CLEO/cutscene-override.sa-only.cs` (358 B) +
+`CLEO/cutscene-override.ini` (35 scenes, 65 area rows, `scene = PROLOG3` pre-set) — round 1 is
+just: launch, new game (or load a save), skip the intro, watch. If the game was already running
+during the install, the files land on the NEXT launch.
+
+- [ ] Three rounds: `scene = PROLOG3` → the scene plays and control returns cleanly; a second
+      scene name (`GARAG3A` is a good interior probe — area 0 unrecorded, watch for blue void) to
       prove the ini is the knob; `scene =` empty to prove inert.
 
 **STOP: user's verdict closes the plan.** **Record:** verdict + the ini row count + any scene that
