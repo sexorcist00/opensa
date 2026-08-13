@@ -27,6 +27,7 @@ import {
   type ConvertReport,
   emitPartsRig,
   emptyEmit,
+  finalizeAtomics,
   firstAtomicInSubtree,
   matchPart,
   type PartsRigAnalysis,
@@ -67,6 +68,7 @@ export function convertBike(
   );
   emit.frames[1].hierarchy = buildHierarchy(emit.frames);
   collectDropped(emit, analysis.model, report);
+  finalizeAtomics(emit, analysis.model.version);
 
   const dff = writeClump({
     atomics: emit.atomics,

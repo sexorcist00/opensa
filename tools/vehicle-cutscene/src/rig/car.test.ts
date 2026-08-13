@@ -1,7 +1,9 @@
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
+import { readRw } from '@opensa/rw-codec/chunk';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
+import { geometryBodyHasWindowPane } from '../materials';
 import { extractCarTemplate, toArrayBuffer } from '../template';
 import { convertCar } from './car';
 import { type ClumpModel, readClump, writeClump } from './clump-io';
@@ -269,6 +271,28 @@ describe('convertCar', () => {
       const { dff } = convertCar(BOBCAT, template);
       const converted = readClump(dff);
       expect(frameByName(converted, 'Box01')?.rotation).toEqual([...IDENTITY_ROTATION]);
+    });
+
+    it('window panes render LAST and every atomic carries the vehicle Pipeline Set (plan 004 rounds 5+6)', () => {
+      const { dff } = convertCar(BOBCAT, extractCarTemplate(CS_BOBCAT));
+      const converted = readClump(dff);
+
+      // Vanilla's own layout (windscreen_ok is the final atomic of every vanilla car): once a pane
+      // atomic appears, only pane atomics follow — an early pane z-erases everything behind it.
+      const paneFlags = converted.atomics.map((atomic) =>
+        geometryBodyHasWindowPane(converted.geometries[atomic.geometryIndex].body),
+      );
+      expect(paneFlags.some(Boolean)).toBe(true);
+      expect(paneFlags.slice(paneFlags.indexOf(true)).every(Boolean)).toBe(true);
+
+      // Every vanilla cs atomic carries PipelineSet 0x53F2009A; without it a cutscene object renders
+      // on the default pipeline and the mod's Reflection/Specular material plugins go unread.
+      for (const atomic of converted.atomics) {
+        const plugins = atomic.extension ? readRw(atomic.extension.body).chunks : [];
+        const pipeline = plugins.find((chunk) => chunk.type === 0x253f2f3);
+        expect(pipeline?.data).toBeDefined();
+        expect(new DataView(pipeline!.data!.buffer, pipeline!.data!.byteOffset, 4).getUint32(0, true)).toBe(0x53f2009a);
+      }
     });
 
     it('RENAMES an adopted mesh that duplicates an emitted frame name — a duplicate still binds its channel', () => {

@@ -176,6 +176,42 @@ scene-specific anims).
   suite 85/85; bottle updated (`cs-mods-plates-preglass` holds the previous build).
 - **Re-check scope:** fleet-wide material fix — BCESAR5 re-run decides; earlier ✅ scenes get a glass
   glance next time they naturally play.
+- [x] **Re-check (user):** FAILED (2026-08-13) — still no see-through on the zr350, "the windscreen
+      seems absent entirely". The alpha clamp was not the mechanism (kept anyway — it is vanilla's
+      authored value); the real cause is round 5's render order.
+
+### Round 5 — BCESAR5: windscreen z-erases the car behind it (2026-08-13, screenshot)
+
+- **Seen (round-4 re-check):** through the windscreen you see SKY, not the interior — the pane reads as
+  "absent" (alpha 26) while everything behind it is missing.
+- **Root cause (measured):** the cutscene path renders clump atomics in FILE ORDER with z-write on. Our
+  emit placed the template windscreen at atomic 9 of 35 with the whole adopted interior AFTER it
+  (atomics 10–34) — the pane drew first, wrote depth, and everything behind it z-failed, leaving the
+  pre-drawn sky. Vanilla's own layout IS the contract: `windscreen_ok` is the LAST atomic of every
+  vanilla car (chassis with interior mid-file) — that is how R* made unsorted panes composite.
+- **Fix (one variable):** `finalizeAtomics` in `rig/emit.ts` (all three branches): stable partition —
+  atomics whose geometry carries a window-pane material (the round-4 classifier) move to the tail,
+  relative order preserved. The emitted zr350 now ends `…windscreen_ok, Object016_ad, glass_ok_ad,
+  glass_lf_ok_ad, glass_rf_ok_ad`.
+- [ ] **Re-check (user):** BCESAR5 re-run.
+
+### Round 6 — fleet: converted cars shine differently than the same mod in gameplay (2026-08-13)
+
+- **Seen (user):** "converted cars have a different gloss level than the same cars in gameplay —
+  probably we apply specular settings during conversion; keep the custom's defaults."
+- **Root cause (measured):** the converter applies NOTHING — geometry bodies and atomic extensions are
+  carried verbatim. The delta is a plugin the mod never needed: EVERY vanilla cs atomic carries the SA
+  Pipeline Set plugin (`0x253f2f3` = `0x53F2009A`, the custom vehicle pipeline). A gameplay DFF gets
+  that pipeline assigned by the engine via its model-info type, so mods do not ship the plugin — and a
+  cutscene object without it renders on the DEFAULT pipeline, where the mod's Reflection/Specular
+  material plugins go unread: hence the different shine. The user's instinct was exactly right — in
+  gameplay the custom gets the vehicle pipeline; the cutscene copy must too.
+- **Fix (one variable):** `finalizeAtomics` also stamps PipelineSet `0x53F2009A` into every emitted
+  atomic's Extension when missing, mirroring the vanilla fleet.
+- Both rounds shipped in one rebuild (independent subsystems: render order vs pipeline; verdicts
+  attribute separately: transparency → round 5, shine vs gameplay → round 6). Suite 86/86; verify
+  green (317 DFFs, 0 duplicate channels); bottle updated (`cs-mods-plates-prepipe` holds the round-4
+  build).
 - [ ] **Re-check (user):** BCESAR5 re-run.
 
 ## Step 3 — the approval

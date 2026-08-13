@@ -43,6 +43,7 @@ import {
   emitAtomic,
   emitBone,
   emptyEmit,
+  finalizeAtomics,
   hingeFactory,
   inYearVariantSubtree,
   lift,
@@ -108,6 +109,7 @@ export function convertCar(modDff: Uint8Array, template: CsTemplate): { dff: Uin
   emitBody(emit, template, analysis, shiftZ, report);
   emit.frames[1].hierarchy = buildHierarchy(emit.frames);
   collectDropped(emit, analysis.model, report);
+  finalizeAtomics(emit, analysis.model.version);
 
   const dff = writeClump({
     atomics: emit.atomics,

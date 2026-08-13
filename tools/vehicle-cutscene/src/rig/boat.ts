@@ -12,7 +12,15 @@
  */
 import { type CsBoatTemplate } from '../template';
 import { writeClump } from './clump-io';
-import { analyzePartsRig, buildHierarchy, collectDropped, type ConvertReport, emitPartsRig, emptyEmit } from './emit';
+import {
+  analyzePartsRig,
+  buildHierarchy,
+  collectDropped,
+  type ConvertReport,
+  emitPartsRig,
+  emptyEmit,
+  finalizeAtomics,
+} from './emit';
 
 export type BoatConvertReport = ConvertReport;
 
@@ -48,6 +56,7 @@ export function convertBoat(
   );
   emit.frames[1].hierarchy = buildHierarchy(emit.frames);
   collectDropped(emit, analysis.model, report);
+  finalizeAtomics(emit, analysis.model.version);
 
   const dff = writeClump({
     atomics: emit.atomics,

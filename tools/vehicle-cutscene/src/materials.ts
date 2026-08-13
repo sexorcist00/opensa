@@ -93,6 +93,23 @@ export function clampWindowGlass(dff: Uint8Array, floor: null | number): { bytes
 }
 
 /**
+ * Whether a geometry chunk BODY (its children stream: Struct / MaterialList / Extension) carries at
+ * least one window-pane material — the render-order pass moves such atomics last, mirroring vanilla's
+ * windscreen_ok-last layout (the cutscene path draws clump atomics in file order with z-write on, so an
+ * early pane erases everything drawn behind it).
+ */
+export function geometryBodyHasWindowPane(body: Uint8Array): boolean {
+  const materialList = readRw(body).chunks.find((chunk) => chunk.type === RW_MATERIAL_LIST);
+  for (const { material, struct } of listMaterialStructs(materialList)) {
+    if (isWindowPane(material, struct)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * The model's first carcols combo as four RGBs. `car` rows carry two colours; slots 3/4 fall back to
  * palette 0 (black) — the game zero-initialises the extra colours the same way. Returns null when the
  * model has no row at all.
@@ -174,6 +191,21 @@ function isWindowPane(material: RwChunk, struct: RwChunk): boolean {
   return luminance(struct.data!) < 128 || alpha <= 128;
 }
 
+function* listMaterialStructs(materialList: RwChunk | undefined): Generator<{ material: RwChunk; struct: RwChunk }> {
+  if (!materialList?.data) {
+    return;
+  }
+  for (const material of readRw(materialList.data).chunks) {
+    if (material.type !== RW_MATERIAL || !material.data) {
+      continue;
+    }
+    const struct = readRw(material.data).chunks.find((chunk) => chunk.type === RW_STRUCT);
+    if (struct?.data && struct.data.length >= 8) {
+      yield { material, struct };
+    }
+  }
+}
+
 /** Rec.601 luminance of the material Struct colour at `data[4..6]`. */
 function luminance(data: Uint8Array): number {
   return 0.299 * data[4] + 0.587 * data[5] + 0.114 * data[6];
@@ -186,19 +218,7 @@ function* materialStructs(dff: Uint8Array): Generator<{ material: RwChunk; struc
     if (geometry.type !== RW_GEOMETRY) {
       continue;
     }
-    const materialList = geometry.children?.find((chunk) => chunk.type === RW_MATERIAL_LIST);
-    if (!materialList?.data) {
-      continue;
-    }
-    for (const material of readRw(materialList.data).chunks) {
-      if (material.type !== RW_MATERIAL || !material.data) {
-        continue;
-      }
-      const struct = readRw(material.data).chunks.find((chunk) => chunk.type === RW_STRUCT);
-      if (struct?.data && struct.data.length >= 8) {
-        yield { material, struct };
-      }
-    }
+    yield* listMaterialStructs(geometry.children?.find((chunk) => chunk.type === RW_MATERIAL_LIST));
   }
 }
 

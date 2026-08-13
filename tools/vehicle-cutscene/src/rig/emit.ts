@@ -7,6 +7,9 @@
  * `_pv` shims absorbing the donor deltas, whole-shell adoption — is documented at the top of
  * `rig/car.ts`, where it was field-won (plan 002 gates 4 and 7).
  */
+import { readRw, writeRw } from '@opensa/rw-codec/chunk';
+
+import { geometryBodyHasWindowPane } from '../materials';
 import { canonicalPartName, type CsPartTemplate } from '../template';
 import { isIdentityDelta } from './bake';
 import {
@@ -200,6 +203,14 @@ export function childrenByFrame(model: ClumpModel): number[][] {
 
   return children;
 }
+
+/** SA Pipeline Set atomic plugin (`0x253f2f3`) and its vehicle-pipeline id — on EVERY vanilla cs
+ *  atomic (measured fleet-wide). A cutscene object is not a CVehicle, so nothing assigns the vehicle
+ *  pipeline at load time the way it happens for gameplay cars — the plugin is the only carrier, and
+ *  without it the mod's Reflection/Specular material plugins go unread (plan 004: the shine delta
+ *  between a converted car and the same mod in gameplay). */
+const RW_PIPELINE_SET = 0x253f2f3;
+const VEHICLE_PIPELINE_ID = 0x53f2009a;
 
 export function collectDropped(emit: Emit, model: ClumpModel, report: ConvertReport): void {
   for (const atomic of model.atomics) {
@@ -419,6 +430,25 @@ export function excludedVariantFrames(model: ClumpModel): Set<number> {
   return excluded;
 }
 
+/**
+ * The shared final pass over the emitted atomic list, run by all three branches before writeClump:
+ *  1. window-pane atomics move LAST (stable partition) — vanilla's own layout (windscreen_ok is the
+ *     final atomic of every vanilla car): the cutscene path renders clump atomics in file order with
+ *     z-write on, so a pane emitted before the interior erases everything behind it (BCESAR5, the
+ *     see-through-the-car windscreen);
+ *  2. every atomic's Extension gains the vehicle Pipeline Set plugin when missing, like vanilla.
+ */
+export function finalizeAtomics(emit: Emit, version: number): void {
+  const panes = new Map(emit.geometries.map((geometry, index) => [index, geometryBodyHasWindowPane(geometry.body)]));
+  emit.atomics = [
+    ...emit.atomics.filter((atomic) => !panes.get(atomic.geometryIndex)),
+    ...emit.atomics.filter((atomic) => panes.get(atomic.geometryIndex)),
+  ];
+  for (const atomic of emit.atomics) {
+    atomic.extension = withVehiclePipeline(atomic.extension, version);
+  }
+}
+
 /** First atomic (in atomic order) whose frame sits in the given frame's subtree, if any. */
 export function firstAtomicInSubtree(model: ClumpModel, rootIndex: number): ClumpAtomic | undefined {
   if (rootIndex < 0) {
@@ -550,4 +580,19 @@ export function worldTransforms(model: ClumpModel): (frameIndex: number) => Tran
   };
 
   return resolve;
+}
+
+function withVehiclePipeline(extension: null | OpaqueChunk, version: number): OpaqueChunk {
+  const chunks = extension ? readRw(extension.body).chunks : [];
+  if (chunks.some((chunk) => chunk.type === RW_PIPELINE_SET)) {
+    return extension!;
+  }
+  const payload = new Uint8Array(4);
+  new DataView(payload.buffer).setUint32(0, VEHICLE_PIPELINE_ID, true);
+  chunks.push({ data: payload, type: RW_PIPELINE_SET, version: extension?.version ?? version });
+
+  return {
+    body: writeRw({ chunks, trailing: new Uint8Array(0) }),
+    version: extension?.version ?? version,
+  };
 }
