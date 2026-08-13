@@ -178,6 +178,27 @@ during the install, the files land on the NEXT launch.
       scene name (`GARAG3A` is a good interior probe — area 0 unrecorded, watch for blue void) to
       prove the ini is the knob; `scene =` empty to prove inert.
 
+**Round 1 (2026-08-13): the scene PLAYED — then a stuck white screen, no menu.** What it proved and
+what it broke:
+
+- PROVED: the whole start half — ini read, string8 local into `02E4`, `06B9` wait, `02E7` — works
+  under real CLEO 4.4.4. The step-3 "one unproven encoding" is proven.
+- BROKE: the restore half. cleo.log shows the script registering and NO `Unregistering … cutscen`
+  line — the thread never reached `0A93`, it is parked in a wait loop. Diagnosis: the 500 ms
+  fade-out + `016B` wait BETWEEN `02E9` and `02EA` is a window in which `CCutsceneMgr`'s own
+  end-fade (the intro's white "camera shutter" — the white screen itself) keeps the fade state
+  alive, so `GET_FADING_STATUS` never goes false. main.scm has no such window: its end fade is
+  `016A 0 0` — INSTANT — so the `016B` guard exits the same tick and `02EA` follows immediately
+  (decoded at the PROLOG3 site; the fade-in after start is `016A 1000 1`, which also pins
+  FADE_IN = 1 as ground truth). The no-menu part was not the fade: `01B4 SET_PLAYER_CONTROL OFF`
+  (MakePlayerSafe) blocks the pause menu, and the restore that would re-enable it never ran.
+- FIX (same day): the restore mirrors main.scm exactly — instant `016A 0` fade-out, `02EA` in the
+  same tick (no `016B` loop between), then `02EB RESTORE_CAMERA_JUMPCUT` + `0373
+  SET_CAMERA_BEHIND_PLAYER` (a generic scene, unlike the intro's scripted flow, must hand the
+  camera back), area 0, control on, `016A 1000 1` fade-in. The finished-poll now runs every frame
+  (`WAIT 0`, main.scm's own cadence) with a 5-minute belt timeout so even a `02E9` that never fires
+  restores instead of hanging. 353 B rebuilt + reinstalled in the bottle.
+
 **STOP: user's verdict closes the plan.** **Record:** verdict + the ini row count + any scene that
 needed the timeout path (each is a fact about that scene worth a line).
 
