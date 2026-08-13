@@ -142,16 +142,19 @@ function adoptOrphanParts(
   for (const atomic of analysis.model.atomics) {
     const index = atomic.frameIndex;
     const canonical = canonicalPartName(analysis.model.frames[index].name);
+    const container = variantContainerOf(analysis.model, index);
     const skip =
       carriedFrames.has(index) ||
       analysis.wheelMeshIndices.has(index) ||
       analysis.wheelContainerFrames.has(index) ||
       ORPHAN_SKIP_RE.test(canonical) ||
-      inYearVariantSubtree(analysis.model, index);
+      // Outside a selector container a year subtree is an unadoptable ALTERNATIVE; inside one the
+      // chosen path governs (the burrito's tail lamps live in version[1983]:1 — round 12).
+      (container < 0 && inYearVariantSubtree(analysis.model, index));
     if (skip) {
       continue;
     }
-    if (variantContainerOf(analysis.model, index) >= 0 && !analysis.chosenVariants.has(index)) {
+    if (container >= 0 && !analysis.chosenVariants.has(index)) {
       continue; // not on the container's chosen path — see chosenVariantFrames
     }
     // `extra1..extraN` are SA's mutually-exclusive spawn variants (contracts §3): the game shows at
@@ -200,7 +203,7 @@ function analyzeMod(modDff: Uint8Array, template: CsTemplate): ModAnalysis {
     atomicByFrame,
     chassisIndex,
     chassisTransform: hingeOf(chassisIndex),
-    chosenVariants: chosenVariantFrames(model, children),
+    chosenVariants: chosenVariantFrames(model, children, carriedCanonicalSet(template)),
     hingeOf,
     model,
     relativeToRoot,
@@ -214,22 +217,35 @@ function analyzeMod(modDff: Uint8Array, template: CsTemplate): ModAnalysis {
   };
 }
 
+/** The canonical part names the template will carry — the year-alternative guard's reference set. */
+function carriedCanonicalSet(template: CsTemplate): Set<string> {
+  return new Set(['chassis', ...template.parts.keys()]);
+}
+
 /**
  * The chosen path of every top-level `f_extras`/`f_class` variant container, VehFuncs-style (measured
- * on the burrito, plan 004 rounds 10–11): a `<name>:K` frame shows K of its children; a bare name
- * shows one. At every level the FIRST eligible child is taken in atomic order (`_dam`/`_vlo` and
- * year-variant children never count) — that is the author's default: a leading meshless `no*` child
- * (`nofogs`, `noadd`) deliberately selects NOTHING from its group. `+` containers are additive: the
- * whole subtree is chosen. Replaces the earlier one-mesh-per-container rule, which starved
- * multi-group containers (the burrito's rear-door f_extras:4 lost its window to a logo).
+ * on the burrito, plan 004 rounds 10–12): a `<name>:K` frame shows K of its children; a bare name
+ * shows one. At every level the FIRST eligible child is taken in atomic order (`_dam`/`_vlo` children
+ * never count) — that is the author's default: a leading meshless `no*` child (`nofogs`, `noadd`)
+ * deliberately selects NOTHING from its group. A YEAR-bracketed child is an ordinary selector option
+ * (the burrito's tail lamps + grille live ONLY in `version[1983/1985]:1` — dropping both years left
+ * holes, round 12) — UNLESS its subtree re-offers a part the rig already carries (the taxi's
+ * `_[1991]:2` door sets duplicate the matched base door): those are ALTERNATIVES, never picked.
+ * `+` containers are additive: the whole subtree is chosen. Replaces the earlier
+ * one-mesh-per-container rule, which starved multi-group containers (the burrito's rear-door
+ * f_extras:4 lost its window to a logo).
  */
-function chosenVariantFrames(model: ClumpModel, children: readonly number[][]): Set<number> {
+function chosenVariantFrames(
+  model: ClumpModel,
+  children: readonly number[][],
+  carriedCanonicals: ReadonlySet<string>,
+): Set<number> {
   const chosen = new Set<number>();
   model.frames.forEach((frame, index) => {
     const name = frame.name.trim().toLowerCase();
     const parent = frame.parentIndex;
     if (VARIANT_CONTAINER_RE.test(name) && (parent < 0 || variantContainerOf(model, parent) < 0)) {
-      for (const picked of pickVariantPath(model, children, index)) {
+      for (const picked of pickVariantPath(model, children, index, carriedCanonicals)) {
         chosen.add(picked);
       }
     }
@@ -501,13 +517,21 @@ function pickVariantPath(
   model: ClumpModel,
   children: readonly number[][],
   rootIndex: number,
-  skipYearVariants = true,
+  carriedCanonicals: ReadonlySet<string>,
 ): Set<number> {
   const chosen = new Set<number>();
+  const atomicFrames = new Set(model.atomics.map((atomic) => atomic.frameIndex));
   const frameName = (index: number): string => model.frames[index].name.trim().toLowerCase();
+  const reoffersCarried = (index: number): boolean => {
+    if (atomicFrames.has(index) && carriedCanonicals.has(canonicalPartName(frameName(index)))) {
+      return true;
+    }
+
+    return children[index].some((child) => reoffersCarried(child));
+  };
   const eligible = (index: number): boolean =>
     !ORPHAN_SKIP_RE.test(canonicalPartName(frameName(index))) &&
-    (!skipYearVariants || !YEAR_VARIANT_RE.test(frameName(index)));
+    (!YEAR_VARIANT_RE.test(frameName(index)) || !reoffersCarried(index));
   const pickAll = (index: number): void => {
     chosen.add(index);
     for (const child of children[index]) {
@@ -571,7 +595,7 @@ function wheelContainerMeshes(
     if (!WHEEL_CONTAINER_RE.test(frame.name.trim().toLowerCase()) || meshes.size > 0) {
       return;
     }
-    for (const chosen of pickVariantPath(model, children, index, false)) {
+    for (const chosen of pickVariantPath(model, children, index, new Set())) {
       if (atomicByFrame.has(chosen)) {
         meshes.add(chosen);
       }

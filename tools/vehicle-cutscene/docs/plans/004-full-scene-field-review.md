@@ -286,7 +286,25 @@ the sweep (nested `<name>:K` selector groups, a three-mesh wheel sub-model).
   selector containers, dummy ancestry).
 - **Re-check scope:** rounds 9–11 change the shared emit fleet-wide — earlier ✅ scenes keep their
   one-eye glance rule; FARL_3B re-run decides all four findings.
-- [ ] **Re-check (user):** FARL_3B re-run.
+- [x] **Re-check (user):** 3 of 4 PASSED (2026-08-13) — wheels whole, door windows ride their doors,
+      both rear windows present (spare + guard read fine). Tail lights still missing → round 12.
+
+### Round 12 — FARL_3B: the tail lamps live in the YEAR selector (2026-08-13)
+
+- **Seen:** tail lights still absent after round 9's pipeline fix.
+- **Root cause (measured):** the burrito's tail-lamp cluster is the `version[1983]:1` /
+  `version[1985]:1` container's OWN mesh (bbox y = [−2.63,−2.44] — the rear panel; the year GRILLES
+  are its children) inside the `year:1` selector group — and the blanket year-variant drop (the
+  taxi's stacked-doors lesson) discarded BOTH years, leaving lamp holes and the black grille aperture
+  seen since the first FARL_3B round.
+- **Fix (one variable):** a year-bracketed selector child is an ordinary OPTION — picked per the
+  `<name>:K` walk — UNLESS its subtree re-offers a part the rig already carries (the taxi's
+  `_[1991]:2` sets duplicate the matched base doors): those stay unadoptable ALTERNATIVES
+  (`reoffersCarried` guard against the template's canonical part set). Outside containers the
+  blanket year drop stands. The burrito adopts `version[1983]:1` + `grill83[gmc]` (first eligible
+  year); the taxi keeps its single door set (suite golden pair green). Fleet 23/23, verify green;
+  suite 80/80; bottle updated (`cs-mods-plates-pretail` holds the rounds-9–11 build).
+- [ ] **Re-check (user):** FARL_3B re-run — tail lamps + the '83 grille in the nose.
 
 ## Step 3 — the approval
 
