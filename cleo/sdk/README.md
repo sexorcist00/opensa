@@ -62,7 +62,9 @@ export const script = defineScript({
 - A backwards jump enclosing no `WAIT` warns (busy loop); suppress per site with
   `{ noWaitWarning: true }` when intended.
 - The whitelist gate holds at build: dual-target scripts use only opcodes BOTH runtimes serve;
-  `target: 'opensa-only'` lifts the real-CLEO half and the artifact name carries it
+  `target: 'opensa-only'` lifts the real-CLEO half, `target: 'sa-only'` is its mirror (real-SA
+  systems our engine does not have — the gate holds the reference install's CLEO 4.4 surface and
+  lifts the VM half; cleo/scripts plan 003), and the artifact name carries either
   (`docs/contracts/mods.md` §4).
 - End every script with an explicit terminator (`TERMINATE_THIS_CUSTOM_SCRIPT`) — trailing queued
   labels are a build error.

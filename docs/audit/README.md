@@ -179,6 +179,19 @@ interpret them.
   mine — twice I answered from the cheap signal instead of the authoritative one** (checkboxes instead of
   banners; one end of a lod link from each tree), and both cost a published wrong root cause.
 
+- [`session-7-cutscene-override-twelve-rounds-four-traps.md`](./session-7-cutscene-override-twelve-rounds-four-traps.md)
+  — 2026-08-13, 21 commits, one plan opened/rewritten/CLOSED the same day: the `cutscene-override`
+  field instrument (cleo/scripts plan 003) — an ini-named cutscene plays at session start, warped to
+  its `.cut` site with the world preloaded. Twelve field rounds, one variable each; **four SILENT
+  traps became permanent records** (edge-cases/cleo-vm.md): the new-game boot race, the missionless
+  intro, global operands as BYTE offsets (a slot number compiled fine and crashed the game), and
+  failed CLEO ini reads CORRUPTING the target var — four rounds of "empty world" that looked exactly
+  like streaming. SDK grew the `sa-only` target (the mirror of opensa-only) + string8 locals. Suite
+  4 165 → 4 175.
+- [`session-6-vehicle-cutscene-two-gates-nine-causes.md`](./session-6-vehicle-cutscene-two-gates-nine-causes.md)
+  — 2026-08-12, ~21 commits (row added retroactively in session 7 — the file existed, the index row
+  didn't): `tools/vehicle-cutscene` built from zero, plan 002 steps 1–7, BOTH field gates passed,
+  nine emit root causes recorded. Suite 4 110 → 4 165.
 - [`session-5-five-chains-closed-and-one-delta-that-cannot-exist.md`](./session-5-five-chains-closed-and-one-delta-that-cannot-exist.md)
   — 2026-08-12, nine commits, 33 files (three source, two test). Session 4's audit finished: the seven
   unverified chains resolved, six closed. **Nineteen of twenty-one open boxes were record, not work** — 097's
