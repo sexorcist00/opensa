@@ -51,13 +51,13 @@ Replace ONE call — the inline `call CRenderer::RenderOneNonRoad` at `0x553C52`
 
 ```c
 void __cdecl PcRenderOneNonRoad(CEntity* e) {
-  if (IsCutsceneVehicleObject(e) && InsertEntityIntoSortedList(e, DistanceFromCamera(e)))
+  if (IsDeferrableCutsceneObject(e) && InsertEntityIntoSortedList(e, DistanceFromCamera(e)))
     return;                    // deferred: the engine renders it after the pass, back-to-front
   RenderOneNonRoad(e);         // everything else: untouched
 }
 ```
 
-`IsCutsceneVehicleObject` derives from the entity and its model, never from a name or an id range
+`IsDeferrableCutsceneObject` derives from the entity and its clump, never from a name or an id range
 (offsets verified in the exe, not assumed):
 
 | what | where | value |
@@ -65,7 +65,8 @@ void __cdecl PcRenderOneNonRoad(CEntity* e) {
 | entity type | `e+0x36 & 7` | `4` = object |
 | object type | `e+0x13C` | `4` = `OBJECT_TYPE_CUTSCENE` (read from the `CCutsceneObject` ctor's own `movb $0x4,0x13c(%esi)`) |
 | model index | `e+0x22` (int16) | → `CModelInfo::ms_modelInfoPtrs` at `0xA9B0C8` |
-| model type | vtable slot 4 (`[[mi]+0x10]`, thiscall) | `6` = `MODEL_INFO_VEHICLE` |
+| ~~model type~~ | ~~vtable slot 4~~ | **falsified in the field, step 2 round 1: every cutscene object is type 5** — cars and actors share the CUTOBJ clump slots |
+| not an actor | `GetAnimHierarchyFromSkinClump(clump)` `0x734A40` | `nullptr` — a skinned clump is an ACTOR and stays in the main pass; a car or prop is what we defer |
 
 The distance is the loop's own: `|GetPosition(e) − CRenderer::ms_vecCameraPosition(0xB76870)|`, with
 `GetPosition` inlined exactly as the loop inlines it (`m_matrix = e+0x14`; matrix ? `m+0x30` :
@@ -121,8 +122,19 @@ bottle's `CLEO/cutscene-override.ini`).
       `SetModelIndex` (`0x553C52`'s sibling, `0x5B1B64`), which fires ONCE per cutscene object at
       scene load, not per frame. Log model index, the vtable-slot-4 model type and the verdict;
       patch no rendering. This is what proves the model-type read (a wrong vtable slot is a crash,
-      so it gets its own step). Verification: RIOT_4B logs the greenwood as `type 6 → vehicle` and
-      its actors as `type 7 → skip`; a scene prop logs `type 1/5 → skip`; the game still boots.
+      so it gets its own step). Verification: RIOT_4B logs the car as deferrable and its actors as
+      skipped; the game still boots.
+      **Round 1 (2026-08-14) — the census earned the step immediately.** The hook works and the
+      vtable read works, but every cutscene object came back **model type 5 (`MODEL_INFO_CLUMP`)**,
+      cars included (ids 300–303 + 1, twice over two scene loads). Cutscene models are streamed into
+      the shared CUTOBJ clump slots, so `GetModelType()` can never separate a cutscene CAR from a
+      cutscene ACTOR — the "model is a vehicle" test the design table carried was wrong on the real
+      game. **The split that does exist is the engine's own**: `CCutsceneMgr` tells an actor from a
+      prop with `GetAnimHierarchyFromSkinClump(clump)` (`0x734A40`, non-null only for a SKINNED
+      clump — its particle-attachment code branches on exactly that). So the classifier inverts:
+      defer every cutscene object that is NOT skinned (cars and props), leave the skinned actors in
+      the main pass — which is what the fix needs anyway, since it is the actors that must be drawn
+      first. Round 2 logs `model / name-key / skinned` to confirm the inversion in the field.
 - [ ] **3. The deferral.** Patch the `0x553C52` call to route through `PcRenderOneNonRoad`, which
       defers a classified cutscene vehicle into `InsertEntityIntoSortedList`. Verification — the
       decisive gate, on the STEP-0 REPRO BUILD (hack still absent): RIOT_4B AND SYND_3A both show

@@ -23,10 +23,24 @@ inline constexpr uint32_t kObjectType = 0x13C;    // CObject::m_nObjectType (CPh
 inline constexpr uint8_t kEntityTypeObject = 4;   // eEntityType ENTITY_TYPE_OBJECT
 inline constexpr uint8_t kObjectTypeCutscene = 4; // eObjectType OBJECT_TYPE_CUTSCENE
 
+inline constexpr uint32_t kRwObject = 0x18;      // CEntity::m_pRwObject
+inline constexpr uint8_t kRwObjectClump = 2;     // rpCLUMP, in the RwObject's first byte
+
 // --- model info -------------------------------------------------------------------------------------------
 inline constexpr uint32_t kModelInfoPtrsVa = 0xa9b0c8;  // CModelInfo::ms_modelInfoPtrs
+inline constexpr uint32_t kModelInfoKey = 0x04;         // CBaseModelInfo::m_nKey (CKeyGen hash of the name)
 inline constexpr uint32_t kGetModelTypeSlot = 4;        // CBaseModelInfo vtable: dtor, As*Ptr ×3, GetModelType
 inline constexpr uint8_t kModelInfoVehicle = 6;         // ModelInfoType MODEL_INFO_VEHICLE
+
+// --- the engine's own skinned-clump test (RwHelper.cpp) ---------------------------------------------------
+// `GetAnimHierarchyFromSkinClump(clump)`: non-null only when the clump's first atomic is SKINNED. That is how
+// CCutsceneMgr itself tells a cutscene ACTOR from a cutscene car/prop (see its particle-attachment code), and
+// it is the only split available — every cutscene model, actor and car alike, is loaded into the shared
+// CUTOBJ clump slots, so `GetModelType()` reports 5 (MODEL_INFO_CLUMP) for all of them (measured in the field,
+// plan 001 step 2 round 1).
+inline constexpr uint32_t kGetAnimHierarchyFromSkinClumpVa = 0x734a40;
+
+using GetAnimHierarchyFn = void*(__cdecl*)(void*);
 
 // --- renderer globals -------------------------------------------------------------------------------------
 inline constexpr uint32_t kCameraPosVa = 0xb76870;  // CRenderer::ms_vecCameraPosition (3 floats)
@@ -104,15 +118,35 @@ inline float DistanceFromCamera(const void* entity) {
   return Sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-/** A cutscene object whose model is a VEHICLE — the only thing this plugin ever treats differently. */
-inline bool IsCutsceneVehicleObject(const void* entity) {
+/** The clump of an entity, or nullptr when it has no RwObject or the RwObject is not a clump. */
+inline void* EntityClump(const void* entity) {
+  void* object = PtrAt(entity, kRwObject);
+  if (object == nullptr || ByteAt(object, 0) != kRwObjectClump) {
+    return nullptr;
+  }
+  return object;
+}
+
+inline bool ClumpIsSkinned(void* clump) {
+  return reinterpret_cast<GetAnimHierarchyFn>(kGetAnimHierarchyFromSkinClumpVa)(clump) != nullptr;
+}
+
+/**
+ * A cutscene object that is NOT a skinned actor — the cars and props whose geometry can z-erase an actor drawn
+ * after them, and the only entities this plugin ever treats differently. Deriving it the other way round (find
+ * the cars) is not available: cutscene cars and cutscene actors share the CUTOBJ model slots and both report
+ * model type 5, so "not skinned" IS the engine's own actor test, run in reverse.
+ */
+inline bool IsDeferrableCutsceneObject(const void* entity) {
   if (entity == nullptr || EntityType(entity) != kEntityTypeObject) {
     return false;
   }
   if (ByteAt(entity, kObjectType) != kObjectTypeCutscene) {
     return false;
   }
-  return ModelType(ModelInfo(Int16At(entity, kModelIndex))) == kModelInfoVehicle;
+  void* clump = EntityClump(entity);
+
+  return clump != nullptr && !ClumpIsSkinned(clump);
 }
 
 }  // namespace pc::game

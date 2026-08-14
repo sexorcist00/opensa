@@ -49,6 +49,12 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
         note: 'push esi / mov esi,[esp+8] — verified, not patched: we CALL it from our replacement, so a differing prologue means someone else redirected the function and we defer',
       },
       {
+        address: 0x734a40,
+        bytes: [0x51, 0x8b, 0x4c, 0x24, 0x08],
+        name: 'RwHelper.GetAnimHierarchyFromSkinClump.entry',
+        note: "cdecl (RpClump*) -> RpHAnimHierarchy*, non-null only for a SKINNED clump — CCutsceneMgr's own actor test, which we run in reverse to find the objects that may z-erase an actor. Verified, not patched",
+      },
+      {
         address: 0x734570,
         bytes: [0x83, 0xec, 0x18, 0x8b, 0x4c, 0x24, 0x20],
         name: 'CVisibilityPlugins.InsertEntityIntoSortedList.entry',

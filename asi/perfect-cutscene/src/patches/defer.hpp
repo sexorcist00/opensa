@@ -1,7 +1,7 @@
 #pragma once
 // Step 3 — THE fix. One call is repointed: the inline `call CRenderer::RenderOneNonRoad(entity)` in
-// `RenderEverythingBarRoads`' visible-entity loop. A cutscene object whose model is a VEHICLE goes into the
-// engine's own sorted entity list instead — the same list, callback and flush (`RenderFadingInEntities`)
+// `RenderEverythingBarRoads`' visible-entity loop. A cutscene object that is not a skinned actor (a car, a
+// prop — see game.hpp's classifier) goes into the engine's own sorted entity list instead — the same list, callback and flush (`RenderFadingInEntities`)
 // gameplay vehicles have used all along, which draws it after every other entity of the pass, back-to-front.
 // Everything else falls straight through to the original.
 //
@@ -28,13 +28,13 @@ inline RenderOneNonRoadFn gRenderOneNonRoad = nullptr;
 inline InsertEntityIntoSortedListFn gInsertEntityIntoSortedList = nullptr;
 
 /**
- * Stands in for the loop's `RenderOneNonRoad(entity)`. A classified cutscene vehicle is deferred; if the
+ * Stands in for the loop's `RenderOneNonRoad(entity)`. A classified cutscene object is deferred; if the
  * sorted list is full the insert returns false and we render inline exactly as before — a car is never lost.
  * The deferred entity is rendered later by `CVisibilityPlugins::RenderEntity`, which calls this same
  * `RenderOneNonRoad` — through the ORIGINAL pointer, not this call site, so there is no re-entry.
  */
 __attribute__((force_align_arg_pointer)) inline void __cdecl PcRenderOneNonRoad(void* entity) {
-  if (game::IsCutsceneVehicleObject(entity) && gInsertEntityIntoSortedList != nullptr &&
+  if (game::IsDeferrableCutsceneObject(entity) && gInsertEntityIntoSortedList != nullptr &&
       gInsertEntityIntoSortedList(entity, game::DistanceFromCamera(entity)) != 0) {
     return;
   }
@@ -45,6 +45,7 @@ inline constexpr const char* kDeferSites[] = {
     "CRenderer.RenderEverythingBarRoads.callRenderOneNonRoad",
     "CRenderer.RenderOneNonRoad.entry",
     "CVisibilityPlugins.InsertEntityIntoSortedList.entry",
+    "RwHelper.GetAnimHierarchyFromSkinClump.entry",
 };
 
 inline void ApplyDefer(asi::Log& log, const asi::Plugin& plugin) {
@@ -52,7 +53,7 @@ inline void ApplyDefer(asi::Log& log, const asi::Plugin& plugin) {
     log.Tagged(plugin.tag, "defer: unexpected image base — DEFER (game.hpp reads absolute VAs)");
     return;
   }
-  if (!asi::VerifySitesOrDefer(log, plugin.tag, plugin.tables, kDeferSites, 3)) {
+  if (!asi::VerifySitesOrDefer(log, plugin.tag, plugin.tables, kDeferSites, 4)) {
     log.Tagged(plugin.tag, "defer: DEFER (patching nothing) — someone else owns the entity render path");
     return;
   }
@@ -76,7 +77,7 @@ inline void ApplyDefer(asi::Log& log, const asi::Plugin& plugin) {
   gInsertEntityIntoSortedList =
       reinterpret_cast<InsertEntityIntoSortedListFn>(asi::Runtime(insert->address));
   const bool ok = asi::WriteCall(site, reinterpret_cast<uintptr_t>(&PcRenderOneNonRoad));
-  log.Tagged(plugin.tag, ok ? "defer APPLIED: cutscene vehicles now render in the sorted entity pass"
+  log.Tagged(plugin.tag, ok ? "defer APPLIED: cutscene cars/props now render in the sorted entity pass"
                             : "defer: patch write FAILED (see VirtualProtect)");
 }
 

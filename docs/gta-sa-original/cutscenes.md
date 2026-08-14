@@ -107,6 +107,22 @@ the reference install — not OpenSA.
     hash) and always matters to anyone grepping for them.
   - `CCarFXRenderer::CustomCarPipeAtomicSetup` **0x5D5B20** is a `jmp` thunk; the real body is at
     **0x5DA610** (`push esi / mov esi,[esp+8]` — the `RpAtomic*`).
+- **A cutscene CAR and a cutscene ACTOR are indistinguishable by model type** (measured in the field
+  2026-08-14): every cutscene model is streamed into the shared `CUTOBJ` clump slots, so
+  `CBaseModelInfo::GetModelType()` reports 5 (`MODEL_INFO_CLUMP`) for cars, actors and props alike —
+  a run of RIOT_4B logged ids 300–303 all as type 5. The engine's own way to tell them apart is
+  structural, not by type or name: `GetAnimHierarchyFromSkinClump(clump)` (`0x734A40`) is non-null
+  only for a SKINNED clump, and `CCutsceneMgr` branches on exactly that when attaching particle
+  effects (bone index for a skinned actor, frame name for anything else). Cutscene actors are
+  skinned; cutscene cars and props are not.
+- **Gameplay vehicles are drawn last in the frame, by design** — the fact behind the cutscene
+  glass-over-actors bug: `CRenderer::RenderEverythingBarRoads` (`0x553AA0`) does not render a vehicle
+  entity inline at all; it hands it to `CVisibilityPlugins::InsertEntityIntoSortedList` (`0x734570`)
+  and lets `CRenderer::RenderFadingInEntities` (`0x5531E0`) draw the list back-to-front after the
+  whole pass. A cutscene car is an OBJECT, so it renders inline in sector-scan order instead — and
+  the per-atomic alpha list (`InitAlphaAtomicList` / `RenderAlphaAtomics` around one entity's render
+  inside `RenderOneNonRoad` `0x553260`) is per-VEHICLE-entity, not per frame: it exists so a car can
+  layer its own glass over its own occupants, and nothing flushes it for a non-vehicle entity.
 
 ## The script API (measured off the bottle's main.scm + gta-reversed, 2026-08-13)
 
