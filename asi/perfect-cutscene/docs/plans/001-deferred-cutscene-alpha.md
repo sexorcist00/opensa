@@ -175,7 +175,12 @@ bottle's `CLEO/cutscene-override.ini`).
       which reads as matte. The "twice" reading was checked and is NOT what happened: the mixed-mesh
       split is clean (opaque copy 248 tris with 0 glass triangles, translucent twin 80 glass tris),
       and the anim-replay world boxes show one pane per window.
-      **The threshold patch stands anyway, on its own reasoning** (the user's call): repoint the SECOND call site,
+      **The threshold patch was later REMOVED — it is what deletes the tint (2026-08-14, same day).**
+      With the modulate fix in and the fleet built hackless, RIOT_4B came back "peds visible, no tint,
+      as if there is no glass at all": mod cutscene glass sits at alpha 102–125, so forcing the outdoor
+      ref back to 140 discards it outright. The parity argument was coherent and the effect is the
+      opposite of what this plugin is for, so the deferred pass now keeps `RenderEntity`'s own ref
+      (100, or 0 in an interior). What follows is what the patch DID, kept for the record: repoint the SECOND call site,
       `CVisibilityPlugins::RenderEntity`'s own `call RenderOneNonRoad` (`0x732C48`), so one of our
       deferred cutscene objects in an outdoor area is rendered at ref 140 and the ref is put back to
       what RenderEntity chose (100, or 0 for a `bDontWriteZBuffer` model) straight after. The plugin

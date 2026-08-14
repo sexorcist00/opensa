@@ -5,6 +5,12 @@
 // gameplay vehicles have used all along, which draws it after every other entity of the pass, back-to-front.
 // Everything else falls straight through to the original.
 //
+// The deferred pass runs at RenderEntity's own alpha-test ref (100, or 0 in an interior) rather than the
+// 140 the outdoor pass uses. That is deliberate and field-chosen: mod cutscene glass sits at alpha 102-125,
+// so ref 140 discards it outright and the car renders unglazed. Restoring 140 for parity was built and
+// REMOVED the same day (plan 001 step 3b) - it was justified by a diagnosis the modulate fix replaced, and
+// its real effect is to delete the very tint this plugin exists to keep.
+//
 // Why here and not per-atomic: `m_alphaList` (the vehicle alpha-atomic list) is cleared and flushed INSIDE one
 // entity's `RenderOneNonRoad`, so atomics inserted from a cutscene object would never be drawn. The entity
 // list is the mechanism that actually runs late in the frame. Full reasoning: plan 001's design section.
@@ -41,34 +47,11 @@ __attribute__((force_align_arg_pointer)) inline void __cdecl PcRenderOneNonRoad(
   gRenderOneNonRoad(entity);
 }
 
-/**
- * Stands in for `RenderOneNonRoad(entity)` at the DEFERRED end — inside `CVisibilityPlugins::RenderEntity`,
- * after it has set the alpha-test ref to 100 (or 0 in an interior area). For one of OUR deferred cutscene
- * objects in the outdoor world we put the ref back to the 140 the main pass would have used, so this plugin
- * changes draw ORDER and nothing else: mod cutscene glass sits at alpha 102–125, i.e. between the two refs, so
- * without this the deferral would silently start rendering glass the game used to discard (measured on
- * PROLOG3, the one confirmed outdoor scene of the step-3 gate — its cop car's windscreen turned matte).
- * Whether we WANT that glass is a separate decision, deliberately not taken here (plan 001's open options).
- */
-__attribute__((force_align_arg_pointer)) inline void __cdecl PcRenderDeferredEntity(void* entity) {
-  if (!game::IsDeferrableCutsceneObject(entity) || !game::IsOutdoorArea()) {
-    gRenderOneNonRoad(entity);
-
-    return;
-  }
-  game::SetRenderState(game::kRsAlphaTestFunctionRef, game::kOutdoorAlphaRef);
-  gRenderOneNonRoad(entity);
-  // Back to what RenderEntity itself chose for this entity, so the next item in the list is unaffected.
-  game::SetRenderState(game::kRsAlphaTestFunctionRef,
-                       game::ModelDontWriteZBuffer(entity) ? 0 : game::kDeferredAlphaRef);
-}
-
 inline constexpr const char* kDeferSites[] = {
     "CRenderer.RenderEverythingBarRoads.callRenderOneNonRoad",
     "CRenderer.RenderOneNonRoad.entry",
     "CVisibilityPlugins.InsertEntityIntoSortedList.entry",
     "RwHelper.GetAnimHierarchyFromSkinClump.entry",
-    "CVisibilityPlugins.RenderEntity.callRenderOneNonRoad",
 };
 
 /**
@@ -92,15 +75,14 @@ inline void ApplyDefer(asi::Log& log, const asi::Plugin& plugin) {
     log.Tagged(plugin.tag, "defer: unexpected image base — DEFER (game.hpp reads absolute VAs)");
     return;
   }
-  if (!asi::VerifySitesOrDefer(log, plugin.tag, plugin.tables, kDeferSites, 5)) {
+  if (!asi::VerifySitesOrDefer(log, plugin.tag, plugin.tables, kDeferSites, 4)) {
     log.Tagged(plugin.tag, "defer: DEFER (patching nothing) — someone else owns the entity render path");
     return;
   }
   const asi::ByteAnchor* loopCall = asi::FindSite(plugin.tables, kDeferSites[0]);
   const asi::ByteAnchor* renderOne = asi::FindSite(plugin.tables, kDeferSites[1]);
   const asi::ByteAnchor* insert = asi::FindSite(plugin.tables, kDeferSites[2]);
-  const asi::ByteAnchor* deferredCall = asi::FindSite(plugin.tables, kDeferSites[4]);
-  if (loopCall == nullptr || renderOne == nullptr || insert == nullptr || deferredCall == nullptr) {
+  if (loopCall == nullptr || renderOne == nullptr || insert == nullptr) {
     log.Tagged(plugin.tag, "defer: site name not in the catalogue — DEFER");
     return;
   }
@@ -108,16 +90,9 @@ inline void ApplyDefer(asi::Log& log, const asi::Plugin& plugin) {
   gRenderOneNonRoad = reinterpret_cast<RenderOneNonRoadFn>(original);
   gInsertEntityIntoSortedList = reinterpret_cast<InsertEntityIntoSortedListFn>(asi::Runtime(insert->address));
 
-  // The ref patch goes in FIRST: between the two writes the deferral would otherwise be live for a moment
-  // without it, and this runs during DLL attach where a frame can already be rendering.
-  if (RepointCall(*deferredCall, original, reinterpret_cast<void*>(&PcRenderDeferredEntity)) == 0) {
-    log.Tagged(plugin.tag, "defer: RenderEntity call site is not what the catalogue says — DEFER");
-    return;
-  }
   const bool ok = RepointCall(*loopCall, original, reinterpret_cast<void*>(&PcRenderOneNonRoad)) != 0;
-  log.Tagged(plugin.tag, ok ? "defer APPLIED: cutscene cars/props render in the sorted entity pass, "
-                              "outdoor alpha-test ref preserved"
-                            : "defer: loop call site is not what the catalogue says — DEFER (ref patch stays)");
+  log.Tagged(plugin.tag, ok ? "defer APPLIED: cutscene cars/props render in the sorted entity pass"
+                            : "defer: loop call site is not what the catalogue says — DEFER");
 }
 
 }  // namespace pc::patches
