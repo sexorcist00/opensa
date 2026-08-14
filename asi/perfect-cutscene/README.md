@@ -5,7 +5,7 @@ depth-sorted alpha pass the engine grants only gameplay `CVehicle` entities — 
 converted cutscene cars renders OVER scene actors at any entity draw order, instead of z-erasing
 every actor drawn after the car (plan 004 rounds 15–17: RIOT_4B's invisible passengers; the full
 recovered mechanism lives in `docs/gta-sa-original/cutscenes.md` and
-`docs/hacks/cutscene-window-pane-suppression.md`).
+`docs/hacks/retired/cutscene-window-pane-suppression.md`).
 
 R\*'s own answer was authored data: vanilla cutscene cars carry no rendering window glass at all.
 This ASI retires that ceiling — `vehicle-cutscene` conversions keep the mod's real tint on every

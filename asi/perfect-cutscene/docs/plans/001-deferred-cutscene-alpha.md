@@ -3,8 +3,8 @@
 Give cutscene vehicle objects the same DEFERRED, distance-sorted render pass the engine already
 gives gameplay vehicles, so a car's translucent atomics (window glass, tint) are drawn after every
 scene actor instead of z-erasing whichever actor the sector scan happened to visit later. Closes the
-mechanism behind plan 004 rounds 15–17 for good and retires
-`docs/hacks/cutscene-window-pane-suppression.md`.
+mechanism behind plan 004 rounds 15–17 for good and retires the pane-suppression hack
+(`docs/hacks/retired/cutscene-window-pane-suppression.md`).
 
 ## The recovered mechanism (measured 2026-08-14 against the accepted exe + gta-reversed-modern)
 

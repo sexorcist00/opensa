@@ -449,7 +449,7 @@ rotated-bone rig.
   `PANE_SUPPRESSED_SLOTS` (census; `csgreenwood` first): after the split isolates windows, the pane
   atomics are not emitted; lenses and opaques untouched. Slot-keyed, mod-agnostic (the failing
   property is the slot's scenes' draw order). Full story + retirement path:
-  `docs/hacks/cutscene-window-pane-suppression.md`. Unlisted slots keep their better-than-vanilla
+  `docs/hacks/retired/cutscene-window-pane-suppression.md`. Unlisted slots keep their better-than-vanilla
   tint; the sweep watches every remaining actors-inside scene (SWEET2B, CESAR1A…) for new losers.
 - Suite 88/88 (suppression golden on the bobcat pair); fleet 23/23, verify green.
 - **Re-check scope:** greenwood-only model change; RIOT_4B re-run decides; SWEET2B (greenwood again)

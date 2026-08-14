@@ -161,3 +161,15 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   too. Any positions SCAN in the vehicle path must measure over triangle-referenced vertices, the set
   RW draws (`wheelRadius` learned this 2026-08-05 — the wheel had scaled to nothing; `appendGeometry`
   was already safe). New scans over `geometry.positions` inherit the trap SILENTLY.
+
+- **`vehicle-cutscene` decides translucency from the MATERIAL alpha only, so a surface whose transparency
+  lives in the TEXTURE's alpha channel converts as opaque.** It then takes the vehicle-pipeline stamp with
+  every other opaque atomic, and outside a real `CVehicle` that pipe does not composite alpha — the surface
+  renders as a solid sheet. Measured 2026-08-14 on `cscopcarla92`: `defrost_ad` is a 224-triangle,
+  1.5 m-wide mesh with material `0,0,0,255` and texture `defrost_lines` (8×16 DXT3, alpha 0..15) — thin
+  defroster wires in gameplay, a **black plate over the rear window** in a cutscene. Four more surfaces on
+  that car have the same shape (`f_logo`, `vint`, `aero_dynic24`). Not fixed: the field's call was that it
+  is real but was not the defect being chased (the matte windscreen was the modulate bit, plan 004 round
+  21). A fix has to check the alpha channel actually VARIES — a fully-opaque alpha channel is common and
+  means nothing.
+

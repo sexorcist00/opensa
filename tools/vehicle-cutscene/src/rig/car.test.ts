@@ -449,7 +449,7 @@ describe('convertCar', () => {
     });
 
     it('window-pane suppression drops every window and nothing else (round 17)', () => {
-      // The per-SLOT switch (docs/hacks/cutscene-window-pane-suppression.md): a rendered window pane
+      // The per-SLOT switch (docs/hacks/retired/cutscene-window-pane-suppression.md): a rendered window pane
       // z-writes over scene actors drawn after the car, and the draw order is a per-scene accident.
       // Suppressed = the whole window class drops; lamp lenses and every opaque atomic stay.
       const template = extractCarTemplate(CS_BOBCAT);

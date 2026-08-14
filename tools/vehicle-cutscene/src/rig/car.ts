@@ -101,7 +101,7 @@ interface ModAnalysis {
 /** Convert one mod car DFF into its cutscene counterpart. Throws when the mod has no usable chassis,
  *  wheel dummies or wheel mesh — a car that cannot stand is an error, not a silent skip.
  *  `suppressWindowPanes`: drop the window-glass class entirely (per-SLOT, plan 004 round 17 —
- *  `docs/hacks/cutscene-window-pane-suppression.md`). */
+ *  `docs/hacks/retired/cutscene-window-pane-suppression.md`). */
 export function convertCar(
   modDff: Uint8Array,
   template: CsTemplate,

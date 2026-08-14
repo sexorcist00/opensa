@@ -216,6 +216,17 @@ interpret them.
   `workspaces` (the enumerate-everything trap in package.json). Suite 4 175 → 4 203. Remaining:
   the step-11 full-pipeline field acceptance (needs a build without `--exclude vehicles`).
 
+- [`session-11-cutscene-glass-two-defects.md`](./session-11-cutscene-glass-two-defects.md)
+  — 2026-08-14, the day the cutscene-glass arc closed and the symptom turned out to have TWO causes.
+  `asi/perfect-cutscene` shipped its fix (one repointed call sends cutscene cars down the sorted
+  entity pass gameplay vehicles already use; the classifier is the engine's own skinned-clump actor
+  test, because every cutscene model reports the same model TYPE), the pane-suppression hack was
+  RETIRED, and a converter bug was found underneath it: a mod shipping window geometry without
+  `rpGEOMETRYMODULATEMATERIALCOLOR` renders solid on RW's default pipe while gameplay's vehicle pipe
+  hides the mistake — one model of 23, and exactly the panes the field called matte. Four hypotheses
+  died first; both decisive controls (pull the plugin, look at the same car in gameplay) were the
+  user's. Two ASI payloads were built and deleted after field rejection. Suite 4222/4222, merged ff.
+
 - [`session-10-cutscene-sweep-rounds-13-19.md`](./session-10-cutscene-sweep-rounds-13-19.md)
   — 2026-08-14, the sweep's runtime-law day: seven rows closed (17/35 ✅) through rounds 13–17,
   recovering TWO runtime laws from gta-reversed + field (the rotation law — un-animated frame

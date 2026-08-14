@@ -37,11 +37,12 @@ own IPL limits" ([sa-target.md](../restrictions/sa-target.md)).
 | **FLA** (`$fastman92limitAdjuster.asi`) | everything else — handling lines, car generators, ID limits, error reporting | **its whole `[IPL]` section is disabled**: 0 active lines in `[IPL]`, while `[HANDLING.CFG LIMITS]` is active and matches `fastman92limitAdjuster.log` |
 | **`perfect-map.asi`** (ours) | the int16 `IplDef` truncation + the 2dfx `FxSystem_c` lifetime | `perfect-map-asi.log`, below |
 
-Since 2026-08-14 the bottle also carries **`perfect-cutscene.asi`** (ours), built **verify-only** —
-it byte-verifies its five cutscene-render sites and writes nothing, so it changes no behaviour while
-[its plan 001](../../asi/perfect-cutscene/docs/plans/001-deferred-cutscene-alpha.md) is brought up.
-It becomes part of what the `sa` target ships at that plan's step 7; until then it is a dev-time
-install and the target still runs OLA + FLA + `perfect-map.asi` only.
+Since 2026-08-14 the bottle also carries **`perfect-cutscene.asi`** (ours), and by that evening it is an
+**APPLY** build: it defers cutscene cars into the engine's sorted entity pass so their glass stops erasing
+scene actors ([plan 001](../../asi/perfect-cutscene/docs/plans/001-deferred-cutscene-alpha.md), field-accepted
+on RIOT_4B and SYND_3A). It is still a DEV-TIME install — the `sa` target does not ship it until that plan's
+step 7 — but the converted cutscene fleet already depends on it
+([`restrictions/sa-target.md`](../restrictions/sa-target.md)), so a cutscene A/B must state which side had it.
 
 In fastman92's ini format a leading `#` **disables** the setting — confirmed against its own log, where the
 uncommented `Number of standard lines = 500` appears and no IPL limit does. So FLA is present and loud, and

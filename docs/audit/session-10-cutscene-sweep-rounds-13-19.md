@@ -27,7 +27,7 @@ the field pixel-for-pixel — the session's biggest time sink and its best new t
    — steering wheels and exhausts had rendered un-tilted all along. Fixed HEIST8A's securica
    standing on its tail (the one vanilla rig with rotated bones); the user's field bonus: specular
    improved fleet-wide (the bakes fixed normals too).
-2. **The entity-order roulette (rounds 17–18, `docs/hacks/cutscene-window-pane-suppression.md`):**
+2. **The entity-order roulette (rounds 17–18, `docs/hacks/retired/cutscene-window-pane-suppression.md`):**
    scene actors are separate cutscene objects drawn in world-sector scan order; a rendered window
    pane z-writes and ERASES actors drawn after the car. Gameplay's driver-then-body-then-sorted-alpha
    choreography exists only for CVehicle entities. Field-proven both ways: PROLOG1/PROLOG3/FINAL2B

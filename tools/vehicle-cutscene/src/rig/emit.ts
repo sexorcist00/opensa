@@ -501,7 +501,7 @@ export function finalizeAtomics(emit: Emit, version: number, suppressWindowPanes
   const translucent = new Map(
     emit.geometries.map((geometry, index) => [index, geometryBodyHasTranslucency(geometry.body)]),
   );
-  // Window-pane suppression (plan 004 round 17, `docs/hacks/cutscene-window-pane-suppression.md`):
+  // Window-pane suppression (plan 004 round 17, `docs/hacks/retired/cutscene-window-pane-suppression.md`):
   // on a suppressed SLOT the whole window class drops — after the split it is exactly the pane
   // atomics, so lamp lenses and every opaque copy stay. The pane geometries stay in the list as
   // unreferenced entries (a few KB) — pruning would renumber every atomic for no visible gain.

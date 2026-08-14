@@ -12,6 +12,14 @@ The measured numbers live in [`edge-cases/sa-runtime-limits.md`](../edge-cases/s
 **The `sa` target always runs OLA + FLA + our own `perfect-map.asi`, and a stock 1.0 is not a configuration
 we build for** (the user's call, reaffirmed 2026-08-09). So the useful column is the third one:
 
+> **Since 2026-08-14 the converted CUTSCENE fleet also depends on `perfect-cutscene.asi`, and the failure is
+> SILENT.** Cutscene cars ship window glass on every slot again (the pane-suppression hack is retired). A
+> rendered pane z-writes, and without the plugin's deferral the scenes that lose the sector-scan roulette
+> erase their own actors — the build succeeds, the scene plays, and a ped simply is not there. Anything that
+> ships `models/cutscene.img` has to ship the plugin with it (plan 001 step 7 does this in pmb); anything
+> that A/Bs the fleet has to say which side had the plugin.
+
+
 | Ceiling | Stock | **On the target** | What overflowing does |
 | --- | --- | --- | --- |
 | Permanent text-IPL rows, map-wide | 32,767 (int16) | **lifted — `perfect-map.asi` patch #1** (the install runs 72,914) | `CIplStore::IncludeEntity` truncates building-pool indexes to int16; past 2^15 it corrupts stream-out ranges (the "ghost barriers" family) |
