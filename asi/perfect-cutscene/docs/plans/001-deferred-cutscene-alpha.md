@@ -68,7 +68,7 @@ bottle's `CLEO/cutscene-override.ini`).
       artifact; restore the hack in the working tree afterwards. Verification: screenshot pairs
       (actors hidden / door-gap visible) for both scenes recorded in this plan.
       **DONE 2026-08-14 — the baseline stands, see "The step-0 baseline" below.**
-- [ ] **1. Scaffold.** `asi/perfect-cutscene` consuming `asi/sdk` exactly like perfect-map (thin
+- [x] **1. Scaffold.** `asi/perfect-cutscene` consuming `asi/sdk` exactly like perfect-map (thin
       Makefile + `src/dllmain.cpp` + plugin descriptor); a no-op build that passes the fingerprint
       gate and writes `perfect-cutscene-asi.log` beside the exe. Verification: the log's first line
       in the bottle (`built <date> (verify-only)`), game boots, no adjuster conflicts (OLA + FLA +
@@ -77,8 +77,11 @@ bottle's `CLEO/cutscene-override.ini`).
       `gen/catalogue.ts` (2 entries / 5 sites, every byte window read out of the accepted exe and
       cross-checked against gta-reversed-modern), the five seam files, the thin Makefile. All three
       modes compile (`build:verify` / `build:asi` / `build:debug`); catalogue tests 5/5; the
-      verify-only artifact (11 264 B) is installed in the bottle. **Open: the boot check** — the log
-      must appear with all 5 sites pristine alongside OLA + FLA + perfect-map.
+      verify-only artifact (11 264 B) is installed in the bottle. **Boot check PASSED 2026-08-14**
+      (`perfect-cutscene-asi.log`, the user's launch): `loaded — built Aug 14 2026 15:25:11
+      (verify-only)`, `fingerprint OK — GTA:SA 1.0 US`, FLA + OLA detected, **5 of 5 sites pristine —
+      "catalogue byte-accurate, safe to apply"**, game boots normally. Nothing among the bottle's ~24
+      other `.asi` plugins hooks the cutscene render path, so steps 2–4 own these sites outright.
 - [ ] **2. The census hook (verify-only).** Hook the cutscene model-load path; log, per scene, every
       cutscene VEHICLE clump and its translucent-atomic census (name, atomic count, alphas), patch
       nothing. Verification: RIOT_4B log lists csgreenwood with exactly the pane/lens census our
