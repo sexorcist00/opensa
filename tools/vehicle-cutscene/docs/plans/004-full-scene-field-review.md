@@ -50,25 +50,25 @@ scene-specific anims).
 | 14 | RIOT_4B | csgreenwood | ✅ after rounds 15–17 ("good" — passengers visible, unglazed like vanilla) |
 | 15 | RIOT4E1 | cscopcarsf, csfirela | ✅ (2026-08-14, "fire truck and cop car excellent"; run on the rounds-13–14 build — the r15/16 delta gets the one-eye glance) |
 | 16 | SMOKE1B | csglendale92 | ✅ after round 16 ("better — specular improved, wheels in place, glass there, one colour") |
-| 17 | SWEET2B | csgreenwood, csvoodoo | |
-| 18 | SYND_3A | cswashington | |
-| 19 | SYND_4A | cssavanna, cswashington | |
-| 20 | BCESA5W | cszr350, cszr350b | |
-| 21 | BCRAS1 | cscopcarla92 | |
-| 22 | BCRAS2 | cscopcarla92 | |
-| 23 | CESAR1A | cssavanna | |
-| 24 | CRASH3A | cscopcarla92 | |
-| 25 | CRASV2A | cscopcarla92 | |
-| 26 | CRASV2B | cscopcarla92 | |
-| 27 | RIOT4E2 | csfirela | |
-| 28 | SCRASH2 | csbravura | |
-| 29 | SMOKE2B | csglendale92 | |
-| 30 | SMOKE3A | csglendale92 | |
-| 31 | SMOKE4A | csglendale92 | |
-| 32 | STEAL_2 | csremington92 | |
-| 33 | STEAL_4 | csremington92 | |
-| 34 | STEAL_5 | csremington92 | |
-| 35 | TRUTH_2 | csmothership | |
+| 17 | SWEET2B | csgreenwood, csvoodoo | ✅ (2026-08-14, "good") |
+| 18 | SYND_3A | cswashington | ⏳ DEFERRED to the perfect-cutscene ASI (round 18: same eraser as RIOT_4B; suppression shows 0 panes in the r18 build — the run likely raced the install, or the mod's glass rides the lens class; ASI repro scene #2) |
+| 19 | SYND_4A | cssavanna, cswashington | ⏳ DEFERRED to the perfect-cutscene ASI (round 19: the wheel stash — vanilla hides repair-scene wheels by animating them to the origin; ASI repro scene #3) |
+| 20 | BCESA5W | cszr350, cszr350b |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 21 | BCRAS1 | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 22 | BCRAS2 | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 23 | CESAR1A | cssavanna |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 24 | CRASH3A | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 25 | CRASV2A | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 26 | CRASV2B | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 27 | RIOT4E2 | csfirela |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 28 | SCRASH2 | csbravura |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 29 | SMOKE2B | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 30 | SMOKE3A | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 31 | SMOKE4A | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 32 | STEAL_2 | csremington92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 33 | STEAL_4 | csremington92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 34 | STEAL_5 | csremington92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 35 | TRUTH_2 | csmothership |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 
 ## Step 2 — fix rounds (as found)
 
@@ -467,7 +467,31 @@ rotated-bone rig.
   alongside RIOT_4B.
 - **Re-check scope:** washington-only model change; SYND_3A re-run decides; SYND_4A (washington again)
   covered by the same suppression.
-- [ ] **Re-check (user):** pending.
+- [x] **Re-check (user):** DEFERRED (2026-08-14): the re-run still showed the eraser — yet the
+      r18 build measures 0 pane atomics on the washington (suppression active), so either the run
+      raced the install (the running-game trap) or the mod's window glass rides the LENS class
+      (`wing_*_ok_ad` are its only remaining translucents — suspicious for "wings"). The user's
+      call: stop chasing it data-side — SYND_3A is ASI repro scene #2 and the ASI fixes the
+      mechanism for every class.
+
+### Round 19 — SYND_4A: the wheel stash — vanilla hides repair-scene wheels at the origin (2026-08-14)
+
+- **Seen:** the washington stands wheel-less on repair as authored — but the converted model shows
+  all four wheels collapsed into one clump at the car's middle.
+- **Root cause (measured):** SYND_4A's anim drives EVERY washington wheel+axis channel to ~zero —
+  R*'s hide is "stash the wheels at the model origin", where the VANILLA body and the ground conceal
+  them (vanilla wheels land centred at the origin, half underground, r 0.33 under a low belly). The
+  converted mod leaks the trick: its wheels are fatter (r 0.37) and its translation shims offset the
+  stash (+4 cm z, ±10 cm spread) — the clump pokes out between the ground and the Lincoln's floor.
+  **No static fix exists**: one constant shim must serve both anim poses (driving = mod corner,
+  stash = origin), and wheel geometry cannot bake offsets (it spins about its bone in other scenes).
+- **Fix (routed to the ASI):** the wheel-stash concealment payload in
+  [`asi/perfect-cutscene` plan 001](../../../../asi/perfect-cutscene/docs/plans/001-deferred-cutscene-alpha.md)
+  (design point 5 / step 4b): a wheel bone whose ANIMATED local is ~zero while its bind local is a
+  corner is stashed — the render callback skips it. The anim itself is the hide instruction; no
+  model or scene names. SYND_4A is ASI repro scene #3; SYND_3A must keep all four wheels (the
+  negative gate).
+- [x] **Re-check (user):** DEFERRED to the ASI by design (the fix lives there).
 
 ### Standing addendum — the perfect-cutscene ASI re-opens the whole ledger (2026-08-14)
 
