@@ -143,7 +143,7 @@ bottle's `CLEO/cutscene-override.ini`).
       the classifier is confirmed by name, not by inference. Note the CUTOBJ slots are reused
       between scenes (id 301 carried a different key in each load), which is why the census logs the
       key and never the slot.
-- [ ] **3. The deferral.** Patch the `0x553C52` call to route through `PcRenderOneNonRoad`, which
+- [x] **3. The deferral.** Patch the `0x553C52` call to route through `PcRenderOneNonRoad`, which
       defers a classified cutscene vehicle into `InsertEntityIntoSortedList`. Verification — the
       decisive gate, on the STEP-0 REPRO BUILD (hack still absent): RIOT_4B AND SYND_3A both show
       their actors through every window AND the tint over them; PROLOG1/PROLOG3/FINAL2B
@@ -151,6 +151,15 @@ bottle's `CLEO/cutscene-override.ini`).
       passes on both repro scenes. **Measure the ref-140 → ref-100 move explicitly**: if a mod's
       tint appears/disappears versus the step-0 screenshots, that is the alpha-test threshold, not
       the ordering — record which, and mirror the pass's ref in the deferred path if needed.
+      **PASSED on both repro scenes (2026-08-14, the user):** RIOT_4B and SYND_3A — "everything is
+      fine, the peds are visible", and on the follow-up look "lamps, headlights, tint — all there".
+      So the actors survive AND the glass still renders over them: the two halves the whole ASI
+      exists for, on the two scenes that failed hardest. The log confirms the patch took
+      (`defer APPLIED`) and the census names the deferred object each time — `csgreenwood`
+      (−1591174577) on RIOT_4B, `cswashington` (1484834498) on SYND_3A, both `skinned 0`.
+      **The ref-140 → ref-100 risk did not bite**: nothing translucent was lost and nothing new
+      appeared. Still open: the unchanged-good glance on the lucky-order scenes
+      (PROLOG1/PROLOG3/FINAL2B), which is the other half of this step's gate.
 - [ ] **4. The blessed six.** Skip the force-pipe on translucent atomics of the six named models so
       their glass renders instead of dropping (independent of ordering — the pipe DROPS translucents
       outside a real CVehicle). Verification: FINAL2B — the bravura shows real window tint for the
