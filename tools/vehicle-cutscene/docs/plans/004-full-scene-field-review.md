@@ -45,8 +45,8 @@ scene-specific anims).
 | 9 | DESERT1 | csmonster | ✅ (2026-08-13) |
 | 10 | FARL_3B | csburrito92 | ✅ after rounds 9–12 ("all fixed") |
 | 11 | FINAL2B | csbravura, cssabre92 | ✅ after rounds 13–14 ("all good") |
-| 12 | GARAG3A | csremington92 | |
-| 13 | HEIST8A | cssecurica92 | |
+| 12 | GARAG3A | csremington92 | ✅ (2026-08-14, "good") |
+| 13 | HEIST8A | cssecurica92 | ✅ after round 15 ("good") |
 | 14 | RIOT_4B | csgreenwood | |
 | 15 | RIOT4E1 | cscopcarsf, csfirela | |
 | 16 | SMOKE1B | csglendale92 | |
@@ -394,7 +394,9 @@ rotated-bone rig.
 - **Re-check scope:** fleet-wide emit change — earlier ✅ scenes keep the one-eye glance rule
   (steering wheel tilt, exhaust alignment are the visible deltas); HEIST8A re-run decides the row.
   The "wheels turned wrong" reading gets its own look after the body fix lands.
-- [ ] **Re-check (user):** pending.
+- [x] **Re-check (user):** PASSED (2026-08-14): "HEIST8A — good" (GARAG3A passed the same run) — the
+      truck stands on its wheels, no wheel finding survived the body fix. HEIST8A ✅ in the ledger;
+      the sweep resumes at row 14 (RIOT_4B).
 
 ## Step 3 — the approval
 
