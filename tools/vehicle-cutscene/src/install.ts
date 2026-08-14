@@ -1,4 +1,5 @@
 import { openArchive } from '@opensa/renderware/archive/img-archive';
+import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 /**
  * The emit path: wipe `--out`, copy the `--game` base in (vehicle-installer's pattern), convert every
  * ready car slot and rebuild `models/cutscene.img` with the converted entries, then patch
@@ -28,7 +29,8 @@ import { appendTextures, composePlatePair, PLATE_TOWNS, plateTextFor } from './p
 import { convertBike } from './rig/bike';
 import { convertBoat } from './rig/boat';
 import { convertCar } from './rig/car';
-import { extractBikeTemplate, extractBoatTemplate, extractCarTemplate } from './template';
+import { patchWheelStashes } from './stash-patch';
+import { extractBikeTemplate, extractBoatTemplate, extractCarTemplate, toArrayBuffer } from './template';
 import { emptyTxd, referencesPlates, textureNames, unresolvedTextures } from './txd';
 
 export interface CutsceneInstallOptions {
@@ -59,6 +61,8 @@ export interface CutsceneInstallSummary {
   txdBytes: number;
   /** Non-fatal findings, e.g. a mod's PRE-EXISTING texture holes (missing in gameplay too). */
   warnings: { csName: string; message: string }[];
+  /** `<scene.ifp> <model> <bone>` rows sunk by the wheel-stash patch (round 20); absent = none. */
+  wheelStashesSunk?: string[];
 }
 
 interface SlotContext {
@@ -130,6 +134,9 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
       message: `text '${options.plate}' is longer than a plate's 8 cells — truncated to '${plateOverride}'`,
     });
   }
+  // Wheel-corner bind distances from the VANILLA entries — captured BEFORE conversion overwrites them.
+  const cornerBinds = wheelCornerBinds(census, img);
+
   for (const entry of readiness) {
     convertSlot(entry, img, inPath, context, summary);
   }
@@ -137,6 +144,7 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
   writeImgFile(img, imgPath);
   summary.imgBytesAfter = statSync(imgPath).size;
   patchTxdcut(outPath, census);
+  sinkWheelStashes(gamePath, outPath, cornerBinds, summary);
 
   return summary;
 }
@@ -251,6 +259,24 @@ function rowIsMissing(text: string, slot: CutsceneSlot): boolean {
   return !new RegExp(`^${slot.csName}\\s*,`, 'm').test(text);
 }
 
+/** Emit the stash-sunk `anim/cuts.img` (round 20, `stash-patch.ts`) when the game tree ships one. */
+function sinkWheelStashes(
+  gamePath: string,
+  outPath: string,
+  cornerBinds: ReadonlyMap<string, ReadonlyMap<string, number>>,
+  summary: CutsceneInstallSummary,
+): void {
+  const cutsPath = join(gamePath, 'anim', 'cuts.img');
+  if (!existsSync(cutsPath)) {
+    return;
+  }
+  const result = patchWheelStashes(new Uint8Array(readFileSync(cutsPath)), cornerBinds);
+  if (result.bytes) {
+    writeFileSync(join(outPath, 'anim', 'cuts.img'), result.bytes);
+    summary.wheelStashesSunk = result.patched;
+  }
+}
+
 /**
  * The slot's `cs*.txd`: EMPTY when the closure resolves through the txdp parent + generic vehicle.txd
  * (the normal case — the pipeline's gta3.img carries the installed mod TXD as the parent). Under
@@ -284,4 +310,26 @@ function slotTxd(
     return { bytes: modTxd, preExisting };
   }
   throw new Error(`unresolved textures (txdp parent ${slot.txd}.txd): ${fixable.join(', ')}`);
+}
+
+/** Per cs model: each `wheel*` bone's bind-local distance from its parent origin (the corner test). */
+function wheelCornerBinds(census: Census, img: ReturnType<typeof openImg>): Map<string, Map<string, number>> {
+  const binds = new Map<string, Map<string, number>>();
+  for (const slot of census.slots) {
+    const vanilla = img.get(`${slot.csName}.dff`);
+    if (!vanilla) {
+      continue;
+    }
+    const clump = parseDff(toArrayBuffer(new Uint8Array(vanilla)));
+    const wheels = new Map<string, number>();
+    for (const frame of clump.frames) {
+      const name = frame.name.trim().toLowerCase();
+      if (name.startsWith('wheel')) {
+        wheels.set(name, Math.hypot(frame.position[0], frame.position[1], frame.position[2]));
+      }
+    }
+    binds.set(slot.csName.toLowerCase(), wheels);
+  }
+
+  return binds;
 }

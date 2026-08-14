@@ -44,16 +44,11 @@ Hook the cutscene-object load path (the call site of `SetupCarPipeAtomicsForClum
    their glass stops being dropped and enters the same deferred path (opaque atomics keep the pipe —
    it is the gameplay shine).
 4. Opaque atomics and every non-vehicle cutscene object are untouched.
-5. **The wheel-stash concealment (second payload, plan 004 round 19 / SYND_4A):** R* hides a scene's
-   wheels by ANIMATING them to the model origin, where the vanilla body and the ground conceal them
-   (synd_4a drives every washington wheel+axis channel to ~zero; vanilla wheels land centred at the
-   origin, half underground). A converted mod leaks the trick: its wheels are fatter and its shims
-   offset the stash, so the clump pokes out between ground and floor — and no static data can fix it,
-   because one constant shim must serve both the driving pose (mod corner) and the stash pose
-   (origin). The runtime signal is unambiguous: a cutscene-vehicle WHEEL bone whose animated local
-   translation is ~zero while its bind local is a corner (≥ 0.5 m from the parent origin) is
-   STASHED — the render callback skips the atomic that frame. No model names, no scene names — the
-   anim itself is the hide instruction.
+
+(A wheel-stash concealment payload was planned here and RETIRED before implementation: the fleet
+scan found exactly ONE stash site in all 148 scenes — synd_4a's four washington wheel channels — and
+plan 004 round 20 fixed it in DATA instead: the installer ships a surgically sunk `anim/cuts.img`
+(`tools/vehicle-cutscene/src/stash-patch.ts`, sink z −0.6). This ASI stays alpha-only.)
 
 Config knobs (SDK pattern): `enabled`, `verify-only` (log the would-be atomic census, patch
 nothing), `verbose` (per-scene atomic decisions into the log).
@@ -70,10 +65,8 @@ bottle's `CLEO/cutscene-override.ini`).
       vanish behind the tint, reappear in the door gaps) and **SYND_3A** (cswashington: the field
       found it "reproduces the bug very well", 2026-08-14) — the recorded repro of the eraser on
       current code. Keep this build aside (`NO_COMMIT/cs-repro-panes`) as the standing repro
-      artifact; restore the hack in the working tree afterwards. **SYND_4A is the third repro scene
-      (the wheel stash):** the washington stands wheel-less on repair, and the converted model shows
-      the wheel clump at the origin instead. Verification: screenshot pairs (actors hidden /
-      door-gap visible; the wheel clump) for all three scenes recorded in this plan.
+      artifact; restore the hack in the working tree afterwards. Verification: screenshot pairs
+      (actors hidden / door-gap visible) for both scenes recorded in this plan.
 - [ ] **1. Scaffold.** `asi/perfect-cutscene` consuming `asi/sdk` exactly like perfect-map (thin
       Makefile + `src/dllmain.cpp` + plugin descriptor); a no-op build that passes the fingerprint
       gate and writes `perfect-cutscene-asi.log` beside the exe. Verification: the log's first line
@@ -92,10 +85,6 @@ bottle's `CLEO/cutscene-override.ini`).
 - [ ] **4. The blessed six.** Skip the force-pipe on translucent atomics of the six named models so
       their glass renders (deferred) instead of dropping. Verification: FINAL2B — the bravura shows
       real window tint for the first time, passengers still visible; BCESA4W/BCESAR4 one-eye glance.
-- [ ] **4b. The wheel-stash concealment.** The render-callback stash check (design point 5).
-      Verification: SYND_4A — the washington stands wheel-less like vanilla authored it; SYND_3A —
-      the same model DRIVES with all four wheels present (the stash check must never trip on a
-      normal corner pose); SMOKE1B one-eye glance (glendale wheels stay put).
 - [ ] **5. Retire the converter hack.** Empty `PANE_SUPPRESSED_SLOTS` for real; move
       `docs/hacks/cutscene-window-pane-suppression.md` to `docs/hacks/retired/` with the closing
       block naming this ASI + the commit; update `docs/contracts/vehicles.md` §3 (the pane-order row

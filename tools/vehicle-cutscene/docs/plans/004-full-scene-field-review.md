@@ -52,7 +52,7 @@ scene-specific anims).
 | 16 | SMOKE1B | csglendale92 | ✅ after round 16 ("better — specular improved, wheels in place, glass there, one colour") |
 | 17 | SWEET2B | csgreenwood, csvoodoo | ✅ (2026-08-14, "good") |
 | 18 | SYND_3A | cswashington | ⏳ DEFERRED to the perfect-cutscene ASI (round 18: same eraser as RIOT_4B; suppression shows 0 panes in the r18 build — the run likely raced the install, or the mod's glass rides the lens class; ASI repro scene #2) |
-| 19 | SYND_4A | cssavanna, cswashington | ⏳ DEFERRED to the perfect-cutscene ASI (round 19: the wheel stash — vanilla hides repair-scene wheels by animating them to the origin; ASI repro scene #3) |
+| 19 | SYND_4A | cssavanna, cswashington | ⏳ round 20 pending re-check (the wheel stash sinks via the shipped `anim/cuts.img` patch — rounds 19–20) |
 | 20 | BCESA5W | cszr350, cszr350b |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 21 | BCRAS1 | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 22 | BCRAS2 | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
@@ -491,7 +491,30 @@ rotated-bone rig.
   corner is stashed — the render callback skips it. The anim itself is the hide instruction; no
   model or scene names. SYND_4A is ASI repro scene #3; SYND_3A must keep all four wheels (the
   negative gate).
-- [x] **Re-check (user):** DEFERRED to the ASI by design (the fix lives there).
+- [x] **Re-check (user):** SUPERSEDED by round 20 the same day — the "no static fix exists" claim
+      was WRONG one level up: the model data cannot fix it, but the SCENE data can.
+
+### Round 20 — SYND_4A: the wheel stash sinks in the scene data, not the ASI (2026-08-14)
+
+- **The user's push:** "can we really not fix this without the ASI? look at the scene again." The
+  second look found two things round 19 missed: (a) the stash drives ONLY the `wheel*` channels to
+  zero — the `Axis_*` channels stay on the corners (the authored bare-hub repair look), so the
+  stash signal is clean; (b) a fleet-wide scan of all 148 scenes found EXACTLY ONE stash site
+  (synd_4a.ifp, four cswashington wheel channels). One site, value-only — an ASI payload was
+  over-engineering.
+- **Fix (data, general rule):** the installer now emits a surgically patched `anim/cuts.img`
+  (`stash-patch.ts`): any cutscene wheel channel whose frame-0 translation is ~zero while the
+  model's bind local is a real corner (>= 0.5 m) sinks to z −0.6 — fully underground for any mod
+  wheel radius, authored intent (hidden wheels) preserved for any body. Driving scenes never match
+  (their wheel channels carry corner values — SYND_3A verified in data). The ASI plan drops its
+  wheel payload and stays alpha-only. Delivery grows by `anim/cuts.img` (the bottle keeps a
+  `.vanilla` beside it for the A/B).
+- Suite 91/91 (three stash-patch tests on the real synd_4a/smoke1b fixtures); fleet 23/23, verify
+  green; patched values verified inside the built img (all four channels 0,0,−0.6; Axis untouched).
+- **Re-check scope:** scene-data change for one scene; SYND_4A re-run decides (LOOK-FOR: the
+  washington stands wheel-LESS like vanilla authors it; then SYND_3A one-eye glance — wheels must
+  all be present when driving).
+- [ ] **Re-check (user):** pending.
 
 ### Standing addendum — the perfect-cutscene ASI re-opens the whole ledger (2026-08-14)
 

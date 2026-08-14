@@ -72,6 +72,12 @@ the reference install — not OpenSA.
   objects render the raw placeholders, so **vanilla cutscene cars have blank white plates** (the
   user's gate-7 vanilla A/B screenshot is the recorded evidence). The plate art all sits uncompressed
   RGBA8888 in `vehicle.txd`: `platecharset` 32×256, `plateback1/2/3` 64×32, `carplate` 16×16.
+- **One scene hides wheels by ANIMATING them into the model origin** (synd_4a, the only such site
+  in all 148 scenes — measured 2026-08-14): the four cswashington `wheel*` channels drive to
+  (0,0,0) while the `Axis_*` channels hold the corners (the authored bare-hub repair look); the
+  vanilla body + the ground conceal the stashed wheels. The trick is tuned to the vanilla body — a
+  converted mod's fatter, shim-offset wheels poke out, which is why the vehicle-cutscene installer
+  ships a surgically sunk `anim/cuts.img` (wheel-stash channels to z −0.6; plan 004 round 20).
 - **The runtime rewrites EVERY frame's local rotation each tick on an animated clump** (gta-reversed
   `FrameUpdateCallBackNonSkinned`, reached via `CCutsceneObject` → `RpAnimBlendClumpInit`): a frame
   with a bound channel gets the summed anim quaternion; a frame with NO channel sums to a zero

@@ -27,8 +27,9 @@ living in the CrossOver bottle's `CLEO/`:
 
 The bottle (`~/Library/Application Support/CrossOver/Bottles/Win10/drive_c/GTA SA/GTA San Andreas`)
 runs the REAL 1.0 US game; its gameplay is stock, so cutscene builds are self-contained
-(`--self-contained-txd`). Vanilla `cutscene.img`/`txdcut.ide` sit beside the installed ones as
-`.vanilla` — restoring them is the vanilla A/B, the cheapest decisive experiment there is.
+(`--self-contained-txd`). Vanilla `cutscene.img`/`txdcut.ide`/`anim/cuts.img` sit beside the
+installed ones as `.vanilla` — restoring them is the vanilla A/B, the cheapest decisive experiment
+there is.
 
 ## The loop (one scene, one variable)
 
@@ -53,6 +54,7 @@ npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original \
 npx tsx scripts/debug/cutscene-fleet-verify.ts "NO_COMMIT/<build>"   # must be 0 failures, 0 duplicate channels
 cp "NO_COMMIT/<build>/models/cutscene.img" "<bottle>/models/"
 cp "NO_COMMIT/<build>/data/txdcut.ide"     "<bottle>/data/"
+cp "NO_COMMIT/<build>/anim/cuts.img"       "<bottle>/anim/"   # round 20: the wheel-stash sink rides in scene data
 ```
 
 Keep the previous build folder aside by RENAME (something in this environment deletes builds
