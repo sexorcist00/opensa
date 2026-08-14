@@ -252,10 +252,61 @@ bottle's `CLEO/cutscene-override.ini`).
       `PANE_SUPPRESSED_SLOTS` is empty and stays as a documented seam; the hack file moved to
       `docs/hacks/retired/` with its closing block, its README row repointed, and
       `docs/contracts/vehicles.md` §3 now keeps only the atomic-ORDER rule. Suite 92/92.
-- [ ] **6. The fleet re-check (plan 004 addendum).** With the ASI active, EVERY vehicle scene gets a
-      re-run — the ASI changes the render path of every translucent atomic on all 23 models, so all
-      35 ledger rows re-open for a glass/shine/actor glance (the fast pass: ~15 s each, one sitting).
-      Findings feed plan 004's ledger as new rounds. Verification: the re-swept ledger.
+- [ ] **6. The fleet re-check (plan 004 addendum).** THREE things changed at once, so every row of
+      plan 004 re-opens: the draw path of every cutscene car (the deferral), the modulate rule (one
+      model's glass), and the retired hack (two slots get their windows back). Sixteen rows had never
+      been run at all. Findings feed plan 004's ledger as new rounds; the verdict per scene goes in
+      that table, not here.
+      **Configuration under test:** the hackless + modulate fleet (`NO_COMMIT/cs-hackless-modulate`)
+      **plus `perfect-cutscene.asi`** (APPLY, census+defer). LOOK-FOR per scene: actors visible
+      through glass AND the tint over them; glass present on every window that should have it; no
+      car floating, sunk or drawn over a wall; lamps/plates/paint unchanged.
+      **Three rows are already done on this exact configuration** (2026-08-14): PROLOG3 ("looks
+      perfect"), RIOT_4B ("peds visible, tint as it should be"), SYND_3A ("all excellent").
+
+      **Block A — 14 scenes that cover all 21 exercised models at least once.** The six force-piped
+      models are marked ★: the engine stamps the vehicle pipe on every one of their atomics, glass
+      included, so they are where a surprise is most likely.
+
+      - [ ] PROLOG1 — cstaxi92 (interior area 14: the one decoded scene where the pass never sets
+            ref 140, so it reads the glass differently from the outdoor ones)
+      - [ ] DESERT9 — csbobcat92
+      - [ ] FINAL2B — ★csbravura, cssabre92
+      - [ ] RIOT4E1 — ★cscopcarsf, ★csfirela
+      - [ ] DES_10B — ★csmothership
+      - [ ] SWEET2B — csgreenwood, ★csvoodoo
+      - [ ] BCESAR5 — cssadler, cszr350, cszr350b
+      - [ ] BCESAR4 — cssavanna, cszr350
+      - [ ] SMOKE1B — csglendale92
+      - [ ] GARAG3A — csremington92
+      - [ ] HEIST8A — cssecurica92
+      - [ ] FARL_3B — csburrito92
+      - [ ] DESERT1 — csmonster
+      - [ ] STRP4B2 — csmtbike92 (the only bike scene in the game)
+
+      **Block B — the remaining 18, per-scene surprises (camera angles, scene anims).**
+
+      - [ ] BCESA4W — ★csbravura, cszr350b
+      - [ ] SYND_4A — cssavanna, cswashington (also re-confirms the round-20 wheel stash)
+      - [ ] BCESA5W — cszr350, cszr350b
+      - [ ] BCRAS1 — ★cscopcarla92
+      - [ ] BCRAS2 — ★cscopcarla92
+      - [ ] CRASH3A — ★cscopcarla92
+      - [ ] CRASV2A — ★cscopcarla92
+      - [ ] CRASV2B — ★cscopcarla92
+      - [ ] CESAR1A — cssavanna
+      - [ ] RIOT4E2 — ★csfirela
+      - [ ] SCRASH2 — ★csbravura
+      - [ ] SMOKE2B — csglendale92
+      - [ ] SMOKE3A — csglendale92
+      - [ ] SMOKE4A — csglendale92
+      - [ ] STEAL_2 — csremington92
+      - [ ] STEAL_4 — csremington92
+      - [ ] STEAL_5 — csremington92
+      - [ ] TRUTH_2 — ★csmothership
+
+      Not driven by any cutscene and therefore unreachable here: `csdinghy`, `cscopcarla` (the latter
+      converts byte-for-byte with `cscopcarla92`, so its six scenes cover it indirectly).
 - [ ] **7. pmb packaging.** Ship the built `.asi` with the game output the way perfect-map is
       integrated into the pmb pipeline (same stage, same config surface), so a field build carries it
       without manual bottle installs. Update `docs/commands.md` + the pmb stage docs +
