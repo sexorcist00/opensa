@@ -49,7 +49,7 @@ scene-specific anims).
 | 13 | HEIST8A | cssecurica92 | ✅ after round 15 ("good") |
 | 14 | RIOT_4B | csgreenwood | ✅ after rounds 15–17 ("good" — passengers visible, unglazed like vanilla) |
 | 15 | RIOT4E1 | cscopcarsf, csfirela | ✅ (2026-08-14, "fire truck and cop car excellent"; run on the rounds-13–14 build — the r15/16 delta gets the one-eye glance) |
-| 16 | SMOKE1B | csglendale92 | |
+| 16 | SMOKE1B | csglendale92 | ✅ after round 16 ("better — specular improved, wheels in place, glass there, one colour") |
 | 17 | SWEET2B | csgreenwood, csvoodoo | |
 | 18 | SYND_3A | cswashington | |
 | 19 | SYND_4A | cssavanna, cswashington | |
@@ -422,7 +422,9 @@ rotated-bone rig.
   bisect build): the glendale body looked pale versus gameplay, and one of two runs showed a
   two-tone body. Both get their own look once the RIOT_4B bisect closes and the current build is
   back in the bottle.
-- [ ] **Re-check (user):** pending (SMOKE1B on the round-16 build).
+- [x] **Re-check (user):** PASSED (2026-08-14): "better — specular improved too, wheels in place,
+      glass there, one colour — good". The pale-body and two-tone observations were artefacts of
+      running on the bisect build; both cleared on the round-16/17 build. SMOKE1B ✅ in the ledger.
 
 ### Round 17 — RIOT_4B: the invisible passengers — rendered window glass erases scene actors (2026-08-14)
 
