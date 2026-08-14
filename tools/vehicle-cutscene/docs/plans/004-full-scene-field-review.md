@@ -52,7 +52,7 @@ scene-specific anims).
 | 16 | SMOKE1B | csglendale92 | ✅ after round 16 ("better — specular improved, wheels in place, glass there, one colour") |
 | 17 | SWEET2B | csgreenwood, csvoodoo | ✅ (2026-08-14, "good") |
 | 18 | SYND_3A | cswashington | ⏳ DEFERRED to the perfect-cutscene ASI (round 18: same eraser as RIOT_4B; suppression shows 0 panes in the r18 build — the run likely raced the install, or the mod's glass rides the lens class; ASI repro scene #2) |
-| 19 | SYND_4A | cssavanna, cswashington | ⏳ round 20 pending re-check (the wheel stash sinks via the shipped `anim/cuts.img` patch — rounds 19–20) |
+| 19 | SYND_4A | cssavanna, cswashington | ✅ after rounds 19–20 ("wheels gone — excellent, no bugs"; the shipped `anim/cuts.img` stash sink) |
 | 20 | BCESA5W | cszr350, cszr350b |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 21 | BCRAS1 | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 22 | BCRAS2 | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
@@ -514,7 +514,9 @@ rotated-bone rig.
 - **Re-check scope:** scene-data change for one scene; SYND_4A re-run decides (LOOK-FOR: the
   washington stands wheel-LESS like vanilla authors it; then SYND_3A one-eye glance — wheels must
   all be present when driving).
-- [ ] **Re-check (user):** pending.
+- [x] **Re-check (user):** PASSED (2026-08-14): "wheels gone — excellent, SYND_4A has no bugs."
+      SYND_4A ✅ in the ledger (18/35). SYND_3A's driving-wheels glance folds into its own
+      ASI re-test.
 
 ### Standing addendum — the perfect-cutscene ASI re-opens the whole ledger (2026-08-14)
 

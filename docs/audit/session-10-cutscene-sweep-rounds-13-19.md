@@ -81,7 +81,9 @@ scenes. Round 20 fixed it in DATA: the installer ships a surgically sunk `anim/c
 (`stash-patch.ts`, wheel-stash channels to z −0.6, corner-bind guarded so driving scenes never
 match). The ASI plan dropped its wheel payload and stays alpha-only; delivery grew by
 `anim/cuts.img` (+ `.vanilla` for the A/B). Round 19's "no static fix exists" is recorded as
-superseded — the model data cannot fix it, the scene data can. Suite 91/91.
+superseded — the model data cannot fix it, the scene data can. Suite 91/91. Field re-check PASSED
+the same day ("wheels gone — excellent, no bugs"): SYND_4A ✅, the sweep stands at 18/35 with
+SYND_3A the one ASI-deferred row before the final acceptance re-sweep.
 
 ## State at close
 
