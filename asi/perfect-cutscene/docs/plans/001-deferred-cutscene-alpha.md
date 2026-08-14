@@ -117,7 +117,7 @@ bottle's `CLEO/cutscene-override.ini`).
       (verify-only)`, `fingerprint OK — GTA:SA 1.0 US`, FLA + OLA detected, **5 of 5 sites pristine —
       "catalogue byte-accurate, safe to apply"**, game boots normally. Nothing among the bottle's ~24
       other `.asi` plugins hooks the cutscene render path, so steps 2–4 own these sites outright.
-- [ ] **2. The classifier, verify-only.** Run `IsCutsceneVehicleObject`'s derivation where it is
+- [x] **2. The classifier, verify-only.** Run `IsCutsceneVehicleObject`'s derivation where it is
       cheapest and safest to observe — the `SetupCarPipeAtomicsForClump` call site inside
       `SetModelIndex` (`0x553C52`'s sibling, `0x5B1B64`), which fires ONCE per cutscene object at
       scene load, not per frame. Log model index, the vtable-slot-4 model type and the verdict;
@@ -135,6 +135,14 @@ bottle's `CLEO/cutscene-override.ini`).
       defer every cutscene object that is NOT skinned (cars and props), leave the skinned actors in
       the main pass — which is what the fix needs anyway, since it is the actors that must be drawn
       first. Round 2 logs `model / name-key / skinned` to confirm the inversion in the field.
+      **Round 2 PASSED (2026-08-14)** — RIOT_4B, two scene loads (the game's own intro plays before the
+      override warps, so a prolog scene is logged first). Every object classified, and the name keys
+      decode by `scripts/debug/sa-name-key.ts`: `csplay` (−249921641) **skinned 1**, `cstaxi92`
+      (1793024146) **skinned 0**, `csgreenwood` (−1591174577) **skinned 0**, and the three remaining
+      actors skinned 1. Exactly one non-skinned object per load, and it is the CAR both times —
+      the classifier is confirmed by name, not by inference. Note the CUTOBJ slots are reused
+      between scenes (id 301 carried a different key in each load), which is why the census logs the
+      key and never the slot.
 - [ ] **3. The deferral.** Patch the `0x553C52` call to route through `PcRenderOneNonRoad`, which
       defers a classified cutscene vehicle into `InsertEntityIntoSortedList`. Verification — the
       decisive gate, on the STEP-0 REPRO BUILD (hack still absent): RIOT_4B AND SYND_3A both show
