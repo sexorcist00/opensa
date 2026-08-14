@@ -72,6 +72,17 @@ suppression hack, returning tint fleet-wide (blessed six included), and re-openi
 rows for the final acceptance sweep. Plan 001 is written with three standing repro scenes
 (RIOT_4B, SYND_3A, SYND_4A) and ends with pmb packaging.
 
+## Addendum (same day): round 20 — the wheel stash sank in scene data
+
+The user pushed back on routing the SYND_4A wheel stash into the ASI — rightly. The second look
+found the stash signal clean (only `wheel*` channels go to the origin; the `Axis_*` hubs hold the
+corners, the authored bare-hub look) and a fleet scan found exactly ONE stash site in all 148
+scenes. Round 20 fixed it in DATA: the installer ships a surgically sunk `anim/cuts.img`
+(`stash-patch.ts`, wheel-stash channels to z −0.6, corner-bind guarded so driving scenes never
+match). The ASI plan dropped its wheel payload and stays alpha-only; delivery grew by
+`anim/cuts.img` (+ `.vanilla` for the A/B). Round 19's "no static fix exists" is recorded as
+superseded — the model data cannot fix it, the scene data can. Suite 91/91.
+
 ## State at close
 
 Suite 88/88 (four new tests this session: securica law golden, glendale anim-pose golden, split
