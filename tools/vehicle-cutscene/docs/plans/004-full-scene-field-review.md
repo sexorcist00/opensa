@@ -473,6 +473,10 @@ rotated-bone rig.
       (`wing_*_ok_ad` are its only remaining translucents — suspicious for "wings"). The user's
       call: stop chasing it data-side — SYND_3A is ASI repro scene #2 and the ASI fixes the
       mechanism for every class.
+- **The LENS hypothesis is dead (2026-08-14, ASI plan 001 step 0):** on the hackless repro build the
+  washington carries 7 pane atomics, and SYND_3A shows BOTH the tint and the erased actors — the
+  erasing glass is the window-pane class after all, so the round-18 contradiction was the
+  running-game install race (the swap lands next launch). The row stays ASI-deferred as decided.
 
 ### Round 19 — SYND_4A: the wheel stash — vanilla hides repair-scene wheels at the origin (2026-08-14)
 

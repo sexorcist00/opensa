@@ -59,7 +59,7 @@ Every step ends with its verification; a step without recorded numbers is unfini
 instrument is `docs/development/cutscene-field-testing.md` (~15 s per verdict; `scene =` in the
 bottle's `CLEO/cutscene-override.ini`).
 
-- [ ] **0. Reproduce the bug without the converter hack (the baseline).** Temporarily empty
+- [x] **0. Reproduce the bug without the converter hack (the baseline).** Temporarily empty
       `PANE_SUPPRESSED_SLOTS` in `tools/vehicle-cutscene/src/census.ts` (do not commit), rebuild the
       fleet, install into the bottle, run BOTH repro scenes — **RIOT_4B** (csgreenwood: both peds
       vanish behind the tint, reappear in the door gaps) and **SYND_3A** (cswashington: the field
@@ -67,6 +67,7 @@ bottle's `CLEO/cutscene-override.ini`).
       current code. Keep this build aside (`NO_COMMIT/cs-repro-panes`) as the standing repro
       artifact; restore the hack in the working tree afterwards. Verification: screenshot pairs
       (actors hidden / door-gap visible) for both scenes recorded in this plan.
+      **DONE 2026-08-14 — the baseline stands, see "The step-0 baseline" below.**
 - [ ] **1. Scaffold.** `asi/perfect-cutscene` consuming `asi/sdk` exactly like perfect-map (thin
       Makefile + `src/dllmain.cpp` + plugin descriptor); a no-op build that passes the fingerprint
       gate and writes `perfect-cutscene-asi.log` beside the exe. Verification: the log's first line
@@ -100,6 +101,36 @@ bottle's `CLEO/cutscene-override.ini`).
       `docs/gta-sa-original/reference-install.md` (the target now runs OLA + FLA + perfect-map +
       perfect-cutscene). Verification: a fresh pmb build's output tree contains the asi; boot log
       shows it loaded.
+
+## The step-0 baseline (2026-08-14) — the standing repro
+
+The build: `PANE_SUPPRESSED_SLOTS` emptied (working tree only, restored right after the build),
+fleet rebuilt to **`NO_COMMIT/cs-repro-panes`** — 23 converted, 0 errors, cutscene.img 25.7 MB →
+321.5 MB; `cutscene-fleet-verify`: 317 DFFs parsed, 317 skeletons, **0 failures, 0 duplicate
+channels**. Installed into the bottle with the round-20 `anim/cuts.img` (the wheel-stash sink stays,
+so panes are the only variable). This build is what step 3's gate is measured against.
+
+Offline census, repro build vs the canonical suppressed build (`NO_COMMIT/cs-mods-plates`):
+
+| model | suppressed build | repro build |
+| --- | --- | --- |
+| csgreenwood | 22 atomics, **0 pane**, 3 translucent | 30 atomics, **8 pane**, 11 translucent |
+| cswashington | 46 atomics, **0 pane**, 5 translucent | 53 atomics, **7 pane**, 12 translucent |
+
+Pane GEOMETRIES are 8 / 7 in both (suppression drops atomics and leaves the geometry entries —
+`rig/emit.ts` `finalizeAtomics`), so the atomic count is the honest measure of "the panes are back".
+
+Field verdicts (user, both on this build):
+
+- **RIOT_4B (csgreenwood): REPRODUCES** — "both peds vanished behind the tint".
+- **SYND_3A (cswashington): REPRODUCES** — actors gone, **and the tint renders**.
+
+What SYND_3A's verdict settles (plan 004 round 18's open question): the washington's erasing glass IS
+the window-PANE class — restoring the pane atomics restores both the tint and the eraser, so the
+"the mod's glass rides the LENS class" hypothesis is dead. The remaining explanation for round 18's
+contradiction (a build measuring 0 pane atomics that still erased in the field) is the running-game
+install race — the swap lands on the NEXT launch. Not re-tested data-side by the user's call; the ASI
+covers every class regardless, and step 3 gates on this same scene.
 
 ## Risks / open measurements
 
