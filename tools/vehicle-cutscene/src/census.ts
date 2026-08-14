@@ -22,11 +22,11 @@ export type CutsceneBranch = 'bike' | 'boat' | 'car';
  * `docs/hacks/cutscene-window-pane-suppression.md`). The cutscene path has no deferred alpha: a rendered
  * window pane z-writes and ERASES any scene actor drawn after the car, and the draw order is a per-scene
  * sector-scan accident no model data controls. A slot lands here when the FIELD showed its scenes losing
- * that roulette (RIOT_4B: both peds invisible inside the greenwood). Keyed by SLOT, not by mod — the
- * scenes and their draw order belong to the slot, so any installed mod gets the same treatment. Lamp
- * lenses and every other translucent class stay untouched.
+ * that roulette (RIOT_4B: both peds invisible inside the greenwood; SYND_3A: the washington, plan 004
+ * round 18). Keyed by SLOT, not by mod — the scenes and their draw order belong to the slot, so any
+ * installed mod gets the same treatment. Lamp lenses and every other translucent class stay untouched.
  */
-export const PANE_SUPPRESSED_SLOTS: ReadonlySet<string> = new Set(['csgreenwood']);
+export const PANE_SUPPRESSED_SLOTS: ReadonlySet<string> = new Set(['csgreenwood', 'cswashington']);
 
 /** One cutscene vehicle model matched to its `vehicles.ide` donor slot. */
 export interface CutsceneSlot {

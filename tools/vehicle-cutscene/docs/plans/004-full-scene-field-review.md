@@ -458,6 +458,17 @@ rotated-bone rig.
       window, lamps intact. RIOT_4B ✅ in the ledger; the sweep resumes at row 16 (SMOKE1B re-run on
       the round-16/17 build).
 
+### Round 18 — SYND_3A: the washington loses the same roulette (2026-08-14)
+
+- **Seen (user, ahead of the sweep):** SYND_3A "reproduces the bug very well" — actors erased behind
+  the washington's rendered glass, the round-17 mechanism verbatim on a second slot.
+- **Fix (the round-17 rule, one slot name):** `cswashington` joins `PANE_SUPPRESSED_SLOTS`. SYND_3A
+  also becomes the SECOND standing repro scene of the perfect-cutscene ASI plan (step 0/3 gates),
+  alongside RIOT_4B.
+- **Re-check scope:** washington-only model change; SYND_3A re-run decides; SYND_4A (washington again)
+  covered by the same suppression.
+- [ ] **Re-check (user):** pending.
+
 ### Standing addendum — the perfect-cutscene ASI re-opens the whole ledger (2026-08-14)
 
 The draw-order mechanism behind rounds 15–17 gets its real fix as an engine patch:

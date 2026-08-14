@@ -56,11 +56,12 @@ bottle's `CLEO/cutscene-override.ini`).
 
 - [ ] **0. Reproduce the bug without the converter hack (the baseline).** Temporarily empty
       `PANE_SUPPRESSED_SLOTS` in `tools/vehicle-cutscene/src/census.ts` (do not commit), rebuild the
-      fleet, install into the bottle, run RIOT_4B: both peds must vanish behind the greenwood's
-      tint and reappear in the door gaps — the recorded repro of the eraser on current code.
-      Keep this build aside (`NO_COMMIT/cs-repro-panes`) as the standing repro artifact; restore the
-      hack in the working tree afterwards. Verification: a screenshot pair (peds hidden / door-gap
-      visible) recorded in this plan.
+      fleet, install into the bottle, run BOTH repro scenes — **RIOT_4B** (csgreenwood: both peds
+      vanish behind the tint, reappear in the door gaps) and **SYND_3A** (cswashington: the field
+      found it "reproduces the bug very well", 2026-08-14) — the recorded repro of the eraser on
+      current code. Keep this build aside (`NO_COMMIT/cs-repro-panes`) as the standing repro
+      artifact; restore the hack in the working tree afterwards. Verification: screenshot pairs
+      (actors hidden / door-gap visible) for both scenes recorded in this plan.
 - [ ] **1. Scaffold.** `asi/perfect-cutscene` consuming `asi/sdk` exactly like perfect-map (thin
       Makefile + `src/dllmain.cpp` + plugin descriptor); a no-op build that passes the fingerprint
       gate and writes `perfect-cutscene-asi.log` beside the exe. Verification: the log's first line
@@ -73,8 +74,9 @@ bottle's `CLEO/cutscene-override.ini`).
       object logs nothing.
 - [ ] **3. The deferral.** Install the sorted-list render callback on translucent cutscene-vehicle
       atomics. Verification — the decisive gate, on the STEP-0 REPRO BUILD (hack still absent):
-      RIOT_4B shows BOTH peds through every window AND the tint over them; PROLOG1/PROLOG3/FINAL2B
-      unchanged-good (their lucky order must not regress); door-gap ped test from step 0 passes.
+      RIOT_4B AND SYND_3A both show their actors through every window AND the tint over them;
+      PROLOG1/PROLOG3/FINAL2B unchanged-good (their lucky order must not regress); the door-gap
+      actor test from step 0 passes on both repro scenes.
 - [ ] **4. The blessed six.** Skip the force-pipe on translucent atomics of the six named models so
       their glass renders (deferred) instead of dropping. Verification: FINAL2B — the bravura shows
       real window tint for the first time, passengers still visible; BCESA4W/BCESAR4 one-eye glance.
