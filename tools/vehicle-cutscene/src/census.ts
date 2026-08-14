@@ -18,15 +18,19 @@ export interface Census {
 export type CutsceneBranch = 'bike' | 'boat' | 'car';
 
 /**
- * Slots whose converted model drops its WINDOW-PANE glass entirely (plan 004 round 17; the full story:
- * `docs/hacks/cutscene-window-pane-suppression.md`). The cutscene path has no deferred alpha: a rendered
- * window pane z-writes and ERASES any scene actor drawn after the car, and the draw order is a per-scene
- * sector-scan accident no model data controls. A slot lands here when the FIELD showed its scenes losing
- * that roulette (RIOT_4B: both peds invisible inside the greenwood; SYND_3A: the washington, plan 004
- * round 18). Keyed by SLOT, not by mod — the scenes and their draw order belong to the slot, so any
- * installed mod gets the same treatment. Lamp lenses and every other translucent class stay untouched.
+ * Slots whose converted model drops its WINDOW-PANE glass entirely — **empty, and meant to stay empty**
+ * (retired 2026-08-14; the story is `docs/hacks/retired/cutscene-window-pane-suppression.md`).
+ *
+ * It existed because the 2004 cutscene path draws a car inline in sector-scan order with z-write on, so a
+ * rendered pane erased any actor drawn after it and the only data-side answer was to ship the car
+ * unglazed, as R* did. `asi/perfect-cutscene` defers cutscene cars into the engine's own sorted entity
+ * pass instead, which draws them after every actor — field-verified on both scenes that forced this hack
+ * (RIOT_4B and SYND_3A, 2026-08-14: actors visible AND the tint over them).
+ *
+ * The list stays as the seam: a slot may go back in if some scene ever loses a roulette the ASI does not
+ * cover. **Anything added here ships a car with no windows, so it needs a field verdict saying why.**
  */
-export const PANE_SUPPRESSED_SLOTS: ReadonlySet<string> = new Set(['csgreenwood', 'cswashington']);
+export const PANE_SUPPRESSED_SLOTS: ReadonlySet<string> = new Set([]);
 
 /** One cutscene vehicle model matched to its `vehicles.ide` donor slot. */
 export interface CutsceneSlot {

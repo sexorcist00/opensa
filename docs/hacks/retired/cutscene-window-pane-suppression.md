@@ -1,3 +1,21 @@
+**RETIRED 2026-08-14.** Replaced by `asi/perfect-cutscene`'s entity-level deferral
+([plan 001](../../../asi/perfect-cutscene/docs/plans/001-deferred-cutscene-alpha.md) step 3, commit on the
+`asi-perfect-cutscene` branch).
+
+The honest version turned out to be one repointed call. Gameplay vehicles never render in the scan-order
+pass at all: `CRenderer::RenderEverythingBarRoads` hands them to `CVisibilityPlugins::InsertEntityIntoSortedList`
+and `RenderFadingInEntities` draws the list back-to-front after the whole pass, so their glass has nothing
+left to erase. A `CCutsceneObject` is an OBJECT and misses that road entirely — so the ASI sends cutscene
+cars down it too, and the draw-order roulette this hack was cut to survive stops existing. The hack cost
+two of twenty-three slots their window tint; the fix costs none, and it covers the sixteen sweep scenes
+that had not been run yet rather than growing a slot at a time.
+
+How far off was the hack? Not wrong about the MECHANISM — its write-up named z-write and the sector-scan
+order correctly — but wrong about the ceiling: it assumed no data-side or engine-side control over draw
+order was available, and there was one, sitting in the engine's own vehicle path.
+
+---
+
 # Cutscene window-pane suppression (per slot, field-calibrated)
 
 **What it is.** Converted cutscene vehicles on the slots listed in `PANE_SUPPRESSED_SLOTS`

@@ -47,11 +47,11 @@ scene-specific anims).
 | 11 | FINAL2B | csbravura, cssabre92 | ✅ after rounds 13–14 ("all good") |
 | 12 | GARAG3A | csremington92 | ✅ (2026-08-14, "good") |
 | 13 | HEIST8A | cssecurica92 | ✅ after round 15 ("good") |
-| 14 | RIOT_4B | csgreenwood | ✅ after rounds 15–17 ("good" — passengers visible, unglazed like vanilla) |
+| 14 | RIOT_4B | csgreenwood | ✅ re-verified 2026-08-14 with the ASI + hackless fleet ("perfect — peds visible, tint as it should be"); the round-17 unglazed compromise is retired |
 | 15 | RIOT4E1 | cscopcarsf, csfirela | ✅ (2026-08-14, "fire truck and cop car excellent"; run on the rounds-13–14 build — the r15/16 delta gets the one-eye glance) |
 | 16 | SMOKE1B | csglendale92 | ✅ after round 16 ("better — specular improved, wheels in place, glass there, one colour") |
 | 17 | SWEET2B | csgreenwood, csvoodoo | ✅ (2026-08-14, "good") |
-| 18 | SYND_3A | cswashington | ⏳ DEFERRED to the perfect-cutscene ASI (round 18: same eraser as RIOT_4B; suppression shows 0 panes in the r18 build — the run likely raced the install, or the mod's glass rides the lens class; ASI repro scene #2) |
+| 18 | SYND_3A | cswashington | ✅ (2026-08-14, "all excellent") — closed by the ASI's deferral on the hackless fleet: actors visible AND the washington keeps its tint |
 | 19 | SYND_4A | cssavanna, cswashington | ✅ after rounds 19–20 ("wheels gone — excellent, no bugs"; the shipped `anim/cuts.img` stash sink) |
 | 20 | BCESA5W | cszr350, cszr350b |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 21 | BCRAS1 | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |

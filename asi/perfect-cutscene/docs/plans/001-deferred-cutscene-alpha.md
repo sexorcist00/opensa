@@ -241,11 +241,17 @@ bottle's `CLEO/cutscene-override.ini`).
       there is only the car's near-black interior shell, while behind a vertical side window there is
       the bright street. That predicts the same look in GAMEPLAY on the same mod — the one A/B nobody
       has run yet, and the next thing to do before any more code.
-- [ ] **5. Retire the converter hack.** Empty `PANE_SUPPRESSED_SLOTS` for real; move
+- [x] **5. Retire the converter hack.** Empty `PANE_SUPPRESSED_SLOTS` for real; move
       `docs/hacks/cutscene-window-pane-suppression.md` to `docs/hacks/retired/` with the closing
       block naming this ASI + the commit; update `docs/contracts/vehicles.md` §3 (the pane-order row
       keeps render-order semantics; the suppression sentence moves to history); rebuild the fleet.
       Verification: suite green; RIOT_4B with the ASI + hackless fleet = tint + peds.
+      **DONE 2026-08-14.** Both scenes that forced the hack passed first on the hackless + modulate
+      fleet with the ASI: RIOT_4B "perfect — peds visible, tint as it should be", SYND_3A "all
+      excellent" — which also closes the plan-004 row that had been deferred here since round 18.
+      `PANE_SUPPRESSED_SLOTS` is empty and stays as a documented seam; the hack file moved to
+      `docs/hacks/retired/` with its closing block, its README row repointed, and
+      `docs/contracts/vehicles.md` §3 now keeps only the atomic-ORDER rule. Suite 92/92.
 - [ ] **6. The fleet re-check (plan 004 addendum).** With the ASI active, EVERY vehicle scene gets a
       re-run — the ASI changes the render path of every translucent atomic on all 23 models, so all
       35 ledger rows re-open for a glass/shine/actor glance (the fast pass: ~15 s each, one sitting).
