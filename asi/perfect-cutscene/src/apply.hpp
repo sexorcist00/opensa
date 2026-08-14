@@ -10,7 +10,7 @@
 
 #include "config.hpp"
 
-#if PC_CENSUS || PC_BLESSED_SIX
+#if PC_CENSUS
 #include "patches/cutscene-load.hpp"
 #endif
 
@@ -21,15 +21,15 @@
 namespace pc {
 
 inline void ApplyPatches(asi::Log& log, const asi::Plugin& plugin, unsigned adjusterMask) {
-#if PC_CENSUS || PC_BLESSED_SIX
-  patches::ApplyCutsceneLoad(log, plugin);  // the census log and/or the force-pipe skip (one call site)
+#if PC_CENSUS
+  patches::ApplyCutsceneLoad(log, plugin);  // observation only — logs how each cutscene object classifies
 #endif
 
 #if PC_DEFER_ALPHA
   patches::ApplyDefer(log, plugin);  // the fix: cutscene vehicles join the sorted entity pass
 #endif
 
-#if !PC_CENSUS && !PC_DEFER_ALPHA && !PC_BLESSED_SIX
+#if !PC_CENSUS && !PC_DEFER_ALPHA
   log.Tagged(plugin.tag, "scaffold build: no payload enabled yet (plan 001 step 1) — patching nothing");
 #endif
 

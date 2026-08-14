@@ -111,9 +111,11 @@ the reference install — not OpenSA.
     atomic. Applied to EVERY atomic of a blessed-six clump, translucent ones included — vanilla can
     afford that because vanilla cutscene DFFs carry no pipeline stamp of their own AND their glass
     never renders. On a converted fleet whose glass does render, the vehicle pipe's static env map
-    covers a RAKED pane (windscreen, rear screen) as flat grey while a vertical side window barely
-    shows it — measured on PROLOG3's sheriff car, where all the glass is one material and only the
-    raked panes read as matte (ASI plan 001 step 3 round 3).
+    it is also, in the reference install, what makes that glass look RIGHT: suppressing the stamp for
+    a converted cutscene car left every window looking worse and changed nothing about the matte
+    windscreen it was aimed at (ASI plan 001 step 4, field-rejected 2026-08-14). Note this is the
+    RUNTIME stamp; the DFF `PipelineSet` plugin our converter writes is a different mechanism and
+    behaves differently (plan 004 rounds 5-9, where stamped panes vanished).
 - **A cutscene CAR and a cutscene ACTOR are indistinguishable by model type** (measured in the field
   2026-08-14): every cutscene model is streamed into the shared `CUTOBJ` clump slots, so
   `CBaseModelInfo::GetModelType()` reports 5 (`MODEL_INFO_CLUMP`) for cars, actors and props alike —

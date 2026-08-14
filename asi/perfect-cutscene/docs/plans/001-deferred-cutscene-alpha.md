@@ -212,14 +212,26 @@ bottle's `CLEO/cutscene-override.ini`).
       004 rounds 5–9). The engine overrides it only because VANILLA cutscene DFFs carry no stamp at
       all. Not letting it override needs no atomic walk — just not calling the original for a
       non-skinned cutscene clump.
-- [ ] **4. The blessed six.** Do not let `SetupCarPipeAtomicsForClump` overwrite our per-atomic
-      pipelines: for a non-skinned cutscene clump the stand-in returns without running the original,
-      so those six models keep exactly the pipeline split the converter authored (round 3 above).
-      The `ms_sCutsceneVehNames` table is byte-verified but never written — if the six ever differ
-      from the catalogue, the assumption this rests on has changed and the patch defers.
-      Verification: **PROLOG3 — the sheriff car's windscreen and rear screen become real tinted
-      glass** (the round-3 gate); FINAL2B — the bravura shows window tint for the first time,
-      passengers still visible; BCESA4W/BCESAR4 one-eye glance.
+- [x] **4. The blessed six — TRIED AND REJECTED (2026-08-14), and the rejection is a finding.**
+      Built: for a non-skinned cutscene clump the stand-in returned without running
+      `SetupCarPipeAtomicsForClump`, so the six kept exactly the per-atomic pipeline split the
+      converter authored. **Field verdict: "the windscreen is not fixed, and the other windows got
+      WORSE."** Two things fall out of that one sentence:
+      1. The env-map-on-a-raked-pane explanation for the matte windscreen (round 3) is **falsified** —
+         with the pipe gone the windscreen is unchanged.
+      2. **The runtime force-pipe is what makes that car's glass look right**, which is the opposite
+         of this step's premise (it was written expecting the pipe to be lossy for translucents,
+         from plan 004 rounds 5–9 where OUR OWN DFF pipeline stamp made panes vanish). The DFF
+         PipelineSet stamp and the runtime `CustomCarPipeAtomicSetup` are evidently not the same
+         thing, and this environment (OLA + FLA + skygfx + ~20 more plugins) is not the one rounds
+         5–9 measured. Recorded, not chased: nothing in the ledger depends on it today.
+      The payload was **removed the same day**, not left behind a flag — a wrong-mechanism fix gets
+      retired, not switched off. The census half of that call site stays.
+      **What the matte windscreen still could be, with everything else eliminated:** the mod's own
+      glass is a dark tint (material `102,102,102`, alpha 115, an 8×8 swatch) and behind a RAKED pane
+      there is only the car's near-black interior shell, while behind a vertical side window there is
+      the bright street. That predicts the same look in GAMEPLAY on the same mod — the one A/B nobody
+      has run yet, and the next thing to do before any more code.
 - [ ] **5. Retire the converter hack.** Empty `PANE_SUPPRESSED_SLOTS` for real; move
       `docs/hacks/cutscene-window-pane-suppression.md` to `docs/hacks/retired/` with the closing
       block naming this ASI + the commit; update `docs/contracts/vehicles.md` §3 (the pane-order row

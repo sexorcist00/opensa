@@ -17,10 +17,6 @@
 #define PC_DEFER_ALPHA 0  // [step 3] the fix: translucent cutscene-vehicle atomics into the sorted alpha pass
 #endif
 
-#ifndef PC_BLESSED_SIX
-#define PC_BLESSED_SIX 0  // [step 4] let the six force-piped models keep OUR per-atomic pipelines
-#endif
-
 #ifndef PC_CENSUS_LOG
 #define PC_CENSUS_LOG 0  // 1 = trace per-clump atomic decisions into the log (make DEBUG=1)
 #endif

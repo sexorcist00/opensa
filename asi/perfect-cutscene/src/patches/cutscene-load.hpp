@@ -7,15 +7,9 @@
 //    the model TYPE came back 5 (MODEL_INFO_CLUMP) for every cutscene object, cars included, because cutscene
 //    models all live in the shared CUTOBJ slots. Round 2 logs the engine's own actor test instead (a skinned
 //    clump is an ACTOR).
-// 2. **The force-pipe skip (step 4, the fix)** — for a cutscene CAR/prop we do not run the original at all.
-//    `SetupCarPipeAtomicsForClump` exists to stamp the vehicle pipeline (`0x53F2009A`) onto EVERY atomic of six
-//    hard-coded models, because VANILLA cutscene DFFs carry no pipeline stamp of their own. Ours do, per
-//    atomic and by translucency (opaque = vehicle pipe, translucent = default; plan 004 rounds 5–9) — so for
-//    our models the stamp is not a fix, it is an override that puts GLASS on the vehicle env-map pipe. On a
-//    raked surface that pipe's static env map covers the whole pane and reads as matte grey, which is exactly
-//    what the field saw on PROLOG3's sheriff car: windscreen and rear screen matte, vertical side windows
-//    clean, every one of them the same material (measured — plan 001 step 3 round 3).
-//    Skipping makes the six behave like the other seventeen, which the field has already accepted.
+// A second job — skipping the force-pipe for cutscene cars, so the six kept OUR per-atomic pipelines — was
+// tried here and REMOVED the same day: the field says the pipe is what makes their glass look right. It fixed
+// nothing it was aimed at and made every other window worse (plan 001 step 4).
 #include <cstdint>
 
 #include <asi/append-log.hpp>
@@ -59,12 +53,6 @@ __attribute__((force_align_arg_pointer)) inline void __cdecl PcSetupCarPipeAtomi
   }
 #endif
 
-#if PC_BLESSED_SIX
-  if (!actor) {
-    return;  // our DFF already says which atomics take the vehicle pipe — do not let the engine overwrite it
-  }
-#endif
-
   if (gSetupCarPipe != nullptr) {
     gSetupCarPipe(modelId, clump);
   }
@@ -74,7 +62,6 @@ inline constexpr const char* kLoadSites[] = {
     "CCutsceneObject.SetModelIndex.callSetupCarPipe",
     "CCutsceneObject.SetupCarPipeAtomicsForClump.entry",
     "RwHelper.GetAnimHierarchyFromSkinClump.entry",
-    "CCutsceneObject.ms_sCutsceneVehNames.table",
 };
 
 inline void ApplyCutsceneLoad(asi::Log& log, const asi::Plugin& plugin) {
@@ -82,9 +69,7 @@ inline void ApplyCutsceneLoad(asi::Log& log, const asi::Plugin& plugin) {
     log.Tagged(plugin.tag, "cutscene-load: unexpected image base — DEFER (game.hpp reads absolute VAs)");
     return;
   }
-  // The name table is verified but never written: if the six hard-coded models ever differ from what the
-  // catalogue recorded, the assumption this patch rests on has changed and it must not run.
-  if (!asi::VerifySitesOrDefer(log, plugin.tag, plugin.tables, kLoadSites, 4)) {
+  if (!asi::VerifySitesOrDefer(log, plugin.tag, plugin.tables, kLoadSites, 3)) {
     log.Tagged(plugin.tag, "cutscene-load: DEFER (patching nothing) — someone else owns the cutscene load path");
     return;
   }
@@ -106,15 +91,8 @@ inline void ApplyCutsceneLoad(asi::Log& log, const asi::Plugin& plugin) {
   }
   gSetupCarPipe = reinterpret_cast<SetupCarPipeFn>(callee);
   const bool ok = asi::WriteCall(site, reinterpret_cast<uintptr_t>(&PcSetupCarPipeAtomicsForClump));
-  if (!ok) {
-    log.Tagged(plugin.tag, "cutscene-load: patch write FAILED (see VirtualProtect)");
-    return;
-  }
-#if PC_BLESSED_SIX
-  log.Tagged(plugin.tag, "cutscene-load APPLIED: the six force-piped models keep OUR per-atomic pipelines");
-#else
-  log.Tagged(plugin.tag, "cutscene-load APPLIED (census only): cutscene objects will be logged");
-#endif
+  log.Tagged(plugin.tag, ok ? "cutscene-load APPLIED (census): cutscene objects will be logged"
+                            : "cutscene-load: patch write FAILED (see VirtualProtect)");
 }
 
 }  // namespace pc::patches
