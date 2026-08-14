@@ -35,7 +35,7 @@ scene-specific anims).
 | # | Scene | cs vehicles | Verdict |
 | --- | --- | --- | --- |
 | 1 | PROLOG1 | cstaxi92 | ✅ (gate 4/7 + 003) |
-| 2 | PROLOG3 | cscopcarla92, cstaxi92 | ✅ (gate 4/7 + 003) |
+| 2 | PROLOG3 | cscopcarla92, cstaxi92 | ✅ re-verified after round 21 (the matte windscreen was a missing modulate flag; "looks perfect") |
 | 3 | STRP4B2 | csmtbike92 | ✅ (002 step 8) |
 | 4 | DESERT9 | csbobcat92 | ✅ after rounds 1–2 ("glass with the door, one rack") |
 | 5 | BCESA4W | csbravura, cszr350b | ✅ (2026-08-13, "good") |
@@ -550,7 +550,11 @@ rotated-bone rig.
   exactly the seven copcarla geometries and nothing else in the fleet moves.
 - **Re-check scope:** copcarla-only change; PROLOG3 decides. LOOK-FOR: windscreen and rear screen
   see-through with tint, door glass unchanged, body/lights unchanged.
-- [ ] **Re-check (user):** pending.
+- [x] **Re-check (user):** PASSED (2026-08-14): "the glass is transparent — it looks perfect."
+      PROLOG3 re-verified on the `cs-modulate` build with NO asi installed, so the flag is the whole
+      fix. The lesson worth keeping: **a viewer cannot show you this bug.** Material, texture,
+      geometry, pipeline and draw order all measured clean and byte-faithful to the mod; the defect
+      was one bit in the geometry flags word that only RW's default pipeline reads.
 
 ### Standing addendum — the perfect-cutscene ASI re-opens the whole ledger (2026-08-14)
 
