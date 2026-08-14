@@ -216,6 +216,18 @@ interpret them.
   `workspaces` (the enumerate-everything trap in package.json). Suite 4 175 → 4 203. Remaining:
   the step-11 full-pipeline field acceptance (needs a build without `--exclude vehicles`).
 
+- [`session-10-cutscene-sweep-rounds-13-19.md`](./session-10-cutscene-sweep-rounds-13-19.md)
+  — 2026-08-14, the sweep's runtime-law day: seven rows closed (17/35 ✅) through rounds 13–17,
+  recovering TWO runtime laws from gta-reversed + field (the rotation law — un-animated frame
+  rotations are rewritten to identity every tick, so shims/adopted frames carry translation only and
+  rotation residuals bake into vertices; the entity-order roulette — a rendered window pane z-writes
+  over scene actors drawn after the car, which gameplay solves only for CVehicle entities). Wheel
+  container precedence, the mixed-translucency split, anim-pose wheel corners, and the per-slot
+  window-pane suppression hack (the user's option C) landed on the way; rounds 18–19 (washington
+  eraser, the wheel stash) were measured to root cause and routed into the NEW
+  `asi/perfect-cutscene` project, whose plan 001 ends by retiring the hack and re-sweeping all 35
+  rows. Suite 88/88; the ledger's tail (rows 20–35) deferred to that post-ASI final acceptance.
+
 - [`session-9-cutscene-sweep-rounds-3-12.md`](./session-9-cutscene-sweep-rounds-3-12.md)
   — 2026-08-13, the plan-004 sweep's heavy day: six ledger rows closed (10/35 ✅) through ten field
   rounds that recovered THREE render laws of the SA cutscene path (atomics draw in file order with
