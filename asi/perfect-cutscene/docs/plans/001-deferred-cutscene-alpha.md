@@ -1,57 +1,91 @@
 # 001 — Deferred cutscene alpha (the glass-over-actors fix)
 
-Give cutscene vehicle clumps the same deferred, depth-sorted alpha rendering the engine gives
-gameplay vehicles, so translucent atomics (window glass, tint) composite OVER scene actors no matter
-which order the renderer visits the entities. Closes the mechanism behind plan 004 rounds 15–17 for
-good and retires `docs/hacks/cutscene-window-pane-suppression.md`.
+Give cutscene vehicle objects the same DEFERRED, distance-sorted render pass the engine already
+gives gameplay vehicles, so a car's translucent atomics (window glass, tint) are drawn after every
+scene actor instead of z-erasing whichever actor the sector scan happened to visit later. Closes the
+mechanism behind plan 004 rounds 15–17 for good and retires
+`docs/hacks/cutscene-window-pane-suppression.md`.
 
-## The recovered mechanism (why this works — measured 2026-08-14, plan 004)
+## The recovered mechanism (measured 2026-08-14 against the accepted exe + gta-reversed-modern)
 
 - Scene actors (peds) are separate `CCutsceneObject`s; the renderer draws visible entities in
   world-sector scan order — a per-scene accident of positions and camera. Field-proven both ways:
-  PROLOG1/PROLOG3/FINAL2B draw actors before the car (glass layers fine), RIOT_4B draws them after
-  (a rendered pane z-writes and erases both peds; they reappear in the door gaps).
-- Gameplay never shows this because `CRenderer::RenderOneNonRoad` (via `RenderEverythingBarRoads`,
-  `0x553AA0`) runs a special choreography FOR VEHICLE ENTITIES ONLY: `RenderDriverAndPassengers`
-  first, then the body, then `CVisibilityPlugins::RenderAlphaAtomics` — vehicle alpha atomics are
-  DEFERRED per-atomic into a depth-sorted list. A `CCutsceneObject` is an object, not a vehicle: its
-  clump renders inline, translucents included, z-write on.
+  PROLOG1/PROLOG3/FINAL2B draw actors before the car (glass layers fine), RIOT_4B and SYND_3A draw
+  them after (a rendered pane z-writes and erases the actors; they reappear in the door gaps).
+- **Gameplay vehicles never render in that scan-order pass at all.** In
+  `CRenderer::RenderEverythingBarRoads` (`0x553AA0`) the visible-entity loop hands every VEHICLE
+  entity to `CVisibilityPlugins::InsertEntityIntoSortedList` (`0x734570`) and skips its inline
+  render; the list is flushed later in the frame by `CRenderer::RenderFadingInEntities`
+  (`0x5531E0` → `RenderFadingEntities` `0x733F10`), back-to-front. So a gameplay car is drawn AFTER
+  every ped, building and object of the frame — the glass has nothing left to erase. A
+  `CCutsceneObject` is an OBJECT, so it falls through to the inline
+  `CRenderer::RenderOneNonRoad(entity)` call at **`0x553C52`** and takes its luck with the scan
+  order. That is the whole bug.
+- **The per-atomic alpha list is NOT a frame-level list** — the correction that killed this plan's
+  first design: `RenderOneNonRoad` (`0x553260`) calls `InitAlphaAtomicList` BEFORE and
+  `RenderAlphaAtomics` AFTER one entity's render, so `m_alphaList` is cleared and flushed inside a
+  single vehicle's render. It is how a car layers its own glass over its own
+  `RenderDriverAndPassengers` occupants — nothing more. Atomics inserted from a cutscene object
+  would be flushed by no one (a cutscene rarely has a `CVehicle` on screen at all) and simply never
+  draw. Deferring per ATOMIC therefore needs a private list AND a private flush point; deferring per
+  ENTITY needs neither, because the engine already owns both.
 - R*'s authored dodge: vanilla cutscene cars ship no rendering window glass (door glass absent, the
-  rest in the sub-alpha-test band; entity alpha-test ref is 140 outdoors, set at `0x553AA0`).
+  rest in the sub-alpha-test band; the pass sets alpha-test ref 140 outdoors at `0x553AA0`, while
+  the deferred path's `CVisibilityPlugins::RenderEntity` sets ref 100 — or 0 inside an interior
+  area. Moving a car from one to the other MOVES ITS TRANSLUCENT THRESHOLD, which is the one thing
+  step 3 has to measure in the field rather than argue about).
 - Six models are already special-cased by name at load (`CCutsceneObject::SetupCarPipeAtomicsForClump`
-  `0x5B1AB0`, names at `0x8D0F68`: csvoodoo, csfirela, csmothership, csbravura, cscopcarsf,
-  cscopcarla92 → `CCarFXRenderer::CustomCarPipeAtomicSetup` `0x5D5B20`): the vehicle env-map pipe,
-  which DROPS translucent atomics outside a real CVehicle. Precedent that per-model cutscene atomic
-  setup is a supported engine pattern — we generalize it and make it correct instead of lossy.
+  `0x5B1AB0`, names at `0x8D0F68` → `CCarFXRenderer::CustomCarPipeAtomicSetup` `0x5D5B20`): the
+  vehicle env-map pipe, which DROPS translucent atomics outside a real CVehicle. Independent of draw
+  order and still ours to fix (step 4).
 
-Reference source: gta-reversed (`docs/links.md`); the addresses above are 1.0 US VAs from its
-`RH_ScopedInstall` lines. The accepted exe is the same single HOODLUM binary perfect-map targets —
-address resolution through `asi/sdk`'s fingerprint gate (the body-relocation trap is solved there).
+Reference source: gta-reversed (`docs/links.md`) for the names and call graph; every address and
+every structure offset below was then read out of the accepted exe itself. The accepted exe is the
+same single HOODLUM binary perfect-map targets — address resolution through `asi/sdk`'s fingerprint
+gate (the body-relocation trap is solved there).
 
-## The design
+## The design (the user's option B, 2026-08-14 — entity-level deferral)
 
-Hook the cutscene-object load path (the call site of `SetupCarPipeAtomicsForClump`, or
-`CCutsceneMgr::CreateCutsceneObject`) for clumps whose model is a cutscene VEHICLE:
+Replace ONE call — the inline `call CRenderer::RenderOneNonRoad` at `0x553C52`, inside
+`RenderEverythingBarRoads`' visible-entity loop — with a call to our own function:
 
-1. Walk the clump's atomics; classify TRANSLUCENT atomics by geometry material alphas (the same
-   data our converter classifies — any material alpha < 255).
-2. Install a custom `RpAtomic` render callback on those atomics: instead of rendering inline, insert
-   the atomic into `CVisibilityPlugins`' sorted alpha list with its camera distance (the mechanism
-   `RenderVehicleHiDetailAlphaCB` uses), preserving the entity's lighting context the way the
-   vehicle path does. The list renders at frame end, depth-sorted — glass composites over every
-   entity of the frame, actors included, both orders.
-3. For the six force-piped models, skip/undo `CustomCarPipeAtomicSetup` on translucent atomics so
-   their glass stops being dropped and enters the same deferred path (opaque atomics keep the pipe —
-   it is the gameplay shine).
-4. Opaque atomics and every non-vehicle cutscene object are untouched.
+```c
+void __cdecl PcRenderOneNonRoad(CEntity* e) {
+  if (IsCutsceneVehicleObject(e) && InsertEntityIntoSortedList(e, DistanceFromCamera(e)))
+    return;                    // deferred: the engine renders it after the pass, back-to-front
+  RenderOneNonRoad(e);         // everything else: untouched
+}
+```
+
+`IsCutsceneVehicleObject` derives from the entity and its model, never from a name or an id range
+(offsets verified in the exe, not assumed):
+
+| what | where | value |
+| --- | --- | --- |
+| entity type | `e+0x36 & 7` | `4` = object |
+| object type | `e+0x13C` | `4` = `OBJECT_TYPE_CUTSCENE` (read from the `CCutsceneObject` ctor's own `movb $0x4,0x13c(%esi)`) |
+| model index | `e+0x22` (int16) | → `CModelInfo::ms_modelInfoPtrs` at `0xA9B0C8` |
+| model type | vtable slot 4 (`[[mi]+0x10]`, thiscall) | `6` = `MODEL_INFO_VEHICLE` |
+
+The distance is the loop's own: `|GetPosition(e) − CRenderer::ms_vecCameraPosition(0xB76870)|`, with
+`GetPosition` inlined exactly as the loop inlines it (`m_matrix = e+0x14`; matrix ? `m+0x30` :
+`e+0x4`). If the sorted list is full, `InsertEntityIntoSortedList` returns false and we fall back to
+the inline render — i.e. today's behaviour, never a dropped car.
+
+What this buys over the per-atomic design: one patched call instead of a render-callback graft, no
+RW struct walking, no lighting-context replay, every translucent class fixed (lamp lenses included,
+not just panes), and several cars in one scene sorted back-to-front instead of by scan luck.
+
+What it costs: the whole car (opaque atomics too) moves later in the frame, and its alpha-test ref
+changes as noted above. Both are field-measured in step 3.
 
 (A wheel-stash concealment payload was planned here and RETIRED before implementation: the fleet
 scan found exactly ONE stash site in all 148 scenes — synd_4a's four washington wheel channels — and
 plan 004 round 20 fixed it in DATA instead: the installer ships a surgically sunk `anim/cuts.img`
 (`tools/vehicle-cutscene/src/stash-patch.ts`, sink z −0.6). This ASI stays alpha-only.)
 
-Config knobs (SDK pattern): `enabled`, `verify-only` (log the would-be atomic census, patch
-nothing), `verbose` (per-scene atomic decisions into the log).
+Config knobs (SDK pattern): `PC_CENSUS` (classify and log, patch nothing), `PC_DEFER_ALPHA` (the
+fix), `PC_BLESSED_SIX` (step 4), `PC_CENSUS_LOG` (verbose per-object decisions).
 
 ## Steps
 
@@ -82,19 +116,25 @@ bottle's `CLEO/cutscene-override.ini`).
       (verify-only)`, `fingerprint OK — GTA:SA 1.0 US`, FLA + OLA detected, **5 of 5 sites pristine —
       "catalogue byte-accurate, safe to apply"**, game boots normally. Nothing among the bottle's ~24
       other `.asi` plugins hooks the cutscene render path, so steps 2–4 own these sites outright.
-- [ ] **2. The census hook (verify-only).** Hook the cutscene model-load path; log, per scene, every
-      cutscene VEHICLE clump and its translucent-atomic census (name, atomic count, alphas), patch
-      nothing. Verification: RIOT_4B log lists csgreenwood with exactly the pane/lens census our
-      offline tooling reports for the repro build; PROLOG1 lists the taxi; a non-vehicle scene
-      object logs nothing.
-- [ ] **3. The deferral.** Install the sorted-list render callback on translucent cutscene-vehicle
-      atomics. Verification — the decisive gate, on the STEP-0 REPRO BUILD (hack still absent):
-      RIOT_4B AND SYND_3A both show their actors through every window AND the tint over them;
-      PROLOG1/PROLOG3/FINAL2B unchanged-good (their lucky order must not regress); the door-gap
-      actor test from step 0 passes on both repro scenes.
+- [ ] **2. The classifier, verify-only.** Run `IsCutsceneVehicleObject`'s derivation where it is
+      cheapest and safest to observe — the `SetupCarPipeAtomicsForClump` call site inside
+      `SetModelIndex` (`0x553C52`'s sibling, `0x5B1B64`), which fires ONCE per cutscene object at
+      scene load, not per frame. Log model index, the vtable-slot-4 model type and the verdict;
+      patch no rendering. This is what proves the model-type read (a wrong vtable slot is a crash,
+      so it gets its own step). Verification: RIOT_4B logs the greenwood as `type 6 → vehicle` and
+      its actors as `type 7 → skip`; a scene prop logs `type 1/5 → skip`; the game still boots.
+- [ ] **3. The deferral.** Patch the `0x553C52` call to route through `PcRenderOneNonRoad`, which
+      defers a classified cutscene vehicle into `InsertEntityIntoSortedList`. Verification — the
+      decisive gate, on the STEP-0 REPRO BUILD (hack still absent): RIOT_4B AND SYND_3A both show
+      their actors through every window AND the tint over them; PROLOG1/PROLOG3/FINAL2B
+      unchanged-good (their lucky order must not regress); the door-gap actor test from step 0
+      passes on both repro scenes. **Measure the ref-140 → ref-100 move explicitly**: if a mod's
+      tint appears/disappears versus the step-0 screenshots, that is the alpha-test threshold, not
+      the ordering — record which, and mirror the pass's ref in the deferred path if needed.
 - [ ] **4. The blessed six.** Skip the force-pipe on translucent atomics of the six named models so
-      their glass renders (deferred) instead of dropping. Verification: FINAL2B — the bravura shows
-      real window tint for the first time, passengers still visible; BCESA4W/BCESAR4 one-eye glance.
+      their glass renders instead of dropping (independent of ordering — the pipe DROPS translucents
+      outside a real CVehicle). Verification: FINAL2B — the bravura shows real window tint for the
+      first time, passengers still visible; BCESA4W/BCESAR4 one-eye glance.
 - [ ] **5. Retire the converter hack.** Empty `PANE_SUPPRESSED_SLOTS` for real; move
       `docs/hacks/cutscene-window-pane-suppression.md` to `docs/hacks/retired/` with the closing
       block naming this ASI + the commit; update `docs/contracts/vehicles.md` §3 (the pane-order row
@@ -143,12 +183,20 @@ covers every class regardless, and step 3 gates on this same scene.
 
 ## Risks / open measurements
 
-- **The deferred pass's render states:** alpha-test ref and lighting in the end-of-frame sorted pass
-  differ from the inline path — measure on step 3 (the a102 tint must still render; if the deferred
-  pass's ref discards it, mirror the vehicle path's ref handling).
-- **Entity lighting context:** vehicle alpha atomics render under the vehicle's lighting setup; the
-  deferred callback must carry the cutscene object's lighting the same way (step 3 verifies against
-  scene look, not just visibility).
+- **The deferred pass's alpha-test ref** — the one real unknown. The inline pass runs at ref 140
+  outdoors; `CVisibilityPlugins::RenderEntity` sets ref 100, or 0 when `CGame::currArea` is an
+  interior. A mod tint at alpha 102 therefore renders in the deferred path and would NOT survive
+  ref 140, so this move can only add glass, never remove it — but it also means a scene whose glass
+  currently renders only because it plays in an interior area may look different. Measured in step 3
+  against the step-0 screenshots.
+- **Lighting is NOT a risk in option B** (it was the killer risk of the per-atomic design): the
+  deferred path calls `RenderEntity` → `RenderOneNonRoad`, which runs the entity's own
+  `SetupLighting`/`RemoveLighting` exactly as the inline path does. Same function, later moment.
+- **Ordering of the opaque half:** the whole car moves after the pass, so it also draws after any
+  translucent thing an earlier entity rendered. Cutscene sets are sparse; watched in the step-6
+  re-sweep rather than argued here.
+- **List capacity:** `InsertEntityIntoSortedList` returns false when the sorted list is full; we
+  then render inline (today's behaviour). No car is ever dropped.
 - **One accepted exe:** everything is fingerprint-gated; on any other exe the ASI must no-op loudly
   (SDK behaviour).
 - **CLEO coexistence:** the override instrument itself runs under CLEO; step 1's boot check covers

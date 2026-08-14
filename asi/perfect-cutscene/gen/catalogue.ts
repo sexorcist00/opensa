@@ -16,7 +16,7 @@ const RE = 'bytes read from the accepted exe 2026-08-14 (ASI plan 001)';
 export const CATALOGUE: readonly CatalogueEntry[] = [
   {
     id: 'cutscene-deferred-alpha',
-    provenance: `gta-reversed-modern source/game_sa/Entity/Object/CutsceneObject.cpp — CCutsceneObject::SetModelIndex (RH_ScopedVMTInstall 0x5B1B20) + SetupCarPipeAtomicsForClump (RH_ScopedInstall 0x5B1AB0); ${RE}`,
+    provenance: `gta-reversed-modern source/game_sa/Entity/Object/CutsceneObject.cpp (CCutsceneObject::SetModelIndex 0x5B1B20, SetupCarPipeAtomicsForClump 0x5B1AB0), source/game_sa/Renderer.cpp (RenderEverythingBarRoads 0x553AA0, RenderOneNonRoad 0x553260) and source/game_sa/VisibilityPlugins.cpp (InsertEntityIntoSortedList 0x734570); ${RE}`,
     sites: [
       {
         address: 0x5b1b20,
@@ -29,6 +29,30 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
         bytes: [0xa0, 0x58, 0x40, 0xbc, 0x00],
         name: 'CCutsceneObject.SetupCarPipeAtomicsForClump.entry',
         note: 'mov al,[0xBC4058] (bCarPipeAtomicsInitialized) — exactly 5 bytes, one instruction. Step 4 skips the force-pipe on translucent atomics of the blessed six',
+      },
+      {
+        address: 0x5b1b64,
+        bytes: [0xe8, 0x47, 0xff, 0xff, 0xff],
+        name: 'CCutsceneObject.SetModelIndex.callSetupCarPipe',
+        note: 'the `call 0x5B1AB0` inside SetModelIndex, cdecl (modelId, clump) — fires ONCE per cutscene object at scene load. Step 2 repoints it to log the classifier verdict, then tail-calls the original',
+      },
+      {
+        address: 0x553c52,
+        bytes: [0xe8, 0x09, 0xf6, 0xff, 0xff],
+        name: 'CRenderer.RenderEverythingBarRoads.callRenderOneNonRoad',
+        note: "the inline `call CRenderer::RenderOneNonRoad` in the visible-entity loop, cdecl (entity) — THE fix site (step 3): a classified cutscene vehicle goes into the engine's sorted entity list instead, everything else falls through to the original",
+      },
+      {
+        address: 0x553260,
+        bytes: [0x56, 0x8b, 0x74, 0x24, 0x08],
+        name: 'CRenderer.RenderOneNonRoad.entry',
+        note: 'push esi / mov esi,[esp+8] — verified, not patched: we CALL it from our replacement, so a differing prologue means someone else redirected the function and we defer',
+      },
+      {
+        address: 0x734570,
+        bytes: [0x83, 0xec, 0x18, 0x8b, 0x4c, 0x24, 0x20],
+        name: 'CVisibilityPlugins.InsertEntityIntoSortedList.entry',
+        note: 'cdecl (CEntity*, float dist) → bool; the same list+callback gameplay vehicles use, flushed by RenderFadingInEntities. Verified, not patched',
       },
       {
         address: 0x8d0f68,
