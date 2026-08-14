@@ -47,7 +47,7 @@ scene-specific anims).
 | 11 | FINAL2B | csbravura, cssabre92 | ✅ after rounds 13–14 ("all good") |
 | 12 | GARAG3A | csremington92 | ✅ (2026-08-14, "good") |
 | 13 | HEIST8A | cssecurica92 | ✅ after round 15 ("good") |
-| 14 | RIOT_4B | csgreenwood | |
+| 14 | RIOT_4B | csgreenwood | ✅ after rounds 15–17 ("good" — passengers visible, unglazed like vanilla) |
 | 15 | RIOT4E1 | cscopcarsf, csfirela | ✅ (2026-08-14, "fire truck and cop car excellent"; run on the rounds-13–14 build — the r15/16 delta gets the one-eye glance) |
 | 16 | SMOKE1B | csglendale92 | |
 | 17 | SWEET2B | csgreenwood, csvoodoo | |
@@ -452,7 +452,9 @@ rotated-bone rig.
 - Suite 88/88 (suppression golden on the bobcat pair); fleet 23/23, verify green.
 - **Re-check scope:** greenwood-only model change; RIOT_4B re-run decides; SWEET2B (greenwood again)
   covered by the same suppression.
-- [ ] **Re-check (user):** pending.
+- [x] **Re-check (user):** PASSED (2026-08-14): "RIOT_4B — good" — passengers visible through every
+      window, lamps intact. RIOT_4B ✅ in the ledger; the sweep resumes at row 16 (SMOKE1B re-run on
+      the round-16/17 build).
 
 ## Step 3 — the approval
 
