@@ -99,8 +99,14 @@ interface ModAnalysis {
 }
 
 /** Convert one mod car DFF into its cutscene counterpart. Throws when the mod has no usable chassis,
- *  wheel dummies or wheel mesh — a car that cannot stand is an error, not a silent skip. */
-export function convertCar(modDff: Uint8Array, template: CsTemplate): { dff: Uint8Array; report: CarConvertReport } {
+ *  wheel dummies or wheel mesh — a car that cannot stand is an error, not a silent skip.
+ *  `suppressWindowPanes`: drop the window-glass class entirely (per-SLOT, plan 004 round 17 —
+ *  `docs/hacks/cutscene-window-pane-suppression.md`). */
+export function convertCar(
+  modDff: Uint8Array,
+  template: CsTemplate,
+  suppressWindowPanes = false,
+): { dff: Uint8Array; report: CarConvertReport } {
   const analysis = analyzeMod(modDff, template);
   const shiftZ = groundShift(template, analysis);
   const emit = emptyEmit({
@@ -120,7 +126,7 @@ export function convertCar(modDff: Uint8Array, template: CsTemplate): { dff: Uin
   emitBody(emit, template, analysis, shiftZ, report);
   emit.frames[1].hierarchy = buildHierarchy(emit.frames);
   collectDropped(emit, analysis.model, report);
-  finalizeAtomics(emit, analysis.model.version);
+  finalizeAtomics(emit, analysis.model.version, suppressWindowPanes);
 
   const dff = writeClump({
     atomics: emit.atomics,

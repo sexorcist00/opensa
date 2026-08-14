@@ -424,6 +424,36 @@ rotated-bone rig.
   back in the bottle.
 - [ ] **Re-check (user):** pending (SMOKE1B on the round-16 build).
 
+### Round 17 — RIOT_4B: the invisible passengers — rendered window glass erases scene actors (2026-08-14)
+
+- **Seen:** both peds inside the greenwood invisible through every window (tint present on all of
+  them); a ped becomes visible only in the door gaps while exiting. The pistol and the exited CJ
+  render fine.
+- **The bisect chain (five field runs):** r15 hides the peds → VANILLA shows them through every
+  window → r12 shows them → r13–14 hides them (tint "like the original" appears) → a no-split
+  diagnostic build on current code still hides them. Segmented per window on the diagnostic build:
+  tint + erased actors on all three visible panes.
+- **Root cause (measured, original source + field):** scene actors are SEPARATE cutscene objects,
+  and the renderer draws entities in world-sector scan order — a per-scene accident. A rendered
+  window pane z-writes (the cutscene path has no deferred alpha; gameplay's
+  `RenderDriverAndPassengers` + sorted-alpha choreography exists only for CVehicle entities), so it
+  ERASES every actor drawn after the car. Scenes that win the order roulette layer fine (PROLOG1's
+  driver, PROLOG3's cops, FINAL2B — all verified with glass over actors); RIOT_4B loses it. Vanilla
+  never trips this: R*'s cutscene window glass effectively never renders (door glass absent, the
+  rest in the sub-alpha-test band) — actors win over glass, per R*'s own authoring. Every earlier
+  "glass + actors" success of ours was an accident: the blessed-six pipe dropping the glass
+  (bravura) or the round-15 rotation bug holding the glass off the windows (r12's greenwood).
+- **Fix (the user's option C, field-calibrated):** window-pane suppression per SLOT —
+  `PANE_SUPPRESSED_SLOTS` (census; `csgreenwood` first): after the split isolates windows, the pane
+  atomics are not emitted; lenses and opaques untouched. Slot-keyed, mod-agnostic (the failing
+  property is the slot's scenes' draw order). Full story + retirement path:
+  `docs/hacks/cutscene-window-pane-suppression.md`. Unlisted slots keep their better-than-vanilla
+  tint; the sweep watches every remaining actors-inside scene (SWEET2B, CESAR1A…) for new losers.
+- Suite 88/88 (suppression golden on the bobcat pair); fleet 23/23, verify green.
+- **Re-check scope:** greenwood-only model change; RIOT_4B re-run decides; SWEET2B (greenwood again)
+  covered by the same suppression.
+- [ ] **Re-check (user):** pending.
+
 ## Step 3 — the approval
 
 - [ ] All 35 rows carry a verdict; open findings zero. **The user's blanket approval closes the

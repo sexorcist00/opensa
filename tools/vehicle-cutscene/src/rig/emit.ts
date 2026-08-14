@@ -490,16 +490,22 @@ export function excludedVariantFrames(model: ClumpModel): Set<number> {
  * an opaque copy and a translucent twin (see `split.ts`) — the sabre's in-door glass cost the whole
  * painted door its pipeline and dragged it into the pane block (FINAL2B round 14).
  */
-export function finalizeAtomics(emit: Emit, version: number): void {
+export function finalizeAtomics(emit: Emit, version: number, suppressWindowPanes = false): void {
   splitMixedAtomics(emit.geometries, emit.atomics);
   const panes = new Map(emit.geometries.map((geometry, index) => [index, geometryBodyHasWindowPane(geometry.body)]));
   const translucent = new Map(
     emit.geometries.map((geometry, index) => [index, geometryBodyHasTranslucency(geometry.body)]),
   );
-  emit.atomics = [
-    ...emit.atomics.filter((atomic) => !panes.get(atomic.geometryIndex)),
-    ...emit.atomics.filter((atomic) => panes.get(atomic.geometryIndex)),
-  ];
+  // Window-pane suppression (plan 004 round 17, `docs/hacks/cutscene-window-pane-suppression.md`):
+  // on a suppressed SLOT the whole window class drops — after the split it is exactly the pane
+  // atomics, so lamp lenses and every opaque copy stay. The pane geometries stay in the list as
+  // unreferenced entries (a few KB) — pruning would renumber every atomic for no visible gain.
+  emit.atomics = suppressWindowPanes
+    ? emit.atomics.filter((atomic) => !panes.get(atomic.geometryIndex))
+    : [
+        ...emit.atomics.filter((atomic) => !panes.get(atomic.geometryIndex)),
+        ...emit.atomics.filter((atomic) => panes.get(atomic.geometryIndex)),
+      ];
   for (const atomic of emit.atomics) {
     if (!translucent.get(atomic.geometryIndex)) {
       atomic.extension = withVehiclePipeline(atomic.extension, version);

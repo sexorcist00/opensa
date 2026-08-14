@@ -15,7 +15,14 @@ import { cpSync, existsSync, readFileSync, rmSync, statSync, writeFileSync } fro
 import { join, resolve } from 'node:path';
 
 import { wheelAnimPoses } from './anim-poses';
-import { type Census, type CutsceneSlot, loadCensus, matchMods, type SlotReadiness } from './census';
+import {
+  type Census,
+  type CutsceneSlot,
+  loadCensus,
+  matchMods,
+  PANE_SUPPRESSED_SLOTS,
+  type SlotReadiness,
+} from './census';
 import { bakePaintMarkers, paintColoursFor } from './materials';
 import { appendTextures, composePlatePair, PLATE_TOWNS, plateTextFor } from './plate';
 import { convertBike } from './rig/bike';
@@ -153,7 +160,13 @@ function convertSlot(
       throw new Error(`cutscene.img has no ${slot.csName}.dff`);
     }
     const modDff = new Uint8Array(readFileSync(join(inPath, folder!, `${slot.model}.dff`)));
-    const { dff } = convertSlotDff(slot.branch, modDff, vanilla, context.wheelPoses.get(slot.csName.toLowerCase()));
+    const { dff } = convertSlotDff(
+      slot.branch,
+      modDff,
+      vanilla,
+      context.wheelPoses.get(slot.csName.toLowerCase()),
+      PANE_SUPPRESSED_SLOTS.has(slot.csName.toLowerCase()),
+    );
     const { baked, bytes } = bakePaintMarkers(dff, paintColoursFor(context.carcols, slot.model));
     const txd = slotTxd(slot, bytes, join(inPath, folder!, `${slot.model}.txd`), context);
 
@@ -193,6 +206,7 @@ function convertSlotDff(
   modDff: Uint8Array,
   vanilla: Uint8Array,
   wheelPoses?: ReadonlyMap<string, readonly [number, number, number]>,
+  suppressWindowPanes = false,
 ): { dff: Uint8Array } {
   if (branch === 'bike') {
     return convertBike(modDff, extractBikeTemplate(vanilla));
@@ -201,7 +215,7 @@ function convertSlotDff(
     return convertBoat(modDff, extractBoatTemplate(vanilla));
   }
 
-  return convertCar(modDff, extractCarTemplate(vanilla, wheelPoses));
+  return convertCar(modDff, extractCarTemplate(vanilla, wheelPoses), suppressWindowPanes);
 }
 
 /** The scene wheel poses, or an empty map when the game tree ships no `anim/cuts.img` (test trees). */

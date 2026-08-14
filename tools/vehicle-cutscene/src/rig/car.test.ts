@@ -417,6 +417,31 @@ describe('convertCar', () => {
       expect(converted.frames.some((frame) => frame.name === 'prefacelft_ad')).toBe(false);
     });
 
+    it('window-pane suppression drops every window and nothing else (round 17)', () => {
+      // The per-SLOT switch (docs/hacks/cutscene-window-pane-suppression.md): a rendered window pane
+      // z-writes over scene actors drawn after the car, and the draw order is a per-scene accident.
+      // Suppressed = the whole window class drops; lamp lenses and every opaque atomic stay.
+      const template = extractCarTemplate(CS_BOBCAT);
+      const { dff } = convertCar(BOBCAT, template, true);
+      const converted = readClump(dff);
+
+      const paneCount = converted.atomics.filter((atomic) =>
+        geometryBodyHasWindowPane(converted.geometries[atomic.geometryIndex].body),
+      ).length;
+      expect(paneCount).toBe(0);
+      // The non-pane translucents (the 242-alpha decal band) survive untouched.
+      expect(
+        converted.atomics.some((atomic) =>
+          geometryBodyHasTranslucency(converted.geometries[atomic.geometryIndex].body),
+        ),
+      ).toBe(true);
+      // And the default path still carries its panes.
+      const plain = readClump(convertCar(BOBCAT, template).dff);
+      expect(
+        plain.atomics.some((atomic) => geometryBodyHasWindowPane(plain.geometries[atomic.geometryIndex].body)),
+      ).toBe(true);
+    });
+
     it('selector containers: <name>:K groups, no* defaults, year options vs year alternatives (rounds 11–12)', () => {
       // The burrito's VehFuncs shapes, synthesized on the stock donor (the real mod cannot be a
       // committed fixture — mods-src is git-ignored). One f_extras with three groups:
