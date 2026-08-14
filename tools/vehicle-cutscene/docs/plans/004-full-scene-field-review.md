@@ -356,6 +356,46 @@ offline against the model data before any code moved.
 - [x] **Re-check (user):** PASSED (2026-08-14): "FINAL2B — all good" — seats, wheels, door and
       reflections all read fine. FINAL2B ✅ in the ledger; the sweep resumes at row 12 (GARAG3A).
 
+### Round 15 — HEIST8A: the securica on its tail — the runtime erases un-animated rotations (2026-08-14)
+
+**Seen:** cssecurica92 "completely broken" — the whole body standing vertically on its tail, doors
+away from their openings, wheels reading wrong. First scene with this model, and the first with a
+rotated-bone rig.
+
+- **Regression check first:** the round-13/14 build and the round-12 build convert securica to an
+  IDENTICAL frame tree (the only diff: three static orphan wheels round 13 correctly drops) — a
+  pre-existing base-conversion bug field-exposed for the first time, not a regression.
+- **Root cause (measured, then recovered from the original source):** every offline view of the
+  built model was UPRIGHT — bind pose, worlds, even a naive anim replay (heist8a.ifp drives every
+  bone to the vanilla local, measured). The breakage only reproduced after recovering the runtime
+  law from gta-reversed (`FrameUpdateCallBackNonSkinned` via `CCutsceneObject` →
+  `RpAnimBlendClumpInit`): **on an animated clump the runtime rewrites EVERY frame's rotation each
+  tick — bound frames get the anim quaternion, unbound frames sum a zero quaternion which
+  `Normalise` turns into IDENTITY; only the position snapshot (`FramePos`) survives.** A rotation
+  stored in a `_pv` shim or `_ad` frame is silently erased in game. Eleven scenes passed because
+  every earlier shim happened to be translation-only; cssecurica92 is the one vanilla rig whose
+  bones carry 90-degree rotations, so its shims got real rotations — wiped, the body took the raw
+  vanilla bone rotation and stood on its tail. A law-replay simulation (unbound frames forced to
+  identity) reproduces the field screenshot exactly; recorded in `docs/gta-sa-original/cutscenes.md`.
+- **Fix (one mechanism, emit model v4):** un-animated frames emit TRANSLATION ONLY. `emitBone` shims
+  carry identity rotation and land the bone's world POSITION on the donor target; adopted frames
+  likewise; the rotation residual (`inv(boneWorld) ∘ targetWorld` — pure rotation about the part's
+  hinge) is baked into the part's VERTICES (`emitTargetedAtomic` → `bakeGeometryBody`, the gate-4
+  machinery revived). Identity residual keeps geometry byte-verbatim — the fast path.
+- **Blast radius (measured):** 22/23 DFFs change — mostly small authored rotations the old path
+  stored in frames and the game silently erased: steering wheels (bobcat `movsteer_1.0_ad` 23°,
+  taxi `f_steer_ad` 25°) rendered un-tilted all along, exhaust tips, micro-noise door shims now
+  cleaned to identity. These parts now render as the mod authored them.
+- Fleet 23/23, verify green (317 DFFs, 0 duplicate channels); suite 86/86 (securica golden:
+  identity-rotation invariant + law-replay upright, on new real fixtures `cssecurica92.dff` +
+  `securica.dff`); law-replay of the built img confirms the truck upright (body z 0.16–2.88, doors
+  at vanilla heights). Bottle updated (`cs-mods-plates-prerotlaw` holds the rounds-13–14 build).
+  Contracts §3 shim row + `docs/gta-sa-original/cutscenes.md` updated in the same change.
+- **Re-check scope:** fleet-wide emit change — earlier ✅ scenes keep the one-eye glance rule
+  (steering wheel tilt, exhaust alignment are the visible deltas); HEIST8A re-run decides the row.
+  The "wheels turned wrong" reading gets its own look after the body fix lands.
+- [ ] **Re-check (user):** pending.
+
 ## Step 3 — the approval
 
 - [ ] All 35 rows carry a verdict; open findings zero. **The user's blanket approval closes the

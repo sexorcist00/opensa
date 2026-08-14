@@ -309,6 +309,77 @@ describe('convertCar', () => {
       });
     });
 
+    it('securica (rotated-bone rig): un-animated frames carry identity rotation and the runtime pose stands upright (round 15)', () => {
+      // The runtime law (HEIST8A, gta-reversed FrameUpdateCallBackNonSkinned): on an animated clump
+      // EVERY frame's rotation is rewritten per tick — animated frames get the anim quaternion,
+      // un-animated ones get IDENTITY (zero-quat Normalise); only the position snapshot survives.
+      // cssecurica92 is the one rig whose vanilla bones carry 90-degree rotations, so a rotation left
+      // in a shim/adopted frame stood the whole truck on its tail in game while the authored bind
+      // pose looked perfect offline.
+      const csSecurica = new Uint8Array(readFileSync('tests/original/dff/cutscene/cssecurica92.dff'));
+      const securica = new Uint8Array(readFileSync('tests/original/dff/cutscene/securica.dff'));
+      const vanilla = readClump(csSecurica);
+      const { dff } = convertCar(securica, extractCarTemplate(csSecurica));
+      const converted = readClump(dff);
+
+      // No un-animated frame may carry rotation — the runtime erases it (the anims bind by NAME, and
+      // only vanilla bone names have channels).
+      const vanillaNames = new Set(vanilla.frames.map((frame) => frame.name.trim()).filter(Boolean));
+      for (const frame of converted.frames) {
+        if (frame.name && !vanillaNames.has(frame.name.trim())) {
+          expect(frame.rotation, `${frame.name} must be identity-rotation`).toEqual([...IDENTITY_ROTATION]);
+        }
+      }
+
+      // Replay the runtime law (anim value = the vanilla local, measured on heist8a.ifp): the truck
+      // must stand upright — its height stays under the vanilla roofline, not its length upended.
+      const vanillaLocals = new Map(
+        vanilla.frames
+          .filter((f) => f.name)
+          .map((f) => [f.name.trim(), { position: f.position, rotation: f.rotation }]),
+      );
+      const worlds: { p: [number, number, number]; r: number[] }[] = [];
+      const mulPoint = (w: { p: number[]; r: number[] }, v: [number, number, number]): [number, number, number] => [
+        w.r[0] * v[0] + w.r[3] * v[1] + w.r[6] * v[2] + w.p[0],
+        w.r[1] * v[0] + w.r[4] * v[1] + w.r[7] * v[2] + w.p[1],
+        w.r[2] * v[0] + w.r[5] * v[1] + w.r[8] * v[2] + w.p[2],
+      ];
+      const mulRot = (a: number[], b: number[]): number[] => {
+        const o = new Array<number>(9).fill(0);
+        for (let i = 0; i < 3; i++)
+          for (let j = 0; j < 3; j++) for (let k = 0; k < 3; k++) o[i + j * 3] += a[i + k * 3] * b[k + j * 3];
+
+        return o;
+      };
+      converted.frames.forEach((frame) => {
+        const law = vanillaLocals.get(frame.name.trim()) ?? {
+          position: frame.position,
+          rotation: [...IDENTITY_ROTATION],
+        };
+        const parent = frame.parentIndex >= 0 ? worlds[frame.parentIndex] : { p: [0, 0, 0], r: [...IDENTITY_ROTATION] };
+        worlds.push({
+          p: mulPoint(parent, law.position),
+          r: mulRot(parent.r, law.rotation),
+        });
+      });
+      let maxZ = -Infinity;
+      const parsed = parseDff(toArrayBuffer(dff));
+      for (const atomic of parsed.atomics) {
+        const g = parsed.geometries[atomic.geometryIndex];
+        const w = worlds[atomic.frameIndex];
+        for (let vi = 0; vi < g.positions.length; vi += 3) {
+          const worldPos = mulPoint(w, [g.positions[vi], g.positions[vi + 1], g.positions[vi + 2]]);
+          // The mods' own stray garbage vertices (magnitudes ~1e18) are carried byte-faithfully and
+          // sit outside any honest bound — ignore them for the pose check.
+          if (Math.abs(worldPos[2]) < 100) {
+            maxZ = Math.max(maxZ, worldPos[2]);
+          }
+        }
+      }
+      expect(maxZ).toBeGreaterThan(2); // a real truck body, not a flattened one
+      expect(maxZ).toBeLessThan(3.2); // upright: the 5.8 m LENGTH never points up (the field bug)
+    });
+
     it('f_wheel container wins over the dummy-child mesh — the stock fallback VehFuncs replaces (round 13)', () => {
       // The bravura's shape, synthesized on the stock donor: a bare disc under wheel_rf_dummy PLUS a
       // VehFuncs `f_wheel_1111 → f_extras:1 → stock|prefacelft` container. Picking the dummy child

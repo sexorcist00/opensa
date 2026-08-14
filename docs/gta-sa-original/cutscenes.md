@@ -72,6 +72,16 @@ the reference install — not OpenSA.
   objects render the raw placeholders, so **vanilla cutscene cars have blank white plates** (the
   user's gate-7 vanilla A/B screenshot is the recorded evidence). The plate art all sits uncompressed
   RGBA8888 in `vehicle.txd`: `platecharset` 32×256, `plateback1/2/3` 64×32, `carplate` 16×16.
+- **The runtime rewrites EVERY frame's local rotation each tick on an animated clump** (gta-reversed
+  `FrameUpdateCallBackNonSkinned`, reached via `CCutsceneObject` → `RpAnimBlendClumpInit`): a frame
+  with a bound channel gets the summed anim quaternion; a frame with NO channel sums to a zero
+  quaternion which `CQuaternion::Normalise` turns into IDENTITY. Only the frame's POSITION survives
+  un-animated (`FramePos`, snapshotted from the DFF local at clump init; `KeyFramesIgnoreNode*`
+  flags exist but nothing in the game sets them). Consequence for converted rigs: an un-animated
+  frame (shim, adopted mesh) may carry translation but NEVER rotation — a stored rotation renders
+  fine in every offline tool and is silently erased in game (plan 004 round 15: cssecurica92's
+  rotated-bone rig stood the whole truck on its tail; vanilla never trips this because every vanilla
+  bone has a channel and every vanilla non-bone frame is identity-rotation).
 
 ## The script API (measured off the bottle's main.scm + gta-reversed, 2026-08-13)
 

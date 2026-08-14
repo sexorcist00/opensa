@@ -11,7 +11,7 @@ import { readRw, writeRw } from '@opensa/rw-codec/chunk';
 
 import { geometryBodyHasTranslucency, geometryBodyHasWindowPane } from '../materials';
 import { canonicalPartName, type CsPartTemplate } from '../template';
-import { isIdentityDelta } from './bake';
+import { bakeGeometryBody, isIdentityDelta } from './bake';
 import {
   type ClumpAtomic,
   type ClumpFrame,
@@ -20,7 +20,7 @@ import {
   type OpaqueChunk,
   readClump,
 } from './clump-io';
-import { compose, IDENTITY_ROTATION, invert, type Transform } from './matrix';
+import { compose, IDENTITY_ROTATION, invert, type Transform, transformPoint } from './matrix';
 import { splitMixedAtomics } from './split';
 
 /** Frame-list matrix-flags words, mirrored from every vanilla cutscene model. */
@@ -136,15 +136,17 @@ export function adoptOrphans(
       continue;
     }
     const parentFrame = nearestCarriedAncestor(analysis.model, carriedFrames, index) ?? fallbackFrame;
-    const local = compose(invert(emit.worlds[parentFrame]), lift(analysis.hingeOf(index), shiftZ));
+    const target = lift(analysis.hingeOf(index), shiftZ);
+    // Identity rotation like every un-animated frame (round 15) — the hinge rotation bakes into
+    // the vertices via the residual in emitTargetedAtomic.
     const frameIndex = pushFrame(emit, {
       boneId: emit.nextBoneId++,
       name: adoptedFrameName(analysis.model.frames[index].name.trim()),
       parentIndex: parentFrame,
-      position: local.position,
-      rotation: local.rotation,
+      position: transformPoint(invert(emit.worlds[parentFrame]), [...target.position] as never),
+      rotation: [...IDENTITY_ROTATION],
     });
-    emitAtomic(emit, analysis.model.geometries, atomic, frameIndex);
+    emitTargetedAtomic(emit, analysis.model.geometries, atomic, frameIndex, target);
     report.adoptedFromMod.push(canonical);
   }
 }
@@ -258,19 +260,33 @@ export function emitAtomic(
 
 /**
  * Emit an anim-targeted bone: the VANILLA local (what the anims replay), with an un-animated SHIM frame
- * absorbing the donor delta when the target placement differs. Returns the bone's frame index.
+ * absorbing the donor's POSITION delta when the target placement differs. Returns the bone's frame index.
+ *
+ * The shim is TRANSLATION-ONLY (plan 004 round 15, HEIST8A): the runtime rewrites every frame's
+ * rotation each tick — an animated frame gets the anim quaternion, an un-animated one gets IDENTITY
+ * (`FrameUpdateCallBackNonSkinned` zero-sums the quat and `CQuaternion::Normalise` turns zero into
+ * identity; only `FramePos`, the position snapshot, survives). A rotation stored in a shim is
+ * therefore silently erased in game — the securica stood on its tail while every offline view looked
+ * right. The bone's world ROTATION ends up `parentRot ∘ vanillaLocalRot`; whatever rotation the
+ * donor target still needed is the caller's to bake into the part's VERTICES ({@link emitTargetedAtomic}).
  */
 export function emitBone(emit: Emit, spec: BoneSpec, report: ConvertReport): number {
   const local: Transform = { position: [...spec.local.position] as never, rotation: [...spec.local.rotation] };
-  const shim = compose(invert(emit.worlds[spec.parentFrame]), compose(spec.targetWorld, invert(local)));
+  const parentInverse = invert(emit.worlds[spec.parentFrame]);
+  const targetInParent = transformPoint(parentInverse, [...spec.targetWorld.position] as never);
+  const shimPosition: [number, number, number] = [
+    targetInParent[0] - local.position[0],
+    targetInParent[1] - local.position[1],
+    targetInParent[2] - local.position[2],
+  ];
   let parentIndex = spec.parentFrame;
-  if (!isIdentityDelta(shim)) {
+  if (!isIdentityDelta({ position: shimPosition, rotation: [...IDENTITY_ROTATION] })) {
     parentIndex = pushFrame(emit, {
       boneId: emit.nextBoneId++,
       name: `${spec.name}${SHIM_SUFFIX}`,
       parentIndex: spec.parentFrame,
-      position: shim.position,
-      rotation: shim.rotation,
+      position: shimPosition,
+      rotation: [...IDENTITY_ROTATION],
     });
     report.shimmed.push(spec.name);
   }
@@ -293,6 +309,7 @@ export function emitPartsRig(
   shiftZ: number,
   report: ConvertReport,
 ): void {
+  const bodyTarget = lift(analysis.hingeOf(analysis.bodyIndex), shiftZ);
   const bodyFrame = emitBone(
     emit,
     {
@@ -300,13 +317,13 @@ export function emitPartsRig(
       local: template.bodyLocal,
       name: template.bodyName,
       parentFrame: emit.bodyParentIndex,
-      targetWorld: lift(analysis.hingeOf(analysis.bodyIndex), shiftZ),
+      targetWorld: bodyTarget,
     },
     report,
   );
   const bodyAtomic = analysis.atomicByFrame.get(analysis.bodyIndex);
   if (bodyAtomic) {
-    emitAtomic(emit, analysis.model.geometries, bodyAtomic, bodyFrame);
+    emitTargetedAtomic(emit, analysis.model.geometries, bodyAtomic, bodyFrame, bodyTarget);
   }
 
   const emittedByCanonical = new Map<string, { frameIndex: number; modIndex: number }>([
@@ -321,6 +338,7 @@ export function emitPartsRig(
       }
       continue;
     }
+    const partTarget = lift(analysis.hingeOf(modIndex), shiftZ);
     const frameIndex = emitBone(
       emit,
       {
@@ -328,13 +346,13 @@ export function emitPartsRig(
         local: { position: part.position, rotation: part.rotation },
         name: part.frameName,
         parentFrame: parent.frameIndex,
-        targetWorld: lift(analysis.hingeOf(modIndex), shiftZ),
+        targetWorld: partTarget,
       },
       report,
     );
     const atomic = analysis.atomicByFrame.get(modIndex);
     if (atomic) {
-      emitAtomic(emit, analysis.model.geometries, atomic, frameIndex);
+      emitTargetedAtomic(emit, analysis.model.geometries, atomic, frameIndex, partTarget);
     }
     emittedByCanonical.set(canonical, { frameIndex, modIndex });
     report.parts.push(canonical);
@@ -346,6 +364,29 @@ export function emitPartsRig(
     bodyFrame,
     new Map([...emittedByCanonical.values()].map((entry) => [entry.modIndex, entry.frameIndex])),
     report,
+  );
+}
+
+/**
+ * Attach a part's atomic to its emitted bone, baking into the VERTICES whatever rotation the bone's
+ * runtime world cannot carry (see {@link emitBone}): residual = inv(boneWorld) ∘ targetWorld — pure
+ * rotation about the part's own hinge (positions match by the shim's construction). Identity residual
+ * keeps the geometry byte-verbatim (the fast path every translation-only car stays on).
+ */
+export function emitTargetedAtomic(
+  emit: Emit,
+  geometries: readonly OpaqueChunk[],
+  atomic: ClumpAtomic,
+  frameIndex: number,
+  targetWorld: Transform,
+): void {
+  const residual = compose(invert(emit.worlds[frameIndex]), targetWorld);
+  emitAtomic(
+    emit,
+    geometries,
+    atomic,
+    frameIndex,
+    isIdentityDelta(residual) ? undefined : bakeGeometryBody(geometries[atomic.geometryIndex], residual),
   );
 }
 

@@ -43,6 +43,7 @@ import {
   type Emit,
   emitAtomic,
   emitBone,
+  emitTargetedAtomic,
   emptyEmit,
   finalizeAtomics,
   hingeFactory,
@@ -56,7 +57,7 @@ import {
   worldTransforms,
   YEAR_VARIANT_RE,
 } from './emit';
-import { compose, IDENTITY_ROTATION, invert, type Transform } from './matrix';
+import { IDENTITY_ROTATION, invert, type Transform, transformPoint } from './matrix';
 
 /** The game rig's wheel dummies (mirrors `build-vehicle-model.ts`'s WHEEL_DUMMY_RE; `m` = 3-axle middles,
  *  which no cutscene template has — they land in `droppedFromMod`). */
@@ -173,15 +174,17 @@ function adoptOrphanParts(
       extraTaken = true;
     }
     const parentFrame = nearestCarriedAncestor(analysis.model, carriedFrames, index) ?? chassisFrame;
-    const local = compose(invert(emit.worlds[parentFrame]), lift(analysis.hingeOf(index), shiftZ));
+    const target = lift(analysis.hingeOf(index), shiftZ);
+    // Identity rotation like every un-animated frame (round 15) — the hinge rotation bakes into
+    // the vertices via the residual in emitTargetedAtomic.
     const frameIndex = pushFrame(emit, {
       boneId: emit.nextBoneId++,
       name: adoptedFrameName(analysis.model.frames[index].name.trim()),
       parentIndex: parentFrame,
-      position: local.position,
-      rotation: local.rotation,
+      position: transformPoint(invert(emit.worlds[parentFrame]), [...target.position] as never),
+      rotation: [...IDENTITY_ROTATION],
     });
-    emitAtomic(emit, analysis.model.geometries, atomic, frameIndex);
+    emitTargetedAtomic(emit, analysis.model.geometries, atomic, frameIndex, target);
     report.adoptedFromMod.push(canonical);
   }
 }
@@ -324,6 +327,7 @@ function emitChassisAndParts(
   shiftZ: number,
   report: CarConvertReport,
 ): void {
+  const chassisTarget = lift(analysis.chassisTransform, shiftZ);
   const chassisFrame = emitBone(
     emit,
     {
@@ -331,11 +335,17 @@ function emitChassisAndParts(
       local: template.chassisLocal,
       name: template.chassisName,
       parentFrame: emit.bodyParentIndex,
-      targetWorld: lift(analysis.chassisTransform, shiftZ),
+      targetWorld: chassisTarget,
     },
     report,
   );
-  emitAtomic(emit, analysis.model.geometries, analysis.atomicByFrame.get(analysis.chassisIndex)!, chassisFrame);
+  emitTargetedAtomic(
+    emit,
+    analysis.model.geometries,
+    analysis.atomicByFrame.get(analysis.chassisIndex)!,
+    chassisFrame,
+    chassisTarget,
+  );
 
   const emittedByCanonical = new Map<string, { frameIndex: number; modIndex: number }>([
     ['chassis', { frameIndex: chassisFrame, modIndex: analysis.chassisIndex }],
@@ -359,6 +369,7 @@ function emitChassisAndParts(
       }
       continue;
     }
+    const partTarget = lift(analysis.hingeOf(modIndex), shiftZ);
     const frameIndex = emitBone(
       emit,
       {
@@ -366,11 +377,11 @@ function emitChassisAndParts(
         local: { position: part.position, rotation: part.rotation },
         name: part.frameName,
         parentFrame: parent.frameIndex,
-        targetWorld: lift(analysis.hingeOf(modIndex), shiftZ),
+        targetWorld: partTarget,
       },
       report,
     );
-    emitAtomic(emit, analysis.model.geometries, analysis.atomicByFrame.get(modIndex)!, frameIndex);
+    emitTargetedAtomic(emit, analysis.model.geometries, analysis.atomicByFrame.get(modIndex)!, frameIndex, partTarget);
     emittedByCanonical.set(canonical, { frameIndex, modIndex });
     report.parts.push(canonical);
   }
