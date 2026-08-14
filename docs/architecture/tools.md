@@ -96,3 +96,9 @@ The root category for `.asi` plugins that patch the real SA exe: an SDK plus its
   [`asi/sdk/docs/`](../../asi/sdk/docs/architecture.md) — chain 001–005.
 - **perfect-map** — the first consumer: the limit-adjuster ASI lifting the int16 building-pool ceiling and
   guarding the 2dfx fx-system use-after-free.
+- **perfect-cutscene** — the second consumer, written straight onto the SDK with no framework change: it
+  repoints ONE call in `CRenderer::RenderEverythingBarRoads` so a cutscene car joins the sorted entity pass
+  gameplay vehicles already use, instead of rendering inline in sector-scan order where its window glass
+  z-writes over scene actors. **The converted cutscene fleet depends on it** — see
+  [`restrictions/sa-target.md`](../restrictions/sa-target.md).
+  [`asi/perfect-cutscene/docs/plans/`](../../asi/perfect-cutscene/docs/plans/readme.md) — plan 001.
