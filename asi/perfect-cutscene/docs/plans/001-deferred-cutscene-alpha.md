@@ -73,6 +73,12 @@ bottle's `CLEO/cutscene-override.ini`).
       gate and writes `perfect-cutscene-asi.log` beside the exe. Verification: the log's first line
       in the bottle (`built <date> (verify-only)`), game boots, no adjuster conflicts (OLA + FLA +
       perfect-map coexistence — the SDK's byte-verify must stay green).
+      **Build side DONE 2026-08-14** — written straight onto the SDK with zero framework changes:
+      `gen/catalogue.ts` (2 entries / 5 sites, every byte window read out of the accepted exe and
+      cross-checked against gta-reversed-modern), the five seam files, the thin Makefile. All three
+      modes compile (`build:verify` / `build:asi` / `build:debug`); catalogue tests 5/5; the
+      verify-only artifact (11 264 B) is installed in the bottle. **Open: the boot check** — the log
+      must appear with all 5 sites pristine alongside OLA + FLA + perfect-map.
 - [ ] **2. The census hook (verify-only).** Hook the cutscene model-load path; log, per scene, every
       cutscene VEHICLE clump and its translucent-atomic census (name, atomic count, alphas), patch
       nothing. Verification: RIOT_4B log lists csgreenwood with exactly the pane/lens census our

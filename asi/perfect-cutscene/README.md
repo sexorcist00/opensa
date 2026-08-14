@@ -21,8 +21,18 @@ slot, and the per-slot window-pane suppression hack retires with it.
 
 - **[docs/plans/readme.md](./docs/plans/readme.md)** — the execution chain (001: reproduce → hook →
   field-gate → retire the hack → re-sweep → pmb packaging).
-- `src/`, `gen/`, `Makefile` — created by plan 001 step 2 (mirroring perfect-map's shape).
+- `gen/` — the catalogue (`catalogue.ts`) + the thin generator, mirroring perfect-map's shape.
+- `src/` — `dllmain.cpp` and the seam headers (`identity` / `config` / `plugin` / `apply`); payloads
+  land in `src/patches/` from step 2.
+- `Makefile` — identity + payload flags, then `include ../sdk/mk/asi-plugin.mk`.
 
 ## Status
 
-Plan 001 written, not started — the repro protocol (step 0) is the entry point.
+Plan 001: step 0 (the hackless repro) closed — RIOT_4B and SYND_3A both erase their actors on the
+standing repro build. Step 1 (this scaffold) builds in all three modes and is installed verify-only
+in the bottle; the boot check is the open item.
+
+The catalogue's five sites were read out of the accepted exe and cross-checked against
+gta-reversed-modern: `CCutsceneObject::SetModelIndex` (0x5B1B20) is the hook the census and the
+deferral ride on — every cutscene object passes through it and the clump exists there, while
+`SetupCarPipeAtomicsForClump` (0x5B1AB0) returns early for anything outside the blessed six.

@@ -280,6 +280,10 @@ npm run build:verify -w @opensa/perfect-map-asi   # DRY RUN: patches nothing, lo
 npm run build:debug  -w @opensa/perfect-map-asi   # APPLY + verbose site dump + the plugin's own traces
 npm run gen          -w @opensa/perfect-map-asi   # catalogue.ts → src/generated/patches.hpp only
 
+# The second plugin: deferred cutscene alpha (glass over scene actors) → dist/perfect-cutscene.asi
+npm run build:asi    -w @opensa/perfect-cutscene-asi
+npm run build:verify -w @opensa/perfect-cutscene-asi   # what a bring-up step installs: verifies, writes nothing
+
 # Per-fix bisection (the flags are the plugin's; EXTRA_CXXFLAGS is the SDK's knob)
 make -C asi/perfect-map APPLY=1 EXTRA_CXXFLAGS='-DPM_FIX_INT16=1 -DPM_FIX_FX2DFX=0'
 # DEBUG=1 without APPLY=1 is refused: every debug switch is read inside an APPLY build.

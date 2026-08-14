@@ -89,6 +89,25 @@ the reference install — not OpenSA.
   rotated-bone rig stood the whole truck on its tail; vanilla never trips this because every vanilla
   bone has a channel and every vanilla non-bone frame is identity-rotation).
 
+- **The cutscene-object render setup, address-verified in the accepted exe (2026-08-14)** — the path
+  the perfect-cutscene ASI rides, cross-checked between gta-reversed-modern and the bytes at each
+  address (SHA1 `8c23ceff…`; VAs at image base 0x400000):
+  - `CCutsceneObject::SetModelIndex` **0x5B1B20** — the single door EVERY cutscene object enters:
+    `CEntity::SetModelIndex` → (clump only) `RpAnimBlendClumpInit` → `SetupCarPipeAtomicsForClump`,
+    then forces the model's alpha to 0xFF. thiscall, `this` in ecx, modelId on the stack; entry is
+    `push esi / push edi / mov edi,[esp+0xc]`.
+  - `CCutsceneObject::SetupCarPipeAtomicsForClump` **0x5B1AB0** — hashes the model's key against six
+    cached `CKeyGen::GetUppercaseKey` values (`0xBC4040`, built once behind the flag at `0xBC4058`)
+    and, on a hit, runs `CCarFXRenderer::CustomCarPipeAtomicSetup` over EVERY atomic of the clump.
+    Anything else returns without touching the clump — which is why a general cutscene-vehicle fix
+    cannot hook here.
+  - The six names (`ms_sCutsceneVehNames`, **0x8D0F68**, `NUM_CUTSCENE_VEHS = 6`) as literally
+    spelled in the exe: `cscopcarla92`, `cscopcarsf`, `csbravura`, **`CsFireLa`**, `csmothership`,
+    **`CsVoodoo`** — mixed case, which never matters to the game (the compare is on the uppercased
+    hash) and always matters to anyone grepping for them.
+  - `CCarFXRenderer::CustomCarPipeAtomicSetup` **0x5D5B20** is a `jmp` thunk; the real body is at
+    **0x5DA610** (`push esi / mov esi,[esp+8]` — the `RpAtomic*`).
+
 ## The script API (measured off the bottle's main.scm + gta-reversed, 2026-08-13)
 
 - main.scm plays every one of its 135 cutscenes with the same sequence (PROLOG1 @ 0x43300,
