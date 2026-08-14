@@ -10,8 +10,8 @@
 
 #include "config.hpp"
 
-#if PC_CENSUS
-#include "patches/census.hpp"
+#if PC_CENSUS || PC_BLESSED_SIX
+#include "patches/cutscene-load.hpp"
 #endif
 
 #if PC_DEFER_ALPHA
@@ -21,8 +21,8 @@
 namespace pc {
 
 inline void ApplyPatches(asi::Log& log, const asi::Plugin& plugin, unsigned adjusterMask) {
-#if PC_CENSUS
-  patches::ApplyCensus(log, plugin);  // observation only — logs model types, changes no rendering
+#if PC_CENSUS || PC_BLESSED_SIX
+  patches::ApplyCutsceneLoad(log, plugin);  // the census log and/or the force-pipe skip (one call site)
 #endif
 
 #if PC_DEFER_ALPHA

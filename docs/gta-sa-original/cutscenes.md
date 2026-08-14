@@ -106,7 +106,14 @@ the reference install — not OpenSA.
     **`CsVoodoo`** — mixed case, which never matters to the game (the compare is on the uppercased
     hash) and always matters to anyone grepping for them.
   - `CCarFXRenderer::CustomCarPipeAtomicSetup` **0x5D5B20** is a `jmp` thunk; the real body is at
-    **0x5DA610** (`push esi / mov esi,[esp+8]` — the `RpAtomic*`).
+    **0x5DA610** (`push esi / mov esi,[esp+8]` — the `RpAtomic*`). What it does: writes
+    `[atomic+0x6C] = [0xC02D24]` and stamps pipeline id **`0x53F2009A`** (the vehicle pipe) on the
+    atomic. Applied to EVERY atomic of a blessed-six clump, translucent ones included — vanilla can
+    afford that because vanilla cutscene DFFs carry no pipeline stamp of their own AND their glass
+    never renders. On a converted fleet whose glass does render, the vehicle pipe's static env map
+    covers a RAKED pane (windscreen, rear screen) as flat grey while a vertical side window barely
+    shows it — measured on PROLOG3's sheriff car, where all the glass is one material and only the
+    raked panes read as matte (ASI plan 001 step 3 round 3).
 - **A cutscene CAR and a cutscene ACTOR are indistinguishable by model type** (measured in the field
   2026-08-14): every cutscene model is streamed into the shared `CUTOBJ` clump slots, so
   `CBaseModelInfo::GetModelType()` reports 5 (`MODEL_INFO_CLUMP`) for cars, actors and props alike —

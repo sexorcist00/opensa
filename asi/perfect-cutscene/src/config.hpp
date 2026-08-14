@@ -10,7 +10,7 @@
 #endif
 
 #ifndef PC_CENSUS
-#define PC_CENSUS 0  // [step 2] verify-only census hook: log every cutscene VEHICLE clump's translucent atomics
+#define PC_CENSUS 0  // [step 2] log how each cutscene object classifies (observation only)
 #endif
 
 #ifndef PC_DEFER_ALPHA
@@ -18,7 +18,7 @@
 #endif
 
 #ifndef PC_BLESSED_SIX
-#define PC_BLESSED_SIX 0  // [step 4] skip the force-pipe on the six named models' translucents (it DROPS them)
+#define PC_BLESSED_SIX 0  // [step 4] let the six force-piped models keep OUR per-atomic pipelines
 #endif
 
 #ifndef PC_CENSUS_LOG

@@ -162,8 +162,11 @@ bottle's `CLEO/cutscene-override.ini`).
 - [x] **3b. The alpha-test ref, put back (round 2, 2026-08-14).**
       **Seen (user):** PROLOG3 — the cop car's windscreen "looks matte, you can't see through it";
       every other window on the same car fine. His read was "as if it applied twice".
-      **Root cause (measured offline, no second field run needed):** it is the threshold, and the
-      model data proves it. Mod cutscene glass sits at **alpha 102–125** (csgreenwood 102,
+      **First root cause — WRONG, and the user's own experiment killed it.** The story below was
+      consistent with every offline measurement and still false: he removed the `.asi` entirely and
+      the windscreen stayed matte, which no explanation involving our render path survives. Kept
+      here because the reasoning it contains is still true about the THRESHOLD, just not about this
+      symptom. Mod cutscene glass sits at **alpha 102–125** (csgreenwood 102,
       cswashington 110, cscopcarla92 and cstaxi92 115, csbravura 125) — *between* the outdoor pass's
       ref **140** and the deferred path's ref **100**. `RenderEverythingBarRoads` sets 140 only when
       `CGame::currArea == 0`, and of the five scenes gated here PROLOG3 is the one with a decoded
@@ -172,7 +175,7 @@ bottle's `CLEO/cutscene-override.ini`).
       which reads as matte. The "twice" reading was checked and is NOT what happened: the mixed-mesh
       split is clean (opaque copy 248 tris with 0 glass triangles, translucent twin 80 glass tris),
       and the anim-replay world boxes show one pane per window.
-      **Fix (the user's call — restore the threshold):** repoint the SECOND call site,
+      **The threshold patch stands anyway, on its own reasoning** (the user's call): repoint the SECOND call site,
       `CVisibilityPlugins::RenderEntity`'s own `call RenderOneNonRoad` (`0x732C48`), so one of our
       deferred cutscene objects in an outdoor area is rendered at ref 140 and the ref is put back to
       what RenderEntity chose (100, or 0 for a `bDontWriteZBuffer` model) straight after. The plugin
@@ -181,11 +184,42 @@ bottle's `CLEO/cutscene-override.ini`).
       mod's authored glass in outdoor scenes too, and make a car look the same indoors and out.
       That is a LOOK decision with a full re-sweep attached, and the first field verdict on it was
       negative — it stays a separate question, not a side effect of an ordering fix.
-      - [ ] **Re-check (user):** PROLOG3 — windscreen see-through again as before, actors still fine.
-- [ ] **4. The blessed six.** Skip the force-pipe on translucent atomics of the six named models so
-      their glass renders instead of dropping (independent of ordering — the pipe DROPS translucents
-      outside a real CVehicle). Verification: FINAL2B — the bravura shows real window tint for the
-      first time, passengers still visible; BCESA4W/BCESAR4 one-eye glance.
+      - [x] **Re-check (user):** no change — and then the decisive one: **with the ASI removed
+        altogether the windscreen is still matte**. The threshold was never the cause; the patch is
+        parity only, and its own effect has never been observed in the field. Say so when it is
+        judged.
+
+- [x] **3c. What the matte windscreen actually is (round 3, 2026-08-14) — a data bisect, no game.**
+      **The data is innocent, proven across the whole session.** The windscreen glass material reads
+      `102,102,102,115` in EVERY kept build from `cs-mods-step8` (08-13 10:29) to today; the only
+      movement in its history is the round-4 alpha clamp (102) that round 7 retired. The MOD's own
+      source DFF carries the same `102,102,102,115` — the conversion alters nothing. The built model
+      carries no opaque surface over the glass (the only opaque part of that mesh is a 27 cm mirror
+      housing), the source's one opaque `glass` band (270 tris, full width — a `_vlo`) is NOT in our
+      model, the `glass` texture is present, and there are no prelit vertex colours anywhere.
+      **The field pattern is the answer.** The user's screenshots: windscreen AND rear screen matte,
+      vertical side windows clean — all of them the SAME material, so no data difference can explain
+      it. What separates them is RAKE, and rake matters to exactly one thing: a reflection.
+      **Mechanism:** `cscopcarla92` is one of the six models `SetupCarPipeAtomicsForClump` (`0x5B1AB0`)
+      force-pipes at load — its body writes `[atomic+0x6C] = [0xC02D24]` and stamps pipeline
+      `0x53F2009A` on EVERY atomic of the clump, glass included. SA's vehicle env map is a static
+      texture: on a raked pane it covers the whole surface as flat grey; on a vertical one it barely
+      shows. Ours is the only fleet where this is visible at all, because vanilla cutscene glass
+      never renders. It is independent of the ASI — the stamp happens at model load — which is
+      exactly why removing the plugin changed nothing.
+      **This makes step 4 both the fix and the experiment**, and simpler than planned: our DFFs
+      already carry the correct per-atomic pipeline (opaque = vehicle, translucent = default, plan
+      004 rounds 5–9). The engine overrides it only because VANILLA cutscene DFFs carry no stamp at
+      all. Not letting it override needs no atomic walk — just not calling the original for a
+      non-skinned cutscene clump.
+- [ ] **4. The blessed six.** Do not let `SetupCarPipeAtomicsForClump` overwrite our per-atomic
+      pipelines: for a non-skinned cutscene clump the stand-in returns without running the original,
+      so those six models keep exactly the pipeline split the converter authored (round 3 above).
+      The `ms_sCutsceneVehNames` table is byte-verified but never written — if the six ever differ
+      from the catalogue, the assumption this rests on has changed and the patch defers.
+      Verification: **PROLOG3 — the sheriff car's windscreen and rear screen become real tinted
+      glass** (the round-3 gate); FINAL2B — the bravura shows window tint for the first time,
+      passengers still visible; BCESA4W/BCESAR4 one-eye glance.
 - [ ] **5. Retire the converter hack.** Empty `PANE_SUPPRESSED_SLOTS` for real; move
       `docs/hacks/cutscene-window-pane-suppression.md` to `docs/hacks/retired/` with the closing
       block naming this ASI + the commit; update `docs/contracts/vehicles.md` §3 (the pane-order row
