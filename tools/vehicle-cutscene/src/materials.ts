@@ -87,6 +87,43 @@ export function geometryBodyHasTranslucency(body: Uint8Array): boolean {
   return false;
 }
 
+/** `rpGEOMETRYMODULATEMATERIALCOLOR` — without it RW's DEFAULT pipeline ignores the material colour. */
+const RP_GEOMETRY_MODULATE_MATERIAL_COLOR = 0x40;
+
+/** Byte offset of the geometry flags word inside a geometry chunk BODY (past the Struct chunk header). */
+const GEOMETRY_FLAGS_OFFSET = 12;
+
+/**
+ * Set `rpGEOMETRYMODULATEMATERIALCOLOR` on a geometry that carries a translucent material, IN PLACE.
+ *
+ * Without that flag RW's default pipeline never reads the material colour — so a material alpha of 115
+ * is simply not applied and the surface renders fully opaque. A mod can ship a window like that and
+ * never notice: in GAMEPLAY vehicle glass is drawn by SA's vehicle pipe, which takes the material alpha
+ * itself and does not consult the flag. Cutscene translucents sit on the DEFAULT pipe (round 9), where
+ * the flag decides — so the same pane that is transparent while driving is a solid sheet in a cutscene.
+ *
+ * Field-measured on PROLOG3 (plan 001, 2026-08-14): the sheriff car's windscreen and rear screen read as
+ * matte from every angle. `copcarla` is the ONLY mod of the 23 whose translucent geometries lack the
+ * flag — `windscreen_ok`, `body_windows`, `glass`, `f_steer` — and they are exactly the panes the field
+ * called out; its door glass carries the flag and looked right all along.
+ *
+ * Only geometries that already carry translucency are touched: on an opaque geometry the flag would
+ * change how the material colour tints the texture, which is not ours to decide.
+ */
+export function ensureModulateMaterialColour(body: Uint8Array): boolean {
+  if (!geometryBodyHasTranslucency(body)) {
+    return false;
+  }
+  const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+  const flags = view.getUint32(GEOMETRY_FLAGS_OFFSET, true);
+  if ((flags & RP_GEOMETRY_MODULATE_MATERIAL_COLOR) !== 0) {
+    return false;
+  }
+  view.setUint32(GEOMETRY_FLAGS_OFFSET, flags | RP_GEOMETRY_MODULATE_MATERIAL_COLOR, true);
+
+  return true;
+}
+
 /**
  * Whether a geometry chunk BODY (its children stream: Struct / MaterialList / Extension) carries at
  * least one window-pane material — the render-order pass moves such atomics last, mirroring vanilla's

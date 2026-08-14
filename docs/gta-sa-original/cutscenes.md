@@ -116,6 +116,13 @@ the reference install — not OpenSA.
     windscreen it was aimed at (ASI plan 001 step 4, field-rejected 2026-08-14). Note this is the
     RUNTIME stamp; the DFF `PipelineSet` plugin our converter writes is a different mechanism and
     behaves differently (plan 004 rounds 5-9, where stamped panes vanished).
+- **SA's vehicle pipe reads a material's alpha; RW's default pipe needs the geometry to say so.** The
+  flag is `rpGEOMETRYMODULATEMATERIALCOLOR` (0x40 in the geometry's flags word): with it clear, the
+  default pipeline ignores the material colour entirely, alpha included, and a translucent material
+  renders solid. The vehicle pipe does not consult it — which is why a vehicle mod can ship glass
+  without the flag, look right in gameplay for years, and turn matte the moment the same mesh renders
+  through the default pipe in a cutscene (measured 2026-08-14 on `copcarla`'s windscreen, whose door
+  glass carries the flag and whose windscreen does not; plan 004 round 21).
 - **A cutscene CAR and a cutscene ACTOR are indistinguishable by model type** (measured in the field
   2026-08-14): every cutscene model is streamed into the shared `CUTOBJ` clump slots, so
   `CBaseModelInfo::GetModelType()` reports 5 (`MODEL_INFO_CLUMP`) for cars, actors and props alike —

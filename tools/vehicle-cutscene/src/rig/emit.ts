@@ -9,7 +9,7 @@
  */
 import { readRw, writeRw } from '@opensa/rw-codec/chunk';
 
-import { geometryBodyHasTranslucency, geometryBodyHasWindowPane } from '../materials';
+import { ensureModulateMaterialColour, geometryBodyHasTranslucency, geometryBodyHasWindowPane } from '../materials';
 import { canonicalPartName, type CsPartTemplate } from '../template';
 import { bakeGeometryBody, isIdentityDelta } from './bake';
 import {
@@ -492,6 +492,11 @@ export function excludedVariantFrames(model: ClumpModel): Set<number> {
  */
 export function finalizeAtomics(emit: Emit, version: number, suppressWindowPanes = false): void {
   splitMixedAtomics(emit.geometries, emit.atomics);
+  // A translucent geometry must say it modulates by material colour, or RW's default pipeline — the one
+  // cutscene translucents render on — never reads the material alpha at all (see materials.ts).
+  for (const geometry of emit.geometries) {
+    ensureModulateMaterialColour(geometry.body);
+  }
   const panes = new Map(emit.geometries.map((geometry, index) => [index, geometryBodyHasWindowPane(geometry.body)]));
   const translucent = new Map(
     emit.geometries.map((geometry, index) => [index, geometryBodyHasTranslucency(geometry.body)]),

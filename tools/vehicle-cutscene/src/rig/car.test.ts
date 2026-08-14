@@ -417,6 +417,37 @@ describe('convertCar', () => {
       expect(converted.frames.some((frame) => frame.name === 'prefacelft_ad')).toBe(false);
     });
 
+    // A translucent geometry that does not modulate by material colour renders SOLID on RW's default
+    // pipeline — the one cutscene translucents sit on — because the material alpha is never read. SA's
+    // vehicle pipe reads it regardless, so a mod ships the flag missing and only a cutscene shows it
+    // (PROLOG3's sheriff windscreen, ASI plan 001; copcarla is the only such mod of the 23).
+    it('every translucent geometry modulates by material colour', () => {
+      const { dff } = convertCar(TAXI, extractCarTemplate(CS_TAXI));
+      const converted = readClump(dff);
+      const MODULATE = 0x40;
+      const flagsOf = (body: Uint8Array): number =>
+        new DataView(body.buffer, body.byteOffset, body.byteLength).getUint32(12, true);
+
+      const translucent = converted.geometries.filter((geometry) => geometryBodyHasTranslucency(geometry.body));
+      expect(translucent.length).toBeGreaterThan(0);
+      for (const geometry of translucent) {
+        expect(flagsOf(geometry.body) & MODULATE).toBe(MODULATE);
+      }
+
+      // Opaque geometries are left exactly as authored: the flag changes how a material colour tints
+      // the texture, which is the mod's decision wherever alpha is not in play.
+      const donor = readClump(TAXI);
+      const opaqueDonorFlags = donor.geometries
+        .filter((geometry) => !geometryBodyHasTranslucency(geometry.body))
+        .map((geometry) => flagsOf(geometry.body) & MODULATE);
+
+      expect(
+        converted.geometries
+          .filter((geometry) => !geometryBodyHasTranslucency(geometry.body))
+          .some((geometry) => (flagsOf(geometry.body) & MODULATE) === 0),
+      ).toBe(opaqueDonorFlags.includes(0));
+    });
+
     it('window-pane suppression drops every window and nothing else (round 17)', () => {
       // The per-SLOT switch (docs/hacks/cutscene-window-pane-suppression.md): a rendered window pane
       // z-writes over scene actors drawn after the car, and the draw order is a per-scene accident.

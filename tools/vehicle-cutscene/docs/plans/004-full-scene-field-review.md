@@ -522,6 +522,36 @@ rotated-bone rig.
       SYND_4A ✅ in the ledger (18/35). SYND_3A's driving-wheels glance folds into its own
       ASI re-test.
 
+### Round 21 — PROLOG3: the windscreen that was never glass (2026-08-14)
+
+- **Seen (user, screenshots):** the sheriff car's windscreen AND rear screen read as matte from every
+  camera angle, while the door glass on the same car is see-through. Found while gating the
+  perfect-cutscene ASI, and **not caused by it** — the user pulled the `.asi` out entirely and the
+  windscreen stayed matte, which is what turned the hunt data-side.
+- **Root cause (measured, and the model data is INNOCENT of everything else first):** the glass
+  material is `102,102,102` alpha 115, byte-identical to the mod's own source DFF and unchanged in
+  every build since 08-13; the texture is byte-identical too; nothing opaque covers the pane (a plane
+  test found only the interior, 64 %, BEHIND it); no prelit colours; one sheet, not two layers; the
+  pane sits on the DEFAULT pipeline like every other translucent. What differs is a GEOMETRY FLAG:
+  `windscreen_ok` and `body_windows` carry `0x10037` — **no `rpGEOMETRYMODULATEMATERIALCOLOR`** —
+  while the door glass carries `0x200f7`, which has it. Without that bit RW's default pipeline never
+  reads the material colour, so alpha 115 is simply not applied and the pane renders solid.
+  **The mod ships it that way and gameplay never shows it**: SA's vehicle pipe takes the material
+  alpha itself and does not consult the flag (the user's gameplay screenshot of the same car is the
+  A/B). Cutscene translucents ride the default pipe (round 9), which is where the flag decides.
+- **Fleet scan confirms the mechanism, 23 models:** `copcarla` (both slots) is the ONLY mod whose
+  translucent geometries lack the flag — `windscreen_ok`, `body_windows`, `glass`, `f_steer`, plus
+  three decal geometries — and they are exactly the panes the field called matte. Every model whose
+  glass the sweep accepted has the flag.
+- **Fix (a general emit rule, `materials.ts` `ensureModulateMaterialColour`):** a geometry that
+  carries a translucent material gets `rpGEOMETRYMODULATEMATERIALCOLOR` set. Opaque geometries are
+  untouched — there the flag decides how a material colour tints its texture, which is the mod's call.
+  Derived from the asset, no model named. Suite 92/92; fleet 23/23, verify green; the flag flips on
+  exactly the seven copcarla geometries and nothing else in the fleet moves.
+- **Re-check scope:** copcarla-only change; PROLOG3 decides. LOOK-FOR: windscreen and rear screen
+  see-through with tint, door glass unchanged, body/lights unchanged.
+- [ ] **Re-check (user):** pending.
+
 ### Standing addendum — the perfect-cutscene ASI re-opens the whole ledger (2026-08-14)
 
 The draw-order mechanism behind rounds 15–17 gets its real fix as an engine patch:

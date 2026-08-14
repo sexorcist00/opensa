@@ -236,6 +236,16 @@ frame 0, which is exactly what the bug looks like before the animation ever work
 first: `npx tsx scripts/debug/dump-osm.ts <model>` prints the animations the built `.osm` actually carries
 and the submesh each one drives. Only UV channel 0 is played; a mask naming more channels loses the rest.
 
+**A translucent material needs `rpGEOMETRYMODULATEMATERIALCOLOR` on its geometry — and the cutscene
+converter now SETS it for you.** Without that RW geometry flag the DEFAULT pipeline never reads the
+material colour, so a window authored at alpha 115 renders as a solid sheet. Gameplay hides the mistake
+completely: SA's vehicle pipe takes the material alpha itself and never consults the flag, so a mod can
+ship windows without it and look perfect while driving. Cutscene translucents ride the default pipe (they
+are kept off the vehicle pipe on purpose, §3), which is where it shows — as a matte windscreen nobody can
+see through, from any angle. Measured on `copcarla`, the only mod of the 23 whose `windscreen_ok` and
+`body_windows` lack the flag (plan 004 round 21); `vehicle-cutscene` sets it on any geometry carrying a
+translucent material and leaves opaque geometries exactly as authored.
+
 **There is deliberately NO texture-name matching for the reflection class.** Chrome is decided by data (an
 untextured neutral-grey material with an env map), glass by translucency, paint by a carcols marker. Mods
 combine arbitrary texture names, so a name rule there produces false positives on whole fleets.
