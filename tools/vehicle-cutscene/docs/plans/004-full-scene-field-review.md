@@ -458,6 +458,16 @@ rotated-bone rig.
       window, lamps intact. RIOT_4B ✅ in the ledger; the sweep resumes at row 16 (SMOKE1B re-run on
       the round-16/17 build).
 
+### Standing addendum — the perfect-cutscene ASI re-opens the whole ledger (2026-08-14)
+
+The draw-order mechanism behind rounds 15–17 gets its real fix as an engine patch:
+[`asi/perfect-cutscene`](../../../../asi/perfect-cutscene/docs/plans/001-deferred-cutscene-alpha.md)
+defers every translucent cutscene-vehicle atomic into the sorted alpha pass (glass over actors at any
+entity order) and retires the `PANE_SUPPRESSED_SLOTS` hack. **When that ASI lands, ALL 23 models'
+translucent rendering changes — every ✅ row in this ledger re-opens for a re-run** (glass, tint,
+shine, actors; ~15 s each, one sitting — the ASI plan's step 6). Until then this plan's verdicts
+stand on the current no-ASI rules.
+
 ## Step 3 — the approval
 
 - [ ] All 35 rows carry a verdict; open findings zero. **The user's blanket approval closes the

@@ -363,6 +363,11 @@ row but its chain was superseded by 097). Newest first:
   `asi/perfect-map` root-category pattern). [`cleo/scripts/docs/plans/`](../../cleo/scripts/docs/plans/readme.md)
   (`001` rhino tracks — CLOSED 2026-08-07, both runtimes field-proven, shipping step waived ·
   `002` no_lights — PLANNED 2026-08-06).
+- **asi/perfect-cutscene** — deferred depth-sorted alpha for CUTSCENE vehicles (the glass-over-actors
+  fix; retires `docs/hacks/cutscene-window-pane-suppression.md`), second consumer of `asi/sdk`.
+  [`asi/perfect-cutscene/docs/plans/`](../../asi/perfect-cutscene/docs/plans/readme.md) (`001` deferred
+  cutscene alpha — WRITTEN 2026-08-14, not started; ends with a full plan-004 fleet re-check + pmb
+  packaging).
 
 ## Other docs
 
