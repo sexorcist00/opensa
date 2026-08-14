@@ -180,7 +180,11 @@ bottle's `CLEO/cutscene-override.ini`).
       as if there is no glass at all": mod cutscene glass sits at alpha 102–125, so forcing the outdoor
       ref back to 140 discards it outright. The parity argument was coherent and the effect is the
       opposite of what this plugin is for, so the deferred pass now keeps `RenderEntity`'s own ref
-      (100, or 0 in an interior). What follows is what the patch DID, kept for the record: repoint the SECOND call site,
+      (100, or 0 in an interior). **Re-verified immediately: RIOT_4B on the hackless + modulate fleet
+      with the patch gone — "perfect: peds visible, tint as it should be."** So the ref difference IS
+      observable, and it reads in our favour: the deferred pass shows the mod's authored glass in
+      outdoor scenes, which the main pass discarded.
+      What follows is what the patch DID, kept for the record: repoint the SECOND call site,
       `CVisibilityPlugins::RenderEntity`'s own `call RenderOneNonRoad` (`0x732C48`), so one of our
       deferred cutscene objects in an outdoor area is rendered at ref 140 and the ref is put back to
       what RenderEntity chose (100, or 0 for a `bDontWriteZBuffer` model) straight after. The plugin
