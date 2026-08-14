@@ -194,8 +194,16 @@ export function extractBoatTemplate(csDff: Uint8Array): CsBoatTemplate {
 /**
  * Extract the car template from a vanilla cutscene DFF. Throws when the model is not a cutscene car rig
  * (no HAnim skeleton root, no chassis, or anything but four wheel corners).
+ *
+ * `animWheelPoses` (bone name, lowercased → the scene anim's frame-0 translation) overrides the BIND
+ * positions for wheel corner classification and locals: the runtime replays the ANIM pose, and R*'s
+ * own csglendale92 binds its left wheels crossed front-to-rear versus every scene (plan 004 round 16 —
+ * each left wheel sat 0.21 m off its arch). Bind stays the fallback when no scene poses a bone.
  */
-export function extractCarTemplate(csDff: Uint8Array): CsTemplate {
+export function extractCarTemplate(
+  csDff: Uint8Array,
+  animWheelPoses?: ReadonlyMap<string, readonly [number, number, number]>,
+): CsTemplate {
   const clump = parseDff(toArrayBuffer(csDff));
   const children = childrenByFrame(clump);
   const rootIndex = clump.frames.findIndex((frame) => frame.boneId === 0);
@@ -208,7 +216,7 @@ export function extractCarTemplate(csDff: Uint8Array): CsTemplate {
     throw new Error('cutscene template has no chassis frame');
   }
   const bodyParentIndex = clump.frames[chassisIndex].parentIndex;
-  const wheels = extractWheels(clump, children, bodyParentIndex, chassisIndex);
+  const wheels = extractWheels(clump, children, bodyParentIndex, chassisIndex, animWheelPoses);
 
   return {
     chassisBoneId: requireBoneId(clump, chassisIndex),
@@ -288,10 +296,11 @@ function extractWheels(
   children: readonly number[][],
   bodyParentIndex: number,
   chassisIndex: number,
+  animWheelPoses?: ReadonlyMap<string, readonly [number, number, number]>,
 ): Map<WheelCorner, CsWheelTemplate> {
   // Root-space z: the body parent is either the root (position 0) or the intermediate frame (COG's 1.20).
   const bodyParentZ = clump.frames[bodyParentIndex].position[2];
-  const wheels = new Map<WheelCorner, CsWheelTemplate>();
+  const nodes: { nodeIndex: number; wheel: Omit<CsWheelTemplate, 'nodeZ'> }[] = [];
   for (const nodeIndex of children[bodyParentIndex]) {
     if (nodeIndex === chassisIndex) {
       continue;
@@ -302,8 +311,22 @@ function extractWheels(
     if (!wheel) {
       throw new Error(`cutscene template wheel node '${node.name.trim()}' has no mesh`);
     }
-    wheels.set(cornerOf(node.position), { ...wheel, nodeZ: bodyParentZ + node.position[2] });
+    nodes.push({ nodeIndex, wheel });
   }
+  // The ANIM pose is where the runtime puts a bone — corner and local follow it, not the bind
+  // (csglendale92 binds its left wheels crossed front-to-rear, round 16). A pose only counts when
+  // the four posed positions yield four DISTINCT corners: rigs nesting wheels under axle frames
+  // (washington, savanna) animate the wheel channels near zero — those keep the bind.
+  const posed = nodes.map(({ nodeIndex }) => animWheelPoses?.get(clump.frames[nodeIndex].name.trim().toLowerCase()));
+  const posedCorners = new Set(posed.map((pose) => (pose ? cornerOf(pose) : undefined)));
+  const usePoses = posed.every(Boolean) && posedCorners.size === 4;
+  const wheels = new Map<WheelCorner, CsWheelTemplate>();
+  nodes.forEach(({ nodeIndex, wheel }, at) => {
+    const position: [number, number, number] = usePoses
+      ? [posed[at]![0], posed[at]![1], posed[at]![2]]
+      : clump.frames[nodeIndex].position;
+    wheels.set(cornerOf(position), { ...wheel, nodePosition: position, nodeZ: bodyParentZ + position[2] });
+  });
   if (wheels.size !== 4) {
     throw new Error(`cutscene template has ${wheels.size} wheel corner(s), expected 4`);
   }

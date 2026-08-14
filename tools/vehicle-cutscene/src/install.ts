@@ -11,9 +11,10 @@ import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { parseCarcols, type VehicleColours } from '@opensa/renderware/parsers/text/carcols.parser';
 import { openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { guardOut } from '@opensa/vehicle-installer/install';
-import { cpSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { wheelAnimPoses } from './anim-poses';
 import { type Census, type CutsceneSlot, loadCensus, matchMods, type SlotReadiness } from './census';
 import { bakePaintMarkers, paintColoursFor } from './materials';
 import { appendTextures, composePlatePair, PLATE_TOWNS, plateTextFor } from './plate';
@@ -65,6 +66,9 @@ interface SlotContext {
   plateOverride?: string;
   plateTown: (typeof PLATE_TOWNS)[string];
   selfContainedTxd: boolean;
+  /** Per cs model: wheel-bone frame-0 anim translations from `anim/cuts.img` (round 16 — the anims'
+   *  pose overrides a lying bind; csglendale92 binds its left wheels crossed). */
+  wheelPoses: ReadonlyMap<string, ReadonlyMap<string, readonly [number, number, number]>>;
 }
 
 /** Build the output game: base copy + converted cutscene.img + patched txdcut.ide. */
@@ -99,6 +103,7 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
     ...(plateOverride !== undefined ? { plateOverride } : {}),
     plateTown: PLATE_TOWNS[town],
     selfContainedTxd: options.selfContainedTxd === true,
+    wheelPoses: loadWheelPoses(gamePath),
   };
 
   const summary: CutsceneInstallSummary = {
@@ -148,7 +153,7 @@ function convertSlot(
       throw new Error(`cutscene.img has no ${slot.csName}.dff`);
     }
     const modDff = new Uint8Array(readFileSync(join(inPath, folder!, `${slot.model}.dff`)));
-    const { dff } = convertSlotDff(slot.branch, modDff, vanilla);
+    const { dff } = convertSlotDff(slot.branch, modDff, vanilla, context.wheelPoses.get(slot.csName.toLowerCase()));
     const { baked, bytes } = bakePaintMarkers(dff, paintColoursFor(context.carcols, slot.model));
     const txd = slotTxd(slot, bytes, join(inPath, folder!, `${slot.model}.txd`), context);
 
@@ -183,7 +188,12 @@ function convertSlot(
   }
 }
 
-function convertSlotDff(branch: CutsceneSlot['branch'], modDff: Uint8Array, vanilla: Uint8Array): { dff: Uint8Array } {
+function convertSlotDff(
+  branch: CutsceneSlot['branch'],
+  modDff: Uint8Array,
+  vanilla: Uint8Array,
+  wheelPoses?: ReadonlyMap<string, readonly [number, number, number]>,
+): { dff: Uint8Array } {
   if (branch === 'bike') {
     return convertBike(modDff, extractBikeTemplate(vanilla));
   }
@@ -191,7 +201,17 @@ function convertSlotDff(branch: CutsceneSlot['branch'], modDff: Uint8Array, vani
     return convertBoat(modDff, extractBoatTemplate(vanilla));
   }
 
-  return convertCar(modDff, extractCarTemplate(vanilla));
+  return convertCar(modDff, extractCarTemplate(vanilla, wheelPoses));
+}
+
+/** The scene wheel poses, or an empty map when the game tree ships no `anim/cuts.img` (test trees). */
+function loadWheelPoses(gamePath: string): ReadonlyMap<string, ReadonlyMap<string, readonly [number, number, number]>> {
+  const cutsPath = join(gamePath, 'anim', 'cuts.img');
+  if (!existsSync(cutsPath)) {
+    return new Map();
+  }
+
+  return wheelAnimPoses(new Uint8Array(readFileSync(cutsPath)));
 }
 
 /**

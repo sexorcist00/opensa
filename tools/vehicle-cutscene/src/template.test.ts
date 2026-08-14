@@ -1,6 +1,8 @@
+import { buildVer2Buffer } from '@opensa/renderware/archive/img-archive';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
+import { wheelAnimPoses } from './anim-poses';
 import { type ClumpModel, writeClump } from './rig/clump-io';
 import { IDENTITY_ROTATION } from './rig/matrix';
 import { canonicalPartName, extractBikeTemplate, extractBoatTemplate, extractCarTemplate } from './template';
@@ -89,6 +91,27 @@ describe('extractCarTemplate', () => {
       expect(template.chassisBoneId).toBe(1);
       expect(template.wheels.get('lf')?.nodeName).toBe('wheelLFNode');
       expect(template.wheels.get('lf')?.nodeZ).toBeCloseTo(-0.35, 3);
+    });
+
+    it('wheel corners follow the scene ANIM poses over a lying bind (round 16)', () => {
+      // R*'s csglendale92 binds its LEFT wheels crossed front-to-rear versus what every scene drives:
+      // wheel02 binds at the left REAR but SMOKE1B animates it to the left FRONT (and wheel03 the
+      // reverse). Classifying corners from the bind handed each left wheel the other end's mod-corner
+      // shim — in game each sat 0.21 m off its arch. The anim pose is where the runtime puts the bone.
+      const csGlendale = new Uint8Array(readFileSync('tests/original/dff/cutscene/csglendale92.dff'));
+      const ifp = new Uint8Array(readFileSync('tests/original/anim/smoke1b.ifp'));
+      const poses = wheelAnimPoses(buildVer2Buffer([{ data: ifp, name: 'smoke1b.ifp' }]));
+      const wheelPoses = poses.get('csglendale92')!;
+      expect(wheelPoses.get('wheel02')![1]).toBeCloseTo(1.792, 3); // the anim's left FRONT
+
+      const template = extractCarTemplate(csGlendale, wheelPoses);
+      expect(template.wheels.get('lf')?.meshName).toBe('wheel02');
+      expect(template.wheels.get('lf')?.nodePosition[1]).toBeCloseTo(1.792, 3);
+      expect(template.wheels.get('lb')?.meshName).toBe('wheel03');
+
+      // Bind-only fallback keeps R*'s crossed labels — the pre-round-16 behaviour.
+      const bindTemplate = extractCarTemplate(csGlendale);
+      expect(bindTemplate.wheels.get('lf')?.meshName).toBe('wheel03');
     });
   });
 });

@@ -398,6 +398,32 @@ rotated-bone rig.
       truck stands on its wheels, no wheel finding survived the body fix. HEIST8A ✅ in the ledger;
       the sweep resumes at row 14 (RIOT_4B).
 
+### Round 16 — SMOKE1B: the glendale's left wheels sat 0.21 m off their arches (2026-08-14)
+
+- **Seen:** both left wheels shifted along the car (the screenshot shows the two front wheels
+  overlapping, one ahead of the other). Reported off the round-12 build during the RIOT_4B bisect;
+  the law-replay shows the identical defect in every build — base conversion, not a regression.
+- **Root cause (measured):** R*'s csglendale92 binds its LEFT wheels CROSSED front-to-rear versus
+  what every scene drives — `wheel02` binds at the left rear (−0.916, −1.784) while SMOKE1B's
+  channel poses it at the left front (+1.792), `wheel03` the reverse; the right side matches. The
+  template classified corners from the BIND, so each left wheel bone got the OTHER end's mod-corner
+  shim; the runtime anim then put the bone at its own end → off by exactly the mod's front-vs-rear
+  wheelbase delta difference (0.21 m on the LTD donor).
+- **Fix (one variable):** wheel corners and locals follow the SCENE ANIM's frame-0 pose when one is
+  known (`anim-poses.ts` reads `anim/cuts.img`'s ANPK wheel channels at install time; the same
+  runtime-law logic as round 15 — the anim is where the bone really stands, the bind only a hope).
+  A pose set only counts when it yields four DISTINCT corners: rigs nesting wheels under axle frames
+  (washington, savanna) animate their wheel channels near zero and keep the bind. Blast radius
+  measured: only csglendale92 (the fix) and csremington92 (float-noise, runtime-identical wheels)
+  change; the fleet is otherwise byte-identical.
+- Fleet 23/23, verify green; suite 87/87 (template golden on the real csglendale92 + smoke1b.ifp
+  fixtures: anim poses uncross the corners, bind fallback preserved).
+- **Also seen in the same report, parked pending re-run on the current build** (the run was on the
+  bisect build): the glendale body looked pale versus gameplay, and one of two runs showed a
+  two-tone body. Both get their own look once the RIOT_4B bisect closes and the current build is
+  back in the bottle.
+- [ ] **Re-check (user):** pending (SMOKE1B on the round-16 build).
+
 ## Step 3 — the approval
 
 - [ ] All 35 rows carry a verdict; open findings zero. **The user's blanket approval closes the
