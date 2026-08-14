@@ -48,7 +48,7 @@ scene-specific anims).
 | 12 | GARAG3A | csremington92 | ✅ (2026-08-14, "good") |
 | 13 | HEIST8A | cssecurica92 | ✅ after round 15 ("good") |
 | 14 | RIOT_4B | csgreenwood | |
-| 15 | RIOT4E1 | cscopcarsf, csfirela | |
+| 15 | RIOT4E1 | cscopcarsf, csfirela | ✅ (2026-08-14, "fire truck and cop car excellent"; run on the rounds-13–14 build — the r15/16 delta gets the one-eye glance) |
 | 16 | SMOKE1B | csglendale92 | |
 | 17 | SWEET2B | csgreenwood, csvoodoo | |
 | 18 | SYND_3A | cswashington | |
