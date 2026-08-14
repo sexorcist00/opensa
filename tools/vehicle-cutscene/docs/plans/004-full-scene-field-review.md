@@ -44,7 +44,7 @@ scene-specific anims).
 | 8 | DES_10B | csmothership | ✅ (2026-08-13) |
 | 9 | DESERT1 | csmonster | ✅ (2026-08-13) |
 | 10 | FARL_3B | csburrito92 | ✅ after rounds 9–12 ("all fixed") |
-| 11 | FINAL2B | csbravura, cssabre92 | |
+| 11 | FINAL2B | csbravura, cssabre92 | ✅ after rounds 13–14 ("all good") |
 | 12 | GARAG3A | csremington92 | |
 | 13 | HEIST8A | cssecurica92 | |
 | 14 | RIOT_4B | csgreenwood | |
@@ -353,7 +353,8 @@ offline against the model data before any code moved.
 - **Re-check scope:** both rounds change the shared emit fleet-wide — earlier ✅ scenes keep their
   one-eye glance rule (wheels on every car with a f_wheel container; shine on formerly-mixed parts);
   FINAL2B re-run decides all three findings.
-- [ ] **Re-check (user):** pending.
+- [x] **Re-check (user):** PASSED (2026-08-14): "FINAL2B — all good" — seats, wheels, door and
+      reflections all read fine. FINAL2B ✅ in the ledger; the sweep resumes at row 12 (GARAG3A).
 
 ## Step 3 — the approval
 
