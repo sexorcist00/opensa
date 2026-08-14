@@ -157,9 +157,31 @@ bottle's `CLEO/cutscene-override.ini`).
       exists for, on the two scenes that failed hardest. The log confirms the patch took
       (`defer APPLIED`) and the census names the deferred object each time — `csgreenwood`
       (−1591174577) on RIOT_4B, `cswashington` (1484834498) on SYND_3A, both `skinned 0`.
-      **The ref-140 → ref-100 risk did not bite**: nothing translucent was lost and nothing new
-      appeared. Still open: the unchanged-good glance on the lucky-order scenes
-      (PROLOG1/PROLOG3/FINAL2B), which is the other half of this step's gate.
+      **PROLOG1 and FINAL2B unchanged-good.** **PROLOG3 changed, and the ref-140 → ref-100 risk is
+      exactly what did it** — round 2 below.
+- [x] **3b. The alpha-test ref, put back (round 2, 2026-08-14).**
+      **Seen (user):** PROLOG3 — the cop car's windscreen "looks matte, you can't see through it";
+      every other window on the same car fine. His read was "as if it applied twice".
+      **Root cause (measured offline, no second field run needed):** it is the threshold, and the
+      model data proves it. Mod cutscene glass sits at **alpha 102–125** (csgreenwood 102,
+      cswashington 110, cscopcarla92 and cstaxi92 115, csbravura 125) — *between* the outdoor pass's
+      ref **140** and the deferred path's ref **100**. `RenderEverythingBarRoads` sets 140 only when
+      `CGame::currArea == 0`, and of the five scenes gated here PROLOG3 is the one with a decoded
+      OUTDOOR area (PROLOG1 is area 14): so PROLOG3's windscreen had always been discarded by the
+      alpha test, and the deferral rendered it for the first time — at its authored 45 % opacity,
+      which reads as matte. The "twice" reading was checked and is NOT what happened: the mixed-mesh
+      split is clean (opaque copy 248 tris with 0 glass triangles, translucent twin 80 glass tris),
+      and the anim-replay world boxes show one pane per window.
+      **Fix (the user's call — restore the threshold):** repoint the SECOND call site,
+      `CVisibilityPlugins::RenderEntity`'s own `call RenderOneNonRoad` (`0x732C48`), so one of our
+      deferred cutscene objects in an outdoor area is rendered at ref 140 and the ref is put back to
+      what RenderEntity chose (100, or 0 for a `bDontWriteZBuffer` model) straight after. The plugin
+      now changes draw ORDER and nothing else.
+      **Open option, deliberately NOT taken:** running the deferred pass at ref 100 would show the
+      mod's authored glass in outdoor scenes too, and make a car look the same indoors and out.
+      That is a LOOK decision with a full re-sweep attached, and the first field verdict on it was
+      negative — it stays a separate question, not a side effect of an ordering fix.
+      - [ ] **Re-check (user):** PROLOG3 — windscreen see-through again as before, actors still fine.
 - [ ] **4. The blessed six.** Skip the force-pipe on translucent atomics of the six named models so
       their glass renders instead of dropping (independent of ordering — the pipe DROPS translucents
       outside a real CVehicle). Verification: FINAL2B — the bravura shows real window tint for the

@@ -49,6 +49,12 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
         note: 'push esi / mov esi,[esp+8] — verified, not patched: we CALL it from our replacement, so a differing prologue means someone else redirected the function and we defer',
       },
       {
+        address: 0x732c48,
+        bytes: [0xe8, 0x13, 0x06, 0xe2, 0xff],
+        name: 'CVisibilityPlugins.RenderEntity.callRenderOneNonRoad',
+        note: "the deferred end of the same function: RenderEntity has just set alpha-test ref 100 (0 in an interior) and calls RenderOneNonRoad. Repointed so OUR deferred cutscene objects get the outdoor pass's ref 140 back — the plugin must change draw order and nothing else",
+      },
+      {
         address: 0x734a40,
         bytes: [0x51, 0x8b, 0x4c, 0x24, 0x08],
         name: 'RwHelper.GetAnimHierarchyFromSkinClump.entry',

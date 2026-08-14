@@ -44,6 +44,34 @@ using GetAnimHierarchyFn = void*(__cdecl*)(void*);
 
 // --- renderer globals -------------------------------------------------------------------------------------
 inline constexpr uint32_t kCameraPosVa = 0xb76870;  // CRenderer::ms_vecCameraPosition (3 floats)
+inline constexpr uint32_t kCurrAreaVa = 0xb72914;   // CGame::currArea — 0 is the outdoor world
+inline constexpr uint32_t kModelInfoFlagsByte = 0x12;    // CBaseModelInfo flag byte carrying bDontWriteZBuffer
+inline constexpr uint8_t kDontWriteZBufferBit = 0x08;
+
+// --- render state -----------------------------------------------------------------------------------------
+// RW's device call table: `mov ecx,[0xC97B24]; push value; push state; call [ecx+0x20]` is how the game itself
+// reaches RwRenderStateSet (read out of CVisibilityPlugins::RenderEntity).
+inline constexpr uint32_t kRwDevicePtrVa = 0xc97b24;
+inline constexpr uint32_t kRwRenderStateSetSlot = 0x20;
+inline constexpr uint32_t kRsAlphaTestFunctionRef = 30;  // rwRENDERSTATEALPHATESTFUNCTIONREF
+inline constexpr uint32_t kOutdoorAlphaRef = 140;        // what RenderEverythingBarRoads sets outdoors
+inline constexpr uint32_t kDeferredAlphaRef = 100;       // what RenderEntity sets in the deferred pass
+
+using RwRenderStateSetFn = int(__cdecl*)(uint32_t, uint32_t);
+
+inline void SetRenderState(uint32_t state, uint32_t value) {
+  void* device = *reinterpret_cast<void**>(kRwDevicePtrVa);
+  if (device == nullptr) {
+    return;
+  }
+  RwRenderStateSetFn set =
+      *reinterpret_cast<RwRenderStateSetFn*>(reinterpret_cast<uintptr_t>(device) + kRwRenderStateSetSlot);
+  set(state, value);
+}
+
+inline bool IsOutdoorArea() {
+  return *reinterpret_cast<const int32_t*>(kCurrAreaVa) == 0;
+}
 
 // --- the .rdata window a model-info vtable must live in, so a garbage pointer never becomes a call ---------
 inline constexpr uint32_t kRdataLowVa = 0x858000;
@@ -116,6 +144,13 @@ inline float DistanceFromCamera(const void* entity) {
   const float dy = cam[1] - pos[1];
   const float dz = cam[2] - pos[2];
   return Sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+/** The model's `bDontWriteZBuffer` flag — the one input, besides the area, to the ref RenderEntity picks. */
+inline bool ModelDontWriteZBuffer(const void* entity) {
+  void* modelInfo = ModelInfo(Int16At(entity, kModelIndex));
+
+  return modelInfo != nullptr && (ByteAt(modelInfo, kModelInfoFlagsByte) & kDontWriteZBufferBit) != 0;
 }
 
 /** The clump of an entity, or nullptr when it has no RwObject or the RwObject is not a clump. */

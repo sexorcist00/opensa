@@ -41,44 +41,83 @@ __attribute__((force_align_arg_pointer)) inline void __cdecl PcRenderOneNonRoad(
   gRenderOneNonRoad(entity);
 }
 
+/**
+ * Stands in for `RenderOneNonRoad(entity)` at the DEFERRED end — inside `CVisibilityPlugins::RenderEntity`,
+ * after it has set the alpha-test ref to 100 (or 0 in an interior area). For one of OUR deferred cutscene
+ * objects in the outdoor world we put the ref back to the 140 the main pass would have used, so this plugin
+ * changes draw ORDER and nothing else: mod cutscene glass sits at alpha 102–125, i.e. between the two refs, so
+ * without this the deferral would silently start rendering glass the game used to discard (measured on
+ * PROLOG3, the one confirmed outdoor scene of the step-3 gate — its cop car's windscreen turned matte).
+ * Whether we WANT that glass is a separate decision, deliberately not taken here (plan 001's open options).
+ */
+__attribute__((force_align_arg_pointer)) inline void __cdecl PcRenderDeferredEntity(void* entity) {
+  if (!game::IsDeferrableCutsceneObject(entity) || !game::IsOutdoorArea()) {
+    gRenderOneNonRoad(entity);
+
+    return;
+  }
+  game::SetRenderState(game::kRsAlphaTestFunctionRef, game::kOutdoorAlphaRef);
+  gRenderOneNonRoad(entity);
+  // Back to what RenderEntity itself chose for this entity, so the next item in the list is unaffected.
+  game::SetRenderState(game::kRsAlphaTestFunctionRef,
+                       game::ModelDontWriteZBuffer(entity) ? 0 : game::kDeferredAlphaRef);
+}
+
 inline constexpr const char* kDeferSites[] = {
     "CRenderer.RenderEverythingBarRoads.callRenderOneNonRoad",
     "CRenderer.RenderOneNonRoad.entry",
     "CVisibilityPlugins.InsertEntityIntoSortedList.entry",
     "RwHelper.GetAnimHierarchyFromSkinClump.entry",
+    "CVisibilityPlugins.RenderEntity.callRenderOneNonRoad",
 };
+
+/**
+ * Repoint one `E8 rel32` call site at `replacement`, but only after its own rel32 decodes to `expected` — so a
+ * site that points anywhere we did not predict (a relocated body, a foreign hook) stops us instead of being
+ * followed blindly. Returns the original callee, or 0 when the site is not what the catalogue says.
+ */
+inline uintptr_t RepointCall(const asi::ByteAnchor& site, uintptr_t expected, void* replacement) {
+  const uintptr_t at = asi::Runtime(site.address);
+  const int32_t rel = *reinterpret_cast<const int32_t*>(at + 1);
+  const uintptr_t callee = at + 5 + static_cast<uintptr_t>(rel);
+  if (callee != expected || !asi::WriteCall(at, reinterpret_cast<uintptr_t>(replacement))) {
+    return 0;
+  }
+
+  return callee;
+}
 
 inline void ApplyDefer(asi::Log& log, const asi::Plugin& plugin) {
   if (asi::HostBase() != game::kExpectedImageBase) {
     log.Tagged(plugin.tag, "defer: unexpected image base — DEFER (game.hpp reads absolute VAs)");
     return;
   }
-  if (!asi::VerifySitesOrDefer(log, plugin.tag, plugin.tables, kDeferSites, 4)) {
+  if (!asi::VerifySitesOrDefer(log, plugin.tag, plugin.tables, kDeferSites, 5)) {
     log.Tagged(plugin.tag, "defer: DEFER (patching nothing) — someone else owns the entity render path");
     return;
   }
-  const asi::ByteAnchor* callSite = asi::FindSite(plugin.tables, kDeferSites[0]);
+  const asi::ByteAnchor* loopCall = asi::FindSite(plugin.tables, kDeferSites[0]);
   const asi::ByteAnchor* renderOne = asi::FindSite(plugin.tables, kDeferSites[1]);
   const asi::ByteAnchor* insert = asi::FindSite(plugin.tables, kDeferSites[2]);
-  if (callSite == nullptr || renderOne == nullptr || insert == nullptr) {
+  const asi::ByteAnchor* deferredCall = asi::FindSite(plugin.tables, kDeferSites[4]);
+  if (loopCall == nullptr || renderOne == nullptr || insert == nullptr || deferredCall == nullptr) {
     log.Tagged(plugin.tag, "defer: site name not in the catalogue — DEFER");
     return;
   }
-  // Same rule as the census patch: the callee is decoded from the site's own rel32 and must agree with the
-  // catalogue, so we never follow a call site that points somewhere we did not expect.
-  const uintptr_t site = asi::Runtime(callSite->address);
-  const int32_t rel = *reinterpret_cast<const int32_t*>(site + 1);
-  const uintptr_t callee = site + 5 + static_cast<uintptr_t>(rel);
-  if (callee != asi::Runtime(renderOne->address)) {
-    log.Tagged(plugin.tag, "defer: loop call site does not point at RenderOneNonRoad — DEFER");
+  const uintptr_t original = asi::Runtime(renderOne->address);
+  gRenderOneNonRoad = reinterpret_cast<RenderOneNonRoadFn>(original);
+  gInsertEntityIntoSortedList = reinterpret_cast<InsertEntityIntoSortedListFn>(asi::Runtime(insert->address));
+
+  // The ref patch goes in FIRST: between the two writes the deferral would otherwise be live for a moment
+  // without it, and this runs during DLL attach where a frame can already be rendering.
+  if (RepointCall(*deferredCall, original, reinterpret_cast<void*>(&PcRenderDeferredEntity)) == 0) {
+    log.Tagged(plugin.tag, "defer: RenderEntity call site is not what the catalogue says — DEFER");
     return;
   }
-  gRenderOneNonRoad = reinterpret_cast<RenderOneNonRoadFn>(callee);
-  gInsertEntityIntoSortedList =
-      reinterpret_cast<InsertEntityIntoSortedListFn>(asi::Runtime(insert->address));
-  const bool ok = asi::WriteCall(site, reinterpret_cast<uintptr_t>(&PcRenderOneNonRoad));
-  log.Tagged(plugin.tag, ok ? "defer APPLIED: cutscene cars/props now render in the sorted entity pass"
-                            : "defer: patch write FAILED (see VirtualProtect)");
+  const bool ok = RepointCall(*loopCall, original, reinterpret_cast<void*>(&PcRenderOneNonRoad)) != 0;
+  log.Tagged(plugin.tag, ok ? "defer APPLIED: cutscene cars/props render in the sorted entity pass, "
+                              "outdoor alpha-test ref preserved"
+                            : "defer: loop call site is not what the catalogue says — DEFER (ref patch stays)");
 }
 
 }  // namespace pc::patches
