@@ -61,8 +61,9 @@ import { compose, IDENTITY_ROTATION, invert, type Transform } from './matrix';
 /** The game rig's wheel dummies (mirrors `build-vehicle-model.ts`'s WHEEL_DUMMY_RE; `m` = 3-axle middles,
  *  which no cutscene template has — they land in `droppedFromMod`). */
 const WHEEL_DUMMY_RE = /^wheel_([lr])([fmb])_dummy$/;
-/** `f_wheel_<mask>` container frames — the IVF-style wheel sub-model four of the real mods ship instead
- *  of a mesh under the dummies (mirrors the engine builder's WHEEL_CONTAINER_RE + first-atomic pick). */
+/** `f_wheel_<mask>` container frames — the IVF-style wheel sub-model some real mods ship (mirrors the
+ *  engine builder's WHEEL_CONTAINER_RE + first-atomic pick). Takes precedence over a dummy-child mesh:
+ *  when both exist the dummy child is the stock fallback VehFuncs replaces (FINAL2B round 13). */
 const WHEEL_CONTAINER_RE = /^f_wheel/;
 /** SA's mutually-exclusive spawn variants: never template-matched (the '92 extras are hand-authored
  *  SCENE FURNITURE the anims pose — a mod's spawn variants are semantically unrelated; DESERT9 swung
@@ -90,6 +91,8 @@ interface ModAnalysis {
   /** Frames inside `f_wheel_*` containers — never adopted as parts. */
   wheelContainerFrames: ReadonlySet<number>;
   wheelDummies: Map<WheelCorner, number>;
+  /** Every frame inside a wheel dummy's subtree — wheel furniture, never adopted as a part. */
+  wheelDummySubtreeFrames: ReadonlySet<number>;
   wheelMeshIndices: ReadonlySet<number>;
   wheelRadius: number;
 }
@@ -147,6 +150,9 @@ function adoptOrphanParts(
       carriedFrames.has(index) ||
       analysis.wheelMeshIndices.has(index) ||
       analysis.wheelContainerFrames.has(index) ||
+      // Anything under a wheel dummy is wheel furniture: when a f_wheel container won the pick, the
+      // dummy-child fallback wheel must DROP, not ride the chassis as a static orphan (round 13).
+      analysis.wheelDummySubtreeFrames.has(index) ||
       ORPHAN_SKIP_RE.test(canonical) ||
       // Outside a selector container a year subtree is an unadoptable ALTERNATIVE; inside one the
       // chosen path governs (the burrito's tail lamps live in version[1983]:1 — round 12).
@@ -197,6 +203,16 @@ function analyzeMod(modDff: Uint8Array, template: CsTemplate): ModAnalysis {
   const wheelDummies = findWheelDummies(model, template);
   const wheelMeshIndices = findWheelMeshes(model, children, atomicByFrame, wheelDummies);
   const wheelAtomics = [...wheelMeshIndices].map((index) => atomicByFrame.get(index)!);
+  const wheelDummySubtreeFrames = new Set<number>();
+  const collectSubtree = (index: number): void => {
+    wheelDummySubtreeFrames.add(index);
+    for (const child of children[index]) {
+      collectSubtree(child);
+    }
+  };
+  for (const dummy of wheelDummies.values()) {
+    collectSubtree(dummy);
+  }
   const analysis = parseDff(toArrayBuffer(modDff));
 
   return {
@@ -210,6 +226,7 @@ function analyzeMod(modDff: Uint8Array, template: CsTemplate): ModAnalysis {
     wheelAtomics,
     wheelContainerFrames: wheelContainerFrameSet(model),
     wheelDummies,
+    wheelDummySubtreeFrames,
     wheelMeshIndices,
     wheelRadius: Math.max(
       ...wheelAtomics.map((atomic) => geometryZHalfExtent(analysis.geometries[atomic.geometryIndex])),
@@ -450,6 +467,13 @@ function findWheelMeshes(
   atomicByFrame: ReadonlyMap<number, ClumpAtomic>,
   wheelDummies: ReadonlyMap<WheelCorner, number>,
 ): Set<number> {
+  // A `f_wheel_*` container WINS over a dummy-child mesh: when a mod ships both, the dummy child is
+  // the stock fallback wheel VehFuncs replaces in gameplay (the bravura's is a bare brake disc —
+  // picking it also sank the whole body via groundShift's radius, FINAL2B round 13).
+  const container = wheelContainerMeshes(model, children, atomicByFrame);
+  if (container.size > 0) {
+    return container;
+  }
   for (const dummyIndex of wheelDummies.values()) {
     const mesh = children[dummyIndex].find((index) => atomicByFrame.has(index));
     if (mesh !== undefined) {
@@ -462,12 +486,7 @@ function findWheelMeshes(
   if (named >= 0) {
     return new Set([named]);
   }
-  const container = wheelContainerMeshes(model, children, atomicByFrame);
-  if (container.size === 0) {
-    throw new Error('mod has no wheel mesh under its wheel dummies');
-  }
-
-  return container;
+  throw new Error('mod has no wheel mesh under its wheel dummies');
 }
 
 /** `shift = (tplNodeZ − tplRadius) − (modDummyZ − modRadius)` — both ground planes meet (plan 002/2a). */

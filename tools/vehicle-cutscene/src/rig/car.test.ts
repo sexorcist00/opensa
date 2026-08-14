@@ -122,7 +122,9 @@ describe('convertCar', () => {
         converted.atomics.filter((atomic) => wheelFrames.has(atomic.frameIndex)).map((atomic) => atomic.geometryIndex),
       );
       expect(wheelGeometries.size).toBe(1);
-      expect(converted.geometries).toHaveLength(11); // 1 wheel + chassis + 7 parts + windscreen + 1 extra
+      // 1 wheel + chassis + 7 parts + windscreen + 1 extra, plus 5 translucent twins split off the
+      // mixed geometries (both doors, chassis, boot, extra2 embed 128/242-alpha glass — round 14).
+      expect(converted.geometries).toHaveLength(16);
 
       // The converted DFF parses as a well-formed clump and keeps the mod's chassis geometry intact.
       const parsed = parseDff(toArrayBuffer(dff));
@@ -305,6 +307,43 @@ describe('convertCar', () => {
           );
         }
       });
+    });
+
+    it('f_wheel container wins over the dummy-child mesh — the stock fallback VehFuncs replaces (round 13)', () => {
+      // The bravura's shape, synthesized on the stock donor: a bare disc under wheel_rf_dummy PLUS a
+      // VehFuncs `f_wheel_1111 → f_extras:1 → stock|prefacelft` container. Picking the dummy child
+      // took a brake disc as THE wheel and groundShift sank the whole body by its tiny radius
+      // (FINAL2B: peds authored in world space poked out of the sunken cabin).
+      const model = readClump(BOBCAT);
+      const rootIndex = model.frames.findIndex((frame) => frame.parentIndex < 0);
+      const wheelFrame = model.frames.findIndex((frame) => frame.name === 'wheel');
+      const wheelAtomic = model.atomics.find((atomic) => atomic.frameIndex === wheelFrame)!;
+      const addFrame = (name: string, parentIndex: number): number => {
+        model.frames.push({ flags: 3, name, parentIndex, position: [0, 0, 0], rotation: [...IDENTITY_ROTATION] });
+
+        return model.frames.length - 1;
+      };
+      const container = addFrame('f_wheel_1111', rootIndex);
+      const selector = addFrame('f_extras:1', container);
+      const stock = addFrame('stock', selector);
+      const preface = addFrame('prefacelft', selector);
+      // The chosen style carries a COPY of the wheel geometry (own index — the dropped ledger is
+      // per geometry source); the non-chosen style shares it and must stay out entirely.
+      const styleGeometry = model.geometries.length;
+      model.geometries.push({
+        body: model.geometries[wheelAtomic.geometryIndex].body.slice(),
+        version: model.version,
+      });
+      model.atomics.push({ extension: null, flags: 5, frameIndex: stock, geometryIndex: styleGeometry });
+      model.atomics.push({ extension: null, flags: 5, frameIndex: preface, geometryIndex: styleGeometry });
+
+      const { dff, report } = convertCar(writeClump(model), extractCarTemplate(CS_BOBCAT));
+      const converted = readClump(dff);
+
+      expect(report.shiftZ).toBeCloseTo(0.9, 2); // radius derives from the container wheel
+      expect(report.droppedFromMod).toContain('wheel'); // the dummy-child fallback is not carried
+      expect(converted.frames.some((frame) => frame.name === 'stock_ad')).toBe(false); // never adopted
+      expect(converted.frames.some((frame) => frame.name === 'prefacelft_ad')).toBe(false);
     });
 
     it('selector containers: <name>:K groups, no* defaults, year options vs year alternatives (rounds 11–12)', () => {

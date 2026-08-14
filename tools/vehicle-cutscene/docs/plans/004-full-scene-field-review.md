@@ -309,6 +309,52 @@ the sweep (nested `<name>:K` selector groups, a three-mesh wheel sub-model).
       structure and the slot's vanilla template at convert time (checked — the only model name in
       the tool source is a comment).
 
+### Rounds 13–14 — FINAL2B: three findings, two mechanisms (2026-08-14, two screenshots)
+
+**Seen:** (1) both peds sit visibly ABOVE the bravura's cabin (heads over the windshield line —
+in gameplay the same mod seats its driver correctly); (2) the sabre's door reads "strange" against
+the neighbouring panels; (3) the sabre's original (mod) reflections look lost. All three decomposed
+offline against the model data before any code moved.
+
+- **Round 13 — wheel container precedence (fixes 1):** the MR2 mod ships BOTH a bare `disk_wh`
+  brake disc under `wheel_rf_dummy` AND a VehFuncs `f_wheel_1111 → f_extras:1 → stock|prefacelft|
+  trueno` wheel sub-model. `findWheelMeshes` preferred the dummy child, so the disc (z-half-extent
+  0.136) became THE wheel and `groundShift` sank the whole body by −0.189 to put the disc's bottom
+  on the vanilla ground plane — the peds, animated in world space, poked out of the sunken cabin
+  (and the car rode on disc-sized wheels). Fix: a `f_wheel_*` container WINS over the dummy-child
+  mesh — when both exist the dummy child is the stock fallback wheel VehFuncs replaces in gameplay.
+  The displaced fallback must DROP, not adopt: anything in a wheel dummy's subtree is wheel
+  furniture (`wheelDummySubtreeFrames`), else the disc rode the chassis as a static orphan at one
+  corner. Measured after: chassis back at the mod's authored height (z top 0.473 → 0.662, shift ≈ 0),
+  wheels the 2 630-vert stock style standing on −0.718.
+- **Round 14 — mixed-geometry translucency split (fixes 2 + 3):** the sabre bakes its door glass
+  INTO `door_lf/rf_ok` (alpha-150 pane material inside the painted door) and its lamp lenses into
+  the chrome bumpers (alpha 150/230). The round-9 rule is per-ATOMIC — any translucent material
+  keeps the whole atomic off the vehicle PipelineSet — so one embedded pane cost the whole painted
+  door its shine (flat against shining fenders = "strange door") and the chrome bumpers their
+  reflections; the pane-last pass also dragged the ENTIRE door into the window block. Round 9's
+  record already named this trade acceptable because *vanilla's* mixed translucents are 26–128-alpha
+  whispers — the sabre is the first mod in the sweep to bake big painted surfaces and glass into one
+  mesh. Fix (`rig/split.ts`, all branches via `finalizeAtomics`): a geometry carrying both classes
+  splits into an opaque copy (vehicle pipeline, normal draw slot) and a translucent twin (default
+  pipeline; pane ordering when it is a pane) on the SAME frame. The surgery is byte-narrow: the full
+  vertex set stays in both copies (prelit/uv/normals/night-colour bytes untouched), the BinMesh is
+  FILTERED by whole per-material entries (winding + strip bytes verbatim — exporters ship Struct
+  faces and BinMesh with opposite winding), the opaque copy's unreferenced translucent materials get
+  alpha 255 for the classifiers, ADC-strip geometries never split. Stock donors carry the same
+  shape (the bobcat's doors embed 128-alpha glass) so the 242-alpha "whisper" parts fleet-wide now
+  gain the shine round 9 knowingly left off them. Measured after (cssabre92): opaque doors/bumpers
+  stamped in normal order, glass twins pane-last unstamped, lens twins unstamped in place.
+- Fleet 23/23, verify green (317 DFFs, 0 duplicate channels); suite 85/85 (round-13 container test,
+  three split tests); bottle updated (`cs-mods-plates-presplit` holds the round-12 build).
+  Contracts §3 rows updated (wheel precedence, the split). The mods' own garbage vertices (bravura
+  `bonnet_ok` z ≈ 1.3e7, sabre `chassis` x ≈ 5.8e25 — invisible degenerates in gameplay) are
+  carried byte-faithfully as always and are NOT these findings' mechanism.
+- **Re-check scope:** both rounds change the shared emit fleet-wide — earlier ✅ scenes keep their
+  one-eye glance rule (wheels on every car with a f_wheel container; shine on formerly-mixed parts);
+  FINAL2B re-run decides all three findings.
+- [ ] **Re-check (user):** pending.
+
 ## Step 3 — the approval
 
 - [ ] All 35 rows carry a verdict; open findings zero. **The user's blanket approval closes the

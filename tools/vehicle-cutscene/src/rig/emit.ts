@@ -21,6 +21,7 @@ import {
   readClump,
 } from './clump-io';
 import { compose, IDENTITY_ROTATION, invert, type Transform } from './matrix';
+import { splitMixedAtomics } from './split';
 
 /** Frame-list matrix-flags words, mirrored from every vanilla cutscene model. */
 export const TOP_FRAME_FLAGS = 0x00020003;
@@ -443,8 +444,13 @@ export function excludedVariantFrames(model: ClumpModel): Set<number> {
  *     exception still lost them (the burrito's tail lights, round 9). The default pipe blends them
  *     and still renders the mod's MatFX env sheen. Vanilla ships the plugin on its own translucents
  *     too, but those are 26–128-alpha whispers whose absence nobody would ever see.
+ *
+ * Before either pass, MIXED geometries (opaque paint + embedded panes/lenses in one mesh) split into
+ * an opaque copy and a translucent twin (see `split.ts`) — the sabre's in-door glass cost the whole
+ * painted door its pipeline and dragged it into the pane block (FINAL2B round 14).
  */
 export function finalizeAtomics(emit: Emit, version: number): void {
+  splitMixedAtomics(emit.geometries, emit.atomics);
   const panes = new Map(emit.geometries.map((geometry, index) => [index, geometryBodyHasWindowPane(geometry.body)]));
   const translucent = new Map(
     emit.geometries.map((geometry, index) => [index, geometryBodyHasTranslucency(geometry.body)]),
