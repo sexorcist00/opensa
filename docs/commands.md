@@ -179,8 +179,11 @@ Full query-param reference: [development/query-parameters.md](./development/quer
 ## Individual tools (run standalone when bisecting the chain)
 
 ```bash
-# Mods → game dir
+# Mods → game dir. Two shapes of --in (docs/contracts/mods.md §1): FLAT (every subfolder is a mod, today's
+# shape) or LAYERED (common/ + sa/ + opensa/, all optional) — a layered folder applies `common` first, then
+# the layer named by --target, and REQUIRES that flag; a flat one ignores it.
 npx tsx tools/mod-installer/src/cli.ts --in ./mods-src/original/mods --game ./game-src/original --out <dir>
+npx tsx tools/mod-installer/src/cli.ts --in ./mods-src/<game>/mods --game <dir> --out <dir> --target sa
 
 # Lossless map conditioning (normals/prelit/dedupe)
 npx tsx tools/map-optimizer/src/cli.ts --game <dir> --out <dir>

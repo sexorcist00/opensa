@@ -22,23 +22,38 @@ The skill operates on ONE game's `mods` folder (numbering is per-game, so never 
   ls -d mods-src/*/mods
   ```
 
-## Steps (per game)
+## Flat or layered
 
-Set `GAME` to the target and run the block. For "all", wrap it in
-`for GAME in $(ls -d mods-src/*/mods | sed 's#mods-src/##;s#/mods##'); do ... done`.
+A game's `mods/` folder is either **flat** (mod folders directly inside — every game today) or **layered**
+(`common/`, `sa/`, `opensa/`, each holding mod folders; `docs/contracts/mods.md` §1). **Numbering is per
+LAYER**, exactly as it is per game — the layer order decides which layer wins, never the numbers — so a
+layered folder is renumbered one layer at a time and the layer folders themselves are NEVER renamed.
+
+Find the sequences to compact:
+
+```bash
+GAME=gostown
+ls -d "mods-src/$GAME/mods"/{common,sa,opensa} 2>/dev/null   # layered if any of these exist
+```
+
+Every listed layer is one sequence; if none exists, the single sequence is `mods-src/$GAME/mods` itself.
+
+## Steps (per sequence)
+
+Set `DIR` to the sequence — `mods-src/$GAME/mods`, or `mods-src/$GAME/mods/<layer>` for each layer.
 
 1. List the current state and show the gaps:
 
    ```bash
-   GAME=gostown
-   ls "mods-src/$GAME/mods/" | sort -n
+   DIR="mods-src/$GAME/mods"
+   ls "$DIR" | sort -n
    ```
 
 2. Compact in ASCENDING order (targets are always below the source number, so no collision is
    possible). Only rename folders whose number differs from their index:
 
    ```bash
-   cd "mods-src/$GAME/mods"
+   cd "$DIR"
    i=0
    ls | sort -n | while IFS= read -r dir; do
      name="${dir#*. }"
@@ -64,3 +79,5 @@ Set `GAME` to the target and run the block. For "all", wrap it in
   past states, do NOT edit them.
 - If the user deleted the mod's folder only partially (kept some files), confirm the leftover is
   intentional before renumbering around it.
+- `common`, `sa` and `opensa` are LAYER names at the top of a game's `mods/`, never mods — renaming one to
+  `0. common` would turn the layer into a mod folder and the install would refuse the tree.

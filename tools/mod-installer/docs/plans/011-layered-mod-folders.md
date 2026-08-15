@@ -1,6 +1,10 @@
 # 011 — layered mod folders: `common` → `<target>`
 
-**Status: PLANNED 2026-08-15.** A mods folder may be split into layers — `common/`, `sa/`, `opensa/` —
+**Status: DONE 2026-08-15**, steps 1–5. Numbers below and in
+[`docs/benchmarks/tools/2026-08-15-mod-installer-layered-flat-path.md`](../../../../docs/benchmarks/tools/2026-08-15-mod-installer-layered-flat-path.md).
+No game has been split yet — the mechanism is in, the migration is the user's call.
+
+A mods folder may be split into layers — `common/`, `sa/`, `opensa/` —
 applied in that order: everything in `common/` first, then the layer of the target the run is building
 for. A folder without those layers is FLAT and behaves exactly as it does today. Every layer is
 optional.
@@ -17,7 +21,7 @@ The split is a build-time decision, which is the right place for it: the target 
 knob whose right value is a fact about the HOST rather than about the source data
 (`@opensa/tool-kit/target`), and the mod set is exactly such a fact.
 
-**Nobody has to migrate.** `mods-src/original/mods` is 61 flat mod folders and stays that way until
+**Nobody has to migrate.** `mods-src/original/mods` is 62 flat mod folders and stays that way until
 someone chooses to split it. The layered shape is opt-in per game, and a game may adopt it with only a
 `common/` layer.
 
@@ -87,14 +91,14 @@ is recorded here as the option if that ever stops being true.
 
 ## Steps
 
-- [ ] **1. Layer resolution, as a pure function.** New `src/layers.ts`: given the immediate subfolders of
+- [x] **1. Layer resolution, as a pure function.** New `src/layers.ts`: given the immediate subfolders of
       `--in` and an optional target, return the ordered mod ROOTS to walk plus a strategy label
       (`flat` / `layered`) and the per-layer counts for the log. No filesystem writes, no install logic.
       Verification: unit tests, negative first per the repo's order — mixed tree throws naming the stray
       folder, layered-without-target throws naming the layers it found; then positive — flat is
       unchanged, `common` only, target layer only, both layers in the right order, absent layer, empty
       layer, and a case-variant (`SA/`) resolving as the layer rather than as a mod.
-- [ ] **2. `install()` walks the roots.** `InstallOptions` grows `target?: BuildTarget`; the mod loop
+- [x] **2. `install()` walks the roots.** `InstallOptions` grows `target?: BuildTarget`; the mod loop
       iterates the resolved roots in order, per-mod behaviour untouched (bake vs overlay, sorting, the
       IPL fold, `checkDanglingModels` — all of it is per-mod or over the finished tree and does not care
       where the mod came from). The summary line states the strategy and each layer with its count.
@@ -102,15 +106,17 @@ is recorded here as the option if that ever stops being true.
       (a) `common` applies before the target layer, (b) the target layer WINS a file both layers ship,
       (c) the other target's layer contributed nothing, (d) switching the target flips which layer's file
       is in the output while the `common` half stays identical.
-- [ ] **3. The CLI.** `--target <sa|opensa>` on `mod-installer`'s CLI via `parseBuildTarget` (a typo must
+- [x] **3. The CLI.** `--target <sa|opensa>` on `mod-installer`'s CLI via `parseBuildTarget` (a typo must
       fail loudly, which that helper already does). Verification: a layered tree converts from the CLI
       for each target; omitting `--target` over a layered tree prints the refusal.
-- [ ] **4. The builder.** `perfect-map-builder` passes its already-resolved target into the `mods` stage,
+- [x] **4. The builder.** `perfect-map-builder` passes its already-resolved target into the `mods` stage,
       and refuses a both-target run over a layered tree at config time — before any stage runs, with the
       two-command fix in the message. Verification: pipeline tests for the refusal and for a flat tree in
-      a both-target run being unaffected; then one real `build:game:original:sa` to prove the flat path
-      did not move (the numbers below).
-- [ ] **5. Docs + the renumber skill, in the same change.**
+      a both-target run being unaffected; then a real run over `mods-src/original/mods` to prove the flat
+      path did not move (the numbers below). **Done differently, and better**: the real check ran the
+      mod-installer CLI itself rather than a full `build:game:original:sa`, which let the BEFORE and AFTER
+      trees be diffed byte for byte instead of compared by stage timing.
+- [x] **5. Docs + the renumber skill, in the same change.**
       `docs/contracts/mods.md` — a new section for the three reserved TOP-LEVEL names, what each does,
       what happens when one is misspelled (it becomes a stray mod and the mixed-tree guard throws), and
       an amendment to §7, which currently says a mod folder's name is ordering only: that stays true for
@@ -122,16 +128,22 @@ is recorded here as the option if that ever stops being true.
       exactly as it is per game today); the skill must detect a layered tree rather than renumbering
       `common`/`sa`/`opensa` themselves into `0. common`.
 
-## Numbers to record
+## Numbers, measured 2026-08-15 (`game-src/original` + `mods-src/original/mods`, 62 flat mods)
 
-- The flat path must not move: `mods` stage wall-clock and the installed-mod count for
-  `build:game:original:sa` before and after (61 mods today).
-- When a set is actually split: mods per layer per target, and the `mods` stage wall-clock for both
-  targets, so the layered build has its own baseline rather than being compared to the flat one.
+**The flat path did not move: `diff -rq` between a BEFORE-code and an AFTER-code install reports no
+differences** — 393 files, 1 892 164 KiB, 62 mods (13 baked), 3 434 entries merged, 10 mod IPLs folded
+(634 rows), 2 stock inst blocks compacted (848 rows), on both. The only difference anywhere is the one new
+log line, `mod-installer: flat mods — 62 mod(s)`.
 
-Build-time only — there is no per-frame cost to measure. What the split can change is what ENDS UP in a
-build, and that is the thing to watch: the first split must be checked by diffing the built tree of the
-`sa` target before and after the migration, not by reading the folder layout.
+**No wall-clock claim** — the machine was busy during the window (a mod folder was added to `mods-src` at
+17:21, mid-measurement) and same-code repeats spread 68 s / 88 s while CPU time stayed flat at ~18 s user
++ ~25 s sys in every complete run. The full record, including the run that came back in 15.9 s with a
+short tree, is in the benchmark file. A stage timing for this tool wants a quiet machine and the mod count
+recorded beside it.
+
+Still to record **when a set is actually split**: mods per layer per target, and a diff of the built `sa`
+tree across the migration — the split changes what ENDS UP in a build, and that is what has to be checked,
+never the folder layout. Build-time only; there is no per-frame cost here.
 
 ## Risks
 

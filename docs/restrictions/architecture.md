@@ -151,9 +151,15 @@ reverse (an opensa-only build priced for `sa`) is merely conservative, and is lo
 A plan that says "rebuild the game" has to say **which target**, because they no longer carry the same
 content: the `:sa` script excludes `vehicles` and `peds`, so the real-game build ships the stock roster.
 
-**Caught:** partly — an unknown `--exclude`/`--target` name is a hard error and the resolved target is
-printed at the top of every run, but a STALE target left by an older run is indistinguishable from a fresh
-one.
+**A stage in the COMMON chain may not produce different content per target in one run.** The mods folder
+may be layered per target (`common/` + `sa/` + `opensa/`, mod-installer plan 011), and the `mods` stage that
+reads it runs before the split — so a run that would build both targets out of a layered folder is refused
+at config time and has to be run once per target. Anything else that wants to vary by target belongs after
+the split, or in a source folder that does not.
+
+**Caught:** partly — an unknown `--exclude`/`--target` name is a hard error, the resolved target is printed
+at the top of every run, and a layered mods folder in a both-target run throws before any stage runs; but a
+STALE target left by an older run is indistinguishable from a fresh one.
 
 ## A build's SOURCE may not live inside its own output
 

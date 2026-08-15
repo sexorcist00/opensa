@@ -22,6 +22,36 @@ A mod is applied in one of two shapes, decided by its contents, not by its name:
 | **Path overlay** (default) | anything else | The mod mirrors the game tree from its own root; files overwrite by path. |
 | **Modloader-style bake** | it carries a **loader `.txt`** — any `.txt` whose contents declare `IDE` / `IPL` / `COLFILE` paths | The folder LAYOUT is ignored entirely and every file is bucketed by its BARE NAME (below). |
 
+### `common/`, `sa/`, `opensa/` — three RESERVED names at the top of `--in`
+
+The mods folder has two shapes, and which one it is comes from the names of its immediate subfolders:
+
+| Shape | `--in` holds | What applies |
+| --- | --- | --- |
+| **Flat** (the default) | mod folders | all of them, in numeric-aware order |
+| **Layered** | `common/` and/or `sa/` and/or `opensa/`, each holding mod folders | `common` first, then the folder named after the **target being built** (`--target sa` / `--target opensa`). The other target's layer is not applied. |
+
+Every layer is optional, and a game keeps the flat shape until someone splits it. Inside a layer nothing
+changes — same mod folders, same numbering, same two shapes above.
+
+**The layer order dominates the numbering**: `common/50. Foo` applies before `sa/0. Bar`, because the
+target layer has to be the last writer for the split to mean anything. Numbers restart in each layer, and
+`renumber-mods` compacts each layer independently. To override a `common` mod for one target, ship the
+files again in that target's layer — a folder NAME never matches anything across layers.
+
+The three names are matched **case-folded** (`SA/` is the `sa` layer), because they are one folder on
+Windows and macOS.
+
+Misspell one — `commons/`, `open-sa/`, `SA mods/` — and it is not a layer: it is a mod folder sitting
+beside layers, which is refused (§5) rather than silently applied to both targets. The same guard is what
+makes a mod that happens to be CALLED `sa` impossible: at the top level of `--in` that name belongs to the
+layer, so such a mod has to be renamed.
+
+A layered `--in` with no target is refused too — there is no layer to pick. In a build that is not
+possible: `perfect-map-builder` always resolves a target and passes it, and it refuses a run that would
+build BOTH targets out of a layered folder, because the `mods` stage is shared by both
+([restrictions/architecture.md](../restrictions/architecture.md)). Build them one at a time.
+
 ---
 
 ## 2. Path-overlay conventions
@@ -177,6 +207,13 @@ can never complete, so the world renders as LODs everywhere with permanent hitch
 performance problem or a map-layer bug. It cost a day of bisection on 2026-08-10 (5 models, 23 placements,
 from one mod's `Remove original/` folder read as a delete list).
 
+**A mod folder beside the layer folders** (§1). Once `--in` carries `common/`, `sa/` or `opensa/`, everything
+else at that level is refused by name: a mod there has no honest position relative to the layers, and the
+usual cause is a misspelled layer, which would otherwise apply to both targets without a word.
+
+**A layered `--in` with no target**, and **two layer folders differing only in case** (`sa/` + `SA/`, which
+only a case-sensitive filesystem can produce).
+
 ---
 
 ## 6. Two files a LATER build stage rewrites over your mod
@@ -197,7 +234,9 @@ them. If you are debugging "my procobj edit did nothing in the real game", this 
 
 ## 7. What is NOT a contract
 
-- **The mod folder's name** — ordering only. Renaming a mod cannot change what it does.
+- **The mod folder's name** — ordering only. Renaming a mod cannot change what it does. The exception is the
+  three RESERVED names at the top level of `--in` (§1): there, `common` / `sa` / `opensa` name layers rather
+  than mods.
 - **The path a Modloader-style mod uses internally** — bare names decide everything there.
 - **A texture's format in the PNG folder** — it comes from the image's own alpha, not from a naming scheme.
 - **`Remove original/`** — the name looks like an instruction and is not one (§2).
