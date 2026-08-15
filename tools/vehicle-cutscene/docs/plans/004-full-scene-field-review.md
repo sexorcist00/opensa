@@ -668,6 +668,32 @@ runtime pipe, and it gets re-priced fleet-wide.
 material puts it on the default pipe either way — so the front headlight moves and the rear lenses
 do not.
 
+**RESULT (field, 2026-08-15): the experiment PASSED, and it did more than close round 23.**
+
+- **The green is gone** on every glendale scene (SMOKE2B, SMOKE3A and the rest), and the lens did NOT
+  vanish — so round 9's premise fails on its own test case. What round 9 measured was OUR DFF
+  PipelineSet stamp behaving one way; the runtime pipe behaves another, exactly as plan 001 step 4
+  found on the blessed six.
+- **It repaired two things nobody had filed as bugs.** The field on FARL_3B and FINAL2B: the burrito's
+  and the sabre's tail lamps "used to look a bit odd, I assumed that was intended — now they look
+  good." Those are the very lenses round 9 was written to rescue: they had been rendering on the
+  default pipe, without the vehicle pipe's shine, since 2026-08-13, and the sweep accepted them
+  because nobody had a reference for how they SHOULD look. A rule introduced as a fix had been
+  quietly costing the fleet its lamp shine.
+- **The whole re-check list passed**: PROLOG1, PROLOG3, DESERT9, FINAL2B, RIOT4E1, DES_10B, SWEET2B,
+  BCESAR5, BCESAR4, SMOKE1B, GARAG3A, HEIST8A, FARL_3B, SYND_3A — the 14 scenes that cover all 21
+  models the change touched (102 atomics; `csmonster` and `csmtbike92` moved nothing, so DESERT1 and
+  STRP4B2 were provably untouched and skipped). No regression, including the two glass surfaces the
+  diff flagged as risky — cscopcarsf's `police_glass` at alpha 203 and cstaxi92's baked `carplate`.
+
+So round 9's generalization is REPLACED by round 8's rule, promoted on this evidence: the vehicle
+PipelineSet goes on every non-pane atomic. Round 23 is closed; the branch is a promotion candidate,
+not an experiment.
+
+**Round 22 is NOT closed by this** — the field confirms the glendale's occupants are still invisible
+with the lamps fixed, which is what the occlusion measurement predicted (a different defect on the
+same car).
+
 ### Standing addendum — the perfect-cutscene ASI re-opens the whole ledger (2026-08-14)
 
 The draw-order mechanism behind rounds 15–17 gets its real fix as an engine patch:
