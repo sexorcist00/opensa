@@ -1,7 +1,18 @@
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
 
 import { assertVer2EntrySize, buildVer2Buffer, openArchive } from '@opensa/renderware/archive/img-archive';
-import { closeSync, existsSync, ftruncateSync, openSync, readFileSync, rmSync, statSync, writeSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  ftruncateSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeSync,
+} from 'node:fs';
+import { basename, dirname } from 'node:path';
 
 /**
  * An **editable** GTA IMG (VER2) archive: open, read, add-with-replace, delete, then rebuild a fresh `.img`.
@@ -205,8 +216,15 @@ export function writeImgFamily(img: EditableImg, basePath: string, cap = ARCHIVE
  * directory lands in its reserved leading sectors afterwards. Byte-identical to
  * `buildVer2Buffer(img.names().map(…))`. For the ~1 GB game archives `build()` alone doubles the run's peak
  * RSS; this keeps the rebuild flat (map-optimizer plan 011 finalize).
+ *
+ * **Refuses to write past {@link ARCHIVE_CAP_BYTES}** — every archive writer in the repo goes through here,
+ * so this is the one place that can guarantee no stage emits a file the next stage cannot open. The check
+ * rides the write cursor rather than a pre-pass, because sizing every entry up front would materialise them
+ * all; when it trips, the partial file is REMOVED, since a truncated archive that looks finished is worse
+ * than none. A caller that legitimately outgrows one file uses {@link writeImgFamily}, which plans its
+ * members under the cap and therefore never trips this.
  */
-export function writeImgFile(img: EditableImg, path: string): void {
+export function writeImgFile(img: EditableImg, path: string, cap = ARCHIVE_CAP_BYTES): void {
   const names = img.names();
   const dirSectors = Math.ceil((8 + names.length * 32) / SECTOR);
   const directory = new Uint8Array(dirSectors * SECTOR);
@@ -214,7 +232,11 @@ export function writeImgFile(img: EditableImg, path: string): void {
   directory.set(new TextEncoder().encode('VER2'), 0);
   view.setUint32(4, names.length, true);
 
+  // The dir, because a seeded archive can be the first file in its tree — the buffered helpers this
+  // replaced created it, and losing that silently turned a fresh install into ENOENT.
+  mkdirSync(dirname(path), { recursive: true });
   const fd = openSync(path, 'w');
+  let failed = false;
   try {
     let cursor = dirSectors;
     names.forEach((name, i) => {
@@ -225,6 +247,13 @@ export function writeImgFile(img: EditableImg, path: string): void {
       const data = img.get(name) ?? new Uint8Array(0);
       assertVer2EntrySize(name, data.length);
       const sectors = Math.max(1, Math.ceil(data.length / SECTOR));
+      if ((cursor + sectors) * SECTOR > cap) {
+        throw new Error(
+          `${basename(path)} would pass the ${(cap / 1024 ** 3).toFixed(2)} GiB archive cap at entry '${name}' ` +
+            `(${i + 1} of ${names.length}) — past 2 GiB no reader in the repo can open it (readFileSync throws ` +
+            'ERR_FS_FILE_TOO_LARGE). Move content into another bucket, or write this one as a family.',
+        );
+      }
       const base = 8 + i * 32;
       view.setUint32(base, cursor, true);
       view.setUint16(base + 4, sectors, true); // streamingSize (sectors); sizeInArchive stays 0
@@ -234,8 +263,14 @@ export function writeImgFile(img: EditableImg, path: string): void {
     });
     ftruncateSync(fd, cursor * SECTOR); // zero-fill the last entry's sector padding
     writeSync(fd, directory, 0, directory.length, 0);
+  } catch (error) {
+    failed = true;
+    throw error;
   } finally {
     closeSync(fd);
+    if (failed) {
+      rmSync(path, { force: true }); // a half-written archive reads as a finished one — do not leave it
+    }
   }
 }
 

@@ -1,6 +1,6 @@
-import { createImg, openImg } from '@opensa/tool-kit/archive/img';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { createImg, openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { warnDroppedCollisions } from './col-replace';
 import { applyStreamMerge, isStreamMerge } from './stream-merge';
@@ -33,7 +33,7 @@ export function applyStreamMergeDir(imgDir: string, imgPath: string): number {
     }
     img.set(entryName, bytes);
   }
-  writeBytes(imgPath, img.build());
+  writeImgFile(img, imgPath);
 
   return merges.length;
 }
@@ -53,7 +53,7 @@ export function injectImgEntries(entries: ReadonlyMap<string, Uint8Array>, imgPa
     warnDroppedCollisions(name, img.get(name) ?? undefined, bytes);
     img.set(name, bytes);
   }
-  writeBytes(imgPath, img.build());
+  writeImgFile(img, imgPath);
 
   return entries.size;
 }
@@ -125,7 +125,7 @@ export function mergeImgDir(imgDir: string, imgPath: string): number {
       merged += result.merged;
     }
   }
-  writeBytes(imgPath, img.build());
+  writeImgFile(img, imgPath);
 
   return entries.size + merged;
 }
@@ -134,9 +134,4 @@ function readBytes(path: string): Uint8Array {
   const buffer = readFileSync(path);
 
   return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-}
-
-function writeBytes(path: string, bytes: Uint8Array): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, bytes);
 }

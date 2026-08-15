@@ -5,7 +5,7 @@ import { encodeColLibrary } from '@opensa/lod-common/encode-col';
 import { encodeLodDff } from '@opensa/lod-common/encode-dff';
 import { encodeLodTxd } from '@opensa/lod-common/encode-txd';
 import { type ScopedRegistry, scopedSource } from '@opensa/lod-common/scoped-texture';
-import { createImg } from '@opensa/tool-kit/archive/img';
+import { createImg, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -119,7 +119,7 @@ export function writeBuild(options: BuildOptions): void {
   // the IMG. Same approach as sa-procobj-placement / lod-trees-generator.
   img.set('lods.col', encodeColLibrary(colBounds, colNames));
 
-  writeFileSync(join(options.outDir, 'models', 'lods.img'), img.build());
+  writeImgFile(img, join(options.outDir, 'models', 'lods.img'));
   const mapsDir = join(options.outDir, 'data', 'maps');
   mkdirSync(mapsDir, { recursive: true });
   writeFileSync(join(mapsDir, 'lods.ide'), section('objs', objs));

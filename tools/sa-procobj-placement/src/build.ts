@@ -16,7 +16,7 @@ import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { parseGtaDat } from '@opensa/renderware/parsers/text/gta-dat.parser';
 import { parseIde, parseTimedObjects } from '@opensa/renderware/parsers/text/ide.parser';
 import { decodeDxt } from '@opensa/rw-codec/dxt';
-import { editArchive } from '@opensa/tool-kit/archive/img';
+import { editArchive, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { type BuildTarget } from '@opensa/tool-kit/target';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -456,7 +456,7 @@ function emitImg(archive: ImgArchive, entries: ReadonlyMap<string, Uint8Array>, 
   for (const [name, bytes] of entries) {
     img.set(name, bytes);
   }
-  writeBytes(join(outPath, 'models', 'gta3.img'), img.build());
+  writeImgFile(img, join(outPath, 'models', 'gta3.img'));
 }
 
 /**

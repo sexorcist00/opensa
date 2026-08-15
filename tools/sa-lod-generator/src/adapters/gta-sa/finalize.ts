@@ -16,7 +16,7 @@ import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { build2dfxSection } from '@opensa/rw-codec/dff';
-import { editArchive } from '@opensa/tool-kit/archive/img';
+import { editArchive, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { cpSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -206,7 +206,7 @@ export function writeBuild(input: BuildInput): BuildStats {
   }
   stats.generatedTxds = hdTxdToClone.size;
 
-  writeFileSync(join(input.outDir, 'models', 'gta3.img'), img.build());
+  writeImgFile(img, join(input.outDir, 'models', 'gta3.img'));
   retargetIdes(input.outDir, modelToTxd);
   if (parentTextures > 0) {
     writeTxdpIde(input.outDir, txdpChildren);

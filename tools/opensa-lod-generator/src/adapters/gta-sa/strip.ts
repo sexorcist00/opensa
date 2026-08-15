@@ -10,7 +10,7 @@ import { isInterior } from '@opensa/renderware/parsers/text/interior';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { isLodModel } from '@opensa/renderware/parsers/text/lod';
-import { editArchive } from '@opensa/tool-kit/archive/img';
+import { editArchive, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -91,7 +91,7 @@ export function stripOldLods(
       entries += 1;
     }
   }
-  writeFileSync(imgPath, img.build());
+  writeImgFile(img, imgPath);
 
   return { entries, instances };
 }

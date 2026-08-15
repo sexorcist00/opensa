@@ -203,6 +203,21 @@ describe('writeImgFile', () => {
       img.set('a-very-long-entry-name-way-past-24.dff', Uint8Array.of(1));
       expect(() => writeImgFile(img, join(tmpdir(), `img-${process.pid}-bad.img`))).toThrow(/name too long/);
     });
+
+    it('REFUSES to pass the archive cap, and leaves no half-written file behind', () => {
+      // Every archive writer in the repo goes through here, so this is the one place that can promise no
+      // stage emits a file the next stage cannot open. A truncated archive looks finished, so it is removed.
+      const dir = mkdtempSync(join(tmpdir(), 'img-cap-'));
+      const path = join(dir, 'big.img');
+      const img = createImg();
+      for (let index = 0; index < 4; index += 1) {
+        img.set(`e${index}.dff`, new Uint8Array(3000).fill(index + 1));
+      }
+
+      expect(() => writeImgFile(img, path, 3 * 2048)).toThrow(/would pass the .* archive cap at entry 'e1\.dff'/);
+      expect(existsSync(path)).toBe(false);
+      rmSync(dir, { force: true, recursive: true });
+    });
   });
 
   describe('positive cases', () => {

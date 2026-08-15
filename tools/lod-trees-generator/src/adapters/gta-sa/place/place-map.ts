@@ -10,7 +10,7 @@ import { parseGtaDat } from '@opensa/renderware/parsers/text/gta-dat.parser';
 import { parseIde, parseTimedObjects } from '@opensa/renderware/parsers/text/ide.parser';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
-import { editArchive } from '@opensa/tool-kit/archive/img';
+import { editArchive, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
@@ -427,7 +427,7 @@ function emitImg(
   for (const [name, bytes] of entries) {
     img.set(name, bytes);
   }
-  writeBytes(join(destDir, 'models', 'gta3.img'), img.build());
+  writeImgFile(img, join(destDir, 'models', 'gta3.img'));
 }
 
 function groupStreams(archive: ImgArchive): Map<string, string[]> {

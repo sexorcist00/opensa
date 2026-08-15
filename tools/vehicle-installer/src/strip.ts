@@ -1,4 +1,4 @@
-import { openImg } from '@opensa/tool-kit/archive/img';
+import { openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -54,7 +54,7 @@ export function stripGta3Img(imgPath: string, keep: ReadonlySet<string>): void {
       img.delete(name);
     }
   }
-  writeFileSync(imgPath, img.build());
+  writeImgFile(img, imgPath);
 }
 
 /** handling.cfg: keep only the installed ids' car-table lines (letter-leading; id = first token). */
