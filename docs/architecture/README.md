@@ -8,6 +8,7 @@ The map of OpenSA, split by concern. Start here, then drill into the flow you ca
 | [world-streaming.md](./world-streaming.md)         | The native formats (`.osm` / `.ostex` / `.oscell` / `.oswire` / `.ospak`) and how the engine streams the world |
 | [perfect-map-builder.md](./perfect-map-builder.md) | The offline build pipeline that produces the canonical build (`./build/original`)                      |
 | [cleo-scripts.md](./cleo-scripts.md)               | Compiled CLEO `.cs` mods on our own SCM VM: decoder → runner → host facets, the native-address atlas, tiers/tracer/F2 |
+| [img-archive-layout.md](./img-archive-layout.md)   | Typed, size-bounded `models/*.img` buckets: who owns which archive, why the split runs before mod-installer, and the 2 GiB host ceiling behind it |
 | [tools.md](./tools.md)                             | One-paragraph architecture of every tool in `tools/` and `tools-debug/`                               |
 
 Diagrams live in [assets/](./assets/) and are **generated** — `npm run arch:render` refreshes them all
