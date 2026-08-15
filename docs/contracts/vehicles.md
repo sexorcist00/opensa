@@ -183,8 +183,25 @@ Every one is carried verbatim into the model. Consumed today:
 
 | Name | Used for |
 | --- | --- |
-| `ped_frontseat` | The driver seat position. |
+| `ped_frontseat` / `ped_backseat` | The seat positions — one per ROW; the opposite side is the x-mirror, which is how SA derives the driver from the passenger seat. Read by the gameplay code AND, since plan 005, by the cutscene converter — see below. |
 | `headlights` / `taillights` | Lamp anchors (SA authors ONE per end and mirrors it). **At the model ORIGIN = this model has no lamp of that kind** — see below. |
+
+**A seat dummy now decides where a CUTSCENE actor sits, too — and an absent one changes nothing.**
+A cutscene actor's position is ABSOLUTE, out of the scene's own root channel in `anim/cuts.img`, and
+R\* authored every scene at their own car's `ped_frontseat` (measured: x within 0.02 m, z within 0.03 m
+across FINAL2B and SMOKE2B). So a donor whose cabin rides higher than the stock car's seats its
+occupants BELOW their own seat — 0.281 m on the glendale — and no model data can correct it, because
+the actor is not in the car's clump. `vehicle-cutscene` therefore lifts the actor's root channel onto
+the donor's own seat (`seat-patch.ts`, z only: the pose is authored for R\*'s cabin, so moving him
+sideways would take his hands off the wheel).
+
+**What a mod author needs to know**: state `ped_frontseat` where a person actually sits and the
+cutscenes follow it; state nothing and the scene's authored placement stands unchanged — that is the
+fallback, not a failure. Three gates keep the patch surgical, and all three are silent when they skip:
+an actor must be SKINNED (a prop riding a car is not one), he must actually ride the car (the lift ramps
+to zero across the frames he spends getting in or out, so nobody floats on the way to the door), and the
+correction must exceed 0.05 m (below R\*'s own authoring spread it is noise). Misplacing the dummy moves the cutscene
+actor with it — the same lever, pointed the wrong way.
 
 **A lamp dummy at (0,0,0) means "no lamp here", and it is the only way to say it.** That is SA's own
 convention, not ours: a missing dummy reads back as (0,0,0) from `CVehicleModelInfo::m_avDummyPos` and

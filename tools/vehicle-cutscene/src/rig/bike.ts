@@ -18,6 +18,7 @@
  */
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 
+import { resolveSeatPoints } from '../seats';
 import { type CsBikeTemplate, geometryZHalfExtent, toArrayBuffer } from '../template';
 import { writeClump } from './clump-io';
 import {
@@ -49,6 +50,7 @@ export function convertBike(
     droppedFromMod: [],
     missingInMod: [],
     parts: [],
+    seats: resolveSeatPoints(analysis.model, analysis.relativeToRoot, shiftZ),
     shiftZ,
     shimmed: [],
   };

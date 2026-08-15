@@ -9,6 +9,8 @@
  */
 import { readRw, writeRw } from '@opensa/rw-codec/chunk';
 
+import type { SeatPoint } from '../seats';
+
 import { ensureModulateMaterialColour, geometryBodyHasWindowPane } from '../materials';
 import { canonicalPartName, type CsPartTemplate } from '../template';
 import { bakeGeometryBody, isIdentityDelta } from './bake';
@@ -63,6 +65,9 @@ export interface ConvertReport {
   missingInMod: string[];
   /** Canonical names of the emitted template parts. */
   parts: string[];
+  /** Where the DONOR says a person sits, in cutscene space (plan 005) — empty when it states nothing,
+   *  which is the fallback: the scene's own authored placement then stands. */
+  seats: SeatPoint[];
   /** The vertical rebase applied to the donor. */
   shiftZ: number;
   /** Bones that needed a shim frame (non-identity donor-vs-vanilla placement delta). */

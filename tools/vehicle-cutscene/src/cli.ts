@@ -123,6 +123,14 @@ function printSummary(summary: CutsceneInstallSummary): void {
   for (const { csName, reason } of summary.skipped) {
     console.log(`  skipped ${csName}: ${reason}`);
   }
+  // The two `anim/cuts.img` passes: both edit scene VALUES no model data can reach, so what they
+  // touched is worth stating rather than leaving to a byte diff.
+  for (const row of summary.wheelStashesSunk ?? []) {
+    console.log(`  wheel stash sunk: ${row}`);
+  }
+  for (const row of summary.actorsSeated ?? []) {
+    console.log(`  actor seated on the donor's own seat: ${row}`);
+  }
   for (const { csName, message } of summary.warnings) {
     console.log(`  warning ${csName}: ${message}`);
   }

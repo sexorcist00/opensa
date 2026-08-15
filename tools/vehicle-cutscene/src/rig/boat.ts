@@ -37,6 +37,7 @@ export function convertBoat(
     droppedFromMod: [],
     missingInMod: [],
     parts: [],
+    seats: [],
     shiftZ: 0,
     shimmed: [],
   };
