@@ -5,7 +5,9 @@
   "description": "Install GTA-SA vehicle mod folders onto a base game: dff/txd into gta3.img + merge settings into handling.cfg / vehicles.ide / carcols.dat / carmods.dat.",
   "exports": {
     "./install": "./src/install.ts",
-    "./rebake": "./src/rebake.ts"
+    "./merge": "./src/merge.ts",
+    "./rebake": "./src/rebake.ts",
+    "./settings": "./src/settings.ts"
   },
   "nx": {
     "tags": [

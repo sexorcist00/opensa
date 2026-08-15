@@ -8,6 +8,17 @@
  */
 
 /**
+ * `car4` when each colour combo carries 4 values (`1,31,1,0`), else `car` (2 values, `34,34`). Combos are
+ * separated by a comma+whitespace, values within a combo by a bare comma — the stock `carcols.dat` / settings
+ * convention, so the colour count is read straight from the line the vehicle ships.
+ */
+export function carcolsSection(line: string): 'car4' | 'car' {
+  const combos = line.split(/,\s+/); // [model, combo1, combo2, …]
+
+  return (combos[1] ?? '').split(',').length === 4 ? 'car4' : 'car';
+}
+
+/**
  * Replace/insert the carcols line by model (column 0), into `car` or `car4` **per the line's own colour count**
  * (2 values per combo → `car`, 4 → `car4`). The model is first removed from BOTH colour sections, so a vehicle
  * whose mod changed its colour count **moves** between them. Each touched section stays alpha-sorted.
@@ -44,17 +55,6 @@ export function mergeHandling(base: string, line: string): string {
 /** Replace the `cars` line in `vehicles.ide` by model (column 1); append before the section `end` if new. */
 export function mergeIde(base: string, line: string): string {
   return replaceOrAppend(base, 'cars', 1, line);
-}
-
-/**
- * `car4` when each colour combo carries 4 values (`1,31,1,0`), else `car` (2 values, `34,34`). Combos are
- * separated by a comma+whitespace, values within a combo by a bare comma — the stock `carcols.dat` / settings
- * convention, so the colour count is read straight from the line the vehicle ships.
- */
-function carcolsSection(line: string): 'car4' | 'car' {
-  const combos = line.split(/,\s+/); // [model, combo1, combo2, …]
-
-  return (combos[1] ?? '').split(',').length === 4 ? 'car4' : 'car';
 }
 
 function eolOf(base: string): string {
