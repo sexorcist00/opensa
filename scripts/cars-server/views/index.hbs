@@ -66,10 +66,12 @@
         padding-bottom: 8px;
       }
       h2 span { color: var(--muted); font-size: 13px; font-weight: 400; }
+      /* ONE card per row, at every width (the user's call): the two pictures side by side ARE the content,
+         and a car ~150 px across in a four-column grid was too small to judge what replaced what. */
       .grid {
         display: grid;
-        gap: 16px;
-        grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+        gap: 20px;
+        grid-template-columns: 1fr;
       }
       .card {
         background: var(--panel);
@@ -79,7 +81,7 @@
         display: flex;
         flex-direction: column;
       }
-      .card .head { padding: 12px 14px 10px; }
+      .card .head { padding: 16px 18px 14px; }
       .id {
         display: inline-block;
         font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -95,15 +97,15 @@
         background: rgba(126, 231, 135, 0.12);
         border-color: rgba(126, 231, 135, 0.35);
       }
-      .swap { margin: 0; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
+      .swap { margin: 0; font-size: 19px; line-height: 1.35; overflow-wrap: anywhere; }
       .swap .slot { font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-      .swap .to { color: var(--muted); font-size: 13px; }
+      .swap .to { color: var(--muted); font-size: 15px; }
       .swap .name { font-weight: 600; }
-      .author { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+      .author { margin: 8px 0 0; color: var(--muted); font-size: 15px; }
       .author b { color: var(--text); font-weight: 600; }
       .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
       .tag {
-        font-size: 12px;
+        font-size: 13px;
         color: var(--tag-text);
         background: var(--tag);
         border: 1px solid #2c3d52;
@@ -136,7 +138,12 @@
       }
       @media (max-width: 720px) {
         main { padding: 14px; }
-        .grid { grid-template-columns: 1fr; gap: 14px; }
+        .grid { gap: 14px; }
+        .swap { font-size: 17px; }
+      }
+      /* On a phone the two panes side by side are ~180 px each — stacked, each car gets the full width. */
+      @media (max-width: 560px) {
+        .shots { grid-template-columns: 1fr; }
       }
     </style>
   </head>

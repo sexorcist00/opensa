@@ -30,7 +30,13 @@ const vehiclesPath = resolve('mods-src', game, 'vehicles');
 const gamePath = resolve('game-src', game);
 
 const metadata = JSON.parse(readFileSync(join(ROOT, 'data', 'original.json'), 'utf8')) as Metadata;
-const template = Handlebars.compile(readFileSync(join(ROOT, 'views', 'index.hbs'), 'utf8'));
+/**
+ * Compiled per request, not at boot: this is a dev tool whose view is edited while it runs, and a cached
+ * template makes a CSS change look like it did nothing. The file is a few KB — the read costs nothing.
+ */
+function render(context: object): string {
+  return Handlebars.compile(readFileSync(join(ROOT, 'views', 'index.hbs'), 'utf8'))(context);
+}
 
 /**
  * The last render's catalog, which the image routes read. Rebuilt when the PAGE is requested and not per
@@ -43,7 +49,7 @@ const app = express();
 app.get('/', (_request, response) => {
   catalog = buildCatalog({ gamePath, metadata, vehiclesPath });
   response.type('html').send(
-    template({
+    render({
       game,
       sections: catalog.sections,
       source: relative(process.cwd(), vehiclesPath),
