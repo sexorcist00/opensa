@@ -338,6 +338,17 @@ bottle's `CLEO/cutscene-override.ini`).
       perfect-cutscene). Verification: a fresh pmb build's output tree contains the asi; boot log
       shows it loaded.
 
+      **This step also carries vehicle-cutscene plan 002 step 11's outstanding half** (reassigned
+      2026-08-15 when 002 closed): every cutscene verdict so far was taken on a fleet built by the
+      tool's own CLI and hand-dropped into the bottle, never on a pmb PIPELINE output. This run is
+      where a pipeline-built `models/cutscene.img` + `data/txdcut.ide` + `anim/cuts.img` first reach
+      the field together, and the empty-TXD route (txdp parents from the installed gta3.img) runs for
+      the first time where it was designed to — the sweep used `--self-contained-txd` throughout.
+      **Note for the run**: `build:game:original:sa` excludes `vehicles`, and the cutscene stage goes
+      with it; a field build with mod vehicles + cutscenes needs a run without that exclude, and which
+      npm script carries it is the user's packaging call. Verification adds: two or three swept scenes
+      re-run on the pipeline build and matching their recorded verdicts.
+
 ## The step-0 baseline (2026-08-14) — the standing repro
 
 The build: `PANE_SUPPRESSED_SLOTS` emptied (working tree only, restored right after the build),

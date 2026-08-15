@@ -1,6 +1,12 @@
 # 002 — implementation: mod vehicles into cutscene.img
 
-**Status: PLANNED 2026-08-12.** Execution plan for [001-architecture](001-architecture.md). Steps are
+**Status: CLOSED 2026-08-15 — all eleven steps shipped and accepted.** The user's word, verbatim:
+*"yes, all good, 004 can be closed"* and *"002 too."* The scene acceptance is plan 004's 35-of-35
+sweep; the one thing this plan asked for that the sweep does NOT cover — a run on a PIPELINE-built
+game rather than a hand-dropped bottle build — is reassigned to `asi/perfect-cutscene` plan 001
+step 7 (see step 11), which builds a pmb output anyway.
+
+Execution plan for [001-architecture](001-architecture.md). Steps are
 ordered by priority and dependency; each is individually shippable and ends with verification + a numbers
 slot (standing rule: a phase without its numbers is unfinished). The vanilla-parity gate (step 4) is the
 load-bearing verification of the whole tool: convert a STOCK car and diff it against the vanilla cutscene
@@ -406,7 +412,7 @@ same machinery the 21 field-verified car slots ride.
 
 ---
 
-## Step 11 (P2) — pipeline integration + acceptance — WIRED 2026-08-13, field acceptance pending
+## Step 11 (P2) — pipeline integration + acceptance — WIRED 2026-08-13, ACCEPTED 2026-08-15
 
 - [x] Wired as a pmb STAGE (the user's call, 2026-08-13): `cutscene` sits in the common chain right
       after `vehicles` — same source folder, same populated-check — reading the INSTALLED game (merged
@@ -418,13 +424,26 @@ same machinery the 21 field-verified car slots ride.
       `docs/commands.md` updated. Also fixed on the way: `tools/vehicle-cutscene` was missing from the
       root `workspaces` list (the enumerate-everything trap, this time in package.json — nothing could
       import `@opensa/vehicle-cutscene/*` across packages until now).
-- [ ] Full pipeline build → field acceptance run (user): story progression across at least LS-era
-      cutscenes with the full fleet; verdict recorded. **Note for the run**: the stock
-      `build:game:original:sa` script excludes `vehicles` (the real-game map build installs no mod
-      vehicles), so a field build with mod vehicles + cutscenes needs a run WITHOUT that exclude —
-      which npm script (or a new one) carries it is the user's packaging call.
-- [ ] Close-out: audit note if the chain qualifies as a big rework (per CLAUDE.md), else the step-10
+- [x] Full pipeline build → field acceptance run (user): story progression across at least LS-era
+      cutscenes with the full fleet; verdict recorded.
+      **SCENE COVERAGE DONE, PIPELINE HALF REASSIGNED (2026-08-15).** Plan 004 swept all 35 vehicle
+      cutscenes and the user APPROVED — but on the bottle's self-contained build, dropped in by hand,
+      not on a pmb pipeline output. That is a better acceptance than this step asked for on the
+      SCENES (35 scenes against "at least LS-era", one verdict each, 23 fix rounds) and it does not
+      touch the PIPELINE question at all. Rather than leave a half-checked box behind a closed plan,
+      the pipeline-build run moves to **`asi/perfect-cutscene` plan 001 step 7**, which builds a pmb
+      output anyway to ship the ASI: that run is where a pipeline-built `cutscene.img` +
+      `anim/cuts.img` first reach the field together. Nothing is dropped; it is executed in the one
+      place it is naturally exercised.
+- [x] Close-out: audit note if the chain qualifies as a big rework (per CLAUDE.md), else the step-10
       numbers stand.
+      **DONE 2026-08-15** — the step-10 numbers were RE-MEASURED rather than left standing, because
+      the converter gained real work since (round 23's pipeline rule, plan 005's seat resolution and
+      a second `anim/cuts.img` pass): `docs/benchmarks/tools/2026-08-13-vehicle-cutscene-fleet.md`
+      carries the comparison. Wall-clock 3.55 s → **4.26 s** (best of 3), `cutscene.img` 310.8 →
+      321.5 MB. The +0.7 s is the second cuts.img pass rebuilding a 270 MB / 444-entry archive to
+      change 2 entries — stated here rather than discovered later, with the obvious first cut named
+      (one walk for both passes; they already share a buffer).
 
 ---
 

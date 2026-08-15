@@ -338,11 +338,11 @@ row but its chain was superseded by 097). Newest first:
   in `models/cutscene.img` (flattened HAnim rig with the vanilla bone ids, four instantiated wheels, baked
   carcols paint, empty `txdp`-resolved TXD), so real-game cutscenes show the same custom cars as gameplay.
   [`vehicle-cutscene/docs/plans/`](../../tools/vehicle-cutscene/docs/plans/) (`001` architecture + research ·
-  `002` implementation — both car field gates passed, bike field-passed, boat structurally verified,
-  the full 23-model fleet converts as pmb's `cutscene` stage; the full-pipeline field acceptance
-  remains · `003` plate bake — CLOSED, field-passed: readable plates where vanilla shows blanks ·
-  `004` full scene field review — IN PROGRESS: 30 of 35 vehicle scenes swept via the override, then
-  the user's approval · `005` seat retarget — CLOSED, field-passed: a cutscene actor sits in the DONOR's
+  `002` implementation — CLOSED, accepted: both car field gates, bike, boat, the full 23-model fleet
+  converting as pmb's `cutscene` stage (the pipeline-build acceptance moved to perfect-cutscene
+  plan 001 step 7) · `003` plate bake — CLOSED, field-passed: readable plates where vanilla shows blanks ·
+  `004` full scene field review — CLOSED, APPROVED: all 35 vehicle scenes swept via the override,
+  23 fix rounds · `005` seat retarget — CLOSED, field-passed: a cutscene actor sits in the DONOR's
   seat rather than R\*'s, which was 0.281 m low on a taller car).
 - **ped-installer** — install ped mod folders: dff/txd → `gta3.img`; a new ped's line → `peds.ide` (replace by
   model, append if new); `--strip` to keep only the installed peds + the player ped (`--player`, default

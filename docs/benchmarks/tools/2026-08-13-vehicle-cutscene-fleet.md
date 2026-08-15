@@ -75,3 +75,39 @@ carry no plate quads and gain nothing.
   round 1** (a duplicate still binds and double-transforms — DESERT9's floating door glass): the
   emit now renames adopted collisions with `_ad`, and the rebuilt fleet measures **0 duplicates**
   (`cutscene-fleet-verify.ts` fails on any).
+
+---
+
+## Re-measurement 2026-08-15 — after plan 004 round 23 and plan 005
+
+Same machine, same base, same mods, same flags (`--self-contained-txd`); commit `a10ba10c`. Re-run
+because the converter gained real work since the headline numbers: round 23 changed which atomics get
+the vehicle PipelineSet, and plan 005 added seat resolution per slot plus a SECOND `anim/cuts.img`
+pass over all 444 entries.
+
+| Measure | 2026-08-13 | 2026-08-15 | Δ |
+| --- | ---: | ---: | --- |
+| Wall-clock, best of 3 | 3.55 s | **4.26 s** (4.92 / 4.71 / 4.26) | +0.7 s |
+| `models/cutscene.img` | 310.8 MB | **321.5 MB** | +10.7 MB |
+| Paint materials baked | 400 on 20 models | **694 on 23 models** | +294 |
+| Plates baked | — | 21 | — |
+| cs TXD bytes | 148 848 640 | 149 092 025 | +243 385 |
+
+**Reading it:** the +0.7 s is the second cuts.img pass — it reads, walks and rebuilds a 270 MB archive
+of 444 ANPK entries to change 2 of them, which is the price of doing it as a whole-archive rebuild
+rather than an in-place patch. Acceptable at this size and called out here rather than discovered
+later; if the cutscene stage ever becomes a build-time complaint, chaining the two passes over ONE
+walk (they already share a buffer) is the obvious first cut. The img growth and the paint-material
+jump are content, not regression: the 2026-08-13 run predates several rounds that adopt more mod
+geometry per slot.
+
+**What the run reports now** (both scene-value passes state what they touched):
+
+```
+wheel stash sunk: synd_4a.ifp cswashington wheellb   (×4)
+actor seated on the donor's own seat: smoke2b.ifp csglendale92 csplay  +0.270
+actor seated on the donor's own seat: smoke2b.ifp csglendale92 cssmoke +0.310 (ramped over 137 frame(s))
+```
+
+Exactly 2 of 444 `cuts.img` entries differ from vanilla, which is also the regression surface for
+anything touching those passes.

@@ -1,14 +1,21 @@
 # 004 — full scene field review: every vehicle cutscene checked, then the approval
 
-**Status: PLANNED 2026-08-13 (the user's call: check ALL cutscenes and sign off).** Plans 002/003
+**Status: CLOSED 2026-08-15 — APPROVED.** The user's word, verbatim: *"yes, all good, 004 can be
+closed."* All 35 rows pass on one configuration, open findings zero. This also closes the
+scene-coverage half of 002 step 11's acceptance; the pipeline-build half stays with 002, since this
+sweep ran on the bottle's self-contained build.
+
+Plans 002/003
 field-verified the conversion on FOUR scenes (intro ×2 gates, STRP4B2, PROLOG3). This plan sweeps
 every vehicle cutscene in the game — all **35 scenes** the ANPK census found cs vehicles in — through
 the cutscene-override instrument (cleo/scripts plan 003: one ini edit per scene, ~15 s to the verdict,
 no story progression), records a per-scene verdict, fixes what the field finds, and ends with the
 user's blanket APPROVAL of the cutscene fleet.
 
-**Build under review:** the bottle's `NO_COMMIT/cs-mods-plates/` (full 23-model fleet + baked plates,
-self-contained TXDs). A fix round re-runs the tool and re-drops `cutscene.img` (+ `txdcut.ide` when it
+**Build under review:** it MOVED during the sweep, which the rows record per verdict. It began on
+`NO_COMMIT/cs-mods-plates/` (full 23-model fleet + baked plates, self-contained TXDs) and the final
+configuration every row was signed off on is `NO_COMMIT/cs-seat-retarget/` — the round-23 fleet plus
+plan 005's seat retarget — running with `perfect-cutscene.asi`. A fix round re-runs the tool and re-drops `cutscene.img` (+ `txdcut.ide` when it
 changes); every fix is one variable per round, per the standing field workflow.
 
 ## Coverage facts (measured)
@@ -760,8 +767,8 @@ stand on the current no-ASI rules.
       plan** — and with it the scene-coverage half of 002 step 11's acceptance (the pipeline-build
       half stays with 002: this sweep runs on the bottle's self-contained build).
       **ALL 35 ROWS PASS as of 2026-08-15**, every one of them on the final configuration (the
-      round-23 fleet + plan 005's seat retarget + `perfect-cutscene.asi`). Awaiting only the user's
-      word to mark the plan CLOSED.
+      round-23 fleet + plan 005's seat retarget + `perfect-cutscene.asi`). **APPROVED the same day,
+      verbatim: "yes, all good, 004 can be closed."**
 
 **Record — the sweep, end to end:**
 
