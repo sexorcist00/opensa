@@ -74,6 +74,9 @@ scripts/cars-server/
 - **Images are served, not inlined.** 212 base64 originals in one document is ~1.7 MB of HTML; the routes
   decode the `data:` URI (and stream the screenshot off disk) so the page stays small and the browser
   lazy-loads what is on screen.
+- **The replaced shot opens full size** on click — a native `<dialog>` (`Esc`, `✕` and a backdrop click all
+  close it), inset from the edges so the page stays visible behind. The picture is dropped on close: these
+  are full-resolution field screenshots, up to 3.8 MB each, and one held decoded behind the page is waste.
 - **Dark, responsive, no framework**: a CSS grid that collapses 3 → 2 → 1 columns, `clamp()` type, images
   `max-width:100%`. Phone and tablet are the layouts that matter — this gets opened next to the game.
 - Rendered per request, so editing `mods-src` and hitting reload shows the new fleet. Nothing is cached

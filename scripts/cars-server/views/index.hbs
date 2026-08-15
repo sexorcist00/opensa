@@ -136,10 +136,66 @@
         color: var(--muted);
         font-size: 12px;
       }
+      /* The replaced shot opens full size — that is the picture worth studying (plates, wheels, paint). */
+      .shot.zoomable img { cursor: zoom-in; }
+      /* Pinned near the top and sized to the picture, so a wide screenshot on a tall phone does not sit in
+         a column of dead space. The inset is the point of the modal: the page stays visible around it. */
+      dialog#zoom {
+        position: fixed;
+        top: 24px;
+        left: 24px;
+        right: 24px;
+        bottom: auto;
+        width: auto;
+        max-width: none;
+        height: auto;
+        max-height: calc(100dvh - 48px);
+        margin: 0;
+        padding: 0;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+        color: var(--text);
+        overflow: hidden;
+      }
+      dialog#zoom::backdrop { background: rgba(0, 0, 0, 0.72); }
+      dialog#zoom .frame { display: grid; grid-template-rows: auto 1fr; min-height: 0; max-height: 100%; }
+      dialog#zoom .bar {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      dialog#zoom .bar b { font-size: 15px; overflow-wrap: anywhere; }
+      dialog#zoom .close {
+        flex: none;
+        width: 34px;
+        height: 34px;
+        font-size: 18px;
+        line-height: 1;
+        color: var(--text);
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      dialog#zoom .close:hover { border-color: var(--accent); color: var(--accent); }
+      dialog#zoom img {
+        display: block;
+        width: 100%;
+        height: auto;
+        max-height: 100%;
+        min-height: 0;
+        object-fit: contain;
+        background: #0b0e12;
+      }
       @media (max-width: 720px) {
         main { padding: 14px; }
         .grid { gap: 14px; }
         .swap { font-size: 17px; }
+        dialog#zoom { top: 12px; left: 12px; right: 12px; max-height: calc(100dvh - 24px); }
       }
       /* On a phone the two panes side by side are ~180 px each — stacked, each car gets the full width. */
       @media (max-width: 560px) {
@@ -185,10 +241,15 @@
                     <div class="missing">no stock picture</div>
                   {{/if}}
                 </div>
-                <div class="shot">
+                <div class="shot{{#if hasShot}} zoomable{{/if}}">
                   <span class="label">Replaced</span>
                   {{#if hasShot}}
-                    <img src="/shot/{{slot}}" alt="{{carName}}" loading="lazy" />
+                    <img
+                      src="/shot/{{slot}}"
+                      alt="{{carName}}"
+                      loading="lazy"
+                      data-zoom="{{slot}} — {{carName}}"
+                    />
                   {{else}}
                     <div class="missing">no screenshot</div>
                   {{/if}}
@@ -199,5 +260,46 @@
         </div>
       {{/each}}
     </main>
+
+    <dialog id="zoom">
+      <div class="frame">
+        <div class="bar">
+          <b></b>
+          <button type="button" class="close" aria-label="Close">✕</button>
+        </div>
+        <img alt="" />
+      </div>
+    </dialog>
+
+    <script>
+      // A native <dialog>, so Esc closes it and focus stays inside for free. Clicking the backdrop closes
+      // too: the click lands on the dialog element itself, never on the frame inside it.
+      (function () {
+        var zoom = document.getElementById('zoom');
+        var picture = zoom.querySelector('img');
+        var title = zoom.querySelector('.bar b');
+
+        document.addEventListener('click', function (event) {
+          var shot = event.target.closest('.shot.zoomable img');
+          if (shot) {
+            picture.src = shot.src;
+            picture.alt = shot.alt;
+            title.textContent = shot.dataset.zoom || shot.alt;
+            zoom.showModal();
+          }
+        });
+
+        zoom.addEventListener('click', function (event) {
+          if (event.target === zoom || event.target.closest('.close')) {
+            zoom.close();
+          }
+        });
+
+        // Drop the picture on close so a 3.8 MB screenshot is not held decoded behind the page.
+        zoom.addEventListener('close', function () {
+          picture.removeAttribute('src');
+        });
+      })();
+    </script>
   </body>
 </html>

@@ -28,6 +28,9 @@ looks like missing pictures.
 A `new/` candidate is shown, because the build installs it, and marked `from new/` — with **no** replaced
 screenshot: the picture filed under that slot is of the car it displaced.
 
+**Click the Replaced picture** to open it near-full-screen (a native `<dialog>`, so `Esc` closes it as well
+as the `✕` and a click on the backdrop). The inset is deliberate: the page stays visible around the modal.
+
 ## Tags — read from the mod folder, in this order
 
 | Tag                | Means                                                                              |
