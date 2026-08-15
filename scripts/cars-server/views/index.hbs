@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{game}} — replaced cars</title>
+    <style>
+      :root {
+        --bg: #0e1116;
+        --panel: #161b22;
+        --panel-2: #1c232c;
+        --line: #2a323d;
+        --text: #e6edf3;
+        --muted: #8d99a6;
+        --accent: #ff9f45;
+        --tag: #223042;
+        --tag-text: #9fd0ff;
+        color-scheme: dark;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 16px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        -webkit-text-size-adjust: 100%;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 16px;
+        align-items: baseline;
+        padding: 14px 20px;
+        background: rgba(14, 17, 22, 0.92);
+        border-bottom: 1px solid var(--line);
+        backdrop-filter: blur(6px);
+      }
+      header h1 { margin: 0; font-size: clamp(17px, 2.4vw, 22px); }
+      header .meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 10px 20px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      nav a {
+        font-size: 12px;
+        color: var(--muted);
+        text-decoration: none;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 4px 9px;
+      }
+      nav a:hover { color: var(--text); border-color: var(--accent); }
+      h2 { scroll-margin-top: 72px; }
+      main { padding: 20px; max-width: 1500px; margin: 0 auto; }
+      h2 {
+        margin: 32px 0 14px;
+        font-size: clamp(15px, 2vw, 19px);
+        color: var(--accent);
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 8px;
+      }
+      h2 span { color: var(--muted); font-size: 13px; font-weight: 400; }
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .card .head { padding: 12px 14px 10px; }
+      .id {
+        display: inline-block;
+        font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--accent);
+        background: rgba(255, 159, 69, 0.12);
+        border: 1px solid rgba(255, 159, 69, 0.35);
+        border-radius: 999px;
+        padding: 4px 8px;
+        margin-bottom: 8px;
+      }
+      .id.candidate {
+        color: #7ee787;
+        background: rgba(126, 231, 135, 0.12);
+        border-color: rgba(126, 231, 135, 0.35);
+      }
+      .swap { margin: 0; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
+      .swap .slot { font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .swap .to { color: var(--muted); font-size: 13px; }
+      .swap .name { font-weight: 600; }
+      .author { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+      .author b { color: var(--text); font-weight: 600; }
+      .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+      .tag {
+        font-size: 12px;
+        color: var(--tag-text);
+        background: var(--tag);
+        border: 1px solid #2c3d52;
+        border-radius: 6px;
+        padding: 3px 7px;
+      }
+      .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); margin-top: auto; }
+      .shot { background: #0b0e12; position: relative; }
+      /* `contain`, not `cover`: the point of the page is looking at the whole car. The stock pictures are
+         wide wiki shots and the field ones are 16:9 gameplay — cropping either cuts the subject. */
+      .shot img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: contain; }
+      .shot .label {
+        position: absolute;
+        left: 6px;
+        top: 6px;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text);
+        background: rgba(0, 0, 0, 0.55);
+        border-radius: 4px;
+        padding: 2px 6px;
+      }
+      .shot .missing {
+        display: grid;
+        place-items: center;
+        aspect-ratio: 16 / 10;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      @media (max-width: 720px) {
+        main { padding: 14px; }
+        .grid { grid-template-columns: 1fr; gap: 14px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>{{game}} — replaced cars</h1>
+      <span class="meta">{{total}} cars · {{sections.length}} sections · read from {{source}}</span>
+    </header>
+    <nav>
+      {{#each sections}}
+        <a href="#{{anchor}}">{{name}} <b>{{cars.length}}</b></a>
+      {{/each}}
+    </nav>
+    <main>
+      {{#each sections}}
+        <h2 id="{{anchor}}">{{name}} <span>{{cars.length}}</span></h2>
+        <div class="grid">
+          {{#each cars}}
+            <article class="card">
+              <div class="head">
+                {{#if id}}<span class="id">ID {{id}}</span>{{else}}<span class="id">ID —</span>{{/if}}
+                {{#if isCandidate}}<span class="id candidate">from new/</span>{{/if}}
+                <p class="swap">
+                  <span class="slot">{{slot}}</span>
+                  <span class="to">replaced to:</span>
+                  <span class="name">{{carName}}</span>
+                </p>
+                {{#if author}}<p class="author">Author: <b>{{author}}</b></p>{{/if}}
+                {{#if tags.length}}
+                  <p class="tags">{{#each tags}}<span class="tag">{{this}}</span>{{/each}}</p>
+                {{/if}}
+              </div>
+              <div class="shots">
+                <div class="shot">
+                  <span class="label">Original</span>
+                  {{#if hasOriginal}}
+                    <img src="/original/{{slot}}" alt="stock {{slot}}" loading="lazy" />
+                  {{else}}
+                    <div class="missing">no stock picture</div>
+                  {{/if}}
+                </div>
+                <div class="shot">
+                  <span class="label">Replaced</span>
+                  {{#if hasShot}}
+                    <img src="/shot/{{slot}}" alt="{{carName}}" loading="lazy" />
+                  {{else}}
+                    <div class="missing">no screenshot</div>
+                  {{/if}}
+                </div>
+              </div>
+            </article>
+          {{/each}}
+        </div>
+      {{/each}}
+    </main>
+  </body>
+</html>
