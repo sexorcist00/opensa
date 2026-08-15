@@ -31,6 +31,7 @@
  */
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 
+import { resolveSeatPoints } from '../seats';
 import { canonicalPartName, type CsTemplate, geometryZHalfExtent, toArrayBuffer, type WheelCorner } from '../template';
 import { mirrorGeometryBodyX } from './bake';
 import { type ClumpAtomic, type ClumpModel, type OpaqueChunk, readClump, writeClump } from './clump-io';
@@ -119,6 +120,7 @@ export function convertCar(
     droppedFromMod: [],
     missingInMod: [],
     parts: [],
+    seats: resolveSeatPoints(analysis.model, analysis.relativeToRoot, shiftZ),
     shiftZ,
     shimmed: [],
   };

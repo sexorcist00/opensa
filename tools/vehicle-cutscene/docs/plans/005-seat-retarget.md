@@ -73,10 +73,26 @@ the follow-up, which needs a blend and its own field round.
       census rows (the five actor pairs plus the two props) byte for byte. Both traps are written into
       the script's own header so the next reader does not re-pay them: a short track HOLDS its last
       value, and props ride vehicles too.
-- [ ] **2. Seat resolution in the converter.** Read `ped_frontseat`/`ped_backseat` from the donor,
+- [x] **2. Seat resolution in the converter.** Read `ped_frontseat`/`ped_backseat` from the donor,
       mirror for the opposite side, express in cutscene space (`+ shiftZ`), and report them per slot.
       Verification: unit test on the glendale — front seat resolves to z +0.161; a donor with no dummy
       resolves to null.
+      **DONE 2026-08-15** — `src/seats.ts` (`resolveSeatPoints` + `matchSeat`), carried on every
+      branch's `ConvertReport.seats`; suite 100/100 (8 new). End-to-end on the real donor the
+      converter reports `shiftZ = 0.207` and
+
+      | seat | position |
+      | --- | --- |
+      | `ped_frontseat` | `[0.444, 0.379, +0.159]` |
+      | `ped_frontseat` mirrored | `[−0.444, 0.379, +0.159]` |
+      | `ped_backseat` | `[0.393, −0.868, +0.087]` |
+
+      — the front seat at **+0.159**, against this plan's predicted +0.161. Both SMOKE2B actors match
+      the FRONT row and neither comes near the back one: cssmoke `[0.50, 0.26]` is 0.13 m from the
+      authored seat, csplay `[−0.51, 0.17]` is 0.22 m from its mirror. The z corrections they imply are
+      **+0.309** and **+0.269**. Matching is x/y only — z is the quantity under correction and may not
+      be its own evidence — and the mod's seat also sits ~0.15 m FORWARD of where the scene puts them,
+      which v1 deliberately leaves alone.
 - [ ] **3. The patch pass.** Sibling to `stash-patch.ts`: for every fully-seated (car, actor) pair, lift
       the actor's root channel by the derived z delta. Verification: rebuilt `cuts.img` where SMOKE2B's
       csplay offset reads z ≈ +0.161, every other channel byte-identical.
