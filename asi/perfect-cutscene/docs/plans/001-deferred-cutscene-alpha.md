@@ -349,6 +349,48 @@ bottle's `CLEO/cutscene-override.ini`).
       npm script carries it is the user's packaging call. Verification adds: two or three swept scenes
       re-run on the pipeline build and matching their recorded verdicts.
 
+      **The packaging call (the user, 2026-08-15): `build:game:original:sa` stops excluding anything but
+      `opensa`.** It was `--exclude vehicles,peds,opensa` since 2026-07-28, from a time when the `sa` target
+      meant the MAP; a "real game" build that silently carries neither the mod cars nor the fleet nor the
+      plugin paired with it is the trap this repo keeps paying for. One script, complete by default.
+      **The change is NOT landed yet, and the reason is the finding below** — the script would fail. It ships
+      with the vehicle-installer fix that makes it true.
+
+      **The finding that stopped the run: the vehicles stage cannot complete on the current mod set** (see
+      `docs/edge-cases/` + the img-split idea). The first attempt at this step's verification died mid-stage:
+
+      ```
+      · mods — 86.5s
+      · vehicles
+      The value of "length" is out of range. It must be >= 0 && <= 2147483647. Received 2168825856
+      ```
+
+      `tools/vehicle-installer/src/img-merge.ts:23` writes the whole archive with one `writeFileSync`, capped
+      at 2 GiB — and it does that **per car** (`apply-vehicle.ts:49`: read the whole gta3.img, add two
+      entries, write the whole gta3.img, 212 times). Measured: gta3.img after `mods` is 1 242 236 928 B, the
+      mod vehicle payload is 3 077 354 628 B over 752 dff/txd, so the finished archive would be ~4.32 GB. The
+      installer is NOT inflating anything — cumulative source through the car it died on is 916 181 801 B
+      against 926 588 928 B of observed archive growth, a 1.1 % delta that is VER2 sector padding.
+      Node 24.15 limits measured directly: `writeSync` at a 3 GiB position OK, `ftruncateSync` past 2 GiB OK,
+      **`readFileSync` of a 3.2 GB file FAILS with `ERR_FS_FILE_TOO_LARGE`**, `writeFileSync` of a 2.2 GB
+      buffer fails as above. So the wall is on both sides, and `tools/opensa-pack/src/game-fs.ts:128`
+      (`openLazyVer2`) is the fd-backed reader that already exists for exactly this reason, in one tool only.
+
+      **The pmb side (code, 2026-08-15):** `shipPerfectCutsceneAsi` beside `shipPerfectMapAsi` — same game
+      ROOT, same pre-built-artifact rule (gitignored `dist/`, a missing one WARNS and does not fail the
+      build), same sha256 into `report-sa.json` + `build-timings.json` (`perfectCutsceneAsiSha256`). The two
+      wrappers share one `shipAsi`, each carrying its own "so what?" for the absent case — the reasons the
+      two plugins are required have nothing to do with each other.
+      **Gated on the cutscene stage having RUN**, and the gate is symmetric: a build with a fleet always says
+      which happened (shipped / NOT SHIPPED), a build without one neither ships it nor mentions it. That
+      second half is not tidiness — the deferred path renders at `RenderEntity`'s ref (100, or 0 indoors)
+      instead of the outdoor pass's 140, so on VANILLA cutscene models the plugin could start drawing glass
+      the main pass had always discarded. An unmeasured look change bought for nothing is worse than no
+      plugin.
+      Artifact pairing checked before the run: both `dist/` artifacts are byte-identical to the bottle copies
+      the 35-scene sweep was taken on — `perfect-cutscene.asi` sha256 `8cbd40db…` (18 944 B),
+      `perfect-map.asi` `c6b87f95…` (20 480 B). So the shipped pair IS the swept pair.
+
       **What comes AFTER this step** (decided 2026-08-15, before step 7 starts): the same converter
       also ships as a standalone Windows app, and that chain is planned in three scopes —
       [`vehicle-cutscene` 006](../../../../tools/vehicle-cutscene/docs/plans/006-no-base-copy.md)

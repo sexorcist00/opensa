@@ -20,6 +20,7 @@ import {
   reportTextIplCensus,
   resolveBuildTarget,
   runsStage,
+  shipPerfectCutsceneAsi,
   shipPerfectMapAsi,
   type StageTiming,
   writeStageTimings,
@@ -469,6 +470,23 @@ describe('buildPerfectMap cutscene stage', () => {
       expect(cutsceneInstall).not.toHaveBeenCalled();
       expect(logs.join('\n')).toMatch(/cutscene — skipped \(vehicles stage excluded/);
     });
+
+    it('does not even ADDRESS perfect-cutscene.asi when no fleet was converted', async () => {
+      // The gate short-circuits before the artifact is looked for, so a fleetless build neither ships the
+      // plugin nor warns about it: without our translucent atomics there is nothing for it to reorder, and
+      // its deferred pass renders at a LOWER alpha-test ref than the inline one it replaces.
+      const said: string[] = [];
+      const record = (m: unknown): void => void said.push(String(m));
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(record);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(record);
+      await buildPerfectMap({ exclude: ['cutscene', 'optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+      logSpy.mockRestore();
+      warnSpy.mockRestore();
+
+      expect(said.join('\n')).not.toMatch(/perfect-cutscene\.asi/);
+      expect(existsSync(join(out, 'sa', 'perfect-cutscene.asi'))).toBe(false);
+      expect(saReport(out).fragments.sa.perfectCutsceneAsiSha256).toBeNull();
+    });
   });
 
   describe('positive cases', () => {
@@ -494,8 +512,33 @@ describe('buildPerfectMap cutscene stage', () => {
       expect(fragment('sa').txdBytes).toBe(40);
       expect(fragment('opensa').converted).toEqual(fragment('sa').converted);
     });
+
+    it('ADDRESSES perfect-cutscene.asi on a build that converted a fleet — shipped, or said to be missing', async () => {
+      // The fleet and the plugin are coupled (asi/perfect-cutscene plan 001 step 7), so a converted build must
+      // never be silent about it. Which of the two happens depends on whether `dist/` holds a cross-compiled
+      // artifact — gitignored, hence absent on a fresh checkout — so the deterministic claim is that the run
+      // NAMED the plugin either way.
+      const said: string[] = [];
+      const record = (m: unknown): void => void said.push(String(m));
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(record);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(record);
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+      logSpy.mockRestore();
+      warnSpy.mockRestore();
+
+      expect(said.join('\n')).toMatch(/perfect-cutscene\.asi (?:shipped into the game root|NOT SHIPPED)/);
+      const shipped = existsSync(join(out, 'sa', 'perfect-cutscene.asi'));
+      expect(saReport(out).fragments.sa.perfectCutsceneAsiSha256 !== null).toBe(shipped);
+    });
   });
 });
+
+/** The `sa` target report — the manifest half of the asi pairing. */
+function saReport(outPath: string): { fragments: { sa: { perfectCutsceneAsiSha256: null | string } } } {
+  return JSON.parse(readFileSync(join(outPath, 'report-sa.json'), 'utf8')) as {
+    fragments: { sa: { perfectCutsceneAsiSha256: null | string } };
+  };
+}
 
 /**
  * Plan 005: one report per target, `.work` split the same way. The regression the whole plan exists for:
@@ -1007,6 +1050,50 @@ describe('shipPerfectMapAsi', () => {
       writeFileSync(b, 'two');
 
       expect(shipPerfectMapAsi(game, a)?.sha256).not.toBe(shipPerfectMapAsi(game, b)?.sha256);
+    });
+  });
+});
+
+describe('shipPerfectCutsceneAsi', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'pmb-cs-asi-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it('WARNS with the COUPLING, not with the map warning — the two asis are needed for different reasons', () => {
+      const warns: string[] = [];
+      const spy = vi.spyOn(console, 'warn').mockImplementation((m: unknown) => void warns.push(String(m)));
+      const shipped = shipPerfectCutsceneAsi(dir, join(dir, 'nope', 'perfect-cutscene.asi'));
+      spy.mockRestore();
+
+      expect(shipped).toBeNull();
+      expect(existsSync(join(dir, 'perfect-cutscene.asi'))).toBe(false);
+      expect(warns.join('\n')).toMatch(/perfect-cutscene\.asi NOT SHIPPED/);
+      expect(warns.join('\n')).toMatch(/asi\/perfect-cutscene/); // its own build dir, not perfect-map's
+      expect(warns.join('\n')).toMatch(/actor is erased/); // what it costs, so the warning is actionable
+    });
+  });
+
+  describe('positive cases', () => {
+    it('copies the artifact into the game ROOT beside the map asi, and returns its sha256', () => {
+      const source = join(dir, 'perfect-cutscene.asi.src');
+      writeFileSync(source, 'MZ-cutscene');
+      const game = join(dir, 'sa');
+      mkdirSync(game, { recursive: true });
+      writeFileSync(join(dir, 'perfect-map.asi.src'), 'MZ-map');
+
+      const shipped = shipPerfectCutsceneAsi(game, source);
+      shipPerfectMapAsi(game, join(dir, 'perfect-map.asi.src'));
+
+      expect(readFileSync(join(game, 'perfect-cutscene.asi'), 'utf8')).toBe('MZ-cutscene');
+      expect(readFileSync(join(game, 'perfect-map.asi'), 'utf8')).toBe('MZ-map');
+      expect(shipped?.sha256).toBe(createHash('sha256').update('MZ-cutscene').digest('hex'));
     });
   });
 });

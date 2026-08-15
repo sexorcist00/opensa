@@ -86,6 +86,13 @@ ID pools** (`checkImgIdBudgets` — the one set of ceilings the target really ha
 neither. There is no int16 row guard any more: the target always runs `perfect-map.asi` + OLA + FLA, so that
 ceiling is lifted where our data lands — `--allow-text-row-overflow` was deleted with it (2026-08-09).
 
+The `sa/` tree carries **the asis its content requires**, into the game root: `perfect-map.asi` always, and
+`perfect-cutscene.asi` when the cutscene stage ran (the fleet and the plugin are coupled — panes on every
+slot with no plugin is the draw-order roulette back). Both are pre-built artifacts under a gitignored
+`dist/` (`npm run build:asi` in `asi/perfect-map` / `asi/perfect-cutscene`, MinGW); a missing one WARNS and
+does not fail the build, and each shipped one is hashed into `report-sa.json` and `build-timings.json` so a
+tree states which plugin build it is paired with.
+
 ### Vehicle round: rebake instead of rebuilding
 
 ```bash

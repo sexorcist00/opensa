@@ -16,8 +16,13 @@ we build for** (the user's call, reaffirmed 2026-08-09). So the useful column is
 > SILENT.** Cutscene cars ship window glass on every slot again (the pane-suppression hack is retired). A
 > rendered pane z-writes, and without the plugin's deferral the scenes that lose the sector-scan roulette
 > erase their own actors — the build succeeds, the scene plays, and a ped simply is not there. Anything that
-> ships `models/cutscene.img` has to ship the plugin with it (plan 001 step 7 does this in pmb); anything
-> that A/Bs the fleet has to say which side had the plugin.
+> ships `models/cutscene.img` has to ship the plugin with it; anything that A/Bs the fleet has to say which
+> side had the plugin.
+>
+> **pmb satisfies this itself since 2026-08-15** (plan 001 step 7): a `sa` build that ran the cutscene stage
+> writes `perfect-cutscene.asi` into the game root and hashes it into `report-sa.json`, so the target runs
+> OLA + FLA + perfect-map + perfect-cutscene. It is now only a rule for anything OUTSIDE pmb that delivers a
+> fleet — a hand-dropped `cutscene.img`, the standalone app, a bottle install.
 
 
 | Ceiling | Stock | **On the target** | What overflowing does |

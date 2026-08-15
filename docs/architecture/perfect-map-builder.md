@@ -32,6 +32,17 @@ point: the report states what the map needs and the next line satisfies it. The 
 (`npm run build:asi`, MinGW) and `dist/` is gitignored, so a fresh checkout ships none and the build **warns**
 rather than quietly emitting a tree that corrupts a plain install.
 
+**A SECOND asi ships beside it when — and only when — the cutscene stage ran** (`shipPerfectCutsceneAsi`,
+asi/perfect-cutscene plan 001 step 7): `perfect-cutscene.asi`, into the same game root, hashed into the same
+report and `build-timings.json`. The gate is the coupling, not a preference. A converted cutscene car carries
+real translucent atomics where vanilla ships almost none, and a `CCutsceneObject` renders inline in
+world-sector scan order — so a fleet without the plugin puts back the draw-order roulette the 35-scene sweep
+was closed on. It does NOT ship on a fleetless build: the deferred path renders at `RenderEntity`'s
+alpha-test ref (100, or 0 in an interior) rather than the outdoor pass's 140, so on vanilla cutscene models
+it could start drawing glass the main pass had always discarded — an unmeasured look change bought for
+nothing. A build with no fleet therefore neither ships it nor warns about it; a build WITH one always says
+which of the two happened.
+
 **A run asks for a TARGET, not for the whole pipeline** (`--exclude <stage,stage>`, repeatable): the named
 stages are dropped and everything after them still runs. That is what the two `build:game:<id>:*` script
 families are — `:opensa` is `--exclude sa`, `:sa` is `--exclude vehicles,peds,opensa` — and it exists because

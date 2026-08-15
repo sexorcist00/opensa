@@ -92,6 +92,15 @@ export const PERFECT_MAP_ASI = resolve(
   '../../../asi/perfect-map/dist/perfect-map.asi',
 );
 
+/**
+ * Where the cross-compiled `perfect-cutscene.asi` is picked up from — same deal as {@link PERFECT_MAP_ASI}: a
+ * pre-built artifact under a gitignored `dist/`, never a build step (asi/perfect-cutscene plan 001 step 7).
+ */
+export const PERFECT_CUTSCENE_ASI = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../asi/perfect-cutscene/dist/perfect-cutscene.asi',
+);
+
 export const OPENSA_BUDGET_NOTICE =
   "opensa: SA's row/slot ceilings do not apply here — and no streaming budget guard exists yet " +
   '(07/04 decision 5: the number must be measured in our engine, never inherited from SA). ' +
@@ -173,6 +182,8 @@ export interface PackFragment {
 export interface SaFragment {
   census: { instBearingIpls: number; largestIpl: number; rows: number };
   imgBudgets: Record<string, number>;
+  /** Set only when this build carries a converted cutscene fleet — the two ship together or not at all. */
+  perfectCutsceneAsiSha256: null | string;
   perfectMapAsiSha256: null | string;
   requirements: InstallRequirement[];
 }
@@ -310,6 +321,8 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   const common: TargetReportFragments = {};
   /** The asi shipped beside this map, for the manifest — a map at this density is correct only with it. */
   let shippedAsi: null | { sha256: string } = null;
+  /** The asi shipped beside the cutscene fleet, same manifest reasoning — null when no fleet was converted. */
+  let shippedCutsceneAsi: null | { sha256: string } = null;
   // Timed per stage and logged AS EACH ONE ENDS, not only in the summary: a long build that is killed part
   // way still leaves its numbers in the log. Nothing recorded a build's duration before 2026-08-09, so the
   // first question asked of the procobj density change ("what did it cost in build time?") had no baseline.
@@ -363,6 +376,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   if (runsStage('sa', until, excluded)) {
     const built = await buildSaTarget({
       config,
+      cutsceneFleet: common.cutscene !== undefined,
       excluded,
       excludeItems,
       game,
@@ -373,6 +387,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       until,
     });
     shippedAsi = built.shippedAsi;
+    shippedCutsceneAsi = built.shippedCutsceneAsi;
     produced.push(built.produced);
     // The report this target never had (plan 005): the census, the FLA pools and the lift requirements used
     // to exist only as console output nobody could diff.
@@ -422,7 +437,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     rmSync(work, { force: true, recursive: true });
   }
   writeStageTimings(outPath, timings, {
-    ...(shippedAsi ? { perfectMapAsiSha256: shippedAsi.sha256 } : {}),
+    ...asiPairings(shippedAsi, shippedCutsceneAsi),
     procobjDensity: config.procobjDensity,
     procobjMax: config.procobjMax,
     target,
@@ -669,6 +684,8 @@ async function buildOpensaTarget(step: {
  */
 async function buildSaTarget(step: {
   config: BuilderConfig;
+  /** Whether the cutscene stage ran — the gate on shipping `perfect-cutscene.asi` beside the fleet it needs. */
+  cutsceneFleet: boolean;
   excluded: ReadonlySet<ExcludableStage>;
   excludeItems: string[];
   /** The common baked build both targets are fed from. */
@@ -679,8 +696,14 @@ async function buildSaTarget(step: {
   procobjIn: string;
   timed: <T>(name: string, run: () => Promise<T> | T) => Promise<T>;
   until: StageName | undefined;
-}): Promise<{ fragment: SaFragment; produced: { dir: string; name: string }; shippedAsi: null | { sha256: string } }> {
-  const { config, excluded, excludeItems, game, holeFillModels, outPath, procobjIn, timed, until } = step;
+}): Promise<{
+  fragment: SaFragment;
+  produced: { dir: string; name: string };
+  shippedAsi: null | { sha256: string };
+  shippedCutsceneAsi: null | { sha256: string };
+}> {
+  const { config, cutsceneFleet, excluded, excludeItems, game, holeFillModels, outPath, procobjIn, timed, until } =
+    step;
   const sa = join(outPath, 'sa');
   log('sa → sa/');
   await timed('sa', () => buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa }));
@@ -715,16 +738,20 @@ async function buildSaTarget(step: {
   reportInstallRequirements(census, imgBudgets);
   // Ship the fix beside the map that needs it — stating a requirement and not satisfying it is half a job.
   const shippedAsi = shipPerfectMapAsi(sa, PERFECT_MAP_ASI);
+  // Same rule for the fleet: a build that converted the cutscene cars ships the plugin they were swept with.
+  const shippedCutsceneAsi = cutsceneFleet ? shipPerfectCutsceneAsi(sa, PERFECT_CUTSCENE_ASI) : null;
 
   return {
     fragment: {
       census,
       imgBudgets,
+      perfectCutsceneAsiSha256: shippedCutsceneAsi?.sha256 ?? null,
       perfectMapAsiSha256: shippedAsi?.sha256 ?? null,
       requirements: installRequirements(census, imgBudgets),
     },
     produced: { dir: sa, name: 'sa' },
     shippedAsi,
+    shippedCutsceneAsi,
   };
 }
 
@@ -1024,6 +1051,32 @@ export function reportTextIplCensus(gameDir: string): { instBearingIpls: number;
 }
 
 /**
+ * The SECOND asi the `sa` target ships (asi/perfect-cutscene plan 001 step 7) — and it is shipped only when
+ * the cutscene stage RAN, because that is when it is required and when its effect is one we have measured.
+ *
+ * **The fleet and the plugin are COUPLED.** A converted cutscene car carries real translucent atomics where
+ * vanilla ships almost none, and a `CCutsceneObject` is rendered inline in world-sector scan order, so
+ * without the deferral a pane z-writes over whichever actor the scan visited later — the roulette the whole
+ * plugin exists to end. The 35-scene sweep was taken on fleet + plugin together; either half alone is a
+ * configuration nobody has measured.
+ *
+ * **Which is also why it does not ship on a build WITHOUT the fleet**: the deferred path renders at
+ * `RenderEntity`'s alpha-test ref (100, or 0 in an interior) instead of the outdoor pass's 140, so on vanilla
+ * cutscene models it could start drawing glass the main pass had always discarded. Shipping it there would be
+ * an unmeasured look change bought for nothing.
+ */
+export function shipPerfectCutsceneAsi(saDir: string, asiPath: string): null | { sha256: string } {
+  return shipAsi(
+    saDir,
+    asiPath,
+    'perfect-cutscene.asi',
+    'This build carries a CONVERTED cutscene fleet and the two are coupled; build it with `npm run build:asi` ' +
+      'in asi/perfect-cutscene, or install it by hand. Without it a scene actor is erased by whichever car ' +
+      'pane the sector scan happened to draw later.',
+  );
+}
+
+/**
  * The asi this build's map REQUIRES, shipped beside it — plan 006 task 1, and the whole of what that plan
  * still is. The build already emits maps a plain install cannot run (110 055 permanent rows against a stock
  * 32 767), and until now nothing put the fix in the tree: the requirement was stated and then left to be
@@ -1035,26 +1088,49 @@ export function reportTextIplCensus(gameDir: string): { instBearingIpls: number;
  * common case on a fresh checkout and it must never be quiet: a `sa/` tree without it is a map that corrupts
  * exactly as it did before the fix (decision 5, fallback honesty).
  *
- * **Into the game ROOT**, which is where the reference install's 23 plugins live
- * (`gta-sa-original/reference-install-config.md`) — not `scripts/`, though the loader accepts both.
- *
  * Returns the pairing for the build manifest: a map built at this density is only correct with THIS asi, and
  * a sha256 is what makes a mismatch detectable rather than a mystery crash (decision 4).
  */
 export function shipPerfectMapAsi(saDir: string, asiPath: string): null | { sha256: string } {
+  return shipAsi(
+    saDir,
+    asiPath,
+    'perfect-map.asi',
+    "This build's map needs it (see the install requirements above); build it with `npm run build:asi` in " +
+      'asi/perfect-map, or install it by hand. Without it the game corrupts exactly as it did before the fix.',
+  );
+}
+
+/** The two asi pairings in the shape `build-timings.json` carries — each absent when nothing was shipped, so
+ *  a run states which plugins its output is paired with and never invents a hash it does not have. */
+function asiPairings(
+  map: null | { sha256: string },
+  cutscene: null | { sha256: string },
+): { perfectCutsceneAsiSha256?: string; perfectMapAsiSha256?: string } {
+  return {
+    ...(cutscene ? { perfectCutsceneAsiSha256: cutscene.sha256 } : {}),
+    ...(map ? { perfectMapAsiSha256: map.sha256 } : {}),
+  };
+}
+
+/**
+ * Copy one pre-built `.asi` into the game ROOT — where the reference install's 23 plugins live
+ * (`gta-sa-original/reference-install-config.md`), not `scripts/`, though the loader accepts both — and
+ * return its sha256 for the build manifest.
+ *
+ * `absentAdvice` is the caller's own answer to "so what?": each asi is required for a different reason and a
+ * warning that does not say which is a warning nobody acts on.
+ */
+function shipAsi(saDir: string, asiPath: string, fileName: string, absentAdvice: string): null | { sha256: string } {
   if (!existsSync(asiPath)) {
-    console.warn(
-      `  ! perfect-map.asi NOT SHIPPED — no artifact at ${asiPath}. This build's map needs it (see the ` +
-        'install requirements above); build it with `npm run build:asi` in asi/perfect-map, or install it by ' +
-        'hand. Without it the game corrupts exactly as it did before the fix.',
-    );
+    console.warn(`  ! ${fileName} NOT SHIPPED — no artifact at ${asiPath}. ${absentAdvice}`);
 
     return null;
   }
   const bytes = readFileSync(asiPath);
   const sha256 = createHash('sha256').update(bytes).digest('hex');
-  writeFileSync(join(saDir, 'perfect-map.asi'), bytes);
-  log(`sa asi: perfect-map.asi shipped into the game root (sha256 ${sha256.slice(0, 12)}…, ${bytes.length} B)`);
+  writeFileSync(join(saDir, fileName), bytes);
+  log(`sa asi: ${fileName} shipped into the game root (sha256 ${sha256.slice(0, 12)}…, ${bytes.length} B)`);
 
   return { sha256 };
 }
@@ -1104,6 +1180,9 @@ export function writeStageTimings(
   outPath: string,
   timings: readonly StageTiming[],
   config: {
+    /** sha256 of the `perfect-cutscene.asi` shipped into `sa/` — the fleet↔asi pairing, same reasoning.
+     *  Absent when this build converted no fleet, or when no artifact was available. */
+    perfectCutsceneAsiSha256?: string;
     /** sha256 of the `perfect-map.asi` shipped into `sa/` — the map↔asi pairing (006 decision 4). Absent when
      *  no artifact was available, which the run also warns about. */
     perfectMapAsiSha256?: string;

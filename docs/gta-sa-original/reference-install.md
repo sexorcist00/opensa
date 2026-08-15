@@ -29,7 +29,8 @@ It boots and plays. That is the fact every ceiling below has to be read against.
 
 Dozens of `.asi` files are installed; only these three touch the structures a map-content plan cares about,
 and **they partition cleanly** — which is what makes the configuration legal under "exactly ONE adjuster may
-own IPL limits" ([sa-target.md](../restrictions/sa-target.md)).
+own IPL limits" ([sa-target.md](../restrictions/sa-target.md)). A fourth of ours, `perfect-cutscene.asi`,
+decides no limit at all — it is below the table because it owns draw ORDER, not a ceiling.
 
 | Plugin | Owns | Evidence |
 | --- | --- | --- |
@@ -40,9 +41,13 @@ own IPL limits" ([sa-target.md](../restrictions/sa-target.md)).
 Since 2026-08-14 the bottle also carries **`perfect-cutscene.asi`** (ours), and by that evening it is an
 **APPLY** build: it defers cutscene cars into the engine's sorted entity pass so their glass stops erasing
 scene actors ([plan 001](../../asi/perfect-cutscene/docs/plans/001-deferred-cutscene-alpha.md), field-accepted
-on RIOT_4B and SYND_3A). It is still a DEV-TIME install — the `sa` target does not ship it until that plan's
-step 7 — but the converted cutscene fleet already depends on it
-([`restrictions/sa-target.md`](../restrictions/sa-target.md)), so a cutscene A/B must state which side had it.
+on RIOT_4B and SYND_3A, then swept 35/35). **Since 2026-08-15 it is SHIPPED, not hand-installed** (that plan's
+step 7): a `sa` build that ran the cutscene stage writes it into the game root beside `perfect-map.asi` and
+hashes both into `report-sa.json`. So the target runs **OLA + FLA + perfect-map + perfect-cutscene**, and the
+last of those arrives with the fleet that requires it
+([`restrictions/sa-target.md`](../restrictions/sa-target.md)) rather than by hand. A build with no converted
+fleet ships no plugin — the two are coupled in both directions — and a cutscene A/B must still state which
+side had it.
 
 In fastman92's ini format a leading `#` **disables** the setting — confirmed against its own log, where the
 uncommented `Number of standard lines = 500` appears and no IPL limit does. So FLA is present and loud, and
