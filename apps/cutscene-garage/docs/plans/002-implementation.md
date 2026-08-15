@@ -39,10 +39,11 @@ Steps 1–2 can start before either lands; step 4 needs both.
       Tailwind tokens, same typographic scale. Verification: side-by-side screenshots; the user's
       call, since "looks like ours" is a judgement he owns.
 - [ ] **7. The tutorial.** `docs/tutorial/cutscene-garage/<version>/` — install, the three steps, what
-      to copy where afterwards, the SmartScreen warning and why it appears, and the plain statement
-      that this changes CUTSCENES ONLY. The app links to its own version. Verification: the user
-      follows it on a clean machine without asking a question; anything he has to ask is a defect in
-      the tutorial, not in him.
+      to copy where afterwards, and two things the app is DECIDED to be rather than apologise for:
+      the SmartScreen warning (shipping unsigned, "More info → Run anyway", why it appears) and the
+      CUTSCENES-ONLY scope (gameplay cars are the user's own business). The app links to its own
+      version. Verification: the user follows it on a clean machine without asking a question;
+      anything he has to ask is a defect in the tutorial, not in him.
 - [ ] **8. Release.** Version, artifact, the ASI SHA and the tutorial version recorded together, so a
       bug report identifies all three. Verification: the recorded triple matches a fresh build.
 
@@ -51,12 +52,15 @@ Steps 1–2 can start before either lands; step 4 needs both.
 - **Installing into the game directly.** `--out` == game is refused by the tool. It is a different
   feature with a different risk profile (an unrecoverable overwrite of someone's install) and it wants
   a backup step before anyone builds it.
-- **Gameplay car installation.** `vehicle-installer` exists and could be a fourth step later, but the
-  app is named for what it does today, and doing half of the pair silently would be worse.
+- **Gameplay car installation.** DECIDED, not deferred by omission (the user, 2026-08-15): what to
+  install for gameplay is the user's business, and the app says so on screen. `vehicle-installer`
+  could become a fourth step **if the app finds an audience** — until then this is the scope, and
+  doing half of the pair silently would be the only wrong version.
 - **A progress bar with percentages.** The tool's own per-slot lines are honest progress; a synthetic
   percentage over a 5-second run is decoration.
-- **Signing.** See 001 — a distribution decision with a recurring bill, addable later without touching
-  the app.
+- **Signing.** DECIDED: none. See 001 — a distribution decision with a recurring bill, addable later
+  without touching a line of the app, so deferring it costs nothing. The tutorial carries the warning
+  instead.
 
 ## Numbers to record
 

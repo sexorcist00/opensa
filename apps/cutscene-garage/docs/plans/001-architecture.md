@@ -10,10 +10,14 @@ prerequisites.
 chooses folders, validates them, runs the tool and explains the result. Every rule about SA data
 stays in the tool — the app must never learn what a `.dff` is.
 
-**It converts CUTSCENES ONLY** (the user's call, 2026-08-15). It does not install the cars into
-gameplay. A user who converts their favourite car will still drive the stock one, and will expect
-otherwise — so the UI has to say this in words, not in a footnote. That is a product decision, not a
-limitation to hide.
+**It converts CUTSCENES ONLY — DECIDED, not a gap.** The user's call, 2026-08-15: *"we convert only
+cutscenes, what else to install is the user's business; we may extend it later if it takes off."* So
+what a player installs for gameplay is theirs to choose, and this app does not touch it.
+
+The UI states the scope plainly — "this changes cutscenes; your gameplay cars are whatever you have
+installed" — as a **statement of what the tool does**, not a warning or an apology. A user who
+converts a car and still drives the stock one has to learn that from the screen rather than from
+surprise; that is the only requirement this decision puts on the app.
 
 ## The three steps the user sees
 
@@ -75,22 +79,18 @@ apps/cutscene-garage/
 - Validation comes from [`@opensa/validation`](../../../../packages/validation/docs/plans/001-validation-package.md),
   which shapes verdicts; the coverage answer itself comes from the tool's census.
 
-## Windows SmartScreen — what can actually be done
+## Windows SmartScreen — DECIDED: ship unsigned
 
-An unsigned portable exe gets "Windows protected your PC" on first run, every user, forever. The
-options, honestly:
+An unsigned portable exe gets "Windows protected your PC" on first run, for every user, permanently.
+**The user's call, 2026-08-15: no certificate, not worth the bother.** The tutorial explains the
+warning and the "More info → Run anyway" path, and that is the whole answer.
 
-| Option | Effect | Cost |
-| --- | --- | --- |
-| Ship unsigned, document the warning | Warning stays; the tutorial explains "More info → Run anyway" | free |
-| **Azure Trusted Signing** | Signed, and reputation accrues on Microsoft's side; the current sane answer for a small project | ~$10/month, requires an identity/organization validation — **verify the current terms before planning on it** |
-| OV code-signing certificate | Signed, but SmartScreen reputation still has to accumulate over downloads | ~$100–400/yr |
-| EV certificate (hardware token) | Immediate SmartScreen trust | ~$300–500/yr + token logistics |
-
-**Recommendation: ship unsigned for the first release and say so in the tutorial**, then decide on
-Azure Trusted Signing once there is a reason to believe anyone outside this repo is downloading it.
-Signing is a distribution decision with a recurring bill, not an engineering one, and it can be added
-later without touching the app.
+Recorded so it is not re-argued rather than as an open question: the alternatives were Azure Trusted
+Signing (~$10/month, identity validation, reputation accrues over time), an OV certificate
+($100–400/yr, still needs download reputation) and an EV certificate ($300–500/yr plus a hardware
+token, the only option granting immediate trust). All three are **distribution** decisions with a
+recurring bill, none is an engineering one, and any of them can be added later without touching a line
+of the app — which is exactly why deferring costs nothing.
 
 ## Tutorial
 
