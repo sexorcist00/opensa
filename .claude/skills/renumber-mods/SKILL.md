@@ -42,34 +42,52 @@ Every listed layer is one sequence; if none exists, the single sequence is `mods
 
 Set `DIR` to the sequence — `mods-src/$GAME/mods`, or `mods-src/$GAME/mods/<layer>` for each layer.
 
-1. List the current state and show the gaps:
+**The order comes from the INSTALLER, never from `sort -n`.** The two disagree, and the disagreement is
+silent: `sort -n` puts an UNNUMBERED folder first, while the installer's own collation puts it LAST — so
+numbering by `sort -n` would move that mod from last writer to first and change which mod wins every
+conflict it has. `sortMods` is the one authority; ask it.
+
+1. List the current state — the installer's order, with the number each folder would get:
 
    ```bash
    DIR="mods-src/$GAME/mods"
-   ls "$DIR" | sort -n
+   npx tsx -e "
+   import { sortMods } from './tools/mod-installer/src/install';
+   import { readdirSync } from 'node:fs';
+   const dir = process.argv[1];
+   const names = readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+   sortMods(names).forEach((name, i) => console.log(\`\${i}\t\${name}\`));
+   " "$DIR"
    ```
 
-2. Compact in ASCENDING order (targets are always below the source number, so no collision is
-   possible). Only rename folders whose number differs from their index:
+   Show it to the user before renaming anything when the sequence has unnumbered folders or gaps.
+
+2. Rename through a TEMP name, so the direction never matters. Compaction usually renames downwards, but
+   inserting a mod (`8.1 SPC Cars` → `9.`, everything after it +1) renames upwards into names that still
+   exist; a two-phase rename is correct either way:
+
+   Run it from the REPO ROOT (the import is resolved against the cwd) and pass the sequence as an argument:
 
    ```bash
-   cd "$DIR"
-   i=0
-   ls | sort -n | while IFS= read -r dir; do
-     # Strip the leading number, INCLUDING a fractional one — `8.1 SPC Cars` is a real folder name, and
-     # `${dir#*. }` leaves it whole (there is no ". " in it), so the old number ends up inside the new one.
-     name=$(printf '%s' "$dir" | sed -E 's/^[0-9]+(\.[0-9]+)*\.? *//')
-     target="$i. $name"
-     if [ "$dir" != "$target" ]; then
-       mv "$dir" "$target"
-       echo "renamed: $dir -> $target"
-     fi
-     i=$((i + 1))
-   done
+   npx tsx -e "
+   import { sortMods } from './tools/mod-installer/src/install';
+   import { readdirSync, renameSync } from 'node:fs';
+   import { join } from 'node:path';
+   const dir = process.argv[1];
+   const names = readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+   // The number, fractional ones included ('8.1 SPC Cars'), is stripped; a folder with no number keeps
+   // its whole name and simply gets one.
+   const plan = sortMods(names)
+     .map((from, i) => ({ from, to: \`\${i}. \${from.replace(/^[0-9]+(\.[0-9]+)*\.? */, '')}\` }))
+     .filter((p) => p.from !== p.to);
+   plan.forEach((p, k) => renameSync(join(dir, p.from), join(dir, \`.renum-\${k}\`)));
+   plan.forEach((p, k) => { renameSync(join(dir, \`.renum-\${k}\`), join(dir, p.to)); console.log(\`renamed: \${p.from} -> \${p.to}\`); });
+   " "$DIR"
    ```
 
-3. Verify: `ls | sort -n` must show a contiguous `0..K` with no duplicates and the same folder count
-   as before.
+3. Verify: re-run step 1. It must print a contiguous `0..K`, the same folder count as before, and **the
+   same ORDER** — the names in the same sequence they were in. A changed order means the renumber changed
+   the install result, which it may never do.
 
 ## Notes
 
