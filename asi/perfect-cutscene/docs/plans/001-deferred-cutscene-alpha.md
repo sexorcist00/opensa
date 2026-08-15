@@ -263,12 +263,10 @@ bottle's `CLEO/cutscene-override.ini`).
       car floating, sunk or drawn over a wall; lamps/plates/paint unchanged.
       **Three rows are already done on this exact configuration** (2026-08-14): PROLOG3 ("looks
       perfect"), RIOT_4B ("peds visible, tint as it should be"), SYND_3A ("all excellent").
-      **Running tally: 11 of 35 passed, zero findings** — the three above plus the 2026-08-15 batch
-      of eight (PROLOG1, DESERT9, FINAL2B, RIOT4E1, DES_10B, SWEET2B, BCESAR5, BCESAR4), each
-      "excellent". Those eleven scenes have now shown **15 of the 21 exercised models, all six
-      ★force-piped ones included** — where a surprise was judged most likely, there was none. The
-      six models still unseen in the re-sweep are exactly the six remaining Block A rows
-      (csglendale92, csremington92, cssecurica92, csburrito92, csmonster, csmtbike92).
+      **Running tally: 17 of 35 passed, zero findings** — the three above plus all 14 of block A,
+      run 2026-08-15 in two sittings, each verdict "excellent". **Model coverage is complete**: the
+      21 exercised models have all been seen on this configuration, the six ★force-piped ones
+      included. What remains is block B's 18 per-scene rows.
 
       **Block A — 14 scenes that cover all 21 exercised models at least once.** The six force-piped
       models are marked ★: the engine stamps the vehicle pipe on every one of their atomics, glass
@@ -283,12 +281,17 @@ bottle's `CLEO/cutscene-override.ini`).
       - [x] SWEET2B — csgreenwood, ★csvoodoo — **2026-08-15 ✅**
       - [x] BCESAR5 — cssadler, cszr350, cszr350b — **2026-08-15 ✅**
       - [x] BCESAR4 — cssavanna, cszr350 — **2026-08-15 ✅**
-      - [ ] SMOKE1B — csglendale92
-      - [ ] GARAG3A — csremington92
-      - [ ] HEIST8A — cssecurica92
-      - [ ] FARL_3B — csburrito92
-      - [ ] DESERT1 — csmonster
-      - [ ] STRP4B2 — csmtbike92 (the only bike scene in the game)
+      - [x] SMOKE1B — csglendale92 — **2026-08-15 ✅**
+      - [x] GARAG3A — csremington92 — **2026-08-15 ✅**
+      - [x] HEIST8A — cssecurica92 — **2026-08-15 ✅**
+      - [x] FARL_3B — csburrito92 — **2026-08-15 ✅**
+      - [x] DESERT1 — csmonster — **2026-08-15 ✅**
+      - [x] STRP4B2 — csmtbike92 (the only bike scene in the game) — **2026-08-15 ✅**
+
+      **Block A is CLOSED, 14 of 14, zero findings (2026-08-15).** Every one of the 21 exercised
+      models has now been seen on the ASI + hackless + modulate configuration, the six ★force-piped
+      ones included. A defect that is per-MODEL would have shown here; none did, so what block B is
+      still guarding is strictly per-SCENE (camera angles, scene anims), not the render change.
 
       **Block B — the remaining 18, per-scene surprises (camera angles, scene anims).**
 
