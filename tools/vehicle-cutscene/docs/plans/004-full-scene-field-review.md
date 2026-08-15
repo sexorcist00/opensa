@@ -35,7 +35,7 @@ scene-specific anims).
 | # | Scene | cs vehicles | Verdict |
 | --- | --- | --- | --- |
 | 1 | PROLOG1 | cstaxi92 | ✅ (gate 4/7 + 003) · **ASI re-sweep 2026-08-15 ✅** ("excellent") — the interior-area scene reads the deferred glass the same as the outdoor ones |
-| 2 | PROLOG3 | cscopcarla92, cstaxi92 | ✅ re-verified after round 21 (the matte windscreen was a missing modulate flag; "looks perfect") |
+| 2 | PROLOG3 | cscopcarla92, cstaxi92 | ✅ re-verified after round 21 (the matte windscreen was a missing modulate flag; "looks perfect") · ASI re-sweep 2026-08-15 ✅ · the taxi's missing driver was checked against VANILLA and is R*'s own — not a defect, do not chase it again |
 | 3 | STRP4B2 | csmtbike92 | ✅ (002 step 8) · **ASI re-sweep 2026-08-15 ✅** ("excellent") — the game's only bike scene |
 | 4 | DESERT9 | csbobcat92 | ✅ after rounds 1–2 ("glass with the door, one rack") · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
 | 5 | BCESA4W | csbravura, cszr350b | ✅ (2026-08-13, "good") · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
@@ -62,8 +62,8 @@ scene-specific anims).
 | 26 | CRASV2B | cscopcarla92 | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
 | 27 | RIOT4E2 | csfirela | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
 | 28 | SCRASH2 | csbravura | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
-| 29 | SMOKE2B | csglendale92 | ⚠️ **first run in the ASI re-sweep, 2026-08-15**: occupants not visible behind the glass. Round 22 — the render side measures clean and the tint reading was refuted in the field; working mechanism is opaque occlusion by the adopted `interior_ad`. Awaiting the ASI-removed control |
-| 30 | SMOKE3A | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 29 | SMOKE2B | csglendale92 | ✅ **first run in the ASI re-sweep, 2026-08-15** — the headlight green is fixed by round 23; the "missing occupants" resolved to round 22's seating delta (they sit 0.281 m low, the scene seats actors at the STOCK car's dummy), which is not a defect in the car and has its own lever recorded |
+| 30 | SMOKE3A | csglendale92 | ✅ **first run in the ASI re-sweep, 2026-08-15**, on the round-23 build — the headlight green is gone here too |
 | 31 | SMOKE4A | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 32 | STEAL_2 | csremington92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 33 | STEAL_4 | csremington92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
@@ -639,12 +639,110 @@ or not reflected — by something other than SA's `CustomCarPipe`, while in game
 rides the vehicle pipe together. The lens is the surface showing the anomaly, and it is the surface
 our split moves.
 
-**This is a hypothesis with one untested link and it must not be coded against yet.** Round 8 put
-translucents on the default pipe because OUR DFF PipelineSet stamp made panes vanish — and plan 001
-step 4 then found the DFF stamp and the runtime `CustomCarPipeAtomicSetup` are NOT the same thing
-("the runtime force-pipe is what makes that car's glass look right"). So the experiment worth one
-build is: keep the lens on the vehicle pipe the way gameplay does, one variable, and look at the
-lamps. If the green goes, round 8's rule needs re-pricing against what step 4 learned.
+**This is a hypothesis with one untested link.** Round 8 put translucents on the default pipe because
+OUR DFF PipelineSet stamp made panes vanish — and plan 001 step 4 then found the DFF stamp and the
+runtime `CustomCarPipeAtomicSetup` are NOT the same thing ("the runtime force-pipe is what makes that
+car's glass look right"). So the experiment worth one build is: keep the lens on the vehicle pipe the
+way gameplay does, one variable, and look at the lamps.
+
+**The experiment is built and armed** (branch `004-23-lens-vehicle-pipe`, 2026-08-15). One line in
+`finalizeAtomics`: the vehicle PipelineSet now goes on every NON-PANE atomic — round 8's rule —
+instead of on fully-opaque ones only. Verified in the built DFF, exactly one variable moved:
+
+| atomic | before | after |
+| --- | --- | --- |
+| `#28 wing_lf_ok_ad` (lamp body, opaque) | `0x53f2009a` | `0x53f2009a` |
+| `#29 wing_lf_ok_ad` (the 120-triangle LENS) | DEFAULT | **`0x53f2009a`** |
+| `#42 windscreen_ok_ad` (pane) | DEFAULT | DEFAULT |
+| `#43 glass_ad` (pane) | DEFAULT | DEFAULT |
+
+Fleet `NO_COMMIT/cs-lens-vehpipe`, 23 converted / 0 errors, installed in the bottle; tool suite 92/92
+(the pipeline test now guards the experiment's rule). **What to expect, stated before the run so the
+result cannot be read backwards:** round 9's own evidence says a stamped lens VANISHES (the burrito's
+210-alpha tail lenses). If the glendale's lens disappears, round 9 stands and the green must come from
+somewhere else — the next candidate being the `gen_envmap9` reflection itself rather than the pipe.
+If the lens survives AND the green goes, round 9's rule was measuring our DFF stamp rather than the
+runtime pipe, and it gets re-priced fleet-wide.
+
+`glass_ad` gives a free control inside the same car: it carries lamp-lens materials too, but a pane
+material puts it on the default pipe either way — so the front headlight moves and the rear lenses
+do not.
+
+**RESULT (field, 2026-08-15): the experiment PASSED, and it did more than close round 23.**
+
+- **The green is gone** on every glendale scene (SMOKE2B, SMOKE3A and the rest), and the lens did NOT
+  vanish — so round 9's premise fails on its own test case. What round 9 measured was OUR DFF
+  PipelineSet stamp behaving one way; the runtime pipe behaves another, exactly as plan 001 step 4
+  found on the blessed six.
+- **It repaired two things nobody had filed as bugs.** The field on FARL_3B and FINAL2B: the burrito's
+  and the sabre's tail lamps "used to look a bit odd, I assumed that was intended — now they look
+  good." Those are the very lenses round 9 was written to rescue: they had been rendering on the
+  default pipe, without the vehicle pipe's shine, since 2026-08-13, and the sweep accepted them
+  because nobody had a reference for how they SHOULD look. A rule introduced as a fix had been
+  quietly costing the fleet its lamp shine.
+- **The whole re-check list passed**: PROLOG1, PROLOG3, DESERT9, FINAL2B, RIOT4E1, DES_10B, SWEET2B,
+  BCESAR5, BCESAR4, SMOKE1B, GARAG3A, HEIST8A, FARL_3B, SYND_3A — the 14 scenes that cover all 21
+  models the change touched (102 atomics; `csmonster` and `csmtbike92` moved nothing, so DESERT1 and
+  STRP4B2 were provably untouched and skipped). No regression, including the two glass surfaces the
+  diff flagged as risky — cscopcarsf's `police_glass` at alpha 203 and cstaxi92's baked `carplate`.
+
+So round 9's generalization is REPLACED by round 8's rule, promoted on this evidence: the vehicle
+PipelineSet goes on every non-pane atomic. Round 23 is closed; the branch is a promotion candidate,
+not an experiment.
+
+**Round 22 is NOT closed by this** — the field confirms the glendale's occupants are still invisible
+with the lamps fixed, which is what the occlusion measurement predicted (a different defect on the
+same car).
+
+### Round 22, continued — the vanilla A/B and the interior probe (2026-08-15)
+
+- **Vanilla settles the ownership.** The field installed the stock `cutscene.img` + `txdcut.ide` +
+  `anim/cuts.img` with the ASI off and ran SMOKE2B: **two occupants are plainly there.** So the
+  scene seats them, the original shows them, and our build loses them — this is ours.
+- **A second suspected case was checked and CLEARED.** PROLOG3's taxi has no driver in OUR build and
+  **no driver in vanilla either** — an R* scene, not a defect. Recorded so nobody chases it twice.
+- **Probe installed (2026-08-15):** fleet `NO_COMMIT/cs-probe-nointerior`, built with `interior`
+  temporarily added to `ORPHAN_SKIP_RE` (a name-matched PROBE, never a rule — the source change was
+  reverted the same minute and is not on any branch). The glendale drops from 44 atomics to 43:
+  `interior_ad` gone, `seats_ad` kept, everything else identical. One variable.
+  - occupants VISIBLE → the adopted interior shell is the occluder, and the work becomes a rule that
+    keeps interiors while letting a seated actor be seen;
+  - occupants STILL HIDDEN → the shell is innocent and the next suspects are `seats_ad` and the
+    placement question (our glendale is 5.41 m long against the vanilla donor's 5.82 m, so a
+    vanilla-authored seat offset may land the actor inside different geometry entirely).
+
+  Either way the eventual fix cannot be "drop interiors": cswashington ships `seats_ad` and its
+  actors read fine, and a scene that looks INTO a car through an open door needs its interior.
+
+**RESOLVED — not occlusion, and not a defect in the car: the actors sit 0.281 m too LOW** (field call
+2026-08-15, "no bug here, they just sit low"). The probe answered by making the field look again, and
+the numbers close it:
+
+| quantity | value |
+| --- | --- |
+| `ped_frontseat`, STOCK gameplay glendale | z = −0.141 |
+| `ped_frontseat`, the MOD's gameplay glendale | z = −0.048 — **9 cm HIGHER**, not lower |
+| our ground lift `shiftZ` for this donor | **+0.209 m** |
+| the mod's own seat point in cutscene space | z = **+0.161** |
+| where SMOKE2B's anim puts the actor | z = **−0.120** |
+| actor below the car's own seat | **0.281 m** |
+
+The calibration that ties it together: the scene's actor offset (−0.120) matches the STOCK car's own
+`ped_frontseat` (−0.141) to within 2 cm. **R\* authored the actor at the stock car's seat**, and a
+converted donor whose cabin rides higher above its ground plane seats them low — 0.209 m of it is our
+ground lift (which is CORRECT and must stay: wheel bottoms compose to −0.70 against vanilla's −0.69),
+the rest is the mod's own higher seat and a body 0.19–0.27 m taller at the roof.
+
+**The seat dummies are not the lever and cannot be.** A cutscene actor's position is absolute, out of
+the scene anim; `ped_frontseat` is read by the GAMEPLAY code only. The field's own control proves the
+split: same car, same dummy — "in gameplay the ped sits perfectly straight", while the cutscene puts
+him 28 cm down. Adjusting a dummy would move the gameplay ped and leave the cutscene untouched.
+
+**The one real lever, if this is ever worth fixing:** a surgical `anim/cuts.img` patch, exactly the
+shape of round 20's wheel stash (`stash-patch.ts`) — lift the actor's ROOT channel by the measured
+donor-vs-vanilla seat delta, a value derived from both models rather than authored per car. That is a
+feature with a design cost, not a bug fix, and it is parked here with its number until someone wants
+it. Round 22 is closed.
 
 ### Standing addendum — the perfect-cutscene ASI re-opens the whole ledger (2026-08-14)
 

@@ -310,16 +310,13 @@ bottle's `CLEO/cutscene-override.ini`).
       - [x] CESAR1A — cssavanna — **2026-08-15 ✅**
       - [x] RIOT4E2 — ★csfirela — **2026-08-15 ✅**
       - [x] SCRASH2 — ★csbravura — **2026-08-15 ✅**
-      - [x] SMOKE2B — csglendale92 — **2026-08-15 ⚠️ FINDING**: the occupants do not read through the
-            windscreen. The census log shows the car deferred and the pane is a proper translucent
-            drawn last, and the field refuted the tint reading (cabin and steering wheel DO read
-            through the glass). Working mechanism is opaque occlusion by the mod's adopted
-            `interior_ad` shell — which predicted this ASI is not involved, since depth decides
-            occlusion and not order. **The ASI-removed control CONFIRMED it** (2026-08-15, "nothing
-            changed"), so the defect predates the ASI and belongs to the converter. Plan 004 round 22;
-            a second, unrelated finding on the same car (green headlights) is round 23. Neither
-            blocks this plan
-      - [ ] SMOKE3A — csglendale92
+      - [x] SMOKE2B — csglendale92 — **2026-08-15 ✅**, after two findings that both turned out to be
+            outside this plan. The occupants read as missing: the ASI-removed control changed nothing
+            (as the depth-not-order prediction required), and the cause resolved to a SEATING delta —
+            the scene places actors at the STOCK car's `ped_frontseat`, so a taller donor seats them
+            0.281 m low (plan 004 round 22, closed). The green headlights were plan 004 round 23, a
+            converter pipeline rule, fixed. Neither touched the deferral
+      - [x] SMOKE3A — csglendale92 — **2026-08-15 ✅**
       - [ ] SMOKE4A — csglendale92
       - [ ] STEAL_2 — csremington92
       - [ ] STEAL_4 — csremington92

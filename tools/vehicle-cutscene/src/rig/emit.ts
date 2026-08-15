@@ -9,7 +9,7 @@
  */
 import { readRw, writeRw } from '@opensa/rw-codec/chunk';
 
-import { ensureModulateMaterialColour, geometryBodyHasTranslucency, geometryBodyHasWindowPane } from '../materials';
+import { ensureModulateMaterialColour, geometryBodyHasWindowPane } from '../materials';
 import { canonicalPartName, type CsPartTemplate } from '../template';
 import { bakeGeometryBody, isIdentityDelta } from './bake';
 import {
@@ -498,9 +498,6 @@ export function finalizeAtomics(emit: Emit, version: number, suppressWindowPanes
     ensureModulateMaterialColour(geometry.body);
   }
   const panes = new Map(emit.geometries.map((geometry, index) => [index, geometryBodyHasWindowPane(geometry.body)]));
-  const translucent = new Map(
-    emit.geometries.map((geometry, index) => [index, geometryBodyHasTranslucency(geometry.body)]),
-  );
   // Window-pane suppression (plan 004 round 17, `docs/hacks/retired/cutscene-window-pane-suppression.md`):
   // on a suppressed SLOT the whole window class drops — after the split it is exactly the pane
   // atomics, so lamp lenses and every opaque copy stay. The pane geometries stay in the list as
@@ -512,7 +509,12 @@ export function finalizeAtomics(emit: Emit, version: number, suppressWindowPanes
         ...emit.atomics.filter((atomic) => panes.get(atomic.geometryIndex)),
       ];
   for (const atomic of emit.atomics) {
-    if (!translucent.get(atomic.geometryIndex)) {
+    // EXPERIMENT (plan 004 round 23, branch 004-23-lens-vehicle-pipe): lamp LENSES go back on the
+    // vehicle pipe, the way gameplay renders them — only window PANES keep the default pipeline.
+    // This is round 8's rule, which round 9 generalized away after the burrito's tail lamps vanished;
+    // it is re-run because plan 001 step 4 found the DFF PipelineSet stamp and the runtime
+    // CustomCarPipeAtomicSetup are not the same thing. Revert or promote once the field has looked.
+    if (!panes.get(atomic.geometryIndex)) {
       atomic.extension = withVehiclePipeline(atomic.extension, version);
     }
   }

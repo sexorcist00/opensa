@@ -287,19 +287,16 @@ describe('convertCar', () => {
       expect(paneFlags.some(Boolean)).toBe(true);
       expect(paneFlags.slice(paneFlags.indexOf(true)).every(Boolean)).toBe(true);
 
-      // Fully-opaque atomics carry PipelineSet 0x53F2009A (the vanilla-cs shine recipe); any atomic
-      // with a translucent material stays on the DEFAULT pipeline — the vehicle pipe drops
-      // translucents outside a real CVehicle (rounds 8–9: stamped panes vanished at any alpha, and
-      // the burrito's 210-alpha tail lenses vanished under the pane-only exception).
-      const translucentFlags = converted.atomics.map((atomic) =>
-        geometryBodyHasTranslucency(converted.geometries[atomic.geometryIndex].body),
-      );
-      expect(translucentFlags.some(Boolean)).toBe(true);
+      // EXPERIMENT (round 23, branch 004-23-lens-vehicle-pipe): every NON-PANE atomic carries
+      // PipelineSet 0x53F2009A — lamp lenses included, the way gameplay renders them — and only
+      // window panes stay on the DEFAULT pipeline. This is round 8's rule; round 9 widened it to all
+      // translucents after the burrito's 210-alpha tail lenses vanished, and the field decides again.
+      expect(converted.atomics.some((_, index) => !paneFlags[index])).toBe(true);
       converted.atomics.forEach((atomic, index) => {
         const plugins = atomic.extension ? readRw(atomic.extension.body).chunks : [];
         const pipeline = plugins.find((chunk) => chunk.type === 0x253f2f3);
-        if (translucentFlags[index]) {
-          expect(pipeline, `translucent atomic ${index}`).toBeUndefined();
+        if (paneFlags[index]) {
+          expect(pipeline, `pane atomic ${index}`).toBeUndefined();
         } else {
           expect(pipeline?.data, `atomic ${index}`).toBeDefined();
           expect(new DataView(pipeline!.data!.buffer, pipeline!.data!.byteOffset, 4).getUint32(0, true)).toBe(
