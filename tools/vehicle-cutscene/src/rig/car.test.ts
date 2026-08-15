@@ -287,10 +287,10 @@ describe('convertCar', () => {
       expect(paneFlags.some(Boolean)).toBe(true);
       expect(paneFlags.slice(paneFlags.indexOf(true)).every(Boolean)).toBe(true);
 
-      // EXPERIMENT (round 23, branch 004-23-lens-vehicle-pipe): every NON-PANE atomic carries
-      // PipelineSet 0x53F2009A — lamp lenses included, the way gameplay renders them — and only
-      // window panes stay on the DEFAULT pipeline. This is round 8's rule; round 9 widened it to all
-      // translucents after the burrito's 210-alpha tail lenses vanished, and the field decides again.
+      // Every NON-PANE atomic carries PipelineSet 0x53F2009A — lamp lenses included, the way gameplay
+      // renders them — and only window panes stay on the DEFAULT pipeline (rounds 8 and 23; round 9's
+      // wider rule measured our DFF stamp rather than the runtime pipe and cost the fleet its lamp
+      // shine).
       expect(converted.atomics.some((_, index) => !paneFlags[index])).toBe(true);
       converted.atomics.forEach((atomic, index) => {
         const plugins = atomic.extension ? readRw(atomic.extension.body).chunks : [];

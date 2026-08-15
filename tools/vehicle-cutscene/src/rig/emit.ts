@@ -478,13 +478,15 @@ export function excludedVariantFrames(model: ClumpModel): Set<number> {
  *     final atomic of every vanilla car): the cutscene path renders clump atomics in file order with
  *     z-write on, so a pane emitted before the interior erases everything behind it (BCESAR5, the
  *     see-through-the-car windscreen);
- *  2. every OPAQUE atomic's Extension gains the vehicle Pipeline Set plugin when missing, like
- *     vanilla. Atomics carrying ANY translucent material stay on the DEFAULT pipeline: the vehicle
- *     pipe does not composite translucents outside a real CVehicle — stamped panes vanished at any
- *     alpha (rounds 5–8), and lamp lenses / decals sit ABOVE the window band, so the pane-only
- *     exception still lost them (the burrito's tail lights, round 9). The default pipe blends them
- *     and still renders the mod's MatFX env sheen. Vanilla ships the plugin on its own translucents
- *     too, but those are 26–128-alpha whispers whose absence nobody would ever see.
+ *  2. every NON-PANE atomic's Extension gains the vehicle Pipeline Set plugin when missing, like
+ *     vanilla — lamp lenses and decals included, which is how GAMEPLAY renders them. Only window
+ *     PANES keep the default pipeline: stamped panes vanished at any alpha (rounds 5–8), so that
+ *     exception is real and stays. Round 9 briefly widened it to every translucent atomic after the
+ *     burrito's 210-alpha tail lenses vanished — but what that measured was OUR DFF PipelineSet
+ *     stamp, not the runtime `CustomCarPipeAtomicSetup` (plan 001 step 4 found the two are not the
+ *     same thing), and it cost the whole fleet its lamp shine for two days. Round 23 put the lenses
+ *     back and the field passed 14 scenes covering all 21 affected models, the burrito's and the
+ *     sabre's tail lamps visibly repaired.
  *
  * Before either pass, MIXED geometries (opaque paint + embedded panes/lenses in one mesh) split into
  * an opaque copy and a translucent twin (see `split.ts`) — the sabre's in-door glass cost the whole
@@ -509,11 +511,6 @@ export function finalizeAtomics(emit: Emit, version: number, suppressWindowPanes
         ...emit.atomics.filter((atomic) => panes.get(atomic.geometryIndex)),
       ];
   for (const atomic of emit.atomics) {
-    // EXPERIMENT (plan 004 round 23, branch 004-23-lens-vehicle-pipe): lamp LENSES go back on the
-    // vehicle pipe, the way gameplay renders them — only window PANES keep the default pipeline.
-    // This is round 8's rule, which round 9 generalized away after the burrito's tail lamps vanished;
-    // it is re-run because plan 001 step 4 found the DFF PipelineSet stamp and the runtime
-    // CustomCarPipeAtomicSetup are not the same thing. Revert or promote once the field has looked.
     if (!panes.get(atomic.geometryIndex)) {
       atomic.extension = withVehiclePipeline(atomic.extension, version);
     }
