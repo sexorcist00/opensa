@@ -65,10 +65,14 @@ the follow-up, which needs a blend and its own field round.
 
 ## Steps
 
-- [ ] **1. The census as a real instrument.** Promote the throwaway walker into `scripts/debug/` with its
+- [x] **1. The census as a real instrument.** Promote the throwaway walker into `scripts/debug/` with its
       row in `docs/debug/README.md` (what it answers: which scenes seat an actor in a converted car, and
       the per-frame offset). It is the input to step 2 and the guard for step 4. Verification: reproduces
       the five rows above.
+      **DONE 2026-08-15** — `scripts/debug/cutscene-seated-actors.ts`, row added. Reproduces all seven
+      census rows (the five actor pairs plus the two props) byte for byte. Both traps are written into
+      the script's own header so the next reader does not re-pay them: a short track HOLDS its last
+      value, and props ride vehicles too.
 - [ ] **2. Seat resolution in the converter.** Read `ped_frontseat`/`ped_backseat` from the donor,
       mirror for the opposite side, express in cutscene space (`+ shiftZ`), and report them per slot.
       Verification: unit test on the glendale — front seat resolves to z +0.161; a donor with no dummy
