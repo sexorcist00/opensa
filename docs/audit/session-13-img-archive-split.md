@@ -80,5 +80,7 @@ to hold a whole archive in a buffer no longer do.
 
 - The map bucket sits at **1.64 GB against a 1.75 GiB cap** — the next large mod set trips the guard,
   which is the `in-reserve` card's trigger.
-- `asi/perfect-cutscene` plan 001 step 7's last verification: re-run two or three swept scenes on a
-  pipeline build and match their recorded verdicts. The build now exists; the scenes have not been run.
+- ~~`asi/perfect-cutscene` plan 001 step 7's last verification~~ — **done the same day**: three swept scenes
+  re-run on the pipeline build, all good (the user). That closes plan 001 entirely, steps 0–7. The scenes
+  matter more than they look: after the split every one of their txdp parents lives in `vehicles2.img`, so
+  they exercised a resolution path that did not exist when the sweep was taken.

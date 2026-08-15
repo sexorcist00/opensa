@@ -1,8 +1,9 @@
 # IMG archive layout — typed buckets, bounded files
 
-**Status: BUILT and FIELD-RUN (2026-08-15).** `tools/img-splitter` produces the layout, `tool-kit` carries
-the cap and the spill, pmb runs the split as its first stage, and the user's field run launched and played a
-split build with no adjuster work at all. This doc is what
+**Status: BUILT and FIELD-ACCEPTED (2026-08-15).** `tools/img-splitter` produces the layout, `tool-kit` carries
+the cap and the spill, pmb runs the split as its first stage, and the user's field runs launched and played a
+split build with no adjuster work at all — then confirmed three swept cutscene scenes on it, which is the
+sharper test: every one of their texture parents now resolves out of `vehicles2.img`. This doc is what
 [plan 001](../../tools/img-splitter/docs/plans/001-archive-split.md) implements, and what any later tool
 touching `models/*.img` has to keep true.
 

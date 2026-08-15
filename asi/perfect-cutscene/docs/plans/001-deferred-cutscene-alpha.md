@@ -331,7 +331,7 @@ bottle's `CLEO/cutscene-override.ini`).
 
       Not driven by any cutscene and therefore unreachable here: `csdinghy`, `cscopcarla` (the latter
       converts byte-for-byte with `cscopcarla92`, so its six scenes cover it indirectly).
-- [ ] **7. pmb packaging.** Ship the built `.asi` with the game output the way perfect-map is
+- [x] **7. pmb packaging. DONE 2026-08-15 — the pipeline route is field-accepted.** Ship the built `.asi` with the game output the way perfect-map is
       integrated into the pmb pipeline (same stage, same config surface), so a field build carries it
       without manual bottle installs. Update `docs/commands.md` + the pmb stage docs +
       `docs/gta-sa-original/reference-install.md` (the target now runs OLA + FLA + perfect-map +
@@ -353,8 +353,7 @@ bottle's `CLEO/cutscene-override.ini`).
       `opensa`.** It was `--exclude vehicles,peds,opensa` since 2026-07-28, from a time when the `sa` target
       meant the MAP; a "real game" build that silently carries neither the mod cars nor the fleet nor the
       plugin paired with it is the trap this repo keeps paying for. One script, complete by default.
-      **The change is NOT landed yet, and the reason is the finding below** — the script would fail. It ships
-      with the vehicle-installer fix that makes it true.
+      **Landed** once the vehicle-installer fix and the archive split made the script true (`--exclude opensa`).
 
       **The finding that stopped the run: the vehicles stage cannot complete on the current mod set** (see
       `docs/edge-cases/` + the img-split idea). The first attempt at this step's verification died mid-stage:
@@ -390,6 +389,28 @@ bottle's `CLEO/cutscene-override.ini`).
       Artifact pairing checked before the run: both `dist/` artifacts are byte-identical to the bottle copies
       the 35-scene sweep was taken on — `perfect-cutscene.asi` sha256 `8cbd40db…` (18 944 B),
       `perfect-map.asi` `c6b87f95…` (20 480 B). So the shipped pair IS the swept pair.
+
+      **CLOSED 2026-08-15.** `shipPerfectCutsceneAsi` puts the plugin in the built game root beside
+      `perfect-map.asi` when the cutscene stage ran, and both shas go into `report-sa.json` and
+      `build-timings.json`. A full `sa` build carries the whole chain: `sa asi: perfect-cutscene.asi shipped
+      into the game root (sha256 8cbd40db4095…, 18 944 B)`.
+
+      **The reassigned half — the PIPELINE route — is what this step really bought.** The stage converts
+      **23 of 23, 0 skipped, 21 plates, in 5.4 s**, and emits `cutscene.img` at **199.1 MB against the CLI
+      route's 321.5 MB** for the same slots. That gap IS the empty-TXD route finally running as designed: a
+      slot's own TXD is empty (csmtbike92 is 2 048 B) and its textures resolve through the txdp parent,
+      instead of `--self-contained-txd` embedding a copy per slot.
+      **And the parents are not where they used to be.** After the archive split every one of them lives in
+      `vehicles2.img` — the spill sibling, registered last — so these scenes exercise a resolution path that
+      did not exist when the sweep was taken: `greenwoo.txd`, `washing.txd`, `monster.txd`, `mtbike.txd`,
+      `glendale.txd` all resolve out of it.
+
+      **Field verification (the user, 2026-08-15): three swept scenes re-run on the pipeline build, ALL
+      GOOD.** RIOT_4B — *"peds visible, tint in place, the car is textured"*, matching its recorded
+      *"perfect — peds visible, tint as it should be"*; SYND_4A (cssavanna + cswashington, also the round-20
+      wheel stash) and STRP4B2 (csmtbike92, the only bike scene and the purest test of the parent route, its
+      cs TXD being genuinely empty) both confirmed good. The bottle was verified to hold this exact build
+      first — all three outputs byte-identical to `build/original/sa`, and the ASI matching.
 
       **What comes AFTER this step** (decided 2026-08-15, before step 7 starts): the same converter
       also ships as a standalone Windows app, and that chain is planned in three scopes —
