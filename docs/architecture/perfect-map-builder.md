@@ -112,7 +112,7 @@ flowchart TB
 
 | #   | Stage      | Runs                                          | Notes                                                            |
 | --- | ---------- | --------------------------------------------- | ---------------------------------------------------------------- |
-| 1   | `mods`     | `installMods` (mod-installer)                 | skipped when `--in`'s `mods/` is empty; overlays + Modloader bake into `gta.dat`/`gta3.img` |
+| 1   | `mods`     | `installMods` (mod-installer)                 | skipped when `--in`'s `mods/` is empty; overlays + Modloader bake into `gta.dat`/`gta3.img`. Takes the run's TARGET — a LAYERED `mods/` applies `common` then that target's own layer (below) |
 | 2   | `vehicles` | `installVehicles`                             | skipped when `vehicles/` is empty                                |
 | 3   | `cutscene` | `installCutscene` (vehicle-cutscene)          | the vehicles stage's shadow (vehicle-cutscene plan 002 step 11): converts the mod fleet into the `cs*` models of `models/cutscene.img` + patches `data/txdcut.ide`, reading the INSTALLED game (merged carcols, mod TXDs as txdp parents → the empty-TXD route, ~40 B per slot). **It also re-emits `anim/cuts.img`** — two passes over the SCENE data that no model change can reach: the wheel-stash sink (plan 004 round 20) and the seat retarget (plan 005), chained through one buffer and one write, each reporting per row in the summary. Both are surgical by construction: 2 of 444 entries differ from vanilla on the current fleet. Skipped when `vehicles/` is empty AND dropped — loudly — under `--exclude vehicles` (no installed parents = every slot fails closure). A slot error FAILS the build; the summary lands in every target report as the `cutscene` fragment |
 | 4   | `peds`     | `installPeds`                                 | skipped when `peds/` is empty                                    |
@@ -126,6 +126,20 @@ flowchart TB
 
 Every row but `lod` is an `--exclude` value (`EXCLUDABLE_STAGES`). Between stages 7 and 8 the pipeline
 collects generated models + `lod-exclude.json` into `excludeItems` for both final LOD generators.
+
+## A mods folder may be LAYERED per target (mod-installer plan 011)
+
+`mods-src/<game>/mods` is either FLAT — every subfolder a mod, what every game shipped until 2026-08-15 —
+or LAYERED: `common/`, `sa/`, `opensa/`, all optional, each holding mod folders. A layered folder applies
+`common` first and then the layer of the target this run resolved, so the target layer is the last writer.
+Contract (including what a misspelled layer name does): [`contracts/mods.md`](../contracts/mods.md) §1.
+
+**The stage sits in the chain both targets SHARE, so one run cannot serve two mod sets.** A run that would
+build both targets over a layered folder is refused at config time and has to be run once per target — the
+four `build:game:*` scripts already exclude one target each, so nothing the repo runs today is affected.
+Rule: [`restrictions/architecture.md`](../restrictions/architecture.md). What one layer writes over the
+other is answered empirically by `scripts/debug/mod-layer-conflicts.ts`, and the ids two mods claim for
+different models by `scripts/debug/mod-id-collisions.ts`.
 
 ## Per-game data files (`mods-src/<game>/`, also honoured at the mods-src root)
 

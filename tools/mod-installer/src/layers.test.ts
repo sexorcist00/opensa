@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { planModLayers } from './layers';
+import { isLayeredModTree, planModLayers } from './layers';
 
 const FLAT = ['0. Map Fixes Pack', '1. Pre Light Fixes Pack', '10. Lampposts FX'];
 
@@ -79,6 +82,39 @@ describe('planModLayers', () => {
         { name: 'common', subdir: 'Common' },
         { name: 'sa', subdir: 'SA' },
       ]);
+    });
+  });
+});
+
+/** The builder's own question, asked before any stage runs — so it must survive a `--in` that is not there. */
+describe('isLayeredModTree', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'mod-layers-'));
+  });
+
+  afterEach(() => {
+    rmSync(root, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it('is false for a missing path — pmb asks before it knows the folder exists', () => {
+      expect(isLayeredModTree(join(root, 'nothing-here'))).toBe(false);
+    });
+
+    it('is false for a flat tree', () => {
+      mkdirSync(join(root, '0. A Mod'), { recursive: true });
+
+      expect(isLayeredModTree(root)).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is true for any single layer folder, whatever its case', () => {
+      mkdirSync(join(root, 'OpenSA'), { recursive: true });
+
+      expect(isLayeredModTree(root)).toBe(true);
     });
   });
 });

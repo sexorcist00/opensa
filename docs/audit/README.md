@@ -279,3 +279,18 @@ interpret them.
   taken and retired the same day, recorded as such. The field method is now
   `docs/development/cutscene-field-testing.md`. Suite 79 → 81 tool tests; no per-model hardcode
   (grep-checked at the user's ask).
+
+- [`session-14-layered-mods-and-the-delivery-shape.md`](./session-14-layered-mods-and-the-delivery-shape.md)
+  — 2026-08-15, 14 commits: `vehicle-cutscene --no-base-copy` (plan 006 — 1.72 GiB of game tree down to
+  579 MiB and three files, byte-identical to the copy run, which is what lets pmb and the standalone app
+  share one converter) and **layered mod folders** (mod-installer plan 011 — `common/` + `sa/` + `opensa/`,
+  applied common-then-target; a flat folder proved byte-identical across the change). The structural
+  finding: the `mods` stage sits in the chain both targets SHARE, so a layered folder in a both-target run
+  is refused at config time. The migration of `original` then exposed two collisions no listing can show —
+  a train mod's baked IDE holding two ids Map Fixes Pack had already placed (int16 literals in its
+  compiled CLEO, so unrenumberable; the mod was dropped) and seven `gta3.img` entries from an interiors
+  mod — both closed, and a whole-set id scan cleared the remaining 131 mods. Two debug scripts kept
+  (`mod-layer-conflicts`, `mod-id-collisions`) and two real bugs fixed in the `renumber-mods` skill. Both
+  of my own instruments lied first (a 64 MB short-circuit; `2dfx` floats read as model names), and the
+  wall-clock A/B was abandoned rather than published — the mod set changed under the measurement.
+  Suite 4 290 → 4 313.

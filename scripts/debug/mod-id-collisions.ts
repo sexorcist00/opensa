@@ -15,6 +15,11 @@
  * Static: it reads `.ide` / `.IDE` / `.ide.merge` files and needs no install, which is why it can be run
  * before a build rather than after one. For what the layers do to each OTHER at install time (files and
  * archive entries), see `mod-layer-conflicts.ts`.
+ *
+ * **It reads the FOLDER, not `gta.dat`'s load list**, so a stock file the game never loads counts here. On
+ * a clean `original` that is a baseline of SEVEN collisions (16700–16708) between the loaded `countn2.ide`
+ * and the dead `leveldes.ide` — see `docs/gta-sa-original/unloaded-map-data.md`. What this scan hunts is
+ * the eighth.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';

@@ -10,7 +10,10 @@ never the app. The dependency picture is the tools cluster of
 - **perfect-map-builder** — the orchestrator; `buildPerfectMap` in `src/pipeline.ts` chains every stage,
   guards SA runtime ceilings, and splits into the `sa/` (RenderWare) + `opensa/` (native pak) targets.
 - **mod-installer** — layers GTA-SA mod folders onto a base game: plain file overlays plus a Modloader
-  `loader.txt` bake into `gta.dat`/`gta3.img`; cumulative, alphabetical. Lib `src/install.ts`.
+  `loader.txt` bake into `gta.dat`/`gta3.img`; cumulative, alphabetical. Lib `src/install.ts`. Its `--in`
+  has two shapes (plan 011): FLAT — every subfolder a mod — or LAYERED `common/` + `sa/` + `opensa/`, where
+  `common` applies first and then the layer of `--target`, which makes the stage target-dependent and a
+  both-target run over it a config-time refusal. Resolution lives in `src/layers.ts`.
 - **vehicle-installer** — vehicle mod folders → `gta3.img` + merged `handling.cfg` / `vehicles.ide` /
   `carcols.dat` / `carmods.dat`. A mod's settings file is decoded by its own encoding (UTF-16 is what most
   authors ship) and every block it cannot classify is reported. A mod's `features.txt` (Modloader/IVF) is
@@ -26,6 +29,13 @@ never the app. The dependency picture is the tools cluster of
   exists because a vehicle round is otherwise a full build to see one row: one car 3.6 s, twelve 26 s. It can
   add a car too, on the id the mod declares for itself
   ([plan 006](../../tools/vehicle-installer/docs/plans/006-rebake.md)).
+- **vehicle-cutscene** — the vehicles stage's shadow: converts the installed vehicle mods into their `cs*`
+  cutscene counterparts (flattened rig with the vanilla model's HAnim bone ids, baked carcols paint,
+  readable plates, `txdp`-resolved TXD). It writes THREE outputs — `models/cutscene.img`,
+  `data/txdcut.ide` and `anim/cuts.img`, the last because two defects live in the SCENE rather than in any
+  model (a wheel stash and the actor's seat). `--no-base-copy` emits only those three instead of a game
+  tree (plan 006) — the shape the standalone converter app needs, byte-identical to the copy run. Lib
+  `src/install.ts`.
 - **ped-installer** — ped mod folders → `gta3.img` + merged `peds.ide`.
 - **img-splitter** — divides `models/gta3.img` into TYPED archives (`vehicles.img`, `peds.img`,
   `weapons.img`) before anything installs, so every entry name lives in exactly one of them; writes the
