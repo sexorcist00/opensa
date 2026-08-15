@@ -69,7 +69,11 @@ Every step ends with its verification; a step without recorded numbers is unfini
       Verification: the game boots and streams from split archives, with the swept cutscene verdicts matched.
       **Then the lift** — raising `TOTAL_IMG_ARCHIVES` in our ASI — is the agreed next link and gets its own
       plan, not a step here. It is a limit **nothing else on the target owns**, which is the one-owner rule's
-      precondition for us claiming it.
+      precondition for us claiming it. Its groundwork is already done and must not be re-derived: the ceiling
+      has TWO halves (`ms_files` AND the CdStream handle tables), and the mechanism a working adjuster uses —
+      relocate the table, rewrite the 4-byte operands of the 14 instructions that referenced it, probe
+      `CdStreamRead` for an existing `0xE9` hook — is written up in
+      [`gta-sa-original/img-archive-limit.md`](../../../../docs/gta-sa-original/img-archive-limit.md).
 
 ## What this plan may not do
 

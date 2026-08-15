@@ -138,6 +138,12 @@ So there are **2 free slots**, and this layout wants three new archives — `veh
 sibling, and `peds.img` — because the vehicle bucket alone is 3.08 GB and cannot sit under a sub-2-GiB cap in
 one file. **One short.**
 
+And the lift is bigger than one array: the ceiling has **two halves** — `ms_files` and the CdStream handle
+tables the reader indexes — so a plan budgeting only for `ms_files` has budgeted for half the work. The
+mechanism, read out of a working third-party adjuster (relocate the table, rewrite the 4-byte operands of the
+14 instructions that referenced it), is in
+[`gta-sa-original/img-archive-limit.md`](../gta-sa-original/img-archive-limit.md).
+
 There is a shape that fits stock: leave peds in `gta3.img` (their mod payload is 2 936 KB) and spend both
 free slots on the two vehicle files. It fits exactly and has zero headroom — the next archive of any kind, or
 one more gigabyte of cars, breaks it at boot. So the layout is designed for the lift instead: raising
