@@ -280,6 +280,20 @@ interpret them.
   `docs/development/cutscene-field-testing.md`. Suite 79 → 81 tool tests; no per-model hardcode
   (grep-checked at the user's ask).
 
+- [`session-15-models-new-and-the-slot-that-was-a-bodykit.md`](./session-15-models-new-and-the-slot-that-was-a-bodykit.md)
+  — 2026-08-15, 15 commits: **`models/` + `new/`** (vehicle-installer plan 007 — a candidate replaces the
+  `models/` car holding the same SLOT, resolved by ONE shared function because the installer and the
+  cutscene census read the same folder) and **`cars-server`** (`npm run cars` — a local page of what the
+  fleet replaced). The restructure had already broken the toolchain silently: every reader saw three cars
+  called `models`, `new` and `screenshots`, found no `.dff`, and did nothing — `--inspect` reported **0 of
+  23 slots ready and exited 0**, now 23/23, with the flat path byte-identical across the change. The
+  serious find: the slot the install RECORDED was the first `.dff` in the folder, which for **10 of 212**
+  cars is a bodykit part (`flash` → `exh_a_f`; `voodoo` and `slamvan` both → `bbb_lr_slv1`), so video mode
+  never saw those slots as modded and `--rebake --only flash` matched nothing. The audit itself found three
+  more: a test that only just fit its 5 s timeout (failed 4 runs in 5 under load), a `packages.svg` stale
+  since two tools were added, and a fixture manifest resolving 104/120 because mods move and get
+  renumbered — now found by NAME. Suite 4 313 → 4 358.
+
 - [`session-14-layered-mods-and-the-delivery-shape.md`](./session-14-layered-mods-and-the-delivery-shape.md)
   — 2026-08-15, 14 commits: `vehicle-cutscene --no-base-copy` (plan 006 — 1.72 GiB of game tree down to
   579 MiB and three files, byte-identical to the copy run, which is what lets pmb and the standalone app
