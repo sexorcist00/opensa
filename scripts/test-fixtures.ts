@@ -25,7 +25,7 @@ import { convertTo24h, parseTimecyc, stringifyTimecyc } from '@opensa/renderware
  * Curated / version-pinned test models that can't be reproduced from a stock copy live committed under
  * `tests/custom/proper-fixes-models/` instead.
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 type Fixture =
@@ -61,22 +61,22 @@ const extract = (entry: string, dest: string): Fixture => ({ dest: `${OUT}/${des
  */
 const MOD_MANIFEST: readonly Fixture[] = [
   // A Chinatown building + its dictionary: 19 material textures, several 512² DXT1 with 10 mip levels.
-  modFile('17. Chinatown Project v2 + Chinese Lamps/gta3_img/chinatown_sfe1.dff', 'mods/chinatown_sfe1.dff'),
-  modFile('17. Chinatown Project v2 + Chinese Lamps/gta3_img/chinatownsfe.txd', 'mods/chinatownsfe.txd'),
+  modFile('Chinatown Project v2 + Chinese Lamps/gta3_img/chinatown_sfe1.dff', 'mods/chinatown_sfe1.dff'),
+  modFile('Chinatown Project v2 + Chinese Lamps/gta3_img/chinatownsfe.txd', 'mods/chinatownsfe.txd'),
   // The Map Fixes Pack road tile whose authored normals are winding-CONSISTENT yet face the ground on
   // visible top faces (35 down / 61 sideways of 168 — dark Gouraud wedges in the field): the plan 024
   // Family A real-asset guard for the `badShading` gate check.
-  modFile('0. Map Fixes Pack/gta3_img/lae2_roads17.dff', 'mods/lae2_roads17.dff'),
+  modFile('Map Fixes Pack/gta3_img/lae2_roads17.dff', 'mods/lae2_roads17.dff'),
   // The Map Fixes Pack copy of the Santa Maria beach slab: a re-export whose Struct FACE ARRAY winds all 65
   // road triangles opposite to its BinMeshPLG index data. RenderWare draws the index data, so reading the
   // face array put the slab face-down and single-sided culling deleted it — the "blue strip" (plan 095).
   // A synthetic clump cannot prove this: the whole point is what a real exporter actually writes.
-  modFile('0. Map Fixes Pack/gta3_img/roads32_law2.dff', 'mods/roads32_law2.dff'),
+  modFile('Map Fixes Pack/gta3_img/roads32_law2.dff', 'mods/roads32_law2.dff'),
   // The Pacific Park ferris wheel's light ring (plan 099): a UVAnimDict entry `f13d` — 261 keyframes
   // stepping UV0 by 1/13 every 0.225 s — plus the `Frames` material that references it. Nothing in stock
   // SA's vehicle/prop set animates its UVs, so the rigid builder's binding can only be proven on this one.
-  modFile('60. Pacific Park Rotating Ferris Wheel/gta3_img/ferriswheel_lights.dff', 'mods/ferriswheel_lights.dff'),
-  modFile('60. Pacific Park Rotating Ferris Wheel/gta3_img/ferriswheel_lights.txd', 'mods/ferriswheel_lights.txd'),
+  modFile('Pacific Park Rotating Ferris Wheel/gta3_img/ferriswheel_lights.dff', 'mods/ferriswheel_lights.dff'),
+  modFile('Pacific Park Rotating Ferris Wheel/gta3_img/ferriswheel_lights.txd', 'mods/ferriswheel_lights.txd'),
 ];
 
 /**
@@ -90,7 +90,7 @@ const MOD_MANIFEST: readonly Fixture[] = [
 const cleoFile = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, from, type: 'cleo' });
 
 const CLEO_MANIFEST: readonly Fixture[] = [
-  cleoFile('mods/60. Pacific Park Rotating Ferris Wheel/CLEO/Rotating Ferris Wheel (Junior_Djjr).cs', 'cleo/ferris.cs'),
+  cleoFile('mods/Pacific Park Rotating Ferris Wheel/CLEO/Rotating Ferris Wheel (Junior_Djjr).cs', 'cleo/ferris.cs'),
   cleoFile(
     'vehicles/bus - 1978 Motor Coach Industries MC-9 Crusader-II - stratumx/cleo/Car Left Door.cs',
     'cleo/cardoor-bus.cs',
@@ -133,7 +133,7 @@ const CLEO_MANIFEST: readonly Fixture[] = [
   // The Dinghy HD boat (plan 002 step 9): real adoption subjects — propellers under the transom flaps,
   // movsteer steering under the hull, a details mesh; the hull authored at the origin (shim absorbs).
   cleoFile('vehicles/dinghy - Dinghy HD - michelle works/dinghy.dff', 'vehicles/dinghy-hd.dff'),
-  cleoFile('mods/61. Wind Farm/CLEO/Wind Farm (Junior_Djjr).cs', 'cleo/windfarm.cs'),
+  cleoFile('mods/Wind Farm/CLEO/Wind Farm (Junior_Djjr).cs', 'cleo/windfarm.cs'),
 ];
 
 const MANIFEST: readonly Fixture[] = [
@@ -324,6 +324,43 @@ function openArchives(): ImgArchive[] {
   return archives;
 }
 
+/** The subfolders a `mods-src/<game>/<subject>` may hide its folders in (mod layers · vehicle layers). */
+const MODS_SRC_LAYERS: readonly string[] = ['common', 'sa', 'opensa', 'models', 'new'];
+
+/**
+ * Resolve `<subject>/<folder>/<rest…>` inside `mods-src/<game>`, by the folder's NAME.
+ *
+ * Neither half of that path is stable, and both moved under this manifest without a test failing —
+ * committed copies keep the corpus green while the sources drift:
+ *
+ * - the **number** is a position, not an identity: `renumber-mods` compacts it whenever a mod is deleted
+ *   (`60. Pacific Park…` is `59.` today), so it is matched loosely and left out of the manifest;
+ * - the **layer** is a build decision: `mods/` became `common/` + `sa/` (mod-installer plan 011) and
+ *   `vehicles/` became `models/` + `new/` (vehicle-installer plan 007), so every layer is searched.
+ *
+ * The NAME is what the author gave the mod, and it is what the manifest states.
+ */
+function modsSrcPath(subject: string, relative: string): string {
+  const [folder, ...rest] = relative.split('/');
+  const wanted = withoutModNumber(folder ?? '');
+  for (const root of [
+    join('mods-src', GAME, subject),
+    ...MODS_SRC_LAYERS.map((l) => join('mods-src', GAME, subject, l)),
+  ]) {
+    if (!existsSync(root)) {
+      continue;
+    }
+    const match = readdirSync(root, { withFileTypes: true }).find(
+      (entry) => entry.isDirectory() && withoutModNumber(entry.name) === wanted,
+    );
+    if (match) {
+      return join(root, match.name, ...rest);
+    }
+  }
+
+  throw new Error(`no folder named '${wanted}' under mods-src/${GAME}/${subject} (or its layers)`);
+}
+
 function produce(fixture: Fixture): null | Uint8Array {
   switch (fixture.type) {
     case 'archive': {
@@ -332,7 +369,9 @@ function produce(fixture: Fixture): null | Uint8Array {
       return data ? buildVer2Buffer([{ data, name: fixture.entry }]) : null;
     }
     case 'cleo': {
-      return new Uint8Array(readFileSync(join('mods-src', GAME, fixture.from)));
+      const [subject, ...rest] = fixture.from.split('/');
+
+      return new Uint8Array(readFileSync(modsSrcPath(subject ?? '', rest.join('/'))));
     }
     case 'committed': {
       return new Uint8Array(readFileSync(fixture.from));
@@ -345,10 +384,16 @@ function produce(fixture: Fixture): null | Uint8Array {
     }
     case 'mod': {
       // `mods-src/<game>/mods` — the per-game layout (plan 079); the old flat `mods-src/mods` path made
-      // every mod fixture report MISSING while stale copies from the previous layout masked it.
-      return new Uint8Array(readFileSync(join('mods-src', GAME, 'mods', fixture.from)));
+      // every mod fixture report MISSING while stale copies from the previous layout masked it. The mod is
+      // found by NAME (see {@link modsSrcPath}) — its number and its layer both move without notice.
+      return new Uint8Array(readFileSync(modsSrcPath('mods', fixture.from)));
     }
   }
+}
+
+/** `60. Pacific Park Rotating Ferris Wheel` → `pacific park rotating ferris wheel`. */
+function withoutModNumber(folder: string): string {
+  return folder.replace(/^\d+(?:\.\d+)?\.\s*/, '').toLowerCase();
 }
 
 let written = 0;
