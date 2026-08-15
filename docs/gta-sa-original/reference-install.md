@@ -79,6 +79,25 @@ Our own log records the whole picture in six lines:
 | `CPool<CBuilding>` | 13 000 | **`Buildings = 150000`** (raised 2026-08-10 for the clutter layer) | OLA |
 | `CPool<CDummy>` | 2 500 | `Dummys = 50000` | OLA |
 | Streaming object instances | — | `StreamingObjectInstancesList = 30000` | OLA |
+| `CStreaming::ms_files` — registered IMG archives | **8** (3 hardcoded + 5 from `gta.dat`) | **NOT LIFTED; 6 in use, 2 free** | nothing here — see below |
+
+### The archive table: 8 slots, and we own 2 of them
+
+**Derived, not remembered** (gta-reversed `Streaming.h`, 2026-08-15): `ms_files` is at `0x8E48D8` and the next
+static, `ms_bLoadingBigModel`, is at `0x8E4A58` — a gap of `0x180` = 384 B over a `tStreamingFileDesc` the
+header itself size-asserts at `0x30` = 48 B, so the array is **8** entries. GTAMods states the same split
+independently: *"3 standard archives gta3.img, gta_int.img, player.img and 5 archives defined within
+default.dat or gta.dat"*. Past it the game crashes.
+
+What this install spends: the three hardcoded ones, plus the three `IMG` lines stock `gta.dat` carries
+(`DATA\PATHS\CARREC.IMG`, `DATA\SCRIPT\SCRIPT.IMG`, `MODELS\CUTSCENE.IMG`) — **6 of 8**.
+
+**FLA does not lift it here.** The captured ini patches the ID pools and `handling.cfg` and turns on error
+reporting (`IMG archive needs rebuilding`, `Stream handles limit exceeded` are REPORTS, not lifts); nothing
+in it touches the archive count. fastman92's separate *IMG & Stream Limit Adjuster* raises the ceiling to 127
+archives / 400 stream handles, and it is not installed here. So the limit is stock, and it is ours to take if
+a design needs a seventh archive — which
+[`architecture/img-archive-layout.md`](../architecture/img-archive-layout.md) does.
 
 **The consequence for our generators — corrected 2026-08-10, twice by the field.** The per-area row cap and the
 slot count are NOT interchangeable:

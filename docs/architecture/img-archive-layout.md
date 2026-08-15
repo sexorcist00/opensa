@@ -121,11 +121,26 @@ quietly.
 - **The opensa target.** Our engine packs its own formats; the split changes the shape of its INPUT and
   nothing about the pak.
 
-## The open question, and where it gets answered
+## The archive table: this layout does not fit, and that is settled arithmetic
 
-SA registers archives in a fixed-size table. **How many slots it has must be read out of the exe or
-gta-reversed, not remembered** — the game already runs six (`gta3`, `gta_int`, `player`, `cutscene`,
-`carrec`, `script`) and this layout adds more. If the table is too small, the lift is ASI work, and
-[`restrictions/sa-target.md`](../restrictions/sa-target.md) requires exactly ONE plugin to own a given limit —
-so whether FLA already moves it is part of the same question. The field run in plan 001 is what decides
-whether any of that is needed.
+SA registers archives in a fixed-size table, and the size is now **derived rather than remembered**
+(gta-reversed `Streaming.h`, 2026-08-15): `ms_files` at `0x8E48D8`, the next static at `0x8E4A58`, a `0x180`
+gap over a `0x30` struct the header size-asserts — **8 slots**. GTAMods states the same split independently:
+three hardcoded (`gta3`, `gta_int`, `player`) and five for `gta.dat`. Past the eighth the game crashes at
+load, with nothing to warn at build time.
+
+The target spends **6**: the three hardcoded plus stock `gta.dat`'s `CARREC.IMG`, `SCRIPT.IMG` and
+`CUTSCENE.IMG`. **FLA does not lift it here** — the captured ini patches ID pools and `handling.cfg`, and its
+`IMG archive needs rebuilding` line is error REPORTING, not a limit. fastman92's separate *IMG & Stream Limit
+Adjuster* would (127 archives / 400 stream handles) and is not installed.
+
+So there are **2 free slots**, and this layout wants three new archives — `vehicles.img`, its first spill
+sibling, and `peds.img` — because the vehicle bucket alone is 3.08 GB and cannot sit under a sub-2-GiB cap in
+one file. **One short.**
+
+There is a shape that fits stock: leave peds in `gta3.img` (their mod payload is 2 936 KB) and spend both
+free slots on the two vehicle files. It fits exactly and has zero headroom — the next archive of any kind, or
+one more gigabyte of cars, breaks it at boot. So the layout is designed for the lift instead: raising
+`TOTAL_IMG_ARCHIVES` is ASI work, on a limit **nothing else on the target owns**, which is what
+[`restrictions/sa-target.md`](../restrictions/sa-target.md)'s one-owner rule requires before we claim it.
+That is the agreed next link after this plan, not a contingency.

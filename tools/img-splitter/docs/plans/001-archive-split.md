@@ -23,27 +23,35 @@ completes.
 
 Every step ends with its verification; a step without recorded numbers is unfinished.
 
-- [ ] **0. The census, and the two things that must be read rather than remembered.**
-      Two facts are already measured and go in as the starting table: the stock archives by extension
-      (`gta3.img` 16 316 entries — dff 12 964, txd 2 759, col 216, ipl 164, ifp 149, dat 64; `gta_int` 2 484;
-      `player` 542; `cutscene` 634) and the IDE sections that will drive the classifier (`objs` 14 052,
-      `peds` 276, `cars` 212, `tobj` 160, `2dfx` 97, `anim` 54, `weap` 50, `txdp` 38, `hier` 35).
-      What is NOT measured and may not be assumed:
-      1. **How many archives SA can register** — a fixed-size table; read it out of the accepted exe or
-         gta-reversed, and find out whether FLA already moves it (`restrictions/sa-target.md`: exactly ONE
-         plugin owns a limit). The game already runs six.
-      2. **Precedence when one name exists in two registered archives.** The layout is designed so this is
-         never exercised, but the answer decides how loudly the splitter must refuse a duplicate.
-      Verification: both answers written into this plan with their source (address / file / line), and the
-      census tables filled in.
+- [x] **0. The census, and the ceiling that decides the shape. DONE 2026-08-15.**
+      **The archives, by extension**: `gta3.img` 16 316 entries — dff 12 964, txd 2 759, col 216, ipl 164,
+      ifp 149, dat 64; `gta_int` 2 484; `player` 542; `cutscene` 634. **The IDE sections** that drive the
+      classifier: `objs` 14 052, `peds` 276, `cars` 212, `tobj` 160, `2dfx` 97, `anim` 54, `weap` 50,
+      `txdp` 38, `hier` 35.
+      **`TOTAL_IMG_ARCHIVES` = 8, derived not remembered**: gta-reversed `Streaming.h` puts `ms_files` at
+      `0x8E48D8` and the next static, `ms_bLoadingBigModel`, at `0x8E4A58` — `0x180` = 384 B over a
+      `tStreamingFileDesc` the header size-asserts at `0x30` = 48 B. GTAMods corroborates the split (3
+      hardcoded + 5 from `gta.dat`). The target spends **6** (gta3 / gta_int / player, plus stock `gta.dat`'s
+      CARREC, SCRIPT, CUTSCENE) and **FLA does not lift it in this install** — its ini patches ID pools and
+      handling; `IMG archive needs rebuilding` is error reporting, not a limit. Recorded in
+      [`gta-sa-original/reference-install.md`](../../../../docs/gta-sa-original/reference-install.md) and as
+      a rule in [`restrictions/sa-target.md`](../../../../docs/restrictions/sa-target.md).
+      **What that settles**: 2 free slots against three wanted archives (`vehicles.img` + one spill sibling +
+      `peds.img`), so the ASI lift is a certainty rather than a contingency — see step 5.
+      **Dropped from this step** (the user's call, 2026-08-15): researching what the game does when one name
+      exists in two registered archives. The layout is built so it cannot happen, so the right answer is a
+      GUARD, not a fact — step 2 refuses a duplicate instead of relying on precedence.
 - [ ] **1. The classifier — pure, no I/O.** Entry name → bucket, from the IDE sections plus each row's txd
       column; non-model entries (`.ipl` / `.ifp` / `.dat` / `.col`) and anything unclaimed stay in `gta3.img`.
       Verification: every entry of the stock `gta3.img` classified with a per-bucket count; the UNCLAIMED
       list printed and its size recorded here (a classifier that quietly absorbs surprises is the failure
       mode). Tests: negative cases first — an entry no IDE declares, a name declared by two sections.
 - [ ] **2. The splitter tool.** Emit the buckets, rewrite `gta.dat`'s `IMG` lines, leave `cutscene`/`player`/
-      `gta_int` alone. Verification: entry bytes byte-identical to the source archive, the entry count
-      conserved exactly (in == sum of out, no duplicates), and the run's wall clock + output sizes recorded.
+      `gta_int` alone. **Uniqueness is a GUARD here, not an assumption**: one name may land in exactly one
+      archive, and the tool fails naming both sides if it ever would not — that is what makes the precedence
+      question unaskable rather than unanswered. Verification: entry bytes byte-identical to the source
+      archive, the entry count conserved exactly (in == sum of out, no duplicates), and the run's wall clock +
+      output sizes recorded.
 - [ ] **3. The cap and the spill, in the shared writer.** `tool-kit` gains a bucket-aware write that opens
       `<name>.img`, and creates `<name>2.img` when the next entry would cross the cap; every installer routes
       through it. The cap is a named constant with its reason (Node's 2 GiB read ceiling), set below it with
@@ -53,11 +61,15 @@ Every step ends with its verification; a step without recorded numbers is unfini
       learns the bucket set instead of its four hard-coded names — an archive it does not know about is an
       under-count, and that is the silent direction. Verification: a full `sa` build completes end to end
       (the run that could not finish today), with per-stage timings and every archive's size recorded.
-- [ ] **5. The field run.** Does the real game boot, stream and play from the split archives? This is where
-      step 0's first unknown gets its answer in practice. Verification: boot, drive, and the cutscene A/B
-      that plan 001 step 7 is waiting on. **If it falls over here, that is not a defeat of the design** — it
-      is the trigger for the ASI work (lift the archive table, in `perfect-map.asi` or beside it), which is
-      the agreed next link and not part of this plan.
+- [ ] **5. The field run — and the archive-table lift it will need.** Step 0 already says the layout does not
+      fit stock: 2 free slots against 3 wanted archives. So this step is not "does it work?" but "what breaks
+      first, and does everything ELSE work while we are one slot short?" — build with the peds bucket left in
+      `gta3.img` (the shape that fits stock exactly, 8 of 8), boot, drive, and run the cutscene A/B that
+      `asi/perfect-cutscene` plan 001 step 7 is waiting on. That isolates the layout from the ceiling.
+      Verification: the game boots and streams from split archives, with the swept cutscene verdicts matched.
+      **Then the lift** — raising `TOTAL_IMG_ARCHIVES` in our ASI — is the agreed next link and gets its own
+      plan, not a step here. It is a limit **nothing else on the target owns**, which is the one-owner rule's
+      precondition for us claiming it.
 
 ## What this plan may not do
 

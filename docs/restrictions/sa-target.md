@@ -25,6 +25,14 @@ we build for** (the user's call, reaffirmed 2026-08-09). So the useful column is
 > fleet — a hand-dropped `cutscene.img`, the standalone app, a bottle install.
 
 
+> **A design may add at most TWO `models/*.img` archives before it needs an ASI.** `CStreaming::ms_files`
+> holds **8** (derived from gta-reversed: `0x8E4A58 − 0x8E48D8 = 0x180` over a `0x30` struct), the target
+> spends 6 of them — gta3 / gta_int / player hardcoded, plus stock `gta.dat`'s CARREC, SCRIPT and CUTSCENE —
+> and **nothing in this install lifts it** (FLA patches ID pools, not the archive count). Measurement and the
+> derivation: [`gta-sa-original/reference-install.md`](../gta-sa-original/reference-install.md).
+> **Caught: no.** Past the eighth the game crashes at load, so it is a boot-time death with no build-side
+> warning — the same shape as exhausting an FLA pool.
+
 | Ceiling | Stock | **On the target** | What overflowing does |
 | --- | --- | --- | --- |
 | Permanent text-IPL rows, map-wide | 32,767 (int16) | **lifted — `perfect-map.asi` patch #1** (the install runs 72,914) | `CIplStore::IncludeEntity` truncates building-pool indexes to int16; past 2^15 it corrupts stream-out ranges (the "ghost barriers" family) |
