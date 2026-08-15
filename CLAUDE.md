@@ -219,6 +219,20 @@ The documentation lifecycle (idea → concept → plan / postmortem; roadmap for
   keeps only a pointer. The central folders carry what genuinely spans several tools, or has no tool yet
 - `docs/audit/` — a post-big-rework audit (see the Standing Workflow rule above): what changed, its cost, its
   gain
+- `docs/in-reserve/` — **DEFERRED work whose investigation is already done** (the user's call, 2026-08-15):
+  we know how, we researched it fully, and we deliberately have not built it because the condition that makes
+  it necessary has not arrived. A card states, in order: which task it came out of, WHY it is deferred (the
+  measurement or field verdict, dated), **the TRIGGER** — the concrete condition that turns it into work —
+  and **where that trigger is checked in code**. Row in `docs/in-reserve/README.md`.
+  **That last part is the rule, not decoration**: the guard, gate or error message that fires when the
+  condition arrives must NAME the card. A card whose trigger lives only in the folder gets read after the
+  confusion instead of before it, which is the exact failure the folder exists to prevent — a symptom
+  surfacing months later and the same investigation being paid for twice.
+  Two things do NOT go here however unused they are: a fact about the ORIGINAL game or its adjuster ecosystem
+  (that is `docs/gta-sa-original/` by rule — a fact does not change folders because we are not using it this
+  month; a card POINTS at it), and work we already intend to do (`docs/roadmap/`). Neighbours: postmortem is
+  _"has this been tried?"_, roadmap _"when are we doing it?"_, ideas _"someone should look at this"_, and this
+  folder _"already looked at — here is what it costs and what makes it urgent"_
 
 Keep these in sync with the code — update them in the same change, not later:
 

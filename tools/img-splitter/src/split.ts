@@ -64,8 +64,10 @@ export function assertArchiveSlots(gtaDatImgLines: number, lifted: boolean): voi
   }
   throw new Error(
     `${needed} registered IMG archives of ${STOCK_ARCHIVE_SLOTS} stock slots (${HARDCODED_ARCHIVES} hardcoded ` +
-      `+ ${gtaDatImgLines} in gta.dat) — the game CRASHES at load past the eighth, and no adjuster on the ` +
-      'target lifts it (see docs/gta-sa-original/img-archive-limit.md). Split fewer buckets, or set ' +
+      `+ ${gtaDatImgLines} in gta.dat) — the game CRASHES at load past the eighth, with no symptom that points ` +
+      'here. No adjuster on the target lifts it. THE RESEARCH FOR THE LIFT IS ALREADY DONE — read ' +
+      'docs/in-reserve/img-archive-limit-lift.md before starting anything: it names the mechanism, the 15 ' +
+      'patch sites and the second half of the ceiling. Until then, split fewer buckets, or set ' +
       'liftedArchiveLimit once our ASI raises CStreaming::ms_files.',
   );
 }

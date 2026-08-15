@@ -1,15 +1,18 @@
 # IMG archive layout — typed buckets, bounded files
 
-**Status: BUILT, not yet field-run.** `tools/img-splitter` produces the layout, `tool-kit` carries the cap
-and the spill, and pmb runs the split as its first stage; what remains is
-[plan 001](../../tools/img-splitter/docs/plans/001-archive-split.md) step 5 — does the real game boot and
-stream from it. This doc is what that plan implements, and what any later tool touching `models/*.img` has to
-keep true.
+**Status: BUILT and FIELD-RUN (2026-08-15).** `tools/img-splitter` produces the layout, `tool-kit` carries
+the cap and the spill, pmb runs the split as its first stage, and the user's field run launched and played a
+split build with no adjuster work at all. This doc is what
+[plan 001](../../tools/img-splitter/docs/plans/001-archive-split.md) implements, and what any later tool
+touching `models/*.img` has to keep true.
 
 **What ships today is the stock-fitting shape**: `splitBuckets` defaults to `['vehicles']`, so peds and
 weapons stay in `gta3.img` and the two free archive slots go to `vehicles.img` and its one spill sibling —
-8 of 8, zero headroom. The full four-bucket layout below is what the ASI lift unlocks, and it is described
-here rather than deferred because the classifier already produces it.
+8 of 8, zero headroom. **That is why the field run needed no ASI**: not a lifted ceiling, an unreached one.
+The full four-bucket layout below is what the lift would unlock, and it is described here rather than
+deferred because the classifier already produces it —
+[`in-reserve/img-archive-limit-lift.md`](../in-reserve/img-archive-limit-lift.md) holds the deferred task
+and the condition that starts it.
 
 ## Why the layout exists
 
@@ -171,7 +174,8 @@ And the lift is bigger than one array: the ceiling has **two halves** — `ms_fi
 tables the reader indexes — so a plan budgeting only for `ms_files` has budgeted for half the work. The
 mechanism, read out of a working third-party adjuster (relocate the table, rewrite the 4-byte operands of the
 14 instructions that referenced it), is in
-[`gta-sa-original/img-archive-limit.md`](../gta-sa-original/img-archive-limit.md).
+[`gta-sa-original/img-archive-limit.md`](../gta-sa-original/img-archive-limit.md); the deferred task and the
+condition that starts it are [`in-reserve/img-archive-limit-lift.md`](../in-reserve/img-archive-limit-lift.md).
 
 There is a shape that fits stock: leave peds and weapons in `gta3.img` (their mod payload is 2 936 KB and
 nothing) and spend both free slots on the two vehicle files. It fits exactly and has zero headroom — the next archive of any kind, or

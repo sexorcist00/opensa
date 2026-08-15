@@ -31,6 +31,10 @@ Read it as a set of rules:
   individually-implementable steps, each ending with verification + measured numbers).
 - **We know what to do but want it in a later version** → [`docs/roadmap/`](./roadmap/) (e.g. `0.5.0/`, `0.6.0/`
   — scheduled cycles, same plan-chain shape as `docs/plans/`, just not this version).
+- **We researched it fully and then did not need it** → [`docs/in-reserve/`](./in-reserve/README.md). Not
+  scheduled like a roadmap item and not dead like a postmortem: a card that names the TRIGGER which would make
+  it work again, **and where that trigger is checked in code**. The point is that the guard which fires months
+  later says the card's name, so the same investigation is never paid for twice.
 - **Before ANY of the three above are written** → read [`docs/project-goals.md`](./project-goals.md) first.
   It is what the project is FOR, and it is directive: OpenSA is compatible with RenderWare and is **not** a
   reimplementation of San Andreas. Honour the authored DATA (timecyc, handling, the IDE/popcycle tables — the

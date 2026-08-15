@@ -5,6 +5,17 @@ ASI can lift it deliberately rather than by imitation. The rule a design must sa
 [`restrictions/sa-target.md`](../restrictions/sa-target.md); the install's numbers are in
 [reference-install.md](reference-install.md).
 
+> **NOT NEEDED TODAY, and the reason matters (2026-08-15, the user's field run).** The shipped layout fits
+> the stock table **exactly**: `splitBuckets: ['vehicles']` puts the mod car set into `vehicles.img` + one
+> spill sibling, so the built `gta.dat` carries 5 `IMG` lines against 3 hardcoded archives — **8 of 8**. The
+> game launched and played with no adjuster work at all.
+> **Read that verdict precisely**: it does not show the ceiling is lifted on that install, it shows we never
+> reached it. From the outside the two are indistinguishable, and only one of them survives a ninth archive.
+> **What makes the lift below real work again**, any one of: a bucket beyond vehicles getting its own archive
+> (the classifier already produces peds and weapons); the vehicle payload growing past two files, or the map
+> bucket needing a spill sibling (it sits at 1.64 GB against a 1.75 GiB cap); any other stage wanting a
+> `models/*.img` of its own.
+
 ## The ceiling has TWO halves, and only one of them is `ms_files`
 
 - **`CStreaming::ms_files` — 8 entries.** Derived from gta-reversed `Streaming.h` (2026-08-15): the array is

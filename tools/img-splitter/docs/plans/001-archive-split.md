@@ -36,8 +36,10 @@ Every step ends with its verification; a step without recorded numbers is unfini
       handling; `IMG archive needs rebuilding` is error reporting, not a limit. Recorded in
       [`gta-sa-original/reference-install.md`](../../../../docs/gta-sa-original/reference-install.md) and as
       a rule in [`restrictions/sa-target.md`](../../../../docs/restrictions/sa-target.md).
-      **What that settles**: 2 free slots against three wanted archives (`vehicles.img` + one spill sibling +
-      `peds.img`), so the ASI lift is a certainty rather than a contingency — see step 5.
+      **What that settles**: 2 free slots. Three wanted archives (`vehicles.img` + a spill sibling +
+      `peds.img`) would need a lift — so the shipped shape drops the peds bucket and spends both slots on
+      vehicles, which fits 8 of 8 exactly. The lift became a DEFERRED task with a named trigger rather than a
+      certainty: [`in-reserve/img-archive-limit-lift.md`](../../../../docs/in-reserve/img-archive-limit-lift.md).
       **Dropped from this step** (the user's call, 2026-08-15): researching what the game does when one name
       exists in two registered archives. The layout is built so it cannot happen, so the right answer is a
       GUARD, not a fact — step 2 refuses a duplicate instead of relying on precedence.
@@ -156,18 +158,18 @@ Every step ends with its verification; a step without recorded numbers is unfini
       **A gap this run exposes**: `gta3.img` grew 889 MB → 1.64 GB across mods and the LOD stages and nothing
       caps it — `mod-installer` and the LOD generators do not write through `writeImgFamily`. 500 MB under the
       wall today, and silent if it were not.
-- [ ] **5. The field run — and the archive-table lift it will need.** Step 0 already says the layout does not
-      fit stock: 2 free slots against 3 wanted archives. So this step is not "does it work?" but "what breaks
-      first, and does everything ELSE work while we are one slot short?" — build with the peds bucket left in
-      `gta3.img` (the shape that fits stock exactly, 8 of 8), boot, drive, and run the cutscene A/B that
-      `asi/perfect-cutscene` plan 001 step 7 is waiting on. That isolates the layout from the ceiling.
-      Verification: the game boots and streams from split archives, with the swept cutscene verdicts matched.
-      **Then the lift** — raising `TOTAL_IMG_ARCHIVES` in our ASI — is the agreed next link and gets its own
-      plan, not a step here. It is a limit **nothing else on the target owns**, which is the one-owner rule's
-      precondition for us claiming it. Its groundwork is already done and must not be re-derived: the ceiling
-      has TWO halves (`ms_files` AND the CdStream handle tables), and the mechanism a working adjuster uses —
-      relocate the table, rewrite the 4-byte operands of the 14 instructions that referenced it, probe
-      `CdStreamRead` for an existing `0xE9` hook — is written up in
+- [x] **5. The field run. PASSED 2026-08-15 — the user: everything launched, no problems, and no ASI work.**
+      The stock-fitting shape (peds and weapons left in `gta3.img`, both free slots spent on `vehicles.img` +
+      its spill sibling) boots and plays.
+      **What that verdict does NOT say, and it is the thing most likely to be misremembered:** it is not
+      evidence that the archive ceiling is lifted on that install. The build registers **8 of 8** — we never
+      reached it. From the outside a lifted ceiling and an unreached one are indistinguishable, and only one
+      of them survives a ninth archive.
+      **So the lift is deferred, not cancelled**, with its trigger written down and — the part that matters —
+      enforced in code: `assertArchiveSlots` fails the build and names the card when a ninth archive appears,
+      because past the eighth the game crashes at load with no symptom that points anywhere. The card is
+      [`in-reserve/img-archive-limit-lift.md`](../../../../docs/in-reserve/img-archive-limit-lift.md); the
+      facts it rests on stay in
       [`gta-sa-original/img-archive-limit.md`](../../../../docs/gta-sa-original/img-archive-limit.md).
 
 ## What this plan may not do
