@@ -64,11 +64,11 @@ scene-specific anims).
 | 28 | SCRASH2 | csbravura | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
 | 29 | SMOKE2B | csglendale92 | ✅ **first run in the ASI re-sweep, 2026-08-15** — the headlight green is fixed by round 23; the "missing occupants" resolved to round 22's seating delta (they sit 0.281 m low, the scene seats actors at the STOCK car's dummy), which is not a defect in the car and has its own lever recorded |
 | 30 | SMOKE3A | csglendale92 | ✅ **first run in the ASI re-sweep, 2026-08-15**, on the round-23 build — the headlight green is gone here too |
-| 31 | SMOKE4A | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
-| 32 | STEAL_2 | csremington92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
-| 33 | STEAL_4 | csremington92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
-| 34 | STEAL_5 | csremington92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
-| 35 | TRUTH_2 | csmothership |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 31 | SMOKE4A | csglendale92 | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent"), on the round-23 + plan-005 build |
+| 32 | STEAL_2 | csremington92 | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent"), on the round-23 + plan-005 build |
+| 33 | STEAL_4 | csremington92 | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent"), on the round-23 + plan-005 build |
+| 34 | STEAL_5 | csremington92 | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent"), on the round-23 + plan-005 build |
+| 35 | TRUTH_2 | csmothership | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent"), on the round-23 + plan-005 build |
 
 ## Step 2 — fix rounds (as found)
 
@@ -756,8 +756,26 @@ stand on the current no-ASI rules.
 
 ## Step 3 — the approval
 
-- [ ] All 35 rows carry a verdict; open findings zero. **The user's blanket approval closes the
+- [x] All 35 rows carry a verdict; open findings zero. **The user's blanket approval closes the
       plan** — and with it the scene-coverage half of 002 step 11's acceptance (the pipeline-build
       half stays with 002: this sweep runs on the bottle's self-contained build).
+      **ALL 35 ROWS PASS as of 2026-08-15**, every one of them on the final configuration (the
+      round-23 fleet + plan 005's seat retarget + `perfect-cutscene.asi`). Awaiting only the user's
+      word to mark the plan CLOSED.
 
-**Record:** rounds spent, findings found/fixed, the approval verbatim.
+**Record — the sweep, end to end:**
+
+- **35 of 35 scenes pass**, 21 exercised models, on one configuration. Nineteen of those rows had
+  never been run before the post-ASI re-sweep; the rest were re-run because the ASI, the modulate fix
+  and the retired pane hack changed all of them at once.
+- **23 fix rounds.** Rounds 1–21 are the original sweep; the re-sweep added three: round 22 (the
+  glendale's "missing" occupants, which resolved to a 0.281 m seating delta and became plan 005),
+  round 23 (green headlights — round 9's pipeline rule replaced by round 8's, which also repaired the
+  burrito's and sabre's tail lamps) and the PROLOG3 taxi driver, checked against vanilla and cleared
+  as R\*'s own.
+- **Two things the sweep is owed for beyond its own rows**: it found a rule of ours that had been
+  silently costing the whole fleet its lamp shine, and it produced the seat retarget — both of which
+  the ledger had been ACCEPTING because nobody had a reference for how they should look.
+- **What is still open, recorded not chased:** `defrost_ad` on cscopcarla92 (texture-alpha
+  translucency the material-alpha classifier cannot see). Round 22 priced it: all five cscopcarla92
+  crash scenes passed without it being raised, so no scene framing meets it.

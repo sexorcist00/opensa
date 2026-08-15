@@ -252,7 +252,7 @@ bottle's `CLEO/cutscene-override.ini`).
       `PANE_SUPPRESSED_SLOTS` is empty and stays as a documented seam; the hack file moved to
       `docs/hacks/retired/` with its closing block, its README row repointed, and
       `docs/contracts/vehicles.md` §3 now keeps only the atomic-ORDER rule. Suite 92/92.
-- [ ] **6. The fleet re-check (plan 004 addendum).** THREE things changed at once, so every row of
+- [x] **6. The fleet re-check (plan 004 addendum).** THREE things changed at once, so every row of
       plan 004 re-opens: the draw path of every cutscene car (the deferral), the modulate rule (one
       model's glass), and the retired hack (two slots get their windows back). Sixteen rows had never
       been run at all. Findings feed plan 004's ledger as new rounds; the verdict per scene goes in
@@ -263,7 +263,13 @@ bottle's `CLEO/cutscene-override.ini`).
       car floating, sunk or drawn over a wall; lamps/plates/paint unchanged.
       **Three rows are already done on this exact configuration** (2026-08-14): PROLOG3 ("looks
       perfect"), RIOT_4B ("peds visible, tint as it should be"), SYND_3A ("all excellent").
-      **Running tally: 28 of 35 passed, zero findings** — the three above, all 14 of block A, and
+      **DONE 2026-08-15 — 35 of 35 PASS.** Two findings came out of it and BOTH belonged to the
+      converter rather than to this ASI: plan 004 round 23 (green headlights — round 9's pipeline rule
+      replaced by round 8's) and round 22, which resolved into plan 005 (a cutscene actor sits in the
+      donor's seat). The deferral itself was never implicated in either; the ASI-removed control is
+      what proved that for round 22.
+
+      **Running tally at the time of the last batch: 28 of 35 passed, zero findings** — the three above, all 14 of block A, and
       11 of block B, run 2026-08-15, every verdict "excellent". **Model coverage is complete**: the
       21 exercised models have all been seen on this configuration, the six ★force-piped ones
       included. Block B has also cleared all five `cscopcarla92` crash scenes — the model carrying
@@ -317,11 +323,11 @@ bottle's `CLEO/cutscene-override.ini`).
             0.281 m low (plan 004 round 22, closed). The green headlights were plan 004 round 23, a
             converter pipeline rule, fixed. Neither touched the deferral
       - [x] SMOKE3A — csglendale92 — **2026-08-15 ✅**
-      - [ ] SMOKE4A — csglendale92
-      - [ ] STEAL_2 — csremington92
-      - [ ] STEAL_4 — csremington92
-      - [ ] STEAL_5 — csremington92
-      - [ ] TRUTH_2 — ★csmothership
+      - [x] SMOKE4A — csglendale92 — **2026-08-15 ✅**
+      - [x] STEAL_2 — csremington92 — **2026-08-15 ✅**
+      - [x] STEAL_4 — csremington92 — **2026-08-15 ✅**
+      - [x] STEAL_5 — csremington92 — **2026-08-15 ✅**
+      - [x] TRUTH_2 — ★csmothership — **2026-08-15 ✅**
 
       Not driven by any cutscene and therefore unreachable here: `csdinghy`, `cscopcarla` (the latter
       converts byte-for-byte with `cscopcarla92`, so its six scenes cover it indirectly).
