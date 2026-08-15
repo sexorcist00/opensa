@@ -35,7 +35,7 @@ scene-specific anims).
 | # | Scene | cs vehicles | Verdict |
 | --- | --- | --- | --- |
 | 1 | PROLOG1 | cstaxi92 | ✅ (gate 4/7 + 003) · **ASI re-sweep 2026-08-15 ✅** ("excellent") — the interior-area scene reads the deferred glass the same as the outdoor ones |
-| 2 | PROLOG3 | cscopcarla92, cstaxi92 | ✅ re-verified after round 21 (the matte windscreen was a missing modulate flag; "looks perfect") |
+| 2 | PROLOG3 | cscopcarla92, cstaxi92 | ✅ re-verified after round 21 (the matte windscreen was a missing modulate flag; "looks perfect") · ASI re-sweep 2026-08-15 ✅ · the taxi's missing driver was checked against VANILLA and is R*'s own — not a defect, do not chase it again |
 | 3 | STRP4B2 | csmtbike92 | ✅ (002 step 8) · **ASI re-sweep 2026-08-15 ✅** ("excellent") — the game's only bike scene |
 | 4 | DESERT9 | csbobcat92 | ✅ after rounds 1–2 ("glass with the door, one rack") · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
 | 5 | BCESA4W | csbravura, cszr350b | ✅ (2026-08-13, "good") · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
@@ -693,6 +693,26 @@ not an experiment.
 **Round 22 is NOT closed by this** — the field confirms the glendale's occupants are still invisible
 with the lamps fixed, which is what the occlusion measurement predicted (a different defect on the
 same car).
+
+### Round 22, continued — the vanilla A/B and the interior probe (2026-08-15)
+
+- **Vanilla settles the ownership.** The field installed the stock `cutscene.img` + `txdcut.ide` +
+  `anim/cuts.img` with the ASI off and ran SMOKE2B: **two occupants are plainly there.** So the
+  scene seats them, the original shows them, and our build loses them — this is ours.
+- **A second suspected case was checked and CLEARED.** PROLOG3's taxi has no driver in OUR build and
+  **no driver in vanilla either** — an R* scene, not a defect. Recorded so nobody chases it twice.
+- **Probe installed (2026-08-15):** fleet `NO_COMMIT/cs-probe-nointerior`, built with `interior`
+  temporarily added to `ORPHAN_SKIP_RE` (a name-matched PROBE, never a rule — the source change was
+  reverted the same minute and is not on any branch). The glendale drops from 44 atomics to 43:
+  `interior_ad` gone, `seats_ad` kept, everything else identical. One variable.
+  - occupants VISIBLE → the adopted interior shell is the occluder, and the work becomes a rule that
+    keeps interiors while letting a seated actor be seen;
+  - occupants STILL HIDDEN → the shell is innocent and the next suspects are `seats_ad` and the
+    placement question (our glendale is 5.41 m long against the vanilla donor's 5.82 m, so a
+    vanilla-authored seat offset may land the actor inside different geometry entirely).
+
+  Either way the eventual fix cannot be "drop interiors": cswashington ships `seats_ad` and its
+  actors read fine, and a scene that looks INTO a car through an open door needs its interior.
 
 ### Standing addendum — the perfect-cutscene ASI re-opens the whole ledger (2026-08-14)
 
