@@ -62,8 +62,8 @@ scene-specific anims).
 | 26 | CRASV2B | cscopcarla92 | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
 | 27 | RIOT4E2 | csfirela | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
 | 28 | SCRASH2 | csbravura | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
-| 29 | SMOKE2B | csglendale92 | ⚠️ **first run in the ASI re-sweep, 2026-08-15**: occupants not visible behind the glass. Round 22 — the render side measures clean and the tint reading was refuted in the field; working mechanism is opaque occlusion by the adopted `interior_ad`. Awaiting the ASI-removed control |
-| 30 | SMOKE3A | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 29 | SMOKE2B | csglendale92 | ✅ **first run in the ASI re-sweep, 2026-08-15** — the headlight green is fixed by round 23; the "missing occupants" resolved to round 22's seating delta (they sit 0.281 m low, the scene seats actors at the STOCK car's dummy), which is not a defect in the car and has its own lever recorded |
+| 30 | SMOKE3A | csglendale92 | ✅ **first run in the ASI re-sweep, 2026-08-15**, on the round-23 build — the headlight green is gone here too |
 | 31 | SMOKE4A | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 32 | STEAL_2 | csremington92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 33 | STEAL_4 | csremington92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
@@ -713,6 +713,36 @@ same car).
 
   Either way the eventual fix cannot be "drop interiors": cswashington ships `seats_ad` and its
   actors read fine, and a scene that looks INTO a car through an open door needs its interior.
+
+**RESOLVED — not occlusion, and not a defect in the car: the actors sit 0.281 m too LOW** (field call
+2026-08-15, "no bug here, they just sit low"). The probe answered by making the field look again, and
+the numbers close it:
+
+| quantity | value |
+| --- | --- |
+| `ped_frontseat`, STOCK gameplay glendale | z = −0.141 |
+| `ped_frontseat`, the MOD's gameplay glendale | z = −0.048 — **9 cm HIGHER**, not lower |
+| our ground lift `shiftZ` for this donor | **+0.209 m** |
+| the mod's own seat point in cutscene space | z = **+0.161** |
+| where SMOKE2B's anim puts the actor | z = **−0.120** |
+| actor below the car's own seat | **0.281 m** |
+
+The calibration that ties it together: the scene's actor offset (−0.120) matches the STOCK car's own
+`ped_frontseat` (−0.141) to within 2 cm. **R\* authored the actor at the stock car's seat**, and a
+converted donor whose cabin rides higher above its ground plane seats them low — 0.209 m of it is our
+ground lift (which is CORRECT and must stay: wheel bottoms compose to −0.70 against vanilla's −0.69),
+the rest is the mod's own higher seat and a body 0.19–0.27 m taller at the roof.
+
+**The seat dummies are not the lever and cannot be.** A cutscene actor's position is absolute, out of
+the scene anim; `ped_frontseat` is read by the GAMEPLAY code only. The field's own control proves the
+split: same car, same dummy — "in gameplay the ped sits perfectly straight", while the cutscene puts
+him 28 cm down. Adjusting a dummy would move the gameplay ped and leave the cutscene untouched.
+
+**The one real lever, if this is ever worth fixing:** a surgical `anim/cuts.img` patch, exactly the
+shape of round 20's wheel stash (`stash-patch.ts`) — lift the actor's ROOT channel by the measured
+donor-vs-vanilla seat delta, a value derived from both models rather than authored per car. That is a
+feature with a design cost, not a bug fix, and it is parked here with its number until someone wants
+it. Round 22 is closed.
 
 ### Standing addendum — the perfect-cutscene ASI re-opens the whole ledger (2026-08-14)
 
