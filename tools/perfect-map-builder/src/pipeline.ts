@@ -7,6 +7,7 @@ import { buildTreeLods } from '@opensa/lod-trees-generator/build';
 import { parseOnlyList, runOptimizer, summarizeReport } from '@opensa/map-optimizer/run';
 import { SA_TREE_MODELS } from '@opensa/map-placement/vegetation';
 import { install as installMods } from '@opensa/mod-installer/install';
+import { isLayeredModTree } from '@opensa/mod-installer/layers';
 import { buildOpensaLods } from '@opensa/opensa-lod-generator/build';
 import { packGameDir } from '@opensa/opensa-pack/pack';
 import { install as installPeds } from '@opensa/ped-installer/install';
@@ -262,9 +263,13 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     run: (game, out) => void splitArchives({ buckets: config.splitBuckets, gamePath: game, outPath: out }),
   });
   if (populated(subfolders.mods)) {
+    // A LAYERED mods folder (mod-installer plan 011) makes this stage target-DEPENDENT, and the stage sits
+    // in the chain both targets share — so a run that would build BOTH cannot serve it. Refused HERE,
+    // before any stage runs, rather than by producing one install and calling it two.
+    refuseLayeredBothTargets(source(subfolders.mods), until, excluded);
     chain.push({
       name: 'mods',
-      run: (game, out) => installMods({ gamePath: game, inPath: source(subfolders.mods), outPath: out }),
+      run: (game, out) => installMods({ gamePath: game, inPath: source(subfolders.mods), outPath: out, target }),
     });
   }
   if (populated(subfolders.vehicles)) {
@@ -1365,6 +1370,33 @@ function planChain<T extends { name: ExcludableStage }>(
  * `gta3.img` seconds after the intermediates are already gone, naming the symptom and never the cause. It
  * cost a full rebuild on 2026-08-09. The OTHER target's work dir is not touched, so a source there is safe.
  */
+/**
+ * Refuse a run that would build BOTH targets out of a LAYERED mods folder (mod-installer plan 011).
+ *
+ * The `mods` stage lives in the chain both targets share, and a layered folder makes its result depend on
+ * the target — so one run cannot produce both installs, and `resolveBuildTarget` would silently pick `sa`
+ * for both. Config-time, like the `--target opensa` refusal beside it: the alternative is an `opensa/`
+ * build carrying the real game's mod layer, which nothing downstream can detect.
+ *
+ * A run that stops inside the COMMON chain is fine and is not refused — it builds neither target, and the
+ * resolved target (logged at the top of the run) is what its intermediate carries.
+ */
+function refuseLayeredBothTargets(
+  modsPath: string,
+  until: StageName | undefined,
+  excluded: ReadonlySet<ExcludableStage>,
+): void {
+  const bothTargets = runsStage('sa', until, excluded) && runsStage('opensa', until, excluded);
+  if (!bothTargets || !isLayeredModTree(modsPath)) {
+    return;
+  }
+  throw new Error(
+    `${modsPath} is a LAYERED mods folder (common/sa/opensa), so its mod set differs per target — but this ` +
+      'run builds both `sa` and `opensa` out of one shared chain. Build them one at a time: ' +
+      '--exclude opensa, then --exclude sa.',
+  );
+}
+
 function refuseSourceInsideWork(work: string, gamePath: string, inPath: string): void {
   for (const [flag, path] of [
     ['--game', gamePath],

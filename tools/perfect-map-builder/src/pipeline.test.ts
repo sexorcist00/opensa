@@ -91,9 +91,11 @@ vi.mock('@opensa/vehicle-cutscene/install', () => ({ installCutscene: cutsceneIn
 
 /** The mod installer, mocked so the split-order test costs no real merge. */
 const modInstall = vi.hoisted(() =>
-  vi.fn<(options: { gamePath: string; inPath: string; outPath: string }) => void>((options) => {
-    mkdirSync(options.outPath, { recursive: true });
-  }),
+  vi.fn<(options: { gamePath: string; inPath: string; outPath: string; target?: 'opensa' | 'sa' }) => void>(
+    (options) => {
+      mkdirSync(options.outPath, { recursive: true });
+    },
+  ),
 );
 vi.mock('@opensa/mod-installer/install', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -471,6 +473,73 @@ describe('buildPerfectMap split stage', () => {
       await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
 
       expect(splitArchives.mock.calls[0][0].buckets).toEqual(['vehicles']);
+    });
+  });
+});
+
+/**
+ * The mods stage's TARGET (mod-installer plan 011). A layered mods folder (`common/`+`sa/`+`opensa/`) makes
+ * this stage's result depend on the target, and the stage sits in the chain both targets share — so the run
+ * either has exactly one target, or it is refused before anything is built.
+ */
+describe('buildPerfectMap mods target', () => {
+  let out: string;
+  let game: string;
+  let mods: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-layers-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-layers-game-'));
+    mods = mkdtempSync(join(tmpdir(), 'pmb-layers-mods-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    modInstall.mockClear();
+  });
+
+  afterEach(() => {
+    for (const dir of [out, game, mods]) {
+      rmSync(dir, { force: true, recursive: true });
+    }
+  });
+
+  function layered(): void {
+    mkdirSync(join(mods, 'mods', 'common', '0. everyone'), { recursive: true });
+    mkdirSync(join(mods, 'mods', 'sa', '0. real game'), { recursive: true });
+  }
+
+  function flat(): void {
+    mkdirSync(join(mods, 'mods', 'a mod'), { recursive: true });
+  }
+
+  describe('negative cases', () => {
+    it('refuses a layered mods folder in a run that builds BOTH targets, before any stage runs', async () => {
+      layered();
+
+      await expect(
+        buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out }),
+      ).rejects.toThrow(/LAYERED mods folder/);
+      expect(modInstall).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('builds a layered folder one target at a time', async () => {
+      layered();
+
+      await buildPerfectMap({ exclude: ['opensa', 'optimize'], gamePath: game, inPath: mods, outPath: out });
+      expect(modInstall.mock.calls[0][0].target).toBe('sa');
+
+      modInstall.mockClear();
+      await buildPerfectMap({ exclude: ['sa', 'optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+      expect(modInstall.mock.calls[0][0].target).toBe('opensa');
+    });
+
+    it('leaves a FLAT folder alone in a both-target run, and still tells it the resolved target', async () => {
+      flat();
+
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+
+      expect(modInstall).toHaveBeenCalledTimes(1);
+      expect(modInstall.mock.calls[0][0].target).toBe('sa');
     });
   });
 });
