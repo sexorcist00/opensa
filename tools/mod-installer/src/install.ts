@@ -1,15 +1,23 @@
-import { cpSync, readdirSync, rmSync } from 'node:fs';
+import type { BuildTarget } from '@opensa/tool-kit/target';
+
+import { cpSync, rmSync } from 'node:fs';
 import { join, parse, resolve, sep } from 'node:path';
 
 import { applyMod } from './apply-mod';
 import { bakeMod } from './bake-mod';
 import { checkDanglingModels } from './dangling-models';
 import { compactStockInstIpls, mergeModInstIpls } from './ipl-slot-merge';
+import { planModLayers, subdirectories } from './layers';
 
 export interface InstallOptions {
   gamePath: string;
   inPath: string;
   outPath: string;
+  /**
+   * The host this install is being built FOR — which layer of a LAYERED `--in` applies after `common`
+   * (plan 011). A flat `--in` has no layer to pick and ignores it; a layered one without it is refused.
+   */
+  target?: BuildTarget;
 }
 
 /** Refuse to wipe a dangerous `--out` — the filesystem root, or a path that is (or contains) `--game` / `--in`. */
@@ -26,8 +34,9 @@ export function guardOut(outPath: string, gamePath: string, inPath: string): voi
 }
 
 /**
- * Build a merged install: wipe `--out`, copy the `--game` base into it, then apply every mod folder under `--in`
- * (alphabetical) on top. A mod carrying a **loader file** (a `loader.txt`-style mod) is **baked** — its loader's
+ * Build a merged install: wipe `--out`, copy the `--game` base into it, then apply the mod folders under `--in`
+ * (alphabetical) on top — every one of them for a flat `--in`, or `common` then the target's own layer for a
+ * layered one (plan 011). A mod carrying a **loader file** (a `loader.txt`-style mod) is **baked** — its loader's
  * defs/placements are registered in `gta.dat`, its scattered assets injected into `gta3.img`, its data files merged
  * ({@link bakeMod}); every other mod is a plain **overlay** (files overwrite, `gta3_img/`/`gta_int_img/`/PNG-folders merge). Later
  * mods win.
@@ -38,23 +47,32 @@ export function install(options: InstallOptions): void {
   const outPath = resolve(options.outPath);
   guardOut(outPath, gamePath, inPath);
 
+  // WHICH mods, and in what order: a flat `--in` is every subfolder (today's shape), a layered one is
+  // `common` then the target's own layer (plan 011). Planned and LOGGED before anything is applied — a
+  // layer that quietly contributed nothing is the failure this shape has to make impossible.
+  const plan = planModLayers(subdirectories(inPath), options.target);
+  const roots = plan.layers.map((layer) => ({
+    mods: sortMods(subdirectories(layer.subdir === undefined ? inPath : join(inPath, layer.subdir))),
+    name: layer.name,
+    path: layer.subdir === undefined ? inPath : join(inPath, layer.subdir),
+  }));
+  logLayerPlan(plan.strategy, roots, plan.skipped, options.target);
+
   rmSync(outPath, { force: true, recursive: true });
   cpSync(gamePath, outPath, { force: true, recursive: true });
 
-  const mods = sortMods(
-    readdirSync(inPath, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name),
-  );
+  const mods = roots.flatMap((layer) => layer.mods);
   let merged = 0;
   let baked = 0;
-  for (const mod of mods) {
-    const bake = bakeMod(join(inPath, mod), outPath);
-    if (bake.baked) {
-      merged += bake.assets;
-      baked += 1;
-    } else {
-      merged += applyMod(join(inPath, mod), outPath).merged;
+  for (const layer of roots) {
+    for (const mod of layer.mods) {
+      const bake = bakeMod(join(layer.path, mod), outPath);
+      if (bake.baked) {
+        merged += bake.assets;
+        baked += 1;
+      } else {
+        merged += applyMod(join(layer.path, mod), outPath).merged;
+      }
     }
   }
 
@@ -81,4 +99,27 @@ export function install(options: InstallOptions): void {
  *  number prefix IS the apply priority: later mods overwrite earlier ones. */
 export function sortMods(names: readonly string[]): string[] {
   return [...names].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'en', { numeric: true }));
+}
+
+/**
+ * State which mods this run will apply, BEFORE it applies them — the strategy, each layer with its count,
+ * and every layer folder that exists and is not being used. A layer that contributed nothing is the one
+ * outcome of plan 011 that no later stage can distinguish from a mod set someone trimmed on purpose.
+ */
+function logLayerPlan(
+  strategy: 'flat' | 'layered',
+  roots: readonly { mods: readonly string[]; name: string }[],
+  skipped: readonly string[],
+  target: BuildTarget | undefined,
+): void {
+  if (strategy === 'flat') {
+    console.log(`mod-installer: flat mods — ${roots[0].mods.length} mod(s)`);
+
+    return;
+  }
+  const applied =
+    roots.length > 0 ? roots.map((layer) => `${layer.name} ${layer.mods.length} mod(s)`).join(' → ') : 'no layer';
+  const absent = roots.some((layer) => layer.name === target) ? '' : `; ${target} absent`;
+  const unused = skipped.length > 0 ? `; ${skipped.join(', ')} not for this target` : '';
+  console.log(`mod-installer: layered mods for target ${target} — ${applied}${absent}${unused}`);
 }

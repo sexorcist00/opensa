@@ -15,6 +15,29 @@ tsx tools/mod-installer/src/cli.ts --game ./game-src/original --in ./mods --out 
     b-roads/   { data/ }
   ```
 - `--out` — output install dir (**wiped + rebuilt** each run)
+- `--target <sa|opensa>` — which layer of a LAYERED `--in` applies after `common/` (below)
+
+## Two shapes of `--in`: flat, or layered per target
+
+`--in` is **flat** — every subfolder is a mod — unless its immediate subfolders are the reserved layer names
+`common/`, `sa/`, `opensa/` (all optional), in which case it is **layered**: `common` applies first, then the
+layer named by `--target`. The other target's layer is not applied.
+
+```
+mods/                 FLAT                    mods/                 LAYERED
+  0. Map Fixes/                                 common/  { 0. Map Fixes/ … }   → every target
+  1. Prelight/                                  sa/      { 0. Stock fix/ }     → --target sa only
+                                                opensa/  { 0. Our engine/ }    → --target opensa only
+```
+
+The layer order **dominates** the numbering (`common/50. X` before `sa/0. Y`) — the target layer has to be
+the last writer. Numbering restarts per layer. Refused rather than guessed: a mod folder sitting beside the
+layers (which is what a misspelled layer name looks like), a layered `--in` with no target, and two layer
+folders differing only in case. Full contract: [`docs/contracts/mods.md`](../../docs/contracts/mods.md) §1;
+plan: [`docs/plans/011-layered-mod-folders.md`](./docs/plans/011-layered-mod-folders.md).
+
+`perfect-map-builder` passes its own resolved target, and refuses a run that would build BOTH targets out of
+a layered folder — the `mods` stage runs before the target split, so one run cannot serve two mod sets.
 
 ## How it applies
 

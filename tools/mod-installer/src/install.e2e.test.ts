@@ -376,5 +376,80 @@ describe('install (end-to-end)', () => {
   });
 });
 
+describe('install (layered mods — plan 011)', () => {
+  describe('negative cases', () => {
+    it('refuses a layered --in with no target', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'mods');
+
+      write(join(game, 'data', 'conf.txt'), 'base');
+      write(join(mods, 'common', '0. everyone', 'data', 'conf.txt'), 'common');
+
+      expect(() => install({ gamePath: game, inPath: mods, outPath: join(root, 'out') })).toThrow(/needs a target/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('applies common first, then the target layer, and leaves the other target out', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'mods');
+
+      write(join(game, 'data', 'conf.txt'), 'base');
+      write(join(mods, 'common', '0. everyone', 'data', 'conf.txt'), 'common');
+      write(join(mods, 'common', '0. everyone', 'data', 'shared.txt'), 'common');
+      write(join(mods, 'sa', '0. real game', 'data', 'conf.txt'), 'sa');
+      write(join(mods, 'sa', '0. real game', 'data', 'sa-only.txt'), 'sa');
+      write(join(mods, 'opensa', '0. our engine', 'data', 'conf.txt'), 'opensa');
+      write(join(mods, 'opensa', '0. our engine', 'data', 'opensa-only.txt'), 'opensa');
+
+      const sa = join(root, 'out-sa');
+      install({ gamePath: game, inPath: mods, outPath: sa, target: 'sa' });
+
+      expect(readFileSync(join(sa, 'data', 'shared.txt'), 'utf8')).toBe('common'); // common applied
+      expect(readFileSync(join(sa, 'data', 'conf.txt'), 'utf8')).toBe('sa'); // the target layer wrote last
+      expect(existsSync(join(sa, 'data', 'sa-only.txt'))).toBe(true);
+      expect(existsSync(join(sa, 'data', 'opensa-only.txt'))).toBe(false); // the other layer never ran
+      expect(existsSync(join(sa, 'common'))).toBe(false); // layer folders are not mods
+
+      const opensa = join(root, 'out-opensa');
+      install({ gamePath: game, inPath: mods, outPath: opensa, target: 'opensa' });
+
+      expect(readFileSync(join(opensa, 'data', 'shared.txt'), 'utf8')).toBe('common'); // the common half is identical
+      expect(readFileSync(join(opensa, 'data', 'conf.txt'), 'utf8')).toBe('opensa');
+      expect(existsSync(join(opensa, 'data', 'opensa-only.txt'))).toBe(true);
+      expect(existsSync(join(opensa, 'data', 'sa-only.txt'))).toBe(false);
+    });
+
+    // The layer order DOMINATES the numbering: a target mod numbered 0 still applies after a common mod
+    // numbered 50, because the target layer has to be the last writer for the split to mean anything.
+    it('applies the whole common layer before the target layer, whatever the numbers say', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'mods');
+      const out = join(root, 'out');
+
+      write(join(game, 'data', 'conf.txt'), 'base');
+      write(join(mods, 'common', '50. late in common', 'data', 'conf.txt'), 'common-50');
+      write(join(mods, 'sa', '0. first in sa', 'data', 'conf.txt'), 'sa-0');
+
+      install({ gamePath: game, inPath: mods, outPath: out, target: 'sa' });
+
+      expect(readFileSync(join(out, 'data', 'conf.txt'), 'utf8')).toBe('sa-0');
+    });
+
+    it('installs nothing but the base when only the OTHER target has a layer', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'mods');
+      const out = join(root, 'out');
+
+      write(join(game, 'data', 'conf.txt'), 'base');
+      write(join(mods, 'opensa', '0. our engine', 'data', 'conf.txt'), 'opensa');
+
+      install({ gamePath: game, inPath: mods, outPath: out, target: 'sa' });
+
+      expect(readFileSync(join(out, 'data', 'conf.txt'), 'utf8')).toBe('base');
+    });
+  });
+});
+
 const png = (size: number, color: [number, number, number, number]): Uint8Array =>
   encodePng(solidRgba(size, size, color), size, size);
