@@ -62,7 +62,7 @@ scene-specific anims).
 | 26 | CRASV2B | cscopcarla92 | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
 | 27 | RIOT4E2 | csfirela | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
 | 28 | SCRASH2 | csbravura | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
-| 29 | SMOKE2B | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 29 | SMOKE2B | csglendale92 | ⚠️ **first run in the ASI re-sweep, 2026-08-15**: occupants not visible behind the glass. Round 22 — the render side measures clean; the stock cutscene glendale has no glass at all and the mod's is the fleet's darkest pane. Awaiting the gameplay control |
 | 30 | SMOKE3A | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 31 | SMOKE4A | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 32 | STEAL_2 | csremington92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
@@ -555,6 +555,42 @@ rotated-bone rig.
       fix. The lesson worth keeping: **a viewer cannot show you this bug.** Material, texture,
       geometry, pipeline and draw order all measured clean and byte-faithful to the mod; the defect
       was one bit in the geometry flags word that only RW's default pipeline reads.
+
+### Round 22 — SMOKE2B: the occupants behind the glendale's glass (2026-08-15, screenshot)
+
+The field: "the passengers are not visible behind the glass", with the note that no earlier glendale
+scene had anyone sitting inside. Measured before analysing, and the render side comes out CLEAN:
+
+- **The ASI classified and deferred the car correctly.** The census log of that very run reads
+  `[census] model/key/skinned 301 -2087156539 0` — key `-2087156539` decodes to `csglendale92`
+  (`scripts/debug/sa-name-key.ts`), skinned 0, so it went to the sorted entity pass; `csplay` and
+  `cssmoke` logged skinned 1 and stayed in the main pass. Actors draw first, the car draws after.
+- **The pane is a proper translucent.** Built `csglendale92`: `windscreen_ok_ad` is atomic **#42 of
+  44** (last but one), material `45,53,48 @125` on the `gls` swatch, `rpGEOMETRYMODULATEMATERIALCOLOR`
+  set. Nothing about order, class or flags is wrong.
+- **The conversion is byte-faithful.** The gameplay mod's own `windscreen_ok` carries exactly
+  `45,53,48 @125` on `gls`, modulate already set. We changed nothing.
+
+What actually differs from vanilla is CONTENT, and it is the whole finding:
+
+- **The stock cutscene glendale has NO glass at all** — 13 atomics, zero materials below alpha 255,
+  no `windscreen`/`glass` frame anywhere (same for the copy inside `3. Global Textures Fixes`). R*
+  authored this cutscene car with the windows as open holes, which is why the vanilla scene shows its
+  occupants unobstructed. Ours has 44 atomics and real glass, because the MOD authors real glass.
+- **That glass is the darkest in the converted fleet.** Against the two cars whose actors the field
+  accepted through the tint: csgreenwood `55,96,102 @102` (luminance 84, 40 % cover), cswashington
+  `77,94,95 @110` (luminance 90, 43 %), csglendale92 `45,53,48 @125` — luminance **50** at **49 %**
+  cover. It both lets less through and lays a much darker, greener veil over what remains; over a dark
+  cabin at dusk that is enough to swallow a seated actor.
+
+So the scene is faithful to the mod and different from vanilla for a reason no render change can undo.
+**Open control before any code:** does this mod's glendale read equally dark in GAMEPLAY with someone
+inside? If it does, the cutscene is honouring authored data and the delta is a product call; if it
+does NOT, the vehicle pipe is doing something the cutscene default pipe is missing and that delta is
+the real defect. Nothing is changed until that run says which.
+
+Note for whoever picks this up: an alpha clamp is NOT the answer — round 7 already retired one, and
+it only erased the tint and sheen the mod carries in gameplay.
 
 ### Standing addendum — the perfect-cutscene ASI re-opens the whole ledger (2026-08-14)
 

@@ -310,7 +310,10 @@ bottle's `CLEO/cutscene-override.ini`).
       - [x] CESAR1A — cssavanna — **2026-08-15 ✅**
       - [x] RIOT4E2 — ★csfirela — **2026-08-15 ✅**
       - [x] SCRASH2 — ★csbravura — **2026-08-15 ✅**
-      - [ ] SMOKE2B — csglendale92
+      - [x] SMOKE2B — csglendale92 — **2026-08-15 ⚠️ FINDING**: the occupants do not read through the
+            windscreen. Not a render defect — the census log shows the car deferred and the pane is a
+            proper translucent drawn last; the stock cutscene glendale ships NO glass and the mod's is
+            the darkest pane in the fleet. Measured in plan 004 round 22, one control outstanding
       - [ ] SMOKE3A — csglendale92
       - [ ] SMOKE4A — csglendale92
       - [ ] STEAL_2 — csremington92
