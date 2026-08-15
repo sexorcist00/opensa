@@ -62,7 +62,7 @@ scene-specific anims).
 | 26 | CRASV2B | cscopcarla92 | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
 | 27 | RIOT4E2 | csfirela | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
 | 28 | SCRASH2 | csbravura | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
-| 29 | SMOKE2B | csglendale92 | ⚠️ **first run in the ASI re-sweep, 2026-08-15**: occupants not visible behind the glass. Round 22 — the render side measures clean; the stock cutscene glendale has no glass at all and the mod's is the fleet's darkest pane. Awaiting the gameplay control |
+| 29 | SMOKE2B | csglendale92 | ⚠️ **first run in the ASI re-sweep, 2026-08-15**: occupants not visible behind the glass. Round 22 — the render side measures clean and the tint reading was refuted in the field; working mechanism is opaque occlusion by the adopted `interior_ad`. Awaiting the ASI-removed control |
 | 30 | SMOKE3A | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 31 | SMOKE4A | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 32 | STEAL_2 | csremington92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
@@ -571,23 +571,36 @@ scene had anyone sitting inside. Measured before analysing, and the render side 
 - **The conversion is byte-faithful.** The gameplay mod's own `windscreen_ok` carries exactly
   `45,53,48 @125` on `gls`, modulate already set. We changed nothing.
 
-What actually differs from vanilla is CONTENT, and it is the whole finding:
+**A first reading — that the mod's dark tint swallows the occupants — was put to the field and REFUTED
+the same hour**: the glass is not opaque at all, the cabin and the steering wheel read through it in
+the very screenshot, and the car is fine in gameplay. Recorded because it prices the tint out: the
+occupants are not being dimmed, they are not being SEEN. (The tint numbers, for the record:
+csglendale92 `45,53,48 @125` against csgreenwood `55,96,102 @102` and cswashington `77,94,95 @110`,
+both of which pass with actors behind them. Darkest of the three, and not the mechanism.)
 
-- **The stock cutscene glendale has NO glass at all** — 13 atomics, zero materials below alpha 255,
-  no `windscreen`/`glass` frame anywhere (same for the copy inside `3. Global Textures Fixes`). R*
-  authored this cutscene car with the windows as open holes, which is why the vanilla scene shows its
-  occupants unobstructed. Ours has 44 atomics and real glass, because the MOD authors real glass.
-- **That glass is the darkest in the converted fleet.** Against the two cars whose actors the field
-  accepted through the tint: csgreenwood `55,96,102 @102` (luminance 84, 40 % cover), cswashington
-  `77,94,95 @110` (luminance 90, 43 %), csglendale92 `45,53,48 @125` — luminance **50** at **49 %**
-  cover. It both lets less through and lays a much darker, greener veil over what remains; over a dark
-  cabin at dusk that is enough to swallow a seated actor.
+What the second round of measurement found:
 
-So the scene is faithful to the mod and different from vanilla for a reason no render change can undo.
-**Open control before any code:** does this mod's glendale read equally dark in GAMEPLAY with someone
-inside? If it does, the cutscene is honouring authored data and the delta is a product call; if it
-does NOT, the vehicle pipe is doing something the cutscene default pipe is missing and that delta is
-the real defect. Nothing is changed until that run says which.
+- **The actors really are seated in the car.** SMOKE2B's own IFP puts `csplay`'s root at
+  `[2.66,-51.93,-0.42]` with `csglendale92`'s at `[3.15,-52.10,-0.30]` — a car-local offset of
+  `(-0.49, +0.17, -0.12)`, i.e. in the seat, and they track the car frame for frame. Nothing is
+  stashed, sunk or left at the origin.
+- **The stock cutscene glendale is an EMPTY SHELL.** 13 atomics, no glass, and no interior mesh at
+  all — R* painted `glendale92interior128` onto the chassis and left the cabin hollow (same for the
+  copy inside `3. Global Textures Fixes`). Its occupants are seen through open holes.
+- **Ours carries the mod's own interior, adopted.** 44 atomics including `interior_ad` — and it is
+  the ONE structural thing the two passing cars do not have: csgreenwood has no interior mesh,
+  cswashington has `seats_ad` only. Composed into car space it spans `y[-1.62..1.34] z[-0.33..1.08]`,
+  which reaches FORWARD of the windscreen (front edge `y 1.15`) and ABOVE it (top `z 0.97`) — a
+  full-height shell across exactly the band the camera looks through. In the seated actor's own sight
+  line (his column, the windscreen band, everything nearer the camera than he is) it puts **868
+  vertices, 165 of them with normals facing the camera**.
+
+So the working mechanism is OPAQUE OCCLUSION by the adopted interior, not alpha, not draw order — and
+that gives a falsifiable prediction, because **the z-buffer decides occlusion by depth, not by order**:
+removing the ASI must change NOTHING. **The control to run before any code:** SMOKE2B with
+`perfect-cutscene.asi` removed. Occupants still hidden → opaque occlusion confirmed, the fix belongs
+to the converter's adopt rule and the ASI is not involved. Occupants appear → this is not opaque
+occlusion and the mechanism is still unknown.
 
 Note for whoever picks this up: an alpha clamp is NOT the answer — round 7 already retired one, and
 it only erased the tint and sheen the mod carries in gameplay.

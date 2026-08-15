@@ -311,9 +311,11 @@ bottle's `CLEO/cutscene-override.ini`).
       - [x] RIOT4E2 — ★csfirela — **2026-08-15 ✅**
       - [x] SCRASH2 — ★csbravura — **2026-08-15 ✅**
       - [x] SMOKE2B — csglendale92 — **2026-08-15 ⚠️ FINDING**: the occupants do not read through the
-            windscreen. Not a render defect — the census log shows the car deferred and the pane is a
-            proper translucent drawn last; the stock cutscene glendale ships NO glass and the mod's is
-            the darkest pane in the fleet. Measured in plan 004 round 22, one control outstanding
+            windscreen. The census log shows the car deferred and the pane is a proper translucent
+            drawn last, and the field refuted the tint reading (cabin and steering wheel DO read
+            through the glass). Working mechanism is opaque occlusion by the mod's adopted
+            `interior_ad` shell — which predicts this ASI is not involved, since depth decides
+            occlusion and not order. Measured in plan 004 round 22; the ASI-removed control decides
       - [ ] SMOKE3A — csglendale92
       - [ ] SMOKE4A — csglendale92
       - [ ] STEAL_2 — csremington92
