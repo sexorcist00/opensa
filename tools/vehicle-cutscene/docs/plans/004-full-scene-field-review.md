@@ -34,23 +34,23 @@ scene-specific anims).
 
 | # | Scene | cs vehicles | Verdict |
 | --- | --- | --- | --- |
-| 1 | PROLOG1 | cstaxi92 | ✅ (gate 4/7 + 003) |
+| 1 | PROLOG1 | cstaxi92 | ✅ (gate 4/7 + 003) · **ASI re-sweep 2026-08-15 ✅** ("excellent") — the interior-area scene reads the deferred glass the same as the outdoor ones |
 | 2 | PROLOG3 | cscopcarla92, cstaxi92 | ✅ re-verified after round 21 (the matte windscreen was a missing modulate flag; "looks perfect") |
 | 3 | STRP4B2 | csmtbike92 | ✅ (002 step 8) |
-| 4 | DESERT9 | csbobcat92 | ✅ after rounds 1–2 ("glass with the door, one rack") |
+| 4 | DESERT9 | csbobcat92 | ✅ after rounds 1–2 ("glass with the door, one rack") · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
 | 5 | BCESA4W | csbravura, cszr350b | ✅ (2026-08-13, "good") |
-| 6 | BCESAR4 | cssavanna, cszr350 | ✅ after round 3 ("lights are normal now") |
-| 7 | BCESAR5 | cssadler, cszr350, cszr350b | ✅ after rounds 4–8 ("glass renders normally now, tint and sheen in place") |
-| 8 | DES_10B | csmothership | ✅ (2026-08-13) |
+| 6 | BCESAR4 | cssavanna, cszr350 | ✅ after round 3 ("lights are normal now") · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
+| 7 | BCESAR5 | cssadler, cszr350, cszr350b | ✅ after rounds 4–8 ("glass renders normally now, tint and sheen in place") · **ASI re-sweep 2026-08-15 ✅** ("excellent") — the scene that drove rounds 4–8 needs none of them now |
+| 8 | DES_10B | csmothership | ✅ (2026-08-13) · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
 | 9 | DESERT1 | csmonster | ✅ (2026-08-13) |
 | 10 | FARL_3B | csburrito92 | ✅ after rounds 9–12 ("all fixed") |
-| 11 | FINAL2B | csbravura, cssabre92 | ✅ after rounds 13–14 ("all good") |
+| 11 | FINAL2B | csbravura, cssabre92 | ✅ after rounds 13–14 ("all good") · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
 | 12 | GARAG3A | csremington92 | ✅ (2026-08-14, "good") |
 | 13 | HEIST8A | cssecurica92 | ✅ after round 15 ("good") |
 | 14 | RIOT_4B | csgreenwood | ✅ re-verified 2026-08-14 with the ASI + hackless fleet ("perfect — peds visible, tint as it should be"); the round-17 unglazed compromise is retired |
-| 15 | RIOT4E1 | cscopcarsf, csfirela | ✅ (2026-08-14, "fire truck and cop car excellent"; run on the rounds-13–14 build — the r15/16 delta gets the one-eye glance) |
+| 15 | RIOT4E1 | cscopcarsf, csfirela | ✅ (2026-08-14, "fire truck and cop car excellent"; run on the rounds-13–14 build — the r15/16 delta gets the one-eye glance) · **ASI re-sweep 2026-08-15 ✅** ("excellent") — which also settles the r15/16 delta this row was carrying |
 | 16 | SMOKE1B | csglendale92 | ✅ after round 16 ("better — specular improved, wheels in place, glass there, one colour") |
-| 17 | SWEET2B | csgreenwood, csvoodoo | ✅ (2026-08-14, "good") |
+| 17 | SWEET2B | csgreenwood, csvoodoo | ✅ (2026-08-14, "good") · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
 | 18 | SYND_3A | cswashington | ✅ (2026-08-14, "all excellent") — closed by the ASI's deferral on the hackless fleet: actors visible AND the washington keeps its tint |
 | 19 | SYND_4A | cssavanna, cswashington | ✅ after rounds 19–20 ("wheels gone — excellent, no bugs"; the shipped `anim/cuts.img` stash sink) |
 | 20 | BCESA5W | cszr350, cszr350b |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |

@@ -263,20 +263,26 @@ bottle's `CLEO/cutscene-override.ini`).
       car floating, sunk or drawn over a wall; lamps/plates/paint unchanged.
       **Three rows are already done on this exact configuration** (2026-08-14): PROLOG3 ("looks
       perfect"), RIOT_4B ("peds visible, tint as it should be"), SYND_3A ("all excellent").
+      **Running tally: 11 of 35 passed, zero findings** — the three above plus the 2026-08-15 batch
+      of eight (PROLOG1, DESERT9, FINAL2B, RIOT4E1, DES_10B, SWEET2B, BCESAR5, BCESAR4), each
+      "excellent". Those eleven scenes have now shown **15 of the 21 exercised models, all six
+      ★force-piped ones included** — where a surprise was judged most likely, there was none. The
+      six models still unseen in the re-sweep are exactly the six remaining Block A rows
+      (csglendale92, csremington92, cssecurica92, csburrito92, csmonster, csmtbike92).
 
       **Block A — 14 scenes that cover all 21 exercised models at least once.** The six force-piped
       models are marked ★: the engine stamps the vehicle pipe on every one of their atomics, glass
       included, so they are where a surprise is most likely.
 
-      - [ ] PROLOG1 — cstaxi92 (interior area 14: the one decoded scene where the pass never sets
-            ref 140, so it reads the glass differently from the outdoor ones)
-      - [ ] DESERT9 — csbobcat92
-      - [ ] FINAL2B — ★csbravura, cssabre92
-      - [ ] RIOT4E1 — ★cscopcarsf, ★csfirela
-      - [ ] DES_10B — ★csmothership
-      - [ ] SWEET2B — csgreenwood, ★csvoodoo
-      - [ ] BCESAR5 — cssadler, cszr350, cszr350b
-      - [ ] BCESAR4 — cssavanna, cszr350
+      - [x] PROLOG1 — cstaxi92 (interior area 14: the one decoded scene where the pass never sets
+            ref 140, so it reads the glass differently from the outdoor ones) — **2026-08-15 ✅**
+      - [x] DESERT9 — csbobcat92 — **2026-08-15 ✅**
+      - [x] FINAL2B — ★csbravura, cssabre92 — **2026-08-15 ✅**
+      - [x] RIOT4E1 — ★cscopcarsf, ★csfirela — **2026-08-15 ✅**
+      - [x] DES_10B — ★csmothership — **2026-08-15 ✅**
+      - [x] SWEET2B — csgreenwood, ★csvoodoo — **2026-08-15 ✅**
+      - [x] BCESAR5 — cssadler, cszr350, cszr350b — **2026-08-15 ✅**
+      - [x] BCESAR4 — cssavanna, cszr350 — **2026-08-15 ✅**
       - [ ] SMOKE1B — csglendale92
       - [ ] GARAG3A — csremington92
       - [ ] HEIST8A — cssecurica92
