@@ -349,6 +349,14 @@ bottle's `CLEO/cutscene-override.ini`).
       npm script carries it is the user's packaging call. Verification adds: two or three swept scenes
       re-run on the pipeline build and matching their recorded verdicts.
 
+      **What comes AFTER this step** (decided 2026-08-15, before step 7 starts): the same converter
+      also ships as a standalone Windows app, and that chain is planned in three scopes —
+      [`vehicle-cutscene` 006](../../../../tools/vehicle-cutscene/docs/plans/006-no-base-copy.md)
+      (`--no-base-copy`, which pmb does NOT use and which makes the app viable on NTFS),
+      [`@opensa/validation` 001](../../../../packages/validation/docs/plans/001-validation-package.md)
+      and [`apps/cutscene-garage` 001/002](../../../../apps/cutscene-garage/docs/plans/001-architecture.md).
+      They are independent of this step: pmb keeps the full-copy behaviour, the app opts out of it.
+
 ## The step-0 baseline (2026-08-14) — the standing repro
 
 The build: `PANE_SUPPRESSED_SLOTS` emptied (working tree only, restored right after the build),
