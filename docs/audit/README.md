@@ -216,6 +216,19 @@ interpret them.
   `workspaces` (the enumerate-everything trap in package.json). Suite 4 175 → 4 203. Remaining:
   the step-11 full-pipeline field acceptance (needs a build without `--exclude vehicles`).
 
+- [`session-12-cutscene-fleet-closed.md`](./session-12-cutscene-fleet-closed.md)
+  — 2026-08-15, the day the whole cutscene chain closed: the sweep finished **35 of 35** and plans
+  002, 004 and 005 were APPROVED and CLOSED. Two fixes came out of the last rows, and neither was
+  what it looked like. Round 23 put lamp lenses back on the vehicle pipe — round 9 had moved every
+  translucent atomic off it after measuring OUR DFF stamp rather than the runtime `CustomCarPipe`,
+  and for two days the whole fleet's lamps rendered without their shine while **the sweep accepted
+  it**, for want of a reference. Plan 005 gave the tool a lever for a class of defect no model data
+  can reach: R\* seats every cutscene actor at their OWN car's `ped_frontseat` (within 0.02 m in x,
+  0.03 in z, measured on two cars), so a taller donor sat them 0.281 m low — patched in the scene
+  values, ramped across the frames an actor spends getting in or out. Three of my hypotheses died in
+  the field first, each supported by a real measurement of the wrong quantity. Suite 4242/4242, one
+  hack recorded, build 3.55 → 4.26 s.
+
 - [`session-11-cutscene-glass-two-defects.md`](./session-11-cutscene-glass-two-defects.md)
   — 2026-08-14, the day the cutscene-glass arc closed and the symptom turned out to have TWO causes.
   `asi/perfect-cutscene` shipped its fix (one repointed call sends cutscene cars down the sorted
