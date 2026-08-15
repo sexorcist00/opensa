@@ -40,6 +40,7 @@ import { basename, join, resolve } from 'node:path';
 import { applyVehicle } from './apply-vehicle';
 import { formatFeatureTable } from './features';
 import { FEATURES_TABLE } from './install';
+import { resolveVehicleModel } from './model';
 import { formatModTable, MODS_TABLE } from './mods-table';
 import { decodeSettings, parseVehicleSettings } from './settings';
 
@@ -225,11 +226,9 @@ function mergeModTable(targetPath: string, models: readonly string[]): void {
   writeFileSync(path, formatModTable(merged));
 }
 
-/** The model a folder is for: its `.dff` basename, the same rule the install uses. */
+/** The model a folder is for — the same rule the install uses ({@link resolveVehicleModel}). */
 function modelOf(folderPath: string): null | string {
-  const dff = readdirSync(folderPath).find((name) => name.toLowerCase().endsWith('.dff'));
-
-  return dff ? dff.replace(/\.dff$/i, '').toLowerCase() : null;
+  return resolveVehicleModel(basename(folderPath), readdirSync(folderPath)).model ?? null;
 }
 
 function readText(path: string): null | string {

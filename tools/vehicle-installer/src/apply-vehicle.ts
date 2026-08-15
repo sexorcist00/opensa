@@ -1,11 +1,12 @@
 import type { EditableImg } from '@opensa/tool-kit/archive/img';
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 import { parseFeatures } from './features';
 import { stageVehicleImg } from './img-merge';
 import { mergeCarcols, mergeCarmods, mergeHandling, mergeIde } from './merge';
+import { resolveVehicleModel } from './model';
 import { addPaletteColors, resolveColorRefs } from './palette';
 import { decodeSettings, parseVehicleSettings } from './settings';
 
@@ -52,15 +53,13 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
   const entries = readdirSync(folderPath);
   const imgNames = options.img === undefined ? [] : stageVehicleImg(folderPath, options.img);
   const cleo = carryCleoFolder(folderPath, entries, outPath);
-  // Without the archive step the model name comes from the folder itself — the same rule, one step earlier:
-  // the mod's `.dff` basename IS the model.
-  const model = (
-    options.img === undefined
-      ? entries.find((name) => name.toLowerCase().endsWith('.dff'))
-      : imgNames.find((name) => name.endsWith('.dff'))
-  )
-    ?.replace(/\.dff$/i, '')
-    .toLowerCase();
+  // The slot the folder NAME states, confirmed against the `.dff`s it ships — a bodykit folder ships several
+  // and the first of them is not the car (see `resolveVehicleModel`). Without the archive step the file list
+  // comes from the folder itself, which is what a rebake wants.
+  const { model, warning: modelWarning } = resolveVehicleModel(
+    basename(folderPath),
+    options.img === undefined ? entries : imgNames,
+  );
 
   // `features.txt` sits in the same folder and also ends in `.txt` — taking the FIRST `.txt` picked it over
   // `previon.settings.txt` (alphabetical order) and the car lost its whole settings file.
@@ -70,10 +69,10 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
   const settingsFile =
     entries.find((name) => name.toLowerCase().endsWith('.settings.txt')) ??
     entries.find((name) => name.toLowerCase().endsWith('.txt') && name.toLowerCase() !== FEATURES_FILE);
+  const warnings: string[] = modelWarning ? [modelWarning] : [];
   if (!settingsFile) {
-    return { cleo, features, imgNames, model, warnings: [] };
+    return { cleo, features, imgNames, model, warnings };
   }
-  const warnings: string[] = [];
   const settings = parseVehicleSettings(decodeSettings(readFileSync(join(folderPath, settingsFile))), (message) =>
     warnings.push(`${settingsFile}: ${message}`),
   );
