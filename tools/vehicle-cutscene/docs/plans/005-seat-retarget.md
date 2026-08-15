@@ -55,13 +55,17 @@ around 0.5 m — the two front seats, mirrored, which is exactly how SA stores t
 5. **Patch the same way round 20 did.** `stash-patch.ts` already rewrites cuts.img channels in place
    (12 bytes per channel, chunk sizes untouched); this is a sibling pass over the ACTOR root channels.
 
-### The one real design cost, and the v1 answer
+### The one real design cost, and how the field settled it
 
-An actor who is seated for only part of a scene walks up, opens the door and gets in. Lifting his whole
-root track would float him while he walks; lifting only the seated frames pops at the boundary. **v1
-patches only actors the census reports SEATED FOR THE WHOLE SCENE** — csplay in SMOKE2B, csplay and
-cscesar in FINAL2B. cssmoke (85 %) and csstew (92 %) are left exactly as authored and recorded here as
-the follow-up, which needs a blend and its own field round.
+An actor who is seated for only part of a scene walks up, opens the door and gets in — or gets out.
+Lifting his whole root track would float him while he walks; lifting only the seated frames pops at the
+boundary. The first cut ducked it (patch only actors seated for the WHOLE scene) and the field's first
+round rejected that immediately: SMOKE2B's passenger stayed visibly low while the driver was fixed.
+
+The answer is a **per-frame ramp**, and it needed the measurement to find: the lift holds inside the
+cabin and falls linearly to zero across a run that leaves it, ramps up across a run that enters, and
+stays full through a run bounded by cabin frames on both sides (a lean-out, not an exit). No blend
+window to tune — the scene's own geometry says where the transition is.
 
 ## Steps
 
@@ -109,7 +113,7 @@ the follow-up, which needs a blend and its own field round.
          Model TYPE cannot do it (every cutscene object reports 5) and a name rule would be a guess.
          Cutscene peds live in `cutscene.img` EXCEPT the player: `csplay` is in `gta3.img`.
       2. **98 % seated**, so `cssmoke` (85 %) and `csstew` (92 %) keep their authored tracks rather
-         than floating on the way to the door.
+         than floating on the way to the door. **Superseded the same day by the ramp — see step 4.**
       3. **A 0.05 m deadband.** R* authored the scenes at the stock seat but only to within 0.03 m, so
          a smaller delta is authoring noise — FINAL2B's two actors (0.03 m each) stay untouched.
 
@@ -121,6 +125,25 @@ the follow-up, which needs a blend and its own field round.
 - [ ] **4. Field.** SMOKE2B and FINAL2B, one sitting. LOOK-FOR: the occupants read through the glass at
       seat height; head clear of the roof (our glendale's is 0.27 m taller, so there is room); hands and
       feet not obviously detached from wheel and floor — the pose is R\*'s and only the root moved.
+      **Round 1 (2026-08-15): HALF PASSED, and it produced the design's last piece.** The field on
+      SMOKE2B: "the driver CJ sits perfectly; the passenger is still low." Both are true and both were
+      expected — `csplay` was lifted, `cssmoke` was not, because the 98 % gate held him out at 85 %.
+      The dummy was never the problem: ONE `ped_frontseat` serves both sides (the other is its
+      x-mirror), and it is the same dummy that fixed the driver.
+
+      Measuring WHERE those 15 % are answered what to do: `cssmoke` sits frames 0–753 and then
+      **leaves the car** — one unbroken 137-frame exit run to the end of the scene, never returning.
+      So the percentage gate was asking the wrong question. It is replaced by a **per-frame ramp**:
+      the lift holds while the actor is in the cabin and falls linearly to zero across a run that
+      leaves it (and ramps up across a run that enters). A run bounded by cabin frames on BOTH sides
+      keeps the full lift — that is a lean-out, not an exit, and cutting it would pop him twice.
+      Visually the ramp is not a compromise but the honest consequence: from a higher seat he steps
+      down further than R\* authored.
+
+      The build now reports both occupants:
+      `csplay +0.270` and `cssmoke +0.310 (ramped over 137 frame(s))`, and the census reads both at
+      z +0.16 — the donor's seat. FINAL2B is still untouched by the deadband, and PROLOG1's csstew
+      still matches no seat. Suite 112/112. **Re-run pending.**
 - [x] **5. Contracts.** `docs/contracts/vehicles.md`: `ped_frontseat`/`ped_backseat` now carry behaviour
       in the CUTSCENE path too, and what happens when a donor omits them (nothing — the scene's own
       placement stands). Say it, because a missing dummy is silent by nature.

@@ -198,9 +198,9 @@ sideways would take his hands off the wheel).
 **What a mod author needs to know**: state `ped_frontseat` where a person actually sits and the
 cutscenes follow it; state nothing and the scene's authored placement stands unchanged — that is the
 fallback, not a failure. Three gates keep the patch surgical, and all three are silent when they skip:
-an actor must be SKINNED (a prop riding a car is not one), he must ride the car for 98 % of the scene
-(otherwise lifting his whole track would float him while he walks to the door), and the correction must
-exceed 0.05 m (below R\*'s own authoring spread it is noise). Misplacing the dummy moves the cutscene
+an actor must be SKINNED (a prop riding a car is not one), he must actually ride the car (the lift ramps
+to zero across the frames he spends getting in or out, so nobody floats on the way to the door), and the
+correction must exceed 0.05 m (below R\*'s own authoring spread it is noise). Misplacing the dummy moves the cutscene
 actor with it — the same lever, pointed the wrong way.
 
 **A lamp dummy at (0,0,0) means "no lamp here", and it is the only way to say it.** That is SA's own

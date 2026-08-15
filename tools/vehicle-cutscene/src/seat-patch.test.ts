@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { Vec3 } from './rig/matrix';
 
-import { judgeRide } from './seat-patch';
+import { judgeRide, rampWeights } from './seat-patch';
 
 /** A track that holds one offset from `car` for `frames` frames. */
 function riding(car: readonly Vec3[], offset: Vec3): Vec3[] {
-  return car.map(([x, y, z]) => [x + offset[0], y + offset[1], z + offset[2]] as Vec3);
+  return car.map(([x, y, z]): Vec3 => [x + offset[0], y + offset[1], z + offset[2]]);
 }
 
 const DRIVING: Vec3[] = Array.from({ length: 200 }, (_, frame) => [0, frame * 0.1, 0]);
@@ -29,7 +29,7 @@ describe('judgeRide', () => {
     });
 
     it('rejects an actor inside the cabin for less than half the scene', () => {
-      const half = DRIVING.map(([x, y, z], frame) => (frame < 120 ? [x + 9, y, z] : [x + 0.5, y, z]));
+      const half = DRIVING.map(([x, y, z], frame): Vec3 => (frame < 120 ? [x + 9, y, z] : [x + 0.5, y, z]));
       expect(judgeRide(half, DRIVING)).toBeNull();
     });
   });
@@ -57,9 +57,44 @@ describe('judgeRide', () => {
     it('reports the partial share for an actor who gets in mid-scene', () => {
       // SMOKE2B's cssmoke shape: outside for a while, then seated. The patch pass uses this number to
       // leave him alone — lifting his whole track would float him on the way to the door.
-      const actor = DRIVING.map(([x, y, z], frame) => (frame < 40 ? [x + 9, y, z] : [x + 0.5, y, z]));
+      const actor = DRIVING.map(([x, y, z], frame): Vec3 => (frame < 40 ? [x + 9, y, z] : [x + 0.5, y, z]));
       const ride = judgeRide(actor, DRIVING)!;
       expect(ride.percent).toBeCloseTo(80, 5);
+    });
+  });
+});
+
+describe('rampWeights', () => {
+  describe('negative cases', () => {
+    it('lifts nothing when the actor is never in the cabin', () => {
+      expect(rampWeights([false, false, false, false])).toEqual([0, 0, 0, 0]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('holds the full lift for an actor who never leaves', () => {
+      expect(rampWeights([true, true, true])).toEqual([1, 1, 1]);
+    });
+
+    it('ramps DOWN across an exit run — SMOKE2B’s cssmoke leaves at frame 754 and never returns', () => {
+      const weights = rampWeights([true, true, false, false, false, false]);
+      expect(weights.slice(0, 2)).toEqual([1, 1]);
+      // Monotone down to zero at the last frame: no pop at the boundary, no lift left when he is out.
+      expect(weights[2]).toBeGreaterThan(weights[3]);
+      expect(weights[5]).toBe(0);
+    });
+
+    it('ramps UP across an entry run', () => {
+      const weights = rampWeights([false, false, false, true, true]);
+      expect(weights[0]).toBeLessThan(weights[1]);
+      expect(weights[2]).toBeCloseTo(1, 6);
+      expect(weights.slice(3)).toEqual([1, 1]);
+    });
+
+    it('keeps the full lift through a lean-out bounded by cabin frames on both sides', () => {
+      // He leaned out of the window and came back — he never stopped riding, and cutting the lift
+      // there would pop him twice rather than once.
+      expect(rampWeights([true, false, false, true])).toEqual([1, 1, 1, 1]);
     });
   });
 });

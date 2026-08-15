@@ -27,14 +27,6 @@ const MAX_SPREAD = 0.12;
 /** Too few frames to judge. */
 const MIN_FRAMES = 30;
 /**
- * The share of the scene an actor must ride for his WHOLE track to be liftable. The measured
- * distribution across the fleet is 100 % / 99 % against 92 % / 85 % — a clean gap, and the low pair are
- * exactly the actors who walk up and get in (SMOKE2B's cssmoke, PROLOG1's csstew). Lifting one of
- * those would float him on his way to the door, so v1 leaves them to the scene; a partial lift needs a
- * blend and its own field round.
- */
-const FULLY_SEATED_PERCENT = 98;
-/**
  * Corrections below this are not applied (metres). R* authored the scenes at the stock car's own
  * `ped_frontseat`, but only to within 0.03 m — so a delta smaller than that is indistinguishable from
  * the authoring's own noise, and moving an actor for it would be churn on scenes nobody complained
@@ -42,6 +34,18 @@ const FULLY_SEATED_PERCENT = 98;
  * fleet-wide patch reduces to the one site the field actually reported.
  */
 const MIN_CORRECTION = 0.05;
+
+/** What an actor does relative to a car across a scene. */
+export interface Ride {
+  frames: number;
+  /** Mean car-local offset over the frames he is actually inside the cabin. */
+  offset: Vec3;
+  /** Share of the scene spent inside the cabin. */
+  percent: number;
+  /** Per frame: is he inside the cabin? The ramp is built from this, never from the percentage. */
+  seated: boolean[];
+  spread: number;
+}
 
 /** One object's root channel: where its keyframes live and the translation of each. */
 export interface RootChannel {
@@ -62,20 +66,20 @@ export interface SeatPatchResult {
  * STATIC pose and holds its last value, the way the engine does — a parked car gets 5 keyframes, and
  * comparing only the overlap misses every scene whose car never moves.
  */
-export function judgeRide(
-  actor: readonly Vec3[],
-  car: readonly Vec3[],
-): null | { frames: number; offset: Vec3; percent: number; spread: number } {
+export function judgeRide(actor: readonly Vec3[], car: readonly Vec3[]): null | Ride {
   const frames = Math.max(actor.length, car.length);
   if (frames < MIN_FRAMES) {
     return null;
   }
   const at = (track: readonly Vec3[], frame: number): Vec3 => track[Math.min(frame, track.length - 1)];
+  const seated: boolean[] = [];
   const inside: Vec3[] = [];
   for (let frame = 0; frame < frames; frame += 1) {
     const [a, c] = [at(actor, frame), at(car, frame)];
     const offset: Vec3 = [a[0] - c[0], a[1] - c[1], a[2] - c[2]];
-    if (Math.abs(offset[0]) < CABIN.x && Math.abs(offset[1]) < CABIN.y && Math.abs(offset[2]) < CABIN.z) {
+    const isInside = Math.abs(offset[0]) < CABIN.x && Math.abs(offset[1]) < CABIN.y && Math.abs(offset[2]) < CABIN.z;
+    seated.push(isInside);
+    if (isInside) {
       inside.push(offset);
     }
   }
@@ -88,7 +92,7 @@ export function judgeRide(
       inside.length,
   );
 
-  return spread > MAX_SPREAD ? null : { frames, offset, percent: (100 * inside.length) / frames, spread };
+  return spread > MAX_SPREAD ? null : { frames, offset, percent: (100 * inside.length) / frames, seated, spread };
 }
 
 /**
@@ -119,6 +123,39 @@ export function patchActorSeats(
   }
 
   return patched.length === 0 ? { bytes: null, patched } : { bytes: buildVer2Buffer(entries), patched };
+}
+
+/**
+ * 1 while the actor is in the cabin; across a run that leaves it and never comes back, a linear ramp to
+ * 0 at the far end. A run bounded by cabin frames on BOTH sides stays 1 — he leaned out and came back,
+ * he never stopped riding, and cutting the lift there would pop him twice.
+ */
+export function rampWeights(seated: readonly boolean[]): number[] {
+  const weights: number[] = seated.map((inside) => (inside ? 1 : 0));
+  let frame = 0;
+  while (frame < seated.length) {
+    if (seated[frame]) {
+      frame += 1;
+      continue;
+    }
+    let end = frame;
+    while (end < seated.length && !seated[end]) {
+      end += 1;
+    }
+    const span = end - frame;
+    for (let step = frame; step < end; step += 1) {
+      if (frame > 0 && end < seated.length) {
+        weights[step] = 1; // a lean-out
+      } else if (frame === 0 && end < seated.length) {
+        weights[step] = (step + 1) / span; // an ENTRY run: ramp up to the cabin
+      } else if (frame > 0) {
+        weights[step] = (end - step - 1) / span; // an EXIT run: ramp down away from it
+      }
+    }
+    frame = end;
+  }
+
+  return weights;
 }
 
 /**
@@ -182,15 +219,20 @@ function liftSeatedActors(
     }
     for (const [actor, actorChannel] of roots) {
       // A PROP rides a vehicle too — the mothership's stand sat 1.6 m from a seat point.
-      const dz = isActor(actor) ? seatCorrection(actorChannel, carChannel, seats) : null;
-      if (dz === null) {
+      const lift = isActor(actor) ? seatCorrection(actorChannel, carChannel, seats) : null;
+      if (!lift) {
         continue;
       }
       for (let frame = 0; frame < actorChannel.frames; frame += 1) {
         const at = actorChannel.keyframesAt + 8 + frame * 32 + 24; // the translation's z
-        view.setFloat32(at, view.getFloat32(at, true) + dz, true);
+        view.setFloat32(at, view.getFloat32(at, true) + (lift[frame] ?? 0), true);
       }
-      hits.push(`${car} ${actor} ${dz >= 0 ? '+' : ''}${dz.toFixed(3)}`);
+      const peak = lift.reduce((most, dz) => (Math.abs(dz) > Math.abs(most) ? dz : most), 0);
+      const ramped = lift.filter((dz) => dz !== peak).length;
+      hits.push(
+        `${car} ${actor} ${peak >= 0 ? '+' : ''}${peak.toFixed(3)}` +
+          (ramped > 0 ? ` (ramped over ${ramped} frame(s))` : ''),
+      );
     }
   }
 
@@ -212,12 +254,17 @@ function readKrt0(view: DataView, limit: number, keyframesAt: number, frames: nu
 }
 
 /**
- * The z lift this actor's whole track needs to sit on the donor's seat, or null when he must be left
- * alone: not riding, riding for only part of the scene, matching no seat, or already close enough.
+ * The PER-FRAME z lift that puts this actor on the donor's seat, or null when he must be left alone:
+ * not riding, matching no seat, or already close enough.
+ *
+ * The lift holds while he is in the cabin and RAMPS to zero across a run that leaves it, so an actor
+ * who gets out mid-scene settles back onto his authored path instead of popping — SMOKE2B's cssmoke
+ * leaves at frame 754 of 891 and never returns, 137 frames of exit. Visually that is what a higher
+ * seat means: he steps DOWN further than R* authored, because he is starting from further up.
  */
-function seatCorrection(actor: RootChannel, car: RootChannel, seats: readonly SeatPoint[]): null | number {
+function seatCorrection(actor: RootChannel, car: RootChannel, seats: readonly SeatPoint[]): null | number[] {
   const ride = judgeRide(actor.translations, car.translations);
-  if (!ride || ride.percent < FULLY_SEATED_PERCENT) {
+  if (!ride) {
     return null;
   }
   const seat = matchSeat(seats, ride.offset);
@@ -226,5 +273,5 @@ function seatCorrection(actor: RootChannel, car: RootChannel, seats: readonly Se
   }
   const dz = seat.position[2] - ride.offset[2];
 
-  return Math.abs(dz) < MIN_CORRECTION ? null : dz;
+  return Math.abs(dz) < MIN_CORRECTION ? null : rampWeights(ride.seated).map((weight) => weight * dz);
 }
