@@ -1,5 +1,6 @@
-import { cpSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join, parse, resolve, sep } from 'node:path';
+import { createImg, openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, parse, resolve, sep } from 'node:path';
 
 import { applyVehicle } from './apply-vehicle';
 import { formatFeatureTable } from './features';
@@ -52,8 +53,13 @@ export function install(options: InstallOptions): void {
   const models = new Set<string>();
   const handlingIds = new Set<string>();
   const features = new Map<string, readonly string[]>();
+  // ONE archive for the whole run: opened here, staged by each vehicle, written once at the end. Per-car
+  // rebuilds cost O(n) passes over a growing multi-GB file and the last of them crossed `writeFileSync`'s
+  // 2 GiB ceiling outright (2026-08-15) — this is both the speed fix and the ceiling fix.
+  const imgPath = join(outPath, 'models', 'gta3.img');
+  const img = existsSync(imgPath) ? openImg(new Uint8Array(readFileSync(imgPath))) : createImg();
   for (const vehicle of vehicles) {
-    const applied = applyVehicle(join(inPath, vehicle), outPath);
+    const applied = applyVehicle(join(inPath, vehicle), outPath, { img });
     applied.warnings.forEach((warning) => console.warn(`vehicle-installer: ${vehicle}: ${warning}`));
     applied.imgNames.forEach((name) => imgNames.add(name));
     if (applied.model) {
@@ -66,6 +72,10 @@ export function install(options: InstallOptions): void {
       features.set(applied.model, applied.features);
     }
   }
+  // Written through the streaming writer, not `writeFileSync(img.build())`: the buffered path caps at 2 GiB
+  // and this archive is past it on the original's mod set (1.24 GB of map + 3.08 GB of cars).
+  mkdirSync(dirname(imgPath), { recursive: true });
+  writeImgFile(img, imgPath);
   // The declarations travel as DATA in the built game dir, because the converter runs later and in another
   // process; `opensa-pack` reads this file when it bakes each car. Written only when a mod declared
   // something, so a plain install leaves no stray file.

@@ -1,7 +1,7 @@
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
 
 import { assertVer2EntrySize, buildVer2Buffer, openArchive } from '@opensa/renderware/archive/img-archive';
-import { closeSync, ftruncateSync, openSync, writeSync } from 'node:fs';
+import { closeSync, ftruncateSync, openSync, readFileSync, statSync, writeSync } from 'node:fs';
 
 /**
  * An **editable** GTA IMG (VER2) archive: open, read, add-with-replace, delete, then rebuild a fresh `.img`.
@@ -23,6 +23,16 @@ export interface EditableImg {
   names(): string[];
   /** Add a new entry or replace an existing one. */
   set(name: string, data: Uint8Array): void;
+  /**
+   * Add or replace an entry whose bytes stay ON DISK until something asks for them — the same contract as
+   * {@link set}, minus the memory. Staging N files costs N paths; only {@link writeImgFile} pulling them one
+   * at a time ever holds one.
+   *
+   * This is what lets an installer stage a whole mod set before writing: vehicle-installer used to read and
+   * rewrite the entire archive once PER CAR (212 times over a growing multi-GB file), and the obvious fix —
+   * stage everything, write once — would otherwise have traded that I/O for 3 GB of resident buffers.
+   */
+  setFile(name: string, path: string): void;
 }
 
 /** A fresh, empty {@link EditableImg} to populate with `set` and `build` (e.g. a new LOD archive). */
@@ -34,12 +44,21 @@ export function createImg(): EditableImg {
 export function editArchive(archive: ImgArchive): EditableImg {
   const order = [...archive.names];
   const overrides = new Map<string, Uint8Array>();
+  /** Staged entries whose bytes are still on disk — read on demand, never held (see {@link EditableImg.setFile}). */
+  const staged = new Map<string, string>();
   const deleted = new Set<string>();
   const key = (name: string): string => name.toLowerCase();
   const readOriginal = (name: string): null | Uint8Array => {
     const buffer = archive.get(name);
 
     return buffer ? new Uint8Array(buffer) : null;
+  };
+  /** Un-delete a name and give it a slot in archive order if it is new — shared by both write paths. */
+  const place = (name: string): void => {
+    deleted.delete(key(name));
+    if (!order.some((existing) => key(existing) === key(name))) {
+      order.push(name);
+    }
   };
 
   const img: EditableImg = {
@@ -52,6 +71,7 @@ export function editArchive(archive: ImgArchive): EditableImg {
       }
       deleted.add(key(name));
       overrides.delete(key(name));
+      staged.delete(key(name));
 
       return true;
     },
@@ -59,8 +79,9 @@ export function editArchive(archive: ImgArchive): EditableImg {
       if (deleted.has(key(name))) {
         return null;
       }
+      const file = staged.get(key(name));
 
-      return overrides.get(key(name)) ?? readOriginal(name);
+      return overrides.get(key(name)) ?? (file ? new Uint8Array(readFileSync(file)) : readOriginal(name));
     },
     has(name: string): boolean {
       return img.get(name) !== null;
@@ -72,11 +93,17 @@ export function editArchive(archive: ImgArchive): EditableImg {
       // Refused HERE, before any rebuild starts: `writeImgFile` streams over the target in place, so an
       // oversized entry discovered mid-write would leave a destroyed archive behind its error.
       assertVer2EntrySize(name, data.length);
-      deleted.delete(key(name));
-      if (!order.some((existing) => key(existing) === key(name))) {
-        order.push(name);
-      }
+      place(name);
+      staged.delete(key(name));
       overrides.set(key(name), data);
+    },
+    setFile(name: string, path: string): void {
+      // Same refusal as `set`, on the file's size — the point of staging is that nothing is read yet, so the
+      // ceiling has to be checked against `stat` rather than against bytes we deliberately do not hold.
+      assertVer2EntrySize(name, statSync(path).size);
+      place(name);
+      overrides.delete(key(name));
+      staged.set(key(name), path);
     },
   };
 

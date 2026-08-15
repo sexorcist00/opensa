@@ -79,6 +79,22 @@ poisoned admiral byte-identical, but only for code that goes through `frameWorld
 chain walk that composes the root is silent: physics stays sound, so nothing crashes — the model just never
 appears.
 
+## No archive a tool must READ may pass 2 GiB — and the writer will happily take it there
+
+`readFileSync` throws `ERR_FS_FILE_TOO_LARGE` past 2 GiB, while the positional write path (`writeImgFile`)
+has no such ceiling, so a stage CAN emit an archive that every later stage fails to open. A design that grows
+`models/*.img` therefore has to bound each FILE, not just each entry: buckets with a size cap and spill into
+a numbered sibling, never one archive that content is allowed to grow into. Measurement, the numbers and the
+run that hit it: [`edge-cases/converter-pipeline.md`](../edge-cases/converter-pipeline.md).
+
+The corollary is the reason it belongs here: **71 call sites across 53 files open archives whole**
+(`openArchive(bytes)` / `openImg(bytes)`), so "just stream it" is not a local change. The one fd-backed
+reader is `openLazyVer2` in `tools/opensa-pack`.
+
+**Caught:** partly, and in the worst order. The WRITE is silent — nothing warns that an archive has grown past
+what a reader can take. The failure surfaces later, in an unrelated stage, as a Node error naming a byte count
+and no file (`The value of "length" is out of range … Received 2168825856`), which is how it cost a build here.
+
 ## A VER2 `.img` entry cannot exceed 65 535 sectors (~128 MB)
 
 The stock directory stores an entry's size as a u16 of 2048-byte sectors, so 134 215 680 bytes is a FORMAT

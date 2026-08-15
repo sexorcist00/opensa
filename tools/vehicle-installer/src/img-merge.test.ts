@@ -1,10 +1,10 @@
-import { createImg, openImg } from '@opensa/tool-kit/archive/img';
+import { createImg, openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { mergeVehicleImg } from './img-merge';
+import { stageVehicleImg } from './img-merge';
 
 let dir: string;
 
@@ -27,17 +27,29 @@ function vehicleFolder(files: Record<string, Uint8Array>): string {
   return folder;
 }
 
-describe('mergeVehicleImg', () => {
+describe('stageVehicleImg', () => {
   describe('negative cases', () => {
     it('returns no names and skips a folder with no dff/txd', () => {
       const folder = mkdtempSync(join(dir, 'empty-'));
       writeFileSync(join(folder, 'readme.txt'), 'x');
-      expect(mergeVehicleImg(folder, join(dir, 'gta3.img'))).toEqual([]);
+      expect(stageVehicleImg(folder, createImg())).toEqual([]);
+    });
+
+    it('stages WITHOUT writing — the caller owns the archive and writes it once', () => {
+      // The whole point of the batch fix: one rebuild per run, not one per car. A stage that wrote would put
+      // the 2 GiB ceiling back on every car.
+      const imgPath = join(dir, 'gta3.img');
+      const img = createImg();
+
+      stageVehicleImg(vehicleFolder({ 'alpha.dff': Uint8Array.of(1) }), img);
+
+      expect(img.has('alpha.dff')).toBe(true);
+      expect(() => readFileSync(imgPath)).toThrow(); // nothing on disk yet
     });
   });
 
   describe('positive cases', () => {
-    it('writes the dff + every txd (incl. extra numbered ones), ignoring the settings file', () => {
+    it('stages the dff + every txd (incl. extra numbered ones), ignoring the settings file', () => {
       const folder = vehicleFolder({
         'alpha1.txd': Uint8Array.of(3),
         'alpha2.txd': Uint8Array.of(4),
@@ -45,8 +57,10 @@ describe('mergeVehicleImg', () => {
         'alpha.txd': Uint8Array.of(2),
       });
       const imgPath = join(dir, 'gta3.img');
+      const staged = createImg();
 
-      expect(mergeVehicleImg(folder, imgPath).sort()).toEqual(['alpha.dff', 'alpha.txd', 'alpha1.txd', 'alpha2.txd']);
+      expect(stageVehicleImg(folder, staged).sort()).toEqual(['alpha.dff', 'alpha.txd', 'alpha1.txd', 'alpha2.txd']);
+      writeImgFile(staged, imgPath);
 
       const img = openImg(new Uint8Array(readFileSync(imgPath)));
       expect(img.has('alpha.dff')).toBe(true);
@@ -63,11 +77,24 @@ describe('mergeVehicleImg', () => {
       base.set('stock.dff', Uint8Array.of(7));
       writeFileSync(imgPath, base.build());
 
-      mergeVehicleImg(vehicleFolder({ 'alpha.dff': Uint8Array.of(1) }), imgPath);
+      const staged = openImg(new Uint8Array(readFileSync(imgPath)));
+      stageVehicleImg(vehicleFolder({ 'alpha.dff': Uint8Array.of(1) }), staged);
+      writeImgFile(staged, imgPath);
 
       const img = openImg(new Uint8Array(readFileSync(imgPath)));
       expect(new Uint8Array(img.get('alpha.dff')!)[0]).toBe(1); // overridden (VER2 pads the rest of the sector)
       expect(img.has('stock.dff')).toBe(true); // preserved
+    });
+
+    it('reads a staged file only when the write pulls it — the mod set stays on disk', () => {
+      // Staging N cars must cost N paths, not N buffers: the fix would otherwise trade 212 archive rewrites
+      // for 3 GB of resident vehicle bytes.
+      const folder = vehicleFolder({ 'alpha.dff': Uint8Array.of(1) });
+      const img = createImg();
+      stageVehicleImg(folder, img);
+      writeFileSync(join(folder, 'alpha.dff'), Uint8Array.of(42)); // changed AFTER staging
+
+      expect(new Uint8Array(img.get('alpha.dff')!)[0]).toBe(42);
     });
   });
 });

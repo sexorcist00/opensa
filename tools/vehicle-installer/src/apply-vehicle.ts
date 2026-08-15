@@ -1,8 +1,10 @@
+import type { EditableImg } from '@opensa/tool-kit/archive/img';
+
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { parseFeatures } from './features';
-import { mergeVehicleImg } from './img-merge';
+import { stageVehicleImg } from './img-merge';
 import { mergeCarcols, mergeCarmods, mergeHandling, mergeIde } from './merge';
 import { addPaletteColors, resolveColorRefs } from './palette';
 import { decodeSettings, parseVehicleSettings } from './settings';
@@ -28,17 +30,19 @@ export interface AppliedVehicle {
 
 export interface ApplyVehicleOptions {
   /**
-   * Put the folder's `dff`/`txd` into `models/gta3.img`. Default true.
+   * The open `models/gta3.img` to stage the folder's `dff`/`txd` into. **The caller owns it and writes it
+   * once**, after every vehicle has been staged — one archive rebuild per RUN instead of one per car.
    *
-   * A REBAKE turns it off: its target is a CONVERTED tree, where a car is one `.osm` and the pack has already
-   * deleted the `.dff`/`.txd` it was built from. Writing the raw pair back would add entries the game does not
-   * read and cannot be told apart from a half-converted archive.
+   * Omitted means the archive is not touched at all, which is what a REBAKE wants: its target is a CONVERTED
+   * tree, where a car is one `.osm` and the pack has already deleted the `.dff`/`.txd` it was built from.
+   * Writing the raw pair back would add entries the game does not read and cannot be told apart from a
+   * half-converted archive.
    */
-  img?: boolean;
+  img?: EditableImg;
 }
 
 /**
- * Install one vehicle over `--out`: put its `dff`/`txd` (+ extra txds) into `models/gta3.img` (replace by name),
+ * Install one vehicle over `--out`: stage its `dff`/`txd` (+ extra txds) into `models/gta3.img` (replace by name),
  * carry its `cleo/` subfolder (scripts + `.ini` sidecars) into `<out>/cleo/`, then merge its `*.settings.txt`
  * lines into `data/{vehicles.ide,handling.cfg,carcols.dat,carmods.dat}`. Returns the archive entries written +
  * the model name / handling id (so a `--strip` run knows what to keep). A rebake re-runs the same path, so
@@ -46,12 +50,12 @@ export interface ApplyVehicleOptions {
  */
 export function applyVehicle(folderPath: string, outPath: string, options: ApplyVehicleOptions = {}): AppliedVehicle {
   const entries = readdirSync(folderPath);
-  const imgNames = options.img === false ? [] : mergeVehicleImg(folderPath, join(outPath, 'models', 'gta3.img'));
+  const imgNames = options.img === undefined ? [] : stageVehicleImg(folderPath, options.img);
   const cleo = carryCleoFolder(folderPath, entries, outPath);
   // Without the archive step the model name comes from the folder itself — the same rule, one step earlier:
   // the mod's `.dff` basename IS the model.
   const model = (
-    options.img === false
+    options.img === undefined
       ? entries.find((name) => name.toLowerCase().endsWith('.dff'))
       : imgNames.find((name) => name.endsWith('.dff'))
   )

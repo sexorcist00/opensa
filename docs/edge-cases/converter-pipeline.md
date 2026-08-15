@@ -2,6 +2,21 @@
 
 Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD generators.
 
+- **Node cannot read a file past 2 GiB, and cannot write a buffer past it either.** Measured directly on
+  Node 24.15 (2026-08-15): `readFileSync` of a 3.2 GB file throws **`ERR_FS_FILE_TOO_LARGE`**;
+  `writeFileSync` of a 2.2 GB buffer throws `ERR_OUT_OF_RANGE` (`"length" … <= 2147483647`). What still works
+  is the **positional** API — `writeSync` at a 3 GiB offset and `ftruncateSync` past 2 GiB both succeed — which
+  is why `writeImgFile` (entry-at-a-time, through a descriptor) can produce an archive that `readFileSync`
+  cannot then open. This is a HOST limit, not a game or format one: VER2 addresses entries in uint32 sectors
+  and has room for terabytes.
+  Hit for real on 2026-08-15: the `sa` build died mid-`vehicles` at 2 168 825 856 B, because
+  `vehicle-installer` rebuilt the whole `gta3.img` per car (212 of them) through `writeFileSync`. The numbers
+  that make it structural rather than a one-off — gta3.img after `mods` is 1 242 236 928 B and the mod vehicle
+  payload is 3 077 354 628 B over 752 dff/txd, so the finished archive is ~4.32 GB. The installer inflates
+  nothing: cumulative source through the car it died on was 916 181 801 B against 926 588 928 B of observed
+  growth, a 1.1 % delta that is VER2 sector padding.
+  `tools/opensa-pack/src/game-fs.ts` (`openLazyVer2`) is the one fd-backed reader that already exists for this
+  reason — its own comment records the converter having been unable to read its own output once.
 - **Node heap ceilings.** A full pmb build **or a standalone `opensa-pack` run with AO on** needs
   `NODE_OPTIONS=--max-old-space-size=12288` (the cell bake holds the mod-grown ~1.3 GB `gta3.img` + merged
   cells); the default 4 GB dies around 37 % of the AO bake. sa-lod-generator needs ~8 GB. The full map cannot

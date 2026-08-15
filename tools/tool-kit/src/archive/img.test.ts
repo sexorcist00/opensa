@@ -1,5 +1,5 @@
-import { buildVer2Buffer } from '@opensa/renderware/archive/img-archive';
-import { readFileSync, rmSync } from 'node:fs';
+import { buildVer2Buffer, VER2_MAX_ENTRY_BYTES } from '@opensa/renderware/archive/img-archive';
+import { closeSync, ftruncateSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -50,6 +50,52 @@ describe('EditableImg', () => {
       expect([...(rebuilt.get('alpha.dff') ?? []).slice(0, 2)]).toEqual([9, 9]);
       expect([...(rebuilt.get('gamma.dff') ?? []).slice(0, 1)]).toEqual([7]);
       expect(rebuilt.has('beta.dff')).toBe(false);
+    });
+  });
+});
+
+describe('EditableImg.setFile', () => {
+  describe('negative cases', () => {
+    it('refuses an oversized file on STAT, without reading it', () => {
+      // `set` checks the ceiling against bytes it holds; staging deliberately holds none, so the same refusal
+      // has to come off the file's size — otherwise the wrap lands mid-write, in the archive.
+      const dir = mkdtempSync(join(tmpdir(), 'img-stage-'));
+      const path = join(dir, 'huge.dff');
+      const fd = openSync(path, 'w');
+      ftruncateSync(fd, VER2_MAX_ENTRY_BYTES + 1); // sparse — costs no disk, no read
+      closeSync(fd);
+
+      expect(() => openImg(sampleImg()).setFile('huge.dff', path)).toThrow(/huge\.dff/);
+      rmSync(dir, { force: true, recursive: true });
+    });
+
+    it('is undone by delete, like any other entry', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'img-stage-'));
+      writeFileSync(join(dir, 'gamma.dff'), Uint8Array.of(7));
+      const img = openImg(sampleImg());
+      img.setFile('gamma.dff', join(dir, 'gamma.dff'));
+
+      expect(img.delete('gamma.dff')).toBe(true);
+      expect(img.get('gamma.dff')).toBeNull();
+      rmSync(dir, { force: true, recursive: true });
+    });
+  });
+
+  describe('positive cases', () => {
+    it('adds and replaces exactly like set, and the last write of either kind wins', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'img-stage-'));
+      writeFileSync(join(dir, 'alpha.dff'), Uint8Array.of(9, 9));
+      writeFileSync(join(dir, 'gamma.dff'), Uint8Array.of(7));
+      const img = openImg(sampleImg());
+      img.setFile('alpha.dff', join(dir, 'alpha.dff')); // replace an original
+      img.setFile('gamma.dff', join(dir, 'gamma.dff')); // add
+      img.set('gamma.dff', Uint8Array.of(3)); // and back to bytes
+
+      const rebuilt = openImg(img.build());
+      expect(rebuilt.names()).toEqual(['alpha.dff', 'beta.dff', 'gamma.dff']);
+      expect([...(rebuilt.get('alpha.dff') ?? []).slice(0, 2)]).toEqual([9, 9]);
+      expect([...(rebuilt.get('gamma.dff') ?? []).slice(0, 1)]).toEqual([3]);
+      rmSync(dir, { force: true, recursive: true });
     });
   });
 });
