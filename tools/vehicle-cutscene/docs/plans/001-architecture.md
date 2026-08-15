@@ -34,12 +34,26 @@ vehicle-cutscene/
     census.ts       # derive the cs* ↔ vehicles.ide mapping from the --game tree (never a hardcoded list)
     template.ts     # extract the per-slot TEMPLATE from the vanilla cs model (bone ids, root name, rebase)
     rig/            # the three transform branches: car.ts, bike.ts, boat.ts + shared frame surgery
-    materials.ts    # carcols paint bake into paint-marker materials
+    materials.ts    # carcols paint bake into paint-marker materials; the translucency/pane classifiers
     hanim.ts        # HAnim plugin (0x11E) emit — frame bone ids + root hierarchy table
     txd.ts          # empty-TXD emit + texture-name closure check; txdcut.ide row patching
+    plate.ts        # readable license-plate bake into the cs TXD (plan 003)
+    anim-poses.ts   # read wheel-bone poses out of anim/cuts.img (the anims override a lying bind)
+    seats.ts        # where the DONOR says a person sits, in cutscene space (plan 005)
+    stash-patch.ts  # SCENE-VALUE pass: sink a wheel stash (plan 004 round 20)
+    seat-patch.ts   # SCENE-VALUE pass: lift a riding actor onto the donor's seat (plan 005)
     install.ts      # copy game → out, rebuild cutscene.img (tool-kit EditableImg)
-  docs/plans/       # 001 architecture · 002 implementation
+  docs/plans/       # 001 architecture · 002 implementation · 003 plates · 004 sweep · 005 seats
 ```
+
+**The tool writes THREE outputs, not two.** `models/cutscene.img` and `data/txdcut.ide` are the models;
+`anim/cuts.img` is the third, and it exists because some defects live in the SCENE rather than in any
+model — R\* hides a repair scene's wheels by animating them to the origin, and R\* seats every cutscene
+actor at their own car's `ped_frontseat`. Neither can be answered by model data: the wheels' one shim
+must serve both poses, and the actor is not in the car's clump at all. Both passes are therefore
+surgical edits to the scene VALUES (12 and 4 bytes per channel, chunk sizes untouched), they CHAIN
+through one buffer and one write, and each reports what it touched. On the current fleet exactly 2 of
+444 entries differ from vanilla.
 
 ## Principles
 
