@@ -33,6 +33,7 @@ import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.p
 import { parseVehicleFeatures, UP_DOWN_LIGHTS } from '@opensa/renderware/parsers/text/vehicle-features.parser';
 import { parseVehicleMods } from '@opensa/renderware/parsers/text/vehicle-mods.parser';
 import { openImg } from '@opensa/tool-kit/archive/img';
+import { resolveVehicleSources, type VehicleSource } from '@opensa/tool-kit/vehicles-dir';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 
@@ -75,10 +76,10 @@ export function rebakeVehicles(options: RebakeOptions): RebakeReport {
   requireBuiltGame(targetPath);
 
   const only = options.only ? new Set(options.only.map((name) => name.toLowerCase())) : null;
-  const folders = readdirSync(inPath, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'en'));
+  // The SAME resolution the install runs (plan 007): a flat `--in`, or `models/` overridden per slot by
+  // `new/`. A rebake that read the tree its own way would bake a car the build does not carry.
+  const { overrides, sources } = resolveVehicleSources(inPath);
+  overrides.forEach(({ by, replaced }) => console.log(`vehicle-installer: new/${by} replaces models/${replaced}`));
 
   const failed: { error: string; model: string }[] = [];
   const rebaked: { bytes: number; model: string }[] = [];
@@ -87,7 +88,7 @@ export function rebakeVehicles(options: RebakeOptions): RebakeReport {
 
   // Pass 0 — WHO. Decided against the roster the built game has BEFORE anything is merged into it, so a car
   // that must not be touched is refused with its files still untouched rather than half-written.
-  const { added, refused, selected, skipped } = selectCars(inPath, folders, targetPath, only);
+  const { added, refused, selected, skipped } = selectCars(sources, targetPath, only);
 
   // Pass 1 — the DATA. Every accepted car's rows land before any car is converted, because the conversion
   // reads the merged `vehicles.ide` (txd name, wheel scale) and `vehicle-features.txt` back out of the target.
@@ -246,8 +247,7 @@ function requireBuiltGame(targetPath: string): void {
 
 /** Which cars this run will touch, and why it will not touch the others — see {@link rebakeVehicles}. */
 function selectCars(
-  inPath: string,
-  folders: readonly string[],
+  sources: readonly VehicleSource[],
   targetPath: string,
   only: null | ReadonlySet<string>,
 ): {
@@ -266,11 +266,11 @@ function selectCars(
   const refused: { model: string; reason: string }[] = [];
   const selected: { folder: string; model: string }[] = [];
   const skipped: string[] = [];
-  for (const folder of folders) {
-    const folderPath = join(inPath, folder);
+  for (const source of sources) {
+    const folderPath = source.folder;
     const model = modelOf(folderPath);
     if (!model || (only && !only.has(model))) {
-      skipped.push(folder);
+      skipped.push(source.name);
       continue;
     }
     const declaredId = declaredIdOf(folderPath);

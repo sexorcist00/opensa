@@ -2,7 +2,8 @@ import type { ArchiveFamilyMember } from '@opensa/tool-kit/archive/img';
 
 import { createImg, openImg, writeImgFamily } from '@opensa/tool-kit/archive/img';
 import { registerImgArchives } from '@opensa/tool-kit/game-dir';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { resolveVehicleSources } from '@opensa/tool-kit/vehicles-dir';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, parse, resolve, sep } from 'node:path';
 
 import { applyVehicle } from './apply-vehicle';
@@ -35,9 +36,13 @@ export function guardOut(outPath: string, gamePath: string, inPath: string): voi
 }
 
 /**
- * Build the install: wipe `--out`, copy the `--game` base in, then install every vehicle folder under `--in`
- * (alphabetical — order only matters when two vehicles touch the same stock model; last wins). Each vehicle's
- * dff/txd land in `gta3.img` and its settings merge into the four data files.
+ * Build the install: wipe `--out`, copy the `--game` base in, then install every vehicle folder `--in`
+ * resolves to (alphabetical — order only matters when two vehicles touch the same stock model; last wins).
+ * Each vehicle's dff/txd land in `gta3.img` and its settings merge into the four data files.
+ *
+ * WHICH folders, from a flat `--in` or a structured one (`models/` overridden per slot by `new/`), is
+ * `resolveVehicleSources`' call — the same one `vehicle-cutscene` makes, so the cutscene fleet and the
+ * driving fleet cannot disagree about what is in the build (plan 007).
  */
 export function install(options: InstallOptions): ArchiveFamilyMember[] {
   const gamePath = resolve(options.gamePath);
@@ -48,10 +53,8 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
   rmSync(outPath, { force: true, recursive: true });
   cpSync(gamePath, outPath, { force: true, recursive: true });
 
-  const vehicles = readdirSync(inPath, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'en'));
+  const { overrides, sources: vehicles } = resolveVehicleSources(inPath);
+  overrides.forEach(({ by, replaced }) => console.log(`vehicle-installer: new/${by} replaces models/${replaced}`));
   const imgNames = new Set<string>();
   const models = new Set<string>();
   const handlingIds = new Set<string>();
@@ -69,8 +72,8 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
   );
   const img = existsSync(imgPath) ? openImg(new Uint8Array(readFileSync(imgPath))) : createImg();
   for (const vehicle of vehicles) {
-    const applied = applyVehicle(join(inPath, vehicle), outPath, { img });
-    applied.warnings.forEach((warning) => console.warn(`vehicle-installer: ${vehicle}: ${warning}`));
+    const applied = applyVehicle(vehicle.folder, outPath, { img });
+    applied.warnings.forEach((warning) => console.warn(`vehicle-installer: ${vehicle.name}: ${warning}`));
     applied.imgNames.forEach((name) => imgNames.add(name));
     if (applied.model) {
       models.add(applied.model);

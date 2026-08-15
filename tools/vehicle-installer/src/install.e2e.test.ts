@@ -200,6 +200,47 @@ describe.skipIf(!hasFixtures)('install (end-to-end, real data fixtures)', () => 
       expect(parseVehicleMods(readFileSync(join(out, 'data', 'vehicle-mods.txt'), 'utf8'))).toEqual(new Set());
     });
 
+    it('installs the new/ candidate for a slot models/ also holds, and none of the incumbent (plan 007)', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'in');
+      const out = join(root, 'out');
+
+      mkdirSync(join(game, 'data'), { recursive: true });
+      for (const file of DATA_FILES) {
+        cpSync(join(DATA, file), join(game, 'data', file));
+      }
+      mkdirSync(join(game, 'models'), { recursive: true });
+      const baseImg = createImg();
+      baseImg.set('admiral.dff', Uint8Array.of(9)); // stock
+      writeFileSync(join(game, 'models', 'gta3.img'), baseImg.build());
+
+      // The incumbent ships an extra txd of its own — the candidate must not inherit it either.
+      const incumbent = join(mods, 'models', 'admiral - 1976 Mercedes-Benz 230 - k1real24');
+      mkdirSync(incumbent, { recursive: true });
+      writeFileSync(join(incumbent, 'admiral.dff'), Uint8Array.of(1));
+      writeFileSync(join(incumbent, 'admiral1.txd'), Uint8Array.of(1));
+      writeFileSync(join(incumbent, 'admiral.settings.txt'), [IDE, HANDLING].join('\n\n'));
+
+      const candidate = join(mods, 'new', 'admiral - 1994 Dodge Stealth RT 1.1 - mad_driver');
+      mkdirSync(candidate, { recursive: true });
+      writeFileSync(join(candidate, 'admiral.dff'), Uint8Array.of(3));
+      writeFileSync(join(candidate, 'admiral.txd'), Uint8Array.of(3));
+
+      // Never installed, never scanned for a car.
+      mkdirSync(join(mods, 'screenshots'), { recursive: true });
+      writeFileSync(join(mods, 'screenshots', 'admiral - 1976 Mercedes-Benz 230 - k1real24.png'), Uint8Array.of(0));
+
+      install({ gamePath: game, inPath: mods, outPath: out });
+
+      const img = openImg(new Uint8Array(readFileSync(join(out, 'models', 'gta3.img'))));
+      expect(new Uint8Array(img.get('admiral.dff')!)[0]).toBe(3);
+      expect(img.has('admiral1.txd')).toBe(false);
+      // The incumbent's settings did not merge either — an overridden car contributes nothing at all.
+      expect(parseVehicleDefs(readFileSync(join(out, 'data', 'vehicles.ide'), 'utf8')).get('admiral')?.txd).not.toBe(
+        'admtxdmod',
+      );
+    });
+
     it('appends custom palette colours and resolves the carcols newN refs (cabbie-style)', () => {
       const game = join(root, 'game');
       const mods = join(root, 'in');
