@@ -36,7 +36,7 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
   --game ./game-src/original --in ./mods-src --exclude sa
 ```
 
-Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|cutscene|peds|optimize|trees|sa|procobj|opensa|pack|lod>` (that IS the run order — `procobj` is baked inside the `sa` branch since plan 014, so `--until sa` stops BEFORE the clutter; `cutscene` is the vehicles stage's shadow and drops out with `--exclude vehicles`)
+Params: `--out <dir>` (default `./build/original`) · `--until <split|mods|vehicles|cutscene|peds|optimize|trees|sa|procobj|opensa|pack|lod>` (that IS the run order — `procobj` is baked inside the `sa` branch since plan 014, so `--until sa` stops BEFORE the clutter; `cutscene` is the vehicles stage's shadow and drops out with `--exclude vehicles`)
 (inclusive, keeps `.work-<target>/`) · **`--exclude <stage,stage>`** · **`--target <sa|opensa>`** ·
 `--procobj-density <n>` · `--procobj-max <n>` · `--keep-work` · `--no-weld-seams` · `--no-textures`.
 
@@ -85,6 +85,14 @@ inst-bearing IPLs, and how many of the IPLs listed in `gta.dat` it could actuall
 ID pools** (`checkImgIdBudgets` — the one set of ceilings the target really has). An `--exclude sa` run does
 neither. There is no int16 row guard any more: the target always runs `perfect-map.asi` + OLA + FLA, so that
 ceiling is lifted where our data lands — `--allow-text-row-overflow` was deleted with it (2026-08-09).
+
+The chain opens with **`split`** (img-splitter): `models/gta3.img` is divided into typed archives BEFORE
+anything installs, so every entry name lives in exactly one of them. `BuilderConfig.splitBuckets` picks which
+buckets get their own file and defaults to `['vehicles']` — the shape that fits a stock archive table exactly
+(SA registers 8, the target already spends 6, and the mod car set spills `vehicles.img` into one sibling).
+Whoever writes an archive registers it in `gta.dat`, and the finished `sa/` tree is gated against the 8:
+past it the game does not warn, it crashes at load. See
+[architecture/img-archive-layout.md](./architecture/img-archive-layout.md).
 
 The `sa/` tree carries **the asis its content requires**, into the game root: `perfect-map.asi` always, and
 `perfect-cutscene.asi` when the cutscene stage ran (the fleet and the plugin are coupled — panes on every

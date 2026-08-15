@@ -1,6 +1,7 @@
 import type { AssetFailure, RunSummary } from '@opensa/map-optimizer/run';
 import type { ProcObjDensityInput } from '@opensa/map-placement/procobj-density';
 
+import { assertArchiveSlots, split as splitArchives } from '@opensa/img-splitter/split';
 import { parsePrelightInfo, type PrelightInfo } from '@opensa/lod-common/prelight';
 import { buildTreeLods } from '@opensa/lod-trees-generator/build';
 import { parseOnlyList, runOptimizer, summarizeReport } from '@opensa/map-optimizer/run';
@@ -23,6 +24,7 @@ import { buildSaLods } from '@opensa/sa-lod-generator/build';
  */
 import { buildProcobjLods } from '@opensa/sa-procobj-placement/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
+import { countImgArchives } from '@opensa/tool-kit/game-dir';
 import { type BuildTarget } from '@opensa/tool-kit/target';
 import { installCutscene } from '@opensa/vehicle-cutscene/install';
 import { install as installVehicles } from '@opensa/vehicle-installer/install';
@@ -40,6 +42,11 @@ import { config as defaultConfig, PACK_RECTS } from './config';
  * runs the whole pipeline (**both** sa + opensa) while keeping every intermediate for debugging.
  */
 export const STAGE_NAMES = [
+  // FIRST, and the ordering is the point rather than a convenience: after the split every entry name lives
+  // in exactly one archive, so a mod replaces `admiral.dff` inside `vehicles.img` by name. Split later and a
+  // stock car would sit in `gta3.img` while its replacement landed elsewhere — see
+  // `docs/architecture/img-archive-layout.md`.
+  'split',
   'mods',
   'vehicles',
   // The cutscene fleet is the vehicles stage's shadow (plan 002 step 11): it reads the INSTALLED game —
@@ -249,6 +256,10 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // A stage may RETURN a fragment for the target report (plan 005) — the runner collects them, keyed by stage.
   const chain: { name: ExcludableStage; run: (game: string, out: string) => ChainOutcome | Promise<ChainOutcome> }[] =
     [];
+  chain.push({
+    name: 'split',
+    run: (game, out) => void splitArchives({ buckets: config.splitBuckets, gamePath: game, outPath: out }),
+  });
   if (populated(subfolders.mods)) {
     chain.push({
       name: 'mods',
@@ -737,6 +748,10 @@ async function buildSaTarget(step: {
   // stage appends hole-fill instances to the copied text IPLs, so the common build undercounts the rows.
   const census = reportTextIplCensus(sa);
   checkInstBearingIplSlots(census.instBearingIpls);
+  // The archive table, checked on the FINISHED tree — the split registers what it creates and the vehicle
+  // install registers its spill sibling, so the total is only known here. A ceiling the game answers with a
+  // crash at load and no build-side symptom, which is exactly the kind this branch gates rather than prints.
+  assertArchiveSlots(countImgArchives(sa), false);
   const imgBudgets = checkImgIdBudgets(sa);
   reportInstallRequirements(census, imgBudgets);
   // Ship the fix beside the map that needs it — stating a requirement and not satisfying it is half a job.
@@ -864,8 +879,16 @@ export interface StageTiming {
  */
 export function checkImgIdBudgets(gameDir: string): Record<string, number> {
   const names: string[] = [];
-  for (const img of ['gta3.img', 'gta_int.img', 'player.img', 'cutscene.img']) {
-    const path = join(gameDir, 'models', img);
+  // EVERY archive in the tree, enumerated rather than listed. The four stock names were hard-coded until the
+  // split started producing `vehicles.img` and its spill siblings — and an archive this guard does not know
+  // about is an UNDER-count, which is the silent direction: the pools stay unreported until the game
+  // corrupts its heap during data load.
+  const modelsDir = join(gameDir, 'models');
+  const archives = existsSync(modelsDir)
+    ? readdirSync(modelsDir).filter((name) => name.toLowerCase().endsWith('.img'))
+    : [];
+  for (const img of archives) {
+    const path = join(modelsDir, img);
     if (!existsSync(path)) {
       continue;
     }

@@ -1,6 +1,7 @@
 import type { ArchiveFamilyMember } from '@opensa/tool-kit/archive/img';
 
 import { createImg, openImg, writeImgFamily } from '@opensa/tool-kit/archive/img';
+import { registerImgArchives } from '@opensa/tool-kit/game-dir';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, parse, resolve, sep } from 'node:path';
 
@@ -86,13 +87,15 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
   // by construction rather than discovered mid-build.
   mkdirSync(dirname(imgPath), { recursive: true });
   const archives = writeImgFamily(img, imgPath);
+  // Whoever writes an archive registers it. A spill sibling the game never registers is invisible content —
+  // the build succeeds, the file is on disk, and its entries simply never load. The base member is skipped:
+  // `gta3.img` is hardcoded in the game and `vehicles.img` was declared by the split that created it.
   if (archives.length > 1) {
-    // A sibling only reaches the game once something writes its `IMG` line into gta.dat. Until the split
-    // stage owns that (img-splitter plan 001 step 4), say so — an unregistered archive is invisible content.
-    console.warn(
-      `  ! vehicle-installer wrote ${archives.length} archives (${archives.map((a) => basename(a.path)).join(', ')}) — ` +
-        'the siblings must be registered in gta.dat or their entries never load',
+    registerImgArchives(
+      outPath,
+      archives.slice(1).map((archive) => basename(archive.path)),
     );
+    console.log(`vehicle-installer: ${archives.length} archives — ${archives.map((a) => basename(a.path)).join(', ')}`);
   }
   // The declarations travel as DATA in the built game dir, because the converter runs later and in another
   // process; `opensa-pack` reads this file when it bakes each car. Written only when a mod declared

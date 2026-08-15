@@ -2,7 +2,8 @@ import type { EditableImg } from '@opensa/tool-kit/archive/img';
 
 import { ver2EntryCount } from '@opensa/renderware/archive/img-archive';
 import { createImg, openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
-import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { registerImgArchives } from '@opensa/tool-kit/game-dir';
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join, parse, resolve, sep } from 'node:path';
 
 import type { Bucket } from './classify';
@@ -85,6 +86,16 @@ export function split(options: SplitOptions): SplitSummary {
   cpSync(gamePath, outPath, { force: true, recursive: true });
 
   const gta3Path = join(outPath, 'models', 'gta3.img');
+  // A tree with no `gta3.img` has nothing to split, and that is not an error: the stage still owes the chain
+  // a complete game dir, which the copy above already produced. (TCs and the pipeline's own fixtures.)
+  if (!existsSync(gta3Path)) {
+    return {
+      archives: [],
+      contested: [],
+      slots: { needed: HARDCODED_ARCHIVES, stock: STOCK_ARCHIVE_SLOTS },
+      unclaimed: 0,
+    };
+  }
   const gta3Bytes = new Uint8Array(readFileSync(gta3Path));
   const source = openImg(gta3Bytes);
   // Snapshotted before anything moves: `names()` reflects the deletes each bucket makes as it is emitted.
@@ -114,8 +125,8 @@ export function split(options: SplitOptions): SplitSummary {
   }
   archives.push({ ...writeArchive(source, gta3Path), name: 'gta3.img' });
 
-  const imgLines = registerArchives(
-    join(dataDir, 'gta.dat'),
+  const imgLines = registerImgArchives(
+    outPath,
     archives.filter((archive) => archive.name !== 'gta3.img').map((archive) => archive.name),
   );
   assertArchiveSlots(imgLines, options.liftedArchiveLimit === true);
@@ -176,32 +187,6 @@ function readIdeFiles(dataDir: string): string[] {
   }
 
   return texts;
-}
-
-/**
- * Add an `IMG` line per new archive to `gta.dat`, beside the ones the stock file already carries, and return
- * how many the file ends up with. Idempotent: a re-run does not double a line.
- *
- * Placed after the LAST existing `IMG` line rather than appended, because `gta.dat` is read top to bottom and
- * the archives are declared before the data that streams out of them.
- */
-function registerArchives(datPath: string, names: readonly string[]): number {
-  if (!existsSync(datPath)) {
-    return 0;
-  }
-  const lines = readFileSync(datPath, 'latin1').split(/\r?\n/);
-  const isImg = (line: string): boolean => /^IMG\s/i.test(line.trim());
-  const wanted = names.map((name) => `IMG MODELS\\${name.toUpperCase()}`);
-  const missing = wanted.filter(
-    (line) => !lines.some((existing) => existing.trim().toUpperCase() === line.toUpperCase()),
-  );
-  if (missing.length > 0) {
-    const lastImg = lines.reduce((last, line, index) => (isImg(line) ? index : last), -1);
-    lines.splice(lastImg + 1, 0, ...missing);
-    writeFileSync(datPath, lines.join('\n'), 'latin1');
-  }
-
-  return lines.filter(isImg).length;
 }
 
 /** Stream an archive out and report what it cost. Size comes from `stat` — reading it back would reintroduce

@@ -1,9 +1,15 @@
 # IMG archive layout — typed buckets, bounded files
 
-**Status: DESIGNED, not built.** The rule and the ownership below are decided; the tool that produces the
-layout is `tools/img-splitter` and its chain is
-[plan 001](../../tools/img-splitter/docs/plans/001-archive-split.md). This doc is what that plan implements,
-and what any later tool touching `models/*.img` has to keep true.
+**Status: BUILT, not yet field-run.** `tools/img-splitter` produces the layout, `tool-kit` carries the cap
+and the spill, and pmb runs the split as its first stage; what remains is
+[plan 001](../../tools/img-splitter/docs/plans/001-archive-split.md) step 5 — does the real game boot and
+stream from it. This doc is what that plan implements, and what any later tool touching `models/*.img` has to
+keep true.
+
+**What ships today is the stock-fitting shape**: `splitBuckets` defaults to `['vehicles']`, so peds and
+weapons stay in `gta3.img` and the two free archive slots go to `vehicles.img` and its one spill sibling —
+8 of 8, zero headroom. The full four-bucket layout below is what the ASI lift unlocks, and it is described
+here rather than deferred because the classifier already produces it.
 
 ## Why the layout exists
 

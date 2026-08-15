@@ -89,6 +89,28 @@ vi.mock('@opensa/vehicle-installer/install', async (importOriginal) => ({
 }));
 vi.mock('@opensa/vehicle-cutscene/install', () => ({ installCutscene: cutsceneInstall }));
 
+/** The mod installer, mocked so the split-order test costs no real merge. */
+const modInstall = vi.hoisted(() =>
+  vi.fn<(options: { gamePath: string; inPath: string; outPath: string }) => void>((options) => {
+    mkdirSync(options.outPath, { recursive: true });
+  }),
+);
+vi.mock('@opensa/mod-installer/install', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  install: modInstall,
+}));
+
+/** The archive split, mocked: the stage's contract here is WHEN it runs and on what, not how it divides. */
+const splitArchives = vi.hoisted(() =>
+  vi.fn<(options: { buckets?: readonly string[]; gamePath: string; outPath: string }) => void>((options) => {
+    mkdirSync(options.outPath, { recursive: true });
+  }),
+);
+vi.mock('@opensa/img-splitter/split', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  split: splitArchives,
+}));
+
 /** The optimizer, mocked ONLY where a test opts in — a real run needs a real game dir. Its report is what
  *  the optimize stage turns into a report fragment, so the fake carries one recognizable failure. */
 const optimizer = vi.hoisted(() =>
@@ -138,6 +160,9 @@ describe('EXCLUDABLE_STAGES', () => {
   describe('positive cases', () => {
     it('offers both targets and every common-chain stage', () => {
       expect(EXCLUDABLE_STAGES).toEqual([
+        // split runs FIRST so every entry name lands in exactly one archive before anything installs into it
+        // (docs/architecture/img-archive-layout.md).
+        'split',
         'mods',
         'vehicles',
         // cutscene is the vehicles stage's shadow (vehicle-cutscene plan 002 step 11): it reads the
@@ -392,6 +417,60 @@ describe('buildPerfectMap target split', () => {
       });
 
       expect(procobjLods.mock.calls[0][0].config.density).toBe(2);
+    });
+  });
+});
+
+/**
+ * The split stage (img-splitter plan 001 step 4). Its whole contract at this level is ORDER: it runs before
+ * anything installs, because that is what puts every entry name in exactly one archive.
+ */
+describe('buildPerfectMap split stage', () => {
+  let out: string;
+  let game: string;
+  let mods: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-split-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-split-game-'));
+    mods = mkdtempSync(join(tmpdir(), 'pmb-split-mods-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    mkdirSync(join(mods, 'mods', 'a mod'), { recursive: true });
+    writeFileSync(join(mods, 'mods', 'a mod', 'x.txd'), 'x');
+    splitArchives.mockClear();
+    modInstall.mockClear();
+  });
+
+  afterEach(() => {
+    for (const dir of [out, game, mods]) {
+      rmSync(dir, { force: true, recursive: true });
+    }
+  });
+
+  describe('negative cases', () => {
+    it('does not run under --exclude split, and the mods stage still does', async () => {
+      await buildPerfectMap({ exclude: ['split', 'optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+
+      expect(splitArchives).not.toHaveBeenCalled();
+      expect(modInstall).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('runs FIRST, on the untouched game, and hands its output to the mods stage', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+
+      expect(splitArchives).toHaveBeenCalledTimes(1);
+      // The split reads --game itself; nothing has installed into it yet.
+      expect(splitArchives.mock.calls[0][0].gamePath).toBe(game);
+      expect(modInstall.mock.calls[0][0].gamePath).toBe(splitArchives.mock.calls[0][0].outPath);
+    });
+
+    it('splits ONLY the buckets a stock archive table can register', async () => {
+      // 8 slots, 6 already spent: vehicles plus its spill sibling is exactly what fits.
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+
+      expect(splitArchives.mock.calls[0][0].buckets).toEqual(['vehicles']);
     });
   });
 });

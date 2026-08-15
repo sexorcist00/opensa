@@ -10,7 +10,16 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
 ```
 
 Each stage is another tool's Node API; every stage hands the next a **complete game dir**, so the chain can
-stop anywhere (`--until <stage>`, inclusive, keeps intermediates). Intermediates live under
+stop anywhere (`--until <stage>`, inclusive, keeps intermediates).
+
+**The chain opens with `split`** (img-splitter), and its position is the design rather than a preference:
+`models/gta3.img` is divided into typed archives BEFORE anything installs, so every entry name lives in
+exactly one of them and a mod replaces `admiral.dff` inside `vehicles.img` by name. Split later and a stock
+car would sit in `gta3.img` while its replacement landed elsewhere — and which one the game loads with a name
+in two registered archives is a question this ordering never has to ask. `config.splitBuckets` decides which
+buckets get their own file; it defaults to `['vehicles']`, the shape that fits a stock archive table exactly
+(8 slots, 6 already spent, and the mod car set spills into one sibling). See
+[img-archive-layout.md](./img-archive-layout.md). Intermediates live under
 `<out>/.work-<target>/<n>-<stage>` (plan 005: one work dir per target, so building one target never deletes
 the other's kept stages) and are deleted as consumed unless `--keep-work`/`--until`. **The run's own work dir
 is wiped at the top of every run, before any stage reads `--game`/`--in`** — so a source pointing into it is
