@@ -4,7 +4,8 @@
   "private": true,
   "description": "Split a game's models/*.img into typed, size-bounded archives (map / vehicles / peds / weapons) before anything installs into them.",
   "exports": {
-    "./classify": "./src/classify.ts"
+    "./classify": "./src/classify.ts",
+    "./split": "./src/split.ts"
   },
   "nx": {
     "tags": [

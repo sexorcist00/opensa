@@ -75,12 +75,29 @@ Every step ends with its verification; a step without recorded numbers is unfini
       non-model extensions are expected (no IDE row declares them). The 284 dictionaries are the generic ones
       (`gb_generic`, `gb_country`, `gb_la…` — reached through `txdp` parents rather than a model row) and the
       75 models are specials like `copgrl1`/`copgrl2`. All stay in `gta3.img`, which is where they are today.
-- [ ] **2. The splitter tool.** Emit the buckets, rewrite `gta.dat`'s `IMG` lines, leave `cutscene`/`player`/
-      `gta_int` alone. **Uniqueness is a GUARD here, not an assumption**: one name may land in exactly one
-      archive, and the tool fails naming both sides if it ever would not — that is what makes the precedence
-      question unaskable rather than unanswered. Verification: entry bytes byte-identical to the source
-      archive, the entry count conserved exactly (in == sum of out, no duplicates), and the run's wall clock +
-      output sizes recorded.
+- [x] **2. The splitter tool. DONE 2026-08-15.** `src/split.ts`: full passthrough copy of `--game`, then
+      `gta3.img` is emitted as buckets, `gta.dat` gains an `IMG` line per new archive (after the last existing
+      one, idempotent on a re-run), and `cutscene`/`player`/`gta_int` are left alone. Tests 24/24.
+      **Two gates, and the first one had to be rewritten once it was tested.** `assertUniqueNames` compares
+      the DIRECTORY's declared entry count against the distinct names the reader returns — the obvious version
+      (walk the names looking for a repeat) is dead code, because `parseVer2Directory` keys a `Map` by name and
+      has therefore already collapsed any duplicate, silently dropping one entry's bytes, before anything
+      downstream can look. `assertArchiveSlots` refuses a tree registering more than the 8 the target's table
+      holds, which turns a ceiling recorded as **"Caught: no"** into a build failure with the arithmetic in it.
+      **Verification, on the real stock tree** (`game-src/original`, run 2026-08-15):
+
+      | Archive | Entries | Bytes |
+      | --- | --- | --- |
+      | vehicles.img | 613 | 50.5 MB |
+      | peds.img | 530 | 55.6 MB |
+      | weapons.img | 100 | 1.3 MB |
+      | gta3.img | 15 073 | 832.6 MB |
+
+      **2.0 s** for the split itself. **Conservation holds exactly**: 16 316 entries in, 16 316 out, no name in
+      two archives, and **0 entries differ — byte-identical to the source**. `gta.dat` ends with
+      `CARREC | SCRIPT | CUTSCENE | VEHICLES | PEDS | WEAPONS`.
+      **And the slot arithmetic is now demonstrated rather than argued**: `slots: {needed: 9, stock: 8}` — the
+      run only completed because it was given `liftedArchiveLimit`, and that is with NO vehicle spill yet.
 - [ ] **3. The cap and the spill, in the shared writer.** `tool-kit` gains a bucket-aware write that opens
       `<name>.img`, and creates `<name>2.img` when the next entry would cross the cap; every installer routes
       through it. The cap is a named constant with its reason (Node's 2 GiB read ceiling), set below it with
