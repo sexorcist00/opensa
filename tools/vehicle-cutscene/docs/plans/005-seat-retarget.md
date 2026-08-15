@@ -121,9 +121,14 @@ the follow-up, which needs a blend and its own field round.
 - [ ] **4. Field.** SMOKE2B and FINAL2B, one sitting. LOOK-FOR: the occupants read through the glass at
       seat height; head clear of the roof (our glendale's is 0.27 m taller, so there is room); hands and
       feet not obviously detached from wheel and floor — the pose is R\*'s and only the root moved.
-- [ ] **5. Contracts.** `docs/contracts/vehicles.md`: `ped_frontseat`/`ped_backseat` now carry behaviour
+- [x] **5. Contracts.** `docs/contracts/vehicles.md`: `ped_frontseat`/`ped_backseat` now carry behaviour
       in the CUTSCENE path too, and what happens when a donor omits them (nothing — the scene's own
       placement stands). Say it, because a missing dummy is silent by nature.
+      **DONE 2026-08-15** — §3's dummy table and a paragraph under it: what the dummy now decides, that
+      an absent one is a fallback rather than a failure, and that all THREE gates are silent when they
+      skip (unskinned, under 98 % seated, under the 0.05 m deadband). Misplacing the dummy now moves the
+      cutscene actor with it — the same lever pointed the wrong way, which is exactly the kind of thing
+      a mod author cannot guess.
 
 ## Risks / open measurements
 
