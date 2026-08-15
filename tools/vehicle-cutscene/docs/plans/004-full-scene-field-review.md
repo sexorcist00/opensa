@@ -639,12 +639,34 @@ or not reflected — by something other than SA's `CustomCarPipe`, while in game
 rides the vehicle pipe together. The lens is the surface showing the anomaly, and it is the surface
 our split moves.
 
-**This is a hypothesis with one untested link and it must not be coded against yet.** Round 8 put
-translucents on the default pipe because OUR DFF PipelineSet stamp made panes vanish — and plan 001
-step 4 then found the DFF stamp and the runtime `CustomCarPipeAtomicSetup` are NOT the same thing
-("the runtime force-pipe is what makes that car's glass look right"). So the experiment worth one
-build is: keep the lens on the vehicle pipe the way gameplay does, one variable, and look at the
-lamps. If the green goes, round 8's rule needs re-pricing against what step 4 learned.
+**This is a hypothesis with one untested link.** Round 8 put translucents on the default pipe because
+OUR DFF PipelineSet stamp made panes vanish — and plan 001 step 4 then found the DFF stamp and the
+runtime `CustomCarPipeAtomicSetup` are NOT the same thing ("the runtime force-pipe is what makes that
+car's glass look right"). So the experiment worth one build is: keep the lens on the vehicle pipe the
+way gameplay does, one variable, and look at the lamps.
+
+**The experiment is built and armed** (branch `004-23-lens-vehicle-pipe`, 2026-08-15). One line in
+`finalizeAtomics`: the vehicle PipelineSet now goes on every NON-PANE atomic — round 8's rule —
+instead of on fully-opaque ones only. Verified in the built DFF, exactly one variable moved:
+
+| atomic | before | after |
+| --- | --- | --- |
+| `#28 wing_lf_ok_ad` (lamp body, opaque) | `0x53f2009a` | `0x53f2009a` |
+| `#29 wing_lf_ok_ad` (the 120-triangle LENS) | DEFAULT | **`0x53f2009a`** |
+| `#42 windscreen_ok_ad` (pane) | DEFAULT | DEFAULT |
+| `#43 glass_ad` (pane) | DEFAULT | DEFAULT |
+
+Fleet `NO_COMMIT/cs-lens-vehpipe`, 23 converted / 0 errors, installed in the bottle; tool suite 92/92
+(the pipeline test now guards the experiment's rule). **What to expect, stated before the run so the
+result cannot be read backwards:** round 9's own evidence says a stamped lens VANISHES (the burrito's
+210-alpha tail lenses). If the glendale's lens disappears, round 9 stands and the green must come from
+somewhere else — the next candidate being the `gen_envmap9` reflection itself rather than the pipe.
+If the lens survives AND the green goes, round 9's rule was measuring our DFF stamp rather than the
+runtime pipe, and it gets re-priced fleet-wide.
+
+`glass_ad` gives a free control inside the same car: it carries lamp-lens materials too, but a pane
+material puts it on the default pipe either way — so the front headlight moves and the rear lenses
+do not.
 
 ### Standing addendum — the perfect-cutscene ASI re-opens the whole ledger (2026-08-14)
 
