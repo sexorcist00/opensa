@@ -35,8 +35,10 @@ exactly 212 and match 1:1 by slot — but **5 screenshots do not match their fol
 character** (`at400 - Boeing 727-100 Liveries- carcer.png` lost a space). A filename join would have dropped
 five cars and looked like missing screenshots.
 
-`new/` is deliberately NOT shown. It has no metadata and no screenshot — the user's call: the page is about
-what the fleet replaced, and a candidate has not replaced anything yet.
+A `new/` candidate HAS no metadata link and no screenshot of its own — but it is what the build installs, so
+dropping it would leave the page showing an incumbent the build no longer ships. It appears marked
+`from new/`, with the slot's stock picture and **no** replaced shot: the picture on file is of the car it
+displaced.
 
 ## Tags — derived from the mod folder, nothing else
 
@@ -77,8 +79,9 @@ scripts/cars-server/
 - **The replaced shot opens full size** on click — a native `<dialog>` (`Esc`, `✕` and a backdrop click all
   close it), inset from the edges so the page stays visible behind. The picture is dropped on close: these
   are full-resolution field screenshots, up to 3.8 MB each, and one held decoded behind the page is waste.
-- **Dark, responsive, no framework**: a CSS grid that collapses 3 → 2 → 1 columns, `clamp()` type, images
-  `max-width:100%`. Phone and tablet are the layouts that matter — this gets opened next to the game.
+- **Dark, responsive, no framework**: **one card per row at every width** (the user's call — four columns
+  put a car at ~150 px, too small to judge), the two panes stacking below 560 px so each picture takes the
+  full screen width. Phone and tablet are the layouts that matter — this gets opened next to the game.
 - Rendered per request, so editing `mods-src` and hitting reload shows the new fleet. Nothing is cached
   except the parsed metadata JSON.
 
@@ -100,4 +103,5 @@ scripts/cars-server/
 - a real `new/admiral - 1994 Dodge Stealth RT 1.1 - mad_driver` dropped into the tree: the card becomes the
   candidate, marked `from new/`, keeps `ID 445` and the stock picture, and shows no replaced screenshot;
 - **18 unit tests** over tags and the catalog join; suite 4358/4358, tsc + eslint clean;
-- screenshotted at 1440 / 820 / 390 px — three columns, two, one.
+- screenshotted at 1440 / 820 / 390 px — one card per row throughout, panes stacked on the phone; the modal
+  driven open and closed by `✕`, `Esc` and a backdrop click at 1440 and 390 px.
