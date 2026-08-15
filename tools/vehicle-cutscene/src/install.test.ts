@@ -206,6 +206,9 @@ describe('installCutscene', () => {
     });
 
     // The load-bearing check of plan 006: it is what lets the app and the pmb pipeline share one converter.
+    // TWO full conversions, so it runs ~2.8 s alone and past the default 5 s timeout when the whole suite is
+    // competing for the machine — it failed 4 runs in 5 at load average 8 while passing on its own. The work
+    // is the test, not a leak: given its own budget rather than being made to do less.
     it('emits bytes identical to the base-copy run, file for file', () => {
       seedCutsImg();
       const leanPath = join(dir, 'out-lean');
@@ -219,7 +222,7 @@ describe('installCutscene', () => {
       for (const relative of [join('models', 'cutscene.img'), join('data', 'txdcut.ide'), join('anim', 'cuts.img')]) {
         expect(readFileSync(join(leanPath, relative))).toEqual(readFileSync(join(outPath, relative)));
       }
-    });
+    }, 30_000);
 
     it('honours --only, converting nothing else', () => {
       const summary = installCutscene({ gamePath, inPath, only: new Set(['mtbike']), outPath });
