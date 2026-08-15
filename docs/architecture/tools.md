@@ -27,6 +27,12 @@ never the app. The dependency picture is the tools cluster of
   add a car too, on the id the mod declares for itself
   ([plan 006](../../tools/vehicle-installer/docs/plans/006-rebake.md)).
 - **ped-installer** — ped mod folders → `gta3.img` + merged `peds.ide`.
+- **img-splitter** — divides `models/gta3.img` into TYPED archives (`vehicles.img`, `peds.img`,
+  `weapons.img`) before anything installs, so every entry name lives in exactly one of them; writes the
+  `IMG` lines into `gta.dat` and gates the tree against SA's 8-archive table. The bucket comes from the IDE
+  section a model's row sits in, plus `carmods.dat` for mod-shop parts. pmb's FIRST stage. Lib
+  `src/split.ts`, classifier `src/classify.ts`; the design is
+  [img-archive-layout.md](./img-archive-layout.md).
 - **map-optimizer** — lossless DFF/TXD conditioning (smooth-group normals, prelit sync, dedupe, mips) that
   yields a drop-in game dir; refuses geometry it can't provably remap. Lib `src/run.ts`.
 - **lod-trees-generator** — tree LOD impostors: crossed billboard cards + a baked DXT5 alpha atlas, placed

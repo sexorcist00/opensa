@@ -5,6 +5,10 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
 
 ## GTA SA reverse engineering & modding
 
+- <https://gtamods.com/wiki/IMG_archive> — the IMG format and, usefully, the ARCHIVE-COUNT limit stated
+  plainly ("max of 8 archives … 3 standard … and 5 defined within default.dat or gta.dat"). Used in 2026-08-15
+  to corroborate `TOTAL_IMG_ARCHIVES` independently of the address arithmetic — see
+  `docs/gta-sa-original/img-archive-limit.md`.
 - <https://github.com/gta-reversed/gta-reversed-modern> — reversed GTA SA source (the active repo; the
   catalogue's provenance lines cite it); the reference for engine internals (pools, `CIplStore`,
   streaming) behind our int16/pool guards and the `asi/` plugin work.
