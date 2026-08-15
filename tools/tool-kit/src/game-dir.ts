@@ -31,16 +31,24 @@ export function countImgArchives(gameDir: string): number {
 /**
  * Refuse a dangerous `--out` before anything is wiped: the filesystem root, a path equal to one of the
  * source dirs, or a path that CONTAINS one (wiping `--out` would take the source with it).
+ *
+ * Paths are compared case-INSENSITIVELY, on every platform. The two mistakes do not cost the same: a
+ * false refusal costs the caller a rename, a missed match points a tool at the source it is about to wipe
+ * or overwrite. `GTA San Andreas` and `gta san andreas` are ONE folder on both platforms this repo runs on
+ * (Windows and macOS), and a tool that emits into a game rather than into a copy of one
+ * (`vehicle-cutscene --no-base-copy`) has no copy standing between that mistake and the user's install.
+ * Folding unconditionally also keeps the guard's behaviour — and its tests — the same everywhere.
  */
 export function guardOut(outPath: string, ...sources: readonly string[]): void {
   if (outPath === parse(outPath).root) {
     throw new Error(`refusing to wipe the filesystem root as --out: ${outPath}`);
   }
+  const out = foldPath(outPath);
   for (const source of sources) {
-    if (outPath === source) {
-      throw new Error(`--out must differ from the source dirs: ${outPath}`);
+    if (out === foldPath(source)) {
+      throw new Error(`--out must differ from the source dirs (it would overwrite one): ${outPath}`);
     }
-    if (source.startsWith(outPath + sep)) {
+    if (foldPath(source).startsWith(out + sep)) {
       throw new Error(`--out must not contain a source dir (would wipe it): ${outPath} contains ${source}`);
     }
   }
@@ -75,4 +83,9 @@ export function registerImgArchives(gameDir: string, names: readonly string[]): 
   }
 
   return lines.filter(isImg).length;
+}
+
+/** A path as the case-insensitive filesystems this repo targets would match it. See {@link guardOut}. */
+function foldPath(path: string): string {
+  return path.toLowerCase();
 }

@@ -23,6 +23,14 @@ describe('guardOut', () => {
     it('checks every source, not just the first', () => {
       expect(() => guardOut(`${sep}a${sep}wind`, `${sep}a${sep}game`, `${sep}a${sep}wind`)).toThrow(/must differ/);
     });
+
+    it('refuses a source that differs only in case — one folder on Windows and macOS', () => {
+      expect(() => guardOut(`${sep}a${sep}GTA San Andreas`, `${sep}a${sep}gta san andreas`)).toThrow(/must differ/);
+    });
+
+    it('refuses a contained source that differs only in case', () => {
+      expect(() => guardOut(`${sep}A`, `${sep}a${sep}game`)).toThrow(/must not contain/);
+    });
   });
 
   describe('positive cases', () => {
