@@ -161,6 +161,21 @@ the split, or in a source folder that does not.
 at the top of every run, and a layered mods folder in a both-target run throws before any stage runs; but a
 STALE target left by an older run is indistinguishable from a fresh one.
 
+## One SOURCE folder, one reader — a tool may not re-derive which mods a folder holds
+
+`mods-src/<game>/vehicles` decides its own contents (a flat tree, or `models/` overridden per SLOT by
+`new/` — vehicle-installer plan 007), and **every tool that reads it goes through
+`resolveVehicleSources`** (`@opensa/tool-kit/vehicles-dir`): the installer, its rebake, `vehicle-cutscene`'s
+census, and any debug script that names a car. A second reading is not a duplicate implementation, it is a
+DIFFERENT FLEET — the cutscene set stops matching the cars the player drives, and nothing in the build
+compares the two. The same holds for `mods-src/<game>/mods` and `layers.ts`.
+
+**Caught:** NO — this is the silent one. A private `readdirSync(inPath)` over the restructured tree returned
+three "cars" called `models`, `new` and `screenshots`, found no `.dff` in any of them, and installed nothing;
+a folder with no `.dff` is a legitimate skip, so no warning exists to fire. Measured on the real tree before
+the fix: `vehicle-cutscene --inspect` reported **0 of 23 slots ready** and exited 0. What catches it is the
+resolver being the only door: it throws on a stray or mis-cased folder instead of guessing.
+
 ## A build's SOURCE may not live inside its own output
 
 The run's own `<out>/.work-<target>` (plus the legacy shared `.work`) is wiped at the top of every run,

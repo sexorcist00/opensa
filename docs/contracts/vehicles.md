@@ -22,9 +22,31 @@ traps below flagged by name — run `npx tsx scripts/debug/dump-vehicle-rig.ts <
 One folder = one vehicle. `<model>` is the game's model slot (`previon`, `zr350`, …) and everything else in
 the build keys off it.
 
+**The folder NAME is three fields**, `<slot> - <what the car really is> - <author>`:
+
+```
+admiral - 1976 Mercedes-Benz 230 - k1real24
+```
+
+The first field, everything before the first ` - `, is the **slot** — case-folded, and the only field any
+tool reads (`parseVehicleSlot`). It exists because a folder can ship several `.dff`s (a bodykit: 13 of the
+original's 212 do) and the file names cannot then say which one is the car. The other two fields are free
+text. A folder with no ` - ` is read as slot-only.
+
+**Where the slot is read**: matching `models/` against `new/` (below), and deciding **which model the
+install records** — the mod-car ledger `data/vehicle-mods.txt`, the `features.txt` key, what `--strip` keeps,
+and the `<model>.osm` a `--rebake` converts. The folder must ship a `<slot>.dff`; when it does not, the first
+`.dff` is used (the pre-2026-08-15 rule, so a mis-named folder installs as it always did) **with a warning
+naming both** — nothing downstream can tell the two apart, and this is what a misspelled slot looks like.
+
+Getting it from the folder rather than from "the first `.dff`" is not tidiness: on the original's fleet the
+old rule mis-recorded **10 of 212 cars** as a bodykit part (`flash` → `exh_a_f`, `voodoo` → `bbb_lr_slv1`),
+so video mode never saw those slots as modded, `--strip` would have dropped the car it was told to keep, and
+a rebake converted the exhaust while the car kept its old model.
+
 | Name | What it is |
 | --- | --- |
-| `<model>.dff` | The model. Its basename IS `<model>` — the folder name is free text and is never parsed. |
+| `<model>.dff` | The model, where `<model>` is the folder's slot. A folder may ship MORE dffs (a bodykit — `exh_a_l.dff`, `bbb_lr_slv1.dff`); they all reach the archive, and none of them is the car. |
 | `<model>.txd` | Its dictionary. |
 | `<model><N>.txd` | Extra numbered dictionaries (`previon1.txd`); they ship into `gta3.img` alongside. |
 | `<model>.settings.txt` | **Settings** — the car's data lines (below). |
@@ -36,6 +58,26 @@ the build keys off it.
 - Both files are decoded by the encoding they were **saved** in: a BOM decides, and with no BOM the parity of
   the NUL bytes does (UTF-16 is what most Windows-authored mods ship). Read as UTF-8 a UTF-16 file parses to
   nothing at all, silently.
+
+### The `vehicles` folder itself — `models/` + `new/`
+
+`mods-src/<game>/vehicles` has two legal shapes, and `resolveVehicleSources` (`@opensa/tool-kit/vehicles-dir`)
+decides which one it is looking at. Every tool that reads this folder goes through it, so the driving fleet
+and the cutscene fleet cannot disagree about what is in the build.
+
+| Folder | What it is |
+| --- | --- |
+| _(any other name)_ | **Flat tree** — one car, exactly as before. Present in a flat tree, this is a car; present beside `models/`, it is an ERROR (see below). |
+| `models/` | The installed fleet. One folder per slot. |
+| `new/` | Candidates. A car here **replaces** the `models/` car holding the same slot — trying a replacement costs no rename, move or deletion. A slot `models/` does not have simply installs. |
+| `screenshots/` | Pictures. Never installed, never scanned for a car. |
+
+Three things are refused rather than guessed, each because guessing installs a fleet nobody asked for:
+a **stray folder** beside the reserved ones (which is what a misspelled `New/`, `model/` or `Screenshots` is,
+and also a car folder left at the top level), **two reserved folders differing only in case** (one folder on
+macOS and Windows), and **two folders in one layer claiming one slot** (the loser would install and then be
+overwritten by whoever came last alphabetically). Every override is logged — `new/<candidate> replaces
+models/<incumbent>` — because a fleet that changed silently is the failure this shape exists to prevent.
 
 ### `<model>.settings.txt` — the data lines
 

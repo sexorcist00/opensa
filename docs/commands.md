@@ -113,7 +113,11 @@ npx tsx tools/vehicle-installer/src/cli.ts --rebake gostown --only previon
 npx tsx tools/vehicle-installer/src/cli.ts --rebake gostown            # every mod car of that game
 ```
 
-Defaults: `--target build/<game>/opensa` · `--in mods-src/<game>/vehicles` (both overridable). Per car it
+Defaults: `--target build/<game>/opensa` · `--in mods-src/<game>/vehicles` (both overridable). **Which cars
+that folder holds**: every subfolder of a flat tree, or `models/` overridden per SLOT by `new/` in a
+structured one — drop a candidate into `new/` and every vehicle command takes it instead of the incumbent,
+with nothing renamed or deleted ([plan 007](../tools/vehicle-installer/docs/plans/007-models-and-new.md),
+contract `docs/contracts/vehicles.md` §1). Per car it
 merges its `*.settings.txt` into the BUILT `data/*`, merges its `features.txt` line into
 `data/vehicle-features.txt`, re-converts its `dff`/`txd` and REPLACES `<model>.osm` in whichever
 `models/*.img` holds it. Idempotent, and it touches nothing else in the tree.

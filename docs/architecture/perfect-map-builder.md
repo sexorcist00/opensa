@@ -141,6 +141,18 @@ Rule: [`restrictions/architecture.md`](../restrictions/architecture.md). What on
 other is answered empirically by `scripts/debug/mod-layer-conflicts.ts`, and the ids two mods claim for
 different models by `scripts/debug/mod-id-collisions.ts`.
 
+## A vehicles folder may carry candidates (vehicle-installer plan 007)
+
+`mods-src/<game>/vehicles` is either FLAT — every subfolder a car — or STRUCTURED: `models/` (the fleet),
+`new/` (candidates) and `screenshots/` (never installed). A car in `new/` REPLACES the `models/` car holding
+the same SLOT — the folder name's first field, `<slot> - <car> - <author>` — so an A/B renames nothing.
+
+Unlike the mods layering this is **not** target-dependent, so it costs the pipeline nothing: no stage is
+refused and both the `vehicles` stage and its `cutscene` shadow read the folder through the one resolver,
+`@opensa/tool-kit/vehicles-dir`. That sharing is the point — the cutscene fleet is built from the cars the
+install chose, and a second reading of the tree is how the two drift apart. Contract (including the three
+shapes it refuses): [`contracts/vehicles.md`](../contracts/vehicles.md) §1.
+
 ## Per-game data files (`mods-src/<game>/`, also honoured at the mods-src root)
 
 Curated JSON, one concern each — a TC without a file simply gets none:

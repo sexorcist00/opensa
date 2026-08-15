@@ -8,12 +8,20 @@ tsx tools/vehicle-installer/src/cli.ts --game ./game-src/original --in ./1 --out
 ```
 
 - `--game` — base game tree (`gta.dat` + `data/` + `models/gta3.img` …)
-- `--in` — folder of vehicles; each immediate subfolder is one vehicle (descriptive name ignored — the model name
-  is the file basename):
+- `--in` — folder of vehicles; each immediate subfolder is one vehicle, named `<slot> - <car> - <author>`:
   ```
   1/
     alpha - 1994 Dodge Stealth RT - mad_driver/   alpha.dff  alpha.txd  alpha1.txd … alpha4.txd  alpha.settings.txt
     ambulan - 1982 Ford E-350 - 533/              ambulan.dff  ambulan.txd  ambulan.settings.txt
+  ```
+  It may also be **structured**, and then a candidate in `new/` replaces the `models/` car holding the same
+  slot — an A/B that renames nothing ([plan 007](./docs/plans/007-models-and-new.md), contract
+  `docs/contracts/vehicles.md` §1):
+  ```
+  mods-src/original/vehicles/
+    models/       admiral - 1976 Mercedes-Benz 230 - k1real24/     ← the fleet
+    new/          admiral - 1994 Dodge Stealth RT 1.1 - mad_driver/ ← installed instead
+    screenshots/  admiral - 1976 Mercedes-Benz 230 - k1real24.png   ← never installed
   ```
 - `--out` — output install dir (**wiped + rebuilt** each run)
 - `--strip` — _(optional, off by default)_ reduce the output to **only** the installed vehicles (see below)
@@ -97,4 +105,4 @@ The result is a minimal, self-contained pack of just the installed cars. Off by 
   trim it; (2) wire the engine population/traffic system to read `cargrp.dat`. Needs a separate plan when picked up.
 
 See [docs/plans/](./docs/plans/) (`001` architecture · `002` install + settings · `003` custom palette · `004`
-strip).
+strip · `005` node API · `006` rebake · `007` `models/` + `new/`).
