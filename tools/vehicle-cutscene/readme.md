@@ -28,6 +28,10 @@ npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src
 npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --out <dir> --no-base-copy
 ```
 
+`--in` is read by the SAME resolver `vehicle-installer` uses (`@opensa/tool-kit/vehicles-dir`), so a
+structured folder — `models/` overridden per slot by `new/` — gives the cutscene fleet exactly the cars the
+driving fleet got (vehicle-installer [plan 007](../vehicle-installer/docs/plans/007-models-and-new.md)).
+
 - [001 — architecture + research record](docs/plans/001-architecture.md) (the census, the rig contract,
   the decisions)
 - [002 — implementation](docs/plans/002-implementation.md) (prioritized steps, field gates)

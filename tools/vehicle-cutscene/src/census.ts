@@ -1,7 +1,8 @@
 import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { cleanLines, sectionedParse } from '@opensa/renderware/parsers/text/text-lines';
+import { resolveVehicleSources } from '@opensa/tool-kit/vehicles-dir';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 /**
  * The census of one `--game` tree: every cutscene VEHICLE model, plus the txdcut.ide rows that point at
@@ -157,20 +158,25 @@ function branchOf(ideType: string): CutsceneBranch {
   return ideType === 'bike' || ideType === 'bmx' ? 'bike' : 'car';
 }
 
+/**
+ * Which folders are in the build is `resolveVehicleSources`' call — the SAME one `vehicle-installer` makes,
+ * so a structured `--in` (`models/` overridden per slot by `new/`) gives the cutscene fleet exactly the cars
+ * the driving fleet got (vehicle-installer plan 007). Reading the tree here on its own terms is how a
+ * cutscene set drifts from the game it belongs to.
+ *
+ * The MODEL still comes from the `.dff` basename, never from the folder name: a slot is matched to whoever
+ * ships its donor geometry, and one folder can ship several models.
+ */
 function indexModFolders(inPath: string): Map<string, { folder: string; hasTxd: boolean }> {
   const mods = new Map<string, { folder: string; hasTxd: boolean }>();
-  const folders = readdirSync(inPath, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort((a, b) => a.localeCompare(b));
-  for (const folder of folders) {
-    const files = readdirSync(join(inPath, folder)).map((file) => file.toLowerCase());
+  for (const source of resolveVehicleSources(inPath).sources) {
+    const files = readdirSync(source.folder).map((file) => file.toLowerCase());
     for (const file of files) {
       if (!file.endsWith('.dff')) {
         continue;
       }
       const model = file.slice(0, -'.dff'.length);
-      mods.set(model, { folder, hasTxd: files.includes(`${model}.txd`) });
+      mods.set(model, { folder: relative(inPath, source.folder), hasTxd: files.includes(`${model}.txd`) });
     }
   }
 
