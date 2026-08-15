@@ -15,6 +15,9 @@ import { guardOut } from '@opensa/vehicle-installer/install';
 import { cpSync, existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import type { ConvertReport } from './rig/emit';
+import type { SeatPoint } from './seats';
+
 import { wheelAnimPoses } from './anim-poses';
 import {
   type Census,
@@ -29,6 +32,7 @@ import { appendTextures, composePlatePair, PLATE_TOWNS, plateTextFor } from './p
 import { convertBike } from './rig/bike';
 import { convertBoat } from './rig/boat';
 import { convertCar } from './rig/car';
+import { patchActorSeats } from './seat-patch';
 import { patchWheelStashes } from './stash-patch';
 import { extractBikeTemplate, extractBoatTemplate, extractCarTemplate, toArrayBuffer } from './template';
 import { emptyTxd, referencesPlates, textureNames, unresolvedTextures } from './txd';
@@ -48,6 +52,8 @@ export interface CutsceneInstallOptions {
 }
 
 export interface CutsceneInstallSummary {
+  /** `<scene.ifp> <car> <actor> <dz>` rows lifted by the seat retarget (plan 005); absent = none. */
+  actorsSeated?: string[];
   converted: string[];
   errors: { csName: string; message: string }[];
   imgBytesAfter: number;
@@ -76,6 +82,8 @@ interface SlotContext {
   /** Plate-text override (`--plate`), already cut to eight cells; undefined = per-slot text. */
   plateOverride?: string;
   plateTown: (typeof PLATE_TOWNS)[string];
+  /** Per cs model (lowercased): the seat points the converter resolved — the seat retarget's input. */
+  seatsBySlot: Map<string, readonly SeatPoint[]>;
   selfContainedTxd: boolean;
   /** Per cs model: wheel-bone frame-0 anim translations from `anim/cuts.img` (round 16 — the anims'
    *  pose overrides a lying bind; csglendale92 binds its left wheels crossed). */
@@ -113,6 +121,7 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
     gta3: openArchive(new Uint8Array(readFileSync(join(gamePath, 'models', 'gta3.img')))),
     ...(plateOverride !== undefined ? { plateOverride } : {}),
     plateTown: PLATE_TOWNS[town],
+    seatsBySlot: new Map(),
     selfContainedTxd: options.selfContainedTxd === true,
     wheelPoses: loadWheelPoses(gamePath),
   };
@@ -144,9 +153,38 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
   writeImgFile(img, imgPath);
   summary.imgBytesAfter = statSync(imgPath).size;
   patchTxdcut(outPath, census);
-  sinkWheelStashes(gamePath, outPath, cornerBinds, summary);
+  patchCutsceneAnims(gamePath, outPath, cornerBinds, context, summary);
 
   return summary;
+}
+
+/**
+ * Is this cutscene object an ACTOR? A SKINNED clump is — the same test perfect-cutscene's ASI makes at
+ * runtime (`GetAnimHierarchyFromSkinClump`), and the only one that works: model TYPE cannot tell them
+ * apart (every cutscene object reports 5, the shared CUTOBJ slots) and a name rule would be a guess.
+ * Props ride vehicles too, and without this the mothership's `csmstand` matched a seat point and was
+ * lifted 1.6 m. Cutscene peds live in `cutscene.img`, EXCEPT the player: `csplay` is in `gta3.img`.
+ */
+function actorPredicate(gamePath: string, context: SlotContext): (model: string) => boolean {
+  const cutscene = openArchive(new Uint8Array(readFileSync(join(gamePath, 'models', 'cutscene.img'))));
+  const known = new Map<string, boolean>();
+
+  return (model: string): boolean => {
+    const cached = known.get(model);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const dff = cutscene.get(`${model}.dff`) ?? context.gta3.get(`${model}.dff`);
+    let skinned = false;
+    try {
+      skinned = dff !== null && parseDff(dff).geometries.some((geometry) => geometry.skin !== undefined);
+    } catch {
+      skinned = false; // an unreadable clump is not evidence of an actor
+    }
+    known.set(model, skinned);
+
+    return skinned;
+  };
 }
 
 function convertSlot(
@@ -168,13 +206,14 @@ function convertSlot(
       throw new Error(`cutscene.img has no ${slot.csName}.dff`);
     }
     const modDff = new Uint8Array(readFileSync(join(inPath, folder!, `${slot.model}.dff`)));
-    const { dff } = convertSlotDff(
+    const { dff, report } = convertSlotDff(
       slot.branch,
       modDff,
       vanilla,
       context.wheelPoses.get(slot.csName.toLowerCase()),
       PANE_SUPPRESSED_SLOTS.has(slot.csName.toLowerCase()),
     );
+    context.seatsBySlot.set(slot.csName.toLowerCase(), report.seats);
     const { baked, bytes } = bakePaintMarkers(dff, paintColoursFor(context.carcols, slot.model));
     const txd = slotTxd(slot, bytes, join(inPath, folder!, `${slot.model}.txd`), context);
 
@@ -215,7 +254,7 @@ function convertSlotDff(
   vanilla: Uint8Array,
   wheelPoses?: ReadonlyMap<string, readonly [number, number, number]>,
   suppressWindowPanes = false,
-): { dff: Uint8Array } {
+): { dff: Uint8Array; report: ConvertReport } {
   if (branch === 'bike') {
     return convertBike(modDff, extractBikeTemplate(vanilla));
   }
@@ -234,6 +273,40 @@ function loadWheelPoses(gamePath: string): ReadonlyMap<string, ReadonlyMap<strin
   }
 
   return wheelAnimPoses(new Uint8Array(readFileSync(cutsPath)));
+}
+
+/**
+ * Emit the patched `anim/cuts.img` when the game tree ships one. TWO passes write the same file — the
+ * wheel-stash sink (round 20) and the seat retarget (plan 005) — so they CHAIN through one buffer and
+ * one write; running them as separate reads would silently drop whichever wrote first.
+ */
+function patchCutsceneAnims(
+  gamePath: string,
+  outPath: string,
+  cornerBinds: ReadonlyMap<string, ReadonlyMap<string, number>>,
+  context: SlotContext,
+  summary: CutsceneInstallSummary,
+): void {
+  const cutsPath = join(gamePath, 'anim', 'cuts.img');
+  if (!existsSync(cutsPath)) {
+    return;
+  }
+  let bytes: Uint8Array<ArrayBufferLike> = new Uint8Array(readFileSync(cutsPath));
+  let touched = false;
+
+  const stashes = patchWheelStashes(bytes, cornerBinds);
+  if (stashes.bytes) {
+    [bytes, touched] = [stashes.bytes, true];
+    summary.wheelStashesSunk = stashes.patched;
+  }
+  const seats = patchActorSeats(bytes, context.seatsBySlot, actorPredicate(gamePath, context));
+  if (seats.bytes) {
+    [bytes, touched] = [seats.bytes, true];
+    summary.actorsSeated = seats.patched;
+  }
+  if (touched) {
+    writeFileSync(join(outPath, 'anim', 'cuts.img'), bytes);
+  }
 }
 
 /**
@@ -257,24 +330,6 @@ function patchTxdcut(outPath: string, census: Census): void {
 
 function rowIsMissing(text: string, slot: CutsceneSlot): boolean {
   return !new RegExp(`^${slot.csName}\\s*,`, 'm').test(text);
-}
-
-/** Emit the stash-sunk `anim/cuts.img` (round 20, `stash-patch.ts`) when the game tree ships one. */
-function sinkWheelStashes(
-  gamePath: string,
-  outPath: string,
-  cornerBinds: ReadonlyMap<string, ReadonlyMap<string, number>>,
-  summary: CutsceneInstallSummary,
-): void {
-  const cutsPath = join(gamePath, 'anim', 'cuts.img');
-  if (!existsSync(cutsPath)) {
-    return;
-  }
-  const result = patchWheelStashes(new Uint8Array(readFileSync(cutsPath)), cornerBinds);
-  if (result.bytes) {
-    writeFileSync(join(outPath, 'anim', 'cuts.img'), result.bytes);
-    summary.wheelStashesSunk = result.patched;
-  }
 }
 
 /**

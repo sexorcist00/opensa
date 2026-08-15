@@ -93,9 +93,31 @@ the follow-up, which needs a blend and its own field round.
       **+0.309** and **+0.269**. Matching is x/y only — z is the quantity under correction and may not
       be its own evidence — and the mod's seat also sits ~0.15 m FORWARD of where the scene puts them,
       which v1 deliberately leaves alone.
-- [ ] **3. The patch pass.** Sibling to `stash-patch.ts`: for every fully-seated (car, actor) pair, lift
+- [x] **3. The patch pass.** Sibling to `stash-patch.ts`: for every fully-seated (car, actor) pair, lift
       the actor's root channel by the derived z delta. Verification: rebuilt `cuts.img` where SMOKE2B's
       csplay offset reads z ≈ +0.161, every other channel byte-identical.
+      **DONE 2026-08-15** — `src/seat-patch.ts`, reported by the CLI; suite 107/107. The build says
+      exactly one site, the one the field reported:
+      `actor seated on the donor's own seat: smoke2b.ifp csglendale92 csplay +0.270`, and SMOKE2B's
+      csplay offset goes `−0.11 → +0.16` against the donor seat at +0.159.
+
+      Three gates were needed to get from "five candidate pairs" to that one site, and each was
+      forced by a measurement:
+
+      1. **The actor test is SKINNEDNESS**, the same one perfect-cutscene's ASI makes at runtime.
+         Without it the mothership's `csmstand` — a prop — matched a seat point and was lifted 1.6 m.
+         Model TYPE cannot do it (every cutscene object reports 5) and a name rule would be a guess.
+         Cutscene peds live in `cutscene.img` EXCEPT the player: `csplay` is in `gta3.img`.
+      2. **98 % seated**, so `cssmoke` (85 %) and `csstew` (92 %) keep their authored tracks rather
+         than floating on the way to the door.
+      3. **A 0.05 m deadband.** R* authored the scenes at the stock seat but only to within 0.03 m, so
+         a smaller delta is authoring noise — FINAL2B's two actors (0.03 m each) stay untouched.
+
+      **The chaining trap, caught in review:** the wheel stash and the seat retarget write the SAME
+      `anim/cuts.img`. They now run through one buffer and one write; as two independent reads the
+      second would silently have dropped the first. Verified in the built archive — `synd_4a.ifp`
+      differs by 16 bytes (round 20's four wheel channels) AND `smoke2b.ifp` by 2685 (csplay's root),
+      while `final2b.ifp` and `riot_4b.ifp` are byte-identical to vanilla.
 - [ ] **4. Field.** SMOKE2B and FINAL2B, one sitting. LOOK-FOR: the occupants read through the glass at
       seat height; head clear of the roof (our glendale's is 0.27 m taller, so there is room); hands and
       feet not obviously detached from wheel and floor — the pose is R\*'s and only the root moved.

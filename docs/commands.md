@@ -109,7 +109,9 @@ spawn it by name to look at it ([plan 006](../tools/vehicle-installer/docs/plans
 ```bash
 # which cutscene models exist, which mod is the donor, is everything in place (writes nothing):
 npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --inspect
-# convert the fleet into an output game (base copied; cutscene.img rebuilt; txdcut.ide patched):
+# convert the fleet into an output game (base copied; cutscene.img rebuilt; txdcut.ide patched;
+# anim/cuts.img re-emitted when two SCENE-VALUE passes find work — the wheel-stash sink and the seat
+# retarget, both reported per row in the summary):
 npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --out <dir>
 # --only bobcat,cszr350 restricts slots; --self-contained-txd embeds each MOD's TXD (for a target whose
 # gameplay stays stock, e.g. the reference bottle). All three branches convert (car/bike/boat) —
