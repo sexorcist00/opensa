@@ -258,7 +258,10 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   if (populated(subfolders.vehicles)) {
     chain.push({
       name: 'vehicles',
-      run: (game, out) => installVehicles({ gamePath: game, inPath: source(subfolders.vehicles), outPath: out }),
+      // The installer returns the archive FAMILY it wrote (one file, or numbered siblings once the cap
+      // bites). Registering a sibling in `gta.dat` belongs to the split stage, not here — img-splitter plan
+      // 001 step 4 — so this stage contributes no fragment yet and the installer warns if one appears.
+      run: (game, out) => void installVehicles({ gamePath: game, inPath: source(subfolders.vehicles), outPath: out }),
     });
   }
   // The cutscene stage exists only downstream of a RUN vehicles stage: the conversion reads the installed

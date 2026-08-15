@@ -1,10 +1,19 @@
 import { buildVer2Buffer, VER2_MAX_ENTRY_BYTES } from '@opensa/renderware/archive/img-archive';
-import { closeSync, ftruncateSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  ftruncateSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { createImg, openImg, writeImgFile } from './img';
+import { createImg, openImg, writeImgFamily, writeImgFile } from './img';
 
 /** Two-entry VER2 archive bytes to open + edit. */
 function sampleImg(): Uint8Array {
@@ -50,6 +59,93 @@ describe('EditableImg', () => {
       expect([...(rebuilt.get('alpha.dff') ?? []).slice(0, 2)]).toEqual([9, 9]);
       expect([...(rebuilt.get('gamma.dff') ?? []).slice(0, 1)]).toEqual([7]);
       expect(rebuilt.has('beta.dff')).toBe(false);
+    });
+  });
+});
+
+describe('writeImgFamily', () => {
+  let dir: string;
+
+  /** An archive of `count` entries, each `bytes` long — enough to push a small cap over. */
+  function padded(count: number, bytes: number): ReturnType<typeof openImg> {
+    const img = openImg(buildVer2Buffer([]));
+    for (let index = 0; index < count; index += 1) {
+      img.set(`e${index}.dff`, new Uint8Array(bytes).fill(index + 1));
+    }
+
+    return img;
+  }
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'img-family-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it('never exceeds the cap, and never splits a single entry across files', () => {
+      const written = writeImgFamily(padded(4, 3000), join(dir, 'veh.img'), 3 * 2048 + 2048);
+
+      expect(written.length).toBeGreaterThan(1);
+      for (const member of written) {
+        expect(member.bytes).toBeLessThanOrEqual(3 * 2048 + 2048);
+        expect(member.entries).toBeGreaterThan(0);
+      }
+    });
+
+    it('deletes a stale sibling a shorter run leaves behind', () => {
+      // A leftover vehicles3.img would stay registered in gta.dat and serve superseded entries.
+      writeImgFamily(padded(4, 3000), join(dir, 'veh.img'), 3 * 2048 + 2048);
+      expect(existsSync(join(dir, 'veh2.img'))).toBe(true);
+
+      writeImgFamily(padded(1, 8), join(dir, 'veh.img'));
+
+      expect(existsSync(join(dir, 'veh.img'))).toBe(true);
+      expect(existsSync(join(dir, 'veh2.img'))).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('writes ONE file when everything fits, at the base name', () => {
+      const written = writeImgFamily(padded(3, 8), join(dir, 'veh.img'));
+
+      expect(written.map((member) => member.path)).toEqual([join(dir, 'veh.img')]);
+      expect(written[0].entries).toBe(3);
+    });
+
+    it('spills into numbered siblings, keeping every entry and its bytes', () => {
+      // A 3000-byte entry costs two whole sectors plus its 32-byte directory row, on top of the leading
+      // directory sector every file starts with — so this cap holds exactly two of them.
+      const twoEntries = 2048 + 2 * (2 * 2048 + 32);
+      const written = writeImgFamily(padded(5, 3000), join(dir, 'veh.img'), twoEntries);
+
+      expect(written.map((member) => member.path)).toEqual([
+        join(dir, 'veh.img'),
+        join(dir, 'veh2.img'),
+        join(dir, 'veh3.img'),
+      ]);
+      const found = new Map<string, number>();
+      for (const member of written) {
+        const img = openImg(new Uint8Array(readFileSync(member.path)));
+        for (const name of img.names()) {
+          found.set(name, (img.get(name) ?? [])[0] ?? 0);
+        }
+      }
+      expect(found.size).toBe(5);
+      for (let index = 0; index < 5; index += 1) {
+        expect(found.get(`e${index}.dff`)).toBe(index + 1);
+      }
+    });
+
+    it('sizes a staged entry by stat, so planning reads nothing', () => {
+      writeFileSync(join(dir, 'big.dff'), new Uint8Array(5000));
+      const img = openImg(buildVer2Buffer([]));
+      img.setFile('big.dff', join(dir, 'big.dff'));
+
+      expect(img.size('big.dff')).toBe(5000);
+      expect(img.size('absent.dff')).toBe(0);
     });
   });
 });

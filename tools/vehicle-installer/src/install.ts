@@ -1,6 +1,8 @@
-import { createImg, openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
+import type { ArchiveFamilyMember } from '@opensa/tool-kit/archive/img';
+
+import { createImg, openImg, writeImgFamily } from '@opensa/tool-kit/archive/img';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, parse, resolve, sep } from 'node:path';
+import { basename, dirname, join, parse, resolve, sep } from 'node:path';
 
 import { applyVehicle } from './apply-vehicle';
 import { formatFeatureTable } from './features';
@@ -36,7 +38,7 @@ export function guardOut(outPath: string, gamePath: string, inPath: string): voi
  * (alphabetical — order only matters when two vehicles touch the same stock model; last wins). Each vehicle's
  * dff/txd land in `gta3.img` and its settings merge into the four data files.
  */
-export function install(options: InstallOptions): void {
+export function install(options: InstallOptions): ArchiveFamilyMember[] {
   const gamePath = resolve(options.gamePath);
   const inPath = resolve(options.inPath);
   const outPath = resolve(options.outPath);
@@ -56,7 +58,14 @@ export function install(options: InstallOptions): void {
   // ONE archive for the whole run: opened here, staged by each vehicle, written once at the end. Per-car
   // rebuilds cost O(n) passes over a growing multi-GB file and the last of them crossed `writeFileSync`'s
   // 2 GiB ceiling outright (2026-08-15) — this is both the speed fix and the ceiling fix.
-  const imgPath = join(outPath, 'models', 'gta3.img');
+  // WHICH archive, read off the tree rather than configured: a split tree owns `models/vehicles.img` and
+  // that is where a car belongs; an unsplit one has only `gta3.img`. Getting this from the output means one
+  // installer serves both shapes, and a car never lands in an archive the split has moved its stock twin out of.
+  const imgPath = join(
+    outPath,
+    'models',
+    existsSync(join(outPath, 'models', 'vehicles.img')) ? 'vehicles.img' : 'gta3.img',
+  );
   const img = existsSync(imgPath) ? openImg(new Uint8Array(readFileSync(imgPath))) : createImg();
   for (const vehicle of vehicles) {
     const applied = applyVehicle(join(inPath, vehicle), outPath, { img });
@@ -72,10 +81,19 @@ export function install(options: InstallOptions): void {
       features.set(applied.model, applied.features);
     }
   }
-  // Written through the streaming writer, not `writeFileSync(img.build())`: the buffered path caps at 2 GiB
-  // and this archive is past it on the original's mod set (1.24 GB of map + 3.08 GB of cars).
+  // Written as a FAMILY, not one file: the buffered path caps at 2 GiB and so does every reader, and this
+  // archive is past it on the original's mod set (1.24 GB of map + 3.08 GB of cars). The cap is now enforced
+  // by construction rather than discovered mid-build.
   mkdirSync(dirname(imgPath), { recursive: true });
-  writeImgFile(img, imgPath);
+  const archives = writeImgFamily(img, imgPath);
+  if (archives.length > 1) {
+    // A sibling only reaches the game once something writes its `IMG` line into gta.dat. Until the split
+    // stage owns that (img-splitter plan 001 step 4), say so — an unregistered archive is invisible content.
+    console.warn(
+      `  ! vehicle-installer wrote ${archives.length} archives (${archives.map((a) => basename(a.path)).join(', ')}) — ` +
+        'the siblings must be registered in gta.dat or their entries never load',
+    );
+  }
   // The declarations travel as DATA in the built game dir, because the converter runs later and in another
   // process; `opensa-pack` reads this file when it bakes each car. Written only when a mod declared
   // something, so a plain install leaves no stray file.
@@ -97,4 +115,6 @@ export function install(options: InstallOptions): void {
       `, ${models.size} slot(s) in the mod ledger)` +
       (options.strip ? ' [stripped to installed]' : ''),
   );
+
+  return archives;
 }

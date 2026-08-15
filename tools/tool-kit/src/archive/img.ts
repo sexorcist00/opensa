@@ -1,7 +1,7 @@
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
 
 import { assertVer2EntrySize, buildVer2Buffer, openArchive } from '@opensa/renderware/archive/img-archive';
-import { closeSync, ftruncateSync, openSync, readFileSync, statSync, writeSync } from 'node:fs';
+import { closeSync, existsSync, ftruncateSync, openSync, readFileSync, rmSync, statSync, writeSync } from 'node:fs';
 
 /**
  * An **editable** GTA IMG (VER2) archive: open, read, add-with-replace, delete, then rebuild a fresh `.img`.
@@ -33,6 +33,15 @@ export interface EditableImg {
    * stage everything, write once — would otherwise have traded that I/O for 3 GB of resident buffers.
    */
   setFile(name: string, path: string): void;
+  /**
+   * An entry's byte length WITHOUT materialising it — `stat` for a staged file, the buffer's length for one
+   * held in memory. `0` for an absent or deleted entry.
+   *
+   * This exists so {@link writeImgFamily} can decide where the cap falls before writing anything: planning
+   * through `get` would read the whole staged mod set into memory, which is the cost {@link setFile} was
+   * added to avoid.
+   */
+  size(name: string): number;
 }
 
 /** A fresh, empty {@link EditableImg} to populate with `set` and `build` (e.g. a new LOD archive). */
@@ -105,6 +114,17 @@ export function editArchive(archive: ImgArchive): EditableImg {
       overrides.delete(key(name));
       staged.set(key(name), path);
     },
+    size(name: string): number {
+      if (deleted.has(key(name))) {
+        return 0;
+      }
+      const file = staged.get(key(name));
+      if (file !== undefined) {
+        return statSync(file).size;
+      }
+
+      return overrides.get(key(name))?.length ?? readOriginal(name)?.length ?? 0;
+    },
   };
 
   return img;
@@ -116,6 +136,68 @@ export function openImg(bytes: Uint8Array): EditableImg {
 }
 
 const SECTOR = 2048;
+
+/**
+ * The most one archive FILE may hold, and the reason is the host rather than the game or the format.
+ *
+ * `readFileSync` throws `ERR_FS_FILE_TOO_LARGE` past 2 GiB while the positional write path has no ceiling at
+ * all, so a stage can emit an archive that every stage after it fails to open — measured, with the build that
+ * hit it, in `docs/edge-cases/converter-pipeline.md`. VER2 itself addresses entries in uint32 sectors and has
+ * room for terabytes.
+ *
+ * 1.75 GiB leaves ~200 MB under the wall: enough for a directory, for whole-sector padding on every entry,
+ * and for the next mod somebody installs without re-deciding this number.
+ */
+export const ARCHIVE_CAP_BYTES = 1.75 * 1024 ** 3;
+
+/** One file of an archive FAMILY — `vehicles.img`, `vehicles2.img`, … */
+export interface ArchiveFamilyMember {
+  bytes: number;
+  entries: number;
+  path: string;
+}
+
+/**
+ * Write an {@link EditableImg} as a FAMILY of archives, none of them over {@link ARCHIVE_CAP_BYTES}:
+ * `<stem>.img`, then `<stem>2.img`, `<stem>3.img` as the cap is reached.
+ *
+ * **The cap belongs to the writer, not to whoever decided the layout.** An archive crosses the ceiling while
+ * an installer is adding its 212th car, not while the buckets are being chosen — so the only place that can
+ * bound it is the code doing the growing. Splitting a bucket in two is safe because the game resolves an
+ * entry by NAME across every registered archive; what it costs is one slot in `CStreaming::ms_files`, which
+ * is why callers still have to budget for the count (`img-splitter`'s `assertArchiveSlots`).
+ *
+ * Entries are placed greedily in `names()` order, so a family is stable for a given input and no entry is
+ * ever moved for its own sake. **Stale siblings from an earlier, longer run are deleted**: leaving
+ * `<stem>3.img` behind would keep a `gta.dat` line pointing at an archive holding superseded entries.
+ */
+export function writeImgFamily(img: EditableImg, basePath: string, cap = ARCHIVE_CAP_BYTES): ArchiveFamilyMember[] {
+  const groups: string[][] = [[]];
+  let used = SECTOR; // the leading directory sector every file starts with
+  for (const name of img.names()) {
+    // What the entry costs the FILE: whole sectors of data plus its 32-byte directory row.
+    const cost = Math.max(1, Math.ceil(img.size(name) / SECTOR)) * SECTOR + 32;
+    const current = groups[groups.length - 1];
+    if (current.length > 0 && used + cost > cap) {
+      groups.push([]);
+      used = SECTOR;
+    }
+    groups[groups.length - 1].push(name);
+    used += cost;
+  }
+
+  const written = groups.map((names, index) => {
+    const path = familyPath(basePath, index);
+    writeImgFile({ ...img, names: () => names }, path);
+
+    return { bytes: statSync(path).size, entries: names.length, path };
+  });
+  for (let index = written.length; existsSync(familyPath(basePath, index)); index += 1) {
+    rmSync(familyPath(basePath, index));
+  }
+
+  return written;
+}
 
 /**
  * Stream an {@link EditableImg} to a VER2 `.img` **file** — the low-memory sibling of `build()`: entries are
@@ -155,4 +237,9 @@ export function writeImgFile(img: EditableImg, path: string): void {
   } finally {
     closeSync(fd);
   }
+}
+
+/** `…/vehicles.img` + 0 → `…/vehicles.img`; + 1 → `…/vehicles2.img`. */
+function familyPath(basePath: string, index: number): string {
+  return index === 0 ? basePath : basePath.replace(/\.img$/i, `${index + 1}.img`);
 }

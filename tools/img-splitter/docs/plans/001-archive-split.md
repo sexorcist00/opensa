@@ -98,11 +98,31 @@ Every step ends with its verification; a step without recorded numbers is unfini
       `CARREC | SCRIPT | CUTSCENE | VEHICLES | PEDS | WEAPONS`.
       **And the slot arithmetic is now demonstrated rather than argued**: `slots: {needed: 9, stock: 8}` — the
       run only completed because it was given `liftedArchiveLimit`, and that is with NO vehicle spill yet.
-- [ ] **3. The cap and the spill, in the shared writer.** `tool-kit` gains a bucket-aware write that opens
-      `<name>.img`, and creates `<name>2.img` when the next entry would cross the cap; every installer routes
-      through it. The cap is a named constant with its reason (Node's 2 GiB read ceiling), set below it with
-      margin. Verification: a synthetic set that crosses the cap produces the sibling and loses nothing; the
-      real vehicle set (3 077 354 628 B) produces its real bucket count; no output file exceeds the cap.
+- [x] **3. The cap and the spill, in the shared writer. DONE 2026-08-15.** `tool-kit` gains
+      `ARCHIVE_CAP_BYTES` (**1.75 GiB** — under Node's 2 GiB read wall with ~200 MB for the directory, sector
+      padding and the next mod somebody installs) and `writeImgFamily`, which places entries greedily into
+      `<stem>.img`, `<stem>2.img`, … and **deletes stale siblings a shorter run leaves behind** (a leftover
+      would stay registered in `gta.dat` and serve superseded entries).
+      Planning where the cap falls needs sizes, and getting them through `get` would read the whole staged mod
+      set into memory — the cost `setFile` exists to avoid — so `EditableImg` gains **`size(name)`**: `stat`
+      for a staged file, buffer length for one held in memory.
+      vehicle-installer routes through it and now **derives WHICH archive it writes from the tree**: a split
+      tree owns `models/vehicles.img` and that is where a car belongs; an unsplit one has only `gta3.img`. One
+      installer, both shapes, and a mod car never lands in an archive the split moved its stock twin out of.
+      **Verification, real set** (`game-src/original` split, then all 212 vehicles installed):
+
+      | | Entries | Bytes | |
+      | --- | --- | --- | --- |
+      | `vehicles.img` | 458 | 1 872.6 MB | under cap |
+      | `vehicles2.img` | 332 | 1 205.2 MB | under cap |
+
+      Family size **2**, summing to 3 077.8 MB — the whole payload, nothing lost to the spill. Install 5.0 s,
+      peak RSS 2.48 GB (down from 3.11 GB: the base archive is now 50.5 MB instead of the 1.24 GB map).
+      Synthetic cases in `tool-kit`'s tests cover the sibling, the stale-sibling delete and the one-file case.
+      Numbers: [`benchmarks/tools/2026-08-15-vehicle-installer-batched-img.md`](../../../../docs/benchmarks/tools/2026-08-15-vehicle-installer-batched-img.md).
+      **Left open on purpose**: nothing registers `vehicles2.img` in `gta.dat` yet, and the installer WARNS
+      when it writes a sibling rather than letting it be invisible content. That is step 4 — which also has to
+      face the arithmetic this run makes concrete: the tree now wants **10** registered archives against 8.
 - [ ] **4. Wire it into pmb, before `mods`.** A new first stage, excludable like the rest. `checkImgIdBudgets`
       learns the bucket set instead of its four hard-coded names — an archive it does not know about is an
       under-count, and that is the silent direction. Verification: a full `sa` build completes end to end
