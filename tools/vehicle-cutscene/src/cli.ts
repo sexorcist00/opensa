@@ -5,6 +5,8 @@
  *     --in       folder of vehicle mods (immediate subfolders: <model>.dff/.txd + <model>.settings.txt) —
  *                the same folder vehicle-installer consumes
  *     --out      output game tree (base copied, models/cutscene.img rebuilt, data/txdcut.ide patched)
+ *     --no-base-copy  do NOT copy the --game tree into --out; emit only the three files this tool writes
+ *                (models/cutscene.img, data/txdcut.ide, anim/cuts.img). --out is not wiped (plan 006)
  *     --only     restrict to specific donor models (comma-separated) while iterating
  *     --inspect  print the census + per-slot readiness, write nothing (no --out needed)
  *     --self-contained-txd  on a texture-closure miss, copy the txdp parent TXD into the cs TXD
@@ -78,6 +80,7 @@ function main(): void {
   const summary = installCutscene({
     gamePath,
     inPath,
+    noBaseCopy: process.argv.includes('--no-base-copy'),
     only: only ? new Set(only.split(',').map((model) => model.trim().toLowerCase())) : undefined,
     outPath: fromCwd(outArg),
     ...(plate !== undefined ? { plate } : {}),

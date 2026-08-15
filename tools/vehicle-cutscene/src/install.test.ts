@@ -1,8 +1,9 @@
+import { buildVer2Buffer } from '@opensa/renderware/archive/img-archive';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { createImg, openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { installCutscene } from './install';
@@ -30,10 +31,28 @@ const TXDCUT_IDE = ['txdp', 'csopcarla, copcarla', 'csbobcat92, bobcat', 'csmtbi
 /** A two-colour palette + the bobcat/mtbike rows (indexes into it) — enough for the paint bake to run. */
 const CARCOLS_DAT = ['col', '10,20,30', '40,50,60', 'end', 'car', 'bobcat, 0,1', 'mtbike, 0,1', 'end'].join('\n');
 
+/** A real scene, so the two `anim/cuts.img` passes run rather than short-circuiting on a missing file. */
+const SYND_4A = new Uint8Array(readFileSync('tests/original/anim/synd_4a.ifp'));
+
 let dir: string;
 let gamePath: string;
 let inPath: string;
 let outPath: string;
+
+/** Every FILE under `root`, as `/`-joined relative paths, sorted — the shape of an emitted output. */
+function filesUnder(root: string): string[] {
+  return readdirSync(root, { recursive: true })
+    .map(String)
+    .filter((entry) => statSync(join(root, entry)).isFile())
+    .map((entry) => entry.split(sep).join('/'))
+    .sort();
+}
+
+/** Give the fixture game an `anim/cuts.img`, so both scene-value passes have something to read. */
+function seedCutsImg(): void {
+  mkdirSync(join(gamePath, 'anim'), { recursive: true });
+  writeFileSync(join(gamePath, 'anim', 'cuts.img'), buildVer2Buffer([{ data: SYND_4A, name: 'synd_4a.ifp' }]));
+}
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'vehicle-cutscene-install-'));
@@ -83,6 +102,17 @@ describe('installCutscene', () => {
   describe('negative cases', () => {
     it('refuses an --out that equals --game', () => {
       expect(() => installCutscene({ gamePath, inPath, outPath: gamePath })).toThrow('--out must differ');
+    });
+
+    // The dangerous one: without the base copy there is no wipe to warn anybody, so a run onto the live
+    // game would quietly overwrite three of its files. Case folded, because that is one folder on Windows.
+    it('refuses an --out that equals --game under --no-base-copy, whatever its case', () => {
+      expect(() => installCutscene({ gamePath, inPath, noBaseCopy: true, outPath: gamePath })).toThrow(
+        '--out must differ',
+      );
+      expect(() => installCutscene({ gamePath, inPath, noBaseCopy: true, outPath: gamePath.toUpperCase() })).toThrow(
+        '--out must differ',
+      );
     });
 
     it('collects a conversion error instead of aborting the run', () => {
@@ -158,6 +188,37 @@ describe('installCutscene', () => {
       expect(summary.converted).toEqual(['csbobcat92', 'csmtbike92']);
       const img = openImg(new Uint8Array(readFileSync(join(outPath, 'models', 'cutscene.img'))));
       expect(textureNames(img.get('csbobcat92.txd')!)).toContain('bobcat92interior128');
+    });
+
+    it('--no-base-copy emits the three written files and leaves the rest of --out alone', () => {
+      seedCutsImg();
+      mkdirSync(outPath, { recursive: true });
+      writeFileSync(join(outPath, 'notes.txt'), 'the user picked a folder of their own');
+
+      const summary = installCutscene({ gamePath, inPath, noBaseCopy: true, outPath });
+
+      expect(summary.errors).toEqual([]);
+      expect(filesUnder(outPath)).toEqual(['anim/cuts.img', 'data/txdcut.ide', 'models/cutscene.img', 'notes.txt']);
+      expect(readFileSync(join(outPath, 'notes.txt'), 'utf8')).toBe('the user picked a folder of their own');
+      // Emitted, not just present: the patched row set, read out of --game and written to --out.
+      expect(readFileSync(join(outPath, 'data', 'txdcut.ide'), 'utf8')).toContain('cscopcarsf, copcarsf');
+      expect(summary.converted).toEqual(['csbobcat92', 'csmtbike92']);
+    });
+
+    // The load-bearing check of plan 006: it is what lets the app and the pmb pipeline share one converter.
+    it('emits bytes identical to the base-copy run, file for file', () => {
+      seedCutsImg();
+      const leanPath = join(dir, 'out-lean');
+
+      const copied = installCutscene({ gamePath, inPath, outPath });
+      const lean = installCutscene({ gamePath, inPath, noBaseCopy: true, outPath: leanPath });
+
+      expect(lean.converted).toEqual(copied.converted);
+      expect(lean.imgBytesBefore).toBe(copied.imgBytesBefore);
+      expect(lean.imgBytesAfter).toBe(copied.imgBytesAfter);
+      for (const relative of [join('models', 'cutscene.img'), join('data', 'txdcut.ide'), join('anim', 'cuts.img')]) {
+        expect(readFileSync(join(leanPath, relative))).toEqual(readFileSync(join(outPath, relative)));
+      }
     });
 
     it('honours --only, converting nothing else', () => {

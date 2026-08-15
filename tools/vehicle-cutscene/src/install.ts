@@ -8,15 +8,19 @@ import { parseDff } from '@opensa/renderware/parsers/binary/dff';
  * `data/txdcut.ide` (fix R*'s `csopcarla` typo row, add the rows R* left out) so the empty-TXD route
  * (step 6) has a parent for every slot. Vanilla cs TXDs stay in place until step 6.
  *
+ * Under `noBaseCopy` (plan 006) the base copy is skipped and only the three written files land in
+ * `--out`. Every read comes from `--game` in BOTH modes — in the copy mode the copy is the game, byte
+ * for byte, so one read path serves both and the two modes cannot drift apart.
+ *
  * Per-slot conversion failures are collected and reported, never silently skipped. All three branches
  * (car / bike / boat) convert; the branch comes from the slot's `vehicles.ide` type.
  */
 import { parseCarcols, type VehicleColours } from '@opensa/renderware/parsers/text/carcols.parser';
 import { openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { openArchiveIndex } from '@opensa/tool-kit/archive/layout';
-import { guardOut } from '@opensa/vehicle-installer/install';
-import { cpSync, existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { guardOut } from '@opensa/tool-kit/game-dir';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 
 import type { ConvertReport } from './rig/emit';
 import type { SeatPoint } from './seats';
@@ -43,6 +47,11 @@ import { emptyTxd, referencesPlates, textureNames, unresolvedTextures } from './
 export interface CutsceneInstallOptions {
   gamePath: string;
   inPath: string;
+  /**
+   * Emit ONLY the three files this tool writes, instead of copying the `--game` tree into `--out` first
+   * (plan 006). `--out` is never wiped under this flag — it is a folder of the caller's choosing.
+   */
+  noBaseCopy?: boolean;
   /** Restrict conversion to these donor models / cs names (the CLI's `--only`). */
   only?: ReadonlySet<string>;
   outPath: string;
@@ -105,10 +114,13 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
   const gamePath = resolve(options.gamePath);
   const inPath = resolve(options.inPath);
   const outPath = resolve(options.outPath);
+  const noBaseCopy = options.noBaseCopy === true;
   guardOut(outPath, gamePath, inPath);
 
-  rmSync(outPath, { force: true, recursive: true });
-  cpSync(gamePath, outPath, { force: true, recursive: true });
+  if (!noBaseCopy) {
+    rmSync(outPath, { force: true, recursive: true });
+    cpSync(gamePath, outPath, { force: true, recursive: true });
+  }
 
   const census = loadCensus(gamePath);
   const readiness = matchMods(census.slots, inPath).filter(
@@ -119,9 +131,9 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
   if (!(town in PLATE_TOWNS)) {
     throw new Error(`--plate-town must be one of ${Object.keys(PLATE_TOWNS).join(' | ')} (got '${town}')`);
   }
-  const imgPath = join(outPath, 'models', 'cutscene.img');
-  const imgBytesBefore = statSync(imgPath).size;
-  const img = openImg(new Uint8Array(readFileSync(imgPath)));
+  const sourceImgPath = join(gamePath, 'models', 'cutscene.img');
+  const imgBytesBefore = statSync(sourceImgPath).size;
+  const img = openImg(new Uint8Array(readFileSync(sourceImgPath)));
   const genericTxd = new Uint8Array(readFileSync(join(gamePath, 'models', 'generic', 'vehicle.txd')));
   const plateOverride = options.plate === undefined ? undefined : plateTextFor('', options.plate);
   const context: SlotContext = {
@@ -160,10 +172,11 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
     convertSlot(entry, img, inPath, context, summary);
   }
 
-  writeImgFile(img, imgPath);
-  summary.imgBytesAfter = statSync(imgPath).size;
-  patchTxdcut(outPath, census);
-  patchCutsceneAnims(gamePath, outPath, cornerBinds, context, summary);
+  const outImgPath = join(outPath, 'models', 'cutscene.img');
+  writeImgFile(img, outImgPath);
+  summary.imgBytesAfter = statSync(outImgPath).size;
+  patchTxdcut(gamePath, outPath, census);
+  patchCutsceneAnims(gamePath, outPath, noBaseCopy, cornerBinds, context, summary);
 
   return summary;
 }
@@ -286,13 +299,29 @@ function loadWheelPoses(gamePath: string): ReadonlyMap<string, ReadonlyMap<strin
 }
 
 /**
+ * A path in `--out`, with the folder the base copy would have provided created first. `writeImgFile`
+ * does its own `mkdir`; the two plain-file writes need this one.
+ */
+function outFile(outPath: string, ...parts: readonly string[]): string {
+  const path = join(outPath, ...parts);
+  mkdirSync(dirname(path), { recursive: true });
+
+  return path;
+}
+
+/**
  * Emit the patched `anim/cuts.img` when the game tree ships one. TWO passes write the same file — the
  * wheel-stash sink (round 20) and the seat retarget (plan 005) — so they CHAIN through one buffer and
  * one write; running them as separate reads would silently drop whichever wrote first.
+ *
+ * `noBaseCopy` writes the file even when neither pass touched it: the copy mode always leaves a
+ * `cuts.img` in `--out`, and a delivery set that sometimes has three files and sometimes two is a
+ * delivery set nobody can check. Copying vanilla bytes into the game they came from is a no-op.
  */
 function patchCutsceneAnims(
   gamePath: string,
   outPath: string,
+  noBaseCopy: boolean,
   cornerBinds: ReadonlyMap<string, ReadonlyMap<string, number>>,
   context: SlotContext,
   summary: CutsceneInstallSummary,
@@ -314,8 +343,8 @@ function patchCutsceneAnims(
     [bytes, touched] = [seats.bytes, true];
     summary.actorsSeated = seats.patched;
   }
-  if (touched) {
-    writeFileSync(join(outPath, 'anim', 'cuts.img'), bytes);
+  if (touched || noBaseCopy) {
+    writeFileSync(outFile(outPath, 'anim', 'cuts.img'), bytes);
   }
 }
 
@@ -324,9 +353,8 @@ function patchCutsceneAnims(
  * `cscopcarla`; 001's research record) and append a `txdp` row for every census slot that has none
  * (`cscopcarsf`, `csdinghy`), so each slot's empty TXD can resolve through its parent.
  */
-function patchTxdcut(outPath: string, census: Census): void {
-  const path = join(outPath, 'data', 'txdcut.ide');
-  let text = readFileSync(path, 'utf8');
+function patchTxdcut(gamePath: string, outPath: string, census: Census): void {
+  let text = readFileSync(join(gamePath, 'data', 'txdcut.ide'), 'utf8');
   text = text.replace(/^csopcarla\s*,\s*copcarla\s*$/m, 'cscopcarla, copcarla');
 
   const additions = census.slots
@@ -335,7 +363,7 @@ function patchTxdcut(outPath: string, census: Census): void {
   if (additions.length > 0) {
     text = text.replace(/^end\s*$/m, `${additions.join('\n')}\nend`);
   }
-  writeFileSync(path, text);
+  writeFileSync(outFile(outPath, 'data', 'txdcut.ide'), text);
 }
 
 function rowIsMissing(text: string, slot: CutsceneSlot): boolean {
