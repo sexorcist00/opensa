@@ -12,6 +12,7 @@ All TypeScript scripts run via `npx tsx`, `.mjs` ones via `node`.
   - [test-viewer-fixtures.ts](#test-viewer-fixturests)
   - [serve-static.ts](#serve-staticts)
   - [test-fixtures.ts](#test-fixturests)
+  - [cars-server/](#cars-server)
 - [Debugging / auditing](#debugging--auditing)
   - [audit-rw-coverage.ts](#audit-rw-coveragets)
   - [inspect-area.ts](#inspect-areats)
@@ -103,6 +104,23 @@ output to `timecyc-builder/merged/`. **Full guide: [timecyc-builder.md](./timecy
 ```sh
 npm run timecyc
 ```
+
+### cars-server/
+
+A local page listing what the vehicle fleet **replaced** — the stock car beside the mod that took its slot,
+its author, the model id and what the mod brings (paint jobs, tuning, colours, a CLEO script). Internal
+tool: express + handlebars, rendered per request off `mods-src/<game>/vehicles`, so editing the tree and
+reloading shows the new fleet.
+
+```sh
+npm run cars                                # http://localhost:5178, game `original`
+npm run cars -- --game gostown --port 5200
+```
+
+It is a folder rather than a file (a view, a catalog and the bundled stock metadata), so it keeps its own
+[readme](../../scripts/cars-server/readme.md) and
+[plan](../../scripts/cars-server/docs/plans/001-cars-server.md) beside the code — including where the tags
+come from and why the three sources are joined on the SLOT and never on the folder name.
 
 ### test-fixtures.ts
 

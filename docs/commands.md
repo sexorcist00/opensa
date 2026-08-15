@@ -127,6 +127,19 @@ tool never allocates an id (it must match what a full build would write) and ref
 to another model. An added car has no traffic or parked presence until a full build writes the placements —
 spawn it by name to look at it ([plan 006](../tools/vehicle-installer/docs/plans/006-rebake.md)).
 
+### What the fleet replaced, in a browser
+
+```bash
+npm run cars                                # http://localhost:5178, game `original`
+npm run cars -- --game gostown --port 5200
+```
+
+One local page per game: every installed car with its model id, `<slot> replaced to: <car>`, the author,
+what the mod brings (paint jobs · tuning · new colours · car4 · a CLEO script), and the stock picture beside
+the field screenshot. Rendered per request off `mods-src/<game>/vehicles`, so a reload shows the tree as it
+is now; a `new/` candidate appears marked `from new/`
+([readme](../scripts/cars-server/readme.md), [plan](../scripts/cars-server/docs/plans/001-cars-server.md)).
+
 ### Cutscene vehicles: census / conversion
 
 ```bash
