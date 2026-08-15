@@ -216,6 +216,22 @@ interpret them.
   `workspaces` (the enumerate-everything trap in package.json). Suite 4 175 → 4 203. Remaining:
   the step-11 full-pipeline field acceptance (needs a build without `--exclude vehicles`).
 
+- [`session-13-img-archive-split.md`](./session-13-img-archive-split.md)
+  — 2026-08-15, the day `models/*.img` stopped being one file content could grow into. The `sa` build
+  was asked to include mod vehicles for the first time and died mid-stage at 2 168 825 856 B:
+  `vehicle-installer` rebuilt the whole archive PER CAR through `writeFileSync`, which caps at 2 GiB.
+  Fixing that produced a 4.27 GB archive **no reader in the repo can open** — `readFileSync` throws
+  `ERR_FS_FILE_TOO_LARGE` — so the answer became a typed, size-bounded layout: `tools/img-splitter`
+  classifies by the IDE section a model's row sits in (plus `carmods.dat` for the 190 mod-shop parts,
+  the user's correction, which dropped contested entries 12 → 1), the writer caps at 1.75 GiB and
+  spills into siblings, and a shared INDEX answers where a file lives instead of every tool opening
+  `gta3.img` by name. Three guards where there were none, and **three of my own guards were wrong until
+  the output was read** (a dead duplicate check, a merge an eslint reformat had silently unhooked, a
+  double close) — the suite was green through all of them. The ASI lift researched for the archive table
+  turned out unnecessary: the shipped shape registers 8 of 8, so the ceiling was never reached rather
+  than lifted, and it is deferred as an `in-reserve` card whose trigger the build's own guard names.
+  Suite 4242 → 4290; `sa` end to end 655.9 s with vehicles, the fleet and both asis.
+
 - [`session-12-cutscene-fleet-closed.md`](./session-12-cutscene-fleet-closed.md)
   — 2026-08-15, the day the whole cutscene chain closed: the sweep finished **35 of 35** and plans
   002, 004 and 005 were APPROVED and CLOSED. Two fixes came out of the last rows, and neither was

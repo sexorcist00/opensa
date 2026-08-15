@@ -118,6 +118,15 @@ resolved out of the installed archives instead of `--self-contained-txd` embeddi
 (11 102 360 B of cs TXDs in total). It is also the run that `asi/perfect-cutscene` plan 001 step 7 was waiting
 for.
 
-**And one gap the run exposes rather than closes**: `gta3.img` grew 889 MB → 1.64 GB across mods and the LOD
-stages, and nothing caps it — `mod-installer` and the LOD generators do not write through `writeImgFamily`.
-It is 500 MB under the wall today and nothing would say so if it were not.
+**And one gap the run exposed** — `gta3.img` grew 889 MB → 1.64 GB across mods and the LOD stages with
+nothing capping it — **closed the same day**: the cap moved inside `writeImgFile`, which every archive writer
+goes through, and eleven writers that still built the whole archive in one buffer were moved onto it.
+
+## The re-run with every writer streaming and capped
+
+Same inputs, same machine: **655.9 s** (against 638.9 s), exit 0, and **every archive byte-for-byte the same
+size as the run above** — `gta3` 1 635 813 376, `vehicles` 1 872 623 616, `vehicles2` 1 205 186 560,
+`cutscene` 199 106 560, `gta_int` 222 642 176, `player` 66 738 176. The sweep changed how the archives are
+written, not what is in them. Stage times: split 3.2 s · mods 74.1 · vehicles 4.9 · cutscene 5.4 · peds 5.8 ·
+optimize 87.1 · trees 87.2 · sa 385.4 · procobj 2.8. The 17 s difference sits in `sa`/`optimize`/`trees` and
+is machine noise — the suite was running against the same disk during part of it.
