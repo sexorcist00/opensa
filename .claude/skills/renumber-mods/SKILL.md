@@ -56,7 +56,9 @@ Set `DIR` to the sequence — `mods-src/$GAME/mods`, or `mods-src/$GAME/mods/<la
    cd "$DIR"
    i=0
    ls | sort -n | while IFS= read -r dir; do
-     name="${dir#*. }"
+     # Strip the leading number, INCLUDING a fractional one — `8.1 SPC Cars` is a real folder name, and
+     # `${dir#*. }` leaves it whole (there is no ". " in it), so the old number ends up inside the new one.
+     name=$(printf '%s' "$dir" | sed -E 's/^[0-9]+(\.[0-9]+)*\.? *//')
      target="$i. $name"
      if [ "$dir" != "$target" ]; then
        mv "$dir" "$target"
