@@ -417,7 +417,7 @@ bottle's `CLEO/cutscene-override.ini`).
       [`vehicle-cutscene` 006](../../../../tools/vehicle-cutscene/docs/plans/006-no-base-copy.md)
       (`--no-base-copy`, which pmb does NOT use and which makes the app viable on NTFS),
       [`@opensa/validation` 001](../../../../packages/validation/docs/plans/001-validation-package.md)
-      and [`apps/cutscene-garage` 001/002](../../../../apps/cutscene-garage/docs/plans/001-architecture.md).
+      and [`apps/cutscene-converter` 001/002](../../../../apps/cutscene-converter/docs/plans/001-architecture.md).
       They are independent of this step: pmb keeps the full-copy behaviour, the app opts out of it.
 
 ## The step-0 baseline (2026-08-14) — the standing repro

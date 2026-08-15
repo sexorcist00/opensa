@@ -1,4 +1,4 @@
-# 001 — Cutscene Garage: architecture
+# 001 — Cutscene Converter: architecture
 
 **Status: PLANNED 2026-08-15.** A standalone Windows application that puts modded cars into GTA:SA's
 cutscenes, for people who will never clone this repo. One portable `.exe`, three steps, no
@@ -42,6 +42,10 @@ copy-on-write.
 
 ## The decisions worth writing down
 
+- **The name is `cutscene-converter`, not `cutscene-garage`** (the user's call, 2026-08-15, before a
+  line was written). "Garage" binds the app to CARS, and the scope may well grow to peds and weapons;
+  what does not change is that it CONVERTS things into cutscenes. Renamed while the app was still two
+  plan files, precisely so nothing had to be renamed later.
 - **`--self-contained-txd` is always on, and never shown.** The user's game has no mod TXDs installed,
   so the txdp parent route cannot resolve; self-contained is the only correct mode here. A choice with
   exactly one correct answer is not a choice.
@@ -62,7 +66,7 @@ copy-on-write.
 ## Shape
 
 ```
-apps/cutscene-garage/
+apps/cutscene-converter/
   src/main/        # Electron main: window, dialogs, IPC, the child-process runner
   src/renderer/    # React + Tailwind — the same stack apps/web already uses
   src/shared/      # IPC message types shared by both sides
@@ -94,7 +98,7 @@ of the app — which is exactly why deferring costs nothing.
 
 ## Tutorial
 
-Versioned inside the repo — `docs/tutorial/cutscene-garage/<version>/` — and the app links to the
+Versioned inside the repo — `docs/tutorial/cutscene-converter/<version>/` — and the app links to the
 version it was built from, never to "latest". A tutorial that drifts from the screen the reader is
 looking at is worse than none.
 
@@ -108,5 +112,5 @@ looking at is worse than none.
 - **Cross-platform**: developed on macOS, shipped for Windows. Everything path-shaped needs care, and
   the `--out` == `--game` refusal must compare case-insensitively on win32.
 - **This is the first Electron app in the repo.** It adds a toolchain (electron, electron-builder) the
-  monorepo has never carried. Keep it inside `apps/cutscene-garage`; nothing else should learn about
+  monorepo has never carried. Keep it inside `apps/cutscene-converter`; nothing else should learn about
   Electron.

@@ -1,4 +1,4 @@
-# 002 — Cutscene Garage: implementation
+# 002 — Cutscene Converter: implementation
 
 **Status: PLANNED 2026-08-15.** Execution plan for
 [001-architecture](001-architecture.md). Ordered so that something runnable exists early and the
@@ -10,7 +10,7 @@ Steps 1–2 can start before either lands; step 4 needs both.
 
 ## Steps
 
-- [ ] **1. The workspace + an empty window.** `apps/cutscene-garage` in the root `workspaces`,
+- [ ] **1. The workspace + an empty window.** `apps/cutscene-converter` in the root `workspaces`,
       Electron main + a Vite/React renderer, one window with the app name. Nothing else.
       Verification: `npm run dev` in the workspace opens the window on macOS; repo lint and tsc stay
       green (the new toolchain must not leak into the root config).
@@ -38,7 +38,7 @@ Steps 1–2 can start before either lands; step 4 needs both.
 - [ ] **6. The look.** Match `apps/web`'s existing visual language rather than inventing one — same
       Tailwind tokens, same typographic scale. Verification: side-by-side screenshots; the user's
       call, since "looks like ours" is a judgement he owns.
-- [ ] **7. The tutorial.** `docs/tutorial/cutscene-garage/<version>/` — install, the three steps, what
+- [ ] **7. The tutorial.** `docs/tutorial/cutscene-converter/<version>/` — install, the three steps, what
       to copy where afterwards, and two things the app is DECIDED to be rather than apologise for:
       the SmartScreen warning (shipping unsigned, "More info → Run anyway", why it appears) and the
       CUTSCENES-ONLY scope (gameplay cars are the user's own business). The app links to its own

@@ -3,7 +3,7 @@
 **Status: PLANNED 2026-08-15.** The tool copies the whole `--game` tree into `--out` and then rewrites
 three files inside it. That is right for the pmb pipeline, where the output IS a game, and wrong
 everywhere else — most sharply on Windows, which is where
-[`apps/cutscene-garage`](../../../apps/cutscene-garage/docs/plans/001-architecture.md) will run.
+[`apps/cutscene-converter`](../../../apps/cutscene-converter/docs/plans/001-architecture.md) will run.
 
 ## Why (measured)
 

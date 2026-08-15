@@ -1,7 +1,7 @@
 # 001 — `@opensa/validation`: a shared answer to "can I proceed, and what do I tell the user?"
 
 **Status: PLANNED 2026-08-15.** A new workspace package. Its first consumer is
-[`apps/cutscene-garage`](../../../../apps/cutscene-garage/docs/plans/001-architecture.md), which has
+[`apps/cutscene-converter`](../../../../apps/cutscene-converter/docs/plans/001-architecture.md), which has
 to tell a stranger — not us — why their folder is wrong, in words they can act on.
 
 ## The boundary, and it is the whole design
