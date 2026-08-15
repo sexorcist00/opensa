@@ -1,6 +1,6 @@
 # 005 — seat retarget: a cutscene actor sits in the DONOR's seat, not R\*'s
 
-**Status: OPEN, designed 2026-08-15 (plan 004 round 22 is the research record).** An IMPROVEMENT over the
+**Status: CLOSED 2026-08-15 — field-passed, including both regression scenes.** An IMPROVEMENT over the
 original in the goals-doc sense: R\* authored every cutscene actor's position against their own car, so a
 converted donor whose cabin rides higher seats its occupants below their own seat. Measured on SMOKE2B:
 **0.281 m low**. The user's design call, the same day: **read the donor's own seat dummies when it has
@@ -122,7 +122,7 @@ window to tune — the scene's own geometry says where the transition is.
       second would silently have dropped the first. Verified in the built archive — `synd_4a.ifp`
       differs by 16 bytes (round 20's four wheel channels) AND `smoke2b.ifp` by 2685 (csplay's root),
       while `final2b.ifp` and `riot_4b.ifp` are byte-identical to vanilla.
-- [ ] **4. Field.** SMOKE2B and FINAL2B, one sitting. LOOK-FOR: the occupants read through the glass at
+- [x] **4. Field.** SMOKE2B and FINAL2B, one sitting. LOOK-FOR: the occupants read through the glass at
       seat height; head clear of the roof (our glendale's is 0.27 m taller, so there is room); hands and
       feet not obviously detached from wheel and floor — the pose is R\*'s and only the root moved.
       **Round 1 (2026-08-15): HALF PASSED, and it produced the design's last piece.** The field on
@@ -154,6 +154,10 @@ window to tune — the scene's own geometry says where the transition is.
       archive moved, so nothing else can regress from this plan. SYND_4A is therefore the ONE run that
       matters: it is what proves the two passes chained rather than overwrote each other. FINAL2B is a
       free confirmation that the deadband did nothing — its bytes are vanilla.
+
+      **Round 3 (2026-08-15): both PASS.** SYND_4A — "the wheels are hidden, all fine": the chaining
+      holds and round 20's sink survived the second pass. FINAL2B — "fine": the deadband changed
+      nothing, as its vanilla bytes promised. **Step 4 closed, and with it the plan.**
 - [x] **5. Contracts.** `docs/contracts/vehicles.md`: `ped_frontseat`/`ped_backseat` now carry behaviour
       in the CUTSCENE path too, and what happens when a donor omits them (nothing — the scene's own
       placement stands). Say it, because a missing dummy is silent by nature.

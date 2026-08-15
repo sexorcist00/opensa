@@ -342,8 +342,8 @@ row but its chain was superseded by 097). Newest first:
   the full 23-model fleet converts as pmb's `cutscene` stage; the full-pipeline field acceptance
   remains · `003` plate bake — CLOSED, field-passed: readable plates where vanilla shows blanks ·
   `004` full scene field review — IN PROGRESS: 30 of 35 vehicle scenes swept via the override, then
-  the user's approval · `005` seat retarget — OPEN: a cutscene actor sits in the DONOR's seat rather
-  than R\*'s, which is 0.281 m low on a taller car).
+  the user's approval · `005` seat retarget — CLOSED, field-passed: a cutscene actor sits in the DONOR's
+  seat rather than R\*'s, which was 0.281 m low on a taller car).
 - **ped-installer** — install ped mod folders: dff/txd → `gta3.img`; a new ped's line → `peds.ide` (replace by
   model, append if new); `--strip` to keep only the installed peds + the player ped (`--player`, default
   `BMYPOL1`). [`ped-installer/docs/plans/`](../../tools/ped-installer/docs/plans/) (`001` architecture · `002`
