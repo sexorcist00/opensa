@@ -12,7 +12,7 @@ more often, so it does not pay for the real game's LOD pass:
 
 ```bash
 npm run build:game:original:opensa     # our target only  (pmb --exclude sa) + fetch-pack
-npm run build:game:original:sa         # the real game    (pmb --exclude vehicles,peds,opensa)
+npm run build:game:original:sa         # the real game    (pmb --exclude opensa — every stage, both asis)
 npm run build:game:gostown:opensa      # TCs are opensa-only (also :carcer :anderius)
 ```
 
@@ -44,7 +44,9 @@ Params: `--out <dir>` (default `./build/original`) · `--until <split|mods|vehic
 everything after them (repeatable, comma-separated, same names as `--until` minus the `lod` alias; an unknown
 name is an error, never a silent skip). Excluding `opensa` drops `pack` with it; excluding `pack` alone leaves
 `opensa/` in GAME format; excluding `sa` also drops its `checkImgIdBudgets` guard, which reads the `sa/` tree.
-**`:sa` builds no mod vehicles or peds** — that is what `--exclude vehicles,peds` means.
+**`:sa` builds everything but the opensa target** since 2026-08-15 — it stopped excluding `vehicles,peds` when the
+cutscene stage began shipping a plugin paired with its fleet: a "real game" build that silently carried neither is
+the trap. Measured end to end at 638.9 s.
 
 `--target` says which HOST the build is for, and it picks every knob whose right value is a fact about the
 host rather than about the source data (limits, particle policy, procobj density). Omit it and it is DERIVED
@@ -91,7 +93,9 @@ anything installs, so every entry name lives in exactly one of them. `BuilderCon
 buckets get their own file and defaults to `['vehicles']` — the shape that fits a stock archive table exactly
 (SA registers 8, the target already spends 6, and the mod car set spills `vehicles.img` into one sibling).
 Whoever writes an archive registers it in `gta.dat`, and the finished `sa/` tree is gated against the 8:
-past it the game does not warn, it crashes at load. See
+past it the game does not warn, it crashes at load. A tool asks **where** a file lives through
+`openArchiveIndex` rather than opening `gta3.img` by name; `data/img-layout.json` beside it is a REPORT for
+readers outside the build, never the lookup. See
 [architecture/img-archive-layout.md](./architecture/img-archive-layout.md).
 
 The `sa/` tree carries **the asis its content requires**, into the game root: `perfect-map.asi` always, and
@@ -344,7 +348,7 @@ npm run e2e / e2e:ui / e2e:update    # playwright
 npm run lint / format                # tsc --noEmit + eslint / prettier+eslint --fix
 npm run arch / arch:render           # package graph to stdout / regenerate docs/architecture/assets
 npm run build:game:original:opensa   # pmb (--exclude sa) + fetch-pack → the opensa game dir + the fetch build (also :gostown :carcer :anderius)
-npm run build:game:original:sa       # pmb (--exclude vehicles,peds,opensa) → the real-game sa/ target only
+npm run build:game:original:sa       # pmb (--exclude opensa) → the real-game sa/ target only, split + vehicles + cutscene fleet + both asis
 npx tsx tools/fetch-pack/src/cli.ts     # fetch build standalone (chained in build:game:*; --build ./build/<id>; --out ./static/games stages a local fetch test)
                                         #   expands models/*.img into bare-named entries (fetch mode cannot open a container), prunes chunks a re-pack replaced, skips *.bak/.DS_Store
 npm run timecyc                      # precompute timecyc data

@@ -24,6 +24,7 @@ import { buildSaLods } from '@opensa/sa-lod-generator/build';
  */
 import { buildProcobjLods } from '@opensa/sa-procobj-placement/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
+import { writeArchiveManifest } from '@opensa/tool-kit/archive/layout';
 import { countImgArchives } from '@opensa/tool-kit/game-dir';
 import { type BuildTarget } from '@opensa/tool-kit/target';
 import { installCutscene } from '@opensa/vehicle-cutscene/install';
@@ -754,6 +755,10 @@ async function buildSaTarget(step: {
   assertArchiveSlots(countImgArchives(sa), false);
   const imgBudgets = checkImgIdBudgets(sa);
   reportInstallRequirements(census, imgBudgets);
+  // The archive report, restated on the FINISHED tree: the split wrote it six stages ago, and everything
+  // since has grown gta3.img and added a spill sibling. A report that ships describing an earlier tree is
+  // worse than none.
+  writeArchiveManifest(sa);
   // Ship the fix beside the map that needs it — stating a requirement and not satisfying it is half a job.
   const shippedAsi = shipPerfectMapAsi(sa, PERFECT_MAP_ASI);
   // Same rule for the fleet: a build that converted the cutscene cars ships the plugin they were swept with.

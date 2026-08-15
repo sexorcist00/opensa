@@ -1,3 +1,5 @@
+import type { ArchiveIndex } from '@opensa/tool-kit/archive/layout';
+
 import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 /**
@@ -11,6 +13,7 @@ import { parseDff } from '@opensa/renderware/parsers/binary/dff';
  */
 import { parseCarcols, type VehicleColours } from '@opensa/renderware/parsers/text/carcols.parser';
 import { openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
+import { openArchiveIndex } from '@opensa/tool-kit/archive/layout';
 import { guardOut } from '@opensa/vehicle-installer/install';
 import { cpSync, existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -73,12 +76,19 @@ export interface CutsceneInstallSummary {
 
 interface SlotContext {
   carcols: VehicleColours;
+  /**
+   * Every `models/*.img` in the `--game` tree, resolved by entry NAME.
+   *
+   * It used to be `gta3.img` alone, and the archive split broke that on its first pipeline run: the txdp
+   * parents this reads (the installed mod TXDs) had moved into `vehicles.img` and its spill sibling, so a
+   * closure that was fine reported `unresolved textures (txdp parent washing.txd)`. Asking WHERE rather
+   * than assuming is the fix, and it costs one directory read per archive.
+   */
+  game: ArchiveIndex;
   /** Texture names of the resident generic `models/generic/vehicle.txd`. */
   genericNames: readonly string[];
   /** The resident generic `models/generic/vehicle.txd` bytes — plate-source art lives here. */
   genericTxd: Uint8Array;
-  /** The `--game` tree's gta3.img — the txdp parents (the installed mod TXDs) live here. */
-  gta3: ReturnType<typeof openArchive>;
   /** Plate-text override (`--plate`), already cut to eight cells; undefined = per-slot text. */
   plateOverride?: string;
   plateTown: (typeof PLATE_TOWNS)[string];
@@ -116,9 +126,9 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
   const plateOverride = options.plate === undefined ? undefined : plateTextFor('', options.plate);
   const context: SlotContext = {
     carcols: parseCarcols(readFileSync(join(gamePath, 'data', 'carcols.dat'), 'utf8')),
+    game: openArchiveIndex(gamePath),
     genericNames: textureNames(genericTxd),
     genericTxd,
-    gta3: openArchive(new Uint8Array(readFileSync(join(gamePath, 'models', 'gta3.img')))),
     ...(plateOverride !== undefined ? { plateOverride } : {}),
     plateTown: PLATE_TOWNS[town],
     seatsBySlot: new Map(),
@@ -174,7 +184,7 @@ function actorPredicate(gamePath: string, context: SlotContext): (model: string)
     if (cached !== undefined) {
       return cached;
     }
-    const dff = cutscene.get(`${model}.dff`) ?? context.gta3.get(`${model}.dff`);
+    const dff = cutscene.get(`${model}.dff`) ?? context.game.get(`${model}.dff`);
     let skinned = false;
     try {
       skinned = dff !== null && parseDff(dff).geometries.some((geometry) => geometry.skin !== undefined);
@@ -350,7 +360,7 @@ function slotTxd(
   modTxdPath: string,
   context: SlotContext,
 ): { bytes: Uint8Array; preExisting: string[] } {
-  const parent = context.gta3.get(`${slot.txd}.txd`);
+  const parent = context.game.get(`${slot.txd}.txd`);
   const parentNames = parent ? textureNames(new Uint8Array(parent)) : [];
   const parentChain = new Set([...context.genericNames, ...parentNames]);
   const modTxd = new Uint8Array(readFileSync(modTxdPath));

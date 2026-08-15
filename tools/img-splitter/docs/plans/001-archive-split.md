@@ -123,10 +123,39 @@ Every step ends with its verification; a step without recorded numbers is unfini
       **Left open on purpose**: nothing registers `vehicles2.img` in `gta.dat` yet, and the installer WARNS
       when it writes a sibling rather than letting it be invisible content. That is step 4 — which also has to
       face the arithmetic this run makes concrete: the tree now wants **10** registered archives against 8.
-- [ ] **4. Wire it into pmb, before `mods`.** A new first stage, excludable like the rest. `checkImgIdBudgets`
-      learns the bucket set instead of its four hard-coded names — an archive it does not know about is an
-      under-count, and that is the silent direction. Verification: a full `sa` build completes end to end
-      (the run that could not finish today), with per-stage timings and every archive's size recorded.
+- [x] **4. Wire it into pmb, before `mods`. DONE 2026-08-15.** A new first stage, excludable like the rest;
+      `checkImgIdBudgets` enumerates archives instead of listing four names; the archive-table gate runs on the
+      FINISHED `sa` tree (the total is only known after the vehicle install registers its sibling);
+      `splitBuckets` defaults to `['vehicles']`.
+      **Registration moved to whoever WRITES an archive** (`registerImgArchives`, now in `tool-kit/game-dir`):
+      the split for its buckets, vehicle-installer for a spill sibling. An unregistered archive is invisible
+      content, and this makes it impossible rather than warned about.
+      **The first attempt FAILED at the cutscene stage, and the two causes split cleanly:**
+      1. **Ours.** `vehicle-cutscene` opened `models/gta3.img` by name to resolve txdp parents, and the split
+         had moved `dinghy.txd` into `vehicles.img`, `washing.txd`/`monster.txd`/`mtbike.txd` into
+         `vehicles2.img`. Fixed by the index below.
+      2. **NOT ours.** `cutscene template has no HAnim skeleton root (bone 0)` on ~19 slots. The same
+         `cstaxi92.dff` parses from `game-src` and fails from the built tree: `cutscene.img` grows
+         26 947 584 → 31 279 104 B in the `mods` stage, because a mod REPLACES cutscene models with rigs that
+         carry no HAnim root. The converter reads its template from the installed archive. The user removed
+         those mods; recorded here because the pipeline route is the only place it shows.
+      **The index, and the manifest** (the user's call, 2026-08-15). `openLazyVer2` was promoted out of
+      `opensa-pack` into `tool-kit/archive/layout` — it was the repo's one fd-backed reader — and
+      `openArchiveIndex(gameDir)` builds a name → archive map from each archive's DIRECTORY. **That is the
+      authority and it cannot go stale**; `writeArchiveManifest` writes `data/img-layout.json` as a REPORT for
+      readers outside the build, saying so in the file. The first run proved the distinction the hard way: the
+      shipped manifest described the tree as it had been at stage one, so a refresh on the finished tree is
+      part of the sa branch now, carrying forward the fields it cannot recompute.
+      **Verification — a full `sa` build, exit 0, 638.9 s.** split 1.6 s · mods 82.7 · vehicles 7.1 ·
+      **cutscene 7.5 (23 converted, 0 skipped, 21 plates)** · peds 11.1 · optimize 78.7 · trees 82.4 · sa
+      363.6 · procobj 4.2. Archives: `gta3` 16 990/1.64 GB, `vehicles` 458/1.87 GB, `vehicles2` 332/1.21 GB,
+      `cutscene` 634/199.1 MB, `gta_int` 2 485, `player` 542. **`gta.dat` = 5 IMG lines + 3 hardcoded = 8 of
+      8**, the stock table exactly full. Id pools with every archive counted: TXD 5171/6000, COL 263/400, IPL
+      191/1024.
+      Numbers: [`benchmarks/tools/2026-08-15-vehicle-installer-batched-img.md`](../../../../docs/benchmarks/tools/2026-08-15-vehicle-installer-batched-img.md).
+      **A gap this run exposes**: `gta3.img` grew 889 MB → 1.64 GB across mods and the LOD stages and nothing
+      caps it — `mod-installer` and the LOD generators do not write through `writeImgFamily`. 500 MB under the
+      wall today, and silent if it were not.
 - [ ] **5. The field run — and the archive-table lift it will need.** Step 0 already says the layout does not
       fit stock: 2 free slots against 3 wanted archives. So this step is not "does it work?" but "what breaks
       first, and does everything ELSE work while we are one slot short?" — build with the peds bucket left in

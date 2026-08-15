@@ -2,6 +2,7 @@ import type { EditableImg } from '@opensa/tool-kit/archive/img';
 
 import { ver2EntryCount } from '@opensa/renderware/archive/img-archive';
 import { createImg, openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
+import { writeArchiveManifest } from '@opensa/tool-kit/archive/layout';
 import { registerImgArchives } from '@opensa/tool-kit/game-dir';
 import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join, parse, resolve, sep } from 'node:path';
@@ -130,6 +131,9 @@ export function split(options: SplitOptions): SplitSummary {
     archives.filter((archive) => archive.name !== 'gta3.img').map((archive) => archive.name),
   );
   assertArchiveSlots(imgLines, options.liftedArchiveLimit === true);
+  // The manifest is a REPORT for readers outside the build (the standalone app, a debug script, a person);
+  // every tool inside it resolves through `openArchiveIndex`, which reads the tree and cannot go stale.
+  writeArchiveManifest(outPath, { contested, unclaimed: unclaimed.length });
 
   return {
     archives,
