@@ -60,6 +60,7 @@
     "tools/sa-lod-generator",
     "tools/perfect-map-builder",
     "tools/sa-procobj-placement",
+    "tools/img-splitter",
     "tools/mod-installer",
     "tools/vehicle-installer",
     "tools/vehicle-cutscene",

@@ -41,11 +41,40 @@ Every step ends with its verification; a step without recorded numbers is unfini
       **Dropped from this step** (the user's call, 2026-08-15): researching what the game does when one name
       exists in two registered archives. The layout is built so it cannot happen, so the right answer is a
       GUARD, not a fact — step 2 refuses a duplicate instead of relying on precedence.
-- [ ] **1. The classifier — pure, no I/O.** Entry name → bucket, from the IDE sections plus each row's txd
-      column; non-model entries (`.ipl` / `.ifp` / `.dat` / `.col`) and anything unclaimed stay in `gta3.img`.
-      Verification: every entry of the stock `gta3.img` classified with a per-bucket count; the UNCLAIMED
-      list printed and its size recorded here (a classifier that quietly absorbs surprises is the failure
-      mode). Tests: negative cases first — an entry no IDE declares, a name declared by two sections.
+- [x] **1. The classifier — pure, no I/O. DONE 2026-08-15.** `src/classify.ts`: `claimsFromIde` reads every
+      model-declaring section (`cars` → vehicles, `peds` → peds, `weap` → weapons,
+      `objs`/`tobj`/`anim`/`hier` → map) taking columns 1 and 2 as the model and its txd, and
+      `classifyEntries` places each archive entry. `txdp` and `2dfx` claim nothing — one declares a texture
+      PARENT, the other attaches to a model declared elsewhere. Tests 13/13, negative cases first.
+      **Two corrections the user made during the step, both of which move a bucket onto better authored data:**
+      1. **Mod-shop parts belong to the car, and `carmods.dat` is where the game says so.** They are authored
+         as plain `objs` rows in `veh_mods.ide`, so section alone puts them in `map` — away from the car they
+         bolt onto, and contesting the car's own dictionary. `vehiclePartsFromCarmods` reads all three of its
+         sections (each hides the parts differently: `link` pairs two per row, `mods` leads with the CAR,
+         `wheel` leads with a group index) and yields **190 part names**.
+      2. **Weapons get their own bucket, from the `weap` IDE section — not from `weapon.dat`.** That file is
+         the stats table and addresses a weapon by numeric `modelId`, so reading it would only resolve back
+         through this section.
+
+      **Verification, over the real stock tree** — all **16 316 `gta3.img` entries placed, none lost**:
+
+      | Bucket | Entries | Bytes |
+      | --- | --- | --- |
+      | map | 15 073 | 832.1 MB |
+      | peds | 530 | 55.6 MB |
+      | vehicles | 613 | 50.5 MB |
+      | weapons | 100 | 1.3 MB |
+
+      **CONTESTED — 1**, down from 12 before `carmods.dat` was read. The eleven that resolved were the
+      tunable cars, whose parts now sit with them. The one that remains, `slamvan.txd`, is an inconsistency
+      in the STOCK data rather than in the classifier: `veh_mods.ide` declares `bnt_lr_slv1` and
+      `bnt_lr_slv2` against it, and `carmods.dat`'s `slamvan` row lists neither — two bonnet models the mod
+      shop never offers. It resolves to `map`, which is safe because the game finds an entry by name across
+      every registered archive.
+      **UNCLAIMED — 952**: `.txd` 284, `.col` 216, `.ipl` 164, `.ifp` 149, `.dff` 75, `.dat` 64. The
+      non-model extensions are expected (no IDE row declares them). The 284 dictionaries are the generic ones
+      (`gb_generic`, `gb_country`, `gb_la…` — reached through `txdp` parents rather than a model row) and the
+      75 models are specials like `copgrl1`/`copgrl2`. All stay in `gta3.img`, which is where they are today.
 - [ ] **2. The splitter tool.** Emit the buckets, rewrite `gta.dat`'s `IMG` lines, leave `cutscene`/`player`/
       `gta_int` alone. **Uniqueness is a GUARD here, not an assumption**: one name may land in exactly one
       archive, and the tool fails naming both sides if it ever would not — that is what makes the precedence

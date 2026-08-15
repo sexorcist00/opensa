@@ -33,10 +33,11 @@ container.
 
 ```
 models/
-  gta3.img         map objects — objs / tobj / anim, and everything no IDE claims
-  vehicles.img     cars — the `cars` IDE section, model + its txd
+  gta3.img         map objects — objs / tobj / anim / hier, and everything no IDE claims
+  vehicles.img     cars — the `cars` IDE section, PLUS the mod-shop parts carmods.dat names
   vehicles2.img    …and its spill siblings, created by the WRITER when a cap is crossed
   peds.img         peds — the `peds` IDE section
+  weapons.img      weapons — the `weap` IDE section
   cutscene.img     unchanged: the cutscene fleet already has its own archive
   player.img       unchanged
   gta_int.img      unchanged
@@ -54,6 +55,20 @@ Two halves, and they belong to different code:
 
 Splitting by type ALONE bounds nothing — the vehicle bucket is 3.08 GB by itself. Bounding by size alone
 loses the ownership that makes each stage cheap. The layout needs both axes.
+
+**What each bucket weighs** — stock measured by the classifier (2026-08-15), installed projected from the
+shipping mod set:
+
+| Bucket | Stock entries | Stock bytes | + mods | ≈ installed |
+| --- | --- | --- | --- | --- |
+| map | 15 073 | 832.1 MB | 1 145 532 416 | **~1.98 GB — at the wall** |
+| vehicles | 613 | 50.5 MB | 3 077 354 628 | **~3.1 GB — two files** |
+| peds | 530 | 55.6 MB | 3 006 464 | 58 MB |
+| weapons | 100 | 1.3 MB | — | 1.3 MB |
+
+So the vehicle bucket is not the only one that spills; the map bucket lands within 8 % of the ceiling with
+the mod set we ship today, which is another way of saying the cap has to be a WRITER's rule rather than a
+layout decision taken once.
 
 ## Why the split is BEFORE mod-installer
 
@@ -97,13 +112,20 @@ and its txd, and the SECTION it sits in is the answer. Measured in the stock `da
 
 | Section | Rows | Bucket |
 | --- | --- | --- |
-| `objs` | 14 052 | map |
+| `objs` | 14 052 | map — **except** a model `carmods.dat` names as a mod-shop part, which is a vehicle |
 | `tobj` | 160 | map |
 | `anim` | 54 | map |
 | `peds` | 276 | peds |
 | `cars` | 212 | vehicles |
-| `weap` | 50 | map (no separate bucket earns its keep at this size) |
+| `weap` | 50 | weapons |
 | `hier` | 35 | already lives in `cutscene.img` |
+
+**Two of those rows are not the obvious reading, and both were the user's correction (2026-08-15).**
+Mod-shop parts are authored as ordinary `objs` rows, so section alone files them under map — away from the
+car they bolt onto, and contesting the car's own texture dictionary. `carmods.dat` is where the game says
+which models are car parts (190 of them), and reading it drops the contested count from 12 to 1. And weapons
+come from the `weap` section rather than from `weapon.dat`: that file is the stats table and addresses a
+weapon by numeric `modelId`, so it could only point back here.
 
 `gta3.img` also carries entries no IDE declares at all — 16 316 entries of which 12 964 `.dff`, 2 759
 `.txd`, 216 `.col`, 164 `.ipl`, 149 `.ifp`, 64 `.dat`. Anything unclaimed stays in `gta3.img` and is
@@ -134,9 +156,10 @@ The target spends **6**: the three hardcoded plus stock `gta.dat`'s `CARREC.IMG`
 `IMG archive needs rebuilding` line is error REPORTING, not a limit. fastman92's separate *IMG & Stream Limit
 Adjuster* would (127 archives / 400 stream handles) and is not installed.
 
-So there are **2 free slots**, and this layout wants three new archives — `vehicles.img`, its first spill
-sibling, and `peds.img` — because the vehicle bucket alone is 3.08 GB and cannot sit under a sub-2-GiB cap in
-one file. **One short.**
+So there are **2 free slots**, and this layout wants **four** new archives — `vehicles.img`, its first spill
+sibling (the bucket is ~3.1 GB installed and cannot sit under a sub-2-GiB cap in one file), `peds.img` and
+`weapons.img`. `gta3.img` costs nothing extra, being one of the three hardcoded. **Two short**, and that is
+before the map bucket needs a spill sibling of its own at ~1.98 GB.
 
 And the lift is bigger than one array: the ceiling has **two halves** — `ms_files` and the CdStream handle
 tables the reader indexes — so a plan budgeting only for `ms_files` has budgeted for half the work. The
@@ -144,8 +167,8 @@ mechanism, read out of a working third-party adjuster (relocate the table, rewri
 14 instructions that referenced it), is in
 [`gta-sa-original/img-archive-limit.md`](../gta-sa-original/img-archive-limit.md).
 
-There is a shape that fits stock: leave peds in `gta3.img` (their mod payload is 2 936 KB) and spend both
-free slots on the two vehicle files. It fits exactly and has zero headroom — the next archive of any kind, or
+There is a shape that fits stock: leave peds and weapons in `gta3.img` (their mod payload is 2 936 KB and
+nothing) and spend both free slots on the two vehicle files. It fits exactly and has zero headroom — the next archive of any kind, or
 one more gigabyte of cars, breaks it at boot. So the layout is designed for the lift instead: raising
 `TOTAL_IMG_ARCHIVES` is ASI work, on a limit **nothing else on the target owns**, which is what
 [`restrictions/sa-target.md`](../restrictions/sa-target.md)'s one-owner rule requires before we claim it.

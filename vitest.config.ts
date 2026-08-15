@@ -54,6 +54,7 @@ export default defineConfig({
       'tools/sa-lod-generator/**/*.test.ts',
       'tools/sa-procobj-placement/**/*.test.ts',
       'tools/mod-installer/**/*.test.ts',
+      'tools/img-splitter/**/*.test.ts',
       'tools/fetch-pack/**/*.test.ts',
       'tools/vehicle-installer/**/*.test.ts',
       'tools/vehicle-cutscene/**/*.test.ts',
