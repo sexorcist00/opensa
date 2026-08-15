@@ -143,7 +143,17 @@ window to tune — the scene's own geometry says where the transition is.
       The build now reports both occupants:
       `csplay +0.270` and `cssmoke +0.310 (ramped over 137 frame(s))`, and the census reads both at
       z +0.16 — the donor's seat. FINAL2B is still untouched by the deadband, and PROLOG1's csstew
-      still matches no seat. Suite 112/112. **Re-run pending.**
+      still matches no seat. Suite 112/112.
+
+      **Round 2 (2026-08-15): SMOKE2B PASSES — "both sit perfectly, the exit is fine."** So the ramp
+      is right at both ends: the seated pose and the transition out of it.
+
+      **The regression surface is two scenes and can be stated exactly**: of the 444 entries in the
+      built `anim/cuts.img`, **2 differ from vanilla** — `smoke2b.ifp` (5487 B, the two actors, just
+      passed) and `synd_4a.ifp` (16 B, round 20's four wheel-stash channels). Nothing else in the
+      archive moved, so nothing else can regress from this plan. SYND_4A is therefore the ONE run that
+      matters: it is what proves the two passes chained rather than overwrote each other. FINAL2B is a
+      free confirmation that the deadband did nothing — its bytes are vanilla.
 - [x] **5. Contracts.** `docs/contracts/vehicles.md`: `ped_frontseat`/`ped_backseat` now carry behaviour
       in the CUTSCENE path too, and what happens when a donor omits them (nothing — the scene's own
       placement stands). Say it, because a missing dummy is silent by nature.
