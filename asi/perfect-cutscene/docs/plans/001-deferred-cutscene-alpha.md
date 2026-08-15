@@ -314,8 +314,11 @@ bottle's `CLEO/cutscene-override.ini`).
             windscreen. The census log shows the car deferred and the pane is a proper translucent
             drawn last, and the field refuted the tint reading (cabin and steering wheel DO read
             through the glass). Working mechanism is opaque occlusion by the mod's adopted
-            `interior_ad` shell — which predicts this ASI is not involved, since depth decides
-            occlusion and not order. Measured in plan 004 round 22; the ASI-removed control decides
+            `interior_ad` shell — which predicted this ASI is not involved, since depth decides
+            occlusion and not order. **The ASI-removed control CONFIRMED it** (2026-08-15, "nothing
+            changed"), so the defect predates the ASI and belongs to the converter. Plan 004 round 22;
+            a second, unrelated finding on the same car (green headlights) is round 23. Neither
+            blocks this plan
       - [ ] SMOKE3A — csglendale92
       - [ ] SMOKE4A — csglendale92
       - [ ] STEAL_2 — csremington92

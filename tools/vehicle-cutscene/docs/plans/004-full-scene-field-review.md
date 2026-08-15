@@ -596,14 +596,55 @@ What the second round of measurement found:
   vertices, 165 of them with normals facing the camera**.
 
 So the working mechanism is OPAQUE OCCLUSION by the adopted interior, not alpha, not draw order — and
-that gives a falsifiable prediction, because **the z-buffer decides occlusion by depth, not by order**:
-removing the ASI must change NOTHING. **The control to run before any code:** SMOKE2B with
-`perfect-cutscene.asi` removed. Occupants still hidden → opaque occlusion confirmed, the fix belongs
-to the converter's adopt rule and the ASI is not involved. Occupants appear → this is not opaque
-occlusion and the mechanism is still unknown.
+that gave a falsifiable prediction, because **the z-buffer decides occlusion by depth, not by order**:
+removing the ASI must change nothing. **The control was run (2026-08-15) and CONFIRMED it** — the
+field pulled `perfect-cutscene.asi` and reported "nothing changed, the passengers are still not
+visible". So the ASI is not involved, this defect predates it, and the fix belongs to the converter's
+ADOPT rule: the mod's `interior_ad` is carried into a cutscene slot whose vanilla donor was a hollow
+shell, and it walls off actors the scene seats inside.
+
+Open question for that fix, not yet answered: which faces actually do the walling. The adopt rule
+cannot simply drop interiors — a cutscene that looks INTO a car through an open door needs them, and
+`seats_ad` rides through fine on cswashington. The narrow candidate is the part of the shell that
+reaches past the glass plane (`y > 1.15`, `z > 0.97` here), which is geometry no interior needs.
 
 Note for whoever picks this up: an alpha clamp is NOT the answer — round 7 already retired one, and
 it only erased the tint and sheen the mod carries in gameplay.
+
+### Round 23 — the glendale's headlights go green, in EVERY scene with that car (2026-08-15, screenshot)
+
+Found while chasing round 22. The field: "something green comes out on the front headlights", on every
+scene this car appears in, and gameplay is fine. Model-wide, not scene-specific — so it is data or
+pipeline, not draw order. What was measured, all of it clean:
+
+- **No green material survives anywhere in the converted model.** The mod authors the SA lamp markers
+  (`wing_lf_ok` `255,175,0`, `wing_rf_ok` `0,255,200` on `vehiclelights128`) and the paint marker
+  `60,255,0`; every one is baked — lamps to white, paint to the carcols combo — exactly as vanilla cs
+  models do.
+- **Textures are byte-faithful.** `ford53_lgt_gls`, `ford53_lgt`, `gen_envmap9`, `remap_ford53` all
+  average identically in the built cutscene TXD and in the mod's own `glendale.txd`. No channel swap.
+- **The lamp UVs are the mod's, unbaked.** `u[0.268,0.475] v[0.767,0.973]` on both, one distinct
+  atlas cell — no atlas-wide smear.
+- **No prelit vertex colours** on any wing or glass atomic, so nothing paints them per-vertex.
+- `vehiclelights128` is absent from the model's own TXD, and that is a RED HERRING: it is absent from
+  every converted slot including ones the field passed, and the vanilla cutscene TXDs are EMPTY (0
+  textures) — cutscene models resolve shared vehicle textures from a parent dictionary.
+
+The one measured behavioural delta against gameplay is **our own split**. The mod ships one
+`wing_lf_ok` atomic; we emit two — an opaque half (162 lamp triangles on `vehiclelights128`, no env
+map) and a translucent half that is exactly the 120 lens triangles, `ford53_lgt_gls` at alpha 205
+carrying **`env=gen_envmap9@0.5`, a dark GREENISH reflection** (that texture averages `60,64,61`).
+Round 9 keeps translucent atomics on the DEFAULT pipeline, so in a cutscene that lens is reflected —
+or not reflected — by something other than SA's `CustomCarPipe`, while in gameplay the whole wing
+rides the vehicle pipe together. The lens is the surface showing the anomaly, and it is the surface
+our split moves.
+
+**This is a hypothesis with one untested link and it must not be coded against yet.** Round 8 put
+translucents on the default pipe because OUR DFF PipelineSet stamp made panes vanish — and plan 001
+step 4 then found the DFF stamp and the runtime `CustomCarPipeAtomicSetup` are NOT the same thing
+("the runtime force-pipe is what makes that car's glass look right"). So the experiment worth one
+build is: keep the lens on the vehicle pipe the way gameplay does, one variable, and look at the
+lamps. If the green goes, round 8's rule needs re-pricing against what step 4 learned.
 
 ### Standing addendum — the perfect-cutscene ASI re-opens the whole ledger (2026-08-14)
 
