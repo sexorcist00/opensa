@@ -18,3 +18,4 @@ which flags) and the machine; two runs are only comparable when those match.
 | --- | --- | --- | --- |
 | 2026-08-13 | [2026-08-13-vehicle-cutscene-fleet.md](2026-08-13-vehicle-cutscene-fleet.md) | vehicle-cutscene | The first full 23-model fleet build (plan 002 step 10): sizes, wall-clock, structural verification |
 | 2026-08-15 | [2026-08-15-vehicle-installer-batched-img.md](2026-08-15-vehicle-installer-batched-img.md) | vehicle-installer | The batched gta3.img write: a stage that could not finish now takes 6.13 s — and emits a 4.27 GB archive no reader can open |
+| 2026-08-15 | [2026-08-15-vehicle-cutscene-no-base-copy.md](2026-08-15-vehicle-cutscene-no-base-copy.md) | vehicle-cutscene | `--no-base-copy` (plan 006): 1.72 GiB of output down to 579 MiB and three files, byte-identical to the copy run |

@@ -1,6 +1,9 @@
 # 006 — `--no-base-copy`: emit only what changed
 
-**Status: PLANNED 2026-08-15.** The tool copies the whole `--game` tree into `--out` and then rewrites
+**Status: DONE 2026-08-15**, steps 1–4. Measured numbers below and in
+[`docs/benchmarks/tools/2026-08-15-vehicle-cutscene-no-base-copy.md`](../../../../docs/benchmarks/tools/2026-08-15-vehicle-cutscene-no-base-copy.md).
+
+The tool copies the whole `--game` tree into `--out` and then rewrites
 three files inside it. That is right for the pmb pipeline, where the output IS a game, and wrong
 everywhere else — most sharply on Windows, which is where
 [`apps/cutscene-converter`](../../../apps/cutscene-converter/docs/plans/001-architecture.md) will run.
@@ -46,25 +49,49 @@ Default behaviour does not change — pmb keeps getting a full game tree. With t
 
 ## Steps
 
-- [ ] **1. The flag and the emit split.** `--no-base-copy` in `cli.ts`, `noBaseCopy` in
+- [x] **1. The flag and the emit split.** `--no-base-copy` in `cli.ts`, `noBaseCopy` in
       `CutsceneInstallOptions`; `installCutscene` takes its inputs from `--game` and writes only the
       three outputs. Verification: unit test over a temp tree asserting the output contains EXACTLY
       `models/cutscene.img`, `data/txdcut.ide`, `anim/cuts.img` and nothing else; a second asserting
       a pre-existing unrelated file in `--out` SURVIVES the run.
-- [ ] **2. The refusal.** `--out` == `--game` (after `resolve`, case-insensitively on win32) throws
+      **Done**: both assertions live in one test (`--no-base-copy` emits the three written files and
+      leaves the rest of `--out` alone), and the `notes.txt` planted in `--out` comes back unchanged.
+      Both modes now READ from `--game` — in the copy mode the copy is the game byte for byte, so one
+      read path serves both and they cannot drift apart. The one design call the plan did not
+      anticipate: `anim/cuts.img` is written even when neither scene pass touched it, because the copy
+      mode always leaves one in `--out` and a delivery set that is sometimes three files and sometimes
+      two cannot be checked.
+- [x] **2. The refusal.** `--out` == `--game` (after `resolve`, case-insensitively on win32) throws
       with a message naming the risk. Verification: negative test first, per the repo's test order.
-- [ ] **3. Byte parity with the copy path.** The three emitted files must be byte-identical to what a
+      **Done, one layer down**: the tool adopted `@opensa/tool-kit/game-dir`'s shared `guardOut` (whose
+      own doc invited exactly that) instead of importing `vehicle-installer`'s private copy, and the
+      case folding went in THERE — unconditionally, on every platform, so the guard behaves and tests
+      the same everywhere. The asymmetry is the argument: a false refusal costs a rename, a missed
+      match overwrites the user's install, and under this flag there is no wipe to warn anybody first.
+- [x] **3. Byte parity with the copy path.** The three emitted files must be byte-identical to what a
       full-copy run produces from the same inputs. Verification: a test that runs both modes over the
       same fixture game and diffs the three outputs — this is the load-bearing check, because it is
       what lets the app and pmb share one converter.
-- [ ] **4. Docs.** `docs/commands.md` row, the tool's `001-architecture.md` output section (it already
+      **Done twice over**: the unit test (fixture tree seeded with a real `synd_4a.ifp` so both scene
+      passes run), and the real 23-car fleet — all three SHA-256s match, recorded in the benchmark. The
+      unit test was itself checked against a deliberate lean-only mutation and failed as it should.
+- [x] **4. Docs.** `docs/commands.md` row, the tool's `001-architecture.md` output section (it already
       says the tool writes three outputs; say when it writes ONLY them).
 
-## Numbers to record when it lands
+## Numbers, measured 2026-08-15 (macOS/APFS, `game-src/original` + `mods-src/original/vehicles`)
 
-Wall-clock and bytes written for both modes on the same input, on macOS. The Windows figure cannot be
-measured here — state it as the reason rather than as a measurement, and let the app's first real run
-supply it.
+| Measure | Base copy | `--no-base-copy` |
+| --- | ---: | ---: |
+| Wall-clock (two runs) | 4.556 s · 3.426 s | **2.633 s · 2.353 s** |
+| Bytes in `--out` | 1.72 GiB | **579 MiB** |
+| Files in `--out` | the whole game tree | **3** |
+
+Both runs: 23 converted, 0 errors, `cutscene.img` 25.7 → 321.5 MB, 4 wheel stashes sunk, 2 actors
+seated — and the three files byte-identical (SHA-256s in the benchmark).
+
+**The Windows figure is still missing, and it is the one that matters.** APFS copy-on-write keeps the
+base copy cheap here, so ~1.1–1.9 s is a lower bound on what the flag saves; NTFS has no such thing.
+The standalone app's first real run supplies it.
 
 ## Risks
 

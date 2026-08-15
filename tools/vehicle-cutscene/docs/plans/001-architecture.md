@@ -23,6 +23,7 @@ tsx tools/vehicle-cutscene/src/cli.ts --game <path> --in <vehicles-dir> --out <p
   --out    output game tree (base copied, models/cutscene.img rebuilt, data/txdcut.ide patched)
   --only   restrict to specific slots while iterating
   --inspect  report the census + per-pair readiness, write nothing
+  --no-base-copy  write ONLY the three outputs below into --out; no base copy, and --out is not wiped
 ```
 
 ## Shape (flat `src/`, like vehicle-installer)
@@ -42,7 +43,7 @@ vehicle-cutscene/
     seats.ts        # where the DONOR says a person sits, in cutscene space (plan 005)
     stash-patch.ts  # SCENE-VALUE pass: sink a wheel stash (plan 004 round 20)
     seat-patch.ts   # SCENE-VALUE pass: lift a riding actor onto the donor's seat (plan 005)
-    install.ts      # copy game → out, rebuild cutscene.img (tool-kit EditableImg)
+    install.ts      # game → out (base copy, or the three files alone), rebuild cutscene.img (EditableImg)
   docs/plans/       # 001 architecture · 002 implementation · 003 plates · 004 sweep · 005 seats
 ```
 
@@ -54,6 +55,11 @@ must serve both poses, and the actor is not in the car's clump at all. Both pass
 surgical edits to the scene VALUES (12 and 4 bytes per channel, chunk sizes untouched), they CHAIN
 through one buffer and one write, and each reports what it touched. On the current fleet exactly 2 of
 444 entries differ from vanilla.
+
+**Those three are also the whole output under `--no-base-copy`** (plan 006): no base copy, `--out` left
+otherwise untouched, and the emitted bytes identical to what the copy run produces from the same inputs
+— which is what lets the pmb pipeline (which wants a game tree) and the standalone app (which wants a
+delivery folder) share one converter. Reads come from `--game` in both modes.
 
 ## Principles
 
