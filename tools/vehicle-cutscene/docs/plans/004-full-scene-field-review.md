@@ -38,7 +38,7 @@ scene-specific anims).
 | 2 | PROLOG3 | cscopcarla92, cstaxi92 | ✅ re-verified after round 21 (the matte windscreen was a missing modulate flag; "looks perfect") |
 | 3 | STRP4B2 | csmtbike92 | ✅ (002 step 8) · **ASI re-sweep 2026-08-15 ✅** ("excellent") — the game's only bike scene |
 | 4 | DESERT9 | csbobcat92 | ✅ after rounds 1–2 ("glass with the door, one rack") · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
-| 5 | BCESA4W | csbravura, cszr350b | ✅ (2026-08-13, "good") |
+| 5 | BCESA4W | csbravura, cszr350b | ✅ (2026-08-13, "good") · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
 | 6 | BCESAR4 | cssavanna, cszr350 | ✅ after round 3 ("lights are normal now") · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
 | 7 | BCESAR5 | cssadler, cszr350, cszr350b | ✅ after rounds 4–8 ("glass renders normally now, tint and sheen in place") · **ASI re-sweep 2026-08-15 ✅** ("excellent") — the scene that drove rounds 4–8 needs none of them now |
 | 8 | DES_10B | csmothership | ✅ (2026-08-13) · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
@@ -52,16 +52,16 @@ scene-specific anims).
 | 16 | SMOKE1B | csglendale92 | ✅ after round 16 ("better — specular improved, wheels in place, glass there, one colour") · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
 | 17 | SWEET2B | csgreenwood, csvoodoo | ✅ (2026-08-14, "good") · **ASI re-sweep 2026-08-15 ✅** ("excellent") |
 | 18 | SYND_3A | cswashington | ✅ (2026-08-14, "all excellent") — closed by the ASI's deferral on the hackless fleet: actors visible AND the washington keeps its tint |
-| 19 | SYND_4A | cssavanna, cswashington | ✅ after rounds 19–20 ("wheels gone — excellent, no bugs"; the shipped `anim/cuts.img` stash sink) |
-| 20 | BCESA5W | cszr350, cszr350b |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
-| 21 | BCRAS1 | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
-| 22 | BCRAS2 | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
-| 23 | CESAR1A | cssavanna |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
-| 24 | CRASH3A | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
-| 25 | CRASV2A | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
-| 26 | CRASV2B | cscopcarla92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
-| 27 | RIOT4E2 | csfirela |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
-| 28 | SCRASH2 | csbravura |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
+| 19 | SYND_4A | cssavanna, cswashington | ✅ after rounds 19–20 ("wheels gone — excellent, no bugs"; the shipped `anim/cuts.img` stash sink) · **ASI re-sweep 2026-08-15 ✅** ("excellent") — the round-20 stash sink re-confirmed |
+| 20 | BCESA5W | cszr350, cszr350b | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
+| 21 | BCRAS1 | cscopcarla92 | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
+| 22 | BCRAS2 | cscopcarla92 | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
+| 23 | CESAR1A | cssavanna | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
+| 24 | CRASH3A | cscopcarla92 | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
+| 25 | CRASV2A | cscopcarla92 | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
+| 26 | CRASV2B | cscopcarla92 | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
+| 27 | RIOT4E2 | csfirela | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
+| 28 | SCRASH2 | csbravura | ✅ **first run in the ASI re-sweep, 2026-08-15** ("excellent") |
 | 29 | SMOKE2B | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 30 | SMOKE3A | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |
 | 31 | SMOKE4A | csglendale92 |⏳ DEFERRED to the post-ASI final sweep (user's call 2026-08-14: every model already shown at least once; the ASI re-opens all rows anyway) |

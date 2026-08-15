@@ -263,10 +263,13 @@ bottle's `CLEO/cutscene-override.ini`).
       car floating, sunk or drawn over a wall; lamps/plates/paint unchanged.
       **Three rows are already done on this exact configuration** (2026-08-14): PROLOG3 ("looks
       perfect"), RIOT_4B ("peds visible, tint as it should be"), SYND_3A ("all excellent").
-      **Running tally: 17 of 35 passed, zero findings** — the three above plus all 14 of block A,
-      run 2026-08-15 in two sittings, each verdict "excellent". **Model coverage is complete**: the
+      **Running tally: 28 of 35 passed, zero findings** — the three above, all 14 of block A, and
+      11 of block B, run 2026-08-15, every verdict "excellent". **Model coverage is complete**: the
       21 exercised models have all been seen on this configuration, the six ★force-piped ones
-      included. What remains is block B's 18 per-scene rows.
+      included. Block B has also cleared all five `cscopcarla92` crash scenes — the model carrying
+      the open `defrost_ad` finding — without that surface being raised, which prices it as a
+      defect nobody meets at scene framing. Seven rows left, all repeats of models already passed
+      (csglendale92 ×3, csremington92 ×3, ★csmothership).
 
       **Block A — 14 scenes that cover all 21 exercised models at least once.** The six force-piped
       models are marked ★: the engine stamps the vehicle pipe on every one of their atomics, glass
@@ -295,17 +298,18 @@ bottle's `CLEO/cutscene-override.ini`).
 
       **Block B — the remaining 18, per-scene surprises (camera angles, scene anims).**
 
-      - [ ] BCESA4W — ★csbravura, cszr350b
-      - [ ] SYND_4A — cssavanna, cswashington (also re-confirms the round-20 wheel stash)
-      - [ ] BCESA5W — cszr350, cszr350b
-      - [ ] BCRAS1 — ★cscopcarla92
-      - [ ] BCRAS2 — ★cscopcarla92
-      - [ ] CRASH3A — ★cscopcarla92
-      - [ ] CRASV2A — ★cscopcarla92
-      - [ ] CRASV2B — ★cscopcarla92
-      - [ ] CESAR1A — cssavanna
-      - [ ] RIOT4E2 — ★csfirela
-      - [ ] SCRASH2 — ★csbravura
+      - [x] BCESA4W — ★csbravura, cszr350b — **2026-08-15 ✅**
+      - [x] SYND_4A — cssavanna, cswashington (also re-confirms the round-20 wheel stash) —
+            **2026-08-15 ✅**, the stash sink confirmed again
+      - [x] BCESA5W — cszr350, cszr350b — **2026-08-15 ✅**
+      - [x] BCRAS1 — ★cscopcarla92 — **2026-08-15 ✅**
+      - [x] BCRAS2 — ★cscopcarla92 — **2026-08-15 ✅**
+      - [x] CRASH3A — ★cscopcarla92 — **2026-08-15 ✅**
+      - [x] CRASV2A — ★cscopcarla92 — **2026-08-15 ✅**
+      - [x] CRASV2B — ★cscopcarla92 — **2026-08-15 ✅**
+      - [x] CESAR1A — cssavanna — **2026-08-15 ✅**
+      - [x] RIOT4E2 — ★csfirela — **2026-08-15 ✅**
+      - [x] SCRASH2 — ★csbravura — **2026-08-15 ✅**
       - [ ] SMOKE2B — csglendale92
       - [ ] SMOKE3A — csglendale92
       - [ ] SMOKE4A — csglendale92
