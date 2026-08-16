@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
  * FILE ORDER — its material, index count and vertex range. The split order is the draw order inside the atomic
  * (RenderWare puts blended materials last), and this dump is what found the map-optimizer rebuild sorting
  * `cehollyhil06`'s vertex-alpha detail split (material 8 of 15, authored last) into the middle
- * (`docs/open-issues/sa-lod-visibility-budget.md`, round 14). Also lists the geometry extension's chunk types.
+ * (`docs/open-issues/fixed/sa-lod-visibility-budget.md`, round 14). Also lists the geometry extension's chunk types.
  *
  * Run: npx tsx scripts/debug/dump-binmesh.ts <file.dff…>   (extract from an IMG with `img-patch.ts get`)
  */

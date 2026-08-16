@@ -10,7 +10,7 @@ import { optimizeModel, type OptimizeVariant, printGeometryDiff, variantFromArgv
  * exactly `optimizer.config.ts` + `run.ts`'s addNormals/crease wiring) in memory, print what changed per
  * geometry (flags / TRISTRIP / NORMALS / PRELIT / triangles / vertices / bytes), write the DFF, and optionally
  * patch it straight into a built tree's archives (`scripts/lib/img-patch.ts`, seconds — no rebuild). The
- * instrument for the normals × repeat-texture × SkyGfx question in `docs/open-issues/sa-lod-visibility-budget.md`
+ * instrument for the normals × repeat-texture × SkyGfx question in `docs/open-issues/fixed/sa-lod-visibility-budget.md`
  * rounds 9–10. Variants and what is NOT replayed: `scripts/lib/optimize-model.ts`.
  *
  * Run:

@@ -18,7 +18,7 @@ import { createWeldVertices } from '../../tools/map-optimizer/src/plugins/weld-v
 /**
  * ONE model through the map-optimizer GEOMETRY chain, in memory, in a named variant — the shared half of
  * `scripts/debug/model-optimize.ts` and `scripts/debug/model-lab.ts` (the field A/B instruments for the
- * normals × repeat-texture × SkyGfx question, `docs/open-issues/sa-lod-visibility-budget.md` rounds 9–10).
+ * normals × repeat-texture × SkyGfx question, `docs/open-issues/fixed/sa-lod-visibility-budget.md` rounds 9–10).
  * The chain is `optimizer.config.ts` + `run.ts`'s addNormals / curated-crease wiring; the world-context
  * prelight passes are NOT replayed (they need a map-wide pre-pass and never touch structure).
  */
