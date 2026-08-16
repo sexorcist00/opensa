@@ -107,11 +107,28 @@ matched canonically. `add` appends, `remove` deletes (stream rows are never inde
 swaps; the entry is rebuilt with its CARS (parked cars) block carried over. Stream merges apply AFTER the
 mod's data merges, so their rows live in the final (post-rebase) index space.
 
-`merge-gen` (`src/merge-gen.ts` — library + CLI) converts a whole-file stock replacement (or a whole stream
-entry) into the equivalent `.merge`: iterative remove-simulation collapses the author's hand-made rebase
-edits into plain removes; mid-section inserts are relocated to appends with their lod links remapped;
-float/quaternion re-export noise is canonicalized away. Everything gates on a roundtrip (semantic link
-equivalence for inst). Real examples: `0. Map Fixes Pack` + `5. SA Xbox Map Features` — fully converted, no
+`merge-gen` (`src/merge-gen.ts` — library + CLI) converts a whole-file stock replacement into the equivalent
+`.merge`: iterative remove-simulation collapses the author's hand-made rebase edits into plain removes;
+mid-section inserts are relocated to appends with their lod links remapped; float/quaternion re-export noise
+is canonicalized away. Everything gates on a roundtrip (semantic link equivalence for inst).
+
+**Convert a mod as a WHOLE FOLDER** — `src/merge-gen-mod.ts`, and for anything with binary streams it is the
+only correct path:
+
+```sh
+npx tsx tools/mod-installer/src/merge-gen-mod.ts --vanilla game-src/original --mod "mods-src/original/mods/common/0. Map Fixes Pack" [--write]
+```
+
+A stream's `lod` indexes its area's TEXT IPL, so it can only be re-expressed once the same run knows what the
+text conversion did to that index space. Converting the two apart is how the shipped `0. Map Fixes Pack` came
+to carry links one row off in `law_stream1..4` / `law2_stream1`: the text merge was right, the streams kept
+the AUTHOR's indexes, and stream merges apply LAST — so they overwrote the installer's own rebase and the
+field lost its LODs ([`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../../docs/open-issues/ipl-row-removal-breaks-lod-links.md)).
+Folder mode diffs each stream against the entry the installer will actually have (removals already mirrored
+in) and **gates every stream end to end**: each link must resolve, in OUR merged text, to the same row the
+author's link resolved to in THEIRS, or the stream is refused instead of written. The single-file CLI now
+refuses a `*_streamN.ipl` target for the same reason. Real examples: `0. Map Fixes Pack` +
+`5. SA Xbox Map Features` — fully converted, no
 whole-file data or stream replacements left; their 27 colliding stream files now stack instead of last-wins.
 Specs: [docs/plans/007-ipl-merge-level1.md](docs/plans/007-ipl-merge-level1.md) ·
 [docs/plans/008-ipl-merge-level2.md](docs/plans/008-ipl-merge-level2.md).

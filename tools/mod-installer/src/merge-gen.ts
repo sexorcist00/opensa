@@ -467,6 +467,19 @@ function main(argv: readonly string[]): void {
   };
   const vanilla = arg('--vanilla');
   const modded = arg('--modded');
+  // A stream indexes its area's TEXT layout, so converting one alone can only carry the AUTHOR's indexes into
+  // a file whose rows we are about to renumber — the defect that shipped in `0. Map Fixes Pack`. Folder mode
+  // is the only path that has the text conversion's index map to hand.
+  if (/_stream\d+\.ipl$/i.test(modded)) {
+    console.error(
+      `${modded} is a binary stream — convert the whole mod instead, so its lod links can be re-expressed ` +
+        'against the converted text IPL: npx tsx tools/mod-installer/src/merge-gen-mod.ts ' +
+        '--vanilla <game-dir> --mod <mod-dir> [--write]',
+    );
+    process.exitCode = 1;
+
+    return;
+  }
   const kind: MergeTargetKind = modded.toLowerCase().endsWith('.ipl') ? 'ipl' : 'ide';
   const result = generateMerge(readFileSync(vanilla, 'utf8'), readFileSync(modded, 'utf8'), kind);
   if (result.kind === 'refused') {
