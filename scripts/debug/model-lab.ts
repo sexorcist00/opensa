@@ -70,6 +70,7 @@ function emptyBuildStats(): BuildStats {
     filledHoles: 0,
     filledInstances: 0,
     generatedTxds: 0,
+    mergedLods: 0,
     missingHd: 0,
     missingTxd: 0,
     parentTextures: 0,
@@ -117,7 +118,9 @@ function lodPatches(options: Options, hd: Uint8Array, hdTxdBytes: null | Uint8Ar
   const stats = emptyBuildStats();
   const atlas: TextureSource = textures ? atlasView(textures, link.hdTxd) : { get: () => null };
   const lod = cloneLodDff(hd, link, decimate, atlas, stats, lodConfig.keepParticles ?? true);
-  console.log(`  LOD ${link.lodModel}: ${lod.length} B (${stats.decimatedLods ? 'decimated' : 'verbatim clone'})`);
+  console.log(
+    `  LOD ${link.lodModel}: ${lod.length} B (${stats.decimatedLods ? 'decimated' : stats.mergedLods ? 'merged multi-atomic' : 'verbatim clone'})`,
+  );
   const patches: Patch[] = [{ bytes: lod, entry: `${link.lodModel}.dff` }];
   if (hdTxdBytes && textures) {
     const halvings = Math.max(0, Math.round(Math.log2(1 / (lodConfig.texScale ?? 0.25))));

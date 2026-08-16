@@ -125,6 +125,26 @@ procobj) must put its blended groups last, in their relative order.
 **Caught:** for `rebuildGeometry`, a unit test. For `encodeLodDff` and every merge writer: **silent** — the build
 validates, our own engine draws it fine, and the symptom appears only under a pipe that z-writes blended splits.
 
+## An `objs` LOD (or any atomic model) is ONE atomic — a multi-atomic clump written there keeps one
+
+SA's `CAtomicModelInfo` holds a single atomic; `CFileLoader::SetRelatedModelInfoCB` assigns EVERY atomic of the
+clump it reads over the previous one and re-frames the survivor at the origin, so a DFF with two atomics behind
+an `objs` row draws the FIRST atomic in the file (RW walks the clump list in reverse), at the origin, and nothing
+else ([`gta-sa-original/atomic-model-one-atomic.md`](../gta-sa-original/atomic-model-one-atomic.md)). Stock's 34
+multi-atomic map models are all `anim` rows (clump model infos, drawn whole); zero `objs` rows carry two. The
+`sa-lod-generator` byte-copied the `anim` HD `burger01_LAw` (building + burger sign on a child frame) into its
+`objs` LOD slot: the LOD was the 5 m sign at the building's origin — "LOD absent"
+([`open-issues/sa-lod-visibility-budget.md`](../open-issues/sa-lod-visibility-budget.md), round 15), and 16
+LOD entries of the `sa` build had the same shape.
+
+The rule: whatever writes a DFF an `objs` row will load emits ONE atomic. A clone or a conversion of a
+multi-atomic clump is a MERGE with the per-atomic frame transforms baked (`buildClumpMesh` does; `cloneLodDff`
+takes that path for every multi-atomic HD since 2026-08-17, budget or no budget). Never the byte-copy.
+
+**Caught:** for `cloneLodDff`, a unit test on the real `burger01_law.dff` fixture. For any other writer that
+places a clump behind an atomic row (hole-fill takes `hdToLod`, which merges — fine today): **silent** — the
+file is valid, the tools validate it, our own engine draws every atomic, and the game shows one part at the origin.
+
 ## A dictionary is not a material list
 
 A model's TXD serves several models. "This dictionary contains a glass texture" says nothing about whether

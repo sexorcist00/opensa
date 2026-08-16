@@ -188,3 +188,11 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   21). A fix has to check the alpha channel actually VARIES — a fully-opaque alpha channel is common and
   means nothing.
 
+
+- **`sa-lod-generator` clones an `anim` HD into a STATIC LOD, and one stock LOD was itself animated.**
+  `oilplodbitbase` (`counxref.ide`, `anim` row, 2 atomics — its arm nods) is the LOD the ten `nt_noddonkbase`
+  instances point at, so in stock the pump nods at 800 m too. Our clone overwrites `oilplodbitbase.dff` with a
+  merge of the 5-atomic HD (one atomic, frame transforms baked; before 2026-08-17 a verbatim 5-atomic copy whose
+  frame names no longer matched the anim), so the far view stands still. The animation is authored data we stop
+  honouring; whether an `anim`-row LOD should be left stock is the user's call and has not been made. The
+  other 15 multi-atomic HDs with a clone LOD have plain `objs` LOD rows, where nothing is lost.

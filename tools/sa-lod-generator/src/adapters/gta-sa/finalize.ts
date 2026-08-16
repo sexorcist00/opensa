@@ -63,6 +63,9 @@ export interface BuildStats {
   filledHoles: number;
   filledInstances: number;
   generatedTxds: number;
+  /** Clones of multi-atomic HDs (`anim` clumps) merged into ONE atomic without decimation — a LOD row is an
+   *  atomic model, and SA keeps exactly one atomic of it. See {@link cloneLodDff}. */
+  mergedLods: number;
   missingHd: number;
   missingTxd: number;
   /** Textures moved into the shared `salodpar.txd` txdp parent (used by ≥ 2 source atlases). */
@@ -80,6 +83,14 @@ export interface BuildStats {
  * clone stays the **verbatim byte-copy** — keeping plugins the mesh path can't carry (e.g. breakable) at zero
  * risk — with the same set applied subtractively.
  *
+ * One HD shape can NEVER be copied verbatim: a clump with several atomics (stock ships 34, every one an `anim`
+ * row — rotating signs, windmills, oil derricks, the Burger Shot's burger). A LOD row is an `objs` atomic
+ * model, and SA's `CFileLoader::SetRelatedModelInfoCB` → `CAtomicModelInfo::SetAtomic` keeps exactly ONE
+ * atomic of whatever clump it reads (the last visited, re-framed at the origin) — the byte-copy of
+ * `burger01_LAw` showed only its 5 m burger sign, at the building's origin: the field's "LOD absent". Such an
+ * HD always takes the mesh path — its atomics merged into one geometry with the frame transforms baked, the
+ * rest-pose the animation starts from — even when the budget keeps every triangle.
+ *
  * Exported for its tests: the 2dfx set a clone carries is this function's decision, and nothing else in the
  * package can be asked what it made of a real model's entries.
  */
@@ -92,13 +103,18 @@ export function cloneLodDff(
   keepParticles: boolean,
 ): Uint8Array {
   const keep = cloneKeepTypes(keepParticles);
-  if (decimate !== null) {
-    const clump = parseDff(toArrayBuffer(hdDff));
+  const clump = parseDff(toArrayBuffer(hdDff));
+  const multiAtomic = clump.atomics.length > 1;
+  if (decimate !== null || multiAtomic) {
     const mesh = buildClumpMesh(clump);
     const ctx = { textures, view: lodView(link.hdDrawDistance || 300) };
-    const decimated = decimate(mesh, ctx);
-    if (decimated !== mesh) {
-      stats.decimatedLods += 1;
+    const decimated = decimate === null ? mesh : decimate(mesh, ctx);
+    if (decimated !== mesh || multiAtomic) {
+      if (decimated !== mesh) {
+        stats.decimatedLods += 1;
+      } else {
+        stats.mergedLods += 1;
+      }
       // One pass over the policy's set, so emitters ride by default and keep their AUTHORED order among the
       // coronas — the old two-pass shape (everything-but-particles, then particles appended) reordered them.
       const effects = build2dfxSection(collectClumpEffects(hdDff, clump, keep));
@@ -169,6 +185,7 @@ export function writeBuild(input: BuildInput): BuildStats {
     filledHoles: 0,
     filledInstances: 0,
     generatedTxds: hdTxdToClone.size,
+    mergedLods: 0,
     missingHd: 0,
     missingTxd: 0,
     parentTextures,

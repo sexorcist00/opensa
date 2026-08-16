@@ -8,7 +8,7 @@ hypothesis is a place a future round must not spend money again.
 | # | vector | what is known | where it is |
 | --- | --- | --- | --- |
 | 1 | **mods** | `lodxhospital1` / `lodxhospground1` / `lod711block02` are clean the moment `mod-installer` is out of the pipeline | undiagnosed |
-| 2 | **the burger joint** | `burger01_LAw`'s LOD is absent with the optimizer in, present without it; its clone is one of 11 with atomics ≠ 1 | undiagnosed |
+| 2 | **the burger joint** | `burger01_LAw`'s LOD is absent with the optimizer in, present without it; its clone is one of 11 with atomics ≠ 1 | **round 15: diagnosed + fixed in code** (a verbatim clone of a multi-atomic `anim` HD — SA keeps ONE atomic of it); one-model swap in `bisect-nomods`, awaiting the field |
 | 3 | **normals × repeat textures** | the optimizer adds normals to prelit world geometry; the smear appears **only on repeat-textured objects** and **only while the install's SkyGfx fork is loaded** | round 10, cause located, fix NOT decided |
 
 **Superseded status: 🔴 STILL OPEN 2026-08-16 — the txdp fix did NOT work.** Self-contained dictionaries changed
@@ -544,3 +544,49 @@ geometries (multi-atomic clumps, cells, procobj) a later geometry's opaque group
 blended group. Decimated clones (`decimateBudget 0.01`) and hole-fill LODs take that path. Needs a "blended
 groups last" rule (vertex alpha < 255 / tint alpha < 255 / texture alpha via `TextureSource`), preserving
 relative order — recorded here and in `restrictions/assets-and-data.md`; not built yet.
+
+# Round 15 (2026-08-17): the burger joint — a verbatim clone of a TWO-atomic clump, and SA keeps one atomic
+
+Diagnosed with the one-model instruments alone (no rebuild): `model-lab.ts burger01_LAw --dry`, `img-patch.ts
+get` from the three trees, `dump-binmesh.ts`, and a 20-line census of every multi-atomic model behind an IDE row.
+
+**What the LOD was in each tree.** Stock `lodger01_law`: an authored 316-triangle single atomic. `bisect-nomods-noopt`
+(LOD present): a **decimated** clone — ONE geometry, 870 triangles, the two HD atomics merged. `bisect-nomods` and
+`build/original/sa` (LOD absent): a **verbatim byte-copy of the HD** — `cmp` says identical to `burger01_law.dff` —
+77 824 B, **two atomics**: `burger01_LAw` (the building, 752 tris, root frame) and `burger01_LAw3` (the 5 m burger
+sign, 336 tris, on a child frame at (7.18, −7.30, 1.01)). The budgeted decimator had rejected every target for the
+optimized HD (with the un-optimized HD it accepted one), and the fallback was the byte-copy.
+
+**Why two atomics vanish.** `burger01_LAw` is not an `objs` row — it is an **`anim` row** (`LAw.ide`, anim block
+`LAw`; the sign turns), i.e. a `CClumpModelInfo` the game loads with `LoadClumpFile` and draws whole. Its LOD row
+`LODger01_LAw` is a plain `objs` atomic model. gta-reversed's `CFileLoader::LoadAtomicFile` →
+`SetRelatedModelInfoCB` → `CAtomicModelInfo::SetAtomic` sets `m_pRwObject = atomic` for EVERY atomic of the clump
+it reads — the last one visited wins, the others are dropped, and the winner is re-parented to a fresh frame
+(`RpAtomicSetFrame(atomic, RwFrameCreate())`) so a child-frame offset is lost. RW's `RpClumpAddAtomic` inserts
+at the list head, so `RpClumpForAllAtomics` visits atomics in REVERSE file order — the LAST callback is the FIRST
+atomic in the file: the burger sign, at the building's origin. A 5 m burger inside the footprint of an 800 m-draw
+LOD is what "LOD absent" was.
+
+**Census.** Every multi-atomic model behind an IDE row in stock `gta3.img` (34 of them, excluding `_dam` pairs)
+is an **`anim` row** — rotating signs, the boigas/burger signs, windmills, oil derricks, the nodding donkeys —
+and **zero `objs` rows are multi-atomic**: R\* never fed an atomic model info more than one atomic. Of the 34,
+**16 LOD entries in `build/original/sa` were verbatim multi-atomic clones** (`lodger01_law`, `lod_cn2ringking`,
+`oilderricklod01..07`, `lodbs_building_sfs`, `lodcandysign1`, `lodboigashot10/15/23/25`, `lodckpole`,
+`lodprtlstation03`, `lodboigashotlawn`, and `oilplodbitbase`); one (`sprasfw → lodage_sfw`) had been decimated
+and was fine. Round 3's "11 clones with atomics ≠ 1" was this list.
+
+**Fix (this branch, `cloneLodDff`):** a clump with more than one atomic NEVER takes the verbatim path — it goes
+through the mesh path (`buildClumpMesh` bakes the per-atomic frame transforms = the rest pose the animation
+starts from) and is encoded as one atomic even when the budget keeps every triangle (`mergedLods` in the build
+stats; `decimateBudget 0` too). Test: `clone-multi-atomic.test.ts` on the real `burger01_law.dff` fixture (2 → 1
+atomic, 752 + 336 triangles kept, the sign's vertices at the frame offset). Rule + the loader fact in
+`docs/restrictions/assets-and-data.md` and `docs/gta-sa-original/atomic-model-one-atomic.md`.
+
+**One-model swap for the field:** `build/bisect-nomods/sa` now carries `burger01_law.dff` (chain variant) and a
+one-atomic `lodger01_law.dff` (869 tris; `img-patch.ts status --game` lists 4 patched entries). Verdict pending.
+
+**Seen on the way, not fixed:** `oilplodbitbase`, the LOD of the nodding donkey `nt_noddonkbase`, is ITSELF an
+`anim` row (2 atomics, its arm nods at 800 m in stock). Our clone overwrites it with the 5-atomic HD, so the LOD
+stopped nodding (verbatim: static, since the anim's frame names no longer match; merged: static, one atomic).
+Whether an `anim`-row LOD should be left stock is the user's call — recorded in `docs/edge-cases/`.
+

@@ -10,7 +10,7 @@ space of existing LODs.
 
 See [`docs/plans/`](./docs/plans) for the design: [001](./docs/plans/001-architecture.md) (architecture +
 measured feasibility), [002](./docs/plans/002-clone-lods.md) (Phase 1 clone), [003](./docs/plans/003-fill-missing-lods.md)
-(Phase 2 hole-fill).
+(Phase 2 hole-fill), [009](./docs/plans/009-multi-atomic-clone-merge.md) (multi-atomic HDs are merged, never byte-copied).
 
 ## Usage
 
@@ -36,7 +36,10 @@ see the `lod-detection-name-vs-target` memory). The text↔binary `lod`-index co
 - Replace each **per-object** LOD's `.dff` with its HD's bytes — **budget-decimated** when the clone's own
   render diff stays within `decimateBudget` (re-encoded with night prelit + tints + transplanted 2dfx coronas),
   else **verbatim** (a known-good SA byte-copy — sidesteps every DFF format gotcha and keeps plugins like
-  breakable). Textures: `texScale` (default 0.25, 32 px floor) DXT TXDs, **`txdp`-partitioned** (plan 006) —
+  breakable). **Exception: a multi-atomic HD (an `anim` clump — rotating signs, derricks, the Burger Shot) is
+  always MERGED into one atomic** (frame transforms baked, budget or not — `mergedLods` in the stats): a LOD row
+  is an `objs` atomic model and SA keeps exactly one atomic of a clump it reads, at the origin
+  (`docs/gta-sa-original/atomic-model-one-atomic.md`; plan 009). Textures: `texScale` (default 0.25, 32 px floor) DXT TXDs, **`txdp`-partitioned** (plan 006) —
   textures used by ≥ 2 source atlases live once in the shared `salodpar.txd` parent, children keep only their
   unique ones (`salod-txdp.ide` registers the links before the first IPL); retarget the LOD's IDE `txd`.
   Same-named textures with DIFFERENT pixels stay per-child, each resolved from its own atlas (lod-common plan 004).

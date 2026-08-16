@@ -211,6 +211,11 @@ const MANIFEST: readonly Fixture[] = [
   extract('countrye_stream1.ipl', 'ipl_binary/countrye_stream1.ipl'),
   extract('counxref.ifp', 'dff/anim-clump/counxref.ifp'),
   extract('nt_noddonkbase.dff', 'dff/anim-clump/nt_noddonkbase.dff'),
+  // The Burger Shot of LAw — an `anim` clump of TWO atomics (the building at the root, its 5 m burger sign on a
+  // child frame at (7.2, −7.3, 1.0)). Its stock LOD row is a plain `objs` atomic, and SA keeps ONE atomic of
+  // whatever clump such a row reads: a verbatim clone showed only the sign, at the origin — the "LOD absent"
+  // of open issue sa-lod-visibility-budget round 15. The clone must merge the atomics with the frame offset baked.
+  extract('burger01_law.dff', 'dff/anim-clump/burger01_law.dff'),
   // Plan 095's two geometry-parity fixtures, both STOCK:
   //   roads32_law2 — the vanilla beach slab, whose face array AGREES with its drawn index data. It is the
   //     control for the mod copy above: same model, same 93 triangles, and the winding must not move.

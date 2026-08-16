@@ -51,6 +51,7 @@ function stats(): BuildStats {
     filledHoles: 0,
     filledInstances: 0,
     generatedTxds: 0,
+    mergedLods: 0,
     missingHd: 0,
     missingTxd: 0,
     parentTextures: 0,
