@@ -464,6 +464,14 @@ So candidate (a) is dead and (b) is the mechanism: **the fork's building PIPE �
 bytes correctly. The pixel shader is innocent. What remains to separate is WHICH property of our output the
 fork's pipe trips on: the normals array (the `NORMAL` element / stride 40 / `rpGEOMETRYLOCKNORMALS` path in
 `DNInstance_PS2`) or the strip→list re-encode + vertex split. Probe (c) — `model-lab.ts cehollyhil06
---strip-normals-after` (normals gone, trilist + 1 322 verts kept) — answers it in one restart; a fourth
-variant, normals ON with the tristrip form KEPT (the overlay path `applyMeshToStruct` takes when no vertex
-splits — a model whose smooth-normals pass adds no split vertices), would close the other half.
+--strip-normals-after` (normals gone, trilist + 1 322 verts kept) — answers it in one restart; the fourth
+variant is free: `--crease 180` makes smooth-normals split nothing, so the overlay path keeps the STRIP —
+`cehollyhil06` comes out `0x7f STRIP NPL`, 1 320 verts, 73 184 B: **normals ON, tristrip KEPT, no split**.
+The two probes are orthogonal:
+
+| variant | flags | verts | if the field says FIXED | if the field says BROKEN |
+| --- | --- | --- | --- | --- |
+| `--strip-normals-after` | `0x6e LIST -PL` | 1 322 | it is the normals array (the fork's `NORMAL` element / lock path) | it is the re-encode |
+| `--crease 180` | `0x7f STRIP NPL` | 1 320 | it is the re-encode | it is the normals array |
+
+Both patched via `model-lab.ts` (HD + clone LOD), one restart each.
