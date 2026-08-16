@@ -449,3 +449,21 @@ Instruments (this session): `scripts/debug/model-optimize.ts` (one model, one va
 an HD-only patch leaves the far view broken), `scripts/debug/img-patch.ts` (append-and-repoint swaps with a
 ledger, `restore` per entry). `build/bisect-nomods/sa` is back to its broken shipped bytes after the round-trip
 tests (ledger empty).
+
+# Round 12 (2026-08-17, field): `buildingPipe=` empty FIXES it, `stochasticTexturing=0` does not
+
+Two single-variable ini probes on the same broken build, one restart each:
+
+| probe | verdict |
+| --- | --- |
+| `stochasticTexturing=0` (fork's PS back to the plain tap, pipe still hooked) | **still broken** |
+| `buildingPipe=` (empty — the fork does NOT hook the building pipe; everything else in the plugin stays) | **fixed** |
+
+So candidate (a) is dead and (b) is the mechanism: **the fork's building PIPE — its instancer `DNInstance_PS2`
++ `ps2BuildingVS` — mishandles what the optimizer writes**, while the game's own building pipe draws the same
+bytes correctly. The pixel shader is innocent. What remains to separate is WHICH property of our output the
+fork's pipe trips on: the normals array (the `NORMAL` element / stride 40 / `rpGEOMETRYLOCKNORMALS` path in
+`DNInstance_PS2`) or the strip→list re-encode + vertex split. Probe (c) — `model-lab.ts cehollyhil06
+--strip-normals-after` (normals gone, trilist + 1 322 verts kept) — answers it in one restart; a fourth
+variant, normals ON with the tristrip form KEPT (the overlay path `applyMeshToStruct` takes when no vertex
+splits — a model whose smooth-normals pass adds no split vertices), would close the other half.

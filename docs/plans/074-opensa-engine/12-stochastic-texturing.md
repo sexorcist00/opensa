@@ -3,6 +3,7 @@
 > **STATUS: UNSTABLE — built, data-ready, DEFAULT OFF (user verdict 2026-07-12).** Ships dormant
 > (`Environment.stochastic = 0`, `?stoch=1` re-enables). Needs finishing before default-on: the
 > histogram-preserving upgrade, a grazing-angle field test, and a per-texture list QA pass.
+> What that finishing would be, with what session 17 learned from the reference install: [ideas/stochastic-texturing-v2](../../ideas/stochastic-texturing-v2/readme.md).
 
 [← chain](readme.md) · relates: [02 formats](02-native-formats.md) · [03 converter](../../../tools/opensa-pack/docs/plans/000-converter-tool.md) ·
 [06 effects](06-world-effects-parity.md)

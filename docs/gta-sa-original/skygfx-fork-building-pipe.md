@@ -78,6 +78,12 @@ building-pipe atomics: it builds its own vertex declaration, instances vertex CO
 (a `BinMeshPLG` our optimizer regenerated) is handled by fork code instead of the game's**, and therefore the
 only structural reason a re-encoded model could look different WITH the plugin and fine WITHOUT it.
 
+## Measured (2026-08-17, field)
+
+`stochasticTexturing=0` does NOT remove the optimizer-output smear; `buildingPipe=` (empty) DOES — the fork's
+building pipe (instancer + VS) is the surface that mishandles our re-encoded geometry, and the game's own
+pipe draws the same bytes correctly. Which property trips it is the open probe in the issue's round 12.
+
 ## What is caught
 
 Nothing. The build validates, our own engine renders the same bytes correctly, and the plugin's ini is
