@@ -15,7 +15,7 @@ import { optimizeModel, type OptimizeVariant, printGeometryDiff, variantFromArgv
  *
  * Run:
  *   npx tsx scripts/debug/model-optimize.ts <model…> --src game-src/original [--patch build/bisect-nomods/sa]
- *       [--out build/model-lab] [--no-add-normals | --strip-normals-after | --raw] [--crease <deg>]
+ *       [--out build/model-lab] [--no-add-normals | --strip-normals-after | --list-only | --restrip | --raw] [--crease <deg>]
  * `--src` is any game dir whose archives hold the model's PRE-optimizer bytes (`game-src/original`, or a
  * `--exclude optimize` build such as `build/bisect-nomods-noopt/sa`). `--patch` appends into every archive
  * of that tree carrying the name; `img-patch.ts restore <model>.dff --game <tree>` undoes it.

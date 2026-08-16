@@ -35,7 +35,7 @@ import { optimizeModel, type OptimizeVariant, printGeometryDiff, variantFromArgv
  * Run:
  *   npx tsx scripts/debug/model-lab.ts <model> --tree build/bisect-nomods/sa
  *       (--src game-src/original | --dff <file.dff> [--txd <file.txd>])
- *       [--no-add-normals | --strip-normals-after | --raw] [--crease <deg>] [--out build/model-lab] [--dry]
+ *       [--no-add-normals | --strip-normals-after | --list-only | --restrip | --raw] [--crease <deg>] [--out build/model-lab] [--dry]
  * `--dry` writes the outputs and prints the plan without touching the tree. Undo:
  *   npx tsx scripts/debug/img-patch.ts restore <hd>.dff --game <tree>   (and <lod>.dff, the .txds)
  */
