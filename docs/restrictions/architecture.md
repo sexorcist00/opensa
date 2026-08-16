@@ -136,6 +136,23 @@ can differ from `game-src/<game>/data/*` completely. Diagnosing against the sour
 
 **Caught:** no. The check is one command: confirm which folder is being served before forming a hypothesis.
 
+### …so a stage writing a PERSISTENT `--out` wipes it before mirroring
+
+`build/<game>/sa` and `build/<game>/opensa` outlive a build. A stage that mirrors its input over them with a
+bare `cpSync` leaves everything an EARLIER run wrote and this one does not — in a tree whose whole authority
+comes from being what the game reads. Found 2026-08-16: 23 mod IPLs from a failed run were still sitting in
+`build/original/sa/data/maps`, unreferenced by `gta.dat`. Dead weight that time; the same mechanism keeps a
+stale model or a retired data file alive the next.
+
+The convention is `copyGameDir` (`@opensa/tool-kit/game-dir`) — wipe, then mirror — with `guardOut` in front
+of it. Every installer already used it; `sa-lod-generator` and `opensa-lod-generator`'s finalize did not, and
+now do.
+
+**Caught:** partly. `copyGameDir` is tested to replace whatever `--out` held, and `opensa-lod-generator`'s
+finalize is tested against a planted stale file — but nothing stops the NEXT tool from writing a persistent
+`--out` with a bare `cpSync`, and the symptom is silent by construction (the build succeeds; the tree just
+carries a file nobody asked for).
+
 ## A build asks for a target, not for the whole pipeline
 
 `sa` and `opensa` are independent targets of the same source tree. Which STAGES run is pmb's `--exclude`

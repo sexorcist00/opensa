@@ -17,7 +17,8 @@ import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parse
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { build2dfxSection } from '@opensa/rw-codec/dff';
 import { editArchive, writeImgFile } from '@opensa/tool-kit/archive/img';
-import { cpSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyGameDir, guardOut } from '@opensa/tool-kit/game-dir';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { LodLink } from '../../core/types';
@@ -142,7 +143,13 @@ export function writeBuild(input: BuildInput): BuildStats {
   const perObject = perObjectLinks(input.links);
   const skippedShared = distinctLods(input.links) - distinctLods(perObject);
 
-  cpSync(input.gameDir, input.outDir, { force: true, recursive: true });
+  // WIPE, then mirror — the chain's `copyGameDir` convention, and here it is a correctness rule rather than
+  // tidiness: `<out>/sa` outlives a build, so anything an earlier run wrote and this one does not would
+  // SURVIVE into the tree a field run reads. Found 2026-08-16 with 23 mod IPLs still sitting in `data/maps`
+  // from a failed run, unreferenced by gta.dat — harmless that time, and the same mechanism keeps a stale
+  // model alive next time (`tools/mod-installer/docs/plans/013-slot-fold-across-hosts.md`).
+  guardOut(input.outDir, input.gameDir);
+  copyGameDir(input.gameDir, input.outDir);
   const img = editArchive(input.archives.gta3);
 
   const { hdTxdToClone, parentTextures } = packCloneTxds(perObject, input, img);

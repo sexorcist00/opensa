@@ -49,11 +49,12 @@ resolves onto its owner afterwards: **15 648 checked, 0 findings** by `assertLod
 ([plan 012](./012-stream-merge-lod-space.md)). Build time 11m 26s, mods stage 1m 25s — the fold itself is not
 measurable against it. Tests: +3.
 
-**Also found, NOT fixed here:** `sa-lod-generator`'s finalize copies the game tree into `<out>/sa` with
-`cpSync` and no wipe, so a file an earlier build produced and this one does not **survives**. The 23 folded
-mod IPLs were still sitting in `build/original/sa/data/maps` from the failed run before the fix, unreferenced
-by `gta.dat` — dead weight this time, but the same mechanism keeps a stale model or IPL alive in the tree a
-field run reads. Removed by hand from the current build; worth a guard of its own.
+**Also found, and fixed straight after (the user's call):** `sa-lod-generator`'s finalize copied the game tree
+into `<out>/sa` with `cpSync` and no wipe, so a file an earlier build produced and this one does not
+**survived**. The 23 folded mod IPLs were still sitting in `build/original/sa/data/maps` from the failed run,
+unreferenced by `gta.dat` — dead weight that time, and the same mechanism keeps a stale model alive the next.
+Both LOD generators now mirror through `copyGameDir` (wipe, then copy) behind `guardOut`; the rule is in
+[`docs/restrictions/architecture.md`](../../../../docs/restrictions/architecture.md).
 
 ## The margin, stated plainly
 

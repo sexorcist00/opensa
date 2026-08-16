@@ -6,7 +6,8 @@ import { encodeLodDff } from '@opensa/lod-common/encode-dff';
 import { encodeLodTxd } from '@opensa/lod-common/encode-txd';
 import { type ScopedRegistry, scopedSource } from '@opensa/lod-common/scoped-texture';
 import { createImg, writeImgFile } from '@opensa/tool-kit/archive/img';
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyGameDir, guardOut } from '@opensa/tool-kit/game-dir';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { BakedCell } from '../../core/types';
@@ -70,7 +71,11 @@ export function meshBounds(mesh: { positions: Float32Array }): { max: Vec3; min:
  * stripped (follow-up), so they coexist with the new cell-LODs.
  */
 export function writeBuild(options: BuildOptions): void {
-  cpSync(options.gameDir, options.outDir, { force: true, recursive: true });
+  // WIPE, then mirror (the chain's `copyGameDir` convention): this `--out` can be a persistent build dir, and
+  // a file an earlier run wrote and this one does not would otherwise survive into it — see the same fix in
+  // `sa-lod-generator`'s finalize.
+  guardOut(options.outDir, options.gameDir);
+  copyGameDir(options.gameDir, options.outDir);
 
   const img = createImg();
   const objs: string[] = [];
