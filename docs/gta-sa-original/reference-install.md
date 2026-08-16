@@ -128,6 +128,22 @@ is 2.23× past that ceiling, so `perfect-map.asi` is not an optimisation here �
 which is exactly what the 2026-08-07 A/B showed when `ProperFixes.asi` (its own equivalent patch) was
 removed.
 
+## The fourth plugin — it owns no ceiling and still changes what we may ship (2026-08-16)
+
+The table above is about LIMITS. `skygfx.asi` sets none, and it still belongs in any plan that touches world
+geometry, because on this install it is the **JuniorDjjr fork** and not aap's original: it replaces SA's
+building pixel shaders and carries its own path for **repeating / tiled** textures (the same stochastic
+de-tiling our own [074·12](../plans/074-opensa-engine/12-stochastic-texturing.md) took its design from).
+
+What that means for a plan: **"the vanilla renderer" is not what this install runs.** A geometry property SA
+itself tolerates can still misrender here, and the reverse — a field verdict of "the game cannot take this"
+may be a verdict about one plugin's shader. The first case is already measured
+([sa-lod-visibility-budget.md](../open-issues/sa-lod-visibility-budget.md)): normals added to prelit world
+geometry smear only on repeat-textured objects, and only while this plugin is loaded.
+
+**Caught:** no, and it cannot be. The build validates, our own engine renders it correctly, and the symptom
+exists only under a third-party shader — the only instrument is a field run with the plugin removed.
+
 ## What may and may not be assumed
 
 - **May be assumed** for a plan targeting this install: no per-file row ceiling **for text rows alone** (9 627

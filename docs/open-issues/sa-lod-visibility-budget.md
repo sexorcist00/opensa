@@ -1,6 +1,17 @@
 # Building LODs that never draw on the `sa` build — the data is perfect, so the budget is the suspect
 
-**Status: 🔴 STILL OPEN 2026-08-16 — the txdp fix did NOT work.** Self-contained dictionaries changed
+**Status: 🟡 SPLIT INTO THREE, 2026-08-16 evening.** The single "LODs do not draw" issue this file was opened
+on turned out to be **three unrelated defects**, separated by a staged pipeline bisect (rounds 7–10 at the
+bottom). Read those first — everything above them is the falsified history, kept because each dead
+hypothesis is a place a future round must not spend money again.
+
+| # | vector | what is known | where it is |
+| --- | --- | --- | --- |
+| 1 | **mods** | `lodxhospital1` / `lodxhospground1` / `lod711block02` are clean the moment `mod-installer` is out of the pipeline | undiagnosed |
+| 2 | **the burger joint** | `burger01_LAw`'s LOD is absent with the optimizer in, present without it; its clone is one of 11 with atomics ≠ 1 | undiagnosed |
+| 3 | **normals × repeat textures** | the optimizer adds normals to prelit world geometry; the smear appears **only on repeat-textured objects** and **only while the install's SkyGfx fork is loaded** | round 10, cause located, fix NOT decided |
+
+**Superseded status: 🔴 STILL OPEN 2026-08-16 — the txdp fix did NOT work.** Self-contained dictionaries changed
 nothing in the field (`lodxhospground1`, `lod711block02` still absent, the white patches unchanged), so the
 parent was a real defect but not THIS one. What the bisect proved stands: the `salod*` dictionary is the
 failing half, since the same clone geometry renders with a stock atlas. Round 5 fixes the last structural
@@ -242,3 +253,164 @@ Each stage is a field verdict, not an argument. Whatever the answer, it lands in
 `mods-src/<game>/lod-exclude.json` already exists for exactly this: models that must not enter the far LODs.
 Listing the ~6 leaves them their stock LODs and costs nothing. The alternative is turning cloning off for the
 `sa` target entirely — proven clean, at the price of the detail the feature buys and 5.5× the LOD payload.
+
+---
+
+# Round 7 (2026-08-16): the staged bisect, and what it cost to get three bootable trees
+
+Branch `lod-field-bisect` (created as a marker; **it carries no commits of its own** — the whole bisect was
+build-tree work, so there is nothing on it to merge and it can be deleted whenever). Three trees on disk:
+
+| tree | pipeline | role |
+| --- | --- | --- |
+| `build/original/sa` | everything | the broken reference |
+| `build/bisect-nomods/sa` | `--exclude mods` | mods out, optimizer + LOD stage in |
+| `build/bisect-nomods-noopt/sa` | `--exclude mods,optimize` | also without `map-optimizer` |
+
+## Four traps that ate most of the round — record them before the next bisect
+
+1. **`--exclude mods` removes the entire RUNTIME, not just mod content.** FLA, OLA, CLEO and modloader are
+   installed BY `mod-installer`, so a nomods tree cannot boot at all. Worked around by running it inside the
+   user's bottle, which keeps its own plugins. **Any future `--exclude mods` build needs this said out loud.**
+2. **Both bisect trees threw at 41 of 40 inst-bearing IPL slots** — because `compactStockInstIpls` also lives
+   inside `mod-installer`. Fixed by running the compaction by hand on both trees (→ 39) and copying the ASIs
+   in. The stage that enforces a stock ceiling must not be the stage a bisect removes.
+3. **FLA crashed on model ID 14769** — `carupg_int_rays`, added by `5. SA Xbox Map Features`. This was a MIXED
+   install: our stock `data/` next to the bottle's already-modded `gta_int.img`. A bisect tree is only honest
+   when the archives and the tables come from the same place.
+4. **`salod-txdp.ide` crashed the game** — the bottle kept an old `gta.dat` registering a file the new build
+   no longer writes. That produced the `assertGtaDatFiles` guard now in the pipeline, so the class is closed.
+
+## The field verdict: one issue was three
+
+| tree | `lodxhospital1` / `lodxhospground1` / `lod711block02` | ground-LOD white patches (`lodcuntw65`) | `burger01_LAw` LOD |
+| --- | --- | --- | --- |
+| `build/original/sa` | **missing** | **present** | **missing** |
+| `bisect-nomods` | **all fixed** | **present** | **missing** |
+| `bisect-nomods-noopt` | fixed | **gone** | **present** |
+
+Read straight off the table: the hospital group belongs to **mods**, the white patches and the burger joint
+belong to **`map-optimizer`**. Nothing here is about the LOD clone stage, the `salod*` dictionaries, or any
+budget — which retires everything in rounds 1–6 above as background.
+
+# Round 8: the swaps prove the optimizer's OUTPUT is the defect, and it is not a LOD problem at all
+
+In-place DFF swaps inside `gta3.img` (dir entry repointed, no rebuild), each one field-checked:
+
+| swap | verdict |
+| --- | --- |
+| `lodcuntw65`: optimized → pre-optimizer version | **fixed**, and the neighbouring `lodcuntw66` fixed with it |
+| a synthetic probe: stock geometry + trilist `BinMeshPLG` + tristrip flag cleared | model **vanished entirely** — the splice was structurally sound (flags 0, 660 indices = 220×3), so this measured nothing except that a hand-built mesh is easy to get wrong |
+| `cehollyhil06` (**HD**, the rock at 994, −841): optimized → pre-optimizer version | **fixed** — "the smear is gone" |
+
+**The user's correction is the load-bearing one:** LODs are CLONED FROM the HD, and the same artifact is on
+the HD itself — he flew to the biggest instance of it and stood on it. So this was never a LOD-visibility
+issue; the clone stage only propagates what the optimizer already did to the source model.
+
+# Round 9: the exact per-model difference
+
+`cehollyhil06`, decoded from the three trees (Geometry → Struct header):
+
+| | flags | triangles | vertices | struct bytes |
+| --- | --- | --- | --- | --- |
+| stock `game-src/original` | `0x1006f` | 1003 | 1320 | 39 744 |
+| `bisect-nomods-noopt` (clean) | `0x1006f` | 1003 | 1320 | 39 744 |
+| optimized | `0x1007e` | 1003 | **1322** | **55 656** |
+
+Flag delta: **TRISTRIP (`0x01`) cleared, NORMALS (`0x10`) set**. Triangle count untouched; two vertices split;
+the +15 912 bytes are exactly the normals array (1322 × 12 B). Clump total 56 184 → 75 768.
+
+## The single-variable probe
+
+Re-ran `map-optimizer --no-add-normals` over `game-src/original` and patched only that model in:
+
+- output is **1320 vertices, flags `0x6f`** (tristrip KEPT), 57 344 B, differing from stock in **378 bytes
+  across 127 ranges** — i.e. the prelit pass and the always-on core, nothing structural.
+- **Field: the HD rock is fixed.**
+
+**Honest limit of that probe:** it does not separate the normals array from the strip→list re-encode, because
+with normals off the mesh is not re-encoded at all. Both moved together.
+
+## The census that says which of the two is the anomaly
+
+Over `game-src/original` (19 193 geometries) and `build/original/sa` (24 672):
+
+| | stock | our `sa` build |
+| --- | --- | --- |
+| tristrip | 18 194 (94.8 %) | — |
+| trilist | **999 (5.2 %)** | — |
+| carries normals | 5 758 (30 %) — 5 727 of them also LIGHT-flagged, and the examples are **dynamic** objects (`bottle`, `beer_girla`, `burg_ga`) | — |
+| **prelit only** | 13 356 | 2 279 |
+| **normals only** | 5 501 | 10 468 |
+| **prelit AND normals** | **257 (1.3 %)** | **11 853 (48 %)** |
+
+Trilist is not an anomaly (stock ships 999) and normals are not an anomaly (stock ships 5 758). **The
+combination is**: stock world geometry is either baked with prelit and carries no normals, or is dynamic and
+lit by normals. We put both on half the map.
+
+## It was already written down in our own code
+
+`tools/map-optimizer/src/plugins/smooth-normals.ts:38`, on `addWhereAbsent`:
+
+> Default **false**: stock SA world geometry is prelit + LIGHT-flagged WITHOUT normals (777 of 800 sampled
+> geometries) — adding normals flips real SA into its dynamic vertex lighting path and shades the whole map
+> with giant triangle-interpolated fans. OpenSA builds opt in (`addNormals` pass) — its renderer wants
+> normals for SSAO (plan 015).
+
+"Giant triangle-interpolated fans" is the reported symptom, verbatim. The safe default was then overridden
+globally by `tools/perfect-map-builder/src/config.ts:86` (`optimizerPasses: { addNormals: true }`), and since
+the `sa` target and the OpenSA pak are cut from the SAME optimize stage, the SA tree inherited a property
+that only OpenSA's renderer wants. **That is the whole mechanism of how it shipped.**
+
+# Round 10: the install names the counterparty — SkyGfx's repeat-texture path
+
+The field observation that reframes the fix (his, 2026-08-16 evening):
+
+- **the defect appears on objects with REPEAT (tiled) textures** — not on arbitrary geometry;
+- **removing `skygfx.asi` removes the problem entirely**;
+- **the install's SkyGfx is not aap's** — it is the **JuniorDjjr fork**
+  (<https://github.com/JuniorDjjr/skygfx>), which carries **special handling for repeat textures**.
+
+That fork is already researched in this repo: [074·12 stochastic
+texturing](../plans/074-opensa-engine/12-stochastic-texturing.md) took its design from it — a curated
+`models/texdb.txt` tags texture NAMES, and `src/buildingPipe.cpp` swaps the building **pixel shader** per
+tagged texture (`simpleStochasticPS`, `xboxBuildingStochasticPS`). So the surface that misrenders is being
+drawn by a REPLACED shader, and the interaction is between the normals we added and that shader's path.
+
+Recorded on the install side in the same change:
+[reference-install-config.md](../gta-sa-original/reference-install-config.md) (which fork, and that its
+plugin list's "only three matter" line is about LIMITS only) and
+[reference-install.md](../gta-sa-original/reference-install.md) ("the vanilla renderer" is not what the
+target install runs).
+
+## What this rules OUT as the fix
+
+**Turning `addNormals` off for the `sa` target is rejected** (his call). It would trade a rendering defect for
+a data loss — the `sa` tree stops carrying the only place curvature intent is expressed — and it answers
+nothing about why the fork's shader cannot take them. The question to answer is **how to ship normals the
+target install's shaders render correctly**, not how to stop shipping them.
+
+## Built but NOT field-tested, and then reverted at his request
+
+A surgical normals strip (chunk-level: clear the NORMALS flag, drop the morph-target normals array, leave
+everything else byte-identical — `cehollyhil06` 77 824 → 61 960 B, 1322 vertices and the trilist form kept,
+flags `0x6e`, prelit intact) was patched into `bisect-nomods` and then rolled back before the field check.
+It would have answered one narrow question — *is the normals array alone enough, with the re-encode left in* —
+and that question is still open. `build/bisect-nomods/sa` currently holds the **broken** optimized model
+again, deliberately.
+
+## Loose ends left in the bisect trees
+
+- `lodcuntw65` in `build/bisect-nomods/sa` is still the failed trilist probe (a hole in the world). Its
+  archive entry was shrunk to 11 sectors, so the clean 21-sector version cannot be written back in place —
+  it needs a rebuild or an append-to-tail patch.
+- Patched entries in that tree were appended past the end of `gta3.img` with the directory repointed; the
+  file is valid but no longer offset-ordered.
+
+## The three vectors, as he framed them
+
+1. **mods** — the hospital group. Undiagnosed; the bisect only proved `mod-installer` is upstream of it.
+2. **the burger joint** — `burger01_LAw`'s LOD, absent with the optimizer in. Note it is also one of the 11
+   clones whose atomic count ≠ 1, the one structural oddity that survived round 3's census.
+3. **normals × repeat textures × the SkyGfx fork** — cause located, fix undecided, and the decision must
+   start from what the fork's building pipe does with normals on a tagged tiled texture.

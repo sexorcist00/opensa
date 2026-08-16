@@ -35,6 +35,18 @@ Also present as loaders/support: `DllTricks.dll`, `GTAINTERFACE.dll`, `MinHook.x
 Of these, only three touch anything a map-content plan budgets against: **OLA**
 (`III.VC.SA.LimitAdjuster.asi`), **FLA** (`$fastman92limitAdjuster.asi`) and **ours** (`perfect-map.asi`).
 
+**That sentence is about LIMITS only, and reading it as "the rest cannot affect our output" cost a session
+(2026-08-16).** `skygfx.asi` here is **not** aap's original — it is the **JuniorDjjr fork**
+(<https://github.com/JuniorDjjr/skygfx>), which replaces SA's building pixel shaders and ships its own
+handling for **repeating / tiled textures** (the stochastic de-tiling researched in
+[074·12](../plans/074-opensa-engine/12-stochastic-texturing.md): a curated `models/texdb.txt` marks texture
+names, and `buildingPipe.cpp` swaps the pixel shader per marked texture). It therefore decides how OUR
+geometry is shaded, and a field symptom on this install can belong to it rather than to the game.
+**Measured consequence:** the washed-out "smear" on tiled world surfaces in
+[sa-lod-visibility-budget.md](../open-issues/sa-lod-visibility-budget.md) reproduces only with this plugin
+present — removing it removes the symptom — and only on repeat-textured objects. Nothing catches this class:
+the build is valid, our own renderer shows it correctly, and the defect exists only under the fork's shaders.
+
 ## `perfect-map-asi.log`, verbatim
 
 ```
