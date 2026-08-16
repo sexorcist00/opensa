@@ -64,16 +64,39 @@ Neither is confirmed. Both are recorded so the next round starts from a hypothes
 - **Streaming / LOD preload.** The install runs `ImprovedStreaming` with `PreLoadLODs = 1` and
   `StreamMemoryForced = 1024`; a 189 MiB LOD payload is 5.5× what that configuration was proven against.
 
+## Both candidates are DEAD — field-tested 2026-08-16, same day
+
+- **Approaching from different distances and headings changes nothing.** The HD swaps in when close; the LOD
+  never appears at any range or angle. A visible-pointer overflow depends on how many LODs compete in the
+  frustum, so this rules that family out.
+- **`PreLoadLODs = 0` did not help.** The preload budget is not it either.
+
+So it is neither of the two ceilings this file was opened on, and it is not the data. What is left is
+something the `sa` LOD stage does to these models that SA rejects SILENTLY — a model whose TXD fails to load
+is never marked loaded, and an unloaded model is never drawn, which is exactly this symptom.
+
+**A byte-level look at our generated dictionaries against stock's, recorded but NOT yet accused:**
+
+| field | ours (`salod*`) | stock (`lod2lae1`) |
+| --- | --- | --- |
+| raster format | `0x8300` — EXT_MIPMAP + **4444**, on DXT1 data | `0x0200` — **565** |
+| mip levels | 6–7 | **1** |
+| mask name | the texture's own name, duplicated | empty |
+| shared txdp parent | `salodpar.txd`, **2.76 MB / 1 086 textures** | none |
+
 ## The experiments that would separate them, cheapest first
 
-1. **No rebuild:** approach the missing LOD from different distances and headings. A visible-pointer overflow
-   depends on how many LODs are in the frustum, so the LOD should appear when fewer compete; a per-model
-   failure never appears. **This one test splits the two families.**
-2. **One ini line:** `PreLoadLODs = 0` in `ImprovedStreaming.ini`. If the LODs come back, it is the preload
-   budget rather than the render array.
-3. **One build (~11 min):** `--exclude trees`. If the building LODs return with the impostor layer gone, the
-   ~9 500 vegetation LOD entities are what crowd them out, and the fix is a density/grouping decision rather
-   than a limit lift.
+1. ~~Approach from different distances and headings~~ — **run, negative** (see above).
+2. ~~`PreLoadLODs = 0`~~ — **run, negative** (see above).
+3. **Built and waiting on the field, 2026-08-16:** a `--exclude trees` build (9m 40s) with the impostor layer
+   gone — LOD instances 15 631 → 6 174 — and, in the SAME tree, three models reverted to their STOCK LOD by
+   hand (`lodxhospital1`, `lodidlewood12`, `lodger01_law`: stock `.dff` written back over the clone in place,
+   IDE `txd` column pointed back at `lod2lae1` / `lod_a_law`). One trip, three answers:
+   - **only the three reverted LODs return** → the `sa` LOD stage's own output is the cause, and the next
+     split is clone-DFF vs `salod*` TXD;
+   - **all the missing LODs return** → the impostor layer was crowding them out after all;
+   - **nothing returns** → the cause is upstream of the LOD stage entirely (mods or optimize), which would
+     exonerate the whole clone/`salod` mechanism in one observation.
 
 ## If it is the array
 
