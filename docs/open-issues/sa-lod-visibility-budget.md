@@ -98,9 +98,42 @@ is never marked loaded, and an unloaded model is never drawn, which is exactly t
    - **nothing returns** → the cause is upstream of the LOD stage entirely (mods or optimize), which would
      exonerate the whole clone/`salod` mechanism in one observation.
 
-## If it is the array
+## Round 3 (2026-08-16): the impostors are innocent, and ONE revert rendered
 
-We already lift a SA ceiling nobody else reaches — the int16 `IplDef` in `asi/perfect-map` — and
-`ms_aVisibleLodPtrs` is the same kind of static array. Lifting it there is the honest fix; reducing the
-impostor entity count (fewer, bigger cards) and decimating the clone LODs are the levers that cost nothing at
-runtime. **None of that is worth building until experiment 1 says which family it is.**
+Field verdict on the `--exclude trees` + three-reverts build:
+
+- **`LODxhospital1`, reverted to its stock dff + stock atlas, is visible for the first time.** The single
+  controlled change that has ever fixed one of these.
+- `LODut01_LAwN` (`salod0558`, untouched) also appeared.
+- `LODxhospground1` (`salod0424`) and `LOD711block02` (`salod0433`) are still missing — the first sits
+  directly under the hospital LOD that now renders.
+- **The impostor layer is not the cause**: with all ~9 500 tree LODs gone the missing set is "5–6 objects for
+  the whole city, plus or minus the same ones" (his words). That also sets the SCALE — this is a handful of
+  models, not a class.
+
+So the `sa` LOD stage's own output breaks a small, specific set. What does NOT separate the broken from the
+working, all measured on the built tree:
+
+| candidate | broken | working | verdict |
+| --- | --- | --- | --- |
+| model size | `lodxhospground1` 98 KiB | `lodut01_lawn` 108 KiB | not it |
+| atomics / geometries | 1 / 1 | 1 / 1 (only 10 clones map-wide have ≠1, none of them these) | not it |
+| textures resolving | all resolve, 1 via the `salodpar` parent | all resolve, 3 via the parent | not it |
+| DXT5 in the model's own textures | `lod711block02` 14 of 24 — but `lodxhospground1` **0** | 0 | not it ALONE |
+
+**One fact worth keeping whatever the cause turns out to be:** stock SA ships **28 786 DXT1 + 2 095 DXT3
+textures across 3 978 dictionaries and not a single DXT5**. Our clone dictionaries emit DXT5 for anything with
+alpha — 399 of 995 carry at least one. That is outside the range the game's own content occupies, and
+`encodeHalvedTxd` should be writing DXT3 for alpha regardless of how this issue resolves.
+
+## Waiting on the field: the DFF/TXD split
+
+The same build now carries a two-way bisect, patched in place (no rebuild), on the two still-missing models:
+
+- **`lodxhospground1` — STOCK dff, our `salod0424` dictionary.** Its stock textures are not in that
+  dictionary, so **white = the model loaded** (the dictionary is fine and the clone DFF was the fault);
+  **still missing = the dictionary is what fails to load**.
+- **`lod711block02` — our clone dff, the STOCK `lod2lae1` atlas.** Same reading, mirrored.
+
+A model whose TXD never loads is never marked loaded, and an unloaded model is never drawn — which is why
+"white or absent" is the question that splits the remaining half in one look.
