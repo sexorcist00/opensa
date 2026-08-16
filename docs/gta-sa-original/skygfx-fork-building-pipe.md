@@ -82,7 +82,10 @@ only structural reason a re-encoded model could look different WITH the plugin a
 
 `stochasticTexturing=0` does NOT remove the optimizer-output smear; `buildingPipe=` (empty) DOES — the fork's
 building pipe (instancer + VS) is the surface that mishandles our re-encoded geometry, and the game's own
-pipe draws the same bytes correctly. Which property trips it is the open probe in the issue's round 12.
+pipe draws the same bytes correctly. **Resolved (round 14):** the property was our regenerated `BinMeshPLG`'s
+split ORDER — a blended split moved out of last place; the fork's dual pass (z-write at alpha ≥ 200) turns that
+into a smear where the game's own pipe hides it. Neither normals nor the trilist form (`--restrip` was broken
+too). See `restrictions/assets-and-data.md`, "A BinMesh's split order is the DRAW order".
 
 ## What is caught
 

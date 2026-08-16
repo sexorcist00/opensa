@@ -514,3 +514,33 @@ cut from ONE `--src` only.
 **Round 13 field, `--list-only`: BROKEN.** The source with nothing but the trilist re-encode (no chain, no
 normals, no split, prelit untouched) already misrenders on the fork's building pipe — **the trilist form
 alone is the variable.** `--restrip` is the next and, if it passes, the fix.
+
+# Round 14 (2026-08-17): FIXED — the rebuilt BinMesh had lost the source's mesh ORDER
+
+`--restrip` was broken too, so the trilist FORM was never it. What `--list-only` and `--restrip` share and the
+overlay path does not touch: `rebuildGeometry` regenerates the `BinMeshPLG` — and `buildBinMesh` emitted its
+splits **materials ascending**. Dumping `cehollyhil06`'s source: 15 splits in the order `0..7, 9..14, 8` —
+material 8 (`cs_rockdetail2`, the vertex-alpha rock-detail layer, 226 triangles) is authored **LAST**, because a
+BinMesh's mesh order IS the draw order inside the atomic and RenderWare's mesher puts the materials that blend
+after the opaque ones. Ours drew that blended split in the middle: under the fork's building pipe (dual pass,
+z-write at alpha ≥ 200) the tiled detail texture painted over the sky, wrote depth, and z-rejected the rock
+splits 9–14 drawn after it — the "washed-out smear on repeat textures". The game's own pipe composites the
+same bytes differently, which is why the symptom needed the plugin.
+
+Fix: `c754efdb` — `buildBinMesh` keeps the source BinMesh's split order (materials the source did not draw are
+appended ascending), unit test in `geometry-rebuild.test.ts`. **Field: `chain` (normals ON, trilist, split
+vertices, source order) — "no bug, it worked".** Normals stay; the `addNormals` pass is not the defect and
+never was; the round-9 census (prelit + normals on 48 % of the build) stands as a fact about our data, not a
+fault.
+
+What the bisect table now reads as: the round-7 "white patches" (`lodcuntw65`) and the rock are the SAME
+class — every rebuilt world model with a blended split not last. The other two vectors (mods → the hospital
+group, the burger joint's absent LOD) are untouched by this and stay open.
+
+**Same class, other writer — follow-up:** `tools/lod-common/src/encode-dff.ts` (`encodeLodDff`) writes ONE split
+per texture group in `MeshBuilder` first-appearance order. For a single-geometry clone that order is the source
+draw order (the parser reads triangles from the BinMesh), so blended-last survives; for a MERGE across several
+geometries (multi-atomic clumps, cells, procobj) a later geometry's opaque groups land after an earlier one's
+blended group. Decimated clones (`decimateBudget 0.01`) and hole-fill LODs take that path. Needs a "blended
+groups last" rule (vertex alpha < 255 / tint alpha < 255 / texture alpha via `TextureSource`), preserving
+relative order — recorded here and in `restrictions/assets-and-data.md`; not built yet.

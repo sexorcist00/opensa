@@ -107,6 +107,24 @@ the largest (the single-array shape hit 128 MB on a 32-texture mod dictionary wh
 **Caught:** yes — `assertVer2EntrySize` throws in `EditableImg.set`, `buildVer2Buffer` and `writeImgFile`
 (the rebake reports it per car instead of aborting the run).
 
+## A BinMesh's split order is the DRAW order — a writer keeps the source's, blended splits last
+
+RenderWare draws an atomic's `BinMeshPLG` splits in the order the chunk lists them, and its mesher puts the
+materials that BLEND (texture alpha, vertex alpha, material alpha) after the opaque ones so they composite over
+what is already drawn. A writer that regenerates the chunk and orders splits by material index moves a blended
+split into the middle: `cehollyhil06`'s vertex-alpha rock-detail layer (material 8 of 15, authored last) drew
+before the rock behind it, wrote depth under the reference install's SkyGfx dual pass, and the tiled texture
+smeared over the sky — the "normals × repeat textures" defect of
+[`open-issues/sa-lod-visibility-budget.md`](../open-issues/sa-lod-visibility-budget.md) (rounds 7–14), chased
+through nine hypotheses because it looked like a lighting fault and needed a third-party building pipe to show.
+
+The rule: a re-encoder that has the source chunk keeps its split order (`rebuildGeometry` does since
+2026-08-17, materials the source did not draw appended); a writer building from a MERGE (`encodeLodDff`, cells,
+procobj) must put its blended groups last, in their relative order.
+
+**Caught:** for `rebuildGeometry`, a unit test. For `encodeLodDff` and every merge writer: **silent** — the build
+validates, our own engine draws it fine, and the symptom appears only under a pipe that z-writes blended splits.
+
 ## A dictionary is not a material list
 
 A model's TXD serves several models. "This dictionary contains a glass texture" says nothing about whether
