@@ -59,6 +59,13 @@ spends a scarce, hard resource, while rows inside one file are cheap
 ([ProperFixes ships 9 627 of them per file](../gta-sa-original/reference-install-config.md)). A text IPL with
 **no** `inst` rows takes no slot.
 
+**Where the build stands: 39 of the 39 usable slots** (2026-08-16) — 28 stock areas, 10 procobj areas, 1 tree
+overflow. There is no margin. What holds it there is mod-installer's fold: a map pack's IPLs are appended
+into the stock areas rather than registered as files of their own (`66. Urbanize only MAP` alone is 13 files
+/ 16 172 rows, and costs zero slots this way), and the two stream-less stock inst blocks are compacted away.
+A pack whose rows carry internal `lod` links cannot be folded and costs one slot per file
+([mod-installer/013](../../tools/mod-installer/docs/plans/013-slot-fold-across-hosts.md)).
+
 **The rule this table exists to enforce: do not design content down to a lifted ceiling, and do not add a
 guard, cap or migration that shapes output to one.** Its mirror image, learnt the same day: **do not trust a
 lift you have never exercised.** Both are answered the same way — by measuring the target, not by reading its
