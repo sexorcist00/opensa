@@ -475,3 +475,38 @@ The two probes are orthogonal:
 | `--crease 180` | `0x7f STRIP NPL` | 1 320 | it is the re-encode | it is the normals array |
 
 Both patched via `model-lab.ts` (HD + clone LOD), one restart each.
+
+# Round 13 (2026-08-17, field + census): it is the RE-ENCODE, and stock never fed the fork's pipe a trilist
+
+Field, one restart each, `build/bisect-nomods/sa`, `buildingPipe=PS2`:
+
+| variant | flags / verts | verdict |
+| --- | --- | --- |
+| `--strip-normals-after` (rebuild path, normals removed) | `0x6e LIST -PL` / 1 322 | **broken** |
+| `--crease 180` (overlay path, normals ON, strip kept) | `0x7f STRIP NPL` / 1 320 | **fixed** |
+| ini `buildingPipe=PC` (the fork's Xbox shader path, same instancer) | — | broken |
+| ini `buildingPipe=` (fork's pipe not hooked, game's own DN pipe draws) | — | fixed |
+
+So the normals array is innocent and **`rebuildGeometry`'s output is what the fork's building pipe cannot
+draw** — while the game's own DN pipe (RW's default instancer + a CPU day/night lerp,
+`CCustomBuildingDNPipeline`) draws the same bytes correctly. The fork replaces only the VERTEX instancing
+(`DNInstance_PS2`); index data comes from RW in both. Reading the fork's callbacks found no branch on list vs
+strip — and a census says why nobody would have noticed one:
+
+**Stock `gta3.img`: 16 275 geometries, 11 743 with night colours, 338 trilist — and 0 trilist WITH night
+colours.** No trilist geometry ever reaches the building pipe in stock; the fork's pipe has never drawn one.
+Whatever the exact line, "trilist on the fork's building pipe" is untested territory, and our rebuild path
+puts every rebuilt world model there (also `encodeLodDff` — decimated clone LODs and hole-fill LODs are
+trilist + night colours too, the same class).
+
+Two probes separate "the trilist itself" from "the rest of the rebuild", and the second is the candidate FIX
+that keeps normals AND prelit:
+
+| variant | what it is | FIXED ⇒ | BROKEN ⇒ |
+| --- | --- | --- | --- |
+| `--list-only` | the SOURCE, no chain, forced through `rebuildGeometry` (`0x6e LIST -PL`, 1 320 verts, prelit untouched) | the rebuild's other output (bounds / re-emitted Struct triangles / mesh order) | the trilist form alone |
+| `--restrip` | the full chain (normals, split), BinMesh converted BACK to a tristrip (degenerate-joined, parity kept, TRISTRIP flag on; `0x7f STRIP NPL`, 1 322 verts, 88 784 B) | **the fix: emit strips for the sa target** — a real stripifier replaces the probe encoder | the trilist was not it |
+
+Both via `model-lab.ts` (HD + clone LOD), `restore` between. Note for the reader: the same HD taken from
+`game-src/original` and from `build/bisect-nomods-noopt/sa` split at different vertices — compare variants
+cut from ONE `--src` only.
