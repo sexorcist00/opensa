@@ -510,3 +510,7 @@ that keeps normals AND prelit:
 Both via `model-lab.ts` (HD + clone LOD), `restore` between. Note for the reader: the same HD taken from
 `game-src/original` and from `build/bisect-nomods-noopt/sa` split at different vertices — compare variants
 cut from ONE `--src` only.
+
+**Round 13 field, `--list-only`: BROKEN.** The source with nothing but the trilist re-encode (no chain, no
+normals, no split, prelit untouched) already misrenders on the fork's building pipe — **the trilist form
+alone is the variable.** `--restrip` is the next and, if it passes, the fix.
