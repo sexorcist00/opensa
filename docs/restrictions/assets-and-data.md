@@ -309,23 +309,30 @@ objects that are not in it at all.
 `remove from "inst"` merge goes through `removeInstWithRebase` (which decrements every surviving link) and
 `patchAreaStreams` (which rewrites the `lod` field in the area's binary streams) — measured working:
 `5. SA Xbox Map Features` drops a row from `LAe.ipl` at index 93 and `laehospital1`'s stream link comes out
-133 → 132, still on its own LOD. **Every other way a row can leave a file has neither half.** `LAw.ipl` is one
-row short of stock with no mod involved: its id/name column took the deletion, its transform column did not,
-so `LODgaz9_law` sits 398.7 u off its object wearing a re-derived neighbouring rotation — and `law_stream2.ipl`
-was never patched, so the link lands on a tree the build had exiled to z = −300.
+133 → 132, still on its own LOD. **Every other way a row can leave a file has neither half.**
 
-The rule for a new design: a pass may APPEND inst rows freely (every index it could disturb is below it), and
-may not REMOVE one. Retire a placement by exiling the row — the trees layer's z = −300/−1000 is the
-established shape — rather than deleting it: no renumbering, no stream patch to keep alive, and nothing
-downstream can undo it. "The merge handles removals" is not cover: that is one path, and the guarantee is a
-property of the whole build rather than of one function.
+**And a rebase is not enough on its own: a later stage can write over it.** The 2026-08-11 field report was
+traced (2026-08-16) to `0. Map Fixes Pack`'s own stream merges carrying the AUTHOR's row indexes. Stream
+merges apply LAST, so they overwrote the correct rebase; `sa-lod-generator` then read those links and moved
+three LOD rows onto a neighbour's transform, which is why the file also looked like a lost column.
+**11 links map-wide, one row off, no error anywhere** — the second half of the rule below is that one.
 
-**Caught: NO, and by construction.** A shifted index lands on a VALID row of the same file, and a transform
-column off by one against its own name column is a perfectly legal file — row counts, well-formedness and
-every budget guard pass. `removeInstWithRebase`'s unit tests prove the FUNCTION rebases, which is not the
-claim that matters. The damage is only visible by resolving each link back to a MODEL NAME and comparing
-against the source tree, which nothing does today. Detail, measurements and the paste-able diagnosis:
-[`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../open-issues/ipl-row-removal-breaks-lod-links.md).
+The rule for a new design, in two halves:
+
+1. A pass may APPEND inst rows freely (every index it could disturb is below it), and may not REMOVE one.
+   Retire a placement by exiling the row — the trees layer's z = −300/−1000 is the established shape — rather
+   than deleting it: no renumbering, no stream patch to keep alive, and nothing downstream can undo it.
+2. A row index written by anything other than the file's own owner is in SOMEBODY's index space, and it has to
+   be re-expressed in ours before it is written. "The merge handles removals" is not cover: that is one path,
+   and the guarantee is a property of the whole build rather than of one function.
+
+**Caught: yes, since 2026-08-16 — and it took a positional test, not an index one.** `assertLodLinks` fails
+the `sa` build when a link's target does not stand where its owner stands (`@opensa/tool-kit/lod-links`;
+`scripts/debug/lod-link-check.ts` for diagnosis). Stock passes with 6 103 links and zero findings, so any
+finding is ours. **Its limit is part of the rule**: a shift that lands within 20 u of the owner is still
+invisible — 3 of the 15 shifted links in the case above were. Detail, measurements and the paste-able
+diagnosis: [`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../open-issues/ipl-row-removal-breaks-lod-links.md)
+and [`tools/mod-installer/docs/plans/012-stream-merge-lod-space.md`](../../tools/mod-installer/docs/plans/012-stream-merge-lod-space.md).
 
 ## A curated list may GATE a derived rule; it may never CARRY the correction
 

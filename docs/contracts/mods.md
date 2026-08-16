@@ -153,6 +153,15 @@ replace in "inst":
   whitespace-normalised line and — for `inst` — rebases every surviving `lod` link and reports the removed
   indexes so the area's binary streams are patched the same way.
 - A `.merge` whose target does not exist in the install is a hard error, not a skip.
+- **Every `lod` cell a `.merge` writes — text or stream — is in the index space of the file the INSTALL will
+  have, never the author's.** The two differ whenever the mod adds an inst row: the author puts it where they
+  authored it, `add` appends it at the end, and every link past that point shifts by one. A merge carrying the
+  author's number silently re-points that link at a different, perfectly valid row, and for a stream merge it
+  also overwrites the rebase the installer just did (stream merges run last). **Nothing about the file looks
+  wrong afterwards** — the field just loses a LOD, which is how `0. Map Fixes Pack` shipped 11 broken links
+  for a month ([mod-installer/012](../../tools/mod-installer/docs/plans/012-stream-merge-lod-space.md)).
+  Generate a pack's merges with `merge-gen-mod --mod <folder>`, which converts the text and its streams in one
+  pass and gates every link; the single-file CLI refuses a `*_streamN.ipl` target for this reason.
 - `#` and `//` comments are ignored.
 
 ---
