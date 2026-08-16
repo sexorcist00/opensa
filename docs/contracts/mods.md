@@ -78,6 +78,15 @@ A binary archive cannot be patched file-by-file, so a mod ships a folder instead
   it at runtime unless FLA's optional error reporting is on, which is how the first case was found: mod 60
   had dropped `ferseat01_LAx`, and the real game said "model ID 3752 does not have loaded collision" months
   after the install.
+  **The quieter half of the same rule: a whole library cut from STOCK reverts every fix an EARLIER mod's copy
+  of that library carried, and nothing warns** — the model count matches, nothing is lost, and the warning
+  above stays silent. `65. Watts towers GTA V to SA` shipped `lae2_5.col` (68 of 68) cut from stock to change
+  `wattspark1_LAe2`, and being installed after `0. Map Fixes Pack` (which ships the same library) it put
+  `furniture_lae`, `ground2_alpha` and `ebeachalpha5b` back to their stock collision (2026-08-17). Base your
+  copy on the previous layer's file, and when you cannot, splice: `scripts/debug/col-splice.ts --base
+  <prev.col> --donor <yours.col> --models <a,b> --out <merged.col>` keeps every block of the base and swaps only
+  the named ones, byte for byte. *What catches you:* nothing — compare the libraries by hand (`col-splice.ts
+  --list`) or wait for the field.
 - **`Remove original/` carries NO special meaning — it is an ordinary organisational subfolder, and its files
   are REPLACEMENTS.** The name reads as an instruction ("remove the original") and we implemented it as one
   until 2026-08-10; it actually names *the files that remove the original*, i.e. empty RW clumps a mod ships to
