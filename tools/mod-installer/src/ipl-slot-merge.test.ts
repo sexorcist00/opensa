@@ -8,8 +8,23 @@ import { compactStockInstIpls, mergeModInstIpls } from './ipl-slot-merge';
 
 const STOCK_DAT = 'IDE DATA\\MAPS\\stock.IDE\nIPL DATA\\MAPS\\area.IPL\n';
 
-function hostRows(out: string): string[] {
-  return readFileSync(join(out, 'data', 'maps', 'area.ipl'), 'utf8')
+/** A second stock host of `rows` rows, registered in both gta.dat files. */
+function addStockHost(game: string, out: string, base: string, rows: number): void {
+  for (const root of [game, out]) {
+    const dat = join(root, 'data', 'gta.dat');
+    const current = existsSync(dat) ? readFileSync(dat, 'utf8') : STOCK_DAT;
+    writeFileSync(dat, `${current}IPL DATA\\MAPS\\${base}.IPL\n`);
+  }
+  writeFileSync(join(out, 'data', 'maps', `${base}.ipl`), `inst\n${bulk(rows, base)}\nend\n`);
+}
+
+/** `count` inst rows, each linking to `lod` (-1 = none) — the shape a mod map file ships. */
+function bulk(count: number, model: string, lod = -1): string {
+  return Array.from({ length: count }, (_, i) => `${i}, ${model}, 0, ${i},0,0, 0,0,0,1, ${lod}`).join('\n');
+}
+
+function hostRows(out: string, base = 'area'): string[] {
+  return readFileSync(join(out, 'data', 'maps', `${base}.ipl`), 'utf8')
     .split(/\r?\n/)
     .filter((l) => l.trim() && /^\d/.test(l.trim()));
 }
@@ -62,14 +77,30 @@ describe('mergeModInstIpls', () => {
       expect(dat).not.toContain('MAPS\\a.IPL');
     });
 
-    it('leaves everything alone when no stock host has the row budget', () => {
-      const bulk = Array.from({ length: 4200 }, (_, i) => `${i}, big, 0, 0,0,0, 0,0,0,1, -1`).join('\n');
-      writeFileSync(join(out, 'data', 'maps', 'area.ipl'), `inst\n${bulk}\nend\n`);
+    it('leaves everything alone when no stock host has the row budget, and SAYS which files', () => {
+      writeFileSync(join(out, 'data', 'maps', 'area.ipl'), `inst\n${bulk(4200, 'big')}\nend\n`);
       writeFileSync(join(out, 'data', 'gta.dat'), `${STOCK_DAT}IPL DATA\\MAPS\\only.IPL\n`);
       writeFileSync(join(out, 'data', 'maps', 'only.ipl'), 'inst\n900, thing, 0, 1,2,3, 0,0,0,1, -1\nend\n');
 
-      expect(mergeModInstIpls(game, out)).toEqual({ merged: 0, rows: 0 });
+      expect(mergeModInstIpls(game, out)).toEqual({ kept: [{ base: 'only.ipl', rows: 1 }], merged: 0, rows: 0 });
       expect(existsSync(join(out, 'data', 'maps', 'only.ipl'))).toBe(true);
+    });
+
+    it('will not SPLIT a file whose rows link to each other, and keeps it whole or keeps it put', () => {
+      // 150 linked rows against two hosts with 100 free each: splitting would repoint every link, so the
+      // file stays — and stays reported.
+      writeFileSync(join(out, 'data', 'maps', 'area.ipl'), `inst\n${bulk(3000, 'stockthing')}\nend\n`);
+      addStockHost(game, out, 'second', 3000);
+      writeFileSync(
+        join(out, 'data', 'gta.dat'),
+        `${readFileSync(join(out, 'data', 'gta.dat'), 'utf8')}IPL DATA\\MAPS\\linked.IPL\n`,
+      );
+      writeFileSync(join(out, 'data', 'maps', 'linked.ipl'), `inst\n${bulk(150, 'linked', 3)}\nend\n`);
+
+      const result = mergeModInstIpls(game, out);
+
+      expect(result).toEqual({ kept: [{ base: 'linked.ipl', rows: 150 }], merged: 0, rows: 0 });
+      expect(existsSync(join(out, 'data', 'maps', 'linked.ipl'))).toBe(true);
     });
   });
 
@@ -90,7 +121,7 @@ describe('mergeModInstIpls', () => {
 
       const result = mergeModInstIpls(game, out);
 
-      expect(result).toEqual({ merged: 2, rows: 4 });
+      expect(result).toEqual({ kept: [], merged: 2, rows: 4 });
       const rows = hostRows(out);
       expect(rows).toHaveLength(5); // 1 stock + 4 appended
       expect(rows[0]).toMatch(/^1, stockthing/); // host rows untouched, indexes preserved
@@ -104,6 +135,43 @@ describe('mergeModInstIpls', () => {
       expect(dat).not.toContain('second.IPL');
       expect(dat).toContain('IPL DATA\\MAPS\\area.IPL'); // host line intact, no new line added
       expect(dat).not.toContain('modinst');
+    });
+
+    it('spreads a link-free file over SEVERAL hosts when no single one has the room', () => {
+      // The Urbanize shape in miniature: 150 rows, two hosts with 100 free each. One host was the old rule,
+      // and under it this file — and every file behind it — kept its slot.
+      writeFileSync(join(out, 'data', 'maps', 'area.ipl'), `inst\n${bulk(3000, 'stockthing')}\nend\n`);
+      addStockHost(game, out, 'second', 3000);
+      writeFileSync(
+        join(out, 'data', 'gta.dat'),
+        `${readFileSync(join(out, 'data', 'gta.dat'), 'utf8')}IPL DATA\\MAPS\\props.IPL\n`,
+      );
+      writeFileSync(join(out, 'data', 'maps', 'props.ipl'), `inst\n${bulk(150, 'prop')}\nend\n`);
+
+      const result = mergeModInstIpls(game, out);
+
+      expect(result).toEqual({ kept: [], merged: 1, rows: 150 });
+      expect(hostRows(out)).toHaveLength(3100); // 3000 + 100, the fold's cap with the later stages reserved
+      expect(hostRows(out, 'second')).toHaveLength(3050);
+      expect(existsSync(join(out, 'data', 'maps', 'props.ipl'))).toBe(false);
+    });
+
+    it('reserves room for the stages that append AFTER it — a host at the fold cap takes nothing', () => {
+      writeFileSync(join(out, 'data', 'maps', 'area.ipl'), `inst\n${bulk(3100, 'stockthing')}\nend\n`);
+      addStockHost(game, out, 'second', 2900);
+      writeFileSync(
+        join(out, 'data', 'gta.dat'),
+        `${readFileSync(join(out, 'data', 'gta.dat'), 'utf8')}IPL DATA\\MAPS\\props.IPL\n`,
+      );
+      writeFileSync(join(out, 'data', 'maps', 'props.ipl'), `inst\n${bulk(200, 'prop')}\nend\n`);
+
+      const result = mergeModInstIpls(game, out);
+
+      // 3100 is the cap (4000 boot rows − 900 for the tree LODs and hole fill that land here later), so the
+      // full host takes none of it and the other takes all 200 — over its own 4000 only if it also grows.
+      expect(result).toEqual({ kept: [], merged: 1, rows: 200 });
+      expect(hostRows(out)).toHaveLength(3100);
+      expect(hostRows(out, 'second')).toHaveLength(3100);
     });
   });
 });

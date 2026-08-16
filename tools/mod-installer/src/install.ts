@@ -79,8 +79,11 @@ export function install(options: InstallOptions): void {
   // Slot economy: each gta.dat text IPL with inst rows costs one of SA's ~39 usable (unbounded!)
   // IplEntityIndexArrays slots and the LOD generators downstream need ~9 — fold mod IPLs into a stock host
   // and empty the stream-less stock inst blocks (int_cont/gen_int1) the same way.
-  const slots = mergeModInstIpls(gamePath, outPath);
+  // Compaction FIRST: it is a fixed 214-row job that frees two slots outright, and it needs one host with
+  // room. The fold behind it is opportunistic and will happily take that room — which is exactly what
+  // happened the first time the fold learned to use every host (2026-08-16): 23 slots won, 2 lost.
   const compact = compactStockInstIpls(gamePath, outPath);
+  const slots = mergeModInstIpls(gamePath, outPath);
 
   // A mod that retires a model the stock map still places leaves a request the streamer can never satisfy —
   // the world then renders as LODs with permanent hitching. Silent until the field; gated here.
@@ -89,10 +92,18 @@ export function install(options: InstallOptions): void {
   console.log(
     `mod-installer: ${mods.length} mod(s) (${baked} baked) → ${outPath} ` +
       `(${merged} entries merged into gta3.img / loose .txd` +
-      (slots.merged > 0 ? `; ${slots.merged} mod IPLs folded into a stock host (${slots.rows} rows)` : '') +
+      (slots.merged > 0 ? `; ${slots.merged} mod IPLs folded into stock hosts (${slots.rows} rows)` : '') +
       (compact.compacted > 0 ? `; ${compact.compacted} stock inst blocks compacted (${compact.rows} rows)` : '') +
       ')',
   );
+  // A file left standing still costs an IplEntityIndexArrays slot, and a fold that quietly does less than it
+  // could reads exactly like one that had nothing to do — which is how 23 mod IPLs reached the slot guard.
+  if (slots.kept.length > 0) {
+    console.warn(
+      `mod-installer: ${slots.kept.length} mod IPL(s) could NOT be folded and still cost a slot each — ` +
+        slots.kept.map((ipl) => `${ipl.base} (${ipl.rows} rows)`).join(', '),
+    );
+  }
 }
 
 /** Mod folder names sorted case-insensitive **numeric-aware** ascending (`1. x`, `2. y`, `10. z`) — the

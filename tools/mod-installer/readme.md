@@ -63,6 +63,17 @@ a layered folder — the `mods` stage runs before the target split, so one run c
      `<folder>.txd` (loud warning if the entry is missing); any other subfolder is organisational — its files are
      collected recursively by bare name (`gta3_img/LV/x.dff` lands like `gta3_img/x.dff`).
 
+**Slot economy, after every mod has applied.** Each text IPL in `gta.dat` that carries `inst` rows costs one
+of SA's 40 `IplEntityIndexArrays` slots, of which the field has proved 39 usable — so a map pack that ships
+its placements as a dozen files spends a scarce, hard resource on nothing (rows INSIDE one file are cheap).
+The install therefore folds them away: the two stream-less stock inst blocks (`int_cont`, `gen_int1`) are
+emptied into a stock host, then every mod IPL is appended into the stock areas that have room, biggest file
+first, its internal `lod` links rebased past the host's rows. A file with no internal links may be spread over
+several hosts; one that links stays whole — and anything that does not fit is **named in a warning**, because
+it still costs a slot. Each host keeps 900 rows in reserve for the tree LODs and hole fill that land in the
+same files later. `66. Urbanize only MAP` (13 files, 16 172 rows) folds to zero slots this way; plan:
+[`docs/plans/013-slot-fold-across-hosts.md`](./docs/plans/013-slot-fold-across-hosts.md).
+
 Each mod applies onto the **accumulated** `--out`, so several mods that touch different files (or different
 textures / different `gta3.img` entries) all coexist; only when two mods change the **same** item does the later
 one win. The `*_img/` folder is a generic "loose IMG entries" convention — a binary `.img` can't be patched file-by-file,
