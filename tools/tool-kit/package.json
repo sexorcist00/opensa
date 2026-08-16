@@ -12,6 +12,7 @@
     "./archive/layout": "./src/archive/layout.ts",
     "./cli": "./src/cli.ts",
     "./game-dir": "./src/game-dir.ts",
+    "./lod-links": "./src/lod-links.ts",
     "./target": "./src/target.ts",
     "./vehicles-dir": "./src/vehicles-dir.ts"
   },

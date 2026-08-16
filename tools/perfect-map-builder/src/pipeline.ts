@@ -27,6 +27,7 @@ import { buildProcobjLods } from '@opensa/sa-procobj-placement/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { writeArchiveManifest } from '@opensa/tool-kit/archive/layout';
 import { countImgArchives } from '@opensa/tool-kit/game-dir';
+import { checkLodLinks, formatLodLink } from '@opensa/tool-kit/lod-links';
 import { type BuildTarget } from '@opensa/tool-kit/target';
 import { installCutscene } from '@opensa/vehicle-cutscene/install';
 import { install as installVehicles } from '@opensa/vehicle-installer/install';
@@ -754,6 +755,9 @@ async function buildSaTarget(step: {
   // stage appends hole-fill instances to the copied text IPLs, so the common build undercounts the rows.
   const census = reportTextIplCensus(sa);
   checkInstBearingIplSlots(census.instBearingIpls);
+  // Every stage that edited an `inst` section has now had its turn, so this is the only place the LOD links
+  // can be judged whole — see {@link assertLodLinks}.
+  assertLodLinks(sa);
   // The archive table, checked on the FINISHED tree — the split registers what it creates and the vehicle
   // install registers its spill sibling, so the total is only known here. A ceiling the game answers with a
   // crash at load and no build-side symptom, which is exactly the kind this branch gates rather than prints.
@@ -1169,6 +1173,48 @@ function shipAsi(saDir: string, asiPath: string, fileName: string, absentAdvice:
   log(`sa asi: ${fileName} shipped into the game root (sha256 ${sha256.slice(0, 12)}…, ${bytes.length} B)`);
 
   return { sha256 };
+}
+
+/** How many broken links the error names before it stops listing — the rest are counted. */
+const LOD_LINK_REPORT_LIMIT = 20;
+
+/**
+ * Fail the build when a LOD link no longer points at its own LOD.
+ *
+ * **The class this catches is silent by construction.** A `lod` cell is a ROW INDEX into the area's `inst`
+ * section (its binary streams index the same space), so a stage that drops or inserts a row re-points every
+ * link past it at another VALID row: no error, no missing file, and in the field a building that simply has
+ * no LOD. That is exactly how `0. Map Fixes Pack`'s stream merges shipped links one row off for a month —
+ * `docs/open-issues/ipl-row-removal-breaks-lod-links.md`, found by eye from a car park in Los Santos.
+ *
+ * Runs on the FINISHED `sa/` tree because every earlier point is a half-answer: the merge, the strip, the
+ * trees layer and the LOD generators each rewrite `inst` rows, and the links are only whole once they all
+ * have. Stock passes it with zero findings (6 103 links), so any finding is ours.
+ */
+export function assertLodLinks(gameDir: string): void {
+  if (!existsSync(join(gameDir, 'data', 'gta.dat'))) {
+    console.warn(`  ! sa lod-link check SKIPPED — no data/gta.dat under ${gameDir}`);
+
+    return;
+  }
+  const report = checkLodLinks(gameDir);
+  const bad = [...report.outOfRange, ...report.broken];
+  if (bad.length === 0) {
+    log(`lod links: ${report.checked} checked, every one resolves onto its owner`);
+
+    return;
+  }
+  const listed = bad.slice(0, LOD_LINK_REPORT_LIMIT).map((link) => `  ${formatLodLink(link)}`);
+  const rest = bad.length - listed.length;
+  throw new Error(
+    `${bad.length} of ${report.checked} lod links do not resolve onto their owner ` +
+      `(${report.outOfRange.length} point past the end of their section):\n${listed.join('\n')}` +
+      `${rest > 0 ? `\n  … and ${rest} more` : ''}\n` +
+      'A lod cell is a ROW INDEX — some stage inserted or dropped an inst row without rebasing the links ' +
+      "that point past it, in the text IPL or in the area's binary streams. Diagnose with " +
+      '`npx tsx scripts/debug/lod-link-check.ts <game-dir>` (stock reports zero) and see ' +
+      'docs/open-issues/ipl-row-removal-breaks-lod-links.md.',
+  );
 }
 
 /** SA's `IplEntityIndexArrays` — one slot per text IPL that carries `inst` rows, written past without a bounds

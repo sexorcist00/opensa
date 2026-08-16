@@ -16,6 +16,9 @@ export interface ArchiveIndex {
   /** The entry's bytes, read from whichever archive holds it. Same shape as {@link ImgArchive.get}, so an
    *  index is a drop-in for the single archive a tool used to open. */
   get(name: string): ArrayBuffer | null;
+  /** Every entry across every archive, lowercased and deduped — the other half of the {@link ImgArchive}
+   *  shape, so a caller that used to scan one archive's `names` can scan the whole tree instead. */
+  names: string[];
 }
 
 /** What the manifest states about one archive. */
@@ -67,6 +70,7 @@ export function openArchiveIndex(gameDir: string): ArchiveIndex {
 
       return (archive ? readers.get(archive)?.get(name) : null) ?? null;
     },
+    names: [...owner.keys()],
   };
 }
 

@@ -8,6 +8,7 @@ import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  assertLodLinks,
   buildPerfectMap,
   checkImgIdBudgets,
   checkInstBearingIplSlots,
@@ -1074,6 +1075,45 @@ describe('checkImgIdBudgets', () => {
         Array.from({ length: 522 }, (_, i) => `a${i}_stream0.ipl`),
       );
       expect(() => checkImgIdBudgets(dir)).not.toThrow();
+    });
+  });
+});
+
+describe('assertLodLinks', () => {
+  /** A one-area tree whose single `inst` link points at `lod` — the shape the guard reads off a built tree. */
+  function tree(lod: number): string {
+    const game = mkdtempSync(join(tmpdir(), 'pmb-lod-links-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    writeFileSync(join(game, 'data', 'gta.dat'), 'IDE DATA\\MAPS\\town.ide\nIPL DATA\\MAPS\\town.ipl\n');
+    writeFileSync(join(game, 'data', 'maps', 'town.ide'), 'objs\n100, house, houses, 300, 0\nend\n');
+    writeFileSync(
+      join(game, 'data', 'maps', 'town.ipl'),
+      [
+        'inst',
+        `100, house, 0, 10, 10, 5, 0, 0, 0, 1, ${lod}`,
+        '100, LODhouse, 0, 10, 10, 5, 0, 0, 0, 1, -1',
+        '100, LODbarn, 0, 900, 900, 5, 0, 0, 0, 1, -1',
+        'end',
+        '',
+      ].join('\n'),
+    );
+
+    return game;
+  }
+
+  describe('negative cases', () => {
+    it('fails the build when a link resolves onto a row that is not where its owner is', () => {
+      expect(() => assertLodLinks(tree(2))).toThrow(/1 of 1 lod links do not resolve onto their owner/);
+    });
+
+    it('names the script that diagnoses it, so the error is actionable off the log alone', () => {
+      expect(() => assertLodLinks(tree(2))).toThrow(/scripts\/debug\/lod-link-check\.ts/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('passes a tree whose LOD stands on its owner', () => {
+      expect(() => assertLodLinks(tree(1))).not.toThrow();
     });
   });
 });
