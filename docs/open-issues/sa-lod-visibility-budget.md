@@ -414,3 +414,38 @@ again, deliberately.
    clones whose atomic count ≠ 1, the one structural oddity that survived round 3's census.
 3. **normals × repeat textures × the SkyGfx fork** — cause located, fix undecided, and the decision must
    start from what the fork's building pipe does with normals on a tagged tiled texture.
+
+# Round 11 (2026-08-17): the fork's shaders do not read normals — the variable is the RE-ENCODE, or the PS
+
+Read out of the fork's source AND its shipped compiled shaders (full record:
+[skygfx-fork-building-pipe.md](../gta-sa-original/skygfx-fork-building-pipe.md)):
+
+- The install runs `buildingPipe=PS2`. `ps2BuildingVS` has **no NORMAL input**; colour = day/night prelit blend
+  × material + ambient × surfAmb. Every building PS, stochastic ones included, is `tex × vertex colour`. The
+  Xbox VS reads the normal only for env-map UVs. There is **no code path in which "normals present" changes
+  the fragment colour of a building-pipe atomic** — and stock SA never lights building-pipe geometry with the
+  sun either (it is not `m_bLightObject`; the world is drawn after `DeActivateDirectional()`).
+- `cehollyhil06` stock AND built carry the night-colour chunk with an empty atomic extension → building pipe in
+  both trees, plugin or not.
+- The stochastic PS is, by construction, a **barycentric blend of three hashed samples on a UV-space
+  triangular lattice** — a "giant triangle-interpolated" pattern that depends on nothing in the geometry.
+- The fork's `DNInstance_PS2` is the one place a re-encoded `BinMeshPLG` (our trilist rebuild, per-mesh
+  `[minVert, numVertices)` colour instancing, per-mesh `vertexAlpha`) meets fork code instead of RW's default
+  instancer — the only STRUCTURAL reason a re-encoded model could differ WITH the plugin and not without.
+
+**So round 9's honest limit is now the whole question.** `--no-add-normals` never separated the normals array
+from the strip→list re-encode (with normals off the mesh is not re-encoded at all), and nothing in the fork can
+see the array. The candidates, in the order they cost:
+
+| # | mechanism | single-variable probe | cost |
+| --- | --- | --- | --- |
+| a | the fork's stochastic PS is what the eye reads as the smear, and the optimizer changed nothing it depends on — i.e. the report conflated a plugin look with a build defect | `stochasticTexturing=0` in `skygfx1.ini`, same broken build | one restart |
+| b | the fork's building PIPE (instancer) mishandles our re-encoded mesh | `buildingPipe=` (empty → pipe not hooked, rest of the plugin stays), same build | one restart |
+| c | the re-encode / vertex split, not the normals array | `model-lab.ts cehollyhil06 --strip-normals-after` (NORMALS flag + array dropped, trilist + 1 322 verts KEPT) | seconds + one restart |
+| d | the normals array itself (contradicts the shader read — kept only to be falsified) | (c) fixed → not d; (c) still broken → not the array | — |
+
+Instruments (this session): `scripts/debug/model-optimize.ts` (one model, one variant, patched in place),
+`scripts/debug/model-lab.ts` (the same PLUS its clone LOD cut from the result — clones are cut from the HD, so
+an HD-only patch leaves the far view broken), `scripts/debug/img-patch.ts` (append-and-repoint swaps with a
+ledger, `restore` per entry). `build/bisect-nomods/sa` is back to its broken shipped bytes after the round-trip
+tests (ledger empty).

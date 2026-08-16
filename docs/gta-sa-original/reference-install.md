@@ -138,8 +138,10 @@ de-tiling our own [074·12](../plans/074-opensa-engine/12-stochastic-texturing.m
 What that means for a plan: **"the vanilla renderer" is not what this install runs.** A geometry property SA
 itself tolerates can still misrender here, and the reverse — a field verdict of "the game cannot take this"
 may be a verdict about one plugin's shader. The first case is already measured
-([sa-lod-visibility-budget.md](../open-issues/sa-lod-visibility-budget.md)): normals added to prelit world
-geometry smear only on repeat-textured objects, and only while this plugin is loaded.
+([sa-lod-visibility-budget.md](../open-issues/sa-lod-visibility-budget.md)): the optimizer's output smears
+only on repeat-textured objects, and only while this plugin is loaded. What the plugin actually does with a
+world atomic — and that its building shaders read NO vertex normals — is
+[skygfx-fork-building-pipe.md](skygfx-fork-building-pipe.md).
 
 **Caught:** no, and it cannot be. The build validates, our own engine renders it correctly, and the symptom
 exists only under a third-party shader — the only instrument is a field run with the plugin removed.
