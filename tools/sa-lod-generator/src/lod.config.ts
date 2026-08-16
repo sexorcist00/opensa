@@ -19,5 +19,6 @@ export const config: LodConfig = {
   holeLodDraw: 1500,
   keepParticles: true,
   minLodPixels: 2,
+  selfContainedTxd: true,
   texScale: 0.25,
 };

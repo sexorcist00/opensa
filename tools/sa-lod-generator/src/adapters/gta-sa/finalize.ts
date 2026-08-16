@@ -45,6 +45,15 @@ export interface BuildInput {
   keepParticles: boolean;
   links: readonly LodLink[];
   outDir: string;
+  /**
+   * Every clone dictionary carries EVERY texture its models name, with no `txdp` parent (default true).
+   *
+   * The partitioned scheme (plan 006) moved names shared by ≥ 2 atlases into one `salodpar` parent and left
+   * each child slim. **The game does not resolve that chain**: field 2026-08-16, every parent-only texture
+   * renders untextured — white patches over the countryside, and 49 % of the 4 050 clones depended on it.
+   * Self-containment trades archive bytes for a texture that is always there.
+   */
+  selfContainedTxd: boolean;
   source: TextureSource;
 }
 
@@ -326,9 +335,11 @@ function packCloneTxds(
     }
   }
 
-  const { perAtlas, shared } = partitionCloneTextures(atlasNames, (atlas, name) =>
-    variantKey(resolveFrom(input.source, atlas, name)),
-  );
+  // Self-contained (the default since the field found the chain broken): every atlas keeps every name, and no
+  // parent is written — see {@link BuildInput.selfContainedTxd}.
+  const { perAtlas, shared } = input.selfContainedTxd
+    ? { perAtlas: new Map([...atlasNames].map(([atlas, names]) => [atlas, [...new Set(names)]])), shared: [] }
+    : partitionCloneTextures(atlasNames, (atlas, name) => variantKey(resolveFrom(input.source, atlas, name)));
   if (shared.length > 0) {
     // All owners carry identical pixels — resolve each shared name through ANY owner (scoped, not flat).
     const ownerOf = new Map<string, string>();

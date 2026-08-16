@@ -1,6 +1,14 @@
 # Building LODs that never draw on the `sa` build — the data is perfect, so the budget is the suspect
 
-**Status: 🔴 open 2026-08-16, measured but NOT diagnosed.** Field report from the real game (helicopter over
+**Status: 🟡 DIAGNOSED 2026-08-16, fix built, awaiting the field.** It is the `txdp` parent dictionary:
+`sa-lod-generator`'s clone TXDs kept only what was unique to them and pointed at one shared `salodpar`
+parent, and **the real game does not deliver that parent's textures to the child's materials**. Every
+parent-only name renders untextured — the white patches over the countryside — and **1 966 of 4 050 clone
+LODs (49 %) depended on it**. Fixed by making every clone dictionary self-contained (`selfContainedTxd`,
+default true); plan 006's parent half is retired and the bytes it saved are priced in
+[`docs/performance/deferred-optimizations/salod-txdp-parent-dedup.md`](../performance/deferred-optimizations/salod-txdp-parent-dedup.md).
+
+**Original status: 🔴 open 2026-08-16, measured but NOT diagnosed.** Field report from the real game (helicopter over
 LS): a number of building LODs simply do not appear, while the same models resolve and render in our own
 `sa-map-viewer` off the SAME built tree. **Pre-existing** — `laehospital1`'s missing LOD was already in the
 2026-08-11 report ([fixed/ipl-row-removal-breaks-lod-links.md](fixed/ipl-row-removal-breaks-lod-links.md))
@@ -126,7 +134,36 @@ textures across 3 978 dictionaries and not a single DXT5**. Our clone dictionari
 alpha — 399 of 995 carry at least one. That is outside the range the game's own content occupies, and
 `encodeHalvedTxd` should be writing DXT3 for alpha regardless of how this issue resolves.
 
-## Waiting on the field: the DFF/TXD split
+## Round 4: the split answered, and the white patches named the mechanism
+
+The two-way patch came back decisive:
+
+- **`lod711block02` — our clone dff + the STOCK atlas → APPEARED.** The geometry is fine.
+- **`lodxhospground1` — the STOCK dff + our `salod0424` → still missing.** The dictionary is the failing half.
+
+Then the field produced the symptom that names the mechanism: **white, z-fighting patches all over the
+countryside**, e.g. `lodcuntw65` (`salod0214`) at −245.2, −1505.7 and `lodcehollyhil06` (`salod0582`) at
+994.1, −840.8. Those models load — they are drawn — with their textures missing. Which textures?
+
+| model | textures | only in the `salodpar` parent |
+| --- | --- | --- |
+| `lodcuntw65` | 7 | 1 — `grasstype4`, the material that reads as a white patch |
+| `lodcehollyhil06` | 15 | 1 — `rocktbrn128blndlit` |
+| `lodut01_lawn` (renders) | 21 | 3 |
+| `lodxhospground1` (missing) | 4 | **4 of 4** |
+
+**Every parent-only texture renders untextured, and a model whose textures are ALL parent-only has nothing to
+draw with at all.** Census over the built tree: **1 966 of 4 050 clone LODs (49 %) depend on the parent.**
+
+`txdp` is an SA-native mechanism and our own engine resolves the chain, which is exactly why every offline
+check passed. The real game does not follow it here.
+
+## The fix, built 2026-08-16
+
+`selfContainedTxd` (default true): every `salodNNNN` carries every texture its models name; no `salodpar`, no
+`salod-txdp.ide`. The partition survives behind the flag and its unit tests, priced as a performance lever.
+
+## Superseded: the DFF/TXD split
 
 The same build now carries a two-way bisect, patched in place (no rebuild), on the two still-missing models:
 
