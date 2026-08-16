@@ -8,7 +8,7 @@ hypothesis is a place a future round must not spend money again.
 | # | vector | what is known | where it is |
 | --- | --- | --- | --- |
 | 1 | **mods** | `lodxhospital1` / `lodxhospground1` / `lod711block02` are clean the moment `mod-installer` is out of the pipeline | undiagnosed |
-| 2 | **the burger joint** | `burger01_LAw`'s LOD is absent with the optimizer in, present without it; its clone is one of 11 with atomics ≠ 1 | **round 15: diagnosed + fixed in code** (a verbatim clone of a multi-atomic `anim` HD — SA keeps ONE atomic of it); one-model swap in `bisect-nomods`, awaiting the field |
+| 2 | **the burger joint** | `burger01_LAw`'s LOD is absent with the optimizer in, present without it; its clone is one of 11 with atomics ≠ 1 | **round 15: FIXED, field-confirmed 2026-08-17** (a verbatim clone of a multi-atomic `anim` HD — SA keeps ONE atomic of it) |
 | 3 | **normals × repeat textures** | the optimizer adds normals to prelit world geometry; the smear appears **only on repeat-textured objects** and **only while the install's SkyGfx fork is loaded** | round 10, cause located, fix NOT decided |
 
 **Superseded status: 🔴 STILL OPEN 2026-08-16 — the txdp fix did NOT work.** Self-contained dictionaries changed
@@ -583,7 +583,7 @@ atomic, 752 + 336 triangles kept, the sign's vertices at the frame offset). Rule
 `docs/restrictions/assets-and-data.md` and `docs/gta-sa-original/atomic-model-one-atomic.md`.
 
 **One-model swap for the field:** `build/bisect-nomods/sa` now carries `burger01_law.dff` (chain variant) and a
-one-atomic `lodger01_law.dff` (869 tris; `img-patch.ts status --game` lists 4 patched entries). Verdict pending.
+one-atomic `lodger01_law.dff` (869 tris; `img-patch.ts status --game` lists 4 patched entries). **Field: fixed.**
 
 **Seen on the way, not fixed:** `oilplodbitbase`, the LOD of the nodding donkey `nt_noddonkbase`, is ITSELF an
 `anim` row (2 atomics, its arm nods at 800 m in stock). Our clone overwrites it with the 5-atomic HD, so the LOD

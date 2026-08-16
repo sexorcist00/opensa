@@ -1,6 +1,6 @@
 # 009 — A multi-atomic HD is merged into one atomic, never byte-copied
 
-> **Status: built 2026-08-17, one-model swap in the field's tree, verdict pending.** Out of open issue
+> **Status: CLOSED 2026-08-17 — field-confirmed on the one-model swap ("fixed").** Out of open issue
 > [`sa-lod-visibility-budget.md`](../../../../docs/open-issues/sa-lod-visibility-budget.md) round 15 — vector 2,
 > "the burger joint".
 
@@ -49,7 +49,7 @@ everything, 752 + 336 triangles kept, the sign's first vertex found at its frame
 
 `lodger01_law` → 68 640 B, **1 atomic, 869 triangles**, 9 splits (all 9 materials of both atomics), bbox
 ±11.1 × ±17.8 × ±7.4 — the building's, with the sign inside it. Patched into `build/bisect-nomods/sa` (with the
-HD `chain` variant); `img-patch.ts status --game` lists 4 entries. **Field verdict: pending.**
+HD `chain` variant); `img-patch.ts status --game` lists 4 entries. **Field verdict (2026-08-17): fixed — the LOD is back.**
 
 Full-tree numbers (`mergedLods` on a real `sa` stage) come with the next rebuild.
 
