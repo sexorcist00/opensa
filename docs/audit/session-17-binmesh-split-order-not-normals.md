@@ -1,7 +1,7 @@
 # Session 17 (2026-08-17): the "normals × repeat textures" smear was the rebuilt BinMesh's split order
 
 **Branch `fix/map-optimizer-normals-skygfx`, unmerged.** What closed: vector 3 of
-[`open-issues/sa-lod-visibility-budget.md`](../open-issues/sa-lod-visibility-budget.md) (rounds 11–14), the one
+[`open-issues/fixed/sa-lod-visibility-budget.md`](../open-issues/fixed/sa-lod-visibility-budget.md) (rounds 11–14), the one
 filed as "map-optimizer adds normals to prelit world geometry and the install's SkyGfx fork cannot draw them".
 It was neither normals nor the fork's shader. What was left open on purpose: vectors 1 (mods — the hospital
 group) and 2 (the burger joint), and the same defect class in `encodeLodDff`.

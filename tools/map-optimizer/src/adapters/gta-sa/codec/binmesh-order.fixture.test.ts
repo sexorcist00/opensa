@@ -9,7 +9,7 @@ import { clumpToIr } from '../read';
 import { encodeDff } from './dff';
 
 /**
- * Round 14 of `docs/open-issues/sa-lod-visibility-budget.md` on the REAL model that showed it: `cehollyhil06`
+ * Round 14 of `docs/open-issues/fixed/sa-lod-visibility-budget.md` on the REAL model that showed it: `cehollyhil06`
  * authors its 15 BinMesh splits `0..7, 9..14, 8` — material 8 (the vertex-alpha rock-detail layer) LAST, as
  * RenderWare's mesher orders blended materials. A count-changing re-encode must keep that order; sorting the
  * splits by material drew the detail layer in the middle and smeared it under the reference install's SkyGfx

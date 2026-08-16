@@ -1,8 +1,8 @@
 # Session 18 (2026-08-17): the last two vectors of the LOD issue — one atomic per `objs` row, and DXT block alignment
 
-**Branch `fix/map-optimizer-normals-skygfx`, 16 commits over `main`, unmerged.** What closed: vectors 2 ("the
+**Branch `fix/map-optimizer-normals-skygfx`, 18 commits over `main`, merged into `main` 2026-08-17 after the acceptance.** What closed: vectors 2 ("the
 burger joint") and 1 ("mods" — the hospital group) of
-[`open-issues/sa-lod-visibility-budget.md`](../open-issues/sa-lod-visibility-budget.md), rounds 15–16, both
+[`open-issues/fixed/sa-lod-visibility-budget.md`](../open-issues/fixed/sa-lod-visibility-budget.md), rounds 15–16, both
 diagnosed with the session-17 one-model instruments and NO rebuild, both field-confirmed by one-entry swaps.
 The issue's three vectors are now all fixed in code; the whole-tree rebuild + field acceptance is the user's
 next step, and then the file moves to `fixed/`. Neither vector was what its label said.
@@ -54,9 +54,10 @@ next step, and then the file moves to `fixed/`. Neither vector was what its labe
 
 ## Not done (deliberately, recorded)
 
-- Whole-tree rebuild + acceptance (rock, `lodcuntw65`, burger, hospital + ground, `lod711block02`, cranes, SFSE
-  sign) — running at close; the two summary lines to record are map-optimizer's `(N DXT resized to pow2)` and
-  sa-lod-generator's `merged multi-atomic` count (plan 009 + round 16 want them).
+- ~~Whole-tree rebuild + acceptance~~ — **DONE 2026-08-17: full `sa` rebuild field-accepted on every point;
+  the rebuilt tree measures 0 non-block-aligned DXT textures (39 720 checked) and 0 multi-atomic clone LODs (20
+  checked); the issue moved to `open-issues/fixed/`.** The build's console summary was not captured (the
+  report JSON does not carry those counters), so the two census scripts are the record.
 - `oilplodbitbase` (an `anim` LOD, now static) — user's call, edge-case entry.
 - `encodeLodDff` blended-groups-last (session 17's follow-up) — unchanged, SILENT.
 - Mod 64's collision meshes (13 312 / 17 050 / 27 671 faces per crane, against stock's 2–18 boxes) — noted to

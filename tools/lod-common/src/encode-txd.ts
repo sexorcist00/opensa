@@ -113,7 +113,7 @@ function halve(rgba: Uint8Array, width: number, height: number, halvings: number
  * never drawn (a model whose TXD is not loaded is never marked loaded). Mods ship such sources uncompressed
  * (`marinadoor1_256` 250×250 A8R8G8B8 in the hospital door mod), which SA takes; halved to 62×62 and
  * DXT-compressed by us, the same texture took the two hospital LODs and the pizzeria block down with it
- * (`open-issues/sa-lod-visibility-budget.md`, round 16). Stock ships 26 004 textures and not one that is not a
+ * (`open-issues/fixed/sa-lod-visibility-budget.md`, round 16). Stock ships 26 004 textures and not one that is not a
  * power of two, so that is the shape we emit: nearest power of two per side (bilinear), floor 4 — which also
  * keeps every mip level block-aligned.
  */

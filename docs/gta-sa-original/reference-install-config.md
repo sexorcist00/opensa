@@ -43,7 +43,7 @@ handling for **repeating / tiled textures** (the stochastic de-tiling researched
 names, and `buildingPipe.cpp` swaps the pixel shader per marked texture). It therefore decides how OUR
 geometry is shaded, and a field symptom on this install can belong to it rather than to the game.
 **Measured consequence:** the washed-out "smear" on tiled world surfaces in
-[sa-lod-visibility-budget.md](../open-issues/sa-lod-visibility-budget.md) reproduces only with this plugin
+[sa-lod-visibility-budget.md](../open-issues/fixed/sa-lod-visibility-budget.md) reproduces only with this plugin
 present — removing it removes the symptom — and only on repeat-textured objects. Nothing catches this class:
 the build is valid, our own renderer shows it correctly, and the defect exists only under the fork's shaders.
 

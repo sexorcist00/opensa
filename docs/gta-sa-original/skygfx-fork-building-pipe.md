@@ -6,7 +6,7 @@ runs `skygfx.asi` = the **JuniorDjjr fork** (<https://github.com/JuniorDjjr/skyg
 a WORLD atomic — read out of the fork's source AND its shipped compiled shaders (`resources/cso/*.cso`,
 constant tables + `dcl` inputs decoded), cross-checked with aap's original (`926616a`) and gta-reversed for
 the stock side. It exists because a field verdict on this install can be a verdict about this plugin
-([sa-lod-visibility-budget.md](../open-issues/sa-lod-visibility-budget.md), rounds 10–11).
+([sa-lod-visibility-budget.md](../open-issues/fixed/sa-lod-visibility-budget.md), rounds 10–11).
 
 ## The install's settings that matter
 
@@ -92,7 +92,7 @@ too). See `restrictions/assets-and-data.md`, "A BinMesh's split order is the DRA
 Nothing. The build validates, our own engine renders the same bytes correctly, and the plugin's ini is
 runtime-toggleable — the instrument is a field run with `stochasticTexturing=0`, then `buildingPipe=`
 (empty → the pipe is not hooked), then the plugin removed. Recorded in
-[sa-lod-visibility-budget.md](../open-issues/sa-lod-visibility-budget.md) round 11 as the probe order.
+[sa-lod-visibility-budget.md](../open-issues/fixed/sa-lod-visibility-budget.md) round 11 as the probe order.
 
 ## Sources
 

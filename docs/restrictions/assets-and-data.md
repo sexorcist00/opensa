@@ -115,7 +115,7 @@ what is already drawn. A writer that regenerates the chunk and orders splits by 
 split into the middle: `cehollyhil06`'s vertex-alpha rock-detail layer (material 8 of 15, authored last) drew
 before the rock behind it, wrote depth under the reference install's SkyGfx dual pass, and the tiled texture
 smeared over the sky — the "normals × repeat textures" defect of
-[`open-issues/sa-lod-visibility-budget.md`](../open-issues/sa-lod-visibility-budget.md) (rounds 7–14), chased
+[`open-issues/fixed/sa-lod-visibility-budget.md`](../open-issues/fixed/sa-lod-visibility-budget.md) (rounds 7–14), chased
 through nine hypotheses because it looked like a lighting fault and needed a third-party building pipe to show.
 
 The rule: a re-encoder that has the source chunk keeps its split order (`rebuildGeometry` does since
@@ -134,7 +134,7 @@ else ([`gta-sa-original/atomic-model-one-atomic.md`](../gta-sa-original/atomic-m
 multi-atomic map models are all `anim` rows (clump model infos, drawn whole); zero `objs` rows carry two. The
 `sa-lod-generator` byte-copied the `anim` HD `burger01_LAw` (building + burger sign on a child frame) into its
 `objs` LOD slot: the LOD was the 5 m sign at the building's origin — "LOD absent"
-([`open-issues/sa-lod-visibility-budget.md`](../open-issues/sa-lod-visibility-budget.md), round 15), and 16
+([`open-issues/fixed/sa-lod-visibility-budget.md`](../open-issues/fixed/sa-lod-visibility-budget.md), round 15), and 16
 LOD entries of the `sa` build had the same shape.
 
 The rule: whatever writes a DFF an `objs` row will load emits ONE atomic. A clone or a conversion of a

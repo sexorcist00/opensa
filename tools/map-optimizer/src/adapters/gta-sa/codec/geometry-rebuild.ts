@@ -185,7 +185,7 @@ function boundingSphere(positions: Float32Array): [number, number, number, numbe
  * opaque splits. Sorting materials ascending drew `cehollyhil06`'s vertex-alpha rock-detail split (material
  * 8 of 15, authored last) in the middle — under the reference install's SkyGfx building pipe (dual pass,
  * z-write at alpha ≥ 200) that painted the tiled detail texture over the sky and z-rejected the rock behind
- * it: the "washed-out smear on repeat textures" of `docs/open-issues/sa-lod-visibility-budget.md`, round 14.
+ * it: the "washed-out smear on repeat textures" of `docs/open-issues/fixed/sa-lod-visibility-budget.md`, round 14.
  */
 function buildBinMesh(triangles: readonly Triangle[], materialOrder: readonly number[]): Uint8Array {
   const byMaterial = new Map<number, number[]>();

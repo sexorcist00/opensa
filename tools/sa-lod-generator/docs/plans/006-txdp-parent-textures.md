@@ -5,7 +5,7 @@ parent was blamed for LODs that render untextured or not at all, replaced by sel
 (`selfContainedTxd`), field-tested, and REVERTED: nothing changed, and self-containment cost 45.9 MiB against
 this plan's 10.4 MB. **The chain is neither proven nor disproven on the real target** — which is the gap this
 plan left by citing a third-party mod as proof at scale instead of measuring our own install. See
-[`docs/open-issues/sa-lod-visibility-budget.md`](../../../../docs/open-issues/sa-lod-visibility-budget.md). Two texture cuts for the clone LODs, in order of risk:
+[`docs/open-issues/fixed/sa-lod-visibility-budget.md`](../../../../docs/open-issues/fixed/sa-lod-visibility-budget.md). Two texture cuts for the clone LODs, in order of risk:
 
 1. **`texScale` 0.5 → 0.25** (with a 32 px floor) — the clone textures are only ever seen from ≥ the HD's draw
    distance, where 0.25 still oversamples the screen ~2×.

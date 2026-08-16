@@ -1,7 +1,7 @@
 # 009 — A multi-atomic HD is merged into one atomic, never byte-copied
 
 > **Status: CLOSED 2026-08-17 — field-confirmed on the one-model swap ("fixed").** Out of open issue
-> [`sa-lod-visibility-budget.md`](../../../../docs/open-issues/sa-lod-visibility-budget.md) round 15 — vector 2,
+> [`sa-lod-visibility-budget.md`](../../../../docs/open-issues/fixed/sa-lod-visibility-budget.md) round 15 — vector 2,
 > "the burger joint".
 
 ## What was wrong
@@ -51,7 +51,8 @@ everything, 752 + 336 triangles kept, the sign's first vertex found at its frame
 ±11.1 × ±17.8 × ±7.4 — the building's, with the sign inside it. Patched into `build/bisect-nomods/sa` (with the
 HD `chain` variant); `img-patch.ts status --game` lists 4 entries. **Field verdict (2026-08-17): fixed — the LOD is back.**
 
-Full-tree numbers (`mergedLods` on a real `sa` stage) come with the next rebuild.
+Full-tree (2026-08-17 rebuild, field-accepted): `multi-atomic-census.ts --tree build/original/sa` — 20 clone LODs of
+multi-atomic HDs, **0 with more than one atomic** (16 before).
 
 ## Not decided here
 

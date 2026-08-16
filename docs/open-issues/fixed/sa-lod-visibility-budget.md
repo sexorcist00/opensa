@@ -1,6 +1,8 @@
 # Building LODs that never draw on the `sa` build — the data is perfect, so the budget is the suspect
 
-**Status: 🟢 ALL THREE VECTORS FIXED IN CODE, 2026-08-17 — moves to `fixed/` once the full `sa` rebuild passes the field.** Vector 3 = BinMesh split order (round 14), vector 2 = a multi-atomic `anim` HD byte-copied into an `objs` LOD (round 15), vector 1 = DXT rasters not block-aligned killing whole dictionaries (round 16). Superseded status follows.
+**Status: ✅ FIXED — full `sa` rebuild field-accepted 2026-08-17 ("all perfect, everything in place": the rock, `lodcuntw65`, the burger joint, hospital + ground, `lod711block02`, the container cranes, the SFSE airport sign). Rebuilt tree: `txd-dimension-census.ts` 0 fatal of 39 720 textures (was 6), `multi-atomic-census.ts --tree` 0 of 20 clone LODs with more than one atomic (was 16).** Original close-out note follows.
+
+**Superseded: 🟢 ALL THREE VECTORS FIXED IN CODE, 2026-08-17 — moves to `fixed/` once the full `sa` rebuild passes the field.** Vector 3 = BinMesh split order (round 14), vector 2 = a multi-atomic `anim` HD byte-copied into an `objs` LOD (round 15), vector 1 = DXT rasters not block-aligned killing whole dictionaries (round 16). Superseded status follows.
 
 **Superseded status: 🟡 SPLIT INTO THREE, 2026-08-16 evening.** The single "LODs do not draw" issue this file was opened
 on turned out to be **three unrelated defects**, separated by a staged pipeline bisect (rounds 7–10 at the
@@ -25,12 +27,12 @@ parent, and **the real game does not deliver that parent's textures to the child
 parent-only name renders untextured — the white patches over the countryside — and **1 966 of 4 050 clone
 LODs (49 %) depended on it**. Fixed by making every clone dictionary self-contained (`selfContainedTxd`,
 default true); plan 006's parent half is retired and the bytes it saved are priced in
-[`docs/performance/deferred-optimizations/salod-txdp-parent-dedup.md`](../performance/deferred-optimizations/salod-txdp-parent-dedup.md).
+[`docs/performance/deferred-optimizations/salod-txdp-parent-dedup.md`](../../performance/deferred-optimizations/salod-txdp-parent-dedup.md).
 
 **Original status: 🔴 open 2026-08-16, measured but NOT diagnosed.** Field report from the real game (helicopter over
 LS): a number of building LODs simply do not appear, while the same models resolve and render in our own
 `sa-map-viewer` off the SAME built tree. **Pre-existing** — `laehospital1`'s missing LOD was already in the
-2026-08-11 report ([fixed/ipl-row-removal-breaks-lod-links.md](fixed/ipl-row-removal-breaks-lod-links.md))
+2026-08-11 report ([fixed/ipl-row-removal-breaks-lod-links.md](ipl-row-removal-breaks-lod-links.md))
 as one of the two cases the stream-merge fix did NOT explain.
 
 ## The three reported cases
@@ -85,9 +87,9 @@ Neither is confirmed. Both are recorded so the next round starts from a hypothes
 - **`CRenderer::ms_aVisibleLodPtrs` — 1 000 entries in stock.** When the array fills, the LODs scanned after
   it are simply not drawn: no error, no missing asset, and the SAME building loses its LOD every time because
   the scan order is stable. The install's OLA ini sets `VisibleLodPtrs = unlimited`
-  ([reference-install-config.md](../gta-sa-original/reference-install-config.md)) — and this project has a
+  ([reference-install-config.md](../../gta-sa-original/reference-install-config.md)) — and this project has a
   MEASURED precedent that an OLA `unlimited` can be a no-op: `EntityIpl = unlimited` was set, and the game
-  still died on the 40th inst-bearing IPL (2026-08-10, [sa-target.md](../restrictions/sa-target.md)).
+  still died on the 40th inst-bearing IPL (2026-08-10, [sa-target.md](../../restrictions/sa-target.md)).
 - **Streaming / LOD preload.** The install runs `ImprovedStreaming` with `PreLoadLODs = 1` and
   `StreamMemoryForced = 1024`; a 189 MiB LOD payload is 5.5× what that configuration was proven against.
 
@@ -374,15 +376,15 @@ The field observation that reframes the fix (his, 2026-08-16 evening):
   (<https://github.com/JuniorDjjr/skygfx>), which carries **special handling for repeat textures**.
 
 That fork is already researched in this repo: [074·12 stochastic
-texturing](../plans/074-opensa-engine/12-stochastic-texturing.md) took its design from it — a curated
+texturing](../../plans/074-opensa-engine/12-stochastic-texturing.md) took its design from it — a curated
 `models/texdb.txt` tags texture NAMES, and `src/buildingPipe.cpp` swaps the building **pixel shader** per
 tagged texture (`simpleStochasticPS`, `xboxBuildingStochasticPS`). So the surface that misrenders is being
 drawn by a REPLACED shader, and the interaction is between the normals we added and that shader's path.
 
 Recorded on the install side in the same change:
-[reference-install-config.md](../gta-sa-original/reference-install-config.md) (which fork, and that its
+[reference-install-config.md](../../gta-sa-original/reference-install-config.md) (which fork, and that its
 plugin list's "only three matter" line is about LIMITS only) and
-[reference-install.md](../gta-sa-original/reference-install.md) ("the vanilla renderer" is not what the
+[reference-install.md](../../gta-sa-original/reference-install.md) ("the vanilla renderer" is not what the
 target install runs).
 
 ## What this rules OUT as the fix
@@ -420,7 +422,7 @@ again, deliberately.
 # Round 11 (2026-08-17): the fork's shaders do not read normals — the variable is the RE-ENCODE, or the PS
 
 Read out of the fork's source AND its shipped compiled shaders (full record:
-[skygfx-fork-building-pipe.md](../gta-sa-original/skygfx-fork-building-pipe.md)):
+[skygfx-fork-building-pipe.md](../../gta-sa-original/skygfx-fork-building-pipe.md)):
 
 - The install runs `buildingPipe=PS2`. `ps2BuildingVS` has **no NORMAL input**; colour = day/night prelit blend
   × material + ambient × surfAmb. Every building PS, stochastic ones included, is `tex × vertex colour`. The
@@ -632,6 +634,6 @@ resamples it to the power of two rounded UP and writes it back in the same forma
 Rule with the measurement table: `docs/restrictions/dxt-raster-dimensions.md`. Census:
 `scripts/debug/txd-dimension-census.ts` (0 fatal on `bisect-nomods`, 5 + 1 on the old `build/original/sa`).
 
-**Closure:** the user runs the full `sa` rebuild; if the field passes there (rock, `lodcuntw65`, burger joint,
-hospital group, cranes, sign) this file moves to `fixed/`.
+**Closure (2026-08-17):** full `sa` rebuild, field-accepted on every point of the list; rebuilt tree measured
+0 non-block-aligned DXT textures (39 720 checked) and 0 multi-atomic clone LODs (20 checked). Moved to `fixed/`.
 

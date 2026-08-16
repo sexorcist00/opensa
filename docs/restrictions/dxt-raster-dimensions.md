@@ -6,7 +6,7 @@ multiples of 4. Anything we ENCODE ourselves is a power of two on both sides. A 
 first half never loads — and it takes its WHOLE dictionary down with it, so every model pointing at that TXD is
 never drawn (a model whose TXD is not loaded is never marked loaded).
 
-## Where it came from (open issue [`sa-lod-visibility-budget.md`](../open-issues/sa-lod-visibility-budget.md), rounds 1–16)
+## Where it came from (open issue [`sa-lod-visibility-budget.md`](../open-issues/fixed/sa-lod-visibility-budget.md), rounds 1–16)
 
 The "LODs that never draw" issue was opened on this and spent nine hypotheses before the data said it: the ~6
 building LODs missing all over the city sat on exactly the five clone dictionaries (of 995) that carried a DXT

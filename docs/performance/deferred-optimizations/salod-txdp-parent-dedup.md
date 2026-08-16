@@ -34,4 +34,4 @@ would otherwise carry duplicated copies of the shared textures.
 A field-proven statement about the chain in EITHER direction — one model, one parent-only texture,
 photographed rendering correctly (or not) on the real target. The MixMods "SA Optimized Map" pack plan 006
 cited as proof at scale was never verified on OUR install, and that gap is what let a whole afternoon be
-spent here. Detail: [`docs/open-issues/sa-lod-visibility-budget.md`](../../open-issues/sa-lod-visibility-budget.md).
+spent here. Detail: [`docs/open-issues/fixed/sa-lod-visibility-budget.md`](../../open-issues/fixed/sa-lod-visibility-budget.md).

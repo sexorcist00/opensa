@@ -1,6 +1,6 @@
 # An `objs` model is ONE atomic — what SA does with a clump that carries more
 
-Recovered 2026-08-17 (open issue [`sa-lod-visibility-budget.md`](../open-issues/sa-lod-visibility-budget.md),
+Recovered 2026-08-17 (open issue [`sa-lod-visibility-budget.md`](../open-issues/fixed/sa-lod-visibility-budget.md),
 round 15 — the Burger Shot whose LOD "was absent"). Source: gta-reversed-modern `FileLoader.cpp` and
 `Models/AtomicModelInfo.cpp` (`docs/links.md`); the RW list semantics from the SDK's `balist.h` (mirrored by
 librw's `LinkList::add`).
