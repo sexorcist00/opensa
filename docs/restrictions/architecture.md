@@ -153,6 +153,15 @@ finalize is tested against a planted stale file — but nothing stops the NEXT t
 `--out` with a bare `cpSync`, and the symptom is silent by construction (the build succeeds; the tree just
 carries a file nobody asked for).
 
+### …and `gta.dat` may not register a file the tree does not have
+
+SA opens what its `gta.dat` lists **without checking**, so a line pointing at nothing is an access violation
+during the data load — and all the field ever sees is `0xC0000005` in `ntdll.dll`, with the path buried in a
+stack dump. Two ways to create one: a stage that registers a file it then does not write (or stops writing —
+`salod-txdp.ide` on 2026-08-16, when the `txdp` parent was retired), and a hand-copied install whose `data/`
+and `gta.dat` came from different builds. **Caught:** yes, since the same day — `assertGtaDatFiles` fails the
+`sa` build and names every dangling line.
+
 ## A build asks for a target, not for the whole pipeline
 
 `sa` and `opensa` are independent targets of the same source tree. Which STAGES run is pmb's `--exclude`

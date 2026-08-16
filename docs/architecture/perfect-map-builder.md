@@ -86,7 +86,7 @@ flowchart TB
   opt["optimize · map-optimizer<br/>normals · prelit · dedupe"]:::stage
   trees["trees · lod-trees-generator<br/>impostor cards + atlas"]:::stage
   proc["procobj · sa-procobj-placement<br/>scatter → permanent rows, lod -1<br/>(IN PLACE, sa only)"]:::stage
-  guard{{"sa checks (on the BUILT sa/ tree)<br/>inst-bearing IPLs THROW: 40 slots ·<br/>FLA pools THROW: TXD 6000 / COL 400 / IPL 1024 ·<br/>lod links THROW: every LOD on its owner ·<br/>map-cost census: rows · IPLs · coverage"}}:::guard
+  guard{{"sa checks (on the BUILT sa/ tree)<br/>inst-bearing IPLs THROW: 40 slots ·<br/>FLA pools THROW: TXD 6000 / COL 400 / IPL 1024 ·<br/>lod links THROW: every LOD on its owner ·<br/>gta.dat THROWS: every registered file exists ·<br/>map-cost census: rows · IPLs · coverage"}}:::guard
   osguard{{"opensa: no SA ceiling applies<br/>and no streaming budget measured yet"}}:::guard
   sa["sa · sa-lod-generator<br/>per-object HD-clone LODs"]:::stage
   oslod["opensa · opensa-lod-generator<br/>cell-LOD bake + linear TXDs"]:::stage

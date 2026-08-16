@@ -8,6 +8,7 @@ import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  assertGtaDatFiles,
   assertLodLinks,
   buildPerfectMap,
   checkImgIdBudgets,
@@ -1075,6 +1076,36 @@ describe('checkImgIdBudgets', () => {
         Array.from({ length: 522 }, (_, i) => `a${i}_stream0.ipl`),
       );
       expect(() => checkImgIdBudgets(dir)).not.toThrow();
+    });
+  });
+});
+
+describe('assertGtaDatFiles', () => {
+  /** A tree whose gta.dat lists `town.ide` and, when `withGhost`, a file nobody wrote. */
+  function tree(withGhost: boolean): string {
+    const game = mkdtempSync(join(tmpdir(), 'pmb-gta-dat-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    writeFileSync(join(game, 'data', 'maps', 'town.ide'), 'objs\nend\n');
+    writeFileSync(
+      join(game, 'data', 'gta.dat'),
+      `IDE DATA\\MAPS\\town.ide\n${withGhost ? 'IDE DATA\\MAPS\\salod-txdp.ide\n' : ''}`,
+    );
+
+    return game;
+  }
+
+  describe('negative cases', () => {
+    it('fails on a registered file the tree does not have — SA opens it without a check', () => {
+      // The 2026-08-16 field crash: an install whose gta.dat still registered `salod-txdp.ide` after the
+      // txdp parent was retired. The access violation names the path only inside a stack dump.
+      expect(() => assertGtaDatFiles(tree(true))).toThrow(/registers 1 file\(s\) the tree does not have/);
+      expect(() => assertGtaDatFiles(tree(true))).toThrow(/salod-txdp\.ide/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('passes a tree that holds everything it registers', () => {
+      expect(() => assertGtaDatFiles(tree(false))).not.toThrow();
     });
   });
 });

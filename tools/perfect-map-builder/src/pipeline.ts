@@ -758,6 +758,9 @@ async function buildSaTarget(step: {
   // Every stage that edited an `inst` section has now had its turn, so this is the only place the LOD links
   // can be judged whole — see {@link assertLodLinks}.
   assertLodLinks(sa);
+  // …and the same for what `gta.dat` claims the tree holds: a line pointing at nothing is a crash in the
+  // data load, and the field only ever sees it as an access violation in ntdll.
+  assertGtaDatFiles(sa);
   // The archive table, checked on the FINISHED tree — the split registers what it creates and the vehicle
   // install registers its spill sibling, so the total is only known here. A ceiling the game answers with a
   // crash at load and no build-side symptom, which is exactly the kind this branch gates rather than prints.
@@ -951,6 +954,42 @@ export interface InstallRequirement {
   lift: string;
   spent: number;
   what: string;
+}
+
+/**
+ * Fail the build when `gta.dat` registers a file the tree does not have.
+ *
+ * SA opens what its `gta.dat` lists **without checking**, so a line pointing at nothing is an access violation
+ * during the data load — the crash names the path only in a stack dump, if the player thinks to send one. The
+ * class is real and cheap to create: a stage that registers a file it then does not write (or stops writing,
+ * as `salod-txdp.ide` did when the `txdp` parent was retired on 2026-08-16) leaves exactly this. It also
+ * catches the delivery half — a hand-copied install whose `data/` and `gta.dat` came from different builds.
+ */
+export function assertGtaDatFiles(gameDir: string): void {
+  const datPath = join(gameDir, 'data', 'gta.dat');
+  if (!existsSync(datPath)) {
+    console.warn(`  ! sa gta.dat file check SKIPPED — no data/gta.dat under ${gameDir}`);
+
+    return;
+  }
+  const missing: string[] = [];
+  for (const line of readFileSync(datPath, 'utf8').split(/\r?\n/)) {
+    const match = /^(IDE|IPL|IMG|COLFILE|TEXDICTION|MODELFILE|HIERFILE|SPLASH)\s+(?:\d+\s+)?(\S.*)$/i.exec(line.trim());
+    if (!match || match[1].toUpperCase() === 'SPLASH') {
+      continue;
+    }
+    const relative = match[2].trim().replace(/\\/g, '/');
+    if (!existsSync(join(gameDir, relative))) {
+      missing.push(`${match[1].toUpperCase()} ${match[2].trim()}`);
+    }
+  }
+  if (missing.length === 0) {
+    return;
+  }
+  throw new Error(
+    `data/gta.dat registers ${missing.length} file(s) the tree does not have — SA opens them without a ` +
+      `bounds check and dies during the data load:\n${missing.map((entry) => `  ${entry}`).join('\n')}`,
+  );
 }
 
 /** The requirement list for a built tree — pure, so the wording is testable without a game dir. */
