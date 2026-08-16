@@ -43,8 +43,10 @@ never the app. The dependency picture is the tools cluster of
   section a model's row sits in, plus `carmods.dat` for mod-shop parts. pmb's FIRST stage. Lib
   `src/split.ts`, classifier `src/classify.ts`; the design is
   [img-archive-layout.md](./img-archive-layout.md).
-- **map-optimizer** — lossless DFF/TXD conditioning (smooth-group normals, prelit sync, dedupe, mips) that
-  yields a drop-in game dir; refuses geometry it can't provably remap. Lib `src/run.ts`.
+- **map-optimizer** — lossless DFF/TXD conditioning (smooth-group normals, prelit sync, dedupe, mips; a DXT
+  texture that is not block-aligned is resampled to a power of two, since the real game refuses it and its whole
+  dictionary — `restrictions/dxt-raster-dimensions.md`) that yields a drop-in game dir; refuses geometry it
+  can't provably remap. Lib `src/run.ts`.
 - **lod-trees-generator** — tree LOD impostors: crossed billboard cards + a baked DXT5 alpha atlas, placed
   via the IPL lod-index.
 - **sa-procobj-placement** — bakes procobj scatter species into **permanent static IPL rows at `lod = -1`**, with
@@ -52,8 +54,9 @@ never the app. The dependency picture is the tools cluster of
   species at runtime, where draw distance is a setting. No LODs and no binary streams since plan 014: a stream's
   IPL slot is only resident within 190 units of the player, so it cannot carry range, and a generated LOD for a
   hand-modelled bush recovered ~0.2 % of its geometry for the price of a whole entity.
-- **sa-lod-generator** — regenerates per-object LODs as HD clones (geometry clone + empty COL + halved
-  textures) for the **real game** target.
+- **sa-lod-generator** — regenerates per-object LODs as HD clones (geometry clone — verbatim, budget-decimated,
+  or MERGED to one atomic when the HD is a multi-atomic `anim` clump, since an `objs` row keeps one atomic —
+  + empty COL + halved textures, every level a power of two) for the **real game** target.
 - **opensa-lod-generator** — the OpenSA cell-LOD bake: merge per 250-cell (= the render grid, plan 087) → budgeted QEM decimate →
   per-cell TXD; output is not tuned for the real-SA streamer (uncapped).
 - **opensa-pack** — game-ready dir → native build (`.osm` per model inside the IMGs + the `opensa/` pak);

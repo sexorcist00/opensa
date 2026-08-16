@@ -280,6 +280,12 @@ interpret them.
   `docs/development/cutscene-field-testing.md`. Suite 79 → 81 tool tests; no per-model hardcode
   (grep-checked at the user's ask).
 
+- [`session-18-burger-joint-and-dxt-dimensions.md`](./session-18-burger-joint-and-dxt-dimensions.md) — the
+  2026-08-17 close of the LOD issue's last two vectors, zero rebuilds: the "burger joint" was a multi-atomic
+  `anim` HD byte-copied into an `objs` LOD (SA keeps ONE atomic, at the origin — merged now), and the "mods"
+  hospital group was five clone dictionaries + one mod TXD carrying a DXT texture with a side not divisible by
+  4, which the real game refuses WITH its whole dictionary (pow2 everywhere we encode; the optimizer resizes
+  any such texture in the tree). Both field-confirmed by one-entry swaps; whole-tree acceptance pending.
 - [`session-17-binmesh-split-order-not-normals.md`](./session-17-binmesh-split-order-not-normals.md) — the
   2026-08-17 close of the "normals × repeat textures × SkyGfx" vector: seven single-variable field probes,
   each a one-model in-place swap (seconds, no rebuild), landed on the rebuilt BinMesh's SPLIT ORDER — a
