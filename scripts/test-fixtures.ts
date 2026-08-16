@@ -235,6 +235,10 @@ const MANIFEST: readonly Fixture[] = [
   extract('gta_cactus.txd', 'dff/clutter/gta_cactus.txd'),
   extract('binnt08_la.dff', 'dff/breakable/binnt08_la.dff'),
   extract('washer.dff', 'dff/building/washer.dff'),
+  // The rock whose rebuilt BinMesh lost its split ORDER (open issue sa-lod-visibility-budget, round 14): 15
+  // splits authored `0..7, 9..14, 8` — material 8 is the vertex-alpha detail layer and must stay LAST through
+  // a count-changing re-encode, or the reference install's SkyGfx dual pass smears it over the rock.
+  extract('cehollyhil06.dff', 'dff/binmesh-order/cehollyhil06.dff'),
   // Stock SA ships 11 EMPTY TXDs — a valid dictionary chunk in one 2 048-byte sector with nothing inside.
   // `mine` is the awkward one: its material NAMES a texture the empty dictionary cannot supply.
   extract('mine.dff', 'dff/empty-txd/mine.dff'),

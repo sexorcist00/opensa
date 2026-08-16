@@ -280,6 +280,12 @@ interpret them.
   `docs/development/cutscene-field-testing.md`. Suite 79 → 81 tool tests; no per-model hardcode
   (grep-checked at the user's ask).
 
+- [`session-17-binmesh-split-order-not-normals.md`](./session-17-binmesh-split-order-not-normals.md) — the
+  2026-08-17 close of the "normals × repeat textures × SkyGfx" vector: seven single-variable field probes,
+  each a one-model in-place swap (seconds, no rebuild), landed on the rebuilt BinMesh's SPLIT ORDER — a
+  blended split moved out of last place, which the install's SkyGfx dual pass turned into a smear. Fixed at
+  the root in `rebuildGeometry`, normals kept; the fork's building pipe recorded down to its compiled
+  shaders; the same class in merge writers named and left open.
 - [`session-15-models-new-and-the-slot-that-was-a-bodykit.md`](./session-15-models-new-and-the-slot-that-was-a-bodykit.md)
   — 2026-08-15, 15 commits: **`models/` + `new/`** (vehicle-installer plan 007 — a candidate replaces the
   `models/` car holding the same SLOT, resolved by ONE shared function because the installer and the

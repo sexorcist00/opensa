@@ -170,6 +170,15 @@ Never edit generated code manually.
   shivering car was chased against a `handling.cfg` row the game was not running (the built one carried a
   mod's suspension damping 5× out of range). `scripts/debug/handling-diff.ts` defaults its baseline to the
   built table for the same reason
+- **A small change to the map build does NOT get a pmb rebuild — swap the model in place.** A full `sa` stage is
+  ~10 min; the one-model instruments are seconds and were built for exactly this (session 17, 2026-08-17):
+  `scripts/debug/model-optimize.ts` (one model through the optimizer chain, a named variant, patched into the
+  tree), `scripts/debug/model-lab.ts` (the same PLUS its clone LOD cut from the result — clones are cut FROM the
+  HD, so an HD-only swap leaves the far view stale; `--dff/--txd` for a mod's loose files),
+  `scripts/debug/img-patch.ts` (append-and-repoint any IMG entry with a ledger, `restore` per entry) and
+  `scripts/debug/dump-binmesh.ts` (split order = draw order). Rebuild only to confirm a fix on the WHOLE tree,
+  after the one-model field verdict, or when the change is a stage that has no one-model form (IPL folds,
+  archive layout, `gta.dat`). Rows in `docs/debug/README.md`
 - **An A/B must be SELF-DESCRIBING: the capture records what the run was configured with.** Careful
   single-variable bisection lost to one capture that stated its own spring values. Before tuning a new
   surface, read it back into the capture (`[phys]`'s `springs` block is the pattern)
