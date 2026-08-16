@@ -1,6 +1,12 @@
 # Building LODs that never draw on the `sa` build — the data is perfect, so the budget is the suspect
 
-**Status: 🟡 DIAGNOSED 2026-08-16, fix built, awaiting the field.** It is the `txdp` parent dictionary:
+**Status: 🔴 STILL OPEN 2026-08-16 — the txdp fix did NOT work.** Self-contained dictionaries changed
+nothing in the field (`lodxhospground1`, `lod711block02` still absent, the white patches unchanged), so the
+parent was a real defect but not THIS one. What the bisect proved stands: the `salod*` dictionary is the
+failing half, since the same clone geometry renders with a stock atlas. Round 5 fixes the last structural
+difference between our generated dictionaries and the game's own content — see the bottom of this file.
+
+**Superseded diagnosis (kept — it was wrong and the fix was still right):** the `txdp` parent dictionary:
 `sa-lod-generator`'s clone TXDs kept only what was unique to them and pointed at one shared `salodpar`
 parent, and **the real game does not deliver that parent's textures to the child's materials**. Every
 parent-only name renders untextured — the white patches over the countryside — and **1 966 of 4 050 clone
@@ -174,3 +180,28 @@ The same build now carries a two-way bisect, patched in place (no rebuild), on t
 
 A model whose TXD never loads is never marked loaded, and an unloaded model is never drawn — which is why
 "white or absent" is the question that splits the remaining half in one look.
+
+## Round 5 (2026-08-16): our raster headers were a combination stock never writes
+
+Self-containment did not fix it, so the dictionaries' CONTENT came under the microscope. Every raster header
+compared against stock and against our own `map-optimizer` (which re-mips 7 243 stock textures and is
+field-proven):
+
+| | stock, and `map-optimizer`'s output | our `salod*`, before |
+| --- | --- | --- |
+| DXT1 | `rasterFormat 0x8200` — 565 + the mip bit | **`0x8300`** — **4444 declared on DXT1 data** |
+| alpha | **DXT3**, `0x8300` | **DXT5**, `0x8300` — stock ships **zero** DXT5 in 3 978 dictionaries |
+| mip bit | set only when levels > 1 | set always |
+| `maskName` | empty | the texture's own name, duplicated |
+
+The defect is confined to `encodeDxtStruct` — the from-scratch writer the LOD dictionaries use. **Our own
+parser keys the format off the FourCC and never reads `rasterFormat`**, which is why a year of offline
+round-trips passed and why the map-optimizer path (which copies the source header) was always right.
+
+Fixed: `rasterFormat` per the data (`0x0200`/`0x0300`, mip bit only when earned), alpha encoded as DXT3, empty
+mask name. Rebuilt and verified in the archive: **14 831 DXT1 at `0x8200`, 1 031 DXT3 at `0x8300`, 0 mask
+names.** Awaiting the field.
+
+**If this is not it either**, the next step is not another guess: build the `sa` target with the clone stage
+producing NOTHING (stock LOD dff + stock atlas everywhere) and see which of the reported models still fail.
+That splits "our LOD stage" from "everything else" without another hypothesis.

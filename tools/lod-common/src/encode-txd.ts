@@ -107,7 +107,10 @@ function leaf(type: number, data: Uint8Array): RwChunk {
 
 function textureNative(name: string, hasAlpha: boolean, level: Level, math: MipColorMath): RwChunk {
   const mips = buildMipChain(level.data, level.width, level.height, math);
-  const struct = encodeDxtStruct(name, hasAlpha ? 'dxt5' : 'dxt1', mips);
+  // DXT3 for alpha, never DXT5: stock SA ships 28 786 DXT1 + 2 095 DXT3 textures across 3 978 dictionaries
+  // and **not one** DXT5 (measured 2026-08-16 over `game-src/original`). Both are 16 bytes per block, so this
+  // costs nothing; it just stops handing the game a format its own content never uses.
+  const struct = encodeDxtStruct(name, hasAlpha ? 'dxt3' : 'dxt1', mips);
 
   return container(RW_TEXTURE_NATIVE, [leaf(RW_STRUCT, struct), container(RW_EXTENSION, [])]);
 }

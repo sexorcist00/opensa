@@ -33,7 +33,7 @@ describe('encodeLodTxd', () => {
   });
 
   describe('positive cases', () => {
-    it('round-trips downscaled, named, DXT-compressed textures (DXT1 opaque, DXT5 alpha)', () => {
+    it('round-trips downscaled, named, DXT-compressed textures (DXT1 opaque, DXT3 alpha)', () => {
       const textures = { grass: solid(128, 20, 180, 40), leaf: solid(64, 10, 90, 10, 128) };
       const txd = encodeLodTxd(['grass', 'leaf'], source(textures), 64, 'gamma');
       const parsed = parseTxd(toArrayBuffer(txd)).textures;
@@ -42,7 +42,7 @@ describe('encodeLodTxd', () => {
       const grass = parsed.find((t) => t.name === 'grass')!;
       const leaf = parsed.find((t) => t.name === 'leaf')!;
       expect(grass.format).toBe('dxt1'); // opaque → DXT1
-      expect(leaf.format).toBe('dxt5'); // alpha → DXT5
+      expect(leaf.format).toBe('dxt3'); // alpha → DXT3, the only alpha format stock SA ships
       expect([grass.width, grass.height]).toEqual([64, 64]); // 128 → downscaled to the 64 budget
       expect(grass.mipmaps.length).toBeGreaterThan(1); // full mip chain
 
@@ -95,7 +95,7 @@ describe('encodeHalvedTxd', () => {
       expect([grass.width, grass.height]).toEqual([64, 64]); // 128 → ½
       expect([leaf.width, leaf.height]).toEqual([32, 32]); // 64 → ½
       expect(grass.format).toBe('dxt1'); // opaque
-      expect(leaf.format).toBe('dxt5'); // alpha
+      expect(leaf.format).toBe('dxt3'); // alpha → DXT3, never DXT5 (stock ships none)
       expect(grass.mipmaps.length).toBeGreaterThan(1);
     });
 
