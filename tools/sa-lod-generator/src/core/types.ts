@@ -39,11 +39,13 @@ export interface LodConfig {
   /** Output directory for the drop-in build (the CLI passes `--out <path>`); absent → report only. */
   out?: string;
   /**
-   * Give every clone dictionary EVERY texture its models name, with no `txdp` parent. **Default true**, and
-   * the default is a field verdict rather than a preference: plan 006's partitioned scheme put names shared by
-   * ≥ 2 atlases into one `salodpar` parent, and the game does not resolve that chain — every parent-only
-   * texture renders untextured (2026-08-16, white patches across the countryside; 49 % of clones depended on
-   * it). False restores the partition, which is smaller on disk and wrong on screen.
+   * Give every clone dictionary EVERY texture its models name, with no `txdp` parent. **Default false** — the
+   * partitioned `salodpar` scheme of plan 006 stands.
+   *
+   * It was flipped to true on 2026-08-16 on the theory that the game does not resolve the `txdp` chain, and
+   * the FIELD said otherwise: self-contained dictionaries changed nothing about the missing/untextured LODs,
+   * while costing 45.9 MiB against the partition's 10.4 MB. The parent is neither proven guilty nor cleared —
+   * it simply is not the defect being chased, so the cheaper shape stays until something proves it wrong.
    */
   selfContainedTxd?: boolean;
   /** Texture downscale factor for the clone LODs (0.5 = half each side = quarter the pixels). */

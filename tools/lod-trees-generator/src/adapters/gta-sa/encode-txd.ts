@@ -24,7 +24,9 @@ const FLAGS_DXT_ALPHA = 0x09;
  */
 export function encodeAtlasTxd(impostors: Impostor[], version: number, math: MipColorMath): Uint8Array {
   const struct = new Uint8Array(4);
-  new DataView(struct.buffer).setUint16(0, impostors.length, true); // textureCount; deviceId stays 0 (any)
+  const header = new DataView(struct.buffer);
+  header.setUint16(0, impostors.length, true); // textureCount
+  header.setUint16(2, 2, true); // deviceId — 2 on every stock SA dictionary; 0 is not accepted (2026-08-16)
 
   const dictionary: RwChunk = {
     children: [

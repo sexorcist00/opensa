@@ -71,7 +71,7 @@ export function createSaLodAdapter(game: string, gameDir: string, config: LodCon
         keepParticles: config.keepParticles ?? true,
         links: resolved.links,
         outDir,
-        selfContainedTxd: config.selfContainedTxd ?? true,
+        selfContainedTxd: config.selfContainedTxd ?? false,
         source,
       }),
     game,

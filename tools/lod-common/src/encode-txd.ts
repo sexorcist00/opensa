@@ -54,7 +54,12 @@ function buildTxd(
   }
 
   const struct = new Uint8Array(4);
-  new DataView(struct.buffer).setUint16(0, natives.length, true); // numTextures (deviceId follows, 0)
+  const header = new DataView(struct.buffer);
+  header.setUint16(0, natives.length, true); // numTextures
+  // deviceId — **2 on every stock SA dictionary**, and we wrote 0 ("any device") for a year. Our own reader
+  // ignores the field; RenderWare's does not, and a dictionary the game will not accept never loads, so every
+  // model pointing at it goes untextured or undrawn. Measured against `game-src/original` 2026-08-16.
+  header.setUint16(2, TXD_DEVICE_D3D, true);
 
   return writeRw({
     chunks: [container(RW_TEXTURE_DICTIONARY, [leaf(RW_STRUCT, struct), ...natives, container(RW_EXTENSION, [])])],
@@ -100,6 +105,9 @@ function halve(rgba: Uint8Array, width: number, height: number, halvings: number
 
   return level;
 }
+
+/** The `deviceId` half of a TexDictionary's struct: 2 on every stock SA TXD (the D3D platform). */
+const TXD_DEVICE_D3D = 2;
 
 function leaf(type: number, data: Uint8Array): RwChunk {
   return { data, type, version: RW_VERSION };

@@ -181,27 +181,64 @@ The same build now carries a two-way bisect, patched in place (no rebuild), on t
 A model whose TXD never loads is never marked loaded, and an unloaded model is never drawn — which is why
 "white or absent" is the question that splits the remaining half in one look.
 
-## Round 5 (2026-08-16): our raster headers were a combination stock never writes
+## Where it stands after 2026-08-16 (nine hypotheses, none of them it)
 
-Self-containment did not fix it, so the dictionaries' CONTENT came under the microscope. Every raster header
-compared against stock and against our own `map-optimizer` (which re-mips 7 243 stock textures and is
-field-proven):
+**What is PROVEN, and it is not much:**
 
-| | stock, and `map-optimizer`'s output | our `salod*`, before |
+| | |
+| --- | --- |
+| clone LODs in the tree | ~6 places broken in the whole city, always the same ones |
+| clone stage producing NOTHING (stock LODs, `minLodPixels` 100 000) | **clean — no bugs at all** (field, 2026-08-16) |
+| our clone geometry + a STOCK dictionary that resolves 100 % of its names, exact case | **still broken** — so the generated dictionary is NOT the defect |
+| the clone DFF of 3 of the 4 checked models | **byte-identical to its HD**, and that HD renders correctly |
+
+So the swap of the LOD's model is the trigger, the dictionary is cleared, and the geometry is provably
+loadable. ~6 of 4 050 clones fail; 99.85 % are fine.
+
+### The nine, and how each died
+
+| # | hypothesis | how it died |
 | --- | --- | --- |
-| DXT1 | `rasterFormat 0x8200` — 565 + the mip bit | **`0x8300`** — **4444 declared on DXT1 data** |
-| alpha | **DXT3**, `0x8300` | **DXT5**, `0x8300` — stock ships **zero** DXT5 in 3 978 dictionaries |
-| mip bit | set only when levels > 1 | set always |
-| `maskName` | empty | the texture's own name, duplicated |
+| 1 | `ms_aVisibleLodPtrs` overflow (1 000 entries) | the LOD never appears at any range or heading |
+| 2 | `PreLoadLODs` / stream-memory budget | `PreLoadLODs = 0` changed nothing |
+| 3 | the tree impostor layer crowding the LOD budget | `--exclude trees` (9 500 LOD entities gone) changed nothing |
+| 4 | the `txdp` parent not resolving | self-contained dictionaries changed nothing — REVERTED, it cost 45.9 MiB against 10.4 MB |
+| 5 | raster headers unlike stock's (4444 on DXT1, DXT5, mip bit, mask name) | matched stock exactly; nothing changed. Kept — it is alignment at zero cost |
+| 6 | `deviceId 0` in the dictionary struct | stock writes 2 and we wrote 0, but the tree's other 422 zeroes are MOD TXDs that render. Kept, same reason |
+| 7 | texture-name CASE (our dictionaries lowercased, the clone's materials do not) | fixed on both sides; nothing changed. His own objection was the right one: mixed-case textures are far more than 6 models |
+| 8 | the FLA TXD id pool (5 171 archives against a 5 000 default) | the install's log reads `20000 - 25999 (6000)`, and setting `FILE_TYPE_TXD = 1000` crashed the game at once — the raise is real and applied |
+| 9 | the LOD-transform retarget writing the HD's transform | of the four broken rows it changed exactly ONE (`lodcuntw65` lost a 33° yaw); the other three are identical to stock |
 
-The defect is confined to `encodeDxtStruct` — the from-scratch writer the LOD dictionaries use. **Our own
-parser keys the format off the FourCC and never reads `rasterFormat`**, which is why a year of offline
-round-trips passed and why the map-optimizer path (which copies the source header) was always right.
+### Features that do NOT separate the broken six
 
-Fixed: `rasterFormat` per the data (`0x0200`/`0x0300`, mip bit only when earned), alpha encoded as DXT3, empty
-mask name. Rebuilt and verified in the archive: **14 831 DXT1 at `0x8200`, 1 031 DXT3 at `0x8300`, 0 mask
-names.** Awaiting the field.
+Measured across all 4 050 clones: vertex/triangle count, decimated vs verbatim, material count, UV layers,
+2dfx presence, night colours, geometry flags, archive size, flatness (`lodidlewood12` ranks 1 964 of 4 049 on
+z/xy, `lodger01_law` 3 393). Nothing puts them in a minority.
 
-**If this is not it either**, the next step is not another guess: build the `sa` target with the clone stage
-producing NOTHING (stock LOD dff + stock atlas everywhere) and see which of the reported models still fail.
-That splits "our LOD stage" from "everything else" without another hypothesis.
+### One contradiction, recorded because it may be the thread
+
+- Round 4: `lodxhospground1` = **stock** dff + our dictionary → still missing.
+- Round 6: `lodxhospground1` = our clone dff + **stock** dictionary → still missing.
+- No-clone build: stock dff + stock dictionary → **fine**.
+
+Neither half alone explains it, which should be impossible if one of them is the defect. The round-4 patch is
+the less trustworthy of the two — it rewrote DFF bytes in place inside `gta3.img` (directory sizes patched by
+hand), where round 6 only edited an IDE column. **Treat round 4's result as suspect before building anything
+on it.**
+
+### The plan that replaces guessing (the user's, 2026-08-16)
+
+Three staged builds, each removing one stage from the pipeline, on the `lod-field-bisect` branch:
+
+1. **`--exclude mods`** — if the objects come back, the defect involves the mods and is chased there.
+2. **`--exclude mods,optimize`** — if not, the optimizer joins the suspects.
+3. **clone-only LOD stage** (no decimation, no mesh re-encode) — if the first two change nothing, the defect
+   is in what the LOD stage does to VANILLA objects, and this splits cloning from transforming.
+
+Each stage is a field verdict, not an argument. Whatever the answer, it lands in this file.
+
+### The pragmatic exit, if the hunt has to stop
+
+`mods-src/<game>/lod-exclude.json` already exists for exactly this: models that must not enter the far LODs.
+Listing the ~6 leaves them their stock LODs and costs nothing. The alternative is turning cloning off for the
+`sa` target entirely — proven clean, at the price of the detail the feature buys and 5.5× the LOD payload.

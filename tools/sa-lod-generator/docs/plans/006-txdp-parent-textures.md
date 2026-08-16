@@ -1,20 +1,11 @@
 # 006 — Clone TXDs: 0.25 scale + `txdp` parent dictionary
 
-**Status: half of it RETIRED by the field, 2026-08-16.** The `texScale` cut stands. **The `txdp` parent does
-not work on the real target**: every texture the partition moved into `salodpar` renders UNTEXTURED — white
-patches over the countryside where a LOD's grass material is a parent-only name — and 1 966 of 4 050 clone
-LODs (49 %) depended on it. `selfContainedTxd` is on by default now: every child carries every texture its
-models name and no parent is written. The bisect that isolated the dictionary half from the geometry half is
-in [`docs/open-issues/sa-lod-visibility-budget.md`](../../../../docs/open-issues/sa-lod-visibility-budget.md);
-the bytes it costs are priced in
-[`docs/performance/deferred-optimizations/salod-txdp-parent-dedup.md`](../../../../docs/performance/deferred-optimizations/salod-txdp-parent-dedup.md).
-
-**What this plan got wrong, kept because the lesson is the expensive part:** `txdp` is an SA-native mechanism,
-the OpenSA engine resolves the chain, and a well-known mod was cited as proof at scale — none of which is a
-measurement on OUR target. Nothing offline could have caught it: the data is correct, the chain is legal, and
-the game simply does not follow it here.
-
-**Original status: ✅ Implemented (measured below).** Two texture cuts for the clone LODs, in order of risk:
+**Status: ✅ Implemented and STILL IN FORCE — but on 2026-08-16 it spent an afternoon as a suspect.** The
+parent was blamed for LODs that render untextured or not at all, replaced by self-contained dictionaries
+(`selfContainedTxd`), field-tested, and REVERTED: nothing changed, and self-containment cost 45.9 MiB against
+this plan's 10.4 MB. **The chain is neither proven nor disproven on the real target** — which is the gap this
+plan left by citing a third-party mod as proof at scale instead of measuring our own install. See
+[`docs/open-issues/sa-lod-visibility-budget.md`](../../../../docs/open-issues/sa-lod-visibility-budget.md). Two texture cuts for the clone LODs, in order of risk:
 
 1. **`texScale` 0.5 → 0.25** (with a 32 px floor) — the clone textures are only ever seen from ≥ the HD's draw
    distance, where 0.25 still oversamples the screen ~2×.

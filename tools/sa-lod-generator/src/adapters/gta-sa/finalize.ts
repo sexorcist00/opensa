@@ -46,12 +46,11 @@ export interface BuildInput {
   links: readonly LodLink[];
   outDir: string;
   /**
-   * Every clone dictionary carries EVERY texture its models name, with no `txdp` parent (default true).
+   * Every clone dictionary carries EVERY texture its models name, with no `txdp` parent (**default false**).
    *
-   * The partitioned scheme (plan 006) moved names shared by ≥ 2 atlases into one `salodpar` parent and left
-   * each child slim. **The game does not resolve that chain**: field 2026-08-16, every parent-only texture
-   * renders untextured — white patches over the countryside, and 49 % of the 4 050 clones depended on it.
-   * Self-containment trades archive bytes for a texture that is always there.
+   * Tried as a fix on 2026-08-16 and REJECTED by the field: it changed nothing about the missing/untextured
+   * LODs and cost 45.9 MiB against the partition's 10.4 MB. Kept as a flag because it is the one shape that
+   * needs no parent at all, should the chain ever be proven at fault.
    */
   selfContainedTxd: boolean;
   source: TextureSource;
@@ -326,17 +325,22 @@ function packCloneTxds(
       continue; // no source atlas → the LODs it would serve stay stock (counted as missingTxd per link)
     }
     try {
+      // The texture's OWN name, case intact. A clone LOD is the HD's geometry verbatim, so its materials ask
+      // for the HD's spelling (`gymshop1_LAe`, `Parking1_LAe2`) — and stock SA never once spells a texture
+      // differently in a DFF than in the dictionary it lives in (measured, 0 case-only mismatches). Lowercasing
+      // here handed the game a dictionary whose keys no material asks for, and OUR resolver could not see it
+      // because it lowercases both sides. `ensureCloneTxd` (the hole-fill path) always kept the case.
       atlasNames.set(
         hdTxd,
-        parseTxd(bytes).textures.map((texture) => texture.name.toLowerCase()),
+        parseTxd(bytes).textures.map((texture) => texture.name),
       );
     } catch {
       // unreadable atlas — same as missing
     }
   }
 
-  // Self-contained (the default since the field found the chain broken): every atlas keeps every name, and no
-  // parent is written — see {@link BuildInput.selfContainedTxd}.
+  // Self-contained (opt-in): every atlas keeps every name and no parent is written — see
+  // {@link BuildInput.selfContainedTxd}.
   const { perAtlas, shared } = input.selfContainedTxd
     ? { perAtlas: new Map([...atlasNames].map(([atlas, names]) => [atlas, [...new Set(names)]])), shared: [] }
     : partitionCloneTextures(atlasNames, (atlas, name) => variantKey(resolveFrom(input.source, atlas, name)));
