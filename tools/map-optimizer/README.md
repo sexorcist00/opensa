@@ -20,7 +20,7 @@ normals, welding duplicate vertices, and removing degenerate / duplicate faces â
 npx tsx map-optimizer/src/cli.ts --game ./game-src/gostown --out ./build
 
 # all passes are on by default â€” opt out per pass:
-npx tsx map-optimizer/src/cli.ts --game ./game-src/original --out ./build --no-textures    # skip mip chains (plan 010)
+npx tsx map-optimizer/src/cli.ts --game ./game-src/original --out ./build --no-textures    # skip mip chains (plan 010) AND the DXT block-alignment resize (docs/restrictions/dxt-raster-dimensions.md)
 npx tsx map-optimizer/src/cli.ts --game ./game-src/original --out ./build --no-weld-seams  # skip cross-model prelit seam weld (plan 016)
 npx tsx map-optimizer/src/cli.ts --game ./game-src/original --out ./build --no-prelit      # skip world-context prelight (plan 019)
 npx tsx map-optimizer/src/cli.ts --game ./game-src/original --out ./build --no-add-normals # don't create absent normals

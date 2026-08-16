@@ -43,6 +43,9 @@ see the `lod-detection-name-vs-target` memory). The text↔binary `lod`-index co
   textures used by ≥ 2 source atlases live once in the shared `salodpar.txd` parent, children keep only their
   unique ones (`salod-txdp.ide` registers the links before the first IPL); retarget the LOD's IDE `txd`.
   Same-named textures with DIFFERENT pixels stay per-child, each resolved from its own atlas (lod-common plan 004).
+  Every clone texture is a **power of two** per side (`resampleToPow2` after the halving): a mod's 250×250 source
+  halved to 62×62 DXT1 made the real game refuse the whole dictionary and every LOD on it
+  (`docs/restrictions/dxt-raster-dimensions.md`, 2026-08-17).
 - Retarget each cloned LOD **instance's** transform to its HD instance's — the stock LOD geometry was baked in a
   different local frame, so an HD clone under the stock rotation would skew (see `lod-clone-needs-hd-instance-transform`).
 - **Skipped** (kept stock): shared multi-HD LODs, dual-role LODs (also placed standalone — cloning corrupts them),

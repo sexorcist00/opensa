@@ -1,13 +1,15 @@
 # Building LODs that never draw on the `sa` build — the data is perfect, so the budget is the suspect
 
-**Status: 🟡 SPLIT INTO THREE, 2026-08-16 evening.** The single "LODs do not draw" issue this file was opened
+**Status: 🟢 ALL THREE VECTORS FIXED IN CODE, 2026-08-17 — moves to `fixed/` once the full `sa` rebuild passes the field.** Vector 3 = BinMesh split order (round 14), vector 2 = a multi-atomic `anim` HD byte-copied into an `objs` LOD (round 15), vector 1 = DXT rasters not block-aligned killing whole dictionaries (round 16). Superseded status follows.
+
+**Superseded status: 🟡 SPLIT INTO THREE, 2026-08-16 evening.** The single "LODs do not draw" issue this file was opened
 on turned out to be **three unrelated defects**, separated by a staged pipeline bisect (rounds 7–10 at the
 bottom). Read those first — everything above them is the falsified history, kept because each dead
 hypothesis is a place a future round must not spend money again.
 
 | # | vector | what is known | where it is |
 | --- | --- | --- | --- |
-| 1 | **mods** | `lodxhospital1` / `lodxhospground1` / `lod711block02` are clean the moment `mod-installer` is out of the pipeline | undiagnosed |
+| 1 | **mods** | `lodxhospital1` / `lodxhospground1` / `lod711block02` are clean the moment `mod-installer` is out of the pipeline | **round 16: FIXED in code, field-confirmed one-dictionary swaps 2026-08-17** — a DXT texture not a multiple of 4 kills its whole dictionary; mods shipped the sources; final closure after the full `sa` rebuild |
 | 2 | **the burger joint** | `burger01_LAw`'s LOD is absent with the optimizer in, present without it; its clone is one of 11 with atomics ≠ 1 | **round 15: FIXED, field-confirmed 2026-08-17** (a verbatim clone of a multi-atomic `anim` HD — SA keeps ONE atomic of it) |
 | 3 | **normals × repeat textures** | the optimizer adds normals to prelit world geometry; the smear appears **only on repeat-textured objects** and **only while the install's SkyGfx fork is loaded** | round 10, cause located, fix NOT decided |
 
@@ -589,4 +591,47 @@ one-atomic `lodger01_law.dff` (869 tris; `img-patch.ts status --game` lists 4 pa
 `anim` row (2 atomics, its arm nods at 800 m in stock). Our clone overwrites it with the 5-atomic HD, so the LOD
 stopped nodding (verbatim: static, since the anim's frame names no longer match; merged: static, one atomic).
 Whether an `anim`-row LOD should be left stock is the user's call — recorded in `docs/edge-cases/`.
+
+# Round 16 (2026-08-17): the mods vector — a DXT texture that is not a multiple of 4 kills its WHOLE dictionary
+
+Desk work only, then one-dictionary swaps. The three models sit on TWO clone dictionaries: `salod0424`
+(`lodxhospital1` + `lodxhospground1`, atlas `hospital_lae`) and `salod0433` (`lod711block02`, `idlewood3_lae`),
+and `lodxhospground1.dff` is byte-identical between the broken and the fixed tree — so the DFF was never the
+variable there. Diffing those two dictionaries against every healthy one, the only thing that sets them apart:
+
+| dictionary | texture | source | ours |
+| --- | --- | --- | --- |
+| `salod0424` | `marinadoor1_256` | mod 39 Realistic Hospital Door: 250×250 **A8R8G8B8**, uncompressed — the game takes it, the HD renders | ×0.25 → **62×62 DXT1** |
+| `salod0433` | `pizzalogo` (+ `pizzatext` 700×52) | mod 62 Ghetto Pizzeria Update: 256×152 | **64×38 DXT3** |
+
+Stock ships **26 004 textures and not one that is not a power of two** — R\* content could never hit this. In
+`build/original/sa` exactly **five** of 995 clone dictionaries carried a DXT texture with a side not divisible
+by 4 (`salod0176/0423/0424/0433/0687`), and one mod's own TXD did (`airwelcomesign_sfse`, `goldengates`
+932×358 DXT1) — the "5–6 objects for the whole city" scale, and why `bisect-nomods` (stock sources, all pow2)
+was clean. It also reads the old rounds correctly: 3 (stock dff + stock atlas → visible), 4 (stock dff + our
+`salod0424` → missing; clone dff + stock atlas → appeared). Round 6's "clone dff + `hospital_lae` → still
+missing" is the one observation this does not explain; the ground LOD sits under the hospital LOD and was judged
+from a helicopter — recorded as unreliable rather than as a fact.
+
+**Field, one swap at a time in `build/original/sa`** (`img-patch.ts set` on the dictionary only; the two IDE
+columns hand-patched in earlier rounds put back to `salod0424`/`salod0433` first):
+
+| swap | verdict |
+| --- | --- |
+| `salod0424` regenerated with `marinadoor1_256` at 64×64, every other texture byte-identical | **hospital AND the ground under it visible** |
+| `salod0433` with `pizzalogo` 64×32, `pizzatext` 512×64 | **`lod711block02` visible** |
+| prediction, unpatched: the container-crane LODs on `salod0176` (`Mich_Rmke` 224×207) | **absent, as predicted** |
+| prediction, unpatched: the SFSE airport sign (mod 57's own 932×358 DXT1) | **absent, as predicted** — a mod's HD, not a LOD |
+| `salod0176` with `Mich_Rmke` 256×256; `airwelcomesign_sfse.txd` through the optimizer's pass (1024×512) | **cranes and sign visible** |
+| control: mod 64's HD `cranes_dyn2_cj` carries `Mich_Rmke` **896×828** DXT1 (4-aligned, NPOT) | HD cranes render — **the fatal property is "not a multiple of 4", NOT "not a power of two"** |
+
+**Fix (this branch):** `encodeHalvedTxd`/`encodeLodTxd` resample every level to the nearest power of two
+(`resampleToPow2`, reused from `cell-weld` — the same 62×62 was WebGPU's problem there); `map-optimizer`'s
+`optimizeTxd` decodes any DXT texture that is not block-aligned in ANY dictionary of the tree (mods included),
+resamples it to the power of two rounded UP and writes it back in the same format (`resized` in the run summary).
+Rule with the measurement table: `docs/restrictions/dxt-raster-dimensions.md`. Census:
+`scripts/debug/txd-dimension-census.ts` (0 fatal on `bisect-nomods`, 5 + 1 on the old `build/original/sa`).
+
+**Closure:** the user runs the full `sa` rebuild; if the field passes there (rock, `lodcuntw65`, burger joint,
+hospital group, cranes, sign) this file moves to `fixed/`.
 

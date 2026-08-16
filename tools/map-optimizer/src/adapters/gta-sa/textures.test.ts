@@ -47,6 +47,30 @@ function txd(rasterStruct: Uint8Array): Uint8Array {
 }
 
 describe('optimizeTxd (Phase 2 — DXT stays DXT)', () => {
+  describe('negative cases', () => {
+    it('never leaves a DXT raster whose top level is not a multiple of 4 — it is resampled to a power of two', () => {
+      // The real game refuses such a raster and drops the whole dictionary with it (a mod's 932×358 airport
+      // sign, our 62×62 hospital door clone — field 2026-08-17). 8×6 → pow2 rounded UP 8×8, full mips, still DXT1.
+      const base = encodeDxt('dxt1', new Uint8Array(8 * 5 * 4).fill(120), 8, 5);
+      const input = txd(dxt1Struct('sign', base, 8, 5));
+
+      const result = optimizeTxd(input);
+      expect(result.resized).toBe(1);
+      expect(result.processed).toBe(1);
+
+      const { textures } = parseTxd(result.bytes.buffer as ArrayBuffer);
+      expect(textures[0].name).toBe('sign');
+      expect(textures[0].format).toBe('dxt1');
+      expect([textures[0].width, textures[0].height]).toEqual([8, 8]);
+      expect(textures[0].mipmaps.map((m) => [m.width, m.height])).toEqual([
+        [8, 8],
+        [4, 4],
+        [2, 2],
+        [1, 1],
+      ]);
+    });
+  });
+
   describe('positive cases', () => {
     it('adds a mip chain to a single-level DXT1 texture, keeping it DXT1 with the base preserved', () => {
       const base = encodeDxt('dxt1', new Uint8Array(4 * 4 * 4).fill(200), 4, 4); // solid grey 4×4 → 8 bytes
@@ -54,6 +78,7 @@ describe('optimizeTxd (Phase 2 — DXT stays DXT)', () => {
 
       const result = optimizeTxd(input);
       expect(result.processed).toBe(1);
+      expect(result.resized).toBe(0);
 
       const { textures } = parseTxd(result.bytes.buffer as ArrayBuffer);
       expect(textures).toHaveLength(1);

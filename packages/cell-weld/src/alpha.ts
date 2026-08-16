@@ -238,17 +238,23 @@ export function processAlphaTexture(
   return mips;
 }
 
-/** Bilinear resample to pow2 (kills WebGPU BC alignment problems at the root; odd sizes like 62×62). */
+/**
+ * Bilinear resample to pow2 (kills WebGPU BC alignment problems at the root; odd sizes like 62×62 — and the
+ * real game's D3D9 refuses a DXT raster that is not block-aligned, `docs/restrictions/dxt-raster-dimensions.md`).
+ * `round` picks the side: `'nearest'` (default) for our own downscaled atlases, `'up'` when the texels are an
+ * author's and none may be lost.
+ */
 export function resampleToPow2(
   rgba: Uint8Array,
   width: number,
   height: number,
+  round: 'nearest' | 'up' = 'nearest',
 ): {
   height: number;
   rgba: Uint8Array;
   width: number;
 } {
-  const pow2 = (value: number): number => 2 ** Math.round(Math.log2(value));
+  const pow2 = (value: number): number => 2 ** (round === 'up' ? Math.ceil : Math.round)(Math.log2(value));
   const outWidth = Math.max(4, pow2(width));
   const outHeight = Math.max(4, pow2(height));
   if (outWidth === width && outHeight === height) {

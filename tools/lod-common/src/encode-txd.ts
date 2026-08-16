@@ -1,5 +1,6 @@
 import type { RwChunk } from '@opensa/rw-codec/chunk';
 
+import { resampleToPow2 } from '@opensa/cell-weld/alpha';
 import { RW_EXTENSION, RW_STRUCT, RW_TEXTURE_DICTIONARY, RW_TEXTURE_NATIVE, writeRw } from '@opensa/rw-codec/chunk';
 import { buildMipChain, downsample, type MipColorMath } from '@opensa/rw-codec/mip';
 import { encodeDxtStruct } from '@opensa/rw-codec/texture-native';
@@ -49,7 +50,7 @@ function buildTxd(
     const texture = source.get(name);
     if (texture) {
       const level = reduce(texture.rgba, texture.width, texture.height);
-      natives.push(textureNative(name, texture.hasAlpha, level, math));
+      natives.push(textureNative(name, texture.hasAlpha, toPow2(level), math));
     }
   }
 
@@ -104,6 +105,22 @@ function halve(rgba: Uint8Array, width: number, height: number, halvings: number
   }
 
   return level;
+}
+
+/**
+ * Every level we emit is DXT, and a DXT raster whose top level is not a multiple of 4 on both sides is one the
+ * real game's D3D9 refuses to create — the whole dictionary then fails to load and EVERY model pointing at it is
+ * never drawn (a model whose TXD is not loaded is never marked loaded). Mods ship such sources uncompressed
+ * (`marinadoor1_256` 250×250 A8R8G8B8 in the hospital door mod), which SA takes; halved to 62×62 and
+ * DXT-compressed by us, the same texture took the two hospital LODs and the pizzeria block down with it
+ * (`open-issues/sa-lod-visibility-budget.md`, round 16). Stock ships 26 004 textures and not one that is not a
+ * power of two, so that is the shape we emit: nearest power of two per side (bilinear), floor 4 — which also
+ * keeps every mip level block-aligned.
+ */
+function toPow2(level: Level): Level {
+  const sized = resampleToPow2(level.data, level.width, level.height);
+
+  return { data: sized.rgba, height: sized.height, width: sized.width };
 }
 
 /** The `deviceId` half of a TexDictionary's struct: 2 on every stock SA TXD (the D3D platform). */

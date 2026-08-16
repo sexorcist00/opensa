@@ -7,6 +7,19 @@ import type { SourceTexture, TextureSource } from './texture-source';
 
 import { encodeHalvedTxd, encodeLodTxd } from './encode-txd';
 
+/** A solid-colour texture of arbitrary size (opaque unless `alpha` given). */
+function rect(width: number, height: number, r: number, g: number, b: number, alpha = 255): SourceTexture {
+  const rgba = new Uint8Array(width * height * 4);
+  for (let i = 0; i < rgba.length; i += 4) {
+    rgba[i] = r;
+    rgba[i + 1] = g;
+    rgba[i + 2] = b;
+    rgba[i + 3] = alpha;
+  }
+
+  return { hasAlpha: alpha !== 255, height, rgba, width };
+}
+
 /** A solid-colour texture of the given size (opaque unless `alpha` given). */
 function solid(size: number, r: number, g: number, b: number, alpha = 255): SourceTexture {
   const rgba = new Uint8Array(size * size * 4);
@@ -58,10 +71,29 @@ describe('encodeLodTxd', () => {
 
 describe('encodeHalvedTxd', () => {
   describe('negative cases', () => {
-    it('never drops a dimension below 1px', () => {
+    it('never drops a dimension below one DXT block (4 px)', () => {
       const txd = encodeHalvedTxd(['dot'], source({ dot: solid(1, 5, 5, 5) }), 3, 'gamma');
       const dot = parseTxd(toArrayBuffer(txd)).textures[0];
-      expect([dot.width, dot.height]).toEqual([1, 1]);
+      expect([dot.width, dot.height]).toEqual([4, 4]);
+    });
+
+    it('never emits a DXT raster whose side is not a power of two — a mod source of 250×250 lands on 64×64', () => {
+      // The hospital door mod ships `marinadoor1_256` as 250×250 uncompressed, which SA takes for the HD; halved
+      // to 62×62 and DXT-compressed, that raster made the real game refuse the whole clone dictionary — every LOD
+      // on `salod0424` vanished (open issue sa-lod-visibility-budget, round 16). Stock ships not one NPOT texture.
+      const wide = rect(700, 52, 7, 7, 7, 128); // the pizzeria mod's `pizzatext`, 4-aligned but not pow2
+      const txd = encodeHalvedTxd(
+        ['door', 'logo', 'wide'],
+        source({ door: rect(250, 250, 5, 5, 5), logo: rect(256, 152, 6, 6, 6, 128), wide }),
+        2,
+        'gamma',
+      );
+      const parsed = parseTxd(toArrayBuffer(txd)).textures;
+      const dims = Object.fromEntries(parsed.map((t) => [t.name, [t.width, t.height]]));
+
+      expect(dims.door).toEqual([64, 64]); // 250 → 62 → nearest pow2 64
+      expect(dims.logo).toEqual([64, 32]); // 256×152 → 64×38 → 64×32
+      expect(dims.wide).toEqual([512, 64]); // 52 is under the 32 px floor's 2× guard: no halving, 700×52 → 512×64
     });
 
     it('floors halving at 32px — a small source never turns to mush (plan 006)', () => {

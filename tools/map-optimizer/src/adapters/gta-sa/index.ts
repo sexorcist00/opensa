@@ -48,8 +48,10 @@ export interface GtaSaTextureOps {
 export interface TextureOutcome {
   /** True when the TXD couldn't be read/optimized (isolated — not packed into the build). */
   failed: boolean;
-  /** How many textures gained a mip chain. */
+  /** How many textures gained a mip chain (the resized ones included). */
   mipped: number;
+  /** DXT textures not block-aligned, resampled to a power of two (see `optimizeTxd`). */
+  resized: number;
 }
 
 /**
@@ -227,9 +229,9 @@ export function createGtaSaAdapter(
           packed.push({ data: result.bytes, name: `${name}.txd` }); // untouched TXDs keep their archive entry
         }
 
-        return { failed: false, mipped: result.processed };
+        return { failed: false, mipped: result.processed, resized: result.resized };
       } catch {
-        return { failed: true, mipped: 0 }; // unparseable TXD — isolate, leave it out of the .img
+        return { failed: true, mipped: 0, resized: 0 }; // unparseable TXD — isolate, leave it out of the .img
       }
     },
     read(ref: AssetRef): Asset {
