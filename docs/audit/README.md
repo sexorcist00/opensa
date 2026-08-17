@@ -280,6 +280,14 @@ interpret them.
   `docs/development/cutscene-field-testing.md`. Suite 79 → 81 tool tests; no per-model hardcode
   (grep-checked at the user's ask).
 
+- [`session-23-validation-package-and-the-cutscene-converter-app.md`](./session-23-validation-package-and-the-cutscene-converter-app.md)
+  — 2026-08-17: the standalone-app chain, the first thing this repo builds for people who will never clone it.
+  `@opensa/validation` (the verdict SHAPE — `fix` is required on an error at the type level — plus generic
+  path/file checks; the 9 ms game+exe gate) and `apps/cutscene-converter` (Electron, plan 002 steps 1–5): an
+  84.8 MB portable exe cross-built from macOS with no wine, the plugin embedded at build time with a build
+  that REFUSES without it, and a facade proved byte-identical to a CLI run of the same inputs. Three findings
+  to remember: electron-builder packs the workspace ROOT's runtime deps (18 MB of asar this app never loads),
+  npm 11 blocks install scripts by default, and a package's LAYER follows its `nx.tags`, never its folder.
 - [`session-22-anim-frames-in-the-cell-lod-and-translucent-clusters.md`](./session-22-anim-frames-in-the-cell-lod-and-translucent-clusters.md)
   — 2026-08-17: the OpenSA cell LOD placed an `anim` def's atomics without their DFF frames (the Burger Shot's
   sign in the middle of the roof at LOD range; now composed like the engine's weld and the `sa` clone LOD);
