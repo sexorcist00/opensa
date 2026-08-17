@@ -185,6 +185,17 @@ Never edit generated code manually.
   the verdict through these instruments and spend a rebuild only when the whole tree must be confirmed.**
   Rebuild only to confirm a fix on the WHOLE tree, after the one-model field verdict, or when the change is
   a stage that has no one-model form (IPL folds, archive layout, `gta.dat`). Rows in `docs/debug/README.md`
+- **Every test fixture has exactly ONE of three sources, and a manifest line that names it** (the user's
+  call, 2026-08-17): a stock game file (`game-src/<game>`, an IMG entry included), a mod file
+  (`mods-src/<game>`, found by NAME across layers), or — when it exists nowhere else (a version-pinned
+  lock, a golden snapshot, a re-export a mod no longer ships) — a copy CACHED in `fixtures-src/`. Nothing
+  under `fixtures/` is committed and neither is `fixtures-src/`; `npm run test:fixtures` (`scripts/
+test-fixtures.ts`) rebuilds `fixtures/original` + `fixtures/viewer` from the first two and mirrors
+  `fixtures-src/` → `fixtures/custom` (wipe + copy, FIRST). **A file dropped into `fixtures/` by hand is
+  one `rm -rf` from gone and no test will say so** — its tests go `skipIf` and the suite stays green: the
+  day the tree was first regenerated from scratch, four cutscene fixtures turned out to have no manifest
+  line at all. So: a new fixture = a manifest line (`copy`/`extract`/`mod`/`cleo`) or a file in
+  `fixtures-src/`, in the same change as the test; verify with a regeneration, never by the file being there
 - **A pmb run that dies is RESUMED, never restarted from stage 1** (pmb plan 006, 2026-08-17): every run leaves
   `<out>/.work-<target>/resume.json` (what it was made of + which steps finished — every chain stage, `sa`,
   `opensa-lod`, `opensa`), and the pack journals every weld chunk under `pack-checkpoints/`. `pmb … --resume`
