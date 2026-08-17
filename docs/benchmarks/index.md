@@ -788,3 +788,35 @@ Companion numbers from the built ferris fixture the same day: `stepUvAnimation` 
 07-18 → 07-20: what the map CONTAINED changed under us while the numbers were read as if it had not. The
 lab rows carry a `converter` block; the sweeps did not. Every new in-game run must name its pak in `note`
 — that is now in the readme's comparability checklist, and the 07-19/07-20 bisect rows carry it.
+
+## 2026-08-17 — the first sweep with the FULL high-poly fleet (and a rebuilt map): nothing holds 120 any more
+
+[`opensa-engine/2026-08-17-ingame-full-hipoly-fleet-sweep.json`](opensa-engine/2026-08-17-ingame-full-hipoly-fleet-sweep.json)
+— the user's in-game `?bench=all` (his machine, capped 120 Hz) on the 2026-08-17 `build/original/opensa`
+(pak 1 269 600 256 B, 1124 cells; the first build in which ALL 212 mod cars are the 30k–100k-polygon fleet,
+`vehicles.img` 1781 MB + `vehicles2.img` 1415 MB of `.osm`). Baseline for the delta:
+[08-09 A/A arm1](opensa-engine/2026-08-09-headless-bench-aa-after-102.json) (headless, DPR=2, capped, the
+08-08 pak) — a different surface AND an 8-days-older map, so the delta is build + fleet + surface.
+
+| scene | avgMs | p95 | gpu.pass | tris (M) | draws | cars |
+| --- | --- | --- | --- | --- | --- | --- |
+| ls-noon | 8.3 → 11.5 | 10.0 → 13.1 | 2.7 → 6.9 | 2.31 → 3.91 | 1094 → 1967 | 24 |
+| sf-fog-dawn | 8.3 → 10.3 | 9.9 → 12.8 | 2.5 → 5.4 | 1.56 → 2.31 | 968 → 1394 | 22 |
+| lv-night | 8.3 → 17.2 | 10.0 → 19.2 | 3.6 → 11.8 | 2.06 → 4.25 | 2251 → 3464 | 43 |
+| country-dusk | 8.3 → 16.3 | 10.0 → 18.6 | 3.8 → 12.4 | 1.23 → 1.45 | 874 → 948 | 4 |
+| ocean-horizon | 8.3 → 8.3 | 10.1 → 9.3 | 2.3 → 2.2 | 0.41 → 0.41 | 47 → 41 | 0 |
+| ls-rain-night | 8.3 → 10.5 | 10.0 → 12.4 | 2.7 → 5.9 | 1.75 → 3.06 | 841 → 1663 | 24 |
+| ganton-noon | 8.3 → 15.2 | 9.9 → 17.5 | 3.1 → 10.4 | 1.57 → 3.14 | 1264 → 1898 | 33 |
+| strip-noon | 8.3 → 12.1 | 10.0 → 15.2 | 3.2 → 7.3 | 2.01 → 3.22 | 1075 → 2076 | 1 → 27 |
+| ganton-night | 8.3 → 15.7 | 9.8 → 18.3 | 3.2 → 10.8 | 1.57 → 3.14 | 1274 → 1908 | 33 |
+
+**GPU pass ×2.5–3.3 on every scene with content; the CPU side is flat** (vehicles 0.28–0.45 ms mean as
+before, physics 1–3 ms, lateCreates 0, every `legStart` green). What the fleet explains: +50–100 %
+triangles and +50–80 % draws where cars stand. **What it does not: `country-dusk` holds 4 cars, +18 %
+triangles, +8 % draws — and its pass still triples (3.8 → 12.4 ms).** `cellVertex` residency is 2.0–2.9× on
+EVERY scene (150–228 → 349–516) and texture residency +15–25 %: a large share is the WORLD — what the
+2026-08-17 map contains and how much of it is resident — not the cars. **Next measurement, before any
+fix**: the same sweep on the same pak with `?benchcar=<one stock low-poly model>` (pins every road car to one
+cheap model) — if `gpu.pass` returns to ~3–4 ms the fleet is the cost, if `country-dusk` stays at ~12 the
+world is; then a rect-repack / `model-repack` A/B on the suspect layer. The cost question itself belongs to
+the `UNCAPPED=1` headless lane; this run answers "does it hold 120" — no.
