@@ -85,6 +85,27 @@ export function registerImgArchives(gameDir: string, names: readonly string[]): 
   return lines.filter(isImg).length;
 }
 
+/**
+ * The inverse of {@link registerImgArchives}: drop the `IMG MODELS\\<name>` lines of archives a writer no
+ * longer writes (a family that shrank). A registered archive that is not on disk is a boot failure in the
+ * real game and a dead fetch in ours. Returns how many `IMG` lines remain.
+ */
+export function unregisterImgArchives(gameDir: string, names: readonly string[]): number {
+  const datPath = join(gameDir, 'data', 'gta.dat');
+  if (!existsSync(datPath)) {
+    return 0;
+  }
+  const lines = readFileSync(datPath, 'latin1').split(/\r?\n/);
+  const isImg = (line: string): boolean => /^IMG\s/i.test(line.trim());
+  const gone = new Set(names.map((name) => `IMG MODELS\\${name.toUpperCase()}`));
+  const kept = lines.filter((line) => !gone.has(line.trim().toUpperCase()));
+  if (kept.length !== lines.length) {
+    writeFileSync(datPath, kept.join('\n'), 'latin1');
+  }
+
+  return kept.filter(isImg).length;
+}
+
 /** A path as the case-insensitive filesystems this repo targets would match it. See {@link guardOut}. */
 function foldPath(path: string): string {
   return path.toLowerCase();
