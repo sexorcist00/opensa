@@ -130,7 +130,8 @@ Regenerates the real-asset test fixtures (`tests/original/`) — Rockstar assets
 redistributed**. Reads from a **clean, UNMODIFIED GTA San Andreas** copy at **`game-src/original/`**:
 copies loose data/text files, extracts entries from `models/*.img`, builds `img/admiral.img`, and generates
 `models/effects` particle data + a stock `data/timecyc_24h.dat` (plain `convertTo24h`, no mod overlay).
-Committed fixtures (mods + curated/version-pinned test models) live in `tests/custom/` and are untouched.
+Custom fixtures (mods + curated/version-pinned test models + golden snapshots) are mirrored from the local,
+uncommitted `fixtures-src/` into `tests/custom/` FIRST (wipe + copy); nothing under `tests/` is committed.
 
 **Running the test suite requires this first** (CI has no game-src, so unit tests + e2e are disabled there):
 

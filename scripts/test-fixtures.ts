@@ -8,9 +8,15 @@ import { convertTo24h, parseTimecyc, stringifyTimecyc } from '@opensa/renderware
  *
  *   npm run test:fixtures
  *
- * Custom, non-Rockstar fixtures live in `tests/custom/` and ARE committed — this script never WRITES
- * there. It may READ from it (`committed` fixtures): a corpus subject whose mod folder no longer ships
- * it keeps its pristine copy in the repo, so the corpus survives that folder changing under it.
+ * Custom, non-Rockstar fixtures (`tests/custom/`) are a MIRROR of `fixtures-src/` — the curated,
+ * version-pinned, mod-derived and golden-snapshot files that have no other source (30 of 37 exist
+ * nowhere else on disk: locked models, petro, Shrek, proper-fixes, txds, the cleo trace/listing
+ * snapshots). Since 2026-08-17 (the user's call) NOTHING under `tests/` is committed and neither is
+ * `fixtures-src/`: it lives locally and is backed up by hand; this script wipes `tests/custom/` and
+ * copies it in FIRST, then the manifests run. A tree without `fixtures-src/` gets no custom fixtures
+ * and the tests that need them skip (`skipIf(!existsSync)`) — loudly, in the summary below.
+ * A `committed` fixture READS from `fixtures-src/` (a corpus subject whose mod folder no longer
+ * ships it keeps its pristine copy there, so the corpus survives that folder changing under it).
  *
  * Each fixture declares how it is produced:
  *   - copy:    copied verbatim from `game-src/<game>/<from>`
@@ -22,20 +28,20 @@ import { convertTo24h, parseTimecyc, stringifyTimecyc } from '@opensa/renderware
  * Extend MANIFEST when a test needs a new real-asset fixture, or MOD_MANIFEST when it needs a modded one.
  *
  * `data/timecyc_24h.dat` is generated here (the stock 24h expansion of timecyc.dat, no mod overlay).
- * Curated / version-pinned test models that can't be reproduced from a stock copy live committed under
- * `tests/custom/proper-fixes-models/` instead.
+ * Curated / version-pinned test models that can't be reproduced from a stock copy live under
+ * `fixtures-src/proper-fixes-models/` (mirrored to `tests/custom/`) instead.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
 
 type Fixture =
   | { readonly dest: string; readonly entry: string; readonly type: 'archive' }
   | { readonly dest: string; readonly entry: string; readonly type: 'extract' }
   /** Copied from `mods-src/<game>/` (mods/ + vehicles/ subpaths) — see {@link CLEO_MANIFEST}. */
   | { readonly dest: string; readonly from: string; readonly type: 'cleo' }
-  /** Copied from a COMMITTED path (`tests/custom/…`) — for a corpus entry whose mod no longer ships
-   *  it. The pristine copy lives in the repo precisely so the corpus survives the mod folder
-   *  changing under it; see the rhino row in {@link CLEO_MANIFEST}. */
+  /** Copied from a KEPT path (`fixtures-src/…`) — for a corpus entry whose mod no longer ships it.
+   *  The pristine copy lives there precisely so the corpus survives the mod folder changing under
+   *  it; see the rhino row in {@link CLEO_MANIFEST}. */
   | { readonly dest: string; readonly from: string; readonly type: 'committed' }
   | { readonly dest: string; readonly from: string; readonly type: 'copy' }
   /** Copied from `mods-src/`, not from the game dir — see {@link MOD_MANIFEST}. */
@@ -46,6 +52,9 @@ const GAME = gameIndex >= 0 ? process.argv[gameIndex + 1] : 'original';
 const ROOT = join('game-src', GAME);
 const ARCHIVES = ['models/gta3.img', 'models/gta_int.img', 'models/cutscene.img'];
 const OUT = 'tests/original';
+/** The local, uncommitted source of the custom fixtures; mirrored to `tests/custom` on every run. */
+const CUSTOM_SRC = 'fixtures-src';
+const CUSTOM_OUT = 'tests/custom';
 
 const copy = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, from, type: 'copy' });
 const modFile = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, from, type: 'mod' });
@@ -107,14 +116,14 @@ const CLEO_MANIFEST: readonly Fixture[] = [
   // does nothing on this model's real rig. So the pristine copy is COMMITTED and read from there;
   // sourcing it from a mod folder that can be edited under us is what made this fixture report
   // MISSING while a stale local copy kept the corpus tests green.
-  { dest: `${OUT}/cleo/rhino.cs`, from: 'tests/custom/cleo/rhino.cs', type: 'committed' },
+  { dest: `${OUT}/cleo/rhino.cs`, from: `${CUSTOM_SRC}/cleo/rhino.cs`, type: 'committed' },
   // The hotring's original light-killer (plan `cleo/scripts` 002). COMMITTED for the same reason as
   // the rhino's, one step earlier: it ships in the mod's `cleo-skipped/` folder — a folder whose name
   // that plan contemplated renaming — so the corpus must not depend on it still being there under that
   // name. 002's authored replacement was WITHDRAWN (superseded by plan 098/11: the effect is a property
   // of the model now), and this fixture deliberately OUTLIVED it — its value is being a real
   // Sanny-compiled decode / re-encode / listing subject, which never depended on us shipping anything.
-  { dest: `${OUT}/cleo/nolights.cs`, from: 'tests/custom/cleo/no_lights.cs', type: 'committed' },
+  { dest: `${OUT}/cleo/nolights.cs`, from: `${CUSTOM_SRC}/cleo/no_lights.cs`, type: 'committed' },
   // The rhino's MODEL, not a script. A track script is only testable end-to-end against the rig it
   // actually addresses: the original's chain anchor `misc_e` is a dummy the vehicle builder does not
   // emit as a part, which is why it was a silent no-op on our runtime while every headless test on a
@@ -340,6 +349,34 @@ function openArchives(): ImgArchive[] {
 /** The subfolders a `mods-src/<game>/<subject>` may hide its folders in (mod layers · vehicle layers). */
 const MODS_SRC_LAYERS: readonly string[] = ['common', 'sa', 'opensa', 'models', 'new'];
 
+/** `fixtures-src/` → `tests/custom/`, wiped first. Null when the source folder is absent (nothing touched). */
+function mirrorCustomFixtures(): null | number {
+  if (!existsSync(CUSTOM_SRC)) {
+    return null;
+  }
+  rmSync(CUSTOM_OUT, { force: true, recursive: true });
+  let count = 0;
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const from = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(from);
+        continue;
+      }
+      if (!entry.isFile() || entry.name === '.DS_Store') {
+        continue;
+      }
+      const dest = join(CUSTOM_OUT, relative(CUSTOM_SRC, from));
+      mkdirSync(dirname(dest), { recursive: true });
+      copyFileSync(from, dest);
+      count += 1;
+    }
+  };
+  walk(CUSTOM_SRC);
+
+  return count;
+}
+
 /**
  * Resolve `<subject>/<folder>/<rest…>` inside `mods-src/<game>`, by the folder's NAME.
  *
@@ -412,6 +449,10 @@ function withoutModNumber(folder: string): string {
 let written = 0;
 const missing: string[] = [];
 
+// The custom mirror goes FIRST: `committed` manifest entries read from it, and a wipe-and-copy keeps a
+// file deleted from the source from surviving in the mirror (the persistent-`--out` lesson).
+const customCount = mirrorCustomFixtures();
+
 for (const fixture of [...MANIFEST, ...MOD_MANIFEST, ...CLEO_MANIFEST]) {
   let data: null | Uint8Array = null;
   try {
@@ -443,6 +484,14 @@ try {
 console.log(
   `test:fixtures (${GAME}): wrote ${written}/${MANIFEST.length + MOD_MANIFEST.length + CLEO_MANIFEST.length + 1} into ${OUT}/`,
 );
+if (customCount === null) {
+  console.error(
+    `\n  NO ${CUSTOM_SRC}/ — ${CUSTOM_OUT}/ was not (re)built; the tests that need a custom fixture will SKIP.` +
+      ` The folder is local and uncommitted (see .gitignore): restore it from your backup.`,
+  );
+} else {
+  console.log(`test:fixtures (custom): mirrored ${customCount} from ${CUSTOM_SRC}/ into ${CUSTOM_OUT}/`);
+}
 if (missing.length > 0) {
   console.error(`\n  MISSING ${missing.length} — source not found in ${ROOT}:`);
   for (const dest of missing) {

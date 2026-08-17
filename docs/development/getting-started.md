@@ -120,9 +120,12 @@ npm run test:fixtures   # extracts/copies the needed files from game-src/origina
 npm test                # now the unit tests have their fixtures
 ```
 
-Custom (non-Rockstar) fixtures live in `tests/custom/` and are committed — no setup needed. A few fixtures
-that can't be reproduced from a stock copy are also committed (see `scripts/test-fixtures.ts`). Re-run
-`npm run test:fixtures` whenever you add a fixture to the manifest.
+Custom (non-Rockstar) fixtures — `tests/custom/` — are a MIRROR of `fixtures-src/`, a folder that is
+**local and uncommitted** (nothing under `tests/` is in git since 2026-08-17): the same run copies it in,
+wiping the mirror first. `fixtures-src/` holds the curated, version-pinned and golden-snapshot files that
+exist nowhere else on disk — keep your own backup of it; a tree without it runs the suite with those tests
+skipped (`skipIf(!existsSync)`), and `test:fixtures` says so. Re-run `npm run test:fixtures` whenever you
+add a fixture to the manifest or drop a file into `fixtures-src/`.
 
 ## 6. Standalone viewers
 
