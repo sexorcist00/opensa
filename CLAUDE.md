@@ -176,9 +176,22 @@ Never edit generated code manually.
   tree), `scripts/debug/model-lab.ts` (the same PLUS its clone LOD cut from the result — clones are cut FROM the
   HD, so an HD-only swap leaves the far view stale; `--dff/--txd` for a mod's loose files),
   `scripts/debug/img-patch.ts` (append-and-repoint any IMG entry with a ledger, `restore` per entry) and
-  `scripts/debug/dump-binmesh.ts` (split order = draw order). Rebuild only to confirm a fix on the WHOLE tree,
-  after the one-model field verdict, or when the change is a stage that has no one-model form (IPL folds,
-  archive layout, `gta.dat`). Rows in `docs/debug/README.md`
+  `scripts/debug/dump-binmesh.ts` (split order = draw order). **The OpenSA target has the same shape**
+  (2026-08-17, `tools/opensa-lod-generator/docs/plans/007`): `scripts/debug/model-repack.ts <model>
+[--dff f.dff [--txd f.txd]]` re-optimizes the model, re-bakes the cell LODs of its rect FROM the swapped HD
+  and re-welds the rect into a servable LAB pak (`build/<game>/opensa-lab`, `?src=`) — seconds against a
+  ~50 min pipeline; it never touches the shipping pak (a subset weld cannot reproduce its texture layer
+  plan — `docs/in-reserve/ospak-in-place-cell-patch.md`). **The GOAL in every field/dev round is to reach
+  the verdict through these instruments and spend a rebuild only when the whole tree must be confirmed.**
+  Rebuild only to confirm a fix on the WHOLE tree, after the one-model field verdict, or when the change is
+  a stage that has no one-model form (IPL folds, archive layout, `gta.dat`). Rows in `docs/debug/README.md`
+- **A pmb run that dies is RESUMED, never restarted from stage 1** (pmb plan 006, 2026-08-17): every run leaves
+  `<out>/.work-<target>/resume.json` (what it was made of + which steps finished — every chain stage, `sa`,
+  `opensa-lod`, `opensa`), and the pack journals every weld chunk under `pack-checkpoints/`. `pmb … --resume`
+  (same flags) re-enters at the last finished step — a dead pack at its last finished chunk — and REFUSES,
+  naming the difference, if the sources, the flags or the code changed since that run (a resumed build over
+  changed inputs is a build nobody can reproduce). Read the refusal, do not work around it. Standalone:
+  `opensa-pack --checkpoints <dir> [--resume]`
 - **An A/B must be SELF-DESCRIBING: the capture records what the run was configured with.** Careful
   single-variable bisection lost to one capture that stated its own spring values. Before tuning a new
   surface, read it back into the capture (`[phys]`'s `springs` block is the pattern)
