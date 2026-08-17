@@ -1,3 +1,5 @@
+import type { VehicleVariantNode } from '@opensa/renderware/vehicle/types';
+
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
@@ -90,6 +92,28 @@ console.log(
     ? `  pop-up headlights: part ${built.popUpLights.part} '${built.parts[built.popUpLights.part].name}' opens ${(built.popUpLights.angle * DEGREES).toFixed(1)}°`
     : '  pop-up headlights: none (no misc_* pod holding head-lamp faces)',
 );
+
+// The VehFuncs tree the runtime walks per spawn (`variants.ts`): what a spawn can wear, and how many of it.
+if (built.variants) {
+  console.log('\n--- VehFuncs variants (spawn picks; [min,max] children, max −1 = all)');
+  const tagged = new Map<string, number>();
+  for (const submesh of built.submeshes) {
+    if (submesh.variant !== undefined) {
+      tagged.set(submesh.variant, (tagged.get(submesh.variant) ?? 0) + 1);
+    }
+  }
+  const show = (node: VehicleVariantNode, depth: number): void => {
+    const gate = node.requires ? ` [${node.requires.join(',')}]` : '';
+    const cond = node.condition ? ` ?${node.condition}` : '';
+    const meshes = tagged.has(node.id) ? `  ${tagged.get(node.id)} submesh(es)` : '';
+    console.log(`  ${'  '.repeat(depth)}${node.name}${gate}${cond}  [${node.select.join(',')}]${meshes}`);
+    node.children.forEach((child) => show(child, depth + 1));
+  };
+  built.variants.classes.forEach((node) => show(node, 0));
+  built.variants.extras.forEach((node) => show(node, 0));
+} else {
+  console.log('\n--- VehFuncs variants: none');
+}
 
 function toBuffer(bytes: ArrayBuffer | Uint8Array): ArrayBuffer {
   return bytes instanceof Uint8Array

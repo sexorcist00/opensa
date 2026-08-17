@@ -1183,6 +1183,51 @@ describe.skipIf(!existsSync(CABBIE))('buildVehicleModel (real cabbie — f_wheel
         expect(wheel.radius * 2).toBeCloseTo(0.757, 3);
       }
     });
+
+    it('ships the VehFuncs tree and tags every option mesh; the chassis and the wheels stay untagged', () => {
+      const variants = built.variants!;
+
+      // `f_class:1` → YCC?c1 / BAC?c2 / WBC?c3 / RURAL?c0?c4 (city classes; conditions carried verbatim).
+      expect(variants.classes).toHaveLength(1);
+      expect(variants.classes[0].children.map((child) => `${child.name}?${child.condition}`)).toEqual([
+        'ycc?c1',
+        'bac?c2',
+        'wbc?c3',
+        'rural?c0?c4',
+      ]);
+      // `f_extras:10` on the chassis + the boot's / rear bumper's own containers.
+      const chassisExtras = variants.extras.find((node) => node.select[0] === 10)!;
+      expect(chassisExtras.children.map((child) => child.name)).toEqual([
+        'ac',
+        'adv_int',
+        'adv_roof',
+        'bags',
+        'int',
+        'easter',
+        'rubbish',
+        'seats',
+        'stickers',
+        'trunkbay',
+      ]);
+      expect(chassisExtras.children.find((child) => child.name === 'int')!.select).toEqual([0, 1]);
+      const advRoof = chassisExtras.children.find((child) => child.name === 'adv_roof')!;
+      expect(advRoof.children.map((child) => child.requires)).toEqual([['ycc'], ['bac'], ['rural'], ['wbc']]);
+
+      const tagged = built.submeshes.filter((submesh) => submesh.variant !== undefined);
+      const untagged = built.submeshes.filter((submesh) => submesh.variant === undefined);
+      expect(tagged.length).toBeGreaterThan(0);
+      expect(untagged.some((submesh) => built.parts[submesh.part].name === 'chassis')).toBe(true);
+      const wheelParts = new Set(built.wheels.map((wheel) => wheel.part));
+      expect(tagged.some((submesh) => wheelParts.has(submesh.part))).toBe(false);
+      // Every tag names a node of the shipped tree — the runtime resolves visibility against it alone.
+      const ids = new Set<string>();
+      const collect = (node: (typeof variants.extras)[number]): void => {
+        ids.add(node.id);
+        node.children.forEach(collect);
+      };
+      variants.extras.forEach(collect);
+      expect(tagged.every((submesh) => ids.has(submesh.variant!))).toBe(true);
+    });
   });
 });
 

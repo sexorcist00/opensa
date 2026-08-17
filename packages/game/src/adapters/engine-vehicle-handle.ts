@@ -11,6 +11,8 @@
 import type { VehicleInstance } from '@opensa/engine';
 import type { VehicleModelData } from '@opensa/renderware';
 
+import { pickVariants } from '@opensa/renderware';
+
 import type { Vec3 } from '../interfaces/world-adapter.interface';
 import type {
   VehicleBand,
@@ -32,7 +34,7 @@ import { withLightSmashed } from '../vehicle/vehicle-lamps';
  */
 export type VehicleRigData = Pick<
   VehicleModelData,
-  'doors' | 'dummies' | 'parts' | 'popUpLights' | 'submeshes' | 'wheels'
+  'doors' | 'dummies' | 'parts' | 'popUpLights' | 'submeshes' | 'variants' | 'wheels'
 >;
 
 /** Column-major mat4 scratch for the detached-part world matrix. */
@@ -59,15 +61,20 @@ export class EngineVehicleHandle implements VehicleHandle {
 
   /** The last state the lamp system pushed — kept so a smashed lamp can be re-pushed without one. */
   private lamps: null | VehicleLampState = null;
+
   /** One bit per SA `eLights` index, set = SMASHED (`CDamageManager::m_nLightsStatus`). */
   private lights = 0;
-
   private readonly onDispose: () => void;
 
   /** The body's last rotation — a detaching panel inherits it (see `detachPart`). */
   private rotation: VehicleQuat = [0, 0, 0, 1];
+
   /** CLEO's script-absolute part poses (plan 097/05), lazily seeded from the bind pose. */
   private readonly scriptParts = new Map<number, { quat: VehicleQuat; translation: Vec3 }>();
+  /** The VehFuncs options this CAR shows — one walk of the model's variant tree per spawn (`variants.ts`).
+   *  Null when the model carries no tree; a tagged submesh is then never shown, which cannot happen (the
+   *  builder tags only from a tree it also ships). */
+  private readonly variants: null | ReadonlySet<string>;
 
   /**
    * The DRAWN pose of every wheel part, as last written by {@link setWheel} — what a script must read
@@ -104,6 +111,8 @@ export class EngineVehicleHandle implements VehicleHandle {
       ...new Set(data.submeshes.map((submesh) => submesh.extra).filter((name): name is string => !!name)),
     ];
     this.extra = extras.length > 0 ? extras[Math.floor(Math.random() * extras.length)] : null;
+    // The VehFuncs tree is walked once per spawn too — the plugin's own behaviour on the SA target.
+    this.variants = data.variants ? pickVariants(data.variants) : null;
     this.setLodBand('hd'); // `_dam`, `_vlo` and the extras this car did not draw start hidden
   }
 
@@ -279,7 +288,8 @@ export class EngineVehicleHandle implements VehicleHandle {
       // An optional part only exists on the car that drew it — the alternatives sit in the same spot and
       // would render as one overlapping jumble.
       const wrongExtra = !!submesh.extra && submesh.extra !== this.extra;
-      this.instance.setSubmeshVisible(index, visible && !culled && !wrongExtra);
+      const wrongVariant = submesh.variant !== undefined && !this.variants?.has(submesh.variant);
+      this.instance.setSubmeshVisible(index, visible && !culled && !wrongExtra && !wrongVariant);
     });
     this.band = band;
   }

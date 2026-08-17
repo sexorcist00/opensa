@@ -26,6 +26,7 @@ import { frameWorldTransform, rotationToQuat } from '../mesh/frame-transform';
 import { groupTrianglesByMaterial, NIGHT_AMBIENT } from '../mesh/prepare-clump';
 import { skyOcclusion } from './sky-occlusion';
 import { LampTag, MaterialClass, PaintSlot } from './types';
+import { variantTree } from './variants';
 import { tyreMaterials } from './wheel-tyre';
 
 /** SA per-lamp marker colours on the `vehiclelights*` atlas: they say WHICH lamp a material is — engine
@@ -132,6 +133,7 @@ export function buildVehicleModel(
   let sharedWheel: null | { frameIndex: number; geometryIndex: number } = null;
   const cornerWheels: { frameIndex: number; front: boolean; geometryIndex: number; right: boolean }[] = [];
   const containerWheels = chosenContainerWheel(clump, containerFrames);
+  const variants = variantTree(clump, containerFrames);
 
   for (const atomic of clump.atomics) {
     const name = frameName(clump, atomic.frameIndex);
@@ -160,13 +162,7 @@ export function buildVehicleModel(
       doorHinges,
       partFrames,
     });
-    // Every `extraN` alternative ships, tagged with its frame. SA shows at most one and the pick is per
-    // SPAWN — a build-time choice would freeze one optional part into the pak for every car in the world.
-    if (EXTRA_RE.test(name)) {
-      for (let at = before; at < scratch.submeshes.length; at += 1) {
-        scratch.submeshes[at].extra = name;
-      }
-    }
+    tagAlternatives(scratch, before, EXTRA_RE.test(name) ? name : null, variants.optionOfFrame.get(atomic.frameIndex));
   }
 
   // A door is its whole HINGE SUBTREE, not one named atomic: SA swings the dummy's frame, so a mod's
@@ -225,6 +221,7 @@ export function buildVehicleModel(
     // fixture for nothing, and "absent" is what every consumer already reads as "no animation".
     ...(scratch.uvAnimations.length > 0 ? { uvAnimations: scratch.uvAnimations } : {}),
     uvs: new Float32Array(scratch.uvs),
+    ...(variants.variants ? { variants: variants.variants } : {}),
     wheels,
   };
 }
@@ -826,11 +823,6 @@ function materialClass(
 }
 
 /**
- * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
- * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
- */
-
-/**
  * Everything one MATERIAL contributes to its vertices/submesh, resolved once per triangle group.
  * Marker colours (lamp IDs and carcols slots) are METADATA and must never reach a pixel: both render white
  * and carry their meaning elsewhere (the lamp tag / the paint slot). Glass carries its opacity in the
@@ -881,6 +873,11 @@ function materialSurface(
     translucent,
   };
 }
+
+/**
+ * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
+ * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
+ */
 
 /** Mean vertex normal over a part's SHOWN faces, or only its head-lamp ones. Null when it has none. */
 function meanNormal(scratch: Scratch, part: number, headOnly: boolean): [number, number, number] | null {
@@ -1063,6 +1060,22 @@ function shownShell(scratch: Scratch): Uint8Array {
   }
 
   return shown;
+}
+
+/**
+ * Every `extraN` alternative ships, tagged with its frame: SA shows at most one and the pick is per SPAWN — a
+ * build-time choice would freeze one optional part into the pak for every car in the world. A VehFuncs
+ * option is tagged the same way and the spawn walks the tree (`variants.ts`).
+ */
+function tagAlternatives(scratch: Scratch, from: number, extra: null | string, variant: string | undefined): void {
+  for (let at = from; at < scratch.submeshes.length; at += 1) {
+    if (extra) {
+      scratch.submeshes[at].extra = extra;
+    }
+    if (variant !== undefined) {
+      scratch.submeshes[at].variant = variant;
+    }
+  }
 }
 
 /**

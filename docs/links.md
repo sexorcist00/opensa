@@ -31,7 +31,9 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
   with arities) — vendored + pinned by plan 097/01; also the recon disassembler's source of truth.
 - <https://github.com/JuniorDjjr/SA-MixSets> — per-feature SA tweaks reference.
 - <https://github.com/JuniorDjjr/VehFuncs> — vehicle function extensions (useful for vehicle features
-  parity: extras, wheels, steering parts).
+  parity: extras, wheels, steering parts). The wiki page
+  `[EN]-Recursive-Extras` is the source for the `f_extras` / `f_class` naming rules our runtime honours
+  (`:N`, `:0`, `:0+`, `:N+`, `[tag]`, `?condition`) — `packages/renderware/src/vehicle/variants.ts`.
 - <https://github.com/JuniorDjjr/skygfx> — the maintained skygfx fork; vehicle reflection / graphics
   reference (informed plan 030 and the stochastic-texturing survey).
 - <https://github.com/aap/skygfx> — the original PS2-graphics-on-PC restoration; the ground truth for SA

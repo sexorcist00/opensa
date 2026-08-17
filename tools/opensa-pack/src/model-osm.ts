@@ -219,6 +219,8 @@ export function packVehicleFixture(
       // Keyframes are small and few (one film-strip dict is ~260 rows) and only the models that reference
       // one carry the key at all, so this rides in DESC rather than earning a section of its own.
       ...(built.uvAnimations?.length ? { uvAnimations: [...built.uvAnimations] } : {}),
+      // The VehFuncs decision tree — small JSON, only on the models that carry one; the spawn walks it.
+      ...(built.variants ? { variants: built.variants } : {}),
       vertexCount: built.positions.length / 3,
       wheels: [...built.wheels],
     },

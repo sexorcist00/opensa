@@ -25,6 +25,13 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   VehFuncs `<name>:K` walk — `f_extras:2 → tire:1 → tire` + `rim:1 → hubcap` — the whole set instanced
   as one part per dummy, fitted and tyre-classified as one solid; the first atomic alone was the tyre.
   Contract row: [`contracts/vehicles.md`](../contracts/vehicles.md).
+- **VehFuncs recursive extras are a SPAWN decision** (2026-08-17): the builder ships a car's `f_extras` /
+  `f_class` tree in the `.osm` (`variants`) and tags every option's meshes; `EngineVehicleHandle` walks it once
+  per car (`pickVariants` — `:N`, `:0`, `:0+`, `:N+`, class tags gating `[tag]` options), the way the plugin
+  does on the SA target. Before this every variant drew at once — the cabbie wore all four taxi companies'
+  roof ads and its whole trunk-clutter catalogue. 59 of 213 original mod cars carry the convention.
+  Conditions (`?c1`, `?rain`) and class characteristics (`_pj=`) are carried but not evaluated yet —
+  [`hacks/vehfuncs-conditions-always-true.md`](../hacks/vehfuncs-conditions-always-true.md).
 - **The clump ROOT frame's authored matrix never contributes** (2026-08-04): SA replaces it with the
   entity's world matrix on attach, and anti-rip exporters poison exactly that slot (the comet lock shipped
   `rotation[0][0] = −3.9e14` there — composing it flung every off-centre part to ±10¹⁴ while the game

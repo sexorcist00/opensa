@@ -121,11 +121,48 @@ function modelWithExtras(): VehicleModelData {
   } as unknown as VehicleModelData;
 }
 
+/** The same model plus a VehFuncs group: `f_extras:1 → a | b`, one mesh each — the spawn shows exactly one. */
+function modelWithVariants(): VehicleModelData {
+  const base = model();
+  const option = (variant: string, indexOffset: number): VehicleModelData['submeshes'][number] =>
+    ({
+      damageGroup: null,
+      indexCount: 3,
+      indexOffset,
+      kind: 'body',
+      lamp: null,
+      part: 0,
+      translucent: false,
+      variant,
+    }) as never;
+
+  return {
+    ...base,
+    submeshes: [...base.submeshes, option('a', 12), option('b', 15)],
+    variants: {
+      classes: [],
+      extras: [
+        {
+          children: [
+            { children: [], id: 'a', name: 'a', select: [1, 1] },
+            { children: [], id: 'b', name: 'b', select: [1, 1] },
+          ],
+          id: 'root',
+          name: 'f_extras',
+          select: [1, 1],
+        },
+      ],
+    },
+  } as unknown as VehicleModelData;
+}
+
 const BONNET_OK = 1;
 const BONNET_DAM = 2;
 const LOD = 3;
 const EXTRA_1 = 4;
 const EXTRA_2 = 5;
+const VARIANT_A = 4;
+const VARIANT_B = 5;
 
 describe('EngineVehicleHandle', () => {
   describe('negative cases', () => {
@@ -148,6 +185,16 @@ describe('EngineVehicleHandle', () => {
         new EngineVehicleHandle(probe, modelWithExtras(), () => undefined);
 
         expect([visible.get(EXTRA_1), visible.get(EXTRA_2)].filter(Boolean)).toHaveLength(1);
+      }
+    });
+
+    it('never draws two options of one VehFuncs `:1` group at once — the spawn walks the tree', () => {
+      for (let spawn = 0; spawn < 20; spawn += 1) {
+        const { probe, visible } = instance();
+
+        new EngineVehicleHandle(probe, modelWithVariants(), () => undefined);
+
+        expect([visible.get(VARIANT_A), visible.get(VARIANT_B)].filter(Boolean)).toHaveLength(1);
       }
     });
 
@@ -181,6 +228,20 @@ describe('EngineVehicleHandle', () => {
       const handle = new EngineVehicleHandle(probe, modelWithExtras(), () => undefined);
       const chosen = visible.get(EXTRA_1) === true ? EXTRA_1 : EXTRA_2;
       const other = chosen === EXTRA_1 ? EXTRA_2 : EXTRA_1;
+
+      handle.setPartDamaged('bonnet', true);
+      handle.setLodBand('vlo');
+      handle.setLodBand('hd');
+
+      expect(visible.get(chosen)).toBe(true);
+      expect(visible.get(other)).toBe(false);
+    });
+
+    it('keeps the SAME VehFuncs pick across an LOD swap and a damage change', () => {
+      const { probe, visible } = instance();
+      const handle = new EngineVehicleHandle(probe, modelWithVariants(), () => undefined);
+      const chosen = visible.get(VARIANT_A) === true ? VARIANT_A : VARIANT_B;
+      const other = chosen === VARIANT_A ? VARIANT_B : VARIANT_A;
 
       handle.setPartDamaged('bonnet', true);
       handle.setLodBand('vlo');

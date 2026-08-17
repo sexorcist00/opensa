@@ -108,6 +108,7 @@ export function readModelOsm(name: string, osm: Uint8Array): OptimizedModel {
       // the same "no animation" the builder means by omitting it.
       ...(fixture.uvAnimations?.length ? { uvAnimations: fixture.uvAnimations } : {}),
       uvs: at(layout.uvs, vertexCount * STRIDE.uvs),
+      ...(fixture.variants ? { variants: fixture.variants } : {}),
       vertexCount,
     },
   };
