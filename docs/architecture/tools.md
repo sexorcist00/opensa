@@ -8,7 +8,11 @@ never the app. The dependency picture is the tools cluster of
 ## Pipeline stages (chained by [perfect-map-builder](./perfect-map-builder.md))
 
 - **perfect-map-builder** — the orchestrator; `buildPerfectMap` in `src/pipeline.ts` chains every stage,
-  guards SA runtime ceilings, and splits into the `sa/` (RenderWare) + `opensa/` (native pak) targets.
+  guards SA runtime ceilings, and splits into the `sa/` (RenderWare) + `opensa/` (native pak) targets. A run
+  that dies is RESUMED, not restarted (plan 006, 2026-08-17): `.work-<target>/resume.json` records the run's
+  identity (git HEAD, config hash, source fingerprints) and every finished step, the pack journals each weld
+  chunk under `pack-checkpoints/`, and `--resume` re-enters at the last finished step — refusing, naming the
+  difference, if the inputs changed. `src/resume.ts`.
 - **mod-installer** — layers GTA-SA mod folders onto a base game: plain file overlays plus a Modloader
   `loader.txt` bake into `gta.dat`/`gta3.img`; cumulative, alphabetical. Lib `src/install.ts`. Its `--in`
   has two shapes (plan 011): FLAT — every subfolder a mod — or LAYERED `common/` + `sa/` + `opensa/`, where
@@ -42,7 +46,8 @@ never the app. The dependency picture is the tools cluster of
   model (a wheel stash and the actor's seat). `--no-base-copy` emits only those three instead of a game
   tree (plan 006) — the shape the standalone converter app needs, byte-identical to the copy run. Lib
   `src/install.ts`.
-- **ped-installer** — ped mod folders → `gta3.img` + merged `peds.ide`.
+- **ped-installer** — ped mod folders → `gta3.img` + merged `peds.ide`. Its `--in` may be layered
+  `common/sa/opensa` like a mods folder (plan 005, `@opensa/tool-kit/layers`, `--target`).
 - **img-splitter** — divides `models/gta3.img` into TYPED archives (`vehicles.img`, `peds.img`,
   `weapons.img`) before anything installs, so every entry name lives in exactly one of them; writes the
   `IMG` lines into `gta.dat` and gates the tree against SA's 8-archive table. The bucket comes from the IDE
@@ -103,7 +108,10 @@ never the app. The dependency picture is the tools cluster of
 - **rw-codec** — pure byte-level RenderWare codec (chunk walker, geometry struct, DXT, texture natives,
   mips, typed 2dfx payloads) used by every tool that rewrites DFF/TXD bytes.
 - **tool-kit** — shared building blocks: CLI arg helpers, smooth-group normals, QEM simplify, editable IMG
-  archive, `copyGameDir`/`guardOut`.
+  archive (`openImg` / `writeImgFamily`, and since 2026-08-17 `openImgFamily` — a spilled family read as
+  one archive, the read half of the writer), `copyGameDir`/`guardOut`, `registerImgArchives` /
+  `unregisterImgArchives`, the ONE layer planner every installer reads a `common/sa/opensa` folder through
+  (`layers.ts`), and the ONE resolver of a vehicles folder (`vehicles-dir.ts`).
 
 ## tools-debug/ (investigation harnesses, not shipped)
 
