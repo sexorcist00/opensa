@@ -37,7 +37,20 @@ interface Pkg {
   srcDir: string;
 }
 
-function layerOf(dir: string): Layer {
+const TAG_LAYERS: Record<string, Layer> = { 'type:app': 'app', 'type:engine': 'engine', 'type:tool': 'tool' };
+
+/**
+ * `nx.tags` is the authority — it is what `@nx/enforce-module-boundaries` reads, so it is what the graph has
+ * to draw. The folder rule is only the fallback for a package that declares no tag; where the two disagree
+ * (`packages/validation` is `type:tool`) the folder would put a `node:fs` package into the runtime graph.
+ */
+function layerOf(dir: string, tags: readonly string[]): Layer {
+  for (const tag of tags) {
+    if (tag in TAG_LAYERS) {
+      return TAG_LAYERS[tag];
+    }
+  }
+
   if (dir.startsWith('apps/')) {
     return 'app';
   }
@@ -53,12 +66,13 @@ function loadPackages(): Map<string, Pkg> {
     const manifest = JSON.parse(readFileSync(join(ROOT, dir, 'package.json'), 'utf8')) as {
       description?: string;
       name: string;
+      nx?: { tags?: readonly string[] };
     };
     const desc = shortDesc(manifest.description ?? '');
     byName.set(manifest.name, {
       id: manifest.name.replace('@opensa/', '').replace(/[^a-z0-9]/gi, '_'),
       label: desc ? `${manifest.name.replace('@opensa/', '')} · ${desc}` : manifest.name.replace('@opensa/', ''),
-      layer: layerOf(dir),
+      layer: layerOf(dir, manifest.nx?.tags ?? []),
       name: manifest.name,
       srcDir: join(ROOT, dir, 'src'),
     });

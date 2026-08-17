@@ -39,6 +39,7 @@ packages/                          (tag type:engine)
   loaders/        @opensa/loaders         asset loaders (fetch / local folder / http-dir) — framework-agnostic
   vfs/            @opensa/vfs             unzip → AssetFileSystem
   game-build/     @opensa/game-build      partitioning shared by the loaders + build scripts
+  validation/     @opensa/validation      verdict shape + generic path/file checks   (tag type:tool, see below)
 tools/                             (tag type:tool — offline; may read engine packages, never the app)
   perfect-map-builder/ · opensa-pack/ · fetch-pack/ · mod-installer/ · vehicle-installer/ · ped-installer/
   map-optimizer/ · opensa-lod-generator/ · sa-lod-generator/ · lod-trees-generator/ · sa-procobj-placement/
@@ -52,6 +53,13 @@ root: game-src/ · mods-src/ · build/ · static/ · tests/ · e2e/ · scripts/ 
 
 **Module boundaries** are enforced in lint by `@nx/enforce-module-boundaries` via `package.json` `nx.tags`:
 `type:app` → app + engine; `type:engine` → engine only (never app/tools); `type:tool` → engine + tools.
+
+**The one place the folder and the tag disagree** is `packages/validation`: it reads `node:fs` and imports
+`@opensa/asi-sdk`, so it can only be `type:tool` — the tag is what the lint reads, and the folder is where the
+vitest `packages/**` include and the coverage floor already reach it. Everything else under `packages/` is
+`type:engine`, and a new package there should be too unless it has the same two reasons. `scripts/arch-graph.ts`
+reads `nx.tags` for the same reason and falls back to the folder only for an untagged package — by folder alone
+the runtime graph below would have drawn a `node:fs` package inside the browser runtime.
 
 ## Runtime dependency graph
 

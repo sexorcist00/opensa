@@ -14,6 +14,22 @@ worked example, and its header says why). Two tests have already been moved for 
 
 **Caught:** yes — ESLint fails the lint lane.
 
+## A `type:engine` package must be Node-free — and the TAG decides the layer, not the folder
+
+`type:engine` is what the browser bundle is made of, so an engine package may not import `node:fs`,
+`node:crypto` or any other `node:*` builtin. `packages/cell-weld` says this in its own header ("Node-free by
+construction") because `sa-map-viewer` welds cells in the browser; the rule is general.
+
+The consequence for a NEW package: `packages/` is not automatically `type:engine`. `packages/validation`
+reads `node:fs` and imports `@opensa/asi-sdk`, so it is tagged `type:tool` and only the folder puts it beside
+the engine — the tag is what `@nx/enforce-module-boundaries` reads, and `scripts/arch-graph.ts` reads it too
+(by folder alone the runtime diagram drew a `node:fs` package inside the browser runtime). Decide the tag
+from what the package IMPORTS, then pick a folder.
+
+**Caught:** partly. Importing a `type:tool` from a `type:engine` fails ESLint; a bare `node:fs` import in an
+engine package does NOT — it lints, it typechecks, and it fails when a browser bundle finally pulls that
+module in. Nothing compares a tag against a folder either.
+
 ## The game layer touches renderware only through `adapters/` or `mods/`
 
 `packages/game/**` may not import `@opensa/renderware` outside those two folders
