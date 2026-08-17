@@ -39,7 +39,7 @@ bottle's `data/` had not been re-delivered since 10 Aug, so the built line had n
   +2 items in `shops/carmod2` after `exh_lr_bl2`, +2 prices in `prices/CarMods` after `exh_lr_bl2`, guard
   green (15 174 names, 0 misses). Same census on the bottle after the sync: 0 misses.
 - Suite: vehicle-installer 106/106 (`tuning-parts.test.ts` 11, `img-merge.test.ts` +3), tsc + eslint clean.
-- Field verdict on the boot: pending (his run).
+- Field verdict, 2026-08-17: the bottle boots, the `new/` cabbie (Checker Taxicab) is the one on the road — plan 007's `new/` layer confirmed in a REAL run for the first time, and plan 008's rebake path with it.
 
 ## What it does not do
 
