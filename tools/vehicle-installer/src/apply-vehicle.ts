@@ -9,6 +9,7 @@ import { mergeCarcols, mergeCarmods, mergeHandling, mergeIde } from './merge';
 import { resolveVehicleModel } from './model';
 import { addPaletteColors, resolveColorRefs } from './palette';
 import { decodeSettings, parseVehicleSettings } from './settings';
+import { applyTuningParts, TUNING_PARTS_FILE } from './tuning-parts';
 
 /** The mod's own feature declaration, by the Modloader/IVF name. */
 const FEATURES_FILE = 'features.txt';
@@ -68,8 +69,13 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
   const features = featuresFile ? parseFeatures(decodeSettings(readFileSync(join(folderPath, featuresFile)))) : [];
   const settingsFile =
     entries.find((name) => name.toLowerCase().endsWith('.settings.txt')) ??
-    entries.find((name) => name.toLowerCase().endsWith('.txt') && name.toLowerCase() !== FEATURES_FILE);
+    entries.find(
+      (name) => name.toLowerCase().endsWith('.txt') && ![FEATURES_FILE, TUNING_PARTS_FILE].includes(name.toLowerCase()),
+    );
   const warnings: string[] = modelWarning ? [modelWarning] : [];
+  // New tuning parts (IDE rows + shop entries) — independent of the settings file, and applied FIRST so
+  // the carmods line merged below never names a part the tree does not define.
+  warnings.push(...applyTuningParts(folderPath, entries, outPath));
   if (!settingsFile) {
     return { cleo, features, imgNames, model, warnings };
   }

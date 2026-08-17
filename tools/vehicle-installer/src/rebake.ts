@@ -48,7 +48,9 @@ import {
   readText,
   requireBuiltGame,
   selectCars,
+  sharedFileWarnings,
 } from './rebake-shared';
+import { assertCarmodsModels } from './tuning-parts';
 
 export type { RebakeOptions, RebakeReport } from './rebake-shared';
 
@@ -99,6 +101,9 @@ export function rebakeVehicles(options: RebakeOptions): RebakeReport {
     }
   }
   mergeFeatureTable(targetPath, declared);
+  assertCarmodsModels(targetPath);
+  // Not an archive concern on a CONVERTED tree (one .osm per car), but the mod's data is still shared.
+  warnings.push(...sharedFileWarnings(sources, selected));
   // The ledger is MERGED, never rewritten from this run's selection: `--only previon` rebakes one car, and a
   // ledger truncated to it would tell video mode that every other mod car in the build is stock. What a
   // rebake knows is "these slots are also mod slots", which is an addition.

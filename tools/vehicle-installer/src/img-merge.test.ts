@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { stageVehicleImg } from './img-merge';
+import { sharedVehicleFiles, stageVehicleImg } from './img-merge';
 
 let dir: string;
 
@@ -95,6 +95,49 @@ describe('stageVehicleImg', () => {
       writeFileSync(join(folder, 'alpha.dff'), Uint8Array.of(42)); // changed AFTER staging
 
       expect(new Uint8Array(img.get('alpha.dff')!)[0]).toBe(42);
+    });
+  });
+});
+
+describe('sharedVehicleFiles', () => {
+  describe('negative cases', () => {
+    it('reports nothing when every folder ships its own names, whatever the case', () => {
+      const a = vehicleFolder({ 'alpha.dff': Uint8Array.of(1), 'Alpha.txd': Uint8Array.of(2) });
+      const b = vehicleFolder({ 'beta.dff': Uint8Array.of(1), 'beta.txd': Uint8Array.of(2) });
+
+      expect(
+        sharedVehicleFiles([
+          { folder: a, name: 'a' },
+          { folder: b, name: 'b' },
+        ]).size,
+      ).toBe(0);
+    });
+
+    it('ignores the settings file and anything that is not a dff/txd', () => {
+      const a = vehicleFolder({ 'readme.txt': Uint8Array.of(1) });
+      const b = vehicleFolder({ 'readme.txt': Uint8Array.of(1) });
+
+      expect(
+        sharedVehicleFiles([
+          { folder: a, name: 'a' },
+          { folder: b, name: 'b' },
+        ]).size,
+      ).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('names a part two folders ship, owners in install order, matched case-insensitively', () => {
+      // The voodoo re-uses the blade's `rbmp_lr_bl1` slot with its own geometry (2026-08-17).
+      const blade = vehicleFolder({ 'blade.dff': Uint8Array.of(1), 'rbmp_lr_bl1.dff': Uint8Array.of(2) });
+      const voodoo = vehicleFolder({ 'RBMP_LR_BL1.dff': Uint8Array.of(3), 'voodoo.dff': Uint8Array.of(1) });
+
+      const shared = sharedVehicleFiles([
+        { folder: blade, name: 'blade - x' },
+        { folder: voodoo, name: 'voodoo - y' },
+      ]);
+
+      expect([...shared]).toEqual([['rbmp_lr_bl1.dff', ['blade - x', 'voodoo - y']]]);
     });
   });
 });

@@ -51,6 +51,7 @@ a rebake converted the exhaust while the car kept its old model.
 | `<model><N>.txd` | Extra numbered dictionaries (`previon1.txd`); they ship into `gta3.img` alongside. |
 | `<model>.settings.txt` | **Settings** — the car's data lines (below). |
 | `features.txt` | **Features** — what the model can DO (below). Folder-scoped, not `<model>.features.txt`. |
+| `tuning_new_parts.txt` | **New tuning parts** — the IDE rows (`1194, spl_b_lr_bl, blade, 100, 0`) and shop entries of parts the game never had; read by the installer since plan 009 (below). **Absent when the carmods line names a new part: the build FAILS** (`assertCarmodsModels`) — the real game would crash loading `carmods.dat`. Misspelled: not read, same failure, same message naming the token. |
 | `cleo/` (or `CLEO/`) | The mod's compiled CLEO scripts + sidecars (`.cs`, `.ini`, `.fxt`) — copied to the built game's `cleo/` (canonical lowercase, author-relative structure preserved), where the runtime discovers them at boot (plan 097/06); a `--rebake` re-copies them. **Misspelled (`celo/`, loose `.cs` beside the dff): not carried at all** — the vehicle installs fine, its script never runs, and the boot census line (`[cleo] N script(s)`) is the only place the absence shows. |
 
 - The settings file is found by its **`.settings.txt` suffix**, never by "the first `.txt` in the folder" —
@@ -94,6 +95,43 @@ parser, so order does not matter and an unrecognised block is dropped **with a w
 
 The handling id is the ide line's 5th column — a car may name a handling row that is not its own model name,
 and the installer's `--strip` follows the same link.
+
+**A part name is shared fleet-wide, not per car.** Every `.dff`/`.txd` a folder ships lands in ONE archive
+under its file name, and `carmods.dat` resolves parts by name — so two folders shipping `rbmp_lr_bl1.dff`
+(the voodoo re-uses the blade's part slots with its own geometry) hold ONE entry between them: the folder
+later in install order (case-insensitive name order) wins, and the other car wears its bumper. The install
+WARNS per shared name with both owners; a `--rebake --only <car>` of either warns that it is putting ITS
+version in the archive where a full install would let the later folder win. Nothing here is refused —
+that would refuse a mod set that has always shipped this way — but it is never silent.
+
+### `tuning_new_parts.txt` — parts the game never had
+
+`carmods.dat`'s `mods` line can only name a part; the part must also EXIST (an IDE row in
+`data/maps/veh_mods/veh_mods.ide`) and, to be bought, be listed in `data/shopping.dat` (a shop's `item`,
+a `CarMods` price). The real game does not check: `CVehicleModelInfo::LoadVehicleUpgrades` looks every
+token up by name and dereferences the result — a token with no IDE row is a crash at boot
+(`0x4C4576`, [gta-sa-original/carmods-unknown-part-crash.md](../gta-sa-original/carmods-unknown-part-crash.md)).
+This file carries what the line cannot:
+
+```
+1194, spl_b_lr_bl, blade, 100, 0        # bare IDE rows (veh_mods.ide shape) — appended to objs, replaced by NAME
+1195, bnt_b_lr_bl, blade, 100, 0
+
+shops.carmod2|exh_lr_bl2                # "<top>.<section>|<anchor>" — lines inserted AFTER the anchor line
+item spl_b_lr_bl
+item bnt_b_lr_bl
+end
+
+prices.CarMods|exh_lr_bl2
+spl_b_lr_bl   SAVST   respect 0   sexy 0   1000
+end
+```
+
+Rules: `#` comments; blocks end with `end`; sections match case-insensitively; a row/item/price already
+present under its name is left alone (idempotent, so a rebake changes nothing the install did not); an IDE
+id another model owns is REFUSED with a warning naming the owner; a missing anchor appends at the section's
+end with a warning; a missing section warns and writes nothing. Not a stock format — a mod author's
+convention (two of the original's 212 folders ship one) that the installer now honours.
 
 ### `features.txt` — what the model can do
 

@@ -13,6 +13,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 import { formatFeatureTable } from './features';
+import { sharedVehicleFiles } from './img-merge';
 import { FEATURES_TABLE } from './install';
 import { resolveVehicleModel } from './model';
 import { formatModTable, MODS_TABLE } from './mods-table';
@@ -141,6 +142,32 @@ export function selectCars(
   }
 
   return { added, refused, selected, skipped };
+}
+
+/**
+ * For each rebaked car, the archive entries it ships that ANOTHER folder of the fleet ships too — a rebake of
+ * one car makes ITS version the one in the archive, where a full install lets the later folder win.
+ */
+export function sharedFileWarnings(
+  sources: readonly VehicleSource[],
+  rebaked: readonly { readonly folder: string; readonly model: string }[],
+): string[] {
+  const shared = sharedVehicleFiles(sources);
+  const warnings: string[] = [];
+  for (const { folder, model } of rebaked) {
+    const name = basename(folder);
+    for (const [entry, owners] of shared) {
+      if (owners.includes(name)) {
+        const others = owners.filter((owner) => owner !== name);
+        warnings.push(
+          `${model}: ${entry} is also shipped by ${others.join(' / ')} — this rebake puts ${name}'s version in the ` +
+            `archive; a full install lets ${owners[owners.length - 1]} win`,
+        );
+      }
+    }
+  }
+
+  return warnings;
 }
 
 /** The `vehicles.ide` id this mod declares for itself (column 0 of its ide line), or null if it declares none. */

@@ -43,6 +43,14 @@ It can also **add** a car the built game never had, when the mod ships its own `
 never invents an id and refuses one another model owns. An added car has no traffic/parked presence until a
 full build writes the placements. See [plan 006](./docs/plans/006-rebake.md).
 
+## New tuning parts, and what the carmods line may name
+
+A folder may ship `tuning_new_parts.txt` — the IDE rows (`veh_mods.ide` shape) and `shopping.dat` entries of
+parts the game never had; the installer applies it before the settings merge (plan 009). After every install
+and rebake **every `carmods.dat` token must resolve to an IDE row in the tree**, or the run FAILS naming the
+line: the real game crashes at boot on one that does not. Two folders shipping the same part file name are
+warned about (the later wins the archive). Contract: `docs/contracts/vehicles.md`.
+
 ## How it applies
 
 1. `--out` is wiped, then the `--game` tree is copied in (the base). A guard refuses a dangerous `--out` (root, or
@@ -109,4 +117,4 @@ The result is a minimal, self-contained pack of just the installed cars. Off by 
   trim it; (2) wire the engine population/traffic system to read `cargrp.dat`. Needs a separate plan when picked up.
 
 See [docs/plans/](./docs/plans/) (`001` architecture · `002` install + settings · `003` custom palette · `004`
-strip · `005` node API · `006` rebake · `007` `models/` + `new/` · `008` rebake for `sa`).
+strip · `005` node API · `006` rebake · `007` `models/` + `new/` · `008` rebake for `sa` · `009` new tuning parts + the carmods guard).

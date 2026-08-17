@@ -30,7 +30,15 @@ import { basename, join, resolve } from 'node:path';
 import type { RebakeOptions, RebakeReport } from './rebake-shared';
 
 import { applyVehicle } from './apply-vehicle';
-import { addedCarWarning, mergeFeatureTable, mergeModTable, requireBuiltGame, selectCars } from './rebake-shared';
+import {
+  addedCarWarning,
+  mergeFeatureTable,
+  mergeModTable,
+  requireBuiltGame,
+  selectCars,
+  sharedFileWarnings,
+} from './rebake-shared';
+import { assertCarmodsModels } from './tuning-parts';
 
 /** Rebake the vehicles of a built REAL-SA game in place. Returns what happened; throws only on a broken target. */
 export function rebakeVehiclesSa(options: RebakeOptions): RebakeReport {
@@ -95,6 +103,8 @@ export function rebakeVehiclesSa(options: RebakeOptions): RebakeReport {
       rebaked.push({ bytes: applied.imgNames.reduce((sum, name) => sum + img.size(name), 0), model });
     }
     mergeFeatureTable(targetPath, declared);
+    assertCarmodsModels(targetPath);
+    warnings.push(...sharedFileWarnings(sources, accepted));
     mergeModTable(
       targetPath,
       accepted.map(({ model }) => model),

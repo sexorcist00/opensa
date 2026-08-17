@@ -8,8 +8,10 @@ import { basename, dirname, join, parse, resolve, sep } from 'node:path';
 
 import { applyVehicle } from './apply-vehicle';
 import { formatFeatureTable } from './features';
+import { sharedVehicleFiles } from './img-merge';
 import { formatModTable, MODS_TABLE } from './mods-table';
 import { stripOutput } from './strip';
+import { assertCarmodsModels } from './tuning-parts';
 
 /** Where the per-model feature declarations land in the built game dir (read by opensa-pack). */
 export const FEATURES_TABLE = join('data', 'vehicle-features.txt');
@@ -71,6 +73,12 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
     existsSync(join(outPath, 'models', 'vehicles.img')) ? 'vehicles.img' : 'gta3.img',
   );
   const img = existsSync(imgPath) ? openImg(new Uint8Array(readFileSync(imgPath))) : createImg();
+  for (const [name, owners] of sharedVehicleFiles(vehicles)) {
+    console.warn(
+      `vehicle-installer: ${name} is shipped by ${owners.length} folders (${owners.join(' / ')}) — ` +
+        `the archive holds one entry per name, so ${owners[owners.length - 1]} wins and the others wear its version`,
+    );
+  }
   for (const vehicle of vehicles) {
     const applied = applyVehicle(vehicle.folder, outPath, { img });
     applied.warnings.forEach((warning) => console.warn(`vehicle-installer: ${vehicle.name}: ${warning}`));
@@ -85,6 +93,9 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
       features.set(applied.model, applied.features);
     }
   }
+  // Every carmods token must resolve to an IDE row — the real game crashes on one that does not, at boot,
+  // at an address; here it fails naming the line (plan 009).
+  assertCarmodsModels(outPath);
   // Written as a FAMILY, not one file: the buffered path caps at 2 GiB and so does every reader, and this
   // archive is past it on the original's mod set (1.24 GB of map + 3.08 GB of cars). The cap is now enforced
   // by construction rather than discovered mid-build.
