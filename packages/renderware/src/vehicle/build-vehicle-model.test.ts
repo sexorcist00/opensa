@@ -744,6 +744,78 @@ describe('buildVehicleModel', () => {
       expect(built.wheels).toHaveLength(2);
     });
 
+    it('a `f_wheel` container wheel is its whole CHOSEN PATH — tyre + rim, not the first atomic', () => {
+      // The alfamodding cabbie's shape: `f_wheel_1111 → f_extras:2 → (tire:1 → tire, tirew) (rim:1 →
+      // hubcap, stamp)`. `:2` shows two groups, each bare group shows its FIRST child; the tyre band is
+      // judged against the whole wheel's radius so a hub cap's own outer ring never passes for rubber.
+      const tyre = geometry([material({ color: [10, 10, 10, 255] })]);
+      tyre.positions = new Float32Array([0, 1, 0, 0.2, 0, 1, 0, 0.95, 0.1]);
+      const hubcap = geometry([material({ color: [200, 200, 200, 255] })]);
+      hubcap.positions = new Float32Array([0, 0.5, 0, 0.1, 0, 0.5, 0, 0.45, 0.05]);
+      const built = buildVehicleModel(
+        clump(
+          [
+            frame('chassis'),
+            frame('f_wheel_1111', 0, [1, 2, 0]),
+            frame('f_extras:2', 1),
+            frame('tire:1', 2),
+            frame('tire', 3),
+            frame('tirew', 3),
+            frame('rim:1', 2),
+            frame('hubcap', 6),
+            frame('stamp', 6),
+            frame('wheel_lf_dummy', 0, [-1, 2, 0]),
+            frame('wheel_rf_dummy', 0, [1, 2, 0]),
+          ],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 4, geometry: 1 },
+            { frame: 5, geometry: 1 },
+            { frame: 7, geometry: 2 },
+            { frame: 8, geometry: 2 },
+          ],
+          [geometry(), tyre, hubcap],
+        ),
+        textures(),
+        { wheelScale: [1, 1] },
+      );
+
+      expect(built.wheels).toHaveLength(2);
+      for (const wheel of built.wheels) {
+        const submeshes = built.submeshes.filter((submesh) => submesh.part === wheel.part);
+
+        expect(submeshes).toHaveLength(2); // tire + hubcap — never tirew/stamp, never the tyre alone
+        expect(submeshes.map((submesh) => submesh.tyre === true)).toEqual([true, false]);
+      }
+      // Fitted as ONE solid: the tyre's radius (1 m) sets the scale, the hub cap does not shrink it.
+      expect(built.parts[built.wheels[0].part].scale).toBeCloseTo(0.5, 5);
+      // The container is never body geometry.
+      expect(built.parts.filter((part) => /^(?:tire|hubcap|f_)/.test(part.name))).toHaveLength(0);
+    });
+
+    it("bakes a chosen mesh's own frame offset below the container root into wheel-local space", () => {
+      const built = buildVehicleModel(
+        clump(
+          [
+            frame('chassis'),
+            frame('f_wheel_1111', 0, [1, 2, 0]),
+            frame('cap', 1, [0.1, 0, 0]),
+            frame('wheel_rf_dummy', 0, [1, 2, 0]),
+          ],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 2, geometry: 0 },
+          ],
+          [geometry()],
+        ),
+        textures(),
+      );
+      const wheel = built.submeshes.find((submesh) => submesh.part === built.wheels[0].part)!;
+
+      // The container's own placement is the dummy's job; only the chain BELOW it moves the vertices.
+      expect(built.positions[built.indices[wheel.indexOffset] * 3]).toBeCloseTo(0.1, 5);
+    });
+
     it('tags the two license-plate faces by their placeholder textures (082/02)', () => {
       const plated = geometry([
         material({ texture: { maskName: '', name: 'carpback' }, textured: true }),
@@ -1088,6 +1160,28 @@ describe.skipIf(!existsSync(ZR350) || !existsSync(GENERIC_TXD))('buildVehicleMod
       // authored looking 40° down into the nose, which is exactly how far it has to swing.
       expect(built.parts[built.popUpLights!.part].name).toBe('misc_a');
       expect((built.popUpLights!.angle * 180) / Math.PI).toBeCloseTo(40.4, 1);
+    });
+  });
+});
+
+const CABBIE = 'tests/original/vehicles/cabbie-container-wheel.dff';
+
+describe.skipIf(!existsSync(CABBIE))('buildVehicleModel (real cabbie — f_wheel container, chosen path)', () => {
+  const built = buildVehicleModel(parseDff(toArrayBuffer(readFileSync(CABBIE))), textures(), {
+    wheelScale: [0.757, 0.757],
+  });
+
+  describe('positive cases', () => {
+    it('every wheel is tyre + hub cap, the tyre silenced and the cap left reflective (field 2026-08-17)', () => {
+      expect(built.wheels).toHaveLength(4);
+      for (const wheel of built.wheels) {
+        const submeshes = built.submeshes.filter((submesh) => submesh.part === wheel.part);
+
+        // `f_extras:2 → tire:1 → tire` + `rim:1 → hubcap`: two meshes, several materials, both kinds present.
+        expect(submeshes.some((submesh) => submesh.tyre)).toBe(true);
+        expect(submeshes.some((submesh) => !submesh.tyre)).toBe(true);
+        expect(wheel.radius * 2).toBeCloseTo(0.757, 3);
+      }
     });
   });
 });

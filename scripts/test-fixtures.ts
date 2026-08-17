@@ -133,6 +133,10 @@ const CLEO_MANIFEST: readonly Fixture[] = [
   // The Dinghy HD boat (plan 002 step 9): real adoption subjects — propellers under the transom flaps,
   // movsteer steering under the hull, a details mesh; the hull authored at the origin (shim absorbs).
   cleoFile('vehicles/dinghy - Dinghy HD - michelle works/dinghy.dff', 'vehicles/dinghy-hd.dff'),
+  // The alfamodding cabbie: a `f_wheel_1111` container whose wheel is a CHOSEN PATH of two groups
+  // (`f_extras:2 → tire:1 → tire` + `rim:1 → hubcap`). The OpenSA builder instanced the first atomic
+  // alone and drew four bare tyres with no rim (field 2026-08-17).
+  cleoFile('vehicles/cabbie - 1982 Checker Taxicab - alfamodding/cabbie.dff', 'vehicles/cabbie-container-wheel.dff'),
   cleoFile('mods/Wind Farm/CLEO/Wind Farm (Junior_Djjr).cs', 'cleo/windfarm.cs'),
 ];
 

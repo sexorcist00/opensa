@@ -25,17 +25,20 @@ const TYRE_OUTER_RADIUS = 0.9;
 
 /**
  * Material indices of `geometry` that form the tyre. Wheel-local space, axle along X — a wheel's radius is
- * therefore its extent in YZ, which is what the whole test measures.
+ * therefore its extent in YZ, which is what the whole test measures. `wheelRadius` is the reference radius
+ * when the geometry is one mesh of a multi-mesh wheel; by default the geometry's own maximum.
  */
-export function tyreMaterials(geometry: RWGeometry | undefined): ReadonlySet<number> {
+export function tyreMaterials(geometry: RWGeometry | undefined, wheelRadius?: number): ReadonlySet<number> {
   const tyres = new Set<number>();
   if (!geometry) {
     return tyres;
   }
   const positions = geometry.positions;
   const radius = (vertex: number): number => Math.hypot(positions[vertex * 3 + 1], positions[vertex * 3 + 2]);
-  let maxRadius = 0;
-  for (let vertex = 0; vertex < positions.length / 3; vertex += 1) {
+  // A multi-mesh wheel passes the WHOLE wheel's radius: a hub cap measured against its own extent is a disc
+  // whose outer ring would pass for rubber.
+  let maxRadius = wheelRadius ?? 0;
+  for (let vertex = 0; wheelRadius === undefined && vertex < positions.length / 3; vertex += 1) {
     maxRadius = Math.max(maxRadius, radius(vertex));
   }
   if (maxRadius <= 0) {

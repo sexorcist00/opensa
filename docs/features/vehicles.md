@@ -20,7 +20,11 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   ship, e.g. comet with only `wheel_rf`) is treated as the shared wheel and instanced at all dummies,
   so it renders four wheels instead of one. A third, wheel-mod convention is also handled: an
   `f_wheel_<mask>` container frame (e.g. `f_wheel_1111`, cheetah) whose child atomics are the wheel
-  sub-model — its geometry is instanced at every dummy instead of rendered once as body.
+  sub-model — its geometry is instanced at every dummy instead of rendered once as body. **The wheel is
+  the container's CHOSEN PATH** (2026-08-17, the alfamodding cabbie/stretch drove on bare tyres): a
+  VehFuncs `<name>:K` walk — `f_extras:2 → tire:1 → tire` + `rim:1 → hubcap` — the whole set instanced
+  as one part per dummy, fitted and tyre-classified as one solid; the first atomic alone was the tyre.
+  Contract row: [`contracts/vehicles.md`](../contracts/vehicles.md).
 - **The clump ROOT frame's authored matrix never contributes** (2026-08-04): SA replaces it with the
   entity's world matrix on attach, and anti-rip exporters poison exactly that slot (the comet lock shipped
   `rotation[0][0] = −3.9e14` there — composing it flung every off-centre part to ±10¹⁴ while the game

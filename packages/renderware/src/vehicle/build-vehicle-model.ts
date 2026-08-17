@@ -74,6 +74,8 @@ const WHEEL_FRAME = 'wheel';
 
 /** Body geometry has no tyre in it — only the wheel paths pass a real set. */
 const NO_TYRES: ReadonlySet<number> = new Set();
+/** Damage twins and LOD meshes never count as a chosen-path option (see {@link chosenContainerWheel}). */
+const VARIANT_SKIP_RE = /_(?:dam|vlo)$/;
 
 interface Scratch {
   colors: number[];
@@ -90,6 +92,12 @@ interface Scratch {
   /** The clump's UVAnimDict by name — the source {@link uvAnimSlot} resolves references against. */
   uvAnimDict: ReadonlyMap<string, RWUvAnimation>;
   uvs: number[];
+}
+
+/** One mesh of a wheel, in wheel-local space, with the material indices that are its tyre. */
+interface WheelMesh {
+  geometry: RWGeometry | undefined;
+  tyres: ReadonlySet<number>;
 }
 
 /** Mirrors prod's `buildVehicle(clump, textures, options)` — callers own parsing (tests pass clumps). */
@@ -123,13 +131,12 @@ export function buildVehicleModel(
 
   let sharedWheel: null | { frameIndex: number; geometryIndex: number } = null;
   const cornerWheels: { frameIndex: number; front: boolean; geometryIndex: number; right: boolean }[] = [];
-  const containerWheels: number[] = [];
+  const containerWheels = chosenContainerWheel(clump, containerFrames);
 
   for (const atomic of clump.atomics) {
     const name = frameName(clump, atomic.frameIndex);
     if (containerFrames.has(atomic.frameIndex)) {
-      containerWheels.push(atomic.geometryIndex); // wheel sub-model — instanced at the dummies below
-      continue;
+      continue; // wheel sub-model — its chosen meshes are instanced at the dummies below
     }
     if (name === WHEEL_FRAME) {
       sharedWheel = { frameIndex: atomic.frameIndex, geometryIndex: atomic.geometryIndex };
@@ -285,7 +292,7 @@ function addWheels(
   textures: VehicleTextures,
   wheelScale: readonly [number, number],
   source: {
-    containerWheels: readonly number[];
+    containerWheels: readonly WheelMesh[];
     cornerWheels: readonly { frameIndex: number; front: boolean; geometryIndex: number; right: boolean }[];
     sharedWheel: null | { frameIndex: number; geometryIndex: number };
   },
@@ -295,7 +302,14 @@ function addWheels(
   if (sharedWheel === null && cornerWheels.length === 1 && dummies) {
     const lone = cornerWheels[0];
 
-    return instanceWheels(scratch, clump, lone.geometryIndex, textures, wheelScale, lone.frameIndex);
+    return instanceWheels(
+      scratch,
+      clump,
+      [wheelMesh(clump, lone.geometryIndex)],
+      textures,
+      wheelScale,
+      lone.frameIndex,
+    );
   }
   if (cornerWheels.length > 0) {
     // Per-corner sets reuse ONE authored mesh across the corners (petro's left and right geometries are
@@ -303,7 +317,7 @@ function addWheels(
     const authoredRight = authoredWheelRight(clump);
 
     return cornerWheels.map((wheel) => {
-      const fit = wheelFit(wheelScale, wheel.front, clump.geometries[wheel.geometryIndex]);
+      const fit = wheelFit(wheelScale, wheel.front, [clump.geometries[wheel.geometryIndex]]);
       const part = addPart(scratch, clump, wheel.frameIndex, frameName(clump, wheel.frameIndex), fit.scale);
       if (wheel.right !== authoredRight) {
         scratch.parts[part].localRotation = flipWheelSide(scratch.parts[part].localRotation);
@@ -322,10 +336,17 @@ function addWheels(
     });
   }
   if (sharedWheel !== null) {
-    return instanceWheels(scratch, clump, sharedWheel.geometryIndex, textures, wheelScale, sharedWheel.frameIndex);
+    return instanceWheels(
+      scratch,
+      clump,
+      [wheelMesh(clump, sharedWheel.geometryIndex)],
+      textures,
+      wheelScale,
+      sharedWheel.frameIndex,
+    );
   }
   if (containerWheels.length > 0 && dummies) {
-    return instanceWheels(scratch, clump, containerWheels[0], textures, wheelScale);
+    return instanceWheels(scratch, clump, containerWheels, textures, wheelScale);
   }
 
   return [];
@@ -513,6 +534,62 @@ function authoredWheelRight(clump: RWClump, fromFrame?: number): boolean {
   return true;
 }
 
+/**
+ * The meshes of a `f_wheel_*` container wheel — the VehFuncs chosen path, as gameplay shows it (the same walk
+ * `vehicle-cutscene` settled in plan 004 round 11): a `<name>:K` frame shows K of its children, a bare name
+ * shows one, a `+` suffix shows the whole subtree; at every level the FIRST eligible child in frame order is
+ * the author's default (`_dam`/`_vlo` never count). Only the first container is read — a mask container is
+ * one wheel design, and its dummies are the corners.
+ *
+ * ONE atomic is not a wheel: the alfamodding cabbie ships `f_extras:2 → tire:1 → tire` + `rim:1 → hubcap` and
+ * the stretch `f_extras:1 → rim:1 → wire_spoke`; instancing the first atomic alone drew four bare tyres
+ * with no rim (field 2026-08-17). A mesh hanging below the container root with its own frame offset is
+ * baked into wheel-local space, so the whole set rides one part per dummy.
+ */
+function chosenContainerWheel(clump: RWClump, containerFrames: ReadonlySet<number>): WheelMesh[] {
+  const root = clump.frames.findIndex(
+    (frame, index) => containerFrames.has(index) && WHEEL_CONTAINER_RE.test(frame.name.trim().toLowerCase()),
+  );
+  if (root < 0) {
+    return [];
+  }
+  const children: number[][] = clump.frames.map(() => []);
+  clump.frames.forEach((frame, index) => {
+    if (frame.parentIndex >= 0) {
+      children[frame.parentIndex].push(index);
+    }
+  });
+  const chosen: number[] = [];
+  const pickAll = (index: number): void => {
+    chosen.push(index);
+    children[index].forEach(pickAll);
+  };
+  const pick = (index: number): void => {
+    chosen.push(index);
+    const name = frameName(clump, index);
+    if (name.endsWith('+')) {
+      children[index].forEach(pickAll);
+
+      return;
+    }
+    const count = Number(/:(\d+)$/.exec(name)?.[1] ?? 1);
+    children[index]
+      .filter((child) => !VARIANT_SKIP_RE.test(frameName(clump, child)))
+      .slice(0, count)
+      .forEach(pick);
+  };
+  pick(root);
+
+  const placed = clump.atomics
+    .filter((atomic) => chosen.includes(atomic.frameIndex))
+    .map((atomic) => wheelLocalGeometry(clump, atomic.geometryIndex, atomic.frameIndex, root));
+  // The tyre band is judged against the WHOLE wheel's radius: a hub cap measured on its own is a disc
+  // whose outer ring would pass for rubber.
+  const wheelMax = Math.max(0, ...placed.map((geometry) => wheelRadius(geometry)));
+
+  return placed.map((geometry) => ({ geometry, tyres: tyreMaterials(geometry, wheelMax) }));
+}
+
 /** `f_wheel_<mask>` container frames (and their descendants): the wheel sub-model, not body geometry. */
 function collectContainerFrames(clump: RWClump): Set<number> {
   const frames = new Set<number>();
@@ -656,19 +733,20 @@ function indicesFor(vertexCount: number, indices: number[]): Uint16Array | Uint3
 }
 
 /**
- * The shared wheel atomic, instanced at every `wheel_*_dummy`, each dummy's own orientation honoured and the
- * copies on the far side from {@link authoredWheelRight} turned by {@link flipWheelSide}.
+ * The wheel meshes, instanced at every `wheel_*_dummy`, each dummy's own orientation honoured and the copies
+ * on the far side from {@link authoredWheelRight} turned by {@link flipWheelSide}. One mesh for the shared /
+ * lone-corner conventions, the whole chosen set for a `f_wheel_*` container (tyre + rim + style).
  */
 function instanceWheels(
   scratch: Scratch,
   clump: RWClump,
-  geometryIndex: number,
+  meshes: readonly WheelMesh[],
   textures: VehicleTextures,
   wheelScale: readonly [number, number],
   sourceFrame?: number,
 ): VehicleWheel[] {
   const wheels: VehicleWheel[] = [];
-  const tyres = tyreMaterials(clump.geometries[geometryIndex]);
+  const geometries = meshes.map((mesh) => mesh.geometry);
   const authoredRight = authoredWheelRight(clump, sourceFrame);
   for (const [frameIndex, frame] of clump.frames.entries()) {
     const match = WHEEL_DUMMY_RE.exec(frame.name.trim().toLowerCase());
@@ -676,7 +754,7 @@ function instanceWheels(
       continue;
     }
     const front = match[2] === 'f';
-    const fit = wheelFit(wheelScale, front, clump.geometries[geometryIndex]);
+    const fit = wheelFit(wheelScale, front, geometries);
     const world = frameWorldTransform(clump.frames, frameIndex);
     const right = match[1] === 'r';
     const mounted: [number, number, number, number] = world ? rotationToQuat(world.rot) : [0, 0, 0, 1];
@@ -687,17 +765,14 @@ function instanceWheels(
       name: frame.name.trim().toLowerCase(),
       scale: fit.scale,
     });
-    appendGeometry(scratch, clump.geometries[geometryIndex], part, textures, 'body', null, tyres);
+    for (const mesh of meshes) {
+      appendGeometry(scratch, mesh.geometry, part, textures, 'body', null, mesh.tyres);
+    }
     wheels.push({ front, part, radius: fit.radius });
   }
 
   return wheels;
 }
-
-/**
- * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
- * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
- */
 
 function lampTag(material: RWMaterial): 'head' | 'tail' | null {
   if (!(material.texture?.name.toLowerCase() ?? '').startsWith('vehiclelights')) {
@@ -749,6 +824,11 @@ function materialClass(
 
   return bareMetal ? MaterialClass.chrome : MaterialClass.paint;
 }
+
+/**
+ * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
+ * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
+ */
 
 /**
  * Everything one MATERIAL contributes to its vertices/submesh, resolved once per triangle group.
@@ -1026,10 +1106,13 @@ function uvAnimSlot(scratch: Scratch, material: RWMaterial): null | number {
 function wheelFit(
   wheelScale: readonly [number, number],
   front: boolean,
-  geometry: RWGeometry | undefined,
+  geometries: readonly (RWGeometry | undefined)[],
 ): { radius: number; scale: number } {
   const radius = (front ? wheelScale[0] : wheelScale[1]) / 2;
-  const authored = wheelRadius(geometry);
+  // A multi-mesh wheel is measured as ONE solid: the tyre gives the radius and the width, a hub cap alone
+  // is a thin disc and must not read as a marker.
+  const authored = Math.max(0, ...geometries.map((geometry) => wheelRadius(geometry)));
+  const width = Math.max(0, ...geometries.map((geometry) => wheelWidth(geometry)));
   // A PLACEHOLDER wheel is not a wheel authored at the wrong size, and fitting it is nonsense: the
   // GTA 5 Rhino ships its road wheels as one 2 cm triangle with NO WIDTH, because its running gear
   // is drawn by the `wheel_big_*`/`track_*` meshes instead. Normalising that to a 1 m tyre scaled it
@@ -1039,11 +1122,58 @@ function wheelFit(
   // extent ALONG the axle is not a wheel. Measured on the rhino it is 3.4e-9 m against 3.3 m for
   // every real wheel in the same model — the bound below is float noise, not a fitted threshold.
   // The physics radius still comes from the ide, never from the marker's own 2 cm.
-  if (wheelWidth(geometry) <= 1e-6 || authored <= 0) {
+  if (width <= 1e-6 || authored <= 0) {
     return { radius, scale: 1 };
   }
 
   return { radius, scale: radius / authored };
+}
+
+/** A geometry re-expressed in the container root's space: its frame chain BELOW the root baked into the
+ *  vertices (identity for every model measured — the copy is only made when it is not). */
+function wheelLocalGeometry(
+  clump: RWClump,
+  geometryIndex: number,
+  frameIndex: number,
+  root: number,
+): RWGeometry | undefined {
+  const geometry = clump.geometries[geometryIndex];
+  const below = geometry ? frameWorldTransform(clump.frames, frameIndex, root) : null;
+  if (!geometry || !below) {
+    return geometry;
+  }
+  const { pos, rot } = below;
+  const positions = new Float32Array(geometry.positions.length);
+  for (let vertex = 0; vertex * 3 < positions.length; vertex += 1) {
+    const [x, y, z] = [
+      geometry.positions[vertex * 3],
+      geometry.positions[vertex * 3 + 1],
+      geometry.positions[vertex * 3 + 2],
+    ];
+    positions[vertex * 3] = rot[0] * x + rot[1] * y + rot[2] * z + pos[0];
+    positions[vertex * 3 + 1] = rot[3] * x + rot[4] * y + rot[5] * z + pos[1];
+    positions[vertex * 3 + 2] = rot[6] * x + rot[7] * y + rot[8] * z + pos[2];
+  }
+  let normals = geometry.normals;
+  if (normals) {
+    const rotated = new Float32Array(normals.length);
+    for (let vertex = 0; vertex * 3 < normals.length; vertex += 1) {
+      const [x, y, z] = [normals[vertex * 3], normals[vertex * 3 + 1], normals[vertex * 3 + 2]];
+      rotated[vertex * 3] = rot[0] * x + rot[1] * y + rot[2] * z;
+      rotated[vertex * 3 + 1] = rot[3] * x + rot[4] * y + rot[5] * z;
+      rotated[vertex * 3 + 2] = rot[6] * x + rot[7] * y + rot[8] * z;
+    }
+    normals = rotated;
+  }
+
+  return { ...geometry, normals, positions };
+}
+
+/** A single-atomic wheel (shared `wheel`, lone corner): the geometry with its own tyre set. */
+function wheelMesh(clump: RWClump, geometryIndex: number): WheelMesh {
+  const geometry = clump.geometries[geometryIndex];
+
+  return { geometry, tyres: tyreMaterials(geometry) };
 }
 
 function wheelRadius(geometry: RWGeometry | undefined): number {
