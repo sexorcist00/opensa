@@ -242,7 +242,7 @@ rather than a guard, because its number does not exist yet.
       from THAT. Record the rows in `docs/benchmarks/` before analysing them. This is the first real ceiling
       the target has ever been given.
       **UNBLOCKED 2026-08-09, and the instrument states its own limits.** The harness blocker is gone —
-      [plan 102](../../../../docs/plans/102-bench-settle-fall/readme.md) shipped and merged, and the A/A floor
+      [bench-harness plan 001](../../../../tools-debug/bench-harness/docs/plans/001-bench-settle-fall.md) shipped and merged, and the A/A floor
       was re-taken on THIS pak (91 092 clutter objects, not the lighter 08-08 one 102 measured):
       [`2026-08-09-headless-aa-floor-current-pak.json`](../../../../docs/benchmarks/opensa-engine/2026-08-09-headless-aa-floor-current-pak.json).
       - **Content holds still**: `avgTriangles` worst-of-nine **0.094 %**, draws 0.52 %.

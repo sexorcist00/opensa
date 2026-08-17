@@ -41,14 +41,14 @@ import { indexModAssets, type ModAssets, resolveDff, resolveTxd } from '../lib/m
  *   2. re-runs the map-optimizer GEOMETRY chain in-memory (weld → degenerate → dedupe → prune →
  *      smooth-normals) — targets get the experimental options, neighbours the build defaults,
  *   3. re-bakes the rect's CELL LODs the way `opensa-lod-generator` does (`bakeCell` over the overlay,
- *      overlay archive first, so the swapped HD is what the far view is cut from — plan 103): the
+ *      overlay archive first, so the swapped HD is what the far view is cut from — opensa-lod-generator plan 007): the
  *      `lod_<cx>_<cy>.dff` cells + a rect-scoped `lods.txd` land in the overlay and shadow the built ones,
  *   4. feeds convertDistrict a synthetic game dir (built `data/` + built IMGs for streams/collision,
  *      regenerated models + rebaked LODs as an overlay) with a rect covering just the affected cells,
  *   5. writes `build/<game>/opensa-lab` — a per-file-symlink mirror of the built game whose `pak/`
  *      is the freshly welded rect — servable by `npm run serve:static` like the real build.
  *
- * Known caveats (fine for an A/B eyeball of ONE model, documented in plan 024 phase 0 + plan 103):
+ * Known caveats (fine for an A/B eyeball of ONE model, documented in plan 024 phase 0 + opensa-lod-generator plan 007):
  *   - world-context prelight passes (019 level/seam/night verdicts) and texture mips are NOT
  *     replayed — neighbours may differ slightly from the main build;
  *   - generated LOD models (trees/procobj) have no source here → the lab cells' LOD level is thinner,
@@ -56,7 +56,7 @@ import { indexModAssets, type ModAssets, resolveDff, resolveTxd } from '../lib/m
  *   - `.osm` props reference the MAIN pak's texture dictionary → props inside the lab rect may lose
  *     textures. World geometry — the thing under test — is welded correctly.
  *   - the lab pak is a SEPARATE small pak: it never patches `build/<game>/opensa/pak` (the shipping
- *     pak's texture layer indexes are not persisted, so a subset weld cannot reproduce them — see plan 103).
+ *     pak's texture layer indexes are not persisted, so a subset weld cannot reproduce them — see opensa-lod-generator plan 007).
  *
  * Run: npx tsx scripts/debug/model-repack.ts <model...> [--game original] [--strip-normals]
  *      [--crease <deg>] [--prelit-floor <luma>] [--margin <cells>] [--no-ao] [--no-lod] [--out <dir>]
@@ -114,7 +114,7 @@ function assembleLab(args: Args, builtDir: string, manifest: OspakManifest, pak:
 }
 
 /**
- * Re-bake the rect's cell LODs from the overlay, the way `opensa-lod-generator` does (plan 103): the swapped HD
+ * Re-bake the rect's cell LODs from the overlay, the way `opensa-lod-generator` does (opensa-lod-generator plan 007): the swapped HD
  * is what the far view is cut from, so an HD-only swap would leave the lab's LOD level showing the OLD model.
  * The overlay archive is searched FIRST (`createModelSource` is first-wins), then the SOURCE game's archives; the
  * built `lod_*` cells themselves are excluded from the bake or they would be merged in as HD twice.

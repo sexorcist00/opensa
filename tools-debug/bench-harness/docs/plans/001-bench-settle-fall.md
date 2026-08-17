@@ -1,7 +1,10 @@
-# 102 — The bench settle lies, and a fall poisons the sweep
+# 001 — The bench settle lies, and a fall poisons the sweep
+
+_(Was `docs/plans/102-bench-settle-fall/` until 2026-08-17 — moved beside the harness it fixes; the central
+folder is engine plans only.)_
 
 **Status: DONE and MERGED 2026-08-09** (`ed6b90ba`, close-out audit `6202503e`). Closes the harness half of
-[`docs/open-issues/bench-scene-transition-collision.md`](../../open-issues/bench-scene-transition-collision.md)
+[`docs/open-issues/bench-scene-transition-collision.md`](../../../../docs/open-issues/bench-scene-transition-collision.md)
 — the falls and the A/A triangle drift. The city-scale simulation-residency question that doc also carries is
 NOT this plan; it stays open as a design track (the user's draw-distance requirement stands, but no observed
 defect currently forces it).
@@ -125,7 +128,7 @@ What shipped, and where:
 instantly on a world with NO collision — `groundBelow` casts a solid ray from the anchor, the player is
 standing on the anchor, so it answered with his own capsule ~0.9 m down. Plausible number, right range, every
 time. The probe now excludes the player's body, and the trap is recorded in
-[`edge-cases/physics-runtime.md`](../../edge-cases/physics-runtime.md) — nothing catches a missing exclusion.
+[`edge-cases/physics-runtime.md`](../../../../docs/edge-cases/physics-runtime.md) — nothing catches a missing exclusion.
 
 Docs updated in the same change: `docs/development/benchmarks.md` (the settle sequence + the `legStart`
 column), `docs/features/character.md` (the warp reset), `docs/edge-cases/physics-runtime.md`.
@@ -152,8 +155,8 @@ column), `docs/features/character.md` (the warp reset), `docs/edge-cases/physics
 | console errors | — | 0 |
 | scenes with `legStart.ok` | (no instrument existed) | **8 of 9** (`dz −0.08 m`, grounded, worst frame drop 0) |
 
-Records: [`2026-08-09-headless-bench-aa-after-102.json`](../../benchmarks/opensa-engine/2026-08-09-headless-bench-aa-after-102.json)
-(the A/A pair) and [`2026-08-09-ingame-102-probe-arm-a.json`](../../benchmarks/opensa-engine/2026-08-09-ingame-102-probe-arm-a.json)
+Records: [`2026-08-09-headless-bench-aa-after-102.json`](../../../../docs/benchmarks/opensa-engine/2026-08-09-headless-bench-aa-after-102.json)
+(the A/A pair) and [`2026-08-09-ingame-102-probe-arm-a.json`](../../../../docs/benchmarks/opensa-engine/2026-08-09-ingame-102-probe-arm-a.json)
 (the diagnostic arm), plus the index entry.
 
 **The field found two things the suite could not**, both from the probe's own numbers:
@@ -171,7 +174,7 @@ Records: [`2026-08-09-headless-bench-aa-after-102.json`](../../benchmarks/opensa
    are the spawn gate at the 150 m collision ring; the district emptying is residency culling around a
    player 890 m down). Anchor moved to `[1933, 1127, 18]` off `teleport-spot.ts`, re-run clean: `dz −0.08`,
    grounded, 27 cars live. Full write-up, wrong diagnosis kept:
-   [`open-issues/fixed/strip-noon-anchor-inside-a-building.md`](../../open-issues/fixed/strip-noon-anchor-inside-a-building.md).
+   [`open-issues/fixed/strip-noon-anchor-inside-a-building.md`](../../../../docs/open-issues/fixed/strip-noon-anchor-inside-a-building.md).
 
    Landing with it: the wait-for-rest is capped at **3 s** (`REST_TIMEOUT_MS`) instead of the 12 s
    world-ready budget. On a floorless anchor the full budget turned an 11 m fall into ~890 m, and since the
@@ -190,8 +193,8 @@ This redoes the 07/04 density A/B that the falls contaminated.
 
 **Done 2026-08-09, by the user on his own display lane** (all three arms: 1219 road cars, 212 parked,
 `legStart.ok` on all nine scenes, no anomalies reported). Records:
-[oldmap](../../benchmarks/opensa-engine/2026-08-09-ingame-user-display-oldmap-baseline.json) ·
-[d1/d3](../../benchmarks/opensa-engine/2026-08-09-ingame-user-display-density-ab.json).
+[oldmap](../../../../docs/benchmarks/opensa-engine/2026-08-09-ingame-user-display-oldmap-baseline.json) ·
+[d1/d3](../../../../docs/benchmarks/opensa-engine/2026-08-09-ingame-user-display-density-ab.json).
 
 | scene | tri d1 | tri d3 | d1↔d3 | vs oldmap | ms d1 | ms d3 | d1↔d3 |
 | --- | --- | --- | --- | --- | --- | --- | --- |

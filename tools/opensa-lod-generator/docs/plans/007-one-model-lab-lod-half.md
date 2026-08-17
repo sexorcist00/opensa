@@ -1,10 +1,14 @@
-# 103 — One-model swap for the OpenSA target: the lab pak gets its LOD half
+# 007 — One-model swap for the OpenSA target: the lab pak gets its LOD half
+
+_(Was `docs/plans/103-opensa-one-model-lab/` until 2026-08-17 — moved beside the tool whose bake it reuses;
+the central folder is engine plans only. The instrument itself is `scripts/debug/model-repack.ts`, which began
+as map-optimizer plan 024 phase 0.)_
 
 **Status: ✅ Phase 1 DONE 2026-08-17.** `scripts/debug/model-repack.ts` — the OpenSA-target counterpart of
 the `sa`-target instruments (`model-lab.ts` / `model-optimize.ts` / `img-patch.ts`, session 17) — now
 re-bakes the rect's CELL LODs from the swapped HD and takes a mod's loose `--dff/--txd`. One model, HD and far
 view both, in a servable lab copy of the built game, in seconds. Phase 2 (patching the SHIPPING pak in place)
-is researched and deferred: [`docs/in-reserve/ospak-in-place-cell-patch.md`](../../in-reserve/ospak-in-place-cell-patch.md).
+is researched and deferred: [`docs/in-reserve/ospak-in-place-cell-patch.md`](../../../../docs/in-reserve/ospak-in-place-cell-patch.md).
 
 Restrictions checked 2026-08-17: `restrictions/architecture.md` (one build, the grid every tool agrees on —
 `lodConfig.cellSize === CELL_SIZE` is asserted), `restrictions/build-vs-runtime.md` (the look is baked; and,

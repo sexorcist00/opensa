@@ -66,7 +66,7 @@ never the app. The dependency picture is the tools cluster of
 - **opensa-lod-generator** — the OpenSA cell-LOD bake: merge per 250-cell (= the render grid, plan 087) → budgeted QEM decimate →
   per-cell TXD; output is not tuned for the real-SA streamer (uncapped). Its adapter takes `deps.archives`
   and bakes per cell, which is how `scripts/debug/model-repack.ts` re-bakes ONE rect's cells from a swapped
-  HD for the lab pak (plan 103) — the tool itself has no per-cell output path (`writeBuild` wipes + mirrors).
+  HD for the lab pak (opensa-lod-generator plan 007) — the tool itself has no per-cell output path (`writeBuild` wipes + mirrors).
 - **opensa-pack** — game-ready dir → native build (`.osm` per model inside the IMGs + the `opensa/` pak);
   see [perfect-map-builder.md](./perfect-map-builder.md#opensa-pack-the-pack-stage-also-standalone).
   **A pack output is never re-packed or read as a source** (its `.dff`s are gone — the weld silently yields

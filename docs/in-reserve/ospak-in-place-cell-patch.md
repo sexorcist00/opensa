@@ -1,6 +1,6 @@
 # Patching ONE cell of the shipping `world.ospak` in place
 
-**Out of:** plan 103 (`docs/plans/103-opensa-one-model-lab/`), 2026-08-17 — the OpenSA one-model swap.
+**Out of:** opensa-lod-generator plan 007 (`tools/opensa-lod-generator/docs/plans/007-one-model-lab-lod-half.md`), 2026-08-17 — the OpenSA one-model swap.
 
 **Why deferred:** the container permits it (4096-aligned, individually compressed entries; the runtime reads
 ranges; `validateOspakManifest` checks alignment + bounds only — an `img-patch`-style append + repoint would

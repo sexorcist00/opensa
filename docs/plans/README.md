@@ -2,8 +2,10 @@
 
 The map of planning docs across the repo. **Engine plans** live here — one numbered folder per plan
 (`docs/plans/NNN-*/readme.md`, multi-part plans add sibling files inside their folder); the
-**offline tools** keep their own `docs/plans/` next to their code. Open questions and parked ideas live in
-[`../open-issues/`](../open-issues/) and [`../ideas/`](../ideas/).
+**offline tools** keep their own `docs/plans/` next to their code (so does the headless harness,
+`tools-debug/bench-harness/docs/plans/`; a debug INSTRUMENT's plan sits beside the tool whose code it reuses —
+`model-repack.ts`'s LOD half is `tools/opensa-lod-generator/docs/plans/007`). Open questions and parked
+ideas live in [`../open-issues/`](../open-issues/) and [`../ideas/`](../ideas/).
 
 > **Before writing one, check [`docs/restrictions/`](../restrictions/README.md).** It holds the rules a
 > design has to satisfy — layer boundaries, format ceilings, engine splits, what is decided at build time and
@@ -19,23 +21,6 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 `001`–`099`, one folder each (066, 073, 074, 078–082, 096–099 carry multi-part sub-plans; 083 kept its
 row but its chain was superseded by 097). Newest first:
 
-- **[103 — One-model swap for the OpenSA target: the lab pak gets its LOD half](./103-opensa-one-model-lab/readme.md)** —
-  **Phase 1 DONE 2026-08-17.** `model-repack.ts` re-bakes the rect's cell LODs from the swapped HD
-  (`opensa-lod-generator`'s adapter over an overlay-first archive list) and takes a mod's loose
-  `--dff/--txd`; gostown one cell in 1.9 s. Research settled that `world.ospak` is per-cell replaceable
-  but the shipping texture plan is not persisted — in-place patching is `in-reserve/ospak-in-place-cell-patch.md`.
-- **[102 — The bench settle lies, and a fall poisons the sweep](./102-bench-settle-fall/readme.md)** —
-  **DONE and MERGED 2026-08-09** (`ed6b90ba`; close-out audit `6202503e`). The perf-runs
-  settle exited on a stale `pendingCells` read, nothing waited for collision, and a teleport preserved
-  `Velocity.z` — one lost race sent the player under the mesh at terminal velocity for the rest of the
-  sweep. Three red tests → the fix (notice → ring → ground → warp onto that ground → wait for rest) + a
-  derived warp reset in the character controller + a permanent leg-start probe in the report. Measured:
-  A/A `avgTriangles` spread **10.19 % → 0.14 %**, `[cam]` jump lines **89 255 → 1**, all nine scenes
-  `legStart.ok`. The field then forced a second fix — a scene anchor is authored for the CAMERA, six of
-  nine sit 3.65–26.29 m above the ground — and exposed `strip-noon`'s anchor standing inside the Flamingo
-  ([fixed](../open-issues/fixed/strip-noon-anchor-inside-a-building.md)). The re-taken density A/B says
-  d1 and d3 are indistinguishable under the noise floor, confirming the 07/04 audit on an instrument that
-  can now be trusted.
 - **[101 — Escalators in OpenSA](./101-escalators/readme.md)** — **PLANNED 2026-08-07**: the steps have
   never moved in our engine. `renderware` decodes the type-10 entry (plan 044) and there is a debug waypoint;
   `engine`, `cell-weld` and `engine-formats` have no escalator code at all, so the staircase draws and

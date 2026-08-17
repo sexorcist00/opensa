@@ -74,7 +74,7 @@ the run reports a plausible-looking pak of a quarter of the world (464 cells / 8
 **Caught:** no — SILENT. Sanity-check every pack against the known cell count / size; the lab instrument
 reads sources by construction.
 
-Detail: [`plans/103-opensa-one-model-lab/`](../plans/103-opensa-one-model-lab/readme.md).
+Detail: [`opensa-lod-generator` plan 007](../../tools/opensa-lod-generator/docs/plans/007-one-model-lab-lod-half.md).
 
 ## Whatever the loaders disagree about, the game disagrees about
 

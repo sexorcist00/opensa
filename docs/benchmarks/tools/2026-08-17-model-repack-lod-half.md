@@ -1,6 +1,6 @@
-# model-repack — the LOD half of the OpenSA one-model swap (plan 103)
+# model-repack — the LOD half of the OpenSA one-model swap (opensa-lod-generator plan 007)
 
-**Date:** 2026-08-17 · **Machine:** macOS 25.6 (Darwin), APFS, Node 24 · **Code:** plan 103 phase 1.
+**Date:** 2026-08-17 · **Machine:** macOS 25.6 (Darwin), APFS, Node 24 · **Code:** opensa-lod-generator plan 007 phase 1.
 
 **Inputs:** `build/gostown/opensa` (599 MB — the only OpenSA tree on disk; `build/original/opensa` was wiped
 at session 18's close), `game-src/gostown/models/*.img` (`gostown6.img` 189 MB), `mods-src/gostown/mods`;
