@@ -832,3 +832,14 @@ not. **Verdict: the fleet is ~10–15 % of the regression on car-heavy scenes an
 rest is the WORLD as drawn today.** First suspect by the record: the RUNTIME clutter — the 08-09 baseline
 predates the 08-10 per-category ranges and the 08-11 species floor, and the worst scenes are the grass ones.
 Next: `?bench=all&benchcar=caddy&procobj=0`, then `parked=0` / `cargen=0` / a smaller `draw`, then pak-vs-pak.
+
+**Third arm, `?benchcar=caddy&procobj=0`** —
+[`opensa-engine/2026-08-17-ingame-caddy-procobj0.json`](opensa-engine/2026-08-17-ingame-caddy-procobj0.json):
+**no measurable change** against the caddy arm on any scene (country-dusk 12.0 → 12.0, ganton-noon 9.1 → 9.2,
+ls-noon 5.6 → 5.6); draws and triangles identical to the caddy arm everywhere (country-dusk 788/787 draws,
+1.31/1.29 M tris) — either the runtime clutter costs nothing on the pass or the knob did not apply on this
+path (the boot line would tell). Either way it is not where the ×3 lives. Same-ish geometry as the 08-09
+baseline (country-dusk 1.3 M tris / 787 draws vs 1.23 M / 874) at 3× the GPU pass, with the sky-only scene
+unchanged, points at per-pixel cost — overdraw / alpha classes / texture footprint of what the cells carry
+now, or the far LOD ring's content. Next: `?benchcar=caddy&draw=400`, then `probe=0`, then the UNCAPPED lane
+and a rect-repack A/B per mod layer.
