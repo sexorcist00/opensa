@@ -280,6 +280,13 @@ interpret them.
   `docs/development/cutscene-field-testing.md`. Suite 79 → 81 tool tests; no per-model hardcode
   (grep-checked at the user's ask).
 
+- [`session-19-instruments-resume-and-the-frame-regression.md`](./session-19-instruments-resume-and-the-frame-regression.md)
+  — 2026-08-17, the tool round: the "new/ car not installed" was a stale bottle; `--rebake --kind sa` (a car
+  in 4 s), `tuning_new_parts.txt` + the carmods guard (the boot crash `0x4C4576`), layered vehicles/peds through
+  the one planner, the mod-installer DXT warning, the OpenSA one-model lab with its LOD half, `rewriteModelArchives`
+  per family (the build that died at its last step) and pmb `--resume` with per-chunk weld checkpoints
+  (byte-identical resume); closed on `bench=all` of the full high-poly fleet build — GPU pass ×2.5–3.3, four
+  arms, not the cars, open issue.
 - [`session-18-burger-joint-and-dxt-dimensions.md`](./session-18-burger-joint-and-dxt-dimensions.md) — the
   2026-08-17 close of the LOD issue's last two vectors, zero rebuilds: the "burger joint" was a multi-atomic
   `anim` HD byte-copied into an `objs` LOD (SA keeps ONE atomic, at the origin — merged now), and the "mods"
