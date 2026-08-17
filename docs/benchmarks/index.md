@@ -843,3 +843,15 @@ baseline (country-dusk 1.3 M tris / 787 draws vs 1.23 M / 874) at 3× the GPU pa
 unchanged, points at per-pixel cost — overdraw / alpha classes / texture footprint of what the cells carry
 now, or the far LOD ring's content. Next: `?benchcar=caddy&draw=400`, then `probe=0`, then the UNCAPPED lane
 and a rect-repack A/B per mod layer.
+
+**Fourth arm, `?benchcar=caddy&draw=400`** —
+[`opensa-engine/2026-08-17-ingame-caddy-draw400.json`](opensa-engine/2026-08-17-ingame-caddy-draw400.json):
+**the far ring is not it either.** country-dusk with half the resident cells (25 → 11), half the draws (788 →
+408) and 0.97 M tris still costs 11.6 ms of pass (12.0 before); ganton-noon 9.1 → 10.9. Only the city scenes
+with many far cells give some back (ls-noon 5.6 → 4.4, lv-night 10.8 → 8.6). The cost is NEAR the camera and
+per pixel. Two facts that narrow it: the ENGINE has not changed since the 08-12 uncapped sweep (no
+`packages/`/`apps/` commit since 08-11 but one debug-spawner change), so the delta is pak + surface; and
+residency `target` reads 422 on every 08-17 row against 345 on every 08-09/08-12 row — the render targets
+are ~22 % bigger on this surface (matches ocean-horizon's +20 %, not a ×3). Next: take the surface out —
+the UNCAPPED headless sweep on THIS pak (same lane as 08-12 → a pure pak-vs-pak delta), then `probe=0`, then
+a rect-repack A/B on country-dusk's cells per mod layer.
