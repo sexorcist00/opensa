@@ -280,6 +280,13 @@ interpret them.
   `docs/development/cutscene-field-testing.md`. Suite 79 → 81 tool tests; no per-model hardcode
   (grep-checked at the user's ask).
 
+- [`session-21-wheels-vehfuncs-extras-and-the-fixture-cache.md`](./session-21-wheels-vehfuncs-extras-and-the-fixture-cache.md)
+  — 2026-08-17: two field cars with no rims = a `f_wheel` container wheel instanced by its first atomic (now
+  its whole chosen path); VehFuncs recursive extras become a per-spawn runtime pick from a tree the `.osm`
+  ships (59 of 213 cars drew every variant at once); IDE/IPL rows split like `LoadLine` (three mods'
+  comma-less rows had doubled ids in the built `vehicles.ide`); the fixture folder renamed `fixtures/`, fully
+  uncommitted, custom fixtures cached in the local `fixtures-src/`, regeneration proved byte-identical and
+  found four fixtures no manifest line produced. Field-accepted the same day.
 - [`session-20-cars-server-layers-and-the-first-real-resume.md`](./session-20-cars-server-layers-and-the-first-real-resume.md)
   — 2026-08-17: cars-server follows the vehicle layers (a car's screenshot from its OWN layer only,
   `cars:sa`/`cars:opensa`, missing pictures as a warning naming the file to save); the pmb leftovers closed by

@@ -33,6 +33,14 @@ list. Model-LOCAL on purpose: the cell path registers dict names GLOBALLY (cells
 but a rigid model streams in and out on its own, so it carries its animations with it. Absent on the models
 that animate nothing, which is every vehicle and nearly every prop — and on every `.osm` written before 099.
 
+**`DESC` also carries a car's VehFuncs variant tree** (2026-08-17): `variants` — the `f_extras` / `f_class`
+selector tree (`{ classes, extras }` of `VehicleVariantNode`: id = frame index, `select: [min, max]`,
+`requires` class tags, `condition` verbatim) — plus a per-submesh `variant` naming the option a mesh belongs
+to. The SPAWN walks it (`pickVariants`, `packages/renderware/src/vehicle/variants.ts`), the way the plugin
+does on the SA target; a build-time pick would freeze one set of clutter, ads and body kits into every car
+in the world. Absent on the models without one and on every `.osm` written before — where every variant is
+drawn at once, which is what those cars looked like until then (59 of 213 original mod cars).
+
 **Private vs world textures.** By-name classes (vehicles, peds, clutter, props, breakables) carry their own
 dictionary in the `.osm` `TEXS` section — self-contained, viewable standalone. **Map objects** are planned
 against the pak's shared world dictionary instead: their `.osm` is `DESC + GEOM` with global array
