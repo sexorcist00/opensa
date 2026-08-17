@@ -61,7 +61,7 @@ position, pieces within 0.2 m merged, at most 8 clusters per group; a connected 
 is unchanged), each with its own AABB. Rebaked comet: the speakers are their own two submeshes with a shelf
 box, the gauges theirs; the car's translucent submesh count 69 → 86 (+17 draws per instance, blend phase
 only). Whole-fleet rebake is `vehicle-installer --rebake original`; a fixture built before this keeps the
-old shape until it is rebaked. Field verdict pending on the reporter's angle.
+old shape until it is rebaked. **Field verdict (2026-08-17, the reporter's own angle): the speakers no longer show through.**
 
 ## How it was diagnosed (the method that worked)
 
