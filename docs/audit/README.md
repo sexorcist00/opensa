@@ -280,6 +280,12 @@ interpret them.
   `docs/development/cutscene-field-testing.md`. Suite 79 → 81 tool tests; no per-model hardcode
   (grep-checked at the user's ask).
 
+- [`session-20-cars-server-layers-and-the-first-real-resume.md`](./session-20-cars-server-layers-and-the-first-real-resume.md)
+  — 2026-08-17: cars-server follows the vehicle layers (a car's screenshot from its OWN layer only,
+  `cars:sa`/`cars:opensa`, missing pictures as a warning naming the file to save); the pmb leftovers closed by
+  the first REAL killed-and-resumed build, which found two bugs the e2e had not (a resume refused over a
+  consumed chain dir; a TC without `cutscene.img` dying on the raw ENOENT) — fixed, resumed pak byte-identical
+  to an unbroken run; per-class pack checkpoints put in reserve with a named trigger.
 - [`session-19-instruments-resume-and-the-frame-regression.md`](./session-19-instruments-resume-and-the-frame-regression.md)
   — 2026-08-17, the tool round: the "new/ car not installed" was a stale bottle; `--rebake --kind sa` (a car
   in 4 s), `tuning_new_parts.txt` + the carmods guard (the boot crash `0x4C4576`), layered vehicles/peds through
