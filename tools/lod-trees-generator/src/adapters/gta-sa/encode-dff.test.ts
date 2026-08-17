@@ -8,7 +8,7 @@ import type { Impostor } from '../../core';
 
 import { encodeLodDff } from './encode-dff';
 
-const TEMPLATE = 'tests/original/dff/lod-template/lodroadscoast02.dff';
+const TEMPLATE = 'fixtures/original/dff/lod-template/lodroadscoast02.dff';
 const template = (): Uint8Array => new Uint8Array(readFileSync(TEMPLATE));
 const ab = (u: Uint8Array): ArrayBuffer => u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer;
 

@@ -9,12 +9,12 @@ import { convertCar } from './car';
 import { type ClumpModel, readClump, writeClump } from './clump-io';
 import { IDENTITY_ROTATION } from './matrix';
 
-const CS_BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/csbobcat92.dff'));
-const CS_TAXI = new Uint8Array(readFileSync('tests/original/dff/cutscene/cstaxi92.dff'));
-const CS_ZR350 = new Uint8Array(readFileSync('tests/original/dff/cutscene/cszr350.dff'));
-const BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.dff'));
-const TAXI = new Uint8Array(readFileSync('tests/original/dff/cutscene/taxi.dff'));
-const ZR350 = new Uint8Array(readFileSync('tests/original/vehicles/zr350.dff'));
+const CS_BOBCAT = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/csbobcat92.dff'));
+const CS_TAXI = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/cstaxi92.dff'));
+const CS_ZR350 = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/cszr350.dff'));
+const BOBCAT = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/bobcat.dff'));
+const TAXI = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/taxi.dff'));
+const ZR350 = new Uint8Array(readFileSync('fixtures/original/vehicles/zr350.dff'));
 
 function frameByName(model: ClumpModel, name: string): ClumpModel['frames'][number] | undefined {
   return model.frames.find((frame) => frame.name === name);
@@ -175,8 +175,8 @@ describe('convertCar', () => {
     });
 
     it('glendale (single-frame wheels): one frame per corner, vanilla hierarchy verbatim', () => {
-      const csGlendale = new Uint8Array(readFileSync('tests/original/dff/cutscene/csglendale92.dff'));
-      const glendale = new Uint8Array(readFileSync('tests/original/dff/cutscene/glendale.dff'));
+      const csGlendale = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/csglendale92.dff'));
+      const glendale = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/glendale.dff'));
       const template = extractCarTemplate(csGlendale);
       const vanilla = readClump(csGlendale);
       const { dff, report } = convertCar(glendale, template);
@@ -202,8 +202,8 @@ describe('convertCar', () => {
     });
 
     it('monster (intermediate COG): the body frame is kept at its vanilla transform', () => {
-      const csMonster = new Uint8Array(readFileSync('tests/original/dff/cutscene/csmonster.dff'));
-      const monster = new Uint8Array(readFileSync('tests/original/dff/cutscene/monster.dff'));
+      const csMonster = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/csmonster.dff'));
+      const monster = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/monster.dff'));
       const template = extractCarTemplate(csMonster);
       const vanilla = readClump(csMonster);
       const { dff, report } = convertCar(monster, template);
@@ -241,8 +241,8 @@ describe('convertCar', () => {
     it('copcarla (junk chassis transform): the mesh frame junk is destroyed, like the game does', () => {
       // Stock copcarla's `chassis` frame carries [0, 1.637, -0.35] under chassis_dummy — the gate-4
       // field regression: trusting it shifted the whole body and every part.
-      const csCopcarla = new Uint8Array(readFileSync('tests/original/dff/cutscene/cscopcarla92.dff'));
-      const copcarla = new Uint8Array(readFileSync('tests/original/dff/cutscene/copcarla.dff'));
+      const csCopcarla = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/cscopcarla92.dff'));
+      const copcarla = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/copcarla.dff'));
       const template = extractCarTemplate(csCopcarla);
       const vanilla = readClump(csCopcarla);
       const { dff } = convertCar(copcarla, template);
@@ -313,8 +313,8 @@ describe('convertCar', () => {
       // cssecurica92 is the one rig whose vanilla bones carry 90-degree rotations, so a rotation left
       // in a shim/adopted frame stood the whole truck on its tail in game while the authored bind
       // pose looked perfect offline.
-      const csSecurica = new Uint8Array(readFileSync('tests/original/dff/cutscene/cssecurica92.dff'));
-      const securica = new Uint8Array(readFileSync('tests/original/dff/cutscene/securica.dff'));
+      const csSecurica = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/cssecurica92.dff'));
+      const securica = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/securica.dff'));
       const vanilla = readClump(csSecurica);
       const { dff } = convertCar(securica, extractCarTemplate(csSecurica));
       const converted = readClump(dff);

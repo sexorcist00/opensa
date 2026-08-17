@@ -11,11 +11,11 @@ import { readClump } from './rig/clump-io';
 import { toArrayBuffer } from './template';
 import { textureNames } from './txd';
 
-const CS_BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/csbobcat92.dff'));
-const BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.dff'));
-const CS_MTBIKE = new Uint8Array(readFileSync('tests/original/dff/cutscene/csmtbike92.dff'));
-const MTBIKE = new Uint8Array(readFileSync('tests/original/dff/cutscene/mtbike.dff'));
-const MTBIKE_TXD = new Uint8Array(readFileSync('tests/original/dff/cutscene/mtbike.txd'));
+const CS_BOBCAT = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/csbobcat92.dff'));
+const BOBCAT = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/bobcat.dff'));
+const CS_MTBIKE = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/csmtbike92.dff'));
+const MTBIKE = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/mtbike.dff'));
+const MTBIKE_TXD = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/mtbike.txd'));
 
 const VEHICLES_IDE = [
   'cars',
@@ -32,7 +32,7 @@ const TXDCUT_IDE = ['txdp', 'csopcarla, copcarla', 'csbobcat92, bobcat', 'csmtbi
 const CARCOLS_DAT = ['col', '10,20,30', '40,50,60', 'end', 'car', 'bobcat, 0,1', 'mtbike, 0,1', 'end'].join('\n');
 
 /** A real scene, so the two `anim/cuts.img` passes run rather than short-circuiting on a missing file. */
-const SYND_4A = new Uint8Array(readFileSync('tests/original/anim/synd_4a.ifp'));
+const SYND_4A = new Uint8Array(readFileSync('fixtures/original/anim/synd_4a.ifp'));
 
 let dir: string;
 let gamePath: string;
@@ -67,10 +67,10 @@ beforeEach(() => {
   writeFileSync(join(gamePath, 'data', 'carcols.dat'), CARCOLS_DAT);
   writeFileSync(
     join(gamePath, 'models', 'generic', 'vehicle.txd'),
-    readFileSync('tests/original/models/generic/vehicle.txd'),
+    readFileSync('fixtures/original/models/generic/vehicle.txd'),
   );
   const gta3 = createImg();
-  gta3.set('bobcat.txd', new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.txd')));
+  gta3.set('bobcat.txd', new Uint8Array(readFileSync('fixtures/original/dff/cutscene/bobcat.txd')));
   gta3.set('mtbike.txd', MTBIKE_TXD);
   writeImgFile(gta3, join(gamePath, 'models', 'gta3.img'));
   const img = createImg();
@@ -87,7 +87,7 @@ beforeEach(() => {
   writeFileSync(join(inPath, 'bobcat - some truck - author', 'bobcat.dff'), BOBCAT);
   writeFileSync(
     join(inPath, 'bobcat - some truck - author', 'bobcat.txd'),
-    readFileSync('tests/original/dff/cutscene/bobcat.txd'),
+    readFileSync('fixtures/original/dff/cutscene/bobcat.txd'),
   );
   mkdirSync(join(inPath, 'mtbike - a bike - author'), { recursive: true });
   writeFileSync(join(inPath, 'mtbike - a bike - author', 'mtbike.dff'), MTBIKE);

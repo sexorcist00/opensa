@@ -14,7 +14,7 @@ function toArrayBuffer(file: Buffer): ArrayBuffer {
 
 // The real stock dictionary the plate sources come from at boot. A synthetic charset can prove the
 // grid arithmetic but not that the grid MATCHES the shipped atlas — only these bytes can.
-const txdPath = join(process.cwd(), 'tests', 'original', 'models', 'generic', 'vehicle.txd');
+const txdPath = join(process.cwd(), 'fixtures', 'original', 'models', 'generic', 'vehicle.txd');
 const fixtureExists = existsSync(txdPath);
 const sources = fixtureExists ? extractPlateSources(parseTxd(toArrayBuffer(readFileSync(txdPath)))) : null;
 

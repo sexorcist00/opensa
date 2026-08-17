@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildCensus, type CutsceneSlot, matchMods } from './census';
 
 /** Real data files (regenerated fixtures — `npm run test:fixtures`). */
-const VEHICLES_IDE = readFileSync('tests/original/data/vehicles.ide', 'utf8');
-const TXDCUT_IDE = readFileSync('tests/original/data/txdcut.ide', 'utf8');
+const VEHICLES_IDE = readFileSync('fixtures/original/data/vehicles.ide', 'utf8');
+const TXDCUT_IDE = readFileSync('fixtures/original/data/txdcut.ide', 'utf8');
 
 /** Entry map builder: every name gets a `.dff` (size 1) and, unless excluded, a `.txd` (size given). */
 function entries(names: string[], txdBytes: Record<string, number> = {}): Map<string, number> {

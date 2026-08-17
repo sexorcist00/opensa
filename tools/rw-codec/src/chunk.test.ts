@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import { readRw, writeRw } from './chunk';
 
-// Committed mod fixtures (tests/custom is tracked); both are full skinned RenderWare clumps.
-const FIXTURES = ['tests/custom/character/gostown-bmypol1.dff', 'tests/custom/character/Shrek.dff'];
+// Committed mod fixtures (fixtures/custom is tracked); both are full skinned RenderWare clumps.
+const FIXTURES = ['fixtures/custom/character/gostown-bmypol1.dff', 'fixtures/custom/character/Shrek.dff'];
 
 function equal(a: Uint8Array, b: Uint8Array): boolean {
   return Buffer.from(a).equals(Buffer.from(b));

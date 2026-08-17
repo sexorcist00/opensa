@@ -18,8 +18,8 @@ import { describe, expect, it } from 'vitest';
 
 import { weldGridCell, type WeldRectContext } from './convert';
 
-const DFF = 'tests/custom/proper-fixes-models/trafficlight1.dff';
-const TXD = 'tests/original/dff/trafficlight-backface-culling/dyntraffic.txd';
+const DFF = 'fixtures/custom/proper-fixes-models/trafficlight1.dff';
+const TXD = 'fixtures/original/dff/trafficlight-backface-culling/dyntraffic.txd';
 const CELL_SIZE = 250;
 /** One plate's worth of quads, in the shape `collectRoadsigns` buckets by world position. */
 const PLATE: RoadsignGlyphQuads = {

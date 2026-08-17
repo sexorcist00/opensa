@@ -1,14 +1,14 @@
 import { type ImgArchive, openArchive } from '@opensa/renderware/archive/img-archive';
 import { buildCollisionIndex, getCollision } from '@opensa/renderware/collision/collision-index';
 /**
- * Build the object-viewer's **e2e fixtures** into `tests/viewer/` by extracting from a clean, UNMODIFIED GTA
+ * Build the object-viewer's **e2e fixtures** into `fixtures/viewer/` by extracting from a clean, UNMODIFIED GTA
  * San Andreas copy under `game-src/original` (the same source `test-fixtures.ts` uses). Chained after
- * `test-fixtures.ts` by `npm run test:fixtures` (renamed from `test-viewer-fixtures.ts` — plan 086 phase 6); the output is Rockstar assets, so `tests/viewer/` is
- * gitignored (like `tests/original/`) and every contributor regenerates it locally.
+ * `test-fixtures.ts` by `npm run test:fixtures` (renamed from `test-viewer-fixtures.ts` — plan 086 phase 6); the output is Rockstar assets, so `fixtures/viewer/` is
+ * gitignored (like `fixtures/original/`) and every contributor regenerates it locally.
  *
  * At runtime the viewers load from the compare server (`--after`); these static fixtures exist ONLY so the
  * object-viewer e2e can render real geometry in CI without the full game archive. `serve-static` maps
- * `/viewer/*` → `tests/viewer/*`, and the object-viewer loads `objects/manifest.json` only in `--mode e2e`.
+ * `/viewer/*` → `fixtures/viewer/*`, and the object-viewer loads `objects/manifest.json` only in `--mode e2e`.
  *
  * Produces (extracted from `gta3.img`/`gta_int.img`):
  *   objects/  the object-viewer's models + their txds, a pre-baked `<model>.col.json` (map-object collision
@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path';
 
 const ROOT = join('game-src', 'original');
 const ARCHIVES = ['models/gta3.img', 'models/gta_int.img'];
-const OUT = 'tests/viewer';
+const OUT = 'fixtures/viewer';
 
 /** The object-viewer's fixture models (name + dff + txd) — the e2e list; index 0 is the default render. */
 const OBJECTS = [

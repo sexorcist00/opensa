@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { readClump, writeClump } from './clump-io';
 
-const CS_BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/csbobcat92.dff'));
+const CS_BOBCAT = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/csbobcat92.dff'));
 
 describe('clump-io', () => {
   describe('negative cases', () => {
@@ -41,7 +41,7 @@ describe('clump-io', () => {
     });
 
     it('recovers a LOCKED mod DFF (anti-rip container sizes) via the engine walk', () => {
-      const locked = new Uint8Array(readFileSync('tests/original/vehicles/taxi-locked.dff'));
+      const locked = new Uint8Array(readFileSync('fixtures/original/vehicles/taxi-locked.dff'));
       const model = readClump(locked);
       expect(model.frames.length).toBeGreaterThan(10);
       expect(model.frames.some((frame) => frame.name === 'chassis')).toBe(true);

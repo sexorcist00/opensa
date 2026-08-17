@@ -161,7 +161,7 @@ describe('encodeLodDff', () => {
 // The hand-written `lightEntry()` above tests the transplant against a payload this file invented. A stock
 // chimney carries the real thing: 3 corona entries AND a particle emitter, so it also proves the extractor's
 // default — particles (type 1) are deliberately dropped from far LODs, where their emitters never unload.
-const CHIMNEY = 'tests/original/dff/particle/refchimny01.dff';
+const CHIMNEY = 'fixtures/original/dff/particle/refchimny01.dff';
 
 describe.skipIf(!existsSync(CHIMNEY))('encodeLodDff (real 2dfx payload — refchimny01.dff)', () => {
   const source = (): Raw2dfxEntry[] => extract2dfxEntries(new Uint8Array(readFileSync(CHIMNEY)));

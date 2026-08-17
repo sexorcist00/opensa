@@ -15,7 +15,7 @@ import { encodeDff } from './dff';
  * splits by material drew the detail layer in the middle and smeared it under the reference install's SkyGfx
  * dual pass. Regenerate the fixture with `npm run test:fixtures` (Rockstar asset, not committed).
  */
-const fixture = join(process.cwd(), 'tests', 'original', 'dff', 'binmesh-order', 'cehollyhil06.dff');
+const fixture = join(process.cwd(), 'fixtures', 'original', 'dff', 'binmesh-order', 'cehollyhil06.dff');
 
 function splitMaterials(dff: Uint8Array): number[] {
   const geometry = collectGeometries(readRw(dff).chunks)[0];

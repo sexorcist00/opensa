@@ -6,8 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { bakePaintMarkers, type PaintColours, paintColoursFor } from './materials';
 import { toArrayBuffer } from './template';
 
-const BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.dff'));
-const CARCOLS = parseCarcols(readFileSync('tests/original/data/carcols.dat', 'utf8'));
+const BOBCAT = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/bobcat.dff'));
+const CARCOLS = parseCarcols(readFileSync('fixtures/original/data/carcols.dat', 'utf8'));
 
 const COLOURS: PaintColours = [
   [11, 22, 33],

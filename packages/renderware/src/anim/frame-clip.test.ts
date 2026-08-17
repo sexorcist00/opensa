@@ -8,8 +8,8 @@ import { animatedFrames, clipForModel, frameBones, frameClip } from './frame-cli
 
 // The stock nodding donkey (an oil pump): a 6-frame clump whose arm and counterweight swing. Its clip lives in
 // counxref.ifp under the MODEL's name — the fact that trips everyone the first time.
-const IFP = 'tests/original/dff/anim-clump/counxref.ifp';
-const DFF = 'tests/original/dff/anim-clump/nt_noddonkbase.dff';
+const IFP = 'fixtures/original/dff/anim-clump/counxref.ifp';
+const DFF = 'fixtures/original/dff/anim-clump/nt_noddonkbase.dff';
 const MODEL = 'nt_noddonkbase';
 
 describe.skipIf(!existsSync(IFP) || !existsSync(DFF))('frame-clip (real nt_noddonkbase + counxref.ifp)', () => {

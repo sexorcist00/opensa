@@ -25,7 +25,7 @@ import { describe, expect, it } from 'vitest';
 import { buildModelOsm } from './model-osm';
 import { type ModelTextureSlot, planModelTextures, remapModelLayers } from './model-textures';
 
-const FIXTURES = join(process.cwd(), 'tests', 'original');
+const FIXTURES = join(process.cwd(), 'fixtures', 'original');
 const MODEL = 'chinatown_sfe1';
 const TXD = 'chinatownsfe';
 

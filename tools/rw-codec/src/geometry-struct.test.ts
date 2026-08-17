@@ -39,7 +39,7 @@ describe('Geometry Struct codec', () => {
     });
 
     it('round-trips real fixture Structs byte-for-byte', () => {
-      const bytes = new Uint8Array(readFileSync('tests/custom/character/gostown-bmypol1.dff'));
+      const bytes = new Uint8Array(readFileSync('fixtures/custom/character/gostown-bmypol1.dff'));
       const structs = collectGeometryStructs(readRw(bytes).chunks);
       expect(structs.length).toBeGreaterThan(0);
       for (const struct of structs) {
@@ -51,7 +51,7 @@ describe('Geometry Struct codec', () => {
     it('derives the UV-layer count from TEXTURED flags when the byte is 0 (casroyale01_lvs family)', () => {
       // The 2015-era exports write the layer-count byte as 0 with TEXTURED carrying the truth — trusting
       // the bare byte read the triangles out of UV data ("Offset is outside the bounds of the DataView").
-      const bytes = new Uint8Array(readFileSync('tests/custom/locked-models/casroyale01_lvs.dff'));
+      const bytes = new Uint8Array(readFileSync('fixtures/custom/locked-models/casroyale01_lvs.dff'));
       const structs = collectGeometryStructs(readRw(bytes).chunks);
       expect(structs.length).toBe(1);
       const decoded = decodeGeometryStruct(structs[0].data!);

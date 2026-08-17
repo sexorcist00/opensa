@@ -52,9 +52,9 @@ bone index `i` corresponds to `nodeId` at hierarchy position `i`.
    `skeleton.calculateInverses()` and would clobber it. Verified: army + Tommy both stand (skinned-mesh
    bbox tallest along +Z).
 4. **Tests / fixtures:**
-   - The custom **Tommy** model is committed at `tests/custom/character/tommy.dff` (non-Rockstar); the
+   - The custom **Tommy** model is committed at `fixtures/custom/character/tommy.dff` (non-Rockstar); the
      `build-skinned-clump` + adapter-integration tests read it from there.
-   - **army** (stock SA ped) regenerates from `gta3.img` into `tests/original/character/army.dff` via the
+   - **army** (stock SA ped) regenerates from `gta3.img` into `fixtures/original/character/army.dff` via the
      `test-fixtures` manifest (`extract('army.dff', …)`), gated by `existsSync` (CI-absent).
    - Synthetic tests cover the logic directly: HAnim order vs frame order, the no-HAnim `i+1` fallback,
      and the skin inverse-bind `[15]→1` repair. The army test is the real-ped regression guard
@@ -83,5 +83,5 @@ Fix (`animation-controller.ts`): `AnimationController` / `retargetClip` take an 
 `character.skeleton?.bones[0]?.name`. Standard peds are unaffected — they already have a `Root` bone, so the
 alias is redundant; only renamed-root models change. Guarded by two synthetic `retargetClip` tests (renamed
 root with and without `rootBoneName`) plus a **real** regression in `build-skinned-clump.test.ts`: the
-committed `tests/custom/character/Shrek.dff` builds a 32-bone skeleton whose root really is `MrAndres5555`
+committed `fixtures/custom/character/Shrek.dff` builds a 32-bone skeleton whose root really is `MrAndres5555`
 (no stock `Root`/`Normal`), confirming the model fact the fix depends on.

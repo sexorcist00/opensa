@@ -12,9 +12,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { install } from './install';
 
-const DATA = join(process.cwd(), 'tests', 'original', 'data');
+const DATA = join(process.cwd(), 'fixtures', 'original', 'data');
 const DATA_FILES = ['carcols.dat', 'carmods.dat', 'cargrp.dat', 'handling.cfg', 'vehicles.ide'];
-const PARKED = join(process.cwd(), 'tests', 'original', 'parked.json');
+const PARKED = join(process.cwd(), 'fixtures', 'original', 'parked.json');
 const hasFixtures = DATA_FILES.every((file) => existsSync(join(DATA, file))) && existsSync(PARKED);
 
 // Distinct modded values so each merge is observable against the stock data.

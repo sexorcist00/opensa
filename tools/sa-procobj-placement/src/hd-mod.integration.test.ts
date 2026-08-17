@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
  * `writeTxdpHdMod` with a real fixture DFF (`washer.dff`, textures `junk_tv2`/`junk_washer1`) + a minted parent TXD
  * containing `junk_tv2`, asserting the on-disk `hd/` mod parents the model's stock TXD via `txdp` (no stock IDE).
  */
-const WASHER_DFF = 'tests/original/dff/building/washer.dff';
+const WASHER_DFF = 'fixtures/original/dff/building/washer.dff';
 const TXDP_IDE_REL = 'data/maps/lod_procobj_hd.ide';
 
 /** A minimal valid TXD holding one named texture (4×4 RGBA) — the custom parent the stock TXD inherits from. */

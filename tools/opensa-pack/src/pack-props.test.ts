@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
 import { createModelBundles } from './model-bundle';
 import { packProps } from './pack-props';
 
-const FIXTURES = join(process.cwd(), 'tests', 'original');
+const FIXTURES = join(process.cwd(), 'fixtures', 'original');
 const MODEL = 'lamppost1';
 const TXD = 'dynsigns';
 const quiet = (): void => undefined;

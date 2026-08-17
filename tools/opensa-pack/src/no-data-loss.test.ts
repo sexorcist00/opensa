@@ -40,7 +40,7 @@ const quiet = (): void => undefined;
  */
 const BUILD_TIMEOUT_MS = 30_000;
 
-const FIXTURES = join(process.cwd(), 'tests', 'original');
+const FIXTURES = join(process.cwd(), 'fixtures', 'original');
 
 /** One real model per class, with the TXD its IDE row names. */
 const MODELS = [

@@ -7,9 +7,9 @@ import { copyMaterialEffects } from './copy-effects';
 
 // Real vehicle fixtures: infernus (env-map coefficient 1 everywhere — overdone), admiral, and the anti-rip
 // locked walton (well-tuned coefficient 0.5) read via the engine parser (regenerate with `npm run test:fixtures`).
-const INFERNUS = 'tests/original/dff/vehicle/infernus.dff';
-const ADMIRAL = 'tests/original/dff/vehicle/admiral.dff';
-const WALTON = 'tests/custom/locked-models/walton.dff';
+const INFERNUS = 'fixtures/original/dff/vehicle/infernus.dff';
+const ADMIRAL = 'fixtures/original/dff/vehicle/admiral.dff';
+const WALTON = 'fixtures/custom/locked-models/walton.dff';
 
 function load(path: string): Uint8Array {
   return new Uint8Array(readFileSync(path));

@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { createModelBundles } from './model-bundle';
 import { packBreakables } from './pack-breakables';
 
-const FIXTURES = join(process.cwd(), 'tests', 'original');
+const FIXTURES = join(process.cwd(), 'fixtures', 'original');
 const MODEL = 'binnt08_la';
 
 /** The writer logs a summary line; the tests do not care about it. */

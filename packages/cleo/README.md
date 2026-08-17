@@ -12,7 +12,7 @@ package is engine-agnostic and runs headless.
 | -------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Decoder        | `src/core/decode.ts`             | `.cs` bytes → instructions with an offset index; stops at the `__SBFTR` footer                        |
 | Opcode DB      | `src/core/opcodes.generated.ts`  | generated from `vendor/sa.json` (`npm run cleo:opcodes`, pin in `vendor/README.md`)                   |
-| Disassembler   | `src/core/disasm.ts`             | the Sanny-like listing — a CONTRACT (fixtures at `tests/custom/cleo-listings/`)                       |
+| Disassembler   | `src/core/disasm.ts`             | the Sanny-like listing — a CONTRACT (fixtures at `fixtures/custom/cleo-listings/`)                    |
 | VM             | `src/vm/runner.ts` + `thread.ts` | cooperative scheduler on game time; every handler throw becomes a located thread fault                |
 | Handlers       | `src/vm/handlers/*.ts`           | opcode implementations over the `CleoHost` facets                                                     |
 | Host interface | `src/vm/host.interface.ts`       | everything the VM may ask of the world — the engine implements it, tests fake it                      |
@@ -23,7 +23,7 @@ package is engine-agnostic and runs headless.
 | Corpus tests   | `src/vm/corpus*.test.ts`         | the shipped scripts on the real decoder+VM: behaviour, coverage join, trace snapshots                 |
 
 Corpus fixtures come from the installed mods: `npm run test:fixtures` copies them to
-`tests/original/cleo/` (skip-gated everywhere, so CI without game assets stays green).
+`fixtures/original/cleo/` (skip-gated everywhere, so CI without game assets stays green).
 
 ## Add an opcode
 

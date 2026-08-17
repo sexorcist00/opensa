@@ -12,7 +12,7 @@ import { keepTypesFor, LOD_2DFX_POLICY, spaceOf, verdictFor } from './two-dfx-po
 
 // A real refinery chimney: three light coronas beside a smoke emitter — the corona baseline every richer
 // carried type is built on (`npm run test:fixtures`).
-const CHIMNEY_DFF = 'tests/original/dff/particle/refchimny01.dff';
+const CHIMNEY_DFF = 'fixtures/original/dff/particle/refchimny01.dff';
 
 /** Every type the stock corpus actually carries (`scripts/debug/two-dfx-census.ts`, 14 865 models). */
 const STOCK_TYPES = [0, 1, 3, 6, 7, 8, 9, 10];

@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { decodeScript } from './decode';
 import { disassemble, formatInstruction } from './disasm';
 
-const CORPUS = 'tests/original/cleo';
-const LISTINGS = 'tests/custom/cleo-listings';
+const CORPUS = 'fixtures/original/cleo';
+const LISTINGS = 'fixtures/custom/cleo-listings';
 const NAMES = ['ferris', 'windfarm', 'firela', 'vandoor', 'rhino', 'cardoor-coach', 'cardoor-bus', 'nolights'];
 
 describe('formatInstruction', () => {

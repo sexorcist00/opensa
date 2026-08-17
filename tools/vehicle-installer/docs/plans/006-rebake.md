@@ -78,7 +78,7 @@ mods-src/<game>/vehicles`. Both are overridable for a tree that lives somewhere 
 
 ## Verification
 
-`src/rebake.test.ts`, against the real `tests/original` zr350 (a fixture is one manifest line, and a real car
+`src/rebake.test.ts`, against the real `fixtures/original` zr350 (a fixture is one manifest line, and a real car
 falsifies what a synthetic one confirms): a target that is not a built game throws; a model no archive holds
 is reported instead of half-installed; `--only` leaves every other entry byte-identical; a rebaked entry
 parses back through `readVehicleOsm` with its pop-up pod detected from the mod's `features.txt`; and a second

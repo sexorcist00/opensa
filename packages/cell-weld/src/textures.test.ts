@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 
 import { PLANNER_CURSOR_START, type PlannerJournal, TexturePlanner } from './textures';
 
-const TXD_PATH = join(process.cwd(), 'tests', 'original', 'mods', 'chinatownsfe.txd');
+const TXD_PATH = join(process.cwd(), 'fixtures', 'original', 'mods', 'chinatownsfe.txd');
 
 function fixtureFs(): { fs: ConstructorParameters<typeof TexturePlanner>[0]; realName: string } {
   const data = readFileSync(TXD_PATH);

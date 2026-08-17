@@ -6,9 +6,9 @@ import { extractBoatTemplate, toArrayBuffer } from '../template';
 import { convertBoat } from './boat';
 import { type ClumpModel, readClump, writeClump } from './clump-io';
 
-const CS_DINGHY = new Uint8Array(readFileSync('tests/original/dff/cutscene/csdinghy.dff'));
-const DINGHY = new Uint8Array(readFileSync('tests/original/dff/cutscene/dinghy.dff'));
-const DINGHY_MOD = new Uint8Array(readFileSync('tests/original/vehicles/dinghy-hd.dff'));
+const CS_DINGHY = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/csdinghy.dff'));
+const DINGHY = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/dinghy.dff'));
+const DINGHY_MOD = new Uint8Array(readFileSync('fixtures/original/vehicles/dinghy-hd.dff'));
 
 function frameByName(model: ClumpModel, name: string): ClumpModel['frames'][number] | undefined {
   return model.frames.find((frame) => frame.name === name);

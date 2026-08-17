@@ -6,9 +6,9 @@ import { extractBikeTemplate, toArrayBuffer } from '../template';
 import { convertBike } from './bike';
 import { type ClumpModel, readClump, writeClump } from './clump-io';
 
-const CS_MTBIKE = new Uint8Array(readFileSync('tests/original/dff/cutscene/csmtbike92.dff'));
-const MTBIKE = new Uint8Array(readFileSync('tests/original/dff/cutscene/mtbike.dff'));
-const MTBIKE_MOD = new Uint8Array(readFileSync('tests/original/vehicles/mtbike-smooth-criminal.dff'));
+const CS_MTBIKE = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/csmtbike92.dff'));
+const MTBIKE = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/mtbike.dff'));
+const MTBIKE_MOD = new Uint8Array(readFileSync('fixtures/original/vehicles/mtbike-smooth-criminal.dff'));
 
 function frameByName(model: ClumpModel, name: string): ClumpModel['frames'][number] | undefined {
   return model.frames.find((frame) => frame.name === name);

@@ -14,7 +14,7 @@ import { cloneLodDff } from './finalize';
 // plain `objs` atomic model, and SA keeps exactly ONE atomic of a clump read through such a row, re-framed at
 // the origin. The verbatim clone showed the sign alone at the origin — "LOD absent" (open issue
 // sa-lod-visibility-budget, round 15).
-const BURGER = 'tests/original/dff/anim-clump/burger01_law.dff';
+const BURGER = 'fixtures/original/dff/anim-clump/burger01_law.dff';
 const SIGN_OFFSET = { x: 7.1796875, y: -7.296875, z: 1.0078125 };
 
 const LINK: LodLink = {

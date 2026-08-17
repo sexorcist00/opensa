@@ -9,7 +9,7 @@ ignored**.
 
 Extend `VehicleHandling` (today 5 fields, `world-adapter.interface.ts:19-31`) to the full set the
 chain consumes, with explicit unit conversions documented per field (SA community docs + the column
-legend already in `tests/original/data/handling.cfg:24-84`):
+legend already in `fixtures/original/data/handling.cfg:24-84`):
 
 | handling column                                       | → typed field                                          | Unit conversion                                              | Consumed by    |
 | ----------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------ | -------------- |
@@ -29,7 +29,7 @@ legend already in `tests/original/data/handling.cfg:24-84`):
 
 - Parser stays raw-string (`handling.parser.ts` untouched); the adapter's `vehicleHandling()` grows
   the mapping + fallback row. Unit tests pin LANDSTAL, ADMIRAL, INFERNUS full rows against
-  `tests/original/data/handling.cfg` (the real-fixtures rule).
+  `fixtures/original/data/handling.cfg` (the real-fixtures rule).
 - Fields deliberately NOT consumed by the chain get a one-line "why" here (nPercentSubmerged — no
   water physics; monetary/light/anim columns — other systems).
 

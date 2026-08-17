@@ -13,7 +13,7 @@ import { cloneLodDff } from './finalize';
 
 // A real refinery chimney: three light coronas beside a smoke emitter — the only stock shape that can tell
 // "carried the emitter" apart from "carried the coronas" (`npm run test:fixtures`).
-const CHIMNEY = 'tests/original/dff/particle/refchimny01.dff';
+const CHIMNEY = 'fixtures/original/dff/particle/refchimny01.dff';
 
 /** The traffic-sign-free link shape `cloneLodDff` reads: only the HD draw distance matters to it. */
 const LINK: LodLink = {

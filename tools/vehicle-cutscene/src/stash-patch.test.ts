@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 import { patchWheelStashes, STASH_SINK_Z } from './stash-patch';
 
-const SYND_4A = new Uint8Array(readFileSync('tests/original/anim/synd_4a.ifp'));
-const SMOKE1B = new Uint8Array(readFileSync('tests/original/anim/smoke1b.ifp'));
+const SYND_4A = new Uint8Array(readFileSync('fixtures/original/anim/synd_4a.ifp'));
+const SMOKE1B = new Uint8Array(readFileSync('fixtures/original/anim/smoke1b.ifp'));
 
 /** The measured cswashington wheel bind-corner distances (the vanilla cs DFF's wheel locals). */
 const WASHINGTON_BINDS = new Map([

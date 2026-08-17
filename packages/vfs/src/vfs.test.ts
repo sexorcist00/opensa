@@ -69,7 +69,7 @@ describe('Vfs', () => {
     });
 
     it('decodes the real UTF-16 mod Loader.txt fixture (SA Brightened Project — Project Immerse-Yourself)', () => {
-      const bytes = new Uint8Array(readFileSync('tests/custom/modloader/utf16-loader.txt'));
+      const bytes = new Uint8Array(readFileSync('fixtures/custom/modloader/utf16-loader.txt'));
       const vfs = new Vfs();
       vfs.addChunk('data', 'd.zip', chunk({ 'modloader/m/loader.txt': bytes }));
 

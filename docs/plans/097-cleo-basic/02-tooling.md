@@ -48,7 +48,7 @@ _(filled 2026-08-04; `cleo-run` + the census status join landed with plan 03)_
   handler registry exists; `--json` for the plan 07 CI joint). Both are plan 01's decoder behind a
   CLI — zero duplicate decode logic.
 - **Verification run**: `scm-disasm --out` over the fixtured corpus reproduces all 7 committed
-  listings in `tests/custom/cleo-listings/` byte for byte (`cmp` clean); `cleo-census` reports the
+  listings in `fixtures/custom/cleo-listings/` byte for byte (`cmp` clean); `cleo-census` reports the
   recon baseline exactly — 115 unique opcodes, per-script counts 91/239/44/102/2085/64/64. Top of
   the frequency table: 000B ADD_VAL_TO_FLOAT_LVAR 472 (rhino's track math), 004D GOTO_IF_FALSE 341,
   00D6 IF 314.

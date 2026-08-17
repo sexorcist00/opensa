@@ -167,7 +167,7 @@ lives under `tools/map-optimizer/`.
 
 **Real-asset integration test** via the existing fixture mechanism (`npm run test:fixtures`, see
 `docs/development/getting-started.md`): fixtures are **regenerated locally** from a clean `game-src/original`
-into the gitignored `tests/original/` by the **MANIFEST in `scripts/test-fixtures.ts`** (types `copy` / `extract`
+into the gitignored `fixtures/original/` by the **MANIFEST in `scripts/test-fixtures.ts`** (types `copy` / `extract`
 / `archive`) — Rockstar assets are never committed. This is **build tooling, not the engine**; extending the
 MANIFEST is allowed.
 
@@ -177,7 +177,7 @@ MANIFEST is allowed.
   DFFs (`world/compfukhouse3.dff`, `world/mcstraps_LAe2.dff`) as precedent.
 - Assert: after the pass, the two tiles' shared-edge vertices agree (seam closed) while their interiors are
   unchanged, and a control model placed multiple times is left alone.
-- Custom, non-reproducible-from-stock cases (if any) go **committed** under `tests/custom/` instead.
+- Custom, non-reproducible-from-stock cases (if any) go **committed** under `fixtures/custom/` instead.
 
 ## Verification (in-game / viewer)
 

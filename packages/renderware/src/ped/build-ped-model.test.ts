@@ -8,9 +8,9 @@ import { toArrayBuffer } from '../test-utils';
 import { buildPedModel, pedClip, rootMotion, sampleRootMotion } from './build-ped-model';
 
 /** Real stock peds, extracted by `npm run test:fixtures` — the same pair the skinning tests use. */
-const BMYPOL1_DFF = 'tests/original/character/bmypol1.dff';
-const BMYPOL1_TXD = 'tests/original/character/bmypol1.txd';
-const ARMY_DFF = 'tests/original/character/army.dff';
+const BMYPOL1_DFF = 'fixtures/original/character/bmypol1.dff';
+const BMYPOL1_TXD = 'fixtures/original/character/bmypol1.txd';
+const ARMY_DFF = 'fixtures/original/character/army.dff';
 
 const read = (path: string): ArrayBuffer => toArrayBuffer(new Uint8Array(readFileSync(path)));
 

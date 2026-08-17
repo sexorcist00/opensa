@@ -278,7 +278,7 @@ the conjugated-quaternion convention). **No change to `packages/`.** All new cod
 
 **Real-asset integration test** (implemented, `gap-stitch.integration.test.ts`) via the existing fixture mechanism
 (`npm run test:fixtures`, MANIFEST in `scripts/test-fixtures.ts` — build tooling, not the engine, as in plan 016):
-the diagnosed **`vegassroad0522a` ↔ `vgssspagjun08`** ramp/slab pair (`tests/original/world/`) at their stock
+the diagnosed **`vegassroad0522a` ↔ `vgssspagjun08`** ramp/slab pair (`fixtures/original/world/`) at their stock
 placements — asserts variant A welds the points where they meet (each move a sub-unit nudge) and a 500-unit-apart
 control stitches nothing. Full unit coverage: `gap-stitch.test.ts` (A weld / B split / D skirt + every guard),
 `boundary.test.ts` (inverse-transform round-trip, edge/vertex/apex), and the three apply plugins'

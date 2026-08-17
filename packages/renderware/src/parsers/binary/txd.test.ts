@@ -291,7 +291,7 @@ describe('parseTxd (synthetic)', () => {
   });
 });
 
-const txdPath = join(process.cwd(), 'tests', 'original', 'txd', 'junk.txd');
+const txdPath = join(process.cwd(), 'fixtures', 'original', 'txd', 'junk.txd');
 const txdExists = existsSync(txdPath);
 // Read lazily: describe.skipIf still evaluates the suite body during collection.
 const realDict = txdExists ? parseTxd(toArrayBuffer(new Uint8Array(readFileSync(txdPath)))) : null;
@@ -319,7 +319,7 @@ describe.skipIf(!txdExists)('parseTxd (real asset junk.txd)', () => {
 // A real mod TXD (yosemite / Ford F350) with two anti-rip quirks: a leading empty type-0 chunk before the
 // dictionary (broke `readDictHeader`), AND inflated TEXTURE_NATIVE sizes that swallow following textures
 // (declares 20, a boundary walk finds 10) — the count-based recovery restores all 20, incl. the F350_mix body.
-const yosemitePath = join(process.cwd(), 'tests', 'custom', 'txd', 'yosemite.txd');
+const yosemitePath = join(process.cwd(), 'fixtures', 'custom', 'txd', 'yosemite.txd');
 const yosemiteExists = existsSync(yosemitePath);
 const yosemiteDict = yosemiteExists ? parseTxd(toArrayBuffer(new Uint8Array(readFileSync(yosemitePath)))) : null;
 
@@ -335,7 +335,7 @@ describe.skipIf(!yosemiteExists)('parseTxd (real asset yosemite.txd — leading 
 // A real mod TXD (gostown's lodveg.txd) with an "obfuscated wrapper" anti-rip lock: NO readable TexDictionary
 // (0x16) header at all (zeroed leading sector) — every standard tool, incl. Magic.TXD, rejects it — but the
 // inner TEXTURE_NATIVE (0x15) chunks are intact. The byte-scan recovery restores the LOD vegetation textures.
-const lodvegPath = join(process.cwd(), 'tests', 'custom', 'txd', 'lodveg.txd');
+const lodvegPath = join(process.cwd(), 'fixtures', 'custom', 'txd', 'lodveg.txd');
 const lodvegExists = existsSync(lodvegPath);
 const lodvegDict = lodvegExists ? parseTxd(toArrayBuffer(new Uint8Array(readFileSync(lodvegPath)))) : null;
 
@@ -354,7 +354,7 @@ describe.skipIf(!lodvegExists)('parseTxd (real asset lodveg.txd — locked, no T
 // both of which our decoder mis-read until fixed: DXT4 (a premultiplied-alpha DXT5 FourCC) rendered as rainbow
 // noise (classified as 16-bit and expand16'd), and X8R8G8B8 rendered invisible (the unused X byte was copied
 // as alpha 0). Whole models (telewires, sewer, police station) were affected.
-const wiresPath = join(process.cwd(), 'tests', 'custom', 'txd', 'carcer-wires-dxt4.txd');
+const wiresPath = join(process.cwd(), 'fixtures', 'custom', 'txd', 'carcer-wires-dxt4.txd');
 const wiresExists = existsSync(wiresPath);
 const wiresDict = wiresExists ? parseTxd(toArrayBuffer(new Uint8Array(readFileSync(wiresPath)))) : null;
 
@@ -367,7 +367,7 @@ describe.skipIf(!wiresExists)('parseTxd (real asset carcer wires.txd — DXT4)',
   });
 });
 
-const x888Path = join(process.cwd(), 'tests', 'custom', 'txd', 'carcer-x8r8g8b8.txd');
+const x888Path = join(process.cwd(), 'fixtures', 'custom', 'txd', 'carcer-x8r8g8b8.txd');
 const x888Exists = existsSync(x888Path);
 const x888Dict = x888Exists ? parseTxd(toArrayBuffer(new Uint8Array(readFileSync(x888Path)))) : null;
 

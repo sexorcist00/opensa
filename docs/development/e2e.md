@@ -15,7 +15,7 @@ npm run e2e:update     # regenerate screenshot baselines
 `playwright.config.ts` starts two `webServer`s for you (reused if already running locally):
 
 - `npm run serve:static` — serves on :3001 (`VITE_STATIC_URL`): the built `static/games/<game>-<version>/`
-  archives, plus `/viewer/*` mapped to the object-viewer's `tests/viewer/` fixtures (`npm run test:fixtures`) —
+  archives, plus `/viewer/*` mapped to the object-viewer's `fixtures/viewer/` fixtures (`npm run test:fixtures`) —
   all gitignored.
 - `npm run dev -- --mode e2e --port 5174 --strictPort` — the Vite app on **:5174** (`baseURL`). The dedicated
   port (not the usual 5173) means the lane never reuses a hand-started dev server. `--mode e2e` loads the
@@ -27,7 +27,7 @@ Chromium is already installed under the repo's Playwright cache. If missing: `np
 ## Assets
 
 `e2e/object-viewer.spec.ts` targets **`/viewer.html`**; in `--mode e2e` the viewer renders the fixtures in
-`tests/viewer/` (served at `/viewer`) — generated locally (gitignored) from a GTA copy via
+`fixtures/viewer/` (served at `/viewer`) — generated locally (gitignored) from a GTA copy via
 `npm run test:fixtures`. Run that once after a fresh clone before the viewer e2e (CI doesn't have game-src,
 so the e2e lane runs locally). Interactive dev instead drives the viewers from the compare server.
 `e2e/asset-fetch-loader.spec.ts` mocks all network (`page.route`) — no assets needed.

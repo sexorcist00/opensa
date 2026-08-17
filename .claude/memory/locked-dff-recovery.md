@@ -22,7 +22,7 @@ ignoring sizes. SOLVED 2026-06-19, verified in-game.
   zeroed/obfuscated, so NO readable `0x16` exists (even Magic.TXD fails: "unknown RenderWare stream block").
   Inner `TEXTURE_NATIVE` (`0x15`) chunks are intact. `parseTxd` → `recoverLockedTextures` (txd.ts) byte-scans
   for `0x15` chunks (type + STRUCT child + version `…FFFF`), parses each, sanity-checks (printable name +
-  pow2 dims), dedupes. Recovery is at LOAD time (locked bytes packed as-is). Fixture `tests/custom/txd/lodveg.txd`.
+  pow2 dims), dedupes. Recovery is at LOAD time (locked bytes packed as-is). Fixture `fixtures/custom/txd/lodveg.txd`.
 
 **Key gotcha:** all recovery is **recovery-on-mismatch** — only runs when the declared count exceeds the
 boundary-walk count, so well-formed files are untouched (≈0 regression). Texture name match is
@@ -30,5 +30,5 @@ case-insensitive (DFF `f350_mix` ↔ TXD `F350_mix`).
 
 The earlier `docs/open-issues/locked-dff.md` claim "Variant A = data absent / unrecoverable" was WRONG — it
 was the inflated-size lock; the 31 atomics / 31 geometries / 20 textures are all present. Fixtures:
-`tests/custom/locked-models/{cheetah,yosemite}.dff` + `tests/custom/txd/yosemite.txd`. See [[test-fixtures]],
+`fixtures/custom/locked-models/{cheetah,yosemite}.dff` + `fixtures/custom/txd/yosemite.txd`. See [[test-fixtures]],
 [[renderware-loader]].

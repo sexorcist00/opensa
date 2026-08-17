@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildModelOsm } from './model-osm';
 
-const FIXTURES = join(process.cwd(), 'tests', 'original');
+const FIXTURES = join(process.cwd(), 'fixtures', 'original');
 const FERRIS = join(FIXTURES, 'mods', 'ferriswheel_lights.dff');
 const ADMIRAL = join(FIXTURES, 'dff', 'vehicle', 'admiral.dff');
 

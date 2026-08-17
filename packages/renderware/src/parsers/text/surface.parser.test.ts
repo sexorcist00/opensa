@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ADHESION_GROUPS, parseSurfaceAdhesion } from './surface.parser';
 
-const datPath = join(process.cwd(), 'tests', 'original', 'data', 'surface.dat');
+const datPath = join(process.cwd(), 'fixtures', 'original', 'data', 'surface.dat');
 const datExists = existsSync(datPath);
 
 describe('parseSurfaceAdhesion', () => {

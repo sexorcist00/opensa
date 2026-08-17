@@ -61,7 +61,7 @@ describe('linkBinaryLods', () => {
     });
 
     it('links a real countrye_stream1 instance to a text index', () => {
-      const stream = new Uint8Array(readFileSync('tests/original/ipl_binary/countrye_stream1.ipl'));
+      const stream = new Uint8Array(readFileSync('fixtures/original/ipl_binary/countrye_stream1.ipl'));
       const out = linkBinaryLods(stream, new Map([[0, 9999]]));
 
       expect(parseBinaryIpl(ab(out))[0].lod).toBe(9999);
@@ -98,7 +98,7 @@ describe('rewriteBinaryStream', () => {
     });
 
     it('removes a real countrye_stream1 instance, keeping the rest parseable', () => {
-      const stream = new Uint8Array(readFileSync('tests/original/ipl_binary/countrye_stream1.ipl'));
+      const stream = new Uint8Array(readFileSync('fixtures/original/ipl_binary/countrye_stream1.ipl'));
       const before = parseBinaryIpl(ab(stream));
       const out = rewriteBinaryStream(stream, new Map(), new Set([0]));
       const after = parseBinaryIpl(ab(out));

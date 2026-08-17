@@ -9,8 +9,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
  * Run after a deliberate handler/atlas behaviour change, then REVIEW THE DIFF — it is the change:
  *   npx tsx scripts/debug/cleo-trace-fixtures.ts
  */
-const CORPUS = 'tests/original/cleo';
-// The SOURCE of the mirror (`fixtures-src` → `tests/custom`, `npm run test:fixtures`), not the mirror.
+const CORPUS = 'fixtures/original/cleo';
+// The SOURCE of the mirror (`fixtures-src` → `fixtures/custom`, `npm run test:fixtures`), not the mirror.
 const TRACES = 'fixtures-src/cleo-traces';
 
 mkdirSync(TRACES, { recursive: true });
@@ -18,6 +18,6 @@ for (const run of CORPUS_TRACE_RUNS) {
   const script = decodeScript(new Uint8Array(readFileSync(`${CORPUS}/${run.name}.cs`)));
   const trace = corpusTrace(run, script);
   writeFileSync(`${TRACES}/${run.name}.txt`, trace);
-  writeFileSync(`tests/custom/cleo-traces/${run.name}.txt`, trace); // and the mirror, so the test sees it now
+  writeFileSync(`fixtures/custom/cleo-traces/${run.name}.txt`, trace); // and the mirror, so the test sees it now
   console.log(`${TRACES}/${run.name}.txt — ${trace.split('\n').length - 1} lines`);
 }

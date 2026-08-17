@@ -1,7 +1,7 @@
 # Test coverage
 
 > **Before running any tests, run `npm run test:fixtures`** (mandatory). The real-asset fixtures under
-> `tests/original/` are Rockstar assets — gitignored and regenerated locally from a clean, **unmodified**
+> `fixtures/original/` are Rockstar assets — gitignored and regenerated locally from a clean, **unmodified**
 > GTA San Andreas copy at **`game-src/original/`**. Without this step, fixture-backed tests fail
 > (hard readers) or skip (guarded readers). CI runs no tests for this reason. See
 > [scripts.md → test-fixtures.ts](./scripts.md#test-fixturests).

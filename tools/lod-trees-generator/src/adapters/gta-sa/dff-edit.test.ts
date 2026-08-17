@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { clearTristripFlag, setNightColour, setTextureName, stripExtraVertColour } from './dff-edit';
 
 // A stock vegetation LOD DFF (the encoder's template): tristrip flag set + an extra-vertex-colour extension.
-const TEMPLATE = 'tests/original/dff/lod-template/lodroadscoast02.dff';
+const TEMPLATE = 'fixtures/original/dff/lod-template/lodroadscoast02.dff';
 const template = (): Uint8Array => new Uint8Array(readFileSync(TEMPLATE));
 const ab = (u: Uint8Array): ArrayBuffer => u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer;
 

@@ -6,7 +6,7 @@ import { appendTextures, composePlatePair, PLATE_TOWNS, plateTextFor } from './p
 import { toArrayBuffer } from './template';
 import { emptyTxd, textureNames } from './txd';
 
-const GENERIC = new Uint8Array(readFileSync('tests/original/models/generic/vehicle.txd'));
+const GENERIC = new Uint8Array(readFileSync('fixtures/original/models/generic/vehicle.txd'));
 
 describe('composePlatePair', () => {
   describe('negative cases', () => {

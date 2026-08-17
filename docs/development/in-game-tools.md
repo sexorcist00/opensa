@@ -70,7 +70,7 @@ alongside the app: `npx tsx tools/map-optimizer/src/compare-serve.ts --before <d
 - **`/viewer.html?tab=character`** — a ped by name (autocomplete from `peds.ide`). Play any `ped.ifp`
   animation (looped), and toggle the skeleton, the collision capsule, and **wireframe**.
 
-The object-viewer's e2e (only) renders static fixtures from `tests/viewer/` (served at `/viewer` by
+The object-viewer's e2e (only) renders static fixtures from `fixtures/viewer/` (served at `/viewer` by
 `serve-static`, gitignored, extracted from `game-src/original` by `npm run test:fixtures`).
 
 See [docs/plans/022-debug-viewers/readme.md](../plans/022-debug-viewers/readme.md) for the original design, and

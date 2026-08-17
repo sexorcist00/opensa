@@ -74,12 +74,12 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 /issues/
 /blog-src/
 /NO_COMMIT/
-# Test fixtures — NOTHING under tests/ is committed (the user's call, 2026-08-17). `npm run test:fixtures`
-# rebuilds all of it locally: tests/original/ + tests/viewer/ from the stock install at game-src/original
-# (Rockstar assets, never redistributed) and tests/custom/ as a mirror of fixtures-src/ — the curated,
+# Test fixtures — NOTHING under fixtures/ is committed (the user's call, 2026-08-17). `npm run test:fixtures`
+# rebuilds all of it locally: fixtures/original/ + fixtures/viewer/ from the stock install at game-src/original
+# (Rockstar assets, never redistributed) and fixtures/custom/ as a mirror of fixtures-src/ — the curated,
 # version-pinned, mod-derived and golden-snapshot files that have NO other source (kept local, backed up
 # by hand). A tree without fixtures-src/ runs the suite with those tests skipped (`skipIf(!existsSync)`).
-/tests/
+/fixtures/
 /fixtures-src/
 
 # Nx cache

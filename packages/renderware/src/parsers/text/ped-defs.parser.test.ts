@@ -33,7 +33,7 @@ describe('parsePedDefs', () => {
   });
 });
 
-const STOCK = 'tests/original/data/peds.ide';
+const STOCK = 'fixtures/original/data/peds.ide';
 
 describe.skipIf(!existsSync(STOCK))('parsePedDefs (real stock peds.ide)', () => {
   describe('positive cases', () => {

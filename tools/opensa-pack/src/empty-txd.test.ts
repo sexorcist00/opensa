@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildModelOsm } from './model-osm';
 
-const FIXTURES = join(process.cwd(), 'tests', 'original', 'dff', 'empty-txd');
+const FIXTURES = join(process.cwd(), 'fixtures', 'original', 'dff', 'empty-txd');
 
 function fileOf(name: string): ArrayBuffer {
   const data = readFileSync(join(FIXTURES, name));

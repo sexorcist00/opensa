@@ -41,7 +41,7 @@ the trunk glows but the rope itself stays dark pink/unlit. Model source: `mods-s
 (`tools/opensa-pack/src/weld.ts` baked mask, `shaders.ts` world runtime heuristic, `shaders.ts` rigid glow).
 Red rope: max delta 0.68 → full mask. Synthesized night sets (day × ambient) stay below day on every
 channel → still mask 0, nothing new glows. Fixture: stock `vgsn_nitree_r01.dff` + txd
-(`tests/original/dff/night-colours/`), test in `weld.test.ts` (rope ≥100 vertices at mask 255 — the luma
+(`fixtures/original/dff/night-colours/`), test in `weld.test.ts` (rope ≥100 vertices at mask 255 — the luma
 rule fails it; foliage stays 0).
 
 **Field check: PENDING the next pak rebuild** — the mask is baked at pack time, the current

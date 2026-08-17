@@ -8,7 +8,7 @@ import type { CleoHostDeps, CleoObjectInstance } from './engine-cleo';
 import { CleoRunnerSystem, createCleoEngineHost, discoverAndSpawn } from './engine-cleo';
 import { createGameRuntimeConfig } from './game-runtime-config';
 
-const FERRIS = 'tests/original/cleo/ferris.cs';
+const FERRIS = 'fixtures/original/cleo/ferris.cs';
 
 interface FakeInstance extends CleoObjectInstance {
   destroyed: boolean;

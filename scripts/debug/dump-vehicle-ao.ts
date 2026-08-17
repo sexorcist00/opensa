@@ -20,7 +20,7 @@ const buf = (p: string): ArrayBuffer => {
 };
 
 const MODS = 'mods-src/original/vehicles';
-const GENERIC = 'tests/original/models/generic/vehicle.txd';
+const GENERIC = 'fixtures/original/models/generic/vehicle.txd';
 // By SLOT, never by folder name: the folder carries the car's real name and author, both of which change
 // when a car is replaced — and a `new/` candidate is the folder the build is actually using.
 const folderOf = new Map(resolveVehicleSources(MODS).sources.map((source) => [source.slot, source.folder]));

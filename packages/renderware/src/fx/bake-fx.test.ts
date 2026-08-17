@@ -124,7 +124,7 @@ describe('bake-fx', () => {
 // The synthetic emitters above pin the arithmetic; only the real library proves the TRACK NAMES we sample are
 // the ones SA actually authors. The `fire` system is the one that shipped broken: its heat-haze prim rendered
 // as a white ball until the baker learned to skip it.
-const EFFECTS = 'tests/original/models/effects.fxp';
+const EFFECTS = 'fixtures/original/models/effects.fxp';
 
 describe.skipIf(!existsSync(EFFECTS))('bake-fx (real effects.fxp)', () => {
   const systems = parseFxp(readFileSync(EFFECTS, 'utf8'));

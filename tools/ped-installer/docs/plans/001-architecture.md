@@ -71,7 +71,7 @@ audio, collision (peds use the shared generic ped COL), and population groups (`
 
 ## Fixtures (tests)
 
-Follow the `tests/original/` convention (`scripts/test-fixtures.ts`, `npm run test:fixtures` — gitignored,
+Follow the `fixtures/original/` convention (`scripts/test-fixtures.ts`, `npm run test:fixtures` — gitignored,
 regenerated from `game-src/original`): a fixture that **copies** `data/peds.ide` and **extracts** a stock ped
 `dff`/`txd` (e.g. `bfori`) from `gta3.img`. Unit tests that touch real data use `describe.skipIf(!existsSync(...))`,
 plus synthetic in-memory cases for `mergePeds` / `settings` / `strip` (deterministic, no fixtures needed). Assert

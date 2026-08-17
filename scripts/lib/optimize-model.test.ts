@@ -12,7 +12,7 @@ import {
   variantFromArgv,
 } from './optimize-model';
 
-const fixture = join(process.cwd(), 'tests', 'original', 'dff', 'binmesh-order', 'cehollyhil06.dff');
+const fixture = join(process.cwd(), 'fixtures', 'original', 'dff', 'binmesh-order', 'cehollyhil06.dff');
 const load = (): Uint8Array => new Uint8Array(readFileSync(fixture));
 const triangles = (dff: Uint8Array): string[] =>
   parseDff(dff.buffer.slice(dff.byteOffset, dff.byteOffset + dff.byteLength) as ArrayBuffer)

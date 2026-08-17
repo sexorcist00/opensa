@@ -185,7 +185,7 @@ const recommendedTypeScriptConfigs = [
 const jsonCustomConfig: Linter.Config = {
   ...json.configs.recommended,
   files: ['**/*.json'],
-  ignores: ['**/*-lock.json', 'package.json', 'mods-src/**/*.json', 'tests/**/*.json', '**/dist/manifest.json'],
+  ignores: ['**/*-lock.json', 'package.json', 'mods-src/**/*.json', 'fixtures/**/*.json', '**/dist/manifest.json'],
   language: 'json/json',
 };
 

@@ -41,7 +41,7 @@ Census over stock `gta3.img` (`.tmp-multi-atomic.ts`, deleted): 34 multi-atomic 
 when the budget allows, **merged undecimated** otherwise (`BuildStats.mergedLods`, printed by the CLI). The
 verbatim path is untouched for single-atomic HDs. `mergedLods` also covers `decimateBudget 0`.
 
-Test: `clone-multi-atomic.test.ts` on the real `tests/original/dff/anim-clump/burger01_law.dff` (fixture added
+Test: `clone-multi-atomic.test.ts` on the real `fixtures/original/dff/anim-clump/burger01_law.dff` (fixture added
 to `scripts/test-fixtures.ts`): never verbatim with decimation off, never verbatim when the budget rejects
 everything, 752 + 336 triangles kept, the sign's first vertex found at its frame-transformed position.
 

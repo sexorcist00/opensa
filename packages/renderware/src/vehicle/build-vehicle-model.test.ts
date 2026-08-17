@@ -874,9 +874,9 @@ describe('buildVehicleModel', () => {
 
 // The engine-side builder must agree with its three twin (`three/build-vehicle.test.ts`, which already runs on
 // these files) — a synthetic clump only ever re-states this module's own assumptions about SA's conventions.
-const ADMIRAL = 'tests/original/dff/vehicle/admiral.dff';
-const ADMIRAL_TXD = 'tests/original/vehicles/admiral.txd';
-const GENERIC_TXD = 'tests/original/models/generic/vehicle.txd';
+const ADMIRAL = 'fixtures/original/dff/vehicle/admiral.dff';
+const ADMIRAL_TXD = 'fixtures/original/vehicles/admiral.txd';
+const GENERIC_TXD = 'fixtures/original/models/generic/vehicle.txd';
 
 describe.skipIf(!existsSync(ADMIRAL) || !existsSync(GENERIC_TXD))('buildVehicleModel (real admiral.dff)', () => {
   const built = buildVehicleModel(
@@ -1043,19 +1043,19 @@ const CONVENTIONS: { atomics: string; file: string; name: string; wheels: number
   { atomics: 'a shared `wheel` atomic', file: ADMIRAL, name: 'admiral (stock)', wheels: 4 },
   {
     atomics: 'a LONE `wheel_rf` corner atomic',
-    file: 'tests/custom/dff/vehicle/comet.dff',
+    file: 'fixtures/custom/dff/vehicle/comet.dff',
     name: 'comet',
     wheels: 4,
   },
   {
     atomics: '4 per-corner atomics',
-    file: 'tests/custom/dff/vehicle/petro-4wheels.dff',
+    file: 'fixtures/custom/dff/vehicle/petro-4wheels.dff',
     name: 'petro 4',
     wheels: 4,
   },
   {
     atomics: '6 per-corner atomics + a shared `wheel`',
-    file: 'tests/custom/dff/vehicle/petro-6wheels.dff',
+    file: 'fixtures/custom/dff/vehicle/petro-6wheels.dff',
     name: 'petro 6',
     wheels: 6,
   },
@@ -1093,11 +1093,11 @@ describe('buildVehicleModel (wheel side, real models)', () => {
       });
     }
 
-    it.skipIf(!existsSync('tests/custom/dff/vehicle/petro-6wheels.dff'))(
+    it.skipIf(!existsSync('fixtures/custom/dff/vehicle/petro-6wheels.dff'))(
       "ships all SIX of a real model's extras, each tagged with its own frame",
       () => {
         const built = buildVehicleModel(
-          parseDff(toArrayBuffer(readFileSync('tests/custom/dff/vehicle/petro-6wheels.dff'))),
+          parseDff(toArrayBuffer(readFileSync('fixtures/custom/dff/vehicle/petro-6wheels.dff'))),
           new VehicleTextures([]),
         );
         const tagged = new Set(built.submeshes.map((submesh) => submesh.extra).filter(Boolean));
@@ -1109,13 +1109,13 @@ describe('buildVehicleModel (wheel side, real models)', () => {
       },
     );
 
-    it.skipIf(!existsSync('tests/custom/dff/vehicle/petro-6wheels.dff'))(
+    it.skipIf(!existsSync('fixtures/custom/dff/vehicle/petro-6wheels.dff'))(
       'silences the tyre and leaves the rim reflective — the model that was caught glinting',
       () => {
         // This fixture is why the rule exists: all six of its wheels author the tyre with a FULL env map
         // (`xvehicleenv128`, coefficient 1) plus specular, so rubber rendered as reflective as chrome.
         const built = buildVehicleModel(
-          parseDff(toArrayBuffer(readFileSync('tests/custom/dff/vehicle/petro-6wheels.dff'))),
+          parseDff(toArrayBuffer(readFileSync('fixtures/custom/dff/vehicle/petro-6wheels.dff'))),
           new VehicleTextures([]),
         );
         const wheelSubmeshes = built.submeshes.filter((submesh) => built.parts[submesh.part].name.startsWith('wheel_'));
@@ -1130,9 +1130,9 @@ describe('buildVehicleModel (wheel side, real models)', () => {
       },
     );
 
-    it.skipIf(!existsSync('tests/custom/dff/vehicle/petro-6wheels.dff'))('covers the middle axle too', () => {
+    it.skipIf(!existsSync('fixtures/custom/dff/vehicle/petro-6wheels.dff'))('covers the middle axle too', () => {
       const built = buildVehicleModel(
-        parseDff(toArrayBuffer(readFileSync('tests/custom/dff/vehicle/petro-6wheels.dff'))),
+        parseDff(toArrayBuffer(readFileSync('fixtures/custom/dff/vehicle/petro-6wheels.dff'))),
         new VehicleTextures([]),
         { wheelScale: [1, 1] },
       );
@@ -1144,8 +1144,8 @@ describe('buildVehicleModel (wheel side, real models)', () => {
   });
 });
 
-const ZR350 = 'tests/original/vehicles/zr350.dff';
-const ZR350_TXD = 'tests/original/vehicles/zr350.txd';
+const ZR350 = 'fixtures/original/vehicles/zr350.dff';
+const ZR350_TXD = 'fixtures/original/vehicles/zr350.txd';
 
 describe.skipIf(!existsSync(ZR350) || !existsSync(GENERIC_TXD))('buildVehicleModel (real zr350.dff)', () => {
   const built = buildVehicleModel(
@@ -1164,7 +1164,7 @@ describe.skipIf(!existsSync(ZR350) || !existsSync(GENERIC_TXD))('buildVehicleMod
   });
 });
 
-const CABBIE = 'tests/original/vehicles/cabbie-container-wheel.dff';
+const CABBIE = 'fixtures/original/vehicles/cabbie-container-wheel.dff';
 
 describe.skipIf(!existsSync(CABBIE))('buildVehicleModel (real cabbie — f_wheel container, chosen path)', () => {
   const built = buildVehicleModel(parseDff(toArrayBuffer(readFileSync(CABBIE))), textures(), {
@@ -1233,7 +1233,7 @@ describe.skipIf(!existsSync(CABBIE))('buildVehicleModel (real cabbie — f_wheel
 
 // Nothing in the stock vehicle/prop set animates its UVs, so the binding can only be proven on a mod: the
 // Pacific Park ferris wheel's light ring is the asset plan 099 exists for.
-const FERRIS_LIGHTS = 'tests/original/mods/ferriswheel_lights.dff';
+const FERRIS_LIGHTS = 'fixtures/original/mods/ferriswheel_lights.dff';
 
 describe.skipIf(!existsSync(FERRIS_LIGHTS))('buildVehicleModel (real ferriswheel_lights.dff)', () => {
   const built = buildVehicleModel(parseDff(toArrayBuffer(readFileSync(FERRIS_LIGHTS))), textures());

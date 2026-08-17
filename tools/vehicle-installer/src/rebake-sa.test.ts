@@ -9,9 +9,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rebakeVehicles } from './rebake';
 import { rebakeVehiclesSa } from './rebake-sa';
 
-const DATA = join(process.cwd(), 'tests', 'original', 'data');
+const DATA = join(process.cwd(), 'fixtures', 'original', 'data');
 const DATA_FILES = ['carcols.dat', 'carmods.dat', 'handling.cfg', 'vehicles.ide'];
-const CAR = join(process.cwd(), 'tests', 'original', 'vehicles');
+const CAR = join(process.cwd(), 'fixtures', 'original', 'vehicles');
 const hasFixtures = DATA_FILES.every((file) => existsSync(join(DATA, file))) && existsSync(join(CAR, 'zr350.dff'));
 
 /** A handling row the stock table cannot already carry, so the merge is observable. */

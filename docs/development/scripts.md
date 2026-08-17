@@ -69,11 +69,11 @@ npx tsx scripts/gen-wind-list.ts
 
 ### test-viewer-fixtures.ts
 
-Builds the object-viewer's **e2e fixtures** into **`tests/viewer/objects/`** by extracting from a clean,
+Builds the object-viewer's **e2e fixtures** into **`fixtures/viewer/objects/`** by extracting from a clean,
 unmodified GTA copy under `game-src/original`: the object-viewer's models + their txds, a pre-baked
 `<model>.col.json` (map-object collision lives in the IMG, not the DFF), and a `manifest.json`. Chained after
-`test-fixtures.ts` by **`npm run test:fixtures`** (not a separate command). `tests/viewer/` is gitignored (like
-`tests/original/`); regenerate locally after a fresh clone. At runtime the viewers load from the compare
+`test-fixtures.ts` by **`npm run test:fixtures`** (not a separate command). `fixtures/viewer/` is gitignored (like
+`fixtures/original/`); regenerate locally after a fresh clone. At runtime the viewers load from the compare
 server — these fixtures exist only so the object-viewer e2e renders real geometry in CI without the full game.
 
 ```sh
@@ -83,7 +83,7 @@ npm run test:fixtures               # tsx scripts/test-fixtures.ts && tsx script
 ### serve-static.ts
 
 The local + e2e static origin (`npm run serve:static`, port 3001 = `VITE_STATIC_URL`). Serves the built
-`static/games/<game>-<version>/` archives, and maps `/viewer/*` → the object-viewer's `tests/viewer/` e2e
+`static/games/<game>-<version>/` archives, and maps `/viewer/*` → the object-viewer's `fixtures/viewer/` e2e
 fixtures (`npm run test:fixtures`) — all gitignored. CORS is on; dev mode reads files fresh.
 
 Also mounts **`/build`** (Range-capable) so the dev surfaces can boot the canonical build in place: a
@@ -126,17 +126,17 @@ come from and why the three sources are joined on the SLOT and never on the fold
 
 ### test-fixtures.ts
 
-Regenerates the real-asset test fixtures (`tests/original/`) — Rockstar assets, **gitignored, not
+Regenerates the real-asset test fixtures (`fixtures/original/`) — Rockstar assets, **gitignored, not
 redistributed**. Reads from a **clean, UNMODIFIED GTA San Andreas** copy at **`game-src/original/`**:
 copies loose data/text files, extracts entries from `models/*.img`, builds `img/admiral.img`, and generates
 `models/effects` particle data + a stock `data/timecyc_24h.dat` (plain `convertTo24h`, no mod overlay).
 Custom fixtures (mods + curated/version-pinned test models + golden snapshots) are mirrored from the local,
-uncommitted `fixtures-src/` into `tests/custom/` FIRST (wipe + copy); nothing under `tests/` is committed.
+uncommitted `fixtures-src/` into `fixtures/custom/` FIRST (wipe + copy); nothing under `tests/` is committed.
 
 **Running the test suite requires this first** (CI has no game-src, so unit tests + e2e are disabled there):
 
 ```sh
-npm run test:fixtures   # populate tests/original/ from game-src/original
+npm run test:fixtures   # populate fixtures/original/ from game-src/original
 npm test                # then run the unit tests
 ```
 

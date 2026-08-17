@@ -1,7 +1,7 @@
 /**
  * Corpus trace snapshots (plan 097/07 decision 6): every supported script's headless HOST-CALL
  * story, byte-for-byte reproducible — the physics-CI philosophy applied to scripts. The committed
- * fixtures live in `tests/custom/cleo-traces/`; `scripts/debug/cleo-trace-fixtures.ts` regenerates
+ * fixtures live in `fixtures/custom/cleo-traces/`; `scripts/debug/cleo-trace-fixtures.ts` regenerates
  * them and `corpus-traces.test.ts` fails when a handler/atlas change moves any story.
  *
  * Everything nondeterministic is pinned HERE, shared by the test and the generator: the per-script

@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { createModelBundles } from './model-bundle';
 import { packVehicles } from './pack-vehicles';
 
-const FIXTURES = join(process.cwd(), 'tests', 'original');
+const FIXTURES = join(process.cwd(), 'fixtures', 'original');
 const quiet = (): void => undefined;
 
 function fileOf(relative: string): ArrayBuffer {

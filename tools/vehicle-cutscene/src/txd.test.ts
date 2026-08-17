@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 import { emptyTxd, textureNames, unresolvedTextures } from './txd';
 
-const BOBCAT_DFF = new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.dff'));
-const BOBCAT_TXD = new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.txd'));
-const VEHICLE_TXD = new Uint8Array(readFileSync('tests/original/models/generic/vehicle.txd'));
+const BOBCAT_DFF = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/bobcat.dff'));
+const BOBCAT_TXD = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/bobcat.txd'));
+const VEHICLE_TXD = new Uint8Array(readFileSync('fixtures/original/models/generic/vehicle.txd'));
 
 describe('txd', () => {
   describe('negative cases', () => {

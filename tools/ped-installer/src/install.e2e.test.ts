@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { install } from './install';
 
-const PEDS_IDE = join(process.cwd(), 'tests', 'original', 'data', 'peds.ide');
+const PEDS_IDE = join(process.cwd(), 'fixtures', 'original', 'data', 'peds.ide');
 const hasFixtures = existsSync(PEDS_IDE);
 
 const NEW_PED = '299, newped, newtxd, CIVMALE, STAT_STREET_GUY, man, 0, 0, null, 9,9, PED_TYPE_GEN, VOICE_X, VOICE_X';

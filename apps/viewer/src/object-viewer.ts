@@ -192,7 +192,7 @@ function buildControls(): void {
   updatePolyCount();
 
   document.body.appendChild(panel);
-  // e2e only: render the static fixtures (tests/viewer, served at /viewer). Dev stays compare-server-driven.
+  // e2e only: render the static fixtures (fixtures/viewer, served at /viewer). Dev stays compare-server-driven.
   if (import.meta.env.MODE === 'e2e') {
     void loadFixtures(addRow);
   }
@@ -362,7 +362,7 @@ async function loadCollision(model: ModelEntry): Promise<ColModel | null> {
 
 /**
  * `--mode e2e` only: list + auto-render the object fixtures from `objects/manifest.json` (extracted by
- * `npm run test:fixtures` into the gitignored `tests/viewer/`, served at `/viewer`). Lets the object-viewer
+ * `npm run test:fixtures` into the gitignored `fixtures/viewer/`, served at `/viewer`). Lets the object-viewer
  * e2e render real geometry without the compare server or the full game. A 404 (dev) is a silent no-op.
  */
 async function loadFixtures(addRow: (model: ModelEntry, checked?: boolean) => void): Promise<void> {

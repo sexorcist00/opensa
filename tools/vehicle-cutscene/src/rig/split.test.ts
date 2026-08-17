@@ -7,7 +7,7 @@ import { geometryBodyHasTranslucency } from '../materials';
 import { type ClumpModel, type OpaqueChunk, readClump } from './clump-io';
 import { splitGeometryByTranslucency } from './split';
 
-const BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.dff'));
+const BOBCAT = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/bobcat.dff'));
 
 function binMeshOf(body: Uint8Array): { indices: number; materials: number[] } {
   const extension = readRw(body).chunks.find((chunk) => chunk.type === RW_EXTENSION);

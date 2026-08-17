@@ -7,7 +7,7 @@ import { ScriptRunner } from './runner';
 import { atlasTierOf } from './tiers';
 
 /** Real corpus scripts on the real decoder — the plan 03 headless integration. */
-const CORPUS = 'tests/original/cleo';
+const CORPUS = 'fixtures/original/cleo';
 
 const load = (name: string): ReturnType<typeof decodeScript> =>
   decodeScript(new Uint8Array(readFileSync(`${CORPUS}/${name}.cs`)));

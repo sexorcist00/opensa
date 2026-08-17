@@ -88,7 +88,7 @@ describe('stripGta3Img', () => {
 
 // Real stock peds.ide: the rows have 11+ columns (stat, anim group, driving-mask, radio stations, voices…),
 // not the 4 the synthetic sample above uses — and the file the installer strips is always this one.
-const STOCK_PEDS = 'tests/original/data/peds.ide';
+const STOCK_PEDS = 'fixtures/original/data/peds.ide';
 
 describe.skipIf(!existsSync(STOCK_PEDS))('stripPeds (real stock peds.ide)', () => {
   describe('positive cases', () => {

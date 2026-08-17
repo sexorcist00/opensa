@@ -5,8 +5,8 @@ import { readClump, writeClump } from './rig/clump-io';
 import { worldTransforms } from './rig/emit';
 import { matchSeat, resolveSeatPoints, type SeatPoint } from './seats';
 
-const TAXI = new Uint8Array(readFileSync('tests/original/dff/cutscene/taxi.dff'));
-const BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/bobcat.dff'));
+const TAXI = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/taxi.dff'));
+const BOBCAT = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/bobcat.dff'));
 
 function seatsOf(donor: Uint8Array, shiftZ: number): SeatPoint[] {
   const model = readClump(donor);

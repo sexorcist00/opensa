@@ -60,7 +60,7 @@ Both are general: any mod (any TC) shipping DXT2/DXT4 or X8R8G8B8 now decodes co
   concrete wall; `Est_ManLwrWall` from a fully-transparent (white) sheet to a stone wall.
 - Tests in `packages/renderware/src/parsers/binary/txd.test.ts`:
   - synthetic: DXT2/DXT4 classify as dxt3/dxt5; X8R8G8B8 decodes opaque (alpha 255).
-  - **real-asset fixtures** (committed under `tests/custom/txd/`): `carcer-wires-dxt4.txd` (the mod's whole
+  - **real-asset fixtures** (committed under `fixtures/custom/txd/`): `carcer-wires-dxt4.txd` (the mod's whole
     5-texture DXT4 wires TXD) and `carcer-x8r8g8b8.txd` (one real 32×32 X8R8G8B8 texture wrapped in a fresh
     TexDictionary — the source TXDs are 16–39 MB uncompressed, too large to commit whole).
 - 645 renderware + opensa-pack tests green; no regression.

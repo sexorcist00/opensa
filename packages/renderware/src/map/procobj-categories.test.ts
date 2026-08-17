@@ -7,7 +7,7 @@ import { procObjCategory, type ProcObjCategoryName } from './procobj-categories'
 
 const CATEGORIES: ProcObjCategoryName[] = ['bushes', 'cacti', 'flowers', 'grass', 'rocks', 'trees', 'underwater'];
 
-const procObjDat = join(process.cwd(), 'tests', 'original', 'data', 'procobj.dat');
+const procObjDat = join(process.cwd(), 'fixtures', 'original', 'data', 'procobj.dat');
 
 describe('procObjCategory', () => {
   describe('negative cases', () => {

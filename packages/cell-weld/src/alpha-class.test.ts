@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 
 import { TexturePlanner } from './textures';
 
-const DIR = join(process.cwd(), 'tests', 'original', 'dff', 'alpha-class');
+const DIR = join(process.cwd(), 'fixtures', 'original', 'dff', 'alpha-class');
 
 /** A one-dictionary filesystem for the planner. */
 function plannerFor(txd: string): TexturePlanner {

@@ -15,7 +15,7 @@ import {
 } from './scale';
 
 // Real vehicle fixture (regenerate with `npm run test:fixtures`): a full hierarchical rig + embedded COL3.
-const INFERNUS = 'tests/original/dff/vehicle/infernus.dff';
+const INFERNUS = 'fixtures/original/dff/vehicle/infernus.dff';
 
 /** A minimal COL3 leaf: header + 1 sphere, 1 face (→3 verts), bounds — offsets chosen so we can assert scaling. */
 function colLeaf(): { data: Uint8Array; view: DataView } {

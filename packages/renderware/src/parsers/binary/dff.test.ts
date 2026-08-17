@@ -392,7 +392,7 @@ describe('parseDff 2d-effect lights', () => {
   });
 });
 
-const dffPath = join(process.cwd(), 'tests', 'original', 'dff', 'building', 'washer.dff');
+const dffPath = join(process.cwd(), 'fixtures', 'original', 'dff', 'building', 'washer.dff');
 const dffExists = existsSync(dffPath);
 // Read lazily: describe.skipIf still evaluates the suite body during collection,
 // so only touch the filesystem when the asset is actually present.
@@ -420,7 +420,7 @@ describe.skipIf(!dffExists)('parseDff (real map model washer.dff)', () => {
   });
 });
 
-const admiralPath = join(process.cwd(), 'tests', 'original', 'vehicles', 'admiral.dff');
+const admiralPath = join(process.cwd(), 'fixtures', 'original', 'vehicles', 'admiral.dff');
 const admiralExists = existsSync(admiralPath);
 const admiral = admiralExists ? parseDff(toArrayBuffer(new Uint8Array(readFileSync(admiralPath)))) : null;
 
@@ -440,7 +440,7 @@ describe.skipIf(!admiralExists)('parseDff (real vehicle admiral.dff) reflection 
 // Anti-rip lock Variant B (see docs/open-issues/locked-dff.md): cheetah.dff's clump Struct size is bloated
 // to 0x0100000C so a boundary-respecting walk sees only the Struct. forEachClumpChild recovers via the
 // canonical 12-byte struct payload. Committed custom fixture (a modified/locked mod model).
-const LOCKED_DFF = 'tests/custom/locked-models/cheetah.dff';
+const LOCKED_DFF = 'fixtures/custom/locked-models/cheetah.dff';
 
 describe('parseDff (locked DFF — inflated clump-struct size)', () => {
   const buffer = toArrayBuffer(new Uint8Array(readFileSync(LOCKED_DFF)));
@@ -463,7 +463,7 @@ describe('parseDff (locked DFF — inflated clump-struct size)', () => {
 // 31 geometries but each item's size is bloated to swallow its siblings (+ 0x0 padding), so a boundary
 // walk finds only 8 / 16 and atomics index missing geometries. The count-based RW-style recovery restores
 // the full set. Committed custom fixture (a locked mod model). The game renders it whole (it reads by count).
-const INFLATED_DFF = 'tests/custom/locked-models/yosemite.dff';
+const INFLATED_DFF = 'fixtures/custom/locked-models/yosemite.dff';
 
 describe('parseDff (locked DFF — inflated atomic/geometry sizes)', () => {
   const clump = parseDff(toArrayBuffer(new Uint8Array(readFileSync(INFLATED_DFF))));
@@ -484,7 +484,7 @@ describe('parseDff (locked DFF — inflated atomic/geometry sizes)', () => {
 // the clump Struct (640 MB, Variant B), the FrameList (1.2 GB, overruns EOF) and the GeometryList (swallows
 // the trailing Atomics). Struct payload counts + leaf/child sizes stay honest, so forEachClumpChild recovers
 // each container's real end from its honest children. Committed custom fixture (a locked mod model).
-const OVERLOCKED_DFF = 'tests/custom/locked-models/walton.dff';
+const OVERLOCKED_DFF = 'fixtures/custom/locked-models/walton.dff';
 
 describe('parseDff (locked DFF — every container size bloated)', () => {
   const buffer = toArrayBuffer(new Uint8Array(readFileSync(OVERLOCKED_DFF)));
@@ -509,7 +509,7 @@ describe('parseDff (locked DFF — every container size bloated)', () => {
 // flag, which RenderWare honours. Trusting the bare byte skipped the UV block and read the TRIANGLES out of
 // UV float data (garbage indices up to 64512 for 1418 vertices) — masquerading as an anti-rip "lock" and
 // costing three field rounds (vanished casino → shard fields, 2026-07-15). Committed real fixture.
-const UV_FLAG_COUNT_DFF = 'tests/custom/locked-models/casroyale01_lvs.dff';
+const UV_FLAG_COUNT_DFF = 'fixtures/custom/locked-models/casroyale01_lvs.dff';
 
 describe('parseDff (uv-layer count from TEXTURED flags when the byte is 0)', () => {
   const clump = parseDff(toArrayBuffer(new Uint8Array(readFileSync(UV_FLAG_COUNT_DFF))));

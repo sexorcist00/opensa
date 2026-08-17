@@ -18,8 +18,8 @@ import { describe, expect, it } from 'vitest';
 import { compileScript } from '../../sdk/src/build';
 import { script as definition, SPEC } from './script';
 
-const MODEL = 'tests/original/vehicles/rhino.dff';
-const ORIGINAL = 'tests/original/cleo/rhino.cs';
+const MODEL = 'fixtures/original/vehicles/rhino.dff';
+const ORIGINAL = 'fixtures/original/cleo/rhino.cs';
 const CAR = 257;
 const FRAME_MS = 1000 / 60;
 /** The big DFF is 1.7 MB and the builder is not cheap — well past vitest's 5 s default. */

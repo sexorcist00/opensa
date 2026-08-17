@@ -18,7 +18,7 @@ OpenSA engine (it never touches `../src` beyond reusing its read-only RW parsers
 
 ```bash
 # inspect a vehicle DFF (structure + which materials carry reflective effects):
-npx tsx vehicle-optimizer/src/cli.ts --model ../../tests/original/dff/vehicle/infernus.dff
+npx tsx vehicle-optimizer/src/cli.ts --model ../../fixtures/original/dff/vehicle/infernus.dff
 
 # scale +10% (and, later, copy reflective effects from a reference) → vehicle-optimizer/out/infernus.dff:
 npx tsx vehicle-optimizer/src/cli.ts --model path/to/infernus.dff --scale 1.1 --prototype path/to/elegy.dff

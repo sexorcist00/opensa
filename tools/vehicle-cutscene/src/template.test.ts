@@ -7,11 +7,11 @@ import { type ClumpModel, writeClump } from './rig/clump-io';
 import { IDENTITY_ROTATION } from './rig/matrix';
 import { canonicalPartName, extractBikeTemplate, extractBoatTemplate, extractCarTemplate } from './template';
 
-const CS_BOBCAT = new Uint8Array(readFileSync('tests/original/dff/cutscene/csbobcat92.dff'));
-const CS_TAXI = new Uint8Array(readFileSync('tests/original/dff/cutscene/cstaxi92.dff'));
-const CS_REMINGTON = new Uint8Array(readFileSync('tests/original/dff/cutscene/csremington92.dff'));
-const CS_MTBIKE = new Uint8Array(readFileSync('tests/original/dff/cutscene/csmtbike92.dff'));
-const CS_DINGHY = new Uint8Array(readFileSync('tests/original/dff/cutscene/csdinghy.dff'));
+const CS_BOBCAT = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/csbobcat92.dff'));
+const CS_TAXI = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/cstaxi92.dff'));
+const CS_REMINGTON = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/csremington92.dff'));
+const CS_MTBIKE = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/csmtbike92.dff'));
+const CS_DINGHY = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/csdinghy.dff'));
 
 /** A minimal synthetic clump: named frames under a root, no HAnim — not a cutscene rig. */
 function clumpWithoutBones(): Uint8Array {
@@ -98,8 +98,8 @@ describe('extractCarTemplate', () => {
       // wheel02 binds at the left REAR but SMOKE1B animates it to the left FRONT (and wheel03 the
       // reverse). Classifying corners from the bind handed each left wheel the other end's mod-corner
       // shim — in game each sat 0.21 m off its arch. The anim pose is where the runtime puts the bone.
-      const csGlendale = new Uint8Array(readFileSync('tests/original/dff/cutscene/csglendale92.dff'));
-      const ifp = new Uint8Array(readFileSync('tests/original/anim/smoke1b.ifp'));
+      const csGlendale = new Uint8Array(readFileSync('fixtures/original/dff/cutscene/csglendale92.dff'));
+      const ifp = new Uint8Array(readFileSync('fixtures/original/anim/smoke1b.ifp'));
       const poses = wheelAnimPoses(buildVer2Buffer([{ data: ifp, name: 'smoke1b.ifp' }]));
       const wheelPoses = poses.get('csglendale92')!;
       expect(wheelPoses.get('wheel02')![1]).toBeCloseTo(1.792, 3); // the anim's left FRONT

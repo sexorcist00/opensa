@@ -10,7 +10,7 @@ import { basename, join } from 'node:path';
  *
  * Run: `npx tsx scripts/debug/cleo-census.ts [paths…] [--json]`
  *
- * Default corpus: `tests/original/cleo` (regenerate with `npm run test:fixtures`). The recon baseline
+ * Default corpus: `fixtures/original/cleo` (regenerate with `npm run test:fixtures`). The recon baseline
  * this must reproduce is in `docs/plans/097-cleo-basic/01-scm-decoding.md` (115 unique opcodes;
  * per-script counts 91/239/44/102/2085/64/64).
  */
@@ -19,7 +19,7 @@ const args = process.argv.slice(2);
 const json = args.includes('--json');
 const paths = args.filter((a) => !a.startsWith('--'));
 if (paths.length === 0) {
-  paths.push('tests/original/cleo');
+  paths.push('fixtures/original/cleo');
 }
 
 const files: string[] = [];

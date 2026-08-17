@@ -22,6 +22,6 @@ jobs:
       - run: npm ci
       - run: npm run lint # tsc --noEmit + eslint
 
-  # Tests are disabled in CI for now: the real-asset fixtures (tests/original/) are gitignored and
+  # Tests are disabled in CI for now: the real-asset fixtures (fixtures/original/) are gitignored and
   # regenerated locally from a GTA SA copy via `npm run test:fixtures`, which CI doesn't have. Run
   # `npm test` / `npm run e2e` locally. Re-enable once fixtures are CI-available (synthetic or provisioned).

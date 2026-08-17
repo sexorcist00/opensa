@@ -172,7 +172,7 @@ describe('parsePrelightInfo', () => {
 
 // A real stock tree: the LOD takes its prelit colour from the HD model, and a wrong average is exactly how the
 // re-encoded LODs ended up brighter than their HD at night.
-const CEDAR = 'tests/original/dff/night-colours/cedar1_hi.dff';
+const CEDAR = 'fixtures/original/dff/night-colours/cedar1_hi.dff';
 
 describe.skipIf(!existsSync(CEDAR))('stockPrelightColor (real cedar1_hi.dff)', () => {
   describe('positive cases', () => {

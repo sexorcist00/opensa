@@ -24,7 +24,7 @@ below rather than assumed.
 
 ## 1. The head is a real, named bone — measured
 
-Dumped from a stock ped (`tests/original/character/bmypol1.dff`) through the shipping
+Dumped from a stock ped (`fixtures/original/character/bmypol1.dff`) through the shipping
 `buildPedModel` path — SKIN ORDER, HAnim ids, and each bone's bind offset from its parent:
 
 ```

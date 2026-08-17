@@ -62,7 +62,7 @@ model name. It is added **for the tool's use now** and to be wired into the engi
 
 ## Fixtures (tests)
 
-Follow the `tests/original/` convention (`scripts/test-fixtures.ts`, `npm run test:fixtures` — gitignored,
+Follow the `fixtures/original/` convention (`scripts/test-fixtures.ts`, `npm run test:fixtures` — gitignored,
 regenerated from `game-src/original`): add fixtures that **copy** `data/{handling.cfg,vehicles.ide,
 carcols.dat,carmods.dat}` and **extract** a stock vehicle `dff`/`txd` (e.g. `admiral`) from `gta3.img`. Unit tests
 that touch real data use `describe.skipIf(!existsSync(...))` (as `build-vehicle.test.ts` does), plus synthetic

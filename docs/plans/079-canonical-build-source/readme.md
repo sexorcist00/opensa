@@ -79,7 +79,7 @@ every dev surface:
 
 The earlier draft said "converted output goes into `./public`". **Superseded 2026-07-21**: `./build/original`
 is git-ignored and ~1.4 GB — a Vite `public/` copies it on build. Serve it where it is. Mechanics: extend
-`scripts/serve-static.ts` with a `/build → build/` mount (it already maps `/viewer → tests/viewer`), or reuse
+`scripts/serve-static.ts` with a `/build → build/` mount (it already maps `/viewer → fixtures/viewer`), or reuse
 the harness's ranged server. Small committed test paks may still live in `apps/engine-lab/public/`.
 
 ### The missing primitive: an `http-dir` loader mode

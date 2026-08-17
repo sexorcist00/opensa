@@ -90,7 +90,7 @@ describe('scanModloaderMod', () => {
     });
 
     it('detects a UTF-16 loader file (BOM-aware read) — the real SA Brightened Project fixture', () => {
-      cpSync('tests/custom/modloader/utf16-loader.txt', join(dir, 'mod', 'Loader.txt'));
+      cpSync('fixtures/custom/modloader/utf16-loader.txt', join(dir, 'mod', 'Loader.txt'));
       const scan = scanModloaderMod(join(dir, 'mod'));
 
       expect(scan.loaderFound).toBe(true);

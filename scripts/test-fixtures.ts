@@ -1,18 +1,18 @@
 import { buildVer2Buffer, type ImgArchive, openArchive } from '@opensa/renderware/archive/img-archive';
 import { convertTo24h, parseTimecyc, stringifyTimecyc } from '@opensa/renderware/parsers/text/timecyc.parser';
 /**
- * Reconstruct the real-asset test fixtures (`tests/original/`) from a clean, UNMODIFIED GTA San Andreas
+ * Reconstruct the real-asset test fixtures (`fixtures/original/`) from a clean, UNMODIFIED GTA San Andreas
  * install under `game-src/original` (default). These are Rockstar assets, so they are NOT committed
- * (`tests/original/` is gitignored) — every contributor regenerates them locally on setup, or after
+ * (`fixtures/original/` is gitignored) — every contributor regenerates them locally on setup, or after
  * changing the manifest:
  *
  *   npm run test:fixtures
  *
- * Custom, non-Rockstar fixtures (`tests/custom/`) are a MIRROR of `fixtures-src/` — the curated,
+ * Custom, non-Rockstar fixtures (`fixtures/custom/`) are a MIRROR of `fixtures-src/` — the curated,
  * version-pinned, mod-derived and golden-snapshot files that have no other source (30 of 37 exist
  * nowhere else on disk: locked models, petro, Shrek, proper-fixes, txds, the cleo trace/listing
  * snapshots). Since 2026-08-17 (the user's call) NOTHING under `tests/` is committed and neither is
- * `fixtures-src/`: it lives locally and is backed up by hand; this script wipes `tests/custom/` and
+ * `fixtures-src/`: it lives locally and is backed up by hand; this script wipes `fixtures/custom/` and
  * copies it in FIRST, then the manifests run. A tree without `fixtures-src/` gets no custom fixtures
  * and the tests that need them skip (`skipIf(!existsSync)`) — loudly, in the summary below.
  * A `committed` fixture READS from `fixtures-src/` (a corpus subject whose mod folder no longer
@@ -29,7 +29,7 @@ import { convertTo24h, parseTimecyc, stringifyTimecyc } from '@opensa/renderware
  *
  * `data/timecyc_24h.dat` is generated here (the stock 24h expansion of timecyc.dat, no mod overlay).
  * Curated / version-pinned test models that can't be reproduced from a stock copy live under
- * `fixtures-src/proper-fixes-models/` (mirrored to `tests/custom/`) instead.
+ * `fixtures-src/proper-fixes-models/` (mirrored to `fixtures/custom/`) instead.
  */
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -50,11 +50,11 @@ type Fixture =
 const gameIndex = process.argv.indexOf('--game');
 const GAME = gameIndex >= 0 ? process.argv[gameIndex + 1] : 'original';
 const ROOT = join('game-src', GAME);
-const ARCHIVES = ['models/gta3.img', 'models/gta_int.img', 'models/cutscene.img'];
-const OUT = 'tests/original';
-/** The local, uncommitted source of the custom fixtures; mirrored to `tests/custom` on every run. */
+const ARCHIVES = ['models/gta3.img', 'models/gta_int.img', 'models/cutscene.img', 'anim/cuts.img'];
+const OUT = 'fixtures/original';
+/** The local, uncommitted source of the custom fixtures; mirrored to `fixtures/custom` on every run. */
 const CUSTOM_SRC = 'fixtures-src';
-const CUSTOM_OUT = 'tests/custom';
+const CUSTOM_OUT = 'fixtures/custom';
 
 const copy = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, from, type: 'copy' });
 const modFile = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, from, type: 'mod' });
@@ -183,6 +183,16 @@ const MANIFEST: readonly Fixture[] = [
   // frame carries `[0, 1.637, -0.35]` that the game destroys at load — the converter must too.
   extract('cscopcarla92.dff', 'dff/cutscene/cscopcarla92.dff'),
   extract('copcarla.dff', 'dff/cutscene/copcarla.dff'),
+  // The rotated-bone golden pair (plan 004 round 15): un-animated frames carry identity rotation at
+  // runtime, so the securica's authored rotation has to be baked into the vertices to stand upright.
+  extract('cssecurica92.dff', 'dff/cutscene/cssecurica92.dff'),
+  extract('securica.dff', 'dff/cutscene/securica.dff'),
+  // Two cutscene anims out of `anim/cuts.img` (plan 004 rounds 16 + 20): SMOKE1B poses the wheel corners
+  // over a lying bind, SYND_4A drives every wheel channel to ~zero — the wheel stash the installer patches.
+  // These four sat in the old fixture tree with no manifest line and were found the day the tree was
+  // regenerated from scratch (2026-08-17): a fixture without a manifest line is one `rm -rf` from gone.
+  extract('smoke1b.ifp', 'anim/smoke1b.ifp'),
+  extract('synd_4a.ifp', 'anim/synd_4a.ifp'),
   // The bike golden pair (plan 002 step 8): the vanilla bike rig has no wheel corners — every part is a
   // mesh bone in the chassis subtree; the stock donor must reproduce it.
   extract('csmtbike92.dff', 'dff/cutscene/csmtbike92.dff'),
@@ -349,7 +359,7 @@ function openArchives(): ImgArchive[] {
 /** The subfolders a `mods-src/<game>/<subject>` may hide its folders in (mod layers · vehicle layers). */
 const MODS_SRC_LAYERS: readonly string[] = ['common', 'sa', 'opensa', 'models', 'new'];
 
-/** `fixtures-src/` → `tests/custom/`, wiped first. Null when the source folder is absent (nothing touched). */
+/** `fixtures-src/` → `fixtures/custom/`, wiped first. Null when the source folder is absent (nothing touched). */
 function mirrorCustomFixtures(): null | number {
   if (!existsSync(CUSTOM_SRC)) {
     return null;

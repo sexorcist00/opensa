@@ -133,7 +133,7 @@ collide with `@opensa/cleo` (the runtime VM package), and the runtime never impo
   our own reading of the spec.
 - **Operand property tests:** `readOperand(emit(x)) === x` across the full type-byte set.
 - **Listing snapshots:** each authored script's disasm listing is a committed fixture — the diff
-  IS the behaviour change, same discipline as `tests/custom/cleo-listings/`.
+  IS the behaviour change, same discipline as `fixtures/custom/cleo-listings/`.
 - **Story tests:** each script runs headless on the recording host (`cleo-run` machinery) —
   behaviour asserted from the host-call story, per-frame instruction cost asserted against the
   script's declared budget.

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { parseSurfaceInfo, parseSurfaceNames } from './surfinfo.parser';
 
-const datPath = join(process.cwd(), 'tests', 'original', 'data', 'surfinfo.dat');
+const datPath = join(process.cwd(), 'fixtures', 'original', 'data', 'surfinfo.dat');
 const datExists = existsSync(datPath);
 const real = (): ReturnType<typeof parseSurfaceInfo> => parseSurfaceInfo(readFileSync(datPath, 'utf8'));
 const named = (name: string): ReturnType<typeof parseSurfaceInfo>[number] => {

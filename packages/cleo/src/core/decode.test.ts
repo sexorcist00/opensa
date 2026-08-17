@@ -5,7 +5,7 @@ import { CleoDecodeError, decodeScript } from './decode';
 import { opcodeDef } from './opcode-table';
 
 /** Real Sanny-compiled corpus scripts, copied by `npm run test:fixtures` (097/01 decision 6). */
-const CORPUS = 'tests/original/cleo';
+const CORPUS = 'fixtures/original/cleo';
 /** name → recon census instruction count — decode counts are a REGRESSION, not an aspiration. */
 const CENSUS: readonly (readonly [string, number])[] = [
   ['ferris', 91],
