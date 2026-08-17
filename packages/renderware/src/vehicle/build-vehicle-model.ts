@@ -9,7 +9,7 @@
  *   - `_dam` / `_vlo` are extra SUBMESHES on the same buffers (hidden via per-submesh visibility), not
  *     separate meshes toggled through a scene graph, which the own engine does not have.
  */
-import type { RWClump, RWGeometry, RWMaterial, RWUvAnimation } from '../parsers/binary/types';
+import type { RWClump, RWGeometry, RWMaterial, RWTriangle, RWUvAnimation } from '../parsers/binary/types';
 import type { VehicleTextures } from './textures';
 import type {
   VehicleBuildOptions,
@@ -25,6 +25,7 @@ import type {
 import { frameWorldTransform, rotationToQuat } from '../mesh/frame-transform';
 import { groupTrianglesByMaterial, NIGHT_AMBIENT } from '../mesh/prepare-clump';
 import { skyOcclusion } from './sky-occlusion';
+import { clusterTriangles } from './translucent-clusters';
 import { LampTag, MaterialClass, PaintSlot } from './types';
 import { variantTree } from './variants';
 import { tyreMaterials } from './wheel-tyre';
@@ -396,106 +397,124 @@ function appendGeometry(
       textures.hasAlphaIn(material, rw.uvLayers[0], tris),
     );
     const { color, klass, lamp, layer, nightLayer, paint, reflect } = surface;
-    const indexOffset = scratch.indices.length;
-    const center: [number, number, number] = [0, 0, 0];
-    // This group's own copy of each vertex it touches, keyed by the source index.
-    const emitted = new Map<number, number>();
-    const emit = (corner: number): number => {
-      const existing = emitted.get(corner);
-      if (existing !== undefined) {
-        return existing;
-      }
-      const index = scratch.positions.length / 3;
-      scratch.positions.push(rw.positions[corner * 3], rw.positions[corner * 3 + 1], rw.positions[corner * 3 + 2]);
-      if (rw.normals) {
-        scratch.normals.push(rw.normals[corner * 3], rw.normals[corner * 3 + 1], rw.normals[corner * 3 + 2]);
-      } else {
-        scratch.normals.push(0, 0, 1);
-      }
-      const uvs = rw.uvLayers[0];
-      scratch.uvs.push(uvs ? uvs[corner * 2] : 0, uvs ? uvs[corner * 2 + 1] : 0);
-      // PRELIT vertex colours modulate the material's (074/... — opensa-pack 003 phase 5g). SA bakes the
-      // map's lighting there and it is DARK: 2 972 of 3 000 map models carry a non-white set, mean luma
-      // 88/255, so ignoring it renders a building roughly three times too bright. Vehicles are unaffected
-      // by construction — not one of the game's 198 cars carries a prelit set at all.
-      const day = rw.prelitColors;
-      const night = rw.nightColors;
-      scratch.colors.push(
-        modulate(color[0], day, corner, 0),
-        modulate(color[1], day, corner, 1),
-        modulate(color[2], day, corner, 2),
-        color[3],
-      );
-      // The night set replaces the day colour as `dn` goes to 1. Without an authored one, synthesize it the
-      // way the welded cell path does — one night formula for the whole world, or a converted prop would
-      // disagree with the cell it stands in. But ONLY for prelit geometry: an asset with no prelit set is
-      // not part of the baked-lighting world (no car carries one), and darkening it here would dim every
-      // vehicle at midnight on top of the world light that already does that job.
-      const dayRgb = scratch.colors.slice(-4, -1);
-      scratch.night.push(
-        ...(night
-          ? [
-              modulate(color[0], night, corner, 0),
-              modulate(color[1], night, corner, 1),
-              modulate(color[2], night, corner, 2),
-            ]
-          : dayRgb.map((channel, index) => (day ? Math.round(channel * NIGHT_AMBIENT[index]) : channel))),
-        255,
-      );
-      scratch.meta.push(layer, nightLayer, paint, (lamp === null ? LampTag.none : LampTag[lamp]) | (klass << 4));
-      scratch.reflect.push(reflect[0], reflect[1], reflect[2], reflect[3]);
-      emitted.set(corner, index);
-
-      return index;
-    };
-    for (const tri of tris) {
-      scratch.indices.push(emit(tri.a), emit(tri.b), emit(tri.c));
-      for (const corner of [tri.a, tri.b, tri.c]) {
-        center[0] += rw.positions[corner * 3];
-        center[1] += rw.positions[corner * 3 + 1];
-        center[2] += rw.positions[corner * 3 + 2];
-      }
-    }
-    const corners = tris.length * 3;
-    const centroid: [number, number, number] = [center[0] / corners, center[1] / corners, center[2] / corners];
-    // Bounding radius about the centroid (074/16 sort fix): the translucent sort subtracts it, so a LARGE
-    // sheet (a raked windscreen) counts as nearer than its centre — a single centroid put the wheel OVER
-    // the glass overhang at down-looking angles. The AABB beside it is the exact form of the same idea:
-    // sorting by the sphere over-reached on SCATTERED submeshes (a gauge cluster spanning the dash, radius
-    // 1.8, counted as nearer than the window sheet in front of it), so the runtime keys on the nearest AABB
-    // corner where the bounds exist and falls back to `center − radius` on old fixtures.
-    let radiusSq = 0;
-    const min: [number, number, number] = [Infinity, Infinity, Infinity];
-    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
-    for (const tri of tris) {
-      for (const corner of [tri.a, tri.b, tri.c]) {
-        radiusSq = Math.max(
-          radiusSq,
-          (rw.positions[corner * 3] - centroid[0]) ** 2 +
-            (rw.positions[corner * 3 + 1] - centroid[1]) ** 2 +
-            (rw.positions[corner * 3 + 2] - centroid[2]) ** 2,
+    // A translucent group is emitted per spatial CLUSTER (`clusterTriangles`): the sort keys on a submesh's
+    // AABB, and one material spanning separate pieces (the comet's dash gauges + rear-shelf speakers, one
+    // submesh) has no honest single key — the speakers drew over the rear quarter glass from the front.
+    const clusters = surface.translucent ? clusterTriangles(tris, rw.positions) : [tris];
+    const geometry = rw;
+    const emitGroup = (tris: readonly RWTriangle[]): void => {
+      const indexOffset = scratch.indices.length;
+      const center: [number, number, number] = [0, 0, 0];
+      // This group's own copy of each vertex it touches, keyed by the source index.
+      const emitted = new Map<number, number>();
+      const emit = (corner: number): number => {
+        const existing = emitted.get(corner);
+        if (existing !== undefined) {
+          return existing;
+        }
+        const index = scratch.positions.length / 3;
+        scratch.positions.push(
+          geometry.positions[corner * 3],
+          geometry.positions[corner * 3 + 1],
+          geometry.positions[corner * 3 + 2],
         );
-        for (let axis = 0; axis < 3; axis += 1) {
-          min[axis] = Math.min(min[axis], rw.positions[corner * 3 + axis]);
-          max[axis] = Math.max(max[axis], rw.positions[corner * 3 + axis]);
+        if (geometry.normals) {
+          scratch.normals.push(
+            geometry.normals[corner * 3],
+            geometry.normals[corner * 3 + 1],
+            geometry.normals[corner * 3 + 2],
+          );
+        } else {
+          scratch.normals.push(0, 0, 1);
+        }
+        const uvs = geometry.uvLayers[0];
+        scratch.uvs.push(uvs ? uvs[corner * 2] : 0, uvs ? uvs[corner * 2 + 1] : 0);
+        // PRELIT vertex colours modulate the material's (074/... — opensa-pack 003 phase 5g). SA bakes the
+        // map's lighting there and it is DARK: 2 972 of 3 000 map models carry a non-white set, mean luma
+        // 88/255, so ignoring it renders a building roughly three times too bright. Vehicles are unaffected
+        // by construction — not one of the game's 198 cars carries a prelit set at all.
+        const day = geometry.prelitColors;
+        const night = geometry.nightColors;
+        scratch.colors.push(
+          modulate(color[0], day, corner, 0),
+          modulate(color[1], day, corner, 1),
+          modulate(color[2], day, corner, 2),
+          color[3],
+        );
+        // The night set replaces the day colour as `dn` goes to 1. Without an authored one, synthesize it the
+        // way the welded cell path does — one night formula for the whole world, or a converted prop would
+        // disagree with the cell it stands in. But ONLY for prelit geometry: an asset with no prelit set is
+        // not part of the baked-lighting world (no car carries one), and darkening it here would dim every
+        // vehicle at midnight on top of the world light that already does that job.
+        const dayRgb = scratch.colors.slice(-4, -1);
+        scratch.night.push(
+          ...(night
+            ? [
+                modulate(color[0], night, corner, 0),
+                modulate(color[1], night, corner, 1),
+                modulate(color[2], night, corner, 2),
+              ]
+            : dayRgb.map((channel, index) => (day ? Math.round(channel * NIGHT_AMBIENT[index]) : channel))),
+          255,
+        );
+        scratch.meta.push(layer, nightLayer, paint, (lamp === null ? LampTag.none : LampTag[lamp]) | (klass << 4));
+        scratch.reflect.push(reflect[0], reflect[1], reflect[2], reflect[3]);
+        emitted.set(corner, index);
+
+        return index;
+      };
+      for (const tri of tris) {
+        scratch.indices.push(emit(tri.a), emit(tri.b), emit(tri.c));
+        for (const corner of [tri.a, tri.b, tri.c]) {
+          center[0] += geometry.positions[corner * 3];
+          center[1] += geometry.positions[corner * 3 + 1];
+          center[2] += geometry.positions[corner * 3 + 2];
         }
       }
+      const corners = tris.length * 3;
+      const centroid: [number, number, number] = [center[0] / corners, center[1] / corners, center[2] / corners];
+      // Bounding radius about the centroid (074/16 sort fix): the translucent sort subtracts it, so a LARGE
+      // sheet (a raked windscreen) counts as nearer than its centre — a single centroid put the wheel OVER
+      // the glass overhang at down-looking angles. The AABB beside it is the exact form of the same idea:
+      // sorting by the sphere over-reached on SCATTERED submeshes (a gauge cluster spanning the dash, radius
+      // 1.8, counted as nearer than the window sheet in front of it), so the runtime keys on the nearest AABB
+      // corner where the bounds exist and falls back to `center − radius` on old fixtures.
+      let radiusSq = 0;
+      const min: [number, number, number] = [Infinity, Infinity, Infinity];
+      const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+      for (const tri of tris) {
+        for (const corner of [tri.a, tri.b, tri.c]) {
+          radiusSq = Math.max(
+            radiusSq,
+            (geometry.positions[corner * 3] - centroid[0]) ** 2 +
+              (geometry.positions[corner * 3 + 1] - centroid[1]) ** 2 +
+              (geometry.positions[corner * 3 + 2] - centroid[2]) ** 2,
+          );
+          for (let axis = 0; axis < 3; axis += 1) {
+            min[axis] = Math.min(min[axis], geometry.positions[corner * 3 + axis]);
+            max[axis] = Math.max(max[axis], geometry.positions[corner * 3 + axis]);
+          }
+        }
+      }
+      scratch.submeshes.push({
+        bounds: { max, min },
+        center: centroid,
+        damageGroup,
+        ...(plate ? { plate } : {}),
+        ...(tyre ? { tyre: true } : {}),
+        indexCount: tris.length * 3,
+        indexOffset,
+        kind,
+        lamp,
+        part,
+        radius: Math.sqrt(radiusSq),
+        translucent: surface.translucent,
+        ...(uvAnim === null ? {} : { uvAnim }),
+      });
+    };
+    for (const clusterTris of clusters) {
+      emitGroup(clusterTris);
     }
-    scratch.submeshes.push({
-      bounds: { max, min },
-      center: centroid,
-      damageGroup,
-      ...(plate ? { plate } : {}),
-      ...(tyre ? { tyre: true } : {}),
-      indexCount: tris.length * 3,
-      indexOffset,
-      kind,
-      lamp,
-      part,
-      radius: Math.sqrt(radiusSq),
-      translucent: surface.translucent,
-      ...(uvAnim === null ? {} : { uvAnim }),
-    });
   });
 }
 

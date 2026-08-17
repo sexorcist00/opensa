@@ -606,6 +606,38 @@ describe('buildVehicleModel', () => {
       expect(submesh.bounds!.max).toEqual([1, 1, 0]);
     });
 
+    it('a translucent material spanning separate pieces becomes one submesh PER piece — each with its own AABB', () => {
+      // The comet's `dials`: dash gauges + rear-shelf speakers on one material. One submesh has no honest
+      // sort key (its box's nearest point is the dash from the front, so the speakers drew over the rear
+      // quarter glass); split, each piece sorts by where IT is. An opaque material is never split.
+      const scattered = (alpha: number): RWGeometry => ({
+        ...geometry([material({ color: [200, 200, 200, alpha] })]),
+        positions: new Float32Array([0, 0.4, 0, 0.1, 0.4, 0, 0, 0.5, 0, 0, -1.4, 0, 0.1, -1.4, 0, 0, -1.3, 0]),
+        triangles: [
+          { a: 0, b: 1, c: 2, materialIndex: 0 },
+          { a: 3, b: 4, c: 5, materialIndex: 0 },
+        ],
+      });
+
+      const glass = buildVehicleModel(
+        clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [scattered(120)]),
+        textures(),
+      );
+      const opaque = buildVehicleModel(
+        clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [scattered(255)]),
+        textures(),
+      );
+
+      expect(opaque.submeshes).toHaveLength(1);
+      expect(glass.submeshes).toHaveLength(2);
+      expect(glass.submeshes.every((submesh) => submesh.translucent)).toBe(true);
+      const boxes = glass.submeshes.map((submesh) => submesh.bounds!).sort((a, b) => a.min[1] - b.min[1]);
+      expect(boxes[0].min[1]).toBeCloseTo(-1.4);
+      expect(boxes[0].max[1]).toBeCloseTo(-1.3);
+      expect(boxes[1].min[1]).toBeCloseTo(0.4);
+      expect(boxes[1].max[1]).toBeCloseTo(0.5);
+    });
+
     it('a door collects every part under its hinge frame — a mod glass atomic swings with it', () => {
       // The comet authors `glass_lf_ok` as its own atomic beside `door_lf_ok`, both under `door_lf_dummy`.
       // SA rotates the dummy's frame, so the whole subtree travels; the door therefore carries a part
