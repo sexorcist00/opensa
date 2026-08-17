@@ -13,6 +13,9 @@
     },
     "apps/sa-map-viewer": {
       "entry": ["src/main.tsx"]
+    },
+    "apps/cutscene-converter": {
+      "entry": ["src/main/main.ts", "src/main/preload.ts", "src/main/convert-child.ts", "scripts/*.ts"]
     }
   }
 }

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { validateGame, validateOut } from './validate';
+import { validateCars, validateGame, validateOut } from './validate';
 
 const GAME_FILES = [
   'anim/cuts.img',
@@ -69,6 +69,23 @@ describe('the three folder validations', () => {
 
     it('refuses an output folder that does not exist', () => {
       expect(validateOut(dir, join(dir, 'nope')).verdicts[0].code).toBe('path.missing');
+    });
+
+    it('blocks a cars folder that does not exist', () => {
+      expect(validateCars(dir, join(dir, 'nope')).verdicts[0].code).toBe('path.missing');
+    });
+
+    // The census is the TOOL's answer; when it cannot be read at all that is an error here, not a
+    // half-empty coverage warning that reads as "your mods are fine, there is just nothing to do".
+    it('blocks when the census cannot be read, carrying the tool own words in the detail', () => {
+      const cars = join(dir, 'cars');
+      mkdirSync(cars);
+
+      const report = validateCars(join(dir, 'not-a-game'), cars);
+
+      expect(report.level).toBe('error');
+      expect(report.verdicts[report.verdicts.length - 1].code).toBe('cars.unreadable');
+      expect(report.verdicts[report.verdicts.length - 1].detail?.length).toBeGreaterThan(0);
     });
   });
 

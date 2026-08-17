@@ -5,7 +5,6 @@
 import type { VerdictReport } from '@opensa/validation';
 
 export interface ConverterApi {
-  readonly cancelConvert: () => void;
   readonly convert: (request: ConvertRequest) => Promise<ConvertResult>;
   readonly onConvertLine: (listener: (line: ConvertLine) => void) => () => void;
   readonly openFolder: (path: string) => Promise<void>;
@@ -36,7 +35,6 @@ export interface ConvertResult {
 export type FolderKind = 'cars' | 'game' | 'out';
 
 export const IPC = {
-  cancelConvert: 'convert:cancel',
   convert: 'convert:run',
   convertLine: 'convert:line',
   openFolder: 'folder:open',

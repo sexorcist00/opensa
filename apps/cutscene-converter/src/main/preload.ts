@@ -9,7 +9,6 @@ import type { ConverterApi, ConvertLine, ConvertRequest, FolderKind } from '../s
 import { IPC } from '../shared/ipc';
 
 const api: ConverterApi = {
-  cancelConvert: () => void ipcRenderer.invoke(IPC.cancelConvert),
   convert: (request: ConvertRequest) => ipcRenderer.invoke(IPC.convert, request),
   onConvertLine: (listener) => {
     const handler = (_event: unknown, line: ConvertLine): void => listener(line);

@@ -13,10 +13,6 @@ import type { ConvertLine, ConvertRequest, ConvertResult } from '../shared/ipc';
 
 let running: ChildProcess | undefined;
 
-export function cancelConvert(): void {
-  running?.kill();
-}
-
 export function convert(request: ConvertRequest, onLine: (line: ConvertLine) => void): Promise<ConvertResult> {
   if (running) {
     return Promise.reject(new Error('a conversion is already running'));

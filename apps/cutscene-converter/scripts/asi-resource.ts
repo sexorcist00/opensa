@@ -26,13 +26,13 @@ export interface AsiResource {
 }
 
 /** The resource, or `undefined` when the binary has not been built. */
-export function readAsi(): AsiResource | undefined {
+export function readAsi(source: string = ASI_SOURCE): AsiResource | undefined {
   try {
-    const contents = readFileSync(ASI_SOURCE);
+    const contents = readFileSync(source);
 
     return {
-      bytes: statSync(ASI_SOURCE).size,
-      path: ASI_SOURCE,
+      bytes: statSync(source).size,
+      path: source,
       sha1: createHash('sha1').update(contents).digest('hex'),
     };
   } catch {
@@ -41,11 +41,11 @@ export function readAsi(): AsiResource | undefined {
 }
 
 /** The resource, or a build failure naming the command that produces it. */
-export function requireAsi(): AsiResource {
-  const asi = readAsi();
+export function requireAsi(source: string = ASI_SOURCE): AsiResource {
+  const asi = readAsi(source);
 
   if (!asi) {
-    throw new Error(`cutscene-converter: ${ASI_NAME} is missing at ${ASI_SOURCE}.\n${HOW_TO_BUILD}`);
+    throw new Error(`cutscene-converter: ${ASI_NAME} is missing at ${source}.\n${HOW_TO_BUILD}`);
   }
 
   return asi;

@@ -23,10 +23,9 @@ import { type Dirent, mkdirSync, readdirSync, readFileSync, writeFileSync } from
 import { basename, dirname, join } from 'node:path';
 
 import { type MermaidDiagram, renderMermaidSvgs } from './lib/mermaid-render';
+import { type Layer, layerOf } from './lib/package-layer';
 
 const ROOT = process.cwd();
-
-type Layer = 'app' | 'engine' | 'tool';
 
 interface Pkg {
   /** Mermaid-safe node id (e.g. `lod_generator`). */
@@ -35,29 +34,6 @@ interface Pkg {
   layer: Layer;
   name: string;
   srcDir: string;
-}
-
-const TAG_LAYERS: Record<string, Layer> = { 'type:app': 'app', 'type:engine': 'engine', 'type:tool': 'tool' };
-
-/**
- * `nx.tags` is the authority — it is what `@nx/enforce-module-boundaries` reads, so it is what the graph has
- * to draw. The folder rule is only the fallback for a package that declares no tag; where the two disagree
- * (`packages/validation` is `type:tool`) the folder would put a `node:fs` package into the runtime graph.
- */
-function layerOf(dir: string, tags: readonly string[]): Layer {
-  for (const tag of tags) {
-    if (tag in TAG_LAYERS) {
-      return TAG_LAYERS[tag];
-    }
-  }
-
-  if (dir.startsWith('apps/')) {
-    return 'app';
-  }
-
-  return dir.startsWith('tools/') || dir.startsWith('tools-debug/') || dir.startsWith('asi/') || dir.startsWith('cleo/')
-    ? 'tool'
-    : 'engine';
 }
 
 function loadPackages(): Map<string, Pkg> {

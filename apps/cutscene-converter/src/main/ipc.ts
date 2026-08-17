@@ -5,7 +5,7 @@ import type { ConvertRequest, FolderKind } from '../shared/ipc';
 
 import { IPC } from '../shared/ipc';
 import { copyAsiInto } from './asi';
-import { cancelConvert, convert } from './convert';
+import { convert } from './convert';
 import { validateCars, validateGame, validateOut } from './validate';
 
 const PICKER_TITLE: Record<FolderKind, string> = {
@@ -39,6 +39,5 @@ export function registerIpc(window: BrowserWindow): void {
     return result;
   });
 
-  ipcMain.handle(IPC.cancelConvert, () => cancelConvert());
   ipcMain.handle(IPC.openFolder, (_event, path: string) => shell.openPath(path));
 }
