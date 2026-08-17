@@ -164,15 +164,21 @@ spawn it by name to look at it ([plan 006](../tools/vehicle-installer/docs/plans
 ### What the fleet replaced, in a browser
 
 ```bash
-npm run cars                                # http://localhost:5178, game `original`
-npm run cars -- --game gostown --port 5200
+npm run cars                                # http://localhost:5178, game `original`, target `sa`
+npm run cars:sa                             # a LAYERED vehicles folder: common + sa (cars AND screenshots)
+npm run cars:opensa                         # … common + opensa
+npm run cars -- --game gostown --port 5200 [--target sa|opensa]
 ```
 
 One local page per game: every installed car with its model id, `<slot> replaced to: <car>`, the author,
 what the mod brings (paint jobs · tuning · new colours · car4 · a CLEO script), and the stock picture beside
 the field screenshot. Rendered per request off `mods-src/<game>/vehicles`, so a reload shows the tree as it
-is now; a `new/` candidate appears marked `from new/`
-([readme](../scripts/cars-server/readme.md), [plan](../scripts/cars-server/docs/plans/001-cars-server.md)).
+is now; a `new/` candidate appears marked `from new/`. The header names the TARGET; on a layered tree each car's
+screenshot comes from its OWN layer's `screenshots/` (`common/` or `<target>/`, `.png`/`.jpg`/`.webp` alike —
+never the other layer's picture under the same slot), on a flat/structured one from `screenshots/` and the
+target does not apply; a car with no screenshot is a warning at the top of the page naming the file to save
+([readme](../scripts/cars-server/readme.md), [plan](../scripts/cars-server/docs/plans/001-cars-server.md),
+[plan 002](../scripts/cars-server/docs/plans/002-layered-screenshots.md)).
 
 ### Cutscene vehicles: census / conversion
 

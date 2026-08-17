@@ -81,7 +81,7 @@ config time, like mods. Misspell a layer (`open-sa/`) and it is a car folder bes
 | _(any other name)_ | **Flat tree** — one car, exactly as before. Present in a flat tree, this is a car; present beside `models/`, it is an ERROR (see below). |
 | `models/` | The installed fleet. One folder per slot. |
 | `new/` | Candidates. A car here **replaces** the `models/` car holding the same slot — trying a replacement costs no rename, move or deletion. A slot `models/` does not have simply installs. |
-| `screenshots/` | Pictures. Never installed, never scanned for a car. |
+| `screenshots/` | Pictures (`.png`, `.jpg`/`.jpeg`, `.webp`), one per SLOT, named like the car folder. Never installed, never scanned for a car. **In a layered tree it lives INSIDE each layer** (`common/screenshots/`, `sa/screenshots/`, `opensa/screenshots/`) and a car's picture is read from ITS OWN layer only — a `sa/models/x` car looks in `sa/screenshots/`, never in `common/screenshots/` (the picture there under its slot is of the `common` car it displaced); without one it is reported missing. A `screenshots/` at the ROOT of a layered tree is a stray folder beside the layers → refused, like a misspelled layer. |
 
 Three things are refused rather than guessed, each because guessing installs a fleet nobody asked for:
 a **stray folder** beside the reserved ones (which is what a misspelled `New/`, `model/` or `Screenshots` is,

@@ -93,6 +93,7 @@ describe('resolveVehicleSources', () => {
       const plan = resolveVehicleSources(root);
 
       expect(plan.strategy).toBe('flat');
+      expect(plan.layers).toEqual([{ name: 'flat' }]);
       expect(plan.sources.map((source) => source.name)).toEqual(['admiral - 230 - k1real24', 'comet - 911 - funky']);
       expect(plan.sources.every((source) => source.origin === 'flat')).toBe(true);
     });
@@ -187,6 +188,10 @@ describe('resolveVehicleSources — layered (plan 010)', () => {
       const plan = resolveVehicleSources(root, 'sa');
 
       expect(plan.strategy).toBe('layered');
+      expect(plan.layers).toEqual([
+        { name: 'common', subdir: 'common' },
+        { name: 'sa', subdir: 'sa' },
+      ]);
       expect(plan.layersSkipped).toEqual(['opensa']);
       expect(plan.sources.map((source) => [source.slot, source.layer, source.name])).toEqual([
         ['admiral', 'common', 'admiral - a - x'],

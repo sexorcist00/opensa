@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import type { BuildTarget } from './target';
 
-import { planLayers } from './layers';
+import { planLayers, type PlannedLayer } from './layers';
 
 /**
  * The shapes a `mods-src/<game>/vehicles` folder may have (vehicle-installer plans 007 and 010).
@@ -50,6 +50,10 @@ export interface VehicleSource {
 }
 
 export interface VehicleSourcePlan {
+  /** The build layers APPLIED, in apply order (`common` then the target's), each with its folder as spelled on
+   *  disk — what a reader of the layers' side folders (`screenshots/`) overlays in the same order. A flat or
+   *  structured tree is one layer rooted at `--in`. */
+  readonly layers: readonly PlannedLayer[];
   /** Build layers present but NOT applied (the other target's) — logged, never dropped silently. */
   readonly layersSkipped: readonly string[];
   /** What a `new/` car — or the target layer's car — displaced; logged by the caller, because a fleet that
@@ -134,7 +138,7 @@ export function resolveVehicleSources(inPath: string, target?: BuildTarget): Veh
   const entries = subdirectories(inPath);
   const plan = planLayers(entries, target, 'car');
   if (plan.strategy === 'flat') {
-    return { layersSkipped: [], ...resolveOneLayer(inPath, entries, undefined) };
+    return { ...resolveOneLayer(inPath, entries, undefined), layers: plan.layers, layersSkipped: [] };
   }
   // Layered: every layer resolved on its own (flat or structured), then folded by slot in apply order —
   // the target's layer is the last writer, so its car takes the slot.
@@ -153,7 +157,13 @@ export function resolveVehicleSources(inPath: string, target?: BuildTarget): Veh
     }
   }
 
-  return { layersSkipped: plan.skipped, overrides, sources: byName([...bySlot.values()]), strategy: 'layered' };
+  return {
+    layers: plan.layers,
+    layersSkipped: plan.skipped,
+    overrides,
+    sources: byName([...bySlot.values()]),
+    strategy: 'layered',
+  };
 }
 
 function byName(sources: readonly VehicleSource[]): VehicleSource[] {
@@ -190,7 +200,7 @@ function resolveOneLayer(
   inPath: string,
   entries: readonly string[],
   layer: string | undefined,
-): Omit<VehicleSourcePlan, 'layersSkipped' | 'strategy'> & { strategy: 'flat' | 'structured' } {
+): Omit<VehicleSourcePlan, 'layers' | 'layersSkipped' | 'strategy'> & { strategy: 'flat' | 'structured' } {
   const reserved = planVehicleLayers(entries);
   if (reserved === undefined) {
     return { overrides: [], sources: layerSources(inPath, undefined, entries, layer), strategy: 'flat' };

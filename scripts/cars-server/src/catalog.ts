@@ -1,7 +1,7 @@
 import type { BuildTarget } from '@opensa/tool-kit/target';
 
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
-import { parseVehicleSlot, resolveVehicleSources } from '@opensa/tool-kit/vehicles-dir';
+import { parseVehicleSlot, resolveVehicleSources, type VehicleSource } from '@opensa/tool-kit/vehicles-dir';
 import { decodeSettings, parseVehicleSettings } from '@opensa/vehicle-installer/settings';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -9,11 +9,18 @@ import { join } from 'node:path';
 import { vehicleTags } from './tags';
 
 export interface Catalog {
+  /** Installed cars with NO screenshot under their slot (`new/` candidates excluded — theirs is withheld on
+   *  purpose), in page order — the warning at the top of the page. */
+  readonly missingShots: readonly MissingShot[];
+  /** The `screenshots/` folders read, one per applied layer in apply order (`common` first) — for the header. */
+  readonly screenshotDirs: readonly string[];
   /** Slot → the screenshot's absolute path (only for slots that have one). */
   readonly screenshots: ReadonlyMap<string, string>;
   readonly sections: readonly CatalogSection[];
   /** Slot → the stock car's `data:` URI. */
   readonly stockImages: ReadonlyMap<string, string>;
+  /** How the vehicles folder is shaped — a layered one is what makes the target matter. */
+  readonly strategy: 'flat' | 'layered' | 'structured';
   readonly total: number;
   /** Cars whose slot the metadata does not know — shown last, under their own heading. */
   readonly unknownSection: string;
@@ -49,6 +56,17 @@ export interface CatalogSection {
 /** The bundled `data/original.json`: section name → the stock cars it holds. */
 export type Metadata = Record<string, { items: MetadataItem[] }>;
 
+export interface MissingShot {
+  /** The screenshot filename to SAVE — the car's folder name + `.png` (any of {@link SHOT_EXTENSIONS} is read;
+   *  matched by SLOT, so a name typo still joins). */
+  readonly expectedFile: string;
+  /** The car folder, with its layer when there is one (`sa/models/admiral - …`). */
+  readonly folder: string;
+  /** The section anchor + slot, so the warning can jump to the card. */
+  readonly sectionAnchor: string;
+  readonly slot: string;
+}
+
 /** One item of the bundled metadata: the STOCK car, keyed by the slot it occupies. */
 interface MetadataItem {
   /** A `data:` URI — the stock car's picture. The bundled `src` (a wiki URL) is deliberately not used. */
@@ -62,7 +80,11 @@ interface MetadataItem {
 /** Where a car with no metadata section lands, so nothing is silently dropped from the page. */
 const UNKNOWN_SECTION = 'Not in the metadata';
 
+/** What counts as a screenshot; the same slot may be a `.png` in `common/` and a `.jpg` in `sa/`. */
 const SHOT_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
+
+/** The pictures folder beside the cars — at the tree's root, or inside EACH build layer of a layered tree. */
+const SCREENSHOTS_DIR = 'screenshots';
 
 export interface CatalogOptions {
   /** `game-src/<game>` — read for the stock `vehicles.ide` when a mod declares no id of its own. */
@@ -86,6 +108,12 @@ export interface CatalogOptions {
  *
  * The fleet is the resolver's, `new/` candidates included, because that is what the build installs — but a
  * candidate is MARKED and gets no screenshot: the picture filed under its slot is of the car it displaced.
+ *
+ * Screenshots follow the layers the fleet does: a flat/structured tree has ONE `screenshots/` at its root; a
+ * layered tree has one per layer, and **a car's picture is read from its OWN layer only** — a `sa/models/x`
+ * car looks in `sa/screenshots/`, never in `common/screenshots/` (the picture filed there under its slot is of
+ * the `common` car it displaced — the same lie a `new/` candidate's incumbent picture would be). A car
+ * without a picture in its layer is reported missing. The other target's folder is never read.
  */
 export function buildCatalog(options: CatalogOptions): Catalog {
   const stockImages = new Map<string, string>();
@@ -98,23 +126,46 @@ export function buildCatalog(options: CatalogOptions): Catalog {
     }
   }
 
-  const screenshots = indexScreenshots(join(options.vehiclesPath, 'screenshots'));
+  const plan = resolveVehicleSources(options.vehiclesPath, options.target);
+  // One index per applied layer, keyed by the layer name (`flat` for an unlayered tree); a car reads its own.
+  const shotsByLayer = new Map<string, Map<string, string>>();
+  const screenshotDirs: string[] = [];
+  for (const layer of plan.layers) {
+    const directory = join(options.vehiclesPath, layer.subdir ?? '', SCREENSHOTS_DIR);
+    screenshotDirs.push(directory);
+    shotsByLayer.set(layer.name, indexScreenshots(directory));
+  }
+  const screenshots = new Map<string, string>();
   const stockIds = stockVehicleIds(options.gamePath);
   const bySection = new Map<string, CatalogCar[]>();
+  const missing: (Omit<MissingShot, 'sectionAnchor'> & { section: string })[] = [];
   let total = 0;
-  for (const source of resolveVehicleSources(options.vehiclesPath, options.target).sources) {
+  for (const source of plan.sources) {
     const car = describe(source.folder, source.name, source.slot, stockIds);
     const section = sectionOf.get(source.slot) ?? UNKNOWN_SECTION;
     // A `new/` candidate is shown because the BUILD installs it — dropping it would leave the slot's
     // incumbent on the page under a car the build no longer ships. Its screenshot is withheld: the picture
     // in `screenshots/` is of the car it displaced, and showing that under the candidate is a lie.
     const isCandidate = source.origin === 'new';
+    const shot = shotsByLayer.get(source.layer ?? 'flat')?.get(source.slot);
+    const hasShot = shot !== undefined;
+    if (hasShot) {
+      screenshots.set(source.slot, shot);
+    }
+    if (!isCandidate && !hasShot) {
+      missing.push({
+        expectedFile: `${source.name}${SHOT_EXTENSIONS[0]}`,
+        folder: sourceLabel(source),
+        section,
+        slot: source.slot,
+      });
+    }
     bySection.set(section, [
       ...(bySection.get(section) ?? []),
       {
         ...car,
         hasOriginal: stockImages.has(source.slot),
-        hasShot: !isCandidate && screenshots.has(source.slot),
+        hasShot: !isCandidate && hasShot,
         isCandidate,
       },
     ]);
@@ -123,21 +174,35 @@ export function buildCatalog(options: CatalogOptions): Catalog {
 
   // Section order is the metadata's own (`Sports Cars` first, as authored), with the catch-all last.
   const ordered = [...Object.keys(options.metadata), UNKNOWN_SECTION].filter((name) => bySection.has(name));
+  const missingShots = ordered.flatMap((section) =>
+    missing
+      .filter((entry) => entry.section === section)
+      .sort((a, b) => a.slot.localeCompare(b.slot, 'en'))
+      .map(({ expectedFile, folder, slot }) => ({ expectedFile, folder, sectionAnchor: anchorOf(section), slot })),
+  );
 
   return {
+    missingShots,
+    screenshotDirs,
     screenshots,
     sections: ordered.map((name) => ({
-      anchor: name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, ''),
+      anchor: anchorOf(name),
       cars: (bySection.get(name) ?? []).sort((a, b) => a.slot.localeCompare(b.slot, 'en')),
       name,
     })),
     stockImages,
+    strategy: plan.strategy,
     total,
     unknownSection: UNKNOWN_SECTION,
   };
+}
+
+/** URL fragment for a section heading. */
+function anchorOf(section: string): string {
+  return section
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 /** Read one car folder: the three name fields, the id it declares, and what it ships. */
@@ -193,6 +258,13 @@ function indexScreenshots(directory: string): Map<string, string> {
   }
 
   return shots;
+}
+
+/** `sa/models/<name>` for a layered source, `models/<name>` for a structured one, the name for a flat one. */
+function sourceLabel(source: VehicleSource): string {
+  return [source.layer, source.origin === 'flat' ? undefined : source.origin, source.name]
+    .filter((part): part is string => part !== undefined)
+    .join('/');
 }
 
 /** The stock `vehicles.ide` ids, so a mod that declares no ide row still shows the id it takes over. */

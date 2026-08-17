@@ -84,6 +84,8 @@
     "build:game:original:sa": "NODE_OPTIONS=--max-old-space-size=12288 tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/original --in ./mods-src/original --out ./build/original --exclude opensa",
     "build:prod": "tsc -b && OPENSA_NO_VIEWERS=true OPENSA_DEBUGGER_HIDE=true vite build",
     "cars": "tsx scripts/cars-server/src/server.ts",
+    "cars:opensa": "tsx scripts/cars-server/src/server.ts --target opensa",
+    "cars:sa": "tsx scripts/cars-server/src/server.ts --target sa",
     "cleo:opcodes": "tsx packages/cleo/scripts/generate-opcodes.ts",
     "cleo:whitelist": "tsx cleo/sdk/scripts/generate-whitelist.ts",
     "dev": "vite",

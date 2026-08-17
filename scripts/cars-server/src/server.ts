@@ -2,8 +2,9 @@
  * cars-server — a local page showing what the vehicle fleet REPLACED: the stock car beside the mod that took
  * its slot, its author, and what the mod brings (paint jobs, tuning, colours, a CLEO script).
  *
- *   npm run cars                          # http://localhost:5178, game `original`
- *   npm run cars -- --game gostown --port 5200 [--target sa|opensa]   (layered vehicles folder: default sa)
+ *   npm run cars                          # http://localhost:5178, game `original`, target `sa`
+ *   npm run cars:sa | npm run cars:opensa # the two targets of a LAYERED vehicles folder (common + sa|opensa)
+ *   npm run cars -- --game gostown --port 5200 [--target sa|opensa]
  *
  * Internal tool, local only: the catalog is rebuilt on every page load, so editing `mods-src` and hitting
  * reload shows the new fleet. See `scripts/cars-server/readme.md` and its plan.
@@ -26,7 +27,8 @@ function argValue(flag: string, fallback: string): string {
 }
 
 const game = argValue('--game', 'original');
-// A LAYERED vehicles folder shows `common` + this target's layer; a flat/structured one ignores it.
+// A LAYERED vehicles folder shows `common` + this target's layer (each car's screenshot from its OWN layer); a flat/structured
+// one ignores it. The page names the target either way, so the reader knows which fleet is on screen.
 const target = parseBuildTarget(argValue('--target', 'sa'));
 const port = Number(argValue('--port', '5178'));
 const vehiclesPath = resolve('mods-src', game, 'vehicles');
@@ -54,8 +56,12 @@ app.get('/', (_request, response) => {
   response.type('html').send(
     render({
       game,
+      layered: catalog.strategy === 'layered',
+      missingShots: catalog.missingShots,
+      screenshotDirs: catalog.screenshotDirs.map((dir) => relative(process.cwd(), dir)),
       sections: catalog.sections,
       source: relative(process.cwd(), vehiclesPath),
+      target,
       total: catalog.total,
     }),
   );
@@ -87,7 +93,8 @@ app.get('/shot/:slot', (request, response) => {
 
 app.listen(port, () => {
   console.log(
-    `cars-server: ${catalog.total} car(s) in ${catalog.sections.length} section(s) from ${vehiclesPath} — ` +
+    `cars-server [${target}]: ${catalog.total} car(s) in ${catalog.sections.length} section(s) from ` +
+      `${vehiclesPath} (${catalog.strategy}; screenshots per layer: ${catalog.screenshotDirs.join(', ')}) — ` +
       `http://localhost:${port}`,
   );
 });

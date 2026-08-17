@@ -4,9 +4,21 @@ A local page showing what the vehicle fleet **replaced**: the stock car beside t
 its author, and what the mod brings. Internal tool — no build step, no auth, nothing persisted.
 
 ```sh
-npm run cars                              # http://localhost:5178, game `original`
-npm run cars -- --game gostown --port 5200
+npm run cars                              # http://localhost:5178, game `original`, target `sa`
+npm run cars:sa                           # a LAYERED vehicles folder: common + sa
+npm run cars:opensa                       # … common + opensa
+npm run cars -- --game gostown --port 5200 [--target sa|opensa]
 ```
+
+The header carries the **target** as a badge. On a layered `mods-src/<game>/vehicles` (`common/` + `sa/` +
+`opensa/`, [plan 010](../../tools/vehicle-installer/docs/plans/010-layered-vehicles.md)) it decides BOTH the
+fleet and the pictures: a car's screenshot is read from ITS OWN layer's `screenshots/` (`common/` or
+`<target>/`) — never the other layer's picture under the same slot, which is of the car it displaced; the
+other target's folder is never read. On a
+flat/structured tree the pictures come from `screenshots/` and the target does not apply — the header says
+so. **A car with no screenshot is a warning at the top of the page** — slot, the filename to save
+(`<car folder name>.png`, `.jpg`/`.jpeg`/`.webp` also read), its folder, a link to the card
+([plan 002](./docs/plans/002-layered-screenshots.md)).
 
 Every card carries the model id, `<slot> replaced to: <car>`, the author, the tags below, and two pictures —
 **Original** (the stock car, from the bundled metadata) and **Replaced** (the field screenshot). The catalog
@@ -14,11 +26,11 @@ is rebuilt on every page load, so editing `mods-src` and hitting reload shows th
 
 ## Where the three sources meet
 
-| Source                                                 | Gives                                                                     |
-| ------------------------------------------------------ | ------------------------------------------------------------------------- |
-| `data/original.json` (committed)                       | 19 sections × 212 stock cars: the section, the SLOT and a `data:` picture |
-| `mods-src/<game>/vehicles` via `resolveVehicleSources` | the fleet the BUILD installs — `models/`, overridden per slot by `new/`   |
-| `mods-src/<game>/vehicles/screenshots/`                | the replaced car in the field                                             |
+| Source                                                                                              | Gives                                                                     |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `data/original.json` (committed)                                                                    | 19 sections × 212 stock cars: the section, the SLOT and a `data:` picture |
+| `mods-src/<game>/vehicles` via `resolveVehicleSources`                                              | the fleet the BUILD installs — `models/`, overridden per slot by `new/`   |
+| `mods-src/<game>/vehicles/screenshots/` — or, layered, the car's own layer's `<layer>/screenshots/` | the replaced car in the field (`.png`, `.jpg`/`.jpeg`, `.webp`)           |
 
 **Joined on the SLOT, never on the folder name.** All three line up 1:1 on the real tree, but five
 screenshots do not match their folder's name character for character

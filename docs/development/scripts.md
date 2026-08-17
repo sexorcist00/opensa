@@ -113,11 +113,13 @@ tool: express + handlebars, rendered per request off `mods-src/<game>/vehicles`,
 reloading shows the new fleet.
 
 ```sh
-npm run cars                                # http://localhost:5178, game `original`
-npm run cars -- --game gostown --port 5200
+npm run cars                                # http://localhost:5178, game `original`, target `sa`
+npm run cars:sa | npm run cars:opensa       # a LAYERED vehicles folder: common + that target (cars and screenshots)
+npm run cars -- --game gostown --port 5200 [--target sa|opensa]
 ```
 
-It is a folder rather than a file (a view, a catalog and the bundled stock metadata), so it keeps its own
+The header names the target; on a layered tree each car's screenshot comes from its OWN layer's `screenshots/`
+([plan 002](../../scripts/cars-server/docs/plans/002-layered-screenshots.md)). It is a folder rather than a file (a view, a catalog and the bundled stock metadata), so it keeps its own
 [readme](../../scripts/cars-server/readme.md) and
 [plan](../../scripts/cars-server/docs/plans/001-cars-server.md) beside the code — including where the tags
 come from and why the three sources are joined on the SLOT and never on the folder name.
