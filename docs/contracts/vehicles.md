@@ -60,11 +60,21 @@ a rebake converted the exhaust while the car kept its old model.
   the NUL bytes does (UTF-16 is what most Windows-authored mods ship). Read as UTF-8 a UTF-16 file parses to
   nothing at all, silently.
 
-### The `vehicles` folder itself — `models/` + `new/`
+### The `vehicles` folder itself — `models/` + `new/`, and the `common/sa/opensa` layers
 
-`mods-src/<game>/vehicles` has two legal shapes, and `resolveVehicleSources` (`@opensa/tool-kit/vehicles-dir`)
+`mods-src/<game>/vehicles` has three legal shapes, and `resolveVehicleSources` (`@opensa/tool-kit/vehicles-dir`)
 decides which one it is looking at. Every tool that reads this folder goes through it, so the driving fleet
 and the cutscene fleet cannot disagree about what is in the build.
+
+**Layered** (plan 010, 2026-08-17): the top level is `common/` + `sa/` + `opensa/` (all optional) — the SAME
+layers, the same planner (`@opensa/tool-kit/layers`) and the same refusals as a mods folder
+([mods.md](mods.md) §1). Each layer is itself flat or `models/`+`new/`. `common` resolves first, then the
+layer of the target being built, and **the target layer's car takes the SLOT** from the `common` car — logged
+as `sa/models/<car> replaces common/models/<car>`. Reading a layered tree needs the target: the pipeline
+passes its own, `vehicle-installer --target`, `--rebake --kind` (the kind IS the target), `vehicle-cutscene
+--target`, `cars-server --target` (default `sa`). Without one it is refused, not guessed. A layered vehicles
+folder makes the `vehicles` stage target-dependent, so a run building BOTH targets over it is refused at
+config time, like mods. Misspell a layer (`open-sa/`) and it is a car folder beside layers → refused (below).
 
 | Folder | What it is |
 | --- | --- |

@@ -27,4 +27,6 @@ Out of scope (see the plans): animations (`ped.ifp`), `pedstats`/voice/audio, co
 population groups.
 
 See [`docs/plans`](./docs/plans) for the design: [001 architecture](./docs/plans/001-architecture.md),
-[002 add/replace peds](./docs/plans/002-add-replace-peds.md), [003 strip](./docs/plans/003-strip.md).
+[002 add/replace peds](./docs/plans/002-add-replace-peds.md), [003 strip](./docs/plans/003-strip.md),
+[004 node API](./docs/plans/004-node-api.md), [005 layered `common/sa/opensa`](./docs/plans/005-layered-peds.md)
+(`--target sa|opensa` picks the layer of a layered `--in`).

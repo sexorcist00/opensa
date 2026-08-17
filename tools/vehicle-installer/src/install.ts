@@ -1,8 +1,9 @@
 import type { ArchiveFamilyMember } from '@opensa/tool-kit/archive/img';
+import type { BuildTarget } from '@opensa/tool-kit/target';
 
 import { createImg, openImg, writeImgFamily } from '@opensa/tool-kit/archive/img';
 import { registerImgArchives } from '@opensa/tool-kit/game-dir';
-import { resolveVehicleSources } from '@opensa/tool-kit/vehicles-dir';
+import { resolveVehicleSources, type VehicleSourcePlan } from '@opensa/tool-kit/vehicles-dir';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, parse, resolve, sep } from 'node:path';
 
@@ -22,6 +23,8 @@ export interface InstallOptions {
   outPath: string;
   /** Reduce the output to ONLY the installed vehicles (gta3.img + the four data files). Default off. */
   strip?: boolean;
+  /** Which layer of a LAYERED `--in` applies after `common` (plan 010); a flat/structured tree ignores it. */
+  target?: BuildTarget;
 }
 
 /** Refuse to wipe a dangerous `--out` — the filesystem root, or a path that is (or contains) `--game` / `--in`. */
@@ -55,8 +58,7 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
   rmSync(outPath, { force: true, recursive: true });
   cpSync(gamePath, outPath, { force: true, recursive: true });
 
-  const { overrides, sources: vehicles } = resolveVehicleSources(inPath);
-  overrides.forEach(({ by, replaced }) => console.log(`vehicle-installer: new/${by} replaces models/${replaced}`));
+  const { sources: vehicles } = logVehiclePlan(resolveVehicleSources(inPath, options.target), options.target);
   const imgNames = new Set<string>();
   const models = new Set<string>();
   const handlingIds = new Set<string>();
@@ -134,4 +136,16 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
   );
 
   return archives;
+}
+
+/** Say which layers a layered `--in` applied and what every override displaced — a fleet that changed silently is the bug. */
+export function logVehiclePlan(plan: VehicleSourcePlan, target: BuildTarget | undefined): VehicleSourcePlan {
+  if (plan.strategy === 'layered') {
+    const layers = [...new Set(plan.sources.map((source) => source.layer))].filter(Boolean).join(' → ');
+    const unused = plan.layersSkipped.length > 0 ? `; ${plan.layersSkipped.join(', ')} not for this target` : '';
+    console.log(`vehicle-installer: layered vehicles for target ${target} — ${layers || 'nothing applied'}${unused}`);
+  }
+  plan.overrides.forEach(({ by, replaced }) => console.log(`vehicle-installer: ${by} replaces ${replaced}`));
+
+  return plan;
 }

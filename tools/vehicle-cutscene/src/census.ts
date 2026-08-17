@@ -1,3 +1,5 @@
+import type { BuildTarget } from '@opensa/tool-kit/target';
+
 import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { cleanLines, sectionedParse } from '@opensa/renderware/parsers/text/text-lines';
 import { resolveVehicleSources } from '@opensa/tool-kit/vehicles-dir';
@@ -137,8 +139,8 @@ export function loadCensus(gamePath: string): Census {
  * ships `<model>.dff` + `<model>.txd`). Two folders shipping the same model: the alphabetically last
  * wins, matching the installer's apply order.
  */
-export function matchMods(slots: readonly CutsceneSlot[], inPath: string): SlotReadiness[] {
-  const mods = indexModFolders(inPath);
+export function matchMods(slots: readonly CutsceneSlot[], inPath: string, target?: BuildTarget): SlotReadiness[] {
+  const mods = indexModFolders(inPath, target);
 
   return slots.map((slot) => {
     const mod = mods.get(slot.model);
@@ -167,9 +169,9 @@ function branchOf(ideType: string): CutsceneBranch {
  * The MODEL still comes from the `.dff` basename, never from the folder name: a slot is matched to whoever
  * ships its donor geometry, and one folder can ship several models.
  */
-function indexModFolders(inPath: string): Map<string, { folder: string; hasTxd: boolean }> {
+function indexModFolders(inPath: string, target?: BuildTarget): Map<string, { folder: string; hasTxd: boolean }> {
   const mods = new Map<string, { folder: string; hasTxd: boolean }>();
-  for (const source of resolveVehicleSources(inPath).sources) {
+  for (const source of resolveVehicleSources(inPath, target).sources) {
     const files = readdirSync(source.folder).map((file) => file.toLowerCase());
     for (const file of files) {
       if (!file.endsWith('.dff')) {

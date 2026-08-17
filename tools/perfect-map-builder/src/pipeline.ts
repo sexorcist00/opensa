@@ -7,7 +7,6 @@ import { buildTreeLods } from '@opensa/lod-trees-generator/build';
 import { parseOnlyList, runOptimizer, summarizeReport } from '@opensa/map-optimizer/run';
 import { SA_TREE_MODELS } from '@opensa/map-placement/vegetation';
 import { install as installMods } from '@opensa/mod-installer/install';
-import { isLayeredModTree } from '@opensa/mod-installer/layers';
 import { buildOpensaLods } from '@opensa/opensa-lod-generator/build';
 import { packGameDir } from '@opensa/opensa-pack/pack';
 import { install as installPeds } from '@opensa/ped-installer/install';
@@ -27,6 +26,7 @@ import { buildProcobjLods } from '@opensa/sa-procobj-placement/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { writeArchiveManifest } from '@opensa/tool-kit/archive/layout';
 import { countImgArchives } from '@opensa/tool-kit/game-dir';
+import { isLayeredTree } from '@opensa/tool-kit/layers';
 import { checkLodLinks, formatLodLink } from '@opensa/tool-kit/lod-links';
 import { type BuildTarget } from '@opensa/tool-kit/target';
 import { installCutscene } from '@opensa/vehicle-cutscene/install';
@@ -267,30 +267,33 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     // A LAYERED mods folder (mod-installer plan 011) makes this stage target-DEPENDENT, and the stage sits
     // in the chain both targets share — so a run that would build BOTH cannot serve it. Refused HERE,
     // before any stage runs, rather than by producing one install and calling it two.
-    refuseLayeredBothTargets(source(subfolders.mods), until, excluded);
+    refuseLayeredBothTargets(source(subfolders.mods), 'mods', until, excluded);
     chain.push({
       name: 'mods',
       run: (game, out) => installMods({ gamePath: game, inPath: source(subfolders.mods), outPath: out, target }),
     });
   }
   if (populated(subfolders.vehicles)) {
+    refuseLayeredBothTargets(source(subfolders.vehicles), 'vehicles', until, excluded);
     chain.push({
       name: 'vehicles',
       // The installer returns the archive FAMILY it wrote (one file, or numbered siblings once the cap
       // bites). Registering a sibling in `gta.dat` belongs to the split stage, not here — img-splitter plan
       // 001 step 4 — so this stage contributes no fragment yet and the installer warns if one appears.
-      run: (game, out) => void installVehicles({ gamePath: game, inPath: source(subfolders.vehicles), outPath: out }),
+      run: (game, out) =>
+        void installVehicles({ gamePath: game, inPath: source(subfolders.vehicles), outPath: out, target }),
     });
   }
   // The cutscene stage exists only downstream of a RUN vehicles stage: the conversion reads the installed
   // game (merged carcols, mod TXDs as txdp parents), so on a tree without them every slot fails closure.
   // `--exclude vehicles` therefore drops this stage too — loudly, because a silently missing stage reads
   // as a broken build (build:game:original:sa excludes vehicles today).
-  stageCutscene(chain, excluded, populated(subfolders.vehicles), source(subfolders.vehicles));
+  stageCutscene(chain, excluded, populated(subfolders.vehicles), source(subfolders.vehicles), target);
   if (populated(subfolders.peds)) {
+    refuseLayeredBothTargets(source(subfolders.peds), 'peds', until, excluded);
     chain.push({
       name: 'peds',
-      run: (game, out) => installPeds({ gamePath: game, inPath: source(subfolders.peds), outPath: out }),
+      run: (game, out) => installPeds({ gamePath: game, inPath: source(subfolders.peds), outPath: out, target }),
     });
   }
   // map-optimizer prelight FORCE list (user decision, reversing the earlier only-mode): the statistical pass
@@ -812,8 +815,9 @@ function runCutsceneStage(
   game: string,
   inPath: string,
   out: string,
+  target: BuildTarget,
 ): { fragment: CutsceneFragment; stage: 'cutscene' } {
-  const summary = installCutscene({ gamePath: game, inPath, outPath: out });
+  const summary = installCutscene({ gamePath: game, inPath, outPath: out, target });
   if (summary.errors.length > 0) {
     const named = summary.errors.map((error) => `${error.csName}: ${error.message}`).join('\n  ');
     throw new Error(`cutscene conversion failed for ${summary.errors.length} slot(s):\n  ${named}`);
@@ -848,6 +852,7 @@ function stageCutscene(
   excluded: ReadonlySet<ExcludableStage>,
   vehiclesPopulated: boolean,
   vehiclesSource: string,
+  target: BuildTarget,
 ): void {
   if (!vehiclesPopulated) {
     return;
@@ -859,7 +864,7 @@ function stageCutscene(
 
     return;
   }
-  chain.push({ name: 'cutscene', run: (game, out) => runCutsceneStage(game, vehiclesSource, out) });
+  chain.push({ name: 'cutscene', run: (game, out) => runCutsceneStage(game, vehiclesSource, out, target) });
 }
 
 /** FLA ID-pool budgets for the real-SA build — mirrors the operative FILE_TYPE_* values in the target
@@ -1468,15 +1473,16 @@ function planChain<T extends { name: ExcludableStage }>(
  */
 function refuseLayeredBothTargets(
   modsPath: string,
+  what: 'mods' | 'peds' | 'vehicles',
   until: StageName | undefined,
   excluded: ReadonlySet<ExcludableStage>,
 ): void {
   const bothTargets = runsStage('sa', until, excluded) && runsStage('opensa', until, excluded);
-  if (!bothTargets || !isLayeredModTree(modsPath)) {
+  if (!bothTargets || !isLayeredTree(modsPath)) {
     return;
   }
   throw new Error(
-    `${modsPath} is a LAYERED mods folder (common/sa/opensa), so its mod set differs per target — but this ` +
+    `${modsPath} is a LAYERED ${what} folder (common/sa/opensa), so its content differs per target — but this ` +
       'run builds both `sa` and `opensa` out of one shared chain. Build them one at a time: ' +
       '--exclude opensa, then --exclude sa.',
   );

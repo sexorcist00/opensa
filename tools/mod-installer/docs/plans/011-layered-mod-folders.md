@@ -91,7 +91,7 @@ is recorded here as the option if that ever stops being true.
 
 ## Steps
 
-- [x] **1. Layer resolution, as a pure function.** New `src/layers.ts`: given the immediate subfolders of
+- [x] **1. Layer resolution, as a pure function.** New `src/layers.ts` (**moved to `@opensa/tool-kit/layers` on 2026-08-17** — vehicle-installer plan 010 and ped-installer plan 005 read their folders through the same planner): given the immediate subfolders of
       `--in` and an optional target, return the ordered mod ROOTS to walk plus a strategy label
       (`flat` / `layered`) and the per-layer counts for the log. No filesystem writes, no install logic.
       Verification: unit tests, negative first per the repo's order — mixed tree throws naming the stray

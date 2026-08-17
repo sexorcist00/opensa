@@ -40,7 +40,7 @@ import { basename, join, resolve } from 'node:path';
 import type { RebakeOptions, RebakeReport } from './rebake-shared';
 
 import { applyVehicle } from './apply-vehicle';
-import { FEATURES_TABLE } from './install';
+import { FEATURES_TABLE, logVehiclePlan } from './install';
 import {
   addedCarWarning,
   mergeFeatureTable,
@@ -63,8 +63,7 @@ export function rebakeVehicles(options: RebakeOptions): RebakeReport {
   const only = options.only ? new Set(options.only.map((name) => name.toLowerCase())) : null;
   // The SAME resolution the install runs (plan 007): a flat `--in`, or `models/` overridden per slot by
   // `new/`. A rebake that read the tree its own way would bake a car the build does not carry.
-  const { overrides, sources } = resolveVehicleSources(inPath);
-  overrides.forEach(({ by, replaced }) => console.log(`vehicle-installer: new/${by} replaces models/${replaced}`));
+  const { sources } = logVehiclePlan(resolveVehicleSources(inPath, options.target), options.target);
 
   const failed: { error: string; model: string }[] = [];
   const rebaked: { bytes: number; model: string }[] = [];

@@ -1,3 +1,5 @@
+import type { BuildTarget } from '@opensa/tool-kit/target';
+
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 import { parseVehicleSlot, resolveVehicleSources } from '@opensa/tool-kit/vehicles-dir';
 import { decodeSettings, parseVehicleSettings } from '@opensa/vehicle-installer/settings';
@@ -67,6 +69,8 @@ export interface CatalogOptions {
   readonly gamePath: string;
   /** The bundled metadata, already parsed. */
   readonly metadata: Metadata;
+  /** Which layer of a LAYERED vehicles folder is shown after `common` — the target the page describes. */
+  readonly target?: BuildTarget;
   /** `mods-src/<game>/vehicles`. */
   readonly vehiclesPath: string;
 }
@@ -98,7 +102,7 @@ export function buildCatalog(options: CatalogOptions): Catalog {
   const stockIds = stockVehicleIds(options.gamePath);
   const bySection = new Map<string, CatalogCar[]>();
   let total = 0;
-  for (const source of resolveVehicleSources(options.vehiclesPath).sources) {
+  for (const source of resolveVehicleSources(options.vehiclesPath, options.target).sources) {
     const car = describe(source.folder, source.name, source.slot, stockIds);
     const section = sectionOf.get(source.slot) ?? UNKNOWN_SECTION;
     // A `new/` candidate is shown because the BUILD installs it — dropping it would leave the slot's

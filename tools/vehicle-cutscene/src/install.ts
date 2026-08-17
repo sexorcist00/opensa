@@ -1,4 +1,5 @@
 import type { ArchiveIndex } from '@opensa/tool-kit/archive/layout';
+import type { BuildTarget } from '@opensa/tool-kit/target';
 
 import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
@@ -61,6 +62,8 @@ export interface CutsceneInstallOptions {
   plateTown?: string;
   /** Escape hatch: on a closure miss, copy the parent TXD into the cs TXD instead of erroring. */
   selfContainedTxd?: boolean;
+  /** Which layer of a LAYERED `inPath` (common/sa/opensa) the fleet is read with — the build's target. */
+  target?: BuildTarget;
 }
 
 export interface CutsceneInstallSummary {
@@ -123,7 +126,7 @@ export function installCutscene(options: CutsceneInstallOptions): CutsceneInstal
   }
 
   const census = loadCensus(gamePath);
-  const readiness = matchMods(census.slots, inPath).filter(
+  const readiness = matchMods(census.slots, inPath, options.target).filter(
     (entry) => !options.only || options.only.has(entry.slot.model) || options.only.has(entry.slot.csName),
   );
 

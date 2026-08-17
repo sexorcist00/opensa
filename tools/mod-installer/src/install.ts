@@ -1,5 +1,6 @@
 import type { BuildTarget } from '@opensa/tool-kit/target';
 
+import { planLayers, subdirectories } from '@opensa/tool-kit/layers';
 import { cpSync, rmSync } from 'node:fs';
 import { join, parse, resolve, sep } from 'node:path';
 
@@ -7,7 +8,6 @@ import { applyMod } from './apply-mod';
 import { bakeMod } from './bake-mod';
 import { checkDanglingModels } from './dangling-models';
 import { compactStockInstIpls, mergeModInstIpls } from './ipl-slot-merge';
-import { planModLayers, subdirectories } from './layers';
 
 export interface InstallOptions {
   gamePath: string;
@@ -50,7 +50,7 @@ export function install(options: InstallOptions): void {
   // WHICH mods, and in what order: a flat `--in` is every subfolder (today's shape), a layered one is
   // `common` then the target's own layer (plan 011). Planned and LOGGED before anything is applied — a
   // layer that quietly contributed nothing is the failure this shape has to make impossible.
-  const plan = planModLayers(subdirectories(inPath), options.target);
+  const plan = planLayers(subdirectories(inPath), options.target);
   const roots = plan.layers.map((layer) => ({
     mods: sortMods(subdirectories(layer.subdir === undefined ? inPath : join(inPath, layer.subdir))),
     name: layer.name,

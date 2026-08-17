@@ -54,7 +54,10 @@ from `--exclude` — `--exclude sa` builds for `opensa`, anything that still bui
 common chain is shared and its content has to satisfy the host that still has ceilings. `--target opensa`
 without `--exclude sa` is refused for the same reason. The run prints the target it resolved, and the procobj
 stage prints that layer's price against it (objects · permanent text rows · rows/object).
-NB `--target` means a DIRECTORY in `vehicle-installer --rebake` — same word, unrelated meaning.
+NB `--target` means a DIRECTORY in `vehicle-installer --rebake` — same word, unrelated meaning; there the
+layer of a LAYERED vehicles folder is picked by `--kind`. `vehicle-installer`/`ped-installer`/`vehicle-cutscene`
+`--target sa|opensa` and `cars-server --target` (default `sa`) pick the layer of a layered `--in`
+(`common/sa/opensa`, same planner as mods — 2026-08-17).
 
 `--procobj-density` is the scatter density cutoff for the procobj stage — **1 = vanilla, max 3** (the
 scatter's candidate ceiling; above it there are no candidates left to keep and the build refuses). The run

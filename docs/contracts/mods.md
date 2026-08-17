@@ -29,7 +29,7 @@ The mods folder has two shapes, and which one it is comes from the names of its 
 | Shape | `--in` holds | What applies |
 | --- | --- | --- |
 | **Flat** (the default) | mod folders | all of them, in numeric-aware order |
-| **Layered** | `common/` and/or `sa/` and/or `opensa/`, each holding mod folders | `common` first, then the folder named after the **target being built** (`--target sa` / `--target opensa`). The other target's layer is not applied. |
+| **Layered** | `common/` and/or `sa/` and/or `opensa/`, each holding mod folders | `common` first, then the folder named after the **target being built** (`--target sa` / `--target opensa`). The other target's layer is not applied. **The same three layers, planner and refusals apply to `mods-src/<game>/vehicles` (each layer flat or `models/`+`new/`, the target layer wins the SLOT — [vehicles.md](vehicles.md) §1) and to `mods-src/<game>/peds` (the target layer's ped is the last writer of its model)** — `@opensa/tool-kit/layers`, one planner for all three (2026-08-17). |
 
 Every layer is optional, and a game keeps the flat shape until someone splits it. Inside a layer nothing
 changes — same mod folders, same numbering, same two shapes above.

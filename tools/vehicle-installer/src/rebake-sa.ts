@@ -30,6 +30,7 @@ import { basename, join, resolve } from 'node:path';
 import type { RebakeOptions, RebakeReport } from './rebake-shared';
 
 import { applyVehicle } from './apply-vehicle';
+import { logVehiclePlan } from './install';
 import {
   addedCarWarning,
   mergeFeatureTable,
@@ -47,8 +48,7 @@ export function rebakeVehiclesSa(options: RebakeOptions): RebakeReport {
   requireBuiltGame(targetPath);
 
   const only = options.only ? new Set(options.only.map((name) => name.toLowerCase())) : null;
-  const { overrides, sources } = resolveVehicleSources(inPath);
-  overrides.forEach(({ by, replaced }) => console.log(`vehicle-installer: new/${by} replaces models/${replaced}`));
+  const { sources } = logVehiclePlan(resolveVehicleSources(inPath, options.target), options.target);
 
   const { added, refused, selected, skipped } = selectCars(sources, targetPath, only);
 

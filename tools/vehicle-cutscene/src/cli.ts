@@ -1,3 +1,4 @@
+import { parseBuildTarget } from '@opensa/tool-kit/target';
 /**
  * vehicle-cutscene CLI. Converts installed GTA-SA vehicle mods into their cutscene counterparts. Usage:
  *   tsx tools/vehicle-cutscene/src/cli.ts --game <path> --in <vehicles-dir> --out <path> [--only <model,…>] [--inspect]
@@ -63,7 +64,7 @@ function main(): void {
 
   const census = loadCensus(gamePath);
   const only = argValue('--only');
-  const readiness = filterOnly(matchMods(census.slots, inPath), only);
+  const readiness = filterOnly(matchMods(census.slots, inPath, parseBuildTarget(argValue('--target'))), only);
 
   printCensus(census, readiness);
 

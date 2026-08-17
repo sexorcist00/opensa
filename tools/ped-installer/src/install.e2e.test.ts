@@ -130,3 +130,30 @@ describe.skipIf(!hasFixtures)('install (end-to-end, real peds.ide fixture)', () 
     });
   });
 });
+
+describe.skipIf(!hasFixtures)('install — layered peds folder (plan 005)', () => {
+  describe('negative cases', () => {
+    it('refuses a layered --in without a target, before writing anything', () => {
+      const game = makeGame();
+      makePed('common/bmypol1 - HD cop', { 'bmypol1.dff': Uint8Array.of(1) });
+      const out = join(root, 'out');
+
+      expect(() => install({ gamePath: game, inPath: join(root, 'in'), outPath: out })).toThrow(/needs a target/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('applies common then the target layer — the target layer is the last writer for one model', () => {
+      const game = makeGame();
+      makePed('common/bmypol1 - HD cop', { 'bmypol1.dff': Uint8Array.of(1) });
+      makePed('sa/bmypol1 - the sa one', { 'bmypol1.dff': Uint8Array.of(2) });
+      makePed('opensa/bmypol1 - the opensa one', { 'bmypol1.dff': Uint8Array.of(3) });
+      const out = join(root, 'out');
+
+      install({ gamePath: game, inPath: join(root, 'in'), outPath: out, target: 'sa' });
+
+      const img = openImg(new Uint8Array(readFileSync(join(out, 'models', 'gta3.img'))));
+      expect(new Uint8Array(img.get('bmypol1.dff')!)[0]).toBe(2);
+    });
+  });
+});

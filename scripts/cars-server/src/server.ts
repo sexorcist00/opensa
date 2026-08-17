@@ -3,11 +3,12 @@
  * its slot, its author, and what the mod brings (paint jobs, tuning, colours, a CLEO script).
  *
  *   npm run cars                          # http://localhost:5178, game `original`
- *   npm run cars -- --game gostown --port 5200
+ *   npm run cars -- --game gostown --port 5200 [--target sa|opensa]   (layered vehicles folder: default sa)
  *
  * Internal tool, local only: the catalog is rebuilt on every page load, so editing `mods-src` and hitting
  * reload shows the new fleet. See `scripts/cars-server/readme.md` and its plan.
  */
+import { parseBuildTarget } from '@opensa/tool-kit/target';
 import express from 'express';
 import Handlebars from 'handlebars';
 import { readFileSync } from 'node:fs';
@@ -25,6 +26,8 @@ function argValue(flag: string, fallback: string): string {
 }
 
 const game = argValue('--game', 'original');
+// A LAYERED vehicles folder shows `common` + this target's layer; a flat/structured one ignores it.
+const target = parseBuildTarget(argValue('--target', 'sa'));
 const port = Number(argValue('--port', '5178'));
 const vehiclesPath = resolve('mods-src', game, 'vehicles');
 const gamePath = resolve('game-src', game);
@@ -42,12 +45,12 @@ function render(context: object): string {
  * The last render's catalog, which the image routes read. Rebuilt when the PAGE is requested and not per
  * image: a card asks for two pictures, so rebuilding there would rescan 212 folders 424 times per reload.
  */
-let catalog: Catalog = buildCatalog({ gamePath, metadata, vehiclesPath });
+let catalog: Catalog = buildCatalog({ gamePath, metadata, target, vehiclesPath });
 
 const app = express();
 
 app.get('/', (_request, response) => {
-  catalog = buildCatalog({ gamePath, metadata, vehiclesPath });
+  catalog = buildCatalog({ gamePath, metadata, target, vehiclesPath });
   response.type('html').send(
     render({
       game,

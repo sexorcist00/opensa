@@ -13,7 +13,9 @@ never the app. The dependency picture is the tools cluster of
   `loader.txt` bake into `gta.dat`/`gta3.img`; cumulative, alphabetical. Lib `src/install.ts`. Its `--in`
   has two shapes (plan 011): FLAT — every subfolder a mod — or LAYERED `common/` + `sa/` + `opensa/`, where
   `common` applies first and then the layer of `--target`, which makes the stage target-dependent and a
-  both-target run over it a config-time refusal. Resolution lives in `src/layers.ts`.
+  both-target run over it a config-time refusal. Resolution lives in `@opensa/tool-kit/layers` (moved out of
+  the tool 2026-08-17 — vehicle-installer plan 010 and ped-installer plan 005 read their `--in` through the
+  SAME planner, so a layered vehicles/peds folder behaves exactly like a layered mods folder).
 - **vehicle-installer** — vehicle mod folders → `gta3.img` + merged `handling.cfg` / `vehicles.ide` /
   `carcols.dat` / `carmods.dat`. A mod's settings file is decoded by its own encoding (UTF-16 is what most
   authors ship) and every block it cannot classify is reported. A mod's `features.txt` (Modloader/IVF) is

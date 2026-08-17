@@ -1,4 +1,7 @@
-import { cpSync, readdirSync, rmSync } from 'node:fs';
+import type { BuildTarget } from '@opensa/tool-kit/target';
+
+import { planLayers, subdirectories } from '@opensa/tool-kit/layers';
+import { cpSync, rmSync } from 'node:fs';
 import { join, parse, resolve, sep } from 'node:path';
 
 import { applyPed } from './apply-ped';
@@ -15,6 +18,8 @@ export interface InstallOptions {
   player?: string;
   /** Reduce the output to ONLY the installed peds (gta3.img + peds.ide), plus the player ped. Default off. */
   strip?: boolean;
+  /** Which layer of a LAYERED `--in` (common/sa/opensa) applies after `common` (plan 005). */
+  target?: BuildTarget;
 }
 
 /** Refuse to wipe a dangerous `--out` — the filesystem root, or a path that is (or contains) `--game` / `--in`. */
@@ -46,14 +51,27 @@ export function install(options: InstallOptions): void {
   rmSync(outPath, { force: true, recursive: true });
   cpSync(gamePath, outPath, { force: true, recursive: true });
 
-  const peds = readdirSync(inPath, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'en'));
+  // A flat `--in` is one layer rooted at itself; a LAYERED one (plan 005 — the same `common`/`sa`/`opensa`
+  // as mod-installer, ONE planner) applies `common` then the target's layer, so a later layer's ped of the
+  // same model is the last writer. Planned and logged before anything is applied.
+  const plan = planLayers(subdirectories(inPath), options.target, 'ped');
+  if (plan.strategy === 'layered') {
+    const unused = plan.skipped.length > 0 ? `; ${plan.skipped.join(', ')} not for this target` : '';
+    console.log(
+      `ped-installer: layered peds for target ${options.target} — ${plan.layers.map((l) => l.name).join(' → ')}${unused}`,
+    );
+  }
+  const peds = plan.layers.flatMap((layer) => {
+    const root = layer.subdir === undefined ? inPath : join(inPath, layer.subdir);
+
+    return subdirectories(root)
+      .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'en'))
+      .map((name) => join(root, name));
+  });
   const imgNames = new Set<string>();
   const models = new Set<string>();
   for (const ped of peds) {
-    const applied = applyPed(join(inPath, ped), outPath);
+    const applied = applyPed(ped, outPath);
     applied.imgNames.forEach((name) => imgNames.add(name));
     if (applied.model) {
       models.add(applied.model);

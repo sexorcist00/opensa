@@ -127,7 +127,7 @@ flowchart TB
 Every row but `lod` is an `--exclude` value (`EXCLUDABLE_STAGES`). Between stages 7 and 8 the pipeline
 collects generated models + `lod-exclude.json` into `excludeItems` for both final LOD generators.
 
-## A mods folder may be LAYERED per target (mod-installer plan 011)
+## A mods folder may be LAYERED per target (mod-installer plan 011; vehicles and peds since 2026-08-17)
 
 `mods-src/<game>/mods` is either FLAT — every subfolder a mod, what every game shipped until 2026-08-15 —
 or LAYERED: `common/`, `sa/`, `opensa/`, all optional, each holding mod folders. A layered folder applies
@@ -147,9 +147,13 @@ different models by `scripts/debug/mod-id-collisions.ts`.
 `new/` (candidates) and `screenshots/` (never installed). A car in `new/` REPLACES the `models/` car holding
 the same SLOT — the folder name's first field, `<slot> - <car> - <author>` — so an A/B renames nothing.
 
-Unlike the mods layering this is **not** target-dependent, so it costs the pipeline nothing: no stage is
-refused and both the `vehicles` stage and its `cutscene` shadow read the folder through the one resolver,
-`@opensa/tool-kit/vehicles-dir`. That sharing is the point — the cutscene fleet is built from the cars the
+The `models/`+`new/` shape is not target-dependent. **A vehicles folder — and a peds folder — may ALSO be
+layered `common/` + `sa/` + `opensa/`** (vehicle-installer plan 010, ped-installer plan 005, 2026-08-17): the
+same planner as mods (`@opensa/tool-kit/layers`), each vehicles layer flat or structured, the target layer
+winning the SLOT (peds: the model). That shape IS target-dependent, so the same config-time refusal covers
+`vehicles/` and `peds/` in a both-target run, and the pipeline passes its resolved target to `installVehicles`,
+`installCutscene` and `installPeds`. Both the `vehicles` stage and its `cutscene` shadow read the folder through
+the one resolver, `@opensa/tool-kit/vehicles-dir`. That sharing is the point — the cutscene fleet is built from the cars the
 install chose, and a second reading of the tree is how the two drift apart. Contract (including the three
 shapes it refuses): [`contracts/vehicles.md`](../contracts/vehicles.md) §1.
 

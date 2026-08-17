@@ -5,6 +5,7 @@
  *     --in    folder of vehicles (each an immediate subfolder: <model>.dff/.txd + <model>.settings.txt)
  *     --out   output install dir (wiped + rebuilt each run)
  *     --strip (optional, off by default) reduce gta3.img + the four data files to ONLY the installed vehicles
+ *     --target sa|opensa  which layer of a LAYERED --in (common/sa/opensa) applies after common (plan 010)
  *
  * Or, against a game that is ALREADY BUILT (no full pipeline run):
  *   tsx tools/vehicle-installer/src/cli.ts --rebake <game> [--kind opensa|sa] [--only <model,model>]
@@ -16,6 +17,7 @@
  *   carcols.dat (car/car4, alpha-sorted) / carmods.dat (mods, alpha-sorted).
  *   All paths are relative to the current working directory (absolute paths pass through).
  */
+import { parseBuildTarget } from '@opensa/tool-kit/target';
 import { statSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 
@@ -64,7 +66,8 @@ function main(): void {
     throw new Error(`--in must be a directory: ${inPath}`);
   }
 
-  install({ gamePath, inPath, outPath, strip: process.argv.includes('--strip') });
+  const target = parseBuildTarget(argValue('--target'));
+  install({ gamePath, inPath, outPath, strip: process.argv.includes('--strip'), ...(target ? { target } : {}) });
 }
 
 /**
@@ -94,7 +97,8 @@ function rebake(
     ?.split(',')
     .map((name) => name.trim().toLowerCase())
     .filter((name) => name !== '');
-  const options = { inPath, targetPath, ...(only?.length ? { only } : {}) };
+  // The rebake's kind IS the build target — a layered `--in` applies `common` + that layer.
+  const options = { inPath, target: kind, targetPath, ...(only?.length ? { only } : {}) };
   const report = kind === 'sa' ? rebakeVehiclesSa(options) : rebakeVehicles(options);
 
   report.warnings.forEach((warning) => console.warn(`vehicle-installer: ${warning}`));

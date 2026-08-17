@@ -118,8 +118,8 @@ describe('resolveVehicleSources', () => {
       ]);
       expect(plan.overrides).toEqual([
         {
-          by: 'admiral - 1994 Dodge Stealth RT 1.1 - mad_driver',
-          replaced: 'admiral - 1976 Mercedes-Benz 230 - k1real24',
+          by: 'new/admiral - 1994 Dodge Stealth RT 1.1 - mad_driver',
+          replaced: 'models/admiral - 1976 Mercedes-Benz 230 - k1real24',
           slot: 'admiral',
         },
       ]);
@@ -157,6 +157,68 @@ describe('resolveVehicleSources', () => {
 
       expect(plan.strategy).toBe('structured');
       expect(plan.sources.map((source) => source.origin)).toEqual(['new']);
+    });
+  });
+});
+
+describe('resolveVehicleSources — layered (plan 010)', () => {
+  describe('negative cases', () => {
+    it('refuses a layered tree read without a target', () => {
+      const root = tree({ common: ['admiral - a - x'], sa: ['comet - b - y'] });
+
+      expect(() => resolveVehicleSources(root)).toThrow(/needs a target/);
+    });
+
+    it('refuses a car folder beside the layers — a misspelled layer lands there', () => {
+      const root = tree({ common: ['admiral - a - x'], 'open-sa': ['comet - b - y'] });
+
+      expect(() => resolveVehicleSources(root, 'sa')).toThrow(/plain car folder\(s\): open-sa/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('applies common then the target layer, the target winning the slot, and names both in the override', () => {
+      const root = tree({
+        common: ['admiral - a - x', 'comet - c - z'],
+        opensa: ['comet - only for opensa - q'],
+        sa: ['comet - b - y'],
+      });
+
+      const plan = resolveVehicleSources(root, 'sa');
+
+      expect(plan.strategy).toBe('layered');
+      expect(plan.layersSkipped).toEqual(['opensa']);
+      expect(plan.sources.map((source) => [source.slot, source.layer, source.name])).toEqual([
+        ['admiral', 'common', 'admiral - a - x'],
+        ['comet', 'sa', 'comet - b - y'],
+      ]);
+      expect(plan.overrides).toEqual([{ by: 'sa/comet - b - y', replaced: 'common/comet - c - z', slot: 'comet' }]);
+    });
+
+    it('lets each layer be structured — new/ beats models/ inside a layer, the target layer beats common', () => {
+      const root = tree({
+        'common/models': ['admiral - a - x', 'comet - c - z'],
+        'common/new': ['admiral - candidate - w'],
+        'sa/models': ['comet - b - y'],
+      });
+
+      const plan = resolveVehicleSources(root, 'sa');
+
+      expect(plan.sources.map((source) => `${source.layer}/${source.origin}/${source.slot}`)).toEqual([
+        'common/new/admiral',
+        'sa/models/comet',
+      ]);
+      expect(plan.overrides.map((o) => `${o.by} > ${o.replaced}`)).toEqual([
+        'common/new/admiral - candidate - w > common/models/admiral - a - x',
+        'sa/models/comet - b - y > common/models/comet - c - z',
+      ]);
+    });
+
+    it('reads a flat or structured tree exactly as before, whatever target is passed', () => {
+      const root = tree({ '': ['admiral - a - x'] });
+
+      expect(resolveVehicleSources(root, 'opensa').sources.map((s) => s.slot)).toEqual(['admiral']);
+      expect(resolveVehicleSources(root).strategy).toBe('flat');
     });
   });
 });

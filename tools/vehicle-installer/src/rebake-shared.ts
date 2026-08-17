@@ -1,3 +1,4 @@
+import type { BuildTarget } from '@opensa/tool-kit/target';
 import type { VehicleSource } from '@opensa/tool-kit/vehicles-dir';
 
 /**
@@ -24,6 +25,8 @@ export interface RebakeOptions {
   inPath: string;
   /** Rebake only these models (lowercased basenames). Absent = every folder under `inPath`. */
   only?: readonly string[];
+  /** Which layer of a LAYERED `inPath` applies after `common` — the rebake's `--kind`, by construction. */
+  target?: BuildTarget;
   /** The BUILT game dir to edit in place — normally `build/<game>/opensa` or `build/<game>/sa`. */
   targetPath: string;
 }
