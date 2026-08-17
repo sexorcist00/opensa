@@ -74,6 +74,13 @@ it still costs a slot. Each host keeps 900 rows in reserve for the tree LODs and
 same files later. `66. Urbanize only MAP` (13 files, 16 172 rows) folds to zero slots this way; plan:
 [`docs/plans/013-slot-fold-across-hosts.md`](./docs/plans/013-slot-fold-across-hosts.md).
 
+Every `.txd` a mod brings in — an archive entry, a Modloader-collected asset, a loose overlay, or a texture
+folder our PNG encoder turned into DXT — is checked for **DXT rasters whose side is not a multiple of 4**: the
+real game refuses such a raster and the WHOLE dictionary with it. The installer stays byte-faithful (nothing
+is changed; map-optimizer resamples later) and WARNS naming the mod, dictionary, texture and size, so the mod
+that brings a dead dictionary is known at install time rather than at the field round
+([`docs/plans/014-dxt-alignment-warning.md`](./docs/plans/014-dxt-alignment-warning.md)).
+
 Each mod applies onto the **accumulated** `--out`, so several mods that touch different files (or different
 textures / different `gta3.img` entries) all coexist; only when two mods change the **same** item does the later
 one win. The `*_img/` folder is a generic "loose IMG entries" convention — a binary `.img` can't be patched file-by-file,

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { warnDroppedCollisions } from './col-replace';
 import { applyStreamMerge, isStreamMerge } from './stream-merge';
+import { warnUnalignedDxt } from './txd-alignment';
 import { mergeTxdBytes } from './txd-folder';
 
 /**
@@ -44,13 +45,14 @@ export function applyStreamMergeDir(imgDir: string, imgPath: string): number {
  * folder) and by the Modloader baker (scattered `.dff`/`.txd`/`.col`/`.ifp` collected by bare name). Returns the
  * number of operations applied.
  */
-export function injectImgEntries(entries: ReadonlyMap<string, Uint8Array>, imgPath: string): number {
+export function injectImgEntries(entries: ReadonlyMap<string, Uint8Array>, imgPath: string, origin = 'a mod'): number {
   if (entries.size === 0) {
     return 0;
   }
   const img = existsSync(imgPath) ? openImg(readBytes(imgPath)) : createImg();
   for (const [name, bytes] of entries) {
     warnDroppedCollisions(name, img.get(name) ?? undefined, bytes);
+    warnUnalignedDxt(name, bytes, origin);
     img.set(name, bytes);
   }
   writeImgFile(img, imgPath);
@@ -78,7 +80,7 @@ export function injectImgEntries(entries: ReadonlyMap<string, Uint8Array>, imgPa
  *
  * Returns the number of operations applied.
  */
-export function mergeImgDir(imgDir: string, imgPath: string): number {
+export function mergeImgDir(imgDir: string, imgPath: string, origin = 'a mod'): number {
   const entries = new Map<string, Uint8Array>();
   const textureFolders: { name: string; path: string }[] = [];
   const collect = (dir: string): void => {
@@ -108,6 +110,7 @@ export function mergeImgDir(imgDir: string, imgPath: string): number {
   const img = existsSync(imgPath) ? openImg(readBytes(imgPath)) : createImg();
   for (const [name, bytes] of entries) {
     warnDroppedCollisions(name, img.get(name) ?? undefined, bytes);
+    warnUnalignedDxt(name, bytes, origin);
     img.set(name, bytes);
   }
   let merged = 0;
@@ -121,6 +124,8 @@ export function mergeImgDir(imgDir: string, imgPath: string): number {
     }
     const result = mergeTxdBytes(folder.path, new Uint8Array(existing), entryName);
     if (result.merged > 0) {
+      // OUR encoder, the mod's PNG: a 250×250 PNG becomes a 250×250 DXT — the same dead dictionary.
+      warnUnalignedDxt(entryName, result.bytes, `${origin} (texture folder ${folder.name})`);
       img.set(entryName, result.bytes);
       merged += result.merged;
     }

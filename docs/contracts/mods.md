@@ -117,7 +117,11 @@ gta3_img/previon/remap.png              →  merges into the previon.txd ENTRY i
   **replaced**, a new one is **added**. Every other texture in the dictionary is left untouched — this is a
   merge, never a rewrite.
 - Format is chosen from the image: **DXT5 when it carries real alpha, DXT1 when it does not**. PNGs must be
-  8-bit RGB/RGBA and non-interlaced.
+  8-bit RGB/RGBA and non-interlaced. **A PNG whose side is not a multiple of 4 becomes a DXT raster the real
+  game refuses** — with its whole dictionary (`docs/restrictions/dxt-raster-dimensions.md`); the installer
+  WARNS naming the mod, folder, texture and size (plan 014) and keeps the bytes as they are — map-optimizer
+  resamples them later in the pipeline. The same warning fires for any `.txd` a mod ships (archive entry,
+  Modloader-collected asset or loose overlay) that carries one.
 - Within a mod, files are copied BEFORE subfolders, so a `.txd` the same mod also ships is in place first and
   gets patched rather than lost.
 - **Both spellings of the folder name work** — `vehicle/` and `vehicle.txd/` target `vehicle.txd`. Authors

@@ -1,9 +1,10 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { basename, join } from 'node:path';
 
 import { mergeIdeFile } from './ide-merge';
 import { applyStreamMergeDir, mergeImgDir } from './img-merge';
 import { patchAreaStreams } from './stream-merge';
+import { warnUnalignedDxt } from './txd-alignment';
 import { mergeTxdFolder } from './txd-folder';
 
 /** Special-cased top-level mod folders — their loose files merge into the matching IMG instead of being copied. */
@@ -21,6 +22,7 @@ const IMG_FOLDERS: ReadonlyMap<string, string> = new Map([
  * Returns the copied-entry + merged-IMG counts.
  */
 export function applyMod(modPath: string, outPath: string): { copied: number; merged: number } {
+  const origin = basename(modPath);
   let copied = 0;
   let merged = 0;
   const merges: { source: string; target: string }[] = [];
@@ -30,7 +32,7 @@ export function applyMod(modPath: string, outPath: string): { copied: number; me
     }
     // `CLEO/` → `cleo/`: the canonical on-disk spelling is lowercase (plan 097/06 decision 1); authors ship both.
     const dest = entry.toLowerCase() === 'cleo' ? 'cleo' : entry;
-    const result = applyEntry(join(modPath, entry), join(outPath, dest), merges);
+    const result = applyEntry(join(modPath, entry), join(outPath, dest), merges, origin);
     copied += result.copied;
     merged += result.merged;
   }
@@ -38,7 +40,7 @@ export function applyMod(modPath: string, outPath: string): { copied: number; me
   for (const [folder, imgPath] of IMG_FOLDERS) {
     const imgDir = join(modPath, folder);
     if (existsSync(imgDir) && statSync(imgDir).isDirectory()) {
-      merged += mergeImgDir(imgDir, join(outPath, imgPath));
+      merged += mergeImgDir(imgDir, join(outPath, imgPath), origin);
     }
   }
 
@@ -80,12 +82,17 @@ function applyEntry(
   srcPath: string,
   dstPath: string,
   merges: { source: string; target: string }[],
+  origin = 'a mod',
 ): { copied: number; merged: number } {
   if (!statSync(srcPath).isDirectory()) {
     if (srcPath.toLowerCase().endsWith('.merge')) {
       merges.push({ source: srcPath, target: dstPath.slice(0, -'.merge'.length) });
 
       return { copied: 0, merged: 0 };
+    }
+    // A loose `.txd` overlay (`models/generic/vehicle.txd` …) reaches the game as-is, so it is judged too.
+    if (srcPath.toLowerCase().endsWith('.txd')) {
+      warnUnalignedDxt(basename(srcPath), new Uint8Array(readFileSync(srcPath)), origin);
     }
     cpSync(srcPath, dstPath, { force: true });
 

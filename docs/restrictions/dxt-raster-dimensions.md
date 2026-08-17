@@ -51,7 +51,12 @@ verdict.
 - **Caught:** in code by the two unit tests, and by construction — the two writers above are the only paths a
   DXT raster takes into the `sa` tree (`img-patch.ts set` bypasses both: a hand-patched TXD is on its own). Census
   on a built tree: `scripts/debug/txd-dimension-census.ts` lists every DXT texture that is not block-aligned
-  (0 on a build made after 2026-08-17). **SILENT at runtime**: the game logs nothing, our engine draws the
+  (0 on a build made after 2026-08-17). **Named at INSTALL time** since 2026-08-17: mod-installer warns
+  `<mod> ships <txd>: <texture> WxH <fmt> — not a multiple of 4, the real game refuses the whole dictionary
+  (map-optimizer will resample it)` for every such raster a mod brings — a `.txd` it injects into an archive
+  or the Modloader baker collects, a loose `.txd` overlay, or a texture folder whose PNG our encoder turned
+  into a non-aligned DXT (mod-installer plan 014; the bytes are still installed as shipped). **SILENT at
+  runtime**: the game logs nothing, our engine draws the
   same bytes fine, and the symptom is a building whose LOD (or HD) is simply not there.
 
 ## What it does NOT say
