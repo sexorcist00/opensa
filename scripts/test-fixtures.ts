@@ -162,6 +162,9 @@ const MANIFEST: readonly Fixture[] = [
   copy('data/cargrp.dat', 'data/cargrp.dat'),
   copy('data/popcycle.dat', 'data/popcycle.dat'),
   copy('parked.json', 'parked.json'),
+  // The only accepted exe (@opensa/asi-sdk's SA_FINGERPRINT). @opensa/validation's exe gate is the one check
+  // whose failure only shows up in-game, so the ACCEPTED build must be proved to pass, not just the rejects.
+  copy('gta_sa.exe', 'gta_sa.exe'),
   copy('data/water.dat', 'data/water.dat'),
   copy('data/vehicles.ide', 'data/vehicles.ide'),
   copy('data/txdcut.ide', 'data/txdcut.ide'), // cutscene-TXD txdp dictionary — the vehicle-cutscene census link
