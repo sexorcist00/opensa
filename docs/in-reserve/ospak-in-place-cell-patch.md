@@ -17,6 +17,10 @@ the output is a `?src=` dir, never a deployable. Measured need today: none — t
 (`model-repack.ts`, seconds) answers every one-model A/B; what it cannot answer is a verdict that depends on
 the SHIPPING dictionary or on world-context prelight, and no field report has needed one.
 
+**Note (2026-08-17):** pmb plan 006 (`--resume`) plans to persist the TexturePlanner snapshot per pack chunk
+and keep it as `pak/texture-plan.json` — the exact artifact step (1) needs; when 006 ships, this card's price
+drops to steps (2)–(4).
+
 **TRIGGER:** a one-model field verdict that the lab pak cannot carry — a defect that reproduces only in the
 shipping pak (its texture arrays, its prelight passes, its generated-LOD exclusions), or a swap that has to
 reach `fetch-pack`.

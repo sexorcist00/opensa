@@ -31,7 +31,7 @@ remembered. Each target that runs also writes **`<out>/report-<target>.json`** (
 chain: the target, the fetch game id, the timings and one typed fragment per stage that produced one —
 optimize totals + failures; the sa census, FLA pools, lift requirements and asi sha (console-only before);
 the pack summary with a pointer to `opensa/pak/report.json`. There is no unnamed root `report.json`: with two
-targets in one `--out` it was a summary of whichever run finished last.
+targets in one `--out` it was a summary of whichever run finished last. **Planned (tool plan [006](../../tools/perfect-map-builder/docs/plans/006-resume.md)): a `resume.json` in that work dir plus per-chunk checkpoints inside `pack`, so `--resume` re-enters a failed run at its last finished step instead of stage 1 — the 2026-08-17 failure at the archive rewrite, the last step of a 55-minute run, is why.**
 
 **What the `sa` branch emits BESIDE the map** (2026-08-11): after its ceiling checks it prints
 `reportInstallRequirements` — every stock ceiling the artifact crosses and the setting that lifts each (int16
