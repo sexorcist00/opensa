@@ -169,6 +169,59 @@ export interface ArchiveFamilyMember {
 }
 
 /**
+ * The members of an archive family that exist on disk — `<stem>.img`, `<stem>2.img`, … up to the first gap.
+ * Empty when even the base file is missing.
+ */
+export function imgFamilyMembers(basePath: string): string[] {
+  const members: string[] = [];
+  for (let index = 0; existsSync(familyPath(basePath, index)); index += 1) {
+    members.push(familyPath(basePath, index));
+  }
+
+  return members;
+}
+
+/**
+ * Open a whole archive FAMILY as ONE {@link EditableImg} — the read half of {@link writeImgFamily}, so a
+ * tool that edits a family a build already spilled (`vehicles.img` + `vehicles2.img`) stages against every
+ * entry the family holds and never adds a duplicate of a name a sibling carries. Entry order is member order;
+ * a name a later member repeats resolves to the later one, as the game's last-registered-wins lookup does.
+ *
+ * Every member is read INTO MEMORY (each is under {@link ARCHIVE_CAP_BYTES} by construction), which is what
+ * makes writing the family back over the same paths safe: the writer truncates each file it rewrites, and a
+ * reader still holding a file handle on it would be reading a hole. Throws when the base member is missing.
+ */
+export function openImgFamily(basePath: string): EditableImg {
+  const members = imgFamilyMembers(basePath);
+  if (members.length === 0) {
+    throw new Error(`no archive family at ${basePath}`);
+  }
+  const archives = members.map((path) => {
+    const bytes = readFileSync(path);
+
+    return openArchive(new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+  });
+  const owner = new Map<string, ImgArchive>();
+  const order: string[] = [];
+  for (const archive of archives) {
+    for (const name of archive.names) {
+      const key = name.toLowerCase();
+      if (!owner.has(key)) {
+        order.push(name);
+      }
+      owner.set(key, archive);
+    }
+  }
+
+  return editArchive({
+    get(name: string): ArrayBuffer | null {
+      return owner.get(name.toLowerCase())?.get(name) ?? null;
+    },
+    names: order,
+  });
+}
+
+/**
  * Write an {@link EditableImg} as a FAMILY of archives, none of them over {@link ARCHIVE_CAP_BYTES}:
  * `<stem>.img`, then `<stem>2.img`, `<stem>3.img` as the cap is reached.
  *

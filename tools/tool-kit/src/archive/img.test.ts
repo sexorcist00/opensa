@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { createImg, openImg, writeImgFamily, writeImgFile } from './img';
+import { createImg, imgFamilyMembers, openImg, openImgFamily, writeImgFamily, writeImgFile } from './img';
 
 /** Two-entry VER2 archive bytes to open + edit. */
 function sampleImg(): Uint8Array {
@@ -146,6 +146,70 @@ describe('writeImgFamily', () => {
 
       expect(img.size('big.dff')).toBe(5000);
       expect(img.size('absent.dff')).toBe(0);
+    });
+  });
+});
+
+describe('openImgFamily', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'img-family-open-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  /** A spilled family of `count` 3000-byte entries, two per member. */
+  function spilled(count: number): string {
+    const img = openImg(buildVer2Buffer([]));
+    for (let index = 0; index < count; index += 1) {
+      img.set(`e${index}.dff`, new Uint8Array(3000).fill(index + 1));
+    }
+    writeImgFamily(img, join(dir, 'veh.img'), 2048 + 2 * (2 * 2048 + 32));
+
+    return join(dir, 'veh.img');
+  }
+
+  describe('negative cases', () => {
+    it('throws when the base member is missing, and lists no members', () => {
+      expect(imgFamilyMembers(join(dir, 'none.img'))).toEqual([]);
+      expect(() => openImgFamily(join(dir, 'none.img'))).toThrow(/no archive family/);
+    });
+
+    it('stops at the first gap in the numbering', () => {
+      const base = spilled(5);
+      rmSync(join(dir, 'veh2.img'));
+
+      expect(imgFamilyMembers(base)).toEqual([join(dir, 'veh.img')]);
+      expect(openImgFamily(base).names()).toEqual(['e0.dff', 'e1.dff']);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('sees every entry of every member, in member order, and reads each from its own file', () => {
+      const base = spilled(5);
+
+      expect(imgFamilyMembers(base)).toEqual([join(dir, 'veh.img'), join(dir, 'veh2.img'), join(dir, 'veh3.img')]);
+      const img = openImgFamily(base);
+      expect(img.names()).toEqual(['e0.dff', 'e1.dff', 'e2.dff', 'e3.dff', 'e4.dff']);
+      for (let index = 0; index < 5; index += 1) {
+        expect(img.get(`e${index}.dff`)?.[0]).toBe(index + 1);
+      }
+    });
+
+    it('replaces an entry a sibling holds instead of adding a duplicate, and writes back as one family', () => {
+      const base = spilled(5);
+      const img = openImgFamily(base);
+      img.set('e3.dff', Uint8Array.of(99));
+
+      writeImgFamily(img, base);
+
+      expect(imgFamilyMembers(base)).toEqual([join(dir, 'veh.img')]);
+      const written = openImgFamily(base);
+      expect(written.names()).toEqual(['e0.dff', 'e1.dff', 'e2.dff', 'e3.dff', 'e4.dff']);
+      expect(written.get('e3.dff')?.[0]).toBe(99);
     });
   });
 });
