@@ -17,6 +17,12 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   growth, a 1.1 % delta that is VER2 sector padding.
   `tools/opensa-pack/src/game-fs.ts` (`openLazyVer2`) is the one fd-backed reader that already exists for this
   reason — its own comment records the converter having been unable to read its own output once.
+  Hit again on 2026-08-17, one stage later: the pack's `rewriteModelArchives` rewrote each `models/*.img`
+  on its own, and the `.osm` a car becomes (private `TEXS` inside) is fatter than the dff+txd it replaces —
+  `vehicles.img` (1.87 GB after the install spilled into `vehicles2.img`) crossed the 1.75 GiB cap at the
+  152nd of 406 entries and the writer, correctly, removed the half-written file. Fixed by rewriting per
+  FAMILY (`openImgFamily` → `writeImgFamily`, siblings registered/un-registered): every grower of an archive
+  has to be family-aware, not just the installer that first spilled it.
 - **Node heap ceilings.** A full pmb build **or a standalone `opensa-pack` run with AO on** needs
   `NODE_OPTIONS=--max-old-space-size=12288` (the cell bake holds the mod-grown ~1.3 GB `gta3.img` + merged
   cells); the default 4 GB dies around 37 % of the AO bake. sa-lod-generator needs ~8 GB. The full map cannot
