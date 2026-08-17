@@ -39,6 +39,7 @@ export default defineConfig({
     include: [
       'apps/web/**/*.test.ts',
       'apps/sa-map-viewer/**/*.test.ts',
+      'apps/cutscene-converter/**/*.test.ts',
       'packages/**/*.test.ts',
       'tools/opensa-pack/**/*.test.ts',
       'tools/timecyc-builder/**/*.test.ts',

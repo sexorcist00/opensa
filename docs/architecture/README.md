@@ -29,6 +29,7 @@ apps/
   viewer/      @opensa/viewer      object/vehicle/character/compare viewer tabs in /viewer.html  (type:app)
   engine-lab/  @opensa/engine-lab  the renderer proving ground (isolated engine scenes)          (type:app)
   sa-map-viewer/ @opensa/sa-map-viewer  the map inspector fed by a FOLDER of original SA files   (type:app)
+  cutscene-converter/ @opensa/cutscene-converter  Electron app: modded cars → cutscenes  (tag type:tool!)
 packages/                          (tag type:engine)
   engine/         @opensa/engine          the WebGPU renderer — device/pipelines, frame graph, world cells
   engine-formats/ @opensa/engine-formats  native .osm/.ostex/.oscell/.ospak/.oswire layouts, shared with tools
@@ -54,12 +55,14 @@ root: game-src/ · mods-src/ · build/ · static/ · tests/ · e2e/ · scripts/ 
 **Module boundaries** are enforced in lint by `@nx/enforce-module-boundaries` via `package.json` `nx.tags`:
 `type:app` → app + engine; `type:engine` → engine only (never app/tools); `type:tool` → engine + tools.
 
-**The one place the folder and the tag disagree** is `packages/validation`: it reads `node:fs` and imports
-`@opensa/asi-sdk`, so it can only be `type:tool` — the tag is what the lint reads, and the folder is where the
-vitest `packages/**` include and the coverage floor already reach it. Everything else under `packages/` is
-`type:engine`, and a new package there should be too unless it has the same two reasons. `scripts/arch-graph.ts`
-reads `nx.tags` for the same reason and falls back to the folder only for an untagged package — by folder alone
-the runtime graph below would have drawn a `node:fs` package inside the browser runtime.
+**Two places the folder and the tag disagree**, both because the tag follows what a package IMPORTS:
+`packages/validation` reads `node:fs` and imports `@opensa/asi-sdk`, and `apps/cutscene-converter` is an
+Electron app that imports `@opensa/vehicle-cutscene` — a `type:app` may depend on apps and engine packages
+only, so an offline desktop tool cannot be one whatever its folder says. Both are `type:tool`. Everything
+else under `packages/` is `type:engine` and everything else under `apps/` is `type:app`; a new one should be
+too unless it has the same reasons. `scripts/arch-graph.ts` reads `nx.tags` and falls back to the folder only
+for an untagged package — by folder alone the runtime graph below would have drawn a `node:fs` package and an
+Electron app inside the browser runtime.
 
 ## Runtime dependency graph
 

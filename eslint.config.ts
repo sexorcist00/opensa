@@ -216,6 +216,10 @@ const customJsConfig = {
 const scriptsConfig = {
   files: [
     'scripts/**/*.{js,mjs,cjs,ts}',
+    // The Electron app's Node halves — its build/dev scripts and the main process. Its `src/renderer/**` is
+    // browser code and stays under the strict rules.
+    'apps/cutscene-converter/scripts/**/*.{js,mjs,cjs,ts}',
+    'apps/cutscene-converter/src/main/**/*.{js,mjs,cjs,ts}',
     'tools/map-optimizer/**/*.{js,mjs,cjs,ts}',
     'tools/opensa-lod-generator/**/*.{js,mjs,cjs,ts}',
     'tools/vehicle-optimizer/**/*.{js,mjs,cjs,ts}',

@@ -38,6 +38,7 @@
     "apps/viewer",
     "apps/engine-lab",
     "apps/sa-map-viewer",
+    "apps/cutscene-converter",
     "packages/cell-weld",
     "packages/cleo",
     "tools/rw-codec",
@@ -183,5 +184,8 @@
     "vite": "8.0.13",
     "vite-plugin-istanbul": "8.0.0",
     "vitest": "4.1.6"
+  },
+  "allowScripts": {
+    "electron@43.4.0": true
   }
 }

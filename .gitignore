@@ -2,6 +2,8 @@
 /dist
 cleo/sdk/dist
 apps/engine-lab/dist
+apps/cutscene-converter/dist
+apps/cutscene-converter/release
 apps/engine-lab/public/pak*/*.ospak
 apps/engine-lab/public/pak*/manifest.json
 apps/engine-lab/public/pak*/report.json

@@ -211,6 +211,18 @@ renamed to `.vanilla` beside them) — the bottle streams cutscene.img directly,
 `data/txdcut.ide` + `data/vehicles.ide`, never a hardcoded list
 ([plans](../tools/vehicle-cutscene/docs/plans/)).
 
+### The same conversion as a Windows app (apps/cutscene-converter)
+
+```bash
+npm run dev -w @opensa/cutscene-converter        # vite + esbuild + Electron, window on macOS
+npm run build -w @opensa/cutscene-converter      # asi resource, main bundle, renderer; FAILS with no asi
+npm run pack:win -w @opensa/cutscene-converter   # the portable exe into apps/cutscene-converter/release/
+```
+
+A facade over the tool above — it forks the very same CLI with `--no-base-copy --self-contained-txd`, so
+its output is byte-identical to the command line's. `perfect-cutscene.asi` is embedded at build time and
+the build refuses to run without it ([README](../apps/cutscene-converter/README.md)).
+
 ## Serving & running
 
 ```bash
