@@ -49,6 +49,16 @@ car is ~20–30 submeshes; a dense street is where it would show.
   dominated by vehicles, not by world cells. Today the world's cells own that floor.
 - Ideally after a cheaper cut below has been taken and was not enough.
 
+## A cost added on this axis (2026-08-17)
+
+The builder emits a TRANSLUCENT material group per spatial cluster (`renderware/vehicle/translucent-clusters.ts`
+— connected pieces within 0.2 m merged, at most 8 per group), so a scattered group sorts honestly against the
+glass ([open-issues/fixed/vehicle-glass-see-through.md](../../open-issues/fixed/vehicle-glass-see-through.md),
+defect 3). Price on the comet: translucent submeshes 69 → 86, +17 draws per instance, blend phase only; opaque
+groups are untouched. It applies to every `.osm` the builder writes (props too — the ferris ring's strip is
+two clusters). The knob is the cap of 8: lowering it trades draws for sort exactness on the worst-scattered
+groups only.
+
 ## Cheaper things to try first
 
 - Cull vehicle submeshes by distance band earlier (the `_vlo` LOD already exists — check it is actually

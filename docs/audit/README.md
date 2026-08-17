@@ -280,6 +280,13 @@ interpret them.
   `docs/development/cutscene-field-testing.md`. Suite 79 → 81 tool tests; no per-model hardcode
   (grep-checked at the user's ask).
 
+- [`session-22-anim-frames-in-the-cell-lod-and-translucent-clusters.md`](./session-22-anim-frames-in-the-cell-lod-and-translucent-clusters.md)
+  — 2026-08-17: the OpenSA cell LOD placed an `anim` def's atomics without their DFF frames (the Burger Shot's
+  sign in the middle of the roof at LOD range; now composed like the engine's weld and the `sa` clone LOD);
+  the comet's speakers back through the rear glass from one angle = a SCATTERED translucent submesh no sort
+  key can serve (dash gauges + shelf speakers, one material) — the builder now emits translucent groups per
+  spatial cluster. Both through the one-model instruments, both field-accepted the same afternoon; `build/`
+  wiped and rebuilt fresh after.
 - [`session-21-wheels-vehfuncs-extras-and-the-fixture-cache.md`](./session-21-wheels-vehfuncs-extras-and-the-fixture-cache.md)
   — 2026-08-17: two field cars with no rims = a `f_wheel` container wheel instanced by its first atomic (now
   its whole chosen path); VehFuncs recursive extras become a per-spawn runtime pick from a tree the `.osm`
