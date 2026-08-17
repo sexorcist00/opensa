@@ -19,6 +19,11 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 `001`–`099`, one folder each (066, 073, 074, 078–082, 096–099 carry multi-part sub-plans; 083 kept its
 row but its chain was superseded by 097). Newest first:
 
+- **[103 — One-model swap for the OpenSA target: the lab pak gets its LOD half](./103-opensa-one-model-lab/readme.md)** —
+  **Phase 1 DONE 2026-08-17.** `model-repack.ts` re-bakes the rect's cell LODs from the swapped HD
+  (`opensa-lod-generator`'s adapter over an overlay-first archive list) and takes a mod's loose
+  `--dff/--txd`; gostown one cell in 1.9 s. Research settled that `world.ospak` is per-cell replaceable
+  but the shipping texture plan is not persisted — in-place patching is `in-reserve/ospak-in-place-cell-patch.md`.
 - **[102 — The bench settle lies, and a fall poisons the sweep](./102-bench-settle-fall/readme.md)** —
   **DONE and MERGED 2026-08-09** (`ed6b90ba`; close-out audit `6202503e`). The perf-runs
   settle exited on a stale `pendingCells` read, nothing waited for collision, and a teleport preserved

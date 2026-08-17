@@ -62,6 +62,20 @@ the distance, let the shader own the falloff) got it right and was still rejecte
 Detail: [`postmortem/090-vehicle-cabin-at-night.md`](../postmortem/090-vehicle-cabin-at-night.md),
 [`contracts/vehicles.md`](../contracts/vehicles.md).
 
+## Never re-pack a pack OUTPUT, and never read one as a source
+
+`opensa-pack` replaces every converted `<model>.dff` in the archives with its `<model>.osm`. Point the packer
+(or any weld, or a LOD bake) at `build/<game>/opensa` and almost no clump resolves: cells weld nearly empty and
+the run reports a plausible-looking pak of a quarter of the world (464 cells / 87 MB against 1 123 / 1.0 GB —
+`docs/plans/097-cleo-basic/06-packaging-pipeline.md`), with no error. Sources are `game-src/<game>/models/*.img`
+(ALL of them — a TC ships its world in its own archive) plus the mods, or the pack INPUT kept with
+`--keep-work`; `scripts/debug/model-repack.ts` regenerates what it needs from those.
+
+**Caught:** no — SILENT. Sanity-check every pack against the known cell count / size; the lab instrument
+reads sources by construction.
+
+Detail: [`plans/103-opensa-one-model-lab/`](../plans/103-opensa-one-model-lab/readme.md).
+
 ## Whatever the loaders disagree about, the game disagrees about
 
 The runtime resolves assets by BARE name (`fs.get('bmycg.osm')`) and the VFS is a flat map of exactly the

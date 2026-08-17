@@ -1,11 +1,16 @@
 import type { OspakManifest } from '@opensa/engine-formats';
 
 import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
+import { encodeLodDff } from '@opensa/lod-common/encode-dff';
+import { encodeLodTxd } from '@opensa/lod-common/encode-txd';
+import { type ScopedRegistry, scopedSource } from '@opensa/lod-common/scoped-texture';
+import { createTextureSource } from '@opensa/lod-common/texture-source';
 import { convertDistrict } from '@opensa/opensa-pack/convert';
 import { openGameDir } from '@opensa/opensa-pack/game-fs';
 import { formatBuildTime } from '@opensa/opensa-pack/pack';
-import { type ImgArchive, openArchive } from '@opensa/renderware/archive/img-archive';
+import { buildVer2Buffer, type ImgArchive, openArchive } from '@opensa/renderware/archive/img-archive';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
+import { openArchiveIndex } from '@opensa/tool-kit/archive/layout';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -19,6 +24,9 @@ import { createRemoveDegenerateTriangles } from '../../tools/map-optimizer/src/p
 import { createPruneVertices } from '../../tools/map-optimizer/src/plugins/prune-vertices';
 import { createSmoothNormals } from '../../tools/map-optimizer/src/plugins/smooth-normals';
 import { createWeldVertices } from '../../tools/map-optimizer/src/plugins/weld-vertices';
+import { createGtaSaLodAdapter } from '../../tools/opensa-lod-generator/src/adapters/gta-sa';
+import { cellModelName, SHARED_TXD } from '../../tools/opensa-lod-generator/src/adapters/gta-sa/finalize';
+import { config as lodConfig } from '../../tools/opensa-lod-generator/src/lod.config';
 import { loadMapDefsAt, readBytes } from '../lib/game';
 import { indexModAssets, type ModAssets, resolveDff, resolveTxd } from '../lib/mod-assets';
 
@@ -32,24 +40,33 @@ import { indexModAssets, type ModAssets, resolveDff, resolveTxd } from '../lib/m
  *      wins, numeric folder order; PNG texture-folders are replayed onto the TXD; vanilla otherwise),
  *   2. re-runs the map-optimizer GEOMETRY chain in-memory (weld → degenerate → dedupe → prune →
  *      smooth-normals) — targets get the experimental options, neighbours the build defaults,
- *   3. feeds convertDistrict a synthetic game dir (built `data/` + built IMGs for streams/collision,
- *      regenerated models as an overlay) with a rect covering just the affected cells,
- *   4. writes `build/<game>/opensa-lab` — a per-file-symlink mirror of the built game whose `pak/`
+ *   3. re-bakes the rect's CELL LODs the way `opensa-lod-generator` does (`bakeCell` over the overlay,
+ *      overlay archive first, so the swapped HD is what the far view is cut from — plan 103): the
+ *      `lod_<cx>_<cy>.dff` cells + a rect-scoped `lods.txd` land in the overlay and shadow the built ones,
+ *   4. feeds convertDistrict a synthetic game dir (built `data/` + built IMGs for streams/collision,
+ *      regenerated models + rebaked LODs as an overlay) with a rect covering just the affected cells,
+ *   5. writes `build/<game>/opensa-lab` — a per-file-symlink mirror of the built game whose `pak/`
  *      is the freshly welded rect — servable by `npm run serve:static` like the real build.
  *
- * Known caveats (fine for an A/B eyeball of ONE model, documented in plan 024 phase 0):
+ * Known caveats (fine for an A/B eyeball of ONE model, documented in plan 024 phase 0 + plan 103):
  *   - world-context prelight passes (019 level/seam/night verdicts) and texture mips are NOT
  *     replayed — neighbours may differ slightly from the main build;
- *   - generated LOD models (trees/procobj) have no source here → the lab cells' LOD level is thinner;
+ *   - generated LOD models (trees/procobj) have no source here → the lab cells' LOD level is thinner,
+ *     and the rebaked cell LODs are cut without the pipeline's `excludeItems` (generated models);
  *   - `.osm` props reference the MAIN pak's texture dictionary → props inside the lab rect may lose
  *     textures. World geometry — the thing under test — is welded correctly.
+ *   - the lab pak is a SEPARATE small pak: it never patches `build/<game>/opensa/pak` (the shipping
+ *     pak's texture layer indexes are not persisted, so a subset weld cannot reproduce them — see plan 103).
  *
  * Run: npx tsx scripts/debug/model-repack.ts <model...> [--game original] [--strip-normals]
- *      [--crease <deg>] [--prelit-floor <luma>] [--margin <cells>] [--no-ao] [--out <dir>]
+ *      [--crease <deg>] [--prelit-floor <luma>] [--margin <cells>] [--no-ao] [--no-lod] [--out <dir>]
+ *      [--dff <file.dff> [--txd <file.txd>]]      (ONE target: a mod's loose files instead of the resolved source)
  *   --strip-normals      drop the targets' authored normals before the chain (forces a clean rebuild)
  *   --crease <deg>       per-run crease override for the targets' smooth-normals rebuild
  *   --prelit-floor <l>   lift the targets' day prelit to a luma floor (Family B ambient experiment)
  *   --margin <n>         extra cell ring around the targets' cells (default 0)
+ *   --no-lod             keep the built cell LODs (skip the rebake — the far view stays the old model)
+ *   --dff/--txd          swap a LOOSE file in for the single target (its txd under the target's txd name)
  * Then: npm run serve:static  →  app with ?src=/build/<game>/opensa-lab
  * Teleports: npx tsx scripts/debug/teleport-spot.ts <model> --game <game>
  */
@@ -57,7 +74,11 @@ import { indexModAssets, type ModAssets, resolveDff, resolveTxd } from '../lib/m
 interface Args {
   ao: boolean;
   crease: number | undefined;
+  /** A loose `.dff` for the single target — a mod's file before it is installed. */
+  dff: string | undefined;
   game: string;
+  /** Re-bake the rect's cell LODs from the overlay (default on). */
+  lod: boolean;
   margin: number;
   /** With --no-mods: models that STILL resolve from mods (file-level bisection). */
   modOnly: Set<string>;
@@ -69,6 +90,8 @@ interface Args {
   raw: boolean;
   stripNormals: boolean;
   targets: string[];
+  /** A loose `.txd` for the single target, written under the target's OWN txd name. */
+  txd: string | undefined;
 }
 
 /** The servable lab dir: symlink mirror of the built game, `pak/` replaced by the lab weld. */
@@ -90,6 +113,65 @@ function assembleLab(args: Args, builtDir: string, manifest: OspakManifest, pak:
   writeFileSync(join(pakDir, 'report.json'), JSON.stringify(report, null, 2));
 }
 
+/**
+ * Re-bake the rect's cell LODs from the overlay, the way `opensa-lod-generator` does (plan 103): the swapped HD
+ * is what the far view is cut from, so an HD-only swap would leave the lab's LOD level showing the OLD model.
+ * The overlay archive is searched FIRST (`createModelSource` is first-wins), then the SOURCE game's archives; the
+ * built `lod_*` cells themselves are excluded from the bake or they would be merged in as HD twice.
+ * Emits `lod_<cx>_<cy>.dff` + ONE `lods.txd` scoped to the rect's cells into the overlay — both shadow the
+ * built entries by basename, and the lab pak welds only the rect, so a rect-scoped dictionary is complete.
+ */
+function bakeRectLods(
+  rect: readonly [number, number, number, number],
+  inputDir: string,
+  overlayDir: string,
+  vanilla: ImgArchive,
+  game: string,
+): number {
+  if (lodConfig.cellSize !== CELL_SIZE) {
+    throw new Error(`lod cellSize ${lodConfig.cellSize} ≠ render CELL_SIZE ${CELL_SIZE} — the lab cannot rebake`);
+  }
+  const overlayArchive = openArchive(
+    buildVer2Buffer(
+      readdirSync(overlayDir)
+        .filter((name) => /\.(?:dff|txd)$/i.test(name))
+        .map((name) => ({ data: new Uint8Array(readFileSync(join(overlayDir, name))), name })),
+    ),
+  );
+  // The built archives hold `.osm` where the HD `.dff`s were — the bake reads the overlay, then the SOURCE game.
+  const archives = [overlayArchive, vanilla];
+  const lodNames = builtLodCellNames(inputDir);
+  const excludeItems = [...(lodConfig.excludeItems ?? []), ...lodNames];
+  const adapter = createGtaSaLodAdapter(game, inputDir, { ...lodConfig, excludeItems }, { archives });
+  const [x0, y0, x1, y1] = rect;
+  const cells = adapter
+    .resolveCells()
+    .filter((cell) => cell.cx >= x0 && cell.cx <= x1 && cell.cy >= y0 && cell.cy <= y1);
+  const registry: ScopedRegistry = new Map();
+  const textures = new Set<string>();
+  for (const cell of cells) {
+    const baked = adapter.bakeCell(cell);
+    const name = cellModelName(cell.cx, cell.cy);
+    writeFileSync(
+      join(overlayDir, `${name}.dff`),
+      encodeLodDff(baked.mesh, name, { doubleSided: true, ...(baked.effects ? { effects: baked.effects } : {}) }),
+    );
+    for (const group of baked.mesh.groups) if (group.texture.length > 0) textures.add(group.texture);
+    for (const [scoped, entry] of baked.textureMap ?? []) registry.set(scoped, entry);
+  }
+  writeFileSync(
+    join(overlayDir, `${SHARED_TXD}.txd`),
+    encodeLodTxd(
+      [...textures].sort(),
+      scopedSource(createTextureSource(archives), registry),
+      lodConfig.lodTextureSize,
+      'linear',
+    ),
+  );
+
+  return cells.length;
+}
+
 /** Regenerate every rect model's DFF (targets with the experimental options) + TXDs into the overlay. */
 function buildOverlay(
   rectModels: ReadonlyMap<string, { txd: string }>,
@@ -103,12 +185,13 @@ function buildOverlay(
   const txdsNeeded = new Set<string>();
   for (const [model, { txd }] of rectModels) {
     txdsNeeded.add(txd);
-    const source = resolveDff(model, mods, vanilla);
+    const isTarget = targetSet.has(model);
+    const source = isTarget && args.dff ? looseSource(args.dff) : resolveDff(model, mods, vanilla);
     if (!source) {
-      missing.push(model);
+      // The built `lod_<cx>_<cy>` cells have no source by design — the LOD rebake writes them into the overlay next.
+      if (!/^lod_-?\d+_-?\d+$/.test(model)) missing.push(model);
       continue;
     }
-    const isTarget = targetSet.has(model);
     const options = isTarget
       ? { crease: args.crease, prelitFloor: args.prelitFloor, stripNormals: args.stripNormals }
       : {};
@@ -127,6 +210,18 @@ function buildOverlay(
     const bytes = resolveTxd(txd, mods, vanilla);
     if (bytes) writeFileSync(join(overlayDir, `${txd}.txd`), bytes);
   }
+  if (args.txd) writeLooseTxd(args.txd, args.targets[0], rectModels, overlayDir);
+}
+
+/** The `lod_<cx>_<cy>` names the built tree's `data/maps/lods.ide` declares — the previous bake's output. */
+function builtLodCellNames(inputDir: string): string[] {
+  const path = join(inputDir, 'data', 'maps', 'lods.ide');
+  if (!existsSync(path)) return [];
+
+  return readFileSync(path, 'utf8')
+    .split(/\r?\n/)
+    .map((line) => /^\s*\d+\s*,\s*([^,\s]+)/.exec(line)?.[1]?.toLowerCase())
+    .filter((name): name is string => name !== undefined);
 }
 
 /** Every model with an instance inside the rect — the welded cells must be complete. */
@@ -208,6 +303,11 @@ function loadStochastic(): Set<string> {
   return names;
 }
 
+/** A mod's loose `.dff`, in the shape `resolveDff` returns. */
+function looseSource(file: string): { bytes: Uint8Array; from: string } {
+  return { bytes: new Uint8Array(readFileSync(file)), from: `loose ${file}` };
+}
+
 async function main(): Promise<void> {
   const args = parseArgs();
   const builtDir = join('build', args.game, 'opensa');
@@ -217,7 +317,9 @@ async function main(): Promise<void> {
   console.log(`· reading built tree ${builtDir} …`);
   const builtArchive = openArchive(readBytes(join(builtDir, 'models', 'gta3.img')));
   const defs = loadMapDefsAt(builtDir, builtArchive);
-  const vanilla = openArchive(readBytes(join('game-src', args.game, 'models', 'gta3.img')));
+  // EVERY archive of the source game, not `gta3.img` alone: a TC ships its world in its own (`gostown6.img`),
+  // and the built tree cannot serve as the fallback — the pack replaced every converted `.dff` with an `.osm`.
+  const vanilla = openArchiveIndex(join('game-src', args.game));
 
   const targetSet = new Set(args.targets);
   const placements = defs.instances.filter((i) =>
@@ -253,6 +355,11 @@ async function main(): Promise<void> {
     symlinkSync(resolve(builtDir, 'models', img), join(inputDir, 'models', img));
   }
   buildOverlay(rectModels, mods, vanilla, args, overlayDir);
+  if (args.lod) {
+    const started = Date.now();
+    const baked = bakeRectLods(rect, inputDir, overlayDir, vanilla, args.game);
+    console.log(`· rebaked ${baked} cell LOD(s) from the overlay in ${((Date.now() - started) / 1000).toFixed(1)} s`);
+  }
 
   console.log(`· welding rect ${rect.join(',')} (ao ${args.ao ? 'on' : 'off'}) …`);
   const fs = openGameDir(inputDir, [overlayDir]);
@@ -295,35 +402,55 @@ function mirrorWithFileSymlinks(src: string, dst: string, skip: ReadonlySet<stri
 function parseArgs(): Args {
   const argv = process.argv.slice(2);
   const targets: string[] = [];
-  let game = 'original';
-  let margin = 0;
-  let crease: number | undefined;
-  let out = '';
-  let ao = true;
-  let stripNormals = false;
-  let raw = false;
-  let noMods = false;
-  const modOnly = new Set<string>();
-  let prelitFloor: number | undefined;
+  const flags = new Set<string>();
+  const values = new Map<string, string>();
+  const VALUE_FLAGS = new Set([
+    '--crease',
+    '--dff',
+    '--game',
+    '--margin',
+    '--mod-only',
+    '--out',
+    '--prelit-floor',
+    '--txd',
+  ]);
+  const BOOL_FLAGS = new Set(['--no-ao', '--no-lod', '--no-mods', '--raw', '--strip-normals']);
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === '--game') game = argv[++i];
-    else if (arg === '--margin') margin = Number(argv[++i]);
-    else if (arg === '--crease') crease = Number(argv[++i]);
-    else if (arg === '--out') out = argv[++i];
-    else if (arg === '--no-ao') ao = false;
-    else if (arg === '--strip-normals') stripNormals = true;
-    else if (arg === '--raw') raw = true;
-    else if (arg === '--no-mods') noMods = true;
-    else if (arg === '--mod-only') for (const m of argv[++i].split(',')) modOnly.add(m.toLowerCase());
-    else if (arg === '--prelit-floor') prelitFloor = Number(argv[++i]);
+    if (VALUE_FLAGS.has(arg)) values.set(arg, argv[++i]);
+    else if (BOOL_FLAGS.has(arg)) flags.add(arg);
     else if (arg.startsWith('--')) throw new Error(`unknown flag ${arg}`);
     else targets.push(arg.toLowerCase());
   }
+  const number = (flag: string): number | undefined => (values.has(flag) ? Number(values.get(flag)) : undefined);
+  const game = values.get('--game') ?? 'original';
+  const dff = values.get('--dff');
+  const txd = values.get('--txd');
   if (targets.length === 0) throw new Error('usage: model-repack.ts <model...> [--strip-normals] [--crease N]');
-  if (!out) out = join('build', game, 'opensa-lab');
+  if ((dff || txd) && targets.length !== 1) throw new Error('--dff/--txd take exactly ONE target model');
+  if (txd && !dff) throw new Error('--txd needs --dff (a texture swap alone is --raw with a mod folder)');
 
-  return { ao, crease, game, margin, modOnly, noMods, out, prelitFloor, raw, stripNormals, targets };
+  return {
+    ao: !flags.has('--no-ao'),
+    crease: number('--crease'),
+    dff,
+    game,
+    lod: !flags.has('--no-lod'),
+    margin: number('--margin') ?? 0,
+    modOnly: new Set(
+      (values.get('--mod-only') ?? '')
+        .split(',')
+        .filter(Boolean)
+        .map((m) => m.toLowerCase()),
+    ),
+    noMods: flags.has('--no-mods'),
+    out: values.get('--out') ?? join('build', game, 'opensa-lab'),
+    prelitFloor: number('--prelit-floor'),
+    raw: flags.has('--raw'),
+    stripNormals: flags.has('--strip-normals'),
+    targets,
+    txd,
+  };
 }
 
 /** Run the map-optimizer geometry chain on one DFF; returns re-encoded bytes (or source on failure). */
@@ -362,6 +489,19 @@ function runGeometryChain(
 
     return source;
   }
+}
+
+/** The loose dictionary goes under the TARGET's txd name — that is the name every instance resolves. */
+function writeLooseTxd(
+  file: string,
+  target: string,
+  rectModels: ReadonlyMap<string, { txd: string }>,
+  overlayDir: string,
+): void {
+  const txd = rectModels.get(target)?.txd;
+  if (txd === undefined) throw new Error(`--txd: ${target} is not in the rect, no txd name to write under`);
+  writeFileSync(join(overlayDir, `${txd}.txd`), readFileSync(file));
+  console.log(`· target ${target}: txd ← loose ${file} (as ${txd}.txd)`);
 }
 
 main().catch((error: Error) => {

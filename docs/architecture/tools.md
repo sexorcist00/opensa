@@ -62,9 +62,15 @@ never the app. The dependency picture is the tools cluster of
   or MERGED to one atomic when the HD is a multi-atomic `anim` clump, since an `objs` row keeps one atomic —
   + empty COL + halved textures, every level a power of two) for the **real game** target.
 - **opensa-lod-generator** — the OpenSA cell-LOD bake: merge per 250-cell (= the render grid, plan 087) → budgeted QEM decimate →
-  per-cell TXD; output is not tuned for the real-SA streamer (uncapped).
+  per-cell TXD; output is not tuned for the real-SA streamer (uncapped). Its adapter takes `deps.archives`
+  and bakes per cell, which is how `scripts/debug/model-repack.ts` re-bakes ONE rect's cells from a swapped
+  HD for the lab pak (plan 103) — the tool itself has no per-cell output path (`writeBuild` wipes + mirrors).
 - **opensa-pack** — game-ready dir → native build (`.osm` per model inside the IMGs + the `opensa/` pak);
   see [perfect-map-builder.md](./perfect-map-builder.md#opensa-pack-the-pack-stage-also-standalone).
+  **A pack output is never re-packed or read as a source** (its `.dff`s are gone — the weld silently yields
+  a quarter of the world; `restrictions/build-vs-runtime.md`); the one-model swap for this target is the
+  lab pak (`model-repack.ts`), and in-place surgery on `world.ospak` is researched and in reserve
+  (`in-reserve/ospak-in-place-cell-patch.md`: the container permits it, the texture plan is not persisted).
 - **fetch-pack** — the build finisher (plan 086): re-homes a build into the fetch-serveable
   `build/<id>/opensa-pack/<game>-<version>/` layout the fetch-mode loader streams by range. Chained after the
   pack in every `build:game:<id>:opensa`; see
