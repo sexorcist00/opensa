@@ -238,6 +238,8 @@ In the space of two weeks I took performance from 16–18 FPS to 100–120. A fr
 
 My next step is to build a properly living city, with characters and cars, real draw distance and the rest of it. Something that looks like a metropolis.
 
+After that I'll come back to the graphics, because a lot of things are still in flight and I need to take my measurements on a genuinely loaded city to understand where the limits are.
+
 Thanks, everyone, for reading. To be continued.
 
 Links once more:
