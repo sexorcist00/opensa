@@ -1,3 +1,4 @@
+import { splitRow } from '@opensa/renderware/parsers/text/text-lines';
 import { openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -105,9 +106,9 @@ export function stripParked(jsonText: string, models: ReadonlySet<string>): stri
   )}\n`;
 }
 
-/** Lowercased comma column `index` of a line. */
+/** Lowercased column `index` of a line — split the way the game reads it (commas + whitespace, `splitRow`). */
 function col(line: string, index: number): string {
-  return (line.split(',')[index] ?? '').trim().toLowerCase();
+  return (splitRow(line)[index] ?? '').toLowerCase();
 }
 
 function editFile(path: string, edit: (text: string) => string): void {

@@ -161,7 +161,7 @@ re-authoring the mods.
 
 | Path | Contract |
 | --- | --- |
-| `data/vehicles.ide` | model, txd, type, handling id, wheel model id, **wheel scale [front, rear] = the wheel DIAMETER in metres** (not a multiplier). |
+| `data/vehicles.ide` | model, txd, type, handling id, wheel model id, **wheel scale [front, rear] = the wheel DIAMETER in metres** (not a multiplier). Rows are split the way the game's `LoadLine` reads them — commas AND whitespace are one separator class — so a `.settings.txt` row missing the model/txd comma (`593, dodo\t\tdodo, …`; dodo, emperor, wayfarer ship one) still keys on the model and REPLACES the stock row instead of appending a duplicate id (2026-08-17). |
 | `data/handling.cfg` | Rows keyed by the handling id above. |
 | `data/carcols.dat`, `data/carmods.dat` | Keyed by model. `carmods` is parsed but not yet wired into the engine. |
 | `data/vehicle-features.txt` | **Ours, not SA's.** `<model> <FEATURE>…`, one line per model, written from each mod's `features.txt`. Read by `opensa-pack` while baking that car — **build time only**; nothing reads it at runtime, so a change here needs a rebuild (`vehicle-installer --rebake`). |

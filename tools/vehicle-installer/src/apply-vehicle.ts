@@ -1,5 +1,6 @@
 import type { EditableImg } from '@opensa/tool-kit/archive/img';
 
+import { splitRow } from '@opensa/renderware/parsers/text/text-lines';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
@@ -154,7 +155,7 @@ function editFile(path: string, edit: (text: string) => string): void {
 /** The handling id this vehicle keys into handling.cfg: the ide line's col 4, else the handling line's id, else
  *  the model uppercased. */
 function handlingId(settings: ReturnType<typeof parseVehicleSettings>, model: string | undefined): string | undefined {
-  const fromIde = settings.ideLine?.split(',')[4]?.trim();
+  const fromIde = settings.ideLine === undefined ? undefined : splitRow(settings.ideLine)[4];
   const fromHandling = settings.handlingLine?.trim().split(/\s+/)[0];
 
   return (fromIde || fromHandling || model)?.toUpperCase();

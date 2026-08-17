@@ -6,6 +6,7 @@
  * - `carcols.dat`  — `car`/`car4` section, key = model (column 0). Replace-or-insert, section **alpha-sorted**.
  * - `carmods.dat`  — `mods` section, key = model (column 0). Replace-or-insert, section **alpha-sorted**.
  */
+import { splitRow } from '@opensa/renderware/parsers/text/text-lines';
 
 /**
  * `car4` when each colour combo carries 4 values (`1,31,1,0`), else `car` (2 values, `34,34`). Combos are
@@ -82,9 +83,9 @@ function firstToken(line: string): string {
   return line.trim().split(/\s+/)[0] ?? '';
 }
 
-/** Lowercased comma column `col` of a line. */
+/** Lowercased column `col` of a line — split the way the game reads it (commas + whitespace, `splitRow`). */
 function keyAt(line: string, col: number): string {
-  return (line.split(',')[col] ?? '').trim().toLowerCase();
+  return (splitRow(line)[col] ?? '').toLowerCase();
 }
 
 /** Rebuild a section's entry lines (keyed by column 0) with `line` added/replaced, sorted by model name. */
@@ -135,14 +136,25 @@ function replaceOrAppend(base: string, section: string, col: number, line: strin
     return base;
   }
   const key = keyAt(line, col);
+  let replaced = false;
   for (let i = found.start + 1; i < found.end; i += 1) {
-    if (keyAt(out[i], col) === key) {
-      out[i] = line;
-
-      return out.join(eol);
+    if (keyAt(out[i], col) !== key) {
+      continue;
     }
+    if (!replaced) {
+      out[i] = line;
+      replaced = true;
+      continue;
+    }
+    // A section holds ONE row per key: a later twin is a stale duplicate (the comma-less dodo row a
+    // comma-only key once appended) and goes, so a rebake over that tree heals it.
+    out.splice(i, 1);
+    i -= 1;
+    found.end -= 1;
   }
-  out.splice(found.end, 0, line);
+  if (!replaced) {
+    out.splice(found.end, 0, line);
+  }
 
   return out.join(eol);
 }

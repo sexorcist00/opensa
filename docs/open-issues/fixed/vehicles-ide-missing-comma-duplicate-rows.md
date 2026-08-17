@@ -1,7 +1,14 @@
 # Three mod `.settings.txt` ide rows lack the model/txd comma → duplicate id rows in the built `vehicles.ide`
 
-**Status: 🔴 open, found 2026-08-17 during the fleet rebake, not fixed (surfaced mid-task, recorded so it is
-not lost).** Affects both built trees (`build/original/sa` and `build/original/opensa`).
+**Status: ✅ FIXED 2026-08-17, the same afternoon it was found (his call).** `splitRow` — the tokenizer every
+IDE/IPL reader and the installer's column reads go through — now splits on commas AND whitespace, which is
+`CFileLoader::LoadLine`'s reading; `mergeIde` replaces the first row of a model and DROPS any later twin, so
+the rebake healed both trees: `--rebake original --only dodo,emperor,wayfarer` (opensa) and the same with
+`--kind sa` — no duplicate ids left in either `vehicles.ide`, the three rows now carry the mods' numbers
+(emperor 0.749, wayfarer 0.673). Regression: `text-lines.test.ts` (the real dodo row) + `merge.test.ts`
+(no duplicate appended; a stale twin dropped). Still dropped, pre-existing and on the roadmap
+(`docs/roadmap/0.6.0/plans/05-air-water-rail`): the `$ DODO` plane and `! WAYFARER` bike handling
+sub-tables in those two `.settings.txt`.
 
 ## The symptom
 
@@ -34,7 +41,7 @@ Whether the duplicate id row does anything in the real game: the `sa` build with
 field-accepted 2026-08-17, so at worst SA re-registers the slot with the second row's numbers. In OpenSA
 the text `vehicles.ide` is parsed at boot — which of the two rows wins there is not measured either.
 
-## The fix (not built)
+## The fix (as built — see status)
 
 Parse IDE rows the way `LoadLine` does — commas AND whitespace as separators — in the vehicle-installer
 merge (`tools/vehicle-installer/src/merge.ts` / `mods-table.ts`) and wherever else an IDE row is split on

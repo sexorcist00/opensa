@@ -7,6 +7,7 @@ import type { VehicleSource } from '@opensa/tool-kit/vehicles-dir';
  * against the built roster before anything is written), and the two per-model tables a rebake MERGES into
  * rather than rewrites.
  */
+import { splitRow } from '@opensa/renderware/parsers/text/text-lines';
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 import { parseVehicleFeatures } from '@opensa/renderware/parsers/text/vehicle-features.parser';
 import { parseVehicleMods } from '@opensa/renderware/parsers/text/vehicle-mods.parser';
@@ -182,7 +183,7 @@ function declaredIdOf(folderPath: string): null | number {
     return null;
   }
   const line = parseVehicleSettings(decodeSettings(readFileSync(join(folderPath, file)))).ideLine;
-  const id = Number(line?.split(',')[0]?.trim());
+  const id = line === undefined ? NaN : Number(splitRow(line)[0]);
 
   return Number.isFinite(id) ? id : null;
 }

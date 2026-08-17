@@ -29,6 +29,29 @@ describe('merge', () => {
       expect(mergeIde('objs\nfoo\nend', '500, alpha, alpha, car')).toBe('objs\nfoo\nend');
     });
 
+    it('mergeIde does NOT append a duplicate when the mod row lacks the model/txd comma (dodo, 2026-08-17)', () => {
+      // The game's `LoadLine` reads commas and whitespace as one separator, so `admiral\t\tadmiral` is the
+      // same model; a comma-only key read it as a NEW model and the built ide carried two id-445 rows.
+      const out = mergeIde(IDE, '445,\tadmiral\t\tadmiral, \tcar');
+
+      expect(modelsIn(out, 'cars')).toEqual(['400', '445']);
+      expect(out).toContain('445,\tadmiral\t\tadmiral, \tcar');
+    });
+
+    it('mergeIde drops a stale duplicate row of the same model already in the tree (heals the built ide)', () => {
+      const stale = [
+        'cars',
+        '400, landstal, landstal, car',
+        '445, admiral, admiral, car',
+        '445,\tadmiral\t\tadmiral, car',
+        'end',
+      ].join('\n');
+      const out = mergeIde(stale, '445, admiral, admiral, car, X');
+
+      expect(modelsIn(out, 'cars')).toEqual(['400', '445']);
+      expect(out.split('\n').filter((line) => line.startsWith('445'))).toEqual(['445, admiral, admiral, car, X']);
+    });
+
     it('mergeCarcols leaves the file unchanged when neither colour section exists', () => {
       expect(mergeCarcols('objs\nfoo\nend', 'camper, 1,2,3,4')).toBe('objs\nfoo\nend');
     });
