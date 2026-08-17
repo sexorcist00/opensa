@@ -162,6 +162,30 @@ exists only under a third-party shader — the only instrument is a field run wi
 — designing down to a ceiling this install does not have — and that one is silent by nature, because the
 result is a build that works and simply carries less than it could.
 
+## The trap in delivering to it (2026-08-17)
+
+**A field run reads the bottle, so a delivery is the WHOLE `models/` + `data/` of the built tree — not the
+files a session happens to be about.** The session-18 LOD retest copied `models/gta3.img`, `data/gta.dat`,
+`data/maps/*` and `procobj.dat` into the bottle (16 Aug 22:45); `models/vehicles.img`/`vehicles2.img` stayed
+the 15 Aug build and `data/{vehicles.ide,carcols.dat,handling.cfg,carmods.dat}` the 10 Aug one. The next
+morning a car dropped into `vehicles/new/` "had not installed" — the built tree carried it byte for byte, the
+bottle was serving the archive from before it existed, and the diagnosis cost a rebuild's worth of diffing
+before anyone compared mtimes. Also present in the bottle and NOT in our tree: `modloader.asi` +
+`modloader/` (`Car Addons`, `_ESSENTIALS`, …, 10 Aug) — an active second source of models and data whenever
+the bottle disagrees with the tree.
+
+The sync that closed it (no `--delete`, `.DS_Store` excluded), from the repo root:
+
+```sh
+B="$HOME/Library/Application Support/CrossOver/Bottles/Win10/drive_c/GTA SA/GTA San Andreas"
+rsync -rlt --itemize-changes --exclude '.DS_Store' build/original/sa/models/ "$B/models/"
+rsync -rlt --itemize-changes --exclude '.DS_Store' build/original/sa/data/   "$B/data/"
+```
+
+`>f.s` rows in its output are content changes, `>f..t` mtime-only; `anim/` was already identical
+(`cmp`), and `vehicle-installer --rebake --kind sa` (plan 008) is the one-car path that makes a rebuild
+unnecessary in the first place.
+
 ## The trap in reading the log
 
 The banner reads `built Jan 1 1980 00:00:00` on every build. That is our own reproducibility pinning
