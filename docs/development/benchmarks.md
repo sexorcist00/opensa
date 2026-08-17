@@ -305,10 +305,16 @@ load path — `fetchInstallSource` reads the served dir's `/__index` + files ove
   counts roadsign glyph quads in the cells drawn this frame. **`signs 0` on a pre-minor-8 pak means UNKNOWN,
   not none** — check the pak's `buildTime` before reading it as a verdict. The canonical `build/original`
   pak carries it from `13:19 08-08-2026` on.
-- **A diagnostic that needs new pak bytes does NOT need a full rebuild.** With `.work-opensa` kept, re-pack a RECT
-  (`opensa-pack --game build/<game>/.work-opensa/opensa-lod --out build/<probe> --rect x0,y0,x1,y1 --no-ao`) and
-  serve that dir: 80 cells in a minute instead of 1137 in an hour. It is a diagnostic pak, not a shipping
-  one — say so wherever its numbers land, and do not benchmark against it.
+- **A diagnostic that needs new pak bytes does NOT need a full rebuild.** For ONE model, `scripts/debug/
+  model-repack.ts <model> [--dff f.dff [--txd f.txd]]` re-optimizes it, re-bakes its rect's cell LODs from the
+  swapped HD and re-welds the rect into `build/<game>/opensa-lab` (serve it, `?src=/build/<game>/opensa-lab`) —
+  17 s for an 88-model rect on `original` (opensa-lod-generator plan 007). For a bigger area with
+  `.work-opensa` kept (`--keep-work`), re-pack a RECT (`opensa-pack --game build/<game>/.work-opensa/opensa-lod
+  --out build/<probe> --rect x0,y0,x1,y1 --no-ao`): 80 cells in a minute instead of 1137 in an hour. Both are
+  diagnostic paks, not shipping ones — say so wherever their numbers land, and do not benchmark against them.
+- **A pmb run that dies is resumed** (`--resume`, pmb plan 006) — never re-run from stage 1 to get the same
+  tree back; the resumed tree is byte-identical to an unbroken run's, and the pack re-enters at its last
+  finished weld chunk.
 
 ### `warnings.js` — the warning catcher (bug rounds)
 

@@ -111,6 +111,30 @@ slot with no plugin is the draw-order roulette back). Both are pre-built artifac
 does not fail the build, and each shipped one is hashed into `report-sa.json` and `build-timings.json` so a
 tree states which plugin build it is paired with.
 
+### One model changed: swap it in place instead of rebuilding
+
+```bash
+# REAL-SA tree: HD through the optimizer chain + its clone LOD cut from the result, patched into the tree's IMGs
+npx tsx scripts/debug/model-lab.ts <model> --tree build/original/sa [--dff f.dff --txd f.txd] [--dry]
+npx tsx scripts/debug/img-patch.ts restore <model>.dff --game build/original/sa      # undo, per entry
+# OPENSA tree: the model re-optimized, its rect's CELL LODs re-baked from the swapped HD, the rect re-welded
+# into a servable LAB pak (never the shipping pak) — 17 s for an 88-model rect on original
+NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/debug/model-repack.ts <model> --game original [--dff f.dff [--txd f.txd]] [--no-lod]
+npm run serve:static   # then the app with ?src=/build/original/opensa-lab
+```
+
+The full pipeline is the LAST resort — to confirm a fix on the whole tree after the one-model verdict, or for a
+change with no one-model form. Rows and levers: [`docs/debug/README.md`](debug/README.md).
+
+### A build that died: resume it
+
+```bash
+# same flags as the run that died, plus --resume — re-enters at the last finished step (a dead pack at its
+# last finished weld chunk); refused, naming the difference, if sources / flags / code changed since that run
+NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cli.ts \
+  --game ./game-src/original --in ./mods-src/original --out ./build/original --exclude sa --resume
+```
+
 ### Vehicle round: rebake instead of rebuilding
 
 ```bash

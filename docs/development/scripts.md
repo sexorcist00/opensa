@@ -147,6 +147,9 @@ These live under `scripts/debug/` and mirror `resolveMap` offline (fs instead of
 variant's real assets in `game-src/<game>/` — models read straight from the stock `gta3.img` /
 `gta_int.img` archives, data from `game-src/<game>/data/`. They share `scripts/lib/game.ts`
 (`--game <name>`, default `original`) and must be run from the repo root (paths are cwd-relative).
+The full, current table — including the one-model swap instruments that replace a rebuild
+(`model-lab.ts` / `model-optimize.ts` / `img-patch.ts` for the `sa` tree, `model-repack.ts` for the OpenSA
+lab pak) — is [`docs/debug/README.md`](../debug/README.md); this page keeps the older, hand-described ones.
 
 ### audit-rw-coverage.ts
 

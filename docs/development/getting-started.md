@@ -51,6 +51,17 @@ npm run build:game:original:sa           # the real-game target instead → ./bu
 # other games (opensa only): npm run build:game:gostown|carcer|anderius:opensa
 ```
 
+A full `original` run is ~50 min (`opensa` — the pack alone ~35) and ~12 min for `sa`. Two things keep that
+from being paid twice:
+
+- **a run that dies is resumed, not restarted** — `npx tsx tools/perfect-map-builder/src/cli.ts <same flags>
+  --resume` re-enters at the last finished step (a dead pack at its last finished weld chunk), reading
+  `<out>/.work-<target>/resume.json`; it refuses, naming the difference, if the sources, the flags or the code
+  changed since that run (pmb plan 006);
+- **one changed model does not need a rebuild** — `scripts/debug/model-lab.ts` for the `sa` tree,
+  `scripts/debug/model-repack.ts` for the OpenSA one (a servable lab pak with the model's HD AND its cell LOD
+  regenerated, `?src=/build/<game>/opensa-lab`); rows in [`docs/debug/README.md`](../debug/README.md).
+
 One command, TWO independent builds (plan 086 phase 8): `opensa/` — the SELF-CONTAINED game dir
 (engine pak inside at `pak/`; open it in folder mode or serve it for http-dir), and `opensa-pack/` —
 the FETCH build (`tools/fetch-pack` packs the game dir into `<game>-<version>/` chunks; deploy = upload
