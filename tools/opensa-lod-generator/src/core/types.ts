@@ -33,6 +33,10 @@ export interface Cell {
 
 /** One HD instance placed in the world (model + world transform), assigned to a cell. */
 export interface CellInstance {
+  /** Set for an IDE `anim` def: its DFF frame hierarchy PLACES the atomics (the Burger Shot sign sits on a child
+   *  frame), so the merge composes each atomic's frame transform — the rule the engine's weld applies to the HD.
+   *  A plain `objs` clump ignores its frames, as the engine does. */
+  anim?: string;
   model: string;
   position: Vec3;
   rotation: Quat;

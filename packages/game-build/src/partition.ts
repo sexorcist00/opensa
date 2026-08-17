@@ -11,6 +11,9 @@ export type GroupName = 'data' | 'models' | 'others' | 'textures';
 
 /** A placed model's dff + txd base names (lowercased, no extension) + its IDE draw distance. */
 export interface ModelRef {
+  /** The `anim` row's IFP name (lowercased) — set only for `anim` defs, whose DFF frame hierarchy PLACES their
+   *  atomics (the engine's weld composes it; a plain `objs` clump ignores its frames). Absent otherwise. */
+  anim?: string;
   /** The def's draw distance (world units; the max when the IDE row carries several) — 0 when absent. */
   drawDistance: number;
   model: string;
@@ -52,6 +55,7 @@ export function ideRefs(ideText: string): Map<number, ModelRef> {
   const refs = new Map<number, ModelRef>();
   for (const def of [...parseIde(ideText), ...parseTimedObjects(ideText)]) {
     refs.set(def.id, {
+      ...(def.anim !== undefined ? { anim: def.anim } : {}),
       drawDistance: def.drawDistance,
       model: def.modelName.toLowerCase(),
       txd: def.txdName.toLowerCase(),

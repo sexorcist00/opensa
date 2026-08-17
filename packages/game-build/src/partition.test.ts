@@ -152,6 +152,9 @@ describe('ideRefs', () => {
     'tobj',
     '200, lampwin_nt, lamptex, 299, 0, 20, 6',
     'end',
+    'anim',
+    '300, burger01_LAw, burger01_LAw, BURGER01_LAW, 299, 0',
+    'end',
   ].join('\n');
 
   describe('positive cases', () => {
@@ -160,6 +163,17 @@ describe('ideRefs', () => {
       expect(refs.get(100)).toEqual({ drawDistance: 299, model: 'house', txd: 'htex' });
       // the tobj model — previously dropped
       expect(refs.get(200)).toEqual({ drawDistance: 299, model: 'lampwin_nt', txd: 'lamptex' });
+    });
+
+    it('carries the anim row IFP name so a consumer knows the DFF frames place the atomics', () => {
+      const refs = ideRefs(IDE);
+      expect(refs.get(300)).toEqual({
+        anim: 'burger01_law',
+        drawDistance: 299,
+        model: 'burger01_law',
+        txd: 'burger01_law',
+      });
+      expect(refs.get(100)?.anim).toBeUndefined();
     });
   });
 });

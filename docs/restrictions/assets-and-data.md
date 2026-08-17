@@ -145,6 +145,14 @@ takes that path for every multi-atomic HD since 2026-08-17, budget or no budget)
 places a clump behind an atomic row (hole-fill takes `hdToLod`, which merges — fine today): **silent** — the
 file is valid, the tools validate it, our own engine draws every atomic, and the game shows one part at the origin.
 
+The mirror rule on the OpenSA side: whatever bakes an **`anim`** def's clump — the engine's weld
+(`cell-weld` `atomicFrame`), the cell merge (`opensa-lod-generator` `mergeCell`, plan 008), any future
+writer — places its atomics by the DFF frame hierarchy (`frameWorldTransform`, the rest pose); a plain `objs`
+clump ignores its frames as SA does. The cell merge ignored frames for everything until 2026-08-17 and the
+Burger Shot sign sat in the middle of the roof at LOD range while the HD had it on its pole.
+**Caught:** `merge.test.ts` on the same fixture. A new writer that forgets: **silent** — the cell is valid and
+draws, the part is just somewhere else.
+
 ## A dictionary is not a material list
 
 A model's TXD serves several models. "This dictionary contains a glass texture" says nothing about whether

@@ -58,7 +58,8 @@ world → grid of N×N-unit cells   (= the engine's streaming cellSize)
   and the engine renders it. Proves assembly + decimation + placement before the atlas.
   - **1a — merge. ✅ Done** (`adapters/gta-sa/{io,model-source,merge}.ts`): load HD DFFs from the archives
     (engine `parseDff`, cached), transform each instance into cell-centre-relative native Z-up world space (IPL
-    quaternion **conjugated**, DFF frame ignored — as the engine does for map atomics), bucket triangles by
+    quaternion **conjugated**, DFF frame ignored for `objs` clumps — as the engine does for map atomics; an IDE `anim`
+    def's atomics ARE placed by their frame hierarchy since plan 008, as the engine's weld does), bucket triangles by
     texture into a `MergedMesh`. Densest cell (3,−7): 422 instances → 85 959 verts / 56 490 tris / 156 textures
     in 24 ms. Unit tests on synthetic clumps (transform, re-base, texture grouping).
   - **1b — normals. ✅ Done** (`adapters/gta-sa/normals.ts`): re-derive smooth-group normals on the merged cell
