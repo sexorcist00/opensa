@@ -111,9 +111,13 @@ tree states which plugin build it is paired with.
 # Re-install + re-convert the mod cars of an ALREADY BUILT game, in place (one car ≈ 3.6 s)
 npx tsx tools/vehicle-installer/src/cli.ts --rebake gostown --only previon
 npx tsx tools/vehicle-installer/src/cli.ts --rebake gostown            # every mod car of that game
+# The same against the REAL-SA tree: raw dff/txd replaced by name in vehicles.img + vehicles2.img (one car ≈ 4 s)
+npx tsx tools/vehicle-installer/src/cli.ts --rebake original --kind sa --only cabbie
 ```
 
-Defaults: `--target build/<game>/opensa` · `--in mods-src/<game>/vehicles` (both overridable). **Which cars
+Defaults: `--kind opensa` · `--target build/<game>/<kind>` · `--in mods-src/<game>/vehicles` (all
+overridable). `--kind sa` installs instead of converting ([plan 008](../tools/vehicle-installer/docs/plans/008-rebake-sa.md));
+each kind refuses the other's tree by what the archive holds. **Which cars
 that folder holds**: every subfolder of a flat tree, or `models/` overridden per SLOT by `new/` in a
 structured one — drop a candidate into `new/` and every vehicle command takes it instead of the incumbent,
 with nothing renamed or deleted ([plan 007](../tools/vehicle-installer/docs/plans/007-models-and-new.md),

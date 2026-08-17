@@ -28,7 +28,11 @@ never the app. The dependency picture is the tools cluster of
   own `buildVehicleOsm`. It is the one place a tool reaches ACROSS the pipeline (installer → converter) and it
   exists because a vehicle round is otherwise a full build to see one row: one car 3.6 s, twelve 26 s. It can
   add a car too, on the id the mod declares for itself
-  ([plan 006](../../tools/vehicle-installer/docs/plans/006-rebake.md)).
+  ([plan 006](../../tools/vehicle-installer/docs/plans/006-rebake.md)). **`--kind sa`** does the same against
+  the real-SA tree (`build/<game>/sa`): nothing converted, the raw `.dff`/`.txd`s replaced by name in the
+  vehicles archive FAMILY opened as one (`openImgFamily`) — one car 4.2 s against a ~12 min `sa` build; each
+  kind refuses the other's tree by what the archive holds
+  ([plan 008](../../tools/vehicle-installer/docs/plans/008-rebake-sa.md)).
 - **vehicle-cutscene** — the vehicles stage's shadow: converts the installed vehicle mods into their `cs*`
   cutscene counterparts (flattened rig with the vanilla model's HAnim bone ids, baked carcols paint,
   readable plates, `txdp`-resolved TXD). It writes THREE outputs — `models/cutscene.img`,

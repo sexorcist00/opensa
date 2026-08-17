@@ -29,12 +29,16 @@ tsx tools/vehicle-installer/src/cli.ts --game ./game-src/original --in ./1 --out
 ## Rebake — the same cars against a game that is already built
 
 ```sh
-tsx tools/vehicle-installer/src/cli.ts --rebake gostown --only previon
+tsx tools/vehicle-installer/src/cli.ts --rebake gostown --only previon              # build/gostown/opensa
+tsx tools/vehicle-installer/src/cli.ts --rebake original --kind sa --only cabbie    # build/original/sa
 ```
 
-Re-merges each mod's settings into the BUILT `data/*` and re-converts its model into the archive's
-`<model>.osm`, **in place** — the vehicle half of the pipeline without the pipeline (one car ≈ 3.6 s).
-Defaults `--target build/<game>/opensa` and `--in mods-src/<game>/vehicles`; `--only a,b` narrows it.
+Re-merges each mod's settings into the BUILT `data/*`, **in place**, and — `--kind opensa` (the default) —
+re-converts its model into the archive's `<model>.osm` (one car ≈ 3.6 s), or — `--kind sa` — replaces its raw
+`.dff`/`.txd`s by name in the vehicles archive FAMILY (`vehicles.img` + the `vehicles2.img` the install spilled
+into, opened as one; one car ≈ 4 s, [plan 008](./docs/plans/008-rebake-sa.md)). The vehicle half of the
+pipeline without the pipeline. Defaults `--target build/<game>/<kind>` and `--in mods-src/<game>/vehicles`;
+`--only a,b` narrows it. Each kind refuses the other's tree by what the archive holds (`.osm` vs `.dff`).
 It can also **add** a car the built game never had, when the mod ships its own `vehicles.ide` row — the tool
 never invents an id and refuses one another model owns. An added car has no traffic/parked presence until a
 full build writes the placements. See [plan 006](./docs/plans/006-rebake.md).
@@ -105,4 +109,4 @@ The result is a minimal, self-contained pack of just the installed cars. Off by 
   trim it; (2) wire the engine population/traffic system to read `cargrp.dat`. Needs a separate plan when picked up.
 
 See [docs/plans/](./docs/plans/) (`001` architecture · `002` install + settings · `003` custom palette · `004`
-strip · `005` node API · `006` rebake · `007` `models/` + `new/`).
+strip · `005` node API · `006` rebake · `007` `models/` + `new/` · `008` rebake for `sa`).

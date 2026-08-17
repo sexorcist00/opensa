@@ -258,7 +258,8 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
     model ids plus 742 random resolved through `popcycle`/`cargrp` by city and hour. Registered by
     `engine-canvas-host` after the city boxes exist, since the random draw asks which city a spot is in.
 - Mods: a vehicle's model/texture/data is installed by `vehicle-installer` at BUILD time (`--rebake <game>
-  [--only <model>]` re-does one car in ~3.6 s against an already-built game). There is no runtime overlay —
+  [--only <model>]` re-does one car in ~3.6 s against an already-built game; `--kind sa` does the same to the
+  real-SA tree in ~4 s). There is no runtime overlay —
   see [postmortem/runtime-modloader-overlay.md](../postmortem/runtime-modloader-overlay.md). Assets resolve by
   their **bare** name, so there is no loose `vehicles/` folder. See [mods.md](mods.md).
 
