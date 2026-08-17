@@ -31,6 +31,13 @@ import { packOstexPayload } from './ostex-payload';
 const MAX_LAYERS = 256;
 const CUTOUT_REF = 128;
 
+export interface PlannedLayer {
+  alphaClass: AlphaClass;
+  /** Mip payloads, level 0 first — pass-through DXT rows or processed RGBA8 rows (both tight). */
+  mips: { data: Uint8Array; height: number; width: number }[];
+  name: string;
+}
+
 export interface ResolvedTexture {
   alphaClass: AlphaClass;
   arrayRef: number;
@@ -48,24 +55,55 @@ interface Bucket {
   width: number;
 }
 
-interface PlannedLayer {
-  alphaClass: AlphaClass;
-  /** Mip payloads, level 0 first — pass-through DXT rows or processed RGBA8 rows (both tight). */
-  mips: { data: Uint8Array; height: number; width: number }[];
-  name: string;
-}
-
 const DXT_TO_FORMAT: Record<string, OstexFormatId> = {
   dxt1: OstexFormat.BC1,
   dxt3: OstexFormat.BC2,
   dxt5: OstexFormat.BC3,
 };
 
+/** Where a journal starts — what {@link TexturePlanner.journalSince} returns for the next call. */
+export interface PlannerCursor {
+  readonly byContent: number;
+  readonly layers: Readonly<Record<string, number>>;
+  readonly missingLayers: number;
+}
+
+/**
+ * The planner's state that a chunked convert must persist between chunks to be RESUMABLE (opensa-pack
+ * checkpoints, pmb plan 006): everything `build()` reads plus everything `resolve()` dedups against.
+ * Incremental — {@link TexturePlanner.journalSince} returns only what was added after a cursor, and
+ * {@link TexturePlanner.restore} replays journals in order onto a fresh planner. Caches (`rawCache`,
+ * `globalIndex`) are not state: they rebuild from the same filesystem.
+ */
+export interface PlannerJournal {
+  /** Buckets touched since the cursor, in bucket insertion order; `layers` holds only the NEW layers. */
+  readonly buckets: readonly {
+    readonly format: OstexFormatId;
+    readonly height: number;
+    readonly key: string;
+    readonly layers: readonly PlannedLayer[];
+    readonly mipCount: number;
+    /** The bucket's FULL refs list (small; a snapshot is simpler than a delta). */
+    readonly refs: readonly number[];
+    readonly width: number;
+  }[];
+  /** New content-hash → resolution entries, in insertion order. */
+  readonly byContent: readonly (readonly [number, ResolvedTexture])[];
+  /** New stand-in layers, in insertion order. */
+  readonly missingLayers: readonly { array: number; color: [number, number, number, number]; layer: number }[];
+  readonly nextArrayRef: number;
+  /** Full snapshot of the ledger (small). */
+  readonly report: TexturePlanner['report'];
+}
+
+export const PLANNER_CURSOR_START: PlannerCursor = { byContent: 0, layers: {}, missingLayers: 0 };
+
 export class TexturePlanner {
   /** Stand-in layers minted for MISSING textures (plan 085 row B) — written into the pak manifest so the
    *  runtime can repaint them magenta on demand. `color` is the PACKED texel of the layer. Deliberately a
    *  pool SEPARATE from ordinary colour materials: repainting a shared layer would tint those too. */
   readonly missingLayers: { array: number; color: [number, number, number, number]; layer: number }[] = [];
+
   /** Ledger: how many textures took each path + every name the chain could not supply (`txd/texture` →
    *  count + the MODELS that asked for it, so a broken mod is identifiable from the report alone). */
   readonly report = {
@@ -78,6 +116,7 @@ export class TexturePlanner {
     opaquePass: 0,
     processed: 0,
   };
+
   private readonly buckets = new Map<string, Bucket>();
   private readonly byContent = new Map<number, ResolvedTexture>();
   /** Global fallback TXDs (074/06 row 10): overlay mods ship one shared TXD (e.g. `vegetation.txd`) that the
@@ -93,9 +132,7 @@ export class TexturePlanner {
    *  texture elsewhere); this index only decides between the real texels and a stand-in. Names only — the
    *  scan retains no pixel data (the lazy-TXD memory lesson), the winner re-parses through rawCache. */
   private globalIndex: Map<string, string> | null = null;
-
   private nextArrayRef = 0;
-
   private readonly rawCache = new Map<string, Map<string, RWTexture>>();
 
   /** Curated de-tiling texture names (074/12) — lowercased. */
@@ -138,6 +175,39 @@ export class TexturePlanner {
     }
 
     return out.sort((a, b) => a.ref - b.ref);
+  }
+
+  /** Everything added since `cursor`, and the cursor for the next call. */
+  journalSince(cursor: PlannerCursor): { cursor: PlannerCursor; journal: PlannerJournal } {
+    const buckets: PlannerJournal['buckets'][number][] = [];
+    const layers: Record<string, number> = { ...cursor.layers };
+    for (const [key, bucket] of this.buckets) {
+      const from = cursor.layers[key] ?? 0;
+      if (bucket.layers.length === from && from > 0) {
+        continue;
+      }
+      buckets.push({
+        format: bucket.format,
+        height: bucket.height,
+        key,
+        layers: bucket.layers.slice(from),
+        mipCount: bucket.mipCount,
+        refs: [...bucket.refs],
+        width: bucket.width,
+      });
+      layers[key] = bucket.layers.length;
+    }
+
+    return {
+      cursor: { byContent: this.byContent.size, layers, missingLayers: this.missingLayers.length },
+      journal: {
+        buckets,
+        byContent: [...this.byContent].slice(cursor.byContent),
+        missingLayers: this.missingLayers.slice(cursor.missingLayers),
+        nextArrayRef: this.nextArrayRef,
+        report: structuredClone(this.report),
+      },
+    };
   }
 
   /** Resolve a material's texture (or its flat colour) to an array layer, planning it on first use. A
@@ -209,6 +279,32 @@ export class TexturePlanner {
     this.byContent.set(contentKey, planned);
 
     return planned;
+  }
+
+  /** Replay a journal onto this planner — call in journal order on a FRESH planner over the same filesystem. */
+  restore(journal: PlannerJournal): void {
+    for (const entry of journal.buckets) {
+      let bucket = this.buckets.get(entry.key);
+      if (!bucket) {
+        bucket = {
+          format: entry.format,
+          height: entry.height,
+          layers: [],
+          mipCount: entry.mipCount,
+          refs: [],
+          width: entry.width,
+        };
+        this.buckets.set(entry.key, bucket);
+      }
+      bucket.layers.push(...entry.layers);
+      bucket.refs.splice(0, bucket.refs.length, ...entry.refs);
+    }
+    for (const [hash, resolved] of journal.byContent) {
+      this.byContent.set(hash, resolved);
+    }
+    this.missingLayers.push(...journal.missingLayers);
+    this.nextArrayRef = journal.nextArrayRef;
+    Object.assign(this.report, structuredClone(journal.report));
   }
 
   private appendLayer(

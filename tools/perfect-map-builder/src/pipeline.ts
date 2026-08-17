@@ -32,13 +32,15 @@ import { type BuildTarget } from '@opensa/tool-kit/target';
 import { installCutscene } from '@opensa/vehicle-cutscene/install';
 import { install as installVehicles } from '@opensa/vehicle-installer/install';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { BuilderConfig } from './config';
+import type { ResumeStage } from './resume';
 
 import { config as defaultConfig, PACK_RECTS } from './config';
+import { fingerprintSources, gitHead, hashRunConfig, openResumeSession } from './resume';
 
 /**
  * Valid `--until <name>` values. Common-chain + `sa`/`opensa` stop after the named one; the special `lod` value
@@ -143,6 +145,12 @@ export interface BuildPerfectMapOptions {
   keepWork?: boolean;
   /** Output root; the builder creates `<out>/sa` and `<out>/opensa`. */
   outPath: string;
+  /**
+   * Re-enter a failed run at its last finished step (plan 006): `<out>/.work-<target>/resume.json` says which
+   * steps are done and what the run was made of; a resume whose sources, config or code differ is REFUSED.
+   * The work dir is not wiped — only the failed step's partial dir is.
+   */
+  resume?: boolean;
   /**
    * The HOST this build is for (`--target`) — what picks every knob whose right value is a fact about the
    * host rather than about the source data. Omitted, it is DERIVED from `exclude` (see
@@ -249,11 +257,27 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   refuseSourceInsideWork(work, gamePath, inPath);
   refuseSourceInsideWork(legacyWork, gamePath, inPath);
   rmSync(legacyWork, { force: true, recursive: true });
-  rmSync(work, { force: true, recursive: true });
-  mkdirSync(work, { recursive: true });
 
   const source = (sub: string): string => join(inPath, sub);
   const populated = (sub: string): boolean => existsSync(source(sub)) && readdirSync(source(sub)).length > 0;
+
+  // The resume point (plan 006). A fresh run wipes the work dir and starts a manifest; `--resume` reads the
+  // manifest a failed run left, refuses it if the sources / config / code differ, and keeps the work dir.
+  const identity = {
+    commit: gitHead(),
+    configHash: hashRunConfig({ config, exclude: [...excluded].sort(), target, until: until ?? null }),
+    sources: fingerprintSources({
+      game: gamePath,
+      ...Object.fromEntries(Object.entries(subfolders).map(([key, sub]) => [`in/${key}`, source(sub)])),
+    }),
+    target,
+  };
+  const { doneStep, recordFailure, recordStep } = openResumeSession({
+    identity,
+    log,
+    resume: options.resume === true,
+    work,
+  });
 
   // The common chain (installers → optimizer → LODs). Conditional stages are skipped when their source is empty.
   // A stage may RETURN a fragment for the target report (plan 005) — the runner collects them, keyed by stage.
@@ -360,19 +384,54 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     return result;
   };
   const untilIndex = until === undefined ? Infinity : STAGE_NAMES.indexOf(until);
+  /** Run a step through `timed`, record it in the resume manifest, and mark the manifest failed if it throws. */
+  const step = async <T>(name: string, dir: string, run: () => Promise<T> | T): Promise<T> => {
+    try {
+      const result = await timed(name, run);
+      recordStep(name, dir, timings[timings.length - 1]?.seconds ?? 0);
+
+      return result;
+    } catch (error) {
+      recordFailure(name, error);
+      throw error;
+    }
+  };
+  /** A step the manifest already has: take its dir and its recorded seconds instead of running it. */
+  const skipDone = (done: ResumeStage): void => {
+    if (!existsSync(done.dir)) {
+      throw new Error(`--resume: step '${done.name}' is recorded as done but its dir is gone: ${done.dir}`);
+    }
+    timings.push({ name: done.name, resumed: true, seconds: done.seconds });
+    log(`${done.name} — done in the run being resumed (${done.seconds}s), skipped`);
+  };
   let game = gamePath;
+  /** One chain stage: taken from the manifest if the resumed run finished it, run (and recorded) otherwise. */
+  const runChainStage = async (index: number, stage: (typeof runnable)[number]): Promise<void> => {
+    const out = join(work, `${index + 1}-${stage.name}`);
+    const done = doneStep(stage.name);
+    if (done) {
+      skipDone(done);
+      game = done.dir;
+      produced.push({ dir: done.dir, name: stage.name });
+
+      return;
+    }
+    log(stage.name);
+    // A partial dir a failed attempt left behind is worse than none — a half-installed stage reads as whole.
+    rmSync(out, { force: true, recursive: true });
+    collectFragment(common, await step(stage.name, out, () => stage.run(game, out)));
+    // Consumed → free disk; a resumed run's kept stage dir is left for the run being resumed to own.
+    if (!keepWork && game !== gamePath && !doneStep(basename(game).replace(/^\d+-/, ''))) {
+      rmSync(game, { force: true, recursive: true });
+    }
+    game = out;
+    produced.push({ dir: out, name: stage.name });
+  };
   for (const [index, stage] of runnable.entries()) {
     if (STAGE_NAMES.indexOf(stage.name) > untilIndex) {
       return { produced, stoppedEarly: true }; // `until` names a skipped stage — everything before it has run
     }
-    log(stage.name);
-    const out = join(work, `${index + 1}-${stage.name}`);
-    collectFragment(common, await timed(stage.name, () => stage.run(game, out)));
-    if (!keepWork && game !== gamePath) {
-      rmSync(game, { force: true, recursive: true }); // consumed → free disk
-    }
-    game = out;
-    produced.push({ dir: out, name: stage.name });
+    await runChainStage(index, stage);
     if (until === stage.name) {
       return { produced, stoppedEarly: true }; // stop before the split; intermediates kept
     }
@@ -397,7 +456,14 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // real geometry behind its lod link — gostown's LODEnsemble* forests). The strip keeps them and the
   // pak welds them into BOTH levels; the cell bake still skips them (it bakes HD, i.e. the stub).
   const alwaysOnLods = loadLodAlways(inPath, source(subfolders.mods));
-  if (runsStage('sa', until, excluded)) {
+  const saDone = doneStep('sa');
+  if (runsStage('sa', until, excluded) && saDone) {
+    skipDone(saDone);
+    produced.push({ dir: saDone.dir, name: 'sa' });
+  } else if (runsStage('sa', until, excluded)) {
+    // Recorded as ONE resume step (its `sa` + `procobj` timings stay their own rows): a real-SA target that
+    // dies in a gate re-enters at the LOD build, not at stage 1.
+    const saStarted = Date.now();
     const built = await buildSaTarget({
       config,
       cutsceneFleet: common.cutscene !== undefined,
@@ -409,7 +475,11 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       procobjIn: source(subfolders.procobj),
       timed,
       until,
+    }).catch((error: unknown) => {
+      recordFailure('sa', error);
+      throw error;
     });
+    recordStep('sa', join(outPath, 'sa'), Number(((Date.now() - saStarted) / 1000).toFixed(1)));
     shippedAsi = built.shippedAsi;
     shippedCutsceneAsi = built.shippedCutsceneAsi;
     produced.push(built.produced);
@@ -426,7 +496,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   }
   if (runsStage('opensa', until, excluded)) {
     log(OPENSA_BUDGET_NOTICE);
-    const built = await timed('opensa', () =>
+    const built = await step('opensa', join(outPath, 'opensa'), () =>
       buildOpensaTarget({
         alwaysOnLods,
         config,
@@ -434,7 +504,11 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
         game,
         gamePath,
         holeFillModels,
+        // The LOD build + linear-txd swap is its own resume step: a pack that dies (the archive rewrite,
+        // 2026-08-17) re-enters at the pack with the kept `opensa-lod`, not at the 40-minute cell bake.
+        lodDone: doneStep('opensa-lod') !== undefined && existsSync(join(work, 'opensa-lod')),
         log,
+        onLodDone: (seconds) => recordStep('opensa-lod', join(work, 'opensa-lod'), seconds),
         outPath,
         packing: until !== 'opensa' && !excluded.has('pack'),
         work,
@@ -642,7 +716,11 @@ async function buildOpensaTarget(step: {
   gamePath: string;
   /** Per-game hole-fill list (`lod-holes.json`) — exempt from the cell bake's reduction tracks. */
   holeFillModels: string[];
+  /** `--resume`: the LOD build + swap already finished in the run being resumed and its dir is in place. */
+  lodDone?: boolean;
   log: (message: string) => void;
+  /** Called once the LOD build + swap is done, with its seconds — the resume point inside this target. */
+  onLodDone?: (seconds: number) => void;
   outPath: string;
   /** Whether the convert runs. False (`--until opensa` / `--exclude pack`) leaves `opensa/` in GAME format. */
   packing: boolean;
@@ -651,20 +729,26 @@ async function buildOpensaTarget(step: {
   const { alwaysOnLods, config, excludeItems, game, holeFillModels, log, outPath, packing, work } = step;
   const opensa = join(outPath, 'opensa');
   const lodDir = packing ? join(work, 'opensa-lod') : opensa;
-  log(`opensa → ${packing ? `${basename(work)}/opensa-lod` : 'opensa/'} (baking cells — can take several minutes)`);
-  await buildOpensaLods({
-    cellSize: config.lodCellSize,
-    config: { excludeItems, holeFillModels },
-    gameDir: game,
-    keepLods: alwaysOnLods,
-    outDir: lodDir,
-    stripLods: true,
-  });
-  // The LOD build is the last thing that mutates the game dir, and `swapLinearTxds` rewrites the very texels
-  // the pak carries — so it must run BEFORE the convert, not after it. The sidecar goes with it: it is a
-  // split-time input, not game content.
-  swapLinearTxds(game, lodDir);
-  rmSync(join(lodDir, 'linear-txd'), { force: true, recursive: true });
+  if (step.lodDone) {
+    log(`opensa-lod — done in the run being resumed, skipped (${lodDir})`);
+  } else {
+    const lodStarted = Date.now();
+    log(`opensa → ${packing ? `${basename(work)}/opensa-lod` : 'opensa/'} (baking cells — can take several minutes)`);
+    await buildOpensaLods({
+      cellSize: config.lodCellSize,
+      config: { excludeItems, holeFillModels },
+      gameDir: game,
+      keepLods: alwaysOnLods,
+      outDir: lodDir,
+      stripLods: true,
+    });
+    // The LOD build is the last thing that mutates the game dir, and `swapLinearTxds` rewrites the very texels
+    // the pak carries — so it must run BEFORE the convert, not after it. The sidecar goes with it: it is a
+    // split-time input, not game content.
+    swapLinearTxds(game, lodDir);
+    rmSync(join(lodDir, 'linear-txd'), { force: true, recursive: true });
+    step.onLodDone?.(Number(((Date.now() - lodStarted) / 1000).toFixed(1)));
+  }
   if (!packing) {
     return { pack: null, produced: [{ dir: opensa, name: 'opensa' }] };
   }
@@ -679,11 +763,15 @@ async function buildOpensaTarget(step: {
     ao: config.pack.ao,
     ...(config.pack.bakeWorkers !== undefined ? { bakeWorkers: config.pack.bakeWorkers } : {}),
     bakes: config.pack.bakes,
+    // The weld's per-chunk checkpoints live beside the pack input (plan 006): a pack that dies re-enters at
+    // its last finished chunk when the run is resumed, and the dir goes with the work dir when the run is green.
+    checkpointDir: join(work, 'pack-checkpoints'),
     gameDir: lodDir,
     gameId,
     log: (message) => log(`pack: ${message}`),
     // Plan 086 phase 8: the game dir is self-contained — the pak lands in `<out>/opensa/pak` (the default).
     outDir: opensa,
+    resume: step.lodDone === true,
     ...(packRect !== undefined ? { rect: packRect } : {}),
   });
 
@@ -892,6 +980,8 @@ const IMG_ID_BUDGETS = [
 /** One stage's wall clock. `seconds` is measured, never derived from a diff of two other numbers. */
 export interface StageTiming {
   name: string;
+  /** Recorded by an earlier run and carried over by `--resume` — never a fresh measurement of this run. */
+  resumed?: true;
   seconds: number;
 }
 

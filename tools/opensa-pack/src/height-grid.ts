@@ -66,10 +66,23 @@ export class WaterHeightGrid {
     }
   }
 
+  /** The grid as `[key, height]` pairs — the checkpoint form (opensa-pack resume). */
+  entries(): [number, number][] {
+    return [...this.cells];
+  }
+
   /** Topmost sea-band ground height at (x, y), or null when nothing rasterized there. */
   heightAt(x: number, y: number): null | number {
     const key = Math.floor(x / CELL) * 8192 + Math.floor(y / CELL) + 33554432;
 
     return this.cells.get(key) ?? null;
+  }
+
+  /** Replace the grid with a checkpointed one. */
+  restore(entries: readonly (readonly [number, number])[]): void {
+    this.cells.clear();
+    for (const [key, height] of entries) {
+      this.cells.set(key, height);
+    }
   }
 }

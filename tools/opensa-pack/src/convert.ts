@@ -1,6 +1,7 @@
 import type { AssetFileSystem, MapDefinitions } from '@opensa/renderware';
+import type { RWUvAnimation } from '@opensa/renderware/parsers/binary/types';
 
-import { TexturePlanner } from '@opensa/cell-weld/textures';
+import { PLANNER_CURSOR_START, TexturePlanner } from '@opensa/cell-weld/textures';
 import {
   assembleCell,
   createUvAnimRegistry,
@@ -36,6 +37,7 @@ import type { WaterHeightGrid } from './height-grid';
 
 import { AO_MAX_DISTANCE, bakeAo, type BakeAoReport, buildOccluderBvh } from './ao';
 import { bakeCellsPooled, defaultBakeWorkers } from './bake-pool';
+import { clearChunkCheckpoints, readChunkCheckpoints, writeChunkCheckpoint } from './checkpoint';
 import { bakeSunVis, type BakeSunVisReport, SUNVIS_MAX_DISTANCE } from './sunvis';
 
 export interface ConvertOptions {
@@ -49,6 +51,12 @@ export interface ConvertOptions {
   /** Bake pool size (074/14 A2); 1 = the serial in-process path. Default: a quarter of the cores. */
   bakeWorkers?: number;
   cellSize?: number;
+  /**
+   * Where per-chunk checkpoints are written (pmb plan 006): after every weld chunk, everything a later chunk
+   * depends on. Absent = no checkpoints. With `resume`, the checkpoints found here are replayed and the
+   * convert continues at the first chunk without one.
+   */
+  checkpointDir?: string;
   /** Chunk side in cells (074/14 A2 chunked welding); the full map cannot hold one welded heap. */
   chunkCells?: number;
   /** Shared overlay TXDs (basenames, no extension) searched when a def's own txdp chain misses. */
@@ -65,6 +73,8 @@ export interface ConvertOptions {
    *  silently drops whatever a TC places outside it (plan 087: gostown's far islands lived at x up to 37 —
    *  a quarter of its LOD map fell outside the old hardcoded ±12). */
   rect?: readonly [number, number, number, number];
+  /** Continue from the checkpoints in `checkpointDir` (a chunk plan that differs is refused). */
+  resume?: boolean;
   /** Curated stochastic de-tiling texture names, lowercased (074/12). */
   stochasticNames?: ReadonlySet<string>;
   /** Bake per-vertex sun visibility (074/07); on by default, `--no-sunvis` skips it. */
@@ -210,12 +220,25 @@ export async function convertDistrict(
   const startedMs = Date.now();
   let doneCells = 0;
 
+  // Checkpoints (pmb plan 006): a fresh convert clears any previous run's; a resume replays them onto the
+  // fresh state above and skips the chunks they cover.
+  const chunkPlan = chunks.map((chunk) => chunk.rect.join(','));
+  const resumed = openCheckpoints(options, chunkPlan, { inputs, planner, report, uvAnims }, log);
+  const firstChunk = resumed.firstChunk;
+  doneCells = resumed.doneCells;
+  const checkpoint = (chunkIndex: number, produced: readonly OspakInput[]): void =>
+    resumed.write(chunkIndex, produced, doneCells, report, uvAnims, options.waterHeights);
+
   for (const [chunkIndex, chunk] of chunks.entries()) {
+    if (chunkIndex < firstChunk) {
+      continue;
+    }
     const tag = `chunk ${chunkIndex + 1}/${chunks.length} [${chunk.rect.join(',')}]`;
     const chunkStarted = Date.now();
     const welded = weldRect(fs, defs, grid, planner, chunk.rect, cellSize, breakableModels, uvAnims, roadsignsByCell);
     if (welded.length === 0) {
       doneCells += chunk.cells;
+      checkpoint(chunkIndex, []);
       continue;
     }
     if (ao || sunVis) {
@@ -235,18 +258,21 @@ export async function convertDistrict(
     if (options.waterHeights) {
       collectWaterHeights(options.waterHeights, welded);
     }
+    const produced: OspakInput[] = [];
     for (const entry of welded) {
       const bytes = assembleCell(entry.cell);
       // The arrays this cell binds, recorded so the runtime can load textures PER RING instead of
       // uploading the whole district up front (074/21 residency follow-up, 003 phase 4).
       const textures = entry.cell.buckets.map((bucket) => bucket.textureArrayRef);
       const aabb = cellAabbXZ(entry.cell);
-      inputs.push(
+      produced.push(
         wireCompress({ ...(aabb !== undefined ? { aabb } : {}), bytes, key: entry.key, kind: 'cell', textures }),
       );
       accumulate(report, entry.key, bytes.byteLength, entry.cell.stats);
     }
+    inputs.push(...produced);
     doneCells += chunk.cells;
+    checkpoint(chunkIndex, produced);
     const elapsed = (Date.now() - startedMs) / 1000;
     const eta = doneCells > 0 ? (elapsed * (totalCells - doneCells)) / doneCells : 0;
     log(
@@ -550,6 +576,84 @@ function normalizedRect(rect: readonly [number, number, number, number]): [numbe
   ];
 }
 
+/**
+ * The convert's checkpoint session (pmb plan 006): with `resume`, replay every checkpoint under
+ * `checkpointDir` onto the fresh state (inputs, report, UV anims, water, planner) and say which chunk to
+ * continue at; without it, clear the dir. `write` journals one finished chunk. No dir = no-op session.
+ */
+function openCheckpoints(
+  options: ConvertOptions,
+  chunkPlan: readonly string[],
+  state: {
+    inputs: OspakInput[];
+    planner: TexturePlanner;
+    report: ConvertReport;
+    uvAnims: ReturnType<typeof createUvAnimRegistry>;
+  },
+  log: (message: string) => void,
+): {
+  doneCells: number;
+  firstChunk: number;
+  write: (
+    chunkIndex: number,
+    produced: readonly OspakInput[],
+    doneCells: number,
+    report: ConvertReport,
+    uvAnims: ReturnType<typeof createUvAnimRegistry>,
+    water: undefined | WaterHeightGrid,
+  ) => void;
+} {
+  const dir = options.checkpointDir;
+  let plannerCursor = PLANNER_CURSOR_START;
+  let firstChunk = 0;
+  let doneCells = 0;
+  if (dir !== undefined && options.resume) {
+    for (const checkpoint of readChunkCheckpoints(dir)) {
+      if (checkpoint.chunkPlan.join(';') !== chunkPlan.join(';')) {
+        throw new Error(
+          `resume refused: the checkpoints in ${dir} were written for a different chunk plan ` +
+            `(${checkpoint.chunkPlan.length} chunks vs ${chunkPlan.length} now) — run without resume`,
+        );
+      }
+      state.inputs.push(...checkpoint.inputs);
+      Object.assign(state.report, checkpoint.report as ConvertReport);
+      restoreUvAnims(state.uvAnims, checkpoint.uvAnims);
+      options.waterHeights?.restore(checkpoint.water);
+      state.planner.restore(checkpoint.planner);
+      plannerCursor = state.planner.journalSince(plannerCursor).cursor;
+      doneCells = checkpoint.doneCells;
+      firstChunk = checkpoint.chunkIndex + 1;
+    }
+    if (firstChunk > 0) {
+      log(`resume: ${firstChunk}/${chunkPlan.length} chunks taken from checkpoints (${doneCells} cells) — continuing`);
+    }
+  } else if (dir !== undefined) {
+    clearChunkCheckpoints(dir);
+  }
+
+  return {
+    doneCells,
+    firstChunk,
+    write: (chunkIndex, produced, done, report, uvAnims, water): void => {
+      if (dir === undefined) {
+        return;
+      }
+      const { cursor, journal } = state.planner.journalSince(plannerCursor);
+      plannerCursor = cursor;
+      writeChunkCheckpoint(dir, {
+        chunkIndex,
+        chunkPlan,
+        doneCells: done,
+        inputs: produced,
+        planner: journal,
+        report: structuredClone(report),
+        uvAnims: [...uvAnims.byName].map(([name, entry]) => ({ anim: entry.anim, name, slot: entry.slot })),
+        water: water?.entries() ?? [],
+      });
+    },
+  };
+}
+
 /** Split a normalized rect into chunk rects, keeping only chunks with content. Progress accounting rides
  *  the cell counts (user ask: long converts must say where they are and what's left) — the grid knows which
  *  cells have content up front, so the ETA weights chunks by their cell counts, not chunk counts. */
@@ -575,6 +679,17 @@ function planChunks(
   }
 
   return chunks;
+}
+
+/** Put a checkpointed UV-anim registry back (slots are the manifest order, so they must survive a resume). */
+function restoreUvAnims(
+  registry: ReturnType<typeof createUvAnimRegistry>,
+  entries: readonly { readonly anim: RWUvAnimation; readonly name: string; readonly slot: number }[],
+): void {
+  registry.byName.clear();
+  for (const entry of entries) {
+    registry.byName.set(entry.name, { anim: entry.anim, slot: entry.slot });
+  }
 }
 
 function tryGetClump(fs: AssetFileSystem, modelName: string): null | ReturnType<typeof getClump> {

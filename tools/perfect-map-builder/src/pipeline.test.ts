@@ -1316,3 +1316,97 @@ describe('shipPerfectCutsceneAsi', () => {
     });
   });
 });
+
+/**
+ * `--resume` (plan 006): a run that dies in a target re-enters at the step that died, with every finished
+ * step taken from `resume.json`; a resume over changed inputs is refused. The generators are the mocks
+ * above, so "finished" is what the manifest says, not what the mocks did.
+ */
+describe('buildPerfectMap --resume', () => {
+  let out: string;
+  let game: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-resume-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-resume-game-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    procobjLods.mockClear();
+    saLods.mockClear();
+    opensaLods.mockClear();
+  });
+
+  afterEach(() => {
+    rmSync(out, { force: true, recursive: true });
+    rmSync(game, { force: true, recursive: true });
+    opensaLods.mockImplementation((step) => {
+      mkdirSync(step.outDir, { recursive: true });
+    });
+  });
+
+  describe('negative cases', () => {
+    it('refuses to resume when nothing failed here, and refuses a resume over a changed source', async () => {
+      await expect(
+        buildPerfectMap({
+          exclude: ['optimize', 'pack'],
+          gamePath: game,
+          inPath: '/nonexistent',
+          outPath: out,
+          resume: true,
+        }),
+      ).rejects.toThrow(/nothing to resume/);
+
+      opensaLods.mockImplementationOnce(() => {
+        throw new Error('bake died');
+      });
+      await expect(
+        buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: '/nonexistent', outPath: out }),
+      ).rejects.toThrow(/bake died/);
+      // The source moved on — a resumed build over it is a build nobody can reproduce.
+      writeFileSync(join(game, 'data', 'maps', 'new.ipl'), 'inst\nend\n');
+
+      await expect(
+        buildPerfectMap({
+          exclude: ['optimize', 'pack'],
+          gamePath: game,
+          inPath: '/nonexistent',
+          outPath: out,
+          resume: true,
+        }),
+      ).rejects.toThrow(/refused[\s\S]*game: changed since the run/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('re-enters at the failed opensa step, taking the finished common chain and the sa target from the manifest', async () => {
+      opensaLods.mockImplementationOnce(() => {
+        throw new Error('bake died');
+      });
+      await expect(
+        buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: '/nonexistent', outPath: out }),
+      ).rejects.toThrow(/bake died/);
+      const manifest = JSON.parse(readFileSync(join(out, '.work-sa', 'resume.json'), 'utf8')) as {
+        failed?: { step: string };
+        stages: { name: string }[];
+      };
+      expect(manifest.failed?.step).toBe('opensa');
+      expect(manifest.stages.map((s) => s.name)).toContain('sa');
+      const saCalls = saLods.mock.calls.length;
+      const procobjCalls = procobjLods.mock.calls.length;
+
+      const result = await buildPerfectMap({
+        exclude: ['optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        outPath: out,
+        resume: true,
+      });
+
+      expect(saLods.mock.calls.length).toBe(saCalls); // the sa target was NOT rebuilt
+      expect(procobjLods.mock.calls.length).toBe(procobjCalls);
+      expect(opensaLods.mock.calls.length).toBe(2); // once died, once resumed
+      expect(result.produced.map((p) => p.name)).toContain('opensa');
+      // A green run leaves no resume point behind (the work dir goes with it, as always).
+      expect(existsSync(join(out, '.work-sa', 'resume.json'))).toBe(false);
+    });
+  });
+});

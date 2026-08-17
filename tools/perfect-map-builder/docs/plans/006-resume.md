@@ -1,8 +1,41 @@
 # 006 — `--resume`: a resume point in `.work-<target>`, and checkpoints inside the pack stage
 
-**Status: 📋 PLANNED 2026-08-17** (his idea, the day the first `original` opensa build in weeks died at the
-LAST step of a 55-minute run — the pack's archive rewrite — and had to be re-run from stage 1). Build after
-the current run lands green.
+**Status: ✅ Phases 1–3 SHIPPED 2026-08-17** (his idea, the day the first `original` opensa build in weeks died at
+the LAST step of a 55-minute run — the pack's archive rewrite — and had to be re-run from stage 1). What is
+NOT built from the text below: the per-model-class `.done` checkpoints inside the pack (the classes are
+~9 min of a 55-min run and re-run on a resumed pack; the 25-min weld is what checkpoints).
+
+## Shipped
+
+- `src/resume.ts`: `resume.json` in `.work-<target>` — `commit` (git HEAD), `configHash` (stable hash of the
+  resolved config + excludes + until + target), `sources` (per root: files / bytes / newest mtime — `--game`
+  and every `mods-src/<game>/<stage>`), `stages[]` (name, dir, doneAt, seconds), `failed?`. Written by
+  `openResumeSession` on every step and on failure; a fresh run wipes the work dir, `--resume` keeps it,
+  refuses on ANY identity difference (`assertResumable` names each), skips every recorded step (its dir must
+  exist), deletes the failed step's partial dir before re-entering it, and carries the recorded seconds into
+  `build-timings.json` marked `resumed: true`. Steps: every chain stage, `sa` (whole target), `opensa-lod`
+  (the cell bake + linear-txd swap — its own step, so a pack that dies re-enters at the pack), `opensa`.
+- The pack's per-chunk checkpoints: `tools/opensa-pack/src/checkpoint.ts` (`chunk-<i>.json` + `.bin` under
+  `<work>/pack-checkpoints`), `TexturePlanner.journalSince/restore` (INCREMENTAL journal: new layers with
+  their mip rows, new content-hash entries, new stand-in layers, refs, `nextArrayRef`, ledger snapshot),
+  `WaterHeightGrid.entries/restore`, the UV-anim registry snapshot, the report snapshot and the chunk's cell
+  entries. `convertDistrict({ checkpointDir, resume })` replays them onto fresh state and continues at the
+  first chunk without one; a different chunk plan is refused. The planner snapshot IS the sidecar
+  `docs/in-reserve/ospak-in-place-cell-patch.md` needs — it lives in the work dir for now, not beside the pak.
+- Surface: `pmb … --resume` (same flags as the run); `opensa-pack --checkpoints <dir> [--resume]` standalone.
+
+## Measured
+
+- **Determinism, real data (2026-08-17)**: on `build/original/.opensa-lab/input` (the model-repack synthetic
+  input for `burger01_law`), rect `3,-7,4,-7` at `chunkCells 1` (2 chunks, 3 cell entries): run A unbroken,
+  run B with checkpoints, then chunk-1's files deleted and run C `resume: true` → **`world.ospak` md5
+  `69c9614a…` on all three, manifest JSON identical**; C took 2.1 s for its one chunk against 6 s for the
+  whole. `--resume` on the pipeline: `pipeline.test.ts` — a run whose opensa step dies resumes with the
+  common chain and the `sa` target taken from the manifest (`saLods` not called again), a changed source
+  refuses, nothing-to-resume refuses.
+- Suites: perfect-map-builder 101, opensa-pack (checkpoint 2, archive-edit 8), cell-weld textures 8 —
+  310/310 across the three, tsc + eslint clean.
+- Not yet measured: a real killed-and-resumed `original` build (the next failure will be).
 
 Restrictions checked 2026-08-17: `restrictions/architecture.md` — *a build's SOURCE may not live inside its
 own output; `<out>/.work-<target>` is wiped before any stage reads `--game`* (the resume carve-out below has

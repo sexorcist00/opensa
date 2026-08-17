@@ -44,6 +44,9 @@ export interface PackOptions {
   bakes?: boolean;
   /** Bake worker pool size; the default is a quarter of the cores. */
   bakeWorkers?: number;
+  /** Per-chunk checkpoints of the weld (pmb plan 006) — written here after every chunk; with `resume`,
+   *  replayed and continued from. Absent = no checkpoints. */
+  checkpointDir?: string;
   /** The game dir to convert. */
   gameDir: string;
   /** Fetch game id stamped into the manifest (plan 086: `game-src/<id>` — folder name IS the id).
@@ -62,6 +65,8 @@ export interface PackOptions {
   /** Inclusive GTA CELL-coordinate rect [x0, y0, x1, y1]. Absent = auto-fit to every cell with content
    *  (plan 087: a fixed rect silently dropped gostown's far islands). */
   rect?: readonly [number, number, number, number];
+  /** Continue the weld from the checkpoints in `checkpointDir` (the model classes after it re-run). */
+  resume?: boolean;
   /** Stochastic de-tiling name lists; defaults to the curated `data/stochastic.txt`. */
   stochasticFiles?: readonly string[];
 }
@@ -121,6 +126,9 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
     ao,
     ...(options.bakeWorkers !== undefined ? { bakeWorkers: options.bakeWorkers } : {}),
     cellSize: CELL_SIZE,
+    ...(options.checkpointDir !== undefined
+      ? { checkpointDir: options.checkpointDir, resume: options.resume === true }
+      : {}),
     log,
     // Every model class converts HERE: the by-name ones first (they own their private dictionaries), then
     // the map objects, which resolve into the world plan this hook hands over while it is still open.

@@ -38,6 +38,9 @@ import { parseBuildTarget } from '@opensa/tool-kit/target';
  *     --procobj-max <n>  raise the placed-object safety cap with the density (default 20000). Without it a
  *                      high-density run measures the CAP — the build prints CAP DROPPED when it binds.
  *     --keep-work      keep the intermediate `.work-<target>` builds even on a full run.
+ *     --resume         re-enter a FAILED run at its last finished step (plan 006): reads
+ *                      `<out>/.work-<target>/resume.json`; refused if the sources, the flags or the code
+ *                      changed since that run. Same flags as the run being resumed.
  *     --no-<pass>      disable a map-optimizer pass to bisect it: --no-weld-seams | --no-textures.
  * A `broken-prelight.json` at the mods-src root (or inside its `mods/` subfolder) is the map-optimizer
  * prelight FORCE list: the statistical pass runs map-wide and the listed models are additionally forced past
@@ -102,6 +105,7 @@ async function main(): Promise<void> {
     inPath,
     keepWork: process.argv.includes('--keep-work'),
     outPath: fromCwd(outArg),
+    resume: process.argv.includes('--resume'),
     target: parseBuildTarget(argValue('--target')),
     until: until as StageName | undefined,
   });

@@ -6,6 +6,7 @@
  *
  *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> [--rect x0,y0,x1,y1]
  *     [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--stochastic <file>[,<file>…]]
+ *     [--checkpoints <dir> [--resume]]   per-chunk weld checkpoints (pmb plan 006); --resume continues from them
  *
  * REMOVED FLAGS (2026-07-19, user): `--cell-size` (the pak and the runtime must agree on it and nothing
  * checked that — it is the `CELL_SIZE` constant now), `--chunk-cells` (a welding tuning knob from the A2
@@ -64,10 +65,12 @@ async function main(): Promise<void> {
 
   const gameId = arg('game-id');
   const pakOut = arg('pak-out');
+  const checkpoints = arg('checkpoints');
   await packGameDir({
     ao: !process.argv.includes('--no-ao'),
     ...(bakeWorkers !== undefined ? { bakeWorkers } : {}),
     bakes: process.argv.includes('--bakes'),
+    ...(checkpoints ? { checkpointDir: fromCwd(checkpoints), resume: process.argv.includes('--resume') } : {}),
     gameDir: requireDir('game', gameRaw),
     ...(gameId ? { gameId } : {}),
     models: !process.argv.includes('--no-models'),

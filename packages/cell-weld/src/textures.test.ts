@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { TexturePlanner } from './textures';
+import { PLANNER_CURSOR_START, type PlannerJournal, TexturePlanner } from './textures';
 
 const TXD_PATH = join(process.cwd(), 'tests', 'original', 'mods', 'chinatownsfe.txd');
 
@@ -124,6 +124,59 @@ describe('TexturePlanner missing textures', () => {
         'chinatownsfe/miragepillar2_257': { count: 3, models: ['visagesign04', 'visagesign05'] },
         'skullsign/miragesign1_257': { count: 1, models: [] },
       });
+    });
+  });
+});
+
+/**
+ * The planner's journal (pmb plan 006): a chunked convert checkpoints what the planner added per chunk, and
+ * a resume replays the journals onto a fresh planner. What must hold: after the replay the fresh planner
+ * RESOLVES and BUILDS exactly as the original — the same layer indexes for the same textures, the same
+ * array bytes — or a resumed pak binds the wrong layers of every array.
+ */
+describe('TexturePlanner journal / restore', () => {
+  describe('negative cases', () => {
+    it('journals only what was added since the cursor', () => {
+      const { fs, realName } = fixtureFs();
+      const planner = new TexturePlanner(fs, new Map());
+      planner.resolve('chinatownsfe', realName, [1, 2, 3, 255]);
+      const first = planner.journalSince(PLANNER_CURSOR_START);
+      planner.resolve('chinatownsfe', null, [9, 9, 9, 255]);
+      const second = planner.journalSince(first.cursor);
+
+      const layers = (journal: PlannerJournal): number =>
+        journal.buckets.reduce((sum, bucket) => sum + bucket.layers.length, 0);
+      expect(layers(first.journal)).toBe(1);
+      expect(layers(second.journal)).toBe(1); // the colour layer only, not the texture again
+      expect(planner.journalSince(second.cursor).journal.buckets).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('a fresh planner fed the journals resolves the same layers and builds the same bytes', () => {
+      const { fs, realName } = fixtureFs();
+      const original = new TexturePlanner(fs, new Map());
+      const a = original.resolve('chinatownsfe', realName, [1, 2, 3, 255]);
+      const b = original.resolve('chinatownsfe', null, [9, 9, 9, 255]);
+      const missed = original.resolve('chinatownsfe', 'nosuch_257', [7, 7, 7, 255]);
+      const journal = original.journalSince(PLANNER_CURSOR_START).journal;
+
+      const resumed = new TexturePlanner(fs, new Map());
+      resumed.restore(journal);
+      expect(resumed.report).toEqual(original.report);
+      expect(resumed.missingLayers).toEqual(original.missingLayers);
+
+      // Dedup state survived: the same asks give the same slots, and a NEW ask gets the next slot both sides.
+      expect(resumed.resolve('chinatownsfe', realName, [1, 2, 3, 255])).toEqual(a);
+      expect(resumed.resolve('chinatownsfe', null, [9, 9, 9, 255])).toEqual(b);
+      expect(resumed.resolve('chinatownsfe', 'nosuch_257', [7, 7, 7, 255])).toEqual(missed);
+      expect(resumed.resolve('chinatownsfe', null, [4, 4, 4, 255])).toEqual(
+        original.resolve('chinatownsfe', null, [4, 4, 4, 255]),
+      );
+      const built = original.build();
+      const rebuilt = resumed.build();
+      expect(rebuilt.map((array) => [array.ref, array.meta])).toEqual(built.map((array) => [array.ref, array.meta]));
+      rebuilt.forEach((array, index) => expect(Buffer.compare(array.bytes, built[index].bytes)).toBe(0));
     });
   });
 });

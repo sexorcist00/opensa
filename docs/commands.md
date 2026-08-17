@@ -38,7 +38,10 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
 
 Params: `--out <dir>` (default `./build/original`) · `--until <split|mods|vehicles|cutscene|peds|optimize|trees|sa|procobj|opensa|pack|lod>` (that IS the run order — `procobj` is baked inside the `sa` branch since plan 014, so `--until sa` stops BEFORE the clutter; `cutscene` is the vehicles stage's shadow and drops out with `--exclude vehicles`)
 (inclusive, keeps `.work-<target>/`) · **`--exclude <stage,stage>`** · **`--target <sa|opensa>`** ·
-`--procobj-density <n>` · `--procobj-max <n>` · `--keep-work` · `--no-weld-seams` · `--no-textures`.
+`--procobj-density <n>` · `--procobj-max <n>` · `--keep-work` · `--no-weld-seams` · `--no-textures` ·
+**`--resume`** — re-enter a FAILED run at its last finished step (`<out>/.work-<target>/resume.json`; the pack
+re-enters at its last finished weld chunk); refused if the sources, flags or code changed since that run
+(pmb plan 006).
 
 `--exclude` says WHICH STAGES run where `--until` is the stop point: it drops the named stages and keeps
 everything after them (repeatable, comma-separated, same names as `--until` minus the `lod` alias; an unknown
@@ -239,6 +242,7 @@ NODE_OPTIONS=--max-old-space-size=12288 \
 #   --rect: optional SUBSET override (bench districts); default auto-fits every cell with content — the old
 #     hardcoded ±12 silently dropped gostown's far islands (plan 087)
 #   --pak-out: where the pak products land (default: <out>/pak — the game dir is self-contained, 086 phase 8)
+#   --checkpoints <dir> [--resume]: per-chunk weld checkpoints; --resume continues from them (pmb plan 006)
 #   --game-id: fetch game id stamped into the pak manifest (default: basename of --game; pmb passes its own)
 ```
 
