@@ -65,7 +65,11 @@ total, LOD rebake 1.0–1.2 s**, lab pak 1.5 MB / 2 entries (`3,-4,hd` 33 425 B,
 shipping tree's `3,-4,lod` is 24 992 B, so the lab LOD is the same class of mesh). Proof the LOD is cut from
 the swap: `--raw` vs the optimized run gave a different `gp_dt_01.dff` AND a different `lod_3_-4.dff`
 (md5 `4a0b16c8…` → `cbcb4ac5…`). Benchmark: `docs/benchmarks/tools/2026-08-17-model-repack-lod-half.md`.
-Field verdict on `original`: pending a rebuilt `build/original/opensa`.
+**`original`, measured 2026-08-17 on the rebuilt `build/original/opensa`** (the run that also fixed the pack's
+per-file archive rewrite — 2804 s total, `opensa` stage 2532 s, 1124 cell entries, pak 1.21 GB):
+`burger01_law` → rect `3,-7` (1 cell, **88 models**, 104 tiny instances culled): **17.4 s wall, LOD rebake
+12.1 s**, lab pak 6.3 MB / 2 entries, peak RSS 3.6 GB. 11 of the 88 have no source by design (generated
+tree/palm LODs — the lab's known caveat). Field verdict: pending his look at `?src=/build/original/opensa-lab`.
 
 ## Caveats that stand (documented in the script header)
 

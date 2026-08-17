@@ -18,3 +18,15 @@ Before today the same run reported "no DFF source for 9 model(s)" and welded 0 c
 `game-src/<game>/models/gta3.img` alone, and gostown's world lives in `gostown6.img` (fixed: `openArchiveIndex`
 over every source archive). The `original` numbers (a 111-model rect took ~10 s in plan 024 phase 0) will be
 re-measured when `build/original/opensa` exists again.
+
+## `original`, same day, after the rebuilt `build/original/opensa`
+
+Build context (the run that fixed `rewriteModelArchives`'s per-file cap hit): 2804 s total, `opensa` stage
+2532 s (pack 2015 s: 16 chunks 1472 s, models ~9 min, archive rewrite 23.3 s), 1124 cell entries, `world.ospak`
+1 269 600 256 B, `vehicles.img` 1781 MB (+392 −590 entries) + `vehicles2.img` 1415 MB, fetch-pack 129 chunks.
+
+| Run | Wall | LOD rebake | Rect | Lab pak | Peak RSS |
+| --- | --- | --- | --- | --- | --- |
+| `model-repack.ts burger01_law --game original` | **17.4 s** | 12.1 s (1 cell) | `3,-7`, 88 models, 104 tiny instances culled | 6.3 MB, 2 entries | 3.6 GB |
+
+Plan 024 phase 0 measured ~10 s for a 111-model rect WITHOUT the LOD half; the LOD rebake is the added 12 s.
