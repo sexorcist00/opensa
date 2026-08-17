@@ -820,3 +820,15 @@ fix**: the same sweep on the same pak with `?benchcar=<one stock low-poly model>
 cheap model) — if `gpu.pass` returns to ~3–4 ms the fleet is the cost, if `country-dusk` stays at ~12 the
 world is; then a rect-repack / `model-repack` A/B on the suspect layer. The cost question itself belongs to
 the `UNCAPPED=1` headless lane; this run answers "does it hold 120" — no.
+
+**The pair, same day, same pak: `?benchcar=caddy`** —
+[`opensa-engine/2026-08-17-ingame-benchcar-caddy-pin.json`](opensa-engine/2026-08-17-ingame-benchcar-caddy-pin.json)
+(every road car pinned to the lightest `.osm` of the fleet, 2.2 MB — all 143 car slots are mod cars, so no
+stock pin exists). `gpu.pass` baseline / fleet / caddy: ls-noon 2.7 / 6.9 / **5.6**, sf-fog-dawn 2.5 / 5.4 /
+4.5, lv-night 3.6 / 11.8 / 10.8, **country-dusk 3.8 / 12.4 / 12.0**, ls-rain-night 2.7 / 5.9 / 4.9, ganton-noon
+3.1 / 10.4 / 9.1, strip-noon 3.2 / 7.3 / 6.2, ganton-night 3.2 / 10.8 / 11.4. Triangles and draws come back
+most of the way to the baseline; the GPU pass gives back ~1 ms where cars stand and nothing where they do
+not. **Verdict: the fleet is ~10–15 % of the regression on car-heavy scenes and ~0 on `country-dusk`; the
+rest is the WORLD as drawn today.** First suspect by the record: the RUNTIME clutter — the 08-09 baseline
+predates the 08-10 per-category ranges and the 08-11 species floor, and the worst scenes are the grass ones.
+Next: `?bench=all&benchcar=caddy&procobj=0`, then `parked=0` / `cargen=0` / a smaller `draw`, then pak-vs-pak.
