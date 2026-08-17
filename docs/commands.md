@@ -130,7 +130,10 @@ change with no one-model form. Rows and levers: [`docs/debug/README.md`](debug/R
 
 ```bash
 # same flags as the run that died, plus --resume — re-enters at the last finished step (a dead pack at its
-# last finished weld chunk); refused, naming the difference, if sources / flags / code changed since that run
+# last finished weld chunk); refused, naming the difference, if sources / flags / git HEAD changed since that
+# run (a DIRTY tree at the same HEAD is allowed — fix the bug that killed it, resume). The pack's model classes
+# after the weld re-run (~9 min on original — docs/in-reserve/opensa-pack-model-class-checkpoints.md).
+# Field-exercised 2026-08-17: killed at weld chunk 6/21, resumed at 7/21, byte-identical to an unbroken run.
 NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cli.ts \
   --game ./game-src/original --in ./mods-src/original --out ./build/original --exclude sa --resume
 ```

@@ -625,7 +625,11 @@ function openCheckpoints(
       firstChunk = checkpoint.chunkIndex + 1;
     }
     if (firstChunk > 0) {
-      log(`resume: ${firstChunk}/${chunkPlan.length} chunks taken from checkpoints (${doneCells} cells) — continuing`);
+      log(
+        `resume: ${firstChunk}/${chunkPlan.length} chunks taken from checkpoints (${doneCells} cells) — continuing; ` +
+          'the model classes after the weld are NOT checkpointed and re-run ' +
+          '(docs/in-reserve/opensa-pack-model-class-checkpoints.md)',
+      );
     }
   } else if (dir !== undefined) {
     clearChunkCheckpoints(dir);

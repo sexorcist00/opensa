@@ -312,7 +312,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // game (merged carcols, mod TXDs as txdp parents), so on a tree without them every slot fails closure.
   // `--exclude vehicles` therefore drops this stage too — loudly, because a silently missing stage reads
   // as a broken build (build:game:original:sa excludes vehicles today).
-  stageCutscene(chain, excluded, populated(subfolders.vehicles), source(subfolders.vehicles), target);
+  stageCutscene(chain, excluded, populated(subfolders.vehicles), source(subfolders.vehicles), target, gamePath);
   if (populated(subfolders.peds)) {
     refuseLayeredBothTargets(source(subfolders.peds), 'peds', until, excluded);
     chain.push({
@@ -396,15 +396,23 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       throw error;
     }
   };
-  /** A step the manifest already has: take its dir and its recorded seconds instead of running it. */
-  const skipDone = (done: ResumeStage): void => {
+  /** A recorded step's dir, which the run is about to READ, must still be there. Checked at the point of use
+   *  and not for every recorded step: the chain deletes each stage dir as the next stage consumes it (disk),
+   *  so of a finished chain only the LAST stage's dir survives — and that is the only one a resume reads
+   *  (2026-08-17: the first real killed build, gostown mid-pack, was refused over the long-gone `1-split`). */
+  const assertResumedDir = (done: ResumeStage): void => {
     if (!existsSync(done.dir)) {
       throw new Error(`--resume: step '${done.name}' is recorded as done but its dir is gone: ${done.dir}`);
     }
+  };
+  /** A step the manifest already has: take its recorded seconds instead of running it. */
+  const skipDone = (done: ResumeStage): void => {
     timings.push({ name: done.name, resumed: true, seconds: done.seconds });
     log(`${done.name} — done in the run being resumed (${done.seconds}s), skipped`);
   };
   let game = gamePath;
+  /** The recorded chain stage whose dir `game` currently points at (undefined while `game` is the source). */
+  let gameStep: ResumeStage | undefined;
   /** One chain stage: taken from the manifest if the resumed run finished it, run (and recorded) otherwise. */
   const runChainStage = async (index: number, stage: (typeof runnable)[number]): Promise<void> => {
     const out = join(work, `${index + 1}-${stage.name}`);
@@ -412,9 +420,13 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     if (done) {
       skipDone(done);
       game = done.dir;
+      gameStep = done;
       produced.push({ dir: done.dir, name: stage.name });
 
       return;
+    }
+    if (gameStep) {
+      assertResumedDir(gameStep); // this stage reads the resumed run's last finished dir
     }
     log(stage.name);
     // A partial dir a failed attempt left behind is worse than none — a half-installed stage reads as whole.
@@ -425,6 +437,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       rmSync(game, { force: true, recursive: true });
     }
     game = out;
+    gameStep = undefined;
     produced.push({ dir: out, name: stage.name });
   };
   for (const [index, stage] of runnable.entries()) {
@@ -443,6 +456,9 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // User-curated LOD exclusions (`lod-exclude.json` at the mods-src root or inside mods/): models that must
   // not enter the far LODs at all — e.g. HD street-furniture replacements (a 22k-tri ELECTRICA traffic light
   // placed 729× exploded the cell bake ~50×; at 300+ u it is a few unreadable pixels anyway).
+  if (gameStep) {
+    assertResumedDir(gameStep); // the split reads the resumed run's last finished chain dir
+  }
   const userExcluded = loadLodExclude(inPath, source(subfolders.mods));
   const excludeItems = [...collectGeneratedModels(game), ...userExcluded];
   log(
@@ -458,6 +474,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   const alwaysOnLods = loadLodAlways(inPath, source(subfolders.mods));
   const saDone = doneStep('sa');
   if (runsStage('sa', until, excluded) && saDone) {
+    assertResumedDir(saDone); // the finished target IS the deliverable — gone means the resume cannot stand in
     skipDone(saDone);
     produced.push({ dir: saDone.dir, name: 'sa' });
   } else if (runsStage('sa', until, excluded)) {
@@ -941,6 +958,7 @@ function stageCutscene(
   vehiclesPopulated: boolean,
   vehiclesSource: string,
   target: BuildTarget,
+  gamePath: string,
 ): void {
   if (!vehiclesPopulated) {
     return;
@@ -948,6 +966,16 @@ function stageCutscene(
   if (excluded.has('vehicles')) {
     if (!excluded.has('cutscene')) {
       log('cutscene — skipped (vehicles stage excluded; the conversion needs the INSTALLED game)');
+    }
+
+    return;
+  }
+  // A total conversion may ship no cutscene archive at all (gostown has none) — there is nothing to convert
+  // the fleet's twins INTO, so the stage is skipped, loudly, instead of dying on the missing file at run time
+  // (2026-08-17: the first gostown build since the stage was added died here after the vehicles stage).
+  if (!existsSync(join(gamePath, 'models', 'cutscene.img'))) {
+    if (!excluded.has('cutscene')) {
+      log('cutscene — skipped (the game ships no models/cutscene.img; no cutscene fleet to convert)');
     }
 
     return;
@@ -1530,6 +1558,11 @@ function planChain<T extends { name: ExcludableStage }>(
 ): T[] {
   const staged = new Set(chain.map((stage) => stage.name));
   for (const name of ['mods', 'vehicles', 'cutscene', 'peds', 'trees'] as const) {
+    // A cutscene stage dropped for a reason OTHER than an empty vehicles/ (vehicles excluded, no
+    // cutscene.img in the game) has already said why in `stageCutscene` — do not call it "empty" here.
+    if (name === 'cutscene' && staged.has('vehicles')) {
+      continue;
+    }
     if (!staged.has(name) && !excluded.has(name)) {
       log(`${name} — skipped (${stageSource[name]}/ empty)`);
     }

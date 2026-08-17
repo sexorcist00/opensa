@@ -183,6 +183,11 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   RW draws (`wheelRadius` learned this 2026-08-05 — the wheel had scaled to nothing; `appendGeometry`
   was already safe). New scans over `geometry.positions` inherit the trap SILENTLY.
 
+- **A game without `models/cutscene.img` gets NO cutscene stage** (2026-08-17: gostown, a TC, ships none —
+  the first build after the stage was added died on the raw ENOENT after the vehicles stage). The pipeline
+  now skips the stage with `cutscene — skipped (the game ships no models/cutscene.img …)`; the consequence
+  is that such a game's mod cars have no cutscene twins at all — nothing to convert them into — and
+  `perfect-cutscene.asi` is not shipped, which is right (it exists to reorder our translucent atomics).
 - **`vehicle-cutscene` decides translucency from the MATERIAL alpha only, so a surface whose transparency
   lives in the TEXTURE's alpha channel converts as opaque.** It then takes the vehicle-pipeline stamp with
   every other opaque atomic, and outside a real `CVehicle` that pipe does not composite alpha — the surface

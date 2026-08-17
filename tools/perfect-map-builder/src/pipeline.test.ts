@@ -561,6 +561,9 @@ describe('buildPerfectMap cutscene stage', () => {
     game = mkdtempSync(join(tmpdir(), 'pmb-cutscene-game-'));
     mods = mkdtempSync(join(tmpdir(), 'pmb-cutscene-mods-'));
     mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    // The stage converts the fleet's twins INTO the game's cutscene archive — a game without one has no stage.
+    mkdirSync(join(game, 'models'), { recursive: true });
+    writeFileSync(join(game, 'models', 'cutscene.img'), 'x');
     mkdirSync(join(mods, 'vehicles', 'bobcat - a truck - author'), { recursive: true });
     writeFileSync(join(mods, 'vehicles', 'bobcat - a truck - author', 'bobcat.dff'), 'x');
     vehicleInstall.mockClear();
@@ -619,6 +622,19 @@ describe('buildPerfectMap cutscene stage', () => {
       expect(vehicleInstall).not.toHaveBeenCalled();
       expect(cutsceneInstall).not.toHaveBeenCalled();
       expect(logs.join('\n')).toMatch(/cutscene — skipped \(vehicles stage excluded/);
+    });
+
+    it('skips, loudly, when the game ships no models/cutscene.img — a total conversion has no cutscene fleet', async () => {
+      // gostown: the first build after the stage was added died on the missing archive AFTER the vehicles stage.
+      rmSync(join(game, 'models', 'cutscene.img'));
+      const logs: string[] = [];
+      const spy = vi.spyOn(console, 'log').mockImplementation((m: unknown) => void logs.push(String(m)));
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+      spy.mockRestore();
+
+      expect(vehicleInstall).toHaveBeenCalledTimes(1);
+      expect(cutsceneInstall).not.toHaveBeenCalled();
+      expect(logs.join('\n')).toMatch(/cutscene — skipped \(the game ships no models\/cutscene\.img/);
     });
 
     it('does not even ADDRESS perfect-cutscene.asi when no fleet was converted', async () => {
@@ -1407,6 +1423,36 @@ describe('buildPerfectMap --resume', () => {
       expect(result.produced.map((p) => p.name)).toContain('opensa');
       // A green run leaves no resume point behind (the work dir goes with it, as always).
       expect(existsSync(join(out, '.work-sa', 'resume.json'))).toBe(false);
+    });
+
+    it('resumes a chain whose consumed stage dirs are gone — only the LAST finished dir is read', async () => {
+      // The chain deletes each stage dir as the next consumes it, so a run killed in a target has lost every
+      // chain dir but the last. The first real killed build (gostown, mid-pack) was refused over `1-split`.
+      const mods = mkdtempSync(join(tmpdir(), 'pmb-resume-mods-'));
+      mkdirSync(join(mods, 'vehicles', 'bobcat - a truck - author'), { recursive: true });
+      writeFileSync(join(mods, 'vehicles', 'bobcat - a truck - author', 'bobcat.dff'), 'x');
+      opensaLods.mockImplementationOnce(() => {
+        throw new Error('bake died');
+      });
+      await expect(
+        buildPerfectMap({ exclude: ['cutscene', 'optimize', 'pack'], gamePath: game, inPath: mods, outPath: out }),
+      ).rejects.toThrow(/bake died/);
+      // split was consumed by vehicles: its dir is gone, vehicles' (the last) is there.
+      expect(existsSync(join(out, '.work-sa', '1-split'))).toBe(false);
+      expect(existsSync(join(out, '.work-sa', '2-vehicles'))).toBe(true);
+      const vehicleCalls = vehicleInstall.mock.calls.length;
+
+      const result = await buildPerfectMap({
+        exclude: ['cutscene', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: mods,
+        outPath: out,
+        resume: true,
+      });
+
+      expect(vehicleInstall.mock.calls.length).toBe(vehicleCalls); // the chain was NOT re-run
+      expect(result.produced.map((p) => p.name)).toContain('opensa');
+      rmSync(mods, { force: true, recursive: true });
     });
   });
 });

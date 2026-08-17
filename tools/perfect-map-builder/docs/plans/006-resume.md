@@ -1,9 +1,11 @@
 # 006 — `--resume`: a resume point in `.work-<target>`, and checkpoints inside the pack stage
 
-**Status: ✅ Phases 1–3 SHIPPED 2026-08-17** (his idea, the day the first `original` opensa build in weeks died at
-the LAST step of a 55-minute run — the pack's archive rewrite — and had to be re-run from stage 1). What is
-NOT built from the text below: the per-model-class `.done` checkpoints inside the pack (the classes are
-~9 min of a 55-min run and re-run on a resumed pack; the 25-min weld is what checkpoints).
+**Status: ✅ Phases 1–3 SHIPPED 2026-08-17, field-exercised on a real killed build the same day** (his idea,
+the day the first `original` opensa build in weeks died at the LAST step of a 55-minute run — the pack's
+archive rewrite — and had to be re-run from stage 1). What is NOT built from the text below: the
+per-model-class `.done` checkpoints inside the pack (the classes are ~9 min of a 55-min run and re-run on a
+resumed pack; the 25-min weld is what checkpoints) — deferred with its trigger in
+`docs/in-reserve/opensa-pack-model-class-checkpoints.md`, named by the pack's own `resume:` log line.
 
 ## Shipped
 
@@ -35,7 +37,22 @@ NOT built from the text below: the per-model-class `.done` checkpoints inside th
   refuses, nothing-to-resume refuses.
 - Suites: perfect-map-builder 101, opensa-pack (checkpoint 2, archive-edit 8), cell-weld textures 8 —
   310/310 across the three, tsc + eslint clean.
-- Not yet measured: a real killed-and-resumed `original` build (the next failure will be).
+- **The first REAL killed build (2026-08-17, gostown opensa, `SIGTERM` at weld chunk 6/21) found a bug the
+  e2e had not**: the chain deletes each stage dir as the next consumes it, so of a finished chain only the
+  LAST dir survives — and `skipDone` demanded EVERY recorded dir, refusing over the long-gone `1-split`. Fixed
+  the same day: a recorded dir is checked at the point of USE (the next stage that reads it, the split, the
+  `sa` deliverable), never for a consumed intermediate; `pipeline.test.ts` +1 (chain of two, first consumed,
+  fails on the old code). Also found: gostown ships no `models/cutscene.img` and the cutscene stage died on
+  the raw ENOENT after the vehicles stage — now skipped, loudly (`pipeline.test.ts` +1). Then the exercise:
+  killed run resumed at chunk 7/21 (`resume: 6/21 chunks taken from checkpoints (116 cells)`), 100 s for the
+  pack vs 197 s whole; **byte-identical to an unbroken run — `world.ospak`, `water.bin`, all four archives;
+  only the manifest's `buildTime` differs.** Numbers:
+  `docs/benchmarks/tools/2026-08-17-pmb-resume-killed-build.md`.
+- **A DIRTY working tree is NOT part of the identity — by design.** `commit` is git HEAD; the resume above ran
+  over uncommitted fixes to the very code that had refused it, and that is the intended dev loop (the pack
+  dies on a bug, the bug is fixed, the run resumes). The reproducibility gate is the COMMIT boundary; a
+  resumed build's manifest names the HEAD it was made of, and whether the tree was clean at that HEAD is the
+  operator's to keep.
 
 Restrictions checked 2026-08-17: `restrictions/architecture.md` — *a build's SOURCE may not live inside its
 own output; `<out>/.work-<target>` is wiped before any stage reads `--game`* (the resume carve-out below has

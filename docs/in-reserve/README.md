@@ -43,4 +43,5 @@ on rather than moving them.
 | Card | Trigger |
 | --- | --- |
 | [ospak-in-place-cell-patch.md](ospak-in-place-cell-patch.md) | a one-model verdict the lab pak cannot carry (shipping texture arrays / prelight / generated-LOD exclusions, or a swap that must reach `fetch-pack`) — `model-repack.ts`'s header names this card; the lab never writes the shipping pak |
+| [opensa-pack-model-class-checkpoints.md](opensa-pack-model-class-checkpoints.md) | a pack dying INSIDE the model classes (after the weld) repeatedly, or the classes outgrowing the weld — the pack's own `resume:` log line names this card as what re-runs |
 | [img-archive-limit-lift.md](img-archive-limit-lift.md) | a ninth registered `models/*.img` — the build's own `assertArchiveSlots` names this card when it fires |
