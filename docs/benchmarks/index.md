@@ -855,3 +855,21 @@ residency `target` reads 422 on every 08-17 row against 345 on every 08-09/08-12
 are ~22 % bigger on this surface (matches ocean-horizon's +20 %, not a ×3). Next: take the surface out —
 the UNCAPPED headless sweep on THIS pak (same lane as 08-12 → a pure pak-vs-pak delta), then `probe=0`, then
 a rect-repack A/B on country-dusk's cells per mod layer.
+
+## 2026-08-18 — the surface taken out: the "×3" was two lanes read as one
+
+[`opensa-engine/2026-08-18-headless-uncapped-0817-evening-pak-surface-out.json`](opensa-engine/2026-08-18-headless-uncapped-0817-evening-pak-surface-out.json)
+— Claude, headless, DPR=2, **UNCAPPED**, all 9 scenes, on the user's 2026-08-17 EVENING pak (`world.ospak`
+1 269 690 368 B, buildTime 18:10 — session 22's two fixes on top of the 10:54 pak arms A–D read), the full
+1219-car fleet unpinned. **The same lane as the 08-12 uncapped record, so this is the pure pak-vs-pak delta:**
+country-dusk pass 3.70 → 4.02 (×1.09), ocean-horizon ×1.04, and the city scenes ×1.5–1.7 (ls-noon 2.67 → 4.43,
+lv-night 3.69 → 6.19, ganton-noon 3.06 → 4.77) — tracking their triangles (×1.5–2.1) and draws (×1.5–2.0), i.e.
+the fleet, which arm B priced at ~1 ms. **The ×2.5–3.3 of the open issue was the user's DISPLAY lane read
+against Claude's HEADLESS lane** — the comparison this readme forbids. His own lane already read country-dusk
+**12.47** on 2026-08-09 (`2026-08-09-ingame-user-display-oldmap-baseline.json`, before mods 64/65, the pow2
+resample, the LOD-link repairs and the fleet), against 12.37 on 08-17; lv-night 9.20 → 11.75, ganton-noon
+8.54 → 10.36. On his lane, fleet pinned (arm B), the world's own residual is **+7–17 % on city scenes and −4 %
+on country-dusk** — the cellVertex ×2–3 and texture +25 % of a fuller map, not a per-pixel ×3. What DOES stand
+and was never this issue: his display costs 2–3× the headless canvas on the same content (country-dusk 12.5
+vs 3.9 since at least 08-09, ocean-horizon only 1.2×), a standing fact about that surface.
+`docs/open-issues/opensa-gpu-pass-regression-2026-08-17.md` closes on this.

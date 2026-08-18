@@ -1,6 +1,28 @@
 # The OpenSA frame lost 120 fps: GPU pass ×2.5–3.3 on the 2026-08-17 build, and it is not the cars
 
-**Status: 🔴 OPEN 2026-08-17 — investigation paused by the user after four in-game arms; the fleet, the
+**Status: ✅ CLOSED 2026-08-18 on step 1 — the ×2.5–3.3 was two LANES read as one, not a regression of the
+pak.** The UNCAPPED headless sweep on the fresh pak
+([`2026-08-18-headless-uncapped-0817-evening-pak-surface-out.json`](../../benchmarks/opensa-engine/2026-08-18-headless-uncapped-0817-evening-pak-surface-out.json),
+the same lane as the 08-12 record, so a pure pak-vs-pak delta) reads `country-dusk` **3.70 → 4.02 (×1.09)**,
+`ocean-horizon` ×1.04 and the city scenes ×1.5–1.7 — tracking their triangles (×1.5–2.1) and draws (×1.5–2.0),
+i.e. the fleet arm B already priced. And the user's OWN display lane, BEFORE any of the suspect pak changes
+([`2026-08-09-ingame-user-display-oldmap-baseline.json`](../../benchmarks/opensa-engine/2026-08-09-ingame-user-display-oldmap-baseline.json)),
+already read `country-dusk` **12.47**, `lv-night` 9.20, `ganton-noon` 8.54 — against 12.37 / 11.75 / 10.36 on
+08-17. Arm A's baseline (`08-09 arm1`) was Claude's headless canvas (`target 345`); every row of his is
+`target 422/423`, and his surface has cost 2–3× the headless one on the same content since at least 08-09
+(country-dusk 12.5 vs 3.9, ocean-horizon only 1.2×) — the comparison `docs/benchmarks/readme.md` forbids,
+made anyway because the two 08-17 tables sat side by side. What remains, and is NOT a defect: on his lane
+with the fleet pinned (arm B) the world's residual 08-09 → 08-17 is **+7–17 % on city scenes and −4 % on
+`country-dusk`** — the `cellVertex` ×2–3 and `texture` +25 % of a fuller map (mods 64/65, the pow2 resample,
+LOD-link repairs), and the unpinned fleet is ~1 ms on car-heavy scenes (`vehicle-submesh-draw-batching` in
+`docs/performance/`). Steps 2–4 below (`probe=0`, the rect bisect, the alpha census) were NOT run — there is
+no ×3 to bisect. **The lesson goes to the readme's comparability list: a regression report must name the lane
+of BOTH sides before it names a suspect**, and the city scenes never held 120 on his display (08-09: ls-noon
+106 fps, lv-night 70, country-dusk 61) — "lost 120" was true of the headless capped rows only.
+
+<details><summary>The investigation as it stood when the surface was still in (2026-08-17)</summary>
+
+**Status as written 2026-08-17: 🔴 OPEN — investigation paused by the user after four in-game arms; the fleet, the
 runtime clutter and the far LOD ring are EXCLUDED, the cost sits near the camera and per pixel, and the
 next step (a surface-free pak-vs-pak delta) is written below.**
 
@@ -95,3 +117,5 @@ beyond the known `peren` deferred-spawn line and one CLEO atlas miss).
   "does it hold 120", the uncapped one answers "what does it cost" (`docs/development/benchmarks.md`).
 - Do not rebuild the pak per hypothesis — the rect probe and the one-model lab are minutes, the pipeline is
   ~50; and a run that dies is resumed (`--resume`), not restarted.
+
+</details>

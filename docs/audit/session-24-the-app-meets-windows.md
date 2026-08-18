@@ -8,7 +8,7 @@ Session 23 shipped an 84.8 MB portable exe that **had never been run**. This ses
 it was, and everything the answer dragged behind it. `apps/cutscene-converter` plan 002 is now DONE, all
 eight steps, and the app is published from the user's own hosting.
 
-The GPU-pass regression (`docs/open-issues/opensa-gpu-pass-regression-2026-08-17.md`) was NOT started and
+The GPU-pass regression (`docs/open-issues/fixed/opensa-gpu-pass-regression-2026-08-17.md`) was NOT started and
 is now the only open item in his order.
 
 ## The two defects, and what each cost

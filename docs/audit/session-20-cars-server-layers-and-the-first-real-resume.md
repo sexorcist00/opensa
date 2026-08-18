@@ -50,7 +50,7 @@ close found two real bugs the e2e had not.
 ## Open after this session
 
 - His field verdict on the OpenSA lab (`?src=/build/original/opensa-lab`, `burger01_law`).
-- The GPU-pass regression (`docs/open-issues/opensa-gpu-pass-regression-2026-08-17.md`) — untouched this
+- The GPU-pass regression (`docs/open-issues/fixed/opensa-gpu-pass-regression-2026-08-17.md`) — untouched this
   session; next = the UNCAPPED headless sweep on the 08-17 pak.
 - `packages/validation` 001 → `apps/cutscene-converter` 001/002 (decisions settled in the standalone-app
   chain).

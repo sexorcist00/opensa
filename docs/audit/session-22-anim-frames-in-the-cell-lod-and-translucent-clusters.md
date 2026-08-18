@@ -44,5 +44,5 @@ then wiped `build/` and rebuilt everything fresh, so every tree on disk carries 
 ## Left for session 23 (his order, unchanged)
 
 1. `packages/validation` 001 → `apps/cutscene-converter` 001/002.
-2. The GPU-pass regression `docs/open-issues/opensa-gpu-pass-regression-2026-08-17.md` — next step an UNCAPPED
+2. The GPU-pass regression `docs/open-issues/fixed/opensa-gpu-pass-regression-2026-08-17.md` — next step an UNCAPPED
    headless sweep on the fresh pak (his rebuild of 2026-08-17 evening).

@@ -5,7 +5,7 @@
 001, then `apps/cutscene-converter` 001/002. Both chains are the standalone-app work — the first thing this
 repo has built for people who will never clone it. Nothing here touches the engine, the pak or a build.
 
-The GPU-pass regression (`docs/open-issues/opensa-gpu-pass-regression-2026-08-17.md`) was NOT started and
+The GPU-pass regression (`docs/open-issues/fixed/opensa-gpu-pass-regression-2026-08-17.md`) was NOT started and
 stays next in his order.
 
 ## What changed
@@ -98,7 +98,7 @@ wired end to end and called by nothing. A run is seconds; killing one mid-write 
    one Windows run of `apps/cutscene-converter/release/cutscene-converter-0.4.0.exe`, and the two numbers
    that need it.
 2. **The GPU-pass regression**, untouched and next: the UNCAPPED headless sweep on the fresh pak first
-   (`docs/open-issues/opensa-gpu-pass-regression-2026-08-17.md` carries the ordered steps).
+   (`docs/open-issues/fixed/opensa-gpu-pass-regression-2026-08-17.md` carries the ordered steps).
 3. **A pre-existing flake**, not from this session — `tools/opensa-pack/src/model-osm-uv-anim.test.ts`
    times out at 5 000 ms under full-suite load (3.7 s alone). Confirmed by stashing this session's work and
    running the suite at `6ea15dc0`: same failure. It needs either an explicit `testTimeout` or a lighter

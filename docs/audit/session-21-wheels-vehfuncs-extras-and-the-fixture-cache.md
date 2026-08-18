@@ -64,7 +64,7 @@ regeneration as the proof. Field verdict at the end: the car fixes are all in pl
 ## Open after this session
 
 - His OpenSA lab verdict on `burger01_law` (`?src=/build/original/opensa-lab`) — still pending.
-- The GPU-pass regression (`docs/open-issues/opensa-gpu-pass-regression-2026-08-17.md`) — untouched;
+- The GPU-pass regression (`docs/open-issues/fixed/opensa-gpu-pass-regression-2026-08-17.md`) — untouched;
   next = the UNCAPPED headless sweep on the 08-17 pak.
 - `packages/validation` 001 → `apps/cutscene-converter` 001/002.
 - VehFuncs conditions (`?c1`, `?rain`, `?h6-18`) and class characteristics (`_pj=`, `_cl=`) — the hack card
