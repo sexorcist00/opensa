@@ -367,3 +367,14 @@ interpret them.
   of my own instruments lied first (a 64 MB short-circuit; `2dfx` floats read as model names), and the
   wall-clock A/B was abandoned rather than published — the mod set changed under the measurement.
   Suite 4 290 → 4 313.
+
+- [`session-25-two-lanes-and-the-price-of-the-fleet.md`](./session-25-two-lanes-and-the-price-of-the-fleet.md)
+  — 2026-08-18: the GPU-pass "×2.5–3.3" closed on its first step — one UNCAPPED headless sweep showed the
+  same-lane pak delta is ×1.1 on the scene that "tripled"; the issue had read the user's display lane against
+  Claude's headless one, and his own lane already carried the number on 08-09. Two A/B builds of his design
+  then priced the fleet whole: the high-poly cars are +1.0..2.6 ms of pass in the city and ~700 draws, the
+  whole map's growth since 08-09 is +0.0..0.5 ms, `country-dusk` moves in no arm, and the `cellVertex`
+  counter turns out to hold the cars. The draw-batching lever got its price and a four-step build-time route
+  (−36 % opaque draws by a same-state weld, per census) — parked. Vehicle-installer plan 011 was written:
+  `features.txt` reaches the real game through fastman92's `model_special_features.dat`, the 15-token
+  vocabulary becomes shared data, and 098/02+06 gain a module and an oracle.
