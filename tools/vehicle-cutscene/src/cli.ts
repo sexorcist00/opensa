@@ -3,7 +3,8 @@ import { parseBuildTarget } from '@opensa/tool-kit/target';
  * vehicle-cutscene CLI. Converts installed GTA-SA vehicle mods into their cutscene counterparts. Usage:
  *   tsx tools/vehicle-cutscene/src/cli.ts --game <path> --in <vehicles-dir> --out <path> [--only <model,…>] [--inspect]
  *     --game     base game tree (data/vehicles.ide + data/txdcut.ide + models/cutscene.img)
- *     --in       folder of vehicle mods (immediate subfolders: <model>.dff/.txd + <model>.settings.txt) —
+ *     --in       folder of vehicle mods (immediate subfolders: <model>.dff + <model>.txd; a `.settings.txt`
+ *                beside them is vehicle-installer's input and is NOT read here) —
  *                the same folder vehicle-installer consumes
  *     --out      output game tree (base copied, models/cutscene.img rebuilt, data/txdcut.ide patched)
  *     --no-base-copy  do NOT copy the --game tree into --out; emit only the three files this tool writes
