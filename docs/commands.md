@@ -280,6 +280,12 @@ npx tsx tools/opensa-lod-generator/src/cli.ts --game <dir> --out <dir> --cell 25
 # Real-SA per-object LOD clones ([--holes <json>]: per-game hole-fill list, e.g. mods-src/original/lod-holes.json)
 NODE_OPTIONS=--max-old-space-size=8192 npx tsx tools/sa-lod-generator/src/cli.ts --game <dir> --out <dir>
 
+# One loose vehicle DFF: report / uniform scale / reflection transfer (paths resolve from the CWD)
+npx tsx tools/vehicle-optimizer/src/cli.ts --model ./mods-src/original/1/yankee.dff
+npx tsx tools/vehicle-optimizer/src/cli.ts --model ./path/to/car.dff --scale 1.02 --prototype ./path/to/ref.dff
+#   no --scale and no --prototype = a structure report, nothing written
+#   the finished DFF lands in an `out/` folder BESIDE the model; --out <dir> puts it elsewhere
+
 # Game dir → native pak (the pack stage standalone)
 NODE_OPTIONS=--max-old-space-size=12288 \
   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --in ./mods-src
