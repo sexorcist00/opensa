@@ -75,6 +75,21 @@ describe('the three folder validations', () => {
       expect(validateCars(dir, join(dir, 'nope')).verdicts[0].code).toBe('path.missing');
     });
 
+    // The shape mistake anyone makes once: unpack the mods and drop the models straight into the folder.
+    // Matching then finds nothing and the honest-looking answer, "0 of 23 slots covered", sends the user
+    // hunting file names instead of the folder shape.
+    it('names the loose-file shape instead of reporting empty coverage', () => {
+      const cars = join(dir, 'cars');
+      mkdirSync(cars);
+      writeFileSync(join(cars, 'bobcat.dff'), '');
+      writeFileSync(join(cars, 'bobcat.txd'), '');
+
+      const report = validateCars(dir, cars);
+
+      expect(report.level).toBe('error');
+      expect(report.verdicts[report.verdicts.length - 1].code).toBe('cars.loose-files');
+    });
+
     // The census is the TOOL's answer; when it cannot be read at all that is an error here, not a
     // half-empty coverage warning that reads as "your mods are fine, there is just nothing to do".
     it('blocks when the census cannot be read, carrying the tool own words in the detail', () => {
