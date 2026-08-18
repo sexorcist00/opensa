@@ -15,6 +15,7 @@ import {
   checkInstBearingIplSlots,
   EXCLUDABLE_STAGES,
   type ExcludableStage,
+  flaIdPools,
   INST_BEARING_IPL_SLOTS,
   installRequirements,
   OPENSA_BUDGET_NOTICE,
@@ -1058,9 +1059,15 @@ describe('checkImgIdBudgets', () => {
     );
   }
 
+  /** The adjuster ini as the mods stage installs it into the tree root — the file the guard reads its pools from. */
+  function writeIni(lines: string[], name = 'fastman92limitAdjuster_GTASA.ini'): void {
+    writeFileSync(join(dir, name), ['[ID LIMITS]', 'Apply ID limit patch = 1', ...lines].join('\r\n'));
+  }
+
   describe('negative cases', () => {
     it('throws when the TXD pool is within the runtime margin of the FLA cap (the shopping.dat crash class)', () => {
       // 5,960 TXDs > 6,000 − 50 margin — exhausting an FLA FILE_TYPE_* pool boots into heap corruption.
+      writeIni(['FILE_TYPE_TXD = 6000']);
       writeImg(
         'gta3.img',
         Array.from({ length: 5960 }, (_, i) => `t${i}.txd`),
@@ -1069,11 +1076,52 @@ describe('checkImgIdBudgets', () => {
     });
 
     it('throws when binary IPL files approach the FILE_TYPE_IPL pool (the field boot-crash case)', () => {
+      writeIni(['FILE_TYPE_IPL = 1024']);
       writeImg(
         'gta3.img',
         Array.from({ length: 1019 }, (_, i) => `a${i}_stream0.ipl`),
       );
       expect(() => checkImgIdBudgets(dir)).toThrow(/binary IPL files: 1019 of 1024/);
+    });
+
+    it('judges the build against the SHIPPED ini, not against the pool someone raised in the bottle', () => {
+      // 2026-08-18: the guard carried 6000 as a constant while the shipped ini said 5000, so a 5,177-archive
+      // build reported headroom and the game died at boot. The ini is the number in force.
+      writeIni(['FILE_TYPE_TXD = 5000']);
+      writeImg(
+        'gta3.img',
+        Array.from({ length: 5177 }, (_, i) => `t${i}.txd`),
+      );
+      expect(() => checkImgIdBudgets(dir)).toThrow(/TXD archives: 5177 of 5000/);
+    });
+
+    it('falls back to FLA defaults when the raise is `#`-disabled — a commented line is not a value', () => {
+      writeIni(['#FILE_TYPE_TXD = 6000']);
+      writeImg(
+        'gta3.img',
+        Array.from({ length: 5177 }, (_, i) => `t${i}.txd`),
+      );
+      expect(() => checkImgIdBudgets(dir)).toThrow(/TXD archives: 5177 of 5000/);
+    });
+
+    it('falls back to FLA defaults when the ini does not apply the ID limit patch at all', () => {
+      writeFileSync(
+        join(dir, 'fastman92limitAdjuster_GTASA.ini'),
+        ['[ID LIMITS]', '#Apply ID limit patch = 0', 'FILE_TYPE_TXD = 6000'].join('\r\n'),
+      );
+      writeImg(
+        'gta3.img',
+        Array.from({ length: 5177 }, (_, i) => `t${i}.txd`),
+      );
+      expect(() => checkImgIdBudgets(dir)).toThrow(/TXD archives: 5177 of 5000/);
+    });
+
+    it('falls back to FLA defaults for a tree that carries no adjuster ini', () => {
+      writeImg(
+        'gta3.img',
+        Array.from({ length: 5177 }, (_, i) => `t${i}.txd`),
+      );
+      expect(() => checkImgIdBudgets(dir)).toThrow(/TXD archives: 5177 of 5000/);
     });
   });
 
@@ -1084,7 +1132,27 @@ describe('checkImgIdBudgets', () => {
       expect(() => checkImgIdBudgets(dir)).not.toThrow();
     });
 
+    it('reads the pools the tree will run under, naming the ini it read them from', () => {
+      writeIni(['FILE_TYPE_TXD = 6000', 'FILE_TYPE_COL = 400', 'FILE_TYPE_IPL = 1024']);
+
+      expect(flaIdPools(dir)).toEqual({
+        pools: { '.col': 400, '.ipl': 1024, '.txd': 6000 },
+        source: 'fastman92limitAdjuster_GTASA.ini',
+      });
+    });
+
+    it('passes what the default pool would refuse once the shipped ini carries the raise', () => {
+      writeIni(['FILE_TYPE_TXD = 6000']);
+      writeImg(
+        'gta3.img',
+        Array.from({ length: 5177 }, (_, i) => `t${i}.txd`),
+      );
+
+      expect(() => checkImgIdBudgets(dir)).not.toThrow();
+    });
+
     it('passes the 522 binary IPLs the first sa build at the recovered density produced', () => {
+      writeIni(['FILE_TYPE_IPL = 1024']);
       // The build that found this gate (2026-08-10): 331 `plobj*_stream*` tiles + 191 stock ones. 242 over
       // the old 280-slot pool, comfortably under the raised one — the regression test for the raise itself.
       writeImg(

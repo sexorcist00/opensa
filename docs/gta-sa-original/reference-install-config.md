@@ -203,7 +203,7 @@ numbers in this document are the only committed copy and a fresh mod library mus
 into the tree root, and the first root delivery reverted the install to the repo's `5000 / 280 / 256` and
 stopped the game booting — see
 [the write-up](../open-issues/fixed/sa-boot-crash-fla-pools-reverted-by-delivery.md). The counts as measured
-on 2026-08-18 across every `models/*.img` of `build/original/sa`: `.dff` 15 600 · **`.txd` 5 511** · `.col` 264
+on 2026-08-18 across every `models/*.img` of `build/original/sa`: `.dff` 15 596 · **`.txd` 5 177** · `.col` 264
 · `.ipl` 191 · `.ifp` 159 · `.dat` 64 of 64.
 
 **The ini is SET** (confirmed by the user 2026-08-10, verbatim — `FILE_TYPE_TXD = 6000`, `FILE_TYPE_COL = 400`,

@@ -983,26 +983,24 @@ function stageCutscene(
   chain.push({ name: 'cutscene', run: (game, out) => runCutsceneStage(game, vehiclesSource, out, target) });
 }
 
-/** FLA ID-pool budgets for the real-SA build — mirrors the operative FILE_TYPE_* values in the target
- *  install's fastman92limitAdjuster_GTASA.ini (stock pools: 5000/255/256). Each counts ARCHIVE FILES = ID
- *  slots. The margins leave room for SA's runtime slots (script/generic/ped-remap TXDs etc.) — exhausting a
- *  pool corrupts the heap during data load with a crash right after `shopping.dat` (field-diagnosed 2026-07:
- *  FILE_TYPE_IPL exhaustion; raising the ini fixed the boot).
+/** FLA ID-pool budgets for the real-SA build. Each row counts ARCHIVE FILES = ID slots. `stock` is the pool
+ *  FLA builds when its ini line is absent or `#`-disabled (the ini states it in the comment above each line);
+ *  the OPERATIVE ceiling is read from the adjuster ini THIS BUILD SHIPS into the tree root — {@link flaIdPools}.
+ *  The margins leave room for SA's runtime slots (script/generic/ped-remap TXDs etc.) — exhausting a pool
+ *  corrupts the heap during data load, with the crash landing somewhere unrelated a few seconds later.
  *
- *  **Raised 2026-08-10 after the first `sa` build at the recovered procobj density (91 092 objects) hit the
- *  IPL pool: 522 binary IPL files of 280.** The layer's `plobj*_stream*` tiles went 50 → 331 across the
- *  column fix, which is what a 5.96× object count buys at `STREAM_MAX_INST = 512`. Per the target rule in
- *  `CLAUDE.md`, an FLA pool is a configured NUMBER — raised in the ini rather than designed down to.
- *
- *  **And TXD was never 6000 here.** These constants claimed it from the start, while the install's ini leaves
- *  `#FILE_TYPE_TXD` commented — FLA's own log reports the pool it actually built: `20000 - 24999 (5000)`. The
- *  build sat at 4999 of a real 5000 while this guard called it 4999 of 6000, so the one pool nothing warned
- *  about was the one a single archive would have burst. Evidence and the new values:
- *  `docs/gta-sa-original/reference-install-config.md`. */
+ *  **These were constants until 2026-08-18, and that is precisely how the class recurs.** A guard number ABOVE
+ *  the install's pool is silent by construction: it claimed TXD 6000 while the shipped ini said 5000, so a
+ *  5 177-archive build reported headroom and the game died at boot the first time a delivery carried the ini
+ *  ([write-up](../../../docs/open-issues/fixed/sa-boot-crash-fla-pools-reverted-by-delivery.md); the 2026-07
+ *  `FILE_TYPE_IPL` exhaustion was the same class). Per the target rule in `CLAUDE.md` a real FLA pool is a
+ *  configured NUMBER — raised in the ini rather than designed down to — so the guard has to read the number
+ *  that will actually be in force, and say where it read it.
+ */
 const IMG_ID_BUDGETS = [
-  { ext: '.txd', label: 'TXD archives', limit: 6000, margin: 50 },
-  { ext: '.col', label: 'COL archives', limit: 400, margin: 8 },
-  { ext: '.ipl', label: 'binary IPL files', limit: 1024, margin: 8 },
+  { ext: '.txd', key: 'FILE_TYPE_TXD', label: 'TXD archives', margin: 50, stock: 5000 },
+  { ext: '.col', key: 'FILE_TYPE_COL', label: 'COL archives', margin: 8, stock: 255 },
+  { ext: '.ipl', key: 'FILE_TYPE_IPL', label: 'binary IPL files', margin: 8, stock: 256 },
 ] as const;
 
 /** One stage's wall clock. `seconds` is measured, never derived from a diff of two other numbers. */
@@ -1036,21 +1034,57 @@ export function checkImgIdBudgets(gameDir: string): Record<string, number> {
     const archive = openArchive(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
     names.push(...archive.names.map((name) => name.toLowerCase()));
   }
+  const { pools, source } = flaIdPools(gameDir);
   const counted: Record<string, number> = {};
   for (const budget of IMG_ID_BUDGETS) {
+    const limit = pools[budget.ext] ?? budget.stock;
     const count = names.filter((name) => name.endsWith(budget.ext)).length;
     counted[budget.ext] = count;
-    const message = `${budget.label}: ${count} of ${budget.limit} ID slots (margin ${budget.margin} for SA's runtime slots)`;
-    if (count > budget.limit - budget.margin) {
+    const message = `${budget.label}: ${count} of ${limit} ID slots (margin ${budget.margin} for SA's runtime slots)`;
+    if (count > limit - budget.margin) {
       throw new Error(
-        `real-SA ID pool nearly exhausted — ${message}. Raise the FLA limit in fastman92limitAdjuster_GTASA.ini ` +
-          'or trim the build (the salod txdp partition is the biggest TXD consumer).',
+        `real-SA ID pool nearly exhausted — ${message}. Ceiling read from: ${source}. Raise ${budget.key} in ` +
+          'the adjuster ini the build SHIPS (mods-src/<game>/mods/sa/…, not just the bottle) and record the new ' +
+          'value in docs/gta-sa-original/reference-install-config.md, or trim the build (the salod txdp ' +
+          'partition is the biggest TXD consumer).',
       );
     }
-    log(`  id budget — ${message}`);
+    log(`  id budget — ${message}, per ${source}`);
   }
 
   return counted;
+}
+
+/**
+ * The ID pools the target will really run, read off the adjuster ini this build ships into the tree root
+ * (`fastman92limitAdjuster*.ini`, installed by the mods stage — so the ini is a build OUTPUT and a delivery
+ * carries it). Three things are NOT a value and fall back to FLA's own defaults, each said out loud: a
+ * `#`/`;`-disabled line, an ini whose `Apply ID limit patch` is off (every raise in it is inert), and a tree
+ * with no adjuster ini at all. Falling back DOWN is the safe direction — it can only make the guard stricter.
+ */
+export function flaIdPools(gameDir: string): { pools: Record<string, number>; source: string } {
+  const stock = Object.fromEntries(IMG_ID_BUDGETS.map((budget) => [budget.ext, budget.stock as number]));
+  const ini = existsSync(gameDir)
+    ? readdirSync(gameDir).find((name) => /^fastman92limitadjuster.*\.ini$/i.test(name))
+    : undefined;
+  if (ini === undefined) {
+    return { pools: stock, source: 'no fastman92limitAdjuster*.ini in the tree, so FLA defaults' };
+  }
+  const text = readFileSync(join(gameDir, ini), 'utf8');
+  // A leading `#` or `;` disables a line in fastman92's format, so the pattern anchors on the key itself.
+  const active = (key: string): number | undefined => {
+    const match = new RegExp(`^[ \\t]*${key}[ \\t]*=[ \\t]*(\\d+)`, 'im').exec(text);
+
+    return match === null ? undefined : Number(match[1]);
+  };
+  if ((active('Apply ID limit patch') ?? 0) === 0) {
+    return { pools: stock, source: `${ini} (ID limit patch NOT applied, so FLA defaults)` };
+  }
+
+  return {
+    pools: Object.fromEntries(IMG_ID_BUDGETS.map((budget) => [budget.ext, active(budget.key) ?? budget.stock])),
+    source: ini,
+  };
 }
 
 /**
@@ -1140,7 +1174,7 @@ export function installRequirements(
       what: 'rows in one text IPL',
     },
     ...IMG_ID_BUDGETS.map((budget) => ({
-      ceiling: budget.ext === '.txd' ? 5000 : budget.ext === '.col' ? 255 : 256,
+      ceiling: budget.stock,
       lift: `FLA ${budget.label.split(' ')[0]} id pool`,
       spent: imgCounts[budget.ext] ?? 0,
       what: budget.label,

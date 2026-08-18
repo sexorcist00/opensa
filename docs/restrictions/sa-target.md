@@ -77,8 +77,11 @@ which is the row's proof that it is a gate and not a museum piece. The answer wa
 ini — a real ceiling is a number to move, not a reason to ship less content — and the same build showed the
 opposite failure too: the guard's TXD limit had always read 6000 while the install's pool was 5000, so a
 4999-archive build reported comfortable headroom while standing one slot short. **A guard number ABOVE the
-install's is silent by construction — it can only fail to fire.** Take pool numbers from FLA's own log, never
-from the ini alone (a `#`-disabled line still prints a value).
+install's is silent by construction — it can only fail to fire.** Since 2026-08-18 the guard does not carry
+the numbers at all: `flaIdPools()` reads them off the adjuster ini the build SHIPS into the tree root, treats a
+`#`-disabled line / an unapplied `Apply ID limit patch` / a missing ini as FLA's defaults (the strict
+direction), and prints the file each ceiling came from. Read pool numbers the same way — from the ini in force
+plus FLA's own log, never from a constant somebody once matched to a bottle.
 
 **A pool raised in the FIELD must be raised in `mods-src` in the same change — the build SHIPS the ini — and
 its value WRITTEN DOWN in `reference-install-config.md`, because `mods-src/` is gitignored and the doc is the
@@ -87,7 +90,7 @@ The adjuster is a mod (`mods-src/<game>/mods/sa/6. fastman92 limit adjuster 6.5 
 `fastman92limitAdjuster_GTASA.ini` is a BUILD OUTPUT: it lands in the tree root and any delivery that copies
 the root puts it in the install. The 2026-08-10 raise was made in the bottle only, the repo kept
 `5000 / 280 / 256`, and the first delivery of a whole tree root (2026-08-18) silently reverted the target to
-those numbers with 5 511 TXD archives in the build — a boot-time heap fault with no message naming any of it
+those numbers with 5 177 TXD archives in the build — a boot-time heap fault with no message naming any of it
 ([the write-up](../open-issues/fixed/sa-boot-crash-fla-pools-reverted-by-delivery.md)). **Nothing catches
 this**: the guard compares against constants that happened to match the bottle, the build succeeds, and the
 crash lands in an unrelated `free()` during a model read. One cheap check exists — FLA's log closes with

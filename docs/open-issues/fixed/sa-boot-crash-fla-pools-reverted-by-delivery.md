@@ -4,7 +4,7 @@
 identical heap fault. Cause: the delivery copied the **whole tree root** into the bottle, so
 `fastman92limitAdjuster_GTASA.ini` came from `mods-src`' copy of the adjuster mod — and that copy never
 carried the field raise of 2026-08-10 (`TXD 6000 / COL 400 / IPL 1024`). The bottle went back to
-`5000 / 280 / 256` while the build ships **5 511 `.txd` archives**. Restoring the captured configuration —
+`5000 / 280 / 256` while the build ships **5 177 `.txd` archives**. Restoring the captured configuration —
 in the bottle AND in `mods-src`, so a build ships it — boots the game.
 
 ## Symptom
@@ -33,7 +33,7 @@ startup logging ends — not where the game was.
 | --- | --- |
 | Working install (captured 2026-08-10, `reference-install-config.md`) | `FILE_TYPE_TXD = 6000`, `FILE_TYPE_COL = 400`, `FILE_TYPE_IPL = 1024` |
 | `mods-src/original/mods/sa/6. fastman92 limit adjuster 6.5 (stable)/…ini` | `5000` / `280` / `256` — the raise was never brought back into the repo |
-| What the build needs (`models/*.img` of `build/original/sa`) | `.dff` 15 600 · **`.txd` 5 511** · `.col` 264 · `.ipl` 191 · `.ifp` 159 · `.dat` 64 of 64 |
+| What the build needs (`models/*.img` of `build/original/sa`) | `.dff` 15 596 · **`.txd` 5 177** · `.col` 264 · `.ipl` 191 · `.ifp` 159 · `.dat` 64 of 64 |
 
 The delivery that preceded the crash was the first to copy the tree ROOT (all 20 `.asi` + their `.ini`), not
 just `models/` + `data/`. That is what put the repo's ini in the bottle — and it also deleted the bottle's
@@ -69,7 +69,7 @@ LESS than the install is documented to apply, and that number is a one-line chec
 
 `checkImgIdBudgets` (pmb) is the guard for exactly this, and it compares against **constants**:
 `{ .txd 6000, .col 400, .ipl 1024 }` — the values the FIELD was raised to, not the values the tree it just
-built will run under. 5 511 of a claimed 6000 passes; 5 511 of a real 5000 is a heap fault. Its own doc
+built will run under. 5 177 of a claimed 6000 passes; 5 177 of a real 5000 is a heap fault. Its own doc
 comment already tells this story about TXD once before ("**And TXD was never 6000 here**"), which is how the
 constant came to be right about the bottle and wrong about `mods-src`.
 
@@ -87,8 +87,14 @@ machine but is NOT a record anyone else (or a fresh checkout) inherits. The comm
 2. Recorded as a delivery rule in [`reference-install.md`](../../gta-sa-original/reference-install.md) and as a
    rule a design must satisfy in [`docs/restrictions/sa-target.md`](../../restrictions/sa-target.md).
 
-## Still owed (the class, not this instance)
+## The class is closed too (same day)
 
-`checkImgIdBudgets` must read the pools from the target tree's own `fastman92limitAdjuster*.ini` instead of
-carrying constants, and say which file each number came from. Until it does, the guard can only ever be
-right by coincidence — and a guard whose number is HIGHER than the install's is silent by construction.
+`checkImgIdBudgets` no longer carries pool constants: `flaIdPools()` reads `FILE_TYPE_TXD/COL/IPL` off the
+adjuster ini **this build ships into the tree root**, and every log line and failure names the file it read.
+Three things are not a value and fall back to FLA's own defaults (5000/255/256), each said out loud — a
+`#`-disabled line, an ini whose `Apply ID limit patch` is off (every raise in it is inert), and a tree with no
+adjuster ini. Falling back DOWN is the safe direction: it can only make the guard stricter, never silently
+laxer. On `build/original/sa` it now reads `6000 / 400 / 1024` from the ini and reports
+`5177 of 6000` · `264 of 400` · `191 of 1024`; on a tree without the ini the same build fails, which is the
+behaviour that would have caught this crash before the delivery. Six tests pin it (raised ini, shipped-5000
+ini, `#`-disabled line, patch-off, no ini, and the pools-with-source reader).
