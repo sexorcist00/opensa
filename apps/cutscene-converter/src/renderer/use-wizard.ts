@@ -21,6 +21,7 @@ export interface Wizard {
   readonly openOut: () => void;
   readonly out: Choice;
   readonly pick: (kind: FolderKind) => Promise<void>;
+  readonly quit: () => void;
   readonly result: ConvertResult | undefined;
 }
 
@@ -92,11 +93,13 @@ export function useWizard(): Wizard {
     }
   }, [cars.path, game.path, out.path]);
 
+  const quit = useCallback(() => converter.quit(), []);
+
   const openOut = useCallback(() => {
     if (out.path) {
       void converter.openFolder(out.path);
     }
   }, [out.path]);
 
-  return { busy, canConvert, cars, convert, game, lines, openOut, out, pick, result };
+  return { busy, canConvert, cars, convert, game, lines, openOut, out, pick, quit, result };
 }

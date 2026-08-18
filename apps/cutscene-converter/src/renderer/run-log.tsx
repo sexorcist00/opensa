@@ -1,22 +1,20 @@
 import { useEffect, useRef } from 'react';
 
-import type { ConvertResult } from '../shared/ipc';
 import type { LoggedLine } from './use-wizard';
 
 /**
  * The tool's own lines, as it prints them. No synthetic percentage: the run is seconds long, and its
  * per-slot output is the honest progress.
  */
-export function RunLog({
-  lines,
-  result,
-}: {
-  readonly lines: readonly LoggedLine[];
-  readonly result: ConvertResult | undefined;
-}): React.ReactElement | undefined {
+export function RunLog({ lines }: { readonly lines: readonly LoggedLine[] }): React.ReactElement | undefined {
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => endRef.current?.scrollIntoView({ block: 'end' }), [lines.length]);
+  // The braces are load-bearing: a concise body hands React whatever `scrollIntoView` returns, and React
+  // takes an effect's return value for its CLEANUP function. That is the crash that emptied the window at
+  // the end of a run — the conversion had finished and its files were on disk, and the app showed black.
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: 'end' });
+  }, [lines.length]);
 
   if (lines.length === 0) {
     return undefined;
@@ -33,18 +31,6 @@ export function RunLog({
         ))}
       </pre>
       <div ref={endRef} />
-      {result ? (
-        <p className={result.code === 0 ? 'cc-log-done' : 'cc-log-failed'}>
-          {result.code === 0
-            ? `Done in ${seconds(result.ms)}. The output folder holds models/cutscene.img, data/txdcut.ide, anim/cuts.img and perfect-cutscene.asi.`
-            : `The converter stopped with code ${result.code} after ${seconds(result.ms)}. The lines above say where.`}
-        </p>
-      ) : undefined}
     </section>
   );
-}
-
-/** Seconds with one decimal — a run is seconds long, so minutes would be a unit nobody reads. */
-function seconds(ms: number): string {
-  return `${(ms / 1000).toFixed(1)} s`;
 }

@@ -121,6 +121,10 @@ question that cost this round. Step 8's release triple is the same three facts, 
 Artifact size, cold-start time, and a full conversion's wall-clock **on Windows** — the last one is the
 figure this whole chain was designed around and it cannot be measured on macOS.
 
+**Measured 2026-08-18 on Windows 11 (the user's machine, build `c6ae5013`):** cold start **~5 s** (stopwatch,
+double-click to window), conversion **~2 s**. Both are the figures the chain was designed around, and both
+are now read off the app itself rather than guessed.
+
 **Measured 2026-08-17 (macOS, the halves that can be measured here):**
 
 | | |
@@ -145,6 +149,36 @@ no duration — so both are now taken by the app itself where it honestly can:
   logged (`window shown N ms after this process started`, visible when the exe is run from a terminal); the
   WHOLE figure is a stopwatch from the double-click, and it wants two numbers — a first run (unpack +
   SmartScreen) and a second (the temp folder is reused, `unpackDirName` keeps it stable).
+
+## The black window, and the test lane that was missing (2026-08-18)
+
+The first working Windows run converted correctly — the files were in the output folder — and showed a
+BLACK window at the end of it. The cause was one line in `RunLog`:
+
+```ts
+useEffect(() => endRef.current?.scrollIntoView({ block: 'end' }), [lines.length]);
+```
+
+A concise arrow body RETURNS what it evaluates, and React takes an effect's return value for its CLEANUP
+function. At the end of the run React unmounted the log's effects, called that value, and the whole tree
+came down with `destroy_ is not a function` — leaving the empty page that reads as a crashed app. Braces
+around the body are the fix.
+
+Three things came out of it, and the last is the one that matters:
+
+- **The status line** (`status.tsx`): converting (with a pulse), finished with the wall-clock, or stopped
+  with a code. A run used to be visible ONLY through the tool's own output, so a run that printed nothing
+  yet was indistinguishable from a dead app. Plus an **Exit** button once a run has finished — this app is
+  a one-errand app.
+- **Two nets under the same failure**: a React error boundary (the app's only class component; there is no
+  hook form) so a thrown render says what broke instead of painting nothing, and a `render-process-gone`
+  handler in main that reports a dead renderer in a native dialog and reloads the window — a dead renderer
+  cannot report itself.
+- **A test lane where there was none.** `scripts/debug/cutscene-converter-drive.ts` drives the built app
+  the way a person does (Playwright's Electron support, the folder dialogs stubbed in the main process):
+  three pickers, a real conversion, the status line, Exit. It reproduced the crash in seconds, and it is
+  what step 6's look should be judged against without spending a Windows round. Row in
+  `docs/debug/README.md`.
 
 ## Deviations from 001's shape, and why
 

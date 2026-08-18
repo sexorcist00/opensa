@@ -1,6 +1,7 @@
 import { APP_NAME } from '../shared/app-info';
 import { About } from './about';
 import { RunLog } from './run-log';
+import { Status } from './status';
 import { Step } from './step';
 import { useWizard } from './use-wizard';
 
@@ -62,9 +63,15 @@ export function App(): React.ReactElement {
             Open the output folder
           </button>
         ) : undefined}
+        {wizard.result && !wizard.busy ? (
+          <button className="cc-button" onClick={wizard.quit} type="button">
+            Exit
+          </button>
+        ) : undefined}
       </div>
 
-      <RunLog lines={wizard.lines} result={wizard.result} />
+      <Status busy={wizard.busy} result={wizard.result} />
+      <RunLog lines={wizard.lines} />
       <About />
     </main>
   );

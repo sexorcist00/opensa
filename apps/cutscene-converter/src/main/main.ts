@@ -2,7 +2,7 @@
  * Electron main: the window, and nothing that knows what a `.dff` is. The conversion lives in
  * `@opensa/vehicle-cutscene` and runs in a CHILD process (plan 001) — this file must stay a shell.
  */
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import { join } from 'node:path';
 
 import { APP_NAME, DEV_SERVER_URL_ENV } from '../shared/app-info';
@@ -45,6 +45,22 @@ function createWindow(): void {
   });
 
   window.webContents.on('did-finish-load', () => console.log(`${APP_NAME}: window loaded`));
+
+  // The OTHER way this app can go black: the renderer process dies (the conversion is memory-hungry, and a
+  // machine under pressure kills what it can). A dead renderer paints nothing and cannot report itself, so
+  // the message has to come from here — and then the window is reloaded, because the wizard's state is
+  // cheap to redo and a black window is not something anyone can act on.
+  window.webContents.on('render-process-gone', (_event, details) => {
+    const reason = `${details.reason}${details.exitCode === undefined ? '' : ` (exit ${details.exitCode})`}`;
+    console.error(`${APP_NAME}: the window's process died — ${reason}`);
+    dialog.showErrorBox(
+      APP_NAME,
+      `The window's process died: ${reason}.\n\nAny conversion that had already finished is still on disk in your output folder. The window is being reloaded.`,
+    );
+    window.webContents.reload();
+  });
+
+  window.on('unresponsive', () => console.error(`${APP_NAME}: the window stopped responding`));
 
   const devServerUrl = process.env[DEV_SERVER_URL_ENV];
 

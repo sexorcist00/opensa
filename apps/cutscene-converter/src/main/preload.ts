@@ -18,6 +18,7 @@ const api: ConverterApi = {
   },
   openFolder: (path: string) => ipcRenderer.invoke(IPC.openFolder, path),
   pickFolder: (kind: FolderKind) => ipcRenderer.invoke(IPC.pickFolder, kind),
+  quit: () => ipcRenderer.send(IPC.quit),
   validateCars: (gamePath: string, carsPath: string) => ipcRenderer.invoke(IPC.validateCars, gamePath, carsPath),
   validateGame: (gamePath: string) => ipcRenderer.invoke(IPC.validateGame, gamePath),
   validateOut: (gamePath: string, outPath: string) => ipcRenderer.invoke(IPC.validateOut, gamePath, outPath),

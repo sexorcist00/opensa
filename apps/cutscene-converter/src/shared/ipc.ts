@@ -9,6 +9,7 @@ export interface ConverterApi {
   readonly onConvertLine: (listener: (line: ConvertLine) => void) => () => void;
   readonly openFolder: (path: string) => Promise<void>;
   readonly pickFolder: (kind: FolderKind) => Promise<string | undefined>;
+  readonly quit: () => void;
   readonly validateCars: (gamePath: string, carsPath: string) => Promise<VerdictReport>;
   readonly validateGame: (gamePath: string) => Promise<VerdictReport>;
   readonly validateOut: (gamePath: string, outPath: string) => Promise<VerdictReport>;
@@ -41,6 +42,7 @@ export const IPC = {
   convertLine: 'convert:line',
   openFolder: 'folder:open',
   pickFolder: 'folder:pick',
+  quit: 'app:quit',
   validateCars: 'validate:cars',
   validateGame: 'validate:game',
   validateOut: 'validate:out',

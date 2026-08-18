@@ -194,14 +194,59 @@ body {
   color: var(--sa-red);
 }
 
-.cc-log-done,
-.cc-log-failed {
-  margin-top: 10px;
-  font-size: 12px;
+/* --- status --- */
+
+.cc-status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 11px 14px;
+  border: 1px solid var(--sa-line);
+  border-radius: 10px;
+  background: var(--sa-panel);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.cc-log-failed {
+.cc-status-busy {
+  border-color: var(--sa-orange-1);
+}
+
+.cc-status-done {
+  border-color: var(--sa-orange-1);
+}
+
+.cc-status-failed {
+  border-color: var(--sa-red);
   color: var(--sa-red);
+}
+
+.cc-status-pulse {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--sa-orange-1);
+  animation: cc-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes cc-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+/* A pulse is a nice-to-have; motion sensitivity is not. */
+@media (prefers-reduced-motion: reduce) {
+  .cc-status-pulse {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 /* --- about --- */
