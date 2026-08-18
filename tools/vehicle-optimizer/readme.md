@@ -11,7 +11,10 @@ A standalone tool for **fitting vehicle models**. Two operations, usable togethe
    plugin sits on nearly every material and is NOT the marker): their env-map `coefficient` and reflection
    `intensity`, taken from the reference by shared texture name where there is one and from its median
    otherwise. A value of **0** is left at 0 (the author said "matte"), and the run prints how many materials it
-   touched and with what value, so a no-op says so.
+   touched and with what value, so a no-op says so. **`--coefficient <n>` / `--reflection <n>` set the two
+   numbers outright** — with or without a donor, and they win over it; a donor's median is a guess about the
+   level you wanted, a number is not. `scripts/debug/dff-reflection.ts <before> <after> --diff` shows exactly
+   which materials moved.
 
 Output is **standard RenderWare DFF/COL**, so it works in the **real game** — this module is independent of the
 OpenSA engine (it never touches `../src` beyond reusing its read-only RW parsers).

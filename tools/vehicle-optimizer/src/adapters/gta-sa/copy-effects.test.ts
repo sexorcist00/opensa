@@ -125,6 +125,23 @@ describe('copyMaterialEffects', () => {
       expect(result.reference.intensity).toBeLessThan(0.5);
     });
 
+    it('takes an explicit level with no prototype at all — a number, not a donor median', () => {
+      const result = copyMaterialEffects(load(ADMIRAL), undefined, { coefficient: 0.15, reflection: 0.05 });
+
+      expect(result.patched).toBe(48);
+      expect(result.reference).toEqual({ coefficient: 0.15, intensity: 0.05 });
+      const after = chunks(result.bytes);
+      expect(after.coefficientZero).toBe(19); // the zeros are still the author's
+      expect(after.nonZero).toBe(51);
+    });
+
+    it('lets an explicit level override the prototype it was given', () => {
+      const result = copyMaterialEffects(load(ADMIRAL), load(WALTON), { reflection: 0.02 });
+
+      expect(result.reference.intensity).toBe(0.02);
+      expect(result.reference.coefficient).toBeCloseTo(0.5, 3); // still walton's
+    });
+
     it('reports what it did, so a run that changes nothing says so', () => {
       const result = copyMaterialEffects(load(ADMIRAL), load(WALTON));
 

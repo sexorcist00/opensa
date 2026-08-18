@@ -3,7 +3,8 @@
  * structure report; with `--scale` and/or `--prototype <path>` it writes the finished DFF to an `out/` folder
  * BESIDE the model, or to `--out <dir>`. Usage:
  * `tsx tools/vehicle-optimizer/src/cli.ts --model <path-to-dff> [--scale <factor>] [--prototype <path-to-dff>]
- * [--out <dir>]`.
+ * [--coefficient <n>] [--reflection <n>] [--out <dir>]`. The two numbers may be set outright instead of (or on
+ * top of) a prototype — a donor's median is a guess about what you wanted, a number is not.
  *
  * Every path is resolved against the INVOCATION cwd (`fromCwd`), like every other tool in the box — it used to
  * resolve against this file's directory, which made `--model ./mods-src/…` from the repo root a missing file
@@ -18,7 +19,7 @@ import { printReport } from './core';
 
 const USAGE =
   'usage: tsx tools/vehicle-optimizer/src/cli.ts --model <path-to-dff> [--scale <factor>] ' +
-  '[--prototype <path-to-dff>] [--out <dir>]';
+  '[--prototype <path-to-dff>] [--coefficient <n>] [--reflection <n>] [--out <dir>]';
 
 function main(): void {
   const model = argValue('--model');
@@ -32,14 +33,18 @@ function main(): void {
 
   const scale = argValue('--scale');
   const prototype = argValue('--prototype');
-  if (!scale && !prototype) {
+  const coefficient = argValue('--coefficient');
+  const reflection = argValue('--reflection');
+  if (!scale && !prototype && coefficient === undefined && reflection === undefined) {
     printReport(adapter.inspect(dff, basename(modelPath)));
 
     return;
   }
 
   const { bytes, notes } = adapter.process(dff, {
+    coefficient: coefficient === undefined ? undefined : Number(coefficient),
     prototype: prototype ? new Uint8Array(readFileSync(fromCwd(prototype))) : undefined,
+    reflection: reflection === undefined ? undefined : Number(reflection),
     scale: scale ? Number(scale) : undefined,
   });
   notes.forEach((note) => console.log(note));

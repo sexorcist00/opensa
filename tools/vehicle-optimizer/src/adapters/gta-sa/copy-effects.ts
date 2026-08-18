@@ -50,12 +50,17 @@ export interface CopyEffectsResult {
  * prototype's **representative** value (median across its reflective materials) — so it works across
  * different vehicles with different material counts, never throwing on a mismatch.
  */
-export function copyMaterialEffects(targetBytes: Uint8Array, prototypeBytes: Uint8Array): CopyEffectsResult {
-  const reference = readReflectionProfiles(prototypeBytes);
+export function copyMaterialEffects(
+  targetBytes: Uint8Array,
+  prototypeBytes: Uint8Array | undefined,
+  override: { coefficient?: number; reflection?: number } = {},
+): CopyEffectsResult {
+  const reference = referenceFrom(prototypeBytes, override);
   if (!reference) {
     throw new Error(
-      'the prototype DFF has no reflective materials (no env-map coefficient and no reflection intensity above ' +
-        '0) — nothing to copy; pick a reference whose reflection is the look you want',
+      'nothing to copy: the prototype DFF has no reflective materials (no env-map coefficient and no reflection ' +
+        'intensity above 0) and no --coefficient/--reflection was given — pick a reference whose reflection is ' +
+        'the look you want, or state the level outright',
     );
   }
 
@@ -270,6 +275,40 @@ function readReflectionProfiles(bytes: Uint8Array): null | ReflectionProfiles {
       coefficient: coefficients.length > 0 ? median(coefficients) : null,
       intensity: intensities.length > 0 ? median(intensities) : null,
     },
+  };
+}
+
+/**
+ * The values to apply: the prototype's profiles with any EXPLICIT override written over both the per-texture
+ * entries and the representative, or an override-only reference when no prototype was given. An explicit
+ * number is what a modder reaches for when no donor carries the level they want — and unlike a median it says
+ * exactly what will land in the file.
+ */
+function referenceFrom(
+  prototypeBytes: Uint8Array | undefined,
+  override: { coefficient?: number; reflection?: number },
+): null | ReflectionProfiles {
+  const forced: ReflectionValue = {
+    coefficient: override.coefficient ?? null,
+    intensity: override.reflection ?? null,
+  };
+  const profiles = prototypeBytes === undefined ? null : readReflectionProfiles(prototypeBytes);
+  if (profiles === null) {
+    return forced.coefficient === null && forced.intensity === null
+      ? null
+      : { byTexture: new Map(), representative: forced };
+  }
+  if (forced.coefficient === null && forced.intensity === null) {
+    return profiles;
+  }
+  const merge = (value: ReflectionValue): ReflectionValue => ({
+    coefficient: forced.coefficient ?? value.coefficient,
+    intensity: forced.intensity ?? value.intensity,
+  });
+
+  return {
+    byTexture: new Map([...profiles.byTexture].map(([texture, value]) => [texture, merge(value)])),
+    representative: merge(profiles.representative),
   };
 }
 

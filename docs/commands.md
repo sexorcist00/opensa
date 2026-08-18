@@ -283,8 +283,12 @@ NODE_OPTIONS=--max-old-space-size=8192 npx tsx tools/sa-lod-generator/src/cli.ts
 # One loose vehicle DFF: report / uniform scale / reflection transfer (paths resolve from the CWD)
 npx tsx tools/vehicle-optimizer/src/cli.ts --model ./mods-src/original/1/yankee.dff
 npx tsx tools/vehicle-optimizer/src/cli.ts --model ./path/to/car.dff --scale 1.02 --prototype ./path/to/ref.dff
-#   no --scale and no --prototype = a structure report, nothing written
+#   --coefficient <n> / --reflection <n>: set the env-map coefficient / SA reflection intensity outright
+#     (with or without a donor — they win over it). The coefficient is the mirror-the-world strength AND the
+#     author's marking of which surfaces reflect; only the marked ones are retuned.
+#   no operation at all = a structure report, nothing written
 #   the finished DFF lands in an `out/` folder BESIDE the model; --out <dir> puts it elsewhere
+#   what moved: npx tsx scripts/debug/dff-reflection.ts <before.dff> <after.dff> --diff
 
 # Game dir → native pak (the pack stage standalone)
 NODE_OPTIONS=--max-old-space-size=12288 \

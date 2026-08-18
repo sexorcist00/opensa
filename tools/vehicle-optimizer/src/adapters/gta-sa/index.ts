@@ -48,8 +48,11 @@ export function createGtaSaVehicleAdapter(): VehicleAdapter {
         bytes = scaleDff(bytes, options.scale);
         notes.push(`scale ×${options.scale} — geometry, dummy rig and collision`);
       }
-      if (options.prototype) {
-        const copied = copyMaterialEffects(bytes, options.prototype);
+      if (options.prototype || options.coefficient !== undefined || options.reflection !== undefined) {
+        const copied = copyMaterialEffects(bytes, options.prototype, {
+          ...(options.coefficient === undefined ? {} : { coefficient: options.coefficient }),
+          ...(options.reflection === undefined ? {} : { reflection: options.reflection }),
+        });
         bytes = copied.bytes;
         const value = (label: string, number: null | number): string =>
           number === null ? `${label} —` : `${label} ${number.toFixed(3)}`;
@@ -57,7 +60,8 @@ export function createGtaSaVehicleAdapter(): VehicleAdapter {
           `effects: ${copied.patched} of ${copied.materials} material(s) retuned ` +
             `(${copied.coefficients} env-map coefficient, ${copied.intensities} reflection intensity)` +
             (copied.fellBack ? ' — no env-map-marked material, so every reflective one was taken' : '') +
-            `; ${copied.byTexture} matched the prototype by texture name, the rest took its median ` +
+            `; ${copied.byTexture} matched the prototype by texture name, the rest took ` +
+            `${options.prototype ? 'its median' : 'the value given'} ` +
             `[${value('coefficient', copied.reference.coefficient)}, ${value('intensity', copied.reference.intensity)}]`,
         );
       }

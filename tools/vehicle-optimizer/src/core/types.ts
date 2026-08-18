@@ -13,10 +13,14 @@ export interface MaterialReport {
   texture: string;
 }
 
-/** What to do to one vehicle DFF. Both may be combined in a single run. */
+/** What to do to one vehicle DFF. All of them may be combined in a single run. */
 export interface ProcessOptions {
+  /** Env-map coefficient to set outright — the mirror-the-world strength. Overrides the prototype's value. */
+  coefficient?: number;
   /** Reference vehicle DFF bytes to copy reflection/specular/env-map effects from (plan 003). */
   prototype?: Uint8Array;
+  /** SA reflection intensity to set outright. Overrides the prototype's value. */
+  reflection?: number;
   /** Uniform scale factor for geometry + frame rig + collision (plan 002); 1 / undefined = no scale. */
   scale?: number;
 }
