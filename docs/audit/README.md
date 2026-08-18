@@ -378,3 +378,16 @@ interpret them.
   (−36 % opaque draws by a same-state weld, per census) — parked. Vehicle-installer plan 011 was written:
   `features.txt` reaches the real game through fastman92's `model_special_features.dat`, the 15-token
   vocabulary becomes shared data, and 098/02+06 gain a module and an oracle.
+
+- [`session-26-features-reach-the-real-game-and-a-delivery-that-reverted-the-install.md`](./session-26-features-reach-the-real-game-and-a-delivery-that-reverted-the-install.md)
+  — 2026-08-18: vehicle-installer plan 011 BUILT and field-accepted in one session — a mod's `features.txt`
+  now reaches the real game as `<model> <stock carrier>` in fastman92's `model_special_features.dat`, and the
+  field answered the question the desk could not: FLA remaps a STOCK model id, read per boot. Then the same
+  delivery stopped the game booting, and the cause was not the plan: copying the whole tree ROOT put
+  `mods-src`' adjuster ini in the install, reverting the FLA ID pools to `5000 / 280 / 256` against 5 177 TXD
+  archives — heap fault at boot in an unrelated `free()`. Six hypotheses were falsified first, while the two
+  facts that named it (the build report's own `requirements` table and FLA's `Number of memory changes made`)
+  sat unread on disk. Closed with the ini raised, the delivery trap written down, and the CLASS closed too:
+  the id-pool guard now reads the pools off the ini the build ships instead of carrying constants. A full
+  rebuild proved the pipeline byte-deterministic; a modloader-off arm found a second, real defect (a folded
+  mod `inst` row read before the mod IDE that defines it) and left it as an open issue.
