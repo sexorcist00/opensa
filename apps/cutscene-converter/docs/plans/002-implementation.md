@@ -1,7 +1,8 @@
 # 002 — Cutscene Converter: implementation
 
-**Status: steps 1–5 DONE, FIELD-ACCEPTED on Windows 11 2026-08-18** (build `63bf6fc4`: the three steps, a
-real conversion, the status line and Exit — the user's words, "everything works"); 6–8 are his. Execution plan for
+**Status: ALL EIGHT STEPS DONE 2026-08-18.** Field-accepted on Windows 11 (build `63bf6fc4`: the three
+steps, a real conversion, the status line and Exit — "everything works"), the look accepted on `99c8595a`,
+the tutorial published, the release recorded at the end of this file. Execution plan for
 [001-architecture](001-architecture.md). Ordered so that something runnable exists early and the
 risky, unfamiliar part (packaging a signed-less portable exe) is proven before the UI is polished.
 
@@ -75,9 +76,15 @@ Steps 1–2 can start before either lands; step 4 needs both.
       unwritable folder is caught by an actual probe write; a mid-run failure surfaces as the child's exit
       code with the tool's own lines above it; free space under 1 GB is a warning naming the figure.
       Ten tests in `src/main/*.test.ts` — the argv the facade builds, and the game/out validations.
-- [ ] **6. The look.** Match `apps/web`'s existing visual language rather than inventing one — same
+- [x] **6. The look.** Match `apps/web`'s existing visual language rather than inventing one — same
       Tailwind tokens, same typographic scale. Verification: side-by-side screenshots; the user's
       call, since "looks like ours" is a judgement he owns.
+      **Accepted 2026-08-18** on build `99c8595a`, in his words. Plain CSS with `apps/web`'s `--sa-*`
+      tokens rather than Tailwind (the app has no Tailwind pipeline and one screen does not earn one):
+      black ground, the orange gradient on the title, the step numbers and the Convert button, panels on
+      `--sa-panel` with `--sa-line` borders. What the round after the field run added is the part that
+      reads as finished: the status line with its pulse, Exit, and the footer — Tutorial link, version,
+      build stamp, plugin SHA.
 - [x] **7. The tutorial.** `docs/tutorial/cutscene-converter/` — install, the three steps, what
       to copy where afterwards, and two things the app is DECIDED to be rather than apologise for:
       the SmartScreen warning (shipping unsigned, "More info → Run anyway", why it appears) and the
@@ -94,8 +101,10 @@ Steps 1–2 can start before either lands; step 4 needs both.
       exist, the exe version is a hard stop, the game folder must be the one actually played (paint is
       read from its `carcols.dat`), and file names inside a car folder are mandatory while folder names
       are free. The tester section documents the CLEO override loop for people outside the repo.
-- [ ] **8. Release.** Version, artifact, the ASI SHA and the tutorial version recorded together, so a
+- [x] **8. Release.** Version, artifact, the ASI SHA and the tutorial version recorded together, so a
       bug report identifies all three. Verification: the recorded triple matches a fresh build.
+      **Done 2026-08-18** — the record is the table below, and every line of it is also ON SCREEN in the
+      app's footer, which is what makes a bug report identify itself.
 
 ## What is NOT in v1, and why
 
@@ -139,7 +148,7 @@ are now read off the app itself rather than guessed.
 
 | | |
 | --- | --- |
-| Portable exe | 89 018 508 B (84.9 MB), rebuilt 2026-08-18 with the stamp (88 871 868 B on 08-17) |
+| Portable exe | 89 008 404 B (84.9 MB) at the 0.4.0 release; 88 871 868 B on 08-17, before the stamp, the status line and the footer link |
 | asar | 199 198 B (18 112 416 B before `!node_modules/**`) |
 | Embedded plugin | `perfect-cutscene.asi` 18 944 B, sha1 `6f98053010ba0295ee867ddcbf18efb57512b5c0` |
 | Conversion, 23/23 slots | ~3.1 s, output 579 MB (cutscene.img 321 MB + cuts.img 257 MB) |
@@ -189,6 +198,21 @@ Three things came out of it, and the last is the one that matters:
   three pickers, a real conversion, the status line, Exit. It reproduced the crash in seconds, and it is
   what step 6's look should be judged against without spending a Windows round. Row in
   `docs/debug/README.md`.
+
+## Release 0.4.0 (2026-08-18)
+
+| | |
+| --- | --- |
+| Version | 0.4.0 |
+| Artifact | `cutscene-converter-0.4.0.exe`, 89 008 404 B, sha256 `bbef5d2fc4621aa19195b15899ff3d60f76e957e431cf71befb650cf41b2e950` |
+| Built from | `99c8595a` — stamped into the exe and shown in the footer |
+| Plugin | `perfect-cutscene.asi`, 18 944 B, sha1 `6f98053010ba0295ee867ddcbf18efb57512b5c0` |
+| Tutorial | `docs/tutorial/cutscene-converter/` (the app's footer links to it); published in Russian on the user's own site |
+| Distribution | the user's hosting (`gooddev.org`), a zip beside the tutorial page — NOT a GitHub release, and not a binary in this repo (85 MB per build in git history, LFS's free quota is ~12 downloads a month) |
+
+**There is no CI build.** `npm run pack:win` runs on the user's machine, and a CI job would first have to
+build `perfect-cutscene.asi` with mingw (`apt install g++-mingw-w64-i686`) because the app build FAILS
+without it, by design. Worth it when a second person ships a build; not before.
 
 ## Deviations from 001's shape, and why
 
