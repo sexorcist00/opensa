@@ -188,4 +188,13 @@ turismo zr350
 uranus zr350
 ```
 
+**Delivered into the built tree, 2026-08-18** — `--rebake original --kind sa --only bullet,cheetah,feltzer,
+hotring,infernus,oceanic,rumpo,turismo,uranus` (the user's go-ahead; the nine cars that declare anything, so a
+full `sa` build was not spent). Report: 9 rebaked / 203 skipped, 153.0 MB of dff/txd, no warnings.
+`build/original/sa/data/model_special_features.dat` is now 980 B, md5 `9b36bafa61cdcb36ca41b79f5eb6854d` — the
+same bytes the scratch dry run produced. Nothing else moved: `vehicles.img` 1 869 164 544 B and
+`vehicles2.img` 1 231 806 464 B unchanged, `data/img-layout.json` and `data/vehicle-features.txt` md5
+unchanged (the settings re-merge is idempotent). The bottle needs `models/` + `data/` synced from this tree
+before the field check.
+
 (field verdicts per car and the FLA remap-stock-id answer: step 5, pending)
