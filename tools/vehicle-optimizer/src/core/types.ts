@@ -23,6 +23,8 @@ export interface ProcessOptions {
   reflection?: number;
   /** Uniform scale factor for geometry + frame rig + collision (plan 002); 1 / undefined = no scale. */
   scale?: number;
+  /** SA specular level to set outright — the HIGHLIGHT, a different term from the reflection. */
+  specular?: number;
 }
 
 /** What a run produced: the finished bytes plus the lines the CLI prints — a run that changed almost nothing

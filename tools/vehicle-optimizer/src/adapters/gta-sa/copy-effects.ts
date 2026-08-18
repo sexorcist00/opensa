@@ -19,6 +19,8 @@ export interface CopyEffectsResult {
   patched: number;
   /** The prototype's representative (median) value, used wherever no texture name matched. */
   reference: ReflectionValue;
+  /** Specular levels written. */
+  speculars: number;
 }
 
 /**
@@ -27,6 +29,14 @@ export interface CopyEffectsResult {
  * (plan 003). Nothing else changes: textures, colour, geometry, even *which* materials reflect are left
  * alone — we only retune the numbers on the target's **existing** reflective materials, so the worst case is
  * a part a touch too shiny/matte.
+ *
+ * **Three terms, three markings — and the one a field report usually means is the SPECULAR** (measured
+ * 2026-08-18 on the reported car): its `level` (`0x253f2f6`) sat at 0.26-0.56 where a tasteful donor carries
+ * 0.05, and the install's SkyGfx vehicle pipe multiplies it by 3 while multiplying the reflection intensity by
+ * 8 — so an intensity retune from 0.5 to 0.16 is saturated at both ends and invisible, and the highlight is
+ * what the eye was reading all along (`docs/gta-sa-original/skygfx-fork-vehicle-pipe.md`). The specular level is
+ * therefore retuned wherever it is non-zero, on its own marking, while the reflection intensity stays on the
+ * env-map-marked set because that is the only place the pipe reads it.
  *
  * **WHICH materials are the reflective ones is the env-map's answer, not the reflection plugin's** (measured
  * 2026-08-18, after a field report). An exporter attaches the MatFX env-map only to the materials meant to
@@ -53,7 +63,7 @@ export interface CopyEffectsResult {
 export function copyMaterialEffects(
   targetBytes: Uint8Array,
   prototypeBytes: Uint8Array | undefined,
-  override: { coefficient?: number; reflection?: number } = {},
+  override: { coefficient?: number; reflection?: number; specular?: number } = {},
 ): CopyEffectsResult {
   const reference = referenceFrom(prototypeBytes, override);
   if (!reference) {
@@ -67,9 +77,23 @@ export function copyMaterialEffects(
   const file = readRw(targetBytes);
   const lists = materialLists(file);
   const targetMaterials = lists.flatMap(({ chunks }) => chunks.filter((chunk) => chunk.type === MATERIAL));
-  const summary = { byTexture: 0, coefficients: 0, fellBack: false, intensities: 0, materials: 0, patched: 0 };
+  const summary = {
+    byTexture: 0,
+    coefficients: 0,
+    fellBack: false,
+    intensities: 0,
+    materials: 0,
+    patched: 0,
+    speculars: 0,
+  };
   summary.materials = targetMaterials.length;
-  const marked = targetMaterials.filter((material) => reflectiveValues(material).coefficient !== null);
+  // Two markings, two terms: the env-map marks which surfaces MIRROR the world, the specular chunk marks which
+  // ones take a highlight — and a car carries far more of the second. A material joins the run if it has either.
+  const marked = targetMaterials.filter((material) => {
+    const values = reflectiveValues(material);
+
+    return values.coefficient !== null || values.specular !== null;
+  });
   summary.fellBack = marked.length === 0;
   for (const material of summary.fellBack ? targetMaterials : marked) {
     patchReflection(material, reference, summary);
@@ -100,6 +124,9 @@ const ENVMAP_COEFFICIENT_OFFSET = 8;
 /** SA reflection (0x253f2fc): scale.xy, offset.xy, then `intensity` f32 at offset 16. */
 const REFLECTION = 0x253f2fc;
 const REFLECTION_INTENSITY_OFFSET = 16;
+/** SA specular (0x253f2f6): `level` f32 at offset 0, then char[24] texture name. */
+const SPECULAR = 0x253f2f6;
+const SPECULAR_LEVEL_OFFSET = 0;
 const HEADER_BYTES = 12;
 
 /** A re-parsed chunk inside a Material List (container ⇒ `children`, leaf ⇒ `data`). */
@@ -117,6 +144,7 @@ interface PatchSummary {
   intensities: number;
   materials: number;
   patched: number;
+  speculars: number;
 }
 
 /** The reflection values to apply, plus a per-texture lookup for name matching. */
@@ -128,6 +156,7 @@ interface ReflectionProfiles {
 interface ReflectionValue {
   coefficient: null | number;
   intensity: null | number;
+  specular: null | number;
 }
 
 function concat(parts: readonly Uint8Array[]): Uint8Array {
@@ -200,11 +229,12 @@ function parseChunks(bytes: Uint8Array): MatChunk[] {
  * else from the prototype's median, and each of the two floats is written only where both sides have it.
  */
 function patchReflection(material: MatChunk, reference: ReflectionProfiles, summary: PatchSummary): void {
-  const { coefficient, envView, intensity, reflView } = reflectiveValues(material);
+  const { coefficient, envView, intensity, reflView, specular, specView } = reflectiveValues(material);
   // A zero is the author saying "this part does not reflect" — retuning it would ADD reflection.
   const hasEnv = coefficient !== null;
   const hasRefl = intensity !== null;
-  if (!hasEnv && !hasRefl) {
+  const hasSpec = specular !== null;
+  if (!hasEnv && !hasRefl && !hasSpec) {
     return;
   }
 
@@ -217,9 +247,18 @@ function patchReflection(material: MatChunk, reference: ReflectionProfiles, summ
     summary.coefficients += 1;
     wrote = true;
   }
-  if (hasRefl && reflView !== undefined && value.intensity !== null) {
+  // The reflection intensity is only read where the env-map marks the surface as reflective (the pipe gates on
+  // it), so writing it elsewhere would edit bytes nothing consults.
+  if (hasEnv && hasRefl && reflView !== undefined && value.intensity !== null) {
     reflView.setFloat32(REFLECTION_INTENSITY_OFFSET, value.intensity, true);
     summary.intensities += 1;
+    wrote = true;
+  }
+  // The specular HIGHLIGHT is its own term and its own marking: the pipe multiplies it by 3 and it sits on
+  // nearly every material, so it is retuned wherever it is non-zero rather than only on env-map-marked ones.
+  if (hasSpec && specView !== undefined && value.specular !== null) {
+    specView.setFloat32(SPECULAR_LEVEL_OFFSET, value.specular, true);
+    summary.speculars += 1;
     wrote = true;
   }
   if (wrote) {
@@ -245,7 +284,16 @@ function readReflectionProfiles(bytes: Uint8Array): null | ReflectionProfiles {
   const byTexture = new Map<string, ReflectionValue>();
   const coefficients: number[] = [];
   const intensities: number[] = [];
+  const speculars: number[] = [];
   const materials = clump.geometries.flatMap((geometry) => geometry.materials);
+  // The specular level has its own population: it sits on nearly every material, so taking it from the
+  // env-map-marked few would report the paint's highlight as if it were the whole car's.
+  for (const material of materials) {
+    const level = material.effects?.specular?.level ?? 0;
+    if (level !== 0) {
+      speculars.push(level);
+    }
+  }
   // The env-map-marked materials ARE the reference's reflective surface; only a tree with none of them falls
   // back to whatever carries the reflection plugin.
   const marked = materials.filter((material) => (material.effects?.envMap?.coefficient ?? 0) !== 0);
@@ -265,7 +313,7 @@ function readReflectionProfiles(bytes: Uint8Array): null | ReflectionProfiles {
       byTexture.set(texture, value);
     }
   }
-  if (coefficients.length === 0 && intensities.length === 0) {
+  if (coefficients.length === 0 && intensities.length === 0 && speculars.length === 0) {
     return null;
   }
 
@@ -274,6 +322,7 @@ function readReflectionProfiles(bytes: Uint8Array): null | ReflectionProfiles {
     representative: {
       coefficient: coefficients.length > 0 ? median(coefficients) : null,
       intensity: intensities.length > 0 ? median(intensities) : null,
+      specular: speculars.length > 0 ? median(speculars) : null,
     },
   };
 }
@@ -286,24 +335,25 @@ function readReflectionProfiles(bytes: Uint8Array): null | ReflectionProfiles {
  */
 function referenceFrom(
   prototypeBytes: Uint8Array | undefined,
-  override: { coefficient?: number; reflection?: number },
+  override: { coefficient?: number; reflection?: number; specular?: number },
 ): null | ReflectionProfiles {
   const forced: ReflectionValue = {
     coefficient: override.coefficient ?? null,
     intensity: override.reflection ?? null,
+    specular: override.specular ?? null,
   };
+  const nothingForced = forced.coefficient === null && forced.intensity === null && forced.specular === null;
   const profiles = prototypeBytes === undefined ? null : readReflectionProfiles(prototypeBytes);
   if (profiles === null) {
-    return forced.coefficient === null && forced.intensity === null
-      ? null
-      : { byTexture: new Map(), representative: forced };
+    return nothingForced ? null : { byTexture: new Map(), representative: forced };
   }
-  if (forced.coefficient === null && forced.intensity === null) {
+  if (nothingForced) {
     return profiles;
   }
   const merge = (value: ReflectionValue): ReflectionValue => ({
     coefficient: forced.coefficient ?? value.coefficient,
     intensity: forced.intensity ?? value.intensity,
+    specular: forced.specular ?? value.specular,
   });
 
   return {
@@ -318,15 +368,20 @@ function referenceFrom(
  * target's shine down.
  */
 function referenceValue(material: {
-  effects?: { envMap?: { coefficient: number }; reflection?: { intensity: number } };
+  effects?: { envMap?: { coefficient: number }; reflection?: { intensity: number }; specular?: { level: number } };
 }): null | ReflectionValue {
   const coefficient = material.effects?.envMap?.coefficient ?? 0;
   const intensity = material.effects?.reflection?.intensity ?? 0;
-  if (coefficient === 0 && intensity === 0) {
+  const specular = material.effects?.specular?.level ?? 0;
+  if (coefficient === 0 && intensity === 0 && specular === 0) {
     return null;
   }
 
-  return { coefficient: coefficient === 0 ? null : coefficient, intensity: intensity === 0 ? null : intensity };
+  return {
+    coefficient: coefficient === 0 ? null : coefficient,
+    intensity: intensity === 0 ? null : intensity,
+    specular: specular === 0 ? null : specular,
+  };
 }
 
 /**
@@ -338,22 +393,29 @@ function reflectiveValues(material: MatChunk): {
   envView: DataView | undefined;
   intensity: null | number;
   reflView: DataView | undefined;
+  specular: null | number;
+  specView: DataView | undefined;
 } {
   const extension = material.children?.find((child) => child.type === EXTENSION);
-  const envMap = extension?.children?.find((child) => child.type === ENVMAP)?.data;
-  const reflection = extension?.children?.find((child) => child.type === REFLECTION)?.data;
-  const envView = envMap ? new DataView(envMap.buffer, envMap.byteOffset, envMap.byteLength) : undefined;
-  const reflView = reflection
-    ? new DataView(reflection.buffer, reflection.byteOffset, reflection.byteLength)
-    : undefined;
+  const view = (type: number): DataView | undefined => {
+    const data = extension?.children?.find((child) => child.type === type)?.data;
+
+    return data ? new DataView(data.buffer, data.byteOffset, data.byteLength) : undefined;
+  };
+  const envView = view(ENVMAP);
+  const reflView = view(REFLECTION);
+  const specView = view(SPECULAR);
   const coefficient = envView?.getFloat32(ENVMAP_COEFFICIENT_OFFSET, true) ?? 0;
   const intensity = reflView?.getFloat32(REFLECTION_INTENSITY_OFFSET, true) ?? 0;
+  const specular = specView?.getFloat32(SPECULAR_LEVEL_OFFSET, true) ?? 0;
 
   return {
     coefficient: coefficient === 0 ? null : coefficient,
     envView,
     intensity: intensity === 0 ? null : intensity,
     reflView,
+    specular: specular === 0 ? null : specular,
+    specView,
   };
 }
 

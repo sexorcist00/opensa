@@ -6,15 +6,16 @@ A standalone tool for **fitting vehicle models**. Two operations, usable togethe
    damage parts), the **dummy rig** (wheels / doors / seats / lights — scaled _with_ the geometry so nothing
    shifts and there's no gap when a door opens), and **collision**. It does **not** touch data files
    (`vehicles.ide` / `carcols` / `handling.cfg`).
-2. **Reflection-strength copy** — `--prototype <reference>` retunes the **reflection strength** of the
-   materials the author marked as reflective with a MatFX env-map (body, glass, chrome — the SA reflection
-   plugin sits on nearly every material and is NOT the marker): their env-map `coefficient` and reflection
-   `intensity`, taken from the reference by shared texture name where there is one and from its median
-   otherwise. A value of **0** is left at 0 (the author said "matte"), and the run prints how many materials it
-   touched and with what value, so a no-op says so. **`--coefficient <n>` / `--reflection <n>` set the two
-   numbers outright** — with or without a donor, and they win over it; a donor's median is a guess about the
-   level you wanted, a number is not. `scripts/debug/dff-reflection.ts <before> <after> --diff` shows exactly
-   which materials moved.
+2. **Shine copy** — `--prototype <reference>` retunes the three numbers a car's shine is made of, each on its
+   own marking: the MatFX env-map `coefficient` and the reflection `intensity` on the materials the author
+   marked reflective with an env-map (body, glass, chrome), and the **specular `level`** wherever it is
+   non-zero — that last one is usually what a "too shiny" report actually means, and the install's SkyGfx
+   vehicle pipe multiplies it by 3 (the intensity by 8, which saturates anything above 0.125). Values come from
+   the reference by shared texture name where there is one, from its median otherwise. A value of **0** is left
+   at 0 (the author said "matte"), and the run prints what it touched and with which numbers, so a no-op says
+   so. **`--coefficient <n>` / `--reflection <n>` / `--specular <n>` set them outright** — with or without a
+   donor, and they win over it. `scripts/debug/dff-reflection.ts <before> <after> --diff` shows exactly which
+   materials moved.
 
 Output is **standard RenderWare DFF/COL**, so it works in the **real game** — this module is independent of the
 OpenSA engine (it never touches `../src` beyond reusing its read-only RW parsers).

@@ -104,9 +104,12 @@ describe('copyMaterialEffects', () => {
       const result = copyMaterialEffects(load(ADMIRAL), load(WALTON));
 
       expect(result.materials).toBe(91);
-      expect(result.patched).toBe(48); // 67 env-map chunks − 19 deliberate zeros
+      // 48 env-map-marked + 13 more that only take a specular HIGHLIGHT (46 carry specular, 33 of them marked
+      // too). The reflection intensity rides the marked set, not all 91 plugin carriers.
+      expect(result.patched).toBe(61);
       expect(result.coefficients).toBe(48);
-      expect(result.intensities).toBe(48); // the intensity rides the same set, not all 91 plugin carriers
+      expect(result.intensities).toBe(48);
+      expect(result.speculars).toBe(46);
       expect(result.fellBack).toBe(false);
       // Nothing matte became shiny: the same zeros are still zero after the copy.
       const after = chunks(result.bytes);
@@ -128,8 +131,9 @@ describe('copyMaterialEffects', () => {
     it('takes an explicit level with no prototype at all — a number, not a donor median', () => {
       const result = copyMaterialEffects(load(ADMIRAL), undefined, { coefficient: 0.15, reflection: 0.05 });
 
-      expect(result.patched).toBe(48);
-      expect(result.reference).toEqual({ coefficient: 0.15, intensity: 0.05 });
+      expect(result.patched).toBe(48); // no specular value given, so the specular-only materials stay out
+      expect(result.reference).toEqual({ coefficient: 0.15, intensity: 0.05, specular: null });
+      expect(result.speculars).toBe(0);
       const after = chunks(result.bytes);
       expect(after.coefficientZero).toBe(19); // the zeros are still the author's
       expect(after.nonZero).toBe(51);
@@ -140,6 +144,27 @@ describe('copyMaterialEffects', () => {
 
       expect(result.reference.intensity).toBe(0.02);
       expect(result.reference.coefficient).toBeCloseTo(0.5, 3); // still walton's
+    });
+
+    it('retunes the specular HIGHLIGHT too — its own term, its own marking (walton → admiral)', () => {
+      // The field case: the target's shine was the specular level (yankee 0.26-0.56 against walton's 0.05),
+      // and the pipe multiplies it by 3. A transfer that skipped it looked inert on exactly those cars.
+      const specular = (dff: Uint8Array): number[] => {
+        const clump = parseDff(toArrayBuffer(dff));
+
+        return clump.geometries
+          .flatMap((geometry) => geometry.materials)
+          .map((material) => material.effects?.specular?.level ?? 0)
+          .filter((level) => level !== 0);
+      };
+      const before = new Set(specular(load(ADMIRAL)).map((level) => level.toFixed(3)));
+      expect(before.size).toBeGreaterThan(1); // admiral carries several levels
+
+      const result = copyMaterialEffects(load(ADMIRAL), load(WALTON));
+
+      const after = new Set(specular(result.bytes).map((level) => level.toFixed(3)));
+      expect(after.size).toBeLessThanOrEqual(before.size); // collapsed toward walton's own level(s)
+      expect(specular(result.bytes)).toHaveLength(46); // none added, none removed
     });
 
     it('reports what it did, so a run that changes nothing says so', () => {

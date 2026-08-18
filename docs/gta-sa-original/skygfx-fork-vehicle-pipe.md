@@ -48,6 +48,15 @@ diff is exactly the 66 floats it should be.
 The multipliers are commented out in this install's ini (`envShininessMult`, `neoShininessMult`,
 `leedsShininessMult` all at their 1.0 default), so nothing softens the ×8.
 
+## The specular term is the other half, and it is the one a report usually means
+
+The same FX pass reads `specData->specularity` (the DFF specular plugin `0x253f2f6`, `level` f32 at offset 0)
+and applies `× 3.0 * envSpecularityMult`, gated by flag bit 4 and skipped on wheels. Measured on the reported
+car: `yankee` carries specular **0.26–0.56** across 80 of its 91 specular materials, while the tasteful donors
+sit at **0.05** (`walton` 124 of 180) and **0.08** (`yosemite`). At ×3 that is 1.7 against 0.15 — the highlight,
+not the env reflection, is what reads as "too shiny", and zeroing the reflection intensity alone changed
+nothing on screen (field arm, 2026-08-18). `vehicle-optimizer` transfers it since the same day.
+
 **Not verified here** (needs the game, not the source): how SA converts the DFF float to that int8 at load
 (a `×255` round is the obvious reading of `GetShininess`), and whether the shader saturates the term or keeps
 scaling past 1. Either way the conclusion for a plan is the same — judge a reflection edit in the 0.02–0.12

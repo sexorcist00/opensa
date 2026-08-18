@@ -12,7 +12,10 @@ import { basename } from 'node:path';
  * - **MatFX env-map `coefficient`** — the mirror-the-world strength, and the author's MARKING of which
  *   surfaces reflect at all (body, glass, chrome). Absent on most materials.
  * - **SA reflection `intensity`** (`0x253f2fc`) — present on nearly EVERY material of a stock or mod car, so
- *   its histogram says almost nothing about which parts you actually see shine.
+ *   its histogram says almost nothing about which parts you actually see shine. The install's SkyGfx vehicle
+ *   pipe multiplies it by 8, so anything at or above 0.125 is saturated and looks identical.
+ * - **SA specular `level`** (`0x253f2f6`) — the HIGHLIGHT, multiplied by 3 by that pipe, and the term a field
+ *   report about "too shiny" usually turns out to mean (yankee 0.26-0.56 against a tasteful 0.05).
  *
  * A value of 0 means "this part does not reflect" — count those apart from a missing chunk.
  *
@@ -24,6 +27,7 @@ import { basename } from 'node:path';
 interface MaterialRow {
   coefficient: null | number;
   intensity: null | number;
+  specular: null | number;
   texture: string;
 }
 
@@ -51,6 +55,7 @@ function rows(path: string): MaterialRow[] {
     geometry.materials.map((material) => ({
       coefficient: material.effects?.envMap ? material.effects.envMap.coefficient : null,
       intensity: material.effects?.reflection ? material.effects.reflection.intensity : null,
+      specular: material.effects?.specular ? material.effects.specular.level : null,
       texture: material.texture?.name?.toLowerCase() ?? '(untextured)',
     })),
   );
@@ -101,6 +106,7 @@ for (const { list, path } of parsed) {
   );
   console.log(`  env-map coefficient: ${histogram(list.map((r) => r.coefficient))}`);
   console.log(`  reflection intensity: ${histogram(list.map((r) => r.intensity))}`);
+  console.log(`  specular level: ${histogram(list.map((r) => r.specular))}`);
   if (!diff) {
     table(list).forEach((line) => console.log(line));
   }
@@ -113,12 +119,16 @@ if (diff && parsed.length === 2) {
   } else {
     const changed = before.list
       .map((row, index) => ({ after: after.list[index], before: row, index }))
-      .filter(({ after: b, before: a }) => a.coefficient !== b.coefficient || a.intensity !== b.intensity);
+      .filter(
+        ({ after: b, before: a }) =>
+          a.coefficient !== b.coefficient || a.intensity !== b.intensity || a.specular !== b.specular,
+      );
     console.log(`\n=== changed: ${changed.length} of ${before.list.length} material(s)`);
     for (const { after: b, before: a, index } of changed.slice(0, 40)) {
       console.log(
         `  #${String(index).padStart(3)} ${a.texture.padEnd(22)} env-map ${show(a.coefficient)} → ${show(b.coefficient)}` +
-          `   reflection ${show(a.intensity)} → ${show(b.intensity)}`,
+          `   reflection ${show(a.intensity)} → ${show(b.intensity)}` +
+          `   specular ${show(a.specular)} → ${show(b.specular)}`,
       );
     }
     if (changed.length > 40) {
