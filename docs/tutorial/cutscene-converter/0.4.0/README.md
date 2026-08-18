@@ -10,7 +10,7 @@ to put the result, and a few seconds later you have the three files that put you
 **It does not touch how you play.** Which cars you install for gameplay is your business and stays exactly as
 you set it up — this app never writes into your game folder at all.
 
-- **Download:** <http://gooddev.org/gta/cutscene-converter.zip> — a portable `.exe`, nothing to install, ~85 MB.
+- **Download:** <https://gooddev.org/gta/cutscene-converter.zip> — a portable `.exe`, nothing to install, ~85 MB.
 - **This page describes version 0.4.0.** Each version has its own page; use the one that matches the app.
 
 ## Before you start
@@ -141,7 +141,9 @@ option.
 | *The output folder cannot be written to* | Choose a folder you own — not one under `Program Files`. |
 | *The converter stopped with code N* | The lines above it in the log say where. Send them with a bug report. |
 
-## Reporting a bug
+## Found a bug?
+
+Open an issue: <https://github.com/AlexSergey/opensa/issues>
 
 The line at the bottom of the app names everything a report needs: the app version, the exact build it was
-made from, and the sha1 of the plugin inside it. Send that line, plus the log if a run failed.
+made from, and the sha1 of the plugin inside it. Include that line, plus the log if a run failed.
