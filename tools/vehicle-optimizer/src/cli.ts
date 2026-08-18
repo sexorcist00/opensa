@@ -38,10 +38,11 @@ function main(): void {
     return;
   }
 
-  const bytes = adapter.process(dff, {
+  const { bytes, notes } = adapter.process(dff, {
     prototype: prototype ? new Uint8Array(readFileSync(fromCwd(prototype))) : undefined,
     scale: scale ? Number(scale) : undefined,
   });
+  notes.forEach((note) => console.log(note));
   // Beside the model by default: a run is about one car in one folder, and writing into the tool's own
   // directory put every car of every mod in one heap, far from the source it came from.
   const out = argValue('--out');

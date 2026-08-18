@@ -6,8 +6,12 @@ A standalone tool for **fitting vehicle models**. Two operations, usable togethe
    damage parts), the **dummy rig** (wheels / doors / seats / lights — scaled _with_ the geometry so nothing
    shifts and there's no gap when a door opens), and **collision**. It does **not** touch data files
    (`vehicles.ide` / `carcols` / `handling.cfg`).
-2. **Material-effect copy** — `--prototype <reference>` copies only the **reflection / specular / env-map**
-   material effects from a perfectly-tuned reference model onto the target.
+2. **Reflection-strength copy** — `--prototype <reference>` retunes only the **reflection strength** of the
+   target's already-reflective materials: the MatFX env-map `coefficient` and the SA reflection plugin's
+   `intensity`, taken from the reference by shared texture name where there is one and from its median
+   otherwise. A material whose value is **0** is left at 0 (the author said "matte"), and the run prints how
+   many materials it touched and with what value — between two cars whose median shine is the same, the honest
+   outcome is no change, and it says so.
 
 Output is **standard RenderWare DFF/COL**, so it works in the **real game** — this module is independent of the
 OpenSA engine (it never touches `../src` beyond reusing its read-only RW parsers).

@@ -1,15 +1,15 @@
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 
-import type { MaterialReport, ProcessOptions, VehicleAdapter, VehicleReport } from '../../core/types';
+import type { MaterialReport, ProcessOptions, ProcessResult, VehicleAdapter, VehicleReport } from '../../core/types';
 
 import { copyMaterialEffects } from './copy-effects';
 import { scaleDff } from './scale';
 
 /**
  * GTA-SA (RenderWare) vehicle adapter, operating on DFF **bytes** (the CLI reads/writes files). `inspect` is
- * implemented (read-only reuse of the DFF parser); `process` does the uniform scale (plan 002) and will copy
- * reflection/specular/env-map from a prototype (plan 003 — stubbed). Output stays standard RenderWare, so it
- * runs in the real game.
+ * implemented (read-only reuse of the DFF parser); `process` does the uniform scale (plan 002) and the
+ * reflection-strength copy from a prototype (plan 003). Output stays standard RenderWare, so it runs in the
+ * real game.
  */
 export function createGtaSaVehicleAdapter(): VehicleAdapter {
   return {
@@ -41,16 +41,27 @@ export function createGtaSaVehicleAdapter(): VehicleAdapter {
         vertices,
       };
     },
-    process(dff: Uint8Array, options: ProcessOptions): Uint8Array {
+    process(dff: Uint8Array, options: ProcessOptions): ProcessResult {
       let bytes = dff;
+      const notes: string[] = [];
       if (options.scale && options.scale !== 1) {
         bytes = scaleDff(bytes, options.scale);
+        notes.push(`scale ×${options.scale} — geometry, dummy rig and collision`);
       }
       if (options.prototype) {
-        bytes = copyMaterialEffects(bytes, options.prototype);
+        const copied = copyMaterialEffects(bytes, options.prototype);
+        bytes = copied.bytes;
+        const value = (label: string, number: null | number): string =>
+          number === null ? `${label} —` : `${label} ${number.toFixed(3)}`;
+        notes.push(
+          `effects: ${copied.patched} of ${copied.materials} material(s) retuned ` +
+            `(${copied.coefficients} env-map coefficient, ${copied.intensities} reflection intensity); ` +
+            `${copied.byTexture} matched the prototype by texture name, the rest took its median ` +
+            `[${value('coefficient', copied.reference.coefficient)}, ${value('intensity', copied.reference.intensity)}]`,
+        );
       }
 
-      return bytes;
+      return { bytes, notes };
     },
   };
 }

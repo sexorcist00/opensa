@@ -21,12 +21,19 @@ export interface ProcessOptions {
   scale?: number;
 }
 
+/** What a run produced: the finished bytes plus the lines the CLI prints — a run that changed almost nothing
+ *  used to look exactly like one that worked. */
+export interface ProcessResult {
+  bytes: Uint8Array;
+  notes: readonly string[];
+}
+
 /** Per-game contract operating on DFF bytes (the CLI handles file I/O). */
 export interface VehicleAdapter {
   /** Parse + report a vehicle DFF's structure (read-only). `name` labels the report. */
   inspect(dff: Uint8Array, name: string): VehicleReport;
-  /** Scale and/or copy effects → a finished DFF byte buffer (plans 002/003). */
-  process(dff: Uint8Array, options: ProcessOptions): Uint8Array;
+  /** Scale and/or copy effects → the finished DFF bytes + what each operation actually did (plans 002/003). */
+  process(dff: Uint8Array, options: ProcessOptions): ProcessResult;
 }
 
 /** Structure report — the parts/dummies scaling touches + the materials the effect-copy uses. */
