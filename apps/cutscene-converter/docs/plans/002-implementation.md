@@ -1,7 +1,7 @@
 # 002 — Cutscene Converter: implementation
 
-**Status: steps 1–5 DONE 2026-08-17** (measured numbers under each); 6–8 are the user's, and step 2 is
-waiting on one Windows run. Execution plan for
+**Status: steps 1–5 DONE, FIELD-ACCEPTED on Windows 11 2026-08-18** (build `63bf6fc4`: the three steps, a
+real conversion, the status line and Exit — the user's words, "everything works"); 6–8 are his. Execution plan for
 [001-architecture](001-architecture.md). Ordered so that something runnable exists early and the
 risky, unfamiliar part (packaging a signed-less portable exe) is proven before the UI is polished.
 
