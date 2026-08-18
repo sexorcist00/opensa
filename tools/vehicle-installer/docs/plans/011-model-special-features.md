@@ -1,6 +1,7 @@
 # 011 — `model_special_features.dat` for the `sa` target (a mod car's `features.txt` reaches the real game)
 
-**Status: IN PROGRESS 2026-08-18 (the user's ask) — steps 1-4 are BUILT and verified headless; step 5 (the field checkpoint) is the user's and is open.** The OpenSA half of the same declaration is
+**Status: DONE 2026-08-18 — steps 1-4 built and verified headless, step 5 FIELD-ACCEPTED the same day: the
+user's verdict is "features работают" (they work). Both open questions are answered below.** The OpenSA half of the same declaration is
 [`docs/plans/098-all-land-vehicles/`](../../../../docs/plans/098-all-land-vehicles/readme.md) (02 + 06) —
 this plan is the REAL-GAME half, and the two share one vocabulary table (step 1).
 
@@ -100,7 +101,7 @@ derive from the asset, not the slot).
       misspelled token is carried and IGNORED on both targets — visible only in the install log; a
       misspelled CARRIER cannot happen, the table owns them). `docs/gta-sa-original/vehicle-special-features.md`
       is written with this plan (the fact about the adjuster).
-- [ ] **5. Field checkpoint (the user, CrossOver bottle):** deliver the built `data/` (`data/model_special_features.dat`
+- [x] **5. Field checkpoint (the user, CrossOver bottle):** DONE 2026-08-18 — deliver the built `data/` (`data/model_special_features.dat`
       + the ini as installed) and check ONE car per mechanism — `feltzer` (pop-up lights open with the
       headlights), `bullet` (hydraulics respond), `infernus` (BF engine + hydraulics). Two things a desk check
       cannot answer, recorded here whatever the answer: does FLA remap a STOCK id (`bullet`) or only added
@@ -197,4 +198,21 @@ same bytes the scratch dry run produced. Nothing else moved: `vehicles.img` 1 86
 unchanged (the settings re-merge is idempotent). The bottle needs `models/` + `data/` synced from this tree
 before the field check.
 
-(field verdicts per car and the FLA remap-stock-id answer: step 5, pending)
+**Step 5, field-accepted 2026-08-18 (the user's bottle, the tree above + the block).** Verdict: the special
+features WORK. Both questions the desk could not answer:
+
+- **Does FLA remap a STOCK id?** **YES.** All nine mapped slots are stock (`bullet`, `cheetah`, `feltzer`,
+  `hotring`, `infernus`, `oceanic`, `rumpo`, `turismo`, `uranus`) — the adjuster's own example (`new_hydra`)
+  being an ADDED model was not a restriction. So this plan stays a feature of the ordinary fleet, not an
+  `add-vehicles`-only one.
+- **Per boot or per model load?** The verdict came from a fresh boot after the delivery, so **per boot is
+  proven and is what a delivery should assume**: after a `--rebake` that rewrites the block, restart the game.
+  Nothing observed says the loader re-reads the file later, and nothing needs it to.
+
+Recorded in `docs/gta-sa-original/vehicle-special-features.md` (the fact about the adjuster).
+
+**The delivery cost a boot-crash hunt that was NOT this plan's fault** — the same delivery reverted the
+install's FLA ID pools, because the whole tree root was copied and `mods-src`' copy of
+`fastman92limitAdjuster_GTASA.ini` never carried the 2026-08-10 field raise. Written up in
+[`docs/open-issues/fixed/sa-boot-crash-fla-pools-reverted-by-delivery.md`](../../../../docs/open-issues/fixed/sa-boot-crash-fla-pools-reverted-by-delivery.md);
+the `.dat` block was cleared as arm 1 of that hunt and exonerated before the real cause was found.

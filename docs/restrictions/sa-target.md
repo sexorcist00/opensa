@@ -80,6 +80,19 @@ opposite failure too: the guard's TXD limit had always read 6000 while the insta
 install's is silent by construction — it can only fail to fire.** Take pool numbers from FLA's own log, never
 from the ini alone (a `#`-disabled line still prints a value).
 
+**A pool raised in the FIELD must be raised in `mods-src` in the same change — the build SHIPS the ini — and
+its value WRITTEN DOWN in `reference-install-config.md`, because `mods-src/` is gitignored and the doc is the
+only committed copy.**
+The adjuster is a mod (`mods-src/<game>/mods/sa/6. fastman92 limit adjuster 6.5 (stable)`), so its
+`fastman92limitAdjuster_GTASA.ini` is a BUILD OUTPUT: it lands in the tree root and any delivery that copies
+the root puts it in the install. The 2026-08-10 raise was made in the bottle only, the repo kept
+`5000 / 280 / 256`, and the first delivery of a whole tree root (2026-08-18) silently reverted the target to
+those numbers with 5 511 TXD archives in the build — a boot-time heap fault with no message naming any of it
+([the write-up](../open-issues/fixed/sa-boot-crash-fla-pools-reverted-by-delivery.md)). **Nothing catches
+this**: the guard compares against constants that happened to match the bottle, the build succeeds, and the
+crash lands in an unrelated `free()` during a model read. One cheap check exists — FLA's log closes with
+`Number of memory changes made`, which was **3632** against the working install's **3712**.
+
 Where the numbers come from: [reference-install-config.md](../gta-sa-original/reference-install-config.md)
 (verbatim ini capture) and [reference-install.md](../gta-sa-original/reference-install.md) (what it means for
 a plan). Read that table rather than assuming a stock value.

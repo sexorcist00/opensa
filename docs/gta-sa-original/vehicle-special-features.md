@@ -24,6 +24,17 @@ line 695 and in the built `build/original/sa/` copy). The separate `[VEHICLE SPE
 per-class id LIST — and is off; we use the loader, not the list.
 
 The mod ships the `.dat` with one commented example (`#new_hydra hydra`) and NOTHING mapped, so a mod car's
-`features.txt` has no effect on the `sa` target until the installer writes this file (plan 011). Open, to be
-answered in the field and recorded here: whether the loader remaps a STOCK id (its example is an ADDED
-model) and whether it reads the file once per boot.
+`features.txt` had no effect on the `sa` target until the installer started writing this file (plan 011).
+
+**Measured in the field 2026-08-18** (nine stock slots mapped by `vehicle-installer`, the user's bottle):
+
+- **The loader DOES remap a stock model id.** `bullet hotknife`, `feltzer zr350`, `infernus bfinject` and the
+  six others are all stock slots, and the abilities work on them. The adjuster's own example being an added
+  model (`new_hydra`) is a documentation choice, not a limit.
+- **Read per boot.** The verdict came from a boot after the file was written; treat a rewritten block as
+  needing a restart, which is what a `--rebake` delivery does anyway. Nothing suggests a later re-read.
+- The loader logs `Model special features loader enabled.` and, per unmatched line,
+  `Model special features loader: model with name %s does not exist.` — a name typo is visible there and
+  nowhere else. It also refuses to work at all unless `[ID LIMITS] Apply ID limit patch = 1` (its own message
+  says so), and its strings carry `Vehicle special features are incompatible with model special features.`,
+  so the `[VEHICLE SPECIAL FEATURES]` id-list mechanism must stay off — as it is here.

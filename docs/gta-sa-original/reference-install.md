@@ -174,6 +174,18 @@ before anyone compared mtimes. Also present in the bottle and NOT in our tree: `
 `modloader/` (`Car Addons`, `_ESSENTIALS`, …, 10 Aug) — an active second source of models and data whenever
 the bottle disagrees with the tree.
 
+**And the mirror trap, paid for on 2026-08-18: delivering the tree ROOT overwrites the install's PLUGIN
+CONFIGURATION.** The root of a built `sa` tree carries every `.asi` and every `.ini` the mods stage installed
+— including `fastman92limitAdjuster_GTASA.ini`. A `--delete` sync of the root therefore replaces whatever the
+bottle was configured with by whatever `mods-src` ships (and deletes what the tree has no copy of; the
+bottle's `logs/` went that way). The FLA ID pools had been raised in the bottle on 2026-08-10 and never in the
+repo, so that one delivery took them from `TXD 6000 / COL 400 / IPL 1024` back to `5000 / 280 / 256` against a
+build carrying 5 511 TXD archives — and the game died at boot in an unrelated `free()`, four arms deep into a
+hunt ([write-up](../open-issues/fixed/sa-boot-crash-fla-pools-reverted-by-delivery.md)). **So: a setting
+changed in the bottle is a setting that must go back into `mods-src` the same day**, and after any root
+delivery read FLA's log line `Number of memory changes made` (3712 for this install) before diagnosing
+anything else.
+
 The sync that closed it (no `--delete`, `.DS_Store` excluded), from the repo root:
 
 ```sh

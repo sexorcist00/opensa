@@ -197,6 +197,15 @@ FLA pool is a configured number, so it is raised rather than designed down to:
 Both `COL` and `IPL` are already past 256, which is what makes FLA apply its `uint32_t` ID patches (its log
 says so for each). `TxdStore` is not set in `[SALIMITS]`.
 
+**Since 2026-08-18 the RAISED values also live in `mods-src`** (`6. fastman92 limit adjuster 6.5 (stable)/
+fastman92limitAdjuster_GTASA.ini`) so a build ships them — but that folder is **gitignored**, so the three
+numbers in this document are the only committed copy and a fresh mod library must be given them by hand: the build ships this ini
+into the tree root, and the first root delivery reverted the install to the repo's `5000 / 280 / 256` and
+stopped the game booting — see
+[the write-up](../open-issues/fixed/sa-boot-crash-fla-pools-reverted-by-delivery.md). The counts as measured
+on 2026-08-18 across every `models/*.img` of `build/original/sa`: `.dff` 15 600 · **`.txd` 5 511** · `.col` 264
+· `.ipl` 191 · `.ifp` 159 · `.dat` 64 of 64.
+
 **The ini is SET** (confirmed by the user 2026-08-10, verbatim — `FILE_TYPE_TXD = 6000`, `FILE_TYPE_COL = 400`,
 `FILE_TYPE_IPL = 1024`, the TXD line now uncommented). **The LOG is not re-captured**: FLA rewrites
 `fastman92limitAdjuster.log` at boot, so the ranges printed above are still the old ones and nothing has yet
