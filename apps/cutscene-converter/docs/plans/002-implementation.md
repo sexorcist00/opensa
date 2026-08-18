@@ -134,6 +134,18 @@ figure this whole chain was designed around and it cannot be measured on macOS.
 
 Still open: cold start and a conversion's wall-clock **on Windows**, which need the user's machine.
 
+**How those two are measured (2026-08-18).** Neither existed as an instrument — the tool prints sizes and
+no duration — so both are now taken by the app itself where it honestly can:
+
+- **The conversion** is timed spawn-to-exit in the main process and rides back with the exit code
+  (`ConvertResult.ms`); the run log's closing line reads `Done in 12.4 s. …`, and a failed run says how long
+  it got before stopping. Read the figure off the screen.
+- **The cold start** is half-visible at best: the portable exe unpacks ~85 MB into a temp folder and only
+  then starts our process, so `process.getCreationTime()` → `ready-to-show` misses the unpack. That half is
+  logged (`window shown N ms after this process started`, visible when the exe is run from a terminal); the
+  WHOLE figure is a stopwatch from the double-click, and it wants two numbers — a first run (unpack +
+  SmartScreen) and a second (the temp folder is reused, `unpackDirName` keeps it stable).
+
 ## Deviations from 001's shape, and why
 
 - **No `build/` folder.** 001 put the electron-builder config in `apps/cutscene-converter/build/`; it is one

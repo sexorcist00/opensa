@@ -29,6 +29,8 @@ export interface ConvertRequest {
 export interface ConvertResult {
   /** The child's exit code; anything but 0 means the tool refused or failed, and the log says why. */
   readonly code: number;
+  /** Wall-clock of the whole run, spawn to exit — the figure this app was designed around. */
+  readonly ms: number;
   readonly outPath: string;
 }
 

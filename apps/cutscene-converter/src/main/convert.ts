@@ -20,6 +20,8 @@ export function convert(request: ConvertRequest, onLine: (line: ConvertLine) => 
 
   const args = convertArgs(request, childScript());
 
+  const startedAt = Date.now();
+
   return new Promise<ConvertResult>((resolve, reject) => {
     // ELECTRON_RUN_AS_NODE turns our own binary into a plain Node — a packaged app has no `node` to call.
     const child = spawn(process.execPath, args, {
@@ -37,7 +39,7 @@ export function convert(request: ConvertRequest, onLine: (line: ConvertLine) => 
 
     child.on('close', (code) => {
       running = undefined;
-      resolve({ code: code ?? 1, outPath: request.outPath });
+      resolve({ code: code ?? 1, ms: Date.now() - startedAt, outPath: request.outPath });
     });
   });
 }

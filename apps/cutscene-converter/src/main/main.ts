@@ -23,7 +23,19 @@ function createWindow(): void {
   registerIpc(window);
 
   // Painting an empty window first and then swapping in the UI reads as a stall on a cold start.
-  window.once('ready-to-show', () => window.show());
+  //
+  // The log line is HALF a cold start and says so: the portable exe unpacks itself into a temp folder and
+  // only then starts this process, so the unpack is time no code of ours can see. The whole figure is a
+  // stopwatch from the double-click.
+  window.once('ready-to-show', () => {
+    const startedAt = process.getCreationTime();
+
+    if (startedAt !== null) {
+      console.log(`${APP_NAME}: window shown ${Math.round(Date.now() - startedAt)} ms after this process started`);
+    }
+
+    window.show();
+  });
 
   // A renderer that fails to load leaves a BLANK window and no message at all — the one Electron failure
   // that looks like nothing happening. Say it out loud, and keep the window so the message has somewhere

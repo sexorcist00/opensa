@@ -36,10 +36,15 @@ export function RunLog({
       {result ? (
         <p className={result.code === 0 ? 'cc-log-done' : 'cc-log-failed'}>
           {result.code === 0
-            ? 'Done. The output folder holds models/cutscene.img, data/txdcut.ide, anim/cuts.img and perfect-cutscene.asi.'
-            : `The converter stopped with code ${result.code}. The lines above say where.`}
+            ? `Done in ${seconds(result.ms)}. The output folder holds models/cutscene.img, data/txdcut.ide, anim/cuts.img and perfect-cutscene.asi.`
+            : `The converter stopped with code ${result.code} after ${seconds(result.ms)}. The lines above say where.`}
         </p>
       ) : undefined}
     </section>
   );
+}
+
+/** Seconds with one decimal — a run is seconds long, so minutes would be a unit nobody reads. */
+function seconds(ms: number): string {
+  return `${(ms / 1000).toFixed(1)} s`;
 }
