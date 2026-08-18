@@ -280,6 +280,18 @@ interpret them.
   `docs/development/cutscene-field-testing.md`. Suite 79 → 81 tool tests; no per-model hardcode
   (grep-checked at the user's ask).
 
+- [`session-24-the-app-meets-windows.md`](./session-24-the-app-meets-windows.md)
+  — 2026-08-18: the exe session 23 built was finally RUN, and both defects it found were invisible from
+  here. A STALE artifact (the asar carried the step 1–2 build, packed half an hour before the wizard) read
+  as a broken app, because nothing named the commit it came from — every build now stamps its own short sha
+  into the footer. Then the BLACK WINDOW at the end of a correct run: a concise-body `useEffect` returning
+  `scrollIntoView`'s value, which React called as the cleanup and unmounted the tree over finished work
+  (`docs/restrictions/architecture.md` records it, with both candidate lint rules measured and refused).
+  The renderer got its first lane, `scripts/debug/cutscene-converter-drive.ts`, which reproduced the crash
+  in seconds. Plan 002 is DONE, all eight steps: status line + Exit, the tutorial (`docs/tutorial/`, no
+  per-version folder), release 0.4.0 recorded — distribution is the user's own hosting, deliberately not a
+  GitHub release. Windows: cold start ~5 s, conversion ~2 s.
+
 - [`session-23-validation-package-and-the-cutscene-converter-app.md`](./session-23-validation-package-and-the-cutscene-converter-app.md)
   — 2026-08-17: the standalone-app chain, the first thing this repo builds for people who will never clone it.
   `@opensa/validation` (the verdict SHAPE — `fix` is required on an error at the type level — plus generic
