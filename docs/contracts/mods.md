@@ -9,6 +9,11 @@ Vehicle mods have their own folder shape: [vehicles.md](./vehicles.md).
 
 ---
 
+**A folder's NUMBER is install ORDER, not an identity.** Inserting a mod shifts every folder after it
+(2026-08-18: two map mods went in at `5.`/`6.` of `common` and 63 folders moved up by two), so **a record must
+name the mod, not its number** — a benchmark row or an issue that says "mod 64" points at a different mod after
+the next insert. Numbers in this repo's docs carry the date they were true where it matters.
+
 ## 1. The `--in` tree
 
 One folder per mod, each an immediate subfolder of `--in`. The folder NAME is free text with one job:
@@ -80,7 +85,7 @@ A binary archive cannot be patched file-by-file, so a mod ships a folder instead
   after the install.
   **The quieter half of the same rule: a whole library cut from STOCK reverts every fix an EARLIER mod's copy
   of that library carried, and nothing warns** — the model count matches, nothing is lost, and the warning
-  above stays silent. `65. Watts towers GTA V to SA` shipped `lae2_5.col` (68 of 68) cut from stock to change
+  above stays silent. `Watts towers GTA V to SA` (`67.` since 2026-08-18) shipped `lae2_5.col` (68 of 68) cut from stock to change
   `wattspark1_LAe2`, and being installed after `0. Map Fixes Pack` (which ships the same library) it put
   `furniture_lae`, `ground2_alpha` and `ebeachalpha5b` back to their stock collision (2026-08-17). Base your
   copy on the previous layer's file, and when you cannot, splice: `scripts/debug/col-splice.ts --base

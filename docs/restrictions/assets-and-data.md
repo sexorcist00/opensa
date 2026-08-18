@@ -354,7 +354,7 @@ objects that are not in it at all.
 **The removal path a MOD takes is handled, and that is exactly what makes the rest dangerous.** A
 `remove from "inst"` merge goes through `removeInstWithRebase` (which decrements every surviving link) and
 `patchAreaStreams` (which rewrites the `lod` field in the area's binary streams) — measured working:
-`5. SA Xbox Map Features` drops a row from `LAe.ipl` at index 93 and `laehospital1`'s stream link comes out
+`SA Xbox Map Features` (`7.` since 2026-08-18) drops a row from `LAe.ipl` at index 93 and `laehospital1`'s stream link comes out
 133 → 132, still on its own LOD. **Every other way a row can leave a file has neither half.**
 
 **And a rebase is not enough on its own: a later stage can write over it.** The 2026-08-11 field report was

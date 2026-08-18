@@ -876,7 +876,7 @@ vs 3.9 since at least 08-09, ocean-horizon only 1.2×), a standing fact about th
 
 ## 2026-08-18 — two A/B builds on the user's display lane: the recent mods, and the fleet
 
-**Build 1 — mods 64–67 out, the full fleet kept**
+**Build 1 — mods 64–67 out, the full fleet kept** (the four 08-16 map mods: GTA 5 Cranes, Watts towers, Urbanize only MAP, Binco Improved — `66–69` since the 2026-08-18 insert)
 ([`opensa-engine/2026-08-18-ingame-ab1-no-recent-mods-full-fleet.json`](opensa-engine/2026-08-18-ingame-ab1-no-recent-mods-full-fleet.json),
 `build/ab1-no-recent-mods`, pak 1 189 171 200 B, buildTime 13:54; the user's in-game sweep, capped 120,
 `target 422`, pair = [arm A](opensa-engine/2026-08-17-ingame-full-hipoly-fleet-sweep.json)): the four
