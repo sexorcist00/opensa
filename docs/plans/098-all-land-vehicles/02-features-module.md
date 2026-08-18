@@ -33,8 +33,17 @@ vehicles.
 
 ## Design
 
-- **Vocabulary = the VSA catalogue, normalised.** The corpus plugin (`NO_COMMIT/all-veh/1`,
-  `VSAConfig.ini`) enumerates SA's 15 hardcoded ability classes. Tokens keep the Modloader/IVF-family
+- **Vocabulary = the VSA catalogue, normalised — and since 2026-08-18 it is IN THE REPO as data, not in
+  `NO_COMMIT`.** The 15 tokens with their stock carriers are the table in
+  [`tools/vehicle-installer/docs/plans/011-model-special-features.md`](../../../tools/vehicle-installer/docs/plans/011-model-special-features.md)
+  (`ADV_HYDRALICs` hotknife/bandito · `BAGBOXA` · `BAGBOXB` · `BF_ENGINE&HYDRALICS` bfinject · `BUCKETs`
+  dozer · `CISTERNs` cement · `PACKERs` packer · `TRACTOR_HOOKs` tractor · `TRAILER_HOOKs`
+  linerun/petro/rdtrain/artict3 · `TRUCK_HOOKs` towtruck · `TUGSTAIR` tugstair · `TURRETs_1` rhino/swatvan ·
+  `TURRETs_2` firetruk · `UP/DOWN_LIGHTS` zr350 · `WATER_JETs` firetruk/swatvan). **One module serves both
+  targets**: `VEHICLE_FEATURE_TOKENS` in `packages/renderware`'s `vehicle-features.parser.ts` (011 step 1) —
+  the `sa` build translates a token into FLA's `model_special_features.dat` line, the OpenSA build hands the
+  same token to the detector registry below. The corpus plugin (`NO_COMMIT/all-veh/1`,
+  `VSAConfig.ini`) enumerates the same 15 classes and stays the provenance. Tokens keep the Modloader/IVF-family
   spelling where one exists (`UP/DOWN_LIGHTS` stays). The vocabulary table in `docs/contracts/vehicles.md`
   is the single source; unknown tokens keep flowing through untouched. **VSA's ID→ability mapping is not
   imported** — identification derives from the asset (geometry, dummies, flags), the token only forces or
@@ -52,7 +61,10 @@ vehicles.
 
 ## Steps
 
-- [ ] Fixture the corpus: vocabulary reference doc + glendale as a vehicle-installer test fixture.
+- [ ] Fixture the corpus: glendale as a vehicle-installer test fixture (the vocabulary reference is now
+      011's table + the shared `VEHICLE_FEATURE_TOKENS` module — build that module FIRST, it is the one
+      thing 011 and this plan both stand on; the stock-carrier list is the detectors' ORACLE, never a
+      runtime key).
 - [ ] Extract the build-side detector registry; `popUpLights()` moves in unchanged (same tests, same
       `.osm` output — byte-compare a re-bake of a pod car and of glendale as the no-features control).
 - [ ] Extract the runtime driver registry + rig articulation channel; the pop-up driver reproduces

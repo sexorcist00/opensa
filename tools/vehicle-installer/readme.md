@@ -117,4 +117,4 @@ The result is a minimal, self-contained pack of just the installed cars. Off by 
   trim it; (2) wire the engine population/traffic system to read `cargrp.dat`. Needs a separate plan when picked up.
 
 See [docs/plans/](./docs/plans/) (`001` architecture · `002` install + settings · `003` custom palette · `004`
-strip · `005` node API · `006` rebake · `007` `models/` + `new/` · `008` rebake for `sa` · `009` new tuning parts + the carmods guard · `010` layered `common/sa/opensa`).
+strip · `005` node API · `006` rebake · `007` `models/` + `new/` · `008` rebake for `sa` · `009` new tuning parts + the carmods guard · `010` layered `common/sa/opensa` · `011` `model_special_features.dat` for `sa` — PLANNED).

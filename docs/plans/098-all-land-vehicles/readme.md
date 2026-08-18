@@ -54,7 +54,12 @@ Census of the built `data/vehicles.ide` (212 rows) and its satellites, measured 
 5. **Special abilities have a live template and a vocabulary source.** The chain
    `features.txt → data/vehicle-features.txt → bake → fixture field → rig driver` is shipped for one token
    (`UP/DOWN_LIGHTS`); the VSA corpus names the rest of the vocabulary. VSA's per-ID mapping is the
-   anti-pattern our restrictions forbid — its ability CATALOGUE is the value.
+   anti-pattern our restrictions forbid — its ability CATALOGUE is the value. **2026-08-18: the catalogue is
+   committed as data (15 tokens + stock carriers) and gets a REAL-GAME twin —
+   [vehicle-installer plan 011](../../../tools/vehicle-installer/docs/plans/011-model-special-features.md)
+   writes FLA's `model_special_features.dat` on the `sa` target from the same `features.txt`, so a mod's
+   declaration works in both games; 02 owns the shared vocabulary module, 06 uses the carriers as its
+   detector oracle.**
 6. **A mod bike's handling cannot install.** `vehicle-installer`'s classifier and merge only accept
    letter-leading handling rows — a shipped `!BIKE` lean line is silently dropped (`settings.ts:94-123`,
    `merge.ts:28-42`).
