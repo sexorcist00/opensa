@@ -80,3 +80,18 @@ fleet's memory off that counter's stock-vs-fleet delta, not off the world's; and
 with the fleet at all (`country-dusk` 12.0–12.5 in every arm on the display lane, 4 cars) — this lever buys back
 the CITY scenes only. Records: [`2026-08-18-ingame-ab2-all-mods-stock-cars.json`](../../benchmarks/opensa-engine/2026-08-18-ingame-ab2-all-mods-stock-cars.json)
 against [`2026-08-17-ingame-full-hipoly-fleet-sweep.json`](../../benchmarks/opensa-engine/2026-08-17-ingame-full-hipoly-fleet-sweep.json).
+
+## What a BUILD-TIME cut reaches (census 2026-08-18, `scripts/debug/vehicle-submesh-census.ts`)
+
+Over the 200 fleet `.osm` in `build/original/opensa`: opaque submeshes shown by default **16 954 → 10 932
+(−36 %)** if the builder welded submeshes that share every runtime-visible state (part, kind, damage group,
+extra, variant, texture array, uv-anim slot, lamp, plate, tyre) — the per-vertex material state (colour, layer,
+paint, reflect) is already in the vertices, so the engine would not notice. Translucent submeshes (4 218 shown)
+cannot merge: they sort per submesh. What keeps the number at −36 % rather than −80 %: **parts** (the feltzer's
+body spans 38 parts, `interior` alone 29 opaque submeshes over 6 texture arrays) and **size-bucketed texture
+arrays** (one draw per array per part). The next two build-time steps, each with a price: fold the parts the
+runtime never moves (not a door member, wheel, pop-up or damage twin — but CLEO natives address `misc_*` frames
+by name, so those stay) into the chassis; and pack a car's small textures into ONE array (atlas layers, UVs
+remapped — tiling materials excluded) so a part becomes one draw. `_vlo` is not the gap: 192/200 ship one
+(mean 96 k body tris vs 4 k LOD); the eight without are stock-shaped (`trash solair rcbaron bmx rctiger bf400
+rccam farmtr1`).
