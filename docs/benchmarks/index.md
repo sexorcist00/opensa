@@ -873,3 +873,15 @@ on country-dusk** — the cellVertex ×2–3 and texture +25 % of a fuller map, 
 and was never this issue: his display costs 2–3× the headless canvas on the same content (country-dusk 12.5
 vs 3.9 since at least 08-09, ocean-horizon only 1.2×), a standing fact about that surface.
 `docs/open-issues/opensa-gpu-pass-regression-2026-08-17.md` closes on this.
+
+## 2026-08-18 — two A/B builds on the user's display lane: the recent mods, and the fleet
+
+**Build 1 — mods 64–67 out, the full fleet kept**
+([`opensa-engine/2026-08-18-ingame-ab1-no-recent-mods-full-fleet.json`](opensa-engine/2026-08-18-ingame-ab1-no-recent-mods-full-fleet.json),
+`build/ab1-no-recent-mods`, pak 1 189 171 200 B, buildTime 13:54; the user's in-game sweep, capped 120,
+`target 422`, pair = [arm A](opensa-engine/2026-08-17-ingame-full-hipoly-fleet-sweep.json)): the four
+2026-08-16 mods (GTA 5 Cranes, Watts towers, Urbanize only MAP, Binco Improved) cost **2–6 % of pass** —
+ls-noon 6.86 → 6.46, ganton-noon 10.36 → 9.68, lv-night 11.75 → 11.27, country-dusk 12.37 → 12.08,
+ocean-horizon 2.19 → 2.16 (control). Triangles −6..−19 %, draws ±1 %, cellVertex −3..−11 %. Decomposition on
+this lane against the 08-09 oldmap row (ls-noon 5.07): fleet ≈ +1.2 ms (arm B), mods 64–67 ≈ +0.4 ms, the rest
+since 08-09 ≈ +0.6 ms. `country-dusk` sits at 12.0–12.5 in EVERY arm — the surface, not the content.
