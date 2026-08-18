@@ -73,3 +73,10 @@ STOCK cars on the same map is **+1.0..+2.6 ms of GPU pass on the city scenes** (
 ganton-night 9.19 → 10.83, ls-noon 5.52 → 6.86) and **~700 draws in view** on ls-noon (1265 → 1967) — while the
 whole map's growth since 08-09 is +0.0..+0.5 ms. That is the budget this lever competes for; the `?benchcar=caddy`
 pin (5.64 on ls-noon) is a fair proxy for it, so a batching change can be A/B'd against the pin without a rebuild.
+
+Two facts for whoever picks this up: the `cellVertex` residency counter INCLUDES the vehicle geometry
+(ocean-horizon 349 → 57 with zero live cars — the registered road-car `.osm` buffers sit in it), so read the
+fleet's memory off that counter's stock-vs-fleet delta, not off the world's; and the country scene does not move
+with the fleet at all (`country-dusk` 12.0–12.5 in every arm on the display lane, 4 cars) — this lever buys back
+the CITY scenes only. Records: [`2026-08-18-ingame-ab2-all-mods-stock-cars.json`](../../benchmarks/opensa-engine/2026-08-18-ingame-ab2-all-mods-stock-cars.json)
+against [`2026-08-17-ingame-full-hipoly-fleet-sweep.json`](../../benchmarks/opensa-engine/2026-08-17-ingame-full-hipoly-fleet-sweep.json).
