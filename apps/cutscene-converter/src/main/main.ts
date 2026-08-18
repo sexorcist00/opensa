@@ -45,6 +45,9 @@ function createWindow(): void {
 
 app.setName(APP_NAME);
 
+// The about line says this on screen; the log says it for a run started from a terminal.
+console.log(`${APP_NAME}: build ${__BUILD_COMMIT__}`);
+
 void app.whenReady().then(() => {
   createWindow();
 

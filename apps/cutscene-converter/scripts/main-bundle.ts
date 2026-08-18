@@ -1,6 +1,8 @@
 import { build } from 'esbuild';
 import { dirname, join } from 'node:path';
 
+import { readBuildStamp } from './build-stamp';
+
 const APP_DIR = dirname(import.meta.dirname);
 
 /** `main` boots the window, `preload` is the bridge, `convert-child` IS the tool's CLI (forked per run). */
@@ -14,6 +16,7 @@ const ENTRIES = ['src/main/main.ts', 'src/main/preload.ts', 'src/main/convert-ch
 export async function buildMain(): Promise<void> {
   await build({
     bundle: true,
+    define: { __BUILD_COMMIT__: JSON.stringify(readBuildStamp()) },
     entryPoints: ENTRIES.map((entry) => join(APP_DIR, entry)),
     external: ['electron'],
     format: 'cjs',

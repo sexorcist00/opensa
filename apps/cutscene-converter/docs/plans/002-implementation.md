@@ -102,6 +102,20 @@ Steps 1–2 can start before either lands; step 4 needs both.
   without touching a line of the app, so deferring it costs nothing. The tutorial carries the warning
   instead.
 
+## The build stamp, and what it came out of (2026-08-18)
+
+The first Windows run of the 0.4.0 exe showed the title and the about line and nothing else — no steps, no
+Convert button. The app was not at fault: the artifact's asar carried `main.cjs` alone (no `preload.cjs`, no
+`convert-child.cjs`, a renderer with no wizard in it), i.e. the build of step 1-2, packed at 20:03 while the
+wizard landed at 20:33. `release/` is untracked, so nothing on screen or in the file said which commit it was
+built from, and the only way to find out was to unpack the asar.
+
+So the build now stamps itself: `scripts/build-stamp.ts` reads `git rev-parse --short HEAD` plus a
+`--porcelain` dirty flag, vite injects it into the renderer and esbuild into the main process, and it shows
+in the about line beside the version and the plugin SHA (`8e05ded2`, `8e05ded2-dirty`, or `unknown` off a git
+tree — a missing git is never a build failure). A screenshot now answers "which build is this", which is the
+question that cost this round. Step 8's release triple is the same three facts, recorded rather than shown.
+
 ## Numbers to record
 
 Artifact size, cold-start time, and a full conversion's wall-clock **on Windows** — the last one is the
@@ -111,7 +125,7 @@ figure this whole chain was designed around and it cannot be measured on macOS.
 
 | | |
 | --- | --- |
-| Portable exe | 88 871 868 B (84.8 MB) |
+| Portable exe | 89 018 508 B (84.9 MB), rebuilt 2026-08-18 with the stamp (88 871 868 B on 08-17) |
 | asar | 199 198 B (18 112 416 B before `!node_modules/**`) |
 | Embedded plugin | `perfect-cutscene.asi` 18 944 B, sha1 `6f98053010ba0295ee867ddcbf18efb57512b5c0` |
 | Conversion, 23/23 slots | ~3.1 s, output 579 MB (cutscene.img 321 MB + cuts.img 257 MB) |

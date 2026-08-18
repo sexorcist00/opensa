@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { defineConfig } from 'vite';
 
 import { readAsi, requireAsi } from './scripts/asi-resource';
+import { readBuildStamp } from './scripts/build-stamp';
 
 const pkg = JSON.parse(readFileSync(join(import.meta.dirname, 'package.json'), 'utf8')) as { version: string };
 
@@ -26,6 +27,7 @@ export default defineConfig(({ command }) => {
       __APP_VERSION__: JSON.stringify(pkg.version),
       __ASI_BYTES__: JSON.stringify(asi?.bytes ?? 0),
       __ASI_SHA1__: JSON.stringify(asi?.sha1 ?? ''),
+      __BUILD_COMMIT__: JSON.stringify(readBuildStamp()),
     },
     plugins: [react()],
     root: import.meta.dirname,
