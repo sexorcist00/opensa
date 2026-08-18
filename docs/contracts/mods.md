@@ -147,6 +147,19 @@ gta3_img/previon/remap.png              →  merges into the previon.txd ENTRY i
   there can create the dictionary, the stray files are harmless (the game ignores them), and a later rule may
   well make the folder itself valid. The warning is the part that matters — it names the missing `.txd`.
 
+### A shared `.txd` is REPLACED whole, so a later mod must carry a SUPERSET
+
+An archive holds one entry per name: a mod shipping `alleyprop.txd` replaces every texture in it, including
+ones an EARLIER mod added or resized. Measured while installing `HD Aircon` (2026-08-18): its own dictionary
+carried the two new `aal_aircon1*` textures plus `hoteldetails2` at the stock 128², while `3. Global Textures
+Fixes` ships that texture at 256² — installing after it would have silently reverted the upscale, and installing
+before it would have lost the aircon's own textures. **The fix is a superset, not an order**: take the winning
+dictionary and splice the new textures in chunk-for-chunk (`readRw`/`writeRw` keep every texel byte-exact — a
+decode/re-encode round costs a DXT generation), and note in the mod which dictionary it was derived from, because
+the superset has to be rebuilt when that mod ships more. `scripts/debug/txd-retune.ts --add <txd>#<name>` does the
+same thing when a re-encode is acceptable, and the pak build reports what a replacement dropped
+(`report.json` → `textures.missing`).
+
 ### `<target>.merge` — edit a data file instead of replacing it
 
 A mod ships `multiobj.ide.merge` next to the game path it wants to change. Directives apply to the CURRENT

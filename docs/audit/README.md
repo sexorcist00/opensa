@@ -390,4 +390,9 @@ interpret them.
   sat unread on disk. Closed with the ini raised, the delivery trap written down, and the CLASS closed too:
   the id-pool guard now reads the pools off the ini the build ships instead of carrying constants. A full
   rebuild proved the pipeline byte-deterministic; a modloader-off arm found a second, real defect (a folded
-  mod `inst` row read before the mod IDE that defines it) and left it as an open issue.
+  mod `inst` row read before the mod IDE that defines it) and left it as an open issue. **Part 2** of the same
+  day: two new map mods scanned, stripped of their 21 conflicting DFFs and numbered into `common`; a mod's full
+  stock IDE converted to one `.ide.merge` with a chunk-spliced superset TXD; and three rounds on
+  `vehicle-optimizer` that ended in the install's SkyGfx source — its car pipe multiplies the reflection
+  intensity by 8 (so ≥ 0.125 saturates) and the SPECULAR level by 3, and the specular was the term the field had
+  been looking at all along. Two of the three rounds were my own wrong turns, reverted by measurement.
