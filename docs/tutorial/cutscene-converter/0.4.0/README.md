@@ -10,7 +10,7 @@ to put the result, and a few seconds later you have the three files that put you
 **It does not touch how you play.** Which cars you install for gameplay is your business and stays exactly as
 you set it up — this app never writes into your game folder at all.
 
-- **Download:** `<DOWNLOAD-URL>` — one portable `.exe`, nothing to install, ~85 MB.
+- **Download:** <http://gooddev.org/gta/cutscene-converter.zip> — a portable `.exe`, nothing to install, ~85 MB.
 - **This page describes version 0.4.0.** Each version has its own page; use the one that matches the app.
 
 ## Before you start
