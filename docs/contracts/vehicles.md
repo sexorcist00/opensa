@@ -39,6 +39,13 @@ and the `<model>.osm` a `--rebake` converts. The folder must ship a `<slot>.dff`
 `.dff` is used (the pre-2026-08-15 rule, so a mis-named folder installs as it always did) **with a warning
 naming both** — nothing downstream can tell the two apart, and this is what a misspelled slot looks like.
 
+**A car must BE a folder.** The tree is resolved from its subdirectories (`subdirectories()` inside
+`resolveVehicleSources`), so a `.dff` and `.txd` dropped straight into the `--in` tree belong to no source
+and are read by nothing. The tools do not fail on it: an installer run reports the cars it installed, which
+is none, and the cutscene census reports 0 of 23 slots covered — both exit 0. **The one place that now says
+it out loud is `apps/cutscene-converter`** ("The cars are loose files, not one folder per car"), because
+that is where the mistake is actually made, by someone who has just unpacked a mod archive.
+
 Getting it from the folder rather than from "the first `.dff`" is not tidiness: on the original's fleet the
 old rule mis-recorded **10 of 212 cars** as a bodykit part (`flash` → `exh_a_f`, `voodoo` → `bbb_lr_slv1`),
 so video mode never saw those slots as modded, `--strip` would have dropped the car it was told to keep, and

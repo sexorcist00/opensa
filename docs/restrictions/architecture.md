@@ -476,3 +476,43 @@ a scene capture afterwards. `station-supply.test.ts` now pins the yield ("yields
 to a plant that already spent it"), but that is one consumer pair, not a guard: a third consumer added
 tomorrow would go over budget silently again. Read `stations.castsMax` in a `[video]` capture before
 believing a new probe is free.
+
+## An effect's RETURN VALUE is its cleanup — a shorthand body must return a cleanup or nothing
+
+React calls whatever `useEffect` returns as the effect's cleanup function. A concise arrow body returns the
+expression it evaluates, so
+
+```ts
+useEffect(() => endRef.current?.scrollIntoView({ block: 'end' }), [lines.length]);
+```
+
+hands React a non-function, and React unmounts the WHOLE tree the moment that cleanup runs. The window goes
+black at the end of the work it was doing, with everything the run produced already correct on disk — which
+is what it looked like when it shipped to Windows in `cutscene-converter` 0.4.0 (`f1f65b7b`): the conversion
+finished, the files were in the output folder, the app showed nothing.
+
+**The shorthand is not the defect.** Returning a subscription's unsubscribe function from it is the correct
+idiom and reads well:
+
+```ts
+useEffect(() => game.events.on('city', ({ city }) => setCity(city)), [game]);
+```
+
+Only a VOID expression is the trap. So: braces around the body unless the expression IS the cleanup.
+
+**Caught: NOTHING catches this**, and both instruments were tried and measured (2026-08-18):
+
+- **tsc cannot.** The callback's type is `void | Destructor`, and `void` fits.
+- **A syntactic lint rule** (`no-restricted-syntax` on a shorthand effect body) fires on all four occurrences
+  in this repo, and **three of them are the legitimate unsubscribe idiom** above. A rule that is wrong 75 %
+  of the time trains people to disable it.
+- **The type-aware rule** (`@typescript-eslint/no-confusing-void-expression` with `ignoreArrowShorthand:
+  false`) is correct in principle — it separates a void expression from a returned function — but it flags
+  **128 places across `apps/`**, nearly all of them ordinary JSX handlers (`onClick={() => setX(1)}`). The
+  price is a repo-wide rewrite of correct code.
+
+What exists instead is damage control, not prevention: the renderer's error boundary turns the blank page
+into a message naming the failure (`apps/cutscene-converter/src/renderer/error-boundary.tsx`), and
+`scripts/debug/cutscene-converter-drive.ts` reproduces the class in seconds by driving the built app. Read
+an effect's body before you shorten it.
+
