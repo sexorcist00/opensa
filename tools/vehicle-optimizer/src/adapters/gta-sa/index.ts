@@ -55,8 +55,9 @@ export function createGtaSaVehicleAdapter(): VehicleAdapter {
           number === null ? `${label} —` : `${label} ${number.toFixed(3)}`;
         notes.push(
           `effects: ${copied.patched} of ${copied.materials} material(s) retuned ` +
-            `(${copied.coefficients} env-map coefficient, ${copied.intensities} reflection intensity); ` +
-            `${copied.byTexture} matched the prototype by texture name, the rest took its median ` +
+            `(${copied.coefficients} env-map coefficient, ${copied.intensities} reflection intensity)` +
+            (copied.fellBack ? ' — no env-map-marked material, so every reflective one was taken' : '') +
+            `; ${copied.byTexture} matched the prototype by texture name, the rest took its median ` +
             `[${value('coefficient', copied.reference.coefficient)}, ${value('intensity', copied.reference.intensity)}]`,
         );
       }

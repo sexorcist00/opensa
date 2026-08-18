@@ -9,6 +9,8 @@ export interface CopyEffectsResult {
   byTexture: number;
   /** Env-map coefficients written. */
   coefficients: number;
+  /** True when the target had no env-map-marked material and every reflection-plugin one was retuned instead. */
+  fellBack: boolean;
   /** Reflection intensities written. */
   intensities: number;
   /** Materials seen in the target. */
@@ -26,14 +28,19 @@ export interface CopyEffectsResult {
  * alone — we only retune the numbers on the target's **existing** reflective materials, so the worst case is
  * a part a touch too shiny/matte.
  *
- * **Both chunks count, and that was a real defect** (2026-08-18): the gate used to be "has an env-map", so a
- * material carrying only the reflection plugin was skipped entirely — on the user's yankee that was **83 of
- * 116 materials**, and every stock fixture has the same shape (infernus 46, admiral 24, walton 123). The
- * prototype side had the same gate, so a reference's reflection-only materials never entered the median
- * either. A run therefore reported success and changed almost nothing.
+ * **WHICH materials are the reflective ones is the env-map's answer, not the reflection plugin's** (measured
+ * 2026-08-18, after a field report). An exporter attaches the MatFX env-map only to the materials meant to
+ * mirror the world — body panels, glass, chrome — while the SA reflection plugin sits on nearly EVERY material
+ * (yankee 116 of 116, walton 180 of 180). So the env-map-marked set is the author's own marking of "this
+ * reflects", and it is the set to retune; widening the retune to every plugin-carrying material spreads the
+ * reference's body value onto tyres, dirt and interior and reads as a uniformly matte car.
+ *
+ * A tree with NO env-map at all falls back to its reflection-carrying materials, so a car built that way is
+ * still serviceable instead of refused.
  *
  * A value of **0 is "not reflective" and stays 0** on both sides: it is neither retuned on the target nor
- * counted into the reference median, so the copy can never make a matte part shiny.
+ * counted into the reference median, so the copy can never make a matte part shiny (stock admiral carries 19
+ * env-map chunks at zero — they used to be written to).
  *
  * The prototype is read with the engine `parseDff` (read-only) — so it works even for anti-rip-locked
  * references like `walton.dff`. The target is read+patched with map-optimizer's byte codec (a standard DFF
@@ -54,12 +61,13 @@ export function copyMaterialEffects(targetBytes: Uint8Array, prototypeBytes: Uin
 
   const file = readRw(targetBytes);
   const lists = materialLists(file);
-  const summary = { byTexture: 0, coefficients: 0, intensities: 0, materials: 0, patched: 0 };
-  for (const { chunks } of lists) {
-    for (const material of chunks.filter((chunk) => chunk.type === MATERIAL)) {
-      summary.materials += 1;
-      patchReflection(material, reference, summary);
-    }
+  const targetMaterials = lists.flatMap(({ chunks }) => chunks.filter((chunk) => chunk.type === MATERIAL));
+  const summary = { byTexture: 0, coefficients: 0, fellBack: false, intensities: 0, materials: 0, patched: 0 };
+  summary.materials = targetMaterials.length;
+  const marked = targetMaterials.filter((material) => reflectiveValues(material).coefficient !== null);
+  summary.fellBack = marked.length === 0;
+  for (const material of summary.fellBack ? targetMaterials : marked) {
+    patchReflection(material, reference, summary);
   }
   if (summary.patched === 0) {
     throw new Error(
@@ -100,6 +108,7 @@ interface MatChunk {
 interface PatchSummary {
   byTexture: number;
   coefficients: number;
+  fellBack: boolean;
   intensities: number;
   materials: number;
   patched: number;
@@ -186,16 +195,10 @@ function parseChunks(bytes: Uint8Array): MatChunk[] {
  * else from the prototype's median, and each of the two floats is written only where both sides have it.
  */
 function patchReflection(material: MatChunk, reference: ReflectionProfiles, summary: PatchSummary): void {
-  const extension = material.children?.find((child) => child.type === EXTENSION);
-  const envMap = extension?.children?.find((child) => child.type === ENVMAP)?.data;
-  const reflection = extension?.children?.find((child) => child.type === REFLECTION)?.data;
-  const envView = envMap ? new DataView(envMap.buffer, envMap.byteOffset, envMap.byteLength) : undefined;
-  const reflView = reflection
-    ? new DataView(reflection.buffer, reflection.byteOffset, reflection.byteLength)
-    : undefined;
+  const { coefficient, envView, intensity, reflView } = reflectiveValues(material);
   // A zero is the author saying "this part does not reflect" — retuning it would ADD reflection.
-  const hasEnv = envView !== undefined && envView.getFloat32(ENVMAP_COEFFICIENT_OFFSET, true) !== 0;
-  const hasRefl = reflView !== undefined && reflView.getFloat32(REFLECTION_INTENSITY_OFFSET, true) !== 0;
+  const hasEnv = coefficient !== null;
+  const hasRefl = intensity !== null;
   if (!hasEnv && !hasRefl) {
     return;
   }
@@ -237,22 +240,24 @@ function readReflectionProfiles(bytes: Uint8Array): null | ReflectionProfiles {
   const byTexture = new Map<string, ReflectionValue>();
   const coefficients: number[] = [];
   const intensities: number[] = [];
-  for (const geometry of clump.geometries) {
-    for (const material of geometry.materials) {
-      const value = referenceValue(material);
-      if (value === null) {
-        continue;
-      }
-      if (value.coefficient !== null) {
-        coefficients.push(value.coefficient);
-      }
-      if (value.intensity !== null) {
-        intensities.push(value.intensity);
-      }
-      const texture = material.texture?.name?.toLowerCase();
-      if (texture && !byTexture.has(texture)) {
-        byTexture.set(texture, value);
-      }
+  const materials = clump.geometries.flatMap((geometry) => geometry.materials);
+  // The env-map-marked materials ARE the reference's reflective surface; only a tree with none of them falls
+  // back to whatever carries the reflection plugin.
+  const marked = materials.filter((material) => (material.effects?.envMap?.coefficient ?? 0) !== 0);
+  for (const material of marked.length > 0 ? marked : materials) {
+    const value = referenceValue(material);
+    if (value === null) {
+      continue;
+    }
+    if (value.coefficient !== null) {
+      coefficients.push(value.coefficient);
+    }
+    if (value.intensity !== null) {
+      intensities.push(value.intensity);
+    }
+    const texture = material.texture?.name?.toLowerCase();
+    if (texture && !byTexture.has(texture)) {
+      byTexture.set(texture, value);
     }
   }
   if (coefficients.length === 0 && intensities.length === 0) {
@@ -283,6 +288,34 @@ function referenceValue(material: {
   }
 
   return { coefficient: coefficient === 0 ? null : coefficient, intensity: intensity === 0 ? null : intensity };
+}
+
+/**
+ * One target material's live reflective state: the two plugin views plus their CURRENT values, `null` where the
+ * chunk is absent or its value is zero (which is the author saying "this part does not reflect").
+ */
+function reflectiveValues(material: MatChunk): {
+  coefficient: null | number;
+  envView: DataView | undefined;
+  intensity: null | number;
+  reflView: DataView | undefined;
+} {
+  const extension = material.children?.find((child) => child.type === EXTENSION);
+  const envMap = extension?.children?.find((child) => child.type === ENVMAP)?.data;
+  const reflection = extension?.children?.find((child) => child.type === REFLECTION)?.data;
+  const envView = envMap ? new DataView(envMap.buffer, envMap.byteOffset, envMap.byteLength) : undefined;
+  const reflView = reflection
+    ? new DataView(reflection.buffer, reflection.byteOffset, reflection.byteLength)
+    : undefined;
+  const coefficient = envView?.getFloat32(ENVMAP_COEFFICIENT_OFFSET, true) ?? 0;
+  const intensity = reflView?.getFloat32(REFLECTION_INTENSITY_OFFSET, true) ?? 0;
+
+  return {
+    coefficient: coefficient === 0 ? null : coefficient,
+    envView,
+    intensity: intensity === 0 ? null : intensity,
+    reflView,
+  };
 }
 
 function writeChunks(chunks: readonly MatChunk[]): Uint8Array {

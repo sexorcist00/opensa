@@ -89,9 +89,10 @@ describe('copyMaterialEffects', () => {
       expect(after.reflective).toBe(reflection(load(INFERNUS)).reflective);
     });
 
-    it('counts a material as reflective through EITHER chunk, and leaves a zero alone (walton → admiral)', () => {
-      // The gate used to be "has an env-map chunk", which both skipped materials that reflect through the SA
-      // reflection plugin alone and wrote a coefficient onto ones deliberately left at zero.
+    it('retunes the ENV-MAP-MARKED materials and leaves a deliberate zero alone (walton → admiral)', () => {
+      // The env-map is the author's marking of "this surface mirrors the world" — body, glass, chrome. The SA
+      // reflection plugin sits on nearly every material (here 91 of 91), so retuning by IT would spread the
+      // reference's body value onto the interior and the tyres.
       expect(chunks(load(ADMIRAL))).toEqual({
         coefficientZero: 19,
         envMapChunks: 67,
@@ -103,9 +104,10 @@ describe('copyMaterialEffects', () => {
       const result = copyMaterialEffects(load(ADMIRAL), load(WALTON));
 
       expect(result.materials).toBe(91);
-      expect(result.patched).toBe(51); // the materials that REFLECT, not the 67 that carry an env-map chunk
-      expect(result.coefficients).toBe(48); // 67 chunks − 19 deliberate zeros
-      expect(result.intensities).toBe(51);
+      expect(result.patched).toBe(48); // 67 env-map chunks − 19 deliberate zeros
+      expect(result.coefficients).toBe(48);
+      expect(result.intensities).toBe(48); // the intensity rides the same set, not all 91 plugin carriers
+      expect(result.fellBack).toBe(false);
       // Nothing matte became shiny: the same zeros are still zero after the copy.
       const after = chunks(result.bytes);
       expect(after.coefficientZero).toBe(19);
@@ -113,13 +115,22 @@ describe('copyMaterialEffects', () => {
       expect(after.nonZero).toBe(51);
     });
 
-    it('reports the reference it used, so a run that changes nothing says so', () => {
+    it("takes the reference's level from ITS marked materials, not from its untuned majority", () => {
+      // walton's env-map-marked materials are the tuned ones; a median over every plugin-carrying material
+      // would return the file's default (0.5) and the copy would transfer nothing at all.
       const result = copyMaterialEffects(load(ADMIRAL), load(WALTON));
 
       expect(result.reference.coefficient).toBeCloseTo(0.5, 3);
       expect(result.reference.intensity).not.toBeNull();
+      expect(result.reference.intensity).toBeLessThan(0.5);
+    });
+
+    it('reports what it did, so a run that changes nothing says so', () => {
+      const result = copyMaterialEffects(load(ADMIRAL), load(WALTON));
+
       expect(result.byTexture).toBeGreaterThanOrEqual(0);
       expect(result.byTexture).toBeLessThanOrEqual(result.patched);
+      expect(result.patched).toBeLessThanOrEqual(result.materials);
     });
   });
 });

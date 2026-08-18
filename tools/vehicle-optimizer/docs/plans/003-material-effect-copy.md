@@ -1,12 +1,16 @@
 # 003 — Reflection-strength transfer (env-map coefficient + reflection intensity)
 
 **Status: ✅ Implemented (cascade matching, cross-vehicle).** (`adapters/gta-sa/copy-effects.ts`).
-**Fixed 2026-08-18 after a field report ("the prototype settings are not applied"):** the gate was "the material
-has an env-map chunk", on BOTH sides. So a material that reflects through the SA reflection plugin alone was
-skipped (the user's yankee: **83 of 116**; walton 123 of 180, infernus 46, admiral 24), a reference's
-reflection-only materials never entered the median, and materials whose env-map coefficient is a deliberate
-**0** were written to anyway. Now a material is reflective when EITHER chunk carries a non-zero value, a zero
-stays zero on both sides, and the run PRINTS what it did — see the ledger.
+**Studied and corrected 2026-08-18 after a field report ("the prototype settings are not applied").** Two
+findings, and the first one reverses the obvious fix: **the env-map is the author's marking of which surface
+reflects** (body, glass, chrome — yankee 33 of 116, admiral 67 of 91), while the SA reflection plugin sits on
+nearly EVERY material (yankee 116 of 116, walton 180 of 180). Retuning by the plugin instead spreads the
+reference's body value onto tyres, dirt and interior, and takes the reference's level from its untuned
+majority — measured on the reported pair, the median flips 0.16 → 0.50 and the copy transfers nothing.
+So the marked set stays the selector on both sides, with a fallback for a tree that has none. What DID change:
+a deliberate **0** is never written to (admiral carries 19 such env-map chunks), a target with no marked
+material falls back to its reflection-carrying ones instead of being refused, and the run PRINTS what it
+did — see the ledger.
 `--prototype <path>` transfers **only the reflection strength** — the env-map `coefficient` (+ optional
 `reflection` intensity) — from a well-tuned reference onto a target whose reflection is overdone. We do **not**
 copy materials/effects wholesale: textures, colour, geometry, and _which_ materials reflect are all left alone;
@@ -82,24 +86,36 @@ is preserved.
 
 ## Ledger — the 2026-08-18 field report
 
-`yankee.dff` (a 43-part mod truck) with `yosemite.dff` as the prototype changed nothing visible, and two
-different reasons were behind it:
+`yankee.dff` (a 43-part mod truck, everything at the default 0.5) with `yosemite.dff` as the prototype.
+Measured per texture, which is what settled it:
 
-1. **The bug above.** Coverage went **33 → 116 of 116** materials once either chunk counts (33 carry an
-   env-map, all 116 carry the reflection plugin at a non-zero 0.5).
-2. **Nothing to copy between THIS pair, and that is not a bug.** Measured: yosemite's intensity histogram is
-   `0.50×141, 0.16×31, 0.07×25, 0.06×12, 0.19×10, 0.05×2, 0.04×1` — its median is **0.50**, and yankee is
-   already at 0.50 on every material. The tuned minority (81 of 222 below 0.5) can only reach the target
-   through a texture-name match, and the two cars share **13 of 116** material names (only the generic
-   `vehiclelights128` / plate / scratch / shatter ones — 46 vs 16 distinct names, different authors).
+| yosemite (reference) | intensity | | yankee (target) | intensity |
+| --- | --- | --- | --- | --- |
+| `remap1` (paint) ×15 | **0.07** | | `tga_body` ×14 | 0.50 |
+| `chrome_gl` ×25 | **0.16** | | `(untextured)` ×36 | 0.50 |
+| `glasswindows2` ×8 | **0.06** | | everything else | 0.50 |
+| `gen_mirror128` ×6 | **0.19** | | | |
+| scratches / dirt / lights / leather | 0.50 (untouched) | | | |
 
-So the cascade's second stage — the median — is what runs in the common case, and it transfers the reference's
-TYPICAL shine, not its per-part character. **A run now says so on stdout** (`effects: 116 of 116 material(s)
-retuned (33 env-map coefficient, 116 reflection intensity); 13 matched the prototype by texture name, the rest
-took its median [coefficient 0.500, intensity 0.500]`), which is the difference between "it did nothing" and
-"it did nothing because there was nothing to do".
+Its full histogram is `0.50×141, 0.16×31, 0.07×25, 0.06×12, 0.19×10, 0.05×2, 0.04×1` — so **the median over
+every reflective material is 0.50, the file's default**, and only the median over the ENV-MAP-MARKED ones is the
+author's actual level (**0.16**). That is why the marked set is the selector: it is simultaneously the right
+target set and the right reference population.
+
+The run now reports itself, and on this pair it does the thing the field remembered:
+
+```
+scale ×1.05 — geometry, dummy rig and collision
+effects: 33 of 116 material(s) retuned (33 env-map coefficient, 33 reflection intensity); 0 matched the
+         prototype by texture name, the rest took its median [coefficient 0.500, intensity 0.160]
+```
+
+`tga_body` goes 0.50 → **0.16**; the 83 unmarked materials (interior, tyres, plates, dirt) keep 0.50, exactly
+as the reference leaves its own. Texture-name matching contributed **0 of 33** here — two independent authors
+share no material names (46 vs 16 distinct, only generic `vehiclelights128`/plate/scratch overlap), so the
+median stage is what runs in practice and the per-name stage is a bonus for same-author families.
 
 **Not built, and the honest next step if per-part character is wanted:** match by something both cars share —
 the part/dummy the geometry hangs off (`chassis`, `bonnet`, `door_*`, `wheel_*`, `windscreen`) or a material
-ROLE derived from it (body / glass / chrome / interior / tyre) — instead of the texture name, which two
-independent authors never share. That is a plan of its own, not a patch to this one.
+ROLE derived from it (body / glass / chrome / interior / tyre) — instead of the texture name. That is a plan of
+its own, not a patch to this one.
