@@ -88,7 +88,7 @@ Read it as a set of rules:
 | [`open-issues/`](./open-issues/) | Tracked open problems and their fixed writeups. |
 | [`improvements/`](./improvements/) | Smaller improvement notes not yet a plan. |
 | [`development/`](./development/) | Contributor/setup notes. |
-| [`tutorial/`](./tutorial/) | End-user guides for what we SHIP, one folder per released version (`<app>/<version>/`) — an app links to its own version, never to "latest". |
+| [`tutorial/`](./tutorial/) | End-user guides for what we SHIP, one folder per app (`<app>/`, screenshots beside the page). The English source of the published page. |
 | [`commands.md`](./commands.md) | CLI/command cheat sheet. |
 | [`links.md`](./links.md) | Useful external resources. |
 

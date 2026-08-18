@@ -78,12 +78,22 @@ Steps 1–2 can start before either lands; step 4 needs both.
 - [ ] **6. The look.** Match `apps/web`'s existing visual language rather than inventing one — same
       Tailwind tokens, same typographic scale. Verification: side-by-side screenshots; the user's
       call, since "looks like ours" is a judgement he owns.
-- [ ] **7. The tutorial.** `docs/tutorial/cutscene-converter/<version>/` — install, the three steps, what
+- [x] **7. The tutorial.** `docs/tutorial/cutscene-converter/` — install, the three steps, what
       to copy where afterwards, and two things the app is DECIDED to be rather than apologise for:
       the SmartScreen warning (shipping unsigned, "More info → Run anyway", why it appears) and the
       CUTSCENES-ONLY scope (gameplay cars are the user's own business). The app links to its own
       version. Verification: the user follows it on a clean machine without asking a question;
       anything he has to ask is a defect in the tutorial, not in him.
+      **Done 2026-08-18, and the per-version shape was DROPPED (the user's call).** One folder per app,
+      no `<version>/` level: a tutorial nobody has to pick a version for is one nobody picks wrong, and
+      0.4.0 is the only version there has ever been. The published page is Russian and lives on the
+      user's own site (`gooddev.org`, with the exe beside it — no GitHub release object); the repo
+      carries the English source plus its screenshots. Written from the app's real verdict strings, so a
+      user can find their message by searching it. Content the earlier draft was missing, each of which
+      would have cost someone a bad result: the `.asi` goes to the game ROOT and an ASI loader has to
+      exist, the exe version is a hard stop, the game folder must be the one actually played (paint is
+      read from its `carcols.dat`), and file names inside a car folder are mandatory while folder names
+      are free. The tester section documents the CLEO override loop for people outside the repo.
 - [ ] **8. Release.** Version, artifact, the ASI SHA and the tutorial version recorded together, so a
       bug report identifies all three. Verification: the recorded triple matches a fresh build.
 
