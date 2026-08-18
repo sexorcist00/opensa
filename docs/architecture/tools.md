@@ -23,7 +23,10 @@ never the app. The dependency picture is the tools cluster of
 - **vehicle-installer** — vehicle mod folders → `gta3.img` + merged `handling.cfg` / `vehicles.ide` /
   `carcols.dat` / `carmods.dat`. A mod's settings file is decoded by its own encoding (UTF-16 is what most
   authors ship) and every block it cannot classify is reported. A mod's `features.txt` (Modloader/IVF) is
-  copied into `data/vehicle-features.txt`, which opensa-pack reads while baking that car. It also writes
+  copied into `data/vehicle-features.txt`, which opensa-pack reads while baking that car; on the **`sa`
+  target** the same declaration is ALSO mapped onto a stock carrier model in fastman92's
+  `data/model_special_features.dat` (plan 011), because the real game hardcodes every special ability to a
+  model id. It also writes
   `data/vehicle-mods.txt`, the mod-car ledger (096/06): once the rows are merged, a mod car is
   indistinguishable from a stock one anywhere downstream, so the set the installer knows while it works is
   written down — the ONE vehicle data file read at runtime, and a SWITCH: name one drivable slot and every video-mode

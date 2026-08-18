@@ -154,13 +154,39 @@ convention (two of the original's 212 folders ship one) that the installer now h
 
 One token per feature, whitespace/comma separated, `#` and `//` start a comment. Tokens are upper-cased.
 
-| Token | Meaning |
-| --- | --- |
-| `UP/DOWN_LIGHTS` | The car has retractable ("pop-up") headlights. |
+The vocabulary is the Modloader/IVF one, so mods already in the wild declare themselves correctly — and it
+lives in ONE place, `VEHICLE_FEATURE_TOKENS` (`@opensa/renderware`'s `vehicle-features.parser`), because both
+targets stand on it. **The two targets honour a declaration by completely different means:** OpenSA detects
+the ability from the asset and drives it itself, while in SA every ability is hardcoded to a MODEL ID, so the
+`sa` build points the slot at the stock model that natively has it (`saCarrierFor` → §2's
+`data/model_special_features.dat`). The `sa` column below is that stock carrier, and where several carry an
+ability any one of them will do.
 
-The vocabulary is the Modloader/IVF one, so mods already in the wild declare themselves correctly. Unknown
-tokens are carried through and ignored — adding a feature later means teaching the converter one token, not
-re-authoring the mods.
+| Token | Meaning | `sa` build maps to | OpenSA |
+| --- | --- | --- | --- |
+| `ADV_HYDRALICs` | Lowrider hydraulics that lift and lean the whole body. | `hotknife`, `bandito` | not yet driven (098/06) |
+| `BAGBOXA` | The airport baggage trailer's first box. | `bagboxa` | not yet driven (098/06) |
+| `BAGBOXB` | Its second box. | `bagboxb` | not yet driven (098/06) |
+| `BF_ENGINE&HYDRALICS` | The BF Injection's exposed engine, plus hydraulics. | `bfinject` | not yet driven (098/06) |
+| `BUCKETs` | A raise/lower bucket or blade (dozer). | `dozer` | not yet driven (098/06) |
+| `CISTERNs` | The cement mixer's rotating drum. | `cement` | not yet driven (098/06) |
+| `PACKERs` | The car-transporter ramp platform. | `packer` | not yet driven (098/06) |
+| `TRACTOR_HOOKs` | The farm tractor's trailer hook. | `tractor` | not yet driven (098/06) |
+| `TRAILER_HOOKs` | An articulated truck's trailer hook. | `linerun`, `petro`, `rdtrain`, `artict3` | not yet driven (098/06) |
+| `TRUCK_HOOKs` | The tow truck's crane and hook. | `towtruck` | not yet driven (098/06) |
+| `TUGSTAIR` | The airport stair trailer. | `tugstair` | not yet driven (098/06) |
+| `TURRETs_1` | A turret aimed by the driver/passenger (tank, SWAT). | `rhino`, `swatvan` | not yet driven (098/06) |
+| `TURRETs_2` | The fire truck's water cannon turret. | `firetruk` | not yet driven (098/06) |
+| `UP/DOWN_LIGHTS` | The car has retractable ("pop-up") headlights. | `zr350` | LIVE — detected geometrically, the token only relaxes the lamp-marker requirement |
+| `WATER_JETs` | Water jets fired from the model. | `firetruk`, `swatvan` | not yet driven (098/06) |
+
+Unknown tokens are carried through and ignored — adding a feature later means teaching the converter one
+token, not re-authoring the mods. **A misspelled token is therefore silent in the game and visible only in
+the install log**, where the `sa` writer names it ("no token of the feature vocabulary"). Two more things
+only the log will tell you, because the real game cannot express them: a declaration of several abilities no
+single stock model has at once is mapped to the best carrier and the REST IS DROPPED, and a slot that is
+itself a stock carrier (a mod in `firetruk` declaring only `UP/DOWN_LIGHTS`) LOSES its native abilities when
+it is remapped — declare those too.
 
 ---
 
@@ -173,6 +199,7 @@ re-authoring the mods.
 | `data/carcols.dat`, `data/carmods.dat` | Keyed by model. `carmods` is parsed but not yet wired into the engine. |
 | `data/vehicle-features.txt` | **Ours, not SA's.** `<model> <FEATURE>…`, one line per model, written from each mod's `features.txt`. Read by `opensa-pack` while baking that car — **build time only**; nothing reads it at runtime, so a change here needs a rebuild (`vehicle-installer --rebake`). |
 | `data/vehicle-mods.txt` | **Ours, not SA's.** The mod-car ledger: one lowercased vehicle SLOT per line (`#` starts a comment; several names on one line are read as several), written by `vehicle-installer` for every slot a mod took over, sorted so a rebuild is byte-identical. **The only vehicle data file read at RUNTIME**, by video mode's car pick (096 D10) — nothing else in the game reads it. **It is a SWITCH, not a preference** (D10 as revised 2026-08-03): if one line names a slot whose model the build actually carries, EVERY scene drives a mod car and no stock car appears; if no line does, every scene takes a stock car. Written on EVERY install run, including an install with no vehicle mods: present-and-empty says "this build looked and found none", absent says "this build predates the ledger", and downstream both mean the stock roster. A `--rebake` MERGES into it (`--only <car>` adds that slot, it never rewrites the file to its own selection). **Misspell the name and the file is simply never found**: video mode silently falls back to the stock roster — no warning, no other effect, because the fact it carries cannot be recovered any other way (mods are indistinguishable from stock once merged). The same silence covers a ledger whose every row names a slot this build has no `.osm` for, which is why video mode's boot line prints the count of DRIVABLE slots, not of ledger rows. |
+| `data/model_special_features.dat` | **The adjuster's file, not ours** (`sa` target only) — fastman92's model special feature loader, `CustomModelName StandardModelName` per line, the custom model behaves like the standard one (`docs/gta-sa-original/vehicle-special-features.md`). The installer writes each declaring model's stock carrier (§1) into ONE marked block (`# --- vehicle-installer: …` to `# --- end vehicle-installer ---`), sorted by model so a rebuild is byte-identical; **every line outside the block is kept verbatim** and a `--rebake --only <car>` merges rather than rewriting the fleet's mappings. No line is written when the slot already carries what it declares (`hotknife` + `ADV_HYDRALICs`). A misspelled CARRIER cannot happen — the table owns them. **What is silent without the log**: the file is not written at all when the adjuster mod is not installed for this target (nothing would read it), and it IS written but ignored by the game when the adjuster's ini does not carry `[SPECIAL] Enable model special feature loader = 1` — both are warnings naming the mod and the ini. |
 | `models/generic/vehicle.txd` | Shared dictionary merged into every car, and the home of the plate rasters. Never deleted by the pack. |
 | `models/vehicles.img` (+ `vehicles2.img`, …) | **The name decides where a car lands.** `vehicle-installer` writes into `models/vehicles.img` **if that file exists** and into `gta3.img` if it does not — the tree tells the installer which shape it is, so one installer serves a split build and an unsplit one. A tree where the split ran but the archive is missing or misspelled therefore takes mod cars into `gta3.img` **silently**, beside the stock twins the split moved out, and nothing reports it. Siblings are numbered (`vehicles2.img`) and appear when the family crosses the 1.75 GiB cap; **whoever writes one registers it in `gta.dat`**, because an archive the game never registers loads nothing while the build still succeeds. Where any entry actually lives is answered by `openArchiveIndex` reading the tree, never by a hardcoded archive name — `vehicle-cutscene` learned that the hard way when the split moved its txdp parents into `vehicles2.img`. |
 | `data/img-layout.json` | **Ours, not SA's, and a REPORT rather than a lookup** — which archives the tree has, how many entries and bytes each carries, plus the classifier's contested/unclaimed lists. Written by the split and restated on the finished `sa` tree, because the first pipeline build shipped one describing the tree as it had been six stages earlier. Anything inside the build resolves through `openArchiveIndex` instead; this file is for readers outside it. |

@@ -1,6 +1,6 @@
 # 011 — `model_special_features.dat` for the `sa` target (a mod car's `features.txt` reaches the real game)
 
-**Status: IN PROGRESS 2026-08-18 (the user's ask) — step 1 (the shared vocabulary module) is BUILT, steps 2-5 are not.** The OpenSA half of the same declaration is
+**Status: IN PROGRESS 2026-08-18 (the user's ask) — steps 1-4 are BUILT and verified headless; step 5 (the field checkpoint) is the user's and is open.** The OpenSA half of the same declaration is
 [`docs/plans/098-all-land-vehicles/`](../../../../docs/plans/098-all-land-vehicles/readme.md) (02 + 06) —
 this plan is the REAL-GAME half, and the two share one vocabulary table (step 1).
 
@@ -73,7 +73,7 @@ derive from the asset, not the slot).
       `WATER_JETs`); otherwise the carrier covering the most tokens (ties → table order, deterministic), the
       uncovered tokens returned as `dropped`. Unknown tokens are neither an error nor covered — they flow
       through as today. Tests: full cover, best-partial with `dropped`, unknown-only → null, case folding.
-- [ ] **2. The `sa` writer.** `install.ts` (and `rebake-sa.ts`, which re-merges settings in place) call
+- [x] **2. The `sa` writer.** `install.ts` (and `rebake-sa.ts`, which re-merges settings in place) call
       `writeModelSpecialFeatures(outPath, features)` when the target is `sa`: read `data/model_special_features.dat`
       from the game tree (the FLA mod's copy, installed by mod-installer BEFORE the vehicle stage — pmb order
       `mods → vehicles`), keep every line that is not ours, and append/replace ONE marked block:
@@ -82,7 +82,7 @@ derive from the asset, not the slot).
       --only <car>` MERGES (drops that car's old line, writes the new one) instead of rewriting the world.
       Model = the built model name — the slot for a replacement, the model name for an added car when
       add-vehicles arrives (the writer never asks WHY a name exists).
-- [ ] **3. What is warned about, loudly, in the install log** (each is silent in the real game otherwise):
+- [x] **3. What is warned about, loudly, in the install log** (each is silent in the real game otherwise):
       - a car declares tokens but the tree carries no `data/model_special_features.dat` → the FLA mod is not
         installed for this target: warn once, naming the mod, write nothing (a file the adjuster does not read
         would lie about being applied);
@@ -94,7 +94,7 @@ derive from the asset, not the slot).
         warn: remapping a stock special model loses its native abilities;
       - the slot already natively carries every declared token (`hotknife` + `ADV_HYDRALICs`) → no line, no
         warning (nothing to do).
-- [ ] **4. Contracts, in the same change as step 2** (`docs/contracts/vehicles.md`): §1 `features.txt` — the
+- [x] **4. Contracts, in the same change as step 2** (`docs/contracts/vehicles.md`): §1 `features.txt` — the
       table becomes the full vocabulary (token → meaning → what the `sa` build writes → OpenSA state, per
       098); §2 gains `data/model_special_features.dat` (`sa` target only; FLA's file, our marked block; a
       misspelled token is carried and IGNORED on both targets — visible only in the install log; a
@@ -145,6 +145,47 @@ oceanic bfinject    [BF_ENGINE&HYDRALICS]
 rumpo bfinject      [BF_ENGINE&HYDRALICS]
 turismo zr350       [UP/DOWN_LIGHTS]
 uranus zr350        [UP/DOWN_LIGHTS]
+```
+
+**Steps 2-4, 2026-08-18** — the writer is `tools/vehicle-installer/src/special-features.ts`
+(`writeModelSpecialFeatures(targetPath, features, authoritative?)` + `SPECIAL_FEATURES_DAT`), called from
+`install.ts` when `options.target === 'sa'` and from `rebake-sa.ts` (target `sa` by construction) with the
+rebaked models as `authoritative`. 14 unit tests in `special-features.test.ts`, +2 in `install.e2e.test.ts`
+(sa writes `admiral zr350` and keeps the adjuster's lines; opensa leaves the file byte-identical), +1 in
+`rebake-sa.test.ts` (a `--only zr350` rebake keeps `feltzer`'s mapping and drops its own stale line).
+Installer + renderware text-parser suites 39 files / 277 green, `tsc` + eslint clean. Contracts:
+`docs/contracts/vehicles.md` §1 is now the full 15-token vocabulary with the `sa` carrier and the OpenSA state
+per token, and §2 carries the `data/model_special_features.dat` row.
+
+Three decisions the plan did not fix, taken while building it:
+
+- **The block is TERMINATED** (`# --- end vehicle-installer ---`), not just opened. Our block is written last,
+  so without an end marker anything appended after it by a later tool or by hand would be swallowed by the
+  next run — the block is parsed by markers, and an unterminated one is read to end-of-file (the honest
+  reading: guessing where it stops would adopt the adjuster's own lines).
+- **A self-mapping line is never written.** Beyond the planned "slot already carries every declared token",
+  the same silence covers the carrier-by-another-name case (`bandito` declaring `ADV_HYDRALICs` resolves to
+  `hotknife`, but bandito HAS hydraulics) — a line would remap a model onto abilities it already has.
+- **A sixth warning, unplanned and silent otherwise**: the adjuster's file already mapping a model we also map
+  (an author's own line outside our block). Both lines name the model and only one wins in the game.
+
+The file's own conventions are preserved rather than normalised: CRLF as the adjuster ships it, the mod's
+comment block verbatim, and no growth on a re-run. Dry run over the real built tree (`build/original/sa`'s
+`data/model_special_features.dat` + `vehicle-features.txt` + `fastman92limitAdjuster_GTASA.ini`, copied to a
+scratch dir — the shipping tree was not touched): 9 lines, 0 warnings, 503 -> 980 B, 23 of 23 line endings
+CRLF, and the second run byte-identical (md5 `9b36bafa61cdcb36ca41b79f5eb6854d`). The block it produced is
+exactly the user's worked example:
+
+```
+bullet hotknife
+cheetah zr350
+feltzer zr350
+hotring hotknife
+infernus bfinject
+oceanic bfinject
+rumpo bfinject
+turismo zr350
+uranus zr350
 ```
 
 (field verdicts per car and the FLA remap-stock-id answer: step 5, pending)

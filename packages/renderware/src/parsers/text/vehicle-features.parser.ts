@@ -82,6 +82,16 @@ export interface VehicleFeatureCarrier {
 const CARRIER_ABILITIES: ReadonlyMap<string, readonly string[]> = buildCarrierAbilities();
 
 /**
+ * The vocabulary tokens a STOCK model natively carries; empty for a model that carries none.
+ *
+ * This is what makes remapping honest on the `sa` target: pointing a slot at a standard model REPLACES the
+ * slot's own native abilities, so the writer has to know what the slot already has before it writes a line.
+ */
+export function saAbilitiesOf(model: string): readonly string[] {
+  return CARRIER_ABILITIES.get(model.toLowerCase()) ?? [];
+}
+
+/**
  * Pick the ONE stock model whose native abilities cover as much of `tokens` as possible — what FLA's
  * special-feature loader can express, since it maps a model onto a single standard model.
  *

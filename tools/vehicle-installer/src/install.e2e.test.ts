@@ -25,6 +25,12 @@ const HANDLING =
 const CARCOLS = 'admiral, 5,5';
 const CARMODS = 'admiral, exh_b_l';
 
+// The adjuster mod's two halves as the `sa` layer installs them (plan 011): the empty mapping file it ships,
+// and the ini line that makes the game read it.
+const FLA_DAT = ['# Author: fastman92', '# CustomModelName StandardModelName', '#new_hydra hydra'].join('\r\n');
+const FLA_INI = '[SPECIAL]\r\nEnable model special feature loader = 1\r\n';
+const FLA_INI_NAME = 'fastman92limitAdjuster_GTASA.ini';
+
 const CABBIE_PALETTE = ['233,199,40   # new1 yellow taxi cab   yellow', '186,208,125  # new2 light green cab   green'];
 const CABBIE_CARCOLS = 'cabbie, 6,0,6,0, new2,0,new2,0, new1,0,new1,0'; // 4-colour, with newN refs
 
@@ -181,6 +187,63 @@ describe.skipIf(!hasFixtures)('install (end-to-end, real data fixtures)', () => 
       expect(parseVehicleMods(readFileSync(join(out, 'data', 'vehicle-mods.txt'), 'utf8'))).toEqual(
         new Set(['admiral']),
       );
+    });
+
+    it("maps a declaring car onto its stock carrier in the adjuster's file on the sa target (plan 011)", () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'in');
+      const out = join(root, 'out');
+
+      mkdirSync(join(game, 'data'), { recursive: true });
+      for (const file of DATA_FILES) {
+        cpSync(join(DATA, file), join(game, 'data', file));
+      }
+      // The mods stage installs these BEFORE the vehicle stage, which is why the vehicle stage can write here.
+      writeFileSync(join(game, 'data', 'model_special_features.dat'), FLA_DAT);
+      writeFileSync(join(game, FLA_INI_NAME), FLA_INI);
+      mkdirSync(join(game, 'models'), { recursive: true });
+      writeFileSync(join(game, 'models', 'gta3.img'), createImg().build());
+
+      const folder = join(mods, 'admiral - 1993 Mercedes-Benz SL-Class');
+      mkdirSync(folder, { recursive: true });
+      writeFileSync(join(folder, 'admiral.dff'), Uint8Array.of(1));
+      writeFileSync(join(folder, 'features.txt'), 'UP/DOWN_LIGHTS\n');
+      writeFileSync(join(folder, 'admiral.settings.txt'), HANDLING);
+
+      install({ gamePath: game, inPath: mods, outPath: out, target: 'sa' });
+
+      // In SA the ability is hardcoded to a model id, so the slot has to be pointed at the stock car that has it.
+      const dat = readFileSync(join(out, 'data', 'model_special_features.dat'), 'utf8');
+      expect(dat).toContain('admiral zr350');
+      // The file is the adjuster's: its own lines survive ours.
+      expect(dat).toContain('#new_hydra hydra');
+      // And the OpenSA half of the same declaration is untouched by any of this.
+      expect(readFileSync(join(out, 'data', 'vehicle-features.txt'), 'utf8')).toContain('admiral UP/DOWN_LIGHTS');
+    });
+
+    it('leaves the adjuster file alone on the opensa target — its engine reads the declaration itself', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'in');
+      const out = join(root, 'out');
+
+      mkdirSync(join(game, 'data'), { recursive: true });
+      for (const file of DATA_FILES) {
+        cpSync(join(DATA, file), join(game, 'data', file));
+      }
+      writeFileSync(join(game, 'data', 'model_special_features.dat'), FLA_DAT);
+      mkdirSync(join(game, 'models'), { recursive: true });
+      writeFileSync(join(game, 'models', 'gta3.img'), createImg().build());
+
+      const folder = join(mods, 'admiral - 1993 Mercedes-Benz SL-Class');
+      mkdirSync(folder, { recursive: true });
+      writeFileSync(join(folder, 'admiral.dff'), Uint8Array.of(1));
+      writeFileSync(join(folder, 'features.txt'), 'UP/DOWN_LIGHTS\n');
+      writeFileSync(join(folder, 'admiral.settings.txt'), HANDLING);
+
+      install({ gamePath: game, inPath: mods, outPath: out, target: 'opensa' });
+
+      expect(readFileSync(join(out, 'data', 'model_special_features.dat'), 'utf8')).toBe(FLA_DAT);
+      expect(readFileSync(join(out, 'data', 'vehicle-features.txt'), 'utf8')).toContain('admiral UP/DOWN_LIGHTS');
     });
 
     it('writes an EMPTY ledger for an install with no vehicle mods at all', () => {

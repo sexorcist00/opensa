@@ -10,8 +10,8 @@
  *      name — `vehicles.img` AND the `vehicles2.img` the install spilled into, opened as one, so a paint-job
  *      dictionary a sibling holds is replaced there rather than duplicated;
  *   2. its `*.settings.txt` merges into the BUILT `data/*` (replace-by-model, idempotent), its `features.txt`
- *      into `data/vehicle-features.txt` and its slot into the mod ledger, both MERGED so one car cannot
- *      disarm the rest;
+ *      into `data/vehicle-features.txt` AND into the adjuster's `data/model_special_features.dat` (plan 011),
+ *      and its slot into the mod ledger — all MERGED so one car cannot disarm the rest;
  *   3. the family is written back (re-planned under the archive cap; a new sibling is registered in
  *      `gta.dat`, a stale one deleted) and `data/img-layout.json` restated.
  *
@@ -39,6 +39,7 @@ import {
   selectCars,
   sharedFileWarnings,
 } from './rebake-shared';
+import { writeModelSpecialFeatures } from './special-features';
 import { assertCarmodsModels } from './tuning-parts';
 
 /** Rebake the vehicles of a built REAL-SA game in place. Returns what happened; throws only on a broken target. */
@@ -103,6 +104,11 @@ export function rebakeVehiclesSa(options: RebakeOptions): RebakeReport {
       rebaked.push({ bytes: applied.imgNames.reduce((sum, name) => sum + img.size(name), 0), model });
     }
     mergeFeatureTable(targetPath, declared);
+    // The real game's half of the same declaration (plan 011). A rebake speaks only for the cars it rebaked, so
+    // the block keeps every other model's line — and a car that no longer declares anything loses its own.
+    warnings.push(
+      ...writeModelSpecialFeatures(targetPath, declared, new Set(accepted.map(({ model }) => model))).warnings,
+    );
     assertCarmodsModels(targetPath);
     warnings.push(...sharedFileWarnings(sources, accepted));
     mergeModTable(

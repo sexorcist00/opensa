@@ -11,6 +11,7 @@ import { applyVehicle } from './apply-vehicle';
 import { formatFeatureTable } from './features';
 import { sharedVehicleFiles } from './img-merge';
 import { formatModTable, MODS_TABLE } from './mods-table';
+import { SPECIAL_FEATURES_DAT, writeModelSpecialFeatures } from './special-features';
 import { stripOutput } from './strip';
 import { assertCarmodsModels } from './tuning-parts';
 
@@ -118,6 +119,16 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
   // something, so a plain install leaves no stray file.
   if (features.size > 0) {
     writeFileSync(join(outPath, FEATURES_TABLE), formatFeatureTable(features));
+  }
+  // The REAL game reads none of that: in SA a special ability is a branch on a model id, and the only lever the
+  // install we ship to has is fastman92's model special feature loader. So on the `sa` target the same
+  // declarations are ALSO written as `<model> <standard model>` pairs into the adjuster's own file (plan 011).
+  if (options.target === 'sa') {
+    const special = writeModelSpecialFeatures(outPath, features);
+    special.warnings.forEach((warning) => console.warn(`vehicle-installer: ${warning}`));
+    if (special.written) {
+      console.log(`vehicle-installer: ${special.lines.length} model(s) mapped in ${SPECIAL_FEATURES_DAT}`);
+    }
   }
   // The mod-car ledger (096/06), written on EVERY run including one that installed nothing: after this point
   // the build cannot tell a mod car from a stock one, and an empty ledger says "looked, found none" where an

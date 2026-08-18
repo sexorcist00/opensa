@@ -39,6 +39,7 @@ export * from './types';
 export { parseVehicleDefs, type VehicleDef } from './vehicle-defs.parser';
 export {
   parseVehicleFeatures,
+  saAbilitiesOf,
   saCarrierFor,
   UP_DOWN_LIGHTS,
   VEHICLE_FEATURE_TOKENS,

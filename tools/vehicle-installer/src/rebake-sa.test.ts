@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { rebakeVehicles } from './rebake';
 import { rebakeVehiclesSa } from './rebake-sa';
+import { SPECIAL_FEATURES_DAT, writeModelSpecialFeatures } from './special-features';
 
 const DATA = join(process.cwd(), 'fixtures', 'original', 'data');
 const DATA_FILES = ['carcols.dat', 'carmods.dat', 'handling.cfg', 'vehicles.ide'];
@@ -18,6 +19,10 @@ const hasFixtures = DATA_FILES.every((file) => existsSync(join(DATA, file))) && 
 const HANDLING =
   'ZR350 4321.0 3650.0 1.6 0.0 0.1 -0.2 70 0.70 0.80 0.5 4 180.0 14.0 10.0 R P 4.3 0.63 1 28.0 ' +
   '0.93 0.81 0.0 0.22 -0.15 0.5 0.0 0.26 0.44 10000 0 1400001 0 3 0';
+
+/** The adjuster mod's two halves, as the `sa` layer installs them into a built tree (plan 011). */
+const FLA_DAT = ['# Author: fastman92', '#new_hydra hydra'].join('\r\n');
+const FLA_INI = '[SPECIAL]\r\nEnable model special feature loader = 1\r\n';
 
 /** A family cap that holds about two of the fixture's entries per member, so the tree is SPILLED like the real one. */
 const SMALL_CAP = 2048 + 2 * (2 * 2048 + 32);
@@ -181,6 +186,29 @@ describe.skipIf(!hasFixtures)('rebakeVehiclesSa (real zr350 fixture)', () => {
 
       expect(report.rebaked.map((car) => car.model)).toEqual(['zr350']);
       expect(family(target, 'gta3.img').get('zr350.dff')?.[0]).not.toBe(7);
+    });
+
+    it("keeps the rest of the fleet's special-feature mappings and drops its own stale one (plan 011)", () => {
+      const target = builtGame();
+      writeFileSync(join(target, SPECIAL_FEATURES_DAT), FLA_DAT);
+      writeFileSync(join(target, 'fastman92limitAdjuster_GTASA.ini'), FLA_INI);
+      // The state a full install left: another car mapped, and a stale line for this one.
+      writeModelSpecialFeatures(
+        target,
+        new Map([
+          ['feltzer', ['UP/DOWN_LIGHTS']],
+          ['zr350', ['ADV_HYDRALICS']],
+        ]),
+      );
+
+      rebakeVehiclesSa({ inPath: modFolder(), only: ['zr350'], target: 'sa', targetPath: target });
+
+      // The rebaked car declares UP/DOWN_LIGHTS, which its own slot carries natively — so no line, and the
+      // stale one goes. `feltzer` was not rebaked, so its mapping is none of this run's business.
+      const mapped = readFileSync(join(target, SPECIAL_FEATURES_DAT), 'utf8')
+        .split(/\r?\n/)
+        .filter((line) => line.trim() !== '' && !line.trimStart().startsWith('#'));
+      expect(mapped).toEqual(['feltzer zr350']);
     });
 
     it('is idempotent — a second run changes nothing the first did not', () => {

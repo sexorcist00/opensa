@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   parseVehicleFeatures,
+  saAbilitiesOf,
   saCarrierFor,
   UP_DOWN_LIGHTS,
   VEHICLE_FEATURE_TOKENS,
@@ -67,6 +68,21 @@ describe('vehicleFeatureToken', () => {
     it('folds case back onto the vocabulary spelling', () => {
       expect(vehicleFeatureToken('adv_hydralics')).toBe('ADV_HYDRALICs');
       expect(vehicleFeatureToken('ADV_HYDRALICS')).toBe('ADV_HYDRALICs');
+    });
+  });
+});
+
+describe('saAbilitiesOf', () => {
+  describe('negative cases', () => {
+    it('gives nothing for a model that carries no special ability', () => {
+      expect(saAbilitiesOf('admiral')).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('lists every ability one stock model carries, whatever the case of its name', () => {
+      expect(saAbilitiesOf('SWATVAN')).toEqual(['TURRETs_1', 'WATER_JETs']);
+      expect(saAbilitiesOf('zr350')).toEqual([UP_DOWN_LIGHTS]);
     });
   });
 });

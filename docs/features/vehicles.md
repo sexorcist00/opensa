@@ -83,7 +83,10 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   `features.txt` in the mod folder holding `UP/DOWN_LIGHTS` — the Modloader/IVF convention. `vehicle-installer`
   copies each mod's declaration into `data/vehicle-features.txt`, and opensa-pack reads it while baking that
   car. That path is BUILD-time only, and there is no runtime path that could pick a declaration up later —
-  which is why an unconverted car is refused at spawn rather than parsed from its DFF.
+  which is why an unconverted car is refused at spawn rather than parsed from its DFF. **On the `sa` target the
+  same declaration takes a different road**: SA hardcodes the ability to a model id, so the installer writes
+  `<slot> zr350` into fastman92's `data/model_special_features.dat` and the real game gives the slot the
+  ZR-350's pods (plan 011; the full token → carrier table is `docs/contracts/vehicles.md` §1).
 - **Paint**: carcols.dat palettes (`car` = 2-colour, `car4` = 4-colour sections); SA editable-material
   markers — primary (60,255,0), secondary (255,0,175), tertiary (0,255,255 cyan), quaternary
   (255,255,0 yellow). NB (255,175,0)/(255,60,0) are per-lamp ids on the `vehiclelights` atlas, **not**
