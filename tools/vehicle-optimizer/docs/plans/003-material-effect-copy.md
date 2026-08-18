@@ -115,6 +115,14 @@ as the reference leaves its own. Texture-name matching contributed **0 of 33** h
 share no material names (46 vs 16 distinct, only generic `vehiclelights128`/plate/scratch overlap), so the
 median stage is what runs in practice and the per-name stage is a bonus for same-author families.
 
+**Why a correct retune can still be invisible IN THE FIELD (2026-08-18, from the SkyGfx fork's source):** the
+install runs `vehiclePipe=PS2`, and that pipe takes the reflection strength from the DFF **reflection plugin's
+`intensity`** — quantised to an int8 (`CustomEnvMapPipeMaterialData::GetShininess() = shininess/255`) and then
+multiplied by **8.0**; the MatFX env-map is only a gate there, its `coefficient` scaling nothing. So `intensity`
+at or above 0.125 leaves the shader term saturated, and 0.5 → 0.16 (yosemite) or 0.5 → 0.07 (walton) can read as
+no change at all. **Judge a retune in the 0.02–0.12 band** — that is what `--reflection <n>` is for. Details:
+[`docs/gta-sa-original/skygfx-fork-vehicle-pipe.md`](../../../../docs/gta-sa-original/skygfx-fork-vehicle-pipe.md).
+
 **Not built, and the honest next step if per-part character is wanted:** match by something both cars share —
 the part/dummy the geometry hangs off (`chassis`, `bonnet`, `door_*`, `wheel_*`, `windscreen`) or a material
 ROLE derived from it (body / glass / chrome / interior / tyre) — instead of the texture name. That is a plan of
