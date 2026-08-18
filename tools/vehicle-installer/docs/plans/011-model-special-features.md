@@ -1,6 +1,6 @@
 # 011 — `model_special_features.dat` for the `sa` target (a mod car's `features.txt` reaches the real game)
 
-**Status: PLANNED 2026-08-18 (the user's ask).** Not built. The OpenSA half of the same declaration is
+**Status: IN PROGRESS 2026-08-18 (the user's ask) — step 1 (the shared vocabulary module) is BUILT, steps 2-5 are not.** The OpenSA half of the same declaration is
 [`docs/plans/098-all-land-vehicles/`](../../../../docs/plans/098-all-land-vehicles/readme.md) (02 + 06) —
 this plan is the REAL-GAME half, and the two share one vocabulary table (step 1).
 
@@ -66,7 +66,7 @@ derive from the asset, not the slot).
 
 ## Steps
 
-- [ ] **1. One vocabulary module, shared by both targets.** `packages/renderware/src/parsers/text/vehicle-features.parser.ts`
+- [x] **1. One vocabulary module, shared by both targets.** DONE 2026-08-18. `packages/renderware/src/parsers/text/vehicle-features.parser.ts`
       already exports `UP_DOWN_LIGHTS`; it grows `VEHICLE_FEATURE_TOKENS` — the table above as
       `{ token, saCarriers: string[] }` rows, plus `saCarrierFor(tokens: string[]): { model: string; covers: string[]; dropped: string[] } | null`.
       Resolution: prefer ONE carrier that covers EVERY declared token (`swatvan` for `TURRETs_1` +
@@ -116,5 +116,35 @@ diff reviewed. Field: step 5. Every field verdict goes into the ledger below wit
 
 ## Ledger
 
-(the resolver census over the 212 folders — which cars get which line, committed as the install log's
-excerpt; field verdicts per car; the FLA remap-stock-id answer)
+**Step 1, 2026-08-18** — `VEHICLE_FEATURE_TOKENS` (15 rows) + `saCarrierFor` + `vehicleFeatureToken` in
+`packages/renderware/src/parsers/text/vehicle-features.parser.ts`, exported from the text-parser barrel;
+14 tests in `vehicle-features.parser.test.ts` (vocabulary guard, case folding, full cover, best-partial with
+`dropped`, unknown-only → `null`, a real declaration through `parseVehicleFeatures`); `tsc` clean, the
+renderware text parsers + vehicle-installer suites 38 files / 258 green.
+
+Two decisions the resolver's callers stand on:
+
+- `dropped` carries only VOCABULARY tokens the chosen carrier cannot cover. A token outside the vocabulary is
+  in neither `covers` nor `dropped` — it is carried and ignored as everywhere else in the chain, so step 3's
+  partial-cover warning reports a real loss of ability instead of every mod's typo.
+- Ties are broken by TABLE order (the first row that mentions the carrier), so the written block is
+  reproducible; the search stops early only on a full cover, so a later carrier that covers everything still
+  beats an earlier one covering a subset.
+
+**The resolver census over the nine cars that ship a `features.txt` today** (run against
+`mods-src/original/vehicles/models`, single-token declarations throughout, nothing dropped) reproduces the
+user's worked example line for line:
+
+```
+bullet hotknife     [ADV_HYDRALICS]
+cheetah zr350       [UP/DOWN_LIGHTS]
+feltzer zr350       [UP/DOWN_LIGHTS]
+hotring hotknife    [ADV_HYDRALICS]
+infernus bfinject   [BF_ENGINE&HYDRALICS]
+oceanic bfinject    [BF_ENGINE&HYDRALICS]
+rumpo bfinject      [BF_ENGINE&HYDRALICS]
+turismo zr350       [UP/DOWN_LIGHTS]
+uranus zr350        [UP/DOWN_LIGHTS]
+```
+
+(field verdicts per car and the FLA remap-stock-id answer: step 5, pending)

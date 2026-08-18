@@ -61,10 +61,11 @@ vehicles.
 
 ## Steps
 
-- [ ] Fixture the corpus: glendale as a vehicle-installer test fixture (the vocabulary reference is now
-      011's table + the shared `VEHICLE_FEATURE_TOKENS` module — build that module FIRST, it is the one
-      thing 011 and this plan both stand on; the stock-carrier list is the detectors' ORACLE, never a
-      runtime key).
+- [ ] Fixture the corpus: glendale as a vehicle-installer test fixture. The vocabulary reference is
+      011's table + the shared `VEHICLE_FEATURE_TOKENS` module, and **that module SHIPPED 2026-08-18**
+      (011 step 1: `VEHICLE_FEATURE_TOKENS`, `saCarrierFor`, `vehicleFeatureToken` in
+      `packages/renderware/src/parsers/text/vehicle-features.parser.ts`) — this step is now the glendale
+      fixture only; the stock-carrier list is the detectors' ORACLE, never a runtime key.
 - [ ] Extract the build-side detector registry; `popUpLights()` moves in unchanged (same tests, same
       `.osm` output — byte-compare a re-bake of a pod car and of glendale as the no-features control).
 - [ ] Extract the runtime driver registry + rig articulation channel; the pop-up driver reproduces
