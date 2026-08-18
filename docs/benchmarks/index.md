@@ -885,3 +885,14 @@ ls-noon 6.86 → 6.46, ganton-noon 10.36 → 9.68, lv-night 11.75 → 11.27, cou
 ocean-horizon 2.19 → 2.16 (control). Triangles −6..−19 %, draws ±1 %, cellVertex −3..−11 %. Decomposition on
 this lane against the 08-09 oldmap row (ls-noon 5.07): fleet ≈ +1.2 ms (arm B), mods 64–67 ≈ +0.4 ms, the rest
 since 08-09 ≈ +0.6 ms. `country-dusk` sits at 12.0–12.5 in EVERY arm — the surface, not the content.
+
+**Build 2 — all mods, STOCK cars** (the vehicle stage excluded;
+[`opensa-engine/2026-08-18-ingame-ab2-all-mods-stock-cars.json`](opensa-engine/2026-08-18-ingame-ab2-all-mods-stock-cars.json),
+`build/ab2-stock-cars`, pak 1 260 396 544 B, buildTime 13:11, `vehicles.img` 272 MB; same lane, same pair):
+**the pass returns to the 08-09 level** — ls-noon 6.86 → 5.52 (08-09: 5.07), lv-night 11.75 → 9.19 (9.20),
+ganton-noon 10.36 → 9.03 (8.54), ganton-night 10.83 → 9.19 (8.70), sf-fog-dawn 5.39 → 4.40 (4.37), country-dusk
+12.37 → 11.98 (12.47), ocean-horizon 2.19 → 2.18 (control). **On the display lane the fleet is +1.0..+2.6 ms of
+pass on the city scenes and the whole map's growth since 08-09 is +0.0..+0.5 ms.** Two side findings: the fleet is
+~700 draws in view on ls-noon (1967 → 1265 — the batching lever), and the `cellVertex` residency counter INCLUDES
+vehicle geometry (ocean-horizon 349 → 57 with zero live cars — the registered road-car `.osm` buffers), so the
+"×2–3 cellVertex on every scene" the closed issue read as world growth was the fleet's buffers.

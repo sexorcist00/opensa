@@ -64,3 +64,12 @@ groups only.
 - Cull vehicle submeshes by distance band earlier (the `_vlo` LOD already exists — check it is actually
   swapping at the intended range in the field).
 - Skip drawing the interior submeshes of a car nobody is inside past N metres.
+
+## The fleet's price, measured whole (2026-08-18)
+
+Two A/B builds on the user's display lane (capped 120, `target 422`;
+[`benchmarks/index.md` §2026-08-18](../../benchmarks/index.md)): the full 212-car high-poly fleet against the
+STOCK cars on the same map is **+1.0..+2.6 ms of GPU pass on the city scenes** (lv-night 9.19 → 11.75,
+ganton-night 9.19 → 10.83, ls-noon 5.52 → 6.86) and **~700 draws in view** on ls-noon (1265 → 1967) — while the
+whole map's growth since 08-09 is +0.0..+0.5 ms. That is the budget this lever competes for; the `?benchcar=caddy`
+pin (5.64 on ls-noon) is a fair proxy for it, so a batching change can be A/B'd against the pin without a rebuild.
