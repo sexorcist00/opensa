@@ -259,6 +259,16 @@ body {
   font-size: 11px;
 }
 
+.cc-about-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sa-orange-1);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .cc-about code {
   font-family: var(--sa-mono);
 }

@@ -3,6 +3,7 @@ import { app, type BrowserWindow, dialog, ipcMain, shell } from 'electron';
 
 import type { ConvertRequest, FolderKind } from '../shared/ipc';
 
+import { TUTORIAL_URL } from '../shared/app-info';
 import { IPC } from '../shared/ipc';
 import { copyAsiInto } from './asi';
 import { convert } from './convert';
@@ -40,6 +41,8 @@ export function registerIpc(window: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.openFolder, (_event, path: string) => shell.openPath(path));
+
+  ipcMain.on(IPC.openTutorial, () => void shell.openExternal(TUTORIAL_URL));
 
   // The app is a one-run errand: when the conversion is done there is nothing else to do here.
   ipcMain.on(IPC.quit, () => app.quit());

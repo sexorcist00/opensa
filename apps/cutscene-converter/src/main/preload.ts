@@ -17,6 +17,7 @@ const api: ConverterApi = {
     return () => void ipcRenderer.off(IPC.convertLine, handler);
   },
   openFolder: (path: string) => ipcRenderer.invoke(IPC.openFolder, path),
+  openTutorial: () => ipcRenderer.send(IPC.openTutorial),
   pickFolder: (kind: FolderKind) => ipcRenderer.invoke(IPC.pickFolder, kind),
   quit: () => ipcRenderer.send(IPC.quit),
   validateCars: (gamePath: string, carsPath: string) => ipcRenderer.invoke(IPC.validateCars, gamePath, carsPath),

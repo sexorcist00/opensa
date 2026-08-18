@@ -1,3 +1,5 @@
+import { converter } from './converter';
+
 /**
  * What a bug report has to be able to name: the app version, the commit it was built from and the exact
  * plugin binary inside it. Both are injected at build time (see vite.config.ts) — `release/` is untracked,
@@ -6,8 +8,14 @@
 export function About(): React.ReactElement {
   const built = __ASI_SHA1__.length > 0;
 
+  // A button, not an <a>: the window never navigates anywhere, the main process opens the page.
+
   return (
     <footer className="cc-about">
+      <button className="cc-about-link" onClick={() => converter.openTutorial()} type="button">
+        Tutorial
+      </button>
+      <span className="cc-about-sep">·</span>
       <span>v{__APP_VERSION__}</span>
       <span className="cc-about-sep">·</span>
       <span>
