@@ -22,6 +22,20 @@ behaviour; and the IDE loader reads a model name with `sscanf %s` into `char[24]
 24 bytes including `.dff` — a part name is safe at **≤ 19 characters**. Stock part names are ≤ 14
 (`misc_c_lr_rem1`).
 
+**Both numbers were read out of the shipping exe on 2026-08-19** (`asi/perfect-vehicle` plan 001), and the
+machine code says them more plainly than the source does:
+
+- `CLinkedUpgradeList`'s layout is pinned by its own two methods — `m_anUpgrade1` at `+0`, `m_anUpgrade2` at
+  `+0x3C`, the count at `+0x78` — and `AddUpgradeLink` (`0x4C74B0`) is six instructions with **no bounds
+  check of any kind**. The address `0xB4E6D8` appears 7 times in the exe and every one is `mov <reg>, imm`
+  before a call to that writer or to `FindOtherUpgrade` (`0x4C74D0`), so nothing indexes the arrays from
+  outside.
+- `m_anUpgrades` sits at `CVehicleModelInfo + 0x2D6` and its SIZE is the constructor's own initialiser:
+  `lea edi,[esi+0x2d6]; mov ecx,9; rep stos DWORD` = 36 bytes = 18 int16. The `mods` loader writes the
+  tokens in a loop with no bound, then appends the two strings at `0x85BB20`/`0x85BB28` — `stereo` and
+  `hydralics` — at `[…+edi*2+0x2d6]` and `[…+0x2d8]`. That is where "16 listed + 2 appended" comes from.
+  A 17th part lands in the DWORDs the constructor sets to `-1` at `+0x2FA`/`+0x2FE`.
+
 Why it matters: every ADDED car that re-models its base car's wings costs one `link` pair, and the stock
 game leaves exactly 7. `tools/add-vehicles` guards both numbers until `asi/perfect-vehicle` lifts them
 (its plan 001 is the RE of every access site).
