@@ -5,6 +5,7 @@ import { splitRow } from '@opensa/renderware/parsers/text/text-lines';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
+import { applyVehicleAudio, AUDIO_FILE } from './audio';
 import { parseFeatures } from './features';
 import { applyVehicleText, TEXT_FILE } from './fxt';
 import { stageVehicleImg } from './img-merge';
@@ -12,6 +13,7 @@ import { mergeCarcols, mergeCarmods, mergeHandling, mergeIde } from './merge';
 import { resolveVehicleModel } from './model';
 import { applyModelVariations, MODEL_VARIATIONS_EXTRA_FILE } from './model-variations';
 import { addPaletteColors, resolveColorRefs } from './palette';
+import { applyVehicleParked, PARKED_FILE } from './parked';
 import { decodeSettings, parseVehicleSettings } from './settings';
 import { applyTuningParts, TUNING_PARTS_FILE } from './tuning-parts';
 
@@ -22,16 +24,15 @@ const FEATURES_FILE = 'features.txt';
  * Every `.txt` a folder may ship that is NOT the settings file. The settings file is found by its
  * `.settings.txt` suffix and only falls back to "the first other `.txt`" for the pre-suffix mods — so every
  * name we know has to be excluded from that fallback, or a car shipping one of these and no settings file
- * has it parsed AS settings and warns "nothing recognised — STOCK". `audio.txt`/`parked.txt` are 013's, and
- * are excluded from the day the fleet ships them rather than from the day we read them.
+ * has it parsed AS settings and warns "nothing recognised — STOCK".
  */
 const KNOWN_TXT_FILES = [
   FEATURES_FILE,
   TUNING_PARTS_FILE,
   MODEL_VARIATIONS_EXTRA_FILE,
   TEXT_FILE,
-  'audio.txt',
-  'parked.txt',
+  AUDIO_FILE,
+  PARKED_FILE,
 ];
 
 /** What one vehicle contributed — its gta3.img entries + the keys `--strip` keeps (model name, handling id). */
@@ -142,11 +143,14 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
       editFile(data('carmods.dat'), (text) => mergeCarmods(text, settings.carmodsLine!));
     }
   }
-  // The two kinds that write files OUTSIDE `data/`, after the settings merge — a `{{name}}` naming this car's
-  // own slot then resolves against the row it just wrote. The ModelVariations plugin is a fact about the REAL
-  // game, so its ini is only merged when that is the host being built for.
+  // The kinds that write OUTSIDE `data/*`, after the settings merge — a `{{name}}` naming this car's own slot,
+  // and `parked.txt`'s id lookup, then resolve against the ide row it just wrote. Three of the four speak to
+  // plugins of the REAL game (ModelVariations, FLA's audio loader, Parked Maker), so they are merged only
+  // when that is the host being built for; the `.fxt` rides along with the mod's own `cleo/` either way.
   if (options.target !== 'opensa') {
     warnings.push(...applyModelVariations(folderPath, entries, outPath));
+    warnings.push(...applyVehicleAudio(folderPath, entries, outPath));
+    warnings.push(...applyVehicleParked(folderPath, entries, outPath, model));
   }
   warnings.push(...applyVehicleText(folderPath, entries, outPath, model));
 

@@ -153,6 +153,14 @@ const CLEO_MANIFEST: readonly Fixture[] = [
   // `tuning_new_parts.txt` price rows already name. A synthetic copy would only prove our own assumption.
   cleoFile('vehicles/tug - Clark CT-50D Tug - smart/model-variations-extra.txt', 'vehicles/tug-variations.txt'),
   cleoFile('vehicles/slamvan - 1968 GMC Pickup Hammered - alfamodding/text.txt', 'vehicles/slamvan-text.txt'),
+  // Plan 013's two, out of the ADDED-cars root (no folder in `vehicles/` ships either yet): the FLA audio
+  // line of a trailer, and the one parked spot the fleet authors. Both are hand-written column formats whose
+  // real spacing — tabs, runs of blanks, a trailing float — is the thing the merge has to survive.
+  cleoFile(
+    'add-vehicles/106veh - American Trailer Pack Tanker - blinkman (petrotr)/audio.txt',
+    'vehicles/106veh-audio.txt',
+  ),
+  cleoFile('add-vehicles/001veh - 1971 Chevrolet Vega - alfamodding (manana)/parked.txt', 'vehicles/001veh-parked.txt'),
 ];
 
 const MANIFEST: readonly Fixture[] = [

@@ -61,6 +61,8 @@ a rebake converted the exhaust while the car kept its old model.
 | `tuning_new_parts.txt` | **New tuning parts** — the IDE rows (`1194, spl_b_lr_bl, blade, 100, 0`) and shop entries of parts the game never had; read by the installer since plan 009 (below). **Absent when the carmods line names a new part: the build FAILS** (`assertCarmodsModels`) — the real game would crash loading `carmods.dat`. Misspelled: not read, same failure, same message naming the token. |
 | `model-variations-extra.txt` | **Traffic behaviour** — an ini section for **ModelVariations 10.7** (mod `11`, `sa` layer), merged into the built `modloader/Model_Variations/ModelVariations_Vehicles.ini` by section name (below). Read by the installer since plan 012; eight of the original's folders ship one. Misspelled (`model-variation-extra.txt`): **not read, and nothing says so** — the trailers simply never spawn. |
 | `text.txt` | **GXT lines** — `KEY text` per line, the names the mod's own tuning parts show in the shop (the key is the second column of its `tuning_new_parts.txt` price row). Written as `cleo/<model>.fxt`, which CLEO's FXT loader reads; read by the installer since plan 012. Misspelled: **not read** — the part is in the shop with an empty name, which is exactly what a part with no GXT entry looks like. |
+| `audio.txt` | **Engine sound** — one row of FLA's `data/gtasa_vehicleAudioSettings.cfg` (15 columns, the first being the model name), merged by that name; read by the installer since plan 013. `sa` only. The loader is keyed by NAME, so a replacement car that ships none simply keeps its stock row — nothing is inherited here. Misspelled: **not read**, and the car keeps the stock sound, which is exactly what shipping no file looks like. |
+| `parked.txt` | **A parked spot** — Parked Maker 3.0.2's `[Cars]` row WITHOUT the id: `<colour> <colour> <x> <y> <z> <angle>` (the script reads `%i %i %i %f %f %f %f`; the id is the installer's to fill in). Merged into `cleo/Parked Car Maker.ini`, read since plan 013, `sa` only. A row with a different column count is **refused with both counts named**. Needs mod 47 and FLA `Accept any ID for car generator = 1`. Misspelled: **not read** — the car is parked nowhere and nothing says so. |
 | `cleo/` (or `CLEO/`) | The mod's compiled CLEO scripts + sidecars (`.cs`, `.ini`, `.fxt`) — copied to the built game's `cleo/` (canonical lowercase, author-relative structure preserved), where the runtime discovers them at boot (plan 097/06); a `--rebake` re-copies them. **Misspelled (`celo/`, loose `.cs` beside the dff): not carried at all** — the vehicle installs fine, its script never runs, and the boot census line (`[cleo] N script(s)`) is the only place the absence shows. |
 
 - The settings file is found by its **`.settings.txt` suffix**, never by "the first `.txt` in the folder" —
@@ -81,6 +83,12 @@ authored**: eight of these files address ADDED cars (`{{205veh}}`), which get th
 line. `[Settings]` is the plugin's own block and is **refused** from a mod folder. The merge is by SECTION
 NAME — replaced when present, appended when not — so a rebake writes the same bytes twice. The whole thing is
 `sa`-only: our own engine has no `modloader/`.
+
+**A parked spot is not free.** Every `[Cars]` row is created through CLEO and holds one of FLA's
+car-generator slots for the whole session (the array is 500; the map's own 1045 records stream in and out
+with their IPL section and share it) — so the installer prints the row count with the limit beside it and
+REFUSES a tree whose rows alone reach it. The measurement, and the field test that would let anyone put a
+real budget on it, is `docs/gta-sa-original/car-generators-500-and-the-map-1045.md`.
 - Both files are decoded by the encoding they were **saved** in: a BOM decides, and with no BOM the parity of
   the NUL bytes does (UTF-16 is what most Windows-authored mods ship). Read as UTF-8 a UTF-16 file parses to
   nothing at all, silently.

@@ -63,6 +63,13 @@ add-vehicles 001 → 002 → 003 → 004 → 005 → 006 → 007. `perfect-vehic
 - `docs/gta-sa-original/fla-id-limits-are-part-of-the-savefile.md`: DFF ids do not change the save schema,
   but parked cars and variations land in saves → ids are deterministic across rebuilds (002).
 
+## The field round
+
+Every step's field verdict is a row in [field-checks.md](field-checks.md) and they are collected in ONE
+round at the end of the chain (the user's call, 2026-08-19) — a delivery, a boot and a drive per step is
+not worth it when each verdict costs seconds of play. A step is DONE when its code, tests, numbers and
+docs are in; its row stays open until the round is run.
+
 ## Acceptance for the whole plan
 
 - The 115 cars install in one `pmb … --until sa` run; `checkImgIdBudgets` + `assertCarmodsModels` green.

@@ -68,6 +68,10 @@ Contract: `docs/contracts/vehicles.md`.
      reported and the line ships as authored. `[Settings]` is the plugin's and is never written from a mod.
    - **Text** — `text.txt`'s `KEY text` lines → `out/cleo/<model>.fxt`, the channel CLEO's FXT loader reads:
      the shop shows a new part's name from there rather than from a rebuilt `american.gxt`.
+   - **Sound and parking** (`sa` only) — `audio.txt`'s row into FLA's `data/gtasa_vehicleAudioSettings.cfg`
+     (replaced by model name, else inserted into the block that file sets aside), and `parked.txt`'s id-less
+     line into Parked Maker's `cleo/Parked Car Maker.ini` `[Cars]`. The parked rows are counted against
+     FLA's car-generator limit and printed; a tree whose rows alone reach it is refused (plan 013).
    - **Settings** — parse `*.settings.txt` (blank-line-separated blocks, each classified + validated by the real
      engine parser) and merge into:
 
