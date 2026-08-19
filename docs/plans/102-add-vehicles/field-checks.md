@@ -65,6 +65,18 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
       gameName is the stock train's key. Look at: the freight train is still called what it always was.
 - [ ] **An added car with no `audio.txt` sounds like its base.** 111 of the 115 inherit. Look at: the vega
       starts and revs like a manana rather than being silent.
+- [ ] **An added car turns up in traffic on its own.** Deliver
+      `modloader/Model_Variations/ModelVariations_Vehicles.ini`. Look at: drive the poor-family
+      neighbourhoods (the manana's) and the vega appears without a cheat. If it fails: `EnableVehicles=1`
+      in `ModelVariations.ini`, and `EnableLog=1` to see the plugin's own parse.
+- [ ] **The one-section-per-model reading is the right one.** We write `[manana] Global=410,19001` where the
+      user's older tool wrote the tuning keys in `[voodoo]` and the variations in `[412]` — two sections for
+      one model. Look at: an added car spawns AND (once 006 lands) the tuned traffic still works for the same
+      base. If only one of the two happens, the plugin keys sections by resolved model and the two writers
+      must stay in one section — which is what we already do, so the failure would instead say the plugin
+      wants them apart.
+- [ ] **`petro` and `towtruck` still tow.** Both are a base AND author trailer keys; their `Global` now reads
+      `Trailers1,<baseId>,<addedId>`. Look at: they still pull their trailer sets.
 - [ ] **`Vehicle colors = 256` really applies.** Set 2026-08-19 because the palette (145 rows with the
       added cars) was over the game's own 128 —
       `docs/gta-sa-original/vehicle-colour-table-128.md`. Deliver `fastman92limitAdjuster_GTASA.ini`.

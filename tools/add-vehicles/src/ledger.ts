@@ -36,7 +36,16 @@ const HEADER = [
 
 /** The ids a previous run handed out, by slot. Missing file = nothing promised yet. */
 export function readAddsLedger(gameDir: string): Map<string, number> {
-  const rows = new Map<string, number>();
+  return new Map(readAddsRows(gameDir).map((row) => [row.slot, row.id]));
+}
+
+/**
+ * Every added car this TREE knows about, not just the ones a run touched — what anything fleet-wide has to
+ * read (the traffic registration in plan 004: a `--only` run must not drop the other 114 cars out of their
+ * base's variation list).
+ */
+export function readAddsRows(gameDir: string): LedgerRow[] {
+  const rows: LedgerRow[] = [];
   const path = join(gameDir, ADDS_LEDGER);
   if (!existsSync(path)) {
     return rows;
@@ -46,9 +55,14 @@ export function readAddsLedger(gameDir: string): Map<string, number> {
     if (trimmed === '' || trimmed.startsWith('#')) {
       continue;
     }
-    const [slot, id] = trimmed.split(/\t+/);
+    const [slot, id, bases, folder] = trimmed.split(/\t+/);
     if (slot && /^\d+$/.test(id ?? '')) {
-      rows.set(slot.toLowerCase(), Number(id));
+      rows.push({
+        bases: (bases ?? '').split(',').filter((base) => base !== ''),
+        folder: folder ?? '',
+        id: Number(id),
+        slot: slot.toLowerCase(),
+      });
     }
   }
 

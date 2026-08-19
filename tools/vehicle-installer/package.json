@@ -14,7 +14,8 @@
     "./special-features": "./src/special-features.ts",
     "./palette": "./src/palette.ts",
     "./audio": "./src/audio.ts",
-    "./fxt": "./src/fxt.ts"
+    "./fxt": "./src/fxt.ts",
+    "./model-variations": "./src/model-variations.ts"
   },
   "nx": {
     "tags": [

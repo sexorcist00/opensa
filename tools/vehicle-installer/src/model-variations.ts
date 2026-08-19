@@ -91,6 +91,47 @@ export function applyModelVariations(folderPath: string, entries: readonly strin
 }
 
 /**
+ * Merge single KEYS into a section, keeping every other key it already has — the section-level merge above
+ * replaces a block outright, which is right for a mod's authored file and wrong for two writers that own
+ * different keys of the same section (`add-vehicles` 004 owns `Global`, 006 owns the tuning keys).
+ * Creates the section when the file has none.
+ */
+export function mergeIniKeys(text: string, section: string, keys: ReadonlyMap<string, string>): string {
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((line) => headerName(line)?.toLowerCase() === section.toLowerCase());
+  if (start === -1) {
+    return mergeIniSection(text, {
+      lines: [...keys].map(([key, value]) => `${key}=${value}`),
+      name: section,
+    });
+  }
+  let end = start + 1;
+  while (end < lines.length && headerName(lines[end]) === null) {
+    end += 1;
+  }
+  const body = lines.slice(start + 1, end);
+  const written = new Set<string>();
+  for (const [index, line] of body.entries()) {
+    const name = line.split('=')[0].trim().toLowerCase();
+    const value = [...keys].find(([key]) => key.toLowerCase() === name);
+    if (value) {
+      body[index] = `${value[0]}=${value[1]}`;
+      written.add(value[0].toLowerCase());
+    }
+  }
+  const fresh = [...keys].filter(([key]) => !written.has(key.toLowerCase())).map(([key, value]) => `${key}=${value}`);
+  // Above the trailing blanks, so re-running writes the same bytes.
+  let at = body.length;
+  while (at > 0 && body[at - 1].trim() === '') {
+    at -= 1;
+  }
+  body.splice(at, 0, ...fresh);
+  lines.splice(start + 1, end - start - 1, ...body);
+
+  return lines.join(text.includes('\r\n') ? '\r\n' : '\n');
+}
+
+/**
  * Replace the `[section]` block of `text` with this one, or append it when the file has none. Everything
  * outside the block is left byte-for-byte as it was — the plugin's `[Settings]` included.
  */
@@ -136,6 +177,14 @@ export function parseIniSections(text: string): IniSection[] {
   }
 
   return sections;
+}
+
+/** The value of one key inside one section, or undefined when either is absent. */
+export function readIniKey(text: string, section: string, key: string): string | undefined {
+  const block = parseIniSections(text).find(({ name }) => name.toLowerCase() === section.toLowerCase());
+  const line = block?.lines.find((entry) => entry.split('=')[0].trim().toLowerCase() === key.toLowerCase());
+
+  return line === undefined ? undefined : line.slice(line.indexOf('=') + 1).trim();
 }
 
 /** Substitute every `{{model}}` with the id that model holds in the tree; an unknown one is reported and kept. */

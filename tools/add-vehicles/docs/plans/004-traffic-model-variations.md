@@ -1,6 +1,6 @@
 # 004 — Traffic: the car as a ModelVariations variation of its base
 
-**Status: PLANNED 2026-08-19.** Why an added car is ever seen without a cheat: ModelVariations 10.7 (mod 11,
+**Status: BUILT 2026-08-19.** Why an added car is ever seen without a cheat: ModelVariations 10.7 (mod 11,
 `sa` layer) swaps a spawning stock car for one of the ids listed in its section. The merge is 012's
 (`model-variations.ts`); this plan decides what to write and reads the user's old output for the shape.
 
@@ -36,4 +36,38 @@ base sections — the section merge is by name, so the two plans compose without
 
 ## Measured
 
-*—*
+**Built 2026-08-19.** `add-vehicles/traffic.ts`; the merge is `vehicle-installer`'s, which gained
+`mergeIniKeys` (merge single KEYS into a section, keeping every other key it has) and `readIniKey` beside
+012's section-level merge.
+
+**Two decisions the old build's own output forced, and they went the other way from the plan:**
+
+1. **One section per model, keyed by its NAME.** The old tool wrote the tuning keys into `[voodoo]` and the
+   variation list into `[412]` — the SAME model addressed two ways, in two sections; whichever the plugin
+   reads last is the one that survives, so one of the two was doing nothing in that build. We write one
+   section per model and merge by key, which is also what lets 006 add its tuning keys to the same section
+   without either plan caring about order. **Not field-proven** — it is a row in the plan-102 field round.
+2. **`Global` is EXTENDED, never rewritten.** Writing the key outright cost `petro` and `towtruck` their
+   trailers: both are the base of an added car AND author `Global=Trailers1` (a reference to the key beside
+   it), so the authored value was replaced by ids and `Trailers1` was left defined and referenced by nothing
+   — a behaviour that silently stops happening. Now `[petro]` reads `Global=Trailers1,514,19055`.
+
+**Traffic speaks for the whole TREE, not for the run.** The registration is written from the LEDGER after it
+is merged, so `--only 001veh` does not drop the other 114 cars out of their bases' lists (verified: after an
+`--only` run `[freibox]` still lists all eight of its carriages).
+
+**Full run on an APFS clone:**
+
+| | |
+| --- | --- |
+| base sections written | **101** — one per stock slot the fleet varies |
+| the ini | 1 section (`[Settings]`) + 8 authored + 100 → **108** |
+| a base with 8 added cars | `[freibox] Global=590,19078,19079,…,19085`, ascending |
+| a base that also authors trailers | `[petro] Global=Trailers1,514,19055`, `Trailers1` untouched |
+| a second run | ini byte-identical |
+
+Tests: 10 in `traffic.test.ts`; add-vehicles 35, vehicle-installer 185.
+
+**Left as authored, on purpose**: `petro`'s and `rdtrain`'s `{{205veh}}`-style placeholders name added cars
+that are not in this fleet at all (the numbering runs to 169veh), so they stay unresolved and the plugin
+logs them — dropping an author's line would be worse than a log line nobody reads.

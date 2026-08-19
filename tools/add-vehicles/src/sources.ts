@@ -72,11 +72,17 @@ export function resolveAddedVehicles(inPath: string, gamePath: string, target: B
   return { plan, sources };
 }
 
+/** Those slots with the model id each holds — what a variation list is written out of. */
+export function stockSlotIds(gamePath: string): Map<string, number> {
+  const path = join(gamePath, 'data', 'vehicles.ide');
+  const defs = parseVehicleDefs(readFileSync(path, 'latin1'));
+
+  return new Map([...defs].map(([slot, def]) => [slot, def.id]));
+}
+
 /** Every stock vehicle slot the BUILT tree's `vehicles.ide` defines, lowercased. */
 export function stockSlots(gamePath: string): Set<string> {
-  const path = join(gamePath, 'data', 'vehicles.ide');
-
-  return new Set(parseVehicleDefs(readFileSync(path, 'latin1')).keys());
+  return new Set(stockSlotIds(gamePath).keys());
 }
 
 /** What is wrong with this folder's `(base)` suffix, if anything. */

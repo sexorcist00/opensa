@@ -27,9 +27,10 @@ import { assertCarmodsModels, ideModelNames } from '@opensa/vehicle-installer/tu
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 
-import { type LedgerRow, readAddsLedger, writeAddsLedger } from './ledger';
+import { type LedgerRow, readAddsLedger, readAddsRows, writeAddsLedger } from './ledger';
 import { resolveAddedCarText } from './name';
-import { type AddedVehicle, resolveAddedVehicles } from './sources';
+import { type AddedVehicle, resolveAddedVehicles, stockSlotIds } from './sources';
+import { registerTraffic } from './traffic';
 
 export interface AddVehiclesOptions {
   /** The BUILT `sa` tree the cars are added to; edited in place. */
@@ -123,6 +124,9 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
   writeArchiveManifest(gamePath);
   // Last: a ledger written before the tree agreed with it would promise ids the build does not carry.
   writeAddsLedger(gamePath, installed);
+  // Traffic speaks for the WHOLE tree, read back off the ledger — an `--only` run must not drop the other
+  // cars out of their base's variation list (plan 004).
+  runWarnings.push(...registerTraffic(gamePath, readAddsRows(gamePath), stockSlotIds(gamePath)));
 
   return { installed, skipped: sources.length - selected.length, warnings: runWarnings };
 }
