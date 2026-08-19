@@ -1,6 +1,7 @@
 # 102 — Added vehicles for the `sa` target: `tools/add-vehicles`, what `vehicle-installer` gains, and `asi/perfect-vehicle`
 
-**Status: PLANNED 2026-08-19. Original SA only** — the OpenSA engine is not in scope (its own vehicle
+**Status: BUILT 2026-08-19 — every chain, in one session. The FIELD ROUND is what remains** (see below).
+**Original SA only** — the OpenSA engine is not in scope (its own vehicle
 system has no ModelVariations/FLA/CLEO to drive, and the user parked it). The research is
 [recon.md](recon.md) (graduated from `docs/ideas/add-new-vehicle` the same day); the decisions in it are the
 user's and are not re-argued here.
@@ -21,7 +22,7 @@ It spans four homes and the pipeline, and each piece is shippable alone:
 | [`tools/vehicle-installer/docs/plans/012`](../../../tools/vehicle-installer/docs/plans/012-unread-file-kinds.md) | `model-variations-extra.txt` + `text.txt` read at last; the settings-fallback trap; `.fxt` + ModelVariations merges are born here | **BUILT** |
 | [`tools/vehicle-installer/docs/plans/013`](../../../tools/vehicle-installer/docs/plans/013-audio-and-parked.md) | `audio.txt` + `parked.txt` for replacement cars; FLA audio cfg + Parked Maker merges are born here | **BUILT** |
 | [`tools/add-vehicles/docs/plans/`](../../../tools/add-vehicles/docs/plans/readme.md) `001`–`007` | the new tool: resolver root, ids + rows + IMG, name/sound/parking, traffic, derived tuning, tuned traffic, pipeline + field | 001–007 **BUILT** (007's field round waits on the link ceiling) |
-| [`asi/perfect-vehicle/docs/plans/`](../../../asi/perfect-vehicle/docs/plans/readme.md) `001`–`002` | the two `carmods.dat` ceilings (30 `link` pairs, 16 parts per car) — RE, then relocation patches | planned |
+| [`asi/perfect-vehicle/docs/plans/`](../../../asi/perfect-vehicle/docs/plans/readme.md) `001`–`002` | the two `carmods.dat` ceilings (30 `link` pairs, 16 parts per car) — RE, then the patches | 001 **DONE**, 002 **BUILT** for the link half (256); the per-car half is researched and deliberately not built |
 | `tool-kit` | the second vehicles ROOT through the one resolver; the free-id allocator over a built tree | inside add-vehicles 001/002 |
 | `perfect-map-builder` | the `add-vehicles` stage after `vehicles`, before the guards; `checkImgIdBudgets` already counts the ids | inside add-vehicles 007 |
 
@@ -69,6 +70,22 @@ Every step's field verdict is a row in [field-checks.md](field-checks.md) and th
 round at the end of the chain (the user's call, 2026-08-19) — a delivery, a boot and a drive per step is
 not worth it when each verdict costs seconds of play. A step is DONE when its code, tests, numbers and
 docs are in; its row stays open until the round is run.
+
+## What the chain actually cost, and what it found
+
+Nine plans in one session (`vehicle-installer` 012–013, `add-vehicles` 001–007, `perfect-vehicle` 001–002).
+The full fleet — **115 cars and 46 re-modelled tuning parts** — installs into a built `sa` tree in **6.6 s**,
+and a second run is byte-identical. Four defects nobody was looking for fell out of it, each of them silent:
+
+1. **`handling.cfg` refused a digit-leading id.** An added car's handling id IS its slot (`001VEH`), and
+   "a car row starts with a letter" dropped the whole block — the car would have run STOCK physics.
+2. **The palette merge was not idempotent**, and it was walking a 128-row table the build had already
+   passed (140 rows, three of them duplicates it had created itself). `Vehicle colors = 256` since.
+3. **`petro` and `towtruck` lost their trailers** the first time traffic was written: they are each the base
+   of an added car AND author `Global=Trailers1`, so writing the key outright left the trailer set
+   referenced by nothing.
+4. **A failed run renumbered the fleet on retry** — the ids are read back off the tree now when the ledger
+   is missing.
 
 ## Acceptance for the whole plan
 

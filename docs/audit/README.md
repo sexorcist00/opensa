@@ -5,6 +5,18 @@ numbers and links to the raw records — so the result survives the session and 
 without re-deriving it. Runtime numbers live in [`../benchmarks/`](../benchmarks/); these docs summarise and
 interpret them.
 
+- [`session-29-a-hundred-and-fifteen-cars-that-were-never-there.md`](./session-29-a-hundred-and-fifteen-cars-that-were-never-there.md)
+  — the 2026-08-19 session after it: **the whole of central plan 102 in one run** (`vehicle-installer`
+  012–013, `tools/add-vehicles` 001–007, `asi/perfect-vehicle` 001–002). 115 added cars + 46 re-modelled
+  tuning parts install into a built `sa` tree in 6.6 s, byte-identical on a second run; every value derived
+  from the built data rather than a per-car table. Budgets: 161 ids of 999, TXD 5 338 of 6 000, the vehicles
+  family 3.10 → 4.47 GB over 3 members, 31 `link` pairs against a ceiling this session lifted from 30 to 256
+  with our own plugin (two functions of the exe replaced, complete by census). **Four silent defects fell out
+  of it**, three pre-existing: `handling.cfg` refusing a digit-leading id (the car would have run STOCK
+  physics), the palette merge appending the same colours every run against a 128-row table the build had
+  already passed, `petro`/`towtruck` losing their trailers to a rewritten `Global`, and a failed run
+  renumbering the fleet on retry. All four were found by one question — does running it twice change
+  anything? The field round (16 rows) is what remains
 - [`session-28-the-dummy-half-of-int16.md`](./session-28-the-dummy-half-of-int16.md) — the 2026-08-19
   session: perfect-map 011 from gate to field in one session — the int16 wrap WATCHED (`lastDummy` negative
   from slot 35 on the first entry), the fix (int32 dummy sidecar + two detours overlaid on FLA's), the ladder

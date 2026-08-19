@@ -1,0 +1,104 @@
+# Session 29 — a hundred and fifteen cars that were never there
+
+**2026-08-19, after session 28.** Nine plans built in one run: `vehicle-installer` 012–013,
+`tools/add-vehicles` 001–007, `asi/perfect-vehicle` 001–002 — the whole of central plan
+[102](../plans/102-add-vehicles/readme.md). What changed, what it cost, what it bought, and the four defects
+that fell out of it.
+
+## What changed
+
+| | |
+| --- | --- |
+| new tool | `tools/add-vehicles` — added cars (new model ids) into a built `sa` tree |
+| new plugin | `asi/perfect-vehicle` — the `carmods.dat` link array, 30 → 256 |
+| `vehicle-installer` gained | the ModelVariations merge, the `.fxt` writer, the FLA audio row, the Parked Maker row, the carmods ceilings guard, an id and a part-rename option on `applyVehicle` |
+| `tool-kit` gained | `free-ids.ts` (the allocator + the tree's used ids), `parseVehicleBases`, `reserved/` |
+| pipeline | the added cars are installed INSIDE the `sa` branch, on the finished tree, after the plugin ships and before the budget guards |
+| commits | 15, all on `main`, not pushed |
+
+## What it cost
+
+The whole fleet installs in **6.6 s** onto a clone of `build/original/sa` and a second run is byte-identical
+across every file it writes. The build-time cost of the stage is therefore that plus what it adds to the
+tree:
+
+| budget | before | after | ceiling |
+| --- | --- | --- | --- |
+| model ids | — | **161** (115 cars + 46 parts), 19 001–19 161 | 999 in the window |
+| FLA `TXD` pool | 5 177 | **5 338** | 6 000 configured |
+| FLA `DFF` pool | 15 596 | **15 711** | its 20 000 range |
+| vehicles archive family | 3.10 GB, 2 members | **4.47 GB, 3** (`vehicles3.img` registered) | the writer's spill cap |
+| `carcols.dat` palette | 140 | **145** | 256 (raised from 128 this session) |
+| `carmods.dat` link pairs | 23 | **31** | 256 (lifted this session; was 30) |
+| `carmods.dat` parts per car | 15 | **15** | 16 — NOT lifted, and the guard says so |
+
+A working method worth keeping: **`cp -Rc` clones the 5.7 GB build tree instantly on APFS**, so every one of
+these runs was against a real tree and none of them touched the one the field uses.
+
+## What it bought
+
+115 cars that the game has no reference to anywhere — no `cargrp` row, no car generator, no mission — now
+have everything a stock slot gets for free, and every bit of it is DERIVED from the built tree rather than
+authored per car (the user's earlier tool carried a hand-written table per car; this one has none):
+
+- an id from a window measured against the tree, pinned by a ledger because parked cars and variations land
+  in the SAVE;
+- a name (`cleo/<slot>.fxt`, 106 of them — the 9 train carriages whose gameName is a stock key deliberately
+  get none, or they would rename the stock train);
+- a sound (111 of the 115 inherit their base's row, retargeted; 4 ship their own);
+- a place in traffic (101 base sections) and a parked spot;
+- their base's tuning parts re-modelled under derived names, with the IDE row, shop item, price and mirror
+  link cloned — 46 parts across 5 cars;
+- tuned traffic for the whole fleet, stock cars included (103 sections).
+
+## The four defects, all of them silent
+
+This is the part worth re-reading. None of these was the thing being worked on; each was found because
+something downstream refused to be idempotent or refused to install.
+
+1. **`handling.cfg` refused a digit-leading id.** `parseHandling`, `mergeHandling` and `stripHandling` all
+   took "a car row starts with a letter" as the rule. An added car's handling id IS its slot (`001VEH`), so
+   the whole block was dropped and the car would have run stock physics — with one warning that named the
+   line and not the reason. The game only reads the first character to spot `;` and the punctuation-marked
+   sub-tables; the rule is one shared `isHandlingCarLine` now.
+2. **The palette merge was not idempotent, and it was walking a fixed table.** `addPaletteColors` appended a
+   mod's custom colours on every run: the shipping build carries three colours twice because of it. The
+   table is 128 rows and the build was at 140 — [the measurement](../gta-sa-original/vehicle-colour-table-128.md),
+   and `Vehicle colors = 256` in the FLA ini since (the user's call).
+3. **`petro` and `towtruck` lost their trailers** the first time traffic was written. Each is the base of an
+   added car AND authors `Global=Trailers1`; writing the key outright left `Trailers1` defined and referenced
+   by nothing. `Global` is extended now, never rewritten.
+4. **A failed run renumbered the fleet on retry.** The ceilings are checked after every row is merged, so a
+   refusal leaves the ide rows and no ledger — and the next run would have seen those ids as taken by
+   strangers. The tree is the ledger's fallback now.
+
+There is a shape here: **every one of the four was found by asking the same question — "does running it
+twice change anything?"** Three of them were pre-existing and would have kept drifting.
+
+## What the chain decided against its own plan
+
+- **The derived part name is the whole stock name plus `_<slot>`**, not a rebuild from a prefix table. The
+  set of prefixes `SetupVehicleUpgradeFlags` switches on is documented with a trailing "…", so appending
+  keeps every rule matching whatever it really is. The fleet's longest name lands on exactly the 19-character
+  ceiling.
+- **One ModelVariations section per model, keyed by name.** The user's earlier tool wrote the tuning keys
+  into `[voodoo]` and the variation list into `[412]` — the same model twice, and whichever the plugin reads
+  last wins. Not field-proven yet; it is a row in the field round.
+- **The added cars are installed inside the `sa` branch**, not as a common-chain stage. That is `procobj`'s
+  placement for content belonging to one target, and it is also what puts the plugin in the tree before the
+  guard that reads its ceiling.
+- **`reserved/` is a reserved NAME, not a stray.** The plan said refuse it; the folder holds a car the author
+  set aside on purpose, and a refusal there stops every tool that reads the root.
+
+## What is NOT done
+
+**The field round.** Sixteen rows in [field-checks.md](../plans/102-add-vehicles/field-checks.md), collected
+rather than run one at a time (the user's call). It includes the riskiest delivery of the session — a plugin
+that rewrites two functions of the exe — with the row that matters most being "then take the plugin away
+again".
+
+**`PV_FIX_UPGRADES`**, the per-car array. Its RE is complete (7 sites, the sidecar shape decided); the patch
+is not written because nothing needs it, and the guard says that rather than implying the plugin covers it.
+
+**The benchmark half of this audit.** No runtime number moved that anyone has measured: the fleet is content,
+not a code path, and what it costs the frame is a field question.
