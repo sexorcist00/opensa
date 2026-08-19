@@ -100,6 +100,41 @@ said by how much before it was tested: at 17 539 per world entry, 100 000 holds 
 estimate any more — it is 17 539 dummies per world entry, exactly the permanent set, and the pool size buys
 `floor(Dummys / 17539)` entries per boot and nothing else.
 
+## `Dummys = 32767` does not boot — which settles the design question
+
+**Field 2026-08-19.** The obvious non-ASI workaround is to keep the pool INSIDE the int16 range, so no
+dummy can ever get an index `firstDummy/lastDummy` cannot hold. Our static worst case is 22 388, which
+looked like it would fit under 32 767 with room to spare. It does not:
+
+```
+Unhandled exception at 0x00538103 ... reading location 0x00000000.
+    EAX: 0x0000059E   EDX: 0x00007FFF   ESI: 0x00000000
+```
+
+Same site, same null. **`EDX` carries the configured pool size** — `0x7FFF` = 32 767 here, `0xC350` = 50 000
+in the 08-18 dump — so the two field points agree that the pool was full at exactly what the ini said. `EAX`
+is `objInstance->m_nModelId`, the instance that could not be placed: `1438 DYN_BOX_PILE_2` and
+`3460 vegaslampost`, both ordinary stock map objects, so the pool was long full before they came up.
+
+**It died during BOOT, before the menu.** The bottle's plugin logs give the timeline: `09:15:55` the ASIs
+load, `09:16:10` the crash — **15 seconds**, against 80 for the healthy 08-18 boot. SA places the permanent
+world on the loading screen, ahead of the menu, so no game had been started.
+
+So the boot's own live dummy count already exceeds 32 767 — appreciably more than the 17 539 this build
+places from its text IPLs, which means the permanent set is placed more than once before the menu appears
+(`CIplStore::LoadIplBoundingBox` is a second path into `LoadObjectInstance` and frees nothing; the
+`CColAccel` cache branch of `SetupRelatedIpls` overwrites a whole `IplDef`, dummy range included). That
+last step is not pinned and does not need to be for the conclusion below.
+
+**The conclusion is what matters: the dummy pool can never be kept inside int16 on this map.** Capping
+`Dummys` at 32 767 does not boot, so `RemoveIpl` will be walking truncated dummy ranges on every run for as
+long as the field runs a pool it can actually boot. There is no configuration that avoids the defect —
+which makes 004b mandatory rather than one option among several.
+
+**Stopgap until it is built:** `Dummys` must stay above 32 767, and the pool buys `floor(Dummys / ~17000)`
+world entries per boot. 400 000 is about 23 entries and costs ~22 MB (`sizeof(CDummyObject)` is 56, read off
+the `pushl $0x38` at `0x5380E1`). It postpones; nothing more.
+
 ## What would actually fix it, in order of honesty
 
 1. **004b — extend the existing int32 sidecar to `firstDummy`/`lastDummy`.** The catalogue already says
