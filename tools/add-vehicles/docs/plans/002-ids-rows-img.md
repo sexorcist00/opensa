@@ -1,6 +1,6 @@
 # 002 — Ids, the four rows, the IMG
 
-**Status: PLANNED 2026-08-19.** The part of an added car that IS a replacement car — once it has an id.
+**Status: BUILT 2026-08-19.** The part of an added car that IS a replacement car — once it has an id.
 
 ## Decisions
 
@@ -40,4 +40,44 @@
 
 ## Measured
 
-*—*
+**Built 2026-08-19.** `tool-kit/free-ids.ts` (the pure allocator + `usedModelIds` over `data/` and
+`modloader/`), `add-vehicles/ledger.ts` (`data/vehicle-adds.txt`, merged so an `--only` run does not
+unpromise the rest), `add-vehicles/install.ts` (in place on the built tree, like `--rebake --kind sa` — an
+added car is added to a build that already exists, so there is no `--out` to wipe; the plan's `--out <tmp>`
+was dropped for that reason). `applyVehicle` gained an `id` option that substitutes `<:id>` in the decoded
+settings text; a folder without the placeholder is refused, naming it.
+
+**The full run, on an APFS clone of `build/original/sa`** (`cp -Rc`, instant, so a 5.7 GB tree is a free
+scratch target — worth remembering):
+
+| | |
+| --- | --- |
+| 115 cars installed | **5.0 s**, ids **19 001–19 115** contiguous |
+| `vehicles.ide` / `handling.cfg` / `carcols.dat` / `carmods.dat` | +115 rows each |
+| the vehicles archive family | 2 members (1.87 + 1.23 GB) → **3** (1.87 + 1.88 + 0.72 GB), **+1.37 GB**; `vehicles3.img` registered in `gta.dat` |
+| FLA id pools | DFF 15 596 → **15 711**, TXD 5 177 → **5 338** of the configured **6000** (margin 662; the 46 part DFFs of plan 005 are still to come) |
+| ledger | 115 rows, sorted |
+| a second run | **byte-identical** across `vehicles.ide`, `carcols.dat`, `vehicle-adds.txt` and the archives |
+
+**Two real defects fell out of the idempotency check, and neither was ours to expect:**
+
+1. **`handling.cfg` refused a digit-leading id.** `parseHandling` (and `mergeHandling`, and `stripHandling`)
+   took "a car row starts with a letter" as the rule; an added car's handling id IS its slot (`001VEH`), so
+   the whole handling block was dropped — the car installed and would have run STOCK physics, with one
+   warning that named the line and not the reason. The game decides by the first character only to spot `;`
+   and the punctuation-marked sub-tables (`!` bike, `$` flying, `%` boat, `^` anim), so the rule is now one
+   shared `isHandlingCarLine` in the parser package, used by all three.
+2. **The palette merge was not idempotent, and it walks a fixed-size table.** `addPaletteColors` appended a
+   mod's custom colours on EVERY run: the shipping build carries three colours twice, and the second install
+   pass grew the palette by five rows and re-pointed cars at the new ids. Fixed (RGB + description = the same
+   colour, reused). The ceiling it was walking is now recorded —
+   `docs/gta-sa-original/vehicle-colour-table-128.md`: the table is **128**, stock ships 127, the build
+   carries **140**, the added cars take it to **145**. WARNED on every install path, not refused, because
+   the 128 comes from FLA's stated default rather than a disassembly. **Raising `Vehicle colors` in the FLA
+   ini is the free fix and is the user's call.**
+
+Tests: 13 (`free-ids.test.ts` 8, `ledger.test.ts` 5) + 2 palette-idempotency cases; tool-kit 144 green with
+add-vehicles, vehicle-installer 185.
+
+`checkImgIdBudgets` stays pmb's (it already counts every archive, and a tool importing the builder would
+invert the dependency) — the numbers above were read with the same rule and are the input to plan 007.

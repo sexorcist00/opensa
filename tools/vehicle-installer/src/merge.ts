@@ -6,6 +6,7 @@
  * - `carcols.dat`  — `car`/`car4` section, key = model (column 0). Replace-or-insert, section **alpha-sorted**.
  * - `carmods.dat`  — `mods` section, key = model (column 0). Replace-or-insert, section **alpha-sorted**.
  */
+import { isHandlingCarLine } from '@opensa/renderware/parsers/text/handling.parser';
 import { splitRow } from '@opensa/renderware/parsers/text/text-lines';
 
 /**
@@ -42,7 +43,7 @@ export function mergeHandling(base: string, line: string): string {
   const out = base.split(/\r?\n/);
   const id = firstToken(line).toUpperCase();
   for (let i = 0; i < out.length; i += 1) {
-    if (/^[A-Z]/i.test(out[i].trim()) && firstToken(out[i]).toUpperCase() === id) {
+    if (isHandlingCarLine(out[i]) && firstToken(out[i]).toUpperCase() === id) {
       out[i] = line;
 
       return out.join(eol);

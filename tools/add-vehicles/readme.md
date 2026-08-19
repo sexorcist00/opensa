@@ -30,8 +30,25 @@ inherits its sound from, whose tuning parts it re-models, and whose place in tra
 no `vehicles.ide` row defines is refused, naming the folder — a mistyped base is otherwise a car that
 silently never enters traffic. Contract: `docs/contracts/vehicles.md` §1b.
 
+```bash
+# Install every added car into a built tree (in place, like --rebake --kind sa)
+npx tsx tools/add-vehicles/src/cli.ts --game build/original/sa
+npx tsx tools/add-vehicles/src/cli.ts --game build/original/sa --only 001veh
+```
+
+## The id
+
+An added car's model id is allocated over the BUILT tree from **19 001–19 999** — the window above every map
+allocator (they stop at 19 000) and inside FLA's DFF range. The author writes `<:id>` where the id goes in
+the settings file; a literal id is refused, because it would be a guess at a window only the build can see.
+
+**The id never moves.** `data/vehicle-adds.txt` records slot → id and is read FIRST by the next run, so a
+folder renamed, added or dropped does not renumber the fleet: a parked spot and a ModelVariations entry land
+in the player's SAVE, and an id that moved between builds is a save that spawns the wrong car. Deleting the
+ledger is the only way to renumber, and the file says so.
+
 ## Status
 
-Plan 001 is built: the source root, the resolver, the base validation and the CLI's shape. Ids, rows and the
-archive are 002; name/sound/parking 003; traffic 004; derived tuning parts 005; tuned traffic 006; the pmb
-stage and the field round 007.
+Plans 001 and 002 are built: the source root, the resolver, the base validation, the ids, the four data rows
+and the archive. Name/sound/parking is 003; traffic 004; derived tuning parts 005; tuned traffic 006; the
+pmb stage and the field round 007.

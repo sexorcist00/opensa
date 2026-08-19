@@ -41,6 +41,7 @@ import type { RebakeOptions, RebakeReport } from './rebake-shared';
 
 import { applyVehicle } from './apply-vehicle';
 import { FEATURES_TABLE, logVehiclePlan } from './install';
+import { vehicleColourWarnings } from './palette';
 import {
   addedCarWarning,
   mergeFeatureTable,
@@ -101,6 +102,7 @@ export function rebakeVehicles(options: RebakeOptions): RebakeReport {
   }
   mergeFeatureTable(targetPath, declared);
   assertCarmodsModels(targetPath);
+  warnings.push(...vehicleColourWarnings(targetPath));
   // Not an archive concern on a CONVERTED tree (one .osm per car), but the mod's data is still shared.
   warnings.push(...sharedFileWarnings(sources, selected));
   // The ledger is MERGED, never rewritten from this run's selection: `--only previon` rebakes one car, and a

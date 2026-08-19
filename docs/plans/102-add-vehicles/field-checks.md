@@ -48,9 +48,21 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
       (downtown LS at ground level), and read the log — this is the measurement
       `docs/gta-sa-original/car-generators-500-and-the-map-1045.md` says nobody has taken.
 
-## From `add-vehicles` (to be filled as 001–007 are built)
+## From `add-vehicles` (002 BUILT 2026-08-19; 003–007 to come)
 
-_—_
+- [ ] **An added car exists and drives.** Deliver the vehicles archive family (`models/vehicles*.img`),
+      `data/{vehicles.ide,handling.cfg,carcols.dat,carmods.dat,gta.dat}` and `data/vehicle-adds.txt`.
+      Look at: spawn `19001` (the vega) with a trainer — it appears, it is the right model, and it drives
+      with its OWN handling rather than the manana's. If it fails: the handling row is the one that was
+      silently dropped before this plan (a digit-leading id), so check `handling.cfg` holds `001VEH`.
+- [ ] **`vehicles3.img` really loads.** The run added a third family member and registered it in `gta.dat`.
+      Look at: the game boots and a car whose model lives in that archive appears. If it fails: FLA's
+      archive count, and `data/img-layout.json`.
+- [ ] **The colour palette.** 145 rows against a table of 128 —
+      `docs/gta-sa-original/vehicle-colour-table-128.md`. Look at: cars whose colours are ids above 127
+      (the added ones use 140–144) show the right paint, and nothing else in the game turns odd. **The
+      real fix is one ini line** (`Vehicle colors` in the FLA ini); this row is what to watch if it is
+      left as it is.
 
 ## From `asi/perfect-vehicle` (to be filled as 001–002 are built)
 

@@ -11,6 +11,7 @@ import { applyVehicle } from './apply-vehicle';
 import { formatFeatureTable } from './features';
 import { sharedVehicleFiles } from './img-merge';
 import { formatModTable, MODS_TABLE } from './mods-table';
+import { vehicleColourWarnings } from './palette';
 import { SPECIAL_FEATURES_DAT, writeModelSpecialFeatures } from './special-features';
 import { stripOutput } from './strip';
 import { assertCarmodsModels } from './tuning-parts';
@@ -99,6 +100,7 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
   // Every carmods token must resolve to an IDE row — the real game crashes on one that does not, at boot,
   // at an address; here it fails naming the line (plan 009).
   assertCarmodsModels(outPath);
+  vehicleColourWarnings(outPath).forEach((warning) => console.warn(`vehicle-installer: ${warning}`));
   // Written as a FAMILY, not one file: the buffered path caps at 2 GiB and so does every reader, and this
   // archive is past it on the original's mod set (1.24 GB of map + 3.08 GB of cars). The cap is now enforced
   // by construction rather than discovered mid-build.

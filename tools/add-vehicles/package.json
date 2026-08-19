@@ -4,7 +4,9 @@
   "private": true,
   "description": "Install ADDED GTA-SA vehicles — new model ids — from mods-src/<game>/add-vehicles into a built `sa` tree: ids, rows, name, sound, parking, traffic and derived tuning parts.",
   "exports": {
-    "./sources": "./src/sources.ts"
+    "./sources": "./src/sources.ts",
+    "./install": "./src/install.ts",
+    "./ledger": "./src/ledger.ts"
   },
   "nx": {
     "tags": [

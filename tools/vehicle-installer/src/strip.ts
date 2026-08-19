@@ -1,3 +1,4 @@
+import { isHandlingCarLine } from '@opensa/renderware/parsers/text/handling.parser';
 import { splitRow } from '@opensa/renderware/parsers/text/text-lines';
 import { openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -63,10 +64,10 @@ export function stripHandling(text: string, ids: ReadonlySet<string>): string {
   return join2(
     text,
     text.split(/\r?\n/).filter((line) => {
-      // Only the main car table is letter-leading; comments / `!`/`$`/`%` sub-tables / blanks are kept.
+      // Only the main car table is stripped; comments / `!`/`$`/`%` sub-tables / blanks are kept.
       const trimmed = line.trim();
 
-      return !/^[A-Z]/i.test(trimmed) || ids.has(trimmed.split(/\s+/)[0].toUpperCase());
+      return !isHandlingCarLine(trimmed) || ids.has(trimmed.split(/\s+/)[0].toUpperCase());
     }),
   );
 }

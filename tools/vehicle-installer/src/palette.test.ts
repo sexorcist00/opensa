@@ -50,6 +50,29 @@ describe('addPaletteColors', () => {
   });
 });
 
+describe('addPaletteColors — the same colour twice', () => {
+  describe('positive cases', () => {
+    it('reuses the row a previous run appended instead of appending it again', () => {
+      const base = 'col\n0,0,0\t# 0 black\t\tblack\nend\n';
+      const palette = [{ line: '233,199,40   # new1 yellow taxi cab   yellow', name: 'new1' }];
+      const once = addPaletteColors(base, palette);
+      const twice = addPaletteColors(once.text, palette);
+
+      expect(once.idByName.get('new1')).toBe(1);
+      expect(twice.idByName.get('new1')).toBe(1);
+      expect(twice.text).toBe(once.text);
+    });
+
+    it('still appends a colour whose RGB matches but whose description does not', () => {
+      const base = 'col\n0,0,0\t# 0 black\t\tblack\nend\n';
+      const first = addPaletteColors(base, [{ line: '233,199,40 # new1 taxi yellow yellow', name: 'new1' }]);
+      const second = addPaletteColors(first.text, [{ line: '233,199,40 # new1 lemon twist yellow', name: 'new1' }]);
+
+      expect(second.idByName.get('new1')).toBe(2);
+    });
+  });
+});
+
 describe('resolveColorRefs', () => {
   describe('positive cases', () => {
     it('replaces each newN ref with its id (whole-word, not inside new10)', () => {

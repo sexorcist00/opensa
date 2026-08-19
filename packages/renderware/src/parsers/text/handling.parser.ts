@@ -6,18 +6,30 @@ export interface HandlingEntry {
 }
 
 /**
+ * Is this a line of `handling.cfg`'s standard (car) table?
+ *
+ * The game decides it by the FIRST CHARACTER: `;` is a comment and each sub-table is marked with its own
+ * punctuation (`!` bike, `$` flying, `%` boat, `^` anim group). Everything else is a car row, and the id may
+ * therefore start with a DIGIT — which is exactly what an ADDED car's handling id looks like (`001VEH`, the
+ * slot). A letter-only rule silently dropped that whole row: the car installed and ran STOCK physics, with
+ * one warning that named the line and not the reason (2026-08-19, add-vehicles plan 002).
+ */
+export function isHandlingCarLine(line: string): boolean {
+  return /^[A-Z0-9]/i.test(line.trim());
+}
+
+/**
  * Parse `handling.cfg` into a dict keyed by handling id. Only the **standard
- * (car) table** is read — its lines start with the id (a letter). Comment lines
- * (`;`) and the bike/boat/plane sub-tables (prefixed `!`, `$`, `%`, …) are
- * skipped. Fields are kept raw (mixed numbers + `F`/`P` transmission flags + a
- * hex flag); the physics implementation maps columns later.
+ * (car) table** is read — see {@link isHandlingCarLine}. Fields are kept raw
+ * (mixed numbers + `F`/`P` transmission flags + a hex flag); the physics
+ * implementation maps columns later.
  */
 export function parseHandling(text: string): Map<string, HandlingEntry> {
   const entries = new Map<string, HandlingEntry>();
 
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
-    if (line === '' || !/^[A-Z]/i.test(line)) {
+    if (!isHandlingCarLine(line)) {
       continue; // comment / blank / a non-car sub-table line
     }
     const [id, ...fields] = line.split(/\s+/);

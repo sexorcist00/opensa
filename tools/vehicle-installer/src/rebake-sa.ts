@@ -31,6 +31,7 @@ import type { RebakeOptions, RebakeReport } from './rebake-shared';
 
 import { applyVehicle } from './apply-vehicle';
 import { logVehiclePlan } from './install';
+import { vehicleColourWarnings } from './palette';
 import {
   addedCarWarning,
   mergeFeatureTable,
@@ -110,6 +111,7 @@ export function rebakeVehiclesSa(options: RebakeOptions): RebakeReport {
       ...writeModelSpecialFeatures(targetPath, declared, new Set(accepted.map(({ model }) => model))).warnings,
     );
     assertCarmodsModels(targetPath);
+    warnings.push(...vehicleColourWarnings(targetPath));
     warnings.push(...sharedFileWarnings(sources, accepted));
     mergeModTable(
       targetPath,

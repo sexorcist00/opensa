@@ -14,7 +14,7 @@ import { resolveVehicleModel } from './model';
 import { applyModelVariations, MODEL_VARIATIONS_EXTRA_FILE } from './model-variations';
 import { addPaletteColors, resolveColorRefs } from './palette';
 import { applyVehicleParked, PARKED_FILE } from './parked';
-import { decodeSettings, parseVehicleSettings } from './settings';
+import { decodeSettings, ID_PLACEHOLDER, parseVehicleSettings } from './settings';
 import { applyTuningParts, TUNING_PARTS_FILE } from './tuning-parts';
 
 /** The mod's own feature declaration, by the Modloader/IVF name. */
@@ -61,6 +61,12 @@ export interface ApplyVehicleOptions {
    * Writing the raw pair back would add entries the game does not read and cannot be told apart from a
    * half-converted archive.
    */
+  /**
+   * The model id an ADDED car is being installed under (`tools/add-vehicles`). Given, every `<:id>` in the
+   * settings file is substituted before the blocks are classified — the ide line then reads like any other.
+   * Omitted, the file is used as authored, which is every car of the `vehicles/` root.
+   */
+  id?: number;
   img?: EditableImg;
   /**
    * Which HOST the tree is being built for. It selects only what is a fact about the host rather than about
@@ -111,8 +117,9 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
   const settings =
     settingsFile === undefined
       ? undefined
-      : parseVehicleSettings(decodeSettings(readFileSync(join(folderPath, settingsFile))), (message) =>
-          warnings.push(`${settingsFile}: ${message}`),
+      : parseVehicleSettings(
+          withId(decodeSettings(readFileSync(join(folderPath, settingsFile))), options.id),
+          (message) => warnings.push(`${settingsFile}: ${message}`),
         );
   if (settings !== undefined) {
     // Nothing at all recognised is the loud case: the file exists, the mod meant something by it, and the car is
@@ -209,4 +216,9 @@ function handlingId(settings: ReturnType<typeof parseVehicleSettings>, model: st
   const fromHandling = settings.handlingLine?.trim().split(/\s+/)[0];
 
   return (fromIde || fromHandling || model)?.toUpperCase();
+}
+
+/** The settings text with `<:id>` resolved — unchanged when the car is a replacement (no id to put there). */
+function withId(text: string, id: number | undefined): string {
+  return id === undefined ? text : text.split(ID_PLACEHOLDER).join(String(id));
 }
