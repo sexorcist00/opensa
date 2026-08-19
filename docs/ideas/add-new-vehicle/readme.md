@@ -134,9 +134,20 @@ number (`#Car generators = 500`, commented = default) that Parked Maker spends �
 original/fla-id-limits-are-part-of-the-savefile.md`: DFF ids do not change the save schema, but parked
 cars and variations DO land in saves, so ids must be stable across rebuilds.
 
-## Open questions for the user
+## Decisions (the user, 2026-08-19) and the id budget, measured
 
-1. Source location: `vehicles/[sa/]added/` through the one resolver (recommended), or the mod-folder shape?
-2. "Tuned traffic" for stock cars — wanted, or dropped with the old tool?
-3. Trains (`trainTypeCarriages`) — part of this tool, or its own?
-4. The id window: 19 001–19 999 only (FLA range above the map window), or the free set anywhere?
+- **Source**: `mods-src/original/add-vehicles/` — its own root beside `vehicles/`, the SAME shape
+  (`models/` 115 folders, `screenshots/` 115 pictures; a `reserved/` folder is temporary and is not read).
+  So plan 001 is "the vehicles-tree resolver serves a second root", not a new resolver.
+- **Trains**: later, in this same tool (not now).
+- **"Tuned traffic"**: YES — a plan of its own in the chain.
+- **Id window 19 001–19 999: FITS.** Measured on the built tree (`build/original/sa`, every `.ide` the tree
+  carries incl. `modloader/`, sections objs/tobj/anim/weap/peds/cars/hier): 15 091 ids in use, highest
+  18 656, **0 used in 19 001–19 999 (999 free, one run)**, 26 used in 18 631–19 000 (the map window).
+  Demand today: 115 cars + 46 re-modelled part dffs = **161 ids**, headroom 838 for trains and later cars.
+  The allocator therefore takes 19 001 upward, deterministic (folder order), and refuses past 19 999 — the
+  map allocators stop at 19 000, so the two windows never meet. Re-measure before every build: a mod that
+  starts using the window shows up here first.
+
+## Open questions — answered above; what remains is the tool's name (`tools/add-vehicles`, matching the
+source root) and the order of the chain, which the plans fix.
