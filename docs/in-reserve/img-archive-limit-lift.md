@@ -14,7 +14,24 @@ archives — **8 of 8**. The game launched and played with no adjuster work at a
 the ceiling is lifted on that install. It shows we never reached it. From the outside the two are
 indistinguishable, and only one of them survives a ninth archive.
 
-## THE TRIGGER
+## THE TRIGGER — **FIRED 2026-08-19**
+
+The second bullet below is the one that went off, and it went off the way it was written: *"the vehicle
+payload growing past two files … a third file is one large mod set away"*. The added-cars fleet (central plan
+102) is that mod set — 115 cars and 46 tuning parts, **+1.37 GB** — and the vehicles family became
+`vehicles.img` + `vehicles2.img` + `vehicles3.img`. The `sa` build now fails at `assertArchiveSlots`:
+
+```
+9 registered IMG archives of 8 stock slots (3 hardcoded + 6 in gta.dat)
+```
+
+3 hardcoded (`gta3`, `gta_int`, `player`) + 6 registered (`carrec`, `script`, `cutscene`, `vehicles`,
+`vehicles2`, `vehicles3`). Six of those nine are stock and not ours to remove, so the fleet fits in eight
+only by shrinking the vehicle payload back under two archives (~3.5 GB against today's 4.17 GB) — or by
+taking the lift this card is about. **The deferral is over; what happens next is a decision, not a
+discovery.**
+
+## The trigger, as it was written
 
 **A ninth registered `models/*.img`.** Any one of these produces it:
 
