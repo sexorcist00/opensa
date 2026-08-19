@@ -23,6 +23,12 @@ go/no-go). Something already understood and scheduled does NOT live here — it 
 
 ## Ideas
 
+- [add-new-vehicle/](./add-new-vehicle/readme.md) — **ADDED cars (new model ids) for the `sa` target
+  only**: recon of the user's earlier private tool and of the `9. Added Vehicles` data (115 cars), the
+  per-file table of what an added car needs and which shipped mod reads it (ModelVariations for traffic,
+  FLA audio loader, Parked Maker, `.fxt` names), what NOT to carry over (a per-car hardcoded tuning table,
+  a hardcoded id start, whole-file regeneration), and the proposed plan split — six plans for the new tool,
+  two for `vehicle-installer`, and the table of what both share.
 - [world-glass-material/](./world-glass-material/readme.md) — **world glass as a material class**: cars
   already classify glass and reflect it differently; the static world has no such class, so a shop window
   shades like concrete. The signal is Rockstar's own — `surfinfo.dat` carries a **GLASS column** (already
