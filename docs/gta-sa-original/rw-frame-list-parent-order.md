@@ -74,5 +74,29 @@ whether it faults or silently corrupts.
   chunks, rewrite the parents to `[-1, 0]`, and move the Atomic's `frameIndex` from 0 to 1. The file stays
   1 736 bytes and nothing else moves.
 
+## What was built (2026-08-19)
+
+- `reorderFrameList` / `frameOrderReport` in `packages/renderware/src/parsers/binary/frame-order.ts` — a
+  permutation, not a re-encode: records and their extension chunks are reordered, parent and atomic frame
+  indexes remapped, every other byte copied, so the output keeps the input's length and a mod's geometry is
+  never re-serialised. It refuses rather than rewrites when it cannot reason about the file (a parent out of
+  range, a cycle, an extension count that does not match the frame count).
+- **vehicle-installer checks every `.dff` it stages** (`stageVehicleImg`): a bounded 64 KiB probe answers the
+  question — the frame list sits at the head of the clump — and only a file that needs repairing is read
+  whole, so staging by PATH survives for the multi-GB mod set. A repaired file is reported through the
+  install's warnings, naming it.
+- The mod's own `wg_r_lr_bl1.dff` was repaired in place as well, because a loose car dropped into
+  `modloader/car/` never passes through the installer.
+
+**Swept with the real parser over 2 096 `.dff`** — the 212 vehicle folders (368 files, 1 405 MB), the stock
+loose models, and the whole map-mod library (1 706 files): **this was the only one**. The sweep also closed a
+gap in the check itself — walking the clump with the lock-tolerant `forEachClumpChild` (what `parseDff` uses)
+rather than a boundary-respecting `findChild` took the vehicle files it could not read from **87 to 3**, so
+an anti-rip-locked model is now examined instead of silently skipped.
+
+**Not covered yet:** mod-installer stages map mods without this check. Nothing in the library needs it today
+(0 of 1 706), which is why it was not built — the same measurement that says so is the one to re-run before
+assuming it stays true.
+
 Neighbour: [`carmods-unknown-part-crash.md`](carmods-unknown-part-crash.md) — the other tuning-part crash of
 this install, a `carmods.dat` token with no IDE row.

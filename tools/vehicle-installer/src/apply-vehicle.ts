@@ -53,7 +53,8 @@ export interface ApplyVehicleOptions {
  */
 export function applyVehicle(folderPath: string, outPath: string, options: ApplyVehicleOptions = {}): AppliedVehicle {
   const entries = readdirSync(folderPath);
-  const imgNames = options.img === undefined ? [] : stageVehicleImg(folderPath, options.img);
+  const staged = options.img === undefined ? null : stageVehicleImg(folderPath, options.img);
+  const imgNames = staged?.names ?? [];
   const cleo = carryCleoFolder(folderPath, entries, outPath);
   // The slot the folder NAME states, confirmed against the `.dff`s it ships — a bodykit folder ships several
   // and the first of them is not the car (see `resolveVehicleModel`). Without the archive step the file list
@@ -74,6 +75,11 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
       (name) => name.toLowerCase().endsWith('.txt') && ![FEATURES_FILE, TUNING_PARTS_FILE].includes(name.toLowerCase()),
     );
   const warnings: string[] = modelWarning ? [modelWarning] : [];
+  // Reported, not silent: the file the mod ships would have crashed the real game on the model read, and
+  // whoever owns the mod should know its export is wrong rather than find out from a bug report.
+  for (const name of staged?.repaired ?? []) {
+    warnings.push(`${name}: frame list declared a parent after its child — reordered before staging`);
+  }
   // New tuning parts (IDE rows + shop entries) — independent of the settings file, and applied FIRST so
   // the carmods line merged below never names a part the tree does not define.
   warnings.push(...applyTuningParts(folderPath, entries, outPath));

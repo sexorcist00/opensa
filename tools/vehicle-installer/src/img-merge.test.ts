@@ -1,10 +1,14 @@
+import { frameOrderReport } from '@opensa/renderware/parsers/binary/frame-order';
 import { createImg, openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { sharedVehicleFiles, stageVehicleImg } from './img-merge';
+
+/** The blade mod's right side skirt, whose export declares frame 0's parent as frame 1. */
+const FORWARD_PARENT_DFF = join(process.cwd(), 'fixtures', 'custom', 'dff', 'wg_r_lr_bl1-forward-parent.dff');
 
 let dir: string;
 
@@ -32,7 +36,17 @@ describe('stageVehicleImg', () => {
     it('returns no names and skips a folder with no dff/txd', () => {
       const folder = mkdtempSync(join(dir, 'empty-'));
       writeFileSync(join(folder, 'readme.txt'), 'x');
-      expect(stageVehicleImg(folder, createImg())).toEqual([]);
+      expect(stageVehicleImg(folder, createImg())).toEqual({ names: [], repaired: [] });
+    });
+
+    it.skipIf(!existsSync(FORWARD_PARENT_DFF))('reports no repair for a dff whose frame list is ordered', () => {
+      const ordered = readFileSync(join(process.cwd(), 'fixtures', 'custom', 'dff', 'wg_l_lr_bl1-ordered.dff'));
+      const folder = vehicleFolder({ 'alpha.dff': ordered });
+      const img = createImg();
+
+      expect(stageVehicleImg(folder, img).repaired).toEqual([]);
+      // Staged by PATH, byte for byte — a healthy mod file is never rewritten.
+      expect(img.get('alpha.dff')).toEqual(new Uint8Array(ordered));
     });
 
     it('stages WITHOUT writing — the caller owns the archive and writes it once', () => {
@@ -49,6 +63,24 @@ describe('stageVehicleImg', () => {
   });
 
   describe('positive cases', () => {
+    it.skipIf(!existsSync(FORWARD_PARENT_DFF))(
+      'reorders a dff whose frame list names a parent after its child, and says so',
+      () => {
+        const broken = readFileSync(FORWARD_PARENT_DFF);
+        const folder = vehicleFolder({ 'alpha.dff': broken });
+        const img = createImg();
+
+        expect(stageVehicleImg(folder, img).repaired).toEqual(['alpha.dff']);
+
+        // What reaches the archive is the ordered file, not what the folder holds — the real game reads
+        // this one, and the mod's own copy is left as its author shipped it.
+        const staged = img.get('alpha.dff') as Uint8Array;
+        const asBuffer = new Uint8Array(staged).buffer;
+        expect(frameOrderReport(asBuffer).forward).toEqual([]);
+        expect(staged.byteLength).toBe(broken.byteLength);
+      },
+    );
+
     it('stages the dff + every txd (incl. extra numbered ones), ignoring the settings file', () => {
       const folder = vehicleFolder({
         'alpha1.txd': Uint8Array.of(3),
@@ -59,7 +91,12 @@ describe('stageVehicleImg', () => {
       const imgPath = join(dir, 'gta3.img');
       const staged = createImg();
 
-      expect(stageVehicleImg(folder, staged).sort()).toEqual(['alpha.dff', 'alpha.txd', 'alpha1.txd', 'alpha2.txd']);
+      expect(stageVehicleImg(folder, staged).names.sort()).toEqual([
+        'alpha.dff',
+        'alpha.txd',
+        'alpha1.txd',
+        'alpha2.txd',
+      ]);
       writeImgFile(staged, imgPath);
 
       const img = openImg(new Uint8Array(readFileSync(imgPath)));
