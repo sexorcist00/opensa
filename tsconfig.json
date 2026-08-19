@@ -20,5 +20,5 @@
     "resolvePackageJsonExports": true,
     "types": ["node", "@webgpu/types"]
   },
-  "exclude": ["./game-src"]
+  "exclude": ["./game-src", "./NO_COMMIT"]
 }
