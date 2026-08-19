@@ -96,7 +96,7 @@ nothing — stop here and re-open the diagnosis (see Risks).
 
 *Measured 2026-08-19, debug build `built Aug 19 2026 11:02:43 (APPLY)`, real install (CrossOver bottle),
 FLA + OLA loaded, `Dummys = 100000`, NEW GAME → world → LOAD GAME → world. **The gate PASSES** — the
-log (kept in full as `assets/011-step1-field-log-2026-08-19.log`) carries both expected signatures:*
+log (kept in full as `assets/011-step1-field-log-2026-08-19.txt`) carries both expected signatures:*
 
 ```
 [dbg] incDUMMY slot/id 35 32768 0          ; first dummy past int16, 24 of them logged in slot 35
@@ -245,7 +245,7 @@ The oracle needs no synthetic build: the failure is already deterministic and qu
 record the value the install actually needs.
 
 *Measured 2026-08-19, debug build `built Aug 19 2026 11:23:00 (APPLY)`, FLA + OLA, bottle. Logs in
-`assets/011-step6-*`.*
+`assets/011-step6-*.txt`.*
 
 1. *`Dummys = 100000`, NEW GAME + 7 LOAD GAME = **8 entries, no crash**. `int16 APPLIED (dummies)` logged.
    `dummyPEAK` (the pool's high-water, logged per 8 192-id boundary): 8 192 → 29 695 → 32 768 → **40 960
