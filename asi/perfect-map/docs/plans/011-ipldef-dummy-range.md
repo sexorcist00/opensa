@@ -256,8 +256,9 @@ record the value the install actually needs.
    40 000 slots — the plan's "under two permanent sets" assumed the first entry costs ~17 644, and it costs
    2.3× that. Re-run at **`Dummys = 50000`** (the value that died on the 3rd LOAD GAME before the fix):
    NEW GAME + 4 LOAD GAME = **5 entries, no crash**, `dummyPEAK` again frozen at 40 960 after entry 1.*
-3. *Regression: building half unchanged (`int16 APPLIED (buildings)` on every boot) — ghost-barriers field
-   check and a stock boot: his call, pending at the time of writing.*
+3. *Regression — PASSED 2026-08-19 on the SHIPPING build (`built Aug 19 2026 11:47:37 (APPLY)`, no DEBUG,
+   24 576 B): all three fixes `APPLIED`, FLA healthy (`Number of memory changes made: 3712`), no crash dump,
+   and his field verdict: **ghost barriers do not return**. The whole ladder is green.*
 
 *What the 40 000 crash measured, and what it means for the pool value:* `CPool::Delete` rewinds the
 cursor (`m_LastFreeSlot = min(cursor, idx)`), so SA allocates lowest-free-slot-first and the high-water IS
