@@ -40,6 +40,7 @@ import type { BuilderConfig } from './config';
 import type { ResumeStage } from './resume';
 
 import { config as defaultConfig, PACK_RECTS } from './config';
+import { checkEntityPoolBudgets, type EntityPoolSpend } from './entity-pools';
 import { fingerprintSources, gitHead, hashRunConfig, openResumeSession } from './resume';
 
 /**
@@ -199,6 +200,8 @@ export interface PackFragment {
 /** The `sa` branch's ceilings, read off the tree the real game loads — console-only before plan 005. */
 export interface SaFragment {
   census: { instBearingIpls: number; largestIpl: number; rows: number };
+  /** What the map spends of `CPool<CBuilding>` / `CPool<CDummy>`, split the way the game splits it. */
+  entityPools: EntityPoolSpend;
   imgBudgets: Record<string, number>;
   /** Set only when this build carries a converted cutscene fleet — the two ship together or not at all. */
   perfectCutsceneAsiSha256: null | string;
@@ -874,6 +877,10 @@ async function buildSaTarget(step: {
   // crash at load and no build-side symptom, which is exactly the kind this branch gates rather than prints.
   assertArchiveSlots(countImgArchives(sa), false);
   const imgBudgets = checkImgIdBudgets(sa);
+  // The other pair of configured pools: an `inst` row spends a CBuilding or a CDummy depending on whether
+  // `object.dat` tunes its model, and until 2026-08-19 nothing counted the second — which is how a build
+  // shipped 17 644 dummies against a 50 000 pool and the field met `0x00538103` on the third LOAD GAME.
+  const entityPools = checkEntityPoolBudgets(sa);
   reportInstallRequirements(census, imgBudgets);
   // The archive report, restated on the FINISHED tree: the split wrote it six stages ago, and everything
   // since has grown gta3.img and added a spill sibling. A report that ships describing an earlier tree is
@@ -887,6 +894,7 @@ async function buildSaTarget(step: {
   return {
     fragment: {
       census,
+      entityPools,
       imgBudgets,
       perfectCutsceneAsiSha256: shippedCutsceneAsi?.sha256 ?? null,
       perfectMapAsiSha256: shippedAsi?.sha256 ?? null,
@@ -1097,8 +1105,6 @@ export function flaIdPools(gameDir: string): { pools: Record<string, number>; so
  * the setting that lifts it — the third column is the whole point: a breach is an instruction, not a fault.
  */
 export const STOCK_CEILINGS = {
-  /** `CPool<CBuilding>` — every permanent row spends one, before anything streams. */
-  buildings: 13_000,
   /** `gpLoadedBuildings`, per text IPL plus its boot streams. */
   rowsPerIpl: 4_096,
   /** `CIplStore::IncludeEntity` truncates the building-pool index to int16, map-wide. */
@@ -1160,12 +1166,6 @@ export function installRequirements(
       lift: 'perfect-map.asi (no adjuster provides it — measured 2026-08-07)',
       spent: census.rows,
       what: 'permanent text-IPL rows, map-wide',
-    },
-    {
-      ceiling: STOCK_CEILINGS.buildings,
-      lift: 'OLA `Buildings`',
-      spent: census.rows,
-      what: 'CPool<CBuilding> entries',
     },
     {
       ceiling: STOCK_CEILINGS.rowsPerIpl,

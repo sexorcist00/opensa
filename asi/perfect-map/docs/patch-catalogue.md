@@ -128,8 +128,8 @@ truncation as `mov word ptr [ecx+0x22], dx` (`66 89 51 22`) — writing only the
   practice" — **FALSIFIED IN THE FIELD 2026-08-19, and 004b is now needed.** The ceiling is on the POOL
   INDEX, not on our row count: with OLA `Dummys` above 32 767 any dummy allocated past that index has an
   index `firstDummy/lastDummy` cannot hold, so `RemoveIpl` walks the wrong range and never frees it. Our
-  map places 17 539 permanent dummies against stock's 40, the count grows per world entry, and the pool
-  buys `floor(Dummys / 17539)` entries per boot — **field-confirmed in both directions 2026-08-19**: 50 000
+  map places 17 644 permanent dummies against stock's 59, the count grows per world entry, and the pool
+  buys `floor(Dummys / 17644)` entries per boot — **field-confirmed in both directions 2026-08-19**: 50 000
   died on the 3rd LOAD GAME, 100 000 on the 6th. See
   [`docs/open-issues/sa-load-game-crash-dummy-pool.md`](../../../docs/open-issues/sa-load-game-crash-dummy-pool.md).
   **The dummy pass reads its bounds at three sites, mirroring the building pass site for site** — `0x404C0F`

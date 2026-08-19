@@ -18,7 +18,7 @@ The short of it:
   configured pool size and matched the ini on both captures (`0xC350` = 50 000, `0x7FFF` = 32 767).
 - **The pool never empties between world entries.** Measured across two field points: `Dummys = 50000` dies
   on the 3rd LOAD GAME, `100000` on the 6th — a leak of ~17 000 per entry, which is exactly the permanent
-  set this build places (17 539 dummies from its text IPLs, against stock SA's **40**).
+  set this build places (17 644 dummies from its text IPLs, against stock SA's **59**).
 - **The pool cannot be kept inside int16.** `Dummys = 32767` does not boot — 15 s in, before the menu. So
   there is no configuration in which `RemoveIpl` walks an untruncated dummy range, which is what turns this
   from an option into the only exit.
@@ -185,7 +185,7 @@ record the value the install actually needs.
   cause and this plan is the wrong tool. The best evidence that it IS the cause is that **buildings do not
   leak** across the same world entries — and the building range in this same function is precisely what 004
   fixed.
-- **The boot places the permanent set more than once.** `Dummys = 32767` dies during boot, above the 17 539
+- **The boot places the permanent set more than once.** `Dummys = 32767` dies during boot, above the 17 644
   the text IPLs hold, and `CIplStore::LoadIplBoundingBox` is a second path into `LoadObjectInstance` that
   frees nothing. Not pinned, not required for this plan, and worth pinning if step 6 comes back short.
 - **`CColAccel`'s cache branch of `SetupRelatedIpls` overwrites a whole `IplDef` from disk** (`def =

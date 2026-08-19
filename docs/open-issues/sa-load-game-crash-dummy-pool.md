@@ -37,12 +37,21 @@ Every `inst` row of a tree, split by whether the model has an `object.dat` entry
 
 | | rows | → `CPool<CBuilding>` | → `CPool<CDummy>` |
 | --- | ---: | ---: | ---: |
-| **stock SA** (`game-src/original`, text IPLs) | 9 268 | 9 228 | **40** |
-| **our `sa` build**, text IPLs (permanent) | 127 384 | 109 845 | **17 539** |
-| our `sa` build, binary IPLs (streamed) | 40 200 | 35 351 | 4 849 |
+| **stock SA**, text IPLs (permanent) | 9 268 | 9 209 | **59** |
+| stock SA, binary IPLs (streamed) | 41 667 | 25 624 | 16 043 |
+| **our `sa` build**, text IPLs (permanent) | 127 384 | 109 740 | **17 644** |
+| our `sa` build, binary IPLs (streamed) | 40 200 | 24 801 | 15 399 |
 
-**Stock places 40 dummies. We place 17 539 — 438×.** 17 311 of them are the procobj bake in
+**Stock holds 59 permanent dummies. We hold 17 644 — 299×**, and the streamed halves are comparable, so
+the whole difference is in what is placed FOREVER. 17 311 of ours are the procobj bake in
 `plobj0..9`: eleven models, all scattered vegetation and rock.
+
+> **These numbers were wrong when this file was first written, and the mistake is worth keeping.** The first
+> census was a throwaway that split `object.dat` on whitespace and took the row's name as it found it — but
+> the file writes `lamppost3,` **with a trailing comma**, so every comma-terminated name failed to match its
+> IPL rows and counted as a building. It under-reported dummies by 10 655 and mis-stated the building
+> headroom as 3.2 % when it is 10.3 %. The table now comes from the shipped parsers (`parseObjectDat`,
+> `parseIpl`, `parseBinaryIpl`, `parseIde`) — the same ones the build guard uses.
 
 ```
 3446 sand_josh2   3357 sand_josh1   2005 elmdead_po   1551 cedar1_po   1509 cedar3_po
@@ -59,9 +68,9 @@ the world, against `Dummys = 50000`:
 
 | world entry | dummies held, if none are released | pool |
 | ---: | ---: | --- |
-| 1 (new game) | 17 539 | fits |
-| 2 (first load) | 35 078 | fits |
-| 3 (second load) | **52 617** | **over 50 000 → crash** |
+| 1 (new game) | 17 644 | fits |
+| 2 (first load) | 35 288 | fits |
+| 3 (second load) | **52 932** | **over 50 000 → crash** |
 
 `CWorld::ClearForRestart` (0x564360) supports this directly: it deletes only `Peds` and `Vehicles` out of
 the repeat sectors. Buildings and Dummies are not in its list.
@@ -92,19 +101,20 @@ pool is used past 32 768, whatever `Dummys` is set to.
 ## What the field workaround actually bought
 
 `Dummys` was raised 50 000 → 100 000 and the symptom went away. It is a **postponement**, and the numbers
-said by how much before it was tested: at 17 539 per world entry, 100 000 holds five entries and the
-**sixth** must crash (105 234). The int16 ceiling at 32 767 is untouched — the raise simply hands the leak
+said by how much before it was tested: at 17 644 per world entry, 100 000 holds five entries and the
+**sixth** must crash (105 864). The int16 ceiling at 32 767 is untouched — the raise simply hands the leak
 67 232 more slots to fill.
 
 **FIELD-CONFIRMED 2026-08-19: the sixth LOAD GAME crashed, same address.** So the leak rate is not an
-estimate any more — it is 17 539 dummies per world entry, exactly the permanent set, and the pool size buys
-`floor(Dummys / 17539)` entries per boot and nothing else.
+estimate any more — it is the permanent set, once per world entry, and the pool size buys
+`floor(Dummys / 17644)` entries per boot and nothing else.
 
 ## `Dummys = 32767` does not boot — which settles the design question
 
 **Field 2026-08-19.** The obvious non-ASI workaround is to keep the pool INSIDE the int16 range, so no
-dummy can ever get an index `firstDummy/lastDummy` cannot hold. Our static worst case is 22 388, which
-looked like it would fit under 32 767 with room to spare. It does not:
+dummy can ever get an index `firstDummy/lastDummy` cannot hold. It does not work, and the corrected census
+says why on its own: the map's full peak is **33 043 dummies**, already past 32 767, so a fully-resident
+world cannot be described by that field even once.
 
 ```
 Unhandled exception at 0x00538103 ... reading location 0x00000000.
@@ -120,7 +130,7 @@ is `objInstance->m_nModelId`, the instance that could not be placed: `1438 DYN_B
 load, `09:16:10` the crash — **15 seconds**, against 80 for the healthy 08-18 boot. SA places the permanent
 world on the loading screen, ahead of the menu, so no game had been started.
 
-So the boot's own live dummy count already exceeds 32 767 — appreciably more than the 17 539 this build
+So the boot's own live dummy count already exceeds 32 767 — more than the 17 644 this build
 places from its text IPLs, which means the permanent set is placed more than once before the menu appears
 (`CIplStore::LoadIplBoundingBox` is a second path into `LoadObjectInstance` and frees nothing; the
 `CColAccel` cache branch of `SetupRelatedIpls` overwrites a whole `IplDef`, dummy range included). That
@@ -152,22 +162,35 @@ the `pushl $0x38` at `0x5380E1`). It postpones; nothing more.
 2. **Find out why a world entry does not release the previous one's dummies at all.** Step 1 makes the
    release possible; it does not prove it happens. `CWorld::ClearForRestart` not touching them is the
    lead.
-3. **Reduce the demand.** 17 311 of 17 539 dummies are the procobj bake. Whether that layer has to be
+3. **Reduce the demand.** 17 311 of 17 644 permanent dummies are the procobj bake. Whether that layer has to be
    permanent `inst` rows of `object.dat` models is a design question nobody has asked yet — it is the
-   difference between a 438× and a 1× multiple of stock.
+   difference between a 299× and a 1× multiple of stock.
 
-## The build guard that would have printed this
+## The build guard — BUILT 2026-08-19
 
-`installRequirements` (`tools/perfect-map-builder/src/pipeline.ts`) prices `census.rows` — **every** text-IPL
-row — against `CPool<CBuilding>`. Wrong in three ways, all silent:
+`installRequirements` priced `census.rows` — **every** text-IPL row — against `CPool<CBuilding>`, wrong in
+three ways and silent in all of them: it counted the 17 644 dummy rows as buildings, it had **no
+`CPool<CDummy>` row at all**, and it ignored the streamed half entirely.
 
-- it counts the 17 539 dummy rows as buildings;
-- it has **no `CPool<CDummy>` row at all** — the pool that blew is absent from the requirements table;
-- it ignores binary IPLs, so it reports a 127 384 peak where the real worst case is 145 196 buildings
-  (against `Buildings = 150000` — **3.2 % of headroom**, which nobody has looked at either).
+`tools/perfect-map-builder/src/entity-pools.ts` replaces it. It splits every row by `object.dat` the way
+`LoadObjectInstance` does, counts the binary IPLs too, and reads `Buildings`/`Dummys` off the OLA ini **this
+build ships** — including the trap that the same file declares both keys in `[SALIMITS]`, `[VCLIMITS]` and
+`[GTA3LIMITS]` with Vice City's numbers larger, and that it is CRLF. It **gates on the permanent rows
+only**, because stock proves the peak is not a budget: stock SA's binary IPLs hold 25 624 building rows
+against a 13 000 pool and the game has run since 2004, because they stream.
 
-Splitting the census by object-info index and adding both a `Dummys` row and the int16 dummy-index ceiling
-would have printed the whole of this on every build.
+On this tree it prints
+
+```
+entity pool — CPool<CBuilding>: 109740 permanent of 150000, +24801 streamed (never all resident)
+entity pool — CPool<CDummy>: 17644 permanent of 50000, +15399 streamed (never all resident)
+! CPool<CDummy> is NOT released between world entries: 17644 permanent dummies per entry against
+  Dummys = 50000 holds 2 entries per boot, and the next one crashes at 0x00538103.
+```
+
+— the field's own result, before the build ships. The count goes into `report-sa.json` as `entityPools`, and
+the misleading `CPool<CBuilding>` row was removed from `installRequirements` rather than left standing
+beside a truer one.
 
 ## Delivery hazard
 

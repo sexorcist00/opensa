@@ -1286,13 +1286,10 @@ describe('installRequirements', () => {
 
     it('names every ceiling the shipped tree crosses, and only those', () => {
       const crossed = installRequirements(shipped, pools).map((row) => row.what);
-      // 110 055 rows cross int16 AND the building pool; 9 110 crosses the per-IPL buffer; COL 300 > 255.
-      expect(crossed).toEqual([
-        'permanent text-IPL rows, map-wide',
-        'CPool<CBuilding> entries',
-        'rows in one text IPL',
-        'COL archives',
-      ]);
+      // 110 055 rows cross int16; 9 110 crosses the per-IPL buffer; COL 300 > 255. The entity pools are NOT
+      // here — a row spends a CBuilding or a CDummy depending on `object.dat`, so pricing rows against
+      // `CPool<CBuilding>` was wrong in both directions; `checkEntityPoolBudgets` owns that ceiling now.
+      expect(crossed).toEqual(['permanent text-IPL rows, map-wide', 'rows in one text IPL', 'COL archives']);
     });
 
     it('reports the per-file buffer separately from the map-wide one — they are different ceilings', () => {
