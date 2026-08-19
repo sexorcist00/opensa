@@ -124,8 +124,13 @@ truncation as `mov word ptr [ecx+0x22], dx` (`66 89 51 22`) — writing only the
   WRONG: the engine's unsigned min keeps `firstBuilding` at SHRT_MAX for slots whose buildings are ALL > 32767, so
   it fired every call and collapsed the range to one element.
 - **Three detours** feed `gSnapFirst`/`gSnapLast` into RemoveIpl's building loop at 0x404B4A / 0x404B5D /
-  **0x404BA8** (the loop re-read). `dummies` don't overflow in practice (diagnosed live — no over-int16 dummies),
-  so `firstDummy/lastDummy` are left alone (004b if ever needed).
+  **0x404BA8** (the loop re-read). `dummies` were left alone on the diagnosis that they "don't overflow in
+  practice" — **FALSIFIED IN THE FIELD 2026-08-19, and 004b is now needed.** The ceiling is on the POOL
+  INDEX, not on our row count: with OLA `Dummys` above 32 767 any dummy allocated past that index has an
+  index `firstDummy/lastDummy` cannot hold, so `RemoveIpl` walks the wrong range and never frees it. Our
+  map places 17 539 permanent dummies against stock's 40, the count grows per world entry, and the pool
+  is exhausted on the third — see
+  [`docs/open-issues/sa-load-game-crash-dummy-pool.md`](../../../docs/open-issues/sa-load-game-crash-dummy-pool.md).
 - **Coexistence:** OLA leaves the read sites stock (detours apply cleanly). **FLA jmp-hooks all three read sites**
   (5-byte `e9` jmps → its own ~0x22C49xx handlers) but NOT the entries — so we verify the entries + the detour
   continuations (0x404B54/63/BAD) and FORCE the detours over FLA's jmps, overlaying FLA's incomplete int16 patch
