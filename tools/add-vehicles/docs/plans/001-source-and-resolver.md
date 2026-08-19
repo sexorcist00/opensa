@@ -1,6 +1,6 @@
 # 001 — Source root and resolver
 
-**Status: PLANNED 2026-08-19.** Where added cars live, how every tool finds them, and the one new name in the
+**Status: BUILT 2026-08-19.** Where added cars live, how every tool finds them, and the one new name in the
 folder convention.
 
 ## The source (already authored by the user)
@@ -47,4 +47,24 @@ first is "the" base (audio inheritance, tuning parts), the rest are additional t
 
 ## Measured
 
-*—*
+**Built 2026-08-19.** The resolver did NOT need a new root parameter — `resolveVehicleSources` already takes
+a path, so the second root is a second CALL. What it did need was three things, and two of them are the
+tree the user actually authored:
+
+- **`reserved/` is a reserved NAME**, beside `screenshots/`, rather than a stray. The plan said refuse it;
+  the folder turned out to hold a car he set aside on purpose (a `cabbie` replacement + its screenshot), and
+  a refusal there stops every tool that reads the root until he deletes something. Reserved-and-never-scanned
+  is the honest reading of "temporary and unread", and it is now a contract row rather than a guess.
+- **`parseVehicleBases`** beside `parseVehicleSlot` (not a changed return type — `parseVehicleSlot` has
+  callers in four tools), and `VehicleSource.bases`. Census of the 115: **every folder has exactly one
+  base**, none has a list, and the eight `freibox`/`freight`/`freiflat` trailers are the only repeats.
+- **`tools/add-vehicles`** — `sources.ts` (the resolver call, the SA-only layer refusal, the base
+  validation against the built `vehicles.ide` through `parseVehicleDefs`), `cli.ts`, the readme.
+
+**Against the real tree**: `--game build/original/sa` resolves **115 of 115**, every `(base)` is a slot the
+built `vehicles.ide` defines, every slot is ≤ 7 characters (it is also the GXT key), and `reserved/` is
+skipped silently-by-contract rather than refused. Tests: 10 in `sources.test.ts` (incl. a real-tree case
+that pins 115 = the folder count) + 7 in tool-kit's `vehicles-dir.test.ts`; tool-kit 121 green.
+
+The tool is registered in `vitest.config.ts` and in eslint's node/console block — a new tool that is in
+neither is a tool whose tests never run and whose CLI cannot print.

@@ -58,6 +58,7 @@ export default defineConfig({
       'tools/img-splitter/**/*.test.ts',
       'tools/fetch-pack/**/*.test.ts',
       'tools/vehicle-installer/**/*.test.ts',
+      'tools/add-vehicles/**/*.test.ts',
       'tools/vehicle-cutscene/**/*.test.ts',
       'tools/ped-installer/**/*.test.ts',
       'tools/perfect-map-builder/**/*.test.ts',

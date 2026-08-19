@@ -216,6 +216,38 @@ it is remapped — declare those too.
 
 ---
 
+## 1b. An ADDED vehicle folder (read by `tools/add-vehicles`, `sa` only)
+
+`mods-src/<game>/add-vehicles` is a SECOND vehicles root with the same grammar as §1's — flat, or
+`models/`+`new/`, or layered — read through the same one resolver. An added car is not a replacement: it
+takes a model id the game never had, so everything a stock slot gets for free has to be produced for it
+(central plan [102](../plans/102-add-vehicles/readme.md)).
+
+**The folder name carries one field more**, a parenthesised suffix naming the STOCK slot the car is a
+variation OF:
+
+```
+001veh - 1971 Chevrolet Vega - alfamodding (manana)
+```
+
+| Part | Contract |
+| --- | --- |
+| `<slot>` (first field) | The car's OWN new slot — `001veh`, not a stock name. **≤ 7 characters**, because the same string is also its GXT key (`001VEH`). |
+| `(<base>[, <base2>…])` (end of the last field) | The stock slot(s) it varies. The FIRST is "the" base — the engine sound it inherits when it ships no `audio.txt`, and the car whose tuning parts it re-models; further entries are additional traffic parents. **A base no `vehicles.ide` row defines is REFUSED**, naming the folder and the base: a mistyped base is otherwise a car that silently never enters traffic. A folder with no suffix at all is refused the same way. |
+| `reserved/` (beside `models/`) | The author's shelf — folders kept out of the fleet without being deleted. Reserved by NAME, never scanned, and NOT a stray (the alternative, a refusal, would stop every tool over a folder the author put there on purpose). |
+
+The optional per-car files are §1's, read by the same code: `features.txt`, `tuning_new_parts.txt`,
+`model-variations-extra.txt`, `text.txt`, `audio.txt`, `parked.txt`. Two things are the added car's own and
+belong to later plans of the chain: **`<:id>`** in the settings file's ide line (the allocation placeholder,
+plan 002) and the derived names of its re-modelled tuning parts (plan 005).
+
+**The root is `sa`-only.** Its whole machinery is the real game's plugins — ModelVariations for traffic,
+FLA's audio loader for sound, Parked Maker for parking, CLEO's FXT loader for the name — and our own engine
+has none of them. A layered root carrying `common/` or `opensa/` is refused rather than planned into a build
+that cannot use it.
+
+---
+
 ## 2. Built game data (written by the installer, read by the converter)
 
 | Path | Contract |

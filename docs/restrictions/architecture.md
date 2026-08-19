@@ -209,7 +209,10 @@ STALE target left by an older run is indistinguishable from a fresh one.
 `mods-src/<game>/vehicles` decides its own contents (a flat tree, or `models/` overridden per SLOT by
 `new/` — vehicle-installer plan 007), and **every tool that reads it goes through
 `resolveVehicleSources`** (`@opensa/tool-kit/vehicles-dir`): the installer, its rebake, `vehicle-cutscene`'s
-census, and any debug script that names a car. A second reading is not a duplicate implementation, it is a
+census, and any debug script that names a car. **Since 2026-08-19 there are TWO such roots** —
+`mods-src/<game>/add-vehicles` holds the ADDED cars (`tools/add-vehicles`, central plan 102) with the same
+grammar and the same one reader; the rule is per ROOT, not per folder name, and a second root is a second
+call, never a second implementation. The cutscene census deliberately reads only the first. A second reading is not a duplicate implementation, it is a
 DIFFERENT FLEET — the cutscene set stops matching the cars the player drives, and nothing in the build
 compares the two. The same holds for `mods-src/<game>/mods` and `layers.ts`.
 

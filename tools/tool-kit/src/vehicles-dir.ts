@@ -24,8 +24,15 @@ export const VEHICLE_MODELS_DIR = 'models';
 /** The higher-priority layer: a car here wins the slot over the same slot in `models/`. */
 export const VEHICLE_NEW_DIR = 'new';
 
-/** Reserved siblings that hold no cars — present in the tree, never scanned for a mod. */
-export const VEHICLE_ASSET_DIRS: readonly string[] = ['screenshots'];
+/**
+ * Reserved siblings that hold no INSTALLED cars — present in the tree, never scanned for one.
+ *
+ * `screenshots/` is the pictures. `reserved/` is the author's own shelf: cars taken out of the fleet
+ * without being deleted (the added-vehicles root holds one). It is a NAME rather than a guess precisely
+ * because the alternative — a stray folder — is refused, and a refusal over a folder the author put there
+ * on purpose stops every tool that reads the tree.
+ */
+export const VEHICLE_ASSET_DIRS: readonly string[] = ['screenshots', 'reserved'];
 
 /** A layer that holds cars. */
 export type VehicleLayer = typeof VEHICLE_MODELS_DIR | typeof VEHICLE_NEW_DIR;
@@ -37,6 +44,9 @@ const VEHICLE_LAYERS: readonly VehicleLayer[] = [VEHICLE_MODELS_DIR, VEHICLE_NEW
 const RESERVED_DIRS: readonly string[] = [...VEHICLE_LAYERS, ...VEHICLE_ASSET_DIRS];
 
 export interface VehicleSource {
+  /** The STOCK slots the folder name's `(base)` suffix declares; empty when it has none — see
+   *  {@link parseVehicleBases}. */
+  readonly bases: readonly string[];
   /** Absolute-or-caller-relative path of the car folder — what `applyVehicle` is handed. */
   readonly folder: string;
   /** The build layer it came from (`common` / a target) — absent for an unlayered tree. */
@@ -62,6 +72,27 @@ export interface VehicleSourcePlan {
   /** The cars to install, ordered by folder name (case-insensitive); one entry per slot. */
   readonly sources: readonly VehicleSource[];
   readonly strategy: 'flat' | 'layered' | 'structured';
+}
+
+/**
+ * The STOCK slots a folder name declares as its BASE — the trailing parenthesised list of the added-cars
+ * convention (`001veh - 1971 Chevrolet Vega - alfamodding (manana)` → `['manana']`). Empty for a name
+ * without one, which is every folder of the `vehicles/` root.
+ *
+ * The base is what an ADDED car inherits from and varies: its engine sound when it ships no `audio.txt`,
+ * the tuning parts it re-models, and the traffic slot ModelVariations spawns it in place of. The first is
+ * "the" base; further entries are additional traffic parents. Contract: `docs/contracts/vehicles.md`.
+ */
+export function parseVehicleBases(folderName: string): string[] {
+  const match = /\(([^()]*)\)\s*$/.exec(folderName.trim());
+  if (match === null) {
+    return [];
+  }
+
+  return match[1]
+    .split(',')
+    .map((base) => base.trim().toLowerCase())
+    .filter((base) => base !== '');
 }
 
 /**
@@ -186,6 +217,7 @@ function layerSources(
 ): VehicleSource[] {
   return byName(
     entries.map((name) => ({
+      bases: parseVehicleBases(name),
       folder: join(path, name),
       ...(layer === undefined ? {} : { layer }),
       name,

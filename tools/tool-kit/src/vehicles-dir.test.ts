@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { parseVehicleSlot, planVehicleLayers, resolveVehicleSources } from './vehicles-dir';
+import { parseVehicleBases, parseVehicleSlot, planVehicleLayers, resolveVehicleSources } from './vehicles-dir';
 
 /** Build a `vehicles` tree from `<subpath>: [folder, …]` and return its root. */
 function tree(layout: Record<string, readonly string[]>): string {
@@ -42,6 +42,32 @@ describe('parseVehicleSlot', () => {
 
 // The names alone, so the case rule is testable on a case-INSENSITIVE filesystem too (macOS folds `New/`
 // and `new/` into one folder — the refusal exists for the case-sensitive one, and must still be covered).
+describe('parseVehicleBases', () => {
+  describe('negative cases', () => {
+    it('is empty for a folder name with no suffix — every car of the vehicles root', () => {
+      expect(parseVehicleBases('admiral - 1976 Mercedes-Benz 230 - k1real24')).toEqual([]);
+    });
+
+    it('is empty for parentheses that are not at the end', () => {
+      expect(parseVehicleBases('bus - 1969 GM TDH-5303 (city) - carface')).toEqual([]);
+    });
+
+    it('is empty for an empty suffix', () => {
+      expect(parseVehicleBases('001veh - a car - someone ()')).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reads the one base of the added-cars convention', () => {
+      expect(parseVehicleBases('001veh - 1971 Chevrolet Vega - alfamodding (manana)')).toEqual(['manana']);
+    });
+
+    it('reads a comma-separated list, folded and trimmed', () => {
+      expect(parseVehicleBases('205veh - a trailer - someone ( Freibox , FREIGHT )')).toEqual(['freibox', 'freight']);
+    });
+  });
+});
+
 describe('planVehicleLayers', () => {
   describe('negative cases', () => {
     it('refuses a stray folder beside the reserved ones', () => {
@@ -140,6 +166,20 @@ describe('resolveVehicleSources', () => {
       const plan = resolveVehicleSources(root);
 
       expect(plan.sources.map((source) => source.name)).toEqual(['comet - 911 - funky']);
+    });
+
+    it("never installs the reserved folder — the author's shelf, not a stray", () => {
+      const root = tree({ models: ['comet - 911 - funky'], reserved: ['cabbie - taxi - 533'] });
+      const plan = resolveVehicleSources(root);
+
+      expect(plan.sources.map((source) => source.name)).toEqual(['comet - 911 - funky']);
+    });
+
+    it('carries the (base) suffix of each car', () => {
+      const root = tree({ models: ['001veh - vega - alfamodding (manana)', 'comet - 911 - funky'] });
+      const plan = resolveVehicleSources(root);
+
+      expect(plan.sources.map((source) => source.bases)).toEqual([['manana'], []]);
     });
 
     it('hands back the folder path each car is installed from', () => {
