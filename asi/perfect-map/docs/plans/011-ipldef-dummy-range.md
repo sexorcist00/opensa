@@ -142,7 +142,36 @@ before its output is believed.
 **Verification:** every surviving site is classified — IplDef or not — and the IplDef ones are either
 covered by a detour or argued harmless in writing.
 
-*Measured: —*
+*Measured 2026-08-19 — the scan and the grep AGREE; step 2 closed.*
+
+- *gta-reversed (`gta-reversed-modern`, shallow clone of the day): `firstDummy`/`lastDummy` occur in exactly
+  two functions — `CIplStore::IncludeEntity` (`std::min/max` writes, `(int16)dummyId`) and
+  `CIplStore::RemoveIpl` (`ProcessPool(*GetDummyPool(), def->firstDummy, def->lastDummy)`). `IplDef` is not
+  named in any file outside `IplStore.*`, `IplDef.h` and `ColAccel.*`. `RemoveIpl` does NOT reset the pair —
+  which is the "stale first" step 1 saw.*
+- *exe (`objdump -d` of the 1.0 US exe, 3 959 327 lines): 184 word-sized accesses to `+0x26`/`+0x28`
+  (`movswl/movzwl/movw/cmpw/incw/decw` + 16-bit-register `mov/cmp/add/sub`). Window filter (±150
+  instructions containing `0x8E3FB0` ms_pPool, `0xBC4094` m_iplDefs, `$0x34` or the RemoveIpl/IncludeEntity
+  addresses) keeps 31 and — unlike the old filter — RETAINS `0x404C0F`/`0x404C13`. Classified by hand:*
+  - *IplDef READS: `0x404C0F`, `0x404C13`, `0x404C4E` — RemoveIpl, the three detour sites. No other.*
+  - *IplDef WRITES: `0x15637CA` / `0x15637D6` (IncludeEntity's HOODLUM-relocated body, the min/max stores;
+    reads `0x15637C2`/`CE` beside them — we observe BEFORE this body runs), `0x156C494–4BA` (an
+    `IplDef` initialiser after `call 0x4059B0` = pool New: `0x7FFF` into +0x22/+0x26, `0x8000` into
+    +0x24/+0x28, `-1` into +0x2A) and `0x15632CF–DB` (a second constructor, same constants). Constants
+    only — harmless, the sidecar never reads the engine's pair.*
+  - *Struct-level: `CColAccel::getIplDef` (`0x5B2EF0`, called from `0x404FF5` SetupRelatedIpls and
+    `0x4057DD`) / `setIplDef` (`0x5B2ED0`, from `0x406162`) copy 13 dwords with `rep movsl`. Only under
+    `isCacheLoading()`; nothing in gta-reversed sets that state on PC and the install has no
+    `models/CINFO.BIN` → dead path (the Risks entry is retired by this).*
+  - *Not IplDef: every `(%esp)`/`(%ebp)` site (none lies in `0x404A30–0x406300` or the relocated
+    CIplStore bodies), `0x4D68C7` (RpAnimBlend node), `0x485960–90` (four uncalled int16 getters),
+    `0x1569975`/`0x156DBF5` (a pool with `imul $0x2c` elements), `0x156B298`, `0x11D9316`/`0x122185C`/
+    `0x124B190` (the second `.text` at `0xCB1000+`, protection wrapper, PIC-style code), the rest (stores of
+    constants into unrelated structs, `0x75Cxxx` int16 arrays).*
+- *Bound convention: the dummy loop is `cmp edi,ecx; jg skip` … `inc edi; cmp edi,eax; jle body` — INCLUSIVE;
+  the building loop at `0x404BB2` is `jle` too. 004 feeds the max id and is field-proven, so 011 feeds the
+  max id unchanged — the plan's trap was real (gta-reversed renders `<`) but costs nothing.*
+- *Working files: the disassembly and `word26_28.txt` were scratchpad; the method is in this block.*
 
 ### Step 3 — coexistence probe at the dummy sites
 
@@ -153,7 +182,24 @@ Read the live bytes at `0x404C0F`, `0x404C13` and `0x404C4E` on the reference in
 there. **Verification:** the patch table's declared original bytes for the two detour sites match the real
 install, or the coexistence rule for them is written down (defer, or overlay as 004 does for FLA).
 
-*Measured: —*
+*Measured 2026-08-19 — FLA owns both sites, exactly as it owns the building ones; step 3 closed.* The four
+sites went into the catalogue (`ipldef-dummy-range`) and the SDK's `VerifyAllSites` now prints the LIVE bytes
+of a differing site (`Log::KeyBytes`), so the probe is the debug build's own verification block:
+
+```
+RemoveIpl.dummyRange     0x00404c0f  live  e9 94 12 ec 01 bf 4b 28   ; FLA jmp → 0x022C5EA8, spans BOTH reads
+RemoveIpl.lastDummy.loop 0x00404c4e  live  e9 66 12 ec               ; FLA jmp → 0x022C5EB9, spans movsx+inc edi
+RemoveIpl.cont.404C17    pristine
+RemoveIpl.cont.404C53    pristine
+```
+
+- *FLA's 5-byte jmp at `0x404C0F` covers the same 5 bytes ours will (both reads' 8 bytes minus the orphan
+  `bf 4b 28`), so its handler must already return to `0x404C17`; its jmp at `0x404C4E` eats `inc edi`, so
+  its handler re-runs the inc — identical shape to our planned detours. Rule: **overlay, as 004** — verify
+  the two continuations (pristine), force our jmps over FLA's. OLA is stock here (it was stock on the
+  building sites too).*
+- *FLA's hooks were live in every field capture that leaked — so whatever its `0x022C5Exx` handlers do,
+  they do not free the over-int16 dummies; overlaying them is not a regression.*
 
 ### Step 4 — the sidecar and the observer
 
@@ -220,6 +266,7 @@ record the value the install actually needs.
 - **`CColAccel`'s cache branch of `SetupRelatedIpls` overwrites a whole `IplDef` from disk** (`def =
   CColAccel::getIplDef(slot)`), dummy range included. If the collision cache is live on this install, a
   slot's range can arrive from a cache file rather than from `IncludeEntity` — which the sidecar would not
-  have seen. Check before trusting step 6's result.
+  have seen. Check before trusting step 6's result. **Retired by step 2 (2026-08-19): nothing on PC sets
+  `isCacheLoading`, and the install has no `models/CINFO.BIN`.**
 - Same standing constraints as 004: SA 1.0 US only, fixed image base, byte-verified sites, coexistence with
   OLA and FLA.

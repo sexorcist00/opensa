@@ -134,7 +134,20 @@ truncation as `mov word ptr [ecx+0x22], dx` (`66 89 51 22`) — writing only the
   [`docs/open-issues/sa-load-game-crash-dummy-pool.md`](../../../docs/open-issues/sa-load-game-crash-dummy-pool.md).
   **The dummy pass reads its bounds at three sites, mirroring the building pass site for site** — `0x404C0F`
   (`movswl 0x26(%ebx),%edi`, firstDummy), `0x404C13` (`movswl 0x28(%ebx),%ecx`, lastDummy) and `0x404C4E`
-  (`movswl 0x28(%ebx),%eax`, the loop back-edge re-read, which is the one the building work nearly missed) — though the first two are ADJACENT, so ONE detour covers them. Planned in [plans/011](plans/011-ipldef-dummy-range.md).
+  (`movswl 0x28(%ebx),%eax`, the loop back-edge re-read, which is the one the building work nearly missed) — though the first two are ADJACENT, so ONE detour covers them. Being built in [plans/011](plans/011-ipldef-dummy-range.md)
+  (catalogue entry `ipldef-dummy-range`: `0x404C0F` 8 bytes `0f bf 7b 26 0f bf 4b 28`, `0x404C4E` `0f bf 43 28`,
+  continuations `0x404C17` `3b f9 7f 3f` and `0x404C53` `83 c5 38`). **Completeness (011 step 2, 2026-08-19): the
+  exe scan and a gta-reversed grep agree** — IplDef's `+0x26/+0x28` are READ only at those three sites and
+  WRITTEN only by `IncludeEntity`'s body (`0x15637CA/D6`) and two constructors/initialisers (`0x156C494–4BA`,
+  `0x15632CF–DB`, the `0x7FFF/0x8000` constants). `CColAccel::get/setIplDef` copy the struct whole (`rep movsl`)
+  and only under `isCacheLoading`, which nothing sets on PC (no `models/CINFO.BIN` on the install). **Both
+  `RemoveIpl` loops are INCLUSIVE** (`jg` skip, `jle` back-edge) — 004 feeds the max id and works, 011 does the same.
+  **Coexistence (011 step 3, 2026-08-19, live bytes):** FLA jmp-hooks the dummy sites exactly as it does the
+  building ones — `0x404C0F` = `e9 94 12 ec 01` (→ `0x022C5EA8`; its 5-byte jmp spans BOTH adjacent reads,
+  leaving `bf 4b 28`), `0x404C4E` = `e9 66 12 ec 01` (→ `0x022C5EB9`; spans the movsx AND `inc edi`, so its
+  handler re-runs the inc too). Continuations `0x404C17` / `0x404C53` pristine. Same overlay rule as 004.
+  Note FLA's hooks are LIVE in every field capture that leaked — whatever its handlers do, they do not free
+  the over-int16 dummies.
 - **Coexistence:** OLA leaves the read sites stock (detours apply cleanly). **FLA jmp-hooks all three read sites**
   (5-byte `e9` jmps → its own ~0x22C49xx handlers) but NOT the entries — so we verify the entries + the detour
   continuations (0x404B54/63/BAD) and FORCE the detours over FLA's jmps, overlaying FLA's incomplete int16 patch

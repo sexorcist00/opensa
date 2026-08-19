@@ -27,6 +27,8 @@ inline uint32_t VerifyAllSites(Log& log, const Plugin& plugin) {
     log.KeyHex("  address ", site.address);
     if (ok) {
       ++pristine;
+    } else {
+      log.KeyBytes("  live    ", reinterpret_cast<const uint8_t*>(Runtime(site.address)), site.length);
     }
   }
   return pristine;

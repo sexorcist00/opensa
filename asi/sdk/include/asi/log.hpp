@@ -64,6 +64,21 @@ class Log {
     Line(hex);
   }
 
+  // "<key>xx xx xx …" on its own line — the LIVE bytes at a site, so a coexistence probe reads what an
+  // adjuster left there instead of just "differs".
+  void KeyBytes(const char* key, const uint8_t* bytes, uint32_t length) {
+    const char* digits = "0123456789abcdef";
+    Write(key);
+    char pair[4] = {' ', ' ', ' ', '\0'};
+    for (uint32_t i = 0; i < length; ++i) {
+      pair[0] = digits[bytes[i] >> 4];
+      pair[1] = digits[bytes[i] & 0xF];
+      pair[2] = (i + 1 < length) ? ' ' : '\0';
+      Write(pair);
+    }
+    Line("");
+  }
+
   void Close() {
     if (file_ != INVALID_HANDLE_VALUE) {
       CloseHandle(file_);
