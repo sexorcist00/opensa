@@ -94,7 +94,36 @@ int16 `firstDummy/lastDummy` are negative or clamped while the true range is not
 lines exist. If they do NOT, the truncation is not what strands the dummies and steps 4–5 would fix
 nothing — stop here and re-open the diagnosis (see Risks).
 
-*Measured: —*
+*Measured 2026-08-19, debug build `built Aug 19 2026 11:02:43 (APPLY)`, real install (CrossOver bottle),
+FLA + OLA loaded, `Dummys = 100000`, NEW GAME → world → LOAD GAME → world. **The gate PASSES** — the
+log (kept in full as `assets/011-step1-field-log-2026-08-19.log`) carries both expected signatures:*
+
+```
+[dbg] incDUMMY slot/id 35 32768 0          ; first dummy past int16, 24 of them logged in slot 35
+[dbg] rmvDUMMY slot/i16dFirst/obsFirst 35 9640 32736
+[dbg] rmvDUMMY slot/i16dLast/obsLast  35 -32718 32818   ; engine int16 last WRAPPED, true last 32 818
+[dbg] rmvDUMMY slot/i16dLast/obsLast  37 -32499 33037
+[dbg] rmvDUMMY slot/i16dLast/obsLast  50 -31474 34062   ; every slot from 35 to 50 (the 40-line cap ended it)
+[dbg] dummyPEAK slot/id/prevPeak 118 40960 40959         ; pool high-water after entry 1
+[dbg] dummyPEAK slot/id/prevPeak 129 98304 98303         ; after entry 2 — 98 % of a 100 000 pool
+```
+
+- *From slot 35 on, `lastDummy` is negative while `firstDummy` is positive → `cmpl; jg` at `0x404C17`
+  sees an empty range and the whole dummy pass is SKIPPED for the slot — nothing of it is ever deleted.
+  That is the stranding, and it begins the moment the pool crosses 32 767, which it does on the FIRST
+  entry (`dummyPEAK 32768` is logged from slot 35 before any LOAD GAME).*
+- *The pool's high-water mark went 40 960 → 98 304 between the two entries, which is the leak the crash
+  forensics measured from the other side (3rd load at 50 000, 6th at 100 000).*
+- *Collateral observation for step 2: the engine's int16 `firstDummy` (and `firstBuilding`) is STALE,
+  not truncated — slot 5 reads `8210` where this load's true first is `31065`, and the same holds for
+  buildings (`16520` vs `99368`). The engine does not reset the pair on unload, so a slot loaded and
+  unloaded once (below int16) keeps its old low `first` forever; a fresh slot reads `32767`/`0x7FFF`
+  (slots 2, 3). Harmless to the loop (it walks extra ids and filters by IPL index) and irrelevant to the
+  fix (we snapshot OUR range), but it means a writer other than the one we hook is NOT implied by a
+  `first` that disagrees with ours — classify the `+0x26/+0x28` writes in step 2 with that in mind.*
+- *Instrument: the `PM_INT16_LOG` diagnostic was widened for this step (own cap for `incDUMMY`, a
+  diagnostic-only int32 dummy range per slot compared against the engine's int16 pair at `RemoveIpl`,
+  and the `dummyPEAK` high-water trace) — `src/patches/int16.hpp`, nothing outside `#if PM_INT16_LOG`.*
 
 ### Step 2 — the completeness scan for `+0x26` / `+0x28`
 

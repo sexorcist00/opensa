@@ -145,6 +145,16 @@ which makes 004b mandatory rather than one option among several.
 world entries per boot. 400 000 is about 23 entries and costs ~22 MB (`sizeof(CDummyObject)` is 56, read off
 the `pushl $0x38` at `0x5380E1`). It postpones; nothing more.
 
+## Confirmed from the inside — 2026-08-19, perfect-map 011 step 1
+
+The forensics above inferred the int16 truncation from the crash dump and the load arithmetic. The
+`PM_INT16_LOG` debug build of `perfect-map.asi` then watched it happen (plan
+[011](../../asi/perfect-map/docs/plans/011-ipldef-dummy-range.md), step 1 — the measured block carries the
+lines): from IPL slot 35 on, the engine's `IplDef.lastDummy` reads negative (`-32718` for a true last of
+`32818`) while `firstDummy` stays positive, so `RemoveIpl`'s `cmpl; jg` sees an empty range and skips the
+slot's dummy pass entirely. The pool crosses 32 767 on the FIRST world entry, and its high-water mark went
+40 960 → 98 304 across two entries at `Dummys = 100000`. The cause is settled; 011 is the fix.
+
 ## What would actually fix it, in order of honesty
 
 1. **004b — extend the existing int32 sidecar to `firstDummy`/`lastDummy`.** The catalogue already says

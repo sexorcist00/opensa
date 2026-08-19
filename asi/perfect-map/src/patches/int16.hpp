@@ -25,6 +25,15 @@ namespace pm::patches {
 inline int gDbgInc = 0;
 inline int gDbgRmv = 0;
 
+// 011 step 1 (the gate): observe the DUMMY pool range the same way the building fix does, but into a
+// diagnostic-only sidecar — nothing reads it but the log. `gDbgIncDummy` is a separate cap so the building
+// lines cannot starve the dummy ones; `gDbgDummyPeak` traces the pool's high-water mark per 8 192 ids, which
+// is the leak curve across world entries.
+inline int gDbgIncDummy = 0;
+inline int gDbgRmvDummy = 0;
+inline int32_t gDbgDummyPeak = 0;
+constexpr uintptr_t kDbgDummyPool = 0xB744A0;  // *(CPool<CDummy>**)
+
 // The runtime hooks fire long after OnAttach closed its Log, so they trace through the SDK's reopen-append
 // logger. Diagnostic builds only (PM_INT16_LOG), never the hot path.
 inline void DbgAppend(const char* label, int32_t a, int32_t b, int32_t c) {
@@ -41,6 +50,11 @@ constexpr uint32_t kSizeofIplDef = 0x34;
 // int32 sidecar for the building range (replaces the truncating int16 IplDef.firstBuilding/lastBuilding).
 inline int32_t gFirstBuilding[kMaxIpl];
 inline int32_t gLastBuilding[kMaxIpl];
+
+#if PM_INT16_LOG
+inline int32_t gDbgFirstDummy[kMaxIpl];
+inline int32_t gDbgLastDummy[kMaxIpl];
+#endif
 
 // The RemoveIpl snapshot (taken at its entry, before the bound-read detours run). RemoveIpl is non-reentrant, so
 // a single pair suffices. The detours read THESE, not gFirst/gLastBuilding — because the entry hook resets the
@@ -63,13 +77,29 @@ inline void PmIncludeObserver(int slot, void* entity) {
   }
   const uint8_t type = *reinterpret_cast<uint8_t*>(reinterpret_cast<uintptr_t>(entity) + 0x36) & 7;
 #if PM_INT16_LOG
-  // Diagnostic: does the DUMMY pool (type 5) also overflow int16? (dummies aren't fixed yet — 004b.)
-  if (type == 5 && gDbgInc < 24) {
-    const uintptr_t db = *reinterpret_cast<uintptr_t*>(*reinterpret_cast<uintptr_t*>(0xB744A0));
+  // Diagnostic: does the DUMMY pool (type 5) also overflow int16? (dummies aren't fixed yet — 011/004b.)
+  if (type == 5) {
+    const uintptr_t db = *reinterpret_cast<uintptr_t*>(*reinterpret_cast<uintptr_t*>(kDbgDummyPool));
     const int32_t did = static_cast<int32_t>((reinterpret_cast<uintptr_t>(entity) - db) / kSizeofBuilding);
-    if (did > 32767) {
-      ++gDbgInc;
+    if (gDbgFirstDummy[slot] == 0 && gDbgLastDummy[slot] == 0) {
+      gDbgFirstDummy[slot] = 0x7FFFFFFF;  // zero-initialised static → first touch opens the range
+      gDbgLastDummy[slot] = static_cast<int32_t>(0x80000000);
+    }
+    if (did < gDbgFirstDummy[slot]) {
+      gDbgFirstDummy[slot] = did;
+    }
+    if (did > gDbgLastDummy[slot]) {
+      gDbgLastDummy[slot] = did;
+    }
+    if (did > 32767 && gDbgIncDummy < 24) {
+      ++gDbgIncDummy;
       DbgAppend("[dbg] incDUMMY slot/id", slot, did, 0);
+    }
+    if (did / 8192 > gDbgDummyPeak / 8192) {
+      DbgAppend("[dbg] dummyPEAK slot/id/prevPeak", slot, did, gDbgDummyPeak);
+    }
+    if (did > gDbgDummyPeak) {
+      gDbgDummyPeak = did;
     }
   }
 #endif
@@ -114,6 +144,25 @@ inline void PmRemoveIplSnapshot(int slot) {
       DbgAppend("[dbg] rmvFIX slot/i16bFirst/snapFirst", slot, bf, gSnapFirst);
       DbgAppend("[dbg] rmvFIX slot/i16bLast/snapLast", slot, bl, gSnapLast);
     }
+  }
+  // 011 step 1: the engine's int16 dummy pair (+0x26/+0x28) against the range we actually saw IncludeEntity
+  // place. A negative/clamped i16 beside an honest int32 is the stranding: RemoveIpl walks the wrong range.
+  {
+    const int32_t of = gDbgFirstDummy[slot];
+    const int32_t ol = gDbgLastDummy[slot];
+    const bool touched = !(of == 0 && ol == 0);
+    if (touched && gDbgRmvDummy < 40) {
+      const uintptr_t ipldef = IplDefPtr(slot);
+      const int32_t df = *reinterpret_cast<int16_t*>(ipldef + 0x26);
+      const int32_t dl = *reinterpret_cast<int16_t*>(ipldef + 0x28);
+      if (of > 32767 || ol > 32767 || df < 0 || dl < 0 || df != of || dl != ol) {
+        ++gDbgRmvDummy;
+        DbgAppend("[dbg] rmvDUMMY slot/i16dFirst/obsFirst", slot, df, of);
+        DbgAppend("[dbg] rmvDUMMY slot/i16dLast/obsLast", slot, dl, ol);
+      }
+    }
+    gDbgFirstDummy[slot] = 0;
+    gDbgLastDummy[slot] = 0;
   }
 #endif
   gFirstBuilding[slot] = 0x7FFFFFFF;
