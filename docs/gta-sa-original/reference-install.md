@@ -77,8 +77,8 @@ Our own log records the whole picture in six lines:
 | `gpLoadedBuildings` per-file buffer | 4 096 rows | **`EntitiesPerIpl = unlimited`** (running a 9 627-row file) | OLA |
 | `IplEntityIndexArrays` | 40 slots | **NOT LIFTED — `EntityIpl = unlimited` is set and does not work** | nothing |
 | `CPool<CBuilding>` | 13 000 | **`Buildings = 150000`** (raised 2026-08-10 for the clutter layer) | OLA |
-| `CPool<CDummy>` | 2 500 | **`Dummys = 100000`** (raised from 50 000 in the field 2026-08-19 — the build places 17 644 permanent dummies against stock's 59, and the pool was exhausted on the third world entry) | OLA |
-| `IplDef.firstDummy/lastDummy` — the dummy range `RemoveIpl` frees by | int16, **32 767** | **NOT LIFTED** — `perfect-map.asi` lifts only the BUILDING pair, so any dummy past pool index 32 767 is never released ([open issue](../open-issues/sa-load-game-crash-dummy-pool.md), 004b) | nothing |
+| `CPool<CDummy>` | 2 500 | **`Dummys = 100000`** (raised from 50 000 in the field 2026-08-19 when the pool was exhausted on the third world entry; KEPT after perfect-map 011 fixed the leak — the FIRST entry alone peaks in [40 960, 49 151] on this build against 33 043 map rows, 40 000 crashes during it, and the pool costs 56 B × 100 000 = 5.6 MB) | OLA |
+| `IplDef.firstDummy/lastDummy` — the dummy range `RemoveIpl` frees by | int16, **32 767** | **LIFTED 2026-08-19** by `perfect-map.asi` ([plan 011](../../asi/perfect-map/docs/plans/011-ipldef-dummy-range.md)); field: the dummy pool's high-water freezes after the first world entry ([fixed issue](../open-issues/fixed/sa-load-game-crash-dummy-pool.md)) | perfect-map.asi |
 | Streaming object instances | — | `StreamingObjectInstancesList = 30000` | OLA |
 | `CStreaming::ms_files` — registered IMG archives | **8** (3 hardcoded + 5 from `gta.dat`) | **NOT LIFTED; 6 in use, 2 free** | nothing here — see below |
 

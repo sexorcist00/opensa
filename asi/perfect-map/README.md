@@ -51,6 +51,6 @@ not re-derive a repro; brackets from that tool are the acceptance test for the l
 
 RE catalogue (001), toolchain + loading ASI (002), patch framework (003), and **fix #1 (004, the int16 ceiling)
 are DONE and confirmed in-game** — `make APPLY=1` → `perfect-map.asi` removes the ghost-barriers bug on the 33k
-repro with **both FLA and OLA** loaded (the chain's standing goal met). Next: fixes #2/#3 array relocations (004b),
+repro with **both FLA and OLA** loaded (the chain's standing goal met). **The dummy half ([011](./docs/plans/011-ipldef-dummy-range.md)) shipped 2026-08-19** — the LOAD GAME crash at `0x00538103` is gone, the dummy pool's high-water freezes after the first world entry. Next: fixes #2/#3 array relocations (004b),
 the Wine test ladder (005), and pipeline integration (006). See
 [004](./docs/plans/004-limit-patches.md) + [patch-catalogue.md](./docs/patch-catalogue.md) (#1).

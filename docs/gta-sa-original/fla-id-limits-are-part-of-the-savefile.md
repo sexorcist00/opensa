@@ -43,7 +43,7 @@ That matters for diagnosis in both directions:
   reports taken across such a change are not comparable.
 - **It was NOT the cause of the 2026-08-19 load-game crash**, which is worth saying because it was the
   first suspect: the same save loaded once and crashed the second time, which no format mismatch explains
-  ([open issue](../open-issues/sa-load-game-crash-dummy-pool.md)). The fact above stands on its own.
+  ([open issue](../open-issues/fixed/sa-load-game-crash-dummy-pool.md)). The fact above stands on its own.
 - A field session that must keep its saves has to keep the ini fixed, or re-make the saves after the change.
 - The build ships that ini (the tree root), so a delivery changes the schema on the player's machine — the
   same delivery path that reverted the pools in session 26

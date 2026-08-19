@@ -63,12 +63,14 @@ runtime, but the converter guards stand for any build not running that ASI.
   `checkEntityPoolBudgets`, which reads `Buildings`/`Dummys` off the OLA ini the build ships and gates on
   the PERMANENT half only — the streamed rows are never all resident (stock's hold 25 624 building rows
   against its 13 000 pool and the game runs).
-- **Dummies are NOT released between world entries**, so `Dummys` buys `floor(pool / permanent dummies)`
-  world loads per boot rather than headroom: 50 000 died on the third LOAD GAME, 100 000 on the sixth, both
-  field-measured. The cause is ours — `IplDef.firstDummy/lastDummy` are int16 and `perfect-map.asi` lifts
-  only the building pair ([open issue](../open-issues/sa-load-game-crash-dummy-pool.md), fix planned as
-  [perfect-map 011](../../asi/perfect-map/docs/plans/011-ipldef-dummy-range.md)). **The pool cannot be kept
-  inside int16 either**: `Dummys = 32767` does not boot.
+- **`Dummys` must cover the FIRST world entry's peak, and that peak is not derivable from the rows.** On
+  this build the first entry occupies [40 960, 49 151] dummy slots (perfect-map 011 trace, 2026-08-19)
+  against 33 043 rows in the whole map — the boot places more dummies than the map has rows — so
+  `Dummys = 40000` crashes at `0x00538103` during the first entry although the pmb guard (permanent rows,
+  17 644) passes it. `Dummys = 32767` does not boot at all. Kept at 100 000 (5.6 MB). The per-entry LEAK
+  that used to sit on top of this (the int16 `IplDef.firstDummy/lastDummy`) is LIFTED by
+  [perfect-map 011](../../asi/perfect-map/docs/plans/011-ipldef-dummy-range.md) —
+  [fixed issue](../open-issues/fixed/sa-load-game-crash-dummy-pool.md).
 - **IDE id cannot be defined twice.** A baked IDE that redefines a stock id must strip the older definition
   everywhere — duplicate model-info ids corrupt SA's heap during data load.
 - **IPL row order is data.** Binary IPL streams reference text rows by index (`lod` columns); removals

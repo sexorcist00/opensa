@@ -10,7 +10,7 @@ and on 004's shipped building fix, whose machinery this extends rather than dupl
 
 ## Context — what the field proved
 
-Full forensics: [`docs/open-issues/sa-load-game-crash-dummy-pool.md`](../../../../docs/open-issues/sa-load-game-crash-dummy-pool.md).
+Full forensics: [`docs/open-issues/fixed/sa-load-game-crash-dummy-pool.md`](../../../../docs/open-issues/fixed/sa-load-game-crash-dummy-pool.md).
 The short of it:
 
 - The game crashes at `0x00538103` — `CFileLoader::LoadObjectInstance` takes null from the `CPool<CDummy>`
@@ -244,7 +244,32 @@ The oracle needs no synthetic build: the failure is already deterministic and qu
 **Verification:** all three. Then, and only then, drop the `Dummys` stopgap back to something sane and
 record the value the install actually needs.
 
-*Measured: —*
+*Measured 2026-08-19, debug build `built Aug 19 2026 11:23:00 (APPLY)`, FLA + OLA, bottle. Logs in
+`assets/011-step6-*`.*
+
+1. *`Dummys = 100000`, NEW GAME + 7 LOAD GAME = **8 entries, no crash**. `int16 APPLIED (dummies)` logged.
+   `dummyPEAK` (the pool's high-water, logged per 8 192-id boundary): 8 192 → 29 695 → 32 768 → **40 960
+   during the first entry, and not one more line across the other seven.** Before the fix the same trace
+   went 40 960 → 98 304 in TWO entries. The leak is gone.*
+2. *`Dummys = 40000` — the step as written was WRONG: it crashed at `0x00538103` (`EDX = 0x9C40`) **during
+   the first entry**, the log ending at `dummyPEAK 32768`. So the first entry alone occupies more than
+   40 000 slots — the plan's "under two permanent sets" assumed the first entry costs ~17 644, and it costs
+   2.3× that. Re-run at **`Dummys = 50000`** (the value that died on the 3rd LOAD GAME before the fix):
+   NEW GAME + 4 LOAD GAME = **5 entries, no crash**, `dummyPEAK` again frozen at 40 960 after entry 1.*
+3. *Regression: building half unchanged (`int16 APPLIED (buildings)` on every boot) — ghost-barriers field
+   check and a stock boot: his call, pending at the time of writing.*
+
+*What the 40 000 crash measured, and what it means for the pool value:* `CPool::Delete` rewinds the
+cursor (`m_LastFreeSlot = min(cursor, idx)`), so SA allocates lowest-free-slot-first and the high-water IS
+the peak occupancy. The first entry's peak lies in **[40 960, 49 151]** (the trace's granularity) against
+**33 043 rows in the whole map** (17 644 permanent + 15 399 streamed) — the boot occupies more dummies than
+the map has rows, i.e. the permanent set is placed more than once during boot (the Risks entry, now
+measured though not pinned). Two consequences: (a) the pmb guard's permanent-only gate (17 644) would NOT
+have caught `Dummys = 40000` — the first-entry peak is not derivable from rows; (b) 50 000 holds with a
+margin somewhere between 2 % and 22 %, which is not a margin to ship on. **`Dummys` stays at 100 000** —
+a `CDummy` is 0x38 = 56 B, so the whole pool is 5.6 MB, and the value is already in `mods-src` and the
+reference-install docs. The stopgap became the value; what changed is that it is now headroom, not a
+per-boot entry budget.
 
 ### Step 7 — record and retire
 
@@ -253,6 +278,12 @@ record the value the install actually needs.
 - Update `docs/restrictions/sa-target.md` — the `IplDef.firstDummy/lastDummy` row changes from **NOT
   LIFTED** to lifted, and the `CPool<CDummy>` row gets the value the install ends on.
 - Numbers into `docs/benchmarks/tools/` if the fix moves any measurable cost.
+
+*Done 2026-08-19: the open issue moved to `docs/open-issues/fixed/`, the catalogue row reads shipped,
+`docs/restrictions/sa-target.md` / `docs/gta-sa-original/reference-install.md` / `docs/edge-cases/
+sa-runtime-limits.md` say LIFTED, the pmb guard's "NOT released between world entries" warning is retired
+(the guard itself stays — it gates the permanent rows, and the first-entry-peak finding above is recorded
+beside it). No benchmark: the fix adds two detours on an unload path and nothing measurable to a frame.*
 
 ## Verification (acceptance for the whole plan)
 

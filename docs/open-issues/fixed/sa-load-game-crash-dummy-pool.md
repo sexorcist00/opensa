@@ -1,5 +1,14 @@
 # Crash on LOAD GAME: the dummy pool fills up and `RemoveIpl` cannot empty it
 
+> **FIXED 2026-08-19** — `perfect-map.asi` [plan 011](../../../asi/perfect-map/docs/plans/011-ipldef-dummy-range.md)
+> lifted the int16 `IplDef.firstDummy/lastDummy` pair the way 004 lifted the building pair (int32 sidecar, two
+> detours over `RemoveIpl`'s dummy pass, overlaid on FLA's jmps). Field ladder: 8 world entries at
+> `Dummys = 100000` (the 6th used to die) and 5 at 50 000 (the 3rd used to die), the pool's high-water frozen at
+> the first entry's 40 960 instead of climbing 17 644 per entry. What the ladder ALSO measured: the first entry
+> alone occupies [40 960, 49 151] slots against 33 043 map rows — `Dummys = 40000` crashes during it — so the
+> value stays 100 000 and the pmb guard's permanent-only gate is known not to see that peak
+> (`docs/restrictions/sa-target.md`). The forensics below are kept as written.
+
 **Field 2026-08-19.** Symptom: the game boots and plays fine; loading a save works; loading a **second**
 time crashes. Cause found the same day, and the field's own workaround confirms it. **Not fixed** — the
 workaround moves the wall, it does not remove it.

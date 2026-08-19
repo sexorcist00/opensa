@@ -10,7 +10,7 @@
  * against `CPool<CBuilding>` and priced `CPool<CDummy>` not at all, so a build placing 17 539 dummies
  * against `Dummys = 50000` reported nothing — and the game died on the third LOAD GAME, at `0x00538103`,
  * with the pool allocator returning null into code that does not check it
- * ([write-up](../../../docs/open-issues/sa-load-game-crash-dummy-pool.md)). Same shape as the FLA pools a
+ * ([write-up](../../../docs/open-issues/fixed/sa-load-game-crash-dummy-pool.md)). Same shape as the FLA pools a
  * day earlier: a guard number that is not the number the install will actually run is silent by
  * construction, so the ceilings here are read off the adjuster ini THIS BUILD SHIPS.
  */
@@ -77,17 +77,11 @@ export function checkEntityPoolBudgets(gameDir: string): EntityPoolSpend {
     );
   }
 
-  const perEntry = spend.permanent.dummies;
-  const dummyPool = pools.Dummys ?? ENTITY_POOL_BUDGETS[1].stock;
-  if (perEntry > 0 && dummyPool !== Infinity) {
-    console.warn(
-      `  ! CPool<CDummy> is NOT released between world entries (docs/open-issues/sa-load-game-crash-dummy-pool.md): ` +
-        `${perEntry} permanent dummies per entry against Dummys = ${dummyPool} holds ` +
-        `${Math.floor(dummyPool / perEntry)} entries per boot, and the next one crashes at 0x00538103. ` +
-        'Retired by perfect-map plan 011.',
-    );
-  }
-
+  // The per-entry leak this once warned about (CPool<CDummy> never released between world entries) was
+  // lifted by perfect-map plan 011 on 2026-08-19. What this gate still cannot see: the FIRST entry's peak
+  // occupancy is not derivable from the rows — measured [40 960, 49 151] against 33 043 map rows, so
+  // `Dummys = 40000` passes the permanent gate and crashes during the first entry
+  // (docs/restrictions/sa-target.md, the IplDef dummy row). Keep the shipped ini at 100 000.
   return spend;
 }
 
