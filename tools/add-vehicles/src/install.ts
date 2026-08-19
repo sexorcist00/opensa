@@ -30,7 +30,7 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { type LedgerRow, readAddsLedger, readAddsRows, writeAddsLedger } from './ledger';
-import { clearLooseFiles, installLooseFiles } from './loose-files';
+import { clearLooseFiles, installLooseFiles, readInstalledIds, writeSettingsFile } from './loose-files';
 import { resolveAddedCarText } from './name';
 import { type AddedVehicle, resolveAddedVehicles, stockSlotIds } from './sources';
 import { registerTraffic } from './traffic';
@@ -90,7 +90,7 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
   const ids = allocateIds({
     ledger: promisedIds(gamePath, slots),
     slots,
-    used: usedModelIds(gamePath),
+    used: new Set([...usedModelIds(gamePath), ...readInstalledIds(gamePath).values()]),
   });
 
   // A FULL run rebuilds the folder from the source; a narrowed one writes only its own cars into it.
@@ -113,10 +113,17 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
     installed.push(...installTuning(gamePath, source, parts, ids, runWarnings));
     // No `img`: `applyVehicle` merges the data and carries the `cleo/` folder, and the MODELS are written
     // loose below instead of staged into an archive.
+    // The car's ide and handling rows do NOT go into `data/`: they are written beside its models for Mod
+    // Loader to merge (`loose-files.ts` carries why, and the field verdict that settled it).
     const applied = applyVehicle(source.folder, gamePath, {
       ...(text.name ? { gxt: [text.name] } : {}),
       id,
       partRenames: new Map([...parts.renames].map(([file, entry]) => [stem(file), stem(entry)])),
+      redirectRows: (rows) =>
+        writeSettingsFile(gamePath, source.slot, {
+          ...(rows.handlingLine === undefined ? {} : { handling: rows.handlingLine }),
+          ...(rows.ideLine === undefined ? {} : { ide: rows.ideLine }),
+        }),
       target: 'sa',
     });
     applied.warnings.forEach((warning) => runWarnings.push(`${source.name}: ${warning}`));
@@ -136,7 +143,9 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
     mergeFeatureTable(gamePath, declared);
     runWarnings.push(...writeModelSpecialFeatures(gamePath, declared, new Set(declared.keys())).warnings);
   }
-  assertCarmodsModels(gamePath);
+  // The added cars' own names are declared beside their models now, not in a `data/*.ide` the guard walks —
+  // so they are handed to it explicitly, or every added car's carmods line would read as an unknown token.
+  assertCarmodsModels(gamePath, new Set(sources.map((source) => source.slot)));
   // The two fixed-size arrays behind carmods.dat. Refuses NAMING `asi/perfect-vehicle`, which is the plugin
   // that lifts them — every added car re-modelling its base's wings costs one of the seven spare link pairs.
   assertCarmodsCeilings(gamePath);
@@ -171,7 +180,8 @@ function allModelIds(gameDir: string): Map<string, number> {
  * and the ledger would then promise an id nothing in the tree defines.
  */
 function assertIdsLanded(gamePath: string, installed: readonly LedgerRow[]): void {
-  const names = ideModelNames(gamePath);
+  // A car's row is in its settings file beside the models; a PART's is in `veh_mods.ide` under `data/`.
+  const names = new Map([...ideModelNames(gamePath), ...readInstalledIds(gamePath)]);
   const wrong = installed.filter((row) => names.get(row.slot) !== row.id);
   if (wrong.length > 0) {
     throw new Error(
@@ -262,7 +272,7 @@ function installTuning(
  * the one thing the ledger exists to prevent.
  */
 function promisedIds(gameDir: string, slots: readonly string[]): Map<string, number> {
-  const names = ideModelNames(gameDir);
+  const names = new Map([...ideModelNames(gameDir), ...readInstalledIds(gameDir)]);
   const promised = new Map<string, number>();
   for (const slot of slots) {
     const id = names.get(slot.toLowerCase());

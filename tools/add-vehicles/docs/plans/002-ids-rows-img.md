@@ -70,6 +70,14 @@ archive family goes back to two members. What it costs is stated in that file: a
 streaming id, and `checkImgIdBudgets` counts archive entries, so the FLA TXD pool is under-counted by what
 lands there (161 against 662 free).
 
+**And the rows moved out of `data/` the same evening, after the first field run.** Baked into
+`data/vehicles.ide` + `data/handling.cfg`, the 115 added cars killed the game before a window appeared — no
+crash dump, because FLA was putting up a message box and exiting. The rows now go beside the models as
+`modloader/added-vehicles/<slot>.settings.txt`, which Mod Loader's `std.data` merges by matching data lines
+out of a text file (documented for `cars`, `peds` and `objs` parts). Field-proven: the fleet loads and a
+parked added car appears. The bisect that got there cost seven launches and is worth reading once —
+`docs/audit/session-29-*.md`, "the evening the cars would not load".
+
 **Two real defects fell out of the idempotency check, and neither was ours to expect:**
 
 1. **`handling.cfg` refused a digit-leading id.** `parseHandling` (and `mergeHandling`, and `stripHandling`)

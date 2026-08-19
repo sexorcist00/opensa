@@ -152,8 +152,12 @@ export function applyTuningParts(folderPath: string, entries: readonly string[],
 /**
  * Refuse a tree whose `carmods.dat` names a model no IDE row defines — the real game crashes on it at boot
  * (see the header). Called after every install/rebake, so the failure names the line instead of an address.
+ *
+ * `alsoDeclared` is for models the game learns about from somewhere this walk cannot see: an ADDED car's
+ * `cars` row lives beside its models for Mod Loader to merge, not in a `data/*.ide`
+ * (`tools/add-vehicles/src/loose-files.ts`), and without this it would read as an unknown token.
  */
-export function assertCarmodsModels(gameDir: string): void {
+export function assertCarmodsModels(gameDir: string, alsoDeclared: ReadonlySet<string> = new Set()): void {
   const path = join(gameDir, 'data', 'carmods.dat');
   // No `veh_mods.ide` = not a bootable game tree (gta.dat loads it; every upgrade part lives there) — a data
   // fixture of the four vehicle files, where the check would fail every token for the wrong reason.
@@ -162,6 +166,7 @@ export function assertCarmodsModels(gameDir: string): void {
   }
   const names = ideModelNames(gameDir);
   const missing: string[] = [];
+  const declared = (token: string): boolean => names.has(token) || alsoDeclared.has(token);
   let section = '';
   for (const [index, raw] of readFileSync(path, 'latin1').split(/\r?\n/).entries()) {
     const line = raw.trim();
@@ -184,7 +189,7 @@ export function assertCarmodsModels(gameDir: string): void {
       tokens.shift(); // the wheel-set number
     }
     for (const token of tokens) {
-      if (!names.has(token.toLowerCase())) {
+      if (!declared(token.toLowerCase())) {
         missing.push(`line ${index + 1} (${section}): '${token}' in "${line}"`);
       }
     }

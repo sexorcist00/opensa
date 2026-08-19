@@ -18,7 +18,7 @@
  * exhaust it would need its own count, and this comment is the trail to it.
  */
 import { repairFrameOrder } from '@opensa/vehicle-installer/img-merge';
-import { copyFileSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** The folder modloader imports the added fleet from, inside the built game dir. */
@@ -73,4 +73,61 @@ export function installLooseFiles(
   }
 
   return { names, repaired };
+}
+
+/** The per-car text file Mod Loader matches the data lines out of. */
+export const SETTINGS_SUFFIX = '.settings.txt';
+
+/**
+ * The ids the tree already carries for added cars, read back out of the settings files beside their models.
+ *
+ * Nothing else can see them: they are not in a `data/*.ide` (that is the whole point), so the id allocator's
+ * "what is already taken" walk and its failed-run recovery would both be blind without this. A run that dies
+ * after writing these files must not hand the same ids to different cars next time.
+ */
+export function readInstalledIds(gameDir: string): Map<string, number> {
+  const dir = join(gameDir, ADDED_VEHICLES_DIR);
+  const ids = new Map<string, number>();
+  if (!existsSync(dir)) {
+    return ids;
+  }
+  for (const name of readdirSync(dir)) {
+    if (!name.toLowerCase().endsWith(SETTINGS_SUFFIX)) {
+      continue;
+    }
+    for (const line of readFileSync(join(dir, name), 'latin1').split(/\r?\n/)) {
+      const row = /^\s*(\d+)\s*,\s*([^,\s]+)/.exec(line);
+      if (row) {
+        ids.set(row[2].toLowerCase(), Number(row[1]));
+        break;
+      }
+    }
+  }
+
+  return ids;
+}
+
+/**
+ * Write one added car's `vehicles.ide` and `handling.cfg` lines BESIDE its models, for Mod Loader's
+ * `std.data` to merge — the shape the field accepted on 2026-08-19.
+ *
+ * **Why not baked into `data/`**: a `cars` row there is read from `default.dat` while the game boots, and
+ * the real install does not survive 115 added ones (it dies before a window appears). The same rows placed
+ * here are merged after, by a plugin whose own documentation lists `cars` among the sections it matches out
+ * of a readme. **And the file may NOT be named after a stock data file** — Mod Loader takes
+ * `vehicles.ide`/`handling.cfg` in a mod folder as a REPLACEMENT, which silently deleted the stock 212 cars
+ * and every stock handling line (`LANDSTAL ... cannot be found`) before this shape was found.
+ */
+export function writeSettingsFile(gameDir: string, slot: string, rows: { handling?: string; ide?: string }): string {
+  const dest = join(gameDir, ADDED_VEHICLES_DIR);
+  mkdirSync(dest, { recursive: true });
+  const path = join(dest, `${slot}${SETTINGS_SUFFIX}`);
+  const lines = [
+    '; added vehicle - data lines matched by Mod Loader std.data (never name this after a stock data file)',
+    ...(rows.ide ? [rows.ide] : []),
+    ...(rows.handling ? [rows.handling] : []),
+  ];
+  writeFileSync(path, `${lines.join('\n')}\n`, 'latin1');
+
+  return path;
 }

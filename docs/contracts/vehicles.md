@@ -257,6 +257,22 @@ The optional per-car files are §1's, read by the same code: `features.txt`, `tu
 belong to later plans of the chain: **`<:id>`** in the settings file's ide line (the allocation placeholder,
 plan 002) and the derived names of its re-modelled tuning parts (plan 005).
 
+**The car's `vehicles.ide` and `handling.cfg` rows go into `modloader/added-vehicles/<slot>.settings.txt`,
+beside its models — NOT into `data/`.** Mod Loader's `std.data` matches data lines by SHAPE out of any text
+file (its own documentation lists `cars`, `peds` and `objs` tuning parts as the sections it reads that way),
+and merges them into the stock files after boot. Baked into `data/vehicles.ide` the same rows are read from
+`default.dat` while the game starts, and the real install does not survive 115 of them — it dies before a
+window appears (field, 2026-08-19).
+
+**The file may never be named after a stock data file.** A `vehicles.ide` or `handling.cfg` inside a mod
+folder is taken by Mod Loader as a REPLACEMENT: naming it that way silently deleted the stock 212 cars, and
+then every stock handling line — the game came up complaining `Handling.cfg identifier name LANDSTAL is
+assigned to vehicle, but cannot be found`. `<slot>.settings.txt` is the name that works, and `.txt` alone is
+not enough: a name Mod Loader knows (`veh_mods.txt`) is a data file, anything else is a "readme" it scans.
+
+**Everything else stays baked** in the built `data/`: `carcols.dat` (the palette is positional), `carmods.dat`,
+`veh_mods.ide`, `shopping.dat`, the audio row, the parked spot, the ModelVariations sections and the `.fxt`.
+
 **The models go LOOSE, not into an archive.** An added car's `.dff`/`.txd` (and its re-modelled tuning
 parts, under their derived names) are written into **`modloader/added-vehicles/`**, where modloader imports
 them by name. The reason is a ceiling: SA registers 8 IMG archives, the built tree already spends six, and

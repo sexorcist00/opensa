@@ -14,7 +14,7 @@ import { resolveVehicleModel } from './model';
 import { applyModelVariations, MODEL_VARIATIONS_EXTRA_FILE } from './model-variations';
 import { addPaletteColors, resolveColorRefs } from './palette';
 import { applyVehicleParked, PARKED_FILE } from './parked';
-import { decodeSettings, ID_PLACEHOLDER, parseVehicleSettings } from './settings';
+import { decodeSettings, ID_PLACEHOLDER, parseVehicleSettings, type VehicleSettings } from './settings';
 import { applyTuningParts, TUNING_PARTS_FILE } from './tuning-parts';
 
 /** The mod's own feature declaration, by the Modloader/IVF name. */
@@ -77,6 +77,16 @@ export interface ApplyVehicleOptions {
    * part of `spl_a_l_b`.
    */
   partRenames?: ReadonlyMap<string, string>;
+  /**
+   * Take the `vehicles.ide` and `handling.cfg` lines INSTEAD of merging them into `data/`.
+   *
+   * An ADDED car's two rows may not be baked: a `cars` row in `data/vehicles.ide` is read from
+   * `default.dat` at boot and the real game does not survive 115 of them, while the same row placed beside
+   * the models is merged by Mod Loader's `std.data` (it matches data lines by SHAPE out of any text file —
+   * `cars`, `peds` and `objs` tuning parts, its own documentation's footnote). Field-proven 2026-08-19;
+   * `tools/add-vehicles` writes what this hands back.
+   */
+  redirectRows?: (rows: { handlingLine?: string; ideLine?: string }) => void;
   /** Archive entry renames for this folder's files — see {@link stageVehicleImg}. */
   renames?: ReadonlyMap<string, string>;
   /**
@@ -136,33 +146,7 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
           (message) => warnings.push(`${settingsFile}: ${message}`),
         );
   if (settings !== undefined) {
-    // Nothing at all recognised is the loud case: the file exists, the mod meant something by it, and the car is
-    // about to run stock data under a mod model.
-    if (Object.keys(settings).length === 0) {
-      warnings.push(`${settingsFile}: nothing recognised — the car keeps STOCK handling/ide/carcols`);
-    }
-    const data = (name: string): string => join(outPath, 'data', name);
-
-    if (settings.ideLine !== undefined) {
-      editFile(data('vehicles.ide'), (text) => mergeIde(text, settings.ideLine!));
-    }
-    if (settings.handlingLine !== undefined) {
-      editFile(data('handling.cfg'), (text) => mergeHandling(text, settings.handlingLine!));
-    }
-    // Palette + carcols both edit carcols.dat: append any custom colours (assigning ids), then merge the carcols
-    // line with its `newN` refs resolved to those ids.
-    if (settings.palette?.length || settings.carcolsLine !== undefined) {
-      editFile(data('carcols.dat'), (text) => {
-        const { idByName, text: withColors } = addPaletteColors(text, settings.palette ?? []);
-
-        return settings.carcolsLine === undefined
-          ? withColors
-          : mergeCarcols(withColors, resolveColorRefs(settings.carcolsLine, idByName));
-      });
-    }
-    if (settings.carmodsLine !== undefined) {
-      editFile(data('carmods.dat'), (text) => mergeCarmods(text, settings.carmodsLine!));
-    }
+    mergeSettings(outPath, settings, options, settingsFile, warnings);
   }
   // The kinds that write OUTSIDE `data/*`, after the settings merge — a `{{name}}` naming this car's own slot,
   // and `parked.txt`'s id lookup, then resolve against the ide row it just wrote. Three of the four speak to
@@ -230,6 +214,57 @@ function handlingId(settings: ReturnType<typeof parseVehicleSettings>, model: st
   const fromHandling = settings.handlingLine?.trim().split(/\s+/)[0];
 
   return (fromIde || fromHandling || model)?.toUpperCase();
+}
+
+/**
+ * Merge one car's four settings blocks into the built `data/*`. Split out of {@link applyVehicle} to keep
+ * that function readable — it is the only caller.
+ *
+ * The ide and handling rows are the pair an ADDED car takes elsewhere (`options.redirectRows`): baked into
+ * `data/vehicles.ide` they are read from `default.dat` while the game boots, and the real install does not
+ * survive 115 of them.
+ */
+function mergeSettings(
+  outPath: string,
+  settings: VehicleSettings,
+  options: ApplyVehicleOptions,
+  settingsFile: string | undefined,
+  warnings: string[],
+): void {
+  // Nothing at all recognised is the loud case: the file exists, the mod meant something by it, and the car is
+  // about to run stock data under a mod model.
+  if (Object.keys(settings).length === 0) {
+    warnings.push(`${settingsFile}: nothing recognised — the car keeps STOCK handling/ide/carcols`);
+  }
+  const data = (name: string): string => join(outPath, 'data', name);
+
+  if (options.redirectRows) {
+    options.redirectRows({
+      ...(settings.handlingLine === undefined ? {} : { handlingLine: settings.handlingLine }),
+      ...(settings.ideLine === undefined ? {} : { ideLine: settings.ideLine }),
+    });
+  } else {
+    if (settings.ideLine !== undefined) {
+      editFile(data('vehicles.ide'), (text) => mergeIde(text, settings.ideLine!));
+    }
+    if (settings.handlingLine !== undefined) {
+      editFile(data('handling.cfg'), (text) => mergeHandling(text, settings.handlingLine!));
+    }
+  }
+  // Palette + carcols both edit carcols.dat: append any custom colours (assigning ids), then merge the carcols
+  // line with its `newN` refs resolved to those ids.
+  if (settings.palette?.length || settings.carcolsLine !== undefined) {
+    editFile(data('carcols.dat'), (text) => {
+      const { idByName, text: withColors } = addPaletteColors(text, settings.palette ?? []);
+
+      return settings.carcolsLine === undefined
+        ? withColors
+        : mergeCarcols(withColors, resolveColorRefs(settings.carcolsLine, idByName));
+    });
+  }
+  if (settings.carmodsLine !== undefined) {
+    editFile(data('carmods.dat'), (text) => mergeCarmods(text, settings.carmodsLine!));
+  }
 }
 
 /** The settings text with every stock part name replaced by the name its re-modelled copy is installed under. */
