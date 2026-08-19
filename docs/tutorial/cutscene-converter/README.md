@@ -57,7 +57,7 @@ The subfolder's own name is up to you. The one rule: no two folders may start wi
 
 ## Installing and running
 
-**1.** Download [cutscene-converter.zip](https://gooddev.org/gta/cutscene-converter.zip) and unpack it.
+**1.** Download [cutscene-converter.zip](https://www.gooddev.org/gta/cutscene-converter/cutscene-converter.zip) and unpack it.
 
 **2.** Run the `.exe` — the app installs nothing and runs as it is.
 
@@ -119,7 +119,7 @@ If a run fails, the converter's own lines stay in the window and say where it st
 
 ## For testers
 
-You do not have to play through the game to see a car in its cutscene. The CLEO script [cutscene-override](https://gooddev.org/gta/cutscene-converter/cutscene-override.zip) plays **any of the game's 148 cutscenes** at its real world site, with the real animations and camera — about 15 seconds per verdict.
+You do not have to play through the game to see a car in its cutscene. The CLEO script [cutscene-override](https://www.gooddev.org/gta/cutscene-converter/cutscene-override.zip) plays **any of the game's 148 cutscenes** at its real world site, with the real animations and camera — about 15 seconds per verdict.
 
 **Setting it up:**
 
