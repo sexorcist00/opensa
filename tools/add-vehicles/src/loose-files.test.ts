@@ -1,9 +1,16 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { ADDED_VEHICLES_DIR, clearLooseFiles, installLooseFiles } from './loose-files';
+import {
+  ADDED_VEHICLES_DIR,
+  clearLooseFiles,
+  installLooseFiles,
+  readInstalledIds,
+  SETTINGS_SUFFIX,
+  writeSettingsFile,
+} from './loose-files';
 
 let root: string;
 let game: string;
@@ -70,6 +77,62 @@ describe('clearLooseFiles', () => {
 
     it('does nothing when there is no folder yet', () => {
       expect(() => clearLooseFiles(game)).not.toThrow();
+    });
+  });
+});
+
+const IDE = '19001, 001veh, 001veh, car, 001VEH, 001VEH, null, poorfamily, 10, 0, 0, -1, 0.63, 0.63, 0';
+const HANDLING = '001VEH 1200.0 2000.0 2.2 0.0 0.15 -0.1 70 0.70 0.86 0.5 4 160.0';
+
+describe('writeSettingsFile', () => {
+  describe('negative cases', () => {
+    it('is never named after a stock data file — Mod Loader would take it as a REPLACEMENT', () => {
+      writeSettingsFile(game, '001veh', { handling: HANDLING, ide: IDE });
+      const written = readdirSync(join(game, ADDED_VEHICLES_DIR));
+
+      expect(written).not.toContain('vehicles.ide');
+      expect(written).not.toContain('handling.cfg');
+      expect(written).toContain(`001veh${SETTINGS_SUFFIX}`);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('writes the ide row and the handling line for Mod Loader to match', () => {
+      const path = writeSettingsFile(game, '001veh', { handling: HANDLING, ide: IDE });
+      const text = readFileSync(path, 'latin1');
+
+      expect(text).toContain(IDE);
+      expect(text).toContain(HANDLING);
+      expect(text.split('\n')[0]).toMatch(/^;/); // a comment line, so the file reads as a readme
+    });
+
+    it('writes what it has when a car ships only one of the two', () => {
+      const text = readFileSync(writeSettingsFile(game, '001veh', { ide: IDE }), 'latin1');
+
+      expect(text).toContain(IDE);
+      expect(text.trimEnd().split('\n')).toHaveLength(2);
+    });
+  });
+});
+
+describe('readInstalledIds', () => {
+  describe('negative cases', () => {
+    it('is empty when nothing has been installed', () => {
+      expect(readInstalledIds(game).size).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reads the ids back — nothing else in the tree can see them', () => {
+      writeSettingsFile(game, '001veh', { handling: HANDLING, ide: IDE });
+
+      expect([...readInstalledIds(game)]).toEqual([['001veh', 19_001]]);
+    });
+
+    it('survives a file with no ide row', () => {
+      writeSettingsFile(game, '002veh', { handling: HANDLING });
+
+      expect(readInstalledIds(game).has('002veh')).toBe(false);
     });
   });
 });

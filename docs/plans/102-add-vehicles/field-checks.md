@@ -14,6 +14,21 @@ before diagnosing anything.
 
 ---
 
+## The field state as of 2026-08-19 evening — read this first
+
+Seven launches went into the road the added cars take, and the result changed the design:
+
+- **PROVEN**: the 115 cars load, drive, and a parked added car appears. Their `vehicles.ide` and
+  `handling.cfg` rows go into `modloader/added-vehicles/<slot>.settings.txt`, not into `data/` — baked there
+  they kill the game before a window appears. Mod Loader merges them by matching data lines by SHAPE
+  ([the facts](../../gta-sa-original/modloader-data-files.md)).
+- **OPEN**: with the TUNING on, the game crashes at the very end of loading —
+  [`docs/open-issues/added-cars-crash-after-loading.md`](../../open-issues/added-cars-crash-after-loading.md).
+  ModelVariations is excluded; the suspect is `CShopping`'s fixed arrays, and the next test is armed in the
+  bottle.
+- **NOT YET SEEN AT ALL**: traffic (ModelVariations), tuned traffic, the shop, the HUD name, the engine
+  sound. Everything below this line still stands, it just has not had its turn.
+
 ## From `vehicle-installer` 012 — trailers and part names (BUILT 2026-08-19)
 
 - [ ] **A truck tows its trailer.** Deliver `modloader/Model_Variations/ModelVariations_Vehicles.ini`.
@@ -40,7 +55,7 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
       Look at: the car whose row was authored starts and revs with the borrowed engine, not its stock one.
       If it fails: FLA's `Enable vehicle audio loader = 1` (on in the reference install), and the row's
       column count — the installer refuses a wrong one, so a silent miss means the row never merged.
-- [ ] **A `parked.txt` car stands where it says.** Deliver `cleo/Parked Car Maker.ini`. Look at:
+- [x] **A `parked.txt` car stands where it says.** ✔ 2026-08-19 (the vega appeared at its spot) Deliver `cleo/Parked Car Maker.ini`. Look at:
       **after a NEW GAME** (parked cars land in the save, and `Accept any ID for car generator = 1` changes
       the save format), the car is at the authored spot. If it fails: mod 47 present, that FLA setting on.
 - [ ] **The car-generator array is not starved.** Only worth doing once a real number of parked rows
@@ -50,7 +65,7 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
 
 ## From `add-vehicles` (002 BUILT 2026-08-19; 003–007 to come)
 
-- [ ] **The models load AT ALL — they are not in an archive any more.** Deliver
+- [x] **The models load AT ALL — they are not in an archive any more.** ✔ 2026-08-19 Deliver
       `modloader/added-vehicles/` (322 files, 1.4 GB) with the rest. Look at: modloader's log carries
       `Importing model file for index <id> at "modloader\added-vehicles\001veh.dff"` — that line is the
       proof a file reached the game, and it is the FIRST thing to read if a car spawns invisible or as a
@@ -59,12 +74,12 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
 - [ ] **A tuning part loads under its DERIVED name.** Same log, looking for
       `exh_lr_rem1_059veh.dff`. The stock `exh_lr_rem1` must NOT appear from that folder — the whole point
       is that the base car's own part is untouched.
-- [ ] **An added car exists and drives.** Deliver the vehicles archive family (`models/vehicles*.img`),
+- [x] **An added car exists and drives.** ✔ 2026-08-19 Deliver the vehicles archive family (`models/vehicles*.img`),
       `data/{vehicles.ide,handling.cfg,carcols.dat,carmods.dat,gta.dat}` and `data/vehicle-adds.txt`.
       Look at: spawn `19001` (the vega) with a trainer — it appears, it is the right model, and it drives
       with its OWN handling rather than the manana's. If it fails: the handling row is the one that was
       silently dropped before this plan (a digit-leading id), so check `handling.cfg` holds `001VEH`.
-- [ ] **The archive count is back to 8 of 8.** The added cars used to want a ninth archive; they are loose
+- [x] **The archive count is back to 8 of 8.** ✔ 2026-08-19 (the models are loose in modloader) The added cars used to want a ninth archive; they are loose
       now. Look at: the game boots at all (past the eighth archive it crashes at load with no symptom that
       points anywhere useful) — `data/gta.dat` should carry 5 `IMG` lines and `models/` 6 archives.
 - [ ] **An added car has a NAME in the HUD.** Deliver `cleo/*.fxt`. Look at: entering the vega shows
@@ -97,7 +112,7 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
       (`TuningChance=75`, `TuningFullBodykit=1`). Look at: roughly three cars in four wear parts or a paint
       job. Too much or too little is one number in `mods-src/original/add-vehicles/add-vehicles.json` and a
       re-run — no rebuild. If police or emergency cars look wrong tuned, that is the `exclude` list.
-- [ ] **`Vehicle colors = 256` really applies.** Set 2026-08-19 because the palette (145 rows with the
+- [x] **`Vehicle colors`** — NOT NEEDED: tried, reverted, and the install has always run 140 rows without it Set 2026-08-19 because the palette (145 rows with the
       added cars) was over the game's own 128 —
       `docs/gta-sa-original/vehicle-colour-table-128.md`. Deliver `fastman92limitAdjuster_GTASA.ini`.
       Look at: FLA's log names the setting, `Number of memory changes made` is still healthy (3712 was the

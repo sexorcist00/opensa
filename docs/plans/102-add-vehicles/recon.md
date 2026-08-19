@@ -4,10 +4,23 @@
 > the same day it was written. Kept verbatim — the plan chains below it cite its sections.
 
 **Original SA only** (2026-08-19, the user's call). Recon of the user's earlier implementation (a private
-build tool, read once from `NO_COMMIT/1/src` and its shipped output `NO_COMMIT/1/build`; **not reused — we
-write our own**) and of the data it was built for, the mod folder `9. Added Vehicles` (115 cars), which we
-WILL use. This doc answers three questions asked before any plan is written: which plans the new tool
-needs, which plans the existing `vehicle-installer` needs, and what the two share.
+build tool, read once from `NO_COMMIT/1/src` and its output `NO_COMMIT/1/build`; **not reused — we write our
+own**).
+
+> **`NO_COMMIT/1/build` IS NOT A WORKING BUILD, and reading it as one cost this chain a whole field evening**
+> (2026-08-19). It has **no `modloader.log`**, so it was never launched; its `data/vehicles.ide` and
+> `data/handling.cfg` carry **zero** added-car rows, and no second copy of either exists anywhere in it. The
+> added cars in that tree could not have loaded: a model id with no IDE row does not exist to the game.
+> What IS real in it: the regenerated `carmods.dat`, `veh_mods.ide`, `shopping.dat`, the ModelVariations ini,
+> the audio cfg and the Parked Maker ini — those are genuine outputs and were compared against ours
+> byte-for-byte. What is NOT evidence: anything about how the ide/handling rows reached the game. Treat the
+> `*.settings.txt` files in `modloader/Vehicles Added/` as the tool's staging copies, not as a proven road —
+> the road that works was found from Mod Loader's own documentation
+> ([modloader-data-files.md](../../gta-sa-original/modloader-data-files.md)).
+
+It is also the recon of the DATA that tool was built for — the mod folder `9. Added Vehicles` (115 cars),
+which we WILL use. This doc answers three questions asked before any plan is written: which plans the new
+tool needs, which plans the existing `vehicle-installer` needs, and what the two share.
 
 ## What "added" means, against what we have
 

@@ -16,7 +16,11 @@ interpret them.
   physics), the palette merge appending the same colours every run against a 128-row table the build had
   already passed, `petro`/`towtruck` losing their trailers to a rewritten `Global`, and a failed run
   renumbering the fleet on retry. All four were found by one question — does running it twice change
-  anything? The field round (16 rows) is what remains
+  anything? **Then the evening**: the delivery would not start, and seven launches later the design had
+  changed — an added car's ide and handling rows may not be baked into `data/` (they go beside the models for
+  Mod Loader to merge), a mod file named after a stock data file is a REPLACEMENT, and four of my own
+  hypotheses died on the way. The cars load; their tuning still crashes at the end of loading and is an open
+  issue
 - [`session-28-the-dummy-half-of-int16.md`](./session-28-the-dummy-half-of-int16.md) — the 2026-08-19
   session: perfect-map 011 from gate to field in one session — the int16 wrap WATCHED (`lastDummy` negative
   from slot 35 on the first entry), the fix (int32 dummy sidecar + two detours overlaid on FLA's), the ladder

@@ -61,3 +61,37 @@ describe('applyVehicle (the settings-file fallback)', () => {
     });
   });
 });
+
+describe('applyVehicle (redirectRows)', () => {
+  describe('negative cases', () => {
+    it('does not merge the ide row into data/ when the caller takes it', () => {
+      writeFileSync(join(folder, 'slamvan.settings.txt'), IDE);
+      applyVehicle(folder, out, { redirectRows: () => undefined, target: 'opensa' });
+
+      expect(readFileSync(join(out, 'data', 'vehicles.ide'), 'latin1')).not.toContain('richfamily');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('hands the ide and handling lines to the caller instead', () => {
+      const handling =
+        'SLAMVAN 1950.0 4712.5 4.0 0.0 0.1 0.0 70 0.65 0.90 0.50 5 160.0 40.0 10.0 R P 10.0 0.50 0 28.0 1.6 0.12 0.0 0.35 -0.14 0.5 0.3 0.36 0.42 19000 40002000 2010000 0 0 0';
+      writeFileSync(join(folder, 'slamvan.settings.txt'), `${IDE}\n\n${handling}`);
+      const taken: { handlingLine?: string; ideLine?: string }[] = [];
+      applyVehicle(folder, out, { redirectRows: (rows) => taken.push(rows), target: 'opensa' });
+
+      expect(taken).toHaveLength(1);
+      expect(taken[0].ideLine).toContain('richfamily');
+      expect(taken[0].handlingLine).toContain('SLAMVAN');
+    });
+
+    it('still merges the blocks that stay baked', () => {
+      writeFileSync(join(folder, 'slamvan.settings.txt'), `${IDE}\n\nslamvan, 3,3, 28,36`);
+      mkdirSync(join(out, 'data'), { recursive: true });
+      writeFileSync(join(out, 'data', 'carcols.dat'), 'car\nslamvan, 1,1\nend\n');
+      applyVehicle(folder, out, { redirectRows: () => undefined, target: 'opensa' });
+
+      expect(readFileSync(join(out, 'data', 'carcols.dat'), 'latin1')).toContain('28,36');
+    });
+  });
+});

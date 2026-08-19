@@ -14,7 +14,8 @@ that fell out of it.
 | `vehicle-installer` gained | the ModelVariations merge, the `.fxt` writer, the FLA audio row, the Parked Maker row, the carmods ceilings guard, an id and a part-rename option on `applyVehicle` |
 | `tool-kit` gained | `free-ids.ts` (the allocator + the tree's used ids), `parseVehicleBases`, `reserved/` |
 | pipeline | the added cars are installed INSIDE the `sa` branch, on the finished tree, after the plugin ships and before the budget guards |
-| commits | 15, all on `main`, not pushed |
+| where the rows go | `modloader/added-vehicles/<slot>.settings.txt` for the ide + handling pair, everything else baked — **changed by the field, see below** |
+| commits | 19, all on `main`, not pushed |
 
 ## What it cost
 
@@ -104,6 +105,62 @@ twice change anything?"** Three of them were pre-existing and would have kept dr
   guard that reads its ceiling.
 - **`reserved/` is a reserved NAME, not a stray.** The plan said refuse it; the folder holds a car the author
   set aside on purpose, and a refusal there stops every tool that reads the root.
+
+## The evening the cars would not load
+
+The chain was "built" by mid-session. Then the tree was delivered to the bottle and the game did not start —
+not a black screen, nothing. **Seven launches later** the design had changed, four of my own hypotheses were
+dead, and the honest lesson is about method, not about SA.
+
+**What it actually was**: an added car's `vehicles.ide` and `handling.cfg` rows may not be baked into
+`data/`. Read from `default.dat` at boot, 115 of them kill the game before a window appears. The same rows in
+`modloader/added-vehicles/<slot>.settings.txt` are merged by Mod Loader — whose own documentation says it
+matches data lines by SHAPE out of any text file, `cars` rows included. The fleet then loads and a parked
+added car appears.
+
+**And the trap that ate most of the launches**: a file NAMED after a stock data file is a REPLACEMENT to Mod
+Loader. `vehicles.ide` in the mod folder silently deleted the stock 212 cars (the game then died on a null
+model info for `admiral` deep in `carmods.dat`); `handling.cfg` deleted every stock handling line
+(`LANDSTAL ... cannot be found`). A `.txt` extension is not enough either — a name it KNOWS is a data file,
+anything else is a "readme" it scans. All of that is now
+[`docs/gta-sa-original/modloader-data-files.md`](../gta-sa-original/modloader-data-files.md).
+
+### What I got wrong, in order
+
+1. **I trusted `NO_COMMIT/1/build` as a working reference — twice.** It has no `modloader.log` (never
+   launched) and not one added-car row in `vehicles.ide` or `handling.cfg` anywhere in it. Those cars could
+   not have loaded from that tree. I used it to justify shapes and to explain "what worked before"; it was
+   evidence for the files it really does regenerate (carmods, veh_mods, shopping, MV, audio, parked) and for
+   nothing else. Recorded at the top of `recon.md` now.
+2. **I changed the user's install configuration on a hypothesis, twice.** `Vehicle colors = 256` (his own
+   history said the palette had always run at 140 without it — he was right) and `Vehicle Models = 400`
+   while OLA already had `VehicleModels = unlimited`; the second BROKE the game outright, leaving
+   `CModelInfo::AddVehicleModel` reading a zeroed vtable at the stock store address. Both reverted, both
+   recorded.
+3. **I left a variable in during a bisect.** Test 5's setting was still on for test 6, so a run meant to
+   isolate one thing carried two. Caught it from the dump, said so, redid it.
+4. **I reasoned from ceilings instead of from evidence.** Three plausible fixed-size arrays were suspected
+   and priced (vehicle model store, train tables, colour table) before the first crash dump existed. The
+   dump — once `logs/` was recreated, which the delivery had deleted — pointed somewhere else entirely
+   within one launch.
+
+### What actually worked as method
+
+- **Recreating `logs/`.** A delivery of the tree ROOT deletes what the tree lacks, and CrashInfo writes
+  there. No dump, no diagnosis: the first four launches produced nothing but "it does not start".
+- **Reading the crash address in the exe.** Every dump was disassembled rather than guessed at
+  (`CModelInfo::AddVehicleModel` at `0x4C6770`, the `wheel` case of `LoadVehicleUpgrades` at `0x5B6B2F`,
+  `CPickups` at `0x9788C4`), and each one named its own function within minutes.
+- **Reading the third-party mod's own documentation.** The answer was one footnote in
+  `modloader/.data/plugins/gta3/std.data.md`, shipped inside the mod folder we already carry.
+- **The user's memory of his own install.** "It worked before, the difference is that we baked it" was worth
+  more than every ceiling I had lined up.
+
+### Where it stands
+
+The cars load. **The tuning does not** — a corrupted pointer at the end of loading, ModelVariations excluded
+by a byte-identical repeat, `CShopping`'s fixed arrays the standing suspect, the next test armed:
+[`docs/open-issues/added-cars-crash-after-loading.md`](../open-issues/added-cars-crash-after-loading.md).
 
 ## What is NOT done
 

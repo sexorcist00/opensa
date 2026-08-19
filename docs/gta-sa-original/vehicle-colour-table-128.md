@@ -43,12 +43,23 @@ Whether the game's array really is 128, and what sits behind it. Until someone r
 honest position is: the build has been running 12 rows past the adjuster's stated default for some time with
 no reported symptom, which is either luck or evidence that the number is wrong.
 
-**TAKEN 2026-08-19 (the user's call): `Vehicle colors = 256`.** The line was commented out, so FLA was
-leaving the game's own table in place; 256 is the natural ceiling because a vehicle's colour is a byte in the
-save. Set in the mod folder (`mods-src/original/mods/sa/6. fastman92 limit adjuster 6.5 (stable)/`), in
-`build/original/sa/` and in the bottle; the installer's warning stops firing at 145 of 256. **The field has
-not confirmed it yet** — FLA's own log line for the setting, and `Number of memory changes made`, are what
-to read on the next boot ([the field round](../plans/102-add-vehicles/field-checks.md)).
+**TRIED AND REVERTED, the same evening.** `Vehicle colors = 256` was set, then taken back out — it changed
+nothing about the crash it was set for, and the user's own history is the stronger evidence: **this install
+has been running a 140-row palette with the setting untouched, for as long as the mod set has existed.**
+
+So the 128 in this file's title is FLA's ini annotation, not a ceiling anyone has watched bite. Two more
+things were learned about the setting itself, and they are the reason not to reach for it casually:
+
+- crossing "over 255" makes FLA apply a whole **uint32 colour-id patch family** (`Applying colour ID uint32_t
+  patches`, +122 memory changes over the 3 712 this install normally makes). That is a large, invasive change
+  to buy headroom nobody has proven is needed;
+- **255 would do** if it ever were needed — the palette is 145 rows with the added fleet, and a vehicle's
+  colour is a byte in the save.
+
+**What would settle it**: a build whose palette actually passes 255, or a read of
+`CVehicleModelInfo::ms_vehicleColourTable`'s real length in the exe. Until then this file records a
+suspicion and a measurement, not a rule — and `vehicleColourWarnings` prints the count rather than refusing,
+which is the right shape for exactly that reason.
 
 ## Where this bites
 
