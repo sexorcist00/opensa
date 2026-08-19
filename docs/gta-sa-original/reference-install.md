@@ -73,7 +73,8 @@ Our own log records the whole picture in six lines:
 
 | Ceiling | Stock | **Reference install** | Who lifts it |
 | --- | --- | --- | --- |
-| int16 `IplDef` building indexes | 32 767 rows map-wide | **lifted** (running at 72 914) | **only `perfect-map.asi`** — OLA leaves `0x404B4A` byte-stock |
+| int16 `IplDef` building indexes | 32 767 rows map-wide | **lifted** (running at 72 914) | **only `perfect-map.asi`** — OLA leaves `0x404B4A` byte-stock; FLA jmp-hooks `0x404B4A/5D/A8` (→ `0x22C4xxx`) and does not finish the job, so perfect-map overlays it |
+| int16 `IplDef` dummy indexes (`firstDummy/lastDummy`, the range `RemoveIpl` frees by) | 32 767 pool slots | **lifted 2026-08-19** (perfect-map 011; first entry peaks at 41–49k) | **only `perfect-map.asi`** — FLA jmp-hooks `0x404C0F` (→ `0x022C5EA8`, its 5-byte jmp spans both adjacent reads) and `0x404C4E` (→ `0x022C5EB9`, spans `movsx` + `inc edi`) but the dummies past 32 767 still leaked with those hooks live; OLA leaves both byte-stock. Read off the live bytes with the SDK's `VerifyAllSites` |
 | `gpLoadedBuildings` per-file buffer | 4 096 rows | **`EntitiesPerIpl = unlimited`** (running a 9 627-row file) | OLA |
 | `IplEntityIndexArrays` | 40 slots | **NOT LIFTED — `EntityIpl = unlimited` is set and does not work** | nothing |
 | `CPool<CBuilding>` | 13 000 | **`Buildings = 150000`** (raised 2026-08-10 for the clutter layer) | OLA |

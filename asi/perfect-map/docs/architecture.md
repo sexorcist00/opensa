@@ -91,7 +91,9 @@ SDK's [architecture](../../sdk/docs/architecture.md) for the framework's own des
 - **Prefer data-relocation over instruction hooks.** For the too-small static arrays (`gpLoadedBuildings` 4096,
   `IplEntityIndexArrays` 40), relocate to our own allocation + repoint accessors rather than detour code. Reserve
   function hooks (`asi/sdk/include/asi/hook.hpp`) for genuine logic changes — chiefly the `IplDef` int16 →
-  int32 min/max widen in `CIplStore::IncludeEntity` (0x404C90).
+  int32 min/max widen in `CIplStore::IncludeEntity` (0x404C90), which since 011 (2026-08-19) covers BOTH
+  pairs — buildings (+0x22/+0x24, three detours in `RemoveIpl`) and dummies (+0x26/+0x28, two detours) —
+  from one observer and one snapshot hook, each half behind its own flag (`PM_FIX_INT16`, `PM_FIX_INT16_DUMMY`).
 - **Observable before it is anything else.** The verify-only build logs the full plan with zero writes — the
   primary debugging aid for blind patching. (Re-apply protection is structural rather than a post-patch
   signature: a second attempt finds the site already changed and defers.)
