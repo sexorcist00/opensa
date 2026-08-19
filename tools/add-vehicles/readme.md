@@ -47,8 +47,24 @@ folder renamed, added or dropped does not renumber the fleet: a parked spot and 
 in the player's SAVE, and an id that moved between builds is a save that spawns the wrong car. Deleting the
 ledger is the only way to renumber, and the file says so.
 
+## Tuned traffic
+
+The same run gives every model with a paint job or a mod-shop part a ModelVariations section that lets it
+spawn already tuned — stock cars included, since that is what stops a city of factory-fresh bodies from
+looking like one. The rate and the exclusions live in an optional `add-vehicles.json` beside the cars:
+
+```json
+{ "tuningChance": 75, "tuningFullBodykit": 1, "changeOnlyParked": 0, "exclude": ["police"] }
+```
+
+Changing it and re-running rewrites the ini and nothing else — no rebuild.
+
 ## Status
 
-Plans 001 and 002 are built: the source root, the resolver, the base validation, the ids, the four data rows
-and the archive. Name/sound/parking is 003; traffic 004; derived tuning parts 005; tuned traffic 006; the
-pmb stage and the field round 007.
+Plans 001–006 are built: the source root and resolver, the ids and the four data rows, the archive, the
+name, the inherited sound, the parked spot, traffic, the derived tuning parts and tuned traffic. The pmb
+stage and the field round are 007.
+
+**The full fleet needs one thing it does not have yet**: its 8 wing pairs put `carmods.dat` at 31 `link`
+pairs against an array of 30, so a run over all 115 refuses and names `asi/perfect-vehicle` plan 002. Four
+of the five part-shipping cars install together today.

@@ -33,6 +33,7 @@ import { type LedgerRow, readAddsLedger, readAddsRows, writeAddsLedger } from '.
 import { resolveAddedCarText } from './name';
 import { type AddedVehicle, resolveAddedVehicles, stockSlotIds } from './sources';
 import { registerTraffic } from './traffic';
+import { readTunedTrafficConfig, registerTunedTraffic } from './tuned-traffic';
 import { type DerivedTuning, deriveTuning, shippedParts } from './tuning';
 
 export interface AddVehiclesOptions {
@@ -156,6 +157,10 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
   // Traffic speaks for the WHOLE tree, read back off the ledger — an `--only` run must not drop the other
   // cars out of their base's variation list (plan 004).
   runWarnings.push(...registerTraffic(gamePath, readAddsRows(gamePath), stockSlotIds(gamePath)));
+  // Tuned traffic is fleet-wide and derived from the tree, so it runs LAST — over the rows this run merged
+  // and the sections 004 just wrote, into the same one-section-per-model (plan 006).
+  const tuned = registerTunedTraffic(gamePath, readTunedTrafficConfig(inPath), allModelIds(gamePath));
+  console.log(`add-vehicles: ${tuned} model(s) given a tuned-traffic section`);
 
   return { installed, skipped: sources.length - selected.length, warnings: runWarnings };
 }
@@ -169,6 +174,11 @@ export function vehicleArchives(gamePath: string): string[] {
   );
 
   return imgFamilyMembers(basePath).map((path) => basename(path));
+}
+
+/** Every drivable model the built tree defines, added cars included — what tuned traffic is written over. */
+function allModelIds(gameDir: string): Map<string, number> {
+  return stockSlotIds(gameDir);
 }
 
 /**

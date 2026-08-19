@@ -1,6 +1,6 @@
 # 006 — Tuned traffic for every stock car
 
-**Status: PLANNED 2026-08-19 — the user's YES.** The other half of what the old tool wrote into
+**Status: BUILT 2026-08-19** (the user's YES). The other half of what the old tool wrote into
 `ModelVariations_Vehicles.ini`: for every stock car that has paintjobs or tuning parts, a section that lets
 ModelVariations spawn it tuned:
 
@@ -30,4 +30,38 @@ the added ids AND the paintjobs/parts (the old build's sections show exactly thi
 
 ## Measured
 
-*—*
+**Built 2026-08-19.** `add-vehicles/tuned-traffic.ts`; the merge is 012's `mergeIniKeys` and the `Global`
+composition is 004's `extendGlobal`, which grew a fourth argument for non-id tokens (`paintjobN`, a part
+name).
+
+**Everything in the section is read off the BUILT tree**, which is what makes it work for cars nobody has
+authored a rule for: the model's id from `vehicles.ide`, one `paintjobN` per `<slot><N>.txd` the ARCHIVES
+actually hold (counted upward until one is missing, the way the game numbers them), and the parts on the
+model's `carmods.dat` line — so after 005 an added car gets its own DERIVED part names, and a replacement
+car gets whatever bodykit it shipped.
+
+**One section per model, and the two writers compose in it** — the point of 004's decision. On the clone:
+
+```
+[elegy]                                     ← the base: 004's added id AND 006's tokens, one Global
+Global=562,19113,paintjob1,…,paintjob4,exh_a_l,exh_c_l,…,spl_a_l_b
+ChangeOnlyParked=0
+TuningChance=75
+TuningFullBodykit=1
+
+[118veh]                                    ← the added car, with the names 005 derived for it
+Global=19113,paintjob1,…,exh_a_l_118veh,exh_c_l_118veh,…
+```
+
+**Measured**: **103 models** given a tuned section on a four-added-car run; the ini 111 sections / 15 939 B
+(the user's old build: 172 sections / 13 570 B — it wrote each model TWICE, once by name and once by id,
+which is the shape 004 replaced). A second run is byte-identical, and a changed `tuningChance` shows up on
+the next run without touching anything else in the file.
+
+Config: `add-vehicles.json` in the source root, every field optional —
+`{ "tuningChance": 75, "tuningFullBodykit": 1, "changeOnlyParked": 0, "exclude": ["police", …] }`. The
+exclude list is folded, so a model matches however it was typed. **No config file is shipped**: the
+defaults are the ones the user's earlier build ran, and a file is only worth writing when he wants
+something else.
+
+Tests: 10 in `tuned-traffic.test.ts`; add-vehicles 56.

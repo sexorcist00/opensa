@@ -37,14 +37,20 @@ const GLOBAL_KEY = 'Global';
  * silently stops happening. A token may be an id, a `paintjobN`, a part name or another key's name; we only
  * ever append ids that are not already in the list.
  */
-export function extendGlobal(current: string | undefined, baseId: number, ids: readonly number[]): string {
+export function extendGlobal(
+  current: string | undefined,
+  baseId: number,
+  ids: readonly number[],
+  /** Non-id tokens to add as well — `paintjob1`, a part name (plan 006's tuned traffic). */
+  extra: readonly string[] = [],
+): string {
   const tokens = (current ?? '')
     .split(',')
     .map((token) => token.trim())
     .filter((token) => token !== '');
-  for (const id of [baseId, ...ids]) {
-    if (!tokens.includes(String(id))) {
-      tokens.push(String(id));
+  for (const token of [baseId, ...ids].map(String).concat(extra)) {
+    if (!tokens.includes(token)) {
+      tokens.push(token);
     }
   }
 

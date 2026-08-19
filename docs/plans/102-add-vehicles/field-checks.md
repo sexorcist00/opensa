@@ -84,6 +84,10 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
       `veh_mods.ide` under `<stock>_<slot>` with the added car's TXD, so check the TXD carries its textures.
 - [ ] **The base car did not change.** The stock `remingtn` keeps its own parts — nothing was renamed out
       from under it. Look at: a remington in a mod shop still has its full set.
+- [ ] **Traffic is TUNED, at about the configured rate.** 103 models carry a tuned section
+      (`TuningChance=75`, `TuningFullBodykit=1`). Look at: roughly three cars in four wear parts or a paint
+      job. Too much or too little is one number in `mods-src/original/add-vehicles/add-vehicles.json` and a
+      re-run — no rebuild. If police or emergency cars look wrong tuned, that is the `exclude` list.
 - [ ] **`Vehicle colors = 256` really applies.** Set 2026-08-19 because the palette (145 rows with the
       added cars) was over the game's own 128 —
       `docs/gta-sa-original/vehicle-colour-table-128.md`. Deliver `fastman92limitAdjuster_GTASA.ini`.
