@@ -50,14 +50,23 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
 
 ## From `add-vehicles` (002 BUILT 2026-08-19; 003–007 to come)
 
+- [ ] **The models load AT ALL — they are not in an archive any more.** Deliver
+      `modloader/added-vehicles/` (322 files, 1.4 GB) with the rest. Look at: modloader's log carries
+      `Importing model file for index <id> at "modloader\added-vehicles\001veh.dff"` — that line is the
+      proof a file reached the game, and it is the FIRST thing to read if a car spawns invisible or as a
+      stock model. If it is missing: `modloader.asi` active, and the folder actually delivered (it is 1.4 GB
+      — a partial copy is the likely failure).
+- [ ] **A tuning part loads under its DERIVED name.** Same log, looking for
+      `exh_lr_rem1_059veh.dff`. The stock `exh_lr_rem1` must NOT appear from that folder — the whole point
+      is that the base car's own part is untouched.
 - [ ] **An added car exists and drives.** Deliver the vehicles archive family (`models/vehicles*.img`),
       `data/{vehicles.ide,handling.cfg,carcols.dat,carmods.dat,gta.dat}` and `data/vehicle-adds.txt`.
       Look at: spawn `19001` (the vega) with a trainer — it appears, it is the right model, and it drives
       with its OWN handling rather than the manana's. If it fails: the handling row is the one that was
       silently dropped before this plan (a digit-leading id), so check `handling.cfg` holds `001VEH`.
-- [ ] **`vehicles3.img` really loads.** The run added a third family member and registered it in `gta.dat`.
-      Look at: the game boots and a car whose model lives in that archive appears. If it fails: FLA's
-      archive count, and `data/img-layout.json`.
+- [ ] **The archive count is back to 8 of 8.** The added cars used to want a ninth archive; they are loose
+      now. Look at: the game boots at all (past the eighth archive it crashes at load with no symptom that
+      points anywhere useful) — `data/gta.dat` should carry 5 `IMG` lines and `models/` 6 archives.
 - [ ] **An added car has a NAME in the HUD.** Deliver `cleo/*.fxt`. Look at: entering the vega shows
       "1971 Chevrolet Vega", not a blank or a key. If it fails: CLEO's FXT loader, and whether the ide row's
       `gameName` is what the fxt keys on.

@@ -27,10 +27,25 @@ tree:
 | model ids | — | **161** (115 cars + 46 parts), 19 001–19 161 | 999 in the window |
 | FLA `TXD` pool | 5 177 | **5 338** | 6 000 configured |
 | FLA `DFF` pool | 15 596 | **15 711** | its 20 000 range |
-| vehicles archive family | 3.10 GB, 2 members | **4.47 GB, 3** (`vehicles3.img` registered) | the writer's spill cap |
+| vehicles archive family | 3.10 GB, 2 members | **unchanged** — the models go loose (below) | 8 registered archives, and the tree already spends 6 |
 | `carcols.dat` palette | 140 | **145** | 256 (raised from 128 this session) |
 | `carmods.dat` link pairs | 23 | **31** | 256 (lifted this session; was 30) |
 | `carmods.dat` parts per car | 15 | **15** | 16 — NOT lifted, and the guard says so |
+
+**The archive road did not survive contact with the build.** Staging the models into the vehicles archive
+family grew it from two members to three, and the `sa` build then stopped at `assertArchiveSlots`: SA
+registers 8 IMG archives, the tree already spends six on stock content, and this wanted a ninth. That is the
+in-reserve trigger written down on 2026-08-15, fired by exactly the case its own text predicted ("the vehicle
+payload growing past two files … one large mod set away"). **The user's call: put the models in
+`modloader/added-vehicles/` instead** — loose, 161 dffs + 161 txds, 1.4 GB, which is the road his earlier
+build shipped these same cars by and the road the install already runs `modloader.asi` for. The family went
+back to two members, the tree to 8 of 8, and the second `sa` build passed end to end.
+
+What that answer costs is stated in `loose-files.ts` rather than left to be discovered: a loose TXD still
+takes a streaming id at runtime while `checkImgIdBudgets` counts ARCHIVE entries, so the FLA TXD pool is
+under-counted by the 161 files that land there (the guard reported 5 177 of 6 000 both before and after the
+fleet — the same number is the tell). The in-reserve card stays live: the next thing that wants a ninth
+archive gets no such escape.
 
 A working method worth keeping: **`cp -Rc` clones the 5.7 GB build tree instantly on APFS**, so every one of
 these runs was against a real tree and none of them touched the one the field uses.
