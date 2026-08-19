@@ -40,6 +40,7 @@ import { basename, join, resolve } from 'node:path';
 import type { RebakeOptions, RebakeReport } from './rebake-shared';
 
 import { applyVehicle } from './apply-vehicle';
+import { assertCarmodsCeilings } from './carmods-guard';
 import { FEATURES_TABLE, logVehiclePlan } from './install';
 import { vehicleColourWarnings } from './palette';
 import {
@@ -102,6 +103,7 @@ export function rebakeVehicles(options: RebakeOptions): RebakeReport {
   }
   mergeFeatureTable(targetPath, declared);
   assertCarmodsModels(targetPath);
+  assertCarmodsCeilings(targetPath);
   warnings.push(...vehicleColourWarnings(targetPath));
   // Not an archive concern on a CONVERTED tree (one .osm per car), but the mod's data is still shared.
   warnings.push(...sharedFileWarnings(sources, selected));

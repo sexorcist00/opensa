@@ -67,10 +67,14 @@ function main(): void {
 
   const report = addVehicles({ gamePath, inPath, ...(only ? { only } : {}) });
   report.warnings.forEach((warning) => console.warn(`add-vehicles: ${warning}`));
-  for (const { bases, id, slot } of report.installed) {
-    console.log(`add-vehicles: ${slot} → id ${id} (base ${bases.join(', ')})`);
+  for (const { bases, id, kind, slot } of report.installed) {
+    console.log(`add-vehicles: ${slot} → id ${id} (${kind === 'part' ? 'part of' : 'base'} ${bases.join(', ')})`);
   }
-  console.log(`add-vehicles: ${report.installed.length} car(s) installed into ${gamePath}, ${report.skipped} skipped`);
+  const cars = report.installed.filter(({ kind }) => kind === 'car').length;
+  console.log(
+    `add-vehicles: ${cars} car(s) and ${report.installed.length - cars} tuning part(s) installed into ` +
+      `${gamePath}, ${report.skipped} car(s) skipped`,
+  );
 }
 
 main();

@@ -15,7 +15,9 @@
     "./palette": "./src/palette.ts",
     "./audio": "./src/audio.ts",
     "./fxt": "./src/fxt.ts",
-    "./model-variations": "./src/model-variations.ts"
+    "./model-variations": "./src/model-variations.ts",
+    "./carmods-guard": "./src/carmods-guard.ts",
+    "./img-merge": "./src/img-merge.ts"
   },
   "nx": {
     "tags": [

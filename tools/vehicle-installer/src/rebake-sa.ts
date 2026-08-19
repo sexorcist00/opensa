@@ -30,6 +30,7 @@ import { basename, join, resolve } from 'node:path';
 import type { RebakeOptions, RebakeReport } from './rebake-shared';
 
 import { applyVehicle } from './apply-vehicle';
+import { assertCarmodsCeilings } from './carmods-guard';
 import { logVehiclePlan } from './install';
 import { vehicleColourWarnings } from './palette';
 import {
@@ -111,6 +112,7 @@ export function rebakeVehiclesSa(options: RebakeOptions): RebakeReport {
       ...writeModelSpecialFeatures(targetPath, declared, new Set(accepted.map(({ model }) => model))).warnings,
     );
     assertCarmodsModels(targetPath);
+    assertCarmodsCeilings(targetPath);
     warnings.push(...vehicleColourWarnings(targetPath));
     warnings.push(...sharedFileWarnings(sources, accepted));
     mergeModTable(

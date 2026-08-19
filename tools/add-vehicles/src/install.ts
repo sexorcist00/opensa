@@ -15,22 +15,25 @@ import type { BuildTarget } from '@opensa/tool-kit/target';
 
 import { imgFamilyMembers, openImgFamily, writeImgFamily } from '@opensa/tool-kit/archive/img';
 import { writeArchiveManifest } from '@opensa/tool-kit/archive/layout';
-import { allocateIds, usedModelIds } from '@opensa/tool-kit/free-ids';
+import { ADDED_ID_WINDOW, allocateIds, usedModelIds } from '@opensa/tool-kit/free-ids';
 import { registerImgArchives } from '@opensa/tool-kit/game-dir';
 import { applyVehicle } from '@opensa/vehicle-installer/apply-vehicle';
 import { writeAudioRows } from '@opensa/vehicle-installer/audio';
+import { assertCarmodsCeilings, carmodsHeadroom } from '@opensa/vehicle-installer/carmods-guard';
+import { mergeCarmodsLink } from '@opensa/vehicle-installer/merge';
 import { vehicleColourWarnings } from '@opensa/vehicle-installer/palette';
 import { mergeFeatureTable, requireBuiltGame } from '@opensa/vehicle-installer/rebake-shared';
 import { decodeSettings, ID_PLACEHOLDER, parseVehicleSettings } from '@opensa/vehicle-installer/settings';
 import { writeModelSpecialFeatures } from '@opensa/vehicle-installer/special-features';
-import { assertCarmodsModels, ideModelNames } from '@opensa/vehicle-installer/tuning-parts';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { applyIdeRows, applyInsert, assertCarmodsModels, ideModelNames } from '@opensa/vehicle-installer/tuning-parts';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 
 import { type LedgerRow, readAddsLedger, readAddsRows, writeAddsLedger } from './ledger';
 import { resolveAddedCarText } from './name';
 import { type AddedVehicle, resolveAddedVehicles, stockSlotIds } from './sources';
 import { registerTraffic } from './traffic';
+import { type DerivedTuning, deriveTuning, shippedParts } from './tuning';
 
 export interface AddVehiclesOptions {
   /** The BUILT `sa` tree the cars are added to; edited in place. */
@@ -68,11 +71,23 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
       `${warnings.length} added car(s) do not leave their model id to this tool:\n  ${warnings.join('\n  ')}`,
     );
   }
+  // What each car re-models of its base's tuning parts, decided BEFORE any id is handed out: the parts need
+  // ids of their own, out of the same window and just as stable (a part id is in the save too).
+  const tuning = new Map(
+    sources.map((source) => [
+      source.slot,
+      deriveTuning(gamePath, source.slot, source.base, shippedParts(source.folder, source.slot)),
+    ]),
+  );
   // Every car of the SOURCE is allocated for, not only the selected ones: an `--only` run must not hand a
   // free id to one car that a full run would give to another. The ledger pins what is already promised.
+  const slots = sources.flatMap((source) => [
+    source.slot,
+    ...(tuning.get(source.slot)?.rows ?? []).map((row) => row.name),
+  ]);
   const ids = allocateIds({
-    ledger: readAddsLedger(gamePath),
-    slots: sources.map((source) => source.slot),
+    ledger: promisedIds(gamePath, slots),
+    slots,
     used: usedModelIds(gamePath),
   });
 
@@ -91,10 +106,17 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
     // (the base's audio row, the keys `american.gxt` already defines), and the name rides in with the install.
     const text = resolveAddedCarText(source, gamePath, ideLineOf(source.folder, id));
     runWarnings.push(...text.warnings);
+    // The parts FIRST: the carmods line the settings merge is about to write names them, and
+    // `assertCarmodsModels` refuses a token no IDE row defines.
+    const parts = tuning.get(source.slot)!;
+    runWarnings.push(...parts.warnings.map((warning) => `${source.name}: ${warning}`));
+    installed.push(...installTuning(gamePath, source, parts, ids, runWarnings));
     const applied = applyVehicle(source.folder, gamePath, {
       ...(text.name ? { gxt: [text.name] } : {}),
       id,
       img,
+      partRenames: new Map([...parts.renames].map(([file, entry]) => [stem(file), stem(entry)])),
+      renames: parts.renames,
       target: 'sa',
     });
     applied.warnings.forEach((warning) => runWarnings.push(`${source.name}: ${warning}`));
@@ -104,13 +126,20 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
     if (applied.features.length > 0 && applied.model) {
       declared.set(applied.model, applied.features);
     }
-    installed.push({ bases: source.bases, folder: source.name, id, slot: source.slot });
+    installed.push({ bases: source.bases, folder: source.name, id, kind: 'car', slot: source.slot });
   }
   if (declared.size > 0) {
     mergeFeatureTable(gamePath, declared);
     runWarnings.push(...writeModelSpecialFeatures(gamePath, declared, new Set(declared.keys())).warnings);
   }
   assertCarmodsModels(gamePath);
+  // The two fixed-size arrays behind carmods.dat. Refuses NAMING `asi/perfect-vehicle`, which is the plugin
+  // that lifts them — every added car re-modelling its base's wings costs one of the seven spare link pairs.
+  assertCarmodsCeilings(gamePath);
+  const headroom = carmodsHeadroom(gamePath);
+  console.log(
+    `add-vehicles: carmods headroom — ${headroom.links} link pair(s), ${headroom.partsPerCar} part(s) on the fullest car`,
+  );
   runWarnings.push(...vehicleColourWarnings(gamePath));
   assertIdsLanded(gamePath, installed);
 
@@ -173,6 +202,88 @@ function ideLineOf(folder: string, id: number): string {
   return parseVehicleSettings(text).ideLine ?? '';
 }
 
+/**
+ * Write one car's derived tuning parts into the built tree: an IDE row per part (with its allocated id), the
+ * shop item and price cloned after the stock part's, and a `link` for every stock pair both of whose sides
+ * the car re-models. Returns the ledger rows for the parts — their ids are a promise like a car's.
+ */
+function installTuning(
+  gameDir: string,
+  source: AddedVehicle,
+  parts: DerivedTuning,
+  ids: ReadonlyMap<string, number>,
+  warnings: string[],
+): LedgerRow[] {
+  if (parts.rows.length === 0) {
+    return [];
+  }
+  const rows: LedgerRow[] = [];
+  const ideRows: string[] = [];
+  for (const { name, row } of parts.rows) {
+    const id = ids.get(name);
+    if (id === undefined) {
+      warnings.push(`${source.name}: no id was allocated for '${name}' — the part is not installed`);
+      continue;
+    }
+    ideRows.push(row.split(ID_PLACEHOLDER).join(String(id)));
+    rows.push({
+      bases: [name.slice(0, name.lastIndexOf(`_${source.slot}`))],
+      folder: source.name,
+      id,
+      kind: 'part',
+      slot: name,
+    });
+  }
+  warnings.push(...applyIdeRows(gameDir, ideRows).map((warning) => `${source.name}: ${warning}`));
+  for (const entry of parts.shop) {
+    warnings.push(
+      ...applyInsert(gameDir, {
+        after: entry.after,
+        lines: [`item ${entry.item}`],
+        section: entry.section,
+        top: 'shops',
+      }),
+      ...applyInsert(gameDir, { after: entry.after, lines: [entry.price], section: 'CarMods', top: 'prices' }),
+    );
+  }
+  if (parts.links.length > 0) {
+    const path = join(gameDir, 'data', 'carmods.dat');
+    let text = readFileSync(path, 'latin1');
+    for (const [left, right] of parts.links) {
+      text = mergeCarmodsLink(text, left, right);
+    }
+    writeFileSync(path, text, 'latin1');
+  }
+
+  return rows;
+}
+
+/**
+ * The ids already promised to these slots: the ledger, and — under it — whatever the TREE already defines
+ * them as inside the window.
+ *
+ * The tree half is what makes a FAILED run safe. A run that refuses late (the carmods ceilings are checked
+ * after every row is merged) leaves the ide rows in place and no ledger; reading only the ledger, the next
+ * run would see those ids as taken by strangers and hand the whole fleet new ones — renumbering it, which is
+ * the one thing the ledger exists to prevent.
+ */
+function promisedIds(gameDir: string, slots: readonly string[]): Map<string, number> {
+  const names = ideModelNames(gameDir);
+  const promised = new Map<string, number>();
+  for (const slot of slots) {
+    const id = names.get(slot.toLowerCase());
+    if (id !== undefined && id >= ADDED_ID_WINDOW.first && id <= ADDED_ID_WINDOW.last) {
+      promised.set(slot, id);
+    }
+  }
+  // The ledger is the record; the tree is only the fallback for what a failed run left behind.
+  for (const [slot, id] of readAddsLedger(gameDir)) {
+    promised.set(slot, id);
+  }
+
+  return promised;
+}
+
 /** An added car must leave its id to the allocator — a literal one is an author guessing at the window. */
 function requireIdPlaceholder(source: AddedVehicle): string[] {
   const file = readdirSync(source.folder).find((name) => name.toLowerCase().endsWith('.settings.txt'));
@@ -185,4 +296,9 @@ function requireIdPlaceholder(source: AddedVehicle): string[] {
   return text.includes(ID_PLACEHOLDER)
     ? []
     : [`${source.name}: ${file} has no '${ID_PLACEHOLDER}' — the id is allocated over the built tree, never authored`];
+}
+
+/** `wg_l_lr_rem1.dff` → `wg_l_lr_rem1`. */
+function stem(file: string): string {
+  return file.replace(/\.dff$/i, '');
 }

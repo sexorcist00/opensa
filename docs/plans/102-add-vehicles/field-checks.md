@@ -77,6 +77,13 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
       wants them apart.
 - [ ] **`petro` and `towtruck` still tow.** Both are a base AND author trailer keys; their `Global` now reads
       `Trailers1,<baseId>,<addedId>`. Look at: they still pull their trailer sets.
+- [ ] **An added car's own tuning parts fit it.** Deliver `data/carmods.dat`, `data/shopping.dat`,
+      `data/maps/veh_mods/veh_mods.ide` and the vehicles archives. Look at: take `059veh` (the Charger) to a
+      mod shop — its bumpers, exhausts and wings are listed under the base's names, cost the base's prices,
+      and sit on THIS body. A wing bought once fits both sides (the link). If it fails: the part is in
+      `veh_mods.ide` under `<stock>_<slot>` with the added car's TXD, so check the TXD carries its textures.
+- [ ] **The base car did not change.** The stock `remingtn` keeps its own parts — nothing was renamed out
+      from under it. Look at: a remington in a mod shop still has its full set.
 - [ ] **`Vehicle colors = 256` really applies.** Set 2026-08-19 because the palette (145 rows with the
       added cars) was over the game's own 128 —
       `docs/gta-sa-original/vehicle-colour-table-128.md`. Deliver `fastman92limitAdjuster_GTASA.ini`.

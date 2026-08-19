@@ -71,6 +71,15 @@ export interface ApplyVehicleOptions {
   id?: number;
   img?: EditableImg;
   /**
+   * Tuning part renames (stock name → derived name) applied to the SETTINGS text before it is parsed: an
+   * added car authors its `carmods.dat` line against the stock part names, and the parts it ships are
+   * installed under new ones (`tools/add-vehicles` 005). Matched whole-word, so `spl_a_l` never rewrites
+   * part of `spl_a_l_b`.
+   */
+  partRenames?: ReadonlyMap<string, string>;
+  /** Archive entry renames for this folder's files — see {@link stageVehicleImg}. */
+  renames?: ReadonlyMap<string, string>;
+  /**
    * Which HOST the tree is being built for. It selects only what is a fact about the host rather than about
    * the mod: `modloader/Model_Variations/` is the real game's plugin and our engine has no such folder, so an
    * `opensa` tree skips that merge instead of warning eight times that a mod it cannot use is missing.
@@ -88,7 +97,7 @@ export interface ApplyVehicleOptions {
  */
 export function applyVehicle(folderPath: string, outPath: string, options: ApplyVehicleOptions = {}): AppliedVehicle {
   const entries = readdirSync(folderPath);
-  const staged = options.img === undefined ? null : stageVehicleImg(folderPath, options.img);
+  const staged = options.img === undefined ? null : stageVehicleImg(folderPath, options.img, options.renames);
   const imgNames = staged?.names ?? [];
   const cleo = carryCleoFolder(folderPath, entries, outPath);
   // The slot the folder NAME states, confirmed against the `.dff`s it ships — a bodykit folder ships several
@@ -120,7 +129,10 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
     settingsFile === undefined
       ? undefined
       : parseVehicleSettings(
-          withId(decodeSettings(readFileSync(join(folderPath, settingsFile))), options.id),
+          renamedParts(
+            withId(decodeSettings(readFileSync(join(folderPath, settingsFile))), options.id),
+            options.partRenames,
+          ),
           (message) => warnings.push(`${settingsFile}: ${message}`),
         );
   if (settings !== undefined) {
@@ -218,6 +230,19 @@ function handlingId(settings: ReturnType<typeof parseVehicleSettings>, model: st
   const fromHandling = settings.handlingLine?.trim().split(/\s+/)[0];
 
   return (fromIde || fromHandling || model)?.toUpperCase();
+}
+
+/** The settings text with every stock part name replaced by the name its re-modelled copy is installed under. */
+function renamedParts(text: string, renames: ReadonlyMap<string, string> | undefined): string {
+  if (renames === undefined || renames.size === 0) {
+    return text;
+  }
+  let out = text;
+  for (const [stock, derived] of renames) {
+    out = out.replace(new RegExp(`\\b${stock}\\b`, 'g'), derived);
+  }
+
+  return out;
 }
 
 /** The settings text with `<:id>` resolved — unchanged when the car is a replacement (no id to put there). */

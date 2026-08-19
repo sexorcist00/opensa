@@ -3,10 +3,24 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import type { LedgerRow } from './ledger';
+
 import { ADDS_LEDGER, readAddsLedger, writeAddsLedger } from './ledger';
 
-const VEGA = { bases: ['manana'], folder: '001veh - vega - alfamodding (manana)', id: 19_001, slot: '001veh' };
-const VOLARE = { bases: ['solair'], folder: '002veh - volare - viter (solair)', id: 19_002, slot: '002veh' };
+const VEGA: LedgerRow = {
+  bases: ['manana'],
+  folder: '001veh - vega - alfamodding (manana)',
+  id: 19_001,
+  kind: 'car',
+  slot: '001veh',
+};
+const VOLARE: LedgerRow = {
+  bases: ['solair'],
+  folder: '002veh - volare - viter (solair)',
+  id: 19_002,
+  kind: 'car',
+  slot: '002veh',
+};
 
 let game: string;
 
@@ -63,8 +77,8 @@ describe('writeAddsLedger', () => {
 
       expect(ledgerText()).toBe(once);
       expect(once.trimEnd().split('\n').slice(-2)).toEqual([
-        '001veh\t19001\tmanana\t001veh - vega - alfamodding (manana)',
-        '002veh\t19002\tsolair\t002veh - volare - viter (solair)',
+        '001veh\t19001\tcar\tmanana\t001veh - vega - alfamodding (manana)',
+        '002veh\t19002\tcar\tsolair\t002veh - volare - viter (solair)',
       ]);
     });
   });

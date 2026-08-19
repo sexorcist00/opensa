@@ -51,6 +51,86 @@ export interface TuningParts {
 const BLOCK_HEADER = /^(shops|prices)\.([^|\s]+)\|(\S+)$/i;
 const IDE_ROW = /^\d+\s*,\s*([^,\s]+)/;
 
+/** Add the rows to `veh_mods.ide`'s `objs` section — replace by NAME, refuse an id another name owns. */
+export function applyIdeRows(outPath: string, rows: readonly string[]): string[] {
+  const warnings: string[] = [];
+  const path = join(outPath, VEH_MODS_IDE);
+  if (!existsSync(path)) {
+    return [`${TUNING_PARTS_FILE}: ${VEH_MODS_IDE} is not in the tree — ${rows.length} IDE row(s) not written`];
+  }
+  const owners = ideModelNames(outPath);
+  const lines = readFileSync(path, 'latin1').split(/\r?\n/);
+  const objsEnd = sectionEnd(lines, 'objs');
+  if (objsEnd === -1) {
+    return [`${TUNING_PARTS_FILE}: ${VEH_MODS_IDE} has no objs…end section — rows not written`];
+  }
+  const additions: string[] = [];
+  for (const row of rows) {
+    const [idText, name] = row.split(',').map((field) => field.trim());
+    const id = Number(idText);
+    const owner = [...owners].find(([, ownerId]) => ownerId === id)?.[0];
+    if (owner !== undefined && owner !== name.toLowerCase()) {
+      warnings.push(`${TUNING_PARTS_FILE}: id ${id} already belongs to '${owner}' — row for '${name}' not written`);
+      continue;
+    }
+    const existing = lines.findIndex((line) => {
+      const match = IDE_ROW.exec(line.trim());
+
+      return match !== null && match[1].toLowerCase() === name.toLowerCase();
+    });
+    if (existing !== -1) {
+      lines[existing] = row;
+    } else {
+      additions.push(row);
+    }
+  }
+  lines.splice(objsEnd, 0, ...additions);
+  writeFileSync(path, lines.join('\n'), 'latin1');
+
+  return warnings;
+}
+
+/** Insert the block's lines after its anchor inside `section <top>` → `section <section>` of shopping.dat. */
+export function applyInsert(outPath: string, insert: TuningInsert): string[] {
+  const path = join(outPath, SHOPPING_DAT);
+  if (!existsSync(path)) {
+    return [`${TUNING_PARTS_FILE}: ${SHOPPING_DAT} is not in the tree — ${insert.top}.${insert.section} not written`];
+  }
+  const lines = readFileSync(path, 'latin1').split(/\r?\n/);
+  const range = nestedSection(lines, insert.top, insert.section);
+  if (!range) {
+    return [`${TUNING_PARTS_FILE}: shopping.dat has no section ${insert.top} → ${insert.section} — block not written`];
+  }
+  const keyOf = (line: string): string => {
+    const tokens = line.trim().split(/\s+/);
+
+    return (tokens[0]?.toLowerCase() === 'item' ? tokens[1] : tokens[0])?.toLowerCase() ?? '';
+  };
+  const present = new Set(lines.slice(range.start, range.end).map(keyOf));
+  const fresh = insert.lines.filter((line) => !present.has(keyOf(line)));
+  if (fresh.length === 0) {
+    return [];
+  }
+  const warnings: string[] = [];
+  let anchor = -1;
+  for (let index = range.start; index < range.end; index += 1) {
+    if (keyOf(lines[index]) === insert.after.toLowerCase()) {
+      anchor = index;
+    }
+  }
+  if (anchor === -1) {
+    warnings.push(
+      `${TUNING_PARTS_FILE}: ${insert.top}.${insert.section} has no line '${insert.after}' to insert after — appended at the section's end`,
+    );
+    anchor = range.end - 1;
+  }
+  const indent = /^\s*/.exec(lines[anchor])?.[0] ?? '\t\t';
+  lines.splice(anchor + 1, 0, ...fresh.map((line) => `${indent}${line}`));
+  writeFileSync(path, lines.join('\n'), 'latin1');
+
+  return warnings;
+}
+
 /** Apply a mod folder's `tuning_new_parts.txt` (if it ships one) to the built game dir. Returns warnings. */
 export function applyTuningParts(folderPath: string, entries: readonly string[], outPath: string): string[] {
   const file = entries.find((name) => name.toLowerCase() === TUNING_PARTS_FILE);
@@ -183,86 +263,6 @@ export function parseTuningParts(text: string): TuningParts {
   }
 
   return { ideRows, inserts, warnings };
-}
-
-/** Add the rows to `veh_mods.ide`'s `objs` section — replace by NAME, refuse an id another name owns. */
-function applyIdeRows(outPath: string, rows: readonly string[]): string[] {
-  const warnings: string[] = [];
-  const path = join(outPath, VEH_MODS_IDE);
-  if (!existsSync(path)) {
-    return [`${TUNING_PARTS_FILE}: ${VEH_MODS_IDE} is not in the tree — ${rows.length} IDE row(s) not written`];
-  }
-  const owners = ideModelNames(outPath);
-  const lines = readFileSync(path, 'latin1').split(/\r?\n/);
-  const objsEnd = sectionEnd(lines, 'objs');
-  if (objsEnd === -1) {
-    return [`${TUNING_PARTS_FILE}: ${VEH_MODS_IDE} has no objs…end section — rows not written`];
-  }
-  const additions: string[] = [];
-  for (const row of rows) {
-    const [idText, name] = row.split(',').map((field) => field.trim());
-    const id = Number(idText);
-    const owner = [...owners].find(([, ownerId]) => ownerId === id)?.[0];
-    if (owner !== undefined && owner !== name.toLowerCase()) {
-      warnings.push(`${TUNING_PARTS_FILE}: id ${id} already belongs to '${owner}' — row for '${name}' not written`);
-      continue;
-    }
-    const existing = lines.findIndex((line) => {
-      const match = IDE_ROW.exec(line.trim());
-
-      return match !== null && match[1].toLowerCase() === name.toLowerCase();
-    });
-    if (existing !== -1) {
-      lines[existing] = row;
-    } else {
-      additions.push(row);
-    }
-  }
-  lines.splice(objsEnd, 0, ...additions);
-  writeFileSync(path, lines.join('\n'), 'latin1');
-
-  return warnings;
-}
-
-/** Insert the block's lines after its anchor inside `section <top>` → `section <section>` of shopping.dat. */
-function applyInsert(outPath: string, insert: TuningInsert): string[] {
-  const path = join(outPath, SHOPPING_DAT);
-  if (!existsSync(path)) {
-    return [`${TUNING_PARTS_FILE}: ${SHOPPING_DAT} is not in the tree — ${insert.top}.${insert.section} not written`];
-  }
-  const lines = readFileSync(path, 'latin1').split(/\r?\n/);
-  const range = nestedSection(lines, insert.top, insert.section);
-  if (!range) {
-    return [`${TUNING_PARTS_FILE}: shopping.dat has no section ${insert.top} → ${insert.section} — block not written`];
-  }
-  const keyOf = (line: string): string => {
-    const tokens = line.trim().split(/\s+/);
-
-    return (tokens[0]?.toLowerCase() === 'item' ? tokens[1] : tokens[0])?.toLowerCase() ?? '';
-  };
-  const present = new Set(lines.slice(range.start, range.end).map(keyOf));
-  const fresh = insert.lines.filter((line) => !present.has(keyOf(line)));
-  if (fresh.length === 0) {
-    return [];
-  }
-  const warnings: string[] = [];
-  let anchor = -1;
-  for (let index = range.start; index < range.end; index += 1) {
-    if (keyOf(lines[index]) === insert.after.toLowerCase()) {
-      anchor = index;
-    }
-  }
-  if (anchor === -1) {
-    warnings.push(
-      `${TUNING_PARTS_FILE}: ${insert.top}.${insert.section} has no line '${insert.after}' to insert after — appended at the section's end`,
-    );
-    anchor = range.end - 1;
-  }
-  const indent = /^\s*/.exec(lines[anchor])?.[0] ?? '\t\t';
-  lines.splice(anchor + 1, 0, ...fresh.map((line) => `${indent}${line}`));
-  writeFileSync(path, lines.join('\n'), 'latin1');
-
-  return warnings;
 }
 
 /** [first line after `section <name>`, index of its `end`) for a section nested one level under `section <top>`. */

@@ -1,6 +1,6 @@
 # 005 — Tuning parts, derived (no table)
 
-**Status: PLANNED 2026-08-19.** An added car ships its base's tuning parts re-modelled to fit it, under the
+**Status: BUILT 2026-08-19 — and it REFUSES the full fleet by one link pair, which is the designed outcome.** An added car ships its base's tuning parts re-modelled to fit it, under the
 STOCK part names (`wg_r_lr_rem1.dff` in `059veh (remingtn)`). Those names must NOT reach the archive — they
 would overwrite the stock part for the base car — so each gets a new unique name, and everything the game
 knows about the stock part is cloned under it. The old tool did this with a hand-written table per car
@@ -43,4 +43,56 @@ knows about the stock part is cloned under it. The old tool did this with a hand
 
 ## Measured
 
-*—*
+**Built 2026-08-19.** `add-vehicles/tuning.ts` derives; `vehicle-installer` gained the writing halves —
+`stageVehicleImg`'s rename map, `ApplyVehicleOptions.partRenames` (applied to the SETTINGS text, whole-word,
+so `spl_a_l` never rewrites part of `spl_a_l_b`), `mergeCarmodsLink`, and `carmods-guard.ts`.
+
+**The naming scheme changed, and for a reason worth keeping.** The plan wanted prefix + slot token + the
+stock suffix digit (`wg_l_lr_` + `v059` + `1`), which needs a table of the prefixes
+`SetupVehicleUpgradeFlags` switches on — and that list is documented here with a trailing "…", i.e. not
+exhaustively known. **The derived name is the whole stock name plus `_<slot>`** instead: every prefix rule
+keeps matching whatever the set really is, and nothing is guessed. The fleet's longest lands on exactly the
+19-character ceiling (`wg_l_lr_rem1_059veh`), which the guard checks rather than truncates.
+
+**The `mods` line is the AUTHOR's, not the base's.** The plan derived it from the base's line; the data says
+every part-shipping car already authors its own (`118veh, exh_a_l, …` under the STOCK names, expecting the
+rename). So the settings line is used and the renames are substituted into it — and what the derivation adds
+is a WARNING for the base's own parts a car names without re-modelling them (`072veh` names three of the
+tornado's): they exist, the shop sells them, and they were modelled for another body.
+
+**What is derived, all of it out of the built `data/`:** a part is base-specific when its `veh_mods.ide` TXD
+column names a car and generic when it names `vehicle` (48 stock rows); the cloned IDE row keeps the stock
+trailing columns and takes the ADDED car's TXD; the shop item is cloned into the section the stock item is
+sold in and the price row keeps the stock GXT key (it is the same part re-modelled); a `link` is written only
+when BOTH sides are shipped, and one side alone is a warning.
+
+**Measured on an APFS clone of `build/original/sa`:** 5 cars ship 46 part dffs (059veh 10, 072veh 5, 118veh
+14, 121veh 5, 124veh 12). The four that fit installed together: **34 parts, 46 rows/shop clones over the
+fleet, 29 link pairs, worst `mods` line 15 of 16**, the renamed dffs in `vehicles2.img` with the STOCK
+`wg_l_lr_rem1.dff` untouched in `vehicles.img`, and a second run byte-identical across `carmods.dat`,
+`shopping.dat`, `veh_mods.ide` and the ledger.
+
+## The ceiling the fleet actually hits
+
+**8 wing pairs + stock 23 = 31, and the array is 30.** The guard refuses, naming the plugin and the pair
+that would be the 31st:
+
+```
+carmods.dat holds 31 'link' pairs and the game's array is 30 (CLinkedUpgradeList, stock uses 23).
+The 31st pair writes past it — static corruption, no message. Ship perfect-vehicle.asi
+(asi/perfect-vehicle plan 002) to lift it, or drop 1 pair(s): wg_l_c_f_124veh/wg_r_c_f_124veh
+```
+
+So the full fleet needs **`asi/perfect-vehicle` 002**, or one pair dropped — the user's call, and the pair
+the guard names is the Miata's second wing set. The guard steps aside on its own when `perfect-vehicle.asi`
+is in the tree.
+
+**A failed run is safe to retry.** The ceilings are checked after every row is merged, so a refusal leaves
+the ide rows in place and no ledger — and reading only the ledger, the NEXT run would see those ids as
+taken by strangers and renumber the whole fleet. `promisedIds` reads the tree as the ledger's fallback:
+verified by re-running over the half-written tree, where `001veh` kept 19001.
+
+Tests: 12 in `tuning.test.ts`; add-vehicles 46, vehicle-installer 185, the whole set 646 green.
+
+**One thing left alone**: `121veh`'s authored line names `nto_b_s` twice. It costs an upgrade slot and the
+game will take it as it is; the file is the author's.

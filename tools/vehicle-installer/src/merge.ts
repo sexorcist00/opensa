@@ -37,6 +37,36 @@ export function mergeCarmods(base: string, line: string): string {
   return mergeSortedSection(base, 'mods', line);
 }
 
+/**
+ * Add a `left, right` pair to `carmods.dat`'s `link` section, before its `end`. Idempotent by the PAIR, in
+ * either order — a mirrored part is linked once and re-running an install adds nothing.
+ *
+ * The section is a fixed-size array in the game (`CLinkedUpgradeList`, 30 pairs), so whoever calls this
+ * counts first: `docs/gta-sa-original/carmods-upgrade-ceilings.md`.
+ */
+export function mergeCarmodsLink(base: string, left: string, right: string): string {
+  const eol = eolOf(base);
+  const out = base.split(/\r?\n/);
+  const section = findSection(out, 'link');
+  if (section === null) {
+    return base;
+  }
+  const wanted = [left.toLowerCase(), right.toLowerCase()].sort().join(',');
+  for (let i = section.start + 1; i < section.end; i += 1) {
+    const cells = out[i]
+      .split('#')[0]
+      .split(',')
+      .map((cell) => cell.trim().toLowerCase())
+      .filter((cell) => cell !== '');
+    if (cells.length >= 2 && [cells[0], cells[1]].sort().join(',') === wanted) {
+      return base;
+    }
+  }
+  out.splice(section.end, 0, `${left}, ${right}`);
+
+  return out.join(eol);
+}
+
 /** Replace the car-table line in `handling.cfg` by id (first token); append if new. */
 export function mergeHandling(base: string, line: string): string {
   const eol = eolOf(base);

@@ -15,7 +15,7 @@ const STOCK_IDS = new Map([
   ['petro', 514],
 ]);
 
-const row = (slot: string, id: number, bases: string[]): LedgerRow => ({ bases, folder: slot, id, slot });
+const row = (slot: string, id: number, bases: string[]): LedgerRow => ({ bases, folder: slot, id, kind: 'car', slot });
 
 let game: string;
 

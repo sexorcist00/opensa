@@ -95,6 +95,9 @@ export function registerTraffic(
 export function variationsByBase(installed: readonly LedgerRow[], warnings: string[]): Map<string, number[]> {
   const byBase = new Map<string, number[]>();
   for (const row of installed) {
+    if (row.kind !== 'car') {
+      continue;
+    }
     if (row.bases.length === 0) {
       warnings.push(`${row.slot} names no base — it is installed but nothing will spawn it`);
       continue;

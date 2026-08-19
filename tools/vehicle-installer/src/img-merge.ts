@@ -52,25 +52,37 @@ export function sharedVehicleFiles(
  * `writeFileSync`'s 2 GiB ceiling mid-stage (`ERR_OUT_OF_RANGE`, 2 168 825 856 B, 2026-08-15). Files stay on
  * disk until the write pulls them, so staging a 3 GB mod set costs paths rather than buffers.
  */
-export function stageVehicleImg(folderPath: string, img: EditableImg): StagedVehicleImg {
+export function stageVehicleImg(
+  folderPath: string,
+  img: EditableImg,
+  /**
+   * File name (lowercased, with extension) → the entry name to stage it UNDER. An added car ships its base's
+   * tuning parts under the STOCK names, and staging those would overwrite the stock part for every car that
+   * uses it — so `tools/add-vehicles` renames them here, at the one point where a file becomes an entry.
+   */
+  renames: ReadonlyMap<string, string> = new Map(),
+): StagedVehicleImg {
   const files = readdirSync(folderPath, { withFileTypes: true }).filter(
     (entry) => entry.isFile() && /\.(?:dff|txd)$/i.test(entry.name),
   );
   const repaired: string[] = [];
+  const names: string[] = [];
   for (const file of files) {
     const path = join(folderPath, file.name);
+    const entry = renames.get(file.name.toLowerCase()) ?? file.name;
+    names.push(entry.toLowerCase());
     // Only a `.dff` carries a frame list, and only a broken one is ever read whole — everything else keeps
     // the staged-by-path route this function exists for.
     const fixed = /\.dff$/i.test(file.name) ? repairFrameOrder(path) : null;
     if (fixed) {
-      img.set(file.name, fixed);
-      repaired.push(file.name.toLowerCase());
+      img.set(entry, fixed);
+      repaired.push(entry.toLowerCase());
     } else {
-      img.setFile(file.name, path);
+      img.setFile(entry, path);
     }
   }
 
-  return { names: files.map((file) => file.name.toLowerCase()), repaired };
+  return { names, repaired };
 }
 
 /**

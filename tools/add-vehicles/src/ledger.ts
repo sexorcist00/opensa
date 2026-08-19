@@ -10,7 +10,10 @@
  *
  * One row per car, tab-separated, sorted by slot so a rebuild is byte-identical:
  *
- *   001veh  19001  manana  001veh - 1971 Chevrolet Vega - alfamodding (manana)
+ *   001veh  19001  car   manana  001veh - 1971 Chevrolet Vega - alfamodding (manana)
+ *
+ * A car's re-modelled TUNING PARTS are rows here too (`kind` = `part`, `bases` = the stock part they were
+ * cloned from): a part id is stored in a save as part of the car's upgrades, so it may not move either.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -18,18 +21,21 @@ import { dirname, join } from 'node:path';
 /** Where the ledger lives inside a built game dir. */
 export const ADDS_LEDGER = join('data', 'vehicle-adds.txt');
 
-/** One added car, as the ledger records it. */
+/** One added model, as the ledger records it. */
 export interface LedgerRow {
   /** The stock slot(s) it varies, comma-separated in the file. */
   readonly bases: readonly string[];
   /** The folder name it was installed from — for a human reading the file, never matched on. */
   readonly folder: string;
   readonly id: number;
+  /** A car, or one of a car's re-modelled tuning parts — only cars go into traffic. */
+  readonly kind: 'car' | 'part';
   readonly slot: string;
 }
 
 const HEADER = [
-  '# OpenSA added vehicles: slot, model id, base slot(s), source folder. Written by tools/add-vehicles.',
+  '# OpenSA added vehicles: slot, model id, kind, base slot(s) or stock part, source folder.',
+  '# Written by tools/add-vehicles.',
   '# The ID IS A PROMISE: parked cars and ModelVariations entries land in the save, so a slot listed here',
   '# keeps its id on every rebuild. Deleting this file renumbers the fleet and invalidates existing saves.',
 ];
@@ -55,12 +61,13 @@ export function readAddsRows(gameDir: string): LedgerRow[] {
     if (trimmed === '' || trimmed.startsWith('#')) {
       continue;
     }
-    const [slot, id, bases, folder] = trimmed.split(/\t+/);
+    const [slot, id, kind, bases, folder] = trimmed.split(/\t+/);
     if (slot && /^\d+$/.test(id ?? '')) {
       rows.push({
         bases: (bases ?? '').split(',').filter((base) => base !== ''),
         folder: folder ?? '',
         id: Number(id),
+        kind: kind === 'part' ? 'part' : 'car',
         slot: slot.toLowerCase(),
       });
     }
@@ -85,7 +92,7 @@ export function writeAddsLedger(gameDir: string, rows: readonly LedgerRow[]): vo
     }
   }
   for (const row of rows) {
-    kept.set(row.slot.toLowerCase(), [row.slot, row.id, row.bases.join(','), row.folder].join('\t'));
+    kept.set(row.slot.toLowerCase(), [row.slot, row.id, row.kind, row.bases.join(','), row.folder].join('\t'));
   }
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(
