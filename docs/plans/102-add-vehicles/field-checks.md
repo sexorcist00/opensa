@@ -58,11 +58,12 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
 - [ ] **`vehicles3.img` really loads.** The run added a third family member and registered it in `gta.dat`.
       Look at: the game boots and a car whose model lives in that archive appears. If it fails: FLA's
       archive count, and `data/img-layout.json`.
-- [ ] **The colour palette.** 145 rows against a table of 128 —
-      `docs/gta-sa-original/vehicle-colour-table-128.md`. Look at: cars whose colours are ids above 127
-      (the added ones use 140–144) show the right paint, and nothing else in the game turns odd. **The
-      real fix is one ini line** (`Vehicle colors` in the FLA ini); this row is what to watch if it is
-      left as it is.
+- [ ] **`Vehicle colors = 256` really applies.** Set 2026-08-19 because the palette (145 rows with the
+      added cars) was over the game's own 128 —
+      `docs/gta-sa-original/vehicle-colour-table-128.md`. Deliver `fastman92limitAdjuster_GTASA.ini`.
+      Look at: FLA's log names the setting, `Number of memory changes made` is still healthy (3712 was the
+      figure before), and cars painted with ids above 127 (the added ones use 140–144) show the right
+      colour. If FLA refuses the number it says so in its log — that is the first place to read.
 
 ## From `asi/perfect-vehicle` (to be filled as 001–002 are built)
 

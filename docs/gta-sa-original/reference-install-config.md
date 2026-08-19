@@ -157,6 +157,13 @@ Enable model special feature loader = 1
 Register global exception handler = 0
 ```
 
+**Changed 2026-08-19 (the user's call):** `Vehicle colors = 256` — the line was commented, so FLA left the
+game's own 128-row `carcols.dat` palette table in place while the build already carried **140** rows and the
+added-cars fleet takes it to 145 ([the measurement](vehicle-colour-table-128.md)). 256 is the natural
+ceiling: a vehicle's colour is a byte in the save. Set in `mods-src/original/mods/sa/6. fastman92 limit
+adjuster 6.5 (stable)/`, in `build/original/sa/` and in the bottle. **Not yet confirmed in the field** — the
+next boot's `Number of memory changes made` and a look at FLA's log line for it are the check.
+
 `fastman92limitAdjuster.log` closes with `Number of memory changes made: 3712`.
 
 ### The ID pools — read them off FLA's LOG, not off the ini

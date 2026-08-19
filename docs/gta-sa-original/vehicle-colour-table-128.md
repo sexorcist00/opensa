@@ -43,10 +43,12 @@ Whether the game's array really is 128, and what sits behind it. Until someone r
 honest position is: the build has been running 12 rows past the adjuster's stated default for some time with
 no reported symptom, which is either luck or evidence that the number is wrong.
 
-**The fix that costs nothing**: uncomment `Vehicle colors` in `fastman92limitAdjuster_GTASA.ini` and set it
-above the palette the build carries (256 leaves room; a vehicle's colour is a byte in the save, so 256 is the
-natural ceiling). That is a change to the reference install's configuration and therefore the user's call —
-raised 2026-08-19, not yet taken.
+**TAKEN 2026-08-19 (the user's call): `Vehicle colors = 256`.** The line was commented out, so FLA was
+leaving the game's own table in place; 256 is the natural ceiling because a vehicle's colour is a byte in the
+save. Set in the mod folder (`mods-src/original/mods/sa/6. fastman92 limit adjuster 6.5 (stable)/`), in
+`build/original/sa/` and in the bottle; the installer's warning stops firing at 145 of 256. **The field has
+not confirmed it yet** — FLA's own log line for the setting, and `Number of memory changes made`, are what
+to read on the next boot ([the field round](../plans/102-add-vehicles/field-checks.md)).
 
 ## Where this bites
 
