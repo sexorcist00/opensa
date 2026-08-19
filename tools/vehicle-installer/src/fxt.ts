@@ -6,11 +6,18 @@
  *
  * The keys are what the mod's `tuning_new_parts.txt` price rows already name (`bnt_lr_slv1  SLASH  respect
  * 0  sexy 0  150`); without them the part is in the shop with no name at all. We do not rebuild
- * `text/american.gxt` for that — the build we ship to carries CLEO's FXT loader (`cleo/ResprayPrice.fxt` is
- * one already), and an `.fxt` is exactly this format: `KEY<whitespace>text`, one per line.
+ * `text/american.gxt` for that — the build we ship to carries CLEO's FXT loader, and an `.fxt` is exactly
+ * this format: `KEY<whitespace>text`, one per line.
  *
- * So the file becomes `cleo/<model>.fxt`, carried like the mod's own `cleo/` folder. The file was found
- * unread by the 212-folder census (session 28): the slamvan's two bonnets are nameless in the built game.
+ * **The file goes in `cleo/cleo_text/<model>.fxt`, and the subfolder is the whole point**: CLEO loads FXT
+ * from `CLEO/CLEO_TEXT/` and nowhere else. A file dropped in `cleo/` beside the scripts is simply never
+ * read, and NOTHING says so — the part is in the shop with an empty name, which looks identical to a
+ * missing GXT key (field-found 2026-08-19, plan 102's shop round; the mods that ship FXT correctly all use
+ * that folder). Do not take `cleo/ResprayPrice.fxt` as evidence to the contrary: it sits there because its
+ * mod put it there, not because the channel works.
+ *
+ * The file was found unread by the 212-folder census (session 28): the slamvan's two bonnets are nameless
+ * in the built game.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -18,6 +25,9 @@ import { join } from 'node:path';
 import { decodeSettings } from './settings';
 
 export const TEXT_FILE = 'text.txt';
+
+/** The one folder CLEO reads `.fxt` from. A file outside it is never read, and nothing reports that. */
+export const CLEO_TEXT_DIR = 'cleo_text';
 
 /** Reading another mod's `.fxt` for its keys: its own authoring problems are not this car's warnings. */
 const noop = (): void => undefined;
@@ -63,16 +73,19 @@ export function applyVehicleText(
 
     return warnings;
   }
+  // Scanned from `cleo/` so a key clash with a MOD's own `.fxt` is caught wherever the mod put it; written
+  // into `cleo/cleo_text/`, the only folder CLEO reads FXT from.
   const cleoDir = join(outPath, 'cleo');
-  const dest = join(cleoDir, `${model}.fxt`);
+  const textDir = join(cleoDir, CLEO_TEXT_DIR);
+  const dest = join(textDir, `${model}.fxt`);
   for (const [key, owner] of foreignKeys(cleoDir, dest)) {
     if (parsed.some((entry) => entry.key.toUpperCase() === key)) {
       warnings.push(`${source}: key '${key}' is already defined by cleo/${owner} — whichever CLEO loads last wins`);
     }
   }
-  mkdirSync(cleoDir, { recursive: true });
+  mkdirSync(textDir, { recursive: true });
   writeFileSync(dest, formatFxt(parsed), 'latin1');
-  console.log(`vehicle-installer: text → cleo/${model}.fxt (${parsed.length} entry/entries)`);
+  console.log(`vehicle-installer: text → cleo/${CLEO_TEXT_DIR}/${model}.fxt (${parsed.length} entry/entries)`);
 
   return warnings;
 }

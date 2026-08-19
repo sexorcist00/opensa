@@ -36,7 +36,7 @@ idempotent; `add-vehicles` imports it and owns only what is specific to a NEW id
 | piece | home | born in | used by |
 | --- | --- | --- | --- |
 | `applyVehicle` (IMG stage, ide/handling/carcols/carmods merges, features, `tuning_new_parts`, `cleo/` carry) | vehicle-installer `apply-vehicle.ts` | exists | add-vehicles 002, with an `id` |
-| `.fxt` writer — GXT lines → `cleo/<slot>.fxt` | vehicle-installer `fxt.ts` | 012 | 012 (`text.txt`), add-vehicles 003 |
+| `.fxt` writer — GXT lines → `cleo/cleo_text/<slot>.fxt` | vehicle-installer `fxt.ts` | 012 | 012 (`text.txt`), add-vehicles 003 |
 | ModelVariations ini section merge, `{{name}}` → id | vehicle-installer `model-variations.ts` | 012 | 012, add-vehicles 004/006 |
 | FLA audio cfg line merge | vehicle-installer `audio.ts` | 013 | 013, add-vehicles 003 |
 | Parked Maker `[Cars]` merge | vehicle-installer `parked.ts` | 013 | 013, add-vehicles 003 |

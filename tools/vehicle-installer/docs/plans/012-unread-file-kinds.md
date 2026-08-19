@@ -33,7 +33,7 @@ would have it parsed AS settings and warned "nothing recognised — STOCK". Toda
    model in the built tree's IDEs (for replacement cars every name is a stock slot, so this is a lookup; the
    allocation case is add-vehicles 004). Missing ini / mod 11 absent → warning naming the mod, nothing
    written. Called from `applyVehicle` after the settings merge.
-2. **`fxt.ts`** — `text.txt` lines → `cleo/<slot>.fxt` (lowercase, CRLF as CLEO expects, one key per line);
+2. **`fxt.ts`** — `text.txt` lines → `cleo/cleo_text/<slot>.fxt` (lowercase, CRLF as CLEO expects, one key per line);
    a key already present in another fxt the build carries → warning. Called from `applyVehicle`.
 3. **The fallback** — the "first other `.txt`" settings fallback excludes every KNOWN kind (`features.txt`,
    `tuning_new_parts.txt`, `model-variations-extra.txt`, `text.txt`, and 013's `audio.txt`/`parked.txt`)
@@ -52,7 +52,7 @@ would have it parsed AS settings and warned "nothing recognised — STOCK". Toda
 
 **Built 2026-08-19.** `model-variations.ts` (parse ini sections / merge by section name / `{{name}}` →
 id via `ideModelNames`, the walk `tuning-parts` already does — 74 IDEs, 904 KB, cheap enough to repeat per
-car), `fxt.ts` (`text.txt` → `cleo/<model>.fxt`, key TAB text, CRLF), both called from `applyVehicle`;
+car), `fxt.ts` (`text.txt` → `cleo/cleo_text/<model>.fxt`, key TAB text, CRLF), both called from `applyVehicle`;
 `ApplyVehicleOptions.target` decides the ModelVariations merge (`opensa` has no `modloader/`, and eight
 "the plugin is missing" warnings per build would be a lie about a host that cannot use it).
 
@@ -65,7 +65,7 @@ Tests: 33 new (`model-variations.test.ts` 17, `fxt.test.ts` 13, `apply-vehicle.t
 output of the user's own earlier tool** (`NO_COMMIT/1/build/…/ModelVariations_Vehicles.ini`) — including
 its unresolved `{{205veh}}`/`{{211veh}}` placeholders, which are ADDED cars and stay unresolved until
 `add-vehicles` allocates their ids. Nine warnings name them, one per occurrence. Re-running the rebake
-leaves the ini byte-identical (idempotent). `cleo/slamvan.fxt` = 55 B, `SLASH\tSlamin Hood\r\nSLACH\tChromer
+leaves the ini byte-identical (idempotent). `cleo/cleo_text/slamvan.fxt` = 55 B, `SLASH\tSlamin Hood\r\nSLACH\tChromer
 Hood\r\n`.
 
 Also fixed on the way: `tsconfig.json` did not exclude `NO_COMMIT/`, so `npm run lint:ts` — and with it

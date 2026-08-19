@@ -17,7 +17,7 @@ let root: string;
 let folder: string;
 let out: string;
 
-const fxtText = (model: string): string => readFileSync(join(out, 'cleo', `${model}.fxt`), 'latin1');
+const fxtText = (model: string): string => readFileSync(join(out, 'cleo', 'cleo_text', `${model}.fxt`), 'latin1');
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'vehicle-installer-fxt-'));
@@ -81,7 +81,7 @@ describe('applyVehicleText', () => {
       const warnings = applyVehicleText(folder, [TEXT_FILE], out, undefined);
 
       expect(warnings[0]).toMatch(/no model to name the \.fxt after/);
-      expect(existsSync(join(out, 'cleo', 'undefined.fxt'))).toBe(false);
+      expect(existsSync(join(out, 'cleo', 'cleo_text', 'undefined.fxt'))).toBe(false);
     });
 
     it('warns when a file with no recognisable entry would leave the parts nameless', () => {
@@ -90,7 +90,7 @@ describe('applyVehicleText', () => {
       const warnings = applyVehicleText(folder, [TEXT_FILE], out, 'slamvan');
 
       expect(warnings[0]).toMatch(/no entries recognised/);
-      expect(existsSync(join(out, 'cleo', 'slamvan.fxt'))).toBe(false);
+      expect(existsSync(join(out, 'cleo', 'cleo_text', 'slamvan.fxt'))).toBe(false);
     });
 
     it('reports a key another .fxt in the build already defines', () => {
@@ -108,10 +108,10 @@ describe('applyVehicleText', () => {
   describe('positive cases', () => {
     it('does nothing at all when the folder ships no such file', () => {
       expect(applyVehicleText(folder, ['slamvan.dff'], out, 'slamvan')).toEqual([]);
-      expect(existsSync(join(out, 'cleo', 'slamvan.fxt'))).toBe(false);
+      expect(existsSync(join(out, 'cleo', 'cleo_text', 'slamvan.fxt'))).toBe(false);
     });
 
-    it("writes the slamvan's two part names as cleo/<model>.fxt", () => {
+    it("writes the slamvan's two part names as cleo/cleo_text/<model>.fxt", () => {
       writeFileSync(join(folder, TEXT_FILE), SLAMVAN);
 
       expect(applyVehicleText(folder, [TEXT_FILE], out, 'slamvan')).toEqual([]);

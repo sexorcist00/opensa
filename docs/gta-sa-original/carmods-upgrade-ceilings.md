@@ -22,6 +22,14 @@ behaviour; and the IDE loader reads a model name with `sscanf %s` into `char[24]
 24 bytes including `.dff` — a part name is safe at **≤ 19 characters**. Stock part names are ≤ 14
 (`misc_c_lr_rem1`).
 
+**19 is FIELD-CONFIRMED, 2026-08-19** (plan 102's shop round): the added fleet's derived parts sit exactly on
+that ceiling — `fbmp_lr_rem1_059veh`, `rbmp_lr_rem2_059veh`, `wg_l_lr_rem1_059veh`, `wg_r_lr_rem1_059veh`,
+19 characters and 23 with `.dff`, one byte of the 24 left for the NUL. All 46 derived parts import at their
+own ids, fit their cars in the mod shop and crash nothing. **So a name-shortening map is not needed** — the
+question was raised because the user's own earlier tool had needed one, and the answer is that the derived
+scheme lands inside the ceiling without help. It also has NO margin: a scheme that adds one character to the
+suffix is over.
+
 **Both numbers were read out of the shipping exe on 2026-08-19** (`asi/perfect-vehicle` plan 001), and the
 machine code says them more plainly than the source does:
 

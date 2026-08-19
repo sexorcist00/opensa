@@ -130,7 +130,7 @@ Candidates the user decides on, not in the chain until he says so: **"tuned traf
 | piece | today | who needs it |
 | --- | --- | --- |
 | `applyVehicle` (img stage + the four merges + features + tuning_new_parts + cleo carry) | vehicle-installer | both — the added car is a replacement car plus an id |
-| `.fxt` writer (GXT lines → `cleo/<slot>.fxt`) | nobody | 012 (text.txt), new 003 |
+| `.fxt` writer (GXT lines → `cleo/cleo_text/<slot>.fxt`) | nobody | 012 (text.txt), new 003 |
 | ModelVariations ini section merge (+ `{{name}}` → id) | nobody | 012, new 004 |
 | FLA audio cfg line merge | nobody | 013, new 003 |
 | Parked Maker ini `[Cars]` merge | nobody | 013, new 003 |

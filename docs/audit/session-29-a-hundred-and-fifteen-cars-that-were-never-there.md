@@ -59,7 +59,7 @@ authored per car (the user's earlier tool carried a hand-written table per car; 
 
 - an id from a window measured against the tree, pinned by a ledger because parked cars and variations land
   in the SAVE;
-- a name (`cleo/<slot>.fxt`, 106 of them — the 9 train carriages whose gameName is a stock key deliberately
+- a name (`cleo/cleo_text/<slot>.fxt`, 106 of them — the 9 train carriages whose gameName is a stock key deliberately
   get none, or they would rename the stock train);
 - a sound (111 of the 115 inherit their base's row, retargeted; 4 ship their own);
 - a place in traffic (101 base sections) and a parked spot;

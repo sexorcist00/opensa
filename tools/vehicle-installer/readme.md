@@ -66,7 +66,7 @@ Contract: `docs/contracts/vehicles.md`.
      `modloader/Model_Variations/ModelVariations_Vehicles.ini` by section name (`sa` target only — the plugin
      is the real game's). `{{name}}` resolves to that model's id in the tree's IDEs; an unknown one is
      reported and the line ships as authored. `[Settings]` is the plugin's and is never written from a mod.
-   - **Text** — `text.txt`'s `KEY text` lines → `out/cleo/<model>.fxt`, the channel CLEO's FXT loader reads:
+   - **Text** — `text.txt`'s `KEY text` lines → `out/cleo/cleo_text/<model>.fxt`, the channel CLEO's FXT loader reads:
      the shop shows a new part's name from there rather than from a rebuilt `american.gxt`.
    - **Sound and parking** (`sa` only) — `audio.txt`'s row into FLA's `data/gtasa_vehicleAudioSettings.cfg`
      (replaced by model name, else inserted into the block that file sets aside), and `parked.txt`'s id-less

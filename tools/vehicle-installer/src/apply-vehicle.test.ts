@@ -34,7 +34,7 @@ describe('applyVehicle (the settings-file fallback)', () => {
 
       expect(applied.warnings).toEqual([]);
       expect(applied.handlingId).toBeUndefined();
-      expect(existsSync(join(out, 'cleo', 'slamvan.fxt'))).toBe(true);
+      expect(existsSync(join(out, 'cleo', 'cleo_text', 'slamvan.fxt'))).toBe(true);
     });
 
     it('still falls back to an unknown `.txt` — the pre-suffix mods have no other name', () => {
@@ -57,7 +57,7 @@ describe('applyVehicle (the settings-file fallback)', () => {
       expect(applied.warnings).toEqual([]);
       expect(applied.handlingId).toBe('SLAMVAN');
       expect(readFileSync(join(out, 'data', 'vehicles.ide'), 'latin1')).toContain('richfamily');
-      expect(readFileSync(join(out, 'cleo', 'slamvan.fxt'), 'latin1')).toBe('SLASH\tSlamin Hood\r\n');
+      expect(readFileSync(join(out, 'cleo', 'cleo_text', 'slamvan.fxt'), 'latin1')).toBe('SLASH\tSlamin Hood\r\n');
     });
   });
 });

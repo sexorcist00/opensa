@@ -38,10 +38,12 @@ Seven launches went into the road the added cars take, and the result changed th
       or `towtruck` in traffic pulls one of its own list. If it fails: the section is in the built ini
       (verify first — it is 45 lines longer than the mod's), so the cause is the plugin's own reading of
       it, not the merge. `ModelVariations.ini` → `EnableLog=1` prints its parse errors.
-- [ ] **The slamvan's two bonnets have names in the shop.** Deliver `cleo/slamvan.fxt` (55 B).
+- [ ] **The slamvan's two bonnets have names in the shop.** Deliver `cleo/cleo_text/slamvan.fxt` (55 B).
       Look at: a slamvan in a mod shop → the bonnet items read "Slamin Hood" / "Chromer Hood" instead of
-      blank. If it fails: CLEO's FXT loader did not pick the file up — check it is beside
-      `cleo/ResprayPrice.fxt`, which proves the channel works.
+      blank. If it fails: CLEO's FXT loader did not pick the file up. **The folder is the contract** —
+      `CLEO/CLEO_TEXT/`, never `cleo/` beside the scripts; every `.fxt` was landing one folder up until
+      2026-08-19. Do NOT use `cleo/ResprayPrice.fxt` as the control, as an earlier revision of this row
+      said: it sits in `cleo/` because its own mod put it there, which proves nothing about the channel.
 - [ ] **`petro` and `rdtrain` still behave.** Their sections ship with unresolved `{{205veh}}`-style
       placeholders on purpose (those are ADDED cars; `add-vehicles` allocates the ids). Look at: nothing
       breaks around them — ModelVariations logs an invalid model id and skips. Re-check this row AFTER
@@ -73,9 +75,13 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
       proof a file reached the game, and it is the FIRST thing to read if a car spawns invisible or as a
       stock model. If it is missing: `modloader.asi` active, and the folder actually delivered (it is 1.4 GB
       — a partial copy is the likely failure).
-- [ ] **A tuning part loads under its DERIVED name.** Same log, looking for
-      `exh_lr_rem1_059veh.dff`. The stock `exh_lr_rem1` must NOT appear from that folder — the whole point
-      is that the base car's own part is untouched.
+- [x] **A tuning part loads under its DERIVED name.** ✔ 2026-08-19, log-proven — **46 of 46** derived parts
+      carry an `Importing model file for index <id> at "modloader\added-vehicles\<name>.dff"` line, and
+      **0** stock parts are served from that folder, so the base car's own set is untouched. 059veh's ten
+      parts land at 19051–19060, including all four names at the **19-character ceiling**
+      (`fbmp_lr_rem1_059veh`, `rbmp_lr_rem2_059veh`, `wg_l_lr_rem1_059veh`, `wg_r_lr_rem1_059veh`) —
+      **so the derived scheme needs no shortening map**, which was the open question the user raised from
+      his own earlier tool.
 - [x] **An added car exists and drives.** ✔ 2026-08-19 Deliver the vehicles archive family (`models/vehicles*.img`),
       `data/{vehicles.ide,handling.cfg,carcols.dat,carmods.dat,gta.dat}` and `data/vehicle-adds.txt`.
       Look at: spawn `19001` (the vega) with a trainer — it appears, it is the right model, and it drives
@@ -103,13 +109,16 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
       wants them apart.
 - [ ] **`petro` and `towtruck` still tow.** Both are a base AND author trailer keys; their `Global` now reads
       `Trailers1,<baseId>,<addedId>`. Look at: they still pull their trailer sets.
-- [ ] **An added car's own tuning parts fit it.** Deliver `data/carmods.dat`, `data/shopping.dat`,
+- [x] **An added car's own tuning parts fit it.** ✔ 2026-08-19, the user's own shop round: the parts are
+      there and nothing crashes. Deliver `data/carmods.dat`, `data/shopping.dat`,
       `data/maps/veh_mods/veh_mods.ide` and the vehicles archives. Look at: take `059veh` (the Charger) to a
       mod shop — its bumpers, exhausts and wings are listed under the base's names, cost the base's prices,
       and sit on THIS body. A wing bought once fits both sides (the link). If it fails: the part is in
       `veh_mods.ide` under `<stock>_<slot>` with the added car's TXD, so check the TXD carries its textures.
 - [ ] **The base car did not change.** The stock `remingtn` keeps its own parts — nothing was renamed out
-      from under it. Look at: a remington in a mod shop still has its full set.
+      from under it. Look at: a remington in a mod shop still has its full set. **Half of this is already
+      log-proven** (2026-08-19): no stock part name is served from `modloader/added-vehicles/`, so nothing
+      was renamed out from under the base; what is unseen is the shop list itself.
 - [ ] **Traffic is TUNED, at about the configured rate.** 103 models carry a tuned section
       (`TuningChance=75`, `TuningFullBodykit=1`). Look at: roughly three cars in four wear parts or a paint
       job. Too much or too little is one number in `mods-src/original/add-vehicles/add-vehicles.json` and a
@@ -127,11 +136,12 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
 `perfect-vehicle.asi` into the game root beside `perfect-map.asi`, and keep the previous `carmods.dat` to
 put back.
 
-- [ ] **It loads and says so.** Look at: `perfect-vehicle-asi.log` beside the others, ending in
-      `links APPLIED: 256 pairs`. A `DEFER` line instead means a site's bytes have moved — the log names
+- [x] **It loads and says so.** ✔ 2026-08-19 — `perfect-vehicle-asi.log` reads `fingerprint OK`, both
+      adjusters detected, `links APPLIED: 256 pairs (stock 30), both accessors on our storage`.
+      Look at: `perfect-vehicle-asi.log` beside the others, ending in `links APPLIED: 256 pairs`. A `DEFER` line instead means a site's bytes have moved — the log names
       which, and that is the whole diagnosis.
-- [ ] **31 link pairs boot.** Deliver the `carmods.dat` the full 115-car run wrote. Look at: the game
-      boots and plays. Before the plugin this was the pair that would have written past the array.
+- [x] **31 link pairs boot.** ✔ 2026-08-19 — the full 115-car `carmods.dat` boots and plays.
+      Look at: the game boots and plays. Before the plugin this was the pair that would have written past the array.
 - [ ] **Both wings of a re-modelled set swap together.** Take `059veh` (the Charger) to a mod shop and buy
       a wing: the mirror appears on the other side. That is `FindOtherUpgrade` — our replacement — doing its
       job, and it is the single most direct test of the patch.

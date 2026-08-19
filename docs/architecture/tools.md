@@ -29,7 +29,7 @@ never the app. The dependency picture is the tools cluster of
   model id. It also writes
   the two files a mod's own plugins read: `model-variations-extra.txt`'s section into
   `modloader/Model_Variations/ModelVariations_Vehicles.ini` (mod 11, `sa` only — `{{name}}` resolved to that
-  model's id in the tree's IDEs) and `text.txt` into `cleo/<model>.fxt`, the GXT names its new tuning parts
+  model's id in the tree's IDEs) and `text.txt` into `cleo/cleo_text/<model>.fxt`, the GXT names its new tuning parts
   show in the shop (plan 012); `audio.txt` into FLA's `gtasa_vehicleAudioSettings.cfg` and `parked.txt` into
   Parked Maker's `[Cars]`, counted against the car-generator array (plan 013). And
   `data/vehicle-mods.txt`, the mod-car ledger (096/06): once the rows are merged, a mod car is

@@ -280,7 +280,7 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   their **bare** name, so there is no loose `vehicles/` folder. See [mods.md](mods.md).
   On the **`sa` target only**, a mod folder can also speak to the plugins that install carries: a
   `model-variations-extra.txt` section reaches ModelVariations 10.7 (which trailers the slot tows, how often)
-  and a `text.txt` becomes `cleo/<model>.fxt`, the shop names of its own tuning parts (plan 012). Our engine
+  and a `text.txt` becomes `cleo/cleo_text/<model>.fxt`, the shop names of its own tuning parts (plan 012). Our engine
   has neither plugin — the trailer/tuning-shop equivalents are the two leftovers below.
 
 ## Known gaps / candidates
