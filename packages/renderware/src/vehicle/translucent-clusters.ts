@@ -6,6 +6,14 @@ interface Cluster {
   triangles: RWTriangle[];
 }
 
+/** Each live row's nearest partner among the rows AFTER it — the naive scan's `i < j` half of the matrix. */
+interface Nearest {
+  /** Gap to `of[row]`; `Infinity` once the row has no later partner left. */
+  gap: Float64Array;
+  /** The nearest later row, `-1` when none is left. */
+  of: Int32Array;
+}
+
 /**
  * Split one material group's triangles into spatially COMPACT clusters — the unit the translucent sort can
  * order honestly. The sort keys a submesh by the eye's distance to its AABB; a group that is one material but
@@ -68,21 +76,42 @@ export function clusterTriangles(
       }
     }
   }
-  const clusters = [...byRoot.values()];
-  // Agglomerate: the closest pair first, while it is within `gap` — then, past the cap, regardless.
-  for (;;) {
-    if (clusters.length < 2) {
-      break;
-    }
-    const [i, j, distance] = closestPair(clusters);
-    if (distance > gap && clusters.length <= maxClusters) {
-      break;
-    }
-    merge(clusters[i], clusters[j]);
-    clusters.splice(j, 1);
+
+  return agglomerate([...byRoot.values()], gap, maxClusters).map((cluster) => cluster.triangles);
+}
+
+/**
+ * Merge the closest pair first, while it is within `gap` — then, past the cap, regardless.
+ *
+ * Re-scanning every pair per merge is O(n^3), and one material group really does reach 1 440 components
+ * (the Pacific Park ferris ring is 1 440 separate bulbs over 50 400 triangles) — 3.6 s for that one model.
+ * A merge changes ONE box, and growing a box can only bring it NEARER to the others, so every row keeps its
+ * own nearest partner and only that column is repaired. Same merge order, same clusters, O(n^2).
+ */
+function agglomerate(clusters: Cluster[], gap: number, maxClusters: number): Cluster[] {
+  const alive = new Uint8Array(clusters.length).fill(1);
+  const nearest: Nearest = {
+    gap: new Float64Array(clusters.length).fill(Infinity),
+    of: new Int32Array(clusters.length).fill(-1),
+  };
+  let live = clusters.length;
+
+  for (let row = 0; row < clusters.length; row += 1) {
+    scanRow(clusters, alive, nearest, row);
   }
 
-  return clusters.map((cluster) => cluster.triangles);
+  while (live >= 2) {
+    const [into, from, distance] = closestPair(alive, nearest);
+    if (into < 0 || (distance > gap && live <= maxClusters)) {
+      break;
+    }
+    merge(clusters[into], clusters[from]);
+    alive[from] = 0;
+    live -= 1;
+    repair(clusters, alive, nearest, into, from);
+  }
+
+  return clusters.filter((_, index) => alive[index] === 1);
 }
 
 function boxGap(a: Cluster, b: Cluster): number {
@@ -95,19 +124,20 @@ function boxGap(a: Cluster, b: Cluster): number {
   return Math.sqrt(sq);
 }
 
-/** The two clusters whose boxes are nearest (Euclidean gap between AABBs, 0 when they overlap) — `i < j`. */
-function closestPair(clusters: readonly Cluster[]): [number, number, number] {
-  let best: [number, number, number] = [0, 1, Infinity];
-  for (let i = 0; i < clusters.length; i += 1) {
-    for (let j = i + 1; j < clusters.length; j += 1) {
-      const distance = boxGap(clusters[i], clusters[j]);
-      if (distance < best[2]) {
-        best = [i, j, distance];
-      }
+/** The closest live pair, ties falling to the lowest row then its lowest partner — the naive scan's order. */
+function closestPair(alive: Uint8Array, nearest: Nearest): [number, number, number] {
+  let into = -1;
+  let from = -1;
+  let best = Infinity;
+  for (let row = 0; row < alive.length; row += 1) {
+    if (alive[row] === 1 && nearest.of[row] >= 0 && nearest.gap[row] < best) {
+      best = nearest.gap[row];
+      into = row;
+      from = nearest.of[row];
     }
   }
 
-  return best;
+  return [into, from, best];
 }
 
 function merge(into: Cluster, from: Cluster): void {
@@ -116,4 +146,48 @@ function merge(into: Cluster, from: Cluster): void {
     into.min[axis] = Math.min(into.min[axis], from.min[axis]);
     into.max[axis] = Math.max(into.max[axis], from.max[axis]);
   }
+}
+
+/**
+ * Repair the cache after `from` was folded into `into`. Only rows BELOW `into` own the pair to it, so only
+ * they can see the grown box; rows that pointed at the retired `from` have lost their partner outright.
+ */
+function repair(clusters: readonly Cluster[], alive: Uint8Array, nearest: Nearest, into: number, from: number): void {
+  scanRow(clusters, alive, nearest, into);
+  for (let row = 0; row < into; row += 1) {
+    if (alive[row] === 0) {
+      continue;
+    }
+    if (nearest.of[row] === from) {
+      scanRow(clusters, alive, nearest, row);
+      continue;
+    }
+    const candidate = boxGap(clusters[row], clusters[into]);
+    if (candidate < nearest.gap[row] || (candidate === nearest.gap[row] && into < nearest.of[row])) {
+      nearest.gap[row] = candidate;
+      nearest.of[row] = into;
+    }
+  }
+  for (let row = into + 1; row < from; row += 1) {
+    if (alive[row] === 1 && nearest.of[row] === from) {
+      scanRow(clusters, alive, nearest, row);
+    }
+  }
+}
+
+/** Re-read one row's nearest partner from scratch. */
+function scanRow(clusters: readonly Cluster[], alive: Uint8Array, nearest: Nearest, row: number): void {
+  let bestRow = -1;
+  let bestGap = Infinity;
+  for (let other = row + 1; other < clusters.length; other += 1) {
+    if (alive[other] === 1) {
+      const candidate = boxGap(clusters[row], clusters[other]);
+      if (candidate < bestGap) {
+        bestGap = candidate;
+        bestRow = other;
+      }
+    }
+  }
+  nearest.of[row] = bestRow;
+  nearest.gap[row] = bestGap;
 }

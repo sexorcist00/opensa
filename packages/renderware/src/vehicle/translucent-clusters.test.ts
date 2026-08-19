@@ -66,5 +66,19 @@ describe('clusterTriangles', () => {
       // The far piece stays alone; the row of five merged among themselves.
       expect(clusters.map((c) => c.length).sort((a, b) => a - b)).toEqual([2, 10]);
     });
+
+    // The Pacific Park ferris ring is 1 440 separate bulbs in ONE material group, so the agglomeration runs
+    // ~1 430 merges: it caches each row's nearest partner instead of re-scanning every pair, and this pins
+    // that the cached order still lands where the plain scan did. Re-scanning would also take minutes here.
+    it('caps a group of a thousand pieces without losing a triangle', () => {
+      const positions: number[] = [];
+      const row = Array.from({ length: 1000 }, (_, i) => i).flatMap((i) => quad(positions, [i * 1.0, 0, 0]));
+      const far = quad(positions, [0, 1000, 0]);
+
+      const clusters = clusterTriangles([...row, ...far], Float32Array.from(positions), 0.2, 2);
+
+      expect(clusters).toHaveLength(2);
+      expect(clusters.map((c) => c.length).sort((a, b) => a - b)).toEqual([2, 2000]);
+    });
   });
 });
