@@ -92,19 +92,28 @@ pool is used past 32 768, whatever `Dummys` is set to.
 ## What the field workaround actually bought
 
 `Dummys` was raised 50 000 → 100 000 and the symptom went away. It is a **postponement**, and the numbers
-say by how much: at 17 539 per world entry, 100 000 holds five entries and the **sixth** should crash
-(105 234). The int16 ceiling at 32 767 is untouched — the raise simply hands the leak 67 232 more slots to
-fill.
+said by how much before it was tested: at 17 539 per world entry, 100 000 holds five entries and the
+**sixth** must crash (105 234). The int16 ceiling at 32 767 is untouched — the raise simply hands the leak
+67 232 more slots to fill.
 
-**The falsifiable test, if it is worth the field time:** from a fresh boot, enter the world six times (new
-game plus five loads). The prediction is a crash on the sixth, at this same address.
+**FIELD-CONFIRMED 2026-08-19: the sixth LOAD GAME crashed, same address.** So the leak rate is not an
+estimate any more — it is 17 539 dummies per world entry, exactly the permanent set, and the pool size buys
+`floor(Dummys / 17539)` entries per boot and nothing else.
 
 ## What would actually fix it, in order of honesty
 
 1. **004b — extend the existing int32 sidecar to `firstDummy`/`lastDummy`.** The catalogue already says
-   they are "the same shape"; `IncludeEntity` would have to mirror the dummy range as it does the building
-   one, and `RemoveIpl`'s dummy-pass reads redirected the way the building pass already is. This is the
-   real fix and it is ASI work — a Windows build and a field bracket.
+   they are "the same shape", and the exe agrees exactly: the dummy pass reads its bounds at **three**
+   sites, mirroring the building pass site for site —
+
+   | | first | last | last, re-read on the loop back-edge |
+   | --- | --- | --- | --- |
+   | buildings (patched) | `0x404B4A` `movswl 0x22(%ebx),%edi` | `0x404B5D` `movswl 0x24(%ebx),%edx` | `0x404BA8` `movswl 0x24(%ebx),%edx` |
+   | dummies (**not** patched) | `0x404C0F` `movswl 0x26(%ebx),%edi` | `0x404C13` `movswl 0x28(%ebx),%ecx` | `0x404C4E` `movswl 0x28(%ebx),%eax` |
+
+   The third column is the one the building work nearly missed — a detour set that skips the back-edge
+   re-read stops deleting after ONE entity. `IncludeEntity` also has to mirror the dummy pool-index range
+   into the sidecar as it already does the building one. ASI work: a Windows build and a field bracket.
 2. **Find out why a world entry does not release the previous one's dummies at all.** Step 1 makes the
    release possible; it does not prove it happens. `CWorld::ClearForRestart` not touching them is the
    lead.

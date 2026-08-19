@@ -129,8 +129,12 @@ truncation as `mov word ptr [ecx+0x22], dx` (`66 89 51 22`) — writing only the
   INDEX, not on our row count: with OLA `Dummys` above 32 767 any dummy allocated past that index has an
   index `firstDummy/lastDummy` cannot hold, so `RemoveIpl` walks the wrong range and never frees it. Our
   map places 17 539 permanent dummies against stock's 40, the count grows per world entry, and the pool
-  is exhausted on the third — see
+  buys `floor(Dummys / 17539)` entries per boot — **field-confirmed in both directions 2026-08-19**: 50 000
+  died on the 3rd LOAD GAME, 100 000 on the 6th. See
   [`docs/open-issues/sa-load-game-crash-dummy-pool.md`](../../../docs/open-issues/sa-load-game-crash-dummy-pool.md).
+  **The dummy pass reads its bounds at three sites, mirroring the building pass site for site** — `0x404C0F`
+  (`movswl 0x26(%ebx),%edi`, firstDummy), `0x404C13` (`movswl 0x28(%ebx),%ecx`, lastDummy) and `0x404C4E`
+  (`movswl 0x28(%ebx),%eax`, the loop back-edge re-read, which is the one the building work nearly missed).
 - **Coexistence:** OLA leaves the read sites stock (detours apply cleanly). **FLA jmp-hooks all three read sites**
   (5-byte `e9` jmps → its own ~0x22C49xx handlers) but NOT the entries — so we verify the entries + the detour
   continuations (0x404B54/63/BAD) and FORCE the detours over FLA's jmps, overlaying FLA's incomplete int16 patch
