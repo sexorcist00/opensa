@@ -171,7 +171,9 @@ covered by a detour or argued harmless in writing.
 - *Bound convention: the dummy loop is `cmp edi,ecx; jg skip` … `inc edi; cmp edi,eax; jle body` — INCLUSIVE;
   the building loop at `0x404BB2` is `jle` too. 004 feeds the max id and is field-proven, so 011 feeds the
   max id unchanged — the plan's trap was real (gta-reversed renders `<`) but costs nothing.*
-- *Working files: the disassembly and `word26_28.txt` were scratchpad; the method is in this block.*
+- *Working files: the disassembly and `word26_28.txt` were scratchpad; the method is in this block AND kept
+  as `scripts/debug/exe-field-access-scan.ts` (2026-08-19, his call) — it reports 192 / 34 for the same
+  question because it also counts the 8 `fldcw` (x87 control word) stack loads the hand filter skipped.*
 
 ### Step 3 — coexistence probe at the dummy sites
 
