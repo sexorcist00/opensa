@@ -5,9 +5,17 @@
 > `Vehicle colors = 256`, set because the built palette carries 142 `col` rows against the 128 of FLA's own
 > ini annotation. Crossing "over 255" makes FLA apply a **uint32 colour-id patch family** (+122 memory
 > changes, `3712` → `3834`) and this install dies at the end of loading with it. Commented back out in
-> `mods-src`, `build/original/sa` and the bottle → **the game loads with the FULL tuning on**: full
-> `carmods.dat`, full `shopping.dat`, all 46 `veh_mods.ide` rows, ModelVariations, 115 added cars. FLA's log
-> is back to `Number of memory changes made: 3712`.
+> `mods-src`, `build/original/sa` and the bottle → **the game loads with the tuning on**: full
+> `carmods.dat`, full `shopping.dat`, all 46 `veh_mods.ide` rows, 115 added cars, and the mod shop serves
+> every derived part. FLA's log is back to `Number of memory changes made: 3712`.
+>
+> **Correction, same evening**: run 5 was first written up here as carrying the FULL tuning "including
+> ModelVariations". It did not — `ModelVariations_Vehicles.ini` was still the 1 097-byte stripped file from
+> run 2 (the full one is 23 765 B), and I restored `shopping.dat` and `carmods.dat` without checking it. The
+> verdict on the colour setting stands, but the composition of run 5 was smaller than claimed. **The process
+> lesson: when a bisect ends, restore EVERY arm it ever stripped and diff the bottle against the tree — not
+> just the arm you removed last.** The user found it from the game: the names were there and the traffic
+> tuning was not.
 >
 > **The user's own history was the correct evidence all along** — he never raised the setting and the install
 > has always run its palette without it. Four field launches were spent bisecting the tuning data because
@@ -59,7 +67,7 @@ the cause is inside the tuning half.
 | | |
 | --- | --- |
 | the cars themselves (ide + handling rows, models, carcols, parked) | **loads and drives** |
-| ModelVariations sections + tuned traffic | same crash with and without → excluded |
+| ModelVariations sections + tuned traffic | same crash with and without → excluded (and it stayed stripped in the bottle until 2026-08-19 21:2x — see the correction above) |
 | **`shopping.dat`** | **EXCLUDED 2026-08-19 (run 3)** — stripped to 174/71/90, same crash byte-identically |
 | both `carmods.dat` ceilings | measured on the built tree: per-car max **15** listed parts against the 16 the array allows, link list **31** pairs on `perfect-vehicle`'s 256-entry storage (`links APPLIED: 256 pairs` in its log) |
 | model `1277` itself | `pickupsave` in `data/maps/generic/dynamic.ide`, row intact — the pickup is the victim, not the cause |

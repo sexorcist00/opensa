@@ -46,8 +46,12 @@ Seven launches went into the road the added cars take, and the result changed th
       said: it sits in `cleo/` because its own mod put it there, which proves nothing about the channel.
 - [ ] **`petro` and `rdtrain` still behave.** Their sections ship with unresolved `{{205veh}}`-style
       placeholders on purpose (those are ADDED cars; `add-vehicles` allocates the ids). Look at: nothing
-      breaks around them — ModelVariations logs an invalid model id and skips. Re-check this row AFTER
-      add-vehicles 002 lands: the placeholders must be gone from the built ini.
+      breaks around them — ModelVariations logs an invalid model id and skips.
+      **Measured 2026-08-19, and the expectation in this row was wrong**: 4 placeholders survive
+      add-vehicles 002 in the built ini (`[petro] Trailers1`, `[rdtrain] Trailers1/2/3`) and they always
+      will — they name slots `205veh`–`216veh`, trailers of a set this fleet does not contain (trains are
+      add-vehicles 008+). So the choice is the tool's to make: **resolve, or DROP the line and say so**.
+      Shipping a literal `{{…}}` means those two trucks tow nothing and only the plugin's log knows.
 
 ## From `vehicle-installer` 013 — sound and parking (BUILT 2026-08-19)
 
