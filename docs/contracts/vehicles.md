@@ -77,10 +77,20 @@ a rebake converted the exhaust while the car kept its old model.
 **`model-variations-extra.txt`, in detail.** Ini sections, one per model the mod speaks for; every key is
 ModelVariations' own (`Trailers1`, `Global`, `TrailersSpawnChance`, `TrailersMatchColors`, `TrailersHealth`).
 A value names models as **`{{name}}`** — resolved to the id that name holds in the built tree's IDEs, because
-the plugin reads ids, not names, in a value. A name no IDE defines is warned about and **the line ships as
-authored**: eight of these files address ADDED cars (`{{205veh}}`), which get their ids from `add-vehicles`
-(central plan 102), and until then the plugin logs an invalid model id rather than us dropping the author's
-line. `[Settings]` is the plugin's own block and is **refused** from a mod folder. The merge is by SECTION
+the plugin reads ids, not names, in a value (`Trailers1=[{{205veh}}-{{206veh}}]` → `Trailers1=[19205-19206]`).
+**A name no IDE in the tree defines is DROPPED** (the user's call, 2026-08-19), at the smallest unit that
+keeps the author's meaning:
+
+- one item of a list goes, the rest stay — `Trailers1=584,{{211veh}}` → `Trailers1=584`;
+- a bracket group is one trailer CHAIN and goes WHOLE — half a road train is a different vehicle;
+- a key left with nothing goes, and so does every `Global=` reference to it: a dangling `Global=Trailers1`
+  is the same refused key by another route.
+
+Each drop is one warning naming the section, the key and the names. Shipping the literal `{{…}}` was the
+earlier behaviour and it was worse: the plugin refuses the key, the truck tows nothing, and the only record
+is a line in the plugin's own log. Some of these never resolve by design — `{{205veh}}`–`{{216veh}}` are
+trailers of the train set that arrives with `add-vehicles` 008+, not something plan 102 was ever going to
+allocate. `[Settings]` is the plugin's own block and is **refused** from a mod folder. The merge is by SECTION
 NAME — replaced when present, appended when not — so a rebake writes the same bytes twice. The whole thing is
 `sa`-only: our own engine has no `modloader/`.
 

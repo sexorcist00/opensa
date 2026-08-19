@@ -12,11 +12,24 @@
  * NAME — replaced when it is already there, appended when it is not — so a rebake over the same mod changes
  * nothing the install did not. `[Settings]` is the plugin's own and is never written from a mod folder.
  *
- * `{{name}}` is a MODEL, resolved to the id it holds in the built tree's IDEs: the plugin reads ids, not
- * names, in a value (`Error reading key %s in [%s]: invalid model id %s` is its own string). A name no IDE
- * in the tree defines is warned about and the line ships as authored — the ADDED cars eight of these files
- * reference (`{{205veh}}`, plan 102) get their ids from `add-vehicles`, and until that chain lands the
- * plugin logs the unresolved token instead of us dropping data the author wrote.
+ * `{{name}}` is a MODEL NAME, resolved to the id it holds in the built tree's IDEs: the plugin reads ids,
+ * not names, in a value (`Error reading key %s in [%s]: invalid model id %s` is its own string).
+ *
+ * **A name no IDE in the tree defines is DROPPED, with a warning** (the user's call, 2026-08-19). Eight of
+ * these files reference added cars (`{{205veh}}`, plan 102), and the ones naming a set this build does not
+ * contain — `205veh`–`216veh`, trailers that arrive with the trains of add-vehicles 008+ — can never
+ * resolve. Shipping the literal `{{…}}` was worse than dropping it: the plugin refuses the key, the truck
+ * tows nothing, and the only record is a line in its own log that nobody reads.
+ *
+ * Dropping is done at the smallest unit that keeps the author's MEANING, because a value is a list of
+ * choices and a bracket group is one trailer CHAIN:
+ *
+ *   - `Trailers1=584,{{211veh}}` → `Trailers1=584` — the stock trailer still tows, only the missing choice
+ *     goes;
+ *   - `Trailers1=[{{205veh}}-{{206veh}}]` → the whole GROUP goes: half a road train is not a smaller road
+ *     train, it is a different vehicle;
+ *   - a key left with nothing goes, and every `Global=` reference to that key goes with it — a dangling
+ *     `Global=Trailers1` is the same refused key by another route.
  *
  * The file was found unread by the 212-folder census (session 28): eight trucks ship trailer behaviour the
  * built ini never carried.
@@ -75,14 +88,8 @@ export function applyModelVariations(folderPath: string, entries: readonly strin
   const names = ideModelNames(outPath);
   let text = readFileSync(path, 'latin1');
   for (const section of writable) {
-    const resolved = section.lines.map((line) =>
-      resolvePlaceholders(line, names, (missing) =>
-        warnings.push(
-          `${MODEL_VARIATIONS_EXTRA_FILE}: [${section.name}] '${missing}' is not a model any IDE in the tree ` +
-            'defines — the line ships as authored and ModelVariations reports an invalid model id',
-        ),
-      ),
-    );
+    const { lines: resolved, warnings: dropped } = resolveSectionLines(section, names);
+    warnings.push(...dropped);
     text = mergeIniSection(text, { lines: resolved, name: section.name });
   }
   writeFileSync(path, text, 'latin1');
@@ -205,7 +212,92 @@ export function resolvePlaceholders(
   });
 }
 
+/** A `Global=Trailers1,514` whose `Trailers1` was just dropped loses that reference — and itself if empty. */
+function dropReferences(
+  section: IniSection,
+  lines: readonly string[],
+  emptied: ReadonlySet<string>,
+  warnings: string[],
+): { lines: string[]; warnings: string[] } {
+  const out: string[] = [];
+  for (const line of lines) {
+    const at = line.indexOf('=');
+    const key = at === -1 ? '' : line.slice(0, at).trim();
+    if (at === -1 || emptied.has(key.toLowerCase())) {
+      out.push(line);
+      continue;
+    }
+    const items = line.slice(at + 1).split(',');
+    const kept = items.filter((item) => !emptied.has(item.trim().toLowerCase()));
+    if (kept.length === items.length) {
+      out.push(line);
+      continue;
+    }
+    if (kept.length === 0) {
+      warnings.push(
+        `${MODEL_VARIATIONS_EXTRA_FILE}: [${section.name}] ${key} referenced only dropped key(s) — dropped too`,
+      );
+      continue;
+    }
+    out.push(`${key}=${kept.map((item) => item.trim()).join(',')}`);
+  }
+
+  return { lines: out, warnings };
+}
+
 /** `[tug]` → `tug`; anything else → null. */
 function headerName(line: string): null | string {
   return SECTION_HEADER.exec(line.trim())?.[1].trim() ?? null;
+}
+
+/**
+ * One section's lines with every unresolvable model name dropped: the item that names it, the key it empties,
+ * and any `Global=` reference to a key that went. See this file's header for why the unit is the item.
+ */
+function resolveSectionLines(
+  section: IniSection,
+  names: ReadonlyMap<string, number>,
+): { lines: string[]; warnings: string[] } {
+  const warnings: string[] = [];
+  const emptied = new Set<string>();
+  const lines: string[] = [];
+  for (const line of section.lines) {
+    // A line that resolves whole is written back AS AUTHORED (ids substituted, the author's spacing kept);
+    // only a line that loses something is rebuilt from its surviving items.
+    const gone: string[] = [];
+    const whole = resolvePlaceholders(line, names, (name) => gone.push(name));
+    const at = line.indexOf('=');
+    if (gone.length === 0 || at === -1) {
+      lines.push(whole);
+      continue;
+    }
+    const key = line.slice(0, at).trim();
+    const kept: string[] = [];
+    const missing: string[] = [];
+    for (const item of line.slice(at + 1).split(',')) {
+      const lost: string[] = [];
+      const resolved = resolvePlaceholders(item, names, (name) => lost.push(name));
+      if (lost.length > 0) {
+        missing.push(...lost);
+        continue;
+      }
+      kept.push(resolved.trim());
+    }
+    const named = missing.map((name) => `'${name}'`).join(', ');
+    if (kept.length === 0) {
+      emptied.add(key.toLowerCase());
+      warnings.push(
+        `${MODEL_VARIATIONS_EXTRA_FILE}: [${section.name}] ${key} names only ${named}, which no IDE in the ` +
+          'tree defines — the key is dropped',
+      );
+      continue;
+    }
+    warnings.push(
+      `${MODEL_VARIATIONS_EXTRA_FILE}: [${section.name}] ${key} drops ${named} — no IDE in the tree defines ` +
+        `that model; ${kept.length} entry/entries kept`,
+    );
+    lines.push(`${key}=${kept.join(',')}`);
+  }
+
+  return emptied.size === 0 ? { lines, warnings } : dropReferences(section, lines, emptied, warnings);
 }

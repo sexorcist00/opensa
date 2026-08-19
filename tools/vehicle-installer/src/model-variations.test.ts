@@ -88,7 +88,7 @@ describe('parseIniSections', () => {
 
 describe('resolvePlaceholders', () => {
   describe('negative cases', () => {
-    it('reports an unknown model and keeps the placeholder as authored', () => {
+    it('reports an unknown model and keeps the placeholder — the CALLER decides what to drop', () => {
       const missing: string[] = [];
       const line = resolvePlaceholders('Trailers1={{205veh}}', new Map(), (name) => missing.push(name));
 
@@ -166,14 +166,41 @@ describe('applyModelVariations', () => {
       expect(iniText()).toBe(STOCK_INI);
     });
 
-    it('reports a trailer no IDE defines and ships the line as authored', () => {
-      writeFileSync(join(folder, MODEL_VARIATIONS_EXTRA_FILE), '[petro]\nTrailers1={{petrotr}},{{211veh}}\n');
+    it('drops the trailer no IDE defines and keeps the ones that resolve', () => {
+      writeFileSync(join(folder, MODEL_VARIATIONS_EXTRA_FILE), '[petro]\nTrailers1=584,{{petrotr}},{{211veh}}\n');
 
       const warnings = applyModelVariations(folder, [MODEL_VARIATIONS_EXTRA_FILE], out);
 
-      expect(warnings).toHaveLength(2);
-      expect(warnings[0]).toMatch(/'petrotr' is not a model any IDE in the tree defines/);
-      expect(iniText()).toContain('Trailers1={{petrotr}},{{211veh}}');
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toMatch(/Trailers1 drops 'petrotr', '211veh'/);
+      expect(iniText()).toContain('Trailers1=584');
+      expect(iniText()).not.toContain('{{');
+    });
+
+    it('drops a bracket CHAIN whole when one of its links is missing — half a road train is not one', () => {
+      writeFileSync(
+        join(folder, MODEL_VARIATIONS_EXTRA_FILE),
+        '[rdtrain]\nTrailers1=[{{bagboxa}}-{{205veh}}]\nTrailersSpawnChance=80\n',
+      );
+
+      const warnings = applyModelVariations(folder, [MODEL_VARIATIONS_EXTRA_FILE], out);
+
+      expect(warnings[0]).toMatch(/Trailers1 names only '205veh'.*the key is dropped/);
+      expect(iniText()).not.toContain('Trailers1');
+      expect(iniText()).toContain('TrailersSpawnChance=80');
+    });
+
+    it('drops a Global reference to a key that went, and Global itself when nothing is left', () => {
+      writeFileSync(
+        join(folder, MODEL_VARIATIONS_EXTRA_FILE),
+        '[rdtrain]\nTrailers1=[{{205veh}}-{{206veh}}]\nGlobal=Trailers1\nTrailersSpawnChance=80\n',
+      );
+
+      const warnings = applyModelVariations(folder, [MODEL_VARIATIONS_EXTRA_FILE], out);
+
+      expect(warnings.some((warning) => /Global referenced only dropped key\(s\)/.test(warning))).toBe(true);
+      expect(iniText()).not.toContain('Global=');
+      expect(iniText()).toContain('TrailersSpawnChance=80');
     });
   });
 

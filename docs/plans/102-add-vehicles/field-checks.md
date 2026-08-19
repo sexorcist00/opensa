@@ -47,11 +47,14 @@ Seven launches went into the road the added cars take, and the result changed th
 - [ ] **`petro` and `rdtrain` still behave.** Their sections ship with unresolved `{{205veh}}`-style
       placeholders on purpose (those are ADDED cars; `add-vehicles` allocates the ids). Look at: nothing
       breaks around them — ModelVariations logs an invalid model id and skips.
-      **Measured 2026-08-19, and the expectation in this row was wrong**: 4 placeholders survive
-      add-vehicles 002 in the built ini (`[petro] Trailers1`, `[rdtrain] Trailers1/2/3`) and they always
-      will — they name slots `205veh`–`216veh`, trailers of a set this fleet does not contain (trains are
-      add-vehicles 008+). So the choice is the tool's to make: **resolve, or DROP the line and say so**.
-      Shipping a literal `{{…}}` means those two trucks tow nothing and only the plugin's log knows.
+      **Measured 2026-08-19, and the expectation in this row was wrong**: 4 placeholders survived
+      add-vehicles 002 in the built ini (`[petro] Trailers1`, `[rdtrain] Trailers1/2/3`) and always would —
+      they name slots `205veh`–`216veh`, trailers of a set this fleet does not contain (trains are
+      add-vehicles 008+). **Settled the same day (the user's call): an unresolvable name is DROPPED.**
+      `[petro]` keeps `Trailers1=584` and still tows its stock trailer; `[rdtrain]`'s three chains and the
+      `Global` that referenced them are gone, so it tows nothing rather than being refused. So what this row
+      now looks at: petro tows 584, rdtrain behaves like a stock rdtrain, and the plugin's log carries no
+      `invalid model id` for either.
 
 ## From `vehicle-installer` 013 — sound and parking (BUILT 2026-08-19)
 
