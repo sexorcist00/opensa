@@ -36,30 +36,39 @@ they are on purpose — collapsing them would renumber colours that cars already
 **The general lesson is the one this repo keeps re-learning**: a merge that is not idempotent does not fail,
 it DRIFTS, and the drift is only visible against a fixed-size table nobody was counting.
 
-## What is not known yet
+## What is still not known
 
-Whether the game's array really is 128, and what sits behind it. Until someone reads
-`CFileLoader::LoadVehicleColours` / `CVehicleModelInfo::ms_vehicleColourTable` in the reversed source, the
-honest position is: the build has been running 12 rows past the adjuster's stated default for some time with
-no reported symptom, which is either luck or evidence that the number is wrong.
+The array's real length, and what sits behind it — nobody has read
+`CFileLoader::LoadVehicleColours` / `CVehicleModelInfo::ms_vehicleColourTable` out of the exe or the reversed
+source. What the field has settled is the practical half, below: 142 rows run, and RAISING the adjuster's
+limit is what breaks.
 
-**TRIED AND REVERTED, the same evening.** `Vehicle colors = 256` was set, then taken back out — it changed
-nothing about the crash it was set for, and the user's own history is the stronger evidence: **this install
-has been running a 140-row palette with the setting untouched, for as long as the mod set has existed.**
+## The setting was tried, and it CRASHES this install — field verdict 2026-08-19
 
-So the 128 in this file's title is FLA's ini annotation, not a ceiling anyone has watched bite. Two more
-things were learned about the setting itself, and they are the reason not to reach for it casually:
+`Vehicle colors = 256` was set on 2026-08-19 (`db1f0ca4`) on the inference this file records: the palette is
+past FLA's annotated 128, so give it headroom. **It is what was killing the added fleet at the end of
+loading** — the game faults identically in every run with it on, and loads with the FULL tuning the moment it
+is commented back out (`docs/open-issues/fixed/added-cars-crash-after-loading.md`, runs 1–5). It cost four
+field launches, because the same evening three docs recorded it as "tried and reverted" while it was live in
+`mods-src`, `build/original/sa` and the bottle — the revert had been written down and never performed.
 
-- crossing "over 255" makes FLA apply a whole **uint32 colour-id patch family** (`Applying colour ID uint32_t
-  patches`, +122 memory changes over the 3 712 this install normally makes). That is a large, invasive change
-  to buy headroom nobody has proven is needed;
-- **255 would do** if it ever were needed — the palette is 145 rows with the added fleet, and a vehicle's
-  colour is a byte in the save.
+**So the two numbers this file was unsure about now have field answers:**
 
-**What would settle it**: a build whose palette actually passes 255, or a read of
-`CVehicleModelInfo::ms_vehicleColourTable`'s real length in the exe. Until then this file records a
-suspicion and a measurement, not a rule — and `vehicleColourWarnings` prints the count rather than refusing,
-which is the right shape for exactly that reason.
+| question | answer |
+| --- | --- |
+| does the build really run past FLA's 128? | **yes — 142 `col` rows, loading and playing, with the setting untouched.** The install has done so for as long as the mod set has existed |
+| is FLA's 128 a ceiling that bites? | **no evidence it is.** Nothing has been observed to break at 142 |
+| is raising it safe? | **no — it is the opposite.** Crossing "over 255" applies a uint32 colour-id patch family (`Applying colour ID uint32_t patches`, +122 memory changes, `3712` → `3834`) and this install dies at the end of loading |
+
+**The mechanism is unread**, and that is the honest state: what is measured is the effect, not the cause. If
+the palette ever genuinely needs raising, **255 is the value to try** — the palette is 145 rows with the added
+fleet, a vehicle's colour is a byte in the save, and 255 stays under the threshold that pulls in the patch
+family at all.
+
+**What `vehicleColourWarnings` should keep doing: warning.** It prints the count against an inferred limit
+and refuses nothing, and that shape was right — the failure here was reading its warning as an instruction to
+change the user's install. A build the user plays every day is not a build a tool, or an assistant, gets to
+reconfigure on an inference.
 
 ## Where this bites
 

@@ -58,12 +58,14 @@ the boot-time failure is not a count ceiling that anyone has found (`VehicleStru
 - **`Vehicle Models = 400`** (FLA), while OLA already has `VehicleModels = unlimited`. Two adjusters
   relocating one store: the game then read `ms_vehicleModelInfoStore` at its stock address `0xB1F654` with a
   zeroed vtable and died in `CModelInfo::AddVehicleModel` (`0x4C6770`). Tried, reverted. **Do not set both.**
-- **`Vehicle colors = 256`** (FLA) — **this one was NOT reverted, and an earlier revision of this file saying
-  it was is a correction made 2026-08-19 (session 30).** It was set deliberately, before the bisect, because
-  the built palette carries 142 `col` rows against the 128 of FLA's ini annotation. Crossing "over 255" makes
-  FLA apply a whole uint32 colour-id patch family (+122 memory changes, `3712` → `3834`), and it is applied in
-  every run of this fleet — the boots that WORKED as well as the ones that crash, which is what keeps it off
-  the top of the suspect list without clearing it. It has never had a field verdict of its own.
+- **`Vehicle colors = 256`** (FLA) — **this one turned out to be the cause of the crash the bisect above was
+  chasing, and it is reverted now.** We had set it earlier the same day on an inference (the palette is 142
+  `col` rows against FLA's annotated 128), then written it up as already reverted while it stayed live in
+  all three trees. Crossing "over 255" applies a uint32 colour-id patch family (+122 memory changes,
+  `3712` → `3834`) and this install dies at the end of loading with it. Commented back out, the full fleet
+  and the full tuning load. Full write-up:
+  [the issue](../open-issues/fixed/added-cars-crash-after-loading.md) ·
+  [the measurement](vehicle-colour-table-128.md).
 
 ## Where this is used
 

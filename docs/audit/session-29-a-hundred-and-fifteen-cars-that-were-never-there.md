@@ -160,7 +160,7 @@ anything else is a "readme" it scans. All of that is now
 
 The cars load. **The tuning does not** — a corrupted pointer at the end of loading, ModelVariations excluded
 by a byte-identical repeat, `CShopping`'s fixed arrays the standing suspect, the next test armed:
-[`docs/open-issues/added-cars-crash-after-loading.md`](../open-issues/added-cars-crash-after-loading.md).
+[`docs/open-issues/fixed/added-cars-crash-after-loading.md`](../open-issues/fixed/added-cars-crash-after-loading.md).
 
 ## What is NOT done
 

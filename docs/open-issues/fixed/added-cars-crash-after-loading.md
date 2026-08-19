@@ -1,8 +1,43 @@
-# The added fleet's TUNING crashes at the end of loading
+# The added fleet's TUNING crashes at the end of loading — it was OUR OWN `Vehicle colors = 256`
 
-**Open, 2026-08-19** (three runs, `shopping.dat` cleared as the suspect in the third). The cars themselves
-load and drive (field-proven: 115 added cars, a parked one appears). Turning their TUNING back on crashes the
-game at the very end of loading — three times now, byte-identically.
+> **✅ FIXED 2026-08-19, field-confirmed the same evening (session 30).** The tuning data was never the
+> cause. The crash came from an FLA setting **we** added on an inference four commits earlier (`db1f0ca4`):
+> `Vehicle colors = 256`, set because the built palette carries 142 `col` rows against the 128 of FLA's own
+> ini annotation. Crossing "over 255" makes FLA apply a **uint32 colour-id patch family** (+122 memory
+> changes, `3712` → `3834`) and this install dies at the end of loading with it. Commented back out in
+> `mods-src`, `build/original/sa` and the bottle → **the game loads with the FULL tuning on**: full
+> `carmods.dat`, full `shopping.dat`, all 46 `veh_mods.ide` rows, ModelVariations, 115 added cars. FLA's log
+> is back to `Number of memory changes made: 3712`.
+>
+> **The user's own history was the correct evidence all along** — he never raised the setting and the install
+> has always run its palette without it. Four field launches were spent bisecting the tuning data because
+> three docs recorded the setting as "tried and reverted" while it was live in all three trees; the revert
+> had been written down but never performed.
+
+## The lesson, and it is the expensive one
+
+**A bisect that moves nothing is not telling you about the half you removed — it is telling you the variable
+is not in the data at all.** Runs 1–4 stripped ModelVariations, `shopping.dat` and the 65 `carmods` lines one
+at a time and the dump never moved by a single register (runs 3 and 4 matched even in their heap addresses).
+That invariance was the signal, and it was read as "keep splitting" for three launches.
+
+Two rules came out of it, both already in the standing set and both violated here:
+
+1. **Do not touch the install's adjuster settings on an inference.** FLA's `(128)` is an ini annotation, not
+   a ceiling anyone had watched bite, and the installer's `vehicleColourWarnings` prints a count precisely
+   because the number is inferred. A warning is not an instruction to change the install.
+2. **A revert is done when the file changes, not when the doc says so.** Three docs claimed this setting had
+   been reverted. It had not, and that turned a live, invasive patch family into an "excluded" variable at
+   the top of every subsequent triage.
+
+## Why it crashes — NOT known, and worth one RE session
+
+What is measured: with the setting on, the game faults at the end of loading, always identically, in the
+first pass that walks a heap structure (a pickup's `CObject` construction, below). With it off, the same
+tree loads. The mechanism between "FLA widens the colour id to uint32" and "a pointer that structure holds
+is garbage" is unread. `255` would be enough headroom if the palette ever genuinely needs raising (a
+vehicle's colour is a byte in the save), and staying at or below 255 avoids the whole patch family — that is
+the cheap route if the day comes.
 
 ## What the crash says
 
@@ -30,7 +65,10 @@ the cause is inside the tuning half.
 | model `1277` itself | `pickupsave` in `data/maps/generic/dynamic.ide`, row intact — the pickup is the victim, not the cause |
 | a `veh_mods.ide` row with no model | all 48 added rows resolve; the two that looked missing (`1194 spl_b_lr_bl`, `1195 bnt_b_lr_bl`, the blade mod's parts) are in `models/vehicles2.img` |
 | `perfect-vehicle.asi` (the `link` array) | loaded and applied; the crash is identical in shape to runs where it was OFF |
+| **the 65 `carmods` `[mods]` lines** | **EXCLUDED 2026-08-19 (run 4)** — stripped, same crash, identical to the byte |
+| the 46 `veh_mods.ide` rows | never had to be tested — the full tuning loads with the colour setting out |
 | FLA `Vehicle Models` | tried, reverted, unrelated |
+| **FLA `Vehicle colors = 256`** | **THE CAUSE** — see the header |
 
 ### Run 3 — 2026-08-19 18:53, `shopping.dat` stripped
 
@@ -69,7 +107,17 @@ verdict of its own and it is not an excluded variable.
 it learns to read Mod Loader's readme rows, or the guard is permanently red and stops being read — which is
 how the crash class it exists to catch gets shipped. Fix it in the same change as the next add-vehicles step.
 
-## What to do next
+### Run 4 — 2026-08-19 19:05, the 65 added `[mods]` lines stripped
+
+`logs/gta_sa.exe_2026-08-19_19-05-34.log`. Identical to run 3 in **every** register including the heap
+addresses (`EAX`/`ESI` `0x0D050B64`). That is the invariance the lesson above is about.
+
+### Run 5 — 2026-08-19 19:08, everything restored, `#Vehicle colors = 256`
+
+**Loads.** Full `carmods.dat`, full `shopping.dat`, every `veh_mods.ide` row, ModelVariations, the whole
+fleet. No crash dump. `fastman92limitAdjuster.log`: `Number of memory changes made: 3712`.
+
+## Superseded — what the next step WAS going to be
 
 1. **The test armed in the bottle now** (2026-08-19, session 30): `shopping.dat` restored to the full
    212/83/116 and the **65 added `[mods]` lines stripped from `data/carmods.dat`** — one variable against the
@@ -83,5 +131,10 @@ how the crash class it exists to catch gets shipped. Fix it in the same change a
 
 ## Where the state is
 
-The bottle carries the armed test above. The built tree `build/original/sa` is the reference and is
-unchanged — it carries the FULL fleet, the full `shopping.dat` and the full `carmods.dat`.
+Bottle and built tree both carry the full fleet, the full tuning and `#Vehicle colors = 256` commented out.
+`data/_bisect-backup/carmods.dat.full` in the bottle can be deleted; nothing else was left armed.
+
+**Still open, and now the next thing to do**: the 21 unticked rows of
+[`docs/plans/102-add-vehicles/field-checks.md`](../plans/102-add-vehicles/field-checks.md) — traffic, tuned
+traffic, the shop, the HUD name, the engine sound — none of which has been seen yet, and all of which the
+loading crash was blocking.

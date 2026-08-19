@@ -22,10 +22,12 @@ Seven launches went into the road the added cars take, and the result changed th
   `handling.cfg` rows go into `modloader/added-vehicles/<slot>.settings.txt`, not into `data/` — baked there
   they kill the game before a window appears. Mod Loader merges them by matching data lines by SHAPE
   ([the facts](../../gta-sa-original/modloader-data-files.md)).
-- **OPEN**: with the TUNING on, the game crashes at the very end of loading —
-  [`docs/open-issues/added-cars-crash-after-loading.md`](../../open-issues/added-cars-crash-after-loading.md).
-  ModelVariations is excluded; the suspect is `CShopping`'s fixed arrays, and the next test is armed in the
-  bottle.
+- **CLOSED 2026-08-19 evening**: the loading crash was never the tuning —
+  [`docs/open-issues/fixed/added-cars-crash-after-loading.md`](../../open-issues/fixed/added-cars-crash-after-loading.md).
+  It was `Vehicle colors = 256`, an FLA setting we had added on an inference; with it commented back out the
+  game loads with the FULL tuning on (run 5, 19:08, FLA `Number of memory changes made: 3712`). Four
+  launches were spent bisecting the tuning data first — ModelVariations, `shopping.dat` and the 65
+  `carmods` lines each excluded in turn, the dump never moving.
 - **NOT YET SEEN AT ALL**: traffic (ModelVariations), tuned traffic, the shop, the HUD name, the engine
   sound. Everything below this line still stands, it just has not had its turn.
 

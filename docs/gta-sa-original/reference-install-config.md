@@ -161,18 +161,18 @@ Register global exception handler = 0
 and two adjusters relocating one store left `CModelInfo::AddVehicleModel` reading a zeroed vtable at the
 stock address `0xB1F654`. **Do not set both.**
 
-**`Vehicle colors = 256` is SET, and it is not a bisect leftover** (corrected 2026-08-19, session 30). It was
-set deliberately earlier the same day because the built palette carries **142 `col` rows** against the 128 of
-FLA's own ini annotation — `mods-src`, `build/original/sa` and the bottle all carry it, and FLA's log says it
-took: `Vehicle colours limit is over 255 … Applying colour ID uint32_t patches` +
-`Modified limit of OTHER LIMITS: Vehicle colors to: 256`. An earlier revision of this file said it had been
-"tried and reverted"; that was wrong, and it cost a bisect step — a live, field-UNCONFIRMED patch family was
-being treated as an excluded variable. It stays a suspect until a run says otherwise.
+**`Vehicle colors = 256` — set 2026-08-19, and REVERTED the same evening because it CRASHES this install.**
+It was added on an inference (the built palette is 142 `col` rows against the 128 of FLA's own ini
+annotation), recorded in three docs as already reverted while it was in fact live in `mods-src`,
+`build/original/sa` and the bottle, and it turned out to be the cause of the added fleet's end-of-loading
+crash ([the issue](../open-issues/fixed/added-cars-crash-after-loading.md)). Crossing "over 255" makes FLA
+apply a uint32 colour-id patch family — that is the whole difference between the two log lines below.
+**The install's FLA configuration is once again unchanged from the capture above.**
 
-**Two healthy numbers, and the setting decides which one applies**:
-`fastman92limitAdjuster.log` closes with `Number of memory changes made: 3712` **without** the colour setting
-and **3834 with it** (the uint32 colour-id family is +122 changes). Read the line after any delivery, then
-check it against the ini rather than against 3712 alone.
+**The healthy line, and it is the number to check after any delivery**:
+`fastman92limitAdjuster.log` closes with `Number of memory changes made: 3712`. **3834 means the colour
+setting is back on** — that alone is enough to explain a crash at the end of loading, so read this line
+before diagnosing anything else.
 
 ### The ID pools — read them off FLA's LOG, not off the ini
 
