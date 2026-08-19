@@ -1,6 +1,6 @@
-# Session 28 (2026-08-19): the dummy half of the int16 lift — perfect-map 011, gate to field in one session
+# Session 28 (2026-08-19): the dummy half of the int16 lift, and the added-vehicles chain planned
 
-**On `main`, 8 commits after `bf151d4a` (session 27), tree clean, NOT pushed. Touched: `asi/perfect-map`
+**On `main`, 15 commits after `bf151d4a` (session 27), tree clean, NOT pushed. Touched: `asi/perfect-map`
 (`src/patches/int16.hpp`, `src/config.hpp`, `gen/catalogue.ts`, `gen/generate.test.ts`), `asi/sdk`
 (`log.hpp`, `patch_table.hpp`), `tools/perfect-map-builder/src/entity-pools.ts`, and the docs that carried
 the open issue. No pak, no pmb run, no benchmark — the fix lives on an unload path and costs a frame nothing.**
@@ -61,3 +61,30 @@ One session, no rebuild, five field rounds of ~15 s each (he ran them; I dropped
 myself — his call this session). Bought: the crash that made LOAD GAME a countdown is gone on the install
 we ship to, and the instrument that would have made 004 one round shorter (live bytes on a differing site,
 the exe byte-accuracy test) now exists for the next patch.
+
+## Second half — the census, a parked annoyance, and plan 102
+
+| area | change | commit |
+| --- | --- | --- |
+| `scripts/debug/exe-field-access-scan.ts` (+ `docs/debug/README.md` row) | the completeness scan behind an engine patch as a kept script (192 / 34 on 011's question — the hand filter had skipped 8 `fldcw`) | `99915d89` |
+| `docs/improvements/fla-quiet-startup.md` | FLA's monthly "main window" code — designed (`!fla-quiet.asi`, WH_CBT → Continue, never in the pmb tree), parked, says plainly it circumvents a donation reminder. **Original SA only** | `534766fe` |
+| the 212-folder census of `mods-src/original/vehicles` | every file KIND against `applyVehicle`: two are unread — `model-variations-extra.txt` (8 trucks' trailers silently dropped; the built ModelVariations ini is byte-identical to the mod's) and `text.txt` (slamvan's part names absent from the built GXT); plus the settings-fallback trap | → vehicle-installer 012 |
+| `docs/plans/102-add-vehicles/` (umbrella + `recon.md`), `tools/add-vehicles/docs/plans/001–007`, `tools/vehicle-installer/docs/plans/012–013`, `asi/perfect-vehicle/{README,docs/plans/001–002}` | the added-cars chain, from the recon of his old tool (`NO_COMMIT/1`, read-only) and the 115-car `add-vehicles` data to plans; the shared layer decided ONCE in the umbrella | `beaccffa` … `e0116763` |
+| `docs/gta-sa-original/carmods-upgrade-ceilings.md`, `docs/restrictions/sa-target.md` (+3 rows) | the two `carmods.dat` ceilings nobody checks — 30 `link` pairs game-wide (`CLinkedUpgradeList` @0xB4E6D8; stock 23, **his old build exactly 30**), 16 parts per car (`m_anUpgrades[18]`; stock `jester` full) — and the part-name rules (prefix = behaviour, ≤ 19) | `e0116763` |
+
+### The numbers of the second half
+
+- `vehicles/`: 368 dff, 388 txd, 225 txt (205 settings, 9 features, 8 variations-extra, 2 tuning, 1 text),
+  7 `cleo/`, 5 `.DS_Store`; 7 cars ship dff+txd only.
+- `add-vehicles/`: 115 cars, 574 files — 115 × (dff, txd, settings), 45 extra TXDs, 14 features, 4 audio,
+  1 parked, ~46 re-modelled part dffs under stock names.
+- Id window 19 001–19 999 on the built tree: **0 used, 999 free in one run**; demand 161. Highest used id
+  18 656; 26 in the map window 18 631–19 000.
+- `link` pairs: stock 23, our build 23, his old build 30; `add-vehicles` ships 8 wing pairs → 31 without
+  `perfect-vehicle`.
+
+### Decisions he took (not to be re-derived)
+
+Source root `mods-src/original/add-vehicles/` (same shape as `vehicles/`; `reserved/` temporary, unread);
+id window 19 001–19 999; tuned traffic YES; trains LATER in the same tool; the ceilings lifted by a SEPARATE
+asi (named `perfect-vehicle`); item 3's second bug deferred by him; FLA window bypass parked.

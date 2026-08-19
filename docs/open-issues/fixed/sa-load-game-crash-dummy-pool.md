@@ -158,7 +158,7 @@ the `pushl $0x38` at `0x5380E1`). It postpones; nothing more.
 
 The forensics above inferred the int16 truncation from the crash dump and the load arithmetic. The
 `PM_INT16_LOG` debug build of `perfect-map.asi` then watched it happen (plan
-[011](../../asi/perfect-map/docs/plans/011-ipldef-dummy-range.md), step 1 — the measured block carries the
+[011](../../../asi/perfect-map/docs/plans/011-ipldef-dummy-range.md), step 1 — the measured block carries the
 lines): from IPL slot 35 on, the engine's `IplDef.lastDummy` reads negative (`-32718` for a true last of
 `32818`) while `firstDummy` stays positive, so `RemoveIpl`'s `cmpl; jg` sees an empty range and skips the
 slot's dummy pass entirely. The pool crosses 32 767 on the FIRST world entry, and its high-water mark went
@@ -217,7 +217,7 @@ beside a truer one.
 so a rebuild carries it. **The currently built tree (`build/original/sa`, 2026-08-17) still has 50 000** — a
 whole-tree-root delivery from it would put the crash straight back, the same way session 26's delivery
 reverted the FLA pools
-([fixed/sa-boot-crash-fla-pools-reverted-by-delivery.md](fixed/sa-boot-crash-fla-pools-reverted-by-delivery.md)).
+([fixed/sa-boot-crash-fla-pools-reverted-by-delivery.md](sa-boot-crash-fla-pools-reverted-by-delivery.md)).
 Rebuild before the next full delivery.
 
 ## Reproduction material

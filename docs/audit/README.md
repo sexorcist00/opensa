@@ -10,7 +10,10 @@ interpret them.
   from slot 35 on the first entry), the fix (int32 dummy sidecar + two detours overlaid on FLA's), the ladder
   (8 entries at 100 000, 5 at 50 000, pool high-water frozen after entry 1) and the thing the 40 000 rung
   measured by crashing: the first entry alone occupies 41–49k slots against 33 043 map rows, so `Dummys`
-  stays 100 000 and the pmb guard's blind spot is recorded
+  stays 100 000 and the pmb guard's blind spot is recorded. Second half: the 212-folder vehicles census
+  (two unread file kinds), FLA's monthly window parked as an improvement, and **central plan 102 — added
+  vehicles** written from the recon of his old tool: `tools/add-vehicles` 001–007, `vehicle-installer`
+  012–013, `asi/perfect-vehicle` 001–002, the two `carmods.dat` ceilings his old build sat on
 - [`session-27-three-crashes-two-of-them-ours.md`](./session-27-three-crashes-two-of-them-ours.md) — the
   2026-08-19 session: the suite's four-session red was an **O(n³)** in the translucent agglomeration (the
   ferris ring is 1 440 separate bulbs in one material group; 3 745 → 412 ms, output proved identical across
