@@ -45,6 +45,29 @@ describe('img-patch', () => {
       writeFileSync(join(dir, 'x'), ''); // keep tmp dir non-empty
       expect(findArchivesWithEntry(game, 'a.dff')).toEqual([]);
     });
+
+    // An IMG editor that ADDS where it should replace leaves the name twice, and SA reads the FIRST record.
+    // A last-wins index made `set` patch the copy the game never opens: success reported, nothing changed
+    // in the field (the blade's `wg_r_lr_bl1.dff`, 2026-08-19).
+    it('patches the FIRST record when the archive carries a name twice — the one SA reads', () => {
+      const twice = join(dir, 'dup.img');
+      writeFileSync(
+        twice,
+        buildVer2Buffer([
+          { data: A, name: 'a.dff' },
+          { data: B, name: 'b.dff' },
+          { data: NEW, name: 'a.dff' },
+        ]),
+      );
+
+      patchImgEntry(
+        twice,
+        'a.dff',
+        Uint8Array.from({ length: 64 }, () => 0x5a),
+      );
+
+      expect(readImgEntry(twice, 'a.dff').subarray(0, 4)).toEqual(Uint8Array.of(0x5a, 0x5a, 0x5a, 0x5a));
+    });
   });
 
   describe('positive cases', () => {

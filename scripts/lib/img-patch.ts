@@ -142,11 +142,23 @@ function readDirectory(fd: number): Directory {
   const bytes = new Uint8Array(HEADER + count * ENTRY);
   readSync(fd, bytes, 0, bytes.length, 0);
   const index = new Map<string, number>();
+  const duplicates = new Set<string>();
   for (let i = 0; i < count; i += 1) {
     const base = HEADER + i * ENTRY + 8;
     let end = base;
     while (end < base + 24 && bytes[end] !== 0) end += 1;
-    index.set(new TextDecoder().decode(bytes.subarray(base, end)).toLowerCase(), i);
+    const name = new TextDecoder().decode(bytes.subarray(base, end)).toLowerCase();
+    // FIRST wins, because that is the record SA reads: an archive can carry a name twice (an IMG editor
+    // that ADDS where it should replace leaves exactly that), and a last-wins index made this instrument
+    // patch the copy the game never opens — a `set` that reports success and changes nothing in the field.
+    if (index.has(name)) {
+      duplicates.add(name);
+      continue;
+    }
+    index.set(name, i);
+  }
+  for (const name of duplicates) {
+    console.warn(`  ! ${name} appears more than once in this archive — patching the FIRST record, the one SA reads`);
   }
 
   return { count, index, view: new DataView(bytes.buffer) };

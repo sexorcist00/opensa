@@ -94,6 +94,22 @@ gap in the check itself — walking the clump with the lock-tolerant `forEachClu
 rather than a boundary-respecting `findChild` took the vehicle files it could not read from **87 to 3**, so
 an anti-rip-locked model is now examined instead of silently skipped.
 
+**FIELD-ACCEPTED 2026-08-19**: after `--rebake --kind sa --only blade` (5.5 s) and a delivery of the two
+vehicle archives, tuning the blade works — the trainer's stable crash on part 1107 and the intermittent one
+at Transfender are both gone.
+
+**The delivery had a trap of its own, and it is the reason this took two rounds.** The first attempt swapped
+the model into the bottle's `vehicles.img` with an IMG editor that **added** the entry instead of replacing
+it, leaving `wg_r_lr_bl1.dff` in the directory TWICE — the broken original at index 163 and the repaired copy
+at 454. SA maps a model to the FIRST matching record, so the game kept reading the broken one and the crash
+did not move. Two things came out of that:
+
+- `scripts/debug/img-patch.ts` would not have helped either: its directory index was built last-wins, so it
+  would have repointed the copy the game never opens and reported success. Fixed — first wins now, and a
+  duplicated name is announced.
+- A rebake is the clean route regardless: it replaces by name across the whole vehicle archive family, so
+  the result carries **0 duplicate names** (456 + 338 entries checked).
+
 **Not covered yet:** mod-installer stages map mods without this check. Nothing in the library needs it today
 (0 of 1 706), which is why it was not built — the same measurement that says so is the one to re-run before
 assuming it stays true.
