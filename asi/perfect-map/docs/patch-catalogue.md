@@ -134,7 +134,7 @@ truncation as `mov word ptr [ecx+0x22], dx` (`66 89 51 22`) — writing only the
   [`docs/open-issues/sa-load-game-crash-dummy-pool.md`](../../../docs/open-issues/sa-load-game-crash-dummy-pool.md).
   **The dummy pass reads its bounds at three sites, mirroring the building pass site for site** — `0x404C0F`
   (`movswl 0x26(%ebx),%edi`, firstDummy), `0x404C13` (`movswl 0x28(%ebx),%ecx`, lastDummy) and `0x404C4E`
-  (`movswl 0x28(%ebx),%eax`, the loop back-edge re-read, which is the one the building work nearly missed).
+  (`movswl 0x28(%ebx),%eax`, the loop back-edge re-read, which is the one the building work nearly missed) — though the first two are ADJACENT, so ONE detour covers them. Planned in [plans/011](plans/011-ipldef-dummy-range.md).
 - **Coexistence:** OLA leaves the read sites stock (detours apply cleanly). **FLA jmp-hooks all three read sites**
   (5-byte `e9` jmps → its own ~0x22C49xx handlers) but NOT the entries — so we verify the entries + the detour
   continuations (0x404B54/63/BAD) and FORCE the detours over FLA's jmps, overlaying FLA's incomplete int16 patch
