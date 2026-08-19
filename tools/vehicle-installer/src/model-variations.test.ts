@@ -218,6 +218,13 @@ describe('applyModelVariations', () => {
       expect(iniText()).toContain('ChangeCarGenerators=0');
     });
 
+    it('keeps a resolving line exactly as authored — spacing included', () => {
+      writeFileSync(join(folder, MODEL_VARIATIONS_EXTRA_FILE), '[tug]\nTrailers1=606,  607 , 608\nGlobal=Trailers1\n');
+
+      expect(applyModelVariations(folder, [MODEL_VARIATIONS_EXTRA_FILE], out)).toEqual([]);
+      expect(iniText()).toContain('Trailers1=606,  607 , 608');
+    });
+
     it('is idempotent — a rebake over the same mod changes nothing', () => {
       writeFileSync(join(folder, MODEL_VARIATIONS_EXTRA_FILE), TUG);
       applyModelVariations(folder, [MODEL_VARIATIONS_EXTRA_FILE], out);

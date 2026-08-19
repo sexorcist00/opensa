@@ -432,3 +432,4 @@ interpret them.
   `vehicle-optimizer` that ended in the install's SkyGfx source — its car pipe multiplies the reflection
   intensity by 8 (so ≥ 0.125 saturates) and the SPECULAR level by 3, and the specular was the term the field had
   been looking at all along. Two of the three rounds were my own wrong turns, reverted by measurement.
+- [session-30-four-defects-and-only-one-where-we-were-looking.md](session-30-four-defects-and-only-one-where-we-were-looking.md) — the plan-102 field round: the loading crash was our own `Vehicle colors = 256` (four launches lost to a revert that was written down but never performed), every `.fxt` was landing in a folder CLEO does not read, unresolvable `{{name}}` placeholders now drop, and two open defects that share one shape — a name or a slot belonging to one car handed to another
