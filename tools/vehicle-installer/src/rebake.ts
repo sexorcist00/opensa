@@ -93,7 +93,7 @@ export function rebakeVehicles(options: RebakeOptions): RebakeReport {
   // Pass 1 — the DATA. Every accepted car's rows land before any car is converted, because the conversion
   // reads the merged `vehicles.ide` (txd name, wheel scale) and `vehicle-features.txt` back out of the target.
   for (const { folder, model } of selected) {
-    const applied = applyVehicle(folder, targetPath, {});
+    const applied = applyVehicle(folder, targetPath, { target: 'opensa' });
     applied.warnings.forEach((warning) => warnings.push(`${basename(folder)}: ${warning}`));
     if (applied.features.length > 0) {
       declared.set(model, applied.features);

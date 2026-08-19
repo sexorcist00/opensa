@@ -96,7 +96,7 @@ export function rebakeVehiclesSa(options: RebakeOptions): RebakeReport {
   if (accepted.length > 0) {
     const img = openImgFamily(basePath);
     for (const { folder, model } of accepted) {
-      const applied = applyVehicle(folder, targetPath, { img });
+      const applied = applyVehicle(folder, targetPath, { img, target: 'sa' });
       applied.warnings.forEach((warning) => warnings.push(`${basename(folder)}: ${warning}`));
       if (applied.features.length > 0) {
         declared.set(model, applied.features);

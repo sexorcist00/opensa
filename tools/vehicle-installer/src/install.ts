@@ -83,7 +83,7 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
     );
   }
   for (const vehicle of vehicles) {
-    const applied = applyVehicle(vehicle.folder, outPath, { img });
+    const applied = applyVehicle(vehicle.folder, outPath, { img, target: options.target });
     applied.warnings.forEach((warning) => console.warn(`vehicle-installer: ${vehicle.name}: ${warning}`));
     applied.imgNames.forEach((name) => imgNames.add(name));
     if (applied.model) {

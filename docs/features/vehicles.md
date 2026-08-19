@@ -278,6 +278,10 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   real-SA tree in ~4 s). There is no runtime overlay —
   see [postmortem/runtime-modloader-overlay.md](../postmortem/runtime-modloader-overlay.md). Assets resolve by
   their **bare** name, so there is no loose `vehicles/` folder. See [mods.md](mods.md).
+  On the **`sa` target only**, a mod folder can also speak to the plugins that install carries: a
+  `model-variations-extra.txt` section reaches ModelVariations 10.7 (which trailers the slot tows, how often)
+  and a `text.txt` becomes `cleo/<model>.fxt`, the shop names of its own tuning parts (plan 012). Our engine
+  has neither plugin — the trailer/tuning-shop equivalents are the two leftovers below.
 
 ## Known gaps / candidates
 

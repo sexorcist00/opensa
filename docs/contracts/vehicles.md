@@ -59,10 +59,28 @@ a rebake converted the exhaust while the car kept its old model.
 | `<model>.settings.txt` | **Settings** — the car's data lines (below). |
 | `features.txt` | **Features** — what the model can DO (below). Folder-scoped, not `<model>.features.txt`. |
 | `tuning_new_parts.txt` | **New tuning parts** — the IDE rows (`1194, spl_b_lr_bl, blade, 100, 0`) and shop entries of parts the game never had; read by the installer since plan 009 (below). **Absent when the carmods line names a new part: the build FAILS** (`assertCarmodsModels`) — the real game would crash loading `carmods.dat`. Misspelled: not read, same failure, same message naming the token. |
+| `model-variations-extra.txt` | **Traffic behaviour** — an ini section for **ModelVariations 10.7** (mod `11`, `sa` layer), merged into the built `modloader/Model_Variations/ModelVariations_Vehicles.ini` by section name (below). Read by the installer since plan 012; eight of the original's folders ship one. Misspelled (`model-variation-extra.txt`): **not read, and nothing says so** — the trailers simply never spawn. |
+| `text.txt` | **GXT lines** — `KEY text` per line, the names the mod's own tuning parts show in the shop (the key is the second column of its `tuning_new_parts.txt` price row). Written as `cleo/<model>.fxt`, which CLEO's FXT loader reads; read by the installer since plan 012. Misspelled: **not read** — the part is in the shop with an empty name, which is exactly what a part with no GXT entry looks like. |
 | `cleo/` (or `CLEO/`) | The mod's compiled CLEO scripts + sidecars (`.cs`, `.ini`, `.fxt`) — copied to the built game's `cleo/` (canonical lowercase, author-relative structure preserved), where the runtime discovers them at boot (plan 097/06); a `--rebake` re-copies them. **Misspelled (`celo/`, loose `.cs` beside the dff): not carried at all** — the vehicle installs fine, its script never runs, and the boot census line (`[cleo] N script(s)`) is the only place the absence shows. |
 
 - The settings file is found by its **`.settings.txt` suffix**, never by "the first `.txt` in the folder" —
   `features.txt` sorts before it and used to swallow it whole (the previon lost its entire data row that way).
+  A folder with **no** `.settings.txt` still falls back to "the first other `.txt`" for the pre-suffix mods, and
+  that fallback now excludes **every name on this page** (`features.txt`, `tuning_new_parts.txt`,
+  `model-variations-extra.txt`, `text.txt`, and `audio.txt`/`parked.txt`). Without the exclusion a car shipping
+  one of them and no settings file had it parsed AS settings and warned "nothing recognised — STOCK".
+  A MISSPELLED name is not on that list, so it is picked up by the fallback and read as settings instead — the
+  same warning, and the reason a misspelling of one of these names is worth checking for when it appears.
+
+**`model-variations-extra.txt`, in detail.** Ini sections, one per model the mod speaks for; every key is
+ModelVariations' own (`Trailers1`, `Global`, `TrailersSpawnChance`, `TrailersMatchColors`, `TrailersHealth`).
+A value names models as **`{{name}}`** — resolved to the id that name holds in the built tree's IDEs, because
+the plugin reads ids, not names, in a value. A name no IDE defines is warned about and **the line ships as
+authored**: eight of these files address ADDED cars (`{{205veh}}`), which get their ids from `add-vehicles`
+(central plan 102), and until then the plugin logs an invalid model id rather than us dropping the author's
+line. `[Settings]` is the plugin's own block and is **refused** from a mod folder. The merge is by SECTION
+NAME — replaced when present, appended when not — so a rebake writes the same bytes twice. The whole thing is
+`sa`-only: our own engine has no `modloader/`.
 - Both files are decoded by the encoding they were **saved** in: a BOM decides, and with no BOM the parity of
   the NUL bytes does (UTF-16 is what most Windows-authored mods ship). Read as UTF-8 a UTF-16 file parses to
   nothing at all, silently.

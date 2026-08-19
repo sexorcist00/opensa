@@ -147,6 +147,12 @@ const CLEO_MANIFEST: readonly Fixture[] = [
   // alone and drew four bare tyres with no rim (field 2026-08-17).
   cleoFile('vehicles/cabbie - 1982 Checker Taxicab - alfamodding/cabbie.dff', 'vehicles/cabbie-container-wheel.dff'),
   cleoFile('mods/Wind Farm/CLEO/Wind Farm (Junior_Djjr).cs', 'cleo/windfarm.cs'),
+  // The two file kinds the installer learned to read in vehicle-installer plan 012 — authored by hand, by
+  // eight and one of the 212 folders, and neither shape is guessable: the tug's ini section addresses its
+  // trailers as `{{name}}` placeholders, and the slamvan's GXT lines are `KEY text` with the keys its own
+  // `tuning_new_parts.txt` price rows already name. A synthetic copy would only prove our own assumption.
+  cleoFile('vehicles/tug - Clark CT-50D Tug - smart/model-variations-extra.txt', 'vehicles/tug-variations.txt'),
+  cleoFile('vehicles/slamvan - 1968 GMC Pickup Hammered - alfamodding/text.txt', 'vehicles/slamvan-text.txt'),
 ];
 
 const MANIFEST: readonly Fixture[] = [

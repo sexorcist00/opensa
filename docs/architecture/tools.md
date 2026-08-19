@@ -27,6 +27,10 @@ never the app. The dependency picture is the tools cluster of
   target** the same declaration is ALSO mapped onto a stock carrier model in fastman92's
   `data/model_special_features.dat` (plan 011), because the real game hardcodes every special ability to a
   model id. It also writes
+  the two files a mod's own plugins read: `model-variations-extra.txt`'s section into
+  `modloader/Model_Variations/ModelVariations_Vehicles.ini` (mod 11, `sa` only — `{{name}}` resolved to that
+  model's id in the tree's IDEs) and `text.txt` into `cleo/<model>.fxt`, the GXT names its new tuning parts
+  show in the shop (plan 012). And
   `data/vehicle-mods.txt`, the mod-car ledger (096/06): once the rows are merged, a mod car is
   indistinguishable from a stock one anywhere downstream, so the set the installer knows while it works is
   written down — the ONE vehicle data file read at runtime, and a SWITCH: name one drivable slot and every video-mode

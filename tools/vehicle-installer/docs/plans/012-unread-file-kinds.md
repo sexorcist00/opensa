@@ -1,6 +1,6 @@
 # 012 — The two file kinds the fleet ships and the installer never read
 
-**Status: PLANNED 2026-08-19.** Part of [central plan 102](../../../../docs/plans/102-add-vehicles/readme.md);
+**Status: BUILT 2026-08-19** (field verdict pending). Part of [central plan 102](../../../../docs/plans/102-add-vehicles/readme.md);
 opened by the 212-folder census (session 28) the user asked for: every file KIND under
 `mods-src/original/vehicles/{models,new}` against what `applyVehicle` reads.
 
@@ -50,7 +50,26 @@ would have it parsed AS settings and warned "nothing recognised — STOCK". Toda
 
 ## Measured
 
-*—*
+**Built 2026-08-19.** `model-variations.ts` (parse ini sections / merge by section name / `{{name}}` →
+id via `ideModelNames`, the walk `tuning-parts` already does — 74 IDEs, 904 KB, cheap enough to repeat per
+car), `fxt.ts` (`text.txt` → `cleo/<model>.fxt`, key TAB text, CRLF), both called from `applyVehicle`;
+`ApplyVehicleOptions.target` decides the ModelVariations merge (`opensa` has no `modloader/`, and eight
+"the plugin is missing" warnings per build would be a lie about a host that cannot use it).
+
+Tests: 33 new (`model-variations.test.ts` 17, `fxt.test.ts` 13, `apply-vehicle.test.ts` 3), tool suite
+16 files / 160 green. Two fixtures added, one manifest line each (`vehicles/tug-variations.txt`,
+`vehicles/slamvan-text.txt`), verified by a full `npm run test:fixtures` regeneration — 130/130.
+
+**The cross-check that matters**: `--rebake original --kind sa` over the eight trucks (4.4 s for two cars,
+~15 s for eight) writes 45 lines into the built ini, and **all eight sections are byte-identical to the
+output of the user's own earlier tool** (`NO_COMMIT/1/build/…/ModelVariations_Vehicles.ini`) — including
+its unresolved `{{205veh}}`/`{{211veh}}` placeholders, which are ADDED cars and stay unresolved until
+`add-vehicles` allocates their ids. Nine warnings name them, one per occurrence. Re-running the rebake
+leaves the ini byte-identical (idempotent). `cleo/slamvan.fxt` = 55 B, `SLASH\tSlamin Hood\r\nSLACH\tChromer
+Hood\r\n`.
+
+Also fixed on the way: `tsconfig.json` did not exclude `NO_COMMIT/`, so `npm run lint:ts` — and with it
+every commit's `lint-staged` — failed on the copy of the old tool that landed there in session 28.
 
 ## What it does not do
 

@@ -1,19 +1,38 @@
 import type { EditableImg } from '@opensa/tool-kit/archive/img';
+import type { BuildTarget } from '@opensa/tool-kit/target';
 
 import { splitRow } from '@opensa/renderware/parsers/text/text-lines';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
 import { parseFeatures } from './features';
+import { applyVehicleText, TEXT_FILE } from './fxt';
 import { stageVehicleImg } from './img-merge';
 import { mergeCarcols, mergeCarmods, mergeHandling, mergeIde } from './merge';
 import { resolveVehicleModel } from './model';
+import { applyModelVariations, MODEL_VARIATIONS_EXTRA_FILE } from './model-variations';
 import { addPaletteColors, resolveColorRefs } from './palette';
 import { decodeSettings, parseVehicleSettings } from './settings';
 import { applyTuningParts, TUNING_PARTS_FILE } from './tuning-parts';
 
 /** The mod's own feature declaration, by the Modloader/IVF name. */
 const FEATURES_FILE = 'features.txt';
+
+/**
+ * Every `.txt` a folder may ship that is NOT the settings file. The settings file is found by its
+ * `.settings.txt` suffix and only falls back to "the first other `.txt`" for the pre-suffix mods — so every
+ * name we know has to be excluded from that fallback, or a car shipping one of these and no settings file
+ * has it parsed AS settings and warns "nothing recognised — STOCK". `audio.txt`/`parked.txt` are 013's, and
+ * are excluded from the day the fleet ships them rather than from the day we read them.
+ */
+const KNOWN_TXT_FILES = [
+  FEATURES_FILE,
+  TUNING_PARTS_FILE,
+  MODEL_VARIATIONS_EXTRA_FILE,
+  TEXT_FILE,
+  'audio.txt',
+  'parked.txt',
+];
 
 /** What one vehicle contributed — its gta3.img entries + the keys `--strip` keeps (model name, handling id). */
 export interface AppliedVehicle {
@@ -42,6 +61,13 @@ export interface ApplyVehicleOptions {
    * half-converted archive.
    */
   img?: EditableImg;
+  /**
+   * Which HOST the tree is being built for. It selects only what is a fact about the host rather than about
+   * the mod: `modloader/Model_Variations/` is the real game's plugin and our engine has no such folder, so an
+   * `opensa` tree skips that merge instead of warning eight times that a mod it cannot use is missing.
+   * Omitted reads as the real game — the host this installer was written for.
+   */
+  target?: BuildTarget;
 }
 
 /**
@@ -71,9 +97,7 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
   const features = featuresFile ? parseFeatures(decodeSettings(readFileSync(join(folderPath, featuresFile)))) : [];
   const settingsFile =
     entries.find((name) => name.toLowerCase().endsWith('.settings.txt')) ??
-    entries.find(
-      (name) => name.toLowerCase().endsWith('.txt') && ![FEATURES_FILE, TUNING_PARTS_FILE].includes(name.toLowerCase()),
-    );
+    entries.find((name) => name.toLowerCase().endsWith('.txt') && !KNOWN_TXT_FILES.includes(name.toLowerCase()));
   const warnings: string[] = modelWarning ? [modelWarning] : [];
   // Reported, not silent: the file the mod ships would have crashed the real game on the model read, and
   // whoever owns the mod should know its export is wrong rather than find out from a bug report.
@@ -83,41 +107,57 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
   // New tuning parts (IDE rows + shop entries) — independent of the settings file, and applied FIRST so
   // the carmods line merged below never names a part the tree does not define.
   warnings.push(...applyTuningParts(folderPath, entries, outPath));
-  if (!settingsFile) {
-    return { cleo, features, imgNames, model, warnings };
-  }
-  const settings = parseVehicleSettings(decodeSettings(readFileSync(join(folderPath, settingsFile))), (message) =>
-    warnings.push(`${settingsFile}: ${message}`),
-  );
-  // Nothing at all recognised is the loud case: the file exists, the mod meant something by it, and the car is
-  // about to run stock data under a mod model.
-  if (Object.keys(settings).length === 0) {
-    warnings.push(`${settingsFile}: nothing recognised — the car keeps STOCK handling/ide/carcols`);
-  }
-  const data = (name: string): string => join(outPath, 'data', name);
+  const settings =
+    settingsFile === undefined
+      ? undefined
+      : parseVehicleSettings(decodeSettings(readFileSync(join(folderPath, settingsFile))), (message) =>
+          warnings.push(`${settingsFile}: ${message}`),
+        );
+  if (settings !== undefined) {
+    // Nothing at all recognised is the loud case: the file exists, the mod meant something by it, and the car is
+    // about to run stock data under a mod model.
+    if (Object.keys(settings).length === 0) {
+      warnings.push(`${settingsFile}: nothing recognised — the car keeps STOCK handling/ide/carcols`);
+    }
+    const data = (name: string): string => join(outPath, 'data', name);
 
-  if (settings.ideLine !== undefined) {
-    editFile(data('vehicles.ide'), (text) => mergeIde(text, settings.ideLine!));
-  }
-  if (settings.handlingLine !== undefined) {
-    editFile(data('handling.cfg'), (text) => mergeHandling(text, settings.handlingLine!));
-  }
-  // Palette + carcols both edit carcols.dat: append any custom colours (assigning ids), then merge the carcols
-  // line with its `newN` refs resolved to those ids.
-  if (settings.palette?.length || settings.carcolsLine !== undefined) {
-    editFile(data('carcols.dat'), (text) => {
-      const { idByName, text: withColors } = addPaletteColors(text, settings.palette ?? []);
+    if (settings.ideLine !== undefined) {
+      editFile(data('vehicles.ide'), (text) => mergeIde(text, settings.ideLine!));
+    }
+    if (settings.handlingLine !== undefined) {
+      editFile(data('handling.cfg'), (text) => mergeHandling(text, settings.handlingLine!));
+    }
+    // Palette + carcols both edit carcols.dat: append any custom colours (assigning ids), then merge the carcols
+    // line with its `newN` refs resolved to those ids.
+    if (settings.palette?.length || settings.carcolsLine !== undefined) {
+      editFile(data('carcols.dat'), (text) => {
+        const { idByName, text: withColors } = addPaletteColors(text, settings.palette ?? []);
 
-      return settings.carcolsLine === undefined
-        ? withColors
-        : mergeCarcols(withColors, resolveColorRefs(settings.carcolsLine, idByName));
-    });
+        return settings.carcolsLine === undefined
+          ? withColors
+          : mergeCarcols(withColors, resolveColorRefs(settings.carcolsLine, idByName));
+      });
+    }
+    if (settings.carmodsLine !== undefined) {
+      editFile(data('carmods.dat'), (text) => mergeCarmods(text, settings.carmodsLine!));
+    }
   }
-  if (settings.carmodsLine !== undefined) {
-    editFile(data('carmods.dat'), (text) => mergeCarmods(text, settings.carmodsLine!));
+  // The two kinds that write files OUTSIDE `data/`, after the settings merge — a `{{name}}` naming this car's
+  // own slot then resolves against the row it just wrote. The ModelVariations plugin is a fact about the REAL
+  // game, so its ini is only merged when that is the host being built for.
+  if (options.target !== 'opensa') {
+    warnings.push(...applyModelVariations(folderPath, entries, outPath));
   }
+  warnings.push(...applyVehicleText(folderPath, entries, outPath, model));
 
-  return { cleo, features, handlingId: handlingId(settings, model), imgNames, model, warnings };
+  return {
+    cleo,
+    features,
+    handlingId: settings === undefined ? undefined : handlingId(settings, model),
+    imgNames,
+    model,
+    warnings,
+  };
 }
 
 /**

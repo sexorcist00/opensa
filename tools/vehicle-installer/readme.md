@@ -49,7 +49,9 @@ A folder may ship `tuning_new_parts.txt` — the IDE rows (`veh_mods.ide` shape)
 parts the game never had; the installer applies it before the settings merge (plan 009). After every install
 and rebake **every `carmods.dat` token must resolve to an IDE row in the tree**, or the run FAILS naming the
 line: the real game crashes at boot on one that does not. Two folders shipping the same part file name are
-warned about (the later wins the archive). Contract: `docs/contracts/vehicles.md`.
+warned about (the later wins the archive). A part's SHOP NAME comes from the folder's `text.txt`
+(plan 012) — the price row's second column is a GXT key, and without it the part is nameless in the shop.
+Contract: `docs/contracts/vehicles.md`.
 
 ## How it applies
 
@@ -60,6 +62,12 @@ warned about (the later wins the archive). Contract: `docs/contracts/vehicles.md
      replacing by name; rebuild the archive.
    - **CLEO** — carry the mod's `cleo/`/`CLEO/` subfolder (scripts + `.ini`/`.fxt` sidecars) to `out/cleo/`
      (canonical lowercase, structure preserved; one log line per file — plan 097/06). `--rebake` re-copies it.
+   - **Traffic** — merge `model-variations-extra.txt`'s ini section into
+     `modloader/Model_Variations/ModelVariations_Vehicles.ini` by section name (`sa` target only — the plugin
+     is the real game's). `{{name}}` resolves to that model's id in the tree's IDEs; an unknown one is
+     reported and the line ships as authored. `[Settings]` is the plugin's and is never written from a mod.
+   - **Text** — `text.txt`'s `KEY text` lines → `out/cleo/<model>.fxt`, the channel CLEO's FXT loader reads:
+     the shop shows a new part's name from there rather than from a rebuilt `american.gxt`.
    - **Settings** — parse `*.settings.txt` (blank-line-separated blocks, each classified + validated by the real
      engine parser) and merge into:
 
