@@ -28,7 +28,8 @@ go/no-go). Something already understood and scheduled does NOT live here — it 
   per-file table of what an added car needs and which shipped mod reads it (ModelVariations for traffic,
   FLA audio loader, Parked Maker, `.fxt` names), what NOT to carry over (a per-car hardcoded tuning table,
   a hardcoded id start, whole-file regeneration), and the proposed plan split — six plans for the new tool,
-  two for `vehicle-installer`, and the table of what both share.
+  two for `vehicle-installer`, and the table of what both share. Also the two tuning ceilings the old build
+  sat on (30 `link` pairs game-wide, 16 parts per car) — to be lifted by a new **`perfect-vehicle.asi`**.
 - [world-glass-material/](./world-glass-material/readme.md) — **world glass as a material class**: cars
   already classify glass and reflect it differently; the static world has no such class, so a shop window
   shades like concrete. The signal is Rockstar's own — `surfinfo.dat` carries a **GLASS column** (already

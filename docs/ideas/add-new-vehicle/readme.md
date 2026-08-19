@@ -89,7 +89,8 @@ Parked Maker's line without the id.
    with `{{name}}` → id, the tuning-block siblings; refuses when mod `11` is not in the build. Field: the
    car appears in traffic, the trailer spawns.
 5. **005 — Tuning parts, derived.** The clone-by-derivation above; `tuning_new_parts.txt` with allocated
-   ids; the carmods guard from vehicle-installer plan 009 stays the acceptance test.
+   ids; the carmods guard from vehicle-installer plan 009 stays the acceptance test; the derived name scheme
+   (prefix kept, ≤ 19 chars) and the two count guards (30 links / 16 parts) until `perfect-vehicle.asi` lifts them.
 6. **006 — Pipeline + field.** The pmb `sa` stage slot (after mod-installer and vehicle-installer, before
    the guards), the ledger (`data/vehicle-adds.txt`?), cars-server shows added cars, one field round on the
    full 115.
@@ -133,6 +134,42 @@ more dictionaries, price it against `checkImgIdBudgets` BEFORE the first build);
 number (`#Car generators = 500`, commented = default) that Parked Maker spends — budget it. `docs/gta-sa-
 original/fla-id-limits-are-part-of-the-savefile.md`: DFF ids do not change the save schema, but parked
 cars and variations DO land in saves, so ids must be stable across rebuilds.
+
+## Tuning parts: what the old code used the ORIGINAL name for, and the ceilings it sat on
+
+Read off `tuning.manager.ts`: a part dff shipped under a STOCK name is a re-modelled copy, and the stock
+name is used ONLY to look things up — (1) the `veh_mods.ide` row's trailing columns (draw distance, flags),
+re-emitted as `<newId>, <newName>, <ADDED car's txd>, <columns>`; (2) the `shopping.dat` item + price,
+cloned under the new name; (3) the `carmods.dat` `link` pair (a right wing has no shop entry; its left
+partner is found and `link newLeft, newRight` is written); (4) the car's carmods line = nitro + the new
+names that have a shop entry. Nothing else. The new name was `exh_lr_rem1` → `exh_lr_<n>1` with `n` the
+car's ordinal in the hardcoded table, always ≤ 12 chars.
+
+**The prefix is behaviour**: `CAtomicModelInfo::SetupVehicleUpgradeFlags(name)` derives the component's
+flags FROM THE NAME (`exh_`, `wg_l_`, `spl_`, `rf_`, `fbmp_`, `bnt_`, …). So the derived scheme keeps the
+prefix and replaces the tail with a token from the car's slot: `wg_l_lr_` + `v059` + index → `wg_l_lr_v0591`
+(13 chars), deterministic, no table.
+
+**Length**: the carmods parser has no explicit limit (`strtok` over a 1 024-byte line, lookup by hash), but
+the IDE loader reads a model name with `sscanf %s` into `char[24]` (> 23 chars smashes the stack) and an IMG
+entry name is 24 bytes INCLUDING `.dff` → base name ≤ 19. The old scheme's ≤ 12 was inside both. Guard: ≤ 19.
+
+**Two count ceilings the old code did not know and its build sat on** (gta-reversed `Models/
+VehicleModelInfo.{h,cpp}`, `LoadVehicleUpgrades` 0x5B65A0 region):
+
+| ceiling | stock | our build | old build | past it |
+| --- | --- | --- | --- | --- |
+| `CLinkedUpgradeList` (`0xB4E6D8`): `m_anUpgrade1/2[30]` — `link` pairs in the WHOLE `carmods.dat` | 23 | 23 | **30 — exactly full** (23 + 7 added wing pairs) | the 31st pair writes past the arrays — silent static corruption. `add-vehicles` ships 8 wing pairs → 31. FLA does not lift it |
+| `CVehicleModelInfo::m_anUpgrades[18]` — parts on ONE car's carmods line, +`hydralics`+`stereo` appended unconditionally → ≤ 16 listed | `jester` 16 (full) | 15 max | 16 | the 17th listed part overruns the array |
+
+**Decision (the user, 2026-08-19): these are lifted by a SEPARATE asi, `perfect-vehicle.asi`** (the name
+over `perfect-tuning.asi` because the same plugin is the home for every vehicle-side ceiling that comes
+later — car generators, train carriages), on `asi/sdk` like perfect-map / perfect-cutscene: relocate +
+enlarge the 30-pair list and the per-car 18-slot array (004-style relocation with every access site
+catalogued and byte-verified), each behind its own flag, FLA coexistence probed with the SDK's live-byte
+verify. Until it ships, the tool GUARDS at 30 / 16 and refuses, naming the plugin — the in-reserve rule.
+RE is that plugin's plan 001 (sites, original bytes, gta-reversed refs); the two numbers above are the
+acceptance test (31 links, 17 parts, game boots and the shop works).
 
 ## Decisions (the user, 2026-08-19) and the id budget, measured
 
