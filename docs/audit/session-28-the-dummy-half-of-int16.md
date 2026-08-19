@@ -19,7 +19,7 @@ with its numbers in the plan.
 | `int16.hpp`, `config.hpp` | **the fix**: `gFirstDummy/gLastDummy[256]` + a second snapshot pair, type 5 observed by the same `IncludeEntity` hook, two detours overlaid on FLA's jmps, `PM_FIX_INT16_DUMMY` (default on), applied only after the building hooks took and the two continuations verified | `61d2e6d4` |
 | docs: open issue → `fixed/`, `restrictions/sa-target.md`, `gta-sa-original/reference-install*.md`, `edge-cases/sa-runtime-limits.md`, `open-issues/README.md`, `entity-pools.ts` warn retired | step 7 — every doc that said NOT LIFTED says LIFTED; the pmb guard's "not released between entries" warning retired, its blind spot recorded beside it | `af1018cb`, `d78776b4` |
 | `docs/plans/assets/011-*.txt` | the five field records (`*.log` is gitignored — caught when the first one never entered the repo) | `3304089a` |
-| `gen/generate.test.ts` (+1 test) | **every catalogue site's declared bytes are read back off the `gta_sa.exe` fixture** — the check 004 and 011 both paid for in field rounds, now on macOS in 7 ms | this audit's commit |
+| `gen/generate.test.ts` (+1 test) | **every catalogue site's declared bytes are read back off the `gta_sa.exe` fixture** — the check 004 and 011 both paid for in field rounds, now on macOS in 7 ms | `7329e8d9` |
 
 ## The numbers
 
