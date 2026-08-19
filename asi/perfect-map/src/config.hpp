@@ -14,6 +14,10 @@
 #define PM_FIX_INT16 1  // IplDef int16 pool-range → int32 sidecar (the root 2^15 fix). No adjuster fixes this.
 #endif
 
+#ifndef PM_FIX_INT16_DUMMY
+#define PM_FIX_INT16_DUMMY 1  // [011] the DUMMY half of the int16 lift (firstDummy/lastDummy) — requires PM_FIX_INT16; bisectable on its own
+#endif
+
 #ifndef PM_FIX_FX2DFX
 #define PM_FIX_FX2DFX 1  // [009] 2dfx fx-system use-after-free — null-guard FxSystem_c::Stop/Play. Fx zone; no adjuster touches it.
 #endif

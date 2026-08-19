@@ -209,7 +209,11 @@ snapshot and reset that pair alongside the building one.
 **Verification:** verify-only build (`make`, no `APPLY`) still reports every site clean; unit-level byte
 tests on macOS still pass; the log shows dummy ranges accumulating per slot.
 
-*Measured: —*
+*Measured 2026-08-19 — built.* `gFirstDummy/gLastDummy[256]` beside the building pair, `PmIncludeObserver`
+accumulates type 5 into it (the step-1 diagnostic arrays are gone — the log now reads the real sidecar),
+`PmRemoveIplSnapshot` snapshots into `gSnapFirstDummy/gSnapLastDummy` and resets the slot. All three flavours
+(`make`, `make APPLY=1`, `make APPLY=1 DEBUG=1`) compile warning-free under `-Wall -Wextra`; KERNEL32-only
+import table kept. Field numbers are step 6's.
 
 ### Step 5 — the two detours
 
@@ -219,7 +223,12 @@ hardcoding the relocated stock instruction, so identical code works over stock a
 **Verification:** `make APPLY=1` boots the real install; `perfect-map-asi.log` reports
 `int16 APPLIED (dummies)`; the game reaches gameplay.
 
-*Measured: —*
+*Measured 2026-08-19 — built, field pending (step 6).* `detail::InstallDummyRangeDetour` (0x404C0F →
+`mov edi,[gSnapFirstDummy]; mov ecx,[gSnapLastDummy]; jmp 0x404C17`, nothing relocated) and
+`detail::InstallLastDummyLoopDetour` (0x404C4E → `mov eax,[gSnapLastDummy]; inc edi; jmp 0x404C53`), both
+behind `PM_FIX_INT16_DUMMY` (default on), applied only after the building hooks succeeded and the two
+continuations (`kInt16DummySites`) verify — so an adjuster owning a continuation defers the dummy half alone.
+The read sites are overlaid over FLA's jmps exactly as 004's are.
 
 ### Step 6 — the field ladder, against the deterministic repro
 

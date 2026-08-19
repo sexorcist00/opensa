@@ -5,8 +5,10 @@
 //   (b) REDIRECT RemoveIpl's two int16 bound READS (movsx edi/edx from IplDef+0x22/+0x24) to the int32 sidecar,
 //       so the original delete loop iterates the FULL range instead of the truncated int16 one. Everything else
 //       in RemoveIpl (object pass, dummy pass, delete path, car generators) runs unchanged — minimal blast radius.
-// Dummies (firstDummy/lastDummy) are the same shape and are 004b. Assumes the fixed 0x400000 image base (SA 1.0
-// has no ASLR); ApplyInt16 refuses otherwise. FIRST ITERATION — validate under Wine on the int16-repro bracket.
+// Dummies (firstDummy/lastDummy, IplDef+0x26/+0x28) are the same shape and get the same treatment under
+// PM_FIX_INT16_DUMMY (plan 011): the same observer and snapshot hook, a second sidecar pair, TWO detours over
+// RemoveIpl's dummy pass (the pre-loop reads are adjacent → one detour; the loop back-edge re-read → the other).
+// Assumes the fixed 0x400000 image base (SA 1.0 has no ASLR); ApplyInt16 refuses otherwise.
 #include <windows.h>
 #include <cstdint>
 
@@ -25,14 +27,12 @@ namespace pm::patches {
 inline int gDbgInc = 0;
 inline int gDbgRmv = 0;
 
-// 011 step 1 (the gate): observe the DUMMY pool range the same way the building fix does, but into a
-// diagnostic-only sidecar — nothing reads it but the log. `gDbgIncDummy` is a separate cap so the building
-// lines cannot starve the dummy ones; `gDbgDummyPeak` traces the pool's high-water mark per 8 192 ids, which
-// is the leak curve across world entries.
+// Dummy-side traces (011 step 1 was the gate that proved the wrap in the field). `gDbgIncDummy` is a separate
+// cap so the building lines cannot starve the dummy ones; `gDbgDummyPeak` traces the pool's high-water mark
+// per 8 192 ids, which is the leak curve across world entries.
 inline int gDbgIncDummy = 0;
 inline int gDbgRmvDummy = 0;
 inline int32_t gDbgDummyPeak = 0;
-constexpr uintptr_t kDbgDummyPool = 0xB744A0;  // *(CPool<CDummy>**)
 
 // The runtime hooks fire long after OnAttach closed its Log, so they trace through the SDK's reopen-append
 // logger. Diagnostic builds only (PM_INT16_LOG), never the hot path.
@@ -43,6 +43,7 @@ inline void DbgAppend(const char* label, int32_t a, int32_t b, int32_t c) {
 
 constexpr int kMaxIpl = 256;                 // m_IplIndex is uint8 → at most 256 slots
 constexpr uintptr_t kBuildingPool = 0xB74498;  // *(CPool<CBuilding>**)
+constexpr uintptr_t kDummyPool = 0xB744A0;     // *(CPool<CDummy>**) — sizeof(CDummy) == sizeof(CBuilding) == 0x38
 constexpr uintptr_t kIplPool = 0x8E3FB0;       // *(CPool<IplDef>**)
 constexpr uint32_t kSizeofBuilding = 0x38;
 constexpr uint32_t kSizeofIplDef = 0x34;
@@ -51,16 +52,19 @@ constexpr uint32_t kSizeofIplDef = 0x34;
 inline int32_t gFirstBuilding[kMaxIpl];
 inline int32_t gLastBuilding[kMaxIpl];
 
-#if PM_INT16_LOG
-inline int32_t gDbgFirstDummy[kMaxIpl];
-inline int32_t gDbgLastDummy[kMaxIpl];
-#endif
+// int32 sidecar for the dummy range (replaces the truncating int16 IplDef.firstDummy/lastDummy). Kept even when
+// PM_FIX_INT16_DUMMY is off so the observer and the log read one shape; only the detours are gated.
+inline int32_t gFirstDummy[kMaxIpl];
+inline int32_t gLastDummy[kMaxIpl];
 
 // The RemoveIpl snapshot (taken at its entry, before the bound-read detours run). RemoveIpl is non-reentrant, so
 // a single pair suffices. The detours read THESE, not gFirst/gLastBuilding — because the entry hook resets the
 // slot to empty for the next load right after snapshotting.
 inline int32_t gSnapFirst = 0x7FFFFFFF;
 inline int32_t gSnapLast = static_cast<int32_t>(0x80000000);
+// RemoveIpl runs buildings → objects → dummies in ONE call, so the dummy pass needs its own snapshot pair.
+inline int32_t gSnapFirstDummy = 0x7FFFFFFF;
+inline int32_t gSnapLastDummy = static_cast<int32_t>(0x80000000);
 
 inline uintptr_t IplDefPtr(int slot) {
   return *reinterpret_cast<uintptr_t*>(*reinterpret_cast<uintptr_t*>(kIplPool)) +
@@ -76,21 +80,16 @@ inline void PmIncludeObserver(int slot, void* entity) {
     return;
   }
   const uint8_t type = *reinterpret_cast<uint8_t*>(reinterpret_cast<uintptr_t>(entity) + 0x36) & 7;
-#if PM_INT16_LOG
-  // Diagnostic: does the DUMMY pool (type 5) also overflow int16? (dummies aren't fixed yet — 011/004b.)
-  if (type == 5) {
-    const uintptr_t db = *reinterpret_cast<uintptr_t*>(*reinterpret_cast<uintptr_t*>(kDbgDummyPool));
+  if (type == 5) {  // ENTITY_TYPE_DUMMY
+    const uintptr_t db = *reinterpret_cast<uintptr_t*>(*reinterpret_cast<uintptr_t*>(kDummyPool));
     const int32_t did = static_cast<int32_t>((reinterpret_cast<uintptr_t>(entity) - db) / kSizeofBuilding);
-    if (gDbgFirstDummy[slot] == 0 && gDbgLastDummy[slot] == 0) {
-      gDbgFirstDummy[slot] = 0x7FFFFFFF;  // zero-initialised static → first touch opens the range
-      gDbgLastDummy[slot] = static_cast<int32_t>(0x80000000);
+    if (did < gFirstDummy[slot]) {
+      gFirstDummy[slot] = did;
     }
-    if (did < gDbgFirstDummy[slot]) {
-      gDbgFirstDummy[slot] = did;
+    if (did > gLastDummy[slot]) {
+      gLastDummy[slot] = did;
     }
-    if (did > gDbgLastDummy[slot]) {
-      gDbgLastDummy[slot] = did;
-    }
+#if PM_INT16_LOG
     if (did > 32767 && gDbgIncDummy < 24) {
       ++gDbgIncDummy;
       DbgAppend("[dbg] incDUMMY slot/id", slot, did, 0);
@@ -101,10 +100,11 @@ inline void PmIncludeObserver(int slot, void* entity) {
     if (did > gDbgDummyPeak) {
       gDbgDummyPeak = did;
     }
-  }
 #endif
+    return;
+  }
   if (type != 1) {
-    return;  // ENTITY_TYPE_BUILDING == 1 (dummies == 5 → 004b)
+    return;  // ENTITY_TYPE_BUILDING == 1
   }
   const uintptr_t base = *reinterpret_cast<uintptr_t*>(*reinterpret_cast<uintptr_t*>(kBuildingPool));
   const int32_t id = static_cast<int32_t>((reinterpret_cast<uintptr_t>(entity) - base) / kSizeofBuilding);
@@ -130,10 +130,14 @@ inline void PmRemoveIplSnapshot(int slot) {
   if (static_cast<unsigned>(slot) >= kMaxIpl) {
     gSnapFirst = 0x7FFFFFFF;
     gSnapLast = static_cast<int32_t>(0x80000000);
+    gSnapFirstDummy = 0x7FFFFFFF;
+    gSnapLastDummy = static_cast<int32_t>(0x80000000);
     return;
   }
   gSnapFirst = gFirstBuilding[slot];
   gSnapLast = gLastBuilding[slot];
+  gSnapFirstDummy = gFirstDummy[slot];
+  gSnapLastDummy = gLastDummy[slot];
 #if PM_INT16_LOG
   if (gDbgRmv < 40) {
     const uintptr_t ipldef = IplDefPtr(slot);
@@ -145,28 +149,23 @@ inline void PmRemoveIplSnapshot(int slot) {
       DbgAppend("[dbg] rmvFIX slot/i16bLast/snapLast", slot, bl, gSnapLast);
     }
   }
-  // 011 step 1: the engine's int16 dummy pair (+0x26/+0x28) against the range we actually saw IncludeEntity
-  // place. A negative/clamped i16 beside an honest int32 is the stranding: RemoveIpl walks the wrong range.
-  {
-    const int32_t of = gDbgFirstDummy[slot];
-    const int32_t ol = gDbgLastDummy[slot];
-    const bool touched = !(of == 0 && ol == 0);
-    if (touched && gDbgRmvDummy < 40) {
-      const uintptr_t ipldef = IplDefPtr(slot);
-      const int32_t df = *reinterpret_cast<int16_t*>(ipldef + 0x26);
-      const int32_t dl = *reinterpret_cast<int16_t*>(ipldef + 0x28);
-      if (of > 32767 || ol > 32767 || df < 0 || dl < 0 || df != of || dl != ol) {
-        ++gDbgRmvDummy;
-        DbgAppend("[dbg] rmvDUMMY slot/i16dFirst/obsFirst", slot, df, of);
-        DbgAppend("[dbg] rmvDUMMY slot/i16dLast/obsLast", slot, dl, ol);
-      }
+  // The engine's int16 dummy pair (+0x26/+0x28) against the range IncludeEntity actually placed. A negative /
+  // clamped i16 beside an honest int32 is the stranding RemoveIpl's dummy pass would have walked past.
+  if (gSnapFirstDummy != 0x7FFFFFFF && gDbgRmvDummy < 40) {
+    const uintptr_t ipldef = IplDefPtr(slot);
+    const int32_t df = *reinterpret_cast<int16_t*>(ipldef + 0x26);
+    const int32_t dl = *reinterpret_cast<int16_t*>(ipldef + 0x28);
+    if (gSnapFirstDummy > 32767 || gSnapLastDummy > 32767 || df < 0 || dl < 0) {
+      ++gDbgRmvDummy;
+      DbgAppend("[dbg] rmvDUMMY slot/i16dFirst/snapFirst", slot, df, gSnapFirstDummy);
+      DbgAppend("[dbg] rmvDUMMY slot/i16dLast/snapLast", slot, dl, gSnapLastDummy);
     }
-    gDbgFirstDummy[slot] = 0;
-    gDbgLastDummy[slot] = 0;
   }
 #endif
   gFirstBuilding[slot] = 0x7FFFFFFF;
   gLastBuilding[slot] = static_cast<int32_t>(0x80000000);
+  gFirstDummy[slot] = 0x7FFFFFFF;
+  gLastDummy[slot] = static_cast<int32_t>(0x80000000);
 }
 
 namespace detail {
@@ -240,6 +239,44 @@ inline bool InstallLastBuildingLoopDetour() {
   return asi::WriteJmp(asi::Runtime(0x404BA8), base);
 }
 
+// [011] Detour at RemoveIpl.dummyRange (0x404C0F): the two pre-loop reads `movsx edi,word[ebx+0x26]` /
+// `movsx ecx,word[ebx+0x28]` are ADJACENT (8 bytes), so one 5-byte jmp covers both and the detour sets edi =
+// gSnapFirstDummy, ecx = gSnapLastDummy, then jumps to the `cmp edi,ecx` at 0x404C17. Nothing to relocate.
+inline bool InstallDummyRangeDetour() {
+  uint8_t* t = asi::AllocExec(24);
+  if (!t) {
+    return false;
+  }
+  const uintptr_t base = reinterpret_cast<uintptr_t>(t);
+  uint32_t p = 0;
+  t[p++] = 0x8B;
+  t[p++] = 0x3D;  // mov edi, [gSnapFirstDummy]  (abs32 follows)
+  Put32(t, p, reinterpret_cast<uint32_t>(&gSnapFirstDummy));
+  t[p++] = 0x8B;
+  t[p++] = 0x0D;  // mov ecx, [gSnapLastDummy]  (abs32 follows)
+  Put32(t, p, reinterpret_cast<uint32_t>(&gSnapLastDummy));
+  asi::EmitJmp(t, p, base, asi::Runtime(0x404C17));
+  return asi::WriteJmp(asi::Runtime(0x404C0F), base);
+}
+
+// [011] Detour at the loop back-edge re-read of lastDummy (0x404C4E: `movsx eax,word[ebx+0x28]`, then `inc edi;
+// add ebp,0x38; cmp edi,eax; jle`) — the same shape as the building loop's 0x404BA8. Set eax = gSnapLastDummy,
+// run the clobbered `inc edi`, jmp to 0x404C53. (0x404C4E is also the skip-path target inside the loop body —
+// those land on our jmp and do the same eax-reload + inc, so they stay correct.)
+inline bool InstallLastDummyLoopDetour() {
+  uint8_t* t = asi::AllocExec(24);
+  if (!t) {
+    return false;
+  }
+  const uintptr_t base = reinterpret_cast<uintptr_t>(t);
+  uint32_t p = 0;
+  t[p++] = 0xA1;  // mov eax, [gSnapLastDummy]  (abs32 follows)
+  Put32(t, p, reinterpret_cast<uint32_t>(&gSnapLastDummy));
+  t[p++] = 0x47;  // inc edi  (relocated clobbered insn)
+  asi::EmitJmp(t, p, base, asi::Runtime(0x404C53));
+  return asi::WriteJmp(asi::Runtime(0x404C4E), base);
+}
+
 }  // namespace detail
 
 // We hook the two ENTRY points (they must be pristine — HookObserve overwrites them) and FORCE our bound-read
@@ -254,6 +291,14 @@ inline constexpr const char* kInt16Sites[] = {
     "RemoveIpl.cont.404BAD",
 };
 
+// [011] The dummy detours' continuations — verified separately, so an adjuster owning THESE defers the dummy
+// half alone and the building half still applies. The read sites themselves (RemoveIpl.dummyRange /
+// RemoveIpl.lastDummy.loop) are overlaid, as the building reads are: FLA jmp-hooks both (measured 2026-08-19).
+inline constexpr const char* kInt16DummySites[] = {
+    "RemoveIpl.cont.404C17",
+    "RemoveIpl.cont.404C53",
+};
+
 inline void ApplyInt16(asi::Log& log, const asi::Plugin& plugin) {
   if (asi::HostBase() != 0x400000) {
     log.Tagged(plugin.tag, "int16: unexpected image base — DEFER");
@@ -262,6 +307,8 @@ inline void ApplyInt16(asi::Log& log, const asi::Plugin& plugin) {
   for (int i = 0; i < kMaxIpl; ++i) {
     gFirstBuilding[i] = 0x7FFFFFFF;
     gLastBuilding[i] = static_cast<int32_t>(0x80000000);
+    gFirstDummy[i] = 0x7FFFFFFF;
+    gLastDummy[i] = static_cast<int32_t>(0x80000000);
   }
   // Verify every byte we hook or relocate (framework rule) before touching anything.
   if (!asi::VerifySitesOrDefer(log, plugin.tag, plugin.tables, kInt16Sites,
@@ -293,6 +340,21 @@ inline void ApplyInt16(asi::Log& log, const asi::Plugin& plugin) {
              s && a && b && c && e
                  ? "int16 APPLIED (buildings): IncludeEntity observed + RemoveIpl snapshot + bounds int32"
                  : "int16: patch write FAILED (see VirtualProtect)");
+#if PM_FIX_INT16_DUMMY
+  if (!(s && a)) {
+    log.Tagged(plugin.tag, "int16 (dummies): hooks missing — DEFER");
+    return;
+  }
+  if (!asi::VerifySitesOrDefer(log, plugin.tag, plugin.tables, kInt16DummySites,
+                               sizeof(kInt16DummySites) / sizeof(kInt16DummySites[0]))) {
+    log.Tagged(plugin.tag, "int16 (dummies): DEFER (building half stays applied)");
+    return;
+  }
+  const bool f = detail::InstallDummyRangeDetour();
+  const bool g = detail::InstallLastDummyLoopDetour();
+  log.Tagged(plugin.tag, f && g ? "int16 APPLIED (dummies): RemoveIpl dummy bounds int32 (2 detours)"
+                                : "int16 (dummies): patch write FAILED (see VirtualProtect)");
+#endif
 }
 
 }  // namespace pm::patches
