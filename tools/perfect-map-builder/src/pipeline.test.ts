@@ -181,9 +181,6 @@ describe('EXCLUDABLE_STAGES', () => {
         // cutscene is the vehicles stage's shadow (vehicle-cutscene plan 002 step 11): it reads the
         // INSTALLED game, so it sits right after `vehicles` and shares its source folder.
         'cutscene',
-        // add-vehicles comes after the cutscene stage: that stage converts the installed REPLACEMENT fleet
-        // and an added car has no cutscene twin (central plan 102, `sa` only).
-        'add-vehicles',
         'peds',
         'optimize',
         'trees',
@@ -1534,11 +1531,11 @@ describe('buildPerfectMap --resume', () => {
 });
 
 /**
- * The `add-vehicles` stage (central plan 102). Its contract at this level is WHEN it runs: only for the `sa`
- * target, only when the source root holds cars, and after the cutscene stage — which converts the installed
- * REPLACEMENT fleet and has no twin to make for a car the game never had.
+ * The added cars (central plan 102). Their contract at this level is WHERE they land: inside the `sa` branch,
+ * on the finished tree — never in the common build both targets are made from, which is the placement
+ * `procobj` established for content that belongs to one target.
  */
-describe('buildPerfectMap add-vehicles stage', () => {
+describe('buildPerfectMap added vehicles', () => {
   let out: string;
   let game: string;
   let inPath: string;

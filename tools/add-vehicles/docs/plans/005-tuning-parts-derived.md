@@ -1,6 +1,7 @@
 # 005 — Tuning parts, derived (no table)
 
-**Status: BUILT 2026-08-19 — and it REFUSES the full fleet by one link pair, which is the designed outcome.** An added car ships its base's tuning parts re-modelled to fit it, under the
+**Status: BUILT 2026-08-19.** It refused the full fleet by one link pair until `asi/perfect-vehicle` 002
+shipped the same day; with the plugin in the tree all 115 cars and 46 parts install. An added car ships its base's tuning parts re-modelled to fit it, under the
 STOCK part names (`wg_r_lr_rem1.dff` in `059veh (remingtn)`). Those names must NOT reach the archive — they
 would overwrite the stock part for the base car — so each gets a new unique name, and everything the game
 knows about the stock part is cloned under it. The old tool did this with a hand-written table per car

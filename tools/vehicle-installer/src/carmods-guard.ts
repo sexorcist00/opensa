@@ -26,28 +26,41 @@ export const STOCK_LINK_PAIRS = 30;
 /** `m_anUpgrades[18]` minus the two the game appends itself. */
 export const STOCK_PARTS_PER_CAR = 16;
 
-/** The plugin that lifts both; present in the tree means the numbers below are no longer the ceiling. */
+/** The plugin that lifts them; present in the tree means the number it lifts is no longer the ceiling. */
 const PERFECT_VEHICLE_ASI = 'perfect-vehicle.asi';
 
 /**
- * Refuse a built tree whose `carmods.dat` is over either array. Does nothing when the tree carries
- * `perfect-vehicle.asi` — that plugin relocates them, and the guard must not ration a target that has been
- * lifted (`docs/restrictions/sa-target.md`).
+ * What `perfect-vehicle.asi` raises each array to when it is in the tree. **Only the link list is lifted
+ * today**: its plan-002 half is built and the per-car array's is not (nothing needs it — the fleet's fullest
+ * car lists 15 of the 16 — and the RE for it is done, `asi/perfect-vehicle/docs/plans/001`). So the parts
+ * ceiling stays the game's own even with the plugin present, and this table is where that is stated once.
+ */
+const LIFTED_LINK_PAIRS = 256;
+
+/**
+ * Refuse a built tree whose `carmods.dat` is over either array. The LINK ceiling follows the tree: with
+ * `perfect-vehicle.asi` in it the number is the plugin's, because a guard must never ration a target that has
+ * been lifted (`docs/restrictions/sa-target.md`). The per-car ceiling is the game's either way — that half of
+ * the plugin is not built.
  */
 export function assertCarmodsCeilings(gameDir: string): void {
   const path = join(gameDir, 'data', 'carmods.dat');
-  if (!existsSync(path) || existsSync(join(gameDir, PERFECT_VEHICLE_ASI))) {
+  if (!existsSync(path)) {
     return;
   }
+  const lifted = existsSync(join(gameDir, PERFECT_VEHICLE_ASI));
+  const linkCeiling = lifted ? LIFTED_LINK_PAIRS : STOCK_LINK_PAIRS;
   const carmods = parseCarmods(readFileSync(path, 'latin1'));
-  if (carmods.links.length > STOCK_LINK_PAIRS) {
+  if (carmods.links.length > linkCeiling) {
     throw new Error(
-      `carmods.dat holds ${carmods.links.length} 'link' pairs and the game's array is ${STOCK_LINK_PAIRS} ` +
-        `(CLinkedUpgradeList, stock uses 23). The 31st pair writes past it — static corruption, no message. ` +
-        `Ship ${PERFECT_VEHICLE_ASI} (asi/perfect-vehicle plan 002) to lift it, or drop ` +
-        `${carmods.links.length - STOCK_LINK_PAIRS} pair(s): ` +
+      `carmods.dat holds ${carmods.links.length} 'link' pairs and the game's array is ${linkCeiling} ` +
+        `(CLinkedUpgradeList, stock uses 23). The next pair writes past it — static corruption, no message. ` +
+        (lifted
+          ? `${PERFECT_VEHICLE_ASI} is in the tree and already raised this to ${LIFTED_LINK_PAIRS}. `
+          : `Ship ${PERFECT_VEHICLE_ASI} (asi/perfect-vehicle plan 002) to lift it to ${LIFTED_LINK_PAIRS}, or `) +
+        `drop ${carmods.links.length - linkCeiling} pair(s): ` +
         carmods.links
-          .slice(STOCK_LINK_PAIRS)
+          .slice(linkCeiling)
           .map(([left, right]) => `${left}/${right}`)
           .join(', '),
     );
@@ -57,7 +70,8 @@ export function assertCarmodsCeilings(gameDir: string): void {
     throw new Error(
       `${over.length} car(s) list more than ${STOCK_PARTS_PER_CAR} upgrade parts, which is what ` +
         `m_anUpgrades[18] holds once the game appends hydralics and stereo — the extra parts overrun the ` +
-        `model info. Ship ${PERFECT_VEHICLE_ASI} to lift it, or shorten: ` +
+        `model info. ${PERFECT_VEHICLE_ASI} does NOT lift this one yet (its RE is done, the patch is not ` +
+        `built — nothing has needed it). Shorten: ` +
         over.map(([model, parts]) => `${model} (${parts.length})`).join(', '),
     );
   }
@@ -66,11 +80,12 @@ export function assertCarmodsCeilings(gameDir: string): void {
 /** How much room is left in each array — for a run that wants to say so before it fills one. */
 export function carmodsHeadroom(gameDir: string): { links: number; partsPerCar: number } {
   const path = join(gameDir, 'data', 'carmods.dat');
+  const ceiling = existsSync(join(gameDir, PERFECT_VEHICLE_ASI)) ? LIFTED_LINK_PAIRS : STOCK_LINK_PAIRS;
   if (!existsSync(path)) {
-    return { links: STOCK_LINK_PAIRS, partsPerCar: STOCK_PARTS_PER_CAR };
+    return { links: ceiling, partsPerCar: STOCK_PARTS_PER_CAR };
   }
   const carmods = parseCarmods(readFileSync(path, 'latin1'));
   const worst = Math.max(0, ...[...carmods.mods.values()].map((parts) => parts.length));
 
-  return { links: STOCK_LINK_PAIRS - carmods.links.length, partsPerCar: STOCK_PARTS_PER_CAR - worst };
+  return { links: ceiling - carmods.links.length, partsPerCar: STOCK_PARTS_PER_CAR - worst };
 }

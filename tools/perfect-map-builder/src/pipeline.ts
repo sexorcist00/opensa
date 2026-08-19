@@ -26,7 +26,7 @@ import { buildSaLods } from '@opensa/sa-lod-generator/build';
 import { buildProcobjLods } from '@opensa/sa-procobj-placement/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { writeArchiveManifest } from '@opensa/tool-kit/archive/layout';
-import { copyGameDir, countImgArchives } from '@opensa/tool-kit/game-dir';
+import { countImgArchives } from '@opensa/tool-kit/game-dir';
 import { isLayeredTree } from '@opensa/tool-kit/layers';
 import { checkLodLinks, formatLodLink } from '@opensa/tool-kit/lod-links';
 import { type BuildTarget } from '@opensa/tool-kit/target';
@@ -60,10 +60,6 @@ export const STAGE_NAMES = [
   // the merged carcols.dat and the mod TXDs already in gta3.img are what the conversion bakes/resolves
   // against — so it sits right after `vehicles` and shares its source folder and its populated-check.
   'cutscene',
-  // Added cars come AFTER the cutscene stage on purpose: that stage converts the installed REPLACEMENT
-  // fleet, and an added car has no cutscene twin to convert (`sa` only — the whole feature is the real
-  // game's plugins). tools/add-vehicles, central plan 102.
-  'add-vehicles',
   'peds',
   'optimize',
   'trees',
@@ -117,6 +113,16 @@ export const PERFECT_MAP_ASI = resolve(
 export const PERFECT_CUTSCENE_ASI = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../../../asi/perfect-cutscene/dist/perfect-cutscene.asi',
+);
+
+/**
+ * Where the cross-compiled `perfect-vehicle.asi` is picked up from — same deal as {@link PERFECT_MAP_ASI}. It
+ * lifts `carmods.dat`'s two fixed-size arrays, so a build whose added cars need more than the stock 30 `link`
+ * pairs is only correct with it (asi/perfect-vehicle plan 002; the installer refuses the overflow either way).
+ */
+export const PERFECT_VEHICLE_ASI = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../asi/perfect-vehicle/dist/perfect-vehicle.asi',
 );
 
 export const OPENSA_BUDGET_NOTICE =
@@ -316,11 +322,6 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
         void installVehicles({ gamePath: game, inPath: source(subfolders.vehicles), outPath: out, target }),
     });
   }
-  stageAddedVehicles(chain, source(subfolders.addVehicles), populated(subfolders.addVehicles), {
-    excluded,
-    target,
-    until,
-  });
   // The cutscene stage exists only downstream of a RUN vehicles stage: the conversion reads the installed
   // game (merged carcols, mod TXDs as txdp parents), so on a tree without them every slot fails closure.
   // `--exclude vehicles` therefore drops this stage too — loudly, because a silently missing stage reads
@@ -495,11 +496,13 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     // dies in a gate re-enters at the LOD build, not at stage 1.
     const saStarted = Date.now();
     const built = await buildSaTarget({
+      addVehiclesIn: source(subfolders.addVehicles),
       config,
       cutsceneFleet: common.cutscene !== undefined,
       excluded,
       excludeItems,
       game,
+      hasAddedVehicles: populated(subfolders.addVehicles),
       holeFillModels,
       outPath,
       procobjIn: source(subfolders.procobj),
@@ -825,6 +828,8 @@ async function buildOpensaTarget(step: {
  * tree, and the asi shipped beside the map. Returns the tree it produced and its report fragment (plan 005).
  */
 async function buildSaTarget(step: {
+  /** The mods-src `add-vehicles/` subfolder — the ADDED cars, this target's alone (central plan 102). */
+  addVehiclesIn: string;
   config: BuilderConfig;
   /** Whether the cutscene stage ran — the gate on shipping `perfect-cutscene.asi` beside the fleet it needs. */
   cutsceneFleet: boolean;
@@ -832,6 +837,8 @@ async function buildSaTarget(step: {
   excludeItems: string[];
   /** The common baked build both targets are fed from. */
   game: string;
+  /** Whether that folder actually holds cars — an empty root is not a stage. */
+  hasAddedVehicles: boolean;
   holeFillModels: string[];
   outPath: string;
   /** The mods-src `procobj/` subfolder (may be absent — the bake falls back to the built-in roster). */
@@ -872,6 +879,10 @@ async function buildSaTarget(step: {
       }),
     );
   }
+  // The added cars belong to this target alone, and they are added to a build that already exists — so the
+  // plugin that legalises their `carmods.dat` goes in first, then the cars, then the guards price them.
+  shipPerfectVehicleAsi(sa, PERFECT_VEHICLE_ASI);
+  addVehiclesIntoSa(sa, step.addVehiclesIn, step.hasAddedVehicles);
   // Every SA ceiling is checked HERE, on the tree the real game loads — not on the shared build. The LOD
   // stage appends hole-fill instances to the copied text IPLs, so the common build undercounts the rows.
   const census = reportTextIplCensus(sa);
@@ -1347,6 +1358,20 @@ export function shipPerfectMapAsi(saDir: string, asiPath: string): null | { sha2
   );
 }
 
+/**
+ * The vehicle-side plugin, shipped when the build HAS added cars — it is what makes their `carmods.dat`
+ * legal past the stock 30 `link` pairs, and a tree without it is one the installer would have refused.
+ */
+export function shipPerfectVehicleAsi(saDir: string, asiPath: string): null | { sha256: string } {
+  return shipAsi(
+    saDir,
+    asiPath,
+    'perfect-vehicle.asi',
+    "This build's added cars need it past 30 carmods `link` pairs; build it with `npm run build:asi` in " +
+      'asi/perfect-vehicle. Without it the 31st pair writes past the array — silent static corruption.',
+  );
+}
+
 /** The two asi pairings in the shape `build-timings.json` carries — each absent when nothing was shipped, so
  *  a run states which plugins its output is paired with and never invents a hash it does not have. */
 function asiPairings(
@@ -1492,6 +1517,45 @@ export function writeStageTimings(
   writeFileSync(join(outPath, 'build-timings.json'), JSON.stringify({ config, stages: timings, total }, null, 2));
 }
 
+/**
+ * The run's work dir (`.work-<target>`, plus the legacy shared `.work`) is wiped before any stage reads
+ * `--game`/`--in`, so a source pointing INTO it (the obvious fast path for re-running one stage:
+ * `--game <out>/.work-sa/5-trees`) is deleted before it is read. Silent otherwise — the run dies on a missing
+ * `gta3.img` seconds after the intermediates are already gone, naming the symptom and never the cause. It
+ * cost a full rebuild on 2026-08-09. The OTHER target's work dir is not touched, so a source there is safe.
+ */
+/**
+ * Refuse a run that would build BOTH targets out of a LAYERED mods folder (mod-installer plan 011).
+ *
+ * The `mods` stage lives in the chain both targets share, and a layered folder makes its result depend on
+ * the target — so one run cannot produce both installs, and `resolveBuildTarget` would silently pick `sa`
+ * for both. Config-time, like the `--target opensa` refusal beside it: the alternative is an `opensa/`
+ * build carrying the real game's mod layer, which nothing downstream can detect.
+ *
+ * A run that stops inside the COMMON chain is fine and is not refused — it builds neither target, and the
+ * resolved target (logged at the top of the run) is what its intermediate carries.
+ */
+/**
+ * The added cars, into the FINISHED `sa` tree, in place — the placement `procobj` taught: this content
+ * belongs to ONE target, so it must not reach the common build both targets are made from (an `opensa` pak
+ * would carry 115 cars nothing can spawn, and the whole machinery — ModelVariations, FLA's audio loader,
+ * Parked Maker, CLEO's FXT loader — is the real game's).
+ *
+ * Runs after the plugin is shipped and BEFORE this branch's budget guards, so the ids, TXDs and archive
+ * members it adds are counted by the same `checkImgIdBudgets` that prices everything else, and so its own
+ * `carmods.dat` ceiling check sees `perfect-vehicle.asi` sitting in the tree.
+ */
+function addVehiclesIntoSa(saDir: string, inPath: string, hasCars: boolean): void {
+  if (!hasCars) {
+    return;
+  }
+  log('add-vehicles → sa/');
+  const report = addVehicles({ gamePath: saDir, inPath });
+  report.warnings.forEach((warning) => console.warn(`add-vehicles: ${warning}`));
+  const cars = report.installed.filter(({ kind }) => kind === 'car').length;
+  log(`add-vehicles: ${cars} car(s), ${report.installed.length - cars} tuning part(s) added to sa/`);
+}
+
 /** `1234.5` → `20m 34s` — the unit a build is actually discussed in. */
 function formatMinutes(seconds: number): string {
   return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
@@ -1622,7 +1686,7 @@ function planChain<T extends { name: ExcludableStage }>(
 
 function refuseLayeredBothTargets(
   modsPath: string,
-  what: 'add-vehicles' | 'mods' | 'peds' | 'vehicles',
+  what: 'mods' | 'peds' | 'vehicles',
   until: StageName | undefined,
   excluded: ReadonlySet<ExcludableStage>,
 ): void {
@@ -1650,54 +1714,4 @@ function refuseSourceInsideWork(work: string, gamePath: string, inPath: string):
       );
     }
   }
-}
-
-/**
- * The run's work dir (`.work-<target>`, plus the legacy shared `.work`) is wiped before any stage reads
- * `--game`/`--in`, so a source pointing INTO it (the obvious fast path for re-running one stage:
- * `--game <out>/.work-sa/5-trees`) is deleted before it is read. Silent otherwise — the run dies on a missing
- * `gta3.img` seconds after the intermediates are already gone, naming the symptom and never the cause. It
- * cost a full rebuild on 2026-08-09. The OTHER target's work dir is not touched, so a source there is safe.
- */
-/**
- * Refuse a run that would build BOTH targets out of a LAYERED mods folder (mod-installer plan 011).
- *
- * The `mods` stage lives in the chain both targets share, and a layered folder makes its result depend on
- * the target — so one run cannot produce both installs, and `resolveBuildTarget` would silently pick `sa`
- * for both. Config-time, like the `--target opensa` refusal beside it: the alternative is an `opensa/`
- * build carrying the real game's mod layer, which nothing downstream can detect.
- *
- * A run that stops inside the COMMON chain is fine and is not refused — it builds neither target, and the
- * resolved target (logged at the top of the run) is what its intermediate carries.
- */
-/**
- * Add the `add-vehicles` stage to the chain when this run can carry it: the source has cars and the target
- * is `sa`. The feature IS the real game's plugins (ModelVariations, FLA's audio loader, Parked Maker,
- * CLEO's FXT loader), so an `opensa` build having no added cars is the correct outcome, not a gap.
- */
-function stageAddedVehicles(
-  chain: { name: ExcludableStage; run: (game: string, out: string) => ChainOutcome | Promise<ChainOutcome> }[],
-  inPath: string,
-  hasCars: boolean,
-  run: { excluded: ReadonlySet<ExcludableStage>; target: BuildTarget; until: StageName | undefined },
-): void {
-  if (run.target !== 'sa' || !hasCars) {
-    return;
-  }
-  refuseLayeredBothTargets(inPath, 'add-vehicles', run.until, run.excluded);
-  chain.push({ name: 'add-vehicles', run: (game, out) => stageAddVehicles(game, out, inPath) });
-}
-
-/**
- * The `add-vehicles` stage: the added cars onto the tree the vehicles stage produced. It edits IN PLACE, so
- * the previous stage's build is copied first — an added car is added to a build that already exists, and the
- * tool has no `--game` of its own. Every guard it runs (the id window, the two `carmods.dat` arrays, the
- * colour table) is the one the installer runs on any path; the pool budgets stay `checkImgIdBudgets`'.
- */
-function stageAddVehicles(game: string, out: string, inPath: string): void {
-  copyGameDir(game, out);
-  const report = addVehicles({ gamePath: out, inPath });
-  report.warnings.forEach((warning) => console.warn(`add-vehicles: ${warning}`));
-  const cars = report.installed.filter(({ kind }) => kind === 'car').length;
-  console.log(`add-vehicles: ${cars} car(s), ${report.installed.length - cars} tuning part(s)`);
 }

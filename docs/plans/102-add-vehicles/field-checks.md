@@ -95,6 +95,22 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
       figure before), and cars painted with ids above 127 (the added ones use 140–144) show the right
       colour. If FLA refuses the number it says so in its log — that is the first place to read.
 
-## From `asi/perfect-vehicle` (to be filled as 001–002 are built)
+## From `asi/perfect-vehicle` (link half BUILT 2026-08-19)
 
-_—_
+**This is the round's riskiest delivery — it rewrites two functions of the exe.** Deliver
+`perfect-vehicle.asi` into the game root beside `perfect-map.asi`, and keep the previous `carmods.dat` to
+put back.
+
+- [ ] **It loads and says so.** Look at: `perfect-vehicle-asi.log` beside the others, ending in
+      `links APPLIED: 256 pairs`. A `DEFER` line instead means a site's bytes have moved — the log names
+      which, and that is the whole diagnosis.
+- [ ] **31 link pairs boot.** Deliver the `carmods.dat` the full 115-car run wrote. Look at: the game
+      boots and plays. Before the plugin this was the pair that would have written past the array.
+- [ ] **Both wings of a re-modelled set swap together.** Take `059veh` (the Charger) to a mod shop and buy
+      a wing: the mirror appears on the other side. That is `FindOtherUpgrade` — our replacement — doing its
+      job, and it is the single most direct test of the patch.
+- [ ] **The stock links still work.** A stock car's mirrored parts (`blade`, `slamvan`) pair as they always
+      did: our storage is loaded from the same `carmods.dat`, so the 23 stock pairs must behave unchanged.
+- [ ] **Eight world entries.** The perfect-map 011 ladder, as the regression: nothing else moved.
+- [ ] **Then take the plugin away.** With the stock `carmods.dat` back and no `perfect-vehicle.asi`, the
+      game is what it was. A patch that cannot be removed is one nobody can bisect.

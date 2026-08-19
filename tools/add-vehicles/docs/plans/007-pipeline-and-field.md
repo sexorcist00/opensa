@@ -26,12 +26,12 @@ one thing outstanding, and it waits on the link ceiling** (see below).
 
 **Built 2026-08-19.**
 
-**The stage.** `add-vehicles` sits in `STAGE_NAMES` between `cutscene` and `peds`, `sa`-only, skipped when
-the root holds no cars, and refused for a layered root that would serve both targets. It edits the previous
-stage's tree IN PLACE (the tool has no `--game` of its own — an added car is added to a build that already
-exists), so the stage copies the build forward first. Tests: three in `pipeline.test.ts` (runs once for
-`sa`, never for `opensa`, never without cars) plus the stage-list pin. `--until add-vehicles` works like any
-other stop point, and `resume.json` records it because it is a chain entry like the rest.
+**Where it runs, and why not where the plan said.** Not a common-chain stage between `cutscene` and `peds`:
+**inside the `sa` branch, on the finished tree**, after the plugin is shipped and before the budget guards.
+That is the placement `procobj` established (plan 014) for content belonging to ONE target — in the common
+chain an `opensa` pak would have carried 115 cars nothing can spawn, and the ordering would have put the
+`carmods.dat` guard before the plugin that lifts its ceiling. Tests: three in `pipeline.test.ts` (runs once,
+into `<out>/sa`, never when the sa branch does not run, never without cars).
 
 **cars-server.** The added fleet is its own section, `Added vehicles`, resolved through the same
 `resolveVehicleSources` and the same screenshot rules (a missing picture is reported the way a replacement
@@ -50,11 +50,10 @@ car's is). Its cards carry the `(base)` the car varies. Three tests in `catalog.
 | `carmods.dat` parts per car | worst **15** | 16 | 1 |
 | **`carmods.dat` link pairs** | **31** | **30** | **−1** |
 
-**So the field round cannot run on the full fleet yet, and that is the designed refusal**: the 8 wing pairs
-the fleet ships put the game-wide `link` array one over. Until `asi/perfect-vehicle` 002 ships (or one pair
-is dropped — the guard names `wg_l_c_f_124veh/wg_r_c_f_124veh`), a full `pmb … --until sa` FAILS at this
-stage. Four of the five part-shipping cars install together today, and everything else in the chain —
-115 cars, their names, sounds, parking, traffic and tuned traffic — is proven on the clone.
+**That last row is why `asi/perfect-vehicle` 002 was built the same day.** With `perfect-vehicle.asi` in the
+tree the ceiling is 256 and the full fleet installs — **115 cars + 46 tuning parts, 6.6 s, 225 link pairs of
+headroom left**. The pipeline ships the plugin into the `sa` tree before the cars go in, so a build either
+has the lift or refuses; there is no middle state where 31 pairs are written against an array of 30.
 
 **The field verdicts are collected in one round** at the end of the chain:
 [`docs/plans/102-add-vehicles/field-checks.md`](../../../../docs/plans/102-add-vehicles/field-checks.md),
