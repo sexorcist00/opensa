@@ -1,4 +1,7 @@
-# add-new-vehicle — ADDED cars (new model ids) that drive in traffic, park, tune and sound
+# Recon — ADDED cars (new model ids) that drive in traffic, park, tune and sound
+
+> The research record of plan [102](readme.md); it graduated from `docs/ideas/add-new-vehicle` on 2026-08-19
+> the same day it was written. Kept verbatim — the plan chains below it cite its sections.
 
 **Original SA only** (2026-08-19, the user's call). Recon of the user's earlier implementation (a private
 build tool, read once from `NO_COMMIT/1/src` and its shipped output `NO_COMMIT/1/build`; **not reused — we

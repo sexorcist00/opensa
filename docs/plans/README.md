@@ -21,6 +21,12 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 `001`–`099`, one folder each (066, 073, 074, 078–082, 096–099 carry multi-part sub-plans; 083 kept its
 row but its chain was superseded by 097). Newest first:
 
+- **[102 — Added vehicles for the `sa` target](./102-add-vehicles/readme.md)** — **PLANNED 2026-08-19,
+  original SA only**: `tools/add-vehicles` (new model ids from `mods-src/original/add-vehicles/`, 115 cars:
+  ids in 19 001–19 999, name/sound/parking, traffic through ModelVariations, tuning parts DERIVED not
+  tabled, tuned traffic), what `vehicle-installer` gains first (012 the two unread file kinds, 013
+  audio/parked), and `asi/perfect-vehicle` for the two `carmods.dat` ceilings (30 `link` pairs, 16 parts
+  per car). Research in its `recon.md`; the shared layer is decided in the umbrella, not per chain.
 - **[101 — Escalators in OpenSA](./101-escalators/readme.md)** — **PLANNED 2026-08-07**: the steps have
   never moved in our engine. `renderware` decodes the type-10 entry (plan 044) and there is a debug waypoint;
   `engine`, `cell-weld` and `engine-formats` have no escalator code at all, so the staircase draws and
@@ -323,7 +329,12 @@ row but its chain was superseded by 097). Newest first:
 - **vehicle-installer** — install vehicle mod folders: dff/txd → `gta3.img`; settings → `handling.cfg`/
   `vehicles.ide`/`carcols.dat` (car/car4, alpha-sorted, custom `col` palettes)/`carmods.dat`; `--strip` to keep
   only the installed cars. [`vehicle-installer/docs/plans/`](../../tools/vehicle-installer/docs/plans/) (`001`
-  architecture · `002` install · `003` palette · `004` strip).
+  architecture · `002` install · `003` palette · `004` strip · … · `011` special features · **`012` unread
+  file kinds · `013` audio + parked — planned, central plan 102**).
+- **add-vehicles** — ADDED cars (new model ids) for the `sa` target, on vehicle-installer's Node API:
+  resolver root, id allocator, name/sound/parking, ModelVariations traffic, derived tuning, tuned traffic,
+  the pmb stage. [`add-vehicles/docs/plans/`](../../tools/add-vehicles/docs/plans/readme.md) (`001`–`007`,
+  planned 2026-08-19; central plan 102).
 - **vehicle-cutscene** — convert installed vehicle mods into their cutscene counterparts: the 23 `cs*` models
   in `models/cutscene.img` (flattened HAnim rig with the vanilla bone ids, four instantiated wheels, baked
   carcols paint, empty `txdp`-resolved TXD), so real-game cutscenes show the same custom cars as gameplay.
@@ -359,6 +370,10 @@ row but its chain was superseded by 097). Newest first:
   [`asi/perfect-cutscene/docs/plans/`](../../asi/perfect-cutscene/docs/plans/readme.md) (`001` deferred
   cutscene alpha — WRITTEN 2026-08-14, not started; ends with a full plan-004 fleet re-check + pmb
   packaging).
+- **asi/perfect-vehicle** — the VEHICLE-side ceilings no adjuster has a setting for: the two `carmods.dat`
+  arrays (30 `link` pairs game-wide, 16 parts per car) that `tools/add-vehicles` runs into; third consumer
+  of `asi/sdk`. [`asi/perfect-vehicle/docs/plans/`](../../asi/perfect-vehicle/docs/plans/readme.md) (`001` RE
+  · `002` relocation patches — PLANNED 2026-08-19, central plan 102).
 
 ## Other docs
 
