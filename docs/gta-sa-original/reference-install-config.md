@@ -157,14 +157,22 @@ Enable model special feature loader = 1
 Register global exception handler = 0
 ```
 
-**Tried and reverted 2026-08-19:** `Vehicle colors = 256` and `Vehicle Models = 400` were both set during a
-field bisect and both taken back out — neither fixed what it was set for, and the second actively broke the
-game (OLA already has `VehicleModels = unlimited`; two adjusters relocating one store left
-`CModelInfo::AddVehicleModel` reading a zeroed vtable at the stock address). **The install's FLA
-configuration is unchanged from the capture above**, and its healthy log line is still
-`Number of memory changes made: 3712` — the number to check after any delivery.
+**`Vehicle Models = 400` was tried and reverted 2026-08-19**: OLA already has `VehicleModels = unlimited`,
+and two adjusters relocating one store left `CModelInfo::AddVehicleModel` reading a zeroed vtable at the
+stock address `0xB1F654`. **Do not set both.**
 
-`fastman92limitAdjuster.log` closes with `Number of memory changes made: 3712`.
+**`Vehicle colors = 256` is SET, and it is not a bisect leftover** (corrected 2026-08-19, session 30). It was
+set deliberately earlier the same day because the built palette carries **142 `col` rows** against the 128 of
+FLA's own ini annotation — `mods-src`, `build/original/sa` and the bottle all carry it, and FLA's log says it
+took: `Vehicle colours limit is over 255 … Applying colour ID uint32_t patches` +
+`Modified limit of OTHER LIMITS: Vehicle colors to: 256`. An earlier revision of this file said it had been
+"tried and reverted"; that was wrong, and it cost a bisect step — a live, field-UNCONFIRMED patch family was
+being treated as an excluded variable. It stays a suspect until a run says otherwise.
+
+**Two healthy numbers, and the setting decides which one applies**:
+`fastman92limitAdjuster.log` closes with `Number of memory changes made: 3712` **without** the colour setting
+and **3834 with it** (the uint32 colour-id family is +122 changes). Read the line after any delivery, then
+check it against the ini rather than against 3712 alone.
 
 ### The ID pools — read them off FLA's LOG, not off the ini
 

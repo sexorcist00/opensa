@@ -53,18 +53,17 @@ new vehicles in `default.dat`'s files" is currently a field rule rather than an 
 the boot-time failure is not a count ceiling that anyone has found (`VehicleStructs`/`VehicleModels` are
 `unlimited` in the OLA ini, and raising FLA's `Vehicle Models` made things worse — see below).
 
-## Two adjuster settings that are NOT the answer
+## One adjuster setting that is NOT the answer — and one that is still LIVE
 
-Both were tried during the same bisect and both were reverted:
-
-- **`Vehicle colors = 256`** (FLA). Crossing "over 255" makes FLA apply a whole uint32 colour-id patch family
-  (+122 memory changes). It changed nothing about the crash, and the user's own history says the palette has
-  been running at 140 rows with the setting untouched — so the 128 in
-  [vehicle-colour-table-128.md](vehicle-colour-table-128.md) is a number from FLA's ini annotation, not an
-  observed ceiling.
 - **`Vehicle Models = 400`** (FLA), while OLA already has `VehicleModels = unlimited`. Two adjusters
   relocating one store: the game then read `ms_vehicleModelInfoStore` at its stock address `0xB1F654` with a
-  zeroed vtable and died in `CModelInfo::AddVehicleModel` (`0x4C6770`). **Do not set both.**
+  zeroed vtable and died in `CModelInfo::AddVehicleModel` (`0x4C6770`). Tried, reverted. **Do not set both.**
+- **`Vehicle colors = 256`** (FLA) — **this one was NOT reverted, and an earlier revision of this file saying
+  it was is a correction made 2026-08-19 (session 30).** It was set deliberately, before the bisect, because
+  the built palette carries 142 `col` rows against the 128 of FLA's ini annotation. Crossing "over 255" makes
+  FLA apply a whole uint32 colour-id patch family (+122 memory changes, `3712` → `3834`), and it is applied in
+  every run of this fleet — the boots that WORKED as well as the ones that crash, which is what keeps it off
+  the top of the suspect list without clearing it. It has never had a field verdict of its own.
 
 ## Where this is used
 
