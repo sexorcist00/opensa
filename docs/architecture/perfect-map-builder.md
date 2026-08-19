@@ -82,6 +82,7 @@ flowchart TB
   mods["mods · mod-installer"]:::stage
   veh["vehicles · vehicle-installer"]:::stage
   cs["cutscene · vehicle-cutscene<br/>mod fleet → cs* models<br/>(needs the INSTALLED game)"]:::stage
+  add["add-vehicles · tools/add-vehicles<br/>new model ids 19001+ · sa only<br/>(IN PLACE, ledger-pinned)"]:::stage
   peds["peds · ped-installer"]:::stage
   opt["optimize · map-optimizer<br/>normals · prelit · dedupe"]:::stage
   trees["trees · lod-trees-generator<br/>impostor cards + atlas"]:::stage
@@ -96,7 +97,7 @@ flowchart TB
   fetch["fetch-pack (chained by build:game:&lt;id&gt;:opensa)<br/>content-hashed zip chunks + manifest"]:::stage
   outpak[("&lt;out&gt;/opensa-pack/&lt;game&gt;-&lt;version&gt;<br/>the FETCH build — deploy as games/&lt;game&gt;-&lt;version&gt;")]:::data
 
-  src --> mods --> veh --> cs --> peds --> opt --> trees
+  src --> mods --> veh --> cs --> add --> peds --> opt --> trees
   trees --> sa --> proc --> guard --> outsa
   trees --> osguard --> oslod --> pack --> outos
   outos --> fetch --> outpak
@@ -115,6 +116,7 @@ flowchart TB
 | 1   | `mods`     | `installMods` (mod-installer)                 | skipped when `--in`'s `mods/` is empty; overlays + Modloader bake into `gta.dat`/`gta3.img`. Takes the run's TARGET — a LAYERED `mods/` applies `common` then that target's own layer (below) |
 | 2   | `vehicles` | `installVehicles`                             | skipped when `vehicles/` is empty                                |
 | 3   | `cutscene` | `installCutscene` (vehicle-cutscene)          | the vehicles stage's shadow (vehicle-cutscene plan 002 step 11): converts the mod fleet into the `cs*` models of `models/cutscene.img` + patches `data/txdcut.ide`, reading the INSTALLED game (merged carcols, mod TXDs as txdp parents → the empty-TXD route, ~40 B per slot). **It also re-emits `anim/cuts.img`** — two passes over the SCENE data that no model change can reach: the wheel-stash sink (plan 004 round 20) and the seat retarget (plan 005), chained through one buffer and one write, each reporting per row in the summary. Both are surgical by construction: 2 of 444 entries differ from vanilla on the current fleet. Skipped when `vehicles/` is empty AND dropped — loudly — under `--exclude vehicles` (no installed parents = every slot fails closure). A slot error FAILS the build; the summary lands in every target report as the `cutscene` fragment |
+| 3b  | `add-vehicles` | `addVehicles` (tools/add-vehicles)        | **`sa` only**, skipped when `add-vehicles/` is empty. The ADDED cars — new model ids from the window 19 001–19 999, deterministic and pinned by `data/vehicle-adds.txt` because a parked spot and a ModelVariations entry land in the SAVE. Edits the previous stage's tree IN PLACE (an added car is added to a build that already exists), and everything an added id needs is a merge into a file the install already reads: the four data rows, a `.fxt` name, an inherited audio row, a Parked Maker spot, a ModelVariations variation of its base, its base's tuning parts re-modelled under derived names, and tuned traffic for the whole fleet. It runs AFTER `cutscene` on purpose: that stage converts the installed REPLACEMENT fleet and an added car has no twin to make. Central plan [102](../plans/102-add-vehicles/readme.md) |
 | 4   | `peds`     | `installPeds`                                 | skipped when `peds/` is empty                                    |
 | 5   | `optimize` | `runOptimizer` (map-optimizer)                | lossless conditioning; `broken-prelight.json` force-list         |
 | 6   | `trees`    | `buildTreeLods`                               | skipped when `vegetation/` is empty; `--tex` 512 atlas, `prelight.json` |

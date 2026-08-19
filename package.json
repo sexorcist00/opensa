@@ -43,6 +43,7 @@
     "packages/cleo",
     "tools/rw-codec",
     "tools/tool-kit",
+    "tools/add-vehicles",
     "packages/renderware",
     "packages/game-build",
     "packages/loaders",

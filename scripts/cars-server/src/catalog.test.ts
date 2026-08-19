@@ -279,3 +279,48 @@ describe('buildCatalog', () => {
     });
   });
 });
+
+describe('buildCatalog — the added fleet', () => {
+  describe('negative cases', () => {
+    it('shows nothing extra when the game has no added-vehicles root', () => {
+      const { gamePath, vehiclesPath } = fixture({ models: [{ name: 'admiral - 230 - k1real24' }] });
+      const catalog = buildCatalog({ gamePath, metadata: METADATA, vehiclesPath });
+
+      expect(catalog.sections.map(({ name }) => name)).not.toContain('Added vehicles');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('puts added cars in their own section with the base they vary', () => {
+      const { gamePath, vehiclesPath } = fixture({ models: [{ name: 'admiral - 230 - k1real24' }] });
+      const addedPath = addedFixture(['001veh - 1971 Chevrolet Vega - alfamodding (manana)']);
+      const catalog = buildCatalog({ addedPath, gamePath, metadata: METADATA, vehiclesPath });
+      const section = catalog.sections.find(({ name }) => name === 'Added vehicles');
+
+      expect(section?.cars.map(({ slot }) => slot)).toEqual(['001veh']);
+      expect(section?.cars[0].bases).toEqual(['manana']);
+      expect(section?.cars[0].carName).toBe('1971 Chevrolet Vega');
+      expect(catalog.total).toBe(2);
+    });
+
+    it('reports an added car with no screenshot, like any other', () => {
+      const { gamePath, vehiclesPath } = fixture({ models: [] });
+      const addedPath = addedFixture(['001veh - vega - alfamodding (manana)']);
+      const catalog = buildCatalog({ addedPath, gamePath, metadata: METADATA, vehiclesPath });
+
+      expect(catalog.missingShots.map(({ slot }) => slot)).toEqual(['001veh']);
+    });
+  });
+});
+
+/** An added-vehicles root: `models/<folder>` + an empty `screenshots/`. */
+function addedFixture(folders: readonly string[]): string {
+  const root = mkdtempSync(join(tmpdir(), 'cars-server-added-'));
+  for (const folder of folders) {
+    mkdirSync(join(root, 'models', folder), { recursive: true });
+    writeFileSync(join(root, 'models', folder, `${folder.split(' - ')[0]}.dff`), '');
+  }
+  mkdirSync(join(root, 'screenshots'), { recursive: true });
+
+  return root;
+}

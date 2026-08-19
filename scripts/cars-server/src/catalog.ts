@@ -29,6 +29,8 @@ export interface Catalog {
 export interface CatalogCar {
   /** The mod author — the folder name's third field. */
   readonly author: string;
+  /** For an ADDED car: the stock slot(s) it varies, out of the folder name's `(base)` suffix. */
+  readonly bases?: readonly string[];
   /** What the mod actually is — the folder name's second field. */
   readonly carName: string;
   /** The folder name, verbatim. */
@@ -80,6 +82,12 @@ interface MetadataItem {
 /** Where a car with no metadata section lands, so nothing is silently dropped from the page. */
 const UNKNOWN_SECTION = 'Not in the metadata';
 
+/**
+ * The ADDED cars' own section. They are not in the stock metadata by definition — they hold ids the game
+ * never had — so putting them in the catch-all would read as a fault when it is the whole point of them.
+ */
+const ADDED_SECTION = 'Added vehicles';
+
 /** What counts as a screenshot; the same slot may be a `.png` in `common/` and a `.jpg` in `sa/`. */
 const SHOT_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
 
@@ -87,6 +95,8 @@ const SHOT_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
 const SCREENSHOTS_DIR = 'screenshots';
 
 export interface CatalogOptions {
+  /** `mods-src/<game>/add-vehicles` — the ADDED fleet, shown in its own section (central plan 102). */
+  readonly addedPath?: string;
   /** `game-src/<game>` — read for the stock `vehicles.ide` when a mod declares no id of its own. */
   readonly gamePath: string;
   /** The bundled metadata, already parsed. */
@@ -172,8 +182,40 @@ export function buildCatalog(options: CatalogOptions): Catalog {
     total += 1;
   }
 
+  // The ADDED fleet, through the same resolver and the same screenshot rules — its own root, its own
+  // section, and its cars keyed by the slot they invented rather than one the metadata could know.
+  for (const source of addedSources(options.addedPath, options.target)) {
+    const shot = indexScreenshots(join(options.addedPath ?? '', SCREENSHOTS_DIR)).get(source.slot);
+    if (shot !== undefined) {
+      screenshots.set(source.slot, shot);
+    } else {
+      missing.push({
+        expectedFile: `${source.name}${SHOT_EXTENSIONS[0]}`,
+        folder: sourceLabel(source),
+        section: ADDED_SECTION,
+        slot: source.slot,
+      });
+    }
+    bySection.set(ADDED_SECTION, [
+      ...(bySection.get(ADDED_SECTION) ?? []),
+      {
+        ...describe(source.folder, source.name, source.slot, stockIds),
+        bases: source.bases,
+        hasOriginal: false,
+        hasShot: shot !== undefined,
+        isCandidate: source.origin === 'new',
+      },
+    ]);
+    total += 1;
+  }
+  if (options.addedPath !== undefined && bySection.has(ADDED_SECTION)) {
+    screenshotDirs.push(join(options.addedPath, SCREENSHOTS_DIR));
+  }
+
   // Section order is the metadata's own (`Sports Cars` first, as authored), with the catch-all last.
-  const ordered = [...Object.keys(options.metadata), UNKNOWN_SECTION].filter((name) => bySection.has(name));
+  const ordered = [...Object.keys(options.metadata), ADDED_SECTION, UNKNOWN_SECTION].filter((name) =>
+    bySection.has(name),
+  );
   const missingShots = ordered.flatMap((section) =>
     missing
       .filter((entry) => entry.section === section)
@@ -195,6 +237,15 @@ export function buildCatalog(options: CatalogOptions): Catalog {
     total,
     unknownSection: UNKNOWN_SECTION,
   };
+}
+
+/** The added fleet, resolved the same way the replacement fleet is; empty when no root was given. */
+function addedSources(addedPath: string | undefined, target: BuildTarget | undefined): readonly VehicleSource[] {
+  if (addedPath === undefined || !existsSync(addedPath)) {
+    return [];
+  }
+
+  return resolveVehicleSources(addedPath, target).sources;
 }
 
 /** URL fragment for a section heading. */

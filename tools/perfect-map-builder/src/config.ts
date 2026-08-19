@@ -45,7 +45,14 @@ export interface BuilderConfig {
    */
   splitBuckets: readonly ('peds' | 'vehicles' | 'weapons')[];
   /** The `--in` (mods-src) subfolder names, one per stage. */
-  subfolders: { mods: string; peds: string; procobj: string; vegetation: string; vehicles: string };
+  subfolders: {
+    addVehicles: string;
+    mods: string;
+    peds: string;
+    procobj: string;
+    vegetation: string;
+    vehicles: string;
+  };
   /** LOD atlas texture size for the tree impostor bake. */
   treeTex: number;
 }
@@ -91,6 +98,13 @@ export const config: BuilderConfig = {
   pack: { ao: true, bakes: false },
   procobjDensity: 1,
   splitBuckets: ['vehicles'],
-  subfolders: { mods: 'mods', peds: 'peds', procobj: 'procobj', vegetation: 'vegetation', vehicles: 'vehicles' },
+  subfolders: {
+    addVehicles: 'add-vehicles',
+    mods: 'mods',
+    peds: 'peds',
+    procobj: 'procobj',
+    vegetation: 'vegetation',
+    vehicles: 'vehicles',
+  },
   treeTex: 512,
 };

@@ -92,6 +92,14 @@ vi.mock('@opensa/vehicle-installer/install', async (importOriginal) => ({
 }));
 vi.mock('@opensa/vehicle-cutscene/install', () => ({ installCutscene: cutsceneInstall }));
 
+/** The added-cars installer, mocked: the stage's contract at this level is that it runs, and for which target. */
+const addedInstall = vi.hoisted(() =>
+  vi.fn<
+    (options: { gamePath: string; inPath: string }) => { installed: unknown[]; skipped: number; warnings: string[] }
+  >(() => ({ installed: [], skipped: 0, warnings: [] })),
+);
+vi.mock('@opensa/add-vehicles/install', () => ({ addVehicles: addedInstall }));
+
 /** The mod installer, mocked so the split-order test costs no real merge. */
 const modInstall = vi.hoisted(() =>
   vi.fn<(options: { gamePath: string; inPath: string; outPath: string; target?: 'opensa' | 'sa' }) => void>(
@@ -173,6 +181,9 @@ describe('EXCLUDABLE_STAGES', () => {
         // cutscene is the vehicles stage's shadow (vehicle-cutscene plan 002 step 11): it reads the
         // INSTALLED game, so it sits right after `vehicles` and shares its source folder.
         'cutscene',
+        // add-vehicles comes after the cutscene stage: that stage converts the installed REPLACEMENT fleet
+        // and an added car has no cutscene twin (central plan 102, `sa` only).
+        'add-vehicles',
         'peds',
         'optimize',
         'trees',
@@ -1518,6 +1529,56 @@ describe('buildPerfectMap --resume', () => {
       expect(vehicleInstall.mock.calls.length).toBe(vehicleCalls); // the chain was NOT re-run
       expect(result.produced.map((p) => p.name)).toContain('opensa');
       rmSync(mods, { force: true, recursive: true });
+    });
+  });
+});
+
+/**
+ * The `add-vehicles` stage (central plan 102). Its contract at this level is WHEN it runs: only for the `sa`
+ * target, only when the source root holds cars, and after the cutscene stage — which converts the installed
+ * REPLACEMENT fleet and has no twin to make for a car the game never had.
+ */
+describe('buildPerfectMap add-vehicles stage', () => {
+  let out: string;
+  let game: string;
+  let inPath: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-added-out-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-added-game-'));
+    inPath = mkdtempSync(join(tmpdir(), 'pmb-added-in-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    mkdirSync(join(inPath, 'add-vehicles', 'models', '001veh - vega - x (manana)'), { recursive: true });
+    addedInstall.mockClear();
+  });
+
+  afterEach(() => {
+    for (const dir of [out, game, inPath]) {
+      rmSync(dir, { force: true, recursive: true });
+    }
+  });
+
+  describe('negative cases', () => {
+    it("does not run for the opensa target — the feature is the real game's plugins", async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack', 'sa'], gamePath: game, inPath, outPath: out });
+
+      expect(addedInstall).not.toHaveBeenCalled();
+    });
+
+    it('does not run when the root holds no cars', async () => {
+      rmSync(join(inPath, 'add-vehicles'), { recursive: true });
+      await buildPerfectMap({ exclude: ['optimize', 'pack', 'opensa'], gamePath: game, inPath, outPath: out });
+
+      expect(addedInstall).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('runs once for the sa target, over its own source root', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack', 'opensa'], gamePath: game, inPath, outPath: out });
+
+      expect(addedInstall).toHaveBeenCalledTimes(1);
+      expect(addedInstall.mock.calls[0][0].inPath).toBe(join(inPath, 'add-vehicles'));
     });
   });
 });

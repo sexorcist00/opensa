@@ -36,7 +36,7 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
   --game ./game-src/original --in ./mods-src --exclude sa
 ```
 
-Params: `--out <dir>` (default `./build/original`) · `--until <split|mods|vehicles|cutscene|peds|optimize|trees|sa|procobj|opensa|pack|lod>` (that IS the run order — `procobj` is baked inside the `sa` branch since plan 014, so `--until sa` stops BEFORE the clutter; `cutscene` is the vehicles stage's shadow and drops out with `--exclude vehicles`)
+Params: `--out <dir>` (default `./build/original`) · `--until <split|mods|vehicles|cutscene|add-vehicles|peds|optimize|trees|sa|procobj|opensa|pack|lod>` (that IS the run order — `procobj` is baked inside the `sa` branch since plan 014, so `--until sa` stops BEFORE the clutter; `cutscene` is the vehicles stage's shadow and drops out with `--exclude vehicles`)
 (inclusive, keeps `.work-<target>/`) · **`--exclude <stage,stage>`** · **`--target <sa|opensa>`** ·
 `--procobj-density <n>` · `--procobj-max <n>` · `--keep-work` · `--no-weld-seams` · `--no-textures` ·
 **`--resume`** — re-enter a FAILED run at its last finished step (`<out>/.work-<target>/resume.json`; the pack
@@ -137,6 +137,22 @@ change with no one-model form. Rows and levers: [`docs/debug/README.md`](debug/R
 NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cli.ts \
   --game ./game-src/original --in ./mods-src/original --out ./build/original --exclude sa --resume
 ```
+
+### Added vehicles — new model ids on a built `sa` tree
+
+```bash
+# Everything mods-src/<game>/add-vehicles holds, into a BUILT sa tree, in place
+npx tsx tools/add-vehicles/src/cli.ts --game build/original/sa
+npx tsx tools/add-vehicles/src/cli.ts --game build/original/sa --only 001veh,059veh
+npx tsx tools/add-vehicles/src/cli.ts --game build/original/sa --plan     # resolve and report, write nothing
+```
+
+`sa` only — every part of an added car is a plugin of the real game (ModelVariations for traffic, FLA's
+audio loader, Parked Maker, CLEO's FXT loader). Ids come from **19 001–19 999** and are pinned by
+`data/vehicle-adds.txt`, so a rebuild never renumbers the fleet (a parked spot and a variation land in the
+SAVE). Also a pmb stage (`--until add-vehicles`), after `cutscene`. Central plan
+[102](../docs/plans/102-add-vehicles/readme.md); tuning rate and exclusions live in an optional
+`mods-src/<game>/add-vehicles/add-vehicles.json`.
 
 ### Vehicle round: rebake instead of rebuilding
 
