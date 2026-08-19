@@ -36,6 +36,18 @@ npx tsx tools/add-vehicles/src/cli.ts --game build/original/sa
 npx tsx tools/add-vehicles/src/cli.ts --game build/original/sa --only 001veh
 ```
 
+## Where the models go
+
+**`modloader/added-vehicles/`, loose — not into an IMG archive.** SA registers 8 archives and the built tree
+already spends six of them; the fleet's 1.4 GB pushed the vehicles family to a third file and the build
+stopped at `assertArchiveSlots` with 9 of 8. Modloader has no such ceiling and the install already runs it,
+so the cars ride that road — the same one the user's earlier build shipped them by. A re-modelled tuning
+part goes there too, under the name the install derived for it, never the stock one.
+
+The cost, stated where anyone chasing it will stand (`src/loose-files.ts`): a loose TXD still takes a
+streaming id at runtime while `checkImgIdBudgets` counts ARCHIVE entries, so the FLA TXD pool is
+under-counted by whatever lands in that folder.
+
 ## The id
 
 An added car's model id is allocated over the BUILT tree from **19 001–19 999** — the window above every map

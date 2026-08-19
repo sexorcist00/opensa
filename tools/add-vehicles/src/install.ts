@@ -10,13 +10,13 @@
  *
  * The tree is edited IN PLACE, like `--rebake --kind sa`, because an added car is added to a build that
  * already exists — there is no source game to copy from and no output to wipe.
+ *
+ * **The models go LOOSE into `modloader/added-vehicles/`, not into an archive** — see `loose-files.ts` for
+ * the ceiling that decided it (the game registers 8 IMG archives and the built tree already spends six).
  */
 import type { BuildTarget } from '@opensa/tool-kit/target';
 
-import { imgFamilyMembers, openImgFamily, writeImgFamily } from '@opensa/tool-kit/archive/img';
-import { writeArchiveManifest } from '@opensa/tool-kit/archive/layout';
 import { ADDED_ID_WINDOW, allocateIds, usedModelIds } from '@opensa/tool-kit/free-ids';
-import { registerImgArchives } from '@opensa/tool-kit/game-dir';
 import { applyVehicle } from '@opensa/vehicle-installer/apply-vehicle';
 import { writeAudioRows } from '@opensa/vehicle-installer/audio';
 import { assertCarmodsCeilings, carmodsHeadroom } from '@opensa/vehicle-installer/carmods-guard';
@@ -26,10 +26,11 @@ import { mergeFeatureTable, requireBuiltGame } from '@opensa/vehicle-installer/r
 import { decodeSettings, ID_PLACEHOLDER, parseVehicleSettings } from '@opensa/vehicle-installer/settings';
 import { writeModelSpecialFeatures } from '@opensa/vehicle-installer/special-features';
 import { applyIdeRows, applyInsert, assertCarmodsModels, ideModelNames } from '@opensa/vehicle-installer/tuning-parts';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 import { type LedgerRow, readAddsLedger, readAddsRows, writeAddsLedger } from './ledger';
+import { clearLooseFiles, installLooseFiles } from './loose-files';
 import { resolveAddedCarText } from './name';
 import { type AddedVehicle, resolveAddedVehicles, stockSlotIds } from './sources';
 import { registerTraffic } from './traffic';
@@ -92,12 +93,10 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
     used: usedModelIds(gamePath),
   });
 
-  const basePath = join(
-    gamePath,
-    'models',
-    existsSync(join(gamePath, 'models', 'vehicles.img')) ? 'vehicles.img' : 'gta3.img',
-  );
-  const img = openImgFamily(basePath);
+  // A FULL run rebuilds the folder from the source; a narrowed one writes only its own cars into it.
+  if (!only) {
+    clearLooseFiles(gamePath);
+  }
   const installed: LedgerRow[] = [];
   const declared = new Map<string, readonly string[]>();
   const runWarnings: string[] = [];
@@ -112,15 +111,19 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
     const parts = tuning.get(source.slot)!;
     runWarnings.push(...parts.warnings.map((warning) => `${source.name}: ${warning}`));
     installed.push(...installTuning(gamePath, source, parts, ids, runWarnings));
+    // No `img`: `applyVehicle` merges the data and carries the `cleo/` folder, and the MODELS are written
+    // loose below instead of staged into an archive.
     const applied = applyVehicle(source.folder, gamePath, {
       ...(text.name ? { gxt: [text.name] } : {}),
       id,
-      img,
       partRenames: new Map([...parts.renames].map(([file, entry]) => [stem(file), stem(entry)])),
-      renames: parts.renames,
       target: 'sa',
     });
     applied.warnings.forEach((warning) => runWarnings.push(`${source.name}: ${warning}`));
+    const loose = installLooseFiles(gamePath, source.folder, parts.renames);
+    loose.repaired.forEach((name) =>
+      runWarnings.push(`${source.name}: ${name}: frame list declared a parent after its child — reordered`),
+    );
     if (text.audio !== null) {
       runWarnings.push(...writeAudioRows(gamePath, [text.audio], `${source.slot} (inherited from ${source.base})`));
     }
@@ -144,14 +147,6 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
   runWarnings.push(...vehicleColourWarnings(gamePath));
   assertIdsLanded(gamePath, installed);
 
-  const archives = writeImgFamily(img, basePath);
-  if (archives.length > 1) {
-    registerImgArchives(
-      gamePath,
-      archives.slice(1).map((archive) => basename(archive.path)),
-    );
-  }
-  writeArchiveManifest(gamePath);
   // Last: a ledger written before the tree agreed with it would promise ids the build does not carry.
   writeAddsLedger(gamePath, installed);
   // Traffic speaks for the WHOLE tree, read back off the ledger — an `--only` run must not drop the other
@@ -163,17 +158,6 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
   console.log(`add-vehicles: ${tuned} model(s) given a tuned-traffic section`);
 
   return { installed, skipped: sources.length - selected.length, warnings: runWarnings };
-}
-
-/** The archives this tree keeps its cars in — reported so a run says where 115 cars went. */
-export function vehicleArchives(gamePath: string): string[] {
-  const basePath = join(
-    gamePath,
-    'models',
-    existsSync(join(gamePath, 'models', 'vehicles.img')) ? 'vehicles.img' : 'gta3.img',
-  );
-
-  return imgFamilyMembers(basePath).map((path) => basename(path));
 }
 
 /** Every drivable model the built tree defines, added cars included — what tuned traffic is written over. */

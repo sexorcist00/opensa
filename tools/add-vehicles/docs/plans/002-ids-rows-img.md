@@ -54,10 +54,21 @@ scratch target — worth remembering):
 | --- | --- |
 | 115 cars installed | **5.0 s**, ids **19 001–19 115** contiguous |
 | `vehicles.ide` / `handling.cfg` / `carcols.dat` / `carmods.dat` | +115 rows each |
-| the vehicles archive family | 2 members (1.87 + 1.23 GB) → **3** (1.87 + 1.88 + 0.72 GB), **+1.37 GB**; `vehicles3.img` registered in `gta.dat` |
+| the vehicles archive family | **unchanged** — see below; the models go loose into `modloader/added-vehicles/` (161 files, 1.4 GB) |
 | FLA id pools | DFF 15 596 → **15 711**, TXD 5 177 → **5 338** of the configured **6000** (margin 662; the 46 part DFFs of plan 005 are still to come) |
 | ledger | 115 rows, sorted |
 | a second run | **byte-identical** across `vehicles.ide`, `carcols.dat`, `vehicle-adds.txt` and the archives |
+
+**The models moved OUT of the archives the same day.** The first shape staged them into the vehicles
+archive family, which grew from 2 members to 3 (+1.37 GB) — and the `sa` build then stopped at
+`assertArchiveSlots`: SA registers **8** IMG archives and the tree wanted a ninth
+(`docs/in-reserve/img-archive-limit-lift.md`, a trigger written down in 2026-08-15 and fired by exactly the
+case it predicted). **The user's call: put them in `modloader/added-vehicles/` instead**, loose, which is
+how his earlier build shipped these same cars. `loose-files.ts` does that — 161 dffs + 161 txds, 1.4 GB,
+the same frame-list repair the archive road does, the tuning parts under their derived names — and the
+archive family goes back to two members. What it costs is stated in that file: a loose TXD still takes a
+streaming id, and `checkImgIdBudgets` counts archive entries, so the FLA TXD pool is under-counted by what
+lands there (161 against 662 free).
 
 **Two real defects fell out of the idempotency check, and neither was ours to expect:**
 

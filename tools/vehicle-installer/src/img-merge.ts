@@ -20,6 +20,47 @@ export interface StagedVehicleImg {
 }
 
 /**
+ * Repaired bytes for a `.dff` whose frame list declares a parent AFTER the child it belongs to, or `null`
+ * when the file is already ordered — which is the answer for every stock model and all but one of the 212
+ * vehicle folders measured on 2026-08-19.
+ *
+ * The real game cannot read such a file: RenderWare parents each frame in the pass that creates it, so a
+ * forward reference reads an unwritten array slot and either faults in `RwFrameAddChild` (`0x007F0BF7`) or
+ * corrupts memory quietly, decided by whatever was there. **Nothing else catches it** — byte-faithful
+ * staging ships a mod's file as authored, and OpenSA's own reader resolves parents by index, so a model
+ * that renders perfectly here still kills the target. Measurement:
+ * `docs/gta-sa-original/rw-frame-list-parent-order.md`.
+ *
+ * The repair is a permutation and the file keeps its length; a mod's geometry is not re-encoded.
+ *
+ * Exported because a vehicle's files do not always go into an archive: `tools/add-vehicles` writes its cars
+ * LOOSE into `modloader/`, and a file that reaches the game by that road needs the same repair — the defect
+ * is in the file, not in the transport.
+ */
+export function repairFrameOrder(path: string): null | Uint8Array {
+  const handle = openSync(path, 'r');
+  const probe = Buffer.alloc(FRAME_LIST_PROBE_BYTES);
+  let read = 0;
+  try {
+    read = readSync(handle, probe, 0, FRAME_LIST_PROBE_BYTES, 0);
+  } finally {
+    closeSync(handle);
+  }
+  const head = probe.buffer.slice(probe.byteOffset, probe.byteOffset + read);
+  try {
+    if (reorderFrameList(head) === null) {
+      return null;
+    }
+  } catch {
+    // The frame list ran past the probe, or the head is not something we can reason about — fall through
+    // and let the whole file answer rather than guessing from a fragment.
+  }
+  const whole = readFileSync(path);
+
+  return reorderFrameList(whole.buffer.slice(whole.byteOffset, whole.byteOffset + whole.byteLength));
+}
+
+/**
  * Archive entry names (lowercased `.dff`/`.txd` file names) that MORE THAN ONE vehicle folder ships, with the
  * folders in install order. Two cars sharing a paint job name is a typo; two cars sharing a tuning PART is
  * the real case (the voodoo re-uses the blade's `rbmp_lr_bl1` slot with its own geometry, 2026-08-17): the
@@ -83,41 +124,4 @@ export function stageVehicleImg(
   }
 
   return { names, repaired };
-}
-
-/**
- * Repaired bytes for a `.dff` whose frame list declares a parent AFTER the child it belongs to, or `null`
- * when the file is already ordered — which is the answer for every stock model and all but one of the 212
- * vehicle folders measured on 2026-08-19.
- *
- * The real game cannot read such a file: RenderWare parents each frame in the pass that creates it, so a
- * forward reference reads an unwritten array slot and either faults in `RwFrameAddChild` (`0x007F0BF7`) or
- * corrupts memory quietly, decided by whatever was there. **Nothing else catches it** — byte-faithful
- * staging ships a mod's file as authored, and OpenSA's own reader resolves parents by index, so a model
- * that renders perfectly here still kills the target. Measurement:
- * `docs/gta-sa-original/rw-frame-list-parent-order.md`.
- *
- * The repair is a permutation and the file keeps its length; a mod's geometry is not re-encoded.
- */
-function repairFrameOrder(path: string): null | Uint8Array {
-  const handle = openSync(path, 'r');
-  const probe = Buffer.alloc(FRAME_LIST_PROBE_BYTES);
-  let read = 0;
-  try {
-    read = readSync(handle, probe, 0, FRAME_LIST_PROBE_BYTES, 0);
-  } finally {
-    closeSync(handle);
-  }
-  const head = probe.buffer.slice(probe.byteOffset, probe.byteOffset + read);
-  try {
-    if (reorderFrameList(head) === null) {
-      return null;
-    }
-  } catch {
-    // The frame list ran past the probe, or the head is not something we can reason about — fall through
-    // and let the whole file answer rather than guessing from a fragment.
-  }
-  const whole = readFileSync(path);
-
-  return reorderFrameList(whole.buffer.slice(whole.byteOffset, whole.byteOffset + whole.byteLength));
 }

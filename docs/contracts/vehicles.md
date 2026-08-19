@@ -257,6 +257,13 @@ The optional per-car files are §1's, read by the same code: `features.txt`, `tu
 belong to later plans of the chain: **`<:id>`** in the settings file's ide line (the allocation placeholder,
 plan 002) and the derived names of its re-modelled tuning parts (plan 005).
 
+**The models go LOOSE, not into an archive.** An added car's `.dff`/`.txd` (and its re-modelled tuning
+parts, under their derived names) are written into **`modloader/added-vehicles/`**, where modloader imports
+them by name. The reason is a ceiling: SA registers 8 IMG archives, the built tree already spends six, and
+the fleet's 1.4 GB pushed the vehicles family to a third file — the build stopped at `assertArchiveSlots`
+with 9 of 8 (`docs/in-reserve/img-archive-limit-lift.md`). A replacement car is unaffected: it still
+replaces its slot's entry inside the archive, because it has a stock entry to replace.
+
 **The root is `sa`-only.** Its whole machinery is the real game's plugins — ModelVariations for traffic,
 FLA's audio loader for sound, Parked Maker for parking, CLEO's FXT loader for the name — and our own engine
 has none of them. A layered root carrying `common/` or `opensa/` is refused rather than planned into a build
