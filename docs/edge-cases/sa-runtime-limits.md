@@ -55,6 +55,20 @@ runtime, but the converter guards stand for any build not running that ASI.
   load.
 - **Permanent LOD layers need a Buildings-pool raise** (~15k procobj + ~9.9k tree LOD instances exceed
   stock `CPool<CBuilding>`).
+- **An `inst` row spends `CPool<CDummy>`, not `CPool<CBuilding>`, when `object.dat` tunes its model** —
+  `CFileLoader::LoadObjectInstance` branches on `mi->m_nObjectInfoIndex == -1`. Measured on the built `sa`
+  tree 2026-08-19: **109 740 permanent buildings + 17 644 permanent dummies** (17 311 of the dummies are the
+  procobj bake), plus 24 801 / 15 399 in the streamed binary IPLs, so the never-reached peak is
+  134 541 / 33 043. Stock for comparison: **9 209 permanent buildings, 59 permanent dummies.** Counted by
+  `checkEntityPoolBudgets`, which reads `Buildings`/`Dummys` off the OLA ini the build ships and gates on
+  the PERMANENT half only — the streamed rows are never all resident (stock's hold 25 624 building rows
+  against its 13 000 pool and the game runs).
+- **Dummies are NOT released between world entries**, so `Dummys` buys `floor(pool / permanent dummies)`
+  world loads per boot rather than headroom: 50 000 died on the third LOAD GAME, 100 000 on the sixth, both
+  field-measured. The cause is ours — `IplDef.firstDummy/lastDummy` are int16 and `perfect-map.asi` lifts
+  only the building pair ([open issue](../open-issues/sa-load-game-crash-dummy-pool.md), fix planned as
+  [perfect-map 011](../../asi/perfect-map/docs/plans/011-ipldef-dummy-range.md)). **The pool cannot be kept
+  inside int16 either**: `Dummys = 32767` does not boot.
 - **IDE id cannot be defined twice.** A baked IDE that redefines a stock id must strip the older definition
   everywhere — duplicate model-info ids corrupt SA's heap during data load.
 - **IPL row order is data.** Binary IPL streams reference text rows by index (`lod` columns); removals

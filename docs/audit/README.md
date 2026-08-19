@@ -5,6 +5,17 @@ numbers and links to the raw records — so the result survives the session and 
 without re-deriving it. Runtime numbers live in [`../benchmarks/`](../benchmarks/); these docs summarise and
 interpret them.
 
+- [`session-27-three-crashes-two-of-them-ours.md`](./session-27-three-crashes-two-of-them-ours.md) — the
+  2026-08-19 session: the suite's four-session red was an **O(n³)** in the translucent agglomeration (the
+  ferris ring is 1 440 separate bulbs in one material group; 3 745 → 412 ms, output proved identical across
+  all 4 605 tests); the LOAD GAME crash is **ours** — `CPool<CDummy>` is never released between world
+  entries because `IplDef.firstDummy/lastDummy` are int16 and our asi lifts only the building pair, so the
+  pool buys `floor(pool / 17 644)` loads per boot (field: 3rd at 50 000, 6th at 100 000) and `32767` does
+  not boot, which makes perfect-map **011** the only exit; the tuning-part crash, older than the project,
+  was one DFF in 2 096 whose frame list declares a parent after its child — fixed, guarded and
+  field-accepted. Plus the entity-pool build guard, and the census error that hid it: `object.dat` writes
+  `lamppost3,` with a trailing comma
+
 - [`uv-repair-retired-and-one-report-per-target.md`](./uv-repair-retired-and-one-report-per-target.md) — the
   2026-08-11 session-3 close of the 025 arc: the field reversed the UV repair in one look (a partial repair
   of a continuous defect is patchwork by construction, and the mapping it writes is invented — no authored

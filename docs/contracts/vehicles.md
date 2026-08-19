@@ -227,6 +227,17 @@ it is remapped — declare those too.
 | `misc_a` … `misc_h` | SA's generic moving components. A `misc_*` holding head-lamp faces is a **pop-up headlight pod**. |
 | `ug_*` | Upgrade attachment points. Present in models, consumed by nothing yet. |
 
+**The frame LIST's order is a contract too, and it is not about names.** A frame's `parentIndex` must
+point at a frame declared BEFORE it. RenderWare parents each frame in the same pass that creates it, so a
+forward reference reads an array slot it has not written yet: an access violation in `RwFrameAddChild`
+(`0x007F0BF7`) or silent memory corruption, decided by whatever was in that slot — which is why the class
+shows up as a crash that happens *sometimes*. Exporters normally emit parents first; a mirrored re-export
+may not (the blade mod's right side skirt did, and its own left twin did not). **vehicle-installer reorders
+it on the way into the archive and warns, naming the file** — a permutation, so the model is unchanged and
+nothing is re-encoded. Nothing else catches it: staging is byte-faithful, and OpenSA's own reader resolves
+parents by index, so a model that renders perfectly here still kills the real game
+(`docs/gta-sa-original/rw-frame-list-parent-order.md`).
+
 **CLEO scripts see these names too** (plan 097/05): `GetFrameFromName` resolves script part lookups
 against the rig's part names verbatim (`misc_a`, `dvan_l`, `dmbus_r`…), and the CAutomobile carNode
 reads (`CVehicle+0x648`) bind wheels to the **`wheel_*_dummy`** forms. A name the rig lacks yields a
