@@ -7,7 +7,7 @@ import { basename, dirname, join } from 'node:path';
 
 import { applyVehicleAudio, AUDIO_FILE } from './audio';
 import { parseFeatures } from './features';
-import { applyVehicleText, TEXT_FILE } from './fxt';
+import { applyVehicleText, TEXT_FILE, type TextEntry } from './fxt';
 import { stageVehicleImg } from './img-merge';
 import { mergeCarcols, mergeCarmods, mergeHandling, mergeIde } from './merge';
 import { resolveVehicleModel } from './model';
@@ -66,6 +66,8 @@ export interface ApplyVehicleOptions {
    * settings file is substituted before the blocks are classified — the ide line then reads like any other.
    * Omitted, the file is used as authored, which is every car of the `vehicles/` root.
    */
+  /** GXT entries the caller derived for this car (an added car's display name) — see {@link applyVehicleText}. */
+  gxt?: readonly TextEntry[];
   id?: number;
   img?: EditableImg;
   /**
@@ -156,10 +158,10 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
   // when that is the host being built for; the `.fxt` rides along with the mod's own `cleo/` either way.
   if (options.target !== 'opensa') {
     warnings.push(...applyModelVariations(folderPath, entries, outPath));
-    warnings.push(...applyVehicleAudio(folderPath, entries, outPath));
+    warnings.push(...applyVehicleAudio(folderPath, entries, outPath, model));
     warnings.push(...applyVehicleParked(folderPath, entries, outPath, model));
   }
-  warnings.push(...applyVehicleText(folderPath, entries, outPath, model));
+  warnings.push(...applyVehicleText(folderPath, entries, outPath, model, options.gxt));
 
   return {
     cleo,

@@ -12,7 +12,9 @@
     "./apply-vehicle": "./src/apply-vehicle.ts",
     "./rebake-shared": "./src/rebake-shared.ts",
     "./special-features": "./src/special-features.ts",
-    "./palette": "./src/palette.ts"
+    "./palette": "./src/palette.ts",
+    "./audio": "./src/audio.ts",
+    "./fxt": "./src/fxt.ts"
   },
   "nx": {
     "tags": [

@@ -28,26 +28,38 @@ export interface TextEntry {
   readonly text: string;
 }
 
-/** Apply a mod folder's `text.txt` (if it ships one) to the built game dir. Returns warnings. */
+/**
+ * Apply a mod folder's `text.txt` (if it ships one) to the built game dir, plus any entry the CALLER derived
+ * — an added car's own display name is one (`tools/add-vehicles` 003), and it comes first so a `text.txt`
+ * line under the same key still wins. Returns warnings.
+ */
 export function applyVehicleText(
   folderPath: string,
   entries: readonly string[],
   outPath: string,
   model: string | undefined,
+  derived: readonly TextEntry[] = [],
 ): string[] {
   const file = entries.find((name) => name.toLowerCase() === TEXT_FILE);
-  if (!file) {
+  if (!file && derived.length === 0) {
     return [];
   }
   const warnings: string[] = [];
+  // What the warnings are ABOUT: the mod's own file when it ships one, else what the caller derived.
+  const source = file ?? 'the derived name';
   if (model === undefined) {
-    return [`${TEXT_FILE}: the folder ships no model to name the .fxt after — ${file} not written`];
+    return [`${source}: the folder ships no model to name the .fxt after — nothing written`];
   }
-  const parsed = parseTextEntries(decodeSettings(readFileSync(join(folderPath, file))), (message) =>
-    warnings.push(`${TEXT_FILE}: ${message}`),
+  const parsed = mergeEntries(
+    derived,
+    file
+      ? parseTextEntries(decodeSettings(readFileSync(join(folderPath, file))), (message) =>
+          warnings.push(`${TEXT_FILE}: ${message}`),
+        )
+      : [],
   );
   if (parsed.length === 0) {
-    warnings.push(`${TEXT_FILE}: no entries recognised — the parts stay nameless in the shop`);
+    warnings.push(`${source}: no entries recognised — the parts stay nameless in the shop`);
 
     return warnings;
   }
@@ -55,7 +67,7 @@ export function applyVehicleText(
   const dest = join(cleoDir, `${model}.fxt`);
   for (const [key, owner] of foreignKeys(cleoDir, dest)) {
     if (parsed.some((entry) => entry.key.toUpperCase() === key)) {
-      warnings.push(`${TEXT_FILE}: key '${key}' is already defined by cleo/${owner} — whichever CLEO loads last wins`);
+      warnings.push(`${source}: key '${key}' is already defined by cleo/${owner} — whichever CLEO loads last wins`);
     }
   }
   mkdirSync(cleoDir, { recursive: true });
@@ -117,4 +129,14 @@ function foreignKeys(cleoDir: string, ownPath: string): Map<string, string> {
   }
 
   return owners;
+}
+
+/** Later entries win by key, order kept — a `text.txt` line overrides the caller's derived one. */
+function mergeEntries(first: readonly TextEntry[], second: readonly TextEntry[]): TextEntry[] {
+  const byKey = new Map<string, TextEntry>();
+  for (const entry of [...first, ...second]) {
+    byKey.set(entry.key.toUpperCase(), entry);
+  }
+
+  return [...byKey.values()];
 }

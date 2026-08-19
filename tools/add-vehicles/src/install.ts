@@ -18,15 +18,17 @@ import { writeArchiveManifest } from '@opensa/tool-kit/archive/layout';
 import { allocateIds, usedModelIds } from '@opensa/tool-kit/free-ids';
 import { registerImgArchives } from '@opensa/tool-kit/game-dir';
 import { applyVehicle } from '@opensa/vehicle-installer/apply-vehicle';
+import { writeAudioRows } from '@opensa/vehicle-installer/audio';
 import { vehicleColourWarnings } from '@opensa/vehicle-installer/palette';
 import { mergeFeatureTable, requireBuiltGame } from '@opensa/vehicle-installer/rebake-shared';
-import { decodeSettings, ID_PLACEHOLDER } from '@opensa/vehicle-installer/settings';
+import { decodeSettings, ID_PLACEHOLDER, parseVehicleSettings } from '@opensa/vehicle-installer/settings';
 import { writeModelSpecialFeatures } from '@opensa/vehicle-installer/special-features';
 import { assertCarmodsModels, ideModelNames } from '@opensa/vehicle-installer/tuning-parts';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 
 import { type LedgerRow, readAddsLedger, writeAddsLedger } from './ledger';
+import { resolveAddedCarText } from './name';
 import { type AddedVehicle, resolveAddedVehicles } from './sources';
 
 export interface AddVehiclesOptions {
@@ -84,8 +86,20 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
   const runWarnings: string[] = [];
   for (const source of selected) {
     const id = ids.get(source.slot)!;
-    const applied = applyVehicle(source.folder, gamePath, { id, img, target: 'sa' });
+    // The name and the inherited sound are decided BEFORE the car is applied: both read the tree as it is
+    // (the base's audio row, the keys `american.gxt` already defines), and the name rides in with the install.
+    const text = resolveAddedCarText(source, gamePath, ideLineOf(source.folder, id));
+    runWarnings.push(...text.warnings);
+    const applied = applyVehicle(source.folder, gamePath, {
+      ...(text.name ? { gxt: [text.name] } : {}),
+      id,
+      img,
+      target: 'sa',
+    });
     applied.warnings.forEach((warning) => runWarnings.push(`${source.name}: ${warning}`));
+    if (text.audio !== null) {
+      runWarnings.push(...writeAudioRows(gamePath, [text.audio], `${source.slot} (inherited from ${source.base})`));
+    }
     if (applied.features.length > 0 && applied.model) {
       declared.set(applied.model, applied.features);
     }
@@ -140,6 +154,19 @@ function assertIdsLanded(gamePath: string, installed: readonly LedgerRow[]): voi
           .join('; '),
     );
   }
+}
+
+/** This car's `vehicles.ide` row with the id already in it — what the install is about to merge. */
+function ideLineOf(folder: string, id: number): string {
+  const file = readdirSync(folder).find((name) => name.toLowerCase().endsWith('.settings.txt'));
+  if (file === undefined) {
+    return '';
+  }
+  const text = decodeSettings(readFileSync(join(folder, file)))
+    .split(ID_PLACEHOLDER)
+    .join(String(id));
+
+  return parseVehicleSettings(text).ideLine ?? '';
 }
 
 /** An added car must leave its id to the allocator — a literal one is an author guessing at the window. */

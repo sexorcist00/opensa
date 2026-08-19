@@ -58,6 +58,13 @@ forward by authoring one file into a replacement car's folder (the user's `mods-
 - [ ] **`vehicles3.img` really loads.** The run added a third family member and registered it in `gta.dat`.
       Look at: the game boots and a car whose model lives in that archive appears. If it fails: FLA's
       archive count, and `data/img-layout.json`.
+- [ ] **An added car has a NAME in the HUD.** Deliver `cleo/*.fxt`. Look at: entering the vega shows
+      "1971 Chevrolet Vega", not a blank or a key. If it fails: CLEO's FXT loader, and whether the ide row's
+      `gameName` is what the fxt keys on.
+- [ ] **The stock trains kept THEIR names.** 9 added carriages deliberately get no `.fxt` because their
+      gameName is the stock train's key. Look at: the freight train is still called what it always was.
+- [ ] **An added car with no `audio.txt` sounds like its base.** 111 of the 115 inherit. Look at: the vega
+      starts and revs like a manana rather than being silent.
 - [ ] **`Vehicle colors = 256` really applies.** Set 2026-08-19 because the palette (145 rows with the
       added cars) was over the game's own 128 —
       `docs/gta-sa-original/vehicle-colour-table-128.md`. Deliver `fastman92limitAdjuster_GTASA.ini`.

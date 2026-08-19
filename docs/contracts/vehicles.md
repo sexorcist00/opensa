@@ -236,6 +236,14 @@ variation OF:
 | `(<base>[, <base2>…])` (end of the last field) | The stock slot(s) it varies. The FIRST is "the" base — the engine sound it inherits when it ships no `audio.txt`, and the car whose tuning parts it re-models; further entries are additional traffic parents. **A base no `vehicles.ide` row defines is REFUSED**, naming the folder and the base: a mistyped base is otherwise a car that silently never enters traffic. A folder with no suffix at all is refused the same way. |
 | `reserved/` (beside `models/`) | The author's shelf — folders kept out of the fleet without being deleted. Reserved by NAME, never scanned, and NOT a stray (the alternative, a refusal, would stop every tool over a folder the author put there on purpose). |
 
+**What an added car is CALLED and what it SOUNDS like are DERIVED, and both rules are readable off the
+folder:**
+
+| | |
+| --- | --- |
+| Display name | The GXT key is the ide row's `gameName` column; the text is the folder's SECOND field (`1971 Chevrolet Vega`). Written as a line in `cleo/<slot>.fxt`; a `text.txt` line under the same key overrides it. **A gameName the built `american.gxt` already defines gets NO line** — 9 of the 115 are train carriages that reuse the stock `STREAK`/`FREIGHT`/`FRFLAT` key, and writing one would rename the stock train. Two added cars sharing a key is allowed and WARNED (the nine `FRBOX` boxcars): the last `.fxt` CLEO loads wins. |
+| Engine sound | `audio.txt` if the folder ships one — its first token forced to this car's model. Otherwise the FIRST `(base)`'s own row from the built `gtasa_vehicleAudioSettings.cfg`, copied under this car's name. **This inheritance is why the base is in the folder name at all**: a new id has no row and is silent without one, and a base with no row of its own is warned about. |
+
 The optional per-car files are §1's, read by the same code: `features.txt`, `tuning_new_parts.txt`,
 `model-variations-extra.txt`, `text.txt`, `audio.txt`, `parked.txt`. Two things are the added car's own and
 belong to later plans of the chain: **`<:id>`** in the settings file's ide line (the allocation placeholder,
