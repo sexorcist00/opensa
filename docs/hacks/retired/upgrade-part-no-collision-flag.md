@@ -1,5 +1,21 @@
 # A new tuning part is given `0x200000` because parts that carry it do not crash
 
+> **RETIRED the same day it was taken, 2026-08-20 — the field disproved it in two crash logs.**
+> `1194 spl_b_lr_bl` and `19051 exh_lr_rem1_059` both carry `0x200000`, and both die at `0x0059F8B4` with
+> `EDI = 0` when spawned. The flag changes nothing. What the 46 derived parts had in common was not the flag
+> but that **nothing had ever spawned one** — the mod shop MOUNTS a part onto a car and never reads
+> `m_pColModel`, so the whole "evidence" was a class of use, not a property of the data.
+>
+> **Replaced by the honest thing**: every part we add now gets a bounds-only COL3 model of its own in
+> `models/coll/opensa-parts.col`, registered with one `COLFILE` line in `default.dat`
+> (`tools/vehicle-installer/src/upgrade-collision.ts`, `writeUpgradeCollision`), and a build whose
+> `veh_mods.ide` names a part with no collision anywhere is REFUSED. Field-confirmed 2026-08-20: with the
+> file in place, both ids spawn.
+>
+> The lesson worth keeping: the hack's own "what it was judged on" section listed the derived fleet as
+> evidence of the flag working. It was evidence of nothing — those parts had never been through the code
+> path that crashes. **A control group that was never exposed to the treatment is not a control group.**
+
 **Taken 2026-08-20**, plan [`vehicle-installer/014`](../../tools/vehicle-installer/docs/plans/014-borrowed-tuning-parts.md)
 step 5.
 

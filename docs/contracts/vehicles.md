@@ -176,6 +176,23 @@ it does NOT ship is dropped from the archive: a stock paintjob left beside a mod
 for other UVs. Ship fewer than the stock car had and the shop simply offers fewer — that is fine. A folder
 that ships no dictionary at all does not own the slot's textures and the stock ones are left alone.
 
+**A part the stock game never had gets COLLISION of its own, in a file the build writes.** Anything that
+creates a tuning part as a standalone object — a trainer, a debug tool — goes through the ordinary `CObject`
+constructor, which dereferences `m_pColModel` with no null check. Stock parts are covered by
+`gta3.img : veh_mods.col` (exactly the 194 of ids 1000–1193); everything we add is not, so the installer
+writes a bounds-only COL3 model per part into **`models/coll/opensa-parts.col`** and registers it with one
+line in `data/default.dat`:
+
+```
+COLFILE 0 MODELS\COLL\OPENSA-PARTS.COL
+```
+
+The model is named after the part as INSTALLED (the derived name, when it was renamed) — SA binds collision
+by name. Both files are build OUTPUTS: a delivery carries them, and a build whose `veh_mods.ide` names a part
+with collision in neither place is refused. Field-proven 2026-08-20 on ids `1194` and `19051`, which crashed
+without it and spawn with it. The IDE flags column has nothing to do with this
+([the retired reading](../hacks/retired/upgrade-part-no-collision-flag.md)).
+
 **Two folders still staging different files under one entry name is REFUSED**, naming both mods and both
 sizes — after the rename that can only happen for a name the derivation cannot classify. Same name and the
 same size is the same file shipped twice and is left alone with a warning. A `--rebake --only <car>` warns

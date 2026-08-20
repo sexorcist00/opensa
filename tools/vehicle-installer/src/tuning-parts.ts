@@ -51,18 +51,6 @@ export interface TuningParts {
 const BLOCK_HEADER = /^(shops|prices)\.([^|\s]+)\|(\S+)$/i;
 const IDE_ROW = /^\d+\s*,\s*([^,\s]+)/;
 
-/**
- * The IDE flag a tuning part with no `veh_mods.col` entry must carry, or the game dies previewing it in the
- * shop — it is created as an ordinary `CObject` and the constructor dereferences `m_pColModel` with no null
- * check (`0x59F8B4`). `gta3.img : veh_mods.col` holds exactly the 194 stock parts, ids 1000–1193, so a part
- * ANY tool adds has no entry and needs the flag. Measured, and the reading of the flag itself is not yet
- * confirmed against the exe: `docs/gta-sa-original/veh-mods-col-and-the-upgrade-object.md`.
- */
-export const NO_COL_FLAG = 0x20_00_00;
-
-/** The stock upgrade block — exactly the 194 ids `veh_mods.col` carries an entry for. */
-const STOCK_UPGRADE_IDS = { first: 1000, last: 1193 };
-
 /** Add the rows to `veh_mods.ide`'s `objs` section — replace by NAME, refuse an id another name owns. */
 export function applyIdeRows(outPath: string, rows: readonly string[]): string[] {
   const warnings: string[] = [];
@@ -77,8 +65,7 @@ export function applyIdeRows(outPath: string, rows: readonly string[]): string[]
     return [`${TUNING_PARTS_FILE}: ${VEH_MODS_IDE} has no objs…end section — rows not written`];
   }
   const additions: string[] = [];
-  for (const authored of rows) {
-    const row = withNoColFlag(authored);
+  for (const row of rows) {
     const [idText, name] = row.split(',').map((field) => field.trim());
     const id = Number(idText);
     const owner = [...owners].find(([, ownerId]) => ownerId === id)?.[0];
@@ -281,27 +268,6 @@ export function parseTuningParts(text: string): TuningParts {
   }
 
   return { ideRows, inserts, warnings };
-}
-
-/**
- * An `objs` row for a part the stock game does not ship, with {@link NO_COL_FLAG} forced into its flags
- * column. Both writers of such a row go through this: an author cannot be expected to know the flag, and a
- * derived row inherits whatever the stock part it was cloned from happened to carry — two of the added
- * fleet's parts inherited `0` and are the crash this prevents.
- */
-export function withNoColFlag(row: string): string {
-  const cells = row.split(',').map((cell) => cell.trim());
-  const flags = Number(cells[cells.length - 1]);
-  const id = Number(cells[0]);
-  if (cells.length < 5 || !Number.isInteger(flags) || !Number.isInteger(id)) {
-    return row;
-  }
-  // A row inside the stock block is a row for a part that HAS collision; leave the author's flags alone.
-  if (id >= STOCK_UPGRADE_IDS.first && id <= STOCK_UPGRADE_IDS.last) {
-    return row;
-  }
-
-  return [...cells.slice(0, -1), String(flags | NO_COL_FLAG)].join(', ');
 }
 
 /** [first line after `section <name>`, index of its `end`) for a section nested one level under `section <top>`. */

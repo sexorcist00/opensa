@@ -34,11 +34,22 @@ import { writeModelSpecialFeatures } from '@opensa/vehicle-installer/special-fea
 import { deriveTuning, shippedParts, slotTokens } from '@opensa/vehicle-installer/tuning-derive';
 import { installDerivedTuning } from '@opensa/vehicle-installer/tuning-install';
 import { assertCarmodsModels, ideModelNames } from '@opensa/vehicle-installer/tuning-parts';
-import { assertUpgradeCollision } from '@opensa/vehicle-installer/upgrade-collision';
+import {
+  assertUpgradeCollision,
+  PARTS_COL,
+  type UpgradePart,
+  writeUpgradeCollision,
+} from '@opensa/vehicle-installer/upgrade-collision';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { clearLooseFiles, installLooseFiles, readInstalledIds, writeSettingsFile } from './loose-files';
+import {
+  ADDED_VEHICLES_DIR,
+  clearLooseFiles,
+  installLooseFiles,
+  readInstalledIds,
+  writeSettingsFile,
+} from './loose-files';
 import { resolveAddedCarText } from './name';
 import { type AddedVehicle, resolveAddedVehicles, stockSlotIds, stockSlots } from './sources';
 import { registerTraffic } from './traffic';
@@ -180,8 +191,18 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
   // The two fixed-size arrays behind carmods.dat. Refuses NAMING `asi/perfect-vehicle`, which is the plugin
   // that lifts them — every added car re-modelling its base's wings costs one of the seven spare link pairs.
   assertCarmodsCeilings(gamePath);
-  // A part with no `veh_mods.col` entry crashes the shop preview unless its flags say so — and the parts
-  // that made this check necessary were derived HERE, from a stock part carrying neither (014 step 5).
+  // Every part derived here is a model the game has no collision for, and anything that SPAWNS one as an
+  // object dies on a null `m_pColModel` — field-proven at 1194 and 19051, both carrying the flag that was
+  // once thought to excuse it. So each gets a bounds-only model of its own, read from the file it ships as.
+  const collision = writeUpgradeCollision(
+    gamePath,
+    installed
+      .filter(({ kind }) => kind === 'part')
+      .map(({ slot }): UpgradePart => ({ dff: join(gamePath, ADDED_VEHICLES_DIR, `${slot}.dff`), name: slot })),
+  );
+  if (collision.length > 0) {
+    console.log(`add-vehicles: ${collision.length} part(s) have collision in ${PARTS_COL}`);
+  }
   runWarnings.push(...assertUpgradeCollision(gamePath));
   const headroom = carmodsHeadroom(gamePath);
   console.log(

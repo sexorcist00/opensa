@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { applyTuningParts, assertCarmodsModels, parseTuningParts, VEH_MODS_IDE, withNoColFlag } from './tuning-parts';
+import { applyTuningParts, assertCarmodsModels, parseTuningParts, VEH_MODS_IDE } from './tuning-parts';
 
 /** The blade's file, as shipped (2026-08-17) — two new parts, their shop items and prices. */
 const BLADE = `1194, spl_b_lr_bl, blade, 100, 0
@@ -180,10 +180,10 @@ describe('applyTuningParts', () => {
         '1000, spl_b_mar_m, vehicle, 70, 0',
         '1013, lgt_b_rspt, vehicle, 70, 0',
         '1181, exh_lr_bl2, blade, 100, 0',
-        // The author wrote `0` for both; a part outside the stock block has no `veh_mods.col` entry and
-        // the shop preview crashes on it without the flag, so the writer forces it in.
-        '1194, spl_b_lr_bl, blade, 100, 2097152',
-        '1195, bnt_b_lr_bl, blade, 100, 2097152',
+        // Written exactly as the author wrote them. A row for a part with no `veh_mods.col` entry once had
+        // `0x200000` forced into it here, on a reading the field disproved — see upgrade-collision.ts.
+        '1194, spl_b_lr_bl, blade, 100, 0',
+        '1195, bnt_b_lr_bl, blade, 100, 0',
         'end',
       ]);
       const shop = readFileSync(join(game, 'data', 'shopping.dat'), 'utf8').split('\n');
@@ -240,27 +240,6 @@ describe('assertCarmodsModels', () => {
       writeFileSync(join(game, 'data', 'carmods.dat'), 'mods\nblade, nosuchpart\nend\n');
 
       expect(() => assertCarmodsModels(game)).not.toThrow();
-    });
-  });
-});
-
-describe('withNoColFlag', () => {
-  describe('negative cases', () => {
-    it('leaves a row in the stock upgrade block alone — those parts have a veh_mods.col entry', () => {
-      expect(withNoColFlag('1181, exh_lr_bl2, blade, 100, 0')).toBe('1181, exh_lr_bl2, blade, 100, 0');
-    });
-
-    it('leaves a row it cannot read as an objs row alone', () => {
-      expect(withNoColFlag('not, a, row')).toBe('not, a, row');
-    });
-  });
-
-  describe('positive cases', () => {
-    it('forces the flag into a new part row and keeps whatever else was set', () => {
-      expect(withNoColFlag('1194, spl_b_lr_bl, blade, 100, 0')).toBe('1194, spl_b_lr_bl, blade, 100, 2097152');
-      expect(withNoColFlag('19077, wg_l_lr_t1_072, 072veh, 100, 4096')).toBe(
-        '19077, wg_l_lr_t1_072, 072veh, 100, 2101248',
-      );
     });
   });
 });

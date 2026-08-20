@@ -171,7 +171,7 @@ do not (one file shipped twice costs nothing). Silent on the real fleet — 0 sh
 e2e case that proves it still bites uses a part no IDE row defines, which is the only thing the derivation
 cannot rename.
 
-### 5 — every new part gets collision, or the build says so — **DONE 2026-08-20**
+### 5 — every new part gets collision, or the build says so — **DONE 2026-08-20, field-confirmed**
 
 **The step as planned was void, and the measurement said so before a line was written.** It read: remove the
 blade's two hand-written rows from `tuning_new_parts.txt`, because "their names are borrowed, so they
@@ -179,23 +179,27 @@ derive". They are not borrowed — `spl_b_lr_bl` and `bnt_b_lr_bl` have **no sto
 so there is nothing to clone them from and the file is doing exactly the job it exists for. Its scope does
 not narrow.
 
-What was real in the step is the crash it pointed at, and it is bigger than the plan thought. A row for a
-part outside the stock block has no `veh_mods.col` entry, and the shop preview creates a part as an ordinary
-`CObject` and dereferences `m_pColModel` with no null check
+What was real in the step is the crash it pointed at. A part the stock game never had has no entry in
+`gta3.img : veh_mods.col` (194 entries, ids 1000–1193), and anything that creates it as a standalone object
+goes through the `CObject` constructor, which dereferences `m_pColModel` with no null check
 ([`veh-mods-col-and-the-upgrade-object.md`](../../../../docs/gta-sa-original/veh-mods-col-and-the-upgrade-object.md)).
-Both writers now force `0x200000` into such a row (`withNoColFlag`), and `assertUpgradeCollision` refuses a
-built tree where any part has neither an entry nor the flag — a static read at the end of `install` and of
-`add-vehicles`, through the archive index so one entry is sliced off a file handle rather than gigabytes
-buffered.
 
-**Measured.** Stock `game-src/original`: **clean**. `build/original/sa`: **7 offenders**, where the original
-write-up predicted 2 — the blade's two hand-written rows (flags `0`) and all five parts derived from the
-tornado (`19074`–`19078`, flags `4096`/`0`, inherited from stock rows that carry no `0x200000`). All seven
-are fixed by construction on the next build. The col fixture is a new manifest line
-(`extract('veh_mods.col')`) and the guard's test reads the real 194 entries out of it.
+**This step shipped the wrong fix first, and the field killed it within the hour.** The doc's reading was
+that `0x200000` in the IDE flags excuses a missing collision model, so both writers forced it in. The user
+spawned `1194` and then `19051` — both carrying the flag — and both died at `0x0059F8B4` with `EDI = 0`. The
+46 derived parts that "proved" the flag had simply never been spawned: the mod shop MOUNTS a part and never
+reads `m_pColModel`. A control group never exposed to the treatment.
+[Retired hack](../../../../docs/hacks/retired/upgrade-part-no-collision-flag.md).
 
-Setting a flag whose meaning to the exe is still unrecovered is recorded as a hack:
-[`docs/hacks/upgrade-part-no-collision-flag.md`](../../../../docs/hacks/upgrade-part-no-collision-flag.md).
+**What shipped instead** (the user's suggestion, and it is the honest thing): a **bounds-only COL3 model per
+part**, written into `models/coll/opensa-parts.col` and registered with one `COLFILE` line in `default.dat`
+— a file of ours rather than an append into `veh_mods.col`, which lives inside a 1.6 GB archive.
+`assertUpgradeCollision` then refuses a build naming a part with collision in neither place.
+
+**Measured on the real install**: 253 `objs` rows — **194 with stock collision, 59 without** (11 voodoo's,
+2 hand-written, 46 the added fleet's), all 59 now carrying one with the bounds of their own geometry.
+**Field-confirmed the same day: `1194` and `19051` spawn.** Tested without a rebuild by generating the file
+straight into the bottle, which is what made the round cost minutes instead of a build.
 
 ## Docs updated in the same change — all DONE
 

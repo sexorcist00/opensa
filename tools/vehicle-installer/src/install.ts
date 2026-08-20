@@ -19,8 +19,8 @@ import { SPECIAL_FEATURES_DAT, writeModelSpecialFeatures } from './special-featu
 import { stripOutput } from './strip';
 import { type DerivedTuning, deriveTuning, shippedParts, slotTokens, vehicleSlots } from './tuning-derive';
 import { installDerivedTuning } from './tuning-install';
-import { assertCarmodsModels } from './tuning-parts';
-import { assertUpgradeCollision } from './upgrade-collision';
+import { assertCarmodsModels, parseTuningParts, TUNING_PARTS_FILE } from './tuning-parts';
+import { assertUpgradeCollision, PARTS_COL, type UpgradePart, writeUpgradeCollision } from './upgrade-collision';
 
 /** Where the per-model feature declarations land in the built game dir (read by opensa-pack). */
 export const FEATURES_TABLE = join('data', 'vehicle-features.txt');
@@ -97,10 +97,12 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
   });
   assertNoStagedClash(vehicles, derived);
   const ledgerRows: LedgerRow[] = [];
+  const newParts: UpgradePart[] = [];
   for (const vehicle of vehicles) {
     // The slot's STOCK texture bundle goes before the mod's is staged: a paintjob the mod does not ship has
     // no owner once its car is replaced, and would offer the player artwork drawn for another body's UVs.
     reportDropped(vehicle.name, pruneReplacedSlotTextures(img, vehicle.slot, readdirSync(vehicle.folder)));
+    newParts.push(...partsNeedingCollision(vehicle.folder, derived.get(vehicle.folder)?.renames));
     const renames = derived.get(vehicle.folder)?.renames ?? new Map<string, string>();
     const applied = applyVehicle(vehicle.folder, outPath, {
       img,
@@ -132,6 +134,12 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
   assertCarmodsModels(outPath);
   // And every part must have collision: the shop previews one as an ordinary CObject, which dereferences
   // m_pColModel without a null check. Static, so it costs a read rather than a field round (014 step 5).
+  // Every part we added gets a bounds-only collision model of its own: without one, anything that SPAWNS a
+  // part as an object dies on a null m_pColModel. Written before the gate below, which is what proves it.
+  const collision = writeUpgradeCollision(outPath, newParts);
+  if (collision.length > 0) {
+    console.log(`vehicle-installer: ${collision.length} part(s) have collision in ${PARTS_COL}`);
+  }
   assertUpgradeCollision(outPath).forEach((warning) => console.warn(`vehicle-installer: ${warning}`));
   assertCarmodsCeilings(outPath);
   vehicleColourWarnings(outPath).forEach((warning) => console.warn(`vehicle-installer: ${warning}`));
@@ -264,6 +272,29 @@ function deriveFleetTuning(outPath: string, vehicles: readonly VehicleSource[]):
   }
 
   return derived;
+}
+
+/**
+ * The models of this folder that the game has no collision for: every part it ships under a DERIVED name
+ * (the stock name it replaces has collision, the new one does not), plus every model its
+ * `tuning_new_parts.txt` declares, which the stock game never had at all.
+ */
+function partsNeedingCollision(folder: string, renames: ReadonlyMap<string, string> | undefined): UpgradePart[] {
+  const parts: UpgradePart[] = [];
+  for (const [file, entry] of renames ?? []) {
+    parts.push({ dff: join(folder, file), name: stem(entry) });
+  }
+  const declared = readdirSync(folder).find((name) => name.toLowerCase() === TUNING_PARTS_FILE);
+  for (const row of declared === undefined
+    ? []
+    : parseTuningParts(readFileSync(join(folder, declared), 'latin1')).ideRows) {
+    const name = row.split(',')[1]?.trim();
+    if (name !== undefined && name !== '') {
+      parts.push({ dff: join(folder, `${name}.dff`), name });
+    }
+  }
+
+  return parts;
 }
 
 /** Say which stock textures a replaced slot gave up — silence would make the archive change unexplainable. */
