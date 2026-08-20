@@ -155,7 +155,7 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
   if (options.target !== 'opensa') {
     warnings.push(...applyModelVariations(folderPath, entries, outPath));
     warnings.push(...applyVehicleAudio(folderPath, entries, outPath, model));
-    warnings.push(...applyVehicleParked(folderPath, entries, outPath, model));
+    warnings.push(...applyVehicleParked(folderPath, entries, outPath, model, options.id));
   }
   warnings.push(...applyVehicleText(folderPath, entries, outPath, model, options.gxt));
 

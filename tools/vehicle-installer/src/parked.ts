@@ -43,6 +43,12 @@ export function applyVehicleParked(
   entries: readonly string[],
   outPath: string,
   model: string | undefined,
+  /**
+   * The model id, when the CALLER knows it. An ADDED car's `vehicles.ide` row is written beside its models
+   * for Mod Loader to merge, not into `data/` — so looking the id up in the tree's IDE files finds nothing
+   * and the car is parked nowhere, silently but for one warning. `tools/add-vehicles` passes it here.
+   */
+  modelId?: number,
 ): string[] {
   const file = entries.find((name) => name.toLowerCase() === PARKED_FILE);
   if (!file) {
@@ -58,7 +64,7 @@ export function applyVehicleParked(
   if (model === undefined) {
     return [`${PARKED_FILE}: the folder ships no model to look an id up for — ${rows.length} row(s) not written`];
   }
-  const id = ideModelNames(outPath).get(model.toLowerCase());
+  const id = modelId ?? ideModelNames(outPath).get(model.toLowerCase());
   if (id === undefined) {
     return [`${PARKED_FILE}: no IDE row in the tree defines '${model}' — ${rows.length} row(s) not written`];
   }

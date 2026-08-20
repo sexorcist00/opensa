@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -97,6 +97,18 @@ describe('assertCarGeneratorBudget', () => {
 
 describe('applyVehicleParked', () => {
   describe('negative cases', () => {
+    it("parks a car whose ide row is not in data/ — an added car's row is beside its models", () => {
+      // Session 29 moved an added car's `cars` row into `modloader/added-vehicles/<slot>.settings.txt`, so
+      // the id lookup here finds nothing and the car is parked NOWHERE. The caller knows the id: it passes it.
+      writeFileSync(join(folder, PARKED_FILE), '35 35 2495.98 -1673.15 13.25 0.00\n');
+
+      expect(applyVehicleParked(folder, readdirSync(folder), out, '001veh')).toEqual([
+        expect.stringContaining("no IDE row in the tree defines '001veh'") as string,
+      ]);
+      expect(applyVehicleParked(folder, readdirSync(folder), out, '001veh', 19_001)).toEqual([]);
+      expect(iniText()).toContain('=19001 35 35 2495.98');
+    });
+
     it('warns and writes nothing when Parked Maker is not in the build', () => {
       rmSync(join(out, PARKED_INI));
       writeFileSync(join(folder, PARKED_FILE), VEGA);
