@@ -1,7 +1,7 @@
 import type { EditableImg } from '@opensa/tool-kit/archive/img';
 
 import { reorderFrameList } from '@opensa/renderware/parsers/binary/frame-order';
-import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -131,4 +131,66 @@ export function stageVehicleImg(
   }
 
   return { names, repaired };
+}
+
+/**
+ * A function saying which CAR an archive entry belongs to, so the family writer keeps a car whole rather
+ * than leaving its `.dff` in one sibling and its `.txd` in the next (148 of 201 cars, 2026-08-20 — plan 103).
+ *
+ * Derived from the built tree's own tables: `vehicles.ide` gives the car names, and a `veh_mods.ide` part is
+ * keyed by the car its TXD column names — the same column that says whose part it is everywhere else
+ * (`docs/contracts/vehicles.md`). A paintjob dictionary follows its car by the `<car><n>.txd` convention,
+ * which no row states. Anything else answers null and is placed on its own.
+ */
+export function vehicleCohortKey(gameDir: string): (name: string) => null | string {
+  const cars = new Set<string>();
+  let section = '';
+  const idePath = join(gameDir, 'data', 'vehicles.ide');
+  if (existsSync(idePath)) {
+    for (const raw of readFileSync(idePath, 'latin1').split(/\r?\n/)) {
+      const line = raw.split('#')[0].trim();
+      const cells = line.split(',').map((cell) => cell.trim());
+      if (line === '') {
+        continue;
+      }
+      if (!/^\d+$/.test(cells[0])) {
+        section = line.toLowerCase();
+      } else if (section === 'cars' && cells[1]) {
+        cars.add(cells[1].toLowerCase());
+      }
+    }
+  }
+  const partOwner = new Map<string, string>();
+  const modsPath = join(gameDir, 'data', 'maps', 'veh_mods', 'veh_mods.ide');
+  if (existsSync(modsPath)) {
+    for (const raw of readFileSync(modsPath, 'latin1').split(/\r?\n/)) {
+      const cells = raw
+        .split('#')[0]
+        .split(',')
+        .map((cell) => cell.trim().toLowerCase());
+      if (/^\d+$/.test(cells[0]) && cells[1] && cells[2] && cars.has(cells[2])) {
+        partOwner.set(cells[1], cells[2]);
+      }
+    }
+  }
+
+  return (entry: string): null | string => {
+    const name = entry.toLowerCase();
+    const stem = name.replace(/\.(?:dff|txd)$/, '');
+    if (stem === name) {
+      return null;
+    }
+
+    if (cars.has(stem)) {
+      return stem;
+    }
+    const owner = partOwner.get(stem);
+    if (owner !== undefined) {
+      return owner;
+    }
+    // `<car>3.txd` — a paintjob dictionary, which no row names.
+    const paintjob = name.endsWith('.txd') ? /^([^.]*[^.\d])\d+$/.exec(stem)?.[1] : undefined;
+
+    return paintjob !== undefined && cars.has(paintjob) ? paintjob : null;
+  };
 }

@@ -47,26 +47,53 @@ const SECTION_BUCKET: Readonly<Record<string, Bucket>> = {
 };
 
 /**
+ * The IDE files whose every row is a VEHICLE row, whatever section it sits in.
+ *
+ * `veh_mods.ide` declares the mod shop's upgrade parts as plain `objs` rows — authored as objects, owned by
+ * the car they bolt onto. The file they are in is what says so, and it is a better answer than the one this
+ * used to ask `carmods.dat` for: a part on no `mods` line, in no `link` pair and in no `wheel` row was
+ * classified as MAP, and `slamvan`'s two bonnets (`bnt_lr_slv1`/`2`, the only stock parts no shop offers)
+ * are exactly that — they claimed the slamvan's own dictionary for the map bucket, it stayed in `gta3.img`
+ * as CONTESTED, and the mod's copy in the vehicle archive lost to it: a car with no textures at all
+ * (`docs/open-issues/mod-file-shadowed-by-its-stock-twin.md`, plan 103).
+ */
+const VEHICLE_IDE_FILES: readonly string[] = ['vehicles.ide', 'veh_mods.ide'];
+
+/** Every model name the `cars` section of a roster declares, lowercased — {@link paintjobClaims}' input. */
+export function carModels(text: string): Set<string> {
+  const cars = new Set<string>();
+  sectionedParse(cleanLines(text), {
+    cars: (row): void => {
+      const model = row[1]?.toLowerCase();
+      if (model) {
+        cars.add(model);
+      }
+    },
+  });
+
+  return cars;
+}
+
+/**
  * Read one IDE file's claims. Every model-declaring section shares the same first two columns — `id, model,
  * txd, …` — so one row shape covers all of them, and a row that is missing either name contributes nothing
  * rather than claiming an empty string.
+ *
+ * `bucket` overrides the section's own answer — see {@link isVehicleIde}.
  */
-export function claimsFromIde(text: string, vehicleParts: ReadonlySet<string> = new Set()): Claim[] {
+export function claimsFromIde(text: string, bucket?: Bucket): Claim[] {
   const claims: Claim[] = [];
   const handlers: Record<string, (row: string[]) => void> = {};
   for (const [section, sectionBucket] of Object.entries(SECTION_BUCKET)) {
     handlers[section] = (row): void => {
       const model = row[1]?.toLowerCase();
       const txd = row[2]?.toLowerCase();
-      // A mod-shop part is authored as an OBJECT but belongs to the car it bolts onto, and `carmods.dat` is
-      // where the game says so. Without this the 12 tunable cars' dictionaries end up shared between the
-      // vehicle and the map bucket, and the parts stream out of a different archive from the car wearing them.
-      const bucket = model !== undefined && vehicleParts.has(model) ? 'vehicles' : sectionBucket;
+      const rowBucket = bucket ?? sectionBucket;
       if (model) {
-        claims.push({ bucket, name: `${model}.dff` });
+        claims.push({ bucket: rowBucket, name: `${model}.dff` });
       }
       if (txd) {
-        claims.push({ bucket, name: `${txd}.txd` });
+        claims.push({ bucket: rowBucket, name: `${txd}.txd` });
       }
     };
   }
@@ -112,29 +139,30 @@ export function classifyEntries(entries: readonly string[], claims: readonly Cla
   return { bucketOf, contested, unclaimed };
 }
 
-/**
- * The model names `carmods.dat` declares as vehicle PARTS — the authored answer to "is this object a car
- * part?", which no IDE section carries (they are all plain `objs` rows in `veh_mods.ide`).
- *
- * Its three sections each hide the parts in a different place: `link` pairs two parts per row, `mods` starts
- * a row with the CAR and lists its parts after it, and `wheel` starts with a numeric group index. So the
- * rule is "every cell except the leading one, plus both cells of a link row".
- */
-export function vehiclePartsFromCarmods(text: string): Set<string> {
-  const parts = new Set<string>();
-  const add = (cells: string[]): void => {
-    for (const cell of cells) {
-      const name = cell.trim().toLowerCase();
-      if (name) {
-        parts.add(name);
-      }
-    }
-  };
-  sectionedParse(cleanLines(text), {
-    link: (row): void => add(row),
-    mods: (row): void => add(row.slice(1)),
-    wheel: (row): void => add(row.slice(1)),
-  });
+/** Whether an IDE path is one of {@link VEHICLE_IDE_FILES} — every row of it claims for `vehicles`. */
+export function isVehicleIde(path: string): boolean {
+  const file = path.toLowerCase().split(/[/\\]/).pop() ?? '';
 
-  return parts;
+  return VEHICLE_IDE_FILES.includes(file);
+}
+
+/**
+ * A car's PAINTJOB dictionaries, claimed by name: `<car>1.txd`, `<car>2.txd`, … for every car the roster
+ * knows. No IDE row names them — the game finds them by the convention alone — so without this all 36 of
+ * the stock ones (13 cars: eleven with 3, `broadway` with 2, `camper` with 1) stay behind as UNCLAIMED
+ * while the mod's copies go to the vehicle archive, and twelve cars quietly wear stock paintjobs.
+ *
+ * Derived from the entries the archive actually holds, so a mod that adds a fourth paintjob is claimed too.
+ */
+export function paintjobClaims(entries: readonly string[], cars: ReadonlySet<string>): Claim[] {
+  const claims: Claim[] = [];
+  for (const entry of entries) {
+    const name = entry.toLowerCase();
+    const car = /^([^.]*[^.\d])\d+\.txd$/.exec(name)?.[1];
+    if (car !== undefined && cars.has(car)) {
+      claims.push({ bucket: 'vehicles', name });
+    }
+  }
+
+  return claims;
 }

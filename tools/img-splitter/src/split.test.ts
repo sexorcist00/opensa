@@ -24,11 +24,6 @@ const ENTRIES: Record<string, Uint8Array> = {
 const IDE = `
 objs
 1700, kb_bar, kb_stuff, 299, 0
-1010, nto_b_l, blade, 200, 0
-end
-
-cars
-575, blade, blade, car
 end
 
 peds
@@ -37,6 +32,18 @@ end
 
 weap
 321, gun_dildo1, gun_dildo1, null, 1, 50, 0
+end
+`;
+
+/** The game's two VEHICLE tables, in the paths it reads them from — the file is what makes a row a car's. */
+const VEHICLES_IDE = `
+cars
+575, blade, blade, car
+end
+`;
+const VEH_MODS_IDE = `
+objs
+1010, nto_b_l, blade, 200, 0
 end
 `;
 
@@ -52,6 +59,9 @@ beforeEach(() => {
   }
   writeImgFile(img, join(game, 'models', 'gta3.img'));
   writeFileSync(join(game, 'data', 'default.ide'), IDE);
+  writeFileSync(join(game, 'data', 'vehicles.ide'), VEHICLES_IDE);
+  mkdirSync(join(game, 'data', 'maps', 'veh_mods'), { recursive: true });
+  writeFileSync(join(game, 'data', 'maps', 'veh_mods', 'veh_mods.ide'), VEH_MODS_IDE);
   writeFileSync(join(game, 'data', 'carmods.dat'), 'mods\nblade, nto_b_l\nend\n');
   writeFileSync(join(game, 'data', 'gta.dat'), 'IMG DATA\\SCRIPT\\SCRIPT.IMG\nIDE DATA\\DEFAULT.IDE\n');
 });

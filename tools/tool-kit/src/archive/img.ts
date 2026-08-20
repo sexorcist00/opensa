@@ -235,19 +235,65 @@ export function openImgFamily(basePath: string): EditableImg {
  * ever moved for its own sake. **Stale siblings from an earlier, longer run are deleted**: leaving
  * `<stem>3.img` behind would keep a `gta.dat` line pointing at an archive holding superseded entries.
  */
-export function writeImgFamily(img: EditableImg, basePath: string, cap = ARCHIVE_CAP_BYTES): ArchiveFamilyMember[] {
+export function writeImgFamily(
+  img: EditableImg,
+  basePath: string,
+  cap = ARCHIVE_CAP_BYTES,
+  /**
+   * What must not be split across siblings — entry name → a key its neighbours share, or null for "on its
+   * own". A car's files answer with the car's slot, so a `.dff` and its `.txd` never end up in different
+   * archives (they did for **148 of 201 cars**, 2026-08-20). Nothing about the game requires this — it
+   * resolves an entry by name across every registered archive — it is so that "where does this car live"
+   * has one answer while something is being diagnosed (plan 103, the user's call).
+   */
+  keyOf: (name: string) => null | string = () => null,
+): ArchiveFamilyMember[] {
+  // Cohesive entries first, in the order their key first appears, so the family stays stable for an input.
+  const order: string[][] = [];
+  const byKey = new Map<string, string[]>();
+  for (const name of img.names()) {
+    const key = keyOf(name);
+    if (key === null) {
+      order.push([name]);
+      continue;
+    }
+    const held = byKey.get(key);
+    if (held === undefined) {
+      const fresh = [name];
+      byKey.set(key, fresh);
+      order.push(fresh);
+    } else {
+      held.push(name);
+    }
+  }
+  // What an entry costs the FILE: whole sectors of data plus its 32-byte directory row.
+  const cost = (name: string): number => Math.max(1, Math.ceil(img.size(name) / SECTOR)) * SECTOR + 32;
   const groups: string[][] = [[]];
   let used = SECTOR; // the leading directory sector every file starts with
-  for (const name of img.names()) {
-    // What the entry costs the FILE: whole sectors of data plus its 32-byte directory row.
-    const cost = Math.max(1, Math.ceil(img.size(name) / SECTOR)) * SECTOR + 32;
+  for (const cohort of order) {
+    const total = cohort.reduce((sum, name) => sum + cost(name), 0);
     const current = groups[groups.length - 1];
-    if (current.length > 0 && used + cost > cap) {
+    if (current.length > 0 && used + total > cap) {
       groups.push([]);
       used = SECTOR;
     }
-    groups[groups.length - 1].push(name);
-    used += cost;
+    // A cohort bigger than a whole archive still has to split — it says so rather than writing a file past
+    // the cap, which is the one thing this may not do.
+    if (total + SECTOR > cap) {
+      console.warn(
+        `writeImgFamily: ${cohort.length} entries keyed together are ${total} B, past the ${cap} B cap — ` +
+          `split across siblings (${cohort.slice(0, 3).join(', ')}…)`,
+      );
+    }
+    for (const name of cohort) {
+      const entry = cost(name);
+      if (groups[groups.length - 1].length > 0 && used + entry > cap) {
+        groups.push([]);
+        used = SECTOR;
+      }
+      groups[groups.length - 1].push(name);
+      used += entry;
+    }
   }
 
   const written = groups.map((names, index) => {

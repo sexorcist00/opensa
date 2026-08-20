@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   assertGtaDatFiles,
   assertLodLinks,
+  assertOneOwnerPerEntry,
   buildPerfectMap,
   checkImgIdBudgets,
   checkInstBearingIplSlots,
@@ -1044,6 +1045,65 @@ describe('OPENSA_BUDGET_NOTICE', () => {
     it('names the one half that IS measured, so the notice cannot read as wholly unmeasured', () => {
       expect(OPENSA_BUDGET_NOTICE).toMatch(/clutter half is measured and does not bind/);
       expect(OPENSA_BUDGET_NOTICE).toMatch(/no frame-time ceiling to cap it at/);
+    });
+  });
+});
+
+describe('assertOneOwnerPerEntry', () => {
+  let tree: string;
+  let stock: string;
+
+  const writeTreeImg = (root: string, name: string, entries: string[]): void => {
+    mkdirSync(join(root, 'models'), { recursive: true });
+    writeFileSync(
+      join(root, 'models', name),
+      buildVer2Buffer(entries.map((entryName) => ({ data: Uint8Array.of(1), name: entryName }))),
+    );
+  };
+
+  beforeEach(() => {
+    tree = mkdtempSync(join(tmpdir(), 'pmb-one-owner-'));
+    stock = mkdtempSync(join(tmpdir(), 'pmb-one-owner-stock-'));
+  });
+
+  afterEach(() => {
+    for (const path of [tree, stock]) {
+      rmSync(path, { force: true, recursive: true });
+    }
+  });
+
+  describe('negative cases', () => {
+    it('refuses a name held by two archives, naming both — one of the two files never loads', () => {
+      writeTreeImg(tree, 'gta3.img', ['slamvan.txd']);
+      writeTreeImg(tree, 'vehicles2.img', ['slamvan.txd']);
+
+      expect(() => assertOneOwnerPerEntry(tree, stock)).toThrow(/slamvan\.txd — gta3\.img, vehicles2\.img/);
+    });
+
+    it('refuses with no baseline at all rather than passing what it cannot compare', () => {
+      writeTreeImg(tree, 'gta3.img', ['coach.dff']);
+      writeTreeImg(tree, 'player.img', ['coach.dff']);
+
+      expect(() => assertOneOwnerPerEntry(tree)).toThrow(/1 archive entry name/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it("allows a duplicate the STOCK game already ships — the original's own answer, not our defect", () => {
+      // `coach.dff` is in gta3.img and player.img in a clean install; six names are, and none is a defect.
+      writeTreeImg(stock, 'gta3.img', ['coach.dff']);
+      writeTreeImg(stock, 'player.img', ['coach.dff']);
+      writeTreeImg(tree, 'gta3.img', ['coach.dff']);
+      writeTreeImg(tree, 'player.img', ['coach.dff']);
+
+      expect(() => assertOneOwnerPerEntry(tree, stock)).not.toThrow();
+    });
+
+    it('passes a tree where every name has one owner', () => {
+      writeTreeImg(tree, 'gta3.img', ['kb_bar.dff']);
+      writeTreeImg(tree, 'vehicles.img', ['slamvan.txd']);
+
+      expect(() => assertOneOwnerPerEntry(tree, stock)).not.toThrow();
     });
   });
 });

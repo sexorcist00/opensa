@@ -11,7 +11,7 @@ import { basename, dirname, join, parse, resolve, sep } from 'node:path';
 import { applyVehicle } from './apply-vehicle';
 import { assertCarmodsCeilings } from './carmods-guard';
 import { formatFeatureTable } from './features';
-import { sharedVehicleFiles } from './img-merge';
+import { sharedVehicleFiles, vehicleCohortKey } from './img-merge';
 import { type LedgerRow, readAddsLedger, writeAddsLedger } from './ledger';
 import { formatModTable, MODS_TABLE } from './mods-table';
 import { vehicleColourWarnings } from './palette';
@@ -136,7 +136,8 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
   // archive is past it on the original's mod set (1.24 GB of map + 3.08 GB of cars). The cap is now enforced
   // by construction rather than discovered mid-build.
   mkdirSync(dirname(imgPath), { recursive: true });
-  const archives = writeImgFamily(img, imgPath);
+  // A car is not split across siblings: its dff, its txd and its paintjob dictionaries travel together.
+  const archives = writeImgFamily(img, imgPath, undefined, vehicleCohortKey(outPath));
   // Whoever writes an archive registers it. A spill sibling the game never registers is invisible content —
   // the build succeeds, the file is on disk, and its entries simply never load. The base member is skipped:
   // `gta3.img` is hardcoded in the game and `vehicles.img` was declared by the split that created it.

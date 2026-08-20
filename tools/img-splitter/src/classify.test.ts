@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { claimsFromIde, classifyEntries, vehiclePartsFromCarmods } from './classify';
+import { carModels, claimsFromIde, classifyEntries, isVehicleIde, paintjobClaims } from './classify';
 
 /** An IDE with one car, one ped and one map object — the three buckets, in the sections the game authors them in. */
 const IDE = `
@@ -92,9 +92,16 @@ end
       expect(bucketOf.get('landstal.dff')).toBe('vehicles');
     });
 
-    it('claims no part from a carmods row that names only a car or only a group index', () => {
-      expect([...vehiclePartsFromCarmods('mods\nadmiral\nend\n')]).toEqual([]);
-      expect([...vehiclePartsFromCarmods('wheel\n0\nend\n')]).toEqual([]);
+    it('claims no paintjob for a name that is not a car, or for a dictionary with no number', () => {
+      const cars = new Set(['blade']);
+
+      expect(paintjobClaims(['lae2_roads17.txd', 'vehicle.txd', 'blade.txd'], cars)).toEqual([]);
+    });
+
+    it('is not a vehicle table just because the path mentions one', () => {
+      expect(isVehicleIde('data/maps/vehicles_extra/props.ide')).toBe(false);
+      expect(isVehicleIde('data/vehicles.ide')).toBe(true);
+      expect(isVehicleIde('data/maps/veh_mods/veh_mods.ide')).toBe(true);
     });
   });
 
@@ -130,39 +137,32 @@ end
       ]);
     });
 
-    it('reads every mod-shop part out of carmods.dat, whatever section hides it', () => {
-      const parts = vehiclePartsFromCarmods(`
-link
-bntl_b_ov, bntr_b_ov
-end
-
-mods
-admiral, nto_b_l, nto_b_s
-end
-
-wheel
-0, wheel_gn1, wheel_sr3
-end
-`);
-      // link: both cells are parts. mods: the leading cell is the CAR. wheel: the leading cell is a group index.
-      expect([...parts].sort()).toEqual(['bntl_b_ov', 'bntr_b_ov', 'nto_b_l', 'nto_b_s', 'wheel_gn1', 'wheel_sr3']);
-      expect(parts.has('admiral')).toBe(false);
-      expect(parts.has('0')).toBe(false);
-    });
-
-    it('puts a mod-shop part and the car dictionary it shares in the VEHICLE bucket', () => {
-      // veh_mods.ide authors the parts as plain objs rows, so without carmods.dat the car's own txd ends up
-      // contested and the parts stream from a different archive than the car wearing them.
-      const parts = vehiclePartsFromCarmods('mods\nblade, nto_b_l\nend\n');
+    it("puts a mod-shop part and its car's dictionary in the VEHICLE bucket, whatever carmods says", () => {
+      // The part is authored as a plain `objs` row; the FILE it sits in is what says it belongs to a car.
+      // `bnt_lr_slv1` is the real case: on no `mods` line, in no `link` pair, so the rule this replaced
+      // classified it as MAP and made the slamvan's own dictionary contested — a car with no textures.
       const claims = [
-        ...claimsFromIde('cars\n575, blade, blade, car\nend\n', parts),
-        ...claimsFromIde('objs\n1010, nto_b_l, blade, 200, 0\nend\n', parts),
+        ...claimsFromIde('cars\n535, slamvan, slamvan, car\nend\n', 'vehicles'),
+        ...claimsFromIde('objs\n1111, bnt_lr_slv1, slamvan, 100, 0\nend\n', 'vehicles'),
       ];
-      const { bucketOf, contested } = classifyEntries(['blade.dff', 'blade.txd', 'nto_b_l.dff'], claims);
+      const { bucketOf, contested } = classifyEntries(['slamvan.dff', 'slamvan.txd', 'bnt_lr_slv1.dff'], claims);
 
       expect(contested).toEqual([]);
-      expect(bucketOf.get('blade.txd')).toBe('vehicles');
-      expect(bucketOf.get('nto_b_l.dff')).toBe('vehicles');
+      expect(bucketOf.get('slamvan.txd')).toBe('vehicles');
+      expect(bucketOf.get('bnt_lr_slv1.dff')).toBe('vehicles');
+    });
+
+    it("claims a car's paintjob dictionaries, which no IDE row names", () => {
+      const cars = carModels('cars\n535, slamvan, slamvan, car\nend\n');
+      const entries = ['slamvan.txd', 'slamvan1.txd', 'slamvan2.txd', 'slamvan3.txd'];
+      const claims = [
+        ...claimsFromIde('cars\n535, slamvan, slamvan, car\nend\n', 'vehicles'),
+        ...paintjobClaims(entries, cars),
+      ];
+      const { bucketOf, unclaimed } = classifyEntries(entries, claims);
+
+      expect(unclaimed).toEqual([]);
+      expect([...bucketOf.values()]).toEqual(['vehicles', 'vehicles', 'vehicles', 'vehicles']);
     });
 
     it('does not treat a repeated claim from the same bucket as contested', () => {

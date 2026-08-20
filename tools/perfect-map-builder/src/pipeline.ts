@@ -25,7 +25,7 @@ import { buildSaLods } from '@opensa/sa-lod-generator/build';
  */
 import { buildProcobjLods } from '@opensa/sa-procobj-placement/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
-import { writeArchiveManifest } from '@opensa/tool-kit/archive/layout';
+import { openLazyVer2, writeArchiveManifest } from '@opensa/tool-kit/archive/layout';
 import { countImgArchives } from '@opensa/tool-kit/game-dir';
 import { isLayeredTree } from '@opensa/tool-kit/layers';
 import { checkLodLinks, formatLodLink } from '@opensa/tool-kit/lod-links';
@@ -506,6 +506,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       holeFillModels,
       outPath,
       procobjIn: source(subfolders.procobj),
+      sourceGame: gamePath,
       timed,
       until,
     }).catch((error: unknown) => {
@@ -843,6 +844,8 @@ async function buildSaTarget(step: {
   outPath: string;
   /** The mods-src `procobj/` subfolder (may be absent — the bake falls back to the built-in roster). */
   procobjIn: string;
+  /** The UNTOUCHED `--game` tree — the baseline for what the original itself already ships twice. */
+  sourceGame: string;
   timed: <T>(name: string, run: () => Promise<T> | T) => Promise<T>;
   until: StageName | undefined;
 }): Promise<{
@@ -898,6 +901,10 @@ async function buildSaTarget(step: {
   // crash at load and no build-side symptom, which is exactly the kind this branch gates rather than prints.
   assertArchiveSlots(countImgArchives(sa), false);
   const imgBudgets = checkImgIdBudgets(sa);
+  // One name, one archive. The game resolves an entry by name across every registered archive, so a name held
+  // twice means one of the two files never loads — and the symptom is a car wearing another's textures, not
+  // an error (plan 103). The STOCK game ships six such names; those are a fact about it, not our defect.
+  assertOneOwnerPerEntry(sa, step.sourceGame);
   // The other pair of configured pools: an `inst` row spends a CBuilding or a CDummy depending on whether
   // `object.dat` tunes its model, and until 2026-08-19 nothing counted the second — which is how a build
   // shipped 17 644 dummies against a 50 000 pool and the field met `0x00538103` on the third LOAD GAME.
@@ -1041,6 +1048,37 @@ export interface StageTiming {
 }
 
 /**
+ * Refuse a built tree that holds one entry name in two of its archives.
+ *
+ * The game resolves a streaming entry by NAME across every registered archive, so two files under one name
+ * means one of them never loads — silently, with every file valid and every archive registered. It cost a
+ * field round on 2026-08-20: `slamvan.txd` sat in `gta3.img` (stock) and in `vehicles2.img` (the mod's), the
+ * stock one won, and the car rendered with no textures at all because the mod's model names textures the
+ * stock dictionary does not carry.
+ *
+ * The stock game ships six duplicates of its own (`changeme.txd`, `kbmiscfrn1.txd`, `barrier.txd`,
+ * `lawest1.txd` across `gta3`/`gta_int`, and `coach.dff`/`coach.txd` across `gta3`/`player`). They are read
+ * out of the SOURCE tree rather than listed here, so the baseline is the game's own answer and a total
+ * conversion brings its own.
+ */
+export function assertOneOwnerPerEntry(gameDir: string, sourceGameDir?: string): void {
+  const held = duplicateEntryNames(gameDir);
+  const baseline = sourceGameDir === undefined ? new Map<string, string[]>() : duplicateEntryNames(sourceGameDir);
+  const ours = [...held].filter(([name]) => !baseline.has(name));
+  if (ours.length === 0) {
+    log(`  archive entries: one owner each (${baseline.size} stock duplicate(s) allowed)`);
+
+    return;
+  }
+  throw new Error(
+    `${ours.length} archive entry name(s) are held by more than one archive of the build. The game resolves ` +
+      `an entry by name across every registered archive, so one of the two files never loads and the symptom ` +
+      `is geometric, not an error:\n  ` +
+      ours.map(([name, archives]) => `${name} — ${archives.join(', ')}`).join('\n  '),
+  );
+}
+
+/**
  * Fail the build when a real-SA ID pool is at (or within `margin` of) its cap — loud at build time instead of
  * heap corruption at boot. Counts every entry across the build's IMG archives.
  */
@@ -1114,6 +1152,23 @@ export function flaIdPools(gameDir: string): { pools: Record<string, number>; so
     pools: Object.fromEntries(IMG_ID_BUDGETS.map((budget) => [budget.ext, active(budget.key) ?? budget.stock])),
     source: ini,
   };
+}
+
+/** Entry name → the archives of this tree holding it, for names held more than once. Read through the index. */
+function duplicateEntryNames(gameDir: string): Map<string, string[]> {
+  const modelsDir = join(gameDir, 'models');
+  const holders = new Map<string, string[]>();
+  if (!existsSync(modelsDir)) {
+    return holders;
+  }
+  for (const file of readdirSync(modelsDir).filter((name) => name.toLowerCase().endsWith('.img'))) {
+    const reader = openLazyVer2(join(modelsDir, file));
+    for (const name of reader?.names ?? []) {
+      holders.set(name.toLowerCase(), [...(holders.get(name.toLowerCase()) ?? []), file]);
+    }
+  }
+
+  return new Map([...holders].filter(([, archives]) => archives.length > 1));
 }
 
 /**

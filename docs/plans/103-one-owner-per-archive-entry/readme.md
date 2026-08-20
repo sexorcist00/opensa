@@ -40,26 +40,50 @@ Stock paintjob dictionaries, for the record: **36 across 13 cars** — 11 cars w
 
 ## Steps
 
-### 1 — The claim set is the vehicle TABLES, not `carmods.dat`
+### 1 — The claim set is the vehicle TABLES, not `carmods.dat` — **DONE 2026-08-20**
 
 `claimsFromIde` gets its vehicle-part answer from the file a row is IN: every row of `vehicles.ide` and of
 `veh_mods.ide` claims its model and its dictionary for `vehicles`. `vehiclePartsFromCarmods` goes.
 **Verify**: 0 contested dictionaries over the stock tree; `slamvan.txd`, `bnt_lr_slv1/2.dff` land in the
 vehicle bucket; the classifier's own unclaimed/contested counts are reported before and after.
 
-### 2 — A paintjob dictionary belongs to its car, by name
+**Measured** over stock `game-src/original` (16 316 entries, 212 cars), the old numbers produced by running
+the code that was actually shipping rather than a reconstruction of it:
+
+| | before | after |
+| --- | ---: | ---: |
+| contested dictionaries | **1** — `slamvan.txd` | **0** |
+| unclaimed entries | 952 | **916** |
+| entries in the vehicle bucket | 613 | **654** |
+
+The blind spot was narrower than the plan first said and no less fatal: the old rule DID catch a mirrored
+part (`vehiclePartsFromCarmods` reads `link` pairs and `wheel` rows too, not only `mods`), so the only
+models it missed were `bnt_lr_slv1`/`2` — the two stock parts no shop offers, on no line of any section.
+Two rows, one contested dictionary, one car with no textures.
+
+### 2 — A paintjob dictionary belongs to its car, by name — **DONE 2026-08-20**
 
 `<car><n>.txd` for every car in `vehicles.ide` is a vehicle claim — derived from the car list and the
 archive's own entry names, no table. **Verify**: all 36 stock paintjob dictionaries move; the 13 cars are
 the ones listed above; nothing whose base name is not a car is dragged along.
 
-### 3 — The guard: one name, one archive
+**Measured**: 36 of 36 in the vehicle bucket, where the old rule left **all 36** behind as unclaimed. The
+name rule is anchored on both ends (`^([^.]*[^.\d])\d+\.txd$` against the roster), so `lae2_roads17.txd`
+is not read as a paintjob of a car called `lae2_roads`.
+
+### 3 — The guard: one name, one archive — **DONE 2026-08-20**
 
 A built tree is refused when a name lives in two of its archives, naming both archives and both sizes,
 against the **stock baseline of 6** (which is a fact about the original game and stays allowed). The class is
 silent by nature — every file valid, every archive registered, and one car quietly wearing another's
 textures — so the guard is what says the fix held.
 **Verify**: it fires on today's tree with 39 and is silent on the rebuilt one.
+
+**Built** as `assertOneOwnerPerEntry`, in the `sa` branch beside the id-pool and archive-slot gates. The
+baseline is READ from the `--game` tree rather than listed in code, so a total conversion brings its own and
+nobody has to remember ours; with no source tree to compare against it refuses every duplicate rather than
+passing what it cannot judge. It reads through the archive index (one directory read per file), not by
+buffering gigabytes.
 
 ### 4 — A mod owns its slot's paintjobs
 
@@ -93,6 +117,11 @@ against the vehicle tables (`<car>.dff`, `<car>.txd`, `<car><n>.txd`, and a part
 which after step 1 is the car's own). A single group larger than the cap still has to split, and says so.
 **Verify**: cars whose files land in two archives 148 → 0; the archive count does not grow (today 2 for the
 vehicle family); the family stays stable for a given input.
+
+**Built 2026-08-20**: `writeImgFamily` takes an optional `keyOf`, and `vehicleCohortKey` answers it from the
+built tree's own tables — the car names from `vehicles.ide`, a part by the car its `veh_mods.ide` TXD column
+names, a paintjob by the `<car><n>.txd` convention. A cohort larger than a whole archive still splits and
+says so, because writing a file past the cap is the one thing the writer may not do.
 
 ## Docs to update in the same change
 

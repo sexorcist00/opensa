@@ -9,7 +9,7 @@ import { join, parse, resolve, sep } from 'node:path';
 
 import type { Bucket } from './classify';
 
-import { claimsFromIde, classifyEntries, vehiclePartsFromCarmods } from './classify';
+import { carModels, claimsFromIde, classifyEntries, isVehicleIde, paintjobClaims } from './classify';
 
 /** A bucket that gets its own archive. `map` is not one — it keeps `gta3.img`, which the game loads anyway. */
 export type SplitBucket = Exclude<Bucket, 'map'>;
@@ -106,11 +106,12 @@ export function split(options: SplitOptions): SplitSummary {
   assertUniqueNames(ver2EntryCount(gta3Bytes.subarray(0, 8)), sourceNames);
 
   const dataDir = join(outPath, 'data');
-  const carmodsPath = join(dataDir, 'carmods.dat');
-  const parts = existsSync(carmodsPath)
-    ? vehiclePartsFromCarmods(readFileSync(carmodsPath, 'latin1'))
-    : new Set<string>();
-  const claims = readIdeFiles(dataDir).flatMap((text) => claimsFromIde(text, parts));
+  const ides = readIdeFiles(dataDir);
+  // The file a row sits in decides, for the two the game reads as vehicle tables — see `isVehicleIde`.
+  const claims = ides.flatMap(({ path, text }) => claimsFromIde(text, isVehicleIde(path) ? 'vehicles' : undefined));
+  // Plus the paintjob dictionaries, which no row names at all.
+  const cars = new Set(ides.flatMap(({ path, text }) => (isVehicleIde(path) ? [...carModels(text)] : [])));
+  claims.push(...paintjobClaims(sourceNames, cars));
   const { bucketOf, contested, unclaimed } = classifyEntries(sourceNames, claims);
 
   const archives: SplitSummary['archives'] = [];
@@ -176,15 +177,15 @@ function guardOut(outPath: string, gamePath: string): void {
 }
 
 /** Every `.ide` under `data/`, read as latin1 (the encoding the stock tables ship in). */
-function readIdeFiles(dataDir: string): string[] {
-  const texts: string[] = [];
+function readIdeFiles(dataDir: string): { path: string; text: string }[] {
+  const files: { path: string; text: string }[] = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, entry.name);
       if (entry.isDirectory()) {
         walk(path);
       } else if (entry.name.toLowerCase().endsWith('.ide')) {
-        texts.push(readFileSync(path, 'latin1'));
+        files.push({ path, text: readFileSync(path, 'latin1') });
       }
     }
   };
@@ -192,7 +193,7 @@ function readIdeFiles(dataDir: string): string[] {
     walk(dataDir);
   }
 
-  return texts;
+  return files;
 }
 
 /** Stream an archive out and report what it cost. Size comes from `stat` — reading it back would reintroduce
