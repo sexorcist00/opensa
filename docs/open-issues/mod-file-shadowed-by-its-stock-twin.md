@@ -1,6 +1,15 @@
 # A mod's file lands in one archive while its stock twin stays in another, and the stock one wins
 
-**Open, 2026-08-20**, field-found by the user: the **slamvan has no textures at all** — before tuning and
+**Open — the fix is BUILT and measured, the field verdict is not in yet (2026-08-20).**
+[Plan 103](../plans/103-one-owner-per-archive-entry/readme.md) steps 1–3 and 6 shipped: the vehicle bucket
+now takes everything `vehicles.ide` and `veh_mods.ide` name plus every `<car><n>.txd`, a build holding one
+name in two of the archives the split owns is refused, and a car's files stop straddling siblings. On the
+rebuilt tree the **39 duplicates of ours are 0**, `slamvan.txd` has one owner and it is the mod's 9 359 360 B
+copy, and all 36 paintjob dictionaries are the mods'. What is left is the eye: the slamvan has to be looked
+at in the game. Step 4 (a mod owning its slot's paintjob COUNT) is deliberately unbuilt until the original's
+own rule is recovered.
+
+Field-found by the user: the **slamvan has no textures at all** — before tuning and
 after, body flat in its paint colour, chrome and wheels white. Every other car he drove was fine.
 
 ## What is actually in the build

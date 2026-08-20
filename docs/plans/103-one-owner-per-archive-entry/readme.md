@@ -137,11 +137,22 @@ says so, because writing a file past the cap is the one thing the writer may not
 - `docs/restrictions/assets-and-data.md` — one name, one archive, and the stock baseline that is not a defect.
 - The open issue → `fixed/` with the before/after.
 
-## Measured (fill in as the steps land)
+## Measured
+
+Rebuilt end to end 2026-08-20 (11 m 9 s, every gate green), then read back off the tree:
 
 | | before | after |
 | --- | ---: | ---: |
-| duplicate names in the built tree | **45** (39 ours) | |
-| cars wearing stock paintjobs | **12** | |
-| cars with no textures at all | **1** | |
-| cars split across two archives | **148** of 201 | |
+| duplicate names in the built tree | **45** (39 ours) | **6, none of them ours** |
+| names held twice among the archives the split owns | 39 | **0** |
+| cars wearing stock paintjobs | **12** | **0** — every `<car><n>.txd` is the mod's, in the vehicle archive |
+| cars with no textures at all | **1** (`slamvan`) | **0** — `slamvan.txd` has one owner, and it is the mod's 9 359 360 B copy |
+| cars split across two archives | **148** of 201 | **0** of 209 keyed |
+| archives in the vehicle family | 2 | 2 (unchanged) |
+
+The six that remain are the original's own and out of scope by construction: four map/interior dictionaries
+between `gta3.img` and `gta_int.img`, and `coach.dff`/`coach.txd` between `player.img` (the clothes, 264 192 B)
+and the vehicle archive (the mod's bus, 15 419 392 B) — one name, two unrelated things, and the game reads
+the clothing one through the clothes system rather than by streaming name.
+
+**Field-pending**: the slamvan's textures are the verdict this was built for, and only the game can give it.
