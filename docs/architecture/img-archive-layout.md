@@ -44,7 +44,7 @@ container.
 ```
 models/
   gta3.img         map objects — objs / tobj / anim / hier, and everything no IDE claims
-  vehicles.img     cars — the `cars` IDE section, PLUS the mod-shop parts carmods.dat names
+  vehicles.img     cars — everything `vehicles.ide` and `veh_mods.ide` name, plus `<car><n>.txd` paintjobs
   vehicles2.img    …and its spill siblings, created by the WRITER when a cap is crossed
   peds.img         peds — the `peds` IDE section
   weapons.img      weapons — the `weap` IDE section
@@ -118,11 +118,25 @@ flowchart LR
 
 The bucket comes from **authored data, never from a name list in our code** — the rule in
 [`restrictions/assets-and-data.md`](../restrictions/assets-and-data.md). Each IDE row declares both a model
-and its txd, and the SECTION it sits in is the answer. Measured in the stock `data/` tree:
+and its txd, and the SECTION it sits in is the answer — **except that the FILE wins over the section for the
+two the game reads as vehicle tables** (2026-08-20, [plan 002](../../tools/img-splitter/docs/plans/002-one-owner-per-archive-entry.md)):
+every row of `vehicles.ide` and of `veh_mods.ide` claims for `vehicles`, whatever section it sits in.
+
+That replaced asking `carmods.dat` whether an `objs` row is a mod-shop part, which missed the two stock
+parts no shop offers (`bnt_lr_slv1`/`2`, on no line of any of its sections). Those two claimed the slamvan's
+own dictionary for the map bucket, it stayed CONTESTED in `gta3.img`, the mod's copy went to the vehicle
+archive, and the stock one won: a car with no textures at all. Under the file rule, **contested dictionaries
+over the whole stock tree go from 1 to 0** and the vehicle bucket grows 613 → 654 entries.
+
+A car's **paintjob dictionaries** are claimed by name — `<car><n>.txd` against the roster — because no IDE
+row names one: 36 across 13 cars in stock, every one of which used to stay behind as unclaimed
+([`gta-sa-original/vehicle-paintjobs.md`](../gta-sa-original/vehicle-paintjobs.md)).
+
+Measured in the stock `data/` tree:
 
 | Section | Rows | Bucket |
 | --- | --- | --- |
-| `objs` | 14 052 | map — **except** a model `carmods.dat` names as a mod-shop part, which is a vehicle |
+| `objs` | 14 052 | map — **except** every row of `veh_mods.ide`, which is a vehicle part |
 | `tobj` | 160 | map |
 | `anim` | 54 | map |
 | `peds` | 276 | peds |

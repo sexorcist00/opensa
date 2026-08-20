@@ -1,6 +1,6 @@
 # 103 — one owner per archive entry: the vehicle bucket takes everything the vehicle tables name
 
-**Status: BUILT 2026-08-20** — steps 1–3, 4's deletion half and 6; field-confirmed the same day. Planned that morning to the user's design. Field-found the same morning: the **slamvan has no
+**Status: BUILT 2026-08-20 — every step, field-confirmed the same day.** Planned that morning to the user's design. Field-found the same morning: the **slamvan has no
 textures**, because `slamvan.txd` exists in `gta3.img` (stock, 14 336 B) and in `vehicles2.img` (the mod's,
 9 359 360 B) at once and the stock one wins. The issue is
 [`docs/open-issues/fixed/mod-file-shadowed-by-its-stock-twin.md`](../../../../docs/open-issues/fixed/mod-file-shadowed-by-its-stock-twin.md);
@@ -115,11 +115,15 @@ plan had left that open on a wrong reading of FLA's `Make paintjobs work for any
 per-id COUNT for stock cars at all: it lets an ADDED car — a new model id — have paintjobs. Nothing here
 waits on anything.
 
-### 5 — `add-vehicles` needs nothing, and that is worth checking
+### 5 — `add-vehicles` needs nothing, and that is worth checking — **DONE 2026-08-20**
 
 An added car has no stock twin and its models go LOOSE into `modloader/added-vehicles/`, so it cannot shadow
 anything. **Verify**: after 1–3, the duplicate count over a full build is the stock 6 with the added fleet
 installed.
+
+**Measured on the finished tree, 115 added cars and their 46 parts installed: 6 duplicate names, all six the
+original's own.** Nothing the added fleet ships reaches an archive, so there was nothing to fix and now
+there is a number saying so.
 
 ### 6 — a car is not split across two archives
 
@@ -143,7 +147,8 @@ says so, because writing a file past the cap is the one thing the writer may not
 
 ## Docs to update in the same change
 
-- `docs/architecture/` — the splitter's bucket rule (its diagram names the claim source).
+- `docs/architecture/img-archive-layout.md` — the bucket rule: the FILE wins over the section for the two
+  vehicle tables, and paintjob dictionaries are claimed by name. **DONE**
 - `docs/contracts/vehicles.md` — that a slot's paintjob dictionaries are the mod's to ship (step 4).
 - `docs/gta-sa-original/vehicle-paintjobs.md` — what a paintjob is made of and what the FLA setting really does.
 - `docs/restrictions/assets-and-data.md` — one name, one archive, and the stock baseline that is not a defect.
