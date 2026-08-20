@@ -59,7 +59,7 @@ any `Global=` reference to a key that went.
 ## 4. Two open defects, both with the same root cause under them
 
 - **An added car in traffic wears its BASE car's paintjob and parts**
-  ([issue](../open-issues/added-car-inherits-its-base-tuning.md)) — one ModelVariations section describes one
+  ([issue](../open-issues/fixed/added-car-inherits-its-base-tuning.md)) — one ModelVariations section describes one
   model, and `add-vehicles` 004 injects the added id into its base's section to reach traffic, so one token
   list dresses two bodies. 40 sections affected. The plugin's own `ExcludeModelsFromInheritance` is the lever
   to try first.
