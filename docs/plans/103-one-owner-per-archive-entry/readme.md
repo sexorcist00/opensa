@@ -79,11 +79,18 @@ silent by nature — every file valid, every archive registered, and one car qui
 textures — so the guard is what says the fix held.
 **Verify**: it fires on today's tree with 39 and is silent on the rebuilt one.
 
-**Built** as `assertOneOwnerPerEntry`, in the `sa` branch beside the id-pool and archive-slot gates. The
-baseline is READ from the `--game` tree rather than listed in code, so a total conversion brings its own and
-nobody has to remember ours; with no source tree to compare against it refuses every duplicate rather than
-passing what it cannot judge. It reads through the archive index (one directory read per file), not by
-buffering gigabytes.
+**Built** as `assertOneOwnerPerEntry`, in the `sa` branch beside the id-pool and archive-slot gates, reading
+archive directories rather than buffering gigabytes.
+
+**Its scope is `gta3.img` and what came OUT of it** — the user's correction, and it is the right one. The
+first shape allowed any duplicate the stock game ships, BY NAME, and that would have let one of ours ride in
+under a stock exemption: the six stock duplicates are not what they look like. Four are map/interior
+dictionaries repeated between `gta3.img` and `gta_int.img`. The other two are `coach.dff`/`coach.txd` in
+`player.img` — the CLOTHES archive, whose `coach.txd` holds a single 256×256 texture called `coach`,
+nothing to do with the bus of that name (`coach92wheel64`, `coach92interior128`) in `gta3.img`. **And we
+ship a coach mod**, so under a by-name baseline the mod's bus and the stock clothing texture would have
+passed as "stock". Scoped to the archives this build decides the contents of — `gta3.img` plus the ones the
+source tree does not have — the expected number is 0, with no exemptions at all.
 
 ### 4 — A mod owns its slot's paintjobs
 

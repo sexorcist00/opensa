@@ -1048,7 +1048,7 @@ export interface StageTiming {
 }
 
 /**
- * Refuse a built tree that holds one entry name in two of its archives.
+ * Refuse a built tree that holds one entry name in two of the archives THE SPLIT OWNS.
  *
  * The game resolves a streaming entry by NAME across every registered archive, so two files under one name
  * means one of them never loads — silently, with every file valid and every archive registered. It cost a
@@ -1056,25 +1056,30 @@ export interface StageTiming {
  * stock one won, and the car rendered with no textures at all because the mod's model names textures the
  * stock dictionary does not carry.
  *
- * The stock game ships six duplicates of its own (`changeme.txd`, `kbmiscfrn1.txd`, `barrier.txd`,
- * `lawest1.txd` across `gta3`/`gta_int`, and `coach.dff`/`coach.txd` across `gta3`/`player`). They are read
- * out of the SOURCE tree rather than listed here, so the baseline is the game's own answer and a total
- * conversion brings its own.
+ * **Scope: `gta3.img` and whatever came OUT of it** — the buckets the split writes and their spill siblings,
+ * recognised as the archives the SOURCE tree does not have. Those are the only ones whose contents this
+ * build decides, and every car and car part is in there (the user's call, 2026-08-20).
+ *
+ * The archives it therefore does not police are the original's own, and they carry six duplicates that are
+ * not defects: `player.img` is the CLOTHES archive and its `coach.txd` is a single 256×256 texture named
+ * `coach`, nothing to do with the bus of that name in `gta3.img`; `gta_int.img` repeats four map and
+ * interior dictionaries. None of them is ours to resolve, and a baseline read by NAME would have let a
+ * duplicate of ours ride in under one of them.
  */
 export function assertOneOwnerPerEntry(gameDir: string, sourceGameDir?: string): void {
-  const held = duplicateEntryNames(gameDir);
-  const baseline = sourceGameDir === undefined ? new Map<string, string[]>() : duplicateEntryNames(sourceGameDir);
-  const ours = [...held].filter(([name]) => !baseline.has(name));
-  if (ours.length === 0) {
-    log(`  archive entries: one owner each (${baseline.size} stock duplicate(s) allowed)`);
+  const stockArchives = new Set(archiveNames(sourceGameDir));
+  const ours = archiveNames(gameDir).filter((name) => name.toLowerCase() === 'gta3.img' || !stockArchives.has(name));
+  const held = duplicateEntryNames(gameDir, ours);
+  if (held.size === 0) {
+    log(`  archive entries: one owner each across ${ours.length} archive(s) the split owns`);
 
     return;
   }
   throw new Error(
-    `${ours.length} archive entry name(s) are held by more than one archive of the build. The game resolves ` +
-      `an entry by name across every registered archive, so one of the two files never loads and the symptom ` +
-      `is geometric, not an error:\n  ` +
-      ours.map(([name, archives]) => `${name} — ${archives.join(', ')}`).join('\n  '),
+    `${held.size} archive entry name(s) are held by more than one archive this build writes. The game ` +
+      `resolves an entry by name across every registered archive, so one of the two files never loads and ` +
+      `the symptom is geometric, not an error:\n  ` +
+      [...held].map(([name, archives]) => `${name} — ${archives.join(', ')}`).join('\n  '),
   );
 }
 
@@ -1154,14 +1159,20 @@ export function flaIdPools(gameDir: string): { pools: Record<string, number>; so
   };
 }
 
-/** Entry name → the archives of this tree holding it, for names held more than once. Read through the index. */
-function duplicateEntryNames(gameDir: string): Map<string, string[]> {
+/** The `models/*.img` names a tree carries — none when it has no such folder, or none was given. */
+function archiveNames(gameDir: string | undefined): string[] {
+  const modelsDir = gameDir === undefined ? undefined : join(gameDir, 'models');
+
+  return modelsDir !== undefined && existsSync(modelsDir)
+    ? readdirSync(modelsDir).filter((name) => name.toLowerCase().endsWith('.img'))
+    : [];
+}
+
+/** Entry name → which of `archives` holds it, for names held more than once. Read through the directories. */
+function duplicateEntryNames(gameDir: string, archives: readonly string[]): Map<string, string[]> {
   const modelsDir = join(gameDir, 'models');
   const holders = new Map<string, string[]>();
-  if (!existsSync(modelsDir)) {
-    return holders;
-  }
-  for (const file of readdirSync(modelsDir).filter((name) => name.toLowerCase().endsWith('.img'))) {
+  for (const file of archives) {
     const reader = openLazyVer2(join(modelsDir, file));
     for (const name of reader?.names ?? []) {
       holders.set(name.toLowerCase(), [...(holders.get(name.toLowerCase()) ?? []), file]);

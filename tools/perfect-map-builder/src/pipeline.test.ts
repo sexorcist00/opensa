@@ -1074,23 +1074,26 @@ describe('assertOneOwnerPerEntry', () => {
 
   describe('negative cases', () => {
     it('refuses a name held by two archives, naming both — one of the two files never loads', () => {
+      writeTreeImg(stock, 'gta3.img', []);
       writeTreeImg(tree, 'gta3.img', ['slamvan.txd']);
       writeTreeImg(tree, 'vehicles2.img', ['slamvan.txd']);
 
       expect(() => assertOneOwnerPerEntry(tree, stock)).toThrow(/slamvan\.txd — gta3\.img, vehicles2\.img/);
     });
 
-    it('refuses with no baseline at all rather than passing what it cannot compare', () => {
-      writeTreeImg(tree, 'gta3.img', ['coach.dff']);
-      writeTreeImg(tree, 'player.img', ['coach.dff']);
+    it('refuses a duplicate between gta3.img and a sibling the split spilled', () => {
+      writeTreeImg(stock, 'gta3.img', ['blade.txd']);
+      writeTreeImg(tree, 'gta3.img', ['blade.txd']);
+      writeTreeImg(tree, 'vehicles.img', ['blade.txd']);
 
-      expect(() => assertOneOwnerPerEntry(tree)).toThrow(/1 archive entry name/);
+      expect(() => assertOneOwnerPerEntry(tree, stock)).toThrow(/blade\.txd — gta3\.img, vehicles\.img/);
     });
   });
 
   describe('positive cases', () => {
-    it("allows a duplicate the STOCK game already ships — the original's own answer, not our defect", () => {
-      // `coach.dff` is in gta3.img and player.img in a clean install; six names are, and none is a defect.
+    it("does not police an archive the original brought — player.img's `coach` is a clothing texture", () => {
+      // The clothes archive holds a 256x256 texture named `coach`, unrelated to the bus of that name in
+      // gta3.img. Six such names ship in a clean install and none of them is ours to resolve.
       writeTreeImg(stock, 'gta3.img', ['coach.dff']);
       writeTreeImg(stock, 'player.img', ['coach.dff']);
       writeTreeImg(tree, 'gta3.img', ['coach.dff']);
