@@ -34,6 +34,7 @@ import { writeModelSpecialFeatures } from '@opensa/vehicle-installer/special-fea
 import { deriveTuning, shippedParts, slotTokens } from '@opensa/vehicle-installer/tuning-derive';
 import { installDerivedTuning } from '@opensa/vehicle-installer/tuning-install';
 import { assertCarmodsModels, ideModelNames } from '@opensa/vehicle-installer/tuning-parts';
+import { assertUpgradeCollision } from '@opensa/vehicle-installer/upgrade-collision';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -179,6 +180,9 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
   // The two fixed-size arrays behind carmods.dat. Refuses NAMING `asi/perfect-vehicle`, which is the plugin
   // that lifts them — every added car re-modelling its base's wings costs one of the seven spare link pairs.
   assertCarmodsCeilings(gamePath);
+  // A part with no `veh_mods.col` entry crashes the shop preview unless its flags say so — and the parts
+  // that made this check necessary were derived HERE, from a stock part carrying neither (014 step 5).
+  runWarnings.push(...assertUpgradeCollision(gamePath));
   const headroom = carmodsHeadroom(gamePath);
   console.log(
     `add-vehicles: carmods headroom — ${headroom.links} link pair(s), ${headroom.partsPerCar} part(s) on the fullest car`,

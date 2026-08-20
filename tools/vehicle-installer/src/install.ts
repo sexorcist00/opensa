@@ -20,6 +20,7 @@ import { stripOutput } from './strip';
 import { type DerivedTuning, deriveTuning, shippedParts, slotTokens, vehicleSlots } from './tuning-derive';
 import { installDerivedTuning } from './tuning-install';
 import { assertCarmodsModels } from './tuning-parts';
+import { assertUpgradeCollision } from './upgrade-collision';
 
 /** Where the per-model feature declarations land in the built game dir (read by opensa-pack). */
 export const FEATURES_TABLE = join('data', 'vehicle-features.txt');
@@ -125,6 +126,9 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
   // Every carmods token must resolve to an IDE row — the real game crashes on one that does not, at boot,
   // at an address; here it fails naming the line (plan 009).
   assertCarmodsModels(outPath);
+  // And every part must have collision: the shop previews one as an ordinary CObject, which dereferences
+  // m_pColModel without a null check. Static, so it costs a read rather than a field round (014 step 5).
+  assertUpgradeCollision(outPath).forEach((warning) => console.warn(`vehicle-installer: ${warning}`));
   assertCarmodsCeilings(outPath);
   vehicleColourWarnings(outPath).forEach((warning) => console.warn(`vehicle-installer: ${warning}`));
   // Written as a FAMILY, not one file: the buffered path caps at 2 GiB and so does every reader, and this

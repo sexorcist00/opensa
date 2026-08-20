@@ -185,6 +185,9 @@ const MANIFEST: readonly Fixture[] = [
   // each is sold for. Both are read by the tuning derivation, so an install test needs them beside the rest.
   copy('data/maps/veh_mods/veh_mods.ide', 'data/maps/veh_mods/veh_mods.ide'),
   copy('data/shopping.dat', 'data/shopping.dat'),
+  // The ONE file every stock tuning part's collision comes from — 194 entries, ids 1000-1193. A part with no
+  // entry here crashes the mod shop unless its IDE flags carry 0x200000, and that guard needs the real list.
+  extract('veh_mods.col', 'col/veh_mods.col'),
   copy('data/txdcut.ide', 'data/txdcut.ide'), // cutscene-TXD txdp dictionary — the vehicle-cutscene census link
   // The vehicle-cutscene golden pairs (plan 002 step 2): three vanilla cutscene rigs covering the three
   // hand-authoring styles (Box01 / wheel_*_node+_hi / axis_*), plus their stock gta3 donors — converting

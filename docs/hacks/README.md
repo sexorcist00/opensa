@@ -67,6 +67,7 @@ the number.
 | [World ambient floor](world-ambient-floor.md) | `game/adapters/engine-environment-driver.ts` | nothing — a deliberate deviation: vanilla day `Amb` ≈ 0 and real SA shows black-prelit walls black; the floor (max(), day-only, fitted 0.13) is the look the field chose over parity |
 | [Tyre-smoke intensity fit](tyre-smoke-intensity-fit.md) | `game/vehicle/vehicle-tyre-smoke.system.ts` | `CFx::AddWheel*` parameters — stubs in gta-reversed, nothing to port |
 | [Skid-mark look fit](skid-mark-look-fit.md) | `game/vehicle/vehicle-skid-marks.system.ts` | SA's `CSkidmarks` width/opacity constants, same unrecoverable code paths |
+| [New tuning part's `0x200000`](upgrade-part-no-collision-flag.md) | `tools/vehicle-installer/src/tuning-parts.ts` | knowing what bit 21 of an IDE flags column means — the shop preview reads a null `m_pColModel` without it |
 | [Impact-smoke fit](impact-smoke-fit.md) | `web/ui/engine-vehicles.ts` | SA's `CFx` collision-effect counts/lifetimes; the trigger itself is the calibrated damage gate |
 | [Per-category clutter draw distances](clutter-category-draw-distances.md) | `web/ui/game-runtime-config.ts` | a range derived from each clutter model's own size — SA has only a flat `PLANTS_MAX_DISTANCE = 100`, so there is no formula to port |
 | [Surface-FX fit](surface-fx-fit.md) | `game/vehicle/vehicle-surface-fx.system.ts` | `CFx::AddWheel*` per-surface counts/colours; the dispatch itself is surfinfo's own `W_*` flags |

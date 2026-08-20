@@ -60,9 +60,20 @@ they do NOT crash. The only thing that separates them is the IDE flags column:
 
 `0x200000` is inherited by a derived part from the stock part it is derived from, which is why the fleet
 survived by accident. **The reading — a part with no collision entry must carry `0x200000`** — is consistent
-with every row measured but is NOT yet confirmed against the exe's own use of the flag, and two of our own
-derived parts (`19077 wg_l_lr_t1_072veh`, `19078 wg_r_lr_t1_072veh`) carry `0` and are the outstanding
-control: by this reading they must crash the same way.
+with every row measured but is NOT yet confirmed against the exe's own use of the flag.
+
+**The full census, 2026-08-20** (`assertUpgradeCollision`, a static read of the built tree against the col's
+194 entry names): stock `game-src/original` is **clean**, and `build/original/sa` had **seven** rows with
+neither an entry nor the flag — not the two this file predicted:
+
+| part | id | flags | where it came from |
+| --- | ---: | ---: | --- |
+| `spl_b_lr_bl`, `bnt_b_lr_bl` | 1194, 1195 | `0` | the blade mod's hand-written `tuning_new_parts.txt` |
+| `fbmp_lr_t1_072veh`, `fbmp_lr_t2_072veh`, `rbmp_lr_t1_072veh` | 19074–19076 | `4096` | derived from the tornado's parts |
+| `wg_l_lr_t1_072veh`, `wg_r_lr_t1_072veh` | 19077, 19078 | `0` | derived from the tornado's parts |
+
+Every one of the five derived rows inherited the gap from a stock tornado part, which carries `4096` or `0`
+— so the outstanding control is five parts wider than "two rows written by hand".
 
 ## What it means for a tool
 
@@ -70,6 +81,14 @@ A tool that writes a NEW tuning part row cannot leave this to the mod author. Th
 no field round: read every `objs` row of the built `veh_mods.ide`, read the entry names of `veh_mods.col`
 inside `gta3.img`, and for every row with no entry require the flag. The id does not matter — this was
 tested in the field by moving both parts to 19701/19702, and the crash moved with them (`ECX = 0x4CF5`).
+
+**Built 2026-08-20** (`vehicle-installer` 014 step 5): `withNoColFlag` forces the flag into every row either
+writer emits outside the stock block — an author cannot be expected to know it, and a derived row inherits
+whatever the part it was cloned from carried — and `assertUpgradeCollision` runs the check above at the end
+of both `install` and `add-vehicles`, refusing the build and naming every offending row. It reads the col
+entry through the archive index, so it slices one entry off a file handle rather than buffering gigabytes.
+Setting the flag rather than knowing what it means is recorded as
+[`docs/hacks/upgrade-part-no-collision-flag.md`](../hacks/upgrade-part-no-collision-flag.md).
 
 Neighbours: [`carmods-upgrade-ceilings.md`](carmods-upgrade-ceilings.md) (what a part NAME must look like and
 how many a car may have), [`carmods-unknown-part-crash.md`](carmods-unknown-part-crash.md) (a `carmods.dat`

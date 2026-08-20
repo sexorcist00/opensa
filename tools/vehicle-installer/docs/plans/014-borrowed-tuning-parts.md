@@ -170,15 +170,31 @@ do not (one file shipped twice costs nothing). Silent on the real fleet — 0 sh
 e2e case that proves it still bites uses a part no IDE row defines, which is the only thing the derivation
 cannot rename.
 
-### 5 — `tuning_new_parts.txt` keeps only its real job
+### 5 — every new part gets collision, or the build says so — **DONE 2026-08-20**
 
-A part that exists NOWHERE in stock, with its own price, name and shop anchor. The blade's two hand-written
-rows are removed from it: their names are borrowed, so they derive — and the hand-picked ids `1194`/`1195`
-go with them, which also removes the crash of
-[`veh-mods-col-and-the-upgrade-object.md`](../../../../docs/gta-sa-original/veh-mods-col-and-the-upgrade-object.md):
-a derived row inherits the stock part's flags, and that is precisely why the added fleet's derived parts do
-not crash while a hand-written `0` does.
-**Verify**: `spl_b_lr_bl` and `bnt_b_lr_bl` no longer appear at ids 1194/1195; the shop previews them.
+**The step as planned was void, and the measurement said so before a line was written.** It read: remove the
+blade's two hand-written rows from `tuning_new_parts.txt`, because "their names are borrowed, so they
+derive". They are not borrowed — `spl_b_lr_bl` and `bnt_b_lr_bl` have **no stock `veh_mods.ide` row at all**,
+so there is nothing to clone them from and the file is doing exactly the job it exists for. Its scope does
+not narrow.
+
+What was real in the step is the crash it pointed at, and it is bigger than the plan thought. A row for a
+part outside the stock block has no `veh_mods.col` entry, and the shop preview creates a part as an ordinary
+`CObject` and dereferences `m_pColModel` with no null check
+([`veh-mods-col-and-the-upgrade-object.md`](../../../../docs/gta-sa-original/veh-mods-col-and-the-upgrade-object.md)).
+Both writers now force `0x200000` into such a row (`withNoColFlag`), and `assertUpgradeCollision` refuses a
+built tree where any part has neither an entry nor the flag — a static read at the end of `install` and of
+`add-vehicles`, through the archive index so one entry is sliced off a file handle rather than gigabytes
+buffered.
+
+**Measured.** Stock `game-src/original`: **clean**. `build/original/sa`: **7 offenders**, where the original
+write-up predicted 2 — the blade's two hand-written rows (flags `0`) and all five parts derived from the
+tornado (`19074`–`19078`, flags `4096`/`0`, inherited from stock rows that carry no `0x200000`). All seven
+are fixed by construction on the next build. The col fixture is a new manifest line
+(`extract('veh_mods.col')`) and the guard's test reads the real 194 entries out of it.
+
+Setting a flag whose meaning to the exe is still unrecovered is recorded as a hack:
+[`docs/hacks/upgrade-part-no-collision-flag.md`](../../../../docs/hacks/upgrade-part-no-collision-flag.md).
 
 ## Docs to update in the same change
 
@@ -188,7 +204,8 @@ not crash while a hand-written `0` does.
 - `docs/open-issues/vehicle-part-name-clash-between-mods.md` → `fixed/` with the measured before/after.
 - `docs/gta-sa-original/carmods-upgrade-ceilings.md` — the 19 is field-confirmed; add what the new scheme
   buys in margin.
-- `tools/vehicle-installer/docs/plans/009-tuning-new-parts.md` — its scope narrows in step 5.
+- `tools/vehicle-installer/docs/plans/009-tuning-new-parts.md` — its scope does NOT narrow (step 5): the two
+  rows it carries are parts no stock row defines, which is precisely its job.
 
 ## Measured (fill in as the steps land)
 
