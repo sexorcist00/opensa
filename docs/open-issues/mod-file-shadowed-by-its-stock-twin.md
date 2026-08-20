@@ -55,11 +55,13 @@ documented resolutions both keep an entry in `map` (= `gta3.img`):
   part as a vehicle part when `carmods.dat`'s `mods` line names it — and `bnt_lr_slv1`/`2` are the two stock
   parts no shop offers, so they are on no line). Contested → `map`.
 
-That last one is the **same false premise this session already disproved for the tuning derivation**: "a
-car's parts are the parts on its `mods` line" misses 22 parts game-wide (every mirrored right-hand part,
-bought through its left partner's `link`, plus slamvan's two bonnets). `vehiclePartsFromCarmods` reads the
-`mods` lines and nothing else. The honest source is the part row's own TXD column —
-[`docs/contracts/vehicles.md`](../contracts/vehicles.md).
+That last one is the **same false premise this session already disproved for the tuning derivation** —
+"a car's parts are the parts `carmods.dat` names" — though the blind spot here is narrower than the
+derivation's was, and worth stating exactly: `vehiclePartsFromCarmods` reads `link` pairs and `wheel` rows
+as well as `mods` lines, so it DOES catch the mirrored right-hand parts. The models it misses are
+`bnt_lr_slv1` and `bnt_lr_slv2` alone — the only two stock parts that appear in no section of `carmods.dat`
+at all, because no shop offers them. Two rows were enough to contest a car's whole dictionary. The honest
+source is the table the row sits in ([`docs/contracts/vehicles.md`](../contracts/vehicles.md)).
 
 The splitter's own comment says a duplicate is harmless because "the game resolves an entry by NAME across
 every registered archive" — true when the entry exists once. It does not anticipate the vehicle installer
