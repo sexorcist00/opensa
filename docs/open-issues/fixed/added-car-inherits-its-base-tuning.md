@@ -1,5 +1,28 @@
 # An added car in traffic wears its BASE car's paintjob and tuning parts
 
+**FIXED 2026-08-20, field-confirmed the same day.** The shape came from the user: his earlier build had it
+right and plan 004 had talked itself out of it.
+
+**Two sections, two subjects.** A section keyed by a model's NAME is what that model IS — its `paintjobN`,
+its tuning parts, its `Trailers1`. A section keyed by an ID carries nothing but the ids that may spawn in
+its place. 004 put the added id into the base's NAME section, so the two models shared one list; now the
+variation list goes into `### blade` / `[536]` / `Global=536,19110` and the added car has a section of its
+own. **Nothing is left to inherit, so `ExcludeModelsFromInheritance` is not needed** — it was armed in the
+bottle for a session and then reverted unused.
+
+**And an added car's own section is keyed by its ID too, which cost a second field round.** Keyed
+`[059veh]` the car spawned in traffic UNTUNED while Transfender tuned the same car perfectly: the plugin
+resolves a section header to a model, and an added car's NAME does not exist when it does that — the row
+that gives it one is merged by Mod Loader out of `modloader/added-vehicles/`, later. `[19050]` binds
+directly and works. The stock names always resolved, which is why only the added cars were affected.
+See [`gta-sa-original/model-variations-sections.md`](../../gta-sa-original/model-variations-sections.md).
+
+**Also fixed alongside**: an added car's paintjob dictionaries ship LOOSE in `modloader/added-vehicles/`, so
+counting them in the archives found none — 19 of the fleet's 46 were never offered, four cars losing all of
+theirs to a base that has none.
+
+---
+
 **Open, 2026-08-19**, field-found by the user the first time added cars reached traffic (plan 102's round).
 A car in the `blade` slot appeared with its paintjob sliding off the body and a spare wheel floating in the
 air behind it.
@@ -44,7 +67,7 @@ build — is one model per section throughout:
 And its `cargrp.dat` carries no added id either — **so added cars were never in traffic in that build at
 all**. Traffic is a capability plan 102 ADDED, and this defect is its cost, not a regression.
 
-## The lever, and the test armed in the bottle
+## The lever that was NOT needed, kept for the record
 
 The plugin has the concept: `[Settings] ExcludeModelsFromInheritance=596,597,598,599,490,497,472,432,433` —
 stock police and army models, kept from inheriting the settings of a section they appear in as a variation.

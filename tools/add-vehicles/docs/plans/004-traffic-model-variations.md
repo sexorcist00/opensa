@@ -71,3 +71,24 @@ Tests: 10 in `traffic.test.ts`; add-vehicles 35, vehicle-installer 185.
 **Left as authored, on purpose**: `petro`'s and `rdtrain`'s `{{205veh}}`-style placeholders name added cars
 that are not in this fleet at all (the numbering runs to 169veh), so they stay unresolved and the plugin
 logs them — dropping an author's line would be worse than a log line nobody reads.
+
+
+## 2026-08-20 — the section shape was wrong twice, and the field said so twice
+
+This plan chose **one section per model, keyed by NAME**, and wrote the added car's id into its base's
+section. Both halves were wrong, and the user's earlier build had had it right all along:
+
+1. **The variation list belongs in an ID-keyed section that carries nothing else.** In the base's NAME
+   section it shares a token list with the base, so the added car wears the base's parts — a 1958 Pontiac
+   with the blade's continental-kit spare wheel hanging behind it. Fixed by writing `### blade` / `[536]` /
+   `Global=536,19110`; `ExcludeModelsFromInheritance` was armed for a session and reverted unused, because
+   with the lists apart there is nothing to inherit.
+2. **An added car's OWN section must be keyed by its ID too.** `[059veh]` left the car untuned in traffic
+   while Transfender tuned it perfectly: the plugin resolves a header to a model, and the added car's name
+   does not exist at that moment — the `vehicles.ide` row that gives it one is merged by Mod Loader out of
+   `modloader/added-vehicles/`. Keyed `[19050]` it works.
+
+The reasoning this plan used against the shape — that a model addressed twice would have one section
+overwrite the other — was never tested; the user's build ran both for a long time. Recorded as a fact about
+the plugin in
+[`gta-sa-original/model-variations-sections.md`](../../../../docs/gta-sa-original/model-variations-sections.md).

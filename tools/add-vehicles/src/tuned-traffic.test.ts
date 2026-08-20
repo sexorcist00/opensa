@@ -131,3 +131,29 @@ describe('an added car gets its OWN section', () => {
     });
   });
 });
+
+describe("an added car's section is keyed by ID", () => {
+  describe('positive cases', () => {
+    it('writes [<id>] under a `### <slot>` caption, where a name binds to nothing', () => {
+      // Field 2026-08-20: `[059veh]` left the car untuned in traffic while Transfender tuned it fine. The
+      // plugin resolves a section header to a model, and an added car's NAME does not exist yet when it
+      // does — the row that gives it one is merged by Mod Loader out of modloader/added-vehicles/.
+      writeFileSync(join(game, 'data', 'carmods.dat'), 'mods\n059veh, nto_b_l\nend\n', 'latin1');
+
+      registerTunedTraffic(game, DEFAULT_TUNED_TRAFFIC, new Map([['059veh', 19_050]]), new Set(['059veh']));
+
+      const text = iniText();
+      expect(text).toContain('### 059veh');
+      expect(text).toContain('[19050]');
+      expect(text).not.toContain('[059veh]');
+    });
+
+    it('leaves a STOCK car keyed by its name — that one resolves, and the file stays readable', () => {
+      writeFileSync(join(game, 'data', 'carmods.dat'), 'mods\nblade, nto_b_l\nend\n', 'latin1');
+
+      registerTunedTraffic(game, DEFAULT_TUNED_TRAFFIC, new Map([['blade', 536]]), new Set(['059veh']));
+
+      expect(iniText()).toContain('[blade]');
+    });
+  });
+});

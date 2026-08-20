@@ -218,7 +218,16 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
   runWarnings.push(...registerTraffic(gamePath, readAddsRows(gamePath), stockSlotIds(gamePath)));
   // Tuned traffic is fleet-wide and derived from the tree, so it runs LAST — over the rows this run merged
   // and the sections 004 just wrote, into the same one-section-per-model (plan 006).
-  const tuned = registerTunedTraffic(gamePath, readTunedTrafficConfig(inPath), allModelIds(gamePath));
+  const tuned = registerTunedTraffic(
+    gamePath,
+    readTunedTrafficConfig(inPath),
+    allModelIds(gamePath),
+    new Set(
+      readAddsRows(gamePath)
+        .filter(({ kind }) => kind === 'car')
+        .map(({ slot }) => slot),
+    ),
+  );
   console.log(`add-vehicles: ${tuned} model(s) given a tuned-traffic section`);
 
   return { installed, skipped: sources.length - selected.length, warnings: runWarnings };

@@ -103,6 +103,16 @@ export function registerTunedTraffic(
   gameDir: string,
   config: TunedTrafficConfig,
   ids: ReadonlyMap<string, number>,
+  /**
+   * The slots whose section must be keyed by ID rather than by name — the ADDED cars.
+   *
+   * Field-proven 2026-08-20, and it is the second half of the same lesson as the variation list: the plugin
+   * resolves a section header to a model, and an added car's NAME does not exist when it does that. The name
+   * comes from a `vehicles.ide` row Mod Loader merges out of `modloader/added-vehicles/`, so `[059veh]` binds
+   * to nothing and the car spawns in traffic untuned while Transfender — which mounts parts itself, without
+   * the plugin — shows the same car tuning perfectly. Keyed `[19050]` it works.
+   */
+  byId: ReadonlySet<string> = new Set(),
 ): number {
   const path = join(gameDir, MODEL_VARIATIONS_INI);
   if (!existsSync(path)) {
@@ -123,15 +133,17 @@ export function registerTunedTraffic(
     if (tokens.length === 0) {
       continue;
     }
+    const section = byId.has(model) ? String(id) : model;
     text = mergeIniKeys(
       text,
-      model,
+      section,
       new Map([
         ['ChangeOnlyParked', String(config.changeOnlyParked)],
-        ['Global', extendGlobal(readIniKey(text, model, 'Global'), id, [], tokens)],
+        ['Global', extendGlobal(readIniKey(text, section, 'Global'), id, [], tokens)],
         ['TuningChance', String(config.tuningChance)],
         ['TuningFullBodykit', String(config.tuningFullBodykit)],
       ]),
+      `### ${model}`,
     );
     written += 1;
   }
