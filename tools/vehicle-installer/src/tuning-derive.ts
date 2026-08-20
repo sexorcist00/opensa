@@ -10,12 +10,16 @@
  * **Nothing here is a table.** The user's earlier tool carried a hand-written rename per car; every value
  * below is read from the built `data/` or from the name itself, so a car nobody has seen yet works the same.
  *
- * **The new name is the stock name plus `_<slot>`.** Not a rewrite of the stock naming scheme: SA derives a
+ * **The new name is the stock name plus `_<token>`.** Not a rewrite of the stock naming scheme: SA derives a
  * component's flags from the name's PREFIX (`CAtomicModelInfo::SetupVehicleUpgradeFlags`), and the exact set
  * of prefixes it switches on is documented but not exhaustively known here — appending keeps every prefix
  * rule matching whatever it is, where replacing a field in the middle would be a guess. The ceiling is 19
- * characters (`docs/gta-sa-original/carmods-upgrade-ceilings.md`) and it is REFUSED, not truncated: the
- * fleet's longest lands on exactly 19 (`wg_l_lr_rem1_059veh`).
+ * characters (`docs/gta-sa-original/carmods-upgrade-ceilings.md`) and it is REFUSED, not truncated.
+ *
+ * The token is `slotTokens`' — the shortest prefix that tells the slot apart from every other slot, floor 3
+ * — and not the slot name itself, because the whole name overflows the ceiling on real data
+ * (`wg_r_lr_slv1_slamvan` is 20, so today's scheme refuses a part the shop needs). It is derived, not
+ * registered: the same slot table always yields the same token.
  *
  * **A part is base-specific when its IDE row's TXD column names the base car**, and generic when it names
  * `vehicle` (nitro, hydraulics, stereo, wheels — 48 of the stock rows). That is the rule that decides what
@@ -33,6 +37,9 @@ const GENERIC_TXD = 'vehicle';
 
 /** An IMG entry name is 24 bytes including `.dff`, and the IDE loader reads a name into `char[24]`. */
 export const MAX_PART_NAME = 19;
+
+/** Below this a token stops naming the car it came from, however unique it is. */
+export const MIN_SLOT_TOKEN = 3;
 
 /** What one added car's shipped parts become. */
 export interface DerivedTuning {
@@ -53,6 +60,20 @@ export interface DerivedTuning {
   readonly warnings: readonly string[];
 }
 
+/** One car's shipped parts, and the slot table its derived names are told apart by. */
+export interface DeriveTuningOptions {
+  /** The stock car this one varies — its own slot, for a mod that replaces a stock car in place. */
+  readonly base: string;
+  /** A BUILT game tree: `data/carmods.dat`, `data/shopping.dat` and the `veh_mods.ide` rows are read from it. */
+  readonly gameDir: string;
+  /** The folder's `.dff` file names that are not the car itself. */
+  readonly shipped: readonly string[];
+  /** The car's own slot. */
+  readonly slot: string;
+  /** What a derived part name ends in — `slotTokens(...).get(slot)`. */
+  readonly token: string;
+}
+
 /** One stock upgrade part, as `veh_mods.ide` defines it. */
 export interface StockPart {
   /** Everything after the txd column, verbatim — draw distance and flags. */
@@ -65,9 +86,10 @@ export interface StockPart {
 
 /**
  * Derive everything an added car's re-modelled parts need. `shipped` is the folder's `.dff` names that are
- * NOT the car itself; `slot` is the added car's own slot and `base` the stock car it varies.
+ * NOT the car itself; `slot` is the added car's own slot, `base` the stock car it varies, and `token` the
+ * tail its parts are renamed with — the caller's, out of `slotTokens` over every slot the run knows about.
  */
-export function deriveTuning(gameDir: string, slot: string, base: string, shipped: readonly string[]): DerivedTuning {
+export function deriveTuning({ base, gameDir, shipped, slot, token }: DeriveTuningOptions): DerivedTuning {
   const warnings: string[] = [];
   const stock = readStockParts(gameDir);
   const carmods = parseCarmods(readFileSync(join(gameDir, 'data', 'carmods.dat'), 'latin1'));
@@ -85,7 +107,7 @@ export function deriveTuning(gameDir: string, slot: string, base: string, shippe
       warnings.push(`${part}.dff is not a part any veh_mods.ide row defines — shipped as it is, under its own name`);
       continue;
     }
-    const derived = `${part}_${slot}`;
+    const derived = `${part}_${token}`;
     if (derived.length > MAX_PART_NAME) {
       warnings.push(
         `${derived} is ${derived.length} characters and a part name may be ${MAX_PART_NAME} — the part is ` +
@@ -145,6 +167,58 @@ export function shippedParts(folder: string, slot: string): string[] {
   return readdirSync(folder)
     .filter((name) => name.toLowerCase().endsWith('.dff') && !name.toLowerCase().startsWith(slot.toLowerCase()))
     .sort((a, b) => a.localeCompare(b, 'en'));
+}
+
+/**
+ * Slot → the shortest prefix that tells it apart from every other slot in `slots`, floor `MIN_SLOT_TOKEN`.
+ *
+ * A slot whose whole name is another slot's prefix has no unique prefix of its own and keeps its full name;
+ * the longer slot then has to reach past it, so two slots can never end up on the same token.
+ *
+ * The caller owns the table: it must hold every slot the run can name, or two cars share a token and one
+ * silently overwrites the other's part. `add-vehicles` passes the built tree's slots PLUS every added slot
+ * of the source, whether or not `--only` narrowed the run — the same reason its ids are allocated for all.
+ */
+export function slotTokens(slots: Iterable<string>): Map<string, string> {
+  const names = [...new Set([...slots].map((slot) => slot.toLowerCase()))];
+  const tokens = new Map<string, string>();
+  for (const name of names) {
+    const shortest = [...Array(Math.max(name.length - MIN_SLOT_TOKEN + 1, 0)).keys()]
+      .map((step) => name.slice(0, MIN_SLOT_TOKEN + step))
+      .find((prefix) => !names.some((other) => other !== name && other.startsWith(prefix)));
+    tokens.set(name, shortest ?? name);
+  }
+
+  return tokens;
+}
+
+/**
+ * Every vehicle slot the tree's `vehicles.ide` names, lowercased — the table `slotTokens` is told apart in.
+ *
+ * Read off the `cars` rows directly rather than through `parseVehicleDefs`, which needs the wheel columns and
+ * so drops the eleven boats (`predator` … `launch`). A dropped slot is a slot two tokens could collide on.
+ */
+export function vehicleSlots(gameDir: string): string[] {
+  const path = join(gameDir, 'data', 'vehicles.ide');
+  if (!existsSync(path)) {
+    return [];
+  }
+  const slots: string[] = [];
+  let section = '';
+  for (const raw of readFileSync(path, 'latin1').split(/\r?\n/)) {
+    const line = raw.split('#')[0].trim();
+    const row = /^\d+\s*,\s*([^,\s]+)/.exec(line);
+    if (line === '') {
+      continue;
+    }
+    if (row === null) {
+      section = line.toLowerCase();
+    } else if (section === 'cars') {
+      slots.push(row[1].toLowerCase());
+    }
+  }
+
+  return slots;
 }
 
 /**

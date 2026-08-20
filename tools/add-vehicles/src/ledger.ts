@@ -77,6 +77,42 @@ export function readAddsRows(gameDir: string): LedgerRow[] {
 }
 
 /**
+ * Move ledger rows to new slot names, keeping their ids. `renames` is old name → new name.
+ *
+ * A part whose NAME changed because the derivation's naming scheme changed is the same part, and its id is
+ * a promise already in somebody's save — so the row moves rather than the part being handed a fresh id and
+ * the old row left reserving one forever. A rename whose target is already recorded is left alone: the row
+ * under the new name is the newer statement.
+ *
+ * Returns what it moved, for the run to report.
+ */
+export function renameAddsRows(gameDir: string, renames: ReadonlyMap<string, string>): string[] {
+  const path = join(gameDir, ADDS_LEDGER);
+  if (!existsSync(path)) {
+    return [];
+  }
+  const recorded = new Set(readAddsRows(gameDir).map((row) => row.slot));
+  const moved: string[] = [];
+  const lines = readFileSync(path, 'latin1')
+    .split(/\r?\n/)
+    .map((line) => {
+      const [slot, ...rest] = line.trimEnd().split(/\t+/);
+      const to = renames.get((slot ?? '').toLowerCase());
+      if (to === undefined || rest.length === 0 || recorded.has(to)) {
+        return line.trimEnd();
+      }
+      moved.push(`${slot} keeps id ${rest[0]} under its new name ${to}`);
+
+      return [to, ...rest].join('\t');
+    });
+  if (moved.length > 0) {
+    writeFileSync(path, lines.join('\n'), 'latin1');
+  }
+
+  return moved;
+}
+
+/**
  * Write the ledger for the cars this run installed, MERGED over what was there: a run narrowed with
  * `--only` speaks for its own cars and must not tell the next one that every other added car is unplaced.
  */

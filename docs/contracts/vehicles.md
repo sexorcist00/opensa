@@ -256,11 +256,20 @@ folder:**
 
 **A shipped `<stock part>.dff` is a RE-MODELLED part, and it is renamed.** An added car that ships a dff
 under one of its base's tuning-part names means "this is that part, re-modelled for my body": it is
-installed as `<stock name>_<slot>` (the whole stock name kept, so the prefix the game reads its component
+installed as `<stock name>_<token>` (the whole stock name kept, so the prefix the game reads its component
 flags from still matches), with the stock part's IDE row, shop item, price and `link` cloned under the new
 name, and the car's own `carmods.dat` line rewritten to it. The stock part is never touched. A derived name
 over **19 characters** is refused, and so is a tree over the two `carmods.dat` arrays (30 `link` pairs
 game-wide, 16 parts on one car) — see `docs/gta-sa-original/carmods-upgrade-ceilings.md`.
+
+**The token is the shortest prefix that tells the car's slot apart from every other slot, floor 3**
+(`voodoo` → `voo`, `slamvan` → `sla`; `copcarla` → `copcarl`, because its family shares six characters; a
+slot whose whole name is another slot's prefix keeps its full name, and the longer slot then reaches past
+it). It is derived from the tree's `vehicles.ide` plus the slots of the run, never registered anywhere, so
+the same table always yields the same name — and it exists because the slot name itself overflows the
+19-character ceiling on real data (`wg_r_lr_slv1_slamvan` is 20). A part whose name changes because this
+scheme changed keeps its model id: `data/vehicle-adds.txt` moves the row rather than the part taking a new
+id, since a part id is in the player's save.
 
 The optional per-car files are §1's, read by the same code: `features.txt`, `tuning_new_parts.txt`,
 `model-variations-extra.txt`, `text.txt`, `audio.txt`, `parked.txt`. Two things are the added car's own and

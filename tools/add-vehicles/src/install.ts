@@ -25,15 +25,15 @@ import { vehicleColourWarnings } from '@opensa/vehicle-installer/palette';
 import { mergeFeatureTable, requireBuiltGame } from '@opensa/vehicle-installer/rebake-shared';
 import { decodeSettings, ID_PLACEHOLDER, parseVehicleSettings } from '@opensa/vehicle-installer/settings';
 import { writeModelSpecialFeatures } from '@opensa/vehicle-installer/special-features';
-import { type DerivedTuning, deriveTuning, shippedParts } from '@opensa/vehicle-installer/tuning-derive';
+import { type DerivedTuning, deriveTuning, shippedParts, slotTokens } from '@opensa/vehicle-installer/tuning-derive';
 import { applyIdeRows, applyInsert, assertCarmodsModels, ideModelNames } from '@opensa/vehicle-installer/tuning-parts';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { type LedgerRow, readAddsLedger, readAddsRows, writeAddsLedger } from './ledger';
+import { type LedgerRow, readAddsLedger, readAddsRows, renameAddsRows, writeAddsLedger } from './ledger';
 import { clearLooseFiles, installLooseFiles, readInstalledIds, writeSettingsFile } from './loose-files';
 import { resolveAddedCarText } from './name';
-import { type AddedVehicle, resolveAddedVehicles, stockSlotIds } from './sources';
+import { type AddedVehicle, resolveAddedVehicles, stockSlotIds, stockSlots } from './sources';
 import { registerTraffic } from './traffic';
 import { readTunedTrafficConfig, registerTunedTraffic } from './tuned-traffic';
 
@@ -75,11 +75,33 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
   }
   // What each car re-models of its base's tuning parts, decided BEFORE any id is handed out: the parts need
   // ids of their own, out of the same window and just as stable (a part id is in the save too).
+  // The tokens their names end in come from the WHOLE slot table — the tree's plus every added slot of the
+  // source, `--only` or not — so a narrowed run can no more shift a token than it can shift an id.
+  const tokens = slotTokens([...stockSlots(gamePath), ...sources.map((source) => source.slot)]);
   const tuning = new Map(
     sources.map((source) => [
       source.slot,
-      deriveTuning(gamePath, source.slot, source.base, shippedParts(source.folder, source.slot)),
+      deriveTuning({
+        base: source.base,
+        gameDir: gamePath,
+        shipped: shippedParts(source.folder, source.slot),
+        slot: source.slot,
+        token: tokens.get(source.slot)!,
+      }),
     ]),
+  );
+  // A part the 014 scheme renamed is the same part: its ledger row moves with the name so the id it already
+  // promised to a save is kept, instead of the part taking a fresh one and the old row reserving one forever.
+  const renamed = renameAddsRows(
+    gamePath,
+    new Map(
+      sources.flatMap((source) =>
+        [...(tuning.get(source.slot)?.renames ?? [])].map(([file, entry]) => [
+          `${stem(file)}_${source.slot}`,
+          stem(entry),
+        ]),
+      ),
+    ),
   );
   // Every car of the SOURCE is allocated for, not only the selected ones: an `--only` run must not hand a
   // free id to one car that a full run would give to another. The ledger pins what is already promised.
@@ -99,7 +121,7 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
   }
   const installed: LedgerRow[] = [];
   const declared = new Map<string, readonly string[]>();
-  const runWarnings: string[] = [];
+  const runWarnings: string[] = renamed.map((move) => `ledger: ${move}`);
   for (const source of selected) {
     const id = ids.get(source.slot)!;
     // The name and the inherited sound are decided BEFORE the car is applied: both read the tree as it is

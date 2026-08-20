@@ -91,12 +91,33 @@ added slots (`slots=115 sha1=587bbaef34667a592396ddc70bf0358d02326f66` over rena
 invariant step 2 will move), and `059veh`'s 10 derived rows were compared against what the tree actually
 carries at ids 19051–19060: identical, columns and all.
 
-### 2 — The token, and one scheme for both callers
+### 2 — The token, and one scheme for both callers — **DONE 2026-08-20**
 
 Derive the token (shortest unique prefix, min 3) from the slots in the built `vehicles.ide`; re-point both
 callers at it. **Verify**: unit tests for the token — uniqueness across the full 212-slot table, the
 minimum-3 floor, and the `copcarla`/`copcarsf`/`copcarvg` family, which needs more than three. Every derived
 name of the current fleet ≤ 19, and the longest is reported.
+
+**Measured.** `slotTokens` + `vehicleSlots` in `tuning-derive.ts`; `deriveTuning` now takes an options
+object with the caller's `token`. Suites green, **25 files / 268 tests**.
+
+| | |
+| --- | --- |
+| stock slots tokenised | **212, all distinct** — 142 at 3 characters, 33 at 4, 19 at 5, 2 at 6, 14 at 7, 2 at 8 |
+| longest token | **8** (`monstera`/`monsterb`, which reach past `monster`) |
+| longest derived name, stock `carmods.dat` | **≤ 19** where `_<slot>` overflowed |
+| longest derived name, the added fleet | **16** (`fbmp_lr_rem1_059`), 46 parts, **0 over 19** |
+
+**`vehicleSlots` reads the `cars` rows itself rather than through `parseVehicleDefs`**, which needs the
+wheel columns and so drops the eleven boats (`predator` … `launch`). A slot missing from the table is a slot
+two tokens can collide on, and nothing would say so.
+
+**The cost the plan had not priced, and the user's call on it.** One scheme means the added fleet's 46
+derived parts change name (`fbmp_lr_rem1_059veh` → `fbmp_lr_rem1_059`), and `data/vehicle-adds.txt` promises
+ids BY NAME because a part id is in the player's save. So `renameAddsRows` moves the ledger row with the
+name, keeping the id, instead of the part taking a fresh one and the old row reserving one forever.
+Rehearsed against a copy of the real ledger: **161 rows in, 161 out, all 46 part rows moved, every id
+identical, none left under an old name.**
 
 ### 3 — Replacement cars derive their borrowed parts
 

@@ -1,11 +1,20 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { parseCarmods } from '@opensa/renderware/parsers/text/carmods.parser';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { DerivedTuning } from './tuning-derive';
 
-import { deriveTuning, MAX_PART_NAME, readStockParts, shippedParts } from './tuning-derive';
+import {
+  deriveTuning,
+  MAX_PART_NAME,
+  MIN_SLOT_TOKEN,
+  readStockParts,
+  shippedParts,
+  slotTokens,
+  vehicleSlots,
+} from './tuning-derive';
 
 /** `veh_mods.ide` cut to the rows these tests key on: two mirrored wings, an exhaust, and a generic nitro. */
 const VEH_MODS = `objs
@@ -39,10 +48,17 @@ section shops
 end
 `;
 
+/** The stock roster, from the fixture manifest — 212 slots, the table both callers really tokenise. */
+const STOCK_IDE = 'fixtures/original/data/vehicles.ide';
+const STOCK_CARMODS = 'fixtures/original/data/carmods.dat';
+
 let root: string;
 let game: string;
+/** Trees the stock-fixture cases make, removed together after them. */
+const trees: string[] = [];
 
-const derive = (slot: string, shipped: string[]): DerivedTuning => deriveTuning(game, slot, 'remingtn', shipped);
+const derive = (slot: string, shipped: string[]): DerivedTuning =>
+  deriveTuning({ base: 'remingtn', gameDir: game, shipped, slot, token: slot });
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'added-tuning-'));
@@ -55,6 +71,7 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(root, { force: true, recursive: true });
+  trees.splice(0).forEach((tree) => rmSync(tree, { force: true, recursive: true }));
 });
 
 describe('readStockParts', () => {
@@ -154,6 +171,71 @@ describe('deriveTuning', () => {
 
       expect(derived.shop).toEqual([]);
       expect(derived.rows).toHaveLength(1);
+    });
+  });
+});
+
+describe('slotTokens', () => {
+  describe('negative cases', () => {
+    it('gives a slot whose whole name is another slot prefix its full name, and the longer one more', () => {
+      const tokens = slotTokens(['bus', 'bussy', 'taxi']);
+
+      expect(tokens.get('bus')).toBe('bus');
+      expect(tokens.get('bussy')).toBe('buss');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is the shortest prefix that is not another slot prefix, never below the floor', () => {
+      const tokens = slotTokens(['voodoo', 'slamvan', 'blade', 'bl']);
+
+      expect(tokens.get('voodoo')).toBe('voo');
+      expect(tokens.get('slamvan')).toBe('sla');
+      expect(tokens.get('blade')).toBe('bla');
+      expect(tokens.get('bl')).toBe('bl'); // shorter than the floor and already unique
+      expect(MIN_SLOT_TOKEN).toBe(3);
+    });
+
+    it('reaches past a shared prefix as far as the family needs', () => {
+      const tokens = slotTokens(['copcarla', 'copcarsf', 'copcarvg', 'copcarru']);
+
+      expect(tokens.get('copcarla')).toBe('copcarl');
+      expect(new Set([...tokens.values()]).size).toBe(4);
+    });
+  });
+});
+
+describe.skipIf(!existsSync(STOCK_IDE) || !existsSync(STOCK_CARMODS))('slotTokens (the real stock tables)', () => {
+  /** The fixtures read the way the tool reads a built tree — through `vehicleSlots`, boats included. */
+  const stockTree = (): string => {
+    const tree = mkdtempSync(join(tmpdir(), 'stock-ide-'));
+    mkdirSync(join(tree, 'data'));
+    cpSync(STOCK_IDE, join(tree, 'data', 'vehicles.ide'));
+    cpSync(STOCK_CARMODS, join(tree, 'data', 'carmods.dat'));
+    trees.push(tree);
+
+    return tree;
+  };
+
+  describe('positive cases', () => {
+    it('tells all 212 slots apart, boats included', () => {
+      const slots = vehicleSlots(stockTree());
+
+      expect(slots).toHaveLength(212);
+      expect(new Set(slotTokens(slots).values()).size).toBe(212);
+    });
+
+    it('keeps every part a stock car can wear under the ceiling, where the slot name did not', () => {
+      const tree = stockTree();
+      const tokens = slotTokens(vehicleSlots(tree));
+      const { mods } = parseCarmods(readFileSync(join(tree, 'data', 'carmods.dat'), 'latin1'));
+      const derived = [...mods].flatMap(([slot, parts]) => parts.map((part) => `${part}_${tokens.get(slot)}`));
+      const longest = derived.reduce((a, b) => (b.length > a.length ? b : a));
+      const bySlot = [...mods].flatMap(([slot, parts]) => parts.map((part) => `${part}_${slot}`));
+
+      expect(longest.length).toBeLessThanOrEqual(MAX_PART_NAME);
+      // What the scheme replaced: the whole slot name overflows on this very data.
+      expect(bySlot.some((name) => name.length > MAX_PART_NAME)).toBe(true);
     });
   });
 });

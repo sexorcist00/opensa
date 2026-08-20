@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { LedgerRow } from './ledger';
 
-import { ADDS_LEDGER, readAddsLedger, writeAddsLedger } from './ledger';
+import { ADDS_LEDGER, readAddsLedger, readAddsRows, renameAddsRows, writeAddsLedger } from './ledger';
 
 const VEGA: LedgerRow = {
   bases: ['manana'],
@@ -13,6 +13,13 @@ const VEGA: LedgerRow = {
   id: 19_001,
   kind: 'car',
   slot: '001veh',
+};
+const EXHAUST: LedgerRow = {
+  bases: ['exh_a_l'],
+  folder: '118veh - m3 - funky (elegy)',
+  id: 19_114,
+  kind: 'part',
+  slot: 'exh_a_l_118veh',
 };
 const VOLARE: LedgerRow = {
   bases: ['solair'],
@@ -80,6 +87,43 @@ describe('writeAddsLedger', () => {
         '001veh\t19001\tcar\tmanana\t001veh - vega - alfamodding (manana)',
         '002veh\t19002\tcar\tsolair\t002veh - volare - viter (solair)',
       ]);
+    });
+  });
+});
+
+describe('renameAddsRows', () => {
+  describe('negative cases', () => {
+    it('moves nothing when the ledger does not exist yet', () => {
+      expect(renameAddsRows(game, new Map([['exh_a_l_118veh', 'exh_a_l_118']]))).toEqual([]);
+    });
+
+    it('leaves the row alone when the new name is already recorded — that row is the newer statement', () => {
+      writeAddsLedger(game, [EXHAUST, { ...EXHAUST, id: 19_200, slot: 'exh_a_l_118' }]);
+
+      expect(renameAddsRows(game, new Map([['exh_a_l_118veh', 'exh_a_l_118']]))).toEqual([]);
+      expect(readAddsLedger(game).get('exh_a_l_118')).toBe(19_200);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('carries the id, the kind and the source folder to the new name', () => {
+      writeAddsLedger(game, [VEGA, EXHAUST]);
+
+      const moved = renameAddsRows(game, new Map([['exh_a_l_118veh', 'exh_a_l_118']]));
+      const row = readAddsRows(game).find(({ slot }) => slot === 'exh_a_l_118');
+
+      expect(moved).toHaveLength(1);
+      expect(row).toEqual({ ...EXHAUST, slot: 'exh_a_l_118' });
+      expect(ledgerText()).not.toContain('exh_a_l_118veh');
+      expect(readAddsLedger(game).get('001veh')).toBe(19_001);
+    });
+
+    it('is idempotent — a second run finds nothing to move', () => {
+      writeAddsLedger(game, [EXHAUST]);
+      const renames = new Map([['exh_a_l_118veh', 'exh_a_l_118']]);
+      renameAddsRows(game, renames);
+
+      expect(renameAddsRows(game, renames)).toEqual([]);
     });
   });
 });
