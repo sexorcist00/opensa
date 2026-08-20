@@ -1,6 +1,9 @@
 # 098 — All land vehicle types (ride, tow and special abilities for the whole land fleet)
 
-**Status: PLANNED 2026-08-04.** Supersedes `roadmap/0.5.0/plans/04-all-vehicle-types/` (deleted in the
+**Status: PLANNED 2026-08-04; re-sequenced 2026-08-20** (11 CLOSED 2026-08-07; 09/10 placed in the queue; 12
+riding animation and 13 car-class animation groups added; 02's vocabulary half shipped through vehicle-installer 011 on 2026-08-18 — every other
+box is open, and the recon below was re-verified against the code on 2026-08-20: every claim holds, only line
+numbers drifted). Supersedes `roadmap/0.5.0/plans/04-all-vehicle-types/` (deleted in the
 same change). Rewritten from a fresh four-way recon (data pipeline, physics, animation, docs) and a new
 corpus in `NO_COMMIT/all-veh`. The old chain's per-class breakdown survives in spirit; its two central
 assumptions do not: the 081/07 "preset seed" it planned to inherit shipped **empty by measurement**, and
@@ -14,14 +17,15 @@ the asset, never from an ID list.
 
 ## The fleet and the corpus
 
-Census of the built `data/vehicles.ide` (212 rows) and its satellites, measured 2026-08-04:
+Census of the built `data/vehicles.ide` (212 rows) and its satellites, measured 2026-08-04 — **215 rows on the
+`sa` target since 2026-08-20**: plan 102's three ADDED cars (`tools/add-vehicles`), `car` type, `sa` only:
 
 | Type | Rows | Parses today | Drives today | In scope |
 | --- | --- | --- | --- | --- |
 | car | 144 | yes | yes | baseline |
 | bike | 10 | yes | **no wheels** (dummy names unrecognised) | yes |
 | bmx | 3 | yes | no wheels | yes |
-| quad | 1 | yes | unverified | yes |
+| quad | 1 | yes | wheels bake (it authors the car `wheel_*_dummy` names) — ride unverified | yes |
 | mtruck | 5 | yes | unverified | yes |
 | trailer | 9 | yes (`.osm` baked) | spawns as a driverless "car" | yes |
 | heli / plane / boat / train | 11/12/10/6 | boats: **all dropped** by a column-count guard | — | no → [0.6.0 note](../../roadmap/0.6.0/plans/05-air-water-rail/readme.md) |
@@ -120,13 +124,21 @@ Doctrine:
 | 08 | [Acceptance & close-out](08-acceptance-close.md) | Per-class drives, regression bands, benchmarks, audit, feature/contract docs settle. |
 | 09 | [Tracked chassis](09-tracked-chassis.md) | Ground support spanning the TRACK footprint, not six point wheels; unreachable wheel dummies ignored. Measured: the Rhino's track overhangs its support by 1.24 m front / 1.13 m rear, and its middle wheels sit 0.518 m too high to touch anything. |
 | 10 | [High entry boarding](10-high-entry-boarding.md) | Climb ON before getting IN, gated on a derived entry height vs the ped's own reach. Measured: the Rhino's door hinge is 1.82 m above its ground plane. |
-| 11 | [Model-derived lamps](11-model-derived-lamps.md) | A lamp exists only where the model authors one; the half-extents fallback is deleted. Measured: 12 stock models (every trailer + aeroplane) carry no lamp dummy at all and were given headlights anyway, and a zeroed dummy was putting both tail lamps inside the bodywork. |
+| 12 | [Riding animation](12-riding-animation.md) | The rider's body follows the ride: `Left/Right/Back/Fwd` partial poses from the physics state, wheelie/stoppie attitude (SA has NO wheelie clip — measured), pedal/sprint/bunny-hop with the clip timing the impulse, hands pinned to `bargrip`. **Field checkpoint 5: it looks ridden.** |
+| 13 | [Car-class animation groups](13-car-animation-groups.md) | `handling.cfg` col 34 `animGroup` → `^` row → the set a car asks for: low-car seat and climb, truck cab, bus/coach, tank hatch, convertible jump-in; plus the driving-time clips every car authors and we never play (hands on the wheel, door open/shut, look-behind). `ped.ifp` carries 80 car clips, we play 7. **Field checkpoint 6: each class boards and drives as its data says; the sedan is unchanged.** |
+| 11 | [Model-derived lamps](11-model-derived-lamps.md) | **CLOSED 2026-08-07.** A lamp exists only where the model authors one; the half-extents fallback is deleted. Measured: 12 stock models (every trailer + aeroplane) carry no lamp dummy at all and were given headlights anyway, and a zeroed dummy was putting both tail lamps inside the bodywork. |
 
 Order and rationale: [priority.md](priority.md). **09 and 10 were added 2026-08-07 from a field
 round on the GTA 5 Rhino** (the tank the `cleo/scripts` 001 track work put on the road) — both are
 tank-SHAPED symptoms with model-derived causes, and neither is allowed a per-model special case.
 **11 was added the same day** from the hotring round: it is the same shape a third time — a per-car CLEO
-script was replaced by a rule that reads what every model already carries.
+script was replaced by a rule that reads what every model already carries. **12 was added 2026-08-20** after a
+census of the nine ride IFPs (`scripts/debug/anim-census.ts`): the riding body was half-owned by 03 and 04, and
+the measurement (no wheelie clip exists; the poses are partial blend targets; the bunny-hop fires from the clip)
+made it its own plan. **13 was added the same day** from the census of the car-class sets: SA selects a
+vehicle's whole animation set through `handling.cfg` col 34 (unread) and the `^` table (unparsed), `vehicles.ide`
+`anims` only names the IFP to stream — which answered 07's "does the truck author a climb" (yes, `truck.ifp`)
+and 10's "how does SA board a tank" (a one-sided `tank.ifp` group, not a climb stage) before either was built.
 
 ## Out of scope (recorded, not silent)
 
@@ -134,6 +146,8 @@ script was replaced by a rule that reads what every model already carries.
   `$`/`%` tables; `PLANE_SMOKE`) in
   [`roadmap/0.6.0/plans/05-air-water-rail/`](../../roadmap/0.6.0/plans/05-air-water-rail/readme.md).
 - **NPC riders and passengers** — one skinned ped probe exists; lifting it is its own engine work.
+- **Rider melee and drive-by** — `kick`, `Snatch_L/R`, `BIKE_elbowL/R`, `Driveby*` are weapons/melee
+  chains, not riding; 12 records them as out.
 - **Rider fall-off / ragdoll** — `BIKE_fall*` clips exist in `ped.ifp`, but honest falls need a ragdoll;
   until then dismount is controlled.
 - **Turrets and water jets** — need an aim-input surface; recorded as extensions in 06, not built.

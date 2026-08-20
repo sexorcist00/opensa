@@ -23,13 +23,14 @@ offset, and a spawn/roster surface that knows what is drivable.
 
 ## Steps
 
-- [ ] **Class registry consumption.** The two scattered `type === 'car'` strings and the new class
+- [ ] **Class registry consumption.** The three scattered `type === 'car'`-style filters (incl. 097/05's `cleoIsCarModelId`) and the new class
       branches resolve through one place (01's threaded type + flags). Trailers: non-enterable (05);
       trains/heli/plane rows: spawnable in F2 but marked not-drivable with a visible reason, not a
       silent no-op.
 - [ ] **Doors & timings.** `NO_DOORS` vans skip the door phases (straight to step-in); `^` timings
       replace the hardcoded durations where the field accepts them; mtruck cab height gets the climb
-      variant if the `^`/clip data authors one (verify, don't invent).
+      variant — **verified 2026-08-20: `mtrkcaranims` (col 34 = 20) uses `truck.ifp`'s 17-clip set and
+      `Drive_truck`; 13 plays it, 07 only wires the class branch.**
 - [ ] **Seats.** `seatOffsetDistance` consumed; `TANDEM_SEATS` recorded (passenger work is out of
       scope, the flag just must not mislead the seat fallback).
 - [ ] **Camera per class.** Bike: closer, lower, lean-following roll component (damped in the subject's

@@ -75,8 +75,9 @@ row but its chain was superseded by 097). Newest first:
   PLUMBING before physics — `wheel_front`/`wheel_rear` match no regex (zero wheels baked), the 13 `!`
   bike-handling rows and the 30 `^` anim-group rows are parsed away, the ride IFPs sit in the
   deliberately-unexpanded `anim/anim.img`, and the repo contains ZERO Rapier joints (trailer hitch is
-  greenfield). Eight sub-plans, four field checkpoints (it rides → it looks ridden → it tows → it
-  bounces): data foundations → features module (pop-up lights generalised into a token registry —
+  greenfield). Thirteen sub-plans (11 CLOSED 2026-08-07; 09/10/12/13 added from field rounds and a clip census;
+  re-sequenced 2026-08-20), six field checkpoints (it rides → it looks ridden → it tows → it
+  bounces → the rider DOES the wheelie → each car class boards as its handling row says): data foundations → features module (pop-up lights generalised into a token registry —
   hydraulics, hooks, moving `misc_*` parts become data) → two-wheel balance controller on the authored
   `!` rows → rider animation → first joints/towing → abilities → per-class gameplay → audit close-out.
   Air/water/rail findings parked in `roadmap/0.6.0/plans/05-air-water-rail/`.

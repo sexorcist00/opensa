@@ -51,7 +51,10 @@ gap is purely the approach: the ped is asked to reach something above their shou
 
 ## Steps
 
-- [ ] Recon: SA's own entry task for a high vehicle; the ped controller's existing climb/step-up
+- [ ] Recon: SA's own entry task for a high vehicle — **half answered 2026-08-20 by 13's census: the Rhino's
+      handling row selects `tankcaranims` (col 34 = 24), a one-sided `tank.ifp` set with a 25-frame
+      `TANK_align_LHS`; SA boards it by ANIMATION, not by a climb stage. Judge in the field whether that
+      authored set closes the symptom before building the stage.** Then: the ped controller's existing climb/step-up
       capability and whether it is a number we can read. Both into the ledger.
 - [ ] Fixture + builder: entry height per vehicle, additive `.osm` DESC field.
 - [ ] Runtime: the climb stage in front of the existing enter chain, gated on entry height vs ped
