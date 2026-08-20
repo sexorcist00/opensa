@@ -47,3 +47,15 @@ bottle's `data/` had not been re-delivered since 10 Aug, so the built line had n
   is the point).
 - It does not resolve the shared-part conflict; it names it. Two cars that genuinely need different geometry
   under one part name need one of them renamed by its author, and its carmods line with it.
+
+
+## 2026-08-20 — 014 asked whether this file still has a job, and it does
+
+[014](014-borrowed-tuning-parts.md) step 5 was written to take the blade's two rows away from this file, on
+the reading that their names are borrowed from another car and would therefore derive. Measured before it was
+coded: `spl_b_lr_bl` and `bnt_b_lr_bl` have **no stock `veh_mods.ide` row at all**, so there is nothing to
+clone them from — they are exactly what this file is for, and its scope is unchanged.
+
+What did change is what happens to the rows it writes: `withNoColFlag` forces `0x200000` into any row outside
+the stock 1000–1193 block, because a part with no `veh_mods.col` entry crashes the mod-shop preview without
+it, and `assertUpgradeCollision` refuses a built tree that still carries one.

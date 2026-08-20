@@ -1,7 +1,33 @@
 # Two car mods ship a tuning part under the SAME stock name, and the last one installed wins
 
-**Open, 2026-08-19**, field-found by the user: the blade's rear bumper sits in the wrong place, and it is
-right in the stock game.
+**FIXED 2026-08-20** by [`vehicle-installer/014`](../../../tools/vehicle-installer/docs/plans/014-borrowed-tuning-parts.md).
+Field-found by the user 2026-08-19: the blade's rear bumper sits in the wrong place, and it is right in the
+stock game.
+
+## The fix, measured over the same 212 folders
+
+**9 → 0.** A shipped part is the slot's OWN when its stock `veh_mods.ide` row is textured by that slot;
+anything textured by another car is a NEW part of the car shipping it and is installed under
+`<stock name>_<token>` with the stock part's IDE row, shop item, price and `link` cloned under it, and the
+car's `carmods.dat` line repointed. So the voodoo's eleven borrowed parts become its own, and the blade and
+the slamvan keep theirs.
+
+| | before | after |
+| --- | ---: | ---: |
+| entry names two folders stage with different files | 9 | **0** |
+| entry names shared by two folders at all | 9 | **0** |
+| archive entries the fleet stages | 747 | 756 |
+
+Both shapes the section below left to the user's call shipped, and shape 1 outlived shape 2: the guard now
+asks about the entry name a file is staged UNDER, and refuses a fleet that still stages two different files
+on one name — which after the rename can only be a name the derivation cannot classify. It is silent on the
+real fleet, and that is what says the fix holds.
+
+**The rule is not the one the plan was written with.** It named the slot's stock `carmods.dat` `mods` line;
+measured first, that line is wrong in 22 places — a right-hand part is bought through its left partner's
+`link` and is on no line at all, so renaming one would break a stock pair and leave the car buying a left
+skirt with no right side. The TXD column never contradicts the line: 0 stock rows name a part whose txd is
+another car's.
 
 ## The cause
 
@@ -51,5 +77,5 @@ Not decided — it is the user's call which of the two ships.
 
 The `sa` target converts no vehicle model: `blade.dff`, its five TXDs and every other part of that folder are
 byte-identical in the archive to the mod's own files. The one file the pipeline has ever rewritten is
-`wg_r_lr_bl1.dff` ([frame order](../gta-sa-original/rw-frame-list-parent-order.md)), and that repair is a
+`wg_r_lr_bl1.dff` ([frame order](../../gta-sa-original/rw-frame-list-parent-order.md)), and that repair is a
 pure permutation whose result matches its untouched mirror frame for frame.

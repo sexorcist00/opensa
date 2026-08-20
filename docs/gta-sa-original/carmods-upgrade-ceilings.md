@@ -22,13 +22,19 @@ behaviour; and the IDE loader reads a model name with `sscanf %s` into `char[24]
 24 bytes including `.dff` — a part name is safe at **≤ 19 characters**. Stock part names are ≤ 14
 (`misc_c_lr_rem1`).
 
-**19 is FIELD-CONFIRMED, 2026-08-19** (plan 102's shop round): the added fleet's derived parts sit exactly on
+**19 is FIELD-CONFIRMED, 2026-08-19** (plan 102's shop round): the added fleet's derived parts sat exactly on
 that ceiling — `fbmp_lr_rem1_059veh`, `rbmp_lr_rem2_059veh`, `wg_l_lr_rem1_059veh`, `wg_r_lr_rem1_059veh`,
 19 characters and 23 with `.dff`, one byte of the 24 left for the NUL. All 46 derived parts import at their
-own ids, fit their cars in the mod shop and crash nothing. **So a name-shortening map is not needed** — the
-question was raised because the user's own earlier tool had needed one, and the answer is that the derived
-scheme lands inside the ceiling without help. It also has NO margin: a scheme that adds one character to the
-suffix is over.
+own ids, fit their cars in the mod shop and crash nothing. It had NO margin: a scheme adding one character to
+the suffix is over — and the next mod set did exactly that (`wg_r_lr_slv1_slamvan`, 20).
+
+**The margin the token scheme bought, 2026-08-20** (`vehicle-installer` 014): the suffix is no longer the
+slot name but the shortest prefix that tells the slot apart from every other slot in `vehicles.ide`, floor 3.
+All 212 stock slots tokenise distinctly — 142 at 3 characters, 33 at 4, 19 at 5, 2 at 6, 14 at 7 and 2 at 8
+(`monstera`/`monsterb`, which have to reach past `monster`). Every part any stock car can wear stays under 19
+with its own car's token, the added fleet's longest derived name drops from 19 to **16**
+(`fbmp_lr_rem1_059`), and the eight-character tokens belong to monster trucks, hot-ring racers, artic
+trailers and trains — none of which the mod shop sells a part for.
 
 **Both numbers were read out of the shipping exe on 2026-08-19** (`asi/perfect-vehicle` plan 001), and the
 machine code says them more plainly than the source does:

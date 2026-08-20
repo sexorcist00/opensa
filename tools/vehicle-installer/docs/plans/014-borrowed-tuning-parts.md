@@ -1,9 +1,9 @@
 # 014 — a replacement car's BORROWED tuning parts, derived
 
-**Status: PLANNED 2026-08-19.** Field-found the same evening: the blade's rear bumper is modelled for a
-1960 Impala. Grew out of central [plan 102](../../../../docs/plans/102-add-vehicles/readme.md)'s field round;
-the issue it closes is
-[`docs/open-issues/vehicle-part-name-clash-between-mods.md`](../../../../docs/open-issues/vehicle-part-name-clash-between-mods.md).
+**Status: BUILT 2026-08-20**, all five steps, measured below. Planned 2026-08-19 and field-found the same
+evening: the blade's rear bumper is modelled for a 1960 Impala. Grew out of central
+[plan 102](../../../../docs/plans/102-add-vehicles/readme.md)'s field round; the issue it closes is
+[`docs/open-issues/fixed/vehicle-part-name-clash-between-mods.md`](../../../../docs/open-issues/fixed/vehicle-part-name-clash-between-mods.md).
 
 ## What is broken
 
@@ -196,18 +196,21 @@ are fixed by construction on the next build. The col fixture is a new manifest l
 Setting a flag whose meaning to the exe is still unrecovered is recorded as a hack:
 [`docs/hacks/upgrade-part-no-collision-flag.md`](../../../../docs/hacks/upgrade-part-no-collision-flag.md).
 
-## Docs to update in the same change
+## Docs updated in the same change — all DONE
 
-- `docs/contracts/vehicles.md` — the borrowed-part rule, the derived name scheme, and what happens when a
-  folder ships a part name that is neither its own nor derivable. This is a name that carries behaviour and a
-  mod author cannot guess it.
-- `docs/open-issues/vehicle-part-name-clash-between-mods.md` → `fixed/` with the measured before/after.
-- `docs/gta-sa-original/carmods-upgrade-ceilings.md` — the 19 is field-confirmed; add what the new scheme
-  buys in margin.
+- `docs/contracts/vehicles.md` — the four classes a shipped part falls into, the derived name scheme, and
+  what the TXD column decides. A name that carries behaviour and a mod author cannot guess it.
+- `docs/open-issues/vehicle-part-name-clash-between-mods.md` → `fixed/`, with 9 → 0 and the corrected rule.
+- `docs/gta-sa-original/carmods-upgrade-ceilings.md` — what the token scheme buys in margin (the fleet's
+  longest derived name 19 → 16, the full token-length histogram over the 212 slots).
+- `docs/gta-sa-original/veh-mods-col-and-the-upgrade-object.md` — the 7-row census the guard produced, where
+  the write-up predicted 2, and what the tools now do about it.
+- `docs/hacks/upgrade-part-no-collision-flag.md` + its README row — forcing a flag whose meaning is unknown.
+- `tools/add-vehicles/docs/plans/002` and `005` — the two modules that moved out of that tool.
 - `tools/vehicle-installer/docs/plans/009-tuning-new-parts.md` — its scope does NOT narrow (step 5): the two
-  rows it carries are parts no stock row defines, which is precisely its job.
+  rows it carries are parts no stock row defines, which is precisely its job. Recorded there.
 
-## Measured (fill in as the steps land)
+## Measured
 
 | | before | after |
 | --- | ---: | ---: |

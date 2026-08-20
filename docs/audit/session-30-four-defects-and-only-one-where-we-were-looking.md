@@ -64,7 +64,7 @@ any `Global=` reference to a key that went.
   list dresses two bodies. 40 sections affected. The plugin's own `ExcludeModelsFromInheritance` is the lever
   to try first.
 - **Two car mods ship a tuning part under the same stock name**
-  ([issue](../open-issues/vehicle-part-name-clash-between-mods.md)) — an archive entry name is global, the
+  ([issue](../open-issues/fixed/vehicle-part-name-clash-between-mods.md)) — an archive entry name is global, the
   last install wins, and the blade wears a rear bumper modelled for a 1960 Impala. 9 clashes measured.
   Answered by [vehicle-installer plan 014](../../tools/vehicle-installer/docs/plans/014-borrowed-tuning-parts.md),
   written this session: the borrowed set DERIVES from the slot's stock `carmods.dat` line, and for the voodoo
