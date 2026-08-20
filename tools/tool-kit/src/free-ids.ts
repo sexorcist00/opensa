@@ -7,6 +7,13 @@
  * - **19 001–19 999.** SA's map allocators stop at 19 000 (`docs/edge-cases/sa-formats.md`) and FLA's DFF
  *   range ends at 19 999, so this window belongs to added content alone and the two never meet. Measured on
  *   the built tree the day it was chosen: **0 ids in use there, 999 free**, against a demand of 161.
+ * - **Split in two, 2026-08-20.** Two tools allocate out of it and one runs FIRST: `vehicle-installer`
+ *   during the mod install, `add-vehicles` several stages later. Sharing one "lowest free id" pool meant a
+ *   vehicle mod's borrowed tuning parts sat BELOW the fleet and moved all 115 cars up by however many parts
+ *   the fleet happened to borrow — a renumber every time such a mod is added or removed, in a file whose
+ *   header calls an id a promise. So a replacement car's derived parts allocate from the TOP
+ *   ({@link MOD_PART_ID_WINDOW}) and the added fleet keeps the bottom, and neither depends on the other's
+ *   size. Both refuse loudly when full rather than growing into each other.
  * - **Deterministic, and a LEDGER wins over order.** A parked car and a ModelVariations entry land in the
  *   SAVE (`docs/gta-sa-original/fla-id-limits-are-part-of-the-savefile.md`), so an id that moved between two
  *   builds is a save that spawns the wrong car. Ids are handed out in the caller's order, skipping whatever
@@ -16,8 +23,14 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** The id window added content is allocated from — see the header. */
-export const ADDED_ID_WINDOW: IdWindow = { first: 19_001, last: 19_999 };
+/** The id window ADDED CARS and their own tuning parts are allocated from — see the header. */
+export const ADDED_ID_WINDOW: IdWindow = { first: 19_001, last: 19_799 };
+
+/**
+ * Where a REPLACEMENT car's derived tuning parts go: the top of the same range, so their count can never
+ * shift the added fleet below them (see the header). 200 ids against a demand of 11 on the original's fleet.
+ */
+export const MOD_PART_ID_WINDOW: IdWindow = { first: 19_800, last: 19_999 };
 
 /** Where a built tree keeps IDE files: the game's own data, plus whatever modloader adds. */
 const IDE_ROOTS: readonly string[] = ['data', 'modloader'];

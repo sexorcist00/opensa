@@ -2,7 +2,7 @@ import type { ArchiveFamilyMember } from '@opensa/tool-kit/archive/img';
 import type { BuildTarget } from '@opensa/tool-kit/target';
 
 import { createImg, openImg, writeImgFamily } from '@opensa/tool-kit/archive/img';
-import { allocateIds, usedModelIds } from '@opensa/tool-kit/free-ids';
+import { allocateIds, MOD_PART_ID_WINDOW, usedModelIds } from '@opensa/tool-kit/free-ids';
 import { registerImgArchives } from '@opensa/tool-kit/game-dir';
 import { resolveVehicleSources, type VehicleSource, type VehicleSourcePlan } from '@opensa/tool-kit/vehicles-dir';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -85,14 +85,15 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
   const img = existsSync(imgPath) ? openImg(new Uint8Array(readFileSync(imgPath))) : createImg();
   // A part this fleet ships under ANOTHER car's name is a new part of the car shipping it, and it is derived
   // BEFORE the first car is applied: the classification reads the stock tables, and the first install would
-  // already have rewritten one of them. Ids come out of the same window the added fleet uses, in one pass,
-  // so a car cannot take an id from the car after it (014).
+  // already have rewritten one of them. Ids come in one pass out of the TOP of the added range, so how many
+  // parts this fleet borrows can never move the added cars allocated from the bottom several stages later.
   const derived = deriveFleetTuning(outPath, vehicles);
   const partNames = [...derived.values()].flatMap((tuning) => tuning.rows.map((row) => row.name));
   const partIds = allocateIds({
     ledger: new Map([...readAddsLedger(outPath)].filter(([slot]) => partNames.includes(slot))),
     slots: partNames,
     used: usedModelIds(outPath),
+    window: MOD_PART_ID_WINDOW,
   });
   assertNoStagedClash(vehicles, derived);
   const ledgerRows: LedgerRow[] = [];

@@ -147,13 +147,14 @@ keeps `rbmp_lr_bl1` and `voodoo` gets `rbmp_lr_bl1_voo`.
 **Not where the plan put it, and not the rule the plan named** — both corrected against the data, see the
 box below. The derivation runs in `install()` before the first car is applied (the classification reads the
 stock tables and the first install would already have rewritten one of them), ids for the whole fleet come
-out of one `allocateIds` pass over the 19 001–19 999 window, and `installDerivedTuning` writes the rows. The
+out of one `allocateIds` pass over `MOD_PART_ID_WINDOW` (19 800–19 999 — see the build note below), and
+`installDerivedTuning` writes the rows. The
 writing half moved out of `add-vehicles` to serve both callers, as did `ledger.ts`: a replacement car's
 derived part is a promised id exactly like an added car's.
 
 Suites: 219 files / 1 714 tests green across `tools/`. New coverage: the derivation's four classes, the
 token, and two end-to-end cases on real stock fixtures — two mods shipping `rbmp_lr_bl1.dff` (blade keeps
-it, voodoo gets `rbmp_lr_bl1_voo` with a cloned IDE row at 19 001+, its shop item, its price and a ledger
+it, voodoo gets `rbmp_lr_bl1_voo` with a cloned IDE row at 19 800+, its shop item, its price and a ledger
 row), and the refusal below. `data/shopping.dat` and `data/maps/veh_mods/veh_mods.ide` are new fixture
 manifest lines, regenerated from scratch (134/134).
 

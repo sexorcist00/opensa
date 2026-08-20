@@ -439,7 +439,7 @@ describe.skipIf(!hasFixtures)('install (end-to-end, real data fixtures)', () => 
       // The IDE row is the stock part's, textured by the car that ships it and given an id of its own.
       const row = readStockParts(out).get('rbmp_lr_bl1_voo');
       expect(row?.txd).toBe('voodoo');
-      expect(row?.id).toBeGreaterThanOrEqual(19_001);
+      expect(row?.id).toBeGreaterThanOrEqual(19_800); // the top of the added range — see MOD_PART_ID_WINDOW
       // Sold where its stock twin is sold, and for the same price.
       const shopping = readFileSync(join(out, 'data', 'shopping.dat'), 'latin1');
       expect(shopping).toContain('item rbmp_lr_bl1_voo');

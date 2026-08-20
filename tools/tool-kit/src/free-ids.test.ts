@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { ADDED_ID_WINDOW, allocateIds, usedModelIds } from './free-ids';
+import { ADDED_ID_WINDOW, allocateIds, MOD_PART_ID_WINDOW, usedModelIds } from './free-ids';
 
 const WINDOW = { first: 100, last: 104 };
 
@@ -83,6 +83,18 @@ describe('usedModelIds', () => {
       writeFileSync(join(root, 'modloader', 'a mod', 'y.ide'), 'objs\n19500, thing, thing, 100, 0\nend\n');
 
       expect([...usedModelIds(root)].sort((a, b) => a - b)).toEqual([410, 1700, 19500]);
+    });
+  });
+});
+
+describe('the two windows', () => {
+  describe('positive cases', () => {
+    it("do not overlap, and a replacement car's parts sit ABOVE the added fleet", () => {
+      expect(ADDED_ID_WINDOW.last).toBeLessThan(MOD_PART_ID_WINDOW.first);
+      // The reason they are split: a fleet allocated from the bottom must not move when the number of parts
+      // a mod borrows changes, and vehicle-installer runs several stages before add-vehicles.
+      expect(allocateIds({ slots: ['part'], used: new Set(), window: MOD_PART_ID_WINDOW }).get('part')).toBe(19_800);
+      expect(allocateIds({ slots: ['001veh'], used: new Set([19_800]) }).get('001veh')).toBe(19_001);
     });
   });
 });

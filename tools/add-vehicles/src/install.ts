@@ -258,9 +258,15 @@ function promisedIds(gameDir: string, slots: readonly string[]): Map<string, num
       promised.set(slot, id);
     }
   }
-  // The ledger is the record; the tree is only the fallback for what a failed run left behind.
+  // The ledger is the record; the tree is only the fallback for what a failed run left behind. Only the
+  // slots THIS run allocates are taken from it: since 014 the file also carries a replacement car's derived
+  // parts, whose ids come out of another window (`MOD_PART_ID_WINDOW`) and would read here as strays. Their
+  // ids are protected anyway — their IDE rows are in the tree, so `usedModelIds` sees them.
+  const wanted = new Set(slots.map((slot) => slot.toLowerCase()));
   for (const [slot, id] of readAddsLedger(gameDir)) {
-    promised.set(slot, id);
+    if (wanted.has(slot.toLowerCase())) {
+      promised.set(slot, id);
+    }
   }
 
   return promised;
