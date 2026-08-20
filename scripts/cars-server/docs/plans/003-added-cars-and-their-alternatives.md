@@ -103,6 +103,7 @@ vary it, drawn as what they are.
   no longer listed in the header.
 - Screenshotted at **1440** and **390 px** on `freibox`: eight alternatives wrap to two rows on the desktop
   and stack one per row on the phone, each with its own picture and blue id chip.
+- **Field-accepted 2026-08-20** — the user ran the page on the real fleet and took it as it is.
 - `scripts/cars-server` **31 tests** (25 → 31: the opensa gate, the unpromised id, the orphan section, the
   hosting, the sort, the ledger id + stale row, and the two-base case); tsc + eslint clean.
 

@@ -7,8 +7,9 @@ difference 0, where DXT1 was quantising them). The mip chain STAYS, which is whe
 rule proposed below: stock ships every uncompressed raster single-level, but these mods upscale them 4–16×
 and a 512² texture with no mips shimmers — so the header declares the chain and the trilinear filter that
 lets it be sampled. Cost, measured over the whole mod set: **18 replaced rasters, 2 673 → 18 264 KB**.
-**The real-game verdict is still a field round on the next `sa` build** — OpenSA decodes DXT properly, so
-neither the suite nor a viewer could ever have shown this defect.
+**Field-confirmed the same day** on the delivered `sa` build — the plates read correctly in the game. Which
+is the only instrument that could say so: OpenSA decodes DXT properly, so neither the suite nor a viewer ever
+showed this defect at all.
 
 **Found open, 2026-08-20**, field-found by the user: **the number plates render as green blocky garbage**
 (screenshot, `9. Car Plates HD [vehicle]` installed). The plate's character area is the worst of it — that is

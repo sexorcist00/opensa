@@ -59,8 +59,10 @@ source PNG is **0** on `platecharset`, `plateback1` and `carplate`, where DXT1 w
 
 `scripts/debug/plate-render.ts` over the two dictionaries shows it: the built tree's DXT charset composes
 plates with a mottled ground and block artefacts around every glyph; the same mod through this change
-composes a clean one. **That is our decoder, not the game's** — the real-game verdict is a field round on the
-next `sa` build, because the failure mode is the game reading blocks as colour without ever decoding them.
+composes a clean one. **That is our decoder, not the game's** — which is why the verdict that counts is the
+field one: **confirmed 2026-08-20** on the rebuilt tree delivered to the reference install, the plates
+reading correctly in the game. The failure mode was the game reading blocks as colour without ever decoding
+them, and nothing offline could reproduce it.
 
 ## What this deliberately costs, and the alternative
 
