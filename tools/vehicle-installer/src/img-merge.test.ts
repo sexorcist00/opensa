@@ -1,11 +1,11 @@
 import { frameOrderReport } from '@opensa/renderware/parsers/binary/frame-order';
 import { createImg, openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { pruneReplacedSlotTextures, sharedVehicleFiles, stageVehicleImg } from './img-merge';
+import { pruneReplacedSlotTextures, sharedVehicleFiles, stageVehicleImg, vehicleCohortKey } from './img-merge';
 
 /** The blade mod's right side skirt, whose export declares frame 0's parent as frame 1. */
 const FORWARD_PARENT_DFF = join(process.cwd(), 'fixtures', 'custom', 'dff', 'wg_r_lr_bl1-forward-parent.dff');
@@ -250,6 +250,54 @@ describe('pruneReplacedSlotTextures', () => {
         'blade2.txd',
         'blade3.txd',
       ]);
+    });
+  });
+});
+
+describe('vehicleCohortKey', () => {
+  /** A tree with the two tables the key is derived from — a car, and a part textured by it. */
+  const tree = (): string => {
+    const dir = mkdtempSync(join(tmpdir(), 'cohort-'));
+    mkdirSync(join(dir, 'data', 'maps', 'veh_mods'), { recursive: true });
+    writeFileSync(
+      join(dir, 'data', 'vehicles.ide'),
+      ['cars', '536, blade, blade, car', '412, voodoo, voodoo, car', 'end', ''].join('\n'),
+    );
+    writeFileSync(
+      join(dir, 'data', 'maps', 'veh_mods', 'veh_mods.ide'),
+      ['objs', '1181, exh_lr_bl2, blade, 100, 0', '1008, nto_b_l, vehicle, 70, 0', 'end', ''].join('\n'),
+    );
+
+    return dir;
+  };
+
+  describe('negative cases', () => {
+    it('answers null for anything that is not a car file — the entry is placed on its own', () => {
+      const key = vehicleCohortKey(tree());
+
+      expect(key('veh_mods.col')).toBeNull(); // not a dff/txd
+      expect(key('kb_bar.dff')).toBeNull(); // a map object
+      expect(key('nto_b_l.dff')).toBeNull(); // a GENERIC part: no one car owns it
+      expect(key('lae2_roads17.txd')).toBeNull(); // reads like `<car><n>` but `lae2_roads` is no car
+    });
+
+    it('is empty-handed rather than throwing on a tree with no tables at all', () => {
+      const empty = mkdtempSync(join(tmpdir(), 'cohort-empty-'));
+
+      expect(vehicleCohortKey(empty)('blade.dff')).toBeNull();
+      rmSync(empty, { force: true, recursive: true });
+    });
+  });
+
+  describe('positive cases', () => {
+    it("keys a car's model, its dictionary, its paintjobs and its parts to the one car", () => {
+      const key = vehicleCohortKey(tree());
+
+      expect(key('blade.dff')).toBe('blade');
+      expect(key('blade.txd')).toBe('blade');
+      expect(key('blade3.txd')).toBe('blade'); // a paintjob, which no row names
+      expect(key('exh_lr_bl2.dff')).toBe('blade'); // a part, by the car its txd column names
+      expect(key('voodoo.dff')).toBe('voodoo');
     });
   });
 });

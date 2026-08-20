@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   applyModelVariations,
+  mergeIniKeys,
   mergeIniSection,
   MODEL_VARIATIONS_EXTRA_FILE,
   MODEL_VARIATIONS_INI,
@@ -260,6 +261,25 @@ describe.skipIf(!existsSync(REAL_TUG))('model-variations-extra.txt (the real tug
       const lines = section.lines.map((line) => resolvePlaceholders(line, names, noop));
 
       expect(lines).toContain('Trailers1=606,607,608');
+    });
+  });
+});
+
+describe('a section caption', () => {
+  describe('negative cases', () => {
+    it('is not added to a section that already exists — only a NEW one is captioned', () => {
+      const text = mergeIniKeys('[536]\nGlobal=536\n', '536', new Map([['Global', '536,19110']]), '### blade');
+
+      expect(text).not.toContain('### blade');
+      expect(text).toContain('Global=536,19110');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('names the model an ID-keyed section belongs to, so the file stays readable', () => {
+      const text = mergeIniKeys('[Settings]\nEnableLights=1\n', '536', new Map([['Global', '536,19110']]), '### blade');
+
+      expect(text).toContain('### blade\n[536]\nGlobal=536,19110');
     });
   });
 });
