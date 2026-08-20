@@ -149,13 +149,29 @@ parser, so order does not matter and an unrecognised block is dropped **with a w
 The handling id is the ide line's 5th column — a car may name a handling row that is not its own model name,
 and the installer's `--strip` follows the same link.
 
-**A part name is shared fleet-wide, not per car.** Every `.dff`/`.txd` a folder ships lands in ONE archive
-under its file name, and `carmods.dat` resolves parts by name — so two folders shipping `rbmp_lr_bl1.dff`
-(the voodoo re-uses the blade's part slots with its own geometry) hold ONE entry between them: the folder
-later in install order (case-insensitive name order) wins, and the other car wears its bumper. The install
-WARNS per shared name with both owners; a `--rebake --only <car>` of either warns that it is putting ITS
-version in the archive where a full install would let the later folder win. Nothing here is refused —
-that would refuse a mod set that has always shipped this way — but it is never silent.
+**A part name is shared fleet-wide, not per car** — so a part you ship under a name that is not yours is
+RENAMED on the way in (014). Every `.dff`/`.txd` a folder ships lands in ONE archive under its file name and
+`carmods.dat` resolves parts by name, so two folders shipping `rbmp_lr_bl1.dff` used to hold one entry
+between them: the later folder in install order won and the other car wore its bumper. What decides whose
+part it is: **the stock `veh_mods.ide` row's TXD column**, which names the car the part is textured by.
+
+| what the folder ships | what happens |
+| --- | --- |
+| a part whose stock row is textured by THIS slot | kept under its own name — a replacement mod re-modelling its own car's part is the normal case |
+| a part textured by ANOTHER car | installed as `<stock name>_<token>` with the stock part's IDE row, shop item, price and `link` cloned under it, and the car's `carmods.dat` line repointed. The other car keeps its own |
+| a part whose row's txd is `vehicle` (nitro, hydraulics, stereo) | kept under its own name and WARNED — that part is worn by every car in the game, so this version replaces all of them |
+| a part no IDE row defines at all | kept under its own name; nothing exists to clone, which is what [`tuning_new_parts.txt`](#tuning_new_partstxt--parts-the-game-never-had) is for |
+
+The `mods` line is NOT what decides it: a right-hand part is bought through its left partner's `link` and
+appears on no line at all (22 of them, plus slamvan's `bnt_lr_slv1`/`2`, the only two stock parts no shop
+offers), and renaming one of those would break a stock `link` pair — a car buying a left skirt with no right
+side. Measured on the stock tables: no car's `mods` line names a part whose txd is another car's, so the
+column never contradicts the line, it only sees what the line cannot show.
+
+**Two folders still staging different files under one entry name is REFUSED**, naming both mods and both
+sizes — after the rename that can only happen for a name the derivation cannot classify. Same name and the
+same size is the same file shipped twice and is left alone with a warning. A `--rebake --only <car>` warns
+that it is putting ITS version in the archive where a full install would let the later folder win.
 
 ### `tuning_new_parts.txt` — parts the game never had
 

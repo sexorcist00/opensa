@@ -181,6 +181,10 @@ const MANIFEST: readonly Fixture[] = [
   copy('gta_sa.exe', 'gta_sa.exe'),
   copy('data/water.dat', 'data/water.dat'),
   copy('data/vehicles.ide', 'data/vehicles.ide'),
+  // The mod shop's two halves: which parts exist and whose they are (the txd column says, 014), and what
+  // each is sold for. Both are read by the tuning derivation, so an install test needs them beside the rest.
+  copy('data/maps/veh_mods/veh_mods.ide', 'data/maps/veh_mods/veh_mods.ide'),
+  copy('data/shopping.dat', 'data/shopping.dat'),
   copy('data/txdcut.ide', 'data/txdcut.ide'), // cutscene-TXD txdp dictionary — the vehicle-cutscene census link
   // The vehicle-cutscene golden pairs (plan 002 step 2): three vanilla cutscene rigs covering the three
   // hand-authoring styles (Box01 / wheel_*_node+_hi / axis_*), plus their stock gta3 donors — converting

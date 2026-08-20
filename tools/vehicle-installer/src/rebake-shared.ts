@@ -160,7 +160,8 @@ export function sharedFileWarnings(
   const warnings: string[] = [];
   for (const { folder, model } of rebaked) {
     const name = basename(folder);
-    for (const [entry, owners] of shared) {
+    for (const [entry, staged] of shared) {
+      const owners = staged.map((owner) => owner.name);
       if (owners.includes(name)) {
         const others = owners.filter((owner) => owner !== name);
         warnings.push(

@@ -20,23 +20,32 @@ works right up until a second mod does it.
 
 ## The rule, and it is DERIVED — no table, no new file kind
 
-> A part `.dff` in a vehicle folder whose name is **not in that slot's STOCK `carmods.dat` line** is a NEW
-> part of that car, not a replacement of the stock one.
+The plan was written with the `carmods.dat` `mods` line as the source of truth. **Measured on the stock
+tables before it was coded, that line is wrong in 22 places, and the column beside it is right in all of
+them** — so the rule as BUILT is:
 
-Checked against the three folders that clash, and it lands exactly:
+> A part `.dff` in a vehicle folder whose stock `veh_mods.ide` row is **textured by another car** (its TXD
+> column) is a NEW part of the car shipping it, not a replacement of the stock one.
+
+Why not the line the plan named: a right-hand part is bought through its left partner's `link` and so is on
+**no `mods` line at all** — 22 of them (`wg_r_*` for elegy, flash, jester, remingtn, savanna, slamvan,
+stratum, sultan, tornado, uranus, blade), plus `bnt_lr_slv1`/`2`, the only two stock parts no shop offers.
+Renaming those would have broken a stock `link` pair and left the car buying a left skirt with no right side.
+The TXD column never disagrees with the line where the line can speak: **0 of the stock `mods` rows name a
+part whose txd is another car's.**
+
+Checked against the three folders that clash, the rule lands exactly:
 
 | folder | own (replacements, keep the name) | BORROWED (new parts) |
 | --- | --- | --- |
-| `blade - … - gross` | 6 | 3 — `bnt_b_lr_bl`, `spl_b_lr_bl`, `wg_r_lr_bl1` |
-| `slamvan - … - alfamodding` | 9 | 4 — `bnt_lr_slv1/2`, `wg_r_lr_slv1/2` |
+| `blade - … - gross` | 7, plus 2 the game never had | **0** (the plan expected 3) |
+| `slamvan - … - alfamodding` | 13 | **0** (the plan expected 4) |
 | `voodoo - … - chezy` | 0 | **11** — exactly the eleven of the user's earlier hand-written map |
 
 That last row is the acceptance test for the derivation: his old tool carried the map by hand, and the rule
-reproduces it from `game-src/original/data/carmods.dat` plus the folder listing, with nothing authored.
-
-The same rule subsumes two things we have been treating separately: the two parts `blade`'s
-`tuning_new_parts.txt` declares by hand (their names are borrowed, so they derive), and the mirrored parts a
-mod adds where the stock car has only one side (`wg_r_*` — stock blade and slamvan have no right skirt).
+reproduces it from `game-src/original/data/maps/veh_mods/veh_mods.ide` plus the folder listing, with nothing
+authored. And it is one rule for both callers with nothing to switch on: every stock part an ADDED car ships
+belongs to its base, so the added fleet derives exactly as it did (46 parts, unchanged).
 
 ## What already exists
 
@@ -119,20 +128,47 @@ name, keeping the id, instead of the part taking a fresh one and the old row res
 Rehearsed against a copy of the real ledger: **161 rows in, 161 out, all 46 part rows moved, every id
 identical, none left under an old name.**
 
-### 3 — Replacement cars derive their borrowed parts
+### 3 — Replacement cars derive their borrowed parts — **DONE 2026-08-20**
 
-`applyVehicle` reads the slot's STOCK `carmods.dat` line, splits the folder's shipped parts into own and
-borrowed, and runs the borrowed set through the derivation: new name, new id, IDE row cloned from the stock
-part (**flags included** — see below), shop item and price row anchored after the stock part, `link` pair
-kept whole, and the car's `carmods.dat` line repointed. **Verify**: 9 clashes → 0; the archive holds each
-mod's own geometry under its own name; `blade` keeps `rbmp_lr_bl1` and `voodoo` gets `rbmp_lr_bl1_voo`.
+`install` splits every folder's shipped parts into own and borrowed and runs the borrowed set through the
+derivation: new name, new id, IDE row cloned from the stock part (**flags included** — see below), shop item
+and price row anchored after the stock part, `link` pair kept whole, and the car's `carmods.dat` line
+repointed. **Verify**: 9 clashes → 0; the archive holds each mod's own geometry under its own name; `blade`
+keeps `rbmp_lr_bl1` and `voodoo` gets `rbmp_lr_bl1_voo`.
 
-### 4 — The guard that survives the fix
+**Measured over the real `mods-src/original/vehicles` (212 folders) against `game-src/original`:**
+
+| | before | after |
+| --- | ---: | ---: |
+| archive entry names two folders stage differently | **9** | **0** |
+| entry names shared by two folders at all | 9 | **0** |
+| entries staged | 747 | 756 |
+
+**Not where the plan put it, and not the rule the plan named** — both corrected against the data, see the
+box below. The derivation runs in `install()` before the first car is applied (the classification reads the
+stock tables and the first install would already have rewritten one of them), ids for the whole fleet come
+out of one `allocateIds` pass over the 19 001–19 999 window, and `installDerivedTuning` writes the rows. The
+writing half moved out of `add-vehicles` to serve both callers, as did `ledger.ts`: a replacement car's
+derived part is a promised id exactly like an added car's.
+
+Suites: 219 files / 1 714 tests green across `tools/`. New coverage: the derivation's four classes, the
+token, and two end-to-end cases on real stock fixtures — two mods shipping `rbmp_lr_bl1.dff` (blade keeps
+it, voodoo gets `rbmp_lr_bl1_voo` with a cloned IDE row at 19 001+, its shop item, its price and a ledger
+row), and the refusal below. `data/shopping.dat` and `data/maps/veh_mods/veh_mods.ide` are new fixture
+manifest lines, regenerated from scratch (134/134).
+
+### 4 — The guard that survives the fix — **DONE 2026-08-20**
 
 Two vehicle folders shipping the same part file name with DIFFERENT content is refused, naming both mods and
 both sizes. After step 3 it should be unreachable from `vehicles/`, which is exactly why it is worth having:
 it is the check that says so, and it still fires for anything the derivation cannot classify.
 **Verify**: it fires on the pre-fix tree (9) and is silent on the post-fix one.
+
+**Measured.** `sharedVehicleFiles` now asks about the entry name a file is STAGED under, not the name on
+disk, and carries each owner's size; `assertNoStagedClash` refuses when the sizes differ and warns when they
+do not (one file shipped twice costs nothing). Silent on the real fleet — 0 shared names left — and the
+e2e case that proves it still bites uses a part no IDE row defines, which is the only thing the derivation
+cannot rename.
 
 ### 5 — `tuning_new_parts.txt` keeps only its real job
 
@@ -158,6 +194,6 @@ not crash while a hand-written `0` does.
 
 | | before | after |
 | --- | ---: | ---: |
-| part-name clashes in the built tree | **9** | |
-| longest derived part name | **20** (refused) | |
-| cars wearing another car's part | **2** (blade, slamvan) | |
+| part-name clashes in the fleet | **9** | **0** |
+| longest derived part name | **20** (refused) | **16** (`fbmp_lr_rem1_059`) |
+| cars wearing another car's part | **2** (blade, slamvan) | **0** |

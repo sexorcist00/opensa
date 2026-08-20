@@ -164,17 +164,40 @@ describe('sharedVehicleFiles', () => {
   });
 
   describe('positive cases', () => {
-    it('names a part two folders ship, owners in install order, matched case-insensitively', () => {
+    it('names a part two folders ship, owners in install order with their sizes, case-insensitively', () => {
       // The voodoo re-uses the blade's `rbmp_lr_bl1` slot with its own geometry (2026-08-17).
       const blade = vehicleFolder({ 'blade.dff': Uint8Array.of(1), 'rbmp_lr_bl1.dff': Uint8Array.of(2) });
-      const voodoo = vehicleFolder({ 'RBMP_LR_BL1.dff': Uint8Array.of(3), 'voodoo.dff': Uint8Array.of(1) });
+      const voodoo = vehicleFolder({ 'RBMP_LR_BL1.dff': Uint8Array.of(3, 3), 'voodoo.dff': Uint8Array.of(1) });
 
       const shared = sharedVehicleFiles([
         { folder: blade, name: 'blade - x' },
         { folder: voodoo, name: 'voodoo - y' },
       ]);
 
-      expect([...shared]).toEqual([['rbmp_lr_bl1.dff', ['blade - x', 'voodoo - y']]]);
+      expect([...shared]).toEqual([
+        [
+          'rbmp_lr_bl1.dff',
+          [
+            { name: 'blade - x', size: 1 },
+            { name: 'voodoo - y', size: 2 },
+          ],
+        ],
+      ]);
+    });
+
+    it('asks about the entry a file is STAGED under, so a renamed part no longer collides (014)', () => {
+      const blade = vehicleFolder({ 'blade.dff': Uint8Array.of(1), 'rbmp_lr_bl1.dff': Uint8Array.of(2) });
+      const voodoo = vehicleFolder({ 'rbmp_lr_bl1.dff': Uint8Array.of(3, 3), 'voodoo.dff': Uint8Array.of(1) });
+
+      const shared = sharedVehicleFiles(
+        [
+          { folder: blade, name: 'blade - x' },
+          { folder: voodoo, name: 'voodoo - y' },
+        ],
+        new Map([[voodoo, new Map([['rbmp_lr_bl1.dff', 'rbmp_lr_bl1_voo.dff']])]]),
+      );
+
+      expect(shared.size).toBe(0);
     });
   });
 });

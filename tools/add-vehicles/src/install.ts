@@ -27,14 +27,14 @@ import {
   renameAddsRows,
   writeAddsLedger,
 } from '@opensa/vehicle-installer/ledger';
-import { mergeCarmodsLink } from '@opensa/vehicle-installer/merge';
 import { vehicleColourWarnings } from '@opensa/vehicle-installer/palette';
 import { mergeFeatureTable, requireBuiltGame } from '@opensa/vehicle-installer/rebake-shared';
 import { decodeSettings, ID_PLACEHOLDER, parseVehicleSettings } from '@opensa/vehicle-installer/settings';
 import { writeModelSpecialFeatures } from '@opensa/vehicle-installer/special-features';
-import { type DerivedTuning, deriveTuning, shippedParts, slotTokens } from '@opensa/vehicle-installer/tuning-derive';
-import { applyIdeRows, applyInsert, assertCarmodsModels, ideModelNames } from '@opensa/vehicle-installer/tuning-parts';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { deriveTuning, shippedParts, slotTokens } from '@opensa/vehicle-installer/tuning-derive';
+import { installDerivedTuning } from '@opensa/vehicle-installer/tuning-install';
+import { assertCarmodsModels, ideModelNames } from '@opensa/vehicle-installer/tuning-parts';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { clearLooseFiles, installLooseFiles, readInstalledIds, writeSettingsFile } from './loose-files';
@@ -138,7 +138,9 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
     // `assertCarmodsModels` refuses a token no IDE row defines.
     const parts = tuning.get(source.slot)!;
     runWarnings.push(...parts.warnings.map((warning) => `${source.name}: ${warning}`));
-    installed.push(...installTuning(gamePath, source, parts, ids, runWarnings));
+    const written = installDerivedTuning({ derived: parts, gameDir: gamePath, ids, source: source.name });
+    runWarnings.push(...written.warnings);
+    installed.push(...written.rows);
     // No `img`: `applyVehicle` merges the data and carries the `cleo/` folder, and the MODELS are written
     // loose below instead of staged into an archive.
     // The car's ide and handling rows do NOT go into `data/`: they are written beside its models for Mod
@@ -232,56 +234,6 @@ function ideLineOf(folder: string, id: number): string {
     .join(String(id));
 
   return parseVehicleSettings(text).ideLine ?? '';
-}
-
-/**
- * Write one car's derived tuning parts into the built tree: an IDE row per part (with its allocated id), the
- * shop item and price cloned after the stock part's, and a `link` for every stock pair both of whose sides
- * the car re-models. Returns the ledger rows for the parts — their ids are a promise like a car's.
- */
-function installTuning(
-  gameDir: string,
-  source: AddedVehicle,
-  parts: DerivedTuning,
-  ids: ReadonlyMap<string, number>,
-  warnings: string[],
-): LedgerRow[] {
-  if (parts.rows.length === 0) {
-    return [];
-  }
-  const rows: LedgerRow[] = [];
-  const ideRows: string[] = [];
-  for (const { from, name, row } of parts.rows) {
-    const id = ids.get(name);
-    if (id === undefined) {
-      warnings.push(`${source.name}: no id was allocated for '${name}' — the part is not installed`);
-      continue;
-    }
-    ideRows.push(row.split(ID_PLACEHOLDER).join(String(id)));
-    rows.push({ bases: [from], folder: source.name, id, kind: 'part', slot: name });
-  }
-  warnings.push(...applyIdeRows(gameDir, ideRows).map((warning) => `${source.name}: ${warning}`));
-  for (const entry of parts.shop) {
-    warnings.push(
-      ...applyInsert(gameDir, {
-        after: entry.after,
-        lines: [`item ${entry.item}`],
-        section: entry.section,
-        top: 'shops',
-      }),
-      ...applyInsert(gameDir, { after: entry.after, lines: [entry.price], section: 'CarMods', top: 'prices' }),
-    );
-  }
-  if (parts.links.length > 0) {
-    const path = join(gameDir, 'data', 'carmods.dat');
-    let text = readFileSync(path, 'latin1');
-    for (const [left, right] of parts.links) {
-      text = mergeCarmodsLink(text, left, right);
-    }
-    writeFileSync(path, text, 'latin1');
-  }
-
-  return rows;
 }
 
 /**

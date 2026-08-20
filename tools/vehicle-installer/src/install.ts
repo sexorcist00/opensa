@@ -2,8 +2,9 @@ import type { ArchiveFamilyMember } from '@opensa/tool-kit/archive/img';
 import type { BuildTarget } from '@opensa/tool-kit/target';
 
 import { createImg, openImg, writeImgFamily } from '@opensa/tool-kit/archive/img';
+import { allocateIds, usedModelIds } from '@opensa/tool-kit/free-ids';
 import { registerImgArchives } from '@opensa/tool-kit/game-dir';
-import { resolveVehicleSources, type VehicleSourcePlan } from '@opensa/tool-kit/vehicles-dir';
+import { resolveVehicleSources, type VehicleSource, type VehicleSourcePlan } from '@opensa/tool-kit/vehicles-dir';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, parse, resolve, sep } from 'node:path';
 
@@ -11,10 +12,13 @@ import { applyVehicle } from './apply-vehicle';
 import { assertCarmodsCeilings } from './carmods-guard';
 import { formatFeatureTable } from './features';
 import { sharedVehicleFiles } from './img-merge';
+import { type LedgerRow, readAddsLedger, writeAddsLedger } from './ledger';
 import { formatModTable, MODS_TABLE } from './mods-table';
 import { vehicleColourWarnings } from './palette';
 import { SPECIAL_FEATURES_DAT, writeModelSpecialFeatures } from './special-features';
 import { stripOutput } from './strip';
+import { type DerivedTuning, deriveTuning, shippedParts, slotTokens, vehicleSlots } from './tuning-derive';
+import { installDerivedTuning } from './tuning-install';
 import { assertCarmodsModels } from './tuning-parts';
 
 /** Where the per-model feature declarations land in the built game dir (read by opensa-pack). */
@@ -78,14 +82,28 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
     existsSync(join(outPath, 'models', 'vehicles.img')) ? 'vehicles.img' : 'gta3.img',
   );
   const img = existsSync(imgPath) ? openImg(new Uint8Array(readFileSync(imgPath))) : createImg();
-  for (const [name, owners] of sharedVehicleFiles(vehicles)) {
-    console.warn(
-      `vehicle-installer: ${name} is shipped by ${owners.length} folders (${owners.join(' / ')}) — ` +
-        `the archive holds one entry per name, so ${owners[owners.length - 1]} wins and the others wear its version`,
-    );
-  }
+  // A part this fleet ships under ANOTHER car's name is a new part of the car shipping it, and it is derived
+  // BEFORE the first car is applied: the classification reads the stock tables, and the first install would
+  // already have rewritten one of them. Ids come out of the same window the added fleet uses, in one pass,
+  // so a car cannot take an id from the car after it (014).
+  const derived = deriveFleetTuning(outPath, vehicles);
+  const partNames = [...derived.values()].flatMap((tuning) => tuning.rows.map((row) => row.name));
+  const partIds = allocateIds({
+    ledger: new Map([...readAddsLedger(outPath)].filter(([slot]) => partNames.includes(slot))),
+    slots: partNames,
+    used: usedModelIds(outPath),
+  });
+  assertNoStagedClash(vehicles, derived);
+  const ledgerRows: LedgerRow[] = [];
   for (const vehicle of vehicles) {
-    const applied = applyVehicle(vehicle.folder, outPath, { img, target: options.target });
+    const renames = derived.get(vehicle.folder)?.renames ?? new Map<string, string>();
+    const applied = applyVehicle(vehicle.folder, outPath, {
+      img,
+      partRenames: new Map([...renames].map(([file, entry]) => [stem(file), stem(entry)])),
+      renames,
+      target: options.target,
+    });
+    ledgerRows.push(...writeVehicleTuning(outPath, vehicle, derived.get(vehicle.folder), partIds));
     applied.warnings.forEach((warning) => console.warn(`vehicle-installer: ${vehicle.name}: ${warning}`));
     applied.imgNames.forEach((name) => imgNames.add(name));
     if (applied.model) {
@@ -97,6 +115,12 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
     if (applied.model && applied.features.length > 0) {
       features.set(applied.model, applied.features);
     }
+  }
+  // The derived parts' ids are a promise like a car's — a part id is in the player's save as part of the
+  // car's upgrades. Written only when the fleet derived any, so a tree with no borrowed part has no file.
+  if (ledgerRows.length > 0) {
+    writeAddsLedger(outPath, ledgerRows);
+    console.log(`vehicle-installer: ${ledgerRows.length} derived tuning part(s) recorded in the id ledger`);
   }
   // Every carmods token must resolve to an IDE row — the real game crashes on one that does not, at boot,
   // at an address; here it fails naming the line (plan 009).
@@ -163,4 +187,97 @@ export function logVehiclePlan(plan: VehicleSourcePlan, target: BuildTarget | un
   plan.overrides.forEach(({ by, replaced }) => console.log(`vehicle-installer: ${by} replaces ${replaced}`));
 
   return plan;
+}
+
+/**
+ * Refuse a fleet where two folders still stage DIFFERENT files under one archive entry name after the
+ * derivation has renamed what it can (014 step 4). One entry name holds one file, so the last folder
+ * installed wins and every other car on that name silently wears its geometry — the defect that had the
+ * blade wearing the voodoo's rear bumper for as long as both mods were installed.
+ *
+ * Same name and the same SIZE is the same file shipped twice, which costs nothing and is left alone. The
+ * check should be unreachable from `vehicles/` now, which is exactly why it is worth keeping: it is what
+ * says so, and it still fires for anything the derivation cannot classify.
+ */
+function assertNoStagedClash(vehicles: readonly VehicleSource[], derived: ReadonlyMap<string, DerivedTuning>): void {
+  const shared = sharedVehicleFiles(
+    vehicles,
+    new Map([...derived].map(([folder, tuning]) => [folder, tuning.renames])),
+  );
+  const clashes = [...shared].filter(([, staged]) => new Set(staged.map(({ size }) => size)).size > 1);
+  for (const [name, staged] of shared) {
+    if (!clashes.some(([clashing]) => clashing === name)) {
+      console.warn(
+        `vehicle-installer: ${name} is shipped by ${staged.length} folders ` +
+          `(${staged.map(({ name: folder }) => folder).join(' / ')}), identical in size — one entry, one file`,
+      );
+    }
+  }
+  if (clashes.length > 0) {
+    throw new Error(
+      `${clashes.length} archive entry name(s) are staged with different files by more than one vehicle ` +
+        `folder. The archive holds one entry per name, so the last one installed would win and the other ` +
+        `car would wear its geometry:\n  ` +
+        clashes
+          .map(
+            ([name, staged]) =>
+              `${name} — ${staged.map(({ name: folder, size }) => `${folder} (${size} B)`).join(' / ')}`,
+          )
+          .join('\n  '),
+    );
+  }
+}
+
+/**
+ * What every folder of the fleet ships that belongs to ANOTHER car, derived against the tree as the copy
+ * left it — stock. Folders with nothing borrowed are not in the map at all, which is most of them.
+ */
+function deriveFleetTuning(outPath: string, vehicles: readonly VehicleSource[]): Map<string, DerivedTuning> {
+  const tokens = slotTokens(vehicleSlots(outPath));
+  const derived = new Map<string, DerivedTuning>();
+  for (const vehicle of vehicles) {
+    const token = tokens.get(vehicle.slot);
+    if (token === undefined) {
+      // A folder naming a slot the game does not define: `applyVehicle` merges its rows as authored, and the
+      // model resolver already says so. Nothing to derive against.
+      continue;
+    }
+    const tuning = deriveTuning({
+      base: vehicle.slot,
+      gameDir: outPath,
+      shipped: shippedParts(vehicle.folder, vehicle.slot),
+      slot: vehicle.slot,
+      token,
+    });
+    if (tuning.rows.length > 0 || tuning.warnings.length > 0) {
+      derived.set(vehicle.folder, tuning);
+    }
+  }
+
+  return derived;
+}
+
+/** An archive entry name without its extension — the form `carmods.dat` and the settings file speak. */
+function stem(file: string): string {
+  return file.replace(/\.dff$/i, '');
+}
+
+/**
+ * Merge one car's derived parts into the tree and report what it cost, returning their ledger rows. Split
+ * out of the install loop only to keep that loop readable — the whole of it is one call.
+ */
+function writeVehicleTuning(
+  outPath: string,
+  vehicle: VehicleSource,
+  tuning: DerivedTuning | undefined,
+  ids: ReadonlyMap<string, number>,
+): LedgerRow[] {
+  if (tuning === undefined) {
+    return [];
+  }
+  tuning.warnings.forEach((warning) => console.warn(`vehicle-installer: ${vehicle.name}: ${warning}`));
+  const written = installDerivedTuning({ derived: tuning, gameDir: outPath, ids, source: vehicle.name });
+  written.warnings.forEach((warning) => console.warn(`vehicle-installer: ${warning}`));
+
+  return written.rows;
 }

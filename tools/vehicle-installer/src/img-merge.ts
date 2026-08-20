@@ -1,7 +1,7 @@
 import type { EditableImg } from '@opensa/tool-kit/archive/img';
 
 import { reorderFrameList } from '@opensa/renderware/parsers/binary/frame-order';
-import { closeSync, openSync, readdirSync, readFileSync, readSync } from 'node:fs';
+import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -61,26 +61,33 @@ export function repairFrameOrder(path: string): null | Uint8Array {
 }
 
 /**
- * Archive entry names (lowercased `.dff`/`.txd` file names) that MORE THAN ONE vehicle folder ships, with the
- * folders in install order. Two cars sharing a paint job name is a typo; two cars sharing a tuning PART is
- * the real case (the voodoo re-uses the blade's `rbmp_lr_bl1` slot with its own geometry, 2026-08-17): the
- * archive holds one entry per name, so the LAST folder wins and the other car wears the wrong part —
- * silently, unless whoever stages them says so.
+ * ARCHIVE ENTRY names that more than one vehicle folder stages, with the folders in install order and the
+ * size each of them ships. The archive holds one entry per name, so the LAST folder wins and every other car
+ * on that name wears its file — silently, unless whoever stages them says so.
+ *
+ * The name asked about is the entry a file is staged UNDER, not the name on disk: since 014 a part belonging
+ * to another car is renamed on the way in, so `renames` (folder path → the derivation's file → entry map)
+ * has to be the same one `stageVehicleImg` is given. Two folders left on one name after that is either the
+ * SAME file shipped twice — harmless, and the sizes say so — or two different models, which is the defect
+ * this exists to name.
  */
 export function sharedVehicleFiles(
   sources: readonly { readonly folder: string; readonly name: string }[],
-): Map<string, string[]> {
-  const owners = new Map<string, string[]>();
+  renames?: ReadonlyMap<string, ReadonlyMap<string, string>>,
+): Map<string, { name: string; size: number }[]> {
+  const owners = new Map<string, { name: string; size: number }[]>();
   for (const source of sources) {
     for (const entry of readdirSync(source.folder, { withFileTypes: true })) {
       if (entry.isFile() && /\.(?:dff|txd)$/i.test(entry.name)) {
-        const key = entry.name.toLowerCase();
-        owners.set(key, [...(owners.get(key) ?? []), source.name]);
+        const file = entry.name.toLowerCase();
+        const key = renames?.get(source.folder)?.get(file) ?? file;
+        const { size } = statSync(join(source.folder, entry.name));
+        owners.set(key, [...(owners.get(key) ?? []), { name: source.name, size }]);
       }
     }
   }
 
-  return new Map([...owners].filter(([, names]) => names.length > 1));
+  return new Map([...owners].filter(([, staged]) => staged.length > 1));
 }
 
 /**

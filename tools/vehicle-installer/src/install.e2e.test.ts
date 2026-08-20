@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { install } from './install';
+import { readStockParts } from './tuning-derive';
 
 const DATA = join(process.cwd(), 'fixtures', 'original', 'data');
 const DATA_FILES = ['carcols.dat', 'carmods.dat', 'cargrp.dat', 'handling.cfg', 'vehicles.ide'];
@@ -45,6 +46,29 @@ afterEach(() => {
 });
 
 describe.skipIf(!hasFixtures)('install (end-to-end, real data fixtures)', () => {
+  describe('negative cases', () => {
+    // 014 step 4. Unreachable through a stock part name now — the derivation renames those — so it fires on
+    // what it cannot classify: a part the game never had, shipped by two folders with different geometry.
+    it('refuses a fleet that stages two different files under one archive entry name', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'in');
+      stockGame(game);
+      for (const [folder, slot, size] of [
+        ['blade - 1964 Ford Thunderbird', 'blade', 1],
+        ['voodoo - 1960 Chevrolet Impala', 'voodoo', 2],
+      ] as const) {
+        const path = join(mods, folder);
+        mkdirSync(path, { recursive: true });
+        writeFileSync(join(path, `${slot}.dff`), Uint8Array.of(1));
+        writeFileSync(join(path, 'spl_invented.dff'), new Uint8Array(size));
+      }
+
+      expect(() => install({ gamePath: game, inPath: mods, outPath: join(root, 'out') })).toThrow(
+        /spl_invented\.dff — blade[^\n]*\(1 B\)[^\n]*voodoo[^\n]*\(2 B\)/,
+      );
+    });
+  });
+
   describe('positive cases', () => {
     it('puts dff/txd into gta3.img and merges the four settings into the data files', () => {
       const game = join(root, 'game');
@@ -395,5 +419,54 @@ describe.skipIf(!hasFixtures)('install (end-to-end, real data fixtures)', () => 
       const parked = JSON.parse(readFileSync(join(out, 'parked.json'), 'utf8')) as { model: string }[];
       expect(parked.every((entry) => entry.model === 'admiral')).toBe(true);
     });
+
+    // 014: two mods shipping a part under the same stock name. `blade` owns `rbmp_lr_bl1` (its veh_mods.ide
+    // row is textured by blade), `voodoo` is borrowing the name — so only voodoo's copy is renamed, and the
+    // archive ends up holding BOTH geometries instead of the last folder's winning.
+    it("renames only the borrowed part, and clones the stock one's IDE row, shop item and price", () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'in');
+      const out = join(root, 'out');
+      stockGame(game);
+      partMod(mods, 'blade - 1964 Ford Thunderbird', 'blade', 11);
+      partMod(mods, 'voodoo - 1960 Chevrolet Impala', 'voodoo', 22);
+
+      install({ gamePath: game, inPath: mods, outPath: out });
+
+      const img = openImg(new Uint8Array(readFileSync(join(out, 'models', 'gta3.img'))));
+      expect(new Uint8Array(img.get('rbmp_lr_bl1.dff')!)[0]).toBe(11); // blade's own, under its own name
+      expect(new Uint8Array(img.get('rbmp_lr_bl1_voo.dff')!)[0]).toBe(22); // voodoo's, derived
+      // The IDE row is the stock part's, textured by the car that ships it and given an id of its own.
+      const row = readStockParts(out).get('rbmp_lr_bl1_voo');
+      expect(row?.txd).toBe('voodoo');
+      expect(row?.id).toBeGreaterThanOrEqual(19_001);
+      // Sold where its stock twin is sold, and for the same price.
+      const shopping = readFileSync(join(out, 'data', 'shopping.dat'), 'latin1');
+      expect(shopping).toContain('item rbmp_lr_bl1_voo');
+      expect(/^\s*rbmp_lr_bl1_voo\s+/m.test(shopping)).toBe(true);
+      // And the id is recorded, because a part id is in the player's save.
+      expect(readFileSync(join(out, 'data', 'vehicle-adds.txt'), 'latin1')).toContain('rbmp_lr_bl1_voo');
+    });
   });
 });
+
+/** A car folder that ships the blade's rear bumper beside its own model, under the stock name. */
+function partMod(mods: string, folder: string, slot: string, mark: number): void {
+  const path = join(mods, folder);
+  mkdirSync(path, { recursive: true });
+  writeFileSync(join(path, `${slot}.dff`), Uint8Array.of(1));
+  writeFileSync(join(path, 'rbmp_lr_bl1.dff'), Uint8Array.of(mark));
+  writeFileSync(join(path, `${slot}.settings.txt`), `${slot}, rbmp_lr_bl1`);
+}
+
+/** The stock data files + an empty archive — the base every install case above starts from. */
+function stockGame(game: string): void {
+  mkdirSync(join(game, 'data', 'maps', 'veh_mods'), { recursive: true });
+  for (const file of DATA_FILES) {
+    cpSync(join(DATA, file), join(game, 'data', file));
+  }
+  cpSync(join(DATA, 'shopping.dat'), join(game, 'data', 'shopping.dat'));
+  cpSync(join(DATA, 'maps', 'veh_mods', 'veh_mods.ide'), join(game, 'data', 'maps', 'veh_mods', 'veh_mods.ide'));
+  mkdirSync(join(game, 'models'), { recursive: true });
+  writeFileSync(join(game, 'models', 'gta3.img'), createImg().build());
+}
