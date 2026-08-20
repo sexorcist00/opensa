@@ -34,18 +34,7 @@ export function encodeRgba8888Struct(original: Uint8Array, levels: readonly MipL
   out[86] = original[86]; // rasterType (preserve)
   out[87] = hasAlpha ? original[87] | ALPHA_FLAG : original[87] & ~ALPHA_FLAG;
 
-  let offset = HEADER_SIZE;
-  for (const level of levels) {
-    view.setUint32(offset, level.data.length, true);
-    offset += 4;
-    for (let i = 0; i < level.data.length; i += 4) {
-      out[offset + i] = level.data[i + 2]; // B
-      out[offset + i + 1] = level.data[i + 1]; // G
-      out[offset + i + 2] = level.data[i]; // R
-      out[offset + i + 3] = level.data[i + 3]; // A
-    }
-    offset += level.data.length;
-  }
+  writeBgraLevels(out, view, levels);
 
   return out;
 }
@@ -136,6 +125,64 @@ export function encodeDxtStruct(name: string, format: DxtFormat, levels: readonl
   return out;
 }
 
+const RASTER_C888 = 0x0600;
+const D3DFMT_X8R8G8B8 = 22;
+/** Linear + wrap/wrap: what every one of stock's 867 uncompressed rasters carries (all single-level). */
+const FILTER_LINEAR = 0x1101;
+
+/**
+ * Build a complete UNCOMPRESSED 32-bit TextureNative Struct **from scratch** — the sibling of
+ * {@link encodeDxtStruct} for a texture that must not be block-compressed, such as a raster the game reads
+ * back on the CPU (mod-installer plan 015). Opaque rasters are written `X8R8G8B8` / `C888` and rasters with
+ * alpha `A8R8G8B8` / `C8888`, the pairing stock's own uncompressed content uses.
+ *
+ * The mip chain is the CALLER's decision and the header follows it: more than one level declares the mipmap
+ * bit and a trilinear filter, because a level nothing is allowed to sample is only dead weight. Stock has no
+ * example to copy here — it ships every uncompressed raster single-level.
+ */
+export function encodeUncompressedStruct(name: string, levels: readonly MipLevel[], hasAlpha: boolean): Uint8Array {
+  const dataSize = levels.reduce((sum, level) => sum + 4 + level.data.length, 0);
+  const out = new Uint8Array(HEADER_SIZE + dataSize);
+  const view = new DataView(out.buffer);
+  const mipped = levels.length > 1;
+
+  view.setUint32(0, PLATFORM_D3D9, true);
+  view.setUint32(4, mipped ? FILTER_LINEAR_MIP : FILTER_LINEAR, true);
+  writeName(out, 8, name); // name[32]
+  writeName(out, 40, ''); // maskName[32] — empty, as stock's own rasters leave it
+  view.setUint32(72, (hasAlpha ? RASTER_C8888 : RASTER_C888) | (mipped ? RASTER_EXT_MIPMAP : 0), true);
+  view.setUint32(76, hasAlpha ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8, true);
+  view.setUint16(80, levels[0].width, true);
+  view.setUint16(82, levels[0].height, true);
+  out[84] = 32; // depth
+  out[85] = levels.length;
+  out[86] = RASTER_TYPE_TEXTURE;
+  out[87] = hasAlpha ? ALPHA_FLAG : 0;
+
+  writeBgraLevels(out, view, levels);
+
+  return out;
+}
+
+/** `DXT` — the first three bytes of every block-compressed `d3dFormat` FourCC (`DXT1`…`DXT5`). */
+const DXT_FOURCC_PREFIX = 0x545844;
+
+/**
+ * Does a TextureNative Struct carry DXT blocks? Read off `d3dFormat`, the field OUR parser classifies by:
+ * a FourCC spelling `DXT…` when compressed, a small `D3DFORMAT` enum value when not.
+ *
+ * A Struct too short to hold a header answers **true** — a header we cannot read is not evidence of an
+ * uncompressed raster, and compressed is what every caller here does by default.
+ */
+export function isCompressedRaster(struct: Uint8Array): boolean {
+  if (struct.length < HEADER_SIZE) {
+    return true;
+  }
+  const d3dFormat = new DataView(struct.buffer, struct.byteOffset, struct.byteLength).getUint32(76, true);
+
+  return (d3dFormat & 0xffffff) === DXT_FOURCC_PREFIX;
+}
+
 /** A TextureNative Struct's texture name (offset 8, 32-byte NUL-terminated). */
 export function readTextureName(struct: Uint8Array): string {
   let end = 8;
@@ -144,6 +191,22 @@ export function readTextureName(struct: Uint8Array): string {
   }
 
   return new TextDecoder().decode(struct.subarray(8, end));
+}
+
+/** Append each level as `size u32 + BGRA pixels` from `HEADER_SIZE` on (RGBA in, the raster's order out). */
+function writeBgraLevels(out: Uint8Array, view: DataView, levels: readonly MipLevel[]): void {
+  let offset = HEADER_SIZE;
+  for (const level of levels) {
+    view.setUint32(offset, level.data.length, true);
+    offset += 4;
+    for (let i = 0; i < level.data.length; i += 4) {
+      out[offset + i] = level.data[i + 2]; // B
+      out[offset + i + 1] = level.data[i + 1]; // G
+      out[offset + i + 2] = level.data[i]; // R
+      out[offset + i + 3] = level.data[i + 3]; // A
+    }
+    offset += level.data.length;
+  }
 }
 
 function writeName(out: Uint8Array, offset: number, name: string): void {
