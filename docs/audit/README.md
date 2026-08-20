@@ -5,6 +5,16 @@ numbers and links to the raw records — so the result survives the session and 
 without re-deriving it. Runtime numbers live in [`../benchmarks/`](../benchmarks/); these docs summarise and
 interpret them.
 
+- [`session-32-the-defect-our-own-decoder-could-not-see.md`](./session-32-the-defect-our-own-decoder-could-not-see.md)
+  — the 2026-08-20 session after it: two named tasks closed, built, delivered and field-accepted
+  (`mod-installer` 015, `cars-server` 003). Its subject is that the defect it fixed — a mod's PNG folder
+  encoded DXT over rasters the game READS BACK, which turned every number plate into green blocks — was
+  **invisible to every instrument we own**: our decoder decompresses DXT before composing, so the suite, the
+  viewer and the plate renderer all showed a readable plate. Plus the census that priced the rule (18
+  replacements of an uncompressed raster, 2 673 → 18 264 KB, +15.2 MB taken deliberately over a name list),
+  and two measurements of mine that lied quietly — a timed-out `curl -o` serving the previous run's HTML, and
+  a count done by eye that four documents repeated.
+
 - [`session-31-the-day-the-field-corrected-three-of-my-rules.md`](./session-31-the-day-the-field-corrected-three-of-my-rules.md)
   — the 2026-08-20 session: two plan chains built end to end (`vehicle-installer` 014, `img-splitter` 002),
   **9 part-name clashes → 0** and **39 archive duplicates of ours → 0**, five `sa` builds and five field

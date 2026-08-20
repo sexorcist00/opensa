@@ -1,5 +1,8 @@
 # 009 — mod-installer: PNG folders for IMG-internal `.txd` + organisational subfolders
 
+> **Superseded in part by [015](015-replacement-png-follows-its-raster.md) (2026-08-20):** the DXT5/DXT1-by-alpha choice below is still the rule for a PNG that ADDS a texture. One that REPLACES an existing texture now inherits that raster's compression class — the game reads some of them back on the CPU.
+
+
 **SHIPPED 2026-07-23.** Extends the `*_img/` folder convention (plans 001/003) in two ways `mergeImgDir`
 previously ignored — both driven by real cases found in the field.
 
