@@ -1,6 +1,16 @@
 # A mod that ships a folder of PNGs gets DXT and a mip chain, whatever it is replacing
 
-**Open, 2026-08-20**, field-found by the user: **the number plates render as green blocky garbage**
+**FIXED 2026-08-20** by [`mod-installer/015`](../../../tools/mod-installer/docs/plans/015-replacement-png-follows-its-raster.md)
+— a PNG that REPLACES a texture is now encoded in the compression class of the raster it replaces, so the six
+plate rasters come out 32-bit again and the mod's pixels reach the game byte for byte (worst channel
+difference 0, where DXT1 was quantising them). The mip chain STAYS, which is where the fix departs from the
+rule proposed below: stock ships every uncompressed raster single-level, but these mods upscale them 4–16×
+and a 512² texture with no mips shimmers — so the header declares the chain and the trilinear filter that
+lets it be sampled. Cost, measured over the whole mod set: **18 replaced rasters, 2 673 → 18 264 KB**.
+**The real-game verdict is still a field round on the next `sa` build** — OpenSA decodes DXT properly, so
+neither the suite nor a viewer could ever have shown this defect.
+
+**Found open, 2026-08-20**, field-found by the user: **the number plates render as green blocky garbage**
 (screenshot, `9. Car Plates HD [vehicle]` installed). The plate's character area is the worst of it — that is
 where the game writes glyphs pixel by pixel.
 
@@ -46,5 +56,5 @@ one measurement before choosing.
 
 ## Not to be confused with
 
-[`mod-inst-rows-folded-before-their-ide.md`](mod-inst-rows-folded-before-their-ide.md) — the other open
+[`mod-inst-rows-folded-before-their-ide.md`](../mod-inst-rows-folded-before-their-ide.md) — the other open
 `mod-installer` defect, about `gta.dat` ORDER. Different subject, same tool.

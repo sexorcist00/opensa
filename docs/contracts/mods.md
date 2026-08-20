@@ -121,12 +121,20 @@ gta3_img/previon/remap.png              →  merges into the previon.txd ENTRY i
 - The texture NAME is the PNG's basename, matched case-insensitively: an existing texture of that name is
   **replaced**, a new one is **added**. Every other texture in the dictionary is left untouched — this is a
   merge, never a rewrite.
-- Format is chosen from the image: **DXT5 when it carries real alpha, DXT1 when it does not**. PNGs must be
-  8-bit RGB/RGBA and non-interlaced. **A PNG whose side is not a multiple of 4 becomes a DXT raster the real
-  game refuses** — with its whole dictionary (`docs/restrictions/dxt-raster-dimensions.md`); the installer
+- Format for a PNG that ADDS a texture is chosen from the image: **DXT5 when it carries real alpha, DXT1 when
+  it does not**. PNGs must be 8-bit RGB/RGBA and non-interlaced. **A PNG whose side is not a multiple of 4
+  becomes a DXT raster the real game refuses** — with its whole dictionary (`docs/restrictions/dxt-raster-dimensions.md`); the installer
   WARNS naming the mod, folder, texture and size (plan 014) and keeps the bytes as they are — map-optimizer
   resamples them later in the pipeline. The same warning fires for any `.txd` a mod ships (archive entry,
   Modloader-collected asset or loose overlay) that carries one.
+- **A PNG that REPLACES a texture inherits that texture's compression class instead**: what the original
+  ships uncompressed stays uncompressed, whatever the image's alpha says (mip chain and size still come from
+  the PNG). This is not cosmetic — the game READS some of those rasters back rather than sampling them
+  (`CCustomCarPlateMgr` copies glyph pixels out of `platecharset`), and a compressed one arrives as blocky
+  garbage on every car with nothing in any log. You cannot tell which from a name, so the rule follows the
+  data: `docs/restrictions/uncompressed-rasters-stay-uncompressed.md`. A texture folder's PNGs therefore
+  cost more than DXT would when they land in `models/generic/vehicle.txd` or `models/particle.txd`, the two
+  dictionaries stock keeps uncompressed end to end.
 - Within a mod, files are copied BEFORE subfolders, so a `.txd` the same mod also ships is in place first and
   gets patched rather than lost.
 - **Both spellings of the folder name work** — `vehicle/` and `vehicle.txd/` target `vehicle.txd`. Authors
@@ -278,7 +286,8 @@ them. If you are debugging "my procobj edit did nothing in the real game", this 
   three RESERVED names at the top level of `--in` (§1): there, `common` / `sa` / `opensa` name layers rather
   than mods.
 - **The path a Modloader-style mod uses internally** — bare names decide everything there.
-- **A texture's format in the PNG folder** — it comes from the image's own alpha, not from a naming scheme.
+- **A texture's format in the PNG folder** — for a texture the folder ADDS it comes from the image's own
+  alpha, and for one it REPLACES from the raster being replaced. Never from a naming scheme.
 - **`Remove original/`** — the name looks like an instruction and is not one (§2).
 
 ---
