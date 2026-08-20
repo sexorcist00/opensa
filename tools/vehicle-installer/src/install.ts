@@ -5,13 +5,13 @@ import { createImg, openImg, writeImgFamily } from '@opensa/tool-kit/archive/img
 import { allocateIds, MOD_PART_ID_WINDOW, usedModelIds } from '@opensa/tool-kit/free-ids';
 import { registerImgArchives } from '@opensa/tool-kit/game-dir';
 import { resolveVehicleSources, type VehicleSource, type VehicleSourcePlan } from '@opensa/tool-kit/vehicles-dir';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, parse, resolve, sep } from 'node:path';
 
 import { applyVehicle } from './apply-vehicle';
 import { assertCarmodsCeilings } from './carmods-guard';
 import { formatFeatureTable } from './features';
-import { sharedVehicleFiles, vehicleCohortKey } from './img-merge';
+import { pruneReplacedSlotTextures, sharedVehicleFiles, vehicleCohortKey } from './img-merge';
 import { type LedgerRow, readAddsLedger, writeAddsLedger } from './ledger';
 import { formatModTable, MODS_TABLE } from './mods-table';
 import { vehicleColourWarnings } from './palette';
@@ -98,6 +98,9 @@ export function install(options: InstallOptions): ArchiveFamilyMember[] {
   assertNoStagedClash(vehicles, derived);
   const ledgerRows: LedgerRow[] = [];
   for (const vehicle of vehicles) {
+    // The slot's STOCK texture bundle goes before the mod's is staged: a paintjob the mod does not ship has
+    // no owner once its car is replaced, and would offer the player artwork drawn for another body's UVs.
+    reportDropped(vehicle.name, pruneReplacedSlotTextures(img, vehicle.slot, readdirSync(vehicle.folder)));
     const renames = derived.get(vehicle.folder)?.renames ?? new Map<string, string>();
     const applied = applyVehicle(vehicle.folder, outPath, {
       img,
@@ -261,6 +264,13 @@ function deriveFleetTuning(outPath: string, vehicles: readonly VehicleSource[]):
   }
 
   return derived;
+}
+
+/** Say which stock textures a replaced slot gave up — silence would make the archive change unexplainable. */
+function reportDropped(vehicle: string, dropped: readonly string[]): void {
+  if (dropped.length > 0) {
+    console.log(`vehicle-installer: ${vehicle}: dropped ${dropped.length} stock texture(s) — ${dropped.join(', ')}`);
+  }
 }
 
 /** An archive entry name without its extension — the form `carmods.dat` and the settings file speak. */

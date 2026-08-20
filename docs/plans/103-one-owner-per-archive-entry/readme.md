@@ -92,17 +92,29 @@ ship a coach mod**, so under a by-name baseline the mod's bus and the stock clot
 passed as "stock". Scoped to the archives this build decides the contents of — `gta3.img` plus the ones the
 source tree does not have — the expected number is 0, with no exemptions at all.
 
-### 4 — A mod owns its slot's paintjobs
+### 4 — A mod owns its slot's paintjobs — **the DELETION is DONE 2026-08-20; the shop's own count is not**
 
-With 1–2 done, the stock paintjob dictionaries sit in the vehicle archive, where the installer replaces the
-ones a mod ships. The leftovers are the open question: stock `blade` has 3, and a mod shipping 2 (or 0)
-leaves stock artwork on a modded body under paintjob 3.
+**The user's rule, and it needs nothing recovered:** a car's dictionary and its paintjob dictionaries are one
+bundle, found by the `<car><n>` convention off the car's own name and named by nothing else. A mod that
+replaces the car replaces the bundle — so `pruneReplacedSlotTextures` drops `<slot>.txd` and every
+`<slot><n>.txd` the folder does not itself ship, a moment before the folder's own files are staged over the
+names it does. A folder that ships no `.txd` for the slot does not own its textures and is left alone: taking
+the stock dictionary from it would leave its car with none at all.
 
-**First recover the original's own rule** — how the game decides how many paintjobs a car offers (the
-reference install runs FLA's `Make paintjobs work for any ID = 1`, so the stock rule is id-based and is being
-lifted). Only then decide between "delete every stock `<slot><n>.txd` the mod does not ship" and "keep the
-count and warn". Until it is recovered this step ships nothing.
-**Verify**: named once the rule is known; the census above is the before.
+Safe to delete by name because of two measurements over stock `vehicles.ide`: **no two cars share a
+dictionary, and no car's dictionary is named anything but its own slot** (0 and 0 of 212).
+
+**Measured on the real fleet: it drops nothing today.** Of 212 folders, 49 ship numbered dictionaries, and
+every stock paintjob dictionary of the 13 tunable cars is replaced by the mod that owns the slot — several
+ship MORE than stock (`slamvan` 5 against 3, `broadway` 5 against 2). **Stock paintjobs a mod does not
+replace: 0.** So this is the door closed before anyone walks through it, and the log line is there for the
+day one does.
+
+**What is NOT built, and why it is a field question rather than a code one:** how many paintjobs the SHOP
+offers. If the count is a property of the model id (the reference install runs FLA's `Make paintjobs work
+for any ID = 1`, which exists precisely because it is), a car whose mod ships fewer than stock could still
+be offered a paintjob whose dictionary no longer exists. Nothing in the tree can answer that — the next
+field round can, on a car with stock paintjobs.
 
 ### 5 — `add-vehicles` needs nothing, and that is worth checking
 
@@ -149,6 +161,7 @@ Rebuilt end to end 2026-08-20 (11 m 9 s, every gate green), then read back off t
 | cars with no textures at all | **1** (`slamvan`) | **0** — `slamvan.txd` has one owner, and it is the mod's 9 359 360 B copy |
 | cars split across two archives | **148** of 201 | **0** of 209 keyed |
 | archives in the vehicle family | 2 | 2 (unchanged) |
+| stock paintjob dictionaries a mod leaves behind | 0 | **0** — the prune is a closed door, not a fix |
 
 The six that remain are the original's own and out of scope by construction: four map/interior dictionaries
 between `gta3.img` and `gta_int.img`, and `coach.dff`/`coach.txd` between `player.img` (the clothes, 264 192 B)

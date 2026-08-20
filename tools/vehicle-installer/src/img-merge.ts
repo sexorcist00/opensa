@@ -20,6 +20,41 @@ export interface StagedVehicleImg {
 }
 
 /**
+ * Drop the STOCK texture set of a slot a mod is taking over: `<slot>.txd` and every `<slot><n>.txd` the
+ * folder does not itself ship.
+ *
+ * A car's dictionary and its paintjob dictionaries are one bundle — the game finds the paintjobs by the
+ * `<car><n>` convention off the car's own name, and nothing else names them (the user's call, 2026-08-20).
+ * So a mod that replaces the car replaces the bundle: keeping a stock paintjob beside a modded body offers
+ * the player artwork drawn for different UVs. What the mod ships is staged over these by name a moment
+ * later; what it does not ship has no owner left and goes.
+ *
+ * **A folder that ships no `.txd` for the slot is left alone and reported.** It does not own the slot's
+ * textures — pruning would leave its car with no dictionary at all, which is worse than a stale paintjob.
+ * (Every one of the original's 212 folders ships one, so this is the door being closed, not one in use.)
+ *
+ * In stock, no two cars share a dictionary and no car's dictionary is named other than after it (measured
+ * 2026-08-20 over `vehicles.ide`: 0 and 0), which is what makes the name rule safe to delete by.
+ */
+export function pruneReplacedSlotTextures(img: EditableImg, slot: string, folderFiles: readonly string[]): string[] {
+  const shipped = new Set(folderFiles.map((file) => file.toLowerCase()).filter((file) => file.endsWith('.txd')));
+  const owned = new RegExp(`^${slot.toLowerCase()}\\d*\\.txd$`);
+  if (![...shipped].some((file) => owned.test(file))) {
+    return [];
+  }
+  const dropped: string[] = [];
+  for (const name of img.names()) {
+    const entry = name.toLowerCase();
+    if (owned.test(entry) && !shipped.has(entry)) {
+      img.delete(name);
+      dropped.push(entry);
+    }
+  }
+
+  return dropped;
+}
+
+/**
  * Repaired bytes for a `.dff` whose frame list declares a parent AFTER the child it belongs to, or `null`
  * when the file is already ordered — which is the answer for every stock model and all but one of the 212
  * vehicle folders measured on 2026-08-19.

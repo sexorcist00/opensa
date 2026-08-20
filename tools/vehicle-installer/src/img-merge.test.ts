@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { sharedVehicleFiles, stageVehicleImg } from './img-merge';
+import { pruneReplacedSlotTextures, sharedVehicleFiles, stageVehicleImg } from './img-merge';
 
 /** The blade mod's right side skirt, whose export declares frame 0's parent as frame 1. */
 const FORWARD_PARENT_DFF = join(process.cwd(), 'fixtures', 'custom', 'dff', 'wg_r_lr_bl1-forward-parent.dff');
@@ -198,6 +198,58 @@ describe('sharedVehicleFiles', () => {
       );
 
       expect(shared.size).toBe(0);
+    });
+  });
+});
+
+describe('pruneReplacedSlotTextures', () => {
+  /** The stock bundle of a tunable car, as the archive holds it before a mod takes the slot over. */
+  const stockImg = (): ReturnType<typeof createImg> => {
+    const img = createImg();
+    for (const name of ['blade.txd', 'blade1.txd', 'blade2.txd', 'blade3.txd', 'bladed.txd', 'voodoo.txd']) {
+      img.set(name, Uint8Array.of(1));
+    }
+
+    return img;
+  };
+
+  describe('negative cases', () => {
+    it('leaves the slot alone when the folder ships no dictionary of its own', () => {
+      const img = stockImg();
+
+      expect(pruneReplacedSlotTextures(img, 'blade', ['blade.dff'])).toEqual([]);
+      expect(img.has('blade1.txd')).toBe(true);
+    });
+
+    it('never reaches another slot, nor a name that merely starts the same', () => {
+      const img = stockImg();
+
+      pruneReplacedSlotTextures(img, 'blade', ['blade.txd']);
+
+      expect(img.has('voodoo.txd')).toBe(true);
+      expect(img.has('bladed.txd')).toBe(true); // a car of its own, not blade's paintjob
+    });
+  });
+
+  describe('positive cases', () => {
+    it('drops the stock paintjobs the mod does not ship, and keeps the ones it does', () => {
+      const img = stockImg();
+
+      const dropped = pruneReplacedSlotTextures(img, 'blade', ['blade.dff', 'blade.txd', 'blade1.txd']);
+
+      expect(dropped).toEqual(['blade2.txd', 'blade3.txd']);
+      expect(img.has('blade.txd')).toBe(true); // the mod's own, staged over it a moment later
+      expect(img.has('blade1.txd')).toBe(true);
+    });
+
+    it('drops all three when the mod brings a body with no paintjobs at all', () => {
+      const img = stockImg();
+
+      expect(pruneReplacedSlotTextures(img, 'blade', ['blade.txd'])).toEqual([
+        'blade1.txd',
+        'blade2.txd',
+        'blade3.txd',
+      ]);
     });
   });
 });
