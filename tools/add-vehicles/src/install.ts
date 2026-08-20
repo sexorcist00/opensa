@@ -20,6 +20,13 @@ import { ADDED_ID_WINDOW, allocateIds, usedModelIds } from '@opensa/tool-kit/fre
 import { applyVehicle } from '@opensa/vehicle-installer/apply-vehicle';
 import { writeAudioRows } from '@opensa/vehicle-installer/audio';
 import { assertCarmodsCeilings, carmodsHeadroom } from '@opensa/vehicle-installer/carmods-guard';
+import {
+  type LedgerRow,
+  readAddsLedger,
+  readAddsRows,
+  renameAddsRows,
+  writeAddsLedger,
+} from '@opensa/vehicle-installer/ledger';
 import { mergeCarmodsLink } from '@opensa/vehicle-installer/merge';
 import { vehicleColourWarnings } from '@opensa/vehicle-installer/palette';
 import { mergeFeatureTable, requireBuiltGame } from '@opensa/vehicle-installer/rebake-shared';
@@ -30,7 +37,6 @@ import { applyIdeRows, applyInsert, assertCarmodsModels, ideModelNames } from '@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { type LedgerRow, readAddsLedger, readAddsRows, renameAddsRows, writeAddsLedger } from './ledger';
 import { clearLooseFiles, installLooseFiles, readInstalledIds, writeSettingsFile } from './loose-files';
 import { resolveAddedCarText } from './name';
 import { type AddedVehicle, resolveAddedVehicles, stockSlotIds, stockSlots } from './sources';

@@ -1,6 +1,7 @@
 /**
- * `data/vehicle-adds.txt` — which added car holds which model id, written by every run and read FIRST by
- * the next one.
+ * `data/vehicle-adds.txt` — which added model holds which id, written by every run and read FIRST by the
+ * next one. Added CARS are `tools/add-vehicles`' rows; a replacement car's derived tuning parts are this
+ * tool's (014), and both tools share the file because they allocate out of the same id window.
  *
  * It exists because an id is not a build detail: a parked spot and a ModelVariations entry land in the
  * player's SAVE (`docs/gta-sa-original/fla-id-limits-are-part-of-the-savefile.md`), so an id that moved
@@ -14,6 +15,8 @@
  *
  * A car's re-modelled TUNING PARTS are rows here too (`kind` = `part`, `bases` = the stock part they were
  * cloned from): a part id is stored in a save as part of the car's upgrades, so it may not move either.
+ * A part row's `slot` is the DERIVED part name, which is why a naming-scheme change moves the row rather
+ * than writing a new one — see {@link renameAddsRows}.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

@@ -1,3 +1,5 @@
+import type { LedgerRow } from '@opensa/vehicle-installer/ledger';
+
 /**
  * Why an added car is ever SEEN — plan 004.
  *
@@ -22,8 +24,6 @@
 import { mergeIniKeys, MODEL_VARIATIONS_INI, readIniKey } from '@opensa/vehicle-installer/model-variations';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-
-import type { LedgerRow } from './ledger';
 
 /** The key whose value is the list of models the plugin may spawn in this slot's place. */
 const GLOBAL_KEY = 'Global';

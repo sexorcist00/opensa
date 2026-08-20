@@ -41,7 +41,8 @@
 ## Measured
 
 **Built 2026-08-19.** `tool-kit/free-ids.ts` (the pure allocator + `usedModelIds` over `data/` and
-`modloader/`), `add-vehicles/ledger.ts` (`data/vehicle-adds.txt`, merged so an `--only` run does not
+`modloader/`), `vehicle-installer/ledger.ts` (`data/vehicle-adds.txt`, moved there by 014 when a replacement car's derived
+parts needed the same promise; merged so an `--only` run does not
 unpromise the rest), `add-vehicles/install.ts` (in place on the built tree, like `--rebake --kind sa` — an
 added car is added to a build that already exists, so there is no `--out` to wipe; the plan's `--out <tmp>`
 was dropped for that reason). `applyVehicle` gained an `id` option that substitutes `<:id>` in the decoded
