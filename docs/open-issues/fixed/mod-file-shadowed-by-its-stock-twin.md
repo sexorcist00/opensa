@@ -1,13 +1,15 @@
 # A mod's file lands in one archive while its stock twin stays in another, and the stock one wins
 
-**Open — the fix is BUILT and measured, the field verdict is not in yet (2026-08-20).**
-[Plan 103](../plans/103-one-owner-per-archive-entry/readme.md) steps 1–3 and 6 shipped: the vehicle bucket
+**FIXED 2026-08-20, field-confirmed the same day** — the user played the delivered build and reported it
+good, the slamvan included.
+[Plan 103](../../plans/103-one-owner-per-archive-entry/readme.md) steps 1–3 and 6 shipped: the vehicle bucket
 now takes everything `vehicles.ide` and `veh_mods.ide` name plus every `<car><n>.txd`, a build holding one
 name in two of the archives the split owns is refused, and a car's files stop straddling siblings. On the
 rebuilt tree the **39 duplicates of ours are 0**, `slamvan.txd` has one owner and it is the mod's 9 359 360 B
-copy, and all 36 paintjob dictionaries are the mods'. What is left is the eye: the slamvan has to be looked
-at in the game. Step 4 (a mod owning its slot's paintjob COUNT) is deliberately unbuilt until the original's
-own rule is recovered.
+copy, and all 36 paintjob dictionaries are the mods'. Step 4's deletion half shipped with it — a replaced slot gives up
+its stock `<slot>.txd` and `<slot><n>.txd`, which drops nothing on today's fleet and closes the door for the
+day a mod ships fewer paintjobs than stock. What stays unbuilt is the shop's own paintjob COUNT, a field
+question rather than a code one.
 
 Field-found by the user: the **slamvan has no textures at all** — before tuning and
 after, body flat in its paint colour, chrome and wheels white. Every other car he drove was fine.
@@ -61,13 +63,13 @@ derivation's was, and worth stating exactly: `vehiclePartsFromCarmods` reads `li
 as well as `mods` lines, so it DOES catch the mirrored right-hand parts. The models it misses are
 `bnt_lr_slv1` and `bnt_lr_slv2` alone — the only two stock parts that appear in no section of `carmods.dat`
 at all, because no shop offers them. Two rows were enough to contest a car's whole dictionary. The honest
-source is the table the row sits in ([`docs/contracts/vehicles.md`](../contracts/vehicles.md)).
+source is the table the row sits in ([`docs/contracts/vehicles.md`](../../contracts/vehicles.md)).
 
 The splitter's own comment says a duplicate is harmless because "the game resolves an entry by NAME across
 every registered archive" — true when the entry exists once. It does not anticipate the vehicle installer
 staging a second copy into a different archive of the same tree.
 
-## The shapes a fix could take
+## The shapes a fix could take — 1 and 2 shipped, 3 was not needed
 
 1. **Classify by the TXD column** (`vehiclePartsFromCarmods` → the same rule the derivation now uses), and
    claim `<car>N.txd` for the car's bucket. Cheap, fixes the 35 dictionary names at their root, and closes
@@ -78,8 +80,10 @@ staging a second copy into a different archive of the same tree.
 3. **Stage into the archive that already owns the name** (or delete the loser). The most robust and the most
    expensive — it means rewriting `gta3.img` in the vehicles stage.
 
-Not decided. 1 + 2 look like the pair worth building: the guard is what says the fix held, exactly as the
-staged-clash guard does for [the part-name clash](fixed/vehicle-part-name-clash-between-mods.md).
+Shape 1 shipped as "the file a row sits in decides" — stronger than the TXD column and with nothing left to
+contest — and shape 2 as `assertOneOwnerPerEntry`. Shape 3 (rewriting `gta3.img` to delete the loser) was
+not needed once the names never landed there in the first place. The guard is what says the fix held,
+exactly as the staged-clash guard does for [the part-name clash](vehicle-part-name-clash-between-mods.md).
 
 ## Not a regression from plan 014
 

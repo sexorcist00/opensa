@@ -1,9 +1,9 @@
 # 103 — one owner per archive entry: the vehicle bucket takes everything the vehicle tables name
 
-**Status: PLANNED 2026-08-20**, the user's design. Field-found the same morning: the **slamvan has no
+**Status: BUILT 2026-08-20** — steps 1–3, 4's deletion half and 6; field-confirmed the same day. Planned that morning to the user's design. Field-found the same morning: the **slamvan has no
 textures**, because `slamvan.txd` exists in `gta3.img` (stock, 14 336 B) and in `vehicles2.img` (the mod's,
 9 359 360 B) at once and the stock one wins. The issue is
-[`docs/open-issues/mod-file-shadowed-by-its-stock-twin.md`](../../open-issues/mod-file-shadowed-by-its-stock-twin.md);
+[`docs/open-issues/fixed/mod-file-shadowed-by-its-stock-twin.md`](../../open-issues/fixed/mod-file-shadowed-by-its-stock-twin.md);
 this is how it gets closed. Spans `img-splitter`, `vehicle-installer` and the `sa` stage's census, which is
 why it lives here rather than beside one tool.
 
@@ -168,4 +168,4 @@ between `gta3.img` and `gta_int.img`, and `coach.dff`/`coach.txd` between `playe
 and the vehicle archive (the mod's bus, 15 419 392 B) — one name, two unrelated things, and the game reads
 the clothing one through the clothes system rather than by streaming name.
 
-**Field-pending**: the slamvan's textures are the verdict this was built for, and only the game can give it.
+**Field-confirmed 2026-08-20**: the user played the delivered build and reported it good, the slamvan included.
