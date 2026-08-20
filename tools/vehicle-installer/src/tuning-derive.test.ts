@@ -23,6 +23,7 @@ const VEH_MODS = `objs
 1122, wg_l_lr_rem1, remingtn, 100, 2097152
 1126, exh_lr_rem1, remingtn, 100, 2097152
 1100, misc_c_lr_rem1, remingtn, 100, 2097152
+1130, exh_lr_bl1, blade, 100, 2097152
 end
 `;
 
@@ -59,6 +60,10 @@ const trees: string[] = [];
 
 const derive = (slot: string, shipped: string[]): DerivedTuning =>
   deriveTuning({ base: 'remingtn', gameDir: game, shipped, slot, token: slot });
+
+/** A REPLACEMENT car: it IS the slot it varies, which is what 014 added to this module. */
+const replace = (slot: string, shipped: string[]): DerivedTuning =>
+  deriveTuning({ base: slot, gameDir: game, shipped, slot, token: 'tok' });
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'added-tuning-'));
@@ -129,6 +134,13 @@ describe('deriveTuning', () => {
       expect(derived.warnings.some((warning) => /has no mirror/.test(warning))).toBe(true);
     });
 
+    it('reports a generic part and does not rename it — every car in the game wears that one', () => {
+      const derived = replace('remingtn', ['nto_b_l.dff']);
+
+      expect(derived.renames.size).toBe(0);
+      expect(derived.warnings[0]).toMatch(/every car wears/);
+    });
+
     it("reports the base's own parts the car names but does not re-model", () => {
       const derived = derive('059veh', ['exh_lr_rem1.dff']);
 
@@ -137,6 +149,24 @@ describe('deriveTuning', () => {
   });
 
   describe('positive cases', () => {
+    it('leaves a replacement car its OWN parts under their own names — that is what replacing means', () => {
+      const derived = replace('remingtn', ['exh_lr_rem1.dff', 'wg_r_lr_rem1.dff']);
+
+      expect(derived.renames.size).toBe(0);
+      expect(derived.rows).toEqual([]);
+      expect(derived.warnings).toEqual([]);
+    });
+
+    it("derives the part that belongs to ANOTHER car, whatever the shipping car's own line says", () => {
+      const derived = replace('remingtn', ['exh_lr_bl1.dff']);
+
+      expect([...derived.renames]).toEqual([['exh_lr_bl1.dff', 'exh_lr_bl1_tok.dff']]);
+      // Cloned from blade's row, but textured by the car that ships it.
+      expect(derived.rows).toEqual([
+        { from: 'exh_lr_bl1', name: 'exh_lr_bl1_tok', row: '<:id>, exh_lr_bl1_tok, remingtn, 100, 2097152' },
+      ]);
+    });
+
     it('renames each part to the stock name plus its slot, keeping the whole prefix', () => {
       const derived = derive('059veh', ['exh_lr_rem1.dff']);
 
@@ -147,7 +177,7 @@ describe('deriveTuning', () => {
       const derived = derive('059veh', ['exh_lr_rem1.dff']);
 
       expect(derived.rows).toEqual([
-        { name: 'exh_lr_rem1_059veh', row: '<:id>, exh_lr_rem1_059veh, 059veh, 100, 2097152' },
+        { from: 'exh_lr_rem1', name: 'exh_lr_rem1_059veh', row: '<:id>, exh_lr_rem1_059veh, 059veh, 100, 2097152' },
       ]);
     });
 

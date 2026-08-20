@@ -245,20 +245,14 @@ function installTuning(
   }
   const rows: LedgerRow[] = [];
   const ideRows: string[] = [];
-  for (const { name, row } of parts.rows) {
+  for (const { from, name, row } of parts.rows) {
     const id = ids.get(name);
     if (id === undefined) {
       warnings.push(`${source.name}: no id was allocated for '${name}' — the part is not installed`);
       continue;
     }
     ideRows.push(row.split(ID_PLACEHOLDER).join(String(id)));
-    rows.push({
-      bases: [name.slice(0, name.lastIndexOf(`_${source.slot}`))],
-      folder: source.name,
-      id,
-      kind: 'part',
-      slot: name,
-    });
+    rows.push({ bases: [from], folder: source.name, id, kind: 'part', slot: name });
   }
   warnings.push(...applyIdeRows(gameDir, ideRows).map((warning) => `${source.name}: ${warning}`));
   for (const entry of parts.shop) {

@@ -1,11 +1,22 @@
 /**
- * An added car's TUNING PARTS, derived — plan 005.
+ * A car's TUNING PARTS that belong to ANOTHER car, derived — plan 005, extended by 014.
  *
- * A car that varies a stock slot usually re-models that slot's mod-shop parts to fit its own body, and ships
- * them under the STOCK names (`wg_r_lr_rem1.dff` inside `059veh - … (remingtn)`). Those names must never
- * reach the archive: they would replace the part every OTHER car using it wears. So each shipped part gets a
- * new unique name, and everything the game knows about the stock one is cloned under it — the IDE row, the
- * shop item, the price, the `link` to its mirror, and its place on the car's `carmods.dat` line.
+ * A car that ships a `.dff` under a stock part's name is saying "this is that part, re-modelled for my
+ * body". When the part is the slot's OWN, that is exactly what a replacement mod does and the name stays.
+ * When it belongs to a DIFFERENT car it must not reach the archive under that name — an entry name is
+ * global, so it would replace the part every other car wearing it gets. Those get a new unique name, and
+ * everything the game knows about the stock one is cloned under it: the IDE row, the shop item, the price,
+ * the `link` to its mirror, and its place on the car's `carmods.dat` line.
+ *
+ * **Whose part is it? The stock `veh_mods.ide` row's TXD column says so** — it names the car the part is
+ * textured by (`rbmp_lr_bl1` → `blade`), or `vehicle` for the parts any car can wear. That column, not the
+ * `carmods.dat` `mods` line: a right-hand part is bought through its left partner's `link` and is on no
+ * line at all (22 of them, plus slamvan's two bonnets no shop offers), and treating those as new would
+ * rename one half of a stock `link` pair and leave the car buying a left skirt with no right side. Measured
+ * on the stock tables: no car's line names a part whose txd is another car's, so the column never
+ * contradicts the line — it only sees the parts the line cannot show. The rule needs no per-car table, and
+ * it serves both callers with nothing to switch on: for an ADDED car every stock part it ships belongs to
+ * its base, so all of them derive, exactly as before.
  *
  * **Nothing here is a table.** The user's earlier tool carried a hand-written rename per car; every value
  * below is read from the built `data/` or from the name itself, so a car nobody has seen yet works the same.
@@ -48,7 +59,7 @@ export interface DerivedTuning {
   /** `<stock file name>.dff` (lowercased) → the entry name it is staged under. */
   readonly renames: ReadonlyMap<string, string>;
   /** `veh_mods.ide` rows to add, with `<:id>` where the id goes. */
-  readonly rows: readonly { readonly name: string; readonly row: string }[];
+  readonly rows: readonly { readonly from: string; readonly name: string; readonly row: string }[];
   /** Shop item + price lines to clone, each after the stock part it was cloned from. */
   readonly shop: readonly {
     readonly after: string;
@@ -99,12 +110,26 @@ export function deriveTuning({ base, gameDir, shipped, slot, token }: DeriveTuni
 
   const parts = shipped.map((file) => file.replace(/\.dff$/i, '').toLowerCase());
   const renames = new Map<string, string>();
-  const rows: { name: string; row: string }[] = [];
+  const rows: { from: string; name: string; row: string }[] = [];
   const shop: { after: string; item: string; price: string; section: string }[] = [];
   for (const part of parts) {
     const stockPart = stock.get(part);
     if (stockPart === undefined) {
+      // Nothing to clone FROM. A part the stock game never had is the mod's own to declare, which is what
+      // `tuning_new_parts.txt` is for; here it just ships under the name it was authored with.
       warnings.push(`${part}.dff is not a part any veh_mods.ide row defines — shipped as it is, under its own name`);
+      continue;
+    }
+    if (stockPart.txd === slot) {
+      // The slot's OWN part, re-modelled for the body that is replacing it: it keeps its name and replaces
+      // the stock geometry, which is the whole point of a replacement mod. Nothing to derive.
+      continue;
+    }
+    if (stockPart.txd === GENERIC_TXD) {
+      warnings.push(
+        `${part}.dff re-models a part every car wears (its veh_mods.ide row's txd is '${GENERIC_TXD}') — ` +
+          `installed under its own name, so every other car gets this version too`,
+      );
       continue;
     }
     const derived = `${part}_${token}`;
@@ -117,7 +142,7 @@ export function deriveTuning({ base, gameDir, shipped, slot, token }: DeriveTuni
     }
     renames.set(`${part}.dff`, `${derived}.dff`);
     // The TXD is the ADDED car's own: a re-modelled part is textured by the car that ships it.
-    rows.push({ name: derived, row: `<:id>, ${derived}, ${slot}, ${stockPart.columns}` });
+    rows.push({ from: part, name: derived, row: `<:id>, ${derived}, ${slot}, ${stockPart.columns}` });
     const entry = shopEntry(shopping, part);
     if (entry === null) {
       // A part with no shop entry is normal — a right-hand wing is bought through its left partner's link.
@@ -126,7 +151,9 @@ export function deriveTuning({ base, gameDir, shipped, slot, token }: DeriveTuni
     shop.push({ after: part, item: derived, price: entry.price.replace(part, derived), section: entry.section });
   }
 
-  warnings.push(...borrowedParts(carmods.mods.get(slot) ?? carmods.mods.get(base), renames, stock, base));
+  if (base !== slot) {
+    warnings.push(...borrowedParts(carmods.mods.get(slot) ?? carmods.mods.get(base), renames, stock, base));
+  }
 
   return {
     links: deriveLinks(carmods.links, renames, warnings),
