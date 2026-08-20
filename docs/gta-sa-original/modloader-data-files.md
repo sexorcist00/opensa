@@ -71,4 +71,4 @@ the boot-time failure is not a count ceiling that anyone has found (`VehicleStru
 
 - `tools/add-vehicles/src/loose-files.ts` — writes the models and the `<slot>.settings.txt`.
 - `docs/contracts/vehicles.md` §1b — the contract a mod author reads.
-- `docs/plans/102-add-vehicles/field-checks.md` — the field round.
+- `tools/add-vehicles/docs/plans/102-add-vehicles/field-checks.md` — the field round.

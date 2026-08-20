@@ -98,7 +98,7 @@ shift that lands within 20 u of the owner.** Three of the 15 repaired pairs were
   `0. Map Fixes Pack` still carries the off-by-one until it is re-converted with `merge-gen-mod`.
 - **Design rule, unchanged: appending is safe, removing is not.** Retire a placement by exiling the row (the
   trees layer's z = −300/−1000 is the established shape) rather than deleting it. Stated in
-  [`docs/restrictions/assets-and-data.md`](../restrictions/assets-and-data.md).
+  [`docs/restrictions/assets-and-data.md`](../../restrictions/assets-and-data.md).
 
 ## Reproducing the forensics
 

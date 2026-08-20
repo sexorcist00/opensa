@@ -16,7 +16,7 @@ own**).
 > byte-for-byte. What is NOT evidence: anything about how the ide/handling rows reached the game. Treat the
 > `*.settings.txt` files in `modloader/Vehicles Added/` as the tool's staging copies, not as a proven road —
 > the road that works was found from Mod Loader's own documentation
-> ([modloader-data-files.md](../../gta-sa-original/modloader-data-files.md)).
+> ([modloader-data-files.md](../../../../../docs/gta-sa-original/modloader-data-files.md)).
 
 It is also the recon of the DATA that tool was built for — the mod folder `9. Added Vehicles` (115 cars),
 which we WILL use. This doc answers three questions asked before any plan is written: which plans the new

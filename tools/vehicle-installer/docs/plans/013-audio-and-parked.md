@@ -1,7 +1,7 @@
 # 013 — `audio.txt` and `parked.txt` for a replacement car
 
 **Status: BUILT 2026-08-19** (field verdict pending —
-[the round](../../../../docs/plans/102-add-vehicles/field-checks.md)). Part of [central plan 102](../../../../docs/plans/102-add-vehicles/readme.md).
+[the round](../../../add-vehicles/docs/plans/102-add-vehicles/field-checks.md)). Part of [central plan 102](../../../add-vehicles/docs/plans/102-add-vehicles/readme.md).
 Neither file exists in `mods-src/original/vehicles` today; both exist in `add-vehicles` (4 `audio.txt`,
 1 `parked.txt`) and the merges they need are the same for a replacement car that wants its own engine sound
 or a parked spot. Built here so the new tool imports them — and so a replacement car can use them.

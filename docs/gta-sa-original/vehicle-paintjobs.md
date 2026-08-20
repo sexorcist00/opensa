@@ -9,7 +9,7 @@ A car's paintjob is a whole texture dictionary of its own, named by CONVENTION o
 `blade1.txd`, `blade2.txd`, `blade3.txd` beside `blade.txd`. **No IDE row, no `carmods.dat` line and no
 `carcols.dat` entry names any of them** — the convention is the only thing that ties them to the car, which
 is why a tool sorting archive entries by "which row claims this" leaves every one of them unclaimed
-([plan 103](../plans/103-one-owner-per-archive-entry/readme.md)).
+([plan 103](../../tools/img-splitter/docs/plans/002-one-owner-per-archive-entry.md)).
 
 Stock ships **36 of them across 13 cars**:
 

@@ -3,7 +3,7 @@
 **Original SA only.** The tool that installs ADDED cars — new model ids — from `mods-src/<game>/add-vehicles/`
 into the built `sa` tree, on top of `vehicle-installer`'s Node API (an added car is a replacement car plus
 an id plus what a stock slot otherwise gets for free). Umbrella, research and the shared layer:
-[`docs/plans/102-add-vehicles/`](../../../../docs/plans/102-add-vehicles/readme.md) — read its "shared
+[`tools/add-vehicles/docs/plans/102-add-vehicles/`](102-add-vehicles/readme.md) — read its "shared
 layer" table before adding a module here; if a merge writes a file the install reads, it belongs in
 `vehicle-installer`, not here.
 

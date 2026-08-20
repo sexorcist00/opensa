@@ -1,8 +1,11 @@
 # Plans index
 
-The map of planning docs across the repo. **Engine plans** live here — one numbered folder per plan
-(`docs/plans/NNN-*/readme.md`, multi-part plans add sibling files inside their folder); the
-**offline tools** keep their own `docs/plans/` next to their code (so does the headless harness,
+The map of planning docs across the repo. **Engine plans live here and nothing else does** (the user's call,
+2026-08-20) — one numbered folder per plan (`docs/plans/NNN-*/readme.md`, multi-part plans add sibling files
+inside their folder). **Every toolchain plan lives beside its tool**, in `tools/<tool>/docs/plans/`, even when
+its work spans several tools: it goes in the chain of the tool whose RULE it is, and its row there names what
+else it reaches. Plans 102 (added vehicles → `tools/add-vehicles`) and 103 (one owner per archive entry →
+`tools/img-splitter`) moved out on that rule. The **offline tools** therefore keep their own `docs/plans/` (so does the headless harness,
 `tools-debug/bench-harness/docs/plans/`; a debug INSTRUMENT's plan sits beside the tool whose code it reuses —
 `model-repack.ts`'s LOD half is `tools/opensa-lod-generator/docs/plans/007`). Open questions and parked
 ideas live in [`../open-issues/`](../open-issues/) and [`../ideas/`](../ideas/).
@@ -21,12 +24,6 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 `001`–`099`, one folder each (066, 073, 074, 078–082, 096–099 carry multi-part sub-plans; 083 kept its
 row but its chain was superseded by 097). Newest first:
 
-- **[102 — Added vehicles for the `sa` target](./102-add-vehicles/readme.md)** — **PLANNED 2026-08-19,
-  original SA only**: `tools/add-vehicles` (new model ids from `mods-src/original/add-vehicles/`, 115 cars:
-  ids in 19 001–19 999, name/sound/parking, traffic through ModelVariations, tuning parts DERIVED not
-  tabled, tuned traffic), what `vehicle-installer` gains first (012 the two unread file kinds, 013
-  audio/parked), and `asi/perfect-vehicle` for the two `carmods.dat` ceilings (30 `link` pairs, 16 parts
-  per car). Research in its `recon.md`; the shared layer is decided in the umbrella, not per chain.
 - **[101 — Escalators in OpenSA](./101-escalators/readme.md)** — **PLANNED 2026-08-07**: the steps have
   never moved in our engine. `renderware` decodes the type-10 entry (plan 044) and there is a debug waypoint;
   `engine`, `cell-weld` and `engine-formats` have no escalator code at all, so the staircase draws and
@@ -69,7 +66,6 @@ row but its chain was superseded by 097). Newest first:
   The before/after frame delta is NOT obtainable — the pre-change engine cannot render the 2026-08-11 pak,
   both sides of the commit pair failing identically — so the chain closes on a stated bound instead: one
   integer compare per rigid submesh bind, nothing else, for a model that animates nothing.
-- **[103 — One owner per archive entry](./103-one-owner-per-archive-entry/readme.md)** — **PLANNED 2026-08-20.** A mod's file and its stock twin can end up in two archives under one name, and the stock one wins: the slamvan renders untextured and twelve cars wear stock paintjobs, silently. The vehicle bucket takes everything `vehicles.ide` and `veh_mods.ide` name (measured: 0 contested dictionaries under that rule), paintjob dictionaries follow their car by name, and a build holding one name in two archives is refused against the stock baseline of 6.
 
 - **[098 — All land vehicle types](./098-all-land-vehicles/readme.md)** — **PLANNED 2026-08-04**,
   supersedes `roadmap/0.5.0/plans/04-all-vehicle-types/` (deleted). Rewritten from a four-way recon

@@ -13,16 +13,19 @@ Maker 3.0.2 (mod 47), CLEO's FXT loader — so the work is merges into the built
 the way every `vehicle-installer` step already works. Source: `mods-src/original/add-vehicles/` (`models/`
 115 cars, `screenshots/`), the same shape as `vehicles/`.
 
-## Why this lives in the central folder
+## Why this is an umbrella, and why it lives HERE
 
-It spans four homes and the pipeline, and each piece is shippable alone:
+It spans four homes and the pipeline, and each piece is shippable alone. It sat in `docs/plans/` for that
+reason until 2026-08-20, when the user's rule made the central folder engine-only: a toolchain plan lives in
+the chain of the tool whose rule it is — `add-vehicles`, here — and names its reach rather than sitting apart
+from all of it.
 
 | chain | what | status |
 | --- | --- | --- |
-| [`tools/vehicle-installer/docs/plans/012`](../../../tools/vehicle-installer/docs/plans/012-unread-file-kinds.md) | `model-variations-extra.txt` + `text.txt` read at last; the settings-fallback trap; `.fxt` + ModelVariations merges are born here | **BUILT** |
-| [`tools/vehicle-installer/docs/plans/013`](../../../tools/vehicle-installer/docs/plans/013-audio-and-parked.md) | `audio.txt` + `parked.txt` for replacement cars; FLA audio cfg + Parked Maker merges are born here | **BUILT** |
-| [`tools/add-vehicles/docs/plans/`](../../../tools/add-vehicles/docs/plans/readme.md) `001`–`007` | the new tool: resolver root, ids + rows + IMG, name/sound/parking, traffic, derived tuning, tuned traffic, pipeline + field | 001–007 **BUILT** (007's field round waits on the link ceiling) |
-| [`asi/perfect-vehicle/docs/plans/`](../../../asi/perfect-vehicle/docs/plans/readme.md) `001`–`002` | the two `carmods.dat` ceilings (30 `link` pairs, 16 parts per car) — RE, then the patches | 001 **DONE**, 002 **BUILT** for the link half (256); the per-car half is researched and deliberately not built |
+| [`tools/vehicle-installer/docs/plans/012`](../../../../../tools/vehicle-installer/docs/plans/012-unread-file-kinds.md) | `model-variations-extra.txt` + `text.txt` read at last; the settings-fallback trap; `.fxt` + ModelVariations merges are born here | **BUILT** |
+| [`tools/vehicle-installer/docs/plans/013`](../../../../../tools/vehicle-installer/docs/plans/013-audio-and-parked.md) | `audio.txt` + `parked.txt` for replacement cars; FLA audio cfg + Parked Maker merges are born here | **BUILT** |
+| [`tools/add-vehicles/docs/plans/`](../../../../../tools/add-vehicles/docs/plans/readme.md) `001`–`007` | the new tool: resolver root, ids + rows + IMG, name/sound/parking, traffic, derived tuning, tuned traffic, pipeline + field | 001–007 **BUILT** (007's field round waits on the link ceiling) |
+| [`asi/perfect-vehicle/docs/plans/`](../../../../../asi/perfect-vehicle/docs/plans/readme.md) `001`–`002` | the two `carmods.dat` ceilings (30 `link` pairs, 16 parts per car) — RE, then the patches | 001 **DONE**, 002 **BUILT** for the link half (256); the per-car half is researched and deliberately not built |
 | `tool-kit` | the second vehicles ROOT through the one resolver; the free-id allocator over a built tree | inside add-vehicles 001/002 |
 | `perfect-map-builder` | the `add-vehicles` stage after `vehicles`, before the guards; `checkImgIdBudgets` already counts the ids | inside add-vehicles 007 |
 

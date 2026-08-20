@@ -8,7 +8,7 @@ Parked Maker for parking, CLEO's FXT loader for the name), and our own engine ha
 An added car is a replacement car **plus an id** plus what a stock slot otherwise gets for free. So this
 tool owns only what is specific to a new id; every merge that writes a file the install reads lives once, in
 `@opensa/vehicle-installer`, and is called from here. The chain, the shared-layer table and the research are
-[central plan 102](../../docs/plans/102-add-vehicles/readme.md); this tool's own steps are
+[central plan 102](docs/plans/102-add-vehicles/readme.md); this tool's own steps are
 [docs/plans](docs/plans/readme.md).
 
 ```bash

@@ -135,7 +135,7 @@ fleet. No crash dump. `fastman92limitAdjuster.log`: `Number of memory changes ma
      `nto_b_*` nitro triple every added car carries, versus the derived parts of the 9 cars that have them.
    - **still crashes** → carmods is out too, and what is left standing is the 46 `veh_mods.ide` rows and the
      colour patch family above. Strip the `veh_mods.ide` rows next, then `Vehicle colors`.
-2. Whatever the verdict, it goes into `docs/plans/102-add-vehicles/field-checks.md` with the run's log name.
+2. Whatever the verdict, it goes into `tools/add-vehicles/docs/plans/102-add-vehicles/field-checks.md` with the run's log name.
 
 ## Where the state is
 
@@ -143,6 +143,6 @@ Bottle and built tree both carry the full fleet, the full tuning and `#Vehicle c
 `data/_bisect-backup/carmods.dat.full` in the bottle can be deleted; nothing else was left armed.
 
 **Still open, and now the next thing to do**: the 21 unticked rows of
-[`docs/plans/102-add-vehicles/field-checks.md`](../plans/102-add-vehicles/field-checks.md) — traffic, tuned
+[`tools/add-vehicles/docs/plans/102-add-vehicles/field-checks.md`](../../../tools/add-vehicles/docs/plans/102-add-vehicles/field-checks.md) — traffic, tuned
 traffic, the shop, the HUD name, the engine sound — none of which has been seen yet, and all of which the
 loading crash was blocking.

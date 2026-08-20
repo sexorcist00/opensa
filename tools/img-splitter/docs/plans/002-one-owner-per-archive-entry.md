@@ -3,7 +3,7 @@
 **Status: BUILT 2026-08-20** — steps 1–3, 4's deletion half and 6; field-confirmed the same day. Planned that morning to the user's design. Field-found the same morning: the **slamvan has no
 textures**, because `slamvan.txd` exists in `gta3.img` (stock, 14 336 B) and in `vehicles2.img` (the mod's,
 9 359 360 B) at once and the stock one wins. The issue is
-[`docs/open-issues/fixed/mod-file-shadowed-by-its-stock-twin.md`](../../open-issues/fixed/mod-file-shadowed-by-its-stock-twin.md);
+[`docs/open-issues/fixed/mod-file-shadowed-by-its-stock-twin.md`](../../../../docs/open-issues/fixed/mod-file-shadowed-by-its-stock-twin.md);
 this is how it gets closed. Spans `img-splitter`, `vehicle-installer` and the `sa` stage's census, which is
 why it lives here rather than beside one tool.
 

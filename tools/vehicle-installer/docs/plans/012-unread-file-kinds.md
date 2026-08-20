@@ -1,6 +1,6 @@
 # 012 — The two file kinds the fleet ships and the installer never read
 
-**Status: BUILT 2026-08-19** (field verdict pending). Part of [central plan 102](../../../../docs/plans/102-add-vehicles/readme.md);
+**Status: BUILT 2026-08-19** (field verdict pending). Part of [central plan 102](../../../add-vehicles/docs/plans/102-add-vehicles/readme.md);
 opened by the 212-folder census (session 28) the user asked for: every file KIND under
 `mods-src/original/vehicles/{models,new}` against what `applyVehicle` reads.
 

@@ -2,7 +2,7 @@
 
 **Status: BUILT 2026-08-20**, all five steps, measured below. Planned 2026-08-19 and field-found the same
 evening: the blade's rear bumper is modelled for a 1960 Impala. Grew out of central
-[plan 102](../../../../docs/plans/102-add-vehicles/readme.md)'s field round; the issue it closes is
+[plan 102](../../../add-vehicles/docs/plans/102-add-vehicles/readme.md)'s field round; the issue it closes is
 [`docs/open-issues/fixed/vehicle-part-name-clash-between-mods.md`](../../../../docs/open-issues/fixed/vehicle-part-name-clash-between-mods.md).
 
 ## What is broken

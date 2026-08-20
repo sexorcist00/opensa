@@ -377,7 +377,7 @@ the `sa` build when a link's target does not stand where its owner stands (`@ope
 `scripts/debug/lod-link-check.ts` for diagnosis). Stock passes with 6 103 links and zero findings, so any
 finding is ours. **Its limit is part of the rule**: a shift that lands within 20 u of the owner is still
 invisible — 3 of the 15 shifted links in the case above were. Detail, measurements and the paste-able
-diagnosis: [`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../open-issues/ipl-row-removal-breaks-lod-links.md)
+diagnosis: [`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../open-issues/fixed/ipl-row-removal-breaks-lod-links.md)
 and [`tools/mod-installer/docs/plans/012-stream-merge-lod-space.md`](../../tools/mod-installer/docs/plans/012-stream-merge-lod-space.md).
 
 ## A curated list may GATE a derived rule; it may never CARRY the correction

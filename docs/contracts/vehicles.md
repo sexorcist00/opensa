@@ -272,7 +272,7 @@ it is remapped — declare those too.
 `mods-src/<game>/add-vehicles` is a SECOND vehicles root with the same grammar as §1's — flat, or
 `models/`+`new/`, or layered — read through the same one resolver. An added car is not a replacement: it
 takes a model id the game never had, so everything a stock slot gets for free has to be produced for it
-(central plan [102](../plans/102-add-vehicles/readme.md)).
+(central plan [102](../../tools/add-vehicles/docs/plans/102-add-vehicles/readme.md)).
 
 **The folder name carries one field more**, a parenthesised suffix naming the STOCK slot the car is a
 variation OF:

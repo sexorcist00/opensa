@@ -51,7 +51,7 @@ a slot enters it when a scene shows actors erased behind its glass.
 entities (actors before vehicles), a patched cutscene render path with a deferred alpha pass, or
 OpenSA's own cutscene player (which sorts transparency properly and never needs this). Then the set
 empties and window glass returns fleet-wide. **The retirement is planned:
-[`asi/perfect-cutscene` plan 001](../../asi/perfect-cutscene/docs/plans/001-deferred-cutscene-alpha.md)
+[`asi/perfect-cutscene` plan 001](../../../asi/perfect-cutscene/docs/plans/001-deferred-cutscene-alpha.md)
 defers cutscene-vehicle alpha atomics into the engine's sorted pass; its step 5 moves this file to
 `retired/` and step 6 re-sweeps the whole plan-004 ledger.**
 

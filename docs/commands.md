@@ -151,7 +151,7 @@ npx tsx tools/add-vehicles/src/cli.ts --game build/original/sa --plan     # reso
 audio loader, Parked Maker, CLEO's FXT loader). Ids come from **19 001–19 999** and are pinned by
 `data/vehicle-adds.txt`, so a rebuild never renumbers the fleet (a parked spot and a variation land in the
 SAVE). Also a pmb stage (`--until add-vehicles`), after `cutscene`. Central plan
-[102](../docs/plans/102-add-vehicles/readme.md); tuning rate and exclusions live in an optional
+[102](../tools/add-vehicles/docs/plans/102-add-vehicles/readme.md); tuning rate and exclusions live in an optional
 `mods-src/<game>/add-vehicles/add-vehicles.json`.
 
 ### Vehicle round: rebake instead of rebuilding

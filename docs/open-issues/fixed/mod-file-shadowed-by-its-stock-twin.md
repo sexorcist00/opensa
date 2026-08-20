@@ -2,7 +2,7 @@
 
 **FIXED 2026-08-20, field-confirmed the same day** — the user played the delivered build and reported it
 good, the slamvan included.
-[Plan 103](../../plans/103-one-owner-per-archive-entry/readme.md) steps 1–3 and 6 shipped: the vehicle bucket
+[Plan 103](../../../tools/img-splitter/docs/plans/002-one-owner-per-archive-entry.md) steps 1–3 and 6 shipped: the vehicle bucket
 now takes everything `vehicles.ide` and `veh_mods.ide` name plus every `<car><n>.txd`, a build holding one
 name in two of the archives the split owns is refused, and a car's files stop straddling siblings. On the
 rebuilt tree the **39 duplicates of ours are 0**, `slamvan.txd` has one owner and it is the mod's 9 359 360 B

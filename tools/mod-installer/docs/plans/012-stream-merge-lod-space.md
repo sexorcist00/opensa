@@ -1,7 +1,7 @@
 # 012 — a stream merge's `lod` lives in the AUTHOR's layout, and ours is a different one
 
 **Status: DONE 2026-08-16**, steps 1–3. The field defect in
-[`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../../../../docs/open-issues/ipl-row-removal-breaks-lod-links.md)
+[`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../../../../docs/open-issues/fixed/ipl-row-removal-breaks-lod-links.md)
 is explained, repaired and now guarded. Numbers below.
 
 ## What was wrong

@@ -56,7 +56,7 @@ headroom left**. The pipeline ships the plugin into the `sa` tree before the car
 has the lift or refuses; there is no middle state where 31 pairs are written against an array of 30.
 
 **The field verdicts are collected in one round** at the end of the chain:
-[`docs/plans/102-add-vehicles/field-checks.md`](../../../../docs/plans/102-add-vehicles/field-checks.md),
+[`tools/add-vehicles/docs/plans/102-add-vehicles/field-checks.md`](102-add-vehicles/field-checks.md),
 16 rows as of today.
 
 ## What is left of this plan

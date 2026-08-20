@@ -16,7 +16,7 @@
 > evidence of the flag working. It was evidence of nothing — those parts had never been through the code
 > path that crashes. **A control group that was never exposed to the treatment is not a control group.**
 
-**Taken 2026-08-20**, plan [`vehicle-installer/014`](../../tools/vehicle-installer/docs/plans/014-borrowed-tuning-parts.md)
+**Taken 2026-08-20**, plan [`vehicle-installer/014`](../../../tools/vehicle-installer/docs/plans/014-borrowed-tuning-parts.md)
 step 5.
 
 ## What it is
@@ -40,7 +40,7 @@ entry per new part".
 ## What it was judged on
 
 Measurement over a real install, written up in
-[`gta-sa-original/veh-mods-col-and-the-upgrade-object.md`](../gta-sa-original/veh-mods-col-and-the-upgrade-object.md):
+[`gta-sa-original/veh-mods-col-and-the-upgrade-object.md`](../../gta-sa-original/veh-mods-col-and-the-upgrade-object.md):
 every part with no `veh_mods.col` entry that carries the flag survives the shop preview (the added fleet's
 46 derived parts, field-played), and both parts measured without it crash — twice in the field, and the
 crash followed them when their ids were moved to 19701/19702, so it is the flag and not the id. Stock parts

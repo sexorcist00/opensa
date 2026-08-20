@@ -141,7 +141,7 @@ A stream's `lod` indexes its area's TEXT IPL, so it can only be re-expressed onc
 text conversion did to that index space. Converting the two apart is how the shipped `0. Map Fixes Pack` came
 to carry links one row off in `law_stream1..4` / `law2_stream1`: the text merge was right, the streams kept
 the AUTHOR's indexes, and stream merges apply LAST — so they overwrote the installer's own rebase and the
-field lost its LODs ([`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../../docs/open-issues/ipl-row-removal-breaks-lod-links.md)).
+field lost its LODs ([`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../../docs/open-issues/fixed/ipl-row-removal-breaks-lod-links.md)).
 Folder mode diffs each stream against the entry the installer will actually have (removals already mirrored
 in) and **gates every stream end to end**: each link must resolve, in OUR merged text, to the same row the
 author's link resolved to in THEIRS, or the stream is refused instead of written. The single-file CLI now

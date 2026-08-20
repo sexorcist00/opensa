@@ -67,6 +67,6 @@ carried 115 cars nothing can spawn.
 
 - **The field ladder** (step 4): a boot with 31 pairs, both wings of a re-modelled set swapping together in
   the shop, eight world entries, then the stock `carmods.dat` again as the regression. Rows in
-  [the plan-102 field round](../../../../docs/plans/102-add-vehicles/field-checks.md).
+  [the plan-102 field round](../../../../tools/add-vehicles/docs/plans/102-add-vehicles/field-checks.md).
 - **`PV_FIX_UPGRADES`** — the per-car array. RE done (001), patch not written: nothing needs it, and writing
   a relocation nobody exercises is how a plugin grows a path that is wrong the first time it runs.

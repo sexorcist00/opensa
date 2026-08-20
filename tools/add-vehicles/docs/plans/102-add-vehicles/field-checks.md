@@ -21,9 +21,9 @@ Seven launches went into the road the added cars take, and the result changed th
 - **PROVEN**: the 115 cars load, drive, and a parked added car appears. Their `vehicles.ide` and
   `handling.cfg` rows go into `modloader/added-vehicles/<slot>.settings.txt`, not into `data/` — baked there
   they kill the game before a window appears. Mod Loader merges them by matching data lines by SHAPE
-  ([the facts](../../gta-sa-original/modloader-data-files.md)).
+  ([the facts](../../../../../docs/gta-sa-original/modloader-data-files.md)).
 - **CLOSED 2026-08-19 evening**: the loading crash was never the tuning —
-  [`docs/open-issues/fixed/added-cars-crash-after-loading.md`](../../open-issues/fixed/added-cars-crash-after-loading.md).
+  [`docs/open-issues/fixed/added-cars-crash-after-loading.md`](../../../../../docs/open-issues/fixed/added-cars-crash-after-loading.md).
   It was `Vehicle colors = 256`, an FLA setting we had added on an inference; with it commented back out the
   game loads with the FULL tuning on (run 5, 19:08, FLA `Number of memory changes made: 3712`). Four
   launches were spent bisecting the tuning data first — ModelVariations, `shopping.dat` and the 65

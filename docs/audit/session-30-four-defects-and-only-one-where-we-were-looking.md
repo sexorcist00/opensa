@@ -1,6 +1,6 @@
 # Session 30 — four defects, and only one of them was where we were looking
 
-**2026-08-19, closing the field round of central [plan 102](../plans/102-add-vehicles/readme.md).**
+**2026-08-19, closing the field round of central [plan 102](../../tools/add-vehicles/docs/plans/102-add-vehicles/readme.md).**
 11 commits on `main` after `da42d358`, tree clean, NOT pushed. No code was written except two small fixes;
 the session's product is diagnosis, and its cost is measured in field launches.
 

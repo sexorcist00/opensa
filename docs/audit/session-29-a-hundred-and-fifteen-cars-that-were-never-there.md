@@ -2,7 +2,7 @@
 
 **2026-08-19, after session 28.** Nine plans built in one run: `vehicle-installer` 012–013,
 `tools/add-vehicles` 001–007, `asi/perfect-vehicle` 001–002 — the whole of central plan
-[102](../plans/102-add-vehicles/readme.md). What changed, what it cost, what it bought, and the four defects
+[102](../../tools/add-vehicles/docs/plans/102-add-vehicles/readme.md). What changed, what it cost, what it bought, and the four defects
 that fell out of it.
 
 ## What changed
@@ -164,7 +164,7 @@ by a byte-identical repeat, `CShopping`'s fixed arrays the standing suspect, the
 
 ## What is NOT done
 
-**The field round.** Sixteen rows in [field-checks.md](../plans/102-add-vehicles/field-checks.md), collected
+**The field round.** Sixteen rows in [field-checks.md](../../tools/add-vehicles/docs/plans/102-add-vehicles/field-checks.md), collected
 rather than run one at a time (the user's call). It includes the riskiest delivery of the session — a plugin
 that rewrites two functions of the exe — with the row that matters most being "then take the plugin away
 again".

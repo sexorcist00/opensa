@@ -241,15 +241,23 @@ The documentation lifecycle (idea → concept → plan / postmortem; roadmap for
 - `docs/postmortem/` — a died concept/plan: what was tried, what was measured, why it failed, when to revisit.
   Add the file + a row in `docs/postmortem/README.md` (never just delete a dead direction)
 - `docs/plans/` — committed work you already know how to do: a numbered chain of small, individually-shippable
-  steps, each ending with verification + measured numbers. Add a row in `docs/plans/README.md`
+  steps, each ending with verification + measured numbers. Add a row in `docs/plans/README.md`.
+  **ENGINE ONLY** (the user's call, 2026-08-20): the runtime, RenderWare parsing, streaming, rendering,
+  characters, vehicles, physics, UI. **Anything about the offline TOOLCHAIN goes in that tool's own chain**
+  (`tools/<tool>/docs/plans/`) even when it spans several tools — pick the tool the RULE lives in and say in
+  its row which others it reaches. Plans 102 (added vehicles) and 103 (one owner per archive entry) were
+  moved out on that rule; the central folder keeps no pointer to them, because a chain that lives beside its
+  code is found from the code
 - `docs/roadmap/` — decided work deferred to a later version (`0.5.0/`, `0.6.0/`); same plan-chain shape as
   `docs/plans/`, just not this version
-- `tools/<tool>/docs/plans/` — **a tool's own numbered chain, beside its code.** A step from `docs/plans/` or
-  `docs/roadmap/` MOVES here when it ships (next free number, measured numbers filled in) and the central row
-  is repointed. **A plan also moves here once its work no longer spans tools, built or not** (the user's call,
-  2026-08-09, when `07-lod-generators-extended` was dissolved): a chain whose every remaining task belongs to
-  one tool is a chain that will drift from that tool's code, so it lives beside it and the central folder
-  keeps only a pointer. The central folders carry what genuinely spans several tools, or has no tool yet
+- `tools/<tool>/docs/plans/` — **a tool's own numbered chain, beside its code, and the home of ALL toolchain
+  work.** A step from `docs/plans/` or `docs/roadmap/` MOVES here when it ships (next free number, measured
+  numbers filled in). **A plan also moves here once its work no longer spans tools, built or not** (the
+  user's call, 2026-08-09, when `07-lod-generators-extended` was dissolved), and since 2026-08-20 **even a
+  plan that DOES span several tools lives here** — in the chain of the tool whose rule it is, with the reach
+  named in its row. A chain that lives beside its code cannot drift from it, and a reader who opens the tool
+  finds the plan without being told where to look. An umbrella that spans four homes keeps its folder shape
+  (`tools/add-vehicles/docs/plans/102-add-vehicles/`); a single-file plan takes the next free number
 - `docs/audit/` — a post-big-rework audit (see the Standing Workflow rule above): what changed, its cost, its
   gain
 - `docs/in-reserve/` — **DEFERRED work whose investigation is already done** (the user's call, 2026-08-15):
