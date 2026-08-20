@@ -417,3 +417,25 @@ round comes before the pass ships in a build the user will judge.
 
 **Caught:** no. Nothing at build time distinguishes "helps the metric" from "looks better" — this failure
 mode is exactly the one the pass's own checks cannot see, which is why it is a restriction now.
+
+## The 19 001–19 999 id window belongs to the two tools with a LEDGER, and a `maxId + 1` allocator has to skip it
+
+Model ids for content the game never had come out of one window (`ADDED_ID_WINDOW`, `tools/tool-kit/src/
+free-ids.ts`): `add-vehicles` for an added car and its parts, `vehicle-installer` for a replacement car's
+derived tuning parts. Both allocate the lowest free id, both record what they handed out in
+`data/vehicle-adds.txt`, and both do it because **an id lands in the player's SAVE** — a parked spot, a
+ModelVariations entry, a car's upgrades.
+
+Anything else that numbers new models must stay OUT of it. The rule bites hardest on the `maxId + 1` shape,
+because that shape has no window of its own — it simply follows whatever the tree already contains:
+`sa-lod-generator`'s hole-fill LODs numbered from the highest id in `data/**.ide`, which was 18 632 until
+2026-08-20, when a vehicle mod's eleven borrowed parts took 19 001–19 011 in an earlier stage. The fills
+followed them to 19 012–19 035 and the whole added fleet — 115 cars and 46 parts — moved **35 ids up** in
+one build. `readDefs` now computes its maximum over ids below the window.
+
+The rule for a new design: allocate through `allocateIds` with a ledger, or number below `ADDED_ID_WINDOW.first`
+— never "one past the biggest thing I can see".
+
+**Caught:** partly. `allocateIds` refuses an exhausted window and a ledger id outside it, and a unit test
+pins the hole-fill allocator to its side of the line. But nothing checks a NEW allocator, and the symptom is
+the silent one: every id still unique, every file valid, and a save that spawns the wrong car.
