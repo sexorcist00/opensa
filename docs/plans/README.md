@@ -69,6 +69,7 @@ row but its chain was superseded by 097). Newest first:
   The before/after frame delta is NOT obtainable — the pre-change engine cannot render the 2026-08-11 pak,
   both sides of the commit pair failing identically — so the chain closes on a stated bound instead: one
   integer compare per rigid submesh bind, nothing else, for a model that animates nothing.
+- **[103 — One owner per archive entry](./103-one-owner-per-archive-entry/readme.md)** — **PLANNED 2026-08-20.** A mod's file and its stock twin can end up in two archives under one name, and the stock one wins: the slamvan renders untextured and twelve cars wear stock paintjobs, silently. The vehicle bucket takes everything `vehicles.ide` and `veh_mods.ide` name (measured: 0 contested dictionaries under that rule), paintjob dictionaries follow their car by name, and a build holding one name in two archives is refused against the stock baseline of 6.
 
 - **[098 — All land vehicle types](./098-all-land-vehicles/readme.md)** — **PLANNED 2026-08-04**,
   supersedes `roadmap/0.5.0/plans/04-all-vehicle-types/` (deleted). Rewritten from a four-way recon
