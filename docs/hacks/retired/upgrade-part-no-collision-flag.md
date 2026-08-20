@@ -12,9 +12,17 @@
 > `veh_mods.ide` names a part with no collision anywhere is REFUSED. Field-confirmed 2026-08-20: with the
 > file in place, both ids spawn.
 >
-> The lesson worth keeping: the hack's own "what it was judged on" section listed the derived fleet as
-> evidence of the flag working. It was evidence of nothing — those parts had never been through the code
-> path that crashes. **A control group that was never exposed to the treatment is not a control group.**
+> **Two lessons, and the second is worse.**
+>
+> 1. The hack's own "what it was judged on" listed the derived fleet as evidence of the flag working. It was
+>    evidence of nothing — those parts had never been through the code path that crashes. *A control group
+>    that was never exposed to the treatment is not a control group.*
+> 2. It claimed the bit's meaning was unrecovered. **This project already knew it**: bit 21 is DISABLE
+>    BACKFACE CULLING, on 1 586 stock object defs, implemented in our engine since plan 004 and tabulated in
+>    [`docs/plans/039-ide-object-flags/readme.md`](../../plans/039-ide-object-flags/readme.md). Two greps
+>    would have killed the hack before it was written, and the standing rule — dig out the original's own
+>    answer first — points at exactly that search. *"Nobody has recovered this" is a claim that needs the
+>    same grep as any other.*
 
 **Taken 2026-08-20**, plan [`vehicle-installer/014`](../../../tools/vehicle-installer/docs/plans/014-borrowed-tuning-parts.md)
 step 5.
@@ -29,7 +37,8 @@ whatever the author wrote and whatever the stock part it was cloned from carried
 
 ## What it stands in for
 
-**Knowing what bit 21 of an IDE flags column actually means to the exe.** The crash it prevents is
+~~Knowing what bit 21 of an IDE flags column actually means to the exe.~~ **It was already known — see the
+closing block: DISABLE BACKFACE CULLING, plan 039.** What follows is the reasoning as it was written. The crash it prevents is
 understood exactly — a tuning part is previewed as an ordinary `CObject` and the constructor dereferences
 `CBaseModelInfo::m_pColModel` with no null check (`0x59F8B4`), while `gta3.img : veh_mods.col` carries
 collision for exactly the 194 stock parts. What is NOT recovered is why the flag changes that outcome. The

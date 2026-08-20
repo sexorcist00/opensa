@@ -61,8 +61,14 @@ flags column, so this file first read the difference as: **a part with no collis
 | `spl_b_lr_bl` (a mod's hand-written part) | 1194 | `2097152` | **crash**, `0x0059F8B4`, `ECX = 0x4AA`, `EDI = 0` |
 | `exh_lr_rem1_059` (one of the 46 derived) | 19051 | `2097152` | **crash**, same address, `ECX = 0x4A6B`, `EDI = 0` |
 
-So the flag has nothing to do with it. **What the 46 had in common was not a property of their data but a
-class of USE**: nothing had ever spawned one. The mod shop MOUNTS a part onto a car and never reaches the
+So the flag has nothing to do with it — and this project already knew what it IS, two greps away:
+**bit 21 is DISABLE BACKFACE CULLING**, a rendering flag on 1 586 stock object defs, read by our own engine
+since plan 004 and tabulated in [`docs/plans/039-ide-object-flags/readme.md`](../plans/039-ide-object-flags/readme.md).
+The stock parts carrying it carry it because their geometry is two-sided. It was never going to answer a
+null `m_pColModel`.
+
+**What the 46 had in common was not a property of their data but a class of USE**: nothing had ever spawned
+one. The mod shop MOUNTS a part onto a car and never reaches the
 `CObject` constructor; a trainer that spawns the model as an object does, and then any part without
 collision dies — ours, a mod's, whichever.
 
