@@ -49,6 +49,8 @@ const SETTINGS_SECTION = 'settings';
 
 /** One `[name]` block of an ini file: the header's name and every line under it, verbatim. */
 export interface IniSection {
+  /** A comment line written above the header when the section is created — `### blade` over `[536]`. */
+  readonly caption?: string;
   readonly lines: readonly string[];
   readonly name: string;
 }
@@ -103,11 +105,18 @@ export function applyModelVariations(folderPath: string, entries: readonly strin
  * different keys of the same section (`add-vehicles` 004 owns `Global`, 006 owns the tuning keys).
  * Creates the section when the file has none.
  */
-export function mergeIniKeys(text: string, section: string, keys: ReadonlyMap<string, string>): string {
+export function mergeIniKeys(
+  text: string,
+  section: string,
+  keys: ReadonlyMap<string, string>,
+  /** A comment written above a section this call CREATES — an id-keyed section says whose id it is. */
+  caption?: string,
+): string {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex((line) => headerName(line)?.toLowerCase() === section.toLowerCase());
   if (start === -1) {
     return mergeIniSection(text, {
+      ...(caption === undefined ? {} : { caption }),
       lines: [...keys].map(([key, value]) => `${key}=${value}`),
       name: section,
     });
@@ -145,7 +154,7 @@ export function mergeIniKeys(text: string, section: string, keys: ReadonlyMap<st
 export function mergeIniSection(text: string, section: IniSection): string {
   const newline = text.includes('\r\n') ? '\r\n' : '\n';
   const lines = text.split(/\r?\n/);
-  const block = [`[${section.name}]`, ...section.lines];
+  const block = [...(section.caption === undefined ? [] : [section.caption]), `[${section.name}]`, ...section.lines];
   const start = lines.findIndex((line) => headerName(line)?.toLowerCase() === section.name.toLowerCase());
   if (start !== -1) {
     let end = start + 1;

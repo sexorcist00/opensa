@@ -226,7 +226,12 @@ export function addVehicles(options: AddVehiclesOptions): AddVehiclesReport {
 
 /** Every drivable model the built tree defines, added cars included — what tuned traffic is written over. */
 function allModelIds(gameDir: string): Map<string, number> {
-  return stockSlotIds(gameDir);
+  const cars = readAddsRows(gameDir).filter(({ kind }) => kind === 'car');
+
+  // The added cars too, each keyed by its OWN slot: its section is where its own paintjobs and its own
+  // derived parts belong. Putting them in the base's section instead is what had a 1958 Pontiac wearing the
+  // blade's spare wheel (`docs/open-issues/fixed/added-car-inherits-its-base-tuning.md`).
+  return new Map([...stockSlotIds(gameDir), ...cars.map(({ id, slot }): [string, number] => [slot, id])]);
 }
 
 /**

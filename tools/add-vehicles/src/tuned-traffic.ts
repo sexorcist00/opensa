@@ -27,6 +27,7 @@ import { mergeIniKeys, MODEL_VARIATIONS_INI, readIniKey } from '@opensa/vehicle-
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { ADDED_VEHICLES_DIR } from './loose-files';
 import { extendGlobal } from './traffic';
 
 /** The optional config file, beside the added cars. */
@@ -59,9 +60,14 @@ export const DEFAULT_TUNED_TRAFFIC: TunedTrafficConfig = {
 export function countPaintjobs(gameDir: string, models: readonly string[]): Map<string, number> {
   const index = openArchiveIndex(gameDir);
   const counts = new Map<string, number>();
+  // An ADDED car's dictionaries are not in any archive: its whole folder goes loose into
+  // `modloader/added-vehicles/`, so the count has to look there too or 19 of the fleet's 46 paintjob
+  // dictionaries are never offered — four cars lose all of theirs, their base having none to be counted.
+  const held = (name: string): boolean =>
+    index.archiveOf(name) !== null || existsSync(join(gameDir, ADDED_VEHICLES_DIR, name));
   for (const model of models) {
     let count = 0;
-    while (index.archiveOf(`${model}${count + 1}.txd`) !== null) {
+    while (held(`${model}${count + 1}.txd`)) {
       count += 1;
     }
     if (count > 0) {

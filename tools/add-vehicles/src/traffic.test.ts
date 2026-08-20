@@ -90,19 +90,21 @@ describe('registerTraffic', () => {
   });
 
   describe('positive cases', () => {
-    it('writes one section per base, keyed by name, values by id', () => {
+    it("writes the variation list in a section keyed by the base's ID, captioned with its name", () => {
       registerTraffic(game, [row('001veh', 19_001, ['manana'])], STOCK_IDS);
 
-      expect(iniText()).toContain('[manana]\nGlobal=410,19001');
+      expect(iniText()).toContain('### manana\n[410]\nGlobal=410,19001');
       expect(iniText()).toContain('ChangeCarGenerators=0');
     });
 
-    it("keeps the keys a mod's own section already had", () => {
+    it("leaves the base's own NAME section alone — that is where its appearance lives", () => {
+      // The whole point of the id-keyed section: `[petro]` describes the petrol tanker, and an added id in
+      // there would have it wearing the tanker's parts. Its `Global=Trailers1` reference is untouched too.
       writeFileSync(join(game, INI), `${STOCK_INI}\n[petro]\nTrailers1=584\nGlobal=Trailers1\n`, 'latin1');
       registerTraffic(game, [row('055veh', 19_055, ['petro'])], STOCK_IDS);
 
-      expect(iniText()).toContain('Trailers1=584');
-      expect(iniText()).toContain('Global=Trailers1,514,19055');
+      expect(iniText()).toContain('[petro]\nTrailers1=584\nGlobal=Trailers1');
+      expect(iniText()).toContain('### petro\n[514]\nGlobal=514,19055');
     });
 
     it('is idempotent', () => {

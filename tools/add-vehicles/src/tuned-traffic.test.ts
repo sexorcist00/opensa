@@ -3,7 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { CONFIG_FILE, DEFAULT_TUNED_TRAFFIC, readTunedTrafficConfig, registerTunedTraffic } from './tuned-traffic';
+import { ADDED_VEHICLES_DIR } from './loose-files';
+import {
+  CONFIG_FILE,
+  countPaintjobs,
+  DEFAULT_TUNED_TRAFFIC,
+  readTunedTrafficConfig,
+  registerTunedTraffic,
+} from './tuned-traffic';
 
 const INI = join('modloader', 'Model_Variations', 'ModelVariations_Vehicles.ini');
 const CARMODS = 'mods\nblade, nto_b_l, exh_lr_bl1\npolice, nto_b_l\nend\n';
@@ -106,6 +113,21 @@ describe('registerTunedTraffic', () => {
       expect(iniText()).toContain('TuningChance=10');
       expect(iniText()).not.toContain('TuningChance=75');
       expect(iniText()).toContain('Global=536,nto_b_l,exh_lr_bl1');
+    });
+  });
+});
+
+describe('an added car gets its OWN section', () => {
+  describe('positive cases', () => {
+    it("counts a paintjob dictionary that ships LOOSE, which is where an added car's are", () => {
+      // 13 of the fleet ship 46 of these; before this they were counted in the archives only, so 19 were
+      // never offered and four cars lost all of theirs (their base has none).
+      mkdirSync(join(game, ADDED_VEHICLES_DIR), { recursive: true });
+      for (const name of ['059veh1.txd', '059veh2.txd', '059veh3.txd']) {
+        writeFileSync(join(game, ADDED_VEHICLES_DIR, name), Uint8Array.of(1));
+      }
+
+      expect(countPaintjobs(game, ['059veh']).get('059veh')).toBe(3);
     });
   });
 });

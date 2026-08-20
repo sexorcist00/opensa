@@ -8,18 +8,25 @@ import type { LedgerRow } from '@opensa/vehicle-installer/ledger';
  * for one of the ids its section lists. So each added car is registered as a variation of the stock slot its
  * folder names as its base:
  *
- *   [manana]
+ *   ### manana
+ *   [410]
  *   Global=410,19001
  *
  * The base's own id comes first, so the stock car still spawns; every added car naming that base follows, by
  * id and in ascending order, so the list is a function of the fleet and not of the run.
  *
- * **One section per model, keyed by its NAME.** The plugin takes either a name or an id in a header but only
- * ids in a value (its own error string: `invalid model id %s`). The user's earlier tool wrote the tuning keys
- * into `[voodoo]` and the variation list into `[412]` — the same model addressed two ways, in two sections,
- * and whichever the plugin reads last is the one that survives. We write one section per model and merge by
- * KEY, so 004's `Global` and 006's tuning keys compose in it instead of overwriting each other. That this
- * is the better reading is not yet field-proven; it is a row in the plan-102 field round.
+ * **The variation list goes in a section keyed by the base's ID, and that section carries NOTHING else.**
+ * A section keyed by NAME is where a model's own appearance lives — its `paintjobN`, its tuning parts, its
+ * `Trailers1`. Put an added id in there and the two models share one list: the field found a 1958 Pontiac
+ * wearing the blade's continental-kit spare wheel, because `[blade]` said `Global=536,19110,…,spl_b_lr_bl`
+ * ([the issue](../../../docs/open-issues/fixed/added-car-inherits-its-base-tuning.md)).
+ *
+ * This is the user's earlier tool's shape, and 004 dismissed it on a reading that turned out to be wrong —
+ * that a model addressed twice (`[voodoo]` and `[412]`) would have one section overwrite the other. His
+ * build ran that way in the field for a long time: `[towtruck]` keeps `Trailers1`/`Global=Trailers1` while
+ * `[525]` carries `Global=525,19788`, and both hold. **Two sections, two subjects: what a model IS, and
+ * what may be spawned in its place.** Writing ids into the id-keyed section also leaves a `Global=Trailers1`
+ * reference alone by construction, which the name-keyed shape had to work around.
  */
 import { mergeIniKeys, MODEL_VARIATIONS_INI, readIniKey } from '@opensa/vehicle-installer/model-variations';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -86,8 +93,10 @@ export function registerTraffic(
       warnings.push(`no vehicles.ide row for base '${base}' — ${ids.length} car(s) not registered in traffic`);
       continue;
     }
-    const global = extendGlobal(readIniKey(text, base, GLOBAL_KEY), baseId, ids);
-    text = mergeIniKeys(text, base, new Map([[GLOBAL_KEY, global]]));
+    // Keyed by ID, and named in a comment so the file stays readable — the shape the user's own build used.
+    const section = String(baseId);
+    const global = extendGlobal(readIniKey(text, section, GLOBAL_KEY), baseId, ids);
+    text = mergeIniKeys(text, section, new Map([[GLOBAL_KEY, global]]), `### ${base}`);
   }
   writeFileSync(path, text, 'latin1');
 
