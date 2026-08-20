@@ -100,7 +100,7 @@ The early split does not answer the precedence question. It never asks it — an
 %%| img-archive-layout
 flowchart LR
   stock[["game-src/&lt;game&gt;<br/>gta3.img 940 MB"]] --> split
-  split["img-splitter<br/><i>one shot, by IDE section</i>"] --> map[(gta3.img<br/>map objects)]
+  split["img-splitter<br/><i>one shot, by IDE FILE then section</i>"] --> map[(gta3.img<br/>map objects)]
   split --> veh[(vehicles.img)]
   split --> ped[(peds.img)]
   split -.->|IMG lines| dat[/gta.dat/]
@@ -110,8 +110,9 @@ flowchart LR
   mods --> writer
   vi --> writer
   pi --> writer
-  writer["tool-kit write<br/><i>cap + spill</i>"] --> out[(gta3.img · vehicles.img<br/>vehicles2.img · peds.img)]
-  out --> rest["optimize → trees → sa / opensa"]
+  writer["tool-kit write<br/><i>cap + spill, a car kept whole</i>"] --> out[(gta3.img · vehicles.img<br/>vehicles2.img · peds.img)]
+  out --> guard{{"one name,<br/>one archive"}}
+  guard --> rest["optimize → trees → sa / opensa"]
 ```
 
 ## What the classifier reads
