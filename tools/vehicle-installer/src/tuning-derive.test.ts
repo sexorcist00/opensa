@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { DerivedTuning } from './tuning';
+import type { DerivedTuning } from './tuning-derive';
 
-import { deriveTuning, MAX_PART_NAME, readStockParts, shippedParts } from './tuning';
+import { deriveTuning, MAX_PART_NAME, readStockParts, shippedParts } from './tuning-derive';
 
 /** `veh_mods.ide` cut to the rows these tests key on: two mirrored wings, an exhaust, and a generic nitro. */
 const VEH_MODS = `objs

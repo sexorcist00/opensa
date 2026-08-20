@@ -25,6 +25,7 @@ import { vehicleColourWarnings } from '@opensa/vehicle-installer/palette';
 import { mergeFeatureTable, requireBuiltGame } from '@opensa/vehicle-installer/rebake-shared';
 import { decodeSettings, ID_PLACEHOLDER, parseVehicleSettings } from '@opensa/vehicle-installer/settings';
 import { writeModelSpecialFeatures } from '@opensa/vehicle-installer/special-features';
+import { type DerivedTuning, deriveTuning, shippedParts } from '@opensa/vehicle-installer/tuning-derive';
 import { applyIdeRows, applyInsert, assertCarmodsModels, ideModelNames } from '@opensa/vehicle-installer/tuning-parts';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -35,7 +36,6 @@ import { resolveAddedCarText } from './name';
 import { type AddedVehicle, resolveAddedVehicles, stockSlotIds } from './sources';
 import { registerTraffic } from './traffic';
 import { readTunedTrafficConfig, registerTunedTraffic } from './tuned-traffic';
-import { type DerivedTuning, deriveTuning, shippedParts } from './tuning';
 
 export interface AddVehiclesOptions {
   /** The BUILT `sa` tree the cars are added to; edited in place. */

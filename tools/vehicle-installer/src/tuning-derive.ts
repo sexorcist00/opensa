@@ -26,6 +26,8 @@ import { parseCarmods } from '@opensa/renderware/parsers/text/carmods.parser';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { VEH_MODS_IDE } from './tuning-parts';
+
 /** The TXD column of a part that belongs to no particular car. */
 const GENERIC_TXD = 'vehicle';
 
@@ -60,9 +62,6 @@ export interface StockPart {
   /** The dictionary column: the base car's model, or `vehicle` for a part any car can wear. */
   readonly txd: string;
 }
-
-/** Where the upgrade parts' IDE rows live in a game tree. */
-const VEH_MODS_IDE = join('data', 'maps', 'veh_mods', 'veh_mods.ide');
 
 /**
  * Derive everything an added car's re-modelled parts need. `shipped` is the folder's `.dff` names that are

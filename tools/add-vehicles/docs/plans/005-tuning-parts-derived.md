@@ -44,7 +44,9 @@ knows about the stock part is cloned under it. The old tool did this with a hand
 
 ## Measured
 
-**Built 2026-08-19.** `add-vehicles/tuning.ts` derives; `vehicle-installer` gained the writing halves —
+**Built 2026-08-19.** The derivation lives in `vehicle-installer/src/tuning-derive.ts` (moved there by
+[014](../../../vehicle-installer/docs/plans/014-borrowed-tuning-parts.md) step 1, when a replacement car
+turned out to need the same operation with `base = slot`); `vehicle-installer` gained the writing halves —
 `stageVehicleImg`'s rename map, `ApplyVehicleOptions.partRenames` (applied to the SETTINGS text, whole-word,
 so `spl_a_l` never rewrites part of `spl_a_l_b`), `mergeCarmodsLink`, and `carmods-guard.ts`.
 

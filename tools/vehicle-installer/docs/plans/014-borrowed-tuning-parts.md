@@ -74,11 +74,22 @@ silently.
 
 ## Steps
 
-### 1 — Move the derivation into `vehicle-installer`, unchanged in behaviour
+### 1 — Move the derivation into `vehicle-installer`, unchanged in behaviour — **DONE 2026-08-20**
 
 `tuning.ts` → `tools/vehicle-installer/src/tuning-derive.ts`; `add-vehicles` imports it (it already imports
 six modules from this tool). No behaviour change, no new name scheme yet. **Verify**: the add-vehicles suite
 is green and `--rebake --kind sa --only 059veh` writes byte-identical `data/*` to the current build.
+
+**Measured.** The move is byte-identical bar one line: the private `VEH_MODS_IDE` copy is gone and the
+constant comes from `tuning-parts.ts`, which already exported the same value (`git show
+HEAD:…/tuning.ts | diff` = those two hunks and nothing else). Both suites green, **25 files / 259 tests**,
+`tsc --noEmit` and eslint clean.
+
+The build check was done WITHOUT writing to the tree — an in-place rebake would edit the tree the bottle
+matches. Instead the derivation was run from its new home over the real `build/original/sa` for all **115**
+added slots (`slots=115 sha1=587bbaef34667a592396ddc70bf0358d02326f66` over renames+rows+links+shop, the
+invariant step 2 will move), and `059veh`'s 10 derived rows were compared against what the tree actually
+carries at ids 19051–19060: identical, columns and all.
 
 ### 2 — The token, and one scheme for both callers
 
