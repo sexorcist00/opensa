@@ -5,6 +5,15 @@ numbers and links to the raw records — so the result survives the session and 
 without re-deriving it. Runtime numbers live in [`../benchmarks/`](../benchmarks/); these docs summarise and
 interpret them.
 
+- [`session-31-the-day-the-field-corrected-three-of-my-rules.md`](./session-31-the-day-the-field-corrected-three-of-my-rules.md)
+  — the 2026-08-20 session: two plan chains built end to end (`vehicle-installer` 014, `img-splitter` 002),
+  **9 part-name clashes → 0** and **39 archive duplicates of ours → 0**, five `sa` builds and five field
+  rounds. Its subject is the three rules of mine the field disproved: a car's parts are NOT the parts on its
+  `carmods.dat` line (wrong in 22 places), `0x200000` does NOT excuse a missing collision model (both ids
+  carrying it crashed, and the bit's real meaning was in our own plan 039), and one ModelVariations section
+  per model keyed by NAME is wrong twice over. Plus two defects I introduced and caught the same day — the
+  added fleet moving 35 ids, and the hack retired the day it was taken.
+
 - [`session-29-a-hundred-and-fifteen-cars-that-were-never-there.md`](./session-29-a-hundred-and-fifteen-cars-that-were-never-there.md)
   — the 2026-08-19 session after it: **the whole of central plan 102 in one run** (`vehicle-installer`
   012–013, `tools/add-vehicles` 001–007, `asi/perfect-vehicle` 001–002). 115 added cars + 46 re-modelled
