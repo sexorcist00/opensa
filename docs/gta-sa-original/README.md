@@ -51,4 +51,5 @@ install provides. Anything a mod author or a modded install brings with it.
 **Budget a map-content plan against the install you ship to, not against stock 1.0 — and say which one you
 picked.** Both answers are legitimate and they are wildly different numbers. Writing neither down is how a
 plan ends up conservative by two-and-a-half times without anyone noticing, because the result still works.
+- [vehicle-paintjobs.md](vehicle-paintjobs.md) — a paintjob is a whole texture dictionary named by CONVENTION off the car (`blade1.txd`), and **no row of any data file names it**: 36 across 13 cars in stock, invisible to anything sorting entries by which row claims them. FLA's `Make paintjobs work for any ID` lets an ADDED car have paintjobs — it is not a per-id COUNT lift — and a mod shipping fewer than stock is fine (field, 2026-08-20)
 - [veh-mods-col-and-the-upgrade-object.md](veh-mods-col-and-the-upgrade-object.md) — a tuning part is previewed as an ordinary `CObject`, which dereferences `m_pColModel`; stock parts get theirs from `gta3.img : veh_mods.col` (194 entries, ids 1000–1193) and an ADDED part gets none, so it crashes unless its IDE flags carry `0x200000`

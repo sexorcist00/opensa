@@ -6,10 +6,9 @@ good, the slamvan included.
 now takes everything `vehicles.ide` and `veh_mods.ide` name plus every `<car><n>.txd`, a build holding one
 name in two of the archives the split owns is refused, and a car's files stop straddling siblings. On the
 rebuilt tree the **39 duplicates of ours are 0**, `slamvan.txd` has one owner and it is the mod's 9 359 360 B
-copy, and all 36 paintjob dictionaries are the mods'. Step 4's deletion half shipped with it — a replaced slot gives up
-its stock `<slot>.txd` and `<slot><n>.txd`, which drops nothing on today's fleet and closes the door for the
-day a mod ships fewer paintjobs than stock. What stays unbuilt is the shop's own paintjob COUNT, a field
-question rather than a code one.
+copy, and all 36 paintjob dictionaries are the mods'. Step 4 shipped with it — a replaced slot gives up its stock
+`<slot>.txd` and `<slot><n>.txd`, which drops nothing on today's fleet and closes the door for the day a mod
+ships fewer paintjobs than stock (which the user confirms is fine in the game anyway).
 
 Field-found by the user: the **slamvan has no textures at all** — before tuning and
 after, body flat in its paint colour, chrome and wheels white. Every other car he drove was fine.

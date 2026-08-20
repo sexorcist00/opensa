@@ -168,6 +168,14 @@ offers), and renaming one of those would break a stock `link` pair — a car buy
 side. Measured on the stock tables: no car's `mods` line names a part whose txd is another car's, so the
 column never contradicts the line, it only sees what the line cannot show.
 
+**A car's dictionary and its PAINTJOB dictionaries are one bundle, and the mod owns it.** A paintjob is a
+whole texture dictionary named by convention off the car — `blade1.txd`, `blade2.txd` beside `blade.txd` —
+and no row of any data file names it ([`gta-sa-original/vehicle-paintjobs.md`](../gta-sa-original/vehicle-paintjobs.md)).
+So when a folder replaces a slot AND ships a dictionary for it, every stock `<slot>.txd` / `<slot><n>.txd`
+it does NOT ship is dropped from the archive: a stock paintjob left beside a modded body is artwork drawn
+for other UVs. Ship fewer than the stock car had and the shop simply offers fewer — that is fine. A folder
+that ships no dictionary at all does not own the slot's textures and the stock ones are left alone.
+
 **Two folders still staging different files under one entry name is REFUSED**, naming both mods and both
 sizes — after the rename that can only happen for a name the derivation cannot classify. Same name and the
 same size is the same file shipped twice and is left alone with a warning. A `--rebake --only <car>` warns

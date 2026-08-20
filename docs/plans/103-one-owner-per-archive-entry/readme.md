@@ -92,7 +92,7 @@ ship a coach mod**, so under a by-name baseline the mod's bus and the stock clot
 passed as "stock". Scoped to the archives this build decides the contents of — `gta3.img` plus the ones the
 source tree does not have — the expected number is 0, with no exemptions at all.
 
-### 4 — A mod owns its slot's paintjobs — **the DELETION is DONE 2026-08-20; the shop's own count is not**
+### 4 — A mod owns its slot's paintjobs — **DONE 2026-08-20**
 
 **The user's rule, and it needs nothing recovered:** a car's dictionary and its paintjob dictionaries are one
 bundle, found by the `<car><n>` convention off the car's own name and named by nothing else. A mod that
@@ -110,11 +110,10 @@ ship MORE than stock (`slamvan` 5 against 3, `broadway` 5 against 2). **Stock pa
 replace: 0.** So this is the door closed before anyone walks through it, and the log line is there for the
 day one does.
 
-**What is NOT built, and why it is a field question rather than a code one:** how many paintjobs the SHOP
-offers. If the count is a property of the model id (the reference install runs FLA's `Make paintjobs work
-for any ID = 1`, which exists precisely because it is), a car whose mod ships fewer than stock could still
-be offered a paintjob whose dictionary no longer exists. Nothing in the tree can answer that — the next
-field round can, on a car with stock paintjobs.
+**A mod shipping FEWER paintjobs than stock is not a problem — the user's field answer, 2026-08-20.** The
+plan had left that open on a wrong reading of FLA's `Make paintjobs work for any ID`, which does not lift a
+per-id COUNT for stock cars at all: it lets an ADDED car — a new model id — have paintjobs. Nothing here
+waits on anything.
 
 ### 5 — `add-vehicles` needs nothing, and that is worth checking
 
@@ -145,7 +144,8 @@ says so, because writing a file past the cap is the one thing the writer may not
 ## Docs to update in the same change
 
 - `docs/architecture/` — the splitter's bucket rule (its diagram names the claim source).
-- `docs/contracts/vehicles.md` — that a slot's paintjob dictionaries are the mod's to ship, once step 4 lands.
+- `docs/contracts/vehicles.md` — that a slot's paintjob dictionaries are the mod's to ship (step 4).
+- `docs/gta-sa-original/vehicle-paintjobs.md` — what a paintjob is made of and what the FLA setting really does.
 - `docs/restrictions/assets-and-data.md` — one name, one archive, and the stock baseline that is not a defect.
 - The open issue → `fixed/` with the before/after.
 
