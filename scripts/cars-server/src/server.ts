@@ -35,6 +35,8 @@ const vehiclesPath = resolve('mods-src', game, 'vehicles');
 /** The ADDED fleet's own root (central plan 102) — shown in its own section when the game has one. */
 const addedPath = resolve('mods-src', game, 'add-vehicles');
 const gamePath = resolve('game-src', game);
+/** The BUILT `sa` tree — read for one thing: the id its ledger promises each added car (plan 003). */
+const builtPath = resolve('build', game, 'sa');
 
 const metadata = JSON.parse(readFileSync(join(ROOT, 'data', 'original.json'), 'utf8')) as Metadata;
 /**
@@ -49,14 +51,15 @@ function render(context: object): string {
  * The last render's catalog, which the image routes read. Rebuilt when the PAGE is requested and not per
  * image: a card asks for two pictures, so rebuilding there would rescan 212 folders 424 times per reload.
  */
-let catalog: Catalog = buildCatalog({ addedPath, gamePath, metadata, target, vehiclesPath });
+let catalog: Catalog = buildCatalog({ addedPath, builtPath, gamePath, metadata, target, vehiclesPath });
 
 const app = express();
 
 app.get('/', (_request, response) => {
-  catalog = buildCatalog({ addedPath, gamePath, metadata, target, vehiclesPath });
+  catalog = buildCatalog({ addedPath, builtPath, gamePath, metadata, target, vehiclesPath });
   response.type('html').send(
     render({
+      addedNote: catalog.addedNote,
       game,
       layered: catalog.strategy === 'layered',
       missingShots: catalog.missingShots,

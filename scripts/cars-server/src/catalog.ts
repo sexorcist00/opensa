@@ -1,14 +1,19 @@
 import type { BuildTarget } from '@opensa/tool-kit/target';
+import type { LedgerRow } from '@opensa/vehicle-installer/ledger';
 
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 import { parseVehicleSlot, resolveVehicleSources, type VehicleSource } from '@opensa/tool-kit/vehicles-dir';
+import { ADDS_LEDGER, readAddsRows } from '@opensa/vehicle-installer/ledger';
 import { decodeSettings, parseVehicleSettings } from '@opensa/vehicle-installer/settings';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 import { vehicleTags } from './tags';
 
 export interface Catalog {
+  /** One line for the header about the ADDED fleet: where its ids were read from, or why it is absent.
+   *  `null` when the game has no added cars at all. */
+  readonly addedNote: null | string;
   /** Installed cars with NO screenshot under their slot (`new/` candidates excluded — theirs is withheld on
    *  purpose), in page order — the warning at the top of the page. */
   readonly missingShots: readonly MissingShot[];
@@ -27,8 +32,12 @@ export interface Catalog {
 }
 
 export interface CatalogCar {
+  /** ADDED cars drawn under this one, a size down — the alternatives that name this slot as their base. */
+  readonly alternatives?: readonly CatalogCar[];
   /** The mod author — the folder name's third field. */
   readonly author: string;
+  /** For an ADDED card: the base slot it is drawn under (one of {@link bases}). */
+  readonly base?: string;
   /** For an ADDED car: the stock slot(s) it varies, out of the folder name's `(base)` suffix. */
   readonly bases?: readonly string[];
   /** What the mod actually is — the folder name's second field. */
@@ -41,11 +50,17 @@ export interface CatalogCar {
   readonly hasShot: boolean;
   /** The `vehicles.ide` id — the mod's own row, else the stock one, else `null`. */
   readonly id: null | number;
+  /** For an ADDED card under several bases: `true` on the one it inherits sound and tuning parts from. */
+  readonly inherits?: boolean;
   /** `true` when the build takes this car out of `new/` rather than out of `models/`. */
   readonly isCandidate: boolean;
+  /** The bases the BUILT ledger records, when they disagree with the folder — the folder's are what is drawn. */
+  readonly ledgerBases?: readonly string[];
   /** The game model slot this car takes over. */
   readonly slot: string;
   readonly tags: readonly string[];
+  /** An ADDED car the built ledger has no row for: its id is not promised yet, so none is shown. */
+  readonly unpromisedId?: boolean;
 }
 
 export interface CatalogSection {
@@ -67,6 +82,21 @@ export interface MissingShot {
   /** The section anchor + slot, so the warning can jump to the card. */
   readonly sectionAnchor: string;
   readonly slot: string;
+}
+
+/** What {@link addedFleet} hands back: the added cards, sorted into the base that hosts them. */
+interface AddedFleet {
+  /** Base slot → the added cards drawn under it, a size down. */
+  readonly alternatives: ReadonlyMap<string, readonly CatalogCar[]>;
+  /** How many added cars the tree holds — every one is a car on the page, hosted or orphan. */
+  readonly count: number;
+  /** The ledger file the ids came from, or `null` when there is no built tree to promise any. */
+  readonly ledger: null | string;
+  readonly missing: readonly (Omit<MissingShot, 'sectionAnchor'> & { section: string })[];
+  /** Added cars whose base has no card — nothing to hang them off, so they keep their own section. */
+  readonly orphans: readonly CatalogCar[];
+  /** Slot → screenshot path, for the added cars that have one. */
+  readonly shots: ReadonlyMap<string, string>;
 }
 
 /** One item of the bundled metadata: the STOCK car, keyed by the slot it occupies. */
@@ -95,8 +125,10 @@ const SHOT_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
 const SCREENSHOTS_DIR = 'screenshots';
 
 export interface CatalogOptions {
-  /** `mods-src/<game>/add-vehicles` — the ADDED fleet, shown in its own section (central plan 102). */
+  /** `mods-src/<game>/add-vehicles` — the ADDED fleet, drawn under the slots it varies (plan 003). */
   readonly addedPath?: string;
+  /** `build/<game>/sa` — read for ONE thing: the id the built tree promises each added car. */
+  readonly builtPath?: string;
   /** `game-src/<game>` — read for the stock `vehicles.ide` when a mod declares no id of its own. */
   readonly gamePath: string;
   /** The bundled metadata, already parsed. */
@@ -149,6 +181,8 @@ export function buildCatalog(options: CatalogOptions): Catalog {
   const stockIds = stockVehicleIds(options.gamePath);
   const bySection = new Map<string, CatalogCar[]>();
   const missing: (Omit<MissingShot, 'sectionAnchor'> & { section: string })[] = [];
+  /** Which section each REPLACED slot's card landed in — where an alternative naming it as base is drawn. */
+  const sectionOfSlot = new Map<string, string>();
   let total = 0;
   for (const source of plan.sources) {
     const car = describe(source.folder, source.name, source.slot, stockIds);
@@ -179,38 +213,23 @@ export function buildCatalog(options: CatalogOptions): Catalog {
         isCandidate,
       },
     ]);
+    sectionOfSlot.set(source.slot, section);
     total += 1;
   }
 
-  // The ADDED fleet, through the same resolver and the same screenshot rules — its own root, its own
-  // section, and its cars keyed by the slot they invented rather than one the metadata could know.
-  for (const source of addedSources(options.addedPath, options.target)) {
-    const shot = indexScreenshots(join(options.addedPath ?? '', SCREENSHOTS_DIR)).get(source.slot);
-    if (shot !== undefined) {
-      screenshots.set(source.slot, shot);
-    } else {
-      missing.push({
-        expectedFile: `${source.name}${SHOT_EXTENSIONS[0]}`,
-        folder: sourceLabel(source),
-        section: ADDED_SECTION,
-        slot: source.slot,
-      });
-    }
-    bySection.set(ADDED_SECTION, [
-      ...(bySection.get(ADDED_SECTION) ?? []),
-      {
-        ...describe(source.folder, source.name, source.slot, stockIds),
-        bases: source.bases,
-        hasOriginal: false,
-        hasShot: shot !== undefined,
-        isCandidate: source.origin === 'new',
-      },
-    ]);
-    total += 1;
+  // The ADDED fleet is drawn UNDER the stock slot each car varies (plan 003) — see `addedFleet`.
+  const added = addedFleet(options, stockIds, sectionOfSlot);
+  for (const [slot, path] of added.shots) {
+    screenshots.set(slot, path);
   }
-  if (options.addedPath !== undefined && bySection.has(ADDED_SECTION)) {
+  missing.push(...added.missing);
+  if (added.orphans.length > 0) {
+    bySection.set(ADDED_SECTION, [...(bySection.get(ADDED_SECTION) ?? []), ...added.orphans]);
+  }
+  if (options.addedPath !== undefined && added.count > 0) {
     screenshotDirs.push(join(options.addedPath, SCREENSHOTS_DIR));
   }
+  total += added.count;
 
   // Section order is the metadata's own (`Sports Cars` first, as authored), with the catch-all last.
   const ordered = [...Object.keys(options.metadata), ADDED_SECTION, UNKNOWN_SECTION].filter((name) =>
@@ -224,12 +243,15 @@ export function buildCatalog(options: CatalogOptions): Catalog {
   );
 
   return {
+    addedNote: addedNoteFor(options, added.count, added.ledger),
     missingShots,
     screenshotDirs,
     screenshots,
     sections: ordered.map((name) => ({
       anchor: anchorOf(name),
-      cars: (bySection.get(name) ?? []).sort((a, b) => a.slot.localeCompare(b.slot, 'en')),
+      cars: (bySection.get(name) ?? [])
+        .sort((a, b) => a.slot.localeCompare(b.slot, 'en'))
+        .map((car) => withAlternatives(car, added.alternatives)),
       name,
     })),
     stockImages,
@@ -239,9 +261,88 @@ export function buildCatalog(options: CatalogOptions): Catalog {
   };
 }
 
-/** The added fleet, resolved the same way the replacement fleet is; empty when no root was given. */
+/**
+ * The added cars, each one a card hanging off the stock slot it varies: the `(base)` suffix of the folder
+ * name is the relation (`tools/add-vehicles`' own rule), and a base with a card of its own takes the car as
+ * an ALTERNATIVE. One naming several bases appears under each, marked on the one it inherits sound and
+ * tuning parts from; one whose base nobody replaced has nowhere to hang and stays an orphan in its own
+ * section. The id comes from the BUILT tree's ledger and nowhere else — an added car has no stock row to
+ * fall back on, and a folder the last build never saw holds no id rather than a plausible-looking one.
+ */
+function addedFleet(
+  options: CatalogOptions,
+  stockIds: ReadonlyMap<string, number>,
+  sectionOfSlot: ReadonlyMap<string, string>,
+): AddedFleet {
+  const sources = addedSources(options.addedPath, options.target);
+  const shotsOnDisk = indexScreenshots(join(options.addedPath ?? '', SCREENSHOTS_DIR));
+  const ledger = readLedger(options.builtPath);
+  const alternatives = new Map<string, CatalogCar[]>();
+  const missing: AddedFleet['missing'][number][] = [];
+  const orphans: CatalogCar[] = [];
+  const shots = new Map<string, string>();
+  for (const source of sources) {
+    const shot = shotsOnDisk.get(source.slot);
+    if (shot !== undefined) {
+      shots.set(source.slot, shot);
+    }
+    const row = ledger.rows.get(source.slot);
+    const card: CatalogCar = {
+      ...describe(source.folder, source.name, source.slot, stockIds),
+      bases: source.bases,
+      hasOriginal: false,
+      hasShot: shot !== undefined,
+      id: row?.id ?? null,
+      isCandidate: source.origin === 'new',
+      ledgerBases: row !== undefined && row.bases.join(',') !== source.bases.join(',') ? row.bases : undefined,
+      unpromisedId: row === undefined,
+    };
+    const hosts = source.bases.filter((base) => sectionOfSlot.has(base));
+    for (const base of hosts) {
+      alternatives.set(base, [
+        ...(alternatives.get(base) ?? []),
+        { ...card, base, inherits: base === source.bases[0] },
+      ]);
+    }
+    if (hosts.length === 0) {
+      orphans.push(card);
+    }
+    if (shot === undefined) {
+      missing.push({
+        expectedFile: `${source.name}${SHOT_EXTENSIONS[0]}`,
+        folder: sourceLabel(source),
+        section: sectionOfSlot.get(hosts[0] ?? '') ?? ADDED_SECTION,
+        slot: source.slot,
+      });
+    }
+  }
+
+  return { alternatives, count: sources.length, ledger: ledger.source, missing, orphans, shots };
+}
+
+/** The header's one line about the added fleet — where its ids came from, or why there are none on screen. */
+function addedNoteFor(options: CatalogOptions, shown: number, ledgerSource: null | string): null | string {
+  if (options.addedPath === undefined || !existsSync(options.addedPath)) {
+    return null;
+  }
+  if (options.target === 'opensa') {
+    return 'Added cars are not shown: they are an SA-only feature, and the opensa build installs none of them.';
+  }
+  if (ledgerSource === null) {
+    return `${shown} added car(s), drawn under the slot each one varies. No built tree was found, so no ids are shown — an added car's id is promised by the build, not by its folder.`;
+  }
+
+  return `${shown} added car(s), drawn under the slot each one varies; ids from ${ledgerSource}.`;
+}
+
+/**
+ * The added fleet, resolved the same way the replacement fleet is — empty when no root was given, and empty
+ * on any target but `sa`: `resolveAddedVehicles` refuses the others outright (ModelVariations, FLA's audio
+ * loader and Parked Maker are the real game's), so an `opensa` build installs none of these cars and a page
+ * that listed them would be describing a build nobody gets. The header says so rather than just dropping them.
+ */
 function addedSources(addedPath: string | undefined, target: BuildTarget | undefined): readonly VehicleSource[] {
-  if (addedPath === undefined || !existsSync(addedPath)) {
+  if (addedPath === undefined || !existsSync(addedPath) || target === 'opensa') {
     return [];
   }
 
@@ -311,6 +412,22 @@ function indexScreenshots(directory: string): Map<string, string> {
   return shots;
 }
 
+/** The ids the BUILT tree promises each added car, by slot, plus the file they were read from. */
+function readLedger(builtPath: string | undefined): { rows: ReadonlyMap<string, LedgerRow>; source: null | string } {
+  if (builtPath === undefined || !existsSync(join(builtPath, ADDS_LEDGER))) {
+    return { rows: new Map(), source: null };
+  }
+  // Only `car` rows: the rest are a replacement car's derived tuning PARTS, which share the id window and
+  // the file but are not cars and have no card.
+  const rows = readAddsRows(builtPath).filter((row) => row.kind === 'car');
+
+  // Relative to the cwd: the header prints it, and an absolute path there is a line of noise nobody reads.
+  return {
+    rows: new Map(rows.map((row) => [row.slot, row])),
+    source: relative(process.cwd(), join(builtPath, ADDS_LEDGER)),
+  };
+}
+
 /** `sa/models/<name>` for a layered source, `models/<name>` for a structured one, the name for a flat one. */
 function sourceLabel(source: VehicleSource): string {
   return [source.layer, source.origin === 'flat' ? undefined : source.origin, source.name]
@@ -330,4 +447,13 @@ function stockVehicleIds(gamePath: string): Map<string, number> {
   }
 
   return ids;
+}
+
+/** A base card, with the alternatives that name it — sorted by slot, as every other list on the page is. */
+function withAlternatives(car: CatalogCar, alternatives: ReadonlyMap<string, readonly CatalogCar[]>): CatalogCar {
+  const attached = alternatives.get(car.slot);
+
+  return attached === undefined
+    ? car
+    : { ...car, alternatives: [...attached].sort((a, b) => a.slot.localeCompare(b.slot, 'en')) };
 }

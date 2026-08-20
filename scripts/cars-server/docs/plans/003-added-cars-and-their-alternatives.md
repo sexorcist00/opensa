@@ -1,8 +1,9 @@
 # 003 — the ADDED cars, and a car shown with the alternatives that hang off it
 
-**Status: PLANNED 2026-08-20**, his ask at the close of session 31: extend cars-server to know about
+**Status: ✅ Implemented 2026-08-20**, his ask at the close of session 31: extend cars-server to know about
 `tools/add-vehicles`, link the main car with the alternatives attached to it, and draw an alternative as a
-**slightly smaller card** than the car it belongs to. Plan first, then the implementation — this is the plan.
+**slightly smaller card** than the car it belongs to. Plan first, then the implementation — both below, the
+plan as it was decided and the numbers it was verified with.
 
 ## What the page already does, and the one thing the request got wrong
 
@@ -78,13 +79,38 @@ vary it, drawn as what they are.
 4. Docs: this plan's numbers filled in, `scripts/cars-server/readme.md`. The commands do not change, so
    `docs/commands.md` does not.
 
-## Verification (to be measured when it is built)
+## What shipped
 
-- The real tree: 327 cards, 101 bases carrying 115 alternatives, `freibox` showing 8; page size before/after.
-- Screenshotted at 1440 / 820 / 390 px, the eight-alternative card included.
-- `--target opensa`: 212 cards, no added cars, the note present.
-- A synthetic tree whose added car names a base nobody replaced → the `Added vehicles` section appears for it.
-- Suites cars-server + tool-kit green; tsc + eslint clean.
+- `catalog.ts` — `addedFleet()`: every added car becomes a card hanging off the stock slot its folder name
+  varies, `CatalogCar.alternatives` on the base, `base`/`inherits` on the alternative. The `Added vehicles`
+  section is now the ORPHAN home and disappears when it is empty. `Catalog.addedNote` is the header's one
+  line about the fleet: how many, where their ids came from, or why there are none.
+- The id comes from the built tree's ledger through `readAddsRows`, `car` rows only (the other 57 are a
+  replacement car's derived tuning parts). No row → `unpromisedId`, drawn as `ID — not built yet`. A row
+  whose bases disagree with the folder is SHOWN as a stale-ledger line under the card, never picked over it.
+- `server.ts` passes `builtPath` (`build/<game>/sa`); `index.hbs` gained the nested strip, its styles and the
+  header note, and the card's `replaced to:` reads `added, varies:` for a card that has bases.
+
+## Verification — measured 2026-08-20
+
+- The real tree, `npm run cars`: **327 cards in 19 sections** (was 20 — the `Added vehicles` bucket is gone,
+  0 orphans), **115 alternative cards under 101 base cards**, `freibox` carrying its **8**. Page **388 228 →
+  392 707 bytes**: the added cars moved rather than multiplied.
+- **115 ids read** from `build/original/sa/data/vehicle-adds.txt`, 0 `not built yet` — and the unbuilt path
+  was exercised for real: rendered against a tree mid-rebuild, the same page showed all 115 as
+  `ID — not built yet`, because the ledger at that moment held only the 11 part rows the run had written.
+- `npm run cars:opensa`: **212 cards, 0 alternatives**, the note present and the added `screenshots/` folder
+  no longer listed in the header.
+- Screenshotted at **1440** and **390 px** on `freibox`: eight alternatives wrap to two rows on the desktop
+  and stack one per row on the phone, each with its own picture and blue id chip.
+- `scripts/cars-server` **31 tests** (25 → 31: the opensa gate, the unpromised id, the orphan section, the
+  hosting, the sort, the ledger id + stale row, and the two-base case); tsc + eslint clean.
+
+## Not done, on purpose
+
+The tuning an added car carries — its derived parts and paintjobs — is still off the page (decision 6). The
+`part` rows are right there in the ledger the page now reads, so it is a tag away when it is wanted.
+
 
 Neighbours: [`tools/add-vehicles/docs/plans/102-add-vehicles/readme.md`](../../../../tools/add-vehicles/docs/plans/102-add-vehicles/readme.md)
 for what an added car is made of, and [`002-layered-screenshots.md`](002-layered-screenshots.md) for the

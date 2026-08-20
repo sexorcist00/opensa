@@ -218,6 +218,38 @@
         object-fit: contain;
         background: #0b0e12;
       }
+      /* An ADDED car is a VARIATION of the slot above it (plan 003), so it is drawn INSIDE the base's card and
+         a size down — the statement is "these belong to that one", never "these are peers". */
+      .alts { border-top: 1px solid var(--line); background: rgba(255, 255, 255, 0.02); padding: 12px 14px 14px; }
+      .alts-head {
+        margin: 0 0 10px;
+        font: 600 12px/1.3 system-ui, sans-serif;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .alts-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+      .alt {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .alt .head { padding: 10px 11px 11px; }
+      .alt .swap { font-size: 15px; }
+      .alt .author { font-size: 13px; margin-top: 6px; }
+      .alt .tag { font-size: 12px; }
+      .alt .id { font-size: 11px; padding: 3px 6px; margin-bottom: 6px; }
+      .alt .id.added {
+        color: #9ecbff;
+        background: rgba(88, 166, 255, 0.12);
+        border-color: rgba(88, 166, 255, 0.35);
+      }
+      .alt .id.unbuilt { color: var(--muted); background: transparent; border-color: var(--line); }
+      .stale { margin: 6px 0 0; font-size: 13px; color: var(--accent); }
+      .added-note { display: block; margin-top: 4px; }
       @media (max-width: 720px) {
         main { padding: 14px; }
         .grid { gap: 14px; }
@@ -227,6 +259,7 @@
       /* On a phone the two panes side by side are ~180 px each — stacked, each car gets the full width. */
       @media (max-width: 560px) {
         .shots { grid-template-columns: 1fr; }
+        .alts-grid { grid-template-columns: 1fr; }
       }
     </style>
   </head>
@@ -242,6 +275,7 @@
           · not layered (target does not apply)
         {{/if}}
       </span>
+      {{#if addedNote}}<span class="meta added-note">{{addedNote}}</span>{{/if}}
     </header>
     {{#if missingShots.length}}
       <details class="warn" open>
@@ -269,8 +303,13 @@
                 {{#if isCandidate}}<span class="id candidate">from new/</span>{{/if}}
                 <p class="swap">
                   <span class="slot">{{slot}}</span>
-                  <span class="to">replaced to:</span>
-                  <span class="name">{{carName}}</span>
+                  {{#if bases.length}}
+                    <span class="to">added, varies:</span>
+                    <span class="name">{{carName}}</span>
+                  {{else}}
+                    <span class="to">replaced to:</span>
+                    <span class="name">{{carName}}</span>
+                  {{/if}}
                 </p>
                 {{#if author}}<p class="author">Author: <b>{{author}}</b></p>{{/if}}
                 {{#if tags.length}}
@@ -300,6 +339,55 @@
                   {{/if}}
                 </div>
               </div>
+              {{#if alternatives.length}}
+                <div class="alts">
+                  <p class="alts-head">{{alternatives.length}} added car(s) on this slot</p>
+                  <div class="alts-grid">
+                    {{#each alternatives}}
+                      <article class="alt" id="car-{{slot}}">
+                        <div class="shot{{#if hasShot}} zoomable{{/if}}">
+                          {{#if hasShot}}
+                            <img
+                              src="/shot/{{slot}}"
+                              alt="{{carName}}"
+                              loading="lazy"
+                              data-zoom="{{slot}} — {{carName}}"
+                            />
+                          {{else}}
+                            <div class="missing">no screenshot</div>
+                          {{/if}}
+                        </div>
+                        <div class="head">
+                          {{#if unpromisedId}}
+                            <span class="id unbuilt" title="No row in the built tree's ledger yet">ID — not built yet</span>
+                          {{else}}
+                            <span class="id added">ID {{id}}</span>
+                          {{/if}}
+                          {{#if isCandidate}}<span class="id candidate">from new/</span>{{/if}}
+                          <p class="swap">
+                            <span class="slot">{{slot}}</span>
+                            <span class="name">{{carName}}</span>
+                          </p>
+                          {{#if author}}<p class="author">Author: <b>{{author}}</b></p>{{/if}}
+                          {{#if bases.[1]}}
+                            <p class="author">
+                              Varies: {{#each bases}}{{#unless @first}}, {{/unless}}<b>{{this}}</b>{{/each}}{{#if inherits}} · inherits from this one{{/if}}
+                            </p>
+                          {{/if}}
+                          {{#if ledgerBases}}
+                            <p class="stale">
+                              The built tree records this car under {{#each ledgerBases}}{{#unless @first}}, {{/unless}}<b>{{this}}</b>{{/each}} — the folder is what is drawn.
+                            </p>
+                          {{/if}}
+                          {{#if tags.length}}
+                            <p class="tags">{{#each tags}}<span class="tag">{{this}}</span>{{/each}}</p>
+                          {{/if}}
+                        </div>
+                      </article>
+                    {{/each}}
+                  </div>
+                </div>
+              {{/if}}
             </article>
           {{/each}}
         </div>

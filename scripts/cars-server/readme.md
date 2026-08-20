@@ -20,6 +20,17 @@ so. **A car with no screenshot is a warning at the top of the page** — slot, t
 (`<car folder name>.png`, `.jpg`/`.jpeg`/`.webp` also read), its folder, a link to the card
 ([plan 002](./docs/plans/002-layered-screenshots.md)).
 
+**Added cars hang off the slot they vary** ([plan 003](./docs/plans/003-added-cars-and-their-alternatives.md)):
+`mods-src/<game>/add-vehicles` is resolved the same way the fleet is, and each car is drawn as a **smaller
+card inside its base's card** — the base is the `(base)` suffix of its folder name, which is the relation
+`tools/add-vehicles` itself installs on. One naming several bases appears under each, marked on the one it
+inherits from; one whose base nobody replaced keeps the `Added vehicles` section to itself. Its **id comes
+from the built tree's ledger** (`build/<game>/sa/data/vehicle-adds.txt`) and from nowhere else — a folder the
+last build never saw reads `ID — not built yet` rather than a number nobody promised, and a ledger row whose
+base disagrees with the folder is shown as such. **`npm run cars:opensa` shows none of them**: added cars are
+an SA-only feature and that build installs none, so the header says so instead of listing 115 cars nobody
+gets.
+
 Every card carries the model id, `<slot> replaced to: <car>`, the author, the tags below, and two pictures —
 **Original** (the stock car, from the bundled metadata) and **Replaced** (the field screenshot). The catalog
 is rebuilt on every page load, so editing `mods-src` and hitting reload shows the new fleet.

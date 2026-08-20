@@ -1,3 +1,6 @@
+import type { LedgerRow } from '@opensa/vehicle-installer/ledger';
+
+import { writeAddsLedger } from '@opensa/vehicle-installer/ledger';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -287,11 +290,32 @@ describe('buildCatalog — the added fleet', () => {
       const catalog = buildCatalog({ gamePath, metadata: METADATA, vehiclesPath });
 
       expect(catalog.sections.map(({ name }) => name)).not.toContain('Added vehicles');
+      expect(catalog.addedNote).toBeNull();
     });
-  });
 
-  describe('positive cases', () => {
-    it('puts added cars in their own section with the base they vary', () => {
+    it('shows no added cars on the opensa target — that build installs none of them', () => {
+      const { gamePath, vehiclesPath } = fixture({ models: [{ name: 'admiral - 230 - k1real24' }] });
+      const addedPath = addedFixture(['001veh - vega - alfamodding (admiral)']);
+      const catalog = buildCatalog({ addedPath, gamePath, metadata: METADATA, target: 'opensa', vehiclesPath });
+
+      expect(catalog.total).toBe(1);
+      expect(catalog.sections[0]?.cars[0]?.alternatives).toBeUndefined();
+      expect(catalog.addedNote).toMatch(/SA-only/);
+    });
+
+    it('promises no id for a car the built tree has never seen', () => {
+      const { gamePath, vehiclesPath } = fixture({ models: [{ name: 'admiral - 230 - k1real24' }] });
+      const addedPath = addedFixture(['001veh - vega - alfamodding (admiral)']);
+      const builtPath = ledgerFixture([]);
+      const alternative = buildCatalog({ addedPath, builtPath, gamePath, metadata: METADATA, vehiclesPath }).sections[0]
+        ?.cars[0]?.alternatives?.[0];
+
+      // A folder the last build never saw holds no id at all — an added car has no stock row to fall back
+      // on, and a number nobody promised is the one thing a save cannot survive being wrong about.
+      expect(alternative).toMatchObject({ id: null, unpromisedId: true });
+    });
+
+    it('leaves an added car whose base nobody replaced in its own section', () => {
       const { gamePath, vehiclesPath } = fixture({ models: [{ name: 'admiral - 230 - k1real24' }] });
       const addedPath = addedFixture(['001veh - 1971 Chevrolet Vega - alfamodding (manana)']);
       const catalog = buildCatalog({ addedPath, gamePath, metadata: METADATA, vehiclesPath });
@@ -311,6 +335,69 @@ describe('buildCatalog — the added fleet', () => {
       expect(catalog.missingShots.map(({ slot }) => slot)).toEqual(['001veh']);
     });
   });
+
+  describe('positive cases', () => {
+    it('hangs an added car under the base card its folder name varies', () => {
+      const { gamePath, vehiclesPath } = fixture({ models: [{ name: 'admiral - 230 - k1real24' }] });
+      const addedPath = addedFixture(['001veh - 1971 Chevrolet Vega - alfamodding (admiral)']);
+      const catalog = buildCatalog({ addedPath, gamePath, metadata: METADATA, vehiclesPath });
+      const base = catalog.sections[0]?.cars[0];
+
+      expect(catalog.sections.map(({ name }) => name)).not.toContain('Added vehicles');
+      expect(base?.alternatives?.map(({ base: host, slot }) => [slot, host])).toEqual([['001veh', 'admiral']]);
+      expect(base?.alternatives?.[0].carName).toBe('1971 Chevrolet Vega');
+      expect(catalog.total).toBe(2);
+    });
+
+    it('hangs several alternatives off one base, sorted by slot as every list on the page is', () => {
+      const { gamePath, vehiclesPath } = fixture({ models: [{ name: 'admiral - 230 - k1real24' }] });
+      const addedPath = addedFixture([
+        '003veh - c - author (admiral)',
+        '001veh - a - author (admiral)',
+        '002veh - b - author (admiral)',
+      ]);
+      const catalog = buildCatalog({ addedPath, gamePath, metadata: METADATA, vehiclesPath });
+
+      expect(catalog.sections[0]?.cars[0]?.alternatives?.map(({ slot }) => slot)).toEqual([
+        '001veh',
+        '002veh',
+        '003veh',
+      ]);
+    });
+
+    it('takes the id from the built ledger, and flags a row whose base disagrees with the folder', () => {
+      const { gamePath, vehiclesPath } = fixture({ models: [{ name: 'admiral - 230 - k1real24' }] });
+      const addedPath = addedFixture(['001veh - vega - alfamodding (admiral)']);
+      const builtPath = ledgerFixture([
+        { bases: ['manana'], folder: 'stale', id: 19001, kind: 'car', slot: '001veh' },
+        { bases: ['bbb_lr_slv1'], folder: 'voodoo', id: 19800, kind: 'part', slot: 'bbb_lr_slv1_voo' },
+      ]);
+      const catalog = buildCatalog({ addedPath, builtPath, gamePath, metadata: METADATA, vehiclesPath });
+      const alternative = catalog.sections[0]?.cars[0]?.alternatives?.[0];
+
+      // The FOLDER is the relation the page draws; the ledger's disagreement is shown, never picked.
+      expect(alternative).toMatchObject({ bases: ['admiral'], id: 19001, ledgerBases: ['manana'] });
+      expect(alternative?.unpromisedId).toBe(false);
+      expect(catalog.addedNote).toContain('vehicle-adds.txt');
+    });
+
+    it('draws a car naming two bases under each, marked on the one it inherits from', () => {
+      const { gamePath, vehiclesPath } = fixture({
+        models: [{ name: 'admiral - 230 - k1real24' }, { name: 'at400 - 727 - author' }],
+      });
+      const addedPath = addedFixture(['001veh - vega - author (at400, admiral)']);
+      const cars = buildCatalog({ addedPath, gamePath, metadata: METADATA, vehiclesPath }).sections[0]?.cars ?? [];
+      const hosts = cars.map((car) => [car.slot, car.alternatives?.[0]?.inherits]);
+
+      // Both bases show the car; only `at400` — the first named, the one it inherits sound and parts from —
+      // is marked. Counted ONCE: it is one car drawn twice, not two cars.
+      expect(hosts).toEqual([
+        ['admiral', false],
+        ['at400', true],
+      ]);
+      expect(cars.length).toBe(2);
+    });
+  });
 });
 
 /** An added-vehicles root: `models/<folder>` + an empty `screenshots/`. */
@@ -321,6 +408,14 @@ function addedFixture(folders: readonly string[]): string {
     writeFileSync(join(root, 'models', folder, `${folder.split(' - ')[0]}.dff`), '');
   }
   mkdirSync(join(root, 'screenshots'), { recursive: true });
+
+  return root;
+}
+
+/** A built tree holding just the adds ledger — written the way the installer writes it, never by hand. */
+function ledgerFixture(rows: readonly LedgerRow[]): string {
+  const root = mkdtempSync(join(tmpdir(), 'cars-server-built-'));
+  writeAddsLedger(root, rows);
 
   return root;
 }
