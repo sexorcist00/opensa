@@ -51,6 +51,8 @@ describe('olaEntityPools', () => {
   describe('negative cases', () => {
     it('falls back to the stock pools when the tree ships no adjuster ini, and says so', () => {
       expect(olaEntityPools(dir)).toEqual({
+        // `configured` false is what keeps the first-entry floor off a tree that ships no adjuster at all.
+        configured: false,
         pools: { Buildings: 13_000, Dummys: 2_500 },
         source: 'no III.VC.SA.LimitAdjuster*.ini in the tree, so OLA defaults',
       });
@@ -75,6 +77,7 @@ describe('olaEntityPools', () => {
       ola('Buildings = 150000\r\nDummys = 100000');
 
       expect(olaEntityPools(dir)).toEqual({
+        configured: true,
         pools: { Buildings: 150_000, Dummys: 100_000 },
         source: 'III.VC.SA.LimitAdjuster.ini [SALIMITS]',
       });
@@ -130,6 +133,40 @@ describe('checkEntityPoolBudgets', () => {
       ola('Buildings = 150000\r\nDummys = 50000');
 
       expect(checkEntityPoolBudgets(dir).permanent).toEqual({ buildings: 40, dummies: 3 });
+    });
+  });
+});
+
+describe('the dummy pool floor', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'pmb-dummy-floor-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  const ship = (dummys: string): void => {
+    writeFileSync(join(dir, 'III.VC.SA.LimitAdjuster.ini'), `[SALIMITS]\r\nBuildings = 150000\r\n${dummys}\r\n`);
+  };
+
+  describe('negative cases', () => {
+    it("refuses a pool under the FIRST entry's measured peak — no row count can see that one", () => {
+      ship('Dummys = 40000');
+
+      expect(() => checkEntityPoolBudgets(dir)).toThrow(/Dummys = 40000 against a measured peak of 49151/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('passes the recorded 100 000, and passes a tree that ships no adjuster at all', () => {
+      ship('Dummys = 100000');
+      expect(() => checkEntityPoolBudgets(dir)).not.toThrow();
+
+      rmSync(join(dir, 'III.VC.SA.LimitAdjuster.ini'));
+      expect(() => checkEntityPoolBudgets(dir)).not.toThrow();
     });
   });
 });

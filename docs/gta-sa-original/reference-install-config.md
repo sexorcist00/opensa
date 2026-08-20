@@ -78,6 +78,7 @@ Vehicles = 110
 Buildings = 150000
 Objects = 10000
 Dummys = 100000   ; raised from 50000 in the field 2026-08-19 and kept after perfect-map 011 — see reference-install.md
+                  ; the OLA ini in mods-src shipped 50000 until 2026-08-20, so every delivery reverted it; guarded now
 ColModel = unlimited
 Task = unlimited
 Event = unlimited

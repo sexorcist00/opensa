@@ -32,6 +32,21 @@ const ENTITY_POOL_BUDGETS = [
   { field: 'dummies', key: 'Dummys', label: 'CPool<CDummy>', stock: 2_500 },
 ] as const;
 
+/**
+ * What the FIRST world entry really occupies of `CPool<CDummy>`, measured in the field 2026-08-19: the boot
+ * places more dummies than the map has rows (**[40 960, 49 151] against 33 043 map rows**), so the row
+ * census above cannot derive it — `Dummys = 40000` passes the permanent gate and dies during the first
+ * entry at `0x00538103`. This is a field number, not a derivation, and it is the floor a build may not go
+ * under. `docs/restrictions/sa-target.md`, the `IplDef.firstDummy/lastDummy` row.
+ */
+const FIRST_ENTRY_DUMMY_PEAK = 49_151;
+
+/**
+ * The value the reference install runs, and the recorded decision: it bought 8 world entries per boot in
+ * the 011 ladder against 5 at 50 000. Below it the build is legal and says how much it is giving up.
+ */
+const DECIDED_DUMMY_POOL = 100_000;
+
 export interface EntityPoolSpend {
   /** Rows in the streamed binary IPLs — resident only near the player, so the peak, not the floor. */
   binary: { buildings: number; dummies: number };
@@ -56,7 +71,7 @@ export interface EntityPoolSpend {
  */
 export function checkEntityPoolBudgets(gameDir: string): EntityPoolSpend {
   const spend = countEntityPoolSpend(gameDir);
-  const { pools, source } = olaEntityPools(gameDir);
+  const { configured, pools, source } = olaEntityPools(gameDir);
 
   for (const budget of ENTITY_POOL_BUDGETS) {
     const limit = pools[budget.key] ?? budget.stock;
@@ -77,11 +92,8 @@ export function checkEntityPoolBudgets(gameDir: string): EntityPoolSpend {
     );
   }
 
-  // The per-entry leak this once warned about (CPool<CDummy> never released between world entries) was
-  // lifted by perfect-map plan 011 on 2026-08-19. What this gate still cannot see: the FIRST entry's peak
-  // occupancy is not derivable from the rows — measured [40 960, 49 151] against 33 043 map rows, so
-  // `Dummys = 40000` passes the permanent gate and crashes during the first entry
-  // (docs/restrictions/sa-target.md, the IplDef dummy row). Keep the shipped ini at 100 000.
+  assertDummyPoolCoversFirstEntry(configured ? pools.Dummys : undefined, source);
+
   return spend;
 }
 
@@ -138,13 +150,17 @@ export function countEntityPoolSpend(gameDir: string): EntityPoolSpend {
  * a ceiling that is not in force and reports headroom that does not exist. An absent ini, a `#`/`;`-disabled
  * line and a missing section all fall back to OLA's stock pool, which can only make the guard stricter.
  */
-export function olaEntityPools(gameDir: string): { pools: Record<string, number>; source: string } {
+export function olaEntityPools(gameDir: string): {
+  configured: boolean;
+  pools: Record<string, number>;
+  source: string;
+} {
   const stock = Object.fromEntries(ENTITY_POOL_BUDGETS.map((budget) => [budget.key, budget.stock as number]));
   const ini = existsSync(gameDir)
     ? readdirSync(gameDir).find((name) => /^iii\.vc\.sa\.limitadjuster.*\.ini$/i.test(name))
     : undefined;
   if (ini === undefined) {
-    return { pools: stock, source: 'no III.VC.SA.LimitAdjuster*.ini in the tree, so OLA defaults' };
+    return { configured: false, pools: stock, source: 'no III.VC.SA.LimitAdjuster*.ini in the tree, so OLA defaults' };
   }
   // A line scan, not one clever regex: the ini is CRLF and a lazy match with a `$` alternative collapses to
   // the empty string on the first line end, which reads as "section present, keys absent" — stock ceilings
@@ -152,7 +168,7 @@ export function olaEntityPools(gameDir: string): { pools: Record<string, number>
   const lines = readFileSync(join(gameDir, ini), 'utf8').split(/\r?\n/);
   const from = lines.findIndex((line) => line.trim().toUpperCase() === '[SALIMITS]');
   if (from < 0) {
-    return { pools: stock, source: `${ini} (no [SALIMITS] section, so OLA defaults)` };
+    return { configured: false, pools: stock, source: `${ini} (no [SALIMITS] section, so OLA defaults)` };
   }
   const rest = lines.slice(from + 1);
   const to = rest.findIndex((line) => /^\s*\[/.test(line));
@@ -169,6 +185,7 @@ export function olaEntityPools(gameDir: string): { pools: Record<string, number>
   };
 
   return {
+    configured: true,
     pools: Object.fromEntries(
       ENTITY_POOL_BUDGETS.map((budget) => {
         const value = read(budget.key);
@@ -178,6 +195,43 @@ export function olaEntityPools(gameDir: string): { pools: Record<string, number>
     ),
     source: `${ini} [SALIMITS]`,
   };
+}
+
+/**
+ * The dummy pool must cover the first world entry's PEAK, which no row count reaches — see
+ * {@link FIRST_ENTRY_DUMMY_PEAK}. Below that the game dies during the first entry; between it and the
+ * recorded {@link DECIDED_DUMMY_POOL} the build runs and buys fewer world entries per boot, which is a
+ * choice rather than a defect, so it is said out loud rather than refused.
+ *
+ * It exists because the class is otherwise SILENT and we paid for it: a delivery of the built tree put
+ * `Dummys = 50000` back over a bottle that had been raised to 100 000 by hand, and nothing said a word
+ * (2026-08-20).
+ *
+ * A tree that ships no OLA setting for the pool is not judged: there is no configuration to read, and the
+ * floor was measured on an install that HAS the adjuster.
+ */
+function assertDummyPoolCoversFirstEntry(limit: number | undefined, source: string): void {
+  if (limit === undefined) {
+    // The build ships no OLA setting for this pool, so there is no configuration to judge — and a tree
+    // without the adjuster is not the install this floor was measured on.
+    return;
+  }
+  if (limit < FIRST_ENTRY_DUMMY_PEAK) {
+    throw new Error(
+      `real-SA entity pool too small for the FIRST world entry — Dummys = ${limit} against a measured peak ` +
+        `of ${FIRST_ENTRY_DUMMY_PEAK} (the boot places more dummies than the map has rows, so no row count ` +
+        `sees this). The game dies during the first entry at 0x00538103. Read from: ${source}. Raise Dummys ` +
+        `to ${DECIDED_DUMMY_POOL} in the OLA ini the build SHIPS (mods-src/<game>/mods/sa/…, not just the ` +
+        'bottle) — docs/restrictions/sa-target.md.',
+    );
+  }
+  if (limit < DECIDED_DUMMY_POOL) {
+    console.warn(
+      `pmb: Dummys = ${limit} clears the first entry's measured peak of ${FIRST_ENTRY_DUMMY_PEAK} with ` +
+        `${limit - FIRST_ENTRY_DUMMY_PEAK} spare, and buys fewer world entries per boot than the recorded ` +
+        `${DECIDED_DUMMY_POOL} (the 011 field ladder: 8 entries at 100 000, 5 at 50 000). Read from: ${source}`,
+    );
+  }
 }
 
 /** Every binary IPL in the tree's archives — the streamed half of the map. */
