@@ -120,6 +120,44 @@ The same step gives each impostor row the vegetation bits of the HD row it repla
 game-dir, HD `0x202084` → LOD `2105476` (was `2097284`), HD `0x204084` → `2113668`, and an HD row with
 double-sided + additive but no vegetation bit leaves the LOD row unchanged.
 
+## The `sa` build that carries all of it
+
+Full run 2026-08-21, `--exclude opensa`, resumed twice (see below): **2 026 s total**, against 676.1 s on
+2026-08-20.
+
+| stage | 2026-08-20 | 2026-08-21 |
+| --- | ---: | ---: |
+| split | 2.2 | 1.2 |
+| mods | 90.7 | 108.7 |
+| vehicles | 8.3 | 9.6 |
+| cutscene | 14.6 | 13.5 |
+| peds | 10.8 | 13.0 |
+| optimize | 90.2 | 104.9 |
+| **trees** | **83.4** | **268.4** |
+| **sa** | **373** | **1 503.2** |
+| procobj | 2.9 | 3.5 |
+| total | 676.1 | 2 026 |
+
+**`trees` is this plan's (×3.2, above). `sa` is NOT, and it is not explained yet.** Nothing in steps 01–03
+touches the `sa` stage — `rw-codec`'s endpoint change is the only shared code, and for an opaque block it
+selects the same 16 texels it always did. The one deliberate difference in this run is mine and unrelated to
+the plan: the stage was resumed with `NODE_OPTIONS=--max-old-space-size=8192` instead of the npm script's
+`12288`, while testing (and disproving) an out-of-memory theory. A stack sample taken 23 minutes in showed
+V8 map-normalisation and scavenging, and CPU time tracked wall-clock 1:1 (98.8 s of CPU in 97 s), so the
+stage was working, not stuck. **The next full build must run the standard script and its `sa` row compared
+before anything is concluded.**
+
+The run also cost three killed attempts, none of them the build's fault: a background task with no stdout is
+killed after ~2–3 minutes here, and the `sa` stage prints one line at its start and nothing until it ends.
+`--resume` re-entered at the last finished stage each time (it refuses over a changed commit, which is why
+the first attempt had to be restarted rather than resumed). The fix was to detach the build (`nohup`) from
+the task that watches it.
+
+**What the built tree carries** (`build/original/sa`): `lodsm_veg_tree5.dff` and `lodash1_hi.dff` are
+**8 triangles** each (were 16), `lodtrees.txd` is 78.7 MB of 512² DXT5, and `data/maps/lodtrees.ide` holds
+**67 rows with `IS_TREE`, 10 with `IS_PALM`, 107 with neither** — the last being the finding that sent step 02
+back for its OpenSA half (105 of those 107 sources are vegetation to OpenSA by NAME, not by flag).
+
 ## Step 03 — how dense the cage is against the tree
 
 Instrument: `scripts/debug/impostor-density.ts` — HD mesh and card cage rendered from the SAME poses by the
