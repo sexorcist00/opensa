@@ -41,6 +41,15 @@ type Vec3px = [number, number, number];
 
 const WHITE: Rgba = [255, 255, 255, 255];
 
+/** Per-fragment scratch. The bake runs this loop `samples²` times per atlas texel over every triangle of a
+ *  5 000-triangle tree, and allocating four small arrays per fragment there is most of its cost — measured
+ *  1.7× on the reference trees. Written and consumed inside one call; nothing retains them. */
+const SCRATCH_TEX: Rgba = [0, 0, 0, 0];
+const SCRATCH_MIP: Rgba = [0, 0, 0, 0];
+const SCRATCH_VC: Rgba = [0, 0, 0, 0];
+const SCRATCH_GAMMA: Rgba = [0, 0, 0, 0];
+const SCRATCH_LINEAR: Rgba = [0, 0, 0, 0];
+
 /** The alpha at which a source texel counts as drawn — the same 0.5 the bake's own cutout uses. */
 const CUTOUT_ALPHA = 128;
 
@@ -142,7 +151,14 @@ export function resolveRaster(raster: Raster): { color: Uint8Array; colorLinear:
   };
 }
 
-/** The texture plus the mip chain {@link rasterizeTriangle} samples — built once per tree, not per fragment. */
+/**
+ * The texture with the mip chain {@link rasterizeTriangle} samples, **memoised on the texture itself**.
+ *
+ * The memo is the point, not an optimisation: the stage hands ONE folder-wide texture map to every tree
+ * (`io.loadTree` stores it verbatim), so a per-tree wrap rebuilds every chain in the folder per tree — 148
+ * textures × 286 trees took the `trees` stage from 83 s to 32 min. Returning a copy is what made that
+ * invisible, so this returns the same object.
+ */
 export function withMipChain(texture: DecodedTexture): DecodedTexture {
   if (texture.mips) {
     return texture;
@@ -158,11 +174,13 @@ export function withMipChain(texture: DecodedTexture): DecodedTexture {
 
   // Gamma math: the chain stands in for this rasterizer's own bilinear filter, which has always averaged raw
   // bytes for both encodings. The per-encoding difference lives in `blend`'s product (plan 012), not here.
-  return { ...texture, mips: buildMipChain(cutout, texture.width, texture.height, 'gamma') };
+  texture.mips = buildMipChain(cutout, texture.width, texture.height, 'gamma');
+
+  return texture;
 }
 
-/** Bilinear sample of ONE mip level, with wrapping (matches the engine's RepeatWrapping). */
-function bilinear(level: MipLevel, u: number, v: number): Rgba {
+/** Bilinear sample of ONE mip level, with wrapping (matches the engine's RepeatWrapping), into `out`. */
+function bilinear(level: MipLevel, u: number, v: number, out: Rgba): Rgba {
   const { data, height, width } = level;
   const fx = (u - Math.floor(u)) * width - 0.5;
   const fy = (v - Math.floor(v)) * height - 0.5;
@@ -175,7 +193,6 @@ function bilinear(level: MipLevel, u: number, v: number): Rgba {
   const ya = ((y0 % height) + height) % height;
   const yb = (ya + 1) % height;
 
-  const out: Rgba = [0, 0, 0, 0];
   for (let c = 0; c < 4; c += 1) {
     const top = lerp(data[(ya * width + xa) * 4 + c], data[(ya * width + xb) * 4 + c], tx);
     const bottom = lerp(data[(yb * width + xa) * 4 + c], data[(yb * width + xb) * 4 + c], tx);
@@ -208,22 +225,15 @@ function blend(
   const tex = texture ? sample(texture, u, v, lod) : WHITE;
   const vc = tri.colors ? lerpColor(tri.colors, l0, l1, l2) : WHITE;
   const alpha = (tex[3] * vc[3]) / 255;
-  const factor = (c: number): number => vc[c] / Math.max(1, normalize[c]);
+  for (let c = 0; c < 3; c += 1) {
+    const factor = vc[c] / Math.max(1, normalize[c]);
+    SCRATCH_GAMMA[c] = Math.min(255, Math.round(tex[c] * factor));
+    SCRATCH_LINEAR[c] = linearToSrgbByte(srgbToLinear(tex[c]) * factor);
+  }
+  SCRATCH_GAMMA[3] = alpha;
+  SCRATCH_LINEAR[3] = alpha;
 
-  return [
-    [
-      Math.min(255, Math.round(tex[0] * factor(0))),
-      Math.min(255, Math.round(tex[1] * factor(1))),
-      Math.min(255, Math.round(tex[2] * factor(2))),
-      alpha,
-    ],
-    [
-      linearToSrgbByte(srgbToLinear(tex[0]) * factor(0)),
-      linearToSrgbByte(srgbToLinear(tex[1]) * factor(1)),
-      linearToSrgbByte(srgbToLinear(tex[2]) * factor(2)),
-      alpha,
-    ],
-  ];
+  return [SCRATCH_GAMMA, SCRATCH_LINEAR];
 }
 
 function edge(p: Vec3px, q: Vec3px, r: Vec3px): number {
@@ -235,12 +245,11 @@ function lerp(a: number, b: number, t: number): number {
 }
 
 function lerpColor(colors: [Rgba, Rgba, Rgba], l0: number, l1: number, l2: number): Rgba {
-  return [
-    colors[0][0] * l0 + colors[1][0] * l1 + colors[2][0] * l2,
-    colors[0][1] * l0 + colors[1][1] * l1 + colors[2][1] * l2,
-    colors[0][2] * l0 + colors[1][2] * l1 + colors[2][2] * l2,
-    colors[0][3] * l0 + colors[1][3] * l1 + colors[2][3] * l2,
-  ];
+  for (let c = 0; c < 4; c += 1) {
+    SCRATCH_VC[c] = colors[0][c] * l0 + colors[1][c] * l1 + colors[2][c] * l2;
+  }
+
+  return SCRATCH_VC;
 }
 
 /** Linear 0–1 → sRGB byte — the encoding the atlas is stored (and later sampled) in. */
@@ -272,7 +281,7 @@ function reduce(data: Uint8Array, raster: Raster, math: MipColorMath): Uint8Arra
  */
 function sample(texture: DecodedTexture, u: number, v: number, lod: number): Rgba {
   const levels = texture.mips;
-  const base = bilinear({ data: texture.rgba, height: texture.height, width: texture.width }, u, v);
+  const base = bilinear({ data: texture.rgba, height: texture.height, width: texture.width }, u, v, SCRATCH_TEX);
   if (!levels || lod <= 0) {
     return base;
   }
@@ -280,10 +289,20 @@ function sample(texture: DecodedTexture, u: number, v: number, lod: number): Rgb
   const low = Math.floor(clamped);
   const high = Math.min(levels.length - 1, low + 1);
   const t = clamped - low;
-  const a = bilinear(levels[low], u, v);
-  const b = high === low || t === 0 ? a : bilinear(levels[high], u, v);
+  const alpha = base[3];
+  const a = bilinear(levels[low], u, v, SCRATCH_TEX);
+  if (high === low || t === 0) {
+    base[3] = alpha;
 
-  return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t), base[3]];
+    return base;
+  }
+  const b = bilinear(levels[high], u, v, SCRATCH_MIP);
+  base[0] = lerp(a[0], b[0], t);
+  base[1] = lerp(a[1], b[1], t);
+  base[2] = lerp(a[2], b[2], t);
+  base[3] = alpha;
+
+  return base;
 }
 
 /** sRGB byte (possibly fractional, from bilinear sampling) → linear, interpolating the LUT. */

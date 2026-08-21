@@ -10,9 +10,10 @@ import type { MipLevel } from '@opensa/rw-codec/mip';
 export interface DecodedTexture {
   hasAlpha: boolean;
   height: number;
-  /** Box-filtered chain over {@link rgba} (level 0 = the base), attached by `withMipChain` before the bake:
-   *  the rasterizer samples the level matching one sub-sample's footprint instead of point-sampling the base
-   *  (plan 013). Absent → the base level is sampled, as before. */
+  /** Box-filtered chain over {@link rgba} (level 0 = the base), attached by `withMipChain` on FIRST use: the
+   *  rasterizer samples the level matching one sub-sample's footprint instead of point-sampling the base
+   *  (plan 013). Absent → the base level is sampled, as before. Memoised here rather than in a wrapper
+   *  because one texture map is shared by every tree of the stage. */
   mips?: readonly MipLevel[];
   rgba: Uint8Array;
   width: number;

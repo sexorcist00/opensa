@@ -23,8 +23,6 @@ export function renderImpostor(tree: HdTree, config: TreeLodConfig): Impostor {
   const cx = (tree.bbox.min[0] + tree.bbox.max[0]) / 2;
   const cy = (tree.bbox.min[1] + tree.bbox.max[1]) / 2;
   const cards: ImpostorCard[] = [];
-  // One mip chain per source texture, not per card: the rasterizer picks the level matching a sub-sample.
-  const textures = new Map([...tree.textures].map(([name, texture]) => [name, withMipChain(texture)]));
 
   for (let i = 0; i < count; i += 1) {
     const angle = (Math.PI * i) / count;
@@ -61,7 +59,10 @@ export function renderImpostor(tree: HdTree, config: TreeLodConfig): Impostor {
       ];
     };
     for (const triangle of tree.triangles) {
-      const texture = triangle.texture ? (textures.get(triangle.texture) ?? null) : null;
+      // The chain is attached on first use and memoised on the texture — the tree's map is the STAGE's,
+      // shared by every tree, so wrapping it per tree costs the whole folder every time (plan 013 step 01).
+      const source = triangle.texture ? (tree.textures.get(triangle.texture) ?? null) : null;
+      const texture = source ? withMipChain(source) : null;
       rasterizeTriangle(
         raster,
         {

@@ -61,18 +61,36 @@ The mip alone does nothing for the speckle (it is a geometric coin flip on thin 
 average); supersampling alone would keep the twig highlights. Both are needed, and the second sub-sample
 step is where the defect goes.
 
-## Stage cost
+## Stage cost — and the extrapolation that was wrong
 
-A 9-tree sample across the roster's shapes (330 → 16 092 HD triangles, one portrait atlas):
+A 9-tree sample across the roster's shapes (330 → 16 092 HD triangles, one portrait atlas), each tree loaded
+with its OWN textures:
 
 | | mean bake per tree | 9 trees |
 | --- | ---: | ---: |
 | before | 248 ms | 2.2 s |
 | after (`--ss 2`) | 1 756 ms | 15.8 s |
 
-**×7.1.** Extrapolated over the ~286-tree roster that is ~71 s → ~8.4 min of bake, so the pmb `trees`
-stage goes from ~2 min to roughly 9–10 min — bake-time only, nothing at runtime. `--ss 4` would put it
-near 35 min, which is what the 0.5 %/0.1 % row costs.
+**×7.1** — from which this file first extrapolated "the `trees` stage goes from ~2 min to roughly 9–10 min".
+**The build measured 1 940.5 s — 32.3 min, against 83.4 s on 2026-08-20 (×23).**
+
+The gap was a defect, not the supersampling: `renderImpostor` wrapped `tree.textures` in a mip chain per
+tree, and the stage hands ONE folder-wide map (148 textures) to every tree — `io.loadTree` stores it
+verbatim — so every chain in the folder was rebuilt 286 times. The census never saw it because it loads only
+the textures a model names. Reproduced in the stage's own shape and fixed by memoising the chain ON the
+texture, plus removing the per-fragment allocations from the sampler:
+
+| per tree, stage shape (one folder-wide texture map) | `tree5` | `tree7vbig` | `ash1_hi` | `pinetree04` |
+| --- | ---: | ---: | ---: | ---: |
+| chain rebuilt per tree (the defect) | 11 024 ms | 11 438 ms | 10 753 ms | 12 736 ms |
+| chain memoised | 2 363 ms | 2 761 ms | 2 172 ms | 3 792 ms |
+| + allocation-free sampler | **1 713 ms** | **2 065 ms** | **1 698 ms** | **2 676 ms** |
+
+The atlas is unchanged by both (the census reports the same numbers to the digit). Projected over the roster
+that is ~10 min of bake; the stage's own measured time from the next build replaces this line.
+
+**The lesson, again**: a per-item cost measured on a fixture that does not share what the pipeline shares is
+not the pipeline's cost. The 9-tree sample was honest about the bake and blind to the stage.
 
 ## Step 02 — one winding per card
 
