@@ -121,13 +121,13 @@ describe('stripBinaryIpl', () => {
     });
 
     it('keeps the binary-to-text LOD pairing intact across a real coupled lae strip', () => {
-      const textRaw = readFileSync('tests/original/ipl_text/lae.ipl', 'utf8');
+      const textRaw = readFileSync('fixtures/original/ipl_text/lae.ipl', 'utf8');
       const origText = parseIpl(textRaw);
       const stripped = stripTextIpl(textRaw, (_id, name) => name.toLowerCase() !== 'laeroad39');
       const { map } = stripped;
       const newText = parseIpl(stripped.text);
 
-      const stream = new Uint8Array(readFileSync('tests/original/ipl_binary/lae_stream0.ipl'));
+      const stream = new Uint8Array(readFileSync('fixtures/original/ipl_binary/lae_stream0.ipl'));
       const orig = parseBinaryIpl(ab(stream));
       const out = parseBinaryIpl(ab(stripBinaryIpl(stream, keepAll, map).bytes));
 
@@ -144,7 +144,7 @@ describe('stripBinaryIpl', () => {
     });
 
     it('drops tree HD instances from the real countrye_stream1 by id', () => {
-      const stream = new Uint8Array(readFileSync('tests/original/ipl_binary/countrye_stream1.ipl'));
+      const stream = new Uint8Array(readFileSync('fixtures/original/ipl_binary/countrye_stream1.ipl'));
       const before = parseBinaryIpl(ab(stream)).length;
       const firstId = parseBinaryIpl(ab(stream))[0].id;
       const result = stripBinaryIpl(stream, (id) => id !== firstId, null);

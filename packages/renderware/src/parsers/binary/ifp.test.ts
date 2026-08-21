@@ -94,7 +94,7 @@ describe('parseIfp', () => {
 
 // Every other binary parser here has a real-file case; this one had only the synthetic ANP3 above (which is
 // still the right unit for the type-3 vs type-4 frame-kind assertions — a real file cannot isolate those).
-const COUNXREF = 'tests/original/dff/anim-clump/counxref.ifp';
+const COUNXREF = 'fixtures/original/dff/anim-clump/counxref.ifp';
 
 describe.skipIf(!existsSync(COUNXREF))('parseIfp (real counxref.ifp)', () => {
   const animations = parseIfp(toArrayBuffer(readFileSync(COUNXREF)));

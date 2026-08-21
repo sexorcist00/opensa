@@ -6,9 +6,11 @@
  *     --out   output install dir (wiped + rebuilt each run)
  *     --strip  (optional, off by default) reduce gta3.img + peds.ide to ONLY the installed peds (+ the player ped)
  *     --player (optional) the player ped model to keep when stripping (default BMYPOL1)
+ *     --target sa|opensa  which layer of a LAYERED --in (common/sa/opensa) applies after common (plan 005)
  *   Per ped: dff/txd go into gta3.img (replace by name); a new ped's settings line is merged into peds.ide.
  *   All paths are relative to the current working directory (absolute paths pass through).
  */
+import { parseBuildTarget } from '@opensa/tool-kit/target';
 import { statSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 
@@ -44,12 +46,14 @@ function main(): void {
     throw new Error(`--in must be a directory: ${inPath}`);
   }
 
+  const target = parseBuildTarget(argValue('--target'));
   install({
     gamePath,
     inPath,
     outPath,
     player: argValue('--player'),
     strip: process.argv.includes('--strip'),
+    ...(target ? { target } : {}),
   });
 }
 

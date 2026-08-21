@@ -113,6 +113,9 @@ export interface VehicleFixture {
   /** The UV animations this model's materials reference, model-local (see {@link VehicleModelData}).
    *  Absent when no material references one — which every `.osm` written before 099 also says. */
   uvAnimations?: RWUvAnimation[];
+  /** The VehFuncs variant tree (see {@link VehicleModelData}). Absent on models without one, and on every
+   *  `.osm` written before it existed — where every variant is drawn at once. */
+  variants?: VehicleVariants;
   vertexCount: number;
   wheels: VehicleWheel[];
 }
@@ -163,6 +166,13 @@ export interface VehicleModelData {
    */
   uvAnimations?: readonly RWUvAnimation[];
   uvs: Float32Array;
+  /**
+   * The VehFuncs `f_extras` / `f_class` decision tree, when the model carries one: which optional parts a
+   * SPAWN shows is chosen at runtime by walking it (`pickVariants`), the way the plugin does in the SA
+   * target — a build-time pick would freeze one set of clutter, ads and body kits into every car in the
+   * world. A submesh names the option it belongs to by `variant`.
+   */
+  variants?: VehicleVariants;
   wheels: readonly VehicleWheel[];
 }
 
@@ -228,6 +238,11 @@ export interface VehicleModelSubmesh {
   /** Index into the MODEL's `uvAnimations` (plan 099/01) — this submesh's material scrolls/steps its UV0.
    *  Absent = static UVs, which is the only thing an `.osm` written before 099 can say. */
   uvAnim?: number;
+  /**
+   * The VehFuncs option this submesh belongs to — a {@link VehicleVariantNode} id — or absent for the
+   * ordinary body. Shown only when the spawn's walk of {@link VehicleModelData.variants} chose it.
+   */
+  variant?: string;
 }
 
 /**
@@ -249,6 +264,33 @@ export interface VehicleTextureArray {
   /** RGBA8 layers, all one size, packed sequentially. */
   rgba: Uint8Array;
   width: number;
+}
+
+/**
+ * One node of the VehFuncs variant tree — a selector container (`f_extras:2`), an option (`ac:1`,
+ * `none[ycc]`, `5[lv]`) or a class tag (`ycc?c1`). Every node is also a selector over its own children:
+ * a bare name selects one, `:N` selects N, `:0` none-or-one, `:0+` any number, `:N+` at least N.
+ */
+export interface VehicleVariantNode {
+  children: VehicleVariantNode[];
+  /** The `?…` condition VehFuncs evaluates at spawn (`c1` = city LS, `rain`, `h6-18`), verbatim. Carried
+   *  so a runtime that learns to evaluate it needs no rebake — the picker treats it as always true today. */
+  condition?: string;
+  /** Unique within the model (the frame index) — what a submesh's `variant` names. */
+  id: string;
+  /** The authored name without its `:N`, `[tags]` and `?condition` decorations, lower-cased. */
+  name: string;
+  /** Class tags this option needs (`name[a,b]` = any of them chosen); absent = always eligible. */
+  requires?: string[];
+  /** How many children a spawn selects: `[min, max]`, `max` −1 = all of them. */
+  select: [number, number];
+}
+
+export interface VehicleVariants {
+  /** Top-level `f_class*` containers: their chosen children are the spawn's class tags. */
+  classes: VehicleVariantNode[];
+  /** Top-level `f_extras*` containers, walked after the classes are known. */
+  extras: VehicleVariantNode[];
 }
 
 export interface VehicleWheel {

@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { irFromDecoded } from '../ir';
 import { assembleCode } from './assemble';
 
-const CORPUS = 'tests/original/cleo';
+const CORPUS = 'fixtures/original/cleo';
 
 describe.skipIf(!existsSync(CORPUS))('corpus re-encode', () => {
   describe('positive cases', () => {

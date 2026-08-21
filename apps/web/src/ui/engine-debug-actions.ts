@@ -82,8 +82,9 @@ export interface EngineDebugActionsDeps {
   setWeather: (index: number) => void;
   /** The player's start position — "To Ganton" on the original game. */
   spawn: Vec3;
-  /** Spawn a car of this model in front of the player (awaits the worker model build). */
-  spawnVehicle: (model: string) => Promise<void>;
+  /** Spawn a car of this model in front of the player (awaits the worker model build). `plate` overrides
+   *  the number the placement would resolve to on its own (plan 082/04). */
+  spawnVehicle: (model: string, plate?: string) => Promise<void>;
   /** Lift the map-viewer camera straight above the player and aim it down — the inspector's "reset view". */
   topDownView: () => void;
   /** Spawnable model names from `vehicles.ide`. */

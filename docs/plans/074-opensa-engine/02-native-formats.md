@@ -92,13 +92,13 @@ BC7 for everything · KTX2 container compatibility.
 
 ## Tasks
 
-- [ ] Freeze the v0 binary layout above as `packages/engine-formats` (pure types + read/write functions shared
+- [~] Freeze the v0 binary layout above as `packages/engine-formats` (pure types + read/write functions shared
       by tool and runtime; ZERO deps) — after chain approval.
-- [ ] Golden-file round-trip tests (write → read → deep-equal) + hexdump fixtures for one tiny synthetic cell.
-- [ ] Version/`channelMask` negative tests (unknown major rejected; absent channels get the zero-buffer path).
-- [ ] Measure & record: bytes/cell HD and LOD (vs today's DFF+TXD slice), groups/cell histogram for the M0
+- [~] Golden-file round-trip tests (write → read → deep-equal) + hexdump fixtures for one tiny synthetic cell.
+- [~] Version/`channelMask` negative tests (unknown major rejected; absent channels get the zero-buffer path).
+- [~] Measure & record: bytes/cell HD and LOD (vs today's DFF+TXD slice), groups/cell histogram for the M0
       district (target: HD ≤ 8, LOD ≤ 4 after array grouping).
-- [ ] Written note per deferred v1 item with the bench number that would justify it.
+- [~] Written note per deferred v1 item with the bench number that would justify it.
 
 ## Measurement ledger
 

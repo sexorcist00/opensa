@@ -17,6 +17,13 @@ import { cellKey, cellOf } from '../../core/grid';
  *  (decimated alpha foliage looks bad and duplicates the impostors' far-LOD). */
 const TREE_MODELS = new Set(SA_TREE_MODELS);
 
+/** What an IDE id resolves to: model/txd names (lowercased) + the `anim` row's IFP name when it is one. */
+interface IdRef {
+  anim?: string;
+  model: string;
+  txd: string;
+}
+
 /** Highest object id across every IDE under the game's data folder — cell-LOD ids start at +1 (no collision). */
 export function maxObjectId(gameDir: string): number {
   let max = 0;
@@ -101,11 +108,15 @@ function binaryInstancesByArea(
 }
 
 /** id → model/txd names (lowercased) from every IDE under the game's data folder. */
-function buildIdMap(dataDir: string): Map<number, { model: string; txd: string }> {
-  const map = new Map<number, { model: string; txd: string }>();
+function buildIdMap(dataDir: string): Map<number, IdRef> {
+  const map = new Map<number, IdRef>();
   for (const file of walk(dataDir).filter((path) => path.toLowerCase().endsWith('.ide'))) {
     for (const [id, ref] of ideRefs(readFileSync(file, 'utf8'))) {
-      map.set(id, { model: ref.model.toLowerCase(), txd: ref.txd });
+      map.set(id, {
+        ...(ref.anim !== undefined ? { anim: ref.anim } : {}),
+        model: ref.model.toLowerCase(),
+        txd: ref.txd,
+      });
     }
   }
 
@@ -125,7 +136,7 @@ function buildIdMap(dataDir: string): Map<number, { model: string; txd: string }
 function collectInstances(
   dataDir: string,
   archives: readonly Archive[],
-  idToModel: Map<number, { model: string; txd: string }>,
+  idToModel: Map<number, IdRef>,
   exclude: ReadonlySet<string>,
 ): CellInstance[] {
   const areas = readTextAreas(dataDir);
@@ -164,7 +175,13 @@ function collectInstances(
       return; // tobj (lit windows / neon): baking it would glow round the clock — the engine renders the real
       // hour-gated instance at LOD range instead (world-grid puts timed instances into both layers)
     }
-    out.push({ model, position: instance.position, rotation: instance.rotation, txd: ref?.txd ?? '' });
+    out.push({
+      ...(ref?.anim !== undefined ? { anim: ref.anim } : {}),
+      model,
+      position: instance.position,
+      rotation: instance.rotation,
+      txd: ref?.txd ?? '',
+    });
   };
   for (const [area, list] of areas) {
     list.forEach((instance, index) => {

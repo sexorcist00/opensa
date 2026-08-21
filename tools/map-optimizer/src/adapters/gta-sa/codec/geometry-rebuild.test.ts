@@ -119,6 +119,34 @@ describe('rebuildGeometry', () => {
       expect(decodeGeometryStruct(geometry.children![0].data!).flags & 0x0001).toBe(0);
     });
 
+    it('keeps the source BinMesh mesh ORDER — the draw order, blended materials authored last (round 14)', () => {
+      // Source draws material 1 (opaque) first and material 0 (the blended detail layer) LAST.
+      const source = new Uint8Array(12 + 2 * 8 + 6 * 4);
+      const sv = new DataView(source.buffer);
+      sv.setUint32(0, 1, true); // tristrip
+      sv.setUint32(4, 2, true);
+      sv.setUint32(8, 6, true);
+      sv.setUint32(12, 3, true);
+      sv.setUint32(16, 1, true); // material 1 first
+      sv.setUint32(32, 3, true);
+      sv.setUint32(36, 0, true); // material 0 last
+      const geometry = geometryChunk(4, 2);
+      geometry.children![1].children![0].data = source;
+      rebuildGeometry(
+        geometry,
+        mesh(4, [
+          { a: 0, b: 1, c: 2, material: 0 },
+          { a: 1, b: 2, c: 3, material: 1 },
+        ]),
+      );
+
+      const bin = geometry.children![1].children![0].data;
+      const view = new DataView(bin.buffer, bin.byteOffset, bin.byteLength);
+      expect(view.getUint32(4, true)).toBe(2);
+      expect(view.getUint32(16, true)).toBe(1); // first split: material 1, as the source drew it
+      expect(view.getUint32(12 + 8 + 3 * 4 + 4, true)).toBe(0); // second split: material 0
+    });
+
     it('re-emits both UV layers of a dual-UV geometry (no longer refused)', () => {
       const dual = struct(3, 1);
       dual.uvLayers = [new Float32Array([0, 0, 1, 0, 1, 1]), new Float32Array([9, 9, 9, 9, 9, 9])];

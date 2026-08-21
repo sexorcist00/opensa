@@ -56,7 +56,7 @@ describe('stripProcObj', () => {
     });
 
     it('drops a known plant from the real procobj.dat and leaves the rest intact', () => {
-      const text = readFileSync('tests/original/data/procobj.dat', 'utf8');
+      const text = readFileSync('fixtures/original/data/procobj.dat', 'utf8');
       const result = stripProcObj(text, (model) => model.toLowerCase() !== 'sjmcacti2');
 
       expect(result.removed).toBeGreaterThan(0);

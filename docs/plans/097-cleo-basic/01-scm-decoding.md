@@ -83,7 +83,7 @@ _(filled 2026-08-04 — the chain's first code change; package `packages/cleo`)_
 - **Data-type bytes actually present in the corpus**: `0x01 0x02 0x03 0x04 0x05 0x06 0x08 0x09 0x0E
   0x11` (the full plan set 0x00-0x13 is unit-fixtured regardless; the corpus never uses global
   arrays, fixed-16 strings or most string-var forms).
-- **Reference listings committed** at `tests/custom/cleo-listings/*.txt` (2 694 lines) — the disasm
+- **Reference listings committed** at `fixtures/custom/cleo-listings/*.txt` (2 694 lines) — the disasm
   format is a contract; `disasm.test.ts` reproduces them byte for byte.
 - **DB gaps found: none** — every corpus opcode resolved (the whole point of vendoring the library
   instead of hand-listing).

@@ -3,11 +3,13 @@ import type { MergedMesh } from '@opensa/lod-common/mesh';
 import type { ModelSource } from '@opensa/lod-common/model-source';
 import type { RWClump, RWGeometry } from '@opensa/renderware/parsers/binary/types';
 
+import { buildClumpMesh } from '@opensa/lod-common/build-mesh';
 import { encodeLodDff } from '@opensa/lod-common/encode-dff';
 import { keepTypesFor } from '@opensa/lod-common/two-dfx-policy';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { toArrayBuffer } from '@opensa/renderware/test-utils';
 import { build2dfxSection } from '@opensa/rw-codec/dff';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { Cell } from '../../core/types';
@@ -97,6 +99,13 @@ function source(models: Record<string, RWClump>): ModelSource {
 
 const IDENTITY = [0, 0, 0, 1] as const; // no rotation
 
+// The Burger Shot of LAw (`npm run test:fixtures`): an IDE `anim` clump — the building on the root frame, the
+// burger sign (atomic 0) on child frame `burger01_LAw3` at (7.18, −7.30, 1.01). The engine's weld places an
+// `anim` def's atomics by their frame hierarchy; the cell merge ignored the frames and baked the sign in the
+// middle of the roof (field, 2026-08-17).
+const BURGER = 'fixtures/original/dff/anim-clump/burger01_law.dff';
+const SIGN_OFFSET = [7.1796875, -7.296875, 1.0078125] as const;
+
 describe('mergeCell', () => {
   describe('negative cases', () => {
     it('carries no type the shared policy drops from cells — the fate is decided in one place', () => {
@@ -141,6 +150,30 @@ describe('mergeCell', () => {
   });
 
   describe('positive cases', () => {
+    it.skipIf(!existsSync(BURGER))(
+      "places an anim def's atomics by their DFF frame — the burger sign sits off the roof centre",
+      () => {
+        const clumpOf = parseDff(toArrayBuffer(new Uint8Array(readFileSync(BURGER))));
+        const cell: Cell = {
+          cx: 0,
+          cy: 0,
+          instances: [{ anim: 'burger01_law', model: 'burger', position: [128, 128, 0], rotation: IDENTITY, txd: '' }],
+        };
+        const plain: Cell = { ...cell, instances: [{ ...cell.instances[0], anim: undefined }] };
+
+        const framed = mergeCell(cell, 256, source({ burger: clumpOf }));
+        const unframed = mergeCell(plain, 256, source({ burger: clumpOf }));
+
+        // Atomic 0 (the sign) is appended first; the SA target's `buildClumpMesh` (plan 009, field-accepted) is
+        // the placement the two targets must agree on. Without `anim` the merge stays where it was.
+        const reference = buildClumpMesh(clumpOf);
+        expect([...framed.positions.slice(0, 3)]).toEqual([...reference.positions.slice(0, 3)]);
+        const local = clumpOf.geometries[clumpOf.atomics[0].geometryIndex].positions;
+        expect([...unframed.positions.slice(0, 3)]).toEqual([...local.slice(0, 3)]);
+        expect(framed.positions[1] - unframed.positions[1]).toBeCloseTo(SIGN_OFFSET[1], 1);
+      },
+    );
+
     it('offsets vertices to the cell centre and applies the instance position', () => {
       const models = { box: clump(geometry('wall', [0, 0, 0, 1, 0, 0, 0, 1, 0])) };
       // cell (0,0) @256 → centre (128,128,0); instance at (130,128,5) → first vertex relative = (2,0,5).

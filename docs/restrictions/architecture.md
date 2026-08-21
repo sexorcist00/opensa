@@ -14,6 +14,22 @@ worked example, and its header says why). Two tests have already been moved for 
 
 **Caught:** yes — ESLint fails the lint lane.
 
+## A `type:engine` package must be Node-free — and the TAG decides the layer, not the folder
+
+`type:engine` is what the browser bundle is made of, so an engine package may not import `node:fs`,
+`node:crypto` or any other `node:*` builtin. `packages/cell-weld` says this in its own header ("Node-free by
+construction") because `sa-map-viewer` welds cells in the browser; the rule is general.
+
+The consequence for a NEW package: `packages/` is not automatically `type:engine`. `packages/validation`
+reads `node:fs` and imports `@opensa/asi-sdk`, so it is tagged `type:tool` and only the folder puts it beside
+the engine — the tag is what `@nx/enforce-module-boundaries` reads, and `scripts/arch-graph.ts` reads it too
+(by folder alone the runtime diagram drew a `node:fs` package inside the browser runtime). Decide the tag
+from what the package IMPORTS, then pick a folder.
+
+**Caught:** partly. Importing a `type:tool` from a `type:engine` fails ESLint; a bare `node:fs` import in an
+engine package does NOT — it lints, it typechecks, and it fails when a browser bundle finally pulls that
+module in. Nothing compares a tag against a folder either.
+
 ## The game layer touches renderware only through `adapters/` or `mods/`
 
 `packages/game/**` may not import `@opensa/renderware` outside those two folders
@@ -160,6 +176,32 @@ can differ from `game-src/<game>/data/*` completely. Diagnosing against the sour
 
 **Caught:** no. The check is one command: confirm which folder is being served before forming a hypothesis.
 
+### …so a stage writing a PERSISTENT `--out` wipes it before mirroring
+
+`build/<game>/sa` and `build/<game>/opensa` outlive a build. A stage that mirrors its input over them with a
+bare `cpSync` leaves everything an EARLIER run wrote and this one does not — in a tree whose whole authority
+comes from being what the game reads. Found 2026-08-16: 23 mod IPLs from a failed run were still sitting in
+`build/original/sa/data/maps`, unreferenced by `gta.dat`. Dead weight that time; the same mechanism keeps a
+stale model or a retired data file alive the next.
+
+The convention is `copyGameDir` (`@opensa/tool-kit/game-dir`) — wipe, then mirror — with `guardOut` in front
+of it. Every installer already used it; `sa-lod-generator` and `opensa-lod-generator`'s finalize did not, and
+now do.
+
+**Caught:** partly. `copyGameDir` is tested to replace whatever `--out` held, and `opensa-lod-generator`'s
+finalize is tested against a planted stale file — but nothing stops the NEXT tool from writing a persistent
+`--out` with a bare `cpSync`, and the symptom is silent by construction (the build succeeds; the tree just
+carries a file nobody asked for).
+
+### …and `gta.dat` may not register a file the tree does not have
+
+SA opens what its `gta.dat` lists **without checking**, so a line pointing at nothing is an access violation
+during the data load — and all the field ever sees is `0xC0000005` in `ntdll.dll`, with the path buried in a
+stack dump. Two ways to create one: a stage that registers a file it then does not write (or stops writing —
+`salod-txdp.ide` on 2026-08-16, when the `txdp` parent was retired), and a hand-copied install whose `data/`
+and `gta.dat` came from different builds. **Caught:** yes, since the same day — `assertGtaDatFiles` fails the
+`sa` build and names every dangling line.
+
 ## A build asks for a target, not for the whole pipeline
 
 `sa` and `opensa` are independent targets of the same source tree. Which STAGES run is pmb's `--exclude`
@@ -175,9 +217,34 @@ reverse (an opensa-only build priced for `sa`) is merely conservative, and is lo
 A plan that says "rebuild the game" has to say **which target**, because they no longer carry the same
 content: the `:sa` script excludes `vehicles` and `peds`, so the real-game build ships the stock roster.
 
-**Caught:** partly — an unknown `--exclude`/`--target` name is a hard error and the resolved target is
-printed at the top of every run, but a STALE target left by an older run is indistinguishable from a fresh
-one.
+**A stage in the COMMON chain may not produce different content per target in one run.** The mods, vehicles
+and peds folders may each be layered per target (`common/` + `sa/` + `opensa/` — mod-installer plan 011,
+vehicle-installer plan 010, ped-installer plan 005; ONE planner, `@opensa/tool-kit/layers`), and the stages
+that read them run before the split — so a run that would build both targets out of a layered folder is
+refused at config time and has to be run once per target. Anything else that wants to vary by target belongs after
+the split, or in a source folder that does not.
+
+**Caught:** partly — an unknown `--exclude`/`--target` name is a hard error, the resolved target is printed
+at the top of every run, and a layered mods/vehicles/peds folder in a both-target run throws before any stage runs; but a
+STALE target left by an older run is indistinguishable from a fresh one.
+
+## One SOURCE folder, one reader — a tool may not re-derive which mods a folder holds
+
+`mods-src/<game>/vehicles` decides its own contents (a flat tree, or `models/` overridden per SLOT by
+`new/` — vehicle-installer plan 007), and **every tool that reads it goes through
+`resolveVehicleSources`** (`@opensa/tool-kit/vehicles-dir`): the installer, its rebake, `vehicle-cutscene`'s
+census, and any debug script that names a car. **Since 2026-08-19 there are TWO such roots** —
+`mods-src/<game>/add-vehicles` holds the ADDED cars (`tools/add-vehicles`, central plan 102) with the same
+grammar and the same one reader; the rule is per ROOT, not per folder name, and a second root is a second
+call, never a second implementation. The cutscene census deliberately reads only the first. A second reading is not a duplicate implementation, it is a
+DIFFERENT FLEET — the cutscene set stops matching the cars the player drives, and nothing in the build
+compares the two. The same holds for `mods-src/<game>/mods` and `layers.ts`.
+
+**Caught:** NO — this is the silent one. A private `readdirSync(inPath)` over the restructured tree returned
+three "cars" called `models`, `new` and `screenshots`, found no `.dff` in any of them, and installed nothing;
+a folder with no `.dff` is a legitimate skip, so no warning exists to fire. Measured on the real tree before
+the fix: `vehicle-cutscene --inspect` reported **0 of 23 slots ready** and exited 0. What catches it is the
+resolver being the only door: it throws on a stray or mis-cased folder instead of guessing.
 
 ## A build's SOURCE may not live inside its own output
 
@@ -580,3 +647,42 @@ must still report 4 creates, and the defect was reintroduced to prove it fails (
 field is documented on the interface itself, which is where a host looks. Before that, **silent, and worse
 than silent**: the wrong number is plausible, self-consistent across a whole window, and grows with window
 length, so a longer capture makes it *more* convincing rather than obviously broken.
+## An effect's RETURN VALUE is its cleanup — a shorthand body must return a cleanup or nothing
+
+React calls whatever `useEffect` returns as the effect's cleanup function. A concise arrow body returns the
+expression it evaluates, so
+
+```ts
+useEffect(() => endRef.current?.scrollIntoView({ block: 'end' }), [lines.length]);
+```
+
+hands React a non-function, and React unmounts the WHOLE tree the moment that cleanup runs. The window goes
+black at the end of the work it was doing, with everything the run produced already correct on disk — which
+is what it looked like when it shipped to Windows in `cutscene-converter` 0.4.0 (`f1f65b7b`): the conversion
+finished, the files were in the output folder, the app showed nothing.
+
+**The shorthand is not the defect.** Returning a subscription's unsubscribe function from it is the correct
+idiom and reads well:
+
+```ts
+useEffect(() => game.events.on('city', ({ city }) => setCity(city)), [game]);
+```
+
+Only a VOID expression is the trap. So: braces around the body unless the expression IS the cleanup.
+
+**Caught: NOTHING catches this**, and both instruments were tried and measured (2026-08-18):
+
+- **tsc cannot.** The callback's type is `void | Destructor`, and `void` fits.
+- **A syntactic lint rule** (`no-restricted-syntax` on a shorthand effect body) fires on all four occurrences
+  in this repo, and **three of them are the legitimate unsubscribe idiom** above. A rule that is wrong 75 %
+  of the time trains people to disable it.
+- **The type-aware rule** (`@typescript-eslint/no-confusing-void-expression` with `ignoreArrowShorthand:
+  false`) is correct in principle — it separates a void expression from a returned function — but it flags
+  **128 places across `apps/`**, nearly all of them ordinary JSX handlers (`onClick={() => setX(1)}`). The
+  price is a repo-wide rewrite of correct code.
+
+What exists instead is damage control, not prevention: the renderer's error boundary turns the blank page
+into a message naming the failure (`apps/cutscene-converter/src/renderer/error-boundary.tsx`), and
+`scripts/debug/cutscene-converter-drive.ts` reproduces the class in seconds by driving the built app. Read
+an effect's body before you shorten it.
+

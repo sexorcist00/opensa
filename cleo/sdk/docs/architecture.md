@@ -5,8 +5,10 @@ CLEO 4 `.cs` bytecode**. One source, two runtimes — the same artifact runs und
 canonical SA 1.0 US exe and under our VM (`@opensa/cleo`), which makes every authored script a
 conformance test of the VM against real CLEO, exercised from the authoring side. This document is
 the standing architecture; the numbered [plans](./plans/readme.md) are the execution steps that
-fill it in. The root-level plan (goals check, scope cuts, the why-now) is
-[`docs/plans/097-cleo-basic/08-authoring-sdk.md`](../../../docs/plans/097-cleo-basic/08-authoring-sdk.md).
+fill it in — that chain readme also carries the goals check, the decisions, the scope cuts and the
+chain ledger (they lived in `docs/plans/097-cleo-basic/08-authoring-sdk.md` until 2026-08-12, when the
+SDK's paperwork was moved beside the SDK). The engine chain this one grew out of is
+[097 — CLEO basic](../../../docs/plans/097-cleo-basic/readme.md).
 
 ## Constraints (what shapes everything)
 
@@ -131,7 +133,7 @@ collide with `@opensa/cleo` (the runtime VM package), and the runtime never impo
   our own reading of the spec.
 - **Operand property tests:** `readOperand(emit(x)) === x` across the full type-byte set.
 - **Listing snapshots:** each authored script's disasm listing is a committed fixture — the diff
-  IS the behaviour change, same discipline as `tests/custom/cleo-listings/`.
+  IS the behaviour change, same discipline as `fixtures/custom/cleo-listings/`.
 - **Story tests:** each script runs headless on the recording host (`cleo-run` machinery) —
   behaviour asserted from the host-call story, per-frame instruction cost asserted against the
   script's declared budget.

@@ -15,7 +15,7 @@
 
 **Status: IDEA (2026-07-25).** Written at the close of the [080 cinematic-camera
 chain](../../plans/080-cinematic-camera/readme.md), while everything it learned is still fresh. Nothing here
-is scheduled — [plan 080/08](../../plans/080-cinematic-camera/08-view-presets.md) holds the C-key preset
+is scheduled — [0.6.0·07 view presets](../../roadmap/0.6.0/plans/07-camera-view-presets/readme.md) holds the C-key preset
 ring that would carry it, and it is deliberately NOT next.
 
 The question that decides the whole thing was asked directly: **can we find the character's head, so the
@@ -24,7 +24,7 @@ below rather than assumed.
 
 ## 1. The head is a real, named bone — measured
 
-Dumped from a stock ped (`tests/original/character/bmypol1.dff`) through the shipping
+Dumped from a stock ped (`fixtures/original/character/bmypol1.dff`) through the shipping
 `buildPedModel` path — SKIN ORDER, HAnim ids, and each bone's bind offset from its parent:
 
 ```
@@ -136,5 +136,5 @@ measurement on a question it may already answer. Then measure, in this order, be
 3. Park a camera at the head with the rig otherwise untouched and walk around: near-plane clipping against
    the ped's own body is the thing that either kills it or sets the model-hiding requirement.
 
-Only then does it earn a plan — most likely as the substance of 080/08's first-person preset rather than a
+Only then does it earn a plan — most likely as the substance of 0.6.0·07's first-person preset rather than a
 plan of its own.

@@ -57,16 +57,16 @@ become the first entries of a permanent series.
 
 ## Tasks
 
-- [ ] `?bench=<scene>` mode in engine-lab: scene registry (rect + camera script), warmup/measure loop,
+- [~] `?bench=<scene>` mode in engine-lab: scene registry (rect + camera script), warmup/measure loop,
       percentile math, JSON download + HUD summary, engine/adapter/env stamping.
-- [ ] `bench/` folder + `series.md` seeded with the two M0 rows above.
-- [ ] Scene `ls-sweep` camera path recorded to match the WebGL `ls-noon` bench path (direct comparability —
+- [~] `bench/` folder + `series.md` seeded with the two M0 rows above.
+- [~] Scene `ls-sweep` camera path recorded to match the WebGL `ls-noon` bench path (direct comparability —
       the 65 ms/31 ms prod row becomes a permanent compare line in `series.md`).
-- [ ] Converter metrics folded into the run record (pak bytes, groups histogram, convert time from report.json).
-- [ ] A tiny compare script (`npx tsx tools/opensa-pack/src/bench-compare.ts a.json b.json`) printing deltas
+- [~] Converter metrics folded into the run record (pak bytes, groups histogram, convert time from report.json).
+- [~] A tiny compare script (`npx tsx tools/opensa-pack/src/bench-compare.ts a.json b.json`) printing deltas
       with the >10 % gate colored — the ritual's step 2 in one command.
-- [ ] Document the ritual in CONTRIBUTING-style form inside this doc once the harness lands (checklist form).
-- [ ] Series CHART (user request 2026-07-13 — a trend chart at the end of the chain): a small generator that reads
+- [~] Document the ritual in CONTRIBUTING-style form inside this doc once the harness lands (checklist form).
+- [~] Series CHART (user request 2026-07-13 — a trend chart at the end of the chain): a small generator that reads
       the committed bench JSONs and renders the trend lines (frame/GPU/draws/residency per scene over time)
       — the series is the data source of record, the chart is the exit-report artifact.
 

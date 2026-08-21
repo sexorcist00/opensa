@@ -55,8 +55,8 @@ describe('engine particles', () => {
 
 // The synthetic half above pins the basis change; only the REAL library proves the dynamic lane's boot-time
 // list resolves against what SA actually ships (system names, textures, the tint/size overrides).
-const EFFECTS_FXP = 'tests/original/models/effects.fxp';
-const EFFECTS_TXD = 'tests/original/models/effectsPC.txd';
+const EFFECTS_FXP = 'fixtures/original/models/effects.fxp';
+const EFFECTS_TXD = 'fixtures/original/models/effectsPC.txd';
 /** A host LOD radius unlike any authored cullDist, so "drawn as far as the world" cannot pass by accident. */
 const WORLD_DRAW_DISTANCE = 1500;
 

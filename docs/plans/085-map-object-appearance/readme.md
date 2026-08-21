@@ -1,6 +1,12 @@
 # 085 — map-object appearance
 
-**Status: OPENED 2026-07-22**, the field round the user queued after vehicles ([084](../084-vehicle-appearance/))
+**Status: 🔒 CLOSED 2026-08-12** — rows A–H all shipped and field-confirmed. Row H was the last one: the
+user drove the Old Venturas Strip entrance at night on the 2026-08-11 build and reported it right (no
+see-through, solid facade), matching what the pak bytes already said. The 2026-08-12 sweep also struck
+four checklist boxes that had been answered elsewhere in this same file (the F2 magenta toggle, rows A/C/D)
+and handed the 084 row back to 084.
+
+The field round the user queued after vehicles ([084](../084-vehicle-appearance/))
 and before peds. Same method: the user reports what they see in game, each symptom is traced to data
 (DFF → pipeline stage → pak bytes → shader) before any code is touched.
 
@@ -35,7 +41,7 @@ the trunk glows but the rope itself stays dark pink/unlit. Model source: `mods-s
 (`tools/opensa-pack/src/weld.ts` baked mask, `shaders.ts` world runtime heuristic, `shaders.ts` rigid glow).
 Red rope: max delta 0.68 → full mask. Synthesized night sets (day × ambient) stay below day on every
 channel → still mask 0, nothing new glows. Fixture: stock `vgsn_nitree_r01.dff` + txd
-(`tests/original/dff/night-colours/`), test in `weld.test.ts` (rope ≥100 vertices at mask 255 — the luma
+(`fixtures/original/dff/night-colours/`), test in `weld.test.ts` (rope ≥100 vertices at mask 255 — the luma
 rule fails it; foliage stays 0).
 
 **Field check: PENDING the next pak rebuild** — the mask is baked at pack time, the current
@@ -201,9 +207,9 @@ another archive TXD, ledgered as crossTxd, missing stays empty.
 
 ---
 
-## Open rows
+## Rows closed on a later build
 
-### Row H — LV facade "holes": row C's ADDITIVE class erased a no-alpha night facade (FIXED 2026-07-23, pending rebuild)
+### Row H — LV facade "holes": row C's ADDITIVE class erased a no-alpha night facade (FIXED 2026-07-23, field-PASSED 2026-08-12)
 
 **Symptom (user, field, night 23:50):** see-through "holes" + a translucent look on the Old Venturas
 Strip entrance facade; day is clean. The picked names (`vgsn_blucasign`, `vgnlowmall3`) were RED
@@ -244,9 +250,18 @@ brightness), and black texels now write depth and occlude. Offline re-weld of ce
 its blend/cutout groups `[0,0,0,0,2,1]`. Tests: weld routes flags-140 + DXT3-alpha (bin fixture) to
 class 4, flags-140 + DXT1-opaque (trafficlight fixture) to class 0.
 
-**Field check: PENDING the next pak rebuild** (class is assigned at weld time) — expect: solid black
-fascia band under the arches, no see-through, bulb canopies fullbright, dark marquee silhouette
-matching the original build's screenshots.
+**The fix is IN the built pak — verified offline 2026-08-12** (`dump-cell.ts 2110 2076` against
+`build/original/opensa`, the 2026-08-11 18:04 build). The night row reads
+`#4 timed on=23 off=4 groups=3 [cls=0 …] [cls=0 …] [cls=0 …]` — **no class 4 anywhere in the 23→4
+window**, which is the whole content of the fix; the class is assigned at weld time, so this is the pak
+bytes, not an intention. (The 2026-07-23 offline re-weld predicted five groups for cell 8,8; this cell
+welds three. The group COUNT is a welding detail, the CLASS is the claim.) `weld.ts` carries the rule at
+`classOf`: `if (additive && alphaClass !== 'opaque')`.
+
+**Field check: PASSED 2026-08-12** — the user drove the Old Venturas Strip entrance (~2110, 2076) at
+night and reported it correct: no see-through, the facade reads solid. Row H closed, and with it the plan.
+(The dark sloped marquee silhouette IS vanilla — authored `roof10L256` night prelit 12/15/13 — and was
+called out in advance so it would not be read as a regression.)
 
 ### Row G — mod 46 "Animated Radars" (CLOSED 2026-07-22 late — engine correct, the DARK look is the mod's own texture)
 

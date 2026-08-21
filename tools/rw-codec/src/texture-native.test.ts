@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest';
 
 import { RW_STRUCT, RW_TEXTURE_DICTIONARY, RW_TEXTURE_NATIVE, type RwChunk, writeRw } from './chunk';
 import { buildMipChain } from './mip';
-import { encodeDxtStruct, encodeRgba8888Struct, readTextureName } from './texture-native';
+import {
+  encodeDxtStruct,
+  encodeRgba8888Struct,
+  encodeUncompressedStruct,
+  isCompressedRaster,
+  readTextureName,
+} from './texture-native';
 
 const RW_VERSION = 0x1803ffff; // a real SA RenderWare stream version
 
@@ -110,6 +116,74 @@ describe('encodeDxtStruct', () => {
       const { textures } = parseTxd(wrapTxd(struct).buffer as ArrayBuffer);
       expect(textures[0].format).toBe('dxt5');
       expect(textures[0].hasAlpha).toBe(true);
+    });
+  });
+});
+
+describe('encodeUncompressedStruct', () => {
+  describe('positive cases', () => {
+    it('round-trips an opaque image as an uncompressed X8R8G8B8 raster, single level, linear filter', () => {
+      const struct = encodeUncompressedStruct(
+        'platecharset',
+        [{ data: solid(2, [10, 20, 30, 255]), height: 2, width: 2 }],
+        false,
+      );
+      const view = new DataView(struct.buffer);
+
+      expect(readTextureName(struct)).toBe('platecharset');
+      expect(view.getUint32(4, true)).toBe(0x1101); // linear, no mip filter declared
+      expect(view.getUint32(72, true)).toBe(0x0600); // C888, mipmap bit clear
+      expect(view.getUint32(76, true)).toBe(22); // D3DFMT_X8R8G8B8 — not a FourCC
+      expect(struct[84]).toBe(32); // depth
+      expect(struct[87]).toBe(0); // no alpha flag, no compressed flag
+
+      const { textures } = parseTxd(wrapTxd(struct).buffer as ArrayBuffer);
+      expect(textures[0].format).toBe('rgba8888');
+      expect(textures[0].hasAlpha).toBe(false);
+      expect([...textures[0].mipmaps[0].data.subarray(0, 4)]).toEqual([10, 20, 30, 255]);
+    });
+
+    it('declares the mipmap bit and a trilinear filter once it carries more than one level', () => {
+      const struct = encodeUncompressedStruct(
+        'scratch',
+        buildMipChain(solid(4, [200, 50, 25, 128]), 4, 4, 'gamma'),
+        true,
+      );
+      const view = new DataView(struct.buffer);
+
+      expect(view.getUint32(4, true)).toBe(0x1106); // trilinear — the levels are there to be sampled
+      expect(view.getUint32(72, true)).toBe(0x8500); // C8888 | mipmap
+      expect(view.getUint32(76, true)).toBe(21); // D3DFMT_A8R8G8B8
+      expect(struct[87]).toBe(0x01); // alpha
+
+      const { textures } = parseTxd(wrapTxd(struct).buffer as ArrayBuffer);
+      expect(textures[0].format).toBe('rgba8888');
+      expect(textures[0].mipmaps).toHaveLength(3);
+    });
+  });
+});
+
+describe('isCompressedRaster', () => {
+  describe('negative cases', () => {
+    it('reads a Struct too short to hold a header as compressed — an unreadable header is not evidence', () => {
+      expect(isCompressedRaster(new Uint8Array(40))).toBe(true);
+    });
+
+    it('is false for an uncompressed raster', () => {
+      expect(
+        isCompressedRaster(
+          encodeUncompressedStruct('plate', [{ data: solid(1, [0, 0, 0, 255]), height: 1, width: 1 }], false),
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is true for every DXT FourCC our encoder writes', () => {
+      const levels = buildMipChain(solid(4, [1, 2, 3, 255]), 4, 4, 'gamma');
+      expect(isCompressedRaster(encodeDxtStruct('a', 'dxt1', levels))).toBe(true);
+      expect(isCompressedRaster(encodeDxtStruct('b', 'dxt3', levels))).toBe(true);
+      expect(isCompressedRaster(encodeDxtStruct('c', 'dxt5', levels))).toBe(true);
     });
   });
 });

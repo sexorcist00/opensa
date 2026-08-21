@@ -85,7 +85,7 @@ export function rebuildGeometry(geometry: RwChunk, mesh: SubMesh): void {
 
   const binMesh = extension?.children?.find((child) => child.type === RW_BIN_MESH_PLG);
   if (binMesh) {
-    binMesh.data = buildBinMesh(mesh.triangles);
+    binMesh.data = buildBinMesh(mesh.triangles, binMesh.data ? binMeshMaterialOrder(binMesh.data) : []);
   }
   const night = extension?.children?.find((child) => child.type === RW_NIGHT_VERTEX_COLORS);
   if (night && mesh.nightColors?.length === vertexCount * 4) {
@@ -127,6 +127,24 @@ export function syncNightColors(geometry: RwChunk, mesh: SubMesh): void {
   });
 }
 
+/** The material index of each split of a `BinMeshPLG` body, in the order the file draws them. */
+function binMeshMaterialOrder(data: Uint8Array): number[] {
+  if (data.length < 12) {
+    return [];
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const numMeshes = view.getUint32(4, true);
+  const order: number[] = [];
+  let offset = 12;
+  for (let m = 0; m < numMeshes && offset + 8 <= data.length; m += 1) {
+    const numIndices = view.getUint32(offset, true);
+    order.push(view.getUint32(offset + 4, true));
+    offset += 8 + numIndices * 4;
+  }
+
+  return order;
+}
+
 /** A bounding sphere enclosing the vertices: AABB centre + farthest-vertex radius. */
 function boundingSphere(positions: Float32Array): [number, number, number, number] {
   if (positions.length === 0) {
@@ -157,9 +175,19 @@ function boundingSphere(positions: Float32Array): [number, number, number, numbe
   return [cx, cy, cz, radius];
 }
 
-/** A fresh trilist `BinMeshPLG` body: `flags=0, numMeshes, totalIndices`, then per material a split of its
- *  triangle indices (winding `a,b,c`, materials ascending). */
-function buildBinMesh(triangles: readonly Triangle[]): Uint8Array {
+/**
+ * A fresh trilist `BinMeshPLG` body: `flags=0, numMeshes, totalIndices`, then per material a split of its
+ * triangle indices (winding `a,b,c`).
+ *
+ * The splits keep the SOURCE's mesh order (`materialOrder`, materials the source did not draw appended
+ * ascending): a `BinMeshPLG`'s mesh order IS the draw order inside the atomic, and RenderWare's mesher puts
+ * the materials that blend (texture alpha / vertex alpha / material alpha) LAST so they composite over the
+ * opaque splits. Sorting materials ascending drew `cehollyhil06`'s vertex-alpha rock-detail split (material
+ * 8 of 15, authored last) in the middle — under the reference install's SkyGfx building pipe (dual pass,
+ * z-write at alpha ≥ 200) that painted the tiled detail texture over the sky and z-rejected the rock behind
+ * it: the "washed-out smear on repeat textures" of `docs/open-issues/fixed/sa-lod-visibility-budget.md`, round 14.
+ */
+function buildBinMesh(triangles: readonly Triangle[], materialOrder: readonly number[]): Uint8Array {
   const byMaterial = new Map<number, number[]>();
   for (const triangle of triangles) {
     let indices = byMaterial.get(triangle.material);
@@ -169,7 +197,10 @@ function buildBinMesh(triangles: readonly Triangle[]): Uint8Array {
     }
     indices.push(triangle.a, triangle.b, triangle.c);
   }
-  const materials = [...byMaterial.keys()].sort((a, b) => a - b);
+  const materials = [
+    ...materialOrder.filter((material) => byMaterial.has(material)),
+    ...[...byMaterial.keys()].filter((material) => !materialOrder.includes(material)).sort((a, b) => a - b),
+  ];
   const totalIndices = materials.reduce((sum, material) => sum + byMaterial.get(material)!.length, 0);
 
   const out = new Uint8Array(12 + materials.length * 8 + totalIndices * 4);

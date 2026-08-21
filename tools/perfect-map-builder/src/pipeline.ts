@@ -1,6 +1,8 @@
 import type { AssetFailure, RunSummary } from '@opensa/map-optimizer/run';
 import type { ProcObjDensityInput } from '@opensa/map-placement/procobj-density';
 
+import { addVehicles } from '@opensa/add-vehicles/install';
+import { assertArchiveSlots, split as splitArchives } from '@opensa/img-splitter/split';
 import { parsePrelightInfo, type PrelightInfo } from '@opensa/lod-common/prelight';
 import { buildTreeLods } from '@opensa/lod-trees-generator/build';
 import { parseOnlyList, runOptimizer, summarizeReport } from '@opensa/map-optimizer/run';
@@ -23,24 +25,41 @@ import { buildSaLods } from '@opensa/sa-lod-generator/build';
  */
 import { buildProcobjLods } from '@opensa/sa-procobj-placement/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
+import { openLazyVer2, writeArchiveManifest } from '@opensa/tool-kit/archive/layout';
+import { countImgArchives } from '@opensa/tool-kit/game-dir';
+import { isLayeredTree } from '@opensa/tool-kit/layers';
+import { checkLodLinks, formatLodLink } from '@opensa/tool-kit/lod-links';
 import { type BuildTarget } from '@opensa/tool-kit/target';
+import { installCutscene } from '@opensa/vehicle-cutscene/install';
 import { install as installVehicles } from '@opensa/vehicle-installer/install';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { BuilderConfig } from './config';
+import type { ResumeStage } from './resume';
 
 import { config as defaultConfig, PACK_RECTS } from './config';
+import { checkEntityPoolBudgets, type EntityPoolSpend } from './entity-pools';
+import { fingerprintSources, gitHead, hashRunConfig, openResumeSession } from './resume';
 
 /**
  * Valid `--until <name>` values. Common-chain + `sa`/`opensa` stop after the named one; the special `lod` value
  * runs the whole pipeline (**both** sa + opensa) while keeping every intermediate for debugging.
  */
 export const STAGE_NAMES = [
+  // FIRST, and the ordering is the point rather than a convenience: after the split every entry name lives
+  // in exactly one archive, so a mod replaces `admiral.dff` inside `vehicles.img` by name. Split later and a
+  // stock car would sit in `gta3.img` while its replacement landed elsewhere — see
+  // `docs/architecture/img-archive-layout.md`.
+  'split',
   'mods',
   'vehicles',
+  // The cutscene fleet is the vehicles stage's shadow (plan 002 step 11): it reads the INSTALLED game —
+  // the merged carcols.dat and the mod TXDs already in gta3.img are what the conversion bakes/resolves
+  // against — so it sits right after `vehicles` and shares its source folder and its populated-check.
+  'cutscene',
   'peds',
   'optimize',
   'trees',
@@ -87,6 +106,25 @@ export const PERFECT_MAP_ASI = resolve(
   '../../../asi/perfect-map/dist/perfect-map.asi',
 );
 
+/**
+ * Where the cross-compiled `perfect-cutscene.asi` is picked up from — same deal as {@link PERFECT_MAP_ASI}: a
+ * pre-built artifact under a gitignored `dist/`, never a build step (asi/perfect-cutscene plan 001 step 7).
+ */
+export const PERFECT_CUTSCENE_ASI = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../asi/perfect-cutscene/dist/perfect-cutscene.asi',
+);
+
+/**
+ * Where the cross-compiled `perfect-vehicle.asi` is picked up from — same deal as {@link PERFECT_MAP_ASI}. It
+ * lifts `carmods.dat`'s two fixed-size arrays, so a build whose added cars need more than the stock 30 `link`
+ * pairs is only correct with it (asi/perfect-vehicle plan 002; the installer refuses the overflow either way).
+ */
+export const PERFECT_VEHICLE_ASI = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../asi/perfect-vehicle/dist/perfect-vehicle.asi',
+);
+
 export const OPENSA_BUDGET_NOTICE =
   "opensa: SA's row/slot ceilings do not apply here — and no streaming budget guard exists yet " +
   '(07/04 decision 5: the number must be measured in our engine, never inherited from SA). ' +
@@ -103,7 +141,8 @@ export interface BuildPerfectMapOptions {
    * - `sa` — no real-game LOD build, and no `checkImgIdBudgets` with it (that guard reads the `sa/` tree).
    * - `opensa` — no cell-LOD build and no convert; `pack` goes with it, being that target's tail.
    * - `pack` alone — build `opensa/` and leave it in GAME format (same result as `--until opensa`).
-   * - any common-chain stage (`mods`/`vehicles`/`peds`/`optimize`/`trees`/`procobj`) — dropped from the chain.
+   * - any common-chain stage (`mods`/`vehicles`/`cutscene`/`peds`/`optimize`/`trees`/`procobj`) — dropped
+   *   from the chain.
    *
    * An excluded stage leaves whatever a previous run wrote in its place: the builder only clears its own
    * `<out>/.work-<target>` (plus the legacy shared `.work`), so an opensa-only run does not touch a `sa/`
@@ -119,6 +158,12 @@ export interface BuildPerfectMapOptions {
   /** Output root; the builder creates `<out>/sa` and `<out>/opensa`. */
   outPath: string;
   /**
+   * Re-enter a failed run at its last finished step (plan 006): `<out>/.work-<target>/resume.json` says which
+   * steps are done and what the run was made of; a resume whose sources, config or code differ is REFUSED.
+   * The work dir is not wiped — only the failed step's partial dir is.
+   */
+  resume?: boolean;
+  /**
    * The HOST this build is for (`--target`) — what picks every knob whose right value is a fact about the
    * host rather than about the source data. Omitted, it is DERIVED from `exclude` (see
    * {@link resolveBuildTarget}), which is what already declares a target today.
@@ -133,6 +178,18 @@ export interface BuildResult {
   produced: { dir: string; name: string }[];
   /** Whether the run stopped early at `until` (before the sa/opensa split). */
   stoppedEarly: boolean;
+}
+
+/** The cutscene stage's summary (plan `vehicle-cutscene` 002 step 11) — per-slot errors FAIL the stage,
+ *  so a report only ever carries the converted/skipped/warning shape of a build that succeeded. */
+export interface CutsceneFragment {
+  converted: string[];
+  imgBytesAfter: number;
+  /** Slots that got a baked readable plate pair (vehicle-cutscene plan 003). */
+  plates: { csName: string; text: string }[];
+  skipped: { csName: string; reason: string }[];
+  txdBytes: number;
+  warnings: { csName: string; message: string }[];
 }
 
 /** Every stage name except the `lod` alias — see {@link EXCLUDABLE_STAGES}. */
@@ -154,7 +211,11 @@ export interface PackFragment {
 /** The `sa` branch's ceilings, read off the tree the real game loads — console-only before plan 005. */
 export interface SaFragment {
   census: { instBearingIpls: number; largestIpl: number; rows: number };
+  /** What the map spends of `CPool<CBuilding>` / `CPool<CDummy>`, split the way the game splits it. */
+  entityPools: EntityPoolSpend;
   imgBudgets: Record<string, number>;
+  /** Set only when this build carries a converted cutscene fleet — the two ship together or not at all. */
+  perfectCutsceneAsiSha256: null | string;
   perfectMapAsiSha256: null | string;
   requirements: InstallRequirement[];
 }
@@ -178,13 +239,18 @@ export interface TargetReport {
 }
 
 export interface TargetReportFragments {
+  cutscene?: CutsceneFragment;
   optimize?: OptimizeFragment;
   pack?: PackFragment;
   sa?: SaFragment;
 }
 
 /** What a common-chain stage may hand the report assembler (plan 005); most stages produce nothing. */
-type ChainOutcome = undefined | void | { fragment: OptimizeFragment; stage: 'optimize' };
+type ChainOutcome =
+  | undefined
+  | void
+  | { fragment: CutsceneFragment; stage: 'cutscene' }
+  | { fragment: OptimizeFragment; stage: 'optimize' };
 
 /** Run the pipeline (optionally up to `until`). Returns each produced stage build. */
 export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<BuildResult> {
@@ -205,32 +271,67 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   refuseSourceInsideWork(work, gamePath, inPath);
   refuseSourceInsideWork(legacyWork, gamePath, inPath);
   rmSync(legacyWork, { force: true, recursive: true });
-  rmSync(work, { force: true, recursive: true });
-  mkdirSync(work, { recursive: true });
 
   const source = (sub: string): string => join(inPath, sub);
   const populated = (sub: string): boolean => existsSync(source(sub)) && readdirSync(source(sub)).length > 0;
+
+  // The resume point (plan 006). A fresh run wipes the work dir and starts a manifest; `--resume` reads the
+  // manifest a failed run left, refuses it if the sources / config / code differ, and keeps the work dir.
+  const identity = {
+    commit: gitHead(),
+    configHash: hashRunConfig({ config, exclude: [...excluded].sort(), target, until: until ?? null }),
+    sources: fingerprintSources({
+      game: gamePath,
+      ...Object.fromEntries(Object.entries(subfolders).map(([key, sub]) => [`in/${key}`, source(sub)])),
+    }),
+    target,
+  };
+  const { doneStep, recordFailure, recordStep } = openResumeSession({
+    identity,
+    log,
+    resume: options.resume === true,
+    work,
+  });
 
   // The common chain (installers → optimizer → LODs). Conditional stages are skipped when their source is empty.
   // A stage may RETURN a fragment for the target report (plan 005) — the runner collects them, keyed by stage.
   const chain: { name: ExcludableStage; run: (game: string, out: string) => ChainOutcome | Promise<ChainOutcome> }[] =
     [];
+  chain.push({
+    name: 'split',
+    run: (game, out) => void splitArchives({ buckets: config.splitBuckets, gamePath: game, outPath: out }),
+  });
   if (populated(subfolders.mods)) {
+    // A LAYERED mods folder (mod-installer plan 011) makes this stage target-DEPENDENT, and the stage sits
+    // in the chain both targets share — so a run that would build BOTH cannot serve it. Refused HERE,
+    // before any stage runs, rather than by producing one install and calling it two.
+    refuseLayeredBothTargets(source(subfolders.mods), 'mods', until, excluded);
     chain.push({
       name: 'mods',
-      run: (game, out) => installMods({ gamePath: game, inPath: source(subfolders.mods), outPath: out }),
+      run: (game, out) => installMods({ gamePath: game, inPath: source(subfolders.mods), outPath: out, target }),
     });
   }
   if (populated(subfolders.vehicles)) {
+    refuseLayeredBothTargets(source(subfolders.vehicles), 'vehicles', until, excluded);
     chain.push({
       name: 'vehicles',
-      run: (game, out) => installVehicles({ gamePath: game, inPath: source(subfolders.vehicles), outPath: out }),
+      // The installer returns the archive FAMILY it wrote (one file, or numbered siblings once the cap
+      // bites). Registering a sibling in `gta.dat` belongs to the split stage, not here — img-splitter plan
+      // 001 step 4 — so this stage contributes no fragment yet and the installer warns if one appears.
+      run: (game, out) =>
+        void installVehicles({ gamePath: game, inPath: source(subfolders.vehicles), outPath: out, target }),
     });
   }
+  // The cutscene stage exists only downstream of a RUN vehicles stage: the conversion reads the installed
+  // game (merged carcols, mod TXDs as txdp parents), so on a tree without them every slot fails closure.
+  // `--exclude vehicles` therefore drops this stage too — loudly, because a silently missing stage reads
+  // as a broken build (build:game:original:sa excludes vehicles today).
+  stageCutscene(chain, excluded, populated(subfolders.vehicles), source(subfolders.vehicles), target, gamePath);
   if (populated(subfolders.peds)) {
+    refuseLayeredBothTargets(source(subfolders.peds), 'peds', until, excluded);
     chain.push({
       name: 'peds',
-      run: (game, out) => installPeds({ gamePath: game, inPath: source(subfolders.peds), outPath: out }),
+      run: (game, out) => installPeds({ gamePath: game, inPath: source(subfolders.peds), outPath: out, target }),
     });
   }
   // map-optimizer prelight FORCE list (user decision, reversing the earlier only-mode): the statistical pass
@@ -267,6 +368,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     });
   }
   const runnable = planChain(chain, excluded, {
+    cutscene: subfolders.vehicles,
     mods: subfolders.mods,
     peds: subfolders.peds,
     trees: subfolders.vegetation,
@@ -281,6 +383,8 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   const common: TargetReportFragments = {};
   /** The asi shipped beside this map, for the manifest — a map at this density is correct only with it. */
   let shippedAsi: null | { sha256: string } = null;
+  /** The asi shipped beside the cutscene fleet, same manifest reasoning — null when no fleet was converted. */
+  let shippedCutsceneAsi: null | { sha256: string } = null;
   // Timed per stage and logged AS EACH ONE ENDS, not only in the summary: a long build that is killed part
   // way still leaves its numbers in the log. Nothing recorded a build's duration before 2026-08-09, so the
   // first question asked of the procobj density change ("what did it cost in build time?") had no baseline.
@@ -294,19 +398,67 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     return result;
   };
   const untilIndex = until === undefined ? Infinity : STAGE_NAMES.indexOf(until);
+  /** Run a step through `timed`, record it in the resume manifest, and mark the manifest failed if it throws. */
+  const step = async <T>(name: string, dir: string, run: () => Promise<T> | T): Promise<T> => {
+    try {
+      const result = await timed(name, run);
+      recordStep(name, dir, timings[timings.length - 1]?.seconds ?? 0);
+
+      return result;
+    } catch (error) {
+      recordFailure(name, error);
+      throw error;
+    }
+  };
+  /** A recorded step's dir, which the run is about to READ, must still be there. Checked at the point of use
+   *  and not for every recorded step: the chain deletes each stage dir as the next stage consumes it (disk),
+   *  so of a finished chain only the LAST stage's dir survives — and that is the only one a resume reads
+   *  (2026-08-17: the first real killed build, gostown mid-pack, was refused over the long-gone `1-split`). */
+  const assertResumedDir = (done: ResumeStage): void => {
+    if (!existsSync(done.dir)) {
+      throw new Error(`--resume: step '${done.name}' is recorded as done but its dir is gone: ${done.dir}`);
+    }
+  };
+  /** A step the manifest already has: take its recorded seconds instead of running it. */
+  const skipDone = (done: ResumeStage): void => {
+    timings.push({ name: done.name, resumed: true, seconds: done.seconds });
+    log(`${done.name} — done in the run being resumed (${done.seconds}s), skipped`);
+  };
   let game = gamePath;
+  /** The recorded chain stage whose dir `game` currently points at (undefined while `game` is the source). */
+  let gameStep: ResumeStage | undefined;
+  /** One chain stage: taken from the manifest if the resumed run finished it, run (and recorded) otherwise. */
+  const runChainStage = async (index: number, stage: (typeof runnable)[number]): Promise<void> => {
+    const out = join(work, `${index + 1}-${stage.name}`);
+    const done = doneStep(stage.name);
+    if (done) {
+      skipDone(done);
+      game = done.dir;
+      gameStep = done;
+      produced.push({ dir: done.dir, name: stage.name });
+
+      return;
+    }
+    if (gameStep) {
+      assertResumedDir(gameStep); // this stage reads the resumed run's last finished dir
+    }
+    log(stage.name);
+    // A partial dir a failed attempt left behind is worse than none — a half-installed stage reads as whole.
+    rmSync(out, { force: true, recursive: true });
+    collectFragment(common, await step(stage.name, out, () => stage.run(game, out)));
+    // Consumed → free disk; a resumed run's kept stage dir is left for the run being resumed to own.
+    if (!keepWork && game !== gamePath && !doneStep(basename(game).replace(/^\d+-/, ''))) {
+      rmSync(game, { force: true, recursive: true });
+    }
+    game = out;
+    gameStep = undefined;
+    produced.push({ dir: out, name: stage.name });
+  };
   for (const [index, stage] of runnable.entries()) {
     if (STAGE_NAMES.indexOf(stage.name) > untilIndex) {
       return { produced, stoppedEarly: true }; // `until` names a skipped stage — everything before it has run
     }
-    log(stage.name);
-    const out = join(work, `${index + 1}-${stage.name}`);
-    collectFragment(common, await timed(stage.name, () => stage.run(game, out)));
-    if (!keepWork && game !== gamePath) {
-      rmSync(game, { force: true, recursive: true }); // consumed → free disk
-    }
-    game = out;
-    produced.push({ dir: out, name: stage.name });
+    await runChainStage(index, stage);
     if (until === stage.name) {
       return { produced, stoppedEarly: true }; // stop before the split; intermediates kept
     }
@@ -318,6 +470,9 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // User-curated LOD exclusions (`lod-exclude.json` at the mods-src root or inside mods/): models that must
   // not enter the far LODs at all — e.g. HD street-furniture replacements (a 22k-tri ELECTRICA traffic light
   // placed 729× exploded the cell bake ~50×; at 300+ u it is a few unreadable pixels anyway).
+  if (gameStep) {
+    assertResumedDir(gameStep); // the split reads the resumed run's last finished chain dir
+  }
   const userExcluded = loadLodExclude(inPath, source(subfolders.mods));
   const excludeItems = [...collectGeneratedModels(game), ...userExcluded];
   log(
@@ -331,19 +486,36 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // real geometry behind its lod link — gostown's LODEnsemble* forests). The strip keeps them and the
   // pak welds them into BOTH levels; the cell bake still skips them (it bakes HD, i.e. the stub).
   const alwaysOnLods = loadLodAlways(inPath, source(subfolders.mods));
-  if (runsStage('sa', until, excluded)) {
+  const saDone = doneStep('sa');
+  if (runsStage('sa', until, excluded) && saDone) {
+    assertResumedDir(saDone); // the finished target IS the deliverable — gone means the resume cannot stand in
+    skipDone(saDone);
+    produced.push({ dir: saDone.dir, name: 'sa' });
+  } else if (runsStage('sa', until, excluded)) {
+    // Recorded as ONE resume step (its `sa` + `procobj` timings stay their own rows): a real-SA target that
+    // dies in a gate re-enters at the LOD build, not at stage 1.
+    const saStarted = Date.now();
     const built = await buildSaTarget({
+      addVehiclesIn: source(subfolders.addVehicles),
       config,
+      cutsceneFleet: common.cutscene !== undefined,
       excluded,
       excludeItems,
       game,
+      hasAddedVehicles: populated(subfolders.addVehicles),
       holeFillModels,
       outPath,
       procobjIn: source(subfolders.procobj),
+      sourceGame: gamePath,
       timed,
       until,
+    }).catch((error: unknown) => {
+      recordFailure('sa', error);
+      throw error;
     });
+    recordStep('sa', join(outPath, 'sa'), Number(((Date.now() - saStarted) / 1000).toFixed(1)));
     shippedAsi = built.shippedAsi;
+    shippedCutsceneAsi = built.shippedCutsceneAsi;
     produced.push(built.produced);
     // The report this target never had (plan 005): the census, the FLA pools and the lift requirements used
     // to exist only as console output nobody could diff.
@@ -358,7 +530,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   }
   if (runsStage('opensa', until, excluded)) {
     log(OPENSA_BUDGET_NOTICE);
-    const built = await timed('opensa', () =>
+    const built = await step('opensa', join(outPath, 'opensa'), () =>
       buildOpensaTarget({
         alwaysOnLods,
         config,
@@ -366,7 +538,11 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
         game,
         gamePath,
         holeFillModels,
+        // The LOD build + linear-txd swap is its own resume step: a pack that dies (the archive rewrite,
+        // 2026-08-17) re-enters at the pack with the kept `opensa-lod`, not at the 40-minute cell bake.
+        lodDone: doneStep('opensa-lod') !== undefined && existsSync(join(work, 'opensa-lod')),
         log,
+        onLodDone: (seconds) => recordStep('opensa-lod', join(work, 'opensa-lod'), seconds),
         outPath,
         packing: until !== 'opensa' && !excluded.has('pack'),
         work,
@@ -393,7 +569,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     rmSync(work, { force: true, recursive: true });
   }
   writeStageTimings(outPath, timings, {
-    ...(shippedAsi ? { perfectMapAsiSha256: shippedAsi.sha256 } : {}),
+    ...asiPairings(shippedAsi, shippedCutsceneAsi),
     procobjDensity: config.procobjDensity,
     procobjMax: config.procobjMax,
     target,
@@ -574,7 +750,11 @@ async function buildOpensaTarget(step: {
   gamePath: string;
   /** Per-game hole-fill list (`lod-holes.json`) — exempt from the cell bake's reduction tracks. */
   holeFillModels: string[];
+  /** `--resume`: the LOD build + swap already finished in the run being resumed and its dir is in place. */
+  lodDone?: boolean;
   log: (message: string) => void;
+  /** Called once the LOD build + swap is done, with its seconds — the resume point inside this target. */
+  onLodDone?: (seconds: number) => void;
   outPath: string;
   /** Whether the convert runs. False (`--until opensa` / `--exclude pack`) leaves `opensa/` in GAME format. */
   packing: boolean;
@@ -583,20 +763,26 @@ async function buildOpensaTarget(step: {
   const { alwaysOnLods, config, excludeItems, game, holeFillModels, log, outPath, packing, work } = step;
   const opensa = join(outPath, 'opensa');
   const lodDir = packing ? join(work, 'opensa-lod') : opensa;
-  log(`opensa → ${packing ? `${basename(work)}/opensa-lod` : 'opensa/'} (baking cells — can take several minutes)`);
-  await buildOpensaLods({
-    cellSize: config.lodCellSize,
-    config: { excludeItems, holeFillModels },
-    gameDir: game,
-    keepLods: alwaysOnLods,
-    outDir: lodDir,
-    stripLods: true,
-  });
-  // The LOD build is the last thing that mutates the game dir, and `swapLinearTxds` rewrites the very texels
-  // the pak carries — so it must run BEFORE the convert, not after it. The sidecar goes with it: it is a
-  // split-time input, not game content.
-  swapLinearTxds(game, lodDir);
-  rmSync(join(lodDir, 'linear-txd'), { force: true, recursive: true });
+  if (step.lodDone) {
+    log(`opensa-lod — done in the run being resumed, skipped (${lodDir})`);
+  } else {
+    const lodStarted = Date.now();
+    log(`opensa → ${packing ? `${basename(work)}/opensa-lod` : 'opensa/'} (baking cells — can take several minutes)`);
+    await buildOpensaLods({
+      cellSize: config.lodCellSize,
+      config: { excludeItems, holeFillModels },
+      gameDir: game,
+      keepLods: alwaysOnLods,
+      outDir: lodDir,
+      stripLods: true,
+    });
+    // The LOD build is the last thing that mutates the game dir, and `swapLinearTxds` rewrites the very texels
+    // the pak carries — so it must run BEFORE the convert, not after it. The sidecar goes with it: it is a
+    // split-time input, not game content.
+    swapLinearTxds(game, lodDir);
+    rmSync(join(lodDir, 'linear-txd'), { force: true, recursive: true });
+    step.onLodDone?.(Number(((Date.now() - lodStarted) / 1000).toFixed(1)));
+  }
   if (!packing) {
     return { pack: null, produced: [{ dir: opensa, name: 'opensa' }] };
   }
@@ -614,11 +800,15 @@ async function buildOpensaTarget(step: {
     ...(config.pack.bakeCollision ? { bakeCollision: true } : {}),
     ...(config.pack.bakeWorkers !== undefined ? { bakeWorkers: config.pack.bakeWorkers } : {}),
     bakes: config.pack.bakes,
+    // The weld's per-chunk checkpoints live beside the pack input (plan 006): a pack that dies re-enters at
+    // its last finished chunk when the run is resumed, and the dir goes with the work dir when the run is green.
+    checkpointDir: join(work, 'pack-checkpoints'),
     gameDir: lodDir,
     gameId,
     log: (message) => log(`pack: ${message}`),
     // Plan 086 phase 8: the game dir is self-contained — the pak lands in `<out>/opensa/pak` (the default).
     outDir: opensa,
+    resume: step.lodDone === true,
     ...(packRect !== undefined ? { rect: packRect } : {}),
   });
 
@@ -642,19 +832,33 @@ async function buildOpensaTarget(step: {
  * tree, and the asi shipped beside the map. Returns the tree it produced and its report fragment (plan 005).
  */
 async function buildSaTarget(step: {
+  /** The mods-src `add-vehicles/` subfolder — the ADDED cars, this target's alone (central plan 102). */
+  addVehiclesIn: string;
   config: BuilderConfig;
+  /** Whether the cutscene stage ran — the gate on shipping `perfect-cutscene.asi` beside the fleet it needs. */
+  cutsceneFleet: boolean;
   excluded: ReadonlySet<ExcludableStage>;
   excludeItems: string[];
   /** The common baked build both targets are fed from. */
   game: string;
+  /** Whether that folder actually holds cars — an empty root is not a stage. */
+  hasAddedVehicles: boolean;
   holeFillModels: string[];
   outPath: string;
   /** The mods-src `procobj/` subfolder (may be absent — the bake falls back to the built-in roster). */
   procobjIn: string;
+  /** The UNTOUCHED `--game` tree — the baseline for what the original itself already ships twice. */
+  sourceGame: string;
   timed: <T>(name: string, run: () => Promise<T> | T) => Promise<T>;
   until: StageName | undefined;
-}): Promise<{ fragment: SaFragment; produced: { dir: string; name: string }; shippedAsi: null | { sha256: string } }> {
-  const { config, excluded, excludeItems, game, holeFillModels, outPath, procobjIn, timed, until } = step;
+}): Promise<{
+  fragment: SaFragment;
+  produced: { dir: string; name: string };
+  shippedAsi: null | { sha256: string };
+  shippedCutsceneAsi: null | { sha256: string };
+}> {
+  const { config, cutsceneFleet, excluded, excludeItems, game, holeFillModels, outPath, procobjIn, timed, until } =
+    step;
   const sa = join(outPath, 'sa');
   log('sa → sa/');
   await timed('sa', () => buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa }));
@@ -681,60 +885,205 @@ async function buildSaTarget(step: {
       }),
     );
   }
+  // The added cars belong to this target alone, and they are added to a build that already exists — so the
+  // plugin that legalises their `carmods.dat` goes in first, then the cars, then the guards price them.
+  shipPerfectVehicleAsi(sa, PERFECT_VEHICLE_ASI);
+  addVehiclesIntoSa(sa, step.addVehiclesIn, step.hasAddedVehicles);
   // Every SA ceiling is checked HERE, on the tree the real game loads — not on the shared build. The LOD
   // stage appends hole-fill instances to the copied text IPLs, so the common build undercounts the rows.
   const census = reportTextIplCensus(sa);
   checkInstBearingIplSlots(census.instBearingIpls);
+  // Every stage that edited an `inst` section has now had its turn, so this is the only place the LOD links
+  // can be judged whole — see {@link assertLodLinks}.
+  assertLodLinks(sa);
+  // …and the same for what `gta.dat` claims the tree holds: a line pointing at nothing is a crash in the
+  // data load, and the field only ever sees it as an access violation in ntdll.
+  assertGtaDatFiles(sa);
+  // The archive table, checked on the FINISHED tree — the split registers what it creates and the vehicle
+  // install registers its spill sibling, so the total is only known here. A ceiling the game answers with a
+  // crash at load and no build-side symptom, which is exactly the kind this branch gates rather than prints.
+  assertArchiveSlots(countImgArchives(sa), false);
   const imgBudgets = checkImgIdBudgets(sa);
+  // One name, one archive. The game resolves an entry by name across every registered archive, so a name held
+  // twice means one of the two files never loads — and the symptom is a car wearing another's textures, not
+  // an error (plan 103). The STOCK game ships six such names; those are a fact about it, not our defect.
+  assertOneOwnerPerEntry(sa, step.sourceGame);
+  // The other pair of configured pools: an `inst` row spends a CBuilding or a CDummy depending on whether
+  // `object.dat` tunes its model, and until 2026-08-19 nothing counted the second — which is how a build
+  // shipped 17 644 dummies against a 50 000 pool and the field met `0x00538103` on the third LOAD GAME.
+  const entityPools = checkEntityPoolBudgets(sa);
   reportInstallRequirements(census, imgBudgets);
+  // The archive report, restated on the FINISHED tree: the split wrote it six stages ago, and everything
+  // since has grown gta3.img and added a spill sibling. A report that ships describing an earlier tree is
+  // worse than none.
+  writeArchiveManifest(sa);
   // Ship the fix beside the map that needs it — stating a requirement and not satisfying it is half a job.
   const shippedAsi = shipPerfectMapAsi(sa, PERFECT_MAP_ASI);
+  // Same rule for the fleet: a build that converted the cutscene cars ships the plugin they were swept with.
+  const shippedCutsceneAsi = cutsceneFleet ? shipPerfectCutsceneAsi(sa, PERFECT_CUTSCENE_ASI) : null;
 
   return {
     fragment: {
       census,
+      entityPools,
       imgBudgets,
+      perfectCutsceneAsiSha256: shippedCutsceneAsi?.sha256 ?? null,
       perfectMapAsiSha256: shippedAsi?.sha256 ?? null,
       requirements: installRequirements(census, imgBudgets),
     },
     produced: { dir: sa, name: 'sa' },
     shippedAsi,
+    shippedCutsceneAsi,
   };
 }
 
 /** File a stage's outcome under its stage name — the runner-side half of the fragment contract (plan 005). */
 function collectFragment(fragments: TargetReportFragments, outcome: ChainOutcome): void {
-  if (outcome) {
-    fragments[outcome.stage] = outcome.fragment;
+  if (!outcome) {
+    return;
+  }
+  if (outcome.stage === 'cutscene') {
+    fragments.cutscene = outcome.fragment;
+  } else {
+    fragments.optimize = outcome.fragment;
   }
 }
 
-/** FLA ID-pool budgets for the real-SA build — mirrors the operative FILE_TYPE_* values in the target
- *  install's fastman92limitAdjuster_GTASA.ini (stock pools: 5000/255/256). Each counts ARCHIVE FILES = ID
- *  slots. The margins leave room for SA's runtime slots (script/generic/ped-remap TXDs etc.) — exhausting a
- *  pool corrupts the heap during data load with a crash right after `shopping.dat` (field-diagnosed 2026-07:
- *  FILE_TYPE_IPL exhaustion; raising the ini fixed the boot).
+/**
+ * The cutscene stage (vehicle-cutscene plan 002 step 11): reads the INSTALLED game the vehicles stage
+ * produced — merged carcols for the paint bake, mod TXDs in gta3.img as the empty-TXD route's txdp
+ * parents. A slot error here is a broken build, not a per-slot condition to carry: with the parents
+ * installed, a closure miss means the vehicle install itself is incomplete — fail loudly, every slot named.
+ */
+function runCutsceneStage(
+  game: string,
+  inPath: string,
+  out: string,
+  target: BuildTarget,
+): { fragment: CutsceneFragment; stage: 'cutscene' } {
+  const summary = installCutscene({ gamePath: game, inPath, outPath: out, target });
+  if (summary.errors.length > 0) {
+    const named = summary.errors.map((error) => `${error.csName}: ${error.message}`).join('\n  ');
+    throw new Error(`cutscene conversion failed for ${summary.errors.length} slot(s):\n  ${named}`);
+  }
+  log(
+    `  cutscene — ${summary.converted.length} converted, ${summary.skipped.length} skipped, ` +
+      `${summary.plates.length} plate(s) baked, ` +
+      `img ${(summary.imgBytesBefore / 1e6).toFixed(1)} → ${(summary.imgBytesAfter / 1e6).toFixed(1)} MB, ` +
+      `${summary.txdBytes} B of cs TXDs`,
+  );
+
+  return {
+    fragment: {
+      converted: summary.converted,
+      imgBytesAfter: summary.imgBytesAfter,
+      plates: summary.plates,
+      skipped: summary.skipped,
+      txdBytes: summary.txdBytes,
+      warnings: summary.warnings,
+    },
+    stage: 'cutscene',
+  };
+}
+
+/**
+ * Stage the cutscene conversion — only downstream of a RUN vehicles stage: on a tree without the
+ * installed parents every slot fails closure, so `--exclude vehicles` drops this stage too, loudly (a
+ * silently missing stage reads as a broken build; `build:game:original:sa` excludes vehicles today).
+ */
+function stageCutscene(
+  chain: { name: ExcludableStage; run: (game: string, out: string) => ChainOutcome | Promise<ChainOutcome> }[],
+  excluded: ReadonlySet<ExcludableStage>,
+  vehiclesPopulated: boolean,
+  vehiclesSource: string,
+  target: BuildTarget,
+  gamePath: string,
+): void {
+  if (!vehiclesPopulated) {
+    return;
+  }
+  if (excluded.has('vehicles')) {
+    if (!excluded.has('cutscene')) {
+      log('cutscene — skipped (vehicles stage excluded; the conversion needs the INSTALLED game)');
+    }
+
+    return;
+  }
+  // A total conversion may ship no cutscene archive at all (gostown has none) — there is nothing to convert
+  // the fleet's twins INTO, so the stage is skipped, loudly, instead of dying on the missing file at run time
+  // (2026-08-17: the first gostown build since the stage was added died here after the vehicles stage).
+  if (!existsSync(join(gamePath, 'models', 'cutscene.img'))) {
+    if (!excluded.has('cutscene')) {
+      log('cutscene — skipped (the game ships no models/cutscene.img; no cutscene fleet to convert)');
+    }
+
+    return;
+  }
+  chain.push({ name: 'cutscene', run: (game, out) => runCutsceneStage(game, vehiclesSource, out, target) });
+}
+
+/** FLA ID-pool budgets for the real-SA build. Each row counts ARCHIVE FILES = ID slots. `stock` is the pool
+ *  FLA builds when its ini line is absent or `#`-disabled (the ini states it in the comment above each line);
+ *  the OPERATIVE ceiling is read from the adjuster ini THIS BUILD SHIPS into the tree root — {@link flaIdPools}.
+ *  The margins leave room for SA's runtime slots (script/generic/ped-remap TXDs etc.) — exhausting a pool
+ *  corrupts the heap during data load, with the crash landing somewhere unrelated a few seconds later.
  *
- *  **Raised 2026-08-10 after the first `sa` build at the recovered procobj density (91 092 objects) hit the
- *  IPL pool: 522 binary IPL files of 280.** The layer's `plobj*_stream*` tiles went 50 → 331 across the
- *  column fix, which is what a 5.96× object count buys at `STREAM_MAX_INST = 512`. Per the target rule in
- *  `CLAUDE.md`, an FLA pool is a configured NUMBER — raised in the ini rather than designed down to.
- *
- *  **And TXD was never 6000 here.** These constants claimed it from the start, while the install's ini leaves
- *  `#FILE_TYPE_TXD` commented — FLA's own log reports the pool it actually built: `20000 - 24999 (5000)`. The
- *  build sat at 4999 of a real 5000 while this guard called it 4999 of 6000, so the one pool nothing warned
- *  about was the one a single archive would have burst. Evidence and the new values:
- *  `docs/gta-sa-original/reference-install-config.md`. */
+ *  **These were constants until 2026-08-18, and that is precisely how the class recurs.** A guard number ABOVE
+ *  the install's pool is silent by construction: it claimed TXD 6000 while the shipped ini said 5000, so a
+ *  5 177-archive build reported headroom and the game died at boot the first time a delivery carried the ini
+ *  ([write-up](../../../docs/open-issues/fixed/sa-boot-crash-fla-pools-reverted-by-delivery.md); the 2026-07
+ *  `FILE_TYPE_IPL` exhaustion was the same class). Per the target rule in `CLAUDE.md` a real FLA pool is a
+ *  configured NUMBER — raised in the ini rather than designed down to — so the guard has to read the number
+ *  that will actually be in force, and say where it read it.
+ */
 const IMG_ID_BUDGETS = [
-  { ext: '.txd', label: 'TXD archives', limit: 6000, margin: 50 },
-  { ext: '.col', label: 'COL archives', limit: 400, margin: 8 },
-  { ext: '.ipl', label: 'binary IPL files', limit: 1024, margin: 8 },
+  { ext: '.txd', key: 'FILE_TYPE_TXD', label: 'TXD archives', margin: 50, stock: 5000 },
+  { ext: '.col', key: 'FILE_TYPE_COL', label: 'COL archives', margin: 8, stock: 255 },
+  { ext: '.ipl', key: 'FILE_TYPE_IPL', label: 'binary IPL files', margin: 8, stock: 256 },
 ] as const;
 
 /** One stage's wall clock. `seconds` is measured, never derived from a diff of two other numbers. */
 export interface StageTiming {
   name: string;
+  /** Recorded by an earlier run and carried over by `--resume` — never a fresh measurement of this run. */
+  resumed?: true;
   seconds: number;
+}
+
+/**
+ * Refuse a built tree that holds one entry name in two of the archives THE SPLIT OWNS.
+ *
+ * The game resolves a streaming entry by NAME across every registered archive, so two files under one name
+ * means one of them never loads — silently, with every file valid and every archive registered. It cost a
+ * field round on 2026-08-20: `slamvan.txd` sat in `gta3.img` (stock) and in `vehicles2.img` (the mod's), the
+ * stock one won, and the car rendered with no textures at all because the mod's model names textures the
+ * stock dictionary does not carry.
+ *
+ * **Scope: `gta3.img` and whatever came OUT of it** — the buckets the split writes and their spill siblings,
+ * recognised as the archives the SOURCE tree does not have. Those are the only ones whose contents this
+ * build decides, and every car and car part is in there (the user's call, 2026-08-20).
+ *
+ * The archives it therefore does not police are the original's own, and they carry six duplicates that are
+ * not defects: `player.img` is the CLOTHES archive and its `coach.txd` is a single 256×256 texture named
+ * `coach`, nothing to do with the bus of that name in `gta3.img`; `gta_int.img` repeats four map and
+ * interior dictionaries. None of them is ours to resolve, and a baseline read by NAME would have let a
+ * duplicate of ours ride in under one of them.
+ */
+export function assertOneOwnerPerEntry(gameDir: string, sourceGameDir?: string): void {
+  const stockArchives = new Set(archiveNames(sourceGameDir));
+  const ours = archiveNames(gameDir).filter((name) => name.toLowerCase() === 'gta3.img' || !stockArchives.has(name));
+  const held = duplicateEntryNames(gameDir, ours);
+  if (held.size === 0) {
+    log(`  archive entries: one owner each across ${ours.length} archive(s) the split owns`);
+
+    return;
+  }
+  throw new Error(
+    `${held.size} archive entry name(s) are held by more than one archive this build writes. The game ` +
+      `resolves an entry by name across every registered archive, so one of the two files never loads and ` +
+      `the symptom is geometric, not an error:\n  ` +
+      [...held].map(([name, archives]) => `${name} — ${archives.join(', ')}`).join('\n  '),
+  );
 }
 
 /**
@@ -743,8 +1092,16 @@ export interface StageTiming {
  */
 export function checkImgIdBudgets(gameDir: string): Record<string, number> {
   const names: string[] = [];
-  for (const img of ['gta3.img', 'gta_int.img', 'player.img', 'cutscene.img']) {
-    const path = join(gameDir, 'models', img);
+  // EVERY archive in the tree, enumerated rather than listed. The four stock names were hard-coded until the
+  // split started producing `vehicles.img` and its spill siblings — and an archive this guard does not know
+  // about is an UNDER-count, which is the silent direction: the pools stay unreported until the game
+  // corrupts its heap during data load.
+  const modelsDir = join(gameDir, 'models');
+  const archives = existsSync(modelsDir)
+    ? readdirSync(modelsDir).filter((name) => name.toLowerCase().endsWith('.img'))
+    : [];
+  for (const img of archives) {
+    const path = join(modelsDir, img);
     if (!existsSync(path)) {
       continue;
     }
@@ -752,21 +1109,80 @@ export function checkImgIdBudgets(gameDir: string): Record<string, number> {
     const archive = openArchive(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
     names.push(...archive.names.map((name) => name.toLowerCase()));
   }
+  const { pools, source } = flaIdPools(gameDir);
   const counted: Record<string, number> = {};
   for (const budget of IMG_ID_BUDGETS) {
+    const limit = pools[budget.ext] ?? budget.stock;
     const count = names.filter((name) => name.endsWith(budget.ext)).length;
     counted[budget.ext] = count;
-    const message = `${budget.label}: ${count} of ${budget.limit} ID slots (margin ${budget.margin} for SA's runtime slots)`;
-    if (count > budget.limit - budget.margin) {
+    const message = `${budget.label}: ${count} of ${limit} ID slots (margin ${budget.margin} for SA's runtime slots)`;
+    if (count > limit - budget.margin) {
       throw new Error(
-        `real-SA ID pool nearly exhausted — ${message}. Raise the FLA limit in fastman92limitAdjuster_GTASA.ini ` +
-          'or trim the build (the salod txdp partition is the biggest TXD consumer).',
+        `real-SA ID pool nearly exhausted — ${message}. Ceiling read from: ${source}. Raise ${budget.key} in ` +
+          'the adjuster ini the build SHIPS (mods-src/<game>/mods/sa/…, not just the bottle) and record the new ' +
+          'value in docs/gta-sa-original/reference-install-config.md, or trim the build (the salod txdp ' +
+          'partition is the biggest TXD consumer).',
       );
     }
-    log(`  id budget — ${message}`);
+    log(`  id budget — ${message}, per ${source}`);
   }
 
   return counted;
+}
+
+/**
+ * The ID pools the target will really run, read off the adjuster ini this build ships into the tree root
+ * (`fastman92limitAdjuster*.ini`, installed by the mods stage — so the ini is a build OUTPUT and a delivery
+ * carries it). Three things are NOT a value and fall back to FLA's own defaults, each said out loud: a
+ * `#`/`;`-disabled line, an ini whose `Apply ID limit patch` is off (every raise in it is inert), and a tree
+ * with no adjuster ini at all. Falling back DOWN is the safe direction — it can only make the guard stricter.
+ */
+export function flaIdPools(gameDir: string): { pools: Record<string, number>; source: string } {
+  const stock = Object.fromEntries(IMG_ID_BUDGETS.map((budget) => [budget.ext, budget.stock as number]));
+  const ini = existsSync(gameDir)
+    ? readdirSync(gameDir).find((name) => /^fastman92limitadjuster.*\.ini$/i.test(name))
+    : undefined;
+  if (ini === undefined) {
+    return { pools: stock, source: 'no fastman92limitAdjuster*.ini in the tree, so FLA defaults' };
+  }
+  const text = readFileSync(join(gameDir, ini), 'utf8');
+  // A leading `#` or `;` disables a line in fastman92's format, so the pattern anchors on the key itself.
+  const active = (key: string): number | undefined => {
+    const match = new RegExp(`^[ \\t]*${key}[ \\t]*=[ \\t]*(\\d+)`, 'im').exec(text);
+
+    return match === null ? undefined : Number(match[1]);
+  };
+  if ((active('Apply ID limit patch') ?? 0) === 0) {
+    return { pools: stock, source: `${ini} (ID limit patch NOT applied, so FLA defaults)` };
+  }
+
+  return {
+    pools: Object.fromEntries(IMG_ID_BUDGETS.map((budget) => [budget.ext, active(budget.key) ?? budget.stock])),
+    source: ini,
+  };
+}
+
+/** The `models/*.img` names a tree carries — none when it has no such folder, or none was given. */
+function archiveNames(gameDir: string | undefined): string[] {
+  const modelsDir = gameDir === undefined ? undefined : join(gameDir, 'models');
+
+  return modelsDir !== undefined && existsSync(modelsDir)
+    ? readdirSync(modelsDir).filter((name) => name.toLowerCase().endsWith('.img'))
+    : [];
+}
+
+/** Entry name → which of `archives` holds it, for names held more than once. Read through the directories. */
+function duplicateEntryNames(gameDir: string, archives: readonly string[]): Map<string, string[]> {
+  const modelsDir = join(gameDir, 'models');
+  const holders = new Map<string, string[]>();
+  for (const file of archives) {
+    const reader = openLazyVer2(join(modelsDir, file));
+    for (const name of reader?.names ?? []) {
+      holders.set(name.toLowerCase(), [...(holders.get(name.toLowerCase()) ?? []), file]);
+    }
+  }
+
+  return new Map([...holders].filter(([, archives]) => archives.length > 1));
 }
 
 /**
@@ -779,8 +1195,6 @@ export function checkImgIdBudgets(gameDir: string): Record<string, number> {
  * the setting that lifts it — the third column is the whole point: a breach is an instruction, not a fault.
  */
 export const STOCK_CEILINGS = {
-  /** `CPool<CBuilding>` — every permanent row spends one, before anything streams. */
-  buildings: 13_000,
   /** `gpLoadedBuildings`, per text IPL plus its boot streams. */
   rowsPerIpl: 4_096,
   /** `CIplStore::IncludeEntity` truncates the building-pool index to int16, map-wide. */
@@ -793,6 +1207,42 @@ export interface InstallRequirement {
   lift: string;
   spent: number;
   what: string;
+}
+
+/**
+ * Fail the build when `gta.dat` registers a file the tree does not have.
+ *
+ * SA opens what its `gta.dat` lists **without checking**, so a line pointing at nothing is an access violation
+ * during the data load — the crash names the path only in a stack dump, if the player thinks to send one. The
+ * class is real and cheap to create: a stage that registers a file it then does not write (or stops writing,
+ * as `salod-txdp.ide` did when the `txdp` parent was retired on 2026-08-16) leaves exactly this. It also
+ * catches the delivery half — a hand-copied install whose `data/` and `gta.dat` came from different builds.
+ */
+export function assertGtaDatFiles(gameDir: string): void {
+  const datPath = join(gameDir, 'data', 'gta.dat');
+  if (!existsSync(datPath)) {
+    console.warn(`  ! sa gta.dat file check SKIPPED — no data/gta.dat under ${gameDir}`);
+
+    return;
+  }
+  const missing: string[] = [];
+  for (const line of readFileSync(datPath, 'utf8').split(/\r?\n/)) {
+    const match = /^(IDE|IPL|IMG|COLFILE|TEXDICTION|MODELFILE|HIERFILE|SPLASH)\s+(?:\d+\s+)?(\S.*)$/i.exec(line.trim());
+    if (!match || match[1].toUpperCase() === 'SPLASH') {
+      continue;
+    }
+    const relative = match[2].trim().replace(/\\/g, '/');
+    if (!existsSync(join(gameDir, relative))) {
+      missing.push(`${match[1].toUpperCase()} ${match[2].trim()}`);
+    }
+  }
+  if (missing.length === 0) {
+    return;
+  }
+  throw new Error(
+    `data/gta.dat registers ${missing.length} file(s) the tree does not have — SA opens them without a ` +
+      `bounds check and dies during the data load:\n${missing.map((entry) => `  ${entry}`).join('\n')}`,
+  );
 }
 
 /** The requirement list for a built tree — pure, so the wording is testable without a game dir. */
@@ -808,19 +1258,13 @@ export function installRequirements(
       what: 'permanent text-IPL rows, map-wide',
     },
     {
-      ceiling: STOCK_CEILINGS.buildings,
-      lift: 'OLA `Buildings`',
-      spent: census.rows,
-      what: 'CPool<CBuilding> entries',
-    },
-    {
       ceiling: STOCK_CEILINGS.rowsPerIpl,
       lift: 'OLA `EntitiesPerIpl`',
       spent: census.largestIpl,
       what: 'rows in one text IPL',
     },
     ...IMG_ID_BUDGETS.map((budget) => ({
-      ceiling: budget.ext === '.txd' ? 5000 : budget.ext === '.col' ? 255 : 256,
+      ceiling: budget.stock,
       lift: `FLA ${budget.label.split(' ')[0]} id pool`,
       spent: imgCounts[budget.ext] ?? 0,
       what: budget.label,
@@ -933,6 +1377,32 @@ export function reportTextIplCensus(gameDir: string): { instBearingIpls: number;
 }
 
 /**
+ * The SECOND asi the `sa` target ships (asi/perfect-cutscene plan 001 step 7) — and it is shipped only when
+ * the cutscene stage RAN, because that is when it is required and when its effect is one we have measured.
+ *
+ * **The fleet and the plugin are COUPLED.** A converted cutscene car carries real translucent atomics where
+ * vanilla ships almost none, and a `CCutsceneObject` is rendered inline in world-sector scan order, so
+ * without the deferral a pane z-writes over whichever actor the scan visited later — the roulette the whole
+ * plugin exists to end. The 35-scene sweep was taken on fleet + plugin together; either half alone is a
+ * configuration nobody has measured.
+ *
+ * **Which is also why it does not ship on a build WITHOUT the fleet**: the deferred path renders at
+ * `RenderEntity`'s alpha-test ref (100, or 0 in an interior) instead of the outdoor pass's 140, so on vanilla
+ * cutscene models it could start drawing glass the main pass had always discarded. Shipping it there would be
+ * an unmeasured look change bought for nothing.
+ */
+export function shipPerfectCutsceneAsi(saDir: string, asiPath: string): null | { sha256: string } {
+  return shipAsi(
+    saDir,
+    asiPath,
+    'perfect-cutscene.asi',
+    'This build carries a CONVERTED cutscene fleet and the two are coupled; build it with `npm run build:asi` ' +
+      'in asi/perfect-cutscene, or install it by hand. Without it a scene actor is erased by whichever car ' +
+      'pane the sector scan happened to draw later.',
+  );
+}
+
+/**
  * The asi this build's map REQUIRES, shipped beside it — plan 006 task 1, and the whole of what that plan
  * still is. The build already emits maps a plain install cannot run (110 055 permanent rows against a stock
  * 32 767), and until now nothing put the fix in the tree: the requirement was stated and then left to be
@@ -944,28 +1414,107 @@ export function reportTextIplCensus(gameDir: string): { instBearingIpls: number;
  * common case on a fresh checkout and it must never be quiet: a `sa/` tree without it is a map that corrupts
  * exactly as it did before the fix (decision 5, fallback honesty).
  *
- * **Into the game ROOT**, which is where the reference install's 23 plugins live
- * (`gta-sa-original/reference-install-config.md`) — not `scripts/`, though the loader accepts both.
- *
  * Returns the pairing for the build manifest: a map built at this density is only correct with THIS asi, and
  * a sha256 is what makes a mismatch detectable rather than a mystery crash (decision 4).
  */
 export function shipPerfectMapAsi(saDir: string, asiPath: string): null | { sha256: string } {
+  return shipAsi(
+    saDir,
+    asiPath,
+    'perfect-map.asi',
+    "This build's map needs it (see the install requirements above); build it with `npm run build:asi` in " +
+      'asi/perfect-map, or install it by hand. Without it the game corrupts exactly as it did before the fix.',
+  );
+}
+
+/**
+ * The vehicle-side plugin, shipped when the build HAS added cars — it is what makes their `carmods.dat`
+ * legal past the stock 30 `link` pairs, and a tree without it is one the installer would have refused.
+ */
+export function shipPerfectVehicleAsi(saDir: string, asiPath: string): null | { sha256: string } {
+  return shipAsi(
+    saDir,
+    asiPath,
+    'perfect-vehicle.asi',
+    "This build's added cars need it past 30 carmods `link` pairs; build it with `npm run build:asi` in " +
+      'asi/perfect-vehicle. Without it the 31st pair writes past the array — silent static corruption.',
+  );
+}
+
+/** The two asi pairings in the shape `build-timings.json` carries — each absent when nothing was shipped, so
+ *  a run states which plugins its output is paired with and never invents a hash it does not have. */
+function asiPairings(
+  map: null | { sha256: string },
+  cutscene: null | { sha256: string },
+): { perfectCutsceneAsiSha256?: string; perfectMapAsiSha256?: string } {
+  return {
+    ...(cutscene ? { perfectCutsceneAsiSha256: cutscene.sha256 } : {}),
+    ...(map ? { perfectMapAsiSha256: map.sha256 } : {}),
+  };
+}
+
+/**
+ * Copy one pre-built `.asi` into the game ROOT — where the reference install's 23 plugins live
+ * (`gta-sa-original/reference-install-config.md`), not `scripts/`, though the loader accepts both — and
+ * return its sha256 for the build manifest.
+ *
+ * `absentAdvice` is the caller's own answer to "so what?": each asi is required for a different reason and a
+ * warning that does not say which is a warning nobody acts on.
+ */
+function shipAsi(saDir: string, asiPath: string, fileName: string, absentAdvice: string): null | { sha256: string } {
   if (!existsSync(asiPath)) {
-    console.warn(
-      `  ! perfect-map.asi NOT SHIPPED — no artifact at ${asiPath}. This build's map needs it (see the ` +
-        'install requirements above); build it with `npm run build:asi` in asi/perfect-map, or install it by ' +
-        'hand. Without it the game corrupts exactly as it did before the fix.',
-    );
+    console.warn(`  ! ${fileName} NOT SHIPPED — no artifact at ${asiPath}. ${absentAdvice}`);
 
     return null;
   }
   const bytes = readFileSync(asiPath);
   const sha256 = createHash('sha256').update(bytes).digest('hex');
-  writeFileSync(join(saDir, 'perfect-map.asi'), bytes);
-  log(`sa asi: perfect-map.asi shipped into the game root (sha256 ${sha256.slice(0, 12)}…, ${bytes.length} B)`);
+  writeFileSync(join(saDir, fileName), bytes);
+  log(`sa asi: ${fileName} shipped into the game root (sha256 ${sha256.slice(0, 12)}…, ${bytes.length} B)`);
 
   return { sha256 };
+}
+
+/** How many broken links the error names before it stops listing — the rest are counted. */
+const LOD_LINK_REPORT_LIMIT = 20;
+
+/**
+ * Fail the build when a LOD link no longer points at its own LOD.
+ *
+ * **The class this catches is silent by construction.** A `lod` cell is a ROW INDEX into the area's `inst`
+ * section (its binary streams index the same space), so a stage that drops or inserts a row re-points every
+ * link past it at another VALID row: no error, no missing file, and in the field a building that simply has
+ * no LOD. That is exactly how `0. Map Fixes Pack`'s stream merges shipped links one row off for a month —
+ * `docs/open-issues/ipl-row-removal-breaks-lod-links.md`, found by eye from a car park in Los Santos.
+ *
+ * Runs on the FINISHED `sa/` tree because every earlier point is a half-answer: the merge, the strip, the
+ * trees layer and the LOD generators each rewrite `inst` rows, and the links are only whole once they all
+ * have. Stock passes it with zero findings (6 103 links), so any finding is ours.
+ */
+export function assertLodLinks(gameDir: string): void {
+  if (!existsSync(join(gameDir, 'data', 'gta.dat'))) {
+    console.warn(`  ! sa lod-link check SKIPPED — no data/gta.dat under ${gameDir}`);
+
+    return;
+  }
+  const report = checkLodLinks(gameDir);
+  const bad = [...report.outOfRange, ...report.broken];
+  if (bad.length === 0) {
+    log(`lod links: ${report.checked} checked, every one resolves onto its owner`);
+
+    return;
+  }
+  const listed = bad.slice(0, LOD_LINK_REPORT_LIMIT).map((link) => `  ${formatLodLink(link)}`);
+  const rest = bad.length - listed.length;
+  throw new Error(
+    `${bad.length} of ${report.checked} lod links do not resolve onto their owner ` +
+      `(${report.outOfRange.length} point past the end of their section):\n${listed.join('\n')}` +
+      `${rest > 0 ? `\n  … and ${rest} more` : ''}\n` +
+      'A lod cell is a ROW INDEX — some stage inserted or dropped an inst row without rebasing the links ' +
+      "that point past it, in the text IPL or in the area's binary streams. Diagnose with " +
+      '`npx tsx scripts/debug/lod-link-check.ts <game-dir>` (stock reports zero) and see ' +
+      'docs/open-issues/ipl-row-removal-breaks-lod-links.md.',
+  );
 }
 
 /** SA's `IplEntityIndexArrays` — one slot per text IPL that carries `inst` rows, written past without a bounds
@@ -1013,6 +1562,9 @@ export function writeStageTimings(
   outPath: string,
   timings: readonly StageTiming[],
   config: {
+    /** sha256 of the `perfect-cutscene.asi` shipped into `sa/` — the fleet↔asi pairing, same reasoning.
+     *  Absent when this build converted no fleet, or when no artifact was available. */
+    perfectCutsceneAsiSha256?: string;
     /** sha256 of the `perfect-map.asi` shipped into `sa/` — the map↔asi pairing (006 decision 4). Absent when
      *  no artifact was available, which the run also warns about. */
     perfectMapAsiSha256?: string;
@@ -1032,6 +1584,45 @@ export function writeStageTimings(
   }
   console.log(`  ${'TOTAL'.padEnd(10)} ${formatMinutes(total).padStart(8)}`);
   writeFileSync(join(outPath, 'build-timings.json'), JSON.stringify({ config, stages: timings, total }, null, 2));
+}
+
+/**
+ * The run's work dir (`.work-<target>`, plus the legacy shared `.work`) is wiped before any stage reads
+ * `--game`/`--in`, so a source pointing INTO it (the obvious fast path for re-running one stage:
+ * `--game <out>/.work-sa/5-trees`) is deleted before it is read. Silent otherwise — the run dies on a missing
+ * `gta3.img` seconds after the intermediates are already gone, naming the symptom and never the cause. It
+ * cost a full rebuild on 2026-08-09. The OTHER target's work dir is not touched, so a source there is safe.
+ */
+/**
+ * Refuse a run that would build BOTH targets out of a LAYERED mods folder (mod-installer plan 011).
+ *
+ * The `mods` stage lives in the chain both targets share, and a layered folder makes its result depend on
+ * the target — so one run cannot produce both installs, and `resolveBuildTarget` would silently pick `sa`
+ * for both. Config-time, like the `--target opensa` refusal beside it: the alternative is an `opensa/`
+ * build carrying the real game's mod layer, which nothing downstream can detect.
+ *
+ * A run that stops inside the COMMON chain is fine and is not refused — it builds neither target, and the
+ * resolved target (logged at the top of the run) is what its intermediate carries.
+ */
+/**
+ * The added cars, into the FINISHED `sa` tree, in place — the placement `procobj` taught: this content
+ * belongs to ONE target, so it must not reach the common build both targets are made from (an `opensa` pak
+ * would carry 115 cars nothing can spawn, and the whole machinery — ModelVariations, FLA's audio loader,
+ * Parked Maker, CLEO's FXT loader — is the real game's).
+ *
+ * Runs after the plugin is shipped and BEFORE this branch's budget guards, so the ids, TXDs and archive
+ * members it adds are counted by the same `checkImgIdBudgets` that prices everything else, and so its own
+ * `carmods.dat` ceiling check sees `perfect-vehicle.asi` sitting in the tree.
+ */
+function addVehiclesIntoSa(saDir: string, inPath: string, hasCars: boolean): void {
+  if (!hasCars) {
+    return;
+  }
+  log('add-vehicles → sa/');
+  const report = addVehicles({ gamePath: saDir, inPath });
+  report.warnings.forEach((warning) => console.warn(`add-vehicles: ${warning}`));
+  const cars = report.installed.filter(({ kind }) => kind === 'car').length;
+  log(`add-vehicles: ${cars} car(s), ${report.installed.length - cars} tuning part(s) added to sa/`);
 }
 
 /** `1234.5` → `20m 34s` — the unit a build is actually discussed in. */
@@ -1140,10 +1731,15 @@ function logTarget(target: BuildTarget, explicit: boolean, excluded: ReadonlySet
 function planChain<T extends { name: ExcludableStage }>(
   chain: readonly T[],
   excluded: ReadonlySet<ExcludableStage>,
-  stageSource: Readonly<Record<'mods' | 'peds' | 'trees' | 'vehicles', string>>,
+  stageSource: Readonly<Record<'cutscene' | 'mods' | 'peds' | 'trees' | 'vehicles', string>>,
 ): T[] {
   const staged = new Set(chain.map((stage) => stage.name));
-  for (const name of ['mods', 'vehicles', 'peds', 'trees'] as const) {
+  for (const name of ['mods', 'vehicles', 'cutscene', 'peds', 'trees'] as const) {
+    // A cutscene stage dropped for a reason OTHER than an empty vehicles/ (vehicles excluded, no
+    // cutscene.img in the game) has already said why in `stageCutscene` — do not call it "empty" here.
+    if (name === 'cutscene' && staged.has('vehicles')) {
+      continue;
+    }
     if (!staged.has(name) && !excluded.has(name)) {
       log(`${name} — skipped (${stageSource[name]}/ empty)`);
     }
@@ -1157,13 +1753,23 @@ function planChain<T extends { name: ExcludableStage }>(
   return chain.filter((stage) => !excluded.has(stage.name));
 }
 
-/**
- * The run's work dir (`.work-<target>`, plus the legacy shared `.work`) is wiped before any stage reads
- * `--game`/`--in`, so a source pointing INTO it (the obvious fast path for re-running one stage:
- * `--game <out>/.work-sa/5-trees`) is deleted before it is read. Silent otherwise — the run dies on a missing
- * `gta3.img` seconds after the intermediates are already gone, naming the symptom and never the cause. It
- * cost a full rebuild on 2026-08-09. The OTHER target's work dir is not touched, so a source there is safe.
- */
+function refuseLayeredBothTargets(
+  modsPath: string,
+  what: 'mods' | 'peds' | 'vehicles',
+  until: StageName | undefined,
+  excluded: ReadonlySet<ExcludableStage>,
+): void {
+  const bothTargets = runsStage('sa', until, excluded) && runsStage('opensa', until, excluded);
+  if (!bothTargets || !isLayeredTree(modsPath)) {
+    return;
+  }
+  throw new Error(
+    `${modsPath} is a LAYERED ${what} folder (common/sa/opensa), so its content differs per target — but this ` +
+      'run builds both `sa` and `opensa` out of one shared chain. Build them one at a time: ' +
+      '--exclude opensa, then --exclude sa.',
+  );
+}
+
 function refuseSourceInsideWork(work: string, gamePath: string, inPath: string): void {
   for (const [flag, path] of [
     ['--game', gamePath],

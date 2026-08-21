@@ -66,7 +66,12 @@ export class MeshBuilder {
     }
     for (const tri of geometry.triangles) {
       const material = geometry.materials[tri.materialIndex];
-      const raw = material?.texture?.name.toLowerCase() ?? '';
+      // The texture's name with its CASE INTACT. What we write here is what the LOD's materials will ask the
+      // dictionary for, and the real game matches those names exactly — stock SA never once spells a texture
+      // differently in a DFF than in the TXD it lives in. Lowercasing here (and in the clone dictionaries)
+      // matched only by accident, and only for the models that took this re-encode path (2026-08-16).
+      // `registerScopedName` lowercases what it resolves by, so the scoped path is unaffected.
+      const raw = material?.texture?.name ?? '';
       const texture = raw.length > 0 && textureName ? textureName(raw) : raw;
       this.group(texture, material?.color).push(base + tri.a, base + tri.b, base + tri.c);
     }

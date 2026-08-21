@@ -27,7 +27,7 @@ Because a procobj LOD is a true **geometry copy** (real triangles + textures, no
 ## Tests
 
 - `mesh-builder.test.ts` — synthetic: carries a source night set, and omits `nightColors` when no geometry has one.
-- `mesh-builder.test.ts` — real fixture (`tests/original/dff/night-colours/cedar1_hi.dff`, via
+- `mesh-builder.test.ts` — real fixture (`fixtures/original/dff/night-colours/cedar1_hi.dff`, via
   `npm run test:fixtures`): the merged mesh's night set matches the source per-vertex.
 
 Verified on real procobj species: `sand_josh1` (source night 18 → LOD 19, the small delta from decimation),

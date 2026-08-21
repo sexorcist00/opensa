@@ -7,6 +7,7 @@
  * Run: `npx tsx scripts/debug/dump-vehicle-ao.ts`
  */
 import { readVehicleOsm } from '@opensa/game/adapters/vehicle-osm';
+import { resolveVehicleSources } from '@opensa/tool-kit/vehicles-dir';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -19,10 +20,13 @@ const buf = (p: string): ArrayBuffer => {
 };
 
 const MODS = 'mods-src/original/vehicles';
-const GENERIC = 'tests/original/models/generic/vehicle.txd';
+const GENERIC = 'fixtures/original/models/generic/vehicle.txd';
+// By SLOT, never by folder name: the folder carries the car's real name and author, both of which change
+// when a car is replaced — and a `new/` candidate is the folder the build is actually using.
+const folderOf = new Map(resolveVehicleSources(MODS).sources.map((source) => [source.slot, source.folder]));
 const CARS: Record<string, string> = {
-  admiral: join(MODS, 'admiral - 1976 Mercedes-Benz 230 - k1real24'),
-  comet: join(MODS, 'comet - 1995 Porsche 911 GT2 - mad_driver'),
+  admiral: folderOf.get('admiral') ?? '',
+  comet: folderOf.get('comet') ?? '',
 };
 
 function fsOf(model: string, dir: string): unknown {

@@ -339,7 +339,7 @@ So both already read through the decorated `fs.get`. The only gap: `scanModloade
 2. **Test. ✅** `scan.test.ts`: `.ifp` buckets into `assets` by bare name. `index.test.ts`: `withModloader` serves
    it by `get('x.ifp')` (getIfp's bare read) **and** `get('anim/x.ifp')` (loadAnimations' path read), and it's in
    `names`. Separately, the UTF-16 loader fix (`vfs.ts`) is covered by the real fixture
-   `tests/custom/modloader/utf16-loader.txt` (the SA Brightened Project's UTF-16 `Loader.txt`).
+   `fixtures/custom/modloader/utf16-loader.txt` (the SA Brightened Project's UTF-16 `Loader.txt`).
 3. **In-game verify** (pending): a mod's `<name>.ifp` animates the referenced zone object in the running game.
 
 ## Caveats

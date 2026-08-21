@@ -37,6 +37,15 @@ export {
 export { convertTo24h, parseTimecyc, WEATHER_NAMES } from './timecyc.parser';
 export * from './types';
 export { parseVehicleDefs, type VehicleDef } from './vehicle-defs.parser';
-export { parseVehicleFeatures, UP_DOWN_LIGHTS } from './vehicle-features.parser';
+export {
+  parseVehicleFeatures,
+  saAbilitiesOf,
+  saCarrierFor,
+  UP_DOWN_LIGHTS,
+  VEHICLE_FEATURE_TOKENS,
+  type VehicleFeatureCarrier,
+  type VehicleFeatureToken,
+  vehicleFeatureToken,
+} from './vehicle-features.parser';
 export { parseWater, type WaterQuad } from './water.parser';
 export { type MapZone, parseZones } from './zon.parser';

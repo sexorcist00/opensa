@@ -96,7 +96,7 @@ Tagged so we pick them up later:
 
 Implemented + tested. `cli.ts` / `install.ts` (`guardOut`) / `img-merge.ts` (`mergePedImg`) / `settings.ts`
 (`parsePedSettings`) / `merge.ts` (`mergePeds`) / `apply-ped.ts` (`applyPed`). A `data/peds.ide` fixture was added
-to `scripts/test-fixtures.ts` (`tests/original/`). Unit tests cover the img merge, the settings classify, and
+to `scripts/test-fixtures.ts` (`fixtures/original/`). Unit tests cover the img merge, the settings classify, and
 `mergePeds`; `install.e2e.test.ts` runs the full `install()` over the real `peds.ide` fixture — a pure replacement
 leaves `peds.ide` byte-identical, a settings line targeting an **existing** model replaces its line in place (no new
 entry — the "Replace+" row), and a new ped's line is appended (all asserted via `parsePedDefs`). `tsc`/`eslint`/

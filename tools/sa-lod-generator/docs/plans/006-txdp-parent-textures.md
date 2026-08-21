@@ -1,6 +1,11 @@
 # 006 — Clone TXDs: 0.25 scale + `txdp` parent dictionary
 
-**Status: ✅ Implemented (measured below).** Two texture cuts for the clone LODs, in order of risk:
+**Status: ✅ Implemented and STILL IN FORCE — but on 2026-08-16 it spent an afternoon as a suspect.** The
+parent was blamed for LODs that render untextured or not at all, replaced by self-contained dictionaries
+(`selfContainedTxd`), field-tested, and REVERTED: nothing changed, and self-containment cost 45.9 MiB against
+this plan's 10.4 MB. **The chain is neither proven nor disproven on the real target** — which is the gap this
+plan left by citing a third-party mod as proof at scale instead of measuring our own install. See
+[`docs/open-issues/fixed/sa-lod-visibility-budget.md`](../../../../docs/open-issues/fixed/sa-lod-visibility-budget.md). Two texture cuts for the clone LODs, in order of risk:
 
 1. **`texScale` 0.5 → 0.25** (with a 32 px floor) — the clone textures are only ever seen from ≥ the HD's draw
    distance, where 0.25 still oversamples the screen ~2×.

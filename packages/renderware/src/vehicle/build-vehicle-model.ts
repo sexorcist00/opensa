@@ -9,7 +9,7 @@
  *   - `_dam` / `_vlo` are extra SUBMESHES on the same buffers (hidden via per-submesh visibility), not
  *     separate meshes toggled through a scene graph, which the own engine does not have.
  */
-import type { RWClump, RWGeometry, RWMaterial, RWUvAnimation } from '../parsers/binary/types';
+import type { RWClump, RWGeometry, RWMaterial, RWTriangle, RWUvAnimation } from '../parsers/binary/types';
 import type { VehicleTextures } from './textures';
 import type {
   VehicleBuildOptions,
@@ -25,7 +25,9 @@ import type {
 import { frameWorldTransform, rotationToQuat } from '../mesh/frame-transform';
 import { groupTrianglesByMaterial, NIGHT_AMBIENT } from '../mesh/prepare-clump';
 import { skyOcclusion } from './sky-occlusion';
+import { clusterTriangles } from './translucent-clusters';
 import { LampTag, MaterialClass, PaintSlot } from './types';
+import { variantTree } from './variants';
 import { tyreMaterials } from './wheel-tyre';
 
 /** SA per-lamp marker colours on the `vehiclelights*` atlas: they say WHICH lamp a material is — engine
@@ -74,6 +76,8 @@ const WHEEL_FRAME = 'wheel';
 
 /** Body geometry has no tyre in it — only the wheel paths pass a real set. */
 const NO_TYRES: ReadonlySet<number> = new Set();
+/** Damage twins and LOD meshes never count as a chosen-path option (see {@link chosenContainerWheel}). */
+const VARIANT_SKIP_RE = /_(?:dam|vlo)$/;
 
 interface Scratch {
   colors: number[];
@@ -90,6 +94,12 @@ interface Scratch {
   /** The clump's UVAnimDict by name — the source {@link uvAnimSlot} resolves references against. */
   uvAnimDict: ReadonlyMap<string, RWUvAnimation>;
   uvs: number[];
+}
+
+/** One mesh of a wheel, in wheel-local space, with the material indices that are its tyre. */
+interface WheelMesh {
+  geometry: RWGeometry | undefined;
+  tyres: ReadonlySet<number>;
 }
 
 /** Mirrors prod's `buildVehicle(clump, textures, options)` — callers own parsing (tests pass clumps). */
@@ -123,13 +133,13 @@ export function buildVehicleModel(
 
   let sharedWheel: null | { frameIndex: number; geometryIndex: number } = null;
   const cornerWheels: { frameIndex: number; front: boolean; geometryIndex: number; right: boolean }[] = [];
-  const containerWheels: number[] = [];
+  const containerWheels = chosenContainerWheel(clump, containerFrames);
+  const variants = variantTree(clump, containerFrames);
 
   for (const atomic of clump.atomics) {
     const name = frameName(clump, atomic.frameIndex);
     if (containerFrames.has(atomic.frameIndex)) {
-      containerWheels.push(atomic.geometryIndex); // wheel sub-model — instanced at the dummies below
-      continue;
+      continue; // wheel sub-model — its chosen meshes are instanced at the dummies below
     }
     if (name === WHEEL_FRAME) {
       sharedWheel = { frameIndex: atomic.frameIndex, geometryIndex: atomic.geometryIndex };
@@ -153,13 +163,7 @@ export function buildVehicleModel(
       doorHinges,
       partFrames,
     });
-    // Every `extraN` alternative ships, tagged with its frame. SA shows at most one and the pick is per
-    // SPAWN — a build-time choice would freeze one optional part into the pak for every car in the world.
-    if (EXTRA_RE.test(name)) {
-      for (let at = before; at < scratch.submeshes.length; at += 1) {
-        scratch.submeshes[at].extra = name;
-      }
-    }
+    tagAlternatives(scratch, before, EXTRA_RE.test(name) ? name : null, variants.optionOfFrame.get(atomic.frameIndex));
   }
 
   // A door is its whole HINGE SUBTREE, not one named atomic: SA swings the dummy's frame, so a mod's
@@ -218,6 +222,7 @@ export function buildVehicleModel(
     // fixture for nothing, and "absent" is what every consumer already reads as "no animation".
     ...(scratch.uvAnimations.length > 0 ? { uvAnimations: scratch.uvAnimations } : {}),
     uvs: new Float32Array(scratch.uvs),
+    ...(variants.variants ? { variants: variants.variants } : {}),
     wheels,
   };
 }
@@ -285,7 +290,7 @@ function addWheels(
   textures: VehicleTextures,
   wheelScale: readonly [number, number],
   source: {
-    containerWheels: readonly number[];
+    containerWheels: readonly WheelMesh[];
     cornerWheels: readonly { frameIndex: number; front: boolean; geometryIndex: number; right: boolean }[];
     sharedWheel: null | { frameIndex: number; geometryIndex: number };
   },
@@ -295,7 +300,14 @@ function addWheels(
   if (sharedWheel === null && cornerWheels.length === 1 && dummies) {
     const lone = cornerWheels[0];
 
-    return instanceWheels(scratch, clump, lone.geometryIndex, textures, wheelScale, lone.frameIndex);
+    return instanceWheels(
+      scratch,
+      clump,
+      [wheelMesh(clump, lone.geometryIndex)],
+      textures,
+      wheelScale,
+      lone.frameIndex,
+    );
   }
   if (cornerWheels.length > 0) {
     // Per-corner sets reuse ONE authored mesh across the corners (petro's left and right geometries are
@@ -303,7 +315,7 @@ function addWheels(
     const authoredRight = authoredWheelRight(clump);
 
     return cornerWheels.map((wheel) => {
-      const fit = wheelFit(wheelScale, wheel.front, clump.geometries[wheel.geometryIndex]);
+      const fit = wheelFit(wheelScale, wheel.front, [clump.geometries[wheel.geometryIndex]]);
       const part = addPart(scratch, clump, wheel.frameIndex, frameName(clump, wheel.frameIndex), fit.scale);
       if (wheel.right !== authoredRight) {
         scratch.parts[part].localRotation = flipWheelSide(scratch.parts[part].localRotation);
@@ -322,10 +334,17 @@ function addWheels(
     });
   }
   if (sharedWheel !== null) {
-    return instanceWheels(scratch, clump, sharedWheel.geometryIndex, textures, wheelScale, sharedWheel.frameIndex);
+    return instanceWheels(
+      scratch,
+      clump,
+      [wheelMesh(clump, sharedWheel.geometryIndex)],
+      textures,
+      wheelScale,
+      sharedWheel.frameIndex,
+    );
   }
   if (containerWheels.length > 0 && dummies) {
-    return instanceWheels(scratch, clump, containerWheels[0], textures, wheelScale);
+    return instanceWheels(scratch, clump, containerWheels, textures, wheelScale);
   }
 
   return [];
@@ -378,106 +397,124 @@ function appendGeometry(
       textures.hasAlphaIn(material, rw.uvLayers[0], tris),
     );
     const { color, klass, lamp, layer, nightLayer, paint, reflect } = surface;
-    const indexOffset = scratch.indices.length;
-    const center: [number, number, number] = [0, 0, 0];
-    // This group's own copy of each vertex it touches, keyed by the source index.
-    const emitted = new Map<number, number>();
-    const emit = (corner: number): number => {
-      const existing = emitted.get(corner);
-      if (existing !== undefined) {
-        return existing;
-      }
-      const index = scratch.positions.length / 3;
-      scratch.positions.push(rw.positions[corner * 3], rw.positions[corner * 3 + 1], rw.positions[corner * 3 + 2]);
-      if (rw.normals) {
-        scratch.normals.push(rw.normals[corner * 3], rw.normals[corner * 3 + 1], rw.normals[corner * 3 + 2]);
-      } else {
-        scratch.normals.push(0, 0, 1);
-      }
-      const uvs = rw.uvLayers[0];
-      scratch.uvs.push(uvs ? uvs[corner * 2] : 0, uvs ? uvs[corner * 2 + 1] : 0);
-      // PRELIT vertex colours modulate the material's (074/... — opensa-pack 003 phase 5g). SA bakes the
-      // map's lighting there and it is DARK: 2 972 of 3 000 map models carry a non-white set, mean luma
-      // 88/255, so ignoring it renders a building roughly three times too bright. Vehicles are unaffected
-      // by construction — not one of the game's 198 cars carries a prelit set at all.
-      const day = rw.prelitColors;
-      const night = rw.nightColors;
-      scratch.colors.push(
-        modulate(color[0], day, corner, 0),
-        modulate(color[1], day, corner, 1),
-        modulate(color[2], day, corner, 2),
-        color[3],
-      );
-      // The night set replaces the day colour as `dn` goes to 1. Without an authored one, synthesize it the
-      // way the welded cell path does — one night formula for the whole world, or a converted prop would
-      // disagree with the cell it stands in. But ONLY for prelit geometry: an asset with no prelit set is
-      // not part of the baked-lighting world (no car carries one), and darkening it here would dim every
-      // vehicle at midnight on top of the world light that already does that job.
-      const dayRgb = scratch.colors.slice(-4, -1);
-      scratch.night.push(
-        ...(night
-          ? [
-              modulate(color[0], night, corner, 0),
-              modulate(color[1], night, corner, 1),
-              modulate(color[2], night, corner, 2),
-            ]
-          : dayRgb.map((channel, index) => (day ? Math.round(channel * NIGHT_AMBIENT[index]) : channel))),
-        255,
-      );
-      scratch.meta.push(layer, nightLayer, paint, (lamp === null ? LampTag.none : LampTag[lamp]) | (klass << 4));
-      scratch.reflect.push(reflect[0], reflect[1], reflect[2], reflect[3]);
-      emitted.set(corner, index);
-
-      return index;
-    };
-    for (const tri of tris) {
-      scratch.indices.push(emit(tri.a), emit(tri.b), emit(tri.c));
-      for (const corner of [tri.a, tri.b, tri.c]) {
-        center[0] += rw.positions[corner * 3];
-        center[1] += rw.positions[corner * 3 + 1];
-        center[2] += rw.positions[corner * 3 + 2];
-      }
-    }
-    const corners = tris.length * 3;
-    const centroid: [number, number, number] = [center[0] / corners, center[1] / corners, center[2] / corners];
-    // Bounding radius about the centroid (074/16 sort fix): the translucent sort subtracts it, so a LARGE
-    // sheet (a raked windscreen) counts as nearer than its centre — a single centroid put the wheel OVER
-    // the glass overhang at down-looking angles. The AABB beside it is the exact form of the same idea:
-    // sorting by the sphere over-reached on SCATTERED submeshes (a gauge cluster spanning the dash, radius
-    // 1.8, counted as nearer than the window sheet in front of it), so the runtime keys on the nearest AABB
-    // corner where the bounds exist and falls back to `center − radius` on old fixtures.
-    let radiusSq = 0;
-    const min: [number, number, number] = [Infinity, Infinity, Infinity];
-    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
-    for (const tri of tris) {
-      for (const corner of [tri.a, tri.b, tri.c]) {
-        radiusSq = Math.max(
-          radiusSq,
-          (rw.positions[corner * 3] - centroid[0]) ** 2 +
-            (rw.positions[corner * 3 + 1] - centroid[1]) ** 2 +
-            (rw.positions[corner * 3 + 2] - centroid[2]) ** 2,
+    // A translucent group is emitted per spatial CLUSTER (`clusterTriangles`): the sort keys on a submesh's
+    // AABB, and one material spanning separate pieces (the comet's dash gauges + rear-shelf speakers, one
+    // submesh) has no honest single key — the speakers drew over the rear quarter glass from the front.
+    const clusters = surface.translucent ? clusterTriangles(tris, rw.positions) : [tris];
+    const geometry = rw;
+    const emitGroup = (tris: readonly RWTriangle[]): void => {
+      const indexOffset = scratch.indices.length;
+      const center: [number, number, number] = [0, 0, 0];
+      // This group's own copy of each vertex it touches, keyed by the source index.
+      const emitted = new Map<number, number>();
+      const emit = (corner: number): number => {
+        const existing = emitted.get(corner);
+        if (existing !== undefined) {
+          return existing;
+        }
+        const index = scratch.positions.length / 3;
+        scratch.positions.push(
+          geometry.positions[corner * 3],
+          geometry.positions[corner * 3 + 1],
+          geometry.positions[corner * 3 + 2],
         );
-        for (let axis = 0; axis < 3; axis += 1) {
-          min[axis] = Math.min(min[axis], rw.positions[corner * 3 + axis]);
-          max[axis] = Math.max(max[axis], rw.positions[corner * 3 + axis]);
+        if (geometry.normals) {
+          scratch.normals.push(
+            geometry.normals[corner * 3],
+            geometry.normals[corner * 3 + 1],
+            geometry.normals[corner * 3 + 2],
+          );
+        } else {
+          scratch.normals.push(0, 0, 1);
+        }
+        const uvs = geometry.uvLayers[0];
+        scratch.uvs.push(uvs ? uvs[corner * 2] : 0, uvs ? uvs[corner * 2 + 1] : 0);
+        // PRELIT vertex colours modulate the material's (074/... — opensa-pack 003 phase 5g). SA bakes the
+        // map's lighting there and it is DARK: 2 972 of 3 000 map models carry a non-white set, mean luma
+        // 88/255, so ignoring it renders a building roughly three times too bright. Vehicles are unaffected
+        // by construction — not one of the game's 198 cars carries a prelit set at all.
+        const day = geometry.prelitColors;
+        const night = geometry.nightColors;
+        scratch.colors.push(
+          modulate(color[0], day, corner, 0),
+          modulate(color[1], day, corner, 1),
+          modulate(color[2], day, corner, 2),
+          color[3],
+        );
+        // The night set replaces the day colour as `dn` goes to 1. Without an authored one, synthesize it the
+        // way the welded cell path does — one night formula for the whole world, or a converted prop would
+        // disagree with the cell it stands in. But ONLY for prelit geometry: an asset with no prelit set is
+        // not part of the baked-lighting world (no car carries one), and darkening it here would dim every
+        // vehicle at midnight on top of the world light that already does that job.
+        const dayRgb = scratch.colors.slice(-4, -1);
+        scratch.night.push(
+          ...(night
+            ? [
+                modulate(color[0], night, corner, 0),
+                modulate(color[1], night, corner, 1),
+                modulate(color[2], night, corner, 2),
+              ]
+            : dayRgb.map((channel, index) => (day ? Math.round(channel * NIGHT_AMBIENT[index]) : channel))),
+          255,
+        );
+        scratch.meta.push(layer, nightLayer, paint, (lamp === null ? LampTag.none : LampTag[lamp]) | (klass << 4));
+        scratch.reflect.push(reflect[0], reflect[1], reflect[2], reflect[3]);
+        emitted.set(corner, index);
+
+        return index;
+      };
+      for (const tri of tris) {
+        scratch.indices.push(emit(tri.a), emit(tri.b), emit(tri.c));
+        for (const corner of [tri.a, tri.b, tri.c]) {
+          center[0] += geometry.positions[corner * 3];
+          center[1] += geometry.positions[corner * 3 + 1];
+          center[2] += geometry.positions[corner * 3 + 2];
         }
       }
+      const corners = tris.length * 3;
+      const centroid: [number, number, number] = [center[0] / corners, center[1] / corners, center[2] / corners];
+      // Bounding radius about the centroid (074/16 sort fix): the translucent sort subtracts it, so a LARGE
+      // sheet (a raked windscreen) counts as nearer than its centre — a single centroid put the wheel OVER
+      // the glass overhang at down-looking angles. The AABB beside it is the exact form of the same idea:
+      // sorting by the sphere over-reached on SCATTERED submeshes (a gauge cluster spanning the dash, radius
+      // 1.8, counted as nearer than the window sheet in front of it), so the runtime keys on the nearest AABB
+      // corner where the bounds exist and falls back to `center − radius` on old fixtures.
+      let radiusSq = 0;
+      const min: [number, number, number] = [Infinity, Infinity, Infinity];
+      const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+      for (const tri of tris) {
+        for (const corner of [tri.a, tri.b, tri.c]) {
+          radiusSq = Math.max(
+            radiusSq,
+            (geometry.positions[corner * 3] - centroid[0]) ** 2 +
+              (geometry.positions[corner * 3 + 1] - centroid[1]) ** 2 +
+              (geometry.positions[corner * 3 + 2] - centroid[2]) ** 2,
+          );
+          for (let axis = 0; axis < 3; axis += 1) {
+            min[axis] = Math.min(min[axis], geometry.positions[corner * 3 + axis]);
+            max[axis] = Math.max(max[axis], geometry.positions[corner * 3 + axis]);
+          }
+        }
+      }
+      scratch.submeshes.push({
+        bounds: { max, min },
+        center: centroid,
+        damageGroup,
+        ...(plate ? { plate } : {}),
+        ...(tyre ? { tyre: true } : {}),
+        indexCount: tris.length * 3,
+        indexOffset,
+        kind,
+        lamp,
+        part,
+        radius: Math.sqrt(radiusSq),
+        translucent: surface.translucent,
+        ...(uvAnim === null ? {} : { uvAnim }),
+      });
+    };
+    for (const clusterTris of clusters) {
+      emitGroup(clusterTris);
     }
-    scratch.submeshes.push({
-      bounds: { max, min },
-      center: centroid,
-      damageGroup,
-      ...(plate ? { plate } : {}),
-      ...(tyre ? { tyre: true } : {}),
-      indexCount: tris.length * 3,
-      indexOffset,
-      kind,
-      lamp,
-      part,
-      radius: Math.sqrt(radiusSq),
-      translucent: surface.translucent,
-      ...(uvAnim === null ? {} : { uvAnim }),
-    });
   });
 }
 
@@ -511,6 +548,62 @@ function authoredWheelRight(clump: RWClump, fromFrame?: number): boolean {
   }
 
   return true;
+}
+
+/**
+ * The meshes of a `f_wheel_*` container wheel — the VehFuncs chosen path, as gameplay shows it (the same walk
+ * `vehicle-cutscene` settled in plan 004 round 11): a `<name>:K` frame shows K of its children, a bare name
+ * shows one, a `+` suffix shows the whole subtree; at every level the FIRST eligible child in frame order is
+ * the author's default (`_dam`/`_vlo` never count). Only the first container is read — a mask container is
+ * one wheel design, and its dummies are the corners.
+ *
+ * ONE atomic is not a wheel: the alfamodding cabbie ships `f_extras:2 → tire:1 → tire` + `rim:1 → hubcap` and
+ * the stretch `f_extras:1 → rim:1 → wire_spoke`; instancing the first atomic alone drew four bare tyres
+ * with no rim (field 2026-08-17). A mesh hanging below the container root with its own frame offset is
+ * baked into wheel-local space, so the whole set rides one part per dummy.
+ */
+function chosenContainerWheel(clump: RWClump, containerFrames: ReadonlySet<number>): WheelMesh[] {
+  const root = clump.frames.findIndex(
+    (frame, index) => containerFrames.has(index) && WHEEL_CONTAINER_RE.test(frame.name.trim().toLowerCase()),
+  );
+  if (root < 0) {
+    return [];
+  }
+  const children: number[][] = clump.frames.map(() => []);
+  clump.frames.forEach((frame, index) => {
+    if (frame.parentIndex >= 0) {
+      children[frame.parentIndex].push(index);
+    }
+  });
+  const chosen: number[] = [];
+  const pickAll = (index: number): void => {
+    chosen.push(index);
+    children[index].forEach(pickAll);
+  };
+  const pick = (index: number): void => {
+    chosen.push(index);
+    const name = frameName(clump, index);
+    if (name.endsWith('+')) {
+      children[index].forEach(pickAll);
+
+      return;
+    }
+    const count = Number(/:(\d+)$/.exec(name)?.[1] ?? 1);
+    children[index]
+      .filter((child) => !VARIANT_SKIP_RE.test(frameName(clump, child)))
+      .slice(0, count)
+      .forEach(pick);
+  };
+  pick(root);
+
+  const placed = clump.atomics
+    .filter((atomic) => chosen.includes(atomic.frameIndex))
+    .map((atomic) => wheelLocalGeometry(clump, atomic.geometryIndex, atomic.frameIndex, root));
+  // The tyre band is judged against the WHOLE wheel's radius: a hub cap measured on its own is a disc
+  // whose outer ring would pass for rubber.
+  const wheelMax = Math.max(0, ...placed.map((geometry) => wheelRadius(geometry)));
+
+  return placed.map((geometry) => ({ geometry, tyres: tyreMaterials(geometry, wheelMax) }));
 }
 
 /** `f_wheel_<mask>` container frames (and their descendants): the wheel sub-model, not body geometry. */
@@ -656,19 +749,20 @@ function indicesFor(vertexCount: number, indices: number[]): Uint16Array | Uint3
 }
 
 /**
- * The shared wheel atomic, instanced at every `wheel_*_dummy`, each dummy's own orientation honoured and the
- * copies on the far side from {@link authoredWheelRight} turned by {@link flipWheelSide}.
+ * The wheel meshes, instanced at every `wheel_*_dummy`, each dummy's own orientation honoured and the copies
+ * on the far side from {@link authoredWheelRight} turned by {@link flipWheelSide}. One mesh for the shared /
+ * lone-corner conventions, the whole chosen set for a `f_wheel_*` container (tyre + rim + style).
  */
 function instanceWheels(
   scratch: Scratch,
   clump: RWClump,
-  geometryIndex: number,
+  meshes: readonly WheelMesh[],
   textures: VehicleTextures,
   wheelScale: readonly [number, number],
   sourceFrame?: number,
 ): VehicleWheel[] {
   const wheels: VehicleWheel[] = [];
-  const tyres = tyreMaterials(clump.geometries[geometryIndex]);
+  const geometries = meshes.map((mesh) => mesh.geometry);
   const authoredRight = authoredWheelRight(clump, sourceFrame);
   for (const [frameIndex, frame] of clump.frames.entries()) {
     const match = WHEEL_DUMMY_RE.exec(frame.name.trim().toLowerCase());
@@ -676,7 +770,7 @@ function instanceWheels(
       continue;
     }
     const front = match[2] === 'f';
-    const fit = wheelFit(wheelScale, front, clump.geometries[geometryIndex]);
+    const fit = wheelFit(wheelScale, front, geometries);
     const world = frameWorldTransform(clump.frames, frameIndex);
     const right = match[1] === 'r';
     const mounted: [number, number, number, number] = world ? rotationToQuat(world.rot) : [0, 0, 0, 1];
@@ -687,17 +781,14 @@ function instanceWheels(
       name: frame.name.trim().toLowerCase(),
       scale: fit.scale,
     });
-    appendGeometry(scratch, clump.geometries[geometryIndex], part, textures, 'body', null, tyres);
+    for (const mesh of meshes) {
+      appendGeometry(scratch, mesh.geometry, part, textures, 'body', null, mesh.tyres);
+    }
     wheels.push({ front, part, radius: fit.radius });
   }
 
   return wheels;
 }
-
-/**
- * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
- * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
- */
 
 function lampTag(material: RWMaterial): 'head' | 'tail' | null {
   if (!(material.texture?.name.toLowerCase() ?? '').startsWith('vehiclelights')) {
@@ -801,6 +892,11 @@ function materialSurface(
     translucent,
   };
 }
+
+/**
+ * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
+ * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
+ */
 
 /** Mean vertex normal over a part's SHOWN faces, or only its head-lamp ones. Null when it has none. */
 function meanNormal(scratch: Scratch, part: number, headOnly: boolean): [number, number, number] | null {
@@ -986,6 +1082,22 @@ function shownShell(scratch: Scratch): Uint8Array {
 }
 
 /**
+ * Every `extraN` alternative ships, tagged with its frame: SA shows at most one and the pick is per SPAWN — a
+ * build-time choice would freeze one optional part into the pak for every car in the world. A VehFuncs
+ * option is tagged the same way and the spawn walks the tree (`variants.ts`).
+ */
+function tagAlternatives(scratch: Scratch, from: number, extra: null | string, variant: string | undefined): void {
+  for (let at = from; at < scratch.submeshes.length; at += 1) {
+    if (extra) {
+      scratch.submeshes[at].extra = extra;
+    }
+    if (variant !== undefined) {
+      scratch.submeshes[at].variant = variant;
+    }
+  }
+}
+
+/**
  * This material's slot in the model's own animation list (plan 099/01), or null for static UVs.
  *
  * The rule is the world lane's (`resolveUvAnim`, `packages/cell-weld/src/weld.ts`): the FIRST dict name the
@@ -1026,10 +1138,13 @@ function uvAnimSlot(scratch: Scratch, material: RWMaterial): null | number {
 function wheelFit(
   wheelScale: readonly [number, number],
   front: boolean,
-  geometry: RWGeometry | undefined,
+  geometries: readonly (RWGeometry | undefined)[],
 ): { radius: number; scale: number } {
   const radius = (front ? wheelScale[0] : wheelScale[1]) / 2;
-  const authored = wheelRadius(geometry);
+  // A multi-mesh wheel is measured as ONE solid: the tyre gives the radius and the width, a hub cap alone
+  // is a thin disc and must not read as a marker.
+  const authored = Math.max(0, ...geometries.map((geometry) => wheelRadius(geometry)));
+  const width = Math.max(0, ...geometries.map((geometry) => wheelWidth(geometry)));
   // A PLACEHOLDER wheel is not a wheel authored at the wrong size, and fitting it is nonsense: the
   // GTA 5 Rhino ships its road wheels as one 2 cm triangle with NO WIDTH, because its running gear
   // is drawn by the `wheel_big_*`/`track_*` meshes instead. Normalising that to a 1 m tyre scaled it
@@ -1039,11 +1154,58 @@ function wheelFit(
   // extent ALONG the axle is not a wheel. Measured on the rhino it is 3.4e-9 m against 3.3 m for
   // every real wheel in the same model — the bound below is float noise, not a fitted threshold.
   // The physics radius still comes from the ide, never from the marker's own 2 cm.
-  if (wheelWidth(geometry) <= 1e-6 || authored <= 0) {
+  if (width <= 1e-6 || authored <= 0) {
     return { radius, scale: 1 };
   }
 
   return { radius, scale: radius / authored };
+}
+
+/** A geometry re-expressed in the container root's space: its frame chain BELOW the root baked into the
+ *  vertices (identity for every model measured — the copy is only made when it is not). */
+function wheelLocalGeometry(
+  clump: RWClump,
+  geometryIndex: number,
+  frameIndex: number,
+  root: number,
+): RWGeometry | undefined {
+  const geometry = clump.geometries[geometryIndex];
+  const below = geometry ? frameWorldTransform(clump.frames, frameIndex, root) : null;
+  if (!geometry || !below) {
+    return geometry;
+  }
+  const { pos, rot } = below;
+  const positions = new Float32Array(geometry.positions.length);
+  for (let vertex = 0; vertex * 3 < positions.length; vertex += 1) {
+    const [x, y, z] = [
+      geometry.positions[vertex * 3],
+      geometry.positions[vertex * 3 + 1],
+      geometry.positions[vertex * 3 + 2],
+    ];
+    positions[vertex * 3] = rot[0] * x + rot[1] * y + rot[2] * z + pos[0];
+    positions[vertex * 3 + 1] = rot[3] * x + rot[4] * y + rot[5] * z + pos[1];
+    positions[vertex * 3 + 2] = rot[6] * x + rot[7] * y + rot[8] * z + pos[2];
+  }
+  let normals = geometry.normals;
+  if (normals) {
+    const rotated = new Float32Array(normals.length);
+    for (let vertex = 0; vertex * 3 < normals.length; vertex += 1) {
+      const [x, y, z] = [normals[vertex * 3], normals[vertex * 3 + 1], normals[vertex * 3 + 2]];
+      rotated[vertex * 3] = rot[0] * x + rot[1] * y + rot[2] * z;
+      rotated[vertex * 3 + 1] = rot[3] * x + rot[4] * y + rot[5] * z;
+      rotated[vertex * 3 + 2] = rot[6] * x + rot[7] * y + rot[8] * z;
+    }
+    normals = rotated;
+  }
+
+  return { ...geometry, normals, positions };
+}
+
+/** A single-atomic wheel (shared `wheel`, lone corner): the geometry with its own tyre set. */
+function wheelMesh(clump: RWClump, geometryIndex: number): WheelMesh {
+  const geometry = clump.geometries[geometryIndex];
+
+  return { geometry, tyres: tyreMaterials(geometry) };
 }
 
 function wheelRadius(geometry: RWGeometry | undefined): number {

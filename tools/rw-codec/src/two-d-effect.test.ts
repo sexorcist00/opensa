@@ -19,15 +19,15 @@ import {
 // Real subjects, one per decoded type. The escalator model is the mixed-type case: it also carries four
 // type-9 cover points this codec never decodes, which is what the section round trip is for.
 // A Vegas junction carrying four street-name plates (committed, version-pinned).
-const SIGN_DFF = 'tests/custom/proper-fixes-models/vegasnroad19.dff';
+const SIGN_DFF = 'fixtures/custom/proper-fixes-models/vegasnroad19.dff';
 // The LA mall pair: two opposed escalators + 4 undecoded type-9 entries (`npm run test:fixtures`).
-const ESCALATOR_DFF = 'tests/original/dff/escalator/escl_la.dff';
+const ESCALATOR_DFF = 'fixtures/original/dff/escalator/escl_la.dff';
 // The LV skull-torch pillar: one `fire` emitter.
-const PARTICLE_DFF = 'tests/original/dff/particle/skullpillar01_lvs.dff';
+const PARTICLE_DFF = 'fixtures/original/dff/particle/skullpillar01_lvs.dff';
 // A refinery chimney: a smoke emitter beside three light coronas.
-const CHIMNEY_DFF = 'tests/original/dff/particle/refchimny01.dff';
+const CHIMNEY_DFF = 'fixtures/original/dff/particle/refchimny01.dff';
 // Light coronas only — the "wrong type" subject.
-const LIGHTS_DFF = 'tests/custom/proper-fixes-models/trafficlight1.dff';
+const LIGHTS_DFF = 'fixtures/custom/proper-fixes-models/trafficlight1.dff';
 
 /** Every 2dfx entry of `type` in a fixture (particles included — `extract2dfxEntries` drops them by default). */
 function entriesOf(path: string, type: number): Raw2dfxEntry[] {

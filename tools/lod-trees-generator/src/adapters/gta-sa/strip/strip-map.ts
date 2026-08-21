@@ -7,7 +7,7 @@ import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { datChildUrl } from '@opensa/renderware/archive/resolve-paths';
 import { parseGtaDat } from '@opensa/renderware/parsers/text/gta-dat.parser';
 import { parseIde, parseTimedObjects } from '@opensa/renderware/parsers/text/ide.parser';
-import { editArchive } from '@opensa/tool-kit/archive/img';
+import { editArchive, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
@@ -78,7 +78,7 @@ function emitImg(archive: ImgArchive, edited: Map<string, Uint8Array>, loose: bo
   for (const [name, bytes] of edited) {
     img.set(name, bytes);
   }
-  writeBytes(join(outPath, 'gta3.img'), img.build());
+  writeImgFile(img, join(outPath, 'gta3.img'));
 }
 
 function readBytes(path: string): Uint8Array {

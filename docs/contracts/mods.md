@@ -9,6 +9,11 @@ Vehicle mods have their own folder shape: [vehicles.md](./vehicles.md).
 
 ---
 
+**A folder's NUMBER is install ORDER, not an identity.** Inserting a mod shifts every folder after it
+(2026-08-18: two map mods went in at `5.`/`6.` of `common` and 63 folders moved up by two), so **a record must
+name the mod, not its number** — a benchmark row or an issue that says "mod 64" points at a different mod after
+the next insert. Numbers in this repo's docs carry the date they were true where it matters.
+
 ## 1. The `--in` tree
 
 One folder per mod, each an immediate subfolder of `--in`. The folder NAME is free text with one job:
@@ -21,6 +26,36 @@ A mod is applied in one of two shapes, decided by its contents, not by its name:
 | --- | --- | --- |
 | **Path overlay** (default) | anything else | The mod mirrors the game tree from its own root; files overwrite by path. |
 | **Modloader-style bake** | it carries a **loader `.txt`** — any `.txt` whose contents declare `IDE` / `IPL` / `COLFILE` paths | The folder LAYOUT is ignored entirely and every file is bucketed by its BARE NAME (below). |
+
+### `common/`, `sa/`, `opensa/` — three RESERVED names at the top of `--in`
+
+The mods folder has two shapes, and which one it is comes from the names of its immediate subfolders:
+
+| Shape | `--in` holds | What applies |
+| --- | --- | --- |
+| **Flat** (the default) | mod folders | all of them, in numeric-aware order |
+| **Layered** | `common/` and/or `sa/` and/or `opensa/`, each holding mod folders | `common` first, then the folder named after the **target being built** (`--target sa` / `--target opensa`). The other target's layer is not applied. **The same three layers, planner and refusals apply to `mods-src/<game>/vehicles` (each layer flat or `models/`+`new/`, the target layer wins the SLOT — [vehicles.md](vehicles.md) §1) and to `mods-src/<game>/peds` (the target layer's ped is the last writer of its model)** — `@opensa/tool-kit/layers`, one planner for all three (2026-08-17). |
+
+Every layer is optional, and a game keeps the flat shape until someone splits it. Inside a layer nothing
+changes — same mod folders, same numbering, same two shapes above.
+
+**The layer order dominates the numbering**: `common/50. Foo` applies before `sa/0. Bar`, because the
+target layer has to be the last writer for the split to mean anything. Numbers restart in each layer, and
+`renumber-mods` compacts each layer independently. To override a `common` mod for one target, ship the
+files again in that target's layer — a folder NAME never matches anything across layers.
+
+The three names are matched **case-folded** (`SA/` is the `sa` layer), because they are one folder on
+Windows and macOS.
+
+Misspell one — `commons/`, `open-sa/`, `SA mods/` — and it is not a layer: it is a mod folder sitting
+beside layers, which is refused (§5) rather than silently applied to both targets. The same guard is what
+makes a mod that happens to be CALLED `sa` impossible: at the top level of `--in` that name belongs to the
+layer, so such a mod has to be renamed.
+
+A layered `--in` with no target is refused too — there is no layer to pick. In a build that is not
+possible: `perfect-map-builder` always resolves a target and passes it, and it refuses a run that would
+build BOTH targets out of a layered folder, because the `mods` stage is shared by both
+([restrictions/architecture.md](../restrictions/architecture.md)). Build them one at a time.
 
 ---
 
@@ -48,6 +83,15 @@ A binary archive cannot be patched file-by-file, so a mod ships a folder instead
   it at runtime unless FLA's optional error reporting is on, which is how the first case was found: mod 60
   had dropped `ferseat01_LAx`, and the real game said "model ID 3752 does not have loaded collision" months
   after the install.
+  **The quieter half of the same rule: a whole library cut from STOCK reverts every fix an EARLIER mod's copy
+  of that library carried, and nothing warns** — the model count matches, nothing is lost, and the warning
+  above stays silent. `Watts towers GTA V to SA` (`67.` since 2026-08-18) shipped `lae2_5.col` (68 of 68) cut from stock to change
+  `wattspark1_LAe2`, and being installed after `0. Map Fixes Pack` (which ships the same library) it put
+  `furniture_lae`, `ground2_alpha` and `ebeachalpha5b` back to their stock collision (2026-08-17). Base your
+  copy on the previous layer's file, and when you cannot, splice: `scripts/debug/col-splice.ts --base
+  <prev.col> --donor <yours.col> --models <a,b> --out <merged.col>` keeps every block of the base and swaps only
+  the named ones, byte for byte. *What catches you:* nothing — compare the libraries by hand (`col-splice.ts
+  --list`) or wait for the field.
 - **`Remove original/` carries NO special meaning — it is an ordinary organisational subfolder, and its files
   are REPLACEMENTS.** The name reads as an instruction ("remove the original") and we implemented it as one
   until 2026-08-10; it actually names *the files that remove the original*, i.e. empty RW clumps a mod ships to
@@ -77,8 +121,20 @@ gta3_img/previon/remap.png              →  merges into the previon.txd ENTRY i
 - The texture NAME is the PNG's basename, matched case-insensitively: an existing texture of that name is
   **replaced**, a new one is **added**. Every other texture in the dictionary is left untouched — this is a
   merge, never a rewrite.
-- Format is chosen from the image: **DXT5 when it carries real alpha, DXT1 when it does not**. PNGs must be
-  8-bit RGB/RGBA and non-interlaced.
+- Format for a PNG that ADDS a texture is chosen from the image: **DXT5 when it carries real alpha, DXT1 when
+  it does not**. PNGs must be 8-bit RGB/RGBA and non-interlaced. **A PNG whose side is not a multiple of 4
+  becomes a DXT raster the real game refuses** — with its whole dictionary (`docs/restrictions/dxt-raster-dimensions.md`); the installer
+  WARNS naming the mod, folder, texture and size (plan 014) and keeps the bytes as they are — map-optimizer
+  resamples them later in the pipeline. The same warning fires for any `.txd` a mod ships (archive entry,
+  Modloader-collected asset or loose overlay) that carries one.
+- **A PNG that REPLACES a texture inherits that texture's compression class instead**: what the original
+  ships uncompressed stays uncompressed, whatever the image's alpha says (mip chain and size still come from
+  the PNG). This is not cosmetic — the game READS some of those rasters back rather than sampling them
+  (`CCustomCarPlateMgr` copies glyph pixels out of `platecharset`), and a compressed one arrives as blocky
+  garbage on every car with nothing in any log. You cannot tell which from a name, so the rule follows the
+  data: `docs/restrictions/uncompressed-rasters-stay-uncompressed.md`. A texture folder's PNGs therefore
+  cost more than DXT would when they land in `models/generic/vehicle.txd` or `models/particle.txd`, the two
+  dictionaries stock keeps uncompressed end to end.
 - Within a mod, files are copied BEFORE subfolders, so a `.txd` the same mod also ships is in place first and
   gets patched rather than lost.
 - **Both spellings of the folder name work** — `vehicle/` and `vehicle.txd/` target `vehicle.txd`. Authors
@@ -98,6 +154,19 @@ gta3_img/previon/remap.png              →  merges into the previon.txd ENTRY i
 - On the LOOSE side the folder is **warned about and still copied** as a directory, PNGs and all: nothing
   there can create the dictionary, the stray files are harmless (the game ignores them), and a later rule may
   well make the folder itself valid. The warning is the part that matters — it names the missing `.txd`.
+
+### A shared `.txd` is REPLACED whole, so a later mod must carry a SUPERSET
+
+An archive holds one entry per name: a mod shipping `alleyprop.txd` replaces every texture in it, including
+ones an EARLIER mod added or resized. Measured while installing `HD Aircon` (2026-08-18): its own dictionary
+carried the two new `aal_aircon1*` textures plus `hoteldetails2` at the stock 128², while `3. Global Textures
+Fixes` ships that texture at 256² — installing after it would have silently reverted the upscale, and installing
+before it would have lost the aircon's own textures. **The fix is a superset, not an order**: take the winning
+dictionary and splice the new textures in chunk-for-chunk (`readRw`/`writeRw` keep every texel byte-exact — a
+decode/re-encode round costs a DXT generation), and note in the mod which dictionary it was derived from, because
+the superset has to be rebuilt when that mod ships more. `scripts/debug/txd-retune.ts --add <txd>#<name>` does the
+same thing when a re-encode is acceptable, and the pak build reports what a replacement dropped
+(`report.json` → `textures.missing`).
 
 ### `<target>.merge` — edit a data file instead of replacing it
 
@@ -123,6 +192,15 @@ replace in "inst":
   whitespace-normalised line and — for `inst` — rebases every surviving `lod` link and reports the removed
   indexes so the area's binary streams are patched the same way.
 - A `.merge` whose target does not exist in the install is a hard error, not a skip.
+- **Every `lod` cell a `.merge` writes — text or stream — is in the index space of the file the INSTALL will
+  have, never the author's.** The two differ whenever the mod adds an inst row: the author puts it where they
+  authored it, `add` appends it at the end, and every link past that point shifts by one. A merge carrying the
+  author's number silently re-points that link at a different, perfectly valid row, and for a stream merge it
+  also overwrites the rebase the installer just did (stream merges run last). **Nothing about the file looks
+  wrong afterwards** — the field just loses a LOD, which is how `0. Map Fixes Pack` shipped 11 broken links
+  for a month ([mod-installer/012](../../tools/mod-installer/docs/plans/012-stream-merge-lod-space.md)).
+  Generate a pack's merges with `merge-gen-mod --mod <folder>`, which converts the text and its streams in one
+  pass and gates every link; the single-file CLI refuses a `*_streamN.ipl` target for this reason.
 - `#` and `//` comments are ignored.
 
 ---
@@ -161,6 +239,7 @@ vehicle-installer carries a vehicle mod's `cleo/` subfolder — see section 3 an
 | a broken/foreign `.cs` | Skipped WITH a console line (`[cleo] … failed to decode`); the other scripts still run. | reports itself |
 | the mod's `.ide` | Must ALSO be LISTED in `data/gta.dat` (`IDE DATA\MAPS\….ide`) — the runtime id→name resolver follows gta.dat, while the partition scans every `data/**/*.ide`. | Models reach the VFS but ids resolve to nothing: `[cleo] model id N resolves to nothing` (the 04 field lesson — reports itself) |
 | `<name>.opensa-only.cs` (SDK-authored artifacts, `cleo/sdk` plan 003) | The `@opensa/cleo-sdk` build embeds the script's declared target in the filename: a plain `<name>.cs` passed the dual-target whitelist (runs under plain real CLEO 4 on SA 1.0 US AND our VM); `<name>.opensa-only.cs` uses opcodes only our VM serves. Our runtime treats both as ordinary scripts. | Dropping the suffix by renaming does NOT make the script portable: on real SA it faults at the first unknown opcode (real CLEO's failure, loud). The suffix is information, not a switch. |
+| `<name>.sa-only.cs` (SDK-authored, cleo/scripts plan 003) | The mirror of `opensa-only`: the script drives real-SA systems our engine does not have (cutscenes), so it passed only the real-CLEO half of the gate — the reference install's CLEO 4.4 surface (game opcodes + classic CLEO 4 core + the IniFiles module the install measurably loads). A debug/field artifact for the bottle; never part of a game build. | Dropped into an OpenSA `cleo/`, the VM cannot execute its opcodes — it dies at the first unserved one, not silently but not usefully either. The suffix is the warning: it does not belong in an OpenSA tree. |
 
 ---
 
@@ -175,6 +254,13 @@ It is a gate rather than a warning because the failure is global and does not po
 can never complete, so the world renders as LODs everywhere with permanent hitching, which reads as a
 performance problem or a map-layer bug. It cost a day of bisection on 2026-08-10 (5 models, 23 placements,
 from one mod's `Remove original/` folder read as a delete list).
+
+**A mod folder beside the layer folders** (§1). Once `--in` carries `common/`, `sa/` or `opensa/`, everything
+else at that level is refused by name: a mod there has no honest position relative to the layers, and the
+usual cause is a misspelled layer, which would otherwise apply to both targets without a word.
+
+**A layered `--in` with no target**, and **two layer folders differing only in case** (`sa/` + `SA/`, which
+only a case-sensitive filesystem can produce).
 
 ---
 
@@ -196,9 +282,12 @@ them. If you are debugging "my procobj edit did nothing in the real game", this 
 
 ## 7. What is NOT a contract
 
-- **The mod folder's name** — ordering only. Renaming a mod cannot change what it does.
+- **The mod folder's name** — ordering only. Renaming a mod cannot change what it does. The exception is the
+  three RESERVED names at the top level of `--in` (§1): there, `common` / `sa` / `opensa` name layers rather
+  than mods.
 - **The path a Modloader-style mod uses internally** — bare names decide everything there.
-- **A texture's format in the PNG folder** — it comes from the image's own alpha, not from a naming scheme.
+- **A texture's format in the PNG folder** — for a texture the folder ADDS it comes from the image's own
+  alpha, and for one it REPLACES from the raster being replaced. Never from a naming scheme.
 - **`Remove original/`** — the name looks like an instruction and is not one (§2).
 
 ---

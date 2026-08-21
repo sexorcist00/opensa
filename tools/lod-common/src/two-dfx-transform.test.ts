@@ -11,10 +11,10 @@ import type { Vec3 } from './mesh';
 
 import { transform2dfxEntry } from './two-dfx-transform';
 
-const SIGN_DFF = 'tests/custom/proper-fixes-models/vegasnroad19.dff';
-const ESCALATOR_DFF = 'tests/original/dff/escalator/escl_la.dff';
-const PARTICLE_DFF = 'tests/original/dff/particle/skullpillar01_lvs.dff';
-const LIGHTS_DFF = 'tests/custom/proper-fixes-models/trafficlight1.dff';
+const SIGN_DFF = 'fixtures/custom/proper-fixes-models/vegasnroad19.dff';
+const ESCALATOR_DFF = 'fixtures/original/dff/escalator/escl_la.dff';
+const PARTICLE_DFF = 'fixtures/original/dff/particle/skullpillar01_lvs.dff';
+const LIGHTS_DFF = 'fixtures/custom/proper-fixes-models/trafficlight1.dff';
 
 const DEG_TO_RAD = Math.PI / 180;
 

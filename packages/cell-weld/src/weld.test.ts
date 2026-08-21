@@ -13,11 +13,11 @@ import { TexturePlanner } from './textures';
 import { createUvAnimRegistry, uvAnimList, weldCell, weldCellParts } from './weld';
 
 // Real committed fixtures (same case build-region tests use).
-const DFF = 'tests/custom/proper-fixes-models/trafficlight1.dff';
-const TXD = 'tests/original/dff/trafficlight-backface-culling/dyntraffic.txd';
+const DFF = 'fixtures/custom/proper-fixes-models/trafficlight1.dff';
+const TXD = 'fixtures/original/dff/trafficlight-backface-culling/dyntraffic.txd';
 // The SF fountain (IDE 9833): a stock model with THREE 2dfx type-1 particle anchors (`water_fountain`).
-const FOUNTAIN_DFF = 'tests/original/dff/particles/fountain_sfw.dff';
-const FOUNTAIN_TXD = 'tests/original/dff/particles/fountain_sfw.txd';
+const FOUNTAIN_DFF = 'fixtures/original/dff/particles/fountain_sfw.dff';
+const FOUNTAIN_TXD = 'fixtures/original/dff/particles/fountain_sfw.txd';
 
 function fixtureCell(count: number): GridCell {
   const hd = Array.from({ length: count }, (_, index) => ({
@@ -197,8 +197,8 @@ describe('weldCell 2dfx particles', () => {
 });
 
 // The nodding donkey: a 6-frame clump whose arm swings (clip in counxref.ifp, named after the MODEL).
-const ANIM_DFF = 'tests/original/dff/anim-clump/nt_noddonkbase.dff';
-const ANIM_IFP = 'tests/original/dff/anim-clump/counxref.ifp';
+const ANIM_DFF = 'fixtures/original/dff/anim-clump/nt_noddonkbase.dff';
+const ANIM_IFP = 'fixtures/original/dff/anim-clump/counxref.ifp';
 
 function animCell(): GridCell {
   return {
@@ -370,8 +370,8 @@ describe('weldCell breakables', () => {
 });
 
 // `mine`: a stock model with NO prelit and NO night set + an EMPTY txd — the plainest timed-model fixture.
-const MINE_DFF = 'tests/original/dff/empty-txd/mine.dff';
-const MINE_TXD = 'tests/original/dff/empty-txd/mine.txd';
+const MINE_DFF = 'fixtures/original/dff/empty-txd/mine.dff';
+const MINE_TXD = 'fixtures/original/dff/empty-txd/mine.txd';
 
 function mineCell(): GridCell {
   return {
@@ -397,8 +397,8 @@ function mineDefs(def: Partial<IdeObjectDef> = {}): MapDefinitions {
 }
 
 // The breakable bin (DXT3 alpha texture `bins2_LAe2`) — the ALPHA side of the additive-class test.
-const BIN_DFF = 'tests/original/dff/breakable/binnt08_la.dff';
-const BIN_TXD = 'tests/original/dff/breakable/labins01_la.txd';
+const BIN_DFF = 'fixtures/original/dff/breakable/binnt08_la.dff';
+const BIN_TXD = 'fixtures/original/dff/breakable/labins01_la.txd';
 
 function binCell(): GridCell {
   return {
@@ -674,8 +674,8 @@ describe('weldCell', () => {
 // The LV strip's neon-rope palm (vegaxref 3509): the rope's night set is saturated red (255/49/49) over a
 // flat grey day (81/81/81) — its Rec709 luma is BARELY above the day's, the case that broke the luma-delta
 // emissive rule (the rope never glowed while the bark next to it did).
-const NITREE_DFF = 'tests/original/dff/night-colours/vgsn_nitree_r01.dff';
-const NITREE_TXD = 'tests/original/dff/night-colours/vgsn_nitree.txd';
+const NITREE_DFF = 'fixtures/original/dff/night-colours/vgsn_nitree_r01.dff';
+const NITREE_TXD = 'fixtures/original/dff/night-colours/vgsn_nitree.txd';
 
 /** Per-vertex emissive bytes (channels u16 high byte) of a welded cell. */
 function emissiveBytes(bytes: Uint8Array): number[] {
@@ -772,7 +772,7 @@ describe('weldCell night emissive mask', () => {
 
 // visagesign04: a stock UV-animated sign whose DFF opens with a UVAnimDict — three materials each scroll a
 // dict entry (Money, DolSign, Material #2065564020). The exact case the parser's uvAnim support was built on.
-const UVANIM_DFF = 'tests/custom/dff/uv-anim/visagesign04.dff';
+const UVANIM_DFF = 'fixtures/custom/dff/uv-anim/visagesign04.dff';
 
 function uvAnimCell(): GridCell {
   return {

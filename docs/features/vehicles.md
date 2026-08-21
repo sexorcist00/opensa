@@ -20,7 +20,20 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   ship, e.g. comet with only `wheel_rf`) is treated as the shared wheel and instanced at all dummies,
   so it renders four wheels instead of one. A third, wheel-mod convention is also handled: an
   `f_wheel_<mask>` container frame (e.g. `f_wheel_1111`, cheetah) whose child atomics are the wheel
-  sub-model — its geometry is instanced at every dummy instead of rendered once as body.
+  sub-model — its geometry is instanced at every dummy instead of rendered once as body. **The wheel is
+  the container's CHOSEN PATH** (2026-08-17, the alfamodding cabbie/stretch drove on bare tyres): a
+  VehFuncs `<name>:K` walk — `f_extras:2 → tire:1 → tire` + `rim:1 → hubcap` — the whole set instanced
+  as one part per dummy, fitted and tyre-classified as one solid; the first atomic alone was the tyre.
+  Field-accepted 2026-08-17 (cabbie + stretch, rebaked in place). Contract row:
+  [`contracts/vehicles.md`](../contracts/vehicles.md).
+- **VehFuncs recursive extras are a SPAWN decision** (2026-08-17): the builder ships a car's `f_extras` /
+  `f_class` tree in the `.osm` (`variants`) and tags every option's meshes; `EngineVehicleHandle` walks it once
+  per car (`pickVariants` — `:N`, `:0`, `:0+`, `:N+`, class tags gating `[tag]` options), the way the plugin
+  does on the SA target. Before this every variant drew at once — the cabbie wore all four taxi companies'
+  roof ads and its whole trunk-clutter catalogue. 59 of 213 original mod cars carry the convention;
+  fleet rebaked in place, field-accepted 2026-08-17.
+  Conditions (`?c1`, `?rain`) and class characteristics (`_pj=`) are carried but not evaluated yet —
+  [`hacks/vehfuncs-conditions-always-true.md`](../hacks/vehfuncs-conditions-always-true.md).
 - **The clump ROOT frame's authored matrix never contributes** (2026-08-04): SA replaces it with the
   entity's world matrix on attach, and anti-rip exporters poison exactly that slot (the comet lock shipped
   `rotation[0][0] = −3.9e14` there — composing it flung every off-centre part to ±10¹⁴ while the game
@@ -70,7 +83,10 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   `features.txt` in the mod folder holding `UP/DOWN_LIGHTS` — the Modloader/IVF convention. `vehicle-installer`
   copies each mod's declaration into `data/vehicle-features.txt`, and opensa-pack reads it while baking that
   car. That path is BUILD-time only, and there is no runtime path that could pick a declaration up later —
-  which is why an unconverted car is refused at spawn rather than parsed from its DFF.
+  which is why an unconverted car is refused at spawn rather than parsed from its DFF. **On the `sa` target the
+  same declaration takes a different road**: SA hardcodes the ability to a model id, so the installer writes
+  `<slot> zr350` into fastman92's `data/model_special_features.dat` and the real game gives the slot the
+  ZR-350's pods (plan 011; the full token → carrier table is `docs/contracts/vehicles.md` §1).
 - **Paint**: carcols.dat palettes (`car` = 2-colour, `car4` = 4-colour sections); SA editable-material
   markers — primary (60,255,0), secondary (255,0,175), tertiary (0,255,255 cyan), quaternary
   (255,255,0 yellow). NB (255,175,0)/(255,60,0) are per-lamp ids on the `vehiclelights` atlas, **not**
@@ -258,9 +274,14 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
     model ids plus 742 random resolved through `popcycle`/`cargrp` by city and hour. Registered by
     `engine-canvas-host` after the city boxes exist, since the random draw asks which city a spot is in.
 - Mods: a vehicle's model/texture/data is installed by `vehicle-installer` at BUILD time (`--rebake <game>
-  [--only <model>]` re-does one car in ~3.6 s against an already-built game). There is no runtime overlay —
+  [--only <model>]` re-does one car in ~3.6 s against an already-built game; `--kind sa` does the same to the
+  real-SA tree in ~4 s). There is no runtime overlay —
   see [postmortem/runtime-modloader-overlay.md](../postmortem/runtime-modloader-overlay.md). Assets resolve by
   their **bare** name, so there is no loose `vehicles/` folder. See [mods.md](mods.md).
+  On the **`sa` target only**, a mod folder can also speak to the plugins that install carries: a
+  `model-variations-extra.txt` section reaches ModelVariations 10.7 (which trailers the slot tows, how often)
+  and a `text.txt` becomes `cleo/cleo_text/<model>.fxt`, the shop names of its own tuning parts (plan 012). Our engine
+  has neither plugin — the trailer/tuning-shop equivalents are the two leftovers below.
 
 ## Known gaps / candidates
 

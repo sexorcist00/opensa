@@ -1,5 +1,5 @@
-import { createImg, openImg } from '@opensa/tool-kit/archive/img';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createImg, openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 /**
@@ -20,7 +20,7 @@ export function mergePedImg(folderPath: string, imgPath: string): string[] {
     img.set(file.name, readBytes(join(folderPath, file.name)));
   }
   mkdirSync(dirname(imgPath), { recursive: true });
-  writeFileSync(imgPath, img.build());
+  writeImgFile(img, imgPath);
 
   return files.map((file) => file.name.toLowerCase());
 }

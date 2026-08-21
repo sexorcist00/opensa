@@ -25,7 +25,7 @@ const SYNTHETIC = [
   '  2  6  100 100 100 100   0 0 0 0 0 0 0 0 0 0 100 0 0 0 0 0 0 0  // Midnight',
 ].join('\n');
 
-const realPath = join(process.cwd(), 'tests', 'original', 'data', 'popcycle.dat');
+const realPath = join(process.cwd(), 'fixtures', 'original', 'data', 'popcycle.dat');
 
 describe('popcycleSlotForHour', () => {
   describe('positive cases', () => {

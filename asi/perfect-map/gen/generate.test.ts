@@ -1,6 +1,6 @@
 import { renderHeader } from '@opensa/asi-sdk/render';
 import { SA_FINGERPRINT } from '@opensa/asi-sdk/sa-fingerprint';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -59,6 +59,25 @@ describe('perfect-map catalogue', () => {
       expect(quoted.length).toBeGreaterThan(0);
       for (const name of new Set(quoted)) {
         expect(names, `payload names "${name}"`).toContain(name);
+      }
+    });
+
+    // The one check that needs no field round: every declared site is read back off the shipping exe itself
+    // (the `gta_sa.exe` fixture is a copy of `game-src/original`, the accepted 1.0 US HOODLUM image — its
+    // relocated `IncludeEntity` entry jmp is ON DISK, so the catalogue's `e9 …` bytes are file bytes too).
+    // 011's four sites were transcribed from objdump; a mis-typed nibble would pass every test above and
+    // make the plugin DEFER in the field with a "site differs" that looks like an adjuster's doing.
+    const EXE = join(import.meta.dirname, '..', '..', '..', 'fixtures', 'original', 'gta_sa.exe');
+    it.skipIf(!existsSync(EXE))('declares, for every site, exactly the bytes the shipping exe carries', () => {
+      const VA_TO_FILE_DELTA = 0x400c00;
+      const exe = readFileSync(EXE);
+
+      expect(exe.byteLength).toBe(SA_FINGERPRINT.exeSize);
+      for (const site of CATALOGUE.flatMap((entry) => entry.sites)) {
+        const offset = site.address - VA_TO_FILE_DELTA;
+        const onDisk = [...exe.subarray(offset, offset + site.bytes.length)];
+
+        expect(onDisk, `${site.name} @ 0x${site.address.toString(16)}`).toEqual(site.bytes);
       }
     });
   });

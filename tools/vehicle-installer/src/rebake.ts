@@ -31,42 +31,30 @@ import { buildVehicleOsm } from '@opensa/opensa-pack/vehicle-osm';
 import { assertVer2EntrySize } from '@opensa/renderware/archive/img-archive';
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 import { parseVehicleFeatures, UP_DOWN_LIGHTS } from '@opensa/renderware/parsers/text/vehicle-features.parser';
-import { parseVehicleMods } from '@opensa/renderware/parsers/text/vehicle-mods.parser';
 import { openImg } from '@opensa/tool-kit/archive/img';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { openArchiveIndex } from '@opensa/tool-kit/archive/layout';
+import { resolveVehicleSources } from '@opensa/tool-kit/vehicles-dir';
+import { existsSync, readFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 
+import type { RebakeOptions, RebakeReport } from './rebake-shared';
+
 import { applyVehicle } from './apply-vehicle';
-import { formatFeatureTable } from './features';
-import { FEATURES_TABLE } from './install';
-import { formatModTable, MODS_TABLE } from './mods-table';
-import { decodeSettings, parseVehicleSettings } from './settings';
+import { assertCarmodsCeilings } from './carmods-guard';
+import { FEATURES_TABLE, logVehiclePlan } from './install';
+import { vehicleColourWarnings } from './palette';
+import {
+  addedCarWarning,
+  mergeFeatureTable,
+  mergeModTable,
+  readText,
+  requireBuiltGame,
+  selectCars,
+  sharedFileWarnings,
+} from './rebake-shared';
+import { assertCarmodsModels } from './tuning-parts';
 
-export interface RebakeOptions {
-  /** Folder of vehicle mod folders — normally `mods-src/<game>/vehicles`. */
-  inPath: string;
-  /** Rebake only these models (lowercased basenames). Absent = every folder under `inPath`. */
-  only?: readonly string[];
-  /** The BUILT game dir to edit in place — normally `build/<game>/opensa`. */
-  targetPath: string;
-}
-
-export interface RebakeReport {
-  /** Models the built game did NOT have and that were added on the mod's own `vehicles.ide` row. */
-  readonly added: readonly string[];
-  /** Cars whose conversion threw — the built tree keeps whatever it had for them. */
-  readonly failed: readonly { readonly error: string; readonly model: string }[];
-  /** Per rebaked car: the `.osm` size that replaced its entry. */
-  readonly rebaked: readonly { readonly bytes: number; readonly model: string }[];
-  /** Cars this run would not touch at all, and why — nothing of theirs was written. */
-  readonly refused: readonly { readonly model: string; readonly reason: string }[];
-  /** Folders that carry no `.dff`, or that `--only` filtered out. */
-  readonly skipped: readonly string[];
-  /** Converted, but no archive held the entry to replace — a car the built game does not have. */
-  readonly unplaced: readonly string[];
-  /** Everything the settings merge complained about, prefixed with the folder. */
-  readonly warnings: readonly string[];
-}
+export type { RebakeOptions, RebakeReport } from './rebake-shared';
 
 /** Rebake the vehicles of a built game in place. Returns what happened; throws only on a broken target. */
 export function rebakeVehicles(options: RebakeOptions): RebakeReport {
@@ -75,10 +63,9 @@ export function rebakeVehicles(options: RebakeOptions): RebakeReport {
   requireBuiltGame(targetPath);
 
   const only = options.only ? new Set(options.only.map((name) => name.toLowerCase())) : null;
-  const folders = readdirSync(inPath, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'en'));
+  // The SAME resolution the install runs (plan 007): a flat `--in`, or `models/` overridden per slot by
+  // `new/`. A rebake that read the tree its own way would bake a car the build does not carry.
+  const { sources } = logVehiclePlan(resolveVehicleSources(inPath, options.target), options.target);
 
   const failed: { error: string; model: string }[] = [];
   const rebaked: { bytes: number; model: string }[] = [];
@@ -87,18 +74,39 @@ export function rebakeVehicles(options: RebakeOptions): RebakeReport {
 
   // Pass 0 — WHO. Decided against the roster the built game has BEFORE anything is merged into it, so a car
   // that must not be touched is refused with its files still untouched rather than half-written.
-  const { added, refused, selected, skipped } = selectCars(inPath, folders, targetPath, only);
+  const { added: addedByRoster, refused, selected: byRoster, skipped } = selectCars(sources, targetPath, only);
+  // A tree that still carries `<model>.dff` is a REAL-SA build, not a converted one: converting into it would
+  // merge the data, then find no `.osm` to replace and leave the car half-written. Refused up front instead.
+  const index = openArchiveIndex(targetPath);
+  const selected = byRoster.filter(({ model }) => {
+    const home = index.archiveOf(`${model}.dff`);
+    if (home === null) {
+      return true;
+    }
+    refused.push({
+      model,
+      reason: `the target holds ${model}.dff in ${home} — a REAL-SA tree; rebake it with --kind sa`,
+    });
+
+    return false;
+  });
+  const added = addedByRoster.filter((model) => selected.some((car) => car.model === model));
 
   // Pass 1 — the DATA. Every accepted car's rows land before any car is converted, because the conversion
   // reads the merged `vehicles.ide` (txd name, wheel scale) and `vehicle-features.txt` back out of the target.
   for (const { folder, model } of selected) {
-    const applied = applyVehicle(folder, targetPath, { img: false });
+    const applied = applyVehicle(folder, targetPath, { target: 'opensa' });
     applied.warnings.forEach((warning) => warnings.push(`${basename(folder)}: ${warning}`));
     if (applied.features.length > 0) {
       declared.set(model, applied.features);
     }
   }
   mergeFeatureTable(targetPath, declared);
+  assertCarmodsModels(targetPath);
+  assertCarmodsCeilings(targetPath);
+  warnings.push(...vehicleColourWarnings(targetPath));
+  // Not an archive concern on a CONVERTED tree (one .osm per car), but the mod's data is still shared.
+  warnings.push(...sharedFileWarnings(sources, selected));
   // The ledger is MERGED, never rewritten from this run's selection: `--only previon` rebakes one car, and a
   // ledger truncated to it would tell video mode that every other mod car in the build is stock. What a
   // rebake knows is "these slots are also mod slots", which is an addition.
@@ -142,10 +150,7 @@ export function rebakeVehicles(options: RebakeOptions): RebakeReport {
   }
   for (const model of added) {
     // Saying it once, here, is the difference between "it did not work" and "it is not placed yet".
-    warnings.push(
-      `${model}: added to the built game — it will NOT appear in traffic or as a parked car until it is in ` +
-        'cargrp.dat and the placements a full build writes; spawn it by name to look at it',
-    );
+    warnings.push(addedCarWarning(model));
   }
 
   return { added, failed, rebaked, refused, skipped, unplaced: [...unplaced], warnings };
@@ -184,117 +189,4 @@ function convert(
   assertVer2EntrySize(`${model}.osm`, bytes.byteLength);
 
   return bytes;
-}
-
-/** The `vehicles.ide` id this mod declares for itself (column 0 of its ide line), or null if it declares none. */
-function declaredIdOf(folderPath: string): null | number {
-  const file = readdirSync(folderPath).find(
-    (name) => name.toLowerCase().endsWith('.settings.txt') || name.toLowerCase().endsWith('.txt'),
-  );
-  if (!file || file.toLowerCase() === 'features.txt') {
-    return null;
-  }
-  const line = parseVehicleSettings(decodeSettings(readFileSync(join(folderPath, file)))).ideLine;
-  const id = Number(line?.split(',')[0]?.trim());
-
-  return Number.isFinite(id) ? id : null;
-}
-
-/** Merge the rebaked cars' declarations into the target's table, keeping every other model's line. */
-function mergeFeatureTable(targetPath: string, declared: ReadonlyMap<string, readonly string[]>): void {
-  if (declared.size === 0) {
-    return;
-  }
-  const path = join(targetPath, FEATURES_TABLE);
-  const merged = new Map<string, readonly string[]>(parseVehicleFeatures(readText(path) ?? ''));
-  for (const [model, features] of declared) {
-    merged.set(model, features);
-  }
-  writeFileSync(path, formatFeatureTable(merged));
-}
-
-/** Add the rebaked slots to the target's mod ledger, keeping every slot already in it (096/06). */
-function mergeModTable(targetPath: string, models: readonly string[]): void {
-  if (models.length === 0) {
-    return;
-  }
-  const path = join(targetPath, MODS_TABLE);
-  const merged = parseVehicleMods(readText(path) ?? '');
-  models.forEach((model) => merged.add(model.toLowerCase()));
-  writeFileSync(path, formatModTable(merged));
-}
-
-/** The model a folder is for: its `.dff` basename, the same rule the install uses. */
-function modelOf(folderPath: string): null | string {
-  const dff = readdirSync(folderPath).find((name) => name.toLowerCase().endsWith('.dff'));
-
-  return dff ? dff.replace(/\.dff$/i, '').toLowerCase() : null;
-}
-
-function readText(path: string): null | string {
-  return existsSync(path) ? readFileSync(path, 'utf8') : null;
-}
-
-/** A rebake edits a game in place — say so loudly when the path is not one, instead of writing into a hole. */
-function requireBuiltGame(targetPath: string): void {
-  for (const required of [join('data', 'vehicles.ide'), 'models']) {
-    if (!existsSync(join(targetPath, required))) {
-      throw new Error(`--target is not a built game dir (no ${required}): ${targetPath}`);
-    }
-  }
-}
-
-/** Which cars this run will touch, and why it will not touch the others — see {@link rebakeVehicles}. */
-function selectCars(
-  inPath: string,
-  folders: readonly string[],
-  targetPath: string,
-  only: null | ReadonlySet<string>,
-): {
-  added: string[];
-  refused: { model: string; reason: string }[];
-  selected: { folder: string; model: string }[];
-  skipped: string[];
-} {
-  const roster = parseVehicleDefs(readFileSync(join(targetPath, 'data', 'vehicles.ide'), 'utf8'));
-  const owners = new Map<number, string>();
-  for (const def of roster.values()) {
-    owners.set(def.id, def.model.toLowerCase());
-  }
-
-  const added: string[] = [];
-  const refused: { model: string; reason: string }[] = [];
-  const selected: { folder: string; model: string }[] = [];
-  const skipped: string[] = [];
-  for (const folder of folders) {
-    const folderPath = join(inPath, folder);
-    const model = modelOf(folderPath);
-    if (!model || (only && !only.has(model))) {
-      skipped.push(folder);
-      continue;
-    }
-    const declaredId = declaredIdOf(folderPath);
-    const owner = declaredId === null ? undefined : owners.get(declaredId);
-    if (owner !== undefined && owner !== model) {
-      // Two models on one id: `modelById` keeps whichever came last, and a car generator then spawns the
-      // wrong car — silently, and only where that generator stands.
-      refused.push({ model, reason: `vehicles.ide id ${declaredId} already belongs to '${owner}'` });
-      continue;
-    }
-    if (!roster.has(model)) {
-      if (declaredId === null) {
-        refused.push({
-          model,
-          reason:
-            "not in the built game's vehicles.ide and the mod declares no ide row — a car needs an id, a txd " +
-            'and a type before it can be added',
-        });
-        continue;
-      }
-      added.push(model);
-    }
-    selected.push({ folder: folderPath, model });
-  }
-
-  return { added, refused, selected, skipped };
 }

@@ -63,7 +63,7 @@ Added this session:
 - `build-vehicle-model.test.ts` — a zero-width marker stays unscaled AND keeps its ide radius.
 - `cleo/scripts/rhino-tracks/story.test.ts` — 9 tests, the script's own logic.
 - **`cleo/scripts/rhino-tracks/integration.test.ts` — NEW and the one that matters**: our compiled
-  artifact, on the VM, over the part list of the REAL model (`tests/original/vehicles/rhino.dff`,
+  artifact, on the VM, over the part list of the REAL model (`fixtures/original/vehicles/rhino.dff`,
   added to the fixture manifest). It also pins the ORIGINAL doing nothing on that rig, so the whole
   001 diagnosis has a regression guard.
 
@@ -90,15 +90,15 @@ no longer the author's `rhino tracks.cs`: what was waived as step 4 was in effec
 mod source, so the plan's stated invariant ("the author's mod in `mods-src/` stays byte-untouched")
 no longer holds. That is a shipping decision, not a defect — but it silently took a fixture with it.
 
-**`npm run test:fixtures` began reporting `tests/original/cleo/rhino.cs` MISSING**, and the corpus
+**`npm run test:fixtures` began reporting `fixtures/original/cleo/rhino.cs` MISSING**, and the corpus
 decode and trace tests kept passing only because a stale local copy survived: the exact "stale
 fixture masks a missing source" trap the manifest's own comment warns about, and one a fresh
 checkout would have discovered instead of us.
 
-Closed 2026-08-07 (user's call): the pristine script is COMMITTED at `tests/custom/cleo/rhino.cs`
+Closed 2026-08-07 (user's call): the pristine script is COMMITTED at `fixtures/custom/cleo/rhino.cs`
 (sha1 `41f0e33d…`) and the manifest reads it from there through a new `committed` fixture type. A
 corpus subject may no longer depend on a mod folder that can be edited under it. Verified by
-DELETING the stale `tests/original/` copy and regenerating — 96/96, no MISSING — because asserting
+DELETING the stale `fixtures/original/` copy and regenerating — 96/96, no MISSING — because asserting
 against the stale file is the same mistake one level up.
 
 ## Follow-on work this raised

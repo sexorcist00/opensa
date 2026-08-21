@@ -139,6 +139,7 @@ export async function runOptimizer(options: RunOptimizerOptions): Promise<RunRep
 function optimizeTextures(adapter: ReturnType<typeof createGtaSaAdapter>): void {
   let processed = 0;
   let mipped = 0;
+  let resized = 0;
   let failed = 0;
   let missing = 0;
   for (const name of adapter.resolveTextures()) {
@@ -150,10 +151,11 @@ function optimizeTextures(adapter: ReturnType<typeof createGtaSaAdapter>): void 
     } else {
       processed += 1;
       mipped += result.mipped;
+      resized += result.resized;
     }
   }
   console.log(
-    `  textures — ${processed} TXD processed, ${mipped} textures mipped, ${failed} failed, ${missing} not found`,
+    `  textures — ${processed} TXD processed, ${mipped} textures mipped (${resized} DXT resized to pow2), ${failed} failed, ${missing} not found`,
   );
 }
 

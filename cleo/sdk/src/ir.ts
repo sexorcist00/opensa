@@ -14,6 +14,7 @@ import {
   TYPE_INT16,
   TYPE_INT32,
   TYPE_LOCAL_VAR,
+  TYPE_LOCAL_VAR_STRING8,
   TYPE_STRING8,
   TYPE_STRING16,
   TYPE_STRING_VARLEN,
@@ -107,6 +108,11 @@ export function labelRef(name: string): LabelRef {
 /** A local numeric variable by its slot (allocation: `assemble/lvars.ts`). */
 export function lvar(index: number): Operand {
   return { index, kind: 'var', scope: 'local', type: TYPE_LOCAL_VAR };
+}
+
+/** A local short-string (8-byte) variable by its FIRST slot — CLEO's `0@s`, two slots wide. */
+export function lvarStr8(index: number): Operand {
+  return { index, kind: 'var', scope: 'local', type: TYPE_LOCAL_VAR_STRING8 };
 }
 
 /** A variable-length string literal (the Sanny default for CLEO string operands). */

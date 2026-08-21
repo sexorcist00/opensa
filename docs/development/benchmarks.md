@@ -258,6 +258,21 @@ load path — `fetchInstallSource` reads the served dir's `/__index` + files ove
   the known settle pattern, not a regression.
 - Screenshot metering: no PIL/numpy on the Mac python — use ImageMagick (`magick` in /opt/homebrew/bin)
   crop + `-resize 1x1!` grid averages; compare channels, not just luma.
+- **A two-arm ENGINE A/B (old commit vs new) has two traps, and the first one is silent.** The setup is a
+  `git worktree` at each commit, served by its own `vite --port 5174`, driven against the same
+  `serve:static` build:
+  - **Never symlink the repo's `node_modules` into the worktree.** The workspace links inside it
+    (`node_modules/@opensa/engine → ../../packages/engine`) then resolve back into the MAIN checkout, so the
+    "old" arm quietly runs today's engine and the A/B measures nothing. It announced itself only as a Vite
+    `outside of Vite serving allow list` warning naming a main-repo path. Build the worktree a real
+    `node_modules` of per-entry symlinks instead, and recreate `@opensa/*` with the SAME relative targets so
+    they land inside the worktree — then verify one of them resolves there before running anything.
+  - **An engine arm can only read a pak of its own era.** The 2026-08-07 pair in plan 099 boots, runs
+    scripts and prints the bench protocol against the 2026-08-11 pak — and renders ZERO frames, both sides
+    dying on `texture array 5 not loaded (cells must load after their arrays)` plus a LOD render-bundle
+    index overflow. A zero-frame arm still emits complete-looking `[bench]` rows (`avgMs: 0`, `frames: 0`),
+    so **check `frames` before reading any column**. Road-car counts drifting between arms (1 196 vs 1 219)
+    is the second tell that the arms are not comparable.
 - **Do not edit anything in the Vite module graph while a run is in flight.** Saving a file under
   `apps/` (a `.test.ts` counts) reloads the page, and the harness ends the run wherever it got to — with
   exit code 0 and no `run complete` line, so the log looks like a short run rather than a broken one. Cost
@@ -293,10 +308,16 @@ load path — `fetchInstallSource` reads the served dir's `/__index` + files ove
   counts roadsign glyph quads in the cells drawn this frame. **`signs 0` on a pre-minor-8 pak means UNKNOWN,
   not none** — check the pak's `buildTime` before reading it as a verdict. The canonical `build/original`
   pak carries it from `13:19 08-08-2026` on.
-- **A diagnostic that needs new pak bytes does NOT need a full rebuild.** With `.work-opensa` kept, re-pack a RECT
-  (`opensa-pack --game build/<game>/.work-opensa/opensa-lod --out build/<probe> --rect x0,y0,x1,y1 --no-ao`) and
-  serve that dir: 80 cells in a minute instead of 1137 in an hour. It is a diagnostic pak, not a shipping
-  one — say so wherever its numbers land, and do not benchmark against it.
+- **A diagnostic that needs new pak bytes does NOT need a full rebuild.** For ONE model, `scripts/debug/
+  model-repack.ts <model> [--dff f.dff [--txd f.txd]]` re-optimizes it, re-bakes its rect's cell LODs from the
+  swapped HD and re-welds the rect into `build/<game>/opensa-lab` (serve it, `?src=/build/<game>/opensa-lab`) —
+  17 s for an 88-model rect on `original` (opensa-lod-generator plan 007). For a bigger area with
+  `.work-opensa` kept (`--keep-work`), re-pack a RECT (`opensa-pack --game build/<game>/.work-opensa/opensa-lod
+  --out build/<probe> --rect x0,y0,x1,y1 --no-ao`): 80 cells in a minute instead of 1137 in an hour. Both are
+  diagnostic paks, not shipping ones — say so wherever their numbers land, and do not benchmark against them.
+- **A pmb run that dies is resumed** (`--resume`, pmb plan 006) — never re-run from stage 1 to get the same
+  tree back; the resumed tree is byte-identical to an unbroken run's, and the pack re-enters at its last
+  finished weld chunk.
 
 ### `warnings.js` — the warning catcher (bug rounds)
 

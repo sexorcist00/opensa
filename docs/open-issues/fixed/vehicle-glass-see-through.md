@@ -43,6 +43,26 @@ the same "nearest extent" idea 074/16 wanted, in its honest form: a sheet close 
 scattered cluster keys at its true nearest face, and neither over-reaches. Old fixtures without `bounds`
 keep the sphere fallback, so nothing changes for a build until it is rebaked.
 
+### Defect 3 (re-report 2026-08-17) — a SCATTERED translucent submesh has no honest sort key at all
+
+The user's re-report, thirteen days on: from an angle near the FRONT of the car the rear-shelf speakers read
+crisp through the rear quarter glass again; from the rear they were fine. The roster (read out of the built
+`.osm`) said why: the comet's `dials` material was ONE translucent submesh of 960 triangles holding the gauge
+cluster on the dash (y ≈ +0.38), the two speakers on the rear shelf (y −1.46..−1.34) and pieces between —
+AABB spanning 1.9 m of the car. Defect 2's exact eye-to-AABB key is right for a compact piece and wrong for
+this by construction: from a front-side eye the box's nearest point is the dash, nearer than the rear quarter
+glass, so the whole submesh — speakers included — drew after it. From the rear the nearest point is the
+shelf, behind the glass, and the order came out right. No single per-submesh key can serve two pieces two
+metres apart.
+
+**Fix:** the builder emits a translucent material group per spatially compact CLUSTER
+(`packages/renderware/src/vehicle/translucent-clusters.ts` — connected components by shared vertex
+position, pieces within 0.2 m merged, at most 8 clusters per group; a connected sheet such as a windscreen
+is unchanged), each with its own AABB. Rebaked comet: the speakers are their own two submeshes with a shelf
+box, the gauges theirs; the car's translucent submesh count 69 → 86 (+17 draws per instance, blend phase
+only). Whole-fleet rebake is `vehicle-installer --rebake original`; a fixture built before this keeps the
+old shape until it is rebaked. **Field verdict (2026-08-17, the reporter's own angle): the speakers no longer show through.**
+
 ## How it was diagnosed (the method that worked)
 
 - The blend-phase ROSTER, offline: every translucent submesh with part, texture layer, alpha class,

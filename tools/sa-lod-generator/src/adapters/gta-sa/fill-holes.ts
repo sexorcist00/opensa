@@ -6,6 +6,7 @@ import { patchGtaDat } from '@opensa/map-placement/ide';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
+import { ADDED_ID_WINDOW } from '@opensa/tool-kit/free-ids';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -288,7 +289,15 @@ function readAreas(
   return { streamsByArea, textByArea };
 }
 
-/** IDE defs (model → id/txd, id → model) + the highest id — new LODs number from `maxId + 1` (needs fastman92). */
+/**
+ * IDE defs (model → id/txd, id → model) + the highest id — new LODs number from `maxId + 1` (needs fastman92).
+ *
+ * **The ADDED-CONTENT window is excluded from that maximum.** `maxId + 1` follows whatever else is in the
+ * tree, and since 2026-08-20 a vehicle mod's borrowed tuning parts get ids out of 19 001–19 999 in an
+ * earlier stage — which dragged these LODs from 18 633 into the window and pushed the whole added fleet 35
+ * ids up, silently, in a file whose own header calls an id a promise. A map LOD belongs below 19 000 (SA's
+ * map allocators stop there); the window belongs to the tools that allocate out of it with a ledger.
+ */
 function readDefs(dataDir: string): {
   idToModel: Map<number, string>;
   maxId: number;
@@ -301,7 +310,9 @@ function readDefs(dataDir: string): {
     for (const [id, ref] of ideRefs(readFileSync(file, 'utf8'))) {
       idToModel.set(id, ref.model);
       modelDef.set(ref.model, { id, txd: ref.txd });
-      maxId = Math.max(maxId, id);
+      if (id < ADDED_ID_WINDOW.first) {
+        maxId = Math.max(maxId, id);
+      }
     }
   }
 

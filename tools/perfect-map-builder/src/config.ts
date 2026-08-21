@@ -42,8 +42,26 @@ export interface BuilderConfig {
   /** Safety cap on placed procobj objects. Raising density without raising this measures the CAP — the build
    *  says so when it binds. `undefined` keeps the generator's own default (20 000). */
   procobjMax?: number;
+  /**
+   * Which buckets the `split` stage gives their own `models/*.img` — the rest stay in `gta3.img`.
+   *
+   * **`['vehicles']` is the shape that FITS a stock archive table, and it fits it exactly.** SA registers 8
+   * (`CStreaming::ms_files`), the target already spends 6 — three hardcoded plus `gta.dat`'s CARREC, SCRIPT
+   * and CUTSCENE — and the mod car set spills `vehicles.img` into one sibling, so vehicles alone lands on
+   * 8 of 8 with zero headroom. Adding `peds` or `weapons` here needs our ASI to raise the table first
+   * (`docs/gta-sa-original/img-archive-limit.md`); until then the split refuses, loudly, rather than emitting
+   * a tree that dies at load.
+   */
+  splitBuckets: readonly ('peds' | 'vehicles' | 'weapons')[];
   /** The `--in` (mods-src) subfolder names, one per stage. */
-  subfolders: { mods: string; peds: string; procobj: string; vegetation: string; vehicles: string };
+  subfolders: {
+    addVehicles: string;
+    mods: string;
+    peds: string;
+    procobj: string;
+    vegetation: string;
+    vehicles: string;
+  };
   /** LOD atlas texture size for the tree impostor bake. */
   treeTex: number;
 }
@@ -88,6 +106,14 @@ export const config: BuilderConfig = {
   // bridges and in canyons.
   pack: { ao: true, bakeCollision: false, bakes: false },
   procobjDensity: 1,
-  subfolders: { mods: 'mods', peds: 'peds', procobj: 'procobj', vegetation: 'vegetation', vehicles: 'vehicles' },
+  splitBuckets: ['vehicles'],
+  subfolders: {
+    addVehicles: 'add-vehicles',
+    mods: 'mods',
+    peds: 'peds',
+    procobj: 'procobj',
+    vegetation: 'vegetation',
+    vehicles: 'vehicles',
+  },
   treeTex: 512,
 };

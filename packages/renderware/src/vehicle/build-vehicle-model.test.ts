@@ -606,6 +606,38 @@ describe('buildVehicleModel', () => {
       expect(submesh.bounds!.max).toEqual([1, 1, 0]);
     });
 
+    it('a translucent material spanning separate pieces becomes one submesh PER piece — each with its own AABB', () => {
+      // The comet's `dials`: dash gauges + rear-shelf speakers on one material. One submesh has no honest
+      // sort key (its box's nearest point is the dash from the front, so the speakers drew over the rear
+      // quarter glass); split, each piece sorts by where IT is. An opaque material is never split.
+      const scattered = (alpha: number): RWGeometry => ({
+        ...geometry([material({ color: [200, 200, 200, alpha] })]),
+        positions: new Float32Array([0, 0.4, 0, 0.1, 0.4, 0, 0, 0.5, 0, 0, -1.4, 0, 0.1, -1.4, 0, 0, -1.3, 0]),
+        triangles: [
+          { a: 0, b: 1, c: 2, materialIndex: 0 },
+          { a: 3, b: 4, c: 5, materialIndex: 0 },
+        ],
+      });
+
+      const glass = buildVehicleModel(
+        clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [scattered(120)]),
+        textures(),
+      );
+      const opaque = buildVehicleModel(
+        clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [scattered(255)]),
+        textures(),
+      );
+
+      expect(opaque.submeshes).toHaveLength(1);
+      expect(glass.submeshes).toHaveLength(2);
+      expect(glass.submeshes.every((submesh) => submesh.translucent)).toBe(true);
+      const boxes = glass.submeshes.map((submesh) => submesh.bounds!).sort((a, b) => a.min[1] - b.min[1]);
+      expect(boxes[0].min[1]).toBeCloseTo(-1.4);
+      expect(boxes[0].max[1]).toBeCloseTo(-1.3);
+      expect(boxes[1].min[1]).toBeCloseTo(0.4);
+      expect(boxes[1].max[1]).toBeCloseTo(0.5);
+    });
+
     it('a door collects every part under its hinge frame — a mod glass atomic swings with it', () => {
       // The comet authors `glass_lf_ok` as its own atomic beside `door_lf_ok`, both under `door_lf_dummy`.
       // SA rotates the dummy's frame, so the whole subtree travels; the door therefore carries a part
@@ -744,6 +776,78 @@ describe('buildVehicleModel', () => {
       expect(built.wheels).toHaveLength(2);
     });
 
+    it('a `f_wheel` container wheel is its whole CHOSEN PATH — tyre + rim, not the first atomic', () => {
+      // The alfamodding cabbie's shape: `f_wheel_1111 → f_extras:2 → (tire:1 → tire, tirew) (rim:1 →
+      // hubcap, stamp)`. `:2` shows two groups, each bare group shows its FIRST child; the tyre band is
+      // judged against the whole wheel's radius so a hub cap's own outer ring never passes for rubber.
+      const tyre = geometry([material({ color: [10, 10, 10, 255] })]);
+      tyre.positions = new Float32Array([0, 1, 0, 0.2, 0, 1, 0, 0.95, 0.1]);
+      const hubcap = geometry([material({ color: [200, 200, 200, 255] })]);
+      hubcap.positions = new Float32Array([0, 0.5, 0, 0.1, 0, 0.5, 0, 0.45, 0.05]);
+      const built = buildVehicleModel(
+        clump(
+          [
+            frame('chassis'),
+            frame('f_wheel_1111', 0, [1, 2, 0]),
+            frame('f_extras:2', 1),
+            frame('tire:1', 2),
+            frame('tire', 3),
+            frame('tirew', 3),
+            frame('rim:1', 2),
+            frame('hubcap', 6),
+            frame('stamp', 6),
+            frame('wheel_lf_dummy', 0, [-1, 2, 0]),
+            frame('wheel_rf_dummy', 0, [1, 2, 0]),
+          ],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 4, geometry: 1 },
+            { frame: 5, geometry: 1 },
+            { frame: 7, geometry: 2 },
+            { frame: 8, geometry: 2 },
+          ],
+          [geometry(), tyre, hubcap],
+        ),
+        textures(),
+        { wheelScale: [1, 1] },
+      );
+
+      expect(built.wheels).toHaveLength(2);
+      for (const wheel of built.wheels) {
+        const submeshes = built.submeshes.filter((submesh) => submesh.part === wheel.part);
+
+        expect(submeshes).toHaveLength(2); // tire + hubcap — never tirew/stamp, never the tyre alone
+        expect(submeshes.map((submesh) => submesh.tyre === true)).toEqual([true, false]);
+      }
+      // Fitted as ONE solid: the tyre's radius (1 m) sets the scale, the hub cap does not shrink it.
+      expect(built.parts[built.wheels[0].part].scale).toBeCloseTo(0.5, 5);
+      // The container is never body geometry.
+      expect(built.parts.filter((part) => /^(?:tire|hubcap|f_)/.test(part.name))).toHaveLength(0);
+    });
+
+    it("bakes a chosen mesh's own frame offset below the container root into wheel-local space", () => {
+      const built = buildVehicleModel(
+        clump(
+          [
+            frame('chassis'),
+            frame('f_wheel_1111', 0, [1, 2, 0]),
+            frame('cap', 1, [0.1, 0, 0]),
+            frame('wheel_rf_dummy', 0, [1, 2, 0]),
+          ],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 2, geometry: 0 },
+          ],
+          [geometry()],
+        ),
+        textures(),
+      );
+      const wheel = built.submeshes.find((submesh) => submesh.part === built.wheels[0].part)!;
+
+      // The container's own placement is the dummy's job; only the chain BELOW it moves the vertices.
+      expect(built.positions[built.indices[wheel.indexOffset] * 3]).toBeCloseTo(0.1, 5);
+    });
+
     it('tags the two license-plate faces by their placeholder textures (082/02)', () => {
       const plated = geometry([
         material({ texture: { maskName: '', name: 'carpback' }, textured: true }),
@@ -802,9 +906,9 @@ describe('buildVehicleModel', () => {
 
 // The engine-side builder must agree with its three twin (`three/build-vehicle.test.ts`, which already runs on
 // these files) — a synthetic clump only ever re-states this module's own assumptions about SA's conventions.
-const ADMIRAL = 'tests/original/dff/vehicle/admiral.dff';
-const ADMIRAL_TXD = 'tests/original/vehicles/admiral.txd';
-const GENERIC_TXD = 'tests/original/models/generic/vehicle.txd';
+const ADMIRAL = 'fixtures/original/dff/vehicle/admiral.dff';
+const ADMIRAL_TXD = 'fixtures/original/vehicles/admiral.txd';
+const GENERIC_TXD = 'fixtures/original/models/generic/vehicle.txd';
 
 describe.skipIf(!existsSync(ADMIRAL) || !existsSync(GENERIC_TXD))('buildVehicleModel (real admiral.dff)', () => {
   const built = buildVehicleModel(
@@ -971,19 +1075,19 @@ const CONVENTIONS: { atomics: string; file: string; name: string; wheels: number
   { atomics: 'a shared `wheel` atomic', file: ADMIRAL, name: 'admiral (stock)', wheels: 4 },
   {
     atomics: 'a LONE `wheel_rf` corner atomic',
-    file: 'tests/custom/dff/vehicle/comet.dff',
+    file: 'fixtures/custom/dff/vehicle/comet.dff',
     name: 'comet',
     wheels: 4,
   },
   {
     atomics: '4 per-corner atomics',
-    file: 'tests/custom/dff/vehicle/petro-4wheels.dff',
+    file: 'fixtures/custom/dff/vehicle/petro-4wheels.dff',
     name: 'petro 4',
     wheels: 4,
   },
   {
     atomics: '6 per-corner atomics + a shared `wheel`',
-    file: 'tests/custom/dff/vehicle/petro-6wheels.dff',
+    file: 'fixtures/custom/dff/vehicle/petro-6wheels.dff',
     name: 'petro 6',
     wheels: 6,
   },
@@ -1021,11 +1125,11 @@ describe('buildVehicleModel (wheel side, real models)', () => {
       });
     }
 
-    it.skipIf(!existsSync('tests/custom/dff/vehicle/petro-6wheels.dff'))(
+    it.skipIf(!existsSync('fixtures/custom/dff/vehicle/petro-6wheels.dff'))(
       "ships all SIX of a real model's extras, each tagged with its own frame",
       () => {
         const built = buildVehicleModel(
-          parseDff(toArrayBuffer(readFileSync('tests/custom/dff/vehicle/petro-6wheels.dff'))),
+          parseDff(toArrayBuffer(readFileSync('fixtures/custom/dff/vehicle/petro-6wheels.dff'))),
           new VehicleTextures([]),
         );
         const tagged = new Set(built.submeshes.map((submesh) => submesh.extra).filter(Boolean));
@@ -1037,13 +1141,13 @@ describe('buildVehicleModel (wheel side, real models)', () => {
       },
     );
 
-    it.skipIf(!existsSync('tests/custom/dff/vehicle/petro-6wheels.dff'))(
+    it.skipIf(!existsSync('fixtures/custom/dff/vehicle/petro-6wheels.dff'))(
       'silences the tyre and leaves the rim reflective — the model that was caught glinting',
       () => {
         // This fixture is why the rule exists: all six of its wheels author the tyre with a FULL env map
         // (`xvehicleenv128`, coefficient 1) plus specular, so rubber rendered as reflective as chrome.
         const built = buildVehicleModel(
-          parseDff(toArrayBuffer(readFileSync('tests/custom/dff/vehicle/petro-6wheels.dff'))),
+          parseDff(toArrayBuffer(readFileSync('fixtures/custom/dff/vehicle/petro-6wheels.dff'))),
           new VehicleTextures([]),
         );
         const wheelSubmeshes = built.submeshes.filter((submesh) => built.parts[submesh.part].name.startsWith('wheel_'));
@@ -1058,9 +1162,9 @@ describe('buildVehicleModel (wheel side, real models)', () => {
       },
     );
 
-    it.skipIf(!existsSync('tests/custom/dff/vehicle/petro-6wheels.dff'))('covers the middle axle too', () => {
+    it.skipIf(!existsSync('fixtures/custom/dff/vehicle/petro-6wheels.dff'))('covers the middle axle too', () => {
       const built = buildVehicleModel(
-        parseDff(toArrayBuffer(readFileSync('tests/custom/dff/vehicle/petro-6wheels.dff'))),
+        parseDff(toArrayBuffer(readFileSync('fixtures/custom/dff/vehicle/petro-6wheels.dff'))),
         new VehicleTextures([]),
         { wheelScale: [1, 1] },
       );
@@ -1072,8 +1176,8 @@ describe('buildVehicleModel (wheel side, real models)', () => {
   });
 });
 
-const ZR350 = 'tests/original/vehicles/zr350.dff';
-const ZR350_TXD = 'tests/original/vehicles/zr350.txd';
+const ZR350 = 'fixtures/original/vehicles/zr350.dff';
+const ZR350_TXD = 'fixtures/original/vehicles/zr350.txd';
 
 describe.skipIf(!existsSync(ZR350) || !existsSync(GENERIC_TXD))('buildVehicleModel (real zr350.dff)', () => {
   const built = buildVehicleModel(
@@ -1092,9 +1196,76 @@ describe.skipIf(!existsSync(ZR350) || !existsSync(GENERIC_TXD))('buildVehicleMod
   });
 });
 
+const CABBIE = 'fixtures/original/vehicles/cabbie-container-wheel.dff';
+
+describe.skipIf(!existsSync(CABBIE))('buildVehicleModel (real cabbie — f_wheel container, chosen path)', () => {
+  const built = buildVehicleModel(parseDff(toArrayBuffer(readFileSync(CABBIE))), textures(), {
+    wheelScale: [0.757, 0.757],
+  });
+
+  describe('positive cases', () => {
+    it('every wheel is tyre + hub cap, the tyre silenced and the cap left reflective (field 2026-08-17)', () => {
+      expect(built.wheels).toHaveLength(4);
+      for (const wheel of built.wheels) {
+        const submeshes = built.submeshes.filter((submesh) => submesh.part === wheel.part);
+
+        // `f_extras:2 → tire:1 → tire` + `rim:1 → hubcap`: two meshes, several materials, both kinds present.
+        expect(submeshes.some((submesh) => submesh.tyre)).toBe(true);
+        expect(submeshes.some((submesh) => !submesh.tyre)).toBe(true);
+        expect(wheel.radius * 2).toBeCloseTo(0.757, 3);
+      }
+    });
+
+    it('ships the VehFuncs tree and tags every option mesh; the chassis and the wheels stay untagged', () => {
+      const variants = built.variants!;
+
+      // `f_class:1` → YCC?c1 / BAC?c2 / WBC?c3 / RURAL?c0?c4 (city classes; conditions carried verbatim).
+      expect(variants.classes).toHaveLength(1);
+      expect(variants.classes[0].children.map((child) => `${child.name}?${child.condition}`)).toEqual([
+        'ycc?c1',
+        'bac?c2',
+        'wbc?c3',
+        'rural?c0?c4',
+      ]);
+      // `f_extras:10` on the chassis + the boot's / rear bumper's own containers.
+      const chassisExtras = variants.extras.find((node) => node.select[0] === 10)!;
+      expect(chassisExtras.children.map((child) => child.name)).toEqual([
+        'ac',
+        'adv_int',
+        'adv_roof',
+        'bags',
+        'int',
+        'easter',
+        'rubbish',
+        'seats',
+        'stickers',
+        'trunkbay',
+      ]);
+      expect(chassisExtras.children.find((child) => child.name === 'int')!.select).toEqual([0, 1]);
+      const advRoof = chassisExtras.children.find((child) => child.name === 'adv_roof')!;
+      expect(advRoof.children.map((child) => child.requires)).toEqual([['ycc'], ['bac'], ['rural'], ['wbc']]);
+
+      const tagged = built.submeshes.filter((submesh) => submesh.variant !== undefined);
+      const untagged = built.submeshes.filter((submesh) => submesh.variant === undefined);
+      expect(tagged.length).toBeGreaterThan(0);
+      expect(untagged.some((submesh) => built.parts[submesh.part].name === 'chassis')).toBe(true);
+      const wheelParts = new Set(built.wheels.map((wheel) => wheel.part));
+      expect(tagged.some((submesh) => wheelParts.has(submesh.part))).toBe(false);
+      // Every tag names a node of the shipped tree — the runtime resolves visibility against it alone.
+      const ids = new Set<string>();
+      const collect = (node: (typeof variants.extras)[number]): void => {
+        ids.add(node.id);
+        node.children.forEach(collect);
+      };
+      variants.extras.forEach(collect);
+      expect(tagged.every((submesh) => ids.has(submesh.variant!))).toBe(true);
+    });
+  });
+});
+
 // Nothing in the stock vehicle/prop set animates its UVs, so the binding can only be proven on a mod: the
 // Pacific Park ferris wheel's light ring is the asset plan 099 exists for.
-const FERRIS_LIGHTS = 'tests/original/mods/ferriswheel_lights.dff';
+const FERRIS_LIGHTS = 'fixtures/original/mods/ferriswheel_lights.dff';
 
 describe.skipIf(!existsSync(FERRIS_LIGHTS))('buildVehicleModel (real ferriswheel_lights.dff)', () => {
   const built = buildVehicleModel(parseDff(toArrayBuffer(readFileSync(FERRIS_LIGHTS))), textures());

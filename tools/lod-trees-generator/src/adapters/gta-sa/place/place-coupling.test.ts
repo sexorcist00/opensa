@@ -15,8 +15,8 @@ const ab = (u: Uint8Array): ArrayBuffer => u.buffer.slice(u.byteOffset, u.byteOf
 describe('place attach (lae text + lae_stream0 binary)', () => {
   describe('positive cases', () => {
     it('links a stream HD to a freshly appended impostor at its own position', () => {
-      const textRaw = readFileSync('tests/original/ipl_text/lae.ipl', 'utf8');
-      const stream = new Uint8Array(readFileSync('tests/original/ipl_binary/lae_stream0.ipl'));
+      const textRaw = readFileSync('fixtures/original/ipl_text/lae.ipl', 'utf8');
+      const stream = new Uint8Array(readFileSync('fixtures/original/ipl_binary/lae_stream0.ipl'));
       const hd = parseBinaryIpl(ab(stream))[0];
       const newIndex = parseIpl(textRaw).length;
       const impostorId = 18631;

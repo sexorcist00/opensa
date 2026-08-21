@@ -8,6 +8,7 @@
  *     [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--textures astc|bc|rgba8] [--max-texture N]
  *     [--map-objects-in-rect]
  *     [--stochastic <file>[,<file>…]]
+ *     [--checkpoints <dir> [--resume]]   per-chunk weld checkpoints (pmb plan 006); --resume continues from them
  *
  * REMOVED FLAGS (2026-07-19, user): `--cell-size` (the pak and the runtime must agree on it and nothing
  * checked that — it is the `CELL_SIZE` constant now), `--chunk-cells` (a welding tuning knob from the A2
@@ -117,6 +118,7 @@ async function main(): Promise<void> {
     .split(',')
     .map((name) => name.trim())
     .filter(Boolean);
+  const checkpoints = arg('checkpoints');
   await packGameDir({
     ao: !process.argv.includes('--no-ao'),
     ...(astcThreads > 0 ? { astcThreads } : {}),
@@ -124,6 +126,7 @@ async function main(): Promise<void> {
     bakeCollision: process.argv.includes('--bake-collision'),
     bakes: process.argv.includes('--bakes'),
     ...(maxTexture ? { maxTextureSize: maxTexture } : {}),
+    ...(checkpoints ? { checkpointDir: fromCwd(checkpoints), resume: process.argv.includes('--resume') } : {}),
     gameDir: requireDir('game', gameRaw),
     mapObjectsInRect: process.argv.includes('--map-objects-in-rect'),
     ...(gameId ? { gameId } : {}),

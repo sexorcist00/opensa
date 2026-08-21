@@ -14,7 +14,7 @@ import { placeMap } from './place-map';
  * stream placing an HD tree + its companion text IPL + an IDE defining it) and assert the two-mod output — `lod/`
  * (the far-LOD attachment) + `hd/` (the swapped HD via a `txdp` IDE) — with **no stock IDE** anywhere.
  */
-const WASHER_DFF = 'tests/original/dff/building/washer.dff'; // textures: junk_tv2, junk_washer1
+const WASHER_DFF = 'fixtures/original/dff/building/washer.dff'; // textures: junk_tv2, junk_washer1
 const SOURCE = 'mytree';
 const STOCK_TXD = 'mytreetxd';
 const HD_ID = 700;

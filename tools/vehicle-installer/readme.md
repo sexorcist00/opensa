@@ -8,12 +8,20 @@ tsx tools/vehicle-installer/src/cli.ts --game ./game-src/original --in ./1 --out
 ```
 
 - `--game` — base game tree (`gta.dat` + `data/` + `models/gta3.img` …)
-- `--in` — folder of vehicles; each immediate subfolder is one vehicle (descriptive name ignored — the model name
-  is the file basename):
+- `--in` — folder of vehicles; each immediate subfolder is one vehicle, named `<slot> - <car> - <author>`:
   ```
   1/
     alpha - 1994 Dodge Stealth RT - mad_driver/   alpha.dff  alpha.txd  alpha1.txd … alpha4.txd  alpha.settings.txt
     ambulan - 1982 Ford E-350 - 533/              ambulan.dff  ambulan.txd  ambulan.settings.txt
+  ```
+  It may also be **structured**, and then a candidate in `new/` replaces the `models/` car holding the same
+  slot — an A/B that renames nothing ([plan 007](./docs/plans/007-models-and-new.md), contract
+  `docs/contracts/vehicles.md` §1):
+  ```
+  mods-src/original/vehicles/
+    models/       admiral - 1976 Mercedes-Benz 230 - k1real24/     ← the fleet
+    new/          admiral - 1994 Dodge Stealth RT 1.1 - mad_driver/ ← installed instead
+    screenshots/  admiral - 1976 Mercedes-Benz 230 - k1real24.png   ← never installed
   ```
 - `--out` — output install dir (**wiped + rebuilt** each run)
 - `--strip` — _(optional, off by default)_ reduce the output to **only** the installed vehicles (see below)
@@ -21,15 +29,29 @@ tsx tools/vehicle-installer/src/cli.ts --game ./game-src/original --in ./1 --out
 ## Rebake — the same cars against a game that is already built
 
 ```sh
-tsx tools/vehicle-installer/src/cli.ts --rebake gostown --only previon
+tsx tools/vehicle-installer/src/cli.ts --rebake gostown --only previon              # build/gostown/opensa
+tsx tools/vehicle-installer/src/cli.ts --rebake original --kind sa --only cabbie    # build/original/sa
 ```
 
-Re-merges each mod's settings into the BUILT `data/*` and re-converts its model into the archive's
-`<model>.osm`, **in place** — the vehicle half of the pipeline without the pipeline (one car ≈ 3.6 s).
-Defaults `--target build/<game>/opensa` and `--in mods-src/<game>/vehicles`; `--only a,b` narrows it.
+Re-merges each mod's settings into the BUILT `data/*`, **in place**, and — `--kind opensa` (the default) —
+re-converts its model into the archive's `<model>.osm` (one car ≈ 3.6 s), or — `--kind sa` — replaces its raw
+`.dff`/`.txd`s by name in the vehicles archive FAMILY (`vehicles.img` + the `vehicles2.img` the install spilled
+into, opened as one; one car ≈ 4 s, [plan 008](./docs/plans/008-rebake-sa.md)). The vehicle half of the
+pipeline without the pipeline. Defaults `--target build/<game>/<kind>` and `--in mods-src/<game>/vehicles`;
+`--only a,b` narrows it. Each kind refuses the other's tree by what the archive holds (`.osm` vs `.dff`).
 It can also **add** a car the built game never had, when the mod ships its own `vehicles.ide` row — the tool
 never invents an id and refuses one another model owns. An added car has no traffic/parked presence until a
 full build writes the placements. See [plan 006](./docs/plans/006-rebake.md).
+
+## New tuning parts, and what the carmods line may name
+
+A folder may ship `tuning_new_parts.txt` — the IDE rows (`veh_mods.ide` shape) and `shopping.dat` entries of
+parts the game never had; the installer applies it before the settings merge (plan 009). After every install
+and rebake **every `carmods.dat` token must resolve to an IDE row in the tree**, or the run FAILS naming the
+line: the real game crashes at boot on one that does not. Two folders shipping the same part file name are
+warned about (the later wins the archive). A part's SHOP NAME comes from the folder's `text.txt`
+(plan 012) — the price row's second column is a GXT key, and without it the part is nameless in the shop.
+Contract: `docs/contracts/vehicles.md`.
 
 ## How it applies
 
@@ -40,6 +62,16 @@ full build writes the placements. See [plan 006](./docs/plans/006-rebake.md).
      replacing by name; rebuild the archive.
    - **CLEO** — carry the mod's `cleo/`/`CLEO/` subfolder (scripts + `.ini`/`.fxt` sidecars) to `out/cleo/`
      (canonical lowercase, structure preserved; one log line per file — plan 097/06). `--rebake` re-copies it.
+   - **Traffic** — merge `model-variations-extra.txt`'s ini section into
+     `modloader/Model_Variations/ModelVariations_Vehicles.ini` by section name (`sa` target only — the plugin
+     is the real game's). `{{name}}` resolves to that model's id in the tree's IDEs; an unknown one is
+     reported and the line ships as authored. `[Settings]` is the plugin's and is never written from a mod.
+   - **Text** — `text.txt`'s `KEY text` lines → `out/cleo/cleo_text/<model>.fxt`, the channel CLEO's FXT loader reads:
+     the shop shows a new part's name from there rather than from a rebuilt `american.gxt`.
+   - **Sound and parking** (`sa` only) — `audio.txt`'s row into FLA's `data/gtasa_vehicleAudioSettings.cfg`
+     (replaced by model name, else inserted into the block that file sets aside), and `parked.txt`'s id-less
+     line into Parked Maker's `cleo/Parked Car Maker.ini` `[Cars]`. The parked rows are counted against
+     FLA's car-generator limit and printed; a tree whose rows alone reach it is refused (plan 013).
    - **Settings** — parse `*.settings.txt` (blank-line-separated blocks, each classified + validated by the real
      engine parser) and merge into:
 
@@ -97,4 +129,4 @@ The result is a minimal, self-contained pack of just the installed cars. Off by 
   trim it; (2) wire the engine population/traffic system to read `cargrp.dat`. Needs a separate plan when picked up.
 
 See [docs/plans/](./docs/plans/) (`001` architecture · `002` install + settings · `003` custom palette · `004`
-strip).
+strip · `005` node API · `006` rebake · `007` `models/` + `new/` · `008` rebake for `sa` · `009` new tuning parts + the carmods guard · `010` layered `common/sa/opensa` · `011` `model_special_features.dat` for `sa` — PLANNED).

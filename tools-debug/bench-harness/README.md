@@ -30,3 +30,6 @@ The served build is `serve-static`'s `/build` mount (`npm run serve:static`, por
 
 Deliberately plain dependency-free Node scripts (playwright resolves from the repo root via
 `NODE_PATH`) — not a workspace, no lint/test registration: they drive a browser, they don't ship.
+
+Plans for the harness itself live in [`docs/plans/`](./docs/plans/) beside it — `001` the settle that lied and
+the fall that poisoned the sweep (moved here from the engine plans on 2026-08-17).

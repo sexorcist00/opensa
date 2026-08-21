@@ -80,7 +80,7 @@ the hack's fate.
 
 ### Step 1 — the per-link math, recovered (2026-08-07)
 
-Sources: `tests/custom/cleo-listings/rhino.txt` (2 085 instructions, the committed listing),
+Sources: `fixtures/custom/cleo-listings/rhino.txt` (2 085 instructions, the committed listing),
 `npx tsx scripts/debug/dump-vehicle-rig.ts "mods-src/original/vehicles/rhino - GTA 5 Rhino - _F_/rhino.dff"`.
 No new disasm run was needed — the listing in the repo is the artifact.
 
@@ -226,7 +226,7 @@ script-only): `handlers/natives.ts` reverses the args once at the call boundary 
 read the SA signatures positionally, guarded by `handlers/natives.test.ts` (4 tests; 3 of them
 verified to FAIL with the reversal removed, the 4th single-argument case correctly order-independent).
 Blast radius measured, not assumed: the whole `packages/cleo` + `cleo/` suite is green at 226 tests
-and exactly ONE committed fixture moved — `tests/custom/cleo-traces/rhino.txt`, 59 lines of
+and exactly ONE committed fixture moved — `fixtures/custom/cleo-traces/rhino.txt`, 59 lines of
 `quat(0,0,0.707,-0.707)` → `quat(0.707,0,0,-0.707)`, i.e. only the axis, only rhino. The rule a new
 atlas row must follow is in `docs/edge-cases/cleo-vm.md`.
 

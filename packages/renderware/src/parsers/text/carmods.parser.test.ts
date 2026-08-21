@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { parseCarmods } from './carmods.parser';
 
-const carmodsPath = join(process.cwd(), 'tests', 'original', 'data', 'carmods.dat');
+const carmodsPath = join(process.cwd(), 'fixtures', 'original', 'data', 'carmods.dat');
 
 describe('parseCarmods', () => {
   describe('negative cases', () => {

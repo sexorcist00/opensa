@@ -30,14 +30,14 @@ channels (03/04).
 
 ## Tasks
 
-- [ ] Format spec: versioned header + buffer layout doc in the pmb readme; a TS type for the header.
-- [ ] Writer: new pmb step (opensa target) emitting `.cell` binaries into a native IMG/VFS beside `lods.img`;
+- [~] Format spec: versioned header + buffer layout doc in the pmb readme; a TS type for the header.
+- [~] Writer: new pmb step (opensa target) emitting `.cell` binaries into a native IMG/VFS beside `lods.img`;
       `--until` compatible; deterministic byte output.
-- [ ] Reader: game adapter path (worker, transferables) → `BufferGeometry` + material; graceful when absent.
-- [ ] meshopt integration: encode at build, `MeshoptDecoder` at runtime; **round-trip unit tests** (positions/UV/normals/
+- [~] Reader: game adapter path (worker, transferables) → `BufferGeometry` + material; graceful when absent.
+- [~] meshopt integration: encode at build, `MeshoptDecoder` at runtime; **round-trip unit tests** (positions/UV/normals/
       prelit bit-exact within quantization tolerance).
-- [ ] KTX2: basisu encode step at build + `KTX2Loader` runtime path; linear-space audit; VRAM before/after probe.
-- [ ] Size budget guard: per-cell byte report; pmb fails if native total exceeds a configured ceiling.
+- [~] KTX2: basisu encode step at build + `KTX2Loader` runtime path; linear-space audit; VRAM before/after probe.
+- [~] Size budget guard: per-cell byte report; pmb fails if native total exceeds a configured ceiling.
 
 ## Verification
 

@@ -5,6 +5,10 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
 
 ## GTA SA reverse engineering & modding
 
+- <https://gtamods.com/wiki/IMG_archive> — the IMG format and, usefully, the ARCHIVE-COUNT limit stated
+  plainly ("max of 8 archives … 3 standard … and 5 defined within default.dat or gta.dat"). Used in 2026-08-15
+  to corroborate `TOTAL_IMG_ARCHIVES` independently of the address arithmetic — see
+  `docs/gta-sa-original/img-archive-limit.md`.
 - <https://github.com/gta-reversed/gta-reversed-modern> — reversed GTA SA source (the active repo; the
   catalogue's provenance lines cite it); the reference for engine internals (pools, `CIplStore`,
   streaming) behind our int16/pool guards and the `asi/` plugin work.
@@ -35,7 +39,9 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
   not ship one, which is the answer to "where do the assets come from" for all of them.
 - <https://github.com/JuniorDjjr/SA-MixSets> — per-feature SA tweaks reference.
 - <https://github.com/JuniorDjjr/VehFuncs> — vehicle function extensions (useful for vehicle features
-  parity: extras, wheels, steering parts).
+  parity: extras, wheels, steering parts). The wiki page
+  `[EN]-Recursive-Extras` is the source for the `f_extras` / `f_class` naming rules our runtime honours
+  (`:N`, `:0`, `:0+`, `:N+`, `[tag]`, `?condition`) — `packages/renderware/src/vehicle/variants.ts`.
 - <https://github.com/JuniorDjjr/skygfx> — the maintained skygfx fork; vehicle reflection / graphics
   reference (informed plan 030 and the stochastic-texturing survey).
 - <https://github.com/aap/skygfx> — the original PS2-graphics-on-PC restoration; the ground truth for SA

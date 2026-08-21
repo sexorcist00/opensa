@@ -10,8 +10,8 @@ import { CORPUS_TRACE_RUNS, corpusTrace } from './corpus-traces';
  * `npx tsx scripts/debug/cleo-trace-fixtures.ts` and review the diff — the diff IS the behaviour
  * change.
  */
-const CORPUS = 'tests/original/cleo';
-const TRACES = 'tests/custom/cleo-traces';
+const CORPUS = 'fixtures/original/cleo';
+const TRACES = 'fixtures/custom/cleo-traces';
 
 describe.skipIf(!existsSync(CORPUS) || !existsSync(TRACES))('corpus trace snapshots', () => {
   describe('positive cases', () => {

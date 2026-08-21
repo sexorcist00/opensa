@@ -129,7 +129,7 @@ describe('stripTextIpl', () => {
     });
 
     it('strips the tree LOD bigbuildings from the real countrye.ipl (524 survive)', () => {
-      const text = readFileSync('tests/original/ipl_text/countrye.ipl', 'utf8');
+      const text = readFileSync('fixtures/original/ipl_text/countrye.ipl', 'utf8');
       const result = stripTextIpl(text, (_id, name) => name.toLowerCase() !== 'lod_vbg_fir_co');
 
       expect(result.removed).toBeGreaterThan(0);
@@ -138,7 +138,7 @@ describe('stripTextIpl', () => {
     });
 
     it('keeps every internal HD to LOD pairing intact in the real lae.ipl', () => {
-      const text = readFileSync('tests/original/ipl_text/lae.ipl', 'utf8');
+      const text = readFileSync('fixtures/original/ipl_text/lae.ipl', 'utf8');
       const before = pairings(parseIpl(text));
       // laeroad39 is an HD with a LOD link (→ LODroad39t) and is itself never a LOD target, so dropping it
       // cascades both rows away and leaves every other pairing intact — the property a real tree strip needs.

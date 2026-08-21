@@ -1,5 +1,8 @@
 # 003 — mod-installer: merge PNG folders into loose `.txd`
 
+> **Superseded in part by [015](015-replacement-png-follows-its-raster.md) (2026-08-20):** the DXT5/DXT1-by-alpha choice below is still the rule for a PNG that ADDS a texture. One that REPLACES an existing texture now inherits that raster's compression class — the game reads some of them back on the CPU.
+
+
 **Plan only — implement after.** Extend `applyMod` so a mod can patch a **loose** `.txd` (a `.txd` file on disk,
 **not** one inside an `.img`) by shipping a **folder of PNGs** in its place. Mirrors the existing `gta3img/` →
 `gta3.img` merge, but for standalone texture dictionaries.

@@ -2,6 +2,13 @@
 
 **Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](../074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
 
+> **The unticked boxes below are VOID with the plan, and are struck rather than deleted (2026-08-11).**
+> They were left as `- [ ]` when the chain was closed, so every repo-wide scan for open work kept
+> reporting them — 118 phantom tasks across the ten closed chains. Nothing here is a debt: the banner
+> above is the authority. They stay readable because what these plans INTENDED is still the record of
+> why the own engine does what it does.
+
+
 Part of the [rendering overhaul chain](../062-rendering-overhaul/readme.md). Depends on [063](../063-render-foundations-instrumentation/readme.md) (frozen colour pipeline + benchmarks). THE foundation plan: solves "how to add real light to the current world while keeping the SA prelit vibe".
 
 ## Context
@@ -35,8 +42,8 @@ Assets are better now than pre-038: map-optimizer computes smooth-group normals 
 - [x] Shadow factor: the existing manual PCF term multiplies **only the direct term** on the modern path (prelit-as-indirect keeps GI in shadowed areas — THE point); classic path keeps the whole-frame multiply bit-exact.
 - [x] Uniform pump in canvas-host's `'coronas'` system beside tint/dnBalance: sun dir/elevation from `SkyPlugin.getSunDirection()`, sun colour from the timecyc `dir` sample (linear via `setRGB(..., SRGBColorSpace)`), overcast read back from the sky's shadow damping (`1 − sunShadow.intensity`). Curves = **`sunSplit()`** (`packages/renderware/src/three/sun-split.ts`) — pure, linear (weather-blend/hour continuous), unit-tested (night → `{0,1}` classic parity, noon-clear → `{sunDirect, sunIndirect}`, overcast kill, linearity).
 - [x] Calibration knobs: `worldLight.sunDirect` (default 1) / `worldLight.sunIndirect` (default 0.7) in config + two new sliders in debug → Atmosphere (WORLD LIGHT block).
-- [ ] SkyPlugin recalibration pass for dynamics (ambient/hemisphere constants) so cars/peds match the newly-lit ground. _After first in-game look._
-- [ ] Screenshot matrix: hour × weather sweep for LS/SF/LV benches; **user sign-off** on the split curves; record final constants here.
+- [~] SkyPlugin recalibration pass for dynamics (ambient/hemisphere constants) so cars/peds match the newly-lit ground. _After first in-game look._
+- [~] Screenshot matrix: hour × weather sweep for LS/SF/LV benches; **user sign-off** on the split curves; record final constants here.
 - [x] Perf: **confirmed ≈ 0 delta** — `ls-noon` modern: avg 53.71 ms / GPU 39.52 ms vs classic baseline 53.47–52.47 / 39.46–39.61 (within run-to-run noise). The hybrid term is free.
 - [x] Tests: shader-injection tests extended (sun uniforms shared, NdotL guard, `saTexel` captured before the prelit multiply, classic-defaults inert) + `sun-split` curve tests. All green (875 across renderware+game); lint/tsc clean.
 

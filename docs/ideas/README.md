@@ -29,6 +29,13 @@ go/no-go). Something already understood and scheduled does NOT live here — it 
   parsed) and every COL face names its surface, so "is this glass" is authored per face rather than guessed
   from a texture name. The unsolved half is the JOIN (collision faces are coarser than render triangles),
   and it is measurable offline before a line is written.
+- [stochastic-texturing-v2/](./stochastic-texturing-v2/readme.md) — **turn the dormant de-tiler on for
+  good**: 074·12 shipped the skygfx 3-tap tiling-and-blend and it sits default OFF after two July verdicts
+  (structured textures scramble; grazing-angle dashes). New since session 17: the reference install RUNS the
+  same math on 306 textures and is field-accepted, so a same-asset reference pair exists; our world sampler
+  has no anisotropy; the honest upgrades are ranked (aniso → Mikkelsen hex-tiling contrast preservation →
+  Heitz–Neyret LUT as a converter stage) and selection moves from names to a texel-derived score gated by
+  the list.
 - [vehdeform/](./vehdeform/readme.md) — **VehDeform**: GTA4-style dynamic impact deformation for vehicles
   (dents proportional to impact force/direction, accumulating), coexisting with SA's ok/dam part swaps.
   Feasibility looks high on our own vertex pipeline; needs a spike to confirm the look + tuning before it can

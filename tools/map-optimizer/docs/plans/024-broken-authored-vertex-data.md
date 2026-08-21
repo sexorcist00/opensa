@@ -207,7 +207,7 @@ control — expect a re-check to pass), `xoverlaymap09` 1558u² / 4 faces (Map F
   `badShading 31, unverifiable 16 → failing 31 > cap 8 → full recompute`. A lab rebuild WITHOUT
   `--strip-normals` now produces byte-identical clean cells to the manual experiment (209 verts,
   100 straight up, dark copies only on their own mirror/curb splits — `verify-cell-normals.ts`).
-- Real-asset guard: `tests/original/mods/lae2_roads17.dff` fixture +
+- Real-asset guard: `fixtures/original/mods/lae2_roads17.dff` fixture +
   `smooth-normals.integration.test.ts` (source has >10 dark top faces; gate recomputes; rebuilt
   surface has 0). Fixing the fixture path exposed a latent bug: `test-fixtures.ts` read mod fixtures
   from the pre-079 flat `mods-src/mods/` — every mod fixture silently reported MISSING while stale

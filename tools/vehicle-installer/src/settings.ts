@@ -25,6 +25,13 @@ export interface VehicleSettings {
   palette?: PaletteColor[];
 }
 
+/**
+ * What an ADDED car writes where its model id goes (`<:id>, 001veh, 001veh, car, …`). The author cannot know
+ * the id — it is allocated over the built tree — and a literal one would be a guess at a window they cannot
+ * see. `applyVehicle` substitutes it when it is given an id; a `vehicles/` car never carries it.
+ */
+export const ID_PLACEHOLDER = '<:id>';
+
 /** A handling line is the id + ~33 columns — require many fields so prose isn't taken for handling. */
 const MIN_HANDLING_FIELDS = 20;
 

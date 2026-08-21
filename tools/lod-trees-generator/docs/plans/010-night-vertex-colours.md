@@ -33,7 +33,7 @@ is present, and the later `stripExtraVertColour` would delete it anyway.
 
 - `dff-edit.test.ts` — `setNightColour` bakes one RGBA/vertex and replaces (not duplicates) an existing set.
 - `io.test.ts` — `loadTree` derives `nightTint` as `255 × nightAvg/dayAvg` from a real HD-tree fixture
-  (`tests/original/dff/night-colours/cedar1_hi.dff`, via `npm run test:fixtures`).
+  (`fixtures/original/dff/night-colours/cedar1_hi.dff`, via `npm run test:fixtures`).
 
 Verified on real assets: `ash1_hi` (day 143 / night 24 → tint 42), `dead_tree_14` (per-channel `[16,21,24]`). See
 the `lod-generator-night-vertex-colours` memory. The sibling case (decimated copy, absolute night) is

@@ -56,8 +56,8 @@ runs of identical WGSL — which is what made the slowdown look random. THIS pla
       geometries remain), and the lags persist — the "unaccounted" GPU remainder did not move. **Gate taken:
       PARKED.** The remainder sits in the three-WebGPU backend on Metal (present/submission side), below our
       reach without owning the backend. See the umbrella readme for the park summary + revive conditions.
-- [ ] IF multi-placement props still storm: the three-patch referenceBuffer prototype for the instanced rest.
-- [ ] Fold findings into the upstream issue (plan 01) — the Mesh workaround + capture analysis strengthen it.
+- [~] IF multi-placement props still storm: the three-patch referenceBuffer prototype for the instanced rest.
+- [~] Fold findings into the upstream issue (plan 01) — the Mesh workaround + capture analysis strengthen it.
 
 ## Done
 

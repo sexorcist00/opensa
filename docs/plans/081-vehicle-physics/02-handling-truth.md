@@ -9,7 +9,7 @@ ignored**.
 
 Extend `VehicleHandling` (today 5 fields, `world-adapter.interface.ts:19-31`) to the full set the
 chain consumes, with explicit unit conversions documented per field (SA community docs + the column
-legend already in `tests/original/data/handling.cfg:24-84`):
+legend already in `fixtures/original/data/handling.cfg:24-84`):
 
 | handling column                                       | → typed field                                          | Unit conversion                                              | Consumed by    |
 | ----------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------ | -------------- |
@@ -29,7 +29,7 @@ legend already in `tests/original/data/handling.cfg:24-84`):
 
 - Parser stays raw-string (`handling.parser.ts` untouched); the adapter's `vehicleHandling()` grows
   the mapping + fallback row. Unit tests pin LANDSTAL, ADMIRAL, INFERNUS full rows against
-  `tests/original/data/handling.cfg` (the real-fixtures rule).
+  `fixtures/original/data/handling.cfg` (the real-fixtures rule).
 - Fields deliberately NOT consumed by the chain get a one-line "why" here (nPercentSubmerged — no
   water physics; monetary/light/anim columns — other systems).
 
@@ -79,7 +79,7 @@ free).
       a field report caught the first attempt and the clamp fixed it).
 - [x] Pre-step control hook + latency test.
 - [x] Replay A/B captures (4 cars × 9 scenes) into the ledger + the benchmark record.
-- [ ] **Field round**: the flip complaint specifically — aggressive city driving, the user tries to
+- [~] **Field round**: the flip complaint specifically — aggressive city driving, the user tries to
       flip a sedan honestly; plus "do different cars feel different now".
 
 ## Acceptance

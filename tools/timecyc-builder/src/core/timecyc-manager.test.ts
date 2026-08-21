@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 import { TimecycManager } from './timecyc-manager';
 
-const VANILLA = 'tests/original/data/timecyc.dat'; // 8-keyframe
-const DAY24 = 'tests/original/data/timecyc_24h.dat'; // already 24h
+const VANILLA = 'fixtures/original/data/timecyc.dat'; // 8-keyframe
+const DAY24 = 'fixtures/original/data/timecyc_24h.dat'; // already 24h
 
 describe('TimecycManager', () => {
   describe('negative cases', () => {

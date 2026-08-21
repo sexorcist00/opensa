@@ -307,7 +307,7 @@ is exactly what the tail guard protects. Two rounds in-game proved the mechanics
   down to it (hue preserved), everything at/below is untouched — dims ONLY the glow. `nightMax` wins over
   `nightScale`. Verified in-game: walls back to stock, glow down; residual brightness at the right ceiling is
   the light texture itself (not prelit).
-- Real-asset regression fixture: `tests/original/world/newvic1_sfw.dff` (`npm run test:fixtures`) +
+- Real-asset regression fixture: `fixtures/original/world/newvic1_sfw.dff` (`npm run test:fixtures`) +
   `prelit-context.integration.test.ts` pinning the "median hides the glow" profile and the cap behaviour.
 
 Current user workflow: `--prelit-only broken-models.json` with `{"model": "newvic1_sfw", "nightMax": 20}`

@@ -4,12 +4,15 @@
 summarised into a plan doc, not left in chat. A number that exists only in a conversation is gone the moment
 the session ends, and a regression cannot be diagnosed without the run it regressed from.
 
-**Two families live here**, because the repo measures two different things and their schemas do not mix:
+**Three families live here**, because the repo measures three different things and their schemas do not
+mix:
 
 - **Performance** — what a frame COSTS (fps, frame/GPU ms, draws, residency). Everything below is this
   family; it was consolidated into this folder on 2026-07-20, split by renderer.
 - **Vehicle physics** — what a car DOES (stopping distance, roll, slip, flips). Its own schema and
   chronology: [`vehicle-physics/`](vehicle-physics/) (plan 081, the `[phys]` capture protocol).
+- **Tool builds** — what a build tool PRODUCES and how long it takes (run wall-clock, input/output
+  sizes, per-item tables). Its own chronology: [`tools/`](tools/).
 
 The performance family, split by renderer:
 
@@ -65,6 +68,13 @@ file, **say so in `note`** — pastes lose fields, and a later reader must not m
 A perf comparison is worthless without these held equal, so record them in `note` when they are not obvious:
 
 - **machine and DPR** (the series is M3 Pro @2× retina)
+- **a regression report names the LANE of both sides before it names a suspect.** On 2026-08-17 the user's
+  display sweep (`target 422`) was tabled against Claude's headless capped row (`target 345`) and read as a
+  GPU-pass ×2.5–3.3 on the new pak; four in-game arms and an issue file later, the same-lane delta was ×1.1
+  on the scene that "tripled" (`country-dusk`) — his display had cost 2–3× the headless canvas on that scene
+  since 08-09. The tell was already in the record: an in-game row from BEFORE the suspect change on the same
+  lane. Look for one first
+  ([the closing](../open-issues/fixed/opensa-gpu-pass-regression-2026-08-17.md))
 - **a single DISPLAY-lane run is not a measurement.** On 2026-08-09 one `?bench=all` sweep came back with
   every scene's `p95` 2–3× worse (`lv-night` 16.4 → 50.0) on unchanged content; a re-run of the same pak and
   the same code matched the earlier numbers to the millisecond. Something outside the app had the machine.

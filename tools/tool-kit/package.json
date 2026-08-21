@@ -9,9 +9,14 @@
     "./mesh/simplify": "./src/mesh/simplify.ts",
     "./mesh/bvh": "./src/mesh/bvh.ts",
     "./archive/img": "./src/archive/img.ts",
+    "./archive/layout": "./src/archive/layout.ts",
+    "./layers": "./src/layers.ts",
     "./cli": "./src/cli.ts",
     "./game-dir": "./src/game-dir.ts",
-    "./target": "./src/target.ts"
+    "./lod-links": "./src/lod-links.ts",
+    "./target": "./src/target.ts",
+    "./vehicles-dir": "./src/vehicles-dir.ts",
+    "./free-ids": "./src/free-ids.ts"
   },
   "nx": {
     "tags": [

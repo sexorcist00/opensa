@@ -768,12 +768,150 @@ knob does something is a picture taken elsewhere — cell `-5,7` in the desert, 
 9.81 % clutter-off control, recorded in plan 012. **This run supports "no cost", not "an effect was present
 and still cost nothing".**
 
+## 2026-08-12 — the UV-anim lane guard: a standing sweep, and a pair that cannot be measured
+
+[`opensa-engine/2026-08-12-ingame-uv-anim-lane-guard.json`](opensa-engine/2026-08-12-ingame-uv-anim-lane-guard.json)
+— 8 of the 9 `?bench=all` scenes in Claude's headless lane, **uncapped** (DPR=2), on the user's
+2026-08-11 18:04 pak. The frame numbers of the day, for the record and as the baseline the next UV-lane
+question is asked against: `avgMs` 2.85 (ocean-horizon) → 5.03 (lv-night / country-dusk), `gpuMs.pass`
+1.84 → 3.70, draws 39 → 2 213.
+
+**This is a standing number, not a delta — and that is the finding.** Plan 099/02 owed a before/after on a
+scene with no animated models. Both ways of building the "before" arm failed, and they failed for reasons
+worth keeping:
+
+- **Reverting the commit onto HEAD** (`git revert -n 402a450d`) conflicts in three places with later engine
+  work, one of them an unrelated `drawClutter` signature change. A hand-merged engine is the instrument
+  this project has already been burned by; the arm was abandoned rather than resolved.
+- **A worktree at the pair itself** (`402a450d^` = `fc0f89c8`, and `402a450d`) boots, runs CLEO, prints the
+  bench protocol — and renders **zero frames**. Both sides die identically: `texture array 5 not loaded
+  (cells must load after their arrays)`, then an index-range overflow on a LOD render bundle (65 538
+  indices into a 27 284-byte buffer). The incompatibility is between the 2026-08-07 engine era and the
+  2026-08-11 pak; it says nothing about the UV lane. Both arms also registered **1 196 road cars against
+  today's 1 219**, so even a rendering old arm would not have shared the workload.
+
+A true delta needs an era-matched pak, and such a pak would no longer describe today's world (mod 39 gone,
+the procobj species floor added since). What stands without it: the always-on cost of the lane is one
+integer compare per rigid submesh bind — a model with no animations allocates no uniform, writes nothing
+per frame and binds dynamic offset 0 everywhere (pinned by `engine.uv-anim.test.ts` on the fake device).
+Companion numbers from the built ferris fixture the same day: `stepUvAnimation` **132.2 ns/call** over
+2 000 000 calls with the real 261-keyframe `f13d`, and an observed strip cadence of **0.225 s exactly**
+(130 steps across the 29.25 s loop) — the authored value, reproduced by the engine's own walker.
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
 07-18 → 07-20: what the map CONTAINED changed under us while the numbers were read as if it had not. The
 lab rows carry a `converter` block; the sweeps did not. Every new in-game run must name its pak in `note`
 — that is now in the readme's comparability checklist, and the 07-19/07-20 bisect rows carry it.
+
+## 2026-08-17 — the first sweep with the FULL high-poly fleet (and a rebuilt map): nothing holds 120 any more
+
+[`opensa-engine/2026-08-17-ingame-full-hipoly-fleet-sweep.json`](opensa-engine/2026-08-17-ingame-full-hipoly-fleet-sweep.json)
+— the user's in-game `?bench=all` (his machine, capped 120 Hz) on the 2026-08-17 `build/original/opensa`
+(pak 1 269 600 256 B, 1124 cells; the first build in which ALL 212 mod cars are the 30k–100k-polygon fleet,
+`vehicles.img` 1781 MB + `vehicles2.img` 1415 MB of `.osm`). Baseline for the delta:
+[08-09 A/A arm1](opensa-engine/2026-08-09-headless-bench-aa-after-102.json) (headless, DPR=2, capped, the
+08-08 pak) — a different surface AND an 8-days-older map, so the delta is build + fleet + surface.
+
+| scene | avgMs | p95 | gpu.pass | tris (M) | draws | cars |
+| --- | --- | --- | --- | --- | --- | --- |
+| ls-noon | 8.3 → 11.5 | 10.0 → 13.1 | 2.7 → 6.9 | 2.31 → 3.91 | 1094 → 1967 | 24 |
+| sf-fog-dawn | 8.3 → 10.3 | 9.9 → 12.8 | 2.5 → 5.4 | 1.56 → 2.31 | 968 → 1394 | 22 |
+| lv-night | 8.3 → 17.2 | 10.0 → 19.2 | 3.6 → 11.8 | 2.06 → 4.25 | 2251 → 3464 | 43 |
+| country-dusk | 8.3 → 16.3 | 10.0 → 18.6 | 3.8 → 12.4 | 1.23 → 1.45 | 874 → 948 | 4 |
+| ocean-horizon | 8.3 → 8.3 | 10.1 → 9.3 | 2.3 → 2.2 | 0.41 → 0.41 | 47 → 41 | 0 |
+| ls-rain-night | 8.3 → 10.5 | 10.0 → 12.4 | 2.7 → 5.9 | 1.75 → 3.06 | 841 → 1663 | 24 |
+| ganton-noon | 8.3 → 15.2 | 9.9 → 17.5 | 3.1 → 10.4 | 1.57 → 3.14 | 1264 → 1898 | 33 |
+| strip-noon | 8.3 → 12.1 | 10.0 → 15.2 | 3.2 → 7.3 | 2.01 → 3.22 | 1075 → 2076 | 1 → 27 |
+| ganton-night | 8.3 → 15.7 | 9.8 → 18.3 | 3.2 → 10.8 | 1.57 → 3.14 | 1274 → 1908 | 33 |
+
+**GPU pass ×2.5–3.3 on every scene with content; the CPU side is flat** (vehicles 0.28–0.45 ms mean as
+before, physics 1–3 ms, lateCreates 0, every `legStart` green). What the fleet explains: +50–100 %
+triangles and +50–80 % draws where cars stand. **What it does not: `country-dusk` holds 4 cars, +18 %
+triangles, +8 % draws — and its pass still triples (3.8 → 12.4 ms).** `cellVertex` residency is 2.0–2.9× on
+EVERY scene (150–228 → 349–516) and texture residency +15–25 %: a large share is the WORLD — what the
+2026-08-17 map contains and how much of it is resident — not the cars. **Next measurement, before any
+fix**: the same sweep on the same pak with `?benchcar=<one stock low-poly model>` (pins every road car to one
+cheap model) — if `gpu.pass` returns to ~3–4 ms the fleet is the cost, if `country-dusk` stays at ~12 the
+world is; then a rect-repack / `model-repack` A/B on the suspect layer. The cost question itself belongs to
+the `UNCAPPED=1` headless lane; this run answers "does it hold 120" — no.
+
+**The pair, same day, same pak: `?benchcar=caddy`** —
+[`opensa-engine/2026-08-17-ingame-benchcar-caddy-pin.json`](opensa-engine/2026-08-17-ingame-benchcar-caddy-pin.json)
+(every road car pinned to the lightest `.osm` of the fleet, 2.2 MB — all 143 car slots are mod cars, so no
+stock pin exists). `gpu.pass` baseline / fleet / caddy: ls-noon 2.7 / 6.9 / **5.6**, sf-fog-dawn 2.5 / 5.4 /
+4.5, lv-night 3.6 / 11.8 / 10.8, **country-dusk 3.8 / 12.4 / 12.0**, ls-rain-night 2.7 / 5.9 / 4.9, ganton-noon
+3.1 / 10.4 / 9.1, strip-noon 3.2 / 7.3 / 6.2, ganton-night 3.2 / 10.8 / 11.4. Triangles and draws come back
+most of the way to the baseline; the GPU pass gives back ~1 ms where cars stand and nothing where they do
+not. **Verdict: the fleet is ~10–15 % of the regression on car-heavy scenes and ~0 on `country-dusk`; the
+rest is the WORLD as drawn today.** First suspect by the record: the RUNTIME clutter — the 08-09 baseline
+predates the 08-10 per-category ranges and the 08-11 species floor, and the worst scenes are the grass ones.
+Next: `?bench=all&benchcar=caddy&procobj=0`, then `parked=0` / `cargen=0` / a smaller `draw`, then pak-vs-pak.
+
+**Third arm, `?benchcar=caddy&procobj=0`** —
+[`opensa-engine/2026-08-17-ingame-caddy-procobj0.json`](opensa-engine/2026-08-17-ingame-caddy-procobj0.json):
+**no measurable change** against the caddy arm on any scene (country-dusk 12.0 → 12.0, ganton-noon 9.1 → 9.2,
+ls-noon 5.6 → 5.6); draws and triangles identical to the caddy arm everywhere (country-dusk 788/787 draws,
+1.31/1.29 M tris) — either the runtime clutter costs nothing on the pass or the knob did not apply on this
+path (the boot line would tell). Either way it is not where the ×3 lives. Same-ish geometry as the 08-09
+baseline (country-dusk 1.3 M tris / 787 draws vs 1.23 M / 874) at 3× the GPU pass, with the sky-only scene
+unchanged, points at per-pixel cost — overdraw / alpha classes / texture footprint of what the cells carry
+now, or the far LOD ring's content. Next: `?benchcar=caddy&draw=400`, then `probe=0`, then the UNCAPPED lane
+and a rect-repack A/B per mod layer.
+
+**Fourth arm, `?benchcar=caddy&draw=400`** —
+[`opensa-engine/2026-08-17-ingame-caddy-draw400.json`](opensa-engine/2026-08-17-ingame-caddy-draw400.json):
+**the far ring is not it either.** country-dusk with half the resident cells (25 → 11), half the draws (788 →
+408) and 0.97 M tris still costs 11.6 ms of pass (12.0 before); ganton-noon 9.1 → 10.9. Only the city scenes
+with many far cells give some back (ls-noon 5.6 → 4.4, lv-night 10.8 → 8.6). The cost is NEAR the camera and
+per pixel. Two facts that narrow it: the ENGINE has not changed since the 08-12 uncapped sweep (no
+`packages/`/`apps/` commit since 08-11 but one debug-spawner change), so the delta is pak + surface; and
+residency `target` reads 422 on every 08-17 row against 345 on every 08-09/08-12 row — the render targets
+are ~22 % bigger on this surface (matches ocean-horizon's +20 %, not a ×3). Next: take the surface out —
+the UNCAPPED headless sweep on THIS pak (same lane as 08-12 → a pure pak-vs-pak delta), then `probe=0`, then
+a rect-repack A/B on country-dusk's cells per mod layer.
+
+## 2026-08-18 — the surface taken out: the "×3" was two lanes read as one
+
+[`opensa-engine/2026-08-18-headless-uncapped-0817-evening-pak-surface-out.json`](opensa-engine/2026-08-18-headless-uncapped-0817-evening-pak-surface-out.json)
+— Claude, headless, DPR=2, **UNCAPPED**, all 9 scenes, on the user's 2026-08-17 EVENING pak (`world.ospak`
+1 269 690 368 B, buildTime 18:10 — session 22's two fixes on top of the 10:54 pak arms A–D read), the full
+1219-car fleet unpinned. **The same lane as the 08-12 uncapped record, so this is the pure pak-vs-pak delta:**
+country-dusk pass 3.70 → 4.02 (×1.09), ocean-horizon ×1.04, and the city scenes ×1.5–1.7 (ls-noon 2.67 → 4.43,
+lv-night 3.69 → 6.19, ganton-noon 3.06 → 4.77) — tracking their triangles (×1.5–2.1) and draws (×1.5–2.0), i.e.
+the fleet, which arm B priced at ~1 ms. **The ×2.5–3.3 of the open issue was the user's DISPLAY lane read
+against Claude's HEADLESS lane** — the comparison this readme forbids. His own lane already read country-dusk
+**12.47** on 2026-08-09 (`2026-08-09-ingame-user-display-oldmap-baseline.json`, before mods 64/65, the pow2
+resample, the LOD-link repairs and the fleet), against 12.37 on 08-17; lv-night 9.20 → 11.75, ganton-noon
+8.54 → 10.36. On his lane, fleet pinned (arm B), the world's own residual is **+7–17 % on city scenes and −4 %
+on country-dusk** — the cellVertex ×2–3 and texture +25 % of a fuller map, not a per-pixel ×3. What DOES stand
+and was never this issue: his display costs 2–3× the headless canvas on the same content (country-dusk 12.5
+vs 3.9 since at least 08-09, ocean-horizon only 1.2×), a standing fact about that surface.
+`docs/open-issues/opensa-gpu-pass-regression-2026-08-17.md` closes on this.
+
+## 2026-08-18 — two A/B builds on the user's display lane: the recent mods, and the fleet
+
+**Build 1 — mods 64–67 out, the full fleet kept** (the four 08-16 map mods: GTA 5 Cranes, Watts towers, Urbanize only MAP, Binco Improved — `66–69` since the 2026-08-18 insert)
+([`opensa-engine/2026-08-18-ingame-ab1-no-recent-mods-full-fleet.json`](opensa-engine/2026-08-18-ingame-ab1-no-recent-mods-full-fleet.json),
+`build/ab1-no-recent-mods`, pak 1 189 171 200 B, buildTime 13:54; the user's in-game sweep, capped 120,
+`target 422`, pair = [arm A](opensa-engine/2026-08-17-ingame-full-hipoly-fleet-sweep.json)): the four
+2026-08-16 mods (GTA 5 Cranes, Watts towers, Urbanize only MAP, Binco Improved) cost **2–6 % of pass** —
+ls-noon 6.86 → 6.46, ganton-noon 10.36 → 9.68, lv-night 11.75 → 11.27, country-dusk 12.37 → 12.08,
+ocean-horizon 2.19 → 2.16 (control). Triangles −6..−19 %, draws ±1 %, cellVertex −3..−11 %. Decomposition on
+this lane against the 08-09 oldmap row (ls-noon 5.07): fleet ≈ +1.2 ms (arm B), mods 64–67 ≈ +0.4 ms, the rest
+since 08-09 ≈ +0.6 ms. `country-dusk` sits at 12.0–12.5 in EVERY arm — the surface, not the content.
+
+**Build 2 — all mods, STOCK cars** (the vehicle stage excluded;
+[`opensa-engine/2026-08-18-ingame-ab2-all-mods-stock-cars.json`](opensa-engine/2026-08-18-ingame-ab2-all-mods-stock-cars.json),
+`build/ab2-stock-cars`, pak 1 260 396 544 B, buildTime 13:11, `vehicles.img` 272 MB; same lane, same pair):
+**the pass returns to the 08-09 level** — ls-noon 6.86 → 5.52 (08-09: 5.07), lv-night 11.75 → 9.19 (9.20),
+ganton-noon 10.36 → 9.03 (8.54), ganton-night 10.83 → 9.19 (8.70), sf-fog-dawn 5.39 → 4.40 (4.37), country-dusk
+12.37 → 11.98 (12.47), ocean-horizon 2.19 → 2.18 (control). **On the display lane the fleet is +1.0..+2.6 ms of
+pass on the city scenes and the whole map's growth since 08-09 is +0.0..+0.5 ms.** Two side findings: the fleet is
+~700 draws in view on ls-noon (1967 → 1265 — the batching lever), and the `cellVertex` residency counter INCLUDES
+vehicle geometry (ocean-horizon 349 → 57 with zero live cars — the registered road-car `.osm` buffers), so the
+"×2–3 cellVertex on every scene" the closed issue read as world growth was the fleet's buffers.
 
 ## Tool trials (not engine runs, never comparable to one)
 
@@ -787,3 +925,4 @@ lab rows carry a `converter` block; the sweeps did not. Every new in-game run mu
 | 08-10 | [district-texture-budget-los-santos-centre-astc](opensa-engine/2026-08-10-district-texture-budget-los-santos-centre-astc.json) | The same pinned district on the ASTC build, and the FIRST pak built from a restored game copy — the earlier ones were converted off a source the pipeline had eaten (`--out` and `--game` were two symlinks into one folder; `gta3.img` carried 1073 `.osm` bundles, `gta_int.img` 155, both re-extracted from `Download/GTA CORP.rar` and verified `clean`). 8 cell entries, 20 arrays, 619 layers, 18.8 M texels, 281 map objects converted where the damaged source gave 0. **Not a format A/B against the 08-09 row** — the source integrity moved too. | **25.4 MB** resident as built (ASTC 4x4) · **15.7 MB** on disk · **95.9 MB** if RGBA8 → 3.8x, taken rather than priced · the estimator's own ASTC column reads 24.0 MB, i.e. 6 % optimistic on this content |
 | 08-12 | [dispatch-render-target-attribution](opensa-engine/2026-08-12-dispatch-render-target-attribution.json) | Where the `target` category of the 08-12 phone capture goes, per texture. Desk arithmetic over every `createTexture('target', …)` in the engine at that capture's own surface (720x728 device px, MSAA 4x, renderScale 1), using the same byte estimates the ledger charges. No GPU, no timing — it answers the capture's second open question, which named this the first place 201/1-03 should look. | **36.54 MB over 23 textures, summing to the measured 36.54** · **MSAA 4x is 23.99 MB of it (65.7 %)** — more than the whole district's textures after ASTC (25.81) · bloom chain 6.67 (the ONE full-res prefilter is 4.00 of it) · env probe 1.88 · **and the category is FIXED**: a function of resolution and sample count, identical on a full-map build where everything else grows |
 | 08-12 | [dispatch-bundle-inventory](opensa-engine/2026-08-12-dispatch-bundle-inventory.json) | 201/1-06's table, taken with a COMMITTED instrument (`scripts/debug/bundle-inventory.ts`) because the 08-09 row's one-off script left nothing behind. Same method, same entry, and the first bundle reading after merging 161 upstream commits. | **506.5 kB raw · 167.6 kB gzip** over 6 chunks (+5.0 / +1.1 against 08-09 — four days of upstream cost this surface 1 kB of gzip) · **the 08-09 table had a 107.3 kB HOLE**: `shaders.ts` went unattributed (394.2 + 107.3 = 501.5 exactly), so `packages/engine` is **48.8 %** and react+react-dom+scheduler **36.5 %** — the engine is the LARGER half, not the smaller · dead code: none that costs a byte · the one lever: WGSL comments/indentation, **22.1 kB gzip (13.2 %)**, priced and not taken |
+

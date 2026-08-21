@@ -71,14 +71,17 @@ describe('linkBinaryLods', () => {
 });
 
 /** Write a synthetic drop-in `data/` dir (one IDE + text IPL + gta.dat + maps/) and run the fill against it. */
-function runFill(models: string[]): {
+function runFill(
+  models: string[],
+  extraIdeRows: readonly string[] = [],
+): {
   dir: string;
   img: Map<string, Uint8Array>;
   result: ReturnType<typeof fillMissingLods>;
 } {
   const dir = mkdtempSync(join(tmpdir(), 'salod-fill-'));
   mkdirSync(join(dir, 'maps'));
-  writeFileSync(join(dir, 'x.ide'), ['objs', '1, hd_a, txda, 300, 0', 'end'].join('\n'));
+  writeFileSync(join(dir, 'x.ide'), ['objs', '1, hd_a, txda, 300, 0', ...extraIdeRows, 'end'].join('\n'));
   writeFileSync(join(dir, 'x.ipl'), ['inst', '1, hd_a, 0, 5, 6, 7, 0, 0, 0, 1, -1', 'end'].join('\n'));
   writeFileSync(join(dir, 'gta.dat'), 'IDE DATA\\MAPS\\x.ide\nIPL DATA\\MAPS\\x.ipl\n');
 
@@ -109,6 +112,14 @@ describe('fillMissingLods', () => {
   });
 
   describe('positive cases', () => {
+    it('numbers past the map, not past the ADDED-content window an earlier stage may have filled', () => {
+      // A vehicle mod's borrowed tuning part takes an id out of 19 001–19 999 before this stage runs. Read
+      // as the maximum it would drag every map LOD into that window and renumber the added fleet under it.
+      const { dir } = runFill(['hd_a'], ['19001, rbmp_lr_bl1_voo, voodoo, 100, 2097152']);
+
+      expect(readFileSync(join(dir, 'maps', 'salod-holes.ide'), 'utf8')).toContain('2, salodh0000,');
+    });
+
     it('generates a LOD id/IDE/instance + links the HD for a text-placed hole', () => {
       const { dir, img, result } = runFill(['hd_a']);
 

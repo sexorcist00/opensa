@@ -11,7 +11,9 @@ script instead"* — which the 097/08 scope-cut paragraph then contradicted ("rh
 author's script"). For no_lights it REVERSES the 2026-08-05 skip (the native light-damage recipe in
 [`docs/postmortem/097-hotring-hotknife-intake.md`](../../../../docs/postmortem/097-hotring-hotknife-intake.md)
 remains the engine half of plan 002, not an alternative to it). The superseded scope-cut lines in
-`docs/plans/097-cleo-basic/08-authoring-sdk.md` and `cleo/sdk/docs/plans/readme.md` now point here.
+the SDK chain's readme now point here (that scope-cut text moved into
+[`cleo/sdk/docs/plans/readme.md`](../../../sdk/docs/plans/readme.md) on 2026-08-12, when
+`docs/plans/097-cleo-basic/08-authoring-sdk.md` was deleted as a duplicate of the shipped SDK chain).
 
 ## The chain
 
@@ -19,6 +21,7 @@ remains the engine half of plan 002, not an alternative to it). The superseded s
 | --- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | 1   | [001 — rhino tracks](001-rhino-tracks.md) | authored track script: `0AE2` walk, per-link loop, frames addressed BY NAME (`track_1`…`track_12`) — bypassing the sibling-order hack; both-runtime field proof | CLOSED - both runtimes field-proven |
 | 2   | [002 — no_lights](002-no-lights.md)     | authored hotring light-killer + the engine half that makes it visible on OpenSA (atlas row for `SetLightStatus`, smashed-lamp state in vehicle-lamps) | engine half SHIPPED; the SCRIPT was WITHDRAWN 2026-08-07 - superseded by plan 098/11 |
+| 3   | [003 — cutscene override](003-cutscene-override.md) | a real-SA debug instrument: `cutscene-override.ini` names a scene → it plays at new game (or save load) in place of sitting through the intro; the ini's comment head lists every vehicle cutscene, generated offline by vehicle-cutscene's tooling (census + the ANPK channel reader). Rewritten 2026-08-13 (user's call) from the cheat-code viewer — no cycling, no key polling. **Single-target by design** (`target: 'sa-only'` — OpenSA has no cutscene system) — the dual-target bar does not apply | CLOSED 2026-08-13 — all three field verdicts passed (scene plays in-world with warp+preload, ini is the knob, empty = inert); 12 field rounds, four recorded traps (boot race, missionless intro, byte-offset globals, ini reads corrupting vars) |
 
 001 first: it exercises the SDK loop/name-lookup surface 002 reuses. It was planned as "script-only,
 zero engine changes" and that assumption did not survive the field — writing the script was the

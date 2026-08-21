@@ -17,6 +17,18 @@ describe('cleanLines', () => {
 });
 
 describe('splitRow', () => {
+  describe('negative cases', () => {
+    it('a missing comma is not a merged cell — the game reads commas and whitespace as one separator', () => {
+      // The dodo mod's real ide row (open issue 2026-08-17): `LoadLine` makes `dodo\t\tdodo` two cells.
+      expect(splitRow('593,\tdodo\t\tdodo, \t\tplane, \t\tDODO,\t \tDODO,\t\tvan,\tignore').slice(0, 4)).toEqual([
+        '593',
+        'dodo',
+        'dodo',
+        'plane',
+      ]);
+    });
+  });
+
   describe('positive cases', () => {
     it('splits on commas and trims each cell', () => {
       expect(splitRow('5000, gplane ,basicmain,  300 ')).toEqual(['5000', 'gplane', 'basicmain', '300']);

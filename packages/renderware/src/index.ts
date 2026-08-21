@@ -47,3 +47,4 @@ export * from './parsers/text';
 export { buildVehicleModel } from './vehicle/build-vehicle-model';
 export { VehicleTextures } from './vehicle/textures';
 export * from './vehicle/types';
+export { pickVariants } from './vehicle/variants';

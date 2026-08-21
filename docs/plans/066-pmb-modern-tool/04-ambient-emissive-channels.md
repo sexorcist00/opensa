@@ -22,13 +22,13 @@ machinery exists. Both are 1 byte per vertex in the [01](01-native-cell-format.m
 
 ## Tasks
 
-- [ ] skyVis baker: hemispheric visibility raytrace over welded cell geometry (reuse 03's sampler); 1-byte channel in 01.
-- [ ] World-shader: consume skyVis on the indirect term; feed it into the SSAO blend so baked AO offsets screen-space AO
+- [~] skyVis baker: hemispheric visibility raytrace over welded cell geometry (reuse 03's sampler); 1-byte channel in 01.
+- [~] World-shader: consume skyVis on the indirect term; feed it into the SSAO blend so baked AO offsets screen-space AO
       (tier-tunable in [05](05-runtime-csm-scopedown-tiers.md)/072).
-- [ ] emissiveMask: derive from day/night prelit delta at build; 1-byte channel; wire into the 071 glow term (replace the
+- [~] emissiveMask: derive from day/night prelit delta at build; 1-byte channel; wire into the 071 glow term (replace the
       runtime heuristic when the mask is present).
-- [ ] Seam test on both channels (bake over welded geometry → no cell-border discontinuity).
-- [ ] A/B: baked AO vs SSAO-only in alleys/under-bridges; emissiveMask vs heuristic on window/neon-heavy night blocks.
+- [~] Seam test on both channels (bake over welded geometry → no cell-border discontinuity).
+- [~] A/B: baked AO vs SSAO-only in alleys/under-bridges; emissiveMask vs heuristic on window/neon-heavy night blocks.
 
 ## Verification
 

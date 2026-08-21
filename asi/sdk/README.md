@@ -55,6 +55,8 @@ perfect-map's `gen/generate.test.ts`, which asserts exactly that.
 
 - [`asi/perfect-map`](../perfect-map/README.md) — the first; its migration is the SDK's
   conformance proof.
+- [`asi/perfect-cutscene`](../perfect-cutscene/README.md) — the second, and the SDK's real
+  greenfield test: written straight onto it (plan 001 step 1), no framework change needed.
 - `asi/city-life` — the named second (roadmap 0.5.0), which will bring the per-frame tick and
   runtime `.ini` extension points when it arrives.
 

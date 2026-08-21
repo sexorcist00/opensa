@@ -2,7 +2,7 @@
 
 **Status: HALF CLOSED 2026-08-09.** Read this header before quoting any measurement below it.
 
-- **The measurement contamination and the falls are FIXED and merged** ([plan 102](../plans/102-bench-settle-fall/readme.md),
+- **The measurement contamination and the falls are FIXED and merged** ([plan 102](../../tools-debug/bench-harness/docs/plans/001-bench-settle-fall.md),
   merge `ed6b90ba`, close-out audit `6202503e`). They were a HARNESS bug, not the design question this doc
   argues for. **Section A's A/A table below is the BEFORE, not a current reproduction** — the spread went
   10.19 % → 0.14 % (`lv-night`), worst-of-nine 0.36 %; `[cam]` jump lines 89 255 → 1. **The bench is a usable

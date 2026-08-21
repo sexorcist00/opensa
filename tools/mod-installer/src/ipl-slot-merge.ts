@@ -6,6 +6,35 @@ import { join } from 'node:path';
 const AREA_ROW_CAP = 4000;
 
 /**
+ * Rows the LATER stages still append to a stock area — tree impostor LODs and the sa hole fill land in these
+ * same files, after this fold has run. Reserved so the fold cannot spend the room they need: measured across
+ * the 2026-08-16 `sa` build, the worst single area grew by 812 rows after the mods stage.
+ */
+const AREA_LATER_APPENDS = 900;
+
+/** A mod IPL that could not be folded, so it keeps its own `IplEntityIndexArrays` slot. */
+export interface KeptIpl {
+  base: string;
+  rows: number;
+}
+
+export interface SlotFoldResult {
+  /** Mod IPLs left standing, worst first — each still costs a slot, and the caller must SAY so. */
+  kept: KeptIpl[];
+  merged: number;
+  rows: number;
+}
+
+/** A stock area a fold may append to: how many text rows it has (the index base) and how many it can take. */
+interface FoldHost {
+  file: string;
+  /** Rows it can still accept without crossing {@link AREA_ROW_CAP} minus {@link AREA_LATER_APPENDS}. */
+  free: number;
+  /** Text `inst` rows — what an appended row's `lod` link must be rebased past. */
+  instRows: number;
+}
+
+/**
  * Free `IplEntityIndexArrays` slots held by STOCK text IPLs that have no binary streams: move their inst
  * rows into the least-loaded stream-backed stock host (appends never shift the host's indexes) and empty
  * their own inst block in place — the file keeps its other sections (enex/cull/grge…) and its gta.dat line,
@@ -45,7 +74,8 @@ export function compactStockInstIpls(gamePath: string, outPath: string): { compa
 
   const donorRows = donors.reduce((n, d) => n + d.rows.length, 0);
   const host = hosts.sort((a, b) => a.total - b.total)[0];
-  if (donors.length === 0 || !host || host.total + donorRows > AREA_ROW_CAP) {
+  // Same reserve as the fold: the tree LODs and the hole fill still append to this host afterwards.
+  if (donors.length === 0 || !host || host.total + donorRows > AREA_ROW_CAP - AREA_LATER_APPENDS) {
     return { compacted: 0, rows: 0 };
   }
 
@@ -73,21 +103,28 @@ export function compactStockInstIpls(gamePath: string, outPath: string): { compa
  * inst section — appends never shift existing indexes, so the host's binary-stream `lod` links stay valid —
  * and the mods' internal `lod` links are rebased by their offset in the host.
  *
- * Skipped (kept as their own file): stock IPLs, files with companion `_stream` entries in gta3.img (binary
- * lod fields index THAT text file), and files with sections beyond `inst` (nothing observed ships them).
+ * Folded across as MANY hosts as it takes, biggest file first. One host was the shape until 2026-08-16, when
+ * a map pack arrived with 13 IPLs / 16 172 rows: nothing fits a single 4 000-row area, and the fold being
+ * all-or-nothing meant it folded NOTHING and said nothing — the build died on the slot guard at 62 of 40.
+ * A file whose rows carry no internal `lod` link may also be SPLIT across hosts, since nothing in it
+ * addresses its own row order; one that does link stays whole or stays put.
+ *
+ * Skipped (kept as their own file, and REPORTED): stock IPLs, files with companion `_stream` entries in
+ * gta3.img (binary lod fields index THAT text file), files with sections beyond `inst` (nothing observed
+ * ships them), and anything the hosts have no room for.
  */
-export function mergeModInstIpls(gamePath: string, outPath: string): { merged: number; rows: number } {
+export function mergeModInstIpls(gamePath: string, outPath: string): SlotFoldResult {
   const stockDatPath = join(gamePath, 'data', 'gta.dat');
   const datPath = join(outPath, 'data', 'gta.dat');
   if (!existsSync(stockDatPath) || !existsSync(datPath)) {
-    return { merged: 0, rows: 0 }; // no gta.dat — nothing registered, nothing to fold
+    return { kept: [], merged: 0, rows: 0 }; // no gta.dat — nothing registered, nothing to fold
   }
   const stock = new Set(iplLines(readFileSync(stockDatPath, 'utf8')).map(([, base]) => base));
   const dat = readFileSync(datPath, 'utf8');
   const streamRows = allStreamRows(outPath);
 
   const candidates: { base: string; file: string; inst: string[] }[] = [];
-  const hosts: { file: string; total: number }[] = [];
+  const hosts: FoldHost[] = [];
   for (const [path, base] of iplLines(dat)) {
     const file = join(outPath, path.replace(/\\/g, '/'));
     if (!existsSync(file)) {
@@ -96,7 +133,8 @@ export function mergeModInstIpls(gamePath: string, outPath: string): { merged: n
     if (stock.has(base)) {
       const rows = countInstRows(readFileSync(file, 'utf8'));
       if (rows > 0) {
-        hosts.push({ file, total: rows + (streamRows.get(base.replace(/\.ipl$/, '')) ?? 0) });
+        const total = rows + (streamRows.get(base.replace(/\.ipl$/, '')) ?? 0);
+        hosts.push({ file, free: Math.max(0, AREA_ROW_CAP - AREA_LATER_APPENDS - total), instRows: rows });
       }
       continue;
     }
@@ -110,28 +148,31 @@ export function mergeModInstIpls(gamePath: string, outPath: string): { merged: n
     candidates.push({ base, file, inst });
   }
 
-  const modRows = candidates.reduce((n, c) => n + c.inst.length, 0);
-  const host = hosts.sort((a, b) => a.total - b.total)[0];
-  if (candidates.length === 0 || !host || host.total + modRows > AREA_ROW_CAP) {
-    return { merged: 0, rows: 0 }; // nothing to fold, or no stock area has the row budget — leave as-is
-  }
-
-  const hostText = readFileSync(host.file, 'utf8');
-  const hostCount = countInstRows(hostText);
-  const rows: string[] = [];
+  // Biggest first: a 2 863-row file has few homes and a 20-row one has many, so placing the small ones first
+  // is how a fold ends up with room everywhere and nowhere.
+  candidates.sort((a, b) => b.inst.length - a.inst.length);
+  const planned = new Map<string, string[]>();
   const mergedBases = new Set<string>();
-  for (const { base, file, inst } of candidates) {
-    const offset = hostCount + rows.length;
-    for (const row of inst) {
-      rows.push(rebaseLod(row, offset));
+  const kept: KeptIpl[] = [];
+  let folded = 0;
+  for (const candidate of candidates) {
+    if (!foldInto(hosts, candidate.inst, planned)) {
+      kept.push({ base: candidate.base, rows: candidate.inst.length });
+      continue;
     }
-    mergedBases.add(base);
-    rmSync(file);
+    mergedBases.add(candidate.base);
+    folded += candidate.inst.length;
+    rmSync(candidate.file);
   }
-  writeFileSync(host.file, appendToInstSection(hostText, rows));
+  if (mergedBases.size === 0) {
+    return { kept: kept.sort((a, b) => b.rows - a.rows), merged: 0, rows: 0 };
+  }
+  for (const [file, rows] of planned) {
+    writeFileSync(file, appendToInstSection(readFileSync(file, 'utf8'), rows));
+  }
 
   const eol = dat.includes('\r\n') ? '\r\n' : '\n';
-  const kept = dat
+  const remaining = dat
     .split(/\r?\n/)
     .filter((line) => {
       const ref = parseIplLine(line);
@@ -140,9 +181,9 @@ export function mergeModInstIpls(gamePath: string, outPath: string): { merged: n
     })
     .join(eol)
     .replace(/\s*$/, '');
-  writeFileSync(datPath, `${kept}${eol}`);
+  writeFileSync(datPath, `${remaining}${eol}`);
 
-  return { merged: mergedBases.size, rows: rows.length };
+  return { kept: kept.sort((a, b) => b.rows - a.rows), merged: mergedBases.size, rows: folded };
 }
 
 /** Stream rows per area across both map IMGs (exterior gta3.img + interior gta_int.img). */
@@ -219,6 +260,52 @@ function emptyInstSection(text: string): string {
   }
 
   return out.join(eol);
+}
+
+/**
+ * Plan one mod file's rows into the hosts, or report that they do not fit. Rows that carry a `lod` link
+ * address their own file by index, so such a file must land in ONE host, whole; a file with no links can be
+ * spread over several. Mutates the hosts' remaining room — nothing is written until every file is placed.
+ */
+function foldInto(hosts: FoldHost[], inst: readonly string[], planned: Map<string, string[]>): boolean {
+  const place = (host: FoldHost, rows: readonly string[]): void => {
+    const target = planned.get(host.file) ?? [];
+    for (const row of rows) {
+      target.push(rebaseLod(row, host.instRows));
+    }
+    planned.set(host.file, target);
+    host.instRows += rows.length;
+    host.free -= rows.length;
+  };
+  if (inst.some(hasLodLink)) {
+    // Best fit: the tightest host that still takes the whole file, so the big rooms stay big.
+    const host = [...hosts].sort((a, b) => a.free - b.free).find((candidate) => candidate.free >= inst.length);
+    if (!host) {
+      return false;
+    }
+    place(host, inst);
+
+    return true;
+  }
+  if (hosts.reduce((n, host) => n + host.free, 0) < inst.length) {
+    return false;
+  }
+  let rest = inst;
+  while (rest.length > 0) {
+    const host = [...hosts].sort((a, b) => b.free - a.free)[0];
+    const take = rest.slice(0, host.free);
+    place(host, take);
+    rest = rest.slice(take.length);
+  }
+
+  return true;
+}
+
+/** Whether the row points at another row of its own file — the reason a file may not be split. */
+function hasLodLink(row: string): boolean {
+  const lod = Number(row.split(',').pop());
+
+  return Number.isInteger(lod) && lod >= 0;
 }
 
 /** Per area key (`<base>` of `<base>_streamN.ipl`): total binary INST rows across its streams in the IMG. */

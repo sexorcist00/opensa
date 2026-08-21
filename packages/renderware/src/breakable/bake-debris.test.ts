@@ -108,7 +108,7 @@ describe('bakeDebris', () => {
 
 // A REAL shatter mesh: trafficlight1 ships an RW Breakable atomic (SA authors 238 of them). The synthetic mesh
 // above pins the arithmetic; this one proves the arithmetic survives contact with SA's own data.
-const TRAFFICLIGHT = 'tests/custom/proper-fixes-models/trafficlight1.dff';
+const TRAFFICLIGHT = 'fixtures/custom/proper-fixes-models/trafficlight1.dff';
 
 describe.skipIf(!existsSync(TRAFFICLIGHT))('bakeDebris (a real SA shatter mesh)', () => {
   const shatter = getBreakable(

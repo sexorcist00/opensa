@@ -13,7 +13,7 @@ The engine never parses RenderWare at runtime — everything is converted offlin
 | `.ostex`  | `OST1` | one `texture_2d_array`                        | BC1/BC2/BC3/BC7/RGBA8, full offline mip chain, premultiplied alpha, alpha class (opaque/cutout/soft-blend)                                                                                    |
 | `.oscell` | `OSC1` | one streamed **cell** level (HD or LOD)       | 36-byte vertices (pos, normal + baked sunVis, uv, day/night prelit, layer + AO/emissive channels), object/breakable/particle/light tables (object kinds incl. 4 uv-scroll / 5 timed uv-scroll, minor 7), pipeline classes opaque/cutout/blend/beam/**additive**, placement mapper for the debugger, roadsign glyph-quad COUNT (minor 8 — a diagnostic, drawn from no table) |
 | `.oswire` | `OSW1` | meshopt-compressed transport of a cell        | the pak worker decodes it back into exact `.oscell` bytes                                                                                                                                     |
-| `.ospak`  | —      | the **archive**                               | manifest (`game` + `appVersion` for fetch cache-keying (plan 086), `buildTime`, cells with offsets/hashes + per-cell texture refs + per-cell geometry `aabb` (world XZ — what the streaming rings test, plan 087), the **shared world texture dictionary**, uv animations, water (a LOOSE `water.bin` next to the pak — stride-20 `x,y,z,depth,class`, plan 075), `missingLayers` — the stand-in layers the runtime's magenta highlight repaints, and `collision` + `collisionCellSize` — baked per-cell `.oscol` ranges keyed on the **GAME** grid (256), never on `cellSize` (250)) + 4096-aligned blobs; runtime reads byte ranges only |
+| `.ospak`  | —      | the **archive**                               | manifest (`game` + `appVersion` for fetch cache-keying (plan 086), `buildTime`, cells with offsets/hashes + per-cell texture refs + per-cell geometry `aabb` (world XZ — what the streaming rings test, plan 087), the **shared world texture dictionary**, uv animations, water (a LOOSE `water.bin` next to the pak — stride-20 `x,y,z,depth,class`, plan 075), `missingLayers` — the stand-in layers the runtime's magenta highlight repaints, and `collision` + `collisionCellSize` — baked per-cell `.oscol` ranges keyed on the **GAME** grid (256), never on `cellSize` (250)) + 4096-aligned blobs; runtime reads byte ranges only. Entries are individually compressed and self-contained, so ONE cell is byte-replaceable (append + repoint) — but the dictionary's `(arrayRef, layer)` plan is not persisted, which is why in-place patching waits in `in-reserve/ospak-in-place-cell-patch.md` (opensa-lod-generator plan 007) |
 
 Sections are read independently — the main thread takes `COLL` without touching geometry; consumers reject
 unknown **major** versions loudly, minors only add optional sections.
@@ -33,6 +33,14 @@ this model's materials actually reference, keyframes verbatim — plus a per-sub
 list. Model-LOCAL on purpose: the cell path registers dict names GLOBALLY (cells index one manifest array),
 but a rigid model streams in and out on its own, so it carries its animations with it. Absent on the models
 that animate nothing, which is every vehicle and nearly every prop — and on every `.osm` written before 099.
+
+**`DESC` also carries a car's VehFuncs variant tree** (2026-08-17): `variants` — the `f_extras` / `f_class`
+selector tree (`{ classes, extras }` of `VehicleVariantNode`: id = frame index, `select: [min, max]`,
+`requires` class tags, `condition` verbatim) — plus a per-submesh `variant` naming the option a mesh belongs
+to. The SPAWN walks it (`pickVariants`, `packages/renderware/src/vehicle/variants.ts`), the way the plugin
+does on the SA target; a build-time pick would freeze one set of clutter, ads and body kits into every car
+in the world. Absent on the models without one and on every `.osm` written before — where every variant is
+drawn at once, which is what those cars looked like until then (59 of 213 original mod cars).
 
 **Private vs world textures.** By-name classes (vehicles, peds, clutter, props, breakables) carry their own
 dictionary in the `.osm` `TEXS` section — self-contained, viewable standalone. **Map objects** are planned

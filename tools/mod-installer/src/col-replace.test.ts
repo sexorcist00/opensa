@@ -12,7 +12,7 @@ import { droppedCollisionModels, warnDroppedCollisions } from './col-replace';
  * A synthetic two-block library would not exercise the thing that made this silent: that a `.col` is a
  * LIBRARY, and a plausible replacement of it can be missing any subset of a hundred-odd models.
  */
-const LAXREF = 'tests/original/col/laxref.col';
+const LAXREF = 'fixtures/original/col/laxref.col';
 
 describe('droppedCollisionModels', () => {
   describe('negative cases', () => {

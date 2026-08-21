@@ -34,8 +34,10 @@ door. **Field checkpoint 2: it looks ridden.**
       the OUTPUT before choosing a shape). Loaders must agree (restriction: whatever the loaders
       disagree about, the game disagrees about). Mods overriding a ride IFP by bare name keep working
       (`img-merge` path).
-- [ ] **Anim-group resolution layer.** One lookup: vehicle → `anims` name → IFP + clip-name set, with
-      the `^` row supplying enter/exit pairing and the kart/truck drive-clip flags. The two hardcoded
+- [ ] **Anim-group resolution layer.** One lookup, **keyed the way SA keys it** (13's finding): `handling` col 34
+      `animGroup` → `^` row → (first, second) base group → per-slot clip with fall-through; `vehicles.ide`
+      `anims` names only the IFP to stream. The `^` row supplies enter/exit pairing and the kart/truck/hover
+      drive-clip flags. The two hardcoded
       arrays become the `car` group's entry. Degradation stays loud-but-safe: a missing group logs once
       and falls back to the car set (never a T-pose, never a standing driver).
 - [ ] **Ride pose per class.** Seated clip from the group (`BIKES_Ride`, BMX equivalents, quad, truck
@@ -45,8 +47,8 @@ door. **Field checkpoint 2: it looks ridden.**
 - [ ] **Mount/dismount.** Bike path in the enter system: no door phases — approach, `BIKE_pickupL/R` /
       `BIKE_pullupL/R` with root-motion replay, straddle. Exit mirrors. The car door machine stays
       untouched for cars; class branching keys off 01's threaded type.
-- [ ] **Wheelie/stoppie/hop pose overlays** from the group's clips where they exist; where they don't,
-      orientation-only (the bike pitches, the rider holds the seated pose) — recorded, not faked.
+- ~~Wheelie/stoppie/hop pose overlays~~ — **moved to [12](12-riding-animation.md)** (2026-08-20): the census
+      showed no such clips exist; the riding body is its own plan.
 - [ ] **Contracts + docs.** New name rules (group name resolution, IFP override behaviour) into
       `docs/contracts/`; `docs/features/vehicles.md` rider section.
 

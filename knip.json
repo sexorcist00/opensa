@@ -5,6 +5,9 @@
     ".": {
       "entry": ["scripts/debug/**/*.ts"]
     },
+    "apps/cutscene-converter": {
+      "entry": ["src/main/main.ts", "src/main/preload.ts", "src/main/convert-child.ts", "scripts/*.ts"]
+    },
     "apps/dispatch": {
       "entry": ["src/main.tsx", "src/embed.ts"]
     },

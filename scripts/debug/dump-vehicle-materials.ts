@@ -1,6 +1,6 @@
 import { readVehicleOsm } from '@opensa/game/adapters/vehicle-osm';
 import { openArchive } from '@opensa/renderware/archive/img-archive';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 /**
  * What each submesh of a BUILT car ended up as: material class, lamp tag, night-twin layer, minimum vertex
@@ -18,8 +18,12 @@ if (!game || !model) {
   throw new Error('usage: dump-vehicle-materials.ts <game> <model>');
 }
 
-const archive = openArchive(new Uint8Array(readFileSync(`build/${game}/opensa/models/gta3.img`)));
-const osm = archive.get(`${model}.osm`);
+// Since the img-archive split, a car lives in vehicles.img / vehicles2.img (gta3.img kept for older trees).
+const osm = ['vehicles', 'vehicles2', 'gta3']
+  .map((img) => `build/${game}/opensa/models/${img}.img`)
+  .filter((path) => existsSync(path))
+  .map((path) => openArchive(new Uint8Array(readFileSync(path))).get(`${model}.osm`))
+  .find((entry) => entry !== undefined);
 if (!osm) {
   throw new Error(`no ${model}.osm in build/${game}`);
 }

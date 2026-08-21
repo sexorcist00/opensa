@@ -21,8 +21,8 @@ lights, no time-of-day drive. The world renders on baked prelit only (dark), dyn
       (uDn/uTint/uSunDir/uSunColor/shadow mirror) went live under webgpu with no per-uniform changes.
       Sun `castShadow` stays **false** until plan 05 (r185: a never-rendered castShadow map binds a non-depth
       fallback and drops lit draws); `uWorldShadowStrength` correctly resolves to 0 (null map). 5 unit tests.
-- [ ] **Slice B:** sky dome in TSL (gradient or LUT-based `backgroundNode`), sun disc + corona sprite, moon.
-- [ ] **Slice C:** the 512×32 horizon LUT generation without `ShaderMaterial` (compute the LUT on CPU or via a TSL
+- [~] **Slice B:** sky dome in TSL (gradient or LUT-based `backgroundNode`), sun disc + corona sprite, moon.
+- [~] **Slice C:** the 512×32 horizon LUT generation without `ShaderMaterial` (compute the LUT on CPU or via a TSL
       RTT) — feeds plan 04's unified fog.
 - [x] Wire the day/night clock drive (dnBalance ← clockNightFactor) in webgpu mode. _Was already driven
       unconditionally by the `coronas` system (a system, not a plugin) — the dead reads were nightFactor/sunDir/

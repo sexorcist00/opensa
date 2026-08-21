@@ -65,7 +65,7 @@ carried (all covered at 5–10 u, not 2); texture 15 from broken roads at 23–2
 
 **RETIRED the next field round, 2026-08-11 — see
 [`docs/postmortem/uv-stretch-repair.md`](../postmortem/uv-stretch-repair.md).** The before/after at a
-repaired intersection reversed it (user: *"мы сделали только хуже"*): every split vertex is a hard UV seam
+repaired intersection reversed it (user: *"we only made it worse"*): every split vertex is a hard UV seam
 between a repaired face and an unrepaired one, and the derived mapping satisfies the anisotropy limit while
 lying where no author put it. The record below is how it was built and what its guards measured; the
 diagnosis above it stands.

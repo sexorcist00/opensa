@@ -42,8 +42,8 @@ describe('collectImgEntries', () => {
   });
 });
 
-const WASHER = 'tests/original/dff/building/washer.dff';
-const BUSH = 'tests/original/world/sm_bush_large_1.dff';
+const WASHER = 'fixtures/original/dff/building/washer.dff';
+const BUSH = 'fixtures/original/world/sm_bush_large_1.dff';
 
 describe.skipIf(!existsSync(WASHER) || !existsSync(BUSH))('combinedModelSource', () => {
   let dir: string;

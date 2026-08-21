@@ -13,7 +13,7 @@ import { atlasMissKey, atlasTierOf, DECLARED_ATLAS_TIERS, DECLARED_TIERS } from 
  * time, sorted into the failure message by real frequency. Runs over the regenerated fixtures
  * (`npm run test:fixtures`), skips where they are absent (CI without game assets).
  */
-const CORPUS = 'tests/original/cleo';
+const CORPUS = 'fixtures/original/cleo';
 
 describe.skipIf(!existsSync(CORPUS))('corpus coverage join', () => {
   describe('negative cases', () => {

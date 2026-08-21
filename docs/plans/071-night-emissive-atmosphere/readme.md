@@ -2,6 +2,13 @@
 
 **Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](../074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
 
+> **The unticked boxes below are VOID with the plan, and are struck rather than deleted (2026-08-11).**
+> They were left as `- [ ]` when the chain was closed, so every repo-wide scan for open work kept
+> reporting them — 118 phantom tasks across the ten closed chains. Nothing here is a debt: the banner
+> above is the authority. They stay readable because what these plans INTENDED is still the record of
+> why the own engine does what it does.
+
+
 Part of the [rendering overhaul chain](../062-rendering-overhaul/readme.md). Depends on [067](../067-pbr-sky-clouds/readme.md) (sky/moon) and [070](../070-local-lights/readme.md) (local lights). The "make night actually beautiful" plan: keep prelit + night vertex colours AND make them glow.
 
 ## Context
@@ -52,14 +59,14 @@ dnBalance` with `mask = smoothstep(0.05, 0.32, luma(night) − luma(day))`. Free
 
 ## Tasks
 
-- [ ] Emissive term in world material: mask source selection (004 attribute if present, else night/day delta heuristic — unit-test the heuristic on night-window fixtures like `newvic1_sfw`), `uEmissiveBoost` config.
-- [ ] tobj/neon material tagging → emissive path (extend build-region `WINDOW_EMISSIVE` tagging; neon 2dfx materials join).
-- [ ] Bloom night profile + crossfade; verify LV strip: neon blooms, dark buildings don't.
-- [ ] Moon light (directional + shader term), phase-scaled; stars/moon/sky coherence pass with 005.
-- [ ] Time-band grading: sun-elevation-driven exposure/saturation curves; calibration sweep dawn→night with sign-off screenshots per band (the 038-style calibration discipline: constants recorded here).
-- [ ] Street-level night composition pass: prelit pools + 008 lamp light + emissive windows + coronas — tune relative levels so no layer dominates (the "balance" the user called out).
-- [ ] (Stretch) rain wet-look spike; measured, separate toggle.
-- [ ] Bench: LV night, LS rain night; before/after screenshot pairs into this doc.
+- [~] Emissive term in world material: mask source selection (004 attribute if present, else night/day delta heuristic — unit-test the heuristic on night-window fixtures like `newvic1_sfw`), `uEmissiveBoost` config.
+- [~] tobj/neon material tagging → emissive path (extend build-region `WINDOW_EMISSIVE` tagging; neon 2dfx materials join).
+- [~] Bloom night profile + crossfade; verify LV strip: neon blooms, dark buildings don't.
+- [~] Moon light (directional + shader term), phase-scaled; stars/moon/sky coherence pass with 005.
+- [~] Time-band grading: sun-elevation-driven exposure/saturation curves; calibration sweep dawn→night with sign-off screenshots per band (the 038-style calibration discipline: constants recorded here).
+- [~] Street-level night composition pass: prelit pools + 008 lamp light + emissive windows + coronas — tune relative levels so no layer dominates (the "balance" the user called out).
+- [~] (Stretch) rain wet-look spike; measured, separate toggle.
+- [~] Bench: LV night, LS rain night; before/after screenshot pairs into this doc.
 
 ## Verification
 

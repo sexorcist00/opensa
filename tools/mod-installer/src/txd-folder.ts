@@ -58,7 +58,7 @@ export function mergeTxdBytes(
   }
   const byName = new Map<string, RwChunk>();
   for (const native of dict.children.filter((c) => c.type === RW_TEXTURE_NATIVE)) {
-    const struct = native.children?.find((c) => c.type === RW_STRUCT)?.data;
+    const struct = textureStruct(native);
     if (struct) {
       byName.set(readTextureName(struct).toLowerCase(), native);
     }
@@ -66,8 +66,14 @@ export function mergeTxdBytes(
 
   for (const png of pngs) {
     const name = png.name.replace(/\.png$/i, '');
-    const native = pngToTextureNative(name, Uint8Array.from(readFileSync(join(folderPath, png.name))), dict.version);
     const existing = byName.get(name.toLowerCase());
+    // The replaced texture's Struct decides the raster format the PNG is encoded into (plan 015).
+    const native = pngToTextureNative(
+      name,
+      Uint8Array.from(readFileSync(join(folderPath, png.name))),
+      dict.version,
+      existing ? textureStruct(existing) : undefined,
+    );
     if (existing) {
       dict.children[dict.children.indexOf(existing)] = native;
     } else {
@@ -106,6 +112,11 @@ function insertNative(dict: RwChunk, native: RwChunk): void {
     }
   }
   children.splice(index, 0, native);
+}
+
+/** A TextureNative chunk's Struct bytes, or undefined when the chunk carries none. */
+function textureStruct(native: RwChunk): Uint8Array | undefined {
+  return native.children?.find((c) => c.type === RW_STRUCT)?.data;
 }
 
 /** Rewrite the dictionary STRUCT's leading `textureCount` (u16) to the current native count. */

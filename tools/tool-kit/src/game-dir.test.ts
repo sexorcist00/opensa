@@ -1,5 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { lstatSync, mkdtempSync, realpathSync, symlinkSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -36,6 +44,14 @@ describe('guardOut', () => {
 
     it('refuses an --out inside a source dir', () => {
       expect(() => guardOut(`${sep}a${sep}game${sep}pak`, `${sep}a${sep}game`)).toThrow(/inside/);
+    });
+
+    it('refuses a source that differs only in case — one folder on Windows and macOS', () => {
+      expect(() => guardOut(`${sep}a${sep}GTA San Andreas`, `${sep}a${sep}gta san andreas`)).toThrow(/must differ/);
+    });
+
+    it('refuses a contained source that differs only in case', () => {
+      expect(() => guardOut(`${sep}A`, `${sep}a${sep}game`)).toThrow(/must not contain/);
     });
   });
 

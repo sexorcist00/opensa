@@ -1,9 +1,14 @@
 # Plans index
 
-The map of planning docs across the repo. **Engine plans** live here — one numbered folder per plan
-(`docs/plans/NNN-*/readme.md`, multi-part plans add sibling files inside their folder); the
-**offline tools** keep their own `docs/plans/` next to their code. Open questions and parked ideas live in
-[`../open-issues/`](../open-issues/) and [`../ideas/`](../ideas/).
+The map of planning docs across the repo. **Engine plans live here and nothing else does** (the user's call,
+2026-08-20) — one numbered folder per plan (`docs/plans/NNN-*/readme.md`, multi-part plans add sibling files
+inside their folder). **Every toolchain plan lives beside its tool**, in `tools/<tool>/docs/plans/`, even when
+its work spans several tools: it goes in the chain of the tool whose RULE it is, and its row there names what
+else it reaches. Plans 102 (added vehicles → `tools/add-vehicles`) and 103 (one owner per archive entry →
+`tools/img-splitter`) moved out on that rule. The **offline tools** therefore keep their own `docs/plans/` (so does the headless harness,
+`tools-debug/bench-harness/docs/plans/`; a debug INSTRUMENT's plan sits beside the tool whose code it reuses —
+`model-repack.ts`'s LOD half is `tools/opensa-lod-generator/docs/plans/007`). Open questions and parked
+ideas live in [`../open-issues/`](../open-issues/) and [`../ideas/`](../ideas/).
 
 > **Before writing one, check [`docs/restrictions/`](../restrictions/README.md).** It holds the rules a
 > design has to satisfy — layer boundaries, format ceilings, engine splits, what is decided at build time and
@@ -70,18 +75,6 @@ Newest first:
 
 Newest first:
 
-- **[102 — The bench settle lies, and a fall poisons the sweep](./102-bench-settle-fall/readme.md)** —
-  **DONE and MERGED 2026-08-09** (`ed6b90ba`; close-out audit `6202503e`). The perf-runs
-  settle exited on a stale `pendingCells` read, nothing waited for collision, and a teleport preserved
-  `Velocity.z` — one lost race sent the player under the mesh at terminal velocity for the rest of the
-  sweep. Three red tests → the fix (notice → ring → ground → warp onto that ground → wait for rest) + a
-  derived warp reset in the character controller + a permanent leg-start probe in the report. Measured:
-  A/A `avgTriangles` spread **10.19 % → 0.14 %**, `[cam]` jump lines **89 255 → 1**, all nine scenes
-  `legStart.ok`. The field then forced a second fix — a scene anchor is authored for the CAMERA, six of
-  nine sit 3.65–26.29 m above the ground — and exposed `strip-noon`'s anchor standing inside the Flamingo
-  ([fixed](../open-issues/fixed/strip-noon-anchor-inside-a-building.md)). The re-taken density A/B says
-  d1 and d3 are indistinguishable under the noise floor, confirming the 07/04 audit on an instrument that
-  can now be trusted.
 - **[101 — Escalators in OpenSA](./101-escalators/readme.md)** — **PLANNED 2026-08-07**: the steps have
   never moved in our engine. `renderware` decodes the type-10 entry (plan 044) and there is a debug waypoint;
   `engine`, `cell-weld` and `engine-formats` have no escalator code at all, so the staircase draws and
@@ -90,8 +83,10 @@ Newest first:
   behaviour does not exist. Step 00 is research first: recover SA's own step spacing, speed and carry rule
   (and find out whether the steps are objects or a texture scroll — if the latter, plan 099's UV lane may
   already do it) before any constant of ours is fitted. Corpus is 5 entries in 4 models, fully enumerable.
-- **[100 — 2dfx survives to LOD range](./100-2dfx-at-lod-range/readme.md)** — **ALL FIVE STEPS SHIPPED
-  2026-08-08** (planned 2026-08-07), **field check owed to the chain's single rebuild**. Steps moved into
+- **[100 — 2dfx survives to LOD range](./100-2dfx-at-lod-range/readme.md)** — **🔒 CLOSED 2026-08-08** — all
+  five steps shipped that day (planned 2026-08-07) and the field check ran on the pak built after them; the
+  2026-08-12 sweep added the banner and corrected the one verdict row that still read NOT CLOSED (the
+  `insects` floor was field-judged the same day, in its hack file, with a positive control). Steps moved into
   [lod-common/007](../../tools/lod-common/docs/plans/007-2dfx-space-and-cell-carry.md),
   [opensa-lod-generator/006](../../tools/opensa-lod-generator/docs/plans/006-cell-bake-carries-effects.md) and
   [sa-lod-generator/007](../../tools/sa-lod-generator/docs/plans/007-clone-2dfx-policy.md); 03 and 04 stayed
@@ -116,7 +111,12 @@ Newest first:
   (per-model uniform, identity slot 0, dynamic offsets — unbundled draws, so no bundle staleness; zero
   allocation and zero per-frame writes for models without animations), and the user's own rebuild +
   field run closed it: **the wheel blinks**. The edge-cases row is removed — the limitation is lifted.
-  Open: the bench guard was never run, so "zero cost" is proven CPU-side only (099/02 ledger).
+  **🔒 CLOSED 2026-08-12** with the numbers it owed: observed cadence **0.225 s exactly** (130 strip steps
+  across the 29.25 s loop, off the built fixture), advance **132.2 ns/call** + one 16-byte write, and a
+  recorded sweep ([`2026-08-12-ingame-uv-anim-lane-guard.json`](../benchmarks/opensa-engine/2026-08-12-ingame-uv-anim-lane-guard.json)).
+  The before/after frame delta is NOT obtainable — the pre-change engine cannot render the 2026-08-11 pak,
+  both sides of the commit pair failing identically — so the chain closes on a stated bound instead: one
+  integer compare per rigid submesh bind, nothing else, for a model that animates nothing.
 
 - **[098 — All land vehicle types](./098-all-land-vehicles/readme.md)** — **PLANNED 2026-08-04**,
   supersedes `roadmap/0.5.0/plans/04-all-vehicle-types/` (deleted). Rewritten from a four-way recon
@@ -126,13 +126,14 @@ Newest first:
   PLUMBING before physics — `wheel_front`/`wheel_rear` match no regex (zero wheels baked), the 13 `!`
   bike-handling rows and the 30 `^` anim-group rows are parsed away, the ride IFPs sit in the
   deliberately-unexpanded `anim/anim.img`, and the repo contains ZERO Rapier joints (trailer hitch is
-  greenfield). Eight sub-plans, four field checkpoints (it rides → it looks ridden → it tows → it
-  bounces): data foundations → features module (pop-up lights generalised into a token registry —
+  greenfield). Thirteen sub-plans (11 CLOSED 2026-08-07; 09/10/12/13 added from field rounds and a clip census;
+  re-sequenced 2026-08-20), six field checkpoints (it rides → it looks ridden → it tows → it
+  bounces → the rider DOES the wheelie → each car class boards as its handling row says): data foundations → features module (pop-up lights generalised into a token registry —
   hydraulics, hooks, moving `misc_*` parts become data) → two-wheel balance controller on the authored
   `!` rows → rider animation → first joints/towing → abilities → per-class gameplay → audit close-out.
   Air/water/rail findings parked in `roadmap/0.6.0/plans/05-air-water-rail/`.
 
-- **[097 — CLEO basic](./097-cleo-basic/readme.md)** — **CLOSED: 01–08 DONE 2026-08-06** (all three field checkpoints — the wheel spins, the corpus ships through pmb + fetch pack with nothing hand-placed; 07 closed with the tracer, the F2 CLEO screen, tiers-as-data + CI joins, audit + benchmarks, and CLEO is ON BY DEFAULT — `?cleo=0` opts out; 08 authoring SDK executed as the project-local chain `cleo/sdk/docs/plans/` — hello-conformance proven on BOTH runtimes, real CLEO included), supersedes the deferred
+- **[097 — CLEO basic](./097-cleo-basic/readme.md)** — **CLOSED: 01–08 DONE 2026-08-06** (all three field checkpoints — the wheel spins, the corpus ships through pmb + fetch pack with nothing hand-placed; 07 closed with the tracer, the F2 CLEO screen, tiers-as-data + CI joins, audit + benchmarks, and CLEO is ON BY DEFAULT — `?cleo=0` opts out; 08 authoring SDK executed as the project-local chain `cleo/sdk/docs/plans/` — hello-conformance proven on BOTH runtimes, real CLEO included; **its plan file was deleted from this folder 2026-08-12** as a duplicate of that shipped chain, so 097 now holds the ENGINE side only and has zero open boxes), supersedes the deferred
   `roadmap/0.5.0/plans/08-cleo-basic/` chain (deleted; it was the unstarted 083 rethink). Rewritten from a
   full recon: all seven target `.cs` scripts (`NO_COMMIT/cleo`) were disassembled — three mod classes
   (world objects / vehicle-part animation via native calls / ped-task orchestration), ~116 unique opcodes,
@@ -235,9 +236,12 @@ Newest first:
   `build/original`→`build/original`), pak manifest identity, the fetch-pack finishing tool replacing
   `build-game.ts`, the fetch client booting the pak, TC trial runs (gostown/carcer/anderius).
 - **[085 — Map-object appearance](./085-map-object-appearance/readme.md)** — the 2026-07-22 field round
-  (after vehicles, before peds): row A SHIPPED — the night emissive mask went per-channel (the luma delta
-  systematically killed saturated neon: the LV strip's red rope lights never glowed); further rows as the
-  user reports them.
+  (after vehicles, before peds): rows A–G SHIPPED and field-confirmed — the night emissive mask went
+  per-channel (the luma delta systematically killed saturated neon: the LV strip's red rope lights never
+  glowed), missing textures render vanilla grey, additive neon adds light, night-only timed models run
+  fullbright. **🔒 CLOSED 2026-08-12** on row H's field verdict — the additive-class narrowing (`classOf`:
+  class 4 only for alpha materials) was verified in the pak bytes and then driven at the Old Venturas Strip
+  entrance at night: no see-through, solid facade.
 
 - **[084 — Vehicle appearance and dynamic-model lighting](./084-vehicle-appearance/readme.md)** — the 2026-07-20
   field round: wheel-side/scale conventions and the flat dynamic indirect term SHIPPED (with measurements);
@@ -256,7 +260,10 @@ Newest first:
   backwards, and a plate is two quads, not one), and the first real boot cost one fix: a WGSL uniformity
   error in `rigidTexel`, which no test can see. Closed on the look verdict — the distribution drive, the
   bench guard and a ram test are listed unmeasured in the plan's readme; **that unmeasured tail was deferred
-  to 0.5.0 on 2026-08-01** (the plan itself stays here — it shipped in 0.4.0).
+  to 0.5.0 on 2026-08-01** (the plan itself stays here — it shipped in 0.4.0). **Finished off 2026-08-12**:
+  the F2 debug-spawner plate input and the damage/detach lifetime tests landed, and the deferred FIELD
+  measurements became a real row in [098/08](./098-all-land-vehicles/08-acceptance-close.md) — until then
+  they pointed at a chain that carried no plate task at all.
 - **[081 — Vehicle driving physics](./081-vehicle-physics/readme.md)** — feel overhaul on the own engine.
   **01–05 DONE 2026-07-26, field-accepted**: `handling.cfg` went from 5 fields consumed to 21, every one a
   translation of the original's own code (spring law, `cTransmission` gearbox, air drag, tyre grip and
@@ -289,7 +296,10 @@ Newest first:
   — every dev surface (lab, bench harness, viewers) reads ONE canonical build (`./build/original`), served in
   place (NOT copied into `public/`), via a new `http-dir` loader + the loading-MODE-selects-the-world fix +
   `buildTime`. Depends on [opensa-pack 003](../../tools/opensa-pack/docs/plans/003-game-shaped-output.md).
-  **Phases 0–5 DONE 2026-07-21; phase 6 (docs) open.**
+  **🔒 CLOSED 2026-08-12** — phases 0–6 DONE 2026-07-21, close-out taken 2026-08-12 (lint clean, coverage
+  floors held: 4 108 tests, 91.92 / 82.6 / 92.09 / 92 vs 86 / 77 / 88 / 86, `docs/development/` verified
+  repointed). Its measurement ledger stays EMPTY on purpose and says why — the phase 2–5 numbers were never
+  taken and the builds they would have described are gone.
 - **[078 — Global bug fixing](./078-global-bug-fixing/readme.md)** — the umbrella ledger for the bugs the
   first FULL pmb map convert surfaced (2026-07-19, >1 h run): engine and tool fixes tracked in one place.
   **OPEN — awaiting the detailed bug report; runs before 079.**
@@ -368,7 +378,22 @@ Newest first:
 - **vehicle-installer** — install vehicle mod folders: dff/txd → `gta3.img`; settings → `handling.cfg`/
   `vehicles.ide`/`carcols.dat` (car/car4, alpha-sorted, custom `col` palettes)/`carmods.dat`; `--strip` to keep
   only the installed cars. [`vehicle-installer/docs/plans/`](../../tools/vehicle-installer/docs/plans/) (`001`
-  architecture · `002` install · `003` palette · `004` strip).
+  architecture · `002` install · `003` palette · `004` strip · … · `011` special features · **`012` unread
+  file kinds · `013` audio + parked — planned, central plan 102**).
+- **add-vehicles** — ADDED cars (new model ids) for the `sa` target, on vehicle-installer's Node API:
+  resolver root, id allocator, name/sound/parking, ModelVariations traffic, derived tuning, tuned traffic,
+  the pmb stage. [`add-vehicles/docs/plans/`](../../tools/add-vehicles/docs/plans/readme.md) (`001`–`007`,
+  planned 2026-08-19; central plan 102).
+- **vehicle-cutscene** — convert installed vehicle mods into their cutscene counterparts: the 23 `cs*` models
+  in `models/cutscene.img` (flattened HAnim rig with the vanilla bone ids, four instantiated wheels, baked
+  carcols paint, empty `txdp`-resolved TXD), so real-game cutscenes show the same custom cars as gameplay.
+  [`vehicle-cutscene/docs/plans/`](../../tools/vehicle-cutscene/docs/plans/) (`001` architecture + research ·
+  `002` implementation — CLOSED, accepted: both car field gates, bike, boat, the full 23-model fleet
+  converting as pmb's `cutscene` stage (the pipeline-build acceptance moved to perfect-cutscene
+  plan 001 step 7) · `003` plate bake — CLOSED, field-passed: readable plates where vanilla shows blanks ·
+  `004` full scene field review — CLOSED, APPROVED: all 35 vehicle scenes swept via the override,
+  23 fix rounds · `005` seat retarget — CLOSED, field-passed: a cutscene actor sits in the DONOR's
+  seat rather than R\*'s, which was 0.281 m low on a taller car).
 - **ped-installer** — install ped mod folders: dff/txd → `gta3.img`; a new ped's line → `peds.ide` (replace by
   model, append if new); `--strip` to keep only the installed peds + the player ped (`--player`, default
   `BMYPOL1`). [`ped-installer/docs/plans/`](../../tools/ped-installer/docs/plans/) (`001` architecture · `002`
@@ -389,6 +414,15 @@ Newest first:
   `asi/perfect-map` root-category pattern). [`cleo/scripts/docs/plans/`](../../cleo/scripts/docs/plans/readme.md)
   (`001` rhino tracks — CLOSED 2026-08-07, both runtimes field-proven, shipping step waived ·
   `002` no_lights — PLANNED 2026-08-06).
+- **asi/perfect-cutscene** — deferred depth-sorted alpha for CUTSCENE vehicles (the glass-over-actors
+  fix; retires `docs/hacks/retired/cutscene-window-pane-suppression.md`), second consumer of `asi/sdk`.
+  [`asi/perfect-cutscene/docs/plans/`](../../asi/perfect-cutscene/docs/plans/readme.md) (`001` deferred
+  cutscene alpha — WRITTEN 2026-08-14, not started; ends with a full plan-004 fleet re-check + pmb
+  packaging).
+- **asi/perfect-vehicle** — the VEHICLE-side ceilings no adjuster has a setting for: the two `carmods.dat`
+  arrays (30 `link` pairs game-wide, 16 parts per car) that `tools/add-vehicles` runs into; third consumer
+  of `asi/sdk`. [`asi/perfect-vehicle/docs/plans/`](../../asi/perfect-vehicle/docs/plans/readme.md) (`001` RE
+  · `002` relocation patches — PLANNED 2026-08-19, central plan 102).
 
 ## Other docs
 

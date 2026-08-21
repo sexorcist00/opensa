@@ -12,6 +12,7 @@ All TypeScript scripts run via `npx tsx`, `.mjs` ones via `node`.
   - [test-viewer-fixtures.ts](#test-viewer-fixturests)
   - [serve-static.ts](#serve-staticts)
   - [test-fixtures.ts](#test-fixturests)
+  - [cars-server/](#cars-server)
 - [Debugging / auditing](#debugging--auditing)
   - [audit-rw-coverage.ts](#audit-rw-coveragets)
   - [inspect-area.ts](#inspect-areats)
@@ -68,11 +69,11 @@ npx tsx scripts/gen-wind-list.ts
 
 ### test-viewer-fixtures.ts
 
-Builds the object-viewer's **e2e fixtures** into **`tests/viewer/objects/`** by extracting from a clean,
+Builds the object-viewer's **e2e fixtures** into **`fixtures/viewer/objects/`** by extracting from a clean,
 unmodified GTA copy under `game-src/original`: the object-viewer's models + their txds, a pre-baked
 `<model>.col.json` (map-object collision lives in the IMG, not the DFF), and a `manifest.json`. Chained after
-`test-fixtures.ts` by **`npm run test:fixtures`** (not a separate command). `tests/viewer/` is gitignored (like
-`tests/original/`); regenerate locally after a fresh clone. At runtime the viewers load from the compare
+`test-fixtures.ts` by **`npm run test:fixtures`** (not a separate command). `fixtures/viewer/` is gitignored (like
+`fixtures/original/`); regenerate locally after a fresh clone. At runtime the viewers load from the compare
 server — these fixtures exist only so the object-viewer e2e renders real geometry in CI without the full game.
 
 ```sh
@@ -82,7 +83,7 @@ npm run test:fixtures               # tsx scripts/test-fixtures.ts && tsx script
 ### serve-static.ts
 
 The local + e2e static origin (`npm run serve:static`, port 3001 = `VITE_STATIC_URL`). Serves the built
-`static/games/<game>-<version>/` archives, and maps `/viewer/*` → the object-viewer's `tests/viewer/` e2e
+`static/games/<game>-<version>/` archives, and maps `/viewer/*` → the object-viewer's `fixtures/viewer/` e2e
 fixtures (`npm run test:fixtures`) — all gitignored. CORS is on; dev mode reads files fresh.
 
 Also mounts **`/build`** (Range-capable) so the dev surfaces can boot the canonical build in place: a
@@ -104,18 +105,38 @@ output to `timecyc-builder/merged/`. **Full guide: [timecyc-builder.md](./timecy
 npm run timecyc
 ```
 
+### cars-server/
+
+A local page listing what the vehicle fleet **replaced** — the stock car beside the mod that took its slot,
+its author, the model id and what the mod brings (paint jobs, tuning, colours, a CLEO script). Internal
+tool: express + handlebars, rendered per request off `mods-src/<game>/vehicles`, so editing the tree and
+reloading shows the new fleet.
+
+```sh
+npm run cars                                # http://localhost:5178, game `original`, target `sa`
+npm run cars:sa | npm run cars:opensa       # a LAYERED vehicles folder: common + that target (cars and screenshots)
+npm run cars -- --game gostown --port 5200 [--target sa|opensa]
+```
+
+The header names the target; on a layered tree each car's screenshot comes from its OWN layer's `screenshots/`
+([plan 002](../../scripts/cars-server/docs/plans/002-layered-screenshots.md)). It is a folder rather than a file (a view, a catalog and the bundled stock metadata), so it keeps its own
+[readme](../../scripts/cars-server/readme.md) and
+[plan](../../scripts/cars-server/docs/plans/001-cars-server.md) beside the code — including where the tags
+come from and why the three sources are joined on the SLOT and never on the folder name.
+
 ### test-fixtures.ts
 
-Regenerates the real-asset test fixtures (`tests/original/`) — Rockstar assets, **gitignored, not
+Regenerates the real-asset test fixtures (`fixtures/original/`) — Rockstar assets, **gitignored, not
 redistributed**. Reads from a **clean, UNMODIFIED GTA San Andreas** copy at **`game-src/original/`**:
 copies loose data/text files, extracts entries from `models/*.img`, builds `img/admiral.img`, and generates
 `models/effects` particle data + a stock `data/timecyc_24h.dat` (plain `convertTo24h`, no mod overlay).
-Committed fixtures (mods + curated/version-pinned test models) live in `tests/custom/` and are untouched.
+Custom fixtures (mods + curated/version-pinned test models + golden snapshots) are mirrored from the local,
+uncommitted `fixtures-src/` into `fixtures/custom/` FIRST (wipe + copy); nothing under `tests/` is committed.
 
 **Running the test suite requires this first** (CI has no game-src, so unit tests + e2e are disabled there):
 
 ```sh
-npm run test:fixtures   # populate tests/original/ from game-src/original
+npm run test:fixtures   # populate fixtures/original/ from game-src/original
 npm test                # then run the unit tests
 ```
 
@@ -129,6 +150,9 @@ These live under `scripts/debug/` and mirror `resolveMap` offline (fs instead of
 variant's real assets in `game-src/<game>/` — models read straight from the stock `gta3.img` /
 `gta_int.img` archives, data from `game-src/<game>/data/`. They share `scripts/lib/game.ts`
 (`--game <name>`, default `original`) and must be run from the repo root (paths are cwd-relative).
+The full, current table — including the one-model swap instruments that replace a rebuild
+(`model-lab.ts` / `model-optimize.ts` / `img-patch.ts` for the `sa` tree, `model-repack.ts` for the OpenSA
+lab pak) — is [`docs/debug/README.md`](../debug/README.md); this page keeps the older, hand-described ones.
 
 ### audit-rw-coverage.ts
 

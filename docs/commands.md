@@ -12,7 +12,7 @@ more often, so it does not pay for the real game's LOD pass:
 
 ```bash
 npm run build:game:original:opensa     # our target only  (pmb --exclude sa) + fetch-pack
-npm run build:game:original:sa         # the real game    (pmb --exclude vehicles,peds,opensa)
+npm run build:game:original:sa         # the real game    (pmb --exclude opensa — every stage, both asis)
 npm run build:game:gostown:opensa      # TCs are opensa-only (also :carcer :anderius)
 ```
 
@@ -36,18 +36,24 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
   --game ./game-src/original --in ./mods-src --exclude sa
 ```
 
-Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|peds|optimize|trees|sa|procobj|opensa|pack|lod>` (that IS the run order — `procobj` is baked inside the `sa` branch since plan 014, so `--until sa` stops BEFORE the clutter)
+Params: `--out <dir>` (default `./build/original`) · `--until <split|mods|vehicles|cutscene|add-vehicles|peds|optimize|trees|sa|procobj|opensa|pack|lod>` (that IS the run order — `procobj` is baked inside the `sa` branch since plan 014, so `--until sa` stops BEFORE the clutter; `cutscene` is the vehicles stage's shadow and drops out with `--exclude vehicles`)
 (inclusive, keeps `.work-<target>/`) · **`--exclude <stage,stage>`** · **`--target <sa|opensa>`** ·
 `--procobj-density <n>` · `--procobj-max <n>` · `--keep-work` · `--no-weld-seams` · `--no-textures` ·
 **`--bake-collision`** (write every cell's collision into the pak — plan
 200/3-01; off by default, and the same tree built with and without it is the A/B the claim is read on: the
 runtime reads a bake when the pak has one and parses COL when it does not).
 
+**`--resume`** — re-enter a FAILED run at its last finished step (`<out>/.work-<target>/resume.json`; the pack
+re-enters at its last finished weld chunk); refused if the sources, flags or code changed since that run
+(pmb plan 006).
+
 `--exclude` says WHICH STAGES run where `--until` is the stop point: it drops the named stages and keeps
 everything after them (repeatable, comma-separated, same names as `--until` minus the `lod` alias; an unknown
 name is an error, never a silent skip). Excluding `opensa` drops `pack` with it; excluding `pack` alone leaves
 `opensa/` in GAME format; excluding `sa` also drops its `checkImgIdBudgets` guard, which reads the `sa/` tree.
-**`:sa` builds no mod vehicles or peds** — that is what `--exclude vehicles,peds` means.
+**`:sa` builds everything but the opensa target** since 2026-08-15 — it stopped excluding `vehicles,peds` when the
+cutscene stage began shipping a plugin paired with its fleet: a "real game" build that silently carried neither is
+the trap. Measured end to end at 638.9 s.
 
 `--target` says which HOST the build is for, and it picks every knob whose right value is a fact about the
 host rather than about the source data (limits, particle policy, procobj density). Omit it and it is DERIVED
@@ -55,7 +61,10 @@ from `--exclude` — `--exclude sa` builds for `opensa`, anything that still bui
 common chain is shared and its content has to satisfy the host that still has ceilings. `--target opensa`
 without `--exclude sa` is refused for the same reason. The run prints the target it resolved, and the procobj
 stage prints that layer's price against it (objects · permanent text rows · rows/object).
-NB `--target` means a DIRECTORY in `vehicle-installer --rebake` — same word, unrelated meaning.
+NB `--target` means a DIRECTORY in `vehicle-installer --rebake` — same word, unrelated meaning; there the
+layer of a LAYERED vehicles folder is picked by `--kind`. `vehicle-installer`/`ped-installer`/`vehicle-cutscene`
+`--target sa|opensa` and `cars-server --target` (default `sa`) pick the layer of a layered `--in`
+(`common/sa/opensa`, same planner as mods — 2026-08-17).
 
 `--procobj-density` is the scatter density cutoff for the procobj stage — **1 = vanilla, max 3** (the
 scatter's candidate ceiling; above it there are no candidates left to keep and the build refuses). The run
@@ -89,15 +98,83 @@ ID pools** (`checkImgIdBudgets` — the one set of ceilings the target really ha
 neither. There is no int16 row guard any more: the target always runs `perfect-map.asi` + OLA + FLA, so that
 ceiling is lifted where our data lands — `--allow-text-row-overflow` was deleted with it (2026-08-09).
 
+The chain opens with **`split`** (img-splitter): `models/gta3.img` is divided into typed archives BEFORE
+anything installs, so every entry name lives in exactly one of them. `BuilderConfig.splitBuckets` picks which
+buckets get their own file and defaults to `['vehicles']` — the shape that fits a stock archive table exactly
+(SA registers 8, the target already spends 6, and the mod car set spills `vehicles.img` into one sibling).
+Whoever writes an archive registers it in `gta.dat`, and the finished `sa/` tree is gated against the 8:
+past it the game does not warn, it crashes at load. A tool asks **where** a file lives through
+`openArchiveIndex` rather than opening `gta3.img` by name; `data/img-layout.json` beside it is a REPORT for
+readers outside the build, never the lookup. See
+[architecture/img-archive-layout.md](./architecture/img-archive-layout.md).
+
+The `sa/` tree carries **the asis its content requires**, into the game root: `perfect-map.asi` always, and
+`perfect-cutscene.asi` when the cutscene stage ran (the fleet and the plugin are coupled — panes on every
+slot with no plugin is the draw-order roulette back). Both are pre-built artifacts under a gitignored
+`dist/` (`npm run build:asi` in `asi/perfect-map` / `asi/perfect-cutscene`, MinGW); a missing one WARNS and
+does not fail the build, and each shipped one is hashed into `report-sa.json` and `build-timings.json` so a
+tree states which plugin build it is paired with.
+
+### One model changed: swap it in place instead of rebuilding
+
+```bash
+# REAL-SA tree: HD through the optimizer chain + its clone LOD cut from the result, patched into the tree's IMGs
+npx tsx scripts/debug/model-lab.ts <model> --tree build/original/sa [--dff f.dff --txd f.txd] [--dry]
+npx tsx scripts/debug/img-patch.ts restore <model>.dff --game build/original/sa      # undo, per entry
+# OPENSA tree: the model re-optimized, its rect's CELL LODs re-baked from the swapped HD, the rect re-welded
+# into a servable LAB pak (never the shipping pak) — 17 s for an 88-model rect on original
+NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/debug/model-repack.ts <model> --game original [--dff f.dff [--txd f.txd]] [--no-lod]
+npm run serve:static   # then the app with ?src=/build/original/opensa-lab
+```
+
+The full pipeline is the LAST resort — to confirm a fix on the whole tree after the one-model verdict, or for a
+change with no one-model form. Rows and levers: [`docs/debug/README.md`](debug/README.md).
+
+### A build that died: resume it
+
+```bash
+# same flags as the run that died, plus --resume — re-enters at the last finished step (a dead pack at its
+# last finished weld chunk); refused, naming the difference, if sources / flags / git HEAD changed since that
+# run (a DIRTY tree at the same HEAD is allowed — fix the bug that killed it, resume). The pack's model classes
+# after the weld re-run (~9 min on original — docs/in-reserve/opensa-pack-model-class-checkpoints.md).
+# Field-exercised 2026-08-17: killed at weld chunk 6/21, resumed at 7/21, byte-identical to an unbroken run.
+NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cli.ts \
+  --game ./game-src/original --in ./mods-src/original --out ./build/original --exclude sa --resume
+```
+
+### Added vehicles — new model ids on a built `sa` tree
+
+```bash
+# Everything mods-src/<game>/add-vehicles holds, into a BUILT sa tree, in place
+npx tsx tools/add-vehicles/src/cli.ts --game build/original/sa
+npx tsx tools/add-vehicles/src/cli.ts --game build/original/sa --only 001veh,059veh
+npx tsx tools/add-vehicles/src/cli.ts --game build/original/sa --plan     # resolve and report, write nothing
+```
+
+`sa` only — every part of an added car is a plugin of the real game (ModelVariations for traffic, FLA's
+audio loader, Parked Maker, CLEO's FXT loader). Ids come from **19 001–19 999** and are pinned by
+`data/vehicle-adds.txt`, so a rebuild never renumbers the fleet (a parked spot and a variation land in the
+SAVE). Also a pmb stage (`--until add-vehicles`), after `cutscene`. Central plan
+[102](../tools/add-vehicles/docs/plans/102-add-vehicles/readme.md); tuning rate and exclusions live in an optional
+`mods-src/<game>/add-vehicles/add-vehicles.json`.
+
 ### Vehicle round: rebake instead of rebuilding
 
 ```bash
 # Re-install + re-convert the mod cars of an ALREADY BUILT game, in place (one car ≈ 3.6 s)
 npx tsx tools/vehicle-installer/src/cli.ts --rebake gostown --only previon
 npx tsx tools/vehicle-installer/src/cli.ts --rebake gostown            # every mod car of that game
+# The same against the REAL-SA tree: raw dff/txd replaced by name in vehicles.img + vehicles2.img (one car ≈ 4 s)
+npx tsx tools/vehicle-installer/src/cli.ts --rebake original --kind sa --only cabbie
 ```
 
-Defaults: `--target build/<game>/opensa` · `--in mods-src/<game>/vehicles` (both overridable). Per car it
+Defaults: `--kind opensa` · `--target build/<game>/<kind>` · `--in mods-src/<game>/vehicles` (all
+overridable). `--kind sa` installs instead of converting ([plan 008](../tools/vehicle-installer/docs/plans/008-rebake-sa.md));
+each kind refuses the other's tree by what the archive holds. **Which cars
+that folder holds**: every subfolder of a flat tree, or `models/` overridden per SLOT by `new/` in a
+structured one — drop a candidate into `new/` and every vehicle command takes it instead of the incumbent,
+with nothing renamed or deleted ([plan 007](../tools/vehicle-installer/docs/plans/007-models-and-new.md),
+contract `docs/contracts/vehicles.md` §1). Per car it
 merges its `*.settings.txt` into the BUILT `data/*`, merges its `features.txt` line into
 `data/vehicle-features.txt`, re-converts its `dff`/`txd` and REPLACES `<model>.osm` in whichever
 `models/*.img` holds it. Idempotent, and it touches nothing else in the tree.
@@ -106,6 +183,65 @@ roster is text and a spawn resolves `<model>.osm` by name, so nothing about a ca
 tool never allocates an id (it must match what a full build would write) and refuses one that already belongs
 to another model. An added car has no traffic or parked presence until a full build writes the placements —
 spawn it by name to look at it ([plan 006](../tools/vehicle-installer/docs/plans/006-rebake.md)).
+
+### What the fleet replaced, in a browser
+
+```bash
+npm run cars                                # http://localhost:5178, game `original`, target `sa`
+npm run cars:sa                             # a LAYERED vehicles folder: common + sa (cars AND screenshots)
+npm run cars:opensa                         # … common + opensa
+npm run cars -- --game gostown --port 5200 [--target sa|opensa]
+```
+
+One local page per game: every installed car with its model id, `<slot> replaced to: <car>`, the author,
+what the mod brings (paint jobs · tuning · new colours · car4 · a CLEO script), and the stock picture beside
+the field screenshot. Rendered per request off `mods-src/<game>/vehicles`, so a reload shows the tree as it
+is now; a `new/` candidate appears marked `from new/`. The header names the TARGET; on a layered tree each car's
+screenshot comes from its OWN layer's `screenshots/` (`common/` or `<target>/`, `.png`/`.jpg`/`.webp` alike —
+never the other layer's picture under the same slot), on a flat/structured one from `screenshots/` and the
+target does not apply; a car with no screenshot is a warning at the top of the page naming the file to save
+([readme](../scripts/cars-server/readme.md), [plan](../scripts/cars-server/docs/plans/001-cars-server.md),
+[plan 002](../scripts/cars-server/docs/plans/002-layered-screenshots.md)).
+
+### Cutscene vehicles: census / conversion
+
+```bash
+# which cutscene models exist, which mod is the donor, is everything in place (writes nothing):
+npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --inspect
+# convert the fleet into an output game (base copied; cutscene.img rebuilt; txdcut.ide patched;
+# anim/cuts.img re-emitted when two SCENE-VALUE passes find work — the wheel-stash sink and the seat
+# retarget, both reported per row in the summary):
+npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --out <dir>
+# emit ONLY the three files the tool writes, into a folder of your own (--out is NOT wiped, and must
+# not be the game itself). The field-delivery shape: 579 MiB instead of a 1.72 GiB game tree, and the
+# three files are byte-identical to the copy run (plan 006):
+npx tsx tools/vehicle-cutscene/src/cli.ts --game game-src/original --in mods-src/original/vehicles --out <dir> --no-base-copy
+# --only bobcat,cszr350 restricts slots; --self-contained-txd embeds each MOD's TXD (for a target whose
+# gameplay stays stock, e.g. the reference bottle). All three branches convert (car/bike/boat) —
+# the full 23-model fleet; ~3.5 s wall-clock, ~2.4 s with --no-base-copy (docs/benchmarks/tools/).
+# Plated slots get a READABLE license plate baked into the cs TXD (vanilla cutscenes show blanks):
+# --plate <text> overrides the per-slot deterministic text, --plate-town <ls|sf|lv> picks the background
+```
+
+Field delivery to the reference bottle = drop `models/cutscene.img` + `data/txdcut.ide` in (originals
+renamed to `.vanilla` beside them) — the bottle streams cutscene.img directly, no modloader override
+([gta-sa-original/cutscenes.md](gta-sa-original/cutscenes.md)).
+
+23 cutscene vehicle models / 21 donor slots; the census derives from `models/cutscene.img` +
+`data/txdcut.ide` + `data/vehicles.ide`, never a hardcoded list
+([plans](../tools/vehicle-cutscene/docs/plans/)).
+
+### The same conversion as a Windows app (apps/cutscene-converter)
+
+```bash
+npm run dev -w @opensa/cutscene-converter        # vite + esbuild + Electron, window on macOS
+npm run build -w @opensa/cutscene-converter      # asi resource, main bundle, renderer; FAILS with no asi
+npm run pack:win -w @opensa/cutscene-converter   # the portable exe into apps/cutscene-converter/release/
+```
+
+A facade over the tool above — it forks the very same CLI with `--no-base-copy --self-contained-txd`, so
+its output is byte-identical to the command line's. `perfect-cutscene.asi` is embedded at build time and
+the build refuses to run without it ([README](../apps/cutscene-converter/README.md)).
 
 ## Serving & running
 
@@ -172,8 +308,11 @@ Full query-param reference: [development/query-parameters.md](./development/quer
 ## Individual tools (run standalone when bisecting the chain)
 
 ```bash
-# Mods → game dir
+# Mods → game dir. Two shapes of --in (docs/contracts/mods.md §1): FLAT (every subfolder is a mod, today's
+# shape) or LAYERED (common/ + sa/ + opensa/, all optional) — a layered folder applies `common` first, then
+# the layer named by --target, and REQUIRES that flag; a flat one ignores it.
 npx tsx tools/mod-installer/src/cli.ts --in ./mods-src/original/mods --game ./game-src/original --out <dir>
+npx tsx tools/mod-installer/src/cli.ts --in ./mods-src/<game>/mods --game <dir> --out <dir> --target sa
 
 # Lossless map conditioning (normals/prelit/dedupe)
 npx tsx tools/map-optimizer/src/cli.ts --game <dir> --out <dir>
@@ -198,6 +337,17 @@ npx tsx tools/opensa-lod-generator/src/cli.ts --game <dir> --out <dir> --cell 25
 # Real-SA per-object LOD clones ([--holes <json>]: per-game hole-fill list, e.g. mods-src/original/lod-holes.json)
 NODE_OPTIONS=--max-old-space-size=8192 npx tsx tools/sa-lod-generator/src/cli.ts --game <dir> --out <dir>
 
+# One loose vehicle DFF: report / uniform scale / reflection transfer (paths resolve from the CWD)
+npx tsx tools/vehicle-optimizer/src/cli.ts --model ./mods-src/original/1/yankee.dff
+npx tsx tools/vehicle-optimizer/src/cli.ts --model ./path/to/car.dff --scale 1.02 --prototype ./path/to/ref.dff
+#   --coefficient <n> / --reflection <n> / --specular <n>: set the env-map coefficient / reflection intensity /
+#     specular level outright
+#     (with or without a donor — they win over it). The coefficient is the mirror-the-world strength AND the
+#     author's marking of which surfaces reflect; only the marked ones are retuned.
+#   no operation at all = a structure report, nothing written
+#   the finished DFF lands in an `out/` folder BESIDE the model; --out <dir> puts it elsewhere
+#   what moved: npx tsx scripts/debug/dff-reflection.ts <before.dff> <after.dff> --diff
+
 # Game dir → native pak (the pack stage standalone)
 NODE_OPTIONS=--max-old-space-size=12288 \
   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --in ./mods-src
@@ -205,6 +355,7 @@ NODE_OPTIONS=--max-old-space-size=12288 \
 #   --rect: optional SUBSET override (bench districts); default auto-fits every cell with content — the old
 #     hardcoded ±12 silently dropped gostown's far islands (plan 087)
 #   --pak-out: where the pak products land (default: <out>/pak — the game dir is self-contained, 086 phase 8)
+#   --checkpoints <dir> [--resume]: per-chunk weld checkpoints; --resume continues from them (pmb plan 006)
 #   --game-id: fetch game id stamped into the pak manifest (default: basename of --game; pmb passes its own)
 #   --bake-collision: write every cell's collision into the pak (.oscol v2, on the GAME grid 256 -- NOT the
 #     render grid 250) so the browser never parses a COL, and resolve the breakable gate here too (the
@@ -310,6 +461,10 @@ npm run build:verify -w @opensa/perfect-map-asi   # DRY RUN: patches nothing, lo
 npm run build:debug  -w @opensa/perfect-map-asi   # APPLY + verbose site dump + the plugin's own traces
 npm run gen          -w @opensa/perfect-map-asi   # catalogue.ts → src/generated/patches.hpp only
 
+# The second plugin: deferred cutscene alpha (glass over scene actors) → dist/perfect-cutscene.asi
+npm run build:asi    -w @opensa/perfect-cutscene-asi
+npm run build:verify -w @opensa/perfect-cutscene-asi   # what a bring-up step installs: verifies, writes nothing
+
 # Per-fix bisection (the flags are the plugin's; EXTRA_CXXFLAGS is the SDK's knob)
 make -C asi/perfect-map APPLY=1 EXTRA_CXXFLAGS='-DPM_FIX_INT16=1 -DPM_FIX_FX2DFX=0'
 # DEBUG=1 without APPLY=1 is refused: every debug switch is read inside an APPLY build.
@@ -348,12 +503,12 @@ npm run cleo:whitelist               # regenerate the SDK's dual-target whitelis
 npx tsx scripts/debug/scm-disasm.ts <file.cs|dir> [--census|--strings|--json] [--out <dir>]   # disassemble compiled CLEO scripts (097/02)
 npx tsx scripts/debug/cleo-census.ts [paths…] [--json]                                        # opcode frequency/coverage table over a CLEO corpus (097/02; status column = VM registry join)
 npx tsx scripts/debug/cleo-run.ts <file.cs> [--ticks 60] [--fps 60] [--calls 60]              # run a CLEO script headless on the VM, print the host-call trace (097/02+03)
-npx tsx scripts/debug/cleo-trace-fixtures.ts                                                  # regenerate the corpus trace snapshots (tests/custom/cleo-traces/, 097/07; review the diff — it IS the change)
+npx tsx scripts/debug/cleo-trace-fixtures.ts                                                  # regenerate the corpus trace snapshots (fixtures-src/cleo-traces/ + the fixtures/custom mirror, 097/07; review the diff — it IS the change)
 npm run e2e / e2e:ui / e2e:update    # playwright
 npm run lint / format                # tsc --noEmit + eslint / prettier+eslint --fix
 npm run arch / arch:render           # package graph to stdout / regenerate docs/architecture/assets
 npm run build:game:original:opensa   # pmb (--exclude sa) + fetch-pack → the opensa game dir + the fetch build (also :gostown :carcer :anderius)
-npm run build:game:original:sa       # pmb (--exclude vehicles,peds,opensa) → the real-game sa/ target only
+npm run build:game:original:sa       # pmb (--exclude opensa) → the real-game sa/ target only, split + vehicles + cutscene fleet + both asis
 npx tsx tools/fetch-pack/src/cli.ts     # fetch build standalone (chained in build:game:*; --build ./build/<id>; --out ./static/games stages a local fetch test)
                                         #   expands models/*.img into bare-named entries (fetch mode cannot open a container), prunes chunks a re-pack replaced, skips *.bak/.DS_Store
 npm run timecyc                      # precompute timecyc data

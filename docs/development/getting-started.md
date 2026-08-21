@@ -51,6 +51,17 @@ npm run build:game:original:sa           # the real-game target instead → ./bu
 # other games (opensa only): npm run build:game:gostown|carcer|anderius:opensa
 ```
 
+A full `original` run is ~50 min (`opensa` — the pack alone ~35) and ~12 min for `sa`. Two things keep that
+from being paid twice:
+
+- **a run that dies is resumed, not restarted** — `npx tsx tools/perfect-map-builder/src/cli.ts <same flags>
+  --resume` re-enters at the last finished step (a dead pack at its last finished weld chunk), reading
+  `<out>/.work-<target>/resume.json`; it refuses, naming the difference, if the sources, the flags or the code
+  changed since that run (pmb plan 006);
+- **one changed model does not need a rebuild** — `scripts/debug/model-lab.ts` for the `sa` tree,
+  `scripts/debug/model-repack.ts` for the OpenSA one (a servable lab pak with the model's HD AND its cell LOD
+  regenerated, `?src=/build/<game>/opensa-lab`); rows in [`docs/debug/README.md`](../debug/README.md).
+
 One command, TWO independent builds (plan 086 phase 8): `opensa/` — the SELF-CONTAINED game dir
 (engine pak inside at `pak/`; open it in folder mode or serve it for http-dir), and `opensa-pack/` —
 the FETCH build (`tools/fetch-pack` packs the game dir into `<game>-<version>/` chunks; deploy = upload
@@ -101,17 +112,20 @@ unzip + verify) → the lazily-loaded game runs entirely from the VFS.
 
 ## 5. Test fixtures (to run the test suite)
 
-The real-asset test fixtures under `tests/original/` are Rockstar assets, so they are **not committed**
+The real-asset test fixtures under `fixtures/original/` are Rockstar assets, so they are **not committed**
 (gitignored) — regenerate them locally from an **unmodified** GTA SA copy placed at `game-src/original/`:
 
 ```bash
-npm run test:fixtures   # extracts/copies the needed files from game-src/original into tests/original/
+npm run test:fixtures   # extracts/copies the needed files from game-src/original into fixtures/original/
 npm test                # now the unit tests have their fixtures
 ```
 
-Custom (non-Rockstar) fixtures live in `tests/custom/` and are committed — no setup needed. A few fixtures
-that can't be reproduced from a stock copy are also committed (see `scripts/test-fixtures.ts`). Re-run
-`npm run test:fixtures` whenever you add a fixture to the manifest.
+Custom (non-Rockstar) fixtures — `fixtures/custom/` — are a MIRROR of `fixtures-src/`, a folder that is
+**local and uncommitted** (nothing under `tests/` is in git since 2026-08-17): the same run copies it in,
+wiping the mirror first. `fixtures-src/` holds the curated, version-pinned and golden-snapshot files that
+exist nowhere else on disk — keep your own backup of it; a tree without it runs the suite with those tests
+skipped (`skipIf(!existsSync)`), and `test:fixtures` says so. Re-run `npm run test:fixtures` whenever you
+add a fixture to the manifest or drop a file into `fixtures-src/`.
 
 ## 6. Standalone viewers
 
@@ -122,7 +136,7 @@ name from the **compare server** (`--after` side). Run it alongside `npm run dev
 npx tsx tools/map-optimizer/src/compare-serve.ts --before <gameDir> --after <gameDir>
 ```
 
-The object-viewer e2e instead renders static fixtures from `tests/viewer/` (gitignored like `tests/original/`),
+The object-viewer e2e instead renders static fixtures from `fixtures/viewer/` (gitignored like `fixtures/original/`),
 extracted from `game-src/original/` by `npm run test:fixtures`.
 
 ## Where to go next

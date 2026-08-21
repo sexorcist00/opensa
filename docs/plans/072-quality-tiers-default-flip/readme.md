@@ -2,6 +2,13 @@
 
 **Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](../074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
 
+> **The unticked boxes below are VOID with the plan, and are struck rather than deleted (2026-08-11).**
+> They were left as `- [ ]` when the chain was closed, so every repo-wide scan for open work kept
+> reporting them — 118 phantom tasks across the ten closed chains. Nothing here is a debt: the banner
+> above is the authority. They stay readable because what these plans INTENDED is still the record of
+> why the own engine does what it does.
+
+
 **Prior status, kept for context — 🅿️ PARKED (2026-07-10, user's call), superseded by the CLOSED banner
 above.** An INTERIM default flip is live instead: `graphics.pipeline`
 defaults to `'modern'` and `sky.model` to `'pbr'` — the whole 064–071 chain on by default, EXCEPT volumetric
@@ -33,12 +40,12 @@ Plans 002–009 each added `graphics.*` toggles and recorded per-feature costs. 
 
 ## Tasks
 
-- [ ] Tier definition table (from measured per-feature ms) + `graphics.quality: 'low'|'medium'|'high'|'ultra'` preset applier (presets set the individual toggles; individual overrides still respected — precedent: vehicle reflection presets).
-- [ ] Auto-pick heuristic at first launch (GPU renderer string + a 2-second self-bench) with manual override in settings UI.
-- [ ] Full bench sweep per tier; fix budget violations by re-tiering; record the final matrix (tier × scene → ms) here.
-- [ ] Sign-off sweep with the user (screenshot matrix tooling from 001); flip defaults.
-- [ ] Cleanup pass: dead classic-only branches inventory (deletion PR deferred — list them here), config defaults, debug overlay regrouping (one "Rendering" section).
-- [ ] Update docs/plans/029 (+032/033/034) statuses + memories; move this chain's docs from ideas/ to docs/plans/ numbering if the project convention prefers (decide with the user).
+- [~] Tier definition table (from measured per-feature ms) + `graphics.quality: 'low'|'medium'|'high'|'ultra'` preset applier (presets set the individual toggles; individual overrides still respected — precedent: vehicle reflection presets).
+- [~] Auto-pick heuristic at first launch (GPU renderer string + a 2-second self-bench) with manual override in settings UI.
+- [~] Full bench sweep per tier; fix budget violations by re-tiering; record the final matrix (tier × scene → ms) here.
+- [~] Sign-off sweep with the user (screenshot matrix tooling from 001); flip defaults.
+- [~] Cleanup pass: dead classic-only branches inventory (deletion PR deferred — list them here), config defaults, debug overlay regrouping (one "Rendering" section).
+- [~] Update docs/plans/029 (+032/033/034) statuses + memories; move this chain's docs from ideas/ to docs/plans/ numbering if the project convention prefers (decide with the user).
 
 ## Verification
 

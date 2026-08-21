@@ -103,7 +103,7 @@ opensa-lod-generator/
     lod.config.ts          # cell size (= engine streaming grid) + draw distance + atlas texture size
     core/                  # game-agnostic: Cell/grid types, the LodAdapter contract, summary
     adapters/gta-sa/       # RenderWare adapter — reuses ../src parsers READ-ONLY; bake/writers live here
-  docs/plans/              # 001 architecture, 002 chunked-LOD-atlas
+  docs/plans/              # 001 architecture … 006 cell bake carries effects, 007 the one-model lab's LOD half (model-repack.ts)
 # baked drop-in is written wherever --out points (gitignored)
 ```
 

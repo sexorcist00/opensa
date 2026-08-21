@@ -1,4 +1,6 @@
-import { openImg } from '@opensa/tool-kit/archive/img';
+import { isHandlingCarLine } from '@opensa/renderware/parsers/text/handling.parser';
+import { splitRow } from '@opensa/renderware/parsers/text/text-lines';
+import { openImg, writeImgFile } from '@opensa/tool-kit/archive/img';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -54,7 +56,7 @@ export function stripGta3Img(imgPath: string, keep: ReadonlySet<string>): void {
       img.delete(name);
     }
   }
-  writeFileSync(imgPath, img.build());
+  writeImgFile(img, imgPath);
 }
 
 /** handling.cfg: keep only the installed ids' car-table lines (letter-leading; id = first token). */
@@ -62,10 +64,10 @@ export function stripHandling(text: string, ids: ReadonlySet<string>): string {
   return join2(
     text,
     text.split(/\r?\n/).filter((line) => {
-      // Only the main car table is letter-leading; comments / `!`/`$`/`%` sub-tables / blanks are kept.
+      // Only the main car table is stripped; comments / `!`/`$`/`%` sub-tables / blanks are kept.
       const trimmed = line.trim();
 
-      return !/^[A-Z]/i.test(trimmed) || ids.has(trimmed.split(/\s+/)[0].toUpperCase());
+      return !isHandlingCarLine(trimmed) || ids.has(trimmed.split(/\s+/)[0].toUpperCase());
     }),
   );
 }
@@ -105,9 +107,9 @@ export function stripParked(jsonText: string, models: ReadonlySet<string>): stri
   )}\n`;
 }
 
-/** Lowercased comma column `index` of a line. */
+/** Lowercased column `index` of a line — split the way the game reads it (commas + whitespace, `splitRow`). */
 function col(line: string, index: number): string {
-  return (line.split(',')[index] ?? '').trim().toLowerCase();
+  return (splitRow(line)[index] ?? '').toLowerCase();
 }
 
 function editFile(path: string, edit: (text: string) => string): void {

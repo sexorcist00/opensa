@@ -1276,7 +1276,7 @@ async function boot(
       },
       setWeather: (index): void => weatherTransition.begin(index, config.weatherTransitionSeconds),
       spawn,
-      spawnVehicle: async (model): Promise<void> => {
+      spawnVehicle: async (model, plate): Promise<void> => {
         const combos = await adapter.vehicleColourCombos(model);
         const index = colourCycle.get(model) ?? 0;
         colourCycle.set(model, index + 1);
@@ -1297,6 +1297,8 @@ async function boot(
           groundSnap: true,
           heading: rig.yaw + Math.PI,
           model,
+          // Stored WITH the placement, so a LOD respawn re-applies the typed number (plan 082/04).
+          ...(plate === undefined ? {} : { plate }),
           position,
         });
       },

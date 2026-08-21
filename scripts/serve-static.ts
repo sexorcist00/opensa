@@ -1,7 +1,7 @@
 /**
  * Local + E2E static origin (port 3001, matches VITE_STATIC_URL / playwright.config). Serves the built game
  * archives from `static/` (`static/games/<game>-<version>/*`, gitignored), maps `/viewer/*` →
- * `tests/viewer/*` — the object-viewer's e2e fixtures (`npm run test:fixtures`, gitignored, only loaded in
+ * `fixtures/viewer/*` — the object-viewer's e2e fixtures (`npm run test:fixtures`, gitignored, only loaded in
  * `--mode e2e`) — AND serves the two dev source trees ({@link DIR_MOUNTS}): `/build/*` → `build/*`, the
  * canonical dev source (plan 079), so every dev surface points `?src=/build/original/opensa` here instead of
  * copying the ~1.4 GB build into a Vite `public/`; and `/game-src/*` → `game-src/*`, the untouched vanilla
@@ -15,7 +15,7 @@ import sirv from 'sirv';
 
 const PORT = Number(process.env.PORT) || 3001;
 const serveStatic = sirv('static', { dev: true });
-const serveTests = sirv('tests', { dev: true }); // `/viewer/objects/x` → `tests/viewer/objects/x`
+const serveTests = sirv('fixtures', { dev: true }); // `/viewer/objects/x` → `fixtures/viewer/objects/x`
 
 /** The source trees served with a `__index` listing — everything the http-dir loader (`?src=`) can read:
  *  the build outputs (`/build/original/opensa/x`) and the raw installs (`/game-src/original/x`). */
@@ -73,5 +73,5 @@ createServer((req, res) => {
   serve(req, res, notFound);
 }).listen(PORT, '0.0.0.0', () => {
   const mounts = DIR_MOUNTS.map((entry) => `/${entry.root} → ${entry.root}`).join(' + ');
-  console.log(`static server on http://localhost:${PORT} (static/ + /viewer → tests/viewer + ${mounts})`);
+  console.log(`static server on http://localhost:${PORT} (static/ + /viewer → fixtures/viewer + ${mounts})`);
 });

@@ -26,16 +26,16 @@ DFF/TXD-only build — all of it is gated on native-cell data being present.
 
 ## Tasks
 
-- [ ] World-material: consume batched groups + sunVis/static-shadow + skyVis + emissiveMask, all uniform-gated; assert
+- [~] World-material: consume batched groups + sunVis/static-shadow + skyVis + emissiveMask, all uniform-gated; assert
       program cache keys unchanged when toggled (shader-test pattern).
-- [ ] CSM re-scope: remove mid/far static cascades when baked static shadows are present; keep near dynamic cascade;
+- [~] CSM re-scope: remove mid/far static cascades when baked static shadows are present; keep near dynamic cascade;
       per-cell guard for mixed (native + DFF) builds.
-- [ ] Config + tiers: extend `GraphicsConfig`/tier ladder; debug sliders for each channel + CSM near-only toggle;
+- [~] Config + tiers: extend `GraphicsConfig`/tier ladder; debug sliders for each channel + CSM near-only toggle;
       eslint `--fix` after adding.
-- [ ] Streaming: native-cell worker load path against plan 060 invariants; measure cell-swap freeze vs DFF.
-- [ ] Bench all 6 scenes: modern-072 baseline → modern + native (batched + baked shadows + CSM scope-down); record draws,
+- [~] Streaming: native-cell worker load path against plan 060 invariants; measure cell-swap freeze vs DFF.
+- [~] Bench all 6 scenes: modern-072 baseline → modern + native (batched + baked shadows + CSM scope-down); record draws,
       frame ms, GPU ms, shadow ms.
-- [ ] Docs: update 072 with the new tier definitions; roll headline numbers into the [chain readme](readme.md).
+- [~] Docs: update 072 with the new tier definitions; roll headline numbers into the [chain readme](readme.md).
 
 ## Verification
 

@@ -11,8 +11,19 @@ import { opcodeDef } from '@opensa/cleo';
 
 import type { ScriptTarget } from '../whitelist/gate';
 
-import { LvarAllocator } from '../assemble/lvars';
-import { gvar, instruction, int, IrError, type IrInstruction, type IrOperand, labelRef, lvar, str8 } from '../ir';
+import { LvarAllocator, type LvarKind } from '../assemble/lvars';
+import {
+  gvar,
+  instruction,
+  int,
+  IrError,
+  type IrInstruction,
+  type IrOperand,
+  labelRef,
+  lvar,
+  lvarStr8,
+  str8,
+} from '../ir';
 
 /** SA thread names are 7 chars + NUL (`03A4 SCRIPT_NAME` carries an 8-byte string). */
 const SCM_NAME_LIMIT = 7;
@@ -35,11 +46,14 @@ export interface ScriptDefinition {
   /** Declared per-frame instruction budget — the story test asserts the measured cost against it. */
   readonly budgetPerTick: number;
   readonly build: (s: ScriptBuilder) => void;
-  /** The artifact name (`<name>.cs` / `<name>.opensa-only.cs`) and the source folder's name. */
+  /** The artifact name (`<name>.cs` / `<name>.<target>.cs`) and the source folder's name. */
   readonly name: string;
   /** The SCM thread name (7 chars max); defaults to `name` truncated. */
   readonly scmName?: string;
-  /** Default `dual` — the whitelist gate holds both runtimes unless `opensa-only` is declared. */
+  /**
+   * Default `dual` — the whitelist gate holds both runtimes unless a single-runtime target is
+   * declared (`opensa-only` lifts the real-CLEO half, `sa-only` lifts the VM half).
+   */
   readonly target?: ScriptTarget;
 }
 
@@ -79,7 +93,11 @@ export class ScriptBuilder {
     return this.instructions;
   }
 
-  /** A global numeric variable by its u16 index — touching the global space is always explicit. */
+  /**
+   * A global numeric variable by its RAW stream u16 — on real SA that is the BYTE offset, i.e.
+   * `$n` × 4 (`$409` → 1636). Passing the `$n` slot number reads garbage inside `$(n/4)` — it cost
+   * a game crash in the field (cutscene-override round 7). The disasm prints the raw value.
+   */
   global(index: number): Operand {
     return gvar(index);
   }
@@ -125,13 +143,12 @@ export class ScriptBuilder {
 
   /** A named local (numeric slot, allocated on first use, declaration-ordered). */
   local(name: string): Operand {
-    let operand = this.localOperands.get(name);
-    if (!operand) {
-      operand = lvar(this.locals.alloc(name, 'int'));
-      this.localOperands.set(name, operand);
-    }
+    return this.namedLocal(name, 'int');
+  }
 
-    return operand;
+  /** A named local short-string (8 bytes, two slots) — CLEO string reads (`0AF4`) land here. */
+  localString(name: string): Operand {
+    return this.namedLocal(name, 'string8');
   }
 
   /** Infinite loop: `label; body; GOTO label`. */
@@ -211,6 +228,23 @@ export class ScriptBuilder {
         }
       }
     });
+  }
+
+  /** One namespace for named locals; asking for the same name as a different kind is an error. */
+  private namedLocal(name: string, kind: LvarKind): Operand {
+    const existing = this.localOperands.get(name);
+    if (existing) {
+      const expected = kind === 'int' ? lvar(0).type : lvarStr8(0).type;
+      if (existing.type !== expected) {
+        throw new IrError(`local "${name}" was allocated as a different kind`);
+      }
+
+      return existing;
+    }
+    const operand = kind === 'int' ? lvar(this.locals.alloc(name, kind)) : lvarStr8(this.locals.alloc(name, kind));
+    this.localOperands.set(name, operand);
+
+    return operand;
   }
 
   private takeLabels(): readonly string[] {

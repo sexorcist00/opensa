@@ -102,18 +102,18 @@ depth+opaque (MSAA 4×, A2C cutouts, front-to-back cells) → sky (depth-tested 
 
 ## Tasks
 
-- [ ] Write `packages/engine` skeleton per the module map (empty impls, types + nx tags enforcing the import
+- [~] Write `packages/engine` skeleton per the module map (empty impls, types + nx tags enforcing the import
       boundary) — after chain approval.
-- [ ] `device.ts`: init + feature matrix check (BC textures, timestamp-query, A2C w/ MSAA4) with explicit
+- [~] `device.ts`: init + feature matrix check (BC textures, timestamp-query, A2C w/ MSAA4) with explicit
       Safari/Chrome notes; hard-fail messaging for unsupported browsers (prod keeps three-WebGL).
-- [ ] `resources.ts` handles + residency ledger + leak assertions on cell unload.
-- [ ] `shaders.ts` include resolver + variant snapshot tests + the naga guardrail lint (a unit test that greps
+- [~] `resources.ts` handles + residency ledger + leak assertions on cell unload.
+- [~] `shaders.ts` include resolver + variant snapshot tests + the naga guardrail lint (a unit test that greps
       resolved WGSL for banned patterns).
-- [ ] `pipelines.ts` registry + `compileAll()` + steady-state-miss assertion.
-- [ ] Frame graph with transient pool + per-pass timestamps; HUD port from 073.
-- [ ] Static path: cells.ts + bundle record/replay + sphere culling.
-- [ ] Dynamics path: flat entities + transform storage buffer + dynamic offsets.
-- [ ] API review checkpoint at M0: one page of "how you add an effect/material/pass" — if it takes more than a
+- [~] `pipelines.ts` registry + `compileAll()` + steady-state-miss assertion.
+- [~] Frame graph with transient pool + per-pass timestamps; HUD port from 073.
+- [~] Static path: cells.ts + bundle record/replay + sphere culling.
+- [~] Dynamics path: flat entities + transform storage buffer + dynamic offsets.
+- [~] API review checkpoint at M0: one page of "how you add an effect/material/pass" — if it takes more than a
       page, the architecture failed the supportability requirement; iterate before M1.
 
 ## Measurement ledger

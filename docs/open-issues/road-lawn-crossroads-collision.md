@@ -51,7 +51,7 @@ crossroads. Either the field position needs pinning down more tightly, or a seco
 - **No mod ships `road_lawn34` or `road_lawn01`.** Nothing under `mods-src/original/` mentions either, and no
   mod carries a DFF or COL file named after them; their COL comes out of the build with stock's face counts.
 - **The A/B that splits it in one round is a build with `0. Map Fixes Pack` excluded** — it owns the replaced
-  `lawn_1/2/4.col` and `law_3.col` (`5. SA Xbox Map Features` owns `law_4.col`). No code needs to be read
+  `lawn_1/2/4.col` and `law_3.col` (`SA Xbox Map Features` (`7.` since 2026-08-18) owns `law_4.col`). No code needs to be read
   first.
 - `road_lawn34` is *also* one of the confirmed texel-smear models
   ([`texel-smear-authored-uv.md`](texel-smear-authored-uv.md), 1124.6, −951.4, 40.9). Almost certainly a

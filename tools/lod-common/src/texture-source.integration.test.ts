@@ -11,9 +11,9 @@ import { createTextureSource } from './texture-source';
  * TXDs with different pixels. The def TXD (`badlands`, vegepart.ide) must win over the flat first-wins index
  * (which used to hand the bush `gta_proc_bush`'s green variant). Fixtures: `npm run test:fixtures`.
  */
-const BUSH_DFF = 'tests/original/world/sm_bush_large_1.dff';
-const BADLANDS_TXD = 'tests/original/txd/badlands.txd';
-const PROC_BUSH_TXD = 'tests/original/txd/gta_proc_bush.txd';
+const BUSH_DFF = 'fixtures/original/world/sm_bush_large_1.dff';
+const BADLANDS_TXD = 'fixtures/original/txd/badlands.txd';
+const PROC_BUSH_TXD = 'fixtures/original/txd/gta_proc_bush.txd';
 
 const fixturesPresent = [BUSH_DFF, BADLANDS_TXD, PROC_BUSH_TXD].every((path) => existsSync(path));
 

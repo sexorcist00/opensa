@@ -4,6 +4,7 @@ import type { Vec3 } from '../interfaces/world-adapter.interface';
 import type { Impact, PhysicsWorld } from '../physics/physics-world';
 
 import { Logger } from '../diagnostics/logger';
+import { BLANK_PLATE_SLOT, PlateSlots } from './plate-slots';
 import { VehicleDamageSystem } from './vehicle-damage.system';
 import { FakeVehicleHandle } from './vehicle-handle.fake';
 
@@ -118,6 +119,32 @@ describe('VehicleDamageSystem', () => {
 
       expect(handle.damaged.has('bonnet')).toBe(true);
       expect(handle.detached.has('bonnet')).toBe(false);
+    });
+
+    it('holds the plate refcount through deform, detach and debris expiry (082/04)', () => {
+      // A plate face lives INSIDE a part mesh, so the whole damage lifecycle runs over it. The refcount
+      // belongs to the CAR and only a despawn may hand it back: evicting the layer while the panel is still
+      // falling would repaint a raster that is on screen.
+      const slots = new PlateSlots({ uploadPlateText: (): undefined => undefined }, 3);
+      const blank = (): Uint8Array => new Uint8Array(0);
+      const slot = slots.claim('LVA 123', blank);
+
+      physics.impacts.push(impact(STRONG, [0, 2, 0]));
+      system.update(0.016); // deform (ok→dam swaps under the plate)
+      physics.impacts.push(impact(STRONG, [0, 2, 0]));
+      system.update(0.016); // detach
+      system.update(2); // past FALL_TTL — the debris is gone
+
+      slots.claim('SFX 998', blank); // slot 0 is reserved, so the atlas is now full
+      expect(slots.claim('LSY 771', blank)).toBe(BLANK_PLATE_SLOT); // nothing evictable → still worn
+      let recomposed = 0;
+      const again = slots.claim('LVA 123', () => {
+        recomposed += 1;
+
+        return blank();
+      });
+      expect(again).toBe(slot);
+      expect(recomposed).toBe(0); // the car's own raster never left the atlas
     });
 
     it('a detached part falls (gravity pulls its pose down) and is removed once its time expires', () => {

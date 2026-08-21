@@ -13,6 +13,7 @@
 | ADV_HYDRALICs / BF engine+hydraulics | **build** — the headline ability |
 | BUCKETs (dozer), CISTERNs (cement), PACKERs | **build** — state/input-driven `misc_*` articulation |
 | TRUCK_HOOKs, TRACTOR_HOOKs, TRAILER_HOOKs, BAGGAGE_* | consumed by 05's hitch framework (tokens defined there) |
+| BAGBOXA / BAGBOXB / TUGSTAIR (baggage trailers, tug stairs) | consumed by 05 as towed bodies; the tokens exist so a mod trailer can declare itself (2026-08-18) |
 | TURRETs_1/2 | **out** — needs an aim-input surface; recorded extension with the input-wire restriction noted |
 | WATER_JETs | **out** — an effects-system feature, not an articulation; recorded in `docs/features/vehicle-effects.md` as a known gap |
 | PLANE_SMOKE | out of chain scope → the 0.6.0 note |
@@ -55,8 +56,13 @@
 ## Verification
 
 Headless: detector census over the whole fleet (which models gain which ability, printed and committed
-as a fixture — a diff in that census is a reviewable event); rebake byte-compare for cars with no
-abilities. Field: the checkpoint above — bounce a stock lowrider, then `vehicle-installer --rebake`
+as a fixture — a diff in that census is a reviewable event); **the census has an ORACLE since 2026-08-18:
+every stock carrier in `VEHICLE_FEATURE_TOKENS` (011's table — `zr350` for `UP/DOWN_LIGHTS`, `hotknife`/`bandito`
+for `ADV_HYDRALICs`, `dozer` for `BUCKETs`, …) must be detected from its OWN asset WITHOUT a token, and a
+detector that needs the token to find its stock carrier is a detector that has not recovered the rule**;
+rebake byte-compare for cars with no abilities. The `sa`-side twin of every token — what the real game does
+with the same `features.txt` — is vehicle-installer plan 011, and a mod car's declaration is checked on BOTH
+targets before a token is called live. Field: the checkpoint above — bounce a stock lowrider, then `vehicle-installer --rebake`
 glendale with the hydraulics token and bounce IT; drive the cement truck and watch the cistern turn.
 Numbers (suspension deltas, per-frame driver cost with N ability cars live) into the ledger +
 benchmarks.

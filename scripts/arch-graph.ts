@@ -23,10 +23,9 @@ import { type Dirent, mkdirSync, readdirSync, readFileSync, writeFileSync } from
 import { basename, dirname, join } from 'node:path';
 
 import { type MermaidDiagram, renderMermaidSvgs } from './lib/mermaid-render';
+import { type Layer, layerOf } from './lib/package-layer';
 
 const ROOT = process.cwd();
-
-type Layer = 'app' | 'engine' | 'tool';
 
 interface Pkg {
   /** Mermaid-safe node id (e.g. `lod_generator`). */
@@ -37,28 +36,19 @@ interface Pkg {
   srcDir: string;
 }
 
-function layerOf(dir: string): Layer {
-  if (dir.startsWith('apps/')) {
-    return 'app';
-  }
-
-  return dir.startsWith('tools/') || dir.startsWith('tools-debug/') || dir.startsWith('asi/') || dir.startsWith('cleo/')
-    ? 'tool'
-    : 'engine';
-}
-
 function loadPackages(): Map<string, Pkg> {
   const byName = new Map<string, Pkg>();
   for (const dir of workspaceDirs()) {
     const manifest = JSON.parse(readFileSync(join(ROOT, dir, 'package.json'), 'utf8')) as {
       description?: string;
       name: string;
+      nx?: { tags?: readonly string[] };
     };
     const desc = shortDesc(manifest.description ?? '');
     byName.set(manifest.name, {
       id: manifest.name.replace('@opensa/', '').replace(/[^a-z0-9]/gi, '_'),
       label: desc ? `${manifest.name.replace('@opensa/', '')} · ${desc}` : manifest.name.replace('@opensa/', ''),
-      layer: layerOf(dir),
+      layer: layerOf(dir, manifest.nx?.tags ?? []),
       name: manifest.name,
       srcDir: join(ROOT, dir, 'src'),
     });

@@ -14,11 +14,14 @@ and a mod that ships bike handling can actually install it. Pure parser/adapter 
   the `$`/`%` tables are all dropped. Test at `handling.parser.test.ts:15-16` asserts the skip.
 - `gta-sa-world.adapter.ts:672-714` consumes main-row indices 0-5, 7-26, 28, 30. **Unread: 6
   `percentSubmerged`, 27 `seatOffsetDistance`, 31 `handlingFlags` (hex — hydraulics, `NO_DOORS`,
-  `TANDEM_SEATS`), 32/33 front/rear lights, 34 `animGroup`.** Of `modelFlags` (30) only the axle nibbles
+  `TANDEM_SEATS`), 32/33 front/rear lights, 34 `animGroup` — the row index into the `^` table, i.e. THE selector
+  of a vehicle's whole animation set (13's finding, 2026-08-20; `vehicles.ide` `anims` only names the IFP to
+  stream).** Of `modelFlags` (30) only the axle nibbles
   are used; the class nibble (`IS_BIKE` etc.) is parsed into the integer but never tested.
 - `VehicleDef.type` never reaches the runtime: `loadVehicleData` (`gta-sa-world.adapter.ts:346-370`)
-  returns `EngineVehicleData` without it. The only two `type === 'car'` filters in the repo are
-  `road-cars.ts:60` and `vehicle-models.ts:34`.
+  returns `EngineVehicleData` without it. The `type === 'car'`-style filters in the repo are
+  `road-cars.ts:60`, `vehicle-models.ts:34` and — since 097/05 — `cleoIsCarModelId`
+  (`gta-sa-world.adapter.ts:327`, `car | mtruck | quad`).
 - `vehicle-installer`: `stripHandling` (`strip.ts:61-71`) carries `!` lines through, but `classify`
   (`settings.ts:94-123`) rejects them (`parseHandling` yields nothing) and `mergeHandling`
   (`merge.ts:28-42`) cannot match them — **a mod's `!BIKE` lean row is silently dropped at install.**

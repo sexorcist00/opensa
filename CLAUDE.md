@@ -256,6 +256,39 @@ Never edit generated code manually.
   shivering car was chased against a `handling.cfg` row the game was not running (the built one carried a
   mod's suspension damping 5× out of range). `scripts/debug/handling-diff.ts` defaults its baseline to the
   built table for the same reason
+- **A small change to the map build does NOT get a pmb rebuild — swap the model in place.** A full `sa` stage is
+  ~10 min; the one-model instruments are seconds and were built for exactly this (session 17, 2026-08-17):
+  `scripts/debug/model-optimize.ts` (one model through the optimizer chain, a named variant, patched into the
+  tree), `scripts/debug/model-lab.ts` (the same PLUS its clone LOD cut from the result — clones are cut FROM the
+  HD, so an HD-only swap leaves the far view stale; `--dff/--txd` for a mod's loose files),
+  `scripts/debug/img-patch.ts` (append-and-repoint any IMG entry with a ledger, `restore` per entry) and
+  `scripts/debug/dump-binmesh.ts` (split order = draw order). **The OpenSA target has the same shape**
+  (2026-08-17, `tools/opensa-lod-generator/docs/plans/007`): `scripts/debug/model-repack.ts <model>
+[--dff f.dff [--txd f.txd]]` re-optimizes the model, re-bakes the cell LODs of its rect FROM the swapped HD
+  and re-welds the rect into a servable LAB pak (`build/<game>/opensa-lab`, `?src=`) — seconds against a
+  ~50 min pipeline; it never touches the shipping pak (a subset weld cannot reproduce its texture layer
+  plan — `docs/in-reserve/ospak-in-place-cell-patch.md`). **The GOAL in every field/dev round is to reach
+  the verdict through these instruments and spend a rebuild only when the whole tree must be confirmed.**
+  Rebuild only to confirm a fix on the WHOLE tree, after the one-model field verdict, or when the change is
+  a stage that has no one-model form (IPL folds, archive layout, `gta.dat`). Rows in `docs/debug/README.md`
+- **Every test fixture has exactly ONE of three sources, and a manifest line that names it** (the user's
+  call, 2026-08-17): a stock game file (`game-src/<game>`, an IMG entry included), a mod file
+  (`mods-src/<game>`, found by NAME across layers), or — when it exists nowhere else (a version-pinned
+  lock, a golden snapshot, a re-export a mod no longer ships) — a copy CACHED in `fixtures-src/`. Nothing
+  under `fixtures/` is committed and neither is `fixtures-src/`; `npm run test:fixtures` (`scripts/
+test-fixtures.ts`) rebuilds `fixtures/original` + `fixtures/viewer` from the first two and mirrors
+  `fixtures-src/` → `fixtures/custom` (wipe + copy, FIRST). **A file dropped into `fixtures/` by hand is
+  one `rm -rf` from gone and no test will say so** — its tests go `skipIf` and the suite stays green: the
+  day the tree was first regenerated from scratch, four cutscene fixtures turned out to have no manifest
+  line at all. So: a new fixture = a manifest line (`copy`/`extract`/`mod`/`cleo`) or a file in
+  `fixtures-src/`, in the same change as the test; verify with a regeneration, never by the file being there
+- **A pmb run that dies is RESUMED, never restarted from stage 1** (pmb plan 006, 2026-08-17): every run leaves
+  `<out>/.work-<target>/resume.json` (what it was made of + which steps finished — every chain stage, `sa`,
+  `opensa-lod`, `opensa`), and the pack journals every weld chunk under `pack-checkpoints/`. `pmb … --resume`
+  (same flags) re-enters at the last finished step — a dead pack at its last finished chunk — and REFUSES,
+  naming the difference, if the sources, the flags or the code changed since that run (a resumed build over
+  changed inputs is a build nobody can reproduce). Read the refusal, do not work around it. Standalone:
+  `opensa-pack --checkpoints <dir> [--resume]`
 - **An A/B must be SELF-DESCRIBING: the capture records what the run was configured with.** Careful
   single-variable bisection lost to one capture that stated its own spring values. Before tuning a new
   surface, read it back into the capture (`[phys]`'s `springs` block is the pattern)
@@ -294,17 +327,39 @@ The documentation lifecycle (idea → concept → plan / postmortem; roadmap for
 - `docs/postmortem/` — a died concept/plan: what was tried, what was measured, why it failed, when to revisit.
   Add the file + a row in `docs/postmortem/README.md` (never just delete a dead direction)
 - `docs/plans/` — committed work you already know how to do: a numbered chain of small, individually-shippable
-  steps, each ending with verification + measured numbers. Add a row in `docs/plans/README.md`
+  steps, each ending with verification + measured numbers. Add a row in `docs/plans/README.md`.
+  **ENGINE ONLY** (the user's call, 2026-08-20): the runtime, RenderWare parsing, streaming, rendering,
+  characters, vehicles, physics, UI. **Anything about the offline TOOLCHAIN goes in that tool's own chain**
+  (`tools/<tool>/docs/plans/`) even when it spans several tools — pick the tool the RULE lives in and say in
+  its row which others it reaches. Plans 102 (added vehicles) and 103 (one owner per archive entry) were
+  moved out on that rule; the central folder keeps no pointer to them, because a chain that lives beside its
+  code is found from the code
 - `docs/roadmap/` — decided work deferred to a later version (`0.5.0/`, `0.6.0/`); same plan-chain shape as
   `docs/plans/`, just not this version
-- `tools/<tool>/docs/plans/` — **a tool's own numbered chain, beside its code.** A step from `docs/plans/` or
-  `docs/roadmap/` MOVES here when it ships (next free number, measured numbers filled in) and the central row
-  is repointed. **A plan also moves here once its work no longer spans tools, built or not** (the user's call,
-  2026-08-09, when `07-lod-generators-extended` was dissolved): a chain whose every remaining task belongs to
-  one tool is a chain that will drift from that tool's code, so it lives beside it and the central folder
-  keeps only a pointer. The central folders carry what genuinely spans several tools, or has no tool yet
+- `tools/<tool>/docs/plans/` — **a tool's own numbered chain, beside its code, and the home of ALL toolchain
+  work.** A step from `docs/plans/` or `docs/roadmap/` MOVES here when it ships (next free number, measured
+  numbers filled in). **A plan also moves here once its work no longer spans tools, built or not** (the
+  user's call, 2026-08-09, when `07-lod-generators-extended` was dissolved), and since 2026-08-20 **even a
+  plan that DOES span several tools lives here** — in the chain of the tool whose rule it is, with the reach
+  named in its row. A chain that lives beside its code cannot drift from it, and a reader who opens the tool
+  finds the plan without being told where to look. An umbrella that spans four homes keeps its folder shape
+  (`tools/add-vehicles/docs/plans/102-add-vehicles/`); a single-file plan takes the next free number
 - `docs/audit/` — a post-big-rework audit (see the Standing Workflow rule above): what changed, its cost, its
   gain
+- `docs/in-reserve/` — **DEFERRED work whose investigation is already done** (the user's call, 2026-08-15):
+  we know how, we researched it fully, and we deliberately have not built it because the condition that makes
+  it necessary has not arrived. A card states, in order: which task it came out of, WHY it is deferred (the
+  measurement or field verdict, dated), **the TRIGGER** — the concrete condition that turns it into work —
+  and **where that trigger is checked in code**. Row in `docs/in-reserve/README.md`.
+  **That last part is the rule, not decoration**: the guard, gate or error message that fires when the
+  condition arrives must NAME the card. A card whose trigger lives only in the folder gets read after the
+  confusion instead of before it, which is the exact failure the folder exists to prevent — a symptom
+  surfacing months later and the same investigation being paid for twice.
+  Two things do NOT go here however unused they are: a fact about the ORIGINAL game or its adjuster ecosystem
+  (that is `docs/gta-sa-original/` by rule — a fact does not change folders because we are not using it this
+  month; a card POINTS at it), and work we already intend to do (`docs/roadmap/`). Neighbours: postmortem is
+  _"has this been tried?"_, roadmap _"when are we doing it?"_, ideas _"someone should look at this"_, and this
+  folder _"already looked at — here is what it costs and what makes it urgent"_
 
 Keep these in sync with the code — update them in the same change, not later:
 

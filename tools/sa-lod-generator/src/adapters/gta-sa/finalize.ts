@@ -16,8 +16,9 @@ import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { build2dfxSection } from '@opensa/rw-codec/dff';
-import { editArchive } from '@opensa/tool-kit/archive/img';
-import { cpSync, readFileSync, writeFileSync } from 'node:fs';
+import { editArchive, writeImgFile } from '@opensa/tool-kit/archive/img';
+import { copyGameDir, guardOut } from '@opensa/tool-kit/game-dir';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { LodLink } from '../../core/types';
@@ -44,6 +45,14 @@ export interface BuildInput {
   keepParticles: boolean;
   links: readonly LodLink[];
   outDir: string;
+  /**
+   * Every clone dictionary carries EVERY texture its models name, with no `txdp` parent (**default false**).
+   *
+   * Tried as a fix on 2026-08-16 and REJECTED by the field: it changed nothing about the missing/untextured
+   * LODs and cost 45.9 MiB against the partition's 10.4 MB. Kept as a flag because it is the one shape that
+   * needs no parent at all, should the chain ever be proven at fault.
+   */
+  selfContainedTxd: boolean;
   source: TextureSource;
 }
 
@@ -54,6 +63,9 @@ export interface BuildStats {
   filledHoles: number;
   filledInstances: number;
   generatedTxds: number;
+  /** Clones of multi-atomic HDs (`anim` clumps) merged into ONE atomic without decimation — a LOD row is an
+   *  atomic model, and SA keeps exactly one atomic of it. See {@link cloneLodDff}. */
+  mergedLods: number;
   missingHd: number;
   missingTxd: number;
   /** Textures moved into the shared `salodpar.txd` txdp parent (used by ≥ 2 source atlases). */
@@ -71,6 +83,14 @@ export interface BuildStats {
  * clone stays the **verbatim byte-copy** — keeping plugins the mesh path can't carry (e.g. breakable) at zero
  * risk — with the same set applied subtractively.
  *
+ * One HD shape can NEVER be copied verbatim: a clump with several atomics (stock ships 34, every one an `anim`
+ * row — rotating signs, windmills, oil derricks, the Burger Shot's burger). A LOD row is an `objs` atomic
+ * model, and SA's `CFileLoader::SetRelatedModelInfoCB` → `CAtomicModelInfo::SetAtomic` keeps exactly ONE
+ * atomic of whatever clump it reads (the last visited, re-framed at the origin) — the byte-copy of
+ * `burger01_LAw` showed only its 5 m burger sign, at the building's origin: the field's "LOD absent". Such an
+ * HD always takes the mesh path — its atomics merged into one geometry with the frame transforms baked, the
+ * rest-pose the animation starts from — even when the budget keeps every triangle.
+ *
  * Exported for its tests: the 2dfx set a clone carries is this function's decision, and nothing else in the
  * package can be asked what it made of a real model's entries.
  */
@@ -83,13 +103,18 @@ export function cloneLodDff(
   keepParticles: boolean,
 ): Uint8Array {
   const keep = cloneKeepTypes(keepParticles);
-  if (decimate !== null) {
-    const clump = parseDff(toArrayBuffer(hdDff));
+  const clump = parseDff(toArrayBuffer(hdDff));
+  const multiAtomic = clump.atomics.length > 1;
+  if (decimate !== null || multiAtomic) {
     const mesh = buildClumpMesh(clump);
     const ctx = { textures, view: lodView(link.hdDrawDistance || 300) };
-    const decimated = decimate(mesh, ctx);
-    if (decimated !== mesh) {
-      stats.decimatedLods += 1;
+    const decimated = decimate === null ? mesh : decimate(mesh, ctx);
+    if (decimated !== mesh || multiAtomic) {
+      if (decimated !== mesh) {
+        stats.decimatedLods += 1;
+      } else {
+        stats.mergedLods += 1;
+      }
       // One pass over the policy's set, so emitters ride by default and keep their AUTHORED order among the
       // coronas — the old two-pass shape (everything-but-particles, then particles appended) reordered them.
       const effects = build2dfxSection(collectClumpEffects(hdDff, clump, keep));
@@ -142,7 +167,13 @@ export function writeBuild(input: BuildInput): BuildStats {
   const perObject = perObjectLinks(input.links);
   const skippedShared = distinctLods(input.links) - distinctLods(perObject);
 
-  cpSync(input.gameDir, input.outDir, { force: true, recursive: true });
+  // WIPE, then mirror — the chain's `copyGameDir` convention, and here it is a correctness rule rather than
+  // tidiness: `<out>/sa` outlives a build, so anything an earlier run wrote and this one does not would
+  // SURVIVE into the tree a field run reads. Found 2026-08-16 with 23 mod IPLs still sitting in `data/maps`
+  // from a failed run, unreferenced by gta.dat — harmless that time, and the same mechanism keeps a stale
+  // model alive next time (`tools/mod-installer/docs/plans/013-slot-fold-across-hosts.md`).
+  guardOut(input.outDir, input.gameDir);
+  copyGameDir(input.gameDir, input.outDir);
   const img = editArchive(input.archives.gta3);
 
   const { hdTxdToClone, parentTextures } = packCloneTxds(perObject, input, img);
@@ -154,6 +185,7 @@ export function writeBuild(input: BuildInput): BuildStats {
     filledHoles: 0,
     filledInstances: 0,
     generatedTxds: hdTxdToClone.size,
+    mergedLods: 0,
     missingHd: 0,
     missingTxd: 0,
     parentTextures,
@@ -206,7 +238,7 @@ export function writeBuild(input: BuildInput): BuildStats {
   }
   stats.generatedTxds = hdTxdToClone.size;
 
-  writeFileSync(join(input.outDir, 'models', 'gta3.img'), img.build());
+  writeImgFile(img, join(input.outDir, 'models', 'gta3.img'));
   retargetIdes(input.outDir, modelToTxd);
   if (parentTextures > 0) {
     writeTxdpIde(input.outDir, txdpChildren);
@@ -310,18 +342,25 @@ function packCloneTxds(
       continue; // no source atlas → the LODs it would serve stay stock (counted as missingTxd per link)
     }
     try {
+      // The texture's OWN name, case intact. A clone LOD is the HD's geometry verbatim, so its materials ask
+      // for the HD's spelling (`gymshop1_LAe`, `Parking1_LAe2`) — and stock SA never once spells a texture
+      // differently in a DFF than in the dictionary it lives in (measured, 0 case-only mismatches). Lowercasing
+      // here handed the game a dictionary whose keys no material asks for, and OUR resolver could not see it
+      // because it lowercases both sides. `ensureCloneTxd` (the hole-fill path) always kept the case.
       atlasNames.set(
         hdTxd,
-        parseTxd(bytes).textures.map((texture) => texture.name.toLowerCase()),
+        parseTxd(bytes).textures.map((texture) => texture.name),
       );
     } catch {
       // unreadable atlas — same as missing
     }
   }
 
-  const { perAtlas, shared } = partitionCloneTextures(atlasNames, (atlas, name) =>
-    variantKey(resolveFrom(input.source, atlas, name)),
-  );
+  // Self-contained (opt-in): every atlas keeps every name and no parent is written — see
+  // {@link BuildInput.selfContainedTxd}.
+  const { perAtlas, shared } = input.selfContainedTxd
+    ? { perAtlas: new Map([...atlasNames].map(([atlas, names]) => [atlas, [...new Set(names)]])), shared: [] }
+    : partitionCloneTextures(atlasNames, (atlas, name) => variantKey(resolveFrom(input.source, atlas, name)));
   if (shared.length > 0) {
     // All owners carry identical pixels — resolve each shared name through ANY owner (scoped, not flat).
     const ownerOf = new Map<string, string>();

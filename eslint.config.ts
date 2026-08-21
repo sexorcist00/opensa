@@ -185,7 +185,7 @@ const recommendedTypeScriptConfigs = [
 const jsonCustomConfig: Linter.Config = {
   ...json.configs.recommended,
   files: ['**/*.json'],
-  ignores: ['**/*-lock.json', 'package.json', 'mods-src/**/*.json', 'tests/**/*.json', '**/dist/manifest.json'],
+  ignores: ['**/*-lock.json', 'package.json', 'mods-src/**/*.json', 'fixtures/**/*.json', '**/dist/manifest.json'],
   language: 'json/json',
 };
 
@@ -216,6 +216,10 @@ const customJsConfig = {
 const scriptsConfig = {
   files: [
     'scripts/**/*.{js,mjs,cjs,ts}',
+    // The Electron app's Node halves — its build/dev scripts and the main process. Its `src/renderer/**` is
+    // browser code and stays under the strict rules.
+    'apps/cutscene-converter/scripts/**/*.{js,mjs,cjs,ts}',
+    'apps/cutscene-converter/src/main/**/*.{js,mjs,cjs,ts}',
     'tools/map-optimizer/**/*.{js,mjs,cjs,ts}',
     'tools/opensa-lod-generator/**/*.{js,mjs,cjs,ts}',
     'tools/vehicle-optimizer/**/*.{js,mjs,cjs,ts}',
@@ -230,7 +234,9 @@ const scriptsConfig = {
     'tools/sa-procobj-placement/**/*.{js,mjs,cjs,ts}',
     'tools/mod-installer/**/*.{js,mjs,cjs,ts}',
     'tools/vehicle-installer/**/*.{js,mjs,cjs,ts}',
+    'tools/vehicle-cutscene/**/*.{js,mjs,cjs,ts}',
     'tools/ped-installer/**/*.{js,mjs,cjs,ts}',
+    'tools/add-vehicles/**/*.{js,mjs,cjs,ts}',
     'tools-debug/bench-harness/**/*.{js,mjs,cjs,ts}',
     'tools-debug/sa-int16-repro/**/*.{js,mjs,cjs,ts}',
     'asi/**/*.{js,mjs,cjs,ts}',

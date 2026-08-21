@@ -15,12 +15,12 @@ three's WebGPURenderer renders shadow maps itself (depth textures); our job is t
 
 ## Tasks
 
-- [ ] Enable sun.castShadow path under webgpu (sky-lite from plan 03 owns the light) + render the near map.
-- [ ] Run CsmPlugin under webgpu (it's GLSL-free; verify its shadow renders + the render-once guard).
-- [ ] TSL comparison sampling of the three maps in the world material (plan 04 slice) + dynamics receiveShadow.
-- [ ] Verify shadow passes × bundles (frozen objects must cast; check the shadow render path ignores bundles or
+- [~] Enable sun.castShadow path under webgpu (sky-lite from plan 03 owns the light) + render the near map.
+- [~] Run CsmPlugin under webgpu (it's GLSL-free; verify its shadow renders + the render-once guard).
+- [~] TSL comparison sampling of the three maps in the world material (plan 04 slice) + dynamics receiveShadow.
+- [~] Verify shadow passes × bundles (frozen objects must cast; check the shadow render path ignores bundles or
       handles them correctly).
-- [ ] Re-tune biases for depth-texture shadows (r182+ guidance: reduce bias).
+- [~] Re-tune biases for depth-texture shadows (r182+ guidance: reduce bias).
 
 ## Done
 

@@ -31,6 +31,10 @@ Read it as a set of rules:
   individually-implementable steps, each ending with verification + measured numbers).
 - **We know what to do but want it in a later version** → [`docs/roadmap/`](./roadmap/) (e.g. `0.5.0/`, `0.6.0/`
   — scheduled cycles, same plan-chain shape as `docs/plans/`, just not this version).
+- **We researched it fully and then did not need it** → [`docs/in-reserve/`](./in-reserve/README.md). Not
+  scheduled like a roadmap item and not dead like a postmortem: a card that names the TRIGGER which would make
+  it work again, **and where that trigger is checked in code**. The point is that the guard which fires months
+  later says the card's name, so the same investigation is never paid for twice.
 - **Before ANY of the three above are written** → read [`docs/project-goals.md`](./project-goals.md) first.
   It is what the project is FOR, and it is directive: OpenSA is compatible with RenderWare and is **not** a
   reimplementation of San Andreas. Honour the authored DATA (timecyc, handling, the IDE/popcycle tables — the
@@ -42,10 +46,14 @@ Read it as a set of rules:
   It holds the rules a design has to satisfy — layer boundaries, format ceilings, engine splits, decisions
   taken at build time that cannot be re-taken at runtime — and says for each whether a violation is caught by
   a test/guard/lint or is SILENT. A new restriction is recorded there in the SAME change that finds it.
-- **A plan step ships inside one tool** → once it is built, MOVE its doc out of `docs/plans/` (or
-  `docs/roadmap/`) into that tool's OWN chain at `tools/<tool>/docs/plans/NNN-<name>.md`, taking the next
-  free number there, with its measured numbers filled in. Every tool keeps the record of its own steps
-  beside its code; the central folders carry what is still unbuilt or spans several tools.
+- **A plan is about the offline TOOLCHAIN** → it belongs in that tool's OWN chain at
+  `tools/<tool>/docs/plans/NNN-<name>.md`, built or not, spanning one tool or four (the user's call,
+  2026-08-20). Pick the tool whose RULE it is and let its row name what else it reaches; an umbrella keeps
+  its folder shape there (`tools/add-vehicles/docs/plans/102-add-vehicles/`). A step that ships inside one
+  tool moves the same way, taking the next free number with its measured numbers filled in. **`docs/plans/`
+  is the ENGINE's** — the runtime, RenderWare parsing, streaming, rendering, characters, vehicles, physics,
+  UI — and nothing else. Every tool keeps the record of its own steps beside its code, where the code's
+  reader finds it.
 - **A change alters the architecture** → add/adjust notes (and the diagram) in
   [`docs/architecture/`](./architecture/README.md) in the SAME change.
 - **A NAME starts carrying behaviour** (a file the pipeline looks for, a frame/material the converter reads,
@@ -85,6 +93,7 @@ Read it as a set of rules:
 | [`open-issues/`](./open-issues/) | Tracked open problems and their fixed writeups. |
 | [`improvements/`](./improvements/) | Smaller improvement notes not yet a plan. |
 | [`development/`](./development/) | Contributor/setup notes. |
+| [`tutorial/`](./tutorial/) | End-user guides for what we SHIP, one folder per app (`<app>/`, screenshots beside the page). The English source of the published page. |
 | [`commands.md`](./commands.md) | CLI/command cheat sheet. |
 | [`links.md`](./links.md) | Useful external resources. |
 

@@ -1,6 +1,6 @@
 ---
 name: test-fixtures
-description: Tests read fixtures from tests/original (gitignored, regenerated via `npm run test:fixtures`) + tests/custom (committed mods/curated), NOT static/
+description: Tests read fixtures from fixtures/original (gitignored, regenerated via `npm run test:fixtures`) + fixtures/custom (committed mods/curated), NOT static/
 metadata:
   type: feedback
 ---
@@ -13,18 +13,18 @@ into the repo-root **`tests/`** folder (committed) and read from there.
 
 **How to apply** (2026-06-19, licensing cleanup): fixtures split by provenance.
 
-- **`tests/original/`** — real Rockstar assets, **gitignored**, regenerated locally by `npm run test:fixtures`
+- **`fixtures/original/`** — real Rockstar assets, **gitignored**, regenerated locally by `npm run test:fixtures`
   (`scripts/test-fixtures.ts`): copies loose data + extracts IMG entries from `game-src/original` (a clean
   STOCK SA copy), builds `img/admiral.img`, and generates `data/timecyc_24h.dat` = stock `convertTo24h` (no
   RealVision; the game's `npm run timecyc` keeps its own enhanced merge). Add new real fixtures to the MANIFEST.
-- **`tests/custom/`** — committed (NOT Rockstar IP, or can't be reproduced from stock): mods
+- **`fixtures/custom/`** — committed (NOT Rockstar IP, or can't be reproduced from stock): mods
   (`dff/vehicle/comet.dff`, `petro-4/6wheels.dff`, `dff/uv-anim/visagesign04.dff`, `world/Lae2_roads03.dff`,
   `txd/yosemite.txd`), the custom `character/tommy.dff`, the `character/Shrek.dff` mod (renamed skeleton root
   `MrAndres5555` — root-track aliasing regression guard), `proper-fixes-models/` (curated/version-pinned:
   `casroyale02_lvs.dff`, `trafficlight1.dff`, `se_bit_17.dff`, `vegasnroad19.dff`), and `locked-models/`
-  (anti-rip `cheetah.dff`, `yosemite.dff`). Stock peds like `army.dff` regenerate into `tests/original/character/`.
+  (anti-rip `cheetah.dff`, `yosemite.dff`). Stock peds like `army.dff` regenerate into `fixtures/original/character/`.
 
-Read via `join(process.cwd(), 'tests', 'original'|'custom', ...)` or `'tests/original/...'` / `'tests/custom/...'`.
+Read via `join(process.cwd(), 'fixtures', 'original'|'custom', ...)` or `'fixtures/original/...'` / `'fixtures/custom/...'`.
 CI tests are disabled for now (CI lacks game-src); run `npm run test:fixtures && npm test` locally.
 
 **Still on `static/` (impractical to copy, kept `skipIf`-gated):** `col.test` (`static/models/gta3.img` is

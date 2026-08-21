@@ -75,10 +75,10 @@ rejects a text line or name field of the wrong width.
 
 | Type | Fixture | Entries |
 | --- | --- | --- |
-| 7 roadsign | `tests/custom/proper-fixes-models/vegasnroad19.dff` (committed) | 4 plates |
-| 10 escalator | `tests/original/dff/escalator/escl_la.dff` | 2, beside 4 undecoded type-9 entries |
-| 1 particle | `tests/original/dff/particle/skullpillar01_lvs.dff`, `…/refchimny01.dff` | 1 each |
-| 0 light | `tests/custom/proper-fixes-models/trafficlight1.dff` | the wrong-type subject |
+| 7 roadsign | `fixtures/custom/proper-fixes-models/vegasnroad19.dff` (committed) | 4 plates |
+| 10 escalator | `fixtures/original/dff/escalator/escl_la.dff` | 2, beside 4 undecoded type-9 entries |
+| 1 particle | `fixtures/original/dff/particle/skullpillar01_lvs.dff`, `…/refchimny01.dff` | 1 each |
+| 0 light | `fixtures/custom/proper-fixes-models/trafficlight1.dff` | the wrong-type subject |
 
 - `encode(decode(e)) === e` byte-for-byte holds on every type-7/10/1 entry in the fixture set.
 - The mall section rebuilt with both escalators re-encoded and the four **type-9 cover points passed through

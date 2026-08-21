@@ -6,6 +6,19 @@
  * - `carcols.dat`  — `car`/`car4` section, key = model (column 0). Replace-or-insert, section **alpha-sorted**.
  * - `carmods.dat`  — `mods` section, key = model (column 0). Replace-or-insert, section **alpha-sorted**.
  */
+import { isHandlingCarLine } from '@opensa/renderware/parsers/text/handling.parser';
+import { splitRow } from '@opensa/renderware/parsers/text/text-lines';
+
+/**
+ * `car4` when each colour combo carries 4 values (`1,31,1,0`), else `car` (2 values, `34,34`). Combos are
+ * separated by a comma+whitespace, values within a combo by a bare comma — the stock `carcols.dat` / settings
+ * convention, so the colour count is read straight from the line the vehicle ships.
+ */
+export function carcolsSection(line: string): 'car4' | 'car' {
+  const combos = line.split(/,\s+/); // [model, combo1, combo2, …]
+
+  return (combos[1] ?? '').split(',').length === 4 ? 'car4' : 'car';
+}
 
 /**
  * Replace/insert the carcols line by model (column 0), into `car` or `car4` **per the line's own colour count**
@@ -24,13 +37,43 @@ export function mergeCarmods(base: string, line: string): string {
   return mergeSortedSection(base, 'mods', line);
 }
 
+/**
+ * Add a `left, right` pair to `carmods.dat`'s `link` section, before its `end`. Idempotent by the PAIR, in
+ * either order — a mirrored part is linked once and re-running an install adds nothing.
+ *
+ * The section is a fixed-size array in the game (`CLinkedUpgradeList`, 30 pairs), so whoever calls this
+ * counts first: `docs/gta-sa-original/carmods-upgrade-ceilings.md`.
+ */
+export function mergeCarmodsLink(base: string, left: string, right: string): string {
+  const eol = eolOf(base);
+  const out = base.split(/\r?\n/);
+  const section = findSection(out, 'link');
+  if (section === null) {
+    return base;
+  }
+  const wanted = [left.toLowerCase(), right.toLowerCase()].sort().join(',');
+  for (let i = section.start + 1; i < section.end; i += 1) {
+    const cells = out[i]
+      .split('#')[0]
+      .split(',')
+      .map((cell) => cell.trim().toLowerCase())
+      .filter((cell) => cell !== '');
+    if (cells.length >= 2 && [cells[0], cells[1]].sort().join(',') === wanted) {
+      return base;
+    }
+  }
+  out.splice(section.end, 0, `${left}, ${right}`);
+
+  return out.join(eol);
+}
+
 /** Replace the car-table line in `handling.cfg` by id (first token); append if new. */
 export function mergeHandling(base: string, line: string): string {
   const eol = eolOf(base);
   const out = base.split(/\r?\n/);
   const id = firstToken(line).toUpperCase();
   for (let i = 0; i < out.length; i += 1) {
-    if (/^[A-Z]/i.test(out[i].trim()) && firstToken(out[i]).toUpperCase() === id) {
+    if (isHandlingCarLine(out[i]) && firstToken(out[i]).toUpperCase() === id) {
       out[i] = line;
 
       return out.join(eol);
@@ -44,17 +87,6 @@ export function mergeHandling(base: string, line: string): string {
 /** Replace the `cars` line in `vehicles.ide` by model (column 1); append before the section `end` if new. */
 export function mergeIde(base: string, line: string): string {
   return replaceOrAppend(base, 'cars', 1, line);
-}
-
-/**
- * `car4` when each colour combo carries 4 values (`1,31,1,0`), else `car` (2 values, `34,34`). Combos are
- * separated by a comma+whitespace, values within a combo by a bare comma — the stock `carcols.dat` / settings
- * convention, so the colour count is read straight from the line the vehicle ships.
- */
-function carcolsSection(line: string): 'car4' | 'car' {
-  const combos = line.split(/,\s+/); // [model, combo1, combo2, …]
-
-  return (combos[1] ?? '').split(',').length === 4 ? 'car4' : 'car';
 }
 
 function eolOf(base: string): string {
@@ -82,9 +114,9 @@ function firstToken(line: string): string {
   return line.trim().split(/\s+/)[0] ?? '';
 }
 
-/** Lowercased comma column `col` of a line. */
+/** Lowercased column `col` of a line — split the way the game reads it (commas + whitespace, `splitRow`). */
 function keyAt(line: string, col: number): string {
-  return (line.split(',')[col] ?? '').trim().toLowerCase();
+  return (splitRow(line)[col] ?? '').toLowerCase();
 }
 
 /** Rebuild a section's entry lines (keyed by column 0) with `line` added/replaced, sorted by model name. */
@@ -135,14 +167,25 @@ function replaceOrAppend(base: string, section: string, col: number, line: strin
     return base;
   }
   const key = keyAt(line, col);
+  let replaced = false;
   for (let i = found.start + 1; i < found.end; i += 1) {
-    if (keyAt(out[i], col) === key) {
-      out[i] = line;
-
-      return out.join(eol);
+    if (keyAt(out[i], col) !== key) {
+      continue;
     }
+    if (!replaced) {
+      out[i] = line;
+      replaced = true;
+      continue;
+    }
+    // A section holds ONE row per key: a later twin is a stale duplicate (the comma-less dodo row a
+    // comma-only key once appended) and goes, so a rebake over that tree heals it.
+    out.splice(i, 1);
+    i -= 1;
+    found.end -= 1;
   }
-  out.splice(found.end, 0, line);
+  if (!replaced) {
+    out.splice(found.end, 0, line);
+  }
 
   return out.join(eol);
 }

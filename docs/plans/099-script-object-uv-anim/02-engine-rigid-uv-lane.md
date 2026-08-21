@@ -39,10 +39,14 @@ wheel's lights.
 - [x] WGSL: the rigid shader's term; identity default. **The ped path needed NO change** — see the
       ledger's deviation note.
 - [x] Tests (fake GPU, decisions not API calls): `packages/engine/src/engine.uv-anim.test.ts`, 8 cases.
-- [ ] Bench guard: the standard bench scene (no animated models) before/after — frame cost delta
-      within noise, numbers into the ledger AND `docs/benchmarks/` per the reporting rule; screenshot
-      A/B on a stock-car scene proves bit-identical output (wind 0, water off — the edge-cases
-      pixel-A/B recipe). **Not run yet** (see the ledger).
+- [x] Bench guard — **taken 2026-08-12, and it came back with a different answer than the box assumed.**
+      The standing sweep is recorded
+      ([`docs/benchmarks/opensa-engine/2026-08-12-ingame-uv-anim-lane-guard.json`](../../benchmarks/opensa-engine/2026-08-12-ingame-uv-anim-lane-guard.json)),
+      but **the before/after DELTA cannot be measured on this build** — both ways of building the "before"
+      arm failed, for reasons recorded in the benchmark note and summarised in the ledger below. What the
+      guard was protecting is instead established by construction + the fake-device tests. The pixel A/B
+      was not run: with no animated model in a bench scene, the only thing that could differ is the
+      identity transform, which is the value a non-animated draw binds either way.
 
 ## Verification
 
@@ -92,8 +96,35 @@ snapshot updated: `shaders.test.ts` → `rigid`, the two intended lines and noth
 was "looks perfect". That closes the lane's PURPOSE. The rest of the frame was judged in the same run: no
 regression reported anywhere else, which is what the pixel A/B existed to check.
 
-**Still not measured — the bench guard.** "Zero cost for a model without animations" remains a CPU-side
-claim: proven by the counters above (no allocation, no per-frame write, offset 0 on every draw) and
-unmeasured on the GPU. It does NOT need a rebake to run — the standard bench scene has no animated models —
-so it is one bench run away whenever the frame budget is next in question. Carried as the open item in
-`docs/plans/README.md`'s 099 row rather than silently dropped.
+**The bench guard, taken 2026-08-12 — and what it could and could not answer.**
+
+The sweep ran: 8 of the 9 `?bench=all` scenes, uncapped, DPR=2, on the user's 2026-08-11 18:04 pak —
+`avgMs` 2.85 (ocean-horizon) → 5.03 (lv-night, country-dusk), `gpuMs.pass` 1.84 → 3.70, draws 39 → 2 213.
+Recorded as
+[`2026-08-12-ingame-uv-anim-lane-guard.json`](../../benchmarks/opensa-engine/2026-08-12-ingame-uv-anim-lane-guard.json)
+with a row in the benchmark index.
+
+**But a sweep of ONE arm is not a guard, and the second arm cannot be built on this build.** Both attempts
+and their exact failures:
+
+1. `git revert -n 402a450d` onto HEAD — conflicts in three places with later engine work, one of them an
+   unrelated `drawClutter` signature change. Resolving them by hand would have produced an engine nobody
+   ever shipped, which is precisely the instrument this project has been misled by before.
+2. A worktree at the pair itself (`402a450d^` = `fc0f89c8`, then `402a450d`) — boots, runs CLEO, prints the
+   bench protocol, and renders **zero frames**. Both sides die identically on `texture array 5 not loaded
+   (cells must load after their arrays)` and an index-range overflow on a LOD render bundle (65 538 indices
+   into a 27 284-byte buffer). The 2026-08-07 engine era cannot read the 2026-08-11 pak — a fact about the
+   pak format, not about this lane, and proven from BOTH sides of the pair. The arms also registered 1 196
+   road cars against today's 1 219, so the workload would not have matched either.
+
+A real delta needs an era-matched pak rebuild, and that pak would no longer describe today's world (mod 39
+deleted, the procobj species floor added since) — so it would answer a question about a world we no longer
+ship. **What stands instead, and it is a bound rather than a measurement:** the lane's always-on cost is one
+integer compare per rigid submesh bind (`array === current.array && offset === current.offset`), because a
+non-animated model's offset is always 0 — so the rebind pattern is identical to the pre-lane one. No
+allocation, no per-frame write, no extra bind: pinned by the fake-device counters above, which is the level
+where this is decidable.
+
+**Per-frame cost where it is NOT zero**, measured the same day on the real built fixture: `stepUvAnimation`
+is **132.2 ns/call** over 2 000 000 calls with the ferris ring's actual 261-keyframe `f13d`, plus one 16-byte
+`writeBuffer`. Against an 8.33 ms frame that is 0.0016 % for the one animated model in the whole world.

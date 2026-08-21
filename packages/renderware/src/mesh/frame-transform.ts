@@ -9,18 +9,21 @@ import type { RWFrame } from '../parsers/binary/types';
  * the welder's `appendInstance` uses (RW stores right/up/at basis vectors as COLUMNS → each local mat
  * transposes in). Null for the identity (the common case — static world DFFs bake geometry in model space),
  * so the hot per-vertex path skips it. Anim-hierarchy models (windmills, the Burger Shot sign) place parts
- * here, and so do vehicle wheels/doors.
+ * here, and so do vehicle wheels/doors. With `stopAt` the walk ends at that ancestor and yields the
+ * frame's transform relative to it (a wheel mesh inside its `f_wheel` container).
  */
 export function frameWorldTransform(
   frames: readonly RWFrame[],
   frameIndex: number,
+  stopAt = -1,
 ): null | { pos: [number, number, number]; rot: number[] } {
   let rot = [1, 0, 0, 0, 1, 0, 0, 0, 1];
   let pos: [number, number, number] = [0, 0, 0];
   let hops = 0;
   for (let at = frameIndex; at >= 0 && at < frames.length && hops <= frames.length; at = frames[at].parentIndex) {
     const frame = frames[at];
-    if (frame.parentIndex < 0) {
+    // `stopAt` — the transform RELATIVE to that ancestor (its own matrix excluded, like the root's below).
+    if (at === stopAt || frame.parentIndex < 0) {
       // The clump ROOT's authored matrix never renders in SA: the engine overwrites it with the entity's
       // world matrix on attach, so its local values are dead data — and anti-rip exporters poison exactly
       // this slot (a comet mod shipped rotation[0][0] = −3.9e14 there; composing it flung every off-centre

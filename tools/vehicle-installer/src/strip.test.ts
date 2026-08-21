@@ -118,11 +118,11 @@ describe('stripGta3Img', () => {
 // handling.cfg's `%` bike / `!` boat / `$` plane / `^` flying sub-tables, carcols.dat's `col`+`car` two-section
 // layout, cargrp.dat's fixed group order. All six are already in the fixture manifest.
 const STOCK = {
-  carcols: 'tests/original/data/carcols.dat',
-  cargrp: 'tests/original/data/cargrp.dat',
-  handling: 'tests/original/data/handling.cfg',
-  ide: 'tests/original/data/vehicles.ide',
-  parked: 'tests/original/parked.json',
+  carcols: 'fixtures/original/data/carcols.dat',
+  cargrp: 'fixtures/original/data/cargrp.dat',
+  handling: 'fixtures/original/data/handling.cfg',
+  ide: 'fixtures/original/data/vehicles.ide',
+  parked: 'fixtures/original/parked.json',
 };
 const read = (path: string): string => readFileSync(path, 'utf8');
 

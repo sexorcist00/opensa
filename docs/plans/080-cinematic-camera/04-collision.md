@@ -60,7 +60,7 @@ The rig is engine Y-up; casts run GTA Z-up. Convert at the probe boundary only:
       semantics; unit tests with scripted probes.
 - [x] Config + Camera tab: `collisionRadius`, `collisionReleaseTime`, whisker angle.
 - [x] Measure: casts/frame and `director.update` p95 with collision on (ledger).
-- [ ] **Field round**: interiors/underpasses (LS parking garages), back-to-wall orbiting, doorway
+- [~] **Field round**: interiors/underpasses (LS parking garages), back-to-wall orbiting, doorway
       exit glide, alley sprint with 03's recenter active (the combination is where jitter hides —
       recenter steering the yaw while collision caps the distance must not oscillate).
 

@@ -8,6 +8,7 @@ The map of OpenSA, split by concern. Start here, then drill into the flow you ca
 | [world-streaming.md](./world-streaming.md)         | The native formats (`.osm` / `.ostex` / `.oscell` / `.oswire` / `.ospak`) and how the engine streams the world |
 | [perfect-map-builder.md](./perfect-map-builder.md) | The offline build pipeline that produces the canonical build (`./build/original`)                      |
 | [cleo-scripts.md](./cleo-scripts.md)               | Compiled CLEO `.cs` mods on our own SCM VM: decoder → runner → host facets, the native-address atlas, tiers/tracer/F2 |
+| [img-archive-layout.md](./img-archive-layout.md)   | Typed, size-bounded `models/*.img` buckets: who owns which archive, why the split runs before mod-installer, and the 2 GiB host ceiling behind it |
 | [tools.md](./tools.md)                             | One-paragraph architecture of every tool in `tools/` and `tools-debug/`                               |
 
 Diagrams live in [assets/](./assets/) and are **generated** — `npm run arch:render` refreshes them all
@@ -29,6 +30,7 @@ apps/
   engine-lab/  @opensa/engine-lab  the renderer proving ground (isolated engine scenes)          (type:app)
   sa-map-viewer/ @opensa/sa-map-viewer  the map inspector fed by a FOLDER of original SA files   (type:app)
   dispatch/    @opensa/dispatch    CAD console over the streamed map (engine + streaming only)   (type:app)
+  cutscene-converter/ @opensa/cutscene-converter  Electron app: modded cars → cutscenes  (tag type:tool!)
 packages/                          (tag type:engine)
   engine/         @opensa/engine          the WebGPU renderer — device/pipelines, frame graph, world cells
   engine-formats/ @opensa/engine-formats  native .osm/.ostex/.oscell/.ospak/.oswire layouts, shared with tools
@@ -39,19 +41,30 @@ packages/                          (tag type:engine)
   loaders/        @opensa/loaders         asset loaders (fetch / local folder / http-dir) — framework-agnostic
   vfs/            @opensa/vfs             unzip → AssetFileSystem
   game-build/     @opensa/game-build      partitioning shared by the loaders + build scripts
+  validation/     @opensa/validation      verdict shape + generic path/file checks   (tag type:tool, see below)
 tools/                             (tag type:tool — offline; may read engine packages, never the app)
   perfect-map-builder/ · opensa-pack/ · fetch-pack/ · mod-installer/ · vehicle-installer/ · ped-installer/
   map-optimizer/ · opensa-lod-generator/ · sa-lod-generator/ · lod-trees-generator/ · sa-procobj-placement/
   vehicle-optimizer/ · timecyc-builder/ · lod-common/ · map-placement/ · rw-codec/ · tool-kit/
 tools-debug/  bench-harness/ (headless field checks) · sa-int16-repro/ (ghost-barriers repro dial)
 asi/          sdk/ (the asi:: framework + codegen every .asi plugin builds on) · perfect-map/ (its first
-              consumer: the real-SA limit-adjuster ASI)
+              consumer: the real-SA limit-adjuster ASI) · perfect-cutscene/ · perfect-vehicle/ (planned:
+              the carmods ceilings, central plan 102)
 cleo/         sdk/ (author CLEO scripts in TS → standard .cs) · scripts/ (our authored script sources)
 root: game-src/ · mods-src/ · build/ · static/ · tests/ · e2e/ · scripts/ · deploy/ · nx.json · *.html
 ```
 
 **Module boundaries** are enforced in lint by `@nx/enforce-module-boundaries` via `package.json` `nx.tags`:
 `type:app` → app + engine; `type:engine` → engine only (never app/tools); `type:tool` → engine + tools.
+
+**Two places the folder and the tag disagree**, both because the tag follows what a package IMPORTS:
+`packages/validation` reads `node:fs` and imports `@opensa/asi-sdk`, and `apps/cutscene-converter` is an
+Electron app that imports `@opensa/vehicle-cutscene` — a `type:app` may depend on apps and engine packages
+only, so an offline desktop tool cannot be one whatever its folder says. Both are `type:tool`. Everything
+else under `packages/` is `type:engine` and everything else under `apps/` is `type:app`; a new one should be
+too unless it has the same reasons. `scripts/arch-graph.ts` reads `nx.tags` and falls back to the folder only
+for an untagged package — by folder alone the runtime graph below would have drawn a `node:fs` package and an
+Electron app inside the browser runtime.
 
 ## Runtime dependency graph
 

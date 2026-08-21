@@ -8,11 +8,15 @@ import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  assertGtaDatFiles,
+  assertLodLinks,
+  assertOneOwnerPerEntry,
   buildPerfectMap,
   checkImgIdBudgets,
   checkInstBearingIplSlots,
   EXCLUDABLE_STAGES,
   type ExcludableStage,
+  flaIdPools,
   INST_BEARING_IPL_SLOTS,
   installRequirements,
   OPENSA_BUDGET_NOTICE,
@@ -20,6 +24,7 @@ import {
   reportTextIplCensus,
   resolveBuildTarget,
   runsStage,
+  shipPerfectCutsceneAsi,
   shipPerfectMapAsi,
   type StageTiming,
   writeStageTimings,
@@ -45,6 +50,80 @@ const opensaLods = vi.hoisted(() =>
 vi.mock('@opensa/sa-procobj-placement/build', () => ({ buildProcobjLods: procobjLods }));
 vi.mock('@opensa/sa-lod-generator/build', () => ({ buildSaLods: saLods }));
 vi.mock('@opensa/opensa-lod-generator/build', () => ({ buildOpensaLods: opensaLods }));
+
+/** The two vehicle-family installers, mocked so the cutscene-stage tests cost no real conversion. The
+ *  cutscene fake mirrors the real summary shape: per-slot ERRORS fail the stage, the rest is a fragment. */
+const vehicleInstall = vi.hoisted(() =>
+  vi.fn<(options: { gamePath: string; inPath: string; outPath: string }) => void>((options) => {
+    mkdirSync(options.outPath, { recursive: true });
+  }),
+);
+const cutsceneInstall = vi.hoisted(() =>
+  vi.fn<
+    (options: { gamePath: string; inPath: string; outPath: string }) => {
+      converted: string[];
+      errors: { csName: string; message: string }[];
+      imgBytesAfter: number;
+      imgBytesBefore: number;
+      painted: never[];
+      plates: { csName: string; text: string }[];
+      skipped: { csName: string; reason: string }[];
+      txdBytes: number;
+      warnings: never[];
+    }
+  >((options) => {
+    mkdirSync(options.outPath, { recursive: true });
+
+    return {
+      converted: ['csbobcat92'],
+      errors: [],
+      imgBytesAfter: 2048,
+      imgBytesBefore: 1024,
+      painted: [],
+      plates: [{ csName: 'csbobcat92', text: 'BX41 KHT' }],
+      skipped: [{ csName: 'cscopcarsf', reason: 'no mod' }],
+      txdBytes: 40,
+      warnings: [],
+    };
+  }),
+);
+vi.mock('@opensa/vehicle-installer/install', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  install: vehicleInstall,
+}));
+vi.mock('@opensa/vehicle-cutscene/install', () => ({ installCutscene: cutsceneInstall }));
+
+/** The added-cars installer, mocked: the stage's contract at this level is that it runs, and for which target. */
+const addedInstall = vi.hoisted(() =>
+  vi.fn<
+    (options: { gamePath: string; inPath: string }) => { installed: unknown[]; skipped: number; warnings: string[] }
+  >(() => ({ installed: [], skipped: 0, warnings: [] })),
+);
+vi.mock('@opensa/add-vehicles/install', () => ({ addVehicles: addedInstall }));
+
+/** The mod installer, mocked so the split-order test costs no real merge. */
+const modInstall = vi.hoisted(() =>
+  vi.fn<(options: { gamePath: string; inPath: string; outPath: string; target?: 'opensa' | 'sa' }) => void>(
+    (options) => {
+      mkdirSync(options.outPath, { recursive: true });
+    },
+  ),
+);
+vi.mock('@opensa/mod-installer/install', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  install: modInstall,
+}));
+
+/** The archive split, mocked: the stage's contract here is WHEN it runs and on what, not how it divides. */
+const splitArchives = vi.hoisted(() =>
+  vi.fn<(options: { buckets?: readonly string[]; gamePath: string; outPath: string }) => void>((options) => {
+    mkdirSync(options.outPath, { recursive: true });
+  }),
+);
+vi.mock('@opensa/img-splitter/split', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  split: splitArchives,
+}));
 
 /** The optimizer, mocked ONLY where a test opts in — a real run needs a real game dir. Its report is what
  *  the optimize stage turns into a report fragment, so the fake carries one recognizable failure. */
@@ -95,8 +174,14 @@ describe('EXCLUDABLE_STAGES', () => {
   describe('positive cases', () => {
     it('offers both targets and every common-chain stage', () => {
       expect(EXCLUDABLE_STAGES).toEqual([
+        // split runs FIRST so every entry name lands in exactly one archive before anything installs into it
+        // (docs/architecture/img-archive-layout.md).
+        'split',
         'mods',
         'vehicles',
+        // cutscene is the vehicles stage's shadow (vehicle-cutscene plan 002 step 11): it reads the
+        // INSTALLED game, so it sits right after `vehicles` and shares its source folder.
+        'cutscene',
         'peds',
         'optimize',
         'trees',
@@ -349,6 +434,287 @@ describe('buildPerfectMap target split', () => {
     });
   });
 });
+
+/**
+ * The split stage (img-splitter plan 001 step 4). Its whole contract at this level is ORDER: it runs before
+ * anything installs, because that is what puts every entry name in exactly one archive.
+ */
+describe('buildPerfectMap split stage', () => {
+  let out: string;
+  let game: string;
+  let mods: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-split-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-split-game-'));
+    mods = mkdtempSync(join(tmpdir(), 'pmb-split-mods-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    mkdirSync(join(mods, 'mods', 'a mod'), { recursive: true });
+    writeFileSync(join(mods, 'mods', 'a mod', 'x.txd'), 'x');
+    splitArchives.mockClear();
+    modInstall.mockClear();
+  });
+
+  afterEach(() => {
+    for (const dir of [out, game, mods]) {
+      rmSync(dir, { force: true, recursive: true });
+    }
+  });
+
+  describe('negative cases', () => {
+    it('does not run under --exclude split, and the mods stage still does', async () => {
+      await buildPerfectMap({ exclude: ['split', 'optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+
+      expect(splitArchives).not.toHaveBeenCalled();
+      expect(modInstall).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('runs FIRST, on the untouched game, and hands its output to the mods stage', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+
+      expect(splitArchives).toHaveBeenCalledTimes(1);
+      // The split reads --game itself; nothing has installed into it yet.
+      expect(splitArchives.mock.calls[0][0].gamePath).toBe(game);
+      expect(modInstall.mock.calls[0][0].gamePath).toBe(splitArchives.mock.calls[0][0].outPath);
+    });
+
+    it('splits ONLY the buckets a stock archive table can register', async () => {
+      // 8 slots, 6 already spent: vehicles plus its spill sibling is exactly what fits.
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+
+      expect(splitArchives.mock.calls[0][0].buckets).toEqual(['vehicles']);
+    });
+  });
+});
+
+/**
+ * The mods stage's TARGET (mod-installer plan 011). A layered mods folder (`common/`+`sa/`+`opensa/`) makes
+ * this stage's result depend on the target, and the stage sits in the chain both targets share — so the run
+ * either has exactly one target, or it is refused before anything is built.
+ */
+describe('buildPerfectMap mods target', () => {
+  let out: string;
+  let game: string;
+  let mods: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-layers-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-layers-game-'));
+    mods = mkdtempSync(join(tmpdir(), 'pmb-layers-mods-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    modInstall.mockClear();
+  });
+
+  afterEach(() => {
+    for (const dir of [out, game, mods]) {
+      rmSync(dir, { force: true, recursive: true });
+    }
+  });
+
+  function layered(): void {
+    mkdirSync(join(mods, 'mods', 'common', '0. everyone'), { recursive: true });
+    mkdirSync(join(mods, 'mods', 'sa', '0. real game'), { recursive: true });
+  }
+
+  function flat(): void {
+    mkdirSync(join(mods, 'mods', 'a mod'), { recursive: true });
+  }
+
+  describe('negative cases', () => {
+    it('refuses a layered mods folder in a run that builds BOTH targets, before any stage runs', async () => {
+      layered();
+
+      await expect(
+        buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out }),
+      ).rejects.toThrow(/LAYERED mods folder/);
+      expect(modInstall).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('builds a layered folder one target at a time', async () => {
+      layered();
+
+      await buildPerfectMap({ exclude: ['opensa', 'optimize'], gamePath: game, inPath: mods, outPath: out });
+      expect(modInstall.mock.calls[0][0].target).toBe('sa');
+
+      modInstall.mockClear();
+      await buildPerfectMap({ exclude: ['sa', 'optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+      expect(modInstall.mock.calls[0][0].target).toBe('opensa');
+    });
+
+    it('leaves a FLAT folder alone in a both-target run, and still tells it the resolved target', async () => {
+      flat();
+
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+
+      expect(modInstall).toHaveBeenCalledTimes(1);
+      expect(modInstall.mock.calls[0][0].target).toBe('sa');
+    });
+  });
+});
+
+/**
+ * The cutscene stage (vehicle-cutscene plan 002 step 11): the vehicles stage's shadow — same source
+ * folder, same populated-check, runs right after it on the INSTALLED game. Per-slot errors FAIL the
+ * build; a clean run contributes a fragment to every target report.
+ */
+describe('buildPerfectMap cutscene stage', () => {
+  let out: string;
+  let game: string;
+  let mods: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-cutscene-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-cutscene-game-'));
+    mods = mkdtempSync(join(tmpdir(), 'pmb-cutscene-mods-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    // The stage converts the fleet's twins INTO the game's cutscene archive — a game without one has no stage.
+    mkdirSync(join(game, 'models'), { recursive: true });
+    writeFileSync(join(game, 'models', 'cutscene.img'), 'x');
+    mkdirSync(join(mods, 'vehicles', 'bobcat - a truck - author'), { recursive: true });
+    writeFileSync(join(mods, 'vehicles', 'bobcat - a truck - author', 'bobcat.dff'), 'x');
+    vehicleInstall.mockClear();
+    cutsceneInstall.mockClear();
+  });
+
+  afterEach(() => {
+    rmSync(out, { force: true, recursive: true });
+    rmSync(game, { force: true, recursive: true });
+    rmSync(mods, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it('FAILS the build when a slot errors — installed parents make a closure miss a broken build', async () => {
+      cutsceneInstall.mockReturnValueOnce({
+        converted: [],
+        errors: [{ csName: 'cstaxi92', message: 'unresolved textures (txdp parent taxi.txd): tx_body_taxi' }],
+        imgBytesAfter: 0,
+        imgBytesBefore: 0,
+        painted: [],
+        plates: [],
+        skipped: [],
+        txdBytes: 0,
+        warnings: [],
+      });
+
+      await expect(
+        buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out }),
+      ).rejects.toThrow(/cutscene conversion failed for 1 slot\(s\)[\s\S]*cstaxi92/);
+    });
+
+    it('does not run under --exclude cutscene, and the vehicles stage still does', async () => {
+      await buildPerfectMap({
+        exclude: ['cutscene', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: mods,
+        outPath: out,
+      });
+
+      expect(vehicleInstall).toHaveBeenCalledTimes(1);
+      expect(cutsceneInstall).not.toHaveBeenCalled();
+    });
+
+    it('drops out with --exclude vehicles — no installed parents, every slot would fail closure', async () => {
+      // build:game:original:sa excludes vehicles today; the cutscene shadow must follow it out, loudly.
+      const logs: string[] = [];
+      const spy = vi.spyOn(console, 'log').mockImplementation((m: unknown) => void logs.push(String(m)));
+      await buildPerfectMap({
+        exclude: ['vehicles', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: mods,
+        outPath: out,
+      });
+      spy.mockRestore();
+
+      expect(vehicleInstall).not.toHaveBeenCalled();
+      expect(cutsceneInstall).not.toHaveBeenCalled();
+      expect(logs.join('\n')).toMatch(/cutscene — skipped \(vehicles stage excluded/);
+    });
+
+    it('skips, loudly, when the game ships no models/cutscene.img — a total conversion has no cutscene fleet', async () => {
+      // gostown: the first build after the stage was added died on the missing archive AFTER the vehicles stage.
+      rmSync(join(game, 'models', 'cutscene.img'));
+      const logs: string[] = [];
+      const spy = vi.spyOn(console, 'log').mockImplementation((m: unknown) => void logs.push(String(m)));
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+      spy.mockRestore();
+
+      expect(vehicleInstall).toHaveBeenCalledTimes(1);
+      expect(cutsceneInstall).not.toHaveBeenCalled();
+      expect(logs.join('\n')).toMatch(/cutscene — skipped \(the game ships no models\/cutscene\.img/);
+    });
+
+    it('does not even ADDRESS perfect-cutscene.asi when no fleet was converted', async () => {
+      // The gate short-circuits before the artifact is looked for, so a fleetless build neither ships the
+      // plugin nor warns about it: without our translucent atomics there is nothing for it to reorder, and
+      // its deferred pass renders at a LOWER alpha-test ref than the inline one it replaces.
+      const said: string[] = [];
+      const record = (m: unknown): void => void said.push(String(m));
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(record);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(record);
+      await buildPerfectMap({ exclude: ['cutscene', 'optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+      logSpy.mockRestore();
+      warnSpy.mockRestore();
+
+      expect(said.join('\n')).not.toMatch(/perfect-cutscene\.asi/);
+      expect(existsSync(join(out, 'sa', 'perfect-cutscene.asi'))).toBe(false);
+      expect(saReport(out).fragments.sa.perfectCutsceneAsiSha256).toBeNull();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('runs right after vehicles, reading the INSTALLED game that stage produced', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+
+      expect(cutsceneInstall).toHaveBeenCalledTimes(1);
+      const installedDir = vehicleInstall.mock.calls[0][0].outPath;
+      expect(cutsceneInstall.mock.calls[0][0].gamePath).toBe(installedDir);
+      expect(cutsceneInstall.mock.calls[0][0].inPath).toBe(join(mods, 'vehicles'));
+    });
+
+    it('contributes its fragment to BOTH target reports', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+
+      const fragment = (target: 'opensa' | 'sa'): { converted: string[]; txdBytes: number } =>
+        (
+          JSON.parse(readFileSync(join(out, `report-${target}.json`), 'utf8')) as {
+            fragments: { cutscene: { converted: string[]; txdBytes: number } };
+          }
+        ).fragments.cutscene;
+      expect(fragment('sa').converted).toEqual(['csbobcat92']);
+      expect(fragment('sa').txdBytes).toBe(40);
+      expect(fragment('opensa').converted).toEqual(fragment('sa').converted);
+    });
+
+    it('ADDRESSES perfect-cutscene.asi on a build that converted a fleet — shipped, or said to be missing', async () => {
+      // The fleet and the plugin are coupled (asi/perfect-cutscene plan 001 step 7), so a converted build must
+      // never be silent about it. Which of the two happens depends on whether `dist/` holds a cross-compiled
+      // artifact — gitignored, hence absent on a fresh checkout — so the deterministic claim is that the run
+      // NAMED the plugin either way.
+      const said: string[] = [];
+      const record = (m: unknown): void => void said.push(String(m));
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(record);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(record);
+      await buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: mods, outPath: out });
+      logSpy.mockRestore();
+      warnSpy.mockRestore();
+
+      expect(said.join('\n')).toMatch(/perfect-cutscene\.asi (?:shipped into the game root|NOT SHIPPED)/);
+      const shipped = existsSync(join(out, 'sa', 'perfect-cutscene.asi'));
+      expect(saReport(out).fragments.sa.perfectCutsceneAsiSha256 !== null).toBe(shipped);
+    });
+  });
+});
+
+/** The `sa` target report — the manifest half of the asi pairing. */
+function saReport(outPath: string): { fragments: { sa: { perfectCutsceneAsiSha256: null | string } } } {
+  return JSON.parse(readFileSync(join(outPath, 'report-sa.json'), 'utf8')) as {
+    fragments: { sa: { perfectCutsceneAsiSha256: null | string } };
+  };
+}
 
 /**
  * Plan 005: one report per target, `.work` split the same way. The regression the whole plan exists for:
@@ -683,6 +1049,68 @@ describe('OPENSA_BUDGET_NOTICE', () => {
   });
 });
 
+describe('assertOneOwnerPerEntry', () => {
+  let tree: string;
+  let stock: string;
+
+  const writeTreeImg = (root: string, name: string, entries: string[]): void => {
+    mkdirSync(join(root, 'models'), { recursive: true });
+    writeFileSync(
+      join(root, 'models', name),
+      buildVer2Buffer(entries.map((entryName) => ({ data: Uint8Array.of(1), name: entryName }))),
+    );
+  };
+
+  beforeEach(() => {
+    tree = mkdtempSync(join(tmpdir(), 'pmb-one-owner-'));
+    stock = mkdtempSync(join(tmpdir(), 'pmb-one-owner-stock-'));
+  });
+
+  afterEach(() => {
+    for (const path of [tree, stock]) {
+      rmSync(path, { force: true, recursive: true });
+    }
+  });
+
+  describe('negative cases', () => {
+    it('refuses a name held by two archives, naming both — one of the two files never loads', () => {
+      writeTreeImg(stock, 'gta3.img', []);
+      writeTreeImg(tree, 'gta3.img', ['slamvan.txd']);
+      writeTreeImg(tree, 'vehicles2.img', ['slamvan.txd']);
+
+      expect(() => assertOneOwnerPerEntry(tree, stock)).toThrow(/slamvan\.txd — gta3\.img, vehicles2\.img/);
+    });
+
+    it('refuses a duplicate between gta3.img and a sibling the split spilled', () => {
+      writeTreeImg(stock, 'gta3.img', ['blade.txd']);
+      writeTreeImg(tree, 'gta3.img', ['blade.txd']);
+      writeTreeImg(tree, 'vehicles.img', ['blade.txd']);
+
+      expect(() => assertOneOwnerPerEntry(tree, stock)).toThrow(/blade\.txd — gta3\.img, vehicles\.img/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it("does not police an archive the original brought — player.img's `coach` is a clothing texture", () => {
+      // The clothes archive holds a 256x256 texture named `coach`, unrelated to the bus of that name in
+      // gta3.img. Six such names ship in a clean install and none of them is ours to resolve.
+      writeTreeImg(stock, 'gta3.img', ['coach.dff']);
+      writeTreeImg(stock, 'player.img', ['coach.dff']);
+      writeTreeImg(tree, 'gta3.img', ['coach.dff']);
+      writeTreeImg(tree, 'player.img', ['coach.dff']);
+
+      expect(() => assertOneOwnerPerEntry(tree, stock)).not.toThrow();
+    });
+
+    it('passes a tree where every name has one owner', () => {
+      writeTreeImg(tree, 'gta3.img', ['kb_bar.dff']);
+      writeTreeImg(tree, 'vehicles.img', ['slamvan.txd']);
+
+      expect(() => assertOneOwnerPerEntry(tree, stock)).not.toThrow();
+    });
+  });
+});
+
 describe('checkImgIdBudgets', () => {
   let dir: string;
 
@@ -702,9 +1130,15 @@ describe('checkImgIdBudgets', () => {
     );
   }
 
+  /** The adjuster ini as the mods stage installs it into the tree root — the file the guard reads its pools from. */
+  function writeIni(lines: string[], name = 'fastman92limitAdjuster_GTASA.ini'): void {
+    writeFileSync(join(dir, name), ['[ID LIMITS]', 'Apply ID limit patch = 1', ...lines].join('\r\n'));
+  }
+
   describe('negative cases', () => {
     it('throws when the TXD pool is within the runtime margin of the FLA cap (the shopping.dat crash class)', () => {
       // 5,960 TXDs > 6,000 − 50 margin — exhausting an FLA FILE_TYPE_* pool boots into heap corruption.
+      writeIni(['FILE_TYPE_TXD = 6000']);
       writeImg(
         'gta3.img',
         Array.from({ length: 5960 }, (_, i) => `t${i}.txd`),
@@ -713,11 +1147,52 @@ describe('checkImgIdBudgets', () => {
     });
 
     it('throws when binary IPL files approach the FILE_TYPE_IPL pool (the field boot-crash case)', () => {
+      writeIni(['FILE_TYPE_IPL = 1024']);
       writeImg(
         'gta3.img',
         Array.from({ length: 1019 }, (_, i) => `a${i}_stream0.ipl`),
       );
       expect(() => checkImgIdBudgets(dir)).toThrow(/binary IPL files: 1019 of 1024/);
+    });
+
+    it('judges the build against the SHIPPED ini, not against the pool someone raised in the bottle', () => {
+      // 2026-08-18: the guard carried 6000 as a constant while the shipped ini said 5000, so a 5,177-archive
+      // build reported headroom and the game died at boot. The ini is the number in force.
+      writeIni(['FILE_TYPE_TXD = 5000']);
+      writeImg(
+        'gta3.img',
+        Array.from({ length: 5177 }, (_, i) => `t${i}.txd`),
+      );
+      expect(() => checkImgIdBudgets(dir)).toThrow(/TXD archives: 5177 of 5000/);
+    });
+
+    it('falls back to FLA defaults when the raise is `#`-disabled — a commented line is not a value', () => {
+      writeIni(['#FILE_TYPE_TXD = 6000']);
+      writeImg(
+        'gta3.img',
+        Array.from({ length: 5177 }, (_, i) => `t${i}.txd`),
+      );
+      expect(() => checkImgIdBudgets(dir)).toThrow(/TXD archives: 5177 of 5000/);
+    });
+
+    it('falls back to FLA defaults when the ini does not apply the ID limit patch at all', () => {
+      writeFileSync(
+        join(dir, 'fastman92limitAdjuster_GTASA.ini'),
+        ['[ID LIMITS]', '#Apply ID limit patch = 0', 'FILE_TYPE_TXD = 6000'].join('\r\n'),
+      );
+      writeImg(
+        'gta3.img',
+        Array.from({ length: 5177 }, (_, i) => `t${i}.txd`),
+      );
+      expect(() => checkImgIdBudgets(dir)).toThrow(/TXD archives: 5177 of 5000/);
+    });
+
+    it('falls back to FLA defaults for a tree that carries no adjuster ini', () => {
+      writeImg(
+        'gta3.img',
+        Array.from({ length: 5177 }, (_, i) => `t${i}.txd`),
+      );
+      expect(() => checkImgIdBudgets(dir)).toThrow(/TXD archives: 5177 of 5000/);
     });
   });
 
@@ -728,7 +1203,27 @@ describe('checkImgIdBudgets', () => {
       expect(() => checkImgIdBudgets(dir)).not.toThrow();
     });
 
+    it('reads the pools the tree will run under, naming the ini it read them from', () => {
+      writeIni(['FILE_TYPE_TXD = 6000', 'FILE_TYPE_COL = 400', 'FILE_TYPE_IPL = 1024']);
+
+      expect(flaIdPools(dir)).toEqual({
+        pools: { '.col': 400, '.ipl': 1024, '.txd': 6000 },
+        source: 'fastman92limitAdjuster_GTASA.ini',
+      });
+    });
+
+    it('passes what the default pool would refuse once the shipped ini carries the raise', () => {
+      writeIni(['FILE_TYPE_TXD = 6000']);
+      writeImg(
+        'gta3.img',
+        Array.from({ length: 5177 }, (_, i) => `t${i}.txd`),
+      );
+
+      expect(() => checkImgIdBudgets(dir)).not.toThrow();
+    });
+
     it('passes the 522 binary IPLs the first sa build at the recovered density produced', () => {
+      writeIni(['FILE_TYPE_IPL = 1024']);
       // The build that found this gate (2026-08-10): 331 `plobj*_stream*` tiles + 191 stock ones. 242 over
       // the old 280-slot pool, comfortably under the raised one — the regression test for the raise itself.
       writeImg(
@@ -736,6 +1231,75 @@ describe('checkImgIdBudgets', () => {
         Array.from({ length: 522 }, (_, i) => `a${i}_stream0.ipl`),
       );
       expect(() => checkImgIdBudgets(dir)).not.toThrow();
+    });
+  });
+});
+
+describe('assertGtaDatFiles', () => {
+  /** A tree whose gta.dat lists `town.ide` and, when `withGhost`, a file nobody wrote. */
+  function tree(withGhost: boolean): string {
+    const game = mkdtempSync(join(tmpdir(), 'pmb-gta-dat-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    writeFileSync(join(game, 'data', 'maps', 'town.ide'), 'objs\nend\n');
+    writeFileSync(
+      join(game, 'data', 'gta.dat'),
+      `IDE DATA\\MAPS\\town.ide\n${withGhost ? 'IDE DATA\\MAPS\\salod-txdp.ide\n' : ''}`,
+    );
+
+    return game;
+  }
+
+  describe('negative cases', () => {
+    it('fails on a registered file the tree does not have — SA opens it without a check', () => {
+      // The 2026-08-16 field crash: an install whose gta.dat still registered `salod-txdp.ide` after the
+      // txdp parent was retired. The access violation names the path only inside a stack dump.
+      expect(() => assertGtaDatFiles(tree(true))).toThrow(/registers 1 file\(s\) the tree does not have/);
+      expect(() => assertGtaDatFiles(tree(true))).toThrow(/salod-txdp\.ide/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('passes a tree that holds everything it registers', () => {
+      expect(() => assertGtaDatFiles(tree(false))).not.toThrow();
+    });
+  });
+});
+
+describe('assertLodLinks', () => {
+  /** A one-area tree whose single `inst` link points at `lod` — the shape the guard reads off a built tree. */
+  function tree(lod: number): string {
+    const game = mkdtempSync(join(tmpdir(), 'pmb-lod-links-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    writeFileSync(join(game, 'data', 'gta.dat'), 'IDE DATA\\MAPS\\town.ide\nIPL DATA\\MAPS\\town.ipl\n');
+    writeFileSync(join(game, 'data', 'maps', 'town.ide'), 'objs\n100, house, houses, 300, 0\nend\n');
+    writeFileSync(
+      join(game, 'data', 'maps', 'town.ipl'),
+      [
+        'inst',
+        `100, house, 0, 10, 10, 5, 0, 0, 0, 1, ${lod}`,
+        '100, LODhouse, 0, 10, 10, 5, 0, 0, 0, 1, -1',
+        '100, LODbarn, 0, 900, 900, 5, 0, 0, 0, 1, -1',
+        'end',
+        '',
+      ].join('\n'),
+    );
+
+    return game;
+  }
+
+  describe('negative cases', () => {
+    it('fails the build when a link resolves onto a row that is not where its owner is', () => {
+      expect(() => assertLodLinks(tree(2))).toThrow(/1 of 1 lod links do not resolve onto their owner/);
+    });
+
+    it('names the script that diagnoses it, so the error is actionable off the log alone', () => {
+      expect(() => assertLodLinks(tree(2))).toThrow(/scripts\/debug\/lod-link-check\.ts/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('passes a tree whose LOD stands on its owner', () => {
+      expect(() => assertLodLinks(tree(1))).not.toThrow();
     });
   });
 });
@@ -793,13 +1357,10 @@ describe('installRequirements', () => {
 
     it('names every ceiling the shipped tree crosses, and only those', () => {
       const crossed = installRequirements(shipped, pools).map((row) => row.what);
-      // 110 055 rows cross int16 AND the building pool; 9 110 crosses the per-IPL buffer; COL 300 > 255.
-      expect(crossed).toEqual([
-        'permanent text-IPL rows, map-wide',
-        'CPool<CBuilding> entries',
-        'rows in one text IPL',
-        'COL archives',
-      ]);
+      // 110 055 rows cross int16; 9 110 crosses the per-IPL buffer; COL 300 > 255. The entity pools are NOT
+      // here — a row spends a CBuilding or a CDummy depending on `object.dat`, so pricing rows against
+      // `CPool<CBuilding>` was wrong in both directions; `checkEntityPoolBudgets` owns that ceiling now.
+      expect(crossed).toEqual(['permanent text-IPL rows, map-wide', 'rows in one text IPL', 'COL archives']);
     });
 
     it('reports the per-file buffer separately from the map-wide one — they are different ceilings', () => {
@@ -860,6 +1421,224 @@ describe('shipPerfectMapAsi', () => {
       writeFileSync(b, 'two');
 
       expect(shipPerfectMapAsi(game, a)?.sha256).not.toBe(shipPerfectMapAsi(game, b)?.sha256);
+    });
+  });
+});
+
+describe('shipPerfectCutsceneAsi', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'pmb-cs-asi-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it('WARNS with the COUPLING, not with the map warning — the two asis are needed for different reasons', () => {
+      const warns: string[] = [];
+      const spy = vi.spyOn(console, 'warn').mockImplementation((m: unknown) => void warns.push(String(m)));
+      const shipped = shipPerfectCutsceneAsi(dir, join(dir, 'nope', 'perfect-cutscene.asi'));
+      spy.mockRestore();
+
+      expect(shipped).toBeNull();
+      expect(existsSync(join(dir, 'perfect-cutscene.asi'))).toBe(false);
+      expect(warns.join('\n')).toMatch(/perfect-cutscene\.asi NOT SHIPPED/);
+      expect(warns.join('\n')).toMatch(/asi\/perfect-cutscene/); // its own build dir, not perfect-map's
+      expect(warns.join('\n')).toMatch(/actor is erased/); // what it costs, so the warning is actionable
+    });
+  });
+
+  describe('positive cases', () => {
+    it('copies the artifact into the game ROOT beside the map asi, and returns its sha256', () => {
+      const source = join(dir, 'perfect-cutscene.asi.src');
+      writeFileSync(source, 'MZ-cutscene');
+      const game = join(dir, 'sa');
+      mkdirSync(game, { recursive: true });
+      writeFileSync(join(dir, 'perfect-map.asi.src'), 'MZ-map');
+
+      const shipped = shipPerfectCutsceneAsi(game, source);
+      shipPerfectMapAsi(game, join(dir, 'perfect-map.asi.src'));
+
+      expect(readFileSync(join(game, 'perfect-cutscene.asi'), 'utf8')).toBe('MZ-cutscene');
+      expect(readFileSync(join(game, 'perfect-map.asi'), 'utf8')).toBe('MZ-map');
+      expect(shipped?.sha256).toBe(createHash('sha256').update('MZ-cutscene').digest('hex'));
+    });
+  });
+});
+
+/**
+ * `--resume` (plan 006): a run that dies in a target re-enters at the step that died, with every finished
+ * step taken from `resume.json`; a resume over changed inputs is refused. The generators are the mocks
+ * above, so "finished" is what the manifest says, not what the mocks did.
+ */
+describe('buildPerfectMap --resume', () => {
+  let out: string;
+  let game: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-resume-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-resume-game-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    procobjLods.mockClear();
+    saLods.mockClear();
+    opensaLods.mockClear();
+  });
+
+  afterEach(() => {
+    rmSync(out, { force: true, recursive: true });
+    rmSync(game, { force: true, recursive: true });
+    opensaLods.mockImplementation((step) => {
+      mkdirSync(step.outDir, { recursive: true });
+    });
+  });
+
+  describe('negative cases', () => {
+    it('refuses to resume when nothing failed here, and refuses a resume over a changed source', async () => {
+      await expect(
+        buildPerfectMap({
+          exclude: ['optimize', 'pack'],
+          gamePath: game,
+          inPath: '/nonexistent',
+          outPath: out,
+          resume: true,
+        }),
+      ).rejects.toThrow(/nothing to resume/);
+
+      opensaLods.mockImplementationOnce(() => {
+        throw new Error('bake died');
+      });
+      await expect(
+        buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: '/nonexistent', outPath: out }),
+      ).rejects.toThrow(/bake died/);
+      // The source moved on — a resumed build over it is a build nobody can reproduce.
+      writeFileSync(join(game, 'data', 'maps', 'new.ipl'), 'inst\nend\n');
+
+      await expect(
+        buildPerfectMap({
+          exclude: ['optimize', 'pack'],
+          gamePath: game,
+          inPath: '/nonexistent',
+          outPath: out,
+          resume: true,
+        }),
+      ).rejects.toThrow(/refused[\s\S]*game: changed since the run/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('re-enters at the failed opensa step, taking the finished common chain and the sa target from the manifest', async () => {
+      opensaLods.mockImplementationOnce(() => {
+        throw new Error('bake died');
+      });
+      await expect(
+        buildPerfectMap({ exclude: ['optimize', 'pack'], gamePath: game, inPath: '/nonexistent', outPath: out }),
+      ).rejects.toThrow(/bake died/);
+      const manifest = JSON.parse(readFileSync(join(out, '.work-sa', 'resume.json'), 'utf8')) as {
+        failed?: { step: string };
+        stages: { name: string }[];
+      };
+      expect(manifest.failed?.step).toBe('opensa');
+      expect(manifest.stages.map((s) => s.name)).toContain('sa');
+      const saCalls = saLods.mock.calls.length;
+      const procobjCalls = procobjLods.mock.calls.length;
+
+      const result = await buildPerfectMap({
+        exclude: ['optimize', 'pack'],
+        gamePath: game,
+        inPath: '/nonexistent',
+        outPath: out,
+        resume: true,
+      });
+
+      expect(saLods.mock.calls.length).toBe(saCalls); // the sa target was NOT rebuilt
+      expect(procobjLods.mock.calls.length).toBe(procobjCalls);
+      expect(opensaLods.mock.calls.length).toBe(2); // once died, once resumed
+      expect(result.produced.map((p) => p.name)).toContain('opensa');
+      // A green run leaves no resume point behind (the work dir goes with it, as always).
+      expect(existsSync(join(out, '.work-sa', 'resume.json'))).toBe(false);
+    });
+
+    it('resumes a chain whose consumed stage dirs are gone — only the LAST finished dir is read', async () => {
+      // The chain deletes each stage dir as the next consumes it, so a run killed in a target has lost every
+      // chain dir but the last. The first real killed build (gostown, mid-pack) was refused over `1-split`.
+      const mods = mkdtempSync(join(tmpdir(), 'pmb-resume-mods-'));
+      mkdirSync(join(mods, 'vehicles', 'bobcat - a truck - author'), { recursive: true });
+      writeFileSync(join(mods, 'vehicles', 'bobcat - a truck - author', 'bobcat.dff'), 'x');
+      opensaLods.mockImplementationOnce(() => {
+        throw new Error('bake died');
+      });
+      await expect(
+        buildPerfectMap({ exclude: ['cutscene', 'optimize', 'pack'], gamePath: game, inPath: mods, outPath: out }),
+      ).rejects.toThrow(/bake died/);
+      // split was consumed by vehicles: its dir is gone, vehicles' (the last) is there.
+      expect(existsSync(join(out, '.work-sa', '1-split'))).toBe(false);
+      expect(existsSync(join(out, '.work-sa', '2-vehicles'))).toBe(true);
+      const vehicleCalls = vehicleInstall.mock.calls.length;
+
+      const result = await buildPerfectMap({
+        exclude: ['cutscene', 'optimize', 'pack'],
+        gamePath: game,
+        inPath: mods,
+        outPath: out,
+        resume: true,
+      });
+
+      expect(vehicleInstall.mock.calls.length).toBe(vehicleCalls); // the chain was NOT re-run
+      expect(result.produced.map((p) => p.name)).toContain('opensa');
+      rmSync(mods, { force: true, recursive: true });
+    });
+  });
+});
+
+/**
+ * The added cars (central plan 102). Their contract at this level is WHERE they land: inside the `sa` branch,
+ * on the finished tree — never in the common build both targets are made from, which is the placement
+ * `procobj` established for content that belongs to one target.
+ */
+describe('buildPerfectMap added vehicles', () => {
+  let out: string;
+  let game: string;
+  let inPath: string;
+
+  beforeEach(() => {
+    out = mkdtempSync(join(tmpdir(), 'pmb-added-out-'));
+    game = mkdtempSync(join(tmpdir(), 'pmb-added-game-'));
+    inPath = mkdtempSync(join(tmpdir(), 'pmb-added-in-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    mkdirSync(join(inPath, 'add-vehicles', 'models', '001veh - vega - x (manana)'), { recursive: true });
+    addedInstall.mockClear();
+  });
+
+  afterEach(() => {
+    for (const dir of [out, game, inPath]) {
+      rmSync(dir, { force: true, recursive: true });
+    }
+  });
+
+  describe('negative cases', () => {
+    it("does not run for the opensa target — the feature is the real game's plugins", async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack', 'sa'], gamePath: game, inPath, outPath: out });
+
+      expect(addedInstall).not.toHaveBeenCalled();
+    });
+
+    it('does not run when the root holds no cars', async () => {
+      rmSync(join(inPath, 'add-vehicles'), { recursive: true });
+      await buildPerfectMap({ exclude: ['optimize', 'pack', 'opensa'], gamePath: game, inPath, outPath: out });
+
+      expect(addedInstall).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('runs once for the sa target, over its own source root', async () => {
+      await buildPerfectMap({ exclude: ['optimize', 'pack', 'opensa'], gamePath: game, inPath, outPath: out });
+
+      expect(addedInstall).toHaveBeenCalledTimes(1);
+      expect(addedInstall.mock.calls[0][0].inPath).toBe(join(inPath, 'add-vehicles'));
     });
   });
 });

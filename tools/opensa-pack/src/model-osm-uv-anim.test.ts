@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildModelOsm } from './model-osm';
 
-const FIXTURES = join(process.cwd(), 'tests', 'original');
+const FIXTURES = join(process.cwd(), 'fixtures', 'original');
 const FERRIS = join(FIXTURES, 'mods', 'ferriswheel_lights.dff');
 const ADMIRAL = join(FIXTURES, 'dff', 'vehicle', 'admiral.dff');
 
@@ -69,9 +69,11 @@ describe.skipIf(!existsSync(FERRIS) || !existsSync(ADMIRAL))('readModelOsm (UV a
       expect(read.model.uvAnimations?.[0].keyframes).toHaveLength(261);
       expect(read.model.uvAnimations?.[0].duration).toBeCloseTo(29.25, 4);
       // The slot indexes the model's own list, so it has to survive JSON beside the animations it names.
+      // One material, one clip — but a translucent group is emitted per spatial CLUSTER (the ring's strip
+      // is two separate pieces), and every cluster of it points at the same slot.
       const animated = read.model.submeshes.filter((submesh) => submesh.uvAnim !== undefined);
-      expect(animated).toHaveLength(1);
-      expect(animated[0].uvAnim).toBe(0);
+      expect(animated.length).toBeGreaterThanOrEqual(1);
+      expect(animated.every((submesh) => submesh.uvAnim === 0)).toBe(true);
     });
   });
 });

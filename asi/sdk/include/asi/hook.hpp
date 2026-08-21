@@ -26,6 +26,25 @@ inline bool WriteJmp(uintptr_t at, uintptr_t target) {
   return true;
 }
 
+// Repoint an existing 5-byte `E8 rel32` CALL at `at` to `target`, keeping the instruction a call. The patch
+// shape for "replace what this one call site invokes" — no trampoline, no relocated prologue, and the original
+// function stays untouched for every other caller. Byte-verify the site FIRST (framework rule); this only
+// performs the write. Returns false if the page can't be made writable.
+inline bool WriteCall(uintptr_t at, uintptr_t target) {
+  ScopedUnprotect guard(at, 5);
+  if (!guard.ok()) {
+    return false;
+  }
+  uint8_t* p = reinterpret_cast<uint8_t*>(at);
+  const int32_t rel = static_cast<int32_t>(target - (at + 5));
+  p[0] = 0xE8;
+  p[1] = static_cast<uint8_t>(rel);
+  p[2] = static_cast<uint8_t>(rel >> 8);
+  p[3] = static_cast<uint8_t>(rel >> 16);
+  p[4] = static_cast<uint8_t>(rel >> 24);
+  return true;
+}
+
 // A tiny executable code buffer we assemble trampolines into (RWX, never freed — lives for the process).
 inline uint8_t* AllocExec(uint32_t size) {
   return static_cast<uint8_t*>(VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));

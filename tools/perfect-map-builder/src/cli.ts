@@ -42,6 +42,9 @@ import { parseBuildTarget } from '@opensa/tool-kit/target';
  *                      a COL for a cell the bake covers. Costs build time; OFF by default, because it is the
  *                      A/B switch — the runtime reads the bake when it is there and parses COL when it is
  *                      not, so the SAME tree built twice, one flag apart, is what the claim is measured on.
+ *     --resume         re-enter a FAILED run at its last finished step (plan 006): reads
+ *                      `<out>/.work-<target>/resume.json`; refused if the sources, the flags or the code
+ *                      changed since that run. Same flags as the run being resumed.
  *     --no-<pass>      disable a map-optimizer pass to bisect it: --no-weld-seams | --no-textures.
  * A `broken-prelight.json` at the mods-src root (or inside its `mods/` subfolder) is the map-optimizer
  * prelight FORCE list: the statistical pass runs map-wide and the listed models are additionally forced past
@@ -113,6 +116,7 @@ async function main(): Promise<void> {
     inPath,
     keepWork: process.argv.includes('--keep-work'),
     outPath: fromCwd(outArg),
+    resume: process.argv.includes('--resume'),
     target: parseBuildTarget(argValue('--target')),
     until: until as StageName | undefined,
   });

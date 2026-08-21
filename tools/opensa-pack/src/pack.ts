@@ -56,6 +56,9 @@ export interface PackOptions {
   bakes?: boolean;
   /** Bake worker pool size; the default is a quarter of the cores. */
   bakeWorkers?: number;
+  /** Per-chunk checkpoints of the weld (pmb plan 006) — written here after every chunk; with `resume`,
+   *  replayed and continued from. Absent = no checkpoints. */
+  checkpointDir?: string;
   /** Emit every world texture as RGBA8 instead of passing SA's DXT through, so the pak loads on a GPU
    *  without BC (every mobile one). 4-8x the texture memory — pair it with a district {@link rect}.
    *  The older spelling of `textures: 'rgba8'`; {@link textures} wins when both are given. */
@@ -91,6 +94,8 @@ export interface PackOptions {
   /** Inclusive GTA CELL-coordinate rect [x0, y0, x1, y1]. Absent = auto-fit to every cell with content
    *  (plan 087: a fixed rect silently dropped gostown's far islands). */
   rect?: readonly [number, number, number, number];
+  /** Continue the weld from the checkpoints in `checkpointDir` (the model classes after it re-run). */
+  resume?: boolean;
   /** Stochastic de-tiling name lists; defaults to the curated `data/stochastic.txt`. */
   stochasticFiles?: readonly string[];
   /** Which texture format the build WRITES (plan 200/2-02). Defaults to `bc` — SA's own DXT, passed through
@@ -175,24 +180,13 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
     ...(options.bakeCollision ? { bakeCollision: true } : {}),
     ...(options.bakeWorkers !== undefined ? { bakeWorkers: options.bakeWorkers } : {}),
     cellSize: CELL_SIZE,
-    log,
-    // Every model class converts HERE: the by-name ones first (they own their private dictionaries), then
-    // the map objects, which resolve into the world plan this hook hands over while it is still open.
-    ...(models
-      ? {
-          onWorldPlanned: (planner, mapDefs): void => {
-            packed = packModels(fs, mapDefs, planner, bundles, log, forceRgba8, {
-              // Only with an explicit rect: without one the convert auto-fits to every cell with content,
-              // and "the models this rect places" is then the whole catalogue anyway.
-              ...(options.mapObjectsInRect && rect !== undefined
-                ? { mapObjects: placedModelNames(mapDefs, rect, CELL_SIZE) }
-                : {}),
-              ...(options.peds ? { peds: new Set(options.peds.map((name) => name.toLowerCase())) } : {}),
-              ...(options.vehicles ? { vehicles: new Set(options.vehicles.map((name) => name.toLowerCase())) } : {}),
-            });
-          },
-        }
+    ...(options.checkpointDir !== undefined
+      ? { checkpointDir: options.checkpointDir, resume: options.resume === true }
       : {}),
+    log,
+    ...modelPlanHook(fs, options, bundles, log, forceRgba8, models, (result) => {
+      packed = result;
+    }),
     ...(textures === 'astc' ? { astc: true, astcThreads: options.astcThreads ?? 0 } : {}),
     ...(forceRgba8 ? { forceRgba8: true } : {}),
     ...(options.maxTextureSize ? { maxTextureSize: options.maxTextureSize } : {}),
@@ -337,6 +331,41 @@ function logTextureLedgers(
       log(`  … ${missing.length - 24} more — full list in report.json textures.missing`);
     }
   }
+}
+
+/**
+ * The convert's `onWorldPlanned` hook: every model class converts HERE — the by-name ones first (they own
+ * their private dictionaries), then the map objects, which resolve into the world plan the hook is handed
+ * while it is still open. `--no-models` returns no hook at all.
+ */
+function modelPlanHook(
+  fs: ReturnType<typeof openGameDir>,
+  options: PackOptions,
+  bundles: ReturnType<typeof createModelBundles>,
+  log: (message: string) => void,
+  forceRgba8: boolean,
+  models: boolean,
+  onPacked: (packed: PackedModels) => void,
+): { onWorldPlanned?: (planner: TexturePlanner, mapDefs: MapDefinitions) => void } {
+  if (!models) {
+    return {};
+  }
+
+  return {
+    onWorldPlanned: (planner, mapDefs): void => {
+      onPacked(
+        packModels(fs, mapDefs, planner, bundles, log, forceRgba8, {
+          // Only with an explicit rect: without one the convert auto-fits to every cell with content, and
+          // "the models this rect places" is then the whole catalogue anyway.
+          ...(options.mapObjectsInRect && options.rect !== undefined
+            ? { mapObjects: placedModelNames(mapDefs, options.rect, CELL_SIZE) }
+            : {}),
+          ...(options.peds ? { peds: new Set(options.peds.map((name) => name.toLowerCase())) } : {}),
+          ...(options.vehicles ? { vehicles: new Set(options.vehicles.map((name) => name.toLowerCase())) } : {}),
+        }),
+      );
+    },
+  };
 }
 
 /**

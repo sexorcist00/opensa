@@ -17,7 +17,7 @@ some knowledge across with an error and dropped some entirely, and prod is the o
 was dropped.
 
 **Measure the actual asset, not a stock stand-in.** The first wheel diagnosis was wrong because it was
-measured against `tests/original/dff/vehicle/admiral.dff` while the user was running the MOD admiral from
+measured against `fixtures/original/dff/vehicle/admiral.dff` while the user was running the MOD admiral from
 `mods-src/`. The two disagree on the one property that mattered (mesh centring). Probe the file the field
 report came from.
 
@@ -259,7 +259,7 @@ a few cars with one material over the whole wheel — "no tyre" is a supported a
 
 The submesh carries a `tyre` flag so the damageable-tyre work can find it without re-deriving any of this.
 
-**The model the user actually saw glinting** is a fixture we already ship: `tests/custom/dff/vehicle/
+**The model the user actually saw glinting** is a fixture we already ship: `fixtures/custom/dff/vehicle/
 petro-6wheels.dff`. All six of its wheels author the TYRE with a full env map (`xvehicleenv128`,
 coefficient 1.0) plus specular 0.05, so its rubber was as reflective as chrome — measured through the
 builder, tyre submeshes went from `paint / coefficient 255 / specular 13` to `matte / 0 / 0`, while the rim

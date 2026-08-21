@@ -36,7 +36,7 @@ audit + benchmark is unfinished (CLAUDE.md standing rule).**
 
 6. `docs/features/video-mode.md` (+ README row): what it does, the decisions table, the accepted v1
    limitations (keyboard sums with autopilot; sidewalk offset jank; clock drift; no interior shots —
-   pointer to 080/08 and the cabin open issue; recording is OS-side).
+   pointer to the view-presets plan (now roadmap 0.6.0·07) and the cabin open issue; recording is OS-side).
 7. `docs/development/query-parameters.md`: final rows for `video`/`from`/`to`/`seed` — and a note in
    the "why no flags.ts" section that the count crossed its own threshold with this family (the doc
    asked to be told; whether the typed reader happens is its own tiny decision, not smuggled in here).

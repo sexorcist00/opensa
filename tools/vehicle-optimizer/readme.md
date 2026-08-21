@@ -6,22 +6,35 @@ A standalone tool for **fitting vehicle models**. Two operations, usable togethe
    damage parts), the **dummy rig** (wheels / doors / seats / lights — scaled _with_ the geometry so nothing
    shifts and there's no gap when a door opens), and **collision**. It does **not** touch data files
    (`vehicles.ide` / `carcols` / `handling.cfg`).
-2. **Material-effect copy** — `--prototype <reference>` copies only the **reflection / specular / env-map**
-   material effects from a perfectly-tuned reference model onto the target.
+2. **Shine copy** — `--prototype <reference>` retunes the three numbers a car's shine is made of, each on its
+   own marking: the MatFX env-map `coefficient` and the reflection `intensity` on the materials the author
+   marked reflective with an env-map (body, glass, chrome), and the **specular `level`** wherever it is
+   non-zero — that last one is usually what a "too shiny" report actually means, and the install's SkyGfx
+   vehicle pipe multiplies it by 3 (the intensity by 8, which saturates anything above 0.125). Values come from
+   the reference by shared texture name where there is one, from its median otherwise. A value of **0** is left
+   at 0 (the author said "matte"), and the run prints what it touched and with which numbers, so a no-op says
+   so. **`--coefficient <n>` / `--reflection <n>` / `--specular <n>` set them outright** — with or without a
+   donor, and they win over it. `scripts/debug/dff-reflection.ts <before> <after> --diff` shows exactly which
+   materials moved.
 
 Output is **standard RenderWare DFF/COL**, so it works in the **real game** — this module is independent of the
 OpenSA engine (it never touches `../src` beyond reusing its read-only RW parsers).
 
 ## Usage
 
-`--model` is a **path to a loose `.dff`, resolved relative to `src/cli.ts`** (same for `--prototype`).
+`--model` is a **path to a loose `.dff`, resolved against the cwd you run from** (same for `--prototype` and
+`--out`). The finished DFF lands in an **`out/` folder beside the model**; `--out <dir>` overrides that.
 
 ```bash
-# inspect a vehicle DFF (structure + which materials carry reflective effects):
-npx tsx vehicle-optimizer/src/cli.ts --model ../../tests/original/dff/vehicle/infernus.dff
+# inspect a vehicle DFF (structure + which materials carry reflective effects) — nothing is written:
+npx tsx tools/vehicle-optimizer/src/cli.ts --model ./fixtures/original/dff/vehicle/infernus.dff
 
-# scale +10% (and, later, copy reflective effects from a reference) → vehicle-optimizer/out/infernus.dff:
-npx tsx vehicle-optimizer/src/cli.ts --model path/to/infernus.dff --scale 1.1 --prototype path/to/elegy.dff
+# scale +10% and copy reflective effects from a reference → ./mods-src/original/1/out/infernus.dff:
+npx tsx tools/vehicle-optimizer/src/cli.ts --model ./mods-src/original/1/infernus.dff --scale 1.1 \
+  --prototype ./mods-src/original/1/elegy.dff
+
+# same, written somewhere else:
+npx tsx tools/vehicle-optimizer/src/cli.ts --model ./mods-src/original/1/infernus.dff --scale 1.1 --out ./tmp
 ```
 
 ```

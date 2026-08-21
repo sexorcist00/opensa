@@ -79,6 +79,22 @@ poisoned admiral byte-identical, but only for code that goes through `frameWorld
 chain walk that composes the root is silent: physics stays sound, so nothing crashes — the model just never
 appears.
 
+## No archive a tool must READ may pass 2 GiB — and the writer will happily take it there
+
+`readFileSync` throws `ERR_FS_FILE_TOO_LARGE` past 2 GiB, while the positional write path (`writeImgFile`)
+has no such ceiling, so a stage CAN emit an archive that every later stage fails to open. A design that grows
+`models/*.img` therefore has to bound each FILE, not just each entry: buckets with a size cap and spill into
+a numbered sibling, never one archive that content is allowed to grow into. Measurement, the numbers and the
+run that hit it: [`edge-cases/converter-pipeline.md`](../edge-cases/converter-pipeline.md).
+
+The corollary is the reason it belongs here: **71 call sites across 53 files open archives whole**
+(`openArchive(bytes)` / `openImg(bytes)`), so "just stream it" is not a local change. The one fd-backed
+reader is `openLazyVer2` in `tools/opensa-pack`.
+
+**Caught:** partly, and in the worst order. The WRITE is silent — nothing warns that an archive has grown past
+what a reader can take. The failure surfaces later, in an unrelated stage, as a Node error naming a byte count
+and no file (`The value of "length" is out of range … Received 2168825856`), which is how it cost a build here.
+
 ## A VER2 `.img` entry cannot exceed 65 535 sectors (~128 MB)
 
 The stock directory stores an entry's size as a u16 of 2048-byte sectors, so 134 215 680 bytes is a FORMAT
@@ -90,6 +106,52 @@ the largest (the single-array shape hit 128 MB on a 32-texture mod dictionary wh
 
 **Caught:** yes — `assertVer2EntrySize` throws in `EditableImg.set`, `buildVer2Buffer` and `writeImgFile`
 (the rebake reports it per car instead of aborting the run).
+
+## A BinMesh's split order is the DRAW order — a writer keeps the source's, blended splits last
+
+RenderWare draws an atomic's `BinMeshPLG` splits in the order the chunk lists them, and its mesher puts the
+materials that BLEND (texture alpha, vertex alpha, material alpha) after the opaque ones so they composite over
+what is already drawn. A writer that regenerates the chunk and orders splits by material index moves a blended
+split into the middle: `cehollyhil06`'s vertex-alpha rock-detail layer (material 8 of 15, authored last) drew
+before the rock behind it, wrote depth under the reference install's SkyGfx dual pass, and the tiled texture
+smeared over the sky — the "normals × repeat textures" defect of
+[`open-issues/fixed/sa-lod-visibility-budget.md`](../open-issues/fixed/sa-lod-visibility-budget.md) (rounds 7–14), chased
+through nine hypotheses because it looked like a lighting fault and needed a third-party building pipe to show.
+
+The rule: a re-encoder that has the source chunk keeps its split order (`rebuildGeometry` does since
+2026-08-17, materials the source did not draw appended); a writer building from a MERGE (`encodeLodDff`, cells,
+procobj) must put its blended groups last, in their relative order.
+
+**Caught:** for `rebuildGeometry`, a unit test. For `encodeLodDff` and every merge writer: **silent** — the build
+validates, our own engine draws it fine, and the symptom appears only under a pipe that z-writes blended splits.
+
+## An `objs` LOD (or any atomic model) is ONE atomic — a multi-atomic clump written there keeps one
+
+SA's `CAtomicModelInfo` holds a single atomic; `CFileLoader::SetRelatedModelInfoCB` assigns EVERY atomic of the
+clump it reads over the previous one and re-frames the survivor at the origin, so a DFF with two atomics behind
+an `objs` row draws the FIRST atomic in the file (RW walks the clump list in reverse), at the origin, and nothing
+else ([`gta-sa-original/atomic-model-one-atomic.md`](../gta-sa-original/atomic-model-one-atomic.md)). Stock's 34
+multi-atomic map models are all `anim` rows (clump model infos, drawn whole); zero `objs` rows carry two. The
+`sa-lod-generator` byte-copied the `anim` HD `burger01_LAw` (building + burger sign on a child frame) into its
+`objs` LOD slot: the LOD was the 5 m sign at the building's origin — "LOD absent"
+([`open-issues/fixed/sa-lod-visibility-budget.md`](../open-issues/fixed/sa-lod-visibility-budget.md), round 15), and 16
+LOD entries of the `sa` build had the same shape.
+
+The rule: whatever writes a DFF an `objs` row will load emits ONE atomic. A clone or a conversion of a
+multi-atomic clump is a MERGE with the per-atomic frame transforms baked (`buildClumpMesh` does; `cloneLodDff`
+takes that path for every multi-atomic HD since 2026-08-17, budget or no budget). Never the byte-copy.
+
+**Caught:** for `cloneLodDff`, a unit test on the real `burger01_law.dff` fixture. For any other writer that
+places a clump behind an atomic row (hole-fill takes `hdToLod`, which merges — fine today): **silent** — the
+file is valid, the tools validate it, our own engine draws every atomic, and the game shows one part at the origin.
+
+The mirror rule on the OpenSA side: whatever bakes an **`anim`** def's clump — the engine's weld
+(`cell-weld` `atomicFrame`), the cell merge (`opensa-lod-generator` `mergeCell`, plan 008), any future
+writer — places its atomics by the DFF frame hierarchy (`frameWorldTransform`, the rest pose); a plain `objs`
+clump ignores its frames as SA does. The cell merge ignored frames for everything until 2026-08-17 and the
+Burger Shot sign sat in the middle of the roof at LOD range while the HD had it on its pole.
+**Caught:** `merge.test.ts` on the same fixture. A new writer that forgets: **silent** — the cell is valid and
+draws, the part is just somewhere else.
 
 ## A dictionary is not a material list
 
@@ -346,24 +408,31 @@ objects that are not in it at all.
 **The removal path a MOD takes is handled, and that is exactly what makes the rest dangerous.** A
 `remove from "inst"` merge goes through `removeInstWithRebase` (which decrements every surviving link) and
 `patchAreaStreams` (which rewrites the `lod` field in the area's binary streams) — measured working:
-`5. SA Xbox Map Features` drops a row from `LAe.ipl` at index 93 and `laehospital1`'s stream link comes out
-133 → 132, still on its own LOD. **Every other way a row can leave a file has neither half.** `LAw.ipl` is one
-row short of stock with no mod involved: its id/name column took the deletion, its transform column did not,
-so `LODgaz9_law` sits 398.7 u off its object wearing a re-derived neighbouring rotation — and `law_stream2.ipl`
-was never patched, so the link lands on a tree the build had exiled to z = −300.
+`SA Xbox Map Features` (`7.` since 2026-08-18) drops a row from `LAe.ipl` at index 93 and `laehospital1`'s stream link comes out
+133 → 132, still on its own LOD. **Every other way a row can leave a file has neither half.**
 
-The rule for a new design: a pass may APPEND inst rows freely (every index it could disturb is below it), and
-may not REMOVE one. Retire a placement by exiling the row — the trees layer's z = −300/−1000 is the
-established shape — rather than deleting it: no renumbering, no stream patch to keep alive, and nothing
-downstream can undo it. "The merge handles removals" is not cover: that is one path, and the guarantee is a
-property of the whole build rather than of one function.
+**And a rebase is not enough on its own: a later stage can write over it.** The 2026-08-11 field report was
+traced (2026-08-16) to `0. Map Fixes Pack`'s own stream merges carrying the AUTHOR's row indexes. Stream
+merges apply LAST, so they overwrote the correct rebase; `sa-lod-generator` then read those links and moved
+three LOD rows onto a neighbour's transform, which is why the file also looked like a lost column.
+**11 links map-wide, one row off, no error anywhere** — the second half of the rule below is that one.
 
-**Caught: NO, and by construction.** A shifted index lands on a VALID row of the same file, and a transform
-column off by one against its own name column is a perfectly legal file — row counts, well-formedness and
-every budget guard pass. `removeInstWithRebase`'s unit tests prove the FUNCTION rebases, which is not the
-claim that matters. The damage is only visible by resolving each link back to a MODEL NAME and comparing
-against the source tree, which nothing does today. Detail, measurements and the paste-able diagnosis:
-[`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../open-issues/ipl-row-removal-breaks-lod-links.md).
+The rule for a new design, in two halves:
+
+1. A pass may APPEND inst rows freely (every index it could disturb is below it), and may not REMOVE one.
+   Retire a placement by exiling the row — the trees layer's z = −300/−1000 is the established shape — rather
+   than deleting it: no renumbering, no stream patch to keep alive, and nothing downstream can undo it.
+2. A row index written by anything other than the file's own owner is in SOMEBODY's index space, and it has to
+   be re-expressed in ours before it is written. "The merge handles removals" is not cover: that is one path,
+   and the guarantee is a property of the whole build rather than of one function.
+
+**Caught: yes, since 2026-08-16 — and it took a positional test, not an index one.** `assertLodLinks` fails
+the `sa` build when a link's target does not stand where its owner stands (`@opensa/tool-kit/lod-links`;
+`scripts/debug/lod-link-check.ts` for diagnosis). Stock passes with 6 103 links and zero findings, so any
+finding is ours. **Its limit is part of the rule**: a shift that lands within 20 u of the owner is still
+invisible — 3 of the 15 shifted links in the case above were. Detail, measurements and the paste-able
+diagnosis: [`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../open-issues/fixed/ipl-row-removal-breaks-lod-links.md)
+and [`tools/mod-installer/docs/plans/012-stream-merge-lod-space.md`](../../tools/mod-installer/docs/plans/012-stream-merge-lod-space.md).
 
 ## A curated list may GATE a derived rule; it may never CARRY the correction
 
@@ -402,3 +471,25 @@ round comes before the pass ships in a build the user will judge.
 
 **Caught:** no. Nothing at build time distinguishes "helps the metric" from "looks better" — this failure
 mode is exactly the one the pass's own checks cannot see, which is why it is a restriction now.
+
+## The 19 001–19 999 id window belongs to the two tools with a LEDGER, and a `maxId + 1` allocator has to skip it
+
+Model ids for content the game never had come out of one window (`ADDED_ID_WINDOW`, `tools/tool-kit/src/
+free-ids.ts`): `add-vehicles` for an added car and its parts, `vehicle-installer` for a replacement car's
+derived tuning parts. Both allocate the lowest free id, both record what they handed out in
+`data/vehicle-adds.txt`, and both do it because **an id lands in the player's SAVE** — a parked spot, a
+ModelVariations entry, a car's upgrades.
+
+Anything else that numbers new models must stay OUT of it. The rule bites hardest on the `maxId + 1` shape,
+because that shape has no window of its own — it simply follows whatever the tree already contains:
+`sa-lod-generator`'s hole-fill LODs numbered from the highest id in `data/**.ide`, which was 18 632 until
+2026-08-20, when a vehicle mod's eleven borrowed parts took 19 001–19 011 in an earlier stage. The fills
+followed them to 19 012–19 035 and the whole added fleet — 115 cars and 46 parts — moved **35 ids up** in
+one build. `readDefs` now computes its maximum over ids below the window.
+
+The rule for a new design: allocate through `allocateIds` with a ledger, or number below `ADDED_ID_WINDOW.first`
+— never "one past the biggest thing I can see".
+
+**Caught:** partly. `allocateIds` refuses an exhausted window and a ledger id outside it, and a unit test
+pins the hole-fill allocator to its side of the line. But nothing checks a NEW allocator, and the symptom is
+the silent one: every id still unique, every file valid, and a save that spawns the wrong car.

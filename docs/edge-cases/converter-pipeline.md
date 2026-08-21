@@ -2,6 +2,27 @@
 
 Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD generators.
 
+- **Node cannot read a file past 2 GiB, and cannot write a buffer past it either.** Measured directly on
+  Node 24.15 (2026-08-15): `readFileSync` of a 3.2 GB file throws **`ERR_FS_FILE_TOO_LARGE`**;
+  `writeFileSync` of a 2.2 GB buffer throws `ERR_OUT_OF_RANGE` (`"length" … <= 2147483647`). What still works
+  is the **positional** API — `writeSync` at a 3 GiB offset and `ftruncateSync` past 2 GiB both succeed — which
+  is why `writeImgFile` (entry-at-a-time, through a descriptor) can produce an archive that `readFileSync`
+  cannot then open. This is a HOST limit, not a game or format one: VER2 addresses entries in uint32 sectors
+  and has room for terabytes.
+  Hit for real on 2026-08-15: the `sa` build died mid-`vehicles` at 2 168 825 856 B, because
+  `vehicle-installer` rebuilt the whole `gta3.img` per car (212 of them) through `writeFileSync`. The numbers
+  that make it structural rather than a one-off — gta3.img after `mods` is 1 242 236 928 B and the mod vehicle
+  payload is 3 077 354 628 B over 752 dff/txd, so the finished archive is ~4.32 GB. The installer inflates
+  nothing: cumulative source through the car it died on was 916 181 801 B against 926 588 928 B of observed
+  growth, a 1.1 % delta that is VER2 sector padding.
+  `tools/opensa-pack/src/game-fs.ts` (`openLazyVer2`) is the one fd-backed reader that already exists for this
+  reason — its own comment records the converter having been unable to read its own output once.
+  Hit again on 2026-08-17, one stage later: the pack's `rewriteModelArchives` rewrote each `models/*.img`
+  on its own, and the `.osm` a car becomes (private `TEXS` inside) is fatter than the dff+txd it replaces —
+  `vehicles.img` (1.87 GB after the install spilled into `vehicles2.img`) crossed the 1.75 GiB cap at the
+  152nd of 406 entries and the writer, correctly, removed the half-written file. Fixed by rewriting per
+  FAMILY (`openImgFamily` → `writeImgFamily`, siblings registered/un-registered): every grower of an archive
+  has to be family-aware, not just the installer that first spilled it.
 - **Node heap ceilings.** A full pmb build **or a standalone `opensa-pack` run with AO on** needs
   `NODE_OPTIONS=--max-old-space-size=12288` (the cell bake holds the mod-grown ~1.3 GB `gta3.img` + merged
   cells); the default 4 GB dies around 37 % of the AO bake. sa-lod-generator needs ~8 GB. The full map cannot
@@ -161,3 +182,28 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   too. Any positions SCAN in the vehicle path must measure over triangle-referenced vertices, the set
   RW draws (`wheelRadius` learned this 2026-08-05 — the wheel had scaled to nothing; `appendGeometry`
   was already safe). New scans over `geometry.positions` inherit the trap SILENTLY.
+
+- **A game without `models/cutscene.img` gets NO cutscene stage** (2026-08-17: gostown, a TC, ships none —
+  the first build after the stage was added died on the raw ENOENT after the vehicles stage). The pipeline
+  now skips the stage with `cutscene — skipped (the game ships no models/cutscene.img …)`; the consequence
+  is that such a game's mod cars have no cutscene twins at all — nothing to convert them into — and
+  `perfect-cutscene.asi` is not shipped, which is right (it exists to reorder our translucent atomics).
+- **`vehicle-cutscene` decides translucency from the MATERIAL alpha only, so a surface whose transparency
+  lives in the TEXTURE's alpha channel converts as opaque.** It then takes the vehicle-pipeline stamp with
+  every other opaque atomic, and outside a real `CVehicle` that pipe does not composite alpha — the surface
+  renders as a solid sheet. Measured 2026-08-14 on `cscopcarla92`: `defrost_ad` is a 224-triangle,
+  1.5 m-wide mesh with material `0,0,0,255` and texture `defrost_lines` (8×16 DXT3, alpha 0..15) — thin
+  defroster wires in gameplay, a **black plate over the rear window** in a cutscene. Four more surfaces on
+  that car have the same shape (`f_logo`, `vint`, `aero_dynic24`). Not fixed: the field's call was that it
+  is real but was not the defect being chased (the matte windscreen was the modulate bit, plan 004 round
+  21). A fix has to check the alpha channel actually VARIES — a fully-opaque alpha channel is common and
+  means nothing.
+
+
+- **`sa-lod-generator` clones an `anim` HD into a STATIC LOD, and one stock LOD was itself animated.**
+  `oilplodbitbase` (`counxref.ide`, `anim` row, 2 atomics — its arm nods) is the LOD the ten `nt_noddonkbase`
+  instances point at, so in stock the pump nods at 800 m too. Our clone overwrites `oilplodbitbase.dff` with a
+  merge of the 5-atomic HD (one atomic, frame transforms baked; before 2026-08-17 a verbatim 5-atomic copy whose
+  frame names no longer matched the anim), so the far view stands still. The animation is authored data we stop
+  honouring; whether an `anim`-row LOD should be left stock is the user's call and has not been made. The
+  other 15 multi-atomic HDs with a clone LOD have plain `objs` LOD rows, where nothing is lost.

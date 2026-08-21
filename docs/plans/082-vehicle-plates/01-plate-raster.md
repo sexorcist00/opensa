@@ -81,7 +81,7 @@ export function extractPlateSources(txd: RWTextureDictionary): null | PlateSourc
 - [x] `generatePlateText` + tests (determinism, each token class, empty→default `LLDD DLL`).
 - [x] `extractPlateSources` + graceful `null` when textures are missing (modded TXD) — plates
       then stay stock, never crash. Real fixture TXD was already shipped
-      (`tests/original/models/generic/vehicle.txd`, manifest line existed).
+      (`fixtures/original/models/generic/vehicle.txd`, manifest line existed).
 - [x] `composePlateText` + tests on a synthetic charset (glyph placement, opacity, non-8px cell scale).
 - [x] Measure: compose time per plate, bytes per slot (ledger).
 

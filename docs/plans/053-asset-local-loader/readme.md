@@ -143,7 +143,7 @@ user gesture`. Fixed by splitting boot vs gesture: `restore()` runs at app mount
    loading. Fetch loader: `folderReady` starts true, so nothing changes.
 
 6. **Tests + e2e** — **DONE**: unit tests across phases 2–5 (`dir-handle-store` via injected deps, `img-reader`
-   synthetic VER2 **+ a real `tests/original/img/admiral.img` parity test** gated by `existsSync`, `build-vfs`
+   synthetic VER2 **+ a real `fixtures/original/img/admiral.img` parity test** gated by `existsSync`, `build-vfs`
    selection, `AssetLocalLoader` init/load/prepare). Fixed the existing fetch e2e broken by the move
    (`e2e/asset-loader.spec.ts` → `asset-fetch-loader.spec.ts`, repointed to `/src/loaders` + `AssetFetchLoader`).
    New `e2e/asset-local-loader.spec.ts` runs the **real** browser pipeline (directory walk + lazy VER2 reader +

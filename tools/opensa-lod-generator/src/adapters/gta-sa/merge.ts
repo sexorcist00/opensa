@@ -1,14 +1,16 @@
 import type { ClumpEffect } from '@opensa/lod-common/clump-effects';
 import type { MergedMesh, Quat, Vec3 } from '@opensa/lod-common/mesh';
 import type { ModelSource } from '@opensa/lod-common/model-source';
+import type { RWClump } from '@opensa/renderware/parsers/binary/types';
 
 import { MeshBuilder, type VertexTransform } from '@opensa/lod-common/build-mesh';
 import { collectClumpEffects } from '@opensa/lod-common/clump-effects';
 import { registerScopedName, type ScopedRegistry } from '@opensa/lod-common/scoped-texture';
 import { keepTypesFor, spaceOf } from '@opensa/lod-common/two-dfx-policy';
 import { transform2dfxEntry } from '@opensa/lod-common/two-dfx-transform';
+import { frameWorldTransform } from '@opensa/renderware/mesh/frame-transform';
 
-import type { Cell } from '../../core/types';
+import type { Cell, CellInstance } from '../../core/types';
 
 /**
  * Gather the cell's 2dfx entries in cell-centre-relative space, so a baked cell's coronas glow, its chimneys
@@ -66,9 +68,12 @@ export function collectCellEffects(
  * Merge a cell's instances into one cell-centre-relative, native Z-up mesh (Phase 1), triangles bucketed by
  * texture. Every instance's atomics are placed by their IPL transform — **rotation = the conjugate of the IPL
  * quaternion** (GTA stores its inverse; matches `build-region.ts`) — offset to the cell centre (small coords for
- * float precision; the cell-LOD inst places it back). The DFF **frame** transform is ignored, as the engine does
- * for map atomics (`build-clump.ts`). The shared {@link MeshBuilder} (`@opensa/lod-common`) accumulates the
- * geometry so opensa and lod-procobj build LOD meshes by the same rules.
+ * float precision; the cell-LOD inst places it back). The DFF **frame** transform is ignored for a plain `objs`
+ * clump, as the engine does; an IDE `anim` def's atomics ARE placed by their frame hierarchy (the engine's weld
+ * composes `frameWorldTransform` for them — the Burger Shot sign sits on a child frame 7 m off the building's
+ * origin, and ignoring it baked the sign in the middle of the roof), so the merge composes the same transform
+ * ahead of the instance's: the animation's rest pose. The shared {@link MeshBuilder} (`@opensa/lod-common`)
+ * accumulates the geometry so opensa and lod-procobj build LOD meshes by the same rules.
  */
 export function mergeCell(cell: Cell, cellSize: number, source: ModelSource, registry?: ScopedRegistry): MergedMesh {
   const origin: Vec3 = [(cell.cx + 0.5) * cellSize, (cell.cy + 0.5) * cellSize, 0];
@@ -87,12 +92,54 @@ export function mergeCell(cell: Cell, cellSize: number, source: ModelSource, reg
     for (const atomic of clump.atomics) {
       const geometry = clump.geometries[atomic.geometryIndex];
       if (geometry) {
-        builder.add(geometry, transform, textureName);
+        builder.add(geometry, atomicTransform(instance, clump, atomic.frameIndex, transform), textureName);
       }
     }
   }
 
   return builder.finish();
+}
+
+/** An `anim` atomic's model-space placement — its frame chain composed root→leaf (null = identity). */
+function atomicFrameTransform(clump: RWClump, frameIndex: number): null | VertexTransform {
+  const frame = frameWorldTransform(clump.frames, frameIndex);
+  if (!frame) {
+    return null;
+  }
+  const { pos, rot: m } = frame; // row-major mat3
+
+  return {
+    normal: (x, y, z): Vec3 => [
+      m[0] * x + m[1] * y + m[2] * z,
+      m[3] * x + m[4] * y + m[5] * z,
+      m[6] * x + m[7] * y + m[8] * z,
+    ],
+    point: (x, y, z): Vec3 => [
+      m[0] * x + m[1] * y + m[2] * z + pos[0],
+      m[3] * x + m[4] * y + m[5] * z + pos[1],
+      m[6] * x + m[7] * y + m[8] * z + pos[2],
+    ],
+  };
+}
+
+/** The instance transform, preceded by the atomic's frame placement when the def is an `anim` row. */
+function atomicTransform(
+  instance: CellInstance,
+  clump: RWClump,
+  frameIndex: number,
+  transform: VertexTransform,
+): VertexTransform {
+  const framed = instance.anim !== undefined ? atomicFrameTransform(clump, frameIndex) : null;
+
+  return framed ? compose(framed, transform) : transform;
+}
+
+/** `first`, then `second` — the frame placement into model space, then the instance placement into cell space. */
+function compose(first: VertexTransform, second: VertexTransform): VertexTransform {
+  return {
+    normal: (x, y, z): Vec3 => second.normal(...first.normal(x, y, z)),
+    point: (x, y, z): Vec3 => second.point(...first.point(x, y, z)),
+  };
 }
 
 /** GTA IPL quaternions are the inverse of the standard convention — conjugate before use (cf. build-region). */

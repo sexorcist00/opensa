@@ -19,6 +19,10 @@ Today a plain folder of relative-imported modules; on the eventual monorepo move
   map — GTA's patchwork-mapped tiled surfaces smear without it; lod-common plan 003 "Road-stripes bug"). Used by
   `@opensa/lod-common/decimate` (opensa cell LODs + lod-procobj clones).
 - **`mesh/bvh`** — triangle BVH raycaster backing lod-common's `visibility-cull`.
+- **`vehicles-dir`** — what a `mods-src/<game>/vehicles` folder holds: every subfolder of a flat tree, or
+  `models/` overridden per SLOT by `new/` in a structured one (vehicle-installer plan 007). Shared because
+  `vehicle-installer` and `vehicle-cutscene` read the SAME folder and must not disagree about which cars are
+  in the build; the slot is the folder name's first field (`<slot> - <car> - <author>`).
 - **`archive/img`** — an editable GTA IMG (VER2): `openImg(bytes)` / `editArchive(archive)` →
   open · get · set (add/replace) · delete · `build()` a fresh `.img`. Wraps the engine's `openArchive` +
   `buildVer2Buffer`. Used by map-optimizer (swap optimized entries) + opensa-lod-generator (emit the cell-LOD build).

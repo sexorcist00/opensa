@@ -2,6 +2,13 @@
 
 **Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](../074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
 
+> **The unticked boxes below are VOID with the plan, and are struck rather than deleted (2026-08-11).**
+> They were left as `- [ ]` when the chain was closed, so every repo-wide scan for open work kept
+> reporting them — 118 phantom tasks across the ten closed chains. Nothing here is a debt: the banner
+> above is the authority. They stay readable because what these plans INTENDED is still the record of
+> why the own engine does what it does.
+
+
 Part of the [rendering overhaul chain](../062-rendering-overhaul/readme.md). Independent of 002–004 (can run in parallel after [063](../063-render-foundations-instrumentation/readme.md)). Feeds [068 — fog](../068-unified-fog/readme.md) via the horizon LUT.
 
 ## Context
@@ -39,7 +46,7 @@ Today's sky (`sky.plugin.ts`): a gradient dome (`uBottom→uTop` from timecyc sk
       sky, works for BOTH models — fog gets one code path), re-rendered only when the quantized sky state steps
       (game minute / cover / palette / model). Exposed as `SkyPlugin.getHorizonLut()` for 068 fog + 069 water.
       Debug view strip in the overlay: later, with the 068 consumer.
-- [ ] Sun disc/corona/god-rays/moon/stars recolour integration; overcast behaviour parity. _After the user's
+- [~] Sun disc/corona/god-rays/moon/stars recolour integration; overcast behaviour parity. _After the user's
       first PBR look._
 - [x] **Night sky glow (2026-07-10, user ask: PBR for the night sky — it is far too dark):** the authored SA
       night gradient is near-black, so the modern sky adds two physically-plausible terms over it — the
@@ -72,7 +79,7 @@ Today's sky (`sky.plugin.ts`): a gradient dome (`uBottom→uTop` from timecyc sk
       deck), a fine detail octave (the full-coverage deck read as giant soft smears), and the sky BASE hands
       back to the authored timecyc gradient as coverage grows (the Preetham overcast is a milky Mie wash that
       fought the dark deck — under a full deck you see cloud base, i.e. the authored gradient).
-- [ ] Bench + calibration sweep across all weathers × key hours; sign-off screenshots.
+- [~] Bench + calibration sweep across all weathers × key hours; sign-off screenshots.
 
 ### Calibration arc (2026-07-10, user A/B)
 

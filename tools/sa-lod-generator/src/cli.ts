@@ -59,7 +59,7 @@ function main(): void {
     const outDir = fromCwd(outArg);
     const stats = adapter.finalize(outDir, resolved);
     console.log(
-      `  baked ${stats.clonedLods} LOD clones (${stats.decimatedLods} decimated, rest verbatim) + ` +
+      `  baked ${stats.clonedLods} LOD clones (${stats.decimatedLods} decimated, ${stats.mergedLods} merged multi-atomic, rest verbatim) + ` +
         `${stats.generatedTxds} TXDs @ ${texScale}× (shared ${stats.skippedShared}, missing HD ${stats.missingHd}, missing TXD ${stats.missingTxd})`,
     );
     console.log(

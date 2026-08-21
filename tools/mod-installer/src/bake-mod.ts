@@ -102,7 +102,7 @@ export function bakeMod(
   for (const [base, src] of scan.assets) {
     entries.set(base, new Uint8Array(readFileSync(src)));
   }
-  const assets = injectImgEntries(entries, join(outPath, 'models', 'gta3.img'));
+  const assets = injectImgEntries(entries, join(outPath, 'models', 'gta3.img'), basename(modPath));
 
   // 5. Carry the mod's CLEO files to `<out>/cleo/` (the silent-drop era ends loudly — one line per file).
   for (const [rel, src] of scan.cleo) {

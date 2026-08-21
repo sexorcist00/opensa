@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildVehicleOsm } from './vehicle-osm';
 
-const FIXTURES = join(process.cwd(), 'tests', 'original');
+const FIXTURES = join(process.cwd(), 'fixtures', 'original');
 
 /** A committed real-asset fixture as a fresh ArrayBuffer. */
 function fileOf(relative: string): ArrayBuffer {

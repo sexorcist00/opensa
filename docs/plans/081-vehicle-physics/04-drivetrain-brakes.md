@@ -54,15 +54,15 @@ handling-authored longitudinal identity.
 
 ## Subtasks
 
-- [ ] Force-curve module (`drivetrain.ts`, pure: gear state + per-wheel forces from handling +
+- [~] Force-curve module (`drivetrain.ts`, pure: gear state + per-wheel forces from handling +
       controls) + unit tests (gear bands, shift dip, engine braking by gear, drive-type split,
       reverse path).
-- [ ] Brake distribution + engine brake + dragMult wiring; delete the four dead constants.
-- [ ] Handbrake rear-cut + release fade + parking degradation; quirk tests re-run.
-- [ ] Telemetry: gear + per-wheel drive force channels; F2 rows.
-- [ ] Replays: `pull-away+reverse`, `brake-strip`, `handbrake-turn`, plus a new `hill-start`
+- [~] Brake distribution + engine brake + dragMult wiring; delete the four dead constants.
+- [~] Handbrake rear-cut + release fade + parking degradation; quirk tests re-run.
+- [~] Telemetry: gear + per-wheel drive force channels; F2 rows.
+- [~] Replays: `pull-away+reverse`, `brake-strip`, `handbrake-turn`, plus a new `hill-start`
       scene (engine braking + drag visible on a grade); trio A/B into the ledger.
-- [ ] **Field round**: acceleration character per car ("firetruck is a barge, Infernus pulls"),
+- [~] **Field round**: acceleration character per car ("firetruck is a barge, Infernus pulls"),
       handbrake turns, hill behaviour, top-speed sanity on the map (decide the city-scale factor).
 
 ## Acceptance

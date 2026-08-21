@@ -35,6 +35,18 @@ Also present as loaders/support: `DllTricks.dll`, `GTAINTERFACE.dll`, `MinHook.x
 Of these, only three touch anything a map-content plan budgets against: **OLA**
 (`III.VC.SA.LimitAdjuster.asi`), **FLA** (`$fastman92limitAdjuster.asi`) and **ours** (`perfect-map.asi`).
 
+**That sentence is about LIMITS only, and reading it as "the rest cannot affect our output" cost a session
+(2026-08-16).** `skygfx.asi` here is **not** aap's original — it is the **JuniorDjjr fork**
+(<https://github.com/JuniorDjjr/skygfx>), which replaces SA's building pixel shaders and ships its own
+handling for **repeating / tiled textures** (the stochastic de-tiling researched in
+[074·12](../plans/074-opensa-engine/12-stochastic-texturing.md): a curated `models/texdb.txt` marks texture
+names, and `buildingPipe.cpp` swaps the pixel shader per marked texture). It therefore decides how OUR
+geometry is shaded, and a field symptom on this install can belong to it rather than to the game.
+**Measured consequence:** the washed-out "smear" on tiled world surfaces in
+[sa-lod-visibility-budget.md](../open-issues/fixed/sa-lod-visibility-budget.md) reproduces only with this plugin
+present — removing it removes the symptom — and only on repeat-textured objects. Nothing catches this class:
+the build is valid, our own renderer shows it correctly, and the defect exists only under the fork's shaders.
+
 ## `perfect-map-asi.log`, verbatim
 
 ```
@@ -65,7 +77,8 @@ PedIntelligence = 140
 Vehicles = 110
 Buildings = 150000
 Objects = 10000
-Dummys = 50000
+Dummys = 100000   ; raised from 50000 in the field 2026-08-19 and kept after perfect-map 011 — see reference-install.md
+                  ; the OLA ini in mods-src shipped 50000 until 2026-08-20, so every delivery reverted it; guarded now
 ColModel = unlimited
 Task = unlimited
 Event = unlimited
@@ -132,7 +145,7 @@ Count of killable model IDs = 20000
 Apply handling.cfg patch = 1
 Number of standard lines = 500
 Number of bike lines = 50
-Make paintjobs work for any ID = 1
+Make paintjobs work for any ID = 1   ; lets an ADDED car (a new model id) have paintjobs — see vehicle-paintjobs.md
 Enable error reporting = 1
   Attempt to load object instance with undefined ID = 1
   Car generator with invalid model ID is getting registered = 1
@@ -145,7 +158,22 @@ Enable model special feature loader = 1
 Register global exception handler = 0
 ```
 
-`fastman92limitAdjuster.log` closes with `Number of memory changes made: 3712`.
+**`Vehicle Models = 400` was tried and reverted 2026-08-19**: OLA already has `VehicleModels = unlimited`,
+and two adjusters relocating one store left `CModelInfo::AddVehicleModel` reading a zeroed vtable at the
+stock address `0xB1F654`. **Do not set both.**
+
+**`Vehicle colors = 256` — set 2026-08-19, and REVERTED the same evening because it CRASHES this install.**
+It was added on an inference (the built palette is 142 `col` rows against the 128 of FLA's own ini
+annotation), recorded in three docs as already reverted while it was in fact live in `mods-src`,
+`build/original/sa` and the bottle, and it turned out to be the cause of the added fleet's end-of-loading
+crash ([the issue](../open-issues/fixed/added-cars-crash-after-loading.md)). Crossing "over 255" makes FLA
+apply a uint32 colour-id patch family — that is the whole difference between the two log lines below.
+**The install's FLA configuration is once again unchanged from the capture above.**
+
+**The healthy line, and it is the number to check after any delivery**:
+`fastman92limitAdjuster.log` closes with `Number of memory changes made: 3712`. **3834 means the colour
+setting is back on** — that alone is enough to explain a crash at the end of loading, so read this line
+before diagnosing anything else.
 
 ### The ID pools — read them off FLA's LOG, not off the ini
 
@@ -184,6 +212,15 @@ FLA pool is a configured number, so it is raised rather than designed down to:
 
 Both `COL` and `IPL` are already past 256, which is what makes FLA apply its `uint32_t` ID patches (its log
 says so for each). `TxdStore` is not set in `[SALIMITS]`.
+
+**Since 2026-08-18 the RAISED values also live in `mods-src`** (`6. fastman92 limit adjuster 6.5 (stable)/
+fastman92limitAdjuster_GTASA.ini`) so a build ships them — but that folder is **gitignored**, so the three
+numbers in this document are the only committed copy and a fresh mod library must be given them by hand: the build ships this ini
+into the tree root, and the first root delivery reverted the install to the repo's `5000 / 280 / 256` and
+stopped the game booting — see
+[the write-up](../open-issues/fixed/sa-boot-crash-fla-pools-reverted-by-delivery.md). The counts as measured
+on 2026-08-18 across every `models/*.img` of `build/original/sa`: `.dff` 15 596 · **`.txd` 5 177** · `.col` 264
+· `.ipl` 191 · `.ifp` 159 · `.dat` 64 of 64.
 
 **The ini is SET** (confirmed by the user 2026-08-10, verbatim — `FILE_TYPE_TXD = 6000`, `FILE_TYPE_COL = 400`,
 `FILE_TYPE_IPL = 1024`, the TXD line now uncommented). **The LOG is not re-captured**: FLA rewrites

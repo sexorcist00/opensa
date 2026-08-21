@@ -63,3 +63,22 @@ mapping — the two are independent. Deferred because it is a whole-world look c
 cost, and because doing it now would confound 025's field rounds.
 
 Full plan: [plans/06-anisotropic-filtering/readme.md](plans/06-anisotropic-filtering/readme.md).
+
+## Switchable camera view presets, first person included (the C key)
+
+Was `080/08`, moved here whole on 2026-08-11 when the cinematic-camera chain closed — deferred work rather
+than a debt against a finished chain. Verified unbuilt at the move: no `CameraPreset`, `cycleView` or
+`cameraView` exists anywhere in the tree.
+
+**Every dependency it had already shipped in 080** — the vehicle rig, an opt-out-able collision layer, the
+transition blends that would cover a preset switch for free — and the constraint the plan placed on that
+chain held (no step hard-codes a value a preset would need to override), so this is pickable up as written
+rather than a rework. The plumbing is a config object handed to the same `stepCamera`; the real work is
+first person: a head-bone eye anchor, hiding the player's own mesh, and re-tuned motion amplitudes.
+
+**Two gates before any work**: the researched idea
+[`docs/ideas/first-person-camera/`](../../ideas/first-person-camera/readme.md), and that idea's own step 0 —
+study the "Ultimate First Person" mod, because everything written on both pages was reasoned from our engine
+and has never been checked against a shipped implementation.
+
+Full plan: [plans/07-camera-view-presets/readme.md](plans/07-camera-view-presets/readme.md).

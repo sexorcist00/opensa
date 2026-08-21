@@ -15,6 +15,29 @@ tsx tools/mod-installer/src/cli.ts --game ./game-src/original --in ./mods --out 
     b-roads/   { data/ }
   ```
 - `--out` — output install dir (**wiped + rebuilt** each run)
+- `--target <sa|opensa>` — which layer of a LAYERED `--in` applies after `common/` (below)
+
+## Two shapes of `--in`: flat, or layered per target
+
+`--in` is **flat** — every subfolder is a mod — unless its immediate subfolders are the reserved layer names
+`common/`, `sa/`, `opensa/` (all optional), in which case it is **layered**: `common` applies first, then the
+layer named by `--target`. The other target's layer is not applied.
+
+```
+mods/                 FLAT                    mods/                 LAYERED
+  0. Map Fixes/                                 common/  { 0. Map Fixes/ … }   → every target
+  1. Prelight/                                  sa/      { 0. Stock fix/ }     → --target sa only
+                                                opensa/  { 0. Our engine/ }    → --target opensa only
+```
+
+The layer order **dominates** the numbering (`common/50. X` before `sa/0. Y`) — the target layer has to be
+the last writer. Numbering restarts per layer. Refused rather than guessed: a mod folder sitting beside the
+layers (which is what a misspelled layer name looks like), a layered `--in` with no target, and two layer
+folders differing only in case. Full contract: [`docs/contracts/mods.md`](../../docs/contracts/mods.md) §1;
+plan: [`docs/plans/011-layered-mod-folders.md`](./docs/plans/011-layered-mod-folders.md).
+
+`perfect-map-builder` passes its own resolved target, and refuses a run that would build BOTH targets out of
+a layered folder — the `mods` stage runs before the target split, so one run cannot serve two mod sets.
 
 ## How it applies
 
@@ -39,6 +62,24 @@ tsx tools/mod-installer/src/cli.ts --game ./game-src/original --in ./mods --out 
      Inside an `*_img/` folder, subfolders work too (plan 009): a subfolder WITH PNGs merges them into the IMG entry
      `<folder>.txd` (loud warning if the entry is missing); any other subfolder is organisational — its files are
      collected recursively by bare name (`gta3_img/LV/x.dff` lands like `gta3_img/x.dff`).
+
+**Slot economy, after every mod has applied.** Each text IPL in `gta.dat` that carries `inst` rows costs one
+of SA's 40 `IplEntityIndexArrays` slots, of which the field has proved 39 usable — so a map pack that ships
+its placements as a dozen files spends a scarce, hard resource on nothing (rows INSIDE one file are cheap).
+The install therefore folds them away: the two stream-less stock inst blocks (`int_cont`, `gen_int1`) are
+emptied into a stock host, then every mod IPL is appended into the stock areas that have room, biggest file
+first, its internal `lod` links rebased past the host's rows. A file with no internal links may be spread over
+several hosts; one that links stays whole — and anything that does not fit is **named in a warning**, because
+it still costs a slot. Each host keeps 900 rows in reserve for the tree LODs and hole fill that land in the
+same files later. `66. Urbanize only MAP` (13 files, 16 172 rows) folds to zero slots this way; plan:
+[`docs/plans/013-slot-fold-across-hosts.md`](./docs/plans/013-slot-fold-across-hosts.md).
+
+Every `.txd` a mod brings in — an archive entry, a Modloader-collected asset, a loose overlay, or a texture
+folder our PNG encoder turned into DXT — is checked for **DXT rasters whose side is not a multiple of 4**: the
+real game refuses such a raster and the WHOLE dictionary with it. The installer stays byte-faithful (nothing
+is changed; map-optimizer resamples later) and WARNS naming the mod, dictionary, texture and size, so the mod
+that brings a dead dictionary is known at install time rather than at the field round
+([`docs/plans/014-dxt-alignment-warning.md`](./docs/plans/014-dxt-alignment-warning.md)).
 
 Each mod applies onto the **accumulated** `--out`, so several mods that touch different files (or different
 textures / different `gta3.img` entries) all coexist; only when two mods change the **same** item does the later
@@ -84,11 +125,28 @@ matched canonically. `add` appends, `remove` deletes (stream rows are never inde
 swaps; the entry is rebuilt with its CARS (parked cars) block carried over. Stream merges apply AFTER the
 mod's data merges, so their rows live in the final (post-rebase) index space.
 
-`merge-gen` (`src/merge-gen.ts` — library + CLI) converts a whole-file stock replacement (or a whole stream
-entry) into the equivalent `.merge`: iterative remove-simulation collapses the author's hand-made rebase
-edits into plain removes; mid-section inserts are relocated to appends with their lod links remapped;
-float/quaternion re-export noise is canonicalized away. Everything gates on a roundtrip (semantic link
-equivalence for inst). Real examples: `0. Map Fixes Pack` + `5. SA Xbox Map Features` — fully converted, no
+`merge-gen` (`src/merge-gen.ts` — library + CLI) converts a whole-file stock replacement into the equivalent
+`.merge`: iterative remove-simulation collapses the author's hand-made rebase edits into plain removes;
+mid-section inserts are relocated to appends with their lod links remapped; float/quaternion re-export noise
+is canonicalized away. Everything gates on a roundtrip (semantic link equivalence for inst).
+
+**Convert a mod as a WHOLE FOLDER** — `src/merge-gen-mod.ts`, and for anything with binary streams it is the
+only correct path:
+
+```sh
+npx tsx tools/mod-installer/src/merge-gen-mod.ts --vanilla game-src/original --mod "mods-src/original/mods/common/0. Map Fixes Pack" [--write]
+```
+
+A stream's `lod` indexes its area's TEXT IPL, so it can only be re-expressed once the same run knows what the
+text conversion did to that index space. Converting the two apart is how the shipped `0. Map Fixes Pack` came
+to carry links one row off in `law_stream1..4` / `law2_stream1`: the text merge was right, the streams kept
+the AUTHOR's indexes, and stream merges apply LAST — so they overwrote the installer's own rebase and the
+field lost its LODs ([`docs/open-issues/ipl-row-removal-breaks-lod-links.md`](../../docs/open-issues/fixed/ipl-row-removal-breaks-lod-links.md)).
+Folder mode diffs each stream against the entry the installer will actually have (removals already mirrored
+in) and **gates every stream end to end**: each link must resolve, in OUR merged text, to the same row the
+author's link resolved to in THEIRS, or the stream is refused instead of written. The single-file CLI now
+refuses a `*_streamN.ipl` target for the same reason. Real examples: `0. Map Fixes Pack` +
+`5. SA Xbox Map Features` — fully converted, no
 whole-file data or stream replacements left; their 27 colliding stream files now stack instead of last-wins.
 Specs: [docs/plans/007-ipl-merge-level1.md](docs/plans/007-ipl-merge-level1.md) ·
 [docs/plans/008-ipl-merge-level2.md](docs/plans/008-ipl-merge-level2.md).

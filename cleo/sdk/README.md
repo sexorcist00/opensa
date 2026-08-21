@@ -6,8 +6,10 @@ thereby a conformance test of the VM against real CLEO.
 
 - Design: [docs/architecture.md](docs/architecture.md)
 - Execution chain: [docs/plans/readme.md](docs/plans/readme.md) (001–005)
-- Root-level plan (goals check, scope cuts, ledger): `docs/plans/097-cleo-basic/08-authoring-sdk.md`
-  at the repo root
+- Goals check, decisions, scope cuts and the chain ledger: the same
+  [docs/plans/readme.md](docs/plans/readme.md) — the SDK's paperwork lives beside the SDK
+- The engine chain this grew out of: `docs/plans/097-cleo-basic/` at the repo root (CLEO integration
+  only — no SDK tasks live there)
 
 Why root `cleo/` and not `tools/`: the `asi/perfect-map` pattern — a self-contained project that
 AUTHORS runtime content for the game rather than building the map. Build-time only: the runtime
@@ -60,7 +62,9 @@ export const script = defineScript({
 - A backwards jump enclosing no `WAIT` warns (busy loop); suppress per site with
   `{ noWaitWarning: true }` when intended.
 - The whitelist gate holds at build: dual-target scripts use only opcodes BOTH runtimes serve;
-  `target: 'opensa-only'` lifts the real-CLEO half and the artifact name carries it
+  `target: 'opensa-only'` lifts the real-CLEO half, `target: 'sa-only'` is its mirror (real-SA
+  systems our engine does not have — the gate holds the reference install's CLEO 4.4 surface and
+  lifts the VM half; cleo/scripts plan 003), and the artifact name carries either
   (`docs/contracts/mods.md` §4).
 - End every script with an explicit terminator (`TERMINATE_THIS_CUSTOM_SCRIPT`) — trailing queued
   labels are a build error.

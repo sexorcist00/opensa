@@ -13,11 +13,11 @@ import { parseDff } from './dff';
  */
 const fixtures = {
   /** Stock `bloodrb`: carries the ADC plugin (0x134) — a PS2 strip whose parity bits we do not decode. */
-  adc: join(process.cwd(), 'tests', 'original', 'dff', 'geometry-parity', 'bloodrb.dff'),
+  adc: join(process.cwd(), 'fixtures', 'original', 'dff', 'geometry-parity', 'bloodrb.dff'),
   /** `0. Map Fixes Pack`'s re-export of the beach slab: the two arrays wind it oppositely. */
-  modSlab: join(process.cwd(), 'tests', 'original', 'mods', 'roads32_law2.dff'),
+  modSlab: join(process.cwd(), 'fixtures', 'original', 'mods', 'roads32_law2.dff'),
   /** The same model, stock: the two arrays agree. */
-  stockSlab: join(process.cwd(), 'tests', 'original', 'dff', 'geometry-parity', 'roads32_law2.dff'),
+  stockSlab: join(process.cwd(), 'fixtures', 'original', 'dff', 'geometry-parity', 'roads32_law2.dff'),
 };
 const haveFixtures = Object.values(fixtures).every((path) => existsSync(path));
 

@@ -71,7 +71,42 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
     ],
     strategy: 'hook',
     summary:
-      'IplDef building pool-range int16 → int32: observe IncludeEntity + snapshot RemoveIpl entry + redirect its THREE lastBuilding/firstBuilding reads (incl. the loop back-edge re-read 0x404BA8) to an int32 sidecar. FLA jmp-hooks the read sites → we overlay it; OLA leaves them stock. WORKS in-game (buildings; dummies don’t overflow).',
+      'IplDef building pool-range int16 → int32: observe IncludeEntity + snapshot RemoveIpl entry + redirect its THREE lastBuilding/firstBuilding reads (incl. the loop back-edge re-read 0x404BA8) to an int32 sidecar. FLA jmp-hooks the read sites → we overlay it; OLA leaves them stock. WORKS in-game (buildings). The dummy pair is `ipldef-dummy-range` (plan 011).',
+  },
+  {
+    conflictsWith: ['fla:ipl-entity-index'],
+    id: 'ipldef-dummy-range',
+    provenance:
+      'gta-reversed-modern source/game_sa/IplStore.cpp — CIplStore::RemoveIpl dummy pass; bytes read off the 1.0 US exe 2026-08-19 (perfect-map plan 011, steps 2–3)',
+    sites: [
+      {
+        address: 0x404c0f,
+        bytes: [0x0f, 0xbf, 0x7b, 0x26, 0x0f, 0xbf, 0x4b, 0x28],
+        name: 'RemoveIpl.dummyRange',
+        note: 'movsx edi,word[ebx+0x26]; movsx ecx,word[ebx+0x28] — the ADJACENT pre-loop reads of firstDummy/lastDummy; ONE detour covers both: edi = snapFirstDummy, ecx = snapLastDummy',
+      },
+      {
+        address: 0x404c4e,
+        bytes: [0x0f, 0xbf, 0x43, 0x28],
+        name: 'RemoveIpl.lastDummy.loop',
+        note: 'movsx eax,word[ebx+0x28] — the loop BACK-EDGE re-read of lastDummy (every iteration) → detour: eax = snapLastDummy',
+      },
+      {
+        address: 0x404c17,
+        bytes: [0x3b, 0xf9, 0x7f, 0x3f],
+        name: 'RemoveIpl.cont.404C17',
+        note: 'cmp edi,ecx; jg 0x404C5A — the dummyRange detour continuation (the loop is INCLUSIVE: this jg and the back-edge jle)',
+      },
+      {
+        address: 0x404c53,
+        bytes: [0x83, 0xc5, 0x38],
+        name: 'RemoveIpl.cont.404C53',
+        note: 'add ebp,0x38 — the back-edge detour continuation (the clobbered inc edi is re-run inside the detour)',
+      },
+    ],
+    strategy: 'hook',
+    summary:
+      "IplDef DUMMY pool-range int16 → int32 (plan 011, the 004b half): the same observer/snapshot as ipldef-range, a second sidecar pair, TWO detours over RemoveIpl's dummy pass. Field-proven necessary 2026-08-19: lastDummy wraps negative past 32 767 and the whole dummy pass is skipped, stranding ~17 600 dummies per world entry.",
   },
   {
     conflictsWith: ['fla:inst-entries-per-file'],

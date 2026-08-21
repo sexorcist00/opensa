@@ -9,8 +9,8 @@
 import type { AssetFileSystem } from '@opensa/renderware';
 
 import { openArchive } from '@opensa/renderware';
-import { parseVer2Directory, ver2DirectoryLength, ver2EntryCount } from '@opensa/renderware/archive';
-import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs';
+import { openLazyVer2 } from '@opensa/tool-kit/archive/layout';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, relative, sep } from 'node:path';
 
 /** What both archive readers below expose — enough for {@link openGameDir} and nothing more. */
@@ -112,44 +112,5 @@ export function openGameDir(root: string, overlayDirs: readonly string[] = []): 
     get names(): string[] {
       return [...overlay.keys(), ...archives.flatMap((archive) => archive.names), ...loose.keys()];
     },
-  };
-}
-
-/**
- * A VER2 archive read through a FILE HANDLE: the directory up front, each entry sliced on demand.
- *
- * Buffering the whole `.img` is what the browser VFS already refuses to do, and Node cannot do it at all
- * past 2 GB — `readFileSync` throws `ERR_FS_FILE_TOO_LARGE`, which is how the converter came to be unable
- * to read its OWN output once the per-model files went in (the deletions brought it back under, but one
- * big mod would have hit the wall again). It also keeps ~1.3 GB per archive out of the convert's RSS.
- *
- * Returns null for anything that is not VER2 — our own WIMG archives stay on the buffered path.
- */
-function openLazyVer2(path: string): ArchiveReader | null {
-  const fd = openSync(path, 'r');
-  const header = Buffer.alloc(8);
-  readSync(fd, header, 0, 8, 0);
-  if (header.toString('latin1', 0, 4) !== 'VER2') {
-    closeSync(fd);
-
-    return null;
-  }
-  const directory = Buffer.alloc(ver2DirectoryLength(ver2EntryCount(new Uint8Array(header))));
-  readSync(fd, directory, 0, directory.length, 0);
-  const files = parseVer2Directory(new Uint8Array(directory));
-
-  return {
-    get(name: string): ArrayBuffer | null {
-      const entry = files.get(name.toLowerCase());
-      if (!entry) {
-        return null;
-      }
-      const [offset, size] = entry;
-      const bytes = Buffer.alloc(size);
-      readSync(fd, bytes, 0, size, offset);
-
-      return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-    },
-    names: [...files.keys()],
   };
 }

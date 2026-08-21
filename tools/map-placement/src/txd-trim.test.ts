@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { trimTxd } from './txd-trim';
 
-const TXD = join(process.cwd(), 'tests', 'original', 'models', 'effectsPC.txd');
+const TXD = join(process.cwd(), 'fixtures', 'original', 'models', 'effectsPC.txd');
 const hasFixture = existsSync(TXD);
 
 function ab(b: Uint8Array): ArrayBuffer {

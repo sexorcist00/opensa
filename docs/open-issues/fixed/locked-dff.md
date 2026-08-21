@@ -28,7 +28,7 @@ BinMesh "salvage" and a vanilla-substitution mechanism, ALL REVERTED once the re
 Fixed in BOTH readers: `packages/renderware/src/parsers/binary/dff.ts#parseGeometry` and
 `tools/rw-codec/src/geometry-struct.ts#decodeGeometryStruct` (the latter was the
 "Offset is outside the bounds of the DataView" write failures). Layer count = byte, else TEXTURED2 → 2,
-TEXTURED → 1, else 0. Fixture: `tests/custom/locked-models/casroyale01_lvs.dff` (pins 1 UV layer, 1011
+TEXTURED → 1, else 0. Fixture: `fixtures/custom/locked-models/casroyale01_lvs.dff` (pins 1 UV layer, 1011
 in-range triangles, full 6389 u² surface, 12 materials).
 
 Diagnostic lesson: before declaring a new LOCK variant, verify the file against a KNOWN-GOOD reader
@@ -91,7 +91,7 @@ stream for `TEXTURE_NATIVE` chunks (type `0x15` + a `STRUCT` child + a plausible
 `…FFFF`) and parses each (the inner chunks keep intact sizes, so they parse normally). Hits are
 sanity-checked (printable name + power-of-two dimensions) to avoid false matches in raster bytes, and
 deduped by name. Triggers only when there's no `0x16` (or it yields nothing) → well-formed TXDs are
-untouched. Covered by `tests/custom/txd/lodveg.txd` + a test in `txd.test.ts`. Recovery is at **load time**
+untouched. Covered by `fixtures/custom/txd/lodveg.txd` + a test in `txd.test.ts`. Recovery is at **load time**
 (the locked bytes are packed as-is; the runtime parser reconstructs the dictionary), so no rebuild needed.
 
 ## Variant D — every container size bloated (`walton.dff`)
@@ -117,7 +117,7 @@ Atomic → `{Struct, Extension}` with `stopAfter Extension` so the last Atomic d
 clump-level Extension that holds the COL; clump Extension → `{Collision, Struct}`). Each child's parse then stays
 bounded and the sibling walk lands on the next real chunk, so the geometry/atomic list parsers (and their own
 A-recovery) take over. Valid clumps never trigger it (the leading Struct ends within the clump). Covered by
-`tests/custom/locked-models/walton.dff` + tests in `dff.test.ts` (77 frames / 43 geometries / 43 atomics + COL).
+`fixtures/custom/locked-models/walton.dff` + tests in `dff.test.ts` (77 frames / 43 geometries / 43 atomics + COL).
 
 ## Variant E — poisoned clump-ROOT matrix (`comet.dff`, gostown, 2026-08-04)
 
@@ -147,15 +147,15 @@ declared size overshoots the clump end (impossible for a valid file), it uses th
 SA clump-struct payload and resumes sibling iteration right after it — recovering the FrameList,
 GeometryList, all 57 atomics and the Extension (with COL3). Valid clumps are untouched (their Struct
 ends within the clump, so the recovery branch never fires) → near-zero regression surface. Covered by a
-committed custom fixture `tests/custom/locked-models/cheetah.dff` + tests in `dff.test.ts`.
+committed custom fixture `fixtures/custom/locked-models/cheetah.dff` + tests in `dff.test.ts`.
 
 For **Variant A**, `parseGeometryList`, `parseDff` and `parseTxd` add a count-based recovery via the shared
 `recoverLockedList` (in `parsers/binary/chunks.ts`): after the normal boundary walk, if the declared
 geometry / atomic / texture count is higher, they re-read the list RW-style with `findChunkFrom` (scan for
 the next item past the bloated sizes + `0x0` padding) and `contentEnd` (advance by the item's real
 children: struct + [matlist] + extension). Only runs on the mismatch → well-formed files are unaffected.
-Covered by `tests/custom/locked-models/yosemite.dff` (31 atomics / 31 geometries) and the committed
-`tests/custom/txd/yosemite.txd` (20 textures incl. `F350_mix`).
+Covered by `fixtures/custom/locked-models/yosemite.dff` (31 atomics / 31 geometries) and the committed
+`fixtures/custom/txd/yosemite.txd` (20 textures incl. `F350_mix`).
 
 ## What is fixed vs. what remains
 
