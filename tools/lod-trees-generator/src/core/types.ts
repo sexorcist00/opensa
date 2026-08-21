@@ -1,3 +1,5 @@
+import type { MipLevel } from '@opensa/rw-codec/mip';
+
 /**
  * Game-agnostic types for the tree-LOD generator. The core renders + packs + emits; everything game-specific
  * (DFF/TXD/IDE I/O, encoding) lives behind a {@link TreeLodAdapter} so a future game plugs in without touching
@@ -8,6 +10,10 @@
 export interface DecodedTexture {
   hasAlpha: boolean;
   height: number;
+  /** Box-filtered chain over {@link rgba} (level 0 = the base), attached by `withMipChain` before the bake:
+   *  the rasterizer samples the level matching one sub-sample's footprint instead of point-sampling the base
+   *  (plan 013). Absent → the base level is sampled, as before. */
+  mips?: readonly MipLevel[];
   rgba: Uint8Array;
   width: number;
 }
@@ -94,6 +100,10 @@ export interface TreeLodConfig {
   cards: number;
   /** Emitted LOD draw distance (world units) — the visibility gate for the LOD def. */
   drawDistance: number;
+  /** Sub-samples per atlas texel on each axis (a power of two; 1 = off). The card bake is a software
+   *  rasterizer with no MSAA, so a thin leaf quad either takes a texel whole or misses it — the isolated
+   *  white twig texels plan 013 measured. Bake-time cost only, and it grows with the SQUARE. */
+  superSample: number;
   /** Per-tree texture size (px) in the shared atlas — the N card views tile inside it. */
   textureSize: number;
 }

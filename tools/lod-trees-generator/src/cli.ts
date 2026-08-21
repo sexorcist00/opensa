@@ -9,6 +9,7 @@
  *     --tex    per-tree atlas texture size in px (default from config)
  *     --cards  crossed billboard cards per tree (default from config)
  *     --draw   impostor LOD draw distance in game units (default from config)
+ *     --ss     sub-samples per atlas texel on each axis, a power of two (default from config; 1 = off)
  *     --prelight [info]  copy the stock model's trunk prelight onto each swapped tree (HD + baked LOD; foliage kept).
  *                        Optionally pass a JSON file (`--prelight ./info.json`) of per-model overrides, e.g.
  *                        `{ "tree_hipoly09b": { "skip": true } }` to opt that model out of the prelight transfer.
@@ -77,6 +78,7 @@ function main(): void {
     config: {
       cards: Number(argValue('--cards') ?? config.cards),
       drawDistance: Number(argValue('--draw') ?? config.drawDistance),
+      superSample: Number(argValue('--ss') ?? config.superSample),
       textureSize: Number(argValue('--tex') ?? config.textureSize),
     },
     debugPng: process.argv.includes('--debug-png'),
