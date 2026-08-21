@@ -412,6 +412,10 @@ npm run gen          -w @opensa/perfect-map-asi   # catalogue.ts → src/generat
 npm run build:asi    -w @opensa/perfect-cutscene-asi
 npm run build:verify -w @opensa/perfect-cutscene-asi   # what a bring-up step installs: verifies, writes nothing
 
+# The fourth plugin: view-weighted tree-LOD impostor cards (lod-trees 013 on the sa target) → dist/perfect-vegetation.asi
+npm run build:asi    -w @opensa/perfect-vegetation-asi
+npm run build:verify -w @opensa/perfect-vegetation-asi   # step 0: empty catalogue, verifies nothing, patches nothing
+
 # Per-fix bisection (the flags are the plugin's; EXTRA_CXXFLAGS is the SDK's knob)
 make -C asi/perfect-map APPLY=1 EXTRA_CXXFLAGS='-DPM_FIX_INT16=1 -DPM_FIX_FX2DFX=0'
 # DEBUG=1 without APPLY=1 is refused: every debug switch is read inside an APPLY build.

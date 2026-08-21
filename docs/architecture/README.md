@@ -47,8 +47,8 @@ tools/                             (tag type:tool — offline; may read engine p
   vehicle-optimizer/ · timecyc-builder/ · lod-common/ · map-placement/ · rw-codec/ · tool-kit/
 tools-debug/  bench-harness/ (headless field checks) · sa-int16-repro/ (ghost-barriers repro dial)
 asi/          sdk/ (the asi:: framework + codegen every .asi plugin builds on) · perfect-map/ (its first
-              consumer: the real-SA limit-adjuster ASI) · perfect-cutscene/ · perfect-vehicle/ (planned:
-              the carmods ceilings, central plan 102)
+              consumer: the real-SA limit-adjuster ASI) · perfect-cutscene/ · perfect-vehicle/ (the carmods
+              ceilings, central plan 102) · perfect-vegetation/ (view-weighted tree-LOD cards, lod-trees 013)
 cleo/         sdk/ (author CLEO scripts in TS → standard .cs) · scripts/ (our authored script sources)
 root: game-src/ · mods-src/ · build/ · static/ · tests/ · e2e/ · scripts/ · deploy/ · nx.json · *.html
 ```

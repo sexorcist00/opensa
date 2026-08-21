@@ -130,7 +130,9 @@ term is per-vertex. The `sa` target keeps 03's rule.
   reads) that, per draw, takes the camera azimuth against the tree's frame and either renders only the 1–2
   nearest mesh splits or sets each card's `RpMaterialColor` alpha to its `|n · view|` weight — the fixed
   function multiplies material alpha by itself, no shader. Fourth consumer of `asi/sdk`, beside
-  `perfect-map` / `perfect-vehicle`. The one constraint: the install runs the SkyGfx fork, which assigns its
+  `perfect-map` / `perfect-vehicle` — its own chain is
+  [`asi/perfect-vegetation/docs/plans/001`](../../../../asi/perfect-vegetation/docs/plans/001-view-weighted-impostor-cards.md)
+  (scaffold done 2026-08-21). The one constraint: the install runs the SkyGfx fork, which assigns its
   building pipeline to every atomic — our callback WRAPS its render CB, it does not replace the pipeline
   (`docs/gta-sa-original/` carries the fork facts). A vertex-shader pipe (skygfx's way) is the heavier
   alternative and is not needed for this. Lands as its own sub-step of 04 after the OpenSA half is

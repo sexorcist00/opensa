@@ -72,6 +72,7 @@
     "tools-debug/sa-int16-repro",
     "asi/perfect-cutscene",
     "asi/perfect-map",
+    "asi/perfect-vegetation",
     "asi/perfect-vehicle",
     "asi/sdk",
     "cleo/sdk"
