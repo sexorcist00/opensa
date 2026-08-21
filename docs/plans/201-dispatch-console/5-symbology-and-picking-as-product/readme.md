@@ -103,6 +103,44 @@ boundary restriction in the same change.
 
 **Owes:** the decision, written down with its cost — not a quiet import.
 
+**DONE 2026-08-21, and the answer was NEITHER of the two options — because the question was posed wrong.**
+
+The console does not need the game layer's zone code. What `packages/game` owns there is `ZoneNameSystem`:
+an ECS system that tracks a PLAYER across frames and fires a callback when the district changes. This
+surface has no player, no ECS and no frames it wants that on. What it needs is one pure question — *what is
+at this point* — and that is a property of `info.zon`'s FORMAT: the boxes nest (a district inside a county
+inside an island) and the SMALLEST containing one is the answer. So the rule moved to `zoneAt`, beside the
+parser that produces the boxes, in `@opensa/renderware`.
+
+Three consumers now read that one function: the game's HUD, the console's readout, and the pack that bakes
+the table for the console. The game reaches it through a new `adapters/named-zones`, because
+[the boundary lint](../../../restrictions/architecture.md) allows renderware from `adapters/` or `mods/` and
+nowhere else — **it caught the first attempt**, which imported it straight into `zones/`. `ZoneNameSystem`
+keeps the per-frame tracking and lost its private copy of the containment rule, so this change removes an
+owner rather than adding one.
+
+**And the fork question hid the real obstacle, which was not layering at all.** `info.zon` holds GXT KEYS
+(`GAN`, `LMEX`) and the text lives in `text/american.gxt` — two files of the game dir, and **a surface
+streaming a pak over HTTP has no game dir**. No import would have got the console a single name. So the
+resolution happens at build time: `opensa-pack` reads both, resolves each box, and writes `districts.json`
+beside the pak with `manifest.districts` pointing at it, exactly the way the water bake rides beside it.
+That is now [a restriction](../../../restrictions/build-vs-runtime.md) in its general form — *a name that
+takes two `data/` files to compute cannot be computed by a pak-only consumer* — because `popcycle` and
+`carcols` will meet it next.
+
+What the console does with it: a click on a building answers **model, TXD, district and coordinates**, and a
+call opened by long-press takes the world's own name for the spot. The hardcoded twenty-landmark table in
+`ops/seed.ts` stays as the fallback and is now honestly labelled one — it is a list of Los Santos places
+that do not exist on a total conversion.
+
+**The cost, stated rather than discovered:** one small fetch at boot and a few tens of kB beside the pak; the
+table is regenerated per build; `?demo=1`, plan mode, a pak built before the field, and any game shipping no
+`info.zon` all get no districts, so every caller carries an answer for *this world has no place names* rather
+than treating an absent table as a failure. `docs/contracts/mods.md` §7 says what a mod replacing either file
+changes, and what a misspelled GXT key looks like — a district shipping under its own key, silently.
+
+**Touched from [the protected list](../1-the-map-profile/protected-list.md):** nothing.
+
 ### 04 — Units get real models
 
 **Decided 2026-08-06: cars and peds are drawn**, not replaced by icons. That settles what was previously

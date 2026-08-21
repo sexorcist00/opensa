@@ -62,7 +62,9 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     longPress: (x, y) => {
       const ground = groundPoint(ray(x, y));
       if (ground) {
-        options.onGround(ground);
+        // Plan mode has no pak and therefore no baked district table — the board falls back to its own
+        // landmark list, the same way the synthetic demo does.
+        options.onGround(ground, null);
       }
     },
     orbit: (dx, dy) => camera.orbit(dx, dy),

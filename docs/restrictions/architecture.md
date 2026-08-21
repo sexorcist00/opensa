@@ -522,7 +522,21 @@ physics world to draw a map. When a console feature genuinely needs game-layer d
 `map.zon`/`info.zon` + GXT is the live case — the decision is to MOVE the lookup to a layer both consumers
 reach, or to take the import and write down why, in `docs/architecture/`.
 
-**Caught:** no — ESLint permits it by construction. The only check is review.
+**The live case was taken on 2026-08-21 (201/5-03), and the answer was neither option**, which is worth
+recording because the question was posed wrong. The console does not need the game layer's zone code: what
+`packages/game` owns there is `ZoneNameSystem`, an ECS system that tracks a PLAYER across frames, and this
+surface has neither. What it needs is one pure question — what is at this point — and that is a property of
+`info.zon`'s FORMAT (the nested boxes; the smallest containing one wins), so it moved to `zoneAt` beside the
+parser in `@opensa/renderware`. The game layer now reaches the same function through
+`adapters/named-zones`, because [the boundary above](#the-game-layer-touches-renderware-only-through-adapters-or-mods)
+allows renderware from there and nowhere else — a lint that caught the first attempt.
+
+**Before asking "may the console import this?", ask what it actually needs.** A game-layer type is often a
+per-frame system wrapped around a rule, and it is the rule both consumers want. Moving the rule leaves both
+better off; taking the import would have dragged an ECS system into a surface with no entities.
+
+**Caught:** no — ESLint permits it by construction. The only check is review. (The renderware half of it IS
+caught, by the `no-restricted-imports` rule above.)
 
 ## A production surface may not stand on a `debug*` switch
 

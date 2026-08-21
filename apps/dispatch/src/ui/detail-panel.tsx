@@ -39,6 +39,7 @@ export function DetailPanel({
         <Title text="Map object" />
         <Field label="model" value={selection.model} />
         <Field label="txd" value={selection.txd} />
+        {selection.district !== null && <Field label="district" value={selection.district} />}
         <Field label="coords" value={coords(selection.at)} />
         <Row>
           <button onClick={() => void navigator.clipboard?.writeText(coords(selection.at))} style={styles.button}>

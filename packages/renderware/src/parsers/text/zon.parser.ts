@@ -45,3 +45,34 @@ export function parseZones(text: string): MapZone[] {
 
   return zones;
 }
+
+/**
+ * The zone a world point is in, or null when it is in none — **the SMALLEST containing box wins.**
+ *
+ * That is how the game reads `info.zon`: the boxes nest (a district inside a county inside an island) and
+ * the most specific one is the answer, so the test is not "the first match" but "the smallest match". A
+ * reader that takes the first box in file order names the island when it should name the street.
+ *
+ * It lives beside the parser because it is a rule about the FORMAT, and it has exactly one owner for the
+ * reason [the cell size](../../../../../docs/restrictions/architecture.md) does: three consumers already
+ * want it — the game's `ZoneNameSystem`, the dispatch console's readout, and the pack that bakes the table
+ * for it — and a second copy diverges silently, in a label nobody checks.
+ *
+ * `x`/`y` are GTA world coordinates (native Z-up), matching the boxes as parsed.
+ */
+export function zoneAt(zones: readonly MapZone[], x: number, y: number): MapZone | null {
+  let best: MapZone | null = null;
+  let bestArea = Infinity;
+  for (const zone of zones) {
+    if (x < zone.min[0] || x > zone.max[0] || y < zone.min[1] || y > zone.max[1]) {
+      continue;
+    }
+    const area = (zone.max[0] - zone.min[0]) * (zone.max[1] - zone.min[1]);
+    if (area < bestArea) {
+      best = zone;
+      bestArea = area;
+    }
+  }
+
+  return best;
+}

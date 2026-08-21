@@ -58,12 +58,12 @@ export function MapCanvas({
         if (click.kind === 'ground') {
           select(null);
         } else if (click.kind === 'world') {
-          select({ at: click.at, kind: 'world', model: click.model, txd: click.txd });
+          select({ at: click.at, district: click.district, kind: 'world', model: click.model, txd: click.txd });
         } else {
           select({ id: click.id, kind: click.kind });
         }
       },
-      onGround: (at: GtaGround) => liveRef.current.actions.createAt(at),
+      onGround: (at: GtaGround, district: null | string) => liveRef.current.actions.createAt(at, district),
       onReadout: (readout) => liveRef.current.onReadout(readout),
       ops: () => liveRef.current.read.ops(),
       overlay,

@@ -30,12 +30,14 @@ import { createErrorLog } from './error-log';
 import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
 import { DEFAULT_SRC, resolvePakBase } from './pak-source';
 import { installWater } from './water';
+import { type DistrictLookup, loadDistricts, NO_DISTRICTS } from './zones';
 
 export interface BootOptions {
   readonly canvas: HTMLCanvasElement;
   readonly onClick: (click: MapClick) => void;
-  /** Right-click: "put a call here". */
-  readonly onGround: (at: GtaGround) => void;
+  /** Right-click: "put a call here". `district` is what the world calls that point (201/5-03) — resolved
+   *  here rather than in the board, because the baked table is the map's, and null when the world has none. */
+  readonly onGround: (at: GtaGround, district: null | string) => void;
   readonly onReadout: (readout: DispatchReadout) => void;
   /** Live read of the board — called once a frame, so the loop never holds a stale snapshot. */
   readonly ops: () => Operations;
@@ -70,8 +72,15 @@ export interface DispatchReadout {
 
 /** What a click resolved to — the app turns it into a {@link Selection}. */
 export type MapClick =
+  | {
+      readonly at: GtaGround;
+      /** The named district the point falls in (201/5-03), or null on a world with no `info.zon`. */
+      readonly district: null | string;
+      readonly kind: 'world';
+      readonly model: string;
+      readonly txd: string;
+    }
   | { readonly at: GtaGround; readonly kind: 'ground' }
-  | { readonly at: GtaGround; readonly kind: 'world'; readonly model: string; readonly txd: string }
   | { readonly id: string; readonly kind: 'incident' | 'unit' };
 
 /** Opening view: high over central Los Santos, north up, steeply tilted so the city still reads as 3D. */
@@ -103,6 +112,9 @@ const DEFAULT_LOD_RADIUS = 2200;
  * demo world has nothing to move.
  */
 interface DispatchWorld {
+  /** What the world's places are called (201/5-03) — baked beside the pak, empty on a world that ships no
+   *  `info.zon` and on the synthetic demo. */
+  districts: DistrictLookup;
   /** Called once a frame with the ground point the view sits over. Returns the ENGINE's own streaming
    *  numbers — blob-handler and upload milliseconds, creates, evictions — which the console used to throw
    *  away, keeping only `pendingCells`. They are the between-frame half no in-loop timer can see. */
@@ -177,7 +189,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     };
   };
 
-  const unbind = bindInput({ camera, canvas, engine, options, symbology });
+  const unbind = bindInput({ camera, canvas, districts: world.districts, engine, options, symbology });
   // 201/1-01. Off unless asked for: draining the span recorder is cheap, but a mode that measures by default
   // is a mode nobody can trust to have measured nothing.
   const inventory = params.get('inventory') === '1' ? new FrameInventory() : null;
@@ -317,11 +329,12 @@ export function dispatchParams(): URLSearchParams {
 function bindInput(input: {
   camera: MapCamera;
   canvas: HTMLCanvasElement;
+  districts: DistrictLookup;
   engine: Engine;
   options: BootOptions;
   symbology: SymbologyLayer;
 }): () => void {
-  const { camera, canvas, engine, options, symbology } = input;
+  const { camera, canvas, districts, engine, options, symbology } = input;
 
   /** The world ray under a canvas-relative CSS position. */
   const rayAt = (x: number, y: number): CursorPick => {
@@ -336,7 +349,7 @@ function bindInput(input: {
     longPress: (x, y) => {
       const ground = groundPoint(rayAt(x, y));
       if (ground) {
-        options.onGround(ground);
+        options.onGround(ground, districts.nameAt(ground));
       }
     },
     orbit: (dx, dy) => camera.orbit(dx, dy),
@@ -353,7 +366,13 @@ function bindInput(input: {
       const hit = engine.cells.pick(ray.origin, ray.direction);
       options.onClick(
         hit
-          ? { at: [hit.position[0], -hit.position[2]], kind: 'world', model: hit.model, txd: hit.txd }
+          ? {
+              at: [hit.position[0], -hit.position[2]],
+              district: districts.nameAt([hit.position[0], -hit.position[2]]),
+              kind: 'world',
+              model: hit.model,
+              txd: hit.txd,
+            }
           : { at: groundPoint(ray) ?? [0, 0], kind: 'ground' },
       );
     },
@@ -383,7 +402,9 @@ function demoWorld(engine: Engine): DispatchWorld {
   // eslint-disable-next-line no-console -- the boot record: a demo run must never be mistaken for a real one
   console.log(`[dispatch] DEMO world — synthetic blocks, ${draws} recorded draws. No pak, no model names.`);
 
-  return { follow: () => IDLE_STREAM, gameDir: '', label: 'demo (synthetic)' };
+  // A synthetic block grid is nowhere, so it has no district names and must not pretend to: the console
+  // falls back to its landmark table, which is what a demo of stock Los Santos wants anyway.
+  return { districts: NO_DISTRICTS, follow: () => IDLE_STREAM, gameDir: '', label: 'demo (synthetic)' };
 }
 
 function numberParam(params: URLSearchParams, name: string, fallback: number): number {
@@ -456,6 +477,7 @@ async function streamedWorld(engine: Engine, params: URLSearchParams): Promise<D
   await installWater(engine, source.base, setup.water);
 
   return {
+    districts: await loadDistricts(source.base, setup.districts),
     follow: (focus) => setup.driver.update(focus),
     gameDir: source.gameDir,
     label: setup.buildTime ?? 'unknown',

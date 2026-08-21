@@ -280,7 +280,23 @@ Neither happens on the `opensa` target: it runs no bake, so both files reach our
 them. If you are debugging "my procobj edit did nothing in the real game", this is the reason, and the built
 `sa/` copy is the one to read — not `game-src/` and not `.work/`.
 
-## 7. What is NOT a contract
+## 7. Two files the `opensa` pack READS for the map's place names
+
+Not rewritten — read, once, at pack time (201/5-03). If your mod replaces either, the districts a dispatch
+map shows come from YOUR copy, and if it removes them the map has no place names at all.
+
+- **`data/info.zon`** — the named boxes. The pack keeps each box's 2D extent and its **tenth column**, which
+  is a GXT key rather than display text (`GANTON, …, GAN`). A row whose key is misspelled resolves to nothing
+  and the district ships under the key itself, so the map reads `GAN` where it should read `Ganton` — no
+  error, no warning, and it looks like a naming decision somebody made.
+- **`text/american.gxt`** — where those keys resolve to text. A total conversion shipping its own GXT is
+  read the same way; one shipping none leaves every district named by its key.
+
+The result is baked into `districts.json` beside the pak, because a surface streaming a pak reaches neither
+file ([build-vs-runtime](../restrictions/build-vs-runtime.md)). A game with no `info.zon` produces no table,
+which is a supported state and not a build failure.
+
+## 8. What is NOT a contract
 
 - **The mod folder's name** — ordering only. Renaming a mod cannot change what it does. The exception is the
   three RESERVED names at the top level of `--in` (§1): there, `common` / `sa` / `opensa` name layers rather
@@ -292,7 +308,7 @@ them. If you are debugging "my procobj edit did nothing in the real game", this 
 
 ---
 
-## 8. Adding a convention
+## 9. Adding a convention
 
 When a new folder/file name starts meaning something, it goes here in the same change, with what happens when
 it is misspelled. That last part is the point: nearly every rule on this page exists because some spelling of

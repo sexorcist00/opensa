@@ -1,0 +1,94 @@
+/**
+ * The world's named districts, as the console reads them (201/5-03).
+ *
+ * A dispatcher does not work in coordinates. "Grove Street, Ganton" is the address a call goes out with, and
+ * until this existed the console's answer came from a **hardcoded table of twenty Los Santos landmarks** in
+ * `ops/seed.ts` — which is fine for a demo of stock SA and wrong for every total conversion this engine
+ * exists to run.
+ *
+ * **The console imports nothing from `packages/game` to do it**, and that is a decision rather than an
+ * accident (201/5-03, recorded in `docs/restrictions/architecture.md`). The game's `ZoneNameSystem` is an
+ * ECS system that tracks a PLAYER across frames; this surface has no player and no ECS, and needs one pure
+ * question answered — what is at this point. That question lives beside the parser in
+ * `@opensa/renderware` (`zoneAt`), where both consumers reach it and neither owns it.
+ *
+ * The DATA is baked: `districts.json` rides beside the pak with the GXT text already resolved, because
+ * `info.zon` holds GXT keys and a surface streaming a pak has no `text/american.gxt` to resolve them
+ * against. A pak without one — a total conversion with no `info.zon`, or a pak built before the field
+ * existed — leaves the table empty, and the caller falls back to whatever it did before.
+ */
+import type { MapZone } from '@opensa/renderware';
+
+import { pakTraffic } from '@opensa/engine';
+import { zoneAt } from '@opensa/renderware';
+
+import type { GtaGround } from '../map/coords';
+
+/** Answers "what is this place called", or null everywhere when the pak carries no districts. */
+export interface DistrictLookup {
+  /** How many boxes were loaded — 0 means every lookup answers null, and the caller should say so once. */
+  readonly count: number;
+  /** The most specific district containing a GTA ground point, or null. */
+  nameAt(at: GtaGround): null | string;
+}
+
+/** One baked district: the box, its GXT key, and the display text already resolved. */
+interface District {
+  key: string;
+  max: [number, number];
+  min: [number, number];
+  name: string;
+}
+
+/** An empty lookup — what a pak with no districts gets, so no caller has to null-check the loader. */
+export const NO_DISTRICTS: DistrictLookup = { count: 0, nameAt: () => null };
+
+/**
+ * Load the baked district table from beside the pak. Never throws: a missing or malformed file is a world
+ * without district names, which every caller already has to handle.
+ */
+export async function loadDistricts(
+  base: string,
+  districts: undefined | { count: number; file: string },
+): Promise<DistrictLookup> {
+  if (!districts) {
+    return NO_DISTRICTS;
+  }
+  const table = await fetchTable(`${base}/${districts.file}`);
+  if (table === null || table.length === 0) {
+    return NO_DISTRICTS;
+  }
+  // `zoneAt` reads `MapZone`; `level` plays no part in the containment test and the baked table drops it.
+  const zones: MapZone[] = table.map((entry) => ({
+    label: entry.key,
+    level: 0,
+    max: entry.max,
+    min: entry.min,
+    name: entry.name,
+  }));
+
+  return {
+    count: zones.length,
+    nameAt: (at) => zoneAt(zones, at[0], at[1])?.name ?? null,
+  };
+}
+
+async function fetchTable(url: string): Promise<District[] | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return null;
+    }
+    const text = await response.text();
+    // Loose beside the pak, like `water.bin` — so it is recorded here or it is missing from the bytes
+    // column entirely (the IO worker never sees it).
+    pakTraffic.record('districts.json', new TextEncoder().encode(text).byteLength);
+    const parsed: unknown = JSON.parse(text);
+
+    return Array.isArray((parsed as { districts?: unknown }).districts)
+      ? ((parsed as { districts: District[] }).districts satisfies District[])
+      : null;
+  } catch {
+    return null;
+  }
+}

@@ -48,4 +48,4 @@ export {
   vehicleFeatureToken,
 } from './vehicle-features.parser';
 export { parseWater, type WaterQuad } from './water.parser';
-export { type MapZone, parseZones } from './zon.parser';
+export { type MapZone, parseZones, zoneAt } from './zon.parser';

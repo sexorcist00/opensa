@@ -93,7 +93,7 @@ flowchart TB
   oslod["opensa · opensa-lod-generator<br/>cell-LOD bake + linear TXDs"]:::stage
   pack["pack · opensa-pack packGameDir<br/>weld cells · .osm per model · pak"]:::stage
   outsa[("&lt;out&gt;/sa<br/>real-SA build")]:::data
-  outos[("&lt;out&gt;/opensa<br/>SELF-CONTAINED game dir<br/>(pak/ inside: world.ospak · manifest · water.bin)")]:::data
+  outos[("&lt;out&gt;/opensa<br/>SELF-CONTAINED game dir<br/>(pak/ inside: world.ospak · manifest · water.bin · districts.json)")]:::data
   fetch["fetch-pack (chained by build:game:&lt;id&gt;:opensa)<br/>content-hashed zip chunks + manifest"]:::stage
   outpak[("&lt;out&gt;/opensa-pack/&lt;game&gt;-&lt;version&gt;<br/>the FETCH build — deploy as games/&lt;game&gt;-&lt;version&gt;")]:::data
 
@@ -177,7 +177,8 @@ Curated JSON, one concern each — a TC without a file simply gets none:
 **copy of the game dir** in which every converted model's `dff`/`txd` inside the IMGs is replaced by one
 sectioned `.osm`; the pak products go to `<out>/pak` (`--pak-out` to override — plan 086 phase 8, the game
 dir is SELF-CONTAINED): `world.ospak` (welded cells + the shared world texture dictionary), `manifest.json`
-(with `buildTime`), `water.bin`, `report.json`.
+(with `buildTime`), `water.bin`, `districts.json` (201/5-03 — `info.zon`'s named boxes with their GXT text
+resolved at BUILD time, because a surface streaming the pak reaches neither file), `report.json`.
 
 - **Weld first, models second** (order-critical): `weld.ts` merges the district into 250-unit render cells
   and produces the shared texture plan; `convertDistrict` then converts model classes

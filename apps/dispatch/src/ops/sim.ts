@@ -78,7 +78,13 @@ export function clearUnit(state: Operations, unitId: string): Operations {
 }
 
 /** Put a new call on the board at an arbitrary point — what right-clicking the map does. */
-export function createIncidentAt(state: Operations, at: GtaGround, now: number, random: () => number): Operations {
+export function createIncidentAt(
+  state: Operations,
+  at: GtaGround,
+  now: number,
+  random: () => number,
+  district: null | string = null,
+): Operations {
   const type = pickIndex(CALL_TYPES.length, random);
   const call = CALL_TYPES[type];
   const incident: Incident = {
@@ -87,7 +93,9 @@ export function createIncidentAt(state: Operations, at: GtaGround, now: number, 
     code: call.code,
     id: `i${Math.floor(now)}${Math.floor(random() * 1000)}`,
     opened: now,
-    place: nearestPlace(at),
+    // The WORLD's own name for the point when the pak carries one (201/5-03); the hardcoded landmark table
+    // is the fallback, and on a total conversion it is a list of Los Santos places that do not exist there.
+    place: district ?? nearestPlace(at),
     priority: call.priority,
     remaining: 20 + type * 6,
     status: 'pending',

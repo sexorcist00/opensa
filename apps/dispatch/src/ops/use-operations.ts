@@ -18,7 +18,9 @@ const TICK_MS = 50;
 export interface DispatchActions {
   assign: (unitId: string, incidentId: string) => void;
   clear: (unitId: string) => void;
-  createAt: (at: GtaGround) => void;
+  /** Open a call at a point. `district` is the world's own name for it (201/5-03), or null when the world
+   *  ships none — the board then falls back to its landmark table. */
+  createAt: (at: GtaGround, district?: null | string) => void;
   select: (selection: Selection) => void;
   setAutoDispatch: (enabled: boolean) => void;
 }
@@ -61,8 +63,8 @@ export function useOperations(): DispatchStore {
     return (): void => window.clearInterval(timer);
   }, []);
 
-  const createAt = useCallback((at: GtaGround): void => {
-    setOps((previous) => createIncidentAt(previous, at, performance.now(), Math.random));
+  const createAt = useCallback((at: GtaGround, district: null | string = null): void => {
+    setOps((previous) => createIncidentAt(previous, at, performance.now(), Math.random, district));
   }, []);
 
   const actions = useMemo<DispatchActions>(

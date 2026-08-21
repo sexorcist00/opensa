@@ -51,6 +51,32 @@ assume the pak knows the car roster.
 
 **Caught:** n/a — this one enables rather than forbids.
 
+## A NAME resolved from `data/` cannot be resolved at runtime by a surface that streams a pak
+
+The world's place names take two files to produce: `data/info.zon` holds the boxes with a GXT **key** in the
+last column (`GAN`, `LMEX`), and `text/american.gxt` holds the text those keys resolve to. Both are files of
+the game dir.
+
+**A surface that streams a `.ospak` over HTTP has no game dir**, so neither is reachable and no amount of
+layering gets it there — the dispatch console spent its first months on a hardcoded table of twenty Los
+Santos landmarks for exactly this reason, which is a demo of stock SA and wrong on every total conversion.
+So the resolution happens at build time: `opensa-pack` reads both, resolves each box, and writes
+`districts.json` beside the pak (`manifest.districts`), the way the water bake rides beside it.
+
+The general rule this is one instance of: **if a value takes two `data/` files to compute, a pak-only
+consumer cannot compute it — bake it or do without it.** The same shape will come back for `popcycle`, for
+`carcols` names, and for anything else keyed through the GXT.
+
+What it costs, stated rather than discovered: the table is a fetch at boot and a few tens of kB, it is
+regenerated per build, and a pak built before the field existed carries none — so every consumer needs an
+answer for *this world has no district names* rather than treating an absent table as a failure. A total
+conversion shipping no `info.zon` is the same case, and it is a real one.
+
+**Caught:** no. A surface that cannot resolve a name shows a fallback or a blank, and both look deliberate.
+
+Detail: [`tools/opensa-pack/src/districts.ts`](../../tools/opensa-pack/src/districts.ts),
+[201/5-03](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
+
 ## The look is baked, so tuning a look parameter costs a re-pack
 
 If a value is going to be iterated on, it belongs in the **shader**; only the anchor belongs in the bake.

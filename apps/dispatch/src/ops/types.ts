@@ -41,7 +41,15 @@ export interface Operations {
 /** What the operator currently has selected — panels and map symbology both read it. */
 export type Selection =
   | null
-  | { readonly at: GtaGround; readonly kind: 'world'; readonly model: string; readonly txd: string }
+  | {
+      readonly at: GtaGround;
+      /** The named district the point falls in (201/5-03) — null when the world ships no `info.zon`, or on
+       *  the synthetic demo, which is nowhere. */
+      readonly district: null | string;
+      readonly kind: 'world';
+      readonly model: string;
+      readonly txd: string;
+    }
   | { readonly id: string; readonly kind: 'incident' }
   | { readonly id: string; readonly kind: 'unit' };
 

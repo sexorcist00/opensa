@@ -1,3 +1,4 @@
+import type { TexturePlanner } from '@opensa/cell-weld/textures';
 /**
  * `opensa-pack` as a LIBRARY (plan opensa-pack/003 phase 6).
  *
@@ -9,7 +10,7 @@
  * the shared texture plan the weld produced (the ONE moment that plan is complete and still open), copy the
  * game dir, then rewrite the archives so each `.osm` replaces the `.dff` it was built from.
  */
-import type { TexturePlanner } from '@opensa/cell-weld/textures';
+import type { OspakManifest } from '@opensa/engine-formats';
 import type { MapDefinitions } from '@opensa/renderware';
 
 import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
@@ -24,6 +25,7 @@ import { rewriteModelArchives } from './archive-edit';
 import { createAstcEncoder } from './astc-encode';
 import { buildRecipe, readGitCommit } from './build-recipe';
 import { convertDistrict } from './convert';
+import { buildDistrictTable } from './districts';
 import { openGameDir } from './game-fs';
 import { WaterHeightGrid } from './height-grid';
 import { createModelBundles } from './model-bundle';
@@ -216,6 +218,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
         `(shore field baked, ${(water.bin.byteLength / 1048576).toFixed(1)} MB)`,
     );
   }
+  writeDistricts(fs, products, manifest, log);
   writeFileSync(join(products, 'world.ospak'), pak);
   // Stamp the build time so the debugger can show which pak the runtime is on. This is the one intentionally
   // non-reproducible field in the output (the pak bytes stay byte-identical); it is set here in the CLI, not
@@ -485,6 +488,7 @@ function printReport(
     );
   }
 }
+
 /**
  * Stochastic de-tiling list (074/12): the CURATED uniform-noise list is the ONLY default — the skygfx
  * texdb (`data/skygfx-texdb.txt`) scrambled structured textures in the field.
@@ -540,7 +544,6 @@ async function retextureModels(
       `${(encoder.stats.ms / 1000).toFixed(1)} s`,
   );
 }
-
 /**
  * Write the accumulated `.osm` files into the copied archives and report what moved. Rebuilding the
  * archives is the expensive half — it streams, but it still rewrites ~1 GB of `gta3.img`.
@@ -570,6 +573,29 @@ function rewriteOptimizedArchives(
   log(`${bundles.size()} models bundled; archive rewrite done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 
   return { ...packed, rewrite };
+}
+
+/**
+ * Bake the district table beside the pak (201/5-03): `info.zon`'s boxes with their GXT text resolved HERE,
+ * because neither file is reachable from a surface that streams the pak. Loose next to the manifest, like
+ * the water. A game shipping no `info.zon` simply gets no table, and the manifest field stays absent.
+ */
+function writeDistricts(
+  fs: ReturnType<typeof openGameDir>,
+  products: string,
+  manifest: OspakManifest,
+  log: (message: string) => void,
+): void {
+  const table = buildDistrictTable(fs);
+  if (table === null) {
+    return;
+  }
+  writeFileSync(join(products, 'districts.json'), JSON.stringify(table));
+  manifest.districts = { count: table.districts.length, file: 'districts.json' };
+  log(
+    `districts: ${table.districts.length} named boxes` +
+      (table.gxt === null ? ' (no GXT — the keys ship as their own names)' : ` from ${table.gxt}`),
+  );
 }
 
 /** How many model names one failure class prints before it says "+N more" — `report.json` always has all. */

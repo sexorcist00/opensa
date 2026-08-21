@@ -166,6 +166,11 @@ Each now names the step that owns it, so none of them is an open-ended note.
   a unit the dispatcher cannot see is not an acceptable way to hit a budget. `?units=150&calls=40` loads the
   board to the declared count — until then it could not be loaded past the nine-car demo shift on any device.
   → [201/5-02](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
+- ~~**Places come from a hardcoded landmark table.**~~ **CLOSED 2026-08-21.** The world's own districts are
+  baked beside the pak (`districts.json`, from `info.zon` × `american.gxt` at pack time — a surface streaming
+  a pak reaches neither file) and a click answers model, TXD, **district** and coordinates. The twenty Los
+  Santos landmarks remain the fallback for `?demo=1`, plan mode, an older pak, and any game shipping no
+  `info.zon`. → [201/5-03](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
 - **The units are not an instanced symbol layer yet.** They are a chevron and a label chip drawn per unit on
   the 2D canvas. The per-symbol canvas cost is down (text measured once per distinct label, font set once a
   frame, instead of both per chip per frame —
@@ -186,6 +191,9 @@ Each now names the step that owns it, so none of them is an open-ended note.
   pinned is the WORK IT ASKS FOR rather than a time this machine happens to take: a label is measured once
   and never again, the font is set a fixed number of times per frame rather than once per chip, and the
   counts it reports match what it drew. Both halves were verified by reintroducing the defect.
+- `apps/dispatch/src/world/zones.test.ts` — the baked district table: a missing file, a malformed one and a
+  pak that declares none all answer "no districts" rather than throwing into the boot, and a point resolves
+  to the smallest containing district rather than the city around it.
 - `apps/dispatch/src/map/beacons.test.ts` — the whole declared budget fits in ONE status without growing, a
   board past it grows instead of dropping, and a grown buffer never writes past the set's allocation (which
   on a real device is a WebGPU validation error, not a dropped marker).

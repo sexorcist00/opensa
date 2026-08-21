@@ -87,6 +87,18 @@ export interface OspakManifest {
   /** The grid {@link OspakManifest.collision} is keyed on — stated rather than implied, because it is NOT
    *  `cellSize` and the difference is invisible until someone falls through the world. */
   collisionCellSize?: number;
+  /**
+   * The world's named districts (201/5-03): a LOOSE `districts.json` beside the manifest, holding
+   * `info.zon`'s boxes with their `american.gxt` text **already resolved**.
+   *
+   * It is baked rather than looked up because a surface streaming a pak has no game dir: `info.zon` carries
+   * GXT KEYS and the GXT is a separate `text/` file, so neither is reachable at runtime
+   * (`docs/restrictions/build-vs-runtime.md`). See `tools/opensa-pack/src/districts.ts` for the writer.
+   *
+   * Absent when the game ships no `info.zon` (a total conversion may not) or when the pak predates the
+   * field — a consumer must have an answer for "this world has no district names".
+   */
+  districts?: { count: number; file: string };
   /** Fetch game id (plan 086 phase 1): the `game-src/<id>` folder name this pak was built from
    *  (`original`, `gostown`, …). Absent on older paks. */
   game?: string;
