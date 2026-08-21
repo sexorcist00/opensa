@@ -72,6 +72,10 @@ BOTH engines: the atlas stores only the **normalized** prelit variation (`tex ×
 vertices carry the source's average day prelit + absolute night set (so any renderer multiplier — SA ×1,
 skygfx PS2 ×2, OpenSA linear — applies to HD and LOD alike), and texels are encoded **per target**: gamma
 into the game build, a linear `linear-txd/` sidecar the pmb opensa split swaps into its own `gta3.img`.
+[`013-impostor-parity.md`](./docs/plans/013-impostor-parity.md) is the open defect chain (2026-08-21): why
+every impostor still reads nothing like its HD — four crossed full-projection cards stack to ~96 % canopy fill
+against the HD's ~55 %, a point-sampled bake, a missing `IS_TREE` bit (soft-blend instead of cutout, no sway)
+and a DXT5 fit over black transparent texels — and the fixes in order.
 [`011-area-row-budget.md`](./docs/plans/011-area-row-budget.md) is the safety cap on impostor appends: an
 area's text + binary rows boot through SA's unbounded 4096-slot buffer (the "ghost barriers" corruption), so
 appends stop at 4000 rows per area and over-budget trees migrate — HD instance + impostor, still lod-linked —
