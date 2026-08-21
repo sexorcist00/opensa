@@ -224,6 +224,13 @@ field verdict; this is what PICKS the rule.
   HD's canopy mass; of that 1.59, the CLASS is most (blend → cutout is ×1.24 → ×0.97 on the same cards). The
   plan's opening `1 − 0.45⁴ ≈ 96 %` assumed the four cards' opaque texels are independent — they are four
   projections of the same canopy, so their union is nothing like that.
+- **The field corrected the scope of this step the same day.** On the `sa` build the user's verdict was
+  "about the same", and the instrument in SA's own class says why: SA composites the crossed cards in its
+  sorted pass whatever the flags say, so 4 cards are ×1.24 / ×1.15 the HD's canopy mass there (against
+  ×0.97 / ×0.86 in OpenSA's cutout class), and what the build moved was ×1.59 → ×1.24. In the blend class
+  **3 cards** measure ×1.07 / ×1.04. So the card rule is per TARGET: 4 where the class unions them, 3 (or a
+  view-weighted 4) where it stacks them — and **the sa half of phase B has a measured justification now,
+  which the OpenSA half does not.**
 - **What the numbers now say to watch is the other direction**: `tree7vbig`'s LOD is 14 % THINNER than its HD,
   and on the `sa` target partial coverage below reference 100 is discarded rather than faded, which thins it
   further. That is the same field question step 01 left open, and it now has a second reason to be asked.

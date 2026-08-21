@@ -200,6 +200,31 @@ composited go from ×1.24 to ×0.97. The plan's opening estimate — four cards 
 assumed the cards' opaque texels are independent; they are four projections of the same canopy, so their
 union is far below what independence predicts.
 
+## The card rule is not the same for both targets (field-driven, 2026-08-21)
+
+The `sa` field verdict on this build was "about the same as before". The instrument agrees, and says why:
+**the class does the heavy lifting, and the `sa` target does not have it.** OpenSA welds the impostor CUTOUT
+after step 02, so its four cards form a union; SA composites them in the sorted alpha pass (`DRAW_LAST`, no
+depth write) whatever the flags say, so they stack.
+
+Canopy mass against the HD, same bake, same 8 azimuths at 64 px:
+
+| cards | SA's class (blend) `tree5` / `tree7vbig` | OpenSA's class (cutout) |
+| ---: | ---: | ---: |
+| 4 (today) | ×1.24 / ×1.15 | **×0.97 / ×0.86** |
+| 3 | **×1.07 / ×1.04** | not measured |
+| 2 | ×0.82 / ×0.82 | ×0.77 / ×0.75 |
+
+And what the `sa` build actually moved: **×1.59 → ×1.24** on `tree5` (blend + two windings + point-sampled
+alpha → blend + one winding + antialiased alpha). A quarter of the excess density is gone, the rest is the
+composite itself. That is a visible-but-modest change, which is what the field reported.
+
+So the rule step 03 picked — 4 cards — is right for the target that has the cutout class and 15–24 % too
+dense for the one that does not. Three ways out, and their price is the choice: bake a SECOND card set for
+`sa` at 3 cards (a second atlas, ~+4.5 min of stage), weight each card's alpha by view angle at draw time
+(`asi/perfect-vegetation`, which is exactly this mechanism and was the phase-B plan), or leave `sa` at ×1.2
+and take the parity only on OpenSA.
+
 ## DXT5 endpoints (`rw-codec`)
 
 Unit measurement, one 4×4 block of eight transparent-black texels plus eight leaf greens 100–156:
