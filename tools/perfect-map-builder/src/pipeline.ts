@@ -563,6 +563,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // already dropped its own above, before the convert read the dir.)
   for (const target of produced.filter(({ name }) => name === 'sa')) {
     rmSync(join(target.dir, 'linear-txd'), { force: true, recursive: true });
+    rmSync(join(target.dir, 'opensa-dff'), { force: true, recursive: true });
   }
 
   if (!keepWork) {
@@ -697,29 +698,36 @@ export function runsStage(
 }
 
 /**
- * Swap the linear-convention TXD sidecars (`<common build>/linear-txd/*.txd`) into the opensa target's
- * `gta3.img` (lod-trees plan 012): the common build's generated TXDs (impostor atlas, lod_procobj) are
- * encoded in the real-SA **gamma** convention — every bootable `.work` stage stays SA-correct — while
- * OpenSA's linear pipeline needs the linear encoding of the same texels. One placement, two texel codings.
+ * Swap the OpenSA sidecars of the common build into the opensa target's `gta3.img`, by entry name.
+ *
+ * Two sidecars, one rule — the built tree carries the REAL-SA shape so every bootable `.work` stage stays
+ * SA-correct, and what OpenSA needs differently rides beside it:
+ * - `linear-txd/*.txd` — the same texels in the linear convention OpenSA's pipeline decodes (plan 012);
+ * - `opensa-dff/*.dff` — the impostor cage as OpenSA's weld wants it, four full-alpha cards against the
+ *   three thinned ones SA composites (lod-trees plan 013 step 06).
  */
 export function swapLinearTxds(commonDir: string, opensaDir: string): void {
-  const sidecarDir = join(commonDir, 'linear-txd');
-  if (!existsSync(sidecarDir)) {
-    return;
-  }
-  const names = readdirSync(sidecarDir).filter((file) => file.toLowerCase().endsWith('.txd'));
-  if (names.length === 0) {
+  const sidecars = [
+    { dir: join(commonDir, 'linear-txd'), what: 'linear-convention TXD' },
+    { dir: join(commonDir, 'opensa-dff'), what: 'impostor DFF' },
+  ].filter((sidecar) => existsSync(sidecar.dir));
+  const swaps = sidecars
+    .map((sidecar) => ({ ...sidecar, names: readdirSync(sidecar.dir) }))
+    .filter((s) => s.names.length > 0);
+  if (swaps.length === 0) {
     return;
   }
   const imgPath = join(opensaDir, 'models', 'gta3.img');
   const buffer = readFileSync(imgPath);
   const img = editArchive(openArchive(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)));
-  for (const name of names) {
-    const bytes = readFileSync(join(sidecarDir, name));
-    img.set(name.toLowerCase(), new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+  for (const swap of swaps) {
+    for (const name of swap.names) {
+      const bytes = readFileSync(join(swap.dir, name));
+      img.set(name.toLowerCase(), new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+    }
+    log(`opensa: swapped ${swap.names.length} ${swap.what}(s)`);
   }
   writeFileSync(imgPath, img.build());
-  log(`opensa: swapped ${names.length} linear-convention TXD(s) (${names.join(', ')})`);
 }
 
 /**
@@ -781,6 +789,7 @@ async function buildOpensaTarget(step: {
     // split-time input, not game content.
     swapLinearTxds(game, lodDir);
     rmSync(join(lodDir, 'linear-txd'), { force: true, recursive: true });
+    rmSync(join(lodDir, 'opensa-dff'), { force: true, recursive: true });
     step.onLodDone?.(Number(((Date.now() - lodStarted) / 1000).toFixed(1)));
   }
   if (!packing) {

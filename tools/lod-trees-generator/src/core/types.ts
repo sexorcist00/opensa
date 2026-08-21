@@ -52,6 +52,9 @@ export interface HdTriangle {
  *  texels stay ~square in world space (no vertical under-sampling). One {@link Impostor} → one named TXD texture. */
 export interface Impostor {
   bbox: { max: Vec3; min: Vec3 };
+  /** The factor every atlas texel's alpha was scaled by so the COMPOSITED cage covers what the HD covers —
+   *  solved per tree (`card-alpha.ts`). 1 on the set whose target unions the cards. */
+  cardAlpha: number;
   cards: ImpostorCard[];
   /** DAY prelit for every card vertex (the source's {@link HdTree.dayAvg}; white when the source had none) —
    *  the mean lighting level lives HERE, not in the atlas, so the target renderer's prelit pipeline applies
@@ -85,8 +88,10 @@ export type Rgba = [number, number, number, number];
 
 /** Game-specific I/O for the generator. */
 export interface TreeLodAdapter {
-  /** Encode + write all baked impostors (LOD DFFs + shared atlas TXD + COL) to `--out`. */
-  finalize: (impostors: Impostor[]) => void;
+  /** Encode + write the baked impostors to `--out`: the `primary` set is what the built tree carries (the
+   *  real-SA shape), the `alternate` set goes to a sidecar the OpenSA split swaps in — the two differ in
+   *  card count and card alpha because their targets composite the cage differently (plan 013 step 06). */
+  finalize: (primary: Impostor[], alternate: Impostor[]) => void;
   /** HD tree model names to process (from `--in`). */
   listInputs: () => string[];
   /** Parse + decode one HD tree (geometry + textures, resolved against `--game`). */
@@ -97,7 +102,12 @@ export interface TreeLodAdapter {
 export interface TreeLodConfig {
   /** `bboxHeight / bboxWidth` above which the atlas goes portrait (`width × 2*width`) instead of square. */
   aspectThreshold: number;
-  /** Number of crossed billboard cards in the impostor cage. */
+  /** Cards for a target whose class STACKS them: real SA composites the impostor in its sorted pass whatever
+   *  the flags say, so the same four cards measure ×1.36 the tree's own canopy there. Baked as a SECOND set
+   *  (plan 013 step 06), with each card thinned by {@link Impostor.cardAlpha}. */
+  blendCards: number;
+  /** Cards in the cage for a target whose alpha class UNIONS them — OpenSA welds the impostor CUTOUT once
+   *  its row carries the vegetation bits (plan 013 step 02), so four crossed cards read as one canopy. */
   cards: number;
   /** Emitted LOD draw distance (world units) — the visibility gate for the LOD def. */
   drawDistance: number;

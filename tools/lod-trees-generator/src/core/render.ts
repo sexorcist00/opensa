@@ -90,6 +90,7 @@ export function renderImpostor(tree: HdTree, config: TreeLodConfig): Impostor {
 
   return {
     bbox: tree.bbox,
+    cardAlpha: 1,
     cards,
     dayColor: tree.dayAvg ?? [255, 255, 255, 255],
     height,

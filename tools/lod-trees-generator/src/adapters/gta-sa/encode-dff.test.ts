@@ -42,6 +42,7 @@ function impostor(): Impostor {
 
   return {
     bbox: { max: [5, 5, 20], min: [-5, -5, 0] },
+    cardAlpha: 1,
     cards: [card(0), card(Math.PI / 2)],
     dayColor: [140, 150, 130, 255],
     height: 64,

@@ -8,6 +8,7 @@ import { buildCardGeometry } from './cards';
 function impostor(count: number): Impostor {
   return {
     bbox: { max: [1, 1, 10], min: [-1, -1, 0] },
+    cardAlpha: 1,
     cards: Array.from({ length: count }, (_, i) => ({
       angle: (Math.PI * i) / count,
       uvRect: { h: 256, w: 256, x: (i % 2) * 256, y: Math.floor(i / 2) * 256 },

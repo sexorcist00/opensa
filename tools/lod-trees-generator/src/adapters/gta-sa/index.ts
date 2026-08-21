@@ -72,7 +72,7 @@ export function createGtaSaTreeLodAdapter(options: GtaSaTreeLodOptions): TreeLod
   const foliageTextures = new Set([...textures].filter(([, tex]) => tex.hasAlpha).map(([name]) => name));
 
   return {
-    finalize(impostors: Impostor[]): void {
+    finalize(impostors: Impostor[], alternate: Impostor[]): void {
       const template = loadTemplate(archive);
       const version = readRw(template).chunks[0]?.version ?? 0;
       for (const impostor of impostors) {
@@ -85,10 +85,15 @@ export function createGtaSaTreeLodAdapter(options: GtaSaTreeLodOptions): TreeLod
         }
       }
       writeFileSync(join(outPath, 'lodtrees.txd'), encodeAtlasTxd(impostors, version, 'gamma'));
-      // The linear-convention variant for OpenSA (plan 012): the pmb opensa split swaps it into its own
-      // gta3.img; the game build (and every bootable .work stage) stays in the real-SA gamma convention.
+      // The OpenSA sidecars (plan 012 for the texels, step 06 for the cage): the built tree carries the
+      // real-SA shape — fewer, thinner cards, gamma texels — and every bootable `.work` stage stays SA-
+      // correct, while the pmb opensa split swaps BOTH of these into its own gta3.img by entry name.
       mkdirSync(join(outPath, 'linear-txd'), { recursive: true });
-      writeFileSync(join(outPath, 'linear-txd', 'lodtrees.txd'), encodeAtlasTxd(impostors, version, 'linear'));
+      writeFileSync(join(outPath, 'linear-txd', 'lodtrees.txd'), encodeAtlasTxd(alternate, version, 'linear'));
+      mkdirSync(join(outPath, 'opensa-dff'), { recursive: true });
+      for (const impostor of alternate) {
+        writeFileSync(join(outPath, 'opensa-dff', `${impostor.name}.dff`), encodeLodDff(template, impostor));
+      }
       // Col models are bound by the same model name SA registers (the IDE/IMG alias), not the impostor's own name.
       const aliases = impostors.map((impostor, i) => lodAlias(impostor.name, i));
       writeFileSync(

@@ -22,7 +22,11 @@ tsx tools/lod-trees-generator/src/cli.ts --out <path> --game <path> [--in <dir>]
   packed into the IMG and their redundant root copies removed, so the root is left clean (only `gta3.img` +
   `data/`). Per-impostor PNG previews are written only with `--debug-png`.
 - `--game` — path to the game data (`gta.dat` + `data/` + `models/gta3.img`)
-- `--tex` / `--cards` — per-tree atlas size (px) / cards per tree (defaults in `config.ts`)
+- `--tex` / `--cards` — per-tree atlas size (px) / cards per tree for the OpenSA set (defaults in `config.ts`)
+- `--blend-cards` — cards for the real-SA set (default 3). Two cages are baked per tree because the targets
+  composite them differently: OpenSA's weld UNIONS the cards (cutout), real SA stacks them in its sorted
+  pass, so the SA set gets fewer cards and each is thinned by a factor SOLVED per tree against its own HD
+  (plan 013 step 06). The SA set is what the built tree carries; the OpenSA one rides in `opensa-dff/`
 - `--draw` — impostor LOD draw distance in game units (default `1500`); how far the LOD stays visible
 - `--ss` — sub-samples per atlas texel on each axis, a power of two (default `2`, `1` = off). The card bake
   is a software rasterizer with no MSAA, so a thin leaf quad takes a texel whole or misses it; the sub-samples

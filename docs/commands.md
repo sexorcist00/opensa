@@ -279,6 +279,9 @@ npx tsx tools/map-optimizer/src/cli.ts --game <dir> --out <dir>
 # Tree LOD impostors
 npx tsx tools/lod-trees-generator/src/cli.ts --in ./mods-src/vegetation --game <dir> --out <dir> \
   --prelight ./mods-src/vegetation/prelight/info.json --tex 512
+#   --blend-cards <n>  cards for the REAL-SA set (default 3), which composites them in its sorted pass; the
+#   --cards <n> set (default 4) is baked beside it for OpenSA, whose weld unions them. Each SA card's alpha is
+#   then solved per tree so the composite covers what that tree's own HD covers (plan 013 step 06).
 #   --ss <n>  sub-samples per atlas texel on each axis, a power of two (default 2, 1 = off). The card bake
 #   has no MSAA, so a thin leaf quad takes a texel whole or misses it — the atlas speckle plan 013 measured.
 #   Bake-time only, and it grows with the SQUARE: ×7.1 at 2, ×25 at 4 (docs/benchmarks/tools/2026-08-21-…).

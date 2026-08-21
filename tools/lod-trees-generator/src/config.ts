@@ -5,6 +5,10 @@ export const config: TreeLodConfig = {
   // Trees taller than 2× their width bake into a portrait (width × 2*width) atlas so vertical detail isn't
   // squashed into a square tile. Below this they stay square.
   aspectThreshold: 2,
+  // 4 for the class that unions the cards, 3 for the class that stacks them: measured against the HD's own
+  // canopy at the LOD switch — 4 cards are ×0.97 of it in a cutout pass and ×1.36 in SA's sorted blend,
+  // where 3 thinned cards land at ×1.00 and cost a quarter less overdraw (plan 013 step 06).
+  blendCards: 3,
   cards: 4,
   drawDistance: 1500,
   // 2×2 sub-samples per atlas texel. Measured on the plan-013 reference trees: it takes the isolated-texel

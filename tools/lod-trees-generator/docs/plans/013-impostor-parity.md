@@ -72,6 +72,7 @@ pose is the offline instrument — it is what produced the report and it is repr
 | 03 | density: measure the stack, pick the card rule — MEASURED, 4 cards stay | both | `lod-trees-generator` config + a benchmark |
 | 04 | view-weighted cards (a billboard-set material): one projection from every angle | OpenSA; `sa` via an ASI render callback (see below) | `cell-weld`, `engine` shaders — go/no-go on 03's numbers |
 | 05 | field verdict, numbers, docs | — | `docs/benchmarks/`, this file, tool readme |
+| 06 | per-target card sets + the card alpha solved per tree — BUILT 2026-08-21 | both | `lod-trees-generator/core/{probe,card-alpha}.ts`, `perfect-map-builder` |
 
 ### 01 — the bake stops aliasing
 
@@ -269,6 +270,35 @@ term is per-vertex. The `sa` target keeps 03's rule.
 Field verdict from the driver's seat at the switch distance on the `opensa` build (and the `sa` bottle for
 01/02), the before/after pair in `docs/benchmarks/`, this file's ledger filled per step, the tool readme's
 plan list extended, `docs/plans/README.md`'s chain row (it still reads `001`–`005`, `007`).
+
+### 06 — one cage per class, and the alpha comes from the tree
+
+**Why it exists**: the `sa` field verdict on the 01+02 build was "about the same", and the instrument in SA's
+own class said why — SA composites the crossed cards in its sorted pass whatever the IDE flags say, so the
+cutout union that puts OpenSA at ×0.97 never happens there. At SA's own reference (100, not the bake's 128)
+four cards measure **×1.36 / ×1.30** the HD's canopy mass.
+
+**What it does**: the bake emits TWO cages per tree.
+
+- The built tree carries the real-SA one: `blendCards` (3) cards, each thinned so the COMPOSITE covers what
+  the HD covers. Three rather than four for two measured reasons — at reference 100 a thinned texel is
+  DISCARDED rather than faded, so the scale has a floor (four cards need ×0.75 and ×0.65 collapses the canopy
+  to ×0.59, while three need ×0.85 and keep a texel alive down to alpha 118), and three blended cards are a
+  quarter fewer blended fragments per tree LOD.
+- `opensa-dff/` carries the OpenSA one: `cards` (4) at full alpha, which its cutout weld unions to ×0.97.
+  `perfect-map-builder` swaps it into the opensa `gta3.img` by entry name, beside the linear TXD that has
+  ridden there since plan 012.
+
+**The alpha is SOLVED, not fitted** (`core/card-alpha.ts`): per tree, the bake renders its own HD from
+between two cards at the size the tree has on screen at the switch (64 px), then bisects the card alpha until
+the composited cage covers the same. Measured: `sm_veg_tree5` 0.858, `sm_veg_tree7vbig` 0.856, `ash1_hi`
+0.832, `pinetree04` 0.807 — each landing its own composite at **×1.00**, where a single global constant would
+have left every tree a few percent off its own canopy. ~1.2–1.7 s per tree on top of the two bakes; no
+`docs/hacks/` entry, because nothing was fitted.
+
+**Runtime**: `sa` gets CHEAPER than before this plan — 6 triangles per impostor instead of 16 and three
+blended cards instead of four; OpenSA is unchanged at 8 triangles. Neither atlas changes size (DXT5 at a
+fixed resolution), so nothing is added to streaming.
 
 ## Out of scope, deliberately
 
