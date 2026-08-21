@@ -24,6 +24,13 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 `001`–`099`, one folder each (066, 073, 074, 078–082, 096–099 carry multi-part sub-plans; 083 kept its
 row but its chain was superseded by 097). Newest first:
 
+- **[104 — `timecyc24h.dat` as a third timecyc source](./104-timecyc24h-source/readme.md)** — **PLANNED
+  2026-08-21**: the built tree carries three timecycs and the engine reads two names. The third is the
+  `timecyc24h.asi` (Dante) format an opensa-layer mod ships — measured: the same 27 columns, 23 × 24 rows,
+  parses clean today, so the parser needs nothing and the three loaders need ONE resolver with the order
+  `timecyc_24h.dat` → `timecyc24h.dat` → `timecyc.dat`. Two things the recon found on the way: our generated
+  `timecyc_24h.dat` in `game-src` silently shadows the mod under that order, and Dante authors negative
+  `FogSt` on 243 rows (min −1 700) that the driver floors at 0 — step 04 recovers SA's meaning first.
 - **[101 — Escalators in OpenSA](./101-escalators/readme.md)** — **PLANNED 2026-08-07**: the steps have
   never moved in our engine. `renderware` decodes the type-10 entry (plan 044) and there is a debug waypoint;
   `engine`, `cell-weld` and `engine-formats` have no escalator code at all, so the staircase draws and
