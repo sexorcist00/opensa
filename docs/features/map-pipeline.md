@@ -12,6 +12,10 @@
   kept on `def.anim`), `tobj` (time windows), `txdp` (TXD parents). Other sections ignored.
 - IDE flags (`ide-flags.ts`): DRAW_LAST, ADDITIVE, NO_ZBUFFER_WRITE, no-shadow (moot),
   IS_TREE/IS_PALM, DISABLE_BACKFACE_CULLING — full render-relevant set per the flag histogram.
+  A GENERATED far-LOD is classified as the model it stands for: the weld's `swayKindFor` retries the wind
+  name list with a leading `lod` stripped, because most stock vegetation rows carry no `IS_TREE` bit at all
+  (105 of the 184 impostors of the 2026-08-21 build) and the impostor's own name is not on the list — without
+  it the tree sways and welds cutout while its LOD stands still in a soft-blend pass (lod-trees plan 013/02).
   NO_ZBUFFER_WRITE (0x40) is applied only to **transparent** materials (decals/shadows/glass, which
   always also carry DRAW_LAST) — opaque geometry keeps depth writes, else bare-0x40 countryside
   terrain tiles show through under a free camera (plan 039 follow-up). In the own-engine pack it is the
