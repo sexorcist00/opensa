@@ -91,6 +91,48 @@ The same step gives each impostor row the vegetation bits of the HD row it repla
 game-dir, HD `0x202084` → LOD `2105476` (was `2097284`), HD `0x204084` → `2113668`, and an HD row with
 double-sided + additive but no vegetation bit leaves the LOD row unchanged.
 
+## Step 03 — how dense the cage is against the tree
+
+Instrument: `scripts/debug/impostor-density.ts` — HD mesh and card cage rendered from the SAME poses by the
+same software rasteriser, 16 azimuths, at the size a tree really has on screen (a 15 m tree at SA's ~70° fov
+on a 900 px viewport is ~64 px tall at the 150 u HD draw distance, ~32 px at twice it). `mass` is the mean
+alpha over the canopy box — the coverage as rendered; `covered` is the share above the cutout; the bracket is
+the per-azimuth spread around the mean.
+
+**As the pair ships after steps 01–02** (cutout class, one winding, `--ss 2`, 512² atlas), 64 px:
+
+| | covered | mass | spread | luma |
+| --- | ---: | ---: | ---: | ---: |
+| `sm_veg_tree5` HD | 27.7 % | 23.3 % | 0.92..1.06 | 27 |
+| `sm_veg_tree5` LOD, 4 cards | 29.9 % (×1.08) | 22.7 % (**×0.97**) | 0.94..1.05 | 27 (×1.01) |
+| `sm_veg_tree5` LOD, 2 cards | 20.6 % (×0.74) | 17.8 % (×0.77) | 0.94..1.05 | 26 (×0.98) |
+| `sm_veg_tree7vbig` HD | 34.8 % | 27.0 % | 0.97..1.03 | 39 |
+| `sm_veg_tree7vbig` LOD, 4 cards | 32.5 % (×0.93) | 23.3 % (**×0.86**) | 0.97..1.03 | 39 (×1.01) |
+| `sm_veg_tree7vbig` LOD, 2 cards | 25.3 % (×0.73) | 20.4 % (×0.75) | 0.88..1.10 | 39 (×1.00) |
+
+32 px moves nothing by more than 0.02 (`tree5` 4 cards ×0.97 mass, `tree7vbig` ×0.87).
+
+**As the pair was when the field reported it** — the blend class (no depth write, cards composited), the
+point-sampled atlas (`--ss 1`, whose alpha is exactly the old bake's) and two windings per card:
+
+| | covered | mass |
+| --- | ---: | ---: |
+| `sm_veg_tree5` LOD, 4 cards | 38.7 % (×1.38) | 37.0 % (**×1.59**) |
+| `sm_veg_tree7vbig` LOD, 4 cards | 41.3 % (×1.19) | 39.6 % (**×1.47**) |
+
+Splitting that 1.59 into its causes, `sm_veg_tree5` 4 cards, mass against the HD:
+
+| configuration | mass |
+| --- | ---: |
+| blend + two windings + point-sampled alpha (before) | ×1.59 |
+| blend, one winding, antialiased alpha | ×1.24 |
+| cutout, one winding, antialiased alpha (after) | ×0.97 |
+
+The canopy was ~1.5× the tree's density, and the CLASS was most of it: the same cards drawn cutout instead of
+composited go from ×1.24 to ×0.97. The plan's opening estimate — four cards at ~55 % fill stacking to ~96 % —
+assumed the cards' opaque texels are independent; they are four projections of the same canopy, so their
+union is far below what independence predicts.
+
 ## DXT5 endpoints (`rw-codec`)
 
 Unit measurement, one 4×4 block of eight transparent-black texels plus eight leaf greens 100–156:

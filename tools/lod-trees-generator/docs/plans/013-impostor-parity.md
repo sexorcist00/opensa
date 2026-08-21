@@ -69,7 +69,7 @@ pose is the offline instrument — it is what produced the report and it is repr
 | --- | --- | --- | --- |
 | 01 | supersampled, mip-aware bake; colour dilation before DXT5; DXT5 endpoints ignore transparent texels | both | `lod-trees-generator/core/raster.ts`, `render.ts`; `rw-codec/dxt-encode.ts` |
 | 02 | the impostor row inherits the source's vegetation bits; one winding per card | both | `map-placement/ide.ts` (flags param is already there), `lod-trees-generator/core/cards.ts` |
-| 03 | density: measure the stack, pick the card rule | both | `lod-trees-generator` config + a benchmark |
+| 03 | density: measure the stack, pick the card rule — MEASURED, 4 cards stay | both | `lod-trees-generator` config + a benchmark |
 | 04 | view-weighted cards (a billboard-set material): one projection from every angle | OpenSA; `sa` via an ASI render callback (see below) | `cell-weld`, `engine` shaders — go/no-go on 03's numbers |
 | 05 | field verdict, numbers, docs | — | `docs/benchmarks/`, this file, tool readme |
 
@@ -181,6 +181,37 @@ channel: worst green error on a canopy-edge block **26 → 10** (BC1's own ramp 
   visible stack. Each is one `--cards` / one rule; the numbers pick.
 - **Done when** a table in `docs/benchmarks/` shows covered-fraction and luminance per candidate against the
   HD, and the chosen rule is the one nearest the HD on both — or none is within 10 %, which is phase B's go.
+
+#### 03 — MEASURED 2026-08-21: 4 cards stay, and phase B is NOT gated in
+
+Numbers: [`docs/benchmarks/tools/2026-08-21-lod-trees-impostor-bake.md`](../../../../docs/benchmarks/tools/2026-08-21-lod-trees-impostor-bake.md) §
+"Step 03". Instrument: `scripts/debug/impostor-density.ts`.
+
+**Not the viewer pair this step opened with, and the swap is deliberate.** The HD mesh and the card cage are
+rendered from the SAME poses by the same software rasteriser the bake uses, 16 azimuths at the size a tree
+really has on screen (~64 px tall at the 150 u switch, ~32 px at twice it). It needs no build, it is
+deterministic, and it isolates the geometry — the viewer pair would have measured the engine's shading at the
+same time, and every run of it costs a ~50 min pak. The viewer pair is still what step 05 shoots for the
+field verdict; this is what PICKS the rule.
+
+| mass vs the HD's | `sm_veg_tree5` | `sm_veg_tree7vbig` |
+| --- | ---: | ---: |
+| 4 cards (today's rule) | **×0.97** | **×0.86** |
+| 2 cards | ×0.77 | ×0.75 |
+| per-azimuth spread, 4 cards | 0.94..1.05 (HD 0.92..1.06) | 0.97..1.03 (HD 0.97..1.03) |
+
+- **4 cards is the rule.** It is inside 10 % on `tree5` and 14 % UNDER on `tree7vbig`; 2 cards is 23–25 %
+  under on both. No coverage-divided variant was needed — nothing is over-covering to divide.
+- **Phase B (04) is not justified by density.** The metric a view-weighted impostor exists to remove is the
+  angular SWING, and the cage's is already the tree's own (0.94..1.05 against 0.92..1.06). The gate this step
+  wrote — "none within 10 %, which is phase B's go" — did not fire.
+- **Cause 1 was mostly cause 3.** The configuration the field reported on measured **×1.59** and **×1.47** the
+  HD's canopy mass; of that 1.59, the CLASS is most (blend → cutout is ×1.24 → ×0.97 on the same cards). The
+  plan's opening `1 − 0.45⁴ ≈ 96 %` assumed the four cards' opaque texels are independent — they are four
+  projections of the same canopy, so their union is nothing like that.
+- **What the numbers now say to watch is the other direction**: `tree7vbig`'s LOD is 14 % THINNER than its HD,
+  and on the `sa` target partial coverage below reference 100 is discarded rather than faded, which thins it
+  further. That is the same field question step 01 left open, and it now has a second reason to be asked.
 
 ### 04 — phase B: one projection from every angle (OpenSA)
 

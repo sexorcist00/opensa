@@ -1,27 +1,17 @@
-import { stockPrelightColor } from '@opensa/lod-common/prelight';
-import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 /**
  * Bake one or more HD trees into impostor atlases IN PROCESS and measure what plan 013 judges the bake on:
  * canopy fill per card, the isolated-opaque-texel share (the white speckle) and the atlas mean RGB — seconds,
  * against a ~10 min pmb `trees` stage. Run:
  *   npx tsx scripts/debug/impostor-atlas-census.ts sm_veg_tree5 sm_veg_tree7vbig [--tex 512] [--ss 4] [--png <dir>]
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { DecodedTexture, HdTree, Impostor, TreeLodConfig } from '../../tools/lod-trees-generator/src/core';
+import type { HdTree, Impostor, TreeLodConfig } from '../../tools/lod-trees-generator/src/core';
 
-import {
-  applyTrunkPrelight,
-  loadTextures,
-  loadTree,
-  openTemplateArchive,
-} from '../../tools/lod-trees-generator/src/adapters/gta-sa/io';
 import { config as defaultConfig } from '../../tools/lod-trees-generator/src/config';
 import { encodePng, renderImpostor } from '../../tools/lod-trees-generator/src/core';
-
-const GAME_DIR = 'game-src/original';
-const HD_DIR = 'mods-src/original/vegetation';
+import { loadHdTree } from '../lib/vegetation';
 /** A texel counts as canopy when the game's own alpha test would keep it (SA's foliage reference). */
 const OPAQUE = 128;
 /** The canopy is the upper share of a card's silhouette box — below it the trunk dominates. */
@@ -98,20 +88,7 @@ function argValue(flag: string): string | undefined {
 }
 
 function bake(model: string, config: TreeLodConfig): { impostor: Impostor; ms: number; tree: HdTree } {
-  const dff = join(HD_DIR, `${model}.dff`);
-  if (!existsSync(dff)) {
-    throw new Error(`no HD model at ${dff}`);
-  }
-  const bytes = new Uint8Array(readFileSync(dff));
-  // A tree's materials routinely name textures that live in ANOTHER mod TXD of the folder (shared leaf/bark
-  // dictionaries) — bake with only `<model>.txd` and every one of them silently comes out UNTEXTURED grey.
-  const tree = loadTree(bytes, model, resolveTextures(bytes, model));
-  // The pmb stage bakes with `--prelight`, so the census has to as well or it measures a different atlas.
-  const stock = openTemplateArchive(GAME_DIR).get(`${model.toLowerCase()}.dff`);
-  const trunk = stock ? stockPrelightColor(new Uint8Array(stock)) : null;
-  if (trunk) {
-    applyTrunkPrelight(tree, trunk);
-  }
+  const tree = loadHdTree(model);
   const started = performance.now();
   const impostor = renderImpostor(tree, config);
 
@@ -203,48 +180,6 @@ function overGrey(image: Uint8Array): Uint8Array {
 }
 function pct(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
-}
-
-/** Every texture the model's materials name, found across the HD folder's dictionaries (own TXD first). */
-function resolveTextures(dffBytes: Uint8Array, model: string): Map<string, DecodedTexture> {
-  // Read the material names off the DFF itself: baking a probe tree with no textures would print io.ts's
-  // "not in --txd → untextured" warning for every one of them, which is exactly the wrong thing to log here.
-  const wanted = new Set(
-    parseDff(dffBytes.buffer.slice(dffBytes.byteOffset, dffBytes.byteOffset + dffBytes.byteLength) as ArrayBuffer)
-      .geometries.flatMap((geometry) => geometry.materials.map((material) => material.texture?.name?.toLowerCase()))
-      .filter((name): name is string => name !== undefined),
-  );
-  const own = join(HD_DIR, `${model}.txd`);
-  const files = [
-    ...(existsSync(own) ? [own] : []),
-    ...readdirSync(HD_DIR)
-      .filter((file) => file.toLowerCase().endsWith('.txd'))
-      .map((file) => join(HD_DIR, file))
-      .filter((file) => file !== own),
-  ];
-
-  const textures = new Map<string, DecodedTexture>();
-  for (const file of files) {
-    if (wanted.size === 0) {
-      break;
-    }
-    // Cheap pre-filter: a TextureNative writes its name as plain ASCII, so a dictionary that cannot contain
-    // any wanted name is skipped without decoding it (the folder is 81 MB of DXT).
-    const raw = readFileSync(file, 'latin1');
-    if (![...wanted].some((name) => raw.includes(name))) {
-      continue;
-    }
-    for (const [name, texture] of loadTextures(file)) {
-      if (wanted.delete(name)) {
-        textures.set(name, texture);
-      }
-    }
-  }
-  if (wanted.size > 0) {
-    console.log(`  ! ${model}: ${wanted.size} texture(s) found nowhere in ${HD_DIR}: ${[...wanted].join(', ')}`);
-  }
-
-  return textures;
 }
 
 /** Stats over one card's rect in the atlas image. */
