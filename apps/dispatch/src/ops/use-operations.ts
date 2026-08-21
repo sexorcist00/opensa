@@ -7,6 +7,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GtaGround } from '../map/coords';
 import type { Operations, Selection } from './types';
 
+import { dispatchParams } from '../world/boot';
+import { seedSize } from './budget';
 import { initialOperations } from './seed';
 import { assignUnit, clearUnit, createIncidentAt, stepOperations } from './sim';
 
@@ -31,7 +33,9 @@ export interface DispatchStore {
 }
 
 export function useOperations(): DispatchStore {
-  const [ops, setOps] = useState<Operations>(() => initialOperations(performance.now()));
+  // `?units=150&calls=40` opens the board at the declared worst case — the load 201/5-02's numbers are
+  // taken at. Read once, in the initializer, so a re-render never reseeds the shift.
+  const [ops, setOps] = useState<Operations>(() => initialOperations(performance.now(), seedSize(dispatchParams())));
   const [selection, setSelection] = useState<Selection>(null);
   const [autoDispatch, setAutoDispatch] = useState(true);
 

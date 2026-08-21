@@ -14,6 +14,7 @@ import type { DebugLineSetId, Engine } from '@opensa/engine';
 import type { Operations, Selection, UnitStatus } from '../ops/types';
 import type { GtaGround } from './coords';
 
+import { UNITS_ON_SCREEN } from '../ops/budget';
 import { gtaToEngine } from './coords';
 
 export type Rgba = readonly [number, number, number, number];
@@ -21,8 +22,18 @@ export type Rgba = readonly [number, number, number, number];
 /** The line sets this layer owns, keyed by what they draw. Incident keys are `call<priority>`. */
 export type SetKey = 'call1' | 'call2' | 'call3' | 'callClosed' | 'route' | 'selection' | UnitStatus;
 
-/** Markers a single set can hold before it starts dropping them. */
-const MARKER_CAPACITY = 96;
+/**
+ * Markers a single set is ALLOCATED for. Every marker of a set shares one colour, so the worst case for any
+ * one of them is the whole board in a single status — which is why the allocation is the declared unit count
+ * ({@link UNITS_ON_SCREEN}) rather than a fraction of it.
+ *
+ * Until 2026-08-21 this was a bare `96` and a set that filled up **returned without drawing the rest**: at
+ * the 150 units 201's budget table declares, a fifth of the shift would simply not have been on the map, with
+ * no throw, no warning and nothing on screen to say a unit was missing. The buffers grow now, and the growth
+ * is counted into the inventory report — a budget is an allocation, not a ceiling
+ * (`docs/project-goals.md`, directive 2).
+ */
+const MARKER_CAPACITY = UNITS_ON_SCREEN;
 
 /**
  * The one colour table in the app — the 2D overlay reads it too, so a unit's pillar and its label chip can
@@ -56,10 +67,22 @@ const RING_SEGMENTS = 28;
 /** A degenerate segment: two identical vertices rasterize nothing, and it keeps the write non-empty. */
 const EMPTY = new Float32Array(6);
 
+/** What the layer had to do to hold the board — read by the inventory report, so a capture states it. */
+export interface BeaconStats {
+  /** Markers the largest set is allocated for. */
+  readonly capacity: number;
+  /** How many times a set has been grown past {@link MARKER_CAPACITY} since boot. Non-zero means the board
+   *  went past the declared budget and the map kept drawing it; zero means the allocation held. */
+  readonly grownSets: number;
+}
+
 export class Beacons {
   private readonly buffers = new Map<SetKey, Float32Array>();
   private readonly counts = new Map<SetKey, number>();
   private readonly engine: Engine;
+  private grownSets = 0;
+  /** Sets whose buffer outgrew its GPU allocation this frame — recreated in {@link flush}. */
+  private readonly resized = new Set<SetKey>();
   private readonly sets = new Map<SetKey, DebugLineSetId>();
 
   constructor(engine: Engine) {
@@ -78,6 +101,16 @@ export class Beacons {
     this.sets.clear();
   }
 
+  /** Allocation and growth, for the report. */
+  stats(): BeaconStats {
+    let capacity = 0;
+    for (const buffer of this.buffers.values()) {
+      capacity = Math.max(capacity, buffer.length / FLOATS_PER_MARKER);
+    }
+
+    return { capacity, grownSets: this.grownSets };
+  }
+
   /** Refill every set from the current board. Called once per frame; allocates nothing. */
   update(ops: Operations, selection: Selection): void {
     this.counts.clear();
@@ -93,6 +126,18 @@ export class Beacons {
   }
 
   private flush(): void {
+    // A grown buffer no longer fits the GPU allocation `createDebugLines` sized from the original one, and
+    // `updateDebugLines` writes without checking — so a resized set is recreated at the new size FIRST.
+    for (const key of this.resized) {
+      const buffer = this.buffers.get(key);
+      const id = this.sets.get(key);
+      if (!buffer || id === undefined) {
+        continue;
+      }
+      this.engine.destroyDebugLines(id);
+      this.sets.set(key, this.engine.createDebugLines(buffer, SET_COLORS[key], { throughDepth: true }));
+    }
+    this.resized.clear();
     for (const [key, id] of this.sets) {
       const buffer = this.buffers.get(key);
       const count = this.counts.get(key) ?? 0;
@@ -100,10 +145,30 @@ export class Beacons {
     }
   }
 
+  /** Double a full set's buffer, keeping what it already holds. Counted, so the report can say it happened. */
+  private grow(key: SetKey, needed: number): Float32Array | undefined {
+    const current = this.buffers.get(key);
+    if (!current) {
+      return undefined;
+    }
+    let length = Math.max(FLOATS_PER_MARKER, current.length);
+    while (length < needed) {
+      length *= 2;
+    }
+    const next = new Float32Array(length);
+    next.set(current);
+    this.buffers.set(key, next);
+    this.resized.add(key);
+    this.grownSets += 1;
+
+    return next;
+  }
+
   private pushMarker(key: SetKey, ground: GtaGround, pillar: number): void {
-    const out = this.buffers.get(key);
     const at = this.counts.get(key) ?? 0;
-    if (!out || at + FLOATS_PER_MARKER > out.length) {
+    const held = this.buffers.get(key);
+    const out = held && at + FLOATS_PER_MARKER > held.length ? this.grow(key, at + FLOATS_PER_MARKER) : held;
+    if (!out) {
       return;
     }
     const [x, , z] = gtaToEngine(ground);
@@ -119,14 +184,22 @@ export class Beacons {
     if (!out) {
       return;
     }
+    let buffer = out;
     let at = 0;
     for (const unit of ops.units) {
       const incident = ops.incidents.find((entry) => entry.id === unit.incident);
-      if (!incident || unit.status !== 'enRoute' || at + 6 > out.length) {
+      if (!incident || unit.status !== 'enRoute') {
         continue;
       }
-      out.set(gtaToEngine(unit.at, ROUTE_Y), at);
-      out.set(gtaToEngine(incident.at, ROUTE_Y), at + 3);
+      if (at + 6 > buffer.length) {
+        const grown = this.grow('route', at + 6);
+        if (!grown) {
+          break;
+        }
+        buffer = grown;
+      }
+      buffer.set(gtaToEngine(unit.at, ROUTE_Y), at);
+      buffer.set(gtaToEngine(incident.at, ROUTE_Y), at + 3);
       at += 6;
     }
     this.counts.set('route', at);

@@ -78,6 +78,15 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
         stream blob {report.streaming.blobMeanMs.toFixed(1)} · upload {report.streaming.uploadMeanMs.toFixed(1)} ms ·
         worst blob {report.streaming.worstBlobMs.toFixed(0)} ms · {report.streaming.cellsCreated} created
       </div>
+      <div>
+        board {report.symbology.units}u/{report.symbology.incidents}c · {report.symbology.symbols} symbols ·{' '}
+        {report.symbology.chips} chips ({report.symbology.chipsDropped} dropped)
+      </div>
+      {report.symbology.beaconGrowths > 0 && (
+        <div style={styles.inventoryWarn}>
+          beacon buffers grown {report.symbology.beaconGrowths}× past the declared budget
+        </div>
+      )}
       {report.cpu.worstFrame.bodyMs > 0 && (
         <div>
           worst body {report.cpu.worstFrame.bodyMs.toFixed(0)} ms

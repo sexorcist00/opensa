@@ -26,6 +26,19 @@ export interface HitArea {
   readonly y: number;
 }
 
+/** What one frame of symbology drew, so a capture can be read against the load it was under. */
+export interface SymbologyCounts {
+  /** Label chips drawn. */
+  readonly chips: number;
+  /** Symbols whose chip was dropped for being past {@link CHIP_MAX_DEPTH} — the decluttering, counted. */
+  readonly chipsDropped: number;
+  /** `measureText` calls this frame. It is the claim of the width cache, stated rather than asserted: with
+   *  the cache warm this is 0 however many symbols are on screen, and every new label costs exactly one. */
+  readonly measures: number;
+  /** Icons drawn — units plus calls that projected onto the canvas. */
+  readonly symbols: number;
+}
+
 /** Height above ground the unit/call icons are anchored at, so they clear the road surface. */
 const ICON_LIFT = 4;
 /** How far above the anchor the chip floats, in screen pixels. */
@@ -39,11 +52,32 @@ const FONT_SMALL = '500 10px ui-sans-serif, system-ui, -apple-system, sans-serif
 const CHIP_MAX_DEPTH = 2600;
 /** Below this canvas width a call chip drops its title and keeps the code — the list carries the rest. */
 const NARROW_CANVAS = 620;
+/** Horizontal padding inside a chip, added to the measured text width. */
+const CHIP_PADDING = 14;
+/** Distinct labels the width cache holds before it is dropped whole. */
+const WIDTH_CACHE_CAP = 512;
 /** Round distances the scale bar is allowed to show. */
 const SCALE_STEPS = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000] as const;
 
 export class SymbologyLayer {
   private areas: HitArea[] = [];
+  private counts = { chips: 0, chipsDropped: 0, measures: 0, symbols: 0 };
+  /**
+   * Chip width by label text, because `measureText` is the layer's per-symbol cost and the labels do not
+   * change: a callsign is a callsign for a whole shift. Before this, every chip re-set `ctx.font` (a font
+   * re-parse) and re-measured its own text EVERY FRAME — at the nine units the 2026-08-09 capture ran,
+   * `overlay-2d` was already the largest item in the body at 2.44 ms, more than `engine-frame`'s 2.10, and
+   * the declared worst case is 150.
+   *
+   * Bounded by construction — a label is a callsign or a call code, both drawn from a fixed board — but
+   * cleared past {@link WIDTH_CACHE_CAP} so a very long shift cannot turn it into a leak.
+   */
+  private readonly widths = new Map<string, number>();
+
+  /** What the last {@link render} drew — the inventory report's `symbology` block. */
+  counted(): SymbologyCounts {
+    return { ...this.counts };
+  }
 
   /** What sits at a CSS-pixel position, topmost first. Chips count — they are half the click target. */
   hitTest(x: number, y: number): null | { id: string; kind: 'incident' | 'unit' } {
@@ -67,6 +101,11 @@ export class SymbologyLayer {
     size: { readonly height: number; readonly width: number },
   ): void {
     this.areas = [];
+    this.counts = { chips: 0, chipsDropped: 0, measures: 0, symbols: 0 };
+    // Font and alignment are the chips' state and never vary, so they are set ONCE per frame rather than
+    // once per chip: assigning `ctx.font` re-parses the shorthand every time.
+    ctx.font = FONT;
+    ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const incident of ops.incidents) {
       this.drawIncident(ctx, projector, incident, selection, size);
@@ -75,6 +114,22 @@ export class SymbologyLayer {
       this.drawUnit(ctx, projector, unit, selection, size);
     }
     drawScaleBar(ctx, projector, ops, size);
+  }
+
+  /** The chip's width, measured once per distinct label and remembered. */
+  private chipWidth(ctx: CanvasRenderingContext2D, text: string): number {
+    const cached = this.widths.get(text);
+    if (cached !== undefined) {
+      return cached;
+    }
+    if (this.widths.size >= WIDTH_CACHE_CAP) {
+      this.widths.clear();
+    }
+    const width = ctx.measureText(text).width + CHIP_PADDING;
+    this.counts.measures += 1;
+    this.widths.set(text, width);
+
+    return width;
   }
 
   private drawIncident(
@@ -91,11 +146,24 @@ export class SymbologyLayer {
     const color = css(SET_COLORS[incidentKey(incident.status, incident.priority)]);
     const selected = selection?.kind === 'incident' && selection.id === incident.id;
     diamond(ctx, point.x, point.y, incident.status === 'closed' ? 5 : 8, color, selected);
+    this.counts.symbols += 1;
     if (point.depth > CHIP_MAX_DEPTH && !selected) {
+      this.counts.chipsDropped += 1;
+
       return;
     }
     const label = size.width < NARROW_CANVAS ? incident.code : `${incident.code} · ${incident.title}`;
-    const rect = chip(ctx, point.x, point.y - CHIP_RISE, label, color, selected, size.width);
+    const rect = chip(
+      ctx,
+      point.x,
+      point.y - CHIP_RISE,
+      label,
+      this.chipWidth(ctx, label),
+      color,
+      selected,
+      size.width,
+    );
+    this.counts.chips += 1;
     this.areas.push({ ...rect, id: incident.id, kind: 'incident' });
     this.areas.push({ height: 20, id: incident.id, kind: 'incident', width: 20, x: point.x - 10, y: point.y - 10 });
   }
@@ -119,10 +187,23 @@ export class SymbologyLayer {
     const color = css(SET_COLORS[unit.status]);
     const selected = selection?.kind === 'unit' && selection.id === unit.id;
     chevron(ctx, point.x, point.y, ahead ? Math.atan2(ahead.y - point.y, ahead.x - point.x) : 0, color, selected);
+    this.counts.symbols += 1;
     if (point.depth > CHIP_MAX_DEPTH && !selected) {
+      this.counts.chipsDropped += 1;
+
       return;
     }
-    const rect = chip(ctx, point.x, point.y - CHIP_RISE, unit.callsign, color, selected, size.width);
+    const rect = chip(
+      ctx,
+      point.x,
+      point.y - CHIP_RISE,
+      unit.callsign,
+      this.chipWidth(ctx, unit.callsign),
+      color,
+      selected,
+      size.width,
+    );
+    this.counts.chips += 1;
     this.areas.push({ ...rect, id: unit.id, kind: 'unit' });
     this.areas.push({ height: 20, id: unit.id, kind: 'unit', width: 20, x: point.x - 10, y: point.y - 10 });
   }
@@ -165,18 +246,22 @@ function chevron(
   ctx.restore();
 }
 
-/** A label chip with its leader line back to the icon. Returns the rect it occupies, for hit-testing. */
+/**
+ * A label chip with its leader line back to the icon. Returns the rect it occupies, for hit-testing.
+ *
+ * `width` comes from the caller's cache and the font is the frame's — neither is re-established here,
+ * because both are per-symbol costs at a count where the layer already dominates the frame.
+ */
 function chip(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   text: string,
+  width: number,
   color: string,
   selected: boolean,
   canvasWidth: number,
 ): { height: number; width: number; x: number; y: number } {
-  ctx.font = FONT;
-  const width = ctx.measureText(text).width + 14;
   // Clamp inside the canvas. A chip centred on an icon near the edge hangs half off screen, which on a phone
   // is most of them; the leader line stays on the icon, so the chip may slide without becoming ambiguous.
   const centre = Math.min(
@@ -201,7 +286,6 @@ function chip(
   ctx.stroke();
 
   ctx.fillStyle = '#e8eef6';
-  ctx.textAlign = 'center';
   ctx.fillText(text, centre, y + 0.5);
 
   return { height: CHIP_HEIGHT, width, x: left, y: top };
@@ -266,6 +350,10 @@ function drawScaleBar(
   ctx.fillStyle = 'rgba(232, 238, 246, 0.85)';
   ctx.textAlign = 'left';
   ctx.fillText(`${metres} m`, x, y - 12);
+  // Drawn last, so putting the chip state back costs nothing — but a caller that adds a pass after this one
+  // would otherwise inherit the scale bar's font and alignment.
+  ctx.font = FONT;
+  ctx.textAlign = 'center';
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {

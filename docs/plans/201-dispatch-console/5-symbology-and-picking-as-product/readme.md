@@ -47,6 +47,48 @@ drawn as a model by step 04, not replaced by an icon.
 
 **Owes:** draws and frame time at the declared count, desktop and phone.
 
+**THE COUNT IS DECLARED AND THE BOARD CAN REACH IT, 2026-08-21. The milliseconds are owed by
+[2/03](../2-real-device-truth/readme.md).**
+
+Three things were true when the step opened, and the expensive one is that none of them was visible:
+
+- **The 150 existed in no line of code.** It was a row in a budget table and nothing read it.
+- **The beacon buffers were `MARKER_CAPACITY = 96`, and a full set RETURNED without drawing the rest.** Every
+  marker in a set shares a colour, so the worst case for any one set is the whole board in a single status —
+  at 150 available units, a fifth of the shift would not have been on the map. No throw, no warning, no
+  missing pixel: the map just stops showing units, and the operator has no way to know which ones.
+- **The board could not be loaded past nine units on any device**, so the number this step owes could not
+  have been taken even with a phone in hand.
+
+What is in now. `UNITS_ON_SCREEN = 150` lives in one place (`apps/dispatch/src/ops/budget.ts`) and is cited
+to the budget table rather than restated. The beacon buffers are allocated at it and **grow** past it,
+counting each growth into the report — a declared budget is an ALLOCATION, never a ceiling
+([directive 2](../../../project-goals.md#2-legacy-limits-are-not-our-limits)), and the alternative is a unit
+the dispatcher cannot see. `?units=150&calls=40` seeds the board at the declared count, deterministically:
+past the nine named cars the roster is generated and scattered around the landmark table by a hash of its
+index, so two runs of the same size are the same board.
+
+The desk half is [counted](../../../benchmarks/opensa-engine/2026-08-21-dispatch-symbology-call-counts.json),
+and it is a call count rather than a timing. At 150 units + 40 calls the overlay was asking the canvas for
+**190 `measureText` calls and 190 `ctx.font` assignments every frame** — a text measurement and a font
+re-parse per chip, per frame, for labels that do not change between frames. It now asks for **151 measures
+once** (150 distinct callsigns plus the one label the forty calls share) **and 0 thereafter**, with one font
+assignment a frame. `fillText` is unchanged at one per chip, and deliberately: this step does not reduce the
+symbol count, and it should not — decluttering is [3/03](../3-the-operator-surface-on-a-phone/readme.md)'s
+rule, and taking it here would spend the budget before anyone has measured what it buys.
+
+The report gained a `symbology` block — units, calls, symbols, chips, chips dropped, `measureText` calls,
+beacon capacity and growths — for the same reason [5/01](#01--picking-off-the-debug-flag) gave `pickingMb`
+one: **1/01's `overlay-2d` at 2.44 ms cannot be read against a symbol count that was never recorded**, and
+the next capture should hand the number over rather than rely on someone remembering the load.
+
+**Still open, and named rather than quietly dropped:** the units are the chevron-and-chip pair on the 2D
+canvas, not an instanced draw. Whether an instanced layer is needed at all is a question the milliseconds at
+150 answer first — building it now would be tuning before the measurement, which is the order
+[the chain's own evidence table](../readme.md) rejects.
+
+**Touched from [the protected list](../1-the-map-profile/protected-list.md):** nothing.
+
 ### 03 — District names in the readout
 
 `map.zon` / `info.zon` and GXT are already parsed and tested —

@@ -118,6 +118,35 @@ export interface InventoryReport {
     /** `?scale=` — the engine's own knob, which shrinks the scene and bloom targets (never the swapchain). */
     readonly renderScale: number;
   };
+  /**
+   * What the SYMBOLOGY layer was carrying — a reading of the last frame before the report was taken, like
+   * `world` below rather than a mean, because the counts are a property of the board and the camera rather
+   * than of the interval.
+   *
+   * The block exists because 201/1-01 measured `overlay-2d` at **2.44 ms, the largest item in the body and
+   * more than `engine-frame`'s 2.10** — while drawing NINE units. Read alone that number says nothing: the
+   * declared worst case is 150 (201's budget table), and a capture that does not state its symbol count
+   * cannot be compared with one taken at a different zoom, let alone at a different load. `?units=` and
+   * `?calls=` set the load; this says what arrived on screen.
+   */
+  readonly symbology: {
+    /** Markers the largest beacon set is allocated for. */
+    readonly beaconCapacity: number;
+    /** Times a beacon set has been GROWN past its allocation since boot. Non-zero is not a fault — it is the
+     *  board going past the declared budget and the map still drawing every unit — but it is a number the
+     *  budget table wants to hear about. */
+    readonly beaconGrowths: number;
+    readonly chips: number;
+    /** Chips dropped for depth — the only decluttering this layer does today (3/03 owns the real rule). */
+    readonly chipsDropped: number;
+    readonly incidents: number;
+    /** `measureText` calls on that frame. 0 with a warm width cache, whatever the symbol count; one per
+     *  label the layer had never drawn before. A capture where this tracks `chips` is one where the cache
+     *  is not working. */
+    readonly measures: number;
+    readonly symbols: number;
+    readonly units: number;
+  };
   /** Human-readable reasons a column above is absent on this device. */
   readonly unavailable: readonly string[];
   /** Reasons this capture may NOT be cited as a before-table. Empty = nothing obviously wrong with it.
@@ -235,6 +264,7 @@ export class FrameInventory {
     /** `engine.cells.pickingBytes` — the host cost of the placement mapper the console picks against. */
     pickingBytes: number;
     surface: InventoryReport['surface'];
+    symbology: InventoryReport['symbology'];
   }): InventoryReport {
     const sorted = [...this.dts].sort((a, b) => a - b);
     const frames = Math.max(1, this.dts.length);
@@ -293,6 +323,7 @@ export class FrameInventory {
         worstCreateMs: this.stream.worstCreateMs,
       },
       surface: context.surface,
+      symbology: context.symbology,
       unavailable,
       warnings: warningsFor({
         bodyMeanMs,

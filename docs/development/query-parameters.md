@@ -156,6 +156,7 @@ has an opaque origin and cannot own its URL — a `content://` or `file://` host
 | `scale=` | render scale, clamped to `0.5..1` — the same manual knob `apps/web` has. It shrinks the scene and bloom targets (never the swapchain), which is the only lever that moves the `target` residency category: 34.66 MB of it at 1, 19.50 at 0.75, 8.66 at 0.5 on a 720×728 surface. Manual by decision — [the automatic ladder was measured and refused](../performance/deferred-optimizations/render-scale-tier.md) |
 | **`inventory=1`** | **201/1-01**: collect the frame before-table and show a panel with a copy button |
 | **`district=`** | the measurement district: names the capture AND, with no `at=`, opens the camera over it (`apps/dispatch/src/world/districts.ts`) |
+| **`units=` · `calls=`** | **201/5-02**: how many units and calls the board opens with (default 9 and 2). `units=150` is the worst case 201's budget table declares, and without this the board could not be loaded past the demo shift on any device — so the symbology numbers that step owes could not be taken at all. The generated roster is a hash of its index, never `Math.random`, so the same size is the same board twice |
 
 ### Taking an inventory capture
 
@@ -177,6 +178,12 @@ http://localhost:5173/dispatch.html?inventory=1&district=los-santos-centre
 `npm run phone` prints exactly this URL for whatever `DISTRICT=` it converted, and the district's name is
 enough: the opening point comes from the same table the pak rect came from, so the capture cannot be filed
 under one district while looking at another. `at=` still overrides it for ground the table does not name.
+
+For a symbology capture (201/5-02) add the load: `&units=150&calls=40`. The report's `symbology` block then
+states what reached the screen — symbols, chips, chips dropped for depth, `measureText` calls and the beacon
+buffers' capacity — so `cpu.segmentsMs`' `overlay-2d` can be read against a count rather than against a
+guess. `measures` above 0 in steady state means the label width cache is not holding and the frame time
+should not be cited.
 
 Let it settle, pan and zoom the way an operator would, then press **copy JSON**. On a LAN address the
 clipboard API is unavailable (not a secure context) and the panel drops a selected textarea instead — long

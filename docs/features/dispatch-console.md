@@ -157,10 +157,21 @@ Each now names the step that owns it, so none of them is an open-ended note.
 - **Demo mode has no model names.** Synthetic cells carry no placement mapper, so a click on a demo block
   resolves to bare ground. → picked up with the production pick capability,
   [201/5-01](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
-- **Picking stands on a debug flag.** `engine.cells.debugPicking` must be true before the first cell loads,
-  and a build defaulting debug off in production kills click-to-inspect with no error — recorded as a
-  restriction ([architecture](../restrictions/architecture.md)) in the same change.
+- ~~**Picking stands on a debug flag.**~~ **CLOSED 2026-08-12.** The flag is `engine.cells.picking`, a named
+  capability, and its cost is counted (`cells.pickingBytes` → the report's `world.pickingMb`) rather than
+  reported as free by every instrument in the repo.
   → [201/5-01](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
+- ~~**The beacon layer silently dropped markers at 96 per set.**~~ **CLOSED 2026-08-21.** The buffers are
+  allocated at the declared 150 (`src/ops/budget.ts`) and grow past it, counting each growth into the report:
+  a unit the dispatcher cannot see is not an acceptable way to hit a budget. `?units=150&calls=40` loads the
+  board to the declared count — until then it could not be loaded past the nine-car demo shift on any device.
+  → [201/5-02](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
+- **The units are not an instanced symbol layer yet.** They are a chevron and a label chip drawn per unit on
+  the 2D canvas. The per-symbol canvas cost is down (text measured once per distinct label, font set once a
+  frame, instead of both per chip per frame —
+  [the counts](../benchmarks/opensa-engine/2026-08-21-dispatch-symbology-call-counts.json)), and `fillText`
+  is still one call per chip. Whether that needs to become an instanced draw is a question the milliseconds
+  at 150 units answer first. → [201/5-02](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
 - **The mobile evidence is emulated, not hardware.** The phone runs below are an emulated Pixel 7 and a
   simulated mobile adapter; the one real device in the repo's record (Mali-G51, 360×800 DPR 2) ran the
   synthetic `?demo=1` city, not a streamed world. → the real-district row is
@@ -169,6 +180,15 @@ Each now names the step that owns it, so none of them is an open-ended note.
 ## Verification
 
 - `apps/dispatch/src/ops/sim.test.ts`, `src/map/coords.test.ts` — the board and the coordinate conversion.
+- `apps/dispatch/src/ops/budget.test.ts`, `src/ops/seed.test.ts` — the declared count off the query string,
+  and a board seeded to it: unique ids, scattered rather than stacked, and the same board on a second run.
+- `apps/dispatch/src/map/overlay-2d.test.ts` — the symbology layer against a stub 2d context, so what is
+  pinned is the WORK IT ASKS FOR rather than a time this machine happens to take: a label is measured once
+  and never again, the font is set a fixed number of times per frame rather than once per chip, and the
+  counts it reports match what it drew. Both halves were verified by reintroducing the defect.
+- `apps/dispatch/src/map/beacons.test.ts` — the whole declared budget fits in ONE status without growing, a
+  board past it grows instead of dropping, and a grown buffer never writes past the set's allocation (which
+  on a real device is a WebGPU validation error, not a dropped marker).
 - `apps/dispatch/src/map/map-camera.test.ts` — `applyPose`: that it is what the constructor does (so a fresh
   camera and an applied pose agree), that it round-trips a saved pose, and that it answers its own bound to
   anything past it — the test that pinned `TOP_DOWN_PITCH` at a hundredth of a radian short of vertical

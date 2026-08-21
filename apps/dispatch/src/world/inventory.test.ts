@@ -55,6 +55,16 @@ const CONTEXT = {
   hasTimestamps: true,
   pickingBytes: 0,
   surface: { cssHeight: 364, cssWidth: 360, deviceHeight: 728, deviceWidth: 720, dpr: 2, renderScale: 1 },
+  symbology: {
+    beaconCapacity: 150,
+    beaconGrowths: 0,
+    chips: 9,
+    chipsDropped: 2,
+    incidents: 2,
+    measures: 0,
+    symbols: 11,
+    units: 9,
+  },
 };
 
 describe('FrameInventory', () => {

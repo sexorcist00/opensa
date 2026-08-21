@@ -163,6 +163,20 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     throw new Error('overlay canvas has no 2d context');
   }
 
+  /** The symbology block of the report: what the last frame drew, plus how the beacon buffers held up. */
+  const symbologyCounts = (): InventoryReport['symbology'] => {
+    const ops = options.ops();
+    const beaconStats = beacons.stats();
+
+    return {
+      beaconCapacity: beaconStats.capacity,
+      beaconGrowths: beaconStats.grownSets,
+      incidents: ops.incidents.length,
+      units: ops.units.length,
+      ...symbology.counted(),
+    };
+  };
+
   const unbind = bindInput({ camera, canvas, engine, options, symbology });
   // 201/1-01. Off unless asked for: draining the span recorder is cheap, but a mode that measures by default
   // is a mode nobody can trust to have measured nothing.
@@ -272,6 +286,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           dpr,
           renderScale: engine.renderScale,
         },
+        symbology: symbologyCounts(),
       });
     },
     locate(at: GtaGround): void {

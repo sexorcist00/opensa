@@ -6,6 +6,8 @@
  */
 import type { Incident, IncidentPriority, Operations, Unit } from './types';
 
+import { DEFAULT_CALLS, DEFAULT_SHIFT } from './budget';
+
 /** Named places calls come in at, GTA coords. Los Santos, roughly clockwise from Ganton. */
 export const LANDMARKS: readonly { readonly at: readonly [number, number]; readonly name: string }[] = [
   { at: [2495, -1687], name: 'Grove Street, Ganton' },
@@ -48,23 +50,47 @@ export const CALL_TYPES: readonly {
   { code: '10-15', priority: 2, title: 'Prisoner transport' },
 ];
 
-/** The shift on duty when the board opens. */
-export function initialOperations(now: number): Operations {
-  const units: Unit[] = [
-    unit('u1', '1-ADAM-12', 'patrol', 0),
-    unit('u2', '1-ADAM-20', 'patrol', 3),
-    unit('u3', '2-LINCOLN-7', 'patrol', 7),
-    unit('u4', '2-LINCOLN-9', 'patrol', 11),
-    unit('u5', '3-KING-4', 'patrol', 15),
-    unit('u6', 'MEDIC-3', 'ambulance', 5),
-    unit('u7', 'MEDIC-7', 'ambulance', 17),
-    unit('u8', 'ENGINE-51', 'fire', 9),
-    unit('u9', 'TRUCK-9', 'fire', 13),
-  ];
+/** The nine named cars a demo shift opens with. Past these the roster is generated — see {@link fillUnit}. */
+const ROSTER: readonly { readonly callsign: string; readonly kind: Unit['kind']; readonly landmark: number }[] = [
+  { callsign: '1-ADAM-12', kind: 'patrol', landmark: 0 },
+  { callsign: '1-ADAM-20', kind: 'patrol', landmark: 3 },
+  { callsign: '2-LINCOLN-7', kind: 'patrol', landmark: 7 },
+  { callsign: '2-LINCOLN-9', kind: 'patrol', landmark: 11 },
+  { callsign: '3-KING-4', kind: 'patrol', landmark: 15 },
+  { callsign: 'MEDIC-3', kind: 'ambulance', landmark: 5 },
+  { callsign: 'MEDIC-7', kind: 'ambulance', landmark: 17 },
+  { callsign: 'ENGINE-51', kind: 'fire', landmark: 9 },
+  { callsign: 'TRUCK-9', kind: 'fire', landmark: 13 },
+];
+
+/** Every fourth generated car is an ambulance and every seventh a truck — a roster, not one long patrol. */
+const FILL_KINDS: readonly Unit['kind'][] = ['patrol', 'patrol', 'patrol', 'ambulance', 'patrol', 'patrol', 'fire'];
+
+/** How far a generated car is scattered around its landmark, world units. Nine cars stacked on one corner
+ *  would measure a symbol count without measuring the decluttering it causes. */
+const SCATTER = 220;
+
+/**
+ * The shift on duty when the board opens.
+ *
+ * `size` is what `?units=`/`?calls=` resolved to ({@link seedSize}). Past the nine named cars the roster is
+ * GENERATED and scattered around the landmark table, because the console's declared worst case is 150 units
+ * (201's budget table) and a board that cannot be loaded to it cannot be measured at it. Deterministic: the
+ * scatter is a hash of the index, never `Math.random`, so two runs of the same size are the same board.
+ */
+export function initialOperations(now: number, size = { calls: DEFAULT_CALLS, units: DEFAULT_SHIFT }): Operations {
+  const units: Unit[] = [];
+  for (let i = 0; i < size.units; i += 1) {
+    units.push(i < ROSTER.length ? unit(`u${i + 1}`, ROSTER[i]) : fillUnit(i));
+  }
+  const incidents: Incident[] = [];
+  for (let i = 0; i < size.calls; i += 1) {
+    incidents.push(makeIncident(`i${i + 1}`, now - i * 45_000, 1 + i * 4));
+  }
 
   return {
-    incidents: [makeIncident('i1', now, 1), makeIncident('i2', now - 90_000, 5)],
-    log: ['Shift start — 9 units on duty'],
+    incidents,
+    log: [`Shift start — ${units.length} units on duty`],
     now,
     units,
   };
@@ -94,14 +120,42 @@ export function makeIncident(
   };
 }
 
-function unit(id: string, callsign: string, kind: Unit['kind'], landmark: number): Unit {
+/** A generated car past the named roster: `4-XRAY-<n>`, scattered deterministically around a landmark. */
+function fillUnit(index: number): Unit {
+  const place = LANDMARKS[index % LANDMARKS.length].at;
+  const kind = FILL_KINDS[index % FILL_KINDS.length];
+
   return {
-    at: LANDMARKS[landmark % LANDMARKS.length].at,
-    callsign,
+    at: [place[0] + jitter(index * 2 + 1) * SCATTER, place[1] + jitter(index * 2 + 2) * SCATTER],
+    callsign: `${prefix(kind)}-${index + 1}`,
+    heading: (jitter(index) + 1) * Math.PI,
+    id: `u${index + 1}`,
+    incident: null,
+    kind,
+    status: 'available',
+    target: null,
+  };
+}
+
+/** A stable −1..1 from an integer — enough scatter to look like a shift, and the same board every run. */
+function jitter(seed: number): number {
+  const mixed = Math.sin(seed * 12.9898) * 43_758.5453;
+
+  return (mixed - Math.floor(mixed)) * 2 - 1;
+}
+
+function prefix(kind: Unit['kind']): string {
+  return kind === 'ambulance' ? 'MEDIC' : kind === 'fire' ? 'ENGINE' : '4-XRAY';
+}
+
+function unit(id: string, entry: (typeof ROSTER)[number]): Unit {
+  return {
+    at: LANDMARKS[entry.landmark % LANDMARKS.length].at,
+    callsign: entry.callsign,
     heading: 0,
     id,
     incident: null,
-    kind,
+    kind: entry.kind,
     status: 'available',
     target: null,
   };
