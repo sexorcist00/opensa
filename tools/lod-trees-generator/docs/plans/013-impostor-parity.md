@@ -1,6 +1,6 @@
 # 013 — Impostor parity: why every tree LOD looks nothing like its HD, and the fixes in order
 
-**Status: PLANNED 2026-08-21**, not started. Reach: `tools/lod-trees-generator` (the rule), `tools/rw-codec`
+**Status: IN PROGRESS** — step 01 BUILT 2026-08-21 (ledger below), 02–05 open. Reach: `tools/lod-trees-generator` (the rule), `tools/rw-codec`
 (the DXT5 endpoint fit), `tools/map-placement` (the impostor IDE row), and — phase B only, OpenSA target only —
 `packages/cell-weld` + `packages/engine`.
 
@@ -89,6 +89,47 @@ pose is the offline instrument — it is what produced the report and it is repr
   — both go into the bottle and the user looks.
 - **Done when** the isolated-texel share drops below 1 % on the two reference trees and the atlas mean RGB
   stays within ±3 of today's (the bake got smoother, not darker or lighter).
+
+#### 01 — BUILT 2026-08-21 (not yet field-verified; that is step 05)
+
+Numbers, conditions and the full tables: [`docs/benchmarks/tools/2026-08-21-lod-trees-impostor-bake.md`](../../../../docs/benchmarks/tools/2026-08-21-lod-trees-impostor-bake.md).
+Instrument: `scripts/debug/impostor-atlas-census.ts` — bakes a named tree IN PROCESS in ~2 s (a full `trees`
+stage is ~10 min), and it reproduced the plan's own baseline before anything was changed, which is the only
+reason its "after" is worth reading.
+
+| | `sm_veg_tree5` | `sm_veg_tree7vbig` |
+| --- | ---: | ---: |
+| speckle (α ≥ 128 with 4-neighbour mean < 64) | 6.0 % → **1.1 %** | 3.6 % → **0.4 %** |
+| canopy MASS (mean α over the canopy box) | 33.5 % → 33.7 % | 36.8 % → 36.9 % |
+| canopy fill (α ≥ 128) | 51.1 % → 40.9 % | 56.7 % → 47.0 % |
+| median luminance / alpha-weighted RGB | 42 → 42 · 44/47/35 → 44/47/35 | 64 → **67** · 66/77/58 → 64/73/56 |
+| bake, 4 cards at 512² | 285 ms → 2 135 ms | 401 ms → 2 533 ms |
+
+**Three things the step learned that the plan had wrong, and they are the step:**
+
+1. **Alpha may NOT come from the mip.** Sampling alpha at the footprint-matched level and putting it through
+   the 0.5 test dissolves the canopy — 51 % → 20 % fill, with the survivors MORE speckled than the point
+   sample (17.9 %). The mip supplies COLOUR; the cutout decision stays at the base level and the sub-samples
+   vote on it `S²` times per texel. That is the whole of `sample()`'s split, and it is commented there.
+2. **The mip chain is built over CUTOUT alpha (0/255), not raw alpha.** `downsample` weights colour by alpha,
+   so a leaf's sub-threshold edge texels — dark, and never drawn — were pulling the mean down: −6 green on
+   `tree7vbig`. Binarising the alpha the chain is built from is what put the colour back.
+3. **The old metric stops working the moment alpha is continuous.** "Isolated opaque texel" RISES (6.0 →
+   10.9 %) because antialiased neighbours fall below 128, and the atlas mean RGB FALLS because the bright
+   tail it was measuring is the defect being removed. The measures that survive are canopy MASS (unchanged,
+   so the canopy was redistributed and not thinned) and the median luminance (42 → 42, 64 → **67**: the bake
+   is if anything lighter at the middle). Both are in the census script now.
+
+Settled by measurement: `superSample` defaults to **2**, not the 4 the plan opened with — 4 buys 1.1 → 0.5 %
+and 0.4 → 0.1 % for ×25 the bake instead of ×7.1 (stage ~2 min → ~9–10 min at 2, ~35 min at 4). `--ss` is a
+CLI flag, so step 05's field round can raise it without a code change. **Still open for the field**: on the
+`sa` target the sorted pass alpha-tests at reference 100, so partial coverage at a canopy edge is DISCARDED
+rather than faded — that is why `canopyFill` fell while the mass did not, and whether the gamma atlas wants
+re-thresholding is the question step 05 puts in front of the user.
+
+Also landed: 6 rings of colour dilation per TILE (never across the finished atlas — a card may not bleed into
+its neighbour), and `rw-codec`'s `endpoints()` now fits over visible texels for every format with an alpha
+channel: worst green error on a canopy-edge block **26 → 10** (BC1's own ramp is the remaining 10).
 
 ### 02 — one class, one draw, wind
 

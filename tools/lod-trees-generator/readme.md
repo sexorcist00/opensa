@@ -24,6 +24,10 @@ tsx tools/lod-trees-generator/src/cli.ts --out <path> --game <path> [--in <dir>]
 - `--game` — path to the game data (`gta.dat` + `data/` + `models/gta3.img`)
 - `--tex` / `--cards` — per-tree atlas size (px) / cards per tree (defaults in `config.ts`)
 - `--draw` — impostor LOD draw distance in game units (default `1500`); how far the LOD stays visible
+- `--ss` — sub-samples per atlas texel on each axis, a power of two (default `2`, `1` = off). The card bake
+  is a software rasterizer with no MSAA, so a thin leaf quad takes a texel whole or misses it; the sub-samples
+  vote on the same cutout decision and the tile resolves to coverage (plan 013 step 01). Bake-time cost only,
+  and it grows with the SQUARE — ×7.1 at `2`, ×25 at `4`
 - `--prelight [info.json]` — copy the stock model's prelight (day ambient) onto each swapped custom tree so it
   isn't black/washed-out next to stock geometry. Applied **trunk-only** (opaque surfaces; foliage keeps its own
   prelit) and to **both** the HD and the baked LOD atlas, so the impostor isn't over-bright vs the corrected HD.

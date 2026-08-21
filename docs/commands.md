@@ -279,6 +279,9 @@ npx tsx tools/map-optimizer/src/cli.ts --game <dir> --out <dir>
 # Tree LOD impostors
 npx tsx tools/lod-trees-generator/src/cli.ts --in ./mods-src/vegetation --game <dir> --out <dir> \
   --prelight ./mods-src/vegetation/prelight/info.json --tex 512
+#   --ss <n>  sub-samples per atlas texel on each axis, a power of two (default 2, 1 = off). The card bake
+#   has no MSAA, so a thin leaf quad takes a texel whole or misses it — the atlas speckle plan 013 measured.
+#   Bake-time only, and it grows with the SQUARE: ×7.1 at 2, ×25 at 4 (docs/benchmarks/tools/2026-08-21-…).
 
 # Procobj → static IPL + LODs ([--target sa|opensa]: the host the layer's cost is reported against; pmb passes
 # its own. [--density n]: scatter cutoff, 1 = vanilla, max 3 — the run prints the density + rows/object it built)
