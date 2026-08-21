@@ -120,6 +120,12 @@ reason its "after" is worth reading.
    so the canopy was redistributed and not thinned) and the median luminance (42 → 42, 64 → **67**: the bake
    is if anything lighter at the middle). Both are in the census script now.
 
+Stage cost, measured on the `sa` build rather than extrapolated: `trees` **83.4 s → 268.4 s (×3.2)** for 184
+impostors over 9 825 tree instances. The first extrapolation here said "~9–10 min" and the first build said
+32 min — both wrong, and the gap was a defect of step 01's own: the chain was wrapped per TREE while the stage
+hands one folder-wide texture map to all of them (fixed by memoising it on the texture; the atlas is unchanged
+to the digit).
+
 Settled by measurement: `superSample` defaults to **2**, not the 4 the plan opened with — 4 buys 1.1 → 0.5 %
 and 0.4 → 0.1 % for ×25 the bake instead of ×7.1 (stage ~2 min → ~9–10 min at 2, ~35 min at 4). `--ss` is a
 CLI flag, so step 05's field round can raise it without a code change. **Still open for the field**: on the
@@ -164,6 +170,15 @@ channel: worst green error on a canopy-edge block **26 → 10** (BC1's own ramp 
   vegetation pipeline". Recovered from gta-reversed and recorded as
   [`docs/gta-sa-original/tree-wind-sway.md`](../../../../docs/gta-sa-original/tree-wind-sway.md): the bit
   costs the same on an 8-triangle card as on the tree, and `IS_PALM` adds its own wind term on top.
+- **The build found the half this step MISSED, and it is the bigger half.** In the built `lodtrees.ide`:
+  **67 rows gained `IS_TREE`, 10 `IS_PALM`, and 107 of 184 gained nothing** — because their stock HD row
+  carries no vegetation bit either. On the `sa` target that is correct (SA reads only flags, so HD and LOD
+  behave alike). **In OpenSA it is not**: `swayKindFor` falls back to a NAME list (`@opensa/game`'s
+  `WIND_MODELS`), and **105 of those 107 sources are on it** — so the tree swayed and welded CUTOUT while its
+  own impostor, named `lodash1_hi`, stood still in a soft-blend pass. Fixed in `packages/cell-weld`: a model
+  whose own name misses the list is asked again with a leading `lod` stripped, which is the same rule as the
+  flags inheritance — the LOD is whatever its source is. Covered by `isVegetationDef` tests, including that
+  a stock building LOD (`lodger01_law`) does not become vegetation.
 - **What is NOT verified yet, and honestly**: the "done when" of this step is a weld statistic and a field
   look, and both need a build that carries the new `lodtrees.ide` — no pmb run has happened since. The
   mechanism either side of the row is unit-tested (`lodVegetationFlags`, the emitted row per output shape,

@@ -86,8 +86,19 @@ texture, plus removing the per-fragment allocations from the sampler:
 | chain memoised | 2 363 ms | 2 761 ms | 2 172 ms | 3 792 ms |
 | + allocation-free sampler | **1 713 ms** | **2 065 ms** | **1 698 ms** | **2 676 ms** |
 
-The atlas is unchanged by both (the census reports the same numbers to the digit). Projected over the roster
-that is ~10 min of bake; the stage's own measured time from the next build replaces this line.
+The atlas is unchanged by both (the census reports the same numbers to the digit).
+
+**The stage, measured on the rebuild:**
+
+| `trees` stage, `sa` target, 184 impostors / 9 825 tree instances | wall-clock |
+| --- | ---: |
+| 2026-08-20, before this plan | 83.4 s |
+| 2026-08-21, step 01 as first written (chain per tree) | 1 940.5 s (×23) |
+| 2026-08-21, after the memo + the allocation-free sampler | **268.4 s (×3.2)** |
+
+So the supersampled, mip-aware bake costs the `sa` build ~3 minutes, not the ~8 of the first extrapolation
+and not the 30 of the defect. (The roster is 184 trees here, not the 286 the extrapolation assumed — another
+reason that number was never going to land.)
 
 **The lesson, again**: a per-item cost measured on a fixture that does not share what the pipeline shares is
 not the pipeline's cost. The 9-tree sample was honest about the bake and blind to the stage.
