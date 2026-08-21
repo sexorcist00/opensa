@@ -144,6 +144,33 @@ channel: worst green error on a canopy-edge block **26 → 10** (BC1's own ramp 
   impostor" line becomes 8.
 - **Done when** the viewer welds `lodsm_veg_tree5` CUTOUT (the weld stats say so) and it sways.
 
+#### 02 — BUILT 2026-08-21 (the weld/field confirmation rides with the next build)
+
+- **The row inherits the bits, and nothing is per model name.** `sourceObjectRows` (was `sourceObjectIds`)
+  now returns the FLAGS of every gta.dat IDE row that defines a source tree beside its ids, OR'd when a model
+  is defined more than once — a mod's duplicate row without the bits cannot strip what another row grants.
+  `lodVegetationFlags(sourceFlags)` (`map-placement/ide.ts`) = `DEFAULT_FLAGS | (sourceFlags & (IS_TREE |
+  IS_PALM))`, and `buildLodIde` takes a per-model flags map because each impostor replaces a different row.
+  Measured on the integration game-dir: HD `0x202084` → LOD row `2105476` (was `2097284`), HD `0x204084` →
+  `2113668`, HD `0x200048` (double-sided + additive) → unchanged. Both output shapes carry it (`--out` and
+  `--modloader`).
+- **One winding per card**: `sm_veg_tree5`'s LOD goes **16 → 8 triangles**, its DFF 2 844 → 2 684 B. The row
+  already carries `DISABLE_BACKFACE_CULLING` and both engines read it — real SA on the model info, OpenSA at
+  `weld.ts:1015` — so the mirrored copy was never a second face, only the same one drawn twice (and in a
+  blend path with no depth write, composited twice).
+- **The `sa` half of the flag was checked before it was written, not after**: SA's sway is
+  `CEntity::ModifyMatrixForTreeInWind`, called from `PreRender` on `SwaysInWind()`, and it shears the
+  entity's matrix `at` vector rather than the vertices — the plan's own note guessed "a vertex shader on the
+  vegetation pipeline". Recovered from gta-reversed and recorded as
+  [`docs/gta-sa-original/tree-wind-sway.md`](../../../../docs/gta-sa-original/tree-wind-sway.md): the bit
+  costs the same on an 8-triangle card as on the tree, and `IS_PALM` adds its own wind term on top.
+- **What is NOT verified yet, and honestly**: the "done when" of this step is a weld statistic and a field
+  look, and both need a build that carries the new `lodtrees.ide` — no pmb run has happened since. The
+  mechanism either side of the row is unit-tested (`lodVegetationFlags`, the emitted row per output shape,
+  `swayKindFor`/`isVegetationDef` reading the same bits), so what remains is confirmation, not design. The
+  cheap `sa` check the plan names (`img-patch.ts` with one re-baked impostor DFF) is worth spending in the
+  same round as step 03's field pass rather than alone.
+
 ### 03 — density, measured before it is decided
 
 - Instrument: a headless pair of renders per tree (HD vs LOD, the viewer's `?lod=` with a fixed pose) from 8

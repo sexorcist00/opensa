@@ -131,7 +131,7 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   screen coverage**. `veg_palm04` is the extreme: 105× the triangles for LESS painted area than stock
   (524 vs 621 m²), average triangle 0.104 m² (~32 cm), i.e. under the rasteriser's 2×2 quad at play
   distance. There is no duplication to blame — each DFF is 1 atomic / 1 geometry. The chain also has no mid
-  LOD: 5000 triangles HD → 16-triangle impostor, carried to a stock `vegepart.ide` draw distance of 150 that
+  LOD: 5000 triangles HD → 8-triangle impostor, carried to a stock `vegepart.ide` draw distance of 150 that
   was sized for 48-triangle models.
 - **A placement-only mod costs nothing until the `trees` stage swaps the models under it.** The mod
   "39. Green Piece 1.47" shipped no models at all — one IPL, 233 `inst` lines, installed into

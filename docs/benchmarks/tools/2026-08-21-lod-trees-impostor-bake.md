@@ -74,6 +74,23 @@ A 9-tree sample across the roster's shapes (330 → 16 092 HD triangles, one por
 stage goes from ~2 min to roughly 9–10 min — bake-time only, nothing at runtime. `--ss 4` would put it
 near 35 min, which is what the 0.5 %/0.1 % row costs.
 
+## Step 02 — one winding per card
+
+Same instrument path (`buildCardGeometry` + `encodeLodDff`, `sm_veg_tree5`, 4 cards):
+
+| | triangles | LOD DFF |
+| --- | ---: | ---: |
+| two windings (before) | 16 | 2 844 B |
+| one winding (after) | **8** | **2 684 B** |
+
+The bytes are not the point (−160 B × ~286 trees ≈ −45 KB); the draw is. The IDE row already carried
+`DISABLE_BACKFACE_CULLING`, which both engines read, so the mirrored copy was the same face drawn twice —
+and in the impostor's blend path, with no depth write, every partial-coverage texel composited twice.
+
+The same step gives each impostor row the vegetation bits of the HD row it replaces: on the integration
+game-dir, HD `0x202084` → LOD `2105476` (was `2097284`), HD `0x204084` → `2113668`, and an HD row with
+double-sided + additive but no vegetation bit leaves the LOD row unchanged.
+
 ## DXT5 endpoints (`rw-codec`)
 
 Unit measurement, one 4×4 block of eight transparent-black texels plus eight leaf greens 100–156:

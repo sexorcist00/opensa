@@ -1,7 +1,7 @@
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
 
 import { applyStockPrelight, type PrelightInfo } from '@opensa/lod-common/prelight';
-import { allocateLodIds, buildLodIde, lodAlias, patchGtaDat } from '@opensa/map-placement/ide';
+import { allocateLodIds, buildLodIde, lodAlias, lodVegetationFlags, patchGtaDat } from '@opensa/map-placement/ide';
 import { retxdSwappedModels, writeTxdpHdMod } from '@opensa/map-placement/retxd';
 import { buildLinkedAreas, type LinkedPair } from '@opensa/map-placement/streamed-areas';
 import { openArchive } from '@opensa/renderware/archive/img-archive';
@@ -110,7 +110,12 @@ export function placeMap(options: PlaceOptions): void {
   const { gamePath, impostors, modloader, outPath } = options;
   const dat = parseGtaDat(readFileSync(join(gamePath, 'data', 'gta.dat'), 'utf8'));
   const registry = buildRegistry(impostors, allObjectIds(gamePath, dat));
-  const idToImpostor = sourceObjectIds(gamePath, dat, new Map(registry.map((r) => [r.source, r])));
+  const sources = sourceObjectRows(gamePath, dat, new Map(registry.map((r) => [r.source, r])));
+  const idToImpostor = sources.ids;
+  // Each impostor's IDE row inherits the vegetation bits of the HD row it stands in for (plan 013 step 02).
+  const ideFlags = new Map(
+    registry.map((r) => [r.alias, lodVegetationFlags(sources.flags.get(r.source) ?? 0)] as const),
+  );
   const procModels = procObjModels(gamePath);
   const archive = openArchive(readBytes(join(gamePath, 'models', 'gta3.img')));
 
@@ -120,7 +125,7 @@ export function placeMap(options: PlaceOptions): void {
   const overflow = buildLinkedAreas(result.overflow, OVERFLOW_AREA_BASE);
 
   if (modloader) {
-    placeModloader(options, { archive, dat, overflow, procModels, registry, result });
+    placeModloader(options, { archive, dat, ideFlags, overflow, procModels, registry, result });
 
     return;
   }
@@ -141,7 +146,7 @@ export function placeMap(options: PlaceOptions): void {
     writeText(join(outPath, idePath.replace(/\\/g, '/')), text);
   }
   const ids = new Map(registry.map((r) => [r.alias, r.id]));
-  writeText(join(outPath, IDE_REL), buildLodIde(ids, 'lodtrees', options.drawDistance));
+  writeText(join(outPath, IDE_REL), buildLodIde(ids, 'lodtrees', options.drawDistance, ideFlags));
   let gtaDat = patchGtaDat(readFileSync(join(gamePath, 'data', 'gta.dat'), 'utf8'), IDE_DAT);
   if (overflow.datLines.length > 0) {
     const eol = gtaDat.includes('\r\n') ? '\r\n' : '\n';
@@ -507,13 +512,14 @@ function placeModloader(
   ctx: {
     archive: ImgArchive;
     dat: GtaDat;
+    ideFlags: ReadonlyMap<string, number>;
     overflow: ReturnType<typeof buildLinkedAreas>;
     procModels: ReadonlySet<string>;
     registry: readonly Impostor[];
     result: ReturnType<typeof editAreas>;
   },
 ): void {
-  const { archive, dat, overflow, procModels, registry, result } = ctx;
+  const { archive, dat, ideFlags, overflow, procModels, registry, result } = ctx;
   const { drawDistance, outPath } = options;
   const lodOut = join(outPath, 'lod');
 
@@ -525,7 +531,7 @@ function placeModloader(
     writeText(join(lodOut, 'data', 'maps', file), text); // overflow areas — NEW files, registered via loader.txt
   }
   const ids = new Map(registry.map((r) => [r.alias, r.id]));
-  writeText(join(lodOut, IDE_REL), buildLodIde(ids, 'lodtrees', drawDistance));
+  writeText(join(lodOut, IDE_REL), buildLodIde(ids, 'lodtrees', drawDistance, ideFlags));
   const loaderLines = [
     LOADER_TXT.trimEnd(),
     ...overflow.datLines.map((line) => line.replace(/\\/g, '/').replace('DATA/MAPS', 'data/maps')),
@@ -563,13 +569,18 @@ function readBytes(path: string): Uint8Array {
   return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 }
 
-/** Object ids whose model is one of the source trees → its impostor record. */
-function sourceObjectIds(
+/**
+ * The gta.dat IDE rows that define a source tree: its object ids → the impostor record, and the FLAGS that row
+ * carries → the source model. A model defined by more than one row (a mod redefining a stock tree) contributes
+ * the OR of them, so a duplicate row without the vegetation bits cannot strip what another row grants.
+ */
+function sourceObjectRows(
   gamePath: string,
   dat: GtaDat,
   bySource: ReadonlyMap<string, Impostor>,
-): Map<number, Impostor> {
+): { flags: Map<string, number>; ids: Map<number, Impostor> } {
   const ids = new Map<number, Impostor>();
+  const flags = new Map<string, number>();
   for (const idePath of dat.ide) {
     const file = datChildUrl(gamePath, idePath);
     if (!existsSync(file)) {
@@ -577,14 +588,16 @@ function sourceObjectIds(
     }
     const text = readFileSync(file, 'utf8');
     for (const def of [...parseIde(text), ...parseTimedObjects(text)]) {
-      const imp = bySource.get(def.modelName.toLowerCase());
+      const model = def.modelName.toLowerCase();
+      const imp = bySource.get(model);
       if (imp) {
         ids.set(def.id, imp);
+        flags.set(imp.source, (flags.get(imp.source) ?? 0) | def.flags);
       }
     }
   }
 
-  return ids;
+  return { flags, ids };
 }
 
 /**
