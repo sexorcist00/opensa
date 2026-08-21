@@ -138,14 +138,11 @@ Full run 2026-08-21, `--exclude opensa`, resumed twice (see below): **2 026 s to
 | procobj | 2.9 | 3.5 |
 | total | 676.1 | 2 026 |
 
-**`trees` is this plan's (×3.2, above). `sa` is NOT, and it is not explained yet.** Nothing in steps 01–03
-touches the `sa` stage — `rw-codec`'s endpoint change is the only shared code, and for an opaque block it
-selects the same 16 texels it always did. The one deliberate difference in this run is mine and unrelated to
-the plan: the stage was resumed with `NODE_OPTIONS=--max-old-space-size=8192` instead of the npm script's
-`12288`, while testing (and disproving) an out-of-memory theory. A stack sample taken 23 minutes in showed
-V8 map-normalisation and scavenging, and CPU time tracked wall-clock 1:1 (98.8 s of CPU in 97 s), so the
-stage was working, not stuck. **The next full build must run the standard script and its `sa` row compared
-before anything is concluded.**
+**`trees` is this plan's (×3.2, above). `sa` was NOT — and the next build settled it.** The stage had been
+resumed with `NODE_OPTIONS=--max-old-space-size=8192` instead of the npm script's `12288`, while testing (and
+disproving) an out-of-memory theory. Run again through the standard script it came back at **365.0 s**
+against the 373 s baseline. So the 1 503 s was the smaller heap, not the plan, not the disk and not the
+machine; nothing in steps 01–03 touches that stage, and now nothing has to be taken on that argument alone.
 
 The run also cost three killed attempts, none of them the build's fault: a background task with no stdout is
 killed after ~2–3 minutes here, and the `sa` stage prints one line at its start and nothing until it ends.
@@ -157,6 +154,30 @@ the task that watches it.
 **8 triangles** each (were 16), `lodtrees.txd` is 78.7 MB of 512² DXT5, and `data/maps/lodtrees.ide` holds
 **67 rows with `IS_TREE`, 10 with `IS_PALM`, 107 with neither** — the last being the finding that sent step 02
 back for its OpenSA half (105 of those 107 sources are vegetation to OpenSA by NAME, not by flag).
+
+## The `sa` build that carries step 06
+
+Full run 2026-08-21 through the standard script, **1 285.7 s total** (676.1 s on 2026-08-20):
+
+| stage | 2026-08-20 | steps 01–03 | steps 01–06 |
+| --- | ---: | ---: | ---: |
+| mods | 90.7 | 108.7 | 101.6 |
+| optimize | 90.2 | 104.9 | 90.4 |
+| **trees** | **83.4** | **268.4** | **684.4** |
+| **sa** | **373** | **1 503.2** (8 GB heap) | **365.0** |
+| procobj | 2.9 | 3.5 | 3.3 |
+| total | 676.1 | 2 026 | **1 285.7** |
+
+`trees` carries the whole cost of the plan: two cages per tree plus a solve against the tree's own HD, ×8.2
+over the 2026-08-20 baseline and ×2.6 over steps 01–03. Everything else is back where it was.
+
+**What the solver chose over the whole roster** (184 trees, 3 cards, SA's reference 100): min **0.47**,
+median **0.83**, max **1.00**, and **12 trees** needed no thinning at all — their three cards already cover
+no more than their own canopy. That spread is the argument against a single constant: it would have missed
+most of the roster in one direction or the other.
+
+Built assets: `lodsm_veg_tree5.dff` and `lodash1_hi.dff` are **6 triangles** (16 before this plan), the atlas
+is unchanged at 78.7 MB, and the `opensa-dff/` sidecar is cleaned out of the shipped tree.
 
 ## Step 03 — how dense the cage is against the tree
 
