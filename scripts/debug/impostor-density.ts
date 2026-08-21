@@ -37,12 +37,25 @@ import {
 } from '../../tools/lod-trees-generator/src/core/raster';
 import { loadHdTree } from '../lib/vegetation';
 
-/** The foliage cutout the bake and both engines use. */
+/** The foliage cutout the bake and OpenSA's weld use; SA's sorted pass tests at reference 100 (`--ref 100`). */
 const ALPHA_TEST = 0.5;
 /** Sub-samples per measured pixel: the metric is a coverage, so the render that produces it is antialiased. */
 const VIEW_SUPERSAMPLE = 4;
 /** The canopy is the upper share of the tree's projected box — below it the trunk dominates. */
 const CANOPY_TOP_SHARE = 0.6;
+
+/** Every knob one run varies — passed as one object so `report` keeps a readable signature. */
+interface RunOptions {
+  alphaScale: number;
+  alphaTest: number;
+  azimuths: number;
+  base: TreeLodConfig;
+  blend: boolean;
+  candidates: number[];
+  pngDir: string | undefined;
+  sizes: number[];
+  windings: number;
+}
 
 /** What one rendered view says about the canopy. */
 interface ViewStats {
@@ -165,6 +178,12 @@ function main(): void {
   const sizes = numbers('--px', [64, 32]);
   const azimuths = Number(argValue('--azimuths') ?? 8);
   const blend = process.argv.includes('--blend');
+  // SA's sorted pass alpha-tests at the entity's reference — 100 for the impostor row, not the bake's 128.
+  const alphaTest = Number(argValue('--ref') ?? ALPHA_TEST * 255) / 255;
+  // Thin every card by this factor before drawing: the gamma atlas is already its own encode, so a target
+  // whose class STACKS the cards can be given cards that are individually weaker (plan 013 step 03's
+  // "coverage divided by the expected visible stack" candidate).
+  const alphaScale = Number(argValue('--alpha-scale') ?? 1);
   // `--windings 2` composites each card twice: what the pre-step-02 geometry did in the blend class, since a
   // mirrored copy of a card is the same face drawn again.
   const windings = Number(argValue('--windings') ?? 1);
@@ -174,39 +193,7 @@ function main(): void {
   }
 
   for (const model of models) {
-    const tree = loadHdTree(model);
-    const hd = hdTris(tree);
-    console.log(
-      `${model}: ${tree.triangles.length} HD tris · ${azimuths} azimuths · ${blend ? 'sorted BLEND, no depth write' : `cutout ${ALPHA_TEST}`}` +
-        `${windings > 1 ? ` · ${windings} windings per card` : ''}`,
-    );
-    for (const px of sizes) {
-      const shot = (kind: string, i: number): string | undefined =>
-        pngDir && i === 0 ? join(pngDir, `${model}-${px}px-${kind}.png`) : undefined;
-      const views = [...Array(azimuths).keys()].map((i) => (2 * Math.PI * i) / azimuths);
-      const hdStats = views.map((a, i) => renderView(hd, tree.bbox, a, px, shot('hd', i)).stats);
-      console.log(
-        `  ${px} px tall — HD: covered ${pct(mean(hdStats, (s) => s.covered))} · mass ${pct(mean(hdStats, (s) => s.mass))} (${spread(hdStats, (s) => s.mass)}) · luma ${mean(hdStats, (s) => s.luma).toFixed(0)}`,
-      );
-      for (const cards of candidates) {
-        const impostor = renderImpostor(tree, { ...base, cards });
-        const lod = cardTris(impostor);
-        const drawn = windings > 1 ? lod.flatMap((card) => Array.from({ length: windings }, () => card)) : lod;
-        const stats = views.map((a, i) => renderCards(drawn, tree.bbox, a, px, blend, shot(`lod${cards}`, i)));
-        console.log(
-          `  ${px} px tall — LOD ${cards} cards: covered ${pct(mean(stats, (s) => s.covered))} ${ratio(
-            mean(stats, (s) => s.covered),
-            mean(hdStats, (s) => s.covered),
-          )} · mass ${pct(mean(stats, (s) => s.mass))} ${ratio(
-            mean(stats, (s) => s.mass),
-            mean(hdStats, (s) => s.mass),
-          )} (${spread(stats, (s) => s.mass)}) · luma ${mean(stats, (s) => s.luma).toFixed(0)} ${ratio(
-            mean(stats, (s) => s.luma),
-            mean(hdStats, (s) => s.luma),
-          )}`,
-        );
-      }
-    }
+    report(model, { alphaScale, alphaTest, azimuths, base, blend, candidates, pngDir, sizes, windings });
   }
 }
 
@@ -236,12 +223,13 @@ function renderCards(
   azimuth: number,
   pxHeight: number,
   blend: boolean,
+  alphaTest: number,
   png?: string,
 ): ViewStats {
   if (!blend) {
-    return renderView(cards.flat(), bbox, azimuth, pxHeight, png).stats;
+    return renderView(cards.flat(), bbox, azimuth, pxHeight, alphaTest, png).stats;
   }
-  const layers = cards.map((card) => renderView(card, bbox, azimuth, pxHeight));
+  const layers = cards.map((card) => renderView(card, bbox, azimuth, pxHeight, alphaTest));
   const color = compositeLayers(layers);
   const width = layers[0].color.length / 4 / pxHeight;
   if (png) {
@@ -257,6 +245,7 @@ function renderView(
   bbox: { max: Vec3; min: Vec3 },
   azimuth: number,
   pxHeight: number,
+  alphaTest: number,
   png?: string,
 ): { color: Uint8Array; stats: ViewStats } {
   const cx = (bbox.min[0] + bbox.max[0]) / 2;
@@ -286,7 +275,7 @@ function renderView(
         uvs: tri.uvs,
       },
       tri.texture,
-      ALPHA_TEST,
+      alphaTest,
     );
   }
   const { color } = resolveRaster(raster);
@@ -295,6 +284,54 @@ function renderView(
   }
 
   return { color, stats: canopyStats(color, raster) };
+}
+
+/** Bake one tree and print the HD row plus one row per candidate card count, per requested screen size. */
+function report(model: string, options: RunOptions): void {
+  const { alphaScale, alphaTest, azimuths, base, blend, candidates, pngDir, sizes, windings } = options;
+  {
+    const tree = loadHdTree(model);
+    const hd = hdTris(tree);
+    console.log(
+      `${model}: ${tree.triangles.length} HD tris · ${azimuths} azimuths · ${blend ? 'sorted BLEND, no depth write' : 'cutout'} at ref ${Math.round(alphaTest * 255)}` +
+        `${alphaScale === 1 ? '' : ` · card alpha ×${alphaScale}`}` +
+        `${windings > 1 ? ` · ${windings} windings per card` : ''}`,
+    );
+    for (const px of sizes) {
+      const shot = (kind: string, i: number): string | undefined =>
+        pngDir && i === 0 ? join(pngDir, `${model}-${px}px-${kind}.png`) : undefined;
+      const views = [...Array(azimuths).keys()].map((i) => (2 * Math.PI * i) / azimuths);
+      const hdStats = views.map((a, i) => renderView(hd, tree.bbox, a, px, alphaTest, shot('hd', i)).stats);
+      console.log(
+        `  ${px} px tall — HD: covered ${pct(mean(hdStats, (s) => s.covered))} · mass ${pct(mean(hdStats, (s) => s.mass))} (${spread(hdStats, (s) => s.mass)}) · luma ${mean(hdStats, (s) => s.luma).toFixed(0)}`,
+      );
+      for (const cards of candidates) {
+        const impostor = renderImpostor(tree, { ...base, cards });
+        if (alphaScale !== 1) {
+          for (let i = 3; i < impostor.image.length; i += 4) {
+            impostor.image[i] = Math.round(impostor.image[i] * alphaScale);
+          }
+        }
+        const lod = cardTris(impostor);
+        const drawn = windings > 1 ? lod.flatMap((card) => Array.from({ length: windings }, () => card)) : lod;
+        const stats = views.map((a, i) =>
+          renderCards(drawn, tree.bbox, a, px, blend, alphaTest, shot(`lod${cards}`, i)),
+        );
+        console.log(
+          `  ${px} px tall — LOD ${cards} cards: covered ${pct(mean(stats, (s) => s.covered))} ${ratio(
+            mean(stats, (s) => s.covered),
+            mean(hdStats, (s) => s.covered),
+          )} · mass ${pct(mean(stats, (s) => s.mass))} ${ratio(
+            mean(stats, (s) => s.mass),
+            mean(hdStats, (s) => s.mass),
+          )} (${spread(stats, (s) => s.mass)}) · luma ${mean(stats, (s) => s.luma).toFixed(0)} ${ratio(
+            mean(stats, (s) => s.luma),
+            mean(hdStats, (s) => s.luma),
+          )}`,
+        );
+      }
+    }
+  }
 }
 
 /**

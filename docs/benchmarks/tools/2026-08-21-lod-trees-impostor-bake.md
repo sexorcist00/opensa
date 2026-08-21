@@ -219,7 +219,25 @@ And what the `sa` build actually moved: **×1.59 → ×1.24** on `tree5` (blend 
 alpha → blend + one winding + antialiased alpha). A quarter of the excess density is gone, the rest is the
 composite itself. That is a visible-but-modest change, which is what the field reported.
 
-So the rule step 03 picked — 4 cards — is right for the target that has the cutout class and 15–24 % too
+**At SA's REAL reference the gap is wider still.** The rows above test at the bake's 128; SA's sorted pass
+tests the impostor row at reference **100**, which keeps more texels. Re-measured there, and with the card
+alpha thinned in the gamma atlas (which is already its own encode, so it costs nothing at runtime and
+nothing in the build) — canopy mass vs the HD, `tree5` / `tree7vbig`:
+
+| cards | card alpha ×1.0 | ×0.9 | ×0.85 | ×0.8 | ×0.75 | ×0.65 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 4 | 1.36 / 1.30 | — | 1.18 / — | — / 1.06 | 0.99 / 0.96 | **0.59** / — |
+| 3 | 1.19 / 1.18 | 1.07 / 1.08 | **1.00 / 1.01** | — | — | — |
+
+and in OpenSA's cutout class, unthinned: 4 cards **0.97 / 0.87**, 3 cards 0.89 / 0.83.
+
+Two things decide between them. **The cliff**: at reference 100 a thinned texel is DISCARDED, not faded, so
+the scale has a floor — ×0.65 on four cards collapses the canopy to 0.59 of the HD's, one notch below the
+×0.75 that reaches parity. Three cards need only ×0.85, which leaves a texel surviving down to alpha 118
+instead of 133. **The cost**: three blended cards are 25 % fewer blended fragments per tree LOD and 6
+triangles instead of 8.
+
+So the rule step 03 picked — 4 cards — is right for the target that has the cutout class and 15–36 % too
 dense for the one that does not. Three ways out, and their price is the choice: bake a SECOND card set for
 `sa` at 3 cards (a second atlas, ~+4.5 min of stage), weight each card's alpha by view angle at draw time
 (`asi/perfect-vegetation`, which is exactly this mechanism and was the phase-B plan), or leave `sa` at ×1.2
