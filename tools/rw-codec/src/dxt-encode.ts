@@ -16,10 +16,10 @@ export function encodeDxt(format: DxtFormat, rgba: Uint8Array, width: number, he
     for (let bx = 0; bx < blocksWide; bx += 1) {
       const block = gatherBlock(rgba, width, height, bx * 4, by * 4);
       if (format === 'dxt1') {
-        encodeColorBlock(block, true, out, offset);
+        encodeColorBlock(block, format, out, offset);
       } else {
         encodeAlpha(format, block, out, offset);
-        encodeColorBlock(block, false, out, offset + 8);
+        encodeColorBlock(block, format, out, offset + 8);
       }
       offset += blockBytes;
     }
@@ -93,9 +93,14 @@ function encodeAlpha(format: 'dxt3' | 'dxt5', block: Uint8Array, out: Uint8Array
 }
 
 /** BC1 colour block: furthest-pair endpoints + nearest-index. `dxt1` allows the 1-bit (punch-through) mode. */
-function encodeColorBlock(block: Uint8Array, dxt1: boolean, out: Uint8Array, base: number): void {
-  const punch = dxt1 && hasTransparent(block);
-  let [c0, c1] = endpoints(block, punch);
+function encodeColorBlock(block: Uint8Array, format: DxtFormat, out: Uint8Array, base: number): void {
+  const punch = format === 'dxt1' && hasTransparent(block);
+  // The endpoints are fitted over the texels that will actually be SEEN. Punch-through has to exclude the
+  // transparent ones (index 3 is transparency itself); with a separate alpha channel (DXT3/5) their colour is
+  // never shown either, and letting a cutout atlas's transparent background into the fit is what quantised
+  // every canopy-edge block toward it (lod-trees plan 013).
+  const minAlpha = punch ? 128 : format === 'dxt1' ? 0 : 1;
+  let [c0, c1] = endpoints(block, minAlpha);
   if (punch ? c0 > c1 : c0 < c1) {
     [c0, c1] = [c1, c0];
   }
@@ -125,12 +130,13 @@ function encodeColorBlock(block: Uint8Array, dxt1: boolean, out: Uint8Array, bas
   out[base + 7] = (bits >>> 24) & 0xff;
 }
 
-/** Endpoints = the two opaque pixels furthest apart in RGB (robust to off-diagonal colour axes, unlike a
- *  bounding box). Each returned as a 565 colour; equal when the block is a single colour. */
-function endpoints(block: Uint8Array, punch: boolean): [number, number] {
+/** Endpoints = the two visible pixels furthest apart in RGB (robust to off-diagonal colour axes, unlike a
+ *  bounding box); `minAlpha` is the alpha at which a texel counts as visible. Each returned as a 565 colour;
+ *  equal when the block is a single colour. */
+function endpoints(block: Uint8Array, minAlpha: number): [number, number] {
   const opaque: number[] = [];
   for (let i = 0; i < 16; i += 1) {
-    if (!(punch && block[i * 4 + 3] < 128)) {
+    if (block[i * 4 + 3] >= minAlpha) {
       opaque.push(i);
     }
   }
