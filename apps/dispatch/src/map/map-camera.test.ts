@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { MapPose } from './map-camera';
 
+import { SAMPLE_INTERVAL_MS } from '../ops/tracks';
 import { MAP_YAW, MapCamera } from './map-camera';
 
 /**
@@ -292,6 +293,137 @@ describe('MapCamera bounds against the world', () => {
 
       expect(camera.pose().yaw).toBeCloseTo(before.yaw, 6);
       expect(camera.pose().pitch).toBeCloseTo(before.pitch, 6);
+    });
+  });
+});
+
+describe('MapCamera.follow', () => {
+  const REACH = 2200;
+
+  describe('negative cases', () => {
+    it('does not tow the camera behind a unit driving at a constant speed', () => {
+      const camera = new MapCamera(OPENING);
+      camera.setStreamedReach(REACH);
+      let x = 1700;
+      camera.follow(() => [x, -1500]);
+
+      // 20 m per tick is ~72 km/h at 60 fps. A world-framed damper lags by speed x time-constant forever;
+      // re-basing on the subject leaves it nothing to do (restrictions/architecture.md).
+      for (let tick = 0; tick < 400; tick += 1) {
+        x += 20;
+        camera.advance(16.7);
+      }
+
+      expect(Math.abs(camera.positionGta()[0] - x)).toBeLessThan(1);
+    });
+
+    it('does not snap to nowhere when the followed unit goes away', () => {
+      const camera = new MapCamera(OPENING);
+      let at: null | readonly [number, number] = [2000, -1600];
+      camera.follow(() => at);
+      for (let tick = 0; tick < 600; tick += 1) {
+        camera.advance(16.7);
+      }
+      const arrived = camera.positionGta();
+      at = null;
+      camera.advance(1000);
+
+      // The view stays exactly where the last fix put it — it does not drift, and it does not jump home.
+      expect(camera.positionGta()[0]).toBeCloseTo(arrived[0], 6);
+      expect(camera.positionGta()[1]).toBeCloseTo(arrived[1], 6);
+      // Still riding: a unit that stops reporting may start again, and dropping the mode would be a
+      // decision the operator did not make.
+      expect(camera.following()).toBe(true);
+    });
+
+    it('does not keep riding once the view is sent somewhere else', () => {
+      const camera = new MapCamera(OPENING);
+      camera.follow(() => [2000, -1600]);
+      camera.flyTo([1000, -1000]);
+
+      // A fit, a bookmark, a locate and a searched place are all this flight — each of them is the operator
+      // naming a destination, which a ride cannot then fight for the focus every frame.
+      expect(camera.following()).toBe(false);
+      expect(camera.flying()).toBe(true);
+    });
+
+    it('does not keep riding once the operator pans away', () => {
+      const camera = new MapCamera(OPENING);
+      camera.follow(() => [2000, -1600]);
+      camera.pan([0.2, 0]);
+
+      expect(camera.following()).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is at most one fix behind: a jump is 95 % closed by the time the next one could land', () => {
+      const camera = new MapCamera(OPENING);
+      camera.setStreamedReach(REACH);
+      // A 4 s fix at speed moves a car ~110 m — the step the feed actually delivers (`SAMPLE_INTERVAL_MS`).
+      const gap = 110;
+      camera.follow(() => [1700 + gap, -1500]);
+      for (let tick = 0; tick < Math.round(SAMPLE_INTERVAL_MS / 16.7); tick += 1) {
+        camera.advance(16.7);
+      }
+
+      // The time constant is one publish interval over three, so this is the bound rather than a feel.
+      expect(1700 + gap - camera.positionGta()[0]).toBeLessThan(gap * 0.05);
+      expect(camera.positionGta()[0]).toBeGreaterThan(1700);
+    });
+
+    it('keeps riding while the operator turns and zooms, which are not a change of subject', () => {
+      const camera = new MapCamera(OPENING);
+      camera.follow(() => [2000, -1600]);
+      camera.orbit(40, 10);
+      camera.zoomBy(1.5);
+
+      expect(camera.following()).toBe(true);
+    });
+  });
+});
+
+describe('MapCamera.fitBounds', () => {
+  describe('negative cases', () => {
+    it('does nothing for an empty set rather than flying to the origin', () => {
+      const camera = new MapCamera(OPENING);
+      camera.fitBounds([]);
+
+      expect(camera.flying()).toBe(false);
+      expect(camera.positionGta()[0]).toBeCloseTo(1700, 3);
+    });
+
+    it('does not frame more world than there is when the set spans the whole state', () => {
+      const camera = new MapCamera(OPENING);
+      camera.setStreamedReach(2200);
+      camera.fitBounds([
+        [-3000, -3000],
+        [3000, 3000],
+      ]);
+      for (let tick = 0; tick < 2000 && camera.flying(); tick += 1) {
+        camera.advance(16.7);
+      }
+
+      // The zoom bound wins: the fit shows as much as the world can, rather than a view of emptiness.
+      expect(camera.span()).toBeLessThanOrEqual(2200 * 2 + 1);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('centres the set and frames it with a cell of air around it', () => {
+      const camera = new MapCamera(OPENING);
+      camera.fitBounds([
+        [1000, -2000],
+        [1600, -1400],
+      ]);
+      for (let tick = 0; tick < 2000 && camera.flying(); tick += 1) {
+        camera.advance(16.7);
+      }
+
+      expect(camera.positionGta()[0]).toBeCloseTo(1300, 1);
+      expect(camera.positionGta()[1]).toBeCloseTo(-1700, 1);
+      // 600 units of set + 250 of margin on each side.
+      expect(camera.span()).toBeCloseTo(1100, 1);
     });
   });
 });

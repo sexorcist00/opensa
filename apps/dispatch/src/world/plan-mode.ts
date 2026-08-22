@@ -14,6 +14,7 @@
 import type { GtaGround } from '../map/coords';
 import type { Operations, Selection } from '../ops/types';
 import type { BootOptions, DispatchHandle, ZoomLevel } from './boot';
+import type { SearchedPlace } from './zones';
 
 import { gtaToEngine } from '../map/coords';
 import { bindGestures } from '../map/gestures';
@@ -127,6 +128,7 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
         cellsTotal: 0,
         cellsVisible: 0,
         draws: 0,
+        following: camera.following(),
         fps: Math.round(1000 / Math.max(1, average)),
         hour: 12,
         pending: 0,
@@ -144,13 +146,32 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
       disposed = true;
       unbind();
     },
+    fitBoard(): void {
+      const ops = options.ops();
+      camera.fitBounds([
+        ...ops.units.map((unit) => unit.at),
+        ...ops.incidents.filter((incident) => incident.status !== 'closed').map((incident) => incident.at),
+      ]);
+    },
+    follow(id: null | string): void {
+      camera.follow(id === null ? null : () => options.ops().units.find((unit) => unit.id === id)?.at ?? null);
+    },
+    goToPlace(place: SearchedPlace): void {
+      camera.fitBounds([place.min, place.max]);
+    },
     /** Nothing to inventory: plan mode draws no world, so there are no passes and no residency to count. */
     inventory(): null {
       return null;
     },
     locate(at: GtaGround): void {
-      camera.zoomTo(at, 500);
+      camera.flyTo(at, 500);
     },
+    pose: () => camera.pose(),
+    recallView(pose): void {
+      camera.flyToPose(pose);
+    },
+    /** Plan mode streams no pak, so there is no baked district table to search — and nothing to invent. */
+    searchPlaces: () => [],
     setHour(): void {
       // Nothing to light.
     },

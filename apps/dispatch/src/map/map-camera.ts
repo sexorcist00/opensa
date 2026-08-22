@@ -8,12 +8,14 @@
  */
 import type { CameraState } from '@opensa/engine';
 
+import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
 import { CAMERA_FOV_Y, cursorRay, forwardFrom, screenBasis } from '@opensa/web/ui/camera/engine-camera';
 import { dollyStep, panStep, TOP_DOWN_PITCH } from '@opensa/web/ui/camera/fly-rig';
 
 import type { GtaGround } from './coords';
 import type { Flight } from './fly';
 
+import { SAMPLE_INTERVAL_MS } from '../ops/tracks';
 import { engineToGta, gtaToEngine } from './coords';
 import { planFlight } from './fly';
 
@@ -65,6 +67,14 @@ const ORBIT_PER_PIXEL = 0.005;
 const MAX_DISTANCE = 7000;
 const MIN_DISTANCE = 30;
 const NEAR = 0.5;
+/**
+ * How fast a {@link MapCamera.follow} closes the gap to its subject: one PUBLISH INTERVAL divided by three,
+ * so ~95 % of any gap is gone by the time the next fix arrives (`e⁻³ = 0.05`). The camera is therefore never
+ * more than one fix behind by construction, and the number is the FEED's rather than one chosen by feel —
+ * PCAD publishes a position every 4 s (`ops/tracks.ts`), and a step that big is exactly what makes an
+ * undamped follow unwatchable.
+ */
+const FOLLOW_TAU_MS = SAMPLE_INTERVAL_MS / 3;
 /** Bisection steps for the pitch bound. Fixed, so the bound is the same number on every machine and in a
  *  test — the reach function is monotonic in pitch, so 32 halvings of the bracket are ~1e-9 rad. */
 const PITCH_SOLVE_STEPS = 32;
@@ -75,6 +85,8 @@ export class MapCamera {
   private flight: null | { elapsedMs: number; plan: Flight } = null;
   /** The looked-at ground point, ENGINE coords. */
   private focus!: [number, number, number];
+  /** The subject the view rides, plus where it stood last frame — see {@link follow}. */
+  private followed: null | { at: () => GtaGround | null; previous: GtaGround | null } = null;
   /** The EFFECTIVE tilt — what the frame is drawn with: {@link wantedPitch} narrowed by the world bound. */
   private pitch!: number;
   private projection!: MapProjection;
@@ -95,6 +107,7 @@ export class MapCamera {
 
   /** Advance a flight in progress. No-op when there is none, so the host can call it every frame. */
   advance(dtMs: number): void {
+    this.advanceFollow(dtMs);
     const flight = this.flight;
     if (flight === null) {
       return;
@@ -124,6 +137,7 @@ export class MapCamera {
    */
   applyPose(pose: MapPose): void {
     this.flight = null;
+    this.followed = null;
     this.focus = gtaToEngine(pose.at);
     this.projection = pose.projection;
     this.yaw = pose.yaw;
@@ -147,6 +161,33 @@ export class MapCamera {
     this.pitch = this.clampPitch(this.wantedPitch);
   }
 
+  /**
+   * Frame every one of these GTA points at once — "show me the whole shift" (201/7-03). Flies rather than
+   * jumps, like every other move that is not a drag.
+   *
+   * The margin is ONE RENDER CELL of air around the set: the smallest unit of world this pak is built out
+   * of, so a set of points that all sit in one cell still gets a cell's worth of context rather than a view
+   * zoomed to a millimetre. A set wider than the world's own reach is capped by the zoom bound (7/02) — the
+   * fit then frames as much as the world can actually show, which is the honest answer and not a failure.
+   */
+  fitBounds(points: readonly GtaGround[], margin = CELL_SIZE): void {
+    if (points.length === 0) {
+      return;
+    }
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const [x, y] of points) {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+
+    this.flyTo([(minX + maxX) / 2, (minY + maxY) / 2], Math.max(maxX - minX, maxY - minY) + margin * 2);
+  }
+
   /** Whether a flight is in progress — the readout says so, and a follow mode must not fight one. */
   flying(): boolean {
     return this.flight !== null;
@@ -160,6 +201,9 @@ export class MapCamera {
    * `span` is the ground extent to arrive framing; omitted, the current one is kept.
    */
   flyTo(at: GtaGround, span = this.span()): void {
+    // A destination the operator chose ends a follow: otherwise the ride and the flight write the focus in
+    // the same frame, the flight wins, and the follow sits there fighting it until something cancels it.
+    this.followed = null;
     const plan = planFlight({ at: this.positionGta(), span: this.span() }, { at, span });
     if (plan.durationMs <= 0) {
       this.lookAtGta(at);
@@ -168,6 +212,43 @@ export class MapCamera {
       return;
     }
     this.flight = { elapsedMs: 0, plan };
+  }
+
+  /**
+   * Fly to a whole saved view (201/7-03's bookmarks): the RIG — tilt, heading, projection — is taken at
+   * once and the GROUND is flown, because those are two different things to an operator. Turning the view
+   * over three seconds is disorienting; travelling to it over three seconds is the point.
+   */
+  flyToPose(pose: MapPose): void {
+    const at = this.positionGta();
+    const span = this.span();
+    this.applyPose({ ...pose, at, height: this.height() });
+    this.frameSpan(span);
+    this.flyTo(pose.at, 2 * this.clampDistance(pose.height / -Math.sin(this.pitch)) * Math.tan(CAMERA_FOV_Y / 2));
+  }
+
+  /**
+   * Ride a moving subject: the view keeps the unit under it and the streaming anchor comes along, because
+   * on this surface the anchor IS the focus. Pass `null` to stop.
+   *
+   * **The damper is re-based against the subject, never against the world**
+   * ([restrictions/architecture.md](../../../../docs/restrictions/architecture.md)): the offset is read
+   * against where the subject stood LAST frame and written against where it stands now, so a unit driving at
+   * a constant speed leaves the damper nothing to do instead of towing the camera at a fixed lag behind it.
+   *
+   * **Smoothing the camera is not smoothing the DATA.** [8/02](../../../../docs/plans/201-dispatch-console/8-the-time-axis/readme.md)
+   * settled that a track answers with the last fix and nothing is interpolated, and that still holds: the
+   * marker steps every publish interval exactly as the feed sent it. What is eased here is where the
+   * OPERATOR is looking, which claims nothing about where the unit is.
+   */
+  follow(subject: (() => GtaGround | null) | null): void {
+    this.flight = null;
+    this.followed = subject === null ? null : { at: subject, previous: null };
+  }
+
+  /** Whether the view is riding a subject — the chrome says so, and a second follow must replace the first. */
+  following(): boolean {
+    return this.followed !== null;
   }
 
   /** Frame this much ground at the focus, world units. The one place a zoom LEVEL is expressed. */
@@ -184,6 +265,7 @@ export class MapCamera {
   /** Put the view over a GTA point without changing height, tilt or heading (what "locate unit" does). */
   lookAtGta(at: GtaGround): void {
     this.flight = null;
+    this.followed = null;
     this.focus = gtaToEngine(at);
   }
 
@@ -206,6 +288,8 @@ export class MapCamera {
   /** Left-drag: slide the focus in the screen plane, so the map follows the cursor like a grabbed sheet. */
   pan(ndcDelta: readonly [number, number]): void {
     this.flight = null;
+    // Panning is the operator saying where to look, which is the one thing a follow owns.
+    this.followed = null;
     const forward = forwardFrom(this.yaw, this.pitch);
     this.focus = panStep(this.focus, forward, ndcDelta, Math.max(1, this.height()));
   }
@@ -319,6 +403,28 @@ export class MapCamera {
     this.lookAtGta(at);
     this.distance = this.clampDistance(height / -Math.sin(this.pitch));
     this.pitch = this.clampPitch(this.wantedPitch);
+  }
+
+  /** One frame of {@link follow}: re-base the offset on the subject, then decay what is left of it. */
+  private advanceFollow(dtMs: number): void {
+    const followed = this.followed;
+    if (followed === null) {
+      return;
+    }
+    const now = followed.at();
+    if (now === null) {
+      // The subject went away (a unit off duty, a selection cleared): hold the last view rather than
+      // snapping to nowhere, and keep riding in case it comes back.
+      return;
+    }
+    const previous = followed.previous ?? now;
+    followed.previous = now;
+    const here = engineToGta(this.focus);
+    // Re-based: what is decayed is the offset from the SUBJECT, carried across the subject's own motion.
+    const decay = Math.exp(-Math.max(0, dtMs) / FOLLOW_TAU_MS);
+    const offsetX = (here[0] - previous[0]) * decay;
+    const offsetY = (here[1] - previous[1]) * decay;
+    this.focus = gtaToEngine([now[0] + offsetX, now[1] + offsetY]);
   }
 
   /**

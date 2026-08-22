@@ -107,6 +107,32 @@ a long trip crosses at a zoom where resident far-LOD covers the ground, the dest
 approaches, and the same zoom cap clamps the arc, so the picture never outruns the ring. **Any input cancels
 a flight** — the operator's hand always wins.
 
+## Getting somewhere
+
+**201/7-03, since 2026-08-22.** Four ways to reach a place, all of them flights rather than jumps, in the
+cluster at the top-left of the map (`ui/map-tools.tsx`) and on keys:
+
+- **Follow a unit** (`c`, or the Follow button) — the view rides the selection, and the streaming anchor
+  comes with it, because on this surface the anchor is the focus. The damper is re-based on the unit rather
+  than on the world, so a car at constant speed does not tow the camera behind it, and its time constant is
+  **one publish interval over three**: 95 % of any gap closed before the next fix can land. Smoothing the
+  camera is not smoothing the data — the marker still steps exactly as the feed sent it
+  ([8/02](../plans/201-dispatch-console/8-the-time-axis/readme.md)). A pan, a locate or a bookmark ends a
+  follow; orbiting and zooming while riding do not.
+- **Fit the board** (`f`, or the Fit button) — every unit and every open call in frame, with one render cell
+  of air around them. A board spread across the state is capped by the zoom bound, so the fit shows as much
+  world as there is rather than a view of emptiness.
+- **Saved views** — named poses in `localStorage`, per operator and per browser. Shape-checked on read, and
+  the store never throws: private mode and a full quota lose the save, not the session.
+The degraded-map banner moved to the bottom-right in the same change: it used to run across the top, which
+is where the cluster now is, and it covered the search box in exactly the mode — plan mode — where an
+operator has the least else to work with.
+
+- **Search a place** — the world's own baked district table (the same data behind the readout's district
+  name), case- and accent-folded, prefix matches first, with the boxes of one name unioned so flying to
+  Vinewood frames Vinewood rather than a third of it. A world that ships no `info.zon` finds nothing, which
+  is the honest answer for a total conversion rather than stock San Andreas names.
+
 ## What it is made of
 
 | Concern                | Where                                    | Notes                                                                                       |
@@ -116,6 +142,8 @@ a flight** — the operator's hand always wins.
 | World (demo)           | `src/world/demo-city.ts`                 | `?demo=1` — a synthetic block grid, no pak needed; reuses `@opensa/engine-lab/synthetic`      |
 | Camera                 | `src/map/map-camera.ts`                  | ground-focus map rig over `@opensa/web/ui/camera/*` — pan / orbit / dolly, north-up default, **perspective or plan view**, bounds derived from the world's reach |
 | Camera flights         | `src/map/fly.ts`                         | Van Wijk & Nuij's zoom-and-pan path — pure, so the host samples it from its own loop           |
+| Saved views            | `src/map/bookmarks.ts`                   | named poses in `localStorage`, shape-checked and non-throwing                                  |
+| Operator cluster       | `src/ui/map-tools.tsx`                   | search, fit, follow and saved views — a skin over the map handle, never on the frame path      |
 | 3D symbology           | `src/map/beacons.ts`                     | through-depth `createDebugLines` pillars, routes, selection ring                             |
 | 2D symbology           | `src/map/overlay-2d.ts`                  | icons, chips, leader lines, scale bar — on a plain 2D canvas, and it owns hit-testing        |
 | World→screen           | `src/map/projection.ts`                  | `mat4LookAt` × the frame's own projection (perspective or orthographic), rebuilt per frame    |

@@ -74,13 +74,16 @@ export const styles = {
     background: 'rgba(120, 72, 8, 0.92)',
     border: '1px solid #d08b2c',
     borderRadius: 5,
+    bottom: 10,
     color: '#ffe8c4',
     fontSize: 11,
-    left: 10,
+    maxWidth: 420,
     padding: '5px 10px',
     position: 'absolute',
+    // Bottom-RIGHT since 201/7-03: the top-left corner is the operator's cluster (search, fit, follow,
+    // saved views), and a banner across the top covered the search box in exactly the mode — plan mode —
+    // where an operator needs it most. It is a standing state notice, not an alert that must interrupt.
     right: 10,
-    top: 10,
     zIndex: 4,
   },
   detail: {
@@ -155,6 +158,42 @@ export const styles = {
     fontFamily: MONO,
     fontSize: 10,
     padding: '3px 12px',
+  },
+  /** 201/7-03's operator cluster: search, saved views, fit and follow. Top-left, where every map application
+   *  puts them, and clear of the selection panel and the inventory panel (both bottom-left). */
+  mapTools: {
+    background: 'rgba(11, 16, 23, 0.94)',
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 6,
+    display: 'grid',
+    gap: 5,
+    left: 10,
+    maxWidth: 232,
+    padding: '7px 8px',
+    position: 'absolute',
+    top: 10,
+    zIndex: 3,
+  },
+  /** One hit in the place search — a row-wide button, so the whole line is the target on a phone. */
+  mapToolsHit: {
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 3,
+    color: COLORS.text,
+    cursor: 'pointer',
+    fontSize: 11,
+    padding: '3px 5px',
+    textAlign: 'left' as const,
+    width: '100%',
+  },
+  mapToolsInput: {
+    background: '#05070a',
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 4,
+    color: COLORS.text,
+    fontSize: 11,
+    padding: '4px 6px',
+    width: '100%',
   },
   mono: { fontFamily: MONO },
   panel: {

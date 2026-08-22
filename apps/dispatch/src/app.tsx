@@ -19,6 +19,7 @@ import { useOperations } from './ops/use-operations';
 import { DetailPanel } from './ui/detail-panel';
 import { IncidentsPanel } from './ui/incidents-panel';
 import { MapCanvas } from './ui/map-canvas';
+import { MapTools } from './ui/map-tools';
 import { Sheet } from './ui/sheet';
 import { StatusBar } from './ui/status-bar';
 import { styles } from './ui/styles';
@@ -33,8 +34,12 @@ export function App(): ReactElement {
   const handleRef = useRef<DispatchHandle | null>(null);
   const compact = useCompactLayout();
 
+  const [handle, setHandle] = useState<DispatchHandle | null>(null);
   const onReady = useCallback((next: DispatchHandle) => {
     handleRef.current = next;
+    // The map tools need the handle as STATE, not a ref: they mount before the engine boots, and a ref does
+    // not re-render them when it arrives (restrictions/architecture.md — the chrome mounts after boot).
+    setHandle(next);
   }, []);
   const locate = useCallback((at: GtaGround) => handleRef.current?.locate(at), []);
   const setHour = useCallback((hour: number) => handleRef.current?.setHour(hour), []);
@@ -51,6 +56,7 @@ export function App(): ReactElement {
 
   const map = (
     <MapCanvas actions={actions} onReadout={setReadout} onReady={onReady} read={read}>
+      <MapTools compact={compact} following={readout?.following ?? false} handle={handle} selection={selection} />
       <DetailPanel actions={actions} compact={compact} onLocate={locate} ops={ops} selection={selection} />
     </MapCanvas>
   );

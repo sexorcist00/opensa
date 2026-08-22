@@ -37,6 +37,23 @@ export interface DistrictLookup {
   readonly count: number;
   /** The most specific district containing a GTA ground point, or null. */
   nameAt(at: GtaGround): null | string;
+  /**
+   * Places whose name contains the query, best first (201/7-03's search box). Case- and
+   * accent-insensitive, and a prefix match sorts above a mid-word one — "vin" should offer Vinewood before
+   * it offers anything that merely contains those letters.
+   *
+   * This is the OTHER half of the layer decision in 5/03: the console does not carry a place list of its
+   * own, so a total conversion's own districts are the ones an operator searches, and a world that ships no
+   * `info.zon` has nothing to search rather than a wrong answer taken from stock San Andreas.
+   */
+  search(query: string, limit?: number): readonly SearchedPlace[];
+}
+
+/** One search hit: what to show in the list, and the box to fly to. */
+export interface SearchedPlace {
+  readonly max: readonly [number, number];
+  readonly min: readonly [number, number];
+  readonly name: string;
 }
 
 /** One baked district: the box, its GXT key, and the display text already resolved. */
@@ -48,7 +65,7 @@ interface District {
 }
 
 /** An empty lookup — what a pak with no districts gets, so no caller has to null-check the loader. */
-export const NO_DISTRICTS: DistrictLookup = { boxAt: () => null, count: 0, nameAt: () => null };
+export const NO_DISTRICTS: DistrictLookup = { boxAt: () => null, count: 0, nameAt: () => null, search: () => [] };
 
 /**
  * Load the baked district table from beside the pak. Never throws: a missing or malformed file is a world
@@ -82,8 +99,12 @@ export async function loadDistricts(
     },
     count: zones.length,
     nameAt: (at) => zoneAt(zones, at[0], at[1])?.name ?? null,
+    search: (query, limit = SEARCH_LIMIT) => searchZones(zones, query, limit),
   };
 }
+
+/** How many hits a search answers with. A list an operator has to scroll is a list they stop reading. */
+const SEARCH_LIMIT = 8;
 
 async function fetchTable(url: string): Promise<District[] | null> {
   try {
@@ -108,6 +129,15 @@ async function fetchTable(url: string): Promise<District[] | null> {
   }
 }
 
+/** Lower-cased and stripped of accents, so a query matches a name a mod author spelled with them. */
+function fold(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .trim();
+}
+
 /** A row is usable only if it carries the two corners and a name — everything `zoneAt` will touch. */
 function isDistrict(row: unknown): row is District {
   const entry = row as District;
@@ -122,4 +152,36 @@ function isDistrict(row: unknown): row is District {
     entry.min.every(Number.isFinite) &&
     entry.max.every(Number.isFinite)
   );
+}
+
+function searchZones(zones: readonly MapZone[], query: string, limit: number): readonly SearchedPlace[] {
+  const needle = fold(query);
+  if (needle === '') {
+    return [];
+  }
+  const hits: { place: SearchedPlace; rank: number }[] = [];
+  // One entry per NAME: `info.zon` names a place once per box it is cut into (Vinewood is several), and a
+  // picker listing the same name four times is one an operator cannot choose from. The boxes are unioned,
+  // so flying to the hit frames the whole place rather than a third of it.
+  const byName = new Map<string, SearchedPlace>();
+  for (const zone of zones) {
+    const index = fold(zone.name).indexOf(needle);
+    if (index < 0) {
+      continue;
+    }
+    const seen = byName.get(zone.name);
+    byName.set(zone.name, {
+      max: [Math.max(seen?.max[0] ?? -Infinity, zone.max[0]), Math.max(seen?.max[1] ?? -Infinity, zone.max[1])],
+      min: [Math.min(seen?.min[0] ?? Infinity, zone.min[0]), Math.min(seen?.min[1] ?? Infinity, zone.min[1])],
+      name: zone.name,
+    });
+  }
+  for (const place of byName.values()) {
+    hits.push({ place, rank: fold(place.name).indexOf(needle) });
+  }
+
+  return hits
+    .sort((a, b) => a.rank - b.rank || a.place.name.localeCompare(b.place.name))
+    .slice(0, limit)
+    .map((hit) => hit.place);
 }

@@ -34,7 +34,7 @@ import { createErrorLog } from './error-log';
 import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
 import { DEFAULT_SRC, resolvePakBase } from './pak-source';
 import { installWater } from './water';
-import { type DistrictLookup, loadDistricts, NO_DISTRICTS } from './zones';
+import { type DistrictLookup, loadDistricts, NO_DISTRICTS, type SearchedPlace } from './zones';
 
 export interface BootOptions {
   readonly canvas: HTMLCanvasElement;
@@ -62,12 +62,27 @@ export interface DispatchHandle {
   readonly camera: MapCamera;
   dispose(): void;
   /**
+   * Put every active unit and call in frame at once (201/7-03). A board with nothing on it is left alone
+   * rather than flown to the origin.
+   */
+  fitBoard(): void;
+  /** Ride a unit by id; `null` stops. An id the board does not have is the same as stopping. */
+  follow(id: null | string): void;
+  /** Fly to a searched place, framing its whole box. */
+  goToPlace(place: SearchedPlace): void;
+  /**
    * The 201/1-01 before-table, or null when `?inventory=1` was not set. Reading it does not stop or reset
    * the collection — the window keeps growing, so a later read is a longer sample of the same run.
    */
   inventory(): InventoryReport | null;
   /** Frame a GTA point at a sensible working height — what "locate" does in the panels. */
   locate(at: GtaGround): void;
+  /** The view as it is right now — what a bookmark stores. */
+  pose(): MapPose;
+  /** Fly back to a saved view: the rig (tilt, heading, projection) is taken at once, the ground is flown. */
+  recallView(pose: MapPose): void;
+  /** Places whose name matches, from the world's own baked district table (201/5-03's data). */
+  searchPlaces(query: string): readonly SearchedPlace[];
   setHour(hour: number): void;
   /** Perspective or the plan view (201/7-01). The pose in the readout says which is live. */
   setProjection(projection: MapProjection): void;
@@ -80,6 +95,9 @@ export interface DispatchReadout {
   readonly cellsTotal: number;
   readonly cellsVisible: number;
   readonly draws: number;
+  /** Whether the view is riding a unit (201/7-03) — the chrome shows it, and it is state rather than an
+   *  event because the UI mounts after the boot that started it. */
+  readonly following: boolean;
   readonly fps: number;
   readonly hour: number;
   readonly pending: number;
@@ -223,11 +241,32 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     };
   };
 
+  /** Every point an operator is working right now: units on duty and calls that are still open. */
+  const boardPoints = (): readonly GtaGround[] => {
+    const ops = options.ops();
+
+    return [
+      ...ops.units.map((unit) => unit.at),
+      ...ops.incidents.filter((incident) => incident.status !== 'closed').map((incident) => incident.at),
+    ];
+  };
+  /** Ride the selected unit, or stop if already riding — one function, so the key and the button agree. */
+  const followSelected = (): void => {
+    const selection = options.selection();
+    camera.follow(
+      camera.following() || selection?.kind !== 'unit'
+        ? null
+        : () => options.ops().units.find((unit) => unit.id === selection.id)?.at ?? null,
+    );
+  };
+
   const unbind = bindInput({
     camera,
     canvas,
     districts: world.districts,
     engine,
+    onFit: () => camera.fitBounds(boardPoints()),
+    onFollowSelected: followSelected,
     onZoomLevel: (level) => camera.flyTo(camera.positionGta(), zoomSpan(level, camera.positionGta(), world)),
     options,
     symbology,
@@ -302,6 +341,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           cellsTotal: stats.cellsTotal,
           cellsVisible: stats.cellsVisible,
           draws: stats.drawsRecorded,
+          following: camera.following(),
           fps: Math.round(1000 / Math.max(1, average)),
           hour,
           pending: stream.pendingCells,
@@ -322,6 +362,15 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       unbind();
       errorLog.dispose();
       beacons.dispose();
+    },
+    fitBoard(): void {
+      camera.fitBounds(boardPoints());
+    },
+    follow(id: null | string): void {
+      camera.follow(id === null ? null : () => options.ops().units.find((unit) => unit.id === id)?.at ?? null);
+    },
+    goToPlace(place: SearchedPlace): void {
+      camera.fitBounds([place.min, place.max]);
     },
     inventory(): InventoryReport | null {
       if (inventory === null) {
@@ -354,6 +403,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     locate(at: GtaGround): void {
       camera.flyTo(at, LOCATE_SPAN);
     },
+    pose: () => camera.pose(),
+    recallView(pose: MapPose): void {
+      camera.flyToPose(pose);
+    },
+    searchPlaces: (query) => world.districts.search(query),
     setHour: applyHour,
     setProjection(projection: MapProjection): void {
       camera.setProjection(projection);
@@ -387,11 +441,13 @@ function bindInput(input: {
   canvas: HTMLCanvasElement;
   districts: DistrictLookup;
   engine: Engine;
+  onFit: () => void;
+  onFollowSelected: () => void;
   onZoomLevel: (level: ZoomLevel) => void;
   options: BootOptions;
   symbology: SymbologyLayer;
 }): () => void {
-  const { camera, canvas, districts, engine, onZoomLevel, options, symbology } = input;
+  const { camera, canvas, districts, engine, onFit, onFollowSelected, onZoomLevel, options, symbology } = input;
 
   /** The world ray under a canvas-relative CSS position. */
   const rayAt = (x: number, y: number): CursorPick => {
@@ -440,12 +496,34 @@ function bindInput(input: {
   // three are the half of THIS step that a level rule is useless without, and they live here rather than in
   // the React tree because the map is not React's and a key must work wherever the focus happens to be.
   const onKeyDown = (event: KeyboardEvent): void => {
-    const level = LEVEL_KEYS[event.key];
-    if (level === undefined || event.altKey || event.ctrlKey || event.metaKey || isTyping(event.target)) {
+    if (event.altKey || event.ctrlKey || event.metaKey || isTyping(event.target)) {
       return;
     }
-    event.preventDefault();
-    onZoomLevel(level);
+    const level = LEVEL_KEYS[event.key];
+    if (level !== undefined) {
+      event.preventDefault();
+      onZoomLevel(level);
+
+      return;
+    }
+    if (event.key === 'f') {
+      event.preventDefault();
+      onFit();
+
+      return;
+    }
+    if (event.key === 'c') {
+      event.preventDefault();
+      onFollowSelected();
+
+      return;
+    }
+    if (event.key === 'Escape' && camera.following()) {
+      // Only when it is riding something: Escape belongs to the selection everywhere else, and a key that
+      // silently eats an operator's Escape is worse than one that does nothing.
+      event.preventDefault();
+      camera.follow(null);
+    }
   };
   window.addEventListener('keydown', onKeyDown);
 

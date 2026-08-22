@@ -112,6 +112,35 @@ Four capabilities, one step because they share a mechanism (a target → a camer
 **Owes:** for follow — that streaming keeps up with a car at speed; for fit bounds — behaviour when the set
 spans the whole state.
 
+**DONE 2026-08-22 on the desk half; the streaming-at-speed verdict is owed by a device run.** All four share
+the mechanism the step predicted — a target becomes a camera pose — and every one of them flies rather than
+jumps, because [7/02](#02--where-the-camera-may-go) already built the path.
+
+| Capability | How it works, and the number it is derived from |
+| --- | --- |
+| **Follow a unit** | the view rides the selection and the streaming anchor comes with it, because on this surface the anchor IS the focus. **The damper is re-based on the subject**, per [the restriction](../../../restrictions/architecture.md): the offset is read against where the unit stood LAST frame and written against where it stands now, so a unit at constant speed leaves the damper nothing to do instead of towing the camera at a fixed lag. Its time constant is **one publish interval over three** (`SAMPLE_INTERVAL_MS / 3`, PCAD's own 4 s) — 95 % of any gap closed before the next fix can land, so the view is at most one fix behind by construction |
+| **View bookmarks** | named poses in `localStorage`, per operator and honestly scoped to *this browser* until the console is a module of the CAD app. Shape-checked on read, because a half-pose written by an older version does not read as corrupt data — it puts the operator somewhere nobody asked for. The store never throws: private mode, a locked profile and a full quota all fail on the plain call, and a console that will not boot for want of a bookmark is worse than one with none |
+| **Fit bounds** | the box of every unit and every OPEN call, with **one render cell of air** around it — the smallest unit of world the pak is built from, so a set inside one cell still gets context instead of a view zoomed to a millimetre. A set wider than the world is capped by 7/02's zoom bound, which is the answer to *what happens when it spans the whole state*: the fit frames as much as there IS, rather than a picture of emptiness |
+| **Search by place** | the consumer side of [5/03](../5-symbology-and-picking-as-product/readme.md)'s decision. The world's own baked district table is what gets searched, so a total conversion's places are the ones an operator finds and a world with no `info.zon` finds nothing rather than answering with stock San Andreas. Case- and accent-folded, prefix matches first, and **boxes of one name are unioned** — `info.zon` cuts a place into several, and flying to a third of Vinewood is not flying to Vinewood |
+
+**Keys:** `f` fits the board, `c` rides the selected unit (again to stop), `Escape` stops a follow — and only
+when one is running, because Escape belongs to the selection everywhere else. The cluster that carries the
+same four things on screen is `ui/map-tools.tsx`, top-left, on the existing tokens.
+
+**Two defects the review pass caught before this landed.** A flight did not end a follow, so a fit or a
+bookmark left the ride writing the focus in the same frame as the flight — the flight won and the follow
+fought it silently until something else cancelled it. And the degraded-map banner ran across the top of the
+map, which is where the cluster now sits: in plan mode, the one mode where an operator has least else to work
+with, it covered the search box. The banner is bottom-right now.
+
+**What cancels a follow, and what does not:** a pan, a locate, a bookmark and an applied pose end it — they
+are the operator saying where to look, which is the one thing a follow owns. Orbit, dolly and pinch do not:
+turning and zooming while riding a car is not a change of subject.
+
+**Owed by the next field run:** that the streamer keeps up with a car at speed (the ring moves with the
+followed unit, and only a device says whether the cells arrive before the car does), and the eye verdict on
+the follow damper at the real 4-second publish rate rather than the mock's 20 Hz.
+
 ### 04 — The minimap
 
 An overview inset: where am I relative to the whole city. **Nothing like it exists anywhere in this repo** —
