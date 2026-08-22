@@ -73,7 +73,9 @@ look identical, and `nto_b_l` / `nto_b_s` / `nto_b_tw` show **nothing** from out
 was asking the plugin to mount three parts a passer-by cannot see. Measured on the built ini: **154 of the
 sections carried them, 457 tokens in all**, and a stock line like `comet, nto_b_l, nto_b_s, nto_b_tw` is nitro
 and nothing else — so for those cars the whole tuned section was mount work with no visible result. Such a
-model now gets no section at all, which is what "nothing to tune" already meant here.
+model now gets no section at all, which is what "nothing to tune" already meant here — **but a nitro-only car
+that HAS paint jobs keeps its section** (his call, the same day): the paint is a reason on its own, and it is
+the reason the token list, not the part list, is what decides. Pinned by a test.
 
 The filter is by the `nto_` PREFIX rather than by three ids, because a prefix is what SA's own loader
 classifies a component with (`CAtomicModelInfo::SetupVehicleUpgradeFlags`) — the family name is the game's,

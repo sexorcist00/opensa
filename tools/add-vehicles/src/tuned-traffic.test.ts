@@ -112,6 +112,17 @@ describe('registerTunedTraffic', () => {
       expect(iniText()).not.toContain('nto_');
     });
 
+    it('KEEPS a nitro-only car that has paint jobs — the paint is what it shows', () => {
+      // The rule, in his words: no section when only nitro is left, but paint jobs are a reason on their own.
+      mkdirSync(join(game, ADDED_VEHICLES_DIR), { recursive: true });
+      writeFileSync(join(game, ADDED_VEHICLES_DIR, 'police1.txd'), Uint8Array.of(1));
+
+      expect(registerTunedTraffic(game, DEFAULT_TUNED_TRAFFIC, IDS)).toBe(2);
+      expect(iniText()).toContain('[police]');
+      expect(iniText()).toContain('Global=596,paintjob1');
+      expect(iniText()).not.toContain('nto_');
+    });
+
     it('is idempotent', () => {
       registerTunedTraffic(game, DEFAULT_TUNED_TRAFFIC, IDS);
       const once = iniText();
