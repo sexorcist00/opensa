@@ -28,7 +28,15 @@ export function StatusBar({
 
   return (
     <div style={styles.statusBar}>
-      <span style={{ color: readout.fps < 45 ? COLORS.danger : COLORS.accent }}>{readout.fps} fps</span>
+      {/* 201/4-01: at rest the console draws nothing, and says so rather than showing a frame rate it is
+          not paying for. The numbers beside it are the last drawn frame's, which is what it still has. */}
+      {readout.idle ? (
+        <span style={{ color: COLORS.muted }} title="Nothing has changed — no frames are being drawn">
+          idle
+        </span>
+      ) : (
+        <span style={{ color: readout.fps < 45 ? COLORS.danger : COLORS.accent }}>{readout.fps} fps</span>
+      )}
       <span>
         cells {readout.cellsVisible}/{readout.cellsTotal}
       </span>

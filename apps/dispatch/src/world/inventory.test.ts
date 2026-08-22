@@ -52,6 +52,7 @@ const CONTEXT = {
   device: {},
   district: 'los-santos-centre',
   errors: [],
+  framesSkipped: 0,
   hasTimestamps: true,
   pickingBytes: 0,
   surface: { cssHeight: 364, cssWidth: 360, deviceHeight: 728, deviceWidth: 720, dpr: 2, renderScale: 1 },
@@ -417,6 +418,31 @@ describe('FrameInventory', () => {
       });
       expect(report.district).toBe('los-santos-centre');
       expect(report.build).toBe('original@test');
+    });
+  });
+});
+
+describe('FrameInventory idle frames (201/4-01)', () => {
+  describe('negative cases', () => {
+    it('does not invent a skip count — a capture on a moving map reports zero', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+
+      expect(inventory.report({ ...CONTEXT, framesSkipped: 0 }).framesSkipped).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reports the frames the gate skipped beside the ones it drew', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+      const report = inventory.report({ ...CONTEXT, framesSkipped: 3580 });
+
+      // A capture at rest: a handful of drawn frames and thousands the console did not spend.
+      expect(report.frames).toBe(1);
+      expect(report.framesSkipped).toBe(3580);
     });
   });
 });

@@ -14,7 +14,7 @@
 import type { GtaGround } from '../map/coords';
 import type { SharedView } from '../map/view-link';
 import type { Operations, Selection } from '../ops/types';
-import type { BootOptions, DispatchHandle, ZoomLevel } from './boot';
+import type { BootOptions, DispatchHandle, DispatchReadout, ZoomLevel } from './boot';
 import type { SearchedPlace } from './zones';
 
 import { gtaToEngine } from '../map/coords';
@@ -25,8 +25,9 @@ import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
 import { drawSketches, type MapTool, SketchStore } from '../map/sketch';
 import { viewOfPose } from '../map/view-link';
-import { applyHeldKeys, runCommand, zoomSpan } from './boot';
+import { applyHeldKeys, IDLE_WAKE_MS, runCommand, zoomSpan } from './boot';
 import { composeImage } from './capture';
+import { RenderGate } from './render-gate';
 import { NO_DISTRICTS } from './zones';
 
 /** Opening view. Higher than the 3D mode's: with no buildings to give scale, more ground reads better. */
@@ -148,6 +149,34 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
   let disposed = false;
   let lastReadout = 0;
   let previous = performance.now();
+  // Render on demand (201/4-01), for the same reason the 3D mode has it and more so: this is the fallback a
+  // WEAK device gets, and redrawing a still plan sixty times a second is the last thing such a machine needs.
+  const gate = new RenderGate();
+  let idleTimer: null | ReturnType<typeof setTimeout> = null;
+  const schedule = (idle: boolean): void => {
+    if (disposed) {
+      return;
+    }
+    if (idle) {
+      idleTimer = setTimeout(loop, IDLE_WAKE_MS);
+    } else {
+      requestAnimationFrame(loop);
+    }
+  };
+  const wake = (): void => {
+    gate.wake();
+    if (idleTimer !== null) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
+      requestAnimationFrame(loop);
+    }
+  };
+  for (const event of ['pointerdown', 'wheel'] as const) {
+    overlay.addEventListener(event, wake, { passive: true });
+  }
+  window.addEventListener('keydown', wake, { passive: true });
+  let idleReported = false;
+  let lastPayload: DispatchReadout | null = null;
 
   const loop = (): void => {
     if (disposed) {
@@ -166,6 +195,28 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     applyHeldKeys(camera, keyboard, dt);
     camera.advance(dt);
     const size = { height: overlay.clientHeight, width: overlay.clientWidth };
+    if (
+      !gate.shouldDraw({
+        canvas: size.width * size.height,
+        created: 0,
+        evicted: 0,
+        hour: 12,
+        ops,
+        pending: 0,
+        pose: camera.pose(),
+        selection: options.selection(),
+        sketch: sketch.revision(),
+      })
+    ) {
+      if (!idleReported && lastPayload !== null) {
+        idleReported = true;
+        options.onReadout({ ...lastPayload, idle: true });
+      }
+      schedule(true);
+
+      return;
+    }
+    idleReported = false;
     const state = camera.state(size.width / Math.max(1, size.height));
     projector.update(state, size.width, size.height);
 
@@ -178,7 +229,7 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     if (now - lastReadout > 1000 / READOUT_HZ) {
       lastReadout = now;
       const average = frames.reduce((sum, value) => sum + value, 0) / Math.max(1, frames.length);
-      options.onReadout({
+      lastPayload = {
         buildTime: `plan mode — ${why}`,
         cellsTotal: 0,
         cellsVisible: 0,
@@ -186,15 +237,18 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
         following: camera.following(),
         fps: Math.round(1000 / Math.max(1, average)),
         hour: 12,
+        idle: false,
+        idleFrames: gate.idleFrames,
         measurement: sketch.measurement(),
         namesHidden: symbology.counted().chipsDropped,
         pending: 0,
         pose: camera.pose(),
         residencyMb: 0,
         tool: sketch.tool(),
-      });
+      };
+      options.onReadout(lastPayload);
     }
-    requestAnimationFrame(loop);
+    schedule(false);
   };
   requestAnimationFrame(loop);
 
@@ -204,6 +258,14 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
       disposed = true;
       keyboard.unbind();
       unbind();
+      for (const event of ['pointerdown', 'wheel'] as const) {
+        overlay.removeEventListener(event, wake);
+      }
+      window.removeEventListener('keydown', wake);
+      if (idleTimer !== null) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
     },
     /**
      * Plan mode has ONE canvas — the overlay is the whole picture here — so the export composes it with

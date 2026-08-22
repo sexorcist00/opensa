@@ -23,6 +23,18 @@ new design must satisfy are next door in [`restrictions/`](../restrictions/READM
   road, a district or a unit kind. A radius in metres is honest; a radius in minutes would be a constant
   chosen by eye.
 
+## At rest (201/4-01)
+
+- **The picture freezes, sway included.** When nothing that affects the picture has changed, the console
+  draws no frames at all — so the palms stop moving and the UV scrollers stop scrolling until the next
+  input, board tick or streaming create. Nothing is cut (the protected list is about what the build and the
+  frame carry, not about a still map), and the first input resumes all of it. If a frozen world ever reads
+  as a hung one, the lever is an idle RATE rather than an idle stop.
+- **The status bar says `idle` instead of a frame rate**, and the numbers beside it are the last drawn
+  frame's — a console at rest still has the cells, the residency and the pose it stopped at.
+- **A change nobody touched can take up to 100 ms to appear** (the idle poll). An operator's own input never
+  waits for it: the pointer, wheel and key handlers re-arm the animation frame in their own handler.
+
 ## The radar (201/7-04)
 
 - **One scale, the whole world.** The dial frames what the pak carries (its cell extent), so at block zoom

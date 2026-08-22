@@ -27,6 +27,42 @@ over a shift-length idle on the [2/03](../2-real-device-truth/readme.md) device.
 **If a cheaper version is rejected** for a better-feeling one, it goes to
 [`docs/performance/deferred-optimizations/`](../../../performance/README.md) with its price.
 
+**BUILT 2026-08-22; the battery delta is owed by the [2/03](../2-real-device-truth/readme.md) device.**
+
+**The budget, named before the build:** the first frame after an operator's input is the NEXT animation
+frame — one frame at the display's rate, never one idle period. It is met by the pointer, wheel and key
+handlers re-arming the fast schedule in their own handler, so the idle poll never sits between a thumb and
+the picture. The poll's own period, **100 ms**, is the separate budget for a change nobody touched (a board
+tick arriving from the feed): PCAD publishes every 4 s, so it is two orders of magnitude inside the rate the
+data arrives at, and under the threshold at which a change stops reading as immediate.
+
+**"Nothing changed" is a STATE, exactly as the step demanded.** `RenderGate` compares the whole picture's
+inputs — pose in all six degrees of freedom, the board by identity, the selection, the hour, the drawing
+buffer's size, the sketch revision, and the streamer's pending/created/evicted counters — against the frame
+that last DREW. A signal that arrives while the loop is asleep is still there when it looks, because it is a
+value rather than a notification. `wake()` exists only to make the answer arrive sooner; it is never how the
+answer is found. **Stopping the loop entirely** — the cheaper version — is [priced and
+refused](../../../performance/deferred-optimizations/idle-loop-stop.md): an event-driven wake is one
+forgotten `wake()` away from a map that looks frozen, and that is a silent regression the day somebody adds
+a twelfth source of change.
+
+**It is in BOTH modes**, and deliberately so: plan mode is the fallback a weak device gets, and redrawing a
+still plan sixty times a second is the last thing such a machine needs.
+
+**What idle costs the world:** the picture freezes, sway and UV scrollers included, until the next change.
+Nothing is cut — the [protected list](../1-the-map-profile/protected-list.md) is about what the build and
+the frame carry, not about a still map — and the first input resumes all of it
+([edge-cases](../../../edge-cases/dispatch-console.md)). If a field verdict says a frozen world reads as a
+hung one, the lever is an idle RATE rather than an idle stop.
+
+**The claim is readable rather than asserted:** the status bar shows `idle` in place of a frame rate, and
+`?inventory=1`'s report carries **`framesSkipped`** beside `frames` — a capture with 400 frames and 0 skips
+was taken on a moving map, one with 40 frames and 3 600 skips on a console at rest, and the two cannot be
+compared without it.
+
+**Still owed:** the wake latency measured under a thumb and the battery/thermal delta over a shift-length
+idle, both on the 2/03 device.
+
 ### 02 — The long session
 
 Residency drift and texture-array growth over hours of panning. The rule to watch:

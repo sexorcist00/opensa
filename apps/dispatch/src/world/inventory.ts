@@ -107,6 +107,13 @@ export interface InventoryReport {
     readonly fps: number;
   };
   readonly frames: number;
+  /**
+   * Frames the render gate SKIPPED over the window (201/4-01) — the other half of `frames`, and the number
+   * the "idle draws → 0" claim is read off rather than asserted. A capture with 400 frames and 0 skips was
+   * taken on a moving map; one with 40 frames and 3 600 skips was taken on a console at rest, and the two
+   * cannot be compared without it.
+   */
+  readonly framesSkipped: number;
   /** Per-frame cost centres, descending by mean. */
   readonly passes: readonly InventoryPass[];
   /** Between-frame named work, mean ms per sampled frame, descending. Empty means nothing was wrapped. */
@@ -288,6 +295,9 @@ export class FrameInventory {
     device: unknown;
     district: string;
     errors: readonly string[];
+    /** Frames the render gate skipped over the window (201/4-01) — the host's own counter, since a skipped
+     *  frame never reaches `sample`. */
+    framesSkipped: number;
     hasTimestamps: boolean;
     /** `engine.cells.pickingBytes` — the host cost of the placement mapper the console picks against. */
     pickingBytes: number;
@@ -338,6 +348,7 @@ export class FrameInventory {
         fps: percentile(sorted, 0.5) > 0 ? Math.round(1000 / percentile(sorted, 0.5)) : 0,
       },
       frames: this.dts.length,
+      framesSkipped: context.framesSkipped,
       passes,
       spans: [...this.spanTotals.entries()]
         .map(([name, ms]) => [name, ms / frames] as const)

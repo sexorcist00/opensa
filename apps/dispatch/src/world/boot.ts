@@ -49,6 +49,7 @@ import { DISTRICTS } from './districts';
 import { createErrorLog } from './error-log';
 import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
 import { DEFAULT_SRC, resolvePakBase } from './pak-source';
+import { RenderGate } from './render-gate';
 import { installWater } from './water';
 import { type DistrictLookup, loadDistricts, NO_DISTRICTS, type SearchedPlace } from './zones';
 
@@ -148,6 +149,11 @@ export interface DispatchReadout {
   readonly following: boolean;
   readonly fps: number;
   readonly hour: number;
+  /** The console is at rest: nothing on screen has changed, so no frame was drawn (201/4-01). The numbers
+   *  beside it are the last drawn frame's, which is what a console at rest still has. */
+  readonly idle: boolean;
+  /** Frames the render gate has skipped since boot — the `idle draws → 0` claim, as a running total. */
+  readonly idleFrames: number;
   /** What the sketch in progress (or the last one finished) measures — null until one is drawn (201/7-05). */
   readonly measurement: Measurement | null;
   /** Labels the decluttering could not place this frame (201/3-03). The operator is told rather than left
@@ -191,6 +197,16 @@ const LOCATE_SPAN = CELL_SIZE;
 /** Readout pushes per second. The loop must not re-render React. */
 const READOUT_HZ = 4;
 /** A world with nothing to stream — the demo's synthetic grid is resident from the start. */
+/**
+ * How long an IDLE console waits before looking again, ms (201/4-01) — the named latency budget for a change
+ * nobody touched: a board tick arriving from the feed, a clock crossing an hour. An operator's own input
+ * never waits for it (the pointer/wheel/key handlers re-arm the animation frame directly), so this bounds
+ * only the delay on something that happened elsewhere, and 100 ms is under the threshold at which a change
+ * stops reading as immediate. PCAD publishes every 4 s, so it is two orders of magnitude inside the rate the
+ * data actually arrives at.
+ */
+export const IDLE_WAKE_MS = 100;
+
 const IDLE_STREAM: StreamStats = {
   blobMs: 0,
   created: 0,
@@ -402,6 +418,14 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   const unbind = (): void => {
     keyboard.unbind();
     gestures();
+    for (const event of ['pointerdown', 'wheel'] as const) {
+      canvas.removeEventListener(event, wake);
+    }
+    window.removeEventListener('keydown', wake);
+    if (idleTimer !== null) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
+    }
   };
   // 201/1-01. Off unless asked for: draining the span recorder is cheap, but a mode that measures by default
   // is a mode nobody can trust to have measured nothing.
@@ -413,6 +437,41 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   const loopCpu = new FrameSpans();
   const time = <T>(name: string, run: () => T): T => (inventory ? loopCpu.measure(name, run) : run());
   /**
+   * Render on demand (201/4-01). The gate decides whether a wake draws; the SCHEDULE decides how soon the
+   * next wake is. While the picture is changing the loop rides `requestAnimationFrame`; while it is not, it
+   * drops to a timer, which is what stops a still city being redrawn sixty times a second on a phone.
+   */
+  const gate = new RenderGate();
+  let idleTimer: null | ReturnType<typeof setTimeout> = null;
+  const schedule = (idle: boolean): void => {
+    if (disposed) {
+      return;
+    }
+    if (idle) {
+      idleTimer = setTimeout(loop, IDLE_WAKE_MS);
+    } else {
+      requestAnimationFrame(loop);
+    }
+  };
+  /**
+   * An input re-arms the fast schedule in its own handler, so the FIRST frame after a thumb lands is the
+   * next animation frame rather than the next idle wake. The gate would find the change anyway — a pose is
+   * a value it compares — but it would find it up to {@link IDLE_WAKE_MS} late, and a map that feels sticky
+   * under the thumb has failed whatever it saves.
+   */
+  const wake = (): void => {
+    gate.wake();
+    if (idleTimer !== null) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
+      requestAnimationFrame(loop);
+    }
+  };
+  for (const event of ['pointerdown', 'wheel'] as const) {
+    canvas.addEventListener(event, wake, { passive: true });
+  }
+  window.addEventListener('keydown', wake, { passive: true });
+  /**
    * A capture waiting for the end of a frame (201/7-07). The two canvases are only in step there: the
    * WebGPU one holds a frame's world until the next one starts, and the overlay holds the symbology drawn
    * for THAT world. Reading either at an arbitrary moment gives a city with no units, or units over a
@@ -420,6 +479,18 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
    */
   let pendingCapture: ((image: Blob | null) => void) | null = null;
   let bodyMs = 0;
+  /** The streaming stats of the last DRAWN frame — what an idle wake compares against (201/4-01). */
+  let lastStream: StreamStats = IDLE_STREAM;
+  /** Whether the chrome has already been told the console is idle; one readout, not one per skipped frame. */
+  let idleReported = false;
+  /** The last readout sent, so going idle can re-send it marked idle rather than inventing a frame's worth
+   *  of zeroes — a console at rest still has the cells, the residency and the pose it stopped at. */
+  let lastPayload: DispatchReadout | null = null;
+  const reportIdle = (): void => {
+    if (lastPayload !== null) {
+      options.onReadout({ ...lastPayload, idle: true });
+    }
+  };
   const frames: number[] = [];
   let disposed = false;
   let lastReadout = 0;
@@ -446,6 +517,32 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     // view THIS frame rather than where it was last frame.
     applyHeldKeys(camera, keyboard, dt);
     camera.advance(dt);
+    // Render on demand (201/4-01): the whole picture's inputs, as VALUES, compared against the frame that
+    // last drew. Everything above this line has to run — a held key and a flight move the view, and a wake
+    // that did not advance them would compare a pose nobody had updated.
+    if (
+      !gate.shouldDraw({
+        canvas: canvas.width * canvas.height,
+        created: lastStream.created,
+        evicted: lastStream.evicted,
+        hour,
+        ops,
+        pending: lastStream.pendingCells,
+        pose: camera.pose(),
+        selection: options.selection(),
+        sketch: sketch.revision(),
+      })
+    ) {
+      if (!idleReported) {
+        idleReported = true; // one readout says the console went idle; then the chrome stops re-rendering too
+        reportIdle();
+      }
+      bodyMs = performance.now() - now;
+      schedule(true);
+
+      return;
+    }
+    idleReported = false;
     const state = camera.state(aspect);
     time('board', () => beacons.update(ops, options.selection(), options.trails?.()));
     // Rings follow the ground point the view is over, never the eye: a camera a kilometre up sits outside
@@ -493,26 +590,28 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     if (now - lastReadout > 1000 / READOUT_HZ) {
       lastReadout = now;
       const average = frames.reduce((sum, value) => sum + value, 0) / Math.max(1, frames.length);
-      time('readout', () =>
-        options.onReadout({
-          buildTime: world.label,
-          cellsTotal: stats.cellsTotal,
-          cellsVisible: stats.cellsVisible,
-          draws: stats.drawsRecorded,
-          following: camera.following(),
-          fps: Math.round(1000 / Math.max(1, average)),
-          hour,
-          measurement: sketch.measurement(),
-          namesHidden: symbology.counted().chipsDropped,
-          pending: stream.pendingCells,
-          pose: camera.pose(),
-          residencyMb: stats.residencyBytes / (1024 * 1024),
-          tool: sketch.tool(),
-        }),
-      );
+      lastPayload = {
+        buildTime: world.label,
+        cellsTotal: stats.cellsTotal,
+        cellsVisible: stats.cellsVisible,
+        draws: stats.drawsRecorded,
+        following: camera.following(),
+        fps: Math.round(1000 / Math.max(1, average)),
+        hour,
+        idle: false,
+        idleFrames: gate.idleFrames,
+        measurement: sketch.measurement(),
+        namesHidden: symbology.counted().chipsDropped,
+        pending: stream.pendingCells,
+        pose: camera.pose(),
+        residencyMb: stats.residencyBytes / (1024 * 1024),
+        tool: sketch.tool(),
+      };
+      time('readout', () => options.onReadout(lastPayload as DispatchReadout));
     }
+    lastStream = stream;
     bodyMs = performance.now() - now;
-    requestAnimationFrame(loop);
+    schedule(false);
   };
   requestAnimationFrame(loop);
 
@@ -560,6 +659,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         device: engine.deviceReport,
         district: params.get('district') ?? UNNAMED_DISTRICT,
         errors: errorLog.entries(),
+        framesSkipped: gate.idleFrames,
         hasTimestamps: !engine.deviceReport.missing.includes('timestamp-query'),
         pickingBytes: engine.cells.pickingBytes,
         surface: {

@@ -133,6 +133,20 @@ operator has the least else to work with.
   Vinewood frames Vinewood rather than a third of it. A world that ships no `info.zon` finds nothing, which
   is the honest answer for a total conversion rather than stock San Andreas names.
 
+## At rest, it draws nothing
+
+A dispatch map is idle for most of a shift, so the console draws a frame when something changed and not
+otherwise: the view moved, the board ticked, the selection or the hour changed, a sketch grew, a cell
+finished streaming, the window resized. *Nothing changed* is a state the loop compares — not an event it
+could miss — so a change that arrives while it is asleep is still there when it looks.
+
+An input is answered in the next animation frame (the pointer, wheel and key handlers re-arm the fast
+schedule themselves); a change nobody touched is picked up within 100 ms. The status bar shows `idle`
+instead of a frame rate, and `?inventory=1` reports `framesSkipped` beside `frames` so a capture says which
+kind of run it was. Plan mode does the same — it is the mode a weak device gets.
+
+While idle the picture is frozen, sway included; the first input resumes it.
+
 ## Labels that declutter
 
 At 150 units a city view collides with itself, so the labels compete for pixels rather than overdrawing each

@@ -52,6 +52,7 @@ export type SketchKind = 'area' | 'circle' | 'ruler';
  * board): it is view state, it is read inside the frame loop, and a re-render must never be able to lose it.
  */
 export class SketchStore {
+  private changes = 0;
   private current: MapTool = 'none';
   private drawing: GtaGround[] = [];
   private readonly finished: Sketch[] = [];
@@ -66,6 +67,7 @@ export class SketchStore {
       return;
     }
     this.drawing.push(at);
+    this.changes += 1;
     if (this.current === 'circle' && this.drawing.length === 2) {
       this.finish();
     }
@@ -75,6 +77,7 @@ export class SketchStore {
   clear(): void {
     this.finished.length = 0;
     this.drawing = [];
+    this.changes += 1;
   }
 
   /** Close the shape in progress, if it has enough points to mean anything. */
@@ -84,6 +87,7 @@ export class SketchStore {
     }
     this.finished.push({ id: `s${String((this.next += 1))}`, kind: this.current, points: this.drawing });
     this.drawing = [];
+    this.changes += 1;
   }
 
   /**
@@ -107,11 +111,17 @@ export class SketchStore {
       : { id: 'pending', kind: this.current, points: this.drawing };
   }
 
+  /** Bumped by every mutation — what the render gate compares, since a tap changes the picture (201/4-01). */
+  revision(): number {
+    return this.changes;
+  }
+
   /** Switch tools. The shape in progress is closed if it can be, and dropped if it cannot. */
   setTool(tool: MapTool): void {
     this.finish();
     this.drawing = [];
     this.current = tool;
+    this.changes += 1;
   }
 
   /** Everything finished, oldest first — the draw order, so a later cordon sits over an earlier one. */
@@ -125,6 +135,7 @@ export class SketchStore {
 
   /** Step back one tap, then one whole shape — the only undo an operator drawing with a finger needs. */
   undo(): void {
+    this.changes += 1;
     if (this.drawing.length > 0) {
       this.drawing.pop();
 
