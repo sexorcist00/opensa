@@ -140,7 +140,7 @@ target.
 | 01 ✅ | ONE resolver, four call sites, `ensure24h` instead of `is24h` | `packages/renderware` (resolver), `packages/game`, `apps/web`, `apps/engine-lab` |
 | 02 ✅ | the choice is visible: a boot log line naming the winner; fixture + tests | `packages/game` tests, `scripts/test-fixtures.ts` |
 | 03 ✅ | docs + the generated file's home + the utility restriction | `docs/contracts/mods.md`, `docs/gta-sa-original/`, `docs/features/`, `tools/timecyc-builder` |
-| 04 | negative `FogSt`: recover SA's meaning, then a field A/B of the three sources | `packages/game` driver, `docs/benchmarks/` |
+| 04 ◐ | negative `FogSt`: SA's meaning recovered, floor removed, A/B captured — his verdict pending | `packages/game` driver, `docs/benchmarks/` |
 
 ### 01 — one resolver, three call sites — ✅ DONE 2026-08-22
 
@@ -281,7 +281,7 @@ Same change as 01/02 where possible:
 - Measured at the close: suite **4 934 green**, `tsc -b` + eslint clean, 0 broken links across the ten docs
   touched, and `npm run timecyc` reproduces its committed output byte for byte from the new destination.
 
-### 04 — negative `FogSt`: SA's meaning first, then the field
+### 04 — negative `FogSt`: SA's meaning first, then the field — code + A/B DONE 2026-08-22, VERDICT PENDING
 
 - Recover from the reversed source (`docs/links.md` → gta-reversed, `CTimeCycle::Update` /
   `CRenderer::RenderFadingInEntities` / `RwCameraSetFogDistance` callers) what a negative fog start does in
@@ -297,6 +297,35 @@ Same change as 01/02 where possible:
 
 **Done when** the three sources have been seen side by side, the verdict is recorded, and the floor is either
 replaced by the recovered rule or carded.
+
+**What shipped:**
+
+- **The rule, recovered, not fitted** — `docs/gta-sa-original/timecyc-fog.md`. SA has exactly ONE consumer of
+  the column: `Scene.m_pRwCamera->fogPlane = CTimeCycle::GetFogStart()` beside
+  `RwCameraSetFarClipPlane(farClip)`, and the pair becomes `D3DRS_FOGSTART` / `D3DRS_FOGEND` with the fog
+  type set to LINEAR once at startup. **No clamp anywhere.** So a negative start is a haze already partly
+  opaque at the camera — `−FogSt / (FarClp − FogSt)` of it — which is how a weather says it has no clear
+  near zone. No hack card was needed; the honest path was reachable.
+- **The floor is gone** (`f1ae2c5c`). Our exp² curve reads the value the same way — the shader clamps the
+  DISTANCE, not the start — so passing it through is the whole fix. `fogCap` stays a ceiling and leaves a
+  negative start alone. Two tests pin it, and a third pins that the cap does not floor.
+- **It was never only a Dante problem.** The floor discarded stock's own near haze on **112 of its 504**
+  expanded rows, which is why FOGGY_SF has never looked foggy from the ground.
+- **The A/B is captured and recorded**: `docs/benchmarks/opensa-engine/2026-08-22-timecyc-fog-ab.md`. Nine
+  headless shots on the existing build, no rebuild, one pose in SF, three arms (floored / authored /
+  Dante). At-camera fog by hour 12·18·21: **0 % · 0 % · 0 %** floored, **4 % · 27 % · 43 %** as stock
+  authored it, **83 % · 91 % · 15 %** as Dante authored it. Hour 21 is the control — Dante is LIGHTER there,
+  so the arms track the table and not a bias. Boot parse 0.859 / 1.698 / **2.016** ms for 184 / 504 / 552
+  rows: **+0.32 ms once** for the bigger table, measurable and irrelevant, said with the number as the plan
+  asked.
+- **The step-02 boot line proved itself in the field**: every capture printed the winner, and it agreed with
+  the arm every time — which is how the A/B knows which table it photographed.
+- **Also learned, worth not re-paying for**: `weather=` and the player's CITY have to be chosen together —
+  the zone remap rewrites a weather that has no variant for the region, so a FOGGY_SF forced in LS is
+  SUNNY_LA before the first frame.
+
+**Still open — the only thing left in this plan**: his verdict on the pictures. The change is large at
+FOGGY_SF noon (the street beyond ~50 u is gone), it is authored, and it is his call whether it ships as is.
 
 ## Out of scope, deliberately
 

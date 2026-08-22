@@ -914,3 +914,14 @@ question this row does not guess at. **Not a controlled A/B of 013**: the two pa
 differ by `mod-installer` 015/016, `img-splitter` 002, `vehicle-installer` 014 and `lod-common`'s blended-last
 rule — what the pair carries is the absence of a regression, on the build where the LOD cells started welding
 49 820 impostor triangles in the cutout class.
+
+### 2026-08-22 — `timecyc-fog-ab` (look A/B, not a frame-cost run)
+
+[2026-08-22-timecyc-fog-ab.md](opensa-engine/2026-08-22-timecyc-fog-ab.md). Nine headless captures on the
+2026-08-22 `opensa` build (**not rebuilt**), one pose in SF, `weather=9` FOGGY_SF at hours 12/18/21, three
+arms: the fog start floored at 0 (the old code), the same table as authored, and Dante's 552-row table as
+authored. The figure is the fog contribution at the CAMERA — 0 % floored, 4/27/43 % from stock's own
+authoring, 83/91/15 % from Dante's. Hour 21 is the control: Dante is LIGHTER there, so the arms track the
+table rather than a bias. The only cost number is the boot parse: 0.859 / 1.698 / **2.016** ms for
+184 / 504 / 552 rows, i.e. **+0.32 ms once** for the bigger table. `draws` and residency unchanged between
+arms. **Not comparable to any row above** — no sweep was run and no scene flight was flown.
