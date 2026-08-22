@@ -67,3 +67,12 @@ observations that killed it, and the conditions under which it might be worth re
   measured), all field-rejected in one day. Produced the two findings the next step stands on: the "weak at
   speed" complaint is a SHAPE (μ·g vs v²), not a scale — and this project's feel target is the field's
   verdict, not the original's numbers.
+- [asi-perfect-vegetation-view-weighted-cards.md](./asi-perfect-vegetation-view-weighted-cards.md) — the
+  fourth `asi/sdk` consumer: a render-callback wrap that would weight each impostor card's material alpha by
+  how squarely it faces the camera, so a tree LOD shows ONE canopy projection from every angle
+  (lod-trees 013 cause 1). Scaffolded 2026-08-21 (`8faafc67`), **removed 2026-08-22 without a single exe site
+  ever being read** — not disproved, just out of a reason: cause 1 measured as mostly cause 3, OpenSA's
+  cutout weld lands at ×0.97 of the HD on its own, and the `sa` half reached the same parity in the DATA
+  (step 06's second cage, 3 cards thinned per tree). Keeps the mechanism, the rule it demonstrates (an ASI is
+  for what data cannot say), the alpha-reference-100 cliff any successor inherits, and the field trigger that
+  would revive it — whose answer for OpenSA would be a material class, not a plugin

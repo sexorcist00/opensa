@@ -377,11 +377,6 @@ row but its chain was superseded by 097). Newest first:
   [`asi/perfect-cutscene/docs/plans/`](../../asi/perfect-cutscene/docs/plans/readme.md) (`001` deferred
   cutscene alpha — WRITTEN 2026-08-14, not started; ends with a full plan-004 fleet re-check + pmb
   packaging).
-- **asi/perfect-vegetation** — view-weighted tree-LOD impostor cards on the `sa` target: each crossed card's
-  material alpha follows how squarely it faces the camera, so the LOD shows ONE canopy projection from every
-  angle (lod-trees 013 cause 1); a render-callback wrap, no shader, coexists with the SkyGfx fork by design;
-  fourth consumer of `asi/sdk`. [`asi/perfect-vegetation/docs/plans/`](../../asi/perfect-vegetation/docs/plans/readme.md)
-  (`001` — PLANNED 2026-08-21, step 0 scaffold done).
 - **asi/perfect-vehicle** — the VEHICLE-side ceilings no adjuster has a setting for: the two `carmods.dat`
   arrays (30 `link` pairs game-wide, 16 parts per car) that `tools/add-vehicles` runs into; third consumer
   of `asi/sdk`. [`asi/perfect-vehicle/docs/plans/`](../../asi/perfect-vehicle/docs/plans/readme.md) (`001` RE

@@ -261,7 +261,8 @@ triangles instead of 8.
 So the rule step 03 picked — 4 cards — is right for the target that has the cutout class and 15–36 % too
 dense for the one that does not. Three ways out, and their price is the choice: bake a SECOND card set for
 `sa` at 3 cards (a second atlas, ~+4.5 min of stage), weight each card's alpha by view angle at draw time
-(`asi/perfect-vegetation`, which is exactly this mechanism and was the phase-B plan), or leave `sa` at ×1.2
+(`asi/perfect-vegetation`, which is exactly this mechanism and was the phase-B plan — the route this
+file's own numbers then closed, [postmortem](../../postmortem/asi-perfect-vegetation-view-weighted-cards.md)), or leave `sa` at ×1.2
 and take the parity only on OpenSA.
 
 ## DXT5 endpoints (`rw-codec`)

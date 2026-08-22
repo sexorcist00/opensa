@@ -70,7 +70,7 @@ pose is the offline instrument — it is what produced the report and it is repr
 | 01 | supersampled, mip-aware bake; colour dilation before DXT5; DXT5 endpoints ignore transparent texels | both | `lod-trees-generator/core/raster.ts`, `render.ts`; `rw-codec/dxt-encode.ts` |
 | 02 | the impostor row inherits the source's vegetation bits; one winding per card | both | `map-placement/ide.ts` (flags param is already there), `lod-trees-generator/core/cards.ts` |
 | 03 | density: measure the stack, pick the card rule — MEASURED, 4 cards stay | both | `lod-trees-generator` config + a benchmark |
-| 04 | view-weighted cards (a billboard-set material): one projection from every angle | OpenSA; `sa` via an ASI render callback (see below) | `cell-weld`, `engine` shaders — go/no-go on 03's numbers |
+| 04 | view-weighted cards (a billboard-set material): one projection from every angle — NOT BUILT, superseded by 06 | OpenSA; the `sa` half was to be an ASI, now [postmortem](../../../../docs/postmortem/asi-perfect-vegetation-view-weighted-cards.md) | — |
 | 05 | field verdict, numbers, docs | — | `docs/benchmarks/`, this file, tool readme |
 | 06 | per-target card sets + the card alpha solved per tree — BUILT 2026-08-21 | both | `lod-trees-generator/core/{probe,card-alpha}.ts`, `perfect-map-builder` |
 
@@ -236,7 +236,16 @@ field verdict; this is what PICKS the rule.
   and on the `sa` target partial coverage below reference 100 is discarded rather than faded, which thins it
   further. That is the same field question step 01 left open, and it now has a second reason to be asked.
 
-### 04 — phase B: one projection from every angle (OpenSA)
+### 04 — phase B: one projection from every angle (OpenSA) — NOT BUILT
+
+**Superseded by step 06 (2026-08-22).** Both halves lost their justification in measurement: OpenSA's cutout
+weld already lands at ×0.97 of the HD with an angular swing equal to the tree's own, and the `sa` half got
+the same parity out of the DATA — a second cage of 3 cards thinned per tree — instead of out of a draw-time
+weight. The `asi/perfect-vegetation` scaffold that was to carry the `sa` half is REMOVED at the user's call
+(2026-08-22); what it was, what killed it and the field trigger that would revive it are in
+[`docs/postmortem/asi-perfect-vegetation-view-weighted-cards.md`](../../../../docs/postmortem/asi-perfect-vegetation-view-weighted-cards.md).
+The design below is kept as written for whoever picks the angular question up again — for OpenSA it is the
+material class, which is where the engine work would live.
 
 The honest answer to cause 1 is a view-dependent impostor, and our engine can have one where RenderWare
 cannot (`docs/project-goals.md` §2–3): the cards stay, each card's vertices carry its PLANE normal (authored by
@@ -245,20 +254,13 @@ scales each card's alpha by a normalised weight of `|n · viewDir|` so the cards
 coverage and the edge-on ones fade — the sum over the set stays ≈ one projection. 16 vertices per tree; the
 term is per-vertex. The `sa` target keeps 03's rule.
 
-- **The `sa` target can have it too — by ASI, never by CLEO** (his question, 2026-08-21): a CLEO script has
-  no reach into an atomic's draw, but an ASI does. Shape: the cards are baked as four MATERIALS of ONE atomic
-  (the `objs` one-atomic rule, `docs/restrictions/assets-and-data.md`, stays satisfied), and the ASI installs
-  an atomic render callback on the `lodtrees.ide` id range (the tool writes the range to a data file the ASI
-  reads) that, per draw, takes the camera azimuth against the tree's frame and either renders only the 1–2
-  nearest mesh splits or sets each card's `RpMaterialColor` alpha to its `|n · view|` weight — the fixed
-  function multiplies material alpha by itself, no shader. Fourth consumer of `asi/sdk`, beside
-  `perfect-map` / `perfect-vehicle` — its own chain is
-  [`asi/perfect-vegetation/docs/plans/001`](../../../../asi/perfect-vegetation/docs/plans/001-view-weighted-impostor-cards.md)
-  (scaffold done 2026-08-21). The one constraint: the install runs the SkyGfx fork, which assigns its
-  building pipeline to every atomic — our callback WRAPS its render CB, it does not replace the pipeline
-  (`docs/gta-sa-original/` carries the fork facts). A vertex-shader pipe (skygfx's way) is the heavier
-  alternative and is not needed for this. Lands as its own sub-step of 04 after the OpenSA half is
-  field-accepted — the same bake serves both.
+- **The `sa` target could have had it too — by ASI, never by CLEO** (his question, 2026-08-21): a CLEO
+  script has no reach into an atomic's draw, but an ASI does. The shape — four cards as four MATERIALS of
+  ONE atomic, a wrapped `RpAtomic` render callback writing each card's `RpMaterialColor` alpha from its
+  `|n · view|` weight, wrapping the SkyGfx fork's callback rather than replacing its pipeline — was
+  scaffolded as `asi/perfect-vegetation` and REMOVED on 2026-08-22 before a single exe site was read, once
+  step 06 reached the same parity in the bake. Recovered in full in
+  [`docs/postmortem/asi-perfect-vegetation-view-weighted-cards.md`](../../../../docs/postmortem/asi-perfect-vegetation-view-weighted-cards.md).
 - Gate: 03's numbers. Frame budget: no measurable change on the Ganton lap (`docs/benchmarks/` frame-cost
   family) — state the number.
 - Docs in the same change: `docs/architecture/` (a new material class), `docs/features/` (vegetation LOD),
