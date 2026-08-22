@@ -449,3 +449,27 @@ The rule for a new design: allocate through `allocateIds` with a ledger, or numb
 **Caught:** partly. `allocateIds` refuses an exhausted window and a ledger id outside it, and a unit test
 pins the hole-fill allocator to its side of the line. But nothing checks a NEW allocator, and the symptom is
 the silent one: every id still unique, every file valid, and a save that spawns the wrong car.
+
+## A car's `carmods` line may only name a part its own MODEL can mount
+
+A universal (`*_b_*`) Transfender part hangs on a `ug_*` dummy inside the car model — `ug_bonnet` (+`_dam`)
+for `bnt_b_*`, `ug_bonnet_left/right` for `bntl_b_*`, `ug_spoiler` for `spl_b_*`, `ug_roof` for `rf_b_*`,
+`ug_wing_left`/`ug_wing_right` for `wg_l_b_*`/`wg_r_b_*`, `ug_lights` for `lgt_b_*`, `ug_nitro` for `nto_b_*`.
+The table is read off the game's own data: every stock car offered a family carries that family's dummy, and
+**stock SA has 0 of 77 cars naming a part it cannot mount**. Car-specific families (`_lr_`, `_a_`, `_c_`)
+replace a standard component every model has (bumper, exhaust) and are not affected.
+
+A replacement mod that does not carry the dummies over — most do not — leaves the game installing a part onto
+a frame that is not there: **`0x007F0BF7`, "frame did not find the child"**, reading `+0x98` off null. It
+needs nobody to visit a mod shop, because `ModelVariations` spawns traffic already tuned; that is how it was
+found, twice, from a helicopter (2026-08-22). Our tree had **30 of 154** cars in that state.
+
+The rule for a new design: a line is a claim about the MODEL in the slot. A folder that declares no line gets
+the stock one REMOVED rather than inherited (`vehicle-installer` plan 015 step 1, built), and a line it does
+declare may only name parts that model can mount. The mod-author-facing half is
+[`contracts/vehicles.md`](../contracts/vehicles.md).
+
+**Caught:** the inheritance half, by the installer and its tests. The declared half: **nothing** — it was
+cleaned out of the fleet's settings files BY HAND ([`hacks/carmods-lines-hand-cleaned.md`](../hacks/carmods-lines-hand-cleaned.md)),
+so a new mod puts the crash back with no build error, no warning, and a symptom that surfaces minutes later
+in traffic.
