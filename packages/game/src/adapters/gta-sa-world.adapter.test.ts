@@ -441,8 +441,10 @@ describe('GtaSaWorldAdapter.breakableInfo', () => {
 
 describe('GtaSaWorldAdapter.loadTimecyc', () => {
   describe('negative cases', () => {
-    it('throws when neither timecyc file ships (the table is mandatory)', async () => {
-      await expect(new GtaSaWorldAdapter(cfg()).loadTimecyc()).rejects.toThrow('asset not found: data/timecyc.dat');
+    it('throws naming all three candidates when none ships (the table is mandatory)', async () => {
+      await expect(new GtaSaWorldAdapter(cfg()).loadTimecyc()).rejects.toThrow(
+        'asset not found: data/timecyc_24h.dat / data/timecyc24h.dat / data/timecyc.dat',
+      );
     });
   });
 });

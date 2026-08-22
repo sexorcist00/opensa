@@ -11,7 +11,7 @@
 import type { Environment } from '@opensa/engine';
 
 import { buildTimecyc, sampleTimecycBlend } from '@opensa/renderware/parsers/text/timecyc';
-import { convertTo24h, parseTimecyc, WEATHER_NAMES } from '@opensa/renderware/parsers/text/timecyc.parser';
+import { ensure24h, parseTimecyc, WEATHER_NAMES } from '@opensa/renderware/parsers/text/timecyc.parser';
 
 import type { WeatherBlend } from '../weather/weather-transition';
 
@@ -83,8 +83,9 @@ export interface EngineEnvironmentOptions {
   fogCap?: number;
   /** Extra multiplier on the timecyc fog distances (the lab's high camera needs `?fogscale=`). */
   fogScale?: number;
-  /** Raw timecyc text from the pak manifest; colours go parametric when absent. */
-  timecyc?: { is24h: boolean; text: string };
+  /** Raw timecyc text, whichever of the three source names supplied it (plan 104/01) — the row count
+   *  decides whether it is expanded, so the caller does not say. Colours go parametric when absent. */
+  timecyc?: { text: string };
   /** SA weather id 0..19 (cloud profile + timecyc column). */
   weather?: number;
   /** Live weather blend getter (prod parity — the host's WeatherTransition): when present, every apply
@@ -119,11 +120,7 @@ export function createEngineEnvironmentDriver(
 ): EngineEnvironmentDriver {
   const config = options.config ?? DEFAULT_ENGINE_ENV_CONFIG;
   const weather = options.weather ?? 0;
-  const timecyc = options.timecyc
-    ? buildTimecyc(
-        options.timecyc.is24h ? parseTimecyc(options.timecyc.text) : convertTo24h(parseTimecyc(options.timecyc.text)),
-      )
-    : null;
+  const timecyc = options.timecyc ? buildTimecyc(ensure24h(parseTimecyc(options.timecyc.text))) : null;
 
   return {
     apply(hour: number): void {

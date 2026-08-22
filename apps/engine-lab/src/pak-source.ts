@@ -10,11 +10,10 @@
  * still loads; it simply has no game dir beside it, and the environment falls back to the parametric driver.
  */
 
-/** Timecyc text plus which variant it is — prod's exact preference, resolved the same way here. */
-export interface LabTimecyc {
-  is24h: boolean;
-  text: string;
-}
+import { resolveTimecycSourceAsync, type TimecycSource } from '@opensa/renderware/parsers/text/timecyc-source';
+
+/** Timecyc text plus which of the three names supplied it — prod's order, resolved the same way here. */
+export type LabTimecyc = TimecycSource;
 
 export interface PakSource {
   /** Where `manifest.json` / `world.ospak` live. */
@@ -23,18 +22,14 @@ export interface PakSource {
   gameDir: null | string;
 }
 
-/** The game's timecyc, with prod's preference: `timecyc_24h.dat` as authored, else vanilla `timecyc.dat`. */
+/** The game's timecyc, through prod's own candidate order (`TIMECYC_SOURCES`, plan 104/01). */
 export async function loadLabTimecyc(source: PakSource): Promise<LabTimecyc | null> {
-  if (source.gameDir === null) {
+  const gameDir = source.gameDir;
+  if (gameDir === null) {
     return null;
   }
-  const authored = await text(`${source.gameDir}/data/timecyc_24h.dat`);
-  if (authored !== null) {
-    return { is24h: true, text: authored };
-  }
-  const vanilla = await text(`${source.gameDir}/data/timecyc.dat`);
 
-  return vanilla !== null ? { is24h: false, text: vanilla } : null;
+  return resolveTimecycSourceAsync((path) => text(`${gameDir}/${path}`));
 }
 
 /** Resolve `?src=` to a products base. Probes, in order: a SELF-CONTAINED game dir (`<src>/pak/manifest.json`,

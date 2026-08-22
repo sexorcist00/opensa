@@ -1,5 +1,6 @@
 import type { Environment } from '@opensa/engine';
 
+import { HOURS, TIME_WEATHERS } from '@opensa/renderware/parsers/text/timecyc.parser';
 import { describe, expect, it } from 'vitest';
 
 import { createEngineEnvironmentDriver, DEFAULT_ENGINE_ENV_CONFIG } from './engine-environment-driver';
@@ -49,6 +50,12 @@ function makeEnvironment(): Environment {
     waterColor: [0.05, 0.14, 0.18],
     windStrength: 1,
   };
+}
+
+/** A whole 24h table of one repeated row: `ensure24h` reads the row COUNT, so a synthetic timecyc has to be
+ *  the full 21 × 24 (plan 104/01). Every weather is the same row, so weather 0 reads exactly `row`. */
+function wholeTable(row: string): string {
+  return Array.from({ length: TIME_WEATHERS * HOURS }, () => row).join('\n');
 }
 
 describe('createEngineEnvironmentDriver', () => {
@@ -270,9 +277,9 @@ describe('createEngineEnvironmentDriver', () => {
         '20 90 55 0', // alpha2 rgb2
         '0 0 0 1', // cloudAlpha intensityLimit waterFogAlpha dirMult
       ].join(' ');
-      const text = Array.from({ length: 24 }, () => row).join('\n');
+      const text = wholeTable(row);
       const environment = makeEnvironment();
-      createEngineEnvironmentDriver(environment, { timecyc: { is24h: true, text }, weather: 0 }).apply(21);
+      createEngineEnvironmentDriver(environment, { timecyc: { text }, weather: 0 }).apply(21);
 
       expect(environment.cloudTopColor).toEqual([0, 0, 0]);
       expect(environment.cloudBottomColor).toEqual([0, 0, 0]);
@@ -300,12 +307,12 @@ describe('createEngineEnvironmentDriver', () => {
         '20 90 55 0', // alpha2 rgb2
         '0 0 0 1', // cloudAlpha intensityLimit waterFogAlpha dirMult
       ].join(' ');
-      const text = Array.from({ length: 24 }, () => row).join('\n');
+      const text = wholeTable(row);
       const environment = makeEnvironment();
       const config = structuredClone(DEFAULT_ENGINE_ENV_CONFIG);
       config.graphics.worldLight.ambient = 0.5;
       config.graphics.worldLight.ambientFloor = 0; // isolate the timecyc term from the deliberate floor
-      createEngineEnvironmentDriver(environment, { config, timecyc: { is24h: true, text }, weather: 0 }).apply(12);
+      createEngineEnvironmentDriver(environment, { config, timecyc: { text }, weather: 0 }).apply(12);
 
       expect(environment.ambientColor[0]).toBeCloseTo((78 / 255) ** 2.2 * 0.5, 5);
       expect(environment.ambientColor[1]).toBeCloseTo((83 / 255) ** 2.2 * 0.5, 5);

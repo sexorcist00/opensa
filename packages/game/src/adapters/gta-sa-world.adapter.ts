@@ -13,7 +13,7 @@ import {
   buildTimecyc,
   buildWorldGrid,
   type CarGroup,
-  convertTo24h,
+  ensure24h,
   groupRulesBySurface,
   type HandlingEntry,
   type IdeObjectDef,
@@ -42,9 +42,11 @@ import {
   type ProcObjSlopeConfig,
   type RegionColliders,
   resolveMap,
+  resolveTimecycSource,
   scatterProcObjects,
   type SurfaceInfo,
   type Timecyc,
+  TIMECYC_SOURCES,
   type VehicleColours,
   type VehicleDef,
   type WorldGrid,
@@ -375,18 +377,18 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   }
 
   /**
-   * Load the timecyc (per-weather, per-hour colour/lighting table), always as 24h.
-   * Uses the optional `timecyc_24h.dat` as-is when present, else converts the
-   * mandatory vanilla `timecyc.dat` (8 keyframes/weather) to 24h.
+   * Load the timecyc (per-weather, per-hour colour/lighting table), always as 24h. The file is whichever
+   * of {@link TIMECYC_SOURCES} the game dir carries first; `ensure24h` decides by row count, so an
+   * authored 24h table (504 or 552 rows) passes through and the stock 8-keyframe one is expanded.
    */
   async loadTimecyc(): Promise<Timecyc> {
     await Promise.resolve(); // VFS reads are synchronous; the WorldAdapter API is async
-    const text24 = this.fs.getText('data/timecyc_24h.dat');
-    if (text24 !== null) {
-      return buildTimecyc(parseTimecyc(text24));
+    const source = resolveTimecycSource((path) => this.fs.getText(path));
+    if (source === null) {
+      throw new Error(`asset not found: ${TIMECYC_SOURCES.map((c) => c.path).join(' / ')}`);
     }
 
-    return buildTimecyc(convertTo24h(parseTimecyc(requireText(this.fs, 'data/timecyc.dat'))));
+    return buildTimecyc(ensure24h(parseTimecyc(source.text)));
   }
 
   /**

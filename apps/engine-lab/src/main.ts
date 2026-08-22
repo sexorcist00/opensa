@@ -562,7 +562,7 @@ function wireWeather(
 
   return (weather: number): void => {
     if (timecyc !== null) {
-      onDriver(timecycDriver(engine, timecyc.text, timecyc.is24h, weather, fogScale, aces, bloom, fogCap));
+      onDriver(timecycDriver(engine, timecyc.text, weather, fogScale, aces, bloom, fogCap));
     }
   };
 }
