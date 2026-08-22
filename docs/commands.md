@@ -25,7 +25,10 @@ so building one target keeps the other's intermediates), so re-running one stage
 (`--game <out>/.work-sa/5-trees`) inside the SAME target's dir deletes the intermediate first. Copy it out,
 point `--out` elsewhere, or read the OTHER target's kept dir — the builder refuses the overlap rather than
 wiping it. Every run writes `<out>/build-timings.json` — per-stage wall clock plus the target and procobj
-knobs it was built with, so two durations are comparable — and each target that runs writes
+knobs it was built with, so two durations are comparable, plus `startedAt`/`finishedAt` and a `status`. **A run
+that DIES writes it too**, with `status: "failed"`, the step that threw and the stages that had finished; both
+it and this run's `report-<target>.json` are cleared on entry, so nothing an earlier run left can be read as
+this one's. Each target that runs writes
 `<out>/report-<target>.json` (`report-sa.json`, `report-opensa.json`): the target, the fetch game id, the
 timings and one typed fragment per stage that produced one (optimize totals; the sa census/FLA pools/lift
 requirements/asi sha; the pack summary with a POINTER to `opensa/pak/report.json` — there is no root

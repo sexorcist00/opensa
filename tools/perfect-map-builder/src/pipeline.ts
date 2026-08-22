@@ -293,6 +293,13 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     resume: options.resume === true,
     work,
   });
+  // Only now, past every refusal: clear the two files this run REPLACES, so a run that dies leaves nothing of
+  // an earlier one to be read as its own (`build-timings.json` carried no date at all, and a stale
+  // `report-<target>.json` differs only in a `builtAt` deep inside it). Both are re-written below — on
+  // success, and on failure with the step that threw and the stages that had finished.
+  rmSync(join(outPath, 'build-timings.json'), { force: true });
+  rmSync(join(outPath, `report-${target}.json`), { force: true });
+  const startedAt = new Date().toISOString();
 
   // The common chain (installers → optimizer → LODs). Conditional stages are skipped when their source is empty.
   // A stage may RETURN a fragment for the target report (plan 005) — the runner collects them, keyed by stage.
@@ -398,6 +405,19 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
 
     return result;
   };
+  /** The run's timings file — written at the end, and by whichever step throws first (with what it managed). */
+  const finishTimings = (failed?: { error: string; step: string }): void =>
+    writeStageTimings(
+      outPath,
+      timings,
+      {
+        ...asiPairings(shippedAsi, shippedCutsceneAsi),
+        procobjDensity: config.procobjDensity,
+        procobjMax: config.procobjMax,
+        target,
+      },
+      { failed, startedAt },
+    );
   const untilIndex = until === undefined ? Infinity : STAGE_NAMES.indexOf(until);
   /** Run a step through `timed`, record it in the resume manifest, and mark the manifest failed if it throws. */
   const step = async <T>(name: string, dir: string, run: () => Promise<T> | T): Promise<T> => {
@@ -408,6 +428,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       return result;
     } catch (error) {
       recordFailure(name, error);
+      finishTimings({ error: error instanceof Error ? error.message : String(error), step: name });
       throw error;
     }
   };
@@ -512,6 +533,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       until,
     }).catch((error: unknown) => {
       recordFailure('sa', error);
+      finishTimings({ error: error instanceof Error ? error.message : String(error), step: 'sa' });
       throw error;
     });
     recordStep('sa', join(outPath, 'sa'), Number(((Date.now() - saStarted) / 1000).toFixed(1)));
@@ -570,12 +592,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   if (!keepWork) {
     rmSync(work, { force: true, recursive: true });
   }
-  writeStageTimings(outPath, timings, {
-    ...asiPairings(shippedAsi, shippedCutsceneAsi),
-    procobjDensity: config.procobjDensity,
-    procobjMax: config.procobjMax,
-    target,
-  });
+  finishTimings();
 
   return { produced, stoppedEarly: until !== undefined };
 }
@@ -1606,6 +1623,11 @@ export function checkInstBearingIplSlots(instBearingIpls: number): void {
  * produced with, because a duration is only comparable against another run whose configuration is known.
  * Comparing two builds is otherwise a guess about what each one was told to do — and the asi hash is what
  * turns "this map crashes" into "this map is paired with a different asi".
+ *
+ * **And which run it was.** It carries `startedAt`/`finishedAt` and a `status`, and a run that DIES writes it
+ * too, with the step that threw and the stages that had finished. Before that (until 2026-08-22) a failed run
+ * left the previous one's file untouched and undated, so `build/<game>/` after a crash showed yesterday's
+ * numbers with nothing saying so; the run also clears both this file and its `report-<target>.json` on entry.
  */
 export function writeStageTimings(
   outPath: string,
@@ -1621,18 +1643,40 @@ export function writeStageTimings(
     procobjMax?: number;
     target: BuildTarget;
   },
+  run?: {
+    /** Set when a step threw: which one, and what it said. Absent = the run finished. */
+    failed?: { error: string; step: string };
+    /** ISO time the run began — the pair with `finishedAt` is what dates the file. */
+    startedAt?: string;
+  },
 ): void {
-  if (timings.length === 0) {
+  const failed = run?.failed;
+  if (timings.length === 0 && !failed) {
     return;
   }
   const total = timings.reduce((sum, stage) => sum + stage.seconds, 0);
-  log('build time');
+  log(failed ? `build time (RUN FAILED in '${failed.step}' — the stages below are what finished)` : 'build time');
   for (const { name, seconds } of timings) {
     const share = total > 0 ? ((100 * seconds) / total).toFixed(0) : '0';
     console.log(`  ${name.padEnd(10)} ${formatMinutes(seconds).padStart(8)}  ${share.padStart(3)} %`);
   }
   console.log(`  ${'TOTAL'.padEnd(10)} ${formatMinutes(total).padStart(8)}`);
-  writeFileSync(join(outPath, 'build-timings.json'), JSON.stringify({ config, stages: timings, total }, null, 2));
+  writeFileSync(
+    join(outPath, 'build-timings.json'),
+    JSON.stringify(
+      {
+        config,
+        finishedAt: new Date().toISOString(),
+        ...(failed ? { failed } : {}),
+        ...(run?.startedAt ? { startedAt: run.startedAt } : {}),
+        stages: timings,
+        status: failed ? 'failed' : 'ok',
+        total,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 /**

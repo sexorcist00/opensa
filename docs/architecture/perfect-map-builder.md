@@ -27,7 +27,10 @@ refused by name rather than eaten ([restrictions/architecture.md](../restriction
 other target's dir is not touched. Every stage is timed and logged as it ends, and the run writes
 `<out>/build-timings.json` stating the target, the procobj knobs and the **sha256 of the `perfect-map.asi` it
 shipped** — a map at this density is correct only with that asi, so the pairing is recorded rather than
-remembered. Each target that runs also writes **`<out>/report-<target>.json`** (plan 005) at the end of its
+remembered — as well as `startedAt`/`finishedAt` and a `status`. **A failed run writes that file too**
+(`status: "failed"`, the step that threw, the stages that had finished), and the run clears both it and its
+own `report-<target>.json` on entry: until 2026-08-22 a crash left the previous run's undated numbers sitting
+in `build/<game>/` with nothing saying they were not this run's. Each target that runs also writes **`<out>/report-<target>.json`** (plan 005) at the end of its
 chain: the target, the fetch game id, the timings and one typed fragment per stage that produced one —
 optimize totals + failures; the sa census, FLA pools, lift requirements and asi sha (console-only before);
 the pack summary with a pointer to `opensa/pak/report.json`. There is no unnamed root `report.json`: with two

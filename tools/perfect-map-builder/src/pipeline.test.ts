@@ -915,14 +915,24 @@ describe('writeStageTimings', () => {
 
       expect(existsSync(join(out, 'build-timings.json'))).toBe(false);
     });
+
+    it("DOES write when a run failed before any stage finished — the file must not stay yesterday's", () => {
+      writeStageTimings(out, [], knobs, { failed: { error: 'boom', step: 'mods' } });
+
+      expect(written().status).toBe('failed');
+      expect(written().stages).toEqual([]);
+    });
   });
 
-  const written = (): { config: unknown; stages: StageTiming[]; total: number } =>
-    JSON.parse(readFileSync(join(out, 'build-timings.json'), 'utf8')) as {
-      config: unknown;
-      stages: StageTiming[];
-      total: number;
-    };
+  const written = (): {
+    config: unknown;
+    failed?: { error: string; step: string };
+    finishedAt: string;
+    stages: StageTiming[];
+    startedAt?: string;
+    status: string;
+    total: number;
+  } => JSON.parse(readFileSync(join(out, 'build-timings.json'), 'utf8')) as ReturnType<typeof written>;
 
   describe('positive cases', () => {
     it('records the knobs the run was configured with, so two durations are comparable', () => {
@@ -931,6 +941,27 @@ describe('writeStageTimings', () => {
       expect(written().config).toEqual(knobs);
       expect(written().stages).toEqual([{ name: 'procobj', seconds: 420 }]);
       expect(written().total).toBe(420);
+    });
+
+    it('dates the file and marks the run ok, so a later reader knows which run it is', () => {
+      writeStageTimings(out, [{ name: 'procobj', seconds: 420 }], knobs, { startedAt: '2026-08-22T07:00:00.000Z' });
+
+      expect(written().status).toBe('ok');
+      expect(written().startedAt).toBe('2026-08-22T07:00:00.000Z');
+      expect(Date.parse(written().finishedAt)).not.toBeNaN();
+      expect(written().failed).toBeUndefined();
+    });
+
+    it('records the step that threw, with the stages that had finished', () => {
+      writeStageTimings(out, [{ name: 'mods', seconds: 84 }], knobs, {
+        failed: { error: '137 inst rows place a model whose IDE is listed LATER', step: 'sa' },
+        startedAt: '2026-08-22T07:00:00.000Z',
+      });
+
+      expect(written().status).toBe('failed');
+      expect(written().failed?.step).toBe('sa');
+      expect(written().stages).toEqual([{ name: 'mods', seconds: 84 }]);
+      expect(written().total).toBe(84);
     });
 
     it('totals the stages it was given rather than re-deriving them', () => {
