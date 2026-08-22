@@ -925,3 +925,40 @@ authoring, 83/91/15 % from Dante's. Hour 21 is the control: Dante is LIGHTER the
 table rather than a bias. The only cost number is the boot parse: 0.859 / 1.698 / **2.016** ms for
 184 / 504 / 552 rows, i.e. **+0.32 ms once** for the bigger table. `draws` and residency unchanged between
 arms. **Not comparable to any row above** — no sweep was run and no scene flight was flown.
+
+## 2026-08-22 — plan 104 on an unchanged world: an ENGINE-only A/B
+
+[`opensa-engine/2026-08-22-ingame-plan-104-engine-ab.json`](opensa-engine/2026-08-22-ingame-plan-104-engine-ab.json),
+user display lane, `?bench=all`, vsync-capped. **The cleanest pair this folder has**: the SAME pak
+(`build/original/opensa`, 2026-08-22 09:57, unrebuilt) against
+[the lod-trees 013 sweep](opensa-engine/2026-08-22-ingame-lod-trees-013-sweep.json) taken on it, with the
+only variable being our code — that sweep's engine plus all of plan 104 (the one timecyc resolver, the boot
+report line, and the fog start no longer floored at 0).
+
+**Mean frame 12.788 ms against 12.767 — +0.17 %.** Nothing else in the sweep moves: every scene is within
+±1.7 % on `avgMs`, triangles within ±0.3 %, draws within ±1.3 %, `legStart.ok` true on all nine legs,
+`lateCreates` 0. Slow frames **24 → 21**. Plan 104 costs nothing measurable.
+
+| scene | avgMs | p95 | gpu pass | draws | slow |
+| --- | --- | --- | --- | --- | --- |
+| ls-noon | 11.136 (−0.2 %) | 12.6 (−3.8 %) | 6.489 (−0.2 %) | 2085 | 1 ← 0 |
+| sf-fog-dawn | 11.409 (**+1.7 %**) | 14.8 (**+8.8 %**) | 6.327 (**+2.8 %**) | 1713 | 0 ← 0 |
+| lv-night | 16.537 (+0.4 %) | 18.9 (0.0 %) | 11.185 (+0.5 %) | 3530 | 8 ← 3 |
+| country-dusk | 16.227 (+0.2 %) | 18.7 (0.0 %) | 12.113 (−0.5 %) | 995 | 7 ← 13 |
+| ocean-horizon | 8.347 (+0.2 %) | 9.3 (−1.1 %) | 2.175 (+0.3 %) | 42 | 1 ← 0 |
+| ls-rain-night | 10.284 (+0.9 %) | 12.2 (+0.8 %) | 5.622 (−1.2 %) | 1805 | 3 ← 1 |
+| ganton-noon | 14.757 (−1.4 %) | 17.1 (−4.5 %) | 9.999 (−2.6 %) | 2000 | 0 ← 2 |
+| strip-noon | 11.118 (+0.6 %) | 14.4 (+0.7 %) | 6.276 (+0.4 %) | 2005 | 1 ← 1 |
+| ganton-night | 15.278 (−0.2 %) | 18.0 (+0.6 %) | 10.489 (−0.3 %) | 1991 | 0 ← 4 |
+
+**The one scene worth a sentence is `sf-fog-dawn`**, and it is the only one where a mechanism exists rather
+than noise: it is the FOG scene, plan 104 raised its fog factor everywhere by unflooring the start, and
+`fogColorFor` runs its cloud math only on meaningfully fogged pixels (`smoothstep(0.7, 1.0, fogFactor)`,
+`shaders.ts`) — so more fogged pixels means more pixels taking that branch. Pass +2.8 %, p95 +8.8 %, and its
+`probe` also reads 2.932 against 2.408, which is the same population being sampled. **Stated as a mechanism
+that FITS, not as a measured cause**: one run cannot separate it from the lane's own spread, and the same
+scene moved +9.1 % between the two previous builds for a different reason. If it matters, the arm to run is
+the floored/unfloored pair on this scene alone.
+
+Everything else in the table is inside the noise this lane has shown before — `ganton-noon` reads −2.6 % on
+pass in the same run, and nothing in plan 104 could make Ganton faster.
