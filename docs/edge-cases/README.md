@@ -22,5 +22,6 @@ the one-line rule and its blast radius live there.
 | [browser-runtime.md](./browser-runtime.md)       | Browser/platform constraints (FSA, Cache Storage, e2e)           |
 | [physics-runtime.md](./physics-runtime.md)       | Rapier vehicle-controller boundaries (cosmetic wheel rotation…) + where a vehicle body may exist at all (no parked car between 150 m and 250 m) |
 | [camera-rig.md](./camera-rig.md)                 | Follow-camera (080 director) limits — the mid-corner muted chase  |
+| [dispatch-console.md](./dispatch-console.md)     | The operator surface's own limits — sketches do not drape or occlude, a distance is the straight line, one radar scale, no radar in plan mode |
 | [route-graph.md](./route-graph.md)               | Drivable-route limits (096) — a city grid yields no route at all  |
 | [cleo-vm.md](./cleo-vm.md)                       | CLEO VM / vehicle-rig gotchas — native-call args are in C order, not script order; dummy frames are not addressable parts |

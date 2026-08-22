@@ -133,6 +133,40 @@ operator has the least else to work with.
   Vinewood frames Vinewood rather than a third of it. A world that ships no `info.zon` finds nothing, which
   is the honest answer for a total conversion rather than stock San Andreas names.
 
+## The radar
+
+**Round** (the user's call, 2026-08-22), bottom-right, 132 CSS px on a desk and 108 on a phone — the one
+corner nothing else claims. A dispatch radar answers a distance question, and a circle is the only frame in
+which a pixel of travel means the same thing in every direction.
+
+It draws the world's own description of itself rather than a picture of it: the **baked district boxes**
+(the city's shape), every unit and open call in their status colours, and the **view's ground footprint** —
+a polygon, because under perspective the frame covers a trapezoid of ground and a rectangle would claim the
+view reaches somewhere it does not. North-up always, so the world stays put and the footprint turns inside
+it. A tap flies there keeping the current zoom: *look over there*, not *zoom in on that*.
+
+**It repaints only when something on it moved** — the board tick, the pose, the selection or its own size —
+so a still map costs 20 repaints a second instead of 60 and an idle console costs none. One repaint is 914
+canvas calls at 150 units + 40 calls + a 160-box city; a skipped frame is
+[zero](../benchmarks/opensa-engine/2026-08-22-dispatch-overlay-census.json).
+
+Not in plan mode: with no pak there is no world extent to frame and no district table to draw, and the plan's
+own 250-unit grid locates the view instead.
+
+## Measuring and drawing
+
+Three tools in the operator cluster — **ruler** (tap along a route), **circle** (tap the centre, then the
+edge) and **area** (tap the corners, then Finish, for a cordon or a search area) — with the live measurement
+in metres, kilometres and square kilometres. Finish, Undo and Clear appear only while a tool is armed. An
+armed tool takes the tap whole, so a cordon can be placed over a unit without picking the unit up.
+
+**They are symbology, not world geometry**, and that is the decision worth knowing: a cordon has to be
+visible *through* the buildings it is drawn around, so a shape is projected onto the overlay canvas and never
+occluded. What it costs is that a shape does not drape over the ground and a distance is the straight line
+rather than the drive — both, and why there is no ETA circle, in
+[edge-cases/dispatch-console](../edge-cases/dispatch-console.md). Measuring works in **plan mode** too; the
+no-GPU fallback is a 2D map, which is what a ruler is best on.
+
 ## The keyboard, and the controls on the map
 
 **201/7-06, since 2026-08-22.** Every command the map takes is in one table (`src/map/keymap.ts`), which is

@@ -115,13 +115,15 @@ export function App(): ReactElement {
   };
 
   const map = (
-    <MapCanvas actions={actions} onReadout={setReadout} onReady={onReady} read={read}>
+    <MapCanvas actions={actions} compact={compact} onReadout={setReadout} onReady={onReady} read={read}>
       <MapTools
         behindLive={clock.mode === 'live' ? 0 : Math.max(0, Math.round((performance.now() - clock.t) / 1000))}
         compact={compact}
         following={readout?.following ?? false}
         handle={handle}
+        measurement={readout?.measurement ?? null}
         selection={selection}
+        tool={readout?.tool ?? 'none'}
         touch={touch}
       />
       <MapNav handle={handle} touch={touch} yaw={readout?.pose.yaw ?? MAP_YAW} />

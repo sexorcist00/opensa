@@ -25,6 +25,7 @@ import type { HistoryStats } from '../ops/history';
 import type { Operations, Selection } from '../ops/types';
 
 import { Beacons } from '../map/beacons';
+import { engineToGta, gtaToEngine } from '../map/coords';
 import { bindGestures } from '../map/gestures';
 import { bindKeys, type KeyboardInput } from '../map/keys';
 import {
@@ -37,11 +38,13 @@ import {
   MAP_YAW,
   MapCamera,
 } from '../map/map-camera';
+import { mountMinimap } from '../map/minimap';
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
+import { drawSketches, type MapTool, type Measurement, SketchStore } from '../map/sketch';
 import { readView, type SharedView, viewOfPose } from '../map/view-link';
 import { composeImage } from './capture';
-import { buildDemoCity, DEMO_REACH } from './demo-city';
+import { buildDemoCity, DEMO_EXTENT, DEMO_REACH } from './demo-city';
 import { DISTRICTS } from './districts';
 import { createErrorLog } from './error-log';
 import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
@@ -54,6 +57,9 @@ export interface BootOptions {
   /** How old each unit's last fix is, ms (201/8-02) — absent for a host with no board, whose markers are
    *  then all drawn as fresh. */
   readonly fixAges?: () => ReadonlyMap<string, number>;
+  /** The radar's own canvas (201/7-04). Absent for a host that does not want one — an embedded map, or
+   *  plan mode, which draws its own board and has no room for an inset. */
+  readonly minimap?: HTMLCanvasElement;
   readonly onClick: (click: MapClick) => void;
   /** Right-click: "put a call here". `district` is what the world calls that point (201/5-03) — resolved
    *  here rather than in the board, because the baked table is the map's, and null when the world has none. */
@@ -112,10 +118,18 @@ export interface DispatchHandle {
   setHour(hour: number): void;
   /** Perspective or the plan view (201/7-01). The pose in the readout says which is live. */
   setProjection(projection: MapProjection): void;
+  /** What a tap on the map does (201/7-05): select, or add a point to a ruler, cordon or circle. */
+  setTool(tool: MapTool): void;
   /** Fly to one of the three zoom levels over the point already under the view (201/7-02). */
   setZoomLevel(level: ZoomLevel): void;
   /** Everything a shared link carries about the world half of the view (201/7-07). */
   sharedView(): SharedView;
+  /** Drop every shape this session drew. */
+  sketchClear(): void;
+  /** Close the shape being drawn. A shape with too few points is left alone rather than half-closed. */
+  sketchFinish(): void;
+  /** Step back one tap, then one whole shape. */
+  sketchUndo(): void;
   /** Tilt by this many radians — the on-screen control's step, the same bound as every other tilt. */
   tiltBy(radians: number): void;
   /** Turn the view by this many radians, eased like the compass rather than snapped. */
@@ -134,9 +148,13 @@ export interface DispatchReadout {
   readonly following: boolean;
   readonly fps: number;
   readonly hour: number;
+  /** What the sketch in progress (or the last one finished) measures — null until one is drawn (201/7-05). */
+  readonly measurement: Measurement | null;
   readonly pending: number;
   readonly pose: MapPose;
   readonly residencyMb: number;
+  /** What a tap on the map currently does. `none` is selection, the console's normal behaviour. */
+  readonly tool: MapTool;
 }
 
 /** What a click resolved to — the app turns it into a {@link Selection}. */
@@ -220,6 +238,9 @@ interface DispatchWorld {
   /** What the world's places are called (201/5-03) — baked beside the pak, empty on a world that ships no
    *  `info.zon` and on the synthetic demo. */
   districts: DistrictLookup;
+  /** Where the world IS and how big it is, GTA — the radar's scale (201/7-04). Taken from the pak's own
+   *  cell extent, so a district-sized pak gets a district-sized dial rather than an empty San Andreas. */
+  readonly extent: { readonly centre: GtaGround; readonly radius: number };
   /** Called once a frame with the ground point the view sits over, and with the view that is about to be
    *  drawn (201/1-05 — residency is decided against the frustum this frame culls with). Returns the
    *  ENGINE's own streaming numbers — blob-handler and upload milliseconds, creates, evictions — which the
@@ -316,6 +337,18 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   camera.setStreamedReach(world.reach);
   const beacons = new Beacons(engine);
   const symbology = new SymbologyLayer();
+  const sketch = new SketchStore();
+  // A click on the radar is "look over there", not "zoom in on that": the flight keeps the operator's
+  // current span, so an overview stays an overview and a street view stays a street view.
+  const radar =
+    options.minimap === undefined
+      ? null
+      : mountMinimap(
+          options.minimap,
+          { boxes: world.districts.boxes, centre: world.extent.centre, radius: world.extent.radius },
+          (at) => camera.flyTo(at),
+          dpr,
+        );
   const projector = new ScreenProjector();
   const context = overlay.getContext('2d');
   if (!context) {
@@ -355,7 +388,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     );
   };
 
-  const gestures = bindInput({ camera, canvas, districts: world.districts, engine, options, symbology });
+  const gestures = bindInput({ camera, canvas, districts: world.districts, engine, options, sketch, symbology });
   const zoomLevel = (level: ZoomLevel): void =>
     camera.flyTo(camera.positionGta(), zoomSpan(level, camera.positionGta(), world));
   /** The keyboard is bound to the WINDOW, not the canvas: the map is not React's, and a key has to work
@@ -437,7 +470,12 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         { height: overlay.clientHeight, width: overlay.clientWidth },
         options.fixAges?.(),
       );
+      // Over the symbols: an operator's own mark is the last thing drawn, so nothing hides it (201/7-05).
+      drawSketches(context, (at) => projector.project(gtaToEngine(at)), sketch);
     });
+    // The radar is drawn LAST and only when something on it moved (201/7-04) — it is an inset over a map
+    // that is already correct, and a repaint every frame is what chain 4 would have to undo.
+    radar?.draw(ops, options.selection(), camera, aspect);
 
     if (pendingCapture !== null) {
       const resolve = pendingCapture;
@@ -461,9 +499,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           following: camera.following(),
           fps: Math.round(1000 / Math.max(1, average)),
           hour,
+          measurement: sketch.measurement(),
           pending: stream.pendingCells,
           pose: camera.pose(),
           residencyMb: stats.residencyBytes / (1024 * 1024),
+          tool: sketch.tool(),
         }),
       );
     }
@@ -483,6 +523,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       unbind();
       errorLog.dispose();
       beacons.dispose();
+      radar?.dispose();
     },
     exportImage(): Promise<Blob | null> {
       return new Promise((resolve) => {
@@ -544,6 +585,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     setProjection(projection: MapProjection): void {
       camera.setProjection(projection);
     },
+    setTool(tool: MapTool): void {
+      sketch.setTool(tool);
+    },
     setZoomLevel(level: ZoomLevel): void {
       camera.flyTo(camera.positionGta(), zoomSpan(level, camera.positionGta(), world));
     },
@@ -553,6 +597,15 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       ...(params.get('src') === null ? {} : { src: params.get('src') ?? '' }),
       ...(params.get('district') === null ? {} : { district: params.get('district') ?? '' }),
     }),
+    sketchClear(): void {
+      sketch.clear();
+    },
+    sketchFinish(): void {
+      sketch.finish();
+    },
+    sketchUndo(): void {
+      sketch.undo();
+    },
     tiltBy(radians: number): void {
       camera.tiltBy(radians);
     },
@@ -656,9 +709,10 @@ function bindInput(input: {
   districts: DistrictLookup;
   engine: Engine;
   options: BootOptions;
+  sketch: SketchStore;
   symbology: SymbologyLayer;
 }): () => void {
-  const { camera, canvas, districts, engine, options, symbology } = input;
+  const { camera, canvas, districts, engine, options, sketch, symbology } = input;
 
   /** The world ray under a canvas-relative CSS position. */
   const rayAt = (x: number, y: number): CursorPick => {
@@ -680,6 +734,16 @@ function bindInput(input: {
     pan: (delta) => camera.pan(delta),
     // Symbology first — the operator aimed at a chip; then whatever the world puts under the cursor.
     tap: (x, y) => {
+      // A tool takes the tap whole: while one is armed the map draws instead of selecting, which is what
+      // makes a cordon possible to place over a unit without picking the unit up (201/7-05).
+      if (sketch.tool() !== 'none') {
+        const ground = groundPoint(rayAt(x, y));
+        if (ground) {
+          sketch.addPoint(ground);
+        }
+
+        return;
+      }
       const symbol = symbology.hitTest(x, y);
       if (symbol) {
         options.onClick(symbol);
@@ -733,6 +797,7 @@ function demoWorld(engine: Engine): DispatchWorld {
   // falls back to its landmark table, which is what a demo of stock Los Santos wants anyway.
   return {
     districts: NO_DISTRICTS,
+    extent: DEMO_EXTENT,
     follow: () => IDLE_STREAM,
     gameDir: '',
     label: 'demo (synthetic)',
@@ -840,6 +905,7 @@ async function streamedWorld(engine: Engine, params: URLSearchParams): Promise<D
 
   return {
     districts: await loadDistricts(source.base, setup.districts),
+    extent: { centre: engineToGta(setup.center), radius: setup.radius },
     follow: (focus, view) => setup.driver.update(focus, view),
     gameDir: source.gameDir,
     label: setup.buildTime ?? 'unknown',

@@ -154,6 +154,35 @@ of the screen.
 **Owes:** its cost per frame, and its behaviour under [render-on-demand](../4-a-console-is-not-a-game/readme.md)
 — an inset that redraws every frame defeats chain 4 entirely.
 
+**DONE 2026-08-22, and it is ROUND** — the user's call, and the shape turned out to carry an argument. A
+dispatch radar answers a distance question (*how far off is my nearest available unit*), and a circle is the
+only frame in which a pixel of travel means the same thing in every direction; a rectangle answers it
+differently along the diagonal than along the edge. It is also what San Andreas' own radar is.
+
+**The step's own "cheapest honest version" was not available and a better one was.** It called for
+[6/02](../6-display-modes/readme.md)'s flat-2D tiles at their lowest zoom — a bake that does not exist yet.
+What the radar draws instead is the world's own description of itself: the **baked district boxes**
+(5/03's table, now reachable as `DistrictLookup.boxes`), the board's units and calls, and the camera's
+**ground footprint** — a new `MapCamera.groundFootprint(aspect)` that is a polygon rather than a rectangle,
+because under perspective the frame's footprint IS a trapezoid and a rectangle would claim the view reaches
+ground it does not. In the plan view the same four rays are parallel and it comes out a rectangle by itself.
+A corner whose ray never meets the ground (a shallow tilt) is pulled back to the world's reach rather than
+dropped — a footprint with two corners is not a shape.
+
+North-up always: the world stays put and the footprint turns inside it, so one glance answers where the view
+is and which way it faces. A tap on the dial flies there **keeping the current zoom** — "look over there",
+not "zoom in on that".
+
+**Owed and paid**: [the census](../../../benchmarks/opensa-engine/2026-08-22-dispatch-overlay-census.json) —
+**914 canvas calls per repaint** at the declared worst case (150 units, 40 calls, a 160-box city), and
+**zero for a frame where nothing moved**. That last number is the answer to chain 4: the layer returns before
+touching the context unless the board ticked, the pose moved, the selection changed or the dial was resized,
+so a still map costs 20 repaints a second instead of 60 and an idle one costs none. The static district
+outline is 160 of those 914 calls, and caching it is priced in
+[radar-outline-cache](../../../performance/deferred-optimizations/radar-outline-cache.md) rather than taken.
+Milliseconds are [2/03](../2-real-device-truth/readme.md)'s. Not in plan mode, and why:
+[edge-cases/dispatch-console](../../../edge-cases/dispatch-console.md).
+
 ### 05 — Measuring and drawing
 
 - **Measure**: distance, radius, an ETA circle around a point.
@@ -173,6 +202,33 @@ the kind [the world-glass idea](../../../ideas/world-glass-material/readme.md) i
 **Owes:** the ground-following rule (what a shape does over a bridge, a tunnel mouth, water), the cost of
 carrying N annotations, and a statement of whether the classification pass fits the frame budget named in
 [1/04](../1-the-map-profile/readme.md).
+
+**DONE 2026-08-22 — and the classification pass was NOT taken, on an argument rather than on cost.** The
+technique is right for a shape that has to look like it is *on* the road. It is wrong for the shape this
+step is actually for: an operator's cordon has to be visible THROUGH the buildings it is drawn around, and a
+draped cordon disappears behind the first block it crosses — the thing the dispatcher drew in order to see
+is the thing they can then no longer see. So a sketch is symbology: world points projected onto the overlay
+canvas with the frame's own view-projection, exactly like the unit chips, drawn last so nothing hides it.
+
+**The ground-following rule, stated:** a sketch does not follow the ground and nothing occludes it. Over a
+hill its line runs where the operator put it; over a tunnel it is drawn on the hill above. A distance is the
+straight ground line between two points, never the drive — the vehicle path graph is `original`-only, so a
+routed distance would be right on stock SA and a lie on every total conversion. All of it, plus why there is
+no ETA circle (it needs a travel speed nobody has measured; a radius in minutes would be a constant chosen by
+eye), is in [edge-cases/dispatch-console](../../../edge-cases/dispatch-console.md).
+
+**Three tools, because three is what the job has**: a ruler (tap along a route), a circle (tap the centre,
+then the edge — it finishes itself), and an area (tap the corners, then Finish) with its shoelace area. The
+store is the MAP's, not React's and not the board's: it is view state read inside the frame loop, and a
+re-render must not be able to lose it. Arming a tool takes the tap whole, so a cordon can be placed over a
+unit without picking the unit up.
+
+**It works in plan mode too**, deliberately: the no-GPU fallback IS a 2D map, so a ruler and a cordon are
+what it is best at, and 7's verification asks every capability to work in every mode or say why not.
+
+**Owed and paid**: [the census](../../../benchmarks/opensa-engine/2026-08-22-dispatch-overlay-census.json) —
+**422 canvas calls for ten shapes of eight points, 42 a shape**, drawn every frame the overlay is drawn.
+Milliseconds are [2/03](../2-real-device-truth/readme.md)'s.
 
 ### 06 — Keyboard
 

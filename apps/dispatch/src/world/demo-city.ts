@@ -31,6 +31,19 @@ const CELL_Z = { from: 2, to: 13 } as const;
  */
 export const DEMO_REACH = ((CELL_X.to - CELL_X.from + 1) * CELL_SIZE) / 2;
 
+/**
+ * Where the demo world is and how far it goes, GTA — the radar's scale (201/7-04). Derived from the same
+ * two cell ranges the blocks are built from, so a change to the fixture moves the dial with it rather than
+ * leaving a second number to notice.
+ */
+export const DEMO_EXTENT = {
+  centre: [((CELL_X.from + CELL_X.to + 1) * CELL_SIZE) / 2, -((CELL_Z.from + CELL_Z.to + 1) * CELL_SIZE) / 2] as [
+    number,
+    number,
+  ],
+  radius: Math.max(((CELL_X.to - CELL_X.from + 1) * CELL_SIZE) / 2, ((CELL_Z.to - CELL_Z.from + 1) * CELL_SIZE) / 2),
+};
+
 /** Build the demo city. Returns how many draws were recorded, for the boot log. */
 export function buildDemoCity(engine: Engine): number {
   engine.textures.load(0, syntheticTextureArray());

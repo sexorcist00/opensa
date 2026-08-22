@@ -23,6 +23,7 @@ import { bindKeys } from '../map/keys';
 import { groundPoint, MAP_YAW, MapCamera, type MapProjection } from '../map/map-camera';
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
+import { drawSketches, type MapTool, SketchStore } from '../map/sketch';
 import { viewOfPose } from '../map/view-link';
 import { applyHeldKeys, runCommand, zoomSpan } from './boot';
 import { composeImage } from './capture';
@@ -64,6 +65,10 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
 
   const camera = new MapCamera(OPENING);
   const symbology = new SymbologyLayer();
+  // Measuring works here too, and deliberately: plan mode IS a 2D map, so a ruler and a cordon are exactly
+  // what it is good at — and 201/7-05's shapes are symbology, which is the half of the console that survives
+  // having no GPU (201/7's verification asks every capability to work in every mode or say why not).
+  const sketch = new SketchStore();
   const projector = new ScreenProjector();
   const context = overlay.getContext('2d');
   if (!context) {
@@ -83,6 +88,14 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     orbit: (dx, dy) => camera.orbit(dx, dy),
     pan: (delta) => camera.pan(delta),
     tap: (x, y) => {
+      if (sketch.tool() !== 'none') {
+        const ground = groundPoint(ray(x, y));
+        if (ground) {
+          sketch.addPoint(ground);
+        }
+
+        return;
+      }
       const symbol = symbology.hitTest(x, y);
       options.onClick(symbol ?? { at: groundPoint(ray(x, y)) ?? [0, 0], kind: 'ground' });
     },
@@ -160,6 +173,7 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     context.clearRect(0, 0, size.width, size.height);
     drawGrid(context, projector, camera, size);
     symbology.render(context, projector, ops, options.selection(), size);
+    drawSketches(context, (at) => projector.project(gtaToEngine(at)), sketch);
 
     if (now - lastReadout > 1000 / READOUT_HZ) {
       lastReadout = now;
@@ -172,9 +186,11 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
         following: camera.following(),
         fps: Math.round(1000 / Math.max(1, average)),
         hour: 12,
+        measurement: sketch.measurement(),
         pending: 0,
         pose: camera.pose(),
         residencyMb: 0,
+        tool: sketch.tool(),
       });
     }
     requestAnimationFrame(loop);
@@ -239,6 +255,9 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     setProjection(projection: MapProjection): void {
       camera.setProjection(projection);
     },
+    setTool(tool: MapTool): void {
+      sketch.setTool(tool);
+    },
     setZoomLevel(level: ZoomLevel): void {
       // Plan mode has no world to measure: no pak, no ring, and no baked districts. So "everything there
       // is" is the widest view the camera's own bounds allow, and the middle level falls back to the
@@ -246,6 +265,15 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
       zoomLevel(level);
     },
     sharedView: (): SharedView => viewOfPose(camera.pose()),
+    sketchClear(): void {
+      sketch.clear();
+    },
+    sketchFinish(): void {
+      sketch.finish();
+    },
+    sketchUndo(): void {
+      sketch.undo();
+    },
     tiltBy(radians: number): void {
       camera.tiltBy(radians);
     },

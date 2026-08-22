@@ -276,6 +276,45 @@ export class MapCamera {
     this.pitch = this.clampPitch(this.pitch);
   }
 
+  /**
+   * The four ground corners of what the frame covers, GTA coords, clockwise from the near-left (201/7-04).
+   *
+   * The minimap's view indicator is this polygon rather than a rectangle, because under perspective the
+   * frame's footprint IS a trapezoid — the far edge covers more ground than the near one — and a rectangle
+   * would tell the operator their view reaches somewhere it does not. In the plan view the same four rays
+   * are parallel and the polygon comes out a rectangle by itself, which is the point of deriving it.
+   *
+   * **A corner whose ray never meets the ground is pulled back to the world's reach**, not dropped: at a
+   * shallow tilt the top of the frame is sky, and a footprint with two corners is not a shape. The pull-back
+   * distance is the streamed reach, so the indicator says "as far as this world goes" rather than inventing
+   * a horizon.
+   */
+  groundFootprint(aspect: number): [number, number][] {
+    const limit = Number.isFinite(this.reach) ? this.reach : this.distance * 4;
+
+    return (
+      [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ] as const
+    ).map((ndc): [number, number] => {
+      const pick = this.rayAt(ndc, aspect);
+      const hit = groundPoint(pick);
+      if (hit !== null) {
+        const focus = this.positionGta();
+        if (Math.hypot(hit[0] - focus[0], hit[1] - focus[1]) <= limit) {
+          return hit;
+        }
+      }
+      const focus = this.positionGta();
+      const flat = Math.hypot(pick.direction[0], pick.direction[2]) || 1;
+
+      return [focus[0] + (pick.direction[0] / flat) * limit, focus[1] - (pick.direction[2] / flat) * limit];
+    });
+  }
+
   /** Eye height above the ground plane — the pan scale and the streaming radii both key off it. */
   height(): number {
     return this.distance * -Math.sin(this.pitch);

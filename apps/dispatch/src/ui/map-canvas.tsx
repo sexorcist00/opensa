@@ -23,6 +23,7 @@ let booted: null | Promise<DispatchHandle | void> = null;
 export function MapCanvas({
   actions,
   children,
+  compact,
   onReadout,
   onReady,
   read,
@@ -30,6 +31,8 @@ export function MapCanvas({
   actions: DispatchActions;
   /** Rendered inside the map's positioned wrapper — the selection panel floats over the canvas. */
   children?: React.ReactNode;
+  /** Phone layout: the radar takes its smaller size (201/7-04). */
+  compact: boolean;
   onReadout: (readout: DispatchReadout) => void;
   onReady: (handle: DispatchHandle) => void;
   read: {
@@ -42,6 +45,7 @@ export function MapCanvas({
 }): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
+  const minimapRef = useRef<HTMLCanvasElement>(null);
   /** Why the 3D map is absent, when it is — shown as a banner over a WORKING plan-mode board. */
   const [degraded, setDegraded] = useState('');
   /** Held for the inventory panel only (201/1-01) — it reads the collector, it does not drive the loop. */
@@ -60,6 +64,7 @@ export function MapCanvas({
     }
     const boot: BootOptions = {
       canvas,
+      ...(minimapRef.current ? { minimap: minimapRef.current } : {}),
       fixAges: () => liveRef.current.read.fixAges(),
       onClick: (click) => {
         const { select } = liveRef.current.actions;
@@ -100,6 +105,8 @@ export function MapCanvas({
     <div style={styles.canvasWrap}>
       <canvas ref={canvasRef} style={styles.canvas} />
       <canvas ref={overlayRef} style={{ ...styles.fill, pointerEvents: 'none', zIndex: 2 }} />
+      {/* The radar (201/7-04). Absent in plan mode, which has no 3D view to locate and draws its own board. */}
+      {!degraded && <canvas ref={minimapRef} style={compact ? styles.minimapCompact : styles.minimap} />}
       {children}
       {degraded && <DegradedBanner message={degraded} />}
       {dispatchParams().get('inventory') === '1' && (

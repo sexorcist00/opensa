@@ -505,3 +505,55 @@ describe('MapCamera keyboard movement', () => {
     });
   });
 });
+
+describe('MapCamera.groundFootprint', () => {
+  describe('negative cases', () => {
+    it('never answers with fewer than four corners, however shallow the tilt', () => {
+      const camera = new MapCamera({ ...OPENING, pitch: -0.05 });
+
+      expect(camera.groundFootprint(1.6)).toHaveLength(4);
+    });
+
+    it('keeps every corner inside the world the streamer actually fills', () => {
+      const camera = new MapCamera(OPENING);
+      camera.setStreamedReach(2200);
+      const focus = camera.pose().at;
+
+      for (const corner of camera.groundFootprint(1.6)) {
+        expect(Math.hypot(corner[0] - focus[0], corner[1] - focus[1])).toBeLessThanOrEqual(2200.0001);
+      }
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is a trapezoid under perspective — the far edge covers more ground than the near one', () => {
+      const camera = new MapCamera({ ...OPENING, pitch: -0.9 });
+      const [nearLeft, nearRight, farRight, farLeft] = camera.groundFootprint(1.6);
+
+      expect(Math.hypot(farRight[0] - farLeft[0], farRight[1] - farLeft[1])).toBeGreaterThan(
+        Math.hypot(nearRight[0] - nearLeft[0], nearRight[1] - nearLeft[1]),
+      );
+    });
+
+    it('is a rectangle in the plan view, because parallel rays cover the same ground at both edges', () => {
+      const camera = new MapCamera({ ...OPENING, projection: 'ortho' });
+      const [nearLeft, nearRight, farRight, farLeft] = camera.groundFootprint(1.6);
+
+      expect(Math.hypot(farRight[0] - farLeft[0], farRight[1] - farLeft[1])).toBeCloseTo(
+        Math.hypot(nearRight[0] - nearLeft[0], nearRight[1] - nearLeft[1]),
+        3,
+      );
+    });
+
+    it('surrounds the point the view is over', () => {
+      const camera = new MapCamera(OPENING);
+      const [x, y] = camera.pose().at;
+      const corners = camera.groundFootprint(1.6);
+
+      expect(Math.min(...corners.map((c) => c[0]))).toBeLessThan(x);
+      expect(Math.max(...corners.map((c) => c[0]))).toBeGreaterThan(x);
+      expect(Math.min(...corners.map((c) => c[1]))).toBeLessThan(y);
+      expect(Math.max(...corners.map((c) => c[1]))).toBeGreaterThan(y);
+    });
+  });
+});

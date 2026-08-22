@@ -33,6 +33,12 @@ export interface DistrictLookup {
    * it should not allocate.
    */
   boxAt(at: GtaGround): null | { readonly max: readonly [number, number]; readonly min: readonly [number, number] };
+  /**
+   * EVERY district box — the city's shape rather than one answer about a point (201/7-04's radar draws it
+   * as the outline everything else is read against). A world with no `info.zon` has none, and the radar
+   * then shows the units over an empty dial rather than over somebody else's city.
+   */
+  readonly boxes: readonly { readonly max: readonly [number, number]; readonly min: readonly [number, number] }[];
   /** How many boxes were loaded — 0 means every lookup answers null, and the caller should say so once. */
   readonly count: number;
   /** The most specific district containing a GTA ground point, or null. */
@@ -65,7 +71,13 @@ interface District {
 }
 
 /** An empty lookup — what a pak with no districts gets, so no caller has to null-check the loader. */
-export const NO_DISTRICTS: DistrictLookup = { boxAt: () => null, count: 0, nameAt: () => null, search: () => [] };
+export const NO_DISTRICTS: DistrictLookup = {
+  boxAt: () => null,
+  boxes: [],
+  count: 0,
+  nameAt: () => null,
+  search: () => [],
+};
 
 /**
  * Load the baked district table from beside the pak. Never throws: a missing or malformed file is a world
@@ -97,6 +109,10 @@ export async function loadDistricts(
 
       return zone === null ? null : { max: [zone.max[0], zone.max[1]], min: [zone.min[0], zone.min[1]] };
     },
+    boxes: zones.map((zone) => ({
+      max: [zone.max[0], zone.max[1]] as const,
+      min: [zone.min[0], zone.min[1]] as const,
+    })),
     count: zones.length,
     nameAt: (at) => zoneAt(zones, at[0], at[1])?.name ?? null,
     search: (query, limit = SEARCH_LIMIT) => searchZones(zones, query, limit),

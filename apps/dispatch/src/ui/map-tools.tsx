@@ -9,12 +9,14 @@
  */
 import { type ReactElement, useState } from 'react';
 
+import type { MapTool, Measurement } from '../map/sketch';
 import type { Selection } from '../ops/types';
 import type { DispatchHandle } from '../world/boot';
 import type { SearchedPlace } from '../world/zones';
 
 import { type Bookmark, readBookmarks, removeBookmark, saveBookmark } from '../map/bookmarks';
 import { viewLink } from '../map/view-link';
+import { MeasureTools } from './measure-tools';
 import { styles } from './styles';
 
 export function MapTools({
@@ -22,7 +24,9 @@ export function MapTools({
   compact = false,
   following,
   handle,
+  measurement,
   selection,
+  tool,
   touch = false,
 }: {
   /** How far behind live the shift clock is, seconds — part of the view a link carries (201/8-03). */
@@ -34,7 +38,11 @@ export function MapTools({
   /** Null until the engine has booted; the cluster renders disabled rather than absent, so it does not
    *  appear under the operator's cursor a second after they started reaching for it. */
   handle: DispatchHandle | null;
+  /** What the sketch in progress measures (201/7-05) — read from the readout, never held here. */
+  measurement: Measurement | null;
   selection: Selection;
+  /** What a tap on the map currently does. */
+  tool: MapTool;
   /** The pointer is a finger: rows and buttons take a finger-sized target. */
   touch?: boolean;
 }): ReactElement {
@@ -151,6 +159,8 @@ export function MapTools({
           {compact ? 'Save' : 'Save view'}
         </button>
       </div>
+
+      <MeasureTools handle={handle} measurement={measurement} tool={tool} touch={touch} />
 
       <div style={{ display: 'flex', gap: 5 }}>
         <button

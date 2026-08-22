@@ -238,7 +238,6 @@ export const styles = {
     fontSize: 10,
     padding: '3px 12px',
   },
-  /** 201/7-06's on-screen controls: top-right, opposite the operator cluster and clear of both panels. */
   mapNav: {
     display: 'grid',
     gap: 4,
@@ -349,6 +348,43 @@ export const styles = {
     fontSize: 11,
     padding: '4px 6px',
     width: '100%',
+  },
+  /** The live number. Monospace, so a distance that is growing does not shuffle the row it sits in. */
+  measureReadout: {
+    color: COLORS.text,
+    fontFamily: MONO,
+    fontSize: 11,
+    letterSpacing: 0.2,
+  },
+  measureRow: { display: 'flex', flexWrap: 'wrap', gap: 5 },
+  /** 201/7-05's rows inside the operator cluster — they wrap rather than push the cluster past 360 px. */
+  measureTools: { display: 'grid', gap: 5 },
+  /** 201/7-06's on-screen controls: top-right, opposite the operator cluster and clear of both panels. */
+  /**
+   * 201/7-04's radar: bottom-right, the one corner nothing else claims (tools top-left, nav top-right,
+   * selection and inventory bottom-left). Round, on the user's call — and the element is round too, so the
+   * click target is the dial rather than a square with dead corners.
+   */
+  minimap: {
+    borderRadius: '50%',
+    bottom: 10,
+    cursor: 'pointer',
+    height: 132,
+    position: 'absolute',
+    right: 10,
+    width: 132,
+    zIndex: 3,
+  },
+  /** Phone: smaller, and clear of the sheet's grab handle. 108 px still reads at arm's length. */
+  minimapCompact: {
+    borderRadius: '50%',
+    bottom: 8,
+    cursor: 'pointer',
+    height: 108,
+    position: 'absolute',
+    right: 8,
+    width: 108,
+    zIndex: 3,
   },
   mono: { fontFamily: MONO },
   panel: {
