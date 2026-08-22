@@ -104,8 +104,12 @@ never the app. The dependency picture is the tools cluster of
 
 - **vehicle-optimizer** — loose-DFF vehicle conditioning: uniform scale (+ ground lift) and
   reflection-strength transfer from a prototype.
-- **timecyc-builder** — precomputes the time-of-day colour cycle data consumed by the engine (entry
-  `src/index.ts`; `npm run timecyc`).
+- **timecyc-builder** — a UTILITY that merges donor timecyc columns onto a base and writes ONE file into
+  its own `src/merged/` (entry `src/index.ts`; `npm run timecyc`). **Not a build stage and not consumed by
+  one**: no `pmb` stage runs it, and getting an output into a game is a deliberate copy by whoever wants it
+  shipped — see [`restrictions/timecyc-builder-is-a-utility.md`](../restrictions/timecyc-builder-is-a-utility.md),
+  where a violation is silent twice over. The engine reads whichever of three timecyc names a world carries
+  (`docs/contracts/mods.md` §2), not this tool's output.
 
 ## Libraries (no CLI)
 

@@ -167,10 +167,13 @@ capture is showing; dolly in afterwards.
 | --- | --- |
 | `map-viewer-shot.ts <appUrl> <outPng> [timeoutMs]` | one scripted pose of a source, captured headless. Adds `panel=0` unless the URL sets it (the panel carries a live fps line, and a pixel diff must not compare a frame counter) and echoes the viewer's own `[sa-map-viewer]` load lines, which NAME the source. **Two runs of one URL are byte-identical PNGs** (wind is off by default — it was the only thing animating a noon frame), so two sources at one pose diff directly: `magick a.png b.png -compose difference -composite -colorspace Gray -format '%[fx:maxima*255]' info:` |
 
+| `game-shot.ts '<query>' <outPng> [settleMs] [srcUrl]` | one standing pose of the GAME host, captured headless through the real load path — the sibling of `map-viewer-shot.ts` for what only the game can answer: a look A/B of a DATA change (weather, timecyc, lighting) with the ped grounded and the world streamed around him (built for 104/04, 12 captures in one session). `query` is the host's own knobs without the `?`; the loader and `src` are supplied. It prints the **HUD** (so `grounded` and the live position sit beside the picture) and the boot lines that say what the run READ — `[timecyc]` names the timecyc file that won, which is the only way to know which table a capture photographed. Three traps it exists to get right: **a guessed `spawn` z drops the player into the void** (`?spawn` does not wait for collision — read a real height out of `dump-cell.ts` first); **`weather` and the player's CITY must be chosen together** (the zone remap turns a `FOGGY_SF` forced in LS into `SUNNY_LA` before frame 1); and **aim is not sight** — `look` points the camera, it does not promise an open sightline |
+
 ```bash
 npm run serve:static && npm run dev   # /build + /game-src on :3001, the app on :5173
 npx tsx scripts/debug/map-viewer-shot.ts \
   'http://localhost:5173/sa-map-viewer.html?src=http://localhost:3001/game-src/original&at=150,-1700' a.png
+npx tsx scripts/debug/game-shot.ts 'weather=9&hour=12&spawn=-1960,505,36&look=-2400,520,30' fog.png
 ```
 
 ## Driving the game itself — the scripted physics lap (081/01)
