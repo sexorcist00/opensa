@@ -1,6 +1,6 @@
 # 015 — A replaced car does not inherit the stock car's tuning
 
-**Status: step 1 BUILT 2026-08-22 (the user's call, from a field crash he diagnosed himself); step 2 open.**
+**Status: DONE 2026-08-22 — step 1 built in the installer, step 2 taken in the DATA at the user's call.**
 
 ## The defect
 
@@ -65,14 +65,26 @@ The 26 cars that DO declare a line still name parts their model has no dummy for
 an author copying the stock line). `ModelVariations` no longer offers those (`add-vehicles` dropped the
 `nto_` family from tuned traffic the same day), but Transfender still would, and the crash would be the same.
 
-The rule: when the installer writes a car's `mods` line, it drops the universal parts whose `ug_*` mount the
-car's own model does not carry, and WARNS naming car and part — the same shape as the DXT-alignment warning
-(plan 014's neighbour). Mount table above; car-specific families (`_lr_`, `_a_`, `_c_`) are out of scope
-because they replace a standard component every model carries rather than hang on a `ug_` dummy.
+The rule: a line may only name a part the car's own model can mount. Mount table above; car-specific
+families (`_lr_`, `_a_`, `_c_`) are out of scope because they replace a standard component every model
+carries rather than hang on a `ug_` dummy.
+
+**Taken in the DATA, not in code — the user's call.** The line those 26 cars declare is *entirely*
+unmountable (measured: 27 of the 30 flagged lines become empty once the unmountable parts go, and the three
+that keep something are step 1's inheritors), so the fix is to delete the line from the mod's own
+`*.settings.txt` and let step 1 do the rest. **26 files edited, 0 partial cases** — every one of them a
+nitro-only line, and none of those cars ships part `.dff`s, so nothing buyable was lost. The removed lines
+and the original files are backed up under `NO_COMMIT/carmods-lines-removed-2026-08-22/`
+(`mods-src/` is gitignored, so git cannot restore them).
+
+**The gap this leaves, stated plainly**: nothing in the build enforces rule 2. A NEW mod whose settings name
+a part its model cannot mount puts the crash back, silently. The code guard is written up in
+[`docs/contracts/vehicles.md`](../../../../docs/contracts/vehicles.md) as the rule and here as the work not
+done — one afternoon if the field ever asks for it.
 
 ## Ledger
 
 | Step | Date | Result | Numbers |
 | --- | --- | --- | --- |
 | 1 | 2026-08-22 | built, 254 tool tests green | 7 stock lines removed on the current fleet (4 of them dangerous); 0 inheriting cars ship part `.dff`s |
-| 2 | — | pending | — |
+| 2 | 2026-08-22 | done in the data (26 settings files), no code guard | 27 of 30 flagged lines are entirely unmountable; 0 partial; 0 of the 26 ship part `.dff`s |
