@@ -10,6 +10,7 @@ import {
 import { describeTimecycSource, resolveTimecycSourceAsync } from '@opensa/renderware';
 
 import type { GtaGround } from '../map/coords';
+import type { HeldCommand, KeyBindings, PressedCommand } from '../map/keymap';
 import type { CursorPick, MapPose, MapProjection } from '../map/map-camera';
 import type { HistoryStats } from '../ops/history';
 /**
@@ -25,7 +26,17 @@ import type { Operations, Selection } from '../ops/types';
 
 import { Beacons } from '../map/beacons';
 import { bindGestures } from '../map/gestures';
-import { CAMERA_FAR, groundPoint, MAP_YAW, MapCamera } from '../map/map-camera';
+import { bindKeys, type KeyboardInput } from '../map/keys';
+import {
+  CAMERA_FAR,
+  groundPoint,
+  KEY_PAN_PER_SECOND,
+  KEY_TILT_PER_SECOND,
+  KEY_TURN_PER_SECOND,
+  KEY_ZOOM_PER_SECOND,
+  MAP_YAW,
+  MapCamera,
+} from '../map/map-camera';
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
 import { buildDemoCity, DEMO_REACH } from './demo-city';
@@ -61,6 +72,8 @@ export interface BootOptions {
 export interface DispatchHandle {
   readonly camera: MapCamera;
   dispose(): void;
+  /** Ease the heading back to north (201/7-06's compass, and the `n` key). */
+  faceNorth(): void;
   /**
    * Put every active unit and call in frame at once (201/7-03). A board with nothing on it is left alone
    * rather than flown to the origin.
@@ -83,11 +96,19 @@ export interface DispatchHandle {
   recallView(pose: MapPose): void;
   /** Places whose name matches, from the world's own baked district table (201/5-03's data). */
   searchPlaces(query: string): readonly SearchedPlace[];
+  /** Swap in a rebound key map, live — the sheet rebinds while the console is running. */
+  setBindings(bindings: KeyBindings): void;
   setHour(hour: number): void;
   /** Perspective or the plan view (201/7-01). The pose in the readout says which is live. */
   setProjection(projection: MapProjection): void;
   /** Fly to one of the three zoom levels over the point already under the view (201/7-02). */
   setZoomLevel(level: ZoomLevel): void;
+  /** Tilt by this many radians — the on-screen control's step, the same bound as every other tilt. */
+  tiltBy(radians: number): void;
+  /** Turn the view by this many radians, eased like the compass rather than snapped. */
+  turnBy(radians: number): void;
+  /** Zoom by whole steps: positive is in, negative is out, and each one is flown rather than jumped. */
+  zoomBySteps(steps: number): void;
 }
 
 export interface DispatchReadout {
@@ -148,9 +169,34 @@ const IDLE_STREAM: StreamStats = {
   worstCreateMs: 0,
 };
 
+/**
+ * What one press of the on-screen zoom control changes the framed span by. Halving and doubling is what a
+ * map's `+`/`−` has meant since the first tile server, and it is one notch of the three zoom LEVELS' own
+ * spacing rather than a number picked to feel right.
+ */
+const ZOOM_STEP = 2;
 /** Streaming rings. Wider than the game's, because a map view looks at the city rather than at a street. */
 const DEFAULT_HD_RADIUS = 450;
 const DEFAULT_LOD_RADIUS = 2200;
+
+/**
+ * The three zoom levels an operator jumps between (201/7-02), and where each one's SPAN comes from.
+ *
+ * None of the three is a number somebody liked: each is a thing the world is actually made of, so the same
+ * key means the same thing on a total conversion that has never heard of Los Santos.
+ *
+ * | Level | The span it frames | Read from |
+ * | --- | --- | --- |
+ * | `block` | one render cell | `CELL_SIZE` — the grid the pak is welded and streamed on |
+ * | `district` | the named district under the view | the baked zone box (`districts.json`, 201/5-03) |
+ * | `city` | everything the world has around the focus | the world's own reach: the LOD ring, or the demo's extent |
+ *
+ * **The fallback is derived too.** A world with no zone table has no district box to frame, so the middle
+ * level becomes the geometric mean of the other two — zoom levels are logarithmic by nature, so the midpoint
+ * of a zoom range is the geometric one, and a level that is missing should still land between its
+ * neighbours rather than on top of one.
+ */
+export type ZoomLevel = 'block' | 'city' | 'district';
 
 /**
  * A world the host can drive, however it was produced. `follow` is called once a frame with the ground point
@@ -172,6 +218,40 @@ interface DispatchWorld {
   /** How far from the view's focus this world actually has content — the LOD ring for a streamed world,
    *  its own extent for the demo. The camera derives both of its bounds from it (201/7-02). */
   readonly reach: number;
+}
+
+/**
+ * One frame of whatever movement keys are held (201/7-06). Rates come from the camera, and every one of
+ * them is a rate rather than a step: a key held for twice as long moves twice as far, at any frame rate.
+ *
+ * Opposite keys held together cancel, which is what a sum does and what an operator expects — the
+ * alternative (last key wins) makes a mistyped combination feel like a stuck map.
+ */
+export function applyHeldKeys(camera: MapCamera, keyboard: KeyboardInput, dtMs: number): void {
+  const seconds = Math.max(0, dtMs) / 1000;
+  const axis = (positive: HeldCommand, negative: HeldCommand): number =>
+    (keyboard.held(positive) ? 1 : 0) - (keyboard.held(negative) ? 1 : 0);
+
+  const east = axis('panEast', 'panWest');
+  const north = axis('panNorth', 'panSouth');
+  if (east !== 0 || north !== 0) {
+    // The two are normalised together, so a diagonal is not faster than a straight line.
+    const length = Math.hypot(east, north);
+    const step = (KEY_PAN_PER_SECOND * seconds) / length;
+    camera.panBySpan(east * step, north * step);
+  }
+  const turn = axis('rotateRight', 'rotateLeft');
+  if (turn !== 0) {
+    camera.turnBy(turn * KEY_TURN_PER_SECOND * seconds);
+  }
+  const tilt = axis('tiltUp', 'tiltDown');
+  if (tilt !== 0) {
+    camera.tiltBy(tilt * KEY_TILT_PER_SECOND * seconds);
+  }
+  const zoom = axis('zoomOut', 'zoomIn');
+  if (zoom !== 0) {
+    camera.zoomBy(KEY_ZOOM_PER_SECOND ** (zoom * seconds));
+  }
 }
 
 export async function bootDispatch(options: BootOptions): Promise<DispatchHandle> {
@@ -260,17 +340,18 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     );
   };
 
-  const unbind = bindInput({
-    camera,
-    canvas,
-    districts: world.districts,
-    engine,
-    onFit: () => camera.fitBounds(boardPoints()),
-    onFollowSelected: followSelected,
-    onZoomLevel: (level) => camera.flyTo(camera.positionGta(), zoomSpan(level, camera.positionGta(), world)),
-    options,
-    symbology,
-  });
+  const gestures = bindInput({ camera, canvas, districts: world.districts, engine, options, symbology });
+  const zoomLevel = (level: ZoomLevel): void =>
+    camera.flyTo(camera.positionGta(), zoomSpan(level, camera.positionGta(), world));
+  /** The keyboard is bound to the WINDOW, not the canvas: the map is not React's, and a key has to work
+   *  wherever the operator's focus happens to be — except in a field, which `bindKeys` guards. */
+  const keyboard = bindKeys(window, (command) =>
+    runCommand(command, { camera, fit: () => camera.fitBounds(boardPoints()), followSelected, options, zoomLevel }),
+  );
+  const unbind = (): void => {
+    keyboard.unbind();
+    gestures();
+  };
   // 201/1-01. Off unless asked for: draining the span recorder is cheap, but a mode that measures by default
   // is a mode nobody can trust to have measured nothing.
   const inventory = params.get('inventory') === '1' ? new FrameInventory() : null;
@@ -303,8 +384,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
 
     const ops = options.ops();
     const aspect = canvas.width / Math.max(1, canvas.height);
-    // Before the state is read, so the streamer follows where the flight has REACHED this frame rather
-    // than where it was last frame.
+    // Before the state is read, so the streamer follows where the held keys and the flight have taken the
+    // view THIS frame rather than where it was last frame.
+    applyHeldKeys(camera, keyboard, dt);
     camera.advance(dt);
     const state = camera.state(aspect);
     time('board', () => beacons.update(ops, options.selection(), options.trails?.()));
@@ -363,6 +445,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       errorLog.dispose();
       beacons.dispose();
     },
+    faceNorth(): void {
+      camera.turnTo(MAP_YAW);
+    },
     fitBoard(): void {
       camera.fitBounds(boardPoints());
     },
@@ -408,6 +493,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       camera.flyToPose(pose);
     },
     searchPlaces: (query) => world.districts.search(query),
+    setBindings(next: KeyBindings): void {
+      keyboard.setBindings(next);
+    },
     setHour: applyHour,
     setProjection(projection: MapProjection): void {
       camera.setProjection(projection);
@@ -415,9 +503,17 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     setZoomLevel(level: ZoomLevel): void {
       camera.flyTo(camera.positionGta(), zoomSpan(level, camera.positionGta(), world));
     },
+    tiltBy(radians: number): void {
+      camera.tiltBy(radians);
+    },
+    turnBy(radians: number): void {
+      camera.turnTo(camera.pose().yaw + radians);
+    },
+    zoomBySteps(steps: number): void {
+      camera.flyTo(camera.positionGta(), camera.span() * ZOOM_STEP ** -steps);
+    },
   };
 }
-
 /**
  * The console's query parameters.
  *
@@ -432,6 +528,74 @@ export function dispatchParams(): URLSearchParams {
 
   return new URLSearchParams(override ?? window.location.search);
 }
+
+/** What a pressed key does. One switch, so the sheet, the buttons and the keyboard cannot drift apart. */
+export function runCommand(
+  command: PressedCommand,
+  host: {
+    camera: MapCamera;
+    fit: () => void;
+    followSelected: () => void;
+    options: BootOptions;
+    zoomLevel: (level: ZoomLevel) => void;
+  },
+): void {
+  switch (command) {
+    case 'fitBoard':
+      host.fit();
+      break;
+    case 'followSelected':
+      host.followSelected();
+      break;
+    case 'levelBlock':
+      host.zoomLevel('block');
+      break;
+    case 'levelCity':
+      host.zoomLevel('city');
+      break;
+    case 'levelDistrict':
+      host.zoomLevel('district');
+      break;
+    case 'nextCall':
+      stepCall(host, 1);
+      break;
+    case 'north':
+      host.camera.turnTo(MAP_YAW);
+      break;
+    case 'previousCall':
+      stepCall(host, -1);
+      break;
+    case 'stopFollowing':
+      // Only when it is riding something: Escape belongs to the selection everywhere else, and a key that
+      // silently eats an operator's Escape is worse than one that does nothing.
+      if (host.camera.following()) {
+        host.camera.follow(null);
+      }
+      break;
+    case 'toggleHelp':
+      // The sheet is React's, and it listens for the same key — nothing to do here, and saying so is
+      // cheaper than a comment somewhere else explaining a missing case.
+      break;
+  }
+}
+
+export function zoomSpan(
+  level: ZoomLevel,
+  at: GtaGround,
+  world: { readonly districts: DistrictLookup; readonly reach: number },
+): number {
+  const city = world.reach * 2;
+  if (level === 'city') {
+    return city;
+  }
+  if (level === 'block') {
+    return CELL_SIZE;
+  }
+  const box = world.districts.boxAt(at);
+
+  return box === null ? Math.sqrt(CELL_SIZE * city) : Math.max(box.max[0] - box.min[0], box.max[1] - box.min[1]);
+}
+
 /**
  * Wire the map's gestures to the camera and to selection. The gesture layer decides WHAT happened (tap, pan,
  * orbit, pinch, long press); this decides what it MEANS: a tap selects, a long press opens a call there.
@@ -441,13 +605,10 @@ function bindInput(input: {
   canvas: HTMLCanvasElement;
   districts: DistrictLookup;
   engine: Engine;
-  onFit: () => void;
-  onFollowSelected: () => void;
-  onZoomLevel: (level: ZoomLevel) => void;
   options: BootOptions;
   symbology: SymbologyLayer;
 }): () => void {
-  const { camera, canvas, districts, engine, onFit, onFollowSelected, onZoomLevel, options, symbology } = input;
+  const { camera, canvas, districts, engine, options, symbology } = input;
 
   /** The world ray under a canvas-relative CSS position. */
   const rayAt = (x: number, y: number): CursorPick => {
@@ -457,7 +618,7 @@ function bindInput(input: {
     return camera.rayAt(ndc, rect.width / Math.max(1, rect.height));
   };
 
-  const unbindGestures = bindGestures(canvas, {
+  return bindGestures(canvas, {
     dolly: (notch) => camera.dolly(notch),
     longPress: (x, y) => {
       const ground = groundPoint(rayAt(x, y));
@@ -491,85 +652,6 @@ function bindInput(input: {
     },
     zoomBy: (factor) => camera.zoomBy(factor),
   });
-
-  // The zoom-level keys (201/7-02). The console's full key map and its remapping are 7/06's step; these
-  // three are the half of THIS step that a level rule is useless without, and they live here rather than in
-  // the React tree because the map is not React's and a key must work wherever the focus happens to be.
-  const onKeyDown = (event: KeyboardEvent): void => {
-    if (event.altKey || event.ctrlKey || event.metaKey || isTyping(event.target)) {
-      return;
-    }
-    const level = LEVEL_KEYS[event.key];
-    if (level !== undefined) {
-      event.preventDefault();
-      onZoomLevel(level);
-
-      return;
-    }
-    if (event.key === 'f') {
-      event.preventDefault();
-      onFit();
-
-      return;
-    }
-    if (event.key === 'c') {
-      event.preventDefault();
-      onFollowSelected();
-
-      return;
-    }
-    if (event.key === 'Escape' && camera.following()) {
-      // Only when it is riding something: Escape belongs to the selection everywhere else, and a key that
-      // silently eats an operator's Escape is worse than one that does nothing.
-      event.preventDefault();
-      camera.follow(null);
-    }
-  };
-  window.addEventListener('keydown', onKeyDown);
-
-  return () => {
-    window.removeEventListener('keydown', onKeyDown);
-    unbindGestures();
-  };
-}
-
-/** Widest to tightest, left to right on the row — the order the levels themselves are in. */
-const LEVEL_KEYS: Readonly<Record<string, undefined | ZoomLevel>> = { 1: 'city', 2: 'district', 3: 'block' };
-
-/**
- * The three zoom levels an operator jumps between (201/7-02), and where each one's SPAN comes from.
- *
- * None of the three is a number somebody liked: each is a thing the world is actually made of, so the same
- * key means the same thing on a total conversion that has never heard of Los Santos.
- *
- * | Level | The span it frames | Read from |
- * | --- | --- | --- |
- * | `block` | one render cell | `CELL_SIZE` — the grid the pak is welded and streamed on |
- * | `district` | the named district under the view | the baked zone box (`districts.json`, 201/5-03) |
- * | `city` | everything the world has around the focus | the world's own reach: the LOD ring, or the demo's extent |
- *
- * **The fallback is derived too.** A world with no zone table has no district box to frame, so the middle
- * level becomes the geometric mean of the other two — zoom levels are logarithmic by nature, so the midpoint
- * of a zoom range is the geometric one, and a level that is missing should still land between its
- * neighbours rather than on top of one.
- */
-export type ZoomLevel = 'block' | 'city' | 'district';
-
-export function zoomSpan(
-  level: ZoomLevel,
-  at: GtaGround,
-  world: { readonly districts: DistrictLookup; readonly reach: number },
-): number {
-  const city = world.reach * 2;
-  if (level === 'city') {
-    return city;
-  }
-  if (level === 'block') {
-    return CELL_SIZE;
-  }
-  const box = world.districts.boxAt(at);
-
-  return box === null ? Math.sqrt(CELL_SIZE * city) : Math.max(box.max[0] - box.min[0], box.max[1] - box.min[1]);
 }
 
 /** The game's own timecyc when the build ships one, so the map is lit as the game lights it. */
@@ -606,18 +688,6 @@ function demoWorld(engine: Engine): DispatchWorld {
     label: 'demo (synthetic)',
     reach: DEMO_REACH,
   };
-}
-
-/** A key pressed into a field is text, not a command — the console has a time slider and checkboxes. */
-function isTyping(target: EventTarget | null): boolean {
-  const element = target as null | { isContentEditable?: boolean; tagName?: string };
-
-  return (
-    element?.isContentEditable === true ||
-    element?.tagName === 'INPUT' ||
-    element?.tagName === 'SELECT' ||
-    element?.tagName === 'TEXTAREA'
-  );
 }
 
 function numberParam(params: URLSearchParams, name: string, fallback: number): number {
@@ -677,6 +747,26 @@ async function readTimecyc(gameDir: string): Promise<null | TimecycSource> {
       return null;
     }
   });
+}
+
+/**
+ * Walk the open calls in the order the queue shows them, selecting and flying to each. The step is taken
+ * from the CURRENT selection, so an operator working a call and pressing "next" gets the one after it
+ * rather than the one after wherever they last looked.
+ */
+function stepCall(
+  host: { camera: MapCamera; options: BootOptions; zoomLevel: (level: ZoomLevel) => void },
+  step: number,
+): void {
+  const open = host.options.ops().incidents.filter((incident) => incident.status !== 'closed');
+  if (open.length === 0) {
+    return;
+  }
+  const selection = host.options.selection();
+  const current = selection?.kind === 'incident' ? open.findIndex((incident) => incident.id === selection.id) : -1;
+  const next = open[(((current + step) % open.length) + open.length) % open.length];
+  host.options.onClick({ id: next.id, kind: 'incident' });
+  host.camera.flyTo(next.at, LOCATE_SPAN);
 }
 
 /** The real thing: a built game, streamed from its pak. */

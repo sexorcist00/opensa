@@ -181,6 +181,53 @@ decides what they repeat. In a real CAD this is half the product.
 
 **Owes:** the default map written down where an operator can read it, and the remap stored per operator.
 
+**DONE 2026-08-22.** Both halves, plus the on-screen controls that are the same commands for an operator who
+has no keyboard at all — which on this surface is the phone, so they are not a nicety.
+
+**The map is written down in ONE table** (`map/keymap.ts`) and everything reads it: the input layer resolves
+events against it, the sheet prints it, the rebinder writes to it. A key handled inline where it happened to
+be convenient — which is what 7/02 and 7/03 left behind, and this step swept up — is a key that exists
+nowhere an operator can read, cannot be rebound, and collides silently with the next one somebody adds.
+
+| | Default | Why there |
+| --- | --- | --- |
+| Pan | `W` `A` `S` `D`, arrows | under the hand that is not on the mouse |
+| Turn | `Q` `E` | beside the pan keys, same hand |
+| Tilt | `Shift`+`↑` / `↓` | one modifier rather than two more letters |
+| Zoom | `+` `-` | what every map has had since the first tile server |
+| Zoom levels | `1` `2` `3` | widest to tightest, left to right |
+| North | `N` · Fit | `F` · Follow `C` | the first letter of what it does |
+| Calls | `[` `]` | previous / next open call, in the queue's own order |
+| Stop following | `Escape` | and ONLY that, since Escape belongs to the selection everywhere else |
+| The sheet | `?` | where the whole table above is readable at runtime |
+
+**Held is not pressed, and they cannot share a path.** Movement runs in the frame loop while the key is down,
+because acting on the operating system's key REPEAT moves the map in the OS's stutter — a long first gap,
+then a burst, at a rate the operator set for typing. Rates: pan is **screenfuls per second** (the frame's own
+unit, so a key crosses the same share of the picture at every zoom), turn a quarter lap per second, tilt half
+that, zoom a factor per second. Opposite keys cancel and a diagonal is normalised, so it is not faster than a
+straight line.
+
+**Rebinding is a press, not a text field** — click a row in the sheet, press the key. Asking an operator to
+type `Shift+ArrowUp` is asking them to know how this repository spells things. Only what DIFFERS from the
+defaults is stored, so a later change to the base map still reaches an operator who never touched that
+command; and binding a key that is taken takes it from the other command rather than leaving two rows
+claiming it.
+
+**The on-screen controls** (`ui/map-nav.tsx`, top-right) are the same commands through the same handle: a
+compass that says which way north is and puts it back, turn, tilt and zoom. The compass is the only thing on
+screen that answers *which way am I facing* at all, and it is drawn from the readout — so it updates at the
+readout's four times a second rather than on the frame path.
+
+**Two defects the tests caught while they were being written.** A key released while the window is not
+focused never sends `keyup`, so alt-tabbing mid-pan left the map panning by itself — the blur clears the held
+set. And a modifier pressed IN THE MIDDLE of a hold changes what the release resolves to: hold `↑`, then
+press Shift, and the release reads as `Shift+↑`, which is a different command — so `panNorth` stayed held with
+no key down. A release now clears every command that key could have started, shifted or not.
+
+**Owed by nobody:** this step is desk work end to end. What a field run adds is a verdict on the RATES, which
+are the one thing here that is a claim about hands rather than about the world.
+
 ### 07 — Leaving the console
 
 Three ways the map goes somewhere else:

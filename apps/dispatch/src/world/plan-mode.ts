@@ -18,10 +18,11 @@ import type { SearchedPlace } from './zones';
 
 import { gtaToEngine } from '../map/coords';
 import { bindGestures } from '../map/gestures';
+import { bindKeys } from '../map/keys';
 import { groundPoint, MAP_YAW, MapCamera, type MapProjection } from '../map/map-camera';
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
-import { zoomSpan } from './boot';
+import { applyHeldKeys, runCommand, zoomSpan } from './boot';
 import { NO_DISTRICTS } from './zones';
 
 /** Opening view. Higher than the 3D mode's: with no buildings to give scale, more ground reads better. */
@@ -85,6 +86,42 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     zoomBy: (factor) => camera.zoomBy(factor),
   });
 
+  // The same keyboard the 3D map has: plan mode is the fallback an operator may work a whole shift in, not
+  // a consolation screen, and a map with no keys on a machine with no GPU is exactly the wrong trade.
+  const zoomLevel = (level: ZoomLevel): void =>
+    camera.flyTo(
+      camera.positionGta(),
+      zoomSpan(level, camera.positionGta(), { districts: NO_DISTRICTS, reach: camera.maxSpan() / 2 }),
+    );
+  const keyboard = bindKeys(window, (command) =>
+    runCommand(command, {
+      camera,
+      fit: () => camera.fitBounds(boardPoints()),
+      followSelected: () => followSelected(),
+      options,
+      zoomLevel,
+    }),
+  );
+
+  /** Every point an operator is working right now — the same set the 3D host fits. */
+  function boardPoints(): readonly GtaGround[] {
+    const ops = options.ops();
+
+    return [
+      ...ops.units.map((unit) => unit.at),
+      ...ops.incidents.filter((incident) => incident.status !== 'closed').map((incident) => incident.at),
+    ];
+  }
+
+  function followSelected(): void {
+    const selection = options.selection();
+    camera.follow(
+      camera.following() || selection?.kind !== 'unit'
+        ? null
+        : () => options.ops().units.find((unit) => unit.id === selection.id)?.at ?? null,
+    );
+  }
+
   function ray(x: number, y: number): ReturnType<MapCamera['rayAt']> {
     const rect = overlay.getBoundingClientRect();
 
@@ -110,6 +147,7 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     const ops = options.ops();
     // Plan mode's zoom keys fly like the 3D mode's, so its loop samples the flight too — one nobody
     // advances is a camera frozen at take-off until the next input cancels it.
+    applyHeldKeys(camera, keyboard, dt);
     camera.advance(dt);
     const size = { height: overlay.clientHeight, width: overlay.clientWidth };
     const state = camera.state(size.width / Math.max(1, size.height));
@@ -144,7 +182,11 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     camera,
     dispose(): void {
       disposed = true;
+      keyboard.unbind();
       unbind();
+    },
+    faceNorth(): void {
+      camera.turnTo(MAP_YAW);
     },
     fitBoard(): void {
       const ops = options.ops();
@@ -172,6 +214,9 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     },
     /** Plan mode streams no pak, so there is no baked district table to search — and nothing to invent. */
     searchPlaces: () => [],
+    setBindings(next): void {
+      keyboard.setBindings(next);
+    },
     setHour(): void {
       // Nothing to light.
     },
@@ -182,10 +227,16 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
       // Plan mode has no world to measure: no pak, no ring, and no baked districts. So "everything there
       // is" is the widest view the camera's own bounds allow, and the middle level falls back to the
       // geometric mean the same way it does on a pak with no zone table.
-      camera.flyTo(
-        camera.positionGta(),
-        zoomSpan(level, camera.positionGta(), { districts: NO_DISTRICTS, reach: camera.maxSpan() / 2 }),
-      );
+      zoomLevel(level);
+    },
+    tiltBy(radians: number): void {
+      camera.tiltBy(radians);
+    },
+    turnBy(radians: number): void {
+      camera.turnTo(camera.pose().yaw + radians);
+    },
+    zoomBySteps(steps: number): void {
+      camera.flyTo(camera.positionGta(), camera.span() * 2 ** -steps);
     },
   };
 }

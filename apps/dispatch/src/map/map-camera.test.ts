@@ -427,3 +427,81 @@ describe('MapCamera.fitBounds', () => {
     });
   });
 });
+
+describe('MapCamera keyboard movement', () => {
+  describe('negative cases', () => {
+    it('does not lift the focus off the ground when panning a tilted view', () => {
+      const camera = new MapCamera({ ...OPENING, pitch: -0.6 });
+      camera.panBySpan(0, 1);
+
+      // The screen's up vector points into the sky on a tilted view; following it would fly the focus.
+      expect(camera.pose().height).toBeCloseTo(OPENING.height, 6);
+    });
+
+    it('does not keep easing towards north once the operator turns by hand', () => {
+      const camera = new MapCamera(OPENING);
+      camera.turnTo(0);
+      camera.advance(100);
+      camera.orbit(30, 0);
+
+      expect(camera.turning()).toBe(false);
+    });
+
+    it('does not tilt past the bounds a drag is held to', () => {
+      const camera = new MapCamera(OPENING);
+      camera.tiltBy(10);
+      const flat = camera.pose().pitch;
+      camera.tiltBy(-10);
+
+      expect(flat).toBeLessThan(0);
+      expect(camera.pose().pitch).toBeGreaterThan(-Math.PI / 2);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('pans one screenful per unit, whatever the zoom, which is what makes a held key predictable', () => {
+      const near = new MapCamera({ ...OPENING, pitch: -Math.PI / 2 });
+      near.frameSpan(400);
+      const before = near.positionGta();
+      near.panBySpan(1, 0);
+
+      expect(near.positionGta()[0] - before[0]).toBeCloseTo(400, 1);
+
+      const far = new MapCamera({ ...OPENING, pitch: -Math.PI / 2 });
+      far.frameSpan(2000);
+      const start = far.positionGta();
+      far.panBySpan(1, 0);
+
+      expect(far.positionGta()[0] - start[0]).toBeCloseTo(2000, 1);
+    });
+
+    it('pans north when told to, on a north-up view', () => {
+      const camera = new MapCamera({ ...OPENING, pitch: -Math.PI / 2 });
+      const before = camera.positionGta();
+      camera.panBySpan(0, 1);
+
+      expect(camera.positionGta()[1]).toBeGreaterThan(before[1]);
+      expect(camera.positionGta()[0]).toBeCloseTo(before[0], 3);
+    });
+
+    it('eases round to north the short way and lands exactly on it', () => {
+      const camera = new MapCamera({ ...OPENING, yaw: MAP_YAW - 0.6 });
+      camera.turnTo(MAP_YAW);
+
+      expect(camera.turning()).toBe(true);
+      for (let tick = 0; tick < 400 && camera.turning(); tick += 1) {
+        camera.advance(16.7);
+      }
+
+      expect(camera.pose().yaw).toBeCloseTo(MAP_YAW, 9);
+    });
+
+    it('turns by hand without easing, because a drag is already the operator moving it', () => {
+      const camera = new MapCamera(OPENING);
+      camera.turnBy(0.5);
+
+      expect(camera.pose().yaw).toBeCloseTo(MAP_YAW + 0.5, 9);
+      expect(camera.turning()).toBe(false);
+    });
+  });
+});

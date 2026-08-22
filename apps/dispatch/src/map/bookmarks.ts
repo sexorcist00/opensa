@@ -10,11 +10,13 @@
  * CAD application ([202 phase 3](../../../../docs/plans/202-pcad-dispatch/readme.md)) the shape below is
  * what a server round-trips: an array of named poses, nothing derived, nothing about the world in it.
  *
- * The store never throws. Private-mode Safari, a locked-down profile and a full quota all fail on the plain
- * `localStorage` call, and a console that will not boot because it could not read a bookmark is a worse
- * console than one with no bookmarks.
+ * The store never throws — see `storage.ts`, which owns that half for both the things this console
+ * remembers per operator.
  */
 import type { MapPose } from './map-camera';
+import type { JsonStorage } from './storage';
+
+import { browserStorage, readJson, STORAGE_KEYS, writeJson } from './storage';
 
 export interface Bookmark {
   /** What the operator called it. Trimmed, non-empty, unique within the store — the newest wins. */
@@ -31,26 +33,13 @@ export interface Bookmark {
  */
 export const BOOKMARK_LIMIT = 12;
 
-const STORAGE_KEY = 'opensa.dispatch.bookmarks';
-
 /** Read every saved view, newest first. Answers `[]` for anything it cannot read or parse. */
-export function readBookmarks(
-  storage: Pick<Storage, 'getItem' | 'setItem'> | undefined = safeStorage(),
-): readonly Bookmark[] {
-  try {
-    const raw = storage?.getItem(STORAGE_KEY);
-
-    return raw === null || raw === undefined ? [] : parse(JSON.parse(raw));
-  } catch {
-    return [];
-  }
+export function readBookmarks(storage: JsonStorage = browserStorage()): readonly Bookmark[] {
+  return parse(readJson(STORAGE_KEYS.bookmarks, storage));
 }
 
 /** Drop one by name and answer the new list. Removing something that is not there is not an error. */
-export function removeBookmark(
-  name: string,
-  storage: Pick<Storage, 'getItem' | 'setItem'> | undefined = safeStorage(),
-): readonly Bookmark[] {
+export function removeBookmark(name: string, storage: JsonStorage = browserStorage()): readonly Bookmark[] {
   return write(
     readBookmarks(storage).filter((entry) => entry.name !== name),
     storage,
@@ -65,7 +54,7 @@ export function removeBookmark(
 export function saveBookmark(
   name: string,
   pose: MapPose,
-  storage: Pick<Storage, 'getItem' | 'setItem'> | undefined = safeStorage(),
+  storage: JsonStorage = browserStorage(),
 ): readonly Bookmark[] {
   const label = name.trim();
   if (label === '') {
@@ -104,25 +93,8 @@ function parse(rows: unknown): readonly Bookmark[] {
   return rows.filter(isBookmark).slice(0, BOOKMARK_LIMIT);
 }
 
-/** `localStorage`, or nothing at all where touching it throws (private mode, a locked-down profile). */
-function safeStorage(): Pick<Storage, 'getItem' | 'setItem'> | undefined {
-  try {
-    return window.localStorage;
-  } catch {
-    return undefined;
-  }
-}
-
-function write(
-  entries: readonly Bookmark[],
-  storage: Pick<Storage, 'getItem' | 'setItem'> | undefined,
-): readonly Bookmark[] {
-  try {
-    storage?.setItem(STORAGE_KEY, JSON.stringify(entries));
-  } catch {
-    // A full or refused quota loses the SAVE, not the session: the list answered below is still what the
-    // operator asked for, it simply will not survive a reload.
-  }
+function write(entries: readonly Bookmark[], storage: JsonStorage): readonly Bookmark[] {
+  writeJson(STORAGE_KEYS.bookmarks, entries, storage);
 
   return entries;
 }

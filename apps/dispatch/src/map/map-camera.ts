@@ -9,6 +9,7 @@
 import type { CameraState } from '@opensa/engine';
 
 import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
+import { angleDelta } from '@opensa/math';
 import { CAMERA_FOV_Y, cursorRay, forwardFrom, screenBasis } from '@opensa/web/ui/camera/engine-camera';
 import { dollyStep, panStep, TOP_DOWN_PITCH } from '@opensa/web/ui/camera/fly-rig';
 
@@ -75,6 +76,21 @@ const NEAR = 0.5;
  * undamped follow unwatchable.
  */
 const FOLLOW_TAU_MS = SAMPLE_INTERVAL_MS / 3;
+/**
+ * How fast a held key turns the view, radians per second. A quarter turn a second: four seconds for a full
+ * lap, which is slow enough to stop on the heading you meant and quick enough to reorient without lifting
+ * the finger. It is an INPUT rate like {@link ORBIT_PER_PIXEL} beside it — a claim about hands, not about
+ * the world — and 201/7-06 lets an operator who disagrees hold the key for less time.
+ */
+export const KEY_TURN_PER_SECOND = Math.PI / 2;
+/** How fast a held key tilts, radians per second. Half the turn rate: the useful tilt range is a quarter of
+ *  a lap, so the same rate would cross the whole of it in half a second. */
+export const KEY_TILT_PER_SECOND = KEY_TURN_PER_SECOND / 2;
+/** How fast a held key pans, in SCREENFULS per second — the frame's own unit, so the same key crosses the
+ *  same fraction of what the operator can see at every zoom rather than a fixed number of metres. */
+export const KEY_PAN_PER_SECOND = 0.9;
+/** How fast a held key zooms: the view distance changes by this factor each second, geometric like a pinch. */
+export const KEY_ZOOM_PER_SECOND = 2.5;
 /** Bisection steps for the pitch bound. Fixed, so the bound is the same number on every machine and in a
  *  test — the reach function is monotonic in pitch, so 32 halvings of the bracket are ~1e-9 rad. */
 const PITCH_SOLVE_STEPS = 32;
@@ -92,6 +108,8 @@ export class MapCamera {
   private projection!: MapProjection;
   /** What the streamer fills around the focus, world units; `Infinity` when nothing streams. */
   private reach = Infinity;
+  /** A heading the view is easing towards ({@link turnTo}), or null when the yaw is the operator's. */
+  private turnTarget: null | number = null;
   /**
    * The tilt the OPERATOR asked for, before the world's bound narrows it. Kept apart from the effective
    * pitch because the bound moves with the zoom, and a bound that overwrote the request would be one-way:
@@ -107,6 +125,7 @@ export class MapCamera {
 
   /** Advance a flight in progress. No-op when there is none, so the host can call it every frame. */
   advance(dtMs: number): void {
+    this.advanceTurn(dtMs);
     this.advanceFollow(dtMs);
     const flight = this.flight;
     if (flight === null) {
@@ -278,6 +297,7 @@ export class MapCamera {
   /** Right-drag: turn and tilt around the focus. */
   orbit(dxPixels: number, dyPixels: number): void {
     this.flight = null;
+    this.turnTarget = null;
     this.yaw -= dxPixels * ORBIT_PER_PIXEL;
     // The drag is measured from what is ON SCREEN, not from an older request: dragging up out of a clamped
     // view has to fight the bound immediately rather than through invisible slack.
@@ -292,6 +312,28 @@ export class MapCamera {
     this.followed = null;
     const forward = forwardFrom(this.yaw, this.pitch);
     this.focus = panStep(this.focus, forward, ndcDelta, Math.max(1, this.height()));
+  }
+
+  /**
+   * Slide the view across the ground by fractions of what it FRAMES — `1` is one screenful. The keyboard's
+   * pan (201/7-06), and deliberately not `pan`'s units: a drag is measured in the pointer's own pixels,
+   * while a held key has to cross the same share of the picture at city zoom and at street zoom.
+   *
+   * Screen-aligned but ground-projected: the screen's up vector on a tilted view points into the sky, and
+   * following it would lift the focus off the ground plane the whole rig is anchored to.
+   */
+  panBySpan(fractionRight: number, fractionUp: number): void {
+    this.flight = null;
+    this.followed = null;
+    const { right, up } = screenBasis(forwardFrom(this.yaw, this.pitch));
+    const span = this.span();
+    const flatRight = flatten(right);
+    const flatUp = flatten(up);
+    this.focus = [
+      this.focus[0] + (flatRight[0] * fractionRight + flatUp[0] * fractionUp) * span,
+      this.focus[1],
+      this.focus[2] + (flatRight[2] * fractionRight + flatUp[2] * fractionUp) * span,
+    ];
   }
 
   pose(): MapPose {
@@ -387,6 +429,29 @@ export class MapCamera {
     };
   }
 
+  /** Tilt by this many radians, through the same bound every other tilt goes through. */
+  tiltBy(radians: number): void {
+    this.wantedPitch = clampPitchHard(this.wantedPitch + radians);
+    this.pitch = this.clampPitch(this.wantedPitch);
+  }
+
+  /** Turn the view by this many radians — the keyboard's half of {@link orbit}'s horizontal drag. */
+  turnBy(radians: number): void {
+    this.turnTarget = null;
+    this.yaw += radians;
+  }
+
+  /** Whether the view is easing towards a heading — the compass shows it, and a new turn cancels it. */
+  turning(): boolean {
+    return this.turnTarget !== null;
+  }
+
+  /** Ease the heading round to `yaw` (north, by default) at the keyboard's own turn rate. Interruptible:
+   *  any turn or drag takes the wheel back. */
+  turnTo(yaw: number): void {
+    this.turnTarget = yaw;
+  }
+
   /**
    * Scale the view distance directly — what a pinch drives. The wheel's {@link dolly} steps by a notch, which
    * a continuous gesture cannot express: a pinch reports a RATIO, and quantising it into notches is what makes
@@ -425,6 +490,23 @@ export class MapCamera {
     const offsetX = (here[0] - previous[0]) * decay;
     const offsetY = (here[1] - previous[1]) * decay;
     this.focus = gtaToEngine([now[0] + offsetX, now[1] + offsetY]);
+  }
+
+  /** One frame of {@link turnTo}: a constant-rate turn the short way round, landing exactly on the target. */
+  private advanceTurn(dtMs: number): void {
+    const target = this.turnTarget;
+    if (target === null) {
+      return;
+    }
+    const remaining = angleDelta(this.yaw, target);
+    const step = (KEY_TURN_PER_SECOND * Math.max(0, dtMs)) / 1000;
+    if (Math.abs(remaining) <= step) {
+      this.yaw = target;
+      this.turnTarget = null;
+
+      return;
+    }
+    this.yaw += Math.sign(remaining) * step;
   }
 
   /**
@@ -502,13 +584,21 @@ export function groundPoint(pick: CursorPick, planeY = 0): [number, number] | nu
   return engineToGta([pick.origin[0] + pick.direction[0] * t, planeY, pick.origin[2] + pick.direction[2] * t]);
 }
 
+function clampPitchHard(pitch: number): number {
+  return Math.min(PITCH_MIN_UNSTREAMED, Math.max(TOP_DOWN_PITCH, pitch));
+}
+
 /**
  * The absolute range every pitch lives in, whatever the world is: never level (a level view has no ground
  * point and the rig's basis degenerates) and never past straight down (the view would flip through the
  * vertical). {@link MapCamera.clampPitch} narrows this further from what the streamer fills.
  */
-function clampPitchHard(pitch: number): number {
-  return Math.min(PITCH_MIN_UNSTREAMED, Math.max(TOP_DOWN_PITCH, pitch));
+/** A screen basis vector projected onto the ground plane and re-normalized; the zero vector when it points
+ *  straight down (a top-down view's screen up IS the ground plane's north, so this only bites at the pole). */
+function flatten(vector: readonly [number, number, number]): [number, number, number] {
+  const length = Math.hypot(vector[0], vector[2]);
+
+  return length < 1e-6 ? [0, 0, 0] : [vector[0] / length, 0, vector[2] / length];
 }
 
 /**

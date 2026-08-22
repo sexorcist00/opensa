@@ -133,6 +133,29 @@ operator has the least else to work with.
   Vinewood frames Vinewood rather than a third of it. A world that ships no `info.zon` finds nothing, which
   is the honest answer for a total conversion rather than stock San Andreas names.
 
+## The keyboard, and the controls on the map
+
+**201/7-06, since 2026-08-22.** Every command the map takes is in one table (`src/map/keymap.ts`), which is
+what the keys resolve against, what the `?` sheet prints, and what the rebinder writes to.
+
+| | Keys |
+| --- | --- |
+| Pan | `W` `A` `S` `D`, arrows |
+| Turn / tilt | `Q` `E`, `Shift`+`↑` `↓` |
+| Zoom | `+` `-`, levels on `1` `2` `3` |
+| Go | north `N`, fit `F`, follow `C`, calls `[` `]` |
+| Other | stop following `Escape`, the key sheet `?` |
+
+Movement runs in the frame loop while the key is held, not on the operating system's key repeat, so it moves
+smoothly and at a rate rather than in steps: panning is measured in **screenfuls per second**, which means a
+key crosses the same share of the picture at city zoom and at street zoom. **Any of it can be rebound** —
+open the sheet with `?`, click a row, press the key. Only what differs from the defaults is stored, per
+operator and per browser.
+
+**On the map itself** (top-right) there is a compass that says which way north is and puts it back when
+clicked, plus turn, tilt and zoom. They are the same commands through the same handle, which is the point:
+the phone has no keyboard, and nothing else on screen answers *which way am I facing*.
+
 ## What it is made of
 
 | Concern                | Where                                    | Notes                                                                                       |
@@ -144,6 +167,9 @@ operator has the least else to work with.
 | Camera flights         | `src/map/fly.ts`                         | Van Wijk & Nuij's zoom-and-pan path — pure, so the host samples it from its own loop           |
 | Saved views            | `src/map/bookmarks.ts`                   | named poses in `localStorage`, shape-checked and non-throwing                                  |
 | Operator cluster       | `src/ui/map-tools.tsx`                   | search, fit, follow and saved views — a skin over the map handle, never on the frame path      |
+| Keyboard               | `src/map/keymap.ts` + `keys.ts`          | one binding table; held commands run in the loop, pressed ones fire once                       |
+| Map controls           | `src/ui/map-nav.tsx`, `key-help.tsx`     | compass, turn, tilt, zoom; the key sheet and its rebinder                                      |
+| Per-operator storage   | `src/map/storage.ts`                     | the one place `localStorage` is touched, and the one place it is allowed to throw              |
 | 3D symbology           | `src/map/beacons.ts`                     | through-depth `createDebugLines` pillars, routes, selection ring                             |
 | 2D symbology           | `src/map/overlay-2d.ts`                  | icons, chips, leader lines, scale bar — on a plain 2D canvas, and it owns hit-testing        |
 | World→screen           | `src/map/projection.ts`                  | `mat4LookAt` × the frame's own projection (perspective or orthographic), rebuilt per frame    |
