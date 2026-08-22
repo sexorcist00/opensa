@@ -133,6 +133,19 @@ operator has the least else to work with.
   Vinewood frames Vinewood rather than a third of it. A world that ships no `info.zon` finds nothing, which
   is the honest answer for a total conversion rather than stock San Andreas names.
 
+## Labels that declutter
+
+At 150 units a city view collides with itself, so the labels compete for pixels rather than overdrawing each
+other. Every **symbol** is always drawn — an icon is the datum — and the **names** are placed best-first
+through a collision index: the selection, then open calls worst-priority first, then units committed to a
+call, then whatever is nearest the eye. A chip that cannot sit above its symbol tries below, then either
+side, before it is dropped, and the status bar says how many names did not fit (*"104 names hidden"*) so a
+crowded map is never mistaken for a complete one.
+
+There is no labels-per-frame constant: the screen holds `floor(area / chipArea)` of them, which is 1371 on a
+1920×1080 desk and 152 on a 360×640 phone. At 150 units + 40 calls the desk places
+[179 of 190 and the phone 86](../benchmarks/opensa-engine/2026-08-22-dispatch-overlay-census.json).
+
 ## The radar
 
 **Round** (the user's call, 2026-08-22), bottom-right, 132 CSS px on a desk and 108 on a phone — the one

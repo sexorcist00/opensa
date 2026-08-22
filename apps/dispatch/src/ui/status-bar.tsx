@@ -35,6 +35,9 @@ export function StatusBar({
       <span>draws {readout.draws}</span>
       <span>resident {readout.residencyMb.toFixed(0)} MB</span>
       {readout.pending > 0 && <span>streaming {readout.pending}…</span>}
+      {/* 201/3-03: what the decluttering dropped. Every symbol is on screen — these are the NAMES that
+          did not fit, and an operator who cannot see the count would read a crowded map as a complete one. */}
+      {readout.namesHidden > 0 && <span title="Labels the map could not fit">{readout.namesHidden} names hidden</span>}
       {!compact && (
         <span>
           view {x.toFixed(0)}, {y.toFixed(0)} · {readout.pose.height.toFixed(0)} m

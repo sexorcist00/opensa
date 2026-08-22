@@ -83,6 +83,9 @@ reading map: what each one answers, so the survey is not re-derived.
   symbol placement**: collision detection, sort-key priority, allow-overlap, variable placement. The best
   documented answer to "150 labels at city zoom" and the reference for
   [201/3](./plans/201-dispatch-console/3-the-operator-surface-on-a-phone/readme.md)'s declutter budget.
+  **Built 2026-08-22** (`apps/dispatch/src/map/labels.ts`): the grid-bucketed index, the rank and the
+  variable placement are theirs; the rank's terms are this product's (selection, worst call, committed unit,
+  nearest) and the budget is derived from the viewport rather than configured.
 - <https://deck.gl/docs/developer-guide/base-maps/using-with-maplibre> — **deck.gl**: the layer model over a
   base map, and interleaved rendering into an existing context. The pattern for data layers restyled at
   runtime over a world whose look is baked.

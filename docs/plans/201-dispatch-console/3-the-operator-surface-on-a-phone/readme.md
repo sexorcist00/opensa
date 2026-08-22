@@ -76,6 +76,37 @@ solved by the `dataviz` rules, not by adjustment until it looks acceptable.
 **Owes:** a labels-per-frame budget and a stated rule for which label wins a collision — plus what happens to
 the loser (dropped, deferred, collapsed into a count).
 
+**DONE 2026-08-22 — and the budget turned out not to be a number.** All three answers, in the order the step
+asks for them:
+
+- **The budget is the screen.** A viewport holds `floor(area / chipArea)` labels and the collision index
+  cannot place past it however many are asked for — **1371 on a 1920×1080 desk, 152 on a 360×640 phone**. So
+  there is no constant to choose and none to retune when the chip font changes, which is the same shape of
+  answer [8/04](../8-the-time-axis/readme.md) reached for trails.
+- **Which label wins:** the operator's own priority, derived from the job. The selection first (they asked
+  for it), then open calls **worst priority first**, then units **committed to a call** before free ones,
+  and distance from the eye breaking every remaining tie. Colour carries none of it — the rank decides an
+  ORDER and the colour already means a status.
+- **What happens to the loser:** its **symbol still draws** — an icon is the datum and is never dropped —
+  and only its name goes. The count reaches the operator (`namesHidden` in the readout, *"104 names hidden"*
+  in the status bar), because a crowded map with no count is one an operator reads as complete.
+
+The mechanism is [MapLibre's](../../../links.md), including **variable placement**: a chip that cannot go
+above its symbol tries below, then either side, before it is dropped. The index is grid-bucketed for the
+reason theirs is — at 150 units an all-pairs test is ~11 000 comparisons a frame.
+
+**The measurement** ([the census](../../../benchmarks/opensa-engine/2026-08-22-dispatch-overlay-census.json),
+150 units + 40 calls spread over the viewport):
+
+| Viewport | Labels placed | Dropped | Ceiling |
+| --- | --- | --- | --- |
+| 1920×1080 desk | **179** of 190 | 11 | 1371 |
+| 360×640 phone | **86** of 190 | 104 | 152 |
+
+One rule, and the screen decides — which is what makes it work at both ends without a phone branch. Whether
+86 of 150 names reads as *enough* in an operator's hand is a field verdict, and the lever if it does not is
+collapsing a cluster into a count rather than dropping its members.
+
 ### 04 — The floor, measured
 
 `apps/dispatch/src/world/plan-mode.ts` already runs the same camera, gestures, symbology and board on a 2D

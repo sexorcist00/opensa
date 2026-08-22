@@ -71,8 +71,23 @@ function fakeContext(): { calls: { font: number; measure: number; text: string[]
 }
 
 /** Everything lands at the same near point — the layer is being measured, not the camera. */
+/** Every point on ONE pixel — the worst case for decluttering, and what most of these tests want. */
 function fakeProjector(depth = 100): ScreenProjector {
   return { project: (): ScreenPoint => ({ depth, x: 200, y: 200 }) } as unknown as ScreenProjector;
+}
+
+/** Points spread along a grid, so labels have somewhere to go and the placement can be counted (3/03). */
+function spreadProjector(depth = 100): ScreenProjector {
+  let n = 0;
+  const columns = 8;
+
+  return {
+    project: (): ScreenPoint => {
+      const index = n++;
+
+      return { depth, x: 60 + (index % columns) * 110, y: 40 + Math.floor(index / columns) * 60 };
+    },
+  } as unknown as ScreenProjector;
 }
 
 function unit(index: number): Unit {
@@ -151,13 +166,48 @@ describe('SymbologyLayer', () => {
   });
 
   describe('positive cases', () => {
-    it('counts every symbol and chip it drew', () => {
+    it('draws every symbol and measures every label, whatever the decluttering then does with them', () => {
       const { ctx } = fakeContext();
       const layer = new SymbologyLayer();
 
       layer.render(ctx, fakeProjector(), board(150, 40), null, SIZE);
+      const counts = layer.counted();
 
-      expect(layer.counted()).toEqual({ chips: 190, chipsDropped: 0, measures: 151, stale: 0, symbols: 190 });
+      // An icon is the datum and is never dropped; a label is what competes (201/3-03).
+      expect(counts.symbols).toBe(190);
+      expect(counts.chips + counts.chipsDropped).toBe(190);
+      expect(counts.measures).toBe(151);
+    });
+
+    it('places a label per symbol when they do not collide', () => {
+      const { ctx } = fakeContext();
+      const layer = new SymbologyLayer();
+
+      layer.render(ctx, spreadProjector(), board(24), null, { height: 900, width: 900 });
+
+      expect(layer.counted()).toMatchObject({ chips: 24, chipsDropped: 0, symbols: 24 });
+    });
+
+    it('gives the pixels to the selection when everything stacks on one point', () => {
+      const { calls, ctx } = fakeContext();
+      const layer = new SymbologyLayer();
+
+      layer.render(ctx, fakeProjector(), board(40), { id: 'u39', kind: 'unit' }, SIZE);
+
+      // The selected unit's callsign is drawn even though 39 others wanted the same pixels.
+      expect(calls.text).toContain('4-XRAY-39');
+    });
+
+    it('keeps only what fits when every symbol lands on one pixel, and counts the rest as dropped', () => {
+      const { ctx } = fakeContext();
+      const layer = new SymbologyLayer();
+
+      layer.render(ctx, fakeProjector(), board(150, 40), null, SIZE);
+      const counts = layer.counted();
+
+      // Four anchors around one point is all the room there is — the rest lose and say so.
+      expect(counts.chips).toBeLessThanOrEqual(4);
+      expect(counts.chipsDropped).toBe(190 - counts.chips);
     });
 
     it('marks a unit whose fix has aged past one publish interval, and says how old', () => {

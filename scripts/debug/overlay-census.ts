@@ -25,9 +25,12 @@ import { writeFileSync } from 'node:fs';
 
 import type { GtaGround } from '../../apps/dispatch/src/map/coords';
 import type { MinimapFrame, MinimapWorld } from '../../apps/dispatch/src/map/minimap';
+import type { ScreenProjector } from '../../apps/dispatch/src/map/projection';
 import type { Incident, Operations, Unit } from '../../apps/dispatch/src/ops/types';
 
+import { labelCeiling } from '../../apps/dispatch/src/map/labels';
 import { MinimapLayer } from '../../apps/dispatch/src/map/minimap';
+import { SymbologyLayer } from '../../apps/dispatch/src/map/overlay-2d';
 import { drawSketches, SketchStore } from '../../apps/dispatch/src/map/sketch';
 
 /** The board 201's budget table declares as the worst case. */
@@ -86,6 +89,7 @@ function counter(): Counter {
   };
   const ctx = {
     arc: bump(),
+    arcTo: bump(),
     beginPath: bump(),
     clearRect: bump(),
     clip: bump(),
@@ -104,14 +108,18 @@ function counter(): Counter {
       return { width: text.length * 6 } as TextMetrics;
     },
     moveTo: bump(),
+    quadraticCurveTo: bump(),
     rect: bump(),
     restore: bump(),
+    rotate: bump(),
     save: bump(),
     setLineDash: bump(),
+    setTransform: bump(),
     stroke: bump(),
     strokeStyle: '',
     textAlign: 'center',
     textBaseline: 'middle',
+    translate: bump(),
   } as unknown as CanvasRenderingContext2D;
 
   return {
@@ -119,6 +127,28 @@ function counter(): Counter {
       return state.calls;
     },
     ctx,
+  };
+}
+
+/** A chip at the layer's own font: 18 px tall, and a callsign is about this wide. */
+const CHIP = { height: 18, width: 84 };
+
+/** What the symbology places and drops on one viewport, at the declared worst-case board. */
+function labelsOn(
+  ops: Operations,
+  size: { height: number; width: number },
+): { calls: number; ceiling: number; dropped: number; placed: number } {
+  const canvas = counter();
+  const layer = new SymbologyLayer();
+  layer.render(canvas.ctx, spreadProjector(size.width, size.height), ops, null, size);
+  const counted = layer.counted();
+
+  return {
+    // Read AFTER the render: `calls` is a getter, and destructuring it would snapshot the zero.
+    calls: canvas.calls,
+    ceiling: labelCeiling(size.width, size.height, CHIP.width, CHIP.height),
+    dropped: counted.chipsDropped,
+    placed: counted.chips,
   };
 }
 
@@ -154,12 +184,17 @@ function main(): void {
   const sketchCounter = counter();
   drawSketches(sketchCounter.ctx, (at) => ({ x: at[0] / 10, y: -at[1] / 10 }), store);
 
+  const phone = labelsOn(ops, { height: 640, width: 360 });
+  const desk = labelsOn(ops, { height: 1080, width: 1920 });
+
   const report = {
     note:
       `A DESK COUNT, not a timing: the layers are driven with a stub 2D context that records calls. Board ` +
       `${String(units)} units + ${String(calls)} calls, ${String(BOXES)} district boxes, ` +
       `${String(shapes)} sketches of ${String(POINTS_PER_SHAPE)} points, radar 132 CSS px.`,
     readings: {
+      labelsDesk: desk,
+      labelsPhone: phone,
       radarRepaintCalls: moved.calls,
       radarSkipCalls: still.calls,
       radarSkipped: !repainted,
@@ -200,6 +235,28 @@ function radarFrame(ops: Operations, world: MinimapWorld, at: GtaGround): Minima
     size: 132,
     world,
   };
+}
+
+/**
+ * Points spread over the viewport in a deterministic spiral — a board at city zoom is neither a grid nor a
+ * single pixel, and a census that used either would flatter or damn the decluttering by construction.
+ */
+function spreadProjector(width: number, height: number): ScreenProjector {
+  let n = 0;
+
+  return {
+    project: (): { depth: number; x: number; y: number } => {
+      const index = n++;
+      const angle = index * 2.399_963; // the golden angle — an even, non-repeating fill
+      const radius = Math.sqrt(index / 200) * Math.min(width, height) * 0.48;
+
+      return {
+        depth: 200 + index,
+        x: width / 2 + Math.cos(angle) * radius,
+        y: height / 2 + Math.sin(angle) * radius,
+      };
+    },
+  } as unknown as ScreenProjector;
 }
 
 main();

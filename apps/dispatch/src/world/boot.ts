@@ -150,6 +150,9 @@ export interface DispatchReadout {
   readonly hour: number;
   /** What the sketch in progress (or the last one finished) measures — null until one is drawn (201/7-05). */
   readonly measurement: Measurement | null;
+  /** Labels the decluttering could not place this frame (201/3-03). The operator is told rather than left
+   *  to believe the map is complete — the SYMBOLS are all there, only the names are missing. */
+  readonly namesHidden: number;
   readonly pending: number;
   readonly pose: MapPose;
   readonly residencyMb: number;
@@ -500,6 +503,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           fps: Math.round(1000 / Math.max(1, average)),
           hour,
           measurement: sketch.measurement(),
+          namesHidden: symbology.counted().chipsDropped,
           pending: stream.pendingCells,
           pose: camera.pose(),
           residencyMb: stats.residencyBytes / (1024 * 1024),

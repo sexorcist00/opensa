@@ -187,6 +187,7 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
         fps: Math.round(1000 / Math.max(1, average)),
         hour: 12,
         measurement: sketch.measurement(),
+        namesHidden: symbology.counted().chipsDropped,
         pending: 0,
         pose: camera.pose(),
         residencyMb: 0,

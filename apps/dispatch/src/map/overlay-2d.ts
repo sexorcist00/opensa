@@ -11,10 +11,12 @@
  * against exactly the pixels the operator aimed at, chip included.
  */
 import type { Incident, Operations, Selection, Unit } from '../ops/types';
+import type { LabelBox } from './labels';
 import type { ScreenProjector } from './projection';
 
 import { incidentKey, type Rgba, SET_COLORS } from './beacons';
 import { gtaToEngine } from './coords';
+import { CollisionIndex, labelCandidates, labelRank } from './labels';
 
 /** What the last draw put on screen, and what a click at those pixels selects. */
 export interface HitArea {
@@ -79,8 +81,25 @@ const WIDTH_CACHE_CAP = 512;
 /** Round distances the scale bar is allowed to show. */
 const SCALE_STEPS = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000] as const;
 
+/** One entity's bid for a label: everything the placement pass needs, and nothing about the camera. */
+interface LabelRequest {
+  readonly color: string;
+  readonly id: string;
+  readonly kind: 'incident' | 'unit';
+  /** Smaller wins — see {@link labelRank}. */
+  readonly rank: number;
+  readonly selected: boolean;
+  readonly text: string;
+  readonly width: number;
+  /** The symbol's screen position, which the leader line runs from. */
+  readonly x: number;
+  readonly y: number;
+}
+
 export class SymbologyLayer {
   private areas: HitArea[] = [];
+  /** Chip rects of the frame, held apart so the ICONS can be appended after them (see {@link render}). */
+  private chipAreas: HitArea[] = [];
   private counts = { chips: 0, chipsDropped: 0, measures: 0, stale: 0, symbols: 0 };
   /**
    * Chip width by label text, because `measureText` is the layer's per-symbol cost and the labels do not
@@ -111,8 +130,15 @@ export class SymbologyLayer {
     return null;
   }
 
-  /** One frame of symbology. `projector` must already carry this frame's camera, and the caller must have
-   *  cleared the canvas — plan mode draws a ground grid under the symbols, so the clear cannot live here. */
+  /**
+   * One frame of symbology. `projector` must already carry this frame's camera, and the caller must have
+   * cleared the canvas — plan mode draws a ground grid under the symbols, so the clear cannot live here.
+   *
+   * **Two passes, since 201/3-03.** Every SYMBOL draws first, because an icon is the datum and is never
+   * dropped; then the labels compete for pixels best-first through a collision index, and a label that
+   * cannot find a free anchor is dropped rather than drawn over its neighbour. Which is why the passes are
+   * separate: in one pass the winner of a collision is whichever entity the board happened to list last.
+   */
   render(
     ctx: CanvasRenderingContext2D,
     projector: ScreenProjector,
@@ -122,18 +148,34 @@ export class SymbologyLayer {
     fixAges?: ReadonlyMap<string, number>,
   ): void {
     this.areas = [];
+    this.chipAreas = [];
     this.counts = { chips: 0, chipsDropped: 0, measures: 0, stale: 0, symbols: 0 };
     // Font and alignment are the chips' state and never vary, so they are set ONCE per frame rather than
     // once per chip: assigning `ctx.font` re-parses the shorthand every time.
     ctx.font = FONT;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    const wanted: LabelRequest[] = [];
     for (const incident of ops.incidents) {
-      this.drawIncident(ctx, projector, incident, selection, size);
+      const request = this.drawIncident(ctx, projector, incident, selection, size);
+      if (request) {
+        wanted.push(request);
+      }
     }
     for (const unit of ops.units) {
-      this.drawUnit(ctx, projector, unit, selection, size, fixAges?.get(unit.id) ?? 0);
+      const request = this.drawUnit(ctx, projector, unit, selection, size, fixAges?.get(unit.id) ?? 0);
+      if (request) {
+        wanted.push(request);
+      }
     }
+    wanted.sort((a, b) => a.rank - b.rank);
+    const index = new CollisionIndex(size.width, size.height);
+    for (const request of wanted) {
+      this.placeChip(ctx, index, request, size);
+    }
+    // A chip is a click target for its own entity, but an ICON must still win where a neighbour's chip
+    // covers it — so the icons go last in the list `hitTest` walks backwards.
+    this.areas = [...this.chipAreas, ...this.areas];
     drawScaleBar(ctx, projector, ops, size);
   }
 
@@ -162,34 +204,34 @@ export class SymbologyLayer {
     incident: Incident,
     selection: Selection,
     size: { readonly height: number; readonly width: number },
-  ): void {
+  ): LabelRequest | null {
     const point = projector.project(gtaToEngine(incident.at, ICON_LIFT));
     if (!point) {
-      return;
+      return null;
     }
     const color = css(SET_COLORS[incidentKey(incident.status, incident.priority)]);
     const selected = selection?.kind === 'incident' && selection.id === incident.id;
     diamond(ctx, point.x, point.y, incident.status === 'closed' ? 5 : 8, color, selected);
     this.counts.symbols += 1;
+    this.areas.push({ height: 20, id: incident.id, kind: 'incident', width: 20, x: point.x - 10, y: point.y - 10 });
     if (point.depth > CHIP_MAX_DEPTH && !selected) {
       this.counts.chipsDropped += 1;
 
-      return;
+      return null;
     }
     const label = size.width < NARROW_CANVAS ? incident.code : `${incident.code} · ${incident.title}`;
-    const rect = chip(
-      ctx,
-      point.x,
-      point.y - CHIP_RISE,
-      label,
-      this.chipWidth(ctx, label),
+
+    return {
       color,
+      id: incident.id,
+      kind: 'incident',
+      rank: labelRank({ depth: point.depth, kind: 'incident', priority: incident.priority, selected }),
       selected,
-      size.width,
-    );
-    this.counts.chips += 1;
-    this.areas.push({ ...rect, id: incident.id, kind: 'incident' });
-    this.areas.push({ height: 20, id: incident.id, kind: 'incident', width: 20, x: point.x - 10, y: point.y - 10 });
+      text: label,
+      width: this.chipWidth(ctx, label),
+      x: point.x,
+      y: point.y,
+    };
   }
 
   private drawUnit(
@@ -199,10 +241,10 @@ export class SymbologyLayer {
     selection: Selection,
     size: { readonly height: number; readonly width: number },
     ageMs: number,
-  ): void {
+  ): LabelRequest | null {
     const point = projector.project(gtaToEngine(unit.at, ICON_LIFT));
     if (!point) {
-      return;
+      return null;
     }
     // The chevron's screen angle comes from projecting a point AHEAD of the unit, so it stays correct under
     // any camera yaw or tilt without the overlay having to know the camera's basis.
@@ -217,31 +259,52 @@ export class SymbologyLayer {
     // difference between "far away" and "we have not heard from it" is the whole point of the mark.
     chevron(ctx, point.x, point.y, angle, color, selected, stale);
     this.counts.symbols += 1;
+    this.areas.push({ height: 20, id: unit.id, kind: 'unit', width: 20, x: point.x - 10, y: point.y - 10 });
     if (stale) {
       this.counts.stale += 1;
     }
     if (point.depth > CHIP_MAX_DEPTH && !selected) {
       this.counts.chipsDropped += 1;
 
-      return;
+      return null;
     }
     // The age goes ON the chip rather than beside it: a callsign an operator cannot trust is a callsign
     // that has to say so in the same glance.
     const suffix = stale ? ` · ${age(ageMs)}` : '';
     const width = stale ? this.chipWidthParts(ctx, unit.callsign, suffix) : this.chipWidth(ctx, unit.callsign);
-    const rect = chip(
-      ctx,
-      point.x,
-      point.y - CHIP_RISE,
-      `${unit.callsign}${suffix}`,
-      width,
+
+    return {
       color,
+      id: unit.id,
+      kind: 'unit',
+      rank: labelRank({ depth: point.depth, kind: 'unit', selected, status: unit.status }),
       selected,
-      size.width,
+      text: `${unit.callsign}${suffix}`,
+      width,
+      x: point.x,
+      y: point.y,
+    };
+  }
+
+  /** One label, placed if the pixels are free. The symbol is already drawn; only the name is at stake. */
+  private placeChip(
+    ctx: CanvasRenderingContext2D,
+    index: CollisionIndex,
+    request: LabelRequest,
+    size: { readonly height: number; readonly width: number },
+  ): void {
+    const candidates = labelCandidates(request.x, request.y, request.width, CHIP_HEIGHT, CHIP_RISE).map((box) =>
+      clampToCanvas(box, size),
     );
+    const box = index.placeFirst(candidates);
+    if (box === null) {
+      this.counts.chipsDropped += 1;
+
+      return;
+    }
+    chip(ctx, request, box);
     this.counts.chips += 1;
-    this.areas.push({ ...rect, id: unit.id, kind: 'unit' });
-    this.areas.push({ height: 20, id: unit.id, kind: 'unit', width: 20, x: point.x - 10, y: point.y - 10 });
+    this.chipAreas.push({ ...box, id: request.id, kind: request.kind });
   }
 
   /** One string's width, measured once and remembered. The chip's padding is the caller's, so a width can
@@ -330,43 +393,39 @@ function chevron(
  * `width` comes from the caller's cache and the font is the frame's — neither is re-established here,
  * because both are per-symbol costs at a count where the layer already dominates the frame.
  */
-function chip(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  text: string,
-  width: number,
-  color: string,
-  selected: boolean,
-  canvasWidth: number,
-): { height: number; width: number; x: number; y: number } {
-  // Clamp inside the canvas. A chip centred on an icon near the edge hangs half off screen, which on a phone
-  // is most of them; the leader line stays on the icon, so the chip may slide without becoming ambiguous.
-  const centre = Math.min(
-    Math.max(x, width / 2 + CHIP_MARGIN),
-    Math.max(width / 2 + CHIP_MARGIN, canvasWidth - width / 2 - CHIP_MARGIN),
-  );
-  const left = centre - width / 2;
-  const top = y - CHIP_HEIGHT / 2;
-
+function chip(ctx: CanvasRenderingContext2D, request: LabelRequest, box: LabelBox): void {
+  const centre = box.x + box.width / 2;
+  const middle = box.y + box.height / 2;
+  // The leader runs from the symbol to the box, whichever of the four anchors the placement found — the
+  // chip may sit above, below or beside its icon now (201/3-03), and a line that assumed "above" would
+  // point at nothing.
+  const toward = leaderEnd(request.x, request.y, box);
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(x, y + CHIP_HEIGHT / 2);
-  ctx.lineTo(x, y + CHIP_RISE - 8);
+  ctx.moveTo(request.x, request.y);
+  ctx.lineTo(toward.x, toward.y);
   ctx.stroke();
 
-  ctx.fillStyle = selected ? 'rgba(12, 18, 26, 0.96)' : 'rgba(8, 12, 18, 0.82)';
-  roundRect(ctx, left, top, width, CHIP_HEIGHT, 4);
+  ctx.fillStyle = request.selected ? 'rgba(12, 18, 26, 0.96)' : 'rgba(8, 12, 18, 0.82)';
+  roundRect(ctx, box.x, box.y, box.width, box.height, 4);
   ctx.fill();
-  ctx.strokeStyle = selected ? '#ffffff' : color;
-  ctx.lineWidth = selected ? 1.6 : 1;
+  ctx.strokeStyle = request.selected ? '#ffffff' : request.color;
+  ctx.lineWidth = request.selected ? 1.6 : 1;
   ctx.stroke();
 
   ctx.fillStyle = '#e8eef6';
-  ctx.fillText(text, centre, y + 0.5);
+  ctx.fillText(request.text, centre, middle + 0.5);
+}
 
-  return { height: CHIP_HEIGHT, width, x: left, y: top };
+/** Slide a candidate box inside the canvas. A chip centred on an icon near the edge hangs half off screen,
+ *  which on a phone is most of them; the leader stays on the icon, so sliding is not ambiguous. */
+function clampToCanvas(box: LabelBox, size: { readonly height: number; readonly width: number }): LabelBox {
+  return {
+    ...box,
+    x: Math.min(Math.max(box.x, CHIP_MARGIN), Math.max(CHIP_MARGIN, size.width - box.width - CHIP_MARGIN)),
+    y: Math.min(Math.max(box.y, CHIP_MARGIN), Math.max(CHIP_MARGIN, size.height - box.height - CHIP_MARGIN)),
+  };
 }
 
 /** The call symbol: a diamond, as every CAD map draws an incident. */
@@ -442,6 +501,14 @@ function fixAlpha(ageMs: number): number {
   const past = Math.min(1, (ageMs - FIX_FRESH_MS) / Math.max(1, FIX_LOST_MS - FIX_FRESH_MS));
 
   return 1 - past * (1 - FIX_LOST_ALPHA);
+}
+
+/** Where the leader line meets the chip: the point on the box's edge nearest the symbol. */
+function leaderEnd(x: number, y: number, box: LabelBox): { x: number; y: number } {
+  return {
+    x: Math.min(Math.max(x, box.x), box.x + box.width),
+    y: Math.min(Math.max(y, box.y), box.y + box.height),
+  };
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
