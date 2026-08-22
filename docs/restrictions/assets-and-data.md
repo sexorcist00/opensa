@@ -122,8 +122,18 @@ The rule: a re-encoder that has the source chunk keeps its split order (`rebuild
 2026-08-17, materials the source did not draw appended); a writer building from a MERGE (`encodeLodDff`, cells,
 procobj) must put its blended groups last, in their relative order.
 
-**Caught:** for `rebuildGeometry`, a unit test. For `encodeLodDff` and every merge writer: **silent** — the build
-validates, our own engine draws it fine, and the symptom appears only under a pipe that z-writes blended splits.
+`lod-common`'s `encodeLodDff` does since 2026-08-22 — it partitions the merged groups opaque-first, each side
+keeping its relative order, and a group counts as blended when its material tint is translucent, when its
+texture's raster carries the alpha flag (the `textures` option — the same signal RenderWare's own mesher reads;
+absent = unknown = opaque), or when any vertex it references has a translucent prelit colour. Both cell-LOD
+generators pass their texture source, resolved the way the group names are (the per-model atlas view for `sa`
+clones, the scoped source for `opensa` cells). It reorders nothing when every group blends or none does, so a
+model whose merge was already correct encodes byte-identically.
+
+**Caught:** for `rebuildGeometry` and for `encodeLodDff`, unit tests — the latter over the same real model
+(`cehollyhil06` merged with a second model, so the authored order really is buried before the encoder sees it).
+For any OTHER merge writer: **silent** — the build validates, our own engine draws it fine, and the symptom
+appears only under a pipe that z-writes blended splits.
 
 ## An `objs` LOD (or any atomic model) is ONE atomic — a multi-atomic clump written there keeps one
 

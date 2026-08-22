@@ -83,6 +83,15 @@ export function writeBuild(options: BuildOptions): void {
   const colNames: string[] = [];
   const colBounds: { max: Vec3; min: Vec3 }[] = [];
   const sharedTextures = new Set<string>();
+  // Built before the cells are encoded as well as before the shared TXD: the encoder resolves each group's
+  // SCOPED name through this same view to tell a blended material from an opaque one (its split order).
+  const registry: ScopedRegistry = new Map();
+  for (const cell of options.baked) {
+    for (const [scoped, entry] of cell.textureMap ?? []) {
+      registry.set(scoped, entry);
+    }
+  }
+  const textures = scopedSource(options.textureSource, registry);
   options.baked.forEach((cell, i) => {
     const id = options.firstId + i;
     const name = cellModelName(cell.cx, cell.cy);
@@ -90,7 +99,11 @@ export function writeBuild(options: BuildOptions): void {
     // inconsistent winding would hole the ground otherwise (the real game renders single-sided fine).
     img.set(
       `${name}.dff`,
-      encodeLodDff(cell.mesh, name, { doubleSided: true, ...(cell.effects ? { effects: cell.effects } : {}) }),
+      encodeLodDff(cell.mesh, name, {
+        doubleSided: true,
+        textures,
+        ...(cell.effects ? { effects: cell.effects } : {}),
+      }),
     );
     for (const texture of cellTextures(cell)) {
       sharedTextures.add(texture);
@@ -104,21 +117,7 @@ export function writeBuild(options: BuildOptions): void {
   // 5,805 unique on the stock map) — on disk AND as decoded/GPU textures at LOD range. Names are SCOPED per
   // source TXD (lod-common plan 004): the merged per-cell registries resolve each scoped name inside its own
   // dictionary, so same-named different-pixel variants coexist instead of collapsing to a random winner.
-  const registry: ScopedRegistry = new Map();
-  for (const cell of options.baked) {
-    for (const [scoped, entry] of cell.textureMap ?? []) {
-      registry.set(scoped, entry);
-    }
-  }
-  img.set(
-    `${SHARED_TXD}.txd`,
-    encodeLodTxd(
-      [...sharedTextures].sort(),
-      scopedSource(options.textureSource, registry),
-      options.lodTextureSize,
-      'linear',
-    ),
-  );
+  img.set(`${SHARED_TXD}.txd`, encodeLodTxd([...sharedTextures].sort(), textures, options.lodTextureSize, 'linear'));
   // SA faults on any streamed model with no collision (fastman92: MODEL_DOES_NOT_HAVE_COLLISION_LOADED). The LODs
   // need no real collision, so pack one bounds-only COL3 per cell (named to its model); SA auto-discovers .col in
   // the IMG. Same approach as sa-procobj-placement / lod-trees-generator.
