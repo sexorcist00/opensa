@@ -102,6 +102,23 @@ describe('ospak', () => {
       expect(manifest.cells['54,-32,lod']).not.toHaveProperty('aabb');
     });
 
+    it('carries the vertical extent and the screen-error pair, omitting each when absent (plan 201/1-05)', () => {
+      const withResidency = [...inputs()];
+      withResidency[0] = { ...withResidency[0], aabbY: [-3, 41], geometricError: 0 };
+      withResidency[1] = { ...withResidency[1], geometricError: 0.6415 };
+      const { manifest } = buildOspak(withResidency, { lodPixelThreshold: 2 });
+
+      expect(manifest.cells['54,-32,hd'].aabbY).toEqual([-3, 41]);
+      expect(manifest.cells['54,-32,hd'].geometricError).toBe(0);
+      expect(manifest.cells['54,-32,lod'].geometricError).toBeCloseTo(0.6415, 4);
+      expect(manifest.cells['54,-32,lod']).not.toHaveProperty('aabbY');
+      expect(manifest.lodPixelThreshold).toBe(2);
+    });
+
+    it('omits the screen-error budget for a pak the bake never stated one to', () => {
+      expect(buildOspak(inputs()).manifest).not.toHaveProperty('lodPixelThreshold');
+    });
+
     it('keys collision on the GAME grid, apart from the render cells', () => {
       const withCollision: OspakInput[] = [
         ...inputs(),

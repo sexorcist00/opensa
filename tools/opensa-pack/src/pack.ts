@@ -21,6 +21,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type { LodBakePromise } from './geometric-error';
+
 import { rewriteModelArchives } from './archive-edit';
 import { createAstcEncoder } from './astc-encode';
 import { buildRecipe, readGitCommit } from './build-recipe';
@@ -71,6 +73,10 @@ export interface PackOptions {
    *  Defaults to `basename(gameDir)`; pmb passes its `--game` basename because ITS gameDir here is a
    *  work-stage intermediate. */
   gameId?: string;
+  /** What the cell-LOD bake promised (plan 201/1-05) — `buildOpensaLods` returns it, pmb hands it over, and
+   *  the manifest turns it into the screen-error fields the streamer picks HD by. Absent = a pak whose
+   *  runtime keeps its ring radii. */
+  lodPromise?: LodBakePromise;
   log?: (message: string) => void;
   /** Convert only the map objects the `rect` actually PLACES, instead of every model the IDEs name (~14 000).
    *  A district places a few hundred, so this is the difference between a convert in minutes and one in
@@ -186,6 +192,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
       ? { checkpointDir: options.checkpointDir, resume: options.resume === true }
       : {}),
     log,
+    ...lodPromiseOption(options.lodPromise),
     ...modelPlanHook(fs, options, bundles, log, forceRgba8, models, (result) => {
       packed = result;
     }),
@@ -302,6 +309,16 @@ export function resolveTextureTarget(options: Pick<PackOptions, 'forceRgba8' | '
   return options.textures ?? (options.forceRgba8 === true ? 'rgba8' : 'bc');
 }
 
+/**
+ * The convert's `onWorldPlanned` hook: every model class converts HERE — the by-name ones first (they own
+ * their private dictionaries), then the map objects, which resolve into the world plan the hook is handed
+ * while it is still open. `--no-models` returns no hook at all.
+ */
+/** The bake's promise as a convert option — a helper so the absent case is not a branch inside `packGameDir`. */
+function lodPromiseOption(promise: LodBakePromise | undefined): { lodPromise?: LodBakePromise } {
+  return promise === undefined ? {} : { lodPromise: promise };
+}
+
 /** The two texture-resolution ledgers (085 rows B/F): cross-TXD rescues (info) and true misses (warn). */
 function logTextureLedgers(
   textures: Awaited<ReturnType<typeof convertDistrict>>['report']['textures'],
@@ -336,11 +353,6 @@ function logTextureLedgers(
   }
 }
 
-/**
- * The convert's `onWorldPlanned` hook: every model class converts HERE — the by-name ones first (they own
- * their private dictionaries), then the map objects, which resolve into the world plan the hook is handed
- * while it is still open. `--no-models` returns no hook at all.
- */
 function modelPlanHook(
   fs: ReturnType<typeof openGameDir>,
   options: PackOptions,

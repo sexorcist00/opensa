@@ -32,6 +32,23 @@ export interface OspakCellEntry extends OspakEntry {
    *  a grid-rect ring skips cells whose geometry is already inside the fog. Absent on older paks — the
    *  runtime falls back to the grid rect. */
   aabb?: [number, number, number, number];
+  /** World Y extent of the cell's TRUE geometry, engine coords `[minY, maxY]` (plan 201/1-05). The XZ
+   *  `aabb` answers a RING (a distance on the ground); a VIEW cannot be answered without a height — a
+   *  tower streamed out from under a pitched camera is a hole, so a cell that does not state its height
+   *  is not view-gated at all. Absent on paks built before this field existed; the runtime then keeps the
+   *  rings ({@link OspakManifest.lodPixelThreshold} is the other half of the same switch). */
+  aabbY?: [number, number];
+  /**
+   * World-unit error introduced by drawing THIS entry instead of the finer content it stands for (plan
+   * 201/1-05) — the 3D Tiles field, and the number screen-space-error LOD has nothing to compute without.
+   * A cell's `lod` entry carries the largest feature its bake does not represent; an `hd` entry is the
+   * finest content there is and carries 0.
+   *
+   * Absent on paks built before the bake wrote it. It is paired with {@link OspakManifest.lodPixelThreshold}
+   * — an error is only a verdict against the budget it was baked to — and the runtime falls back to the
+   * ring radii when either is missing.
+   */
+  geometricError?: number;
   textures?: number[];
 }
 
@@ -48,9 +65,14 @@ export interface OspakEntry {
 export interface OspakInput {
   /** World XZ geometry AABB (kind 'cell') — see {@link OspakCellEntry.aabb}. */
   aabb?: [number, number, number, number];
+  /** World Y geometry extent (kind 'cell') — see {@link OspakCellEntry.aabbY}. */
+  aabbY?: [number, number];
   bytes: Uint8Array;
   /** Wire encoding the producer applied to `bytes` (the reader inflates before use). */
   enc?: OspakWireEnc;
+  /** World-unit error of drawing this entry instead of its finer content (kind 'cell') — see
+   *  {@link OspakCellEntry.geometricError}. */
+  geometricError?: number;
   key: string;
   kind: 'cell' | 'collision' | 'texture';
   /** Texture meta (required for kind 'texture'). */
@@ -102,6 +124,18 @@ export interface OspakManifest {
   /** Fetch game id (plan 086 phase 1): the `game-src/<id>` folder name this pak was built from
    *  (`original`, `gostown`, …). Absent on older paks. */
   game?: string;
+  /**
+   * The screen-error budget the cell LODs were BAKED to, in pixels (plan 201/1-05): `opensa-lod-generator`
+   * drops from a cell LOD what subtends fewer than this many pixels at the closest distance a LOD is drawn,
+   * so it is the bake's own promise about how wrong the far view is allowed to look — and therefore the
+   * threshold the runtime compares {@link OspakCellEntry.geometricError} against.
+   *
+   * It is carried rather than re-derived because the alternative is two copies of one number in two
+   * repositories' worth of code, agreeing until somebody retunes the bake (SILENT: every pak still loads,
+   * the HD ring just stops meaning what the LOD was built for). Absent on paks built before the field —
+   * the runtime keeps the ring radii.
+   */
+  lodPixelThreshold?: number;
   /** Colour stand-in layers the planner minted for MISSING textures (plan 085 row B): 4×4 RGBA8 layers the
    *  runtime can repaint magenta when the missing-texture highlight is on. `color` is the PACKED texel, so
    *  toggling off restores the quiet material colour without re-fetching the array. Absent when the whole
@@ -146,6 +180,8 @@ export function buildOspak(
     cellSize?: number;
     /** Required whenever any input is `kind: 'collision'` — the GAME grid those keys are on. */
     collisionCellSize?: number;
+    /** The bake's screen-error budget — see {@link OspakManifest.lodPixelThreshold}. */
+    lodPixelThreshold?: number;
     missingLayers?: OspakManifest['missingLayers'];
     uvAnimations?: OspakUvAnimation[];
   } = {},
@@ -193,6 +229,7 @@ export function buildOspak(
       cells,
       cellSize: options.cellSize ?? 250,
       ...(Object.keys(collision).length > 0 ? { collision, collisionCellSize: options.collisionCellSize } : {}),
+      ...(options.lodPixelThreshold !== undefined ? { lodPixelThreshold: options.lodPixelThreshold } : {}),
       textures,
       ...(options.missingLayers !== undefined && options.missingLayers.length > 0
         ? { missingLayers: options.missingLayers }
@@ -259,6 +296,8 @@ function addCell(cells: OspakManifest['cells'], input: OspakInput, entry: OspakE
   cells[input.key] = {
     ...entry,
     ...(input.aabb !== undefined ? { aabb: input.aabb } : {}),
+    ...(input.aabbY !== undefined ? { aabbY: input.aabbY } : {}),
+    ...(input.geometricError !== undefined ? { geometricError: input.geometricError } : {}),
     ...(input.textures !== undefined ? { textures: [...new Set(input.textures)].sort((a, b) => a - b) } : {}),
   };
 }

@@ -5,6 +5,7 @@
  */
 import type { OspakUvAnimation } from '@opensa/engine-formats';
 
+import { cameraProjection } from './core/camera';
 import { configureCanvas, describeDevice, type EngineDevice, initDevice } from './core/device';
 import {
   frustumFromViewProj,
@@ -14,8 +15,6 @@ import {
   mat4Invert,
   mat4LookAt,
   mat4Multiply,
-  mat4OrthographicZO,
-  mat4PerspectiveZO,
   sphereFullyBeyond,
   type Vec3,
 } from './core/math';
@@ -1165,12 +1164,9 @@ export class Engine {
     const canvasTexture = this.canvasContext.getCurrentTexture();
     this.ensureTargets(canvasTexture.width, canvasTexture.height);
 
-    // Swapped near/far = the reversed-Z projection (near maps to depth 1, far to 0).
-    if (camera.orthoHalfHeight === undefined) {
-      mat4PerspectiveZO(this.proj, camera.fovYRad, camera.aspect, camera.far, camera.near);
-    } else {
-      mat4OrthographicZO(this.proj, camera.orthoHalfHeight, camera.aspect, camera.far, camera.near);
-    }
+    // The projection convention (reversed-Z, plan view) lives in ONE place — the streamer decides
+    // residency against the same frustum this frame culls with (201/1-05).
+    cameraProjection(this.proj, camera);
     mat4LookAt(this.view, camera.eye, camera.target, camera.up);
     mat4Multiply(this.viewProj, this.proj, this.view);
     mat4Invert(this.invViewProj, this.viewProj);

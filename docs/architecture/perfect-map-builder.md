@@ -132,6 +132,15 @@ flowchart TB
 Every row but `lod` is an `--exclude` value (`EXCLUDABLE_STAGES`). Between stages 7 and 8 the pipeline
 collects generated models + `lod-exclude.json` into `excludeItems` for both final LOD generators.
 
+**Stage 9 hands stage 10 its PROMISE** (plan 201/1-05). `buildOpensaLods` returns what its config guaranteed
+— it dropped what covered fewer than `minLodPixels` at `hdDrawDistance` — and the pack turns that into the
+manifest's screen-error fields: `lodPixelThreshold`, plus a per-entry `geometricError` (the same promise as a
+world size: 2 px at 300 u = 0.64 u) beside the new `aabbY`. The runtime then picks HD by projected error
+instead of by a ring radius, which is how one rule serves every zoom and every screen. On `--resume` the
+promise is read from the config rather than from the skipped bake — safe because a resume refuses when the
+config, the code or the sources moved. A pack run outside the pipeline states neither field, and such a pak's
+runtime keeps its radii.
+
 ## A mods folder may be LAYERED per target (mod-installer plan 011; vehicles and peds since 2026-08-17)
 
 `mods-src/<game>/mods` is either FLAT — every subfolder a mod, what every game shipped until 2026-08-15 —

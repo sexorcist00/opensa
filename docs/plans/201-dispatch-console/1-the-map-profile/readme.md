@@ -205,6 +205,61 @@ Watch the grid rule: render content is keyed on 250 and collision/procobj on 256
 **Owes:** cells, draws and resident MB before/after, and **the zoom at which HD has to come back** — stated
 as a rule, not a constant chosen by eye.
 
+**THE DESK HALF IS DONE 2026-08-22; the seconds and the megabytes are owed by a device run.** The step
+turned out to have one answer, not two: *what* to keep and *which level* to keep it at are the same question
+asked of the same projection, and both are now decided from what the frame will draw rather than from a
+radius.
+
+- **The prerequisite is met, and by the bake's own promise rather than by a new measurement.**
+  `opensa-lod-generator` culls what covers fewer than `minLodPixels` at `hdDrawDistance` and decimates
+  inside a pixel budget judged at that same distance. Read backwards that IS a geometric error: **2 px at
+  300 u on the bake's 1080p/60° view = 0.64 world units**, which the pack writes onto every LOD entry
+  (`geometricError`) beside the budget it was judged against (`lodPixelThreshold`). Fed back into the
+  screen-error rule it reproduces the bake's own 300 u ring exactly at the view it was written for — so the
+  HD ring stops being a number the engine has to be told and becomes a consequence of the bake.
+  `tools/opensa-pack/src/geometric-error.ts`; the generator RETURNS its promise (`buildOpensaLods`) so it is
+  stated by the tool that made it and never re-read from a config by whoever needs it.
+- **The number is per-BUILD today, and the per-CELL refinement is named rather than pretended.** Only the
+  generator knows what a given cell's bake dropped (a cell's LOD weld is one baked model, so the pack cannot
+  diff the two levels' placements). Until it emits that, a cell that dropped something big is judged by the
+  average promise — which is precisely what the fixed ring did before, so nowhere worse and better on every
+  screen that is not 1080p.
+- **The view gate needs a height, and that is why it is a pak capability.** A ring is answered by a distance
+  on the ground; a frustum cannot be answered without knowing how tall the cell is, and guessing streams a
+  tower out from under a pitched camera. So the pack now writes `aabbY` beside `aabb`, and the gate is
+  all-or-nothing per pak: **a manifest that does not state every height keeps the rings**, which is every pak
+  built before today. The rule that a view-gated residency is only valid where nothing behind the camera is
+  simulated is a restriction now
+  ([streaming-residency.md](../../../restrictions/streaming-residency.md)) — the game shell keeps its rings,
+  and its next dynamic body is why.
+- **The reserve is one cell, and the near ring is exempt.** The margin is stated in the grid's own quantum
+  rather than in metres (a residency decision is taken per cell; slack smaller than one cannot be expressed,
+  slack larger is a number somebody picked), and everything inside the HD ring stays resident whichever way
+  the operator faces — a turn is instant, a fetch is not. **Eviction stays radial**: the gate bounds what a
+  frame ASKS FOR, never what it keeps.
+- **The queue is ordered now, and that part needs no new pak.** The driver iterated the manifest and spent
+  its two creates a frame on whatever came first; both the fetch queue (which IS the network's order) and
+  the create budget are sorted nearest-focus-first.
+
+**The measured half** ([the census](../../../benchmarks/opensa-engine/2026-08-22-dispatch-residency-census.json),
+a Node run of the shipped driver over a synthetic 41×41 grid — it measures the RULE, not a district):
+
+| Pose | Ring cells | Ring HD | View cells | View HD |
+| --- | --- | --- | --- | --- |
+| block · tilted | 276 | 12 | **26** | 14 |
+| district · tilted | 276 | 12 | **84** | 0 |
+| city · tilted | 276 | 12 | **202** | 0 |
+| block · plan | 276 | 12 | **16** | 16 |
+| district · plan | 276 | 12 | **60** | 0 |
+| city · plan | 276 | 12 | **176** | 0 |
+
+**The zoom at which HD comes back is now a rule**: when the LOD's 0.64 u of error covers more than the 2 px
+the bake promised — ~660 u on a phone's 1600 px buffer, ~450 on a 1080p desk view, never in the plan view
+past district zoom. Nobody chose those distances; they fall out of the screen the operator is holding.
+
+**Still owed, and only a device can pay it:** the seconds to a working picture and the resident MB, on the
+pinned district ([2/03](../2-real-device-truth/readme.md)). Cells are not equal in a real pak.
+
 ### 06 — The bundle
 
 Dead code only: what the console ships and never runs.

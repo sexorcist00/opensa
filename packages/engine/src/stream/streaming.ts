@@ -19,9 +19,11 @@ import type { OspakManifest } from '@opensa/engine-formats';
  */
 import type { Engine } from '../engine';
 import type { PakWorkerResponse } from './pak-worker';
+import type { ResidencyView } from './residency';
 
 import { COLLISION_KEY_PREFIX } from './collision-source';
 import { postPakFetch } from './pak-traffic';
+import { ResidencyGate, verticalExtents } from './residency';
 
 const HD_RADIUS = 380;
 const LOD_RADIUS = 1000;
@@ -104,12 +106,25 @@ interface CellSlot {
 
 type Level = 'hd' | 'lod';
 
+/** A slot that wants a level it has not got, and how badly — the queue both the fetch and the create read. */
+interface WantedCell {
+  key: string;
+  level: Level;
+  /** Distance from the TRUE focus to the slot's geometry, engine units: smaller = wanted sooner. */
+  priority: number;
+  slot: CellSlot;
+}
+
 export class StreamingDriver {
   /** Texture-array ref → the loaded cell keys drawing with it. Empty set ⇒ the array is released. */
   private readonly arrayUsers = new Map<number, Set<string>>();
   private readonly blobs = new Map<string, Uint8Array>();
   private readonly cells = new Map<string, CellSlot>();
+  /** The grid the pak is welded on — the residency reserve is stated in cells rather than in metres. */
+  private readonly cellSize: number;
   private readonly engine: Engine;
+  /** Per-entry vertical extent, or null when the pak does not state one — see {@link verticalExtents}. */
+  private readonly extents: Map<string, [number, number]> | null;
   private readonly hdRadius: number;
   private readonly keyToSlot = new Map<string, CellSlot>();
   /** Previous update's focus (engine XZ) — velocity source; null until the first update. */
@@ -146,6 +161,8 @@ export class StreamingDriver {
     this.hdRadius = radii.hdRadius ?? HD_RADIUS;
     this.lodRadius = radii.lodRadius ?? LOD_RADIUS;
     const cellSize = manifest.cellSize ?? 250; // pre-cellSize manifests (older converts) default to the stock grid
+    this.cellSize = cellSize;
+    this.extents = verticalExtents(manifest);
     for (const [key, entry] of Object.entries(manifest.cells)) {
       const [cxRaw, cyRaw, level] = key.split(',');
       const cx = Number(cxRaw);
@@ -231,30 +248,53 @@ export class StreamingDriver {
     this.teleportGrace = true; // the re-stream is boot-like — its creates are not pops
   }
 
-  /** Per frame: retarget rings at `focus` (engine coords) and advance the bounded creates + swaps. */
-  update(focus: readonly [number, number, number]): StreamStats {
+  /**
+   * Per frame: retarget residency at `focus` (engine coords) and advance the bounded creates + swaps.
+   *
+   * `view` is what the host's NEXT frame will look at, and passing it changes the question the driver asks
+   * from *"how far is this cell from the focus"* to *"will the frame draw it"* (plan 201/1-05). A host that
+   * passes nothing keeps the rings — and the game shell is one on purpose: it streams around the PLAYER, who
+   * has physics behind the camera, and a view gate there would spawn cars into a hole
+   * ([restrictions/streaming-residency.md](../../../../docs/restrictions/streaming-residency.md)).
+   */
+  update(focus: readonly [number, number, number], view?: ResidencyView): StreamStats {
     // Velocity prefetch (074/21 P3): REQUESTS test a focus biased ahead along the smoothed motion;
     // EVICTION stays on the true focus (symmetric safety — the ring behind never thrashes).
     const [biasX, biasZ] = this.advanceVelocity(focus[0], focus[2]);
     // Drain BEFORE the slot loop: an array whose last write lands here unblocks its cell the same frame.
     this.stats.uploadMs = this.engine.textures.drainUploads(UPLOAD_BUDGET_MS);
-    let pendingCells = 0;
-    let loadedCells = 0;
+    const gate = view !== undefined && this.extents !== null ? new ResidencyGate(view) : null;
+    const { loaded, wanted } = this.retarget(biasX, biasZ, focus[0], focus[2], gate);
+    let pendingCells = wanted.length;
+    let loadedCells = loaded;
     let createSpentMs = 0;
     let creates = 0;
-    for (const slot of this.cells.values()) {
+    for (const want of wanted) {
+      if (!this.requested.has(want.key)) {
+        this.requestBlob(want.key);
+        this.texturesReady(want.key); // kick the arrays off IN PARALLEL with the cell — never serialize the two
+        continue;
+      }
       // Adaptive budget: up to two creates while the total stays under CREATE_BUDGET_MS — a heavy first
       // create keeps the old 1/frame behaviour, two light ones drain ring-entry bursts twice as fast.
-      const canCreate = creates === 0 || (creates < 2 && createSpentMs < CREATE_BUDGET_MS);
-      const spent = this.advanceSlot(slot, biasX, biasZ, focus[0], focus[2], canCreate);
-      if (spent !== null) {
-        creates += 1;
-        createSpentMs += spent;
+      if (creates > 0 && (creates >= 2 || createSpentMs >= CREATE_BUDGET_MS)) {
+        continue;
       }
-      if (slot.pending !== null) {
-        pendingCells += 1;
+      const blob = this.blobs.get(want.key);
+      if (!blob || !this.texturesReady(want.key)) {
+        continue; // arrays still in flight — a cell must never record against an unloaded array
       }
-      if (slot.current !== null) {
+      const wasLoaded = want.slot.current !== null;
+      createSpentMs += this.create(
+        want.slot,
+        want.level,
+        want.key,
+        blob,
+        rectDistanceOf(this.levelRect(want.slot, want.level), focus[0], focus[2]),
+      );
+      creates += 1;
+      pendingCells -= 1; // the create cleared this slot's `pending`, and the counters are read this frame
+      if (!wasLoaded) {
         loadedCells += 1;
       }
     }
@@ -269,57 +309,6 @@ export class StreamingDriver {
     this.stats.worstBlobMs = 0;
 
     return stats;
-  }
-
-  /** One slot's step: evict / request / create-swap. Requests test the BIASED focus (velocity prefetch),
-   *  eviction and the late-create metric the TRUE one. Returns the create's duration (ms), null otherwise. */
-  private advanceSlot(
-    slot: CellSlot,
-    biasX: number,
-    biasZ: number,
-    trueX: number,
-    trueZ: number,
-    canCreate: boolean,
-  ): null | number {
-    const desired = this.desiredLevel(slot, biasX, biasZ);
-    if (desired === null) {
-      slot.pending = null;
-      // The evict margin is a RING hysteresis; a pinned set has no ring, so an unselected cell must go
-      // regardless of how close it sits to the camera — otherwise deselecting one never clears it.
-      if (
-        slot.current !== null &&
-        (this.manual !== null || rectDistanceOf(slot.evictRect, trueX, trueZ) > this.lodRadius + EVICT_MARGIN)
-      ) {
-        this.unload(slot);
-      }
-
-      return null;
-    }
-    const key = slot.keys[desired];
-    if (desired === slot.current || key === undefined) {
-      slot.pending = null;
-
-      return null;
-    }
-    slot.pending = desired;
-    if (!this.requested.has(key)) {
-      this.requestBlob(key);
-      this.texturesReady(key); // kick the arrays off IN PARALLEL with the cell — never serialize the two
-
-      return null;
-    }
-    if (!canCreate) {
-      return null;
-    }
-    const blob = this.blobs.get(key);
-    if (!blob) {
-      return null;
-    }
-    if (!this.texturesReady(key)) {
-      return null; // arrays still in flight — a cell must never record against an unloaded array
-    }
-
-    return this.create(slot, desired, key, blob, rectDistanceOf(this.levelRect(slot, desired), trueX, trueZ));
   }
 
   /** Smooth the per-update focus delta; returns the REQUEST focus (true focus + capped lead vector). */
@@ -400,15 +389,23 @@ export class StreamingDriver {
    *  HD tests the GRID cell CENTRE (a quality ring — a rect test would nearly double HD residency for no
    *  guarantee); the LOD ring tests the level's TRUE geometry rect (manifest `aabb`, grid-rect fallback) —
    *  the fog-mask guarantee is geometric, and the geometry is what must not pop (074/21, 087). */
-  private desiredLevel(slot: CellSlot, fx: number, fz: number): Level | null {
+  private desiredLevel(slot: CellSlot, fx: number, fz: number, gate: null | ResidencyGate): Level | null {
     if (this.manual !== null) {
       const { keys, level } = this.manual;
 
       return keys.has(`${slot.cx},${slot.cy}`) && slot.keys[level] ? level : null;
     }
-    const hdEdge = slot.current === 'hd' ? this.hdRadius + HYSTERESIS : this.hdRadius;
     const lodEdge = slot.current !== null ? this.lodRadius + HYSTERESIS : this.lodRadius;
-    if (slot.keys.hd && Math.hypot(slot.centre[0] - fx, slot.centre[1] - fz) < hdEdge) {
+    // The LOD ring stays the REACH in every mode: a frustum runs to the far plane, and a view gate that
+    // widened the set would stream the far side of the map the moment the operator tilted towards it.
+    // The gate only ever REMOVES cells the ring already wanted — which is what makes it safe.
+    if (rectDistanceOf(slot.evictRect, fx, fz) >= lodEdge) {
+      return null;
+    }
+    if (gate !== null && !this.inView(slot, fx, fz, gate)) {
+      return null;
+    }
+    if (slot.keys.hd && this.wantsHd(slot, fx, fz, gate)) {
       return 'hd';
     }
     if (slot.keys.lod && rectDistanceOf(this.levelRect(slot, 'lod'), fx, fz) < lodEdge) {
@@ -416,6 +413,44 @@ export class StreamingDriver {
     }
 
     return null;
+  }
+
+  /**
+   * Drop a slot the residency no longer wants, once it is past the ring plus its margin. Eviction stays
+   * RADIAL even when the requests are view-gated: a cell that left the screen because the operator turned
+   * is one they are about to turn back to, and unloading on the turn would thrash the fetch queue for a
+   * saving the ring already bounds.
+   */
+  private evictIfBeyondRing(slot: CellSlot, trueX: number, trueZ: number): void {
+    // The evict margin is a RING hysteresis; a pinned set has no ring, so an unselected cell must go
+    // regardless of how close it sits to the camera — otherwise deselecting one never clears it.
+    if (
+      slot.current !== null &&
+      (this.manual !== null || rectDistanceOf(slot.evictRect, trueX, trueZ) > this.lodRadius + EVICT_MARGIN)
+    ) {
+      this.unload(slot);
+    }
+  }
+
+  /**
+   * Is this slot inside the view, plus the reserve? The reserve is ONE grid cell on every side, which is the
+   * quantum the whole decision is taken in: a residency set is a set of cells, so slack smaller than a cell
+   * cannot be expressed and slack larger than one is a number somebody picked. The near cells are exempt —
+   * a turn is instant and a fetch is not, so everything within the HD ring stays resident whichever way the
+   * operator is facing.
+   */
+  private inView(slot: CellSlot, fx: number, fz: number, gate: ResidencyGate): boolean {
+    if (rectDistanceOf(slot.evictRect, fx, fz) < this.hdRadius) {
+      return true;
+    }
+    for (const level of Object.keys(slot.keys) as Level[]) {
+      const extent = this.extents?.get(slot.keys[level] as string);
+      if (extent && gate.sees(this.levelRect(slot, level), extent[0], extent[1], this.cellSize)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /** The rect a level's ring decisions test: its true geometry AABB, or the grid rect on a pre-`aabb` pak. */
@@ -500,6 +535,40 @@ export class StreamingDriver {
   }
 
   /**
+   * The decision pass: what every slot wants this update, what that leaves resident, and the queue of slots
+   * that want a level they have not got — sorted nearest-focus-first, because that queue IS the network's
+   * order and the create budget's. Eviction happens here too, on the slots that want nothing.
+   */
+  private retarget(
+    biasX: number,
+    biasZ: number,
+    trueX: number,
+    trueZ: number,
+    gate: null | ResidencyGate,
+  ): { loaded: number; wanted: WantedCell[] } {
+    let loaded = 0;
+    const wanted: WantedCell[] = [];
+    for (const slot of this.cells.values()) {
+      const desired = this.desiredLevel(slot, biasX, biasZ, gate);
+      const key = desired === null ? undefined : slot.keys[desired];
+      if (desired === null) {
+        slot.pending = null;
+        this.evictIfBeyondRing(slot, trueX, trueZ);
+      } else if (key === undefined || desired === slot.current) {
+        slot.pending = null;
+      } else {
+        slot.pending = desired;
+        wanted.push({ key, level: desired, priority: rectDistanceOf(slot.evictRect, trueX, trueZ), slot });
+      }
+      if (slot.current !== null) {
+        loaded += 1;
+      }
+    }
+
+    return { loaded, wanted: wanted.sort((a, b) => a.priority - b.priority) };
+  }
+
+  /**
    * Whether every array this cell draws with is uploaded, requesting the missing ones. A pak built before
    * the `textures` field carries no refs — those districts loaded every array eagerly at boot, so there is
    * nothing to wait for and this is trivially true.
@@ -547,6 +616,32 @@ export class StreamingDriver {
     slot.current = null;
     slot.pending = null;
     this.stats.evicted += 1;
+  }
+
+  /**
+   * Does this slot need its HD level? Two rules, and which one runs is a property of the PAK rather than of
+   * the host: a pak that states a cell LOD's geometric error and the pixel budget it was baked to is judged
+   * by screen-space error (3D Tiles / CesiumJS — one rule at every zoom, screen height and DPR), and one
+   * that states neither keeps the HD radius it always had.
+   *
+   * The hysteresis is the same 60 units in both, applied to the quantity that means *further out*: a
+   * resident HD level is judged from `HYSTERESIS` units further away in perspective, and from a view box
+   * `HYSTERESIS` units taller in the plan view. Judging it exactly where it is makes a cell parked on the
+   * boundary refetch itself.
+   */
+  private wantsHd(slot: CellSlot, fx: number, fz: number, gate: null | ResidencyGate): boolean {
+    const backOff = slot.current === 'hd' ? HYSTERESIS : 0;
+    const lodKey = slot.keys.lod;
+    const error = lodKey === undefined ? undefined : this.manifest.cells[lodKey].geometricError;
+    const budget = this.manifest.lodPixelThreshold;
+    if (gate === null || error === undefined || budget === undefined) {
+      return Math.hypot(slot.centre[0] - fx, slot.centre[1] - fz) < this.hdRadius + backOff;
+    }
+    const extent = this.extents?.get(lodKey as string);
+    const rect = this.levelRect(slot, 'lod');
+    const distance = extent ? gate.distanceToBox(rect, extent[0], extent[1]) : rectDistanceOf(rect, fx, fz);
+
+    return gate.screenError(error, distance, backOff) > budget;
   }
 }
 

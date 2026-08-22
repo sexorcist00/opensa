@@ -8,7 +8,7 @@ import { buildTreeLods } from '@opensa/lod-trees-generator/build';
 import { parseOnlyList, runOptimizer, summarizeReport } from '@opensa/map-optimizer/run';
 import { SA_TREE_MODELS } from '@opensa/map-placement/vegetation';
 import { install as installMods } from '@opensa/mod-installer/install';
-import { buildOpensaLods } from '@opensa/opensa-lod-generator/build';
+import { buildOpensaLods, opensaLodPromise } from '@opensa/opensa-lod-generator/build';
 import { packGameDir } from '@opensa/opensa-pack/pack';
 import { install as installPeds } from '@opensa/ped-installer/install';
 import { openArchive } from '@opensa/renderware/archive/img-archive';
@@ -789,12 +789,15 @@ async function buildOpensaTarget(step: {
   const { alwaysOnLods, config, excludeItems, game, holeFillModels, log, outPath, packing, work } = step;
   const opensa = join(outPath, 'opensa');
   const lodDir = packing ? join(work, 'opensa-lod') : opensa;
+  // The bake's screen-error promise (201/1-05) — read from the config on a resumed run, whose kept
+  // `opensa-lod` was baked by an earlier run of the same pinned config, and returned by the bake otherwise.
+  let lodPromise = opensaLodPromise();
   if (step.lodDone) {
     log(`opensa-lod — done in the run being resumed, skipped (${lodDir})`);
   } else {
     const lodStarted = Date.now();
     log(`opensa → ${packing ? `${basename(work)}/opensa-lod` : 'opensa/'} (baking cells — can take several minutes)`);
-    await buildOpensaLods({
+    lodPromise = await buildOpensaLods({
       cellSize: config.lodCellSize,
       config: { excludeItems, holeFillModels },
       gameDir: game,
@@ -832,6 +835,9 @@ async function buildOpensaTarget(step: {
     checkpointDir: join(work, 'pack-checkpoints'),
     gameDir: lodDir,
     gameId,
+    // The bake states its own screen-error promise and the pak carries it, so the streamer picks HD by
+    // projected error rather than by a ring radius (plan 201/1-05).
+    lodPromise,
     log: (message) => log(`pack: ${message}`),
     // Plan 086 phase 8: the game dir is self-contained — the pak lands in `<out>/opensa/pak` (the default).
     outDir: opensa,

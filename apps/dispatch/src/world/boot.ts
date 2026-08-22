@@ -1,4 +1,4 @@
-import type { StreamStats } from '@opensa/engine';
+import type { ResidencyView, StreamStats } from '@opensa/engine';
 import type { TimecycSource } from '@opensa/renderware';
 
 import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
@@ -220,10 +220,12 @@ interface DispatchWorld {
   /** What the world's places are called (201/5-03) — baked beside the pak, empty on a world that ships no
    *  `info.zon` and on the synthetic demo. */
   districts: DistrictLookup;
-  /** Called once a frame with the ground point the view sits over. Returns the ENGINE's own streaming
-   *  numbers — blob-handler and upload milliseconds, creates, evictions — which the console used to throw
-   *  away, keeping only `pendingCells`. They are the between-frame half no in-loop timer can see. */
-  follow: (focus: readonly [number, number, number]) => StreamStats;
+  /** Called once a frame with the ground point the view sits over, and with the view that is about to be
+   *  drawn (201/1-05 — residency is decided against the frustum this frame culls with). Returns the
+   *  ENGINE's own streaming numbers — blob-handler and upload milliseconds, creates, evictions — which the
+   *  console used to throw away, keeping only `pendingCells`. They are the between-frame half no in-loop
+   *  timer can see. */
+  follow: (focus: readonly [number, number, number], view: ResidencyView) => StreamStats;
   /** Where `data/` sits, for timecyc. Empty when there is no game dir (the demo). */
   gameDir: string;
   /** What the status bar shows as the world's provenance. */
@@ -411,8 +413,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     const state = camera.state(aspect);
     time('board', () => beacons.update(ops, options.selection(), options.trails?.()));
     // Rings follow the ground point the view is over, never the eye: a camera a kilometre up sits outside
-    // every ring and would stream nothing at all.
-    const stream = time('stream', () => world.follow([state.target[0], state.target[1], state.target[2]]));
+    // every ring and would stream nothing at all. The view goes with it, so what the frame will draw is what
+    // the streamer fetches — judged at the DRAWING buffer's height, which is where a DPR of 3 lives.
+    const stream = time('stream', () =>
+      world.follow([state.target[0], state.target[1], state.target[2]], { camera: state, pixelHeight: canvas.height }),
+    );
     const stats = time('engine-frame', () => engine.frame(state));
     // Drained every frame the mode is on, so a span never carries into the next frame's total. Plan 091's
     // rule: the frame that DRAINS is the frame that paid, because the work ran in the gap before it.
@@ -835,7 +840,7 @@ async function streamedWorld(engine: Engine, params: URLSearchParams): Promise<D
 
   return {
     districts: await loadDistricts(source.base, setup.districts),
-    follow: (focus) => setup.driver.update(focus),
+    follow: (focus, view) => setup.driver.update(focus, view),
     gameDir: source.gameDir,
     label: setup.buildTime ?? 'unknown',
     reach: numberParam(params, 'lod', DEFAULT_LOD_RADIUS),

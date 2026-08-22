@@ -2,9 +2,17 @@ import type { OspakManifest } from '@opensa/engine-formats';
 
 import { describe, expect, it } from 'vitest';
 
-import type { Engine } from '../engine';
+import type { CameraState, Engine } from '../engine';
+import type { ResidencyView } from './residency';
 
 import { StreamingDriver, type StreamingRadii } from './streaming';
+
+/** What a pak states for the screen-error rule — one height for every cell keeps the fixtures readable. */
+interface ResidencyProfile {
+  aabbY?: [number, number];
+  geometricError?: Record<string, number>;
+  lodPixelThreshold?: number;
+}
 
 function harness(
   cells: string[],
@@ -17,6 +25,8 @@ function harness(
   /** Drain calls an array needs before its last write lands — >1 models an upload the budget splits
    *  across frames (the 15-85 ms hitch fix). 1 keeps the pre-split single-frame behaviour. */
   uploadSteps = 1,
+  /** What the pak states about screen error (201/1-05). Omit to model every pak built so far. */
+  residency?: ResidencyProfile,
 ): {
   deliver: (key: string) => void;
   driver: StreamingDriver;
@@ -105,7 +115,7 @@ function harness(
       requested.push(message.key);
     },
   } as unknown as Worker;
-  const driver = new StreamingDriver(engine, manifestWith(cells, cellTextures, cellAabbs), worker, radii);
+  const driver = new StreamingDriver(engine, manifestWith(cells, cellTextures, cellAabbs, residency), worker, radii);
 
   return {
     deliver: (key: string): void => {
@@ -126,19 +136,53 @@ function manifestWith(
   cells: string[],
   cellTextures?: Record<string, number[]>,
   cellAabbs?: Record<string, [number, number, number, number]>,
+  residency?: ResidencyProfile,
 ): OspakManifest {
   const entries: OspakManifest['cells'] = {};
   const arrays: OspakManifest['textures'] = {};
   for (const key of cells) {
     const refs = cellTextures?.[key];
     const aabb = cellAabbs?.[key];
-    entries[key] = { hash: 0, length: 4, offset: 0, ...(aabb ? { aabb } : {}), ...(refs ? { textures: refs } : {}) };
+    const error = residency?.geometricError?.[key];
+    entries[key] = {
+      hash: 0,
+      length: 4,
+      offset: 0,
+      ...(aabb ? { aabb } : {}),
+      ...(residency?.aabbY ? { aabbY: residency.aabbY } : {}),
+      ...(error !== undefined ? { geometricError: error } : {}),
+      ...(refs ? { textures: refs } : {}),
+    };
     for (const ref of refs ?? []) {
       arrays[`array-${ref}`] = { format: 0, hash: 0, height: 4, layers: 1, length: 4, offset: 0, width: 4 };
     }
   }
 
-  return { byteLength: 4096, cells: entries, cellSize: 250, textures: arrays, version: 1 };
+  return {
+    byteLength: 4096,
+    cells: entries,
+    cellSize: 250,
+    ...(residency?.lodPixelThreshold !== undefined ? { lodPixelThreshold: residency.lodPixelThreshold } : {}),
+    textures: arrays,
+    version: 1,
+  };
+}
+
+/** A view over the origin looking down −Z from 400 u up: the console's own shape, minus its chrome. */
+function mapView(overrides: Partial<CameraState> = {}): ResidencyView {
+  return {
+    camera: {
+      aspect: 1.6,
+      eye: [0, 400, 400],
+      far: 5000,
+      fovYRad: Math.PI / 3,
+      near: 0.1,
+      target: [0, 0, 0],
+      up: [0, 1, 0],
+      ...overrides,
+    },
+    pixelHeight: 800,
+  };
 }
 
 describe('StreamingDriver rings (074/21 P1)', () => {
@@ -485,6 +529,18 @@ describe('StreamingDriver manual cells (the map inspector, 074/22)', () => {
       expect(h.loaded).toEqual(['3,3,lod']);
     });
 
+    it('keeps a pinned cell loaded on every later update — the pin is not a one-frame request', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 1000 });
+      h.driver.setManualCells([[3, 3]], true);
+      h.driver.update([0, 0, 0]);
+      h.deliver('3,3,lod');
+      h.driver.update([0, 0, 0]);
+      h.driver.update([0, 0, 0]);
+      h.driver.update([0, 0, 0]);
+
+      expect(h.unloaded).toEqual([]);
+    });
+
     it('evicts a deselected cell even while it sits well inside the ring', () => {
       const h = harness(['3,3,lod'], { lodRadius: 2000 });
       h.driver.setManualCells([[3, 3]], true);
@@ -590,6 +646,114 @@ describe('StreamingDriver budgeted texture uploads', () => {
 
       expect(h.loaded).toEqual(['3,3,lod']);
       expect(h.liveArrays()).toEqual([7]);
+    });
+  });
+});
+
+describe('StreamingDriver residency (201/1-05)', () => {
+  describe('negative cases', () => {
+    it('ignores the view on a pak that states no cell heights — the rings stand', () => {
+      // Same two cells, 750 u either side of the focus; without `aabbY` neither can be frustum-tested.
+      const h = harness(['0,3,lod', '0,-4,lod'], { hdRadius: 100, lodRadius: 2000 });
+      h.driver.update([0, 0, 0], mapView());
+
+      expect(h.requested.sort()).toEqual(['0,-4,lod', '0,3,lod']);
+    });
+
+    it('does not request a cell behind the camera once the pak states heights', () => {
+      const h = harness(['0,3,lod', '0,-4,lod'], { hdRadius: 100, lodRadius: 2000 }, 2400, undefined, undefined, 1, {
+        aabbY: [0, 40],
+      });
+      h.driver.update([0, 0, 0], mapView());
+
+      expect(h.requested).toEqual(['0,3,lod']);
+    });
+
+    it('does not evict a loaded cell for leaving the view — eviction stays radial', () => {
+      const h = harness(['0,3,lod'], { hdRadius: 100, lodRadius: 2000 }, 2400, undefined, undefined, 1, {
+        aabbY: [0, 40],
+      });
+      h.driver.update([0, 0, 0], mapView());
+      h.deliver('0,3,lod');
+      h.driver.update([0, 0, 0], mapView());
+
+      expect(h.loaded).toEqual(['0,3,lod']);
+
+      // Turn 180°: the cell is now behind the camera, and still inside the ring.
+      h.driver.update([0, 0, 0], mapView({ target: [0, 0, 800] }));
+
+      expect(h.unloaded).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('requests the nearest cell to the focus first, whatever order the manifest lists them in', () => {
+      const h = harness(['0,5,lod', '0,3,lod', '0,1,lod'], { lodRadius: 2000 });
+      h.driver.update([0, 0, 0]);
+
+      expect(h.requested).toEqual(['0,1,lod', '0,3,lod', '0,5,lod']);
+    });
+
+    it('keeps everything inside the HD ring resident whichever way the view faces', () => {
+      // The cell sits behind the camera, but 250 u from the focus — a turn is instant, a fetch is not.
+      const h = harness(['0,-2,lod'], { hdRadius: 600, lodRadius: 2000 }, 2400, undefined, undefined, 1, {
+        aabbY: [0, 40],
+      });
+      h.driver.update([0, 0, 0], mapView());
+
+      expect(h.requested).toEqual(['0,-2,lod']);
+    });
+
+    it('takes HD when the cell LOD errs by more pixels than the bake promised', () => {
+      // Closest point 1205 u from the eye → 1.74 u/px, so a 10 u error draws 5.7 px of it.
+      const h = harness(['0,3,hd', '0,3,lod'], { hdRadius: 100, lodRadius: 2000 }, 2400, undefined, undefined, 1, {
+        aabbY: [0, 40],
+        geometricError: { '0,3,lod': 10 },
+        lodPixelThreshold: 4,
+      });
+      h.driver.update([0, 0, 0], mapView());
+
+      expect(h.requested).toEqual(['0,3,hd']);
+    });
+
+    it('keeps the LOD inside the HD radius when its error is under the budget', () => {
+      const h = harness(['0,3,hd', '0,3,lod'], { hdRadius: 2000, lodRadius: 2000 }, 2400, undefined, undefined, 1, {
+        aabbY: [0, 40],
+        geometricError: { '0,3,lod': 10 },
+        lodPixelThreshold: 8,
+      });
+      h.driver.update([0, 0, 0], mapView());
+
+      expect(h.requested).toEqual(['0,3,lod']);
+    });
+
+    it('needs HD closer in on a taller drawing buffer — the same world on a phone at DPR 3', () => {
+      const profile = { aabbY: [0, 40] as [number, number], geometricError: { '0,3,lod': 10 }, lodPixelThreshold: 8 };
+      const short = harness(
+        ['0,3,hd', '0,3,lod'],
+        { hdRadius: 100, lodRadius: 2000 },
+        2400,
+        undefined,
+        undefined,
+        1,
+        profile,
+      );
+      short.driver.update([0, 0, 0], mapView());
+
+      expect(short.requested).toEqual(['0,3,lod']);
+
+      const tall = harness(
+        ['0,3,hd', '0,3,lod'],
+        { hdRadius: 100, lodRadius: 2000 },
+        2400,
+        undefined,
+        undefined,
+        1,
+        profile,
+      );
+      tall.driver.update([0, 0, 0], { ...mapView(), pixelHeight: 2400 });
+
+      expect(tall.requested).toEqual(['0,3,hd']);
     });
   });
 });

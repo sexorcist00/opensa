@@ -89,6 +89,13 @@ flowchart LR
 - **`stream/pak-worker.ts`** — all pak IO: HTTP Range mode when the server honours `Range:` (auto-detected;
   falls back to whole-pak), meshopt/`.oswire` decode, transfers cell blobs. JS heap stays flat — pak bytes
   never live whole on the main thread.
+- **`stream/residency.ts`** — `ResidencyGate`: the view half of the residency rule (plan 201/1-05). Builds
+  the frustum planes from a host-supplied `CameraState` through `core/camera.ts` — the ONE owner of the
+  reversed-Z / plan-view convention, shared with `Engine.frame`, so the set the streamer fetches and the set
+  the frame culls cannot disagree — and answers box-vs-frustum and screen-space error (perspective divides
+  by distance, the plan view does not). A host that passes a view gets residency decided by what the frame
+  will draw; one that passes nothing keeps the rings, and the game shell is one on purpose
+  ([restrictions/streaming-residency.md](../restrictions/streaming-residency.md)).
 - **`stream/streaming.ts`** — `StreamingDriver`: ring model with hysteresis, the old level stays visible
   until its replacement is resident (atomic HD↔LOD swap), ≤1 cell create per frame, eviction outside the
   outer ring. The LOD ring doubles as the fog-mask boundary, and it tests the cell's TRUE geometry rect
@@ -96,6 +103,12 @@ flowchart LR
   PIVOT, so meshes reach past the grid rect (gostown mean 141 u, max 799 u — plan 087) and a grid-rect
   ring skipped cells whose geometry already sat inside the fog. **Per-ring texture residency**: a shared
   array is fetched with the first cell that draws it and released with the last.
+  **Since 201/1-05 the ring is the outer REACH rather than the whole rule**: with a view (and a pak stating
+  every cell's `aabbY`) the request set is the frustum's, grown by one grid cell, with everything inside the
+  HD ring exempt so a turn never waits on a fetch; eviction stays radial. The HD/LOD choice is screen-space
+  error when the pak carries `geometricError` + `lodPixelThreshold` (the bake's own promise — see
+  [perfect-map-builder.md](./perfect-map-builder.md)) and the HD radius otherwise. Both queues — the fetch,
+  which is the network's order, and the ≤2 creates a frame — are sorted nearest-focus-first.
 - **`stream/collision-source.ts`** — `PakCollisionSource`: the baked-collision half of the pak (plan
   200/3-01), present only when the manifest carries `collision`. Reads an entry's range through the SAME pak
   worker (keys prefixed `collision-`, so the driver ignores replies that are not its cells), de-dupes

@@ -50,7 +50,15 @@ const opensaLods = vi.hoisted(() =>
 );
 vi.mock('@opensa/sa-procobj-placement/build', () => ({ buildProcobjLods: procobjLods }));
 vi.mock('@opensa/sa-lod-generator/build', () => ({ buildSaLods: saLods }));
-vi.mock('@opensa/opensa-lod-generator/build', () => ({ buildOpensaLods: opensaLods }));
+vi.mock('@opensa/opensa-lod-generator/build', () => ({
+  buildOpensaLods: opensaLods,
+  // The bake STATES its screen-error promise and the pack carries it (201/1-05); the resume path reads it
+  // from the config instead, which is this export.
+  opensaLodPromise: (): { hdDrawDistance: number; screenPixels: number } => ({
+    hdDrawDistance: 300,
+    screenPixels: 2,
+  }),
+}));
 
 /** The two vehicle-family installers, mocked so the cutscene-stage tests cost no real conversion. The
  *  cutscene fake mirrors the real summary shape: per-slot ERRORS fail the stage, the rest is a fragment. */

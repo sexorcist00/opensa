@@ -29,7 +29,19 @@ export interface BuildOpensaLodsOptions {
   stripLods?: boolean;
 }
 
-export async function buildOpensaLods(options: BuildOpensaLodsOptions): Promise<void> {
+/**
+ * What the bake promised about its output (plan 201/1-05): it dropped what covered fewer than
+ * `screenPixels` at `hdDrawDistance`, judged on `tools/lod-common`'s view. The pack turns it into the
+ * manifest's screen-error fields, so the runtime's HD/LOD rule is this bake's own threshold rather than a
+ * radius somebody typed into the engine — and the promise is STATED by the tool that made it, never
+ * re-read from a config file by whoever needs it.
+ */
+export interface OpensaLodPromise {
+  hdDrawDistance: number;
+  screenPixels: number;
+}
+
+export async function buildOpensaLods(options: BuildOpensaLodsOptions): Promise<OpensaLodPromise> {
   const config = { ...defaultConfig, ...options.config, ...(options.cellSize ? { cellSize: options.cellSize } : {}) };
   // Default HALF the cores: the bake saturates memory bandwidth long before core count, and cores−1
   // made the machine unusable (user feedback) for little extra throughput.
@@ -57,6 +69,19 @@ export async function buildOpensaLods(options: BuildOpensaLodsOptions): Promise<
     const { entries, instances } = stripOldLods(options.outDir, exclude);
     console.log(`  stripped old lod*: ${instances} instances, ${entries} gta3.img entries`);
   }
+
+  return { hdDrawDistance: config.hdDrawDistance, screenPixels: config.minLodPixels };
+}
+
+/**
+ * The promise this generator's config makes, WITHOUT running the bake — what a resumed pmb run needs, since
+ * its `opensa-lod` dir was baked by an earlier run of the same pinned config (a resume refuses when the
+ * config, the code or the sources moved).
+ */
+export function opensaLodPromise(overrides: Partial<LodConfig> = {}): OpensaLodPromise {
+  const config = { ...defaultConfig, ...overrides };
+
+  return opensaLodPromise(config);
 }
 
 /**

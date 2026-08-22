@@ -44,6 +44,7 @@ import { AO_MAX_DISTANCE, bakeAo, type BakeAoReport, buildOccluderBvh } from './
 import { createAstcEncoder } from './astc-encode';
 import { bakeCellsPooled, defaultBakeWorkers } from './bake-pool';
 import { clearChunkCheckpoints, readChunkCheckpoints, writeChunkCheckpoint } from './checkpoint';
+import { type LodBakePromise, promisedGeometricError } from './geometric-error';
 import { bakeCellCollision, collisionCellRect } from './pack-collision';
 import { bakeSunVis, type BakeSunVisReport, SUNVIS_MAX_DISTANCE } from './sunvis';
 
@@ -84,6 +85,10 @@ export interface ConvertOptions {
   /** Emit every world texture as RGBA8 instead of passing SA's DXT through — the pak then loads on GPUs
    *  without BC (every mobile one). Costs 4-8x texture memory; pair it with a district `rect`. */
   forceRgba8?: boolean;
+  /** What the cell-LOD bake promised (plan 201/1-05) — the pack turns it into the manifest's screen-error
+   *  fields, so the runtime picks HD by projected error instead of by a ring radius. Absent (a pack run
+   *  outside the pipeline) writes neither field and the runtime keeps its radii. */
+  lodPromise?: LodBakePromise;
   /** Progress sink (chunk/bake/assembly lines with an ETA); silent when absent — tests stay quiet. */
   log?: (message: string) => void;
   /** Largest texture edge the pak may carry (0 = uncapped). Halving each edge takes back three quarters of
@@ -178,6 +183,23 @@ export function cellAabbXZ(cell: WeldedCell): [number, number, number, number] |
   ];
 }
 
+/** World Y extent of a welded cell's geometry (engine coords, rounded outward) — the manifest `aabbY`
+ *  a VIEW test needs and a ring never did (plan 201/1-05: a cell with no height cannot be frustum-tested,
+ *  and a guessed one streams a tower out from under a pitched camera). */
+export function cellAabbY(cell: WeldedCell): [number, number] | undefined {
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const bucket of cell.buckets) {
+    if (bucket.vertices.length === 0) {
+      continue;
+    }
+    minY = Math.min(minY, bucket.min[1]);
+    maxY = Math.max(maxY, bucket.max[1]);
+  }
+
+  return minY > maxY ? undefined : [Math.floor(minY + cell.origin[1]), Math.ceil(maxY + cell.origin[1])];
+}
+
 export async function convertDistrict(
   fs: AssetFileSystem,
   options: ConvertOptions,
@@ -199,6 +221,8 @@ export async function convertDistrict(
   );
 
   const inputs: OspakInput[] = [];
+  // The bake's promise as a world size, written onto every LOD entry — see `geometric-error.ts`.
+  const lodError = options.lodPromise === undefined ? undefined : promisedGeometricError(options.lodPromise);
   const report: ConvertReport = {
     animatedObjects: 0,
     animatedStatic: 0,
@@ -285,7 +309,7 @@ export async function convertDistrict(
     if (options.waterHeights) {
       collectWaterHeights(options.waterHeights, welded);
     }
-    const produced = assembleChunk(welded, report);
+    const produced = assembleChunk(welded, report, lodError);
     inputs.push(...produced);
     doneCells += chunk.cells;
     checkpoint(chunkIndex, produced);
@@ -320,6 +344,7 @@ export async function convertDistrict(
   const { manifest, pak } = buildOspak(inputs, {
     cellSize,
     ...(collisionCells > 0 ? { collisionCellSize: GAME_CELL_SIZE } : {}),
+    ...(options.lodPromise !== undefined ? { lodPixelThreshold: options.lodPromise.screenPixels } : {}),
     missingLayers: planner.missingLayers, // buildOspak drops the key when the list is empty
     uvAnimations, // buildOspak drops the key when the list is empty
   });
@@ -419,14 +444,27 @@ function accumulate(report: ConvertReport, key: string, bytes: number, stats: We
  * Every cell records the texture arrays it binds, so the runtime can load textures PER RING instead of
  * uploading the whole district up front (074/21 residency follow-up, 003 phase 4).
  */
-function assembleChunk(welded: readonly { cell: WeldedCell; key: string }[], report: ConvertReport): OspakInput[] {
+function assembleChunk(
+  welded: readonly { cell: WeldedCell; key: string }[],
+  report: ConvertReport,
+  lodError: number | undefined,
+): OspakInput[] {
   const produced: OspakInput[] = [];
   for (const entry of welded) {
     const bytes = assembleCell(entry.cell);
     const textures = entry.cell.buckets.map((bucket) => bucket.textureArrayRef);
     const aabb = cellAabbXZ(entry.cell);
+    const aabbY = cellAabbY(entry.cell);
     produced.push(
-      wireCompress({ ...(aabb !== undefined ? { aabb } : {}), bytes, key: entry.key, kind: 'cell', textures }),
+      wireCompress({
+        ...(aabb !== undefined ? { aabb } : {}),
+        ...(aabbY !== undefined ? { aabbY } : {}),
+        bytes,
+        ...(lodError === undefined ? {} : { geometricError: entry.key.endsWith(',lod') ? lodError : 0 }),
+        key: entry.key,
+        kind: 'cell',
+        textures,
+      }),
     );
     accumulate(report, entry.key, bytes.byteLength, entry.cell.stats);
   }
