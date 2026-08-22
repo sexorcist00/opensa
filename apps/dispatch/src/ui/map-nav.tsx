@@ -9,6 +9,12 @@
  *
  * The needle is an SVG rather than a glyph because it has to ROTATE with the view, and it is redrawn from
  * the readout — four times a second, off the frame path, like everything else in this tree.
+ *
+ * **The zoom LEVELS live here too, and that is the cross-platform rule rather than a layout preference**: on
+ * a phone there is no `1`/`2`/`3` to press, so a capability that exists only on the keyboard exists only on
+ * a desk ([restrictions/cross-platform-surface.md](../../../../docs/restrictions/cross-platform-surface.md)).
+ * Every control grows to a finger's target size where the pointer is coarse, and stays dense where it is a
+ * mouse — one component, two sizes, no second layout to keep in step.
  */
 import type { ReactElement } from 'react';
 
@@ -21,8 +27,19 @@ import { styles } from './styles';
 const TURN_STEP = Math.PI / 4;
 const TILT_STEP = Math.PI / 12;
 
-export function MapNav({ handle, yaw }: { handle: DispatchHandle | null; yaw: number }): ReactElement {
+export function MapNav({
+  handle,
+  touch = false,
+  yaw,
+}: {
+  handle: DispatchHandle | null;
+  /** The pointer is a finger: every control takes a finger-sized target. */
+  touch?: boolean;
+  yaw: number;
+}): ReactElement {
   const disabled = handle === null;
+  const key = touch ? styles.mapNavKeyTouch : styles.mapNavKey;
+  const level = touch ? styles.mapNavLevelTouch : styles.mapNavLevel;
 
   return (
     <div style={styles.mapNav}>
@@ -42,7 +59,7 @@ export function MapNav({ handle, yaw }: { handle: DispatchHandle | null; yaw: nu
           aria-label="Turn left"
           disabled={disabled}
           onClick={() => handle?.turnBy(-TURN_STEP)}
-          style={styles.mapNavKey}
+          style={key}
           type="button"
         >
           ⟲
@@ -51,7 +68,7 @@ export function MapNav({ handle, yaw }: { handle: DispatchHandle | null; yaw: nu
           aria-label="Turn right"
           disabled={disabled}
           onClick={() => handle?.turnBy(TURN_STEP)}
-          style={styles.mapNavKey}
+          style={key}
           type="button"
         >
           ⟳
@@ -63,7 +80,7 @@ export function MapNav({ handle, yaw }: { handle: DispatchHandle | null; yaw: nu
           aria-label="Tilt towards the horizon"
           disabled={disabled}
           onClick={() => handle?.tiltBy(TILT_STEP)}
-          style={styles.mapNavKey}
+          style={key}
           type="button"
         >
           ▲
@@ -72,7 +89,7 @@ export function MapNav({ handle, yaw }: { handle: DispatchHandle | null; yaw: nu
           aria-label="Tilt towards the ground"
           disabled={disabled}
           onClick={() => handle?.tiltBy(-TILT_STEP)}
-          style={styles.mapNavKey}
+          style={key}
           type="button"
         >
           ▼
@@ -81,10 +98,43 @@ export function MapNav({ handle, yaw }: { handle: DispatchHandle | null; yaw: nu
 
       <div style={styles.mapNavRow}>
         <button
+          aria-label="Zoom to the city"
+          disabled={disabled}
+          onClick={() => handle?.setZoomLevel('city')}
+          style={level}
+          title="Zoom to the city"
+          type="button"
+        >
+          CITY
+        </button>
+        <button
+          aria-label="Zoom to the district"
+          disabled={disabled}
+          onClick={() => handle?.setZoomLevel('district')}
+          style={level}
+          title="Zoom to the district"
+          type="button"
+        >
+          DIST
+        </button>
+        <button
+          aria-label="Zoom to a block"
+          disabled={disabled}
+          onClick={() => handle?.setZoomLevel('block')}
+          style={level}
+          title="Zoom to a block"
+          type="button"
+        >
+          BLK
+        </button>
+      </div>
+
+      <div style={styles.mapNavRow}>
+        <button
           aria-label="Zoom in"
           disabled={disabled}
           onClick={() => handle?.zoomBySteps(1)}
-          style={styles.mapNavKey}
+          style={key}
           type="button"
         >
           +
@@ -93,7 +143,7 @@ export function MapNav({ handle, yaw }: { handle: DispatchHandle | null; yaw: nu
           aria-label="Zoom out"
           disabled={disabled}
           onClick={() => handle?.zoomBySteps(-1)}
-          style={styles.mapNavKey}
+          style={key}
           type="button"
         >
           −

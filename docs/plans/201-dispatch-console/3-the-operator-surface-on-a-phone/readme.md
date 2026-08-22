@@ -24,6 +24,21 @@ What that has to produce:
 - a **360 CSS px layout fixed before the code**, so 01 below checks against a specification rather than
   against a feeling.
 
+## What already landed against this chain's rules, and what it changes here
+
+**2026-08-22.** Chain 7 put an operator cluster, a nav cluster and a key sheet on the map before this chain's
+360-px spec existed, and three of its controls were desk-shaped: 24-px map controls, 19-px list rows, and
+zoom levels that lived only on keys `1`/`2`/`3` — which on a phone is a capability that does not exist. All
+three are fixed, and the rule they broke is now
+[a restriction](../../../restrictions/cross-platform-surface.md) plus a standing rule in `CLAUDE.md`: a
+feature ships on a phone and on a desk in the SAME change.
+
+What that leaves for **01** below is narrower and sharper than it was: the controls now take a
+finger-sized target where the pointer is coarse (`useCoarsePointer()`, ≥ 44 CSS px) and the clusters cap
+their width on a compact layout, but **nothing has been checked at 360 CSS px on the real phone** — the
+clusters sit top-left and top-right of the same map, the sheet under it, and whether all of that leaves a
+usable picture is exactly what this chain measures rather than assumes.
+
 ## Steps
 
 ### 01 — 360 CSS px

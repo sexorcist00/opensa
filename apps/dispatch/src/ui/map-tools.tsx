@@ -21,8 +21,9 @@ export function MapTools({
   following,
   handle,
   selection,
+  touch = false,
 }: {
-  /** Phone layout: the cluster keeps search and the two buttons, and drops the saved-view row. */
+  /** Phone layout: the cluster narrows so it cannot crowd the map it sits on. */
   compact?: boolean;
   /** Whether the camera is currently riding a unit — read from the readout, never held here. */
   following: boolean;
@@ -30,6 +31,8 @@ export function MapTools({
    *  appear under the operator's cursor a second after they started reaching for it. */
   handle: DispatchHandle | null;
   selection: Selection;
+  /** The pointer is a finger: rows and buttons take a finger-sized target. */
+  touch?: boolean;
 }): ReactElement {
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<readonly SearchedPlace[]>([]);
@@ -38,6 +41,9 @@ export function MapTools({
   const [naming, setNaming] = useState<null | string>(null);
 
   const unitSelected = selection?.kind === 'unit' ? selection.id : null;
+  const button = touch ? styles.buttonTouch : styles.button;
+  const buttonPrimary = touch ? styles.buttonPrimaryTouch : styles.buttonPrimary;
+  const hit = touch ? styles.mapToolsHitTouch : styles.mapToolsHit;
 
   const search = (next: string): void => {
     setQuery(next);
@@ -60,7 +66,7 @@ export function MapTools({
   };
 
   return (
-    <div style={styles.mapTools}>
+    <div style={compact ? { ...styles.mapTools, maxWidth: 'min(232px, 56vw)' } : styles.mapTools}>
       <input
         aria-label="Search places"
         onChange={(event) => search(event.target.value)}
@@ -70,7 +76,7 @@ export function MapTools({
       />
 
       {hits.map((place) => (
-        <button key={place.name} onClick={() => goTo(place)} style={styles.mapToolsHit} type="button">
+        <button key={place.name} onClick={() => goTo(place)} style={hit} type="button">
           {place.name}
         </button>
       ))}
@@ -79,7 +85,7 @@ export function MapTools({
         <button
           disabled={handle === null}
           onClick={() => handle?.fitBoard()}
-          style={styles.button}
+          style={button}
           title="Put every active unit and call in frame"
           type="button"
         >
@@ -88,22 +94,21 @@ export function MapTools({
         <button
           disabled={handle === null || (unitSelected === null && !following)}
           onClick={() => handle?.follow(following ? null : unitSelected)}
-          style={following ? styles.buttonPrimary : styles.button}
+          style={following ? buttonPrimary : button}
           title={following ? 'Stop riding the selected unit' : 'Ride the selected unit'}
           type="button"
         >
           {following ? 'Following' : 'Follow'}
         </button>
-        {!compact && (
-          <button
-            disabled={handle === null}
-            onClick={() => setNaming(naming === null ? `View ${views.length + 1}` : null)}
-            style={naming === null ? styles.button : styles.buttonPrimary}
-            type="button"
-          >
-            Save view
-          </button>
-        )}
+        <button
+          disabled={handle === null}
+          onClick={() => setNaming(naming === null ? `View ${views.length + 1}` : null)}
+          style={naming === null ? button : buttonPrimary}
+          title="Save this view"
+          type="button"
+        >
+          {compact ? 'Save' : 'Save view'}
+        </button>
       </div>
 
       {naming !== null && (
@@ -124,27 +129,21 @@ export function MapTools({
         />
       )}
 
-      {!compact &&
-        views.map((view) => (
-          <div key={view.name} style={{ display: 'flex', gap: 4 }}>
-            <button
-              onClick={() => handle?.recallView(view.pose)}
-              style={styles.mapToolsHit}
-              title="Fly back to this view"
-              type="button"
-            >
-              {view.name}
-            </button>
-            <button
-              onClick={() => setViews(removeBookmark(view.name))}
-              style={{ ...styles.mapToolsHit, width: 'auto' }}
-              title={`Forget "${view.name}"`}
-              type="button"
-            >
-              ×
-            </button>
-          </div>
-        ))}
+      {views.map((view) => (
+        <div key={view.name} style={{ display: 'flex', gap: 4 }}>
+          <button onClick={() => handle?.recallView(view.pose)} style={hit} title="Fly back to this view" type="button">
+            {view.name}
+          </button>
+          <button
+            onClick={() => setViews(removeBookmark(view.name))}
+            style={{ ...hit, width: 'auto' }}
+            title={`Forget "${view.name}"`}
+            type="button"
+          >
+            ×
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

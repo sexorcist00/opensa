@@ -5,6 +5,14 @@
  */
 import type { CSSProperties } from 'react';
 
+/**
+ * The smallest a control may be where a FINGER is the pointer, CSS px. Not ours and not a feel: WCAG 2.2's
+ * enhanced target-size criterion (2.5.5) is 44×44 CSS px, Apple's HIG says 44 pt and Material says 48 dp —
+ * 44 is the number all three agree is enough. Below it a control is not "small", it is one an operator
+ * misses while driving a shift ([restrictions/cross-platform-surface.md](../../../../docs/restrictions/cross-platform-surface.md)).
+ */
+export const TOUCH_TARGET = 44;
+
 export const COLORS = {
   accent: '#38bdf8',
   border: '#1c2735',
@@ -65,6 +73,26 @@ export const styles = {
     cursor: 'pointer',
     fontSize: 11,
     padding: '4px 9px',
+  },
+  buttonPrimaryTouch: {
+    background: '#0e3a52',
+    border: `1px solid ${COLORS.accent}`,
+    borderRadius: 5,
+    color: COLORS.accent,
+    cursor: 'pointer',
+    fontSize: 13,
+    minHeight: TOUCH_TARGET,
+    padding: '4px 12px',
+  },
+  buttonTouch: {
+    background: COLORS.panelRaised,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 5,
+    color: COLORS.text,
+    cursor: 'pointer',
+    fontSize: 13,
+    minHeight: TOUCH_TARGET,
+    padding: '4px 12px',
   },
   // `touchAction: none` is load-bearing on a phone: without it the browser claims the drag for scrolling
   // and page-zoom before a single `pointermove` reaches the gesture layer.
@@ -238,6 +266,39 @@ export const styles = {
     padding: 0,
     width: 24,
   },
+  mapNavKeyTouch: {
+    background: 'rgba(11, 16, 23, 0.94)',
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 6,
+    color: COLORS.text,
+    cursor: 'pointer',
+    fontSize: 15,
+    height: TOUCH_TARGET,
+    lineHeight: '15px',
+    padding: 0,
+    width: TOUCH_TARGET,
+  },
+  mapNavLevel: {
+    background: 'rgba(11, 16, 23, 0.94)',
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 4,
+    color: COLORS.text,
+    cursor: 'pointer',
+    fontSize: 10,
+    letterSpacing: 0.3,
+    padding: '3px 5px',
+  },
+  mapNavLevelTouch: {
+    background: 'rgba(11, 16, 23, 0.94)',
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 6,
+    color: COLORS.text,
+    cursor: 'pointer',
+    fontSize: 12,
+    minHeight: TOUCH_TARGET,
+    minWidth: TOUCH_TARGET,
+    padding: '3px 6px',
+  },
   mapNavRow: { display: 'flex', gap: 4 },
   /** 201/7-03's operator cluster: search, saved views, fit and follow. Top-left, where every map application
    *  puts them, and clear of the selection panel and the inventory panel (both bottom-left). */
@@ -262,6 +323,18 @@ export const styles = {
     color: COLORS.text,
     cursor: 'pointer',
     fontSize: 11,
+    padding: '3px 5px',
+    textAlign: 'left' as const,
+    width: '100%',
+  },
+  mapToolsHitTouch: {
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 3,
+    color: COLORS.text,
+    cursor: 'pointer',
+    fontSize: 13,
+    minHeight: TOUCH_TARGET,
     padding: '3px 5px',
     textAlign: 'left' as const,
     width: '100%',

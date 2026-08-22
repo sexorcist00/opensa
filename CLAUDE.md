@@ -197,6 +197,27 @@ Never edit generated code manually.
   from `203`. Upstream keeps `0xx`/`1xx` and will not reach 200 for years. A citation older than that date
   reads `098/1-01` where the repo now says `201/1-01`.
 
+- **THIS IS CROSS-PLATFORM WORK: A FEATURE SHIPS ON A PHONE AND ON A DESK IN THE SAME CHANGE.** Not "desktop
+  first, phone later" — later is a pass nobody schedules, and the phone is the device the console is aimed at
+  ([project-goals](docs/project-goals.md) directive 7: one engine, and the platform difference is a BUDGET
+  the frame reads rather than a branch it executes). **The surface half of that rule is
+  [`docs/restrictions/cross-platform-surface.md`](docs/restrictions/cross-platform-surface.md)**, and a change
+  that adds a control or a capability answers its five questions or it is not finished: **≥ 44 CSS px** of
+  target where the pointer is coarse (WCAG 2.5.5 / Apple HIG / Material agree on it — `TOUCH_TARGET`), fits at
+  **360 CSS px**, reachable **without a keyboard**, reachable **without hover**, and **one component that
+  takes a size** rather than two layouts that drift apart.
+  **Width and pointer are two different questions** — `useCompactLayout()` says how much room there is,
+  `useCoarsePointer()` says what is pointing at it, and a phone in landscape is wide AND coarse while a small
+  window on a desk is narrow and fine. Never a user-agent string.
+  **This is SILENT in every way this repo can be silent**: it typechecks, it lints, every test stays green
+  (a test asserts behaviour and this is geometry), and it looks perfect on the machine of whoever wrote it.
+  It was violated three times in one session on 2026-08-22 — 24-pixel map controls, 19-pixel list rows, and
+  zoom levels that existed only on keys `1`/`2`/`3` and therefore did not exist on a phone at all.
+  **Design is part of "works everywhere"**, not a layer on top: the design skills are loaded before layout
+  and colour (`artifact-design`, `dataviz`), tokens live in one place per app
+  (`apps/dispatch/src/ui/styles.ts`), and a control that is legible and reachable on a desk but fiddly on a
+  phone is an unfinished control, not a phone problem.
+
 - **THE DEVELOPMENT MACHINE IS AN ANDROID PHONE RUNNING TERMUX.** Every command handed over is run there, so
   write commands for that environment or they waste the user's time: no `sudo`, `pkg` rather than `apt`,
   paths under `$PREFIX`, and a long job needs `termux-wake-lock` or Android suspends it. The user **has the

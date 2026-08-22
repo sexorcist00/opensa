@@ -153,8 +153,11 @@ open the sheet with `?`, click a row, press the key. Only what differs from the 
 operator and per browser.
 
 **On the map itself** (top-right) there is a compass that says which way north is and puts it back when
-clicked, plus turn, tilt and zoom. They are the same commands through the same handle, which is the point:
-the phone has no keyboard, and nothing else on screen answers *which way am I facing*.
+clicked, plus turn, tilt, zoom and the three zoom levels. They are the same commands through the same handle,
+which is the point rather than duplication: **a capability that lives only on a keyboard ships to one
+platform**, and the phone is the device this console is aimed at. Every control takes a finger-sized target
+(≥ 44 CSS px) where the pointer is coarse and stays dense where it is a mouse — one component with two sizes,
+never two layouts ([the rule](../restrictions/cross-platform-surface.md)).
 
 ## What it is made of
 

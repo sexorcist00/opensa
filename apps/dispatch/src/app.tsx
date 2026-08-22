@@ -31,13 +31,16 @@ import { styles } from './ui/styles';
 import { TimelineBar } from './ui/timeline-bar';
 import { TopBar } from './ui/top-bar';
 import { UnitsPanel } from './ui/units-panel';
-import { useCompactLayout } from './ui/use-compact';
+import { useCoarsePointer, useCompactLayout } from './ui/use-compact';
 
 export function App(): ReactElement {
   const { actions, autoDispatch, clock, historyWindow, ops, read, selection } = useOperations();
   const [readout, setReadout] = useState<DispatchReadout | null>(null);
   const handleRef = useRef<DispatchHandle | null>(null);
   const compact = useCompactLayout();
+  // Two different questions: how much room there is, and what is pointing at it. A phone in landscape is
+  // wide and coarse; a small window on a desk is narrow and fine.
+  const touch = useCoarsePointer();
 
   const [handle, setHandle] = useState<DispatchHandle | null>(null);
   const [bindings, setBindings] = useState<KeyBindings>(() => loadBindings());
@@ -93,7 +96,7 @@ export function App(): ReactElement {
   const map = (
     <MapCanvas actions={actions} onReadout={setReadout} onReady={onReady} read={read}>
       <MapTools compact={compact} following={readout?.following ?? false} handle={handle} selection={selection} />
-      <MapNav handle={handle} yaw={readout?.pose.yaw ?? MAP_YAW} />
+      <MapNav handle={handle} touch={touch} yaw={readout?.pose.yaw ?? MAP_YAW} />
       <DetailPanel actions={actions} compact={compact} onLocate={locate} ops={ops} selection={selection} />
       {keysOpen && <KeyHelp bindings={bindings} onBindings={applyBindings} onClose={() => setKeysOpen(false)} />}
     </MapCanvas>
