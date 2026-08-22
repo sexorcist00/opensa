@@ -962,3 +962,18 @@ the floored/unfloored pair on this scene alone.
 
 Everything else in the table is inside the noise this lane has shown before — `ganton-noon` reads −2.6 % on
 pass in the same run, and nothing in plan 104 could make Ganton faster.
+
+### 2026-08-22 — `sf-fog-dawn` floored vs unfloored (the arm the row above asked for)
+
+[write-up](opensa-engine/2026-08-22-sf-fog-dawn-floored-vs-unfloored.md) ·
+[runs](opensa-engine/2026-08-22-sf-fog-dawn-floored-vs-unfloored.json). Headless lane, `DPR=2`, **uncapped**
+(the capped lane saturates at 8.333 ms and cannot see a 1 % move), six runs **alternated** `U F U F U F`,
+one line of the driver the only variable.
+
+**World pass +1.53 % unfloored** (median 3.969 vs 3.909) and **the arms do not overlap** — the cheapest
+unfloored run is dearer than the dearest floored one, against a within-arm spread of 1.09 % / 0.75 %. So the
+mechanism is real. **`avgMs` is flat to 0.1 %** with the frame clock removed, and every other column moves
+the wrong way or on overlapping ranges (`p95` −12.5 %, `submit` +13.5 %, `probe` −2.3 %) — noise, shown
+rather than hidden. No case for reinstating the floor: 1.5 % of the world pass on a fog scene buys back the
+near haze that 112 of stock's own 504 rows author. **It does not explain the display lane's +8.8 % p95** —
+different lane, one run, and `ganton-noon` read −2.6 % in that same sweep.
