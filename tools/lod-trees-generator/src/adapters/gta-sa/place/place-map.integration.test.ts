@@ -49,12 +49,16 @@ function mintTxd(texture: string): Uint8Array {
   return encodeLodTxd([texture], source, 64, 'gamma');
 }
 
-/** Lay down a synthetic game-dir: gta.dat + stock IDE + companion text IPL + a gta3.img with one binary stream. */
-function writeGame(game: string): void {
+/** Lay down a synthetic game-dir: gta.dat + stock IDE + companion text IPL + a gta3.img with one binary stream.
+ *  `hdFlags` is the flags cell of the HD row — the LOD row inherits its vegetation bits (plan 013 step 02). */
+function writeGame(game: string, hdFlags = 0): void {
   mkdirSync(join(game, 'data', 'maps'), { recursive: true });
   mkdirSync(join(game, 'models'), { recursive: true });
   writeFileSync(join(game, 'data', 'gta.dat'), 'IDE data/maps/stock.ide\nIPL data/maps/marea.ipl\n');
-  writeFileSync(join(game, 'data', 'maps', 'stock.ide'), `objs\n${HD_ID}, ${SOURCE}, ${STOCK_TXD}, 299, 0\nend\n`);
+  writeFileSync(
+    join(game, 'data', 'maps', 'stock.ide'),
+    `objs\n${HD_ID}, ${SOURCE}, ${STOCK_TXD}, 299, ${hdFlags}\nend\n`,
+  );
   writeFileSync(join(game, 'data', 'maps', 'marea.ipl'), 'inst\nend\n');
   writeFileSync(join(game, 'data', 'procobj.dat'), ''); // no procobj species
   const img = buildVer2Buffer([{ data: binaryIpl([{ id: HD_ID, lod: -1 }]), name: 'marea_stream0.ipl' }]);
@@ -136,6 +140,61 @@ describe('placeMap --modloader (two-mod output)', () => {
       );
       expect(existsSync(join(out, 'hd', 'gta3img', `${SOURCE}.dff`))).toBe(true);
       expect(existsSync(join(out, 'hd', 'gta3img', 'custom.txd'))).toBe(true);
+    });
+  });
+});
+
+describe('placeMap vegetation flags on the impostor row (plan 013 step 02)', () => {
+  let dir: string;
+
+  /** Place one impostor over an HD row carrying `hdFlags`, and return its emitted `lodtrees.ide` row. */
+  const lodRow = (hdFlags: number): string => {
+    const out = join(dir, `out-${hdFlags}`);
+    const game = join(dir, `game-${hdFlags}`);
+    writeGame(game, hdFlags);
+    writeInputsAndBaked(join(dir, `in-${hdFlags}`), out);
+    placeMap({
+      drawDistance: 1500,
+      foliageTextures: new Set(),
+      gamePath: game,
+      impostors: [{ name: 'lodmytree', source: SOURCE }],
+      inPath: join(dir, `in-${hdFlags}`),
+      modloader: true,
+      outPath: out,
+      prelight: false,
+    });
+
+    return readFileSync(join(out, 'lod', 'data', 'maps', 'lodtrees.ide'), 'utf8')
+      .split(/\r?\n/)
+      .find((line) => line.includes('lodmytree')) as string;
+  };
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'lod-trees-flags-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it('inherits nothing when the HD row carries no vegetation bit', () => {
+      expect(lodRow(0).endsWith(', 2097284')).toBe(true); // DEFAULT_FLAGS, unchanged
+    });
+
+    it('inherits ONLY the vegetation bits — the other flags of an HD row stay on the HD', () => {
+      // 0x200048 = double-sided + additive + draw-last, no IS_TREE/IS_PALM.
+      expect(lodRow(0x200048).endsWith(', 2097284')).toBe(true);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('inherits IS_TREE from the HD row it replaces', () => {
+      expect(lodRow(0x202084).endsWith(', 2105476')).toBe(true); // 0x200084 | IS_TREE
+    });
+
+    it('inherits IS_PALM the same way', () => {
+      expect(lodRow(0x204084).endsWith(', 2113668')).toBe(true); // 0x200084 | IS_PALM
     });
   });
 });

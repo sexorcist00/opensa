@@ -11,7 +11,7 @@
 import type { Environment } from '@opensa/engine';
 
 import { buildTimecyc, sampleTimecycBlend } from '@opensa/renderware/parsers/text/timecyc';
-import { convertTo24h, parseTimecyc, WEATHER_NAMES } from '@opensa/renderware/parsers/text/timecyc.parser';
+import { ensure24h, parseTimecyc, WEATHER_NAMES } from '@opensa/renderware/parsers/text/timecyc.parser';
 
 import type { WeatherBlend } from '../weather/weather-transition';
 
@@ -83,8 +83,9 @@ export interface EngineEnvironmentOptions {
   fogCap?: number;
   /** Extra multiplier on the timecyc fog distances (the lab's high camera needs `?fogscale=`). */
   fogScale?: number;
-  /** Raw timecyc text from the pak manifest; colours go parametric when absent. */
-  timecyc?: { is24h: boolean; text: string };
+  /** Raw timecyc text, whichever of the three source names supplied it (plan 104/01) — the row count
+   *  decides whether it is expanded, so the caller does not say. Colours go parametric when absent. */
+  timecyc?: { text: string };
   /** SA weather id 0..19 (cloud profile + timecyc column). */
   weather?: number;
   /** Live weather blend getter (prod parity — the host's WeatherTransition): when present, every apply
@@ -119,11 +120,7 @@ export function createEngineEnvironmentDriver(
 ): EngineEnvironmentDriver {
   const config = options.config ?? DEFAULT_ENGINE_ENV_CONFIG;
   const weather = options.weather ?? 0;
-  const timecyc = options.timecyc
-    ? buildTimecyc(
-        options.timecyc.is24h ? parseTimecyc(options.timecyc.text) : convertTo24h(parseTimecyc(options.timecyc.text)),
-      )
-    : null;
+  const timecyc = options.timecyc ? buildTimecyc(ensure24h(parseTimecyc(options.timecyc.text))) : null;
 
   return {
     apply(hour: number): void {
@@ -189,7 +186,16 @@ export function createEngineEnvironmentDriver(
         // Authored fog mood, unfloored (074/21): the old `max(…, 1200)` floor flattened every weather —
         // FOGGY_SF's 250 u farClip was stretched to 1200, and clear-LA's 800 pushed past the 1000 LOD ring,
         // which is exactly why streaming pops were visible. Prod runs the raw farClip; so do we now.
-        environment.fogStartDistance = Math.max(0, sample.fogStart * fogScale);
+        //
+        // The START may be NEGATIVE and is passed through as authored (104/04). In SA the pair goes straight
+        // to D3D9 linear fog — `D3DRS_FOGSTART = FogSt`, `D3DRS_FOGEND = FarClp`, no clamp on the way — so a
+        // negative start is a haze that is already partly opaque where the player stands, which is how a
+        // weather says "no clear near zone" (`docs/gta-sa-original/timecyc-fog.md`). Our own exp² curve
+        // reads it the same way: the shader's `max(dist − fogStart, 0)` clamps the DISTANCE, never the
+        // start. The `Math.max(0, …)` that used to be here threw the mood away before the shader saw it —
+        // and not only Dante's: it flattened stock's own near haze on 112 of its 504 rows, which is why
+        // FOGGY_SF never looked foggy from the ground.
+        environment.fogStartDistance = sample.fogStart * fogScale;
         environment.fogCutDistance = sample.farClip * fogScale;
         // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint + opacity per hour/weather.
         environment.waterColor = lin3(sample.water);
@@ -225,7 +231,8 @@ export function createEngineEnvironmentDriver(
       ];
       // The fog ⊂ LOD-ring invariant (074/21): whatever the weather authored, the cut never crosses the
       // streaming ring's margin — everything past the cap is loaded-but-fogged, so pops are impossible.
-      // Start is kept under the (possibly clamped) cut so the exp² ramp never degenerates.
+      // Start is kept under the (possibly clamped) cut so the exp² ramp never degenerates. A NEGATIVE
+      // authored start passes through untouched — this is a ceiling, not a floor (104/04).
       if (options.fogCap !== undefined) {
         environment.fogCutDistance = Math.min(environment.fogCutDistance, options.fogCap);
         environment.fogStartDistance = Math.min(environment.fogStartDistance, environment.fogCutDistance * 0.8);

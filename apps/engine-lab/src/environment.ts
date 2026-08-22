@@ -30,7 +30,6 @@ export function parametricDriver(engine: Engine, aces = true, bloom: null | numb
 export function timecycDriver(
   engine: Engine,
   timecycText: string,
-  is24h: boolean,
   weather: number,
   fogScale = 2.5,
   aces = true,
@@ -41,7 +40,7 @@ export function timecycDriver(
     config: labConfig(aces, bloom),
     ...(fogCap !== undefined ? { fogCap } : {}),
     fogScale,
-    timecyc: { is24h, text: timecycText },
+    timecyc: { text: timecycText },
     weather,
   });
 }

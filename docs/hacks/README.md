@@ -57,6 +57,7 @@ the number.
 | Hack | Where | Stands in for |
 | --- | --- | --- |
 | [Pop-up headlight travel time](popup-travel-time.md) | `game/vehicle/vehicle-rig.ts` | SA's own pop-up animation, which does not exist |
+| [Unmountable tuning lines cleaned by hand](carmods-lines-hand-cleaned.md) | `mods-src/<game>/vehicles` + `add-vehicles` settings files | the mount check `vehicle-installer` should carry when it writes a `carmods` line |
 | [Independent-axle camber gain](independent-camber-gain.md) | `game/vehicle/vehicle-rig.ts` | the original's rule for the `AXLE_*` model flags, absent from the reversed source |
 | [Car-paint reflection](car-paint-reflection.md) | `engine/render/shaders.ts` | an HDR environment, a real ground, and curved normal-mapped panels |
 | [Dynamic-indirect weight](dynamic-indirect-weight.md) | `engine/render/shaders.ts` | the baked prelit + per-instance AO a dynamic model has no data for |

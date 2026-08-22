@@ -1,10 +1,12 @@
 import type { StreamStats } from '@opensa/engine';
+import type { TimecycSource } from '@opensa/renderware';
 
 import { Engine, FrameSpans, frameSpans, pakTraffic, setupStreaming } from '@opensa/engine';
 import {
   createEngineEnvironmentDriver,
   type EngineEnvironmentDriver,
 } from '@opensa/game/adapters/engine-environment-driver';
+import { describeTimecycSource, resolveTimecycSourceAsync } from '@opensa/renderware';
 
 import type { GtaGround } from '../map/coords';
 import type { CursorPick, MapPose } from '../map/map-camera';
@@ -402,9 +404,12 @@ async function buildEnvironment(
   params: URLSearchParams,
 ): Promise<EngineEnvironmentDriver> {
   const timecyc = await readTimecyc(gameDir);
+  // Which of the three names won is otherwise unobservable — a shadowed table fails nothing (104/02).
+  // eslint-disable-next-line no-console -- boot report, one line
+  console.log(`[timecyc] ${describeTimecycSource(timecyc)}`);
 
   return createEngineEnvironmentDriver(engine.environment, {
-    ...(timecyc ? { timecyc } : {}),
+    ...(timecyc ? { timecyc: { text: timecyc.text } } : {}),
     // A map camera hundreds of units up measures radial distances a street-level mood was never authored for.
     fogScale: numberParam(params, 'fogscale', 2.5),
     weather: numberParam(params, 'weather', 0),
@@ -461,25 +466,23 @@ function pushFogOut(engine: Engine, params: URLSearchParams): void {
   engine.environment.fogCutDistance = CAMERA_FAR;
 }
 
-async function readTimecyc(gameDir: string): Promise<null | { is24h: boolean; text: string }> {
+async function readTimecyc(gameDir: string): Promise<null | TimecycSource> {
   if (gameDir === '') {
     return null;
   }
-  for (const [file, is24h] of [
-    ['timecyc_24h.dat', true],
-    ['timecyc.dat', false],
-  ] as const) {
+
+  // The candidate order is `TIMECYC_SOURCES` and nowhere else (plan 104/01): a second copy of it here is a
+  // console lit by a different table than the game it is a map of, and nothing would say so.
+  return resolveTimecycSourceAsync(async (path) => {
     try {
-      const response = await fetch(`${gameDir}/data/${file}`);
-      if (response.ok) {
-        return { is24h, text: await response.text() };
-      }
+      const response = await fetch(`${gameDir}/${path}`);
+
+      return response.ok ? await response.text() : null;
     } catch {
       // A build served without its `data/` folder simply goes parametric — not an error worth failing on.
+      return null;
     }
-  }
-
-  return null;
+  });
 }
 
 /** The real thing: a built game, streamed from its pak. */

@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { TexturePlanner } from './textures';
-import { createUvAnimRegistry, uvAnimList, weldCell, weldCellParts } from './weld';
+import { createUvAnimRegistry, isVegetationDef, uvAnimList, weldCell, weldCellParts } from './weld';
 
 // Real committed fixtures (same case build-region tests use).
 const DFF = 'fixtures/custom/proper-fixes-models/trafficlight1.dff';
@@ -1171,6 +1171,34 @@ describe('weldCell roadsign text', () => {
       expect(withText?.signs).toBe(1);
       // The glyphs are real geometry, not just a counter: the bundle grows by the quad.
       expect(withText!.rows).toBeGreaterThan(bare!.rows);
+    });
+  });
+});
+
+describe('isVegetationDef', () => {
+  describe('negative cases', () => {
+    it('says no for a model that is neither flagged nor listed', () => {
+      expect(isVegetationDef({ flags: 0, modelName: 'ws_streetlight1' })).toBe(false);
+    });
+
+    it('does not turn an unrelated lod-prefixed model into vegetation', () => {
+      // Stock building LODs are named `lod<model>` too; stripping the prefix must only MATCH the list,
+      // never invent membership.
+      expect(isVegetationDef({ flags: 0, modelName: 'lodger01_law' })).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reads the IDE vegetation bits', () => {
+      expect(isVegetationDef({ flags: IdeFlag.IS_TREE, modelName: 'whatever' })).toBe(true);
+      expect(isVegetationDef({ flags: IdeFlag.IS_PALM, modelName: 'whatever' })).toBe(true);
+    });
+
+    it('classes a generated impostor as its SOURCE when the source is listed by name only', () => {
+      // 105 of the 184 impostors of the 2026-08-21 build are in this case: the stock row carries no
+      // vegetation bit, so the LOD inherits none and only the NAME can say what it stands for.
+      expect(isVegetationDef({ flags: 0, modelName: 'ash1_hi' })).toBe(true);
+      expect(isVegetationDef({ flags: 0, modelName: 'lodash1_hi' })).toBe(true);
     });
   });
 });

@@ -26,6 +26,7 @@ import { buildSaLods } from '@opensa/sa-lod-generator/build';
 import { buildProcobjLods } from '@opensa/sa-procobj-placement/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { openLazyVer2, writeArchiveManifest } from '@opensa/tool-kit/archive/layout';
+import { checkDefinitionOrder, formatLateDefinition } from '@opensa/tool-kit/dat-order';
 import { countImgArchives } from '@opensa/tool-kit/game-dir';
 import { isLayeredTree } from '@opensa/tool-kit/layers';
 import { checkLodLinks, formatLodLink } from '@opensa/tool-kit/lod-links';
@@ -292,6 +293,13 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     resume: options.resume === true,
     work,
   });
+  // Only now, past every refusal: clear the two files this run REPLACES, so a run that dies leaves nothing of
+  // an earlier one to be read as its own (`build-timings.json` carried no date at all, and a stale
+  // `report-<target>.json` differs only in a `builtAt` deep inside it). Both are re-written below — on
+  // success, and on failure with the step that threw and the stages that had finished.
+  rmSync(join(outPath, 'build-timings.json'), { force: true });
+  rmSync(join(outPath, `report-${target}.json`), { force: true });
+  const startedAt = new Date().toISOString();
 
   // The common chain (installers → optimizer → LODs). Conditional stages are skipped when their source is empty.
   // A stage may RETURN a fragment for the target report (plan 005) — the runner collects them, keyed by stage.
@@ -397,6 +405,19 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
 
     return result;
   };
+  /** The run's timings file — written at the end, and by whichever step throws first (with what it managed). */
+  const finishTimings = (failed?: { error: string; step: string }): void =>
+    writeStageTimings(
+      outPath,
+      timings,
+      {
+        ...asiPairings(shippedAsi, shippedCutsceneAsi),
+        procobjDensity: config.procobjDensity,
+        procobjMax: config.procobjMax,
+        target,
+      },
+      { failed, startedAt },
+    );
   const untilIndex = until === undefined ? Infinity : STAGE_NAMES.indexOf(until);
   /** Run a step through `timed`, record it in the resume manifest, and mark the manifest failed if it throws. */
   const step = async <T>(name: string, dir: string, run: () => Promise<T> | T): Promise<T> => {
@@ -407,6 +428,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       return result;
     } catch (error) {
       recordFailure(name, error);
+      finishTimings({ error: error instanceof Error ? error.message : String(error), step: name });
       throw error;
     }
   };
@@ -511,6 +533,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       until,
     }).catch((error: unknown) => {
       recordFailure('sa', error);
+      finishTimings({ error: error instanceof Error ? error.message : String(error), step: 'sa' });
       throw error;
     });
     recordStep('sa', join(outPath, 'sa'), Number(((Date.now() - saStarted) / 1000).toFixed(1)));
@@ -563,17 +586,13 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // already dropped its own above, before the convert read the dir.)
   for (const target of produced.filter(({ name }) => name === 'sa')) {
     rmSync(join(target.dir, 'linear-txd'), { force: true, recursive: true });
+    rmSync(join(target.dir, 'opensa-dff'), { force: true, recursive: true });
   }
 
   if (!keepWork) {
     rmSync(work, { force: true, recursive: true });
   }
-  writeStageTimings(outPath, timings, {
-    ...asiPairings(shippedAsi, shippedCutsceneAsi),
-    procobjDensity: config.procobjDensity,
-    procobjMax: config.procobjMax,
-    target,
-  });
+  finishTimings();
 
   return { produced, stoppedEarly: until !== undefined };
 }
@@ -697,29 +716,36 @@ export function runsStage(
 }
 
 /**
- * Swap the linear-convention TXD sidecars (`<common build>/linear-txd/*.txd`) into the opensa target's
- * `gta3.img` (lod-trees plan 012): the common build's generated TXDs (impostor atlas, lod_procobj) are
- * encoded in the real-SA **gamma** convention — every bootable `.work` stage stays SA-correct — while
- * OpenSA's linear pipeline needs the linear encoding of the same texels. One placement, two texel codings.
+ * Swap the OpenSA sidecars of the common build into the opensa target's `gta3.img`, by entry name.
+ *
+ * Two sidecars, one rule — the built tree carries the REAL-SA shape so every bootable `.work` stage stays
+ * SA-correct, and what OpenSA needs differently rides beside it:
+ * - `linear-txd/*.txd` — the same texels in the linear convention OpenSA's pipeline decodes (plan 012);
+ * - `opensa-dff/*.dff` — the impostor cage as OpenSA's weld wants it, four full-alpha cards against the
+ *   three thinned ones SA composites (lod-trees plan 013 step 06).
  */
 export function swapLinearTxds(commonDir: string, opensaDir: string): void {
-  const sidecarDir = join(commonDir, 'linear-txd');
-  if (!existsSync(sidecarDir)) {
-    return;
-  }
-  const names = readdirSync(sidecarDir).filter((file) => file.toLowerCase().endsWith('.txd'));
-  if (names.length === 0) {
+  const sidecars = [
+    { dir: join(commonDir, 'linear-txd'), what: 'linear-convention TXD' },
+    { dir: join(commonDir, 'opensa-dff'), what: 'impostor DFF' },
+  ].filter((sidecar) => existsSync(sidecar.dir));
+  const swaps = sidecars
+    .map((sidecar) => ({ ...sidecar, names: readdirSync(sidecar.dir) }))
+    .filter((s) => s.names.length > 0);
+  if (swaps.length === 0) {
     return;
   }
   const imgPath = join(opensaDir, 'models', 'gta3.img');
   const buffer = readFileSync(imgPath);
   const img = editArchive(openArchive(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)));
-  for (const name of names) {
-    const bytes = readFileSync(join(sidecarDir, name));
-    img.set(name.toLowerCase(), new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+  for (const swap of swaps) {
+    for (const name of swap.names) {
+      const bytes = readFileSync(join(swap.dir, name));
+      img.set(name.toLowerCase(), new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+    }
+    log(`opensa: swapped ${swap.names.length} ${swap.what}(s)`);
   }
   writeFileSync(imgPath, img.build());
-  log(`opensa: swapped ${names.length} linear-convention TXD(s) (${names.join(', ')})`);
 }
 
 /**
@@ -781,6 +807,7 @@ async function buildOpensaTarget(step: {
     // split-time input, not game content.
     swapLinearTxds(game, lodDir);
     rmSync(join(lodDir, 'linear-txd'), { force: true, recursive: true });
+    rmSync(join(lodDir, 'opensa-dff'), { force: true, recursive: true });
     step.onLodDone?.(Number(((Date.now() - lodStarted) / 1000).toFixed(1)));
   }
   if (!packing) {
@@ -896,6 +923,8 @@ async function buildSaTarget(step: {
   // Every stage that edited an `inst` section has now had its turn, so this is the only place the LOD links
   // can be judged whole — see {@link assertLodLinks}.
   assertLodLinks(sa);
+  // …and that nothing the tree places is defined further down `gta.dat` than the row placing it.
+  assertDefinitionOrder(sa);
   // …and the same for what `gta.dat` claims the tree holds: a line pointing at nothing is a crash in the
   // data load, and the field only ever sees it as an access violation in ntdll.
   assertGtaDatFiles(sa);
@@ -1517,6 +1546,47 @@ export function assertLodLinks(gameDir: string): void {
   );
 }
 
+/** How many late definitions the error names before it stops listing — the rest are counted. */
+const DAT_ORDER_REPORT_LIMIT = 12;
+
+/**
+ * Fail the build when a placed model is defined further down `gta.dat` than the `inst` row placing it.
+ *
+ * `CFileLoader::LoadLevel` reads the file top to bottom, so a definition listed later does not exist yet for a
+ * row read earlier and the game refuses the row outright — with `modloader.asi` off, which is the only
+ * configuration that reports it (modloader supplies the same mod IDEs itself, early, and hides the fault). The
+ * `sa` build shipped 137 such rows for months: the installer appended a mod's IDE refs at the end while the IPL
+ * slot fold moved that mod's rows into stock hosts chosen by CAPACITY, 55+ lines earlier.
+ *
+ * Every other check we have asks whether a placed id is defined ANYWHERE — `dangling-models`, `assertLodLinks`,
+ * the IPL census — and all of them pass on such a tree. This one compares two POSITIONS. Stock reports zero over
+ * its 9 268 rows, so any finding is ours. `docs/open-issues/mod-inst-rows-folded-before-their-ide.md`.
+ */
+export function assertDefinitionOrder(gameDir: string): void {
+  if (!existsSync(join(gameDir, 'data', 'gta.dat'))) {
+    console.warn(`  ! sa definition-order check SKIPPED — no data/gta.dat under ${gameDir}`);
+
+    return;
+  }
+  const report = checkDefinitionOrder(gameDir);
+  if (report.late.length === 0) {
+    log(`definition order: ${report.checked} inst rows, every model defined before the row placing it`);
+
+    return;
+  }
+  const rows = report.late.reduce((sum, row) => sum + row.count, 0);
+  const listed = report.late.slice(0, DAT_ORDER_REPORT_LIMIT).map((row) => `  ${formatLateDefinition(row)}`);
+  const rest = report.late.length - listed.length;
+  throw new Error(
+    `${rows} inst row(s) of ${report.checked} place a model whose IDE is listed LATER in gta.dat ` +
+      `(${report.late.length} ids):\n${listed.join('\n')}${rest > 0 ? `\n  … and ${rest} more` : ''}\n` +
+      'The game reads gta.dat top to bottom, so those rows load against an undefined id (visible only with ' +
+      'modloader.asi off). Mod IDE refs must be SPLICED before the first IPL line — see mergeGtaDat. ' +
+      'Diagnose with `npx tsx scripts/debug/dat-order-check.ts <game-dir>` (stock reports zero) and see ' +
+      'docs/open-issues/fixed/mod-inst-rows-folded-before-their-ide.md.',
+  );
+}
+
 /** SA's `IplEntityIndexArrays` — one slot per text IPL that carries `inst` rows, written past without a bounds
  *  check. **Real on the target**, twice-measured 2026-08-10 (see {@link checkInstBearingIplSlots}). */
 export const INST_BEARING_IPL_SLOTS = 40;
@@ -1557,6 +1627,11 @@ export function checkInstBearingIplSlots(instBearingIpls: number): void {
  * produced with, because a duration is only comparable against another run whose configuration is known.
  * Comparing two builds is otherwise a guess about what each one was told to do — and the asi hash is what
  * turns "this map crashes" into "this map is paired with a different asi".
+ *
+ * **And which run it was.** It carries `startedAt`/`finishedAt` and a `status`, and a run that DIES writes it
+ * too, with the step that threw and the stages that had finished. Before that (until 2026-08-22) a failed run
+ * left the previous one's file untouched and undated, so `build/<game>/` after a crash showed yesterday's
+ * numbers with nothing saying so; the run also clears both this file and its `report-<target>.json` on entry.
  */
 export function writeStageTimings(
   outPath: string,
@@ -1572,18 +1647,40 @@ export function writeStageTimings(
     procobjMax?: number;
     target: BuildTarget;
   },
+  run?: {
+    /** Set when a step threw: which one, and what it said. Absent = the run finished. */
+    failed?: { error: string; step: string };
+    /** ISO time the run began — the pair with `finishedAt` is what dates the file. */
+    startedAt?: string;
+  },
 ): void {
-  if (timings.length === 0) {
+  const failed = run?.failed;
+  if (timings.length === 0 && !failed) {
     return;
   }
   const total = timings.reduce((sum, stage) => sum + stage.seconds, 0);
-  log('build time');
+  log(failed ? `build time (RUN FAILED in '${failed.step}' — the stages below are what finished)` : 'build time');
   for (const { name, seconds } of timings) {
     const share = total > 0 ? ((100 * seconds) / total).toFixed(0) : '0';
     console.log(`  ${name.padEnd(10)} ${formatMinutes(seconds).padStart(8)}  ${share.padStart(3)} %`);
   }
   console.log(`  ${'TOTAL'.padEnd(10)} ${formatMinutes(total).padStart(8)}`);
-  writeFileSync(join(outPath, 'build-timings.json'), JSON.stringify({ config, stages: timings, total }, null, 2));
+  writeFileSync(
+    join(outPath, 'build-timings.json'),
+    JSON.stringify(
+      {
+        config,
+        finishedAt: new Date().toISOString(),
+        ...(failed ? { failed } : {}),
+        ...(run?.startedAt ? { startedAt: run.startedAt } : {}),
+        stages: timings,
+        status: failed ? 'failed' : 'ok',
+        total,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 /**

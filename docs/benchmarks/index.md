@@ -913,6 +913,87 @@ pass on the city scenes and the whole map's growth since 08-09 is +0.0..+0.5 ms.
 vehicle geometry (ocean-horizon 349 → 57 with zero live cars — the registered road-car `.osm` buffers), so the
 "×2–3 cellVertex on every scene" the closed issue read as world growth was the fleet's buffers.
 
+## 2026-08-22 — the first OpenSA pak carrying lod-trees 013, on the user's display lane
+
+[`opensa-engine/2026-08-22-ingame-lod-trees-013-sweep.json`](opensa-engine/2026-08-22-ingame-lod-trees-013-sweep.json)
++ the write-up [`opensa-engine/2026-08-22-lod-trees-013-sweep.md`](opensa-engine/2026-08-22-lod-trees-013-sweep.md).
+`build/original/opensa` of 09:57 (repo `efe28767`), same lane and window as
+[arm A](opensa-engine/2026-08-17-ingame-full-hipoly-fleet-sweep.json) — `ocean-horizon` pins at 120.0 fps /
+8.333 ms in both, which is what says the lane matches.
+
+**No frame cost: mean frame 13.008 → 12.767 ms (−1.9 %), GPU pass 8.099 → 7.872 (−2.8 %), 8 of 9 scenes equal
+or faster, slow frames 35 → 24** (ganton-night 12 → 4, lv-night 11 → 3). Plan 013's own gate for the phase B it
+never built was *"no measurable change on the Ganton lap"* — Ganton reads −1.4 % noon, −2.6 % night. The single
+slower scene is `sf-fog-dawn` (+9.1 %), and its **+25.8 % triangles / +23 % draws** say it is submitting more
+geometry rather than paying more per triangle; what gained geometry in SF between the two builds is a separate
+question this row does not guess at. **Not a controlled A/B of 013**: the two paks are five days apart and also
+differ by `mod-installer` 015/016, `img-splitter` 002, `vehicle-installer` 014 and `lod-common`'s blended-last
+rule — what the pair carries is the absence of a regression, on the build where the LOD cells started welding
+49 820 impostor triangles in the cutout class.
+
+### 2026-08-22 — `timecyc-fog-ab` (look A/B, not a frame-cost run)
+
+[2026-08-22-timecyc-fog-ab.md](opensa-engine/2026-08-22-timecyc-fog-ab.md). Nine headless captures on the
+2026-08-22 `opensa` build (**not rebuilt**), one pose in SF, `weather=9` FOGGY_SF at hours 12/18/21, three
+arms: the fog start floored at 0 (the old code), the same table as authored, and Dante's 552-row table as
+authored. The figure is the fog contribution at the CAMERA — 0 % floored, 4/27/43 % from stock's own
+authoring, 83/91/15 % from Dante's. Hour 21 is the control: Dante is LIGHTER there, so the arms track the
+table rather than a bias. The only cost number is the boot parse: 0.859 / 1.698 / **2.016** ms for
+184 / 504 / 552 rows, i.e. **+0.32 ms once** for the bigger table. `draws` and residency unchanged between
+arms. **Not comparable to any row above** — no sweep was run and no scene flight was flown.
+
+## 2026-08-22 — plan 104 on an unchanged world: an ENGINE-only A/B
+
+[`opensa-engine/2026-08-22-ingame-plan-104-engine-ab.json`](opensa-engine/2026-08-22-ingame-plan-104-engine-ab.json),
+user display lane, `?bench=all`, vsync-capped. **The cleanest pair this folder has**: the SAME pak
+(`build/original/opensa`, 2026-08-22 09:57, unrebuilt) against
+[the lod-trees 013 sweep](opensa-engine/2026-08-22-ingame-lod-trees-013-sweep.json) taken on it, with the
+only variable being our code — that sweep's engine plus all of plan 104 (the one timecyc resolver, the boot
+report line, and the fog start no longer floored at 0).
+
+**Mean frame 12.788 ms against 12.767 — +0.17 %.** Nothing else in the sweep moves: every scene is within
+±1.7 % on `avgMs`, triangles within ±0.3 %, draws within ±1.3 %, `legStart.ok` true on all nine legs,
+`lateCreates` 0. Slow frames **24 → 21**. Plan 104 costs nothing measurable.
+
+| scene | avgMs | p95 | gpu pass | draws | slow |
+| --- | --- | --- | --- | --- | --- |
+| ls-noon | 11.136 (−0.2 %) | 12.6 (−3.8 %) | 6.489 (−0.2 %) | 2085 | 1 ← 0 |
+| sf-fog-dawn | 11.409 (**+1.7 %**) | 14.8 (**+8.8 %**) | 6.327 (**+2.8 %**) | 1713 | 0 ← 0 |
+| lv-night | 16.537 (+0.4 %) | 18.9 (0.0 %) | 11.185 (+0.5 %) | 3530 | 8 ← 3 |
+| country-dusk | 16.227 (+0.2 %) | 18.7 (0.0 %) | 12.113 (−0.5 %) | 995 | 7 ← 13 |
+| ocean-horizon | 8.347 (+0.2 %) | 9.3 (−1.1 %) | 2.175 (+0.3 %) | 42 | 1 ← 0 |
+| ls-rain-night | 10.284 (+0.9 %) | 12.2 (+0.8 %) | 5.622 (−1.2 %) | 1805 | 3 ← 1 |
+| ganton-noon | 14.757 (−1.4 %) | 17.1 (−4.5 %) | 9.999 (−2.6 %) | 2000 | 0 ← 2 |
+| strip-noon | 11.118 (+0.6 %) | 14.4 (+0.7 %) | 6.276 (+0.4 %) | 2005 | 1 ← 1 |
+| ganton-night | 15.278 (−0.2 %) | 18.0 (+0.6 %) | 10.489 (−0.3 %) | 1991 | 0 ← 4 |
+
+**The one scene worth a sentence is `sf-fog-dawn`**, and it is the only one where a mechanism exists rather
+than noise: it is the FOG scene, plan 104 raised its fog factor everywhere by unflooring the start, and
+`fogColorFor` runs its cloud math only on meaningfully fogged pixels (`smoothstep(0.7, 1.0, fogFactor)`,
+`shaders.ts`) — so more fogged pixels means more pixels taking that branch. Pass +2.8 %, p95 +8.8 %, and its
+`probe` also reads 2.932 against 2.408, which is the same population being sampled. **Stated as a mechanism
+that FITS, not as a measured cause**: one run cannot separate it from the lane's own spread, and the same
+scene moved +9.1 % between the two previous builds for a different reason. If it matters, the arm to run is
+the floored/unfloored pair on this scene alone.
+
+Everything else in the table is inside the noise this lane has shown before — `ganton-noon` reads −2.6 % on
+pass in the same run, and nothing in plan 104 could make Ganton faster.
+
+### 2026-08-22 — `sf-fog-dawn` floored vs unfloored (the arm the row above asked for)
+
+[write-up](opensa-engine/2026-08-22-sf-fog-dawn-floored-vs-unfloored.md) ·
+[runs](opensa-engine/2026-08-22-sf-fog-dawn-floored-vs-unfloored.json). Headless lane, `DPR=2`, **uncapped**
+(the capped lane saturates at 8.333 ms and cannot see a 1 % move), six runs **alternated** `U F U F U F`,
+one line of the driver the only variable.
+
+**World pass +1.53 % unfloored** (median 3.969 vs 3.909) and **the arms do not overlap** — the cheapest
+unfloored run is dearer than the dearest floored one, against a within-arm spread of 1.09 % / 0.75 %. So the
+mechanism is real. **`avgMs` is flat to 0.1 %** with the frame clock removed, and every other column moves
+the wrong way or on overlapping ranges (`p95` −12.5 %, `submit` +13.5 %, `probe` −2.3 %) — noise, shown
+rather than hidden. No case for reinstating the floor: 1.5 % of the world pass on a fog scene buys back the
+near haze that 112 of stock's own 504 rows author. **It does not explain the display lane's +8.8 % p95** —
+different lane, one run, and `ganton-noon` read −2.6 % in that same sweep.
+
 ## Tool trials (not engine runs, never comparable to one)
 
 | Date | File | What | Headline numbers |
@@ -929,4 +1010,3 @@ vehicle geometry (ocean-horizon 349 → 57 with zero live cars — the registere
 | 08-22 | [dispatch-track-memory](opensa-engine/2026-08-22-dispatch-track-memory.json) | 201/8-01's owed number: what the time axis costs for 150 units x a shift. A Node run, no GPU and no device — 150 units ticked through 8 h at the app's own 20 Hz into the real `UnitTracks`, with `process.memoryUsage()` either side. Also the reading that would have lied: `heapUsed` alone reports 0.2 MB for 17.5 MB of typed arrays, because a backing store lives outside the V8 heap. | **17.51 MB host, and the accounting is EXACT** (`arrayBuffers` moves by 17.51 against an accounted 17.51) · **it is HOST memory and may not be added to the 300-500 MB residency ceiling**, which counts GPU bytes · the ring is pre-allocated, so the stationary collapse buys HISTORY not bytes: the same 17.51 MB holds **8.0 h when every unit moves all shift and 24.0 h at a 25 % duty cycle** |
 | 08-22 | [dispatch-scrub-cost](opensa-engine/2026-08-22-dispatch-scrub-cost.json) | 201/8-03's owed number: what a drag along the timeline costs, since it re-solves every entity per frame. A Node run against the real `BoardHistory` — a whole 8 h shift of 150 units + 40 calls recorded at 20 Hz, then 300 resolves spread across the full span (nothing warm). The resolve, not the paint. | **p50 0.071 ms · p95 0.193 · worst 0.636** — 0.4 % of a 16.7 ms frame typical, 3.8 % worst · the units are the cheap half; the tail is the calls' event lists at a deliberately absurd 49 transitions each · the call event list is the one structure here that is NOT bounded (125 kB at that rate, so nothing to do — but that is the thing to watch) |
 | 08-22 | [dispatch-trail-cost](opensa-engine/2026-08-22-dispatch-trail-cost.json) | 201/8-04's owed numbers: what 150 trails cost, and how far back one goes. A Node run against the real `BoardHistory` — an 8 h shift of 150 units at 20 Hz, status changing every ~6 min, 200 full trail resolves. | **p50 0.200 ms · p95 0.649 · worst 1.055** for all 150 legs, resolved at the BOARD's rate not the frame's · **51 points/unit, 7 500 segments, 176 kB of line buffer per frame** — the number to watch on a phone · the span is DERIVED (the unit's leg, back to its last status change) so 8/04's warning about a constant chosen by eye does not apply · and a measurement defect worth keeping: the first run's confident **0 points** was the probe landing exactly on a status change, not the code |
-

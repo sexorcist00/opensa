@@ -25,7 +25,10 @@ so building one target keeps the other's intermediates), so re-running one stage
 (`--game <out>/.work-sa/5-trees`) inside the SAME target's dir deletes the intermediate first. Copy it out,
 point `--out` elsewhere, or read the OTHER target's kept dir — the builder refuses the overlap rather than
 wiping it. Every run writes `<out>/build-timings.json` — per-stage wall clock plus the target and procobj
-knobs it was built with, so two durations are comparable — and each target that runs writes
+knobs it was built with, so two durations are comparable, plus `startedAt`/`finishedAt` and a `status`. **A run
+that DIES writes it too**, with `status: "failed"`, the step that threw and the stages that had finished; both
+it and this run's `report-<target>.json` are cleared on entry, so nothing an earlier run left can be read as
+this one's. Each target that runs writes
 `<out>/report-<target>.json` (`report-sa.json`, `report-opensa.json`): the target, the fetch game id, the
 timings and one typed fragment per stage that produced one (optimize totals; the sa census/FLA pools/lift
 requirements/asi sha; the pack summary with a POINTER to `opensa/pak/report.json` — there is no root
@@ -321,6 +324,12 @@ npx tsx tools/map-optimizer/src/cli.ts --game <dir> --out <dir>
 # Tree LOD impostors
 npx tsx tools/lod-trees-generator/src/cli.ts --in ./mods-src/vegetation --game <dir> --out <dir> \
   --prelight ./mods-src/vegetation/prelight/info.json --tex 512
+#   --blend-cards <n>  cards for the REAL-SA set (default 3), which composites them in its sorted pass; the
+#   --cards <n> set (default 4) is baked beside it for OpenSA, whose weld unions them. Each SA card's alpha is
+#   then solved per tree so the composite covers what that tree's own HD covers (plan 013 step 06).
+#   --ss <n>  sub-samples per atlas texel on each axis, a power of two (default 2, 1 = off). The card bake
+#   has no MSAA, so a thin leaf quad takes a texel whole or misses it — the atlas speckle plan 013 measured.
+#   Bake-time only, and it grows with the SQUARE: ×7.1 at 2, ×25 at 4 (docs/benchmarks/tools/2026-08-21-…).
 
 # Procobj → static IPL + LODs ([--target sa|opensa]: the host the layer's cost is reported against; pmb passes
 # its own. [--density n]: scatter cutoff, 1 = vanilla, max 3 — the run prints the density + rows/object it built)
@@ -512,5 +521,7 @@ npm run build:game:original:opensa   # pmb (--exclude sa) + fetch-pack → the o
 npm run build:game:original:sa       # pmb (--exclude opensa) → the real-game sa/ target only, split + vehicles + cutscene fleet + both asis
 npx tsx tools/fetch-pack/src/cli.ts     # fetch build standalone (chained in build:game:*; --build ./build/<id>; --out ./static/games stages a local fetch test)
                                         #   expands models/*.img into bare-named entries (fetch mode cannot open a container), prunes chunks a re-pack replaced, skips *.bak/.DS_Store
-npm run timecyc                      # precompute timecyc data
+npm run timecyc                      # UTILITY: merge donors onto a base timecyc → tools/timecyc-builder/src/merged/timecyc_24h.dat
+                                        #   writes NOTHING else and is not part of pmb or any build (docs/restrictions/timecyc-builder-is-a-utility.md);
+                                        #   copying its output into a game dir is a deliberate act — that name outranks a mod's timecyc24h.dat
 ```

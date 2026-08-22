@@ -10,9 +10,15 @@ export interface CardGeometry {
 
 /**
  * Build the crossed-billboard geometry from a baked {@link Impostor}: per card, a quad spanning its world
- * extents (tangent `u` around the trunk centre, absolute `z`), UV-mapped to its atlas tile, doubled-sided so it
- * reads from both faces. Prelit = the source tree's average day colour ({@link Impostor.dayColor}) — the atlas
- * is normalized (plan 012), so the mean lighting level rides the vertices like on any stock prelit model.
+ * extents (tangent `u` around the trunk centre, absolute `z`), UV-mapped to its atlas tile. Prelit = the source
+ * tree's average day colour ({@link Impostor.dayColor}) — the atlas is normalized (plan 012), so the mean
+ * lighting level rides the vertices like on any stock prelit model.
+ *
+ * **One winding per card, not two.** Both faces are needed, but the IDE row already says
+ * `DISABLE_BACKFACE_CULLING` (`map-placement/ide.ts` `DEFAULT_FLAGS`) and BOTH engines read that bit — real SA
+ * on the model info, OpenSA in the weld. A mirrored copy therefore does not add a face, it draws the same one
+ * twice: in a blend path with no depth write every partial-coverage texel composites twice (plan 013, cause 1),
+ * and it doubles the impostor's triangles for nothing. 8 triangles per tree, not 16.
  */
 export function buildCardGeometry(impostor: Impostor): CardGeometry {
   const cx = (impostor.bbox.min[0] + impostor.bbox.max[0]) / 2;
@@ -40,9 +46,8 @@ export function buildCardGeometry(impostor: Impostor): CardGeometry {
     positions.push(cx + tx * uMax, cy + ty * uMax, zMin);
     uvs.push(uL, vT, uR, vT, uL, vB, uR, vB);
 
-    // Two triangles per face, both windings → double-sided.
+    // Two triangles, one winding — the row's DISABLE_BACKFACE_CULLING supplies the back face.
     triangles.push({ a: base, b: base + 1, c: base + 2 }, { a: base + 2, b: base + 1, c: base + 3 });
-    triangles.push({ a: base, b: base + 2, c: base + 1 }, { a: base + 2, b: base + 3, c: base + 1 });
     base += 4;
   }
 

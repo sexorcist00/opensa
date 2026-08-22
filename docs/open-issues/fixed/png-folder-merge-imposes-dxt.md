@@ -57,5 +57,5 @@ one measurement before choosing.
 
 ## Not to be confused with
 
-[`mod-inst-rows-folded-before-their-ide.md`](../mod-inst-rows-folded-before-their-ide.md) — the other open
+[`mod-inst-rows-folded-before-their-ide.md`](./mod-inst-rows-folded-before-their-ide.md) — the other open
 `mod-installer` defect, about `gta.dat` ORDER. Different subject, same tool.

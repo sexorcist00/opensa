@@ -13,9 +13,46 @@ import {
   WEATHER_NAMES,
 } from './timecyc.parser';
 
-const ROW_SIZE = FIELDS.reduce((n, f) => n + (f.kind === 'rgb' ? 3 : f.kind === 'rgba' ? 4 : 1), 0);
+const WIDTH: Record<string, number> = { float: 1, int: 1, rgb: 3, rgba: 4 };
+/** Read-failure default per field kind; a FLOAT field has none — see {@link readFailures}. */
+const SENTINEL: Record<string, number | undefined> = { int: -1000, rgb: -100, rgba: -100 };
+const ROW_SIZE = FIELDS.reduce((n, f) => n + WIDTH[f.kind], 0);
 const base = readFileSync('fixtures/original/data/timecyc.dat', 'utf8');
 const day24 = readFileSync('fixtures/original/data/timecyc_24h.dat', 'utf8');
+/** The `timecyc24h.asi` (Dante) table — the only 23 × 24 authored file in the corpus (plan 104). */
+const dante = readFileSync('fixtures/original/data/timecyc24h.dat', 'utf8');
+/** Read-failure defaults, by the only field kinds that can produce them: `getval` returns -1000 for a
+ *  strict-int read and -100 per channel for an RGB(A) one. A FLOAT field can hold either number as DATA —
+ *  Dante authors `FogSt` at -100 and -1000 — so a whole-row scan for those values reports failures that
+ *  are not there (it did, on 2026-08-22, until the columns were separated). */
+function readFailures(rows: readonly (readonly number[])[]): number {
+  return rows.reduce((total, row) => total + rowFailures(row), 0);
+}
+
+function rowFailures(row: readonly number[]): number {
+  let failures = 0;
+  let pos = 0;
+  for (const field of FIELDS) {
+    const width = WIDTH[field.kind];
+    const sentinel = SENTINEL[field.kind];
+    if (sentinel !== undefined && row.slice(pos, pos + width).includes(sentinel)) {
+      failures += 1;
+    }
+    pos += width;
+  }
+
+  return failures;
+}
+
+/** Every non-comment line's raw token count — the structural claim, before any field is read. */
+const tokenWidths = (text: string): Set<number> =>
+  new Set(
+    text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line !== '' && !line.startsWith('//'))
+      .map((line) => line.split(/\s+/).length),
+  );
 
 describe('parseTimecyc', () => {
   describe('negative cases', () => {
@@ -36,6 +73,28 @@ describe('parseTimecyc', () => {
       const rows = parseTimecyc(day24);
       expect(rows.length).toBeGreaterThanOrEqual(TIME_WEATHERS * HOURS); // ≥ 504
       expect(rows[0]).toHaveLength(ROW_SIZE);
+    });
+
+    it('parses the Dante timecyc24h.dat as 23 weathers × 24 hours with no read failure', () => {
+      const rows = parseTimecyc(dante);
+      expect(rows).toHaveLength(WEATHER_NAMES.length * HOURS); // 552
+      expect(rows.every((row) => row.length === ROW_SIZE)).toBe(true);
+      expect(readFailures(rows)).toBe(0);
+    });
+
+    it('still carries the stock RAINY_COUNTRYSIDE corruption into our own 24h table', () => {
+      // The contrast that names the mod ("Refixed"): stock's one 49-token keyframe fails 13 fields
+      // (7 int + 6 RGB), and convertTo24h carries them to hour 20 of that weather — the same 13 in the
+      // generated table. Pinned so a change to that file (plan 104/03) cannot quietly alter it.
+      expect(readFailures(parseTimecyc(base))).toBe(13);
+      expect(readFailures(parseTimecyc(day24))).toBe(13);
+    });
+
+    it('reads the two 24h plugin files as ONE schema — 52 tokens on every data line of both', () => {
+      // The finding the plan turns on: `timecyc_24h.dat` and `timecyc24h.dat` are the same format, and the
+      // two plugins differ only in the file name each hardcodes. If this ever splits, the plan is wrong.
+      expect(tokenWidths(dante)).toEqual(new Set([ROW_SIZE]));
+      expect(tokenWidths(day24)).toEqual(new Set([ROW_SIZE]));
     });
 
     it('defaults the missing trailing field (dirMult) to 1', () => {
@@ -62,10 +121,17 @@ describe('convertTo24h', () => {
       expect(convertTo24h(parseTimecyc(base))).toHaveLength(TIME_WEATHERS * HOURS); // 504
     });
 
-    it('reproduces the bundled timecyc_24h.dat exactly (first 504 rows, byte-for-byte)', () => {
+    it('agrees with the shipped 24h fixture, which scripts/test-fixtures.ts generates from the base', () => {
+      // What this checks and what it does NOT: the fixture is written by `stringifyTimecyc(convertTo24h(…))`
+      // of this very `base`, so agreement is a fixture-generation invariant — it catches the generator and
+      // the parser drifting apart, and it says NOTHING about parity with the original `timecyc` tool.
+      // Its previous name claimed byte-for-byte parity with a reference output; no reference output of
+      // this base exists in the repo (plan 104, recon finding 7). The 24h file bundled with
+      // `timecycle24.asi` cannot stand in: its own timecyc.dat is stock, but its 24h table is authored,
+      // not an expansion of it (20 416 of 26 208 values differ).
       const converted = convertTo24h(parseTimecyc(base));
       const expected = parseTimecyc(day24).slice(0, TIME_WEATHERS * HOURS);
-      expect(converted).toEqual(expected); // JS port == the reference tool's output
+      expect(converted).toEqual(expected);
     });
 
     it('copies the keyframe hours verbatim (midnight/5am/6am/7am/midday/7pm/8pm/10pm)', () => {
@@ -105,7 +171,13 @@ describe('ensure24h', () => {
 
   describe('positive cases', () => {
     it('passes an already-24h table through unchanged', () => {
-      const rows = parseTimecyc(day24); // 23 × 24
+      const rows = parseTimecyc(day24); // 21 × 24 — our generated table omits the 2 extracolour weathers
+      expect(ensure24h(rows)).toBe(rows);
+    });
+
+    it('passes the Dante 23 × 24 table through unchanged too (both widths are 24h)', () => {
+      const rows = parseTimecyc(dante);
+      expect(rows).toHaveLength(WEATHER_NAMES.length * HOURS); // 552, not 504
       expect(ensure24h(rows)).toBe(rows);
     });
 

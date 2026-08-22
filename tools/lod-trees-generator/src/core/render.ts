@@ -1,9 +1,13 @@
 import type { HdTree, Impostor, ImpostorCard, TreeLodConfig, Vec3 } from './types';
 
-import { createRaster, rasterizeTriangle } from './raster';
+import { dilateTransparent } from './dilate';
+import { createRaster, rasterizeTriangle, resolveRaster, withMipChain } from './raster';
 
 /** Foliage cutout threshold (0–1) — fragments with combined alpha below this are dropped. */
 const ALPHA_TEST = 0.5;
+/** Rings of colour bled into the transparent background before the atlas is encoded — two more than a DXT
+ *  block is wide, so no 4×4 fit and no mip level of an edge block still sees the raster's black (plan 013). */
+const DILATE_RINGS = 6;
 
 /**
  * Bake a tree's impostor: N crossed vertical cards around the trunk axis (Z-up). Each card is an orthographic
@@ -43,15 +47,22 @@ export function renderImpostor(tree: HdTree, config: TreeLodConfig): Impostor {
     const uSpan = Math.max(1e-3, uMax - uMin);
     const zSpan = Math.max(1e-3, zMax - zMin);
 
-    const raster = createRaster(tileW, tileH);
+    const raster = createRaster(tileW, tileH, config.superSample);
     const toPx = (p: Vec3): [number, number, number] => {
       const u = (p[0] - cx) * tx + (p[1] - cy) * ty;
       const depth = (p[0] - cx) * nx + (p[1] - cy) * ny;
 
-      return [((u - uMin) / uSpan) * (tileW - 1), ((zMax - p[2]) / zSpan) * (tileH - 1), depth];
+      return [
+        ((u - uMin) / uSpan) * (raster.sampleWidth - 1),
+        ((zMax - p[2]) / zSpan) * (raster.sampleHeight - 1),
+        depth,
+      ];
     };
     for (const triangle of tree.triangles) {
-      const texture = triangle.texture ? (tree.textures.get(triangle.texture) ?? null) : null;
+      // The chain is attached on first use and memoised on the texture — the tree's map is the STAGE's,
+      // shared by every tree, so wrapping it per tree costs the whole folder every time (plan 013 step 01).
+      const source = triangle.texture ? (tree.textures.get(triangle.texture) ?? null) : null;
+      const texture = source ? withMipChain(source) : null;
       rasterizeTriangle(
         raster,
         {
@@ -65,15 +76,21 @@ export function renderImpostor(tree: HdTree, config: TreeLodConfig): Impostor {
       );
     }
 
+    const { color, colorLinear } = resolveRaster(raster);
+    // Per TILE, never over the finished atlas: a card's colour may not bleed into its neighbour's texels.
+    dilateTransparent(color, tileW, tileH, DILATE_RINGS);
+    dilateTransparent(colorLinear, tileW, tileH, DILATE_RINGS);
+
     const gx = (i % cols) * tileW;
     const gy = Math.floor(i / cols) * tileH;
-    blit(image, width, raster.color, tileW, tileH, gx, gy);
-    blit(imageLinear, width, raster.colorLinear, tileW, tileH, gx, gy);
+    blit(image, width, color, tileW, tileH, gx, gy);
+    blit(imageLinear, width, colorLinear, tileW, tileH, gx, gy);
     cards.push({ angle, uvRect: { h: tileH, w: tileW, x: gx, y: gy }, worldU: [uMin, uMax], worldZ: [zMin, zMax] });
   }
 
   return {
     bbox: tree.bbox,
+    cardAlpha: 1,
     cards,
     dayColor: tree.dayAvg ?? [255, 255, 255, 255],
     height,

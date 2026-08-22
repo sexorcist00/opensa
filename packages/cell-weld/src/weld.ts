@@ -965,7 +965,12 @@ function snorm(value: number): number {
 }
 
 /** Sway kind for a def — IDE veg flags first, then the wind list (plan 039: list membership is the TRIGGER;
- *  prelit alpha alone must not trigger — roads/night overlays use it too). */
+ *  prelit alpha alone must not trigger — roads/night overlays use it too).
+ *
+ *  A generated far-LOD is asked as its SOURCE when its own name misses the list: `lod-trees-generator` names
+ *  an impostor `lod<source>`, and the row it inherits from carries no vegetation bit for most of the roster —
+ *  105 of the 184 impostors of the 2026-08-21 build are wind models by NAME only, so without this the tree
+ *  sways and welds cutout while its own LOD stands still in a soft-blend pass (lod-trees plan 013, cause 3). */
 function swayKindFor(def: { flags: number; modelName: string }): keyof typeof SWAY_TUNING | null {
   if ((def.flags & IdeFlag.IS_PALM) !== 0) {
     return 'palm';
@@ -973,7 +978,8 @@ function swayKindFor(def: { flags: number; modelName: string }): keyof typeof SW
   if ((def.flags & IdeFlag.IS_TREE) !== 0) {
     return 'tree';
   }
-  const model = def.modelName.toLowerCase();
+  const own = def.modelName.toLowerCase();
+  const model = WIND_MODELS.has(own) ? own : own.replace(/^lod/, '');
   if (!WIND_MODELS.has(model)) {
     return null;
   }

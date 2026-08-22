@@ -203,6 +203,36 @@ replace in "inst":
   pass and gates every link; the single-file CLI refuses a `*_streamN.ipl` target for this reason.
 - `#` and `//` comments are ignored.
 
+### The timecyc: THREE names, one order, and a silent fall-through
+
+A world may carry the per-weather colour table under any of three names, and every reader in the project
+resolves them in this order (`TIMECYC_SOURCES`, `packages/renderware/src/parsers/text/timecyc-source.ts`):
+
+| # | File | What it is |
+| --- | --- | --- |
+| 1 | `data/timecyc_24h.dat` | a hand-authored 24h table, read as authored |
+| 2 | `data/timecyc24h.dat` | the same thing under the name the `timecyc24h.asi` plugin (Dante) reads |
+| 3 | `data/timecyc.dat` | the stock 8-keyframe table, expanded to 24h on load |
+
+**A mod shipping `data/timecyc24h.dat` in the `opensa` layer is the supported way to ship a 24h table.**
+The first two names are the SAME FORMAT — 23 weathers × 24 hours × 52 numbers, the 27 field groups in file
+order — so a file authored for either plugin loads here. The two plugins differ only in the name each one
+hardcodes, which is also why swapping their files in the REAL game does nothing (the plugin never finds its
+name and the stock table stays live). Our loader accepts a table of 504 rows (the 21 time weathers) or 552
+(plus the 2 extracolour weathers); `ensure24h` decides by row count, and `buildTimecyc` keeps the first 21
+either way, so the extracolours are parsed and not used.
+
+**When a name is misspelled, nothing happens** — the resolver simply falls through to the next one, no error,
+no warning. The same silence covers the case that actually bites: a world carrying two of the three names
+uses the higher one and the other is never read. The ONE tell is the boot line every reader prints:
+
+```
+[timecyc] data/timecyc24h.dat (dante-24h, 552 rows)
+```
+
+Read it before concluding a timecyc mod "did nothing". If none of the three is present the world refuses to
+load and the error names all three.
+
 ---
 
 ## 3. Modloader-style bake

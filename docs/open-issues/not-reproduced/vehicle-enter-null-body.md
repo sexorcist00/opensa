@@ -1,8 +1,15 @@
 # Crash on entering a freshly-spawned car (`readBody` null body)
 
-**Status: shelved, NOT currently reproducing (2026-07-24).** Investigated; root cause narrowed to a
-streaming/physics handle-pool race but not pinned to an exact line (needs a one-shot runtime trace). No fix
-applied yet, kept OPEN — but it has not been seen recently, so it is not a current-priority merge blocker.
+**It does not reproduce, and it is a legacy of the engine's three.js era.** Both sightings are from that
+stack — a streaming/physics handle-pool race in a renderer this project no longer has. Nothing here was
+repaired; the code that could produce it was replaced wholesale by the own engine (plan 074), and every run
+since has been clean.
+
+**Status: NOT REPRODUCED — moved here 2026-08-22 at the user's call, ahead of the 2026-08-30 recheck.**
+Both sightings are from the three.js era; the own engine has never shown it, across at least 180 staged
+teleport → spawn → enter cycles (the evidence below). Waiting out the recheck date would add nothing: the
+stack it lived in is gone. Kept in full because the diagnosis and the defensive options are still the right
+starting point if a `readBody` null ever appears again.
 
 **Recheck 2026-08-30 (set 2026-07-30): close if still unseen.** Per the user, the crash has not appeared
 once on the own engine — both sightings date back to the three.js era, so the handle-pool race may have died

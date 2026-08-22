@@ -63,7 +63,7 @@ LESS than the install is documented to apply, and that number is a one-line chec
    to the delivered tree. The pipeline is deterministic, the tree was not damaged, and the mods-folder
    renumbering of session 23 is proven to change nothing in the install result.
 7. **modloader.** Disabling it as an arm did not reach the crash — it produced a DIFFERENT, real defect instead
-   ([mod-inst-rows-folded-before-their-ide.md](../mod-inst-rows-folded-before-their-ide.md)).
+   ([mod-inst-rows-folded-before-their-ide.md](./mod-inst-rows-folded-before-their-ide.md)).
 
 ## Why nothing caught it
 

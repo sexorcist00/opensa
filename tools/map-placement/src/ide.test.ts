@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { allocateLodIds, buildLodIde, lodAlias, patchGtaDat, setIdeDrawDistance } from './ide';
+import { allocateLodIds, buildLodIde, lodAlias, lodVegetationFlags, patchGtaDat, setIdeDrawDistance } from './ide';
 
 describe('allocateLodIds', () => {
   describe('negative cases', () => {
@@ -60,6 +60,23 @@ describe('lodAlias', () => {
 });
 
 describe('buildLodIde', () => {
+  describe('negative cases', () => {
+    it('falls back to the default flags for a model the per-model map does not name', () => {
+      const text = buildLodIde(
+        new Map([
+          ['loda', 4000],
+          ['lodb', 4001],
+        ]),
+        'lodtrees',
+        1500,
+        new Map([['loda', 2105476]]),
+      );
+
+      expect(text).toContain('4000, loda, lodtrees, 1500, 2105476');
+      expect(text).toContain('4001, lodb, lodtrees, 1500, 2097284');
+    });
+  });
+
   describe('positive cases', () => {
     it('emits an objs section ordered by id, at the given txd + draw distance, with CRLF', () => {
       const text = buildLodIde(
@@ -81,6 +98,23 @@ describe('buildLodIde', () => {
       const text = buildLodIde(new Map([['a', 4000]]), 'lod_procobj', 300, 2130048);
 
       expect(text).toContain('4000, a, lod_procobj, 300, 2130048');
+    });
+  });
+});
+
+describe('lodVegetationFlags', () => {
+  describe('negative cases', () => {
+    it('adds nothing when the source row carries no vegetation bit', () => {
+      expect(lodVegetationFlags(0)).toBe(2097284);
+      expect(lodVegetationFlags(0x200048)).toBe(2097284); // double-sided + additive + draw-last
+    });
+  });
+
+  describe('positive cases', () => {
+    it('carries IS_TREE and IS_PALM over from the row being replaced', () => {
+      expect(lodVegetationFlags(0x202084)).toBe(2105476); // | IS_TREE
+      expect(lodVegetationFlags(0x204084)).toBe(2113668); // | IS_PALM
+      expect(lodVegetationFlags(0x206084)).toBe(2121860); // both, as a `tobj` palm row may carry
     });
   });
 });

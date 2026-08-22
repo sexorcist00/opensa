@@ -60,9 +60,11 @@ import { type NamedZone, ZoneNameSystem } from '@opensa/game/zones/zone-name.sys
 import { angleDelta, lerp } from '@opensa/math';
 import {
   type AssetFileSystem,
+  describeTimecycSource,
   flatWaterMesh,
   gxtKeyHash,
   parseTxd,
+  resolveTimecycSource,
   WATER_VERTEX_FLOATS,
   WEATHER_NAMES,
 } from '@opensa/renderware';
@@ -495,13 +497,16 @@ async function boot(
   // Weather transitions (prod parity): the SAME WeatherTransition class prod's Game runs — one driver,
   // its blend getter eases from→to over config.weatherTransitionSeconds (smoothstep, like prod).
   const weatherTransition = new WeatherTransition(weather);
-  // Timecyc comes from the LIVE game files, with prod's exact preference (timecyc_24h.dat as authored,
-  // else vanilla timecyc.dat converted). There is no pak-baked copy to fall back to any more: the manifest
+  // Timecyc comes from the LIVE game files, through the ONE candidate order every reader shares
+  // (plan 104/01, `TIMECYC_SOURCES`). There is no pak-baked copy to fall back to any more: the manifest
   // rule (opensa-pack 003) forbids carrying data that already exists in the game dir, and that copy is
   // precisely what froze weather/fog at convert time and diverged from prod (2026-07-18 field finding).
-  const liveTimecyc24 = fs.getText('data/timecyc_24h.dat');
-  const liveTimecyc = liveTimecyc24 ?? fs.getText('data/timecyc.dat');
-  const timecycSource = liveTimecyc !== null ? { is24h: liveTimecyc24 !== null, text: liveTimecyc } : undefined;
+  const liveTimecyc = resolveTimecycSource((path) => fs.getText(path));
+  const timecycSource = liveTimecyc !== null ? { text: liveTimecyc.text } : undefined;
+  // Boot report (104/02): which of the three names won is otherwise unobservable — a mod's table shadowed
+  // by a higher-priority one fails NOTHING.
+  // eslint-disable-next-line no-console -- boot report, one line
+  console.log(`[timecyc] ${describeTimecycSource(liveTimecyc)}`);
   const environmentDriver = createEngineEnvironmentDriver(engine.environment, {
     config,
     fogCap: drawDistance - FOG_RING_MARGIN,

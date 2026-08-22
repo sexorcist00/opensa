@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mergeCarcols, mergeCarmods, mergeHandling, mergeIde } from './merge';
+import { mergeCarcols, mergeCarmods, mergeHandling, mergeIde, removeCarmods } from './merge';
 
 const IDE = ['cars', '400, landstal, landstal, car', '445, admiral, admiral, car', 'end'].join('\n');
 const HANDLING = ['LANDSTAL 1700 a b c', 'ADMIRAL 2000 a b c'].join('\n');
@@ -25,6 +25,14 @@ function modelsIn(text: string, section: string): string[] {
 
 describe('merge', () => {
   describe('negative cases', () => {
+    it('removeCarmods leaves a model that has no line alone', () => {
+      expect(removeCarmods(CARMODS, 'alpha')).toBe(CARMODS);
+    });
+
+    it('removeCarmods leaves text without a mods section unchanged', () => {
+      expect(removeCarmods('link\na, b\nend', 'admiral')).toBe('link\na, b\nend');
+    });
+
     it('mergeIde leaves text without a cars section unchanged', () => {
       expect(mergeIde('objs\nfoo\nend', '500, alpha, alpha, car')).toBe('objs\nfoo\nend');
     });
@@ -112,6 +120,17 @@ describe('merge', () => {
       const out = mergeCarmods(CARMODS, 'admiral, exh_b_l, exh_b_t');
       expect(out).toContain('admiral, exh_b_l, exh_b_t');
       expect(out).not.toContain('admiral, nto_b_l');
+    });
+
+    it('removeCarmods drops the line, leaving the rest of the section (plan 015)', () => {
+      const out = removeCarmods(CARMODS, 'admiral');
+
+      expect(modelsIn(out, 'mods')).toEqual(['banshee']);
+      expect(removeCarmods(out, 'admiral')).toBe(out); // idempotent
+    });
+
+    it('removeCarmods matches the model however it was cased', () => {
+      expect(modelsIn(removeCarmods(CARMODS, 'ADMIRAL'), 'mods')).toEqual(['banshee']);
     });
   });
 });

@@ -42,6 +42,8 @@ group) and 2 (the burger joint), and the same defect class in `encodeLodDff`.
 
 - `encodeLodDff` blended-last rule for merge writers (decimated clones, hole-fill LODs, cells, procobj) —
   `restrictions/assets-and-data.md` + the issue's round 14 name it; SILENT until built.
+  **Built 2026-08-22 (`6b2e37ab`)**, unit-tested on `cehollyhil06` merged with a second model; a single clone
+  was already in split order, so the rule bites on merges (opensa cells, hole-fill) rather than on sa clones.
 - A whole-tree rebuild + field acceptance of the fix (holm, `lodcuntw65`, the burger joint) — the next step
   before the merge, after vectors 1–2.
 - No benchmark row: nothing in the frame changed; the fix is bytes order.

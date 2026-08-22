@@ -22,8 +22,16 @@ tsx tools/lod-trees-generator/src/cli.ts --out <path> --game <path> [--in <dir>]
   packed into the IMG and their redundant root copies removed, so the root is left clean (only `gta3.img` +
   `data/`). Per-impostor PNG previews are written only with `--debug-png`.
 - `--game` — path to the game data (`gta.dat` + `data/` + `models/gta3.img`)
-- `--tex` / `--cards` — per-tree atlas size (px) / cards per tree (defaults in `config.ts`)
+- `--tex` / `--cards` — per-tree atlas size (px) / cards per tree for the OpenSA set (defaults in `config.ts`)
+- `--blend-cards` — cards for the real-SA set (default 3). Two cages are baked per tree because the targets
+  composite them differently: OpenSA's weld UNIONS the cards (cutout), real SA stacks them in its sorted
+  pass, so the SA set gets fewer cards and each is thinned by a factor SOLVED per tree against its own HD
+  (plan 013 step 06). The SA set is what the built tree carries; the OpenSA one rides in `opensa-dff/`
 - `--draw` — impostor LOD draw distance in game units (default `1500`); how far the LOD stays visible
+- `--ss` — sub-samples per atlas texel on each axis, a power of two (default `2`, `1` = off). The card bake
+  is a software rasterizer with no MSAA, so a thin leaf quad takes a texel whole or misses it; the sub-samples
+  vote on the same cutout decision and the tile resolves to coverage (plan 013 step 01). Bake-time cost only,
+  and it grows with the SQUARE — ×7.1 at `2`, ×25 at `4`
 - `--prelight [info.json]` — copy the stock model's prelight (day ambient) onto each swapped custom tree so it
   isn't black/washed-out next to stock geometry. Applied **trunk-only** (opaque surfaces; foliage keeps its own
   prelit) and to **both** the HD and the baked LOD atlas, so the impostor isn't over-bright vs the corrected HD.
@@ -72,6 +80,10 @@ BOTH engines: the atlas stores only the **normalized** prelit variation (`tex ×
 vertices carry the source's average day prelit + absolute night set (so any renderer multiplier — SA ×1,
 skygfx PS2 ×2, OpenSA linear — applies to HD and LOD alike), and texels are encoded **per target**: gamma
 into the game build, a linear `linear-txd/` sidecar the pmb opensa split swaps into its own `gta3.img`.
+[`013-impostor-parity.md`](./docs/plans/013-impostor-parity.md) is the open defect chain (2026-08-21): why
+every impostor still reads nothing like its HD — four crossed full-projection cards stack to ~96 % canopy fill
+against the HD's ~55 %, a point-sampled bake, a missing `IS_TREE` bit (soft-blend instead of cutout, no sway)
+and a DXT5 fit over black transparent texels — and the fixes in order.
 [`011-area-row-budget.md`](./docs/plans/011-area-row-budget.md) is the safety cap on impostor appends: an
 area's text + binary rows boot through SA's unbounded 4096-slot buffer (the "ghost barriers" corruption), so
 appends stop at 4000 rows per area and over-budget trees migrate — HD instance + impostor, still lod-linked —

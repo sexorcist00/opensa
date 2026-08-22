@@ -13,7 +13,8 @@ import {
 } from '@opensa/rw-codec/chunk';
 import { encodeGeometryStruct } from '@opensa/rw-codec/geometry-struct';
 
-import type { MergedMesh } from './mesh';
+import type { MergedGroup, MergedMesh } from './mesh';
+import type { TextureSource } from './texture-source';
 
 export interface EncodeLodDffOptions {
   /**
@@ -29,6 +30,14 @@ export interface EncodeLodDffOptions {
    * source models' coronas/lights into the LOD (plan 003, Phase 5).
    */
   effects?: Uint8Array;
+  /**
+   * The textures the mesh's groups name, used ONLY to tell a blended material from an opaque one when the
+   * splits are ordered (see {@link encodeLodDff}). A raster's own `hasAlpha` flag is the same signal
+   * RenderWare's mesher reads, and the source memoizes it — resolution must match the group names, so pass the
+   * per-model atlas view (sa clones) or the scoped source (opensa cells). Absent = texture alpha is unknown and
+   * every texture counts as opaque, leaving material and vertex alpha to classify.
+   */
+  textures?: TextureSource;
 }
 
 /**
@@ -39,20 +48,25 @@ export interface EncodeLodDffOptions {
  * {@link doubleSided}). Built from scratch via the map-optimizer chunk codec (`writeRw` + `encodeGeometryStruct`);
  * the geometry stays in native Z-up, model-local space (the IPL inst places it). u16 vertex indices cap a geometry
  * at 65 535 verts, so a dense mesh is split across several geometries/atomics (see {@link splitMesh}).
+ *
+ * The groups are written **opaque first, blended last** (see {@link orderBlendedLast}) — a BinMesh's split order
+ * is the DRAW order, and this writer builds from a MERGE, where the sources' own authored order does not survive
+ * being concatenated (`docs/restrictions/assets-and-data.md`).
  */
 export function encodeLodDff(rawMesh: MergedMesh, name: string, options: EncodeLodDffOptions = {}): Uint8Array {
+  const ordered = orderBlendedLast(rawMesh, options.textures);
   // u16 vertex indices cap a geometry at 65 535 verts; a dense mesh can exceed that, so split it across several
   // geometries/atomics (all sharing the one identity frame) instead of decimating harder. Double-side after the
   // split (OpenSA only) — it only doubles indices, leaving the vertex count untouched. A mesh whose groups carry
   // per-face `twoSided` masks (the visibility cull ran) doubles only the masked faces — the rest are already
   // oriented toward their one visible side, so the blanket copy would be pure waste.
-  const masked = rawMesh.groups.some((group) => group.twoSided);
+  const masked = ordered.groups.some((group) => group.twoSided);
   const prepare = masked
     ? doubleSidedMasked
     : options.doubleSided
       ? doubleSided
       : (mesh: MergedMesh): MergedMesh => mesh;
-  const chunks = splitMesh(rawMesh, 0xffff).map(prepare);
+  const chunks = splitMesh(ordered, 0xffff).map(prepare);
 
   return writeRw({
     chunks: [
@@ -72,6 +86,50 @@ export function encodeLodDff(rawMesh: MergedMesh, name: string, options: EncodeL
     ],
     trailing: new Uint8Array(0),
   });
+}
+
+/** Whether one group's material draws blended — see {@link orderBlendedLast} for the three inputs. */
+function isBlended(mesh: MergedMesh, group: MergedGroup, textures?: TextureSource): boolean {
+  if (group.color && group.color[3] < 255) {
+    return true;
+  }
+  if (group.texture !== '' && textures?.get(group.texture)?.hasAlpha === true) {
+    return true;
+  }
+  for (const vertex of group.indices) {
+    if (mesh.colors[vertex * 4 + 3] < 255) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Order a merged mesh's groups **opaque first, blended last**, each side keeping its relative order.
+ *
+ * A `BinMeshPLG`'s split order is the order RenderWare draws them in, and its own mesher puts the materials that
+ * BLEND after the opaque ones so they composite over what is already there. A writer with the source chunk keeps
+ * that order; this one builds from a MERGE — several models' groups concatenated, or one model's rebuilt after a
+ * decimation — so an authored last-place blended group can end up in the middle, which is `cehollyhil06`'s
+ * vertex-alpha detail layer smearing over the sky under the reference install's SkyGfx dual pass
+ * (`docs/open-issues/fixed/sa-lod-visibility-budget.md` round 14, the rule in
+ * `docs/restrictions/assets-and-data.md`).
+ *
+ * A group blends when its material tint is translucent, when its texture carries alpha (`textures`, absent =
+ * unknown = opaque), or when any vertex it references has a translucent prelit colour — the three inputs SA
+ * modulates together. When every group blends, or none does, the mesh is returned untouched.
+ */
+function orderBlendedLast(mesh: MergedMesh, textures?: TextureSource): MergedMesh {
+  const blended = mesh.groups.map((group) => isBlended(mesh, group, textures));
+  if (blended.every((flag) => flag) || blended.every((flag) => !flag)) {
+    return mesh;
+  }
+
+  return {
+    ...mesh,
+    groups: [...mesh.groups.filter((_, i) => !blended[i]), ...mesh.groups.filter((_, i) => blended[i])],
+  };
 }
 
 /** Partition a merged mesh into sub-meshes each within `maxVerts` vertices (re-indexed), so each fits one DFF

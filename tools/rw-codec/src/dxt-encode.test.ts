@@ -14,6 +14,20 @@ function block(fn: (i: number) => [number, number, number, number]): Uint8Array 
 }
 
 describe('encodeDxt', () => {
+  describe('negative cases', () => {
+    it('does not let a transparent texel pull the visible colour of its block (DXT5)', () => {
+      // The lod-trees atlas case: a canopy-edge block is a RANGE of leaf greens plus the bake's transparent
+      // black background. Fit the endpoints over all 16 and the pair becomes black↔brightest leaf, leaving
+      // the block's four levels to span a range the leaves never use — every leaf quantises toward black.
+      const green = (i: number): number => 100 + (i - 8) * 8;
+      const src = block((i) => (i < 8 ? [0, 0, 0, 0] : [green(i) / 2, green(i), green(i) / 3, 255]));
+      const decoded = decodeDxt('dxt5', encodeDxt('dxt5', src, 4, 4), 4, 4);
+      const worst = Math.max(...[8, 9, 10, 11, 12, 13, 14, 15].map((i) => Math.abs(decoded[i * 4 + 1] - green(i))));
+
+      expect(worst).toBeLessThanOrEqual(12); // 26 when the transparent texels are in the fit
+    });
+  });
+
   describe('positive cases', () => {
     it('round-trips a solid colour exactly (DXT1)', () => {
       const red = block(() => [255, 0, 0, 255]);

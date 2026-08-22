@@ -34,7 +34,15 @@ export {
   type TimecycHour,
   type TimecycWeather,
 } from './timecyc';
-export { convertTo24h, parseTimecyc, WEATHER_NAMES } from './timecyc.parser';
+export {
+  describeTimecycSource,
+  resolveTimecycSource,
+  resolveTimecycSourceAsync,
+  TIMECYC_SOURCES,
+  type TimecycKind,
+  type TimecycSource,
+} from './timecyc-source';
+export { convertTo24h, ensure24h, parseTimecyc, WEATHER_NAMES } from './timecyc.parser';
 export * from './types';
 export { parseVehicleDefs, type VehicleDef } from './vehicle-defs.parser';
 export {

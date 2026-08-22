@@ -2,13 +2,24 @@ import type { Raw2dfxEntry } from '@opensa/rw-codec/dff';
 
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { toArrayBuffer } from '@opensa/renderware/test-utils';
-import { build2dfxSection, extract2dfxEntries } from '@opensa/rw-codec/dff';
+import { readRw, RW_BIN_MESH_PLG, RW_EXTENSION } from '@opensa/rw-codec/chunk';
+import { build2dfxSection, collectGeometries, extract2dfxEntries } from '@opensa/rw-codec/dff';
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { MergedMesh } from './mesh';
+import type { TextureSource } from './texture-source';
 
+import { buildClumpMesh } from './build-mesh';
 import { encodeLodDff } from './encode-dff';
+import { concatMeshes } from './mesh';
+
+/** A {@link TextureSource} answering `hasAlpha` for the named textures — the raster flag RW's mesher reads. */
+function alphaTextures(withAlpha: readonly string[]): TextureSource {
+  return {
+    get: (name) => ({ hasAlpha: withAlpha.includes(name), height: 1, rgba: Uint8Array.of(0, 0, 0, 255), width: 1 }),
+  };
+}
 
 /** A raw 2dfx light entry (type 0): header pos+type+size, then the parser-known 49-byte light payload. */
 function lightEntry(): Uint8Array {
@@ -24,6 +35,11 @@ function lightEntry(): Uint8Array {
   return bytes;
 }
 
+/** The texture of each material, in material-list order (= split order, see the BinMesh test). */
+function materialTextures(dff: Uint8Array): (string | undefined)[] {
+  return parseDff(toArrayBuffer(dff)).geometries[0].materials.map((material) => material.texture?.name);
+}
+
 /** A unit quad (4 verts, 2 tris) split across two texture groups. */
 function sampleMesh(): MergedMesh {
   return {
@@ -36,6 +52,26 @@ function sampleMesh(): MergedMesh {
     positions: Float32Array.from([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]),
     uvs: Float32Array.from([0, 0, 1, 0, 1, 1, 0, 1]),
   };
+}
+
+/** The material index of each BinMesh split, in the order the chunk lists them = the order the game draws them. */
+function splitMaterials(dff: Uint8Array): number[] {
+  const geometry = collectGeometries(readRw(dff).chunks)[0];
+  const bin = geometry.children
+    ?.find((child) => child.type === RW_EXTENSION)
+    ?.children?.find((child) => child.type === RW_BIN_MESH_PLG)?.data;
+  if (!bin) {
+    throw new Error('no BinMesh');
+  }
+  const view = new DataView(bin.buffer, bin.byteOffset, bin.byteLength);
+  const materials: number[] = [];
+  let offset = 12;
+  for (let m = 0; m < view.getUint32(4, true); m += 1) {
+    materials.push(view.getUint32(offset + 4, true));
+    offset += 8 + view.getUint32(offset, true) * 4;
+  }
+
+  return materials;
 }
 
 /** A mesh of `n` disconnected triangles (3n vertices) in one group — used to exceed the u16 vertex limit. */
@@ -60,6 +96,60 @@ function triangleSoup(n: number): MergedMesh {
     uvs: new Float32Array(n * 6),
   };
 }
+
+describe('encodeLodDff split order (blended last)', () => {
+  describe('negative cases', () => {
+    it('leaves the order alone when no group blends', () => {
+      expect(materialTextures(encodeLodDff(sampleMesh(), 'lod_cell'))).toEqual(['road', 'grass']);
+    });
+
+    it('leaves the order alone when every group blends — there is nothing to put behind', () => {
+      const mesh = sampleMesh();
+      mesh.colors.fill(200); // every vertex translucent, so both groups blend
+      expect(materialTextures(encodeLodDff(mesh, 'lod_cell'))).toEqual(['road', 'grass']);
+    });
+
+    it('counts a texture the source cannot resolve as opaque, never as blended', () => {
+      const textures: TextureSource = { get: () => null };
+      expect(materialTextures(encodeLodDff(sampleMesh(), 'lod_cell', { textures }))).toEqual(['road', 'grass']);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('lists one BinMesh split per material, in material-list order — the order the game draws', () => {
+      expect(splitMaterials(encodeLodDff(sampleMesh(), 'lod_cell'))).toEqual([0, 1]);
+    });
+
+    it('moves a VERTEX-alpha group last (the cehollyhil06 class, round 14)', () => {
+      const mesh = sampleMesh();
+      mesh.colors[7] = 128; // vertex 1 — referenced by the 'road' group only
+      expect(materialTextures(encodeLodDff(mesh, 'lod_cell'))).toEqual(['grass', 'road']);
+    });
+
+    it('moves a MATERIAL-alpha group last', () => {
+      const mesh = sampleMesh();
+      mesh.groups[0].color = [255, 255, 255, 128];
+      expect(materialTextures(encodeLodDff(mesh, 'lod_cell'))).toEqual(['grass', 'road']);
+    });
+
+    it('moves a TEXTURE-alpha group last, read from the source', () => {
+      const textures = alphaTextures(['road']);
+      expect(materialTextures(encodeLodDff(sampleMesh(), 'lod_cell', { textures }))).toEqual(['grass', 'road']);
+    });
+
+    it('keeps each side in its own relative order', () => {
+      const mesh = sampleMesh();
+      mesh.groups = [
+        { indices: Uint32Array.of(0, 1, 2), texture: 'glass' },
+        { indices: Uint32Array.of(0, 2, 3), texture: 'road' },
+        { indices: Uint32Array.of(0, 1, 3), texture: 'fence' },
+        { indices: Uint32Array.of(1, 2, 3), texture: 'wall' },
+      ];
+      const encoded = encodeLodDff(mesh, 'lod_cell', { textures: alphaTextures(['glass', 'fence']) });
+      expect(materialTextures(encoded)).toEqual(['road', 'wall', 'glass', 'fence']);
+    });
+  });
+});
 
 describe('encodeLodDff', () => {
   describe('positive cases', () => {
@@ -141,8 +231,11 @@ describe('encodeLodDff', () => {
       tinted.groups[0].color = [64, 128, 255, 200];
       const clump = parseDff(toArrayBuffer(encodeLodDff(tinted, 'lod_cell')));
 
-      expect(clump.geometries[0].materials[0].color).toEqual([64, 128, 255, 200]);
-      expect(clump.geometries[0].materials[1].color).toEqual([255, 255, 255, 255]);
+      // The tint is translucent (alpha 200), so its split is written LAST — see the split-order suite above.
+      expect(clump.geometries[0].materials.map((material) => material.color)).toEqual([
+        [255, 255, 255, 255],
+        [64, 128, 255, 200],
+      ]);
     });
 
     it('writes the night-colour plugin (round-trips) when the mesh carries night colours', () => {
@@ -193,6 +286,40 @@ describe.skipIf(!existsSync(CHIMNEY))('encodeLodDff (real 2dfx payload — refch
       });
       // And the engine parser still reads the coronas out of the result.
       expect(parseDff(toArrayBuffer(encoded)).geometries[0].lights).toHaveLength(entries.length);
+    });
+  });
+});
+
+// The rule's own model. `cehollyhil06` authors 15 splits with material 8 — the `cs_rockdetail2` vertex-alpha
+// layer — LAST, and drawing it in the middle is what smeared it over the sky under the reference install's
+// SkyGfx dual pass (`docs/open-issues/fixed/sa-lod-visibility-budget.md` round 14). A single clone of it comes
+// out of `buildClumpMesh` in split order, so the layer is already last; a MERGE is where the authored order
+// dies, and a merge is what this writer is for. Regenerate with `npm run test:fixtures`.
+const HOLLYHIL = 'fixtures/original/dff/binmesh-order/cehollyhil06.dff';
+
+describe.skipIf(!existsSync(HOLLYHIL))('encodeLodDff split order on a real merge (cehollyhil06)', () => {
+  const merged = (): MergedMesh => {
+    const raw = new Uint8Array(readFileSync(HOLLYHIL));
+
+    return concatMeshes(buildClumpMesh(parseDff(toArrayBuffer(raw))), sampleMesh());
+  };
+
+  describe('negative cases', () => {
+    it('the merge really does bury the blended layer — the test would prove nothing otherwise', () => {
+      const groups = merged().groups.map((group) => group.texture);
+
+      expect(groups).toContain('cs_rockdetail2');
+      expect(groups[groups.length - 1]).not.toBe('cs_rockdetail2'); // the appended model's opaque groups follow it
+    });
+  });
+
+  describe('positive cases', () => {
+    it('writes the vertex-alpha layer as the LAST split of the merged geometry', () => {
+      const encoded = encodeLodDff(merged(), 'lod_cell');
+      const textures = materialTextures(encoded);
+
+      expect(textures[textures.length - 1]).toBe('cs_rockdetail2');
+      expect(splitMaterials(encoded)).toEqual(textures.map((_, index) => index)); // splits follow the material list
     });
   });
 });

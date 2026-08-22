@@ -11,6 +11,7 @@ import {
   type StreamingDriver,
   type StreamStats,
 } from '@opensa/engine';
+import { describeTimecycSource } from '@opensa/renderware/parsers/text/timecyc-source';
 
 import {
   BENCH_SCENE_MEASURE,
@@ -243,6 +244,10 @@ async function main(): Promise<void> {
     // paks under `public/`, the products directory itself. Default /pak.
     const source = await resolvePakSource(params.get('src') ?? 'pak');
     const timecyc = await loadLabTimecyc(source);
+    // Boot report (104/02), the same line the game host prints: the choice between two present names is
+    // otherwise unobservable.
+    // eslint-disable-next-line no-console -- boot report, one line
+    console.log(`[timecyc] ${describeTimecycSource(timecyc)}`);
     const setup = await setupStreaming(engine, source.base, streamRadiiParam(params));
     streaming = setup.driver;
     focus = setup.center;
@@ -562,7 +567,7 @@ function wireWeather(
 
   return (weather: number): void => {
     if (timecyc !== null) {
-      onDriver(timecycDriver(engine, timecyc.text, timecyc.is24h, weather, fogScale, aces, bloom, fogCap));
+      onDriver(timecycDriver(engine, timecyc.text, weather, fogScale, aces, bloom, fogCap));
     }
   };
 }

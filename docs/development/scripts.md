@@ -142,6 +142,17 @@ npm test                # then run the unit tests
 
 Extend the `MANIFEST` in `scripts/test-fixtures.ts` when a test needs a new real-asset fixture.
 
+**A `modFile` line resolves a mod by its FOLDER NAME, and renaming that folder breaks the line silently.**
+The lookup is the folder's name minus its leading number (`withoutModNumber`), matched across the
+`common`/`sa`/`opensa` layers — so `1. Foo` and `24. Foo 1.6` are *different* names, and a folder renamed to
+say what changed inside it stops matching. `produce()` throws on a missing folder, which is loud, but the
+tests that read the fixture had already been written against a file that is simply gone. **Rename a mod
+folder and the manifest line in the SAME change**, and verify with a regeneration (`npm run test:fixtures`
+reports `N/N`), never by the fixture still being on disk from the previous run — that is the failure mode
+this whole rule exists for. Two fixtures may point at two copies of one mod on purpose: plan 104 keeps
+`data/timecyc24h.dat` on the `sa` layer's VERBATIM plugin file and `mods/timecyc24h-shipped.dat` on the
+opensa layer's edited one, because they are two different claims.
+
 ---
 
 ## Debugging / auditing

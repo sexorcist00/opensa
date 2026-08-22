@@ -27,6 +27,25 @@ vi.mock('@opensa/renderware', async (importActual) => {
   };
 });
 
+/** The three names a world can carry, and the fixture standing in for each (plan 104). */
+const TIMECYC_FILES = {
+  authored: 'data/timecyc_24h.dat',
+  dante: 'data/timecyc24h.dat',
+  stock: 'data/timecyc.dat',
+} as const;
+const TIMECYC_FIXTURES = {
+  authored: 'fixtures/original/data/timecyc_24h.dat',
+  dante: 'fixtures/original/data/timecyc24h.dat',
+  stock: 'fixtures/original/data/timecyc.dat',
+} as const;
+/** EXTRASUNNY_LA at hour 0. Dante's table is the only one that differs here: the 24h fixture is the stock
+ *  expansion, and hour 0 is keyframe 0 copied verbatim, so `authored` and `stock` share this value. */
+const TIMECYC_MIDNIGHT_AMB = {
+  authored: [22, 22, 22],
+  dante: [0, 11, 11],
+  stock: [22, 22, 22],
+} as const;
+
 /** The fixture-backed file map: bare model/txd names + loose data paths, as the build packs them. */
 function baseFiles(): Map<string, ArrayBuffer | string> {
   return new Map<string, ArrayBuffer | string>([
@@ -98,6 +117,33 @@ describe('GtaSaWorldAdapter integration', () => {
 
       expect(authored.weathers[0].hours).toHaveLength(24);
       expect(authored.weathers[0].hours).toEqual(converted.weathers[0].hours);
+    });
+
+    // The candidate order, as a table rather than as a comment (plan 104/02). Picking between two names
+    // that are both present fails NOTHING, so a regression here is invisible without this test: each row
+    // is a world carrying a subset of the three names, and the amb column of hour 0 identifies the winner.
+    // `authored` and `stock` cannot appear in one row: our 24h fixture IS the stock expansion, so the two
+    // build the same table by construction. That pair is the resolver's own unit test (timecyc-source).
+    it.each([
+      { carries: ['stock'], winner: 'stock' },
+      { carries: ['dante', 'stock'], winner: 'dante' },
+      { carries: ['authored', 'dante'], winner: 'authored' },
+      { carries: ['authored', 'dante', 'stock'], winner: 'authored' },
+    ])('resolves $winner when the world carries $carries', async ({ carries, winner }) => {
+      const files = baseFiles();
+      files.delete('data/timecyc.dat');
+      for (const name of carries) {
+        files.set(
+          TIMECYC_FILES[name as keyof typeof TIMECYC_FILES],
+          readFileSync(TIMECYC_FIXTURES[name as keyof typeof TIMECYC_FIXTURES], 'utf8'),
+        );
+      }
+
+      const result = await new GtaSaWorldAdapter({ cellSize: 250, fs: fsFrom(files) }).loadTimecyc();
+
+      expect(result.weathers[0].hours[0].slice(0, 3)).toEqual(
+        TIMECYC_MIDNIGHT_AMB[winner as keyof typeof TIMECYC_MIDNIGHT_AMB],
+      );
     });
   });
 });

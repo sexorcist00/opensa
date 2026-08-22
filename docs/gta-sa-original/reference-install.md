@@ -196,7 +196,11 @@ rsync -rlt --itemize-changes --exclude '.DS_Store' build/original/sa/models/ "$B
 rsync -rlt --itemize-changes --exclude '.DS_Store' build/original/sa/data/   "$B/data/"
 ```
 
-`>f.s` rows in its output are content changes, `>f..t` mtime-only; `anim/` was already identical
+`>f.s` rows in its output are content changes **only when the file's SIZE changed** — a fixed-layout archive
+rewritten in place keeps its byte count, so a fresh `gta3.img` itemises as `>f..t....` exactly like an
+untouched file (2026-08-21: 0 of 419 rows carried the `s` flag on a delivery that replaced the whole map).
+Verify such a file by digest — `md5 -q` on both sides — not by the itemise flags; `>f..t` alone means
+mtime-only for files whose size is a fingerprint, and nothing for archives. `anim/` was already identical
 (`cmp`), and `vehicle-installer --rebake --kind sa` (plan 008) is the one-car path that makes a rebuild
 unnecessary in the first place.
 

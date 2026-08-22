@@ -1,4 +1,12 @@
-import { FIELD_LABELS, FIELDS, HOURS, WEATHER_NAMES } from '@opensa/renderware/parsers/text/timecyc.parser';
+import {
+  ensure24h,
+  FIELD_LABELS,
+  FIELDS,
+  HOURS,
+  parseTimecyc,
+  WEATHER_NAMES,
+} from '@opensa/renderware/parsers/text/timecyc.parser';
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mergeTimecyc } from './merge';
@@ -28,6 +36,8 @@ function offsetOf(label: string): number {
 const rowIndex = (weather: string, hour: number): number => WEATHER_NAMES.indexOf(weather) * HOURS + hour;
 
 const SKY_TOP = offsetOf('Sky top'); // 9 (width 3)
+const FAR_CLIP = offsetOf('FarClp'); // 27
+const FOG_START = offsetOf('FogSt'); // 28
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -95,6 +105,27 @@ describe('mergeTimecyc', () => {
         { props: ['Sky top'], rows: grid(9) },
       ]);
       expect(result[0].slice(SKY_TOP, SKY_TOP + 3)).toEqual([9, 9, 9]);
+    });
+
+    // The recipe for the table the opensa target SHIPS, written as a test so the file stays reproducible
+    // and any drift fails (plan 104/04): Dante's 23 × 24 table everywhere, `FarClp` + `FogSt` from stock.
+    // The field rejected Dante's fog and accepted everything else, and nothing else in the repo could say
+    // so — re-copying his file over ours would be silent.
+    it('reproduces the shipped opensa table: Dante everywhere, FarClp + FogSt from stock', () => {
+      const dante = ensure24h(parseTimecyc(readFileSync('fixtures/original/data/timecyc24h.dat', 'utf8')));
+      const stock = ensure24h(parseTimecyc(readFileSync('fixtures/original/data/timecyc.dat', 'utf8')));
+      const shipped = ensure24h(parseTimecyc(readFileSync('fixtures/original/mods/timecyc24h-shipped.dat', 'utf8')));
+
+      expect(mergeTimecyc(dante, [{ props: ['FarClp', 'FogSt'], rows: stock }])).toEqual(shipped);
+    });
+
+    it('leaves every column but the fog pair as Dante authored it', () => {
+      const dante = ensure24h(parseTimecyc(readFileSync('fixtures/original/data/timecyc24h.dat', 'utf8')));
+      const shipped = ensure24h(parseTimecyc(readFileSync('fixtures/original/mods/timecyc24h-shipped.dat', 'utf8')));
+      const changed = new Set<number>();
+      shipped.forEach((row, r) => row.forEach((value, c) => (value === dante[r][c] ? null : changed.add(c))));
+
+      expect([...changed].sort((a, b) => a - b)).toEqual([FAR_CLIP, FOG_START]);
     });
   });
 });

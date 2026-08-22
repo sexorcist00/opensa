@@ -198,6 +198,28 @@ sizes — after the rename that can only happen for a name the derivation cannot
 same size is the same file shipped twice and is left alone with a warning. A `--rebake --only <car>` warns
 that it is putting ITS version in the archive where a full install would let the later folder win.
 
+### A car's tuning line is a claim about its MODEL
+
+Two rules, both silent when broken and both learned from a field crash (2026-08-22, `vehicle-installer`
+[plan 015](../../tools/vehicle-installer/docs/plans/015-a-replaced-car-does-not-inherit-tuning.md)):
+
+1. **A folder that declares no `carmods` line gets the stock line for its slot REMOVED, not inherited.** The
+   stock line describes the model that used to hold the slot. Say nothing about tuning and the car is not
+   tunable — which is what a replacement that was never adapted actually is.
+2. **A line may only name a part the car's own model can MOUNT.** A universal (`*_b_*`) Transfender part hangs
+   on a `ug_*` dummy inside the model: `ug_bonnet` (+`_dam`) for `bnt_b_*`, `ug_bonnet_left/right` for
+   `bntl_b_*`, `ug_spoiler` for `spl_b_*`, `ug_roof` for `rf_b_*`, `ug_wing_left`/`ug_wing_right` for
+   `wg_l_b_*`/`wg_r_b_*`, `ug_lights` for `lgt_b_*`, `ug_nitro` for `nto_b_*`. The table is not invented — it
+   is what every stock car offered that family carries, without exception, and **stock SA has 0 of 77 cars
+   naming a part it cannot mount**. Car-specific families (`_lr_`, `_a_`, `_c_`) replace a standard component
+   (bumper, exhaust) that every model has, and are not affected.
+
+   Break it and the real game dies where the part is installed — `0x007F0BF7`, *"frame did not find the
+   child"*, reading `+0x98` off a null frame. It needs nobody to visit a mod shop: `ModelVariations` spawns
+   traffic already tuned, which is how it was found (two crashes in a helicopter). **Nothing in the build
+   checks this yet** — rule 2 was applied to the fleet's own settings files by hand, so a NEW mod carrying a
+   line its model cannot mount reintroduces the crash silently.
+
 ### `tuning_new_parts.txt` — parts the game never had
 
 `carmods.dat`'s `mods` line can only name a part; the part must also EXIST (an IDE row in

@@ -13,6 +13,7 @@ const ab = (u: Uint8Array): ArrayBuffer => u.buffer.slice(u.byteOffset, u.byteOf
 function impostor(name: string, width = 64, height = width): Impostor {
   return {
     bbox: { max: [1, 1, 1], min: [0, 0, 0] },
+    cardAlpha: 1,
     cards: [],
     dayColor: [255, 255, 255, 255],
     height,

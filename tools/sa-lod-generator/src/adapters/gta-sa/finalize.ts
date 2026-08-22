@@ -119,7 +119,7 @@ export function cloneLodDff(
       // coronas — the old two-pass shape (everything-but-particles, then particles appended) reordered them.
       const effects = build2dfxSection(collectClumpEffects(hdDff, clump, keep));
 
-      return encodeLodDff(decimated, link.lodModel, { ...(effects ? { effects } : {}) });
+      return encodeLodDff(decimated, link.lodModel, { textures, ...(effects ? { effects } : {}) });
     }
   }
 

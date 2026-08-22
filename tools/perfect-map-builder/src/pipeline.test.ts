@@ -8,6 +8,7 @@ import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  assertDefinitionOrder,
   assertGtaDatFiles,
   assertLodLinks,
   assertOneOwnerPerEntry,
@@ -915,14 +916,24 @@ describe('writeStageTimings', () => {
 
       expect(existsSync(join(out, 'build-timings.json'))).toBe(false);
     });
+
+    it("DOES write when a run failed before any stage finished — the file must not stay yesterday's", () => {
+      writeStageTimings(out, [], knobs, { failed: { error: 'boom', step: 'mods' } });
+
+      expect(written().status).toBe('failed');
+      expect(written().stages).toEqual([]);
+    });
   });
 
-  const written = (): { config: unknown; stages: StageTiming[]; total: number } =>
-    JSON.parse(readFileSync(join(out, 'build-timings.json'), 'utf8')) as {
-      config: unknown;
-      stages: StageTiming[];
-      total: number;
-    };
+  const written = (): {
+    config: unknown;
+    failed?: { error: string; step: string };
+    finishedAt: string;
+    stages: StageTiming[];
+    startedAt?: string;
+    status: string;
+    total: number;
+  } => JSON.parse(readFileSync(join(out, 'build-timings.json'), 'utf8')) as ReturnType<typeof written>;
 
   describe('positive cases', () => {
     it('records the knobs the run was configured with, so two durations are comparable', () => {
@@ -931,6 +942,27 @@ describe('writeStageTimings', () => {
       expect(written().config).toEqual(knobs);
       expect(written().stages).toEqual([{ name: 'procobj', seconds: 420 }]);
       expect(written().total).toBe(420);
+    });
+
+    it('dates the file and marks the run ok, so a later reader knows which run it is', () => {
+      writeStageTimings(out, [{ name: 'procobj', seconds: 420 }], knobs, { startedAt: '2026-08-22T07:00:00.000Z' });
+
+      expect(written().status).toBe('ok');
+      expect(written().startedAt).toBe('2026-08-22T07:00:00.000Z');
+      expect(Date.parse(written().finishedAt)).not.toBeNaN();
+      expect(written().failed).toBeUndefined();
+    });
+
+    it('records the step that threw, with the stages that had finished', () => {
+      writeStageTimings(out, [{ name: 'mods', seconds: 84 }], knobs, {
+        failed: { error: '137 inst rows place a model whose IDE is listed LATER', step: 'sa' },
+        startedAt: '2026-08-22T07:00:00.000Z',
+      });
+
+      expect(written().status).toBe('failed');
+      expect(written().failed?.step).toBe('sa');
+      expect(written().stages).toEqual([{ name: 'mods', seconds: 84 }]);
+      expect(written().total).toBe(84);
     });
 
     it('totals the stages it was given rather than re-deriving them', () => {
@@ -1300,6 +1332,41 @@ describe('assertLodLinks', () => {
   describe('positive cases', () => {
     it('passes a tree whose LOD stands on its owner', () => {
       expect(() => assertLodLinks(tree(1))).not.toThrow();
+    });
+  });
+});
+
+describe('assertDefinitionOrder', () => {
+  /** A one-area tree whose IDE is listed BEFORE its IPL (`inOrder`) or after it — the shape the guard reads. */
+  function tree(inOrder: boolean): string {
+    const game = mkdtempSync(join(tmpdir(), 'pmb-dat-order-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    const ide = 'IDE DATA\\MAPS\\town.ide';
+    const ipl = 'IPL DATA\\MAPS\\town.ipl';
+    writeFileSync(join(game, 'data', 'gta.dat'), `${(inOrder ? [ide, ipl] : [ipl, ide]).join('\n')}\n`);
+    writeFileSync(join(game, 'data', 'maps', 'town.ide'), 'objs\n7394, exteriorlit, houses, 300, 0\nend\n');
+    writeFileSync(
+      join(game, 'data', 'maps', 'town.ipl'),
+      ['inst', '7394, exteriorlit, 0, 10, 10, 5, 0, 0, 0, 1, -1', 'end', ''].join('\n'),
+    );
+
+    return game;
+  }
+
+  describe('negative cases', () => {
+    it('fails the build when a row is placed before the IDE that defines its model', () => {
+      expect(() => assertDefinitionOrder(tree(false))).toThrow(/place a model whose IDE is listed LATER/);
+    });
+
+    it('names the model, both files and the script that diagnoses it', () => {
+      expect(() => assertDefinitionOrder(tree(false))).toThrow(/exteriorlit/);
+      expect(() => assertDefinitionOrder(tree(false))).toThrow(/scripts\/debug\/dat-order-check\.ts/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('passes a tree whose IDE is listed first', () => {
+      expect(() => assertDefinitionOrder(tree(true))).not.toThrow();
     });
   });
 });

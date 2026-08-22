@@ -7,8 +7,11 @@
  *     --out    output directory
  *     --game   game-data dir (gta.dat + data/ + models/gta3.img)
  *     --tex    per-tree atlas texture size in px (default from config)
- *     --cards  crossed billboard cards per tree (default from config)
+ *     --cards  crossed billboard cards per tree for the OpenSA set (default from config)
+ *     --blend-cards  cards for the real-SA set, which composites them (default from config); each card's
+ *                    alpha is then solved per tree so the composite covers what the HD covers
  *     --draw   impostor LOD draw distance in game units (default from config)
+ *     --ss     sub-samples per atlas texel on each axis, a power of two (default from config; 1 = off)
  *     --prelight [info]  copy the stock model's trunk prelight onto each swapped tree (HD + baked LOD; foliage kept).
  *                        Optionally pass a JSON file (`--prelight ./info.json`) of per-model overrides, e.g.
  *                        `{ "tree_hipoly09b": { "skip": true } }` to opt that model out of the prelight transfer.
@@ -75,8 +78,10 @@ function main(): void {
 
   buildTreeLods({
     config: {
+      blendCards: Number(argValue('--blend-cards') ?? config.blendCards),
       cards: Number(argValue('--cards') ?? config.cards),
       drawDistance: Number(argValue('--draw') ?? config.drawDistance),
+      superSample: Number(argValue('--ss') ?? config.superSample),
       textureSize: Number(argValue('--tex') ?? config.textureSize),
     },
     debugPng: process.argv.includes('--debug-png'),
