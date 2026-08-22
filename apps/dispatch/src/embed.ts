@@ -20,12 +20,20 @@
  *   only ever runs `demo=1`; with a real `src=` it 404s on the worker with the manifest already fetched,
  *   which reads as a hang rather than a missing file.
  *
+ * **Two ways to embed, and they answer different needs** (201/7-07). This entry is for a host that mounts
+ * the map ITSELF and feeds it its own board. `?embed=1` on `dispatch.html` is the other one: the whole
+ * console in an iframe with its chrome off — the map and its own controls, no queue, no roster, no
+ * timeline, and it never writes the address bar it does not own. What an embedded console may do is stated
+ * in `docs/features/dispatch-console.md` rather than left for an embedder to discover.
+ *
  * Full write-up: `docs/features/dispatch-console.md`.
  */
 
 export type { GtaGround } from './map/coords';
 export type { CursorPick, MapPose, MapProjection } from './map/map-camera';
 export { MAP_YAW, MapCamera } from './map/map-camera';
+export type { SharedView } from './map/view-link';
+export { readView, viewLink, viewOfPose, viewQuery } from './map/view-link';
 export type {
   Incident,
   IncidentPriority,

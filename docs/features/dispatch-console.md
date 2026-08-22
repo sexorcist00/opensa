@@ -159,6 +159,32 @@ platform**, and the phone is the device this console is aimed at. Every control 
 (≥ 44 CSS px) where the pointer is coarse and stays dense where it is a mouse — one component with two sizes,
 never two layouts ([the rule](../restrictions/cross-platform-surface.md)).
 
+## Leaving the console
+
+**201/7-07, since 2026-08-22.** Three ways a view goes somewhere else.
+
+**A link to what is on screen.** `Copy link` writes a URL carrying the pose, the projection, the world hour
+and how far behind live the shift clock was — everything that makes the picture what it is. Opening it puts
+another operator on the same view, including the moment. It does not carry the selection: an id from one
+board means nothing on another. Angles are degrees and the coordinates keep their comma, so a link can be
+edited by hand.
+
+**Embedded in another page** (`?embed=1`), and what it may do is stated rather than discovered:
+
+| | |
+| --- | --- |
+| Shows | the map and its own controls — nav cluster, operator cluster, selection panel |
+| Never shows | the queue, the roster, the shift timeline, the status bar — the host has its own board |
+| Never writes | the address bar; a host owns its URL, which is also why `dispatchParams()` reads `window.__opensaDispatch` |
+| Keeps | the keyboard, the gestures, saved views and rebound keys — they belong to the person at the screen |
+| Reports out | through the handle, the same seam `embed.ts` gives a host that mounts the map itself |
+
+**An image of the situation.** `Save image` writes a PNG of the world **with the symbology over it** —
+composed from both canvases, because the units, calls, callsigns and trails all live on the second one and a
+naive capture of the first is a screenshot of a video game. Under the picture is a stamp: place,
+coordinates, eye height, projection, time and the pak build, so an image in a chat a week later still says
+where and when it was. Plan mode exports too, and says `plan mode` on its face.
+
 ## What it is made of
 
 | Concern                | Where                                    | Notes                                                                                       |
@@ -173,6 +199,8 @@ never two layouts ([the rule](../restrictions/cross-platform-surface.md)).
 | Keyboard               | `src/map/keymap.ts` + `keys.ts`          | one binding table; held commands run in the loop, pressed ones fire once                       |
 | Map controls           | `src/ui/map-nav.tsx`, `key-help.tsx`     | compass, turn, tilt, zoom; the key sheet and its rebinder                                      |
 | Per-operator storage   | `src/map/storage.ts`                     | the one place `localStorage` is touched, and the one place it is allowed to throw              |
+| Shareable view         | `src/map/view-link.ts`                   | the link's parameter names and both directions, so a URL it writes is one it opens             |
+| Image export           | `src/world/capture.ts`                   | world + symbology composed at the end of a frame, with a stamp under it                        |
 | 3D symbology           | `src/map/beacons.ts`                     | through-depth `createDebugLines` pillars, routes, selection ring                             |
 | 2D symbology           | `src/map/overlay-2d.ts`                  | icons, chips, leader lines, scale bar — on a plain 2D canvas, and it owns hit-testing        |
 | World→screen           | `src/map/projection.ts`                  | `mat4LookAt` × the frame's own projection (perspective or orthographic), rebuilt per frame    |

@@ -18,6 +18,7 @@ import type { DispatchHandle, DispatchReadout } from './world/boot';
 
 import { keyOf, loadBindings } from './map/keymap';
 import { MAP_YAW } from './map/map-camera';
+import { readView } from './map/view-link';
 import { useOperations } from './ops/use-operations';
 import { DetailPanel } from './ui/detail-panel';
 import { IncidentsPanel } from './ui/incidents-panel';
@@ -32,6 +33,7 @@ import { TimelineBar } from './ui/timeline-bar';
 import { TopBar } from './ui/top-bar';
 import { UnitsPanel } from './ui/units-panel';
 import { useCoarsePointer, useCompactLayout } from './ui/use-compact';
+import { dispatchParams } from './world/boot';
 
 export function App(): ReactElement {
   const { actions, autoDispatch, clock, historyWindow, ops, read, selection } = useOperations();
@@ -45,6 +47,13 @@ export function App(): ReactElement {
   const [handle, setHandle] = useState<DispatchHandle | null>(null);
   const [bindings, setBindings] = useState<KeyBindings>(() => loadBindings());
   const [keysOpen, setKeysOpen] = useState(false);
+  /**
+   * An embedded console (`?embed=1`) is the MAP and its own controls, and nothing else: the host has its own
+   * queue, roster and clock, and a second set of them inside an iframe is two boards disagreeing on one
+   * screen. What it may do is stated in `docs/features/dispatch-console.md` rather than discovered by an
+   * embedder — most of all that it never writes the address bar, which is not its to write.
+   */
+  const embedded = dispatchParams().get('embed') === '1';
   const onReady = useCallback((next: DispatchHandle) => {
     handleRef.current = next;
     // The map tools need the handle as STATE, not a ref: they mount before the engine boots, and a ref does
@@ -75,6 +84,18 @@ export function App(): ReactElement {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [bindings]);
 
+  // A link that carried a moment opens on that moment (201/7-07). Once, on mount: a link is an OPENING
+  // state, and re-applying it later would fight the operator every time they touched the timeline.
+  useEffect(() => {
+    const behindLive = readView(dispatchParams()).behindLive;
+    if (behindLive !== undefined && behindLive > 0) {
+      // `performance.now()`, not `Date.now()`: the shift clock runs on the monotonic timeline
+      // (`use-operations.ts`), and mixing the two puts the scrub 57 years off with nothing to show for it
+      // but an empty board.
+      actions.scrub(performance.now() - behindLive * 1000);
+    }
+  }, [actions]);
+
   const applyBindings = useCallback(
     (next: KeyBindings) => {
       setBindings(next);
@@ -95,7 +116,14 @@ export function App(): ReactElement {
 
   const map = (
     <MapCanvas actions={actions} onReadout={setReadout} onReady={onReady} read={read}>
-      <MapTools compact={compact} following={readout?.following ?? false} handle={handle} selection={selection} />
+      <MapTools
+        behindLive={clock.mode === 'live' ? 0 : Math.max(0, Math.round((performance.now() - clock.t) / 1000))}
+        compact={compact}
+        following={readout?.following ?? false}
+        handle={handle}
+        selection={selection}
+        touch={touch}
+      />
       <MapNav handle={handle} touch={touch} yaw={readout?.pose.yaw ?? MAP_YAW} />
       <DetailPanel actions={actions} compact={compact} onLocate={locate} ops={ops} selection={selection} />
       {keysOpen && <KeyHelp bindings={bindings} onBindings={applyBindings} onClose={() => setKeysOpen(false)} />}
@@ -124,6 +152,10 @@ export function App(): ReactElement {
       projection={readout?.pose.projection ?? 'perspective'}
     />
   );
+
+  if (embedded) {
+    return <div style={styles.appEmbedded}>{map}</div>;
+  }
 
   if (compact) {
     return (

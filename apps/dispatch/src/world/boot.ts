@@ -39,6 +39,8 @@ import {
 } from '../map/map-camera';
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
+import { readView, type SharedView, viewOfPose } from '../map/view-link';
+import { composeImage } from './capture';
 import { buildDemoCity, DEMO_REACH } from './demo-city';
 import { DISTRICTS } from './districts';
 import { createErrorLog } from './error-log';
@@ -72,6 +74,15 @@ export interface BootOptions {
 export interface DispatchHandle {
   readonly camera: MapCamera;
   dispose(): void;
+  /**
+   * A PNG of the situation: the world and the symbology drawn over it, composed into one image (201/7-07).
+   * `null` when there is no world canvas to read — plan mode answers with its own single canvas instead.
+   *
+   * Resolves on the NEXT frame rather than immediately, and that is not an implementation detail: the two
+   * canvases are only in step at the end of a frame, and a naive `toDataURL` of the WebGPU one alone
+   * captures a city with no units on it.
+   */
+  exportImage(): Promise<Blob | null>;
   /** Ease the heading back to north (201/7-06's compass, and the `n` key). */
   faceNorth(): void;
   /**
@@ -103,6 +114,8 @@ export interface DispatchHandle {
   setProjection(projection: MapProjection): void;
   /** Fly to one of the three zoom levels over the point already under the view (201/7-02). */
   setZoomLevel(level: ZoomLevel): void;
+  /** Everything a shared link carries about the world half of the view (201/7-07). */
+  sharedView(): SharedView;
   /** Tilt by this many radians — the on-screen control's step, the same bound as every other tilt. */
   tiltBy(radians: number): void;
   /** Turn the view by this many radians, eased like the compass rather than snapped. */
@@ -361,6 +374,13 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // device with no `timestamp-query`, and it only runs when the mode is on.
   const loopCpu = new FrameSpans();
   const time = <T>(name: string, run: () => T): T => (inventory ? loopCpu.measure(name, run) : run());
+  /**
+   * A capture waiting for the end of a frame (201/7-07). The two canvases are only in step there: the
+   * WebGPU one holds a frame's world until the next one starts, and the overlay holds the symbology drawn
+   * for THAT world. Reading either at an arbitrary moment gives a city with no units, or units over a
+   * city that has moved.
+   */
+  let pendingCapture: ((image: Blob | null) => void) | null = null;
   let bodyMs = 0;
   const frames: number[] = [];
   let disposed = false;
@@ -414,6 +434,16 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       );
     });
 
+    if (pendingCapture !== null) {
+      const resolve = pendingCapture;
+      pendingCapture = null;
+      void composeImage(canvas, overlay, {
+        build: world.label,
+        district: districtLabel(params, world, camera),
+        pose: camera.pose(),
+      }).then(resolve);
+    }
+
     if (now - lastReadout > 1000 / READOUT_HZ) {
       lastReadout = now;
       const average = frames.reduce((sum, value) => sum + value, 0) / Math.max(1, frames.length);
@@ -441,9 +471,18 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     camera,
     dispose(): void {
       disposed = true;
+      // A capture waiting for a frame that will never come would leave its caller waiting forever; the
+      // export says "no image" instead, which is a thing the operator can act on.
+      pendingCapture?.(null);
+      pendingCapture = null;
       unbind();
       errorLog.dispose();
       beacons.dispose();
+    },
+    exportImage(): Promise<Blob | null> {
+      return new Promise((resolve) => {
+        pendingCapture = resolve;
+      });
     },
     faceNorth(): void {
       camera.turnTo(MAP_YAW);
@@ -503,6 +542,12 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     setZoomLevel(level: ZoomLevel): void {
       camera.flyTo(camera.positionGta(), zoomSpan(level, camera.positionGta(), world));
     },
+    sharedView: (): SharedView => ({
+      ...viewOfPose(camera.pose()),
+      hour,
+      ...(params.get('src') === null ? {} : { src: params.get('src') ?? '' }),
+      ...(params.get('district') === null ? {} : { district: params.get('district') ?? '' }),
+    }),
     tiltBy(radians: number): void {
       camera.tiltBy(radians);
     },
@@ -514,6 +559,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     },
   };
 }
+
 /**
  * The console's query parameters.
  *
@@ -528,7 +574,6 @@ export function dispatchParams(): URLSearchParams {
 
   return new URLSearchParams(override ?? window.location.search);
 }
-
 /** What a pressed key does. One switch, so the sheet, the buttons and the keyboard cannot drift apart. */
 export function runCommand(
   command: PressedCommand,
@@ -690,6 +735,15 @@ function demoWorld(engine: Engine): DispatchWorld {
   };
 }
 
+/**
+ * What the export's stamp calls this place: the world's own name for the point under the view, else the
+ * district the run was opened with, else nothing at all. Never a landmark table of our own — a total
+ * conversion's places are its own (201/5-03).
+ */
+function districtLabel(params: URLSearchParams, world: DispatchWorld, camera: MapCamera): string {
+  return world.districts.nameAt(camera.positionGta()) ?? params.get('district') ?? '';
+}
+
 function numberParam(params: URLSearchParams, name: string, fallback: number): number {
   const raw = Number(params.get(name) ?? Number.NaN);
 
@@ -704,15 +758,16 @@ function numberParam(params: URLSearchParams, name: string, fallback: number): n
  * nothing on screen or in the report saying so.
  */
 function poseFromQuery(params: URLSearchParams): MapPose {
-  const at = (params.get('at') ?? '').split(',').map(Number);
+  // One reader for the link's own names (201/7-07), so a URL this console WRITES is one it opens.
+  const view = readView(params);
   const district = DISTRICTS[params.get('district') ?? ''];
 
   return {
-    at: at.length === 2 && at.every(Number.isFinite) ? [at[0], at[1]] : (district?.at ?? OPENING_POSE.at),
-    height: numberParam(params, 'h', OPENING_POSE.height),
-    pitch: (numberParam(params, 'pitch', (OPENING_POSE.pitch * 180) / Math.PI) * Math.PI) / 180,
-    projection: params.get('proj') === 'ortho' ? 'ortho' : OPENING_POSE.projection,
-    yaw: (numberParam(params, 'yaw', (OPENING_POSE.yaw * 180) / Math.PI) * Math.PI) / 180,
+    at: view.at ?? district?.at ?? OPENING_POSE.at,
+    height: view.height ?? OPENING_POSE.height,
+    pitch: view.pitch ?? OPENING_POSE.pitch,
+    projection: view.projection ?? OPENING_POSE.projection,
+    yaw: view.yaw ?? OPENING_POSE.yaw,
   };
 }
 

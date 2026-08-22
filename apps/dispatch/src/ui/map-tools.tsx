@@ -14,15 +14,19 @@ import type { DispatchHandle } from '../world/boot';
 import type { SearchedPlace } from '../world/zones';
 
 import { type Bookmark, readBookmarks, removeBookmark, saveBookmark } from '../map/bookmarks';
+import { viewLink } from '../map/view-link';
 import { styles } from './styles';
 
 export function MapTools({
+  behindLive,
   compact = false,
   following,
   handle,
   selection,
   touch = false,
 }: {
+  /** How far behind live the shift clock is, seconds — part of the view a link carries (201/8-03). */
+  behindLive: number;
   /** Phone layout: the cluster narrows so it cannot crowd the map it sits on. */
   compact?: boolean;
   /** Whether the camera is currently riding a unit — read from the readout, never held here. */
@@ -39,6 +43,9 @@ export function MapTools({
   const [views, setViews] = useState<readonly Bookmark[]>(() => readBookmarks());
   /** The name being typed for a view about to be saved, or null when nothing is being saved. */
   const [naming, setNaming] = useState<null | string>(null);
+  /** What the last share did, shown for a moment. A clipboard that refused is not an error worth a dialog,
+   *  but it is one the operator has to see — the link is put on screen to copy by hand instead. */
+  const [copied, setCopied] = useState('');
 
   const unitSelected = selection?.kind === 'unit' ? selection.id : null;
   const button = touch ? styles.buttonTouch : styles.button;
@@ -56,6 +63,40 @@ export function MapTools({
   };
   // The pose is read when SAVE is pressed, not when the name box opened: an operator who nudges the map
   // while typing a name means the view they are looking at.
+  /**
+   * The link is built from the map's own view plus the moment the board is showing, and the two halves come
+   * from different owners on purpose: the console knows where it is looking, React knows what time it is
+   * looking at. Copied rather than navigated to — a console that rewrites its own address bar breaks an
+   * embedded host that does not own it (201/7-07).
+   */
+  const copyLink = (): void => {
+    const view = handle?.sharedView();
+    if (!view) {
+      return;
+    }
+    const link = viewLink(window.location.href, { ...view, ...(behindLive > 0 ? { behindLive } : {}) });
+    void navigator.clipboard?.writeText(link).then(
+      () => setCopied('link copied'),
+      () => setCopied(link),
+    );
+  };
+
+  const saveImage = (): void => {
+    void handle?.exportImage().then((image) => {
+      if (image === null) {
+        setCopied('no image');
+
+        return;
+      }
+      const url = URL.createObjectURL(image);
+      const anchor = document.createElement('a');
+      anchor.download = `dispatch-${new Date().toISOString().replace(/[:.]/gu, '-')}.png`;
+      anchor.href = url;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    });
+  };
+
   const save = (): void => {
     const pose = handle?.pose();
     const name = naming?.trim() ?? '';
@@ -110,6 +151,46 @@ export function MapTools({
           {compact ? 'Save' : 'Save view'}
         </button>
       </div>
+
+      <div style={{ display: 'flex', gap: 5 }}>
+        <button
+          disabled={handle === null}
+          onClick={copyLink}
+          style={button}
+          title="Copy a link to this view — pose, projection, world hour and the moment on the clock"
+          type="button"
+        >
+          {compact ? 'Link' : 'Copy link'}
+        </button>
+        <button
+          disabled={handle === null}
+          onClick={saveImage}
+          style={button}
+          title="Save a PNG of the map with its units, calls and a stamp"
+          type="button"
+        >
+          {compact ? 'Image' : 'Save image'}
+        </button>
+      </div>
+
+      {copied.startsWith('http') ? (
+        // The clipboard refused — an insecure origin, or a browser that wants a gesture it did not get. The
+        // link goes on screen to be copied by hand, in a field that can be SELECTED: a button would be
+        // dismissed by the first click, which is the one thing the operator is trying not to do.
+        <input
+          aria-label="Link to this view"
+          onFocus={(event) => event.target.select()}
+          readOnly
+          style={styles.mapToolsInput}
+          value={copied}
+        />
+      ) : (
+        copied !== '' && (
+          <button onClick={() => setCopied('')} style={{ ...hit, width: 'auto' }} title="Dismiss" type="button">
+            {copied}
+          </button>
+        )
+      )}
 
       {naming !== null && (
         <input

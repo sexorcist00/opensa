@@ -242,6 +242,45 @@ Three ways the map goes somewhere else:
 includes the symbology (which lives on a second canvas — a naive `toDataURL` will capture the world without
 the units).
 
+**DONE 2026-08-22.** All three ways out, and the two things this step owed are answered rather than
+discovered.
+
+**A link to a view.** `map/view-link.ts` owns the parameter NAMES and both directions, which is the point: a
+writer that builds a string and a reader somewhere else that parses it is how a share button produces a URL
+that silently opens the default view. What it carries — the pose, **the projection** (7/01: the same pose is
+a different picture in plan view), the world hour, and **how far behind live the shift clock was** (8/03: a
+moment is part of a view once time is an axis). What it does NOT carry is the **selection**: an id from one
+board means nothing on another, and once the feed is real a call id belongs to the CAD rather than to a URL.
+Angles go out in degrees and the comma in `at=` stays a comma, because a human edits these by hand.
+
+**What an embedded console may do** (`?embed=1`), stated:
+
+| | |
+| --- | --- |
+| **Shows** | the map and its own controls — nav cluster, operator cluster, selection panel |
+| **Never shows** | the queue, the roster, the shift timeline, the status bar. The host has its own board, and two boards disagreeing on one screen is worse than none |
+| **Never writes** | the address bar. It is not its to write — which is also why `dispatchParams()` already reads `window.__opensaDispatch` for a host with an opaque origin |
+| **Keeps** | the keyboard, the gestures and per-operator storage, because they belong to the person at the screen rather than to the page around them |
+| **Reports out** | through the handle (picks, readout, view state) — the same seam the library entry (`embed.ts`) hands a host that mounts the map itself |
+
+**The export composes both canvases, and that is the whole defect it exists to avoid.** A `toDataURL` of the
+WebGPU canvas captures a city with no units on it — every unit, call, callsign and trail lives on the second
+canvas — so an export that looked right would have been a screenshot of a video game sent into a report. The
+capture also has to happen at the END of a frame, where the two layers are in step, so `exportImage()`
+resolves on the next frame rather than immediately. A stamp goes under the picture (place, coordinates, eye
+height, projection, time, pak build), because an image in a chat a week later answers *where* and *when* or
+it answers nothing.
+
+**Plan mode exports too**, composing its single canvas with itself and stamping `plan mode` — an image of a
+GPU-less shift should say so on its face.
+
+**A defect caught while wiring the moment into the link:** the shift clock runs on `performance.now()`, not
+`Date.now()` (`ops/use-operations.ts`), and mixing the two puts a scrub decades off with nothing to show but
+an empty board.
+
+**Owed by nobody here.** What a field run adds is the phone verdict on the two share buttons — the clipboard
+and the download both behave differently on Android's browsers, and neither can be checked from a desk.
+
 ## The design rule for all of it
 
 Layout, colour, density and state tiles go through the design skills — `artifact-design` and `dataviz` —

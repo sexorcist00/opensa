@@ -49,6 +49,8 @@ export const styles = {
     height: '100%',
     width: '100%',
   },
+  /** `?embed=1`: the map fills the frame the host gave it, and nothing else is drawn. */
+  appEmbedded: { background: COLORS.panel, color: COLORS.text, height: '100%', position: 'relative', width: '100%' },
   badge: {
     borderRadius: 3,
     fontFamily: MONO,

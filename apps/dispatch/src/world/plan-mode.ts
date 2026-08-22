@@ -12,6 +12,7 @@
  */
 
 import type { GtaGround } from '../map/coords';
+import type { SharedView } from '../map/view-link';
 import type { Operations, Selection } from '../ops/types';
 import type { BootOptions, DispatchHandle, ZoomLevel } from './boot';
 import type { SearchedPlace } from './zones';
@@ -22,7 +23,9 @@ import { bindKeys } from '../map/keys';
 import { groundPoint, MAP_YAW, MapCamera, type MapProjection } from '../map/map-camera';
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
+import { viewOfPose } from '../map/view-link';
 import { applyHeldKeys, runCommand, zoomSpan } from './boot';
+import { composeImage } from './capture';
 import { NO_DISTRICTS } from './zones';
 
 /** Opening view. Higher than the 3D mode's: with no buildings to give scale, more ground reads better. */
@@ -185,6 +188,19 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
       keyboard.unbind();
       unbind();
     },
+    /**
+     * Plan mode has ONE canvas — the overlay is the whole picture here — so the export composes it with
+     * itself rather than with a WebGPU layer that does not exist. What comes out says `plan mode` in its
+     * stamp through the build label the host passed in, which is what an image of a GPU-less shift should
+     * say on its face.
+     */
+    exportImage(): Promise<Blob | null> {
+      return composeImage(overlay, overlay, {
+        build: `plan mode — ${why}`,
+        district: '',
+        pose: camera.pose(),
+      });
+    },
     faceNorth(): void {
       camera.turnTo(MAP_YAW);
     },
@@ -229,6 +245,7 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
       // geometric mean the same way it does on a pak with no zone table.
       zoomLevel(level);
     },
+    sharedView: (): SharedView => viewOfPose(camera.pose()),
     tiltBy(radians: number): void {
       camera.tiltBy(radians);
     },
