@@ -35,6 +35,9 @@ import { type DistrictLookup, loadDistricts, NO_DISTRICTS } from './zones';
 
 export interface BootOptions {
   readonly canvas: HTMLCanvasElement;
+  /** How old each unit's last fix is, ms (201/8-02) — absent for a host with no board, whose markers are
+   *  then all drawn as fresh. */
+  readonly fixAges?: () => ReadonlyMap<string, number>;
   readonly onClick: (click: MapClick) => void;
   /** Right-click: "put a call here". `district` is what the world calls that point (201/5-03) — resolved
    *  here rather than in the board, because the baked table is the map's, and null when the world has none. */
@@ -245,10 +248,14 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       projector.update(state, overlay.clientWidth, overlay.clientHeight);
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
-      symbology.render(context, projector, ops, options.selection(), {
-        height: overlay.clientHeight,
-        width: overlay.clientWidth,
-      });
+      symbology.render(
+        context,
+        projector,
+        ops,
+        options.selection(),
+        { height: overlay.clientHeight, width: overlay.clientWidth },
+        options.fixAges?.(),
+      );
     });
 
     if (now - lastReadout > 1000 / READOUT_HZ) {

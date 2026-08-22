@@ -30,8 +30,8 @@ function call(index: number): Incident {
 }
 
 /** A 2D context that records what was asked of it — the layer's cost is calls, not pixels. */
-function fakeContext(): { calls: { font: number; measure: number }; ctx: CanvasRenderingContext2D } {
-  const calls = { font: 0, measure: 0 };
+function fakeContext(): { calls: { font: number; measure: number; text: string[] }; ctx: CanvasRenderingContext2D } {
+  const calls = { font: 0, measure: 0, text: [] as string[] };
   const ctx = {
     arc: (): void => undefined,
     arcTo: (): void => undefined,
@@ -39,7 +39,9 @@ function fakeContext(): { calls: { font: number; measure: number }; ctx: CanvasR
     closePath: (): void => undefined,
     fill: (): void => undefined,
     fillStyle: '',
-    fillText: (): void => undefined,
+    fillText: (text: string): void => {
+      calls.text.push(text);
+    },
     lineTo: (): void => undefined,
     lineWidth: 0,
     measureText: (text: string): TextMetrics => {
@@ -107,6 +109,24 @@ describe('SymbologyLayer', () => {
       expect(layer.counted().measures).toBe(0);
     });
 
+    it('does not re-measure a stale unit every second — the changing age is measured apart', () => {
+      const { calls, ctx } = fakeContext();
+      const layer = new SymbologyLayer();
+      const ops = board(150);
+      // Every unit stale, ages under a minute so the label's `12s` really does tick every frame. Putting
+      // that age inside the measured label makes 150 NEW cache keys per frame, which blows the cap and
+      // re-measures everything — 5/02's whole finding undone.
+      for (let frame = 0; frame < 400; frame += 1) {
+        const ages = new Map(ops.units.map((unit) => [unit.id, 10_000 + (frame % 40) * 1000]));
+        layer.render(ctx, fakeProjector(), ops, null, SIZE, ages);
+        if (frame === 380) {
+          calls.measure = 0;
+        }
+      }
+
+      expect(calls.measure).toBe(0);
+    });
+
     it('sets the font a fixed number of times per frame, not once per chip', () => {
       const { calls, ctx } = fakeContext();
       const layer = new SymbologyLayer();
@@ -137,7 +157,37 @@ describe('SymbologyLayer', () => {
 
       layer.render(ctx, fakeProjector(), board(150, 40), null, SIZE);
 
-      expect(layer.counted()).toEqual({ chips: 190, chipsDropped: 0, measures: 151, symbols: 190 });
+      expect(layer.counted()).toEqual({ chips: 190, chipsDropped: 0, measures: 151, stale: 0, symbols: 190 });
+    });
+
+    it('marks a unit whose fix has aged past one publish interval, and says how old', () => {
+      const { calls, ctx } = fakeContext();
+      const layer = new SymbologyLayer();
+      const ops = board(3);
+      // PCAD publishes every 4 s: 2 s is not late, 90 s is.
+      const ages = new Map([
+        ['u0', 2000],
+        ['u1', 90_000],
+        ['u2', 400_000],
+      ]);
+
+      layer.render(ctx, fakeProjector(), ops, null, SIZE, ages);
+
+      expect(layer.counted().stale).toBe(2);
+      // The age rides on the chip, so a callsign an operator cannot trust says so in the same glance.
+      expect(calls.text).toContain('4-XRAY-1 · 1m');
+      expect(calls.text).toContain('4-XRAY-2 · 6m');
+      expect(calls.text).toContain('4-XRAY-0');
+      expect(calls.text).not.toContain('4-XRAY-0 · ');
+    });
+
+    it('treats a unit with no recorded fix as fresh rather than as ancient', () => {
+      const { ctx } = fakeContext();
+      const layer = new SymbologyLayer();
+
+      layer.render(ctx, fakeProjector(), board(4), null, SIZE, new Map());
+
+      expect(layer.counted().stale).toBe(0);
     });
 
     it('hit-tests the pixels it last drew', () => {

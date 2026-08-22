@@ -90,6 +90,26 @@ export class BoardHistory {
     return { ...live, incidents, now: t, units };
   }
 
+  /**
+   * How old each unit's last fix is at `t`, in ms, keyed by unit id (201/8-02).
+   *
+   * It cannot come off the board: a `Unit` carries a position, not the moment that position was reported,
+   * and the live board's `now` is the console's clock rather than the feed's. The age is a property of the
+   * TRACK — the gap between the moment asked for and the last sample the feed actually delivered — which is
+   * the only place it exists.
+   */
+  fixAges(t: number): Map<string, number> {
+    const out = new Map<string, number>();
+    for (const id of this.roster.keys()) {
+      const state = this.tracks.at(id, t);
+      if (state) {
+        out.set(id, state.ageMs);
+      }
+    }
+
+    return out;
+  }
+
   /** Drop a unit's history entirely — it is off the board for good, not merely off duty. */
   forget(id: string): void {
     this.roster.delete(id);

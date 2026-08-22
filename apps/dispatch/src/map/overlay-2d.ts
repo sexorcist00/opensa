@@ -35,6 +35,8 @@ export interface SymbologyCounts {
   /** `measureText` calls this frame. It is the claim of the width cache, stated rather than asserted: with
    *  the cache warm this is 0 however many symbols are on screen, and every new label costs exactly one. */
   readonly measures: number;
+  /** Units drawn with an aging fix — older than one publish interval (201/8-02). */
+  readonly stale: number;
   /** Icons drawn — units plus calls that projected onto the canvas. */
   readonly symbols: number;
 }
@@ -52,6 +54,24 @@ const FONT_SMALL = '500 10px ui-sans-serif, system-ui, -apple-system, sans-serif
 const CHIP_MAX_DEPTH = 2600;
 /** Below this canvas width a call chip drops its title and keeps the code — the list carries the rest. */
 const NARROW_CANVAS = 620;
+/**
+ * When a unit's last fix stops being current, and when the feed has given up on it (201/8-02).
+ *
+ * **Both numbers are PCAD's, not ours** ([202 §4](../../../../docs/plans/202-pcad-dispatch/readme.md), read
+ * out of the plugin and the backend rather than chosen here): positions publish every **4 s**, so a fix
+ * younger than that is not late — it is simply the newest one sent. The backend sweeps a unit as stale after
+ * **300 s**, so past that the feed itself has stopped believing in the position and the map may not keep
+ * drawing it as if it were current.
+ *
+ * Between the two the marker FADES rather than flipping, because that is the honest shape of the thing: a
+ * fix does not become wrong at a threshold, it gets older. This is the half 8/02 owed — a stale marker, not
+ * a confidently wrong one — and the interpolation half of that step is answered by not having any.
+ */
+const FIX_FRESH_MS = 4000;
+const FIX_LOST_MS = 300_000;
+/** How faint a lost unit gets. Not zero: an operator must still be able to find it and ask why. */
+const FIX_LOST_ALPHA = 0.35;
+
 /** Horizontal padding inside a chip, added to the measured text width. */
 const CHIP_PADDING = 14;
 /** Distinct labels the width cache holds before it is dropped whole. */
@@ -61,7 +81,7 @@ const SCALE_STEPS = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000] as const;
 
 export class SymbologyLayer {
   private areas: HitArea[] = [];
-  private counts = { chips: 0, chipsDropped: 0, measures: 0, symbols: 0 };
+  private counts = { chips: 0, chipsDropped: 0, measures: 0, stale: 0, symbols: 0 };
   /**
    * Chip width by label text, because `measureText` is the layer's per-symbol cost and the labels do not
    * change: a callsign is a callsign for a whole shift. Before this, every chip re-set `ctx.font` (a font
@@ -99,9 +119,10 @@ export class SymbologyLayer {
     ops: Operations,
     selection: Selection,
     size: { readonly height: number; readonly width: number },
+    fixAges?: ReadonlyMap<string, number>,
   ): void {
     this.areas = [];
-    this.counts = { chips: 0, chipsDropped: 0, measures: 0, symbols: 0 };
+    this.counts = { chips: 0, chipsDropped: 0, measures: 0, stale: 0, symbols: 0 };
     // Font and alignment are the chips' state and never vary, so they are set ONCE per frame rather than
     // once per chip: assigning `ctx.font` re-parses the shorthand every time.
     ctx.font = FONT;
@@ -111,25 +132,28 @@ export class SymbologyLayer {
       this.drawIncident(ctx, projector, incident, selection, size);
     }
     for (const unit of ops.units) {
-      this.drawUnit(ctx, projector, unit, selection, size);
+      this.drawUnit(ctx, projector, unit, selection, size, fixAges?.get(unit.id) ?? 0);
     }
     drawScaleBar(ctx, projector, ops, size);
   }
 
-  /** The chip's width, measured once per distinct label and remembered. */
+  /** The chip's width for one label, padded. */
   private chipWidth(ctx: CanvasRenderingContext2D, text: string): number {
-    const cached = this.widths.get(text);
-    if (cached !== undefined) {
-      return cached;
-    }
-    if (this.widths.size >= WIDTH_CACHE_CAP) {
-      this.widths.clear();
-    }
-    const width = ctx.measureText(text).width + CHIP_PADDING;
-    this.counts.measures += 1;
-    this.widths.set(text, width);
+    return this.textWidth(ctx, text) + CHIP_PADDING;
+  }
 
-    return width;
+  /**
+   * A chip's width when part of it CHANGES every second — a callsign plus the age of its fix.
+   *
+   * Measured in PIECES, because the composite is not cacheable: `4-XRAY-7 · 12s` is a different string one
+   * second later, so keying the cache on it re-measures every stale unit on every frame. Measured at 150
+   * stale units: 150 `measureText` calls per frame, forever, against the 0 in steady state that
+   * [5/02's count](../../../../docs/benchmarks/opensa-engine/2026-08-21-dispatch-symbology-call-counts.json)
+   * exists to hold. Both parts are bounded — one string per callsign, and the age vocabulary is about a
+   * hundred short strings — so both settle.
+   */
+  private chipWidthParts(ctx: CanvasRenderingContext2D, text: string, suffix: string): number {
+    return this.textWidth(ctx, text) + this.textWidth(ctx, suffix) + CHIP_PADDING;
   }
 
   private drawIncident(
@@ -174,6 +198,7 @@ export class SymbologyLayer {
     unit: Unit,
     selection: Selection,
     size: { readonly height: number; readonly width: number },
+    ageMs: number,
   ): void {
     const point = projector.project(gtaToEngine(unit.at, ICON_LIFT));
     if (!point) {
@@ -184,21 +209,32 @@ export class SymbologyLayer {
     const ahead = projector.project(
       gtaToEngine([unit.at[0] + Math.sin(unit.heading) * 14, unit.at[1] + Math.cos(unit.heading) * 14], ICON_LIFT),
     );
-    const color = css(SET_COLORS[unit.status]);
+    const stale = ageMs > FIX_FRESH_MS;
+    const color = css(SET_COLORS[unit.status], stale ? fixAlpha(ageMs) : 1);
     const selected = selection?.kind === 'unit' && selection.id === unit.id;
-    chevron(ctx, point.x, point.y, ahead ? Math.atan2(ahead.y - point.y, ahead.x - point.x) : 0, color, selected);
+    const angle = ahead ? Math.atan2(ahead.y - point.y, ahead.x - point.x) : 0;
+    // A stale unit is drawn HOLLOW as well as faded: fade alone reads as distance on a tilted map, and the
+    // difference between "far away" and "we have not heard from it" is the whole point of the mark.
+    chevron(ctx, point.x, point.y, angle, color, selected, stale);
     this.counts.symbols += 1;
+    if (stale) {
+      this.counts.stale += 1;
+    }
     if (point.depth > CHIP_MAX_DEPTH && !selected) {
       this.counts.chipsDropped += 1;
 
       return;
     }
+    // The age goes ON the chip rather than beside it: a callsign an operator cannot trust is a callsign
+    // that has to say so in the same glance.
+    const suffix = stale ? ` · ${age(ageMs)}` : '';
+    const width = stale ? this.chipWidthParts(ctx, unit.callsign, suffix) : this.chipWidth(ctx, unit.callsign);
     const rect = chip(
       ctx,
       point.x,
       point.y - CHIP_RISE,
-      unit.callsign,
-      this.chipWidth(ctx, unit.callsign),
+      `${unit.callsign}${suffix}`,
+      width,
       color,
       selected,
       size.width,
@@ -206,6 +242,23 @@ export class SymbologyLayer {
     this.counts.chips += 1;
     this.areas.push({ ...rect, id: unit.id, kind: 'unit' });
     this.areas.push({ height: 20, id: unit.id, kind: 'unit', width: 20, x: point.x - 10, y: point.y - 10 });
+  }
+
+  /** One string's width, measured once and remembered. The chip's padding is the caller's, so a width can
+   *  be assembled from parts when half of it changes every second. */
+  private textWidth(ctx: CanvasRenderingContext2D, text: string): number {
+    const cached = this.widths.get(text);
+    if (cached !== undefined) {
+      return cached;
+    }
+    if (this.widths.size >= WIDTH_CACHE_CAP) {
+      this.widths.clear();
+    }
+    const width = ctx.measureText(text).width;
+    this.counts.measures += 1;
+    this.widths.set(text, width);
+
+    return width;
   }
 }
 
@@ -216,7 +269,25 @@ export function css(rgba: Rgba, alpha = rgba[3]): string {
   return `rgba(${to255(rgba[0])}, ${to255(rgba[1])}, ${to255(rgba[2])}, ${alpha})`;
 }
 
-/** The unit symbol: a filled disc with a heading chevron, the way a moving-map AVL display draws one. */
+/** A fix's age as the chip says it: `12s`, `4m`, `1h 20m`. */
+function age(ms: number): string {
+  const total = Math.round(ms / 1000);
+  if (total < 60) {
+    return `${total}s`;
+  }
+  if (total < 3600) {
+    return `${Math.floor(total / 60)}m`;
+  }
+
+  return `${Math.floor(total / 3600)}h ${String(Math.floor((total % 3600) / 60)).padStart(2, '0')}m`;
+}
+
+/**
+ * The unit symbol: a disc with a heading chevron, the way a moving-map AVL display draws one.
+ *
+ * `stale` draws it HOLLOW — the disc is outlined rather than filled — which is the part a fade alone cannot
+ * carry, because a faded symbol on a tilted map reads as distance.
+ */
 function chevron(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -224,12 +295,13 @@ function chevron(
   angle: number,
   color: string,
   selected: boolean,
+  stale = false,
 ): void {
   ctx.save();
   ctx.translate(x, y);
   ctx.beginPath();
   ctx.arc(0, 0, selected ? 9 : 7, 0, Math.PI * 2);
-  ctx.fillStyle = color;
+  ctx.fillStyle = stale ? 'rgba(8, 12, 18, 0.7)' : color;
   ctx.fill();
   ctx.strokeStyle = selected ? '#ffffff' : 'rgba(0, 0, 0, 0.65)';
   ctx.lineWidth = selected ? 2 : 1.4;
@@ -241,8 +313,14 @@ function chevron(
   ctx.lineTo(5, -5);
   ctx.lineTo(5, 5);
   ctx.closePath();
-  ctx.fillStyle = color;
-  ctx.fill();
+  if (stale) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -354,6 +432,16 @@ function drawScaleBar(
   // would otherwise inherit the scale bar's font and alignment.
   ctx.font = FONT;
   ctx.textAlign = 'center';
+}
+
+/**
+ * How solid an aging marker is drawn: full at one publish interval, {@link FIX_LOST_ALPHA} once the backend
+ * has swept the unit as stale, linear between. A fix does not become wrong at a threshold — it gets older.
+ */
+function fixAlpha(ageMs: number): number {
+  const past = Math.min(1, (ageMs - FIX_FRESH_MS) / Math.max(1, FIX_LOST_MS - FIX_FRESH_MS));
+
+  return 1 - past * (1 - FIX_LOST_ALPHA);
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {

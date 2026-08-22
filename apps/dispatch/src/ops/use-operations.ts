@@ -53,6 +53,8 @@ export interface DispatchStore {
   readonly ops: Operations;
   /** Stable getters for the render loop — identity never changes, so the host binds them once. */
   readonly read: {
+    /** How old each unit's last fix is, ms (201/8-02). Same rate and same source as {@link trails}. */
+    fixAges: () => ReadonlyMap<string, number>;
     ops: () => Operations;
     selection: () => Selection;
     trackStats: () => HistoryStats;
@@ -86,14 +88,17 @@ export function useOperations(): DispatchStore {
   // Resolved at the board's rate rather than the frame's: a trail only changes when a sample lands or the
   // clock moves, and the map redraws from the same object in between.
   const trails = useMemo(() => history.trails(ops.now), [history, ops]);
+  const fixAges = useMemo(() => history.fixAges(ops.now), [history, ops]);
 
   const opsRef = useRef(ops);
   const trailsRef = useRef(trails);
+  const fixAgesRef = useRef(fixAges);
   const liveRef = useRef(live);
   const selectionRef = useRef(selection);
   const autoRef = useRef(autoDispatch);
   opsRef.current = ops;
   trailsRef.current = trails;
+  fixAgesRef.current = fixAges;
   liveRef.current = live;
   selectionRef.current = selection;
   autoRef.current = autoDispatch;
@@ -143,6 +148,7 @@ export function useOperations(): DispatchStore {
 
   const read = useMemo(
     () => ({
+      fixAges: (): ReadonlyMap<string, number> => fixAgesRef.current,
       ops: (): Operations => opsRef.current,
       selection: (): Selection => selectionRef.current,
       trackStats: (): HistoryStats => history.stats(),

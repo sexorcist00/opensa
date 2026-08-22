@@ -144,6 +144,9 @@ export interface InventoryReport {
      *  label the layer had never drawn before. A capture where this tracks `chips` is one where the cache
      *  is not working. */
     readonly measures: number;
+    /** Units drawn with an AGING fix — older than PCAD's 4 s publish interval (201/8-02). On the mock this
+     *  is 0 while live and grows during a scrub; on a real feed it is what a quiet channel looks like. */
+    readonly stale: number;
     readonly symbols: number;
     readonly units: number;
   };

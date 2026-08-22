@@ -183,10 +183,10 @@ Each now names the step that owns it, so none of them is an open-ended note.
   and the shift strip says `SHIFT`, because they are two different times and the console was labelling one
   of them "Time". A resolve costs p50 0.071 ms.
   → [201/8-03](../plans/201-dispatch-console/8-the-time-axis/readme.md).
-- **Units step between fixes rather than sliding, and nothing yet SAYS a marker is stale.** Interpolation was
-  dropped on the user's call (2026-08-22): a track answers with the last fix, because a straight line across
-  a 4 s gap at 100 km/h runs through buildings. The accessor already returns the answer's age and a stale
-  flag; what is missing is the operator seeing it.
+- ~~**Units step between fixes and nothing SAYS a marker is stale.**~~ **Closed 2026-08-22.** Interpolation
+  was dropped on the user's call (a straight line across a 4 s gap at 100 km/h runs through buildings), and a
+  unit whose fix has aged past one publish interval is now drawn hollow, faded with age, and carrying that
+  age on its chip. Both thresholds are PCAD's own — 4 s publish, 300 s backend sweep.
   → [201/8-02](../plans/201-dispatch-console/8-the-time-axis/readme.md).
 - ~~**No trails.**~~ **Landed 2026-08-22.** Every unit draws its current LEG — back to its last status
   change, not a fixed number of minutes. 150 legs resolve in p50 0.200 ms and produce 7 500 segments a
@@ -205,8 +205,10 @@ Each now names the step that owns it, so none of them is an open-ended note.
   and a board seeded to it: unique ids, scattered rather than stacked, and the same board on a second run.
 - `apps/dispatch/src/map/overlay-2d.test.ts` — the symbology layer against a stub 2d context, so what is
   pinned is the WORK IT ASKS FOR rather than a time this machine happens to take: a label is measured once
-  and never again, the font is set a fixed number of times per frame rather than once per chip, and the
-  counts it reports match what it drew. Both halves were verified by reintroducing the defect.
+  and never again — **including a stale unit whose chip carries a fix age that ticks every second**, which
+  is measured in parts so the cache still settles — the font is set a fixed number of times per frame rather
+  than once per chip, an aged unit is marked and says how old, and the counts match what was drawn. Every
+  one was verified by reintroducing its defect.
 - `apps/dispatch/src/ops/tracks.test.ts` — the time axis and the trails: that a trail stops at the last
   status change rather than running the whole shift, that one sample is no trail, that it never exceeds its
   work bound, and — for the axis itself — that it answers with the LAST FIX rather than a

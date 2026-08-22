@@ -81,6 +81,7 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
       <div>
         board {report.symbology.units}u/{report.symbology.incidents}c · {report.symbology.symbols} symbols ·{' '}
         {report.symbology.chips} chips ({report.symbology.chipsDropped} dropped)
+        {report.symbology.stale > 0 && ` · ${report.symbology.stale} stale`}
       </div>
       {report.tracks !== null && (
         <div>

@@ -62,6 +62,7 @@ const CONTEXT = {
     chipsDropped: 2,
     incidents: 2,
     measures: 0,
+    stale: 0,
     symbols: 11,
     units: 9,
   },

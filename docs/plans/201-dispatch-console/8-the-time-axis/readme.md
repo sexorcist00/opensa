@@ -110,6 +110,33 @@ raise. That is a measurement, and it is [202 phase 4](../../202-pcad-dispatch/re
 **Owes:** what the operator sees when the feed goes quiet — a stale marker, not a confidently wrong one — and
 the latency the interpolation adds.
 
+**DONE 2026-08-22 — the operator half.**
+
+A unit whose last fix has aged past **one publish interval** is drawn as a stale mark: the disc goes
+**hollow** rather than filled, the whole symbol **fades** with age, and the chip carries the age beside the
+callsign (`4-XRAY-7 · 12s`). Hollow AND faded, because fade alone reads as distance on a tilted map, and the
+difference between *far away* and *we have not heard from it* is the entire point of the mark. The age is on
+the chip rather than beside it: a callsign an operator cannot trust has to say so in the same glance.
+
+**Both thresholds are PCAD's, not ours** ([202 §4](../../202-pcad-dispatch/readme.md), read out of the plugin
+and the backend): positions publish every **4 s**, so a fix younger than that is not late — it is the newest
+one sent; and the backend sweeps a unit as stale after **300 s**, so past that the feed itself has stopped
+believing the position. Between the two the marker fades rather than flipping, because a fix does not become
+wrong at a threshold, it gets older. Nothing here was chosen by eye, so there is no `docs/hacks/` entry.
+
+**The age cannot come off the board and that is why this needed the time axis.** A `Unit` carries a position,
+not the moment it was reported, and the live board's `now` is the console's clock rather than the feed's.
+`BoardHistory.fixAges(t)` reads it off the tracks — the only place it exists.
+
+**A regression this step caused and the review caught before it landed**, worth recording because it undid a
+measured property: the chip label now changes every second, and keying the width cache on the whole label
+made 150 new entries per frame, blew the 512-entry cap and re-measured everything — **150 `measureText` per
+frame, forever**, against [5/02's steady-state
+0](../../../benchmarks/opensa-engine/2026-08-21-dispatch-symbology-call-counts.json). The width is assembled
+from cached parts now (the callsign, and the ~100-string age vocabulary), and the steady state is 0 again.
+
+**Touched from [the protected list](../1-the-map-profile/protected-list.md):** nothing.
+
 **The engine half is enforced in the track accessor rather than left to each consumer.** `UnitTracks.at`
 answers with the last fix and **holds** past it, returning the answer's age and a `stale` flag once it is
 older than one publish interval — so no consumer can invent a position. Reintroducing extrapolation fails a

@@ -33,6 +33,7 @@ export function MapCanvas({
   onReadout: (readout: DispatchReadout) => void;
   onReady: (handle: DispatchHandle) => void;
   read: {
+    fixAges: () => ReadonlyMap<string, number>;
     ops: () => Operations;
     selection: () => Selection;
     trackStats: () => HistoryStats;
@@ -59,6 +60,7 @@ export function MapCanvas({
     }
     const boot: BootOptions = {
       canvas,
+      fixAges: () => liveRef.current.read.fixAges(),
       onClick: (click) => {
         const { select } = liveRef.current.actions;
         if (click.kind === 'ground') {
