@@ -62,6 +62,42 @@ the other) — the desk has the parallel-plane test, the screen has the picture.
 **Owes:** the clamp rule with the observation behind it, and the flyTo duration measured against the time the
 destination district needs to stream.
 
+**DONE 2026-08-22 on the desk half; the flyTo-vs-stream number is owed by a device run.** All three parts are
+rules read off the world rather than constants, and the two they replaced show what that is worth: the pitch
+floor was `-0.35 rad` and the zoom-out cap `7000` units of distance, against a **2200-unit** LOD ring — one
+drag and one wheel turn put the top of the frame over ground nobody had loaded, which renders as a world that
+simply ends.
+
+| Part | The rule, and where its number comes from |
+| --- | --- |
+| **Pitch clamp** | the shallowest tilt whose TOP EDGE lands inside the world around the focus. Perspective: the top edge is a ray `fovY/2` above the axis, landing at `d·sin t / tan(t − f)`; orthographic: it is parallel and offset by the box half-height, landing at `half / sin t`. Solved by bisection (32 fixed halvings — the reach is monotonic in the tilt) and **re-taken on every step that moves the frame**, because zooming out widens the frame and invalidates a tilt that was legal a notch ago ([the restriction this produced](../../../restrictions/architecture.md)) |
+| **Zoom cap** | at the top-down limit the frame's half-span is `d·tan f`, so the widest honest view is `reach / tan f` of distance. Past it the picture has ground outside the ring at ANY tilt |
+| **`reach`** | the world's own number, not the camera's: the LOD ring for a streamed world, its extent for the synthetic demo, nothing for plan mode (which draws no world and keeps the flat bounds) |
+| **Zoom levels** | `block` = one render cell (`CELL_SIZE`, the grid the pak is welded on) · `district` = the baked zone box under the view (201/5-03's table) · `city` = everything the world has around the focus. A world with no zone table falls back to the GEOMETRIC mean of the other two, because zoom levels are logarithmic and a missing level should land between its neighbours. Keys `1` / `2` / `3`, widest to tightest |
+| **`flyTo`** | Van Wijk & Nuij's path ([links](../../../links.md)), the one MapLibre's `flyTo` follows: the camera pulls up, crosses and settles, and **the duration is the path length in zoom space over a speed in screenfuls per second** — derived, not picked. ρ = 1.42 is the paper's own user-study value, not one we fitted |
+
+**What is shown while the destination loads, which this step had to answer rather than discover:** the arc
+zooms OUT for a long trip, so the crossing happens over far-LOD content that is already resident, and the
+destination's cells begin streaming as the focus approaches rather than on arrival — the ring follows the
+focus along the path. The frame never outruns the ring because the zoom cap above applies to the arc too:
+the flight's own widest point is clamped by the same rule as a wheel turn. What an operator sees on arrival
+is LOD geometry sharpening to HD, never a hole.
+
+**Any input cancels a flight** — pan, orbit, dolly, pinch, a pose applied by the host. A camera that keeps
+flying under the operator's hand is the bug every map application has shipped at least once.
+
+**The bound NARROWS the operator's tilt, it does not overwrite it.** The camera keeps the tilt that was
+asked for beside the one it is drawing with, and re-derives the second from the first whenever the frame
+moves. Without that the rule is one-way and quietly expensive: zooming out tilts the view down, zooming back
+in leaves it there, and a flight's own climb costs the operator their viewing angle for good. A drag still
+measures from what is on SCREEN rather than from the older request, so dragging up out of a clamped view
+fights the bound immediately instead of running through invisible slack.
+
+**Owed by the next field run:** the flyTo duration against the time a destination district actually needs to
+stream (the desk can state the rule and not the milliseconds), and the eye verdict on the clamp at city
+height — the rule says the frame stays inside the ring, and only a screen says whether that is also a view a
+dispatcher wants to work in.
+
 ### 03 — Getting somewhere
 
 Four capabilities, one step because they share a mechanism (a target → a camera pose):

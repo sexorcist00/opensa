@@ -415,6 +415,32 @@ camera path that ignores the anchor produces an EMPTY WORLD ON CAMERA, which no 
 `[video]` ledger measures — the shot is perfectly framed, perfectly smooth, and shows nothing. It is the
 failure mode plan 094 exists to make impossible and the reason this is a restriction rather than a note.
 
+## A map camera's FRAME may not reach past the world around its focus, however the streaming follows it
+
+The neighbouring rule above is about a camera the streaming does not follow. The dispatch console is the
+other case and it is not exempt: there the ring **does** follow the camera (`world.follow(state.target)` in
+`apps/dispatch/src/world/boot.ts`), and the failure survives anyway — because a ring is a radius around the
+FOCUS and a frame is a shape that grows with zoom and tilt. Tilt shallow enough, or zoom out far enough, and
+the top of the picture lands outside the ring while the focus sits comfortably in the middle of it.
+
+The rule: **a map camera's bounds are derived from how much world there is around the focus, and re-taken
+every time the frame moves** — not written as constants. The console's two bounds (201/7-02,
+`map/map-camera.ts`):
+
+- the widest view is `reach / tan(fovY/2)` of distance, because at the top-down limit the frame's half-span
+  IS `distance × tan(fovY/2)`;
+- the shallowest tilt is the one whose top edge lands exactly `reach` from the focus — solved per frame,
+  since it is a function of the distance the wheel just changed as much as of the tilt itself.
+
+`reach` is the world's number, not the camera's: the LOD ring for a streamed world, its own extent for the
+synthetic demo, nothing at all for plan mode (which draws no world).
+
+**SILENT, and it looks like a content bug rather than a camera one.** Nothing throws, no counter moves: the
+cells beyond the ring were never requested, so the map simply ends in mid-air and reads as a broken pak or a
+half-built district. The old constants (`PITCH_MIN = -0.35`, `MAX_DISTANCE = 7000` against a 2200 ring) let
+exactly that be reached with one drag. **Caught since 2026-08-22** by `map-camera.test.ts` for the two
+bounds; nothing catches a NEW surface that lifts a camera over a streamed world and writes its own limits.
+
 ## A path's per-vertex speeds belong to the SUBJECT that travels it, not to the builder's default
 
 `walkRoute` writes a target speed at every vertex from its `cruiseSpeed`, and those numbers are not decoration:

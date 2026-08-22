@@ -13,13 +13,15 @@
 
 import type { GtaGround } from '../map/coords';
 import type { Operations, Selection } from '../ops/types';
-import type { BootOptions, DispatchHandle } from './boot';
+import type { BootOptions, DispatchHandle, ZoomLevel } from './boot';
 
 import { gtaToEngine } from '../map/coords';
 import { bindGestures } from '../map/gestures';
 import { groundPoint, MAP_YAW, MapCamera, type MapProjection } from '../map/map-camera';
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
+import { zoomSpan } from './boot';
+import { NO_DISTRICTS } from './zones';
 
 /** Opening view. Higher than the 3D mode's: with no buildings to give scale, more ground reads better. */
 const OPENING = {
@@ -98,12 +100,16 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
       return;
     }
     const now = performance.now();
-    frames.push(now - previous);
+    const dt = now - previous;
+    frames.push(dt);
     previous = now;
     if (frames.length > 60) {
       frames.shift();
     }
     const ops = options.ops();
+    // Plan mode's zoom keys fly like the 3D mode's, so its loop samples the flight too — one nobody
+    // advances is a camera frozen at take-off until the next input cancels it.
+    camera.advance(dt);
     const size = { height: overlay.clientHeight, width: overlay.clientWidth };
     const state = camera.state(size.width / Math.max(1, size.height));
     projector.update(state, size.width, size.height);
@@ -150,6 +156,15 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     },
     setProjection(projection: MapProjection): void {
       camera.setProjection(projection);
+    },
+    setZoomLevel(level: ZoomLevel): void {
+      // Plan mode has no world to measure: no pak, no ring, and no baked districts. So "everything there
+      // is" is the widest view the camera's own bounds allow, and the middle level falls back to the
+      // geometric mean the same way it does on a pak with no zone table.
+      camera.flyTo(
+        camera.positionGta(),
+        zoomSpan(level, camera.positionGta(), { districts: NO_DISTRICTS, reach: camera.maxSpan() / 2 }),
+      );
     },
   };
 }

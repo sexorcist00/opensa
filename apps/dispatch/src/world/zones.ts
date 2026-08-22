@@ -26,6 +26,13 @@ import type { GtaGround } from '../map/coords';
 
 /** Answers "what is this place called", or null everywhere when the pak carries no districts. */
 export interface DistrictLookup {
+  /**
+   * The BOX of the most specific district containing a point, GTA min/max — what the district zoom level
+   * frames (201/7-02). The same lookup as {@link nameAt} and deliberately a second method rather than a
+   * richer return: `nameAt` is called on every pick and every readout, and a box it does not need is a box
+   * it should not allocate.
+   */
+  boxAt(at: GtaGround): null | { readonly max: readonly [number, number]; readonly min: readonly [number, number] };
   /** How many boxes were loaded — 0 means every lookup answers null, and the caller should say so once. */
   readonly count: number;
   /** The most specific district containing a GTA ground point, or null. */
@@ -41,7 +48,7 @@ interface District {
 }
 
 /** An empty lookup — what a pak with no districts gets, so no caller has to null-check the loader. */
-export const NO_DISTRICTS: DistrictLookup = { count: 0, nameAt: () => null };
+export const NO_DISTRICTS: DistrictLookup = { boxAt: () => null, count: 0, nameAt: () => null };
 
 /**
  * Load the baked district table from beside the pak. Never throws: a missing or malformed file is a world
@@ -68,6 +75,11 @@ export async function loadDistricts(
   }));
 
   return {
+    boxAt: (at) => {
+      const zone = zoneAt(zones, at[0], at[1]);
+
+      return zone === null ? null : { max: [zone.max[0], zone.max[1]], min: [zone.min[0], zone.min[1]] };
+    },
     count: zones.length,
     nameAt: (at) => zoneAt(zones, at[0], at[1])?.name ?? null,
   };

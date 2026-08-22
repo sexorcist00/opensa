@@ -168,3 +168,130 @@ describe('MapCamera projection', () => {
     });
   });
 });
+
+describe('MapCamera bounds against the world', () => {
+  /** The console's default LOD ring: what the streamer fills around the focus. */
+  const REACH = 2200;
+
+  describe('negative cases', () => {
+    it('does not let the frame reach past the world there is: a shallow tilt is forced down', () => {
+      const unbounded = new MapCamera(OPENING);
+      const bounded = new MapCamera(OPENING);
+      bounded.setStreamedReach(REACH);
+
+      unbounded.applyPose({ ...OPENING, pitch: -0.6 });
+      bounded.applyPose({ ...OPENING, pitch: -0.6 });
+
+      // Same request, and the world is what says no: the top of a −0.6 rad frame lands thousands of units
+      // outside the ring, over ground nobody loaded — which renders EMPTY rather than failing.
+      expect(unbounded.pose().pitch).toBeCloseTo(-0.6, 6);
+      expect(bounded.pose().pitch).toBeLessThan(-0.6);
+    });
+
+    it('does not zoom out past the ring, however far the wheel is turned', () => {
+      const camera = new MapCamera(OPENING);
+      camera.setStreamedReach(REACH);
+      camera.zoomBy(1000);
+
+      // At the top-down limit the frame's half-span IS the distance × tan(fov/2), so a view wider than the
+      // ring is one whose edges are outside the world at any tilt.
+      expect(camera.span()).toBeLessThanOrEqual(REACH * 2 + 1);
+    });
+
+    it('does not keep flying once the operator grabs the map', () => {
+      const camera = new MapCamera(OPENING);
+      camera.flyTo([2600, -1700]);
+      camera.advance(100);
+      camera.pan([0.1, 0]);
+
+      expect(camera.flying()).toBe(false);
+      const held = camera.positionGta();
+      camera.advance(5000);
+
+      expect(camera.positionGta()[0]).toBeCloseTo(held[0], 6);
+      expect(camera.positionGta()[1]).toBeCloseTo(held[1], 6);
+    });
+
+    it('does not tighten anything when nothing is streamed, which is the demo and plan mode', () => {
+      const camera = new MapCamera(OPENING);
+      camera.applyPose({ ...OPENING, pitch: -0.6 });
+
+      expect(camera.pose().pitch).toBeCloseTo(-0.6, 6);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('re-takes the tilt bound when the ZOOM moves, not only when the tilt does', () => {
+      const camera = new MapCamera({ ...OPENING, height: 200, pitch: -0.5 });
+      camera.setStreamedReach(REACH);
+      const close = camera.pose().pitch;
+      // Widen the view a long way: the same tilt now reaches further, so the bound has to move with it.
+      camera.zoomBy(8);
+
+      expect(camera.pose().pitch).toBeLessThan(close);
+    });
+
+    it('frames the span it is given, and reports the span it is framing', () => {
+      const camera = new MapCamera(OPENING);
+      camera.frameSpan(1000);
+
+      expect(camera.span()).toBeCloseTo(1000, 3);
+    });
+
+    it('lands a flight exactly on its destination and then stops being a flight', () => {
+      const camera = new MapCamera(OPENING);
+      camera.setStreamedReach(REACH);
+      camera.flyTo([2400, -1700], 400);
+
+      expect(camera.flying()).toBe(true);
+      for (let step = 0; step < 400 && camera.flying(); step += 1) {
+        camera.advance(16.7);
+      }
+
+      expect(camera.flying()).toBe(false);
+      expect(camera.positionGta()[0]).toBeCloseTo(2400, 3);
+      expect(camera.positionGta()[1]).toBeCloseTo(-1700, 3);
+      expect(camera.span()).toBeCloseTo(400, 3);
+    });
+
+    it('gives the tilt back when a long flight comes down, instead of leaving the view flat', () => {
+      const camera = new MapCamera(OPENING);
+      camera.setStreamedReach(REACH);
+      const before = camera.pose().pitch;
+      camera.flyTo([5200, -2600], camera.span());
+      let steepest = before;
+      for (let step = 0; step < 600 && camera.flying(); step += 1) {
+        camera.advance(16.7);
+        steepest = Math.min(steepest, camera.pose().pitch);
+      }
+
+      // The arc widens the view, so somewhere over the trip the world bound tilted it down — that is the
+      // bound working, and it is the half that must not be permanent.
+      expect(steepest).toBeLessThan(before);
+      expect(camera.pose().pitch).toBeCloseTo(before, 6);
+    });
+
+    it('gives the tilt back when the wheel comes back in, so a zoom round trip costs nothing', () => {
+      const camera = new MapCamera(OPENING);
+      camera.setStreamedReach(REACH);
+      const before = camera.pose().pitch;
+      camera.zoomBy(6);
+
+      expect(camera.pose().pitch).toBeLessThan(before);
+
+      camera.zoomBy(1 / 6);
+
+      expect(camera.pose().pitch).toBeCloseTo(before, 6);
+    });
+
+    it('keeps the tilt and the heading it had while it flies — a flight moves the view, not the rig', () => {
+      const camera = new MapCamera(OPENING);
+      const before = camera.pose();
+      camera.flyTo([2400, -1700], camera.span());
+      camera.advance(200);
+
+      expect(camera.pose().yaw).toBeCloseTo(before.yaw, 6);
+      expect(camera.pose().pitch).toBeCloseTo(before.pitch, 6);
+    });
+  });
+});

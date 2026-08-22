@@ -86,6 +86,13 @@ reading map: what each one answers, so the survey is not re-derived.
 - <https://deck.gl/docs/developer-guide/base-maps/using-with-maplibre> — **deck.gl**: the layer model over a
   base map, and interleaved rendering into an existing context. The pattern for data layers restyled at
   runtime over a world whose look is baked.
+- <https://www.win.tue.nl/~vanwijk/zoompan.pdf> — **Van Wijk & Nuij, _Smooth and efficient zooming and
+  panning_ (InfoVis 2003)**: the optimal path between two views when the cost is measured in SCREENFULS
+  rather than metres — the camera pulls up, crosses, settles, and the DURATION falls out of the path instead
+  of being a constant somebody liked. MapLibre's `flyTo` is this paper (its `curve` is the paper's ρ, its
+  `speed` the screenfuls per second), and so is
+  [201/7-02](./plans/201-dispatch-console/7-the-operator-map/readme.md)'s (`apps/dispatch/src/map/fly.ts`).
+  Its ρ = 1.42 is not fitted by us: it is the value the paper's own user study settled on.
 - <https://github.com/giro3d-org/Giro3D> — **Giro3D** (successor of iTowns, IGN/Oslandia, three.js): a
   geospatial scene with operator tools — measurement, annotation, cross-sections, elevation profiles. The
   closest existing thing to what [201/7](./plans/201-dispatch-console/7-the-operator-map/readme.md) needs.

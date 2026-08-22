@@ -24,7 +24,7 @@
  */
 
 export type { GtaGround } from './map/coords';
-export type { CursorPick, MapPose } from './map/map-camera';
+export type { CursorPick, MapPose, MapProjection } from './map/map-camera';
 export { MAP_YAW, MapCamera } from './map/map-camera';
 export type {
   Incident,
@@ -37,6 +37,6 @@ export type {
   UnitStatus,
 } from './ops/types';
 
-export type { BootOptions, DispatchHandle, DispatchReadout, MapClick } from './world/boot';
+export type { BootOptions, DispatchHandle, DispatchReadout, MapClick, ZoomLevel } from './world/boot';
 export { bootDispatch, dispatchParams } from './world/boot';
 export { bootPlanMode } from './world/plan-mode';

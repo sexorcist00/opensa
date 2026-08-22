@@ -150,6 +150,7 @@ has an opaque origin and cannot own its URL — a `content://` or `file://` host
 | `src=` | pak base to stream (default `build/original`) |
 | `hour=` | opening hour for the environment driver |
 | `at=x,y` · `h=` · `pitch=` · `yaw=` | opening camera pose (GTA ground point, height, degrees) |
+| **keys `1` / `2` / `3`** | **201/7-02**: not parameters — the three zoom levels (city / district / block), which fly rather than jump. `at`/`h`/`pitch` are still the opening pose, but **`h` and `pitch` are bounded by how much world there is around the focus**: a tilt whose top edge would land outside the streamed ring is tilted down, and a height that would frame past it is capped. The height asked for is kept; the tilt is what moves |
 | **`proj=ortho`** | **201/7-01**: open in the plan view — an orthographic projection instead of the default perspective one. The `PLAN` button in the top bar is the same switch, and the pose in the readout says which is live. The box is sized to frame exactly what perspective frames at the focus plane, so switching is a change of projection and not a jump |
 | `hd=` · `lod=` | streaming ring radii |
 | `fog=1` · `fogscale=` | restore the game's own fog instead of pushing the cut to the far plane |

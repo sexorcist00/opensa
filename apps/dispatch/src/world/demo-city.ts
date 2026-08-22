@@ -24,6 +24,13 @@ const BLOCKS_PER_SIDE = 6;
 const CELL_X = { from: 1, to: 12 } as const;
 const CELL_Z = { from: 2, to: 13 } as const;
 
+/**
+ * How far from its centre the demo world actually has content, world units — the same question a streamed
+ * world answers with its LOD ring, and the number the camera's bounds are derived from (201/7-02). The demo
+ * streams nothing, but it still ENDS, and a map camera that frames past the end shows the same emptiness.
+ */
+export const DEMO_REACH = ((CELL_X.to - CELL_X.from + 1) * CELL_SIZE) / 2;
+
 /** Build the demo city. Returns how many draws were recorded, for the boot log. */
 export function buildDemoCity(engine: Engine): number {
   engine.textures.load(0, syntheticTextureArray());

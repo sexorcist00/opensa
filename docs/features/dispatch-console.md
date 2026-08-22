@@ -79,6 +79,34 @@ BETTER picture and is kept deliberately: a truly parallel view has one view dire
 orthographic sky is a single flat colour. Branching the shader on the projection is not on the table —
 [one engine, one frame](../restrictions/architecture.md).
 
+## Where the camera may go
+
+**201/7-02, since 2026-08-22.** The map camera's two bounds are **derived from how much world there is
+around the focus**, and re-taken whenever the frame moves:
+
+- **it cannot tilt so shallow that the top of the picture leaves the world** — the bound is the tilt whose
+  top edge lands exactly at the streamed reach, solved per frame rather than written down;
+- **it cannot zoom out past what the reach covers**, because at the top-down limit the frame's half-span is
+  the view distance times `tan(fov/2)`.
+
+`reach` is the world's number: the LOD ring for a streamed pak, its own extent for the synthetic demo, and
+nothing at all for plan mode, which draws no world and keeps flat bounds. What this replaced was a pitch
+floor of `-0.35 rad` and a zoom cap of `7000` units against a `2200`-unit ring — one drag and one wheel turn
+away from a map that ends in mid-air ([the restriction](../restrictions/architecture.md)).
+
+**Three zoom levels, on keys `1` / `2` / `3`** — widest to tightest, and each is a thing the world is made of
+rather than a number: `city` is everything around the focus, `district` is the baked zone box under the view,
+`block` is one render cell. A pak with no zone table falls back to the geometric mean of the other two, since
+zoom levels are logarithmic.
+
+**Getting there is a flight, not a jump.** `locate` and the level keys fly along Van Wijk & Nuij's path
+([links](../links.md)) — the same one MapLibre's `flyTo` follows: the camera pulls up, crosses, and settles,
+and the duration is the path length in screenfuls over a speed in screenfuls per second, so a longer trip
+takes longer without anyone choosing a number. The arc is also what keeps the flight honest about streaming:
+a long trip crosses at a zoom where resident far-LOD covers the ground, the destination streams as the focus
+approaches, and the same zoom cap clamps the arc, so the picture never outruns the ring. **Any input cancels
+a flight** — the operator's hand always wins.
+
 ## What it is made of
 
 | Concern                | Where                                    | Notes                                                                                       |
@@ -86,7 +114,8 @@ orthographic sky is a single flat colour. Branching the shader on the projection
 | Engine host, frame loop | `src/world/boot.ts`                     | boots the engine, picks a world, owns input; React never enters the loop                     |
 | World (real)           | `src/world/pak-source.ts` + `water.ts`   | `?src=` → `setupStreaming` + the baked `water.bin`                                           |
 | World (demo)           | `src/world/demo-city.ts`                 | `?demo=1` — a synthetic block grid, no pak needed; reuses `@opensa/engine-lab/synthetic`      |
-| Camera                 | `src/map/map-camera.ts`                  | ground-focus map rig over `@opensa/web/ui/camera/*` — pan / orbit / dolly, north-up default, **perspective or plan view** |
+| Camera                 | `src/map/map-camera.ts`                  | ground-focus map rig over `@opensa/web/ui/camera/*` — pan / orbit / dolly, north-up default, **perspective or plan view**, bounds derived from the world's reach |
+| Camera flights         | `src/map/fly.ts`                         | Van Wijk & Nuij's zoom-and-pan path — pure, so the host samples it from its own loop           |
 | 3D symbology           | `src/map/beacons.ts`                     | through-depth `createDebugLines` pillars, routes, selection ring                             |
 | 2D symbology           | `src/map/overlay-2d.ts`                  | icons, chips, leader lines, scale bar — on a plain 2D canvas, and it owns hit-testing        |
 | World→screen           | `src/map/projection.ts`                  | `mat4LookAt` × the frame's own projection (perspective or orthographic), rebuilt per frame    |

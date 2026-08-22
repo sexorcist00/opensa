@@ -1,6 +1,7 @@
 import type { StreamStats } from '@opensa/engine';
 import type { TimecycSource } from '@opensa/renderware';
 
+import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
 import { Engine, FrameSpans, frameSpans, pakTraffic, setupStreaming } from '@opensa/engine';
 import {
   createEngineEnvironmentDriver,
@@ -27,7 +28,7 @@ import { bindGestures } from '../map/gestures';
 import { CAMERA_FAR, groundPoint, MAP_YAW, MapCamera } from '../map/map-camera';
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
-import { buildDemoCity } from './demo-city';
+import { buildDemoCity, DEMO_REACH } from './demo-city';
 import { DISTRICTS } from './districts';
 import { createErrorLog } from './error-log';
 import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
@@ -70,6 +71,8 @@ export interface DispatchHandle {
   setHour(hour: number): void;
   /** Perspective or the plan view (201/7-01). The pose in the readout says which is live. */
   setProjection(projection: MapProjection): void;
+  /** Fly to one of the three zoom levels over the point already under the view (201/7-02). */
+  setZoomLevel(level: ZoomLevel): void;
 }
 
 export interface DispatchReadout {
@@ -105,8 +108,13 @@ const OPENING_POSE: MapPose = {
   projection: 'perspective',
   yaw: MAP_YAW,
 };
-/** Eye height "locate" drops to. */
-const LOCATE_HEIGHT = 260;
+/**
+ * What "locate" frames: one render cell of ground around the thing being looked at, which is the block
+ * level (see {@link zoomSpan}) and the tightest of the three. A unit or a call is a point, so the question
+ * is how much of its surroundings an operator needs to place it, and one cell is the smallest unit of world
+ * this pak is built out of.
+ */
+const LOCATE_SPAN = CELL_SIZE;
 /** Readout pushes per second. The loop must not re-render React. */
 const READOUT_HZ = 4;
 /** A world with nothing to stream — the demo's synthetic grid is resident from the start. */
@@ -143,6 +151,9 @@ interface DispatchWorld {
   gameDir: string;
   /** What the status bar shows as the world's provenance. */
   label: string;
+  /** How far from the view's focus this world actually has content — the LOD ring for a streamed world,
+   *  its own extent for the demo. The camera derives both of its bounds from it (201/7-02). */
+  readonly reach: number;
 }
 
 export async function bootDispatch(options: BootOptions): Promise<DispatchHandle> {
@@ -187,6 +198,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // Installed before anything else this boot does, because the failures worth catching happen during it.
   const errorLog = createErrorLog();
   const camera = new MapCamera(poseFromQuery(params));
+  // The bounds are the world's, not the camera's: how far it may zoom out and how shallow it may tilt both
+  // come from how much world there is around the focus (201/7-02).
+  camera.setStreamedReach(world.reach);
   const beacons = new Beacons(engine);
   const symbology = new SymbologyLayer();
   const projector = new ScreenProjector();
@@ -209,7 +223,15 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     };
   };
 
-  const unbind = bindInput({ camera, canvas, districts: world.districts, engine, options, symbology });
+  const unbind = bindInput({
+    camera,
+    canvas,
+    districts: world.districts,
+    engine,
+    onZoomLevel: (level) => camera.flyTo(camera.positionGta(), zoomSpan(level, camera.positionGta(), world)),
+    options,
+    symbology,
+  });
   // 201/1-01. Off unless asked for: draining the span recorder is cheap, but a mode that measures by default
   // is a mode nobody can trust to have measured nothing.
   const inventory = params.get('inventory') === '1' ? new FrameInventory() : null;
@@ -242,6 +264,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
 
     const ops = options.ops();
     const aspect = canvas.width / Math.max(1, canvas.height);
+    // Before the state is read, so the streamer follows where the flight has REACHED this frame rather
+    // than where it was last frame.
+    camera.advance(dt);
     const state = camera.state(aspect);
     time('board', () => beacons.update(ops, options.selection(), options.trails?.()));
     // Rings follow the ground point the view is over, never the eye: a camera a kilometre up sits outside
@@ -327,11 +352,14 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       });
     },
     locate(at: GtaGround): void {
-      camera.zoomTo(at, LOCATE_HEIGHT);
+      camera.flyTo(at, LOCATE_SPAN);
     },
     setHour: applyHour,
     setProjection(projection: MapProjection): void {
       camera.setProjection(projection);
+    },
+    setZoomLevel(level: ZoomLevel): void {
+      camera.flyTo(camera.positionGta(), zoomSpan(level, camera.positionGta(), world));
     },
   };
 }
@@ -359,10 +387,11 @@ function bindInput(input: {
   canvas: HTMLCanvasElement;
   districts: DistrictLookup;
   engine: Engine;
+  onZoomLevel: (level: ZoomLevel) => void;
   options: BootOptions;
   symbology: SymbologyLayer;
 }): () => void {
-  const { camera, canvas, districts, engine, options, symbology } = input;
+  const { camera, canvas, districts, engine, onZoomLevel, options, symbology } = input;
 
   /** The world ray under a canvas-relative CSS position. */
   const rayAt = (x: number, y: number): CursorPick => {
@@ -372,7 +401,7 @@ function bindInput(input: {
     return camera.rayAt(ndc, rect.width / Math.max(1, rect.height));
   };
 
-  return bindGestures(canvas, {
+  const unbindGestures = bindGestures(canvas, {
     dolly: (notch) => camera.dolly(notch),
     longPress: (x, y) => {
       const ground = groundPoint(rayAt(x, y));
@@ -406,6 +435,63 @@ function bindInput(input: {
     },
     zoomBy: (factor) => camera.zoomBy(factor),
   });
+
+  // The zoom-level keys (201/7-02). The console's full key map and its remapping are 7/06's step; these
+  // three are the half of THIS step that a level rule is useless without, and they live here rather than in
+  // the React tree because the map is not React's and a key must work wherever the focus happens to be.
+  const onKeyDown = (event: KeyboardEvent): void => {
+    const level = LEVEL_KEYS[event.key];
+    if (level === undefined || event.altKey || event.ctrlKey || event.metaKey || isTyping(event.target)) {
+      return;
+    }
+    event.preventDefault();
+    onZoomLevel(level);
+  };
+  window.addEventListener('keydown', onKeyDown);
+
+  return () => {
+    window.removeEventListener('keydown', onKeyDown);
+    unbindGestures();
+  };
+}
+
+/** Widest to tightest, left to right on the row — the order the levels themselves are in. */
+const LEVEL_KEYS: Readonly<Record<string, undefined | ZoomLevel>> = { 1: 'city', 2: 'district', 3: 'block' };
+
+/**
+ * The three zoom levels an operator jumps between (201/7-02), and where each one's SPAN comes from.
+ *
+ * None of the three is a number somebody liked: each is a thing the world is actually made of, so the same
+ * key means the same thing on a total conversion that has never heard of Los Santos.
+ *
+ * | Level | The span it frames | Read from |
+ * | --- | --- | --- |
+ * | `block` | one render cell | `CELL_SIZE` — the grid the pak is welded and streamed on |
+ * | `district` | the named district under the view | the baked zone box (`districts.json`, 201/5-03) |
+ * | `city` | everything the world has around the focus | the world's own reach: the LOD ring, or the demo's extent |
+ *
+ * **The fallback is derived too.** A world with no zone table has no district box to frame, so the middle
+ * level becomes the geometric mean of the other two — zoom levels are logarithmic by nature, so the midpoint
+ * of a zoom range is the geometric one, and a level that is missing should still land between its
+ * neighbours rather than on top of one.
+ */
+export type ZoomLevel = 'block' | 'city' | 'district';
+
+export function zoomSpan(
+  level: ZoomLevel,
+  at: GtaGround,
+  world: { readonly districts: DistrictLookup; readonly reach: number },
+): number {
+  const city = world.reach * 2;
+  if (level === 'city') {
+    return city;
+  }
+  if (level === 'block') {
+    return CELL_SIZE;
+  }
+  const box = world.districts.boxAt(at);
+
+  return box === null ? Math.sqrt(CELL_SIZE * city) : Math.max(box.max[0] - box.min[0], box.max[1] - box.min[1]);
 }
 
 /** The game's own timecyc when the build ships one, so the map is lit as the game lights it. */
@@ -435,7 +521,25 @@ function demoWorld(engine: Engine): DispatchWorld {
 
   // A synthetic block grid is nowhere, so it has no district names and must not pretend to: the console
   // falls back to its landmark table, which is what a demo of stock Los Santos wants anyway.
-  return { districts: NO_DISTRICTS, follow: () => IDLE_STREAM, gameDir: '', label: 'demo (synthetic)' };
+  return {
+    districts: NO_DISTRICTS,
+    follow: () => IDLE_STREAM,
+    gameDir: '',
+    label: 'demo (synthetic)',
+    reach: DEMO_REACH,
+  };
+}
+
+/** A key pressed into a field is text, not a command — the console has a time slider and checkboxes. */
+function isTyping(target: EventTarget | null): boolean {
+  const element = target as null | { isContentEditable?: boolean; tagName?: string };
+
+  return (
+    element?.isContentEditable === true ||
+    element?.tagName === 'INPUT' ||
+    element?.tagName === 'SELECT' ||
+    element?.tagName === 'TEXTAREA'
+  );
 }
 
 function numberParam(params: URLSearchParams, name: string, fallback: number): number {
@@ -511,5 +615,6 @@ async function streamedWorld(engine: Engine, params: URLSearchParams): Promise<D
     follow: (focus) => setup.driver.update(focus),
     gameDir: source.gameDir,
     label: setup.buildTime ?? 'unknown',
+    reach: numberParam(params, 'lod', DEFAULT_LOD_RADIUS),
   };
 }
