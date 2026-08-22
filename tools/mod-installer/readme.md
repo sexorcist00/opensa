@@ -74,6 +74,14 @@ it still costs a slot. Each host keeps 900 rows in reserve for the tree LODs and
 same files later. `66. Urbanize only MAP` (13 files, 16 172 rows) folds to zero slots this way; plan:
 [`docs/plans/013-slot-fold-across-hosts.md`](./docs/plans/013-slot-fold-across-hosts.md).
 
+Because that fold picks a host by CAPACITY and never by position, the mod's `IDE` refs are **spliced into
+`gta.dat` before its first `IPL` line** rather than appended (the `IPL` refs still append): the game reads the
+file top to bottom, so a row folded into `LAs.ipl` at line 93 would otherwise load against a definition
+waiting at line 158, and be refused. 137 rows of the 2026-08-21 `sa` build did exactly that, unseen because
+modloader supplies the same IDEs itself. The built tree is guarded (`assertDefinitionOrder`) and any tree can
+be checked with `scripts/debug/dat-order-check.ts`; plan
+[`docs/plans/016-mod-ides-before-the-first-ipl.md`](./docs/plans/016-mod-ides-before-the-first-ipl.md).
+
 Every `.txd` a mod brings in — an archive entry, a Modloader-collected asset, a loose overlay, or a texture
 folder our PNG encoder turned into DXT — is checked for **DXT rasters whose side is not a multiple of 4**: the
 real game refuses such a raster and the WHOLE dictionary with it. The installer stays byte-faithful (nothing

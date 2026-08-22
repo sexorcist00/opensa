@@ -26,6 +26,7 @@ import { buildSaLods } from '@opensa/sa-lod-generator/build';
 import { buildProcobjLods } from '@opensa/sa-procobj-placement/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { openLazyVer2, writeArchiveManifest } from '@opensa/tool-kit/archive/layout';
+import { checkDefinitionOrder, formatLateDefinition } from '@opensa/tool-kit/dat-order';
 import { countImgArchives } from '@opensa/tool-kit/game-dir';
 import { isLayeredTree } from '@opensa/tool-kit/layers';
 import { checkLodLinks, formatLodLink } from '@opensa/tool-kit/lod-links';
@@ -902,6 +903,8 @@ async function buildSaTarget(step: {
   // Every stage that edited an `inst` section has now had its turn, so this is the only place the LOD links
   // can be judged whole — see {@link assertLodLinks}.
   assertLodLinks(sa);
+  // …and that nothing the tree places is defined further down `gta.dat` than the row placing it.
+  assertDefinitionOrder(sa);
   // …and the same for what `gta.dat` claims the tree holds: a line pointing at nothing is a crash in the
   // data load, and the field only ever sees it as an access violation in ntdll.
   assertGtaDatFiles(sa);
@@ -1520,6 +1523,46 @@ export function assertLodLinks(gameDir: string): void {
       "that point past it, in the text IPL or in the area's binary streams. Diagnose with " +
       '`npx tsx scripts/debug/lod-link-check.ts <game-dir>` (stock reports zero) and see ' +
       'docs/open-issues/ipl-row-removal-breaks-lod-links.md.',
+  );
+}
+
+/** How many late definitions the error names before it stops listing — the rest are counted. */
+const DAT_ORDER_REPORT_LIMIT = 12;
+
+/**
+ * Fail the build when a placed model is defined further down `gta.dat` than the `inst` row placing it.
+ *
+ * `CFileLoader::LoadLevel` reads the file top to bottom, so a definition listed later does not exist yet for a
+ * row read earlier and the game refuses the row outright — with `modloader.asi` off, which is the only
+ * configuration that reports it (modloader supplies the same mod IDEs itself, early, and hides the fault). The
+ * `sa` build shipped 137 such rows for months: the installer appended a mod's IDE refs at the end while the IPL
+ * slot fold moved that mod's rows into stock hosts chosen by CAPACITY, 55+ lines earlier.
+ *
+ * Every other check we have asks whether a placed id is defined ANYWHERE — `dangling-models`, `assertLodLinks`,
+ * the IPL census — and all of them pass on such a tree. This one compares two POSITIONS. Stock reports zero over
+ * its 9 268 rows, so any finding is ours. `docs/open-issues/mod-inst-rows-folded-before-their-ide.md`.
+ */
+export function assertDefinitionOrder(gameDir: string): void {
+  if (!existsSync(join(gameDir, 'data', 'gta.dat'))) {
+    console.warn(`  ! sa definition-order check SKIPPED — no data/gta.dat under ${gameDir}`);
+
+    return;
+  }
+  const report = checkDefinitionOrder(gameDir);
+  if (report.late.length === 0) {
+    log(`definition order: ${report.checked} inst rows, every model defined before the row placing it`);
+
+    return;
+  }
+  const rows = report.late.reduce((sum, row) => sum + row.count, 0);
+  const listed = report.late.slice(0, DAT_ORDER_REPORT_LIMIT).map((row) => `  ${formatLateDefinition(row)}`);
+  const rest = report.late.length - listed.length;
+  throw new Error(
+    `${rows} inst row(s) of ${report.checked} place a model whose IDE is listed LATER in gta.dat ` +
+      `(${report.late.length} ids):\n${listed.join('\n')}${rest > 0 ? `\n  … and ${rest} more` : ''}\n` +
+      'The game reads gta.dat top to bottom, so those rows load against an undefined id (visible only with ' +
+      'modloader.asi off). Mod IDE refs must be SPLICED before the first IPL line — see mergeGtaDat and ' +
+      'docs/open-issues/mod-inst-rows-folded-before-their-ide.md.',
   );
 }
 

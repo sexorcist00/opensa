@@ -1,7 +1,9 @@
 # A folded mod `inst` row is READ before the mod IDE that defines its id
 
-**Status: open 2026-08-18, root cause pinned on the desk, no fix applied (found while bisecting a boot crash,
-and it is NOT that crash).** The `sa` build produces a `gta.dat` whose stock IPL block places model ids that
+**Status: 🟡 FIX BUILT 2026-08-22 (`mod-installer` [plan 016](../../tools/mod-installer/docs/plans/016-mod-ides-before-the-first-ipl.md)),
+verified offline, NOT yet verified in a build or in the field.** Opened 2026-08-18 with the root cause pinned
+(found while bisecting a boot crash, and it is NOT that crash). It stays here until the next `sa` build prints
+the guard's zero and a boot with `modloader.asi` OFF is clean — that is the only configuration that reports it. The `sa` build produces a `gta.dat` whose stock IPL block places model ids that
 only a mod IDE line further down defines. The real game reads `gta.dat` top to bottom, so those placements
 hit an undefined id. In the reference bottle **modloader hides it** — it supplies the same mod IDEs itself,
 early — which is why the build has shipped this way without a single report.
@@ -45,16 +47,27 @@ defined and streamable anywhere in the tree, `assertLodLinks` / `lod-link-check.
 `ipl-row-census.ts` counts rows and slots. All of them pass on this tree. The one thing that would have
 failed is a check that compares two positions in `gta.dat`.
 
-## The fix, when it is taken
+## What the tree really carried — measured 2026-08-22, no rebuild
 
-1. **Splice, do not append**: mod `IDE` lines belong BEFORE the first `IPL` line of `gta.dat` (SA has no
-   opinion about IDE order, and `registerImgArchives` already splices rather than appends, for the same class
-   of reason). Mod `IPL` lines can stay at the end.
-2. **Then guard it**: for every `inst` row of the built tree, the `IDE` that defines its id must appear
-   earlier in `gta.dat` than the `IPL` that places it — fail the build naming both files, the way
-   `assertLodLinks` and `assertCarmodsModels` fail. Without the guard the fold is free to reintroduce it the
-   next time a host is chosen differently.
-3. Re-check with modloader OFF, which is the only configuration that reports the fault.
+`scripts/debug/dat-order-check.ts` on `build/original/sa` (2026-08-21): **137 rows / 31 ids**, across `lae`
+(63), `las` (49), `lahills` (23) and `vegase` (2), from **six** mod IDEs — `reLIT.IDE` (17 ids), `lumos.IDE`
+(7), `churchlite.ide` (4), `barberpole.IDE`, `tobjmodel.IDE`, `Missing Smokes Fix.ide`. Worst is `exteriorlit`
+(7394) with 51 rows; the 12780 above is second with exactly the 39 recorded here. **0 ids are undefined
+anywhere**, so it is purely order. Stock: 0 findings over 9 268 rows.
+
+## The fix, taken 2026-08-22
+
+1. **Splice, do not append** ✅ — `mergeGtaDat` puts the mod `IDE` refs before the first `IPL` line; the `IPL`
+   refs still append. The splice point is the first `IPL`, not the top of the file, so mod IDEs still land
+   after every stock one and which definition wins a shared id is unchanged.
+2. **Then guard it** ✅ — `checkDefinitionOrder` (`@opensa/tool-kit/dat-order`) + `assertDefinitionOrder`,
+   failing the `sa` build beside `assertLodLinks` on the finished tree. Without it the fold is free to
+   reintroduce this the next time a host is chosen differently. Text IPLs only: a `<area>_streamN.ipl` streams
+   by distance, long after every `IDE` line has been read.
+3. **Re-check with modloader OFF** — still to do, and it is what closes this file.
+
+**Rehearsed offline instead of by a build**: the built tree's `data/` copied aside, its 12 mod IDE lines moved
+before the first `IPL` — exactly what the fixed merge emits — then re-checked: **137 → 0**.
 
 ## What this is NOT
 
