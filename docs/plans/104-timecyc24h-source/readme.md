@@ -337,9 +337,20 @@ Two things that verdict does and does not settle:
   on `lowClouds`, ~21 on `skyTop`/`skyBot` and on `Alpha1`/`Alpha2` in every one of the 504 rows. Nothing in
   our loader can take one column from one table and the rest from another, and nothing should.
 
-**Consequence the tree does not yet reflect, and the open question**: `game-src/original/data/timecyc_24h.dat`
-was deleted today, so the NEXT build resolves to `data/timecyc24h.dat` — arm C, the rejected one. Deciding
-what should win instead is the last item of this plan and it is his call; the plan does not act on it.
+**The verdict does NOT touch the support, and the two must not be confused.** This plan's deliverable is
+that a world can CARRY a `timecyc24h.dat` and that our engine reads it — the resolver, the order, the
+contract and the tests are unconditional and stay exactly as built. A mod author shipping that file in the
+`opensa` layer is supported, today and after this verdict. What he judged is the VALUES in one particular
+table, which is a content question about our own tree and nothing else. (I framed it as "what should win
+instead" when recording the verdict; that was wrong and is corrected here — a rejected table replaces
+nothing in the support.)
+
+**The content question that IS open, and it is his**: `game-src/original/data/timecyc_24h.dat` was deleted
+today and `timecyc-builder` no longer writes there, so with the opensa-layer mod installed the next build
+resolves to Dante's table. If our tree should ship a different 24h table, it needs one put somewhere the
+order will pick — a mod in the `opensa` layer, or a deliberate copy into `game-src` — and if it should ship
+none, the stock `timecyc.dat` is expanded on load and that is a complete, valid configuration. **The plan
+does not act on this and does not need to**: it is finished either way.
 
 ## Out of scope, deliberately
 

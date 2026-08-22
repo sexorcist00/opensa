@@ -70,6 +70,10 @@ of a build that will be replaced by the next one.
 h21, where they read 0 % against 43 % at the camera — the unfloored fog start is accepted and what is
 rejected is Dante's authored table.
 
+**Scope of that verdict**: it is about the VALUES in one table, not about the format. Reading a
+`timecyc24h.dat` is supported unconditionally (plan 104/01-03, `docs/contracts/mods.md` §2) and nothing in
+this A/B changes that — a mod shipping one in the `opensa` layer works whatever we think of Dante's numbers.
+
 ## The only cost number: boot parse
 
 `buildTimecyc(ensure24h(parseTimecyc(text)))`, 200 samples after 20 warm-ups, same machine, same session:
