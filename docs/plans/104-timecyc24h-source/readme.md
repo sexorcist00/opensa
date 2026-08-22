@@ -324,8 +324,22 @@ replaced by the recovered rule or carded.
   the zone remap rewrites a weather that has no variant for the region, so a FOGGY_SF forced in LS is
   SUNNY_LA before the first frame.
 
-**Still open — the only thing left in this plan**: his verdict on the pictures. The change is large at
-FOGGY_SF noon (the street beyond ~50 u is gone), it is authored, and it is his call whether it ships as is.
+**HIS VERDICT, 2026-08-22: arm C is rejected — "вариант Dante нам не подходит".** The five shots he named
+as the good ones are `A-floored-h12`, `A-floored-h21`, `B-unfloored-stock-h12`, `B-unfloored-stock-h21` and
+`probe3` (the same configuration as `B-…-h12`, a different frame). **No arm-C shot is in the list.**
+
+Two things that verdict does and does not settle:
+
+- **It settles the TABLE, not the code.** He named arm A and arm B shots side by side at both hours,
+  including h21 where they differ most (0 % vs 43 % at the camera) — so the unfloored fog start is accepted,
+  and what is rejected is Dante's authored table. The fix stays.
+- **It rejects the WHOLE Dante table, not only its fog.** The two tables also differ by a mean |Δ| of 73.9
+  on `lowClouds`, ~21 on `skyTop`/`skyBot` and on `Alpha1`/`Alpha2` in every one of the 504 rows. Nothing in
+  our loader can take one column from one table and the rest from another, and nothing should.
+
+**Consequence the tree does not yet reflect, and the open question**: `game-src/original/data/timecyc_24h.dat`
+was deleted today, so the NEXT build resolves to `data/timecyc24h.dat` — arm C, the rejected one. Deciding
+what should win instead is the last item of this plan and it is his call; the plan does not act on it.
 
 ## Out of scope, deliberately
 

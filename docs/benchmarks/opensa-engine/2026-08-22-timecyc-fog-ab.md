@@ -62,6 +62,14 @@ of a build that will be replaced by the next one.
   that, but it is a large change and it is the user's call.
 - Nothing else moved: `draws` 432 in both noon arms, `residency` 1412 MB, `grounded 1`, same pose.
 
+## Verdict (the user, 2026-08-22)
+
+**Arm C rejected** — *"вариант Dante нам не подходит"*. The shots he named as good: `A-floored-h12`,
+`A-floored-h21`, `B-unfloored-stock-h12`, `B-unfloored-stock-h21`, `probe3` (same configuration as
+`B-…-h12`). No arm-C shot among them. Since arm A and arm B are both in the list at BOTH hours — including
+h21, where they read 0 % against 43 % at the camera — the unfloored fog start is accepted and what is
+rejected is Dante's authored table.
+
 ## The only cost number: boot parse
 
 `buildTimecyc(ensure24h(parseTimecyc(text)))`, 200 samples after 20 warm-ups, same machine, same session:
