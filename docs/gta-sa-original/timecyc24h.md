@@ -48,8 +48,9 @@ Measured with our own parser over the `.dat` each plugin ships:
   (min −200). Dante's table does it on **243 of the 504 time-weather rows, down to −1 700**, across 13
   weathers — 11 of them for all 24 hours (both smog weathers, `CLOUDY_LA`, `CLOUDY_SF`, `RAINY_SF`,
   `FOGGY_SF`, `CLOUDY_COUNTRYSIDE`, `RAINY_COUNTRYSIDE`, `SANDSTORM_DESERT`, `UNDERWATER`). What a negative
-  start MEANS in the original is not recovered yet — see plan 104 step 04. Note the trap it sets for any
-  corruption scan: the value `−1000.00` appears in this column as DATA, and `−1000` is also our parser's
+  start MEANS is recovered in [timecyc-fog.md](timecyc-fog.md) — a haze already partly opaque at the camera
+  — and the field rejected his fog for OpenSA on 2026-08-22 while keeping every other column. Note the trap
+  it sets for any corruption scan: the value `−1000.00` appears in this column as DATA, and `−1000` is also our parser's
   int-read failure default.
 - **Dante's file fixes stock's corrupt line.** Stock's `RAINY_COUNTRYSIDE` 8PM keyframe is 49 tokens instead
   of 51 and fails 13 field reads; Dante's 552 rows fail none. That is what "Refixed" means in the mod name
