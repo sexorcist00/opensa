@@ -9,7 +9,7 @@ import {
 import { describeTimecycSource, resolveTimecycSourceAsync } from '@opensa/renderware';
 
 import type { GtaGround } from '../map/coords';
-import type { CursorPick, MapPose } from '../map/map-camera';
+import type { CursorPick, MapPose, MapProjection } from '../map/map-camera';
 import type { HistoryStats } from '../ops/history';
 /**
  * The dispatch host: boot the engine on a canvas, stream the city, run the frame loop, and translate pointer
@@ -68,6 +68,8 @@ export interface DispatchHandle {
   /** Frame a GTA point at a sensible working height — what "locate" does in the panels. */
   locate(at: GtaGround): void;
   setHour(hour: number): void;
+  /** Perspective or the plan view (201/7-01). The pose in the readout says which is live. */
+  setProjection(projection: MapProjection): void;
 }
 
 export interface DispatchReadout {
@@ -96,7 +98,13 @@ export type MapClick =
   | { readonly id: string; readonly kind: 'incident' | 'unit' };
 
 /** Opening view: high over central Los Santos, north up, steeply tilted so the city still reads as 3D. */
-const OPENING_POSE: MapPose = { at: [1700, -1500], height: 900, pitch: -1.15, yaw: MAP_YAW };
+const OPENING_POSE: MapPose = {
+  at: [1700, -1500],
+  height: 900,
+  pitch: -1.15,
+  projection: 'perspective',
+  yaw: MAP_YAW,
+};
 /** Eye height "locate" drops to. */
 const LOCATE_HEIGHT = 260;
 /** Readout pushes per second. The loop must not re-render React. */
@@ -300,7 +308,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         build: world.label,
         byCategory: engine.ledger(),
         bytes: { byKind: pakTraffic.report(), requests: pakTraffic.requests, totalBytes: pakTraffic.totalBytes },
-        camera: { at: pose.at, height: pose.height },
+        camera: { at: pose.at, height: pose.height, projection: pose.projection },
         device: engine.deviceReport,
         district: params.get('district') ?? UNNAMED_DISTRICT,
         errors: errorLog.entries(),
@@ -322,6 +330,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       camera.zoomTo(at, LOCATE_HEIGHT);
     },
     setHour: applyHour,
+    setProjection(projection: MapProjection): void {
+      camera.setProjection(projection);
+    },
   };
 }
 
@@ -448,6 +459,7 @@ function poseFromQuery(params: URLSearchParams): MapPose {
     at: at.length === 2 && at.every(Number.isFinite) ? [at[0], at[1]] : (district?.at ?? OPENING_POSE.at),
     height: numberParam(params, 'h', OPENING_POSE.height),
     pitch: (numberParam(params, 'pitch', (OPENING_POSE.pitch * 180) / Math.PI) * Math.PI) / 180,
+    projection: params.get('proj') === 'ortho' ? 'ortho' : OPENING_POSE.projection,
     yaw: (numberParam(params, 'yaw', (OPENING_POSE.yaw * 180) / Math.PI) * Math.PI) / 180,
   };
 }

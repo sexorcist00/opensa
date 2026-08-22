@@ -24,6 +24,32 @@ Watch two things the engine currently assumes are perspective: frustum culling, 
 **Owes:** culling correctness under an orthographic frustum (a cell wrongly culled is an empty screen, and
 the counters will still look healthy), and the frame cost against perspective at the same coverage.
 
+**DONE 2026-08-22 on the desk half; the frame cost is owed by a device run.** One field on the camera state
+(`CameraState.orthoHalfHeight`) and one matrix (`mat4OrthographicZO`) rather than a second camera — the view,
+the culling, every pass and the symbology are the same code, and the map camera carries the projection in its
+POSE so a shared or restored view opens as it was left. `?proj=ortho`, or the `PLAN` button in the top bar.
+
+What the step actually had to settle, none of which is the matrix:
+
+| Question | The answer taken, and why it is derived rather than picked |
+| --- | --- |
+| How big is the box? | `distance × tan(fov/2)` — it frames exactly what perspective frames AT THE FOCUS PLANE, so switching is a projection change and not a jump, and pan / dolly / pinch keep their meaning |
+| Where is the front plane? | as far in front of the focus as the far plane is behind it. An orthographic box has no apex, so the plane may sit ABOVE the camera — which is what stops a tower taller than the eye being sliced off at block zoom, and a perspective near plane cannot express it. Depth stays ≤ 24 km, which `depth32float` carries at ~1.5 mm |
+| Is the culling correct? | `frustumFromViewProj` is Gribb–Hartmann over any view-projection, so it needs nothing new — the ortho planes come out PARALLEL rather than converging, which is pinned by a test, together with the case that reads the two apart: a sphere 60 units off-axis and 500 deep is inside the perspective frustum and outside the box |
+| Where does a pick go? | the variation swaps halves: perspective fans the DIRECTION out of one eye, orthographic slides the ORIGIN across the image plane. Getting this backwards is SILENT — every pick lands under the middle of the screen |
+| And the labels? | the overlay's "behind me" test was clip `w`, which is **1 for the whole world** under an orthographic projection, so a unit behind the operator would keep its callsign on screen. It reads the view matrix now, in both projections (`depth` is unchanged for perspective: `w = −z_view`) |
+
+**What it does NOT change, stated rather than discovered:** fog, specular and the sky all read the eye POINT
+(`frame.camera.xyz`), which is exact under perspective and an approximation under parallel rays. Fog is
+invisible in normal use because the console pushes the cut to the far plane — it shows only under `?fog=1`
+with `?proj=ortho`. The sky is the one place the approximation is the better picture and is kept on purpose:
+a truly parallel view has ONE view direction, so an honest orthographic sky is a flat single colour. No
+shader branch either way — [one engine, one frame](../../../restrictions/architecture.md).
+
+**Owed by the next field run:** the frame cost against perspective at the same coverage, and the eye
+verdict that both projections show the same world at the same pose (no cell present in one and missing in
+the other) — the desk has the parallel-plane test, the screen has the picture.
+
 ### 02 — Where the camera may go
 
 - **Pitch is clamped** — below some angle a map stops being a map: near buildings occlude everything and the

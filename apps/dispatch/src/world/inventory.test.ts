@@ -48,7 +48,7 @@ const CONTEXT = {
   build: 'original@test',
   byCategory: {},
   bytes: { byKind: [], requests: 0, totalBytes: 0 },
-  camera: { at: [1480, -1720] as const, height: 900 },
+  camera: { at: [1480, -1720] as const, height: 900, projection: 'perspective' as const },
   device: {},
   district: 'los-santos-centre',
   errors: [],

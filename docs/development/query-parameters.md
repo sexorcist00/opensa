@@ -150,6 +150,7 @@ has an opaque origin and cannot own its URL — a `content://` or `file://` host
 | `src=` | pak base to stream (default `build/original`) |
 | `hour=` | opening hour for the environment driver |
 | `at=x,y` · `h=` · `pitch=` · `yaw=` | opening camera pose (GTA ground point, height, degrees) |
+| **`proj=ortho`** | **201/7-01**: open in the plan view — an orthographic projection instead of the default perspective one. The `PLAN` button in the top bar is the same switch, and the pose in the readout says which is live. The box is sized to frame exactly what perspective frames at the focus plane, so switching is a change of projection and not a jump |
 | `hd=` · `lod=` | streaming ring radii |
 | `fog=1` · `fogscale=` | restore the game's own fog instead of pushing the cut to the far plane |
 | `weather=` | weather id for the environment driver |
@@ -232,7 +233,8 @@ at 15-85 ms a call. Beside it, `cpu.worstFrame` keeps the worst body of the wind
 breakdown**, because two captures in a row made the worst frame the interesting one and a mean cannot say
 which part of it grew.
 
-The report also states its own ground — `district`, `camera.at`, `camera.height` — and **warns when the
+The report also states its own ground and its own arm — `district`, `camera.at`, `camera.height`,
+`camera.projection` (perspective or the plan view, 201/7-01) — and **warns when the
 district is not the one 201/1-01 pinned**, because a capture on other ground is a valid measurement of
 somewhere else and not part of the chain's before/after series.
 

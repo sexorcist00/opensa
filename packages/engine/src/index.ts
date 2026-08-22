@@ -7,6 +7,7 @@ export {
   mat4Identity,
   mat4LookAt,
   mat4Multiply,
+  mat4OrthographicZO,
   mat4PerspectiveZO,
   type Vec3,
 } from './core/math';

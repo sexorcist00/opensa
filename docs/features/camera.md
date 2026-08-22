@@ -196,7 +196,10 @@ either fell BEHIND the wall or stalled, both worse. Revisit if a real pull-in po
 
 **Field of view** is a director OUTPUT (`CameraState.fovYRad`, default π/3) — the projection is rebuilt from
 it every frame, and cursor picking in the map viewer unprojects through the SAME value the frame was
-rendered with, so an animated FOV (plan 05) can never send clicks off-target.
+rendered with, so an animated FOV (plan 05) can never send clicks off-target. **A camera state may instead
+carry `orthoHalfHeight`**, which draws that frame orthographically and leaves `fovYRad` unread (201/7-01) —
+the dispatch console's plan view, and the only consumer: the game never sets it, and a director that did
+would be asking for a projection with no apex to sit behind.
 
 **Render interpolation** (plan 080/03): physics steps at a fixed 1/60 but the frame draws in the
 variable-rate loop, so the raw physics pose is a stair-step. The host draws the ped, every car and the

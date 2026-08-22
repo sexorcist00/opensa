@@ -17,12 +17,18 @@ import type { BootOptions, DispatchHandle } from './boot';
 
 import { gtaToEngine } from '../map/coords';
 import { bindGestures } from '../map/gestures';
-import { groundPoint, MAP_YAW, MapCamera } from '../map/map-camera';
+import { groundPoint, MAP_YAW, MapCamera, type MapProjection } from '../map/map-camera';
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
 
 /** Opening view. Higher than the 3D mode's: with no buildings to give scale, more ground reads better. */
-const OPENING = { at: [1700, -1500] as GtaGround, height: 1400, pitch: -1.35, yaw: MAP_YAW };
+const OPENING = {
+  at: [1700, -1500] as GtaGround,
+  height: 1400,
+  pitch: -1.35,
+  projection: 'perspective' as MapProjection,
+  yaw: MAP_YAW,
+};
 /** Grid pitch in world units — the render grid, so the plan's squares mean something. */
 const GRID = 250;
 /** Draw at most this many grid lines per axis; past it the grid is noise and costs real time. */
@@ -141,6 +147,9 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     },
     setHour(): void {
       // Nothing to light.
+    },
+    setProjection(projection: MapProjection): void {
+      camera.setProjection(projection);
     },
   };
 }

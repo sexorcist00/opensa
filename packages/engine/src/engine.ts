@@ -14,6 +14,7 @@ import {
   mat4Invert,
   mat4LookAt,
   mat4Multiply,
+  mat4OrthographicZO,
   mat4PerspectiveZO,
   sphereFullyBeyond,
   type Vec3,
@@ -75,6 +76,13 @@ export interface CameraState {
   far: number;
   fovYRad: number;
   near: number;
+  /**
+   * Present = draw this frame ORTHOGRAPHICALLY, with a view box this many world units tall (201/7-01);
+   * `fovYRad` is then unread. Absent = perspective, which is what every consumer but the map's plan view
+   * passes. One field rather than a second camera: the view matrix, the culling and every pass are the
+   * same work, and only the projection differs.
+   */
+  orthoHalfHeight?: number;
   target: Vec3;
   up: Vec3;
 }
@@ -1158,7 +1166,11 @@ export class Engine {
     this.ensureTargets(canvasTexture.width, canvasTexture.height);
 
     // Swapped near/far = the reversed-Z projection (near maps to depth 1, far to 0).
-    mat4PerspectiveZO(this.proj, camera.fovYRad, camera.aspect, camera.far, camera.near);
+    if (camera.orthoHalfHeight === undefined) {
+      mat4PerspectiveZO(this.proj, camera.fovYRad, camera.aspect, camera.far, camera.near);
+    } else {
+      mat4OrthographicZO(this.proj, camera.orthoHalfHeight, camera.aspect, camera.far, camera.near);
+    }
     mat4LookAt(this.view, camera.eye, camera.target, camera.up);
     mat4Multiply(this.viewProj, this.proj, this.view);
     mat4Invert(this.invViewProj, this.viewProj);

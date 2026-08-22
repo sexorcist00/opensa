@@ -9,6 +9,7 @@ import {
   mat4Invert,
   mat4LookAt,
   mat4Multiply,
+  mat4OrthographicZO,
   mat4PerspectiveZO,
   sphereFullyBeyond,
 } from './math';
@@ -24,6 +25,21 @@ function expectMatrixClose(actual: Mat4, expected: Mat4, precision = 4): void {
   for (let index = 0; index < 16; index += 1) {
     expect(actual[index]).toBeCloseTo(expected[index], precision);
   }
+}
+
+/** The same view, projected orthographically — `halfHeight` world units tall (201/7-01's plan view). */
+function orthoViewProj(
+  eye: [number, number, number],
+  target: [number, number, number],
+  halfHeight: number,
+): Float32Array {
+  const proj = mat4Identity();
+  const view = mat4Identity();
+  const out = mat4Identity();
+  mat4OrthographicZO(proj, halfHeight, 16 / 9, 0.1, 1000);
+  mat4LookAt(view, eye, target, [0, 1, 0]);
+
+  return mat4Multiply(out, proj, view);
 }
 
 /** Apply a column-major mat4 to a point, returning the perspective-divided result plus clip w. */
@@ -103,6 +119,18 @@ describe('engine math', () => {
       expect(Array.from(view).every((value) => Number.isFinite(value))).toBe(true);
     });
 
+    it('culls a sphere outside an orthographic box that a perspective frustum at the same pose would hold', () => {
+      const ortho = new Float32Array(24);
+      const perspective = new Float32Array(24);
+      frustumFromViewProj(ortho, orthoViewProj([0, 0, 10], [0, 0, 0], 5));
+      frustumFromViewProj(perspective, viewProj([0, 0, 10], [0, 0, 0]));
+
+      // 60 units off the axis and 500 deep: inside a widening frustum, outside a box 5 units tall. Reading
+      // an orthographic view through perspective planes is how a plan view draws cells nobody can see.
+      expect(frustumIntersectsSphere(perspective, 60, 0, -500, 1)).toBe(true);
+      expect(frustumIntersectsSphere(ortho, 60, 0, -500, 1)).toBe(false);
+    });
+
     it('culls a sphere entirely behind the near plane', () => {
       const planes = new Float32Array(24);
       frustumFromViewProj(planes, viewProj([0, 0, 10], [0, 0, 0]));
@@ -122,6 +150,55 @@ describe('engine math', () => {
       expect(clipW).toBeGreaterThan(0);
       expect(ndcZ).toBeGreaterThan(0);
       expect(ndcZ).toBeLessThan(1);
+    });
+
+    it('maps an orthographic near plane to depth 0 and its far plane to depth 1', () => {
+      const m = mat4OrthographicZO(mat4Identity(), 5, 16 / 9, 0.1, 1000);
+      const near = transformPoint(m, [0, 0, -0.1]);
+      const far = transformPoint(m, [0, 0, -1000]);
+
+      expect(near.xyz[2]).toBeCloseTo(0, 5);
+      expect(far.xyz[2]).toBeCloseTo(1, 5);
+      // Reversed-Z is the same call with the planes swapped, exactly as the renderer does for perspective.
+      const reversed = mat4OrthographicZO(mat4Identity(), 5, 16 / 9, 1000, 0.1);
+      expect(transformPoint(reversed, [0, 0, -0.1]).xyz[2]).toBeCloseTo(1, 5);
+      expect(transformPoint(reversed, [0, 0, -1000]).xyz[2]).toBeCloseTo(0, 5);
+    });
+
+    it('draws a distant point the same size as a near one, which is what a plan view is', () => {
+      const m = mat4OrthographicZO(mat4Identity(), 5, 16 / 9, 0.1, 1000);
+      const near = transformPoint(m, [2.5, 0, -10]);
+      const far = transformPoint(m, [2.5, 0, -900]);
+
+      expect(near.w).toBe(1);
+      expect(far.xyz[0]).toBeCloseTo(near.xyz[0], 6);
+      // Half the box height across, at any depth: the edge of the picture is a world distance, not an angle.
+      expect(transformPoint(m, [0, 5, -10]).xyz[1]).toBeCloseTo(1, 6);
+    });
+
+    it('accepts a front plane behind the eye, so nothing above a plan camera is sliced off', () => {
+      const planes = new Float32Array(24);
+      const proj = mat4OrthographicZO(mat4Identity(), 200, 1, -500, 1000);
+      const view = mat4LookAt(mat4Identity(), [0, 300, 0], [0, 0, 0], [0, 0, -1]);
+      frustumFromViewProj(planes, mat4Multiply(mat4Identity(), proj, view));
+
+      // A tower whose top stands 100 units ABOVE the camera still passes the box.
+      expect(frustumIntersectsSphere(planes, 0, 400, 0, 1)).toBe(true);
+    });
+
+    it('extracts parallel side planes from an orthographic view, which is what makes the culling correct', () => {
+      const planes = new Float32Array(24);
+      frustumFromViewProj(planes, orthoViewProj([0, 0, 10], [0, 0, 0], 5));
+      const left = [planes[0], planes[1], planes[2]];
+      const right = [planes[4], planes[5], planes[6]];
+
+      // Opposed, not converging: the two walls of a box rather than the sides of a wedge.
+      expect(left[0]).toBeCloseTo(-right[0], 5);
+      expect(left[1]).toBeCloseTo(-right[1], 5);
+      expect(left[2]).toBeCloseTo(-right[2], 5);
+      // And what is inside stays inside all the way down the box.
+      expect(frustumIntersectsSphere(planes, 4, 0, 0, 0)).toBe(true);
+      expect(frustumIntersectsSphere(planes, 4, 0, -900, 0)).toBe(true);
     });
 
     it('keeps a visible sphere and one straddling the frustum edge', () => {

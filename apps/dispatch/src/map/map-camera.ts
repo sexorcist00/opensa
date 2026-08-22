@@ -8,7 +8,7 @@
  */
 import type { CameraState } from '@opensa/engine';
 
-import { CAMERA_FOV_Y, cursorRay, forwardFrom } from '@opensa/web/ui/camera/engine-camera';
+import { CAMERA_FOV_Y, cursorRay, forwardFrom, screenBasis } from '@opensa/web/ui/camera/engine-camera';
 import { dollyStep, panStep, TOP_DOWN_PITCH } from '@opensa/web/ui/camera/fly-rig';
 
 import type { GtaGround } from './coords';
@@ -28,9 +28,18 @@ export interface MapPose {
   readonly height: number;
   /** Radians; negative looks down. */
   readonly pitch: number;
+  /** How the world is projected. Part of the pose because a view is not restored without it (201/7-01). */
+  readonly projection: MapProjection;
   /** Radians. {@link MAP_YAW} is north-up. */
   readonly yaw: number;
 }
+
+/**
+ * `perspective` is the default and the game's own view. `ortho` is the plan view an operator switches on:
+ * parallel rays, so buildings stop leaning over the streets they hide and a distance on screen is the same
+ * distance wherever it is measured — which is the difference between a picture and a drawing.
+ */
+export type MapProjection = 'ortho' | 'perspective';
 
 /**
  * The far plane. A city-wide pose sits kilometres from the far corner, and — this is the part that bites —
@@ -55,6 +64,7 @@ export class MapCamera {
   /** The looked-at ground point, ENGINE coords. */
   private focus!: [number, number, number];
   private pitch!: number;
+  private projection!: MapProjection;
   private yaw!: number;
 
   constructor(pose: MapPose) {
@@ -75,6 +85,7 @@ export class MapCamera {
   applyPose(pose: MapPose): void {
     this.focus = gtaToEngine(pose.at);
     this.pitch = clampPitch(pose.pitch);
+    this.projection = pose.projection;
     this.yaw = pose.yaw;
     this.distance = clampDistance(pose.height / -Math.sin(this.pitch));
   }
@@ -109,7 +120,13 @@ export class MapCamera {
   }
 
   pose(): MapPose {
-    return { at: this.positionGta(), height: this.height(), pitch: this.pitch, yaw: this.yaw };
+    return {
+      at: this.positionGta(),
+      height: this.height(),
+      pitch: this.pitch,
+      projection: this.projection,
+      yaw: this.yaw,
+    };
   }
 
   /** The ground point under the view, in GTA coords — what the streaming rings follow. */
@@ -117,20 +134,55 @@ export class MapCamera {
     return engineToGta(this.focus);
   }
 
-  /** The world ray under a screen position in NDC (x right, y up, both −1..1). */
+  /**
+   * The world ray under a screen position in NDC (x right, y up, both −1..1).
+   *
+   * The two projections put the variation in different halves of the ray, and getting that backwards is
+   * SILENT — picks land on whatever is under the middle of the screen and the map simply feels wrong:
+   * under perspective every ray leaves the one eye and the DIRECTION fans out; under orthographic every
+   * ray is parallel and the ORIGIN slides across the image plane.
+   */
   rayAt(ndc: readonly [number, number], aspect: number): CursorPick {
     const forward = forwardFrom(this.yaw, this.pitch);
+    if (this.projection === 'perspective') {
+      return { direction: cursorRay(forward, ndc, aspect, CAMERA_FOV_Y), origin: this.eye() };
+    }
+    const { right, up } = screenBasis(forward);
+    const halfHeight = this.orthoHalfHeight();
+    const sx = ndc[0] * halfHeight * aspect;
+    const sy = ndc[1] * halfHeight;
+    const eye = this.eye();
 
-    return { direction: cursorRay(forward, ndc, aspect, CAMERA_FOV_Y), origin: this.eye() };
+    return {
+      direction: forward,
+      origin: [
+        eye[0] + right[0] * sx + up[0] * sy,
+        eye[1] + right[1] * sx + up[1] * sy,
+        eye[2] + right[2] * sx + up[2] * sy,
+      ],
+    };
+  }
+
+  /** Switch how the world is projected; everything else about the view is untouched. */
+  setProjection(projection: MapProjection): void {
+    this.projection = projection;
   }
 
   state(aspect: number): CameraState {
+    const perspective = this.projection === 'perspective';
+
     return {
       aspect,
       eye: this.eye(),
       far: CAMERA_FAR,
       fovYRad: CAMERA_FOV_Y,
-      near: NEAR,
+      // An orthographic box has no apex, so its front plane is placed as far in FRONT of the focus as the
+      // far plane lies behind it. Two things fall out of that, and neither is a preference: a tower taller
+      // than the eye keeps drawing instead of being sliced off at block zoom (the perspective near plane
+      // cannot express that), and the depth range stays 2 × (far − distance) — 24 km at worst, which a
+      // depth32float carries at ~1.5 mm.
+      near: perspective ? NEAR : 2 * this.distance - CAMERA_FAR,
+      ...(perspective ? {} : { orthoHalfHeight: this.orthoHalfHeight() }),
       target: [...this.focus],
       up: [0, 1, 0],
     };
@@ -155,6 +207,15 @@ export class MapCamera {
     const [fx, fy, fz] = forwardFrom(this.yaw, this.pitch);
 
     return [this.focus[0] - fx * this.distance, this.focus[1] - fy * this.distance, this.focus[2] - fz * this.distance];
+  }
+
+  /**
+   * The ortho box is sized so it frames exactly what the perspective view frames AT THE FOCUS PLANE. That is
+   * what makes switching a change of projection rather than a jump: the ground under the view keeps its
+   * scale, and pan, dolly and pinch — all of which move `distance` — go on meaning what they meant.
+   */
+  private orthoHalfHeight(): number {
+    return this.distance * Math.tan(CAMERA_FOV_Y / 2);
   }
 }
 

@@ -5,8 +5,13 @@
  * carries a second clock — the shift's wall time, on the timeline strip — and an operator who reads this one
  * as that one turns the sky when they meant to rewind the board. It says `WORLD` now, and the timeline says
  * `SHIFT`.
+ *
+ * The `PLAN` toggle (201/7-01) is the projection, not a display mode: the same world, drawn with parallel
+ * rays instead of a perspective frustum.
  */
 import type { ReactElement } from 'react';
+
+import type { MapProjection } from '../map/map-camera';
 
 import { COLORS, styles } from './styles';
 
@@ -17,6 +22,8 @@ export function TopBar({
   latest,
   onAutoDispatch,
   onHour,
+  onProjection,
+  projection,
 }: {
   autoDispatch: boolean;
   /** Phone layout: shorten the title, drop the region badge and the log ticker, narrow the time slider. */
@@ -25,6 +32,9 @@ export function TopBar({
   latest: string | undefined;
   onAutoDispatch: (enabled: boolean) => void;
   onHour: (hour: number) => void;
+  onProjection: (projection: MapProjection) => void;
+  /** What the map is drawing with right now — read back from the readout's pose, never held here. */
+  projection: MapProjection;
 }): ReactElement {
   return (
     <div style={styles.topBar}>
@@ -44,6 +54,15 @@ export function TopBar({
         />
         <span style={{ ...styles.mono, width: 42 }}>{clock(hour)}</span>
       </label>
+
+      <button
+        onClick={() => onProjection(projection === 'ortho' ? 'perspective' : 'ortho')}
+        style={projection === 'ortho' ? styles.buttonPrimary : styles.button}
+        title="Plan view: parallel projection, so buildings stop leaning and distances read the same everywhere"
+        type="button"
+      >
+        PLAN
+      </button>
 
       <label style={{ alignItems: 'center', display: 'flex', gap: 6, marginLeft: compact ? 'auto' : 0 }}>
         <input checked={autoDispatch} onChange={(event) => onAutoDispatch(event.target.checked)} type="checkbox" />

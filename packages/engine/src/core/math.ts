@@ -173,6 +173,29 @@ export function mat4Multiply(out: Mat4, a: Mat4, b: Mat4): Mat4 {
   return out;
 }
 
+/**
+ * Orthographic with WebGPU 0..1 depth — a symmetric box `halfHeight` tall and `halfHeight * aspect` wide.
+ *
+ * The plan view (201/7-01), and the same matrix 6/02's tile bake reads: parallel rays, so a building stops
+ * leaning and a distance on screen is a distance in the world wherever it is measured. Same conventions as
+ * {@link mat4PerspectiveZO} — right-handed view down −Z, near→0 and far→1 — so passing them SWAPPED gives
+ * the reversed-Z the renderer runs, exactly as it does for perspective.
+ *
+ * `near` may be negative: an orthographic box has no apex to sit behind, so pulling the front plane back
+ * past the eye is how geometry ABOVE the eye plane (a tower, at block zoom) keeps drawing instead of being
+ * sliced off — a perspective frustum cannot express that and does not need to.
+ */
+export function mat4OrthographicZO(out: Mat4, halfHeight: number, aspect: number, near: number, far: number): Mat4 {
+  out.fill(0);
+  out[0] = 1 / (halfHeight * aspect);
+  out[5] = 1 / halfHeight;
+  out[10] = 1 / (near - far);
+  out[14] = near / (near - far);
+  out[15] = 1;
+
+  return out;
+}
+
 /** Perspective with WebGPU 0..1 depth. `fovY` radians. */
 export function mat4PerspectiveZO(out: Mat4, fovY: number, aspect: number, near: number, far: number): Mat4 {
   const f = 1 / Math.tan(fovY / 2);

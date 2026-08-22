@@ -30,6 +30,8 @@
 
 import type { EngineStats, FrameSpanTotals, PakTrafficKind, StreamStats } from '@opensa/engine';
 
+import type { MapProjection } from '../map/map-camera';
+
 import { DISTRICTS, PINNED_DISTRICT } from './districts';
 
 /** The CPU cost of ONE loop body, measured by the host around its own frame. */
@@ -79,8 +81,15 @@ export interface InventoryReport {
     readonly requests: number;
     readonly totalBytes: number;
   };
-  /** Where the operator was when they took the report — so the capture states its own ground. */
-  readonly camera: { readonly at: readonly [number, number]; readonly height: number };
+  /** Where the operator was when they took the report, and how the world was PROJECTED — so the capture
+   *  states its own ground and its own arm. A plan-view frame and a perspective one cover different
+   *  amounts of world at the same pose, so a row that does not say which it was cannot be compared to
+   *  anything (201/7-01, and the standing rule that an A/B is self-describing). */
+  readonly camera: {
+    readonly at: readonly [number, number];
+    readonly height: number;
+    readonly projection: MapProjection;
+  };
   readonly cpu: InventoryCpu;
   readonly device: unknown;
   readonly district: string;
@@ -275,7 +284,7 @@ export class FrameInventory {
     /** `engine.ledger()` — resident bytes and counts per category. */
     byCategory: Readonly<Record<string, { bytes: number; count: number }>>;
     bytes: { byKind: readonly PakTrafficKind[]; requests: number; totalBytes: number };
-    camera: { at: readonly [number, number]; height: number };
+    camera: { at: readonly [number, number]; height: number; projection: MapProjection };
     device: unknown;
     district: string;
     errors: readonly string[];
@@ -308,7 +317,7 @@ export class FrameInventory {
     return {
       build: context.build,
       bytes: context.bytes,
-      camera: { at: context.camera.at, height: context.camera.height },
+      camera: { at: context.camera.at, height: context.camera.height, projection: context.camera.projection },
       cpu: {
         bodyMaxMs: this.maxima.get('cpu-body') ?? 0,
         bodyMeanMs,

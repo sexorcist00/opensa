@@ -45,6 +45,40 @@ pose, selection and the moment in time survive a switch. The 2D tiles are baked 
 so every build — including total conversions, which have no third-party map raster and never will — gets all
 three modes.
 
+## The plan view
+
+**201/7-01, since 2026-08-22.** The `PLAN` button in the top bar (or `?proj=ortho`) draws the same world with
+an **orthographic** projection: parallel rays, so buildings stop leaning over the streets they hide and a
+distance on screen is the same distance wherever it is measured. Perspective stays the default — this is a
+projection an operator turns on, not a display mode ([the three modes](#three-ways-to-draw-the-world) are the
+world underneath, and both projections work in all of them, plan mode included).
+
+It is one field on the camera state (`orthoHalfHeight`) rather than a second camera: the view matrix, the
+culling, the passes and the symbology are the same code, and only the projection matrix differs. The same
+matrix is what [6/02](../plans/201-dispatch-console/6-display-modes/readme.md) will bake the 2D tiles with,
+so the mode and the generator cannot drift apart.
+
+Three things fall out of the projection rather than being chosen, and each one is a place a naive port goes
+silently wrong:
+
+- **The box is sized to frame exactly what perspective frames at the focus plane** (`distance × tan(fov/2)`),
+  so switching is a change of projection and not a jump, and pan / dolly / pinch go on meaning what they meant.
+- **The front plane sits as far in front of the focus as the far plane sits behind it**, which a perspective
+  frustum cannot express: an orthographic box has no apex, so this is what keeps a tower taller than the eye
+  from being sliced off at block zoom.
+- **Picking and labels read the projection**: under perspective the rays fan out from one eye and clip `w` is
+  the distance ahead; under orthographic every ray is parallel and `w` is 1 for the whole world, including
+  what is behind the operator. Both are read from the view matrix now, so a plan-view pick lands where the
+  cursor is and no callsign is drawn for a unit that is behind the camera.
+
+**What the mode does not change, and says so rather than pretending:** fog, specular and the sky are computed
+from the eye POINT (`frame.camera.xyz`), which is exact for a perspective view and an approximation under
+parallel rays. The console pushes the fog cut to the far plane anyway, so fog is invisible in normal use —
+`?fog=1` with `?proj=ortho` is where it would show. The sky is the one place where the approximation is the
+BETTER picture and is kept deliberately: a truly parallel view has one view direction, so an honest
+orthographic sky is a single flat colour. Branching the shader on the projection is not on the table —
+[one engine, one frame](../restrictions/architecture.md).
+
 ## What it is made of
 
 | Concern                | Where                                    | Notes                                                                                       |
@@ -52,10 +86,10 @@ three modes.
 | Engine host, frame loop | `src/world/boot.ts`                     | boots the engine, picks a world, owns input; React never enters the loop                     |
 | World (real)           | `src/world/pak-source.ts` + `water.ts`   | `?src=` → `setupStreaming` + the baked `water.bin`                                           |
 | World (demo)           | `src/world/demo-city.ts`                 | `?demo=1` — a synthetic block grid, no pak needed; reuses `@opensa/engine-lab/synthetic`      |
-| Camera                 | `src/map/map-camera.ts`                  | ground-focus map rig over `@opensa/web/ui/camera/*` — pan / orbit / dolly, north-up default  |
+| Camera                 | `src/map/map-camera.ts`                  | ground-focus map rig over `@opensa/web/ui/camera/*` — pan / orbit / dolly, north-up default, **perspective or plan view** |
 | 3D symbology           | `src/map/beacons.ts`                     | through-depth `createDebugLines` pillars, routes, selection ring                             |
 | 2D symbology           | `src/map/overlay-2d.ts`                  | icons, chips, leader lines, scale bar — on a plain 2D canvas, and it owns hit-testing        |
-| World→screen           | `src/map/projection.ts`                  | `mat4LookAt`/`mat4PerspectiveZO`/`mat4Multiply` rebuilt per frame from the frame's camera     |
+| World→screen           | `src/map/projection.ts`                  | `mat4LookAt` × the frame's own projection (perspective or orthographic), rebuilt per frame    |
 | Board (domain)         | `src/ops/*`                              | units, calls, assignment, a pure `stepOperations` tick — renderer-free and unit-tested       |
 | Chrome                 | `src/ui/*`, `src/app.tsx`                | call queue, roster, selection panel, status bar; desk and phone layouts                      |
 | Gestures               | `src/map/gestures.ts`                    | mouse and touch through one set of Pointer Events                                            |

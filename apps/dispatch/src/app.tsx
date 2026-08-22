@@ -11,6 +11,7 @@
 import { type ReactElement, useCallback, useRef, useState } from 'react';
 
 import type { GtaGround } from './map/coords';
+import type { MapProjection } from './map/map-camera';
 import type { Incident, Unit } from './ops/types';
 import type { DispatchHandle, DispatchReadout } from './world/boot';
 
@@ -37,6 +38,7 @@ export function App(): ReactElement {
   }, []);
   const locate = useCallback((at: GtaGround) => handleRef.current?.locate(at), []);
   const setHour = useCallback((hour: number) => handleRef.current?.setHour(hour), []);
+  const setProjection = useCallback((projection: MapProjection) => handleRef.current?.setProjection(projection), []);
 
   const locateIncident = (incident: Incident): void => {
     actions.select({ id: incident.id, kind: 'incident' });
@@ -71,6 +73,8 @@ export function App(): ReactElement {
       latest={ops.log[0]}
       onAutoDispatch={actions.setAutoDispatch}
       onHour={setHour}
+      onProjection={setProjection}
+      projection={readout?.pose.projection ?? 'perspective'}
     />
   );
 
