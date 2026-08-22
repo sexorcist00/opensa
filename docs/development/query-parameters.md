@@ -185,6 +185,11 @@ buffers' capacity — so `cpu.segmentsMs`' `overlay-2d` can be read against a co
 guess. `measures` above 0 in steady state means the label width cache is not holding and the frame time
 should not be cited.
 
+The report's `tracks` block (201/8-01) is the time axis: how many units it is holding history for, how many
+samples that is, the **host** bytes it costs, and the window a scrub could ask for. It is deliberately not
+part of `world.residencyMb` — that ledger counts GPU bytes and this is JS heap, so adding them charges a
+track against a texture budget.
+
 Let it settle, pan and zoom the way an operator would, then press **copy JSON**. On a LAN address the
 clipboard API is unavailable (not a secure context) and the panel drops a selected textarea instead — long
 press, copy. The JSON goes to `docs/benchmarks/` **before** it is analysed, per the standing rule.

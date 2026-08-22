@@ -82,6 +82,14 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
         board {report.symbology.units}u/{report.symbology.incidents}c · {report.symbology.symbols} symbols ·{' '}
         {report.symbology.chips} chips ({report.symbology.chipsDropped} dropped)
       </div>
+      {report.tracks !== null && (
+        <div>
+          tracks {report.tracks.tracks} × {report.tracks.capacity} · {report.tracks.samples} samples ·{' '}
+          {(report.tracks.bytes / (1024 * 1024)).toFixed(1)} MB host
+          {report.tracks.window !== null &&
+            ` · ${((report.tracks.window[1] - report.tracks.window[0]) / 60_000).toFixed(0)} min held`}
+        </div>
+      )}
       {report.symbology.beaconGrowths > 0 && (
         <div style={styles.inventoryWarn}>
           beacon buffers grown {report.symbology.beaconGrowths}× past the declared budget

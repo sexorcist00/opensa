@@ -5,12 +5,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { GtaGround } from '../map/coords';
+import type { TrackStats } from './tracks';
 import type { Operations, Selection } from './types';
 
 import { dispatchParams } from '../world/boot';
 import { seedSize } from './budget';
 import { initialOperations } from './seed';
 import { assignUnit, clearUnit, createIncidentAt, stepOperations } from './sim';
+import { UnitTracks } from './tracks';
 
 /** Simulation tick. 20 Hz is smooth on the map and cheap for the panels; the render loop is independent. */
 const TICK_MS = 50;
@@ -30,7 +32,7 @@ export interface DispatchStore {
   readonly autoDispatch: boolean;
   readonly ops: Operations;
   /** Stable getters for the render loop — identity never changes, so the host binds them once. */
-  readonly read: { ops: () => Operations; selection: () => Selection };
+  readonly read: { ops: () => Operations; selection: () => Selection; trackStats: () => TrackStats };
   readonly selection: Selection;
 }
 
@@ -41,6 +43,12 @@ export function useOperations(): DispatchStore {
   const [selection, setSelection] = useState<Selection>(null);
   const [autoDispatch, setAutoDispatch] = useState(true);
 
+  // The time axis, owned beside the board rather than inside it: `Operations` is an immutable snapshot and
+  // a ring buffer cannot be (see `tracks.ts`). One writer — the tick below.
+  const tracksRef = useRef<null | UnitTracks>(null);
+  tracksRef.current ??= new UnitTracks();
+  const tracks = tracksRef.current;
+
   const opsRef = useRef(ops);
   const selectionRef = useRef(selection);
   const autoRef = useRef(autoDispatch);
@@ -50,6 +58,11 @@ export function useOperations(): DispatchStore {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
+      // The time axis (201/8-01) observes the board OUTSIDE the state updater. A side effect inside one is
+      // run twice by StrictMode and again by any React retry, and a track written twice is a track that
+      // cannot be scrubbed. What it reads is the snapshot React last rendered — one tick behind, which for
+      // an observation at 20 Hz against a 4 s sampling policy is nothing.
+      tracks.record(opsRef.current);
       setOps((previous) =>
         stepOperations(previous, {
           autoDispatch: autoRef.current,
@@ -61,7 +74,7 @@ export function useOperations(): DispatchStore {
     }, TICK_MS);
 
     return (): void => window.clearInterval(timer);
-  }, []);
+  }, [tracks]);
 
   const createAt = useCallback((at: GtaGround, district: null | string = null): void => {
     setOps((previous) => createIncidentAt(previous, at, performance.now(), Math.random, district));
@@ -79,8 +92,12 @@ export function useOperations(): DispatchStore {
   );
 
   const read = useMemo(
-    () => ({ ops: (): Operations => opsRef.current, selection: (): Selection => selectionRef.current }),
-    [],
+    () => ({
+      ops: (): Operations => opsRef.current,
+      selection: (): Selection => selectionRef.current,
+      trackStats: (): TrackStats => tracks.stats(),
+    }),
+    [tracks],
   );
 
   return { actions, autoDispatch, ops, read, selection };

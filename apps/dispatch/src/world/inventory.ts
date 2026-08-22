@@ -147,6 +147,22 @@ export interface InventoryReport {
     readonly symbols: number;
     readonly units: number;
   };
+  /**
+   * What the TIME AXIS is holding (201/8-01) — host bytes, samples, and the window a scrub may ask for.
+   * Null when the host passed no board (an embedding with no dispatch state).
+   *
+   * Kept out of `world.residencyMb` on purpose: that ledger counts GPU bytes and this is JS heap, the same
+   * distinction 5/01 drew for `pickingMb`. A capture that adds them together is one that charges a track
+   * against a texture budget.
+   */
+  readonly tracks: {
+    readonly bytes: number;
+    readonly capacity: number;
+    readonly samples: number;
+    readonly tracks: number;
+    /** Oldest → newest sample time held, ms. */
+    readonly window: null | readonly [number, number];
+  } | null;
   /** Human-readable reasons a column above is absent on this device. */
   readonly unavailable: readonly string[];
   /** Reasons this capture may NOT be cited as a before-table. Empty = nothing obviously wrong with it.
@@ -265,6 +281,7 @@ export class FrameInventory {
     pickingBytes: number;
     surface: InventoryReport['surface'];
     symbology: InventoryReport['symbology'];
+    tracks: InventoryReport['tracks'];
   }): InventoryReport {
     const sorted = [...this.dts].sort((a, b) => a - b);
     const frames = Math.max(1, this.dts.length);
@@ -324,6 +341,7 @@ export class FrameInventory {
       },
       surface: context.surface,
       symbology: context.symbology,
+      tracks: context.tracks,
       unavailable,
       warnings: warningsFor({
         bodyMeanMs,

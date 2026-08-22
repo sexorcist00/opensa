@@ -6,6 +6,7 @@
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 
 import type { GtaGround } from '../map/coords';
+import type { TrackStats } from '../ops/tracks';
 import type { Operations, Selection } from '../ops/types';
 import type { DispatchActions } from '../ops/use-operations';
 import type { BootOptions, DispatchHandle, DispatchReadout } from '../world/boot';
@@ -31,7 +32,7 @@ export function MapCanvas({
   children?: React.ReactNode;
   onReadout: (readout: DispatchReadout) => void;
   onReady: (handle: DispatchHandle) => void;
-  read: { ops: () => Operations; selection: () => Selection };
+  read: { ops: () => Operations; selection: () => Selection; trackStats: () => TrackStats };
 }): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -68,6 +69,7 @@ export function MapCanvas({
       ops: () => liveRef.current.read.ops(),
       overlay,
       selection: () => liveRef.current.read.selection(),
+      trackStats: () => liveRef.current.read.trackStats(),
     };
     // The 3D map is the preferred surface, not a requirement: a browser without WebGPU (or a world this GPU
     // cannot read) falls back to the 2D plan, which keeps every unit, call and gesture working.

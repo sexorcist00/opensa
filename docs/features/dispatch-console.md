@@ -177,6 +177,11 @@ Each now names the step that owns it, so none of them is an open-ended note.
   [the counts](../benchmarks/opensa-engine/2026-08-21-dispatch-symbology-call-counts.json)), and `fillText`
   is still one call per chip. Whether that needs to become an instanced draw is a question the milliseconds
   at 150 units answer first. → [201/5-02](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
+- **Time is an axis now, but nothing drives it yet.** Every unit's position is recorded as a track
+  (`ops/tracks.ts`, 17 B/sample, 17.5 MB for 150 units × a shift) and `at(t)` interpolates between samples
+  and holds past the last one rather than extrapolating. What does not exist is the clock that would ask it
+  for a T other than "now" — no scrub, no playback, no trails.
+  → [201/8-03](../plans/201-dispatch-console/8-the-time-axis/readme.md) and 8/04.
 - **The mobile evidence is emulated, not hardware.** The phone runs below are an emulated Pixel 7 and a
   simulated mobile adapter; the one real device in the repo's record (Mali-G51, 360×800 DPR 2) ran the
   synthetic `?demo=1` city, not a streamed world. → the real-district row is
@@ -191,6 +196,10 @@ Each now names the step that owns it, so none of them is an open-ended note.
   pinned is the WORK IT ASKS FOR rather than a time this machine happens to take: a label is measured once
   and never again, the font is set a fixed number of times per frame rather than once per chip, and the
   counts it reports match what it drew. Both halves were verified by reintroducing the defect.
+- `apps/dispatch/src/ops/tracks.test.ts` — the time axis: that it does not extrapolate past the last sample
+  (it holds and says how old the answer is), that it records at the PUBLISH rate rather than the tick rate,
+  that a stationary run collapses to two samples, and that a heading crossing north takes the short way
+  round. Each of the three policy rules was verified by reintroducing its defect.
 - `apps/dispatch/src/world/zones.test.ts` — the baked district table: a missing file, a malformed one and a
   pak that declares none all answer "no districts" rather than throwing into the boot, and a point resolves
   to the smallest containing district rather than the city around it.
