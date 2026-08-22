@@ -130,3 +130,11 @@ The result is a minimal, self-contained pack of just the installed cars. Off by 
 
 See [docs/plans/](./docs/plans/) (`001` architecture · `002` install + settings · `003` custom palette · `004`
 strip · `005` node API · `006` rebake · `007` `models/` + `new/` · `008` rebake for `sa` · `009` new tuning parts + the carmods guard · `010` layered `common/sa/opensa` · `011` `model_special_features.dat` for `sa` — PLANNED).
+
+A car whose settings declare **no `carmods` line** has the stock one for its slot **removed** rather than
+inherited (plan 015): that line describes the model that used to hold the slot, and a universal Transfender
+part hangs on a `ug_*` dummy inside the car — `ug_bonnet`, `ug_spoiler`, `ug_roof`, `ug_wing_left/right`,
+`ug_lights`, `ug_nitro` — which most replacement models do not carry over. Installing one whose dummy is
+absent crashes the real game at `0x007F0BF7` ("frame did not find the child"); it took two field crashes in a
+helicopter to find, because `ModelVariations` spawns traffic already tuned. Stock SA never does this (0 of
+77 cars); our fleet did it on 30 of 154.

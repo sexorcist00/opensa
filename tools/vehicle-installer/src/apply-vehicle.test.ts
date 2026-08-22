@@ -25,6 +25,46 @@ afterEach(() => {
   rmSync(root, { force: true, recursive: true });
 });
 
+const CARMODS = ['mods', 'admiral, nto_b_l', 'slamvan, bnt_b_sc_l, nto_b_l', 'end', ''].join('\n');
+
+describe('applyVehicle and the stock tuning line (plan 015)', () => {
+  beforeEach(() => {
+    writeFileSync(join(out, 'data', 'carmods.dat'), CARMODS);
+  });
+
+  describe('negative cases', () => {
+    it("leaves another car's line alone", () => {
+      applyVehicle(folder, out, { target: 'sa' });
+
+      expect(readFileSync(join(out, 'data', 'carmods.dat'), 'latin1')).toContain('admiral, nto_b_l');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('REMOVES the stock line when the car declares none — it was never adapted to that kit', () => {
+      // The field crash this closes: a replaced model without the `ug_*` dummies kept being offered the stock
+      // car's hood scoops, and installing one dies at 0x007F0BF7.
+      writeFileSync(join(folder, 'slamvan.settings.txt'), [IDE, ''].join('\n'));
+
+      applyVehicle(folder, out, { target: 'sa' });
+
+      const text = readFileSync(join(out, 'data', 'carmods.dat'), 'latin1');
+      expect(text).not.toContain('slamvan');
+      expect(text).toContain('admiral, nto_b_l');
+    });
+
+    it('keeps the line the car DOES declare', () => {
+      writeFileSync(join(folder, 'slamvan.settings.txt'), [IDE, '', 'slamvan, exh_b_l', ''].join('\n'));
+
+      applyVehicle(folder, out, { target: 'sa' });
+
+      const text = readFileSync(join(out, 'data', 'carmods.dat'), 'latin1');
+      expect(text).toContain('slamvan, exh_b_l');
+      expect(text).not.toContain('bnt_b_sc_l');
+    });
+  });
+});
+
 describe('applyVehicle (the settings-file fallback)', () => {
   describe('negative cases', () => {
     it('does not read a known file kind as the settings file when the folder ships none', () => {

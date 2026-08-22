@@ -89,6 +89,18 @@ export function mergeIde(base: string, line: string): string {
   return replaceOrAppend(base, 'cars', 1, line);
 }
 
+/**
+ * Drop the `mods` line for `model` from `carmods.dat` — no-op when it has none.
+ *
+ * **What a car with no `carmods` line of its own must get** (plan 015): the stock line describes the model
+ * that USED to hold the slot, and a replacement was never adapted to it. Leaving it there offers the mod's
+ * body the stock car's whole kit, and a universal part whose `ug_*` dummy the new model does not carry
+ * crashes the real game where it is installed (`0x007F0BF7`, "frame did not find the child").
+ */
+export function removeCarmods(base: string, model: string): string {
+  return removeFromSection(base, 'mods', model.toLowerCase());
+}
+
 function eolOf(base: string): string {
   return base.includes('\r\n') ? '\r\n' : '\n';
 }

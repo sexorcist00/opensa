@@ -9,7 +9,7 @@ import { applyVehicleAudio, AUDIO_FILE } from './audio';
 import { parseFeatures } from './features';
 import { applyVehicleText, TEXT_FILE, type TextEntry } from './fxt';
 import { stageVehicleImg } from './img-merge';
-import { mergeCarcols, mergeCarmods, mergeHandling, mergeIde } from './merge';
+import { mergeCarcols, mergeCarmods, mergeHandling, mergeIde, removeCarmods } from './merge';
 import { resolveVehicleModel } from './model';
 import { applyModelVariations, MODEL_VARIATIONS_EXTRA_FILE } from './model-variations';
 import { addPaletteColors, resolveColorRefs } from './palette';
@@ -146,7 +146,7 @@ export function applyVehicle(folderPath: string, outPath: string, options: Apply
           (message) => warnings.push(`${settingsFile}: ${message}`),
         );
   if (settings !== undefined) {
-    mergeSettings(outPath, settings, options, settingsFile, warnings);
+    mergeSettings(outPath, model, settings, options, settingsFile, warnings);
   }
   // The kinds that write OUTSIDE `data/*`, after the settings merge — a `{{name}}` naming this car's own slot,
   // and `parked.txt`'s id lookup, then resolve against the ide row it just wrote. Three of the four speak to
@@ -226,6 +226,9 @@ function handlingId(settings: ReturnType<typeof parseVehicleSettings>, model: st
  */
 function mergeSettings(
   outPath: string,
+  /** The slot this folder takes over — the key of the `carmods.dat` line it may have to REMOVE; absent when
+   *  the folder's own name and its `.dff`s disagree, and then nothing is removed rather than the wrong line. */
+  model: string | undefined,
   settings: VehicleSettings,
   options: ApplyVehicleOptions,
   settingsFile: string | undefined,
@@ -262,8 +265,14 @@ function mergeSettings(
         : mergeCarcols(withColors, resolveColorRefs(settings.carcolsLine, idByName));
     });
   }
+  // A car that says nothing about tuning gets the stock line REMOVED rather than inherited (plan 015): that
+  // line describes the model that used to hold the slot, and a universal part whose `ug_*` dummy the new
+  // model does not carry crashes the game where it is installed. Measured when the rule was taken: no
+  // inheriting car in the fleet ships part `.dff`s, so nothing that was buyable stops being buyable.
   if (settings.carmodsLine !== undefined) {
     editFile(data('carmods.dat'), (text) => mergeCarmods(text, settings.carmodsLine!));
+  } else if (model !== undefined) {
+    editFile(data('carmods.dat'), (text) => removeCarmods(text, model));
   }
 }
 
