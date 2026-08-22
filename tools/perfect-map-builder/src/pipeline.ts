@@ -1578,8 +1578,9 @@ export function assertDefinitionOrder(gameDir: string): void {
     `${rows} inst row(s) of ${report.checked} place a model whose IDE is listed LATER in gta.dat ` +
       `(${report.late.length} ids):\n${listed.join('\n')}${rest > 0 ? `\n  … and ${rest} more` : ''}\n` +
       'The game reads gta.dat top to bottom, so those rows load against an undefined id (visible only with ' +
-      'modloader.asi off). Mod IDE refs must be SPLICED before the first IPL line — see mergeGtaDat and ' +
-      'docs/open-issues/mod-inst-rows-folded-before-their-ide.md.',
+      'modloader.asi off). Mod IDE refs must be SPLICED before the first IPL line — see mergeGtaDat. ' +
+      'Diagnose with `npx tsx scripts/debug/dat-order-check.ts <game-dir>` (stock reports zero) and see ' +
+      'docs/open-issues/fixed/mod-inst-rows-folded-before-their-ide.md.',
   );
 }
 

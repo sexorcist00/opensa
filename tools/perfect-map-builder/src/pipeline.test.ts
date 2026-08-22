@@ -8,6 +8,7 @@ import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  assertDefinitionOrder,
   assertGtaDatFiles,
   assertLodLinks,
   assertOneOwnerPerEntry,
@@ -1331,6 +1332,41 @@ describe('assertLodLinks', () => {
   describe('positive cases', () => {
     it('passes a tree whose LOD stands on its owner', () => {
       expect(() => assertLodLinks(tree(1))).not.toThrow();
+    });
+  });
+});
+
+describe('assertDefinitionOrder', () => {
+  /** A one-area tree whose IDE is listed BEFORE its IPL (`inOrder`) or after it — the shape the guard reads. */
+  function tree(inOrder: boolean): string {
+    const game = mkdtempSync(join(tmpdir(), 'pmb-dat-order-'));
+    mkdirSync(join(game, 'data', 'maps'), { recursive: true });
+    const ide = 'IDE DATA\\MAPS\\town.ide';
+    const ipl = 'IPL DATA\\MAPS\\town.ipl';
+    writeFileSync(join(game, 'data', 'gta.dat'), `${(inOrder ? [ide, ipl] : [ipl, ide]).join('\n')}\n`);
+    writeFileSync(join(game, 'data', 'maps', 'town.ide'), 'objs\n7394, exteriorlit, houses, 300, 0\nend\n');
+    writeFileSync(
+      join(game, 'data', 'maps', 'town.ipl'),
+      ['inst', '7394, exteriorlit, 0, 10, 10, 5, 0, 0, 0, 1, -1', 'end', ''].join('\n'),
+    );
+
+    return game;
+  }
+
+  describe('negative cases', () => {
+    it('fails the build when a row is placed before the IDE that defines its model', () => {
+      expect(() => assertDefinitionOrder(tree(false))).toThrow(/place a model whose IDE is listed LATER/);
+    });
+
+    it('names the model, both files and the script that diagnoses it', () => {
+      expect(() => assertDefinitionOrder(tree(false))).toThrow(/exteriorlit/);
+      expect(() => assertDefinitionOrder(tree(false))).toThrow(/scripts\/debug\/dat-order-check\.ts/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('passes a tree whose IDE is listed first', () => {
+      expect(() => assertDefinitionOrder(tree(true))).not.toThrow();
     });
   });
 });
