@@ -65,3 +65,22 @@ defaults are the ones the user's earlier build ran, and a file is only worth wri
 something else.
 
 Tests: 10 in `tuned-traffic.test.ts`; add-vehicles 56.
+
+## 2026-08-22 — the NITRO upgrades never reach `Global`
+
+His call, and it needs no crash to justify it: tuned traffic exists so a city of factory-fresh bodies does not
+look identical, and `nto_b_l` / `nto_b_s` / `nto_b_tw` show **nothing** from outside a car. Every tuned spawn
+was asking the plugin to mount three parts a passer-by cannot see. Measured on the built ini: **154 of the
+sections carried them, 457 tokens in all**, and a stock line like `comet, nto_b_l, nto_b_s, nto_b_tw` is nitro
+and nothing else — so for those cars the whole tuned section was mount work with no visible result. Such a
+model now gets no section at all, which is what "nothing to tune" already meant here.
+
+The filter is by the `nto_` PREFIX rather than by three ids, because a prefix is what SA's own loader
+classifies a component with (`CAtomicModelInfo::SetupVehicleUpgradeFlags`) — the family name is the game's,
+not ours. `SKIPPED_UPGRADE_PREFIX` in `tuned-traffic.ts`.
+
+**What this is NOT**: a diagnosis of the `0x007F0BF7` crash (frame-not-found while installing a tuning part)
+that reproduced twice in a helicopter and stops when `ModelVariations` is removed. The nitro family is under
+suspicion because it is what every tuned spawn mounts, but nothing has pinned the crash to a car or a part
+yet, and he has flown that build before without seeing it. Tested first as a hand-stripped ini in the bottle,
+with the same rule, before any rebuild.

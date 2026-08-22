@@ -80,12 +80,19 @@ describe('registerTunedTraffic', () => {
       expect(iniText()).not.toContain('[police]');
       expect(iniText()).toContain('[blade]');
     });
+
+    it('skips a car whose whole line is NITRO — nothing it would show is left', () => {
+      // `police, nto_b_l` is the shape half the stock table has (`comet, nto_b_l, nto_b_s, nto_b_tw`).
+      expect(registerTunedTraffic(game, DEFAULT_TUNED_TRAFFIC, IDS)).toBe(1);
+
+      expect(iniText()).not.toContain('[police]');
+    });
   });
 
   describe('positive cases', () => {
     it("writes the model's own id, its parts and the three keys", () => {
-      expect(registerTunedTraffic(game, DEFAULT_TUNED_TRAFFIC, IDS)).toBe(2);
-      expect(iniText()).toContain('Global=536,nto_b_l,exh_lr_bl1');
+      expect(registerTunedTraffic(game, DEFAULT_TUNED_TRAFFIC, IDS)).toBe(1);
+      expect(iniText()).toContain('Global=536,exh_lr_bl1');
       expect(iniText()).toContain('TuningChance=75');
       expect(iniText()).toContain('TuningFullBodykit=1');
       expect(iniText()).toContain('ChangeOnlyParked=0');
@@ -95,7 +102,14 @@ describe('registerTunedTraffic', () => {
       writeFileSync(join(game, INI), '[Settings]\nEnableLights=1\n\n[blade]\nGlobal=536,19001\n', 'latin1');
       registerTunedTraffic(game, DEFAULT_TUNED_TRAFFIC, IDS);
 
-      expect(iniText()).toContain('Global=536,19001,nto_b_l,exh_lr_bl1');
+      expect(iniText()).toContain('Global=536,19001,exh_lr_bl1');
+    });
+
+    it('leaves the NITRO upgrades out of Global — they show nothing from outside the car', () => {
+      registerTunedTraffic(game, DEFAULT_TUNED_TRAFFIC, IDS);
+
+      expect(iniText()).toContain('[blade]');
+      expect(iniText()).not.toContain('nto_');
     });
 
     it('is idempotent', () => {
@@ -112,7 +126,7 @@ describe('registerTunedTraffic', () => {
 
       expect(iniText()).toContain('TuningChance=10');
       expect(iniText()).not.toContain('TuningChance=75');
-      expect(iniText()).toContain('Global=536,nto_b_l,exh_lr_bl1');
+      expect(iniText()).toContain('Global=536,exh_lr_bl1');
     });
   });
 });
@@ -138,7 +152,7 @@ describe("an added car's section is keyed by ID", () => {
       // Field 2026-08-20: `[059veh]` left the car untuned in traffic while Transfender tuned it fine. The
       // plugin resolves a section header to a model, and an added car's NAME does not exist yet when it
       // does — the row that gives it one is merged by Mod Loader out of modloader/added-vehicles/.
-      writeFileSync(join(game, 'data', 'carmods.dat'), 'mods\n059veh, nto_b_l\nend\n', 'latin1');
+      writeFileSync(join(game, 'data', 'carmods.dat'), 'mods\n059veh, exh_a_l_059\nend\n', 'latin1');
 
       registerTunedTraffic(game, DEFAULT_TUNED_TRAFFIC, new Map([['059veh', 19_050]]), new Set(['059veh']));
 
@@ -149,7 +163,7 @@ describe("an added car's section is keyed by ID", () => {
     });
 
     it('leaves a STOCK car keyed by its name — that one resolves, and the file stays readable', () => {
-      writeFileSync(join(game, 'data', 'carmods.dat'), 'mods\nblade, nto_b_l\nend\n', 'latin1');
+      writeFileSync(join(game, 'data', 'carmods.dat'), 'mods\nblade, exh_lr_bl1\nend\n', 'latin1');
 
       registerTunedTraffic(game, DEFAULT_TUNED_TRAFFIC, new Map([['blade', 536]]), new Set(['059veh']));
 

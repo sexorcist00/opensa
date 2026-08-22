@@ -20,6 +20,8 @@
  * often traffic should be tuned is taste, not a fact about the game. The `exclude` list is there for the
  * same reason the plugin ships its own `ExcludeModelsFromInheritance`: police, emergency and trains look
  * wrong tuned.
+ *
+ * **One family of the line never reaches `Global`: the NITRO upgrades** — see {@link SKIPPED_UPGRADE_PREFIX}.
  */
 import { parseCarmods } from '@opensa/renderware/parsers/text/carmods.parser';
 import { openArchiveIndex } from '@opensa/tool-kit/archive/layout';
@@ -29,6 +31,26 @@ import { join } from 'node:path';
 
 import { ADDED_VEHICLES_DIR } from './loose-files';
 import { extendGlobal } from './traffic';
+
+/**
+ * Upgrade ids the tuned-traffic sections DROP, by the prefix SA's own loader classifies them with
+ * (`CAtomicModelInfo::SetupVehicleUpgradeFlags` reads a component's prefix, so this is the game's own family
+ * name and not a list of ours): `nto_` — `nto_b_l`, `nto_b_s`, `nto_b_tw`.
+ *
+ * **Why they have no business here** (the user's call, 2026-08-22): tuned traffic exists to stop a city of
+ * factory-fresh bodies from looking identical, and nitro shows nothing from outside a car — it is a
+ * performance upgrade whose bottles sit inside the shell. So every tuned spawn was asking the plugin to mount
+ * three parts that change nothing a passer-by can see. On a fleet where 154 sections carried them and a stock
+ * line like `comet, nto_b_l, nto_b_s, nto_b_tw` is nitro and nothing else, that is the majority of the mount
+ * work the feature was doing.
+ *
+ * It is also the family under suspicion in a reproducible crash — `0x007F0BF7`, "frame did not find the
+ * child", which is what the game does when a part is installed on a car with no mount for it, and which stops
+ * when `ModelVariations` is removed. **That is a suspicion, not a diagnosis**: the crash has not been pinned
+ * to a car or a part, and this change is justified on its own ground (nothing visible to gain) rather than as
+ * a fix. If it turns out to be the cause, the note here is where to say so.
+ */
+export const SKIPPED_UPGRADE_PREFIX = 'nto_';
 
 /** The optional config file, beside the added cars. */
 export const CONFIG_FILE = 'add-vehicles.json';
@@ -128,7 +150,7 @@ export function registerTunedTraffic(
     }
     const tokens = [
       ...Array.from({ length: paintjobs.get(model) ?? 0 }, (_, index) => `paintjob${index + 1}`),
-      ...(carmods.mods.get(model) ?? []),
+      ...(carmods.mods.get(model) ?? []).filter((part) => !part.toLowerCase().startsWith(SKIPPED_UPGRADE_PREFIX)),
     ];
     if (tokens.length === 0) {
       continue;
