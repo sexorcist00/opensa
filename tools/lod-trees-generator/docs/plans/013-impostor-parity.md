@@ -1,6 +1,6 @@
 # 013 — Impostor parity: why every tree LOD looks nothing like its HD, and the fixes in order
 
-**Status: 01/02/03/06 BUILT, measured on the BUILT trees 2026-08-22 ([benchmark](../../../../docs/benchmarks/tools/2026-08-22-lod-trees-013-on-the-built-trees.md)); 04 NOT BUILT (superseded by 06); 05 waits ONLY on the field verdict.** Reach: `tools/lod-trees-generator` (the rule), `tools/rw-codec`
+**Status: DONE and FIELD-ACCEPTED 2026-08-22.** Steps 01/02/03/06 built and measured on the built trees ([benchmark](../../../../docs/benchmarks/tools/2026-08-22-lod-trees-013-on-the-built-trees.md)); 04 NOT BUILT (measured away by 06, and its `sa`-half ASI removed with a [postmortem](../../../../docs/postmortem/asi-perfect-vegetation-view-weighted-cards.md)). **The verdict, on BOTH targets — the real game and OpenSA: "definitely better, the LOD→HD transition is much less noticeable, no defects seen"** (the user, 2026-08-22, after driving and flying both builds). Reach: `tools/lod-trees-generator` (the rule), `tools/rw-codec`
 (the DXT5 endpoint fit), `tools/map-placement` (the impostor IDE row), and — phase B only, OpenSA target only —
 `packages/cell-weld` + `packages/engine`.
 
@@ -71,7 +71,7 @@ pose is the offline instrument — it is what produced the report and it is repr
 | 02 | the impostor row inherits the source's vegetation bits; one winding per card | both | `map-placement/ide.ts` (flags param is already there), `lod-trees-generator/core/cards.ts` |
 | 03 | density: measure the stack, pick the card rule — MEASURED, 4 cards stay | both | `lod-trees-generator` config + a benchmark |
 | 04 | view-weighted cards (a billboard-set material): one projection from every angle — NOT BUILT, superseded by 06 | OpenSA; the `sa` half was to be an ASI, now [postmortem](../../../../docs/postmortem/asi-perfect-vegetation-view-weighted-cards.md) | — |
-| 05 | field verdict, numbers, docs — numbers DONE 2026-08-22, verdict open | — | `docs/benchmarks/`, this file, tool readme |
+| 05 | field verdict, numbers, docs — CLOSED 2026-08-22, accepted on both targets | — | `docs/benchmarks/`, this file, tool readme |
 | 06 | per-target card sets + the card alpha solved per tree — BUILT 2026-08-21 | both | `lod-trees-generator/core/{probe,card-alpha}.ts`, `perfect-map-builder` |
 
 ### 01 — the bake stops aliasing
@@ -292,7 +292,19 @@ bake-time probe. Full file:
 - OpenSA in the engine for the first time on this plan: 8.1–8.3 ms frames (120+ fps), 938–1 057 draws. Not an
   A/B — the previous pak was rebuilt in place, so there is no before-frame.
 
-**What remains is the verdict**, which is his eye and nothing else.
+#### 05 — the verdict, 2026-08-22: ACCEPTED on both targets
+
+He delivered the `sa` build to the reference bottle, drove it, flew a helicopter over it, and looked at the
+`opensa` build too. **"Definitely better on both — the LOD→HD transition is much less noticeable, and I saw no
+defects."** That closes the plan: the report it opened with (*"the LOD is a solid dark mass where the HD is an
+airy canopy"*) no longer describes what the field sees.
+
+The one crash of that session (`0x007F0BF7`, twice, while flying) is NOT this plan's: it is a tuning-part
+frame lookup, it stops when `ModelVariations` is removed, and it has its own work item.
+
+**Deliberately not claimed**: nothing here says the impostor is indistinguishable from its HD, only that the
+switch stopped announcing itself. The angular question phase B existed for was never re-opened by the field —
+which is the condition the postmortem records for reviving it.
 
 ### 06 — one cage per class, and the alpha comes from the tree
 

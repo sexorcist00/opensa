@@ -323,8 +323,11 @@ row but its chain was superseded by 097). Newest first:
   trees, plus the map strip + place stages (text↔binary IPL LOD-index coupling), the SA asset-format checklist,
   and aspect-aware atlas + `--prelight` trunk transfer. (procobj is now its own tool.)
   [`lod-trees-generator/docs/plans/`](../../tools/lod-trees-generator/docs/plans/) (`001`–`005`, `007`–`013`;
-  `013` — impostor parity, PLANNED 2026-08-21: the four measured causes every tree LOD differs from its HD,
-  fixes in order, a view-weighted phase B for OpenSA).
+  `013` — impostor parity, **DONE and field-accepted 2026-08-22**: the four causes measured, the bake made
+  antialiased and dilated, the impostor row given its source's vegetation class, and ONE CAGE PER ALPHA CLASS
+  — 4 full-alpha cards for OpenSA's cutout weld, 3 cards thinned per tree for real SA. Phase B was measured
+  away rather than built, and its `sa` half's ASI with it
+  ([postmortem](../postmortem/asi-perfect-vegetation-view-weighted-cards.md)).
 - **sa-procobj-placement** — procobj scatter → **permanent static IPL rows at `lod = -1`**, range from the stock
   `procobj.ide` raised to 299. SA-only (OpenSA scatters at runtime), and no LODs since
   [014](../../tools/sa-procobj-placement/docs/plans/014-permanent-rows-no-lod-twins.md) — renamed from

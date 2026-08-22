@@ -896,3 +896,21 @@ pass on the city scenes and the whole map's growth since 08-09 is +0.0..+0.5 ms.
 ~700 draws in view on ls-noon (1967 → 1265 — the batching lever), and the `cellVertex` residency counter INCLUDES
 vehicle geometry (ocean-horizon 349 → 57 with zero live cars — the registered road-car `.osm` buffers), so the
 "×2–3 cellVertex on every scene" the closed issue read as world growth was the fleet's buffers.
+
+## 2026-08-22 — the first OpenSA pak carrying lod-trees 013, on the user's display lane
+
+[`opensa-engine/2026-08-22-ingame-lod-trees-013-sweep.json`](opensa-engine/2026-08-22-ingame-lod-trees-013-sweep.json)
++ the write-up [`opensa-engine/2026-08-22-lod-trees-013-sweep.md`](opensa-engine/2026-08-22-lod-trees-013-sweep.md).
+`build/original/opensa` of 09:57 (repo `efe28767`), same lane and window as
+[arm A](opensa-engine/2026-08-17-ingame-full-hipoly-fleet-sweep.json) — `ocean-horizon` pins at 120.0 fps /
+8.333 ms in both, which is what says the lane matches.
+
+**No frame cost: mean frame 13.008 → 12.767 ms (−1.9 %), GPU pass 8.099 → 7.872 (−2.8 %), 8 of 9 scenes equal
+or faster, slow frames 35 → 24** (ganton-night 12 → 4, lv-night 11 → 3). Plan 013's own gate for the phase B it
+never built was *"no measurable change on the Ganton lap"* — Ganton reads −1.4 % noon, −2.6 % night. The single
+slower scene is `sf-fog-dawn` (+9.1 %), and its **+25.8 % triangles / +23 % draws** say it is submitting more
+geometry rather than paying more per triangle; what gained geometry in SF between the two builds is a separate
+question this row does not guess at. **Not a controlled A/B of 013**: the two paks are five days apart and also
+differ by `mod-installer` 015/016, `img-splitter` 002, `vehicle-installer` 014 and `lod-common`'s blended-last
+rule — what the pair carries is the absence of a regression, on the build where the LOD cells started welding
+49 820 impostor triangles in the cutout class.

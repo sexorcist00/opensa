@@ -88,7 +88,12 @@ browner than the HD (the blue channel is where it drops, 42 → 29).
 the numbers are a floor for the next comparison, not a verdict on the plan's cost. What they do say is that
 the layer is not expensive: the impostors in frame draw as cutout, the frame sits at 8 ms on this machine.
 
-## Still open
+## The field verdict — ACCEPTED, both targets, the same day
 
-The field verdict from the driver's seat at the switch distance (plan 013 step 05) — the acceptance criterion
-is the user's eye, and no metric here replaces it.
+The user delivered the `sa` build to the reference bottle, drove it and flew a helicopter over it, and looked
+at the `opensa` build as well: **"definitely better on both; the LOD→HD transition is much less noticeable; no
+defects seen."** Plan 013 closes on that. Nothing above replaces it — every number here says the data is what
+the plan intended, and none of them could have said the switch stopped announcing itself.
+
+(The two crashes of that session were a tuning-part frame lookup, `0x007F0BF7`, which stops when
+`ModelVariations` is removed — a separate work item, not this plan's.)
