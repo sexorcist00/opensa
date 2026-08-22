@@ -177,11 +177,20 @@ Each now names the step that owns it, so none of them is an open-ended note.
   [the counts](../benchmarks/opensa-engine/2026-08-21-dispatch-symbology-call-counts.json)), and `fillText`
   is still one call per chip. Whether that needs to become an instanced draw is a question the milliseconds
   at 150 units answer first. → [201/5-02](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
-- **Time is an axis now, but nothing drives it yet.** Every unit's position is recorded as a track
-  (`ops/tracks.ts`, 17 B/sample, 17.5 MB for 150 units × a shift) and `at(t)` interpolates between samples
-  and holds past the last one rather than extrapolating. What does not exist is the clock that would ask it
-  for a T other than "now" — no scrub, no playback, no trails.
-  → [201/8-03](../plans/201-dispatch-console/8-the-time-axis/readme.md) and 8/04.
+- ~~**Time is an axis now, but nothing drives it yet.**~~ **The clock landed 2026-08-22.** The shift strip
+  scrubs, plays at ×1/×2/×8, returns to Live and holds bookmarks; the board is reconstructed at whatever
+  moment is on screen — units where they were, calls with the status they had. The world's dial says `WORLD`
+  and the shift strip says `SHIFT`, because they are two different times and the console was labelling one
+  of them "Time". A resolve costs p50 0.071 ms.
+  → [201/8-03](../plans/201-dispatch-console/8-the-time-axis/readme.md).
+- **Units step between fixes rather than sliding, and nothing yet SAYS a marker is stale.** Interpolation was
+  dropped on the user's call (2026-08-22): a track answers with the last fix, because a straight line across
+  a 4 s gap at 100 km/h runs through buildings. The accessor already returns the answer's age and a stale
+  flag; what is missing is the operator seeing it.
+  → [201/8-02](../plans/201-dispatch-console/8-the-time-axis/readme.md).
+- **No trails.** The last N minutes of a unit's track on the ground — cheap now that the track exists, and it
+  shares the clamp-to-ground work with the operator's annotations.
+  → [201/8-04](../plans/201-dispatch-console/8-the-time-axis/readme.md).
 - **The mobile evidence is emulated, not hardware.** The phone runs below are an emulated Pixel 7 and a
   simulated mobile adapter; the one real device in the repo's record (Mali-G51, 360×800 DPR 2) ran the
   synthetic `?demo=1` city, not a streamed world. → the real-district row is
@@ -196,10 +205,16 @@ Each now names the step that owns it, so none of them is an open-ended note.
   pinned is the WORK IT ASKS FOR rather than a time this machine happens to take: a label is measured once
   and never again, the font is set a fixed number of times per frame rather than once per chip, and the
   counts it reports match what it drew. Both halves were verified by reintroducing the defect.
-- `apps/dispatch/src/ops/tracks.test.ts` — the time axis: that it does not extrapolate past the last sample
-  (it holds and says how old the answer is), that it records at the PUBLISH rate rather than the tick rate,
-  that a stationary run collapses to two samples, and that a heading crossing north takes the short way
-  round. Each of the three policy rules was verified by reintroducing its defect.
+- `apps/dispatch/src/ops/tracks.test.ts` — the time axis: that it answers with the LAST FIX rather than a
+  slide between two, that it does not extrapolate past the last sample (it holds and says how old the answer
+  is), that it records at the PUBLISH rate rather than the tick rate, and that a stationary run collapses to
+  two samples. Each of the three policy rules was verified by reintroducing its defect.
+- `apps/dispatch/src/ops/clock.test.ts` — the shift clock: it cannot be scrubbed outside what was recorded,
+  it does not slip into live when playback catches up, picking a rate while live enters replay at the moment
+  on screen, and Live returns to the wall clock rather than to where the scrub was.
+- `apps/dispatch/src/ops/history.test.ts` — the reconstruction: a call is absent before it was opened, a unit
+  with no sample is dropped rather than drawn where nobody saw it, and both a call and a unit carry the
+  status they HAD rather than the one they ended with.
 - `apps/dispatch/src/world/zones.test.ts` — the baked district table: a missing file, a malformed one and a
   pak that declares none all answer "no districts" rather than throwing into the boot, and a point resolves
   to the smallest containing district rather than the city around it.

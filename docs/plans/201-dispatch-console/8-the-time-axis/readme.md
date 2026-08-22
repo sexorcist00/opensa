@@ -13,7 +13,7 @@ drives the scene. We are not adopting CZML; we are adopting the fact that **time
 
 | Requirement | Decided |
 | --- | --- |
-| Movement between server packets | **interpolated**, never teleported and never extrapolated past what was received |
+| Movement between server packets | ~~interpolated~~ → **the last fix, and never extrapolated past it** (the user's call, 2026-08-22 — see [02](#02--interpolation-honestly)) |
 | History depth | **the current shift** (hours) — client-side, no storage backend needed |
 | Scrub | a timeline the operator drags |
 | Playback | accelerated (×2, ×8) |
@@ -85,14 +85,36 @@ Between two received samples the unit moves smoothly; past the last one it **sto
 rejected on 2026-08-06: a car continuing on its last vector drives through a wall, and a map that invents
 positions is worse than one that admits it is a second behind.
 
+**INTERPOLATION IS OUT TOO — the user's call, 2026-08-22.** A track answers with the last fix at or before
+the moment asked for; between two fixes it steps rather than slides. It had been built in 8/01 and is
+removed, before anything on screen depended on it.
+
+Three things make the call the right one rather than merely the one that was made:
+
+- **The same argument that killed extrapolation applies to the slide.** At PCAD's 4 s rate a car at 100 km/h
+  covers ~110 m between fixes, and a straight line between them runs through buildings.
+  [202 §4](../../202-pcad-dispatch/readme.md) named exactly this — *"smooth, confident and wrong, which is
+  worse on a 3D map than on a tile map because the world around it makes the error obvious"* — and then
+  listed interpolation as the thing whose rate this constrains. Stepping is the honest picture of a
+  self-reported feed: the dot is where the unit SAID it was.
+- **Nothing on screen needed it.** The mock feed integrates at 20 Hz, so the live map is already smooth; and
+  a drag across an 8 h timeline moves about one sample per pixel, so a slide inside a 4 s gap is invisible.
+  It was machinery for a feed that is not wired yet.
+- **The cheap fix for the jumping is not ours.** 202 phase 4 already proposes raising PCAD's publish rate,
+  and *"both are worth measuring before choosing: raise the rate and see what the map looks like, before
+  building uncertainty rendering to compensate for a rate nobody tried to change."*
+
+**What would bring it back:** a field verdict that stepping reads badly at a publish rate nobody managed to
+raise. That is a measurement, and it is [202 phase 4](../../202-pcad-dispatch/readme.md)'s to take.
+
 **Owes:** what the operator sees when the feed goes quiet — a stale marker, not a confidently wrong one — and
 the latency the interpolation adds.
 
-**Half of it is already enforced, by 8/01 rather than by this step.** `UnitTracks.at` interpolates between
-two samples and **holds** past the last one, returning the answer's age and a `stale` flag once it is older
-than one publish interval — so no consumer can accidentally invent a position, whatever this step decides to
-draw. Reintroducing extrapolation fails a test. What remains is entirely this step's: showing the operator
-that a marker is aging, and the latency number.
+**The engine half is enforced in the track accessor rather than left to each consumer.** `UnitTracks.at`
+answers with the last fix and **holds** past it, returning the answer's age and a `stale` flag once it is
+older than one publish interval — so no consumer can invent a position. Reintroducing extrapolation fails a
+test. What remains is entirely this step's and is UI: showing the operator that a marker is aging. The
+latency number the step also owed is now zero by construction — a stepped read adds none.
 
 ### 03 — The clock and the timeline
 
@@ -106,6 +128,43 @@ other.
 
 **Owes:** the two clocks distinguished on screen, and the frame cost of a scrub (a drag re-solves every
 entity — it must not stall).
+
+**DONE 2026-08-22.**
+
+**The whole of replay is one substitution, and that is what 8/01 bought.** `useOperations` now holds two
+boards: `live` is what the feed is doing and what the history records, and `ops` is the board AT THE CLOCK —
+the same object while live, and a reconstructed snapshot while scrubbing. Everything downstream takes `ops`
+and cannot tell which it was handed, so there is no second rendering path: the map loop, the symbology, the
+panels and the detail card all work on a scrub without a line of change. Keeping time out of `Unit` and in a
+store beside it is what made a resolved snapshot the same shape as a live one.
+
+**A unit and a call get different histories, because they change differently.** A unit MOVES and is sampled;
+a call does not move at all and changes STATUS a handful of times, so its history is an event list — smaller
+and exact. `BoardHistory` owns both, and a scrub therefore satisfies the chain's own verification: units are
+where they were, and calls have the state they had, not the one they ended with.
+
+**The two clocks are labelled, because the chain said they would be confused and the console was already
+doing it.** The top bar's dial was labelled `Time`, which is the one label it may not have now that a second
+clock exists: it says **`WORLD`** (it turns the sky) and the new timeline strip says **`SHIFT`** (it moves
+the board). Whenever the picture is not the current one the strip shows a loud **`REPLAY`** badge, because an
+operator reading an hour-old picture as the live one is the failure this step can actually cause.
+
+**Playback stops at the newest sample rather than slipping into live.** A console that silently becomes live
+while the operator is reading the past has changed what is on screen without being asked; returning is one
+press of a button that says `Live`. ×1/×2/×8, and bookmarks are `Mark` plus a button per moment.
+
+**The number it owed** ([measured](../../../benchmarks/opensa-engine/2026-08-22-dispatch-scrub-cost.json)):
+one full-board resolve at 150 units + 40 calls over an 8 h history is **p50 0.071 ms, p95 0.193, worst
+0.636** — 0.4 % of a 16.7 ms frame typically and 3.8 % at its worst. A drag re-solves everything every frame
+and does not come close to stalling. What is NOT measured and is named rather than assumed: React's
+re-render on each scrub frame, which the loop is immune to (it reads through a getter) and the panels are
+not.
+
+**One structure here is not bounded** and it is worth knowing before it matters: the unit rings are
+fixed-size, the calls' event lists grow with the shift. At a deliberately absurd 49 transitions per call they
+are ~125 kB, so nothing needs doing — but a feed that flapped a call's status would grow them without limit.
+
+**Touched from [the protected list](../1-the-map-profile/protected-list.md):** nothing.
 
 ### 04 — Trails
 

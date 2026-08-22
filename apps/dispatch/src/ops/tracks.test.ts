@@ -101,13 +101,14 @@ describe('UnitTracks', () => {
   });
 
   describe('positive cases', () => {
-    it('interpolates between two received samples', () => {
+    it("answers with the LAST FIX between two samples — it does not slide (the user's call, 08-22)", () => {
       const tracks = new UnitTracks();
       drive(tracks, 20, 10);
       const midway = tracks.at('u0', 6000);
 
-      // 10 u/s: at t=6 s the unit is at x=60, between the 4 s and 8 s samples.
-      expect(midway?.at[0]).toBeCloseTo(60, 0);
+      // 10 u/s at a 4 s rate: the fix at t=4 s puts the unit at x=40, and t=6 s is still that fix. A slide
+      // would answer 60 — smooth, confident, and a position nobody reported.
+      expect(midway?.at[0]).toBeCloseTo(40, 0);
       expect(midway?.stale).toBe(false);
       expect(midway?.ageMs).toBe(0);
     });
@@ -121,14 +122,14 @@ describe('UnitTracks', () => {
       expect(tracks.at('u0', 100)?.status).toBe('enRoute');
     });
 
-    it('takes the short way round when a heading crosses north', () => {
+    it('carries the heading of the fix it answers with, unblended', () => {
       const tracks = new UnitTracks();
       tracks.record(board(0, [{ at: [0, 0], heading: 0.1 }]));
       tracks.record(board(SAMPLE_INTERVAL_MS, [{ at: [40, 0], heading: Math.PI * 2 - 0.1 }]));
-      const midway = tracks.at('u0', SAMPLE_INTERVAL_MS / 2);
 
-      // Halfway between +0.1 and -0.1 is 0, not π. A blend through the long way would land near 3.14.
-      expect(Math.abs(Math.atan2(Math.sin(midway?.heading ?? 0), Math.cos(midway?.heading ?? 0)))).toBeLessThan(0.05);
+      // No blend, so no wrap-around question to get wrong: each answer is one recorded heading.
+      expect(tracks.at('u0', SAMPLE_INTERVAL_MS / 2)?.heading).toBeCloseTo(0.1, 5);
+      expect(tracks.at('u0', SAMPLE_INTERVAL_MS)?.heading).toBeCloseTo(Math.PI * 2 - 0.1, 5);
     });
 
     it('reports the window it holds, so a scrub knows what it may ask for', () => {

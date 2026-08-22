@@ -21,12 +21,13 @@ import { MapCanvas } from './ui/map-canvas';
 import { Sheet } from './ui/sheet';
 import { StatusBar } from './ui/status-bar';
 import { styles } from './ui/styles';
+import { TimelineBar } from './ui/timeline-bar';
 import { TopBar } from './ui/top-bar';
 import { UnitsPanel } from './ui/units-panel';
 import { useCompactLayout } from './ui/use-compact';
 
 export function App(): ReactElement {
-  const { actions, autoDispatch, ops, read, selection } = useOperations();
+  const { actions, autoDispatch, clock, historyWindow, ops, read, selection } = useOperations();
   const [readout, setReadout] = useState<DispatchReadout | null>(null);
   const handleRef = useRef<DispatchHandle | null>(null);
   const compact = useCompactLayout();
@@ -50,6 +51,17 @@ export function App(): ReactElement {
     <MapCanvas actions={actions} onReadout={setReadout} onReady={onReady} read={read}>
       <DetailPanel actions={actions} compact={compact} onLocate={locate} ops={ops} selection={selection} />
     </MapCanvas>
+  );
+  const timeline = (
+    <TimelineBar
+      clock={clock}
+      compact={compact}
+      onBookmark={() => actions.bookmark(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}
+      onLive={actions.live}
+      onRate={actions.setRate}
+      onScrub={actions.scrub}
+      window={historyWindow}
+    />
   );
   const top = (
     <TopBar
@@ -76,6 +88,7 @@ export function App(): ReactElement {
           selection={selection}
           units={ops.units}
         />
+        {timeline}
         <StatusBar compact readout={readout} />
       </div>
     );
@@ -103,6 +116,7 @@ export function App(): ReactElement {
         units={ops.units}
       />
 
+      {timeline}
       <StatusBar readout={readout} />
     </div>
   );

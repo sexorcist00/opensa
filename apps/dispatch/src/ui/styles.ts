@@ -25,7 +25,7 @@ export const styles = {
     fontFamily: 'ui-sans-serif, system-ui, sans-serif',
     fontSize: 12,
     gridTemplateColumns: '300px 1fr 264px',
-    gridTemplateRows: '44px 1fr 26px',
+    gridTemplateRows: '44px 1fr 30px 26px',
     height: '100%',
     width: '100%',
   },
@@ -37,7 +37,7 @@ export const styles = {
     fontFamily: 'ui-sans-serif, system-ui, sans-serif',
     fontSize: 12,
     gridTemplateColumns: '1fr',
-    gridTemplateRows: '40px 1fr 44% 20px',
+    gridTemplateRows: '40px 1fr 44% 30px 20px',
     height: '100%',
     width: '100%',
   },
@@ -229,6 +229,32 @@ export const styles = {
     gap: 16,
     gridColumn: '1 / -1',
     padding: '0 12px',
+  },
+  /** The shift timeline strip (201/8-03). Sits above the status bar, full width. */
+  timeline: {
+    alignItems: 'center',
+    background: COLORS.panel,
+    borderTop: `1px solid ${COLORS.border}`,
+    display: 'flex',
+    gap: 10,
+    gridColumn: '1 / -1',
+    padding: '0 12px',
+  },
+  /** The scrub track itself — it takes what the row has left. */
+  timelineRange: {
+    flex: 1,
+    minWidth: 60,
+  },
+  /** REPLAY, shown while the console is NOT live. Deliberately loud: the whole screen is showing the past,
+   *  and an operator who misses that is reading an old picture as the current one. */
+  timelineReplay: {
+    background: '#4a1220',
+    borderRadius: 3,
+    color: '#ffb3c0',
+    fontFamily: MONO,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    padding: '2px 6px',
   },
   topBar: {
     alignItems: 'center',

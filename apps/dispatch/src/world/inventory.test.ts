@@ -65,7 +65,7 @@ const CONTEXT = {
     symbols: 11,
     units: 9,
   },
-  tracks: { bytes: 2601, capacity: 17, samples: 42, tracks: 9, window: [0, 30_000] as const },
+  tracks: { bytes: 2601, capacity: 17, incidentEvents: 4, samples: 42, tracks: 9, window: [0, 30_000] as const },
 };
 
 describe('FrameInventory', () => {

@@ -6,7 +6,7 @@
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 
 import type { GtaGround } from '../map/coords';
-import type { TrackStats } from '../ops/tracks';
+import type { HistoryStats } from '../ops/history';
 import type { Operations, Selection } from '../ops/types';
 import type { DispatchActions } from '../ops/use-operations';
 import type { BootOptions, DispatchHandle, DispatchReadout } from '../world/boot';
@@ -32,7 +32,7 @@ export function MapCanvas({
   children?: React.ReactNode;
   onReadout: (readout: DispatchReadout) => void;
   onReady: (handle: DispatchHandle) => void;
-  read: { ops: () => Operations; selection: () => Selection; trackStats: () => TrackStats };
+  read: { ops: () => Operations; selection: () => Selection; trackStats: () => HistoryStats };
 }): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);

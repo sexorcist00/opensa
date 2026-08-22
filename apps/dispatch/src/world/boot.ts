@@ -8,7 +8,7 @@ import {
 
 import type { GtaGround } from '../map/coords';
 import type { CursorPick, MapPose } from '../map/map-camera';
-import type { TrackStats } from '../ops/tracks';
+import type { HistoryStats } from '../ops/history';
 /**
  * The dispatch host: boot the engine on a canvas, stream the city, run the frame loop, and translate pointer
  * input into camera steps and selections. Plain DOM and engine — React never enters the loop, it only receives
@@ -46,7 +46,7 @@ export interface BootOptions {
   readonly selection: () => Selection;
   /** The time axis's cost and window (201/8-01) — read only by `?inventory=1`, so it is optional and a host
    *  embedding the map without a board simply does not pass it. */
-  readonly trackStats?: () => TrackStats;
+  readonly trackStats?: () => HistoryStats;
 }
 
 export interface DispatchHandle {

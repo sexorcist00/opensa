@@ -25,9 +25,23 @@
  * - **A stationary run collapses to its two ends.** Most of a shift, most units are parked. Keeping the
  *   first and last sample of a still period says exactly as much as keeping four hundred of them.
  *
- * The interval past the last sample is NOT extrapolated — {@link UnitTracks.at} holds the last known state
- * and marks it stale. That rule is 8/02's to surface to the operator; it is enforced here so that no
- * consumer can accidentally invent a position.
+ * **What it does BETWEEN two samples is nothing, and that is the user's call (2026-08-22).** A track answers
+ * with the last fix at or before the moment asked for — a step, not a slide. The plan's 8/02 was written
+ * around interpolating between packets; interpolation was dropped before anything needed it, and the reasons
+ * hold either way:
+ *
+ * - At PCAD's 4 s rate a car at 100 km/h covers ~110 m between fixes, so a straight-line slide draws it
+ *   gliding through buildings — smooth, confident and wrong, which 202 §4 already named as the map's hardest
+ *   constraint. A dot that jumps to where the unit was actually reported is the honest picture, and the
+ *   cheapest fix for the jumping is PCAD's own publish rate (202 phase 4).
+ * - Nothing on screen needed it. The mock feed integrates at 20 Hz, so the live map is already smooth; and a
+ *   drag across an 8 h timeline moves about one sample per pixel, so a slide inside a 4 s gap is invisible.
+ *
+ * It is a decision rather than an absence, so it is written down with what would bring it back: a field
+ * verdict that stepping reads badly at a publish rate nobody managed to raise.
+ *
+ * The interval past the last sample is likewise NOT extrapolated — {@link UnitTracks.at} holds the last
+ * known state and marks it stale, so that no consumer can invent a position.
  */
 import type { GtaGround } from '../map/coords';
 import type { Operations, UnitStatus } from './types';
@@ -171,10 +185,10 @@ export class UnitTracks {
   /**
    * One unit's state at time `t`.
    *
-   * Between two samples it is linearly interpolated. **Past the last sample it HOLDS** — the last known
-   * state, marked stale with its age — because a car continued along its last vector drives through a wall,
-   * and a map that invents a position is worse than one that admits it is a second behind (decided
-   * 2026-08-06; 8/02 is what shows that staleness to the operator). Before the first sample, the first.
+   * **The last fix at or before it**, and nothing invented in between. Past the last sample it holds, marked
+   * stale with its age — a car continued along its last vector drives through a wall, and a map that invents
+   * a position is worse than one that admits it is a second behind (decided 2026-08-06). Before the first
+   * sample, the first. Between two, the earlier one — see the header for why there is no slide.
    */
   at(id: string, t: number): null | TrackState {
     const track = this.tracks.get(id);
@@ -183,15 +197,13 @@ export class UnitTracks {
     }
     const last = track.index(track.length - 1);
     if (t >= track.t[last]) {
-      const ageMs = t - track.t[last];
-
-      return state(track, last, track, last, 0, ageMs);
+      return state(track, last, t - track.t[last]);
     }
     const first = track.index(0);
     if (t <= track.t[first]) {
-      return state(track, first, track, first, 0, 0);
+      return state(track, first, 0);
     }
-    // Binary search for the last sample at or before `t`.
+    // Binary search for the last sample at or before `t` — the answer, not one end of a blend.
     let low = 0;
     let high = track.length - 1;
     while (high - low > 1) {
@@ -202,11 +214,8 @@ export class UnitTracks {
         high = mid;
       }
     }
-    const a = track.index(low);
-    const b = track.index(high);
-    const span = track.t[b] - track.t[a];
 
-    return state(track, a, track, b, span > 0 ? (t - track.t[a]) / span : 0, 0);
+    return state(track, track.index(low), 0);
   }
 
   /** Drop a unit's history — it went off duty. */
@@ -251,20 +260,13 @@ export class UnitTracks {
   }
 }
 
-/** The short way round from `from` to `to`, radians — a unit turning past north must not spin backwards. */
-function angleDelta(from: number, to: number): number {
-  const delta = (to - from) % (Math.PI * 2);
-
-  return delta > Math.PI ? delta - Math.PI * 2 : delta < -Math.PI ? delta + Math.PI * 2 : delta;
-}
-
-/** Interpolate between two ring slots. `status` is the EARLIER sample's — a status does not blend. */
-function state(a: Track, ai: number, b: Track, bi: number, mix: number, ageMs: number): TrackState {
+/** One ring slot, as a state. `ageMs` is how much older than the moment asked for this fix is. */
+function state(track: Track, slot: number, ageMs: number): TrackState {
   return {
     ageMs,
-    at: [a.x[ai] + (b.x[bi] - a.x[ai]) * mix, a.y[ai] + (b.y[bi] - a.y[ai]) * mix],
-    heading: a.heading[ai] + angleDelta(a.heading[ai], b.heading[bi]) * mix,
+    at: [track.x[slot], track.y[slot]],
+    heading: track.heading[slot],
     stale: ageMs > SAMPLE_INTERVAL_MS,
-    status: STATUS_BY_ID[a.status[ai]] ?? 'available',
+    status: STATUS_BY_ID[track.status[slot]] ?? 'available',
   };
 }

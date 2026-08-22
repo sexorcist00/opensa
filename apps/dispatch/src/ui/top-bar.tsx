@@ -1,4 +1,11 @@
-/** Shift header: identity, the clock that drives the world's lighting, and the desk's dispatch mode. */
+/**
+ * Shift header: identity, the dial that drives the WORLD's lighting, and the desk's dispatch mode.
+ *
+ * The dial was labelled "Time" until 201/8-03, which is the one label it may not have: the console now
+ * carries a second clock — the shift's wall time, on the timeline strip — and an operator who reads this one
+ * as that one turns the sky when they meant to rewind the board. It says `WORLD` now, and the timeline says
+ * `SHIFT`.
+ */
 import type { ReactElement } from 'react';
 
 import { COLORS, styles } from './styles';
@@ -25,7 +32,7 @@ export function TopBar({
       {!compact && <span style={{ ...styles.badge, background: '#0e3a52', color: COLORS.accent }}>SAN ANDREAS</span>}
 
       <label style={{ alignItems: 'center', display: 'flex', gap: 6, marginLeft: compact ? 0 : 12 }}>
-        {!compact && <span style={{ color: COLORS.muted }}>Time</span>}
+        {!compact && <span style={{ color: COLORS.muted }}>WORLD</span>}
         <input
           max={24}
           min={0}
