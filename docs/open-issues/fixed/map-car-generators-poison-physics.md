@@ -142,7 +142,7 @@ it. Both census lines must be read before a run counts.
 
 ## Related
 
-- [`vehicle-enter-null-body.md`](../vehicle-enter-null-body.md) — also a streaming/physics race around a
+- [`vehicle-enter-null-body.md`](../not-reproduced/vehicle-enter-null-body.md) — also a streaming/physics race around a
   freshly-spawned car. Worth re-testing against this fix before investigating it further.
 - The rule this produced: [`restrictions/architecture.md`](../../restrictions/architecture.md) — a fresh
   Rapier body has no mass until the world steps. The measurement lives in

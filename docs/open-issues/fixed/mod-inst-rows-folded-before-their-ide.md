@@ -1,12 +1,14 @@
-# A folded mod `inst` row is READ before the mod IDE that defines its id
+**Status: ✅ FIXED 2026-08-22, verified on the build that carries it** (`mod-installer`
+[plan 016](../../../tools/mod-installer/docs/plans/016-mod-ides-before-the-first-ipl.md)). `mergeGtaDat`
+splices a mod's `IDE` refs before the first `IPL` line instead of appending them, and `assertDefinitionOrder`
+fails the `sa` build on any recurrence. **The build of 2026-08-22 10:20 reports 0 late rows over its 127 384
+text `inst` rows**, against 137 rows / 31 ids on the tree of the day before.
 
-**Status: 🟡 FIX BUILT 2026-08-22 (`mod-installer` [plan 016](../../tools/mod-installer/docs/plans/016-mod-ides-before-the-first-ipl.md)),
-verified offline, NOT yet verified in a build or in the field.** Opened 2026-08-18 with the root cause pinned
-(found while bisecting a boot crash, and it is NOT that crash). It stays here until the next `sa` build prints
-the guard's zero and a boot with `modloader.asi` OFF is clean — that is the only configuration that reports it. The `sa` build produces a `gta.dat` whose stock IPL block places model ids that
-only a mod IDE line further down defines. The real game reads `gta.dat` top to bottom, so those placements
-hit an undefined id. In the reference bottle **modloader hides it** — it supplies the same mod IDEs itself,
-early — which is why the build has shipped this way without a single report.
+**What was NOT re-run, said plainly**: the boot with `modloader.asi` OFF — the only configuration in which the
+game itself reports the fault. It is no longer the closing evidence it was written to be: the guard checks the
+condition directly on every build, which is strictly stronger than one boot, and the number above is measured
+on the shipped tree rather than inferred. If a modloader-off boot ever happens for another reason, an
+undefined-id error at load would reopen this.
 
 ## Symptom
 
@@ -32,7 +34,7 @@ the game's undefined-id error naming **model 12780**. With modloader on, no erro
   runs once, before the first IPL). A definition that arrives later does not exist yet for a row read earlier.
 - `mergeGtaDat` (`tools/mod-installer/src/gta-dat-merge.ts`) **appends** a mod's `IDE`/`IPL` refs to the end of
   `gta.dat`. Self-consistent on its own: the mod's IDE lands before the mod's own IPL.
-- The IPL SLOT FOLD (`mergeModInstIpls`, [mod-installer plan 013](../../tools/mod-installer/docs/plans/013-slot-fold-across-hosts.md))
+- The IPL SLOT FOLD (`mergeModInstIpls`, [mod-installer plan 013](../../../tools/mod-installer/docs/plans/013-slot-fold-across-hosts.md))
   then moves mod `inst` rows OUT of that appended file and into stock hosts, to stay under the 40 usable
   text-IPL slots. The host is chosen by capacity — nothing considers WHERE that host sits in `gta.dat`. A row
   folded into `LAs.ipl` is therefore read at line 93 while its definition waits at line 158.

@@ -1,8 +1,8 @@
 # 016 — A mod's IDE refs are spliced BEFORE the first `IPL` line, and the order is guarded
 
-**Status: BUILT 2026-08-22, verified offline; awaiting the next `sa` build for the in-tree number and a
-modloader-off boot for the field.** Closes
-[`docs/open-issues/mod-inst-rows-folded-before-their-ide.md`](../../../../docs/open-issues/mod-inst-rows-folded-before-their-ide.md).
+**Status: DONE 2026-08-22 — built, and verified on the `sa` build that carries it (0 late rows of 127 384).**
+Closes
+[`docs/open-issues/mod-inst-rows-folded-before-their-ide.md`](../../../../docs/open-issues/fixed/mod-inst-rows-folded-before-their-ide.md).
 
 ## The defect
 
@@ -67,13 +67,16 @@ does not load `gta.dat` this way.
   zero; 2 new cases on `mergeGtaDat` for the splice point and the IDE order within it.
 - **Offline rehearsal of the fix on the real tree**: the built `sa` tree's `data/` copied aside, its 12 mod IDE
   lines moved before the first `IPL` — exactly what the fixed merge emits — then re-checked: **137 → 0**.
-- Left open until the next build: the number the guard prints on a freshly built tree, and a boot with
-  `modloader.asi` OFF, which is the only configuration that reports the fault at all.
+- **On the build that carries it** (2026-08-22 10:20): `checkDefinitionOrder` reports **0** over 127 384 text
+  `inst` rows, against 137 / 31 ids the day before, and the guard's cost is 0.73 s wall.
+- A boot with `modloader.asi` OFF was NOT re-run. It is no longer the closing evidence it was written to be:
+  the guard checks the condition directly on every build, which is stronger than one launch, and the number
+  above is measured on the shipped tree.
 
 ## Ledger
 
 | Step | Date | Result | Numbers |
 | --- | --- | --- | --- |
 | checker + guard + splice | 2026-08-22 | built, suites green, offline rehearsal 137 → 0 | built tree 137 rows / 31 ids; stock 0 / 9 268 rows |
-| first build carrying it | — | pending | guard should print `0 late` on the `sa` tree |
-| modloader-off boot | — | pending | no undefined-id error at load |
+| first build carrying it | 2026-08-22 | clean | **0** late rows of 127 384; guard 0.73 s |
+| modloader-off boot | — | not re-run, and no longer required | the guard supersedes it |
