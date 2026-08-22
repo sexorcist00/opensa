@@ -5,6 +5,28 @@ import { describe, expect, it } from 'vitest';
 
 import { createEngineEnvironmentDriver, DEFAULT_ENGINE_ENV_CONFIG } from './engine-environment-driver';
 
+/** A timecyc data row with a chosen `FarClp` / `FogSt`; every other column is a plausible midday value. */
+function fogRow(fogStart: number, farClip: number): string {
+  return [
+    '78 83 89', // amb
+    '170 170 170', // ambObj
+    '255 255 255', // dir
+    '40 40 40', // skyTop
+    '60 60 60', // skyBot
+    '0 0 0', // sunCore
+    '0 0 0', // sunCorona
+    '1 1 0.6', // sunSize spriteSize spriteBright
+    '200 100 0', // shadow lightShadow poleShadow
+    `${farClip} ${fogStart} 1`, // farClip fogStart lightOnGround
+    '80 80 80', // lowClouds
+    '50 50 50', // bottomClouds
+    '240 255 38 64', // water RGBA
+    '98 255 0 64', // alpha1 rgb1
+    '20 90 55 0', // alpha2 rgb2
+    '0 0 0 1', // cloudAlpha intensityLimit waterFogAlpha dirMult
+  ].join(' ');
+}
+
 /** Minimal mutable Environment (only the fields the driver writes matter; extras don't). */
 function makeEnvironment(): Environment {
   return {
@@ -346,6 +368,32 @@ describe('createEngineEnvironmentDriver', () => {
 
       expect(environment.fogCutDistance).toBe(1100);
       expect(environment.fogStartDistance).toBeCloseTo(880, 5); // 0.8 × cut — the exp² ramp never degenerates
+    });
+
+    it('passes a NEGATIVE authored fog start through, unfloored (104/04)', () => {
+      // SA hands the pair straight to D3D9 linear fog with no clamp, so a negative start is a haze that is
+      // already partly opaque at the camera — see docs/gta-sa-original/timecyc-fog.md. Both stock (112 of
+      // its 504 expanded rows) and the timecyc24h tables author it.
+      const environment = makeEnvironment();
+      createEngineEnvironmentDriver(environment, {
+        timecyc: { text: wholeTable(fogRow(-100, 600)) },
+        weather: 0,
+      }).apply(12);
+
+      expect(environment.fogStartDistance).toBe(-100);
+      expect(environment.fogCutDistance).toBe(600);
+    });
+
+    it('leaves a negative start negative under the fogCap (the cap is a ceiling, not a floor)', () => {
+      const environment = makeEnvironment();
+      createEngineEnvironmentDriver(environment, {
+        fogCap: 400,
+        timecyc: { text: wholeTable(fogRow(-1600, 800)) },
+        weather: 0,
+      }).apply(12);
+
+      expect(environment.fogCutDistance).toBe(400);
+      expect(environment.fogStartDistance).toBe(-1600);
     });
 
     it('applies the prod graphics tunables to the environment', () => {
