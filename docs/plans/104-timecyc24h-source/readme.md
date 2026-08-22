@@ -89,11 +89,18 @@ whose format is 23 weathers and put 21 in it. Feed it to either plugin and the e
 nowhere. Step 03 owns this together with the file's home.
 
 **4. Our file carries the stock corruption; Dante's does not — that is what "Refixed" means.** Read back
-with our own parser, `timecyc_24h.dat` row 404 (`RAINY_COUNTRYSIDE`, hour 20) holds the `-1000` failure
-sentinel in seven fields — `LightShd`, `PoleShd`, `Alpha1`, `Alpha2`, `CloudAlpha`, `IntensityLimit`,
-`WaterFogAlpha` — inherited from stock keyframe 6, the 49-token line, through `convertTo24h`. Dante's 552
-rows produce **zero** sentinels. (The first recon's "2 parse failures" for our file and "0" for Dante's were
-right; this names the row and the columns.)
+with our own parser, `timecyc_24h.dat` row 404 (`RAINY_COUNTRYSIDE`, hour 20) fails **13 fields** — the
+`-1000` int-read default in `LightShd`, `PoleShd`, `Alpha1`, `Alpha2`, `CloudAlpha`, `IntensityLimit`,
+`WaterFogAlpha` plus the `-100` RGB default in six more — inherited from stock keyframe 6, the 49-token
+line, through `convertTo24h`. Stock itself fails the same 13; Dante's 552 rows fail **zero**.
+
+**The count above was measured twice, and the first instrument lied.** `getval`'s failure defaults are
+`-1000` (int) and `-100` (RGB channel), and **Dante authors `FogSt` at exactly `-100.00` and `-1000.00`** —
+a whole float weather at −100, three rows at −1000. A scan of whole parsed rows for those two numbers
+therefore reports 24 "failures" in a file that has none, and it did, until the check was restricted to the
+int/RGB columns that can actually produce them. The test in step 02 carries that restriction and the reason
+in a comment. The class: **a sentinel that is also a legal value is not a sentinel** — the check has to know
+which columns can produce it.
 
 **5. The negative-`FogSt` census, over the 504 rows we would actually sample**: Dante 243 rows (min −1 700)
 against our 96 (min −200). Dante authors it across **13 weathers, 11 of them for all 24 hours** —
@@ -131,7 +138,7 @@ target.
 | # | Step | Lands in |
 | --- | --- | --- |
 | 01 ✅ | ONE resolver, four call sites, `ensure24h` instead of `is24h` | `packages/renderware` (resolver), `packages/game`, `apps/web`, `apps/engine-lab` |
-| 02 | the choice is visible: a boot log line naming the winner; fixture + tests | `packages/game` tests, `scripts/test-fixtures.ts` |
+| 02 ✅ | the choice is visible: a boot log line naming the winner; fixture + tests | `packages/game` tests, `scripts/test-fixtures.ts` |
 | 03 | docs + the generated file's home | `docs/contracts/mods.md`, `docs/gta-sa-original/`, `docs/features/`, `tools/timecyc-builder` |
 | 04 | negative `FogSt`: recover SA's meaning, then a field A/B of the three sources | `packages/game` driver, `docs/benchmarks/` |
 
@@ -176,7 +183,7 @@ behaviour).
   eslint clean. No fixture and no build were needed: nothing in this step reads a Dante file yet, which is
   step 02.
 
-### 02 — the choice is visible; fixture + tests
+### 02 — the choice is visible; fixture + tests — ✅ DONE 2026-08-22
 
 - The boot log gets one line: `[timecyc] data/timecyc24h.dat (dante-24h, 552 rows)` — the same place the
   sampled entry is logged on the `'time'` event today. A shadowed mod file is then one `grep` away instead of
@@ -194,6 +201,34 @@ behaviour).
 
 **Done when** the order is asserted by a test, not by a comment.
 
+**What shipped:**
+
+- `describeTimecycSource` beside the resolver, and the line `[timecyc] data/timecyc24h.dat (dante-24h, 552
+  rows)` printed once at boot by **both** live readers — the game host and the lab. It costs a second parse
+  of ~500 lines, once; that is cheaper than re-deriving the "which lines are data" rule in a counter of its
+  own. `loadTimecyc` on the adapter has no production caller (only tests), so those two are the whole live
+  surface.
+- Fixture `data/timecyc24h.dat` by the manifest rule — one `modFile` line, resolved by NAME to the
+  opensa-layer folder, byte-identical to the mod (md5 `8a000cfd…`). Verified by **deleting
+  `fixtures/original` and regenerating**: 136/136 written, suite green against the rebuilt tree.
+- Tests: the Dante table parses to 552 × 52 with **0 read failures**; both 24h files are ONE schema (52
+  tokens on every data line of each — the finding the plan turns on, pinned so a split would fail);
+  `ensure24h` passes 552 through; `buildTimecyc` keeps 21 weathers of it ending at `UNDERWATER`; the
+  candidate order as an `it.each` table on the adapter; and `describeTimecycSource` for both the winner and
+  the nothing-found line.
+- **Our own table's 13 read failures are now PINNED** (stock 13, our generated 24h 13, Dante 0) so step 03
+  cannot change the generated file without saying so.
+- **The circular test is retired.** `reproduces the bundled timecyc_24h.dat exactly (byte-for-byte)` claimed
+  parity with the reference tool while comparing `convertTo24h` against a fixture that
+  `scripts/test-fixtures.ts` generates by calling `convertTo24h`. It is now named for what it checks — the
+  generator and the parser have not drifted apart — and both it and `parseTimecyc`'s own doc comment say
+  plainly that byte-for-byte parity with the original tool is **not** claimed and has no evidence here.
+- Measured at the close: suite **4 934 green** (526 files, +11), `tsc -b` and eslint clean, fixtures
+  regenerated from an empty tree.
+
+**Not done here, deliberately**: the negative-`FogSt` A/B and the contract/feature docs are steps 04 and 03.
+Nothing in this step changes what any build produces.
+
 ### 03 — docs, and the generated file's home
 
 Same change as 01/02 where possible:
@@ -206,10 +241,21 @@ Same change as 01/02 where possible:
   renamed header groups, the hour labels, the negative-`FogSt` census above, and that the asi reads the
   name `timecyc24h.dat` — the only string in the binary).
 - `docs/features/weather-environment.md`: "or a shipped `timecyc_24h.dat`" becomes the three-name order.
-- **The generated file's home** — the user's decision, recorded here when taken: either `npm run timecyc`
-  writes to `tools/timecyc-builder/merged/` as its doc already claims and copying it into `game-src` is a
-  deliberate act, or it keeps writing into `game-src/original/data/` and the contract says so in one line.
-  Until it is taken, the shadowing in finding 2 is the state of every build.
+- **The generated file's home — DECIDED 2026-08-22 (the user): nowhere. `timecyc-builder` is a utility, and
+  a utility does not write into the game source.** `npm run timecyc` writes to
+  `tools/timecyc-builder/merged/` as its own doc has always claimed; putting an output into
+  `game-src/<game>/data/` is a deliberate, separate act by whoever wants that table shipped.
+  Two consequences this step has to carry out, not just record:
+  - the config in `tools/timecyc-builder/src/index.ts` stops naming `game-src` as its destination;
+  - `game-src/original/data/timecyc_24h.dat` is a committed FILE, so the tool no longer writing it does not
+    remove it — the shadowing of finding 2 continues until that file is deleted or kept on purpose. Ask
+    before deleting: dropping it makes Dante's table the winner on the `opensa` target, which is a visible
+    change of mood (finding 6), not a cleanup.
+- **`npm run timecyc` is not part of `pmb` or any other build** (the user, 2026-08-22). Checked the same
+  day and it already holds — `tools/pmb/src` has zero `timecyc` hits and the only non-doc references to the
+  builder are its own files; `scripts/test-fixtures.ts` imports the PARSER, not the builder. So this is a
+  rule to KEEP, not a defect to fix, and it needs a row in `docs/restrictions/` because a violation is
+  **silent**: a build stage that regenerated the table would simply produce a different sky and exit 0.
 
 ### 04 — negative `FogSt`: SA's meaning first, then the field
 

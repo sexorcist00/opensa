@@ -60,6 +60,7 @@ import { type NamedZone, ZoneNameSystem } from '@opensa/game/zones/zone-name.sys
 import { angleDelta, lerp } from '@opensa/math';
 import {
   type AssetFileSystem,
+  describeTimecycSource,
   flatWaterMesh,
   gxtKeyHash,
   parseTxd,
@@ -502,6 +503,10 @@ async function boot(
   // precisely what froze weather/fog at convert time and diverged from prod (2026-07-18 field finding).
   const liveTimecyc = resolveTimecycSource((path) => fs.getText(path));
   const timecycSource = liveTimecyc !== null ? { text: liveTimecyc.text } : undefined;
+  // Boot report (104/02): which of the three names won is otherwise unobservable — a mod's table shadowed
+  // by a higher-priority one fails NOTHING.
+  // eslint-disable-next-line no-console -- boot report, one line
+  console.log(`[timecyc] ${describeTimecycSource(liveTimecyc)}`);
   const environmentDriver = createEngineEnvironmentDriver(engine.environment, {
     config,
     fogCap: drawDistance - FOG_RING_MARGIN,

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveTimecycSource, resolveTimecycSourceAsync, TIMECYC_SOURCES } from './timecyc-source';
+import {
+  describeTimecycSource,
+  resolveTimecycSource,
+  resolveTimecycSourceAsync,
+  TIMECYC_SOURCES,
+} from './timecyc-source';
 
 /** A game dir holding exactly `present`, read the way each loader reads it. */
 const dir =
@@ -43,6 +48,16 @@ describe('resolveTimecycSource', () => {
       const source = await resolveTimecycSourceAsync((path) => Promise.resolve(dir(present)(path)));
 
       expect(source).toEqual({ kind: 'dante-24h', path: 'data/timecyc24h.dat', text: 'dante' });
+    });
+
+    it('reports the winner with its kind and row count', () => {
+      const source = resolveTimecycSource(dir({ 'data/timecyc24h.dat': '// header\n1 2 3\n4 5 6\n' }));
+
+      expect(describeTimecycSource(source)).toBe('data/timecyc24h.dat (dante-24h, 2 rows)');
+    });
+
+    it('names the three it looked for when the world carries none', () => {
+      expect(describeTimecycSource(null)).toBe('none of data/timecyc_24h.dat / data/timecyc24h.dat / data/timecyc.dat');
     });
 
     it('lists the three names in preference order', () => {

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { buildTimecyc, sampleTimecyc } from './timecyc';
-import { convertTo24h, parseTimecyc, TIME_WEATHERS } from './timecyc.parser';
+import { convertTo24h, ensure24h, parseTimecyc, TIME_WEATHERS } from './timecyc.parser';
 
 const timecyc = buildTimecyc(convertTo24h(parseTimecyc(readFileSync('fixtures/original/data/timecyc.dat', 'utf8'))));
 
@@ -12,6 +12,15 @@ describe('buildTimecyc', () => {
       expect(timecyc.weathers).toHaveLength(TIME_WEATHERS);
       expect(timecyc.weathers[0].name).toBe('EXTRASUNNY_LA');
       expect(timecyc.weathers[0].hours).toHaveLength(24);
+    });
+
+    it('keeps 21 weathers from the Dante 23 × 24 table (the extracolours are not time-based)', () => {
+      const text = readFileSync('fixtures/original/data/timecyc24h.dat', 'utf8');
+      const dante = buildTimecyc(ensure24h(parseTimecyc(text)));
+
+      expect(dante.weathers).toHaveLength(TIME_WEATHERS);
+      expect(dante.weathers[TIME_WEATHERS - 1].name).toBe('UNDERWATER');
+      expect(dante.weathers[0].hours).toHaveLength(24);
     });
   });
 });

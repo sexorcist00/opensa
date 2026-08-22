@@ -11,6 +11,7 @@
  * the real game silently leaves the stock table live. Nothing here needs to tell the two apart at parse
  * time; `kind` exists so a reader can SAY which file won.
  */
+import { parseTimecyc } from './timecyc.parser';
 
 interface TimecycCandidate {
   readonly kind: TimecycKind;
@@ -29,6 +30,21 @@ export const TIMECYC_SOURCES: readonly TimecycCandidate[] = [
 export type TimecycKind = 'authored-24h' | 'dante-24h' | 'stock';
 
 export type TimecycSource = TimecycCandidate & { readonly text: string };
+
+/**
+ * The one-line boot report: `data/timecyc24h.dat (dante-24h, 552 rows)`, or which three names were looked
+ * for when the world carries none. **Choosing between two names that are both present is SILENT by nature**
+ * — nothing fails, the lower-priority file is simply never read — so this line is the only way a shadowed
+ * table is one `grep` away instead of one session. The row count is what `ensure24h` will judge, so it is
+ * read the same way (a second parse of ~500 lines, once, at boot).
+ */
+export function describeTimecycSource(source: null | TimecycSource): string {
+  if (source === null) {
+    return `none of ${TIMECYC_SOURCES.map((c) => c.path).join(' / ')}`;
+  }
+
+  return `${source.path} (${source.kind}, ${parseTimecyc(source.text).length} rows)`;
+}
 
 /**
  * First candidate `getText` answers for, or `null` when the game dir carries none of the three.

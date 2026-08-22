@@ -35,6 +35,7 @@ export {
   type TimecycWeather,
 } from './timecyc';
 export {
+  describeTimecycSource,
   resolveTimecycSource,
   resolveTimecycSourceAsync,
   TIMECYC_SOURCES,

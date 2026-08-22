@@ -84,6 +84,12 @@ const MOD_MANIFEST: readonly Fixture[] = [
   // The Pacific Park ferris wheel's light ring (plan 099): a UVAnimDict entry `f13d` — 261 keyframes
   // stepping UV0 by 1/13 every 0.225 s — plus the `Frames` material that references it. Nothing in stock
   // SA's vehicle/prop set animates its UVs, so the rigid builder's binding can only be proven on this one.
+  // The 24h timecyc in the `timecyc24h.asi` (Dante) shape — the third name a world can carry (plan 104).
+  // The opensa layer's folder is the exact-name match; the `sa` layer ships the byte-identical file under
+  // `… 1.6/modloader/timecyc24h/`. This is the only 23 × 24 table in the corpus: our own generated
+  // `timecyc_24h.dat` is 21 × 24 and carries the stock RAINY_COUNTRYSIDE 20h corruption, so a test that
+  // wants a clean, full-width authored table has nowhere else to get one.
+  modFile('[24H] Refixed Original Timecycle/data/timecyc24h.dat', 'data/timecyc24h.dat'),
   modFile('Pacific Park Rotating Ferris Wheel/gta3_img/ferriswheel_lights.dff', 'mods/ferriswheel_lights.dff'),
   modFile('Pacific Park Rotating Ferris Wheel/gta3_img/ferriswheel_lights.txd', 'mods/ferriswheel_lights.txd'),
 ];
