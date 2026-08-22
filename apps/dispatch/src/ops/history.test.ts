@@ -48,9 +48,34 @@ describe('BoardHistory', () => {
       expect(history.at(45_000, board(60_000, [], [call('i1', 30_000)])).incidents).toHaveLength(1);
     });
 
+    it('keeps a unit that went OFF DUTY in the replay of when it was on', () => {
+      const history = new BoardHistory();
+      run(history, 60, (ms) => board(ms, [unit('u1', [ms / 100, 0]), unit('u2', [500, -500])]));
+      // u2 leaves the live roster. The hour it worked must not leave with it.
+      run(history, 30, (ms) => board(60_000 + ms, [unit('u1', [(60_000 + ms) / 100, 0])]));
+      const live = board(90_000, [unit('u1', [900, 0])]);
+
+      expect(
+        history
+          .at(30_000, live)
+          .units.map((entry) => entry.id)
+          .sort(),
+      ).toEqual(['u1', 'u2']);
+      expect(history.at(85_000, live).units.map((entry) => entry.id)).toEqual(['u1', 'u2']);
+    });
+
+    it('forgets a unit outright when asked, roster and track together', () => {
+      const history = new BoardHistory();
+      run(history, 20, (ms) => board(ms, [unit('u1', [ms / 100, 0]), unit('u2', [1, 1])]));
+      history.forget('u2');
+
+      expect(history.at(10_000, board(20_000, [])).units.map((entry) => entry.id)).toEqual(['u1']);
+    });
+
     it('drops a unit it has no sample for rather than drawing it where nobody saw it', () => {
       const history = new BoardHistory();
       history.record(board(0, [unit('u1', [10, 10])]));
+      // u2 was never recorded, so it is in no roster and no track — the replay cannot place it.
       const resolved = history.at(0, board(0, [unit('u1', [10, 10]), unit('u2', [99, 99])]));
 
       expect(resolved.units.map((entry) => entry.id)).toEqual(['u1']);

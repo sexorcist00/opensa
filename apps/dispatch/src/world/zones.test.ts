@@ -39,6 +39,20 @@ describe('loadDistricts', () => {
       expect((await loadDistricts('/pak', { count: 2, file: 'districts.json' })).count).toBe(0);
     });
 
+    it('drops a malformed row instead of letting it throw inside the click handler', async () => {
+      serve(
+        JSON.stringify({
+          districts: [{ key: 'BROKEN', name: 'No corners' }, ...TABLE.districts],
+          gxt: null,
+        }),
+      );
+      const lookup = await loadDistricts('/pak', { count: 3, file: 'districts.json' });
+
+      expect(lookup.count).toBe(2);
+      expect(() => lookup.nameAt([2495, -1800])).not.toThrow();
+      expect(lookup.nameAt([2495, -1800])).toBe('Ganton');
+    });
+
     it('answers null for a point in no district', async () => {
       serve(JSON.stringify(TABLE));
       const lookup = await loadDistricts('/pak', { count: 2, file: 'districts.json' });

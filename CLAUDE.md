@@ -406,3 +406,16 @@ Keep these in sync with the code — update them in the same change, not later:
 - `docs/debug/` — when a debug script proves useful, KEEP it in `scripts/debug/` and add a row in
   `docs/debug/README.md` (what it answers + how to run) in the same change; throwaway experiments are
   `scripts/debug/.tmp-*.ts` and are deleted before commit
+
+## gstack (recommended)
+
+This project uses [gstack](https://github.com/garrytan/gstack) for AI-assisted workflows.
+Install it for the best experience:
+
+```bash
+git clone --depth 1 https://github.com/garrytan/gstack.git ~/.claude/skills/gstack
+cd ~/.claude/skills/gstack && ./setup --team
+```
+
+Skills like /qa, /ship, /review, /investigate, and /browse become available after install.
+Use /browse for all web browsing. Use ~/.claude/skills/gstack/... for gstack file paths.

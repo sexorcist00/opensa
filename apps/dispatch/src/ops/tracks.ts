@@ -91,8 +91,21 @@ export const SAMPLES_PER_TRACK = Math.ceil((SHIFT_HOURS * 3600 * 1000) / SAMPLE_
 /** Movement below this (world units) is "the unit did not move" — a parked car's GPS jitter, not a drive. */
 const STILL_RADIUS = 1.5;
 
-/** The status ids, as the ring stores them. Index IS the stored byte, so this order is a format. */
-const STATUS_BY_ID: readonly UnitStatus[] = ['available', 'busy', 'enRoute', 'onScene'];
+/**
+ * Status → the byte the ring stores.
+ *
+ * `satisfies` is the load-bearing part: adding a `UnitStatus` without giving it an id is a COMPILE error.
+ * Before this it was an array read with `indexOf`, which answers **-1** for an unknown status — written into
+ * a `Uint8Array` that is 255, replayed as `available`, and (measured) sampled on EVERY tick because 255
+ * never equals -1, so a 60 s window took 1201 samples instead of 16 and a whole shift's ring burned in six
+ * minutes. Silent in all three ways: no throw, no warning, and a plausible status on screen.
+ */
+const STATUS_ID = { available: 0, busy: 1, enRoute: 2, onScene: 3 } as const satisfies Record<UnitStatus, number>;
+
+/** The inverse, derived so the two cannot drift. Index IS the stored byte, so this order is a format. */
+const STATUS_BY_ID: readonly UnitStatus[] = (Object.keys(STATUS_ID) as UnitStatus[]).sort(
+  (a, b) => STATUS_ID[a] - STATUS_ID[b],
+);
 
 /** One unit's ring of samples, stored column-wise so a sample costs exactly {@link BYTES_PER_SAMPLE}. */
 class Track {
@@ -234,7 +247,7 @@ export class UnitTracks {
         track = new Track(this.capacity);
         this.tracks.set(unit.id, track);
       }
-      track.push(ops.now, unit.at, unit.heading, STATUS_BY_ID.indexOf(unit.status));
+      track.push(ops.now, unit.at, unit.heading, STATUS_ID[unit.status]);
     }
   }
 

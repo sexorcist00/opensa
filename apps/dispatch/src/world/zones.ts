@@ -84,11 +84,30 @@ async function fetchTable(url: string): Promise<District[] | null> {
     // column entirely (the IO worker never sees it).
     pakTraffic.record('districts.json', new TextEncoder().encode(text).byteLength);
     const parsed: unknown = JSON.parse(text);
+    const rows: unknown = (parsed as null | { districts?: unknown })?.districts;
 
-    return Array.isArray((parsed as { districts?: unknown }).districts)
-      ? ((parsed as { districts: District[] }).districts satisfies District[])
-      : null;
+    // Shape-checked rather than cast. A cast satisfies the compiler and nothing else: a row missing `min`
+    // reaches `zoneAt`, which reads `zone.min[0]` and throws — inside the map's TAP HANDLER, well outside
+    // this try/catch. The file is our own pack's output, so a bad one means a bad build rather than an
+    // attack, and it should still degrade to "this world has no district names".
+    return Array.isArray(rows) ? rows.filter(isDistrict) : null;
   } catch {
     return null;
   }
+}
+
+/** A row is usable only if it carries the two corners and a name — everything `zoneAt` will touch. */
+function isDistrict(row: unknown): row is District {
+  const entry = row as District;
+
+  return (
+    typeof entry?.name === 'string' &&
+    typeof entry.key === 'string' &&
+    Array.isArray(entry.min) &&
+    Array.isArray(entry.max) &&
+    entry.min.length === 2 &&
+    entry.max.length === 2 &&
+    entry.min.every(Number.isFinite) &&
+    entry.max.every(Number.isFinite)
+  );
 }

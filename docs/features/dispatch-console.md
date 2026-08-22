@@ -213,11 +213,13 @@ Each now names the step that owns it, so none of them is an open-ended note.
   it does not slip into live when playback catches up, picking a rate while live enters replay at the moment
   on screen, and Live returns to the wall clock rather than to where the scrub was.
 - `apps/dispatch/src/ops/history.test.ts` — the reconstruction: a call is absent before it was opened, a unit
-  with no sample is dropped rather than drawn where nobody saw it, and both a call and a unit carry the
-  status they HAD rather than the one they ended with.
+  with no sample is dropped rather than drawn where nobody saw it, both a call and a unit carry the status
+  they HAD rather than the one they ended with, and a unit that went OFF DUTY stays in the replay of the
+  hour it worked (the history keeps its own roster; the live board's is the wrong one to read).
 - `apps/dispatch/src/world/zones.test.ts` — the baked district table: a missing file, a malformed one and a
-  pak that declares none all answer "no districts" rather than throwing into the boot, and a point resolves
-  to the smallest containing district rather than the city around it.
+  pak that declares none all answer "no districts" rather than throwing into the boot, a row missing its
+  corners is dropped instead of reaching `zoneAt` and throwing inside the map's tap handler, and a point
+  resolves to the smallest containing district rather than the city around it.
 - `apps/dispatch/src/map/beacons.test.ts` — the whole declared budget fits in ONE status without growing, a
   board past it grows instead of dropping, and a grown buffer never writes past the set's allocation (which
   on a real device is a WebGPU validation error, not a dropped marker).

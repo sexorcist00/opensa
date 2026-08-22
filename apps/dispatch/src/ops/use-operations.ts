@@ -80,12 +80,10 @@ export function useOperations(): DispatchStore {
 
   const opsRef = useRef(ops);
   const liveRef = useRef(live);
-  const clockRef = useRef(clock);
   const selectionRef = useRef(selection);
   const autoRef = useRef(autoDispatch);
   opsRef.current = ops;
   liveRef.current = live;
-  clockRef.current = clock;
   selectionRef.current = selection;
   autoRef.current = autoDispatch;
 

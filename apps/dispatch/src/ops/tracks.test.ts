@@ -113,6 +113,21 @@ describe('UnitTracks', () => {
       expect(midway?.ageMs).toBe(0);
     });
 
+    it('gives every unit status a distinct stored id — an unknown one wrote 255 and replayed as available', () => {
+      const tracks = new UnitTracks();
+      const statuses: Unit['status'][] = ['available', 'busy', 'enRoute', 'onScene'];
+      for (const [i, status] of statuses.entries()) {
+        tracks.record(board(i * SAMPLE_INTERVAL_MS, [{ at: [i, 0], status }]));
+      }
+
+      // Each reads back as itself. Before the ids were exhaustive by type, a status outside the table
+      // stored 255, came back `available`, and sampled on every tick instead of every 4 s.
+      for (const [i, status] of statuses.entries()) {
+        expect(tracks.at('u0', i * SAMPLE_INTERVAL_MS)?.status).toBe(status);
+      }
+      expect(tracks.stats().samples).toBe(statuses.length);
+    });
+
     it('samples a status change immediately, whatever the rate limit says', () => {
       const tracks = new UnitTracks();
       tracks.record(board(0, [{ at: [0, 0], status: 'available' }]));

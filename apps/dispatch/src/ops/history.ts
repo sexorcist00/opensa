@@ -42,19 +42,30 @@ const BYTES_PER_EVENT = 64;
 
 export class BoardHistory {
   private readonly incidents = new Map<string, { events: IncidentEvent[]; incident: Incident }>();
+  /**
+   * Every unit the history has ever seen, by id — the ROSTER a replay is built from.
+   *
+   * It cannot come from the live board, which is where it came from until 2026-08-22: a unit that goes off
+   * duty leaves `live.units`, and the replay of an hour when it WAS on duty then loses it too. The mock
+   * never removes a unit so nothing showed it, but a real feed's units go off shift constantly, and the
+   * symptom would be a past that quietly disagrees with what the operator remembers seeing.
+   */
+  private readonly roster = new Map<string, Unit>();
   private readonly tracks = new UnitTracks();
 
   /**
    * The board at wall time `t`.
    *
-   * Units come from their tracks; a unit with no sample at all is dropped rather than drawn at a position
-   * nobody recorded. Calls that had not been opened yet are not on the board, and the ones that had carry
-   * the status they had. The log is left as the live one's — a scrub is for the map and the roster, and a
-   * reconstructed ticker would be a second source of truth for what was said.
+   * Units come from their tracks, over the roster this history has seen rather than the one the live board
+   * holds now — a unit that went off duty was still on the map an hour ago. A unit with no sample at `t` is
+   * dropped rather than drawn at a position nobody recorded, which is also what keeps a unit that joined
+   * later out of the earlier picture. Calls that had not been opened yet are not on the board, and the ones
+   * that had carry the status they had. The log is left as the live one's — a scrub is for the map and the
+   * roster, and a reconstructed ticker would be a second source of truth for what was said.
    */
   at(t: number, live: Operations): Operations {
     const units: Unit[] = [];
-    for (const unit of live.units) {
+    for (const unit of this.roster.values()) {
       const state = this.tracks.at(unit.id, t);
       if (state) {
         units.push({ ...unit, at: state.at, heading: state.heading, status: state.status });
@@ -72,9 +83,18 @@ export class BoardHistory {
     return { ...live, incidents, now: t, units };
   }
 
+  /** Drop a unit's history entirely — it is off the board for good, not merely off duty. */
+  forget(id: string): void {
+    this.roster.delete(id);
+    this.tracks.forget(id);
+  }
+
   /** Take one board snapshot. Called once per tick; the policies decide what actually lands. */
   record(ops: Operations): void {
     this.tracks.record(ops);
+    for (const unit of ops.units) {
+      this.roster.set(unit.id, unit);
+    }
     for (const incident of ops.incidents) {
       const held = this.incidents.get(incident.id);
       if (!held) {
