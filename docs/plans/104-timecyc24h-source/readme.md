@@ -139,7 +139,7 @@ target.
 | --- | --- | --- |
 | 01 ✅ | ONE resolver, four call sites, `ensure24h` instead of `is24h` | `packages/renderware` (resolver), `packages/game`, `apps/web`, `apps/engine-lab` |
 | 02 ✅ | the choice is visible: a boot log line naming the winner; fixture + tests | `packages/game` tests, `scripts/test-fixtures.ts` |
-| 03 | docs + the generated file's home | `docs/contracts/mods.md`, `docs/gta-sa-original/`, `docs/features/`, `tools/timecyc-builder` |
+| 03 ✅ | docs + the generated file's home + the utility restriction | `docs/contracts/mods.md`, `docs/gta-sa-original/`, `docs/features/`, `tools/timecyc-builder` |
 | 04 | negative `FogSt`: recover SA's meaning, then a field A/B of the three sources | `packages/game` driver, `docs/benchmarks/` |
 
 ### 01 — one resolver, three call sites — ✅ DONE 2026-08-22
@@ -229,7 +229,7 @@ behaviour).
 **Not done here, deliberately**: the negative-`FogSt` A/B and the contract/feature docs are steps 04 and 03.
 Nothing in this step changes what any build produces.
 
-### 03 — docs, and the generated file's home
+### 03 — docs, and the generated file's home — ✅ DONE 2026-08-22
 
 Same change as 01/02 where possible:
 
@@ -243,19 +243,43 @@ Same change as 01/02 where possible:
 - `docs/features/weather-environment.md`: "or a shipped `timecyc_24h.dat`" becomes the three-name order.
 - **The generated file's home — DECIDED 2026-08-22 (the user): nowhere. `timecyc-builder` is a utility, and
   a utility does not write into the game source.** `npm run timecyc` writes to
-  `tools/timecyc-builder/merged/` as its own doc has always claimed; putting an output into
-  `game-src/<game>/data/` is a deliberate, separate act by whoever wants that table shipped.
-  Two consequences this step has to carry out, not just record:
-  - the config in `tools/timecyc-builder/src/index.ts` stops naming `game-src` as its destination;
-  - `game-src/original/data/timecyc_24h.dat` is a committed FILE, so the tool no longer writing it does not
-    remove it — the shadowing of finding 2 continues until that file is deleted or kept on purpose. Ask
-    before deleting: dropping it makes Dante's table the winner on the `opensa` target, which is a visible
-    change of mood (finding 6), not a cleanup.
+  `tools/timecyc-builder/src/merged/` as its own doc has always claimed; putting an output into
+  `game-src/<game>/data/` is a deliberate, separate act by whoever wants that table shipped. **Done** — the
+  destination in `tools/timecyc-builder/src/index.ts` is `merged/`, the tool prints the path it wrote, and a
+  run reproduced the committed `merged/timecyc_24h.dat` byte for byte.
 - **`npm run timecyc` is not part of `pmb` or any other build** (the user, 2026-08-22). Checked the same
   day and it already holds — `tools/pmb/src` has zero `timecyc` hits and the only non-doc references to the
-  builder are its own files; `scripts/test-fixtures.ts` imports the PARSER, not the builder. So this is a
-  rule to KEEP, not a defect to fix, and it needs a row in `docs/restrictions/` because a violation is
-  **silent**: a build stage that regenerated the table would simply produce a different sky and exit 0.
+  builder are its own files; `scripts/test-fixtures.ts` imports the PARSER, not the builder. A rule to KEEP
+  rather than a defect to fix, and it is now `docs/restrictions/timecyc-builder-is-a-utility.md`, because a
+  violation is **silent**: a build stage that regenerated the table would produce a different sky and exit 0.
+- **`game-src/original/data/timecyc_24h.dat` — deleted by the user, 2026-08-22.** Correcting this plan's own
+  earlier claim: that file was **not committed**. `game-src/` is gitignored whole, so it existed only on the
+  machine, appeared in no diff, and the build mirrored it into the tree without comment — which is precisely
+  why the tool writing there was invisible. With it gone, `data/timecyc24h.dat` is the winner on the `opensa`
+  target from the next build, and the shadowing of finding 2 is over for `original`.
+  **Still carrying one**: `game-src/{anderius,carcer,gostown}/data/timecyc_24h.dat`. Those are other game
+  trees and are nobody's call but his; nothing in this plan touches them.
+  **Stale in the current builds**: `build/original/{sa,opensa}/data/timecyc_24h.dat` are from the 2026-08-22
+  build and still there. The next build drops them; until then the built opensa tree still resolves to the
+  old table, and the boot line from step 02 is how to tell.
+
+**What shipped:**
+
+- `docs/contracts/mods.md` §2 — the three names as a table, that a mod shipping `data/timecyc24h.dat` in the
+  `opensa` layer is the supported way to ship a 24h table, that both 24h names are ONE format, and **what
+  happens when a name is misspelled: nothing** — plus the boot line as the only tell.
+- `docs/gta-sa-original/timecyc24h.md` + a README row — the plugins as measured: two of them, one hardcoded
+  file name each, the same 23 × 24 × 52 schema, `DirMult` as the 52nd column stock does not have, the
+  negative-`FogSt` census, and that Dante's file repairs stock's corrupt keyframe. Carries its own limit:
+  the binaries were read for strings, not disassembled.
+- `docs/restrictions/timecyc-builder-is-a-utility.md` + a README row — the rule, and that it is **silent
+  twice** (a regenerating build exits 0 with a different sky; a tool writing into gitignored `game-src`
+  shows in no diff).
+- `docs/features/weather-environment.md`, `docs/development/timecyc-builder.md` and `docs/commands.md`
+  brought in line; the builder doc's long-standing disagreement with its own code is now the code's
+  behaviour, and the doc says which name outranks which if the output is ever copied into a game.
+- Measured at the close: suite **4 934 green**, `tsc -b` + eslint clean, 0 broken links across the ten docs
+  touched, and `npm run timecyc` reproduces its committed output byte for byte from the new destination.
 
 ### 04 — negative `FogSt`: SA's meaning first, then the field
 

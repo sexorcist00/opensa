@@ -12,6 +12,22 @@ npm run timecyc
 
 Reads the config in `timecyc-builder/index.ts`, writes `timecyc-builder/merged/timecyc_24h.dat`.
 
+**That is the only file it writes, and it is not part of any build.** Until 2026-08-22 the code wrote its
+output straight into `game-src/original/data/timecyc_24h.dat` while this page said otherwise; the code
+follows the page now. Getting a table into a game is a deliberate copy by whoever wants it shipped —
+`npm run timecyc` must never become a step of `pmb` or any other build, and a violation is **silent**
+(the build exits 0 with a different sky). The rule and what it protects:
+[`docs/restrictions/timecyc-builder-is-a-utility.md`](../restrictions/timecyc-builder-is-a-utility.md).
+
+**Where to put the output if you do want it shipped**, and which name wins: the loader tries
+`data/timecyc_24h.dat`, then `data/timecyc24h.dat`, then the stock `data/timecyc.dat`
+(`docs/contracts/mods.md` §2). This tool's output carries the FIRST of those names, so dropping it into a
+game tree outranks any 24h table a mod ships.
+
+**One gap to know before copying it anywhere real**: the output is 504 rows (21 time weathers × 24), while
+both real 24h plugin files are 552 — `convertTo24h` skips `EXTRACOLOURS_1`/`EXTRACOLOURS_2`, which are not
+time-based. Our engine never reads those two weathers; a real 24h plugin would find them unauthored.
+
 ## Layout
 
 - `base/` — the base timecyc (every value starts from here).

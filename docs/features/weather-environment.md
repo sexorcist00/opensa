@@ -8,10 +8,14 @@
 
 ## Implemented
 
-- **timecyc**: vanilla 8-keyframe parsing + 24h conversion, or a shipped `timecyc_24h.dat`
-  used as-is; per-weather per-hour colours (sky top/bottom, ambient, sun, fog…), blended
-  sampling (`sampleTimecycBlend`). Colours are 0–255 **sRGB** — uniforms decode with
-  colour management (managed=true) or the night sky washes grey.
+- **timecyc**: the table comes from the first of THREE names a world carries —
+  `data/timecyc_24h.dat`, then `data/timecyc24h.dat` (the `timecyc24h.asi` plugin's name; same format), then
+  the stock `data/timecyc.dat`, which is expanded from 8 keyframes on load. One order, one resolver
+  (`TIMECYC_SOURCES`, plan 104), and `ensure24h` decides by row count rather than by a flag, so a 504- or
+  552-row authored table passes through. Every reader prints the winner once at boot (`[timecyc] …`),
+  because choosing between two present names fails nothing. Per-weather per-hour colours (sky top/bottom,
+  ambient, sun, fog…), blended sampling (`sampleTimecycBlend`). Colours are 0–255 **sRGB** — uniforms decode
+  with colour management (managed=true) or the night sky washes grey.
 - **Weather manager**: per-city weather sets (`weatherForCity`), region-crossing keeps the
   current weather but follows the new region's set; smooth transitions
   (`weatherTransitionSeconds`); debug Weather screen (rain/storm excluded by design).

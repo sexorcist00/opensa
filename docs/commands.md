@@ -467,5 +467,7 @@ npm run build:game:original:opensa   # pmb (--exclude sa) + fetch-pack → the o
 npm run build:game:original:sa       # pmb (--exclude opensa) → the real-game sa/ target only, split + vehicles + cutscene fleet + both asis
 npx tsx tools/fetch-pack/src/cli.ts     # fetch build standalone (chained in build:game:*; --build ./build/<id>; --out ./static/games stages a local fetch test)
                                         #   expands models/*.img into bare-named entries (fetch mode cannot open a container), prunes chunks a re-pack replaced, skips *.bak/.DS_Store
-npm run timecyc                      # precompute timecyc data
+npm run timecyc                      # UTILITY: merge donors onto a base timecyc → tools/timecyc-builder/src/merged/timecyc_24h.dat
+                                        #   writes NOTHING else and is not part of pmb or any build (docs/restrictions/timecyc-builder-is-a-utility.md);
+                                        #   copying its output into a game dir is a deliberate act — that name outranks a mod's timecyc24h.dat
 ```
