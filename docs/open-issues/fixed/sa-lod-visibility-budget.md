@@ -547,7 +547,15 @@ draw order (the parser reads triangles from the BinMesh), so blended-last surviv
 geometries (multi-atomic clumps, cells, procobj) a later geometry's opaque groups land after an earlier one's
 blended group. Decimated clones (`decimateBudget 0.01`) and hole-fill LODs take that path. Needs a "blended
 groups last" rule (vertex alpha < 255 / tint alpha < 255 / texture alpha via `TextureSource`), preserving
-relative order — recorded here and in `restrictions/assets-and-data.md`; not built yet.
+relative order — recorded here and in `restrictions/assets-and-data.md`.
+
+**BUILT 2026-08-22 (`6b2e37ab`).** `encodeLodDff` partitions the merged groups opaque-first, each side keeping
+its relative order, classifying a group as blended by its tint alpha, its texture's raster alpha flag (a new
+`textures` option — both cell-LOD generators pass their source, resolved the way the group names are) or any
+translucent prelit vertex; it reorders nothing when all or none blend, so an already-correct merge encodes
+byte-identically. Unit-tested on `cehollyhil06` MERGED with a second model — the shape that buries the layer,
+since a single clone of it already comes out of `buildClumpMesh` in split order. Not field-verified: it lands
+with the next build of either generator's output.
 
 # Round 15 (2026-08-17): the burger joint — a verbatim clone of a TWO-atomic clump, and SA keeps one atomic
 
