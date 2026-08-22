@@ -55,6 +55,12 @@ Measured with our own parser over the `.dat` each plugin ships:
   of 51 and fails 13 field reads; Dante's 552 rows fail none. That is what "Refixed" means in the mod name
   `[24H] Refixed Original Timecycle`.
 
+**Where his verbatim file still is, in this repo**: the `sa` layer
+(`mods-src/original/mods/sa/24. [24H] Refixed Original Timecycle 1.6/modloader/timecyc24h/timecyc24h.dat`),
+which is what his asi reads on the real game, and the fixture `fixtures/original/data/timecyc24h.dat` taken
+from it. The **opensa** layer's file is no longer his: the field rejected his fog and kept everything else,
+so that copy is his table with `FarClp`/`FogSt` merged from stock (plan 104/04).
+
 ## What this means for OpenSA
 
 Our engine is 24h by construction — it samples a fractional hour over 24 rows and has no 8-keyframe table to

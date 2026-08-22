@@ -85,11 +85,17 @@ const MOD_MANIFEST: readonly Fixture[] = [
   // stepping UV0 by 1/13 every 0.225 s — plus the `Frames` material that references it. Nothing in stock
   // SA's vehicle/prop set animates its UVs, so the rigid builder's binding can only be proven on this one.
   // The 24h timecyc in the `timecyc24h.asi` (Dante) shape — the third name a world can carry (plan 104).
-  // The opensa layer's folder is the exact-name match; the `sa` layer ships the byte-identical file under
-  // `… 1.6/modloader/timecyc24h/`. This is the only 23 × 24 table in the corpus: our own generated
-  // `timecyc_24h.dat` is 21 × 24 and carries the stock RAINY_COUNTRYSIDE 20h corruption, so a test that
-  // wants a clean, full-width authored table has nowhere else to get one.
-  modFile('[24H] Refixed Original Timecycle/data/timecyc24h.dat', 'data/timecyc24h.dat'),
+  // Taken from the `sa` layer, which ships the plugin's file VERBATIM; the opensa layer's copy is ours now
+  // (its fog columns come from stock, 104/04) and is fixtured separately below. This is the only clean
+  // 23 × 24 authored table in the corpus: our own generated `timecyc_24h.dat` is 21 × 24 and carries the
+  // stock RAINY_COUNTRYSIDE 20h corruption.
+  modFile('[24H] Refixed Original Timecycle 1.6/modloader/timecyc24h/timecyc24h.dat', 'data/timecyc24h.dat'),
+  // What the opensa target actually SHIPS: Dante's table with `FarClp`/`FogSt` taken from stock. Fixtured
+  // so a test can hold that split — re-copying Dante's file over it would otherwise be silent (104/04).
+  modFile(
+    '[24H] Refixed Original Timecycle (default FarClp + FogSt)/data/timecyc24h.dat',
+    'mods/timecyc24h-shipped.dat',
+  ),
   modFile('Pacific Park Rotating Ferris Wheel/gta3_img/ferriswheel_lights.dff', 'mods/ferriswheel_lights.dff'),
   modFile('Pacific Park Rotating Ferris Wheel/gta3_img/ferriswheel_lights.txd', 'mods/ferriswheel_lights.txd'),
 ];

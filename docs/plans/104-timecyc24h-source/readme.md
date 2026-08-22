@@ -128,10 +128,11 @@ interface, not from its code. Our engine has no 8-keyframe table to patch (`samp
 fractional hour over 24 rows already), so there is no plugin logic to port; that claim is worth one
 sentence of doubt if a field A/B in step 04 ever disagrees with the `sa` target.
 
-Both copies of the mod's file are identical (`sa/24. [24H] Refixed Original Timecycle 1.6/modloader/
-timecyc24h/timecyc24h.dat` and `opensa/1. [24H] Refixed Original Timecycle/data/timecyc24h.dat`, `cmp` clean),
-so on the `sa` target the original consumes it through Dante's asi and nothing in this plan touches that
-target.
+Both copies of the mod's file were identical when this was written (`sa/24. [24H] Refixed Original Timecycle
+1.6/modloader/timecyc24h/timecyc24h.dat` and `opensa/1. [24H] Refixed Original Timecycle/data/timecyc24h.dat`,
+`cmp` clean), so on the `sa` target the original consumes it through Dante's asi and nothing in this plan
+touches that target. **That is no longer true of the opensa copy since step 04** — see the verdict below: the
+`sa` layer still ships Dante's file verbatim for his asi, the `opensa` layer now ships ours.
 
 ## Steps
 
@@ -191,7 +192,8 @@ behaviour).
 - Fixture: `data/timecyc24h.dat` by the manifest rule — ONE line,
   `modFile('[24H] Refixed Original Timecycle/data/timecyc24h.dat', 'data/timecyc24h.dat')` (found by NAME
   across layers; the opensa-layer folder is the exact-name match), regenerated with `npm run test:fixtures`,
-  never dropped in by hand.
+  never dropped in by hand. **Repointed in step 04** at the `sa` layer's verbatim copy, because the opensa
+  folder was renamed and its file is ours now.
 - Tests (negative first, positive after, per the project's test structure):
   - `timecyc.parser.test.ts`: the Dante fixture parses to 23 × 24 rows of 52 numbers with no sentinel
     defaults; `ensure24h` passes it through; `buildTimecyc` keeps 21 weathers.
@@ -344,6 +346,32 @@ contract and the tests are unconditional and stay exactly as built. A mod author
 table, which is a content question about our own tree and nothing else. (I framed it as "what should win
 instead" when recording the verdict; that was wrong and is corrected here — a rejected table replaces
 nothing in the support.)
+
+**SETTLED 2026-08-22, and shipped**: he refined the verdict to *"только туман нам не нужен такой,
+остальное хорошо"* — Dante's table everywhere, his fog nowhere. That is a column mix, which is exactly what
+`timecyc-builder` is for, so it needed no new code:
+
+- **base** = Dante's `timecyc24h.dat`, **donor** = the stock `timecyc.dat`, **props** = `['FarClp', 'FogSt']`.
+  Verified before it was shipped: exactly two columns moved — 27 `farClip` (286 rows) and 28 `fogStart`
+  (256). Every other column is Dante's, value for value. The stock donor expands to 21 weathers, so
+  `EXTRACOLOURS_1/2` keep his fog, which is correct — they are not time weathers.
+- Shipped as `mods-src/original/mods/opensa/1. [24H] Refixed Original Timecycle (default FarClp + FogSt)/
+  data/timecyc24h.dat` — his name for the folder, which says what was changed.
+- **The recipe is a TEST, not a note** (`tools/timecyc-builder/src/core/merge.test.ts`): the shipped fixture
+  must equal `mergeTimecyc(dante, [{ props: ['FarClp','FogSt'], rows: stock }])`, and a second test pins that
+  the ONLY columns differing from Dante are that pair. Re-copying his file over ours would otherwise be
+  silent — nothing else in the repo compares the two.
+- **Two fixtures now**, because they are two different claims: `data/timecyc24h.dat` is Dante VERBATIM, taken
+  from the `sa` layer (which still ships it for his asi), and `mods/timecyc24h-shipped.dat` is what the
+  opensa target ships. The manifest line had to move in the same change — it resolves a mod by FOLDER NAME,
+  and the rename would have made it fail to find anything.
+- Field check on arm D (same pose, same hours, no rebuild): fog at the camera 4 / 27 / 43 % at 12 / 18 / 21
+  in FOGGY_SF — identical to the arm he approved, with Dante's sky, clouds and PostFX above it.
+
+**Still his call, not acted on**: `tools/timecyc-builder/src/index.ts` still holds the OLD recipe (RealVision
+night merge onto stock) and would overwrite `merged/timecyc_24h.dat` with it on the next `npm run timecyc`.
+The shipped table's recipe lives in the test, so it is reproducible either way — but if this mix is now the
+project's default table, the builder's config should say so instead.
 
 **The content question that IS open, and it is his**: `game-src/original/data/timecyc_24h.dat` was deleted
 today and `timecyc-builder` no longer writes there, so with the opensa-layer mod installed the next build
