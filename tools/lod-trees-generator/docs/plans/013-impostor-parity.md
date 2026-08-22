@@ -1,6 +1,6 @@
 # 013 — Impostor parity: why every tree LOD looks nothing like its HD, and the fixes in order
 
-**Status: IN PROGRESS** — step 01 BUILT 2026-08-21 (ledger below), 02–05 open. Reach: `tools/lod-trees-generator` (the rule), `tools/rw-codec`
+**Status: 01/02/03/06 BUILT, measured on the BUILT trees 2026-08-22 ([benchmark](../../../../docs/benchmarks/tools/2026-08-22-lod-trees-013-on-the-built-trees.md)); 04 NOT BUILT (superseded by 06); 05 waits ONLY on the field verdict.** Reach: `tools/lod-trees-generator` (the rule), `tools/rw-codec`
 (the DXT5 endpoint fit), `tools/map-placement` (the impostor IDE row), and — phase B only, OpenSA target only —
 `packages/cell-weld` + `packages/engine`.
 
@@ -71,7 +71,7 @@ pose is the offline instrument — it is what produced the report and it is repr
 | 02 | the impostor row inherits the source's vegetation bits; one winding per card | both | `map-placement/ide.ts` (flags param is already there), `lod-trees-generator/core/cards.ts` |
 | 03 | density: measure the stack, pick the card rule — MEASURED, 4 cards stay | both | `lod-trees-generator` config + a benchmark |
 | 04 | view-weighted cards (a billboard-set material): one projection from every angle — NOT BUILT, superseded by 06 | OpenSA; the `sa` half was to be an ASI, now [postmortem](../../../../docs/postmortem/asi-perfect-vegetation-view-weighted-cards.md) | — |
-| 05 | field verdict, numbers, docs | — | `docs/benchmarks/`, this file, tool readme |
+| 05 | field verdict, numbers, docs — numbers DONE 2026-08-22, verdict open | — | `docs/benchmarks/`, this file, tool readme |
 | 06 | per-target card sets + the card alpha solved per tree — BUILT 2026-08-21 | both | `lod-trees-generator/core/{probe,card-alpha}.ts`, `perfect-map-builder` |
 
 ### 01 — the bake stops aliasing
@@ -272,6 +272,27 @@ term is per-vertex. The `sa` target keeps 03's rule.
 Field verdict from the driver's seat at the switch distance on the `opensa` build (and the `sa` bottle for
 01/02), the before/after pair in `docs/benchmarks/`, this file's ledger filled per step, the tool readme's
 plan list extended, `docs/plans/README.md`'s chain row (it still reads `001`–`005`, `007`).
+
+#### 05 — the numbers, off the BUILT trees (2026-08-22)
+
+Both targets were rebuilt this morning; everything below is read from the shipped bytes rather than from a
+bake-time probe. Full file:
+[`docs/benchmarks/tools/2026-08-22-lod-trees-013-on-the-built-trees.md`](../../../../docs/benchmarks/tools/2026-08-22-lod-trees-013-on-the-built-trees.md).
+
+- **The per-target cages are in the archives**: every impostor is **6 triangles** in `sa`'s `gta3.img` and
+  **8** in `opensa`'s (16 before this plan).
+- **The classification is 182 of 184 impostor rows**, against 67 without step 02's `lod`-strip retry — and
+  **0** rows match the wind list under their own name, which is why the retry had to exist at all. The two
+  that classify as nothing are `loddead_tree_13` / `loddead_tree_14`, whose HD rows carry no bit either.
+- **The pak welds the cage CUTOUT**: 49 820 triangles on the tree atlas across the 562 LOD cells, every one
+  `pipelineClass 1`, none in blend — 6 227 impostor instances. Cause 3 is closed on the shipped data.
+- **Sway reaches the LOD layer**: 425 of 562 LOD cells carry the SWAY channel against 435 of 562 HD.
+- The `lod=0` / `lod=1` viewer pair is a LOOK check only, and the benchmark says why: it renders the SA cage
+  through OUR cutout class, so it under-reads cards thinned for SA's ref-100 blend pass by construction.
+- OpenSA in the engine for the first time on this plan: 8.1–8.3 ms frames (120+ fps), 938–1 057 draws. Not an
+  A/B — the previous pak was rebuilt in place, so there is no before-frame.
+
+**What remains is the verdict**, which is his eye and nothing else.
 
 ### 06 — one cage per class, and the alpha comes from the tree
 
