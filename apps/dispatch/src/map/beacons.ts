@@ -20,7 +20,7 @@ import { gtaToEngine } from './coords';
 export type Rgba = readonly [number, number, number, number];
 
 /** The line sets this layer owns, keyed by what they draw. Incident keys are `call<priority>`. */
-export type SetKey = 'call1' | 'call2' | 'call3' | 'callClosed' | 'route' | 'selection' | UnitStatus;
+export type SetKey = 'call1' | 'call2' | 'call3' | 'callClosed' | 'route' | 'selection' | 'trail' | UnitStatus;
 
 /**
  * Markers a single set is ALLOCATED for. Every marker of a set shares one colour, so the worst case for any
@@ -51,6 +51,9 @@ export const SET_COLORS: Readonly<Record<SetKey, Rgba>> = {
   onScene: [0.32, 0.66, 1, 1],
   route: [0.34, 0.78, 1, 1],
   selection: [1, 1, 1, 1],
+  // Deliberately dim: a trail is context under the live picture, not a thing to read. One colour for every
+  // unit — colouring each by status would need a set per status and would compete with the units themselves.
+  trail: [0.42, 0.55, 0.68, 1],
 };
 
 /** Beacon height in world units — tall enough to clear Los Santos rooftops. */
@@ -62,6 +65,30 @@ const CROSS = 9;
 const FLOATS_PER_MARKER = 18;
 /** How high the route lines float, so they read above the road surface rather than inside it. */
 const ROUTE_Y = 8;
+/**
+ * Trails ride at the same height as the assignment lines, for now.
+ *
+ * 8/04 says trails are ground geometry and share the clamp-to-ground work with
+ * [7/05's annotations](../../../../docs/plans/201-dispatch-console/7-the-operator-map/readme.md) — *do not
+ * build it twice*. 7/05 does not exist, so this does NOT invent a clamp that 7/05 would then replace: a
+ * flat offset is honest on the flat half of Los Santos and visibly wrong on a hill, and that is the thing
+ * 7/05 fixes for both consumers at once.
+ */
+const TRAIL_Y = ROUTE_Y;
+/**
+ * Floats the `trail` set is allocated for — its own budget, because it is not a marker set.
+ *
+ * Sizing it from {@link MARKER_CAPACITY} would be a category error with a visible cost: a marker is 18
+ * floats and a board's worth is 2 700, while trails are **45 000** at the measured 51 points per unit
+ * ([the trail cost](../../../../docs/benchmarks/opensa-engine/2026-08-22-dispatch-trail-cost.json)). The set
+ * grew five times on the FIRST frame that drew trails, and each growth is counted into
+ * {@link BeaconStats.grownSets} — the number the inventory panel warns on to say *the board went past the
+ * declared unit budget*. One frame of trails and that warning is permanently on and means nothing.
+ *
+ * 64 points per unit covers the measured 51 with room; past it the set still grows, and {@link grow} keeps
+ * that growth out of the marker counter.
+ */
+const TRAIL_FLOATS = UNITS_ON_SCREEN * 64 * 6;
 const RING_RADIUS = 26;
 const RING_SEGMENTS = 28;
 /** A degenerate segment: two identical vertices rasterize nothing, and it keeps the write non-empty. */
@@ -69,7 +96,8 @@ const EMPTY = new Float32Array(6);
 
 /** What the layer had to do to hold the board — read by the inventory report, so a capture states it. */
 export interface BeaconStats {
-  /** Markers the largest set is allocated for. */
+  /** Markers the largest MARKER set is allocated for. The trail set has its own budget and is excluded —
+   *  it is a line list, not a marker ring. */
   readonly capacity: number;
   /** How many times a set has been grown past {@link MARKER_CAPACITY} since boot. Non-zero means the board
    *  went past the declared budget and the map kept drawing it; zero means the allocation held. */
@@ -88,7 +116,7 @@ export class Beacons {
   constructor(engine: Engine) {
     this.engine = engine;
     for (const key of Object.keys(SET_COLORS) as SetKey[]) {
-      const buffer = new Float32Array(MARKER_CAPACITY * FLOATS_PER_MARKER);
+      const buffer = new Float32Array(key === 'trail' ? TRAIL_FLOATS : MARKER_CAPACITY * FLOATS_PER_MARKER);
       this.buffers.set(key, buffer);
       this.sets.set(key, engine.createDebugLines(buffer, SET_COLORS[key], { throughDepth: true }));
     }
@@ -104,15 +132,17 @@ export class Beacons {
   /** Allocation and growth, for the report. */
   stats(): BeaconStats {
     let capacity = 0;
-    for (const buffer of this.buffers.values()) {
-      capacity = Math.max(capacity, buffer.length / FLOATS_PER_MARKER);
+    for (const [key, buffer] of this.buffers) {
+      if (key !== 'trail') {
+        capacity = Math.max(capacity, buffer.length / FLOATS_PER_MARKER);
+      }
     }
 
     return { capacity, grownSets: this.grownSets };
   }
 
   /** Refill every set from the current board. Called once per frame; allocates nothing. */
-  update(ops: Operations, selection: Selection): void {
+  update(ops: Operations, selection: Selection, trails?: ReadonlyMap<string, Float32Array>): void {
     this.counts.clear();
     for (const unit of ops.units) {
       this.pushMarker(unit.status, unit.at, UNIT_PILLAR);
@@ -121,6 +151,7 @@ export class Beacons {
       this.pushMarker(incidentKey(incident.status, incident.priority), incident.at, CALL_PILLAR);
     }
     this.pushRoutes(ops);
+    this.pushTrails(trails);
     this.pushSelection(ops, selection);
     this.flush();
   }
@@ -145,7 +176,13 @@ export class Beacons {
     }
   }
 
-  /** Double a full set's buffer, keeping what it already holds. Counted, so the report can say it happened. */
+  /**
+   * Double a full set's buffer, keeping what it already holds.
+   *
+   * Counted for MARKER sets only. `grownSets` answers one question — *did the board go past the declared
+   * unit budget* — and the trail set is not a board of units; letting its growth in would answer that
+   * question with a yes on every session.
+   */
   private grow(key: SetKey, needed: number): Float32Array | undefined {
     const current = this.buffers.get(key);
     if (!current) {
@@ -159,7 +196,9 @@ export class Beacons {
     next.set(current);
     this.buffers.set(key, next);
     this.resized.add(key);
-    this.grownSets += 1;
+    if (key !== 'trail') {
+      this.grownSets += 1;
+    }
 
     return next;
   }
@@ -229,6 +268,32 @@ export class Beacons {
       );
     }
     this.counts.set('selection', RING_SEGMENTS * 6);
+  }
+
+  /** Every unit's leg so far, as a line list: each pair of points is one segment. */
+  private pushTrails(trails: ReadonlyMap<string, Float32Array> | undefined): void {
+    let out = this.buffers.get('trail');
+    let at = 0;
+    if (!out || !trails) {
+      this.counts.set('trail', 0);
+
+      return;
+    }
+    for (const points of trails.values()) {
+      for (let i = 0; i + 3 < points.length; i += 2) {
+        if (at + 6 > out.length) {
+          const grown = this.grow('trail', at + 6);
+          if (!grown) {
+            break;
+          }
+          out = grown;
+        }
+        out.set(gtaToEngine([points[i], points[i + 1]], TRAIL_Y), at);
+        out.set(gtaToEngine([points[i + 2], points[i + 3]], TRAIL_Y), at + 3);
+        at += 6;
+      }
+    }
+    this.counts.set('trail', at);
   }
 }
 

@@ -176,6 +176,42 @@ Trails are ground geometry, so they share the clamp-to-ground work with
 **Owes:** the cost of 150 trails, and the rule for what N is (a constant chosen by eye is a debt —
 `docs/hacks/`).
 
+**DONE 2026-08-22, and there is no N.**
+
+**The span is DERIVED: a trail covers the unit's current LEG, back to its last status change.** That is the
+question an operator is actually asking — where did this responding car come from since it was dispatched,
+where has this patrol been since it went available — and it says something a clock cannot. It also needs no
+constant, so the debt this step warned about is not taken: there is no `docs/hacks/` file here, and that is
+the point. The one number is a **work bound** (240 points, 16 min at the publish rate) which caps what a
+single very long leg may contribute to a frame; a normal 6-minute leg is 90 samples before the stationary
+collapse trims it.
+
+**Cheap, as 8/01 promised** ([measured](../../../benchmarks/opensa-engine/2026-08-22-dispatch-trail-cost.json)):
+**p50 0.200 ms, p95 0.649, worst 1.055** to resolve all 150 legs — and resolved at the BOARD's rate rather
+than the frame's, so the 60 fps loop redraws from the same object between ticks. What it produces is **51
+points per unit, 7 500 segments, 176 kB written into the line buffer per frame**, and that is the figure to
+watch on a phone rather than the resolve.
+
+**On the clamp-to-ground this step shares with [7/05](../7-the-operator-map/readme.md): it is NOT built
+here, deliberately.** Trails ride at the same fixed height the assignment lines already use. Inventing a
+clamp now would be building it twice — the second time by 7/05, for both consumers, properly. A flat offset
+is honest on the flat half of Los Santos and visibly wrong on a hill, and saying so is better than a clamp
+nobody measured.
+
+**And a regression the numbers themselves caused, caught by reviewing this diff before it landed.** 45 000
+floats of trail do not fit a set allocated for 150 markers (2 700), so the `trail` set grew five times on the
+first frame that drew one — and every growth counts into `grownSets`, the number the inventory panel warns on
+to say *the board went past its declared unit budget* ([5/02](../5-symbology-and-picking-as-product/readme.md)).
+One frame of trails and that warning is permanently on and says nothing. The trail set has its own budget now,
+and growth past it stays out of the marker counter: a line list is not a board of units.
+
+**A measurement defect worth keeping**, because it produced a confident zero: the first cost run reported
+0 points for all 150 units, and the code was right — the probe sampled at exactly the instant every unit in
+the synthetic changes status, and a leg one sample long is correctly no trail. The number was a property of
+the harness.
+
+**Touched from [the protected list](../1-the-map-profile/protected-list.md):** nothing.
+
 ## What this does not do
 
 No storage backend, no cross-shift archive, no incident search. History is the current shift, in the

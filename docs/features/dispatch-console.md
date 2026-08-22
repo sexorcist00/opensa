@@ -188,9 +188,11 @@ Each now names the step that owns it, so none of them is an open-ended note.
   a 4 s gap at 100 km/h runs through buildings. The accessor already returns the answer's age and a stale
   flag; what is missing is the operator seeing it.
   → [201/8-02](../plans/201-dispatch-console/8-the-time-axis/readme.md).
-- **No trails.** The last N minutes of a unit's track on the ground — cheap now that the track exists, and it
-  shares the clamp-to-ground work with the operator's annotations.
-  → [201/8-04](../plans/201-dispatch-console/8-the-time-axis/readme.md).
+- ~~**No trails.**~~ **Landed 2026-08-22.** Every unit draws its current LEG — back to its last status
+  change, not a fixed number of minutes. 150 legs resolve in p50 0.200 ms and produce 7 500 segments a
+  frame. They ride at a fixed height rather than following the ground: that clamp belongs to
+  [7/05](../plans/201-dispatch-console/7-the-operator-map/readme.md) and building it here would build it
+  twice. → [201/8-04](../plans/201-dispatch-console/8-the-time-axis/readme.md).
 - **The mobile evidence is emulated, not hardware.** The phone runs below are an emulated Pixel 7 and a
   simulated mobile adapter; the one real device in the repo's record (Mali-G51, 360×800 DPR 2) ran the
   synthetic `?demo=1` city, not a streamed world. → the real-district row is
@@ -205,7 +207,9 @@ Each now names the step that owns it, so none of them is an open-ended note.
   pinned is the WORK IT ASKS FOR rather than a time this machine happens to take: a label is measured once
   and never again, the font is set a fixed number of times per frame rather than once per chip, and the
   counts it reports match what it drew. Both halves were verified by reintroducing the defect.
-- `apps/dispatch/src/ops/tracks.test.ts` — the time axis: that it answers with the LAST FIX rather than a
+- `apps/dispatch/src/ops/tracks.test.ts` — the time axis and the trails: that a trail stops at the last
+  status change rather than running the whole shift, that one sample is no trail, that it never exceeds its
+  work bound, and — for the axis itself — that it answers with the LAST FIX rather than a
   slide between two, that it does not extrapolate past the last sample (it holds and says how old the answer
   is), that it records at the PUBLISH rate rather than the tick rate, and that a stationary run collapses to
   two samples. Each of the three policy rules was verified by reintroducing its defect.

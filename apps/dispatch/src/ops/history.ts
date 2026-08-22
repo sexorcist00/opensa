@@ -40,6 +40,13 @@ interface IncidentEvent {
  *  one rather than being left out of the total. */
 const BYTES_PER_EVENT = 64;
 
+/**
+ * Points one unit's trail may contribute to a frame. A WORK bound, not a look choice: the span a trail
+ * covers is the unit's current leg (see {@link UnitTracks.trail}), and this only stops one very long leg
+ * from growing the per-frame copy without limit. 240 points is 16 minutes at the 4 s publish rate.
+ */
+const TRAIL_MAX_POINTS = 240;
+
 export class BoardHistory {
   private readonly incidents = new Map<string, { events: IncidentEvent[]; incident: Incident }>();
   /**
@@ -119,6 +126,24 @@ export class BoardHistory {
     }
 
     return { ...track, bytes: track.bytes + incidentEvents * BYTES_PER_EVENT, incidentEvents };
+  }
+
+  /**
+   * Every unit's trail at `t` — the leg each one is on, as flat GTA `x, y` pairs, keyed by unit id.
+   *
+   * Rebuilt from the rings rather than cached: the alternative is a second copy of the same samples that
+   * has to be invalidated on every record, and the measured cost says there is nothing to buy.
+   */
+  trails(t: number, limit = TRAIL_MAX_POINTS): Map<string, Float32Array> {
+    const out = new Map<string, Float32Array>();
+    for (const id of this.roster.keys()) {
+      const points = this.tracks.trail(id, t, limit);
+      if (points) {
+        out.set(id, points);
+      }
+    }
+
+    return out;
   }
 
   /** The span a scrub may ask for, or null while nothing has been recorded. */

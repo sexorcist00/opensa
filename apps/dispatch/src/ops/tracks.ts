@@ -208,27 +208,10 @@ export class UnitTracks {
     if (!track || track.length === 0) {
       return null;
     }
+    const i = indexAt(track, t);
     const last = track.index(track.length - 1);
-    if (t >= track.t[last]) {
-      return state(track, last, t - track.t[last]);
-    }
-    const first = track.index(0);
-    if (t <= track.t[first]) {
-      return state(track, first, 0);
-    }
-    // Binary search for the last sample at or before `t` — the answer, not one end of a blend.
-    let low = 0;
-    let high = track.length - 1;
-    while (high - low > 1) {
-      const mid = (low + high) >> 1;
-      if (track.t[track.index(mid)] <= t) {
-        low = mid;
-      } else {
-        high = mid;
-      }
-    }
 
-    return state(track, track.index(low), 0);
+    return state(track, track.index(i), i === track.length - 1 ? Math.max(0, t - track.t[last]) : 0);
   }
 
   /** Drop a unit's history — it went off duty. */
@@ -271,6 +254,64 @@ export class UnitTracks {
       window: samples > 0 ? [oldest, newest] : null,
     };
   }
+
+  /**
+   * The unit's path up to `t`, as flat GTA `x, y` pairs, or null when there is nothing to draw.
+   *
+   * **How far back it goes is DERIVED, not a constant.** The trail covers the unit's current LEG — back to
+   * its last status change — which is the span an operator is actually asking about: where a responding car
+   * came from since it was dispatched, where a patrol has been since it went available. 8/04 asked for "the
+   * last N minutes" and warned that a constant chosen by eye is a debt (`docs/hacks/`); the leg needs no
+   * such constant, and it says something the clock cannot.
+   *
+   * `limit` is a WORK bound rather than a look choice: it caps the points one unit can contribute to the
+   * frame so a long leg cannot grow the per-frame copy without limit.
+   */
+  trail(id: string, t: number, limit: number): Float32Array | null {
+    const track = this.tracks.get(id);
+    if (!track || track.length < 2) {
+      return null;
+    }
+    const end = indexAt(track, t);
+    const status = track.status[track.index(end)];
+    let start = end;
+    while (start > 0 && track.status[track.index(start - 1)] === status && end - start + 1 < limit) {
+      start -= 1;
+    }
+    if (start === end) {
+      return null;
+    }
+    const points = new Float32Array((end - start + 1) * 2);
+    for (let i = start; i <= end; i += 1) {
+      const slot = track.index(i);
+      points[(i - start) * 2] = track.x[slot];
+      points[(i - start) * 2 + 1] = track.y[slot];
+    }
+
+    return points;
+  }
+}
+
+/** Logical index of the last sample at or before `t` — the ONE place that question is answered. */
+function indexAt(track: Track, t: number): number {
+  if (t >= track.t[track.index(track.length - 1)]) {
+    return track.length - 1;
+  }
+  if (t <= track.t[track.index(0)]) {
+    return 0;
+  }
+  let low = 0;
+  let high = track.length - 1;
+  while (high - low > 1) {
+    const mid = (low + high) >> 1;
+    if (track.t[track.index(mid)] <= t) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+
+  return low;
 }
 
 /** One ring slot, as a state. `ageMs` is how much older than the moment asked for this fix is. */

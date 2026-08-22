@@ -70,6 +70,24 @@ describe('Beacons', () => {
       expect(beacons.stats().capacity).toBeGreaterThanOrEqual(over);
     });
 
+    it('does NOT count trail growth as the board outgrowing its unit budget', () => {
+      const { engine } = fakeEngine();
+      const beacons = new Beacons(engine);
+      // 51 points per unit is the measured typical leg; 150 of them is 45 000 floats, sixteen times what a
+      // marker set holds. Sizing the trail set off MARKER_CAPACITY made this warn on the FIRST frame.
+      const trails = new Map(
+        Array.from({ length: UNITS_ON_SCREEN }, (_, i) => [
+          `u${i}`,
+          new Float32Array(Array.from({ length: 102 }, (_, k) => 1000 + i + k)),
+        ]),
+      );
+
+      beacons.update(board(UNITS_ON_SCREEN), null, trails);
+
+      expect(beacons.stats().grownSets).toBe(0);
+      expect(beacons.stats().capacity).toBe(UNITS_ON_SCREEN);
+    });
+
     it("never writes past a set's allocation — the grown buffer gets a new set first", () => {
       const { engine } = fakeEngine();
       const beacons = new Beacons(engine);

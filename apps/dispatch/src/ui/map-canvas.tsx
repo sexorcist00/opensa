@@ -32,7 +32,12 @@ export function MapCanvas({
   children?: React.ReactNode;
   onReadout: (readout: DispatchReadout) => void;
   onReady: (handle: DispatchHandle) => void;
-  read: { ops: () => Operations; selection: () => Selection; trackStats: () => HistoryStats };
+  read: {
+    ops: () => Operations;
+    selection: () => Selection;
+    trackStats: () => HistoryStats;
+    trails: () => ReadonlyMap<string, Float32Array>;
+  };
 }): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -70,6 +75,7 @@ export function MapCanvas({
       overlay,
       selection: () => liveRef.current.read.selection(),
       trackStats: () => liveRef.current.read.trackStats(),
+      trails: () => liveRef.current.read.trails(),
     };
     // The 3D map is the preferred surface, not a requirement: a browser without WebGPU (or a world this GPU
     // cannot read) falls back to the 2D plan, which keeps every unit, call and gesture working.

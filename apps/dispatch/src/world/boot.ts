@@ -47,6 +47,9 @@ export interface BootOptions {
   /** The time axis's cost and window (201/8-01) — read only by `?inventory=1`, so it is optional and a host
    *  embedding the map without a board simply does not pass it. */
   readonly trackStats?: () => HistoryStats;
+  /** Each unit's current leg as GTA `x, y` pairs (201/8-04) — absent for a host embedding the map with no
+   *  board, which then simply draws no trails. */
+  readonly trails?: () => ReadonlyMap<string, Float32Array>;
 }
 
 export interface DispatchHandle {
@@ -227,7 +230,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     const ops = options.ops();
     const aspect = canvas.width / Math.max(1, canvas.height);
     const state = camera.state(aspect);
-    time('board', () => beacons.update(ops, options.selection()));
+    time('board', () => beacons.update(ops, options.selection(), options.trails?.()));
     // Rings follow the ground point the view is over, never the eye: a camera a kilometre up sits outside
     // every ring and would stream nothing at all.
     const stream = time('stream', () => world.follow([state.target[0], state.target[1], state.target[2]]));

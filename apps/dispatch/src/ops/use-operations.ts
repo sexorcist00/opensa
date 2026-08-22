@@ -52,7 +52,13 @@ export interface DispatchStore {
    *  knows the difference, which is the whole shape of 201/8-03. */
   readonly ops: Operations;
   /** Stable getters for the render loop — identity never changes, so the host binds them once. */
-  readonly read: { ops: () => Operations; selection: () => Selection; trackStats: () => HistoryStats };
+  readonly read: {
+    ops: () => Operations;
+    selection: () => Selection;
+    trackStats: () => HistoryStats;
+    /** Each unit's current leg, GTA `x, y` pairs (201/8-04). Resolved at the board's tick, not the frame's. */
+    trails: () => ReadonlyMap<string, Float32Array>;
+  };
   readonly selection: Selection;
 }
 
@@ -77,12 +83,17 @@ export function useOperations(): DispatchStore {
     [clock.mode, clock.t, history, live],
   );
   const historyWindow = history.window();
+  // Resolved at the board's rate rather than the frame's: a trail only changes when a sample lands or the
+  // clock moves, and the map redraws from the same object in between.
+  const trails = useMemo(() => history.trails(ops.now), [history, ops]);
 
   const opsRef = useRef(ops);
+  const trailsRef = useRef(trails);
   const liveRef = useRef(live);
   const selectionRef = useRef(selection);
   const autoRef = useRef(autoDispatch);
   opsRef.current = ops;
+  trailsRef.current = trails;
   liveRef.current = live;
   selectionRef.current = selection;
   autoRef.current = autoDispatch;
@@ -135,6 +146,7 @@ export function useOperations(): DispatchStore {
       ops: (): Operations => opsRef.current,
       selection: (): Selection => selectionRef.current,
       trackStats: (): HistoryStats => history.stats(),
+      trails: (): ReadonlyMap<string, Float32Array> => trailsRef.current,
     }),
     [history],
   );

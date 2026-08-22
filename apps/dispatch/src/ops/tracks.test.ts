@@ -157,6 +157,57 @@ describe('UnitTracks', () => {
   });
 });
 
+describe('UnitTracks.trail', () => {
+  describe('negative cases', () => {
+    it('has nothing to draw for a unit it never saw', () => {
+      expect(new UnitTracks().trail('nobody', 0, 100)).toBeNull();
+    });
+
+    it('has nothing to draw from a single sample — a point is not a path', () => {
+      const tracks = new UnitTracks();
+      tracks.record(board(0, [{ at: [10, 10] }]));
+
+      expect(tracks.trail('u0', 0, 100)).toBeNull();
+    });
+
+    it('stops at the last status change — the leg, not the whole shift', () => {
+      const tracks = new UnitTracks();
+      // 40 s available, then 40 s en route, sampling every 4 s.
+      for (let ms = 0; ms <= 80_000; ms += 50) {
+        tracks.record(board(ms, [{ at: [ms / 100, 0], status: ms < 40_000 ? 'available' : 'enRoute' }]));
+      }
+      const leg = tracks.trail('u0', 80_000, 1000);
+
+      // Every point of the leg is from the en-route half: x = ms/100, so x >= 400.
+      expect(leg).not.toBeNull();
+      for (let i = 0; i < (leg?.length ?? 0); i += 2) {
+        expect(leg?.[i]).toBeGreaterThanOrEqual(400);
+      }
+    });
+
+    it('never returns more points than the work bound allows', () => {
+      const tracks = new UnitTracks();
+      drive(tracks, 600, 10);
+
+      expect((tracks.trail('u0', 600_000, 20)?.length ?? 0) / 2).toBeLessThanOrEqual(20);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('walks the leg up to the moment asked for, and no further', () => {
+      const tracks = new UnitTracks();
+      drive(tracks, 100, 10);
+      const half = tracks.trail('u0', 50_000, 1000);
+
+      expect(half).not.toBeNull();
+      // 10 u/s at one sample per 4 s: the last point is the fix at or before 50 s, never past it.
+      expect(half?.[(half.length ?? 2) - 2]).toBeLessThanOrEqual(500);
+      expect(half?.[(half.length ?? 2) - 2]).toBeGreaterThan(500 - 10 * 4 - 1);
+      expect(tracks.trail('u0', 100_000, 1000)?.length).toBeGreaterThan(half?.length ?? 0);
+    });
+  });
+});
+
 describe('UnitTracks cost', () => {
   describe('positive cases', () => {
     it('prices the declared worst case: 150 units, one shift, at the publish rate', () => {
