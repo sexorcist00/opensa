@@ -64,6 +64,9 @@ export default defineConfig({
       'tools/ped-installer/**/*.test.ts',
       'tools/perfect-map-builder/**/*.test.ts',
       'tools-debug/sa-int16-repro/**/*.test.ts',
+      // Plain .js on purpose: the panel must boot on `node` alone, since its first job is to report a tree
+      // too broken to run TypeScript (tools-debug/phone-console).
+      'tools-debug/phone-console/**/*.test.mjs',
       'asi/**/*.test.ts',
       'cleo/**/*.test.ts',
     ],

@@ -97,3 +97,27 @@ space.
   [`img-census.ts`](../debug/README.md) — `gta3.img` 1073 `.osm` bundles, `gta_int.img` 155, `cutscene.img` and
   `player.img` clean. Restoring those two files from a pristine install is the whole repair; the deleted `.dff`
   are not recoverable from the rewritten archive.
+
+## The panel — the phone's own control surface
+
+**`npm run panel`** starts [`tools-debug/phone-console`](../../tools-debug/phone-console/README.md) on
+`http://localhost:8787`. Open it in the phone's browser and use the browser menu's **Add to Home screen**: it
+ships a manifest and a service worker, so it installs as an app and opens full-screen. After that a field run
+is taps rather than typing — preflight, `git pull`, `phone:setup`, the convert with its knobs, start/stop, the
+links to the map, and the inbox that files a capture into `docs/benchmarks/` and commits it.
+
+- **It binds `127.0.0.1`.** A page that runs commands is a shell; `PANEL_HOST=0.0.0.0` puts it on the network
+  and the startup line says exactly that.
+- **Starting it without a terminal:** Termux:Widget runs a script from a home-screen shortcut
+  (`~/.shortcuts/panel` containing `cd ~/opensa && npm run panel`), and Termux:Boot starts one at boot
+  (`~/.termux/boot/`). Both are separate F-Droid add-ons; neither is required — a Termux session works.
+- **`termux-wake-lock` still applies.** The panel runs the convert as a child of the Termux session, so the
+  session sleeping is the convert sleeping. `phone:setup` takes the lock when Termux offers one.
+
+**A landmine the panel now reports rather than lets you discover.** `scripts/serve-static.ts` — the server
+that hands out the pak on `:3001` — imports `sirv`, and `sirv` is a **devDependency** whose only other route
+into the tree is `@vitest/browser`. `npm run phone:setup` installs with `--omit=dev`. On a device set up
+strictly by the documented path the static server therefore cannot start, and because it is the server that
+serves the world, the symptom is a map that loads nothing at all rather than an error about a missing module.
+The panel's preflight checks for `sirv` by name; the fix, when a real device reports it, is
+[`phone-console` plan 001/03](../../tools-debug/phone-console/docs/plans/001-the-panel.md).

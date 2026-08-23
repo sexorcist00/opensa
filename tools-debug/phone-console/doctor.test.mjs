@@ -1,0 +1,121 @@
+import { describe, expect, it } from 'vitest';
+
+import { runChecks, verdict } from './doctor.mjs';
+
+const TARGET = { game: './game-src/original', out: './build/phone', ports: [3001] };
+
+/** A phone where everything is in place; each test breaks exactly one thing. */
+function probe(overrides = {}) {
+  const present = new Set(['./game-src/original/data/gta.dat', 'node_modules/sirv', 'node_modules/tsx']);
+
+  return {
+    arch: 'arm64',
+    exists: async (path) => (overrides.missing ?? new Set()).has(path) === false && present.has(path),
+    freeBytes: async () => 40 * 1024 ** 3,
+    git: async () => ({ behind: 0, branch: 'main', dirty: 0 }),
+    mtime: async (path) => (path === 'package-lock.json' ? 100 : 200),
+    nodeVersion: 'v22.4.0',
+    portOpen: async () => false,
+    readJson: async () => ({ build: { at: '2026-08-23', textures: 'astc' } }),
+    realpath: async (path) => `/home/user/opensa/${path}`,
+    termux: true,
+    wakeLock: true,
+    ...overrides,
+  };
+}
+
+const find = (checks, id) => checks.find((check) => check.id === id);
+
+describe('phone console doctor', () => {
+  describe('negative cases', () => {
+    it('fails a tree older than the lock — what a pull causes and the convert reports minutes later', async () => {
+      const checks = await runChecks(
+        probe({ mtime: async (path) => (path === 'package-lock.json' ? 300 : 200) }),
+        TARGET,
+      );
+
+      expect(find(checks, 'deps').state).toBe('fail');
+      expect(find(checks, 'deps').fix).toBe('npm run phone:setup');
+    });
+
+    it('fails when node_modules is not there at all', async () => {
+      const checks = await runChecks(
+        probe({ mtime: async (path) => (path === 'package-lock.json' ? 100 : null) }),
+        TARGET,
+      );
+
+      expect(find(checks, 'deps').detail).toMatch(/not installed/);
+    });
+
+    it('fails on a missing sirv, because that is the server that hands out the pak', async () => {
+      const checks = await runChecks(probe({ missing: new Set(['node_modules/sirv']) }), TARGET);
+
+      expect(find(checks, 'sirv').state).toBe('fail');
+      expect(find(checks, 'sirv').detail).toMatch(/cannot serve the pak/);
+    });
+
+    it('fails when GAME and OUT resolve to one folder', async () => {
+      // 2026-08-09: the convert rewrote the archives it was reading. `guardOut` refuses it now, but only
+      // after the run has already started deleting.
+      const checks = await runChecks(probe({ realpath: async () => '/shared/one-folder' }), TARGET);
+
+      expect(find(checks, 'paths').state).toBe('fail');
+      expect(find(checks, 'paths').detail).toMatch(/eat its own source/);
+    });
+
+    it('fails a node too old to run the repo', async () => {
+      const checks = await runChecks(probe({ nodeVersion: 'v16.20.0' }), TARGET);
+
+      expect(find(checks, 'node').state).toBe('fail');
+    });
+
+    it('warns rather than fails on a device that is nearly full', async () => {
+      const checks = await runChecks(probe({ freeBytes: async () => 512 * 1024 ** 2 }), TARGET);
+
+      expect(find(checks, 'disk-repo').state).toBe('warn');
+    });
+
+    it('rolls the blocking checks up into one line', async () => {
+      const checks = await runChecks(probe({ missing: new Set(['node_modules/tsx']) }), TARGET);
+
+      expect(verdict(checks)).toEqual({ headline: '1 blocking: tsx', state: 'fail' });
+    });
+  });
+
+  describe('positive cases', () => {
+    it('passes a phone that is ready, and says what the pak is', async () => {
+      const checks = await runChecks(probe(), TARGET);
+
+      expect(verdict(checks).state).toBe('ok');
+      expect(find(checks, 'pak').detail).toBe('built 2026-08-23 · textures astc');
+      expect(find(checks, 'node').detail).toBe('v22.4.0 · arm64 · Termux');
+    });
+
+    it('reports a port that is already serving as reuse rather than a problem', async () => {
+      const checks = await runChecks(probe({ portOpen: async () => true }), TARGET);
+
+      expect(find(checks, 'port-3001')).toMatchObject({ detail: 'already serving — a run reuses it', state: 'ok' });
+    });
+
+    it('warns about a missing wake lock, since Android suspends a long convert without it', async () => {
+      const checks = await runChecks(probe({ wakeLock: false }), TARGET);
+
+      expect(find(checks, 'wake').state).toBe('warn');
+      expect(verdict(checks)).toEqual({ headline: 'ready · 1 to know about', state: 'warn' });
+    });
+
+    it('offers the pull when the branch is behind', async () => {
+      const checks = await runChecks(probe({ git: async () => ({ behind: 3, branch: 'main', dirty: 2 }) }), TARGET);
+
+      expect(find(checks, 'git').detail).toBe('main · 2 changed files · 3 behind');
+      expect(find(checks, 'git').fix).toBe('git pull --ff-only');
+    });
+
+    it('says a world with no pak yet is not an error', async () => {
+      const checks = await runChecks(probe({ readJson: async () => null }), TARGET);
+
+      expect(find(checks, 'pak').state).toBe('warn');
+      expect(find(checks, 'pak').detail).toMatch(/no pak yet/);
+    });
+  });
+});

@@ -13,6 +13,12 @@ workspace (`tsx`-run CLI + unit tests), registered in the root `package.json`, `
   boot-gate checks without a human at the screen. Guide:
   [docs/development/benchmarks.md](../docs/development/benchmarks.md). (Plain node scripts, not a
   workspace — they drive a browser, they don't ship.)
+- **[`phone-console`](./phone-console)** — the field-run panel for the phone the work is done on: one page
+  (`npm run panel`, installable to the home screen) that runs the rituals `scripts/phone.sh` already knows,
+  says why a run will not start BEFORE it is started, and files what the run measures into
+  `docs/benchmarks/` with the conditions it can prove. Plain dependency-free `.mjs` on purpose — it has to
+  boot on a tree too broken to run TypeScript, because saying so is its first job. Plans:
+  [`phone-console/docs/plans/`](./phone-console/docs/plans/).
 - **[`sa-int16-repro`](./sa-int16-repro)** — the row-count dial that reproduces SA's int16 building-pool
   truncation (the "ghost barriers" bug) on demand. The pass/fail **oracle** for the
   [perfect-map ASI project](../asi/perfect-map/docs/plans/readme.md). Full plan:
