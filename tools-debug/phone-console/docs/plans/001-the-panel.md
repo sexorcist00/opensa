@@ -78,6 +78,15 @@ against the archive**, and the fix is a button running the README's own two-step
 never `rm -rf build/webapp` — that path is routinely a symlink into shared storage). The archive itself was
 refreshed in the same change.
 
+**And the check itself was wrong the first time, in the way this repo keeps meeting.** It compared the
+unpacked copy's mtime against the archive's — which always fails the same direction, because `tar -x`
+restores the times recorded INSIDE the archive (when the app was built, on another machine) while the archive
+file is written by `git pull` (now). Measured: extracted `index.html` 22:40:27 against an archive of 22:40:46.
+The user re-unpacked, by button and by hand, and the row stayed red both times. It now compares **content** —
+a fingerprint over the archive's `.html` entry points, which are the files that name the content-hashed
+chunks — so it needs no cooperation from whoever extracted the archive and cannot be fooled by a clock
+(`webapp.mjs`, with the tar walk and the fingerprint tested on both sides of the comparison).
+
 **Owed:** the first clean run on the phone itself — the doctor's own verdict there is the measurement this
 step is judged on.
 

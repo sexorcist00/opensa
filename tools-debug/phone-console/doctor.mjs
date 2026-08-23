@@ -77,14 +77,15 @@ export async function runChecks(probe, target) {
   // is the same warning as a check, because the symptom is a device running last week's app while its
   // operator reads this week's release notes (2026-08-23: an 11-day-old build, so the flat map did not exist
   // on a phone that had just pulled it).
-  const servedApp = await probe.mtime('build/webapp/index.html');
-  if (servedApp !== null) {
-    const archive = await probe.mtime('prebuilt/opensa-webapp.tar.gz');
-    const stale = archive !== null && archive > servedApp;
+  //
+  // Compared by CONTENT — see `webapp.mjs` for why a timestamp comparison is guaranteed to lie here.
+  const app = await probe.app();
+  if (app !== null) {
+    const stale = app.archived !== app.served;
     add({
       detail: stale
-        ? 'OLDER than the archive in the repo — a pull updated the archive, not the unpacked copy'
-        : 'unpacked from the archive currently in the repo',
+        ? 'NOT the app in the repo — a pull updates the archive, never the unpacked copy'
+        : 'the same build as the archive in the repo',
       id: 'webapp',
       label: 'the served app',
       state: stale ? 'fail' : 'ok',

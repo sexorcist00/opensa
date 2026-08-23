@@ -20,11 +20,13 @@ import { connect } from 'node:net';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { gunzipSync } from 'node:zlib';
 
 import { fileCapture, writeTilesArchive } from './capture-store.mjs';
 import { commitPlan } from './captures.mjs';
 import { runChecks, statusPaths, verdict } from './doctor.mjs';
 import { buildJob, JobRunner } from './jobs.mjs';
+import { htmlFingerprint, htmlNames, listTarFiles } from './webapp.mjs';
 
 const run = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -56,7 +58,38 @@ const runner = new JobRunner({
   },
 });
 
+/** The archive is 1.4 MB and preflight runs every few seconds, so the gunzip is done once per ARCHIVE — a
+ *  new one has a different size or mtime, and nothing else can change what is inside it. */
+let archiveCache = null;
+
 const probe = {
+  /**
+   * The served app against the archive it should have come from, by content.
+   *
+   * `null` when there is no unpacked copy at all — that device runs the dev server, and a check about an
+   * archive nobody extracted is noise.
+   */
+  app: async () => {
+    const archivePath = join(REPO, 'prebuilt/opensa-webapp.tar.gz');
+    const servedDir = join(REPO, 'build/webapp');
+    try {
+      const stamp = await stat(archivePath);
+      const key = `${stamp.size}:${stamp.mtimeMs}`;
+      if (archiveCache?.key !== key) {
+        const files = listTarFiles(gunzipSync(await readFile(archivePath)));
+        archiveCache = { fingerprint: htmlFingerprint(files), key, names: htmlNames(files) };
+      }
+      const served = [];
+      for (const name of archiveCache.names) {
+        served.push({ body: await readFile(join(servedDir, name)), name });
+      }
+
+      return { archived: archiveCache.fingerprint, served: htmlFingerprint(served) };
+    } catch {
+      // No archive, or no unpacked copy — either way there is nothing to compare and nothing to say.
+      return null;
+    }
+  },
   arch: process.arch,
   exists: async (path) => existsSync(join(REPO, path)),
   freeBytes: async (path) => {

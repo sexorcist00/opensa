@@ -9,13 +9,12 @@ function probe(overrides = {}) {
   const present = new Set(['./game-src/original/data/gta.dat', 'node_modules/sirv', 'node_modules/tsx']);
 
   return {
+    app: async () => null,
     arch: 'arm64',
     exists: async (path) => (overrides.missing ?? new Set()).has(path) === false && present.has(path),
     freeBytes: async () => 40 * 1024 ** 3,
     git: async () => ({ behind: 0, branch: 'main', dirty: 0, dirtyPaths: [] }),
-    // No unpacked app by default: this device runs the dev server, and the served-app check is about the
-    // prebuilt path only.
-    mtime: async (path) => (path === 'package-lock.json' ? 100 : path === 'build/webapp/index.html' ? null : 200),
+    mtime: async (path) => (path === 'package-lock.json' ? 100 : 200),
     nodeVersion: 'v22.4.0',
     portOpen: async () => false,
     readJson: async () => ({ build: { at: '2026-08-23', textures: 'astc' } }),
@@ -50,19 +49,13 @@ describe('phone console doctor', () => {
       expect(find(checks, 'deps').detail).toMatch(/not installed/);
     });
 
-    it('fails when the SERVED app is older than the archive a pull brought', async () => {
-      // 2026-08-23: the phone was serving an 11-day-old build, so a feature it had just pulled did not exist
-      // on screen. `git pull` updates the archive; `build/webapp` is the unpacked copy and is gitignored.
-      const checks = await runChecks(
-        probe({
-          mtime: async (path) =>
-            path === 'build/webapp/index.html' ? 100 : path === 'prebuilt/opensa-webapp.tar.gz' ? 900 : 200,
-        }),
-        TARGET,
-      );
+    it('fails when the served app is NOT the build in the archive', async () => {
+      // 2026-08-23: the phone served an 11-day-old build, so a feature it had just pulled did not exist on
+      // screen. Compared by content — a timestamp comparison is guaranteed to lie here (`webapp.mjs`).
+      const checks = await runChecks(probe({ app: async () => ({ archived: 'a:1', served: 'a:2' }) }), TARGET);
 
       expect(find(checks, 'webapp')).toMatchObject({ job: 'webapp', state: 'fail' });
-      expect(find(checks, 'webapp').detail).toMatch(/OLDER than the archive/);
+      expect(find(checks, 'webapp').detail).toMatch(/NOT the app in the repo/);
     });
 
     it('fails on a missing sirv, because that is the server that hands out the pak', async () => {
@@ -139,6 +132,13 @@ describe('phone console doctor', () => {
     it('says nothing about the served app on a device that runs the dev server instead', async () => {
       // No `build/webapp` means vite is the app, and a check about an archive nobody unpacked is noise.
       expect(find(await runChecks(probe(), TARGET), 'webapp')).toBeUndefined();
+    });
+
+    it('passes the served app when it is the build the archive carries', async () => {
+      const checks = await runChecks(probe({ app: async () => ({ archived: 'a:1', served: 'a:1' }) }), TARGET);
+
+      expect(find(checks, 'webapp')).toMatchObject({ state: 'ok' });
+      expect(find(checks, 'webapp').fix).toBeUndefined();
     });
 
     it('reports a port that is already serving as reuse rather than a problem', async () => {

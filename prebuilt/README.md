@@ -30,6 +30,11 @@ rm -rf build/webapp/assets      # NOT `rm -rf build/webapp` — that path is oft
 tar -xzf prebuilt/opensa-webapp.tar.gz -C build/webapp
 ```
 
+**The phone panel checks this and offers the same two commands as a button** — the served pages are compared
+against the archive's by CONTENT, because a timestamp comparison always says "stale" here (`tar -x` restores
+the times inside the archive, which are older than the archive file a pull just wrote):
+[`tools-debug/phone-console`](../tools-debug/phone-console/README.md).
+
 **Clear `assets/` rather than extracting over it.** Chunk filenames carry a content hash, so an overlay leaves
 every old chunk in place beside the new ones. They are never loaded — `index.html` names the new hashes — but
 they are indistinguishable from live files when something is being diagnosed by grep, and on 2026-08-12 that
