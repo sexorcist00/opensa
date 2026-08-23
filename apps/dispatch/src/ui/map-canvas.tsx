@@ -50,6 +50,9 @@ export function MapCanvas({
   const [degraded, setDegraded] = useState('');
   /** Held for the inventory panel only (201/1-01) — it reads the collector, it does not drive the loop. */
   const handleRef = useRef<DispatchHandle | null>(null);
+  /** The flat 2D map, asked for rather than fallen back to (201/6-02) — plan mode either way, so it draws
+   *  no radar; an undrawn radar canvas is invisible but still eats every tap in its corner. */
+  const flat = dispatchParams().get('mode') === 'flat';
 
   // Callbacks reach the loop through a ref so the boot effect never re-runs: re-booting the engine on a
   // re-render would leak a device and a streaming worker per render.
@@ -113,7 +116,7 @@ export function MapCanvas({
       <canvas ref={canvasRef} style={styles.canvas} />
       <canvas ref={overlayRef} style={{ ...styles.fill, pointerEvents: 'none', zIndex: 2 }} />
       {/* The radar (201/7-04). Absent in plan mode, which has no 3D view to locate and draws its own board. */}
-      {!degraded && <canvas ref={minimapRef} style={compact ? styles.minimapCompact : styles.minimap} />}
+      {!degraded && !flat && <canvas ref={minimapRef} style={compact ? styles.minimapCompact : styles.minimap} />}
       {children}
       {degraded && <DegradedBanner message={degraded} />}
       {dispatchParams().get('inventory') === '1' && (
