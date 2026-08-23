@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { capturePath, checkTilesArchive, commitPlan, pakFacts, runCommit, slugify, withNote } from './captures.mjs';
+import {
+  capturePath,
+  checkTilesArchive,
+  commitPlan,
+  pakFacts,
+  pendingCaptures,
+  runCommit,
+  slugify,
+  withNote,
+} from './captures.mjs';
 
 const FACTS = { commit: 'abc1234', device: 'Pixel', node: 'v22.0.0', pak: 'original rect 8,-8,11,-5' };
 
@@ -54,6 +63,21 @@ describe('phone console captures', () => {
   });
 
   describe('positive cases', () => {
+    it('finds the captures waiting to be committed, and nothing else', () => {
+      // The list comes from git, not from what the page remembers filing — a reload used to lose it, and a
+      // capture already on disk could then never be committed from the panel.
+      expect(
+        pendingCaptures([
+          'docs/benchmarks/opensa-engine/2026-08-23-b.json',
+          'docs/benchmarks/opensa-engine/2026-08-23-a.json',
+          'docs/benchmarks/opensa-engine/notes.md',
+          'docs/benchmarks/index.md',
+          'apps/dispatch/src/world/boot.ts',
+        ]),
+      ).toEqual(['docs/benchmarks/opensa-engine/2026-08-23-a.json', 'docs/benchmarks/opensa-engine/2026-08-23-b.json']);
+      expect(pendingCaptures([])).toEqual([]);
+    });
+
     it('names the file the way the family does', () => {
       expect(capturePath('2026-08-23', 'Mobile pinned district — inventory')).toBe(
         'docs/benchmarks/opensa-engine/2026-08-23-mobile-pinned-district-inventory.json',

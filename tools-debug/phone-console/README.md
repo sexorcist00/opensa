@@ -64,6 +64,11 @@ panel writes `docs/benchmarks/opensa-engine/<date>-<name>.json`, **stamping the 
 (device, node, the pak's own recipe and the commit that built it) into the note rather than trusting them to
 memory. `Commit & push` then files it on the current branch.
 
+**What is waiting to be committed comes from git, not from this page.** The panel used to remember what it
+had filed in the browser's own memory, so a reload, a restarted server or a phone that put the browser to
+sleep left a written capture the panel then refused to commit — because it had forgotten writing it. The
+section lists whatever is uncommitted under `docs/benchmarks/opensa-engine/`, whoever wrote it and whenever.
+
 Two refusals, both on purpose:
 
 - **a capture with no note is refused** — a row nobody can place is a row nobody can compare;

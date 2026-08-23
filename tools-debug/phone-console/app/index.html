@@ -297,6 +297,7 @@
         </div>
         <label for="tiles" style="margin-top: 12px">…or put a baked tiles.pmtiles beside the pak</label>
         <input id="tiles" type="file" accept=".pmtiles,application/octet-stream" />
+        <p class="muted" id="pending"></p>
         <p class="muted" id="filed"></p>
       </section>
 
@@ -308,9 +309,10 @@
 
     <script>
       const $ = (id) => document.getElementById(id);
-      /** Paths this session filed, and therefore the only ones the commit may name. */
-      let filed = [];
-      let state = { ports: { app: 5173, static: 3001 }, webapp: false };
+      /** What the SERVER says is waiting to be committed. Never a list this page remembers: a reload, a
+          restarted panel or a sleeping phone would lose it, and a capture already on disk could then never
+          be committed from here. */
+      let state = { pending: [], ports: { app: 5173, static: 3001 }, webapp: false };
 
       async function api(path, body, raw) {
         const response = await fetch(
@@ -391,6 +393,12 @@
         pill.textContent = state.verdict.headline;
         $('districts').innerHTML = state.districts.map((name) => `<option value="${name}"></option>`).join('');
         $('jobstate').textContent = state.job.running ? `running: ${state.job.id}` : 'nothing running';
+        const waiting = state.pending ?? [];
+        $('pending').textContent =
+          waiting.length === 0
+            ? 'nothing waiting to be committed'
+            : `waiting to be committed: ${waiting.map((path) => path.split('/').pop()).join(', ')}`;
+        $('commit').disabled = waiting.length === 0;
         $('stop').disabled = !state.job.running;
         urls();
       }
@@ -427,29 +435,29 @@
             payload: $('payload').value,
             slug: $('slug').value,
           });
-          filed = [...new Set([...filed, result.path])];
           $('filed').textContent = `filed ${result.path} — ${result.note}`;
+          refresh();
         } catch (error) {
           $('filed').textContent = error.message;
         }
       };
 
       $('commit').onclick = async () => {
-        if (filed.length === 0) {
-          $('filed').textContent = 'nothing filed in this session yet';
+        const paths = state.pending ?? [];
+        if (paths.length === 0) {
+          $('filed').textContent = 'nothing is waiting — file a capture first, or it is already committed';
           return;
         }
         try {
-          const count = filed.length;
           const result = await api('/api/commit', {
-            paths: filed,
+            paths,
             push: true,
             subject: $('slug').value || 'a capture from the phone',
           });
           $('filed').textContent = result.pushed
-            ? `committed and pushed ${count} file(s) to ${result.branch}`
-            : `committed ${count} file(s) on ${result.branch} — not pushed`;
-          filed = [];
+            ? `committed and pushed ${paths.length} file(s) to ${result.branch}`
+            : `committed ${paths.length} file(s) on ${result.branch} — not pushed`;
+          refresh();
         } catch (error) {
           // Git's own first line; the whole exchange is in the log below, which is where a failure is read.
           $('filed').textContent = error.message;

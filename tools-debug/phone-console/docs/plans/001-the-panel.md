@@ -87,6 +87,15 @@ a fingerprint over the archive's `.html` entry points, which are the files that 
 chunks — so it needs no cooperation from whoever extracted the archive and cannot be fooled by a clock
 (`webapp.mjs`, with the tar walk and the fingerprint tested on both sides of the comparison).
 
+**Two more of the same family, reported from the phone the same evening.** A `Commit & push` that sent
+nothing left no trace: the panel collected each git command's output and wrote it to the log only after every
+step SUCCEEDED, so the one case the log exists for was the one case it was empty. Now every command is logged
+as it runs, a failure logs git's own words, and `GIT_TERMINAL_PROMPT=0` makes a push that needs credentials
+fail instead of waiting for a username on a terminal nobody is looking at (a blocked git looks exactly like a
+slow one from a page). Then the button answered `nothing filed in this session yet` over a capture that was
+already on disk: the list of what to commit lived in the PAGE's memory, so a reload or a restarted panel lost
+it forever. The list now comes from `git status` — the repository is the state, the page only shows it.
+
 **Owed:** the first clean run on the phone itself — the doctor's own verdict there is the measurement this
 step is judged on.
 

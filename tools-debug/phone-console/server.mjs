@@ -23,7 +23,7 @@ import { promisify } from 'node:util';
 import { gunzipSync } from 'node:zlib';
 
 import { fileCapture, writeTilesArchive } from './capture-store.mjs';
-import { commitPlan, runCommit } from './captures.mjs';
+import { commitPlan, pendingCaptures, runCommit } from './captures.mjs';
 import { runChecks, statusPaths, verdict } from './doctor.mjs';
 import { buildJob, JobRunner } from './jobs.mjs';
 import { htmlFingerprint, htmlNames, listTarFiles } from './webapp.mjs';
@@ -233,6 +233,9 @@ async function handle(request, response) {
       checks,
       districts: await districtNames(),
       job: runner.status(),
+      // Read from git rather than remembered by the page: a capture written before a reload is still there,
+      // and a panel that forgot filing it would refuse to commit it.
+      pending: await pending(),
       ports: { app: RUN_PORTS[1], static: RUN_PORTS[0] },
       verdict: verdict(checks),
       // Which app URL to offer: a prebuilt copy is served as static files and vite is never started, which
@@ -268,6 +271,19 @@ async function handle(request, response) {
   }
 
   return send(response, 404, { error: `no route for ${request.method} ${path}` });
+}
+
+/** Captures written but not committed — the list the commit button acts on. */
+async function pending() {
+  try {
+    const { stdout } = await run('git', ['status', '--porcelain', '--untracked-files=all', '--', 'docs/benchmarks'], {
+      cwd: REPO,
+    });
+
+    return pendingCaptures(statusPaths(stdout));
+  } catch {
+    return [];
+  }
 }
 
 async function readBody(request, limit) {

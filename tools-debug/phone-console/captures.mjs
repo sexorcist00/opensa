@@ -95,6 +95,17 @@ export function pakFacts(report) {
 }
 
 /**
+ * The captures on disk that are not committed yet, out of `git status`'s paths.
+ *
+ * The panel used to remember what IT had filed, in the page's own memory — so a reload, a restarted server
+ * or a phone that put the browser to sleep left a written capture that the panel then refused to commit
+ * because it had forgotten writing it. The repository is the state; the page only shows it.
+ */
+export function pendingCaptures(paths) {
+  return paths.filter((path) => path.startsWith(`${CAPTURE_DIR}/`) && path.endsWith('.json')).sort();
+}
+
+/**
  * Run a commit plan, writing every command and its output to the log AS IT HAPPENS.
  *
  * The order matters and it is the whole point: the first version collected the output and pushed it to the
