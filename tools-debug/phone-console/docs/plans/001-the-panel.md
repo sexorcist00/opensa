@@ -54,8 +54,21 @@ console's own table); a job started, streamed and finished; a capture refused fo
 with its note stamped; a commit refused for naming a source file; a tile upload refused for an HTML body and
 accepted for a real header; and a `../../etc` output path refused as outside the repository.
 
-**Owed:** the first run on the phone itself — the doctor's own verdict there is the measurement this step is
-judged on.
+**The first phone run, 2026-08-23, and what it cost.** The panel did not start, and neither did the pull that
+carried it: `git pull` refused with *"Your local changes to the following files would be overwritten by
+merge: package.json"*, so `npm run panel` answered `Missing script: "panel"` — a symptom two steps away from
+its cause. The dirt was ours: **`npm run phone:setup` installs tsx with `npm i tsx`, and `npm i <pkg>` writes
+the package into `package.json`** — on the one machine whose worktree the same script's header refuses to
+touch for exactly that reason. Fixed with `--no-save`, and the panel now names the condition
+(`a pull will refuse`, with the way back) rather than leaving it to be discovered as a missing script.
+
+Fixing that check found a second defect of the same family in the panel itself: `git status --porcelain` was
+`.trim()`ed before parsing, and an unstaged modification's status field STARTS with a space — so the first
+line lost a character (`ackage.json`) and the check read healthy exactly when the file it was about was the
+only thing changed. Now `statusPaths`, with a test for the leading space, the rename arrow and an empty tree.
+
+**Owed:** the first clean run on the phone itself — the doctor's own verdict there is the measurement this
+step is judged on.
 
 ### 02 — The console posts its own captures
 
@@ -82,7 +95,7 @@ that reads a log it cannot cite has learned nothing the next session can use.
 
 | Step | State |
 | --- | --- |
-| 01 preflight + rituals + capture inbox | **DONE 2026-08-23** — verified in the container end to end (33 tests, every guard exercised). Owed: the first run on the phone |
+| 01 preflight + rituals + capture inbox | **DONE 2026-08-23** — verified in the container end to end (35 tests, every guard exercised). The first phone attempt failed on a dirty `package.json` written by our own `phone:setup`; fixed at the source (`--no-save`) and now reported by the doctor. Owed: the first clean run on the phone |
 | 02 the console posts its own captures | not started |
 | 03 the panel serves the pak itself | not started — gated on the doctor reporting `sirv` missing on a real device |
 | 04 a read-only window for an agent | ruled out 2026-08-23 |

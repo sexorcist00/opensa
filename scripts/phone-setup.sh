@@ -55,11 +55,18 @@ else
 fi
 
 # tsx is a devDependency, so --omit=dev skipped it — and it is what runs every .ts entry point here.
+#
+# `--no-save`, and that word is the whole point: `npm i <pkg>` WRITES the package into package.json, which
+# leaves the worktree dirty on exactly the machine this script exists for. On 2026-08-23 that dirt stopped a
+# `git pull` outright ("Your local changes to the following files would be overwritten by merge:
+# package.json") — the phone could not take an update at all, and the reason looked like a mistake the user
+# had made. This script already refuses `npm pkg delete scripts.prepare` for that same reason two steps
+# above; it must not undo the rule with its own next command.
 if [ -d node_modules/tsx ]; then
   ok "tsx present"
 else
   echo "   installing tsx…"
-  HUSKY=0 npm i tsx --no-audit --no-fund || exit 1
+  HUSKY=0 npm i tsx --no-save --no-audit --no-fund || exit 1
   ok "tsx installed"
 fi
 

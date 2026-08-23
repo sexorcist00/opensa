@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { runChecks, verdict } from './doctor.mjs';
+import { runChecks, statusPaths, verdict } from './doctor.mjs';
 
 const TARGET = { game: './game-src/original', out: './build/phone', ports: [3001] };
 
@@ -12,7 +12,7 @@ function probe(overrides = {}) {
     arch: 'arm64',
     exists: async (path) => (overrides.missing ?? new Set()).has(path) === false && present.has(path),
     freeBytes: async () => 40 * 1024 ** 3,
-    git: async () => ({ behind: 0, branch: 'main', dirty: 0 }),
+    git: async () => ({ behind: 0, branch: 'main', dirty: 0, dirtyPaths: [] }),
     mtime: async (path) => (path === 'package-lock.json' ? 100 : 200),
     nodeVersion: 'v22.4.0',
     portOpen: async () => false,
@@ -75,6 +75,30 @@ describe('phone console doctor', () => {
       expect(find(checks, 'disk-repo').state).toBe('warn');
     });
 
+    it('names a modified package.json, because that is a pull that will not run', async () => {
+      // 2026-08-23 on the phone: `npm i tsx` had written itself into package.json, the pull refused, and
+      // the update carrying the panel never landed — so the symptom was "the script does not exist".
+      const checks = await runChecks(
+        probe({ git: async () => ({ behind: 2, branch: 'main', dirty: 1, dirtyPaths: ['package.json'] }) }),
+        TARGET,
+      );
+
+      expect(find(checks, 'pull-blocked')).toMatchObject({
+        fix: 'git checkout -- package.json package-lock.json',
+        state: 'fail',
+      });
+    });
+
+    it('reads the FIRST porcelain line correctly, space and all', () => {
+      // An unstaged modification's status field starts with a space, so trimming the block first eats one
+      // character of the first line only — `ackage.json`, and a check that reads healthy exactly when the
+      // file it is about is the only thing changed.
+      expect(statusPaths(' M package.json\n M scripts/phone.sh\n')).toEqual(['package.json', 'scripts/phone.sh']);
+      expect(statusPaths('?? tools-debug/phone-console/\n')).toEqual(['tools-debug/phone-console/']);
+      expect(statusPaths('R  old.md -> docs/new.md\n')).toEqual(['docs/new.md']);
+      expect(statusPaths('')).toEqual([]);
+    });
+
     it('rolls the blocking checks up into one line', async () => {
       const checks = await runChecks(probe({ missing: new Set(['node_modules/tsx']) }), TARGET);
 
@@ -105,10 +129,14 @@ describe('phone console doctor', () => {
     });
 
     it('offers the pull when the branch is behind', async () => {
-      const checks = await runChecks(probe({ git: async () => ({ behind: 3, branch: 'main', dirty: 2 }) }), TARGET);
+      const checks = await runChecks(
+        probe({ git: async () => ({ behind: 3, branch: 'main', dirty: 2, dirtyPaths: ['docs/a.md', 'docs/b.md'] }) }),
+        TARGET,
+      );
 
       expect(find(checks, 'git').detail).toBe('main · 2 changed files · 3 behind');
       expect(find(checks, 'git').fix).toBe('git pull --ff-only');
+      expect(find(checks, 'pull-blocked')).toBeUndefined();
     });
 
     it('says a world with no pak yet is not an error', async () => {

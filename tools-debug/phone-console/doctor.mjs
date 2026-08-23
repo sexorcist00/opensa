@@ -67,7 +67,7 @@ export async function runChecks(probe, target) {
     id: 'sirv',
     label: 'sirv (static server)',
     state: sirv ? 'ok' : 'fail',
-    ...(sirv ? {} : { fix: 'npm i sirv --no-audit --no-fund' }),
+    ...(sirv ? {} : { fix: 'npm i sirv --no-save --no-audit --no-fund' }),
   });
 
   const gameDat = await probe.exists(`${target.game}/data/gta.dat`);
@@ -142,6 +142,19 @@ export async function runChecks(probe, target) {
     ...(git !== null && git.behind > 0 ? { fix: 'git pull --ff-only' } : {}),
   });
 
+  // A pull that cannot run is the failure that reaches the user as "the panel does not exist": the update
+  // carrying it never lands. It has a specific cause on this device — `npm i <pkg>` writes the package into
+  // package.json — so the check names the file and the way back rather than saying "worktree dirty".
+  if (git !== null && git.dirtyPaths.some((path) => path === 'package.json' || path === 'package-lock.json')) {
+    add({
+      detail: 'package.json is modified, so `git pull` will refuse — usually npm writing a package it installed',
+      fix: 'git checkout -- package.json package-lock.json',
+      id: 'pull-blocked',
+      label: 'a pull will refuse',
+      state: 'fail',
+    });
+  }
+
   add({
     detail: probe.wakeLock
       ? 'termux-wake-lock is available — a long convert survives the screen going off'
@@ -152,6 +165,21 @@ export async function runChecks(probe, target) {
   });
 
   return checks;
+}
+
+/**
+ * The paths out of `git status --porcelain`.
+ *
+ * **Do not `.trim()` the output first.** Every porcelain line starts with a two-character status field, and
+ * for an unstaged modification the first of those characters is a SPACE — so trimming the whole block eats
+ * one character of the first line only, and `slice(3)` then returns `ackage.json`. One entry wrong, always
+ * the first, silently: the check reads healthy exactly when the file it is about is the only thing changed.
+ */
+export function statusPaths(stdout) {
+  return stdout
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .map((line) => line.slice(3).split(' -> ').pop());
 }
 
 /** The one-line verdict a page shows before anything is tapped. */

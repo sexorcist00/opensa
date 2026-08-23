@@ -114,6 +114,13 @@ links to the map, and the inbox that files a capture into `docs/benchmarks/` and
 - **`termux-wake-lock` still applies.** The panel runs the convert as a child of the Termux session, so the
   session sleeping is the convert sleeping. `phone:setup` takes the lock when Termux offers one.
 
+**`npm i <pkg>` writes into `package.json`, and on this device that stops the next `git pull`.** Measured
+2026-08-23: `phone:setup` installed tsx with `npm i tsx`, which added it to `package.json`; the next pull
+refused with *"Your local changes to the following files would be overwritten by merge"*, so the phone could
+not take an update at all — and the symptom surfaced two steps later as a missing npm script. `phone:setup`
+passes `--no-save` since, and the panel's preflight names the condition with the way back
+(`git checkout -- package.json package-lock.json`). Install anything by hand here with `--no-save` too.
+
 **A landmine the panel now reports rather than lets you discover.** `scripts/serve-static.ts` — the server
 that hands out the pak on `:3001` — imports `sirv`, and `sirv` is a **devDependency** whose only other route
 into the tree is `@vitest/browser`. `npm run phone:setup` installs with `--omit=dev`. On a device set up

@@ -23,7 +23,7 @@ import { promisify } from 'node:util';
 
 import { fileCapture, writeTilesArchive } from './capture-store.mjs';
 import { commitPlan } from './captures.mjs';
-import { runChecks, verdict } from './doctor.mjs';
+import { runChecks, statusPaths, verdict } from './doctor.mjs';
 import { buildJob, JobRunner } from './jobs.mjs';
 
 const run = promisify(execFile);
@@ -71,7 +71,7 @@ const probe = {
   git: async () => {
     try {
       const branch = (await run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: REPO })).stdout.trim();
-      const status = (await run('git', ['status', '--porcelain'], { cwd: REPO })).stdout.trim();
+      const status = (await run('git', ['status', '--porcelain'], { cwd: REPO })).stdout;
       let behind = 0;
       try {
         const counts = (
@@ -82,7 +82,9 @@ const probe = {
         behind = 0; // no upstream yet — not a problem to report
       }
 
-      return { behind, branch, dirty: status === '' ? 0 : status.split('\n').length };
+      const paths = statusPaths(status);
+
+      return { behind, branch, dirty: paths.length, dirtyPaths: paths };
     } catch {
       return null;
     }
