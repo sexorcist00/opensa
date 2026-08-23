@@ -72,6 +72,26 @@ export async function runChecks(probe, target) {
     ...(sirv ? {} : { fix: 'npm i sirv --no-save --no-audit --no-fund', job: 'sirv' }),
   });
 
+  // The prebuilt app is a COMMITTED archive, and `build/webapp` is the unpacked copy — gitignored, so a pull
+  // updates the archive and never the thing being served. `prebuilt/README.md` warns about it in prose; this
+  // is the same warning as a check, because the symptom is a device running last week's app while its
+  // operator reads this week's release notes (2026-08-23: an 11-day-old build, so the flat map did not exist
+  // on a phone that had just pulled it).
+  const servedApp = await probe.mtime('build/webapp/index.html');
+  if (servedApp !== null) {
+    const archive = await probe.mtime('prebuilt/opensa-webapp.tar.gz');
+    const stale = archive !== null && archive > servedApp;
+    add({
+      detail: stale
+        ? 'OLDER than the archive in the repo — a pull updated the archive, not the unpacked copy'
+        : 'unpacked from the archive currently in the repo',
+      id: 'webapp',
+      label: 'the served app',
+      state: stale ? 'fail' : 'ok',
+      ...(stale ? { fix: 're-unpack the app', job: 'webapp' } : {}),
+    });
+  }
+
   const gameDat = await probe.exists(`${target.game}/data/gta.dat`);
   add({
     detail: gameDat ? `${target.game}` : `no ${target.game}/data/gta.dat — the converter reads the PC game`,

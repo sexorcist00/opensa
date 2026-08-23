@@ -13,7 +13,9 @@ function probe(overrides = {}) {
     exists: async (path) => (overrides.missing ?? new Set()).has(path) === false && present.has(path),
     freeBytes: async () => 40 * 1024 ** 3,
     git: async () => ({ behind: 0, branch: 'main', dirty: 0, dirtyPaths: [] }),
-    mtime: async (path) => (path === 'package-lock.json' ? 100 : 200),
+    // No unpacked app by default: this device runs the dev server, and the served-app check is about the
+    // prebuilt path only.
+    mtime: async (path) => (path === 'package-lock.json' ? 100 : path === 'build/webapp/index.html' ? null : 200),
     nodeVersion: 'v22.4.0',
     portOpen: async () => false,
     readJson: async () => ({ build: { at: '2026-08-23', textures: 'astc' } }),
@@ -30,7 +32,9 @@ describe('phone console doctor', () => {
   describe('negative cases', () => {
     it('fails a tree older than the lock — what a pull causes and the convert reports minutes later', async () => {
       const checks = await runChecks(
-        probe({ mtime: async (path) => (path === 'package-lock.json' ? 300 : 200) }),
+        probe({
+          mtime: async (path) => (path === 'package-lock.json' ? 300 : path === 'build/webapp/index.html' ? null : 200),
+        }),
         TARGET,
       );
 
@@ -41,12 +45,24 @@ describe('phone console doctor', () => {
     });
 
     it('fails when node_modules is not there at all', async () => {
+      const checks = await runChecks(probe({ mtime: async () => null }), TARGET);
+
+      expect(find(checks, 'deps').detail).toMatch(/not installed/);
+    });
+
+    it('fails when the SERVED app is older than the archive a pull brought', async () => {
+      // 2026-08-23: the phone was serving an 11-day-old build, so a feature it had just pulled did not exist
+      // on screen. `git pull` updates the archive; `build/webapp` is the unpacked copy and is gitignored.
       const checks = await runChecks(
-        probe({ mtime: async (path) => (path === 'package-lock.json' ? 100 : null) }),
+        probe({
+          mtime: async (path) =>
+            path === 'build/webapp/index.html' ? 100 : path === 'prebuilt/opensa-webapp.tar.gz' ? 900 : 200,
+        }),
         TARGET,
       );
 
-      expect(find(checks, 'deps').detail).toMatch(/not installed/);
+      expect(find(checks, 'webapp')).toMatchObject({ job: 'webapp', state: 'fail' });
+      expect(find(checks, 'webapp').detail).toMatch(/OLDER than the archive/);
     });
 
     it('fails on a missing sirv, because that is the server that hands out the pak', async () => {
@@ -118,6 +134,11 @@ describe('phone console doctor', () => {
       expect(verdict(checks).state).toBe('ok');
       expect(find(checks, 'pak').detail).toBe('built 2026-08-23 · textures astc');
       expect(find(checks, 'node').detail).toBe('v22.4.0 · arm64 · Termux');
+    });
+
+    it('says nothing about the served app on a device that runs the dev server instead', async () => {
+      // No `build/webapp` means vite is the app, and a check about an archive nobody unpacked is noise.
+      expect(find(await runChecks(probe(), TARGET), 'webapp')).toBeUndefined();
     });
 
     it('reports a port that is already serving as reuse rather than a problem', async () => {

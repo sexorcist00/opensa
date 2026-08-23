@@ -67,6 +67,17 @@ Fixing that check found a second defect of the same family in the panel itself: 
 line lost a character (`ackage.json`) and the check read healthy exactly when the file it was about was the
 only thing changed. Now `statusPaths`, with a test for the leading space, the rename arrow and an empty tree.
 
+**The first clean run, 2026-08-23, and the third defect of the same family.** The panel started, preflight
+was green but for one line, the convert reused the district pak, and both servers came up — the ritual
+worked. What the log then showed is that `phone.sh` was serving `build/webapp`, the unpacked copy of
+`prebuilt/opensa-webapp.tar.gz`, and **that archive was 11 days old**: none of chains 7 and 8, none of
+[6/02](../../../../docs/plans/201-dispatch-console/6-display-modes/readme.md), existed in the app the phone
+was about to open. `prebuilt/README.md` warns about it in prose ("re-unpack it after every pull"), which is
+exactly the kind of warning a preflight should carry instead. Now it does: **the served app is compared
+against the archive**, and the fix is a button running the README's own two-step command (clear `assets/`,
+never `rm -rf build/webapp` — that path is routinely a symlink into shared storage). The archive itself was
+refreshed in the same change.
+
 **Owed:** the first clean run on the phone itself — the doctor's own verdict there is the measurement this
 step is judged on.
 

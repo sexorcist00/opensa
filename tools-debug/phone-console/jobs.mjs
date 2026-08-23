@@ -66,6 +66,16 @@ export const JOBS = {
     label: 'reinstall sirv — the static server that hands out the pak',
     long: false,
   },
+  // The one job that is a shell line, and it is a FIXED one — no input reaches it. `rm -rf build/webapp`
+  // would be the obvious command and is the wrong one: that path is routinely a symlink into shared storage,
+  // so only its `assets/` is cleared (chunk names are content-hashed, and extracting over them leaves every
+  // old chunk in place, indistinguishable from a live file when something is being diagnosed).
+  webapp: {
+    args: ['-c', 'rm -rf build/webapp/assets && tar -xzf prebuilt/opensa-webapp.tar.gz -C build/webapp'],
+    command: 'bash',
+    label: 're-unpack the prebuilt app over the served copy',
+    long: false,
+  },
 };
 
 /**

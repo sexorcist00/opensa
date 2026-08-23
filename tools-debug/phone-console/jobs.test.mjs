@@ -32,7 +32,9 @@ const STAYS = {
 describe('phone console jobs', () => {
   describe('negative cases', () => {
     it('refuses a job it does not have, and names the ones it does', () => {
-      expect(() => buildJob('rm-rf')).toThrow(/unknown job 'rm-rf' — known: districts, phone, pull, setup, sirv/);
+      expect(() => buildJob('rm-rf')).toThrow(
+        /unknown job 'rm-rf' — known: districts, phone, pull, setup, sirv, webapp/,
+      );
     });
 
     it('drops a knob that is not this job DIRECTLY rather than passing it on', () => {
@@ -88,6 +90,16 @@ describe('phone console jobs', () => {
         TEXTURES: 'rgba8',
       });
       expect(plan.long).toBe(true);
+    });
+
+    it('re-unpacks the app by clearing assets/ rather than the folder itself', () => {
+      // `build/webapp` is routinely a symlink into shared storage, so `rm -rf build/webapp` removes the link
+      // (or the shared folder); `assets/` is the part that must go, because chunk names are content-hashed
+      // and an overlay leaves every old chunk in place beside the new ones.
+      const plan = buildJob('webapp');
+
+      expect(plan.command).toBe('bash');
+      expect(plan.args[1]).toBe('rm -rf build/webapp/assets && tar -xzf prebuilt/opensa-webapp.tar.gz -C build/webapp');
     });
 
     it('installs sirv without touching package.json', () => {
