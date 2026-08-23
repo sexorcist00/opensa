@@ -23,7 +23,7 @@ import { promisify } from 'node:util';
 import { gunzipSync } from 'node:zlib';
 
 import { fileCapture, writeTilesArchive } from './capture-store.mjs';
-import { commitPlan } from './captures.mjs';
+import { commitPlan, runCommit } from './captures.mjs';
 import { runChecks, statusPaths, verdict } from './doctor.mjs';
 import { buildJob, JobRunner } from './jobs.mjs';
 import { htmlFingerprint, htmlNames, listTarFiles } from './webapp.mjs';
@@ -174,24 +174,15 @@ createServer((request, response) => {
 /** Commit the filed captures — and push when asked, on the branch that is checked out. */
 async function commit(body) {
   const plan = commitPlan(body.paths ?? [], body.subject ?? 'a capture from the phone');
-  const log = [];
-  for (const [command, args] of plan.steps) {
-    const { stderr, stdout } = await run(command, args, { cwd: REPO, env: { ...process.env, ...plan.env } });
-    log.push(`$ ${command} ${args.join(' ')}\n${stdout}${stderr}`.trim());
-  }
-  if (body.push === true) {
-    const branch = (await run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: REPO })).stdout.trim();
-    const { stderr, stdout } = await run('git', ['push', '-u', 'origin', branch], {
-      cwd: REPO,
-      env: { ...process.env, HUSKY: '0' },
-    });
-    log.push(`$ git push -u origin ${branch}\n${stdout}${stderr}`.trim());
-  }
-  for (const line of log) {
-    runner.push(line);
-  }
+  const branch = (await run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: REPO })).stdout.trim();
 
-  return { log };
+  return runCommit({
+    branch,
+    log: (line) => runner.push(line),
+    plan,
+    push: body.push === true,
+    run: (command, args, env) => run(command, args, { cwd: REPO, env: { ...process.env, ...env } }),
+  });
 }
 
 /** The device, for a capture's conditions. `getprop` is Android's own and absent everywhere else. */

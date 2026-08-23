@@ -440,14 +440,18 @@
           return;
         }
         try {
-          await api('/api/commit', {
+          const count = filed.length;
+          const result = await api('/api/commit', {
             paths: filed,
             push: true,
             subject: $('slug').value || 'a capture from the phone',
           });
-          $('filed').textContent = `committed and pushed ${filed.length} file(s) — see the log`;
+          $('filed').textContent = result.pushed
+            ? `committed and pushed ${count} file(s) to ${result.branch}`
+            : `committed ${count} file(s) on ${result.branch} — not pushed`;
           filed = [];
         } catch (error) {
+          // Git's own first line; the whole exchange is in the log below, which is where a failure is read.
           $('filed').textContent = error.message;
         }
       };

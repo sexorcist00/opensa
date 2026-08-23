@@ -69,7 +69,9 @@ export function commitPlan(paths, subject) {
   const header = `chore(bench): ${subject}`.slice(0, 90);
 
   return {
-    env: { HUSKY: '0' },
+    // GIT_TERMINAL_PROMPT=0: a push that needs credentials must FAIL rather than wait for a username on a
+    // terminal nobody is looking at — a blocked git is indistinguishable, from the page, from a slow one.
+    env: { GIT_TERMINAL_PROMPT: '0', HUSKY: '0' },
     steps: [
       ['git', ['add', '--', ...paths]],
       // The paths are named on the commit too, so whatever else is staged in this worktree stays behind.
@@ -90,6 +92,35 @@ export function pakFacts(report) {
     commit: build.commit ?? null,
     pak: `${build.game ?? 'unknown'} rect ${rect} textures ${build.textures ?? 'unstated'} built ${build.at ?? 'unknown'}`,
   };
+}
+
+/**
+ * Run a commit plan, writing every command and its output to the log AS IT HAPPENS.
+ *
+ * The order matters and it is the whole point: the first version collected the output and pushed it to the
+ * log only after every step had succeeded, so a failed commit or push left the operator with one short line
+ * on the page and no evidence anywhere — on the device where reading a terminal is hardest. Now the log
+ * carries the failing command and git's own words, and the error the page shows is the first line of them.
+ */
+export async function runCommit({ branch, log, plan, push, run }) {
+  const steps = push === true ? [...plan.steps, ['git', ['push', '-u', 'origin', branch]]] : [...plan.steps];
+  for (const [command, args] of steps) {
+    log(`$ ${command} ${args.join(' ')}`);
+    let result;
+    try {
+      result = await run(command, args, plan.env);
+    } catch (error) {
+      const said = `${error?.stderr ?? ''}${error?.stdout ?? ''}`.trim() || String(error?.message ?? error);
+      log(`— ${command} failed: ${said}`);
+      throw new Error(`${command} ${args[0]} failed — ${said.split('\n')[0]}`, { cause: error });
+    }
+    const said = `${result?.stdout ?? ''}${result?.stderr ?? ''}`.trim();
+    if (said !== '') {
+      log(said);
+    }
+  }
+
+  return { branch, pushed: push === true, steps: steps.length };
 }
 
 /** `Ganton, RGBA8 A/B` → `ganton-rgba8-a-b`. */

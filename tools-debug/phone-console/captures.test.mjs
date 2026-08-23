@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { capturePath, checkTilesArchive, commitPlan, pakFacts, slugify, withNote } from './captures.mjs';
+import { capturePath, checkTilesArchive, commitPlan, pakFacts, runCommit, slugify, withNote } from './captures.mjs';
 
 const FACTS = { commit: 'abc1234', device: 'Pixel', node: 'v22.0.0', pak: 'original rect 8,-8,11,-5' };
 
@@ -29,6 +29,27 @@ describe('phone console captures', () => {
 
     it('refuses an empty commit', () => {
       expect(() => commitPlan([], 'nothing')).toThrow(/nothing to commit/);
+    });
+
+    it('writes the failing command and git’s own words to the log, then stops', async () => {
+      // The first version logged only on success, so a failed push left one short line on the page and no
+      // evidence anywhere — on the device where reading a terminal is hardest.
+      const lines = [];
+      const plan = commitPlan(['docs/benchmarks/opensa-engine/2026-08-23-a.json'], 'a capture');
+      const run = async (command) => {
+        if (command === 'git' && lines.some((line) => line.includes('commit'))) {
+          throw Object.assign(new Error('Command failed'), { stderr: 'nothing to commit, working tree clean\n' });
+        }
+
+        return { stderr: '', stdout: '' };
+      };
+
+      await expect(
+        runCommit({ branch: 'main', log: (line) => lines.push(line), plan, push: true, run }),
+      ).rejects.toThrow(/git commit failed — nothing to commit/);
+      expect(lines.some((line) => line.includes('nothing to commit, working tree clean'))).toBe(true);
+      // The push never ran: a failed commit has nothing to send.
+      expect(lines.some((line) => line.includes('push'))).toBe(false);
     });
   });
 
@@ -76,10 +97,38 @@ describe('phone console captures', () => {
       expect(checkTilesArchive(archive)).toEqual({ bytes: archive.byteLength });
     });
 
+    it('logs every command it runs, and says what it pushed', async () => {
+      const lines = [];
+      const plan = commitPlan(['docs/benchmarks/opensa-engine/2026-08-23-a.json'], 'a capture');
+      const run = async () => ({ stderr: 'To github.com:owner/repo.git', stdout: '' });
+
+      const result = await runCommit({ branch: 'work', log: (line) => lines.push(line), plan, push: true, run });
+
+      expect(result).toEqual({ branch: 'work', pushed: true, steps: 3 });
+      expect(lines[0]).toMatch(/^\$ git add/);
+      expect(lines.some((line) => line.startsWith('$ git push -u origin work'))).toBe(true);
+    });
+
+    it('leaves the push out when it was not asked for', async () => {
+      const lines = [];
+      const plan = commitPlan(['docs/benchmarks/opensa-engine/2026-08-23-a.json'], 'a capture');
+
+      const result = await runCommit({
+        branch: 'work',
+        log: (line) => lines.push(line),
+        plan,
+        push: false,
+        run: async () => ({ stderr: '', stdout: '' }),
+      });
+
+      expect(result).toEqual({ branch: 'work', pushed: false, steps: 2 });
+      expect(lines.some((line) => line.includes('push'))).toBe(false);
+    });
+
     it('names the paths on the commit itself, so a dirty tree cannot ride along', () => {
       const plan = commitPlan(['docs/benchmarks/opensa-engine/2026-08-23-a.json'], 'the pinned district on ASTC');
 
-      expect(plan.env).toEqual({ HUSKY: '0' });
+      expect(plan.env).toEqual({ GIT_TERMINAL_PROMPT: '0', HUSKY: '0' });
       expect(plan.steps[0]).toEqual(['git', ['add', '--', 'docs/benchmarks/opensa-engine/2026-08-23-a.json']]);
       expect(plan.steps[1]).toEqual([
         'git',
