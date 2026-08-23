@@ -36,6 +36,8 @@ describe('phone console doctor', () => {
 
       expect(find(checks, 'deps').state).toBe('fail');
       expect(find(checks, 'deps').fix).toBe('npm run phone:setup');
+      // Carries the job, so the page offers it as a button rather than a command to retype on a phone.
+      expect(find(checks, 'deps').job).toBe('setup');
     });
 
     it('fails when node_modules is not there at all', async () => {
@@ -52,6 +54,7 @@ describe('phone console doctor', () => {
 
       expect(find(checks, 'sirv').state).toBe('fail');
       expect(find(checks, 'sirv').detail).toMatch(/cannot serve the pak/);
+      expect(find(checks, 'sirv').job).toBe('sirv');
     });
 
     it('fails when GAME and OUT resolve to one folder', async () => {
@@ -87,6 +90,8 @@ describe('phone console doctor', () => {
         fix: 'git checkout -- package.json package-lock.json',
         state: 'fail',
       });
+      // Deliberately NOT a button: it discards a file, and nothing destructive is one tap away here.
+      expect(find(checks, 'pull-blocked').job).toBeUndefined();
     });
 
     it('reads the FIRST porcelain line correctly, space and all', () => {

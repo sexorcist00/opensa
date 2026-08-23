@@ -363,10 +363,21 @@
           body.append(label, detail);
           row.append(dot, body);
           if (check.fix) {
-            const fix = document.createElement('span');
-            fix.className = 'muted';
-            fix.textContent = check.fix;
-            body.append(document.createElement('br'), fix);
+            body.append(document.createElement('br'));
+            if (check.job) {
+              // A fix the panel can run is a button; a fix that would discard work stays a line of text, so
+              // nothing destructive is ever one tap away on a phone.
+              const button = document.createElement('button');
+              button.textContent = check.fix;
+              button.style.marginTop = '6px';
+              button.onclick = () => start(check.job);
+              body.append(button);
+            } else {
+              const fix = document.createElement('span');
+              fix.className = 'muted';
+              fix.textContent = check.fix;
+              body.append(fix);
+            }
           }
           $('checks').append(row);
         }
@@ -386,7 +397,10 @@
 
       async function start(id) {
         try {
-          await api(`/api/job/${id}`, form());
+          // Only the convert takes knobs. Sending the form to `setup` or `pull` made the panel report every
+          // field as dropped, which reads as a mistake the operator made rather than as a field that simply
+          // does not apply.
+          await api(`/api/job/${id}`, id === 'phone' ? form() : {});
         } catch (error) {
           alert(error.message);
         }

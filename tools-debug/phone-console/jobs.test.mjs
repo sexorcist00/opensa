@@ -32,7 +32,7 @@ const STAYS = {
 describe('phone console jobs', () => {
   describe('negative cases', () => {
     it('refuses a job it does not have, and names the ones it does', () => {
-      expect(() => buildJob('rm-rf')).toThrow(/unknown job 'rm-rf' — known: districts, phone, pull, setup/);
+      expect(() => buildJob('rm-rf')).toThrow(/unknown job 'rm-rf' — known: districts, phone, pull, setup, sirv/);
     });
 
     it('drops a knob that is not this job DIRECTLY rather than passing it on', () => {
@@ -90,6 +90,11 @@ describe('phone console jobs', () => {
       expect(plan.long).toBe(true);
     });
 
+    it('installs sirv without touching package.json', () => {
+      // Every install this panel runs is --no-save: a dirty package.json here is a `git pull` that refuses.
+      expect(buildJob('sirv').args).toEqual(['i', 'sirv', '--no-save', '--no-audit', '--no-fund']);
+    });
+
     it('ignores an empty field instead of passing an empty value down', () => {
       expect(buildJob('phone', { DISTRICT: '  ', TEXTURES: 'astc' }).env).toEqual({ TEXTURES: 'astc' });
     });
@@ -102,6 +107,17 @@ describe('phone console jobs', () => {
       expect(lines.some((line) => line.includes('from the job'))).toBe(true);
       expect(jobs.backlog().some((line) => line.startsWith('$ node'))).toBe(true);
       expect(jobs.backlog().some((line) => line.includes('finished'))).toBe(true);
+    });
+
+    it('drops the terminal colour codes the shell scripts print', () => {
+      // `phone-setup.sh` writes its headings with literal printf escapes, which FORCE_COLOR cannot reach —
+      // on a page they are `[1m== environment[0m` across the line an operator is reading.
+      const jobs = new JobRunner({ cwd: process.cwd(), onLine: () => undefined });
+      const esc = String.fromCharCode(27);
+      jobs.push(`${esc}[1m== environment${esc}[0m`);
+      jobs.push(`   ${esc}[32m+${esc}[0m wake lock held`);
+
+      expect(jobs.backlog()).toEqual(['== environment', '   + wake lock held']);
     });
 
     it('caps the buffer so a long convert cannot grow without bound', () => {

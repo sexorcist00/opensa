@@ -47,7 +47,9 @@ export async function runChecks(probe, target) {
     id: 'deps',
     label: 'dependencies',
     state: installed === null ? 'fail' : lock !== null && lock > installed ? 'fail' : 'ok',
-    ...(installed === null || (lock !== null && lock > installed) ? { fix: 'npm run phone:setup' } : {}),
+    // `job` is what makes a fix a BUTTON on the page rather than a command to retype on a phone. Only the
+    // safe ones carry it: nothing that discards a file is one tap away.
+    ...(installed === null || (lock !== null && lock > installed) ? { fix: 'npm run phone:setup', job: 'setup' } : {}),
   });
 
   add({
@@ -55,7 +57,7 @@ export async function runChecks(probe, target) {
     id: 'tsx',
     label: 'tsx',
     state: (await probe.exists('node_modules/tsx')) ? 'ok' : 'fail',
-    ...((await probe.exists('node_modules/tsx')) ? {} : { fix: 'npm run phone:setup' }),
+    ...((await probe.exists('node_modules/tsx')) ? {} : { fix: 'npm run phone:setup', job: 'setup' }),
   });
 
   // `scripts/serve-static.ts` imports sirv, and sirv is a devDependency reachable only through the dev tree
@@ -67,7 +69,7 @@ export async function runChecks(probe, target) {
     id: 'sirv',
     label: 'sirv (static server)',
     state: sirv ? 'ok' : 'fail',
-    ...(sirv ? {} : { fix: 'npm i sirv --no-save --no-audit --no-fund' }),
+    ...(sirv ? {} : { fix: 'npm i sirv --no-save --no-audit --no-fund', job: 'sirv' }),
   });
 
   const gameDat = await probe.exists(`${target.game}/data/gta.dat`);
@@ -139,7 +141,7 @@ export async function runChecks(probe, target) {
     id: 'git',
     label: 'branch',
     state: git === null ? 'warn' : 'ok',
-    ...(git !== null && git.behind > 0 ? { fix: 'git pull --ff-only' } : {}),
+    ...(git !== null && git.behind > 0 ? { fix: 'git pull --ff-only', job: 'pull' } : {}),
   });
 
   // A pull that cannot run is the failure that reaches the user as "the panel does not exist": the update

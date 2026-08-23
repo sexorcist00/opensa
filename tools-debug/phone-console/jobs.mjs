@@ -58,6 +58,14 @@ export const JOBS = {
     label: 'install what a run needs (idempotent)',
     long: false,
   },
+  // `--no-save`, like every install this panel runs: `npm i <pkg>` writes the package into package.json, and
+  // a dirty package.json on this device is a `git pull` that refuses (2026-08-23).
+  sirv: {
+    args: ['i', 'sirv', '--no-save', '--no-audit', '--no-fund'],
+    command: 'npm',
+    label: 'reinstall sirv — the static server that hands out the pak',
+    long: false,
+  },
 };
 
 /**
@@ -82,11 +90,12 @@ export class JobRunner {
   }
 
   push(line) {
-    this.lines.push(line);
+    const clean = stripAnsi(line);
+    this.lines.push(clean);
     if (this.lines.length > this.ringLines) {
       this.lines.splice(0, this.lines.length - this.ringLines);
     }
-    this.onLine(line);
+    this.onLine(clean);
   }
 
   /** Start a job. Throws — by name — when one is already running. */
@@ -194,4 +203,18 @@ function describeEnv(env) {
   const keys = Object.keys(env);
 
   return keys.length === 0 ? '' : `   [${keys.map((key) => `${key}=${env[key]}`).join(' ')}]`;
+}
+
+/**
+ * Drop the terminal's own colour codes.
+ *
+ * `FORCE_COLOR=0` does not reach `scripts/phone-setup.sh`: it writes its headings with literal printf
+ * escapes, as a shell script for a terminal should. On a page those bytes are not colour — they are
+ * `[1m== environment[0m` across the middle of the line an operator is trying to read.
+ *
+ * The pattern is built from a character code rather than written as an escape, so the regex carries no
+ * control character of its own.
+ */
+function stripAnsi(line) {
+  return line.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[a-z]`, 'gi'), '');
 }
