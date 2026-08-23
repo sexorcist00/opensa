@@ -85,6 +85,7 @@ stays, pointing at the new home).
 | [Bake the procobj scatter, the way collision is now baked](deferred-optimizations/procobj-scatter-bake.md) | cold-cell main thread | unmeasured in isolation; it is the last per-cell COL work left on the collision path (and what keeps a whole-archive COL parse alive) | in reserve — opened by 200/3-01 |
 | [Camera position render interpolation](deferred-optimizations/camera-position-render-interpolation.md) | correctness (camera feel) | unlocked the 080/02 position weight + killed the run "doubling" | **PULLED 2026-07-25** |
 | [Budgeted texture-array uploads](applied/texture-upload-budget.md) | frame time (hitch) | one 85 ms stall → ~1.5 ms/frame | **PULLED 2026-07-27** — applied |
+| [Budgeted static-collider builds](applied/collider-build-budget.md) | frame time (hitch) | a 5.6–28.1 ms per-cell spike → ~1.5 ms/frame — **estimated, not measured** | **PULLED 2026-08-04** — applied, measurement owed |
 | Lever | Impact | Axis | Est. win | Status |
 | --- | --- | --- | --- | --- |
 | [Bake vehicle sky-occlusion in opensa-pack](deferred-optimizations/vehicle-ao-baking.md) | **very low** | spawn hitch | 8–78 ms per model, once per model, spawn path only | in reserve — not needed |
@@ -104,6 +105,7 @@ stays, pointing at the new home).
 | [The speed camera's framing cost (FOV kick + distance gain)](deferred-optimizations/vehicle-speed-camera-framing.md) | **HIGH**, inferred | GPU pass (fill) | ~×1.47 screen-projected world area at top speed; the field reads 50 fps flat-out vs 70–80 braking. Floor of the ladder: a STATIC framing, config-only, gives it all back | in reserve |
 | [Camera position render interpolation](deferred-optimizations/camera-position-render-interpolation.md) | n/a — a FEEL lever | correctness (camera feel) | unlocked the 080/02 position weight + killed the run "doubling" | **PULLED 2026-07-25** |
 | [Budgeted texture-array uploads](applied/texture-upload-budget.md) | **high** (hitch) | frame time (hitch) | one 85 ms stall → ~1.5 ms/frame | **PULLED 2026-07-27** — applied |
+| [Budgeted static-collider builds](applied/collider-build-budget.md) | **high** (hitch) | frame time (hitch) | a 5.6–28.1 ms per-cell spike → ~1.5 ms/frame — **estimated, not measured** | **PULLED 2026-08-04** — applied, measurement owed |
 
 ## How to use it when the frame budget is blown
 

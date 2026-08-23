@@ -107,9 +107,12 @@ the top of the frame that paid for it, and the line prints the breakdown in brac
 other 223.6 (vehicle-model:tampa 4.9 · vehicle-osm:tampa 1.2 · cell-collision-bodies 8.4 · unattributed 163.8)
 ```
 
+That capture predates [200/3-02](../plans/200-platform-reach/3-off-main-thread/readme.md): `cell-collision-bodies`
+no longer exists. The Rapier build is now drained inside `collision.update()` under a per-frame allowance, so
+it is counted in the loop's own `collision` block and has no span of its own.
+
 Spans today: `vehicle-osm:<model>` (the `.osm` section read + parse) · `vehicle-model:<model>` (the GPU
-upload) · `vehicle-spawn:<model>` (the physics body, rig and plate) · `cell-collision-bodies` (Rapier static
-colliders, built in a `.then()`) · `cell-collision-decode` (a BAKED cell's `.oscol` → colliders, plan
+upload) · `vehicle-spawn:<model>` (the physics body, rig and plate) · `cell-collision-decode` (a BAKED cell's `.oscol` → colliders, plan
 200/3-01 — it exists only on a pak built with `--bake-collision`, and only there does the collider build run
 in a continuation at all; the COL path is synchronous inside the loop's `collision` block and must stay
 unwrapped). **`unattributed` is always printed** — a run that hides it is reporting only

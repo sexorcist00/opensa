@@ -333,12 +333,22 @@ export interface Impact {
   force: number; // max contact force magnitude (N)
   point: null | Vec3; // world-space contact point (where the hit landed), if available
 }
+/**
+ * A static-collider build in progress (plan 200/3-02) — see
+ * {@link PhysicsWorld.beginStaticColliders}.
+ */
+export interface StaticColliderBuild {
+  /** Bodies created SO FAR. A caller abandoning the build removes exactly these. */
+  readonly handles: number[];
+  /** Create bodies until `budgetMs` is spent; true once the last one exists. */
+  step(budgetMs: number): boolean;
+}
+
 /** Rapier's raycast vehicle controller (engine/brake/steer, suspension, wheels). */
 export type VehicleController = ReturnType<RapierWorld['createVehicleController']>;
 
 /** Which wheels the engine drives (`nDriveType`). */
 export type VehicleDriveType = '4' | 'F' | 'R';
-
 /**
  * A vehicle body's AUTHORED mass properties (plan 081/02) — `handling.cfg`'s, not the collision hull's.
  *
@@ -359,6 +369,7 @@ export interface VehicleMassProperties {
   /** `fTurnMass` (kg·m²) — the yaw inertia, the only one SA authors. */
   readonly turnMass: number;
 }
+
 /**
  * One wheel's SPRING SETUP, as the controller holds it (plan 081/02).
  *
@@ -474,8 +485,8 @@ export interface VehicleWheelSpec {
 }
 
 type Quat = [number, number, number, number];
-
 type RapierBody = ReturnType<RapierWorld['createRigidBody']>;
+
 type RapierWorld = InstanceType<Rapier['World']>;
 
 /**
@@ -540,6 +551,67 @@ export class PhysicsWorld {
   /** The active air-control dial — read by the F2 tab and by every `[phys]` capture (self-description). */
   airControlTuning(): { scale: number } {
     return { ...this.airControl };
+  }
+
+  /**
+   * A RESUMABLE static-collider build (plan 200/3-02).
+   *
+   * One cell's bodies measured **5.6–28.1 ms** built in a single call (plan 091), which is a frame the player
+   * feels. This hands the caller the same work as {@link PhysicsWorld.createStaticColliders} split into
+   * budgeted slices, exactly as the texture upload was split when it stalled a frame at 15–85 ms.
+   *
+   * The build owns `handles`, so a caller that abandons it mid-way removes precisely the bodies it created —
+   * a partially built cell must leave nothing behind.
+   */
+  beginStaticColliders(
+    models: readonly ModelColliders[],
+    onBreakable?: (key: string, handle: number) => void,
+  ): StaticColliderBuild {
+    const translation = new Vector3();
+    const rotation = new Quaternion();
+    const scale = new Vector3();
+    const handles: number[] = [];
+    let model = 0;
+    let placement = 0;
+
+    return {
+      handles,
+      step: (budgetMs: number): boolean => {
+        const started = performance.now();
+        while (model < models.length) {
+          const entry = models[model];
+          if (placement >= entry.transforms.length) {
+            model += 1;
+            placement = 0;
+            continue;
+          }
+          const matrix = entry.transforms[placement];
+          matrix.decompose(translation, rotation, scale);
+          const body = this.world.createRigidBody(
+            this.rapier.RigidBodyDesc.fixed()
+              .setTranslation(translation.x, translation.y, translation.z)
+              .setRotation({ w: rotation.w, x: rotation.x, y: rotation.y, z: rotation.z }),
+          );
+          if (this.addShapes(body, entry.shape) > 0) {
+            handles.push(body.handle);
+            const key = entry.instanceKeys?.[placement];
+            if (key !== undefined) {
+              onBreakable?.(key, body.handle);
+            }
+          } else {
+            this.world.removeRigidBody(body); // no usable shape — don't keep an empty body
+          }
+          placement += 1;
+          // Checked AFTER a body, never before: a zero budget must still make progress, or a cell that never
+          // finishes is a cell the player never gets collision for.
+          if (performance.now() - started >= budgetMs) {
+            return model >= models.length;
+          }
+        }
+
+        return true;
+      },
+    };
   }
 
   /** What the solver is actually chewing on — a stall needs a count, not a guess. */
@@ -778,32 +850,15 @@ export class PhysicsWorld {
     models: readonly ModelColliders[],
     onBreakable?: (key: string, handle: number) => void,
   ): number[] {
-    const translation = new Vector3();
-    const rotation = new Quaternion();
-    const scale = new Vector3();
-    const handles: number[] = [];
-
-    for (const model of models) {
-      model.transforms.forEach((matrix, index) => {
-        matrix.decompose(translation, rotation, scale);
-        const body = this.world.createRigidBody(
-          this.rapier.RigidBodyDesc.fixed()
-            .setTranslation(translation.x, translation.y, translation.z)
-            .setRotation({ w: rotation.w, x: rotation.x, y: rotation.y, z: rotation.z }),
-        );
-        if (this.addShapes(body, model.shape) > 0) {
-          handles.push(body.handle);
-          const key = model.instanceKeys?.[index];
-          if (key !== undefined) {
-            onBreakable?.(key, body.handle);
-          }
-        } else {
-          this.world.removeRigidBody(body); // no usable shape — don't keep an empty body
-        }
-      });
+    // Drained in place: every caller that wants the whole cell NOW (tests, the map viewer) keeps its old
+    // behaviour, and the budgeted path is opt-in — the same shape as `uploadOstexTexture` over
+    // `beginOstexUpload`.
+    const build = this.beginStaticColliders(models, onBreakable);
+    while (!build.step(Infinity)) {
+      // one slice is the whole build at an infinite budget
     }
 
-    return handles;
+    return build.handles;
   }
 
   dispose(): void {

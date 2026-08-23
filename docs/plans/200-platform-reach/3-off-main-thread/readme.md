@@ -97,10 +97,21 @@ colliders and reads in the field as a physics bug.
   must wind its quad *away* from the ray or it passes while the game fails.
 - Expected: `cell-collision-read` disappears from the census. Measure, do not assume.
 
-## 02 — Cell collider assembly in a worker
+## 02 — Cell collider assembly, budgeted — SHIPPED 2026-08-04 (unmeasured)
 
-With the parse gone, what remains is building Rapier bodies (5.6–28.1 ms). Move the assembly behind the
-streaming worker and hand the main thread a finished descriptor.
+With the parse gone, what remains is building Rapier bodies (5.6–28.1 ms).
+
+**A worker cannot take this one.** Rapier's bodies live in the physics world's wasm heap on the main thread;
+there is nothing to build elsewhere and transfer. So the step became what the same problem became for
+textures: `beginStaticColliders` makes the build resumable and `CollisionStreamingSystem` drains it under a
+per-frame allowance, turning one spike into slices. Details and the price:
+[the applied lever](../../../performance/applied/collider-build-budget.md).
+
+The two rules it had to keep: a cell is not `loaded` until its build is whole (the restriction below), and an
+abandoned build removes exactly the bodies it created. Both are pinned by tests.
+
+**Unmeasured**, like 3/01 — the budget constant is borrowed from the texture drain, and what this really
+spends is streaming MARGIN, which is what the field round must look at rather than the mean.
 
 - The handover is budgeted like the texture drain: a cell may not land in one frame if it costs more than
   the allowance.
@@ -109,11 +120,17 @@ streaming worker and hand the main thread a finished descriptor.
   ([restrictions/architecture.md](../../../restrictions/architecture.md)). Deferring collider assembly
   moves that ordering constraint; the spawn gate follows it or parked cars free-fall again.
 
-## 03 — `.osm` parse into the worker
+## 03 — `.osm` parse into the worker — DELIBERATELY NOT STARTED
 
 Per *new type*, worst 20.5 ms. The field drives say it never lands on a slow frame when types arrive one at a
 time — so this is not urgent on desktop, and it is exactly the kind of cost a phone converts into a stutter.
-Cheap once 02 has built the transport.
+
+Two things changed its footing, and both say wait:
+
+- **02 did not build a transport.** It turned out a worker cannot take the collider assembly at all, so the
+  "cheap once 02 has built the transport" assumption is void — this step now needs 04's transport first.
+- **Nothing has demanded it.** By this bundle's own rule, a step justified only by a phone is a step that
+  waits for a phone measurement. Starting it now would be building against an estimate.
 
 ## 04 — The worker transport: `crossOriginIsolated` as progressive enhancement
 

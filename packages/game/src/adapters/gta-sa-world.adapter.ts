@@ -641,7 +641,8 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     const bytes = this.baked?.has(cx, cy) === true ? await this.baked.read(cx, cy) : null;
     if (bytes !== null) {
       // Everything from here runs in a promise CONTINUATION — between frames, where no loop timer reaches —
-      // so it times itself into a span (plan 091 phase 2), exactly like `cell-collision-bodies` does.
+      // so it times itself into a span (plan 091 phase 2). The Rapier build that used to be timed here
+      // alongside it (`cell-collision-bodies`) is drained inside the loop's `collision` block since 200/3-02.
       // The regions are used AS WRITTEN: the bake already decided which models shatter, and re-asking would
       // open a DFF per model — the archive read this whole path exists to avoid.
       const baked = frameSpans.measure('cell-collision-decode', () => {

@@ -16,6 +16,12 @@
   `CollisionStreamingSystem` (radius `collisionDrawDistance`, diff-based load/unload, `reload()`
   for live invalidation); character capsule/box controller; vehicle chassis convex hull +
   raycast wheels; vehicle damage system.
+- **Budgeted collider builds** (plan 200/3-02): a cell's bodies are created a slice at a time under a
+  per-frame allowance (`beginStaticColliders` + `COLLIDER_BUDGET_MS`) instead of all at once, which measured
+  5.6–28.1 ms per cell. A cell counts as loaded only when its build is whole — a half-built cell would let a
+  car spawn where only half the ground exists — and an abandoned build removes exactly the bodies it made.
+  The cost is streaming MARGIN rather than throughput; unmeasured so far
+  ([the lever](../performance/applied/collider-build-budget.md)).
 - **Clutter collision** (procobj): models that ship a COL collide; the collidable subset always
   equals the rendered subset (density knobs + `procObjLimit` lottery cap), live re-stream on
   knob changes (debounced cache invalidation).

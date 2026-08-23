@@ -204,31 +204,66 @@ function stubAdapter(): {
   };
 }
 
-function stubPhysics(): {
-  createStaticColliders: Mock<
-    (models: readonly ModelColliders[], onBreakable?: (key: string, handle: number) => void) => number[]
+/**
+ * The physics seam the streamer drives (plan 200/3-02): a build that yields after `perStep` placements, so a
+ * test can watch a cell land over several frames. `perStep: Infinity` (the default) completes in one drain,
+ * which is what every pre-existing test expects.
+ */
+function stubPhysics(perStep = Infinity): {
+  beginStaticColliders: Mock<
+    (
+      models: readonly ModelColliders[],
+      onBreakable?: (key: string, handle: number) => void,
+    ) => { handles: number[]; step(budgetMs: number): boolean }
   >;
   removeBodies: Mock<(handles: readonly number[]) => void>;
 } {
   let nextHandle = 0;
 
   return {
-    createStaticColliders: vi.fn(
-      (models: readonly ModelColliders[], onBreakable?: (key: string, handle: number) => void): number[] =>
-        models.map((model) => {
-          const handle = nextHandle++;
-          for (const key of model.instanceKeys ?? []) {
-            onBreakable?.(key, handle);
-          }
+    beginStaticColliders: vi.fn(
+      (models: readonly ModelColliders[], onBreakable?: (key: string, handle: number) => void) => {
+        const handles: number[] = [];
+        let index = 0;
 
-          return handle;
-        }),
+        return {
+          handles,
+          step(): boolean {
+            let made = 0;
+            while (index < models.length && made < perStep) {
+              const model = models[index];
+              const handle = nextHandle++;
+              handles.push(handle);
+              for (const key of model.instanceKeys ?? []) {
+                onBreakable?.(key, handle);
+              }
+              index += 1;
+              made += 1;
+            }
+
+            return index >= models.length;
+          },
+        };
+      },
     ),
     removeBodies: vi.fn<(handles: readonly number[]) => void>(),
   };
 }
 
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+/**
+ * One full streaming round: desire the cells, let the adapter's promise resolve, then drain the builds.
+ *
+ * The second `update` is the point of plan 200/3-02 — a cell's bodies are created a slice at a time under a
+ * frame budget, so a cell is NOT loaded the instant its colliders arrive. It becomes loaded when its build
+ * finishes, which is what keeps a car from spawning where only half the ground exists.
+ */
+async function stream(system: CollisionStreamingSystem): Promise<void> {
+  system.update();
+  await flush();
+  system.update();
+}
 
 describe('CollisionStreamingSystem', () => {
   describe('negative cases', () => {
@@ -240,7 +275,10 @@ describe('CollisionStreamingSystem', () => {
       system.update(); // requested, unresolved
       expect(system.settled()).toBe(false);
       await flush();
-      expect(system.settled()).toBe(true); // all desired cells loaded
+      // Colliders have ARRIVED but no body exists yet — the build is queued, not drained (200/3-02).
+      expect(system.settled()).toBe(false);
+      system.update();
+      expect(system.settled()).toBe(true); // all desired cells built
     });
 
     it('removeBreakable is a no-op for an unknown key', () => {
@@ -260,8 +298,7 @@ describe('CollisionStreamingSystem', () => {
       const system = new CollisionStreamingSystem(adapter, stubPhysics(), () => [125, 125, 0] as Vec3, config(100));
       expect(system.nearestBreakable([125, 125, 0], 8)).toBeUndefined(); // nothing streamed yet
 
-      system.update();
-      await flush();
+      await stream(system);
 
       expect(system.nearestBreakable([125, 125, 40], 8)).toBeUndefined(); // 40 m above it — out of range
     });
@@ -275,8 +312,7 @@ describe('CollisionStreamingSystem', () => {
       );
       const system = new CollisionStreamingSystem(adapter, stubPhysics(), () => [125, 125, 0] as Vec3, config(100));
 
-      system.update();
-      await flush();
+      await stream(system);
 
       expect(system.nearestBreakable([125, 125, 0], 8)).toBe('near@0');
       expect(system.nearestBreakable([131, 125, 0], 8)).toBe('far@0'); // nearest is relative to the caller
@@ -290,8 +326,7 @@ describe('CollisionStreamingSystem', () => {
       const physics = stubPhysics();
       const system = new CollisionStreamingSystem(adapter, physics, () => [125, 125, 0] as Vec3, config(100));
 
-      system.update();
-      await flush();
+      await stream(system);
 
       expect(system.breakableKeyOf(0)).toBe('bin@0'); // contact-force impact resolves the prop
       expect(system.removeBreakable('bin@0')).toBe(true);
@@ -305,11 +340,10 @@ describe('CollisionStreamingSystem', () => {
       const physics = stubPhysics();
       const system = new CollisionStreamingSystem(adapter, physics, () => [125, 125, 0] as Vec3, config(100));
 
-      system.update();
-      await flush();
+      await stream(system);
 
       expect(adapter.loadCellColliders).toHaveBeenCalledWith(0, 0);
-      expect(physics.createStaticColliders).toHaveBeenCalledTimes(1);
+      expect(physics.beginStaticColliders).toHaveBeenCalledTimes(1);
     });
 
     it('removes a cell’s bodies when the view leaves it and loads the new cell', async () => {
@@ -318,15 +352,57 @@ describe('CollisionStreamingSystem', () => {
       let view: Vec3 = [125, 125, 0];
       const system = new CollisionStreamingSystem(adapter, physics, () => view, config(100));
 
-      system.update();
-      await flush();
+      await stream(system);
 
       view = [100125, 100125, 0]; // a far cell (400, 400)
-      system.update();
-      await flush();
+      await stream(system);
 
       expect(physics.removeBodies).toHaveBeenCalledWith([0]); // the old cell's handles freed
       expect(adapter.loadCellColliders).toHaveBeenCalledWith(400, 400);
+    });
+
+    it('BUDGETS a cell over several frames, and does not call it loaded until it is whole', async () => {
+      // The point of 200/3-02: a cell measured 5.6-28.1 ms built in one go (plan 091). Announcing it early
+      // would let a car spawn where only half the ground exists, so `settled` stays false until the last
+      // body is in the world.
+      const adapter = stubAdapter();
+      adapter.loadCellColliders.mockImplementation((cx, cy) =>
+        Promise.resolve([modelColliders(`${cx},${cy}`), modelColliders(`${cx},${cy}`), modelColliders(`${cx},${cy}`)]),
+      );
+      const physics = stubPhysics(1); // one placement per drain
+      const system = new CollisionStreamingSystem(adapter, physics, () => [125, 125, 0] as Vec3, config(100));
+
+      system.update();
+      await flush();
+      system.update(); // 1 of 3
+      expect(system.settled()).toBe(false);
+      system.update(); // 2 of 3
+      expect(system.settled()).toBe(false);
+      system.update(); // 3 of 3 — whole
+      expect(system.settled()).toBe(true);
+      expect(physics.beginStaticColliders).toHaveBeenCalledTimes(1); // one build, not one per frame
+    });
+
+    it('leaves nothing behind when a cell is abandoned mid-build', async () => {
+      // A partially built cell that is never cleaned up is bodies in the world with no owner — invisible
+      // until something collides with a wall that is no longer streamed.
+      const adapter = stubAdapter();
+      adapter.loadCellColliders.mockImplementation((cx, cy) =>
+        Promise.resolve([modelColliders(`${cx},${cy}`), modelColliders(`${cx},${cy}`)]),
+      );
+      const physics = stubPhysics(1);
+      let view: Vec3 = [125, 125, 0];
+      const system = new CollisionStreamingSystem(adapter, physics, () => view, config(100));
+
+      system.update();
+      await flush();
+      system.update(); // one body exists, the build is half done
+
+      view = [100125, 100125, 0]; // walk away before it finishes
+      system.update();
+
+      expect(physics.removeBodies).toHaveBeenCalledWith([0]); // exactly what the build had created
+      expect(system.settled()).toBe(false);
     });
 
     it('reload drops every loaded cell and re-streams it on the next update', async () => {
@@ -334,15 +410,13 @@ describe('CollisionStreamingSystem', () => {
       const physics = stubPhysics();
       const system = new CollisionStreamingSystem(adapter, physics, () => [125, 125, 0] as Vec3, config(100));
 
-      system.update();
-      await flush();
+      await stream(system);
       expect(adapter.loadCellColliders).toHaveBeenCalledTimes(1);
 
       system.reload(); // clutter knobs changed — physics must match the new rendered set
       expect(physics.removeBodies).toHaveBeenCalledWith([0]);
 
-      system.update();
-      await flush();
+      await stream(system);
       expect(adapter.loadCellColliders).toHaveBeenCalledTimes(2); // same cell rebuilt
     });
   });
