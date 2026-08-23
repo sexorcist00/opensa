@@ -75,6 +75,21 @@ export class ByteReader {
 
     return value;
   }
+
+  /** 64-bit little-endian, read as a double. Throws past 2^53 rather than returning a number that is quietly
+   *  a few bytes wrong — the formats that need this width carry file offsets, and one off by 1024 reads a
+   *  neighbouring tile's pixels with no error anywhere. */
+  u64(): number {
+    const low = this.view.getUint32(this.position, true);
+    const high = this.view.getUint32(this.position + 4, true);
+    this.position += 8;
+    const value = high * 2 ** 32 + low;
+    if (!Number.isSafeInteger(value)) {
+      throw new RangeError(`u64 ${high}:${low} is not an exact double`);
+    }
+
+    return value;
+  }
 }
 
 /** Growable little-endian writer. `align(n)` zero-pads to an n-byte boundary (section alignment). */
@@ -157,6 +172,17 @@ export class ByteWriter {
     this.ensure(4);
     this.view.setUint32(this.length, value >>> 0, true);
     this.length += 4;
+  }
+
+  /** 64-bit little-endian from a double — see the reader's note on the ceiling. */
+  u64(value: number): void {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new RangeError(`u64 ${value} is not an exact non-negative integer`);
+    }
+    this.ensure(8);
+    this.view.setUint32(this.length, value >>> 0, true);
+    this.view.setUint32(this.length + 4, Math.floor(value / 2 ** 32), true);
+    this.length += 8;
   }
 
   private ensure(extra: number): void {

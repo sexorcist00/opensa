@@ -81,6 +81,47 @@ eventually need.
 **Owes:** total bytes per zoom level, time to first usable picture, and a run on a device with no WebGPU at
 all.
 
+#### What landed, 2026-08-23 — the mode, its content and the baker
+
+The three pieces the step is made of, all in the repository and all tested; what is missing is a bake, and a
+bake needs the game files:
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| the archive format | `packages/engine-formats/src/pmtiles.ts` | PMTiles v3, written and read: hilbert tile ids, the fixed 127-byte header, directory varint encoding, leaf directories when the root outgrows the format's 16 KB first fetch, and content dedupe so a bake of the sea is ONE blue square |
+| the tile scheme | `apps/dispatch/src/map/tiles.ts` | SanMap's scheme — the world as one square, z0 the whole of it, `y` counting from the north edge down. **The square is a parameter and comes out of the archive**, never San Andreas' 6000: a total conversion has its own extent and a map read on the wrong square is silently in the wrong place |
+| the reader | `apps/dispatch/src/map/tile-source.ts` | one archive over HTTP range requests, LRU-capped at 256 decoded tiles, request coalescing, and the two silent failures refused by name — a server that ignores `Range` (answers `200` with the whole file, which a trusting reader decodes as pixels) and an archive with no world square in its metadata |
+| the layer | `apps/dispatch/src/map/tile-layer.ts` | one `drawImage` per tile under an affine taken from the tile's own projected corners |
+| the mode | `apps/dispatch/src/world/plan-mode.ts` | opens the pyramid beside the pak, takes the view to the plan projection, draws tiles under the symbology and keeps the grid where no tile covers |
+| the baker | `apps/dispatch/src/world/tile-bake.ts` + `tile-bake-host.ts` | `?bake=tiles` renders the pyramid with the console's own engine — orthographic, straight down, one tile at a time, waiting for the streamer before each capture — and hands over one `tiles.pmtiles` |
+
+**The layer is exact under the plan view and under nothing else, and that is geometry rather than a gap.**
+The ground plane maps AFFINELY to the screen under an orthographic projection at any heading and any tilt, so
+three projected corners give the canvas the exact transform. Under perspective the same map is a homography,
+which a 2D canvas cannot express — an affine per tile would bend every straight road at the tile seams. So
+opening the pyramid takes the camera to the plan view, and a perspective view draws no tiles and says so.
+
+**The baker runs in the browser, and that is not a shortcut either.** The development machine is a phone with
+no headless Chromium ([termux](../../../development/termux.md)), so a bake that needed Playwright would be a
+bake nobody here can run. The console already has the world streamed and the renderer warm.
+
+**The refusals, because a long job that cannot finish is worse than one never started:** a run past
+`BAKE_TILE_CAP` (4096 tiles — z8 alone is 65 536) is refused with the count in the message, and the archive
+declares the format the browser's encoder ACTUALLY produced rather than the one that was asked for (a browser
+that cannot write WebP hands back a PNG with no error, and an archive declaring WebP would then serve
+pictures no reader can open).
+
+**What it costs the bundle, measured 2026-08-23** (`npx vite build`, same tree with and without the change):
+the dispatch chunk goes **102.64 kB → 112.13 kB raw, 33.95 → 38.38 kB gzipped** — +9.49 kB / +4.43 kB for
+the format, the scheme, the reader, the layer and the baker together. [1/06](../1-the-map-profile/readme.md)
+counts the shareable artifact rather than this chunk, and the baker is the half of the cost a console that
+only READS tiles never needs; splitting it out is a lever, not a decision taken here.
+
+**Still owed, and only a bake can pay it:** total bytes per zoom level, time to first usable picture, and the
+run on a device with no WebGPU. The baker reports every one of the first two as a `[tilebake]` line
+(`N tiles in Ns → M MB · z0 1×…kB · z1 4×…kB · …`) so the numbers arrive in the shape a benchmark row is
+written from.
+
 ### 03 — Switching
 
 The operator picks, always. **Plus an automatic floor:** a device that cannot carry the chosen mode starts in

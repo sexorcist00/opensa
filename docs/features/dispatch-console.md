@@ -38,7 +38,7 @@ Decided 2026-08-06 — one camera, one symbology, one board, three sources for w
 | --- | --- | --- |
 | Live render | the streamed pak — the game's own world | shipped, this document |
 | Baked 3D city map | the world pre-simplified offline and lit like a map rather than a game | the bake exists (`tools/opensa-lod-generator`), the mode does not |
-| Flat 2D | top-down tiles, no 3D at all | the frame exists (`plan-mode.ts`), the content does not |
+| Flat 2D | top-down tiles, no 3D at all | **shipped 2026-08-23** — `?mode=flat`, one `tiles.pmtiles` beside the pak; [below](#the-flat-2d-map) |
 
 The operator picks; a device that cannot carry the choice starts in one that works **and says why**. Camera
 pose, selection and the moment in time survive a switch. The 2D tiles are baked by our own orthographic pass
@@ -55,8 +55,45 @@ world underneath, and both projections work in all of them, plan mode included).
 
 It is one field on the camera state (`orthoHalfHeight`) rather than a second camera: the view matrix, the
 culling, the passes and the symbology are the same code, and only the projection matrix differs. The same
-matrix is what [6/02](../plans/201-dispatch-console/6-display-modes/readme.md) will bake the 2D tiles with,
+matrix is what [6/02](../plans/201-dispatch-console/6-display-modes/readme.md) bakes the 2D tiles with,
 so the mode and the generator cannot drift apart.
+
+## The flat 2D map
+
+**201/6-02, since 2026-08-23.** `?mode=flat` opens the console over a baked tile pyramid instead of the
+streamed world: no WebGPU, no pak, no streaming — the same camera, the same gestures, the same symbology and
+the same board, over a picture of the city. It is the mode that runs where nothing else does, and the one an
+operator can leave open all shift on a phone.
+
+**The whole pyramid is ONE file.** `tiles.pmtiles` sits beside the built game and is read by HTTP range
+requests ([PMTiles v3](../links.md)), so the 2D mode adds no tile server, no directory of loose PNGs, and —
+the part that matters for the product — **nothing for an operator to calibrate**. PCAD's current 2D map needs
+each dispatcher to align a picture to the world by hand and keep the result in `localStorage`; our engine IS
+the world, so the archive states the square it was baked over and `map/coords.ts` converts exactly.
+
+| Piece | Where |
+| --- | --- |
+| the format, written and read | `packages/engine-formats/src/pmtiles.ts` |
+| the tile scheme (SanMap's: one square, `y` from the north edge down) | `apps/dispatch/src/map/tiles.ts` |
+| the range reader, LRU-capped at 256 decoded tiles | `apps/dispatch/src/map/tile-source.ts` |
+| the draw | `apps/dispatch/src/map/tile-layer.ts` |
+| the baker (`?bake=tiles`) | `apps/dispatch/src/world/tile-bake.ts`, `tile-bake-host.ts` |
+
+**The tiles are ours, baked from our own world.** An orthographic top-down pass over whatever build is loaded
+— so a total conversion gets a 2D map too, which no third-party San Andreas raster will ever give it, and the
+picture matches the world that actually streams. The bake runs **in the browser** (`?bake=tiles`, then the
+file lands in Downloads): the development machine is a phone with no headless Chromium, and the console
+already has the world streamed and the renderer warm.
+
+**It draws under the plan view and nowhere else.** The ground plane maps affinely to the screen under an
+orthographic projection at any heading and any tilt, so a tile is one `drawImage` under the transform between
+its own projected corners — exact. Under perspective the same map is a homography that a 2D canvas cannot
+express, and an affine per tile would bend every straight road at the tile seams. So opening the pyramid
+takes the view to the plan projection, and a perspective view draws the grid and says why in the status bar.
+
+**What it says when it has nothing.** No archive, a server that refuses the request, an archive baked over no
+square: the map keeps its projected grid and the status bar carries the reason. An empty 2D map that is
+silent about it is indistinguishable from one that is still loading.
 
 Three things fall out of the projection rather than being chosen, and each one is a place a naive port goes
 silently wrong:

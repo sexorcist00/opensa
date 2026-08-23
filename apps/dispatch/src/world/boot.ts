@@ -42,6 +42,7 @@ import { mountMinimap } from '../map/minimap';
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
 import { drawSketches, type MapTool, type Measurement, SketchStore } from '../map/sketch';
+import { DEFAULT_TILE_SIZE } from '../map/tiles';
 import { readView, type SharedView, viewOfPose } from '../map/view-link';
 import { composeImage } from './capture';
 import { buildDemoCity, DEMO_EXTENT, DEMO_REACH } from './demo-city';
@@ -50,6 +51,7 @@ import { createErrorLog } from './error-log';
 import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
 import { DEFAULT_SRC, resolvePakBase } from './pak-source';
 import { RenderGate } from './render-gate';
+import { bakeFlatMap } from './tile-bake-host';
 import { installWater } from './water';
 import { type DistrictLookup, loadDistricts, NO_DISTRICTS, type SearchedPlace } from './zones';
 
@@ -162,6 +164,9 @@ export interface DispatchReadout {
   readonly pending: number;
   readonly pose: MapPose;
   readonly residencyMb: number;
+  /** The flat map's tile layer, in words (201/6-02): which pyramid level is drawn and how many tiles, or why
+   *  none is. Absent on the 3D host, which draws the streamed world instead. */
+  readonly tiles?: string;
   /** What a tap on the map currently does. `none` is selection, the console's normal behaviour. */
   readonly tool: MapTool;
 }
@@ -178,6 +183,10 @@ export type MapClick =
     }
   | { readonly at: GtaGround; readonly kind: 'ground' }
   | { readonly id: string; readonly kind: 'incident' | 'unit' };
+
+/** How deep `?bake=tiles` goes when nothing says otherwise: z0–z4 is 341 tiles, which a phone finishes, and
+ *  over San Andreas' 6 km square it is ~1.5 m per tile pixel at the deepest level. */
+const DEFAULT_BAKE_MAX_ZOOM = 4;
 
 /** Opening view: high over central Los Santos, north up, steeply tilted so the city still reads as 3D. */
 const OPENING_POSE: MapPose = {
@@ -496,8 +505,17 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   let lastReadout = 0;
   let previous = performance.now();
 
+  /** The tile bake owns the canvas while it runs (201/6-02) — it resizes the drawing buffer and drives the
+   *  camera itself, and a live frame in the middle of that would render a tile at the wrong size. */
+  let baking = false;
+
   const loop = (): void => {
     if (disposed) {
+      return;
+    }
+    if (baking) {
+      requestAnimationFrame(loop);
+
       return;
     }
     const now = performance.now();
@@ -614,6 +632,39 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     schedule(false);
   };
   requestAnimationFrame(loop);
+
+  // 201/6-02: bake the flat map's pyramid out of THIS world. Driven by the URL rather than a control,
+  // because it is an offline job with no offline home — the development machine has no headless browser,
+  // so the bake runs where the world already is.
+  if (params.get('bake') === 'tiles') {
+    void bakeFlatMap(
+      {
+        canvas,
+        extent: world.extent,
+        frame: (state) => {
+          engine.frame(state);
+        },
+        label: world.label,
+        pause: (on) => {
+          baking = on;
+          if (!on) {
+            wake();
+          }
+        },
+        stream: (state, pixelHeight) =>
+          world.follow([state.target[0], state.target[1], state.target[2]], { camera: state, pixelHeight })
+            .pendingCells,
+      },
+      {
+        maxZoom: numberParam(params, 'zmax', DEFAULT_BAKE_MAX_ZOOM),
+        minZoom: numberParam(params, 'zmin', 0),
+        tileSize: numberParam(params, 'tilesize', DEFAULT_TILE_SIZE),
+      },
+    ).catch((error: unknown) => {
+      // eslint-disable-next-line no-console -- a bake that failed must say so; there is no other surface
+      console.error('[tilebake] failed:', error);
+    });
+  }
 
   return {
     camera,

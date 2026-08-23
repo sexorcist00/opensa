@@ -86,13 +86,20 @@ export function MapCanvas({
     };
     // The 3D map is the preferred surface, not a requirement: a browser without WebGPU (or a world this GPU
     // cannot read) falls back to the 2D plan, which keeps every unit, call and gesture working.
-    booted ??= bootDispatch(boot).catch((error: unknown) => {
-      // eslint-disable-next-line no-console -- a degraded map must say why, in the console as well as on it
-      console.warn('[dispatch] 3D map unavailable, falling back to plan mode:', error);
-      setDegraded(reason(error));
+    //
+    // `?mode=flat` asks for the flat map deliberately (201/6-02) — the same surface, chosen rather than
+    // fallen back to, which is why it raises no banner. The operator's own control over the three modes is
+    // 201/6-03's step; this is how the mode is reached and measured until then.
+    booted ??=
+      dispatchParams().get('mode') === 'flat'
+        ? Promise.resolve(bootPlanMode(boot, 'flat map'))
+        : bootDispatch(boot).catch((error: unknown) => {
+            // eslint-disable-next-line no-console -- a degraded map must say why, in the console as well as on it
+            console.warn('[dispatch] 3D map unavailable, falling back to plan mode:', error);
+            setDegraded(reason(error));
 
-      return bootPlanMode(boot, reason(error));
-    });
+            return bootPlanMode(boot, reason(error));
+          });
     void booted.then((handle) => {
       if (handle) {
         handleRef.current = handle;

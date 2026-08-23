@@ -40,12 +40,34 @@ new design must satisfy are next door in [`restrictions/`](../restrictions/READM
 - **One scale, the whole world.** The dial frames what the pak carries (its cell extent), so at block zoom
   the view footprint is a few pixels — legible as a position, useless as a shape. A second scale (the
   district box) is the obvious answer and has not been asked for.
-- **No world picture.** The radar draws the world's baked district boxes, not a map image: the flat-2D tile
-  bake ([6/02](../plans/201-dispatch-console/6-display-modes/readme.md)) does not exist yet, and a world
-  with no `info.zon` — a total conversion may ship none — gets an empty dial with its units on it rather
-  than somebody else's city.
+- **No world picture.** The radar draws the world's baked district boxes, not a map image. The flat-2D tile
+  pyramid ([6/02](../plans/201-dispatch-console/6-display-modes/readme.md)) exists now and the radar does not
+  read it yet; a world with no `info.zon` — a total conversion may ship none — gets an empty dial with its
+  units on it rather than somebody else's city.
 - **Absent in plan mode.** The no-GPU fallback has no pak, so it has no world extent to frame and no
   district table to draw; its own 250-unit grid is what locates the view there. Measuring and drawing DO
   work in plan mode.
 - **Only real board entities are drawn**, which is the console's rule everywhere: nothing on the radar is
   ever a decoration that could be mistaken for a unit.
+
+## The flat 2D map (201/6-02)
+
+- **Tiles are drawn under the plan projection and under no other.** The ground plane maps affinely to the
+  screen under an orthographic projection at any heading and any tilt, so a tile is one `drawImage` under
+  the transform between its own projected corners. Under perspective that map is a homography, which a 2D
+  canvas cannot express — an affine per tile would bend every straight road at the tile seams. So opening a
+  pyramid takes the view to the plan projection, and a perspective view in the flat mode draws the grid and
+  says so in the status bar. Subdividing each tile into affine patches is the way out if a tilted flat map
+  is ever wanted; nobody has asked for one.
+- **The bake runs in the operator's browser, and only there.** There is no headless capture on the
+  development machine ([termux](../development/termux.md)), so `?bake=tiles` drives the console's own engine
+  and hands the archive over as a download. A run past **4096 tiles** is refused with the count in the
+  message — z8 alone is 65 536 tiles, each one waiting for the streamer.
+- **The tiles are lit by whatever hour the bake ran at.** They are pictures of the live world, so a pyramid
+  baked at `hour=22` is a night map for good. Baking a map LOOK — even light, no time of day, muted
+  surfaces — is [6/01](../plans/201-dispatch-console/6-display-modes/readme.md)'s work, not this mode's.
+- **A tile that never streamed is baked as it rendered.** The baker waits for the streamer before every
+  capture (up to 180 frames), but a cell the pak does not carry never arrives, and what goes into the file
+  is the empty ground that was on screen. Nothing re-renders a tile later.
+- **The archive is not incremental.** A rebuilt world means a re-baked pyramid; there is no patch path, and
+  a pyramid and a pak that disagree look exactly like a correct map of a different city.

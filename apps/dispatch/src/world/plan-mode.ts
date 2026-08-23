@@ -24,9 +24,12 @@ import { groundPoint, MAP_YAW, MapCamera, type MapProjection } from '../map/map-
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
 import { drawSketches, type MapTool, SketchStore } from '../map/sketch';
+import { drawTileLayer } from '../map/tile-layer';
+import { decodeTile, httpRange, TileSource } from '../map/tile-source';
 import { viewOfPose } from '../map/view-link';
-import { applyHeldKeys, IDLE_WAKE_MS, runCommand, zoomSpan } from './boot';
+import { applyHeldKeys, dispatchParams, IDLE_WAKE_MS, runCommand, zoomSpan } from './boot';
 import { composeImage } from './capture';
+import { DEFAULT_SRC, resolveTilesUrl } from './pak-source';
 import { RenderGate } from './render-gate';
 import { NO_DISTRICTS } from './zones';
 
@@ -66,6 +69,10 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
 
   const camera = new MapCamera(OPENING);
   const symbology = new SymbologyLayer();
+  // The flat map's content (201/6-02). It is opened asynchronously and the mode works without it — a plan
+  // over a grid is what this screen was before the pyramid existed, and it stays the honest fallback.
+  let tiles: null | TileSource = null;
+  let tileNote = 'grid — no tile archive';
   // Measuring works here too, and deliberately: plan mode IS a 2D map, so a ruler and a cordon are exactly
   // what it is good at — and 201/7-05's shapes are symbology, which is the half of the console that survives
   // having no GPU (201/7's verification asks every capability to work in every mode or say why not).
@@ -175,6 +182,42 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     overlay.addEventListener(event, wake, { passive: true });
   }
   window.addEventListener('keydown', wake, { passive: true });
+  // Opened after `wake` exists: a tile that lands must be able to wake a console that draws on demand, or
+  // the map only fills in when the operator moves — which reads as a broken pyramid rather than a slow one.
+  void openTiles();
+
+  /**
+   * Open the pyramid beside the built game (`?tiles=` overrides). Failure is a NOTE, not a throw: the plan
+   * over a grid is what this mode was before the tiles existed and it still works, but a flat map showing
+   * nothing must say whether it is empty or still loading.
+   */
+  async function openTiles(): Promise<void> {
+    const params = dispatchParams();
+    const url = resolveTilesUrl(params.get('src') ?? DEFAULT_SRC, params.get('tiles'));
+    let served = '';
+    try {
+      const source = await TileSource.open(
+        httpRange(url, () => {
+          served = ' · whole file (no range support)';
+        }),
+        decodeTile,
+      );
+      if (disposed) {
+        source.dispose();
+
+        return;
+      }
+      tiles = source;
+      // A flat map is a PLAN: the tile layer is exact under the orthographic projection and under no other,
+      // so opening the pyramid takes the view there rather than drawing a skewed city.
+      camera.setProjection('ortho');
+      tileNote = `tiles ${source.meta.world}${served}`;
+      wake();
+    } catch (error) {
+      tileNote = `grid — ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
   let idleReported = false;
   let lastPayload: DispatchReadout | null = null;
 
@@ -222,7 +265,28 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
 
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
     context.clearRect(0, 0, size.width, size.height);
-    drawGrid(context, projector, camera, size);
+    const layer =
+      tiles === null
+        ? null
+        : drawTileLayer({
+            context,
+            dpr,
+            footprint: camera.groundFootprint(size.width / Math.max(1, size.height)),
+            projection: camera.pose().projection,
+            projector,
+            source: tiles,
+            wake,
+          });
+    if (layer !== null) {
+      tileNote =
+        layer.reason ??
+        `z${layer.zoom} · ${layer.drawn} tiles${layer.pending > 0 ? ` · ${layer.pending} loading` : ''}`;
+    }
+    // The grid is what the ground reads as where no tile covers it — an empty plan with no reference at all
+    // is the one thing this mode may not become.
+    if (layer === null || layer.drawn === 0) {
+      drawGrid(context, projector, camera, size);
+    }
     symbology.render(context, projector, ops, options.selection(), size);
     drawSketches(context, (at) => projector.project(gtaToEngine(at)), sketch);
 
@@ -244,6 +308,7 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
         pending: 0,
         pose: camera.pose(),
         residencyMb: 0,
+        tiles: tileNote,
         tool: sketch.tool(),
       };
       options.onReadout(lastPayload);
@@ -256,6 +321,8 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     camera,
     dispose(): void {
       disposed = true;
+      tiles?.dispose();
+      tiles = null;
       keyboard.unbind();
       unbind();
       for (const event of ['pointerdown', 'wheel'] as const) {

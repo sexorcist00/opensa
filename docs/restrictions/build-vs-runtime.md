@@ -77,6 +77,21 @@ conversion shipping no `info.zon` is the same case, and it is a real one.
 Detail: [`tools/opensa-pack/src/districts.ts`](../../tools/opensa-pack/src/districts.ts),
 [201/5-03](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
 
+## A baked pyramid carries the SQUARE it was baked over — the runtime cannot recover it
+
+A tile pyramid is a picture of a world at a fixed extent: which world units the archive's zoom-0 tile covers
+was decided by whatever ran the bake, and no amount of reading tiles back tells you. A surface that assumes a
+square — San Andreas' 6000, say — draws a plausible city in the wrong place on every total conversion, and on
+a district-sized pak it draws the district's tiles across the whole state.
+
+So the square is METADATA in the archive (`scheme.origin`, `scheme.span`, `scheme.tileSize`,
+[contracts/dispatch-map.md](../contracts/dispatch-map.md)), it comes from the pak's own extent at bake time,
+and a reader that does not find it refuses rather than guesses. The same rule as every other build-time
+decision in this file: what the build knew and the runtime cannot re-derive travels WITH the output.
+
+**Caught:** yes, at open — an archive with no square is refused by name. **Silent** if a reader ever assumes
+one instead: the map draws, every tile loads, and the city is in the wrong place.
+
 ## The look is baked, so tuning a look parameter costs a re-pack
 
 If a value is going to be iterated on, it belongs in the **shader**; only the anchor belongs in the bake.

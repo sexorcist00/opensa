@@ -33,7 +33,8 @@ apps/
   cutscene-converter/ @opensa/cutscene-converter  Electron app: modded cars → cutscenes  (tag type:tool!)
 packages/                          (tag type:engine)
   engine/         @opensa/engine          the WebGPU renderer — device/pipelines, frame graph, world cells
-  engine-formats/ @opensa/engine-formats  native .osm/.ostex/.oscell/.ospak/.oswire layouts, shared with tools
+  engine-formats/ @opensa/engine-formats  native .osm/.ostex/.oscell/.ospak/.oswire layouts + the PMTiles
+                                          archive the flat 2D map reads (201/6-02), shared with tools
   cell-weld/      @opensa/cell-weld       RW instances + TXDs → .oscell/.ostex bytes (weld, texture plan, alpha)
   math/           @opensa/math            dependency-free 3D math
   renderware/     @opensa/renderware      parsers (DFF/TXD/COL, IDE/IPL/DAT/GXT) + archive + map + mesh prep

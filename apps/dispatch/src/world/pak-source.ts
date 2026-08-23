@@ -25,7 +25,7 @@ export interface PakBase {
  * name is made root-relative to this app's own origin.
  */
 export async function resolvePakBase(src: string): Promise<PakBase> {
-  const root = /^(?:https?:)?\/\//.test(src) ? src.replace(/\/+$/, '') : `/${src.replace(/^\/+|\/+$/g, '')}`;
+  const root = rootOf(src);
   const candidates = [`${root}/pak`, `${root}/opensa/pak`, `${root}/opensa`, root];
   for (const candidate of candidates) {
     if (await exists(`${candidate}/manifest.json`)) {
@@ -39,10 +39,29 @@ export async function resolvePakBase(src: string): Promise<PakBase> {
   );
 }
 
+/**
+ * The flat map's whole tile pyramid, one file beside the built game (201/6-02).
+ *
+ * A NAME that carries behaviour, so it is written down in `docs/contracts/`: the console looks for exactly
+ * this file and draws the grid instead when it is not there. Misspelling it is silent by nature — a flat map
+ * with no tiles looks like one that has not finished loading.
+ */
+export const TILES_FILE = 'tiles.pmtiles';
+
+/** Where the pyramid is, for a given `?src=`. `?tiles=` overrides it with any URL. */
+export function resolveTilesUrl(src: string, override: null | string): string {
+  return override === null || override === '' ? `${rootOf(src)}/${TILES_FILE}` : override;
+}
+
 async function exists(url: string): Promise<boolean> {
   try {
     return (await fetch(url, { method: 'HEAD' })).ok;
   } catch {
     return false;
   }
+}
+
+/** `?src=` as a URL base: an absolute URL passes through, a bare name is root-relative to this origin. */
+function rootOf(src: string): string {
+  return /^(?:https?:)?\/\//.test(src) ? src.replace(/\/+$/, '') : `/${src.replace(/^\/+|\/+$/g, '')}`;
 }

@@ -612,6 +612,24 @@ way, and the symptom (a black screen with healthy streaming counters) points at 
 
 **Caught:** no. The counters say the cells loaded; only the eye says they were not drawn.
 
+## A raster ground layer on the 2D canvas is exact under the PLAN projection and under no other
+
+The 2D overlay is where everything that is not the streamed world is drawn — symbology, sketches, and (since
+201/6-02) the flat map's tiles. For a picture pinned to the GROUND the projection decides whether that is
+even possible: under an **orthographic** projection the ground plane maps AFFINELY to the screen at any
+heading and any tilt, so three projected corners give `setTransform` the exact placement of a whole tile.
+Under **perspective** the same map is a homography, and canvas 2D has no homography: an affine per tile bends
+every straight road at the tile seams, and the error grows with the tilt.
+
+So a design that puts a raster — tiles, a baked overview, a heat layer, a floor plan — under the symbology
+either holds the plan view while it draws (what `tile-layer.ts` does: it refuses under perspective and the
+status bar says why) or subdivides each tile into affine patches and pays for the seams. Vector symbology is
+unaffected: a point is projected exactly under both.
+
+**Caught:** partly. Our own layer refuses by name, but nothing stops the next one from drawing a skewed
+quad — and a skewed raster under a tilted view reads as a rendering artefact rather than as a category
+error, which is how it survives review.
+
 ## The PC/mobile difference is a BUDGET, not a branch
 
 One engine runs on the desktop and on a phone. The difference between them is expressed in numbers the frame
