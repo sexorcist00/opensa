@@ -52,6 +52,16 @@ export const JOBS = {
     label: 'git pull --ff-only',
     long: false,
   },
+  // The way out of a branch that has diverged, and the ONE history operation this panel runs. It is safe
+  // here for a specific reason: what the phone commits is capture files under
+  // `docs/benchmarks/opensa-engine/` that nobody else writes, and they are not on the remote yet — so they
+  // are replayed on top rather than rewritten in place, and there is nothing to conflict with.
+  rebase: {
+    args: ['pull', '--rebase'],
+    command: 'git',
+    label: 'replay what this phone committed on top of the remote',
+    long: false,
+  },
   setup: {
     args: ['run', 'phone:setup'],
     command: 'npm',

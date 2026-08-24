@@ -112,6 +112,15 @@ grew a **Push** button of its own. Until then a failed push was a dead end: the 
 remote did not have it, and the only button that could send it insisted on having something new to file
 first. The branch's unpushed count is in preflight (`N to push`) and on the button.
 
+**And the first divergence, minutes later.** With credentials finally in place the phone pulled — and
+`--ff-only` refused: the capture commit was here, two panel commits were there, both on the same base. That
+is what a device that COMMITS meets the first time the other end pushes too, and `git pull` says it in words
+that read like a breakage rather than a choice. Preflight now names it (**the branch has diverged**, with
+what is on each side) and offers `git pull --rebase` as a button — the one history operation this panel runs,
+safe for a precise reason: the phone's commits are capture files nobody else writes and they are not on the
+remote yet, so they are replayed rather than rewritten. If a rebase ever stops part-way, preflight says THAT
+too, with `--continue` and `--abort` in words — not as buttons, because neither is a tap.
+
 **Owed:** the first clean run on the phone itself — the doctor's own verdict there is the measurement this
 step is judged on.
 

@@ -188,7 +188,30 @@ export async function runChecks(probe, target) {
     ...(credentials.ok ? {} : { fix: 'pkg install gh && gh auth login   (or: git config credential.helper store)' }),
   });
 
+  // A branch that has both sides ahead is what a phone that COMMITS meets the first time the other end
+  // pushes too (2026-08-24): `git pull --ff-only` refuses, correctly, and says so in words that read like a
+  // failure rather than a decision. The decision is one command, and the panel can run it.
+  if (await probe.rebasing()) {
+    add({
+      detail: 'a rebase stopped part-way — the tree is mid-history until it is finished or abandoned',
+      fix: 'git rebase --continue   (or: git rebase --abort to put it back)',
+      id: 'rebasing',
+      label: 'a rebase is in progress',
+      state: 'fail',
+    });
+  }
+
   const git = await probe.git();
+  if (git !== null && git.ahead > 0 && git.behind > 0) {
+    add({
+      detail: `${git.ahead} here and ${git.behind} there — a fast-forward pull cannot take both`,
+      fix: 'git pull --rebase',
+      id: 'diverged',
+      job: 'rebase',
+      label: 'the branch has diverged',
+      state: 'fail',
+    });
+  }
   add({
     detail:
       git === null

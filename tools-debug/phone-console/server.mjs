@@ -204,6 +204,8 @@ const probe = {
       return null;
     }
   },
+  /** A rebase that stopped part-way leaves one of these behind, and the tree is mid-history until it ends. */
+  rebasing: async () => existsSync(join(REPO, '.git/rebase-merge')) || existsSync(join(REPO, '.git/rebase-apply')),
   termux: Boolean(process.env.PREFIX) && existsSync('/data/data/com.termux'),
   wakeLock: existsSync('/data/data/com.termux/files/usr/bin/termux-wake-lock'),
 };

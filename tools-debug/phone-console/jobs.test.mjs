@@ -33,7 +33,7 @@ describe('phone console jobs', () => {
   describe('negative cases', () => {
     it('refuses a job it does not have, and names the ones it does', () => {
       expect(() => buildJob('rm-rf')).toThrow(
-        /unknown job 'rm-rf' — known: districts, phone, pull, setup, sirv, webapp/,
+        /unknown job 'rm-rf' — known: districts, phone, pull, rebase, setup, sirv, webapp/,
       );
     });
 

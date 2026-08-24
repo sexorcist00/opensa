@@ -21,6 +21,7 @@ function probe(overrides = {}) {
     portOpen: async () => false,
     readJson: async () => ({ build: { at: '2026-08-23', textures: 'astc' } }),
     realpath: async (path) => `/home/user/opensa/${path}`,
+    rebasing: async () => false,
     termux: true,
     wakeLock: true,
     ...overrides,
@@ -157,6 +158,27 @@ describe('phone console doctor', () => {
       expect(find(checks, 'webapp').fix).toBeUndefined();
     });
 
+    it('names a diverged branch as the decision it is, with the command that takes both sides', async () => {
+      // 2026-08-24: the phone committed a capture while the other end pushed, and `git pull --ff-only`
+      // refused — correctly, and in words that read like a breakage rather than a choice.
+      const checks = await runChecks(
+        probe({ git: async () => ({ ahead: 1, behind: 2, branch: 'work', dirty: 0, dirtyPaths: [] }) }),
+        TARGET,
+      );
+
+      expect(find(checks, 'diverged')).toMatchObject({ job: 'rebase', state: 'fail' });
+      expect(find(checks, 'diverged').detail).toBe('1 here and 2 there — a fast-forward pull cannot take both');
+    });
+
+    it('says when a rebase stopped part-way, and how to leave that state', async () => {
+      const checks = await runChecks(probe({ rebasing: async () => true }), TARGET);
+
+      expect(find(checks, 'rebasing')).toMatchObject({ state: 'fail' });
+      expect(find(checks, 'rebasing').fix).toContain('git rebase --abort');
+      // Not a button: neither continuing nor abandoning someone's half-finished history is a tap.
+      expect(find(checks, 'rebasing').job).toBeUndefined();
+    });
+
     it('warns when a push has no way to authenticate, without asking the network', async () => {
       // 2026-08-24: the commit went through and the push died on "could not read Username". Knowable from
       // configuration alone, so preflight says it before a capture is filed rather than after.
@@ -197,6 +219,8 @@ describe('phone console doctor', () => {
       expect(find(checks, 'git').detail).toBe('main · 2 changed files · 1 to push · 3 behind');
       expect(find(checks, 'git').fix).toBe('git pull --ff-only');
       expect(find(checks, 'pull-blocked')).toBeUndefined();
+      // Ahead AND behind is the diverged case; ahead alone is not.
+      expect(find(checks, 'diverged')).toBeDefined();
     });
 
     it('says a world with no pak yet is not an error', async () => {
