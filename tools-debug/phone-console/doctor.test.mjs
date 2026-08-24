@@ -11,9 +11,10 @@ function probe(overrides = {}) {
   return {
     app: async () => null,
     arch: 'arm64',
+    credentials: async () => ({ helper: 'store', ok: true }),
     exists: async (path) => (overrides.missing ?? new Set()).has(path) === false && present.has(path),
     freeBytes: async () => 40 * 1024 ** 3,
-    git: async () => ({ behind: 0, branch: 'main', dirty: 0, dirtyPaths: [] }),
+    git: async () => ({ ahead: 0, behind: 0, branch: 'main', dirty: 0, dirtyPaths: [] }),
     identity: async () => ({ email: 'phone@users.noreply.github.com', name: 'phone', owner: 'sexorcist00' }),
     mtime: async (path) => (path === 'package-lock.json' ? 100 : 200),
     nodeVersion: 'v22.4.0',
@@ -106,7 +107,7 @@ describe('phone console doctor', () => {
       // 2026-08-23 on the phone: `npm i tsx` had written itself into package.json, the pull refused, and
       // the update carrying the panel never landed — so the symptom was "the script does not exist".
       const checks = await runChecks(
-        probe({ git: async () => ({ behind: 2, branch: 'main', dirty: 1, dirtyPaths: ['package.json'] }) }),
+        probe({ git: async () => ({ ahead: 0, behind: 2, branch: 'main', dirty: 1, dirtyPaths: ['package.json'] }) }),
         TARGET,
       );
 
@@ -156,6 +157,15 @@ describe('phone console doctor', () => {
       expect(find(checks, 'webapp').fix).toBeUndefined();
     });
 
+    it('warns when a push has no way to authenticate, without asking the network', async () => {
+      // 2026-08-24: the commit went through and the push died on "could not read Username". Knowable from
+      // configuration alone, so preflight says it before a capture is filed rather than after.
+      const checks = await runChecks(probe({ credentials: async () => ({ helper: '', ok: false }) }), TARGET);
+
+      expect(find(checks, 'push-auth')).toMatchObject({ state: 'warn' });
+      expect(find(checks, 'push-auth').fix).toContain('gh auth login');
+    });
+
     it('says who the captures will be committed as', async () => {
       expect(find(await runChecks(probe(), TARGET), 'identity')).toMatchObject({
         detail: 'commits as phone <phone@users.noreply.github.com>',
@@ -178,11 +188,13 @@ describe('phone console doctor', () => {
 
     it('offers the pull when the branch is behind', async () => {
       const checks = await runChecks(
-        probe({ git: async () => ({ behind: 3, branch: 'main', dirty: 2, dirtyPaths: ['docs/a.md', 'docs/b.md'] }) }),
+        probe({
+          git: async () => ({ ahead: 1, behind: 3, branch: 'main', dirty: 2, dirtyPaths: ['docs/a.md', 'docs/b.md'] }),
+        }),
         TARGET,
       );
 
-      expect(find(checks, 'git').detail).toBe('main · 2 changed files · 3 behind');
+      expect(find(checks, 'git').detail).toBe('main · 2 changed files · 1 to push · 3 behind');
       expect(find(checks, 'git').fix).toBe('git pull --ff-only');
       expect(find(checks, 'pull-blocked')).toBeUndefined();
     });

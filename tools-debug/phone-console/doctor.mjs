@@ -174,12 +174,26 @@ export async function runChecks(probe, target) {
       : {}),
   });
 
+  // A push needs a way to authenticate, and an https remote with no helper anywhere fails with "could not
+  // read Username" — which git only says when a push is attempted, and which this panel makes it say fast
+  // rather than hang on a prompt nobody sees.
+  const credentials = await probe.credentials();
+  add({
+    detail: credentials.ok
+      ? `push authenticates through ${credentials.helper}`
+      : 'no credential helper — a push will fail with "could not read Username"',
+    id: 'push-auth',
+    label: 'push credentials',
+    state: credentials.ok ? 'ok' : 'warn',
+    ...(credentials.ok ? {} : { fix: 'pkg install gh && gh auth login   (or: git config credential.helper store)' }),
+  });
+
   const git = await probe.git();
   add({
     detail:
       git === null
         ? 'not a git worktree'
-        : `${git.branch}${git.dirty > 0 ? ` · ${git.dirty} changed files` : ' · clean'}${git.behind > 0 ? ` · ${git.behind} behind` : ''}`,
+        : `${git.branch}${git.dirty > 0 ? ` · ${git.dirty} changed files` : ' · clean'}${git.ahead > 0 ? ` · ${git.ahead} to push` : ''}${git.behind > 0 ? ` · ${git.behind} behind` : ''}`,
     id: 'git',
     label: 'branch',
     state: git === null ? 'warn' : 'ok',

@@ -294,6 +294,7 @@
         <div class="row" style="margin-top: 10px">
           <button id="file" class="primary grow">File it</button>
           <button id="commit" class="grow">Commit &amp; push</button>
+          <button id="push">Push</button>
         </div>
         <label for="tiles" style="margin-top: 12px">…or put a baked tiles.pmtiles beside the pak</label>
         <input id="tiles" type="file" accept=".pmtiles,application/octet-stream" />
@@ -399,6 +400,11 @@
             ? 'nothing waiting to be committed'
             : `waiting to be committed: ${waiting.map((path) => path.split('/').pop()).join(', ')}`;
         $('commit').disabled = waiting.length === 0;
+        // Committed here and not on the remote — after a push that failed for its own reasons, this is the
+        // only way back to it, since the commit button insists on having something new to file.
+        const ahead = state.ahead ?? 0;
+        $('push').disabled = ahead === 0;
+        $('push').textContent = ahead === 0 ? 'Push' : `Push ${ahead}`;
         $('stop').disabled = !state.job.running;
         urls();
       }
@@ -460,6 +466,16 @@
           refresh();
         } catch (error) {
           // Git's own first line; the whole exchange is in the log below, which is where a failure is read.
+          $('filed').textContent = error.message;
+        }
+      };
+
+      $('push').onclick = async () => {
+        try {
+          const result = await api('/api/push', {});
+          $('filed').textContent = `pushed ${result.branch}`;
+          refresh();
+        } catch (error) {
           $('filed').textContent = error.message;
         }
       };

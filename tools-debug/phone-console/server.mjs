@@ -91,6 +91,28 @@ const probe = {
     }
   },
   arch: process.arch,
+  /**
+   * Whether a push has any way to authenticate, as CONFIGURATION rather than by trying.
+   *
+   * Asking the network would mean a request on every preflight; what is knowable locally is enough for the
+   * failure this exists for — an https remote with no credential helper anywhere, which fails with "could
+   * not read Username for 'https://github.com'" the moment a capture is pushed (2026-08-24).
+   */
+  credentials: async () => {
+    const url = await remoteUrl();
+    if (url.startsWith('git@') || url.startsWith('ssh://')) {
+      return { helper: 'ssh key', ok: true };
+    }
+    try {
+      const helper = (
+        await run('git', ['config', '--get-urlmatch', 'credential.helper', 'https://github.com'], { cwd: REPO })
+      ).stdout.trim();
+
+      return { helper, ok: helper !== '' };
+    } catch {
+      return { helper: '', ok: false };
+    }
+  },
   exists: async (path) => existsSync(join(REPO, path)),
   freeBytes: async (path) => {
     try {
@@ -105,19 +127,22 @@ const probe = {
     try {
       const branch = (await run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: REPO })).stdout.trim();
       const status = (await run('git', ['status', '--porcelain'], { cwd: REPO })).stdout;
+      let ahead = 0;
       let behind = 0;
       try {
         const counts = (
           await run('git', ['rev-list', '--left-right', '--count', `${branch}...origin/${branch}`], { cwd: REPO })
         ).stdout.trim();
-        behind = Number(counts.split(/\s+/)[1] ?? 0);
+        // `--left-right` counts the local side first: what is here and not there, then the other way round.
+        [ahead, behind] = counts.split(/\s+/).map((count) => Number(count) || 0);
       } catch {
-        behind = 0; // no upstream yet — not a problem to report
+        ahead = 0; // no upstream yet — not a problem to report
+        behind = 0;
       }
 
       const paths = statusPaths(status);
 
-      return { behind, branch, dirty: paths.length, dirtyPaths: paths };
+      return { ahead, behind, branch, dirty: paths.length, dirtyPaths: paths };
     } catch {
       return null;
     }
@@ -251,6 +276,8 @@ async function handle(request, response) {
     const checks = await runChecks(probe, target);
 
     return send(response, 200, {
+      // What is committed here and not on the remote — the Push button appears for it.
+      ahead: (await probe.git())?.ahead ?? 0,
       checks,
       districts: await districtNames(),
       job: runner.status(),
@@ -287,6 +314,9 @@ async function handle(request, response) {
 
     return send(response, 200, filed);
   }
+  if (request.method === 'POST' && path === '/api/push') {
+    return send(response, 200, await pushOnly());
+  }
   if (request.method === 'POST' && path === '/api/commit') {
     return send(response, 200, await commit(await readJson(request)));
   }
@@ -307,6 +337,25 @@ async function pending() {
   }
 }
 
+/**
+ * Push what is already committed.
+ *
+ * Separate from the commit for one reason: on 2026-08-24 the commit succeeded and only the push failed (no
+ * credentials), and there was then no way to retry it from the panel at all — the capture was in, the
+ * repository was not, and the button that could have sent it insisted on having something new to file.
+ */
+async function pushOnly() {
+  const branch = (await run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: REPO })).stdout.trim();
+
+  return runCommit({
+    branch,
+    log: (line) => runner.push(line),
+    plan: { env: { GIT_TERMINAL_PROMPT: '0', HUSKY: '0' }, steps: [] },
+    push: true,
+    run: (command, args, env) => run(command, args, { cwd: REPO, env: { ...process.env, ...env } }),
+  });
+}
+
 async function readBody(request, limit) {
   const chunks = [];
   let size = 0;
@@ -325,6 +374,15 @@ async function readJson(request) {
   const body = await readBody(request, MAX_JSON);
 
   return body.length === 0 ? {} : JSON.parse(body.toString('utf8'));
+}
+
+/** The origin URL, or an empty string when there is no remote at all. */
+async function remoteUrl() {
+  try {
+    return (await run('git', ['remote', 'get-url', 'origin'], { cwd: REPO })).stdout.trim();
+  } catch {
+    return '';
+  }
 }
 
 function send(response, status, body) {

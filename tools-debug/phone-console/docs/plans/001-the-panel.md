@@ -103,6 +103,15 @@ row: who captures will be committed as, or the two `git config` lines to set it,
 from the repository's own remote (`<owner>@users.noreply.github.com`) rather than invented, and never a
 placeholder for bash to run literally. Not a button — only the operator knows what to be called.
 
+**Then the commit went through and the PUSH failed — `could not read Username`, 2026-08-24.** That is
+`GIT_TERMINAL_PROMPT=0` doing its job (the alternative is git waiting forever on a prompt nobody can see),
+and the cause is a phone with no credential helper for an https remote. Two things came out of it: preflight
+now carries a **push credentials** row, read from CONFIGURATION rather than by asking the network — an
+https remote with no `credential.helper` for github.com warns before a capture is ever filed — and the panel
+grew a **Push** button of its own. Until then a failed push was a dead end: the capture was committed, the
+remote did not have it, and the only button that could send it insisted on having something new to file
+first. The branch's unpushed count is in preflight (`N to push`) and on the button.
+
 **Owed:** the first clean run on the phone itself — the doctor's own verdict there is the measurement this
 step is judged on.
 

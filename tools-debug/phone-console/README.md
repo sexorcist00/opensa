@@ -56,6 +56,9 @@ the game files · **GAME vs OUT resolving to one folder** (2026-08-09: the conve
 reading) · the pak and what it was built from · the two run ports · free space on **both** filesystems (the
 repo is on internal storage, build output is routinely a symlink into shared) · the branch · the wake lock.
 
+**push credentials** — an https remote with no credential helper anywhere fails with _"could not read
+Username"_, and only when a push is attempted. Read from configuration, never by asking the network.
+
 Each check says what to do about it. The verdict is one line at the top.
 
 ## The capture inbox
@@ -69,6 +72,10 @@ memory. `Commit & push` then files it on the current branch.
 had filed in the browser's own memory, so a reload, a restarted server or a phone that put the browser to
 sleep left a written capture the panel then refused to commit — because it had forgotten writing it. The
 section lists whatever is uncommitted under `docs/benchmarks/opensa-engine/`, whoever wrote it and whenever.
+
+**A push that failed is not a dead end.** `Push` sends what is already committed — after a push that died
+for its own reasons (no credentials, no network), the capture is in the repository and the remote is not,
+and the commit button has nothing new to file. Preflight counts what is unpushed; so does the button.
 
 Two refusals, both on purpose:
 
