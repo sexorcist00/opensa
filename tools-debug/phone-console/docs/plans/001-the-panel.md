@@ -96,6 +96,13 @@ slow one from a page). Then the button answered `nothing filed in this session y
 already on disk: the list of what to commit lived in the PAGE's memory, so a reload or a restarted panel lost
 it forever. The list now comes from `git status` — the repository is the state, the page only shows it.
 
+**And the reason the commit had been failing all along, 2026-08-24: `Author identity unknown`.** git on that
+phone had no `user.name` or `user.email` — it never had, because the device had only ever PULLED — and git
+only says so when a commit is attempted. Preflight knows it beforehand, so it now carries a **git identity**
+row: who captures will be committed as, or the two `git config` lines to set it, with the address DERIVED
+from the repository's own remote (`<owner>@users.noreply.github.com`) rather than invented, and never a
+placeholder for bash to run literally. Not a button — only the operator knows what to be called.
+
 **Owed:** the first clean run on the phone itself — the doctor's own verdict there is the measurement this
 step is judged on.
 

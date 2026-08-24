@@ -153,6 +153,27 @@ export async function runChecks(probe, target) {
     });
   }
 
+  // A commit needs an author, and git says so only when one is attempted: "Author identity unknown". On a
+  // phone that has only ever PULLED, it never is — which is how a capture that was written, filed and
+  // committed by one tap turned out to have gone nowhere (2026-08-24).
+  const identity = await probe.identity();
+  add({
+    detail:
+      identity.email === '' || identity.name === ''
+        ? 'not set — every commit will fail with "Author identity unknown"'
+        : `commits as ${identity.name} <${identity.email}>`,
+    id: 'identity',
+    label: 'git identity',
+    state: identity.email === '' || identity.name === '' ? 'fail' : 'ok',
+    // Derived from the remote this repository actually has, never invented: GitHub accepts the account's
+    // noreply address, so a capture from the phone is attributed without publishing a personal one.
+    ...(identity.email === '' || identity.name === ''
+      ? {
+          fix: `git config user.name "${identity.owner || 'your name'}" && git config user.email "${identity.owner || 'you'}@users.noreply.github.com"`,
+        }
+      : {}),
+  });
+
   const git = await probe.git();
   add({
     detail:

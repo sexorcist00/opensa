@@ -122,6 +122,27 @@ const probe = {
       return null;
     }
   },
+  /** Who this repository commits as, and who owns its remote — the fix line is derived from the second. */
+  identity: async () => {
+    const read = async (key) => {
+      try {
+        return (await run('git', ['config', '--get', key], { cwd: REPO })).stdout.trim();
+      } catch {
+        return ''; // `git config --get` exits 1 when the key is unset
+      }
+    };
+    const owner = async () => {
+      try {
+        const url = (await run('git', ['remote', 'get-url', 'origin'], { cwd: REPO })).stdout.trim();
+
+        return /[/:]([^/]+)\/[^/]+?(?:\.git)?$/.exec(url)?.[1] ?? '';
+      } catch {
+        return '';
+      }
+    };
+
+    return { email: await read('user.email'), name: await read('user.name'), owner: await owner() };
+  },
   mtime: async (path) => {
     try {
       return (await stat(join(REPO, path))).mtimeMs;

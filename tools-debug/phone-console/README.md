@@ -49,7 +49,8 @@ two paks welded into one folder.
 
 ## What it checks before you start
 
-`node` · dependency **staleness** (a pull that added deps, the rule `phone-setup.sh` learned the hard way) ·
+`node` · **git identity** (a phone that has only ever pulled has none, and every commit then dies with
+_"Author identity unknown"_ — which git says only when one is attempted) · dependency **staleness** (a pull that added deps, the rule `phone-setup.sh` learned the hard way) ·
 `tsx` · **`sirv`** (the static server's dependency, and therefore whether the pak can be served at all) ·
 the game files · **GAME vs OUT resolving to one folder** (2026-08-09: the convert rewrote the archives it was
 reading) · the pak and what it was built from · the two run ports · free space on **both** filesystems (the

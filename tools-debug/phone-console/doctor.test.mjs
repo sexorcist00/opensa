@@ -14,6 +14,7 @@ function probe(overrides = {}) {
     exists: async (path) => (overrides.missing ?? new Set()).has(path) === false && present.has(path),
     freeBytes: async () => 40 * 1024 ** 3,
     git: async () => ({ behind: 0, branch: 'main', dirty: 0, dirtyPaths: [] }),
+    identity: async () => ({ email: 'phone@users.noreply.github.com', name: 'phone', owner: 'sexorcist00' }),
     mtime: async (path) => (path === 'package-lock.json' ? 100 : 200),
     nodeVersion: 'v22.4.0',
     portOpen: async () => false,
@@ -56,6 +57,20 @@ describe('phone console doctor', () => {
 
       expect(find(checks, 'webapp')).toMatchObject({ job: 'webapp', state: 'fail' });
       expect(find(checks, 'webapp').detail).toMatch(/NOT the app in the repo/);
+    });
+
+    it('fails when git has no author, and derives the fix from the remote', async () => {
+      // 2026-08-24 on the phone: every commit died with "Author identity unknown", which git only says when
+      // one is attempted — so the capture the operator had filed went nowhere and the panel looked broken.
+      const checks = await runChecks(
+        probe({ identity: async () => ({ email: '', name: '', owner: 'sexorcist00' }) }),
+        TARGET,
+      );
+
+      expect(find(checks, 'identity').state).toBe('fail');
+      expect(find(checks, 'identity').fix).toContain('sexorcist00@users.noreply.github.com');
+      // Not a button: only the operator knows what to be called, so nothing here can run it for them.
+      expect(find(checks, 'identity').job).toBeUndefined();
     });
 
     it('fails on a missing sirv, because that is the server that hands out the pak', async () => {
@@ -139,6 +154,13 @@ describe('phone console doctor', () => {
 
       expect(find(checks, 'webapp')).toMatchObject({ state: 'ok' });
       expect(find(checks, 'webapp').fix).toBeUndefined();
+    });
+
+    it('says who the captures will be committed as', async () => {
+      expect(find(await runChecks(probe(), TARGET), 'identity')).toMatchObject({
+        detail: 'commits as phone <phone@users.noreply.github.com>',
+        state: 'ok',
+      });
     });
 
     it('reports a port that is already serving as reuse rather than a problem', async () => {
