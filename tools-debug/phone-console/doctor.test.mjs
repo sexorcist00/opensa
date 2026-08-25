@@ -23,6 +23,7 @@ function probe(overrides = {}) {
     realpath: async (path) => `/home/user/opensa/${path}`,
     rebasing: async () => false,
     termux: true,
+    tilesArchive: async () => null,
     wakeLock: true,
     ...overrides,
   };
@@ -142,7 +143,7 @@ describe('phone console doctor', () => {
       const checks = await runChecks(probe(), TARGET);
 
       expect(verdict(checks).state).toBe('ok');
-      expect(find(checks, 'pak').detail).toBe('built 2026-08-23 · textures astc');
+      expect(find(checks, 'pak').detail).toBe('built 2026-08-23 · textures astc · no tiles.pmtiles beside it');
       expect(find(checks, 'node').detail).toBe('v22.4.0 · arm64 · Termux');
     });
 
@@ -186,6 +187,12 @@ describe('phone console doctor', () => {
 
       expect(find(checks, 'push-auth')).toMatchObject({ state: 'warn' });
       expect(find(checks, 'push-auth').fix).toContain('gh auth login');
+    });
+
+    it('says the flat map’s pyramid is beside the pak, and how big it is', async () => {
+      const checks = await runChecks(probe({ tilesArchive: async () => 12 * 1024 * 1024 }), TARGET);
+
+      expect(find(checks, 'pak').detail).toContain('tiles.pmtiles 12.00 MB');
     });
 
     it('says who the captures will be committed as', async () => {

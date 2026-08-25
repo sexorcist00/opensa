@@ -117,11 +117,14 @@ export async function runChecks(probe, target) {
 
   const manifest = await probe.readJson(`${target.out}/pak/manifest.json`);
   const report = await probe.readJson(`${target.out}/pak/report.json`);
+  const tiles = await probe.tilesArchive(target.out);
   add({
     detail:
       manifest === null
         ? 'no pak yet — the next run converts one (minutes to hours)'
-        : `built ${report?.build?.at ?? 'unknown'} · textures ${report?.build?.textures ?? 'unstated'}`,
+        : `built ${report?.build?.at ?? 'unknown'} · textures ${report?.build?.textures ?? 'unstated'} · ${
+            tiles === null ? 'no tiles.pmtiles beside it' : `tiles.pmtiles ${(tiles / 1024 / 1024).toFixed(2)} MB`
+          }`,
     id: 'pak',
     label: 'pak',
     state: manifest === null ? 'warn' : 'ok',

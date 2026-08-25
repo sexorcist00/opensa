@@ -132,6 +132,16 @@ English-only for anything committed. This panel is the one writing committed fil
 does not type English by default, so the rule belongs at the door rather than in a later cleanup — a note
 carrying Cyrillic is refused by name, and the panel's own separators keep working.
 
+**A push that could only be rejected, 2026-08-25.** The phone committed while the remote had moved, and the
+`Push` button ran a push git could only refuse (`! [rejected] … fetch first`). The panel already KNEW — the
+behind-count is in preflight — so the button was a trap rather than an option. It now reads both sides: while
+the remote is ahead it says `Pull first (N behind)` and is disabled, and `/api/push` refuses the same case by
+name, because a page can be seconds stale. The way forward is the diverged row's rebase, one row up.
+
+The same round added a line the flat map needed: the **pak** row says whether `tiles.pmtiles` is beside the
+pak and how big it is, so "did my upload land" is on the screen rather than a question — the archive is
+gitignored, so nothing else on the panel could ever have shown it.
+
 **Owed:** the first clean run on the phone itself — the doctor's own verdict there is the measurement this
 step is judged on.
 

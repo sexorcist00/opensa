@@ -403,8 +403,11 @@
         // Committed here and not on the remote — after a push that failed for its own reasons, this is the
         // only way back to it, since the commit button insists on having something new to file.
         const ahead = state.ahead ?? 0;
-        $('push').disabled = ahead === 0;
-        $('push').textContent = ahead === 0 ? 'Push' : `Push ${ahead}`;
+        const behind = state.behind ?? 0;
+        // Pushing while the remote is ahead can only be rejected — the answer is to take the other side
+        // first, and a button that can only fail is a trap rather than an option.
+        $('push').disabled = ahead === 0 || behind > 0;
+        $('push').textContent = behind > 0 ? `Pull first (${behind} behind)` : ahead === 0 ? 'Push' : `Push ${ahead}`;
         $('stop').disabled = !state.job.running;
         urls();
       }

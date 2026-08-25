@@ -207,6 +207,15 @@ const probe = {
   /** A rebase that stopped part-way leaves one of these behind, and the tree is mid-history until it ends. */
   rebasing: async () => existsSync(join(REPO, '.git/rebase-merge')) || existsSync(join(REPO, '.git/rebase-apply')),
   termux: Boolean(process.env.PREFIX) && existsSync('/data/data/com.termux'),
+  /** The flat map's pyramid beside the pak, in bytes, or null when it is not there — so "did my upload land"
+   *  is a line on the screen rather than a question (201/6-02). */
+  tilesArchive: async (out) => {
+    try {
+      return (await stat(join(REPO, out, 'tiles.pmtiles'))).size;
+    } catch {
+      return null;
+    }
+  },
   wakeLock: existsSync('/data/data/com.termux/files/usr/bin/termux-wake-lock'),
 };
 
@@ -278,8 +287,10 @@ async function handle(request, response) {
     const checks = await runChecks(probe, target);
 
     return send(response, 200, {
-      // What is committed here and not on the remote — the Push button appears for it.
+      // What is committed here and not on the remote, and what is there and not here — the Push button reads
+      // both: pushing while behind can only be rejected, and a button that can only fail is a trap.
       ahead: (await probe.git())?.ahead ?? 0,
+      behind: (await probe.git())?.behind ?? 0,
       checks,
       districts: await districtNames(),
       job: runner.status(),
@@ -348,6 +359,13 @@ async function pending() {
  */
 async function pushOnly() {
   const branch = (await run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: REPO })).stdout.trim();
+  // Refused here as well as disabled on the page: a page can be seconds stale, and a push while the remote
+  // is ahead cannot succeed — git rejects it with `fetch first`, and the operator reads a failure where the
+  // answer was "take the other side first" (2026-08-25).
+  const state = await probe.git();
+  if (state !== null && state.behind > 0) {
+    throw new Error(`${state.behind} commit(s) from the remote are missing here — pull (rebase) before pushing`);
+  }
 
   return runCommit({
     branch,
