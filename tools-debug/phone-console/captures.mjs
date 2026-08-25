@@ -21,6 +21,9 @@
 export const CAPTURE_DIR = 'docs/benchmarks/opensa-engine';
 /** Long enough to say what the run was for. Shorter than this is not a note, it is a placeholder. */
 const MIN_NOTE = 12;
+/** Any letter of the Cyrillic block, including its supplements — the one script this repository keeps meeting. */
+const CYRILLIC = /[\u0400-\u052F]/;
+
 /** PMTiles v3 archives start with these seven bytes — an HTML error page saved as `tiles.pmtiles` does not. */
 const PMTILES_MAGIC = 'PMTiles';
 
@@ -156,6 +159,12 @@ export function withNote(payload, note, facts) {
     throw new Error(
       `say what this run was for (at least ${MIN_NOTE} characters) — a row with no conditions cannot be compared`,
     );
+  }
+  // English only, repo-wide (`CLAUDE.md`) — and this panel is the one writing committed files on a device
+  // whose operator types Russian, so it is where the rule has to be enforced rather than cleaned up later
+  // (2026-08-24: the first capture landed with a Russian note and had to be rewritten after the fact).
+  if (CYRILLIC.test(trimmed)) {
+    throw new Error('the note must be in English — this file is committed, and the repository is English only');
   }
   const proven = [
     facts.device,

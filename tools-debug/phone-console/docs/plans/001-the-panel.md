@@ -121,6 +121,17 @@ safe for a precise reason: the phone's commits are capture files nobody else wri
 remote yet, so they are replayed rather than rewritten. If a rebase ever stops part-way, preflight says THAT
 too, with `--continue` and `--abort` in words — not as buttons, because neither is a tap.
 
+**THE LOOP CLOSED, 2026-08-23.** A capture was filed on the phone, committed by the phone and pushed by the
+phone: [`2026-08-23-mobile-pinned-district-inventory.json`](../../../../docs/benchmarks/opensa-engine/2026-08-23-mobile-pinned-district-inventory.json)
+— 433 lines of inventory report that reached the repository without passing through a chat window, which is
+what this panel was built for. It is also [201/2-03](../../../../docs/plans/201-dispatch-console/readme.md)'s
+first row on the pinned district from a real device.
+
+One rule it broke on the way, and the panel now enforces it: **the note came in Russian**, and `CLAUDE.md` is
+English-only for anything committed. This panel is the one writing committed files on a device whose operator
+does not type English by default, so the rule belongs at the door rather than in a later cleanup — a note
+carrying Cyrillic is refused by name, and the panel's own separators keep working.
+
 **Owed:** the first clean run on the phone itself — the doctor's own verdict there is the measurement this
 step is judged on.
 
@@ -149,7 +160,7 @@ that reads a log it cannot cite has learned nothing the next session can use.
 
 | Step | State |
 | --- | --- |
-| 01 preflight + rituals + capture inbox | **DONE 2026-08-23** — verified in the container end to end (35 tests, every guard exercised). The first phone attempt failed on a dirty `package.json` written by our own `phone:setup`; fixed at the source (`--no-save`) and now reported by the doctor. Owed: the first clean run on the phone |
+| 01 preflight + rituals + capture inbox | **DONE 2026-08-23, and PROVEN on the device: a capture was filed, committed and pushed by the phone itself.** — verified in the container end to end (35 tests, every guard exercised). The first phone attempt failed on a dirty `package.json` written by our own `phone:setup`; fixed at the source (`--no-save`) and now reported by the doctor. Owed: the first clean run on the phone |
 | 02 the console posts its own captures | not started |
 | 03 the panel serves the pak itself | not started — gated on the doctor reporting `sirv` missing on a real device |
 | 04 a read-only window for an agent | ruled out 2026-08-23 |

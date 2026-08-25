@@ -24,6 +24,14 @@ describe('phone console captures', () => {
       expect(() => withNote({ runs: [] }, 'ok', FACTS)).toThrow(/at least 12 characters/);
     });
 
+    it('refuses a note that is not in English', () => {
+      // The repository is English only, and this panel writes committed files on a device whose operator
+      // does not type English by default — so the rule is enforced at the door, not repaired afterwards.
+      expect(() => withNote({}, 'Прогон на телефоне', FACTS)).toThrow(/must be in English/);
+      // The panel's own separators are not letters and must keep working.
+      expect(withNote({}, 'the ASTC side of the A/B', FACTS).note).toContain(' · ');
+    });
+
     it('refuses a file that is not a PMTiles archive', () => {
       // Silent by nature: an HTML error page saved under the right name makes the flat map draw nothing,
       // which looks exactly like a map that has not loaded.

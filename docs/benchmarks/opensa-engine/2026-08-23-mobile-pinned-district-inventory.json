@@ -429,5 +429,5 @@
     "residencyMb": 76.14103603363037,
     "triangles": 277970
   },
-  "note": "Прогон на телефоне — MGA-LX3 · node v24.18.0 · pak original rect 5,-7,6,-6 textures astc built 17:45 12-08-2026 · captured through tools-debug/phone-console"
+  "note": "The first field run taken through the phone console (tools-debug/phone-console) — and the first inventory capture on the PINNED district from a real phone. IDLE-DOMINATED: render-on-demand (201/4-01) skipped 599 of the frames in the window, so the 100 ms idle poll is the histogram hump at 94-100 ms and fps 16 is the rate of DRAWN frames, not a frame cost. Read the CPU body and the worst frame instead. GPU time is not measurable on this adapter (no timestamp-query). Device MGA-LX3, ARM Bifrost, 403x334 CSS at DPR 2 · node v24.18.0 · pak original rect 5,-7,6,-6 textures astc built 17:45 12-08-2026 · captured through tools-debug/phone-console"
 }
