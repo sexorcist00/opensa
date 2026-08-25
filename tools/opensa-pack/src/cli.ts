@@ -10,6 +10,12 @@
  *     [--stochastic <file>[,<file>…]]
  *     [--checkpoints <dir> [--resume]]   per-chunk weld checkpoints (pmb plan 006); --resume continues from them
  *
+ * **`--resume` here guards the CHUNK PLAN and nothing else.** It refuses a journal whose chunk rects differ,
+ * and says nothing about a journal written with different textures, a different game tree or older code — a
+ * caller that changes one of those and resumes gets a pak no set of flags reproduces, silently. pmb's own
+ * `resume.json` carries the full "sources, flags or code moved" check; a caller driving this CLI directly
+ * does not get it and has to bring its own (`scripts/phone.sh` stamps a recipe beside the journal).
+ *
  * REMOVED FLAGS (2026-07-19, user): `--cell-size` (the pak and the runtime must agree on it and nothing
  * checked that — it is the `CELL_SIZE` constant now), `--chunk-cells` (a welding tuning knob from the A2
  * speed work; the default stands), `--no-sunvis` (it said exactly what omitting `--bakes` says), and

@@ -189,16 +189,49 @@ if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
   #
   # This device does not decide when a convert ends: Android does. Termux gets killed with the screen ON and
   # the app merely backgrounded (2026-08-25, EMUI), and a run that died at minute 40 of 50 used to cost all
-  # fifty. The pack journals every weld chunk under `$CKPT`, and `--resume` re-enters at the last finished
-  # one — it REFUSES, naming the difference, if the sources, the flags or the code changed since that run,
-  # so a resumed build is still a build somebody can reproduce (pmb plan 006).
+  # fifty. The pack journals every weld chunk under `$CKPT` and `--resume` re-enters at the first chunk
+  # without one, replaying the finished ones onto fresh state — so deleting the half-written `pak/` above is
+  # correct and costs nothing: the pak is assembled after the loop, never during it.
+  #
+  # **The pack's own refusal covers ONE thing: a different CHUNK PLAN.** `openCheckpoints` compares the chunk
+  # rects and nothing else, so a journal written with `TEXTURES=astc` would replay happily into an
+  # `rgba8` run and produce a pak whose contents no set of flags reproduces — silently, which is the exact
+  # failure the resume rule exists to prevent. (The full "sources, flags or code moved" guard lives in pmb's
+  # `resume.json`; this script drives `opensa-pack` directly and does not get it.) So the recipe is stamped
+  # beside the journal here, and a resume over a changed one is refused with the difference named.
   CKPT="$OUT/.pack-checkpoints"
+  RECIPE_NOW="GAME=$(readlink -f "$GAME" 2>/dev/null || echo "$GAME")
+RECT=$RECT
+TEXTURES=$TEXTURES
+BAKE=$BAKE
+MAPOBJ=$MAPOBJ
+MODELS=$MODELS
+VEHICLES=$([ "$MODELS" = 0 ] && echo '-' || echo "$VEHICLES")
+PEDS=$([ "$MODELS" = 0 ] && echo '-' || echo "$PEDS")"
   args=(--game "$GAME" --out "$OUT" --textures "$TEXTURES" --max-texture 256 --rect "$RECT" --no-ao --platforms mobile
         --checkpoints "$CKPT")
   if [ -d "$CKPT" ] && [ "$REBUILD" != 1 ]; then
-    say "resuming the last convert from $CKPT (delete it, or REBUILD=1, to start over)"
-    args+=(--resume)
+    if [ ! -f "$CKPT/.recipe" ]; then
+      # A journal from before the stamp existed. Its recipe is unknowable, so it cannot be resumed — but
+      # refusing and demanding REBUILD=1 costs the same convert as dropping it and says something alarming
+      # for what is really just an upgrade. Drop it, say so, convert.
+      say "the journal in $CKPT predates the recipe stamp — starting this convert fresh (once)"
+      rm -rf "$CKPT"
+    elif [ "$(cat "$CKPT/.recipe")" = "$RECIPE_NOW" ]; then
+      say "resuming the last convert from $CKPT (REBUILD=1 starts over)"
+      args+=(--resume)
+    else
+      echo "resume refused: the journal in $CKPT was written for a different recipe." >&2
+      echo "  it holds:  $(tr '\n' ' ' <"$CKPT/.recipe")" >&2
+      echo "  you asked: $(echo "$RECIPE_NOW" | tr '\n' ' ')" >&2
+      echo >&2
+      echo "Resuming across that would weld the old chunks into the new pak, and no set of flags would" >&2
+      echo "reproduce the result. Either put the knob back, or start over:" >&2
+      echo "  REBUILD=1 npm run phone" >&2
+      exit 1
+    fi
   fi
+  mkdir -p "$CKPT" && printf '%s' "$RECIPE_NOW" >"$CKPT/.recipe"
   [ "$TEXTURES" = astc ] && [ "$ASTC_THREADS" != 0 ] && args+=(--astc-threads "$ASTC_THREADS")
   # Said out loud because it is the slow setting and the log otherwise looks stuck: the encode is the LAST
   # stage, and on this device it is the one that has to run without spawning a single worker isolate.
@@ -218,6 +251,8 @@ if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
   fi
   # --platforms mobile fails the pack when anything it wrote needs a GPU feature a phone lacks (BC), so a pak
   # that survives this line is one the device can actually open.
+  # (On success the journal is deleted just below — it is a rope for a crash, not an artefact, and it holds a
+  #  full copy of every chunk's produced inputs on a device the doctor already warns about free space on.)
   if ! NODE_OPTIONS="--max-old-space-size=$HEAP" tsx tools/opensa-pack/src/cli.ts "${args[@]}"; then
     echo "convert failed — nothing was served" >&2
     if [ "$TEXTURES" = astc ]; then
@@ -229,6 +264,7 @@ if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
     fi
     exit 1
   fi
+  rm -rf "$CKPT"
 else
   # Reuse is the normal case — but only after the pak on disk is asked whether it is the one being requested.
   # Until this check existed, `RECT=8,-8,11,-5 npm run phone` over an existing pak served the OLD district and

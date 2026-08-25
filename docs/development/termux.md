@@ -71,11 +71,27 @@ around the same *stage* every time rather than after the same *elapsed time*, it
 *Our half, and it is the one that makes the kill survivable.* **A convert that is killed is resumed, not
 restarted.** `scripts/phone.sh` passes `--checkpoints "$OUT/.pack-checkpoints"` to the pack, which journals
 every weld chunk, and adds `--resume` on the next run when that journal is there — so a run that dies at
-minute 40 of 50 costs the last chunk rather than all fifty. The resume REFUSES, naming the difference, if the
-sources, the flags or the code moved since that run; read the refusal rather than working around it, because
-a resumed build over changed inputs is a build nobody can reproduce (pmb plan 006). `REBUILD=1` deletes the
-journal with the pak and starts over. The panel's preflight says *"unfinished convert"* when a journal is
-sitting there without a pak, so the answer to "did I lose the forty minutes" is on screen before it is asked.
+minute 40 of 50 costs the last chunk rather than all fifty. The finished chunks replay onto fresh state and
+the pak is assembled after the loop, never during it, which is why deleting the half-written `pak/` first is
+correct. `REBUILD=1` deletes the journal with the pak; a successful convert deletes it too, because it is a
+rope for a crash rather than an artefact and it holds a full copy of every chunk's produced inputs.
+
+**What guards a resume here, exactly — the guard is NOT the one pmb has.** `opensa-pack`'s own refusal
+compares the CHUNK PLAN and nothing else, so a journal written with `TEXTURES=astc` would replay into an
+`rgba8` run without a word. The full "the sources, the flags or the code moved" check lives in **pmb's**
+`resume.json` (pmb plan 006), and this script drives `opensa-pack` directly, so it does not get it. What
+covers the gap is a recipe stamped beside the journal by `phone.sh` — game path, rect, textures, bake,
+map-objects, models, vehicles, peds — and compared before `--resume` is added:
+
+| The journal | What happens |
+| --- | --- |
+| absent | a normal convert; the recipe is stamped |
+| same recipe | **resumed** at the first chunk without a checkpoint |
+| different recipe | **refused**, both recipes printed, `REBUILD=1` offered — resuming across it would weld the old chunks into the new pak and no set of flags would reproduce the result |
+| no stamp (written before 2026-08-25) | dropped once, with a line saying so, and the convert starts fresh |
+
+The panel's preflight says *"unfinished convert"* when a journal is sitting there without a pak, so the
+answer to "did I lose the forty minutes" is on screen before it is asked.
 
 ## What this does to the measurement plan
 
