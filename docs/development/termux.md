@@ -93,6 +93,16 @@ map-objects, models, vehicles, peds — and compared before `--resume` is added:
 The panel's preflight says *"unfinished convert"* when a journal is sitting there without a pak, so the
 answer to "did I lose the forty minutes" is on screen before it is asked.
 
+**And the log outlives the kill.** `build/.phone/panel-jobs.log` gets every job line as it is printed,
+unbuffered, because the panel's own ring buffer dies with the panel — which is the same event. After a
+restart the panel replays that tail, so the two questions worth asking about a kill (*which stage* and *how
+long in*) can be answered from the file rather than from having watched it:
+
+```bash
+tail -40 build/.phone/panel-jobs.log     # where it stopped
+grep -c chunk build/.phone/panel-jobs.log # how far the weld got
+```
+
 ## What this does to the measurement plan
 
 [201](../plans/201-dispatch-console/readme.md) is written as *desktop baseline first, phone second* — chain 1

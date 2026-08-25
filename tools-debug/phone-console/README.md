@@ -55,6 +55,12 @@ along so the links below open the right pak. That is not tidiness either: `phone
 against the recipe it was asked for and refuses when they differ, so a map-only run pointed at a full pak's
 folder would serve nothing, and forcing a rebuild instead would throw the full pak away on every press.
 
+**The log survives the kill, because the panel does not.** Every job line is appended to
+`build/.phone/panel-jobs.log` as it is printed, unbuffered — the ring buffer lives in the panel's memory, and
+on this device the thing that kills a convert kills the panel holding the record of it, so "where did it die"
+used to be answerable only by watching it happen. A panel that comes up with nothing running replays the tail
+of the previous session into the log pane, marked as such.
+
 **A convert that Android killed is resumed, not restarted.** This device kills Termux with the screen on and
 the app merely backgrounded, so a run dying part-way is the normal case here. `scripts/phone.sh` journals
 every weld chunk and re-enters at the last finished one, and preflight says _"unfinished convert"_ when a

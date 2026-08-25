@@ -10,6 +10,8 @@
  * one because the alternative is a queue nobody watches on a screen that sleeps.
  */
 import { spawn } from 'node:child_process';
+import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 /** Env a `phone` run may carry, with what each accepts. Anything else the form sends is DROPPED rather than
  *  passed on: this is the list `scripts/phone.sh` documents, and an unknown key is a typo that would
@@ -124,13 +126,27 @@ export const JOBS = {
  * and on reconnect the page must show what happened rather than an empty box waiting for the next line.
  */
 export class JobRunner {
-  /** @param {{cwd: string, onLine: (line: string) => void, ringLines?: number}} options */
+  /** @param {{cwd: string, logFile?: string, onLine: (line: string) => void, ringLines?: number}} options */
   constructor(options) {
     this.cwd = options.cwd;
     this.onLine = options.onLine;
     this.ringLines = options.ringLines ?? 400;
+    /**
+     * Where every line is ALSO written, and the reason it exists: this device kills Termux, which takes the
+     * panel and its ring buffer with it — so the record of a convert that died was itself destroyed by the
+     * thing that killed it, and "where did it die" could only be answered by watching it happen. The file
+     * outlives the process.
+     */
+    this.logFile = options.logFile;
     this.lines = [];
     this.current = null;
+    if (this.logFile !== undefined) {
+      try {
+        mkdirSync(dirname(this.logFile), { recursive: true });
+      } catch {
+        this.logFile = undefined;
+      }
+    }
   }
 
   /** Everything the buffer still holds, for a page that just connected. */
@@ -138,11 +154,37 @@ export class JobRunner {
     return this.lines;
   }
 
+  /**
+   * The tail of what the LAST session logged, for a panel that came up after a kill.
+   *
+   * Read from disk rather than memory on purpose: the interesting case is the one where this process is not
+   * the process that wrote it.
+   */
+  previous(lines = 60) {
+    if (this.logFile === undefined) {
+      return [];
+    }
+    try {
+      return readFileSync(this.logFile, 'utf8').split('\n').filter(Boolean).slice(-lines);
+    } catch {
+      return [];
+    }
+  }
+
   push(line) {
     const clean = stripAnsi(line);
     this.lines.push(clean);
     if (this.lines.length > this.ringLines) {
       this.lines.splice(0, this.lines.length - this.ringLines);
+    }
+    if (this.logFile !== undefined) {
+      // Synchronous and unbuffered: the whole point is the line that was written a moment before the process
+      // was killed, and a stream that batches is a stream that loses exactly that line.
+      try {
+        appendFileSync(this.logFile, `${new Date().toISOString().slice(11, 19)} ${clean}\n`);
+      } catch {
+        this.logFile = undefined;
+      }
     }
     this.onLine(clean);
   }

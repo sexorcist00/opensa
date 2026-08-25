@@ -51,6 +51,10 @@ const MAX_UPLOAD = 512 * 1024 * 1024;
 const listeners = new Set();
 const runner = new JobRunner({
   cwd: REPO,
+  // Beside the servers' own logs (`scripts/phone.sh` writes `build/.phone/{app,static}.log` there). Every job
+  // line lands here as well as in the ring buffer, because on this device the thing that kills a convert
+  // kills the panel holding the record of it — see `jobs.mjs`.
+  logFile: join(REPO, 'build/.phone/panel-jobs.log'),
   onLine: (line) => {
     for (const listener of listeners) {
       listener(line);
@@ -436,7 +440,20 @@ function streamLog(response) {
     'content-type': 'text/event-stream',
   });
   const write = (line) => response.write(`data: ${JSON.stringify(line)}\n\n`);
-  for (const line of runner.backlog()) {
+  const backlog = runner.backlog();
+  if (backlog.length === 0) {
+    // Nothing in memory means this panel has not run anything — which after a kill is exactly when the
+    // operator most needs to see what the LAST one was doing when it stopped.
+    const previous = runner.previous();
+    if (previous.length > 0) {
+      write('— from the previous session (the panel was restarted) —');
+      for (const line of previous) {
+        write(line);
+      }
+      write('— end of the previous session —');
+    }
+  }
+  for (const line of backlog) {
     write(line);
   }
   listeners.add(write);
