@@ -6,7 +6,7 @@ import { type FrameCpuSample, FrameInventory, UNNAMED_DISTRICT } from './invento
 
 const NO_SPANS: FrameSpanTotals = { byName: [], totalMs: 0 };
 /** A host that timed nothing — most tests are about the frame, not about where its CPU time went. */
-const NO_CPU: FrameCpuSample = { bodyMs: 0, segments: NO_SPANS };
+const NO_CPU: FrameCpuSample = { bodyMs: 0, canvasPixels: 806 * 668, segments: NO_SPANS };
 /** A streamer with nothing to do — most tests are about the frame, not about what the world was loading. */
 const IDLE: StreamStats = {
   blobMs: 0,
@@ -21,9 +21,14 @@ const IDLE: StreamStats = {
 };
 
 /** One loop body: its wall time, and the segments inside it. */
-function cpu(bodyMs: number, segments: readonly (readonly [string, number])[] = []): FrameCpuSample {
+function cpu(
+  bodyMs: number,
+  segments: readonly (readonly [string, number])[] = [],
+  canvasPixels = 806 * 668,
+): FrameCpuSample {
   return {
     bodyMs,
+    canvasPixels,
     segments: { byName: segments, totalMs: segments.reduce((sum, [, ms]) => sum + ms, 0) },
   };
 }
@@ -317,6 +322,41 @@ describe('FrameInventory', () => {
 
       expect(worstFrame.bodyMs).toBe(1068);
       expect(worstFrame.segmentsMs).toEqual([['engine-frame', 1050]]);
+    });
+
+    it('records the CONDITIONS the worst frame happened under, not only its cost', () => {
+      // The 2026-08-23 field capture had a 600 ms frame and nothing to attribute it to: no time, no surface,
+      // no idea whether the streamer was delivering. A number that large with no conditions cannot be acted
+      // on, only argued about.
+      const inventory = new FrameInventory();
+      inventory.sample(32, stats(), NO_SPANS, NO_CPU, { ...IDLE, created: 9 });
+      inventory.sample(
+        700,
+        stats({ cellsVisible: 12, drawsRecorded: 140 }),
+        NO_SPANS,
+        cpu(680, [['overlay-2d', 500]], 1280 * 720),
+        { ...IDLE, created: 11, evicted: 1, pendingCells: 3 },
+      );
+
+      const { worstFrame } = inventory.report(CONTEXT).cpu;
+
+      expect(worstFrame.dtMs).toBe(700);
+      expect(worstFrame.canvasPixels).toBe(1280 * 720);
+      expect(worstFrame.cellsVisible).toBe(12);
+      expect(worstFrame.draws).toBe(140);
+      expect(worstFrame.pending).toBe(3);
+      // Per-frame, from the driver's RUNNING totals: two created in this frame, not the eleven since boot.
+      expect(worstFrame.cellsCreated).toBe(2);
+      expect(worstFrame.cellsEvicted).toBe(1);
+      expect(worstFrame.atMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('does not charge the first sampled frame with everything the streamer did before the window', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(32, stats(), NO_SPANS, NO_CPU, { ...IDLE, created: 40 });
+      inventory.sample(32, stats(), NO_SPANS, cpu(9), { ...IDLE, created: 41 });
+
+      expect(inventory.report(CONTEXT).cpu.worstFrame.cellsCreated).toBe(1);
     });
 
     it("carries the STREAMER's own numbers, which the console used to drop on the floor", () => {

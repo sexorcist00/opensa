@@ -527,7 +527,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     }
     // Drained BEFORE this frame opens a segment of its own, so what comes out is the PREVIOUS body — the
     // work that actually ran inside the `dt` interval about to be reported.
-    const cpu: FrameCpuSample = { bodyMs, segments: loopCpu.drain() };
+    const cpu: FrameCpuSample = { bodyMs, canvasPixels: canvas.width * canvas.height, segments: loopCpu.drain() };
 
     const ops = options.ops();
     const aspect = canvas.width / Math.max(1, canvas.height);

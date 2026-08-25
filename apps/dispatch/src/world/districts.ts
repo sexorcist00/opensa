@@ -50,4 +50,21 @@ export const DISTRICTS: Readonly<Record<string, MeasurementDistrict>> = {
       'watches — not an empty stretch that flatters every number',
     spawn: [1480, -1720, 20],
   },
+  /**
+   * The pinned district with one cell added on every side — same centre, same opening point, 4x the ground.
+   *
+   * Sized from the 2026-08-23 field capture rather than by feel: 4 cells measured **76.1 MB resident, of
+   * which `target` is 37.5 and does not grow with the world** (1/01's finding), so the content is ~38.6 MB
+   * for 4 cells. Even with every one of these 16 cells resident at once that is ~192 MB — inside the
+   * 300-500 MB ceiling with room, and the streamer keeps far less than all of them anyway.
+   */
+  'los-santos-wide': {
+    at: [1480, -1720],
+    cells: [4, -8, 7, -5],
+    note:
+      'the pinned district extended one cell on every side (1000x1000 units, same centre) — for a run ' +
+      'that needs somewhere to fly to rather than a 500 m square. NOT the chain series: a capture here ' +
+      'is a valid measurement of more world, and its numbers are not comparable to the pinned rect',
+    spawn: [1480, -1720, 20],
+  },
 };

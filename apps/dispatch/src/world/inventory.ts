@@ -38,6 +38,10 @@ import { DISTRICTS, PINNED_DISTRICT } from './districts';
 export interface FrameCpuSample {
   /** rAF callback start → end, ms: everything the host's main thread did for that frame. */
   readonly bodyMs: number;
+  /** The drawing buffer this frame was rendered into, in pixels. Carried for ONE reason: a size change
+   *  rebuilds every render target, and a phone changes it without being asked — the browser's own chrome
+   *  collapsing is a resize. Without it a frame that cost half a second has no candidate explanation. */
+  readonly canvasPixels: number;
   /** Named segments inside the body. Their sum is ≤ `bodyMs`; the remainder is untimed glue. */
   readonly segments: FrameSpanTotals;
 }
@@ -58,7 +62,7 @@ export interface InventoryCpu {
   /** The WORST body of the window, with its own segment breakdown rather than the window's averages. Two
    *  captures in a row made the worst frame the interesting one, and a mean cannot answer which part of it
    *  grew — 1068 ms of body says nothing about whether it was the render, the overlay or the streamer. */
-  readonly worstFrame: { readonly bodyMs: number; readonly segmentsMs: readonly (readonly [string, number])[] };
+  readonly worstFrame: InventoryWorstFrame;
 }
 
 /** One pass or cost centre, averaged over the sampled window. */
@@ -234,6 +238,33 @@ export interface InventoryStreaming {
   readonly worstCreateMs: number;
 }
 
+/**
+ * The most expensive frame of the window, WITH the conditions it happened under.
+ *
+ * The 2026-08-23 field capture is why this carries more than a number: its worst frame was 600.3 ms — 422 of
+ * them in `overlay-2d` and 163 in `engine-frame`, two segments that do not both inflate for the same reason —
+ * and nothing in the report said when it happened, what the surface was, or whether the streamer was
+ * delivering at the time. A number that large with no conditions cannot be acted on, only argued about.
+ */
+export interface InventoryWorstFrame {
+  /** Ms into the sampled window. A cost at 200 ms is cold start; the same cost at 40 s is not. */
+  readonly atMs: number;
+  readonly bodyMs: number;
+  /** Drawing-buffer pixels for THIS frame — compare with the report's `surface` to see a resize. */
+  readonly canvasPixels: number;
+  /** Cells created and evicted in this frame alone (the driver's totals are running, so these are deltas —
+   *  summing them is the mistake the 2026-08-12 capture made, and it reported 2454 creates for 4 cells). */
+  readonly cellsCreated: number;
+  readonly cellsEvicted: number;
+  readonly cellsVisible: number;
+  readonly draws: number;
+  /** The interval this frame took, which is what an operator felt. */
+  readonly dtMs: number;
+  /** Cells still on their way when it happened. */
+  readonly pending: number;
+  readonly segmentsMs: readonly (readonly [string, number])[];
+}
+
 /** What `?district=` defaults to. Exported so the reader and the writer cannot drift apart — the check for
  *  "nobody named the district" is a string comparison, and a second copy of it would silently stop matching. */
 export const UNNAMED_DISTRICT = 'unnamed — pass ?district=';
@@ -269,6 +300,8 @@ export class FrameInventory {
   private readonly cpuTotals = new Map<string, number>();
   private readonly dts: number[] = [];
   private readonly maxima = new Map<string, number>();
+  /** The driver's create/evict totals as of the previous sample, so a frame's own count is a DELTA. */
+  private previousStream = { created: 0, evicted: 0 };
   private readonly spanTotals = new Map<string, number>();
   private started = 0;
   private readonly stream = {
@@ -281,10 +314,21 @@ export class FrameInventory {
     worstCreateMs: 0,
   };
   private readonly sums = new Map<string, number>();
-  private readonly worldLast = { cellsTotal: 0, cellsVisible: 0, draws: 0, residencyBytes: 0, triangles: 0 };
 
+  private readonly worldLast = { cellsTotal: 0, cellsVisible: 0, draws: 0, residencyBytes: 0, triangles: 0 };
   /** The worst body seen, kept WITH its own segments — the mean cannot say which part of it grew. */
-  private worst: { bodyMs: number; segmentsMs: readonly (readonly [string, number])[] } = { bodyMs: 0, segmentsMs: [] };
+  private worst: InventoryWorstFrame = {
+    atMs: 0,
+    bodyMs: 0,
+    canvasPixels: 0,
+    cellsCreated: 0,
+    cellsEvicted: 0,
+    cellsVisible: 0,
+    draws: 0,
+    dtMs: 0,
+    pending: 0,
+    segmentsMs: [],
+  };
 
   report(context: {
     build: string;
@@ -405,6 +449,9 @@ export class FrameInventory {
       // from this call, since it is a reading rather than an interval.
       this.started = performance.now();
       this.worldFrom(stats);
+      // Seed the running totals here too: without it the SECOND frame claims every cell created before the
+      // window opened as its own, which is the same class of mistake as summing them (2026-08-12).
+      this.previousStream = { created: stream.created, evicted: stream.evicted };
 
       return;
     }
@@ -417,7 +464,18 @@ export class FrameInventory {
       this.cpuTotals.set(name, (this.cpuTotals.get(name) ?? 0) + ms);
     }
     if (cpu.bodyMs > this.worst.bodyMs) {
-      this.worst = { bodyMs: cpu.bodyMs, segmentsMs: cpu.segments.byName };
+      this.worst = {
+        atMs: performance.now() - this.started,
+        bodyMs: cpu.bodyMs,
+        canvasPixels: cpu.canvasPixels,
+        cellsCreated: Math.max(0, stream.created - this.previousStream.created),
+        cellsEvicted: Math.max(0, stream.evicted - this.previousStream.evicted),
+        cellsVisible: stats.cellsVisible,
+        draws: stats.drawsRecorded,
+        dtMs,
+        pending: stream.pendingCells,
+        segmentsMs: cpu.segments.byName,
+      };
     }
     // Only HALF the streamer's numbers are per-update. `blobMs` is reset every update and `uploadMs` is
     // assigned every update, so those two sum like the spans do; `created`, `evicted` and `lateCreates` are
@@ -433,6 +491,7 @@ export class FrameInventory {
     this.stream.lateCreates = stream.lateCreates;
     this.stream.worstBlobMs = Math.max(this.stream.worstBlobMs, stream.worstBlobMs);
     this.stream.worstCreateMs = Math.max(this.stream.worstCreateMs, stream.worstCreateMs);
+    this.previousStream = { created: stream.created, evicted: stream.evicted };
     for (const [key] of TIMED) {
       this.bump(key, stats[key]);
     }
