@@ -55,6 +55,13 @@ along so the links below open the right pak. That is not tidiness either: `phone
 against the recipe it was asked for and refuses when they differ, so a map-only run pointed at a full pak's
 folder would serve nothing, and forcing a rebuild instead would throw the full pak away on every press.
 
+**A convert that Android killed is resumed, not restarted.** This device kills Termux with the screen on and
+the app merely backgrounded, so a run dying part-way is the normal case here. `scripts/phone.sh` journals
+every weld chunk and re-enters at the last finished one, and preflight says _"unfinished convert"_ when a
+journal is sitting there without a pak — so the answer to "did I lose the forty minutes" is on screen before
+it is asked. What to change on the phone so it stops happening is in
+[termux.md](../../docs/development/termux.md).
+
 **One job at a time**, and the refusal names what is running. Two converts at once on a phone is an OOM and
 two paks welded into one folder.
 

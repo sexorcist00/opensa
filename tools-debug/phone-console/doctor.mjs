@@ -130,6 +130,20 @@ export async function runChecks(probe, target) {
     state: manifest === null ? 'warn' : 'ok',
   });
 
+  // A convert this device did not get to finish. Android kills Termux with the screen ON and the app merely
+  // backgrounded, so a run dying part-way is the normal case here rather than the exceptional one — and the
+  // question an operator has after it is "did I lose the forty minutes". This answers it before they ask.
+  const journal = await probe.exists(`${target.out}/.pack-checkpoints`);
+  if (journal && manifest === null) {
+    add({
+      detail: 'a convert was interrupted and its finished chunks are journalled — the next run RESUMES it',
+      fix: 'Convert & serve picks up where it stopped; REBUILD=1 starts over instead',
+      id: 'resume',
+      label: 'unfinished convert',
+      state: 'warn',
+    });
+  }
+
   for (const port of target.ports) {
     const open = await probe.portOpen(port);
     add({

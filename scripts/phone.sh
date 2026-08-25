@@ -26,6 +26,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
+WAKE_HELD=0
 GAME="${GAME:-./game-src/original}"
 OUT="${OUT:-./build/phone}"
 # Both are routinely symlinks here (internal storage is small), and on 2026-08-09 they pointed at ONE folder:
@@ -163,6 +164,14 @@ if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
   # every convert overwrote the last and the A/B that was supposed to keep two paks apart kept one.
   REAL_OUT="$(cd "$(dirname "$OUT")" 2>/dev/null && pwd -P)/$(basename "$OUT")"
   REAL_OUT="$(readlink -f "$OUT" 2>/dev/null || echo "$REAL_OUT")"
+  # Held for the CONVERT only, and released on the way out however this exits (`cleanup` below runs on
+  # HUP/INT/TERM/EXIT). Without it Android suspends the process the moment the screen goes off. It is not a
+  # cure for being killed outright — nothing in userspace is — which is what the checkpoints above are for.
+  if command -v termux-wake-lock >/dev/null 2>&1; then
+    termux-wake-lock && WAKE_HELD=1 && say "wake lock held for the convert"
+  else
+    echo "   no termux-wake-lock (pkg install termux-api) — the convert dies when the screen sleeps" >&2
+  fi
   say "converting $GAME → $OUT (rect $RECT, textures=$TEXTURES, astc-threads=$ASTC_THREADS, heap=${HEAP}m, bake=$BAKE, models=$MODELS)"
   [ "$REAL_OUT" != "$(readlink -f . 2>/dev/null)/${OUT#./}" ] && echo "   → real path: $REAL_OUT"
   # A REBUILD is a rebuild: the previous pak's products are removed first. Without this the convert writes
@@ -172,7 +181,24 @@ if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
     echo "   removing the previous pak in $OUT/pak (a rebuild starts from nothing)"
     rm -rf "$OUT/pak"
   fi
-  args=(--game "$GAME" --out "$OUT" --textures "$TEXTURES" --max-texture 256 --rect "$RECT" --no-ao --platforms mobile)
+  # A rebuild starts from nothing, and the journal is part of that nothing: replaying yesterday's chunks into
+  # a pak that was just deleted is the one way a resume can produce a tree nobody can account for.
+  [ "$REBUILD" = 1 ] && rm -rf "$OUT/.pack-checkpoints"
+
+  # A convert that is killed is RESUMED, not restarted.
+  #
+  # This device does not decide when a convert ends: Android does. Termux gets killed with the screen ON and
+  # the app merely backgrounded (2026-08-25, EMUI), and a run that died at minute 40 of 50 used to cost all
+  # fifty. The pack journals every weld chunk under `$CKPT`, and `--resume` re-enters at the last finished
+  # one — it REFUSES, naming the difference, if the sources, the flags or the code changed since that run,
+  # so a resumed build is still a build somebody can reproduce (pmb plan 006).
+  CKPT="$OUT/.pack-checkpoints"
+  args=(--game "$GAME" --out "$OUT" --textures "$TEXTURES" --max-texture 256 --rect "$RECT" --no-ao --platforms mobile
+        --checkpoints "$CKPT")
+  if [ -d "$CKPT" ] && [ "$REBUILD" != 1 ]; then
+    say "resuming the last convert from $CKPT (delete it, or REBUILD=1, to start over)"
+    args+=(--resume)
+  fi
   [ "$TEXTURES" = astc ] && [ "$ASTC_THREADS" != 0 ] && args+=(--astc-threads "$ASTC_THREADS")
   # Said out loud because it is the slow setting and the log otherwise looks stuck: the encode is the LAST
   # stage, and on this device it is the one that has to run without spawning a single worker isolate.
@@ -281,6 +307,8 @@ cleanup() {
   for pid in ${STARTED[@]+"${STARTED[@]}"}; do
     kill_tree "$pid"
   done
+  # Only if THIS run took it: a second session's lock is not ours to drop.
+  [ "${WAKE_HELD:-0}" = 1 ] && termux-wake-unlock >/dev/null 2>&1
 }
 trap cleanup HUP INT TERM EXIT
 

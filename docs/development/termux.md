@@ -32,6 +32,51 @@ Playwright. Here the equivalent is: run `npm run dev` in Termux and open the pag
 scripted input or an automated screenshot diff. A step that owes a scripted check has to say so and find
 another way rather than assume `npx playwright` will run.
 
+**Android kills Termux, and the screen being on does not stop it.** Reported 2026-08-25: the session dies
+with the screen ON and the app merely backgrounded. Nothing in userspace prevents this — a wake lock keeps the
+CPU awake, it does not keep the process alive — so the answer is in two halves, and only the second one is
+ours.
+
+*Their half, and on this device it is the one that matters.* The phone is a Huawei (`MGA-LX3`, the model on
+every mobile benchmark row), and EMUI's PowerGenie is the most aggressive background killer of any Android
+skin. Three settings, all of which have to be set:
+
+| Where | What |
+| --- | --- |
+| Settings → Battery → **App launch** → Termux | switch OFF "Manage automatically", then enable all three of Auto-launch, Secondary launch and **Run in background**. This is the one that actually decides it |
+| Settings → Battery → **More battery settings** | "Stay connected when device sleeps" ON; power-intensive app prompts OFF, or EMUI offers to close the convert for you |
+| Recents (the task switcher) | swipe DOWN on the Termux card to **lock** it — a locked card survives "clear all" and is reclaimed last |
+
+Termux's own notification must stay visible: it is what makes the session a foreground service, and hiding it
+tells Android the process is idle.
+
+**On Android 12+ there is a second, separate killer, and it looks like the same symptom.** The *phantom
+process* limit reaps a background app's child processes past a cap (32 by default), which a node build with
+workers reaches by itself. It is not the OEM killer and the battery settings above do not touch it. Without a
+PC it is still reachable, over wireless debugging on the device itself:
+
+```bash
+pkg install android-tools
+# Developer options → Wireless debugging → Pair device with pairing code
+adb pair localhost:<pair-port>          # the code the dialog shows
+adb connect localhost:<connect-port>    # the port on the Wireless debugging screen
+adb shell "settings put global settings_enable_monitor_phantom_procs false"
+adb shell "/system/bin/device_config set_sync_disabled_for_tests persistent"
+adb shell "/system/bin/device_config put activity_manager max_phantom_processes 2147483647"
+```
+
+It resets on reboot. Check whether it is the cause before spending the evening on it: if the convert dies
+around the same *stage* every time rather than after the same *elapsed time*, it is the phantom killer.
+
+*Our half, and it is the one that makes the kill survivable.* **A convert that is killed is resumed, not
+restarted.** `scripts/phone.sh` passes `--checkpoints "$OUT/.pack-checkpoints"` to the pack, which journals
+every weld chunk, and adds `--resume` on the next run when that journal is there — so a run that dies at
+minute 40 of 50 costs the last chunk rather than all fifty. The resume REFUSES, naming the difference, if the
+sources, the flags or the code moved since that run; read the refusal rather than working around it, because
+a resumed build over changed inputs is a build nobody can reproduce (pmb plan 006). `REBUILD=1` deletes the
+journal with the pak and starts over. The panel's preflight says *"unfinished convert"* when a journal is
+sitting there without a pak, so the answer to "did I lose the forty minutes" is on screen before it is asked.
+
 ## What this does to the measurement plan
 
 [201](../plans/201-dispatch-console/readme.md) is written as *desktop baseline first, phone second* — chain 1
@@ -75,9 +120,11 @@ space.
   packages, none of which the convert path touches) and `HUSKY=0`, and it is idempotent, so re-running it
   after a failure or a reboot repeats nothing. Then `npm run phone` for every run
   ([mobile-pak.md](./mobile-pak.md)).
-- `termux-wake-lock` before a build, `termux-wake-unlock` after — without it a long pak build dies when the
-  screen sleeps. `npm run phone:setup` takes the lock when Termux offers one, so a convert started right
-  after it is already covered.
+- **`npm run phone` now takes the wake lock itself** for the duration of a convert and releases it on the way
+  out (including on Ctrl+C and on the session closing), so there is nothing to remember. `termux-wake-lock` /
+  `termux-wake-unlock` by hand still work for anything else long-running; both need `pkg install termux-api`.
+  A wake lock keeps the CPU from sleeping and does NOT stop Android killing the app — see "The two that
+  actually bite" above for what does.
 - The dev server binds fine; reach it from the phone's browser at `localhost`, and from another device on the
   same network with `npm run dev -- --host`.
 - Storage: the built game lives under `build/<game>/opensa`, and a field run reads that and nothing else
