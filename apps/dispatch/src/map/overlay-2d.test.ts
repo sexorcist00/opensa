@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Incident, Operations, Unit } from '../ops/types';
 import type { ScreenPoint, ScreenProjector } from './projection';
 
-import { SymbologyLayer } from './overlay-2d';
+import { SymbologyLayer, warmTextMetrics } from './overlay-2d';
 
 function board(units: number, incidents = 0): Operations {
   return {
@@ -248,6 +248,17 @@ describe('SymbologyLayer', () => {
 
       expect(layer.hitTest(200, 200)).toEqual({ id: 'u0', kind: 'unit' });
       expect(layer.hitTest(2, 2)).toBeNull();
+    });
+
+    it('resolves both fonts before a frame is ever timed', () => {
+      // The phone's first drawn frame cost 1654.9 ms with 1528.1 of it inside this layer, drawing twelve
+      // things over nothing — the family stack is resolved on the first `ctx.font`, and this moves that walk
+      // out of the loop. Measuring is what forces it; assigning the shorthand alone can be lazy.
+      const { calls, ctx } = fakeContext();
+
+      warmTextMetrics(ctx);
+
+      expect(calls.measure).toBe(2);
     });
   });
 });

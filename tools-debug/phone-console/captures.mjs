@@ -33,6 +33,14 @@ export function capturePath(date, slug) {
   if (clean === '') {
     throw new Error('a capture needs a name — it becomes the file name and the row nobody can place without');
   }
+  // The family's rule is `YYYY-MM-DD-<surface>-<what>.json`, so a name is at least two words. One word is
+  // what gets typed when the point is to test the button rather than to keep the run: `test` on 2026-08-23
+  // and a row of keyboard mash on 2026-08-25, both of which had to be renamed by hand afterwards.
+  if (!clean.includes('-')) {
+    throw new Error(
+      `'${clean}' is one word — a capture is named <surface>-<what>, like 'mobile-pinned-district-inventory'`,
+    );
+  }
 
   return `${CAPTURE_DIR}/${date}-${clean}.json`;
 }

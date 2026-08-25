@@ -332,6 +332,27 @@ export function css(rgba: Rgba, alpha = rgba[3]): string {
   return `rgba(${to255(rgba[0])}, ${to255(rgba[1])}, ${to255(rgba[2])}, ${alpha})`;
 }
 
+/**
+ * Resolve the fonts this layer draws with, ONCE, before the first frame is timed.
+ *
+ * Measured on the phone 2026-08-25: the console's first drawn frame cost **1654.9 ms, of which `overlay-2d`
+ * was 1528.1** — with zero cells resident and twelve draws, so there was nothing else in it. The layer's
+ * first `ctx.font` assignment is where a browser resolves the family stack
+ * (`ui-sans-serif, system-ui, -apple-system, sans-serif`), and on this device that walk is most of a second.
+ *
+ * Warming it at boot does not make the work cheaper — it moves it out of the frame loop and into the wait
+ * the console already spends on the pak, which is the difference between a first frame the operator feels
+ * and a cost nobody can see. It is also a test: if a later capture still shows a first frame like that one,
+ * the font is ruled out and the cost is somewhere else.
+ */
+export function warmTextMetrics(ctx: CanvasRenderingContext2D): void {
+  for (const font of [FONT, FONT_SMALL]) {
+    ctx.font = font;
+    // The measure is what forces the resolution; assigning the shorthand alone can be lazy.
+    ctx.measureText('0');
+  }
+}
+
 /** A fix's age as the chip says it: `12s`, `4m`, `1h 20m`. */
 function age(ms: number): string {
   const total = Math.round(ms / 1000);

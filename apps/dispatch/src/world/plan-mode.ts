@@ -21,7 +21,7 @@ import { gtaToEngine } from '../map/coords';
 import { bindGestures } from '../map/gestures';
 import { bindKeys } from '../map/keys';
 import { groundPoint, MAP_YAW, MapCamera, type MapProjection } from '../map/map-camera';
-import { SymbologyLayer } from '../map/overlay-2d';
+import { SymbologyLayer, warmTextMetrics } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
 import { drawSketches, type MapTool, SketchStore } from '../map/sketch';
 import { drawTileLayer } from '../map/tile-layer';
@@ -82,6 +82,9 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
   if (!context) {
     throw new Error('overlay canvas has no 2d context');
   }
+  // Before the loop, never inside it: the first font resolution cost 1528 ms of the phone's first frame
+  // (2026-08-25). Here it overlaps the wait for the pak instead.
+  warmTextMetrics(context);
 
   const unbind = bindGestures(overlay, {
     dolly: (notch) => camera.dolly(notch),

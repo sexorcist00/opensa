@@ -19,6 +19,12 @@ describe('phone console captures', () => {
       expect(() => capturePath('2026-08-23', '   ')).toThrow(/needs a name/);
     });
 
+    it('refuses a one-word name, because the family names a capture <surface>-<what>', () => {
+      // What gets typed when the point is to test the button rather than to keep the run.
+      expect(() => capturePath('2026-08-25', 'test')).toThrow(/is one word/);
+      expect(() => capturePath('2026-08-25', 'Jdjsjsjsjdjd')).toThrow(/is one word/);
+    });
+
     it('refuses a capture whose note says nothing', () => {
       // The benchmark record's first rule: a row nobody can place is a row nobody can compare.
       expect(() => withNote({ runs: [] }, 'ok', FACTS)).toThrow(/at least 12 characters/);
