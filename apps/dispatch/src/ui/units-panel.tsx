@@ -4,7 +4,7 @@ import type { ReactElement } from 'react';
 import { SET_COLORS } from '../map/beacons';
 import { css } from '../map/overlay-2d';
 import { type Incident, type Selection, type Unit } from '../ops/types';
-import { COLORS, styles } from './styles';
+import { COLORS, RAMP, styles } from './styles';
 
 const KIND_LABEL: Readonly<Record<Unit['kind'], string>> = {
   ambulance: 'EMS',
@@ -49,13 +49,21 @@ export function UnitsPanel({
               key={unit.id}
               onClick={() => onSelect({ id: unit.id, kind: 'unit' })}
               onDoubleClick={() => onLocate(unit)}
-              style={{ ...styles.row, ...(selected ? styles.rowSelected : {}) }}
+              // A unit's rail carries its STATUS for the same reason a call's carries its priority: the
+              // roster is scanned down the left edge, not read row by row.
+              style={{
+                ...styles.row,
+                borderLeftColor: css(SET_COLORS[unit.status]),
+                ...(selected ? styles.rowSelected : {}),
+              }}
               title="Click to select · double-click to centre the map on it"
             >
               <div style={{ alignItems: 'center', display: 'flex', gap: 6 }}>
                 <span style={{ background: css(SET_COLORS[unit.status]), borderRadius: 6, height: 8, width: 8 }} />
                 <strong style={styles.mono}>{unit.callsign}</strong>
-                <span style={{ ...styles.badge, background: '#16202e', color: COLORS.muted, marginLeft: 'auto' }}>
+                <span
+                  style={{ ...styles.badge, background: RAMP.surfaceHover, color: COLORS.muted, marginLeft: 'auto' }}
+                >
                   {KIND_LABEL[unit.kind]}
                 </span>
               </div>

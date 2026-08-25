@@ -152,7 +152,9 @@ export function MapNav({
         </button>
       </div>
 
-      <div style={styles.mapNavRow}>
+      {/* Vertical where the screen is narrow: a column is 44 px wide against the row's 92, which keeps the
+          cluster in the thumb's edge zone instead of reaching across the map and its labels. */}
+      <div style={{ ...styles.mapNavRow, flexDirection: compact ? 'column' : 'row' }}>
         <button
           aria-label="Zoom in"
           disabled={disabled}

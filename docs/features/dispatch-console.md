@@ -257,6 +257,19 @@ platform**, and the phone is the device this console is aimed at. Every control 
 (≥ 44 CSS px, in both axes) where the pointer is coarse and stays dense where it is a mouse — one component
 with two sizes, never two layouts ([the rule](../restrictions/cross-platform-surface.md)).
 
+## The look, and where its rules live
+
+**[`apps/dispatch/DESIGN.md`](../../apps/dispatch/DESIGN.md), since 2026-08-25.** The console has a design
+system now rather than a colour list: a 12-step neutral ramp with one declared role per step, depth carried
+by value and shadow instead of a border on everything, three radii, one spacing scale, and a type scale whose
+every changing number is tabular.
+
+The rule that matters outside the console: **chrome colour and STATE colour are different things and do not
+mix.** Chrome comes from the ramp in `src/ui/styles.ts`. A unit's status and a call's priority come from
+`src/map/beacons.ts` → `SET_COLORS` — the one table the beacons, the 2D overlay, the radar and the two lists
+all read, which is why a chip in the queue cannot drift from the pillar on the map. A status colour added to
+the style table would break that, and `styles.test.ts` fails the build if one appears.
+
 ## What the phone shows, and what it folds
 
 **201/3-01, since 2026-08-25.** A 360-px screen cannot hold the desk's chrome and a map worth looking at, so

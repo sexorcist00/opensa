@@ -21,6 +21,7 @@ import { MAP_YAW } from './map/map-camera';
 import { readView } from './map/view-link';
 import { useOperations } from './ops/use-operations';
 import { DetailPanel } from './ui/detail-panel';
+import { DISPATCH_SCOPE, installDispatchCss } from './ui/global-css';
 import { IncidentsPanel } from './ui/incidents-panel';
 import { KeyHelp } from './ui/key-help';
 import { MapCanvas } from './ui/map-canvas';
@@ -46,6 +47,10 @@ export function App(): ReactElement {
   // A third question, and width cannot answer it: a phone in LANDSCAPE is wide enough to look roomy and too
   // short to spend any of it on a list nobody is reading.
   const short = useShortViewport();
+  // The one stylesheet this app has, for what an inline style cannot reach (focus rings, range thumbs,
+  // placeholders, scrollbars). Scoped under the attribute below so an embedded console cannot restyle its
+  // host — see `ui/global-css.ts`.
+  useEffect(installDispatchCss, []);
 
   const [handle, setHandle] = useState<DispatchHandle | null>(null);
   const [bindings, setBindings] = useState<KeyBindings>(() => loadBindings());
@@ -161,12 +166,16 @@ export function App(): ReactElement {
   );
 
   if (embedded) {
-    return <div style={styles.appEmbedded}>{map}</div>;
+    return (
+      <div {...{ [DISPATCH_SCOPE]: '' }} style={styles.appEmbedded}>
+        {map}
+      </div>
+    );
   }
 
   if (compact) {
     return (
-      <div style={styles.appCompact}>
+      <div {...{ [DISPATCH_SCOPE]: '' }} style={styles.appCompact}>
         {top}
         {map}
         <Sheet
@@ -187,7 +196,7 @@ export function App(): ReactElement {
   }
 
   return (
-    <div style={styles.app}>
+    <div {...{ [DISPATCH_SCOPE]: '' }} style={styles.app}>
       {top}
 
       <IncidentsPanel

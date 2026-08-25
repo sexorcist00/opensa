@@ -1,5 +1,8 @@
 # @opensa/dispatch
 
+**Design system: [`DESIGN.md`](./DESIGN.md)** — the palette's step roles, the layering rule, the type
+and spacing scales, and why a unit's colour may not live in the style table.
+
 A computer-aided-dispatch (CAD) operator console over the streamed San Andreas map: top-down 3D view, live
 units, a call queue, and click-to-inspect on any map object.
 

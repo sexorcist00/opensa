@@ -35,32 +35,37 @@ export function IncidentsPanel({
         {sorted.length === 0 && <div style={styles.empty}>No active calls</div>}
         {sorted.map((incident) => {
           const selected = selection?.kind === 'incident' && selection.id === incident.id;
+          // One table for the map and the list, so a chip in the queue cannot drift from the pillar on the
+          // map — they are the same number, not two colours somebody matched by eye.
+          const key = `call${incident.priority}` as const;
+          const priority = css(SET_COLORS[key]);
 
           return (
             <div
               key={incident.id}
               onClick={() => onSelect({ id: incident.id, kind: 'incident' })}
               onDoubleClick={() => onLocate(incident)}
-              style={{ ...styles.row, ...(selected ? styles.rowSelected : {}) }}
+              style={{
+                ...styles.row,
+                // The rail. Priority reaches the eye as POSITION here, as text in the chip, and as colour in
+                // both — so a dispatcher scanning the queue, or one who cannot separate red from amber, still
+                // reads it (DESIGN.md, "Priority is encoded three ways").
+                borderLeftColor: incident.status === 'closed' ? 'transparent' : priority,
+                ...(selected ? styles.rowSelected : {}),
+              }}
               title="Click to select · double-click to centre the map on it"
             >
               <div style={{ alignItems: 'center', display: 'flex', gap: 6 }}>
-                <span
-                  style={{
-                    ...styles.badge,
-                    background: css(SET_COLORS[`call${incident.priority}`], 0.18),
-                    color: css(SET_COLORS[`call${incident.priority}`]),
-                  }}
-                >
+                <span style={{ ...styles.badge, background: css(SET_COLORS[key], 0.16), color: css(SET_COLORS[key]) }}>
                   P{incident.priority}
                 </span>
                 <strong style={styles.mono}>{incident.code}</strong>
-                <span style={{ color: COLORS.muted, marginLeft: 'auto' }}>{age(now - incident.opened)}</span>
+                <span style={{ ...styles.rowMeta, marginLeft: 'auto' }}>{age(now - incident.opened)}</span>
               </div>
               <div>{incident.title}</div>
               <div style={{ color: COLORS.muted, display: 'flex', gap: 8 }}>
                 <span>{incident.place}</span>
-                <span style={{ marginLeft: 'auto' }}>{STATUS_LABEL[incident.status]}</span>
+                <span style={{ ...styles.statusTag, marginLeft: 'auto' }}>{STATUS_LABEL[incident.status]}</span>
               </div>
             </div>
           );

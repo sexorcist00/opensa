@@ -17,7 +17,7 @@ import type { CSSProperties } from 'react';
 
 import { describe, expect, it } from 'vitest';
 
-import { styles, TOUCH_TARGET } from './styles';
+import { ACCENT, COLORS, RADIUS, RAMP, SEMANTIC, SPACE, styles, TEXT, TOUCH_TARGET } from './styles';
 
 /** Every token whose name says it is the finger-sized variant of another. */
 const TOUCH_TOKENS = Object.entries(styles).filter(([name]) => name.endsWith('Touch'));
@@ -57,6 +57,31 @@ describe('dispatch styles', () => {
       expect(under).toEqual([]);
     });
 
+    it('lets no style in the table carry a colour the token groups do not name', () => {
+      // The table used to hold ad-hoc hex — `#0e3a52` for four different "selected" fills, `#4a1220` for
+      // one badge — so a component reached for whatever looked close and the surfaces drifted apart. Every
+      // colour now comes from RAMP, ACCENT or SEMANTIC, and a unit's or a call's colour comes from the map's
+      // own table (`SET_COLORS`) rather than from here at all.
+      const named = new Set<string>([
+        ...Object.values(RAMP),
+        ...Object.values(ACCENT),
+        ...Object.values(SEMANTIC),
+        ...Object.values(COLORS),
+      ]);
+      const strays = new Set<string>();
+      for (const style of Object.values(styles)) {
+        for (const value of Object.values(style)) {
+          for (const hex of String(value).match(/#[0-9a-f]{3,8}/giu) ?? []) {
+            if (!named.has(hex)) {
+              strays.add(hex);
+            }
+          }
+        }
+      }
+
+      expect([...strays]).toEqual([]);
+    });
+
     it('lets no bar that spans the grid push its column wider than the screen', () => {
       // These three are full-width flex rows. Bounded tracks only help if the row itself gives way.
       for (const bar of ['statusBar', 'timeline', 'topBar', 'topBarCompact'] as const) {
@@ -85,6 +110,13 @@ describe('dispatch styles', () => {
       // The thumb's own size belongs to the browser, but a range input drags from anywhere in its box —
       // so the box is the target, and both of this console's sliders measured 16 px tall.
       expect(styles.rangeTouch.height).toBe(TOUCH_TARGET);
+    });
+
+    it('keeps the three scales to their declared steps', () => {
+      // A scale with a value between its steps is not a scale. Radius was eight values, spacing thirteen.
+      expect(Object.values(RADIUS)).toEqual([4, 999, 8]);
+      expect([...Object.values(SPACE)].sort((a, b) => a - b)).toEqual([2, 4, 8, 12, 16, 24]);
+      expect([...Object.values(TEXT)].sort((a, b) => a - b)).toEqual([10, 11, 12, 13, 15, 17]);
     });
 
     it('caps the phone sheet rather than reserving a share of the screen for it', () => {
