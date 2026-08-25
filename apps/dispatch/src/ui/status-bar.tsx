@@ -45,7 +45,13 @@ export function StatusBar({
       {readout.pending > 0 && <span>streaming {readout.pending}…</span>}
       {/* 201/6-02: the flat map says which pyramid level it is drawing, or why it is drawing none — an empty
           2D map that is silent about it is indistinguishable from one that is still loading. */}
-      {readout.tiles !== undefined && <span title="The baked tile pyramid">{readout.tiles}</span>}
+      {readout.tiles !== undefined && (
+        // The pyramid's state can be a whole sentence when it is an error, and this bar is 22 px of a phone:
+        // it ellipsizes rather than running off the end of a row that cannot scroll.
+        <span style={styles.statusEllipsis} title={readout.tiles}>
+          {readout.tiles}
+        </span>
+      )}
       {/* 201/3-03: what the decluttering dropped. Every symbol is on screen — these are the NAMES that
           did not fit, and an operator who cannot see the count would read a crowded map as a complete one. */}
       {readout.namesHidden > 0 && <span title="Labels the map could not fit">{readout.namesHidden} names hidden</span>}
@@ -55,7 +61,11 @@ export function StatusBar({
         </span>
       )}
       {!compact && <span style={{ marginLeft: 'auto' }}>pak {readout.buildTime}</span>}
-      {!compact && <span>left-drag pan · right-drag orbit · wheel zoom · click select · right-click new call</span>}
+      {!compact && (
+        <span style={styles.statusEllipsis}>
+          left-drag pan · right-drag orbit · wheel zoom · click select · right-click new call
+        </span>
+      )}
     </div>
   );
 }

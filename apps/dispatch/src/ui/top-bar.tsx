@@ -9,11 +9,11 @@
  * The `PLAN` toggle (201/7-01) is the projection, not a display mode: the same world, drawn with parallel
  * rays instead of a perspective frustum.
  */
-import type { ReactElement } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 
 import type { MapProjection } from '../map/map-camera';
 
-import { COLORS, styles } from './styles';
+import { COLORS, styles, TOUCH_TARGET } from './styles';
 
 export function TopBar({
   autoDispatch,
@@ -24,6 +24,7 @@ export function TopBar({
   onHour,
   onProjection,
   projection,
+  touch = false,
 }: {
   autoDispatch: boolean;
   /** Phone layout: shorten the title, drop the region badge and the log ticker, narrow the time slider. */
@@ -35,20 +36,22 @@ export function TopBar({
   onProjection: (projection: MapProjection) => void;
   /** What the map is drawing with right now — read back from the readout's pose, never held here. */
   projection: MapProjection;
+  /** The pointer is a finger: the dial and the switch take a finger-sized target. */
+  touch?: boolean;
 }): ReactElement {
   return (
-    <div style={styles.topBar}>
+    <div style={compact ? styles.topBarCompact : styles.topBar}>
       <strong style={{ letterSpacing: 1.5 }}>{compact ? 'DISPATCH' : 'OPENSA · DISPATCH'}</strong>
       {!compact && <span style={{ ...styles.badge, background: '#0e3a52', color: COLORS.accent }}>SAN ANDREAS</span>}
 
-      <label style={{ alignItems: 'center', display: 'flex', gap: 6, marginLeft: compact ? 0 : 12 }}>
+      <label style={{ alignItems: 'center', display: 'flex', gap: 6, marginLeft: compact ? 0 : 12, minWidth: 0 }}>
         {!compact && <span style={{ color: COLORS.muted }}>WORLD</span>}
         <input
           max={24}
           min={0}
           onChange={(event) => onHour(Number(event.target.value))}
           step={0.25}
-          style={{ width: compact ? 84 : 150 }}
+          style={{ ...(touch ? styles.rangeTouch : {}), minWidth: 0, width: compact ? 84 : 150 }}
           type="range"
           value={hour}
         />
@@ -57,17 +60,32 @@ export function TopBar({
 
       <button
         onClick={() => onProjection(projection === 'ortho' ? 'perspective' : 'ortho')}
-        style={projection === 'ortho' ? styles.buttonPrimary : styles.button}
+        style={buttonStyle(touch, projection === 'ortho')}
         title="Plan view: parallel projection, so buildings stop leaning and distances read the same everywhere"
         type="button"
       >
         PLAN
       </button>
 
-      <label style={{ alignItems: 'center', display: 'flex', gap: 6, marginLeft: compact ? 'auto' : 0 }}>
-        <input checked={autoDispatch} onChange={(event) => onAutoDispatch(event.target.checked)} type="checkbox" />
+      {/* A button rather than a checkbox: the native box is 13x13 and no inline style reaches it, so on a
+          phone this switch was a third of the target the criterion asks for. `aria-pressed` keeps it a
+          two-state control for anything reading the tree. */}
+      <button
+        aria-pressed={autoDispatch}
+        onClick={() => onAutoDispatch(!autoDispatch)}
+        style={{
+          ...(autoDispatch ? styles.toggleOn : styles.toggle),
+          ...(touch ? { minHeight: TOUCH_TARGET, minWidth: TOUCH_TARGET } : {}),
+          marginLeft: compact ? 'auto' : 0,
+        }}
+        title="Assign the nearest free unit to a new call automatically"
+        type="button"
+      >
+        <span aria-hidden style={{ fontSize: 13 }}>
+          {autoDispatch ? '☑' : '☐'}
+        </span>
         <span>{compact ? 'Auto' : 'Auto-dispatch'}</span>
-      </label>
+      </button>
 
       {!compact && (
         <span style={{ color: COLORS.muted, marginLeft: 'auto', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -76,6 +94,14 @@ export function TopBar({
       )}
     </div>
   );
+}
+
+function buttonStyle(touch: boolean, primary: boolean): CSSProperties {
+  if (primary) {
+    return touch ? styles.buttonPrimaryTouch : styles.buttonPrimary;
+  }
+
+  return touch ? styles.buttonTouch : styles.button;
 }
 
 function clock(hour: number): string {

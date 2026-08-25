@@ -16,7 +16,7 @@
  * Every control grows to a finger's target size where the pointer is coarse, and stays dense where it is a
  * mouse — one component, two sizes, no second layout to keep in step.
  */
-import type { ReactElement } from 'react';
+import { type ReactElement, useState } from 'react';
 
 import type { DispatchHandle } from '../world/boot';
 
@@ -28,10 +28,13 @@ const TURN_STEP = Math.PI / 4;
 const TILT_STEP = Math.PI / 12;
 
 export function MapNav({
+  compact = false,
   handle,
   touch = false,
   yaw,
 }: {
+  /** Narrow screen: the cluster keeps what is used every few seconds and folds the rest behind one key. */
+  compact?: boolean;
   handle: DispatchHandle | null;
   /** The pointer is a finger: every control takes a finger-sized target. */
   touch?: boolean;
@@ -40,21 +43,41 @@ export function MapNav({
   const disabled = handle === null;
   const key = touch ? styles.mapNavKeyTouch : styles.mapNavKey;
   const level = touch ? styles.mapNavLevelTouch : styles.mapNavLevel;
+  /**
+   * On a narrow screen the full ladder is 240 px of a ~350-px-tall map, down the edge the thumb reaches
+   * with — so what stays out is what is pressed constantly (north, zoom in, zoom out) and the rest folds.
+   * Nothing is REMOVED: turn, tilt and the three levels are one key away, because a capability that exists
+   * only on a desk is the failure this cluster was written to fix in the first place.
+   */
+  const [open, setOpen] = useState(false);
+  const folded = compact && !open;
 
   return (
-    <div style={styles.mapNav}>
+    <div style={compact ? styles.mapNavCompact : styles.mapNav}>
       <button
         aria-label="Face north"
         disabled={disabled}
         onClick={() => handle?.faceNorth()}
-        style={styles.mapNavCompass}
+        style={touch ? styles.mapNavCompassTouch : styles.mapNavCompass}
         title="Face north"
         type="button"
       >
         <Compass yaw={yaw} />
       </button>
 
-      <div style={styles.mapNavRow}>
+      {compact && (
+        <button
+          aria-expanded={open}
+          aria-label={open ? 'Hide turn, tilt and zoom levels' : 'Show turn, tilt and zoom levels'}
+          onClick={() => setOpen(!open)}
+          style={key}
+          type="button"
+        >
+          {open ? '×' : '⋯'}
+        </button>
+      )}
+
+      <div style={{ ...styles.mapNavRow, display: folded ? 'none' : 'flex' }}>
         <button
           aria-label="Turn left"
           disabled={disabled}
@@ -75,7 +98,7 @@ export function MapNav({
         </button>
       </div>
 
-      <div style={styles.mapNavRow}>
+      <div style={{ ...styles.mapNavRow, display: folded ? 'none' : 'flex' }}>
         <button
           aria-label="Tilt towards the horizon"
           disabled={disabled}
@@ -96,7 +119,7 @@ export function MapNav({
         </button>
       </div>
 
-      <div style={styles.mapNavRow}>
+      <div style={{ ...styles.mapNavRow, display: folded ? 'none' : 'flex' }}>
         <button
           aria-label="Zoom to the city"
           disabled={disabled}

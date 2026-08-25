@@ -43,12 +43,55 @@ usable picture is exactly what this chain measures rather than assumes.
 
 ### 01 — 360 CSS px
 
-What fits, what collapses into the tabbed sheet, and what is simply off. Safe-area insets (the game's touch
-overlay already uses `env(safe-area-inset-*)`), and one-handed reach for the actions an operator repeats —
-dispatch, clear, centre.
+**DONE 2026-08-25.** The step's own premise held: the surface loaded on the phone for weeks and the user's
+verdict was *"impossible to control"*.
 
-**Owes:** the layout spec, and the same three checks the desk layout gets: nothing clipped, nothing
-unreachable, nothing that requires hover.
+**What the render at 360x800 found, and none of it was visible on a desk.**
+
+| | Before | After |
+| --- | --- | --- |
+| Layout width in a 360-px screen | **403 px** | 360 |
+| Elements past the right edge | 33 (the map, both bars, the sheet, 4 nav keys) | 0 |
+| Controls under 44 in either axis | 9 | 0 |
+| Map height at 360x800 | ~350 px | ~500 px |
+| Map height at 740x360 (landscape) | **98 px** | ~210 px |
+
+**The width was one root cause, and it is the reason the controls were unreachable rather than merely
+small.** A `1fr` grid track keeps `min-width: auto`, so it cannot shrink below the widest row in its column
+— the top bar's content came to 403 px, the single column took that width, and the map cell took it too.
+Everything anchored to the map's RIGHT edge then sat past the screen: `⟳`, `▼`, `BLK` and `−`, with no
+scroll to reach them, plus the `Auto` switch and the `ASSIGNED` state on every call row. `minmax(0, 1fr)` on
+every flexible track fixes it; the three full-width bars take `minWidth: 0` + `overflow: hidden` so they
+give way instead of pushing.
+
+**The target sizes failed in the axis nobody checks.** The `Touch` tokens carried `minHeight` and no
+`minWidth`, so `Fit` was 40 wide and the rate keys 33 — passing every review that measures height. The
+compass was 42x42 (its padding fit a mouse), the two sliders **16 px tall**, and `Auto-dispatch` was a
+native `<input type="checkbox">` at **13x13** — which no inline style can reach, so it is a button with
+`aria-pressed` now.
+
+**The map had no room left.** The tool cluster was ~380x390 permanently open over a ~350-px-tall map:
+nothing in it is used every few seconds, so it opens from one `TOOLS` handle. The nav cluster keeps north
+and zoom out and folds turn, tilt and the three levels behind one key — folded, never removed, since a
+capability that lives only on a desk is what this chain exists to prevent. The sheet is capped
+(`maxHeight: 44vh`) on an `auto` track rather than given a fixed 44 % of the screen, which had left ~200 px
+of black under two calls.
+
+**Landscape needed a third question.** Width said 740 px is roomy; the viewport was 360 px TALL, and the
+sheet at its cap left the map 98 px. `useShortViewport()` sits beside `useCompactLayout()` and
+`useCoarsePointer()` for exactly the reason the restriction gives for the other two — they vary
+independently — and the sheet opens collapsed there, both counts still on screen.
+
+**How it was measured, and what it does not prove.** A headless Chromium in the agent container at 360x800
+DPR 2 with `(pointer: coarse)`, probing every element for a box past the viewport and every control for a
+box under 44. That is a real 360-px render rather than a feeling, and the user's own screenshot shows the
+same clipping — but it is not the phone, and **feel, thumb reach and safe-area insets are still owed to a
+device**. Safe-area insets and one-handed reach for the repeated actions (dispatch, clear, centre) are what
+remains of this step.
+
+**Guard:** `apps/dispatch/src/ui/styles.test.ts` — the bare-`1fr` rule and the 44-in-both-axes rule over the
+style table. The restriction closed by saying nothing here was caught by a test and that a lint over these
+literals could be written "when this bites a second time"; this was the second time.
 
 ### 02 — Gestures on real touch hardware
 

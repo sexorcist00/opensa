@@ -26,14 +26,24 @@ export const COLORS = {
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 
 export const styles = {
+  /**
+   * Desk: three columns.
+   *
+   * **`minmax(0, …)` on every flexible track, never a bare `1fr`.** A `1fr` track keeps `min-width: auto`,
+   * so it refuses to shrink below the widest thing in ANY row of that column — one over-wide row then
+   * widens the whole grid, and since the map cell is in that column the map is widened with it. Measured
+   * 2026-08-25 at 360 CSS px: the top bar's content came to 403 px, the single column became 403, and every
+   * control anchored to the map's RIGHT edge — the whole turn/tilt/zoom cluster's right-hand column — sat
+   * 43 px past the screen with no way to scroll to it. Nothing clipped visibly and nothing warned.
+   */
   app: {
     background: '#05070a',
     color: COLORS.text,
     display: 'grid',
     fontFamily: 'ui-sans-serif, system-ui, sans-serif',
     fontSize: 12,
-    gridTemplateColumns: '300px 1fr 264px',
-    gridTemplateRows: '44px 1fr 30px 26px',
+    gridTemplateColumns: '300px minmax(0, 1fr) 264px',
+    gridTemplateRows: '44px minmax(0, 1fr) 30px 26px',
     height: '100%',
     width: '100%',
   },
@@ -44,8 +54,11 @@ export const styles = {
     display: 'grid',
     fontFamily: 'ui-sans-serif, system-ui, sans-serif',
     fontSize: 12,
-    gridTemplateColumns: '1fr',
-    gridTemplateRows: '40px 1fr 44% 30px 20px',
+    gridTemplateColumns: 'minmax(0, 1fr)',
+    // 48 rather than 40: the bar carries 44-px targets now, and a 40-px row makes every one of them
+    // overflow its own bar. The sheet is `auto` rather than a fixed 44% because a fixed share left ~200 px
+    // of black under two calls while the map — the thing the console is for — was starved to 350.
+    gridTemplateRows: '48px minmax(0, 1fr) auto 34px 22px',
     height: '100%',
     width: '100%',
   },
@@ -84,8 +97,11 @@ export const styles = {
     cursor: 'pointer',
     fontSize: 13,
     minHeight: TOUCH_TARGET,
+    minWidth: TOUCH_TARGET,
     padding: '4px 12px',
   },
+  /** `minWidth` as well as `minHeight`: the criterion is 44 in BOTH axes, and a short label — `Fit`, `×1` —
+   *  came out 40 and 33 wide while passing the height every reviewer actually checks. */
   buttonTouch: {
     background: COLORS.panelRaised,
     border: `1px solid ${COLORS.border}`,
@@ -94,6 +110,7 @@ export const styles = {
     cursor: 'pointer',
     fontSize: 13,
     minHeight: TOUCH_TARGET,
+    minWidth: TOUCH_TARGET,
     padding: '4px 12px',
   },
   // `touchAction: none` is load-bearing on a phone: without it the browser claims the drag for scrolling
@@ -247,6 +264,16 @@ export const styles = {
     top: 10,
     zIndex: 3,
   },
+  /** The cluster COLLAPSED on a phone: one target that says what is behind it. */
+  mapNavCompact: {
+    display: 'grid',
+    gap: 6,
+    justifyItems: 'center',
+    position: 'absolute',
+    right: 8,
+    top: 8,
+    zIndex: 3,
+  },
   mapNavCompass: {
     background: 'rgba(11, 16, 23, 0.94)',
     border: `1px solid ${COLORS.border}`,
@@ -254,6 +281,21 @@ export const styles = {
     cursor: 'pointer',
     lineHeight: 0,
     padding: 3,
+  },
+  /** 42 px with its border, which is under the criterion — the rose needs its own size where a finger
+   *  presses it rather than the padding that fits a mouse. */
+  mapNavCompassTouch: {
+    alignItems: 'center',
+    background: 'rgba(11, 16, 23, 0.94)',
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: '50%',
+    cursor: 'pointer',
+    display: 'flex',
+    height: TOUCH_TARGET,
+    justifyContent: 'center',
+    lineHeight: 0,
+    padding: 0,
+    width: TOUCH_TARGET,
   },
   mapNavKey: {
     background: 'rgba(11, 16, 23, 0.94)',
@@ -316,6 +358,29 @@ export const styles = {
     top: 10,
     zIndex: 3,
   },
+  /** The cluster collapsed to its one handle on a phone (201/7-03 expanded it always, which on a 360-px
+   *  screen put nine buttons and a search box over 60% of the map). */
+  mapToolsHandle: {
+    alignItems: 'center',
+    background: 'rgba(11, 16, 23, 0.94)',
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 6,
+    color: COLORS.text,
+    cursor: 'pointer',
+    display: 'flex',
+    fontSize: 12,
+    fontWeight: 700,
+    gap: 6,
+    justifyContent: 'center',
+    left: 8,
+    letterSpacing: 1,
+    minHeight: TOUCH_TARGET,
+    minWidth: TOUCH_TARGET,
+    padding: '0 12px',
+    position: 'absolute',
+    top: 8,
+    zIndex: 3,
+  },
   /** One hit in the place search — a row-wide button, so the whole line is the target on a phone. */
   mapToolsHit: {
     background: 'transparent',
@@ -347,6 +412,16 @@ export const styles = {
     color: COLORS.text,
     fontSize: 11,
     padding: '4px 6px',
+    width: '100%',
+  },
+  mapToolsInputTouch: {
+    background: '#05070a',
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 4,
+    color: COLORS.text,
+    fontSize: 15,
+    minHeight: TOUCH_TARGET,
+    padding: '4px 8px',
     width: '100%',
   },
   /** The live number. Monospace, so a distance that is growing does not shuffle the row it sits in. */
@@ -412,6 +487,19 @@ export const styles = {
     padding: '8px 12px',
     textTransform: 'uppercase',
   },
+  /** The phone sheet's tab strip. */
+  /**
+   * A slider a finger can catch.
+   *
+   * The thumb's own size is the browser's and cannot be reached from an inline style — but a range input
+   * takes the press anywhere in its box and drags from there, so the box is the target that counts. Both of
+   * this console's sliders measured 16 px tall (the world dial and the shift scrub), which is a third of the
+   * criterion on the two controls an operator sweeps rather than taps.
+   */
+  rangeTouch: {
+    cursor: 'pointer',
+    height: TOUCH_TARGET,
+  },
   row: {
     borderBottom: `1px solid ${COLORS.border}`,
     cursor: 'pointer',
@@ -426,7 +514,8 @@ export const styles = {
     paddingLeft: 10,
   },
   scroll: { flex: 1, minHeight: 0, overflowY: 'auto' },
-  /** The phone sheet's tab strip. */
+  /** The phone sheet: as tall as the list needs, and never more than this share of the screen. */
+  sheet: { display: 'flex', flexDirection: 'column' as const, maxHeight: '44vh', minHeight: 0 },
   sheetTab: {
     background: 'transparent',
     border: 'none',
@@ -448,6 +537,19 @@ export const styles = {
     borderTop: `1px solid ${COLORS.border}`,
     display: 'flex',
   },
+  sheetTabTouch: {
+    background: 'transparent',
+    border: 'none',
+    borderBottom: `2px solid transparent`,
+    color: COLORS.muted,
+    cursor: 'pointer',
+    flex: 1,
+    fontSize: 13,
+    fontWeight: 700,
+    letterSpacing: 1,
+    minHeight: TOUCH_TARGET,
+    padding: '9px 0',
+  },
   statusBar: {
     alignItems: 'center',
     background: COLORS.panel,
@@ -458,8 +560,15 @@ export const styles = {
     fontSize: 10,
     gap: 16,
     gridColumn: '1 / -1',
+    // The row is bounded by the grid now, so anything too long has to be cut here rather than push the
+    // column wider — which is how the map ended up wider than the screen.
+    minWidth: 0,
+    overflow: 'hidden',
     padding: '0 12px',
+    whiteSpace: 'nowrap' as const,
   },
+  /** One field of the status bar that can be arbitrarily long. */
+  statusEllipsis: { minWidth: 0, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const },
   /** The shift timeline strip (201/8-03). Sits above the status bar, full width. */
   timeline: {
     alignItems: 'center',
@@ -468,6 +577,8 @@ export const styles = {
     display: 'flex',
     gap: 10,
     gridColumn: '1 / -1',
+    minWidth: 0,
+    overflow: 'hidden',
     padding: '0 12px',
   },
   /** The scrub track itself — it takes what the row has left. */
@@ -486,6 +597,32 @@ export const styles = {
     letterSpacing: 0.6,
     padding: '2px 6px',
   },
+  /** A two-state control that is a BUTTON, not a checkbox: a native checkbox renders 13x13 and no inline
+   *  style reaches it, so on a phone the console's one board-wide switch was a third of a finger. */
+  toggle: {
+    alignItems: 'center',
+    background: COLORS.panelRaised,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 4,
+    color: COLORS.muted,
+    cursor: 'pointer',
+    display: 'flex',
+    fontSize: 11,
+    gap: 6,
+    padding: '4px 9px',
+  },
+  toggleOn: {
+    alignItems: 'center',
+    background: '#0e3a52',
+    border: `1px solid ${COLORS.accent}`,
+    borderRadius: 4,
+    color: COLORS.accent,
+    cursor: 'pointer',
+    display: 'flex',
+    fontSize: 11,
+    gap: 6,
+    padding: '4px 9px',
+  },
   topBar: {
     alignItems: 'center',
     background: COLORS.panel,
@@ -493,6 +630,20 @@ export const styles = {
     display: 'flex',
     gap: 14,
     gridColumn: '1 / -1',
+    minWidth: 0,
+    overflow: 'hidden',
     padding: '0 14px',
+  },
+  /** Phone: the same bar with the gaps a 360-px screen can pay for. */
+  topBarCompact: {
+    alignItems: 'center',
+    background: COLORS.panel,
+    borderBottom: `1px solid ${COLORS.border}`,
+    display: 'flex',
+    gap: 8,
+    gridColumn: '1 / -1',
+    minWidth: 0,
+    overflow: 'hidden',
+    padding: '0 8px',
   },
 } satisfies Record<string, CSSProperties>;

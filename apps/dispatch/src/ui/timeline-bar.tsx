@@ -20,6 +20,7 @@ export function TimelineBar({
   onLive,
   onRate,
   onScrub,
+  touch = false,
   window,
 }: {
   clock: Clock;
@@ -29,9 +30,13 @@ export function TimelineBar({
   onLive: () => void;
   onRate: (rate: PlaybackRate) => void;
   onScrub: (t: number) => void;
+  /** The pointer is a finger: the scrub and the rate keys take a finger-sized target. */
+  touch?: boolean;
   window: null | { newest: number; oldest: number };
 }): ReactElement {
   const replaying = clock.mode === 'replay';
+  const button = touch ? styles.buttonTouch : styles.button;
+  const buttonPrimary = touch ? styles.buttonPrimaryTouch : styles.buttonPrimary;
   const span = window ? Math.max(1, window.newest - window.oldest) : 1;
   const behindMs = window ? window.newest - clock.t : 0;
 
@@ -44,7 +49,7 @@ export function TimelineBar({
         min={window?.oldest ?? 0}
         onChange={(event) => onScrub(Number(event.target.value))}
         step={Math.max(1, Math.round(span / 1000))}
-        style={styles.timelineRange}
+        style={touch ? { ...styles.timelineRange, ...styles.rangeTouch } : styles.timelineRange}
         type="range"
         value={clock.t}
       />
@@ -56,25 +61,25 @@ export function TimelineBar({
         <button
           key={rate}
           onClick={() => onRate(rate)}
-          style={replaying && clock.rate === rate ? styles.buttonPrimary : styles.button}
+          style={replaying && clock.rate === rate ? buttonPrimary : button}
           type="button"
         >
           ×{rate}
         </button>
       ))}
 
-      <button onClick={onLive} style={replaying ? styles.button : styles.buttonPrimary} type="button">
+      <button onClick={onLive} style={replaying ? button : buttonPrimary} type="button">
         Live
       </button>
       {replaying && <span style={styles.timelineReplay}>REPLAY</span>}
 
       {!compact && (
-        <button onClick={onBookmark} style={styles.button} type="button">
+        <button onClick={onBookmark} style={button} type="button">
           Mark
         </button>
       )}
       {clock.bookmarks.map((mark) => (
-        <button key={mark.t} onClick={() => onScrub(mark.t)} style={styles.button} type="button">
+        <button key={mark.t} onClick={() => onScrub(mark.t)} style={button} type="button">
           {mark.label}
         </button>
       ))}

@@ -54,11 +54,20 @@ export function MapTools({
   /** What the last share did, shown for a moment. A clipboard that refused is not an error worth a dialog,
    *  but it is one the operator has to see — the link is put on screen to copy by hand instead. */
   const [copied, setCopied] = useState('');
+  /**
+   * On a narrow screen the cluster opens on demand.
+   *
+   * Measured 2026-08-25 at 360 CSS px: expanded it is ~380x390 over a map ~350 px tall — the search box and
+   * nine buttons covering the thing they are for. Nothing here is used every few seconds (search, fit,
+   * follow, save, measure, share are all deliberate acts), so a handle costs one tap and buys back the map.
+   */
+  const [open, setOpen] = useState(false);
 
   const unitSelected = selection?.kind === 'unit' ? selection.id : null;
   const button = touch ? styles.buttonTouch : styles.button;
   const buttonPrimary = touch ? styles.buttonPrimaryTouch : styles.buttonPrimary;
   const hit = touch ? styles.mapToolsHitTouch : styles.mapToolsHit;
+  const input = touch ? styles.mapToolsInputTouch : styles.mapToolsInput;
 
   const search = (next: string): void => {
     setQuery(next);
@@ -114,13 +123,38 @@ export function MapTools({
     setNaming(null);
   };
 
+  if (compact && !open) {
+    return (
+      <button
+        aria-expanded={false}
+        onClick={() => setOpen(true)}
+        style={styles.mapToolsHandle}
+        title="Search, fit, follow, measure and share"
+        type="button"
+      >
+        TOOLS
+      </button>
+    );
+  }
+
   return (
     <div style={compact ? { ...styles.mapTools, maxWidth: 'min(232px, 56vw)' } : styles.mapTools}>
+      {compact && (
+        <button
+          aria-expanded
+          aria-label="Hide the tools"
+          onClick={() => setOpen(false)}
+          style={{ ...button, justifySelf: 'end' }}
+          type="button"
+        >
+          ×
+        </button>
+      )}
       <input
         aria-label="Search places"
         onChange={(event) => search(event.target.value)}
         placeholder="Search a place"
-        style={styles.mapToolsInput}
+        style={input}
         value={query}
       />
 
@@ -191,7 +225,7 @@ export function MapTools({
           aria-label="Link to this view"
           onFocus={(event) => event.target.select()}
           readOnly
-          style={styles.mapToolsInput}
+          style={input}
           value={copied}
         />
       ) : (
@@ -215,7 +249,7 @@ export function MapTools({
               setNaming(null);
             }
           }}
-          style={styles.mapToolsInput}
+          style={input}
           value={naming}
         />
       )}

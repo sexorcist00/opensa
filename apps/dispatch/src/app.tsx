@@ -32,7 +32,7 @@ import { styles } from './ui/styles';
 import { TimelineBar } from './ui/timeline-bar';
 import { TopBar } from './ui/top-bar';
 import { UnitsPanel } from './ui/units-panel';
-import { useCoarsePointer, useCompactLayout } from './ui/use-compact';
+import { useCoarsePointer, useCompactLayout, useShortViewport } from './ui/use-compact';
 import { dispatchParams } from './world/boot';
 
 export function App(): ReactElement {
@@ -43,6 +43,9 @@ export function App(): ReactElement {
   // Two different questions: how much room there is, and what is pointing at it. A phone in landscape is
   // wide and coarse; a small window on a desk is narrow and fine.
   const touch = useCoarsePointer();
+  // A third question, and width cannot answer it: a phone in LANDSCAPE is wide enough to look roomy and too
+  // short to spend any of it on a list nobody is reading.
+  const short = useShortViewport();
 
   const [handle, setHandle] = useState<DispatchHandle | null>(null);
   const [bindings, setBindings] = useState<KeyBindings>(() => loadBindings());
@@ -126,7 +129,7 @@ export function App(): ReactElement {
         tool={readout?.tool ?? 'none'}
         touch={touch}
       />
-      <MapNav handle={handle} touch={touch} yaw={readout?.pose.yaw ?? MAP_YAW} />
+      <MapNav compact={compact} handle={handle} touch={touch} yaw={readout?.pose.yaw ?? MAP_YAW} />
       <DetailPanel actions={actions} compact={compact} onLocate={locate} ops={ops} selection={selection} />
       {keysOpen && <KeyHelp bindings={bindings} onBindings={applyBindings} onClose={() => setKeysOpen(false)} />}
     </MapCanvas>
@@ -139,6 +142,7 @@ export function App(): ReactElement {
       onLive={actions.live}
       onRate={actions.setRate}
       onScrub={actions.scrub}
+      touch={touch}
       window={historyWindow}
     />
   );
@@ -152,6 +156,7 @@ export function App(): ReactElement {
       onHour={setHour}
       onProjection={setProjection}
       projection={readout?.pose.projection ?? 'perspective'}
+      touch={touch}
     />
   );
 
@@ -171,6 +176,8 @@ export function App(): ReactElement {
           onLocateUnit={locateUnit}
           onSelect={actions.select}
           selection={selection}
+          short={short}
+          touch={touch}
           units={ops.units}
         />
         {timeline}

@@ -11,6 +11,14 @@ import { useEffect, useState } from 'react';
 
 /** Below this the two side panels stop fitting next to a usable map. */
 const COMPACT_MAX_WIDTH = 860;
+/**
+ * Below this there is no room for a list UNDER the map and a map worth looking at.
+ *
+ * Measured 2026-08-25 on a phone in landscape (740x360 CSS): the header, the sheet at its 44% cap, the
+ * timeline and the status bar left the map **98 px** — the console's whole subject reduced to a strip. Width
+ * alone cannot see this, which is why it is a third question rather than a smaller `COMPACT_MAX_WIDTH`.
+ */
+const SHORT_MAX_HEIGHT = 520;
 
 /**
  * Whether the primary pointer is a finger rather than a mouse — which is what decides TARGET SIZE, and the
@@ -26,6 +34,11 @@ export function useCoarsePointer(): boolean {
 
 export function useCompactLayout(): boolean {
   return useMediaQuery(`(max-width: ${COMPACT_MAX_WIDTH}px)`);
+}
+
+/** Whether the viewport is too SHORT to spend any of it on a list that is not being read. */
+export function useShortViewport(): boolean {
+  return useMediaQuery(`(max-height: ${SHORT_MAX_HEIGHT}px)`);
 }
 
 function matchesNow(query: string): boolean {

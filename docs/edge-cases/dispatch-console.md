@@ -71,3 +71,25 @@ new design must satisfy are next door in [`restrictions/`](../restrictions/READM
   is the empty ground that was on screen. Nothing re-renders a tile later.
 - **The archive is not incremental.** A rebuilt world means a re-baked pyramid; there is no patch path, and
   a pyramid and a pak that disagree look exactly like a correct map of a different city.
+
+## The phone layout (201/3-01)
+
+**A control the map pushes off the screen cannot be scrolled to.** The console's clusters are absolutely
+positioned against the map cell, so when that cell is wider than the viewport — which a bare `1fr` grid
+track allows, since it keeps `min-width: auto` — the controls anchored to its right edge are simply gone.
+Measured 2026-08-25 at 360 CSS px: layout 403 px wide, and `⟳`, `▼`, `BLK`, `−`, the `Auto` switch and
+every call row's state were past the edge. There is no page scroll to recover them and nothing draws a
+clipped edge. Fixed by `minmax(0, 1fr)`; guarded by `apps/dispatch/src/ui/styles.test.ts`.
+
+**A native checkbox cannot be given a touch target from this codebase.** `<input type="checkbox">` renders
+13x13 and its box is drawn by the browser — `width`/`height` do not resize the control, and this app styles
+inline, so there is no stylesheet to reach the appearance from either. A two-state control that needs 44 px
+is a `<button aria-pressed>`.
+
+**A range input's thumb is the browser's; its BOX is the target.** The thumb cannot be resized without a
+stylesheet, but a range drags from anywhere inside its box, so `height: 44` makes the control catchable even
+while the thumb still looks 16 px. Both of the console's sliders were 16 px tall until 2026-08-25.
+
+**Landscape is the posture width cannot see.** At 740x360 the viewport reads as roomy and is 360 px TALL:
+the map came to 98 px with the sheet at its 44 % cap. `useShortViewport()` answers it; a width query never
+will.

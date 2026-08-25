@@ -6,7 +6,7 @@ five of these or it is not finished:
 
 | Question | The answer that counts |
 | --- | --- |
-| Can a FINGER hit it? | ≥ **44 CSS px** of target where the pointer is coarse (`TOUCH_TARGET`, `apps/dispatch/src/ui/styles.ts`) |
+| Can a FINGER hit it? | ≥ **44 CSS px** of target where the pointer is coarse, in **BOTH axes** (`TOUCH_TARGET`, `apps/dispatch/src/ui/styles.ts`) |
 | Does it fit at **360 CSS px**? | the narrowest real device in this repo's record; nothing clipped, nothing crowded off the map |
 | Is it reachable WITHOUT a keyboard? | every command has an on-screen path, or the capability exists only on a desk |
 | Is it reachable without HOVER? | a `title=` is a bonus, never the only label — a finger has no hover state |
@@ -14,6 +14,18 @@ five of these or it is not finished:
 
 **44 is not ours.** WCAG 2.2's enhanced target-size criterion (2.5.5) says 44×44 CSS px, Apple's HIG says
 44 pt, Material says 48 dp. 44 is the number all three agree is enough, so it is the one the token carries.
+
+**Never a bare `1fr` on a track that holds the map.** A `1fr` grid track keeps `min-width: auto`, so it
+refuses to shrink below the widest row in its column — one over-wide row widens the whole grid, and the map
+cell goes with it. Measured 2026-08-25 at 360 CSS px: the console's top bar came to 403 px, the single
+column became 403, **and every control anchored to the map's right edge sat past the screen with nothing to
+scroll to**. `minmax(0, 1fr)`, and any full-width flex row inside it takes `minWidth: 0` + `overflow:
+hidden` so it gives way rather than pushing. This is the difference between a control that is small and one
+that does not exist.
+
+**Height is a third question, and width cannot answer it either.** A phone in landscape is wide and SHORT:
+at 740x360 the same layout left the map 98 px, because a list under it took its share of a screen that had
+none to give. `useShortViewport()` sits beside the other two.
 
 **Width and pointer are two questions, and answering one with the other is the usual mistake.** How WIDE the
 viewport is decides what fits — panels beside the map, or a tabbed sheet under it. How it is POINTED AT
@@ -37,6 +49,14 @@ time. Nothing in this repository measures a touch target, and no benchmark row h
 The failure reaches the operator as *"this app is fiddly on my phone"*, which is unactionable feedback
 arriving weeks later, about a control nobody remembers writing.
 
+**Violated again 2026-08-25**, and the second round is the one that says why this file is not a style note.
+The three 08-22 defects were controls that were too small. These were controls **that were not on the
+screen**: the layout was 403 CSS px wide inside a 360-px phone, so the right-hand column of the map's
+turn/tilt/zoom cluster, the board's `Auto` switch and every call row's state were past the edge with no way
+to scroll to them. The operator's report was *"impossible to control on the phone"* — which is what a
+geometry failure sounds like weeks later, from the far end of the feedback loop this file was written to
+shorten.
+
 **Discovered 2026-08-22**, by being violated three times in one session while the console's operator
 surface was built ([201/7-03](../plans/201-dispatch-console/7-the-operator-map/readme.md) and
 [7/06](../plans/201-dispatch-console/7-the-operator-map/readme.md)):
@@ -53,13 +73,22 @@ component, a `touch` flag from `useCoarsePointer()`, and a second size token bes
 
 ## Caught, or silent?
 
-**SILENT.** Nothing here is caught by a test, a lint rule or a build guard today. The honest checks are:
+**PARTLY CAUGHT since 2026-08-25, and silent everywhere the guard does not reach.**
 
+What is caught, by `apps/dispatch/src/ui/styles.test.ts`: a **bare `1fr`** in either grid template, a
+`…Touch` token under 44 in either axis, and a full-width bar that can push its column. That test exists
+because this file used to end by saying a lint over these literals could be written *"when this bites a
+second time"* — it bit a second time, and the sizes are literals in `styles.ts`, so the guard is the test.
+
+What is still SILENT, and it is most of the rule: a control sized inline at the call site rather than from a
+token, a cluster that fits but covers the map, a capability that exists only on a keyboard, and anything
+about reach or feel. The honest checks remain:
+
+- **a render at 360 CSS px**, which the agent container CAN do even though the phone cannot — a headless
+  Chromium at `(pointer: coarse)`, probing every element for a box past the viewport and every control for
+  a box under 44. This found all nine of 2026-08-25's defects in one pass and is the cheapest check in this
+  list; run it before handing a surface to the phone, never instead of it;
 - a **real phone**, which the development machine already is
-  ([development/termux.md](../development/termux.md)) — this is why
-  [201/3](../plans/201-dispatch-console/3-the-operator-surface-on-a-phone/readme.md) exists and why its
-  360-px layout spec is owed before, not after;
+  ([development/termux.md](../development/termux.md)) — the only judge of reach, feel and safe-area insets,
+  and the reason [201/3](../plans/201-dispatch-console/3-the-operator-surface-on-a-phone/readme.md) exists;
 - and a reviewer reading a diff for the five questions above, which is what this file is for.
-
-A lint rule over inline style objects would catch the target size (the sizes are literals in
-`styles.ts`), and nothing prevents writing one when this bites a second time.

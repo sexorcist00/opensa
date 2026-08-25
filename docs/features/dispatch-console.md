@@ -254,8 +254,30 @@ operator and per browser.
 clicked, plus turn, tilt, zoom and the three zoom levels. They are the same commands through the same handle,
 which is the point rather than duplication: **a capability that lives only on a keyboard ships to one
 platform**, and the phone is the device this console is aimed at. Every control takes a finger-sized target
-(≥ 44 CSS px) where the pointer is coarse and stays dense where it is a mouse — one component with two sizes,
-never two layouts ([the rule](../restrictions/cross-platform-surface.md)).
+(≥ 44 CSS px, in both axes) where the pointer is coarse and stays dense where it is a mouse — one component
+with two sizes, never two layouts ([the rule](../restrictions/cross-platform-surface.md)).
+
+## What the phone shows, and what it folds
+
+**201/3-01, since 2026-08-25.** A 360-px screen cannot hold the desk's chrome and a map worth looking at, so
+on a compact layout the console keeps out only what is pressed constantly and folds the rest one tap away —
+folded, never dropped, because a capability that exists on a desk and not on a phone is the failure this
+console is measured against.
+
+| | On a desk | On a phone |
+| --- | --- | --- |
+| The operator cluster (search, fit, follow, save, measure, share) | open | one `TOOLS` handle |
+| Turn, tilt, the three zoom levels | open | behind one key beside the compass |
+| North, zoom in, zoom out | open | open |
+| The calls and units lists | two columns beside the map | a tabbed sheet capped at 44 % of the screen, and **collapsed by default when the viewport is short** — a phone in landscape is wide and 360 px tall, where the sheet at its cap left the map 98 px |
+
+Collapsed, the sheet still carries both counts, which are the two numbers a dispatcher watches; tapping the
+tab you are on closes the list, tapping the other switches to it.
+
+**The measurements this replaced** are in
+[201/3-01](../plans/201-dispatch-console/3-the-operator-surface-on-a-phone/readme.md): a layout 403 CSS px
+wide inside a 360-px screen with four nav keys and the `Auto` switch off the edge, nine controls under 44 in
+one axis, and a tool cluster covering ~60 % of the map.
 
 ## Leaving the console
 
