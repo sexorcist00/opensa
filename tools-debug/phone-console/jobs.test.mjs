@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { buildJob, JobRunner } from './jobs.mjs';
+import { buildJob, JobRunner, mapOnlyOut } from './jobs.mjs';
 
 /** A runner over this repository, collecting what it printed. */
 function runner() {
@@ -33,7 +33,7 @@ describe('phone console jobs', () => {
   describe('negative cases', () => {
     it('refuses a job it does not have, and names the ones it does', () => {
       expect(() => buildJob('rm-rf')).toThrow(
-        /unknown job 'rm-rf' — known: districts, phone, pull, rebase, setup, sirv, webapp/,
+        /unknown job 'rm-rf' — known: districts, map, phone, pull, rebase, setup, sirv, webapp/,
       );
     });
 
@@ -60,6 +60,14 @@ describe('phone console jobs', () => {
         dropped: ['DISTRICT (not a knob of this job)'],
         env: {},
       });
+    });
+
+    it('will not let the page turn a map-only run back into a full one', () => {
+      // The whole value of the button is that it cannot be half-pressed: a stale MODELS in the form, or a
+      // page from before this existed, must not buy back the model half of a convert measured in hours.
+      const plan = buildJob('map', { BAKE: '1', DISTRICT: 'ganton', MODELS: '1', OUT: './build/phone-ls' });
+
+      expect(plan.env).toMatchObject({ BAKE: '0', MODELS: '0' });
     });
 
     it('refuses a second job while one is running, and names the one that is', async () => {
@@ -90,6 +98,30 @@ describe('phone console jobs', () => {
         TEXTURES: 'rgba8',
       });
       expect(plan.long).toBe(true);
+    });
+
+    it('sends a map-only run into its own folder, once', () => {
+      // `phone.sh` REFUSES an existing pak whose recipe is not the one being asked for, so a map-only run
+      // over the full pak's folder would serve nothing at all; and pressing the button twice must reuse the
+      // map-only pak rather than name a third folder.
+      expect(buildJob('map', { OUT: './build/phone-ls' }).env.OUT).toBe('./build/phone-ls-map');
+      expect(mapOnlyOut('./build/phone-ls-map')).toBe('./build/phone-ls-map');
+      expect(mapOnlyOut('./build/phone-ls/')).toBe('./build/phone-ls-map');
+      // Nothing typed, or a value dropped for its shape: still a folder named for what it holds.
+      expect(buildJob('map').env.OUT).toBe('./build/phone-map');
+    });
+
+    it('keeps the district and the texture format a map-only run was asked for', () => {
+      const plan = buildJob('map', { DISTRICT: 'los-santos-wide', TEXTURES: 'rgba8' });
+
+      expect(plan.args).toEqual(['run', 'phone']);
+      expect(plan.env).toEqual({
+        BAKE: '0',
+        DISTRICT: 'los-santos-wide',
+        MODELS: '0',
+        OUT: './build/phone-map',
+        TEXTURES: 'rgba8',
+      });
     });
 
     it('re-unpacks the app by clearing assets/ rather than the folder itself', () => {

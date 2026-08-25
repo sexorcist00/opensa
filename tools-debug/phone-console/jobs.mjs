@@ -30,6 +30,24 @@ export const PHONE_ENV = {
   VEHICLES: /^[\w,]{1,200}$/,
 };
 
+/**
+ * What a MAP-ONLY run forces off, whatever the page sends.
+ *
+ * The button exists because "just the ground" is the run that is wanted most and is the one nobody remembers
+ * how to ask for: it is two env vars, and getting either wrong costs a convert measured in hours rather than
+ * one that is wrong on screen.
+ *
+ * - `MODELS=0` → `--no-models`: no vehicles, no peds, no model archives rewritten. The whole model half of
+ *   the convert, and the pak the flat and 3D map read does not contain one of them.
+ * - `BAKE=0` → no `--bake-collision`. Not tidiness: with no models there is nothing to run physics, and
+ *   `scripts/phone.sh` says so in its own banner — the bake is work whose product this run cannot reach.
+ *
+ * `MAPOBJ` is deliberately NOT here. Its default is already 1 (convert only what the rect places), and the
+ * map objects the rect places ARE the ground — turning them off would not be a leaner map, it would be an
+ * empty one.
+ */
+export const MAP_ONLY = { BAKE: '0', MODELS: '0' };
+
 /** What the panel can run. `long` jobs hold the terminal (they serve), so the page shows a stop button. */
 export const JOBS = {
   districts: {
@@ -38,9 +56,20 @@ export const JOBS = {
     label: 'list the measurement districts',
     long: false,
   },
+  // The one-tap ground run. It is the `phone` ritual with two things forced OFF and its own output folder —
+  // see MAP_ONLY below for why each of the three is not a default the operator is asked to remember.
+  map: {
+    args: ['run', 'phone'],
+    command: 'npm',
+    forced: MAP_ONLY,
+    knobs: PHONE_ENV,
+    label: 'convert the ground and nothing else — no models, no collision bake',
+    long: true,
+  },
   phone: {
     args: ['run', 'phone'],
     command: 'npm',
+    knobs: PHONE_ENV,
     label: 'convert if needed, verify the pak, serve, print the URLs',
     long: true,
   },
@@ -206,7 +235,7 @@ export function buildJob(id, form = {}) {
     if (value === '') {
       continue;
     }
-    const allowed = id === 'phone' ? PHONE_ENV[key] : undefined;
+    const allowed = job.knobs?.[key];
     if (allowed === undefined) {
       dropped.push(`${key} (not a knob of this job)`);
     } else if (!allowed.test(value)) {
@@ -215,8 +244,30 @@ export function buildJob(id, form = {}) {
       env[key] = value;
     }
   }
+  if (job.forced) {
+    // Last, so nothing the page sends can turn a map-only run back into a full one — and into its OWN folder,
+    // because the alternative is worse than it looks: `phone.sh` checks an existing pak against the recipe it
+    // was asked for and REFUSES when they differ, so a map-only run over a full pak's folder would serve
+    // nothing, and forcing a rebuild instead would throw the full pak away every time the button is pressed.
+    Object.assign(env, job.forced, { OUT: mapOnlyOut(env.OUT) });
+  }
 
   return { args: job.args, command: job.command, dropped, env, id, label: job.label, long: job.long };
+}
+
+/**
+ * The folder a map-only pak lives in: the requested one with `-map` on the end, idempotent.
+ *
+ * The default matches `scripts/phone.sh`'s own (`./build/phone`), so a form that sent no output folder — or
+ * one whose value was dropped for its shape — still lands somewhere named for what it holds rather than in
+ * whatever the last run used.
+ */
+export function mapOnlyOut(out) {
+  const base = String(out ?? '')
+    .trim()
+    .replace(/\/+$/, '');
+
+  return base === '' ? './build/phone-map' : base.endsWith('-map') ? base : `${base}-map`;
 }
 
 function describeEnv(env) {

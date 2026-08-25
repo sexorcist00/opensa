@@ -270,6 +270,13 @@
           <button id="run" class="primary grow">Convert &amp; serve</button>
           <button id="stop" class="danger">Stop</button>
         </div>
+        <div class="row" style="margin-top: 8px">
+          <button id="run-map" class="grow">Map only — the ground, nothing else</button>
+        </div>
+        <p class="muted">
+          Map only ignores the two selects above: no models, no collision bake, into its own
+          <code>-map</code> folder so it never fights the full pak’s recipe.
+        </p>
         <p class="muted" id="jobstate">nothing running</p>
       </section>
 
@@ -327,6 +334,9 @@
         }
         return parsed;
       }
+
+      /** The jobs whose behaviour the Run section's fields describe; everything else runs on nothing. */
+      const TAKES_FORM = new Set(['map', 'phone']);
 
       function form() {
         return {
@@ -414,10 +424,15 @@
 
       async function start(id) {
         try {
-          // Only the convert takes knobs. Sending the form to `setup` or `pull` made the panel report every
+          // Only the converts take knobs. Sending the form to `setup` or `pull` made the panel report every
           // field as dropped, which reads as a mistake the operator made rather than as a field that simply
           // does not apply.
-          await api(`/api/job/${id}`, id === 'phone' ? form() : {});
+          const started = await api(`/api/job/${id}`, TAKES_FORM.has(id) ? form() : {});
+          // The server has the last word on where a run writes — a map-only run picks its own folder — and
+          // the links below are built from this field, so it follows rather than leads.
+          if (started.env?.OUT) {
+            $('out').value = started.env.OUT;
+          }
         } catch (error) {
           alert(error.message);
         }
@@ -428,6 +443,7 @@
       $('pull').onclick = () => start('pull');
       $('setup').onclick = () => start('setup');
       $('run').onclick = () => start('phone');
+      $('run-map').onclick = () => start('map');
       $('stop').onclick = async () => {
         await api('/api/stop', {});
         refresh();

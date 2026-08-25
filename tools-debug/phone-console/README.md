@@ -44,6 +44,17 @@ offers — district, output folder, texture format, whether models are converted
 `scripts/phone.sh` is 369 lines of measured knowledge about this device, and a second copy of it inside a web
 server would be a second thing to keep true.
 
+**`Map only` is the same ritual with the model half taken out**, because "just the ground" is the run that is
+wanted most and the one nobody remembers how to ask for. It forces `MODELS=0` (no vehicles, no peds, no model
+archives rewritten — the pak the map reads contains none of them) and `BAKE=0` (with no models there is
+nothing to run physics, so the collision bake is work whose product this run cannot reach), and the page
+cannot buy either back: the forced values are applied last, after the form.
+
+It also converts into its **own** folder — the one in the field with `-map` appended, and the field follows
+along so the links below open the right pak. That is not tidiness either: `phone.sh` checks an existing pak
+against the recipe it was asked for and refuses when they differ, so a map-only run pointed at a full pak's
+folder would serve nothing, and forcing a rebuild instead would throw the full pak away on every press.
+
 **One job at a time**, and the refusal names what is running. Two converts at once on a phone is an OOM and
 two paks welded into one folder.
 

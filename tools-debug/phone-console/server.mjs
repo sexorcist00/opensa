@@ -309,8 +309,9 @@ async function handle(request, response) {
   }
   if (request.method === 'POST' && path.startsWith('/api/job/')) {
     const plan = buildJob(path.slice('/api/job/'.length), await readJson(request));
-
-    return send(response, 200, runner.start(plan));
+    // The env goes back with the status because the SERVER decides part of it — a map-only run converts into
+    // its own folder, and a page still pointing its links at the folder it typed would open the other pak.
+    return send(response, 200, { ...runner.start(plan), env: plan.env });
   }
   if (request.method === 'POST' && path === '/api/stop') {
     return send(response, 200, runner.stop());

@@ -36,7 +36,8 @@ inbox and its commit — the two halves that pay for themselves immediately.
   **`sirv`** · the game files · **GAME vs OUT resolving to one folder** · the pak and its recipe · the two
   run ports · free space on both filesystems · branch and behind-count · the wake lock. Each with what to do
   about it, rolled into one verdict line.
-- **The rituals** (`jobs.mjs`): `git pull --ff-only`, `phone:setup`, `phone` with its knobs, `district.ts`.
+- **The rituals** (`jobs.mjs`): `git pull --ff-only`, `phone:setup`, `phone` with its knobs, `map` — the
+  same convert with the model half forced off — and `district.ts`.
   One at a time, refusal naming what is running; env is whitelisted per job and a dropped knob is REPORTED
   (a shell script ignores an env var it does not read, silently). Jobs run in their own process group, so
   stopping one reaches vite, the static server and the convert rather than orphaning a held port.
@@ -172,5 +173,6 @@ that reads a log it cannot cite has learned nothing the next session can use.
 | --- | --- |
 | 01 preflight + rituals + capture inbox | **DONE 2026-08-23, and PROVEN on the device: a capture was filed, committed and pushed by the phone itself.** — verified in the container end to end (35 tests, every guard exercised). The first phone attempt failed on a dirty `package.json` written by our own `phone:setup`; fixed at the source (`--no-save`) and now reported by the doctor. Owed: the first clean run on the phone |
 | 02 the console posts its own captures | not started |
+| 05 the map-only button | **DONE 2026-08-25** — the user's ask: one tap that converts the ground and nothing else. `MODELS=0` + `BAKE=0` forced after the form (the page cannot buy either back) and its own `-map` output folder, because `phone.sh` refuses a pak whose recipe is not the one asked for and a forced rebuild would discard the full pak on every press. 62 tests |
 | 03 the panel serves the pak itself | not started — gated on the doctor reporting `sirv` missing on a real device |
 | 04 a read-only window for an agent | ruled out 2026-08-23 |
