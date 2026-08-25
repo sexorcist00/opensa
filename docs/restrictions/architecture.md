@@ -705,6 +705,28 @@ must still report 4 creates, and the defect was reintroduced to prove it fails (
 field is documented on the interface itself, which is where a host looks. Before that, **silent, and worse
 than silent**: the wrong number is plausible, self-consistent across a whole window, and grows with window
 length, so a longer capture makes it *more* convincing rather than obviously broken.
+## An effect that depends on a PROP the host recreates is a subscription that never runs
+
+An interval, an observer or a listener started inside `useEffect(…, [callback])` is torn down and rebuilt
+every time `callback` changes identity. When that callback is an inline arrow in the host's JSX — the normal
+way a getter is passed down — it is a new function on every render of the host, so the effect restarts on
+every render. If the host re-renders faster than the effect's own period, the work inside it **never happens
+once**.
+
+Measured 2026-08-25: `InventoryPanel` polled the collector every 500 ms with `[read]` as its dependency,
+while the console pushes a readout four times a second — so the interval was rebuilt every 250 ms and fired
+only in the gaps. The capture the operator copied after flying the map for minutes contained ONE frame, from
+just after boot, and every other capture of a moving map had been the same. The panel looked alive the whole
+time, because it had a report; it was simply the first one.
+
+The fix is the shape the rest of this app already uses: the callback lives in a ref (`readRef.current = read`
+on every render) and the effect depends on **nothing**, so it is started exactly once.
+
+**Caught:** no, and worse than not caught — it is INVERTED. The failure happens while the surface is busy and
+disappears the moment it goes idle, so every check made "at rest" passes: `use-operations.ts` had the ref
+shape from the start and the panel next to it did not, and the difference showed up only as a measurement
+that had been quietly wrong for two days.
+
 ## An effect's RETURN VALUE is its cleanup — a shorthand body must return a cleanup or nothing
 
 React calls whatever `useEffect` returns as the effect's cleanup function. A concise arrow body returns the

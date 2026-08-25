@@ -22,12 +22,27 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
   const [copied, setCopied] = useState('');
   const [fallback, setFallback] = useState('');
   const areaRef = useRef<HTMLTextAreaElement>(null);
+  /**
+   * The getter through a REF, so the poll below depends on nothing and is started exactly once.
+   *
+   * With `[read]` as the dependency this panel froze at the first tick and stayed there. `read` is an inline
+   * arrow in the host's JSX, so it is a new function on every render of the host — and the host re-renders
+   * on every readout, four times a second. The effect therefore tore the interval down and rebuilt it every
+   * 250 ms, and a 500 ms interval never got to fire.
+   *
+   * It failed in the one direction nothing catches: while the console is BUSY. Idle, the readouts stop, the
+   * interval survives and the panel updates — which is why the 2026-08-23 capture carried a 65 s window and
+   * the 2026-08-25 one, taken while flying the map, carried a single frame from just after boot. Every
+   * capture of a MOVING map was a capture of the boot until this line changed.
+   */
+  const readRef = useRef(read);
+  readRef.current = read;
 
   useEffect(() => {
-    const id = setInterval((): void => setReport(read()), POLL_MS);
+    const id = setInterval((): void => setReport(readRef.current()), POLL_MS);
 
     return (): void => clearInterval(id);
-  }, [read]);
+  }, []);
 
   useEffect(() => {
     if (fallback && areaRef.current) {
