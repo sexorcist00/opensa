@@ -151,7 +151,24 @@ things an inline style object structurally cannot express, each of which was a r
 - `:focus-visible` — keyboard focus had no visible ring on a dark panel;
 - `::-webkit-slider-thumb` / `::-moz-range-thumb` — both sliders had a 16 px thumb;
 - `::placeholder` — the search box's placeholder sat at the UA's grey;
-- the scrollbars on the dense lists.
+- **`font-family` on form controls** — it does not inherit, so every button and field rendered in the
+  browser's default face (Arial, measured on the live page) beside panels set in the app's own sans;
+- the scrollbars on the dense lists, plus `color-scheme: dark` and `prefers-reduced-motion`.
+
+## Two checklist rules this console deliberately breaks
+
+A design review flags both of these on sight. Both are reasoned, and they are written down here so the next
+reviewer does not "fix" them.
+
+**A system font as the primary typeface.** The usual read is _"I gave up on typography"_, and on a marketing
+page it is correct. Here the console is served as static files to a phone on whatever connection it has, and
+a webfont that arrives late reflows the board an operator is reading. Nothing in this UI is set larger than
+17 px, so the display face a webfont would buy is a face nobody sees. Revisit if the console ever grows a
+surface that is read rather than scanned.
+
+**A coloured left border on a row.** It is on every AI-slop blacklist because it is usually decoration on a
+marketing card. Here it is the priority rail, and it is carrying the one thing the queue is scanned for. The
+test is whether removing it loses information: it does.
 
 ## Decisions log
 

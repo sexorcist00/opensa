@@ -173,7 +173,15 @@ export const styles = {
     width: '100%',
   },
   /** `?embed=1`: the map fills the frame the host gave it, and nothing else is drawn. */
-  appEmbedded: { background: RAMP.bg, color: RAMP.text, height: '100%', position: 'relative', width: '100%' },
+  appEmbedded: {
+    background: RAMP.bg,
+    color: RAMP.text,
+    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+    fontSize: TEXT.body,
+    height: '100%',
+    position: 'relative',
+    width: '100%',
+  },
   badge: {
     borderRadius: RADIUS.pill,
     fontFamily: MONO,

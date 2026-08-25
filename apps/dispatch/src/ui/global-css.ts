@@ -10,6 +10,10 @@
  * - **the range thumb** — both sliders drew a ~16 px thumb. Making the input 44 px tall fixed the TARGET
  *   (a range drags from anywhere in its box), but the thumb still looked like something to aim at rather
  *   than grab. Only `::-webkit-slider-thumb` / `::-moz-range-thumb` reach it.
+ * - **form controls do not inherit a typeface** — `font-family` does not cross into `<button>` or `<input>`,
+ *   so every button and every field in this console rendered in the browser's default (Arial, measured
+ *   2026-08-25) beside panels set in the app's own sans. A style object per token cannot fix this without
+ *   repeating itself in fourteen places; one rule does.
  * - **`::placeholder`** — the search box's hint sat at the browser's grey, darker than our own muted step.
  * - **the scrollbars** on the queue and the roster, which on a dark surface arrive as a bright band.
  *
@@ -25,6 +29,17 @@ export const DISPATCH_SCOPE = 'data-opensa-dispatch';
 const ID = 'opensa-dispatch-css';
 
 const CSS = `
+[${DISPATCH_SCOPE}] {
+  /* Tells the UA to render its own parts — scrollbar gutters, form control internals, the range track we do
+     not restyle — for a dark surface, instead of drawing light chrome onto one. */
+  color-scheme: dark;
+}
+[${DISPATCH_SCOPE}] button,
+[${DISPATCH_SCOPE}] input,
+[${DISPATCH_SCOPE}] select,
+[${DISPATCH_SCOPE}] textarea {
+  font-family: inherit;
+}
 [${DISPATCH_SCOPE}] *:focus-visible {
   outline: 2px solid ${ACCENT.solid};
   outline-offset: 1px;
@@ -87,6 +102,13 @@ const CSS = `
 }
 [${DISPATCH_SCOPE}] ::-webkit-scrollbar-track {
   background: transparent;
+}
+/* The only motion in this console is a tap being acknowledged. An operator who has asked the system for
+   less of it gets none, rather than a shorter version of it. */
+@media (prefers-reduced-motion: reduce) {
+  [${DISPATCH_SCOPE}] * {
+    transition: none !important;
+  }
 }
 `;
 
