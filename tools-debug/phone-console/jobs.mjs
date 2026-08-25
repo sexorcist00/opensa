@@ -181,7 +181,10 @@ export class JobRunner {
       // Synchronous and unbuffered: the whole point is the line that was written a moment before the process
       // was killed, and a stream that batches is a stream that loses exactly that line.
       try {
-        appendFileSync(this.logFile, `${new Date().toISOString().slice(11, 19)} ${clean}\n`);
+        // LOCAL time, not `toISOString()`. The first log this wrote stamped UTC while the phone's clock read
+        // UTC+3, so every line was three hours off the wall clock it was being compared against — on a file
+        // whose whole job is answering "how long in did it die".
+        appendFileSync(this.logFile, `${new Date().toLocaleTimeString('en-GB', { hour12: false })} ${clean}\n`);
       } catch {
         this.logFile = undefined;
       }

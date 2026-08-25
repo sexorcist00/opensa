@@ -258,9 +258,14 @@ PEDS=$([ "$MODELS" = 0 ] && echo '-' || echo "$PEDS")"
     if [ "$TEXTURES" = astc ]; then
       echo >&2
       echo "the ASTC encode is the LAST stage, so the district converted and only the re-encode died." >&2
+      echo "it is also 97% of a map-only run's wall clock and it is NOT checkpointed: the weld resumes, the" >&2
+      echo "encode restarts (measured 2026-08-25 — 77s of weld, ~2550s of encode, killed at 6m25s)." >&2
+      echo "  docs/benchmarks/tools/2026-08-25-phone-map-only-astc-encode-wall.md" >&2
+      echo "  docs/in-reserve/opensa-pack-encode-checkpoints.md  ← what it would take to make it resumable" >&2
       echo "next, in order of cost:" >&2
+      echo "  TEXTURES=rgba8 REBUILD=1 npm run phone  # skips the stage entirely; 4x the texture memory" >&2
+      echo "  DISTRICT=los-santos-centre npm run phone  # 4 cells instead of 16 — a quarter of the texels" >&2
       echo "  HEAP=1536 REBUILD=1 npm run phone     # less reserved address space for the isolates to fit in" >&2
-      echo "  TEXTURES=rgba8 REBUILD=1 npm run phone  # take the pak without ASTC and lose the 4x texture win" >&2
     fi
     exit 1
   fi

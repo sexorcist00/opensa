@@ -25,6 +25,7 @@ arrives says the card's name.
 
 | Folder | What it holds | Why it is there |
 | --- | --- | --- |
+| [opensa-pack-encode-checkpoints.md](opensa-pack-encode-checkpoints.md) | The ASTC encode is 97% of a map-only convert on the phone and is not checkpointed, so a kill loses all of it. Deferred because `TEXTURES=rgba8` removes the stage. **Trigger:** an ASTC pak has to be built ON the phone — checked in `scripts/phone.sh`'s convert-failed branch, which names this card |
 | **`in-reserve/`** | researched work, not needed YET | a named condition would make it needed |
 | [`roadmap/`](../roadmap/) | decided work, later version | we DO intend it, it is scheduled |
 | [`postmortem/`](../postmortem/) | a died concept or plan | it was TRIED and it FAILED |
