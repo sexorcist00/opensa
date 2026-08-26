@@ -119,6 +119,14 @@ decided against real-world geography, so a globe and its CRS machinery buy nothi
 - <https://github.com/SnailyCAD/snaily-cadv4> (MIT) — the open-source benchmark for roleplay CAD/MDT:
   self-hosted, TypeScript monorepo, Docker, Discord role sync, realtime state. The feature checklist the
   product half is measured against. Its map is a [separate 2D integration](https://github.com/SnailyCAD/live-map).
+  **It ships a real design system**, `@snailycad/ui` (read 2026-08-26, v1.80.2): tsup-built, published,
+  with Storybook and Chromatic visual regression. Built on **React Aria / React Stately** (~30 packages)
+  plus four Radix primitives, `class-variance-authority` + `tailwind-merge`, `formik`, `next-intl`,
+  `react-dnd` and Monaco — and **`next` as a peer dependency**. Worth reading and worth DEPENDING on for a
+  list-first CAD; not forkable into `apps/dispatch`, which is Vite, Tailwind-free and ships as an
+  embeddable widget with zero runtime dependencies. Their choice of React Aria over Radix is the
+  interesting part: it is the deeper answer for comboboxes, date pickers and listboxes, which is the CAD
+  half's problem rather than the map's.
 - <https://sonorancad.com/fivem> — the commercial leader for FiveM, and **it ships a 3D live map for GTA V**
   (a `2D / 2.5D / 3D` switch in the Live Map window, a camera pad, bodycam previews on unit markers).
   Corrected 2026-08-26: this entry, and [202 §2](plans/202-pcad-dispatch/readme.md), previously said its 3D
