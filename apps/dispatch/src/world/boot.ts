@@ -1,8 +1,8 @@
-import type { ResidencyView, StreamStats } from '@opensa/engine';
+import type { OpenedPak, ResidencyView, StreamStats } from '@opensa/engine';
 import type { TimecycSource } from '@opensa/renderware';
 
 import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
-import { Engine, FrameSpans, frameSpans, pakTraffic, setupStreaming } from '@opensa/engine';
+import { Engine, FrameSpans, frameSpans, openPakSource, pakTraffic, setupStreaming } from '@opensa/engine';
 import {
   createEngineEnvironmentDriver,
   type EngineEnvironmentDriver,
@@ -50,7 +50,7 @@ import { buildDemoCity, DEMO_EXTENT, DEMO_REACH } from './demo-city';
 import { DISTRICTS } from './districts';
 import { createErrorLog } from './error-log';
 import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
-import { DEFAULT_SRC, resolvePakBase } from './pak-source';
+import { DEFAULT_SRC, type PakBase, resolvePakBase } from './pak-source';
 import { RenderGate } from './render-gate';
 import { bakeFlatMap } from './tile-bake-host';
 import { installWater } from './water';
@@ -276,13 +276,25 @@ interface DispatchWorld {
    *  console used to throw away, keeping only `pendingCells`. They are the between-frame half no in-loop
    *  timer can see. */
   follow: (focus: readonly [number, number, number], view: ResidencyView) => StreamStats;
-  /** Where `data/` sits, for timecyc. Empty when there is no game dir (the demo). */
-  gameDir: string;
   /** What the status bar shows as the world's provenance. */
   label: string;
   /** How far from the view's focus this world actually has content — the LOD ring for a streamed world,
    *  its own extent for the demo. The camera derives both of its bounds from it (201/7-02). */
   readonly reach: number;
+}
+
+/**
+ * What the pak open produced while the GPU was starting (201/4-03), and what it cost. `openMs` is the whole
+ * of it — the `?src=` probe AND the manifest AND the worker's own IO probe — because that is the span the
+ * overlap either hid or did not.
+ */
+interface OpenedWorld {
+  readonly openMs: number;
+  readonly pak: OpenedPak;
+  readonly source: PakBase;
+  /** The game's own `data/timecyc.dat`, read beside the pak — it lives on the same server and is not the
+   *  pak's business, so it has no reason to wait for it. `null` when the build ships no `data/`. */
+  readonly timecyc: null | TimecycSource;
 }
 
 /**
@@ -346,13 +358,37 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   new ResizeObserver(resize).observe(canvas);
 
   const engine = new Engine();
+  /**
+   * The GPU and the radio are two different machines, and this boot used them one at a time: `engine.init`
+   * measured **2 607.5 ms** on the phone (201/4-03) with the network idle, and only when it returned did the
+   * world start looking for its manifest. The pak's engine-free half — probing `?src=`, reading the
+   * manifest, spinning the worker onto its IO mode and slice cache — is STARTED here and awaited after the
+   * GPU, so the pair costs `max` rather than `sum`.
+   *
+   * What it costs when the world is the one that fails: the error now arrives after the GPU is up rather
+   * than before it. The message is the same one; the wait in front of it is the GPU's, and it is the wait
+   * the console pays on every successful boot anyway.
+   */
+  const bothStart = performance.now();
+  const opening = params.get('demo') === '1' ? null : openWorld(params);
+  // A rejection with nobody attached is an unhandled rejection the moment it happens, and nothing is
+  // attached until the GPU is up. This one is discarded; the `await` below gets the real error.
+  opening?.catch(() => undefined);
   // The phases the shell reports are the ones that actually take time here, in the order they take it. The
   // GPU first: `init` opens the device and compiles all 34 pipelines. That compile is asynchronous and
   // overlapped since 201/4-03, and this is the number that says whether it helped — the capture carries it
   // (`boot.gpuMs`), because a boot cost nobody records is one nobody can argue about.
   bootStep('starting the GPU…');
   const gpuStart = performance.now();
-  await engine.init(canvas);
+  await engine.init(canvas).catch((error: unknown) => {
+    // A GPU that fails here is not the end of the console: `map-canvas` falls back to plan mode and keeps
+    // running, so the worker the open beside it produced would sit there for the rest of the session
+    // holding its slice cache. Close it when it arrives — which is the price of starting it early, and the
+    // only one.
+    void opening?.then((world) => world.pak.worker.terminate()).catch(() => undefined);
+
+    throw error;
+  });
   const gpuMs = performance.now() - gpuStart;
   // `?scale=` — the same manual knob `apps/web` has, and the only one that moves the `target` category:
   // 36.54 MB of the 2026-08-12 capture's 74.9 MB is scene + bloom targets, which scale with the square of
@@ -368,8 +404,14 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // `?demo=1` skips the pak entirely and builds a synthetic block grid, so the console can be driven on a
   // machine with no built game. Everything above the world — camera, beacons, symbology, picking — is the
   // same code path either way; only the geometry's provenance differs.
-  const world = params.get('demo') === '1' ? demoWorld(engine) : await streamedWorld(engine, params);
-  const environment = await buildEnvironment(engine, world.gameDir, params);
+  bootStep(opening === null ? 'the demo world…' : 'reading the world…');
+  const opened = opening === null ? null : await opening;
+  // What the overlap was worth on the day, counted rather than claimed: both halves ran between
+  // `bothStart` and here, so whatever their durations sum to beyond that wall is time that ran twice over.
+  const openMs = opened?.openMs ?? 0;
+  const overlapMs = Math.max(0, gpuMs + openMs - (performance.now() - bothStart));
+  const world = opened === null ? demoWorld(engine) : await streamedWorld(engine, params, opened);
+  const environment = buildEnvironment(engine, opened?.timecyc ?? null, params);
   let hour = numberParam(params, 'hour', 10);
   const applyHour = (next: number): void => {
     hour = next;
@@ -797,7 +839,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       const pose = camera.pose();
 
       return inventory.report({
-        boot: { gpuMs, phases: engine.bootPhases.byName },
+        boot: { gpuMs, openMs, overlapMs, phases: engine.bootPhases.byName },
         build: world.label,
         byCategory: engine.ledger(),
         bytes: {
@@ -1026,12 +1068,11 @@ function bindInput(input: {
 }
 
 /** The game's own timecyc when the build ships one, so the map is lit as the game lights it. */
-async function buildEnvironment(
+function buildEnvironment(
   engine: Engine,
-  gameDir: string,
+  timecyc: null | TimecycSource,
   params: URLSearchParams,
-): Promise<EngineEnvironmentDriver> {
-  const timecyc = await readTimecyc(gameDir);
+): EngineEnvironmentDriver {
   // Which of the three names won is otherwise unobservable — a shadowed table fails nothing (104/02).
   // eslint-disable-next-line no-console -- boot report, one line
   console.log(`[timecyc] ${describeTimecycSource(timecyc)}`);
@@ -1056,7 +1097,6 @@ function demoWorld(engine: Engine): DispatchWorld {
     districts: NO_DISTRICTS,
     extent: DEMO_EXTENT,
     follow: () => IDLE_STREAM,
-    gameDir: '',
     label: 'demo (synthetic)',
     reach: DEMO_REACH,
   };
@@ -1075,6 +1115,22 @@ function numberParam(params: URLSearchParams, name: string, fallback: number): n
   const raw = Number(params.get(name) ?? Number.NaN);
 
   return Number.isFinite(raw) ? raw : fallback;
+}
+
+/**
+ * The pak's engine-free half, started beside `engine.init` (201/4-03): where the world is, its manifest, and
+ * a worker that has probed its IO mode. It reports no shell step — while this runs, the phase the console is
+ * actually waiting on is the GPU, and a bar that narrates the faster of two parallel halves is a bar that
+ * lies about what is taking the time.
+ */
+async function openWorld(params: URLSearchParams): Promise<OpenedWorld> {
+  const startedAt = performance.now();
+  const source = await resolvePakBase(params.get('src') ?? DEFAULT_SRC);
+  // Two files on the same server, neither waiting on the other: the pak's manifest and worker, and the
+  // game's `data/` mood table (up to three candidate names, 104/01).
+  const [pak, timecyc] = await Promise.all([openPakSource(source.base), readTimecyc(source.gameDir)]);
+
+  return { openMs: performance.now() - startedAt, pak, source, timecyc };
 }
 
 /**
@@ -1151,23 +1207,30 @@ function stepCall(
   host.camera.flyTo(next.at, LOCATE_SPAN);
 }
 
-/** The real thing: a built game, streamed from its pak. */
-async function streamedWorld(engine: Engine, params: URLSearchParams): Promise<DispatchWorld> {
-  bootStep('finding the world…');
-  const source = await resolvePakBase(params.get('src') ?? DEFAULT_SRC);
-  bootStep('reading the manifest…', undefined, undefined, source.base);
-  const setup = await setupStreaming(engine, source.base, {
-    hdRadius: numberParam(params, 'hd', DEFAULT_HD_RADIUS),
-    lodRadius: numberParam(params, 'lod', DEFAULT_LOD_RADIUS),
-  });
-  bootStep('the water…');
-  await installWater(engine, source.base, setup.water);
+/** The real thing: a built game, streamed from its already-opened pak. */
+async function streamedWorld(engine: Engine, params: URLSearchParams, opened: OpenedWorld): Promise<DispatchWorld> {
+  const base = opened.source.base;
+  const setup = await setupStreaming(
+    engine,
+    base,
+    {
+      hdRadius: numberParam(params, 'hd', DEFAULT_HD_RADIUS),
+      lodRadius: numberParam(params, 'lod', DEFAULT_LOD_RADIUS),
+    },
+    opened.pak,
+  );
+  // The water mesh and the district table are two more independent reads off the same server — a 2.66 MB
+  // binary and a small JSON — and the boot used to queue them one behind the other.
+  bootStep('the water and the places…', undefined, undefined, base);
+  const [, districts] = await Promise.all([
+    installWater(engine, base, setup.water),
+    loadDistricts(base, setup.districts),
+  ]);
 
   return {
-    districts: await loadDistricts(source.base, setup.districts),
+    districts,
     extent: { centre: engineToGta(setup.center), radius: setup.radius },
     follow: (focus, view) => setup.driver.update(focus, view),
-    gameDir: source.gameDir,
     label: setup.buildTime ?? 'unknown',
     reach: numberParam(params, 'lod', DEFAULT_LOD_RADIUS),
   };

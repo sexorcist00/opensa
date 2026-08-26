@@ -77,7 +77,8 @@ window. A drift with no ceiling is a finding, not a footnote.
 4/01 made the first frame cheap. This step is about the seconds BEFORE it, which on the phone were a black
 rectangle: no signal that anything was happening, and no way to tell a slow pak from a crash.
 
-Three pieces, chosen with the user 2026-08-26 — progress only, no flat map and no skeleton behind it:
+Four pieces. Three were chosen with the user 2026-08-26 — progress only, no flat map and no skeleton behind
+it — and the fourth came out of what they measured:
 
 - **The boot shell.** Inline in `dispatch.html`, painted before the module graph, released on the first
   frame that has a PICTURE rather than when `bootDispatch` returns. Contract and failure shapes in
@@ -93,14 +94,27 @@ Three pieces, chosen with the user 2026-08-26 — progress only, no flat map and
   first three frames are split by phase (`firstFrames` in the capture) and the number gets an owner before
   anything else is aimed at it.
 
+- **The GPU and the network at the same time.** The capture below said `engine.init` costs **2 607.5 ms**
+  with the radio idle — and only then did the world start looking for its manifest, its worker, its timecyc,
+  its water and its district table, each behind the last. The pak's engine-free half is `openPakSource` now
+  (manifest + a worker already probed onto its IO mode and slice cache), STARTED before `engine.init` is
+  awaited and handed to `setupStreaming` as `opened`; the timecyc read goes beside it, and the water mesh and
+  the district table are fetched together rather than in sequence. The boot pays `max` instead of `sum`, and
+  the capture says how much of the two really overlapped (`boot.openMs`, `boot.overlapMs`) rather than
+  claiming it. What it costs: a world that FAILS reports after the GPU is up instead of before it — and a GPU
+  that fails leaves a worker the boot has to `terminate()`, since that session falls back to plan mode and
+  keeps running. **Measured here:** the dispatch chunk goes **121.47 → 121.88 kB raw (41.51 → 41.70
+  gzipped)** for the scheduling, the cleanup and the two counters; the engine chunk does not move.
+
 **Measured 2026-08-26** ([the capture](../../../benchmarks/opensa-engine/2026-08-26-mobile-boot-split.json)):
 the shell ran a real boot; the cache answered **10.67 MB of 32.68 over 59 of 88 requests**; and the split
 named the 77.9 ms in one go — **`frame:sky-lut` 75.8**, fixed at 3.3x
 ([the bench](../../../benchmarks/opensa-engine/2026-08-26-sky-lut-build.json)).
 
 **Still owed:** the device number for the sky-LUT fix; a repeat open that reaches no further than the one
-that filled the cache, since this one missed on the texture arrays; and a breakdown of **`boot.gpuMs`
-2 607.5** — now the largest single item in the boot, split by phase but not yet captured.
+that filled the cache, since this one missed on the texture arrays; a breakdown of **`boot.gpuMs` 2 607.5** —
+now the largest single item in the boot, split by phase but not yet captured; and the first `boot.overlapMs`,
+which is the overlap's own device number. All four come off ONE capture, and it is the user's to take.
 
 ## Verification
 

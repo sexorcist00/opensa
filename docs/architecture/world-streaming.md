@@ -84,10 +84,14 @@ flowchart LR
 
 </details>
 
-- **`stream/setup.ts`** — `setupStreaming(engine, source, radii)`: validates the manifest, spins up the pak
-  worker (folder mode hands it the pak Blob; HTTP mode the `world.ospak` URL), returns
+- **`stream/setup.ts`** — `setupStreaming(engine, source, radii, opened?)`: validates the manifest, spins up
+  the pak worker (folder mode hands it the pak Blob; HTTP mode the `world.ospak` URL), returns
   `StreamSetup { buildTime?, cellSize, center, driver, radius, water? }`. A `LocalPakSource` returning `null`
   throws loudly — no fallback (see [boot-and-loading.md](./boot-and-loading.md)).
+  Its first two steps need no GPU and are reachable on their own as **`openPakSource(source)` →
+  `{ manifest, worker }`**, so a host can run them BESIDE `engine.init` and hand the result back as `opened`
+  (201/4-03 — the dispatch console does; `engine.init` alone measured 2 607.5 ms on the phone). Omitting
+  `opened` opens the source in place, exactly as before.
 - **`stream/pak-worker.ts`** — all pak IO: HTTP Range mode when the server honours `Range:` (auto-detected;
   falls back to whole-pak), meshopt/`.oswire` decode, transfers cell blobs. JS heap stays flat — pak bytes
   never live whole on the main thread.

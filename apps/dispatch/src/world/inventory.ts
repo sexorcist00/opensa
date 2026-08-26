@@ -76,8 +76,16 @@ export interface InventoryPass {
 
 export interface InventoryReport {
   /** What the BOOT cost, before a frame existed. `gpuMs` is `engine.init` end to end; `phases` is its own
-   *  split — device / canvas / pipelines / resources / sky-lut / targets (201/4-03). */
-  readonly boot: { readonly gpuMs: number; readonly phases: readonly (readonly [string, number])[] };
+   *  split — device / canvas / pipelines / resources / sky-lut / targets (201/4-03). `openMs` is the pak's
+   *  engine-free half (the `?src=` probe, the manifest, the worker's IO probe), which runs BESIDE the GPU,
+   *  and `overlapMs` is how much of the two ran at the same time — the saving, counted rather than claimed.
+   *  Both are 0 on `?demo=1`, which opens no pak. */
+  readonly boot: {
+    readonly gpuMs: number;
+    readonly openMs: number;
+    readonly overlapMs: number;
+    readonly phases: readonly (readonly [string, number])[];
+  };
   readonly build: string;
   /** What this surface actually READ out of the pak, by entry kind — wire bytes and request counts, live
    *  since boot rather than over the sampled window. The build's `report.json` says what the pak CONTAINS;
@@ -342,8 +350,9 @@ export class FrameInventory {
   };
 
   report(context: {
-    /** `performance.now()` around `engine.init`, plus the engine's own phase split of it. */
-    boot: { gpuMs: number; phases: readonly (readonly [string, number])[] };
+    /** `performance.now()` around `engine.init`, plus the engine's own phase split of it — and what the
+     *  pak open beside it cost and hid. */
+    boot: { gpuMs: number; openMs: number; overlapMs: number; phases: readonly (readonly [string, number])[] };
     build: string;
     /** `engine.ledger()` — resident bytes and counts per category. */
     byCategory: Readonly<Record<string, { bytes: number; count: number }>>;

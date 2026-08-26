@@ -303,8 +303,8 @@ loop is running and the shell is not the thing to look at). Plan mode has no cel
 `bootDone()` directly.
 
 **What it reports is what has a denominator.** The bar sweeps — indeterminate, saying "working" — through
-the phases that cannot be counted (`starting the GPU…`, `reading the manifest…`, `the water…`) and becomes a
-real fraction the moment the streamer knows how many cells the district holds. Bytes read ride along as a
+the phases that cannot be counted (`starting the GPU…`, `reading the world…`, `the water and the places…`)
+and becomes a real fraction the moment the streamer knows how many cells the district holds. Bytes read ride along as a
 note with no denominator, because nothing knows in advance how much of the pak the opening view will pull. A
 percentage nobody can defend is worse than a sweep.
 
@@ -364,6 +364,42 @@ The other number that capture produced has no owner yet: **`engine.init` measure
 everything else in the boot put together. It is split by phase now (`init:device`, `init:canvas`,
 `init:pipelines`, `init:resources`, `init:sky-lut`, `init:targets`, in `boot.phases`) for exactly the
 reason above — a number that big with no breakdown is the next confident wrong guess waiting to be made.
+
+## The GPU and the radio, at the same time
+
+**Since 2026-08-26.** The boot used its two machines one at a time. `engine.init` measured **2 607.5 ms** on
+the phone with the network idle, and only when it returned did the world start looking for its manifest —
+a `?src=` probe (up to four `HEAD`s), the manifest itself, the worker and its `Range:` probe, then the game's
+`data/timecyc.dat` (up to three candidate names), then the water mesh, then the district table. Every one of
+them a round trip, and every one of them behind a GPU that was not using the radio.
+
+**Nothing about that was necessary, and the fix is scheduling rather than cleverness.** The pak's engine-free
+half is now a function of its own — `openPakSource(source)` in
+[`stream/setup.ts`](../architecture/world-streaming.md), the manifest plus a worker already probed onto its IO
+mode and its slice cache — and `bootDispatch` STARTS it, with the timecyc read beside it, before it awaits
+`engine.init`. `setupStreaming` takes the result as its `opened` argument and does the engine half only.
+Downstream, the water mesh (2.66 MB) and the district table are two independent reads off the same server and
+are now fetched together. The pair costs **`max` rather than `sum`**.
+
+Three things worth knowing before touching it:
+
+- **A promise nobody is awaiting still rejects.** `opening` is started before `engine.init` and awaited after
+  it, so its rejection has no handler in between — which is an unhandled rejection the moment it happens. It
+  gets a discarding `catch`; the real error is still thrown by the `await`.
+- **A failing world now fails later.** A bad `?src=` used to report before the GPU started; it now reports
+  after. Same message, and the wait in front of it is the one every successful boot pays anyway.
+- **The shell narrates the pole, not the race.** `openWorld` reports no step of its own: while it runs, what
+  the console is actually waiting on is the GPU, and a bar that narrates the faster of two parallel halves is
+  a bar that lies about where the time went.
+- **A GPU that fails leaves a worker behind, so the boot closes it.** A device with no WebGPU does not stop
+  here — `map-canvas` falls back to the plan view and keeps working — and the pak worker the parallel open
+  produced would idle in that session for good, holding its slice cache. `engine.init`'s failure path
+  `terminate()`s it when it arrives. That is the price of starting it early, and the only one.
+
+**It is counted, not claimed.** The capture carries `boot.openMs` (the whole pak open — probe, manifest,
+worker) beside `boot.gpuMs`, and **`boot.overlapMs`**: how much of the two actually ran at the same time,
+derived from the wall clock across both rather than asserted. Both are `0` under `?demo=1`, which opens no
+pak. **No device number yet** — the phone's next capture is what says what this bought there.
 
 ## The second open, and why it is cheap
 
