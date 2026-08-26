@@ -839,6 +839,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       const pose = camera.pose();
 
       return inventory.report({
+        app: appBuild(),
         boot: { gpuMs, openMs, overlapMs, phases: engine.bootPhases.byName },
         build: world.label,
         byCategory: engine.ledger(),
@@ -996,6 +997,16 @@ export function zoomSpan(
   const box = world.districts.boxAt(at);
 
   return box === null ? Math.sqrt(CELL_SIZE * city) : Math.max(box.max[0] - box.min[0], box.max[1] - box.min[1]);
+}
+
+/**
+ * Which build of the APP this is (`__APP_BUILD__`, the commit vite stamped in). A capture carries it beside
+ * the pak's `buildTime` because on 2026-08-26 three field captures in a row were taken of an app the device
+ * had not updated to, and nothing in them could say so. `dev` is a bundle nobody stamped — the dev server,
+ * a test host, an embedding host on an older build.
+ */
+function appBuild(): string {
+  return typeof __APP_BUILD__ === 'string' ? __APP_BUILD__ : 'dev';
 }
 
 /**

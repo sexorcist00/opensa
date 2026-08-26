@@ -727,6 +727,29 @@ disappears the moment it goes idle, so every check made "at rest" passes: `use-o
 shape from the start and the panel next to it did not, and the difference showed up only as a measurement
 that had been quietly wrong for two days.
 
+## A field capture names the pak it read — it must name the APP too
+
+A capture off a device measures what the device is RUNNING, which is not the same thing as what was pushed.
+The dispatch capture stated the PAK's `buildTime` from the manifest and said nothing at all about the app, so
+"is this a measurement of the change?" was answerable only by argument.
+
+Measured 2026-08-26: **three captures in a row were taken of the same pre-change app, twice while everyone
+involved believed otherwise.** The first was caught only by an accident — that change happened to ADD fields
+(`boot.openMs`, `boot.overlapMs`), and their absence gave it away; a change that only alters a number would
+have been invisible. The second time the cause was upstream of the app entirely: `git pull` printed
+`Your configuration specifies to merge with the ref '…' from the remote, but no such ref was fetched` —
+the device's branch still tracked a branch name the remote no longer has — **and exited 0**, so the `&&`
+chain behind it happily re-extracted the archive that was already in the tree and served it.
+
+So: anything that will be compared across builds carries the build identity of the thing being compared.
+`__APP_BUILD__` (the commit, `+` when the tree was dirty — [`scripts/app-build.ts`](../../scripts/app-build.ts))
+reaches the report as `app`, beside the pak's `build`.
+
+**Caught:** no, and it is the worst shape of silent — nothing errors, the capture is complete,
+self-consistent and plausible, and every number in it is a real measurement of the wrong build. A green run
+and a stale run look identical. The check is the `app` field, and the half that lives outside this repo is
+the device's git state: a `git pull` that fetches without merging is a NO-OP with a zero exit code.
+
 ## An effect's RETURN VALUE is its cleanup — a shorthand body must return a cleanup or nothing
 
 React calls whatever `useEffect` returns as the effect's cleanup function. A concise arrow body returns the

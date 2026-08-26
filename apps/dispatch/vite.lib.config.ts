@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
+import { appBuild } from '../../scripts/app-build';
+
 /**
  * The embeddable build of the dispatch map (`src/embed.ts`).
  *
@@ -38,6 +40,7 @@ export default defineConfig({
     target: 'esnext',
   },
   define: {
+    __APP_BUILD__: JSON.stringify(appBuild(root)),
     __APP_VERSION__: JSON.stringify(pkg.version),
     __DEBUGGER_HIDE__: JSON.stringify(true),
     'process.env.NODE_ENV': JSON.stringify('production'),

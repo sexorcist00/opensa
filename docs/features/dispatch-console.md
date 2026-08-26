@@ -413,6 +413,13 @@ worker) beside `boot.gpuMs`, and **`boot.overlapMs`**: how much of the two actua
 derived from the wall clock across both rather than asserted. Both are `0` under `?demo=1`, which opens no
 pak. **No device number yet** — the phone's next capture is what says what this bought there.
 
+**And the capture says which app produced it.** `app` carries `__APP_BUILD__` — the commit vite stamped in,
+with a `+` when the tree was dirty — beside `build`, which is the PAK's `buildTime`. It is there because
+three captures in a row on 2026-08-26 were taken of an app the device had never updated to, twice while
+everyone believed otherwise; the trap and both of its halves are
+[a restriction](../restrictions/architecture.md) now. `dev` means a bundle nobody stamped: the dev server, a
+test host, an embedding host.
+
 ## The second open, and why it is cheap
 
 **Since 2026-08-26.** The opening view of a district pulls tens of megabytes out of the pak — the 08-25

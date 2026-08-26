@@ -134,10 +134,24 @@ of the pinned district at street height):
   and is now unmeasured. It is a hypothesis and not a finding: the test is one capture with the site's data
   cleared against one taken straight after it, and it is cheap.
 
-**Still owed:** the first `boot.overlapMs` — **the capture carries neither `openMs` nor `overlapMs`, which is
-exactly how it says the device was running the app from before the overlap landed.** The archive has to be
-re-extracted on the phone before that number exists. And the cold/warm boot pair above, which is what decides
-whether `init:pipelines` is a 227 ms phase or a 2.3 s one.
+**The warm boot reproduced, and the third capture did too**
+([the repeat](../../../benchmarks/opensa-engine/2026-08-26-mobile-warm-boot-repeat.json)): `boot.gpuMs`
+**347.2** against 398.4 with `init:pipelines` **218.3** against 226.8 — a stable ~220 ms phase over two runs,
+which makes 2 607.5 the outlier rather than the series. The second open reproduced with it (**22.26 MB of
+24.92, 89.3 %, 38 of 39 requests**), and **`water.bin` missed again at exactly the same 2 658 756 bytes**.
+
+**Still owed, and the reason is not the measurement:** the first `boot.overlapMs`. **Three captures in a row
+were taken of the app from BEFORE the overlap landed** — the third after a `git pull` that printed
+`no such ref was fetched` (the device's branch tracked a branch name the remote no longer has), did not
+merge, **and exited 0**, so the archive that was re-extracted was the one already in the tree. Two of the
+three were believed to be captures of something else, and only an accident gave the first away: that change
+happened to ADD fields, and their absence showed. **A capture says which app it is now** — `app`, the commit
+vite stamps in — and the trap is written up as
+[a restriction](../../../restrictions/architecture.md), because it is silent in the worst way: nothing
+errors, every number is real, and it is a real measurement of the wrong build.
+
+Also owed: the cold/warm boot pair, which is what decides whether `init:pipelines` is a 220 ms phase or a
+2.3 s one — neither run so far cleared the site's data, so the hypothesis is still untested.
 
 ## Verification
 

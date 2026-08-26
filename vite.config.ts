@@ -3,6 +3,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
+import { appBuild } from './scripts/app-build';
+
 const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')) as { version: string };
 
 /**
@@ -100,6 +102,9 @@ export default defineConfig(({ command }) => ({
     },
   },
   define: {
+    // Which COMMIT this bundle is, as `__APP_BUILD__` — so a field capture can say whether the device is
+    // running the app somebody thinks it is (see scripts/app-build.ts for the failure that put it here).
+    __APP_BUILD__: JSON.stringify(appBuild(__dirname)),
     // Build version usable in code as `__APP_VERSION__` (typed in apps/web/vite-env.d.ts).
     __APP_VERSION__: JSON.stringify(pkg.version),
     // Hide dev-only debugger sections — true only in the deploy build (build:prod), false in `build`/`dev`.

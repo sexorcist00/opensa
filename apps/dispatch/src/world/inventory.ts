@@ -75,6 +75,11 @@ export interface InventoryPass {
 }
 
 export interface InventoryReport {
+  /** The commit the APP was built from (`__APP_BUILD__`), or `dev` for a bundle nobody stamped. It sits
+   *  beside `build` — the PAK's `buildTime` — because a capture has to answer both halves of "what was
+   *  running": three captures on 2026-08-26 were taken of an app the device had never updated to, and only
+   *  a missing field gave it away. A trailing `+` means the tree was dirty when it was built. */
+  readonly app: string;
   /** What the BOOT cost, before a frame existed. `gpuMs` is `engine.init` end to end; `phases` is its own
    *  split — device / canvas / pipelines / resources / sky-lut / targets (201/4-03). `openMs` is the pak's
    *  engine-free half (the `?src=` probe, the manifest, the worker's IO probe), which runs BESIDE the GPU,
@@ -353,6 +358,8 @@ export class FrameInventory {
   };
 
   report(context: {
+    /** `__APP_BUILD__` — which commit this bundle is. */
+    app: string;
     /** `performance.now()` around `engine.init`, plus the engine's own phase split of it — and what the
      *  pak open beside it cost and hid. */
     boot: { gpuMs: number; openMs: number; overlapMs: number; phases: readonly (readonly [string, number])[] };
@@ -402,6 +409,7 @@ export class FrameInventory {
         ];
 
     return {
+      app: context.app,
       boot: context.boot,
       build: context.build,
       bytes: context.bytes,
