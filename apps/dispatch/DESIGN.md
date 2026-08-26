@@ -21,22 +21,57 @@ decision below serves that. Where a choice would make it prettier and less like 
 
 ## The landscape, and what it changed
 
-Researched 2026-08-25. External sites could not be captured visually from the build container (headless
-Chromium gets `ERR_CONNECTION_RESET`; `curl` and text fetches work), so these are read and cited rather than
-screenshotted.
+Researched 2026-08-25, and **re-done with screenshots on 2026-08-26**. The first pass could only read these
+products, because headless Chromium answered `ERR_CONNECTION_RESET` on every site. That was never a policy
+block: Chromium's TLS 1.3 ClientHello carries a post-quantum key share the session's egress gateway resets
+on, and launching with `--ssl-version-max=tls1.2` makes every one of them load. The rows below now rest on
+captured screens rather than on prose about them.
 
-| Source                                                                                                                | What it is                                                                                       | What it changed here                                                                                                                                                                                                                                                                          |
-| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [SnailyCAD](https://github.com/SnailyCAD/snaily-cadv4)                                                                | the closest open-source peer — an MIT CAD/MDT for GTA roleplay communities, Next.js + TypeScript | Confirms the information model we already have (active units, active calls, statuses, searches) and that the dispatch screen is a **list-and-map**, not a dashboard of tiles. Its docs are silent on mobile and on status colour, which is where this console can be better rather than equal |
-| [Radix Colors](https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale)                      | a 12-step scale where every step has one declared UI role                                        | **Adopted as the palette architecture.** Steps 1-2 backgrounds, 3-5 component backgrounds by state, 6-8 borders by strength, 9-10 solid, 11-12 text (Lc 60 / Lc 90 APCA over step 2). The console had seven flat colours and no rule for which to use where                                   |
-| [IBM Carbon](https://carbondesignsystem.com/elements/themes/overview/)                                                | an enterprise system with an explicit dark-theme layering model                                  | **Adopted as the depth rule:** in a dark theme each added layer is one step LIGHTER. The console had panels and floating map clusters at the same value, so nothing on screen said what was on top of what                                                                                    |
-| Public-safety CAD practice ([DHS TechNote](https://www.dhs.gov/sites/default/files/publications/CAD_TN_0911-508.pdf)) | what a real CAD is for: prioritise, locate, assign, track to closure                             | Keeps the hierarchy honest: **priority and location are the two things a row must answer at a glance**, and everything else is detail. It is why priority is encoded three ways below                                                                                                         |
+| Source                                                                                                                | What it is                                                                                       | What it changed here                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [SnailyCAD](https://github.com/SnailyCAD/snaily-cadv4)                                                                | the closest open-source peer — an MIT CAD/MDT for GTA roleplay communities, Next.js + TypeScript | Confirms the information model we already have (active units, active calls, statuses, searches). **Its Live Map page is this console's layout already** — map full-bleed, a collapsible call list floating top-left, actions in a popup at the marker — but it is a VIEWING mode: no roster, no queue, no way to assign. The right layout with the work left out of it                                            |
+| [SonoranCAD](https://sonorancad.com/fivem)                                                                            | the commercial leader for FiveM; four operator-selectable themes over one fixed screen           | **Two mechanics adopted, one rejected.** Adopted: the **status tally in the panel header** (`10-6:1 10-8:3 10-51:3`), which makes one line both the colour legend and the shift summary; and the **callsign as a filled pill**, the one field in a row that never truncates. Rejected: its light theme fills the whole ROW with the status colour, and the text contrast fails exactly where the row matters most |
+| [Resgrid](https://resgrid.com/apps/dispatch)                                                                          | the largest open-source real-world CAD (Apache-2.0)                                              | A measured warning rather than a pattern: its Dispatch app keeps the call-intake FORM expanded permanently and leaves the map a card — **475×302 of 1665×947, 9.1 % of the screen**. Its BigBoard is the field's only configurable widget grid, and is the reference for a future wall mode                                                                                                                       |
+| [CrowdCAD](https://crowdcad.org)                                                                                      | AGPL-3.0, Next.js + Tailwind + shadcn/ui; browser-only "Lite Mode"                               | **Call intake as a MODAL, not a docked form** — the intake screen is needed seconds per minute and the map always, which is the argument this console needed. Its panes resize (`react-resizable-panels`, a 25/75 splitter) but do not move; ours do both, because a splitter still divides the map's space                                                                                                       |
+| [Radix Colors](https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale)                      | a 12-step scale where every step has one declared UI role                                        | **Adopted as the palette architecture.** Steps 1-2 backgrounds, 3-5 component backgrounds by state, 6-8 borders by strength, 9-10 solid, 11-12 text (Lc 60 / Lc 90 APCA over step 2). The console had seven flat colours and no rule for which to use where                                                                                                                                                       |
+| [IBM Carbon](https://carbondesignsystem.com/elements/themes/overview/)                                                | an enterprise system with an explicit dark-theme layering model                                  | **Adopted as the depth rule:** in a dark theme each added layer is one step LIGHTER. The console had panels and floating map clusters at the same value, so nothing on screen said what was on top of what                                                                                                                                                                                                        |
+| Public-safety CAD practice ([DHS TechNote](https://www.dhs.gov/sites/default/files/publications/CAD_TN_0911-508.pdf)) | what a real CAD is for: prioritise, locate, assign, track to closure                             | Keeps the hierarchy honest: **priority and location are the two things a row must answer at a glance**, and everything else is detail. It is why priority is encoded three ways below                                                                                                                                                                                                                             |
 
 **Where we deliberately differ from the category.** Real CAD is a desk product with three monitors, and the
 roleplay CADs are laptop products. This one is a phone product first, so the density that reads as
 professional on a 27-inch panel is exactly what makes it unusable in a hand. The answer is not a smaller
 version of the desk: it is **one component that takes a size**, plus folding the controls that are not
 pressed every few seconds ([201/3-01](../../docs/plans/201-dispatch-console/3-the-operator-surface-on-a-phone/readme.md)).
+
+## The workspace
+
+**The map is the desk, and everything else is on top of it.** Adopted 2026-08-26 with the user, after the
+survey above; the step is
+[201/7-08](../../docs/plans/201-dispatch-console/7-the-operator-map/readme.md).
+
+The finding that settled it: **no console in this field makes the map its main screen.** SnailyCAD puts it
+on another page, SonoranCAD in another window, Resgrid in a 9 %-of-screen card, CrowdCAD not at all. So a
+map-first console has nothing to copy and has to state its own rule:
+
+1. **The map holds the whole viewport, at every width.** The desk layout used to spend a 300-px and a
+   264-px column on the queue and the roster — 564 px, 44 % of a 1280-px screen, on two lists that are read
+   in glances.
+2. **The lists are windows over the world**, moved and sized by the operator, and remembered per browser
+   (`STORAGE_KEYS.windows`). A window is always FULLY inside the map: a panel hanging half off the edge is
+   a bug that looks like a feature, and at 360 px it is simply lost.
+3. **A window is movable without a pointer.** The title bar is a real `<button>`, so it is in the tab order
+   and carries the focus ring; arrows move it, shift+arrows size it.
+4. **The phone keeps the sheet.** A window that covers the map it floats over is not a small version of the
+   desk, it is a worse one — so under `COMPACT_MAX_WIDTH` the same two panels are a sheet beneath the map.
+   One model, two densities.
+
+**What this deliberately is not.** Not a widget grid (GridStack, Resgrid's BigBoard): tiles that snap to
+columns and reflow take space away from the map, which is the thing this rule exists to stop. Not a
+splitter (CrowdCAD's `react-resizable-panels`): a divider still divides the map's space rather than
+floating over it. And not a library at all — `react-rnd` and friends would be this package's first runtime
+dependencies, in something that ships as an embeddable widget with none, and their touch handling is an
+afterthought on a console whose primary device is a phone. Pointer Events cover mouse, pen and touch in one
+handler; the geometry is `src/ui/window-frame.ts` and the gesture is `src/ui/panel-window.tsx`.
 
 ## Aesthetic direction
 
@@ -172,11 +207,15 @@ test is whether removing it loses information: it does.
 
 ## Decisions log
 
-| Date       | Decision                                                   | Rationale                                                                                                                                  |
-| ---------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 2026-08-25 | The neutral ramp is 12 steps with Radix's role-per-step    | Seven flat colours with no rule for which to use where; every new component picked whatever looked close                                   |
-| 2026-08-25 | Depth by value + shadow, borders only between equal values | A 1 px border on every surface reads as a wireframe at 360 px, and floating clusters were the same value as docked panels                  |
-| 2026-08-25 | State colour comes only from `SET_COLORS`                  | It already fed the beacons, the overlay and the radar; the lists reading the same table is what keeps a chip and a pin from drifting       |
-| 2026-08-25 | The accent means "the operator's mark" and nothing else    | It was on primary buttons, fps, tabs, the inventory border and the key sheet, so it marked nothing                                         |
-| 2026-08-25 | Priority is position + text + colour                       | Colour alone fails a scanning dispatcher and fails colour-blind operators; the chain already required "readable by more than colour alone" |
-| 2026-08-25 | One scoped stylesheet for pseudo-elements                  | Four documented defects were unreachable from inline styles; scoping it under the app's own attribute keeps `?embed=1` safe                |
+| Date       | Decision                                                     | Rationale                                                                                                                                       |
+| ---------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-25 | The neutral ramp is 12 steps with Radix's role-per-step      | Seven flat colours with no rule for which to use where; every new component picked whatever looked close                                        |
+| 2026-08-25 | Depth by value + shadow, borders only between equal values   | A 1 px border on every surface reads as a wireframe at 360 px, and floating clusters were the same value as docked panels                       |
+| 2026-08-25 | State colour comes only from `SET_COLORS`                    | It already fed the beacons, the overlay and the radar; the lists reading the same table is what keeps a chip and a pin from drifting            |
+| 2026-08-25 | The accent means "the operator's mark" and nothing else      | It was on primary buttons, fps, tabs, the inventory border and the key sheet, so it marked nothing                                              |
+| 2026-08-25 | Priority is position + text + colour                         | Colour alone fails a scanning dispatcher and fails colour-blind operators; the chain already required "readable by more than colour alone"      |
+| 2026-08-25 | One scoped stylesheet for pseudo-elements                    | Four documented defects were unreachable from inline styles; scoping it under the app's own attribute keeps `?embed=1` safe                     |
+| 2026-08-26 | The map is the desk; the queue and roster are windows on it  | Four working consoles measured, and none makes the map its main screen; the old desk layout spent 564 of 1280 px on two lists read in glances   |
+| 2026-08-26 | Windows move and size by pointer AND by keyboard, no library | `react-rnd` would be this widget's first runtime dependency; GridStack is a grid whose tiles reflow, which takes back the space this change won |
+| 2026-08-26 | A status tally sits in each panel's header                   | Taken from SonoranCAD: one line is both the colour legend and the shift summary, and it reads `SET_COLORS` so it cannot disagree with the map   |
+| 2026-08-26 | The callsign is a filled pill coloured by status             | The one field in a row that never truncates; at 360 px it is the only place the status is guaranteed readable                                   |

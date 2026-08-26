@@ -1,6 +1,8 @@
 /** The call queue: open calls first, worst priority at the top — the order a dispatcher works them in. */
 import type { ReactElement } from 'react';
 
+import type { TallyItem } from './status-tally';
+
 import { SET_COLORS } from '../map/beacons';
 import { css } from '../map/overlay-2d';
 import { type Incident, type Selection } from '../ops/types';
@@ -12,6 +14,15 @@ const STATUS_LABEL: Readonly<Record<Incident['status'], string>> = {
   onScene: 'ON SCENE',
   pending: 'PENDING',
 };
+
+/** The queue's tally: open calls by priority, worst first. A closed call is not a number anyone is working. */
+export function callsTally(incidents: readonly Incident[]): readonly TallyItem[] {
+  return ([1, 2, 3] as const).map((priority) => ({
+    color: css(SET_COLORS[`call${priority}`]),
+    count: incidents.filter((call) => call.status !== 'closed' && call.priority === priority).length,
+    label: `P${priority}`,
+  }));
+}
 
 export function IncidentsPanel({
   incidents,
@@ -30,7 +41,6 @@ export function IncidentsPanel({
 
   return (
     <div style={styles.panel}>
-      <div style={styles.panelTitle}>Calls · {incidents.filter((call) => call.status !== 'closed').length} open</div>
       <div style={styles.scroll}>
         {sorted.length === 0 && <div style={styles.empty}>No active calls</div>}
         {sorted.map((incident) => {

@@ -152,7 +152,10 @@ export const styles = {
     display: 'grid',
     fontFamily: 'ui-sans-serif, system-ui, sans-serif',
     fontSize: 12,
-    gridTemplateColumns: '300px minmax(0, 1fr) 264px',
+    // ONE column since 201/7-08. The queue and the roster used to be 300-px and 264-px tracks either side
+    // of the map, which is 564 px the map did not have on a 1280-px desk — 44 % of the width spent on two
+    // lists that are read in glances. They are windows over the world now, and the world is the workspace.
+    gridTemplateColumns: 'minmax(0, 1fr)',
     gridTemplateRows: '44px minmax(0, 1fr) 30px 26px',
     height: '100%',
     width: '100%',
@@ -586,31 +589,17 @@ export const styles = {
     zIndex: 3,
   },
   mono: { fontFamily: MONO, fontVariantNumeric: NUM },
+  /**
+   * A list panel's body. There is one of these rather than a `panel`/`panelRight` pair: the side borders
+   * those two carried said which EDGE of the desk the panel was docked to, and since 201/7-08 neither is
+   * docked — the window frame around them draws the border now.
+   */
   panel: {
-    background: RAMP.surface,
-    borderRight: `1px solid ${RAMP.line}`,
+    background: 'transparent',
     display: 'flex',
     flexDirection: 'column',
     minHeight: 0,
     overflow: 'hidden',
-  },
-  panelRight: {
-    background: RAMP.surface,
-    borderLeft: `1px solid ${RAMP.line}`,
-    display: 'flex',
-    flexDirection: 'column',
-    minHeight: 0,
-    overflow: 'hidden',
-  },
-  panelTitle: {
-    borderBottom: `1px solid ${RAMP.line}`,
-    color: RAMP.textMuted,
-    fontSize: TEXT.micro,
-    fontVariantNumeric: NUM,
-    fontWeight: 700,
-    letterSpacing: 1.2,
-    padding: '9px 12px',
-    textTransform: 'uppercase',
   },
   /** The phone sheet's tab strip. */
   /**
@@ -729,6 +718,30 @@ export const styles = {
     letterSpacing: 0.6,
   },
   /** The shift timeline strip (201/8-03). Sits above the status bar, full width. */
+  /**
+   * The status tally in a panel's header — `AVAILABLE 4 · EN ROUTE 2 · ON SCENE 1`.
+   *
+   * Taken from SonoranCAD, which is the only console in the field that puts the counts where the legend
+   * would go, so one line answers both "what does this colour mean" and "how is the shift doing". The
+   * numbers and the swatches come from `map/beacons.ts` → `SET_COLORS`, the same table the pillars on the
+   * map are drawn from — a legend that could disagree with the map would be worse than none.
+   */
+  tally: {
+    alignItems: 'center',
+    display: 'flex',
+    flexWrap: 'wrap',
+    fontFamily: MONO,
+    fontSize: TEXT.micro,
+    fontVariantNumeric: NUM,
+    fontWeight: 400,
+    gap: SPACE.sm,
+    letterSpacing: 0,
+    marginLeft: 'auto',
+    minWidth: 0,
+    overflow: 'hidden',
+    textTransform: 'none',
+  },
+  tallyItem: { alignItems: 'center', display: 'flex', gap: 4 },
   timeline: {
     alignItems: 'center',
     background: RAMP.surface,
@@ -808,4 +821,123 @@ export const styles = {
     overflow: 'hidden',
     padding: '0 8px',
   },
+  /**
+   * The unit's callsign, as the thing the eye lands on.
+   *
+   * SonoranCAD's rows are read by their unit number and not by the officer's name, and the reason is
+   * mechanical rather than aesthetic: a name truncates and a callsign does not, so at 360 px the pill is
+   * still whole when everything beside it has become an ellipsis. The colour is the unit's STATUS, from
+   * the map's own table.
+   */
+  unitPill: {
+    borderRadius: RADIUS.control,
+    fontFamily: MONO,
+    fontSize: TEXT.caption,
+    fontVariantNumeric: NUM,
+    fontWeight: 700,
+    letterSpacing: 0.3,
+    padding: '2px 8px',
+    whiteSpace: 'nowrap',
+  },
+  /** The scrolling body of a floating window — the panel itself lives in here. */
+  windowBody: { display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0, overflow: 'hidden' },
+  /**
+   * A floating panel over the map (201/7-08).
+   *
+   * `position: absolute` inside `canvasWrap`, which is why every rect in `window-frame.ts` is relative to
+   * the map rather than to the page: the map is the coordinate space the operator is arranging things in.
+   */
+  windowFrame: {
+    ...FLOATING,
+    borderRadius: RADIUS.surface,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    position: 'absolute',
+    zIndex: 3,
+  },
+  /**
+   * The resize grip, bottom-right.
+   *
+   * `touchAction: none` for the same reason the map canvas has it: without it the browser claims the drag
+   * for scrolling before a single `pointermove` arrives, and the grip does nothing on a phone while working
+   * perfectly on the desk the developer tested it on.
+   */
+  windowGrip: {
+    background: 'transparent',
+    border: 'none',
+    bottom: 0,
+    cursor: 'nwse-resize',
+    height: 18,
+    padding: 0,
+    position: 'absolute',
+    right: 0,
+    touchAction: 'none',
+    width: 18,
+  },
+  /** The same grip where a finger is the pointer: 44 in both axes, per `TOUCH_TARGET`. */
+  windowGripTouch: {
+    background: 'transparent',
+    border: 'none',
+    bottom: 0,
+    cursor: 'nwse-resize',
+    height: TOUCH_TARGET,
+    padding: 0,
+    position: 'absolute',
+    right: 0,
+    touchAction: 'none',
+    width: TOUCH_TARGET,
+  },
+  /**
+   * The title bar, which is also the drag handle — and a real `<button>`, so it is in the tab order and
+   * carries the console's focus ring without a line of extra work. Arrow keys move the window from here,
+   * which is the only way a window is movable at all without a pointer.
+   */
+  windowHeader: {
+    alignItems: 'center',
+    background: RAMP.surfaceRaised,
+    border: 'none',
+    borderBottom: `1px solid ${RAMP.line}`,
+    color: RAMP.textMuted,
+    cursor: 'move',
+    display: 'flex',
+    fontSize: TEXT.micro,
+    fontVariantNumeric: NUM,
+    fontWeight: 700,
+    gap: SPACE.sm,
+    letterSpacing: 1.2,
+    // `overflow: hidden` and NOT `minWidth: 0`. The shrinking belongs to the tally inside, which is the
+    // flex item that refuses to shrink below its content; a `minWidth: 0` here would say this 44-px target
+    // may be zero wide, and `styles.test.ts` is right to fail that — it cannot see that the window around
+    // it is never narrower than `MIN_WINDOW.w`.
+    overflow: 'hidden',
+    padding: '7px 10px',
+    textAlign: 'left',
+    textTransform: 'uppercase',
+    touchAction: 'none',
+    width: '100%',
+  },
+  windowHeaderTouch: {
+    alignItems: 'center',
+    background: RAMP.surfaceRaised,
+    border: 'none',
+    borderBottom: `1px solid ${RAMP.line}`,
+    color: RAMP.textMuted,
+    cursor: 'move',
+    display: 'flex',
+    fontSize: TEXT.caption,
+    fontVariantNumeric: NUM,
+    fontWeight: 700,
+    gap: SPACE.sm,
+    letterSpacing: 1.2,
+    minHeight: TOUCH_TARGET,
+    overflow: 'hidden',
+    padding: '7px 10px',
+    textAlign: 'left',
+    textTransform: 'uppercase',
+    touchAction: 'none',
+    width: '100%',
+  },
+  /** A window that has not been placed yet: it must be in the DOM to have an `offsetParent` to measure. */
+  windowPending: { height: 0, left: 0, position: 'absolute', top: 0, width: 0 },
 } satisfies Record<string, CSSProperties>;

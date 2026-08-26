@@ -337,6 +337,51 @@ an empty board.
 **Owed by nobody here.** What a field run adds is the phone verdict on the two share buttons — the clipboard
 and the download both behave differently on Android's browsers, and neither can be checked from a desk.
 
+### 08 — The workspace
+
+**The map is the desk, and the lists are windows on it.** Taken with the user 2026-08-26, out of a survey of
+every working console in this field.
+
+**The finding that forced it.** SnailyCAD, SonoranCAD, Resgrid and CrowdCAD were captured and measured
+rather than read about (2026-08-26), and **none of them makes the map its main screen**: SnailyCAD puts it
+on a separate PAGE, SonoranCAD in a separate WINDOW of its own dock, Resgrid in a card measuring
+**475x302 of 1665x947 — 9.1 % of the screen**, and CrowdCAD's Lite Mode has no map at all. A map-first
+console therefore has no pattern to copy in its own category, and the desk layout this console shipped with
+was the category's: a 300-px and a 264-px column either side of the map, **564 px of a 1280-px screen, 44 %,
+spent on two lists that are read in glances**.
+
+**The rule.**
+
+1. The map holds the whole viewport at every width — `styles.app` is one column.
+2. The queue and the roster are windows over it, moved and sized by the operator with a pointer or with the
+   keyboard, remembered per browser under `STORAGE_KEYS.windows`.
+3. **A window is always fully inside the map.** Not "part of it stays reachable": a panel hanging off the
+   edge is a bug that looks like a feature, and at 360 px it is simply lost. Where the map is smaller than
+   `MIN_WINDOW`, the map wins — a window may be squeezed, never pushed out.
+4. The phone keeps the sheet under the map (3/01). A window that covers the map it floats over is not a
+   smaller desk, it is a worse one.
+
+**Three mechanics taken from the survey**, each from the console that does it best:
+
+| Taken | From | Why |
+| --- | --- | --- |
+| the **status tally in the panel header** (`AVAILABLE 7 · EN ROUTE 2`) | SonoranCAD | one line is both the colour legend and the shift summary; it reads from `SET_COLORS`, so it cannot disagree with the map it explains. No other console in the field has it |
+| the **callsign as a filled pill**, coloured by status | SonoranCAD | the one field in a row that never truncates, so at 360 px it is the only place the status is guaranteed readable. The row's left rail says it a second time for anyone who cannot separate the hues |
+| **windows rather than a split** | CrowdCAD, inverted | its panes resize (`react-resizable-panels`, a 25/75 splitter) but do not move, and a splitter still divides the map's space instead of floating over it |
+
+**And one rejected on evidence:** SonoranCAD's light theme fills the whole ROW with the status colour, and
+the text contrast fails exactly where the row matters most. Colour goes on the rail and the pill.
+
+**No library.** `react-rnd` and `react-draggable` would be this package's first runtime dependencies, in
+something that ships as an embeddable widget (`vite.lib.config.ts`, `embed.ts`) with none, and their touch
+handling is an afterthought on a console whose primary device is a phone. GridStack is worse than
+irrelevant: it is a GRID, tiles snap to columns and reflow, which takes space from the map in exactly the
+way this step exists to stop. Pointer Events cover mouse, pen and touch in one handler; the geometry is
+`ui/window-frame.ts` (pure, tested) and the gesture is `ui/panel-window.tsx`.
+
+**Owes:** the phone verdict on the two touch targets that only exist here — the title bar as a drag handle
+and the 44-px corner grip — which cannot be checked from a desk.
+
 ## The design rule for all of it
 
 Layout, colour, density and state tiles go through the design skills — `artifact-design` and `dataviz` —

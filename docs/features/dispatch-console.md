@@ -404,6 +404,28 @@ mix.** Chrome comes from the ramp in `src/ui/styles.ts`. A unit's status and a c
 all read, which is why a chip in the queue cannot drift from the pillar on the map. A status colour added to
 the style table would break that, and `styles.test.ts` fails the build if one appears.
 
+## The workspace: the map is the desk
+
+**201/7-08, since 2026-08-26.** On a desk the map fills the viewport and the two lists float on top of it as
+**windows the operator moves and sizes** — by dragging the title bar and the corner grip, or, with either
+focused, by arrow keys (shift+arrows to size). Each window remembers where it was put, per browser, under
+`opensa.dispatch.windows`.
+
+Three rules make that safe rather than clever:
+
+- **A window is always fully inside the map.** Dragging it past an edge stops it; shrinking the map pulls it
+  back in; where the map is smaller than 200×120 the map wins and the window is squeezed. A panel hanging
+  half off the screen is a bug that looks like a feature.
+- **The map's own corners stay clear.** The windows open at y 180 down the left and right edges, below the
+  operator cluster (which ends at y 165) and the turn/tilt/zoom cluster (y 285) — the map's controls are not
+  something a list may cover by default.
+- **The phone does not get windows.** Under `COMPACT_MAX_WIDTH` the same two panels are the sheet below the
+  map, because a window that covers the map it floats over is not a smaller desk, it is a worse one.
+
+Each window's title bar carries its **status tally** — `AVAILABLE 7 · EN ROUTE 2` for the roster, `P1 1 · P3 1`
+for the queue — read from `map/beacons.ts` → `SET_COLORS`, so the legend in the header and the pillars on the
+map are the same numbers rather than two colours matched by eye.
+
 ## What the phone shows, and what it folds
 
 **201/3-01, since 2026-08-25.** A 360-px screen cannot hold the desk's chrome and a map worth looking at, so
@@ -416,7 +438,7 @@ console is measured against.
 | The operator cluster (search, fit, follow, save, measure, share) | open | one `TOOLS` handle |
 | Turn, tilt, the three zoom levels | open | behind one key beside the compass |
 | North, zoom in, zoom out | open | open |
-| The calls and units lists | two columns beside the map | a tabbed sheet capped at 44 % of the screen, and **collapsed by default when the viewport is short** — a phone in landscape is wide and 360 px tall, where the sheet at its cap left the map 98 px |
+| The calls and units lists | **windows over the map**, moved and sized by the operator (201/7-08) | a tabbed sheet capped at 44 % of the screen, and **collapsed by default when the viewport is short** — a phone in landscape is wide and 360 px tall, where the sheet at its cap left the map 98 px |
 
 Collapsed, the sheet still carries both counts, which are the two numbers a dispatcher watches; tapping the
 tab you are on closes the list, tapping the other switches to it.

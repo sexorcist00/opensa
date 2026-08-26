@@ -49,21 +49,33 @@ Roleplay dispatch is a mature market. Two systems define it:
 
 | System | What it is | Its map |
 | --- | --- | --- |
-| **[SonoranCAD](https://sonorancad.com/fivem)** | the commercial leader for FiveM; deep in-game integration (`/911`, `/311`, `/panic`), unit lookups, drag-and-drop dispatching | a **2D tile map** with blips for units, calls and smart signs; custom tiles for paying communities. Its "3D live map" exists only for ER:LC (Roblox), not for GTA |
+| **[SonoranCAD](https://sonorancad.com/fivem)** | the commercial leader for FiveM; deep in-game integration (`/911`, `/311`, `/panic`), unit lookups, drag-and-drop dispatching | **a 3D live map, for GTA V, since some time before 2026-08-26** — a `2D / 2.5D / 3D` switch in the Live Map window's toolbar, over a solid model of Los Santos, with a camera pad and unit markers carrying bodycam previews. This row said the opposite until 2026-08-26 and was wrong |
 | **[SnailyCAD](https://snailycad.org/)** ([MIT](https://github.com/SnailyCAD/snaily-cadv4)) | the open-source benchmark: self-hosted CAD/MDT, TypeScript monorepo, Docker, Discord role sync, realtime sync of calls and statuses | a **2D live map**, shipped as a [separate integration](https://github.com/SnailyCAD/live-map) |
 
-Read those two rows together and the gap is precise:
+**Corrected 2026-08-26, and the correction matters.** This section used to close on
+*"every dispatch map in this market is a flat picture with dots on it — nobody has the world"*. That is no
+longer true and it must not be quoted: SonoranCAD ships a 3D live map for FiveM. The screenshot it was read
+off is filed in [the console's design landscape](../../../apps/dispatch/DESIGN.md).
 
-> **Every dispatch map in this market is a flat picture with dots on it. Nobody has the world.**
+What survives the correction, stated narrowly enough to be defensible:
 
-And the second gap: **both are FiveM.** SA-MP and open.mp — a large, older, still-populated ecosystem — are
-served by nothing comparable.
+1. **Nobody serves SA-MP or open.mp.** Both systems above are FiveM only, and this is a large, older,
+   still-populated ecosystem with nothing comparable. This is the gap the product is aimed at.
+2. **Nobody has a TOTAL-CONVERSION world.** Sonoran's 3D map is stock Los Santos, and SnailyCAD's flat map
+   is a stock raster. Ours is whatever the pak was built from — which is the one thing an engine can do and
+   a picture cannot.
+3. **Nobody makes the map the main screen.** Measured across four consoles on 2026-08-26
+   ([201/7-08](../201-dispatch-console/7-the-operator-map/readme.md)): SnailyCAD puts the map on a separate
+   page, Sonoran in a separate window, Resgrid in a card at 9.1 % of the screen, CrowdCAD not at all. That
+   one is now a decision this repository has taken and shipped, rather than an observation.
 
-We are the only project that can close both at once, because we already have the streamed San Andreas world
-and a renderer for it. That is the whole strategic claim of this plan, and it also sets the bar: **the CAD
-half must be as good as SnailyCAD's, or the 3D map is a demo attached to a worse product.** Feature parity on
-the boring things — calls, statuses, roster, permissions, audit — is not optional, and it is the part with no
-technical novelty and most of the work.
+What does NOT survive: "we are the only project that can render the world". We are not, since Sonoran does
+it too — we are the only one that can render *any* world, on the ecosystem nobody serves, with the map as
+the product rather than a viewer beside it.
+
+The bar is unchanged and was never about the map: **the CAD half must be as good as SnailyCAD's, or the 3D
+map is a demo attached to a worse product.** Feature parity on the boring things — calls, statuses, roster,
+permissions, audit — is not optional, and it is the part with no technical novelty and most of the work.
 
 ---
 

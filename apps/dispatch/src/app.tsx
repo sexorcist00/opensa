@@ -1,7 +1,7 @@
 /**
- * The console. On a desk: three columns — calls, map, roster — with the selection panel floating over the map
- * and the renderer's own numbers along the bottom. On a phone: the map fills the screen and the two lists move
- * into a tabbed sheet beneath it.
+ * The console. On a desk: the MAP is the workspace and the queue and the roster are windows over it, moved
+ * and sized by the operator (201/7-08). On a phone: the map still fills the screen and the two lists move
+ * into a tabbed sheet beneath it — one model, two densities, which is the whole point of the change.
  *
  * The split that matters is between this tree and `world/boot.ts`: React owns the board and the chrome and
  * re-renders when the board changes; the engine owns the frame loop and never re-renders anything. They meet
@@ -22,19 +22,37 @@ import { readView } from './map/view-link';
 import { useOperations } from './ops/use-operations';
 import { DetailPanel } from './ui/detail-panel';
 import { DISPATCH_SCOPE, installDispatchCss } from './ui/global-css';
-import { IncidentsPanel } from './ui/incidents-panel';
+import { callsTally, IncidentsPanel } from './ui/incidents-panel';
 import { KeyHelp } from './ui/key-help';
 import { MapCanvas } from './ui/map-canvas';
 import { MapNav } from './ui/map-nav';
 import { MapTools } from './ui/map-tools';
+import { PanelWindow } from './ui/panel-window';
 import { Sheet } from './ui/sheet';
 import { StatusBar } from './ui/status-bar';
+import { StatusTally } from './ui/status-tally';
 import { styles } from './ui/styles';
 import { TimelineBar } from './ui/timeline-bar';
 import { TopBar } from './ui/top-bar';
-import { UnitsPanel } from './ui/units-panel';
+import { UnitsPanel, unitsTally } from './ui/units-panel';
 import { useCoarsePointer, useCompactLayout, useShortViewport } from './ui/use-compact';
 import { dispatchParams } from './world/boot';
+
+/**
+ * Where the two windows open before the operator has moved them.
+ *
+ * Left and right edges, so the board still reads like the columns it replaced — but starting at **y 180**
+ * rather than at the top, and that number is not taste. The map owns both upper corners: the operator's
+ * tool cluster (search, fit, follow, saved views) is top-left and the turn/tilt/zoom cluster is top-right,
+ * and a window opening over either one hides the map's own controls behind a list. Measured at 1280×800
+ * with the demo city: the clusters end at y 165 and y 285 respectively, and 180 clears the taller of the
+ * two on the side the roster is not on.
+ *
+ * `x` is the gap from the near edge in both cases — the roster passes `anchorRight`, because the map's
+ * width is not known until it lays out.
+ */
+const CALLS_RECT = { h: 480, w: 320, x: 12, y: 180 } as const;
+const UNITS_RECT = { h: 480, w: 300, x: 12, y: 180 } as const;
 
 export function App(): ReactElement {
   const { actions, autoDispatch, clock, historyWindow, ops, read, selection } = useOperations();
@@ -55,6 +73,11 @@ export function App(): ReactElement {
   const [handle, setHandle] = useState<DispatchHandle | null>(null);
   const [bindings, setBindings] = useState<KeyBindings>(() => loadBindings());
   const [keysOpen, setKeysOpen] = useState(false);
+  /**
+   * Which of the two windows is on top. Two windows need exactly one bit, and a stacking ORDER would be a
+   * list to keep sorted for a case that does not exist yet — when a third window arrives this becomes one.
+   */
+  const [front, setFront] = useState<'calls' | 'units'>('calls');
   /**
    * An embedded console (`?embed=1`) is the MAP and its own controls, and nothing else: the host has its own
    * queue, roster and clock, and a second set of them inside an iframe is two boards disagreeing on one
@@ -135,6 +158,47 @@ export function App(): ReactElement {
         touch={touch}
       />
       <MapNav compact={compact} handle={handle} touch={touch} yaw={readout?.pose.yaw ?? MAP_YAW} />
+      {/* The two lists, over the world. Only on the desk: a phone has no room for a window that covers the
+          map it floats over, so there the same two panels are a sheet UNDER it (`Sheet`). */}
+      {!compact && (
+        <>
+          <PanelWindow
+            defaultRect={CALLS_RECT}
+            id="calls"
+            onFocus={() => setFront('calls')}
+            title="Calls"
+            touch={touch}
+            trailing={<StatusTally items={callsTally(ops.incidents)} />}
+            z={front === 'calls' ? 4 : 3}
+          >
+            <IncidentsPanel
+              incidents={ops.incidents}
+              now={ops.now}
+              onLocate={locateIncident}
+              onSelect={actions.select}
+              selection={selection}
+            />
+          </PanelWindow>
+          <PanelWindow
+            anchorRight
+            defaultRect={UNITS_RECT}
+            id="units"
+            onFocus={() => setFront('units')}
+            title="Units"
+            touch={touch}
+            trailing={<StatusTally items={unitsTally(ops.units)} />}
+            z={front === 'units' ? 4 : 3}
+          >
+            <UnitsPanel
+              incidents={ops.incidents}
+              onLocate={locateUnit}
+              onSelect={actions.select}
+              selection={selection}
+              units={ops.units}
+            />
+          </PanelWindow>
+        </>
+      )}
       <DetailPanel actions={actions} compact={compact} onLocate={locate} ops={ops} selection={selection} />
       {keysOpen && <KeyHelp bindings={bindings} onBindings={applyBindings} onClose={() => setKeysOpen(false)} />}
     </MapCanvas>
@@ -198,25 +262,7 @@ export function App(): ReactElement {
   return (
     <div {...{ [DISPATCH_SCOPE]: '' }} style={styles.app}>
       {top}
-
-      <IncidentsPanel
-        incidents={ops.incidents}
-        now={ops.now}
-        onLocate={locateIncident}
-        onSelect={actions.select}
-        selection={selection}
-      />
-
       {map}
-
-      <UnitsPanel
-        incidents={ops.incidents}
-        onLocate={locateUnit}
-        onSelect={actions.select}
-        selection={selection}
-        units={ops.units}
-      />
-
       {timeline}
       <StatusBar readout={readout} />
     </div>

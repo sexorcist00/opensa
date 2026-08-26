@@ -119,9 +119,28 @@ decided against real-world geography, so a globe and its CRS machinery buy nothi
 - <https://github.com/SnailyCAD/snaily-cadv4> (MIT) — the open-source benchmark for roleplay CAD/MDT:
   self-hosted, TypeScript monorepo, Docker, Discord role sync, realtime state. The feature checklist the
   product half is measured against. Its map is a [separate 2D integration](https://github.com/SnailyCAD/live-map).
-- <https://sonorancad.com/fivem> — the commercial leader for FiveM. Its live map is a 2D tile canvas with
-  blips; the only 3D live map it ships is for a Roblox game. Both it and SnailyCAD are FiveM, which is why
-  SA-MP/open.mp is the opening.
+- <https://sonorancad.com/fivem> — the commercial leader for FiveM, and **it ships a 3D live map for GTA V**
+  (a `2D / 2.5D / 3D` switch in the Live Map window, a camera pad, bodycam previews on unit markers).
+  Corrected 2026-08-26: this entry, and [202 §2](plans/202-pcad-dispatch/readme.md), previously said its 3D
+  map existed only for a Roblox game. Both it and SnailyCAD are FiveM, which is why SA-MP/open.mp is the
+  opening — and its world is stock Los Santos, which is why a total conversion still is.
+  Its dispatch screen is worth reading directly: four operator-selectable THEMES over one fixed 2x2
+  quadrant layout, with a status tally in each panel header. `sonorancad.com/images/homepage/themes/` holds
+  the four, captured 2026-08-26.
+- <https://resgrid.com/apps/dispatch> and <https://resgrid.com/apps/bigboard> (Apache-2.0) — the largest
+  open-source real-world CAD. Its Dispatch app keeps the intake FORM expanded permanently and leaves the map
+  a card measuring 475x302 of 1665x947 — **9.1 % of the screen**, measured off their own published
+  screenshot. BigBoard is the field's only configurable widget grid, and the reference for a future wall
+  mode.
+- <https://crowdcad.org> / <https://github.com/evanqua/crowdcad> (AGPL-3.0) — a browser-based CAD for event
+  medical teams, and the only one in the field built on **Next.js + Tailwind + shadcn/ui**. Its "Lite Mode"
+  runs the whole app in the browser with no backend, which makes it the easiest console in this list to
+  inspect live. Panes resize via `react-resizable-panels` (a 25/75 splitter); they do not move.
+- <https://openises.sourceforge.net/> / <https://github.com/khoegenauer/tickets-cad> — Tickets CAD, for
+  volunteer fire, ARES/RACES, CERT and campus security. **Recorded with a warning:** as of 2026-08-26
+  `ticketscad.org` serves a ParkLogic domain-parking page, the reachable repository is legacy (Travis CI,
+  Scrutinizer), and a widely-repeated spec for a "v4 NewUI" on Bootstrap 5 + GridStack + Leaflet could not
+  be verified from any reachable source. Do not build on it without checking it yourself.
 ## References the user wants watched before work starts
 
 - <https://www.youtube.com/watch?v=1dwufRp71EY> — **must be shown to the user before ANY work on the City

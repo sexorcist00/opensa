@@ -27,6 +27,12 @@ its research record into its `docs/plans/<n>-…/` folder, and a killed one move
   device's format at load (Basis/KTX2), so a phone can open the real map. Direction decided 2026-08-04;
   the open question is whether the quality survives a second generation of loss on SA's DXT. Gate on
   [plan 200 chain 2](../plans/200-platform-reach/2-universal-textures/readme.md).
+- **[go-backend](go-backend.md)** — Go for the dispatch backend, opened 2026-08-26. Recommendation up front:
+  do not rewrite PCAD's working Node server (~4.1k lines, real users, and [202](../plans/202-pcad-dispatch/readme.md)
+  says the dull half is behind us), and do not close the door either — the one shape that pays is the
+  dispatcher's READ path as a greenfield service that validates the existing JWT and can be deleted. The
+  throughput argument does not apply: ~37 position messages/s at 150 units. Graduates only on a measurement,
+  a written event contract, and somebody willing to maintain a second toolchain on a phone.
 - **[webgl2-fallback-backend](webgl2-fallback-backend.md)** — a second rendering backend for devices with no
   WebGPU adapter. In scope by decision; carries its own counter-case (the reach window is closing, the tax is
   permanent). Gate on
