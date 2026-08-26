@@ -499,7 +499,15 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
 
       return;
     }
-    bootStep('streaming the world…', stats.cellsVisible, stats.cellsTotal, `${bootBytes(pakTraffic.totalBytes)} read`);
+    // The cached share is on the shell rather than only in a capture: on a phone it is the only place an
+    // operator can see that a second open really is reading off the disk (201/4-03).
+    const cached = pakTraffic.cachedBytes > 0 ? ` · ${bootBytes(pakTraffic.cachedBytes)} cached` : '';
+    bootStep(
+      'streaming the world…',
+      stats.cellsVisible,
+      stats.cellsTotal,
+      `${bootBytes(pakTraffic.totalBytes)} read${cached}`,
+    );
   };
 
   /** How many more overlay draws are broken into named steps — see the split inside `overlay-2d` below. */
@@ -788,7 +796,13 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       return inventory.report({
         build: world.label,
         byCategory: engine.ledger(),
-        bytes: { byKind: pakTraffic.report(), requests: pakTraffic.requests, totalBytes: pakTraffic.totalBytes },
+        bytes: {
+          byKind: pakTraffic.report(),
+          cachedBytes: pakTraffic.cachedBytes,
+          cachedRequests: pakTraffic.cachedRequests,
+          requests: pakTraffic.requests,
+          totalBytes: pakTraffic.totalBytes,
+        },
         camera: { at: pose.at, height: pose.height, projection: pose.projection },
         device: engine.deviceReport,
         district: params.get('district') ?? UNNAMED_DISTRICT,

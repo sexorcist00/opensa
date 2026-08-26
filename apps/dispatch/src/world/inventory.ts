@@ -82,6 +82,11 @@ export interface InventoryReport {
    *  of this surface ever asked for. */
   readonly bytes: {
     readonly byKind: readonly PakTrafficKind[];
+    /** Of `totalBytes`, how much the range cache answered instead of the network (201/4-03) — a SUBSET,
+     *  never an addition. Zero on a first open, on an unversioned pak, and wherever Cache Storage is
+     *  withheld (a LAN `http://` origin is not a secure context). */
+    readonly cachedBytes: number;
+    readonly cachedRequests: number;
     readonly requests: number;
     readonly totalBytes: number;
   };
@@ -334,7 +339,13 @@ export class FrameInventory {
     build: string;
     /** `engine.ledger()` — resident bytes and counts per category. */
     byCategory: Readonly<Record<string, { bytes: number; count: number }>>;
-    bytes: { byKind: readonly PakTrafficKind[]; requests: number; totalBytes: number };
+    bytes: {
+      byKind: readonly PakTrafficKind[];
+      cachedBytes: number;
+      cachedRequests: number;
+      requests: number;
+      totalBytes: number;
+    };
     camera: { at: readonly [number, number]; height: number; projection: MapProjection };
     device: unknown;
     district: string;

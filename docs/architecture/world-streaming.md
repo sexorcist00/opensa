@@ -60,6 +60,7 @@ flowchart LR
   pak[(".ospak<br/>manifest + 4096-aligned blobs")]:::data
   setup["setupStreaming<br/>validate manifest · buildTime ·<br/>water · uv-anims"]:::engine
   worker["pak worker<br/>Range reads · .oswire → .oscell<br/>(pak bytes never on main thread)"]:::infra
+  slices[("Cache Storage<br/>range slices, keyed by buildTime<br/>(secure contexts only)")]:::data
   driver["StreamingDriver<br/>rings + hysteresis · ≤1 create/frame ·<br/>atomic HD↔LOD swap · eviction"]:::engine
   col["PakCollisionSource<br/>.oscol ranges on the GAME grid (256)<br/>→ the game's collision streamer"]:::engine
   cells["CellStore<br/>.oscell → GPU buffers +<br/>recorded render bundle · pick()"]:::engine
@@ -70,6 +71,7 @@ flowchart LR
   setup --> col
   col <--> worker
   driver <--> worker
+  worker <--> slices
   worker --> cells
   driver --> tex
   cells --> frame
@@ -89,6 +91,13 @@ flowchart LR
 - **`stream/pak-worker.ts`** — all pak IO: HTTP Range mode when the server honours `Range:` (auto-detected;
   falls back to whole-pak), meshopt/`.oswire` decode, transfers cell blobs. JS heap stays flat — pak bytes
   never live whole on the main thread.
+- **`stream/pak-cache.ts`** — the range slices kept BETWEEN sessions (201/4-03), so a second open of a
+  district reads off the disk instead of the network. Range mode only; keyed by the manifest's `buildTime`,
+  and the caches of other builds of the same pak are dropped on open. It is optional in three ways that all
+  degrade to "fetch it": no Cache Storage (a LAN `http://` origin is not a secure context), no `buildTime`
+  (an unversioned cache cannot be invalidated, so nothing is stored), and a refused write (quota — one
+  warning, then network for the rest of the session). `pakTraffic.cachedBytes` is what a capture reports it
+  by, and the boot shell shows the same share while the world streams.
 - **`stream/residency.ts`** — `ResidencyGate`: the view half of the residency rule (plan 201/1-05). Builds
   the frustum planes from a host-supplied `CameraState` through `core/camera.ts` — the ONE owner of the
   reversed-Z / plan-view convention, shared with `Engine.frame`, so the set the streamer fetches and the set

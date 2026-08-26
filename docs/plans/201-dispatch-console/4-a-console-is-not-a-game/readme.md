@@ -84,7 +84,8 @@ Three pieces, chosen with the user 2026-08-26 — progress only, no flat map and
   [the feature doc](../../../features/dispatch-console.md).
 - **The pak cache.** A second open of the same district should not re-read the pak over the network.
   Cache Storage, keyed by the manifest's `buildTime`, degrading silently where `caches` is undefined — a
-  LAN `http://` origin is not a secure context and has none.
+  LAN `http://` origin is not a secure context and has none, though the phone's own `localhost` does.
+  Counted as a subset of the traffic (`pakTraffic.cachedBytes`), never as a claim.
 - **Async pipelines.** `engine-frame` measured **77.9 ms on the first frame in both 08-25 captures, to the
   tenth** — a fixed cost, now the largest item on that frame. Shader compilation is the suspect:
   `createRenderPipelineAsync` compiles off the main thread, and the engine has 17 synchronous call sites.

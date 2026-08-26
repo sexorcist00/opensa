@@ -6,7 +6,14 @@
   in-page fake FSA tree; real folder flows need a human. Headless _field checks_ are still possible: the
   bench harness boots the real game through `?loader=http-dir&src=<served build>` (no picker on that path).
 - **Cache Storage needs a secure context.** Over plain `http://` (e.g. a phone on a LAN IP) `caches` is
-  undefined and every cache op silently no-ops — assets re-download each visit, nothing breaks.
+  undefined and every cache op silently no-ops — assets re-download each visit, nothing breaks. The same
+  applies to the pak's range-slice cache (201/4-03) — and note which side of the line the phone is on:
+  Termux serves the console at `http://localhost:3001`, which IS a secure context, so the cache works
+  there. A DIFFERENT device reaching the same server over `http://<lan-ip>` gets no cache and re-reads the
+  district every open.
+- **A cached `Range:` response cannot be stored as one.** `cache.put` rejects a 206 by spec, and
+  `cache.match` ignores the `Range:` header when matching — so every slice of one file would collide on a
+  single entry. `stream/pak-cache.ts` re-wraps the bytes as a 200 and puts the range IN the key.
 - **Visual regression renders on Chromium's software backend** (for determinism), not real GPU — it cannot
   judge WebGPU-specific defects.
 - **The shell e2e needs built `static/games/original-*` archives** — it only runs where those exist (not on

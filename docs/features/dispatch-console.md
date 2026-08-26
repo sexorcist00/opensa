@@ -320,6 +320,32 @@ The app's side is [`src/world/boot-progress.ts`](../../apps/dispatch/src/world/b
 handle whose every function is a **no-op when the shell is absent**. The viewer harness, the tests and an
 embedding host all mount the console without that markup, and in none of them is a missing shell an error.
 
+## The second open, and why it is cheap
+
+**Since 2026-08-26.** The opening view of a district pulls tens of megabytes out of the pak — the 08-25
+captures read **38.6 MB for four cells** — and every open paid for all of it again. The reads are `Range:`
+requests over one immutable file, so they cache perfectly: the only thing that can make a slice stale is a
+REBUILD, and the manifest already stamps that (`buildTime`).
+[`stream/pak-cache.ts`](../architecture/world-streaming.md) keeps them in Cache Storage, named for the
+build, and drops the caches of other builds of the same pak when it opens.
+
+Three shapes of "no cache", and all three read from the network exactly as before: **no Cache Storage** (a
+secure-context API — the phone's own `http://localhost:3001` has it, another device on `http://<lan-ip>`
+does not), **no `buildTime`** (a pak built before the field existed; an unversioned cache is one nobody can
+invalidate, and serving a stale slice is silent corruption rather than a miss), and **a refused write**
+(quota — one warning, then network for the rest of the session).
+
+Two details the API forces, both worth knowing before touching this: `cache.put` **rejects a 206 by spec**,
+so the slice is re-wrapped as a plain 200; and `cache.match` **ignores the `Range:` header**, so every slice
+of `world.ospak` would collide on one entry — the range goes in the key instead. Writes are serialized
+rather than fired in parallel, which is what makes a refusal able to stop the writes queued behind it.
+
+**It is visible, which on a phone is the whole point.** `pakTraffic.cachedBytes` counts what the disk
+answered as a SUBSET of what the world asked for — the bytes a district needs do not change because they
+were already local — and the inventory capture carries `bytes.cachedBytes` / `bytes.cachedRequests` beside
+the totals. The boot shell shows the same share while the world streams (`38.6 MB read · 38.6 MB cached`),
+so an operator with no devtools can see a repeat open working.
+
 ## The look, and where its rules live
 
 **[`apps/dispatch/DESIGN.md`](../../apps/dispatch/DESIGN.md), since 2026-08-25.** The console has a design
@@ -387,6 +413,7 @@ where and when it was. Plan mode exports too, and says `plan mode` on its face.
 | ---------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
 | Engine host, frame loop | `src/world/boot.ts`                     | boots the engine, picks a world, owns input; React never enters the loop                     |
 | Boot shell             | `dispatch.html` + `src/world/boot-progress.ts` | the progress overlay painted before any module; leaves on the first frame that has a picture |
+| Pak slice cache        | `@opensa/engine` `stream/pak-cache.ts`   | range slices kept between sessions, keyed by the pak's `buildTime`; optional everywhere |
 | World (real)           | `src/world/pak-source.ts` + `water.ts`   | `?src=` → `setupStreaming` + the baked `water.bin`                                           |
 | World (demo)           | `src/world/demo-city.ts`                 | `?demo=1` — a synthetic block grid, no pak needed; reuses `@opensa/engine-lab/synthetic`      |
 | Camera                 | `src/map/map-camera.ts`                  | ground-focus map rig over `@opensa/web/ui/camera/*` — pan / orbit / dolly, north-up default, **perspective or plan view**, bounds derived from the world's reach |

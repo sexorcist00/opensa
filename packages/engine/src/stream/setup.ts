@@ -10,7 +10,7 @@ import type { Engine } from '../engine';
 import type { PakWorkerRequest, PakWorkerResponse } from './pak-worker';
 
 import { PakCollisionSource } from './collision-source';
-import { postPakFetch } from './pak-traffic';
+import { pakTraffic, postPakFetch } from './pak-traffic';
 import { StreamingDriver, type StreamingRadii } from './streaming';
 
 /**
@@ -86,9 +86,22 @@ export async function setupStreaming(
   // Folder mode hands the worker the pak Blob (read off disk); HTTP mode hands it the `world.ospak` URL.
   const pakInit: PakWorkerRequest =
     typeof source === 'string'
-      ? { type: 'init', url: `${source}/world.ospak` }
+      ? {
+          ...(manifest.buildTime !== undefined ? { buildTime: manifest.buildTime } : {}),
+          type: 'init',
+          url: `${source}/world.ospak`,
+        }
       : { blob: await openLocal(source, 'world.ospak'), type: 'init' };
   const worker = new Worker(new URL('./pak-worker.ts', import.meta.url), { type: 'module' });
+  // The one place a cache hit is counted (201/4-03). `postPakFetch` counts what the world ASKED for; this
+  // says how much of it the disk answered, and a capture that reports both is the only way to see the cache
+  // working on a device with no devtools.
+  worker.addEventListener('message', (event: MessageEvent<PakWorkerResponse>): void => {
+    const message = event.data;
+    if (message.type === 'blob' && message.cached === true) {
+      pakTraffic.recordCacheHit(message.wire ?? 0);
+    }
+  });
   await new Promise<void>((resolve, reject) => {
     worker.addEventListener(
       'message',

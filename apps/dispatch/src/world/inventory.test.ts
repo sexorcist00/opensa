@@ -52,7 +52,7 @@ function stats(overrides: Partial<EngineStats> = {}): EngineStats {
 const CONTEXT = {
   build: 'original@test',
   byCategory: {},
-  bytes: { byKind: [], requests: 0, totalBytes: 0 },
+  bytes: { byKind: [], cachedBytes: 0, cachedRequests: 0, requests: 0, totalBytes: 0 },
   camera: { at: [1480, -1720] as const, height: 900, projection: 'perspective' as const },
   device: {},
   district: 'los-santos-centre',
@@ -430,6 +430,8 @@ describe('FrameInventory', () => {
             { bytes: 24_000_000, kind: 'texture-array', requests: 20 },
             { bytes: 3_000_000, kind: 'cell-hd', requests: 4 },
           ],
+          cachedBytes: 3_000_000,
+          cachedRequests: 4,
           requests: 24,
           totalBytes: 27_000_000,
         },
@@ -438,6 +440,8 @@ describe('FrameInventory', () => {
       expect(report.bytes.byKind[0].kind).toBe('texture-array');
       expect(report.bytes.totalBytes).toBe(27_000_000);
       expect(report.bytes.requests).toBe(24);
+      expect(report.bytes.cachedBytes).toBe(3_000_000);
+      expect(report.bytes.cachedRequests).toBe(4);
     });
 
     it('carries the world counters and the context the capture must state', () => {

@@ -16,6 +16,11 @@
  *
  * The recorder is shared, for the same reason `frameSpans` is: it is an instrument rather than state, and
  * the three packages that read a pak do not own each other.
+ *
+ * Since 201/4-03 a read can be served from the range cache instead of the network, and the recorder counts
+ * that separately rather than instead: the bytes the WORLD asked for do not change because a slice was
+ * already on the disk. `cachedBytes` against `totalBytes` is how a capture proves the cache is working —
+ * which on a phone is the only way to see it at all.
  */
 
 /** One entry kind's traffic over the window. */
@@ -26,6 +31,14 @@ export interface PakTrafficKind {
 }
 
 export class PakTraffic {
+  /** Wire bytes served from the range cache — a subset of {@link totalBytes}, never an addition to it. */
+  get cachedBytes(): number {
+    return this.fromCacheBytes;
+  }
+  /** Requests served from the range cache — a subset of {@link requests}. */
+  get cachedRequests(): number {
+    return this.fromCacheRequests;
+  }
   get requests(): number {
     return this.totalRequests;
   }
@@ -33,6 +46,8 @@ export class PakTraffic {
     return this.bytes;
   }
   private bytes = 0;
+  private fromCacheBytes = 0;
+  private fromCacheRequests = 0;
   private readonly kinds = new Map<string, { bytes: number; requests: number }>();
   private totalRequests = 0;
 
@@ -47,6 +62,12 @@ export class PakTraffic {
     this.totalRequests += 1;
   }
 
+  /** One request that the range cache answered. Its bytes were already counted by {@link record}. */
+  recordCacheHit(bytes: number): void {
+    this.fromCacheBytes += bytes;
+    this.fromCacheRequests += 1;
+  }
+
   /** Descending by bytes, so the table reads top-down. Empty when nothing was read. */
   report(): readonly PakTrafficKind[] {
     return [...this.kinds.entries()]
@@ -58,6 +79,8 @@ export class PakTraffic {
   reset(): void {
     this.kinds.clear();
     this.bytes = 0;
+    this.fromCacheBytes = 0;
+    this.fromCacheRequests = 0;
     this.totalRequests = 0;
   }
 }
