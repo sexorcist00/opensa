@@ -611,6 +611,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
        * `overlayDetail` counts down, so this costs two extra `performance.now()` pairs for three frames and
        * nothing at all afterwards — a permanent split would put three noise rows in every steady-state
        * frame's segments.
+       *
+       * It was written to be removed once it had answered, and it is KEPT instead: `overlay:clear` went
+       * 212.1 ms → 0.1 on the device once the warm landed, and this split is the only thing that would say
+       * if that ever came back. Six timestamps per session is a cheap regression detector for a cost that
+       * used to be two seconds.
        */
       const detail = overlayDetail > 0;
       if (detail) {

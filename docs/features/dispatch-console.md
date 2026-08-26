@@ -268,9 +268,18 @@ it.
 
 Both are warmed before the loop now (`warmOverlaySurface`, `warmTextMetrics`), and the resize guard stops
 the `ResizeObserver`'s first tick from throwing the warmed store away by re-assigning an unchanged
-`canvas.width`. The lesson worth keeping is the order: the first attempt warmed the FONT on the assumption
-that font resolution was the cost, and the measurement after it shipped did not support that. The split is
-what answered it.
+`canvas.width`. **Measured after: `overlay:clear` 212.1 ms → 0.1, the worst frame 333.1 → 123.0, `dtMax`
+390.5 → 140.1.** The split stays in the build as the regression detector for it — six timestamps a session
+against a cost that was once two seconds.
+
+Two things are honestly still open. The `fillText` added to the font warm bought 2.3 ms of 22.6, so what
+`symbology.render` pays on its first pass is not the glyph atlas and is not yet known. And **`engine-frame`
+measured 77.9 ms on the first frame in both captures, to the tenth** — a fixed cost of the engine's own
+first pass, untouched by any of this, and now the largest single item on that frame.
+
+The lesson worth keeping is the order: the first attempt warmed the FONT on the assumption that font
+resolution was the cost, and the measurement after it shipped did not support that. The split is what
+answered it.
 
 [The two capture rows](../benchmarks/index.md) carry the numbers, and the absolute value is not stable — the
 same span read 1 850 ms under a taller viewport and a colder start. The shape is: it is one-shot, it is the
