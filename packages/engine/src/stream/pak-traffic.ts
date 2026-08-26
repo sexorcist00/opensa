@@ -17,10 +17,12 @@
  * The recorder is shared, for the same reason `frameSpans` is: it is an instrument rather than state, and
  * the three packages that read a pak do not own each other.
  *
- * Since 201/4-03 a read can be served from the range cache instead of the network, and the recorder counts
- * that separately rather than instead: the bytes the WORLD asked for do not change because a slice was
- * already on the disk. `cachedBytes` against `totalBytes` is how a capture proves the cache is working —
- * which on a phone is the only way to see it at all.
+ * Since 201/4-03 a read can be served from a cache instead of the network, and the recorder counts that
+ * separately rather than instead: the bytes the WORLD asked for do not change because they were already on
+ * the disk. `cachedBytes` against `totalBytes` is how a capture proves the cache is working — which on a
+ * phone is the only way to see it at all. It means **what did not cross the wire**, not one cache: pak
+ * slices come from Cache Storage, and `water.bin` — a loose file the slice cache never sees — reports the
+ * browser's own HTTP cache through Resource Timing.
  */
 
 /** One entry kind's traffic over the window. */
@@ -31,11 +33,11 @@ export interface PakTrafficKind {
 }
 
 export class PakTraffic {
-  /** Wire bytes served from the range cache — a subset of {@link totalBytes}, never an addition to it. */
+  /** Wire bytes that did not cross the network — a subset of {@link totalBytes}, never an addition to it. */
   get cachedBytes(): number {
     return this.fromCacheBytes;
   }
-  /** Requests served from the range cache — a subset of {@link requests}. */
+  /** Requests that did not cross the network — a subset of {@link requests}. */
   get cachedRequests(): number {
     return this.fromCacheRequests;
   }
@@ -62,7 +64,8 @@ export class PakTraffic {
     this.totalRequests += 1;
   }
 
-  /** One request that the range cache answered. Its bytes were already counted by {@link record}. */
+  /** One request a cache answered instead of the network — the range cache, or the browser's own HTTP cache
+   *  for a loose file beside the pak. Its bytes were already counted by {@link record}. */
   recordCacheHit(bytes: number): void {
     this.fromCacheBytes += bytes;
     this.fromCacheRequests += 1;

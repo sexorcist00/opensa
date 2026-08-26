@@ -360,10 +360,22 @@ That matters beyond the boot, which is why it is worth the paragraph: **the LUT 
 or the weather moves**, so this was a ~76 ms main-thread hitch on every one of them — on the device the
 time axis (chain 8) scrubs across.
 
+**The device confirmed it and beat the bench: `frame:sky-lut` 75.8 → 15.4 ms on the first frame, 4.9×**
+([the row](../benchmarks/opensa-engine/2026-08-26-mobile-boot-warm-second-open.json)), where desktop node had
+predicted 3.3×. The whole first frame goes **85.1 → 23.7 ms**, and what is left on it is `frame:record` at 6.8.
+
 The other number that capture produced has no owner yet: **`engine.init` measured 2 607.5 ms**, larger than
 everything else in the boot put together. It is split by phase now (`init:device`, `init:canvas`,
 `init:pipelines`, `init:resources`, `init:sky-lut`, `init:targets`, in `boot.phases`) for exactly the
 reason above — a number that big with no breakdown is the next confident wrong guess waiting to be made.
+
+**The split answered, and the answer is a question.** The next capture read **`boot.gpuMs` 398.4** with
+`init:pipelines` 226.8, `init:device` 117.4, resources 28.9, sky-LUT 17.6, targets 4.9, canvas 2.0 — 397.6 of
+the 398.4 attributed. Nothing is claimed for that 6.5×: the only code difference between the two runs is the
+sky-LUT fix, which can own at most those 17.6 ms, so ~2.2 s changed hands with no owner at all. **The standing
+hypothesis is the browser's persisted pipeline cache — warm on the second open, cold on the first** — and if
+it holds, the boot this section is about (the FIRST one after an app rebuild) is still the 2.6 s run and is
+currently unmeasured. One capture with the site's data cleared, against one straight after it, settles it.
 
 ## The GPU and the radio, at the same time
 
@@ -420,6 +432,19 @@ Two details the API forces, both worth knowing before touching this: `cache.put`
 so the slice is re-wrapped as a plain 200; and `cache.match` **ignores the `Range:` header**, so every slice
 of `world.ospak` would collide on one entry — the range goes in the key instead. Writes are serialized
 rather than fired in parallel, which is what makes a refusal able to stop the writes queued behind it.
+
+**Measured on the device, 2026-08-26: a second open of the pinned district read 23.60 MB of 26.26 out of the
+cache — 89.9 %, over 40 of 41 requests** ([the row](../benchmarks/opensa-engine/2026-08-26-mobile-boot-warm-second-open.json)),
+against 33 % over 59 of 88 on the open that reached past what had filled it. The blob handler's mean halves
+with it (0.130 → 0.065 ms). **The single request the cache does not answer is `water.bin`, to the byte** — it
+is a loose file beside the pak rather than a pak slice, so it is a miss by construction and not a cache
+failure; whether those 2.66 MB crossed the network was not something that capture could say.
+
+**It can now.** `installWater` asks Resource Timing what the network actually carried for that file:
+`transferSize === 0` means the browser's own HTTP cache served it outright, and only then is it counted as a
+hit — a 304 revalidation carries bytes and counts as a miss, and an entry Resource Timing cannot produce is
+never counted at all. So `cachedBytes` means **what did not cross the wire**, over both caches, rather than
+one of them.
 
 **It is visible, which on a phone is the whole point.** `pakTraffic.cachedBytes` counts what the disk
 answered as a SUBSET of what the world asked for — the bytes a district needs do not change because they

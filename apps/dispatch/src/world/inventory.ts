@@ -93,9 +93,12 @@ export interface InventoryReport {
    *  of this surface ever asked for. */
   readonly bytes: {
     readonly byKind: readonly PakTrafficKind[];
-    /** Of `totalBytes`, how much the range cache answered instead of the network (201/4-03) — a SUBSET,
-     *  never an addition. Zero on a first open, on an unversioned pak, and wherever Cache Storage is
-     *  withheld (a LAN `http://` origin is not a secure context). */
+    /** Of `totalBytes`, how much did NOT cross the network (201/4-03) — a SUBSET, never an addition. Pak
+     *  slices come from Cache Storage; `water.bin` is a loose file the slice cache never sees and reports
+     *  the browser's own HTTP cache instead (Resource Timing `transferSize === 0`, so a 304 revalidation
+     *  counts as a miss and an unknown transfer is never counted as a hit). Zero on a first open, on an
+     *  unversioned pak, and wherever Cache Storage is withheld (a LAN `http://` origin is not a secure
+     *  context). */
     readonly cachedBytes: number;
     readonly cachedRequests: number;
     readonly requests: number;

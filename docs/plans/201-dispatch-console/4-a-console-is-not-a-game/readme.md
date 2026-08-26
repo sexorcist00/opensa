@@ -111,10 +111,33 @@ the shell ran a real boot; the cache answered **10.67 MB of 32.68 over 59 of 88 
 named the 77.9 ms in one go — **`frame:sky-lut` 75.8**, fixed at 3.3x
 ([the bench](../../../benchmarks/opensa-engine/2026-08-26-sky-lut-build.json)).
 
-**Still owed:** the device number for the sky-LUT fix; a repeat open that reaches no further than the one
-that filled the cache, since this one missed on the texture arrays; a breakdown of **`boot.gpuMs` 2 607.5** —
-now the largest single item in the boot, split by phase but not yet captured; and the first `boot.overlapMs`,
-which is the overlap's own device number. All four come off ONE capture, and it is the user's to take.
+**Three of the four owed numbers came back the same day**
+([the capture](../../../benchmarks/opensa-engine/2026-08-26-mobile-boot-warm-second-open.json), a SECOND open
+of the pinned district at street height):
+
+- **The sky-LUT fix, on the device: `frame:sky-lut` 75.8 → 15.4 ms on the first frame, 4.9x** — more than the
+  3.3x the desktop bench predicted — and the whole first frame goes **85.1 → 23.7 ms**.
+- **The repeat open: the cache served 23.60 MB of 26.26 (89.9 %) over 40 of 41 requests**, against 33 % over
+  59 of 88 when the open reached past what had filled it. The blob handler's mean halves with it (0.130 →
+  0.065 ms). **The one miss is `water.bin`, to the byte** — a loose file beside the pak rather than a pak
+  slice, so it is a miss by construction; whether those bytes crossed the network was not visible from the
+  capture, and nothing there says they did. **It is visible now**: `installWater` reads Resource Timing's
+  `transferSize` for that file and counts a hit only at 0 — a 304 carries bytes and counts as a miss, an
+  entry Resource Timing cannot produce is not counted at all — so `cachedBytes` now means what did not cross
+  the wire over both caches rather than over one of them.
+- **`boot.gpuMs` 2 607.5 → 398.4, and it is claimed for NOTHING.** The only code difference between the two
+  captures is the sky-LUT fix, which can own at most the 17.6 ms that `init:sky-lut` now reports. The split
+  says where the rest of the boot lives — **`init:pipelines` 226.8, `init:device` 117.4**, resources 28.9,
+  targets 4.9, canvas 2.0, 397.6 of 398.4 attributed — and leaves ~2.2 s with no owner between the two runs.
+  **The standing hypothesis is the browser's persisted pipeline cache: warm on this open, cold on that one**,
+  which would mean the boot this step is about — the FIRST one after an app rebuild — is still the 2.6 s run
+  and is now unmeasured. It is a hypothesis and not a finding: the test is one capture with the site's data
+  cleared against one taken straight after it, and it is cheap.
+
+**Still owed:** the first `boot.overlapMs` — **the capture carries neither `openMs` nor `overlapMs`, which is
+exactly how it says the device was running the app from before the overlap landed.** The archive has to be
+re-extracted on the phone before that number exists. And the cold/warm boot pair above, which is what decides
+whether `init:pipelines` is a 227 ms phase or a 2.3 s one.
 
 ## Verification
 

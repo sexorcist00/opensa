@@ -22,7 +22,8 @@ export async function installWater(
   if (!water) {
     return 0;
   }
-  const response = await fetch(`${base}/${water.file}`);
+  const url = `${base}/${water.file}`;
+  const response = await fetch(url);
   if (!response.ok) {
     return 0;
   }
@@ -30,6 +31,13 @@ export async function installWater(
   // The one pak read that does NOT go through the IO worker: `water.bin` rides beside the pak as a loose
   // file, so it is recorded here or it is missing from the bytes column entirely.
   pakTraffic.record(water.file, bytes.byteLength);
+  // And because it is loose, the pak's slice cache never sees it — on 2026-08-26 this was the single request
+  // of a second open the cache did not answer, 2.66 MB of 26.26, and nothing could say whether those bytes
+  // had actually crossed the wire. Resource Timing can: `transferSize` is 0 when the HTTP cache served it
+  // outright, a few hundred bytes for a 304 revalidation, and the full body otherwise.
+  if (transferredBytes(url) === 0) {
+    pakTraffic.recordCacheHit(bytes.byteLength);
+  }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const vertexCount = view.getUint32(0, true);
   const indexCount = view.getUint32(4, true);
@@ -52,4 +60,17 @@ function engineWaterVertices(gta: Float32Array): Float32Array {
   }
 
   return vertices;
+}
+
+/**
+ * What the network carried for `url`, or `undefined` where Resource Timing cannot say — no `performance`
+ * entries (a test host), or a timeline that no longer holds this request. Undefined is NOT zero: an unknown
+ * transfer must not be reported as a cache hit.
+ */
+function transferredBytes(url: string): number | undefined {
+  const rows: PerformanceResourceTiming[] = (globalThis.performance?.getEntriesByType?.('resource') ??
+    []) as PerformanceResourceTiming[];
+  const mine = rows.filter((row) => row.name.endsWith(url));
+
+  return mine.length === 0 ? undefined : mine[mine.length - 1].transferSize;
 }
