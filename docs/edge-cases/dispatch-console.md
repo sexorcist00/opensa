@@ -23,6 +23,30 @@ new design must satisfy are next door in [`restrictions/`](../restrictions/READM
   road, a district or a unit kind. A radius in metres is honest; a radius in minutes would be a constant
   chosen by eye.
 
+## Units drawn as cars (201/5-04)
+
+- **A unit is drawn with ONE angle, so it never leans.** The feed publishes a position and a heading
+  ([202 §4](../plans/202-pcad-dispatch/readme.md): `pos_x, pos_y, pos_z, heading`) — SA's z-angle and nothing
+  else — so the map turns a car about the up axis and leaves it level. The game's own vehicle handle takes a
+  full quaternion and does lean; the map cannot, because roll and pitch are not in the packet. **What it
+  looks like:** on a slope the car sits flat and cuts into the road — a 15° hill loses the forward vector's
+  0.2588 vertical component, so a 4.6 m car buries a nose or a tail by roughly 0.6 m. Invisible at city zoom,
+  visible at street zoom on the hills.
+
+  **Deriving a lean from consecutive fixes would be the tempting fix and it is barred**
+  ([restrictions/architecture](../restrictions/architecture.md)): at a 4 s publish rate two fixes are ~110 m
+  apart, so the "slope" between them is noise, and the map may not invent an orientation any more than it may
+  invent a position. What retires this is upstream — PCAD publishing the two extra floats — and it is worth
+  asking for only if a field verdict at street zoom says the flat cars read badly.
+
+- **The wheels do not turn.** No spin, no steer: every part stays at its bind pose, because the feed carries
+  no wheel data and the alternative is animating a car from a position it was at four seconds ago. The
+  fixture's wheel parts are there and the primitive is one call away if a field verdict ever wants it
+  (`RigidEntity.setPartRotation`, the way the engine lab drives its convoy).
+
+- **Peds are not drawn at all.** A unit on foot keeps its symbol — and PCAD sends nothing for it either
+  (`isCharInAnyCar` gates the whole publish), so the map has no position to draw a ped at even if it drew one.
+
 ## At rest (201/4-01)
 
 - **The picture freezes, sway included.** When nothing that affects the picture has changed, the console

@@ -596,6 +596,10 @@ server's numbers, converted between coordinate systems and nothing else.
 - **smoothing, interpolating or extrapolating between fixes** — already ruled out for its own reasons
   ([201/8-02](../plans/201-dispatch-console/8-the-time-axis/readme.md)); this is the same rule seen from the
   other side;
+- **deriving an ORIENTATION the packet does not carry** — a roll or pitch computed from consecutive fixes,
+  so cars lean on hills. At a 4 s publish rate the two fixes are ~110 m apart and the slope between them is
+  noise; a map may not invent a facing any more than a position. The visible consequence of NOT doing it is
+  recorded instead ([edge-cases/dispatch-console](../edge-cases/dispatch-console.md));
 - **any correction at all** applied because the picture looks wrong.
 
 **What breaks when it is violated:** the map stops agreeing with the game. A dispatcher sends a unit to a

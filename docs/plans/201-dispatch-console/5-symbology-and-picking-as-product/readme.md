@@ -218,6 +218,25 @@ counter-clockwise from north and this map's heading is a bearing in radians cloc
 comes through `headingFromZAngle` and never raw — passed through unconverted it mirrors every unit about the
 north–south axis, and a car pointing at its own reflection looks entirely plausible on a top-down map.
 
+**Every angle in the path, audited 2026-08-26 rather than asserted.** The map's yaw matrix was checked
+against the game handle's QUATERNION path at all 360 z-angles: **max difference 4e-16** — double-precision
+noise — and the basis change `(x, y, z) → (x, z, −y)` has determinant **+1**, so no geometry is mirrored.
+The convention is inherited from the shipped path rather than re-derived, which is the stronger claim: it is
+pinned to the code that already renders cars in the game.
+
+Two angles are NOT in the path, and both are the feed's shape rather than an oversight. **Roll and pitch do
+not exist in the packet**, so a car never leans: on a 15° slope the forward vector loses its 0.2588 vertical
+component and a 4.6 m car buries a nose or a tail by ~0.6 m. Deriving one from consecutive fixes is barred by
+the restriction above — at 4 s the fixes are ~110 m apart and the slope between them is noise — so the
+consequence is [recorded](../../../edge-cases/dispatch-console.md) and the fix, if a street-zoom verdict ever
+wants it, is upstream: two more floats from PCAD. **Wheels neither spin nor steer** for the same reason.
+
+**And the two layers that draw the same direction are now pinned to each other.** The 3D model is turned by
+the root matrix; the 2D chevron takes its screen angle from a point ahead of the unit. Written twice, those
+are one sign apart from a map whose cars and whose symbols point different ways — plausible in either file
+alone, absurd together. `aheadOf` is that point, in `coords.ts` with everything else, and a test walks 16
+headings comparing the model's forward column against it.
+
 **What a unit DRIVES is not part of the position feed.** PCAD publishes a position (and a `vehicleId` whose
 meaning 202 §4 still owes); the vehicle a unit is in is board state, like its callsign and its status. So
 `Unit.model` is a NAME the board carries, and the console asks no further — an id is a slot, and a slot means

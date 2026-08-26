@@ -13,6 +13,19 @@ export type EnginePoint = readonly [number, number, number];
 /** A ground position as a dispatcher reads it: GTA x (east) and y (north). */
 export type GtaGround = readonly [number, number];
 
+/**
+ * The ground point `distance` AHEAD of a unit facing `heading` — the FORWARD convention, in one place.
+ *
+ * Two layers draw the same direction and they may not disagree: the 3D model is turned by
+ * {@link gtaRootMatrix}, and the 2D chevron takes its screen angle by projecting a point ahead of the unit
+ * (so it stays correct under any camera yaw or tilt without knowing the camera's basis). Written twice,
+ * those two are one sign apart from a map whose cars and whose symbols point different ways — plausible
+ * separately, absurd together, and nobody would call it a bug in either file. A test pins them to each other.
+ */
+export function aheadOf(at: GtaGround, heading: number, distance: number): [number, number] {
+  return [at[0] + Math.sin(heading) * distance, at[1] + Math.cos(heading) * distance];
+}
+
 /** Engine point → the GTA ground point under it (the y-up height is dropped). */
 export function engineToGta(point: EnginePoint): [number, number] {
   return [point[0], -point[2]];
@@ -33,7 +46,12 @@ export function gtaDistance(a: GtaGround, b: GtaGround): number {
  * `[x, z, −y]` from a GTA position, height verbatim. A map that places the same numbers half a metre off is
  * a map that disagrees with the game a dispatcher is looking at.
  *
- * The rotation is the same matrix as the handle's, restricted to yaw — a map has no roll or pitch to draw.
+ * The rotation is the same matrix as the handle's, restricted to yaw — verified numerically against the
+ * handle's quaternion path at every one of 360 z-angles (max difference 4e-16, double-precision noise), and
+ * the basis change is a proper rotation (determinant +1), so nothing is mirrored. Yaw is all there IS to
+ * draw: the feed publishes one angle, so a car never leans and a slope makes it cut into the road — recorded
+ * in [edge-cases](../../../../docs/edge-cases/dispatch-console.md) rather than papered over with a derived
+ * pitch, which would be inventing an orientation at 110 m between fixes.
  * It is also where a car ends up facing backwards: a converted model is authored GTA Z-up with **+y
  * forward**, the engine is Y-up with `z = −y`, and the yaw therefore runs the OTHER WAY round than
  * {@link headingOf} reports it. Pinned by a test rather than by this paragraph — north must come out as

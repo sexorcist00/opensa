@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  aheadOf,
   engineToGta,
   gtaDistance,
   gtaRootMatrix,
@@ -105,6 +106,21 @@ describe('coords', () => {
       expect(matrix[12]).toBeCloseTo(position[0], 3);
       expect(matrix[13]).toBeCloseTo(position[2], 3);
       expect(matrix[14]).toBeCloseTo(-position[1], 3);
+    });
+
+    it('points the CAR and its CHEVRON the same way, at every heading', () => {
+      // The 3D model is turned by the root matrix; the 2D symbol takes its angle from a point ahead of the
+      // unit. One sign apart, they would draw a car and its own symbol facing differently — and each file
+      // would look right on its own. This is the pairing, not either convention.
+      const matrix = new Float32Array(16);
+      for (let step = 0; step < 16; step += 1) {
+        const heading = (step * Math.PI) / 8;
+        gtaRootMatrix(matrix, [0, 0], 0, heading);
+        const ahead = aheadOf([0, 0], heading, 10);
+        // The model's forward is its own +y column, read back into GTA ground (engine z = −y).
+        expect(matrix[4]).toBeCloseTo(ahead[0] / 10);
+        expect(-matrix[6]).toBeCloseTo(ahead[1] / 10);
+      }
     });
 
     it('steps exactly the requested distance along the line', () => {

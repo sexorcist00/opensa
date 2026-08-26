@@ -15,7 +15,7 @@ import type { LabelBox } from './labels';
 import type { ScreenProjector } from './projection';
 
 import { incidentKey, type Rgba, SET_COLORS } from './beacons';
-import { gtaToEngine } from './coords';
+import { aheadOf, gtaToEngine } from './coords';
 import { CollisionIndex, labelCandidates, labelRank } from './labels';
 
 /** What the last draw put on screen, and what a click at those pixels selects. */
@@ -248,9 +248,7 @@ export class SymbologyLayer {
     }
     // The chevron's screen angle comes from projecting a point AHEAD of the unit, so it stays correct under
     // any camera yaw or tilt without the overlay having to know the camera's basis.
-    const ahead = projector.project(
-      gtaToEngine([unit.at[0] + Math.sin(unit.heading) * 14, unit.at[1] + Math.cos(unit.heading) * 14], ICON_LIFT),
-    );
+    const ahead = projector.project(gtaToEngine(aheadOf(unit.at, unit.heading, 14), ICON_LIFT));
     const stale = ageMs > FIX_FRESH_MS;
     const color = css(SET_COLORS[unit.status], stale ? fixAlpha(ageMs) : 1);
     const selected = selection?.kind === 'unit' && selection.id === unit.id;
