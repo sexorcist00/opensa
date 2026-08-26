@@ -13,10 +13,12 @@ function board(now: number, units: readonly Partial<Unit>[]): Operations {
     units: units.map((unit, index) => ({
       at: [0, 0],
       callsign: `U${index}`,
+      elevation: 13,
       heading: 0,
       id: `u${index}`,
       incident: null,
       kind: 'patrol',
+      model: 'copcarls',
       status: 'available',
       target: null,
       ...unit,

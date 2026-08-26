@@ -557,6 +557,17 @@ parser in `@opensa/renderware`. The game layer now reaches the same function thr
 `adapters/named-zones`, because [the boundary above](#the-game-layer-touches-renderware-only-through-adapters-or-mods)
 allows renderware from there and nowhere else — a lint that caught the first attempt.
 
+**The second case, 2026-08-26 (201/5-04), moved as well — and it says where a moved rule LANDS.** Drawing a
+unit as a car needs `readModelOsm`, which lived in `packages/game/src/adapters/`. It is not game logic: no
+ECS, no player, no frame, just the inverse of `packVehicleFixture`. The obvious destination was
+`@opensa/engine-formats`, which owns the `.osm` container — and it was the wrong one, on the container's own
+words: *"sections are opaque byte ranges here; what is inside each one is the asset class's business"*, plus
+a zero-dependency promise a reader needing the fixture type would break. It went to `@opensa/loaders` instead,
+beside `openLazyVer2` — the primitive that gets those bytes out of an archive in a browser — and
+`packages/game` re-exports it, so its fourteen existing hosts did not change and there is still one copy of
+the format knowledge. **A rule moves to the package that already owns the neighbouring step, not to the one
+whose name matches the file extension.**
+
 **Before asking "may the console import this?", ask what it actually needs.** A game-layer type is often a
 per-frame system wrapped around a rule, and it is the rule both consumers want. Moving the rule leaves both
 better off; taking the import would have dragged an ECS system into a surface with no entities.

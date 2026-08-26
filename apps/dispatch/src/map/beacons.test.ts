@@ -45,10 +45,12 @@ function unit(index: number, status: UnitStatus): Unit {
   return {
     at: [1000 + index * 3, -1000],
     callsign: `4-XRAY-${index}`,
+    elevation: 13,
     heading: 0,
     id: `u${index}`,
     incident: null,
     kind: 'patrol',
+    model: 'copcarls',
     status,
     target: null,
   };

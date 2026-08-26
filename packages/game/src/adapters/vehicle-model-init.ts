@@ -1,35 +1,8 @@
+import type { RigidModelInit } from '@opensa/loaders/model-osm';
 import type { VehicleModelData } from '@opensa/renderware';
 
-/**
- * The engine's rigid-model upload shape. Structural on purpose: `packages/game` must not import
- * `@opensa/engine` types just to describe an argument, and the engine must not learn RenderWare types.
- */
-export interface RigidModelInit {
-  colors: Uint8Array;
-  /** False when `indices` is uint32 — a model past 65 536 vertices. Absent = the historical uint16. */
-  index16?: boolean;
-  indexCount: number;
-  indices: Uint8Array;
-  meta: Uint8Array;
-  /** NIGHT vertex colours (same layout as `colors`) — SA's extra-vertex-colour set, or a synthesized one. */
-  night: Uint8Array;
-  normals: Uint8Array;
-  parts: VehicleModelData['parts'];
-  positions: Uint8Array;
-  reflect: Uint8Array;
-  submeshes: VehicleModelData['submeshes'];
-  /** One per texture ARRAY; a submesh's `array` indexes it. Runtime-built models always carry exactly one. */
-  textures: readonly RigidTextureInit[];
-  /** Model-local UV animations a submesh's `uvAnim` indexes (plan 099/01). Absent = nothing animates. */
-  uvAnimations?: VehicleModelData['uvAnimations'];
-  uvs: Uint8Array;
-  vertexCount: number;
-}
-
-/** Mirrors the engine's `ModelTextureInit` — our optimized `.ostex`, or RGBA8 layers from a runtime parse. */
-export type RigidTextureInit =
-  | { bytes: Uint8Array; kind: 'ostex' }
-  | { height: number; kind: 'rgba'; layers: number; rgba: Uint8Array; width: number };
+/** The engine-ready shapes both paths produce; they moved beside the `.osm` reader in 201/5-04. */
+export type { RigidModelInit, RigidTextureInit } from '@opensa/loaders/model-osm';
 
 const bytes = (values: Float32Array): Uint8Array => new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
 

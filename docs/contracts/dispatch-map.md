@@ -35,3 +35,32 @@ it is a picture that is silently in the wrong place.
 **Directory compression is `none`.** Our writer produces it and our reader refuses anything else by name — a
 gzip stream is a valid varint stream, so a reader with no inflater would return entries that decode, address
 real offsets and serve the wrong bytes.
+
+## 2. `<model>.osm` in the built game's archives — what a unit is drawn as
+
+**Where:** the archives beside the pak, under the game dir `?src=` resolves —
+`build/<game>/opensa/models/vehicles.img`, then `vehicles2.img`, `peds.img` and `gta3.img`, in that order.
+The console reads them over HTTP **Range** requests: the directory first (32 bytes an entry), then one entry
+when a unit claims it ([201/5-04](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md)).
+
+**What names it:** the unit's own `model` field — what the feed says the unit is driving, a bare name
+(`copcarls`, `ambulan`), matched case-insensitively, exactly as the game resolves a spawn. It is never a
+model id: an id is a slot, and a slot means different things in two builds
+([restrictions/assets-and-data](../restrictions/assets-and-data.md)).
+
+**What must exist:** `<name>.osm` — the CONVERTED model. There is no DFF fallback anywhere in this surface
+([build-vs-runtime](../restrictions/build-vs-runtime.md)): a build converted without `--vehicles` carries
+`copcarls.dff` and no `.osm`, and the console will not parse it.
+
+**When it is spelled wrong, absent, or the archives are not served at all:** the unit is drawn exactly as it
+was before models existed — chevron, callsign chip and beacon — and the console says so **once per name** in
+the log (`[units] 'copcarls' is drawn as a symbol: this build carries no model of that name`). The name is
+not asked for again in that session. `?inventory=1` carries the same fact as numbers
+(`symbology.unitsAsSymbolOnly`, `symbology.unitsUnresolvedModels`), and the readout shows `cars 7/9`.
+
+A unit is never dropped from the map for want of a model. That is the whole rule: a hole where a unit should
+be is indistinguishable from a unit that went off duty, and a dispatcher would act on it.
+
+**A total conversion is the normal case, not the failure case.** `copcarls` is a stock San Andreas name; a
+conversion that ships its own fleet has none of them, so the mock board's units fall back to symbols there by
+construction. What a real board reports is the model its own build carries.

@@ -43,6 +43,7 @@ import { SymbologyLayer, warmOverlaySurface, warmTextMetrics } from '../map/over
 import { ScreenProjector } from '../map/projection';
 import { drawSketches, type MapTool, type Measurement, SketchStore } from '../map/sketch';
 import { DEFAULT_TILE_SIZE } from '../map/tiles';
+import { UnitModels } from '../map/unit-models';
 import { readView, type SharedView, viewOfPose } from '../map/view-link';
 import { bootBytes, bootDone, bootStep } from './boot-progress';
 import { composeImage } from './capture';
@@ -50,6 +51,7 @@ import { buildDemoCity, DEMO_EXTENT, DEMO_REACH } from './demo-city';
 import { DISTRICTS } from './districts';
 import { createErrorLog } from './error-log';
 import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
+import { openModelSource } from './model-source';
 import { DEFAULT_SRC, resolvePakBase } from './pak-source';
 import { RenderGate } from './render-gate';
 import { bakeFlatMap } from './tile-bake-host';
@@ -385,6 +387,10 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // come from how much world there is around the focus (201/7-02).
   camera.setStreamedReach(world.reach);
   const beacons = new Beacons(engine);
+  // Units are drawn as CARS under their symbols (201/5-04). The wake is the point of the callback: a model
+  // arrives between frames and changes none of the values the render gate compares, so without it the fleet
+  // would appear on whatever frame the operator happened to cause next.
+  const unitModels = new UnitModels(engine, openModelSource(world.gameDir), () => gate.wake());
   const symbology = new SymbologyLayer();
   const sketch = new SketchStore();
   // A click on the radar is "look over there", not "zoom in on that": the flight keeps the operator's
@@ -415,11 +421,18 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     const ops = options.ops();
     const beaconStats = beacons.stats();
 
+    const models = unitModels.stats();
+
     return {
       beaconCapacity: beaconStats.capacity,
       beaconGrowths: beaconStats.grownSets,
       incidents: ops.incidents.length,
+      modelTextureMb: models.textureBytes / (1024 * 1024),
+      modelTypes: models.types,
       units: ops.units.length,
+      unitsAsModels: models.drawn,
+      unitsAsSymbolOnly: models.withoutModel,
+      unitsUnresolvedModels: models.unresolved,
       ...symbology.counted(),
     };
   };
@@ -627,7 +640,10 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     }
     idleReported = false;
     const state = camera.state(aspect);
-    time('board', () => beacons.update(ops, options.selection(), options.trails?.()));
+    time('board', () => {
+      beacons.update(ops, options.selection(), options.trails?.());
+      unitModels.update(ops.units);
+    });
     // Rings follow the ground point the view is over, never the eye: a camera a kilometre up sits outside
     // every ring and would stream nothing at all. The view goes with it, so what the frame will draw is what
     // the streamer fetches — judged at the DRAWING buffer's height, which is where a DPR of 3 lives.
@@ -771,6 +787,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       unbind();
       errorLog.dispose();
       beacons.dispose();
+      unitModels.dispose();
       radar?.dispose();
     },
     exportImage(): Promise<Blob | null> {

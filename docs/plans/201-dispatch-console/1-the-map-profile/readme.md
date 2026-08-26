@@ -153,6 +153,19 @@ from 01; there is no "a map does not need it" without a measurement behind it.
 [5/04](../5-symbology-and-picking-as-product/readme.md) settles that units are kinematic rather than
 simulated. Vehicle and ped dictionaries and ped animation are **protected** by 02 and stay.
 
+**ANSWERED 2026-08-26: units are KINEMATIC, so the condition is met.** A unit's position is a claim the feed
+makes rather than a simulation this surface runs, and 5/04 draws a car as a root matrix written from that
+claim — its HEIGHT included, because it comes with the fix. Nothing on this surface reads collision, which
+the 08-09 bytes capture already showed as **zero** collision requests and this now makes a property of the
+design rather than of that camera. The condition on dropping the baked collision is therefore satisfied; the
+BYTES it saves are still this step's to measure.
+
+**And the vehicle dictionaries are no longer a protected thing the pak carries unused** — 5/04 is what loads
+them, and it loads them from the built game's ARCHIVES rather than from the pak
+([contracts/dispatch-map](../../../contracts/dispatch-map.md) §2). So this step's cut list must not omit
+`models/*.img` from a deploy the console reads: the pak is the world, and the archives beside it are the
+fleet.
+
 **Owes:** bytes and resident MB before/after on the **district pinned in step 01**, against the BC reference
 (1,272,901,632 B at 1137 cells), **and** the "kept, and why" list beside the "cut, and on what evidence" one.
 

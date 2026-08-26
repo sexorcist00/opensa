@@ -594,6 +594,23 @@ carrying the placement mapper (minor 6). A world hit answers the **model and TXD
 plus GTA coordinates — the readout a mod author wants, and one no tile-based map stack can produce. Right-click
 opens a call at the ground point under the cursor.
 
+## Units are drawn as cars
+
+The unit a dispatcher sees is a **model with a symbol over it**, which is the whole difference between this
+and every other dispatch map (all of them are flat tiles with dots on them). The model is resolved the way
+the game resolves a spawn — `<model>.osm` **by name**, out of `models/vehicles.img` and its neighbours beside
+the pak, over HTTP Range requests, directory first and one entry per type. One upload serves every unit
+driving that type, so a 150-car shift of six kinds is six models.
+
+**Everything about it degrades to the symbol.** No game dir (a pak deployed alone, or `?demo=1`), a build
+converted without `--vehicles`, a total conversion that never had a car called `copcarls`, a feed that names
+no model: the unit is drawn exactly as it was before models existed, the console says so once per name in the
+log, and the readout counts it (`cars 7/9 · 3 types · 12.5 MB`). A unit is never dropped from the map for
+want of a model — that would read as a unit going off duty.
+
+The names it looks for, and what a wrong one does, are in
+[contracts/dispatch-map](../contracts/dispatch-map.md) §2.
+
 ## Known gaps
 
 Each now names the step that owns it, so none of them is an open-ended note.
@@ -605,10 +622,15 @@ Each now names the step that owns it, so none of them is an open-ended note.
 - **The board is a mockup feed.** `stepOperations` stands in for a real one; wiring this to a game server
   replaces that one module and nothing else. → deferred, contract first:
   [roadmap 0.6.0](../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md).
-- **No unit models** — **decided 2026-08-06: units get real models.** Cars and peds are drawn rather than
-  replaced by icons; the symbol keeps the label and the priority and stays 2D on top. The cost is a
-  dependency on the build carrying converted `.osm` models, and the fallback when one is absent is part of
-  the step. → [201/5-04](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
+- ~~**No unit models.**~~ **CARS LANDED 2026-08-26; peds still keep their symbol.** A unit is drawn as the
+  model its feed says it is driving, with the chevron and chip still on top of it (they carry the callsign
+  and the status, and they are what an operator picks out at city zoom). The models come from the built
+  game's own archives BY NAME over Range requests — the pak carries nothing about a vehicle, by decision —
+  and every way that can fail ends at the symbol the unit already had, once per name in the log and counted
+  in `?inventory=1`. Units are **kinematic**: a position is a claim the feed makes, so nothing here reads
+  collision. Peds are deliberately not drawn yet — the ped path is a skinned probe rather than a rigid model,
+  and it should not be built before 150 cars have been timed on a phone.
+  → [201/5-04](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).
 - **Demo mode has no model names.** Synthetic cells carry no placement mapper, so a click on a demo block
   resolves to bare ground. → picked up with the production pick capability,
   [201/5-01](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md).

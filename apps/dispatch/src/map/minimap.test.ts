@@ -69,7 +69,18 @@ function pose(at: [number, number] = [0, 0]): MapPose {
 }
 
 function unit(id: string, at: [number, number]): Unit {
-  return { at, callsign: id, heading: 0, id, incident: null, kind: 'patrol', status: 'available', target: null };
+  return {
+    at,
+    callsign: id,
+    elevation: 13,
+    heading: 0,
+    id,
+    incident: null,
+    kind: 'patrol',
+    model: 'copcarls',
+    status: 'available',
+    target: null,
+  };
 }
 
 describe('MinimapLayer', () => {

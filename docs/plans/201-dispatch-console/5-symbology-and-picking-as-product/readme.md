@@ -162,6 +162,74 @@ baked collision leave the map profile's pak.
 **Owes:** draws and frame time at the declared visible-unit count, desktop and phone, and the
 simulated-vs-kinematic decision handed back to 1/03.
 
+**THE DESK HALF IS DONE 2026-08-26; the milliseconds at 150 are owed by a device run. The decision 1/03 was
+waiting for is KINEMATIC, and it was not a close call.**
+
+**Where the bytes come from, and why no format changed.** The pak holds cells, textures and collision, and
+*nothing about a vehicle lives in it* ([build-vs-runtime](../../../restrictions/build-vs-runtime.md)) — that
+restriction is what makes `--rebake` able to add a car on the id its mod declares, so the answer was never to
+widen the pak. A unit's car is resolved the way the game resolves one: **by NAME, out of the archives of the
+same built game**, which the console already reaches for `data/timecyc.dat`. `models/vehicles.img` →
+`vehicles2.img` → `peds.img` → `gta3.img`, over **Range requests** — `openLazyVer2` holds the directory
+(32 bytes an entry) and slices the one entry a unit asks for, so a board of six types costs six model reads
+and never the gigabyte the archive is. `gta3.img` is last on purpose: ~14 900 stock entries is ~477 kB of
+directory, and a board that only ever draws cars must not pay it. The rule is written down in
+[contracts/dispatch-map](../../../contracts/dispatch-map.md) §2, because a name that carries behaviour and
+cannot be grepped for is one nobody can follow.
+
+**The layering fork this step inherited from [5/03](#03--district-names-in-the-readout), taken the same
+way.** `readModelOsm` lived in `packages/game/src/adapters/`, and this surface reaches the game layer
+through the environment driver alone ([architecture](../../../restrictions/architecture.md)). It is not game
+logic — no ECS, no player, no frame, just the inverse of `packVehicleFixture` — so it MOVED, to
+`@opensa/loaders/model-osm`, beside `openLazyVer2`, which is how a browser gets those bytes out of an archive
+in the first place. It did NOT move to `@opensa/engine-formats`, which owns the container and says so in its
+own words: *"sections are opaque byte ranges here; what is inside each one is the asset class's business"* —
+plus a zero-dependency promise this reader (which needs the fixture type) would have broken. `packages/game`
+re-exports it, so the fourteen hosts that already import it are unchanged, and there is still exactly one
+copy of the format knowledge.
+
+**Kinematic, and what that buys 1/03.** A unit's position is a CLAIM the feed makes
+([202](../../202-pcad-dispatch/readme.md)'s first seam), not a simulation this surface runs. So a car is a
+root matrix written from the fix — `gtaRootMatrix` in `map/coords.ts`, the one place this app converts
+between the two coordinate systems — and **nothing on this surface reads collision**. That is the answer
+[1/03](../1-the-map-profile/readme.md) was blocked on: the baked collision may leave the map profile's pak,
+and the 08-09 capture's measured **zero** collision requests were not an accident of that camera.
+
+The height comes with the fix for the same reason. The map is 2D everywhere else, but a MODEL needs a Y and
+this surface has no world to ask — no ground query in the pak, and asking collision for one would undo the
+paragraph above. So `Unit.elevation` is part of the position claim, which is what PCAD actually has. The
+track ring is untouched: it stores what a dispatcher reads (17 bytes a sample, [8/01](../8-the-time-axis/readme.md)),
+so a REPLAYED fix carries the unit's last known height rather than the one it had then — stated here rather
+than discovered on a scrub.
+
+**The fallback is the step's real content, because it is the normal case rather than the error case.** A pak
+served without its game dir, a build converted without `--vehicles`, a total conversion that never had a car
+called `copcarls`, a feed that reports no model at all — each leaves the unit exactly as 5/02 drew it
+(chevron, chip, beacon), says so ONCE per name in the log, and never asks again. It is counted rather than
+narrated: `?inventory=1` gained `unitsAsModels`, `unitsAsSymbolOnly`, `unitsUnresolvedModels`, `modelTypes`
+and `modelTextureMb`, and the readout shows `cars 7/9 · 3 types · 12.5 MB`. **A hole where a unit should be
+is the one outcome that is not allowed** — it is indistinguishable from a unit going off duty, and a
+dispatcher would act on it. Verified by removing the model deliberately, which is what four of the twelve
+`unit-models.test.ts` cases do.
+
+**What it costs so far, measured on the desk.** The bundle: **dispatch 131 650 → 135 848 B raw (+4.1 kB)**,
+plus a 1 153 B `model-osm` chunk; the whole `dist/assets` moves 3 771 964 → 3 776 383 B. No `@opensa/cleo`
+and no `@opensa/game-build` came with it, which is the number that says the subpath imports did what they
+were chosen for. One model TYPE serves every unit driving it (150 cars of six kinds upload six models), an
+idle type is trimmed back to `UNIT_MODEL_TEXTURE_BYTES` = 64 MB — a quarter of the phone's smaller ceiling,
+derived from this chain's budget table rather than copied from the game's 256 MB — and a type with live
+instances is never trimmed, because trimming one would take a unit off the map.
+
+**Still owed, and it is the half only a device can pay:** draws and frame time at 150 units with models,
+desktop and phone ([2/03](../2-real-device-truth/readme.md)), and the resident megabytes the model cache
+really holds. Two things are deliberately NOT done before that measurement: the `_vlo` LOD the models already
+ship is not used at city zoom ([the lever, priced](../../../performance/deferred-optimizations/unit-model-lod-band.md)),
+and peds are not drawn — a unit on foot keeps its symbol, because the ped path is a skinned probe rather than
+a rigid model and it should not be built on a guess about what the frame can afford.
+
+**Touched from [the protected list](../1-the-map-profile/protected-list.md):** the vehicle model path, which
+is protected — this step is the one that makes it load.
+
 ## Verification
 
 - Click-to-inspect still answers model + TXD + GTA coordinates in a build with debug defaults off.

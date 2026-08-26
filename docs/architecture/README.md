@@ -40,6 +40,8 @@ packages/                          (tag type:engine)
   renderware/     @opensa/renderware      parsers (DFF/TXD/COL, IDE/IPL/DAT/GXT) + archive + map + mesh prep
   game/           @opensa/game            ECS, systems, adapters — renderer-agnostic
   loaders/        @opensa/loaders         asset loaders (fetch / local folder / http-dir) — framework-agnostic
+                                          + the `.osm` → engine-ready model decode, beside the lazy archive
+                                          reader, for every host that has the bytes (201/5-04)
   vfs/            @opensa/vfs             unzip → AssetFileSystem
   game-build/     @opensa/game-build      partitioning shared by the loaders + build scripts
   validation/     @opensa/validation      verdict shape + generic path/file checks   (tag type:tool, see below)
@@ -81,7 +83,9 @@ reference when touching tool dependencies.
 - **`AssetFileSystem`** (defined in `renderware/archive`) is the seam: the game reads files through it and
   doesn't care whether the **vfs** filled up from fetched chunks, a picked folder, or a served dir.
 - Only **`game/adapters`** (and `game/mods`) may import **renderware** — it's the leaf layer.
-- **loaders** and **vfs** are standalone (no React, no game).
+- **loaders** and **vfs** are standalone (no React, no game). `loaders/model-osm` is where a converted model
+  becomes an engine upload: the game re-exports it (`adapters/vehicle-osm`) and the dispatch console reads it
+  directly, which is what keeps the console's only `packages/game` import the environment driver.
 - The engine / Rapier load **lazily** with the game surface, so the UI shell paints instantly.
 - **Two cell grids:** the render grid (`CELL_SIZE = 250` — opensa-pack weld, engine streaming, AND the
   cell-LOD bake, which must match it so an object's HD and LOD share a slot; field-proven in plan 087)

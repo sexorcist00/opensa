@@ -175,11 +175,24 @@ export interface InventoryReport {
      *  label the layer had never drawn before. A capture where this tracks `chips` is one where the cache
      *  is not working. */
     readonly measures: number;
+    /** Texture megabytes the uploaded unit models hold (201/5-04) — the dominant per-type cost, and the
+     *  half of a resident figure that belongs to the BOARD rather than to the world. */
+    readonly modelTextureMb: number;
+    /** Unit model TYPES uploaded right now. A shift of 150 cars is a handful of types, which is the whole
+     *  reason a model layer is affordable at the declared count. */
+    readonly modelTypes: number;
     /** Units drawn with an AGING fix — older than PCAD's 4 s publish interval (201/8-02). On the mock this
      *  is 0 while live and grows during a scrub; on a real feed it is what a quiet channel looks like. */
     readonly stale: number;
     readonly symbols: number;
     readonly units: number;
+    /** Units drawn as a MODEL on that frame (201/5-04). */
+    readonly unitsAsModels: number;
+    /** Units drawn as a symbol ALONE — no model claimed, none in this build, or one still loading. On a pak
+     *  served without its game dir this is every unit, which is the fallback working rather than a fault. */
+    readonly unitsAsSymbolOnly: number;
+    /** Distinct model names this build could not draw. Each one was reported to the log once. */
+    readonly unitsUnresolvedModels: number;
   };
   /**
    * What the TIME AXIS is holding (201/8-01) — host bytes, samples, and the window a scrub may ask for.

@@ -17,6 +17,21 @@
 /** Units the console must carry at once, worst case. */
 export const UNITS_ON_SCREEN = 150;
 
+/**
+ * Texture bytes the uploaded UNIT MODELS may hold before an idle type is trimmed (201/5-04).
+ *
+ * Derived from this chain's own ceiling rather than copied from the game, where the same cache is 256 MB:
+ * the phone's whole resident budget is 300–500 MB and the pinned district already measured 76.1 MB of it
+ * (the 08-23 row), so a quarter of the smaller ceiling is what unit models may hold while the world holds
+ * the rest. A shift is a handful of TYPES however many units it has — 150 cars of six kinds upload six
+ * models — so the allowance binds only on a board that keeps changing what it drives.
+ *
+ * Like {@link UNITS_ON_SCREEN} it is an ALLOCATION: a type with live instances is never trimmed, because
+ * trimming one would take a unit off the map. The number is owed a device measurement by
+ * [2/04](../../../../docs/plans/201-dispatch-console/2-real-device-truth/readme.md).
+ */
+export const UNIT_MODEL_TEXTURE_BYTES = 64 * 1024 * 1024;
+
 /** How many units the demo board opens with when `?units=` does not say otherwise — a plausible shift. */
 export const DEFAULT_SHIFT = 9;
 

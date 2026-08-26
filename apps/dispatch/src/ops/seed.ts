@@ -66,6 +66,25 @@ const ROSTER: readonly { readonly callsign: string; readonly kind: Unit['kind'];
 /** Every fourth generated car is an ambulance and every seventh a truck — a roster, not one long patrol. */
 const FILL_KINDS: readonly Unit['kind'][] = ['patrol', 'patrol', 'patrol', 'ambulance', 'patrol', 'patrol', 'fire'];
 
+/**
+ * What each service drives on the MOCK board — stock San Andreas model names, and a demo fixture exactly
+ * like the landmark table above it. On a real board this comes from the feed: PCAD knows which car its
+ * player is in, and 201/5-04 draws whatever it names. A total conversion ships none of these, which is not
+ * a defect to hide — it is the fallback path (symbol, and a line in the log) doing its job.
+ */
+const DEMO_MODELS: Readonly<Record<Unit['kind'], string>> = {
+  ambulance: 'ambulan',
+  fire: 'firetruk',
+  patrol: 'copcarls',
+};
+
+/**
+ * The height the mock puts its units at, metres. Los Santos street level, ONE number rather than twenty
+ * invented ones: the demo board has no world under it to measure, and a fiction that says so is better than
+ * twenty that look surveyed. A real feed reports the z its player is standing at.
+ */
+const DEMO_GROUND = 13;
+
 /** How far a generated car is scattered around its landmark, world units. Nine cars stacked on one corner
  *  would measure a symbol count without measuring the decluttering it causes. */
 const SCATTER = 220;
@@ -128,10 +147,12 @@ function fillUnit(index: number): Unit {
   return {
     at: [place[0] + jitter(index * 2 + 1) * SCATTER, place[1] + jitter(index * 2 + 2) * SCATTER],
     callsign: `${prefix(kind)}-${index + 1}`,
+    elevation: DEMO_GROUND,
     heading: (jitter(index) + 1) * Math.PI,
     id: `u${index + 1}`,
     incident: null,
     kind,
+    model: DEMO_MODELS[kind],
     status: 'available',
     target: null,
   };
@@ -152,10 +173,12 @@ function unit(id: string, entry: (typeof ROSTER)[number]): Unit {
   return {
     at: LANDMARKS[entry.landmark % LANDMARKS.length].at,
     callsign: entry.callsign,
+    elevation: DEMO_GROUND,
     heading: 0,
     id,
     incident: null,
     kind: entry.kind,
+    model: DEMO_MODELS[entry.kind],
     status: 'available',
     target: null,
   };

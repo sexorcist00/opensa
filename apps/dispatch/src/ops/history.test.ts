@@ -31,7 +31,18 @@ function run(history: BoardHistory, seconds: number, make: (ms: number) => Opera
 }
 
 function unit(id: string, at: [number, number], status: Unit['status'] = 'available'): Unit {
-  return { at, callsign: id, heading: 0, id, incident: null, kind: 'patrol', status, target: null };
+  return {
+    at,
+    callsign: id,
+    elevation: 13,
+    heading: 0,
+    id,
+    incident: null,
+    kind: 'patrol',
+    model: 'copcarls',
+    status,
+    target: null,
+  };
 }
 
 describe('BoardHistory', () => {

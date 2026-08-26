@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { engineToGta, gtaDistance, gtaToEngine, headingOf, stepTowards } from './coords';
+import { engineToGta, gtaDistance, gtaRootMatrix, gtaToEngine, headingOf, stepTowards } from './coords';
+
+/** The direction a model's own +y (forward) ends up pointing in engine space, under `matrix`. */
+const forwardOf = (matrix: Float32Array): [number, number, number] => [matrix[4], matrix[5], matrix[6]];
 
 describe('coords', () => {
   describe('negative cases', () => {
@@ -15,6 +18,14 @@ describe('coords', () => {
     it('does not mirror the map: a GTA round trip is not the identity on the raw tuple', () => {
       // The trap this file exists for — z = −y, so feeding GTA numbers straight to the engine flips the world.
       expect(gtaToEngine([100, 200])).not.toEqual([100, 200, 0]);
+    });
+
+    it('does not turn a model the way the heading reads: east is not engine −x', () => {
+      // The mirrored-yaw trap. Using the heading verbatim as the yaw sends an eastbound car west, and on a
+      // top-down map that reads as a plausible car going somewhere else.
+      const matrix = new Float32Array(16);
+      gtaRootMatrix(matrix, [0, 0], 0, Math.PI / 2);
+      expect(forwardOf(matrix)[0]).toBeCloseTo(1);
     });
   });
 
@@ -34,6 +45,30 @@ describe('coords', () => {
     it('reads north as heading 0 and east as a quarter turn', () => {
       expect(headingOf([0, 0], [0, 10])).toBeCloseTo(0);
       expect(headingOf([0, 0], [10, 0])).toBeCloseTo(Math.PI / 2);
+    });
+
+    it('stands a model at the engine point under its GTA position, at its own height', () => {
+      const matrix = new Float32Array(16);
+      gtaRootMatrix(matrix, [2495, -1687], 13, 0);
+      expect([matrix[12], matrix[13], matrix[14]]).toEqual([2495, 13, 1687]);
+    });
+
+    it('faces a model north on heading 0 and east on a quarter turn', () => {
+      const matrix = new Float32Array(16);
+      gtaRootMatrix(matrix, [0, 0], 0, 0);
+      const north = forwardOf(matrix);
+      expect(north[0]).toBeCloseTo(0);
+      expect(north[2]).toBeCloseTo(-1); // GTA +y (north) is engine −z
+      gtaRootMatrix(matrix, [0, 0], 0, Math.PI / 2);
+      const east = forwardOf(matrix);
+      expect(east[0]).toBeCloseTo(1);
+      expect(east[2]).toBeCloseTo(0);
+    });
+
+    it('keeps a model upright: its own up axis is the engine up axis', () => {
+      const matrix = new Float32Array(16);
+      gtaRootMatrix(matrix, [10, 10], 0, 1.2);
+      expect([matrix[8], matrix[9], matrix[10]]).toEqual([0, 1, 0]);
     });
 
     it('steps exactly the requested distance along the line', () => {

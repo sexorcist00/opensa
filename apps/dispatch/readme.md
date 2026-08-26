@@ -33,7 +33,9 @@ every pending call by itself.
 `@opensa/engine` (renderer + streaming) and `@opensa/engine-formats`. **Nothing from `packages/game`** except
 the shared config→`Environment` driver, so no ECS, no Rapier, no peds, no vehicle physics, no weather sim.
 Camera rig steps come from `@opensa/web/ui/camera/*`, the demo city's fixture from
-`@opensa/engine-lab/synthetic`.
+`@opensa/engine-lab/synthetic`. Unit models come from `@opensa/loaders` — the lazy VER2 archive reader and
+the `.osm` decode, both of which moved there rather than being imported out of `packages/game`
+([201/5-04](../../docs/plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md)).
 
 ## Embedding the map elsewhere
 

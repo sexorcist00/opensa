@@ -56,12 +56,29 @@ export type Selection =
 export interface Unit {
   readonly at: GtaGround;
   readonly callsign: string;
+  /**
+   * Metres above sea level, as the feed reports them (201/5-04). The map is drawn in GTA ground coordinates
+   * and everything else here is 2D, but a MODEL needs a height, and this surface has no world to ask: the
+   * pak carries no ground query and the units read no collision, by decision. So the height is part of the
+   * position CLAIM, like the rest of it — PCAD knows what z its player is at.
+   *
+   * A replayed fix carries the unit's last known height rather than the one it had then: the track ring
+   * stores what a dispatcher reads (201/8-01), and widening a 17-byte sample for a drawing detail is a cost
+   * the whole shift pays.
+   */
+  readonly elevation: number;
   /** Radians, 0 = north — the chevron's rotation. */
   readonly heading: number;
   readonly id: string;
   /** The incident this unit is committed to, or null when it is patrolling. */
   readonly incident: null | string;
   readonly kind: UnitKind;
+  /**
+   * The model the unit CLAIMS to be driving — a bare name the built game resolves (`copcarls`, `ambulan`).
+   * `null` means the feed did not say, and the map draws the symbol alone; so does a name this build carries
+   * no `.osm` for (201/5-04). Never a slot id: a name is what a mod author writes and what the archive keys.
+   */
+  readonly model: null | string;
   readonly status: UnitStatus;
   /** Where it is currently driving; null means "pick a new patrol point". */
   readonly target: GtaGround | null;

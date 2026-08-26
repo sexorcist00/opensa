@@ -70,10 +70,12 @@ function board(units: number, calls: number): Operations {
       (_, i): Unit => ({
         at: [900 + i * 11, -1400 - i * 9],
         callsign: `4-X-${String(i)}`,
+        elevation: 13,
         heading: 0,
         id: `u${String(i)}`,
         incident: null,
         kind: 'patrol',
+        model: 'copcarls',
         status: (['available', 'busy', 'enRoute', 'onScene'] as const)[i % 4],
         target: null,
       }),

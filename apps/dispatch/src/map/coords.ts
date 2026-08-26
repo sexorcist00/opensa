@@ -23,6 +23,21 @@ export function gtaDistance(a: GtaGround, b: GtaGround): number {
   return Math.hypot(b[0] - a[0], b[1] - a[1]);
 }
 
+/**
+ * Column-major root matrix for a MODEL standing on the map (201/5-04): translate to the engine point under
+ * `at` at `elevation`, then rotate about the up axis so the model faces GTA `heading`.
+ *
+ * The conversion is the same one the rest of this file exists for, and it is where a car ends up facing
+ * backwards: a converted model is authored GTA Z-up with **+y forward**, the engine is Y-up with `z = −y`,
+ * and the yaw therefore runs the OTHER WAY round than {@link headingOf} reports it. Both are pinned by a
+ * test rather than by this paragraph — north must come out as engine −z and east as engine +x.
+ */
+export function gtaRootMatrix(out: Float32Array, at: GtaGround, elevation: number, heading: number): void {
+  const c = Math.cos(-heading);
+  const s = Math.sin(-heading);
+  out.set([c, 0, -s, 0, -s, 0, -c, 0, 0, 1, 0, 0, at[0], elevation, -at[1], 1]);
+}
+
 /** GTA ground point → the engine ground point under it. `height` lifts it off y = 0. */
 export function gtaToEngine(at: GtaGround, height = 0): [number, number, number] {
   return [at[0], height, -at[1]];

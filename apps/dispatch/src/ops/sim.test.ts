@@ -17,10 +17,12 @@ const board = (units: Unit[], incidents: Incident[] = []): Operations => ({
 const unit = (id: string, at: [number, number], patch: Partial<Unit> = {}): Unit => ({
   at,
   callsign: id.toUpperCase(),
+  elevation: 13,
   heading: 0,
   id,
   incident: null,
   kind: 'patrol',
+  model: 'copcarls',
   status: 'available',
   target: null,
   ...patch,

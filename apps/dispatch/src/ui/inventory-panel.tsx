@@ -98,6 +98,11 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
         {report.symbology.chips} chips ({report.symbology.chipsDropped} dropped)
         {report.symbology.stale > 0 && ` · ${report.symbology.stale} stale`}
       </div>
+      <div>
+        cars {report.symbology.unitsAsModels}/{report.symbology.units} · {report.symbology.modelTypes} types ·{' '}
+        {report.symbology.modelTextureMb.toFixed(1)} MB
+        {report.symbology.unitsUnresolvedModels > 0 && ` · ${report.symbology.unitsUnresolvedModels} unresolved`}
+      </div>
       {report.tracks !== null && (
         <div>
           tracks {report.tracks.tracks} × {report.tracks.capacity} · {report.tracks.samples} samples ·{' '}

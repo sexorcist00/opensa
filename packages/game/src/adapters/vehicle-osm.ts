@@ -1,40 +1,20 @@
+import type { OsmCollision } from '@opensa/engine-formats';
 /**
- * `.osm` → everything a vehicle spawn needs (opensa-pack 003 phase 3) — the OPTIMIZED path.
+ * `.osm` → everything a vehicle SPAWN needs (opensa-pack 003 phase 3) — the game's half of the optimized path.
  *
- * This is the inverse of opensa-pack's `packVehicleFixture`, and the point of the whole format: the work
- * the unoptimized path does at spawn (parse the DFF in a worker, walk the chunk tree for the embedded COL
- * on the main thread, decode a TXD, bucket it into an array) already happened offline. Here it is three
- * section reads and some `subarray` views — no RW parser is entered, and the texture payload stays
- * compressed all the way to `createVehicleModel`.
- *
- * The `DESC`/`GEOM` split is what makes that cheap: `COLL` is read without touching geometry, so the double
- * consumption of the DFF (worker for the model, main thread for collision) does not come back.
+ * The container read itself is not game logic and no longer lives here: `readModelOsm` moved to
+ * `@opensa/loaders/model-osm` when the dispatch console needed the same bytes (201/5-04), and is re-exported
+ * from this module so the hosts that already import it are unchanged. What stays is what only a spawn wants —
+ * the baked collision in engine shape, the rig, the seat and the wheels.
  */
 import type { VehicleFixture } from '@opensa/renderware/vehicle/types';
 
-import {
-  decodeOsm,
-  decodeOsmCollision,
-  decodeOsmTextures,
-  type OsmCollision,
-  osmSection,
-  OsmSectionTag,
-} from '@opensa/engine-formats';
+import { type OptimizedModel, readModelOsm, type RigidModelInit } from '@opensa/loaders/model-osm';
 
 import type { ModelColliders } from '../interfaces/collider.interface';
 import type { VehicleRigData } from './engine-vehicle-handle';
-import type { RigidModelInit } from './vehicle-model-init';
 
-/** Byte strides of the `GEOM` sections, matching what `packVehicleFixture` reserved. */
-const STRIDE = { colors: 4, index: 2, meta: 4, normals: 12, positions: 12, reflect: 4, uvs: 8 };
-
-/** What every converted rigid model carries: the engine-ready upload, its fixture, and collision if any. */
-export interface OptimizedModel {
-  /** Present only when the class bakes one (vehicles do; a clutter species does not). */
-  collision?: OsmCollision;
-  fixture: VehicleFixture;
-  model: RigidModelInit;
-}
+export { type OptimizedModel, readModelOsm };
 
 export interface OptimizedVehicle {
   /** Null when the source DFF carried no collision — the same signal the unoptimized path gives. */
@@ -46,72 +26,6 @@ export interface OptimizedVehicle {
   /** `ped_frontseat` dummy in vehicle space, or null. */
   seat: [number, number, number] | null;
   wheels: { connection: [number, number, number]; front: boolean; index: number; radius: number }[];
-}
-
-/**
- * Read any converted rigid model — geometry, dictionary and description in one container, engine-ready.
- *
- * `COLL` is NOT required — vehicles carry it, a clutter species does not. Every class the converter emits
- * shares `DESC`/`GEOM`/`TEXS`; the class-specific sections are read by their own callers.
- */
-export function readModelOsm(name: string, osm: Uint8Array): OptimizedModel {
-  const sections = decodeOsm(osm);
-  const section = (tag: number, label: string): Uint8Array => {
-    const bytes = osmSection(sections, tag);
-    if (!bytes) {
-      throw new Error(`${name}.osm is missing its ${label} section`);
-    }
-
-    return bytes;
-  };
-  const fixture = JSON.parse(new TextDecoder().decode(section(OsmSectionTag.DESC, 'DESC'))) as VehicleFixture;
-  const geom = section(OsmSectionTag.GEOM, 'GEOM');
-  // A car is one array; a map object is routinely several (one array is one size AND format AND mip count),
-  // and each submesh names the one it samples. All of them come through — dropping the tail here is how a
-  // building would render every wall in whatever texture happened to land in array 0.
-  // A map object points into the SHARED world plan instead of carrying a dictionary: its submeshes' `array`
-  // fields are refs into the arrays the cells already stream, so there is no `TEXS` to read and nothing to
-  // upload. Every other class ships its own.
-  const texs = fixture.textureSource === 'world' ? null : section(OsmSectionTag.TEXS, 'TEXS');
-  const dictionaries = texs ? decodeOsmTextures(texs).arrays : [];
-  if (texs && dictionaries.length === 0) {
-    throw new Error(`${name}.osm carries no texture array`);
-  }
-  const collisionBytes = osmSection(sections, OsmSectionTag.COLL);
-
-  const at = (offset: number, length: number): Uint8Array => geom.subarray(offset, offset + length);
-  const { layout, vertexCount } = fixture;
-
-  return {
-    ...(collisionBytes ? { collision: decodeOsmCollision(collisionBytes) } : {}),
-    fixture,
-    model: {
-      colors: at(layout.colors, vertexCount * STRIDE.colors),
-      // A fixture written before the width existed is uint16 — that was the only shape the builder emitted.
-      index16: fixture.index16 ?? true,
-      indexCount: fixture.indexCount,
-      indices: at(layout.indices, fixture.indexCount * ((fixture.index16 ?? true) ? STRIDE.index : 4)),
-      meta: at(layout.meta, vertexCount * STRIDE.meta),
-      // A fixture from before the night set simply has no darker twin: the day colours stand in, which
-      // makes the vertex stage's day → night mix a no-op rather than a black model.
-      night:
-        layout.night === undefined
-          ? at(layout.colors, vertexCount * STRIDE.colors)
-          : at(layout.night, vertexCount * STRIDE.colors),
-      normals: at(layout.normals, vertexCount * STRIDE.normals),
-      parts: fixture.parts,
-      positions: at(layout.positions, vertexCount * STRIDE.positions),
-      reflect: at(layout.reflect, vertexCount * STRIDE.reflect),
-      submeshes: fixture.submeshes,
-      textures: dictionaries.map((bytes) => ({ bytes, kind: 'ostex' }) as const),
-      // Absent on every `.osm` written before 099 and on every model whose materials animate nothing —
-      // the same "no animation" the builder means by omitting it.
-      ...(fixture.uvAnimations?.length ? { uvAnimations: fixture.uvAnimations } : {}),
-      uvs: at(layout.uvs, vertexCount * STRIDE.uvs),
-      ...(fixture.variants ? { variants: fixture.variants } : {}),
-      vertexCount,
-    },
-  };
 }
 
 /** Read one converted vehicle. Throws when a required section is missing — a truncated `.osm` is a bug. */
