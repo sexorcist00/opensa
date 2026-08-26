@@ -39,13 +39,25 @@ export interface ConsoleTheme {
    */
   readonly mode: 'dark' | 'light';
   readonly name: string;
+  /**
+   * Ink for text sitting ON a status fill. The same value in every skin on purpose: `SET_COLORS` is not
+   * themed, so the colour underneath does not change, and neither may the thing written on it.
+   */
+  readonly onStatus: string;
   readonly ramp: ThemeRamp;
   /** Row padding. The one density lever a theme gets; target sizes are not negotiable and stay in `styles.ts`. */
   readonly rowPadding: string;
   readonly semantic: ThemeSemantic;
   readonly shadow: { readonly float: string; readonly modal: string };
-  /** What floats over the map: step 3 at 92 %, and the modal at 97 %. */
-  readonly translucent: { readonly float: string; readonly modal: string };
+  /**
+   * What floats over the map, and it is **opaque**.
+   *
+   * These were step 3 at 92 % and the modal at 97 % until 2026-08-26, and the translucency was the single
+   * biggest reason the console read as a generated dashboard rather than as an instrument: a panel you can
+   * see the world through is a glassy card, and it also makes 11-px text sit on whatever happens to be
+   * under it. An instrument's panel is a solid thing bolted over the display.
+   */
+  readonly surfaces: { readonly float: string; readonly modal: string };
 }
 
 /** The accent, which means one thing: the operator's own mark — selection, focus, live, the primary action. */
@@ -111,6 +123,7 @@ const NIGHT: ConsoleTheme = {
   id: 'night',
   mode: 'dark',
   name: 'Night',
+  onStatus: '#06090d',
   ramp: {
     bg: '#070a0f',
     line: '#222f40',
@@ -123,7 +136,7 @@ const NIGHT: ConsoleTheme = {
     text: '#e8eff7',
     textMuted: '#a8bbd0',
   },
-  rowPadding: '8px 12px',
+  rowPadding: '5px 9px',
   semantic: {
     danger: '#ff92a6',
     dangerBg: '#4a1220',
@@ -134,7 +147,7 @@ const NIGHT: ConsoleTheme = {
     warnText: '#ffe8c4',
   },
   shadow: { float: '0 4px 16px rgba(0, 0, 0, 0.45)', modal: '0 12px 40px rgba(0, 0, 0, 0.6)' },
-  translucent: { float: 'rgba(17, 26, 38, 0.92)', modal: 'rgba(17, 26, 38, 0.97)' },
+  surfaces: { float: '#111a26', modal: '#16202e' },
 };
 
 /**
@@ -150,6 +163,7 @@ const DAY: ConsoleTheme = {
   id: 'day',
   mode: 'light',
   name: 'Day',
+  onStatus: '#06090d',
   ramp: {
     bg: '#f2f5f9',
     line: '#ccd7e3',
@@ -162,7 +176,7 @@ const DAY: ConsoleTheme = {
     text: '#0d1620',
     textMuted: '#46586b',
   },
-  rowPadding: '8px 12px',
+  rowPadding: '5px 9px',
   semantic: {
     danger: '#c31d38',
     dangerBg: '#ffe1e5',
@@ -173,7 +187,7 @@ const DAY: ConsoleTheme = {
     warnText: '#523500',
   },
   shadow: { float: '0 4px 16px rgba(15, 23, 32, 0.16)', modal: '0 12px 40px rgba(15, 23, 32, 0.26)' },
-  translucent: { float: 'rgba(255, 255, 255, 0.94)', modal: 'rgba(255, 255, 255, 0.98)' },
+  surfaces: { float: '#ffffff', modal: '#ffffff' },
 };
 
 /**
@@ -188,6 +202,7 @@ const CONTRAST: ConsoleTheme = {
   id: 'contrast',
   mode: 'dark',
   name: 'Contrast',
+  onStatus: '#06090d',
   ramp: {
     bg: '#000000',
     line: '#3d4a5a',
@@ -200,7 +215,7 @@ const CONTRAST: ConsoleTheme = {
     text: '#ffffff',
     textMuted: '#c8d6e4',
   },
-  rowPadding: '8px 12px',
+  rowPadding: '5px 9px',
   semantic: {
     danger: '#ff9dac',
     dangerBg: '#5e0f1e',
@@ -211,7 +226,7 @@ const CONTRAST: ConsoleTheme = {
     warnText: '#fff2da',
   },
   shadow: { float: '0 4px 16px rgba(0, 0, 0, 0.7)', modal: '0 12px 40px rgba(0, 0, 0, 0.85)' },
-  translucent: { float: 'rgba(10, 13, 18, 0.96)', modal: 'rgba(10, 13, 18, 0.99)' },
+  surfaces: { float: '#0a0d12', modal: '#12171f' },
 };
 
 /**
@@ -228,6 +243,7 @@ const AMBER: ConsoleTheme = {
   id: 'amber',
   mode: 'dark',
   name: 'Amber',
+  onStatus: '#06090d',
   ramp: {
     bg: '#0a0806',
     line: '#3a2e1d',
@@ -240,7 +256,7 @@ const AMBER: ConsoleTheme = {
     text: '#f8eed6',
     textMuted: '#cbb894',
   },
-  rowPadding: '6px 10px',
+  rowPadding: '4px 8px',
   semantic: {
     danger: '#ffa19c',
     dangerBg: '#4d1414',
@@ -251,7 +267,7 @@ const AMBER: ConsoleTheme = {
     warnText: '#ffdfc6',
   },
   shadow: { float: '0 4px 16px rgba(0, 0, 0, 0.55)', modal: '0 12px 40px rgba(0, 0, 0, 0.7)' },
-  translucent: { float: 'rgba(27, 21, 13, 0.93)', modal: 'rgba(27, 21, 13, 0.97)' },
+  surfaces: { float: '#1b150d', modal: '#241c12' },
 };
 
 /** Every skin, in the order the switcher offers them. Night first: the default must be the first choice. */
@@ -301,8 +317,9 @@ export function themeVariables(theme: ConsoleTheme): string {
     ['--os-warn-border', theme.semantic.warnBorder],
     ['--os-warn-solid', theme.semantic.warnSolid],
     ['--os-warn-text', theme.semantic.warnText],
-    ['--os-float-bg', theme.translucent.float],
-    ['--os-modal-bg', theme.translucent.modal],
+    ['--os-float-bg', theme.surfaces.float],
+    ['--os-modal-bg', theme.surfaces.modal],
+    ['--os-on-status', theme.onStatus],
     ['--os-shadow-float', theme.shadow.float],
     ['--os-shadow-modal', theme.shadow.modal],
     ['--os-font-sans', theme.font.sans],

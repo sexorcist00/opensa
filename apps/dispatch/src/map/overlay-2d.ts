@@ -452,8 +452,11 @@ function chip(ctx: CanvasRenderingContext2D, request: LabelRequest, box: LabelBo
   ctx.lineTo(toward.x, toward.y);
   ctx.stroke();
 
-  ctx.fillStyle = request.selected ? 'rgba(12, 18, 26, 0.96)' : 'rgba(8, 12, 18, 0.82)';
-  roundRect(ctx, box.x, box.y, box.width, box.height, 4);
+  // Square, and nearly opaque. A rounded chip at 82 % over a moving world is the shape and the material of
+  // a web badge; a unit label on an operations map is a stamped plate, and it has to stay readable when the
+  // thing under it is a lit street rather than a flat panel.
+  ctx.fillStyle = request.selected ? 'rgba(12, 18, 26, 0.98)' : 'rgba(8, 12, 18, 0.94)';
+  roundRect(ctx, box.x, box.y, box.width, box.height, 1);
   ctx.fill();
   ctx.strokeStyle = request.selected ? '#ffffff' : request.color;
   ctx.lineWidth = request.selected ? 1.6 : 1;

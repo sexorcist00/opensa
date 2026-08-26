@@ -114,7 +114,7 @@ describe('dispatch styles', () => {
 
     it('keeps the three scales to their declared steps', () => {
       // A scale with a value between its steps is not a scale. Radius was eight values, spacing thirteen.
-      expect(Object.values(RADIUS)).toEqual([4, 999, 8]);
+      expect(Object.values(RADIUS)).toEqual([2, 2, 0]);
       expect([...Object.values(SPACE)].sort((a, b) => a - b)).toEqual([2, 4, 8, 12, 16, 24]);
       expect([...Object.values(TEXT)].sort((a, b) => a - b)).toEqual([10, 11, 12, 13, 15, 17]);
     });

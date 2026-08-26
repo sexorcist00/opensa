@@ -66,7 +66,7 @@ export function IncidentsPanel({
               title="Click to select · double-click to centre the map on it"
             >
               <div style={{ alignItems: 'center', display: 'flex', gap: 6 }}>
-                <span style={{ ...styles.badge, background: css(SET_COLORS[key], 0.16), color: css(SET_COLORS[key]) }}>
+                <span style={{ ...styles.badge, background: priority, color: 'var(--os-on-status)' }}>
                   P{incident.priority}
                 </span>
                 <strong style={styles.mono}>{incident.code}</strong>

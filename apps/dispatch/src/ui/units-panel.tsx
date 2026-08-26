@@ -60,15 +60,7 @@ export function UnitsPanel({
                     the one field in the row that never truncates, so at 360 px it is the only place the
                     status is guaranteed to still be readable. The row's left rail says the same thing a
                     second time for anyone who cannot separate the hues. */}
-                <span
-                  style={{
-                    ...styles.unitPill,
-                    background: css(SET_COLORS[unit.status], 0.2),
-                    color: css(SET_COLORS[unit.status]),
-                  }}
-                >
-                  {unit.callsign}
-                </span>
+                <span style={{ ...styles.unitPill, background: css(SET_COLORS[unit.status]) }}>{unit.callsign}</span>
                 <span
                   style={{ ...styles.badge, background: RAMP.surfaceHover, color: COLORS.muted, marginLeft: 'auto' }}
                 >

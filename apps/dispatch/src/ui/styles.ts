@@ -92,7 +92,15 @@ export const SEMANTIC = {
 export const SPACE = { lg: 16, md: 12, sm: 8, xl: 24, xs: 4, xxs: 2 } as const;
 
 /** Three radii. There were eight. */
-export const RADIUS = { control: 4, pill: 999, surface: 8 } as const;
+/**
+ * Three radii, and since 2026-08-26 they are nearly zero.
+ *
+ * They were 4 / 999 / 8 — a rounded control, a fully round pill and a rounded panel — which is the shape
+ * language of a web dashboard, not of an instrument. Nothing in a dispatch room has a rounded corner, and
+ * the user's verdict on the old set was blunt and correct. `2` on a control is the smallest radius that
+ * still reads as deliberate rather than as an unstyled box; a panel and a tag are square.
+ */
+export const RADIUS = { control: 2, pill: 2, surface: 0 } as const;
 
 /** The type scale. `input` is what a finger types into; the rest is what it reads. */
 export const TEXT = { body: 12, bodyTouch: 13, caption: 11, input: 15, micro: 10, title: 17 } as const;
@@ -100,8 +108,10 @@ export const TEXT = { body: 12, bodyTouch: 13, caption: 11, input: 15, micro: 10
 /**
  * Depth for the two things that float.
  *
- * A shadow rather than another border: at 360 px a 1 px outline on every surface reads as a wireframe, and
- * it cannot say which of two surfaces is on top. This can.
+ * The soft 16-px drop shadow that used to be here is what made the panels read as CARDS. It is a hard,
+ * tight edge now: an instrument's panel is bolted over the display, it does not hover above it. The shadow
+ * still exists — a panel over a moving map needs SOMETHING to separate it — but at 2 px and near-opaque it
+ * reads as a bevel rather than as elevation.
  */
 export const SHADOW = {
   float: 'var(--os-shadow-float)',
@@ -131,7 +141,7 @@ const NUM = 'tabular-nums' as const;
 /** What floats over the map: step 3, nearly opaque, lifted by a shadow instead of ringed by a border. */
 const FLOATING = {
   background: 'var(--os-float-bg)',
-  border: `1px solid ${RAMP.line}`,
+  border: `1px solid ${RAMP.lineStrong}`,
   boxShadow: SHADOW.float,
 } as const;
 
@@ -185,14 +195,19 @@ export const styles = {
     position: 'relative',
     width: '100%',
   },
+  /**
+   * A square tag. It was a fully-round pill with a translucent tint of its own colour behind it — the
+   * default badge of every generated dashboard, and the thing that made these lists look like a template.
+   * A tag on an instrument is a stamped rectangle.
+   */
   badge: {
     borderRadius: RADIUS.pill,
     fontFamily: MONO,
     fontSize: TEXT.micro,
     fontVariantNumeric: NUM,
-    fontWeight: 700,
-    letterSpacing: 0.4,
-    padding: '2px 7px',
+    fontWeight: 600,
+    letterSpacing: 0.2,
+    padding: '1px 5px',
   },
   button: {
     background: RAMP.surfaceRaised,
@@ -850,14 +865,20 @@ export const styles = {
    * still whole when everything beside it has become an ellipsis. The colour is the unit's STATUS, from
    * the map's own table.
    */
+  /**
+   * The callsign, as a SOLID block of its status colour with dark ink on it — not a translucent tint of it.
+   * A tinted pill is the shadcn badge; a solid stamp is what a status light looks like, and it is also the
+   * higher contrast of the two.
+   */
   unitPill: {
-    borderRadius: RADIUS.control,
+    borderRadius: RADIUS.pill,
+    color: 'var(--os-on-status)',
     fontFamily: MONO,
     fontSize: TEXT.caption,
     fontVariantNumeric: NUM,
-    fontWeight: 700,
-    letterSpacing: 0.3,
-    padding: '2px 8px',
+    fontWeight: 600,
+    letterSpacing: 0.2,
+    padding: '1px 6px',
     whiteSpace: 'nowrap',
   },
   /** The scrolling body of a floating window — the panel itself lives in here. */
@@ -926,7 +947,7 @@ export const styles = {
     fontVariantNumeric: NUM,
     fontWeight: 700,
     gap: SPACE.sm,
-    letterSpacing: 1.2,
+    letterSpacing: 0.6,
     // `overflow: hidden` and NOT `minWidth: 0`. The shrinking belongs to the tally inside, which is the
     // flex item that refuses to shrink below its content; a `minWidth: 0` here would say this 44-px target
     // may be zero wide, and `styles.test.ts` is right to fail that — it cannot see that the window around
@@ -950,7 +971,7 @@ export const styles = {
     fontVariantNumeric: NUM,
     fontWeight: 700,
     gap: SPACE.sm,
-    letterSpacing: 1.2,
+    letterSpacing: 0.6,
     minHeight: TOUCH_TARGET,
     overflow: 'hidden',
     padding: '7px 10px',

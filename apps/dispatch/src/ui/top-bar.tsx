@@ -112,8 +112,8 @@ export function TopBar({
         }}
         title="The console's skin"
       >
-        <span aria-hidden style={{ color: COLORS.muted }}>
-          ◐
+        <span aria-hidden style={{ color: COLORS.muted, letterSpacing: 0.6 }}>
+          SKIN
         </span>
         <span style={{ clip: 'rect(0 0 0 0)', height: 1, overflow: 'hidden', position: 'absolute', width: 1 }}>
           Theme

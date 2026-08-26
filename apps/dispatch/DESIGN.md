@@ -108,6 +108,12 @@ variable — it needs a hook in 201/5.
 **Instrument panel.** The map is the subject and holds all the saturation; the chrome is achromatic and gets
 out of the way. Decoration level: none — there is no ornament in this UI that is not carrying information.
 
+**This paragraph was true and the implementation was not.** On 2026-08-26 the user's verdict on the built
+console was that it looked generated, and they were right: rounded cards, translucent panels, tinted pill
+badges, letterspaced micro-labels and generous row padding — every one of them on the standard list of tells,
+and every one of them contradicting the two paragraphs here. The direction did not change that day; the code
+was brought back to it. **When this document and the screen disagree, the screen is the bug.**
+
 The mood is a working instrument that has been used for years: quiet, legible, unsurprising. Not "dark mode
 SaaS", which is where a console like this usually lands — glassy cards, a purple gradient, a hero number
 nobody needs.
@@ -187,7 +193,16 @@ every frame it drew.
 ## Spacing and shape
 
 - **Spacing:** 4-based — `2 · 4 · 8 · 12 · 16 · 24`. Nothing else.
-- **Radius:** `4` controls · `8` surfaces · `999` pills. Three values; there were eight.
+- **Radius:** `2` controls · `0` surfaces · `2` tags. Three values, and nearly zero on purpose — see below.
+- **Shape:** **square.** Corrected 2026-08-26 on the user's verdict that the console read as generated. The
+  old set (`4` / `8` / `999`) is the shape language of a web dashboard: a rounded control, a rounded card
+  and a fully-round pill. Nothing in a dispatch room has a rounded corner. Together with the three changes
+  below this is what separates an instrument from a template:
+  - **panels are OPAQUE**, not step 3 at 92 %. A panel you can see the world through is a glassy card, and
+    it puts 11-px text on whatever happens to be under it;
+  - **a status is a SOLID stamp**, not a translucent tint of its own colour behind matching text — the
+    tinted pill is the default badge of every generated dashboard, and the solid block has more contrast;
+  - **rows are tight** — `5px 9px`, and `4px 8px` in the compact skin, down from `8px 12px`.
 - **Touch target:** `44` CSS px minimum in **both** axes where the pointer is coarse. Not a preference —
   WCAG 2.2 (2.5.5), Apple HIG and Material all agree on it.
 
@@ -237,20 +252,21 @@ test is whether removing it loses information: it does.
 
 ## Decisions log
 
-| Date       | Decision                                                         | Rationale                                                                                                                                                                                           |
-| ---------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-25 | The neutral ramp is 12 steps with Radix's role-per-step          | Seven flat colours with no rule for which to use where; every new component picked whatever looked close                                                                                            |
-| 2026-08-25 | Depth by value + shadow, borders only between equal values       | A 1 px border on every surface reads as a wireframe at 360 px, and floating clusters were the same value as docked panels                                                                           |
-| 2026-08-25 | State colour comes only from `SET_COLORS`                        | It already fed the beacons, the overlay and the radar; the lists reading the same table is what keeps a chip and a pin from drifting                                                                |
-| 2026-08-25 | The accent means "the operator's mark" and nothing else          | It was on primary buttons, fps, tabs, the inventory border and the key sheet, so it marked nothing                                                                                                  |
-| 2026-08-25 | Priority is position + text + colour                             | Colour alone fails a scanning dispatcher and fails colour-blind operators; the chain already required "readable by more than colour alone"                                                          |
-| 2026-08-25 | One scoped stylesheet for pseudo-elements                        | Four documented defects were unreachable from inline styles; scoping it under the app's own attribute keeps `?embed=1` safe                                                                         |
-| 2026-08-26 | The map is the desk; the queue and roster are windows on it      | Four working consoles measured, and none makes the map its main screen; the old desk layout spent 564 of 1280 px on two lists read in glances                                                       |
-| 2026-08-26 | Windows move and size by pointer AND by keyboard, no library     | `react-rnd` would be this widget's first runtime dependency; GridStack is a grid whose tiles reflow, which takes back the space this change won                                                     |
-| 2026-08-26 | A status tally sits in each panel's header                       | Taken from SonoranCAD: one line is both the colour legend and the shift summary, and it reads `SET_COLORS` so it cannot disagree with the map                                                       |
-| 2026-08-26 | The callsign is a filled pill coloured by status                 | The one field in a row that never truncates; at 360 px it is the only place the status is guaranteed readable                                                                                       |
-| 2026-08-26 | Four skins, as data, switched by one attribute on the root       | Colour moved to CSS custom properties so a skin change costs no React work at all; SonoranCAD's four are hand-written forks                                                                         |
-| 2026-08-26 | Every skin is measured by APCA in the test suite                 | Contrast failure is silent — it renders, lints and screenshots fine; the guard caught the SHIPPED theme's step 11 at Lc 47                                                                          |
-| 2026-08-26 | A skin may not touch `SET_COLORS`, targets or the layout         | Those are the map's own colours, an accessibility criterion, and muscle memory; SonoranCAD moves its dock between skins                                                                             |
-| 2026-08-26 | `@snailycad/ui` is not forked; the map half keeps its own system | It peers on `next`, requires Tailwind, and brings ~50 runtime dependencies into a zero-dependency embeddable widget — and its component set is for a list-first page, not a map                     |
-| 2026-08-26 | Overlay BEHAVIOUR comes from Radix Primitives, headless          | Five overlays need dialog/popover/tooltip/select/tabs; SnailyCAD reached for React Aria instead, which is the deeper answer for comboboxes and date pickers — the CAD half's problem, not the map's |
+| Date       | Decision                                                         | Rationale                                                                                                                                                                                                     |
+| ---------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-25 | The neutral ramp is 12 steps with Radix's role-per-step          | Seven flat colours with no rule for which to use where; every new component picked whatever looked close                                                                                                      |
+| 2026-08-25 | Depth by value + shadow, borders only between equal values       | A 1 px border on every surface reads as a wireframe at 360 px, and floating clusters were the same value as docked panels                                                                                     |
+| 2026-08-25 | State colour comes only from `SET_COLORS`                        | It already fed the beacons, the overlay and the radar; the lists reading the same table is what keeps a chip and a pin from drifting                                                                          |
+| 2026-08-25 | The accent means "the operator's mark" and nothing else          | It was on primary buttons, fps, tabs, the inventory border and the key sheet, so it marked nothing                                                                                                            |
+| 2026-08-25 | Priority is position + text + colour                             | Colour alone fails a scanning dispatcher and fails colour-blind operators; the chain already required "readable by more than colour alone"                                                                    |
+| 2026-08-25 | One scoped stylesheet for pseudo-elements                        | Four documented defects were unreachable from inline styles; scoping it under the app's own attribute keeps `?embed=1` safe                                                                                   |
+| 2026-08-26 | The map is the desk; the queue and roster are windows on it      | Four working consoles measured, and none makes the map its main screen; the old desk layout spent 564 of 1280 px on two lists read in glances                                                                 |
+| 2026-08-26 | Windows move and size by pointer AND by keyboard, no library     | `react-rnd` would be this widget's first runtime dependency; GridStack is a grid whose tiles reflow, which takes back the space this change won                                                               |
+| 2026-08-26 | A status tally sits in each panel's header                       | Taken from SonoranCAD: one line is both the colour legend and the shift summary, and it reads `SET_COLORS` so it cannot disagree with the map                                                                 |
+| 2026-08-26 | The callsign is a filled pill coloured by status                 | The one field in a row that never truncates; at 360 px it is the only place the status is guaranteed readable                                                                                                 |
+| 2026-08-26 | Four skins, as data, switched by one attribute on the root       | Colour moved to CSS custom properties so a skin change costs no React work at all; SonoranCAD's four are hand-written forks                                                                                   |
+| 2026-08-26 | Every skin is measured by APCA in the test suite                 | Contrast failure is silent — it renders, lints and screenshots fine; the guard caught the SHIPPED theme's step 11 at Lc 47                                                                                    |
+| 2026-08-26 | A skin may not touch `SET_COLORS`, targets or the layout         | Those are the map's own colours, an accessibility criterion, and muscle memory; SonoranCAD moves its dock between skins                                                                                       |
+| 2026-08-26 | `@snailycad/ui` is not forked; the map half keeps its own system | It peers on `next`, requires Tailwind, and brings ~50 runtime dependencies into a zero-dependency embeddable widget — and its component set is for a list-first page, not a map                               |
+| 2026-08-26 | Overlay BEHAVIOUR comes from Radix Primitives, headless          | Five overlays need dialog/popover/tooltip/select/tabs; SnailyCAD reached for React Aria instead, which is the deeper answer for comboboxes and date pickers — the CAD half's problem, not the map's           |
+| 2026-08-26 | Square shapes, opaque panels, solid status stamps, tight rows    | The user's verdict: the built console read as generated. Rounded cards, translucent surfaces and tinted pill badges are the tells, and all three contradicted this file's own "instrument panel, no ornament" |
