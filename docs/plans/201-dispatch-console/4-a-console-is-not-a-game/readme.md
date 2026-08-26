@@ -86,13 +86,17 @@ Three pieces, chosen with the user 2026-08-26 — progress only, no flat map and
   Cache Storage, keyed by the manifest's `buildTime`, degrading silently where `caches` is undefined — a
   LAN `http://` origin is not a secure context and has none, though the phone's own `localhost` does.
   Counted as a subset of the traffic (`pakTraffic.cachedBytes`), never as a claim.
-- **Async pipelines.** `engine-frame` measured **77.9 ms on the first frame in both 08-25 captures, to the
-  tenth** — a fixed cost, now the largest item on that frame. Shader compilation is the suspect:
-  `createRenderPipelineAsync` compiles off the main thread, and the engine has 17 synchronous call sites.
+- **Async pipelines, and the split that checks them.** `engine-frame` measured **77.9 ms on the first frame
+  in both 08-25 captures, to the tenth** — a fixed cost, now the largest item on that frame. The 34
+  pipelines are compiled with `createRenderPipelineAsync` and awaited once, which shortens `engine.init`
+  (`boot.gpuMs`) — and NOT, by itself, that 77.9 ms, because `compileAll` never ran inside a frame. So the
+  first three frames are split by phase (`firstFrames` in the capture) and the number gets an owner before
+  anything else is aimed at it.
 
-**Owes:** the shell verified on the real device rather than in a harness; a repeat-open capture with and
-without the cache; and `engine-frame` on the first frame before/after the pipeline change — the same
-capture, on the pinned district.
+**Owes, all three on the device and all three from the same capture on the pinned district:** the shell
+under a real boot rather than a harness; a repeat open, for `bytes.cachedBytes` against `bytes.totalBytes`;
+and `boot.gpuMs` + `firstFrames` — the first says what the async compile bought, the second says who owns
+the 77.9 ms.
 
 ## Verification
 

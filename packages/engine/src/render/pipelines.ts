@@ -3,6 +3,12 @@
  * `compileAll()` behind the load veil. A steady-state miss throws — cold-start compile storms are impossible
  * by design, not unlikely (the 073 lesson as an assertion).
  *
+ * The compile is ASYNCHRONOUS and overlapped (201/4-03): every pipeline is started, then all of them are
+ * awaited once. `createRenderPipelineAsync` is the same descriptor compiled on the implementation's own
+ * threads instead of blocking the caller's, which on a phone is what keeps 34 compiles off the thread the
+ * boot is running on. `compileAll` is therefore async, and a shader that no longer validates rejects the
+ * boot at the await rather than at the first draw that binds it.
+ *
  * World set: opaque/cutout/blend/beam/additive × front/double = 10 pipelines + sky. The cutout pair
  * enables alpha-to-coverage (MSAA 4×) — the third leg of the alpha-edge fix. Blend/beam pipelines blend
  * PREMULTIPLIED output (one, one-minus-src-alpha) with depth READ-ONLY (074/06 rows 9/11); the additive
@@ -95,12 +101,12 @@ export interface PipelineSet {
   waterLayout: GPUBindGroupLayout;
 }
 
-export function compileAll(
+export async function compileAll(
   device: GPUDevice,
   colorFormat: GPUTextureFormat,
   depthFormat: GPUTextureFormat,
   outputFormat: GPUTextureFormat = colorFormat,
-): PipelineSet {
+): Promise<PipelineSet> {
   const frameLayout = device.createBindGroupLayout({
     entries: [
       { binding: 0, buffer: { type: 'uniform' }, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT },
@@ -155,7 +161,11 @@ export function compileAll(
     },
   ];
 
-  const pipelines = new Map<PipelineId, GPURenderPipeline>();
+  // Every pipeline is STARTED here and awaited once at the end (201/4-03). `createRenderPipelineAsync`
+  // hands the compile to the implementation's own threads, so 34 of them overlap instead of blocking the
+  // main thread one after another — on a phone that is the difference between a boot that stalls and one
+  // that streams. The descriptors are unchanged; only WHEN the pipeline exists is.
+  const pipelines = new Map<PipelineId, Promise<GPURenderPipeline>>();
   const variants: {
     additive?: boolean;
     blend: boolean;
@@ -202,7 +212,7 @@ export function compileAll(
   const waterModule = device.createShaderModule({ code: resolveShader('water'), label: 'water' });
   pipelines.set(
     'water',
-    device.createRenderPipeline({
+    device.createRenderPipelineAsync({
       depthStencil: { depthCompare: 'greater', depthWriteEnabled: false, format: depthFormat },
       fragment: {
         entryPoint: 'fsWater',
@@ -303,7 +313,7 @@ export function compileAll(
   ]) {
     pipelines.set(
       variant.id,
-      device.createRenderPipeline({
+      device.createRenderPipelineAsync({
         depthStencil: {
           depthCompare: variant.blend ? 'greater-equal' : 'greater',
           depthWriteEnabled: !variant.blend,
@@ -338,7 +348,7 @@ export function compileAll(
   const pedModule = device.createShaderModule({ code: resolveShader('ped'), label: 'ped' });
   pipelines.set(
     'ped',
-    device.createRenderPipeline({
+    device.createRenderPipelineAsync({
       depthStencil: { depthCompare: 'greater', depthWriteEnabled: true, format: depthFormat },
       fragment: { entryPoint: 'fsPed', module: pedModule, targets: [{ format: colorFormat }] },
       label: 'ped',
@@ -393,7 +403,7 @@ export function compileAll(
   ]) {
     pipelines.set(
       variant.id,
-      device.createRenderPipeline({
+      device.createRenderPipelineAsync({
         depthStencil: { depthCompare: 'greater', depthWriteEnabled: false, format: depthFormat },
         fragment: {
           entryPoint: 'fsParticle',
@@ -440,7 +450,7 @@ export function compileAll(
   const skidModule = device.createShaderModule({ code: resolveShader('skid'), label: 'skid' });
   pipelines.set(
     'skid',
-    device.createRenderPipeline({
+    device.createRenderPipelineAsync({
       depthStencil: { depthCompare: 'greater', depthWriteEnabled: false, format: depthFormat },
       fragment: { entryPoint: 'fsSkid', module: skidModule, targets: [{ blend: premultBlend, format: colorFormat }] },
       label: 'skid',
@@ -477,7 +487,7 @@ export function compileAll(
   const debrisModule = device.createShaderModule({ code: resolveShader('debris'), label: 'debris' });
   pipelines.set(
     'debris',
-    device.createRenderPipeline({
+    device.createRenderPipelineAsync({
       depthStencil: { depthCompare: 'greater', depthWriteEnabled: false, format: depthFormat },
       fragment: {
         entryPoint: 'fsDebris',
@@ -521,7 +531,7 @@ export function compileAll(
   const coronaModule = device.createShaderModule({ code: resolveShader('corona'), label: 'corona' });
   pipelines.set(
     'corona',
-    device.createRenderPipeline({
+    device.createRenderPipelineAsync({
       // Reversed-Z everywhere (z-fighting fix): float depth, clear 0, GREATER passes nearer fragments.
       depthStencil: { depthCompare: 'greater', depthWriteEnabled: false, format: depthFormat },
       fragment: {
@@ -578,7 +588,7 @@ export function compileAll(
   const postModule = device.createShaderModule({ code: resolveShader('post'), label: 'post' });
   pipelines.set(
     'post',
-    device.createRenderPipeline({
+    device.createRenderPipelineAsync({
       fragment: { entryPoint: 'fsPost', module: postModule, targets: [{ format: outputFormat }] },
       label: 'post',
       layout: device.createPipelineLayout({ bindGroupLayouts: [postLayout], label: 'post' }),
@@ -597,7 +607,7 @@ export function compileAll(
   const cloudFieldModule = device.createShaderModule({ code: resolveShader('cloud-field'), label: 'cloud-field' });
   pipelines.set(
     'cloud-field',
-    device.createRenderPipeline({
+    device.createRenderPipelineAsync({
       fragment: { entryPoint: 'fsCloudField', module: cloudFieldModule, targets: [{ format: 'rg16float' }] },
       label: 'cloud-field',
       layout: device.createPipelineLayout({ bindGroupLayouts: [cloudFieldLayout], label: 'cloud-field' }),
@@ -617,7 +627,7 @@ export function compileAll(
   const probeViewModule = device.createShaderModule({ code: resolveShader('probe-view'), label: 'probe-view' });
   pipelines.set(
     'probe-view',
-    device.createRenderPipeline({
+    device.createRenderPipelineAsync({
       depthStencil: { depthCompare: 'always', depthWriteEnabled: false, format: depthFormat },
       fragment: { entryPoint: 'fsProbeView', module: probeViewModule, targets: [{ format: colorFormat }] },
       label: 'probe-view',
@@ -629,7 +639,7 @@ export function compileAll(
   );
   pipelines.set(
     'sky',
-    device.createRenderPipeline({
+    device.createRenderPipelineAsync({
       // Reversed-Z far plane (depth 0). The sky draws FIRST in the frame (vs the cleared buffer): blended
       // classes write no depth, so a late sky would repaint them wherever their background is sky.
       depthStencil: { depthCompare: 'greater-equal', depthWriteEnabled: false, format: depthFormat },
@@ -671,7 +681,7 @@ export function compileAll(
   for (const cutout of [false, true]) {
     pipelines.set(
       cutout ? 'clutter-cutout' : 'clutter-opaque',
-      device.createRenderPipeline({
+      device.createRenderPipelineAsync({
         depthStencil: { depthCompare: 'greater', depthWriteEnabled: true, format: depthFormat },
         fragment: {
           entryPoint: cutout ? 'fsClutterCutout' : 'fsClutter',
@@ -692,7 +702,7 @@ export function compileAll(
     const blendState = worldBlendState(variant, premultBlend, additiveBlend);
     pipelines.set(
       variant.id,
-      device.createRenderPipeline({
+      device.createRenderPipelineAsync({
         // Reversed-Z: GREATER for depth-written classes; blended classes read-only AND pass EQUAL depths —
         // coplanar overlays (night windows, wall signs) composite stably instead of shimmering.
         depthStencil: {
@@ -714,6 +724,14 @@ export function compileAll(
     );
   }
 
+  // One await for all of them: a rejected compile (a shader that no longer validates) fails the boot here
+  // rather than at the first draw that binds it.
+  const compiled = new Map<PipelineId, GPURenderPipeline>(
+    await Promise.all(
+      [...pipelines].map(async ([id, pipeline]): Promise<[PipelineId, GPURenderPipeline]> => [id, await pipeline]),
+    ),
+  );
+
   return {
     bloomLayout,
     bloomUpLayout,
@@ -724,7 +742,7 @@ export function compileAll(
     debugLineLayout,
     frameLayout,
     get(id: PipelineId): GPURenderPipeline {
-      const pipeline = pipelines.get(id);
+      const pipeline = compiled.get(id);
       if (!pipeline) {
         throw new Error(`pipeline miss in steady state: ${id} (074 ground rule 3 — enumerate it in compileAll)`);
       }
@@ -756,7 +774,7 @@ export function pipelineIdFor(pipelineClass: number, side: number): PipelineId {
 function compileBloomPipelines(
   device: GPUDevice,
   colorFormat: GPUTextureFormat,
-  pipelines: Map<PipelineId, GPURenderPipeline>,
+  pipelines: Map<PipelineId, Promise<GPURenderPipeline>>,
 ): { bloomLayout: GPUBindGroupLayout; bloomUpLayout: GPUBindGroupLayout } {
   const bloomLayout = device.createBindGroupLayout({
     entries: [
@@ -784,7 +802,7 @@ function compileBloomPipelines(
   for (const [id, entryPoint, groupLayout] of entries) {
     pipelines.set(
       id,
-      device.createRenderPipeline({
+      device.createRenderPipelineAsync({
         fragment: { entryPoint, module: bloomModule, targets: [{ format: colorFormat }] },
         label: id,
         layout: device.createPipelineLayout({ bindGroupLayouts: [groupLayout], label: id }),
@@ -807,7 +825,7 @@ function compileDebugLinePipelines(
   depthFormat: GPUTextureFormat,
   debugLineLayout: GPUBindGroupLayout,
   frameLayout: GPUBindGroupLayout,
-  pipelines: Map<PipelineId, GPURenderPipeline>,
+  pipelines: Map<PipelineId, Promise<GPURenderPipeline>>,
 ): void {
   const module = device.createShaderModule({ code: resolveShader('debug-line'), label: 'debug-line' });
   const layout = device.createPipelineLayout({ bindGroupLayouts: [frameLayout, debugLineLayout], label: 'debug-line' });
@@ -818,7 +836,7 @@ function compileDebugLinePipelines(
   ] as const) {
     pipelines.set(
       id,
-      device.createRenderPipeline({
+      device.createRenderPipelineAsync({
         depthStencil: { depthCompare, depthWriteEnabled: false, format: depthFormat },
         fragment: { entryPoint: 'fsDebugLine', module, targets: [{ format: colorFormat }] },
         label: id,
@@ -844,7 +862,7 @@ function compileDebugLinePipelines(
 function compileProbePipelines(
   device: GPUDevice,
   colorFormat: GPUTextureFormat,
-  pipelines: Map<PipelineId, GPURenderPipeline>,
+  pipelines: Map<PipelineId, Promise<GPURenderPipeline>>,
 ): GPUBindGroupLayout {
   const probeMipLayout = device.createBindGroupLayout({
     entries: [
@@ -861,7 +879,7 @@ function compileProbePipelines(
   ] as const) {
     pipelines.set(
       id,
-      device.createRenderPipeline({
+      device.createRenderPipelineAsync({
         fragment: { entryPoint, module: probeModule, targets: [{ format: colorFormat }] },
         label: id,
         layout: probePipelineLayout,

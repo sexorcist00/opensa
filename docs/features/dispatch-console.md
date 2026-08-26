@@ -320,6 +320,35 @@ The app's side is [`src/world/boot-progress.ts`](../../apps/dispatch/src/world/b
 handle whose every function is a **no-op when the shell is absent**. The viewer harness, the tests and an
 embedding host all mount the console without that markup, and in none of them is a missing shell an error.
 
+## The 77.9 ms nobody owned
+
+**Since 2026-08-26.** The 08-25 round left one number standing: `engine-frame` measured **77.9 ms on the
+first frame in both captures, to the tenth** — a fixed cost of the engine's own first pass, and the largest
+single item on that frame once the overlay was warmed. Two things ship against it.
+
+**The pipeline compile is asynchronous and overlapped.** `compileAll` enumerates 34 pipelines and used to
+create every one of them synchronously, one after another on the thread the boot runs on.
+`createRenderPipelineAsync` is the same descriptor compiled on the implementation's own threads: every
+pipeline is started, then all of them are awaited once. `compileAll` is therefore async, and a shader that
+no longer validates now rejects the boot at that await instead of at the first draw that binds it. Note
+where this lands: **`compileAll` runs inside `engine.init`, not inside a frame**, so it shortens the
+`starting the GPU…` phase rather than `engine-frame` — the capture records it as `boot.gpuMs`, which is the
+number to compare across builds.
+
+**And the frame itself is split, because 77.9 ms with no owner is a guess waiting to happen.** The first
+three frames time six phases — `frame:targets`, `frame:sky-lut`, `frame:probe`, `frame:cull`,
+`frame:record`, `frame:submit` — and no frame after them pays anything for the split. Three frames rather
+than one on purpose: the first pays for everything, and the two behind it are what separate a one-shot
+allocation from a steady-state cost. It reaches the capture as `firstFrames`, one entry per frame in order.
+
+It is **not** `frameSpans`. That recorder is for work BETWEEN frames, and the game shell subtracts its total
+from the loop body to print `unattributed` — a span from inside the frame would drive that negative, which
+is exactly what its own second rule warns about. This one is the engine's own, read once by the host
+(`engine.firstFrames`).
+
+The order here is the 08-25 lesson applied rather than restated: the overlay's cost was found by splitting a
+span, after a confident guess about font resolution had already shipped and measured wrong.
+
 ## The second open, and why it is cheap
 
 **Since 2026-08-26.** The opening view of a district pulls tens of megabytes out of the pak — the 08-25

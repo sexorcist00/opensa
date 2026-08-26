@@ -75,6 +75,9 @@ export interface InventoryPass {
 }
 
 export interface InventoryReport {
+  /** What the BOOT cost, before a frame existed. `gpuMs` is `engine.init` — the device plus every pipeline
+   *  compile (201/4-03). */
+  readonly boot: { readonly gpuMs: number };
   readonly build: string;
   /** What this surface actually READ out of the pak, by entry kind — wire bytes and request counts, live
    *  since boot rather than over the sampled window. The build's `report.json` says what the pak CONTAINS;
@@ -104,6 +107,9 @@ export interface InventoryReport {
   readonly district: string;
   /** The page's own errors during the capture (see `error-log.ts`) — a phone has no devtools to read. */
   readonly errors: readonly string[];
+  /** The engine's own split of its FIRST frames, one entry per frame in order (201/4-03) — where the fixed
+   *  77.9 ms of a first `engine-frame` went. Empty on a host that never reached a first frame. */
+  readonly firstFrames: readonly (readonly (readonly [string, number])[])[];
   readonly frame: {
     /** dt counts per 2 ms bin, ascending, empty bins omitted. A frame waiting on a 60 Hz vsync piles into
      *  the bins around 16.7 and 33.3; a frame that is simply slow spreads. The two look identical in a p50
@@ -336,6 +342,8 @@ export class FrameInventory {
   };
 
   report(context: {
+    /** `performance.now()` around `engine.init` — the device and the pipeline compile. */
+    boot: { gpuMs: number };
     build: string;
     /** `engine.ledger()` — resident bytes and counts per category. */
     byCategory: Readonly<Record<string, { bytes: number; count: number }>>;
@@ -350,6 +358,8 @@ export class FrameInventory {
     device: unknown;
     district: string;
     errors: readonly string[];
+    /** `engine.firstFrames` — the split of the first frames, taken straight from the engine. */
+    firstFrames: readonly (readonly (readonly [string, number])[])[];
     /** Frames the render gate skipped over the window (201/4-01) — the host's own counter, since a skipped
      *  frame never reaches `sample`. */
     framesSkipped: number;
@@ -380,6 +390,7 @@ export class FrameInventory {
         ];
 
     return {
+      boot: context.boot,
       build: context.build,
       bytes: context.bytes,
       camera: { at: context.camera.at, height: context.camera.height, projection: context.camera.projection },
@@ -394,6 +405,7 @@ export class FrameInventory {
       device: context.device,
       district: context.district,
       errors: context.errors,
+      firstFrames: context.firstFrames,
       frame: {
         dtHistogramMs: [...this.bins.entries()].sort((a, b) => a[0] - b[0]),
         dtMaxMs: this.maxima.get('dt') ?? 0,

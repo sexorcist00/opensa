@@ -197,6 +197,22 @@ describe('Engine frame decisions', () => {
       expect(post).toBeGreaterThan(world); // post composites the world, never before it
     });
 
+    it('splits its FIRST frames by phase and then stops paying for the split (201/4-03)', async () => {
+      const engine = await bootedEngine();
+      engine.cells.load('0,0', cellBytes());
+
+      for (let i = 0; i < 5; i += 1) {
+        engine.frame(camera());
+      }
+
+      // Three frames split, and no more — the fourth and fifth add nothing.
+      expect(engine.firstFrames).toHaveLength(3);
+      const named = engine.firstFrames[0].byName.map(([name]) => name);
+      expect(named).toEqual(
+        expect.arrayContaining(['frame:targets', 'frame:sky-lut', 'frame:probe', 'frame:cull', 'frame:record']),
+      );
+    });
+
     it('executes a loaded cell bundle in the world pass', async () => {
       const engine = await bootedEngine();
       engine.cells.load('0,0', cellBytes());

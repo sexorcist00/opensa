@@ -20,6 +20,7 @@ import {
 } from './core/math';
 import { uploadOstexTexture } from './core/ostex-upload';
 import { Resources } from './core/resources';
+import { FrameSpans, type FrameSpanTotals } from './debug/frame-spans';
 import { GpuTimers } from './debug/gpu-timers';
 import { RigidEntity, type RigidPartInit } from './entities/rigid';
 import { type DynamicParticleLibrary, DynamicParticles } from './render/dynamic-particles';
@@ -713,6 +714,21 @@ export class Engine {
     return describeDevice(this.engineDevice, this.canvasElement);
   }
   /**
+   * What the FIRST frames spent themselves on, by name (201/4-03).
+   *
+   * `engine-frame` measured **77.9 ms on the first frame in both 08-25 captures, to the tenth** — a fixed
+   * cost with no owner, and now the largest item on that frame. The 08-25 overlay round is the reason this
+   * is a split rather than a theory: the guess there (font resolution) measured wrong, and separating the
+   * span answered it in one capture.
+   *
+   * It is NOT `frameSpans`. That recorder is for work between frames and the game shell SUBTRACTS its total
+   * from the loop body to print `unattributed` — a span from inside the frame would drive that negative,
+   * which is the exact failure its own rule warns about. This one is the engine's, read once by the host.
+   */
+  get firstFrames(): readonly FrameSpanTotals[] {
+    return this.firstFrameTotals;
+  }
+  /**
    * Bloom chain resources (074/09): prefilter (full res) + `levels` downsample mips + `levels−1` upsample
    * mips, all 16f, rebuilt with the targets on resize (with the previous chain destroyed — unlike the
    * one-off scene targets these are many small textures). `result` (up mip 0, half res) feeds the composite.
@@ -743,6 +759,7 @@ export class Engine {
   private readonly clutterBreakables = new Map<number, { matrixBuffer: GPUBuffer; offset: number }>();
   /** Per streamed cell → its clutter draws (one per model). Replaced/removed as cells stream. */
   private readonly clutterCells = new Map<string, ClutterCellDraw[]>();
+
   /** Procedural-clutter models (074/19 B7·d) — shared grass/bush/rock geometry + texture, drawn instanced. */
   private readonly clutterModels = new Map<ClutterModelId, ClutterModel>();
   private clutterModelSeq = 0;
@@ -757,6 +774,13 @@ export class Engine {
   /** Dynamic one-shot particle lane (089/01) — null until a host installs a library. */
   private dynamicParticles: DynamicParticles | null = null;
   private engineDevice!: EngineDevice;
+  /** How many more frames are split. Three: the first pays for everything, the next two say what was
+   *  one-shot and what is steady state. After that the split costs nothing at all. */
+  private firstFrameDetail = 3;
+  private readonly firstFrameSpans = new FrameSpans();
+  /** One entry per split frame, in order — the first is the expensive one, and the two after it are what
+   *  says which of its phases was one-shot. Summing them would hide exactly that. */
+  private readonly firstFrameTotals: FrameSpanTotals[] = [];
   private frameBindGroup!: GPUBindGroup;
   /** Triangles recorded by the out-of-bundle draw passes this frame; reset at the top of `frame`. A field
    *  rather than a return value because every `draw*` already returns its draw count. */
@@ -1161,8 +1185,17 @@ export class Engine {
   /** Render one frame. Returns the stats snapshot (the HUD's input). */
   frame(camera: CameraState): EngineStats {
     const submitStart = performance.now();
+    // The first three frames are SPLIT by phase and nothing else is (201/4-03) — see `firstFrames` for why
+    // this is the engine's own recorder. Two `performance.now()` per phase for three frames, then nothing.
+    const detail = this.firstFrameDetail > 0;
+    if (detail) {
+      this.firstFrameDetail -= 1;
+    }
+    const step = <T>(name: string, run: () => T): T => (detail ? this.firstFrameSpans.measure(name, run) : run());
     const canvasTexture = this.canvasContext.getCurrentTexture();
-    this.ensureTargets(canvasTexture.width, canvasTexture.height);
+    step('frame:targets', () => {
+      this.ensureTargets(canvasTexture.width, canvasTexture.height);
+    });
 
     // The projection convention (reversed-Z, plan view) lives in ONE place — the streamer decides
     // residency against the same frustum this frame culls with (201/1-05).
@@ -1222,11 +1255,25 @@ export class Engine {
     // World ambient floor (plan 093): SA's building formula adds timecyc ambient ON TOP of prelit —
     // normal-independent, so black-authored shadow verts stay shadow instead of holes. .w spare.
     frameData.set([...env.ambientColor, 0], 100);
-    this.refreshSkyLut(); // before the probe submit — the probe's sky pass samples the LUT too
-    this.scheduleProbe(frameData);
+    step('frame:sky-lut', () => {
+      this.refreshSkyLut(); // before the probe submit — the probe's sky pass samples the LUT too
+    });
+    step('frame:probe', () => {
+      this.scheduleProbe(frameData);
+    });
     this.device.queue.writeBuffer(this.frameUniform, 0, frameData);
 
     frustumFromViewProj(this.frustumPlanes, this.viewProj);
+    // The two big phases are marked rather than wrapped: a closure around a hundred lines of commented
+    // pass-building would reindent all of it to add two timestamps. `FrameSpans.add` exists for exactly
+    // this — a segment the caller timed itself.
+    const mark = (): number => (detail ? performance.now() : 0);
+    const since = (name: string, started: number): void => {
+      if (detail) {
+        this.firstFrameSpans.add(name, performance.now() - started);
+      }
+    };
+    const cullStart = mark();
     const bundles: GPURenderBundle[] = [];
     const blendCells: { bundle: GPURenderBundle; distanceSq: number }[] = [];
     let draws = 0;
@@ -1268,7 +1315,9 @@ export class Engine {
     // Blend phase back-to-front by CELL distance — cross-cell transparency ordering (per-group order inside
     // a cell stays baked; the standard within-bundle transparency caveat).
     const blendBundles = blendCells.sort((a, b) => b.distanceSq - a.distanceSq).map((entry) => entry.bundle);
+    since('frame:cull', cullStart);
 
+    const recordStart = mark();
     const encoder = this.device.createCommandEncoder({ label: 'frame' });
     // Cumulus field bake (sky v2 perf): rewrite the tiny fbm field before anything samples it this frame
     // (256² × 10 vnoise ≈ fixed ~0.05 ms — full-deck weathers stopped scaling with the swapchain).
@@ -1386,9 +1435,16 @@ export class Engine {
     postPass.setBindGroup(0, this.postBindGroup);
     postPass.draw(3);
     postPass.end();
+    since('frame:record', recordStart);
+
+    const submitPhase = mark();
     this.timers.resolve(encoder);
     this.device.queue.submit([encoder.finish()]);
     this.timers.read();
+    since('frame:submit', submitPhase);
+    if (detail) {
+      this.firstFrameTotals.push(this.firstFrameSpans.drain());
+    }
 
     this.statsValue.submitMs = performance.now() - submitStart;
     this.statsValue.gpuPassMs = this.timers.lastPassMs;
@@ -1418,7 +1474,7 @@ export class Engine {
     this.timers = new GpuTimers(this.device, this.engineDevice.hasTimestamps);
     // Scene pipelines target the 16-float offscreen (godrays bright-pass needs the HDR overshoot); only
     // the post pipeline writes the sRGB swapchain.
-    this.pipelines = compileAll(this.device, SCENE_FORMAT, DEPTH_FORMAT, this.engineDevice.colorFormat);
+    this.pipelines = await compileAll(this.device, SCENE_FORMAT, DEPTH_FORMAT, this.engineDevice.colorFormat);
     // Scene env probe (074/16 step 2) — fixed-size, allocated once, BEFORE any vehicle model binds its cube.
     this.probe = new EnvProbe(this.device, this.resources, this.pipelines);
     // License-plate arrays (plan 082/03), allocated here for the same reason as the probe: their views go

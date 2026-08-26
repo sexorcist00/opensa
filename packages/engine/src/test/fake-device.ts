@@ -171,6 +171,10 @@ export function createFakeDevice(): FakeGpu {
       };
     },
     createRenderPipeline: (descriptor: GPURenderPipelineDescriptor): unknown => ({ label: descriptor.label }),
+    // The engine compiles asynchronously (201/4-03); the fake resolves immediately, so a test still gets
+    // its pipelines within one microtask turn.
+    createRenderPipelineAsync: (descriptor: GPURenderPipelineDescriptor): Promise<unknown> =>
+      Promise.resolve({ label: descriptor.label }),
     createSampler: (descriptor?: GPUSamplerDescriptor): unknown => ({ label: descriptor?.label }),
     createShaderModule: (descriptor: GPUShaderModuleDescriptor): unknown => ({ label: descriptor.label }),
     createTexture: texture,

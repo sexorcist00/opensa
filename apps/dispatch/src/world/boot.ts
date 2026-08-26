@@ -347,10 +347,13 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
 
   const engine = new Engine();
   // The phases the shell reports are the ones that actually take time here, in the order they take it. The
-  // GPU first: `init` creates the device and every pipeline, which measured 77.9 ms of the first frame on
-  // the phone even before a byte of world was asked for.
+  // GPU first: `init` opens the device and compiles all 34 pipelines. That compile is asynchronous and
+  // overlapped since 201/4-03, and this is the number that says whether it helped — the capture carries it
+  // (`boot.gpuMs`), because a boot cost nobody records is one nobody can argue about.
   bootStep('starting the GPU…');
+  const gpuStart = performance.now();
   await engine.init(canvas);
+  const gpuMs = performance.now() - gpuStart;
   // `?scale=` — the same manual knob `apps/web` has, and the only one that moves the `target` category:
   // 36.54 MB of the 2026-08-12 capture's 74.9 MB is scene + bloom targets, which scale with the square of
   // this number. Manual, per the refusal in performance/deferred-optimizations/render-scale-tier.md — the
@@ -794,6 +797,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       const pose = camera.pose();
 
       return inventory.report({
+        boot: { gpuMs },
         build: world.label,
         byCategory: engine.ledger(),
         bytes: {
@@ -807,6 +811,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         device: engine.deviceReport,
         district: params.get('district') ?? UNNAMED_DISTRICT,
         errors: errorLog.entries(),
+        firstFrames: engine.firstFrames.map((totals) => totals.byName),
         framesSkipped: gate.idleFrames,
         hasTimestamps: !engine.deviceReport.missing.includes('timestamp-query'),
         pickingBytes: engine.cells.pickingBytes,
