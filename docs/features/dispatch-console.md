@@ -411,7 +411,19 @@ Three things worth knowing before touching it:
 **It is counted, not claimed.** The capture carries `boot.openMs` (the whole pak open — probe, manifest,
 worker) beside `boot.gpuMs`, and **`boot.overlapMs`**: how much of the two actually ran at the same time,
 derived from the wall clock across both rather than asserted. Both are `0` under `?demo=1`, which opens no
-pak. **No device number yet** — the phone's next capture is what says what this bought there.
+pak.
+
+**Measured on the device, 2026-08-26: `openMs` 230.5, `overlapMs` 227.7 — 98.8 % of the world open ran
+underneath the GPU** ([the row](../benchmarks/opensa-engine/2026-08-26-mobile-boot-overlap.json)). The pair
+cost **690.8 ms of wall instead of 918.5**: 227.7 ms off the boot, for a change that added 0.41 kB and no
+machinery.
+
+**Two more reads moved in behind it.** The sea (`water.bin`, 2.66 MB) and the district table are loose files
+the MANIFEST points at, so they cannot be fetched until it is read — but they were being fetched after the
+GPU and after `setupStreaming` instead of during them, and the sea was the largest single read left on the
+serial path. `openWorld` now reads both as a second wave, still inside the GPU's wait; `installWater` takes
+the bytes and does the engine half (a parse and one `setWater`). `streamedWorld` reaches the network for
+nothing at all now.
 
 **And the capture says which app produced it.** `app` carries `__APP_BUILD__` — the commit vite stamped in,
 with a `+` when the tree was dirty — beside `build`, which is the PAK's `buildTime`. It is there because
@@ -419,6 +431,12 @@ three captures in a row on 2026-08-26 were taken of an app the device had never 
 everyone believed otherwise; the trap and both of its halves are
 [a restriction](../restrictions/architecture.md) now. `dev` means a bundle nobody stamped: the dev server, a
 test host, an embedding host.
+
+The first stamp it produced was `67432d1+` from a tree that had been clean one command earlier, which is the
+instrument's own bug and is fixed: `appBuild` runs INSIDE the build, after `tsc -b`, so a plain
+`git status --porcelain` counts the build's own leavings — and untracked files — as uncommitted work. It
+reads tracked files only now, minus the incremental cache. **A `+` that fires on every build is a `+` that
+means nothing**, which is the same failure as a capture that cannot name its app, one level down.
 
 ## The second open, and why it is cheap
 

@@ -140,8 +140,24 @@ of the pinned district at street height):
 which makes 2 607.5 the outlier rather than the series. The second open reproduced with it (**22.26 MB of
 24.92, 89.3 %, 38 of 39 requests**), and **`water.bin` missed again at exactly the same 2 658 756 bytes**.
 
-**Still owed, and the reason is not the measurement:** the first `boot.overlapMs`. **Three captures in a row
-were taken of the app from BEFORE the overlap landed** — the third after a `git pull` that printed
+**The overlap has its number, on the fourth attempt**
+([the capture](../../../benchmarks/opensa-engine/2026-08-26-mobile-boot-overlap.json), and the first in this
+repo that names its own app): **`openMs` 230.5, `overlapMs` 227.7 — 98.8 % of the world open ran underneath
+the GPU**, so the pair cost **690.8 ms of wall against 918.5 serial**. 227.7 ms off the boot for 0.41 kB and
+no machinery. It also put a range under `boot.gpuMs`: **688 here against 398.4 and 347.2**, with
+`init:pipelines` spreading **218–358** and `init:device` **81–265** over three warm runs — a single boot
+number means little, and 2 607.5 remains an outlier nobody has explained.
+
+**Two more reads moved in behind it, in the same shape.** `water.bin` (2.66 MB) and the district table are
+loose files the MANIFEST points at, so they cannot start in the first wave — but they were being fetched
+after the GPU *and* after `setupStreaming`, and the sea was the largest single read left on the boot's serial
+path. `openWorld` reads both as a second wave under the same wait; `streamedWorld` now touches the network
+for nothing. The sea's transfer check shipped and did NOT count it as a hit, which means either it crossed
+the wire or Resource Timing had no entry yet — the capture cannot separate those, and moving the fetch into
+the overlap makes the question cost nothing either way.
+
+**What that fourth attempt cost, because the number above hides it: three captures in a row were taken of the
+app from BEFORE the overlap landed** — the third after a `git pull` that printed
 `no such ref was fetched` (the device's branch tracked a branch name the remote no longer has), did not
 merge, **and exited 0**, so the archive that was re-extracted was the one already in the tree. Two of the
 three were believed to be captures of something else, and only an accident gave the first away: that change
@@ -150,8 +166,10 @@ vite stamps in — and the trap is written up as
 [a restriction](../../../restrictions/architecture.md), because it is silent in the worst way: nothing
 errors, every number is real, and it is a real measurement of the wrong build.
 
-Also owed: the cold/warm boot pair, which is what decides whether `init:pipelines` is a 220 ms phase or a
-2.3 s one — neither run so far cleared the site's data, so the hypothesis is still untested.
+Also owed: the cold/warm boot pair, which is what decides whether `init:pipelines` is a 220–360 ms phase or a
+2.3 s one — none of the four runs cleared the site's data, so the hypothesis is still untested. And now that
+the overlap is in, the pair says something it could not before: whatever the cold GPU number turns out to be,
+that is how much of the world's open it hides.
 
 ## Verification
 

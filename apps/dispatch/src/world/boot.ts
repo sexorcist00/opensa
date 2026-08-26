@@ -53,7 +53,7 @@ import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DIST
 import { DEFAULT_SRC, type PakBase, resolvePakBase } from './pak-source';
 import { RenderGate } from './render-gate';
 import { bakeFlatMap } from './tile-bake-host';
-import { installWater } from './water';
+import { fetchWater, installWater } from './water';
 import { type DistrictLookup, loadDistricts, NO_DISTRICTS, type SearchedPlace } from './zones';
 
 export interface BootOptions {
@@ -289,12 +289,17 @@ interface DispatchWorld {
  * overlap either hid or did not.
  */
 interface OpenedWorld {
+  /** What the world's places are called — a small loose JSON beside the pak (201/5-03). */
+  readonly districts: DistrictLookup;
   readonly openMs: number;
   readonly pak: OpenedPak;
   readonly source: PakBase;
   /** The game's own `data/timecyc.dat`, read beside the pak — it lives on the same server and is not the
    *  pak's business, so it has no reason to wait for it. `null` when the build ships no `data/`. */
   readonly timecyc: null | TimecycSource;
+  /** The baked sea, read but not yet installed: 2.66 MB of loose file, and the largest single read the boot
+   *  still had on its serial path before this rode the overlap too. `null` when the pak carries none. */
+  readonly water: null | Uint8Array;
 }
 
 /**
@@ -1140,8 +1145,15 @@ async function openWorld(params: URLSearchParams): Promise<OpenedWorld> {
   // Two files on the same server, neither waiting on the other: the pak's manifest and worker, and the
   // game's `data/` mood table (up to three candidate names, 104/01).
   const [pak, timecyc] = await Promise.all([openPakSource(source.base), readTimecyc(source.gameDir)]);
+  // The second wave, and it could not have been in the first: both of these are loose files the MANIFEST
+  // points at, so they are not knowable until it is read. Together, because they are two servers' answers to
+  // two independent questions — and still inside the GPU's wait, which is the whole point.
+  const [water, districts] = await Promise.all([
+    fetchWater(source.base, pak.manifest.water),
+    loadDistricts(source.base, pak.manifest.districts),
+  ]);
 
-  return { openMs: performance.now() - startedAt, pak, source, timecyc };
+  return { districts, openMs: performance.now() - startedAt, pak, source, timecyc, water };
 }
 
 /**
@@ -1230,16 +1242,12 @@ async function streamedWorld(engine: Engine, params: URLSearchParams, opened: Op
     },
     opened.pak,
   );
-  // The water mesh and the district table are two more independent reads off the same server — a 2.66 MB
-  // binary and a small JSON — and the boot used to queue them one behind the other.
-  bootStep('the water and the places…', undefined, undefined, base);
-  const [, districts] = await Promise.all([
-    installWater(engine, base, setup.water),
-    loadDistricts(base, setup.districts),
-  ]);
+  // Nothing here reaches the network any more: the sea and the district table were read under the GPU
+  // (`openWorld`), and this is the engine half of the sea — a parse and one `setWater`.
+  installWater(engine, opened.water);
 
   return {
-    districts,
+    districts: opened.districts,
     extent: { centre: engineToGta(setup.center), radius: setup.radius },
     follow: (focus, view) => setup.driver.update(focus, view),
     label: setup.buildTime ?? 'unknown',

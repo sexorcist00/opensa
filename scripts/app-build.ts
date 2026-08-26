@@ -16,8 +16,15 @@ export function appBuild(cwd: string): string {
   try {
     const run = (command: string): string => execSync(command, { cwd, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
     const sha = run('git rev-parse --short HEAD').trim();
+    // `--untracked-files=no`, and the incremental cache dropped: this runs INSIDE the build, after `tsc -b`
+    // has already written whatever it writes, so a plain `git status` reports the build's own leavings as
+    // uncommitted work. The first archive stamped `67432d1+` from a tree that was clean when it was
+    // committed one command earlier — a `+` that fires on every build is a `+` that means nothing.
+    const dirty = run('git status --porcelain --untracked-files=no')
+      .split('\n')
+      .filter((line) => line.trim() !== '' && !line.endsWith('tsconfig.tsbuildinfo'));
 
-    return run('git status --porcelain').trim() === '' ? sha : `${sha}+`;
+    return dirty.length === 0 ? sha : `${sha}+`;
   } catch {
     // A tarball with no `.git`, or no git at all. `unknown` is the honest answer and is never a version
     // anyone can mistake for one.
