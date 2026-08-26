@@ -77,6 +77,20 @@ The bar is unchanged and was never about the map: **the CAD half must be as good
 map is a demo attached to a worse product.** Feature parity on the boring things — calls, statuses, roster,
 permissions, audit — is not optional, and it is the part with no technical novelty and most of the work.
 
+**And there is a shortcut for that half, found 2026-08-26 and decided with the user.** SnailyCAD publishes
+its design system as **[`@snailycad/ui`](https://github.com/SnailyCAD/snaily-cadv4)** — MIT, v1.80.2,
+tsup-built, with Storybook and Chromatic visual regression, on React Aria plus a few Radix primitives,
+Tailwind and `next` as a **peer dependency**. For the CAD half that is not a thing to fork, it is a thing to
+**depend on**: vibecode is a Next application and list-first, which is exactly the product that package was
+built for, and its combobox / date-picker / listbox work is the part with the most tedium and the least
+novelty in the whole plan.
+
+**The map half does the opposite, and deliberately.** `apps/dispatch` is Vite, Tailwind-free and ships as an
+embeddable widget with zero runtime dependencies ([201/7-09](../201-dispatch-console/7-the-operator-map/readme.md)),
+so the same package would bring `next`, Tailwind's global preflight and ~50 dependencies into something
+whose whole contract is that it cannot leak into its host. One product, two answers, because the two halves
+have opposite constraints — and the seam between them is the one in §4.
+
 ---
 
 ## 3. What we take from the open-source map engines
