@@ -21,7 +21,7 @@ import { gtaToEngine } from '../map/coords';
 import { bindGestures } from '../map/gestures';
 import { bindKeys } from '../map/keys';
 import { groundPoint, MAP_YAW, MapCamera, type MapProjection } from '../map/map-camera';
-import { SymbologyLayer, warmTextMetrics } from '../map/overlay-2d';
+import { SymbologyLayer, warmOverlaySurface, warmTextMetrics } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
 import { drawSketches, type MapTool, SketchStore } from '../map/sketch';
 import { drawTileLayer } from '../map/tile-layer';
@@ -82,8 +82,10 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
   if (!context) {
     throw new Error('overlay canvas has no 2d context');
   }
-  // Before the loop, never inside it: the first font resolution cost 1528 ms of the phone's first frame
-  // (2026-08-25). Here it overlaps the wait for the pak instead.
+  // Before the loop, never inside it — and the SURFACE first: on the phone the first `clearRect` cost 212 ms
+  // of a 333 ms first frame against 22.6 for the first glyph raster (2026-08-25). Plan mode draws onto the
+  // same overlay canvas and pays the same allocation, so it warms the same two things.
+  warmOverlaySurface(context, overlay);
   warmTextMetrics(context);
 
   const unbind = bindGestures(overlay, {

@@ -257,6 +257,25 @@ platform**, and the phone is the device this console is aimed at. Every control 
 (≥ 44 CSS px, in both axes) where the pointer is coarse and stays dense where it is a mouse — one component
 with two sizes, never two layouts ([the rule](../restrictions/cross-platform-surface.md)).
 
+## The first frame, and what it actually costs
+
+**201/4-01, measured 2026-08-25.** The console's first drawn frame was ~2 s on the phone and the whole of it
+sat in one span called `overlay-2d`. Splitting that span for its first three draws named the offender: the
+first `clearRect` — **212 ms of a 333 ms frame, 64 %** — against 22.6 ms for the symbol layer's first glyph
+raster. A 2D canvas on Android Chromium is GPU-backed, and the first drawing operation is what allocates its
+backing store, at boot, in the same GPU process that is creating the WebGPU device for the map canvas beside
+it.
+
+Both are warmed before the loop now (`warmOverlaySurface`, `warmTextMetrics`), and the resize guard stops
+the `ResizeObserver`'s first tick from throwing the warmed store away by re-assigning an unchanged
+`canvas.width`. The lesson worth keeping is the order: the first attempt warmed the FONT on the assumption
+that font resolution was the cost, and the measurement after it shipped did not support that. The split is
+what answered it.
+
+[The two capture rows](../benchmarks/index.md) carry the numbers, and the absolute value is not stable — the
+same span read 1 850 ms under a taller viewport and a colder start. The shape is: it is one-shot, it is the
+allocation, and it is paid once per session.
+
 ## The look, and where its rules live
 
 **[`apps/dispatch/DESIGN.md`](../../apps/dispatch/DESIGN.md), since 2026-08-25.** The console has a design

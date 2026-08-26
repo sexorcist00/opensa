@@ -39,7 +39,7 @@ import {
   MapCamera,
 } from '../map/map-camera';
 import { mountMinimap } from '../map/minimap';
-import { SymbologyLayer, warmTextMetrics } from '../map/overlay-2d';
+import { SymbologyLayer, warmOverlaySurface, warmTextMetrics } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
 import { drawSketches, type MapTool, type Measurement, SketchStore } from '../map/sketch';
 import { DEFAULT_TILE_SIZE } from '../map/tiles';
@@ -322,11 +322,24 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   const { canvas, overlay } = options;
   const params = dispatchParams();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  /**
+   * Only ASSIGN when the size actually moved.
+   *
+   * Writing `canvas.width` resets the backing store even when the value is identical — and the
+   * `ResizeObserver` below fires once on `observe()`, so the unguarded version threw away the store the boot
+   * had just allocated (and every warm done against it) a tick after allocating it. It also cleared both
+   * canvases on every observer tick for the rest of the session.
+   */
   const resize = (): void => {
-    canvas.width = Math.max(2, Math.floor(canvas.clientWidth * dpr));
-    canvas.height = Math.max(2, Math.floor(canvas.clientHeight * dpr));
-    overlay.width = canvas.width;
-    overlay.height = canvas.height;
+    const width = Math.max(2, Math.floor(canvas.clientWidth * dpr));
+    const height = Math.max(2, Math.floor(canvas.clientHeight * dpr));
+    if (canvas.width === width && canvas.height === height) {
+      return;
+    }
+    canvas.width = width;
+    canvas.height = height;
+    overlay.width = width;
+    overlay.height = height;
   };
   resize();
   new ResizeObserver(resize).observe(canvas);
@@ -382,8 +395,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   if (!context) {
     throw new Error('overlay canvas has no 2d context');
   }
-  // Before the loop, never inside it: the first font resolution cost 1528 ms of the phone's first frame
-  // (2026-08-25). Here it overlaps the wait for the pak instead.
+  // Before the loop, never inside it — here both overlap the wait for the pak instead of landing on the
+  // first frame. The SURFACE is the expensive one: splitting the span on 2026-08-25 put 212 ms of a 333 ms
+  // first frame inside the first `clearRect` and only 22.6 in the first glyph raster, which is why warming
+  // the font alone (the first attempt) measured no improvement.
+  warmOverlaySurface(context, overlay);
   warmTextMetrics(context);
 
   /** The symbology block of the report: what the last frame drew, plus how the beacon buffers held up. */

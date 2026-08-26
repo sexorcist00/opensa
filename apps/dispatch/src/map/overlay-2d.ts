@@ -333,6 +333,25 @@ export function css(rgba: Rgba, alpha = rgba[3]): string {
 }
 
 /**
+ * Touch the canvas's backing store before the loop does.
+ *
+ * **This is the one that mattered, and it was found by splitting the span rather than by reasoning.** The
+ * phone's first overlay draw spent **212 ms of a 333 ms frame inside the first `clearRect`** — 64 % — while
+ * the first glyph raster beside it was 22.6
+ * ([the split capture](../../../../docs/benchmarks/opensa-engine/2026-08-25-mobile-first-draw-split.json)).
+ * A 2D canvas on Android Chromium is GPU-backed, and the first drawing operation is what allocates that
+ * store and wires up its raster path — at boot, in the same GPU process that is busy creating the WebGPU
+ * device for the map canvas beside it. The same measurement under a taller viewport and a colder start read
+ * 1 850 ms, so 212 is a floor rather than the number.
+ *
+ * Call it once the canvas has its FINAL backing size. Warming it earlier allocates a store at the wrong
+ * size, which is thrown away and paid for again the moment the real one is needed.
+ */
+export function warmOverlaySurface(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+/**
  * Resolve the fonts this layer draws with, ONCE, before the first frame is timed.
  *
  * Measured on the phone 2026-08-25: the console's first drawn frame cost **1654.9 ms, of which `overlay-2d`
@@ -350,6 +369,11 @@ export function warmTextMetrics(ctx: CanvasRenderingContext2D): void {
     ctx.font = font;
     // The measure is what forces the resolution; assigning the shorthand alone can be lazy.
     ctx.measureText('0');
+    // And a DRAW, because measuring is not rasterizing: `measureText` resolves the face and its metrics and
+    // leaves the glyph atlas cold, so the first real `fillText` still paid for it. Measured on the device
+    // 2026-08-25: `overlay:symbols` cost 22.6 ms on the first frame against 0.09 ms after. Off-canvas, so
+    // nothing of this reaches a pixel anybody sees.
+    ctx.fillText('0', -50, -50);
   }
 }
 
