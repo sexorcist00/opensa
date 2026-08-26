@@ -57,26 +57,36 @@ export interface Unit {
   readonly at: GtaGround;
   readonly callsign: string;
   /**
-   * Metres above sea level, as the feed reports them (201/5-04). The map is drawn in GTA ground coordinates
-   * and everything else here is 2D, but a MODEL needs a height, and this surface has no world to ask: the
-   * pak carries no ground query and the units read no collision, by decision. So the height is part of the
-   * position CLAIM, like the rest of it — PCAD knows what z its player is at.
+   * The fix's height, GTA `pos_z` — metres, applied VERBATIM (201/5-04).
+   *
+   * It arrives with the position ([202 §4](../../../../docs/plans/202-pcad-dispatch/readme.md): PCAD
+   * publishes `pos_x, pos_y, pos_z`), and it is already correct because **the game resolved it**: the run
+   * that produced this fix had collision, so the car was standing on the road when the number was taken.
+   * This surface does not re-do that work and must never try — here a unit is a model drawn ON the map, not
+   * an object in a world (the user's own framing, 2026-08-26). Correcting a height here would move the car
+   * off the place the game says it is, which is the one thing the operator is acting on.
    *
    * A replayed fix carries the unit's last known height rather than the one it had then: the track ring
    * stores what a dispatcher reads (201/8-01), and widening a 17-byte sample for a drawing detail is a cost
    * the whole shift pays.
    */
   readonly elevation: number;
-  /** Radians, 0 = north — the chevron's rotation. */
+  /** Radians, 0 = north, CLOCKWISE — a compass bearing, and the chevron's rotation. SA measures the same
+   *  direction the other way round, so a feed's z-angle comes through `headingFromZAngle` and never raw. */
   readonly heading: number;
   readonly id: string;
   /** The incident this unit is committed to, or null when it is patrolling. */
   readonly incident: null | string;
   readonly kind: UnitKind;
   /**
-   * The model the unit CLAIMS to be driving — a bare name the built game resolves (`copcarls`, `ambulan`).
-   * `null` means the feed did not say, and the map draws the symbol alone; so does a name this build carries
-   * no `.osm` for (201/5-04). Never a slot id: a name is what a mod author writes and what the archive keys.
+   * What the unit is driving — a bare model NAME the built game resolves (`copcarls`, `ambulan`), or `null`
+   * for a unit whose vehicle is unknown, which draws the symbol alone (201/5-04).
+   *
+   * **It does not come from the position feed.** PCAD publishes a position (plus a `vehicleId` whose meaning
+   * is [202 §4](../../../../docs/plans/202-pcad-dispatch/readme.md)'s seam to settle); what a unit drives is
+   * board state, the way its callsign and status are. A name rather than an id, always: an id is a SLOT and a
+   * slot means different things in two builds (`docs/restrictions/assets-and-data.md`), so whoever resolves
+   * one does it where the build's own tables are.
    */
   readonly model: null | string;
   readonly status: UnitStatus;

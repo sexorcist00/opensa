@@ -43,10 +43,14 @@ real offsets and serve the wrong bytes.
 The console reads them over HTTP **Range** requests: the directory first (32 bytes an entry), then one entry
 when a unit claims it ([201/5-04](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md)).
 
-**What names it:** the unit's own `model` field — what the feed says the unit is driving, a bare name
-(`copcarls`, `ambulan`), matched case-insensitively, exactly as the game resolves a spawn. It is never a
-model id: an id is a slot, and a slot means different things in two builds
-([restrictions/assets-and-data](../restrictions/assets-and-data.md)).
+**What names it:** the unit's own `model` field — a bare name (`copcarls`, `ambulan`), matched
+case-insensitively, exactly as the game resolves a spawn. It is never a model id: an id is a slot, and a slot
+means different things in two builds ([restrictions/assets-and-data](../restrictions/assets-and-data.md)).
+
+**Where that name comes from is NOT the position feed.** PCAD publishes a position; what a unit drives is
+board state, like its callsign and its status
+([202 §4](../plans/202-pcad-dispatch/readme.md) owns the seam, including what its `vehicleId` field turns out
+to mean). The map takes a name and asks no further.
 
 **What must exist:** `<name>.osm` — the CONVERTED model. There is no DFF fallback anywhere in this surface
 ([build-vs-runtime](../restrictions/build-vs-runtime.md)): a build converted without `--vehicles` carries

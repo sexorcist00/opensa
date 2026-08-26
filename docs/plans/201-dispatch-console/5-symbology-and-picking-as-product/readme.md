@@ -195,16 +195,37 @@ between the two coordinate systems — and **nothing on this surface reads colli
 [1/03](../1-the-map-profile/readme.md) was blocked on: the baked collision may leave the map profile's pak,
 and the 08-09 capture's measured **zero** collision requests were not an accident of that camera.
 
-The height comes with the fix for the same reason. The map is 2D everywhere else, but a MODEL needs a Y and
-this surface has no world to ask — no ground query in the pak, and asking collision for one would undo the
-paragraph above. So `Unit.elevation` is part of the position claim, which is what PCAD actually has. The
+**Confirmed with the user 2026-08-26, and it is now a [restriction](../../../restrictions/architecture.md)
+rather than a step's decision:** the fix arrives FINISHED. The game that published it applied collision —
+that is why `pos_z` is a road height and not a hole — and on this surface *a unit is a model drawn on the
+map, not an object in a world*. The map therefore corrects nothing: no ground snap, no height grid, no
+"the car looks like it is floating" fix. The violation is worse than silent, because it presents as an
+improvement while moving every unit off the place the server reported it at — most on a bridge or a hill,
+which is where a dispatcher is least able to afford it.
+
+The height comes with the fix for the same reason it is trusted: PCAD publishes `pos_x, pos_y, pos_z`
+(202 §4), so `Unit.elevation` is one third of the position rather than a number this surface invents. The
 track ring is untouched: it stores what a dispatcher reads (17 bytes a sample, [8/01](../8-the-time-axis/readme.md)),
 so a REPLAYED fix carries the unit's last known height rather than the one it had then — stated here rather
-than discovered on a scrub.
+than discovered on a scrub, and reversible for +4 bytes a sample (+4.3 MB at 150 units over an 8 h shift) if
+a scrub through the hills ever reads badly.
+
+**Exactness is the requirement, so the pairing is tested rather than asserted.** The console must place a
+unit where the GAME places the same numbers: `engine-vehicle-handle` writes `[x, z, −y]` with the height
+verbatim, and `gtaRootMatrix` is now pinned to produce exactly that (f32, so ~1e-4 world units at Los Santos
+magnitudes — a tenth of a millimetre). The second half of the seam is the FACING: SA's z-angle is degrees
+counter-clockwise from north and this map's heading is a bearing in radians clockwise, so the feed's angle
+comes through `headingFromZAngle` and never raw — passed through unconverted it mirrors every unit about the
+north–south axis, and a car pointing at its own reflection looks entirely plausible on a top-down map.
+
+**What a unit DRIVES is not part of the position feed.** PCAD publishes a position (and a `vehicleId` whose
+meaning 202 §4 still owes); the vehicle a unit is in is board state, like its callsign and its status. So
+`Unit.model` is a NAME the board carries, and the console asks no further — an id is a slot, and a slot means
+different things in two builds.
 
 **The fallback is the step's real content, because it is the normal case rather than the error case.** A pak
 served without its game dir, a build converted without `--vehicles`, a total conversion that never had a car
-called `copcarls`, a feed that reports no model at all — each leaves the unit exactly as 5/02 drew it
+called `copcarls`, a board that does not know what a unit is in — each leaves the unit exactly as 5/02 drew it
 (chevron, chip, beacon), says so ONCE per name in the log, and never asks again. It is counted rather than
 narrated: `?inventory=1` gained `unitsAsModels`, `unitsAsSymbolOnly`, `unitsUnresolvedModels`, `modelTypes`
 and `modelTextureMb`, and the readout shows `cars 7/9 · 3 types · 12.5 MB`. **A hole where a unit should be

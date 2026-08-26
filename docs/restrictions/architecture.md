@@ -575,6 +575,46 @@ better off; taking the import would have dragged an ECS system into a surface wi
 **Caught:** no — ESLint permits it by construction. The only check is review. (The renderware half of it IS
 caught, by the `no-restricted-imports` rule above.)
 
+## A map surface draws the fix it was sent, and corrects NOTHING about it
+
+The dispatch console shows units that are players on a running server. Their positions arrive from PCAD — a
+position and a heading, published every 4 s while the unit is in a vehicle
+([202 §4](../plans/202-pcad-dispatch/readme.md)) — and they are already physically correct, because **the run
+that produced them had collision**: the game held the car on the road, which is why `pos_z` is a road height
+and not a hole. That work is done, once, where it belongs.
+
+**On this surface a unit is a model drawn ON the map, not an object in a world** (the user's framing,
+2026-08-26, and the reason 201/5-04 settles units as kinematic). The map has no physics, runs no simulation,
+and reads no collision. So a fix is applied verbatim: the position, the height and the facing are the
+server's numbers, converted between coordinate systems and nothing else.
+
+**What may not be designed here, however reasonable each one sounds:**
+
+- **snapping a unit to the ground** — a raycast, a height grid, a "the car looks like it is floating" fix;
+- **reading collision for units** — the one thing that would put the baked collision back in the map
+  profile's pak, which [201/1-03](../plans/201-dispatch-console/1-the-map-profile/readme.md) is now free of;
+- **smoothing, interpolating or extrapolating between fixes** — already ruled out for its own reasons
+  ([201/8-02](../plans/201-dispatch-console/8-the-time-axis/readme.md)); this is the same rule seen from the
+  other side;
+- **any correction at all** applied because the picture looks wrong.
+
+**What breaks when it is violated:** the map stops agreeing with the game. A dispatcher sends a unit to a
+place, and the operator's whole job is taken on the belief that what is on the map is where the server says
+the unit is. A corrected position is a *better-looking* map that answers a different question — and the
+error is largest exactly where it matters (a bridge, a multi-storey car park, a hill), because that is where
+a ground correction has the most to move.
+
+**Caught:** **no, and worse than silent** — a correction presents as an improvement (cars stop floating,
+nobody sinks) while it quietly moves every unit off the place it was reported at. The one half that IS
+pinned by a test is the pairing that makes the rule usable: `gtaRootMatrix` must place a car exactly where
+`engine-vehicle-handle` places the same GTA position (`[x, z, −y]`, height verbatim), and SA's z-angle must
+turn into this map's clockwise bearing through `headingFromZAngle` — feeding it in raw mirrors every unit's
+facing about the north–south axis and looks entirely plausible (`apps/dispatch/src/map/coords.test.ts`).
+
+**Where the picture may legitimately change:** in what is drawn AROUND the fix, never in the fix. A marker
+that widens as its fix ages (202 §4's option 2) says the truth about uncertainty; a car quietly moved onto
+the nearest road does not.
+
 ## A production surface may not stand on a `debug*` switch
 
 The dispatch console's central interaction — click a building, get the model and TXD names the pak was built

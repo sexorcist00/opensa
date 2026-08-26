@@ -14,7 +14,7 @@
  *
  * **What happens when a model is absent is the step's real content**, because it is the normal case rather
  * than the error case: a pak deployed without its game dir, a build converted without `--vehicles`, a total
- * conversion that never had a car called `copcarls`, a feed that reports no model at all. Each one leaves
+ * conversion that never had a car called `copcarls`, a board that does not know what a unit is in. Each leaves
  * the unit exactly as 5/02 drew it — chevron, chip and beacon — says so ONCE in the log, and counts itself
  * into `?inventory=1`. A hole where a unit should be is the one outcome that is not allowed.
  */

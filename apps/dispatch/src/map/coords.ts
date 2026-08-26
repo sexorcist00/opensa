@@ -27,10 +27,17 @@ export function gtaDistance(a: GtaGround, b: GtaGround): number {
  * Column-major root matrix for a MODEL standing on the map (201/5-04): translate to the engine point under
  * `at` at `elevation`, then rotate about the up axis so the model faces GTA `heading`.
  *
- * The conversion is the same one the rest of this file exists for, and it is where a car ends up facing
- * backwards: a converted model is authored GTA Z-up with **+y forward**, the engine is Y-up with `z = −y`,
- * and the yaw therefore runs the OTHER WAY round than {@link headingOf} reports it. Both are pinned by a
- * test rather than by this paragraph — north must come out as engine −z and east as engine +x.
+ * **This reproduces the GAME's own placement, and that is the requirement rather than a nicety.** The
+ * console draws a unit where the server said it is, and the operator's whole job is done on that agreement,
+ * so the translation is verified to be identical to what `engine-vehicle-handle` writes for a real car:
+ * `[x, z, −y]` from a GTA position, height verbatim. A map that places the same numbers half a metre off is
+ * a map that disagrees with the game a dispatcher is looking at.
+ *
+ * The rotation is the same matrix as the handle's, restricted to yaw — a map has no roll or pitch to draw.
+ * It is also where a car ends up facing backwards: a converted model is authored GTA Z-up with **+y
+ * forward**, the engine is Y-up with `z = −y`, and the yaw therefore runs the OTHER WAY round than
+ * {@link headingOf} reports it. Pinned by a test rather than by this paragraph — north must come out as
+ * engine −z and east as engine +x.
  */
 export function gtaRootMatrix(out: Float32Array, at: GtaGround, elevation: number, heading: number): void {
   const c = Math.cos(-heading);
@@ -41,6 +48,26 @@ export function gtaRootMatrix(out: Float32Array, at: GtaGround, elevation: numbe
 /** GTA ground point → the engine ground point under it. `height` lifts it off y = 0. */
 export function gtaToEngine(at: GtaGround, height = 0): [number, number, number] {
   return [at[0], height, -at[1]];
+}
+
+/**
+ * SA's Z-ANGLE → this app's heading. The one conversion a live feed needs, and the one that is silent when
+ * it is wrong.
+ *
+ * The game and this map measure the same direction in opposite senses. SA's z-angle (`GetVehicleZAngle`,
+ * and what PCAD publishes beside the position — [202 §4](../../../../docs/plans/202-pcad-dispatch/readme.md))
+ * is **degrees counter-clockwise from north**: 90° faces WEST. {@link headingOf} is a compass bearing,
+ * **radians clockwise from north**: 90° faces EAST. Feeding one in as the other mirrors every unit's facing
+ * about the north-south axis, which on a top-down map is not a broken picture — it is a plausible car
+ * pointing somewhere else, and nothing anywhere says so.
+ *
+ * Degrees in, because that is what every SA API answers with. Confirm the field's unit against `cadui.lua`
+ * when the socket lands; the sense is derived from the game's own matrix, not assumed.
+ */
+export function headingFromZAngle(degrees: number): number {
+  const radians = (-degrees * Math.PI) / 180;
+
+  return radians - Math.PI * 2 * Math.floor(radians / (Math.PI * 2)); // 0 ≤ heading < 2π
 }
 
 /** GTA heading (radians, 0 = +y/north) for a movement delta — what points a unit's chevron. */

@@ -68,9 +68,10 @@ const FILL_KINDS: readonly Unit['kind'][] = ['patrol', 'patrol', 'patrol', 'ambu
 
 /**
  * What each service drives on the MOCK board — stock San Andreas model names, and a demo fixture exactly
- * like the landmark table above it. On a real board this comes from the feed: PCAD knows which car its
- * player is in, and 201/5-04 draws whatever it names. A total conversion ships none of these, which is not
- * a defect to hide — it is the fallback path (symbol, and a line in the log) doing its job.
+ * like the landmark table above it. On a real board this is CAD state, not feed state: the position stream
+ * carries a position, and what a unit is driving is known the way its callsign is. A total conversion ships
+ * none of these names, which is not a defect to hide — it is the fallback path (symbol, and a line in the
+ * log) doing its job.
  */
 const DEMO_MODELS: Readonly<Record<Unit['kind'], string>> = {
   ambulance: 'ambulan',

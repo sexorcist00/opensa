@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { engineToGta, gtaDistance, gtaRootMatrix, gtaToEngine, headingOf, stepTowards } from './coords';
+import {
+  engineToGta,
+  gtaDistance,
+  gtaRootMatrix,
+  gtaToEngine,
+  headingFromZAngle,
+  headingOf,
+  stepTowards,
+} from './coords';
 
 /** The direction a model's own +y (forward) ends up pointing in engine space, under `matrix`. */
 const forwardOf = (matrix: Float32Array): [number, number, number] => [matrix[4], matrix[5], matrix[6]];
@@ -18,6 +26,13 @@ describe('coords', () => {
     it('does not mirror the map: a GTA round trip is not the identity on the raw tuple', () => {
       // The trap this file exists for — z = −y, so feeding GTA numbers straight to the engine flips the world.
       expect(gtaToEngine([100, 200])).not.toEqual([100, 200, 0]);
+    });
+
+    it("does not read SA's z-angle as a bearing: 90° is west, not east", () => {
+      // The mirrored-facing trap on the live feed. The game measures counter-clockwise, this map clockwise,
+      // so passing the field through unconverted points every unit at its reflection about north-south.
+      expect(headingFromZAngle(90)).not.toBeCloseTo(Math.PI / 2);
+      expect(headingFromZAngle(90)).toBeCloseTo((3 * Math.PI) / 2);
     });
 
     it('does not turn a model the way the heading reads: east is not engine −x', () => {
@@ -69,6 +84,27 @@ describe('coords', () => {
       const matrix = new Float32Array(16);
       gtaRootMatrix(matrix, [10, 10], 0, 1.2);
       expect([matrix[8], matrix[9], matrix[10]]).toEqual([0, 1, 0]);
+    });
+
+    it("turns SA's z-angle into a bearing, and keeps it inside one turn", () => {
+      expect(headingFromZAngle(0)).toBeCloseTo(0); // north either way
+      expect(headingFromZAngle(270)).toBeCloseTo(Math.PI / 2); // SA 270° = east
+      expect(headingFromZAngle(180)).toBeCloseTo(Math.PI); // south either way
+      expect(headingFromZAngle(-90)).toBeCloseTo(Math.PI / 2);
+      expect(headingFromZAngle(450)).toBeCloseTo((3 * Math.PI) / 2);
+    });
+
+    it("places a car exactly where the game's own vehicle handle places it", () => {
+      // `engine-vehicle-handle` writes `[x, z, −y]` from a GTA position and takes the height verbatim. The
+      // map must agree with the game a dispatcher is looking at, so this is the pairing rather than a taste.
+      const matrix = new Float32Array(16);
+      const position: [number, number, number] = [1481.3, -1770.6, 18.79];
+      gtaRootMatrix(matrix, [position[0], position[1]], position[2], 0);
+      // The matrix is f32, so the fix survives to ~1e-4 world units at Los Santos magnitudes — a tenth of a
+      // millimetre, which is the precision floor of the whole path from the packet to the pixel.
+      expect(matrix[12]).toBeCloseTo(position[0], 3);
+      expect(matrix[13]).toBeCloseTo(position[2], 3);
+      expect(matrix[14]).toBeCloseTo(-position[1], 3);
     });
 
     it('steps exactly the requested distance along the line', () => {

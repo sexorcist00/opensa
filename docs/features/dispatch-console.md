@@ -602,6 +602,12 @@ the game resolves a spawn — `<model>.osm` **by name**, out of `models/vehicles
 the pak, over HTTP Range requests, directory first and one entry per type. One upload serves every unit
 driving that type, so a 150-car shift of six kinds is six models.
 
+**The fix is drawn exactly as it arrived.** The position, the height and the facing are the server's own
+numbers — the run that published them had collision, so the car was on the road when they were taken, and
+this surface adds nothing to that: no ground snap, no smoothing, no re-simulation. A unit here is a model
+drawn on the map rather than an object in a world. The placement is pinned to the game's own (`[x, z, −y]`,
+height verbatim) by a test, because the operator's job is done on the belief that the map and the game agree.
+
 **Everything about it degrades to the symbol.** No game dir (a pak deployed alone, or `?demo=1`), a build
 converted without `--vehicles`, a total conversion that never had a car called `copcarls`, a feed that names
 no model: the unit is drawn exactly as it was before models existed, the console says so once per name in the
@@ -623,7 +629,7 @@ Each now names the step that owns it, so none of them is an open-ended note.
   replaces that one module and nothing else. → deferred, contract first:
   [roadmap 0.6.0](../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md).
 - ~~**No unit models.**~~ **CARS LANDED 2026-08-26; peds still keep their symbol.** A unit is drawn as the
-  model its feed says it is driving, with the chevron and chip still on top of it (they carry the callsign
+  model the board says it is driving, with the chevron and chip still on top of it (they carry the callsign
   and the status, and they are what an operator picks out at city zoom). The models come from the built
   game's own archives BY NAME over Range requests — the pak carries nothing about a vehicle, by decision —
   and every way that can fail ends at the symbol the unit already had, once per name in the log and counted

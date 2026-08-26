@@ -171,6 +171,23 @@ what arrived, never extrapolate past it.
 **On foot, a unit has no position at all.** The map must show that state honestly — last known, aging — and
 not a dot parked at the car the unit left. This is a PCAD gap, not a map gap, and it is listed as such below.
 
+**The fix arrives finished, and the map adds nothing to it** (settled with the user 2026-08-26). The run that
+published it had collision — the game held the car on the road, which is why `pos_z` is a road height rather
+than a hole — so the console applies the position, the height and the facing verbatim. On the map a unit is a
+**model drawn on the world, not an object in it**: no physics, no ground snap, no re-simulation, which is
+what [201/5-04](../201-dispatch-console/5-symbology-and-picking-as-product/readme.md) settles as kinematic and
+what frees [201/1-03](../201-dispatch-console/1-the-map-profile/readme.md) of the baked collision. It is a
+[restriction](../../restrictions/architecture.md) now, because the violation looks like an improvement.
+
+**Two conversions the wiring owes, and both are silent when wrong.** The map's placement is verified against
+the game's own (`[x, z, −y]`, height verbatim — `apps/dispatch/src/map/coords.test.ts`), so the remaining risk
+is at the seam: **the heading is SA's z-angle, degrees counter-clockwise, and this map's is a bearing in
+radians clockwise** — passed through raw it mirrors every unit's facing about the north–south axis, which
+reads as a plausible car going somewhere else (`headingFromZAngle` exists for exactly this, and is the only
+way in). And the `vehicleId` field: a slot id means different things in two builds
+([assets-and-data](../../restrictions/assets-and-data.md)), so **what a unit drives reaches the map as a model
+NAME** — resolved wherever the build's own tables are, never guessed by the console.
+
 **Positions are claims, not facts.** They are self-reported by an authenticated client. The backend already
 attributes them to a JWT identity behind a Discord role gate; what it does not do is sanity-check them
 against plausible speed. A map that draws whatever it is sent is a map that can be lied to.
