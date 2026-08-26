@@ -797,7 +797,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       const pose = camera.pose();
 
       return inventory.report({
-        boot: { gpuMs },
+        boot: { gpuMs, phases: engine.bootPhases.byName },
         build: world.label,
         byCategory: engine.ledger(),
         bytes: {

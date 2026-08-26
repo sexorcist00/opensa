@@ -10,7 +10,7 @@
  * compressed as prod did) stays selectable for A/B while the day-sky verdict is out. timecyc `skyTop`
  * stays the colourist via the mood tint in both models.
  */
-import { cookHosekWilkie, hosekWilkieRadiance } from './hosek-wilkie';
+import { cookHosekWilkie, hosekWilkieRadianceFromCos } from './hosek-wilkie';
 
 export interface SkyLutInput {
   /** Cloud cover 0 (clear) → 1 (overcast) — drives haze AND hands the sky back to the authored gradient
@@ -79,6 +79,9 @@ export function buildSkyLut(input: SkyLutInput): Uint16Array {
     const y = elevation;
     const xz = Math.sqrt(Math.max(0.0001, 1 - y * y));
     const zenith = Math.acos(Math.min(1, Math.max(0, y)));
+    // `cos(zenith)` by construction — the row's own clamped elevation. The radiance form below takes it
+    // directly rather than making every channel undo the `acos` with a `cos` (201/4-03).
+    const cosZenith = Math.min(1, Math.max(0, y));
     const denom = Math.cos(zenith) + 0.15 * (93.885 - (zenith * 180) / Math.PI) ** -1.253;
     const sR = 8400 / Math.max(1, denom);
     const sM = 1250 / Math.max(1, denom);
@@ -86,7 +89,8 @@ export function buildSkyLut(input: SkyLutInput): Uint16Array {
       // Azimuthal angle between the view and the sun (the dome is symmetric around the sun's azimuth).
       const azimuth = (col / (SKY_LUT_WIDTH - 1)) * Math.PI;
       const cosTheta = xz * Math.cos(azimuth) * sunXz + y * sunY;
-      const gamma = Math.acos(Math.min(1, Math.max(-1, cosTheta)));
+      const cosGamma = Math.min(1, Math.max(-1, cosTheta));
+      const gamma = Math.acos(cosGamma);
       const gradientT = clamp01(Math.max(0, elevation)) ** 0.55;
       for (let channel = 0; channel < 3; channel += 1) {
         let dome: number;
@@ -94,7 +98,10 @@ export function buildSkyLut(input: SkyLutInput): Uint16Array {
           // LINEAR HDR — ACES is the compressor; a Reinhard pre-squash here is exactly what flattened
           // the Preetham day into a fill (double compression).
           dome =
-            hosekWilkieRadiance(hosek[channel], zenith, gamma) * HW_RADIANCE_SCALE * input.exposure * tint[channel];
+            hosekWilkieRadianceFromCos(hosek[channel], cosZenith, cosGamma, gamma) *
+            HW_RADIANCE_SCALE *
+            input.exposure *
+            tint[channel];
         } else {
           const rPhase = 0.0596831 * (1 + cosTheta * cosTheta);
           const mPhase = (0.0795775 * (1 - g2)) / (1 - 2 * g * cosTheta + g2) ** 1.5;
@@ -114,7 +121,7 @@ export function buildSkyLut(input: SkyLutInput): Uint16Array {
         const gradientW = Math.max(clamp01(input.pbrNight), clamp01(input.cloudCover) * 0.85);
         out[at + channel] = f32ToF16(dome + (gradient - dome) * gradientW);
       }
-      out[at + 3] = f32ToF16(1);
+      out[at + 3] = F16_ONE;
       at += 4;
     }
   }
@@ -143,12 +150,17 @@ export function skyLutKey(input: SkyLutInput): string {
   ].join(',');
 }
 
+/** The one scratch pair the conversion below reinterprets through. It is module-level because this runs
+ *  four times per texel — 18 432 calls per build — and a `new Float32Array(1)` per call was measured as
+ *  most of the cost (201/4-03: 13.3 → 1.9 ms in node, and 75.8 ms of the phone's first frame). */
+const F16_ONE = 0x3c00; // f32ToF16(1), which the alpha channel writes 4 608 times per build
+const F32_SCRATCH = new Float32Array(1);
+const U32_SCRATCH = new Uint32Array(F32_SCRATCH.buffer);
+
 function f32ToF16(value: number): number {
   // Round-to-nearest float32 → float16 (positive-range inputs; HW texels are linear HDR, may exceed 1).
-  const f32 = new Float32Array(1);
-  const u32 = new Uint32Array(f32.buffer);
-  f32[0] = value;
-  const x = u32[0];
+  F32_SCRATCH[0] = value;
+  const x = U32_SCRATCH[0];
   const sign = (x >> 16) & 0x8000;
   const exponent = ((x >> 23) & 0xff) - 127 + 15;
   const mantissa = x & 0x7fffff;

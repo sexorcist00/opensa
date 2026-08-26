@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cookHosekWilkie, hosekWilkieRadiance } from './hosek-wilkie';
+import { cookHosekWilkie, hosekWilkieRadiance, hosekWilkieRadianceFromCos } from './hosek-wilkie';
 
 const ZENITH = 0;
 const HORIZON = Math.PI / 2 - 0.01;
@@ -44,6 +44,22 @@ describe('cookHosekWilkie / hosekWilkieRadiance', () => {
       const red = hosekWilkieRadiance(r, HORIZON, 0.03);
       const blue = hosekWilkieRadiance(b, HORIZON, 0.03);
       expect(red).toBeGreaterThan(blue * 3);
+    });
+
+    it('gives the same radiance from the cosines as from the angles — the LUT takes the cheap form', () => {
+      const channels = cookHosekWilkie(3, 0.15, Math.PI / 4);
+      for (const channel of channels) {
+        for (const [theta, gamma] of [
+          [0, 0],
+          [Math.PI / 4, 0.05],
+          [Math.PI / 3, Math.PI / 2],
+          [Math.PI / 2, Math.PI],
+        ]) {
+          const fromAngles = hosekWilkieRadiance(channel, theta, gamma);
+          const fromCos = hosekWilkieRadianceFromCos(channel, Math.max(0, Math.cos(theta)), Math.cos(gamma), gamma);
+          expect(fromCos).toBe(fromAngles);
+        }
+      }
     });
 
     it('brightens the circumsolar region over the anti-solar sky', () => {

@@ -349,6 +349,22 @@ is exactly what its own second rule warns about. This one is the engine's own, r
 The order here is the 08-25 lesson applied rather than restated: the overlay's cost was found by splitting a
 span, after a confident guess about font resolution had already shipped and measured wrong.
 
+**And it answered in one capture. `frame:sky-lut` was 75.8 ms of the 77.9** — 0 on the second frame and 0.1
+on the third, so a one-shot CPU cost and not a per-frame one
+([the row](../benchmarks/opensa-engine/2026-08-26-mobile-boot-split.json)). The cause was not the
+atmosphere maths: `f32ToF16` allocated **a new `Float32Array(1)` and a `Uint32Array` view on every call**,
+and the 96×48 LUT calls it 18 432 times per build. The pair is module-level now and the alpha channel's
+constant is precomputed — **13.29 → 4.05 ms per build in node, 3.3×, output bit-identical**.
+
+That matters beyond the boot, which is why it is worth the paragraph: **the LUT rebuilds whenever the hour
+or the weather moves**, so this was a ~76 ms main-thread hitch on every one of them — on the device the
+time axis (chain 8) scrubs across.
+
+The other number that capture produced has no owner yet: **`engine.init` measured 2 607.5 ms**, larger than
+everything else in the boot put together. It is split by phase now (`init:device`, `init:canvas`,
+`init:pipelines`, `init:resources`, `init:sky-lut`, `init:targets`, in `boot.phases`) for exactly the
+reason above — a number that big with no breakdown is the next confident wrong guess waiting to be made.
+
 ## The second open, and why it is cheap
 
 **Since 2026-08-26.** The opening view of a district pulls tens of megabytes out of the pak — the 08-25

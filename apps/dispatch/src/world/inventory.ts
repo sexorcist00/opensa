@@ -75,9 +75,9 @@ export interface InventoryPass {
 }
 
 export interface InventoryReport {
-  /** What the BOOT cost, before a frame existed. `gpuMs` is `engine.init` — the device plus every pipeline
-   *  compile (201/4-03). */
-  readonly boot: { readonly gpuMs: number };
+  /** What the BOOT cost, before a frame existed. `gpuMs` is `engine.init` end to end; `phases` is its own
+   *  split — device / canvas / pipelines / resources / sky-lut / targets (201/4-03). */
+  readonly boot: { readonly gpuMs: number; readonly phases: readonly (readonly [string, number])[] };
   readonly build: string;
   /** What this surface actually READ out of the pak, by entry kind — wire bytes and request counts, live
    *  since boot rather than over the sampled window. The build's `report.json` says what the pak CONTAINS;
@@ -342,8 +342,8 @@ export class FrameInventory {
   };
 
   report(context: {
-    /** `performance.now()` around `engine.init` — the device and the pipeline compile. */
-    boot: { gpuMs: number };
+    /** `performance.now()` around `engine.init`, plus the engine's own phase split of it. */
+    boot: { gpuMs: number; phases: readonly (readonly [string, number])[] };
     build: string;
     /** `engine.ledger()` — resident bytes and counts per category. */
     byCategory: Readonly<Record<string, { bytes: number; count: number }>>;

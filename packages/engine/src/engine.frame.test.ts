@@ -197,6 +197,16 @@ describe('Engine frame decisions', () => {
       expect(post).toBeGreaterThan(world); // post composites the world, never before it
     });
 
+    it('splits its BOOT by phase, so a 2.6 s init has a breakdown rather than a total (201/4-03)', async () => {
+      const engine = await bootedEngine();
+
+      const named = engine.bootPhases.byName.map(([name]) => name);
+
+      expect(named).toEqual(
+        expect.arrayContaining(['init:device', 'init:canvas', 'init:pipelines', 'init:sky-lut', 'init:targets']),
+      );
+    });
+
     it('splits its FIRST frames by phase and then stops paying for the split (201/4-03)', async () => {
       const engine = await bootedEngine();
       engine.cells.load('0,0', cellBytes());

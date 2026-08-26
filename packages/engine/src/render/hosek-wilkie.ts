@@ -35,9 +35,28 @@ export function cookHosekWilkie(turbidity: number, albedo: number, solarElevatio
  * channel's expected radiance. Reference `ArHosekSkyModel_GetRadianceInternal`.
  */
 export function hosekWilkieRadiance(channel: HwChannel, theta: number, gamma: number): number {
+  return hosekWilkieRadianceFromCos(channel, Math.max(0, Math.cos(theta)), Math.cos(gamma), gamma);
+}
+
+/**
+ * The same distribution for a caller that ALREADY HAS the cosines.
+ *
+ * The LUT builder does: it derives both angles with `acos` from cosines it computed, and the form above
+ * immediately undoes that with `cos` — three times per texel, once per channel, for 4 608 texels
+ * (201/4-03). `gamma` itself is still needed: `exp(p[4] * gamma)` is a function of the ANGLE, and its
+ * coefficient is per-channel, so that one cannot be hoisted.
+ *
+ * @param cosTheta `max(0, cos(theta))` — the caller applies the same clamp the angle form does
+ * @param cosGamma `cos(gamma)`
+ * @param gamma the view-sun angle in radians
+ */
+export function hosekWilkieRadianceFromCos(
+  channel: HwChannel,
+  cosTheta: number,
+  cosGamma: number,
+  gamma: number,
+): number {
   const p = channel.params;
-  const cosGamma = Math.cos(gamma);
-  const cosTheta = Math.max(0, Math.cos(theta));
   const expM = Math.exp(p[4] * gamma);
   const rayM = cosGamma * cosGamma;
   const mieM = (1 + rayM) / (1 + p[8] * p[8] - 2 * p[8] * cosGamma) ** 1.5;

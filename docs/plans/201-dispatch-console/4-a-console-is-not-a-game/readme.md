@@ -93,10 +93,14 @@ Three pieces, chosen with the user 2026-08-26 — progress only, no flat map and
   first three frames are split by phase (`firstFrames` in the capture) and the number gets an owner before
   anything else is aimed at it.
 
-**Owes, all three on the device and all three from the same capture on the pinned district:** the shell
-under a real boot rather than a harness; a repeat open, for `bytes.cachedBytes` against `bytes.totalBytes`;
-and `boot.gpuMs` + `firstFrames` — the first says what the async compile bought, the second says who owns
-the 77.9 ms.
+**Measured 2026-08-26** ([the capture](../../../benchmarks/opensa-engine/2026-08-26-mobile-boot-split.json)):
+the shell ran a real boot; the cache answered **10.67 MB of 32.68 over 59 of 88 requests**; and the split
+named the 77.9 ms in one go — **`frame:sky-lut` 75.8**, fixed at 3.3x
+([the bench](../../../benchmarks/opensa-engine/2026-08-26-sky-lut-build.json)).
+
+**Still owed:** the device number for the sky-LUT fix; a repeat open that reaches no further than the one
+that filled the cache, since this one missed on the texture arrays; and a breakdown of **`boot.gpuMs`
+2 607.5** — now the largest single item in the boot, split by phase but not yet captured.
 
 ## Verification
 

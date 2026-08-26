@@ -706,13 +706,6 @@ export class Engine {
   get adapterInfo(): string {
     return this.engineDevice.adapterInfo;
   }
-  get device(): GPUDevice {
-    return this.engineDevice.device;
-  }
-  /** The `device` block a mobile benchmark row is required to carry — see `describeDevice`. */
-  get deviceReport(): ReturnType<typeof describeDevice> {
-    return describeDevice(this.engineDevice, this.canvasElement);
-  }
   /**
    * What the FIRST frames spent themselves on, by name (201/4-03).
    *
@@ -725,6 +718,17 @@ export class Engine {
    * from the loop body to print `unattributed` — a span from inside the frame would drive that negative,
    * which is the exact failure its own rule warns about. This one is the engine's, read once by the host.
    */
+  /** What `init` spent itself on, by phase — filled once, when `init` returns (201/4-03). */
+  get bootPhases(): FrameSpanTotals {
+    return this.bootTotals;
+  }
+  get device(): GPUDevice {
+    return this.engineDevice.device;
+  }
+  /** The `device` block a mobile benchmark row is required to carry — see `describeDevice`. */
+  get deviceReport(): ReturnType<typeof describeDevice> {
+    return describeDevice(this.engineDevice, this.canvasElement);
+  }
   get firstFrames(): readonly FrameSpanTotals[] {
     return this.firstFrameTotals;
   }
@@ -749,17 +753,19 @@ export class Engine {
   private readonly bloomPrefilterScratch = new Float32Array(8);
   /** Prefilter params (threshold animates with the night profile) — written every bloom frame. */
   private bloomPrefilterUniform!: GPUBuffer;
+  private readonly bootSpans = new FrameSpans();
+  private bootTotals: FrameSpanTotals = { byName: [], totalMs: 0 };
   private canvasContext!: GPUCanvasContext;
   /** Kept for `deviceReport` — a capture states the CSS size it was taken at. */
   private canvasElement!: HTMLCanvasElement;
   private cloudFieldBindGroup!: GPUBindGroup;
   private cloudFieldTexture!: GPUTexture;
   private cloudFieldView!: GPUTextureView;
+
   /** Breakable clutter instances (074/20): key hash → the matrix slot to degenerate on a hit. */
   private readonly clutterBreakables = new Map<number, { matrixBuffer: GPUBuffer; offset: number }>();
   /** Per streamed cell → its clutter draws (one per model). Replaced/removed as cells stream. */
   private readonly clutterCells = new Map<string, ClutterCellDraw[]>();
-
   /** Procedural-clutter models (074/19 B7·d) — shared grass/bush/rock geometry + texture, drawn instanced. */
   private readonly clutterModels = new Map<ClutterModelId, ClutterModel>();
   private clutterModelSeq = 0;
@@ -1467,14 +1473,26 @@ export class Engine {
    * from the DATA, not from a constant, so a higher-resolution moon drops straight in.
    */
   async init(canvas: HTMLCanvasElement, coronaSprites?: CoronaSprites): Promise<void> {
+    // Boot is split the way the first frames are (201/4-03), and for the same reason: the phone measured
+    // `engine.init` at 2 607.5 ms on 2026-08-26 — larger than everything else in the boot put together —
+    // and a number that big with no breakdown is the next confident wrong guess waiting to be made.
+    const bootStarted = performance.now();
+    const bootPhase = (name: string, from: number): number => {
+      this.bootSpans.add(name, performance.now() - from);
+
+      return performance.now();
+    };
     this.engineDevice = await initDevice();
+    let at = bootPhase('init:device', bootStarted);
     this.canvasElement = canvas;
     this.canvasContext = configureCanvas(canvas, this.engineDevice);
     this.resources = new Resources(this.device);
     this.timers = new GpuTimers(this.device, this.engineDevice.hasTimestamps);
+    at = bootPhase('init:canvas', at);
     // Scene pipelines target the 16-float offscreen (godrays bright-pass needs the HDR overshoot); only
     // the post pipeline writes the sRGB swapchain.
     this.pipelines = await compileAll(this.device, SCENE_FORMAT, DEPTH_FORMAT, this.engineDevice.colorFormat);
+    at = bootPhase('init:pipelines', at);
     // Scene env probe (074/16 step 2) — fixed-size, allocated once, BEFORE any vehicle model binds its cube.
     this.probe = new EnvProbe(this.device, this.resources, this.pipelines);
     // License-plate arrays (plan 082/03), allocated here for the same reason as the probe: their views go
@@ -1573,7 +1591,9 @@ export class Engine {
       label: 'frame',
       layout: this.pipelines.frameLayout,
     });
+    at = bootPhase('init:resources', at);
     this.refreshSkyLut();
+    at = bootPhase('init:sky-lut', at);
     this.textures = new TextureArrays(this.device, this.resources, this.pipelines.materialLayout);
     // Corona pass buffers (074/06 row 13): a unit quad + a per-frame instance buffer (CPU-filled, tiny).
     this.coronaQuad = this.resources.createBuffer('cellVertex', {
@@ -1616,6 +1636,8 @@ export class Engine {
       textures: this.textures,
     });
     this.ensureTargets(canvas.width, canvas.height);
+    bootPhase('init:targets', at);
+    this.bootTotals = this.bootSpans.drain();
   }
 
   /**
