@@ -161,7 +161,14 @@ if (differences.length > 0) {
   process.exit(1);
 }
 
+// `textures` and `models` are on this line because they are the two the operator cannot see any other way
+// and the two that silently make a reused pak the wrong one. 2026-08-25: a run that believed it was serving
+// an rgba8 build reused an ASTC pak from a fortnight earlier, and this line — which named the game, the rect
+// and the collision side — said "matches the request" without ever printing the format. It matched, correctly;
+// it just did not say what it matched AS, and the texture budget that would have shown it prints further up
+// where a long convert's output has already scrolled it away.
 console.log(
   `pak matches the request — ${build.game ?? '?'} · rect ${actual.get('rect')} · ` +
+    `textures=${actual.get('textures')} · models=${actual.get('models')} · ` +
     `bake-collision=${actual.get('bakeCollision')} · built ${build.at ?? '?'}${build.commit ? ` · ${build.commit}` : ''}`,
 );
