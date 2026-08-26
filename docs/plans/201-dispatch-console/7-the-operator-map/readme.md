@@ -382,6 +382,66 @@ way this step exists to stop. Pointer Events cover mouse, pen and touch in one h
 **Owes:** the phone verdict on the two touch targets that only exist here — the title bar as a drag handle
 and the 44-px corner grip — which cannot be checked from a desk.
 
+### 09 — Skins
+
+**Four operator-selectable themes, and a guard that makes them cheaper than SonoranCAD's four.** Asked for
+by the user 2026-08-26 ("разные стили как у SonoranCAD").
+
+**What SonoranCAD does, and what it costs them.** Four hand-written skins over one fixed screen — `modern`,
+`spillboy`, `trevor`, `mike19`, captured 2026-08-26. The idea is right: the console belongs to the operator
+and a server owner wants it to be theirs. The execution is four times the surface on which contrast can
+break, with nothing checking it, and it has broken: `trevor` fills a whole row with the status colour and
+lands grey text on a mid-blue fill, so the row that matters most is the one that stops being readable.
+
+**A theme here is DATA, not a fork.** It carries the neutral ramp, the accent, the two semantic surfaces,
+the shadows, a font stack and one density lever — nothing else. Every value is emitted as a CSS custom
+property under `[data-theme='…']`, so switching a skin is **one attribute on the app root**: no re-render, no
+new style objects, no reconciliation. That is why colour left the TypeScript table, and it is what makes
+four skins cost about as much as one.
+
+**What a theme may not touch**, and each has a reason rather than a preference:
+
+| Off limits | Why |
+| --- | --- |
+| `map/beacons.ts` → `SET_COLORS` | the engine draws pillars from it, and the lists, radar, labels and header tallies read the same table so a chip cannot drift from a pin. A theme that repainted statuses would break the one agreement that table exists to keep |
+| `TOUCH_TARGET` | 44 px is WCAG 2.5.5 / HIG / Material, not taste |
+| the layout and the dock | SonoranCAD moves its dock between skins (top in `spillboy`, bottom in `modern`), which breaks muscle memory on a theme change |
+
+**The guard is the point of the step.** `theme.test.ts` runs every preset through **APCA** — the measure
+DESIGN.md already declares, because WCAG 2.x is symmetric and gets the light-on-dark polarity wrong — and
+fails the build under **Lc 90 for primary text, Lc 60 for secondary**, across all five surfaces each is set
+on, plus the accent and danger pairs.
+
+**And it immediately found a defect in the SHIPPED theme.** Night's secondary text (`#8fa1b6`) measured
+**Lc 47–50** against the Lc 60 DESIGN.md had claimed since 2026-08-25 — the target was written down and
+never measured. Corrected to `#a8bbd0` (Lc 61 on the worst surface it sits on). Three more were corrected
+the same way: the danger readout in Night (Lc 38 → 61), in Contrast (49 → 64) and in Amber (50 → 65), and
+Day's selected row could not reach Lc 90 for primary text until step 5 was lightened.
+
+A second guard reads the components themselves for raw hex, because a colour written into a component has
+opted out of the theme — it renders, it lints, and it stays dark-blue-on-white the moment Day is chosen.
+Two were found in this change (`#0e3a52` on the region badge, `#7d8ea1` on a hint line).
+
+**The four:**
+
+| Skin | For | Not cosmetic because |
+| --- | --- | --- |
+| **Night** (default) | the shift | the palette the console shipped with, now measured |
+| **Day** | a phone outdoors | the one condition a dark console genuinely cannot serve. Built in its own direction rather than inverted — in the dark each layer is one step lighter, in the light one step darker, and inverting breaks Carbon's rule |
+| **Contrast** | a bad screen, bright sun, tired eyes | pure black ground, pure white text, mid steps pushed apart so a border is visible rather than implied |
+| **Amber** | the identity slot | warm near-black, monospace chrome, rows two pixels tighter — the same lever `mike19` pulls |
+
+**Deliberately NOT shipped: a colour-vision-safe STATUS palette.** Unit and call colours are red / amber /
+green, the worst triple for deuteranopia (~8 % of men). It is wanted and it is not a theme: those colours
+are the engine's, built into a debug-line set per key at boot, so repainting them means rebuilding those
+sets rather than writing a variable. It needs an engine hook, it belongs with the symbology
+([5](../5-symbology-and-picking-as-product/readme.md)), and it has to swap the whole table at once so the
+map and the lists move together. Filed rather than half-done.
+
+**Owes:** the phone verdict on the switcher (a native `<select>`, which opens the OS picker), and a reading
+of Day against real daylight on a real screen — the condition it exists for is the one a desk cannot
+reproduce.
+
 ## The design rule for all of it
 
 Layout, colour, density and state tiles go through the design skills — `artifact-design` and `dataviz` —

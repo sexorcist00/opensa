@@ -1,6 +1,6 @@
 /**
- * The console's per-operator storage: saved views (201/7-03), rebound keys (201/7-06) and where the operator
- * dragged their panels (201/7-08).
+ * The console's per-operator storage: saved views (201/7-03), rebound keys (201/7-06), where the operator
+ * dragged their panels and which skin they chose (201/7-08).
  *
  * One module rather than two copies of the same five lines, because the awkward half is identical for both
  * and getting it wrong is not a data bug: **touching `localStorage` THROWS** in private-mode Safari, in a
@@ -17,6 +17,7 @@
 export const STORAGE_KEYS = {
   bookmarks: 'opensa.dispatch.bookmarks',
   keymap: 'opensa.dispatch.keymap',
+  theme: 'opensa.dispatch.theme',
   windows: 'opensa.dispatch.windows',
 } as const;
 

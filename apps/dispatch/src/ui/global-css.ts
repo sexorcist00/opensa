@@ -22,18 +22,32 @@
  * on the app root, so these rules cannot reach past it.
  */
 import { ACCENT, RAMP } from './styles';
+import { DEFAULT_THEME, THEMES, themeVariables } from './theme';
 
 /** The attribute every rule below is scoped under, and the app root carries. */
 export const DISPATCH_SCOPE = 'data-opensa-dispatch';
 
 const ID = 'opensa-dispatch-css';
 
+/**
+ * Every skin's variables, one attribute-scoped block each — which is what makes switching a skin free.
+ *
+ * The token table (`styles.ts`) holds `var(--os-…)` rather than colours, so changing `data-theme` on the app
+ * root repaints the whole console with **no React work at all**: no re-render, no new style objects, no
+ * reconciliation. That is the reason colour left TypeScript, and it is why four skins cost about as much as
+ * one. `color-scheme` rides along per theme, so the browser paints the parts we do not draw — scrollbar
+ * gutters, form control internals, the range track — the right way round for the ground underneath.
+ *
+ * The unqualified block comes first and carries the default, so a root that has lost its attribute renders
+ * the shipping theme rather than an unstyled console.
+ */
+const THEME_CSS = [
+  `[${DISPATCH_SCOPE}] {\n${themeVariables(THEMES.find((theme) => theme.id === DEFAULT_THEME) ?? THEMES[0])}\n}`,
+  ...THEMES.map((theme) => `[${DISPATCH_SCOPE}][data-theme='${theme.id}'] {\n${themeVariables(theme)}\n}`),
+].join('\n');
+
 const CSS = `
-[${DISPATCH_SCOPE}] {
-  /* Tells the UA to render its own parts — scrollbar gutters, form control internals, the range track we do
-     not restyle — for a dark surface, instead of drawing light chrome onto one. */
-  color-scheme: dark;
-}
+${THEME_CSS}
 [${DISPATCH_SCOPE}] button,
 [${DISPATCH_SCOPE}] input,
 [${DISPATCH_SCOPE}] select,

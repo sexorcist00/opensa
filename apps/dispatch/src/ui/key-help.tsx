@@ -11,7 +11,7 @@ import { type ReactElement, useState } from 'react';
 import type { KeyBindings, MapCommand } from '../map/keymap';
 
 import { COMMAND_ORDER, keyOf, rebind, resetBindings } from '../map/keymap';
-import { styles } from './styles';
+import { RAMP, styles } from './styles';
 
 export function KeyHelp({
   bindings,
@@ -42,7 +42,7 @@ export function KeyHelp({
     <div style={styles.keyHelp}>
       <div style={styles.keyHelpHead}>
         <strong>Keys</strong>
-        <span style={{ color: '#7d8ea1' }}>click a row, then press a key</span>
+        <span style={{ color: RAMP.textMuted }}>click a row, then press a key</span>
         <button onClick={onClose} style={styles.button} type="button">
           Close
         </button>

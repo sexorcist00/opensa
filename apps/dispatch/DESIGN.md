@@ -73,6 +73,36 @@ dependencies, in something that ships as an embeddable widget with none, and the
 afterthought on a console whose primary device is a phone. Pointer Events cover mouse, pen and touch in one
 handler; the geometry is `src/ui/window-frame.ts` and the gesture is `src/ui/panel-window.tsx`.
 
+## Skins
+
+**Four themes, and a theme is DATA rather than a fork** (201/7-09, 2026-08-26). `src/ui/theme.ts` holds
+them; `src/ui/styles.ts` holds `var(--os-…)` rather than colours, so switching a skin is one attribute on
+the app root and **nothing in React re-renders**.
+
+| Skin                | For                                | Character                                                                                                                                               |
+| ------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Night** (default) | the shift                          | cool slate, hue ~213, the palette everything else is measured against                                                                                   |
+| **Day**             | a phone outdoors                   | built in its own direction, not inverted — in the dark each layer is one step LIGHTER, in the light one step DARKER, and inverting breaks Carbon's rule |
+| **Contrast**        | bad screen, bright sun, tired eyes | pure black ground, pure white text, mid steps pushed apart                                                                                              |
+| **Amber**           | the identity slot                  | warm near-black, monospace chrome, rows two pixels tighter                                                                                              |
+
+**A theme may change** the ramp, the accent, the two semantic surfaces, the shadows, the font stacks and
+row padding. **A theme may never change** `SET_COLORS` (the engine's own draw colours — a chip would drift
+from its pin), `TOUCH_TARGET`, or the layout and the position of controls. SonoranCAD moves its dock between
+skins; that breaks muscle memory on a theme change, and we do not copy it.
+
+**Contrast is measured, not asserted.** `theme.test.ts` runs every preset through APCA and fails the build
+under **Lc 90 primary / Lc 60 secondary**, over all five surfaces each colour is set on. This is what makes
+four skins cost less risk than SonoranCAD's four, whose `trevor` lands grey text on a mid-blue row fill.
+
+**It found a defect in this document.** The neutral-ramp table below claimed Lc 60 for step 11 from
+2026-08-25; the shipped value measured **Lc 47–50**. The target was written down and never checked. Step 11
+is `#a8bbd0` now, and three danger readouts moved for the same reason.
+
+**A colour-vision-safe STATUS palette is not a skin and is not shipped.** Red / amber / green is the worst
+triple for deuteranopia, and fixing it means rebuilding the engine's debug-line sets rather than writing a
+variable — it needs a hook in 201/5.
+
 ## Aesthetic direction
 
 **Instrument panel.** The map is the subject and holds all the saturation; the chrome is achromatic and gets
@@ -96,18 +126,18 @@ nobody needs.
 
 Cool slate, hue ≈ 213°, built dark-first with Radix's step roles.
 
-| Step | Value     | Role                                                       |
-| ---- | --------- | ---------------------------------------------------------- |
-| 1    | `#070a0f` | the world — app background, and what the map is drawn onto |
-| 2    | `#0b111a` | docked surfaces — the side panels, the three bars          |
-| 3    | `#111a26` | components — rows, floating clusters, inputs               |
-| 4    | `#16202e` | hover                                                      |
-| 5    | `#1b2736` | active / selected                                          |
-| 6    | `#222f40` | separators inside a surface                                |
-| 7    | `#2b3a4d` | borders on interactive components                          |
-| 8    | `#3a4d64` | strong border, and the focus ring                          |
-| 11   | `#8fa1b6` | secondary text                                             |
-| 12   | `#e8eff7` | primary text                                               |
+| Step | Value     | Role                                                                                            |
+| ---- | --------- | ----------------------------------------------------------------------------------------------- |
+| 1    | `#070a0f` | the world — app background, and what the map is drawn onto                                      |
+| 2    | `#0b111a` | docked surfaces — the side panels, the three bars                                               |
+| 3    | `#111a26` | components — rows, floating clusters, inputs                                                    |
+| 4    | `#16202e` | hover                                                                                           |
+| 5    | `#1b2736` | active / selected                                                                               |
+| 6    | `#222f40` | separators inside a surface                                                                     |
+| 7    | `#2b3a4d` | borders on interactive components                                                               |
+| 8    | `#3a4d64` | strong border, and the focus ring                                                               |
+| 11   | `#a8bbd0` | secondary text — **corrected 2026-08-26**: `#8fa1b6` measured Lc 47–50, not the 60 claimed here |
+| 12   | `#e8eff7` | primary text                                                                                    |
 
 Steps 9-10 (solid) are the accent's job, not the neutral's — nothing in this console is a solid grey block.
 
@@ -219,3 +249,6 @@ test is whether removing it loses information: it does.
 | 2026-08-26 | Windows move and size by pointer AND by keyboard, no library | `react-rnd` would be this widget's first runtime dependency; GridStack is a grid whose tiles reflow, which takes back the space this change won |
 | 2026-08-26 | A status tally sits in each panel's header                   | Taken from SonoranCAD: one line is both the colour legend and the shift summary, and it reads `SET_COLORS` so it cannot disagree with the map   |
 | 2026-08-26 | The callsign is a filled pill coloured by status             | The one field in a row that never truncates; at 360 px it is the only place the status is guaranteed readable                                   |
+| 2026-08-26 | Four skins, as data, switched by one attribute on the root   | Colour moved to CSS custom properties so a skin change costs no React work at all; SonoranCAD's four are hand-written forks                     |
+| 2026-08-26 | Every skin is measured by APCA in the test suite             | Contrast failure is silent — it renders, lints and screenshots fine; the guard caught the SHIPPED theme's step 11 at Lc 47                      |
+| 2026-08-26 | A skin may not touch `SET_COLORS`, targets or the layout     | Those are the map's own colours, an accessibility criterion, and muscle memory; SonoranCAD moves its dock between skins                         |

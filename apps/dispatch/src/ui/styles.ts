@@ -30,25 +30,25 @@ export const TOUCH_TARGET = 44;
  */
 export const RAMP = {
   /** 1 — the world, and what the map draws onto. */
-  bg: '#070a0f',
+  bg: 'var(--os-bg)',
   /** 6 — separators inside one surface. */
-  line: '#222f40',
+  line: 'var(--os-line)',
   /** 7 — the edge of an interactive component. */
-  lineStrong: '#2b3a4d',
+  lineStrong: 'var(--os-line-strong)',
   /** 8 — strong border, and the focus ring. */
-  ring: '#3a4d64',
+  ring: 'var(--os-ring)',
   /** 2 — docked surfaces: the side panels and the three bars. */
-  surface: '#0b111a',
+  surface: 'var(--os-surface)',
   /** 4 — hover. */
-  surfaceHover: '#16202e',
+  surfaceHover: 'var(--os-surface-hover)',
   /** 5 — active or selected. */
-  surfaceOn: '#1b2736',
+  surfaceOn: 'var(--os-surface-on)',
   /** 3 — components: rows, inputs, and everything floating over the map. */
-  surfaceRaised: '#111a26',
+  surfaceRaised: 'var(--os-surface-raised)',
   /** 12 — primary text. */
-  text: '#e8eff7',
+  text: 'var(--os-text)',
   /** 11 — secondary text. */
-  textMuted: '#8fa1b6',
+  textMuted: 'var(--os-text-muted)',
 } as const;
 
 /**
@@ -62,13 +62,13 @@ export const RAMP = {
  */
 export const ACCENT = {
   /** The fill behind a primary or selected control. */
-  bg: '#0c2634',
+  bg: 'var(--os-accent-bg)',
   /** Its edge. */
-  border: '#1d5b7d',
+  border: 'var(--os-accent-border)',
   /** Solid — the ring, the rail, the dot. */
-  solid: '#38bdf8',
+  solid: 'var(--os-accent-solid)',
   /** Text on a dark fill: the solid is too hot for a glyph at 11 px. */
-  text: '#6fd0fb',
+  text: 'var(--os-accent-text)',
 } as const;
 
 /**
@@ -80,12 +80,12 @@ export const ACCENT = {
  * belong here — it comes from `src/map/beacons.ts` → `SET_COLORS`, the table the map itself draws from.
  */
 export const SEMANTIC = {
-  dangerBg: '#4a1220',
-  dangerText: '#ffb3c0',
-  warnBg: 'rgba(92, 56, 6, 0.94)',
-  warnBorder: '#a9701f',
-  warnSolid: '#ffb454',
-  warnText: '#ffe8c4',
+  dangerBg: 'var(--os-danger-bg)',
+  dangerText: 'var(--os-danger-text)',
+  warnBg: 'var(--os-warn-bg)',
+  warnBorder: 'var(--os-warn-border)',
+  warnSolid: 'var(--os-warn-solid)',
+  warnText: 'var(--os-warn-text)',
 } as const;
 
 /** 4-based, and nothing between the steps. */
@@ -104,8 +104,8 @@ export const TEXT = { body: 12, bodyTouch: 13, caption: 11, input: 15, micro: 10
  * it cannot say which of two surfaces is on top. This can.
  */
 export const SHADOW = {
-  float: '0 4px 16px rgba(0, 0, 0, 0.45)',
-  modal: '0 12px 40px rgba(0, 0, 0, 0.6)',
+  float: 'var(--os-shadow-float)',
+  modal: 'var(--os-shadow-modal)',
 } as const;
 
 /** A tap has to be acknowledged on a device that may be a frame behind; nothing else animates. */
@@ -118,19 +118,19 @@ const PRESS = 'background-color 120ms ease-out, border-color 120ms ease-out';
 export const COLORS = {
   accent: ACCENT.solid,
   border: RAMP.lineStrong,
-  danger: '#f43f5e',
+  danger: 'var(--os-danger)',
   muted: RAMP.textMuted,
   panel: RAMP.surface,
   panelRaised: RAMP.surfaceRaised,
   text: RAMP.text,
 } as const;
 
-const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const MONO = 'var(--os-font-mono)';
 /** Every changing number is tabular, or the row it sits in shifts as it counts. */
 const NUM = 'tabular-nums' as const;
 /** What floats over the map: step 3, nearly opaque, lifted by a shadow instead of ringed by a border. */
 const FLOATING = {
-  background: 'rgba(17, 26, 38, 0.92)',
+  background: 'var(--os-float-bg)',
   border: `1px solid ${RAMP.line}`,
   boxShadow: SHADOW.float,
 } as const;
@@ -150,7 +150,7 @@ export const styles = {
     background: RAMP.bg,
     color: COLORS.text,
     display: 'grid',
-    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+    fontFamily: 'var(--os-font-sans)',
     fontSize: 12,
     // ONE column since 201/7-08. The queue and the roster used to be 300-px and 264-px tracks either side
     // of the map, which is 564 px the map did not have on a 1280-px desk — 44 % of the width spent on two
@@ -165,7 +165,7 @@ export const styles = {
     background: RAMP.bg,
     color: COLORS.text,
     display: 'grid',
-    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+    fontFamily: 'var(--os-font-sans)',
     fontSize: 12,
     gridTemplateColumns: 'minmax(0, 1fr)',
     // 48 rather than 40: the bar carries 44-px targets now, and a 40-px row makes every one of them
@@ -179,7 +179,7 @@ export const styles = {
   appEmbedded: {
     background: RAMP.bg,
     color: RAMP.text,
-    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+    fontFamily: 'var(--os-font-sans)',
     fontSize: TEXT.body,
     height: '100%',
     position: 'relative',
@@ -329,7 +329,7 @@ export const styles = {
   /** 201/7-06's key sheet. Centred over the map, because it is a modal reference rather than a tool: an
    *  operator reading it is not working the board at that second. */
   keyHelp: {
-    background: 'rgba(17, 26, 38, 0.97)',
+    background: 'var(--os-modal-bg)',
     border: `1px solid ${RAMP.lineStrong}`,
     borderRadius: RADIUS.surface,
     boxShadow: SHADOW.modal,
@@ -626,7 +626,7 @@ export const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: 3,
-    padding: '8px 12px',
+    padding: 'var(--os-row-padding)',
     transition: PRESS,
   },
   /** The age, the count, anything that ticks: tabular, or the row shifts under the eye reading it. */
@@ -650,6 +650,27 @@ export const styles = {
     transition: PRESS,
   },
   scroll: { flex: 1, minHeight: 0, overflowY: 'auto' },
+  /** The skin switcher, and any other native picker. Same shape as `button` so the bar reads as one row. */
+  select: {
+    background: RAMP.surfaceRaised,
+    border: `1px solid ${RAMP.lineStrong}`,
+    borderRadius: RADIUS.control,
+    color: RAMP.text,
+    cursor: 'pointer',
+    fontSize: TEXT.caption,
+    padding: '4px 6px',
+  },
+  selectTouch: {
+    background: RAMP.surfaceRaised,
+    border: `1px solid ${RAMP.lineStrong}`,
+    borderRadius: RADIUS.control,
+    color: RAMP.text,
+    cursor: 'pointer',
+    fontSize: TEXT.bodyTouch,
+    minHeight: TOUCH_TARGET,
+    minWidth: TOUCH_TARGET,
+    padding: '4px 8px',
+  },
   /** The phone sheet: as tall as the list needs, and never more than this share of the screen. */
   sheet: { display: 'flex', flexDirection: 'column' as const, maxHeight: '44vh', minHeight: 0 },
   sheetTab: {

@@ -404,6 +404,22 @@ mix.** Chrome comes from the ramp in `src/ui/styles.ts`. A unit's status and a c
 all read, which is why a chip in the queue cannot drift from the pillar on the map. A status colour added to
 the style table would break that, and `styles.test.ts` fails the build if one appears.
 
+## Skins
+
+**201/7-09, since 2026-08-26.** Four themes in the header's picker — **Night** (the default), **Day** (a
+phone outdoors), **Contrast** (bad screen, bright sun, tired eyes) and **Amber** (warm near-black with a
+monospace chrome and tighter rows). The choice is remembered per browser under `opensa.dispatch.theme`.
+
+Switching is one attribute on the app root: the token table holds `var(--os-…)` and each skin is a block of
+custom properties, so the browser repaints and **React does no work at all**.
+
+A skin carries the neutral ramp, the accent, the two semantic surfaces, the shadows, the font stacks and row
+padding. It cannot change the status colours (those are the map's own table — a chip in a list and a pillar
+on the map are the same number), the 44-px targets, or where anything sits.
+
+**No skin can ship with unreadable text**: the test suite runs every preset through APCA and fails the build
+below Lc 90 for primary text and Lc 60 for secondary.
+
 ## The workspace: the map is the desk
 
 **201/7-08, since 2026-08-26.** On a desk the map fills the viewport and the two lists float on top of it as

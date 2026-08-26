@@ -32,6 +32,7 @@ import { Sheet } from './ui/sheet';
 import { StatusBar } from './ui/status-bar';
 import { StatusTally } from './ui/status-tally';
 import { styles } from './ui/styles';
+import { loadTheme, saveTheme, type ThemeId } from './ui/theme';
 import { TimelineBar } from './ui/timeline-bar';
 import { TopBar } from './ui/top-bar';
 import { UnitsPanel, unitsTally } from './ui/units-panel';
@@ -78,6 +79,16 @@ export function App(): ReactElement {
    * list to keep sorted for a case that does not exist yet — when a third window arrives this becomes one.
    */
   const [front, setFront] = useState<'calls' | 'units'>('calls');
+  /**
+   * The skin. It lives here only so the switcher can read it back; the actual repaint is the `data-theme`
+   * attribute below, which the browser resolves against the variable blocks in `global-css.ts` — no
+   * component re-renders because a skin changed.
+   */
+  const [theme, setTheme] = useState<ThemeId>(loadTheme);
+  const applyTheme = useCallback((next: ThemeId) => {
+    setTheme(next);
+    saveTheme(next);
+  }, []);
   /**
    * An embedded console (`?embed=1`) is the MAP and its own controls, and nothing else: the host has its own
    * queue, roster and clock, and a second set of them inside an iframe is two boards disagreeing on one
@@ -224,14 +235,16 @@ export function App(): ReactElement {
       onAutoDispatch={actions.setAutoDispatch}
       onHour={setHour}
       onProjection={setProjection}
+      onTheme={applyTheme}
       projection={readout?.pose.projection ?? 'perspective'}
+      theme={theme}
       touch={touch}
     />
   );
 
   if (embedded) {
     return (
-      <div {...{ [DISPATCH_SCOPE]: '' }} style={styles.appEmbedded}>
+      <div {...{ [DISPATCH_SCOPE]: '' }} data-theme={theme} style={styles.appEmbedded}>
         {map}
       </div>
     );
@@ -239,7 +252,7 @@ export function App(): ReactElement {
 
   if (compact) {
     return (
-      <div {...{ [DISPATCH_SCOPE]: '' }} style={styles.appCompact}>
+      <div {...{ [DISPATCH_SCOPE]: '' }} data-theme={theme} style={styles.appCompact}>
         {top}
         {map}
         <Sheet
@@ -260,7 +273,7 @@ export function App(): ReactElement {
   }
 
   return (
-    <div {...{ [DISPATCH_SCOPE]: '' }} style={styles.app}>
+    <div {...{ [DISPATCH_SCOPE]: '' }} data-theme={theme} style={styles.app}>
       {top}
       {map}
       {timeline}

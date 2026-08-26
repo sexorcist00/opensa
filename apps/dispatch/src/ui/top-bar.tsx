@@ -12,8 +12,10 @@
 import type { CSSProperties, ReactElement } from 'react';
 
 import type { MapProjection } from '../map/map-camera';
+import type { ThemeId } from './theme';
 
-import { COLORS, styles, TOUCH_TARGET } from './styles';
+import { ACCENT, COLORS, styles, TOUCH_TARGET } from './styles';
+import { THEMES } from './theme';
 
 export function TopBar({
   autoDispatch,
@@ -23,7 +25,9 @@ export function TopBar({
   onAutoDispatch,
   onHour,
   onProjection,
+  onTheme,
   projection,
+  theme,
   touch = false,
 }: {
   autoDispatch: boolean;
@@ -34,15 +38,18 @@ export function TopBar({
   onAutoDispatch: (enabled: boolean) => void;
   onHour: (hour: number) => void;
   onProjection: (projection: MapProjection) => void;
+  onTheme: (theme: ThemeId) => void;
   /** What the map is drawing with right now — read back from the readout's pose, never held here. */
   projection: MapProjection;
+  /** The skin in force. Held by `App` and written to the root as `data-theme`, never held here. */
+  theme: ThemeId;
   /** The pointer is a finger: the dial and the switch take a finger-sized target. */
   touch?: boolean;
 }): ReactElement {
   return (
     <div style={compact ? styles.topBarCompact : styles.topBar}>
       <strong style={{ letterSpacing: 1.5 }}>{compact ? 'DISPATCH' : 'OPENSA · DISPATCH'}</strong>
-      {!compact && <span style={{ ...styles.badge, background: '#0e3a52', color: COLORS.accent }}>SAN ANDREAS</span>}
+      {!compact && <span style={{ ...styles.badge, background: ACCENT.bg, color: COLORS.accent }}>SAN ANDREAS</span>}
 
       <label style={{ alignItems: 'center', display: 'flex', gap: 6, marginLeft: compact ? 0 : 12, minWidth: 0 }}>
         {!compact && <span style={{ color: COLORS.muted }}>WORLD</span>}
@@ -92,6 +99,37 @@ export function TopBar({
           {latest ?? ''}
         </span>
       )}
+
+      {/* A native `<select>` rather than a menu of swatches: it is one target, it is in the tab order for
+          free, and on a phone it opens the OS picker — which is a better list than anything drawn here.
+          Switching writes one attribute on the app root; nothing in this tree re-renders because of it. */}
+      <label
+        style={{
+          alignItems: 'center',
+          display: 'flex',
+          gap: 6,
+          marginLeft: compact ? 8 : 12,
+        }}
+        title="The console's skin"
+      >
+        <span aria-hidden style={{ color: COLORS.muted }}>
+          ◐
+        </span>
+        <span style={{ clip: 'rect(0 0 0 0)', height: 1, overflow: 'hidden', position: 'absolute', width: 1 }}>
+          Theme
+        </span>
+        <select
+          onChange={(event) => onTheme(event.target.value as ThemeId)}
+          style={touch ? styles.selectTouch : styles.select}
+          value={theme}
+        >
+          {THEMES.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 }
