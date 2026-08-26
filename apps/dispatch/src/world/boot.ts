@@ -453,6 +453,8 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
    * next wake is. While the picture is changing the loop rides `requestAnimationFrame`; while it is not, it
    * drops to a timer, which is what stops a still city being redrawn sixty times a second on a phone.
    */
+  /** How many more overlay draws are broken into named steps — see the split inside `overlay-2d` below. */
+  let overlayDetail = 3;
   const gate = new RenderGate();
   let idleTimer: null | ReturnType<typeof setTimeout> = null;
   const schedule = (idle: boolean): void => {
@@ -580,19 +582,42 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     }
 
     time('overlay-2d', () => {
+      /**
+       * The first few overlay draws are SPLIT, and only those.
+       *
+       * The phone's first frame spends ~1.85 s here and nothing says which part
+       * ([the 08-25 moving-camera row](../../../../docs/benchmarks/opensa-engine/2026-08-25-mobile-centre-moving-camera.json)).
+       * `warmTextMetrics` was written on the assumption that font resolution was the cost, and the first
+       * measurement after it shipped did not support that — so the next guess is a measurement instead. The
+       * three candidates it separates: the canvas backing store being touched for the first time
+       * (`clearRect`), the symbol layer's first glyph raster (`symbols`), and the sketch pass.
+       *
+       * `overlayDetail` counts down, so this costs two extra `performance.now()` pairs for three frames and
+       * nothing at all afterwards — a permanent split would put three noise rows in every steady-state
+       * frame's segments.
+       */
+      const detail = overlayDetail > 0;
+      if (detail) {
+        overlayDetail -= 1;
+      }
+      const step = <T>(name: string, run: () => T): T => (detail ? time(name, run) : run());
       projector.update(state, overlay.clientWidth, overlay.clientHeight);
-      context.setTransform(dpr, 0, 0, dpr, 0, 0);
-      context.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
-      symbology.render(
-        context,
-        projector,
-        ops,
-        options.selection(),
-        { height: overlay.clientHeight, width: overlay.clientWidth },
-        options.fixAges?.(),
+      step('overlay:clear', () => {
+        context.setTransform(dpr, 0, 0, dpr, 0, 0);
+        context.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
+      });
+      step('overlay:symbols', () =>
+        symbology.render(
+          context,
+          projector,
+          ops,
+          options.selection(),
+          { height: overlay.clientHeight, width: overlay.clientWidth },
+          options.fixAges?.(),
+        ),
       );
       // Over the symbols: an operator's own mark is the last thing drawn, so nothing hides it (201/7-05).
-      drawSketches(context, (at) => projector.project(gtaToEngine(at)), sketch);
+      step('overlay:sketches', () => drawSketches(context, (at) => projector.project(gtaToEngine(at)), sketch));
     });
     // The radar is drawn LAST and only when something on it moved (201/7-04) — it is an inset over a map
     // that is already correct, and a repaint every frame is what chain 4 would have to undo.
