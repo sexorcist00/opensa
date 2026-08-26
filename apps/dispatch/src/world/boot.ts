@@ -44,6 +44,7 @@ import { ScreenProjector } from '../map/projection';
 import { drawSketches, type MapTool, type Measurement, SketchStore } from '../map/sketch';
 import { DEFAULT_TILE_SIZE } from '../map/tiles';
 import { readView, type SharedView, viewOfPose } from '../map/view-link';
+import { bootBytes, bootDone, bootStep } from './boot-progress';
 import { composeImage } from './capture';
 import { buildDemoCity, DEMO_EXTENT, DEMO_REACH } from './demo-city';
 import { DISTRICTS } from './districts';
@@ -345,6 +346,10 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   new ResizeObserver(resize).observe(canvas);
 
   const engine = new Engine();
+  // The phases the shell reports are the ones that actually take time here, in the order they take it. The
+  // GPU first: `init` creates the device and every pipeline, which measured 77.9 ms of the first frame on
+  // the phone even before a byte of world was asked for.
+  bootStep('starting the GPU…');
   await engine.init(canvas);
   // `?scale=` — the same manual knob `apps/web` has, and the only one that moves the `target` category:
   // 36.54 MB of the 2026-08-12 capture's 74.9 MB is scene + bloom targets, which scale with the square of
@@ -469,6 +474,34 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
    * next wake is. While the picture is changing the loop rides `requestAnimationFrame`; while it is not, it
    * drops to a timer, which is what stops a still city being redrawn sixty times a second on a phone.
    */
+  /**
+   * The last phase the boot shell reports, and the moment it leaves.
+   *
+   * **It leaves when there is a PICTURE, not when `bootDispatch` returns.** Boot resolves as soon as the
+   * streaming is wired, which is before the first cell has arrived — removing the shell there would hand the
+   * operator an empty map and call it ready. So this waits for a drawn frame that has world in it, and the
+   * fraction it shows on the way is a real one: cells resident out of the cells the district holds.
+   *
+   * The escape hatches matter as much as the rule. A pak with no cells (plan mode, the flat map, an empty
+   * rect) would never satisfy the condition, and a district whose first cell is slow should not hold the
+   * shell forever — so a drawn frame with `cellsTotal` 0 releases it, and so does the 40th frame whatever
+   * the world is doing. Nothing here can leave the shell up.
+   */
+  let bootFrames = 0;
+  const reportBoot = (stats: { cellsTotal: number; cellsVisible: number }): void => {
+    if (bootFrames < 0) {
+      return;
+    }
+    bootFrames += 1;
+    if (stats.cellsTotal === 0 || stats.cellsVisible > 0 || bootFrames > 40) {
+      bootFrames = -1;
+      bootDone();
+
+      return;
+    }
+    bootStep('streaming the world…', stats.cellsVisible, stats.cellsTotal, `${bootBytes(pakTraffic.totalBytes)} read`);
+  };
+
   /** How many more overlay draws are broken into named steps — see the split inside `overlay-2d` below. */
   let overlayDetail = 3;
   const gate = new RenderGate();
@@ -591,6 +624,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       world.follow([state.target[0], state.target[1], state.target[2]], { camera: state, pixelHeight: canvas.height }),
     );
     const stats = time('engine-frame', () => engine.frame(state));
+    reportBoot(stats);
     // Drained every frame the mode is on, so a span never carries into the next frame's total. Plan 091's
     // rule: the frame that DRAINS is the frame that paid, because the work ran in the gap before it.
     if (inventory) {
@@ -1100,11 +1134,14 @@ function stepCall(
 
 /** The real thing: a built game, streamed from its pak. */
 async function streamedWorld(engine: Engine, params: URLSearchParams): Promise<DispatchWorld> {
+  bootStep('finding the world…');
   const source = await resolvePakBase(params.get('src') ?? DEFAULT_SRC);
+  bootStep('reading the manifest…', undefined, undefined, source.base);
   const setup = await setupStreaming(engine, source.base, {
     hdRadius: numberParam(params, 'hd', DEFAULT_HD_RADIUS),
     lodRadius: numberParam(params, 'lod', DEFAULT_LOD_RADIUS),
   });
+  bootStep('the water…');
   await installWater(engine, source.base, setup.water);
 
   return {

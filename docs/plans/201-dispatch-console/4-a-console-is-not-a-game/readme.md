@@ -72,6 +72,27 @@ Residency drift and texture-array growth over hours of panning. The rule to watc
 **Owes:** resident MB at t=0 / 30 min / 2 h on the [pinned district](../1-the-map-profile/readme.md), and the count of bundle re-records over that
 window. A drift with no ceiling is a finding, not a footnote.
 
+### 03 — The wait before the first frame
+
+4/01 made the first frame cheap. This step is about the seconds BEFORE it, which on the phone were a black
+rectangle: no signal that anything was happening, and no way to tell a slow pak from a crash.
+
+Three pieces, chosen with the user 2026-08-26 — progress only, no flat map and no skeleton behind it:
+
+- **The boot shell.** Inline in `dispatch.html`, painted before the module graph, released on the first
+  frame that has a PICTURE rather than when `bootDispatch` returns. Contract and failure shapes in
+  [the feature doc](../../../features/dispatch-console.md).
+- **The pak cache.** A second open of the same district should not re-read the pak over the network.
+  Cache Storage, keyed by the manifest's `buildTime`, degrading silently where `caches` is undefined — a
+  LAN `http://` origin is not a secure context and has none.
+- **Async pipelines.** `engine-frame` measured **77.9 ms on the first frame in both 08-25 captures, to the
+  tenth** — a fixed cost, now the largest item on that frame. Shader compilation is the suspect:
+  `createRenderPipelineAsync` compiles off the main thread, and the engine has 17 synchronous call sites.
+
+**Owes:** the shell verified on the real device rather than in a harness; a repeat-open capture with and
+without the cache; and `engine-frame` on the first frame before/after the pipeline change — the same
+capture, on the pinned district.
+
 ## Verification
 
 - The idle claim is read off a capture, not asserted: draws at rest, over a stated window.

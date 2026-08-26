@@ -13,6 +13,7 @@ import type { BootOptions, DispatchHandle, DispatchReadout } from '../world/boot
 
 import { bootDispatch } from '../world/boot';
 import { dispatchParams } from '../world/boot';
+import { bootStep } from '../world/boot-progress';
 import { bootPlanMode } from '../world/plan-mode';
 import { InventoryPanel } from './inventory-panel';
 import { styles } from './styles';
@@ -100,6 +101,10 @@ export function MapCanvas({
             // eslint-disable-next-line no-console -- a degraded map must say why, in the console as well as on it
             console.warn('[dispatch] 3D map unavailable, falling back to plan mode:', error);
             setDegraded(reason(error));
+            // The shell is still up at this point and its last phase is whatever the 3D boot died in. Say
+            // what is happening instead of leaving that on screen while the fallback wires itself up —
+            // `bootPlanMode` releases the shell when it is ready.
+            bootStep('no 3D map here — switching to the plan view…');
 
             return bootPlanMode(boot, reason(error));
           });

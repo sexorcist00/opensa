@@ -28,6 +28,7 @@ import { drawTileLayer } from '../map/tile-layer';
 import { decodeTile, httpRange, TileSource } from '../map/tile-source';
 import { viewOfPose } from '../map/view-link';
 import { applyHeldKeys, dispatchParams, IDLE_WAKE_MS, runCommand, zoomSpan } from './boot';
+import { bootDone } from './boot-progress';
 import { composeImage } from './capture';
 import { DEFAULT_SRC, resolveTilesUrl } from './pak-source';
 import { RenderGate } from './render-gate';
@@ -87,6 +88,9 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
   // same overlay canvas and pays the same allocation, so it warms the same two things.
   warmOverlaySurface(context, overlay);
   warmTextMetrics(context);
+  // Plan mode has no world to stream — it draws its board from the ops the host already holds — so there is
+  // no cell fraction to report and nothing to wait for. The shell goes the moment this surface is wired.
+  bootDone();
 
   const unbind = bindGestures(overlay, {
     dolly: (notch) => camera.dolly(notch),

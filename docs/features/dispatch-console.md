@@ -285,6 +285,41 @@ answered it.
 same span read 1 850 ms under a taller viewport and a colder start. The shape is: it is one-shot, it is the
 allocation, and it is paid once per session.
 
+## The boot shell, and when it is allowed to leave
+
+**Since 2026-08-26.** Between the tap and the first drawn frame the console used to show the page's
+background and nothing else — on the phone, seconds of a black rectangle that is indistinguishable from a
+crash. The shell is the answer: markup and a script **inline in `dispatch.html`**, painted before a byte of
+the module graph is fetched. It cannot import the style table for the same reason it exists — importing
+anything would put the 944 kB engine chunk in front of the first pixel — so its colours are ramp literals
+with a comment saying why, and `apps/dispatch/src/ui/styles.test.ts` is not the guard for them.
+
+**It leaves when there is a PICTURE, not when `bootDispatch` returns.** Returning only means the loop
+started; the world arrives cell by cell after it, and a shell removed at that moment hands the operator the
+same empty rectangle a few hundred milliseconds later. `reportBoot` in `boot.ts` watches the frame's own
+stats and releases on the first of three: `cellsVisible > 0` (the world is on screen), `cellsTotal === 0`
+(there is nothing to stream — the demo city, a pak with no cells), or frame 40 (whatever is happening, the
+loop is running and the shell is not the thing to look at). Plan mode has no cells at all and calls
+`bootDone()` directly.
+
+**What it reports is what has a denominator.** The bar sweeps — indeterminate, saying "working" — through
+the phases that cannot be counted (`starting the GPU…`, `reading the manifest…`, `the water…`) and becomes a
+real fraction the moment the streamer knows how many cells the district holds. Bytes read ride along as a
+note with no denominator, because nothing knows in advance how much of the pak the opening view will pull. A
+percentage nobody can defend is worse than a sweep.
+
+Two failure shapes are handled, and both matter more on a phone than on a desk. A boot that **throws** calls
+`bootFail`, which leaves the reason on screen instead of a bar that never fills — including the WebGPU
+fallback, which reports `no 3D map here — switching to the plan view…` on its way to plan mode rather than
+vanishing. A boot that **neither finishes nor throws** — a `?src=` that hangs — is caught by the shell's own
+30 s watchdog: it says what it was still waiting on, then removes itself, because a fixed overlay left in
+the tree keeps eating taps over the whole map. `done()` removes the element for that same reason; it is not
+`hidden`.
+
+The app's side is [`src/world/boot-progress.ts`](../../apps/dispatch/src/world/boot-progress.ts) — a typed
+handle whose every function is a **no-op when the shell is absent**. The viewer harness, the tests and an
+embedding host all mount the console without that markup, and in none of them is a missing shell an error.
+
 ## The look, and where its rules live
 
 **[`apps/dispatch/DESIGN.md`](../../apps/dispatch/DESIGN.md), since 2026-08-25.** The console has a design
@@ -351,6 +386,7 @@ where and when it was. Plan mode exports too, and says `plan mode` on its face.
 | Concern                | Where                                    | Notes                                                                                       |
 | ---------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
 | Engine host, frame loop | `src/world/boot.ts`                     | boots the engine, picks a world, owns input; React never enters the loop                     |
+| Boot shell             | `dispatch.html` + `src/world/boot-progress.ts` | the progress overlay painted before any module; leaves on the first frame that has a picture |
 | World (real)           | `src/world/pak-source.ts` + `water.ts`   | `?src=` → `setupStreaming` + the baked `water.bin`                                           |
 | World (demo)           | `src/world/demo-city.ts`                 | `?demo=1` — a synthetic block grid, no pak needed; reuses `@opensa/engine-lab/synthetic`      |
 | Camera                 | `src/map/map-camera.ts`                  | ground-focus map rig over `@opensa/web/ui/camera/*` — pan / orbit / dolly, north-up default, **perspective or plan view**, bounds derived from the world's reach |
