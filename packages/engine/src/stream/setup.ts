@@ -51,6 +51,9 @@ export interface StreamSetup {
   /** Baked cell collision (200/3-01), when the pak carries it — the host hands this to whatever streams
    *  collision, and a pak built without `--bake-collision` simply has none. */
   collision?: PakCollisionSource;
+  /** Let the pak worker and the streaming go (201/6-03) — a host that can swap what draws the world calls
+   *  this before it starts the next one. */
+  dispose: () => void;
   /** Baked district table pointer (201/5-03) — a loose `districts.json` next to the manifest, holding
    *  `info.zon`'s boxes with their GXT text already resolved. Absent when the game ships no `info.zon`, or
    *  on a pak built before the field existed. */
@@ -182,6 +185,8 @@ export async function setupStreaming(
     maxZ = Math.max(maxZ, z);
   }
 
+  const driver = new StreamingDriver(engine, manifest, worker, radii);
+
   return {
     ...(manifest.buildTime !== undefined ? { buildTime: manifest.buildTime } : {}),
     cellSize,
@@ -193,7 +198,8 @@ export async function setupStreaming(
       : {}),
     ...(manifest.districts !== undefined ? { districts: manifest.districts } : {}),
     ...(manifest.water !== undefined ? { water: manifest.water } : {}),
-    driver: new StreamingDriver(engine, manifest, worker, radii),
+    dispose: () => driver.dispose(),
+    driver,
     radius: Math.max((maxX - minX) / 2, (maxZ - minZ) / 2, 400),
   };
 }

@@ -221,6 +221,15 @@ export class StreamingDriver {
     });
   }
 
+  /**
+   * Let the pak worker go (201/6-03). Until a mode could be SWITCHED nothing ever tore streaming down, so
+   * the worker outlived the surface that started it — a thread and its range cache per switch, on a device
+   * budgeted for one.
+   */
+  dispose(): void {
+    this.worker.terminate();
+  }
+
   /** Every cell the pak offers, as GTA cell coords — the map inspector's section grid. Independent of
    *  what is currently resident (that is `engine.cells`), because the grid must show the whole map. */
   listCells(): [number, number][] {

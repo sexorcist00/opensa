@@ -54,6 +54,7 @@ const PRESSED_COMMANDS = [
   'previousCall',
   'stopFollowing',
   'toggleHelp',
+  'toggleMode',
 ] as const;
 
 export type KeyBindings = Readonly<Record<MapCommand, KeyBinding>>;
@@ -90,6 +91,7 @@ export const DEFAULT_BINDINGS: KeyBindings = {
   tiltDown: { keys: ['Shift+ArrowDown'], label: 'Tilt towards the ground' },
   tiltUp: { keys: ['Shift+ArrowUp'], label: 'Tilt towards the horizon' },
   toggleHelp: { keys: ['?'], label: 'Show or hide this sheet' },
+  toggleMode: { keys: ['m'], label: 'Switch between the 3D map and the flat map' },
   zoomIn: { keys: ['+', '='], label: 'Zoom in' },
   zoomOut: { keys: ['-'], label: 'Zoom out' },
 };

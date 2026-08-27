@@ -15,6 +15,7 @@ import type { KeyBindings } from './map/keymap';
 import type { MapProjection } from './map/map-camera';
 import type { Incident, Unit } from './ops/types';
 import type { DispatchHandle, DispatchReadout } from './world/boot';
+import type { MapMode } from './world/mode-switch';
 
 import { keyOf, loadBindings } from './map/keymap';
 import { MAP_YAW } from './map/map-camera';
@@ -58,6 +59,9 @@ const UNITS_RECT = { h: 480, w: 300, x: 12, y: 180 } as const;
 export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}): ReactElement {
   const { actions, autoDispatch, clock, historyWindow, ops, read, selection } = useOperations();
   const [readout, setReadout] = useState<DispatchReadout | null>(null);
+  /** Which surface is drawing, and how to change it (201/6-03) — the map reports it up, because the switch
+   *  outlives any one surface and the chrome is what survives it. */
+  const [mapMode, setMapMode] = useState<null | { mode: MapMode; toggle: () => void }>(null);
   const handleRef = useRef<DispatchHandle | null>(null);
   const compact = useCompactLayout();
   // Two different questions: how much room there is, and what is pointing at it. A phone in landscape is
@@ -161,6 +165,7 @@ export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}
       actions={actions}
       compact={compact}
       createPakWorker={createPakWorker}
+      onMode={({ mode, toggle }) => setMapMode({ mode, toggle })}
       onReadout={setReadout}
       onReady={onReady}
       read={read}
@@ -175,7 +180,14 @@ export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}
         tool={readout?.tool ?? 'none'}
         touch={touch}
       />
-      <MapNav compact={compact} handle={handle} touch={touch} yaw={readout?.pose.yaw ?? MAP_YAW} />
+      <MapNav
+        compact={compact}
+        handle={handle}
+        mode={mapMode?.mode ?? null}
+        onToggleMode={mapMode?.toggle}
+        touch={touch}
+        yaw={readout?.pose.yaw ?? MAP_YAW}
+      />
       {/* The two lists, over the world. Only on the desk: a phone has no room for a window that covers the
           map it floats over, so there the same two panels are a sheet UNDER it (`Sheet`). */}
       {!compact && (

@@ -62,8 +62,12 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     overlay.height = Math.max(2, Math.floor(overlay.clientHeight * dpr));
   };
   resize();
-  new ResizeObserver(resize).observe(overlay);
-  // The dead WebGPU canvas must not eat the gestures — in plan mode the overlay is the input surface.
+  const observer = new ResizeObserver(resize);
+  observer.observe(overlay);
+  // The dead WebGPU canvas must not eat the gestures — in plan mode the overlay is the input surface. Both
+  // of these are put back on dispose: they were written when this mode was the end of the page, and a
+  // SWITCH back to the 3D map (201/6-03) would otherwise init the engine on a `display: none` canvas and
+  // hand every gesture to an overlay that is supposed to be transparent to them.
   canvas.style.display = 'none';
   overlay.style.pointerEvents = 'auto';
   overlay.style.touchAction = 'none';
@@ -332,6 +336,12 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
       disposed = true;
       tiles?.dispose();
       tiles = null;
+      observer.disconnect();
+      // Give the canvases back exactly as they were found, or the next mode inherits a surface this one
+      // hid and an overlay this one made solid.
+      canvas.style.display = '';
+      overlay.style.pointerEvents = 'none';
+      overlay.style.touchAction = '';
       keyboard.unbind();
       unbind();
       for (const event of ['pointerdown', 'wheel'] as const) {

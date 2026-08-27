@@ -135,6 +135,55 @@ camera and hands `plan-mode` the same one) and must stay true.
 
 **Owes:** a test that switches modes and asserts the three survive, and a measurement of the switch cost.
 
+#### DONE 2026-08-27 — and what it found was that nothing had ever been torn down
+
+The operator switches with **`m`** or the `2D`/`3D` key in the nav cluster; `?mode=` follows the choice
+(`replaceState`, so Back keeps meaning "the page I came from"), and an embedded map writes no address bar it
+does not own. The rule lives in `world/mode-switch.ts` — deliberately DOM-free, so the thing this step owes
+a test for is testable at all — and it is three moves in a fixed order: **read the pose, dispose, boot, apply
+the pose.** Each of those is a test:
+
+- the pose is read BEFORE the old surface is disposed (a pose off a disposed camera is nothing, and the
+  operator would land wherever the next mode happens to open);
+- the old surface is disposed BEFORE the next boots — two live surfaces mean two GPU devices and two
+  streaming workers on a device budgeted for one;
+- a second request while one is in flight is IGNORED, because the button is a 44-px touch target and a
+  double tap must not boot two engines;
+- the mode that comes UP is reported, not the one asked for: the boot owns the fallback (it is the layer
+  that knows how the failure looked), so a device with no WebGPU gets the flat map **and the banner saying
+  why**, while a mode the operator CHOSE raises none.
+
+**The selection and the moment needed no carrying, and that is the structural claim rather than an
+omission.** They are `useOperations`' state, read through getters the switch never sees; the only things it
+hands a boot are a mode and a pose. A test pins exactly that (`args.length === 2`), because the regression
+would be a third argument somebody adds later.
+
+**What the step actually uncovered: neither mode gave anything back.** Both were written when a surface was
+the end of the page, so nothing released anything and nothing could show it —
+
+| Left behind | By | What a switch would have done |
+| --- | --- | --- |
+| the WebGPU device, with every buffer, texture and bundle the world uploaded | the 3D host | leak the whole world per switch; `GPUDevice.destroy()` is the entire teardown, since all of it belongs to the device |
+| the pak worker and its range cache | the streaming setup | a thread per switch (`StreamingDriver.dispose`, handed up as `StreamSetup.dispose`) |
+| `canvas.style.display = 'none'` | plan mode | the next 3D boot would `init` on a zero-size canvas — a black screen with no error |
+| `overlay.style.pointerEvents = 'auto'` | plan mode | the overlay keeps eating every gesture the 3D map expects to receive |
+| a `ResizeObserver` on the overlay | plan mode | one more observer per switch |
+
+None of them was a bug before this step and all of them were bugs the moment it landed, which is the honest
+shape of "the mode is a thing you can leave".
+
+**The cost is measured on whatever device is running**, since a switch is a full teardown and boot and the
+number is therefore the device's rather than the code's: every switch logs `[mode] live → flat in N ms`, the
+first open included, so a field run has the baseline to compare against. **Not measured here** — this
+container has no WebGPU at all ([2/02](../2-real-device-truth/readme.md) probed it three ways), so the only
+switch it can perform is flat→flat, which is a no-op by design. The number rides with
+[2/03](../2-real-device-truth/readme.md).
+
+**What it costs the desk**, measured the same way [6/02](#02--the-flat-2d-map) measured itself: the dispatch chunk goes **136.06 → 138.32 kB raw** (+2.26 kB) for the switch, the key, the nav button and the two teardowns; the shareable single-file artifact ([2/02](../2-real-device-truth/readme.md)) goes 655.23 → 657.55 kB.
+
+**Still open, and it is 6/01's:** the third mode. The switch is written against `MapMode`, and the baked 3D
+city map joins it as a third value rather than as a second mechanism.
+
 ## Verification
 
 - The same district, in all three modes, at the same camera pose, with the same units selected.

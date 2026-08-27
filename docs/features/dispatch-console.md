@@ -45,6 +45,25 @@ pose, selection and the moment in time survive a switch. The 2D tiles are baked 
 so every build — including total conversions, which have no third-party map raster and never will — gets all
 three modes.
 
+## Switching what draws the world
+
+Three ways to draw the same world and the operator picks (201/6-03): **`m`**, or the `2D`/`3D` key in the
+map's nav cluster. It is not a quality ladder — a mode you CHOSE raises no banner.
+
+**The camera comes across; the selection and the moment never move.** The pose is read off the surface that
+is leaving and applied to the one arriving, and that is the only thing a switch carries: the board, the
+selection and the clock live above the mode, so nothing has to save or restore them.
+
+**A device that cannot carry the 3D map gets the flat one and is told why** — the automatic floor, the same
+banner plan mode has always shown. That is a failure being honest, not a downgrade being hidden.
+
+`?mode=` follows the choice, so a reload or a shared link opens the same surface. An embedded console writes
+nothing: the address bar belongs to its host.
+
+**A switch is a full teardown and boot**, and the cost is whatever that costs on the device — it is logged
+(`[mode] live → flat in N ms`) rather than estimated. The teardown is real: the WebGPU device is destroyed,
+the pak worker terminated, and plan mode gives the canvases back exactly as it found them.
+
 ## The plan view
 
 **201/7-01, since 2026-08-22.** The `PLAN` button in the top bar (or `?proj=ortho`) draws the same world with

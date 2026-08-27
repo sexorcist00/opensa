@@ -10,22 +10,26 @@ import type { HistoryStats } from '../ops/history';
 import type { Operations, Selection } from '../ops/types';
 import type { DispatchActions } from '../ops/use-operations';
 import type { BootOptions, DispatchHandle, DispatchReadout } from '../world/boot';
+import type { BootedMode, MapMode, ModeReport } from '../world/mode-switch';
 
+import { commandFor } from '../map/keymap';
 import { bootDispatch } from '../world/boot';
 import { dispatchParams } from '../world/boot';
 import { bootStep } from '../world/boot-progress';
+import { ModeSwitch } from '../world/mode-switch';
 import { bootPlanMode } from '../world/plan-mode';
 import { InventoryPanel } from './inventory-panel';
 import { styles } from './styles';
 
 /** Module scope, so StrictMode's dev double-mount boots the engine on the canvas exactly once. */
-let booted: null | Promise<DispatchHandle | void> = null;
+let switcher: ModeSwitch | null = null;
 
 export function MapCanvas({
   actions,
   children,
   compact,
   createPakWorker,
+  onMode,
   onReadout,
   onReady,
   read,
@@ -37,6 +41,9 @@ export function MapCanvas({
   compact: boolean;
   /** How to build the pak worker, for a bundle that cannot serve the chunk beside it (201/2-02). */
   createPakWorker?: () => Worker;
+  /** Which surface is drawing, and how to change it (201/6-03) — called on the first open and after every
+   *  switch, so the chrome shows the mode the operator actually has rather than the one they asked for. */
+  onMode?: (state: { mode: MapMode; toggle: () => void; why: string }) => void;
   onReadout: (readout: DispatchReadout) => void;
   onReady: (handle: DispatchHandle) => void;
   read: {
@@ -52,16 +59,14 @@ export function MapCanvas({
   const minimapRef = useRef<HTMLCanvasElement>(null);
   /** Why the 3D map is absent, when it is — shown as a banner over a WORKING plan-mode board. */
   const [degraded, setDegraded] = useState('');
+  /** Which surface is drawing. Null until the first one is up, so the chrome shows no mode it does not have. */
+  const [mode, setMode] = useState<MapMode | null>(null);
   /** Held for the inventory panel only (201/1-01) — it reads the collector, it does not drive the loop. */
   const handleRef = useRef<DispatchHandle | null>(null);
-  /** The flat 2D map, asked for rather than fallen back to (201/6-02) — plan mode either way, so it draws
-   *  no radar; an undrawn radar canvas is invisible but still eats every tap in its corner. */
-  const flat = dispatchParams().get('mode') === 'flat';
-
   // Callbacks reach the loop through a ref so the boot effect never re-runs: re-booting the engine on a
   // re-render would leak a device and a streaming worker per render.
-  const liveRef = useRef({ actions, createPakWorker, onReadout, read });
-  liveRef.current = { actions, createPakWorker, onReadout, read };
+  const liveRef = useRef({ actions, createPakWorker, onMode, onReadout, read });
+  liveRef.current = { actions, createPakWorker, onMode, onReadout, read };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -94,40 +99,74 @@ export function MapCanvas({
       trackStats: () => liveRef.current.read.trackStats(),
       trails: () => liveRef.current.read.trails(),
     };
-    // The 3D map is the preferred surface, not a requirement: a browser without WebGPU (or a world this GPU
-    // cannot read) falls back to the 2D plan, which keeps every unit, call and gesture working.
-    //
-    // `?mode=flat` asks for the flat map deliberately (201/6-02) — the same surface, chosen rather than
-    // fallen back to, which is why it raises no banner. The operator's own control over the three modes is
-    // 201/6-03's step; this is how the mode is reached and measured until then.
-    booted ??=
-      dispatchParams().get('mode') === 'flat'
-        ? Promise.resolve(bootPlanMode(boot, 'flat map'))
-        : bootDispatch(boot).catch((error: unknown) => {
-            // eslint-disable-next-line no-console -- a degraded map must say why, in the console as well as on it
-            console.warn('[dispatch] 3D map unavailable, falling back to plan mode:', error);
-            setDegraded(reason(error));
-            // The shell is still up at this point and its last phase is whatever the 3D boot died in. Say
-            // what is happening instead of leaving that on screen while the fallback wires itself up —
-            // `bootPlanMode` releases the shell when it is ready.
-            bootStep('no 3D map here — switching to the plan view…');
+    /**
+     * Start one mode, and own the FALLBACK here rather than in the switch: this is the layer that knows how
+     * the failure looked. The 3D map is the preferred surface, never a requirement — a browser without
+     * WebGPU, or a world this GPU cannot read, comes up on the 2D plan with every unit, call and gesture
+     * working, and says why (201/6-03: an automatic floor, never a silent downgrade).
+     *
+     * `?mode=flat` and the operator's own switch reach the same function, and neither raises a banner: a
+     * mode that was CHOSEN is not a degraded one.
+     */
+    const bootMode = (mode: MapMode): Promise<BootedMode> =>
+      mode === 'flat'
+        ? Promise.resolve({ mode, surface: bootPlanMode(boot, 'flat map'), why: '' })
+        : bootDispatch(boot)
+            .then((surface): BootedMode => ({ mode: 'live', surface, why: '' }))
+            .catch((error: unknown) => {
+              // eslint-disable-next-line no-console -- a degraded map must say why, in the console as well as on it
+              console.warn('[dispatch] 3D map unavailable, falling back to plan mode:', error);
+              // The shell is still up at this point and its last phase is whatever the 3D boot died in. Say
+              // what is happening instead of leaving that on screen while the fallback wires itself up —
+              // `bootPlanMode` releases the shell when it is ready.
+              bootStep('no 3D map here — switching to the plan view…');
 
-            return bootPlanMode(boot, reason(error));
-          });
-    void booted.then((handle) => {
+              return { mode: 'flat' as const, surface: bootPlanMode(boot, reason(error)), why: reason(error) };
+            });
+
+    switcher ??= new ModeSwitch(bootMode, (report: ModeReport) => {
+      const handle = switcher?.surface as DispatchHandle | undefined;
+      setDegraded(report.why);
+      setMode(report.mode);
       if (handle) {
         handleRef.current = handle;
         onReady(handle);
       }
+      // The cost the step owes, on whatever device is running it — the first open included, since that is
+      // the number a field report compares a switch against.
+      // eslint-disable-next-line no-console -- the switch cost is a measurement, and a phone has no devtools
+      console.log(`[mode] ${report.requested} → ${report.mode} in ${Math.round(report.ms)} ms`);
+      rememberMode(report.mode);
+      liveRef.current.onMode?.({
+        mode: report.mode,
+        toggle: () => void switcher?.to(report.mode === 'live' ? 'flat' : 'live'),
+        why: report.why,
+      });
     });
+    void switcher.to(dispatchParams().get('mode') === 'flat' ? 'flat' : 'live');
   }, [onReady]);
+
+  // `m` belongs to the chrome for the same reason the help sheet's `?` does — and a stronger one: a mode
+  // change disposes the surface a key handler inside it would be running in.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.ctrlKey || event.altKey || event.metaKey || commandFor(event) !== 'toggleMode') {
+        return;
+      }
+      event.preventDefault();
+      void switcher?.to(switcher.current() === 'live' ? 'flat' : 'live');
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   return (
     <div style={styles.canvasWrap}>
       <canvas ref={canvasRef} style={styles.canvas} />
       <canvas ref={overlayRef} style={{ ...styles.fill, pointerEvents: 'none', zIndex: 2 }} />
       {/* The radar (201/7-04). Absent in plan mode, which has no 3D view to locate and draws its own board. */}
-      {!degraded && !flat && <canvas ref={minimapRef} style={compact ? styles.minimapCompact : styles.minimap} />}
+      {mode === 'live' && <canvas ref={minimapRef} style={compact ? styles.minimapCompact : styles.minimap} />}
       {children}
       {degraded && <DegradedBanner message={degraded} />}
       {dispatchParams().get('inventory') === '1' && (
@@ -166,4 +205,27 @@ function reason(error: unknown): string {
   }
 
   return text.replace(/^Error:\s*/, '').slice(0, 160);
+}
+
+/**
+ * Keep the chosen mode in the address bar, so a reload — or a link an operator sends — opens the same one.
+ *
+ * `replaceState`, never `pushState`: a mode is a view setting, and filling somebody's Back button with them
+ * is how Back stops meaning "the page I came from".
+ *
+ * **It writes nothing when the console does not own the address bar** — an embedded map lives in a host's
+ * URL and must not touch it (201/7-07), and a host that configures the surface through
+ * `window.__opensaDispatch` is not reading `window.location` at all, so a write there would be a lie as well
+ * as a trespass.
+ */
+function rememberMode(mode: MapMode): void {
+  const embedded =
+    (window as { __opensaDispatch?: string }).__opensaDispatch !== undefined ||
+    new URLSearchParams(window.location.search).get('embed') === '1';
+  if (embedded) {
+    return;
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set('mode', mode);
+  window.history.replaceState(window.history.state, '', url);
 }

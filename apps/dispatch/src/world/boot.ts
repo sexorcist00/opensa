@@ -272,6 +272,8 @@ export type ZoomLevel = 'block' | 'city' | 'district';
  * demo world has nothing to move.
  */
 interface DispatchWorld {
+  /** Let the world go — the pak worker and the streaming (201/6-03). The demo world holds neither. */
+  dispose?: () => void;
   /** What the world's places are called (201/5-03) — baked beside the pak, empty on a world that ships no
    *  `info.zon` and on the synthetic demo. */
   districts: DistrictLookup;
@@ -791,11 +793,22 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       // export says "no image" instead, which is a thing the operator can act on.
       pendingCapture?.(null);
       pendingCapture = null;
+      if (idleTimer !== null) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
       unbind();
       errorLog.dispose();
       beacons.dispose();
       unitModels.dispose();
       radar?.dispose();
+      // **The GPU half, and it only became reachable when a mode could be SWITCHED** (201/6-03). Until then
+      // this host was torn down exactly once, at the end of the page, so nothing here released anything and
+      // nothing showed it. A switch that leaves the device alive leaks every buffer, texture and bundle the
+      // world uploaded — `GPUDevice.destroy()` is the whole teardown by construction, because every one of
+      // them belongs to the device. The streaming worker goes with it.
+      world.dispose?.();
+      engine.device.destroy();
     },
     exportImage(): Promise<Blob | null> {
       return new Promise((resolve) => {
@@ -959,6 +972,10 @@ export function runCommand(
     case 'toggleHelp':
       // The sheet is React's, and it listens for the same key — nothing to do here, and saying so is
       // cheaper than a comment somewhere else explaining a missing case.
+      break;
+    case 'toggleMode':
+      // Same shape, and for a stronger reason: a mode change tears THIS surface down (201/6-03), so the
+      // one thing it cannot be is a command the surface runs on itself. The chrome owns it.
       break;
   }
 }
@@ -1197,6 +1214,7 @@ async function streamedWorld(
   await installWater(engine, source.base, setup.water);
 
   return {
+    dispose: () => setup.dispose(),
     districts: await loadDistricts(source.base, setup.districts),
     extent: { centre: engineToGta(setup.center), radius: setup.radius },
     follow: (focus, view) => setup.driver.update(focus, view),
