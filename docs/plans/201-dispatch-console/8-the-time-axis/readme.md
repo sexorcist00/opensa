@@ -38,6 +38,16 @@ cost of 150 units × a shift, measured against the
 column-wise (`t` u32 ms, `x`/`y`/`heading` f32, `status` u8) so a sample costs exactly **17 bytes** and the
 figure is a fact rather than an estimate of what an array of objects weighs.
 
+**AMENDED 2026-08-27, when the user said the publish interval will drop below 4 s.** The sampling interval
+and the feed's publish rate were the same constant, and `SAMPLES_PER_TRACK` is derived from it — so "the feed
+is 1 s now" was one honest-looking edit away from **18.4 MB → 73.4 MB** of track memory at the declared 150
+units, on a phone whose whole budget is 300–500 MB and whose world already holds ~76 MB. Split into
+`PUBLISH_INTERVAL_MS` (a fact about PCAD: staleness on screen, the follow damper's time constant) and
+`RECORD_INTERVAL_MS` (ours: what the ring writes and what sizes it). The rule the split states — **a faster
+feed improves the LIVE picture and never grows the history** — is pinned by a test that records a 10 Hz feed
+and a 4 s feed into two stores and asserts the same sample count and the same bytes. The transport this came
+out of is evaluated in [roadmap 0.6.0](../../../roadmap/0.6.0/plans/05-dispatch-cad-depth/readme.md).
+
 **It is a store beside the board, not a field on `Unit`, and that is a deviation from the sketch above with
 a reason.** `Operations` is an immutable snapshot and `stepOperations` is a pure reducer — the property that
 lets the whole board be unit-tested today and swapped for a socket handler later. A ring buffer cannot be

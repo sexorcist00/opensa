@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { MapPose } from './map-camera';
 
-import { SAMPLE_INTERVAL_MS } from '../ops/tracks';
+import { PUBLISH_INTERVAL_MS } from '../ops/tracks';
 import { MAP_YAW, MapCamera } from './map-camera';
 
 /**
@@ -360,10 +360,10 @@ describe('MapCamera.follow', () => {
     it('is at most one fix behind: a jump is 95 % closed by the time the next one could land', () => {
       const camera = new MapCamera(OPENING);
       camera.setStreamedReach(REACH);
-      // A 4 s fix at speed moves a car ~110 m — the step the feed actually delivers (`SAMPLE_INTERVAL_MS`).
+      // A 4 s fix at speed moves a car ~110 m — the step the feed actually delivers (`PUBLISH_INTERVAL_MS`).
       const gap = 110;
       camera.follow(() => [1700 + gap, -1500]);
-      for (let tick = 0; tick < Math.round(SAMPLE_INTERVAL_MS / 16.7); tick += 1) {
+      for (let tick = 0; tick < Math.round(PUBLISH_INTERVAL_MS / 16.7); tick += 1) {
         camera.advance(16.7);
       }
 

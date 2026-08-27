@@ -25,6 +25,75 @@ rate), and what an operator sees when the feed is stale rather than empty. Writt
 [`docs/contracts/`](../../../../contracts/) so the plugin and the console can be built separately, against
 something rather than against a guess.
 
+### The transport, evaluated 2026-08-27 (SSE vs WebSocket, and whether Go)
+
+Asked when the publish interval drops below 4 s. The short answer: **at the rates this product can actually
+use, the transport is not what costs bytes — the ENCODING and the CADENCE are** — and the map has a ceiling
+of its own that decides the rate before the network does.
+
+**The map cannot use more than ~2 Hz, and that is a measured property of this console rather than an
+opinion.** It draws on demand ([201/4-01](../../../../plans/201-dispatch-console/4-a-console-is-not-a-game/readme.md)):
+a frame happens when the board changes. The 08-23 field capture drew 605 frames and **skipped 599** — that
+idle half is the whole battery result, and a 10 Hz feed spends it, because every distinct board is a full 3D
+frame on a phone. So whatever the feed does, the console coalesces fixes to its own redraw budget, and there
+is no point publishing faster than that. What a faster rate *does* buy is the stepping complaint 202 §4 names:
+a car at 100 km/h moves **110 m** between fixes at 4 s, **28 m** at 1 s and **14 m** at 2 Hz — which retires
+it without anyone interpolating anything.
+
+**Arithmetic, not a measurement** (150 units, worst case = every unit moving; one batched message per tick;
+a fix is id + x/y/z + heading + status). Compact JSON ≈ 58 B/fix, binary ≈ 15 B/fix (id u16, x/y int32 cm,
+z int16 dm, heading u16, status u8), gzip-over-JSON estimated at 4–6× on payloads this repetitive:
+
+| Publish rate | fixes/s | JSON raw | JSON + gzip (est.) | binary | 8 h shift, binary |
+| --- | --- | --- | --- | --- | --- |
+| 4 s (today) | 37.5 | 2.2 kB/s | ~0.45 kB/s | 0.56 kB/s | 16 MB |
+| 1 s | 150 | 8.7 kB/s | ~1.8 kB/s | 2.25 kB/s | 65 MB |
+| 500 ms | 300 | 17.4 kB/s | ~3.6 kB/s | 4.5 kB/s | 130 MB |
+| 100 ms | 1500 | 87 kB/s | ~18 kB/s | 22.5 kB/s | 648 MB |
+
+Read it as three levers, in the order they matter:
+
+1. **Send only what MOVED.** Most of a shift, most units are parked — the same fact the track ring already
+   exploits (a stationary run collapses to its two ends). This halves or better, and it is bigger than any
+   choice below it.
+2. **One message per TICK, not per unit.** Framing is per message (WS 2–6 B, SSE 8 B + text escaping), and on
+   a phone the radio state matters more than the bytes: 150 little messages a second hold the radio awake in
+   a way one batched message does not.
+3. **Then, and only then, the transport.**
+
+**SSE is the recommendation, and the reason is not bandwidth.** At 1 Hz both transports land in the same
+order of magnitude once the two levers above are pulled. What separates them is what happens on a phone that
+changes network: `EventSource` reconnects by itself and replays from `Last-Event-ID`, so a shift's track does
+not acquire a hole when the operator walks out of WiFi. It rides the same HTTP/2 connection as the rest of the
+app, gzip applies to the whole stream with a shared dictionary (which is why the gzip column above is
+competitive with raw binary), and no middlebox treats it as anything but a slow GET. Its cost is that it is
+text: binary needs base64 (+33 %, and base64 does not gzip well), which is exactly why the recommendation is
+**compact JSON + gzip rather than binary-over-SSE**. Commands go the other way as ordinary HTTP POST — they
+are rare, they want auth, idempotency and retries, and they do not belong in a stream.
+
+**WebSocket wins when one of two things becomes true, and neither is today:** the bytes actually bind in the
+field (a measurement, from the phone, not this table), or the client needs a continuous upstream — a viewport
+or area subscription, so the server sends only the units on screen. If the second one arrives it decides the
+matter on its own, and the switch is one module by construction (`stepOperations` is the seam).
+
+**Go: not justified by load, and out of this repository's scope.** The work is 150 fixes a second fanned out
+to a handful of operators — three orders of magnitude below where a runtime choice starts to matter; Node's
+`server.js` is nowhere near its limits. Go earns a place at thousands of concurrent streams, or for a single
+static binary if that is the deployment preference — an ops argument, not a performance one. And
+[202](../../../../plans/202-pcad-dispatch/readme.md) is explicit that this repository owns exactly one
+component, the 3D map: what we owe the backend is the **wire contract**, not its language.
+
+**What the console owes the contract, whatever transport wins:**
+
+- **Rate-agnostic client.** The map must not care whether fixes arrive every 4 s or every 200 ms. Two
+  constants now say so (`PUBLISH_INTERVAL_MS` = the feed's, `RECORD_INTERVAL_MS` = ours): a faster feed
+  improves the live picture and never grows the history. They were ONE constant until 2026-08-26, which
+  would have made "the rate is 1 s now" a silent **18.4 MB → 73.4 MB** of track memory on a phone.
+- **Resume semantics.** What a reconnect replays — the snapshot plus everything since a sequence number —
+  because the alternative is a track with a hole in it that no consumer can see.
+- **Staleness derived, never restated.** The screen's *aging* threshold is one publish interval
+  (`FIX_FRESH_MS`), so a rate change moves it automatically rather than marking every unit stale.
+
 Note what is **not** deferred: the client-side time axis moved forward into
 [201/8](../../../../plans/201-dispatch-console/8-the-time-axis/readme.md), because where time lives in the
 data model is cheap to decide now and a rewrite to decide late.

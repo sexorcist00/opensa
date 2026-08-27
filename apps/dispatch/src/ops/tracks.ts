@@ -16,10 +16,11 @@
  * **What it records and what it drops** is the sampling policy 8/01 owes, and all three rules exist because
  * of the feed rather than by taste:
  *
- * - **Rate limit.** The mock ticks at 20 Hz; PCAD publishes every 4 s (measured in its source, plan 202 §4).
- *   Recording at tick rate would make the mock's tracks five times denser than the live feed's — a memory
- *   figure that flatters, and a scrub that behaves differently in the two. So one sample per
- *   {@link SAMPLE_INTERVAL_MS}, whichever feed is driving.
+ * - **Rate limit.** The mock ticks at 20 Hz; PCAD publishes every 4 s today (measured in its source, plan
+ *   202 §4) and faster later. Recording at tick rate would make the mock's tracks denser than the live
+ *   feed's — a memory figure that flatters, and a scrub that behaves differently in the two — and recording
+ *   at a RISING feed rate would grow the ring with it. So one sample per {@link RECORD_INTERVAL_MS},
+ *   whatever is driving and however fast it arrives.
  * - **A status change always samples**, rate limit or not: a unit that went en-route and arrived between two
  *   position samples has a history that says it never did.
  * - **A stationary run collapses to its two ends.** Most of a shift, most units are parked. Keeping the
@@ -74,19 +75,38 @@ export interface TrackStats {
 export const BYTES_PER_SAMPLE = 4 + 4 + 4 + 4 + 1;
 
 /**
- * How often a track takes a sample, ms. **This is PCAD's publish rate**, read out of its source rather than
- * chosen here (plan 202 §4: `cadui.lua`'s `sendPositionUpdate` thread, every 4 s, vehicles only). The mock
- * feed is held to the same rate so the two produce tracks of the same density.
+ * How often the feed PUBLISHES a fix, ms — a FACT about PCAD, read out of its source rather than chosen here
+ * (plan 202 §4: `cadui.lua`'s `sendPositionUpdate` thread, every 4 s, vehicles only), and one that is
+ * expected to SHRINK once the transport is a socket rather than a poll.
+ *
+ * It is what a consumer measuring the feed's own behaviour reads: how long a fix may be old before it is
+ * aging on screen, and how fast the follow damper must close a gap to stay inside one fix.
  */
-export const SAMPLE_INTERVAL_MS = 4000;
+export const PUBLISH_INTERVAL_MS = 4000;
+
+/**
+ * How often a track WRITES a sample, ms — **ours to choose, and deliberately not the same number.**
+ *
+ * These two were one constant until 2026-08-26, and that is a memory trap with a very ordinary trigger: the
+ * publish rate drops to 1 s, someone edits the one constant to match the feed, and the ring silently
+ * QUADRUPLES — {@link SAMPLES_PER_TRACK} is derived from it, so a shift goes from 18.4 MB to 73.4 MB at the
+ * declared 150 units, on a phone whose whole budget is 300–500 MB and whose world already holds ~76 MB of
+ * it. Nothing fails; the console just gets heavier for a reason nobody would connect to a feed setting.
+ *
+ * The rule the split expresses: **a faster feed improves the LIVE picture, never the size of the history.**
+ * Fixes arriving between two record intervals are drawn as they land (the board is live state) and simply do
+ * not all become samples — the sampling policy above already collapses what a scrub cannot use.
+ */
+export const RECORD_INTERVAL_MS = 4000;
 
 /** How long a track keeps history. See `docs/hacks/dispatch-shift-length.md` — the one number here nobody
  *  has named, and what it costs is linear in it. Not exported: `SAMPLES_PER_TRACK` is what a caller wants,
  *  and a second reader of the hours would be a second place to change it. */
 const SHIFT_HOURS = 8;
 
-/** Samples one unit's ring holds: a whole shift at the publish rate, with no gap left to chance. */
-export const SAMPLES_PER_TRACK = Math.ceil((SHIFT_HOURS * 3600 * 1000) / SAMPLE_INTERVAL_MS);
+/** Samples one unit's ring holds: a whole shift at the RECORD interval — never at the publish rate, see
+ *  {@link RECORD_INTERVAL_MS} for what that distinction is worth in megabytes. */
+export const SAMPLES_PER_TRACK = Math.ceil((SHIFT_HOURS * 3600 * 1000) / RECORD_INTERVAL_MS);
 
 /** Movement below this (world units) is "the unit did not move" — a parked car's GPS jitter, not a drive. */
 const STILL_RADIUS = 1.5;
@@ -145,7 +165,7 @@ class Track {
     const last = this.index(this.length - 1);
     const moved = Math.hypot(at[0] - this.x[last], at[1] - this.y[last]) > STILL_RADIUS;
     const changed = status !== this.status[last];
-    if (!changed && t - this.t[last] < SAMPLE_INTERVAL_MS) {
+    if (!changed && t - this.t[last] < RECORD_INTERVAL_MS) {
       return;
     }
     // A run of stationary samples keeps only its two ends: the moment the unit stopped, and where it still
@@ -320,7 +340,7 @@ function state(track: Track, slot: number, ageMs: number): TrackState {
     ageMs,
     at: [track.x[slot], track.y[slot]],
     heading: track.heading[slot],
-    stale: ageMs > SAMPLE_INTERVAL_MS,
+    stale: ageMs > PUBLISH_INTERVAL_MS,
     status: STATUS_BY_ID[track.status[slot]] ?? 'available',
   };
 }

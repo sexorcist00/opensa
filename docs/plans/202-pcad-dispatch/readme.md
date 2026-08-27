@@ -198,6 +198,15 @@ note): the event and snapshot shapes, what a reconnect replays, the position pub
 [201/8's interpolation](../201-dispatch-console/8-the-time-axis/readme.md) is written against that rate — and
 what an operator sees when the feed goes stale rather than empty.
 
+**The transport itself is evaluated there too** (2026-08-27, when the publish interval was expected to drop
+below 4 s): **SSE + compact JSON + gzip, with commands as ordinary HTTP POST**, on the grounds that at the
+rates this product can use, encoding and cadence decide the bytes and a phone changing network decides the
+transport — `EventSource` resumes from `Last-Event-ID` by itself. WebSocket is the answer the day the bytes
+measurably bind or the client needs a viewport subscription upstream. **A rate under ~2 Hz is the map's own
+ceiling**, not a network limit: this console draws on demand, and the 08-23 capture's 599 skipped frames of
+1204 are what a faster feed would spend. Go is not justified by the load (150 fixes/s to a handful of
+operators) and the backend's language is not this repository's call in any case.
+
 **Shell → map.** The narrow interface that keeps the map a component:
 
 | Direction | Payload |

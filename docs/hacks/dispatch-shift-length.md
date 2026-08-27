@@ -1,7 +1,9 @@
 # The dispatch shift is eight hours
 
 **Where:** `apps/dispatch/src/ops/tracks.ts` — `SHIFT_HOURS = 8`, which sizes every unit's track ring
-(`SAMPLES_PER_TRACK = SHIFT_HOURS × 3600 × 1000 / SAMPLE_INTERVAL_MS`), shipped 2026-08-22 with 201/8-01.
+(`SAMPLES_PER_TRACK = SHIFT_HOURS × 3600 × 1000 / RECORD_INTERVAL_MS`), shipped 2026-08-22 with 201/8-01.
+The divisor is OUR record interval and not the feed's publish rate — they were one constant until
+2026-08-26, so a feed sped up to 1 s would have quadrupled this card's memory without anyone touching it.
 **Stands in for:** a retention window somebody actually decided, or one derived from how a real shift on the
 server runs. Neither exists.
 
@@ -9,7 +11,7 @@ server runs. Neither exists.
 
 The two numbers either side of it are both real and both cited:
 
-- **`SAMPLE_INTERVAL_MS = 4000`** is PCAD's own publish rate, read out of `cadui.lua`'s `sendPositionUpdate`
+- **`PUBLISH_INTERVAL_MS = 4000`** is PCAD's own publish rate, read out of `cadui.lua`'s `sendPositionUpdate`
   thread ([plan 202 §4](../plans/202-pcad-dispatch/readme.md)). It is a measurement of the feed, not a
   choice of ours.
 - **`UNITS_ON_SCREEN = 150`** is the count the user named on 2026-08-06, before any of this was built

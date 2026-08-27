@@ -14,6 +14,7 @@ import type { Incident, Operations, Selection, Unit } from '../ops/types';
 import type { LabelBox } from './labels';
 import type { ScreenProjector } from './projection';
 
+import { PUBLISH_INTERVAL_MS } from '../ops/tracks';
 import { incidentKey, type Rgba, SET_COLORS } from './beacons';
 import { aheadOf, gtaToEngine } from './coords';
 import { CollisionIndex, labelCandidates, labelRank } from './labels';
@@ -69,7 +70,9 @@ const NARROW_CANVAS = 620;
  * fix does not become wrong at a threshold, it gets older. This is the half 8/02 owed — a stale marker, not
  * a confidently wrong one — and the interpolation half of that step is answered by not having any.
  */
-const FIX_FRESH_MS = 4000;
+/** A fix is CURRENT for one publish interval — derived, because a hardcoded twin of the feed's rate goes
+ *  quietly wrong the day the rate changes: every unit would read as aging, or none would. */
+const FIX_FRESH_MS = PUBLISH_INTERVAL_MS;
 const FIX_LOST_MS = 300_000;
 /** How faint a lost unit gets. Not zero: an operator must still be able to find it and ask why. */
 const FIX_LOST_ALPHA = 0.35;

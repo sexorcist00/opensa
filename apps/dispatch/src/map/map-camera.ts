@@ -16,7 +16,7 @@ import { dollyStep, panStep, TOP_DOWN_PITCH } from '@opensa/web/ui/camera/fly-ri
 import type { GtaGround } from './coords';
 import type { Flight } from './fly';
 
-import { SAMPLE_INTERVAL_MS } from '../ops/tracks';
+import { PUBLISH_INTERVAL_MS } from '../ops/tracks';
 import { engineToGta, gtaToEngine } from './coords';
 import { planFlight } from './fly';
 
@@ -75,7 +75,7 @@ const NEAR = 0.5;
  * PCAD publishes a position every 4 s (`ops/tracks.ts`), and a step that big is exactly what makes an
  * undamped follow unwatchable.
  */
-const FOLLOW_TAU_MS = SAMPLE_INTERVAL_MS / 3;
+const FOLLOW_TAU_MS = PUBLISH_INTERVAL_MS / 3;
 /**
  * How fast a held key turns the view, radians per second. A quarter turn a second: four seconds for a full
  * lap, which is slow enough to stop on the heading you meant and quick enough to reorient without lifting

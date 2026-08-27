@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Operations, Unit } from './types';
 
 import { UNITS_ON_SCREEN } from './budget';
-import { BYTES_PER_SAMPLE, SAMPLE_INTERVAL_MS, SAMPLES_PER_TRACK, UnitTracks } from './tracks';
+import { BYTES_PER_SAMPLE, PUBLISH_INTERVAL_MS, RECORD_INTERVAL_MS, SAMPLES_PER_TRACK, UnitTracks } from './tracks';
 
 function board(now: number, units: readonly Partial<Unit>[]): Operations {
   return {
@@ -35,6 +35,23 @@ function drive(tracks: UnitTracks, seconds: number, speed: number, from = 0): vo
 
 describe('UnitTracks', () => {
   describe('negative cases', () => {
+    it('does not grow the history when the feed speeds up — the ring is sized by OUR interval', () => {
+      // The trap the two constants were split for (2026-08-26). A socket feed at 10 Hz delivers 40 fixes in
+      // the time PCAD delivers one; recording all of them would quadruple-and-then-some a shift's memory on
+      // a phone, for a change nobody would connect to a feed setting.
+      const fast = new UnitTracks();
+      const slow = new UnitTracks();
+      for (let ms = 0; ms <= 60_000; ms += 100) {
+        fast.record(board(ms, [{ at: [ms / 100, 0] }]));
+      }
+      for (let ms = 0; ms <= 60_000; ms += RECORD_INTERVAL_MS) {
+        slow.record(board(ms, [{ at: [ms / 100, 0] }]));
+      }
+
+      expect(fast.stats().samples).toBe(slow.stats().samples);
+      expect(fast.stats().bytes).toBe(slow.stats().bytes);
+    });
+
     it('answers null for a unit it has never seen', () => {
       expect(new UnitTracks().at('nobody', 0)).toBeNull();
     });
@@ -54,7 +71,7 @@ describe('UnitTracks', () => {
       const tracks = new UnitTracks();
       drive(tracks, 20, 10);
 
-      expect(tracks.at('u0', 20_000 + SAMPLE_INTERVAL_MS - 1)?.stale).toBe(false);
+      expect(tracks.at('u0', 20_000 + PUBLISH_INTERVAL_MS - 1)?.stale).toBe(false);
     });
 
     it('answers the first sample before the track starts, rather than nothing', () => {
@@ -69,7 +86,7 @@ describe('UnitTracks', () => {
       drive(tracks, 60, 10);
 
       // 60 s at one sample per 4 s, plus the first: nothing like the 1201 ticks that went in.
-      expect(tracks.stats().samples).toBeLessThanOrEqual(60_000 / SAMPLE_INTERVAL_MS + 2);
+      expect(tracks.stats().samples).toBeLessThanOrEqual(60_000 / RECORD_INTERVAL_MS + 2);
       expect(tracks.stats().samples).toBeGreaterThan(10);
     });
 
@@ -119,13 +136,13 @@ describe('UnitTracks', () => {
       const tracks = new UnitTracks();
       const statuses: Unit['status'][] = ['available', 'busy', 'enRoute', 'onScene'];
       for (const [i, status] of statuses.entries()) {
-        tracks.record(board(i * SAMPLE_INTERVAL_MS, [{ at: [i, 0], status }]));
+        tracks.record(board(i * RECORD_INTERVAL_MS, [{ at: [i, 0], status }]));
       }
 
       // Each reads back as itself. Before the ids were exhaustive by type, a status outside the table
       // stored 255, came back `available`, and sampled on every tick instead of every 4 s.
       for (const [i, status] of statuses.entries()) {
-        expect(tracks.at('u0', i * SAMPLE_INTERVAL_MS)?.status).toBe(status);
+        expect(tracks.at('u0', i * RECORD_INTERVAL_MS)?.status).toBe(status);
       }
       expect(tracks.stats().samples).toBe(statuses.length);
     });
@@ -142,11 +159,11 @@ describe('UnitTracks', () => {
     it('carries the heading of the fix it answers with, unblended', () => {
       const tracks = new UnitTracks();
       tracks.record(board(0, [{ at: [0, 0], heading: 0.1 }]));
-      tracks.record(board(SAMPLE_INTERVAL_MS, [{ at: [40, 0], heading: Math.PI * 2 - 0.1 }]));
+      tracks.record(board(RECORD_INTERVAL_MS, [{ at: [40, 0], heading: Math.PI * 2 - 0.1 }]));
 
       // No blend, so no wrap-around question to get wrong: each answer is one recorded heading.
-      expect(tracks.at('u0', SAMPLE_INTERVAL_MS / 2)?.heading).toBeCloseTo(0.1, 5);
-      expect(tracks.at('u0', SAMPLE_INTERVAL_MS)?.heading).toBeCloseTo(Math.PI * 2 - 0.1, 5);
+      expect(tracks.at('u0', RECORD_INTERVAL_MS / 2)?.heading).toBeCloseTo(0.1, 5);
+      expect(tracks.at('u0', RECORD_INTERVAL_MS)?.heading).toBeCloseTo(Math.PI * 2 - 0.1, 5);
     });
 
     it('reports the window it holds, so a scrub knows what it may ask for', () => {
