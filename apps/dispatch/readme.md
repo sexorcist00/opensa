@@ -37,6 +37,16 @@ Camera rig steps come from `@opensa/web/ui/camera/*`, the demo city's fixture fr
 the `.osm` decode, both of which moved there rather than being imported out of `packages/game`
 ([201/5-04](../../docs/plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md)).
 
+## One file you can send someone
+
+```bash
+npm run build:share:dispatch   # → dist-share/dispatch.html, and nothing beside it
+```
+
+The whole console in a single HTML file, streaming a real world when it is given a `?src=` — the pak worker
+is carried inline rather than fetched, which is what used to make a shared link work only on `?demo=1`
+(201/2-02). The build fails rather than emit an artifact that would load a file it does not ship.
+
 ## Embedding the map elsewhere
 
 ```bash

@@ -1,6 +1,7 @@
 # compiled output
 /dist
 /dist-embed
+/dist-share
 cleo/sdk/dist
 apps/engine-lab/dist
 apps/cutscene-converter/dist

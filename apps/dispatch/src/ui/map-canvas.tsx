@@ -25,6 +25,7 @@ export function MapCanvas({
   actions,
   children,
   compact,
+  createPakWorker,
   onReadout,
   onReady,
   read,
@@ -34,6 +35,8 @@ export function MapCanvas({
   children?: React.ReactNode;
   /** Phone layout: the radar takes its smaller size (201/7-04). */
   compact: boolean;
+  /** How to build the pak worker, for a bundle that cannot serve the chunk beside it (201/2-02). */
+  createPakWorker?: () => Worker;
   onReadout: (readout: DispatchReadout) => void;
   onReady: (handle: DispatchHandle) => void;
   read: {
@@ -57,8 +60,8 @@ export function MapCanvas({
 
   // Callbacks reach the loop through a ref so the boot effect never re-runs: re-booting the engine on a
   // re-render would leak a device and a streaming worker per render.
-  const liveRef = useRef({ actions, onReadout, read });
-  liveRef.current = { actions, onReadout, read };
+  const liveRef = useRef({ actions, createPakWorker, onReadout, read });
+  liveRef.current = { actions, createPakWorker, onReadout, read };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -69,6 +72,9 @@ export function MapCanvas({
     const boot: BootOptions = {
       canvas,
       ...(minimapRef.current ? { minimap: minimapRef.current } : {}),
+      // Read from the ref like every other callback: the boot effect must not re-run, and a factory prop
+      // that arrives one render later would otherwise re-boot the engine and leak a device.
+      ...(liveRef.current.createPakWorker ? { createPakWorker: liveRef.current.createPakWorker } : {}),
       fixAges: () => liveRef.current.read.fixAges(),
       onClick: (click) => {
         const { select } = liveRef.current.actions;

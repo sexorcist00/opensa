@@ -45,7 +45,13 @@ export { SKID_LIFE_SECONDS, SKID_SEGMENT_CAP, type SkidSegment } from './render/
 export { COLLISION_KEY_PREFIX, PakCollisionSource } from './stream/collision-source';
 export { kindOfPakKey, PakTraffic, pakTraffic, type PakTrafficKind } from './stream/pak-traffic';
 export { ResidencyGate, type ResidencyView } from './stream/residency';
-export { type LocalPakSource, type PakSource, setupStreaming, type StreamSetup } from './stream/setup';
+export {
+  type LocalPakSource,
+  type PakSource,
+  setupStreaming,
+  type StreamingHost,
+  type StreamSetup,
+} from './stream/setup';
 export { StreamingDriver, type StreamingRadii, type StreamStats } from './stream/streaming';
 export { type CellHandle, CellStore } from './world/cells';
 export { type TextureArrayHandle, TextureArrays } from './world/textures';

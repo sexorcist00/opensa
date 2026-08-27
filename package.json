@@ -88,6 +88,7 @@
     "build:game:original:opensa": "NODE_OPTIONS=--max-old-space-size=12288 tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/original --in ./mods-src/original --out ./build/original --exclude sa && tsx tools/fetch-pack/src/cli.ts --build ./build/original",
     "build:game:original:sa": "NODE_OPTIONS=--max-old-space-size=12288 tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/original --in ./mods-src/original --out ./build/original --exclude opensa",
     "build:prod": "tsc -b && OPENSA_NO_VIEWERS=true OPENSA_DEBUGGER_HIDE=true vite build",
+    "build:share:dispatch": "vite build --config apps/dispatch/vite.share.config.ts",
     "cars": "tsx scripts/cars-server/src/server.ts",
     "cars:opensa": "tsx scripts/cars-server/src/server.ts --target opensa",
     "cars:sa": "tsx scripts/cars-server/src/server.ts --target sa",

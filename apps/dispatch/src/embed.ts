@@ -16,9 +16,10 @@
  *   board per call if the host can avoid it.
  * - **configuration through `window.__opensaDispatch`**, not the address bar. A host owns its own URL, and
  *   the surface must not read it — see `dispatchParams`.
- * - **the pak worker chunk served beside the bundle**, at the path the bundle names. A single-file build
- *   only ever runs `demo=1`; with a real `src=` it 404s on the worker with the manifest already fetched,
- *   which reads as a hang rather than a missing file.
+ * - **the pak worker chunk served beside the bundle**, at the path the bundle names — or a `createPakWorker`
+ *   passed to the boot, which is how a host that cannot serve a second file carries it instead (201/2-02;
+ *   `src/share.tsx` is this repo's own such host). Neither, with a real `src=`, means a 404 on the worker
+ *   with the manifest already fetched, which reads as a hang rather than as a missing file.
  *
  * **Two ways to embed, and they answer different needs** (201/7-07). This entry is for a host that mounts
  * the map ITSELF and feeds it its own board. `?embed=1` on `dispatch.html` is the other one: the whole

@@ -60,6 +60,12 @@ import { type DistrictLookup, loadDistricts, NO_DISTRICTS, type SearchedPlace } 
 
 export interface BootOptions {
   readonly canvas: HTMLCanvasElement;
+  /**
+   * Build the pak IO worker (201/2-02). Absent = the engine's module-relative default, which is what every
+   * multi-file build wants. A SINGLE-FILE artifact passes one, because the chunk it would resolve to is not
+   * beside it — `src/share.tsx` is this repo's own such host.
+   */
+  readonly createPakWorker?: () => Worker;
   /** How old each unit's last fix is, ms (201/8-02) — absent for a host with no board, whose markers are
    *  then all drawn as fresh. */
   readonly fixAges?: () => ReadonlyMap<string, number>;
@@ -370,7 +376,8 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // `?demo=1` skips the pak entirely and builds a synthetic block grid, so the console can be driven on a
   // machine with no built game. Everything above the world — camera, beacons, symbology, picking — is the
   // same code path either way; only the geometry's provenance differs.
-  const world = params.get('demo') === '1' ? demoWorld(engine) : await streamedWorld(engine, params);
+  const world =
+    params.get('demo') === '1' ? demoWorld(engine) : await streamedWorld(engine, params, options.createPakWorker);
   const environment = await buildEnvironment(engine, world.gameDir, params);
   let hour = numberParam(params, 'hour', 10);
   const applyHour = (next: number): void => {
@@ -1169,14 +1176,23 @@ function stepCall(
 }
 
 /** The real thing: a built game, streamed from its pak. */
-async function streamedWorld(engine: Engine, params: URLSearchParams): Promise<DispatchWorld> {
+async function streamedWorld(
+  engine: Engine,
+  params: URLSearchParams,
+  createPakWorker: (() => Worker) | undefined,
+): Promise<DispatchWorld> {
   bootStep('finding the world…');
   const source = await resolvePakBase(params.get('src') ?? DEFAULT_SRC);
   bootStep('reading the manifest…', undefined, undefined, source.base);
-  const setup = await setupStreaming(engine, source.base, {
-    hdRadius: numberParam(params, 'hd', DEFAULT_HD_RADIUS),
-    lodRadius: numberParam(params, 'lod', DEFAULT_LOD_RADIUS),
-  });
+  const setup = await setupStreaming(
+    engine,
+    source.base,
+    {
+      hdRadius: numberParam(params, 'hd', DEFAULT_HD_RADIUS),
+      lodRadius: numberParam(params, 'lod', DEFAULT_LOD_RADIUS),
+    },
+    createPakWorker ? { createWorker: createPakWorker } : {},
+  );
   bootStep('the water…');
   await installWater(engine, source.base, setup.water);
 

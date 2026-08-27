@@ -55,7 +55,7 @@ import { dispatchParams } from './world/boot';
 const CALLS_RECT = { h: 480, w: 320, x: 12, y: 180 } as const;
 const UNITS_RECT = { h: 480, w: 300, x: 12, y: 180 } as const;
 
-export function App(): ReactElement {
+export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}): ReactElement {
   const { actions, autoDispatch, clock, historyWindow, ops, read, selection } = useOperations();
   const [readout, setReadout] = useState<DispatchReadout | null>(null);
   const handleRef = useRef<DispatchHandle | null>(null);
@@ -157,7 +157,14 @@ export function App(): ReactElement {
   };
 
   const map = (
-    <MapCanvas actions={actions} compact={compact} onReadout={setReadout} onReady={onReady} read={read}>
+    <MapCanvas
+      actions={actions}
+      compact={compact}
+      createPakWorker={createPakWorker}
+      onReadout={setReadout}
+      onReady={onReady}
+      read={read}
+    >
       <MapTools
         behindLive={clock.mode === 'live' ? 0 : Math.max(0, Math.round((performance.now() - clock.t) / 1000))}
         compact={compact}

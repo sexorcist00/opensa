@@ -10,6 +10,7 @@ import type { Engine } from '../engine';
 import type { PakWorkerRequest, PakWorkerResponse } from './pak-worker';
 
 import { PakCollisionSource } from './collision-source';
+import { createDefaultPakWorker } from './default-pak-worker';
 import { pakTraffic, postPakFetch } from './pak-traffic';
 import { StreamingDriver, type StreamingRadii } from './streaming';
 
@@ -24,6 +25,20 @@ export interface LocalPakSource {
 
 /** Where the world pak lives: a URL base (HTTP/fetch mode) or a picked-folder source (folder mode). */
 export type PakSource = LocalPakSource | string;
+
+/** How the host wants its pak worker built. Everything else about streaming is the engine's business. */
+export interface StreamingHost {
+  /**
+   * Build the pak IO worker. Absent = the module-relative default, which is what every multi-file build
+   * wants: Vite emits `assets/pak-worker-*.js` beside the entry and the URL below resolves to it.
+   *
+   * A host passes one when its bundle cannot serve that file — a SINGLE-FILE artifact is the case this
+   * exists for (201/2-02): the chunk is not there, and the console 404s on the worker with the manifest
+   * already fetched, which reads as a hang rather than a missing file. Such a host inlines the worker
+   * itself (`?worker&inline`) and hands the constructor over, so the engine never learns how it was built.
+   */
+  readonly createWorker?: () => Worker;
+}
 
 export interface StreamSetup {
   /** When the pak was built (opensa-pack manifest `buildTime`, `HH:mm DD-MM-YYYY`) — the debugger shows it so
@@ -74,6 +89,7 @@ export async function setupStreaming(
   engine: Engine,
   source: PakSource = '/pak',
   radii: StreamingRadii = {},
+  host: StreamingHost = {},
 ): Promise<StreamSetup> {
   const manifest = await loadManifest(source);
   validateOspakManifest(manifest);
@@ -92,7 +108,7 @@ export async function setupStreaming(
           url: `${source}/world.ospak`,
         }
       : { blob: await openLocal(source, 'world.ospak'), type: 'init' };
-  const worker = new Worker(new URL('./pak-worker.ts', import.meta.url), { type: 'module' });
+  const worker = host.createWorker ? host.createWorker() : createDefaultPakWorker();
   // The one place a cache hit is counted (201/4-03). `postPakFetch` counts what the world ASKED for; this
   // says how much of it the disk answered, and a capture that reports both is the only way to see the cache
   // working on a device with no devtools.

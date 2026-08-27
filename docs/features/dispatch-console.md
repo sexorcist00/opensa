@@ -729,13 +729,16 @@ Each now names the step that owns it, so none of them is an open-ended note.
   Re-run with `texture-compression-bc` filtered out of the adapter — **the console boots and builds its world
   on a simulated mobile GPU**, which is the change's whole point. Re-run again with `navigator.gpu` returning
   undefined — **plan mode takes over**, banner and all.
-- Single-file build (the shareable artifact): the whole console inlines to ~490 kB of ASCII-escaped JS, adds
-  its own `<meta name=viewport>` at runtime (without it a phone lays out at ~980 px and the DESK layout wins
-  on a 412 px screen — found by publishing it), and opens on `?demo=1`.
-  **It is single-file only for `?demo=1`.** The pak worker is emitted as a separate `assets/pak-worker-*.js`
-  chunk, and `?demo=1` never constructs it — so the gap stayed invisible until a real pak was streamed on a
-  phone and the console 404'd on the worker with the manifest already fetched. Serving a real `?src=` from the
-  single-file build means shipping that one chunk beside it, at the path its own bundle names.
+- Single-file build (the shareable artifact): `npm run build:share:dispatch` → **one `dist-share/dispatch.html`,
+  655 kB raw / 217 kB gzip**, which streams a real `?src=` as well as `?demo=1`. It adds its own
+  `<meta name=viewport>` at runtime (without it a phone lays out at ~980 px and the DESK layout wins on a
+  412 px screen — found by publishing it).
+  **It used to be single-file only for `?demo=1`**, and that is closed (201/2-02): the pak worker was a
+  separate `assets/pak-worker-*.js` chunk that `?demo=1` never constructs, so a real pak fetched its manifest
+  and then 404'd on the worker — a hang, not a missing file, and invisible for months because a shared link
+  only ever opened the demo. The share entry (`src/share.tsx`) now carries the worker inline and hands the
+  constructor to the boot, and the build **refuses to emit an artifact that would fetch anything beside
+  itself** — verified in both directions by dropping `?worker&inline` and watching the build fail by name.
 - In-browser (SwiftShader, 2026-08-04): engine boot, `.oscell`/`.ostex` load (576 recorded draws), the frame
   loop, frustum culling (53/144 cells visible), the projected symbology, the whole console and the
   pak-missing failure path all run. **The rendered world image was NOT verified** — the software WebGPU

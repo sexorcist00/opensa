@@ -254,6 +254,7 @@ npm run serve:static        # static origin :3001 — mounts /build + /game-src 
 npm run phone:setup         # ONCE per device: deps, tsx, the prebuilt app, and what is still missing
 npm run phone               # the whole phone run in ONE command (convert if needed → check the pak → serve → print the URL)
 npm run build:embed:dispatch # → dist-embed/ — the dispatch MAP as one ES module, for an external host
+npm run build:share:dispatch # → dist-share/dispatch.html — the whole console as ONE file, real pak included
 ```
 
 **Two commands is the whole phone workflow**: `npm run phone:setup` once, then `npm run phone` for every run
@@ -305,6 +306,7 @@ vite is not started at all — which is the only way in on a device whose rolldo
 | dispatch: a pose         | `…&at=1700,-1500&h=900&pitch=-66&yaw=180` (GTA x,y · height · degrees) — same convention as sa-map-viewer |
 | dispatch: world knobs    | `&src=<built game>` · `&hd=450&lod=2200` streaming rings · `&hour=10` · `&weather=0` · `&fogscale=2.5` · `&fog=1` restores the game's fog (off by default, or a city view culls every cell) |
 | dispatch: board size     | `&units=150&calls=40` — seed the board at 201's declared worst case instead of the nine-car demo shift, which is how the symbology numbers 201/5-02 owes get taken (pair with `&inventory=1`; the report's `symbology` block says what actually reached the screen). Deterministic — the generated roster is a hash of its index, so two runs of the same size are the same board |
+| dispatch: shareable      | `npm run build:share:dispatch` → **one `dist-share/dispatch.html`** (655 kB raw / 217 kB gzip), which streams a real `&src=` as well as `?demo=1` — the pak worker is carried inline rather than fetched (201/2-02). The build REFUSES to emit an artifact that would load anything beside itself, so the old failure (manifest fetched, worker 404, reads as a hang) cannot come back quietly |
 | dispatch: embedded       | `npm run build:embed:dispatch` → `dist-embed/dispatch.js` **plus `assets/pak-worker-*.js`, which must be served beside it at the path the entry names**. A host imports the module, calls `bootDispatch` / `bootPlanMode`, and configures it through `window.__opensaDispatch` — NOT the address bar, which belongs to the host. `&src=` accepts an absolute URL, so a hosted pak needs no local game files: [features/dispatch-console.md](./features/dispatch-console.md#embedding-it) |
 
 | what a reused pak IS      | `npm run phone` prints it on the reuse line: game, rect, **textures**, **models**, bake-collision, build time, commit. A pak that predates the recipe block has none to print, and the check reports without failing — so an old folder can keep a name it stopped deserving (2026-08-25). `npx tsx scripts/debug/pak-recipe.ts <pakDir>` prints it on demand |

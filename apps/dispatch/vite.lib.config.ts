@@ -17,8 +17,11 @@ import { defineConfig } from 'vite';
  * console's own chrome (`app.tsx`, not exported here) is React. If a React import ever appears in this
  * bundle, something from the chrome has leaked into the surface.
  *
- * The pak worker stays a SEPARATE chunk and must be served beside the entry, at the path the entry names.
- * Inlining it would make the artifact single-file, but a worker is exactly where the streaming work belongs.
+ * The pak worker stays a SEPARATE chunk here and must be served beside the entry, at the path the entry
+ * names — an embedding host serves files anyway, so it costs nothing and keeps 31 kB out of every page that
+ * loads the map. A host that genuinely cannot serve a second file passes `createPakWorker` to the boot and
+ * carries it inline instead (201/2-02): still a worker, still off the main thread, just carried rather than
+ * fetched. `vite.share.config.ts` is the build that does that.
  */
 
 const root = resolve(__dirname, '../..');

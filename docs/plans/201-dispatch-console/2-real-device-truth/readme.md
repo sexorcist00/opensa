@@ -33,6 +33,34 @@ Close it: a real `?src=` must stream from the built artifact, at the path the bu
 **Owes:** the console streaming a real pak out of the built artifact, and a note in the feature doc replacing
 the known-gap paragraph.
 
+**DONE 2026-08-27, and the artifact is reproducible now — which was half the defect.** There was no
+single-file BUILD in this repo: the shareable console had been made by hand, so the thing that broke was
+also the thing nobody could rebuild or fix. `npm run build:share:dispatch`
+(`apps/dispatch/vite.share.config.ts`) emits **one `dist-share/dispatch.html`, 655 kB raw / 217 kB gzip**,
+and it streams a real `?src=`.
+
+**The seam is the fix, not the inlining.** `setupStreaming` takes a `StreamingHost` whose `createWorker` the
+host may supply; absent, the engine builds the worker from a module-relative URL exactly as before, so every
+ordinary build is unchanged (the multi-file dispatch chunk moves **135.85 → 136.06 kB**, +215 B, and
+`assets/pak-worker-*.js` stays a 31.3 kB chunk beside it). The share entry `src/share.tsx` is the one host
+that carries the worker inside itself (`?worker&inline`) and hands the constructor over. It is still a
+worker — pak bytes still never touch the main thread — it is just carried rather than fetched.
+
+**Two guards, because the failure was silent for months in two different ways.** The build refuses to emit
+an artifact whose MARKUP points at anything beside it, and — after the beside-the-entry worker module is
+aliased out of this build entirely — it refuses one whose CODE names any chunk it does not carry. That
+second guard is the one that matters: a worker is not loaded by a tag, so an artifact can look perfectly
+self-contained and still fetch a file that is not there. **Verified in both directions**: with
+`?worker&inline` the build emits one file; with it removed the build FAILS by name
+(*"share build would FETCH 'assets/pak-worker-*.js' … Inline it at its import"*).
+
+**Not verified here, and stated rather than implied:** the artifact was not opened against a real pak in
+this container — headless Chromium here exposes no `navigator.gpu` (probed: `--enable-unsafe-swiftshader`,
+`--use-webgpu-adapter=swiftshader`, `--headless=new`; all report no WebGPU), so the 3D boot cannot run and
+would fall back to plan mode, which streams no pak at all. What is proven is what a build can prove: the
+file fetches nothing beside itself and carries the worker's code. **The field half rides with
+[2/03](#03--the-field-run)**, on the device that has both a GPU and a pak.
+
 ### 03 — The field run
 
 A real phone, the 01 district, panned and zoomed the way an operator does — not a static frame, and not a
