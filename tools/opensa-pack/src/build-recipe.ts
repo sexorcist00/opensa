@@ -30,6 +30,10 @@ export interface PakBuildRecipe {
   readonly commit: null | string;
   /** Game id the pak was built from (`game-src/<id>`). */
   readonly game: string;
+  /** `--lod-only`: the baked 3D city map (201/6-01), whose world is the cell LOD tier and nothing else. A
+   *  pak that carries one tier and a pak that carries two are not the same build, and the difference is
+   *  invisible in a folder listing — which is what makes it a recipe field rather than a note. */
+  readonly lodOnly: boolean;
   /** Only the models the rect PLACES were converted, not every model the IDEs name. Changes what the pak's
    *  archives carry, so two paks differing only in this are not the same build. */
   readonly mapObjectsInRect: boolean;
@@ -74,6 +78,7 @@ export function buildRecipe(
     bakeCollision: options.bakeCollision ?? false,
     commit: meta.commit,
     game: meta.game,
+    lodOnly: options.lodOnly ?? false,
     mapObjectsInRect: options.mapObjectsInRect ?? false,
     maxTexture: options.maxTextureSize ?? 0,
     models: options.models ?? true,

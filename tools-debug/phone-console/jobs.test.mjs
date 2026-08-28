@@ -33,7 +33,7 @@ describe('phone console jobs', () => {
   describe('negative cases', () => {
     it('refuses a job it does not have, and names the ones it does', () => {
       expect(() => buildJob('rm-rf')).toThrow(
-        /unknown job 'rm-rf' — known: districts, map, phone, pull, rebase, setup, share, sirv, webapp/,
+        /unknown job 'rm-rf' — known: districts, map, map3d, phone, pull, rebase, setup, share, sirv, webapp/,
       );
     });
 
@@ -81,6 +81,21 @@ describe('phone console jobs', () => {
   });
 
   describe('positive cases', () => {
+    it('builds the 3D map into its OWN folder, with the tier flag forced on', () => {
+      // 201/6-01. Two recipes in one folder is a run that serves nothing (phone.sh refuses a pak whose
+      // recipe is not the one asked for) or a rebuild that throws the other pak away.
+      const plan = buildJob('map3d', { OUT: './build/phone', TEXTURES: 'rgba8' });
+
+      expect(plan.env.LODONLY).toBe('1');
+      expect(plan.env.OUT).toBe('./build/phone-map3d');
+      expect(plan.env.TEXTURES).toBe('rgba8');
+    });
+
+    it('keeps the map-only and the 3D-map folders apart, so neither can be reused as the other', () => {
+      expect(buildJob('map', {}).env.OUT).toBe('./build/phone-map');
+      expect(buildJob('map3d', {}).env.OUT).toBe('./build/phone-map3d');
+    });
+
     it('builds the phone run out of the form', () => {
       const plan = buildJob('phone', {
         DISTRICT: 'los-santos-centre',

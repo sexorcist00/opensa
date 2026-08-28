@@ -273,9 +273,14 @@
         <div class="row" style="margin-top: 8px">
           <button id="run-map" class="grow">Map only — the ground, nothing else</button>
         </div>
+        <div class="row" style="margin-top: 8px">
+          <button id="run-map3d" class="grow">Baked 3D city map — the LOD tier as the only tier</button>
+        </div>
         <p class="muted">
           Map only ignores the two selects above: no models, no collision bake, into its own
-          <code>-map</code> folder so it never fights the full pak’s recipe.
+          <code>-map</code> folder so it never fights the full pak’s recipe. The baked 3D city map (201/6-01)
+          builds the far tier alone into <code>-map3d</code> — a mode the operator picks, not a frame that
+          gave up, and the one where 150 units with models is close to free.
         </p>
         <p class="muted" id="jobstate">nothing running</p>
       </section>
@@ -471,6 +476,7 @@
       $('setup').onclick = () => start('setup');
       $('run').onclick = () => start('phone');
       $('run-map').onclick = () => start('map');
+      $('run-map3d').onclick = () => start('map3d');
       $('build-share').onclick = () => start('share');
       $('stop').onclick = async () => {
         await api('/api/stop', {});

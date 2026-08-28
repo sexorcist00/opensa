@@ -68,6 +68,18 @@ export const JOBS = {
     label: 'convert the ground and nothing else — no models, no collision bake',
     long: true,
   },
+  // The baked 3D city map (201/6-01): the cell LOD tier as the world's ONLY tier. It is the `phone` ritual
+  // with `--lod-only`, in its own folder — a pak with one tier and a pak with two are different builds, and
+  // the reuse check compares recipes rather than folder names.
+  map3d: {
+    args: ['run', 'phone'],
+    command: 'npm',
+    forced: { LODONLY: '1' },
+    knobs: PHONE_ENV,
+    label: 'convert the baked 3D city map — the LOD tier as the only tier',
+    long: true,
+    outSuffix: '-map3d',
+  },
   phone: {
     args: ['run', 'phone'],
     command: 'npm',
@@ -303,7 +315,7 @@ export function buildJob(id, form = {}) {
     // because the alternative is worse than it looks: `phone.sh` checks an existing pak against the recipe it
     // was asked for and REFUSES when they differ, so a map-only run over a full pak's folder would serve
     // nothing, and forcing a rebuild instead would throw the full pak away every time the button is pressed.
-    Object.assign(env, job.forced, { OUT: mapOnlyOut(env.OUT) });
+    Object.assign(env, job.forced, { OUT: suffixedOut(env.OUT, job.outSuffix ?? '-map') });
   }
 
   return { args: job.args, command: job.command, dropped, env, id, label: job.label, long: job.long };
@@ -317,11 +329,23 @@ export function buildJob(id, form = {}) {
  * whatever the last run used.
  */
 export function mapOnlyOut(out) {
+  return suffixedOut(out, '-map');
+}
+
+/**
+ * The folder a build with its own recipe lives in: the requested one with `suffix` on the end, idempotent.
+ *
+ * Every such build needs one for the same reason (see `buildJob`): `phone.sh` refuses a pak whose recipe is
+ * not the one asked for, so two recipes sharing a folder is a run that serves nothing or a rebuild that
+ * throws the other pak away.
+ */
+export function suffixedOut(out, suffix) {
   const base = String(out ?? '')
     .trim()
     .replace(/\/+$/, '');
+  const root = base === '' ? './build/phone' : base;
 
-  return base === '' ? './build/phone-map' : base.endsWith('-map') ? base : `${base}-map`;
+  return root.endsWith(suffix) ? root : `${root}${suffix}`;
 }
 
 function describeEnv(env) {

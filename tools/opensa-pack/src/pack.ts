@@ -73,6 +73,15 @@ export interface PackOptions {
    *  Defaults to `basename(gameDir)`; pmb passes its `--game` basename because ITS gameDir here is a
    *  work-stage intermediate. */
   gameId?: string;
+  /**
+   * Build the **baked 3D city map** (201/6-01): the cell LOD tier as the world's ONLY tier.
+   *
+   * A mode the operator picks rather than a quality the frame fell back to — the LODs are a whole
+   * simplified city already, and a map is what they are the right shape for. Recorded in the recipe, because
+   * a pak that carries half the tiers and does not say so is one a reuse check will hand back for a run it
+   * cannot serve.
+   */
+  lodOnly?: boolean;
   /** What the cell-LOD bake promised (plan 201/1-05) — `buildOpensaLods` returns it, pmb hands it over, and
    *  the manifest turns it into the screen-error fields the streamer picks HD by. Absent = a pak whose
    *  runtime keeps its ring radii. */
@@ -191,6 +200,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
     ...(options.checkpointDir !== undefined
       ? { checkpointDir: options.checkpointDir, resume: options.resume === true }
       : {}),
+    lodOnly: options.lodOnly === true,
     log,
     ...lodPromiseOption(options.lodPromise),
     ...modelPlanHook(fs, options, bundles, log, forceRgba8, models, (result) => {

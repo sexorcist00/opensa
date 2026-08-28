@@ -65,6 +65,7 @@ describe('buildRecipe', () => {
         bakeCollision: true,
         commit: 'abc1234',
         game: 'original',
+        lodOnly: false,
         mapObjectsInRect: true,
         maxTexture: 256,
         models: true,
@@ -75,6 +76,18 @@ describe('buildRecipe', () => {
         textures: 'rgba8',
         vehicles: ['admiral'],
       });
+    });
+
+    it('distinguishes the baked 3D city map from the full world — one tier is not two', () => {
+      // 201/6-01. The two paks are the same game, the same rect and the same flags otherwise, and one of
+      // them carries half the tiers. A folder listing cannot tell them apart, and `phone.sh` reuses a pak by
+      // comparing its recipe — so an unrecorded `--lod-only` is a run served the wrong world.
+      const map = buildRecipe({ ...BASE, lodOnly: true }, META);
+      const full = buildRecipe(BASE, META);
+
+      expect(map.lodOnly).toBe(true);
+      expect(full.lodOnly).toBe(false);
+      expect(map).not.toEqual(full);
     });
 
     it('distinguishes the two sides of the collision A/B, which is the whole point of recording it', () => {

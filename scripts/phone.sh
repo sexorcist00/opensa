@@ -9,6 +9,7 @@
 #   BAKE=0 OUT=./build/phone-plain npm run phone     # the OTHER side of the A/B: no --bake-collision
 #   MODELS=0 npm run phone            # skip the model convert entirely: fast, but dispatch-only (no physics)
 #   MAPOBJ=0 npm run phone            # convert the whole ~14k map-object catalogue, not just what the rect places
+#   LODONLY=1 OUT=./build/phone-map3d npm run phone   # the baked 3D city map: the LOD tier as the only tier
 #   VEHICLES=admiral,infernus PEDS=bmycg npm run phone     # convert a different subset
 #   VEHICLES=all PEDS=all npm run phone                    # the whole roster (hours on a phone)
 #   TEXTURES=rgba8 OUT=./build/phone-rgba8 npm run phone   # the texture-format A/B's other side
@@ -49,6 +50,11 @@ MODELS="${MODELS:-1}"
 # Convert only the map objects the rect PLACES, not all ~14 000 the IDEs name. ON here because this script
 # always converts a DISTRICT: the rest are models this pak does not contain. MAPOBJ=0 converts the catalogue.
 MAPOBJ="${MAPOBJ:-1}"
+# LODONLY=1 builds the BAKED 3D CITY MAP (201/6-01): the cell LOD tier as the world's only tier. Not a
+# quality setting — the LODs are a whole simplified city already, and a map is what they are the right shape
+# for. Give it its own OUT: a pak with one tier and a pak with two are different builds, and the reuse check
+# below refuses the mismatch rather than serving the wrong world.
+LODONLY="${LODONLY:-0}"
 # ASTC by default (200/2-02): a quarter of rgba8's texture memory on the same texels, and the format this
 # class of GPU actually carries. It costs an encode stage in the convert — `TEXTURES=rgba8` is the way back
 # and the A/B's other side. `bc` is desktop-only and would fail the --platforms mobile line below.
@@ -205,6 +211,7 @@ RECT=$RECT
 TEXTURES=$TEXTURES
 BAKE=$BAKE
 MAPOBJ=$MAPOBJ
+LODONLY=$LODONLY
 MODELS=$MODELS
 VEHICLES=$([ "$MODELS" = 0 ] && echo '-' || echo "$VEHICLES")
 PEDS=$([ "$MODELS" = 0 ] && echo '-' || echo "$PEDS")"
@@ -238,6 +245,7 @@ PEDS=$([ "$MODELS" = 0 ] && echo '-' || echo "$PEDS")"
   [ "$TEXTURES" = astc ] && [ "$ASTC_THREADS" = 1 ] && say "astc: single-threaded encode (no worker isolates — slower, and it survives)"
   [ "$BAKE" = 1 ] && args+=(--bake-collision)
   [ "$MAPOBJ" = 1 ] && args+=(--map-objects-in-rect)
+  [ "$LODONLY" = 1 ] && args+=(--lod-only)
   [ "$MODELS" = 0 ] && args+=(--no-models)
   if [ "$MODELS" != 0 ]; then
     [ "$VEHICLES" != all ] && args+=(--vehicles "$VEHICLES")
@@ -278,6 +286,7 @@ else
   say "pak already at $OUT/pak (REBUILD=1 to redo it)"
   expect=(--expect "rect=$RECT" --expect "bakeCollision=$([ "$BAKE" = 1 ] && echo true || echo false)"
           --expect "mapObjectsInRect=$([ "$MAPOBJ" = 1 ] && echo true || echo false)"
+          --expect "lodOnly=$([ "$LODONLY" = 1 ] && echo true || echo false)"
           --expect "textures=$TEXTURES"
           --expect "models=$([ "$MODELS" != 0 ] && echo true || echo false)")
   if [ "$MODELS" != 0 ]; then

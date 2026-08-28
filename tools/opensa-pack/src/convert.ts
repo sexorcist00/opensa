@@ -85,6 +85,18 @@ export interface ConvertOptions {
   /** Emit every world texture as RGBA8 instead of passing SA's DXT through — the pak then loads on GPUs
    *  without BC (every mobile one). Costs 4-8x texture memory; pair it with a district `rect`. */
   forceRgba8?: boolean;
+  /**
+   * Weld the LOD level ONLY — the **baked 3D city map** (201/6-01): a world whose only tier is the far one.
+   *
+   * It is not a quality setting and not a degradation: the cell LODs are a whole simplified city already
+   * (one merged mesh per cell over one shared downscaled dictionary — the modern open-world SLOD scheme),
+   * and a map is what they are the right shape for. What it buys is the console's hardest budget: 150 units
+   * with models at 60 fps inside 300–500 MB is a real risk in the live render and close to free here.
+   *
+   * The runtime needs no flag for it: a cell with no `hd` key already resolves to its `lod` one at every
+   * distance inside the ring (`StreamingDriver.chooseLevel`), which is pinned by a test rather than assumed.
+   */
+  lodOnly?: boolean;
   /** What the cell-LOD bake promised (plan 201/1-05) — the pack turns it into the manifest's screen-error
    *  fields, so the runtime picks HD by projected error instead of by a ring radius. Absent (a pack run
    *  outside the pipeline) writes neither field and the runtime keeps its radii. */
@@ -150,6 +162,8 @@ export interface WeldRectContext {
   defs: ReturnType<typeof resolveMap>;
   fs: AssetFileSystem;
   grid: ReturnType<typeof buildWorldGrid>;
+  /** Weld the LOD level ONLY (201/6-01): the baked 3D city map is a world whose only tier is the far one. */
+  lodOnly?: boolean;
   planner: TexturePlanner;
   roadsignsByCell: ReadonlyMap<string, RoadsignGlyphQuads[]>;
   uvAnimRegistry: UvAnimRegistry;
@@ -286,7 +300,18 @@ export async function convertDistrict(
     }
     const tag = `chunk ${chunkIndex + 1}/${chunks.length} [${chunk.rect.join(',')}]`;
     const chunkStarted = Date.now();
-    const welded = weldRect(fs, defs, grid, planner, chunk.rect, cellSize, breakableModels, uvAnims, roadsignsByCell);
+    const welded = weldRect(
+      fs,
+      defs,
+      grid,
+      planner,
+      chunk.rect,
+      cellSize,
+      breakableModels,
+      uvAnims,
+      roadsignsByCell,
+      options.lodOnly ?? false,
+    );
     if (welded.length === 0) {
       doneCells += chunk.cells;
       checkpoint(chunkIndex, []);
@@ -400,7 +425,10 @@ export function weldGridCell(
   // Cell origin in ENGINE coords: GTA cell centre (x, y) → engine (x, 0, −y).
   const origin: [number, number, number] = [(cx + 0.5) * ctx.cellSize, 0, -(cy + 0.5) * ctx.cellSize];
   const roadsigns = ctx.roadsignsByCell.get(cellKey(cx, cy));
-  for (const lod of [false, true]) {
+  // Both levels, unless the build is the baked 3D city map — where the LOD tier is the whole world and the
+  // HD weld would be geometry the pak carries and nothing ever asks for (201/6-01). The occluder ring the
+  // AO bake reads stays HD either way: it is an INPUT to the bake, not an entry in the pak.
+  for (const lod of ctx.lodOnly ? [true] : [false, true]) {
     // Both levels get the same world-keyed roadsign list since plan 100/03 — the text has to survive to LOD
     // range, and one key per plate is what keeps it from doubling (see `weldCellParts`' note).
     const parts = weldCellParts(
@@ -906,8 +934,19 @@ function weldRect(
   breakableModels: ReadonlySet<string>,
   uvAnimRegistry: UvAnimRegistry,
   roadsignsByCell: ReadonlyMap<string, RoadsignGlyphQuads[]>,
+  lodOnly = false,
 ): { cell: WeldedCell; key: string }[] {
-  const ctx: WeldRectContext = { breakableModels, cellSize, defs, fs, grid, planner, roadsignsByCell, uvAnimRegistry };
+  const ctx: WeldRectContext = {
+    breakableModels,
+    cellSize,
+    defs,
+    fs,
+    grid,
+    lodOnly,
+    planner,
+    roadsignsByCell,
+    uvAnimRegistry,
+  };
   const [x0, y0, x1, y1] = rect;
   const welded: { cell: WeldedCell; key: string }[] = [];
   for (let cx = Math.min(x0, x1); cx <= Math.max(x0, x1); cx += 1) {

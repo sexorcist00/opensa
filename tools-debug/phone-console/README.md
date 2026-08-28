@@ -44,6 +44,11 @@ offers — district, output folder, texture format, whether models are converted
 `scripts/phone.sh` is 369 lines of measured knowledge about this device, and a second copy of it inside a web
 server would be a second thing to keep true.
 
+**`Baked 3D city map` is the third convert** (201/6-01): `LODONLY=1`, which welds the cell LOD tier and skips
+the HD one, into its own `-map3d` folder. It is a mode the operator picks rather than a frame that gave up —
+the LODs are a simplified city already, and it is where the console's hardest budget (150 units with models)
+is close to free. Its folder is separate for the same reason `Map only`'s is, below.
+
 **`Map only` is the same ritual with the model half taken out**, because "just the ground" is the run that is
 wanted most and the one nobody remembers how to ask for. It forces `MODELS=0` (no vehicles, no peds, no model
 archives rewritten — the pak the map reads contains none of them) and `BAKE=0` (with no models there is

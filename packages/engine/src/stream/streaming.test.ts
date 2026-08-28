@@ -315,6 +315,41 @@ describe('StreamingDriver rings (074/21 P1)', () => {
  * The ring must test the geometry, not the grid; pre-`aabb` paks keep the grid-rect behaviour (the whole
  * suite above runs without aabbs).
  */
+/**
+ * The baked 3D city map (201/6-01): a pak whose world is the cell LOD tier and nothing else.
+ *
+ * The runtime needs no mode for it and gets none — a level is chosen from what the CELL HAS, so a pak that
+ * carries no `hd` key resolves to its `lod` one at every distance inside the ring. That was already true
+ * when the mode was decided, which is exactly why it is pinned here: the build half of 6/01 rests on it, and
+ * an unpinned "it already works" is one refactor away from a district that renders nothing up close.
+ */
+describe('StreamingDriver with a LOD-only world (201/6-01)', () => {
+  describe('negative cases', () => {
+    it('never asks for an HD key the pak does not carry, however close the focus is', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 2000 });
+      h.driver.update([875, 0, -875]); // the cell's own centre
+
+      expect(h.requested.some((key) => key.endsWith(',hd'))).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('streams the LOD tier at point-blank range when it is the only tier there is', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 2000 });
+      h.driver.update([875, 0, -875]);
+
+      expect(h.requested).toEqual(['3,3,lod']);
+    });
+
+    it("still prefers HD where the pak carries both — the difference is the PAK's, not the radius's", () => {
+      const h = harness(['3,3,hd', '3,3,lod'], { lodRadius: 2000 });
+      h.driver.update([875, 0, -875]);
+
+      expect(h.requested).toEqual(['3,3,hd']);
+    });
+  });
+});
+
 describe('StreamingDriver geometry-AABB rings (plan 087)', () => {
   describe('negative cases', () => {
     it('does not request a cell whose geometry sits outside the ring even though its grid rect is inside', () => {

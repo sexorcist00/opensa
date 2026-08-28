@@ -6,6 +6,7 @@
  *
  *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> [--rect x0,y0,x1,y1]
  *     [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--textures astc|bc|rgba8] [--max-texture N]
+ *     [--lod-only]
  *     [--map-objects-in-rect]
  *     [--stochastic <file>[,<file>…]]
  *     [--checkpoints <dir> [--resume]]   per-chunk weld checkpoints (pmb plan 006); --resume continues from them
@@ -78,7 +79,7 @@ async function main(): Promise<void> {
     console.error(
       'usage: opensa-pack --game <dir> --out <dir> [--rect x0,y0,x1,y1] ' +
         '[--pak-out <dir>] [--game-id <id>] [--no-ao] [--no-models] [--bakes] [--bake-workers N] ' +
-        '[--textures astc|bc|rgba8] [--astc-threads N] [--max-texture N] [--map-objects-in-rect] ' +
+        '[--textures astc|bc|rgba8] [--astc-threads N] [--max-texture N] [--map-objects-in-rect] [--lod-only] ' +
         '[--platforms desktop|mobile[,…]] [--bake-collision] [--stochastic <file>[,<file>…]] ' +
         '[--vehicles a,b] [--peds a,b]',
     );
@@ -134,6 +135,7 @@ async function main(): Promise<void> {
     ...(maxTexture ? { maxTextureSize: maxTexture } : {}),
     ...(checkpoints ? { checkpointDir: fromCwd(checkpoints), resume: process.argv.includes('--resume') } : {}),
     gameDir: requireDir('game', gameRaw),
+    lodOnly: process.argv.includes('--lod-only'),
     mapObjectsInRect: process.argv.includes('--map-objects-in-rect'),
     ...(gameId ? { gameId } : {}),
     models: !process.argv.includes('--no-models'),

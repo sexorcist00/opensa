@@ -61,6 +61,39 @@ recolour pass over geometry we already generate, not a runtime style.
 **Owes:** bytes, resident MB and frame time against the live render on the [pinned district](../1-the-map-profile/readme.md) and the same device
 — the whole argument for this mode is the gap between those two columns.
 
+#### The build target landed 2026-08-27; the LOOK has not, and that is deliberate
+
+`opensa-pack --lod-only` welds the LOD level and skips the HD one, which is the whole of "a world whose only
+tier is the far one" — the cell LODs are already a simplified city (one merged mesh per cell over one shared
+downscaled dictionary), so the target is a build flag rather than a new bake. `LODONLY=1` carries it through
+`scripts/phone.sh`, and the panel has it as a button that converts into its own `-map3d` folder.
+
+**Three things it had to get right, and each is a test:**
+
+- **The recipe records it.** A pak with one tier and a pak with two are different builds and a folder listing
+  cannot tell them apart — and `phone.sh` reuses a pak by comparing its recipe, so an unrecorded flag is a
+  run served the wrong world. `PakBuildRecipe.lodOnly` closes it, and the reuse check asks for it by name.
+- **The folder is its own.** Same reason the map-only run has one: two recipes in one folder is either a run
+  that serves nothing (the reuse check refuses) or a rebuild that throws the other pak away every press.
+- **The runtime needed nothing, and that is now pinned rather than assumed.** A level is chosen from what the
+  CELL HAS (`chooseLevel`), so a pak with no `hd` key resolves to its `lod` one at every distance inside the
+  ring. It was already true; the mode rests on it, and an unpinned "it already works" is one refactor away
+  from a district that renders nothing up close. Three cases in `streaming.test.ts`, including the control
+  that a both-tier pak still prefers HD at the same focus — the difference is the PAK's, not the radius's.
+
+**The occluder ring stays HD**, and that is not an oversight: it is an input to the AO bake, never an entry
+in the pak. A map lit by the real world's shape is the point.
+
+**What is NOT done: the look — the bake-time recolour** (even light, no time of day, muted legible surfaces).
+Not because it is hard, but because this repository's own rule says a look change is judged by looking
+(`CLAUDE.md`), and looking needs the device that has the game files. Writing a recolour blind and calling it
+"a map look" is exactly the assumption [directive 4](../../../project-goals.md) exists to forbid. So the mode
+opens today as the LOD tier under the console's ordinary lighting, which is honest and measurable, and the
+recolour waits for a session that can see it.
+
+**Owed, and only a build can pay it:** bytes and resident MB against the live render on the pinned district,
+and frame time at the 150-unit board — the gap between those columns IS the argument for the mode.
+
 ### 02 — The flat 2D map
 
 Content for the mode `plan-mode.ts` already frames. Raster tiles baked by an orthographic top-down pass over
