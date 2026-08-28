@@ -281,6 +281,19 @@ export async function runChecks(probe, target) {
     ...(probe.openUrl ? {} : { fix: 'pkg install termux-tools' }),
   });
 
+  // Whether `map_release` can reach the OPERATOR rather than the agent. Termux:API is a separate add-on app,
+  // so its absence is ordinary — and the console's own band still says the run is over, which is why this is
+  // a warn and why the detail says what is lost rather than what is broken.
+  add({
+    detail: probe.signal
+      ? 'termux-vibrate is available — the phone buzzes when an agent finishes with the console'
+      : 'no Termux:API: the console still shows when a run ends, but the phone cannot buzz for it',
+    id: 'signal',
+    label: 'telling you the run ended',
+    state: probe.signal ? 'ok' : 'warn',
+    ...(probe.signal ? {} : { fix: 'pkg install termux-api' }),
+  });
+
   return checks;
 }
 

@@ -23,6 +23,7 @@ function probe(overrides = {}) {
     readJson: async () => ({ build: { at: '2026-08-23', textures: 'astc' } }),
     realpath: async (path) => `/home/user/opensa/${path}`,
     rebasing: async () => false,
+    signal: true,
     termux: true,
     tilesArchive: async () => null,
     wakeLock: true,
@@ -221,6 +222,13 @@ describe('phone console doctor', () => {
 
       expect(find(checks, 'open-url').state).toBe('warn');
       expect(find(checks, 'open-url').fix).toBe('pkg install termux-tools');
+    });
+
+    it('warns when the phone cannot buzz, because then only the console itself says a run ended', async () => {
+      const checks = await runChecks(probe({ signal: false }), TARGET);
+
+      expect(find(checks, 'signal').state).toBe('warn');
+      expect(find(checks, 'signal').fix).toBe('pkg install termux-api');
     });
 
     it('offers the pull when the branch is behind', async () => {

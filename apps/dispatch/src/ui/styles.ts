@@ -156,6 +156,41 @@ export const styles = {
    * control anchored to the map's RIGHT edge — the whole turn/tilt/zoom cluster's right-hand column — sat
    * 43 px past the screen with no way to scroll to it. Nothing clipped visibly and nothing warned.
    */
+  /**
+   * The band that says an agent is driving this page (phone-console plan 002).
+   *
+   * Top-centre and `pointerEvents: none`: the operator's own cluster is top-LEFT and the radar top-RIGHT, so
+   * a centred line is the one place across the width that belongs to neither, and passing every pointer
+   * through means it can overlap one on a narrow screen without ever eating a tap. It exists only while a
+   * panel is answering, which is exactly when nobody is typing in the search box.
+   */
+  agentBand: {
+    background: SEMANTIC.warnBg,
+    border: `1px solid ${SEMANTIC.warnBorder}`,
+    borderRadius: RADIUS.control,
+    color: SEMANTIC.warnText,
+    fontSize: TEXT.caption,
+    left: SPACE.sm,
+    margin: '0 auto',
+    maxWidth: 460,
+    overflow: 'hidden',
+    padding: '5px 10px',
+    pointerEvents: 'none',
+    position: 'absolute',
+    right: SPACE.sm,
+    textAlign: 'center',
+    textOverflow: 'ellipsis',
+    top: SPACE.sm,
+    whiteSpace: 'nowrap',
+    width: 'fit-content',
+    zIndex: 5,
+  },
+  /** Released: the accent, because this is the one state the operator is WAITING for rather than warned by. */
+  agentBandDone: {
+    background: ACCENT.bg,
+    border: `1px solid ${ACCENT.border}`,
+    color: ACCENT.text,
+  },
   app: {
     background: RAMP.bg,
     color: COLORS.text,

@@ -104,7 +104,7 @@ fight over one folder. With the panel down, every tool says so rather than start
 
 It also reaches the **map page itself** — `map_state`, `map_snapshot` (the whole `?inventory=1` report plus
 the live readout and the errors), `map_screenshot` (a PNG, returned as an image), `map_goto`, `map_mode`,
-`map_board`. The page answers because the panel's links carry `&agent=1`; nothing else does, so a shared link
+`map_board`, and `map_release` when it is done with it. The page answers because the panel's links carry `&agent=1`; nothing else does, so a shared link
 or a desk run never phones a panel. **No DevTools protocol and no `adb`**: the numbers are the ones the
 console already computes and the picture is the one it already composes for a share link.
 
@@ -117,6 +117,15 @@ than covered with a second tab. Without `termux-open-url` (`pkg install termux-t
 back the URL; the doctor warns for it rather than failing, because a thumb still works. **The links it opens
 and the links the page hands out are built by one module** (`app/console-urls.mjs`): two copies of that
 arithmetic would open different paks, and the capture would name the one nobody was looking at.
+
+**`map_release` gives the phone back.** The one tool here that talks to the OPERATOR rather than to the
+agent, and it exists because of what this channel costs them: the console has to stay the foreground tab
+while it is being driven, so a run is somebody sitting still holding their own device with no idea how long
+for. It posts the release into the page — the band across the top of the console turns from _keep this tab in
+front_ to _done, you can switch away_ — and buzzes the phone through Termux:API (`termux-vibrate -f`, so it
+lands through silent mode) with a notification carrying whatever the agent said it was doing. The buzz is the
+optional half: Termux:API is a separate add-on app, the doctor warns when it is absent, and the band still
+says the run is over without it. Call it when the last measurement is taken, not when the conversation ends.
 
 **It needs Termux allowed to display over other apps, and nothing reports that for you.** Android forbids a
 background app from starting an activity, and `termux-open-url` exits 0 when the system discards one — so on

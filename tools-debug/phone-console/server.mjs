@@ -29,12 +29,16 @@ import { runChecks, statusPaths, verdict } from './doctor.mjs';
 import { buildJob, JobRunner, JOBS } from './jobs.mjs';
 import { OPEN_URL_BIN, openConsole } from './opener.mjs';
 import { MapBus } from './remote.mjs';
+import { NOTIFY_BIN, signalDone, VIBRATE_BIN } from './signal.mjs';
 import { htmlFingerprint, htmlNames, listTarFiles } from './webapp.mjs';
 
 const run = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
 const PORT = Number(process.env.PANEL_PORT) || 8787;
+
+/** A Termux:API binary with no add-on app behind it can hang; the release must not hang with it. */
+const SIGNAL_TIMEOUT_MS = 4000;
 const HOST = process.env.PANEL_HOST || '127.0.0.1';
 /** The two ports a field run uses (`scripts/phone.sh`), so the doctor can say which are already serving. */
 const RUN_PORTS = [Number(process.env.STATIC_PORT) || 3001, Number(process.env.APP_PORT) || 5173];
@@ -218,6 +222,7 @@ const probe = {
   },
   /** A rebase that stopped part-way leaves one of these behind, and the tree is mid-history until it ends. */
   rebasing: async () => existsSync(join(REPO, '.git/rebase-merge')) || existsSync(join(REPO, '.git/rebase-apply')),
+  signal: existsSync(VIBRATE_BIN) || existsSync(NOTIFY_BIN),
   termux: Boolean(process.env.PREFIX) && existsSync('/data/data/com.termux'),
   /** The flat map's pyramid beside the pak, in bytes, or null when it is not there — so "did my upload land"
    *  is a line on the screen rather than a question (201/6-02). */
@@ -405,6 +410,19 @@ async function handle(request, response) {
         { timeoutMs: Number(body.timeoutMs) || undefined, url: links[view] },
       ),
     );
+  }
+  // The end of a run, told to the PERSON rather than to the agent: the page shows it and the phone buzzes.
+  // Both halves are attempted whatever the other does — a console that has already been closed does not stop
+  // the buzz, and a phone with no Termux:API does not stop the page from saying the run is over.
+  if (request.method === 'POST' && path === '/api/map/release') {
+    const body = await readJson(request);
+    const note = String(body.note ?? '').slice(0, 120);
+    const [map, signal] = await Promise.all([
+      mapBus.submit({ args: { note }, kind: 'release' }),
+      signalDone({ exists: existsSync, run: (bin, args) => run(bin, args, { timeout: SIGNAL_TIMEOUT_MS }) }, { note }),
+    ]);
+
+    return send(response, 200, { map, ok: true, signal });
   }
   if (request.method === 'GET' && path === '/api/jobs') {
     return send(

@@ -171,6 +171,26 @@ export const TOOLS = [
     title: 'Put the console on the screen',
   },
   {
+    annotations: STEERS,
+    description:
+      'Say the run is over, to the PERSON holding the phone. Android freezes a tab that is not in front, so ' +
+      'while these tools drive the console its owner has to leave the device alone — this is what tells ' +
+      'them they can stop: the console shows it and the phone buzzes (Termux:API, when it is installed). ' +
+      'Call it when the last measurement is taken, not when the conversation ends.',
+    inputSchema: {
+      additionalProperties: false,
+      properties: {
+        note: {
+          description: 'One line for the band and the notification — what was taken, or what is next.',
+          type: 'string',
+        },
+      },
+      type: 'object',
+    },
+    name: 'map_release',
+    title: 'Give the phone back',
+  },
+  {
     annotations: READS,
     description:
       'Everything the map knows about itself in one answer: the ?inventory=1 report (fps p50/p95, draws, ' +
@@ -348,6 +368,8 @@ async function callTool(name, args, deps) {
           view: args.view ?? 'map',
         }),
       );
+    case 'map_release':
+      return content(await panel('POST', '/api/map/release', { note: args.note ?? '' }));
     case 'map_screenshot': {
       const answer = await mapCall(panel, 'screenshot', {}, 30_000);
       const image = answer?.value?.image;

@@ -163,6 +163,7 @@ describe('phone MCP server', () => {
         'phone_stop',
         'map_state',
         'map_open',
+        'map_release',
         'map_snapshot',
         'map_screenshot',
         'map_goto',

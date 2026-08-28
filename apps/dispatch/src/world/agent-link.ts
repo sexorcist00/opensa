@@ -17,9 +17,31 @@
  * Long-poll, never a socket: a phone locks, Android kills the tab, the tunnel drops. A poll that comes back
  * with nothing after twenty seconds and starts again survives all three without a reconnect protocol of its
  * own; a failure just means the next poll is a second later.
+ *
+ * **The page also says, on itself, whether it is currently being driven** — because on this device the
+ * operator has to hold still while it is. Android freezes a tab that is not in front: the map stops polling,
+ * the panel calls it detached after 15 s, and a command already handed over is never answered (measured
+ * 2026-08-28, twice, on `screenshot`). So an agent's session costs somebody their phone, and until this
+ * reported anything, the only way to learn it was over was to ask the agent in a chat. `onStatus` is that
+ * report, and `release` is the agent saying the run is finished.
  */
 import type { MapPose } from '../map/map-camera';
 import type { MapMode } from './mode-switch';
+
+/**
+ * What the link is doing to this page, for the operator holding it.
+ *
+ * - `held` — a panel is answering and may ask at any moment, so the tab has to stay in front;
+ * - `busy` — a command is being answered right now;
+ * - `released` — the agent said it is done, and the phone is the operator's again.
+ */
+export type AgentActivity = 'busy' | 'held' | 'released';
+
+/** The state, plus whatever the agent said when it let go. */
+export interface AgentStatus {
+  readonly activity: AgentActivity;
+  readonly note: string;
+}
 
 /** What the link can reach. Deliberately small: everything here already existed for something else. */
 export interface AgentSurface {
@@ -50,16 +72,39 @@ interface AgentCommand {
 /** How long to wait before polling again after a failure — the panel restarting, the tunnel blinking. */
 const RETRY_MS = 2000;
 
-/** Start answering, until `stop()`. Safe to call when no panel is there: it simply keeps failing quietly. */
-export function startAgentLink(panel: string, surface: AgentSurface): { stop: () => void } {
+/**
+ * Start answering, until `stop()`. Safe to call when no panel is there: it simply keeps failing quietly, and
+ * `onStatus` stays silent — a shared link carrying `&agent=1` with nothing listening must not tell an
+ * operator that somebody is driving their page.
+ */
+export function startAgentLink(
+  panel: string,
+  surface: AgentSurface,
+  onStatus?: (status: AgentStatus) => void,
+): { stop: () => void } {
   let running = true;
+  // Sticky: a release stands until the agent asks for something again, so the operator is not sent back to
+  // "hold still" by the panel's own idle polling.
+  let released: AgentStatus | null = null;
+  const report = (status: AgentStatus): void => onStatus?.(status);
   const loop = async (): Promise<void> => {
     while (running) {
       try {
         const command = await nextCommand(panel, surface);
+        // What the command IS decides the state, so it is read before anything is reported: a poll that came
+        // back carrying the release must not flash "hold still" on its way to saying the run is over.
+        if (command?.kind === 'release') {
+          released = { activity: 'released', note: noteOf(command) };
+        } else if (command) {
+          released = null;
+          report({ activity: 'busy', note: '' });
+        }
         if (command) {
           await answer(panel, command, surface);
         }
+        // Only now is a panel known to be there. A poll that returns empty after its hold is the ordinary
+        // case and is still proof of one, which is why this is reported here rather than at startup.
+        report(released ?? { activity: 'held', note: '' });
       } catch {
         // A poll that failed says nothing about the next one: the panel may be restarting, the phone may
         // have slept, the tunnel may have blinked. Wait a beat rather than spinning on a dead port.
@@ -119,6 +164,13 @@ async function nextCommand(panel: string, surface: AgentSurface): Promise<AgentC
   return body.command;
 }
 
+/** What the agent said when it released the page — trimmed, and short enough for one line of chrome. */
+function noteOf(command: AgentCommand): string {
+  const note = command.args.note;
+
+  return typeof note === 'string' ? note.trim().slice(0, 120) : '';
+}
+
 /** What each command means. Everything here is a capability the console already had. */
 async function run(command: AgentCommand, surface: AgentSurface): Promise<unknown> {
   switch (command.kind) {
@@ -141,6 +193,10 @@ async function run(command: AgentCommand, surface: AgentSurface): Promise<unknow
 
       return { flyingTo: pose };
     }
+    // The agent letting go. It answers with what the page will now be showing, so a tool that says "you can
+    // put the phone down" only says it once the page has actually said so.
+    case 'release':
+      return { released: true, says: noteOf(command) };
     case 'screenshot':
       return { image: await encodeImage(await surface.image()) };
     case 'snapshot':
