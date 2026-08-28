@@ -63,8 +63,10 @@ anything.
    minutes to an hour on this device. Follow it with phone_log, and do not poll faster than the log grows.
    A refusal while another job runs is the phone protecting one build folder from two writers, not a
    transient error to retry.
-3. Call map_state before any other map_ tool. The page answers only when a person opened it with &agent=1
-   (the panel's own links carry it). "No map is attached" is not something another call can fix.
+3. Call map_state before any other map_ tool. The page answers only when it was opened with &agent=1 (the
+   panel's own links carry it, and so does map_open). When nothing is attached, map_open puts the console
+   on the phone's screen and waits for it — no other call can clear that refusal, and a person tapping a
+   link is no longer the only way.
 4. Measurements file themselves: the console posts its own capture to the panel, and phone_commit commits
    and pushes exactly what git reports pending under docs/benchmarks. It never invents a path, and it never
    files code.

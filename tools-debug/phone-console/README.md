@@ -108,6 +108,16 @@ the live readout and the errors), `map_screenshot` (a PNG, returned as an image)
 or a desk run never phones a panel. **No DevTools protocol and no `adb`**: the numbers are the ones the
 console already computes and the picture is the one it already composes for a share link.
 
+**`map_open` puts the console on the phone's screen**, which is the one thing every tool above could not do:
+they all talk to a page somebody had already opened, so `"no map is attached"` stopped a field run until a
+person tapped a link. It launches the panel's own URL through `termux-open-url` — any of the six links in
+the table above, by name — and waits for the page to phone home, so a browser that started is reported as
+a launch and only an attached console is reported as a map. A console already attached is left alone rather
+than covered with a second tab. Without `termux-open-url` (`pkg install termux-tools`) it says so and hands
+back the URL; the doctor warns for it rather than failing, because a thumb still works. **The links it opens
+and the links the page hands out are built by one module** (`app/console-urls.mjs`): two copies of that
+arithmetic would open different paks, and the capture would name the one nobody was looking at.
+
 `phone_exec` (a real shell) is **off unless `PANEL_MCP_EXEC=1`**, and the HTTP transport binds localhost and
 requires a bearer token: reaching it from off-device is a tunnel somebody sets up on purpose, and a tunnel
 with no token is a shell on the open internet. The design, the transports and what is verified where:
@@ -128,7 +138,7 @@ a batch too; it used to be dropped in silence, because an array carries no `id`.
 
 **What the tools ARE is now said out loud**, because compatibility only gets an agent connected. The rules
 that are not visible in any signature — read `phone_state` first, one job at a time and `phone_run` returns
-at the START, `map_state` before any `map_` tool because a missing page is a person's problem — ride the
+at the START, `map_state` before any `map_` tool and `map_open` when it answers that none is attached — ride the
 handshake as `instructions`, including from the bridge when there is no phone at all. Every tool carries a
 `title` and its behaviour annotations (an unannotated tool is read as destructive and open-world, which is
 wrong for the nine that only read), the no-argument tools state a closed schema, `map_mode`/`map_goto`

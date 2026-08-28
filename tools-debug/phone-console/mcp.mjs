@@ -146,27 +146,32 @@ export const TOOLS = [
     title: 'Whether a map is attached',
   },
   {
-    annotations: READS,
+    annotations: STEERS,
     description:
       'Open the console ON THE PHONE\'S SCREEN and wait until it reaches the panel. This is what clears "no ' +
       'map is attached" — every other map_ tool talks to a page that is already open. Answers when the ' +
-      'page phones home, or says what it launched and why nothing arrived.',
+      'page phones home, or says what it launched and why nothing arrived. A console already attached is ' +
+      'left alone rather than covered with a second tab.',
     inputSchema: {
+      additionalProperties: false,
       properties: {
         district: { description: 'District the console starts on (see phone_state).', type: 'string' },
         out: { description: "Pak folder to read, default './build/phone'.", type: 'string' },
         view: {
           description:
-            "Which of the panel's own links to open: 'map' (default), 'inventory' (the report), 'field' " +
-            "(the declared worst case, 150 units), 'flat', 'bake' (the tile pyramid), 'share'.",
+            "Which of the panel's own links to open: the map itself, its inventory report, the declared " +
+            'worst case (150 units), the flat 2D map, the tile bake, or the share build.',
+          enum: ['map', 'inventory', 'field', 'flat', 'bake', 'share'],
           type: 'string',
         },
       },
       type: 'object',
     },
     name: 'map_open',
+    title: 'Put the console on the screen',
   },
   {
+    annotations: READS,
     description:
       'Everything the map knows about itself in one answer: the ?inventory=1 report (fps p50/p95, draws, ' +
       'resident MB, per-pass spans, symbology counts, the time axis), the live readout, and the errors it ' +
