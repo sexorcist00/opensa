@@ -102,10 +102,46 @@ node tools-debug/phone-console/mcp.mjs --http --port 8788   # JSON-RPC over POST
 **It is a client of the running panel**, not a second copy: one `JobRunner` on the phone, or two converts
 fight over one folder. With the panel down, every tool says so rather than starting anything.
 
+It also reaches the **map page itself** — `map_state`, `map_snapshot` (the whole `?inventory=1` report plus
+the live readout and the errors), `map_screenshot` (a PNG, returned as an image), `map_goto`, `map_mode`,
+`map_board`. The page answers because the panel's links carry `&agent=1`; nothing else does, so a shared link
+or a desk run never phones a panel. **No DevTools protocol and no `adb`**: the numbers are the ones the
+console already computes and the picture is the one it already composes for a share link.
+
 `phone_exec` (a real shell) is **off unless `PANEL_MCP_EXEC=1`**, and the HTTP transport binds localhost and
 requires a bearer token: reaching it from off-device is a tunnel somebody sets up on purpose, and a tunnel
 with no token is a shell on the open internet. The design, the transports and what is verified where:
 [docs/plans/002-mcp.md](docs/plans/002-mcp.md).
+
+### Wiring it to a Claude that is not on this phone
+
+```bash
+# 1. on the phone, in the repo — the panel, then the MCP server beside it
+npm run panel
+PANEL_MCP_TOKEN=$(head -c 24 /dev/urandom | base64 | tr -d '/+=') node tools-debug/phone-console/mcp.mjs --http --port 8788
+#    it prints the token it is using — keep that line
+
+# 2. a tunnel, so the container can reach it. Any HTTPS tunnel works; this one needs no account:
+pkg install cloudflared            # once
+cloudflared tunnel --url http://127.0.0.1:8788
+#    it prints https://<something>.trycloudflare.com — the MCP URL is that + /mcp
+```
+
+Then set two environment variables on the Claude Code environment (Settings → the environment this session
+runs in) and **start a new session** — MCP servers are read at session start, never mid-conversation:
+
+| Variable             | Value                                       |
+| -------------------- | ------------------------------------------- |
+| `OPENSA_PHONE_URL`   | `https://<something>.trycloudflare.com/mcp` |
+| `OPENSA_PHONE_TOKEN` | the token the MCP server printed            |
+
+`.mcp.json` in the repository root already points at both, by name — **the URL and the token are never
+committed**: a quick tunnel's address changes every restart, and a committed token is a leak that outlives
+the session that leaked it.
+
+**A quick tunnel is a public URL.** The token is what stands between it and a stranger, which is why the
+server refuses an unauthenticated request rather than answering it. Stop `cloudflared` when the session is
+over; the next one gets a new address anyway.
 
 ## What it checks before you start
 

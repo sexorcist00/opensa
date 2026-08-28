@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "opensa-phone": {
+      "headers": {
+        "Authorization": "Bearer ${OPENSA_PHONE_TOKEN}"
+      },
+      "type": "http",
+      "url": "${OPENSA_PHONE_URL}"
+    }
+  }
+}

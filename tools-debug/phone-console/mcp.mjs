@@ -92,6 +92,55 @@ export const TOOLS = [
   },
   {
     description:
+      'What the MAP page is doing right now: whether one is attached (opened with &agent=1), which mode it ' +
+      'is drawing and what it last reported. Ask this before any other map_ tool.',
+    inputSchema: { properties: {}, type: 'object' },
+    name: 'map_state',
+  },
+  {
+    description:
+      'Everything the map knows about itself in one answer: the ?inventory=1 report (fps p50/p95, draws, ' +
+      'resident MB, per-pass spans, symbology counts, the time axis), the live readout, and the errors it ' +
+      'has logged. This is the realtime benchmark, read without anybody copying it.',
+    inputSchema: { properties: {}, type: 'object' },
+    name: 'map_snapshot',
+  },
+  {
+    description: 'A PNG of the map as it is on screen — the world and the symbology over it, composed by the page.',
+    inputSchema: { properties: {}, type: 'object' },
+    name: 'map_screenshot',
+  },
+  {
+    description: 'Fly the map camera to a pose. The same flight a bookmark makes, so streaming follows it.',
+    inputSchema: {
+      properties: {
+        at: { description: 'GTA ground point [x, y].', items: { type: 'number' }, type: 'array' },
+        height: { description: 'Camera height in world units.', type: 'number' },
+        pitch: { description: 'Radians; negative looks down.', type: 'number' },
+        projection: { description: "'perspective' or 'ortho'.", type: 'string' },
+        yaw: { description: 'Radians.', type: 'number' },
+      },
+      required: ['at'],
+      type: 'object',
+    },
+    name: 'map_goto',
+  },
+  {
+    description: 'Switch which surface draws the world (201/6-03): the live 3D render or the flat 2D map.',
+    inputSchema: {
+      properties: { mode: { description: "'live' or 'flat'.", type: 'string' } },
+      required: ['mode'],
+      type: 'object',
+    },
+    name: 'map_mode',
+  },
+  {
+    description: 'The board the operator has: units, calls, the selection.',
+    inputSchema: { properties: {}, type: 'object' },
+    name: 'map_board',
+  },
+  {
+    description:
       'Commit and push what the map has filed under docs/benchmarks. The captures themselves arrive from ' +
       'the console itself (its readout posts them), so this is the second half of that round trip.',
     inputSchema: {
@@ -170,6 +219,26 @@ export function toolList(env = process.env) {
 async function callTool(name, args, deps) {
   const { exec, panel } = deps;
   switch (name) {
+    case 'map_board':
+      return content(await mapCall(panel, 'ops'));
+    case 'map_goto':
+      return content(await mapCall(panel, 'pose', { pose: args }));
+    case 'map_mode':
+      return content(await mapCall(panel, 'mode', { mode: args.mode }));
+    case 'map_screenshot': {
+      const answer = await mapCall(panel, 'screenshot', {}, 30_000);
+      const image = answer?.value?.image;
+      if (typeof image !== 'string') {
+        return content(answer);
+      }
+
+      // An IMAGE result, so the agent sees the map rather than a base64 string it cannot read.
+      return { content: [{ data: image.slice(image.indexOf(',') + 1), mimeType: 'image/png', type: 'image' }] };
+    }
+    case 'map_snapshot':
+      return content(await mapCall(panel, 'snapshot'));
+    case 'map_state':
+      return content(await panel('GET', '/api/map/state'));
     case 'phone_commit':
       return content(
         await panel('POST', '/api/commit', {
@@ -222,6 +291,11 @@ async function execInRepo(command, timeoutMs) {
   } catch (error) {
     return { code: error.code ?? 1, stderr: error.stderr ?? message(error), stdout: error.stdout ?? '' };
   }
+}
+
+/** Ask the attached map page for something, through the panel's bus. */
+function mapCall(panel, kind, args = {}, timeoutMs = 20_000) {
+  return panel('POST', '/api/map/command', { args, kind, timeoutMs });
 }
 
 function message(error) {

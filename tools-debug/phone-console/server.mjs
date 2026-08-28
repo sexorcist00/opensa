@@ -26,6 +26,7 @@ import { fileCapture, writeTilesArchive } from './capture-store.mjs';
 import { commitPlan, pendingCaptures, runCommit } from './captures.mjs';
 import { runChecks, statusPaths, verdict } from './doctor.mjs';
 import { buildJob, JobRunner, JOBS } from './jobs.mjs';
+import { MapBus } from './remote.mjs';
 import { htmlFingerprint, htmlNames, listTarFiles } from './webapp.mjs';
 
 const run = promisify(execFile);
@@ -49,6 +50,9 @@ const MAX_JSON = 8 * 1024 * 1024;
 const MAX_UPLOAD = 512 * 1024 * 1024;
 
 const listeners = new Set();
+/** The map page's command bus (plan 002). One per panel, like the job runner: one phone, one map in front. */
+const mapBus = new MapBus();
+
 const runner = new JobRunner({
   cwd: REPO,
   // Beside the servers' own logs (`scripts/phone.sh` writes `build/.phone/{app,static}.log` there). Every job
@@ -345,6 +349,30 @@ async function handle(request, response) {
   }
   // What may be run, straight off the table `buildJob` validates against — an agent asking "what can this
   // phone do" must be answered by the allowlist itself rather than by a list somebody keeps in step with it.
+  // The map page's own channel (plan 002, the browser half). Three routes and no state of its own: the page
+  // long-polls for a command, answers it, and an agent waits on that answer.
+  if (request.method === 'GET' && path === '/api/map/poll') {
+    const page = {
+      fps: Number(url.searchParams.get('fps')) || 0,
+      mode: url.searchParams.get('mode') ?? '',
+      url: url.searchParams.get('url') ?? '',
+    };
+
+    return send(response, 200, { command: await mapBus.take({ page }) });
+  }
+  if (request.method === 'POST' && path === '/api/map/result') {
+    const body = await readJson(request);
+
+    return send(response, 200, mapBus.settle(body.id, body.result));
+  }
+  if (request.method === 'POST' && path === '/api/map/command') {
+    const body = await readJson(request);
+
+    return send(response, 200, await mapBus.submit(body));
+  }
+  if (request.method === 'GET' && path === '/api/map/state') {
+    return send(response, 200, mapBus.attached());
+  }
   if (request.method === 'GET' && path === '/api/jobs') {
     return send(
       response,

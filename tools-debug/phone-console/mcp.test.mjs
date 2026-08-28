@@ -37,6 +37,21 @@ describe('phone MCP server', () => {
       expect(answer.result).toBeUndefined();
     });
 
+    it('says which end is silent when no map is attached, rather than hanging', async () => {
+      // The panel answers this one itself — "no map is attached" and "the map never answered" are different
+      // problems and an agent must not have to guess between them.
+      const stub = panelStub({
+        '/api/map/command': { error: 'no map is attached — open the console with &agent=1', ok: false },
+      });
+      const answer = await handleRpc(
+        { id: 10, jsonrpc: '2.0', method: 'tools/call', params: { arguments: {}, name: 'map_snapshot' } },
+        deps(stub),
+      );
+
+      expect(text(answer).ok).toBe(false);
+      expect(text(answer).error).toContain('agent=1');
+    });
+
     it('reports a tool failure as a RESULT the agent can read, not as a protocol error', async () => {
       // The distinction is the whole difference between "this request made no sense" and "the thing you
       // asked for went wrong" — an agent can act on the second and can only give up on the first.
@@ -95,6 +110,12 @@ describe('phone MCP server', () => {
         'phone_run',
         'phone_log',
         'phone_stop',
+        'map_state',
+        'map_snapshot',
+        'map_screenshot',
+        'map_goto',
+        'map_mode',
+        'map_board',
         'phone_commit',
       ]);
       expect(tools.every((tool) => tool.inputSchema.type === 'object' && tool.description.length > 20)).toBe(true);
@@ -149,6 +170,44 @@ describe('phone MCP server', () => {
         push: true,
         subject: 'the field run',
       });
+    });
+
+    it('reads the map through the panel bus, never by talking to the page itself', async () => {
+      // The page is on the phone and this server may not be; the panel is the one thing both can reach.
+      const stub = panelStub({ '/api/map/command': { ok: true, value: { readout: { fps: 41 } } } });
+      const answer = await handleRpc(
+        { id: 7, jsonrpc: '2.0', method: 'tools/call', params: { arguments: {}, name: 'map_snapshot' } },
+        deps(stub),
+      );
+
+      expect(stub.calls).toEqual(['POST /api/map/command']);
+      expect(text(answer).value.readout.fps).toBe(41);
+    });
+
+    it('hands a screenshot back as an IMAGE, so the map is seen rather than described', async () => {
+      const png = 'data:image/png;base64,iVBORw0KGgo=';
+      const stub = panelStub({ '/api/map/command': { ok: true, value: { image: png } } });
+      const answer = await handleRpc(
+        { id: 8, jsonrpc: '2.0', method: 'tools/call', params: { arguments: {}, name: 'map_screenshot' } },
+        deps(stub),
+      );
+
+      expect(answer.result.content[0]).toEqual({ data: 'iVBORw0KGgo=', mimeType: 'image/png', type: 'image' });
+    });
+
+    it('passes a camera pose through as the map page expects it', async () => {
+      const stub = panelStub();
+      await handleRpc(
+        {
+          id: 9,
+          jsonrpc: '2.0',
+          method: 'tools/call',
+          params: { arguments: { at: [1481, -1770], height: 900 }, name: 'map_goto' },
+        },
+        deps(stub),
+      );
+
+      expect(stub.calls).toEqual(['POST /api/map/command']);
     });
 
     it('runs a shell command through the injected runner when it is enabled', async () => {

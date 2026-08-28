@@ -13,6 +13,7 @@ import type { BootOptions, DispatchHandle, DispatchReadout } from '../world/boot
 import type { BootedMode, MapMode, ModeReport } from '../world/mode-switch';
 
 import { commandFor } from '../map/keymap';
+import { startAgentLink } from '../world/agent-link';
 import { bootDispatch } from '../world/boot';
 import { dispatchParams } from '../world/boot';
 import { bootStep } from '../world/boot-progress';
@@ -23,6 +24,8 @@ import { styles } from './styles';
 
 /** Module scope, so StrictMode's dev double-mount boots the engine on the canvas exactly once. */
 let switcher: ModeSwitch | null = null;
+/** The same, for the panel link: one page, one link, however many times React mounts this. */
+let agentLink: null | { stop: () => void } = null;
 
 export function MapCanvas({
   actions,
@@ -63,6 +66,8 @@ export function MapCanvas({
   const [mode, setMode] = useState<MapMode | null>(null);
   /** Held for the inventory panel only (201/1-01) — it reads the collector, it does not drive the loop. */
   const handleRef = useRef<DispatchHandle | null>(null);
+  /** The last readout, for the agent link's heartbeat — a ref, so mirroring it costs no render. */
+  const lastReadout = useRef<DispatchReadout | null>(null);
   // Callbacks reach the loop through a ref so the boot effect never re-runs: re-booting the engine on a
   // re-render would leak a device and a streaming worker per render.
   const liveRef = useRef({ actions, createPakWorker, onMode, onReadout, read });
@@ -92,7 +97,10 @@ export function MapCanvas({
         }
       },
       onGround: (at: GtaGround, district: null | string) => liveRef.current.actions.createAt(at, district),
-      onReadout: (readout) => liveRef.current.onReadout(readout),
+      onReadout: (readout) => {
+        lastReadout.current = readout;
+        liveRef.current.onReadout(readout);
+      },
       ops: () => liveRef.current.read.ops(),
       overlay,
       selection: () => liveRef.current.read.selection(),
@@ -131,6 +139,21 @@ export function MapCanvas({
       if (handle) {
         handleRef.current = handle;
         onReady(handle);
+      }
+      // The map answers the phone panel while `?agent=1` is on (phone-console plan 002) — started once, on
+      // the first surface, and left alone by later switches: the link reads through the switcher, so what
+      // it reports is whatever is drawing now.
+      if (agentLink === null && dispatchParams().get('agent') === '1') {
+        agentLink = startAgentLink(panelUrl(), {
+          errors: () => handleRef.current?.inventory()?.errors ?? [],
+          image: () => handleRef.current?.exportImage() ?? Promise.resolve(null),
+          inventory: () => handleRef.current?.inventory() ?? null,
+          mode: () => switcher?.current() ?? null,
+          moveTo: (pose) => handleRef.current?.recallView(pose),
+          ops: () => liveRef.current.read.ops(),
+          readout: () => lastReadout.current,
+          setMode: (wanted) => void switcher?.to(wanted),
+        });
       }
       // The cost the step owes, on whatever device is running it — the first open included, since that is
       // the number a field report compares a switch against.
@@ -183,6 +206,13 @@ function DegradedBanner({ message }: { message: string }): ReactElement {
       <strong>2D plan mode</strong> — no 3D world: {message}
     </div>
   );
+}
+
+/** Where the phone panel is — `?panel=` for anything unusual, otherwise the port it serves on. */
+function panelUrl(): string {
+  const override = dispatchParams().get('panel');
+
+  return override && override !== '' ? override.replace(/\/$/, '') : `${window.location.protocol}//localhost:8787`;
 }
 
 /** The short version of a boot error, for a banner that has one line. */

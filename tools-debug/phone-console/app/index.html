@@ -379,7 +379,10 @@
         const app = state.webapp
           ? `http://localhost:${state.ports.static}/build/webapp/dispatch.html`
           : `http://localhost:${state.ports.app}/dispatch.html`;
-        const query = `src=${pak}&district=${encodeURIComponent($('district').value.trim())}`;
+        // `agent=1` on every link this page hands out: these URLs only exist on the phone, and it is what
+        // lets an agent read the map's numbers and see it (phone-console plan 002). Nothing else carries it,
+        // so a shared link or a desk run never phones a panel.
+        const query = `src=${pak}&district=${encodeURIComponent($('district').value.trim())}&agent=1`;
         $('link-map').href = `${app}?${query}`;
         $('link-inventory').href = `${app}?${query}&inventory=1`;
         // The declared worst case, in one tap: 201's budget table says 150 units each drawn as a model with
