@@ -108,6 +108,7 @@
     "lint:ts": "tsc --noEmit",
     "panel": "node tools-debug/phone-console/server.mjs",
     "panel:mcp": "node tools-debug/phone-console/mcp.mjs",
+    "panel:tunnel": "node tools-debug/phone-console/tunnel.mjs",
     "phone": "bash scripts/phone.sh",
     "phone:setup": "bash scripts/phone-setup.sh",
     "pre-commit": "lint-staged --config .lintstagedrc.cjs",

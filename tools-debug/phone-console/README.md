@@ -116,16 +116,18 @@ with no token is a shell on the open internet. The design, the transports and wh
 ### Wiring it to a Claude that is not on this phone
 
 ```bash
-# 1. on the phone, in the repo — the panel, then the MCP server beside it
-npm run panel
-PANEL_MCP_TOKEN=$(head -c 24 /dev/urandom | base64 | tr -d '/+=') node tools-debug/phone-console/mcp.mjs --http --port 8788
-#    it prints the token it is using — keep that line
-
-# 2. a tunnel, so the container can reach it. Any HTTPS tunnel works; this one needs no account:
-pkg install cloudflared            # once
-cloudflared tunnel --url http://127.0.0.1:8788
-#    it prints https://<something>.trycloudflare.com — the MCP URL is that + /mcp
+pkg install cloudflared      # once
+npm run panel                # session 1 — the panel itself
+npm run panel:tunnel         # session 2 — the MCP server + the tunnel, and the two values to paste
 ```
+
+`panel:tunnel` starts both and prints one block: the URL cloudflared just minted (with `/mcp` already on it)
+and the token. **The token is made once and kept** in `build/.phone/mcp-token`, so a restart re-pastes one
+value rather than two — a tunnel address changes every time and nothing can be done about that.
+
+Keep that session open: closing it closes the tunnel. `cloudflared` missing is not fatal — the MCP server
+comes up anyway and the block names the localhost address, which is what a Claude running ON this phone
+wants.
 
 Then set two environment variables on the Claude Code environment (Settings → the environment this session
 runs in) and **start a new session** — MCP servers are read at session start, never mid-conversation:
