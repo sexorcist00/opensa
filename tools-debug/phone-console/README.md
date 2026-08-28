@@ -116,40 +116,55 @@ with no token is a shell on the open internet. The design, the transports and wh
 ### Wiring it to a Claude that is not on this phone
 
 ```bash
-pkg install cloudflared      # once
 npm run panel                # session 1 — the panel itself
-npm run panel:tunnel         # session 2 — the MCP server + the tunnel, and the two values to paste
+npm run panel:tunnel         # session 2 — the MCP server + a tunnel, and the two values to paste
 ```
 
-`panel:tunnel` starts both and prints one block: the URL cloudflared just minted (with `/mcp` already on it)
-and the token. **The token is made once and kept** in `build/.phone/mcp-token`, so a restart re-pastes one
-value rather than two — a tunnel address changes every time and nothing can be done about that.
+`panel:tunnel` starts both and prints one block: the public URL (with `/mcp` already on it) and the token.
+**The token is made once and kept** in `build/.phone/mcp-token`, so a restart re-pastes one value rather than
+two — a tunnel address changes every time and nothing can be done about that.
 
-Keep that session open: closing it closes the tunnel. `cloudflared` missing is not fatal — the MCP server
-comes up anyway and the block names the localhost address, which is what a Claude running ON this phone
-wants.
+**Three providers, tried in order, because the network gets a vote.** 2026-08-28 on this phone, cloudflared's
+own pre-check failed both ways — `UDP Connectivity … QUIC connection failed` and `TCP Connectivity … HTTP/2
+is blocked` — while `api.cloudflare.com:443` passed. The carrier allows 443 and blocks **7844**, which is the
+only port cloudflared reaches its edge on, in either protocol; no config setting gets around that. So the
+order is by what survives a restrictive network, not by preference:
+
+| Provider      | Reaches its edge on             | Needs                                                                                               |
+| ------------- | ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `ngrok`       | 443 (TLS)                       | a free account — the linux-arm64 binary in `$PREFIX/bin`, then `ngrok config add-authtoken <yours>` |
+| `serveo`      | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                  |
+| `cloudflared` | **7844** only                   | `pkg install cloudflared` — and a network that allows 7844                                          |
+
+Every installed one is tried in turn; a provider that prints no address within 30s is given up on **by name**
+and the next is started. `TUNNEL=ngrok` (or `serveo`, `cloudflared`) forces one. None installed is not fatal:
+the MCP server comes up anyway and the block names the localhost address, which is what a Claude running ON
+this phone wants.
+
+Keep that session open: closing it closes the tunnel.
 
 Then set two environment variables on the Claude Code environment (Settings → the environment this session
 runs in) and **start a new session** — MCP servers are read at session start, never mid-conversation:
 
-| Variable             | Value                                       |
-| -------------------- | ------------------------------------------- |
-| `OPENSA_PHONE_URL`   | `https://<something>.trycloudflare.com/mcp` |
-| `OPENSA_PHONE_TOKEN` | the token the MCP server printed            |
+| Variable             | Value                                      |
+| -------------------- | ------------------------------------------ |
+| `OPENSA_PHONE_URL`   | the address the block printed, with `/mcp` |
+| `OPENSA_PHONE_TOKEN` | the token beside it                        |
 
-`.mcp.json` in the repository root already points at both, by name — **the URL and the token are never
-committed**: a quick tunnel's address changes every restart, and a committed token is a leak that outlives
+**`.mcp.json` names neither.** It runs `mcp-bridge.mjs`, a stdio server that reads both at RUN time and
+forwards each call to the phone — and that indirection is the fix for a real failure, not a layer for its own
+sake. The config is parsed before anything runs, and a `${VAR}` that is not set is left _unexpanded_ by
+Claude Code: a `url` of `${OPENSA_PHONE_URL}` reaches the client as that literal text and the entry is
+refused whole — `INVALID_CONFIG: 'url' is not a valid URL` (2026-08-28). `${VAR:-default}` did not help.
+Worse, that failure is at load, so it takes a NEW session to clear — the exact cost this panel exists to
+remove. Through the bridge the session always loads: with the variables set the tools are the phone's, and
+without them the server lists no tools and says what to set. **The URL and the token are still never
+committed** — a quick tunnel's address changes every restart, and a committed token is a leak that outlives
 the session that leaked it.
 
-**Both references carry a `:-default`, and that is not decoration.** A `${VAR}` that is not set is left
-_unexpanded_ by Claude Code, so a `url` of `${OPENSA_PHONE_URL}` reaches the client as that literal text and
-the whole entry is refused — `INVALID_CONFIG: 'url' is not a valid URL`, which is what the first attempt got
-(2026-08-28). With the default, an unset variable means the localhost address instead, which is exactly right
-for a Claude running ON this phone and merely fails to connect anywhere else.
-
-**A quick tunnel is a public URL.** The token is what stands between it and a stranger, which is why the
-server refuses an unauthenticated request rather than answering it. Stop `cloudflared` when the session is
-over; the next one gets a new address anyway.
+**A public tunnel is a public URL.** The token is what stands between it and a stranger, which is why the
+server refuses an unauthenticated request rather than answering it. Stop the tunnel when the session is over;
+the next one gets a new address anyway.
 
 ## What it checks before you start
 

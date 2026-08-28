@@ -1,11 +1,9 @@
 {
   "mcpServers": {
     "opensa-phone": {
-      "headers": {
-        "Authorization": "Bearer ${OPENSA_PHONE_TOKEN:-unset}"
-      },
-      "type": "http",
-      "url": "${OPENSA_PHONE_URL:-http://127.0.0.1:8788/mcp}"
+      "args": ["tools-debug/phone-console/mcp-bridge.mjs"],
+      "command": "node",
+      "type": "stdio"
     }
   }
 }
