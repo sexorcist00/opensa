@@ -111,6 +111,7 @@ describe('phone MCP server', () => {
         'phone_log',
         'phone_stop',
         'map_state',
+        'map_open',
         'map_snapshot',
         'map_screenshot',
         'map_goto',
@@ -139,6 +140,29 @@ describe('phone MCP server', () => {
       );
 
       expect(stub.calls).toEqual(['POST /api/job/map3d']);
+    });
+
+    it('opens the console through the panel, carrying the pak and district it was asked for', async () => {
+      const stub = panelStub();
+      const answer = await handleRpc(
+        {
+          id: 6,
+          jsonrpc: '2.0',
+          method: 'tools/call',
+          params: {
+            arguments: { district: 'los-santos-centre', out: './build/phone-1916', view: 'field' },
+            name: 'map_open',
+          },
+        },
+        deps(stub),
+      );
+
+      expect(stub.calls).toEqual(['POST /api/map/open']);
+      expect(text(answer).sent).toEqual({
+        district: 'los-santos-centre',
+        out: './build/phone-1916',
+        view: 'field',
+      });
     });
 
     it('reads the log the PAGE shows, tail-first', async () => {

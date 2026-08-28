@@ -262,6 +262,19 @@ export async function runChecks(probe, target) {
     state: probe.wakeLock ? 'ok' : 'warn',
   });
 
+  // Without it the panel can hand out a link but never open one, so `map_open` — the tool that clears "no
+  // map is attached" — has nothing to launch with. A warn rather than a fail: every link still works under
+  // a thumb.
+  add({
+    detail: probe.openUrl
+      ? 'termux-open-url is available — the console can be opened on this screen from a tool'
+      : 'no termux-open-url: only a tap can open the console (`pkg install termux-tools`)',
+    id: 'open-url',
+    label: 'opening the console',
+    state: probe.openUrl ? 'ok' : 'warn',
+    ...(probe.openUrl ? {} : { fix: 'pkg install termux-tools' }),
+  });
+
   return checks;
 }
 

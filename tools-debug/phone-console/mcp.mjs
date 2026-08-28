@@ -99,6 +99,26 @@ export const TOOLS = [
   },
   {
     description:
+      'Open the console ON THE PHONE\'S SCREEN and wait until it reaches the panel. This is what clears "no ' +
+      'map is attached" — every other map_ tool talks to a page that is already open. Answers when the ' +
+      'page phones home, or says what it launched and why nothing arrived.',
+    inputSchema: {
+      properties: {
+        district: { description: 'District the console starts on (see phone_state).', type: 'string' },
+        out: { description: "Pak folder to read, default './build/phone'.", type: 'string' },
+        view: {
+          description:
+            "Which of the panel's own links to open: 'map' (default), 'inventory' (the report), 'field' " +
+            "(the declared worst case, 150 units), 'flat', 'bake' (the tile pyramid), 'share'.",
+          type: 'string',
+        },
+      },
+      type: 'object',
+    },
+    name: 'map_open',
+  },
+  {
+    description:
       'Everything the map knows about itself in one answer: the ?inventory=1 report (fps p50/p95, draws, ' +
       'resident MB, per-pass spans, symbology counts, the time axis), the live readout, and the errors it ' +
       'has logged. This is the realtime benchmark, read without anybody copying it.',
@@ -225,6 +245,14 @@ async function callTool(name, args, deps) {
       return content(await mapCall(panel, 'pose', { pose: args }));
     case 'map_mode':
       return content(await mapCall(panel, 'mode', { mode: args.mode }));
+    case 'map_open':
+      return content(
+        await panel('POST', '/api/map/open', {
+          district: args.district ?? '',
+          out: args.out ?? './build/phone',
+          view: args.view ?? 'map',
+        }),
+      );
     case 'map_screenshot': {
       const answer = await mapCall(panel, 'screenshot', {}, 30_000);
       const image = answer?.value?.image;

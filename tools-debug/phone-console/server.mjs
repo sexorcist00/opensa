@@ -22,10 +22,12 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { gunzipSync } from 'node:zlib';
 
+import { CONSOLE_VIEWS, consoleUrls } from './app/console-urls.mjs';
 import { fileCapture, writeTilesArchive } from './capture-store.mjs';
 import { commitPlan, pendingCaptures, runCommit } from './captures.mjs';
 import { runChecks, statusPaths, verdict } from './doctor.mjs';
 import { buildJob, JobRunner, JOBS } from './jobs.mjs';
+import { OPEN_URL_BIN, openConsole } from './opener.mjs';
 import { MapBus } from './remote.mjs';
 import { htmlFingerprint, htmlNames, listTarFiles } from './webapp.mjs';
 
@@ -184,6 +186,8 @@ const probe = {
     }
   },
   nodeVersion: process.version,
+  /** Termux's URL launcher — without it the panel can hand out a link but never open one. */
+  openUrl: existsSync(OPEN_URL_BIN),
   portOpen: (port) =>
     new Promise((done) => {
       const socket = connect(port, '127.0.0.1');
@@ -372,6 +376,35 @@ async function handle(request, response) {
   }
   if (request.method === 'GET' && path === '/api/map/state') {
     return send(response, 200, mapBus.attached());
+  }
+  // The one thing the bus above cannot do for itself: put the page on the screen. Everything else here talks
+  // to a console somebody already opened, so this is what turns "no map is attached" from a dead end into a
+  // step (plan 002).
+  if (request.method === 'POST' && path === '/api/map/open') {
+    const body = await readJson(request);
+    const view = String(body.view ?? 'map');
+    if (!CONSOLE_VIEWS.includes(view)) {
+      return send(response, 400, { error: `no view '${view}' — one of ${CONSOLE_VIEWS.join(', ')}`, ok: false });
+    }
+    const links = consoleUrls({
+      district: body.district ?? '',
+      out: body.out ?? './build/phone',
+      ports: { app: RUN_PORTS[1], static: RUN_PORTS[0] },
+      webapp: await probe.exists('build/webapp/index.html'),
+    });
+
+    return send(
+      response,
+      200,
+      await openConsole(
+        {
+          attached: () => mapBus.attached(),
+          exists: existsSync,
+          launch: (url) => run(OPEN_URL_BIN, [url]),
+        },
+        { timeoutMs: Number(body.timeoutMs) || undefined, url: links[view] },
+      ),
+    );
   }
   if (request.method === 'GET' && path === '/api/jobs') {
     return send(
