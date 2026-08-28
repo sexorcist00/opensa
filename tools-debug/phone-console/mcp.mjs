@@ -27,19 +27,50 @@
  *
  *   node tools-debug/phone-console/mcp.mjs            # stdio
  *   node tools-debug/phone-console/mcp.mjs --http     # POST http://127.0.0.1:8788/mcp
+ *
+ * The version negotiation, the discovery answer and the framing that survives a malformed byte live in
+ * `mcp-protocol.mjs`, because the bridge needs the same answers and neither end owns them.
  */
 import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import { promisify } from 'node:util';
 
+import {
+  discoverResult,
+  INSTRUCTIONS,
+  negotiate,
+  parseFailure,
+  readLines,
+  requestedVersion,
+  respond,
+  SERVER_INFO,
+  SUPPORTED_VERSIONS,
+  unsupportedVersion,
+} from './mcp-protocol.mjs';
+
 const run = promisify(execFile);
 
 /** Where the panel is. Same default as the panel's own, so neither has to be configured in the usual case. */
 const PANEL = process.env.PANEL_URL ?? `http://127.0.0.1:${Number(process.env.PANEL_PORT) || 8787}`;
 
-/** The MCP protocol version this server speaks. */
-const PROTOCOL = '2024-11-05';
+/** What this server offers. Tools and nothing else — no resources, no prompts, no sampling. */
+const CAPABILITIES = { tools: {} };
+
+/** The largest POST body the HTTP transport will assemble, so a runaway request cannot eat the phone's RAM. */
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
+
+/**
+ * The behaviour hints, named once. A client uses them to decide what to confirm with a person and what to
+ * cache, and a model uses them to decide what is safe to try — so they are stated rather than defaulted:
+ * an unannotated tool is assumed DESTRUCTIVE and open-world, which is wrong for nine of these twelve.
+ */
+const READS = { destructiveHint: false, idempotentHint: true, openWorldHint: false, readOnlyHint: true };
+const STEERS = { destructiveHint: false, idempotentHint: true, openWorldHint: false, readOnlyHint: false };
+const BUILDS = { destructiveHint: true, idempotentHint: false, openWorldHint: false, readOnlyHint: false };
+
+/** A tool that takes nothing. Stated as a closed schema, so a client rejects invented arguments here. */
+const NO_ARGS = { additionalProperties: false, type: 'object' };
 
 /**
  * The tools, and their whole surface. Every one of them is something the panel's page can already do — the
@@ -47,24 +78,31 @@ const PROTOCOL = '2024-11-05';
  */
 export const TOOLS = [
   {
+    annotations: READS,
     description:
       'What the phone is: preflight checks and their verdict, the pak on disk and what it was built from, ' +
       'the running job, the ports, and the captures waiting to be committed. Read this before anything else.',
-    inputSchema: { properties: {}, type: 'object' },
+    inputSchema: NO_ARGS,
     name: 'phone_state',
+    title: 'The phone, and whether it is ready',
   },
   {
+    annotations: READS,
     description:
       'The jobs this phone can run, with the knobs each accepts. An allowlist, not a shell: ' +
       'converts, the setup/pull rituals, the shareable build.',
-    inputSchema: { properties: {}, type: 'object' },
+    inputSchema: NO_ARGS,
     name: 'phone_jobs',
+    title: 'What this phone may run',
   },
   {
+    annotations: BUILDS,
     description:
       'Start one job. Refuses while another is running — a phone runs one convert at a time. ' +
-      'Returns immediately; watch it with phone_log.',
+      'Returns immediately, when the job STARTS rather than when it finishes: a convert is ten minutes to ' +
+      'an hour on this device. Watch it with phone_log.',
     inputSchema: {
+      additionalProperties: false,
       properties: {
         env: {
           description: 'Knobs the job accepts (DISTRICT, OUT, TEXTURES, MODELS). Anything else is dropped and named.',
@@ -76,89 +114,126 @@ export const TOOLS = [
       type: 'object',
     },
     name: 'phone_run',
+    title: 'Start a job',
   },
   {
+    annotations: READS,
     description: 'The tail of the job log — what the running (or last) job printed. Survives the panel being killed.',
     inputSchema: {
-      properties: { lines: { description: 'How many lines from the end (default 80).', type: 'number' } },
+      additionalProperties: false,
+      properties: {
+        lines: { description: 'How many lines from the end (default 80).', minimum: 1, type: 'number' },
+      },
       type: 'object',
     },
     name: 'phone_log',
+    title: 'What the job is printing',
   },
   {
+    annotations: { ...BUILDS, idempotentHint: true },
     description: 'Stop the running job.',
-    inputSchema: { properties: {}, type: 'object' },
+    inputSchema: NO_ARGS,
     name: 'phone_stop',
+    title: 'Stop the running job',
   },
   {
+    annotations: READS,
     description:
       'What the MAP page is doing right now: whether one is attached (opened with &agent=1), which mode it ' +
       'is drawing and what it last reported. Ask this before any other map_ tool.',
-    inputSchema: { properties: {}, type: 'object' },
+    inputSchema: NO_ARGS,
     name: 'map_state',
+    title: 'Whether a map is attached',
   },
   {
+    annotations: READS,
     description:
       'Everything the map knows about itself in one answer: the ?inventory=1 report (fps p50/p95, draws, ' +
       'resident MB, per-pass spans, symbology counts, the time axis), the live readout, and the errors it ' +
       'has logged. This is the realtime benchmark, read without anybody copying it.',
-    inputSchema: { properties: {}, type: 'object' },
+    inputSchema: NO_ARGS,
     name: 'map_snapshot',
+    title: 'The map’s own numbers',
   },
   {
+    annotations: READS,
     description: 'A PNG of the map as it is on screen — the world and the symbology over it, composed by the page.',
-    inputSchema: { properties: {}, type: 'object' },
+    inputSchema: NO_ARGS,
     name: 'map_screenshot',
+    title: 'A picture of the map',
   },
   {
+    annotations: STEERS,
     description: 'Fly the map camera to a pose. The same flight a bookmark makes, so streaming follows it.',
     inputSchema: {
+      additionalProperties: false,
       properties: {
-        at: { description: 'GTA ground point [x, y].', items: { type: 'number' }, type: 'array' },
+        at: {
+          description: 'GTA ground point [x, y].',
+          items: { type: 'number' },
+          maxItems: 2,
+          minItems: 2,
+          type: 'array',
+        },
         height: { description: 'Camera height in world units.', type: 'number' },
         pitch: { description: 'Radians; negative looks down.', type: 'number' },
-        projection: { description: "'perspective' or 'ortho'.", type: 'string' },
+        projection: { description: 'Which lens the camera uses.', enum: ['perspective', 'ortho'], type: 'string' },
         yaw: { description: 'Radians.', type: 'number' },
       },
       required: ['at'],
       type: 'object',
     },
     name: 'map_goto',
+    title: 'Fly the camera',
   },
   {
+    annotations: STEERS,
     description: 'Switch which surface draws the world (201/6-03): the live 3D render or the flat 2D map.',
     inputSchema: {
-      properties: { mode: { description: "'live' or 'flat'.", type: 'string' } },
+      additionalProperties: false,
+      properties: {
+        mode: { description: 'Which surface draws.', enum: ['live', 'flat'], type: 'string' },
+      },
       required: ['mode'],
       type: 'object',
     },
     name: 'map_mode',
+    title: 'Switch display mode',
   },
   {
+    annotations: READS,
     description: 'The board the operator has: units, calls, the selection.',
-    inputSchema: { properties: {}, type: 'object' },
+    inputSchema: NO_ARGS,
     name: 'map_board',
+    title: 'The operator’s board',
   },
   {
+    // Open-world on purpose: this one leaves the phone, and a client that asks before reaching a network
+    // should ask here.
+    annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true, readOnlyHint: false },
     description:
       'Commit and push what the map has filed under docs/benchmarks. The captures themselves arrive from ' +
       'the console itself (its readout posts them), so this is the second half of that round trip.',
     inputSchema: {
+      additionalProperties: false,
       properties: {
         message: { description: 'Commit subject; a sensible one is derived when absent.', type: 'string' },
       },
       type: 'object',
     },
     name: 'phone_commit',
+    title: 'File the captures',
   },
 ];
 
 /** The `exec` tool, added only when the operator turned it on. */
 const EXEC_TOOL = {
+  annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: true, readOnlyHint: false },
   description:
     'Run a shell command in the repository on the phone. Off unless PANEL_MCP_EXEC=1 — this is the one ' +
     'tool that is not an allowlist, and it exists for what the allowlist cannot cover.',
   inputSchema: {
+    additionalProperties: false,
     properties: {
       command: { description: 'The command line to run, in the repo root.', type: 'string' },
       timeoutMs: { description: 'How long to wait before killing it (default 120000).', type: 'number' },
@@ -167,6 +242,7 @@ const EXEC_TOOL = {
     type: 'object',
   },
   name: 'phone_exec',
+  title: 'Run a command on the phone',
 };
 
 /**
@@ -174,20 +250,34 @@ const EXEC_TOOL = {
  *
  * Pure over `deps` so the whole protocol is testable without a panel, a phone or a socket: `panel` is how it
  * reaches the panel's HTTP API, `exec` how it runs a command when that is enabled.
+ *
+ * **Dual-era.** A client that opens with `initialize` is served the handshake, answered in its own revision
+ * when we speak one; a client that sends `server/discover`, or declares a revision in `_meta`, is served
+ * statelessly. Nothing here keeps session state to begin with — every tool call is a fresh hop to the panel.
  */
 export async function handleRpc(request, deps) {
   const { id, method, params } = request;
-  const reply = (result) => (id === undefined ? null : { id, jsonrpc: '2.0', result });
-  const fail = (code, message) => (id === undefined ? null : { error: { code, message }, id, jsonrpc: '2.0' });
+  const asked = requestedVersion(request);
+  const modern = asked !== null;
+  const reply = (result) =>
+    id === undefined ? null : { id, jsonrpc: '2.0', result: modern ? { resultType: 'complete', ...result } : result };
+  const fail = (error) => (id === undefined ? null : { error, id, jsonrpc: '2.0' });
 
+  if (modern && !SUPPORTED_VERSIONS.includes(asked)) {
+    return fail(unsupportedVersion(asked));
+  }
+  if (method === 'server/discover') {
+    return reply(discoverResult(CAPABILITIES));
+  }
   if (method === 'initialize') {
     return reply({
-      capabilities: { tools: {} },
-      protocolVersion: PROTOCOL,
-      serverInfo: { name: 'opensa-phone', version: '1' },
+      capabilities: CAPABILITIES,
+      instructions: INSTRUCTIONS,
+      protocolVersion: negotiate(params?.protocolVersion),
+      serverInfo: SERVER_INFO,
     });
   }
-  if (method === 'notifications/initialized' || method === 'notifications/cancelled') {
+  if (method?.startsWith('notifications/')) {
     return null;
   }
   if (method === 'ping') {
@@ -197,7 +287,7 @@ export async function handleRpc(request, deps) {
     return reply({ tools: toolList(deps.env) });
   }
   if (method !== 'tools/call') {
-    return fail(-32601, `unknown method '${method}'`);
+    return fail({ code: -32_601, message: `unknown method '${method}'` });
   }
 
   const name = params?.name;
@@ -273,9 +363,19 @@ async function callTool(name, args, deps) {
   }
 }
 
-/** Text back to the caller, in the one shape MCP wants. */
+/**
+ * Text back to the caller, in the one shape MCP wants — plus the same answer as `structuredContent` when it
+ * is an object, so a client that can read data does not have to re-parse a string the model already saw.
+ *
+ * No `outputSchema` goes with it, deliberately: a schema makes conformance MANDATORY, and these shapes are
+ * the panel's rather than this file's — a preflight check added on the phone would start failing validation
+ * in an agent's client, which is a worse failure than having no schema at all.
+ */
 function content(value) {
-  return { content: [{ text: typeof value === 'string' ? value : JSON.stringify(value, null, 2), type: 'text' }] };
+  const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  const structured = typeof value === 'object' && value !== null && !Array.isArray(value);
+
+  return { content: [{ text, type: 'text' }], ...(structured ? { structuredContent: value } : {}) };
 }
 
 /** Run a command in the repo, capturing both streams — only reachable when `phone_exec` is on. */
@@ -331,25 +431,44 @@ const DEPS = { env: process.env, exec: execInRepo, panel: panelFetch };
  */
 function serveHttp(port) {
   const token = process.env.PANEL_MCP_TOKEN ?? randomBytes(24).toString('hex');
+  const send = (response, status, payload) => {
+    response.writeHead(status, { 'content-type': 'application/json' });
+    response.end(payload === null ? '' : JSON.stringify(payload));
+  };
   createServer((request, response) => {
     const authorized = request.headers.authorization === `Bearer ${token}`;
     if (!authorized) {
-      response.writeHead(401, { 'content-type': 'application/json' });
-
-      return response.end(JSON.stringify({ error: 'bearer token required' }));
+      return send(response, 401, { error: 'bearer token required' });
     }
     if (request.method !== 'POST') {
-      response.writeHead(405, { 'content-type': 'application/json' });
-
-      return response.end(JSON.stringify({ error: 'POST JSON-RPC to /mcp' }));
+      return send(response, 405, { error: 'POST JSON-RPC to /mcp' });
     }
     let body = '';
-    request.on('data', (chunk) => (body += chunk));
+    let refused = false;
+    request.on('data', (chunk) => {
+      body += chunk;
+      if (body.length > MAX_BODY_BYTES && !refused) {
+        // A body this size is not a tool call; assembling the rest of it is the phone's memory.
+        refused = true;
+        send(response, 413, parseFailure(new Error(`body over ${MAX_BODY_BYTES} bytes`)));
+        request.destroy();
+      }
+    });
     request.on('end', () => {
-      void handleRpc(JSON.parse(body), DEPS).then((answer) => {
-        response.writeHead(answer ? 200 : 202, { 'content-type': 'application/json' });
-        response.end(answer ? JSON.stringify(answer) : '');
-      });
+      if (refused) {
+        return;
+      }
+      let payload;
+      try {
+        payload = JSON.parse(body);
+      } catch (error) {
+        // A truncated body is what a phone tunnel produces when it half-closes a connection, and parsing it
+        // in this handler used to take the whole server down with it.
+        return send(response, 400, parseFailure(error));
+      }
+      void respond(payload, (one) => handleRpc(one, DEPS))
+        .then((answer) => send(response, answer ? 200 : 202, answer))
+        .catch((error) => send(response, 500, { error: message(error) }));
     });
   }).listen(port, '127.0.0.1', () => {
     process.stdout.write(`opensa phone MCP on http://127.0.0.1:${port}/mcp\n`);
@@ -360,24 +479,14 @@ function serveHttp(port) {
 
 /** Line-delimited JSON-RPC on stdin/stdout — the transport a Claude on this phone speaks. */
 function serveStdio() {
-  let buffer = '';
   process.stdin.setEncoding('utf8');
-  process.stdin.on('data', (chunk) => {
-    buffer += chunk;
-    let cut = buffer.indexOf('\n');
-    while (cut >= 0) {
-      const line = buffer.slice(0, cut).trim();
-      buffer = buffer.slice(cut + 1);
-      if (line !== '') {
-        void handleRpc(JSON.parse(line), DEPS).then((answer) => {
-          if (answer) {
-            process.stdout.write(`${JSON.stringify(answer)}\n`);
-          }
-        });
-      }
-      cut = buffer.indexOf('\n');
-    }
-  });
+  process.stdin.on(
+    'data',
+    readLines(
+      (one) => handleRpc(one, DEPS),
+      (answer) => process.stdout.write(`${JSON.stringify(answer)}\n`),
+    ),
+  );
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {

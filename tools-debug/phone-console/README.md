@@ -113,6 +113,31 @@ requires a bearer token: reaching it from off-device is a tunnel somebody sets u
 with no token is a shell on the open internet. The design, the transports and what is verified where:
 [docs/plans/002-mcp.md](docs/plans/002-mcp.md).
 
+**It speaks both eras of the protocol** (`mcp-protocol.mjs`, 2026-08-28). A client that opens with
+`initialize` is answered in ITS revision — `2025-11-25` through `2024-11-05` — rather than in the one this
+server was written against; a client that sends `server/discover`, or declares a revision in a request's
+`_meta`, is served statelessly, and one that names a revision we do not speak is refused with `-32022`
+listing the ones we do, so it can retry instead of giving up. There is no session state on either side to
+make that hard: every tool call is already a fresh hop to the panel.
+
+**A malformed byte used to kill the server.** `JSON.parse` sat in the socket's data handler here, in the
+bridge, and in the HTTP transport's `end` handler, so one bad line — which is what a tunnel produces when it
+half-closes a connection mid-body — took the process down and every tool in the session with it, costing a
+NEW session to get back. It now answers `-32700` and reads the next message. A JSON-RPC batch is answered as
+a batch too; it used to be dropped in silence, because an array carries no `id`.
+
+**What the tools ARE is now said out loud**, because compatibility only gets an agent connected. The rules
+that are not visible in any signature — read `phone_state` first, one job at a time and `phone_run` returns
+at the START, `map_state` before any `map_` tool because a missing page is a person's problem — ride the
+handshake as `instructions`, including from the bridge when there is no phone at all. Every tool carries a
+`title` and its behaviour annotations (an unannotated tool is read as destructive and open-world, which is
+wrong for the nine that only read), the no-argument tools state a closed schema, `map_mode`/`map_goto`
+enumerate the words they take, and every JSON answer rides as `structuredContent` beside its text.
+
+**Restart `panel:tunnel` after pulling this** — a running server keeps serving the code it started with, so
+the tunnel hands out the old handshake until it is restarted. What the channel costs, measured through the
+phone's own tunnel: [the round trip](../../docs/benchmarks/tools/2026-08-28-phone-mcp-round-trip.md).
+
 ### Wiring it to a Claude that is not on this phone
 
 ```bash
