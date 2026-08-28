@@ -24,6 +24,22 @@ import { consoleUrls, LINK_NAMES, portsFor } from './app/links.mjs';
 const run = promisify(execFile);
 const PANEL = process.env.PANEL_URL ?? `http://127.0.0.1:${Number(process.env.PANEL_PORT) || 8787}`;
 
+/** Hand the URL to Android. `termux-open-url` is the Termux:API bridge, and its absence is a package name. */
+async function openOnPhone(url) {
+  try {
+    await run('termux-open-url', [url]);
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      throw new Error(
+        'termux-open-url is not installed — `pkg install termux-api`, and the Termux:API app from ' +
+          'F-Droid (the package alone does nothing without it). Until then the link above is a tap.',
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+}
+
 /** The panel's own state, which is where the ports, the served app and the district list already live. */
 async function panelState() {
   let response;
@@ -37,21 +53,6 @@ async function panelState() {
   }
 
   return response.json();
-}
-
-/** Hand the URL to Android. `termux-open-url` is the Termux:API bridge, and its absence is a package name. */
-async function openOnPhone(url) {
-  try {
-    await run('termux-open-url', [url]);
-  } catch (error) {
-    if (error?.code === 'ENOENT') {
-      throw new Error(
-        'termux-open-url is not installed — `pkg install termux-api`, and the Termux:API app from ' +
-          'F-Droid (the package alone does nothing without it). Until then the link above is a tap.',
-      );
-    }
-    throw error;
-  }
 }
 
 const link = (process.env.LINK ?? 'field').trim();

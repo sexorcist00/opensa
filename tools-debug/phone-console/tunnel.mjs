@@ -80,23 +80,6 @@ export function sshIdentity(home = process.env.HOME ?? '', exists = existsSync) 
   return null;
 }
 
-/** What to paste, in the order the settings page asks for it. */
-export function summary(url, token) {
-  return [
-    '',
-    '─────────────────────────────────────────────',
-    ' Paste these two into the Claude Code environment,',
-    ' then START A NEW SESSION (MCP servers load at start):',
-    '',
-    `   OPENSA_PHONE_URL    ${url}`,
-    `   OPENSA_PHONE_TOKEN  ${token}`,
-    '',
-    ' Keep this session open — closing it closes the tunnel.',
-    '─────────────────────────────────────────────',
-    '',
-  ].join('\n');
-}
-
 /**
  * What to do about an address that moves, printed under the block that has just been pasted.
  *
@@ -115,6 +98,23 @@ export function stabilityHint(context = {}) {
     '',
     "   ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519   # localhost.run keeps a KEYED subdomain",
     '   NGROK_DOMAIN=https://<yours>.ngrok-free.app        # a free ngrok account reserves one',
+    '',
+  ].join('\n');
+}
+
+/** What to paste, in the order the settings page asks for it. */
+export function summary(url, token) {
+  return [
+    '',
+    '─────────────────────────────────────────────',
+    ' Paste these two into the Claude Code environment,',
+    ' then START A NEW SESSION (MCP servers load at start):',
+    '',
+    `   OPENSA_PHONE_URL    ${url}`,
+    `   OPENSA_PHONE_TOKEN  ${token}`,
+    '',
+    ' Keep this session open — closing it closes the tunnel.',
+    '─────────────────────────────────────────────',
     '',
   ].join('\n');
 }
