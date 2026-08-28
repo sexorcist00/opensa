@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { consoleUrls, LINK_NAMES, portsFor } from './links.mjs';
 
 /** What the panel's `/api/state` hands over, in the shape both readers take it in. */
-const SERVED = { district: 'los-santos-centre', out: './build/phone', ports: { app: 5173, static: 3001 }, webapp: true };
+const SERVED = {
+  district: 'los-santos-centre',
+  out: './build/phone',
+  ports: { app: 5173, static: 3001 },
+  webapp: true,
+};
 
 describe('the panel links', () => {
   describe('negative cases', () => {
