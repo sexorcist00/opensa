@@ -32,6 +32,29 @@ Playwright. Here the equivalent is: run `npm run dev` in Termux and open the pag
 scripted input or an automated screenshot diff. A step that owes a scripted check has to say so and find
 another way rather than assume `npx playwright` will run.
 
+*Since 2026-08-28 that is narrower than it reads.* The panel's map channel
+([`phone-console` plan 002](../../tools-debug/phone-console/docs/plans/002-mcp.md)) drives the console the page
+opened with `&agent=1`: an agent opens it, reads the inventory report, takes the console's own PNG, moves the
+camera, switches the mode. So a capture no longer needs a person relaying the screen — verified on this device
+that day, `map_open` → `map_snapshot` → `map_screenshot` with nobody touching the phone. What it still is not
+is headless: it drives THAT page, on THAT screen, and the two conditions below are what it costs.
+
+**A browser opens from the panel only while Termux may display over other apps.** Android forbids a
+background app from starting an activity, and `termux-open-url` does not report the refusal: it exits 0,
+nothing appears, and `map_open` can only say that it launched something and nobody arrived. Measured
+2026-08-28 — the same URL opened instantly when it was typed in a foreground Termux, and the tool's launch of
+it opened nothing at all. Grant Termux **Display over other apps** (EMUI: Settings → Apps → Termux → Display
+over other apps; the launch-management entry for Termux has to be manual with all three switches on, per the
+PowerGenie block below). After that the panel raises the console by itself, which is what makes an unattended
+run possible at all.
+
+**A console that is not the foreground tab is a frozen console.** Android suspends the tab: the map stops
+polling, so within 15 s the panel reports no map attached, and a command already handed to it is simply never
+answered (`map_screenshot` failed exactly this way twice on 2026-08-28, while the cheap `map_snapshot` taken
+seconds earlier had gone through). This is not a bug to fix on our side — it is the shape of the device — so
+a measurement is taken with the console in front and the phone left alone, and anything else read from the
+panel instead.
+
 **Android kills Termux, and the screen being on does not stop it.** Reported 2026-08-25: the session dies
 with the screen ON and the app merely backgrounded. Nothing in userspace prevents this — a wake lock keeps the
 CPU awake, it does not keep the process alive — so the answer is in two halves, and only the second one is

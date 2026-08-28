@@ -265,9 +265,15 @@ export async function runChecks(probe, target) {
   // Without it the panel can hand out a link but never open one, so `map_open` — the tool that clears "no
   // map is attached" — has nothing to launch with. A warn rather than a fail: every link still works under
   // a thumb.
+  //
+  // Present is not the same as working, and this check cannot tell the difference: Android drops an activity
+  // started by a background app, `termux-open-url` exits 0 when it does, and the permission that lifts it is
+  // not readable from an app's own uid. So the detail names the condition rather than promising the launch —
+  // the phone run on 2026-08-28 found the binary here and every launch silently discarded.
   add({
     detail: probe.openUrl
-      ? 'termux-open-url is available — the console can be opened on this screen from a tool'
+      ? 'termux-open-url is available — a launch from here also needs Termux allowed to display over other ' +
+        'apps, or Android drops it with no error'
       : 'no termux-open-url: only a tap can open the console (`pkg install termux-tools`)',
     id: 'open-url',
     label: 'opening the console',

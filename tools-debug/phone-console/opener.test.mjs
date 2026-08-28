@@ -69,6 +69,16 @@ describe('openConsole', () => {
       expect(answer.error).toContain('npm run phone');
       expect(answer.url).toBe(URL_);
     });
+
+    // The phone run on 2026-08-28: the launcher exits 0 and Android discards the activity, so the refusal
+    // that only described a broken page sent the reader looking for a bug that was a permission.
+    it('names the permission a background launch needs, since the launcher cannot report being ignored', async () => {
+      const { deps } = phone({ attachAfter: Number.POSITIVE_INFINITY });
+
+      const answer = await openConsole(deps, { timeoutMs: 2000, url: URL_ });
+
+      expect(answer.error).toContain('display over other apps');
+    });
   });
 
   describe('positive cases', () => {

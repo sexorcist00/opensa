@@ -7,10 +7,14 @@
  * hands it to the browser the same way a tap on a link does — so an agent can put the page in front of
  * whoever is holding the phone and then read it.
  *
- * **The launch is not the success.** A browser that started is not a console that loaded: the static server
- * may not be up, the pak may be missing, the bundle may not parse (the case plan 002 already names as
- * invisible to this channel). So the open is only finished when the page PHONES HOME, and until it does
- * this reports what it launched rather than claiming a map.
+ * **The launch is not the success**, and on a real device the usual reason is not ours. Android forbids a
+ * BACKGROUND app from starting an activity, and the panel is exactly that whenever the operator is in some
+ * other app — so `termux-open-url` exits 0, nothing opens, and nothing anywhere says why (measured on the
+ * phone 2026-08-28: the same URL opened instantly from a foreground Termux and not at all from here, until
+ * Termux was allowed to display over other apps). After that come the ordinary ones: no static server, no
+ * pak, or a bundle that does not parse and therefore cannot report itself through this channel at all.
+ * So the open is only finished when the page PHONES HOME, and until it does this reports what it launched,
+ * naming the permission first because that is the answer far more often than the map is.
  */
 
 /** Termux's own launcher — part of `termux-tools`, so it is there unless somebody removed it. */
@@ -68,10 +72,13 @@ export async function openConsole(deps, request) {
   return {
     attached: false,
     error:
-      `the browser was opened but no map reached the panel within ${Math.round(timeoutMs / 1000)}s. The page ` +
-      'is on the screen — read what it says: a console that cannot fetch its pak needs the static server ' +
-      'running (`npm run phone`), and a bundle that does not parse at all cannot report itself through this ' +
-      'channel.',
+      `termux-open-url accepted the URL and no map reached the panel within ${Math.round(timeoutMs / 1000)}s. ` +
+      'It exits 0 either way, so start with the screen: NOTHING OPENED means Android dropped the activity — a ' +
+      'background app may not start one unless Termux is allowed to display over other apps (Settings → Apps ' +
+      '→ Termux → Display over other apps), which is the usual cause on a device that has never been asked ' +
+      'for it. If the console IS on the screen it did not reach this panel: one that cannot fetch its pak ' +
+      'needs the static server running (`npm run phone`), and a bundle that does not parse at all cannot ' +
+      'report itself through this channel.',
     ok: false,
     url,
   };

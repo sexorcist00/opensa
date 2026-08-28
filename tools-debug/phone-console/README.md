@@ -118,6 +118,14 @@ back the URL; the doctor warns for it rather than failing, because a thumb still
 and the links the page hands out are built by one module** (`app/console-urls.mjs`): two copies of that
 arithmetic would open different paks, and the capture would name the one nobody was looking at.
 
+**It needs Termux allowed to display over other apps, and nothing reports that for you.** Android forbids a
+background app from starting an activity, and `termux-open-url` exits 0 when the system discards one — so on
+the phone run of 2026-08-28 three opens returned "launched, nobody arrived" while the screen never changed.
+Granting it once makes the launch work; until then this tool is a URL somebody has to tap. The second half of
+the same device fact: **the console has to stay the foreground tab** while it is being driven. Android freezes
+a background tab, the page stops polling, the panel reports it detached after 15 s, and a command already
+handed over is never answered.
+
 `phone_exec` (a real shell) is **off unless `PANEL_MCP_EXEC=1`**, and the HTTP transport binds localhost and
 requires a bearer token: reaching it from off-device is a tunnel somebody sets up on purpose, and a tunnel
 with no token is a shell on the open internet. The design, the transports and what is verified where:
@@ -165,13 +173,13 @@ is blocked` — while `api.cloudflare.com:443` passed. The carrier allows 443 an
 only port cloudflared reaches its edge on, in either protocol; no config setting gets around that. So the
 order is by what survives a restrictive network, not by preference:
 
-| Provider        | Reaches its edge on             | Needs                                                                                               | On this phone, 2026-08-28     |
-| --------------- | ------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------- |
+| Provider        | Reaches its edge on             | Needs                                                                                                                     | On this phone, 2026-08-28     |
+| --------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
 | `ngrok`         | 443 (TLS)                       | a free account — the linux-arm64 binary in `$PREFIX/bin`, `ngrok config add-authtoken <yours>`, and the DNS wrapper below | **worked**                    |
-| `localhost.run` | 22 (SSH)                        | `pkg install openssh` — no account, no key                                                          | **worked**                    |
-| `pinggy`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                  | asked for a password          |
-| `serveo`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                  | connection closed by the host |
-| `cloudflared`   | **7844** only                   | `pkg install cloudflared` — and a network that allows 7844                                          | cannot reach the edge         |
+| `localhost.run` | 22 (SSH)                        | `pkg install openssh` — no account, no key                                                                                | **worked**                    |
+| `pinggy`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                                        | asked for a password          |
+| `serveo`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                                        | connection closed by the host |
+| `cloudflared`   | **7844** only                   | `pkg install cloudflared` — and a network that allows 7844                                                                | cannot reach the edge         |
 
 The order changed once the phone had a verdict: `localhost.run` is ahead of the two 443 providers because it
 is the one that came up, and every ssh provider carries `BatchMode=yes` — pinggy fell through to a password
@@ -184,7 +192,7 @@ not see was one.
 1. **It resolves no names.** Android ships no `/etc/resolv.conf`, and ngrok is a static Go binary carrying its
    own resolver — it finds no file, falls back to `127.0.0.1:53`, and nothing listens there, because a port
    under 1024 is not bindable by an app uid. Every dial failed with `lookup connect.ngrok-agent.com on
-   [::1]:53: read: connection refused`, which reads exactly like a carrier blocking 443. The fix belongs to
+[::1]:53: read: connection refused`, which reads exactly like a carrier blocking 443. The fix belongs to
    the phone rather than to this script — a `proot` wrapper that hands the binary a resolv.conf, in
    [termux.md](../../docs/development/termux.md) under _Practical notes_. `netlinkrib: permission denied` in
    the same log is unrelated and harmless.
