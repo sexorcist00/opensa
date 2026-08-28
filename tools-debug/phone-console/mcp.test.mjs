@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { LEGACY_VERSIONS, MODERN_VERSION, SUPPORTED_VERSIONS } from './mcp-protocol.mjs';
 import { handleRpc, toolList } from './mcp.mjs';
+
+/** A request in the modern era: the revision rides `_meta` and there is no handshake at all. */
+const modern = (request, version = MODERN_VERSION) => ({
+  ...request,
+  params: { ...request.params, _meta: { 'io.modelcontextprotocol/protocolVersion': version } },
+});
 
 /** A fake panel: records what was asked of it, answers what the test set up. */
 function panelStub(answers = {}) {
@@ -64,6 +71,16 @@ describe('phone MCP server', () => {
       expect(answer.result.content[0].text).toContain("unknown tool 'phone_nonsense'");
     });
 
+    it('refuses a revision it does not speak by NAMING the ones it does', async () => {
+      // A modern client can act on this: it retries with a version from the list. Answering -32601, or
+      // answering in a revision the client did not ask for, leaves it nothing to do.
+      const answer = await handleRpc(modern({ id: 20, jsonrpc: '2.0', method: 'tools/list' }, '1900-01-01'), deps());
+
+      expect(answer.error.code).toBe(-32_022);
+      expect(answer.error.data.supported).toEqual(SUPPORTED_VERSIONS);
+      expect(answer.result).toBeUndefined();
+    });
+
     it('does not offer the shell tool unless it was turned on', () => {
       expect(toolList({}).map((tool) => tool.name)).not.toContain('phone_exec');
       expect(toolList({ PANEL_MCP_EXEC: '' }).map((tool) => tool.name)).not.toContain('phone_exec');
@@ -95,9 +112,43 @@ describe('phone MCP server', () => {
     it('handshakes with the protocol version and a tools capability', async () => {
       const answer = await handleRpc({ id: 1, jsonrpc: '2.0', method: 'initialize', params: {} }, deps());
 
-      expect(answer.result.protocolVersion).toBe('2024-11-05');
+      expect(answer.result.protocolVersion).toBe(LEGACY_VERSIONS[0]);
       expect(answer.result.capabilities.tools).toBeDefined();
       expect(answer.result.serverInfo.name).toBe('opensa-phone');
+    });
+
+    it('handshakes in the CLIENT’s revision rather than pinning its own', async () => {
+      // Measured 2026-08-28: a client asking for 2025-06-18 was answered 2024-11-05 and dropped back to it,
+      // losing structuredContent, tool titles and annotations that both ends support.
+      const answer = await handleRpc(
+        { id: 1, jsonrpc: '2.0', method: 'initialize', params: { protocolVersion: '2025-06-18' } },
+        deps(),
+      );
+
+      expect(answer.result.protocolVersion).toBe('2025-06-18');
+    });
+
+    it('hands the agent the operating rules at the handshake, not one refusal at a time', async () => {
+      const answer = await handleRpc({ id: 1, jsonrpc: '2.0', method: 'initialize', params: {} }, deps());
+
+      expect(answer.result.instructions).toContain('phone_state FIRST');
+      expect(answer.result.instructions).toContain('&agent=1');
+    });
+
+    it('answers server/discover, which a modern client probes stdio with', async () => {
+      const answer = await handleRpc(modern({ id: 11, jsonrpc: '2.0', method: 'server/discover' }), deps());
+
+      expect(answer.result.supportedVersions).toEqual(SUPPORTED_VERSIONS);
+      expect(answer.result.capabilities).toEqual({ tools: {} });
+      expect(answer.result.resultType).toBe('complete');
+    });
+
+    it('marks a modern result complete, and leaves a legacy one alone', async () => {
+      const asModern = await handleRpc(modern({ id: 12, jsonrpc: '2.0', method: 'tools/list' }), deps());
+      const asLegacy = await handleRpc({ id: 13, jsonrpc: '2.0', method: 'tools/list' }, deps());
+
+      expect(asModern.result.resultType).toBe('complete');
+      expect(asLegacy.result.resultType).toBeUndefined();
     });
 
     it('lists the panel tools, and every one of them declares a schema', async () => {
@@ -120,6 +171,31 @@ describe('phone MCP server', () => {
         'phone_commit',
       ]);
       expect(tools.every((tool) => tool.inputSchema.type === 'object' && tool.description.length > 20)).toBe(true);
+    });
+
+    it('states every tool’s behaviour rather than letting the client assume the worst', async () => {
+      // An unannotated tool is read as destructive and open-world. That is right for a convert and wrong
+      // for the nine that only read, which is the difference between a client asking a person every time
+      // and asking once.
+      const answer = await handleRpc({ id: 14, jsonrpc: '2.0', method: 'tools/list' }, deps());
+      const tools = answer.result.tools;
+      const named = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+
+      expect(tools.every((tool) => typeof tool.title === 'string' && tool.title.length > 0)).toBe(true);
+      expect(tools.every((tool) => typeof tool.annotations?.readOnlyHint === 'boolean')).toBe(true);
+      expect(named.phone_state.annotations.readOnlyHint).toBe(true);
+      expect(named.phone_run.annotations).toMatchObject({ destructiveHint: true, readOnlyHint: false });
+      expect(named.phone_commit.annotations.openWorldHint).toBe(true);
+    });
+
+    it('closes the schema of a tool that takes nothing, and enumerates the ones that take a word', async () => {
+      const answer = await handleRpc({ id: 15, jsonrpc: '2.0', method: 'tools/list' }, deps());
+      const named = Object.fromEntries(answer.result.tools.map((tool) => [tool.name, tool]));
+
+      expect(named.phone_state.inputSchema.additionalProperties).toBe(false);
+      expect(named.map_mode.inputSchema.properties.mode.enum).toEqual(['live', 'flat']);
+      expect(named.map_goto.inputSchema.properties.projection.enum).toEqual(['perspective', 'ortho']);
+      expect(named.map_goto.inputSchema.properties.at.minItems).toBe(2);
     });
 
     it('offers the shell tool once the operator turned it on', () => {
@@ -206,6 +282,17 @@ describe('phone MCP server', () => {
 
       expect(stub.calls).toEqual(['POST /api/map/command']);
       expect(text(answer).value.readout.fps).toBe(41);
+    });
+
+    it('answers with the data AND the text, so a client does not re-parse what the model already read', async () => {
+      const stub = panelStub({ '/api/map/command': { ok: true, value: { readout: { fps: 41 } } } });
+      const answer = await handleRpc(
+        { id: 16, jsonrpc: '2.0', method: 'tools/call', params: { arguments: {}, name: 'map_snapshot' } },
+        deps(stub),
+      );
+
+      expect(answer.result.structuredContent).toEqual({ ok: true, value: { readout: { fps: 41 } } });
+      expect(JSON.parse(answer.result.content[0].text)).toEqual(answer.result.structuredContent);
     });
 
     it('hands a screenshot back as an IMAGE, so the map is seen rather than described', async () => {
