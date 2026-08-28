@@ -124,22 +124,31 @@ npm run panel:tunnel         # session 2 — the MCP server + a tunnel, and the 
 **The token is made once and kept** in `build/.phone/mcp-token`, so a restart re-pastes one value rather than
 two — a tunnel address changes every time and nothing can be done about that.
 
-**Three providers, tried in order, because the network gets a vote.** 2026-08-28 on this phone, cloudflared's
+**Five providers, tried in order, because the network gets a vote.** 2026-08-28 on this phone, cloudflared's
 own pre-check failed both ways — `UDP Connectivity … QUIC connection failed` and `TCP Connectivity … HTTP/2
 is blocked` — while `api.cloudflare.com:443` passed. The carrier allows 443 and blocks **7844**, which is the
 only port cloudflared reaches its edge on, in either protocol; no config setting gets around that. So the
 order is by what survives a restrictive network, not by preference:
 
-| Provider      | Reaches its edge on             | Needs                                                                                               |
-| ------------- | ------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `ngrok`       | 443 (TLS)                       | a free account — the linux-arm64 binary in `$PREFIX/bin`, then `ngrok config add-authtoken <yours>` |
-| `serveo`      | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                  |
-| `cloudflared` | **7844** only                   | `pkg install cloudflared` — and a network that allows 7844                                          |
+| Provider        | Reaches its edge on             | Needs                                                                                               |
+| --------------- | ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `ngrok`         | 443 (TLS)                       | a free account — the linux-arm64 binary in `$PREFIX/bin`, then `ngrok config add-authtoken <yours>` |
+| `pinggy`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                  |
+| `serveo`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                  |
+| `localhost.run` | 22 (SSH)                        | `pkg install openssh` — no account                                                                  |
+| `cloudflared`   | **7844** only                   | `pkg install cloudflared` — and a network that allows 7844                                          |
 
-Every installed one is tried in turn; a provider that prints no address within 30s is given up on **by name**
-and the next is started. `TUNNEL=ngrok` (or `serveo`, `cloudflared`) forces one. None installed is not fatal:
-the MCP server comes up anyway and the block names the localhost address, which is what a Claude running ON
-this phone wants.
+`TUNNEL=pinggy` (or any other name) forces one. None installed is not fatal: the MCP server comes up anyway
+and the block names the localhost address, which is what a Claude running ON this phone wants.
+
+**An address is not a tunnel, and the first version of this script believed it was.** cloudflared printed
+`Your quick Tunnel has been created!` with a `trycloudflare.com` address, the script printed the paste block,
+and every dial to the edge failed afterwards — the address was dead and the block said it was ready, which
+is worse than no address at all. So a provider is announced only once it says it is **connected**
+(`Registered tunnel connection`; for an SSH provider the address arrives on a connection that is already up,
+so printing it is the proof), one whose own diagnostics say it cannot connect here (`hard_fail=true`) is
+dropped on that line rather than after the timeout, and anything still not up after 45 s is given up on **by
+name** and the next is started.
 
 Keep that session open: closing it closes the tunnel.
 

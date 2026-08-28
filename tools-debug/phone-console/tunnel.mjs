@@ -18,8 +18,14 @@
  * only port cloudflared reaches the edge on, in either protocol. Nothing about that is fixable in the
  * config, so the script tries the next provider instead of leaving a wall of retries on the screen.
  *
- * `TUNNEL=ngrok` (or `cloudflared`, `serveo`) forces one; otherwise every installed provider is tried in
- * order and one that prints no address within {@link URL_TIMEOUT_MS} is given up on by name.
+ * **An address is not a tunnel**, and that distinction cost a paste block that was a lie: 2026-08-28
+ * cloudflared printed `Your quick Tunnel has been created!` with a `trycloudflare.com` address, then failed
+ * every dial to the edge — the URL never worked. So a provider is announced only when it says it is
+ * CONNECTED, and one whose own diagnostics say it cannot connect here is dropped immediately.
+ *
+ * `TUNNEL=pinggy` (or `ngrok`, `serveo`, `localhost.run`, `cloudflared`) forces one; otherwise every
+ * installed provider is tried in order and one that is not up within {@link URL_TIMEOUT_MS} is given up on
+ * by name.
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -70,34 +76,48 @@ export function summary(url, token) {
   ].join('\n');
 }
 
-/** How long a provider gets to print an address before the next one is tried. */
-export const URL_TIMEOUT_MS = 30_000;
+/** How long a provider gets to prove it is UP before the next one is tried. */
+export const URL_TIMEOUT_MS = 45_000;
+
+/** The SSH options every ssh-based provider wants: no host-key prompt, and a connection that stays up. */
+const SSH = ['-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null', '-o', 'ServerAliveInterval=30'];
 
 /**
  * The providers, in the order they are tried.
  *
- * Ordered by what survives a restrictive network rather than by preference: ngrok reaches its edge over TLS
- * on 443, serveo is SSH and is asked for 443 explicitly, and cloudflared — which needs 7844 — is last
- * because that is the port a carrier blocks.
+ * Ordered by what survives a restrictive network rather than by preference. The carrier here allows 443 and
+ * blocks **7844**, which is the only port cloudflared reaches its edge on — so everything that speaks 443
+ * comes first and cloudflared is last, kept only for a network where it does work.
+ *
+ * `ready` is the point of this table. A provider that PRINTS an address has not necessarily got a working
+ * tunnel: cloudflared prints `Your quick Tunnel has been created!` before it has dialled the edge at all,
+ * and on 2026-08-28 it printed one, failed every dial after it, and the address was dead — which is worse
+ * than no address, because the paste block said it was ready. So an address is announced only once the
+ * provider says it is CONNECTED, and `fatal` lets one that has proved it cannot connect be dropped without
+ * waiting out the timeout.
  */
 export const PROVIDERS = [
   { args: (port) => ['http', String(port), '--log', 'stdout'], command: 'ngrok', name: 'ngrok' },
   {
-    args: (port) => [
-      '-o',
-      'StrictHostKeyChecking=no',
-      '-o',
-      'ServerAliveInterval=30',
-      '-p',
-      '443',
-      '-R',
-      `80:localhost:${port}`,
-      'serveo.net',
-    ],
+    // No account, and 443 is asked for explicitly. The address line arrives on the established SSH
+    // connection, so printing it IS the proof — same for every ssh-based provider below.
+    args: (port) => [...SSH, '-p', '443', '-R', `0:localhost:${port}`, 'a.pinggy.io'],
     command: 'ssh',
-    name: 'serveo',
+    name: 'pinggy',
   },
-  { args: (port) => ['tunnel', '--url', `http://127.0.0.1:${port}`], command: 'cloudflared', name: 'cloudflared' },
+  { args: (port) => [...SSH, '-p', '443', '-R', `80:localhost:${port}`, 'serveo.net'], command: 'ssh', name: 'serveo' },
+  {
+    args: (port) => [...SSH, '-R', `80:localhost:${port}`, 'nokey@localhost.run'],
+    command: 'ssh',
+    name: 'localhost.run',
+  },
+  {
+    args: (port) => ['tunnel', '--url', `http://127.0.0.1:${port}`],
+    command: 'cloudflared',
+    fatal: (line) => /hard_fail=true|Environment has critical failures/.test(String(line)),
+    name: 'cloudflared',
+    ready: (line) => /Registered tunnel connection/.test(String(line)),
+  },
 ];
 
 /** Which providers are installed here, in the order above; `TUNNEL=` narrows it to one. */
@@ -107,10 +127,20 @@ export function chooseProviders(wanted, has) {
   return named.filter((provider) => has(provider.command));
 }
 
+/** Whether this line means the provider has proved it cannot connect here. */
+export function isFatal(provider, line) {
+  return provider.fatal ? provider.fatal(String(line)) : false;
+}
+
+/** Whether this line means the tunnel is actually carrying traffic — the address alone is not that. */
+export function isReady(provider, line, url) {
+  return url !== null && (provider.ready ? provider.ready(line) : true);
+}
+
 /** The public address a tunnel printed, or null when the line is something else. */
 export function tunnelUrl(line) {
   const match =
-    /https:\/\/[a-z0-9][a-z0-9-]*\.(?:trycloudflare\.com|ngrok-free\.app|ngrok\.app|ngrok\.io|serveo\.net)/.exec(
+    /https:\/\/[a-z0-9][a-z0-9.-]*\.(?:trycloudflare\.com|ngrok-free\.app|ngrok\.app|ngrok\.io|serveo\.net|pinggy\.link|lhr\.life)/.exec(
       String(line),
     );
 
@@ -148,21 +178,24 @@ if (process.argv[1] && process.argv[1].endsWith('tunnel.mjs')) {
     process.stdout.write(
       `\nNo tunnel is installed. This network blocks cloudflared's port (7844), so install one that ` +
         `reaches its edge over 443:\n` +
+        `  openssh — \`pkg install openssh\`, and three account-less providers become available\n` +
         `  ngrok   — most reliable, free account: put the linux-arm64 binary in $PREFIX/bin, then ` +
         `\`ngrok config add-authtoken <yours>\`\n` +
-        `  serveo  — no account: \`pkg install openssh\` (this script asks it for port 443)\n` +
         `The MCP server is up regardless, for a Claude running ON this phone:\n` +
         summary(`http://127.0.0.1:${PORT}/mcp`, token),
     );
   }
 
-  /** Try each provider until one prints an address; say by name when one does not. */
+  /** Try each provider until one is UP; say by name when one is not, and never announce an address early. */
   const tryProvider = (index) => {
     const provider = providers[index];
     if (!provider) {
       process.stdout.write(
-        `\nNo provider produced an address. The MCP server is still up on ` +
-          `http://127.0.0.1:${PORT}/mcp for a Claude running on this phone.\n`,
+        `\nNo provider got a working tunnel. This network blocks cloudflared's only port (7844), and the ` +
+          `account-less ones are up and down — the reliable answer here is ngrok: put the linux-arm64 binary ` +
+          `in $PREFIX/bin and run \`ngrok config add-authtoken <yours>\` (free account), then re-run this.\n` +
+          `The MCP server is up regardless, for a Claude running ON this phone:\n` +
+          summary(`http://127.0.0.1:${PORT}/mcp`, token),
       );
 
       return;
@@ -170,40 +203,39 @@ if (process.argv[1] && process.argv[1].endsWith('tunnel.mjs')) {
     process.stdout.write(`\n[tunnel] trying ${provider.name}…\n`);
     const child = spawn(provider.command, provider.args(PORT), { stdio: ['ignore', 'pipe', 'pipe'] });
     children.add(child);
-    let announced = false;
-    const giveUp = setTimeout(() => {
-      if (!announced) {
-        process.stdout.write(`\n[tunnel] ${provider.name} printed no address in 30s — trying the next one.\n`);
-        child.kill();
-        children.delete(child);
-        tryProvider(index + 1);
+    let settled = false; // announced as up, or given up on — either way this provider is done
+    let url = null;
+    const next = (why) => {
+      if (settled) {
+        return;
       }
-    }, URL_TIMEOUT_MS);
+      settled = true; // stop this provider's own later lines from re-entering
+      clearTimeout(giveUp);
+      child.kill();
+      children.delete(child);
+      process.stdout.write(`\n[tunnel] ${provider.name} ${why} — trying the next one.\n`);
+      tryProvider(index + 1);
+    };
+    const giveUp = setTimeout(() => next(`printed no working address in ${URL_TIMEOUT_MS / 1000}s`), URL_TIMEOUT_MS);
     const watch = (chunk) => {
       process.stdout.write(`[${provider.name}] ${chunk}`);
-      const url = tunnelUrl(chunk);
-      if (url && !announced) {
-        announced = true;
+      if (settled) {
+        return;
+      }
+      url = tunnelUrl(chunk) ?? url;
+      if (isFatal(provider, chunk)) {
+        return next('reported it cannot connect from this network');
+      }
+      if (isReady(provider, chunk, url)) {
+        settled = true;
         clearTimeout(giveUp);
         process.stdout.write(summary(`${url}/mcp`, token));
       }
     };
     child.stdout.on('data', watch);
     child.stderr.on('data', watch); // cloudflared and ssh both announce on stderr
-    child.on('error', () => {
-      clearTimeout(giveUp);
-      children.delete(child);
-      process.stdout.write(`\n[tunnel] ${provider.name} would not start — trying the next one.\n`);
-      tryProvider(index + 1);
-    });
-    child.on('exit', (code) => {
-      children.delete(child);
-      if (!announced) {
-        clearTimeout(giveUp);
-        process.stdout.write(`\n[tunnel] ${provider.name} exited (${code}) before giving an address.\n`);
-        tryProvider(index + 1);
-      }
-    });
+    child.on('error', () => next('would not start'));
+    child.on('exit', (code) => next(`exited (${code}) before giving a working address`));
   };
   tryProvider(0);
 }

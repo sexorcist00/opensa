@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { chooseProviders, PROVIDERS, readToken, summary, tunnelUrl } from './tunnel.mjs';
+import { chooseProviders, isFatal, isReady, PROVIDERS, readToken, summary, tunnelUrl } from './tunnel.mjs';
+
+const provider = (name) => PROVIDERS.find((entry) => entry.name === name);
 
 const tempFile = () => join(mkdtempSync(join(tmpdir(), 'opensa-token-')), 'mcp-token');
 
@@ -26,7 +28,29 @@ describe('panel tunnel', () => {
     });
 
     it('does not fall back past a provider the operator named', () => {
-      expect(chooseProviders('ngrok', () => true).map((provider) => provider.name)).toEqual(['ngrok']);
+      expect(chooseProviders('ngrok', () => true).map((entry) => entry.name)).toEqual(['ngrok']);
+    });
+
+    it('does not call cloudflared ready on the banner it prints before dialling the edge', () => {
+      // 2026-08-28, verbatim: this line appeared, every dial after it failed, and the address was dead.
+      const banner = 'INF |  Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):';
+
+      expect(isReady(provider('cloudflared'), banner, 'https://teens-executed-standards-retro.trycloudflare.com')).toBe(
+        false,
+      );
+    });
+
+    it('is never ready before an address has been seen at all', () => {
+      expect(isReady(provider('pinggy'), 'anything', null)).toBe(false);
+    });
+
+    it('drops cloudflared the moment its own pre-check says the network cannot carry it', () => {
+      expect(isFatal(provider('cloudflared'), 'INF precheck complete hard_fail=true run_id=79757136-7e6c')).toBe(true);
+      expect(isFatal(provider('cloudflared'), 'INF | SUMMARY: Environment has critical failures.')).toBe(true);
+    });
+
+    it('does not mistake a retry for a failure that is worth giving up on', () => {
+      expect(isFatal(provider('cloudflared'), 'ERR Failed to dial a quic connection error="timeout"')).toBe(false);
     });
   });
 
@@ -57,17 +81,44 @@ describe('panel tunnel', () => {
       expect(tunnelUrl('INF |  https://tidy-pine-mango-ab12.trycloudflare.com   |')).toBe(
         'https://tidy-pine-mango-ab12.trycloudflare.com',
       );
+      // pinggy and localhost.run both put more than one label in front of the domain.
+      expect(tunnelUrl('http://ab12-cd.a.free.pinggy.link\nhttps://ab12-cd.a.free.pinggy.link')).toBe(
+        'https://ab12-cd.a.free.pinggy.link',
+      );
+      expect(tunnelUrl('a1b2c3.lhr.life tunneled with tls termination, https://a1b2c3.lhr.life')).toBe(
+        'https://a1b2c3.lhr.life',
+      );
     });
 
     it('tries the ones that reach their edge over 443 BEFORE the one that needs 7844', () => {
       // The order is the finding, not a preference: this phone's carrier blocks 7844 both ways while 443
       // passes, so cloudflared cannot connect here however long it retries.
-      expect(chooseProviders(undefined, () => true).map((provider) => provider.name)).toEqual([
+      expect(chooseProviders(undefined, () => true).map((entry) => entry.name)).toEqual([
         'ngrok',
+        'pinggy',
         'serveo',
+        'localhost.run',
         'cloudflared',
       ]);
       expect(PROVIDERS.at(-1).name).toBe('cloudflared');
+    });
+
+    it('asks every ssh provider that can be asked for port 443', () => {
+      for (const name of ['pinggy', 'serveo']) {
+        expect(provider(name).args(8788)).toContain('443');
+      }
+    });
+
+    it('takes an ssh provider at its word: the address arrives on a connection that is already up', () => {
+      expect(
+        isReady(provider('pinggy'), 'https://ab12-cd.a.free.pinggy.link', 'https://ab12-cd.a.free.pinggy.link'),
+      ).toBe(true);
+    });
+
+    it('announces cloudflared only once it says it registered a connection', () => {
+      const line = 'INF Registered tunnel connection connIndex=0 connection=1ce3744e location=fra01';
+
+      expect(isReady(provider('cloudflared'), line, 'https://x.trycloudflare.com')).toBe(true);
     });
 
     it('prints both values under the names the settings page asks for', () => {
