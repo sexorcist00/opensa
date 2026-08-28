@@ -285,9 +285,30 @@
         <div class="links">
           <a class="linkbtn" id="link-map" href="#" target="_blank" rel="noreferrer">The map</a>
           <a class="linkbtn" id="link-inventory" href="#" target="_blank" rel="noreferrer">Map + inventory capture</a>
+          <a class="linkbtn" id="link-field" href="#" target="_blank" rel="noreferrer"
+            >THE FIELD RUN — 150 units, models, inventory</a
+          >
           <a class="linkbtn" id="link-flat" href="#" target="_blank" rel="noreferrer">The flat 2D map</a>
           <a class="linkbtn" id="link-bake" href="#" target="_blank" rel="noreferrer">Bake the tile pyramid</a>
         </div>
+        <p class="muted">
+          The field run is the board at the count 201 declared (150 units, 40 calls) with the inventory
+          collector on — the run 2/03 owes. Fly the map for a minute, then press <b>file to the panel</b> in
+          the readout: it lands under <code>docs/benchmarks/</code> with the pak’s own recipe stamped on it,
+          and <b>Commit &amp; push</b> below sends it. Nothing is copied or typed.
+        </p>
+      </section>
+
+      <section>
+        <h2>The shareable console</h2>
+        <div class="row">
+          <button id="build-share" class="grow">Build it — one file</button>
+          <a class="linkbtn" id="link-share" href="#" target="_blank" rel="noreferrer">Open it on a real pak</a>
+        </div>
+        <p class="muted">
+          One HTML file that streams the pak with no <code>assets/</code> beside it (201/2-02). Building it
+          here and opening it on this phone is the check a build log cannot make.
+        </p>
       </section>
 
       <section>
@@ -356,8 +377,14 @@
         const query = `src=${pak}&district=${encodeURIComponent($('district').value.trim())}`;
         $('link-map').href = `${app}?${query}`;
         $('link-inventory').href = `${app}?${query}&inventory=1`;
+        // The declared worst case, in one tap: 201's budget table says 150 units each drawn as a model with
+        // a symbol over it, and every number 5/02 and 5/04 owe is measured AT it. Typed by hand it was never
+        // typed at all.
+        $('link-field').href = `${app}?${query}&units=150&calls=40&inventory=1`;
         $('link-flat').href = `${app}?${query}&mode=flat`;
         $('link-bake').href = `${app}?${query}&bake=tiles&zmin=0&zmax=4`;
+        // The share artifact is served as a plain file out of the repo, wherever the static server is.
+        $('link-share').href = `http://localhost:${state.ports.static}/dist-share/dispatch.html?${query}&inventory=1`;
       }
 
       function renderChecks(checks) {
@@ -444,6 +471,7 @@
       $('setup').onclick = () => start('setup');
       $('run').onclick = () => start('phone');
       $('run-map').onclick = () => start('map');
+      $('build-share').onclick = () => start('share');
       $('stop').onclick = async () => {
         await api('/api/stop', {});
         refresh();

@@ -249,6 +249,16 @@ this adapter and empty `spans`. The headline claim — a real district, on a rea
 **The next action is a field run, and it is the user's**, because every measurement here reads
 `build/<game>/opensa` and no container has one.
 
+**It is two buttons now, and that is deliberate** (2026-08-27, on the user's instruction that the panel
+should be made convenient rather than the work deferred): the phone panel's **THE FIELD RUN** link opens the
+console at the declared count (`units=150&calls=40&inventory=1`) with no query to type, and the console's
+readout files its own capture into the panel — district, mode, unit count and its own query included, with
+the pak's recipe and the device stamped on by the panel. The copy-JSON-paste-and-name round trip that used
+to sit between a measurement and its file is gone; `Commit & push` is the second button. The panel also
+builds and opens the one-file shareable console ([2/02](2-real-device-truth/readme.md)'s device half), and
+`prebuilt/opensa-webapp.tar.gz` was refreshed in the same change, because a panel with new buttons serving
+an old app is worse than neither.
+
 **The blocker that used to sit here is GONE, and the row said otherwise for eleven days.** On 2026-08-09 the
 phone's `game-src/original` and its `build/phone*` output were symlinks into ONE folder, so the converter
 rewrote the archives it was reading (`gta3.img` 1073 `.osm` bundles, `gta_int.img` 155 — measured with

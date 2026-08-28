@@ -276,6 +276,29 @@ async function handle(request, response) {
   const url = new URL(request.url ?? '/', `http://localhost:${PORT}`);
   const path = url.pathname;
 
+  /**
+   * The console files its own capture, from its own page, on its own port — so this server answers a
+   * cross-origin POST (201/2-03's round trip).
+   *
+   * It used to be a copy-paste: copy the JSON out of the map, switch apps, paste it in, type a slug. On a
+   * phone that is the step where a measurement quietly stops being taken, and the README already names the
+   * failure it produces — *"a measurement that reached the next session as a chat paste with its conditions
+   * missing"*. The map knows the conditions; letting it POST them is the whole fix.
+   *
+   * `*` is the right origin here and stays narrow in practice: this server binds localhost, on a phone, and
+   * every route it exposes is one the operator is holding the screen for.
+   */
+  if (request.method === 'OPTIONS') {
+    response.writeHead(204, {
+      'access-control-allow-headers': 'content-type',
+      'access-control-allow-methods': 'POST, GET, OPTIONS',
+      'access-control-allow-origin': '*',
+      'access-control-max-age': '600',
+    });
+
+    return response.end();
+  }
+
   if (request.method === 'GET' && (path === '/' || path === '/index.html')) {
     return serveFile(response, join(HERE, 'app/index.html'));
   }
@@ -412,7 +435,12 @@ async function remoteUrl() {
 
 function send(response, status, body) {
   const payload = JSON.stringify(body);
-  response.writeHead(status, { 'cache-control': 'no-store', 'content-type': 'application/json' });
+  response.writeHead(status, {
+    // See the OPTIONS handler: the console posts its captures here from another port.
+    'access-control-allow-origin': '*',
+    'cache-control': 'no-store',
+    'content-type': 'application/json',
+  });
   response.end(payload);
 }
 

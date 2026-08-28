@@ -99,6 +99,15 @@ export const JOBS = {
     label: 'install what a run needs (idempotent)',
     long: false,
   },
+  // The one-file console (201/2-02). It is here rather than in a terminal because the thing it produces is
+  // checked BY OPENING IT on this device — a build whose whole claim is that it fetches nothing beside
+  // itself is not verified by a build log.
+  share: {
+    args: ['run', 'build:share:dispatch'],
+    command: 'npm',
+    label: 'build the shareable console — one file, streams a real pak',
+    long: false,
+  },
   // `--no-save`, like every install this panel runs: `npm i <pkg>` writes the package into package.json, and
   // a dirty package.json on this device is a `git pull` that refuses (2026-08-23).
   sirv: {

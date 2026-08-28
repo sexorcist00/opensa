@@ -18,10 +18,15 @@ const serveStatic = sirv('static', { dev: true });
 const serveTests = sirv('fixtures', { dev: true }); // `/viewer/objects/x` → `fixtures/viewer/objects/x`
 
 /** The source trees served with a `__index` listing — everything the http-dir loader (`?src=`) can read:
- *  the build outputs (`/build/original/opensa/x`) and the raw installs (`/game-src/original/x`). */
+ *  the build outputs (`/build/original/opensa/x`) and the raw installs (`/game-src/original/x`), plus the
+ *  shareable single-file console (`/dist-share/dispatch.html`, 201/2-02). That last one is here rather than
+ *  anywhere else for one reason: it must be served from the SAME origin as the pak it streams, or the range
+ *  requests it exists to make become somebody's CORS problem — and the whole point of that artifact is that
+ *  it needs nothing beside it. */
 const DIR_MOUNTS = [
   { root: 'build', serve: sirv('build', { dev: true }) },
   { root: 'game-src', serve: sirv('game-src', { dev: true }) },
+  { root: 'dist-share', serve: sirv('dist-share', { dev: true }) },
 ];
 
 /** A flat `{ path, size }[]` walk of a served dir — the http-dir loader's file index (its `__index` endpoint).

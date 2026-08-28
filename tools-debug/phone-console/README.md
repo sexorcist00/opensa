@@ -71,6 +71,20 @@ it is asked. What to change on the phone so it stops happening is in
 **One job at a time**, and the refusal names what is running. Two converts at once on a phone is an OOM and
 two paks welded into one folder.
 
+## The runs the page opens
+
+Every link is the ritual with its query already right, because a query typed on a phone is a query that does
+not get typed:
+
+| Link                        | What it opens                                                                                                                                                                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **The map**                 | the console on the pak that was just built                                                                                                                                                                                     |
+| **Map + inventory capture** | the same, with the collector on                                                                                                                                                                                                |
+| **THE FIELD RUN**           | the board at the count 201 declared — `units=150&calls=40&inventory=1` — which is what [2/03](../../docs/plans/201-dispatch-console/2-real-device-truth/readme.md) owes and what every number 5/02 and 5/04 owe is measured AT |
+| **The flat 2D map**         | `mode=flat`, the no-WebGPU surface                                                                                                                                                                                             |
+| **Bake the tile pyramid**   | `bake=tiles`, z0–z4                                                                                                                                                                                                            |
+| **The shareable console**   | `Build it` runs `npm run build:share:dispatch`, and the link opens that ONE file on a real pak — the check a build log cannot make ([2/02](../../docs/plans/201-dispatch-console/2-real-device-truth/readme.md))               |
+
 ## What it checks before you start
 
 `node` · **git identity** (a phone that has only ever pulled has none, and every commit then dies with
@@ -87,10 +101,21 @@ Each check says what to do about it. The verdict is one line at the top.
 
 ## The capture inbox
 
-Paste the JSON the console's `copy JSON` button produced, name it, say in one line why the run exists — the
-panel writes `docs/benchmarks/opensa-engine/<date>-<name>.json`, **stamping the conditions it can prove**
-(device, node, the pak's own recipe and the commit that built it) into the note rather than trusting them to
-memory. `Commit & push` then files it on the current branch.
+**Since 2026-08-27 the map files its own capture and nothing is typed.** The console's readout carries a
+`file to the panel` button — it appears only when a panel answers — and it POSTs the report here with the
+conditions only the MAP knows: which district, which mode, how many units were on the board, and the query
+the run was opened with. This server adds what only IT knows (the pak's own recipe, the device, node) and
+writes the file. The round trip that used to be _copy the JSON → leave the map → switch apps → paste → type
+a name_ is now **one button in the map and one here**, and it is the step where a measurement was actually
+being lost: the README opened by warning about captures that arrive as a chat paste with their conditions
+missing, and a paste is exactly what a phone makes hardest.
+
+The paste box stays for everything else — a capture from another device, an older report, a run the map
+could not file because the panel was not up.
+
+Either way the panel writes `docs/benchmarks/opensa-engine/<date>-<name>.json`, **stamping the conditions it
+can prove** into the note rather than trusting them to memory. `Commit & push` then files it on the current
+branch.
 
 **What is waiting to be committed comes from git, not from this page.** The panel used to remember what it
 had filed in the browser's own memory, so a reload, a restarted server or a phone that put the browser to

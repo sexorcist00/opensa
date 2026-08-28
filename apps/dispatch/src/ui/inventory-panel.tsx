@@ -8,6 +8,12 @@
  * the numbers it shows are only enough to tell that collection is alive. And it does not assume the
  * clipboard: `navigator.clipboard` needs a secure context, which `http://localhost` is and a LAN address is
  * NOT — so a phone reaching a dev server at `192.168.x.x` falls back to a selected textarea to long-press.
+ *
+ * **Since 2026-08-27 it can also FILE the capture itself**, straight into the phone panel
+ * (`tools-debug/phone-console`), which writes it under `docs/benchmarks/` and stamps the pak facts on it.
+ * That removes the step where a measurement was actually being lost: copy the JSON, leave the map, switch
+ * apps, paste, type a name. The button is offered only when a panel answers — on a desk there is none, and a
+ * button that can only fail is worse than no button.
  */
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 
@@ -21,6 +27,9 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
   const [report, setReport] = useState<InventoryReport | null>(null);
   const [copied, setCopied] = useState('');
   const [fallback, setFallback] = useState('');
+  const [filed, setFiled] = useState('');
+  /** Whether the phone panel is up. Null while unknown — the button appears only once one has answered. */
+  const [panel, setPanel] = useState<null | string>(null);
   const areaRef = useRef<HTMLTextAreaElement>(null);
   /**
    * The getter through a REF, so the poll below depends on nothing and is started exactly once.
@@ -50,11 +59,49 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
     }
   }, [fallback]);
 
+  // Ask once, at mount: is a panel listening? A failure here is the ordinary case (a desk, a shared link)
+  // and must be silent — the button simply is not offered.
+  useEffect(() => {
+    const url = panelUrl();
+    const abort = new AbortController();
+    fetch(`${url}/api/state`, { signal: abort.signal })
+      .then((response) => (response.ok ? setPanel(url) : undefined))
+      .catch(() => undefined);
+
+    return (): void => abort.abort();
+  }, []);
+
   if (!report) {
     return null;
   }
 
   const json = JSON.stringify(report, null, 2);
+  /**
+   * Hand the capture to the panel, with the conditions the MAP knows and the panel cannot: which district,
+   * which mode, how many units were on the board. The panel adds what IT knows — the pak's own recipe, the
+   * device, the node version — and writes the file. Nothing is typed on a phone.
+   */
+  const file = (): void => {
+    const params = new URLSearchParams(window.location.search);
+    const district = params.get('district') ?? 'world';
+    const mode = params.get('mode') === 'flat' ? 'flat' : 'live';
+    setFiled('filing…');
+    void fetch(`${panel ?? ''}/api/capture`, {
+      body: JSON.stringify({
+        note: `${mode} map, ${report.symbology.units} units · ${window.location.search || 'no query'}`,
+        out: outOf(params.get('src')),
+        payload: report,
+        slug: `mobile-${district}-${mode}-${report.symbology.units}u`,
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    })
+      .then(async (response) => {
+        const body = (await response.json()) as { error?: string; path?: string };
+        setFiled(body.path ? `filed → ${body.path}` : `panel refused: ${body.error ?? response.status}`);
+      })
+      .catch((error: unknown) => setFiled(`panel unreachable: ${error instanceof Error ? error.message : 'failed'}`));
+  };
   const copy = (): void => {
     void navigator.clipboard
       ?.writeText(json)
@@ -139,7 +186,35 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
       <button onClick={copy} style={styles.inventoryButton} type="button">
         {copied || 'copy JSON'}
       </button>
+      {panel !== null && (
+        <button onClick={file} style={styles.inventoryButton} type="button">
+          {filed || 'file to the panel'}
+        </button>
+      )}
       {fallback && <textarea readOnly ref={areaRef} style={styles.inventoryFallback} value={fallback} />}
     </div>
   );
+}
+
+/**
+ * The build folder behind a `?src=`, which is what the panel stamps its pak facts from. A src is a URL to
+ * the served build (`http://localhost:3001/build/phone`), and the panel wants the repo-relative path.
+ */
+function outOf(src: null | string): string {
+  if (!src) {
+    return './build/phone';
+  }
+  const path = src.startsWith('http') ? new URL(src).pathname : src;
+
+  return `./${path.replace(/^\/+/, '').replace(/\/+$/, '')}`;
+}
+
+/**
+ * Where the panel is. `?panel=` for anything unusual, otherwise the port it serves on — the map and the
+ * panel are two pages on one phone, so "localhost" is the whole of the addressing.
+ */
+function panelUrl(): string {
+  const override = new URLSearchParams(window.location.search).get('panel');
+
+  return override && override !== '' ? override.replace(/\/$/, '') : `${window.location.protocol}//localhost:8787`;
 }
