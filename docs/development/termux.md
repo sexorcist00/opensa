@@ -170,6 +170,25 @@ space.
   [`img-census.ts`](../debug/README.md) — `gta3.img` 1073 `.osm` bundles, `gta_int.img` 155, `cutscene.img` and
   `player.img` clean. Restoring those two files from a pristine install is the whole repair; the deleted `.dff`
   are not recoverable from the rewritten archive.
+- **A downloaded Linux binary resolves no names here, and it looks exactly like a blocked network.** Android
+  ships no `/etc/resolv.conf`. Termux's own tools go through Bionic and never notice, but a statically linked
+  Go binary carries its own resolver: it finds no file, falls back to `127.0.0.1:53`, and nothing answers
+  there — a port under 1024 is not bindable by an app uid, so there is nothing to run on it either. Measured
+  2026-08-28 with ngrok, where every dial failed as `lookup connect.ngrok-agent.com on [::1]:53: read:
+  connection refused` and read for half an hour as a carrier blocking 443. Hand the binary a resolv.conf
+  through `proot`, wrapped under the original name so anything spawning it by name gets the wrapper:
+
+  ```bash
+  pkg install proot
+  printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > $PREFIX/etc/resolv.conf
+  mv $PREFIX/bin/ngrok $PREFIX/bin/ngrok.real
+  printf '#!%s/bin/sh\nexec proot -b %s/etc/resolv.conf:/etc/resolv.conf %s/bin/ngrok.real "$@"\n' \
+    "$PREFIX" "$PREFIX" "$PREFIX" > $PREFIX/bin/ngrok
+  chmod +x $PREFIX/bin/ngrok
+  ```
+
+  `netlinkrib: permission denied` in the same log is a different thing and harmless — Android does not let an
+  app read the interface list, and the binary carries on.
 
 ## The panel — the phone's own control surface
 
