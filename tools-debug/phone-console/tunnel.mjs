@@ -213,7 +213,8 @@ if (process.argv[1] && process.argv[1].endsWith('tunnel.mjs')) {
     process.stdout.write(`\n[tunnel] trying ${provider.name}…\n`);
     const child = spawn(provider.command, provider.args(PORT), { stdio: ['ignore', 'pipe', 'pipe'] });
     children.add(child);
-    let settled = false; // announced as up, or given up on — either way this provider is done
+    let settled = false; // announced as up, or given up on — either way this provider is out of the race
+    let announced = false; // a block was printed for it, so a later address change has to correct that block
     let url = null;
     const next = (why) => {
       if (settled) {
@@ -242,15 +243,26 @@ if (process.argv[1] && process.argv[1].endsWith('tunnel.mjs')) {
     beat.unref?.();
     const watch = (chunk) => {
       process.stdout.write(`[${provider.name}] ${chunk}`);
+      const seen = tunnelUrl(chunk);
       if (settled) {
+        // An anonymous localhost.run tunnel is handed a NEW address every time it reconnects, and the block
+        // printed minutes ago then names a dead one — which the operator has no way to notice, because the
+        // new address arrives as one more line in a log they have already stopped reading. Say it loudly.
+        if (announced && seen !== null && seen !== url) {
+          url = seen;
+          process.stdout.write(`\n[tunnel] ${provider.name} RECONNECTED ON A NEW ADDRESS — the one above is dead.\n`);
+          process.stdout.write(summary(`${url}/mcp`, token));
+        }
+
         return;
       }
-      url = tunnelUrl(chunk) ?? url;
+      url = seen ?? url;
       if (isFatal(provider, chunk)) {
         return next('reported it cannot connect from this network');
       }
       if (isReady(provider, chunk, url)) {
         settled = true;
+        announced = true;
         clearTimeout(giveUp);
         clearInterval(beat);
         process.stdout.write(summary(`${url}/mcp`, token));

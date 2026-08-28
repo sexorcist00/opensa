@@ -146,6 +146,12 @@ not see was one.
 `TUNNEL=pinggy` (or any other name) forces one. None installed is not fatal: the MCP server comes up anyway
 and the block names the localhost address, which is what a Claude running ON this phone wants.
 
+**An anonymous tunnel's address can change under you.** localhost.run hands out a new one on every
+reconnect — 2026-08-28 the block named `1799d46bfdb9ba.lhr.life` and fourteen minutes later the log carried
+`ceb8689e34376a.lhr.life`, with nothing to mark that the pasted value had died. A new address after the
+block has been printed now reprints it, under a line saying the previous one is dead. A stable address is
+what an account buys, on either provider.
+
 **An address is not a tunnel, and the first version of this script believed it was.** cloudflared printed
 `Your quick Tunnel has been created!` with a `trycloudflare.com` address, the script printed the paste block,
 and every dial to the edge failed afterwards — the address was dead and the block said it was ready, which
