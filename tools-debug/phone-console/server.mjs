@@ -39,6 +39,9 @@ const RUN_PORTS = [Number(process.env.STATIC_PORT) || 3001, Number(process.env.A
 const MIME = {
   '.css': 'text/css',
   '.html': 'text/html',
+  // `.js` is here for `app/sw.js`: served as `application/octet-stream` a service worker is REFUSED, and the
+  // registration swallows that — so the panel's install prompt quietly never appeared.
+  '.js': 'text/javascript',
   '.json': 'application/json',
   '.mjs': 'text/javascript',
   '.svg': 'image/svg+xml',

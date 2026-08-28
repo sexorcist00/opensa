@@ -51,6 +51,9 @@ interface Recipe {
   bakeCollision?: boolean;
   commit?: null | string;
   game?: string;
+  /** Since 2026-08-27 (201/6-01). A pak built before it always carried both tiers, so its absence reads
+   *  `false` rather than "not recorded" — see the `shown` row below for why that distinction is load-bearing. */
+  lodOnly?: boolean;
   mapObjectsInRect?: boolean;
   maxTexture?: number;
   models?: boolean;
@@ -95,6 +98,11 @@ const shown: [string, string][] = [
   // be refused on every run — including the district convert that costs hours.
   ['textures', norm('textures', build.textures ?? (build.rgba8 === true ? 'rgba8' : 'bc'))],
   ['rgba8', norm('rgba8', build.rgba8)],
+  // Derived when absent, for the same reason `textures` is: `npm run phone` expects this key on EVERY run
+  // (`scripts/phone.sh`), so a pak that cannot answer it is refused always rather than never — which is what
+  // happened between 2026-08-27 and 2026-08-28, when the recipe field landed and this list did not grow with
+  // it. A pak built before `--lod-only` existed carried both tiers by construction, so `false` is a fact.
+  ['lodOnly', norm('lodOnly', build.lodOnly ?? false)],
   ['maxTexture', norm('maxTexture', build.maxTexture)],
   ['mapObjectsInRect', norm('mapObjectsInRect', build.mapObjectsInRect)],
   ['bakeCollision', norm('bakeCollision', build.bakeCollision)],
@@ -122,6 +130,7 @@ if (expectations.size === 0) {
  */
 const KNOBS: Readonly<Record<string, string>> = {
   bakeCollision: 'BAKE',
+  lodOnly: 'LODONLY',
   mapObjectsInRect: 'MAPOBJ',
   models: 'MODELS',
   peds: 'PEDS',
@@ -143,8 +152,9 @@ for (const [key, want] of expectations) {
     differences.push(`  ${key}: pak has ${got}, asked for ${norm(key, want)}`);
     const knob = KNOBS[key];
     if (knob) {
-      // `bakeCollision` reads true/false in the recipe and 1/0 on the command line.
-      asks.push(`${knob}=${key === 'bakeCollision' ? (got === 'true' ? '1' : '0') : got}`);
+      // `bakeCollision` and `lodOnly` read true/false in the recipe and 1/0 on the command line.
+      const isBooleanKnob = key === 'bakeCollision' || key === 'lodOnly';
+      asks.push(`${knob}=${isBooleanKnob ? (got === 'true' ? '1' : '0') : got}`);
     }
   }
 }

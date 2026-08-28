@@ -341,7 +341,11 @@
       </section>
     </main>
 
-    <script>
+    <script type="module">
+      // The link rule lives beside the server (`links.mjs`) because `phone_open` is a second reader of it:
+      // two copies is how an agent opens an address that differs from the one on this screen.
+      import { consoleUrls } from './app/links.mjs';
+
       const $ = (id) => document.getElementById(id);
       /** What the SERVER says is waiting to be committed. Never a list this page remembers: a reload, a
           restarted panel or a sleeping phone would lose it, and a capture already on disk could then never
@@ -374,25 +378,18 @@
       }
 
       function urls() {
-        const out = $('out').value.trim().replace(/^\.\//, '');
-        const pak = `http://localhost:${state.ports.static}/${out}`;
-        const app = state.webapp
-          ? `http://localhost:${state.ports.static}/build/webapp/dispatch.html`
-          : `http://localhost:${state.ports.app}/dispatch.html`;
-        // `agent=1` on every link this page hands out: these URLs only exist on the phone, and it is what
-        // lets an agent read the map's numbers and see it (phone-console plan 002). Nothing else carries it,
-        // so a shared link or a desk run never phones a panel.
-        const query = `src=${pak}&district=${encodeURIComponent($('district').value.trim())}&agent=1`;
-        $('link-map').href = `${app}?${query}`;
-        $('link-inventory').href = `${app}?${query}&inventory=1`;
-        // The declared worst case, in one tap: 201's budget table says 150 units each drawn as a model with
-        // a symbol over it, and every number 5/02 and 5/04 owe is measured AT it. Typed by hand it was never
-        // typed at all.
-        $('link-field').href = `${app}?${query}&units=150&calls=40&inventory=1`;
-        $('link-flat').href = `${app}?${query}&mode=flat`;
-        $('link-bake').href = `${app}?${query}&bake=tiles&zmin=0&zmax=4`;
-        // The share artifact is served as a plain file out of the repo, wherever the static server is.
-        $('link-share').href = `http://localhost:${state.ports.static}/dist-share/dispatch.html?${query}&inventory=1`;
+        const links = consoleUrls({
+          district: $('district').value.trim(),
+          out: $('out').value.trim(),
+          ports: state.ports,
+          webapp: state.webapp,
+        });
+        for (const [name, href] of Object.entries(links)) {
+          const anchor = $(`link-${name}`);
+          if (anchor) {
+            anchor.href = href;
+          }
+        }
       }
 
       function renderChecks(checks) {

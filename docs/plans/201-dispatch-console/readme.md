@@ -247,8 +247,22 @@ ground (Ganton, not the pinned district), and **94 % of its frame has no owner**
 this adapter and empty `spans`. The headline claim — a real district, on a real phone, in an operator's hands
 — stays unproven until [2/03](2-real-device-truth/readme.md) records its row on the pinned district.
 
-**The next action is a field run, and it is the user's**, because every measurement here reads
-`build/<game>/opensa` and no container has one.
+**The next action is a field run, and since 2026-08-28 it is the AGENT'S** — the phone answers as an MCP
+server ([phone-console plan 002](../../../tools-debug/phone-console/docs/plans/002-mcp.md)), so convert,
+serve, open the console, fly the camera, read the report and file the capture are tool calls rather than
+taps. It still reads `build/<game>/opensa` and no container has one; what changed is who drives the device
+that does.
+
+**The first session on that channel took no measurement, and the reason is worth the row** (2026-08-28).
+Three things sat between the agent and the world, none of them visible from any screen:
+**`npm run phone` had refused every pak since 2026-08-27** — `--lod-only` became a recipe field with
+[6/01](6-display-modes/readme.md) and `phone.sh` began expecting it on every reuse, while `pak-recipe.ts`'s
+comparison table never grew the row, so the answer was always *"lodOnly: not recorded in this pak"* and
+nothing was served (the fix derives the key, as `textures` already did); **the tunnel died mid-session**
+(`tunnel inactivity timeout`) after a guard that had already settled swallowed the exit, so it neither said
+so nor reconnected; and **opening the console was still a person**, which is now the `open` job. All three
+are fixed. **The numbers below are unchanged and still owed** — read the panel plan's *"What the next agent
+does, in order"* before re-deriving any of this.
 
 **It is two buttons now, and that is deliberate** (2026-08-27, on the user's instruction that the panel
 should be made convenient rather than the work deferred): the phone panel's **THE FIELD RUN** link opens the

@@ -21,6 +21,7 @@ export const PHONE_ENV = {
   BAKE: /^[01]$/,
   DISTRICT: /^[a-z0-9-]{1,40}$/,
   HEAP: /^\d{3,5}$/,
+  LODONLY: /^[01]$/,
   MAPOBJ: /^[01]$/,
   MODELS: /^[01]$/,
   OUT: /^\.?\/?[\w./-]{1,80}$/,
@@ -79,6 +80,17 @@ export const JOBS = {
     label: 'convert the baked 3D city map — the LOD tier as the only tier',
     long: true,
     outSuffix: '-map3d',
+  },
+  // The last tap in the measurement loop (plan 002): a page has to EXIST before an agent can read or drive
+  // it, and until this job that first step was a person holding the phone. `open.mjs` builds the address
+  // from the same rule the page's own links use, refuses one nothing is serving, and says which package is
+  // missing when the phone cannot open a URL at all.
+  open: {
+    args: ['tools-debug/phone-console/open.mjs'],
+    command: 'node',
+    knobs: { DISTRICT: PHONE_ENV.DISTRICT, LINK: /^[a-z]{3,12}$/, OUT: PHONE_ENV.OUT },
+    label: 'open one of the panel links in the browser on this phone',
+    long: false,
   },
   phone: {
     args: ['run', 'phone'],
