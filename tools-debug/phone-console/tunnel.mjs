@@ -59,6 +59,27 @@ export function readToken(file = TOKEN_FILE, make = () => randomBytes(24).toStri
   return token;
 }
 
+/**
+ * The ssh key this phone would present, or null when it has none.
+ *
+ * It is the difference between an address that survives a restart and one that does not. `nokey@` is
+ * anonymous and localhost.run hands an anonymous connection a NEW subdomain every time; a keyed one is
+ * recognised and — per localhost.run's own documentation — keeps its subdomain. That matters far more than
+ * it sounds: the address is read by an agent's session at START, so an address that moves costs a whole
+ * session every time the tunnel blinks (2026-08-28: it blinked mid-measurement and every tool call after it
+ * answered `no tunnel`).
+ */
+export function sshIdentity(home = process.env.HOME ?? '', exists = existsSync) {
+  for (const name of ['id_ed25519', 'id_rsa']) {
+    const path = join(home, '.ssh', name);
+    if (exists(path)) {
+      return path;
+    }
+  }
+
+  return null;
+}
+
 /** What to paste, in the order the settings page asks for it. */
 export function summary(url, token) {
   return [
@@ -76,8 +97,44 @@ export function summary(url, token) {
   ].join('\n');
 }
 
+/**
+ * What to do about an address that moves, printed under the block that has just been pasted.
+ *
+ * An address is read by an agent session at START, so a moving one costs a whole session every time the
+ * tunnel restarts — and after the reconnect above, a restart is now something that happens on its own. Both
+ * fixes are free and neither is obvious from any screen the operator sees.
+ */
+export function stabilityHint(context = {}) {
+  if (context.ngrokDomain || context.identity) {
+    return '';
+  }
+
+  return [
+    ' This address will CHANGE on the next reconnect, and a new address costs a new session.',
+    ' Either of these makes it stop moving, once:',
+    '',
+    "   ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519   # localhost.run keeps a KEYED subdomain",
+    '   NGROK_DOMAIN=https://<yours>.ngrok-free.app        # a free ngrok account reserves one',
+    '',
+  ].join('\n');
+}
+
 /** How long a provider gets to prove it is UP before the next one is tried. */
 export const URL_TIMEOUT_MS = 45_000;
+
+/** How long to wait before putting a dropped tunnel back up. Long enough not to spin on a dead network. */
+export const RECONNECT_MS = 3_000;
+
+/**
+ * How often to send one request through the tunnel so the provider does not close it for being idle.
+ *
+ * This is what actually killed the first measurement session, 2026-08-28, and the provider said so in one
+ * line nobody was watching: `Received disconnect … tunnel inactivity timeout`. An agent's tunnel is idle by
+ * nature — it carries a burst of calls, then nothing while the agent reads what came back — so the quiet is
+ * the normal state and not a sign that anyone is finished. A GET to `/mcp` is refused (405, POST only) and
+ * is still traffic: it keeps the tunnel warm without carrying anything or needing the token.
+ */
+export const KEEPALIVE_MS = 60_000;
 
 /** The SSH options every ssh-based provider wants: no host-key prompt, and a connection that stays up. */
 const SSH = [
@@ -110,12 +167,35 @@ const SSH = [
  * waiting out the timeout.
  */
 export const PROVIDERS = [
-  { args: (port) => ['http', String(port), '--log', 'stdout'], command: 'ngrok', name: 'ngrok' },
   {
-    // The one that actually worked on this phone, 2026-08-28: anonymous, no key, and its address line
-    // arrives on an SSH connection that is by then established — so printing it IS the proof of a tunnel.
-    // Same for every ssh-based provider below.
-    args: (port) => [...SSH, '-R', `80:localhost:${port}`, 'nokey@localhost.run'],
+    // `--url` is a RESERVED domain (one comes with a free account). Without it ngrok is random like the
+    // rest; with it the address is the same one next week, which is the only version of this that an agent
+    // session can be configured against once.
+    args: (port, context = {}) =>
+      context.ngrokDomain
+        ? ['http', `--url=${context.ngrokDomain}`, String(port), '--log', 'stdout']
+        : ['http', String(port), '--log', 'stdout'],
+    command: 'ngrok',
+    name: 'ngrok',
+  },
+  {
+    // The one that actually worked on this phone, 2026-08-28. Its address line arrives on an SSH connection
+    // that is by then established — so printing it IS the proof of a tunnel. Same for every ssh provider
+    // below. Anonymous (`nokey@`) gets a fresh subdomain every reconnect; a KEYED connection is recognised
+    // and keeps one, so the key is used whenever the phone has it.
+    args: (port, context = {}) =>
+      context.identity
+        ? [
+            ...SSH,
+            '-o',
+            'IdentitiesOnly=yes',
+            '-i',
+            context.identity,
+            '-R',
+            `80:localhost:${port}`,
+            'opensa@localhost.run',
+          ]
+        : [...SSH, '-R', `80:localhost:${port}`, 'nokey@localhost.run'],
     command: 'ssh',
     name: 'localhost.run',
   },
@@ -160,7 +240,15 @@ export function tunnelUrl(line) {
 if (process.argv[1] && process.argv[1].endsWith('tunnel.mjs')) {
   const token = readToken();
   const children = new Set();
+  let stopping = false;
+  let restart = null;
+  let pulse = null;
+  /** The address the paste block last named, so a reconnect onto the SAME one is a line, not a block. */
+  let announcedUrl = null;
   const stop = () => {
+    stopping = true;
+    clearTimeout(restart);
+    clearInterval(pulse);
     for (const child of children) {
       child.kill();
     }
@@ -183,6 +271,15 @@ if (process.argv[1] && process.argv[1].endsWith('tunnel.mjs')) {
       return false;
     }
   };
+  // What this phone can offer a provider that wants to be stable, read once.
+  const context = { identity: sshIdentity(), ngrokDomain: process.env.NGROK_DOMAIN };
+  /** One request a minute through the tunnel, so the provider never calls it idle. See {@link KEEPALIVE_MS}. */
+  const keepAlive = (url) => {
+    clearInterval(pulse);
+    pulse = setInterval(() => void fetch(`${url}/mcp`).catch(() => undefined), KEEPALIVE_MS);
+    pulse.unref?.();
+  };
+
   const providers = chooseProviders(process.env.TUNNEL, installed);
   if (providers.length === 0) {
     process.stdout.write(
@@ -211,7 +308,7 @@ if (process.argv[1] && process.argv[1].endsWith('tunnel.mjs')) {
       return;
     }
     process.stdout.write(`\n[tunnel] trying ${provider.name}…\n`);
-    const child = spawn(provider.command, provider.args(PORT), { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(provider.command, provider.args(PORT, context), { stdio: ['ignore', 'pipe', 'pipe'] });
     children.add(child);
     let settled = false; // announced as up, or given up on — either way this provider is out of the race
     let announced = false; // a block was printed for it, so a later address change has to correct that block
@@ -265,13 +362,40 @@ if (process.argv[1] && process.argv[1].endsWith('tunnel.mjs')) {
         announced = true;
         clearTimeout(giveUp);
         clearInterval(beat);
-        process.stdout.write(summary(`${url}/mcp`, token));
+        keepAlive(url);
+        if (url === announcedUrl) {
+          // The whole point of a stable address: a reconnect changes nothing the operator has to act on, and
+          // reprinting the block would make it look like it did.
+          process.stdout.write(`\n[tunnel] back up on the SAME address — nothing to re-paste.\n`);
+        } else {
+          announcedUrl = url;
+          process.stdout.write(summary(`${url}/mcp`, token));
+          process.stdout.write(stabilityHint(context));
+        }
       }
     };
     child.stdout.on('data', watch);
     child.stderr.on('data', watch); // cloudflared and ssh both announce on stderr
     child.on('error', () => next('would not start'));
-    child.on('exit', (code) => next(`exited (${code}) before giving a working address`));
+    child.on('exit', (code) => {
+      children.delete(child);
+      if (!settled) {
+        return next(`exited (${code}) before giving a working address`);
+      }
+      // A tunnel that dies AFTER it was announced used to be silent — `next` returns early once settled, so
+      // nothing was printed and nothing was restarted. That is the failure exactly as it was met on
+      // 2026-08-28: the address kept being read, every call answered `no tunnel`, and the screen said
+      // nothing had happened. Say it, and put it back up.
+      //
+      // `announced`, not `settled`: giving up on a provider settles it and then KILLS it, so reading
+      // `settled` here would reconnect the one we just walked away from — beside the one now running.
+      clearInterval(beat);
+      if (!announced || stopping) {
+        return;
+      }
+      process.stdout.write(`\n[tunnel] ${provider.name} DROPPED (exit ${code}) — reconnecting…\n`);
+      restart = setTimeout(() => tryProvider(index), RECONNECT_MS);
+    });
   };
   tryProvider(0);
 }

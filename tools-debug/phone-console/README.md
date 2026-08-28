@@ -90,6 +90,15 @@ not get typed:
 | **Bake the tile pyramid**   | `bake=tiles`, z0–z4                                                                                                                                                                                                            |
 | **The shareable console**   | `Build it` runs `npm run build:share:dispatch`, and the link opens that ONE file on a real pak — the check a build log cannot make ([2/02](../../docs/plans/201-dispatch-console/2-real-device-truth/readme.md))               |
 
+**An agent opens them too, since 2026-08-28** — `phone_run open` with `LINK=field` (or `map`, `inventory`,
+`flat`, `bake`, `share`). It was the last step in the measurement loop that still needed a person holding the
+phone: everything after it was already a tool call, but a page has to EXIST before any of it. It is a JOB
+rather than an MCP tool deliberately — the job table is read by the panel, which restarts for free, while
+`mcp.mjs` runs beside the tunnel whose address every open session is holding, so a new tool costs a session.
+It needs `pkg install termux-api` and the Termux:API app (the package alone does nothing), and says so by
+name when they are missing. The addresses come from `app/links.mjs`, which this page reads too: two copies of
+that rule is how an agent opens a URL that differs from the one on the screen beside it.
+
 ## The same panel, as an MCP server
 
 ```bash
@@ -122,7 +131,7 @@ npm run panel:tunnel         # session 2 — the MCP server + a tunnel, and the 
 
 `panel:tunnel` starts both and prints one block: the public URL (with `/mcp` already on it) and the token.
 **The token is made once and kept** in `build/.phone/mcp-token`, so a restart re-pastes one value rather than
-two — a tunnel address changes every time and nothing can be done about that.
+two. The address can be made to stop moving as well — see the three findings below.
 
 **Five providers, tried in order, because the network gets a vote.** 2026-08-28 on this phone, cloudflared's
 own pre-check failed both ways — `UDP Connectivity … QUIC connection failed` and `TCP Connectivity … HTTP/2
@@ -149,8 +158,26 @@ and the block names the localhost address, which is what a Claude running ON thi
 **An anonymous tunnel's address can change under you.** localhost.run hands out a new one on every
 reconnect — 2026-08-28 the block named `1799d46bfdb9ba.lhr.life` and fourteen minutes later the log carried
 `ceb8689e34376a.lhr.life`, with nothing to mark that the pasted value had died. A new address after the
-block has been printed now reprints it, under a line saying the previous one is dead. A stable address is
-what an account buys, on either provider.
+block has been printed now reprints it, under a line saying the previous one is dead.
+
+**Then it happened for real, mid-measurement, and cost the session** (2026-08-28). The provider said exactly
+why, in one line nobody was watching: `Received disconnect … tunnel inactivity timeout`. An agent's tunnel is
+idle by nature — it carries a burst of calls and then nothing while the agent reads what came back — so the
+quiet is the normal state, not a sign anybody has finished. Three things came out of it, and each is a
+separate failure:
+
+- **It goes quiet, so it is kept warm.** One request a minute through the tunnel (`GET /mcp`, which the
+  server refuses with 405 — traffic without carrying anything or needing the token).
+- **A dead tunnel was SILENT.** A provider that exits after being announced hit a guard that had already
+  settled, so nothing was printed and nothing was restarted: the address stayed in the agent's environment,
+  every call answered `no tunnel`, and the phone's screen said nothing had happened. It now says so and
+  reconnects.
+- **A moving address costs a SESSION.** The address is read at session start, so every reconnect used to
+  mean pasting a new value and starting over — which, with automatic reconnection, would now happen more
+  often rather than less. Two ways to stop it moving, and the block prints both when neither is in place:
+  `ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519` (a keyed localhost.run connection keeps its subdomain,
+  where `nokey@` is handed a fresh one) or `NGROK_DOMAIN=https://<yours>.ngrok-free.app` (a free ngrok
+  account reserves one). The key is used automatically once it exists.
 
 **An address is not a tunnel, and the first version of this script believed it was.** cloudflared printed
 `Your quick Tunnel has been created!` with a `trycloudflare.com` address, the script printed the paste block,

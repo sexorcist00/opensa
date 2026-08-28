@@ -3,7 +3,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { chooseProviders, isFatal, isReady, PROVIDERS, readToken, summary, tunnelUrl } from './tunnel.mjs';
+import {
+  chooseProviders,
+  isFatal,
+  isReady,
+  PROVIDERS,
+  readToken,
+  sshIdentity,
+  stabilityHint,
+  summary,
+  tunnelUrl,
+} from './tunnel.mjs';
 
 const provider = (name) => PROVIDERS.find((entry) => entry.name === name);
 
@@ -47,6 +57,24 @@ describe('panel tunnel', () => {
     it('drops cloudflared the moment its own pre-check says the network cannot carry it', () => {
       expect(isFatal(provider('cloudflared'), 'INF precheck complete hard_fail=true run_id=79757136-7e6c')).toBe(true);
       expect(isFatal(provider('cloudflared'), 'INF | SUMMARY: Environment has critical failures.')).toBe(true);
+    });
+
+    it('does not present a key it does not have — an anonymous localhost.run is still a tunnel', () => {
+      expect(provider('localhost.run').args(8788)).toContain('nokey@localhost.run');
+      expect(provider('localhost.run').args(8788)).not.toContain('-i');
+    });
+
+    it('finds no ssh identity in a home with no key, rather than naming one that is not there', () => {
+      expect(sshIdentity('/home/nobody', () => false)).toBeNull();
+    });
+
+    it('does not pin ngrok to a domain the operator has not reserved', () => {
+      expect(provider('ngrok').args(8788).join(' ')).not.toContain('--url');
+    });
+
+    it('says nothing about stability when the address is already stable', () => {
+      expect(stabilityHint({ identity: '/home/u/.ssh/id_ed25519' })).toBe('');
+      expect(stabilityHint({ ngrokDomain: 'https://opensa.ngrok-free.app' })).toBe('');
     });
 
     it('does not mistake a retry for a failure that is worth giving up on', () => {
@@ -126,6 +154,33 @@ describe('panel tunnel', () => {
       const line = 'INF Registered tunnel connection connIndex=0 connection=1ce3744e location=fra01';
 
       expect(isReady(provider('cloudflared'), line, 'https://x.trycloudflare.com')).toBe(true);
+    });
+
+    it('presents the phone key when it has one, which is what keeps the subdomain still', () => {
+      const args = provider('localhost.run').args(8788, { identity: '/home/u/.ssh/id_ed25519' });
+
+      expect(args).toContain('/home/u/.ssh/id_ed25519');
+      expect(args).toContain('IdentitiesOnly=yes');
+      expect(args).not.toContain('nokey@localhost.run');
+    });
+
+    it('prefers ed25519 over rsa when the phone carries both', () => {
+      expect(sshIdentity('/home/u', (path) => path.endsWith('id_ed25519') || path.endsWith('id_rsa'))).toBe(
+        '/home/u/.ssh/id_ed25519',
+      );
+    });
+
+    it('pins ngrok to a reserved domain when one is configured', () => {
+      expect(provider('ngrok').args(8788, { ngrokDomain: 'https://opensa.ngrok-free.app' })).toContain(
+        '--url=https://opensa.ngrok-free.app',
+      );
+    });
+
+    it('says how to stop the address moving when it still can', () => {
+      const hint = stabilityHint({});
+
+      expect(hint).toContain('ssh-keygen');
+      expect(hint).toContain('NGROK_DOMAIN');
     });
 
     it('prints both values under the names the settings page asks for', () => {
