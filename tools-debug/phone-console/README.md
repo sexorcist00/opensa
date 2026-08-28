@@ -139,6 +139,12 @@ runs in) and **start a new session** — MCP servers are read at session start, 
 committed**: a quick tunnel's address changes every restart, and a committed token is a leak that outlives
 the session that leaked it.
 
+**Both references carry a `:-default`, and that is not decoration.** A `${VAR}` that is not set is left
+_unexpanded_ by Claude Code, so a `url` of `${OPENSA_PHONE_URL}` reaches the client as that literal text and
+the whole entry is refused — `INVALID_CONFIG: 'url' is not a valid URL`, which is what the first attempt got
+(2026-08-28). With the default, an unset variable means the localhost address instead, which is exactly right
+for a Claude running ON this phone and merely fails to connect anywhere else.
+
 **A quick tunnel is a public URL.** The token is what stands between it and a stranger, which is why the
 server refuses an unauthenticated request rather than answering it. Stop `cloudflared` when the session is
 over; the next one gets a new address anyway.
