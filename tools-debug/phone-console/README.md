@@ -130,13 +130,18 @@ is blocked` — while `api.cloudflare.com:443` passed. The carrier allows 443 an
 only port cloudflared reaches its edge on, in either protocol; no config setting gets around that. So the
 order is by what survives a restrictive network, not by preference:
 
-| Provider        | Reaches its edge on             | Needs                                                                                               |
-| --------------- | ------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `ngrok`         | 443 (TLS)                       | a free account — the linux-arm64 binary in `$PREFIX/bin`, then `ngrok config add-authtoken <yours>` |
-| `pinggy`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                  |
-| `serveo`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                  |
-| `localhost.run` | 22 (SSH)                        | `pkg install openssh` — no account                                                                  |
-| `cloudflared`   | **7844** only                   | `pkg install cloudflared` — and a network that allows 7844                                          |
+| Provider        | Reaches its edge on             | Needs                                                                                               | On this phone, 2026-08-28     |
+| --------------- | ------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `ngrok`         | 443 (TLS)                       | a free account — the linux-arm64 binary in `$PREFIX/bin`, then `ngrok config add-authtoken <yours>` | not installed                 |
+| `localhost.run` | 22 (SSH)                        | `pkg install openssh` — no account, no key                                                          | **worked**                    |
+| `pinggy`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                  | asked for a password          |
+| `serveo`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                  | connection closed by the host |
+| `cloudflared`   | **7844** only                   | `pkg install cloudflared` — and a network that allows 7844                                          | cannot reach the edge         |
+
+The order changed once the phone had a verdict: `localhost.run` is ahead of the two 443 providers because it
+is the one that came up, and every ssh provider carries `BatchMode=yes` — pinggy fell through to a password
+prompt on a phone with no key and spent the whole timeout waiting for a person to answer a prompt they could
+not see was one.
 
 `TUNNEL=pinggy` (or any other name) forces one. None installed is not fatal: the MCP server comes up anyway
 and the block names the localhost address, which is what a Claude running ON this phone wants.

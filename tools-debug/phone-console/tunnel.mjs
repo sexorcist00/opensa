@@ -23,7 +23,7 @@
  * every dial to the edge — the URL never worked. So a provider is announced only when it says it is
  * CONNECTED, and one whose own diagnostics say it cannot connect here is dropped immediately.
  *
- * `TUNNEL=pinggy` (or `ngrok`, `serveo`, `localhost.run`, `cloudflared`) forces one; otherwise every
+ * `TUNNEL=localhost.run` (or `ngrok`, `pinggy`, `serveo`, `cloudflared`) forces one; otherwise every
  * installed provider is tried in order and one that is not up within {@link URL_TIMEOUT_MS} is given up on
  * by name.
  */
@@ -80,7 +80,20 @@ export function summary(url, token) {
 export const URL_TIMEOUT_MS = 45_000;
 
 /** The SSH options every ssh-based provider wants: no host-key prompt, and a connection that stays up. */
-const SSH = ['-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null', '-o', 'ServerAliveInterval=30'];
+const SSH = [
+  '-o',
+  'StrictHostKeyChecking=no',
+  '-o',
+  'UserKnownHostsFile=/dev/null',
+  '-o',
+  'ServerAliveInterval=30',
+  // Never let a provider stop at a password prompt. pinggy did, on a phone with no ssh key
+  // (`u0_a210@a.pinggy.io's password:`), and the whole 45s timeout was then spent waiting for a person to
+  // type something into a prompt they could not see was a prompt. BatchMode turns that into an immediate
+  // refusal, which is the next provider.
+  '-o',
+  'BatchMode=yes',
+];
 
 /**
  * The providers, in the order they are tried.
@@ -99,18 +112,15 @@ const SSH = ['-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/nu
 export const PROVIDERS = [
   { args: (port) => ['http', String(port), '--log', 'stdout'], command: 'ngrok', name: 'ngrok' },
   {
-    // No account, and 443 is asked for explicitly. The address line arrives on the established SSH
-    // connection, so printing it IS the proof — same for every ssh-based provider below.
-    args: (port) => [...SSH, '-p', '443', '-R', `0:localhost:${port}`, 'a.pinggy.io'],
-    command: 'ssh',
-    name: 'pinggy',
-  },
-  { args: (port) => [...SSH, '-p', '443', '-R', `80:localhost:${port}`, 'serveo.net'], command: 'ssh', name: 'serveo' },
-  {
+    // The one that actually worked on this phone, 2026-08-28: anonymous, no key, and its address line
+    // arrives on an SSH connection that is by then established — so printing it IS the proof of a tunnel.
+    // Same for every ssh-based provider below.
     args: (port) => [...SSH, '-R', `80:localhost:${port}`, 'nokey@localhost.run'],
     command: 'ssh',
     name: 'localhost.run',
   },
+  { args: (port) => [...SSH, '-p', '443', '-R', `0:localhost:${port}`, 'a.pinggy.io'], command: 'ssh', name: 'pinggy' },
+  { args: (port) => [...SSH, '-p', '443', '-R', `80:localhost:${port}`, 'serveo.net'], command: 'ssh', name: 'serveo' },
   {
     args: (port) => ['tunnel', '--url', `http://127.0.0.1:${port}`],
     command: 'cloudflared',
@@ -211,12 +221,25 @@ if (process.argv[1] && process.argv[1].endsWith('tunnel.mjs')) {
       }
       settled = true; // stop this provider's own later lines from re-entering
       clearTimeout(giveUp);
+      clearInterval(beat);
       child.kill();
       children.delete(child);
       process.stdout.write(`\n[tunnel] ${provider.name} ${why} — trying the next one.\n`);
       tryProvider(index + 1);
     };
     const giveUp = setTimeout(() => next(`printed no working address in ${URL_TIMEOUT_MS / 1000}s`), URL_TIMEOUT_MS);
+    // A provider that says nothing for 45s is indistinguishable from a hang on a phone screen, and the
+    // operator's only move then is to kill a script that was about to work. Say the clock is running.
+    const started = Date.now();
+    const beat = setInterval(() => {
+      if (!settled) {
+        const left = Math.round((URL_TIMEOUT_MS - (Date.now() - started)) / 1000);
+        process.stdout.write(
+          `[tunnel] ${provider.name}: ${url ? 'address seen, waiting for it to connect' : 'waiting for an address'} — ${left}s left\n`,
+        );
+      }
+    }, 10_000);
+    beat.unref?.();
     const watch = (chunk) => {
       process.stdout.write(`[${provider.name}] ${chunk}`);
       if (settled) {
@@ -229,6 +252,7 @@ if (process.argv[1] && process.argv[1].endsWith('tunnel.mjs')) {
       if (isReady(provider, chunk, url)) {
         settled = true;
         clearTimeout(giveUp);
+        clearInterval(beat);
         process.stdout.write(summary(`${url}/mcp`, token));
       }
     };

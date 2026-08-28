@@ -95,12 +95,19 @@ describe('panel tunnel', () => {
       // passes, so cloudflared cannot connect here however long it retries.
       expect(chooseProviders(undefined, () => true).map((entry) => entry.name)).toEqual([
         'ngrok',
+        'localhost.run',
         'pinggy',
         'serveo',
-        'localhost.run',
         'cloudflared',
       ]);
       expect(PROVIDERS.at(-1).name).toBe('cloudflared');
+    });
+
+    it('never lets an ssh provider stop at a password prompt', () => {
+      // pinggy did, on a phone with no key, and burned the whole timeout waiting on an invisible prompt.
+      for (const name of ['localhost.run', 'pinggy', 'serveo']) {
+        expect(provider(name).args(8788)).toContain('BatchMode=yes');
+      }
     });
 
     it('asks every ssh provider that can be asked for port 443', () => {
