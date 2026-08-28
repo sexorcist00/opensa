@@ -132,7 +132,7 @@ order is by what survives a restrictive network, not by preference:
 
 | Provider        | Reaches its edge on             | Needs                                                                                               | On this phone, 2026-08-28     |
 | --------------- | ------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------- |
-| `ngrok`         | 443 (TLS)                       | a free account — the linux-arm64 binary in `$PREFIX/bin`, then `ngrok config add-authtoken <yours>` | not installed                 |
+| `ngrok`         | 443 (TLS)                       | a free account — the linux-arm64 binary in `$PREFIX/bin`, `ngrok config add-authtoken <yours>`, and the DNS wrapper below | **worked**                    |
 | `localhost.run` | 22 (SSH)                        | `pkg install openssh` — no account, no key                                                          | **worked**                    |
 | `pinggy`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                  | asked for a password          |
 | `serveo`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                  | connection closed by the host |
@@ -142,6 +142,24 @@ The order changed once the phone had a verdict: `localhost.run` is ahead of the 
 is the one that came up, and every ssh provider carries `BatchMode=yes` — pinggy fell through to a password
 prompt on a phone with no key and spent the whole timeout waiting for a person to answer a prompt they could
 not see was one.
+
+**ngrok connects here, but only after two things that both look like a network problem.** Measured
+2026-08-28 on this phone, the day the account-less providers turned flaky and cloudflared stayed unreachable:
+
+1. **It resolves no names.** Android ships no `/etc/resolv.conf`, and ngrok is a static Go binary carrying its
+   own resolver — it finds no file, falls back to `127.0.0.1:53`, and nothing listens there, because a port
+   under 1024 is not bindable by an app uid. Every dial failed with `lookup connect.ngrok-agent.com on
+   [::1]:53: read: connection refused`, which reads exactly like a carrier blocking 443. The fix belongs to
+   the phone rather than to this script — a `proot` wrapper that hands the binary a resolv.conf, in
+   [termux.md](../../docs/development/termux.md) under _Practical notes_. `netlinkrib: permission denied` in
+   the same log is unrelated and harmless.
+2. **The address it hands out is a `.dev` one now.** `https://prowling-volumes-smooth.ngrok-free.dev` — and
+   `tunnelUrl` knew only `ngrok-free.app`, so a tunnel that had already printed `client session established`
+   and `started tunnel` was given up on 45 s later as _"printed no working address"_ and killed on the way to
+   the next provider. The pattern takes `ngrok-free.{app,dev}` and `ngrok.{app,dev,io}` since. **A provider
+   that changes its domain again fails in exactly this shape**, and it is silent in the worst way: the
+   provider's own log says it is up while the script says it is waiting. That disagreement is the symptom to
+   read.
 
 `TUNNEL=pinggy` (or any other name) forces one. None installed is not fatal: the MCP server comes up anyway
 and the block names the localhost address, which is what a Claude running ON this phone wants.

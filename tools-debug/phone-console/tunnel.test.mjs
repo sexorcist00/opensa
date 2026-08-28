@@ -75,6 +75,14 @@ describe('panel tunnel', () => {
       expect(
         tunnelUrl('t=2026-08-28T14:30:02+0000 lvl=info msg="started tunnel" url=https://a1b2-c3.ngrok-free.app'),
       ).toBe('https://a1b2-c3.ngrok-free.app');
+      // 2026-08-28, verbatim: ngrok handed out an `ngrok-free.dev` address, the pattern only knew `.app`,
+      // and a connected tunnel was abandoned as "no address" 45s later.
+      expect(
+        tunnelUrl(
+          't=2026-08-28T15:48:00+0000 lvl=info msg="started tunnel" obj=tunnels name=command_line ' +
+            'addr=http://localhost:8788 url=https://prowling-volumes-smooth.ngrok-free.dev',
+        ),
+      ).toBe('https://prowling-volumes-smooth.ngrok-free.dev');
       expect(tunnelUrl('Forwarding HTTP traffic from https://frosty-lake.serveo.net')).toBe(
         'https://frosty-lake.serveo.net',
       );
