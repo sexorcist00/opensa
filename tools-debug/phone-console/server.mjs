@@ -25,7 +25,7 @@ import { gunzipSync } from 'node:zlib';
 import { fileCapture, writeTilesArchive } from './capture-store.mjs';
 import { commitPlan, pendingCaptures, runCommit } from './captures.mjs';
 import { runChecks, statusPaths, verdict } from './doctor.mjs';
-import { buildJob, JobRunner } from './jobs.mjs';
+import { buildJob, JobRunner, JOBS } from './jobs.mjs';
 import { htmlFingerprint, htmlNames, listTarFiles } from './webapp.mjs';
 
 const run = promisify(execFile);
@@ -333,6 +333,31 @@ async function handle(request, response) {
   }
   if (request.method === 'GET' && path === '/api/log') {
     return streamLog(response);
+  }
+  // The same buffer the stream replays, as ONE answer — for a caller that cannot hold an event stream open
+  // (the MCP server, `mcp.mjs`). Never a second buffer: the log a tool reads and the log the page shows are
+  // the same lines, or a field report and the screen disagree about what happened.
+  if (request.method === 'GET' && path === '/api/log/tail') {
+    const lines = runner.backlog();
+    const tail = Number(url.searchParams.get('tail')) || 80;
+
+    return send(response, 200, { job: runner.status(), lines: lines.slice(-Math.max(1, tail)) });
+  }
+  // What may be run, straight off the table `buildJob` validates against — an agent asking "what can this
+  // phone do" must be answered by the allowlist itself rather than by a list somebody keeps in step with it.
+  if (request.method === 'GET' && path === '/api/jobs') {
+    return send(
+      response,
+      200,
+      Object.entries(JOBS).map(([id, job]) => ({
+        forced: job.forced ?? null,
+        id,
+        knobs: Object.keys(job.knobs ?? {}),
+        label: job.label,
+        long: job.long === true,
+        outSuffix: job.outSuffix ?? null,
+      })),
+    );
   }
   if (request.method === 'POST' && path.startsWith('/api/job/')) {
     const plan = buildJob(path.slice('/api/job/'.length), await readJson(request));

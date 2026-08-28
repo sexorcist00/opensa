@@ -90,6 +90,23 @@ not get typed:
 | **Bake the tile pyramid**   | `bake=tiles`, z0–z4                                                                                                                                                                                                            |
 | **The shareable console**   | `Build it` runs `npm run build:share:dispatch`, and the link opens that ONE file on a real pak — the check a build log cannot make ([2/02](../../docs/plans/201-dispatch-console/2-real-device-truth/readme.md))               |
 
+## The same panel, as an MCP server
+
+```bash
+npm run panel:mcp                       # stdio — a Claude running ON this phone
+node tools-debug/phone-console/mcp.mjs --http --port 8788   # JSON-RPC over POST, token-gated
+```
+
+`mcp.mjs` exposes what the page's buttons expose — `phone_state`, `phone_jobs`, `phone_run`, `phone_log`,
+`phone_stop`, `phone_commit` — so an agent can drive a measurement without a person relaying the screen.
+**It is a client of the running panel**, not a second copy: one `JobRunner` on the phone, or two converts
+fight over one folder. With the panel down, every tool says so rather than starting anything.
+
+`phone_exec` (a real shell) is **off unless `PANEL_MCP_EXEC=1`**, and the HTTP transport binds localhost and
+requires a bearer token: reaching it from off-device is a tunnel somebody sets up on purpose, and a tunnel
+with no token is a shell on the open internet. The design, the transports and what is verified where:
+[docs/plans/002-mcp.md](docs/plans/002-mcp.md).
+
 ## What it checks before you start
 
 `node` · **git identity** (a phone that has only ever pulled has none, and every commit then dies with
