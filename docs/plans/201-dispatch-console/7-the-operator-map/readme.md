@@ -457,7 +457,7 @@ it twice:
 | Product | Evidence | Quality |
 | --- | --- | --- |
 | **Mark43 CAD** | the vendor's own one-pager (`mark43.com/wp-content/uploads/Mark43CAD.pdf`, fetched 2026-08-28). Page 2 embeds a **1071 x 549 product screenshot**, pulled out with `pdfimages` and sampled with a histogram plus point probes | **measured**, with one caveat stated below |
-| **Tickets CAD** (Open ISES) | the vendor's screens are still uncapturable (Cloudflare on SourceForge, TLS failure on `ticketscad.org`, `web.archive.org` unreachable), so on 2026-08-29 the **2.41 dev-repo build was stood up and run locally** and its screens measured in the browser — the CLASSIC line, **not** the v3.44.1 stable or the v4.0 NewUI the project's page describes | **measured, but of the wrong version** |
+| **Tickets CAD** (Open ISES) | both lines were stood up and measured locally on 2026-08-29: the 2.41 dev-repo build first (the wrong version, kept below for what it shows about hand-written skins), then **v4.2.26 NewUI** from the live repo — `github.com/openises/TicketsCAD`, which the legacy 3.44 codebase names in its own README and release check | **measured, current version** |
 
 **The caveat on the Mark43 numbers.** The screenshot is a downscaled JPEG inside a marketing PDF. Flat
 regions survive that (a panel fill is still its own colour); 1 px separators, small text and pill edges are
@@ -564,6 +564,52 @@ basemap with pins drawn over it. It is the wrong answer here, and the reason is 
 our chips must equal the pillars the ENGINE draws from `SET_COLORS`, so a per-agency colour table would have
 to move the engine's debug-line sets with it. Filed as the shape a colour-vision-safe palette would take
 (201/5), not as a theme.
+
+#### And then the CURRENT one: v4.2.26 NewUI (2026-08-29)
+
+**Where it actually lives**, because finding it cost two wrong turns: SourceForge ships only the legacy line
+(`tickets-3.44.1.zip`, 2026-03-23 — behind Cloudflare, though its mirror hosts `<name>.dl.sourceforge.net`
+serve the file directly). The legacy 3.44 code checks GitHub for its own releases, and that string is the
+signpost: **`github.com/openises/tickets` is the legacy line, `github.com/openises/TicketsCAD` is v4**.
+Stood up with the project's own procedure — `composer install`, `tools/install_fresh.php`,
+`tools/create_admin.php`, on PHP 8.4 + MariaDB — and it installs clean: **55 migrations applied, 0 failed**,
+no patching of any kind. A decade of distance from the 2.41 build, in one command.
+
+| What | Measured |
+| --- | --- |
+| palette | **Bootstrap 5.** Day ground `#e9ecef`, text `#212529`; Night `#1a1d21`, text `#dee2e6` |
+| type | `system-ui` at **16 px** base (the legacy line was Verdana 12) |
+| density | **28 px** table rows — twice the legacy 14 |
+| contrast, Night | **52 of 184** rendered text pairs under Lc 60; the floor is Bootstrap's `text-muted` `#6c757d` at 9.6 px on the dark panels, **Lc 20–26** |
+| targets | the top bar's icon buttons are **23–27 px**, against 44 |
+| the map | **Leaflet on OSM in Day, a CARTO dark basemap in Night** |
+
+**Three findings, and only one of them is about colour.**
+
+**1. The theme toggles in the CHROME, not only at sign-in.** A sun/moon pair sits in the top bar beside the
+clock, and the login form keeps its `Day / Night` choice as a hidden field. Ours is sign-in-equivalent — a
+`<select>` in the top bar — so the mechanism matches, but it settles a question the switchability section
+leaves open: **an operator changes skin mid-shift**, which is the argument for reading `prefers-color-scheme`
+at first run and for keeping the switch one attribute rather than a reload.
+
+**2. Their map follows the skin, and ours structurally cannot.** Swapping OSM for a CARTO dark basemap is a
+tile-style change — the map is a picture served by somebody else, so a theme reaches it. Our map is a
+rendered world on a clock: the same request is an ENGINE question (the environment driver,
+[6](../6-display-modes/readme.md)), never a token. That is the sharpest available statement of why layer 5
+below is not a theme's, and it is the answer to keep for the day someone asks for "a dark map to match the
+dark UI".
+
+**3. A GridStack widget dashboard — the fourth sighting.** Resgrid's BigBoard, CrowdCAD's panes, their own
+v3 situation panels, and now v4's draggable widget grid. [7-08](#08--the-workspace) rejected the pattern
+because a grid whose tiles reflow takes back the space the map-first decision won; four products later the
+argument is unchanged, and the field's agreement is not evidence against it — every one of those four also
+puts the map in a card.
+
+**What it does NOT change: still no preset.** Bootstrap 5's defaults are not an identity to borrow, and its
+own dark theme leaves a quarter of its rendered text under our secondary threshold — the `text-muted` grey
+that ships with the framework, at 9.6 px, on panels it was never measured against. Which is the lesson the
+legacy skin taught at Lc 0, one framework and thirteen years later: **a guard is what makes a second palette
+cheap, and nobody who ships one by hand has one.**
 
 #### What a screen holds, and which layer a theme can carry
 
@@ -690,7 +736,7 @@ The procedure, so the next one is not a taste exercise:
 - The switcher, the view-link parameter and the embedded default all resolve to the same preset for the same
   input.
 
-**Owes:** a Tickets CAD capture of the version its own page describes (v3.44.1 / v4.0 NewUI) — the local run reached 2.41 only; a phone verdict on the Mark43 preset in
+**Owes:** a phone verdict on the Mark43 preset in
 daylight (it is a lighter ground than Night and that cuts both ways); and the bundle delta per preset,
 measured with `bundle-inventory.ts` rather than assumed — the claim that a preset costs bytes and not frame
 time is exactly the kind this repository does not take on trust.
