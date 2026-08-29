@@ -457,7 +457,7 @@ it twice:
 | Product | Evidence | Quality |
 | --- | --- | --- |
 | **Mark43 CAD** | the vendor's own one-pager (`mark43.com/wp-content/uploads/Mark43CAD.pdf`, fetched 2026-08-28). Page 2 embeds a **1071 x 549 product screenshot**, pulled out with `pdfimages` and sampled with a histogram plus point probes | **measured**, with one caveat stated below |
-| **Tickets CAD** (Open ISES) | the project's own page, read as text. `openises.sourceforge.net` and `sourceforge.net` answer a **Cloudflare bot challenge** to this session's egress, `www.ticketscad.org` fails TLS (`ERR_SSL_PROTOCOL_ERROR`), and `web.archive.org` is unreachable from here — **no screen was obtained** | **prose only** |
+| **Tickets CAD** (Open ISES) | the vendor's screens are still uncapturable (Cloudflare on SourceForge, TLS failure on `ticketscad.org`, `web.archive.org` unreachable), so on 2026-08-29 the **2.41 dev-repo build was stood up and run locally** and its screens measured in the browser — the CLASSIC line, **not** the v3.44.1 stable or the v4.0 NewUI the project's page describes | **measured, but of the wrong version** |
 
 **The caveat on the Mark43 numbers.** The screenshot is a downscaled JPEG inside a marketing PDF. Flat
 regions survive that (a panel fill is still its own colour); 1 px separators, small text and pill edges are
@@ -466,7 +466,9 @@ sound, and the type sizes and row heights are **not** measurable from it — the
 
 **And the consequence for Tickets CAD is the whole verdict on it.** A preset built from a page that says
 "modern dark theme" is not a skin taken from a product; it is our own taste wearing somebody else's name.
-It does not get built here.
+It does not get built here — and the local run below, which reached the classic UI rather than the v4 one
+the page is describing, does not change that: measuring the wrong version is not evidence about the right
+one.
 
 #### Mark43, measured
 
@@ -509,12 +511,59 @@ it is a phone question before it is a desk one, and it is filed here rather than
 - **Mark43 -> a preset, and it is worth building.** It is this console's own direction with a different ramp
   (achromatic, lighter ground) and a different depth strategy (a line where we use a value step and a
   shadow). Both differences are real work, and one of them the theme contract cannot express today.
-- **Tickets CAD -> not a preset.** It is a landscape row, one owed capture, and two architecture signals:
+- **Tickets CAD -> not a preset**, confirmed by running it (below): its own Night skin measures **Lc 0** on a
+  live control, so the palette is not a thing to borrow. It is a landscape row, one still-owed capture of the
+  version its page describes, and two architecture signals:
   **light and dark as a first-class instant toggle**, both declared "for extended use in dispatch
   environments" — a stronger reason to keep Day measured than the one we wrote (a phone outdoors) — and a
   **drag-and-drop widget dashboard** (incidents, responders, map, statistics, facilities, communications,
   recent events), which is Resgrid's BigBoard pattern for the third time. 7-08 rejected it with an argument
   and the argument has not changed: a grid whose tiles reflow takes back the space that decision won.
+
+#### What the Tickets CAD run actually showed (2026-08-29)
+
+**How it was run**, so nobody pays for it twice: the `khoegenauer/tickets-cad` dev repo (master is **2.41**, 2013)
+against a local MariaDB, served by PHP 8.4 with a throwaway `ext/mysql` -> mysqli shim, because the app calls
+the removed `mysql_*` API in 246 files. Five upstream defects had to be patched to reach a screen at all — a
+missing paren in `install.php` (a hard parse error in any PHP), `is_resource()` on what is now a
+`mysqli_result` (the login silently reports "expired"), `count($x == 0)` where `count($x) == 0` was meant, a
+`break` outside any switch in `units.php` and `units_nm.php`, and a PHP-5 numeric coercion on an empty
+setting. None of that is a judgement on the product; it is the cost of running a 2013 PHP application, and it
+is written down only so the next attempt starts from the answer.
+
+**The mechanism, and it is the one this chain already chose.** The skin is picked on the **login form** —
+`Colors: Day / Night`, held for the session — and switching it changes colour and nothing else: same layout,
+same controls, same positions. 7-09 wrote that rule from first principles; here is a working CAD that has
+obeyed it for a decade.
+
+**The warning, measured with this console's own APCA implementation** (`ui/theme.test.ts`'s formula, run in
+the page against every text-on-background pair actually rendered):
+
+| Night, on the screens a dispatcher works | Measured |
+| --- | --- |
+| the Call Board's `Show` control | `#000` on the `#121212` ground — **Lc 0. Invisible, not merely poor** |
+| every unit row's data (callsign, status, "as of") | 10 px `#000` on `#9e9e9e` — **Lc 52** |
+| the board's column-group headers (Incident / Units / Dispatch) | white on `#99b2cc` — **Lc 48** |
+| the status chip | `#000` on `#ff3c4a` — **Lc 43** |
+
+Against our thresholds (Lc 90 primary, Lc 60 secondary) the whole Night skin fails, and one live control is
+at zero. **This is the exact failure 7-09's guard exists for**, found for the second time in the field after
+SonoranCAD's `trevor`: a second palette is a second surface on which contrast breaks silently, and nobody
+who ships one by hand measures it. Two hand-written skins, two failures, both invisible to the people who
+shipped them — the guard is not paranoia.
+
+**Density**: 14 px rows, 10 px data text, Verdana 12 px base; Day is `#efefef` ground with `#ffffff` and
+`#dee3e7` surfaces. At 360 CSS px the tables fit, and every control in them is far under the 44 px
+criterion — which is what a desk product looks like on a phone, and why the density lever above is clamped
+by the pointer rather than by the preset.
+
+**One thing they do that we deliberately do not**: status colour is **agency-editable data** —
+`un_status.bg_color` / `text_color` per status row, `in_types.color` / `opacity` / `radius` per incident
+type, all edited in Config by the customer. It is the right answer for a product whose map is a Google
+basemap with pins drawn over it. It is the wrong answer here, and the reason is the one 7-09 already gives:
+our chips must equal the pillars the ENGINE draws from `SET_COLORS`, so a per-agency colour table would have
+to move the engine's debug-line sets with it. Filed as the shape a colour-vision-safe palette would take
+(201/5), not as a theme.
 
 #### What a screen holds, and which layer a theme can carry
 
@@ -641,7 +690,7 @@ The procedure, so the next one is not a taste exercise:
 - The switcher, the view-link parameter and the embedded default all resolve to the same preset for the same
   input.
 
-**Owes:** the Tickets CAD capture, from a network that can reach it; a phone verdict on the Mark43 preset in
+**Owes:** a Tickets CAD capture of the version its own page describes (v3.44.1 / v4.0 NewUI) — the local run reached 2.41 only; a phone verdict on the Mark43 preset in
 daylight (it is a lighter ground than Night and that cuts both ways); and the bundle delta per preset,
 measured with `bundle-inventory.ts` rather than assumed — the claim that a preset costs bytes and not frame
 time is exactly the kind this repository does not take on trust.
