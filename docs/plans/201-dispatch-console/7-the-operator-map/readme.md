@@ -611,6 +611,49 @@ that ships with the framework, at 9.6 px, on panels it was never measured agains
 legacy skin taught at Lc 0, one framework and thirteen years later: **a guard is what makes a second palette
 cheap, and nobody who ships one by hand has one.**
 
+#### The three, side by side — and this console (2026-08-29)
+
+All four columns are MEASURED, three of them in a browser against a running install, the fourth read from
+this repo's own tokens. SnailyCAD v1.80.2 was built and run the same day (pnpm + Postgres; its client
+refuses `localhost` in production mode, so it runs on the host's IP, and `next/font` cannot fetch Google
+Fonts behind this egress — one import was pointed at a local face to build).
+
+| | **Mark43** (real CAD) | **Tickets CAD 4.2.26** | **SnailyCAD 1.80.2** | **this console (Night)** |
+| --- | --- | --- | --- | --- |
+| ground | `#1e1f21`, achromatic | `#1a1d21` dark / `#e9ecef` light | `#16151a` | `#070a0f` |
+| surfaces | `#28292b` | Bootstrap 5 panels | cards `#1f1e26`, radius **6 px** | `#0b111a`, radius **0** |
+| type | not quotable from the capture | `system-ui` 16 px | **`Assistant`, a self-hosted webfont**, 16 px | system stack, 12 px |
+| rows | ~20 px (read off the screen) | 28 px | card-per-item, no table rows | 22–24 px (`5px 9px` + 12 px) |
+| contrast | not measurable from a JPEG | **52 of 184** pairs under Lc 60 | **0 of 35** under Lc 60 (an empty board — a small sample) | **guaranteed** by `theme.test.ts` at Lc 90 / 60 |
+| smallest target | — | 23–27 px | 25 px | **44 px**, guarded by `styles.test.ts` |
+| the map | a corner panel, **27 %** | Leaflet, and the basemap follows the skin | **not on the dispatch page at all** — a separate page that will not open until you name a separate **map server** | the map IS the desk |
+| skin switch | one skin | login form **and** a top-bar toggle | `darkMode: ["class", '[data-theme="dark"]']` — ours exactly | one attribute on the app root |
+| where the skin lives | — | session | **the ACCOUNT** (`user.isDarkTheme`) | the browser (`localStorage`) |
+| status colour | ≥ 11 saturated hues | agency-editable data | per-status config | `SET_COLORS`, shared with the engine |
+
+**What the comparison actually settles, beyond confirming what we already do:**
+
+**1. Nobody's map is the desk — and the strongest case is SnailyCAD's**, whose dispatch screen has no map on
+it at all and whose live map is a different server you must configure before the page will render. Four
+products, four times the map is somewhere else. [7-08](#08--the-workspace)'s decision is now the only one of
+its kind in the field, which is either the product's edge or its risk, and it should be stated as the former
+only while the phone measurement holds.
+
+**2. A skin can live in three places, and we picked the weakest one.** Tickets CAD keeps it in the session,
+SnailyCAD on the **account**, ours in `localStorage`. Account-stored follows the operator to a second
+machine and to a borrowed phone; browser-stored does not, and it is also the path that carries a desk-chosen
+density onto a phone (the [restriction](../../../restrictions/cross-platform-surface.md) this step added).
+The console has no account of its own — it is embeddable and the CAD owns identity — so the honest design is:
+**the host may supply the preset id with the board, and `localStorage` is the fallback when it does not.**
+That is one more line in the switchability list above, and it is the one a real deployment will ask for
+first.
+
+**3. The one product that passes our thresholds is the one built on a component library.** SnailyCAD's
+sampled dark screen has no pair under Lc 60 — on React Aria primitives with Tailwind's own scale, chosen
+rather than hand-mixed. It is also the product whose shape (rounded cards, a webfont, 16 px type) this
+console deliberately rejects. Both can be true: **borrow the discipline, not the look** — which is exactly
+what our own guard does, and why 7-09's APCA test is the part of this chain worth defending hardest.
+
 #### What a screen holds, and which layer a theme can carry
 
 This is the architecture answer, and it is why "a screenshot becomes a theme" is only two-thirds true. A
