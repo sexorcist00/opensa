@@ -673,6 +673,20 @@ chrome comes from **CDN Tailwind 2.0.3 + FontAwesome**, so with no CDN it render
 **Map page is an `<iframe>` to a hardcoded third-party URL** (`shawn1-wxg9gm.users.cfx.re/webmap/` — one
 person's own server), which every install embeds.
 
+**The paid half, read from public pages 2026-08-29 — and the finding is about the SOURCES, not the
+products.** Eight vendor pages were captured (Motorola PremierOne, Hexagon HxGN OnCall, CentralSquare,
+RapidDeploy, and the roleplay sellers CDE CAD, Blue Horizon, PulseCAD, CADvanced). **The enterprise vendors
+do not publish their interface**: their product pages are photography of dispatch rooms — blurred consoles,
+a telecommunicator in a headset — with no screen a reader can measure. `rapiddeploy.com` now redirects into
+Motorola's site, which is the acquisition showing up as a 301 rather than as a page. Of the roleplay
+sellers, CDE CAD is pre-launch (a waitlist and a hero), Blue Horizon shows one small window of a dense dark
+CAD with a module rail and a table, and the rest are JS-gated.
+
+**So the method that worked for Mark43 is the method to repeat: the vendor's own PDF.** A datasheet embeds a
+real screen at real resolution, and `pdfimages` gets it out — that is where every measured number in the
+Mark43 row came from. A marketing page is staged, composited and unmeasurable, and quoting one as if it
+were a screen would put invented numbers next to measured ones. None of these eight is quoted here.
+
 **Seven products now, and seven times the map is not the desk**: a corner panel (Mark43), a widget
 (Tickets), a separate page and server (SnailyCAD), a card (Resgrid), absent from the board (CrowdCAD), an
 iframe to someone else's site (StoicCAD), and non-existent (free-the-cad).
