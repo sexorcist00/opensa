@@ -649,6 +649,22 @@ self-hostable thing in this survey. Measured on its Lite dispatch board: `#0c0c0
 surge meter on the left, calls in a table on the right; the venue map is elsewhere), which makes five
 products and five times the map is somewhere other than the desk.
 
+**Two more from the roleplay end, run 2026-08-29, and both are worth one line each.**
+**[free-the-cad](https://github.com/CardosoDev04/free-the-cad)** is the only other project that names
+**SA-MP** — and it is a skeleton: a Vite/React frontend with a login and a signup screen, a dashboard route
+whose component renders the string `CivDashboardLayout`, no backend in the repository, no SA-MP code
+anywhere outside the README title, and no commit since **2024-12-26**.
+**[StoicCAD](https://github.com/TheStoicBear/StoicCAD)** (PHP/MySQL, last commit 2024-05-06) runs, and its
+schema depends on a table the dump does not contain (`nd_characters`, from the FiveM framework ND_Core) —
+the CAD is an attachment to a game server's own database rather than a system with its own model. Its whole
+chrome comes from **CDN Tailwind 2.0.3 + FontAwesome**, so with no CDN it renders as unstyled HTML; and its
+**Map page is an `<iframe>` to a hardcoded third-party URL** (`shawn1-wxg9gm.users.cfx.re/webmap/` — one
+person's own server), which every install embeds.
+
+**Seven products now, and seven times the map is not the desk**: a corner panel (Mark43), a widget
+(Tickets), a separate page and server (SnailyCAD), a card (Resgrid), absent from the board (CrowdCAD), an
+iframe to someone else's site (StoicCAD), and non-existent (free-the-cad).
+
 **The two that could not be run, and why that is stated rather than skipped:** **Resgrid** is .NET with a
 SQL Server / Redis / RabbitMQ stack and a Docker-compose deployment, and this session has no Docker daemon —
 its numbers stay as the 2026-08-26 screenshot measurement (the map at 9.1 % of the screen). **SonoranCAD**

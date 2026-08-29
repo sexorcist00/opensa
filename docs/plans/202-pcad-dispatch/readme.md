@@ -61,6 +61,11 @@ What survives the correction, stated narrowly enough to be defensible:
 
 1. **Nobody serves SA-MP or open.mp.** Both systems above are FiveM only, and this is a large, older,
    still-populated ecosystem with nothing comparable. This is the gap the product is aimed at.
+   **Checked again 2026-08-29 by running the field**: the only project that even names SA-MP is
+   [free-the-cad](https://github.com/CardosoDev04/free-the-cad), and it is a skeleton — a login and a signup
+   screen, a dashboard component that renders its own name as a string, no backend in the repository, no
+   SA-MP code outside the README title, no commit since 2024-12-26. The claim holds, and it now rests on a
+   clone rather than on a search result.
 2. **Nobody has a TOTAL-CONVERSION world.** Sonoran's 3D map is stock Los Santos, and SnailyCAD's flat map
    is a stock raster. Ours is whatever the pak was built from — which is the one thing an engine can do and
    a picture cannot.
