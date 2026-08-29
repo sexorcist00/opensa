@@ -630,6 +630,16 @@ Fonts behind this egress — one import was pointed at a local face to build).
 | skin switch | one skin | login form **and** a top-bar toggle | `darkMode: ["class", '[data-theme="dark"]']` — ours exactly | one attribute on the app root |
 | where the skin lives | — | session | **the ACCOUNT** (`user.isDarkTheme`) | the browser (`localStorage`) |
 | status colour | ≥ 11 saturated hues | agency-editable data | per-status config | `SET_COLORS`, shared with the engine |
+| the phone | — | a separate **mobile view** (`mobile.php`), offered by a link in the navbar | **responsive, not touch-sized**: no overflow at 360 and a hamburger under its own `nav: 900px` breakpoint, but **22 of 25** targets on `/dispatch` are under 44 px (the hamburger itself is 28 × 18), no `matchMedia`/pointer test anywhere in the client, and no PWA manifest | ONE component that takes a size; 44 px in both axes where the pointer is coarse, guarded by `styles.test.ts` |
+
+**A fourth thing, measured on a phone profile after the fact:** *responsive* and *usable with a thumb* are
+different claims, and only the second one is a rule. SnailyCAD is genuinely responsive — nothing overflows
+360 CSS px on `/dispatch`, `/officer` or `/citizen`, the nav collapses, the columns stack — and it is still
+not a phone product: the client contains no pointer test at all, so every control keeps its desk size (22 of
+25 under 44 px, the menu button 28 × 18). Tickets CAD answers the same question by shipping a **separate
+mobile view** rather than sizing the one it has. Both are the shape
+[cross-platform-surface](../../../restrictions/cross-platform-surface.md) exists to refuse: a second surface
+drifts, and a responsive-but-desk-sized one looks finished in a screenshot and fails in a hand.
 
 **What the comparison actually settles, beyond confirming what we already do:**
 
