@@ -641,6 +641,21 @@ mobile view** rather than sizing the one it has. Both are the shape
 [cross-platform-surface](../../../restrictions/cross-platform-surface.md) exists to refuse: a second surface
 drifts, and a responsive-but-desk-sized one looks finished in a screenshot and fails in a hand.
 
+**A fifth product, run the same day: CrowdCAD 1.4.0** (AGPL-3.0, Next.js + HeroUI/Radix), stood up on its
+**PocketBase** backend rather than Firebase — a single Go binary, no cloud account, which is the most
+self-hostable thing in this survey. Measured on its Lite dispatch board: `#0c0c0d` ground, `ui-sans-serif`
+16 px, heavy rounding, **1 of 20 text pairs under Lc 60** (a 14 px `0%` label) — and **13 of 13 targets under
+44 px**, the icon buttons 32 × 32. **Its dispatch board has no map either** (teams with a status tally and a
+surge meter on the left, calls in a table on the right; the venue map is elsewhere), which makes five
+products and five times the map is somewhere other than the desk.
+
+**The two that could not be run, and why that is stated rather than skipped:** **Resgrid** is .NET with a
+SQL Server / Redis / RabbitMQ stack and a Docker-compose deployment, and this session has no Docker daemon —
+its numbers stay as the 2026-08-26 screenshot measurement (the map at 9.1 % of the screen). **SonoranCAD**
+is closed SaaS: there is nothing to install, and its four skins and 3D live map remain readable only from
+its own public pages. Both rows in [DESIGN.md](../../../../apps/dispatch/DESIGN.md) say which evidence they
+rest on, and neither is quoted as if it had been measured here.
+
 **What the comparison actually settles, beyond confirming what we already do:**
 
 **1. Nobody's map is the desk — and the strongest case is SnailyCAD's**, whose dispatch screen has no map on
