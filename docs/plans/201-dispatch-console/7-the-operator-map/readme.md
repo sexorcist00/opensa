@@ -651,8 +651,20 @@ products and five times the map is somewhere other than the desk.
 
 **Two more from the roleplay end, run 2026-08-29, and both are worth one line each.**
 **[free-the-cad](https://github.com/CardosoDev04/free-the-cad)** is the only other project that names
-**SA-MP** — and it is a skeleton: a Vite/React frontend with a login and a signup screen, a dashboard route
-whose component renders the string `CivDashboardLayout`, no backend in the repository, no SA-MP code
+**SA-MP** — and it is a skeleton, which is stated here from a probe of every route its own router declares
+rather than from a glance:
+
+| route | what renders | interactive controls |
+| --- | --- | --- |
+| `/` | the footer, nothing else | 0 |
+| `/dashboard` | the footer, nothing else | 0 |
+| `/dashboard/civ` | the literal string `CivDashboardLayout` | 0 |
+| `/auth` | redirects to `/auth/login` | 3 |
+| `/auth/login` | a real sign-in card | 3 |
+| `/auth/signup` | a real sign-up card | 4 |
+| `/nope` (unrouted) | blank — there is no 404 | 0 |
+
+Two screens exist; everything behind the login is a placeholder. No backend in the repository, no SA-MP code
 anywhere outside the README title, and no commit since **2024-12-26**.
 **[StoicCAD](https://github.com/TheStoicBear/StoicCAD)** (PHP/MySQL, last commit 2024-05-06) runs, and its
 schema depends on a table the dump does not contain (`nd_characters`, from the FiveM framework ND_Core) —
