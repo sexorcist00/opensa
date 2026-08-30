@@ -687,6 +687,35 @@ real screen at real resolution, and `pdfimages` gets it out — that is where ev
 Mark43 row came from. A marketing page is staged, composited and unmeasurable, and quoting one as if it
 were a screen would put invented numbers next to measured ones. None of these eight is quoted here.
 
+#### The one paid product that opened — and it opened by its other half
+
+**CDE CAD, 2026-08-29: the site is a waitlist, the game client is public, and the client is the interesting
+half.** [`JonathaF0/cdecad`](https://github.com/JonathaF0/cdecad) is the FiveM resource a customer installs on
+their own server; the CAD it talks to is the paid product and stays closed. The resource ships against
+**`CDE-CAD SYSTEM v2.4.1`**, so *pre-launch* above is the marketing site's state rather than the product's.
+What it exposes is not screens — it is **the seam**, which is the half this project is actually building
+against:
+
+| What the public half shows | Read from |
+| --- | --- |
+| **The in-game tablet is a browser window.** Its whole body is one sandboxed `<iframe>` pointed at the hosted CAD — `Config.TabletURL = "https://cdecad.com/login2"` | `config.lua`, `html/index.html` |
+| Chrome around it: a dark header reading `CDECAD`, a close x, rounded corners, a drag surface and a resize grip | `html/` |
+| **1344 x 918 at a 1920 x 1080 viewport — 70 % of the width, 85 % of the height** | measured by rendering the shipped `html/` locally |
+| It did **not** frame: `cdecad.com` refused to render inside the iframe in this capture. Standalone the same URL is a real screen — "Tablet Login / Emergency Response Management System", a Discord username and password, a *Use Desktop Login* link, a Connected indicator and a clock | rendered directly |
+| The other NUI surfaces are one small page each: a driver-licence card, a biometric result with a MATCH percentage, an ALPR reader, a radar, duty, panic, 911 | `civ/`, `fingerprint/`, `reader/`, `wraith/`, `duty/`, `panic/`, `911/` |
+| **No map anywhere in the client.** It only *publishes* — `Config.LocationTracking`, off by default, `Interval = 10000`, `MinDistance = 50.0` — and polls calls every 10 s | `config.lua` |
+
+**Two things this settles, and neither of them changes a decision in this step.** First, **the tablet is our
+shape, built by somebody selling it**: a web CAD rendered inside a game client at ~70 % of the screen is
+exactly the embedding [7-08](#08--the-workspace) assumes, and it is the argument for the console being a page
+a host hands a SIZE to rather than an application that owns a window. Second, **a product that iframes its own
+hosted CAD inherits that host's framing headers** — the one thing that stopped this capture — so an embeddable
+console has to be explicit about being framed instead of leaving it to a default, and the day a deployment
+puts the console and its CAD on different origins that same wall is there. **CDE CAD is not an eighth line in
+the count below**, because the half that would hold a map is the hosted CAD nobody outside its customers can
+see; what its public half shows is where the map is *not* — not in the game client, which knows only how to
+send a position.
+
 **Seven products now, and seven times the map is not the desk**: a corner panel (Mark43), a widget
 (Tickets), a separate page and server (SnailyCAD), a card (Resgrid), absent from the board (CrowdCAD), an
 iframe to someone else's site (StoicCAD), and non-existent (free-the-cad).

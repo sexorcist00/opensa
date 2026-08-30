@@ -174,6 +174,17 @@ the choice is measured rather than argued:
 Whatever wins, [201/8's rule stands](../201-dispatch-console/8-the-time-axis/readme.md): interpolate between
 what arrived, never extrapolate past it.
 
+**And there is now one outside number to hold that 4 s against** (2026-08-29). The FiveM client of the paid
+**CDE CAD** is public ([`JonathaF0/cdecad`](https://github.com/JonathaF0/cdecad)) and it is the only shipped
+competitor whose position publisher can be READ: `Config.LocationTracking` ships **`Enabled = false`** — off
+until a server owner turns it on — and then **`Interval = 10000` with `MinDistance = 50.0`**, 10 s or 50 m
+whichever comes first, plus a 30 s check that the CAD is even listening; its call poll is 10 s as well. So
+PCAD's 4 s is not a slow rate by this field's standard, it is **2.5x the only comparable one we can read**,
+and the gap is on the MAP's side rather than PCAD's: a tile map is happy at 10 s and a world drawn in 3D is
+not. That prices the three responses above rather than choosing between them — raising the rate is a change
+nobody else in this field has needed, so it has to be justified by a measurement of our own map rather than by
+what the others do.
+
 **On foot, a unit has no position at all.** The map must show that state honestly — last known, aging — and
 not a dot parked at the car the unit left. This is a PCAD gap, not a map gap, and it is listed as such below.
 
