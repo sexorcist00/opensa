@@ -536,3 +536,21 @@ npm run timecyc                      # UTILITY: merge donors onto a base timecyc
                                         #   writes NOTHING else and is not part of pmb or any build (docs/restrictions/timecyc-builder-is-a-utility.md);
                                         #   copying its output into a game dir is a deliberate act — that name outranks a mod's timecyc24h.dat
 ```
+
+## Claude Code plugins
+
+**Superpowers is not installed out of the box** — a fresh web container has no marketplace and no plugin,
+and `~/.claude` does not survive it. What it ships, what it costs and the trust caveat:
+[development/superpowers.md](development/superpowers.md).
+
+```bash
+claude plugin marketplace list        # what is configured (a fresh container: "No marketplaces configured")
+claude plugin list                    # what is installed
+claude plugin marketplace add obra/superpowers        # ~20 s, clones from GitHub
+claude plugin install superpowers@superpowers-dev     # 14 skills, live in the SAME session
+claude plugin details superpowers     # component inventory + projected token cost (~688 tok always-on)
+claude plugin uninstall superpowers@superpowers-dev   # and: claude plugin marketplace remove superpowers-dev
+```
+
+The install writes `extraKnownMarketplaces` + `enabledPlugins` into `~/.claude/settings.json` (ephemeral);
+the same two keys are committed in `.claude/settings.json` so a trusted workspace picks them up on its own.
