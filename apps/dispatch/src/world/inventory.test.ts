@@ -62,6 +62,7 @@ const CONTEXT = {
   firstFrames: [],
   framesSkipped: 0,
   hasTimestamps: true,
+  overlay: true,
   pickingBytes: 0,
   surface: { cssHeight: 364, cssWidth: 360, deviceHeight: 728, deviceWidth: 720, dpr: 2, renderScale: 1 },
   symbology: {
@@ -495,6 +496,26 @@ describe('FrameInventory idle frames (201/4-01)', () => {
       // A capture at rest: a handful of drawn frames and thousands the console did not spend.
       expect(report.frames).toBe(1);
       expect(report.framesSkipped).toBe(3580);
+    });
+  });
+});
+
+describe('FrameInventory overlay state (201/2, ?overlay=0)', () => {
+  describe('negative cases', () => {
+    it('does not let a bare-engine window pass for an ordinary one', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+
+      expect(inventory.report({ ...CONTEXT, overlay: false }).overlay).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('says the map was drawn over when it was', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+
+      expect(inventory.report({ ...CONTEXT, overlay: true }).overlay).toBe(true);
     });
   });
 });
