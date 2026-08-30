@@ -148,6 +148,32 @@ Never edit generated code manually.
   code is merged is how the next agent concludes the work was never done and does it twice. If the reading
   above and the code disagree, the CODE is the truth and the doc is the bug: fix the doc in that session.
 
+- **SUPERPOWERS IS DECLARED IN `.claude/settings.json`, AND THIS FILE OUTRANKS IT.** The plugin
+  (`obra/superpowers`, 14 skills, ~688 always-on tokens) ships a `SessionStart` hook that injects its
+  `using-superpowers` skill as an `<EXTREMELY_IMPORTANT>` block demanding a skill be invoked *before any
+  response* — before the reading order above, and before a clarifying question. **Read the chain first
+  anyway**: the hook is a plugin's opinion, this file is the project's, and where they disagree
+  **CLAUDE.md wins on plans, documentation and branches**:
+  - a plan goes to `docs/plans/NNN-*/readme.md` (the `2xx` block) or `tools/<tool>/docs/plans/` — NEVER to
+    `docs/superpowers/plans/YYYY-MM-DD-<name>.md`, which is what `writing-plans` defaults to. That folder
+    does not exist here and must not be created; the skill's own "user preferences override this default"
+    is the clause that settles it
+  - a finished branch follows the `main`-only rule below — merge, verify, `git branch -d`, and END THE
+    REPLY with the remote-deletion command for the user — not the three-option menu of
+    `finishing-a-development-branch`, and not its Step 1 full test suite: "verify" here means the affected
+    tests (Cost Saving Rules), with the whole suite reserved for the big reworks that already owe an audit
+    and a benchmark
+  - `using-git-worktrees` is a desktop assumption. The development machine is a phone
+    ([termux.md](docs/development/termux.md)) and `main` is the only branch that survives — a worktree is
+    allowed, but it does not change where the work lands or who deletes the remote branch
+  - the skills that carry no project rule are welcome unchanged: `systematic-debugging`,
+    `test-driven-development`, `brainstorming`, `requesting-code-review` / `receiving-code-review`,
+    `dispatching-parallel-agents`, `verification-before-completion`, `executing-plans`,
+    `subagent-driven-development`, `writing-skills`
+  - **it is NOT available out of the box.** A fresh web container has no marketplace and no plugin, and
+    `~/.claude` does not survive it; what it ships, what it costs and the two commands that install it by
+    hand are in [`docs/development/superpowers.md`](docs/development/superpowers.md)
+
 - **`main` IS THE ONLY BRANCH THAT SURVIVES. Work lands there, and the branch that carried it is DELETED —
   local and remote — in the same session.** A finished branch left on the remote is not a backup, it is a
   decoy: five of them accumulated once, and answering "is anything lost?" cost a full session of archaeology.
