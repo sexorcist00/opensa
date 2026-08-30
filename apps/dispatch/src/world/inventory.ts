@@ -75,9 +75,22 @@ export interface InventoryPass {
 }
 
 export interface InventoryReport {
+  /** The commit the APP was built from (`__APP_BUILD__`), or `dev` for a bundle nobody stamped. It sits
+   *  beside `build` — the PAK's `buildTime` — because a capture has to answer both halves of "what was
+   *  running": three captures on 2026-08-26 were taken of an app the device had never updated to, and only
+   *  a missing field gave it away. A trailing `+` means the tree was dirty when it was built. */
+  readonly app: string;
   /** What the BOOT cost, before a frame existed. `gpuMs` is `engine.init` end to end; `phases` is its own
-   *  split — device / canvas / pipelines / resources / sky-lut / targets (201/4-03). */
-  readonly boot: { readonly gpuMs: number; readonly phases: readonly (readonly [string, number])[] };
+   *  split — device / canvas / pipelines / resources / sky-lut / targets (201/4-03). `openMs` is the pak's
+   *  engine-free half (the `?src=` probe, the manifest, the worker's IO probe), which runs BESIDE the GPU,
+   *  and `overlapMs` is how much of the two ran at the same time — the saving, counted rather than claimed.
+   *  Both are 0 on `?demo=1`, which opens no pak. */
+  readonly boot: {
+    readonly gpuMs: number;
+    readonly openMs: number;
+    readonly overlapMs: number;
+    readonly phases: readonly (readonly [string, number])[];
+  };
   readonly build: string;
   /** What this surface actually READ out of the pak, by entry kind — wire bytes and request counts, live
    *  since boot rather than over the sampled window. The build's `report.json` says what the pak CONTAINS;
@@ -85,9 +98,12 @@ export interface InventoryReport {
    *  of this surface ever asked for. */
   readonly bytes: {
     readonly byKind: readonly PakTrafficKind[];
-    /** Of `totalBytes`, how much the range cache answered instead of the network (201/4-03) — a SUBSET,
-     *  never an addition. Zero on a first open, on an unversioned pak, and wherever Cache Storage is
-     *  withheld (a LAN `http://` origin is not a secure context). */
+    /** Of `totalBytes`, how much did NOT cross the network (201/4-03) — a SUBSET, never an addition. Pak
+     *  slices come from Cache Storage; `water.bin` is a loose file the slice cache never sees and reports
+     *  the browser's own HTTP cache instead (Resource Timing `transferSize === 0`, so a 304 revalidation
+     *  counts as a miss and an unknown transfer is never counted as a hit). Zero on a first open, on an
+     *  unversioned pak, and wherever Cache Storage is withheld (a LAN `http://` origin is not a secure
+     *  context). */
     readonly cachedBytes: number;
     readonly cachedRequests: number;
     readonly requests: number;
@@ -355,8 +371,11 @@ export class FrameInventory {
   };
 
   report(context: {
-    /** `performance.now()` around `engine.init`, plus the engine's own phase split of it. */
-    boot: { gpuMs: number; phases: readonly (readonly [string, number])[] };
+    /** `__APP_BUILD__` — which commit this bundle is. */
+    app: string;
+    /** `performance.now()` around `engine.init`, plus the engine's own phase split of it — and what the
+     *  pak open beside it cost and hid. */
+    boot: { gpuMs: number; openMs: number; overlapMs: number; phases: readonly (readonly [string, number])[] };
     build: string;
     /** `engine.ledger()` — resident bytes and counts per category. */
     byCategory: Readonly<Record<string, { bytes: number; count: number }>>;
@@ -403,6 +422,7 @@ export class FrameInventory {
         ];
 
     return {
+      app: context.app,
       boot: context.boot,
       build: context.build,
       bytes: context.bytes,

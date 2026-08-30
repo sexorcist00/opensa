@@ -47,6 +47,8 @@ export { kindOfPakKey, PakTraffic, pakTraffic, type PakTrafficKind } from './str
 export { ResidencyGate, type ResidencyView } from './stream/residency';
 export {
   type LocalPakSource,
+  type OpenedPak,
+  openPakSource,
   type PakSource,
   setupStreaming,
   type StreamingHost,

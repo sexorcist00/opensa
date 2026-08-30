@@ -322,8 +322,8 @@ loop is running and the shell is not the thing to look at). Plan mode has no cel
 `bootDone()` directly.
 
 **What it reports is what has a denominator.** The bar sweeps — indeterminate, saying "working" — through
-the phases that cannot be counted (`starting the GPU…`, `reading the manifest…`, `the water…`) and becomes a
-real fraction the moment the streamer knows how many cells the district holds. Bytes read ride along as a
+the phases that cannot be counted (`starting the GPU…`, `reading the world…`, `the water and the places…`)
+and becomes a real fraction the moment the streamer knows how many cells the district holds. Bytes read ride along as a
 note with no denominator, because nothing knows in advance how much of the pak the opening view will pull. A
 percentage nobody can defend is worse than a sweep.
 
@@ -379,10 +379,83 @@ That matters beyond the boot, which is why it is worth the paragraph: **the LUT 
 or the weather moves**, so this was a ~76 ms main-thread hitch on every one of them — on the device the
 time axis (chain 8) scrubs across.
 
+**The device confirmed it and beat the bench: `frame:sky-lut` 75.8 → 15.4 ms on the first frame, 4.9×**
+([the row](../benchmarks/opensa-engine/2026-08-26-mobile-boot-warm-second-open.json)), where desktop node had
+predicted 3.3×. The whole first frame goes **85.1 → 23.7 ms**, and what is left on it is `frame:record` at 6.8.
+
 The other number that capture produced has no owner yet: **`engine.init` measured 2 607.5 ms**, larger than
 everything else in the boot put together. It is split by phase now (`init:device`, `init:canvas`,
 `init:pipelines`, `init:resources`, `init:sky-lut`, `init:targets`, in `boot.phases`) for exactly the
 reason above — a number that big with no breakdown is the next confident wrong guess waiting to be made.
+
+**The split answered, and the answer is a question.** The next capture read **`boot.gpuMs` 398.4** with
+`init:pipelines` 226.8, `init:device` 117.4, resources 28.9, sky-LUT 17.6, targets 4.9, canvas 2.0 — 397.6 of
+the 398.4 attributed. Nothing is claimed for that 6.5×: the only code difference between the two runs is the
+sky-LUT fix, which can own at most those 17.6 ms, so ~2.2 s changed hands with no owner at all. **The standing
+hypothesis is the browser's persisted pipeline cache — warm on the second open, cold on the first** — and if
+it holds, the boot this section is about (the FIRST one after an app rebuild) is still the 2.6 s run and is
+currently unmeasured. One capture with the site's data cleared, against one straight after it, settles it.
+
+## The GPU and the radio, at the same time
+
+**Since 2026-08-26.** The boot used its two machines one at a time. `engine.init` measured **2 607.5 ms** on
+the phone with the network idle, and only when it returned did the world start looking for its manifest —
+a `?src=` probe (up to four `HEAD`s), the manifest itself, the worker and its `Range:` probe, then the game's
+`data/timecyc.dat` (up to three candidate names), then the water mesh, then the district table. Every one of
+them a round trip, and every one of them behind a GPU that was not using the radio.
+
+**Nothing about that was necessary, and the fix is scheduling rather than cleverness.** The pak's engine-free
+half is now a function of its own — `openPakSource(source)` in
+[`stream/setup.ts`](../architecture/world-streaming.md), the manifest plus a worker already probed onto its IO
+mode and its slice cache — and `bootDispatch` STARTS it, with the timecyc read beside it, before it awaits
+`engine.init`. `setupStreaming` takes the result as its `opened` argument and does the engine half only.
+Downstream, the water mesh (2.66 MB) and the district table are two independent reads off the same server and
+are now fetched together. The pair costs **`max` rather than `sum`**.
+
+Three things worth knowing before touching it:
+
+- **A promise nobody is awaiting still rejects.** `opening` is started before `engine.init` and awaited after
+  it, so its rejection has no handler in between — which is an unhandled rejection the moment it happens. It
+  gets a discarding `catch`; the real error is still thrown by the `await`.
+- **A failing world now fails later.** A bad `?src=` used to report before the GPU started; it now reports
+  after. Same message, and the wait in front of it is the one every successful boot pays anyway.
+- **The shell narrates the pole, not the race.** `openWorld` reports no step of its own: while it runs, what
+  the console is actually waiting on is the GPU, and a bar that narrates the faster of two parallel halves is
+  a bar that lies about where the time went.
+- **A GPU that fails leaves a worker behind, so the boot closes it.** A device with no WebGPU does not stop
+  here — `map-canvas` falls back to the plan view and keeps working — and the pak worker the parallel open
+  produced would idle in that session for good, holding its slice cache. `engine.init`'s failure path
+  `terminate()`s it when it arrives. That is the price of starting it early, and the only one.
+
+**It is counted, not claimed.** The capture carries `boot.openMs` (the whole pak open — probe, manifest,
+worker) beside `boot.gpuMs`, and **`boot.overlapMs`**: how much of the two actually ran at the same time,
+derived from the wall clock across both rather than asserted. Both are `0` under `?demo=1`, which opens no
+pak.
+
+**Measured on the device, 2026-08-26: `openMs` 230.5, `overlapMs` 227.7 — 98.8 % of the world open ran
+underneath the GPU** ([the row](../benchmarks/opensa-engine/2026-08-26-mobile-boot-overlap.json)). The pair
+cost **690.8 ms of wall instead of 918.5**: 227.7 ms off the boot, for a change that added 0.41 kB and no
+machinery.
+
+**Two more reads moved in behind it.** The sea (`water.bin`, 2.66 MB) and the district table are loose files
+the MANIFEST points at, so they cannot be fetched until it is read — but they were being fetched after the
+GPU and after `setupStreaming` instead of during them, and the sea was the largest single read left on the
+serial path. `openWorld` now reads both as a second wave, still inside the GPU's wait; `installWater` takes
+the bytes and does the engine half (a parse and one `setWater`). `streamedWorld` reaches the network for
+nothing at all now.
+
+**And the capture says which app produced it.** `app` carries `__APP_BUILD__` — the commit vite stamped in,
+with a `+` when the tree was dirty — beside `build`, which is the PAK's `buildTime`. It is there because
+three captures in a row on 2026-08-26 were taken of an app the device had never updated to, twice while
+everyone believed otherwise; the trap and both of its halves are
+[a restriction](../restrictions/architecture.md) now. `dev` means a bundle nobody stamped: the dev server, a
+test host, an embedding host.
+
+The first stamp it produced was `67432d1+` from a tree that had been clean one command earlier, which is the
+instrument's own bug and is fixed: `appBuild` runs INSIDE the build, after `tsc -b`, so a plain
+`git status --porcelain` counts the build's own leavings — and untracked files — as uncommitted work. It
+reads tracked files only now, minus the incremental cache. **A `+` that fires on every build is a `+` that
+means nothing**, which is the same failure as a capture that cannot name its app, one level down.
 
 ## The second open, and why it is cheap
 
@@ -403,6 +476,19 @@ Two details the API forces, both worth knowing before touching this: `cache.put`
 so the slice is re-wrapped as a plain 200; and `cache.match` **ignores the `Range:` header**, so every slice
 of `world.ospak` would collide on one entry — the range goes in the key instead. Writes are serialized
 rather than fired in parallel, which is what makes a refusal able to stop the writes queued behind it.
+
+**Measured on the device, 2026-08-26: a second open of the pinned district read 23.60 MB of 26.26 out of the
+cache — 89.9 %, over 40 of 41 requests** ([the row](../benchmarks/opensa-engine/2026-08-26-mobile-boot-warm-second-open.json)),
+against 33 % over 59 of 88 on the open that reached past what had filled it. The blob handler's mean halves
+with it (0.130 → 0.065 ms). **The single request the cache does not answer is `water.bin`, to the byte** — it
+is a loose file beside the pak rather than a pak slice, so it is a miss by construction and not a cache
+failure; whether those 2.66 MB crossed the network was not something that capture could say.
+
+**It can now.** `installWater` asks Resource Timing what the network actually carried for that file:
+`transferSize === 0` means the browser's own HTTP cache served it outright, and only then is it counted as a
+hit — a 304 revalidation carries bytes and counts as a miss, and an entry Resource Timing cannot produce is
+never counted at all. So `cachedBytes` means **what did not cross the wire**, over both caches, rather than
+one of them.
 
 **It is visible, which on a phone is the whole point.** `pakTraffic.cachedBytes` counts what the disk
 answered as a SUBSET of what the world asked for — the bytes a district needs do not change because they

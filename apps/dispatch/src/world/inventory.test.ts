@@ -50,7 +50,8 @@ function stats(overrides: Partial<EngineStats> = {}): EngineStats {
 }
 
 const CONTEXT = {
-  boot: { gpuMs: 0, phases: [] },
+  app: 'test',
+  boot: { gpuMs: 0, openMs: 0, overlapMs: 0, phases: [] },
   build: 'original@test',
   byCategory: {},
   bytes: { byKind: [], cachedBytes: 0, cachedRequests: 0, requests: 0, totalBytes: 0 },

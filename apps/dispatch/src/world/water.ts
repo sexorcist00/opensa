@@ -13,23 +13,45 @@ import { pakTraffic } from '@opensa/engine';
 /** Floats per baked water vertex: position, shore depth, water class. */
 const WATER_STRIDE_FLOATS = 5;
 
-/** Install the baked sea. Returns the triangle count, or 0 when the pak carries no water. */
-export async function installWater(
-  engine: Engine,
+/**
+ * Read the baked sea off the network. No engine, on purpose: this runs BESIDE `engine.init` (201/4-03), so
+ * the 2.66 MB it costs are spent under the GPU's own wait instead of queued behind it — measured 2026-08-26,
+ * where it was the largest single read left on the boot's serial path and the one request of a repeat open
+ * the pak's slice cache never answers. `null` when the pak carries no water or the file is not there; the
+ * sea is simply absent, and the map still draws.
+ */
+export async function fetchWater(
   base: string,
   water: undefined | { file: string; indexCount: number; vertexCount: number },
-): Promise<number> {
+): Promise<null | Uint8Array> {
   if (!water) {
-    return 0;
+    return null;
   }
-  const response = await fetch(`${base}/${water.file}`);
+  const url = `${base}/${water.file}`;
+  const response = await fetch(url);
   if (!response.ok) {
-    return 0;
+    return null;
   }
   const bytes = new Uint8Array(await response.arrayBuffer());
   // The one pak read that does NOT go through the IO worker: `water.bin` rides beside the pak as a loose
   // file, so it is recorded here or it is missing from the bytes column entirely.
   pakTraffic.record(water.file, bytes.byteLength);
+  // And because it is loose, the pak's slice cache never sees it, so what a repeat open pays for it was
+  // arguable. Resource Timing is not: `transferSize` is 0 when the HTTP cache served it outright, a few
+  // hundred bytes for a 304 revalidation, and the full body otherwise. An entry it cannot produce counts as
+  // a miss rather than a hit — an unknown transfer must never be reported as a saving.
+  if (transferredBytes(url) === 0) {
+    pakTraffic.recordCacheHit(bytes.byteLength);
+  }
+
+  return bytes;
+}
+
+/** Install the baked sea from bytes already read. Returns the triangle count, or 0 when there is none. */
+export function installWater(engine: Engine, bytes: null | Uint8Array): number {
+  if (!bytes) {
+    return 0;
+  }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const vertexCount = view.getUint32(0, true);
   const indexCount = view.getUint32(4, true);
@@ -52,4 +74,17 @@ function engineWaterVertices(gta: Float32Array): Float32Array {
   }
 
   return vertices;
+}
+
+/**
+ * What the network carried for `url`, or `undefined` where Resource Timing cannot say — no `performance`
+ * entries (a test host), or a timeline that no longer holds this request. Undefined is NOT zero: an unknown
+ * transfer must not be reported as a cache hit.
+ */
+function transferredBytes(url: string): number | undefined {
+  const rows: PerformanceResourceTiming[] = (globalThis.performance?.getEntriesByType?.('resource') ??
+    []) as PerformanceResourceTiming[];
+  const mine = rows.filter((row) => row.name.endsWith(url));
+
+  return mine.length === 0 ? undefined : mine[mine.length - 1].transferSize;
 }

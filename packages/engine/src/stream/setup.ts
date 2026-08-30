@@ -5,6 +5,9 @@ import { ospakRequiredFeatures, validateOspakManifest } from '@opensa/engine-for
 /**
  * Streaming-mode bootstrap (plan 074/05): manifest → worker (pak lives worker-side) → texture arrays
  * (eagerly for a pre-`textures` pak; PER RING otherwise, driven by the streamer) → a ready StreamingDriver.
+ *
+ * The first two of those need no GPU, and are reachable on their own as `openPakSource` so a host can run
+ * them BESIDE `engine.init` rather than after it (201/4-03).
  */
 import type { Engine } from '../engine';
 import type { PakWorkerRequest, PakWorkerResponse } from './pak-worker';
@@ -21,6 +24,21 @@ import { StreamingDriver, type StreamingRadii } from './streaming';
  */
 export interface LocalPakSource {
   open(name: string): Promise<Blob | null>;
+}
+
+/**
+ * The half of a pak open that needs no GPU: the manifest, and a worker whose IO mode is probed and whose
+ * slice cache is open. Split out so a host can START it beside `engine.init` (201/4-03) — the two contend
+ * for nothing, one being a driver compiling shaders and the other a radio fetching bytes, and the GPU side
+ * alone measured 2 607.5 ms on the phone. Hand the result to `setupStreaming` as `opened`; a caller that
+ * does not want the overlap omits it and the setup opens the source itself, exactly as before.
+ *
+ * The worker belongs to whoever opened it until `setupStreaming` takes it: a host that starts this and then
+ * fails before the handover has to `terminate()` it, or it idles for the rest of the session.
+ */
+export interface OpenedPak {
+  readonly manifest: OspakManifest;
+  readonly worker: Worker;
 }
 
 /** Where the world pak lives: a URL base (HTTP/fetch mode) or a picked-folder source (folder mode). */
@@ -64,43 +82,9 @@ export interface StreamSetup {
   water?: OspakManifest['water'];
 }
 
-/**
- * Can this device display this world? Asked ONCE, from the manifest, before a single cell streams.
- *
- * The demand belongs to the content and is decided by the converter — a pak built from SA assets is BC
- * throughout, and mobile GPUs ship ETC2/ASTC and never BC. `beginOstexUpload` catches that too, but only when
- * the first array reaches the upload drain: by then the boot looks successful, the world is streaming, and
- * the message arrives as one texture's name. Read from the manifest it is a property of the WORLD, stated
- * before anything is loaded — which is also the difference between telling a phone "your browser cannot run
- * this" (false) and "this world needs a BC-capable GPU" (true).
- */
-export function requireWorldSupport(
-  device: { features: { has(name: string): boolean } },
-  manifest: OspakManifest,
-): void {
-  const missing = ospakRequiredFeatures(manifest).filter((feature) => !device.features.has(feature));
-  if (missing.length > 0) {
-    throw new Error(
-      `this world's textures need GPU feature(s) this device does not have: ${missing.join(', ')}. ` +
-        `The format was chosen when the pak was built and cannot be changed at runtime — build the world for ` +
-        `this device (opensa-pack --rgba8) or run it on a GPU that carries the feature.`,
-    );
-  }
-}
-
-export async function setupStreaming(
-  engine: Engine,
-  source: PakSource = '/pak',
-  radii: StreamingRadii = {},
-  host: StreamingHost = {},
-): Promise<StreamSetup> {
+export async function openPakSource(source: PakSource = '/pak', host: StreamingHost = {}): Promise<OpenedPak> {
   const manifest = await loadManifest(source);
   validateOspakManifest(manifest);
-  requireWorldSupport(engine.device, manifest);
-  // UV-scroll animations (B7·c / plan 074/18): global by dict name, advanced engine-side; kind-4 draws slot in.
-  engine.setUvAnimations(manifest.uvAnimations ?? []);
-  // Missing-texture stand-ins (plan 085 row B): the highlight repaints these layers magenta on demand.
-  engine.textures.setMissingLayers(manifest.missingLayers ?? []);
 
   // Folder mode hands the worker the pak Blob (read off disk); HTTP mode hands it the `world.ospak` URL.
   const pakInit: PakWorkerRequest =
@@ -137,6 +121,47 @@ export async function setupStreaming(
     );
     worker.postMessage(pakInit);
   });
+
+  return { manifest, worker };
+}
+
+/**
+ * Can this device display this world? Asked ONCE, from the manifest, before a single cell streams.
+ *
+ * The demand belongs to the content and is decided by the converter — a pak built from SA assets is BC
+ * throughout, and mobile GPUs ship ETC2/ASTC and never BC. `beginOstexUpload` catches that too, but only when
+ * the first array reaches the upload drain: by then the boot looks successful, the world is streaming, and
+ * the message arrives as one texture's name. Read from the manifest it is a property of the WORLD, stated
+ * before anything is loaded — which is also the difference between telling a phone "your browser cannot run
+ * this" (false) and "this world needs a BC-capable GPU" (true).
+ */
+export function requireWorldSupport(
+  device: { features: { has(name: string): boolean } },
+  manifest: OspakManifest,
+): void {
+  const missing = ospakRequiredFeatures(manifest).filter((feature) => !device.features.has(feature));
+  if (missing.length > 0) {
+    throw new Error(
+      `this world's textures need GPU feature(s) this device does not have: ${missing.join(', ')}. ` +
+        `The format was chosen when the pak was built and cannot be changed at runtime — build the world for ` +
+        `this device (opensa-pack --rgba8) or run it on a GPU that carries the feature.`,
+    );
+  }
+}
+
+export async function setupStreaming(
+  engine: Engine,
+  source: PakSource = '/pak',
+  radii: StreamingRadii = {},
+  host: StreamingHost = {},
+  opened?: OpenedPak,
+): Promise<StreamSetup> {
+  const { manifest, worker } = opened ?? (await openPakSource(source, host));
+  requireWorldSupport(engine.device, manifest);
+  // UV-scroll animations (B7·c / plan 074/18): global by dict name, advanced engine-side; kind-4 draws slot in.
+  engine.setUvAnimations(manifest.uvAnimations ?? []);
+  // Missing-texture stand-ins (plan 085 row B): the highlight repaints these layers magenta on demand.
+  engine.textures.setMissingLayers(manifest.missingLayers ?? []);
 
   // Texture arrays up-front — ONLY for a pak that does not say which cell needs which array (003 phase 4).
   // When every cell entry carries `textures`, the streaming driver loads an array with the first cell that
