@@ -203,6 +203,32 @@ kind of run it was. Plan mode does the same — it is the mode a weak device get
 
 While idle the picture is frozen, sway included; the first input resumes it.
 
+**One wake used to arrive twice.** The idle wait stored its timeout handle and nothing dropped it when the
+timer fired, so after an idle wake that drew, an input handler read the dead handle as *a wake is already
+pending*, cleared it and armed an animation frame on top of the one the drawn frame had armed — two passes
+through the loop for one displayed frame, each paying the held keys, the camera advance and the gate, plus
+the wake-up itself. Nothing errored and the picture stayed correct, so the only trace was frames faster than
+a vsync interval in a capture: **192 of 808 (23.8 %) on the phone, 6 of 229 (2.6 %) once the handle was
+dropped as the timer fires** ([the pair](../benchmarks/opensa-engine/2026-08-30-mobile-idle-timer-fix.json)).
+The moving-frame p50 did not move, so what went away was the wasted passes and their wake-ups — battery on a
+phone — and no frame time.
+
+## Nothing over the map, when the engine is what is being measured
+
+`?overlay=0` draws the world and nothing above it: the symbol pass, the callsign chips, the sketches, the
+radar, and the per-frame update that feeds them. It exists because of what the field round of 2026-08-30
+measured — **the symbology and the board are 3.79 ms of a 5.11 ms frame body at 150 units, against the
+engine's own 0.72** ([the A/B](../benchmarks/opensa-engine/2026-08-30-mobile-overlay-ab-150u.json)) — so a
+streaming or texture number taken with the overlay on is mostly a number about drawing symbols.
+
+The pass is **skipped, not subtracted**: taking the segment off afterwards would credit the engine with work
+the GPU still did. The render gate stops watching the board with it, because a window meant to price the
+engine may not be paced by a roster nobody can see; the layers stay constructed, so it measures the draw
+cost and never the allocation; and the capture carries `overlay: false`, because with the pass skipped
+`overlay-2d` reads ~0 for a reason no reader could otherwise tell from a fast frame. `?embed=1&overlay=0` is
+the engine with nothing above it at all, and the phone panel offers the pair as two links so the halves
+cannot drift apart.
+
 ## Labels that declutter
 
 At 150 units a city view collides with itself, so the labels compete for pixels rather than overdrawing each
