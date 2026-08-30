@@ -422,7 +422,7 @@ export const styles = {
   keyHelpRow: {
     background: 'transparent',
     border: `1px solid transparent`,
-    borderRadius: 4,
+    borderRadius: RADIUS.control,
     color: COLORS.text,
     cursor: 'pointer',
     display: 'flex',
@@ -584,7 +584,7 @@ export const styles = {
   mapToolsHit: {
     background: 'transparent',
     border: 'none',
-    borderRadius: 3,
+    borderRadius: RADIUS.control,
     color: COLORS.text,
     cursor: 'pointer',
     fontSize: 11,
@@ -595,7 +595,7 @@ export const styles = {
   mapToolsHitTouch: {
     background: 'transparent',
     border: 'none',
-    borderRadius: 3,
+    borderRadius: RADIUS.control,
     color: COLORS.text,
     cursor: 'pointer',
     fontSize: 13,

@@ -789,6 +789,17 @@ style objects then read both from variables instead of from `RADIUS`, and the ex
 `theme.test.ts` grows a second half: **a component that writes its own radius or its own shadow has opted
 out of the theme**, exactly as a component writing its own hex does.
 
+**As built, that second half lives in `styles.test.ts` rather than in `theme.test.ts`, and the reason is
+where the defect actually was.** `theme.test.ts` reads the `.tsx` files, and they were already clean; what
+kept its own corner was the token TABLE — `keyHelpRow` at 4 px, both `mapToolsHit` variants at 3 px, off the
+radius scale as well as out of the theme, so under Mark43's `radius: 0` three controls stayed rounded while
+every neighbour went square. The guard therefore sits beside the table it polices and refuses any
+`borderRadius` in `styles.ts` that is neither a `--os-radius-*` variable nor **`50%`**, the one deliberate
+exception: the compass, the minimap ([04](#04--the-minimap), round on the user's call) and the tally dot are
+MARKS whose roundness carries an argument rather than a preference. The shadow half needs no rule of its own
+— the three elevations already read `SHADOW.float` / `SHADOW.modal`, and the fourth `boxShadow` in the table
+is an INSET ring coloured from the accent, which is not elevation and is reachable by a skin.
+
 **2. `density` — a bounded enum, clamped by the pointer.** `rowPadding` alone cannot reach a Mark43 grid,
 because the row's height is padding **plus** its type step. So:
 

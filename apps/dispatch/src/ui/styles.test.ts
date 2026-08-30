@@ -25,6 +25,13 @@ const TOUCH_TOKENS = Object.entries(styles).filter(([name]) => name.endsWith('To
 /** The tokens that place a control over the map with its own touch size baked in. */
 const TOUCH_SIZED = ['mapNavCompassTouch', 'mapToolsHandle'] as const;
 
+/** The corner a token draws, as text — `undefined` when it draws none. */
+function radiusOf(style: CSSProperties): string | undefined {
+  const value = style.borderRadius;
+
+  return value === undefined ? undefined : typeof value === 'number' ? `${value}` : value;
+}
+
 function size(style: CSSProperties, axis: 'height' | 'width'): number | undefined {
   const fixed = style[axis];
   const min = style[axis === 'height' ? 'minHeight' : 'minWidth'];
@@ -88,6 +95,23 @@ describe('dispatch styles', () => {
         expect(styles[bar].minWidth).toBe(0);
         expect(styles[bar].overflow).toBe('hidden');
       }
+    });
+
+    it('lets no style in the table round a corner the theme cannot square', () => {
+      // 201/7-10 made the radius theme data, and the token table kept three corners of its own: 4 px on a
+      // key-help row and 3 px on the two map-tool hits. Mark43 declares `radius: 0` on all three steps, so
+      // under it those controls stay rounded while every neighbour goes square — a skin the preset cannot
+      // reach, which is the same defect as a raw hex and just as silent.
+      //
+      // A full circle is NOT that: the compass, the minimap (7-04, round on the user's call) and the tally
+      // dot are MARKS whose shape carries an argument rather than a preference, so `50%` is the one value
+      // allowed to stand outside the theme.
+      const strays = Object.entries(styles)
+        .map(([name, style]) => [name, radiusOf(style)] as const)
+        .filter(([, radius]) => radius !== undefined && radius !== '50%' && !radius.startsWith('var(--os-radius-'))
+        .map(([name, radius]) => `${name}: ${radius ?? ''}`);
+
+      expect(strays).toEqual([]);
     });
   });
 
