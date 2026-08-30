@@ -71,6 +71,26 @@ surface was built ([201/7-03](../plans/201-dispatch-console/7-the-operator-map/r
 All three are fixed in the change that wrote this file. What that fix looks like is the pattern to copy: one
 component, a `touch` flag from `useCoarsePointer()`, and a second size token beside the first.
 
+## A density lever is clamped by the POINTER, never by the preset
+
+**Added 2026-08-28**, while reading Mark43 and Tickets CAD as skins
+([201/7-10](../plans/201-dispatch-console/7-the-operator-map/readme.md)). Real CAD is a desk product with
+three monitors, so a skin taken from one carries a desk's density: Mark43's grid is far tighter than
+anything this console may show a finger. A theme is allowed **one** density lever
+(`ConsoleTheme.rowPadding`, and the `density` enum 7-10 proposes beside it), and the rule for it is:
+
+**the lever is resolved against `useCoarsePointer()`, in the resolver — not offered to a reviewer.** A
+preset may ask for `dense`; where the pointer is coarse it resolves to the size that still clears 44 px in
+both axes. `TOUCH_TARGET` is never scaled, and neither is the `input` step (15 px is the iOS-zoom floor).
+
+**Why it is here rather than in the design file.** A skin is chosen once and then travels: the operator
+picks it on a desk, and the same `localStorage` key paints their phone that evening. Nothing on that path
+re-asks the question, so a lever that trusts the preset ships a desk row to a hand — and it is the same
+silence as the rest of this file (it typechecks, it lints, the suite is green, and it looks perfect on the
+machine that chose it). Clamping in the resolver makes the violation unrepresentable rather than
+reviewable, and the guard is one test: every preset, resolved at a coarse pointer, still yields a row that
+clears the criterion.
+
 ## Caught, or silent?
 
 **PARTLY CAUGHT since 2026-08-25, and silent everywhere the guard does not reach.**

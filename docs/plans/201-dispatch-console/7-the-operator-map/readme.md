@@ -442,6 +442,444 @@ map and the lists move together. Filed rather than half-done.
 of Day against real daylight on a real screen — the condition it exists for is the one a desk cannot
 reproduce.
 
+### 10 — Skins from the field: Mark43 and Tickets CAD
+
+**PLANNED 2026-08-28.** Asked by the user: evaluate the Mark43 and Tickets CAD screens as skins we intend to
+ship, and state the architecture that carries them. [09](#09--skins) built the mechanism; this step is the
+first attempt to point it at two REAL products rather than at four palettes of our own, and the interesting
+part is not the colours — it is discovering which parts of a screenshot a theme structurally cannot carry.
+
+#### What was captured, and what was not
+
+The landscape rows of 2026-08-26 rest on captured screens, and this step keeps that bar. It does not clear
+it twice:
+
+| Product | Evidence | Quality |
+| --- | --- | --- |
+| **Mark43 CAD** | the vendor's own one-pager (`mark43.com/wp-content/uploads/Mark43CAD.pdf`, fetched 2026-08-28). Page 2 embeds a **1071 x 549 product screenshot**, pulled out with `pdfimages` and sampled with a histogram plus point probes | **measured**, with one caveat stated below |
+| **Tickets CAD** (Open ISES) | both lines were stood up and measured locally on 2026-08-29: the 2.41 dev-repo build first (the wrong version, kept below for what it shows about hand-written skins), then **v4.2.26 NewUI** from the live repo — `github.com/openises/TicketsCAD`, which the legacy 3.44 codebase names in its own README and release check | **measured, current version** |
+
+**The caveat on the Mark43 numbers.** The screenshot is a downscaled JPEG inside a marketing PDF. Flat
+regions survive that (a panel fill is still its own colour); 1 px separators, small text and pill edges are
+blended with their neighbours. So the ramp below is good to roughly +/-2 per channel, the hue COUNT is
+sound, and the type sizes and row heights are **not** measurable from it — they are not quoted.
+
+**And the consequence for Tickets CAD is the whole verdict on it.** A preset built from a page that says
+"modern dark theme" is not a skin taken from a product; it is our own taste wearing somebody else's name.
+It does not get built here — and the local run below, which reached the classic UI rather than the v4 one
+the page is describing, does not change that: measuring the wrong version is not evidence about the right
+one.
+
+#### Mark43, measured
+
+| What | Measured off the screen | Against Night |
+| --- | --- | --- |
+| ground | `#1e1f21`, **18.9 %** of all pixels | Night `#070a0f` — Mark43 sits several steps lighter |
+| bars, panel headers, column headers | `#28292b` | Night `#0b111a` |
+| grid rows | `#1d1e20` / `#1c1d1f` | Night `#111a26` |
+| separators | `#333333`–`#343436` | Night `#222f40` / `#2b3a4d` |
+| the map panel | a grey Esri canvas, `#303231` | ours is a rendered world with a day cycle |
+| hue | **achromatic** — R, G and B within 2 of each other on every step | Night is cool slate at hue ~213 |
+| depth | **a line, not a value.** Ground to surface is ~10/255, and there is **no shadow anywhere** | ours is Carbon's layering + `shadow.float` |
+| shape | square. Zero radius, zero translucency, no gradient, no ornament | the same, since 2026-08-26 |
+| state colour | **>= 11 saturated hues** (15-degree buckets over the whole screen: `#5d9be5` blue, `#6124a3` purple, `#9d0f28` crimson, `#49c9ac` teal, `#378fa3` cyan, `#af8328` amber, `#c9272d` red, `#a9722d` orange, `#aa9f12` olive, ...) on filled callsign pills, plus a red priority cell | ours is `SET_COLORS`, and it is not a theme's to touch |
+| the map | a corner panel, roughly **630 x 250 of 1071 x 549 = 27 %** of the screen, under a command line | ours is the desk (7-08) |
+
+**Two findings worth more than the palette.**
+
+**1. The best-designed CAD in the field is square, opaque, borderless-dark and ornament-free.** That is the
+direction this console was corrected back to on 2026-08-26 on the user's verdict that the built screen
+looked generated. It was argued there from first principles; here it is a vendor whose own marketing calls
+the product "the best-designed CAD available", arriving at the same place independently. The direction is
+not ours to second-guess any more.
+
+**2. Even Mark43 does not make the map the desk.** 27 % of the screen, third in the reading order behind two
+data grids. That is a **fourth** data point for [7-08](#08--the-workspace)'s measurement (SnailyCAD another
+page, SonoranCAD another window, Resgrid 9.1 % of the screen, CrowdCAD not at all) and the most
+authoritative one, because this is the product real dispatchers work a shift in. Our decision stands
+against it deliberately, and it stays the thing that distinguishes the product — but nobody may now claim it
+is the obvious layout.
+
+**And one thing that is not a skin at all.** Their command line (`TS P309C @COORS/PASEO DEL NORTE@`, set
+large in mono over a ghosted syntax hint: `units #event @location@ /comment "plate"`) is the most
+interesting control on the screen and it is an INPUT MODEL, not an appearance: a keyboard-first command
+grammar for a telecommunicator who types faster than they point. It belongs beside [7-06](#06--keyboard),
+it is a phone question before it is a desk one, and it is filed here rather than smuggled into a palette.
+
+#### The verdict
+
+- **Mark43 -> a preset, and it is worth building.** It is this console's own direction with a different ramp
+  (achromatic, lighter ground) and a different depth strategy (a line where we use a value step and a
+  shadow). Both differences are real work, and one of them the theme contract cannot express today.
+- **Tickets CAD -> not a preset**, confirmed by running it (below): its own Night skin measures **Lc 0** on a
+  live control, so the palette is not a thing to borrow. It is a landscape row, one still-owed capture of the
+  version its page describes, and two architecture signals:
+  **light and dark as a first-class instant toggle**, both declared "for extended use in dispatch
+  environments" — a stronger reason to keep Day measured than the one we wrote (a phone outdoors) — and a
+  **drag-and-drop widget dashboard** (incidents, responders, map, statistics, facilities, communications,
+  recent events), which is Resgrid's BigBoard pattern for the third time. 7-08 rejected it with an argument
+  and the argument has not changed: a grid whose tiles reflow takes back the space that decision won.
+
+#### What the Tickets CAD run actually showed (2026-08-29)
+
+**How it was run**, so nobody pays for it twice: the `khoegenauer/tickets-cad` dev repo (master is **2.41**, 2013)
+against a local MariaDB, served by PHP 8.4 with a throwaway `ext/mysql` -> mysqli shim, because the app calls
+the removed `mysql_*` API in 246 files. Five upstream defects had to be patched to reach a screen at all — a
+missing paren in `install.php` (a hard parse error in any PHP), `is_resource()` on what is now a
+`mysqli_result` (the login silently reports "expired"), `count($x == 0)` where `count($x) == 0` was meant, a
+`break` outside any switch in `units.php` and `units_nm.php`, and a PHP-5 numeric coercion on an empty
+setting. None of that is a judgement on the product; it is the cost of running a 2013 PHP application, and it
+is written down only so the next attempt starts from the answer.
+
+**The mechanism, and it is the one this chain already chose.** The skin is picked on the **login form** —
+`Colors: Day / Night`, held for the session — and switching it changes colour and nothing else: same layout,
+same controls, same positions. 7-09 wrote that rule from first principles; here is a working CAD that has
+obeyed it for a decade.
+
+**The warning, measured with this console's own APCA implementation** (`ui/theme.test.ts`'s formula, run in
+the page against every text-on-background pair actually rendered):
+
+| Night, on the screens a dispatcher works | Measured |
+| --- | --- |
+| the Call Board's `Show` control | `#000` on the `#121212` ground — **Lc 0. Invisible, not merely poor** |
+| every unit row's data (callsign, status, "as of") | 10 px `#000` on `#9e9e9e` — **Lc 52** |
+| the board's column-group headers (Incident / Units / Dispatch) | white on `#99b2cc` — **Lc 48** |
+| the status chip | `#000` on `#ff3c4a` — **Lc 43** |
+
+Against our thresholds (Lc 90 primary, Lc 60 secondary) the whole Night skin fails, and one live control is
+at zero. **This is the exact failure 7-09's guard exists for**, found for the second time in the field after
+SonoranCAD's `trevor`: a second palette is a second surface on which contrast breaks silently, and nobody
+who ships one by hand measures it. Two hand-written skins, two failures, both invisible to the people who
+shipped them — the guard is not paranoia.
+
+**Density**: 14 px rows, 10 px data text, Verdana 12 px base; Day is `#efefef` ground with `#ffffff` and
+`#dee3e7` surfaces. At 360 CSS px the tables fit, and every control in them is far under the 44 px
+criterion — which is what a desk product looks like on a phone, and why the density lever above is clamped
+by the pointer rather than by the preset.
+
+**One thing they do that we deliberately do not**: status colour is **agency-editable data** —
+`un_status.bg_color` / `text_color` per status row, `in_types.color` / `opacity` / `radius` per incident
+type, all edited in Config by the customer. It is the right answer for a product whose map is a Google
+basemap with pins drawn over it. It is the wrong answer here, and the reason is the one 7-09 already gives:
+our chips must equal the pillars the ENGINE draws from `SET_COLORS`, so a per-agency colour table would have
+to move the engine's debug-line sets with it. Filed as the shape a colour-vision-safe palette would take
+(201/5), not as a theme.
+
+#### And then the CURRENT one: v4.2.26 NewUI (2026-08-29)
+
+**Where it actually lives**, because finding it cost two wrong turns: SourceForge ships only the legacy line
+(`tickets-3.44.1.zip`, 2026-03-23 — behind Cloudflare, though its mirror hosts `<name>.dl.sourceforge.net`
+serve the file directly). The legacy 3.44 code checks GitHub for its own releases, and that string is the
+signpost: **`github.com/openises/tickets` is the legacy line, `github.com/openises/TicketsCAD` is v4**.
+Stood up with the project's own procedure — `composer install`, `tools/install_fresh.php`,
+`tools/create_admin.php`, on PHP 8.4 + MariaDB — and it installs clean: **55 migrations applied, 0 failed**,
+no patching of any kind. A decade of distance from the 2.41 build, in one command.
+
+| What | Measured |
+| --- | --- |
+| palette | **Bootstrap 5.** Day ground `#e9ecef`, text `#212529`; Night `#1a1d21`, text `#dee2e6` |
+| type | `system-ui` at **16 px** base (the legacy line was Verdana 12) |
+| density | **28 px** table rows — twice the legacy 14 |
+| contrast, Night | **52 of 184** rendered text pairs under Lc 60; the floor is Bootstrap's `text-muted` `#6c757d` at 9.6 px on the dark panels, **Lc 20–26** |
+| targets | the top bar's icon buttons are **23–27 px**, against 44 |
+| the map | **Leaflet on OSM in Day, a CARTO dark basemap in Night** |
+
+**Three findings, and only one of them is about colour.**
+
+**1. The theme toggles in the CHROME, not only at sign-in.** A sun/moon pair sits in the top bar beside the
+clock, and the login form keeps its `Day / Night` choice as a hidden field. Ours is sign-in-equivalent — a
+`<select>` in the top bar — so the mechanism matches, but it settles a question the switchability section
+leaves open: **an operator changes skin mid-shift**, which is the argument for reading `prefers-color-scheme`
+at first run and for keeping the switch one attribute rather than a reload.
+
+**2. Their map follows the skin, and ours structurally cannot.** Swapping OSM for a CARTO dark basemap is a
+tile-style change — the map is a picture served by somebody else, so a theme reaches it. Our map is a
+rendered world on a clock: the same request is an ENGINE question (the environment driver,
+[6](../6-display-modes/readme.md)), never a token. That is the sharpest available statement of why layer 5
+below is not a theme's, and it is the answer to keep for the day someone asks for "a dark map to match the
+dark UI".
+
+**3. A GridStack widget dashboard — the fourth sighting.** Resgrid's BigBoard, CrowdCAD's panes, their own
+v3 situation panels, and now v4's draggable widget grid. [7-08](#08--the-workspace) rejected the pattern
+because a grid whose tiles reflow takes back the space the map-first decision won; four products later the
+argument is unchanged, and the field's agreement is not evidence against it — every one of those four also
+puts the map in a card.
+
+**What it does NOT change: still no preset.** Bootstrap 5's defaults are not an identity to borrow, and its
+own dark theme leaves a quarter of its rendered text under our secondary threshold — the `text-muted` grey
+that ships with the framework, at 9.6 px, on panels it was never measured against. Which is the lesson the
+legacy skin taught at Lc 0, one framework and thirteen years later: **a guard is what makes a second palette
+cheap, and nobody who ships one by hand has one.**
+
+#### The three, side by side — and this console (2026-08-29)
+
+All four columns are MEASURED, three of them in a browser against a running install, the fourth read from
+this repo's own tokens. SnailyCAD v1.80.2 was built and run the same day (pnpm + Postgres; its client
+refuses `localhost` in production mode, so it runs on the host's IP, and `next/font` cannot fetch Google
+Fonts behind this egress — one import was pointed at a local face to build).
+
+| | **Mark43** (real CAD) | **Tickets CAD 4.2.26** | **SnailyCAD 1.80.2** | **this console (Night)** |
+| --- | --- | --- | --- | --- |
+| ground | `#1e1f21`, achromatic | `#1a1d21` dark / `#e9ecef` light | `#16151a` | `#070a0f` |
+| surfaces | `#28292b` | Bootstrap 5 panels | cards `#1f1e26`, radius **6 px** | `#0b111a`, radius **0** |
+| type | not quotable from the capture | `system-ui` 16 px | **`Assistant`, a self-hosted webfont**, 16 px | system stack, 12 px |
+| rows | ~20 px (read off the screen) | 28 px | card-per-item, no table rows | 22–24 px (`5px 9px` + 12 px) |
+| contrast | not measurable from a JPEG | **52 of 184** pairs under Lc 60 | **0 of 35** under Lc 60 (an empty board — a small sample) | **guaranteed** by `theme.test.ts` at Lc 90 / 60 |
+| smallest target | — | 23–27 px | 25 px | **44 px**, guarded by `styles.test.ts` |
+| the map | a corner panel, **27 %** | Leaflet, and the basemap follows the skin | **not on the dispatch page at all** — a separate page that will not open until you name a separate **map server** | the map IS the desk |
+| skin switch | one skin | login form **and** a top-bar toggle | `darkMode: ["class", '[data-theme="dark"]']` — ours exactly | one attribute on the app root |
+| where the skin lives | — | session | **the ACCOUNT** (`user.isDarkTheme`) | the browser (`localStorage`) |
+| status colour | ≥ 11 saturated hues | agency-editable data | per-status config | `SET_COLORS`, shared with the engine |
+| the phone | — | a separate **mobile view** (`mobile.php`), offered by a link in the navbar | **responsive, not touch-sized**: no overflow at 360 and a hamburger under its own `nav: 900px` breakpoint, but **22 of 25** targets on `/dispatch` are under 44 px (the hamburger itself is 28 × 18), no `matchMedia`/pointer test anywhere in the client, and no PWA manifest | ONE component that takes a size; 44 px in both axes where the pointer is coarse, guarded by `styles.test.ts` |
+
+**A fourth thing, measured on a phone profile after the fact:** *responsive* and *usable with a thumb* are
+different claims, and only the second one is a rule. SnailyCAD is genuinely responsive — nothing overflows
+360 CSS px on `/dispatch`, `/officer` or `/citizen`, the nav collapses, the columns stack — and it is still
+not a phone product: the client contains no pointer test at all, so every control keeps its desk size (22 of
+25 under 44 px, the menu button 28 × 18). Tickets CAD answers the same question by shipping a **separate
+mobile view** rather than sizing the one it has. Both are the shape
+[cross-platform-surface](../../../restrictions/cross-platform-surface.md) exists to refuse: a second surface
+drifts, and a responsive-but-desk-sized one looks finished in a screenshot and fails in a hand.
+
+**A fifth product, run the same day: CrowdCAD 1.4.0** (AGPL-3.0, Next.js + HeroUI/Radix), stood up on its
+**PocketBase** backend rather than Firebase — a single Go binary, no cloud account, which is the most
+self-hostable thing in this survey. Measured on its Lite dispatch board: `#0c0c0d` ground, `ui-sans-serif`
+16 px, heavy rounding, **1 of 20 text pairs under Lc 60** (a 14 px `0%` label) — and **13 of 13 targets under
+44 px**, the icon buttons 32 × 32. **Its dispatch board has no map either** (teams with a status tally and a
+surge meter on the left, calls in a table on the right; the venue map is elsewhere), which makes five
+products and five times the map is somewhere other than the desk.
+
+**Two more from the roleplay end, run 2026-08-29, and both are worth one line each.**
+**[free-the-cad](https://github.com/CardosoDev04/free-the-cad)** is the only other project that names
+**SA-MP** — and it is a skeleton, which is stated here from a probe of every route its own router declares
+rather than from a glance:
+
+| route | what renders | interactive controls |
+| --- | --- | --- |
+| `/` | the footer, nothing else | 0 |
+| `/dashboard` | the footer, nothing else | 0 |
+| `/dashboard/civ` | the literal string `CivDashboardLayout` | 0 |
+| `/auth` | redirects to `/auth/login` | 3 |
+| `/auth/login` | a real sign-in card | 3 |
+| `/auth/signup` | a real sign-up card | 4 |
+| `/nope` (unrouted) | blank — there is no 404 | 0 |
+
+Two screens exist; everything behind the login is a placeholder. No backend in the repository, no SA-MP code
+anywhere outside the README title, and no commit since **2024-12-26**.
+**[StoicCAD](https://github.com/TheStoicBear/StoicCAD)** (PHP/MySQL, last commit 2024-05-06) runs, and its
+schema depends on a table the dump does not contain (`nd_characters`, from the FiveM framework ND_Core) —
+the CAD is an attachment to a game server's own database rather than a system with its own model. Its whole
+chrome comes from **CDN Tailwind 2.0.3 + FontAwesome**, so with no CDN it renders as unstyled HTML; and its
+**Map page is an `<iframe>` to a hardcoded third-party URL** (`shawn1-wxg9gm.users.cfx.re/webmap/` — one
+person's own server), which every install embeds.
+
+**The paid half, read from public pages 2026-08-29 — and the finding is about the SOURCES, not the
+products.** Eight vendor pages were captured (Motorola PremierOne, Hexagon HxGN OnCall, CentralSquare,
+RapidDeploy, and the roleplay sellers CDE CAD, Blue Horizon, PulseCAD, CADvanced). **The enterprise vendors
+do not publish their interface**: their product pages are photography of dispatch rooms — blurred consoles,
+a telecommunicator in a headset — with no screen a reader can measure. `rapiddeploy.com` now redirects into
+Motorola's site, which is the acquisition showing up as a 301 rather than as a page. Of the roleplay
+sellers, CDE CAD is pre-launch (a waitlist and a hero), Blue Horizon shows one small window of a dense dark
+CAD with a module rail and a table, and the rest are JS-gated.
+
+**So the method that worked for Mark43 is the method to repeat: the vendor's own PDF.** A datasheet embeds a
+real screen at real resolution, and `pdfimages` gets it out — that is where every measured number in the
+Mark43 row came from. A marketing page is staged, composited and unmeasurable, and quoting one as if it
+were a screen would put invented numbers next to measured ones. None of these eight is quoted here.
+
+#### The one paid product that opened — and it opened by its other half
+
+**CDE CAD, 2026-08-29: the site is a waitlist, the game client is public, and the client is the interesting
+half.** [`JonathaF0/cdecad`](https://github.com/JonathaF0/cdecad) is the FiveM resource a customer installs on
+their own server; the CAD it talks to is the paid product and stays closed. The resource ships against
+**`CDE-CAD SYSTEM v2.4.1`**, so *pre-launch* above is the marketing site's state rather than the product's.
+What it exposes is not screens — it is **the seam**, which is the half this project is actually building
+against:
+
+| What the public half shows | Read from |
+| --- | --- |
+| **The in-game tablet is a browser window.** Its whole body is one sandboxed `<iframe>` pointed at the hosted CAD — `Config.TabletURL = "https://cdecad.com/login2"` | `config.lua`, `html/index.html` |
+| Chrome around it: a dark header reading `CDECAD`, a close x, rounded corners, a drag surface and a resize grip | `html/` |
+| **1344 x 918 at a 1920 x 1080 viewport — 70 % of the width, 85 % of the height** | measured by rendering the shipped `html/` locally |
+| It did **not** frame: `cdecad.com` refused to render inside the iframe in this capture. Standalone the same URL is a real screen — "Tablet Login / Emergency Response Management System", a Discord username and password, a *Use Desktop Login* link, a Connected indicator and a clock | rendered directly |
+| The other NUI surfaces are one small page each: a driver-licence card, a biometric result with a MATCH percentage, an ALPR reader, a radar, duty, panic, 911 | `civ/`, `fingerprint/`, `reader/`, `wraith/`, `duty/`, `panic/`, `911/` |
+| **No map anywhere in the client.** It only *publishes* — `Config.LocationTracking`, off by default, `Interval = 10000`, `MinDistance = 50.0` — and polls calls every 10 s | `config.lua` |
+
+**Two things this settles, and neither of them changes a decision in this step.** First, **the tablet is our
+shape, built by somebody selling it**: a web CAD rendered inside a game client at ~70 % of the screen is
+exactly the embedding [7-08](#08--the-workspace) assumes, and it is the argument for the console being a page
+a host hands a SIZE to rather than an application that owns a window. Second, **a product that iframes its own
+hosted CAD inherits that host's framing headers** — the one thing that stopped this capture — so an embeddable
+console has to be explicit about being framed instead of leaving it to a default, and the day a deployment
+puts the console and its CAD on different origins that same wall is there. **CDE CAD is not an eighth line in
+the count below**, because the half that would hold a map is the hosted CAD nobody outside its customers can
+see; what its public half shows is where the map is *not* — not in the game client, which knows only how to
+send a position.
+
+**Seven products now, and seven times the map is not the desk**: a corner panel (Mark43), a widget
+(Tickets), a separate page and server (SnailyCAD), a card (Resgrid), absent from the board (CrowdCAD), an
+iframe to someone else's site (StoicCAD), and non-existent (free-the-cad).
+
+**The two that could not be run, and why that is stated rather than skipped:** **Resgrid** is .NET with a
+SQL Server / Redis / RabbitMQ stack and a Docker-compose deployment, and this session has no Docker daemon —
+its numbers stay as the 2026-08-26 screenshot measurement (the map at 9.1 % of the screen). **SonoranCAD**
+is closed SaaS: there is nothing to install, and its four skins and 3D live map remain readable only from
+its own public pages. Both rows in [DESIGN.md](../../../../apps/dispatch/DESIGN.md) say which evidence they
+rest on, and neither is quoted as if it had been measured here.
+
+**What the comparison actually settles, beyond confirming what we already do:**
+
+**1. Nobody's map is the desk — and the strongest case is SnailyCAD's**, whose dispatch screen has no map on
+it at all and whose live map is a different server you must configure before the page will render. Four
+products, four times the map is somewhere else. [7-08](#08--the-workspace)'s decision is now the only one of
+its kind in the field, which is either the product's edge or its risk, and it should be stated as the former
+only while the phone measurement holds.
+
+**2. A skin can live in three places, and we picked the weakest one.** Tickets CAD keeps it in the session,
+SnailyCAD on the **account**, ours in `localStorage`. Account-stored follows the operator to a second
+machine and to a borrowed phone; browser-stored does not, and it is also the path that carries a desk-chosen
+density onto a phone (the [restriction](../../../restrictions/cross-platform-surface.md) this step added).
+The console has no account of its own — it is embeddable and the CAD owns identity — so the honest design is:
+**the host may supply the preset id with the board, and `localStorage` is the fallback when it does not.**
+That is one more line in the switchability list above, and it is the one a real deployment will ask for
+first.
+
+**3. The one product that passes our thresholds is the one built on a component library.** SnailyCAD's
+sampled dark screen has no pair under Lc 60 — on React Aria primitives with Tailwind's own scale, chosen
+rather than hand-mixed. It is also the product whose shape (rounded cards, a webfont, 16 px type) this
+console deliberately rejects. Both can be true: **borrow the discipline, not the look** — which is exactly
+what our own guard does, and why 7-09's APCA test is the part of this chain worth defending hardest.
+
+#### What a screen holds, and which layer a theme can carry
+
+This is the architecture answer, and it is why "a screenshot becomes a theme" is only two-thirds true. A
+console screen is five separable layers:
+
+| Layer | Example, from the two screens | Carried by a theme today? |
+| --- | --- | --- |
+| **1. Palette** — ramp, accent, semantic surfaces, shadows | Mark43's achromatic `#1e1f21` ground | **yes**, wholly. `ConsoleTheme` + `themeVariables` |
+| **2. Typeface** — the sans and mono stacks | Amber already switches the chrome to mono | **yes** (`font.sans` / `font.mono`); the SIZE steps are not — `TEXT` is a module constant in `styles.ts` |
+| **3. Density** — row padding, control height, type step | Mark43's grid is far tighter than our desk rows | **one lever only** (`rowPadding`). Everything else is fixed |
+| **4. Shape and edge** — radius, border-vs-shadow, opacity | Mark43 separates by a `#333` line and casts no shadow | **no.** `RADIUS` is a constant, and *whether* an edge is drawn is written into the style objects |
+| **5. Layout and information architecture** — where the map is, where the dock is, whether there is a command line | Mark43's map at 27 %; Tickets CAD's widget grid | **no, and deliberately never** (09, 7-08) |
+
+So the honest shape of the work: **layers 1-3 are a preset, layer 4 is a bounded extension to the token
+contract, and layer 5 is a different product.** A skin that lands 1-4 will read unmistakably as Mark43 and
+still be this console — which is the correct outcome and worth saying out loud, because the naive read of
+"implement their screen" is layer 5, and layer 5 is where a skin stops being a skin.
+
+#### The token contract, extended — two additions and nothing else
+
+Both additions keep 09's shape: **data, emitted as custom properties, guarded by a test.**
+
+**1. `shape` — the edge strategy.** Mark43 cannot be expressed by colours alone: its surfaces are separated
+by a visible line and cast nothing, ours are separated by a value step and a shadow. Add to `ConsoleTheme`:
+
+```ts
+readonly shape: {
+  /** How a surface is told apart from what is under it. */
+  readonly edge: 'line' | 'shadow';
+  readonly radius: { readonly control: number; readonly pill: number; readonly surface: number };
+};
+```
+
+emitted as `--os-radius-control` / `--os-radius-pill` / `--os-radius-surface` and `--os-edge-width`
+(`edge: 'line'` sets 1 px and drops `--os-shadow-float` to `none`; `edge: 'shadow'` does the reverse). The
+style objects then read both from variables instead of from `RADIUS`, and the existing raw-value guard in
+`theme.test.ts` grows a second half: **a component that writes its own radius or its own shadow has opted
+out of the theme**, exactly as a component writing its own hex does.
+
+**2. `density` — a bounded enum, clamped by the pointer.** `rowPadding` alone cannot reach a Mark43 grid,
+because the row's height is padding **plus** its type step. So:
+
+```ts
+readonly density: 'comfortable' | 'compact' | 'dense';
+```
+
+which scales `rowPadding` and the two row-level type steps (`caption`, `body`) and nothing else — never
+`TOUCH_TARGET`, never `input` (15 px is the iOS-zoom floor), never the title.
+
+**And the clamp is the point, not a nicety:** `dense` is refused where `useCoarsePointer()` is true, in the
+resolver rather than in a review. A dense preset chosen on a desk and carried onto a phone is a silent
+[cross-platform-surface](../../../restrictions/cross-platform-surface.md) violation of exactly the kind that
+file exists for — it typechecks, it lints, every test stays green, and it looks perfect on the machine that
+chose it. Clamping it in the resolver makes the violation unrepresentable instead of reviewable, and the
+guard is a unit test asserting that every preset, resolved at a coarse pointer, still yields a row that
+clears the criterion.
+
+**What is refused, and why each one is not a preference:**
+
+| Refused | Where it actually lives | Why not a theme |
+| --- | --- | --- |
+| Mark43's 11 status hues | `map/beacons.ts` -> `SET_COLORS` | the engine builds a debug-line set per key at boot; the lists, radar, labels and tallies read the same table. A theme that repainted statuses would break the one agreement that table exists to keep — and 11 hues fails the "readable by more than colour alone" rule the queue already meets in three channels |
+| the map's own look (their flat grey basemap) | the environment driver and [6](../6-display-modes/readme.md) | a CSS variable cannot reach the world. Our map is rendered, weathered and on a clock; a grey basemap is a DISPLAY MODE, not a skin, and asking a theme for it is asking the chrome to repaint the subject |
+| the corner map, the widget grid, a moved dock | 7-08, and 09's own rule | muscle memory. SonoranCAD moves its dock between skins; we do not copy it |
+| target sizes | `TOUCH_TARGET` | WCAG 2.5.5 / HIG / Material, not taste |
+| the command line | a step of its own, beside [7-06](#06--keyboard) | it is an input grammar; painting it would be cosplay |
+
+#### Switchability, as it stands and as it needs to be
+
+**What it costs today, from the code rather than from memory:** every preset's variables are emitted once
+into the single scoped stylesheet (`ui/global-css.ts`), one `[data-opensa-dispatch][data-theme='<id>']`
+block each, plus the default block unqualified so an unset attribute still paints the shipping theme.
+`app.tsx` holds the id in state only so the switcher can read it back, writes it as `data-theme` on the app
+root, and persists it under `STORAGE_KEYS.theme`. **Switching is one attribute write**: no re-render, no new
+style objects, no reconciliation, and the cost of an extra preset is bundle bytes, not frame time.
+
+Three gaps, and each is a product requirement rather than polish:
+
+1. **The first run ignores the operator's own machine.** Night is the default whatever the OS says. A
+   console that opens dark on a phone in daylight has a Day preset it never offered. First run should read
+   `prefers-color-scheme` and `prefers-contrast` (which maps to **Contrast**, the preset that already exists
+   for exactly that person) and pick from them; an explicit choice, once made, still wins forever.
+2. **A view link cannot carry a skin.** `map/view-link.ts` owns the parameter names and round-trips pose,
+   projection, moment and district — a shared link reproduces the view but not the look. A `theme=` parameter
+   belongs in that table, read on open, and (like every other parameter there) never written to an address
+   bar the console does not own.
+3. **An embedding host has no way in.** `?embed=1` is the whole console with its chrome off, inside a CAD
+   shell that will have its own brand — and the library entry (`embed.ts`) mounts the map alone, where a
+   skin has nothing to paint at all. The host needs to pin a preset, and the honest design is that it names
+   an **id**, or passes a **full preset object that is validated at runtime against the same APCA
+   thresholds** and falls back to Night, loudly, when it fails. What must not happen is a host overriding
+   `--os-*` from its own root: the cascade would allow it, and it is an unmeasured skin that renders, lints
+   and screenshots fine — the exact failure 09's guard exists to catch, re-entering through the back door.
+
+#### How a screenshot becomes a preset
+
+The procedure, so the next one is not a taste exercise:
+
+1. **Capture at a known scale**, and record what the source was (a live page, a vendor PDF, a video frame)
+   and how much it was resampled — a downscaled JPEG cannot answer type size or line width, and a preset
+   that quotes them from one is quoting an artefact.
+2. **Sample the flat regions**: a colour histogram over the whole frame gives the ground (it is the mode),
+   the bar and the row fills; point probes confirm each in a region known to be flat.
+3. **Order by luminance and assign to the role steps** — Radix's roles are the target, not the source's own
+   naming: ground -> step 1, docked surface -> 2, rows and floats -> 3, hover -> 4, selected -> 5,
+   separators -> 6, component edge -> 7, ring -> 8.
+4. **Do not sample the text.** Text in a resampled capture is blended with its background, and the source's
+   own contrast is not evidence that it passes. Fit steps 11 and 12 by walking lightness until
+   `theme.test.ts` clears **Lc 60 / Lc 90** on every surface each is set on. This is the step where a
+   borrowed palette becomes ours.
+5. **Sample the saturated hues separately** to learn what the source encodes with colour — and then leave
+   them where they are. Ours come from `SET_COLORS` in every preset.
+6. **Run the suite, then look at it.** The guard proves the text is readable; only the screen says whether
+   the skin reads as the instrument it was taken from.
+
+#### Verification
+
+- `theme.test.ts` passes for the new preset on every pair, at both thresholds, with no exception added.
+- The shape and density additions carry their own guards: no component writes a raw radius or shadow, and
+  every preset resolved at a coarse pointer still clears the 44-px criterion in both axes.
+- A skin change remains one attribute write — asserted by the existing test that the emitted blocks contain
+  every declared token, and confirmed on the phone (no reflow of the board, no dropped frame on the map).
+- The switcher, the view-link parameter and the embedded default all resolve to the same preset for the same
+  input.
+
+**Owes:** a phone verdict on the Mark43 preset in
+daylight (it is a lighter ground than Night and that cuts both ways); and the bundle delta per preset,
+measured with `bundle-inventory.ts` rather than assumed — the claim that a preset costs bytes and not frame
+time is exactly the kind this repository does not take on trust.
+
 ## The design rule for all of it
 
 Layout, colour, density and state tiles go through the design skills — `artifact-design` and `dataviz` —
