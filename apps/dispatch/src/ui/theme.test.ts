@@ -22,7 +22,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { ConsoleTheme } from './theme';
 
-import { DEFAULT_THEME, loadTheme, saveTheme, THEMES, themeVariables } from './theme';
+import { styles, TOUCH_TARGET } from './styles';
+import { DEFAULT_THEME, loadTheme, resolveDensity, saveTheme, THEMES, themeVariables } from './theme';
 
 /** Lc for primary text (ramp step 12) on any surface it is set on. */
 const LC_PRIMARY = 90;
@@ -61,6 +62,15 @@ function apca(text: string, background: string): number {
   const sapc = (bgY ** REV_BG - txtY ** REV_TXT) * SCALE;
 
   return (sapc > -LO_CLIP ? 0 : sapc + LO_OFFSET) * 100;
+}
+
+/** Every component file beside this test, as `[name, source]` — what the two raw-value guards read. */
+function components(): readonly (readonly [string, string])[] {
+  const here = dirname(fileURLToPath(import.meta.url));
+
+  return readdirSync(here)
+    .filter((name) => name.endsWith('.tsx'))
+    .map((name) => [name, readFileSync(join(here, name), 'utf8')] as const);
 }
 
 /** Screen luminance of a `#rrggbb`. Alpha is not accepted: a translucent colour has no luminance of its own. */
@@ -126,15 +136,52 @@ describe('theme', () => {
       // lint, and both stay dark-blue-on-white the moment the Day skin is chosen — a raw hex in a component
       // is a colour that has opted out of the theme. `styles.test.ts` cannot see these because it reads the
       // token table; this reads the components themselves.
-      const here = dirname(fileURLToPath(import.meta.url));
       const strays: string[] = [];
-      for (const file of readdirSync(here).filter((name) => name.endsWith('.tsx'))) {
-        for (const hex of readFileSync(join(here, file), 'utf8').match(/'#[0-9a-f]{3,8}'/giu) ?? []) {
+      for (const [file, source] of components()) {
+        for (const hex of source.match(/'#[0-9a-f]{3,8}'/giu) ?? []) {
           strays.push(`${file}: ${hex}`);
         }
       }
 
       expect(strays).toEqual([]);
+    });
+
+    it('lets no component write its own radius or its own shadow', () => {
+      // The same rule as the hex above, for the layer 201/7-10 added to the contract. A radius or a shadow
+      // written into a component has opted out of `shape` exactly as a hex opts out of the ramp: it renders,
+      // it lints, and it stays rounded-and-lifted under a preset whose whole depth strategy is a hairline.
+      // The one deliberate exception is a symbology MARK rather than a surface, and it lives in the token
+      // table (`styles.tallyDot`) where this guard can see it.
+      const strays: string[] = [];
+      for (const [file, source] of components()) {
+        for (const written of source.match(/\b(?:borderRadius|boxShadow):\s*[^,\n]+/gu) ?? []) {
+          strays.push(`${file}: ${written.trim()}`);
+        }
+      }
+
+      expect(strays).toEqual([]);
+    });
+
+    it('lets no preset carry a desk density onto a phone', () => {
+      // The [cross-platform-surface](../../../../docs/restrictions/cross-platform-surface.md) half of
+      // 201/7-10, and the reason the clamp lives in `resolveDensity` rather than in a review. A skin is
+      // chosen on a desk and travels to the same operator's phone through one `localStorage` key with
+      // nothing on that path re-asking the question.
+      //
+      // BOTH halves are asserted, and the second is the one that can actually fail. The phone's row carries
+      // `minHeight: TOUCH_TARGET` and its own padding, so the 44-px criterion is true by construction
+      // whatever a preset asks for — the plan's original phrasing would have passed on every possible
+      // input. What genuinely travels is the TYPE, inside a row that stays 44 px tall while its text
+      // shrinks to 10 px, which is invisible to every other guard here.
+      const floor = resolveDensity('compact', true);
+      const under = THEMES.filter((theme) => {
+        const steps = resolveDensity(theme.density, true);
+
+        return steps.body < floor.body || steps.caption < floor.caption;
+      }).map((theme) => theme.name);
+
+      expect(under).toEqual([]);
+      expect(styles.rowTouch.minHeight).toBe(TOUCH_TARGET);
     });
 
     it('falls back to the default for a stored id that is not shipped any more', () => {
@@ -154,6 +201,24 @@ describe('theme', () => {
         // Light ground, light scheme — otherwise the browser paints dark scrollbars and form internals onto it.
         expect(theme.mode).toBe(luminance(theme.ramp.bg) > 0.35 ? 'light' : 'dark');
       }
+    });
+
+    it('moves only the row padding and the two row type steps', () => {
+      // Density is a bounded lever, not a scale factor over the type table: `input` at 15 px is the floor
+      // below which iOS zooms the page on focus, and the title is not a row. A step that reached either
+      // would be a phone defect written as a preference.
+      const moved = new Set<string>();
+      for (const density of ['comfortable', 'compact', 'dense'] as const) {
+        for (const [name, value] of Object.entries(resolveDensity(density, false))) {
+          moved.add(`${name}:${String(value)}`);
+        }
+      }
+
+      expect([...new Set([...moved].map((entry) => entry.split(':')[0]))].sort()).toEqual([
+        'body',
+        'caption',
+        'rowPadding',
+      ]);
     });
 
     it('remembers the chosen skin', () => {

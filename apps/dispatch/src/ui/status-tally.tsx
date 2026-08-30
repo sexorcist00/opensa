@@ -30,7 +30,7 @@ export function StatusTally({ items }: { items: readonly TallyItem[] }): ReactEl
         .filter((item) => item.count > 0)
         .map((item) => (
           <span key={item.label} style={styles.tallyItem}>
-            <span style={{ background: item.color, borderRadius: 6, height: 6, width: 6 }} />
+            <span style={{ ...styles.tallyDot, background: item.color }} />
             {item.label} {item.count}
           </span>
         ))}
