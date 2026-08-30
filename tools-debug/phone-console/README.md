@@ -289,6 +289,12 @@ the session that leaked it.
 server refuses an unauthenticated request rather than answering it. Stop the tunnel when the session is over;
 the next one gets a new address anyway.
 
+**One `panel:tunnel` at a time.** A second one finds 8788 taken, and until 2026-08-30 that killed the MCP
+server while the tunnel carried on and printed a URL and token for it — credentials for nothing, whose only
+symptom was the provider's `connection refused` a minute later. The port collision now names itself and the
+command stops with its server rather than outliving it; `PANEL_MCP_PORT=<free port>` runs a second one on
+purpose.
+
 ## What it checks before you start
 
 `node` · **git identity** (a phone that has only ever pulled has none, and every commit then dies with

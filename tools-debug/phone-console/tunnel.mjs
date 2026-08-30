@@ -245,17 +245,20 @@ if (process.argv[1] && process.argv[1].endsWith('tunnel.mjs')) {
   let pulse = null;
   /** The address the paste block last named, so a reconnect onto the SAME one is a line, not a block. */
   let announcedUrl = null;
-  const stop = () => {
+  /** `code` so a stop that follows a CRASH exits non-zero — a signal is a person stopping this on purpose,
+   *  and the two must not look alike to whatever started it. The handlers below drop the signal argument
+   *  rather than passing it in as an exit code. */
+  const stop = (code = 0) => {
     stopping = true;
     clearTimeout(restart);
     clearInterval(pulse);
     for (const child of children) {
       child.kill();
     }
-    process.exit(0);
+    process.exit(code);
   };
-  process.on('SIGINT', stop);
-  process.on('SIGTERM', stop);
+  process.on('SIGINT', () => stop());
+  process.on('SIGTERM', () => stop());
 
   const mcp = spawn(process.execPath, [join(HERE, 'mcp.mjs'), '--http', '--port', String(PORT)], {
     env: { ...process.env, PANEL_MCP_TOKEN: token },
@@ -263,6 +266,21 @@ if (process.argv[1] && process.argv[1].endsWith('tunnel.mjs')) {
   });
   children.add(mcp);
   mcp.stdout.on('data', (chunk) => process.stdout.write(`[mcp] ${chunk}`));
+  // The tunnel is a pipe to this server, so this server dying is the whole command dying — and saying so is
+  // the point. On 2026-08-30 a second `panel:tunnel` met EADDRINUSE on 8788, the child threw, and this
+  // process carried on and printed a URL and a token for something that was not there: the operator pasted
+  // credentials for a dead server, and the only symptom minutes later was the provider's own
+  // `connection refused`. An address announced for nothing running is worse than no address.
+  mcp.on('exit', (code, signal) => {
+    if (!stopping) {
+      process.stdout.write(
+        `\n[mcp] the MCP server exited (${signal ?? `code ${code}`}) — the reason is printed above.\n` +
+          `Nothing is left to tunnel TO, so this command is stopping rather than handing out an address ` +
+          `for a server that is not running.\n`,
+      );
+      stop(1);
+    }
+  });
 
   const installed = (command) => {
     try {
