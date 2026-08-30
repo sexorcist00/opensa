@@ -11,7 +11,7 @@
  */
 
 /** The links the panel offers, in the order the page lists them. `phone_open`'s `LINK` knob takes one. */
-export const LINK_NAMES = ['map', 'inventory', 'field', 'flat', 'bake', 'share'];
+export const LINK_NAMES = ['map', 'inventory', 'field', 'engine', 'flat', 'bake', 'share'];
 
 /**
  * Every link, for one panel state.
@@ -36,6 +36,11 @@ export function consoleUrls(state = {}) {
 
   return {
     bake: `${app}?${query}&bake=tiles&zmin=0&zmax=4`,
+    // The field run's A/B PARTNER (201/2): the same board and the same collector, with `?overlay=0` — so the
+    // window prices the engine rather than the symbology over it. The field round of 2026-08-30 measured the
+    // 2D overlay at four times `engine-frame`'s own CPU, which is what makes the pair worth a link each: two
+    // halves typed by hand differ by something nobody wrote down.
+    engine: `${app}?${query}&units=150&calls=40&inventory=1&overlay=0`,
     // The declared worst case: 201's budget table says 150 units each drawn as a model with a symbol over
     // it, and every number 5/02 and 5/04 owe is measured AT it. Typed by hand it was never typed at all.
     field: `${app}?${query}&units=150&calls=40&inventory=1`,

@@ -58,3 +58,20 @@ describe('the panel links', () => {
     });
   });
 });
+
+describe('the engine link (201/2)', () => {
+  describe('negative cases', () => {
+    it('does not let the field run carry the overlay switch — it is the half that DRAWS the symbology', () => {
+      expect(consoleUrls(SERVED).field).not.toContain('overlay=0');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is the field run with the overlay off and nothing else changed', () => {
+      const links = consoleUrls(SERVED);
+
+      // The pair only measures the overlay if that is the ONLY difference between its halves.
+      expect(links.engine).toBe(`${links.field}&overlay=0`);
+    });
+  });
+});

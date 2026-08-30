@@ -86,11 +86,12 @@ not get typed:
 | **The map**                 | the console on the pak that was just built                                                                                                                                                                                     |
 | **Map + inventory capture** | the same, with the collector on                                                                                                                                                                                                |
 | **THE FIELD RUN**           | the board at the count 201 declared — `units=150&calls=40&inventory=1` — which is what [2/03](../../docs/plans/201-dispatch-console/2-real-device-truth/readme.md) owes and what every number 5/02 and 5/04 owe is measured AT |
+| **The engine alone**        | the field run's A/B partner — the same board and collector with `?overlay=0`, so the window prices the ENGINE rather than the symbology drawn over it (201/2). The pair is two links rather than one typed twice, because two halves typed by hand differ by something nobody wrote down                                  |
 | **The flat 2D map**         | `mode=flat`, the no-WebGPU surface                                                                                                                                                                                             |
 | **Bake the tile pyramid**   | `bake=tiles`, z0–z4                                                                                                                                                                                                            |
 | **The shareable console**   | `Build it` runs `npm run build:share:dispatch`, and the link opens that ONE file on a real pak — the check a build log cannot make ([2/02](../../docs/plans/201-dispatch-console/2-real-device-truth/readme.md))               |
 
-**An agent opens them too, since 2026-08-28** — `phone_run open` with `LINK=field` (or `map`, `inventory`,
+**An agent opens them too, since 2026-08-28** — `phone_run open` with `LINK=field` (or `map`, `inventory`, `engine`,
 `flat`, `bake`, `share`). It was the last step in the measurement loop that still needed a person holding the
 phone: everything after it was already a tool call, but a page has to EXIST before any of it. It is a JOB
 rather than an MCP tool deliberately — the job table is read by the panel, which restarts for free, while
