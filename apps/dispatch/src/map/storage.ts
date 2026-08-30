@@ -16,6 +16,8 @@
 /** Everything the console stores, named in one place so a reader can see the whole surface at once. */
 export const STORAGE_KEYS = {
   bookmarks: 'opensa.dispatch.bookmarks',
+  /** Whether the metrics panel is folded to its one-line header (201/3-05). */
+  inventoryOpen: 'opensa.dispatch.inventory-open',
   keymap: 'opensa.dispatch.keymap',
   theme: 'opensa.dispatch.theme',
   windows: 'opensa.dispatch.windows',

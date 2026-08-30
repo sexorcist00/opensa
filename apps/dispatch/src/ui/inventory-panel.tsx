@@ -14,17 +14,28 @@
  * That removes the step where a measurement was actually being lost: copy the JSON, leave the map, switch
  * apps, paste, type a name. The button is offered only when a panel answers — on a desk there is none, and a
  * button that can only fail is worse than no button.
+ *
+ * **And since 201/3-05 it FOLDS.** Fourteen rows of monospace over a 360-px phone is most of the screen, and
+ * the screen is the map — so it opens folded where the pointer is a finger, keeps the operator's choice, and
+ * folded it still carries the two things that must not be hidden: that collection is alive, and that
+ * something warned. A panel that could swallow a warning would be worse than one that is in the way.
  */
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 
 import type { InventoryReport } from '../world/inventory';
 
+import { readJson, STORAGE_KEYS, writeJson } from '../map/storage';
 import { styles } from './styles';
+import { useCoarsePointer } from './use-compact';
 
 const POLL_MS = 500;
 
 export function InventoryPanel({ read }: { read: () => InventoryReport | null }): null | ReactElement {
   const [report, setReport] = useState<InventoryReport | null>(null);
+  // A finger and a mouse get different defaults on purpose: on a desk the panel costs a corner of a large
+  // map and is worth having open, on a phone it costs the map. The operator's own choice outranks both.
+  const touch = useCoarsePointer();
+  const [open, setOpen] = useState<boolean>(() => initiallyOpen(touch));
   const [copied, setCopied] = useState('');
   const [fallback, setFallback] = useState('');
   const [filed, setFiled] = useState('');
@@ -75,7 +86,6 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
     return null;
   }
 
-  const json = JSON.stringify(report, null, 2);
   /**
    * Hand the capture to the panel, with the conditions the MAP knows and the panel cannot: which district,
    * which mode, how many units were on the board. The panel adds what IT knows — the pak's own recipe, the
@@ -103,6 +113,9 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
       .catch((error: unknown) => setFiled(`panel unreachable: ${error instanceof Error ? error.message : 'failed'}`));
   };
   const copy = (): void => {
+    // Serialised on the press, never on the render. This panel polls at 2 Hz, so a report stringified in the
+    // body ran twice a second on a phone for a button nobody had touched — and folded, for one not on screen.
+    const json = JSON.stringify(report, null, 2);
     void navigator.clipboard
       ?.writeText(json)
       .then(() => {
@@ -115,85 +128,127 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
     }
   };
 
+  const alerts = report.warnings.length + report.errors.length + report.unavailable.length;
+  const fold = (): void => {
+    const next = !open;
+    setOpen(next);
+    writeJson(STORAGE_KEYS.inventoryOpen, next);
+  };
+
   return (
-    <div style={styles.inventoryPanel}>
-      <div>
-        <strong>inventory</strong> · {report.frames} frames · {(report.windowMs / 1000).toFixed(0)}s
-      </div>
-      <div>
-        dt p50 {report.frame.dtP50Ms.toFixed(1)} · p95 {report.frame.dtP95Ms.toFixed(1)} · max{' '}
-        {report.frame.dtMaxMs.toFixed(0)} ms
-      </div>
-      <div>
-        cpu {report.cpu.bodyMeanMs.toFixed(1)} · outside {report.cpu.outsideMeanMs.toFixed(1)} ms (
-        {Math.round(report.cpu.shareOfFrame * 100)}% in the loop)
-      </div>
-      <div>
-        {report.world.cellsVisible}/{report.world.cellsTotal} cells · {report.world.draws} draws ·{' '}
-        {report.world.residencyMb.toFixed(0)} MB
-      </div>
-      <div>
-        pak read {(report.bytes.totalBytes / (1024 * 1024)).toFixed(1)} MB in {report.bytes.requests} requests
-        {report.bytes.byKind.length > 0 && ` · ${report.bytes.byKind[0].kind} leads`}
-      </div>
-      <div>
-        stream blob {report.streaming.blobMeanMs.toFixed(1)} · upload {report.streaming.uploadMeanMs.toFixed(1)} ms ·
-        worst blob {report.streaming.worstBlobMs.toFixed(0)} ms · {report.streaming.cellsCreated} created
-      </div>
-      <div>
-        board {report.symbology.units}u/{report.symbology.incidents}c · {report.symbology.symbols} symbols ·{' '}
-        {report.symbology.chips} chips ({report.symbology.chipsDropped} dropped)
-        {report.symbology.stale > 0 && ` · ${report.symbology.stale} stale`}
-      </div>
-      <div>
-        cars {report.symbology.unitsAsModels}/{report.symbology.units} · {report.symbology.modelTypes} types ·{' '}
-        {report.symbology.modelTextureMb.toFixed(1)} MB
-        {report.symbology.unitsUnresolvedModels > 0 && ` · ${report.symbology.unitsUnresolvedModels} unresolved`}
-      </div>
-      {report.tracks !== null && (
-        <div>
-          tracks {report.tracks.tracks} × {report.tracks.capacity} · {report.tracks.samples} samples ·{' '}
-          {(report.tracks.bytes / (1024 * 1024)).toFixed(1)} MB host
-          {report.tracks.window !== null &&
-            ` · ${((report.tracks.window[1] - report.tracks.window[0]) / 60_000).toFixed(0)} min held`}
-        </div>
-      )}
-      {report.symbology.beaconGrowths > 0 && (
-        <div style={styles.inventoryWarn}>
-          beacon buffers grown {report.symbology.beaconGrowths}× past the declared budget
-        </div>
-      )}
-      {report.cpu.worstFrame.bodyMs > 0 && (
-        <div>
-          worst body {report.cpu.worstFrame.bodyMs.toFixed(0)} ms
-          {report.cpu.worstFrame.segmentsMs.length > 0 &&
-            ` — ${report.cpu.worstFrame.segmentsMs[0][0]} ${report.cpu.worstFrame.segmentsMs[0][1].toFixed(0)}`}
-        </div>
-      )}
-      {report.unavailable.length > 0 && <div style={styles.inventoryWarn}>GPU timings unavailable on this adapter</div>}
-      {report.warnings.map((warning) => (
-        <div key={warning} style={styles.inventoryWarn}>
-          {warning}
-        </div>
-      ))}
-      {/* On the phone there is no devtools to open, so an error the page logged has to be readable HERE —
-          copying the JSON out of a browser that is failing is the harder half of the round trip. */}
-      {report.errors.map((error) => (
-        <div key={error} style={styles.inventoryWarn}>
-          error: {error}
-        </div>
-      ))}
-      <button onClick={copy} style={styles.inventoryButton} type="button">
-        {copied || 'copy JSON'}
+    <div style={open ? styles.inventoryPanel : { ...styles.inventoryPanel, ...styles.inventoryPanelFolded }}>
+      {/* The header is the control. Folded it is the whole panel, so it carries what may not be hidden:
+          that collection is alive (`frames`), what the frame cost, and whether anything warned. */}
+      <button
+        aria-expanded={open}
+        onClick={fold}
+        style={touch ? { ...styles.inventoryHeader, ...styles.inventoryHeaderTouch } : styles.inventoryHeader}
+        type="button"
+      >
+        <span>{open ? '▾' : '▸'}</span>
+        <strong>inventory</strong>
+        <span>
+          {report.frames}f · {report.frame.dtP50Ms.toFixed(1)} ms
+        </span>
+        {alerts > 0 && (
+          <span style={styles.inventoryWarn} title="Warnings and errors — open the panel to read them">
+            ⚠ {alerts}
+          </span>
+        )}
       </button>
-      {panel !== null && (
-        <button onClick={file} style={styles.inventoryButton} type="button">
-          {filed || 'file to the panel'}
-        </button>
+      {open && (
+        <>
+          <div>
+            window {(report.windowMs / 1000).toFixed(0)}s · {report.frames} frames
+          </div>
+          <div>
+            dt p50 {report.frame.dtP50Ms.toFixed(1)} · p95 {report.frame.dtP95Ms.toFixed(1)} · max{' '}
+            {report.frame.dtMaxMs.toFixed(0)} ms
+          </div>
+          <div>
+            cpu {report.cpu.bodyMeanMs.toFixed(1)} · outside {report.cpu.outsideMeanMs.toFixed(1)} ms (
+            {Math.round(report.cpu.shareOfFrame * 100)}% in the loop)
+          </div>
+          <div>
+            {report.world.cellsVisible}/{report.world.cellsTotal} cells · {report.world.draws} draws ·{' '}
+            {report.world.residencyMb.toFixed(0)} MB
+          </div>
+          <div>
+            pak read {(report.bytes.totalBytes / (1024 * 1024)).toFixed(1)} MB in {report.bytes.requests} requests
+            {report.bytes.byKind.length > 0 && ` · ${report.bytes.byKind[0].kind} leads`}
+          </div>
+          <div>
+            stream blob {report.streaming.blobMeanMs.toFixed(1)} · upload {report.streaming.uploadMeanMs.toFixed(1)} ms
+            · worst blob {report.streaming.worstBlobMs.toFixed(0)} ms · {report.streaming.cellsCreated} created
+          </div>
+          <div>
+            board {report.symbology.units}u/{report.symbology.incidents}c · {report.symbology.symbols} symbols ·{' '}
+            {report.symbology.chips} chips ({report.symbology.chipsDropped} dropped)
+            {report.symbology.stale > 0 && ` · ${report.symbology.stale} stale`}
+          </div>
+          <div>
+            cars {report.symbology.unitsAsModels}/{report.symbology.units} · {report.symbology.modelTypes} types ·{' '}
+            {report.symbology.modelTextureMb.toFixed(1)} MB
+            {report.symbology.unitsUnresolvedModels > 0 && ` · ${report.symbology.unitsUnresolvedModels} unresolved`}
+          </div>
+          {report.tracks !== null && (
+            <div>
+              tracks {report.tracks.tracks} × {report.tracks.capacity} · {report.tracks.samples} samples ·{' '}
+              {(report.tracks.bytes / (1024 * 1024)).toFixed(1)} MB host
+              {report.tracks.window !== null &&
+                ` · ${((report.tracks.window[1] - report.tracks.window[0]) / 60_000).toFixed(0)} min held`}
+            </div>
+          )}
+          {report.symbology.beaconGrowths > 0 && (
+            <div style={styles.inventoryWarn}>
+              beacon buffers grown {report.symbology.beaconGrowths}× past the declared budget
+            </div>
+          )}
+          {report.cpu.worstFrame.bodyMs > 0 && (
+            <div>
+              worst body {report.cpu.worstFrame.bodyMs.toFixed(0)} ms
+              {report.cpu.worstFrame.segmentsMs.length > 0 &&
+                ` — ${report.cpu.worstFrame.segmentsMs[0][0]} ${report.cpu.worstFrame.segmentsMs[0][1].toFixed(0)}`}
+            </div>
+          )}
+          {report.unavailable.length > 0 && (
+            <div style={styles.inventoryWarn}>GPU timings unavailable on this adapter</div>
+          )}
+          {report.warnings.map((warning) => (
+            <div key={warning} style={styles.inventoryWarn}>
+              {warning}
+            </div>
+          ))}
+          {/* On the phone there is no devtools to open, so an error the page logged has to be readable HERE —
+          copying the JSON out of a browser that is failing is the harder half of the round trip. */}
+          {report.errors.map((error) => (
+            <div key={error} style={styles.inventoryWarn}>
+              error: {error}
+            </div>
+          ))}
+          <button onClick={copy} style={styles.inventoryButton} type="button">
+            {copied || 'copy JSON'}
+          </button>
+          {panel !== null && (
+            <button onClick={file} style={styles.inventoryButton} type="button">
+              {filed || 'file to the panel'}
+            </button>
+          )}
+          {fallback && <textarea readOnly ref={areaRef} style={styles.inventoryFallback} value={fallback} />}
+        </>
       )}
-      {fallback && <textarea readOnly ref={areaRef} style={styles.inventoryFallback} value={fallback} />}
     </div>
   );
+}
+
+/**
+ * Whether the panel opens open. The operator's stored choice first; failing that the POINTER decides, which
+ * is the cross-platform-surface rule rather than a preference: on a phone this panel is most of the map.
+ */
+function initiallyOpen(touch: boolean): boolean {
+  const stored = readJson(STORAGE_KEYS.inventoryOpen);
+
+  return typeof stored === 'boolean' ? stored : !touch;
 }
 
 /**

@@ -213,6 +213,61 @@ export const styles = {
     border: `1px solid ${ACCENT.border}`,
     color: ACCENT.text,
   },
+  /** The panel stopped answering. Danger rather than warning: every other state is the link WORKING, and an
+   *  operator holding a phone still for a link that has ended is the cost this state was added to end. */
+  agentBandLost: {
+    background: SEMANTIC.dangerBg,
+    border: `1px solid ${COLORS.danger}`,
+    color: SEMANTIC.dangerText,
+  },
+  /**
+   * One command, as it happens (201/3-05). Under the band, `pointerEvents: none`, and never a control: a
+   * notice with a dismiss button is a notice competing with the map for a finger.
+   */
+  agentNotice: {
+    background: 'var(--os-float-bg)',
+    border: `1px solid ${RAMP.lineStrong}`,
+    borderRadius: RADIUS.control,
+    color: RAMP.text,
+    fontSize: TEXT.micro,
+    overflow: 'hidden' as const,
+    padding: '4px 9px',
+    textOverflow: 'ellipsis' as const,
+    whiteSpace: 'nowrap' as const,
+  },
+  /** The half of a notice that is context rather than the sentence — quieter, and it may be the part cut. */
+  agentNoticeDetail: {
+    color: RAMP.textMuted,
+  },
+  /** A command that threw on this page. The operator sees the failure the agent is being handed. */
+  agentNoticeFailed: {
+    background: SEMANTIC.dangerBg,
+    border: `1px solid ${COLORS.danger}`,
+    borderRadius: RADIUS.control,
+    color: SEMANTIC.dangerText,
+    fontSize: TEXT.micro,
+    overflow: 'hidden' as const,
+    padding: '4px 9px',
+    textOverflow: 'ellipsis' as const,
+    whiteSpace: 'nowrap' as const,
+  },
+  /** The stack. Centred like the band it hangs under, and bounded so a long detail cannot reach either
+   *  corner cluster — 360 CSS px is the screen this is judged at. */
+  agentNotices: {
+    display: 'grid',
+    fontFamily: MONO,
+    gap: SPACE.xxs,
+    justifyItems: 'center' as const,
+    left: SPACE.sm,
+    margin: '0 auto',
+    maxWidth: 460,
+    pointerEvents: 'none' as const,
+    position: 'absolute' as const,
+    right: SPACE.sm,
+    top: 36,
+    width: 'fit-content' as const,
+    zIndex: 5,
+  },
   app: {
     background: RAMP.bg,
     color: COLORS.text,
@@ -378,6 +433,38 @@ export const styles = {
     marginTop: 4,
     width: '100%',
   },
+  /**
+   * The fold control, which folded IS the panel (201/3-05). A row rather than a corner glyph: on a phone the
+   * whole header has to be the target, and a 12-px chevron is the defect this repository already paid for
+   * three times.
+   */
+  inventoryHeader: {
+    alignItems: 'center',
+    background: 'none',
+    border: 'none',
+    color: RAMP.text,
+    cursor: 'pointer',
+    display: 'flex',
+    fontFamily: MONO,
+    fontSize: TEXT.micro,
+    fontVariantNumeric: NUM,
+    gap: SPACE.xs,
+    margin: 0,
+    padding: 0,
+    textAlign: 'left' as const,
+    width: '100%',
+  },
+  /**
+   * Where a FINGER is the pointer: the full 44 px, in both axes (`TOUCH_TARGET`) — and the TYPE does not
+   * move with it. The restriction is about what a finger can hit, not about what it reads: at `bodyTouch`
+   * this row was wider than the 240-px panel and wrapped its own summary onto two lines, which made the
+   * folded panel taller than the thing it folds. Every other row here is `micro`, and the header is not the
+   * one oversized element in a table of numbers.
+   */
+  inventoryHeaderTouch: {
+    minHeight: TOUCH_TARGET,
+    minWidth: TOUCH_TARGET,
+  },
   /** 201/1-01. Bottom-left so it never sits under the selection panel, and narrow enough for 360 CSS px. */
   inventoryPanel: {
     ...FLOATING,
@@ -394,6 +481,13 @@ export const styles = {
     padding: '6px 8px',
     position: 'absolute',
     zIndex: 5,
+  },
+  /** Folded: the header alone, so the map keeps the corner. `width: fit-content` rather than the panel's
+   *  240 — a one-line summary that still reserved a 240-px block would not have given anything back. */
+  inventoryPanelFolded: {
+    maxWidth: 240,
+    padding: '4px 8px',
+    width: 'fit-content' as const,
   },
   inventoryWarn: {
     color: SEMANTIC.warnSolid,

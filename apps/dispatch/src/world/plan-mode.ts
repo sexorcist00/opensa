@@ -30,6 +30,7 @@ import { viewOfPose } from '../map/view-link';
 import { applyHeldKeys, dispatchParams, IDLE_WAKE_MS, runCommand, zoomSpan } from './boot';
 import { bootDone } from './boot-progress';
 import { composeImage } from './capture';
+import { FrameClock } from './frame-clock';
 import { DEFAULT_SRC, resolveTilesUrl } from './pak-source';
 import { RenderGate } from './render-gate';
 import { NO_DISTRICTS } from './zones';
@@ -165,7 +166,12 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     return camera.rayAt([(x / rect.width) * 2 - 1, 1 - (y / rect.height) * 2], rect.width / Math.max(1, rect.height));
   }
 
-  const frames: number[] = [];
+  /** Drawn frames only — an idle wake is not a frame and the interval after one is not a frame time
+   *  (`frame-clock.ts`). The plan map renders on demand exactly like the 3D one, so it had the same defect. */
+  const frameClock = new FrameClock();
+  /** The last DRAWN pass's body, ms — never a skipped wake's, which runs one too and is not a frame cost
+   *  (`boot.ts` says why). Reported one frame late, like the 3D loop's. */
+  let drawnBodyMs = 0;
   let disposed = false;
   let lastReadout = 0;
   let previous = performance.now();
@@ -240,11 +246,7 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     }
     const now = performance.now();
     const dt = now - previous;
-    frames.push(dt);
     previous = now;
-    if (frames.length > 60) {
-      frames.shift();
-    }
     const ops = options.ops();
     // Plan mode's zoom keys fly like the 3D mode's, so its loop samples the flight too — one nobody
     // advances is a camera frozen at take-off until the next input cancels it.
@@ -268,11 +270,13 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
         idleReported = true;
         options.onReadout({ ...lastPayload, idle: true });
       }
+      frameClock.skipped();
       schedule(true);
 
       return;
     }
     idleReported = false;
+    frameClock.drew(now, dt);
     const state = camera.state(size.width / Math.max(1, size.height));
     projector.update(state, size.width, size.height);
 
@@ -305,14 +309,16 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
 
     if (now - lastReadout > 1000 / READOUT_HZ) {
       lastReadout = now;
-      const average = frames.reduce((sum, value) => sum + value, 0) / Math.max(1, frames.length);
+      const rate = frameClock.read(now);
       lastPayload = {
         buildTime: `plan mode — ${why}`,
         cellsTotal: 0,
         cellsVisible: 0,
+        cpuMs: drawnBodyMs,
         draws: 0,
         following: camera.following(),
-        fps: Math.round(1000 / Math.max(1, average)),
+        fps: rate.fps,
+        frameMs: rate.frameMs,
         hour: 12,
         idle: false,
         idleFrames: gate.idleFrames,
@@ -326,6 +332,7 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
       };
       options.onReadout(lastPayload);
     }
+    drawnBodyMs = performance.now() - now;
     schedule(false);
   };
   requestAnimationFrame(loop);

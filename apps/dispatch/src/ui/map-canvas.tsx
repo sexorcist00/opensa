@@ -21,6 +21,7 @@ import { bootStep } from '../world/boot-progress';
 import { ModeSwitch } from '../world/mode-switch';
 import { bootPlanMode } from '../world/plan-mode';
 import { AgentBand } from './agent-band';
+import { AgentNotices, useAgentNotices } from './agent-notices';
 import { InventoryPanel } from './inventory-panel';
 import { styles } from './styles';
 
@@ -68,6 +69,12 @@ export function MapCanvas({
   const [mode, setMode] = useState<MapMode | null>(null);
   /** What the panel link is doing to this page. Null until a panel actually answers one of its polls. */
   const [agent, setAgent] = useState<AgentStatus | null>(null);
+  /** What it is doing right NOW, command by command — the half the band could not carry (201/3-05). */
+  const notices = useAgentNotices();
+  /** The sink through a ref, because the boot effect runs once and the hook's `push` is a new function on
+   *  every render: capturing it directly would freeze the feed at the first one. */
+  const pushNotice = useRef(notices.push);
+  pushNotice.current = notices.push;
   /** Held for the inventory panel only (201/1-01) — it reads the collector, it does not drive the loop. */
   const handleRef = useRef<DispatchHandle | null>(null);
   /** The last readout, for the agent link's heartbeat — a ref, so mirroring it costs no render. */
@@ -161,6 +168,7 @@ export function MapCanvas({
             setMode: (wanted) => void switcher?.to(wanted),
           },
           setAgent,
+          (report) => pushNotice.current(report),
         );
       }
       // The cost the step owes, on whatever device is running it — the first open included, since that is
@@ -200,6 +208,7 @@ export function MapCanvas({
       {mode === 'live' && <canvas ref={minimapRef} style={compact ? styles.minimapCompact : styles.minimap} />}
       {children}
       {agent && <AgentBand compact={compact} status={agent} />}
+      <AgentNotices notices={notices.notices} />
       {degraded && <DegradedBanner message={degraded} />}
       {dispatchParams().get('inventory') === '1' && (
         <InventoryPanel read={() => handleRef.current?.inventory() ?? null} />

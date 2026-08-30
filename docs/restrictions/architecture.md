@@ -760,6 +760,36 @@ must still report 4 creates, and the defect was reintroduced to prove it fails (
 field is documented on the interface itself, which is where a host looks. Before that, **silent, and worse
 than silent**: the wrong number is plausible, self-consistent across a whole window, and grows with window
 length, so a longer capture makes it *more* convincing rather than obviously broken.
+## A rate over a loop that may SKIP is a rate for the loop, never for the frames
+
+A render-on-demand loop (`apps/dispatch/src/world/boot.ts`, 201/4-01) wakes on a timer when nothing has
+changed and returns without drawing. Its per-pass `dt` is therefore two different quantities wearing one
+name: between two drawn passes it is a frame interval, and around a skipped one it is a *wake interval* —
+the 100 ms the console spent asleep. **A statistic that mixes them is a statistic about the scheduler.**
+
+The console reported `fps` as `1000 / mean(dt)` over the last sixty passes, drawn or not. Six seconds of rest
+is sixty 100 ms wakes, so the readout said **10 fps** on a console that was drawing nothing at all, and then
+climbed back to the truth over the next sixty frames as the idle samples aged out of the window. The same dt
+was printed as a frame time, so the first frame after a rest "cost" the length of the rest.
+
+The rule has two halves and both are needed:
+
+- **count what was DRAWN.** A frame rate on a gated loop is a COUNT — frames drawn in the last second — not
+  the reciprocal of a mean. On a console at rest the honest answer is a low number, and it is low because the
+  frames were not drawn rather than because they were slow.
+- **an interval is a frame time only if BOTH ends drew.** The one that follows a skipped pass is dropped, not
+  averaged in. `FrameClock` (`apps/dispatch/src/world/frame-clock.ts`) does both and is the one place either
+  is computed; `plan-mode.ts` had the identical defect and takes the same clock.
+
+**Still live one layer down, and named rather than fixed:** the inventory collector is only called on drawn
+frames, so its `frames` count and its histogram are clean — but the interval that SPANS a rest is sampled as
+that frame's `dt` and reaches `dtMaxMs`, `dtP95Ms` and, on a capture of a mostly-still map, `dtP50Ms`.
+
+**Caught:** the readout half is, in `apps/dispatch/src/world/frame-clock.test.ts`. Before that, **silent, and
+in the shape that costs the most**: every sample is a real measurement, the arithmetic is right, and the
+number is only wrong about what it is a number OF. It is also wrong exactly when it is read — a person
+looking at a still map to judge the frame rate is looking at the case that produces the worst answer.
+
 ## An effect that depends on a PROP the host recreates is a subscription that never runs
 
 An interval, an observer or a listener started inside `useEffect(…, [callback])` is torn down and rebuilt

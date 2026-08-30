@@ -33,13 +33,35 @@ import type { MapMode } from './mode-switch';
  *
  * - `held` — a panel is answering and may ask at any moment, so the tab has to stay in front;
  * - `busy` — a command is being answered right now;
+ * - `offline` — the panel STOPPED answering, after having answered before;
  * - `released` — the agent said it is done, and the phone is the operator's again.
+ *
+ * `offline` is the one that was missing, and its absence was the whole defect: a failed poll reported
+ * nothing, so a panel that died — the server restarted, the tunnel dropped, Termux killed — left the band
+ * saying `AGENT ATTACHED, keep this tab in front` for as long as the operator was willing to believe it.
+ * The state was a claim made once and never withdrawn. It is a live reading now, and the rule that makes it
+ * safe is unchanged: nothing is reported until a panel has actually answered, so a shared link with
+ * `&agent=1` and nothing listening still says nothing at all.
  */
-export type AgentActivity = 'busy' | 'held' | 'released';
+export type AgentActivity = 'busy' | 'held' | 'offline' | 'released';
+
+/** One command, as the operator is told about it. */
+export interface AgentCommandReport {
+  /** What the command carried or answered with — a pose, a mode, the error it failed on. */
+  readonly detail: string;
+  readonly id: number;
+  readonly kind: string;
+  readonly state: 'done' | 'failed' | 'running';
+  /** What it DOES, in words. A kind is what an agent asked for; this is what happens to the page. */
+  readonly what: string;
+}
 
 /** The state, plus whatever the agent said when it let go. */
 export interface AgentStatus {
   readonly activity: AgentActivity;
+  /** When the panel last answered, on the monotonic clock; 0 until one has. What makes the state a reading
+   *  rather than a claim: the chrome can say how old it is, and an operator can see it stop moving. */
+  readonly contactAt: number;
   readonly note: string;
 }
 
@@ -71,43 +93,122 @@ interface AgentCommand {
 
 /** How long to wait before polling again after a failure — the panel restarting, the tunnel blinking. */
 const RETRY_MS = 2000;
+/**
+ * How long a poll may hang before it counts as a dead link, ms.
+ *
+ * The panel holds a poll for 20 s and then answers with nothing (`POLL_HOLD_MS`, `remote.mjs`), so anything
+ * past that is not a hold. It matters because a link does not usually die with a connection error: the
+ * server stops answering while the socket stays open (a closed server keeping its keep-alives, a tunnel
+ * whose far end went away, a phone that slept mid-request), and `fetch` on a hung request simply never
+ * settles. Without this the `offline` state would only ever be reached on an immediate refusal — which is
+ * the easy half, and the half that was already visible.
+ */
+const POLL_TIMEOUT_MS = 30_000;
+
+/**
+ * What a command DOES to this page, for somebody watching it happen.
+ *
+ * The kind is the agent's word for it and means nothing to an operator — `pose` is a map that moves by
+ * itself, `mode` is the whole surface changing under them. Exported so the wording is tested rather than
+ * eyeballed: this is the only sentence the person holding the phone gets.
+ */
+export function describeCommand(command: { args: Record<string, unknown>; kind: string }): {
+  detail: string;
+  what: string;
+} {
+  switch (command.kind) {
+    case 'errors':
+      return { detail: '', what: 'reading the error log' };
+    case 'mode':
+      return {
+        detail: command.args.mode === 'flat' ? 'flat 2D map' : '3D map',
+        what: 'switching the map surface',
+      };
+    case 'ops':
+      return { detail: '', what: 'reading the board' };
+    case 'pose': {
+      const pose = command.args.pose as undefined | { at?: readonly number[]; height?: number };
+      const at = pose?.at;
+
+      return {
+        detail:
+          at === undefined
+            ? ''
+            : `${at[0]?.toFixed(0) ?? '?'}, ${at[1]?.toFixed(0) ?? '?'}${
+                pose?.height === undefined ? '' : ` · ${pose.height.toFixed(0)} m`
+              }`,
+        what: 'moving the camera',
+      };
+    }
+    case 'release':
+      return { detail: noteOf(command as AgentCommand), what: 'letting go of this console' };
+    case 'screenshot':
+      return { detail: '', what: 'taking a picture of the map' };
+    case 'snapshot':
+      return { detail: '', what: 'reading the metrics and the error log' };
+    default:
+      return { detail: command.kind, what: 'an instruction this console does not know' };
+  }
+}
 
 /**
  * Start answering, until `stop()`. Safe to call when no panel is there: it simply keeps failing quietly, and
  * `onStatus` stays silent — a shared link carrying `&agent=1` with nothing listening must not tell an
  * operator that somebody is driving their page.
+ *
+ * `onCommand` is told about every instruction twice — as it starts and as it settles — so the chrome can say
+ * WHAT is being done to the page rather than only that something is. Before it, an agent moving the camera
+ * and an agent taking a picture looked identical from the operator's side: the band read `AGENT READING…`
+ * for both, and a map that flew somewhere on its own had no explanation on screen at all.
  */
 export function startAgentLink(
   panel: string,
   surface: AgentSurface,
   onStatus?: (status: AgentStatus) => void,
+  onCommand?: (report: AgentCommandReport) => void,
 ): { stop: () => void } {
   let running = true;
   // Sticky: a release stands until the agent asks for something again, so the operator is not sent back to
   // "hold still" by the panel's own idle polling.
-  let released: AgentStatus | null = null;
-  const report = (status: AgentStatus): void => onStatus?.(status);
+  let released: null | { activity: 'released'; note: string } = null;
+  /** When a panel last answered. 0 means none ever has, which is what keeps a shared link silent. */
+  let contactAt = 0;
+  const report = (activity: AgentActivity, note = ''): void => onStatus?.({ activity, contactAt, note });
   const loop = async (): Promise<void> => {
     while (running) {
       try {
         const command = await nextCommand(panel, surface);
+        // A poll that returned — carrying a command or empty after its hold — is proof of a panel, and the
+        // moment it returned is what every reading below is stamped with.
+        contactAt = performance.now();
         // What the command IS decides the state, so it is read before anything is reported: a poll that came
         // back carrying the release must not flash "hold still" on its way to saying the run is over.
         if (command?.kind === 'release') {
           released = { activity: 'released', note: noteOf(command) };
         } else if (command) {
           released = null;
-          report({ activity: 'busy', note: '' });
+          report('busy');
         }
         if (command) {
-          await answer(panel, command, surface);
+          onCommand?.({ ...describeCommand(command), id: command.id, kind: command.kind, state: 'running' });
+          const failure = await answer(panel, command, surface);
+          contactAt = performance.now();
+          onCommand?.({
+            ...describeCommand(command),
+            id: command.id,
+            kind: command.kind,
+            ...(failure === null ? { state: 'done' } : { detail: failure, state: 'failed' }),
+          });
         }
-        // Only now is a panel known to be there. A poll that returns empty after its hold is the ordinary
-        // case and is still proof of one, which is why this is reported here rather than at startup.
-        report(released ?? { activity: 'held', note: '' });
+        report(released?.activity ?? 'held', released?.note ?? '');
       } catch {
-        // A poll that failed says nothing about the next one: the panel may be restarting, the phone may
-        // have slept, the tunnel may have blinked. Wait a beat rather than spinning on a dead port.
+        // A poll that failed says nothing about the NEXT one — the panel may be restarting, the phone may
+        // have slept, the tunnel may have blinked — but it says everything about the state the operator is
+        // in, and staying quiet here is what left the band claiming an attachment that had ended. Reported
+        // only once a panel has actually answered: `contactAt` of 0 is a link that never came up.
+        if (contactAt > 0) {
+          report('offline');
+        }
         await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
       }
     }
@@ -121,19 +222,28 @@ export function startAgentLink(
   };
 }
 
-/** Do what was asked and hand back the answer — a failure is an ANSWER, so the agent reads why. */
-async function answer(panel: string, command: AgentCommand, surface: AgentSurface): Promise<void> {
+/**
+ * Do what was asked and hand back the answer — a failure is an ANSWER, so the agent reads why.
+ *
+ * Returns the failure for the chrome, or null when it worked. The agent is told either way; the operator is
+ * told because a command that failed on their phone is the one they most need an explanation for.
+ */
+async function answer(panel: string, command: AgentCommand, surface: AgentSurface): Promise<null | string> {
   let result: unknown;
+  let failure: null | string = null;
   try {
     result = { ok: true, value: await run(command, surface) };
   } catch (error) {
-    result = { error: error instanceof Error ? error.message : String(error), ok: false };
+    failure = error instanceof Error ? error.message : String(error);
+    result = { error: failure, ok: false };
   }
   await fetch(`${panel}/api/map/result`, {
     body: JSON.stringify({ id: command.id, result }),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
   });
+
+  return failure;
 }
 
 /** The PNG as a data URI, which is how a picture survives a JSON hop. */
@@ -158,7 +268,17 @@ async function nextCommand(panel: string, surface: AgentSurface): Promise<AgentC
     mode: surface.mode() ?? '',
     url: window.location.href,
   });
-  const response = await fetch(`${panel}/api/map/poll?${query.toString()}`);
+  const response = await fetch(`${panel}/api/map/poll?${query.toString()}`, {
+    // `AbortSignal.timeout` is not everywhere; a browser without it keeps the old behaviour rather than
+    // failing to poll at all, which is the right way round for a diagnostic channel.
+    ...(typeof AbortSignal.timeout === 'function' ? { signal: AbortSignal.timeout(POLL_TIMEOUT_MS) } : {}),
+  });
+  // A poll that came back 502 from a tunnel, or an HTML error page from something else on the port, is not a
+  // panel answering. Read as JSON it would parse into `{ command: undefined }` and be indistinguishable from
+  // an idle hold — the link would report itself up on the strength of somebody else's error page.
+  if (!response.ok) {
+    throw new Error(`panel answered ${response.status}`);
+  }
   const body = (await response.json()) as { command: AgentCommand | null };
 
   return body.command;

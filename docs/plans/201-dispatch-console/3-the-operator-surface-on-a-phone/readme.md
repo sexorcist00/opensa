@@ -159,6 +159,62 @@ than a claim.
 
 **Owes:** the plan-mode run recorded beside the 2/03 row.
 
+### 05 — The chrome tells the truth, and gets out of the way
+
+**Opened and built 2026-08-30, on the operator's report**, and taken out of turn for the same reason 7/01
+and 7/02 were: it needs no field run to start, and it is what every field run after it is read through.
+
+The console's own chrome had three defects, and they are one defect: **a surface that states things it is no
+longer measuring.** The person holding the phone is the instrument here — there is no headless browser and no
+devtools — so a readout that is stale, a status that is a claim rather than a reading, and a panel that
+covers the map are not cosmetics. They are the measuring equipment.
+
+- **The frame rate was counted over the LOOP, not over the frames.** Since [4/01](../4-a-console-is-not-a-game/readme.md)
+  the loop wakes every 100 ms when nothing has changed and draws nothing, and the readout was
+  `1000 / mean(dt)` over the last sixty loop passes whether they drew or not. So a console at rest for six
+  seconds reported **10 fps**, and then climbed back over the next sixty frames as the idle samples were
+  pushed out of the window — every number real, none of them describing the frame on screen. And the
+  interval that spans a rest was reported as a frame time.
+- **The link status was a claim made once and never withdrawn.** `AGENT ATTACHED — keep this tab in front`
+  was only ever entered on a poll that SUCCEEDED, and a failed poll reported nothing at all. A panel that
+  died — the server restarted, ngrok dropped, Termux killed — left that sentence on screen in front of
+  somebody holding their phone still because of it.
+- **The metrics panel was most of the screen.** Fourteen rows of monospace over 360 CSS px, on the one
+  surface whose whole subject is the map underneath it.
+
+**What landed:**
+
+| | Before | After |
+| --- | --- | --- |
+| `fps` | `1000 / mean(dt)` over 60 loop passes, drawn or not | a COUNT of frames drawn in the last second (`world/frame-clock.ts`) |
+| frame time | not on screen | the median interval between two CONSECUTIVE drawn frames; `—` when the window holds no pair, never an invented `0.0` |
+| cpu | only in the `?inventory=1` capture | `cpu N ms` on the desk bar — the number that survives a second with one frame in it |
+| at rest | `idle` | `idle · 16.7 ms last`, because what the last frames cost is what a touch gets back |
+| link state | `busy` / `held` / `released`, entered only on success | plus **`offline`**, and every reading stamped with when the panel last answered — the band counts that age up on screen |
+| a command | `AGENT READING…`, whatever it was | one line per command saying what it does to this page, settling into `done` / `failed` (`ui/agent-notices.tsx`) |
+| metrics panel | 14 rows, always | folds to its header; opens folded where the pointer is coarse, and the operator's choice is kept |
+
+Two rules the fold had to satisfy, and they are why it is a header rather than a corner glyph. It may not
+**hide a warning** — folded it still carries the frames, the frame time and a `⚠ n` count over the warnings,
+errors and unavailable timings — and the whole header is the target, at the full 44 px where the pointer is a
+finger ([cross-platform-surface](../../../restrictions/cross-platform-surface.md)).
+
+The notices exist because of a report this repository has had more than once: *"the map jumped"*. An agent
+flying the camera, an agent switching the whole surface from 3D to the flat plan, and an agent taking a
+picture were the same sentence on screen, and a view that moves with no hand on it is indistinguishable from
+a defect. The wording lives in `describeCommand()` beside the switch that runs the commands, so a new command
+cannot be added without a sentence for the person whose phone it runs on.
+
+**Owes two things.** The phone run first: the change ships in `prebuilt/opensa-webapp.tar.gz`, so the device
+sees it after a pull and a re-unpack, and the first capture taken through the new counter is the one to file
+— **every on-screen `fps` in the record before 2026-08-30 was read off the old one**, so a field note quoting
+one is quoting the loop rather than the frames. The filed JSON is a different matter and is not touched here:
+the collector never samples a skipped wake, so its `frames` count and its histogram are of drawn frames only,
+but **the one interval that SPANS a rest is still sampled as that frame's `dt`** — which reaches `dtMaxMs`
+and `dtP95Ms` and, in a capture of a mostly-still map, `dtP50Ms` too. It is the same defect one layer down,
+it is deliberately left alone in this step because changing what a capture MEANS is a change that owes its
+own before/after, and it is the second thing this step owes.
+
 ## Verification
 
 - Every check in this chain runs on the device from [2/03](../2-real-device-truth/readme.md), not on an

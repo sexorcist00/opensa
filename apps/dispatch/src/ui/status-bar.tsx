@@ -28,15 +28,19 @@ export function StatusBar({
 
   return (
     <div style={styles.statusBar}>
-      {/* 201/4-01: at rest the console draws nothing, and says so rather than showing a frame rate it is
-          not paying for. The numbers beside it are the last drawn frame's, which is what it still has. */}
-      {readout.idle ? (
-        <span style={{ color: COLORS.muted }} title="Nothing has changed — no frames are being drawn">
-          idle
-        </span>
-      ) : (
-        <span style={{ color: readout.fps < 45 ? COLORS.danger : COLORS.accent }}>{readout.fps} fps</span>
-      )}
+      {/* 201/4-01 and 201/3-05: the frame rate and the frame COST, in ONE field so the narrowest bar cannot
+          cut one off the other — they answer different questions and reading either alone is how this
+          console has been misjudged. At rest it says so rather than showing a rate it is not paying for. */}
+      <span
+        style={{ color: readout.idle ? COLORS.muted : readout.fps < 45 ? COLORS.danger : COLORS.accent }}
+        title={
+          readout.idle
+            ? 'Nothing has changed — no frames are being drawn. The cost beside it is the last drawn frame’s.'
+            : 'Frames drawn in the last second, and what a frame is costing'
+        }
+      >
+        {frameField(readout, compact)}
+      </span>
       <span>
         cells {readout.cellsVisible}/{readout.cellsTotal}
       </span>
@@ -68,4 +72,28 @@ export function StatusBar({
       )}
     </div>
   );
+}
+
+/**
+ * The one field: how many frames, and what one is costing.
+ *
+ * The cost has two honest forms and which one is available depends on how the console is being used, so the
+ * field NAMES the one it is showing rather than printing a bare number that means different things:
+ *
+ * - **the interval** between two consecutive drawn frames, which is the real answer while the map is being
+ *   flown — it includes the wait on the GPU and the vsync, which is most of a frame on a phone (201/1-01
+ *   measured the main thread running 5.83 ms of a 27.56 ms frame);
+ * - **`cpu`, the loop body**, when the window holds no consecutive pair at all. A console that renders on
+ *   demand produces exactly that under a slow drag: every drawn frame sits between two skipped wakes, so
+ *   there is no interval to measure and the body is the only thing that was really timed.
+ *
+ * Never a fabricated `0.0 ms`, and never a stale one carried over from the last time the map moved.
+ */
+function frameField(readout: DispatchReadout, compact: boolean): string {
+  const cost = readout.frameMs > 0 ? `${readout.frameMs.toFixed(1)} ms` : `cpu ${readout.cpuMs.toFixed(1)} ms`;
+  // On a desk both are worth carrying: the interval says what the operator is getting, the body says how
+  // much of it this console is responsible for. A phone bar has room for one.
+  const both = !compact && readout.frameMs > 0 ? `${cost} · cpu ${readout.cpuMs.toFixed(1)} ms` : cost;
+
+  return readout.idle ? `idle · last ${both}` : `${readout.fps} fps · ${both}`;
 }

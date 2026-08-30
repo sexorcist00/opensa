@@ -50,6 +50,7 @@ import { composeImage } from './capture';
 import { buildDemoCity, DEMO_EXTENT, DEMO_REACH } from './demo-city';
 import { DISTRICTS } from './districts';
 import { createErrorLog } from './error-log';
+import { FrameClock } from './frame-clock';
 import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
 import { openModelSource } from './model-source';
 import { DEFAULT_SRC, type PakBase, resolvePakBase } from './pak-source';
@@ -154,11 +155,19 @@ export interface DispatchReadout {
   readonly buildTime: string;
   readonly cellsTotal: number;
   readonly cellsVisible: number;
+  /** What the frame COST the main thread, ms — the last drawn loop body. Reported beside `frameMs` because
+   *  it is the number that still means something when the map drew one frame in a second and there is no
+   *  interval to take (see `frame-clock.ts`). */
+  readonly cpuMs: number;
   readonly draws: number;
   /** Whether the view is riding a unit (201/7-03) — the chrome shows it, and it is state rather than an
    *  event because the UI mounts after the boot that started it. */
   readonly following: boolean;
+  /** Frames DRAWN in the last second — a count, never `1000 / mean(dt)` (`frame-clock.ts`). */
   readonly fps: number;
+  /** The median interval between two consecutive drawn frames in that second, ms; 0 when the window holds
+   *  no consecutive pair — a console at rest has no frame time, and inventing one is the old defect. */
+  readonly frameMs: number;
   readonly hour: number;
   /** The console is at rest: nothing on screen has changed, so no frame was drawn (201/4-01). The numbers
    *  beside it are the last drawn frame's, which is what a console at rest still has. */
@@ -665,6 +674,14 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
    */
   let pendingCapture: ((image: Blob | null) => void) | null = null;
   let bodyMs = 0;
+  /**
+   * The last DRAWN pass's body, ms — which is not the same variable as `bodyMs`.
+   *
+   * A skipped wake also runs a body (the held keys, the camera advance, the gate) and it costs ~0.1 ms, so
+   * reporting `bodyMs` put a wake's cost on screen as a frame's the moment the console had rested once. The
+   * readout reads this one; the frame cost it names has to be a frame's.
+   */
+  let drawnBodyMs = 0;
   /** The streaming stats of the last DRAWN frame — what an idle wake compares against (201/4-01). */
   let lastStream: StreamStats = IDLE_STREAM;
   /** Whether the chrome has already been told the console is idle; one readout, not one per skipped frame. */
@@ -677,7 +694,8 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       options.onReadout({ ...lastPayload, idle: true });
     }
   };
-  const frames: number[] = [];
+  /** What the readout's fps and frame time are counted from — DRAWN frames only (`frame-clock.ts`). */
+  const frameClock = new FrameClock();
   let disposed = false;
   let lastReadout = 0;
   let previous = performance.now();
@@ -697,11 +715,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     }
     const now = performance.now();
     const dt = now - previous;
-    frames.push(dt);
     previous = now;
-    if (frames.length > 60) {
-      frames.shift();
-    }
     // Drained BEFORE this frame opens a segment of its own, so what comes out is the PREVIOUS body — the
     // work that actually ran inside the `dt` interval about to be reported.
     const cpu: FrameCpuSample = { bodyMs, canvasPixels: canvas.width * canvas.height, segments: loopCpu.drain() };
@@ -732,12 +746,16 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         idleReported = true; // one readout says the console went idle; then the chrome stops re-rendering too
         reportIdle();
       }
+      // Not a frame, and the interval that follows it is not a frame time either — both were counted as one
+      // before this, which is why a console coming out of rest reported 10 fps for the next sixty frames.
+      frameClock.skipped();
       bodyMs = performance.now() - now;
       schedule(true);
 
       return;
     }
     idleReported = false;
+    frameClock.drew(now, dt);
     const state = camera.state(aspect);
     if (overlayOn) {
       time('board', () => {
@@ -825,14 +843,19 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
 
     if (now - lastReadout > 1000 / READOUT_HZ) {
       lastReadout = now;
-      const average = frames.reduce((sum, value) => sum + value, 0) / Math.max(1, frames.length);
+      const rate = frameClock.read(now);
       lastPayload = {
         buildTime: world.label,
         cellsTotal: stats.cellsTotal,
         cellsVisible: stats.cellsVisible,
+        // The PREVIOUS body, like the inventory's pairing: `dt` runs from one loop pass to the next, so the
+        // work that ran inside the interval being reported is the one before it, and a body can then never
+        // exceed the frame it is a share of.
+        cpuMs: drawnBodyMs,
         draws: stats.drawsRecorded,
         following: camera.following(),
-        fps: Math.round(1000 / Math.max(1, average)),
+        fps: rate.fps,
+        frameMs: rate.frameMs,
         hour,
         idle: false,
         idleFrames: gate.idleFrames,
@@ -847,6 +870,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     }
     lastStream = stream;
     bodyMs = performance.now() - now;
+    drawnBodyMs = bodyMs;
     schedule(false);
   };
   requestAnimationFrame(loop);

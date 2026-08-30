@@ -201,6 +201,38 @@ schedule themselves); a change nobody touched is picked up within 100 ms. The st
 instead of a frame rate, and `?inventory=1` reports `framesSkipped` beside `frames` so a capture says which
 kind of run it was. Plan mode does the same — it is the mode a weak device gets.
 
+**And the frame rate is counted over the frames rather than over the loop** (201/3-05, `world/frame-clock.ts`).
+Because the loop wakes on a timer and draws nothing, `1000 / mean(dt)` over the last sixty loop passes is a
+rate for the loop: a console at rest for six seconds reported **10 fps** and then climbed back over the next
+sixty frames as the idle samples aged out of the window. `fps` is now a COUNT of frames drawn in the last
+second, and the frame time beside it is the median interval between two **consecutive** drawn frames — the
+one that spans a rest is dropped rather than averaged in, and when the window holds no consecutive pair the
+bar prints `—` rather than an invented `0.0`. At rest it reads `idle · 16.7 ms last`, since what the last
+frames cost is what a touch gets back, and on a desk `cpu N ms` sits beside it: the loop body's own cost is
+the number that survives a second with a single frame in it.
+
+Two things this did NOT change, and the second one is owed. The capture's `frames` count and histogram were
+already of drawn frames only — the collector is never called on a skipped wake. But the one interval that
+**spans** a rest is still sampled as that frame's `dt`, so it reaches `dtMaxMs`, `dtP95Ms` and, on a capture
+of a mostly-still map, `dtP50Ms`. Changing what a filed capture means owes its own before/after, so it is
+named here rather than done quietly.
+
+**The `?inventory=1` panel folds** (201/3-05). Fourteen rows of monospace over a 360 CSS px phone is most of
+the screen the map is the subject of, so it opens folded where the pointer is coarse, open where it is a
+mouse, and the operator's own choice is kept from then on. Folded it is its header, and the header is the
+whole target at the full 44 px: it carries the frames sampled, the frame time and — the rule the fold had to
+satisfy — a `⚠ n` count over the warnings, the errors and the unavailable GPU timings, so folding can never
+swallow one.
+
+**And while the phone panel is driving the page** (`&agent=1`, [phone-console plan 002](../../tools-debug/phone-console/docs/plans/002-mcp.md)),
+the band that says so is a live reading rather than a caption. It carries an `offline` state, entered when
+the panel stops answering, and counts up how long ago it last did — before that the band could only be
+entered on a poll that SUCCEEDED, so a dead panel left *keep this tab in front* on screen in front of
+somebody doing exactly that. Under it, each command raises one line saying what it does to this console
+(`moving the camera — 1700, -1501 · 900 m`, `switching the map surface`, `taking a picture of the map`),
+settling into `done` or `failed` and going: a map that flies somewhere with no hand on it is otherwise
+indistinguishable from a defect, and that is the report it produced.
+
 While idle the picture is frozen, sway included; the first input resumes it.
 
 **One wake used to arrive twice.** The idle wait stored its timeout handle and nothing dropped it when the
