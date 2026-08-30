@@ -262,6 +262,38 @@ export async function runChecks(probe, target) {
     state: probe.wakeLock ? 'ok' : 'warn',
   });
 
+  // Without it the panel can hand out a link but never open one, so `map_open` — the tool that clears "no
+  // map is attached" — has nothing to launch with. A warn rather than a fail: every link still works under
+  // a thumb.
+  //
+  // Present is not the same as working, and this check cannot tell the difference: Android drops an activity
+  // started by a background app, `termux-open-url` exits 0 when it does, and the permission that lifts it is
+  // not readable from an app's own uid. So the detail names the condition rather than promising the launch —
+  // the phone run on 2026-08-28 found the binary here and every launch silently discarded.
+  add({
+    detail: probe.openUrl
+      ? 'termux-open-url is available — a launch from here also needs Termux allowed to display over other ' +
+        'apps, or Android drops it with no error'
+      : 'no termux-open-url: only a tap can open the console (`pkg install termux-tools`)',
+    id: 'open-url',
+    label: 'opening the console',
+    state: probe.openUrl ? 'ok' : 'warn',
+    ...(probe.openUrl ? {} : { fix: 'pkg install termux-tools' }),
+  });
+
+  // Whether `map_release` can reach the OPERATOR rather than the agent. Termux:API is a separate add-on app,
+  // so its absence is ordinary — and the console's own band still says the run is over, which is why this is
+  // a warn and why the detail says what is lost rather than what is broken.
+  add({
+    detail: probe.signal
+      ? 'termux-vibrate is available — the phone buzzes when an agent finishes with the console'
+      : 'no Termux:API: the console still shows when a run ends, but the phone cannot buzz for it',
+    id: 'signal',
+    label: 'telling you the run ended',
+    state: probe.signal ? 'ok' : 'warn',
+    ...(probe.signal ? {} : { fix: 'pkg install termux-api' }),
+  });
+
   return checks;
 }
 

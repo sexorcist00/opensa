@@ -29,6 +29,12 @@ describe('the panel links', () => {
     it('needs the static port even when the app is served from vite — the pak comes from it', () => {
       expect(portsFor({ ...SERVED, webapp: false })).toEqual([3001, 5173]);
     });
+
+    it('encodes a district so a name with a space or an & cannot cut the query short', () => {
+      const links = consoleUrls({ ...SERVED, district: 'los santos & centre' });
+
+      expect(links.map).toContain('district=los%20santos%20%26%20centre&agent=1');
+    });
   });
 
   describe('positive cases', () => {

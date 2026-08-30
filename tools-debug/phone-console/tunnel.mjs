@@ -230,7 +230,7 @@ export function isReady(provider, line, url) {
 /** The public address a tunnel printed, or null when the line is something else. */
 export function tunnelUrl(line) {
   const match =
-    /https:\/\/[a-z0-9][a-z0-9.-]*\.(?:trycloudflare\.com|ngrok-free\.app|ngrok\.app|ngrok\.io|serveo\.net|pinggy\.link|lhr\.life)/.exec(
+    /https:\/\/[a-z0-9][a-z0-9.-]*\.(?:trycloudflare\.com|ngrok-free\.(?:app|dev)|ngrok\.(?:app|dev|io)|serveo\.net|pinggy\.link|lhr\.life)/.exec(
       String(line),
     );
 

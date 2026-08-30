@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { bridgeRpc } from './mcp-bridge.mjs';
+import { bridgeRpc, postToPhone } from './mcp-bridge.mjs';
+import { LEGACY_VERSIONS, SUPPORTED_VERSIONS } from './mcp-protocol.mjs';
 
 const failing = () => {
   throw new Error('connect ECONNREFUSED');
@@ -27,7 +28,31 @@ describe('bridgeRpc', () => {
     it('still initializes without a phone, so the session loads', async () => {
       const answer = await bridgeRpc({ id: 1, jsonrpc: '2.0', method: 'initialize' }, { env: {}, post: failing });
 
-      expect(answer.result.protocolVersion).toBe('2024-11-05');
+      expect(answer.result.protocolVersion).toBe(LEGACY_VERSIONS[0]);
+    });
+
+    it('says what to set in the HANDSHAKE, not only when a tool is called', async () => {
+      // An empty tool list with no reason attached is a server that looks broken. The reason belongs where
+      // a client reads it before it tries anything.
+      const answer = await bridgeRpc({ id: 1, jsonrpc: '2.0', method: 'initialize' }, { env: {}, post: failing });
+
+      expect(answer.result.instructions).toContain('OPENSA_PHONE_URL');
+      expect(answer.result.serverInfo.name).toContain('offline');
+    });
+
+    it('answers a modern probe without a phone, rather than looking like a legacy server', async () => {
+      const answer = await bridgeRpc(
+        {
+          id: 2,
+          jsonrpc: '2.0',
+          method: 'server/discover',
+          params: { _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28' } },
+        },
+        { env: {}, post: failing },
+      );
+
+      expect(answer.result.supportedVersions).toEqual(SUPPORTED_VERSIONS);
+      expect(answer.result.instructions).toContain('panel:tunnel');
     });
 
     it('names the stale tunnel when the phone does not answer', async () => {
@@ -65,6 +90,18 @@ describe('bridgeRpc', () => {
   });
 
   describe('positive cases', () => {
+    it('gives up on a phone that never answers, instead of waiting forever', async () => {
+      // A dead tunnel usually refuses, which is instant. One whose far end slept black-holes the packets,
+      // and a fetch with no signal hangs there until the client's own patience runs out.
+      const fetchSpy = vi.fn(() => Promise.resolve({ status: 200, text: () => Promise.resolve('') }));
+      vi.stubGlobal('fetch', fetchSpy);
+      await postToPhone('https://phone.example/mcp', 'abc', { id: 1, jsonrpc: '2.0', method: 'ping' }, 5000);
+      vi.unstubAllGlobals();
+
+      expect(fetchSpy.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+      expect(fetchSpy.mock.calls[0][1].headers.authorization).toBe('Bearer abc');
+    });
+
     it('forwards the message unchanged, with the token', async () => {
       const seen = [];
       const answer = await bridgeRpc(

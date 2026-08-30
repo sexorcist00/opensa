@@ -342,7 +342,7 @@
     </main>
 
     <script type="module">
-      // The link rule lives beside the server (`links.mjs`) because `phone_open` is a second reader of it:
+      // The link rule lives beside the server (`links.mjs`) because the open route is a second reader of it:
       // two copies is how an agent opens an address that differs from the one on this screen.
       import { consoleUrls } from './app/links.mjs';
 
@@ -377,6 +377,8 @@
         };
       }
 
+      // Every link is built by the module the OPEN route uses, so a tap here and `map_open` from an agent
+      // land on the same pak (`app/links.mjs`).
       function urls() {
         const links = consoleUrls({
           district: $('district').value.trim(),

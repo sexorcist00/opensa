@@ -113,14 +113,66 @@ fight over one folder. With the panel down, every tool says so rather than start
 
 It also reaches the **map page itself** — `map_state`, `map_snapshot` (the whole `?inventory=1` report plus
 the live readout and the errors), `map_screenshot` (a PNG, returned as an image), `map_goto`, `map_mode`,
-`map_board`. The page answers because the panel's links carry `&agent=1`; nothing else does, so a shared link
+`map_board`, and `map_release` when it is done with it. The page answers because the panel's links carry `&agent=1`; nothing else does, so a shared link
 or a desk run never phones a panel. **No DevTools protocol and no `adb`**: the numbers are the ones the
 console already computes and the picture is the one it already composes for a share link.
+
+**`map_open` puts the console on the phone's screen**, which is the one thing every tool above could not do:
+they all talk to a page somebody had already opened, so `"no map is attached"` stopped a field run until a
+person tapped a link. It launches the panel's own URL through `termux-open-url` — any of the six links in
+the table above, by name — and waits for the page to phone home, so a browser that started is reported as
+a launch and only an attached console is reported as a map. A console already attached is left alone rather
+than covered with a second tab. Without `termux-open-url` (`pkg install termux-tools`) it says so and hands
+back the URL; the doctor warns for it rather than failing, because a thumb still works. **The links it opens
+and the links the page hands out are built by one module** (`app/links.mjs`): two copies of that
+arithmetic would open different paks, and the capture would name the one nobody was looking at.
+
+**`map_release` gives the phone back.** The one tool here that talks to the OPERATOR rather than to the
+agent, and it exists because of what this channel costs them: the console has to stay the foreground tab
+while it is being driven, so a run is somebody sitting still holding their own device with no idea how long
+for. It posts the release into the page — the band across the top of the console turns from _keep this tab in
+front_ to _done, you can switch away_ — and buzzes the phone through Termux:API (`termux-vibrate -f`, so it
+lands through silent mode) with a notification carrying whatever the agent said it was doing. The buzz is the
+optional half: Termux:API is a separate add-on app, the doctor warns when it is absent, and the band still
+says the run is over without it. Call it when the last measurement is taken, not when the conversation ends.
+
+**It needs Termux allowed to display over other apps, and nothing reports that for you.** Android forbids a
+background app from starting an activity, and `termux-open-url` exits 0 when the system discards one — so on
+the phone run of 2026-08-28 three opens returned "launched, nobody arrived" while the screen never changed.
+Granting it once makes the launch work; until then this tool is a URL somebody has to tap. The second half of
+the same device fact: **the console has to stay the foreground tab** while it is being driven. Android freezes
+a background tab, the page stops polling, the panel reports it detached after 15 s, and a command already
+handed over is never answered.
 
 `phone_exec` (a real shell) is **off unless `PANEL_MCP_EXEC=1`**, and the HTTP transport binds localhost and
 requires a bearer token: reaching it from off-device is a tunnel somebody sets up on purpose, and a tunnel
 with no token is a shell on the open internet. The design, the transports and what is verified where:
 [docs/plans/002-mcp.md](docs/plans/002-mcp.md).
+
+**It speaks both eras of the protocol** (`mcp-protocol.mjs`, 2026-08-28). A client that opens with
+`initialize` is answered in ITS revision — `2025-11-25` through `2024-11-05` — rather than in the one this
+server was written against; a client that sends `server/discover`, or declares a revision in a request's
+`_meta`, is served statelessly, and one that names a revision we do not speak is refused with `-32022`
+listing the ones we do, so it can retry instead of giving up. There is no session state on either side to
+make that hard: every tool call is already a fresh hop to the panel.
+
+**A malformed byte used to kill the server.** `JSON.parse` sat in the socket's data handler here, in the
+bridge, and in the HTTP transport's `end` handler, so one bad line — which is what a tunnel produces when it
+half-closes a connection mid-body — took the process down and every tool in the session with it, costing a
+NEW session to get back. It now answers `-32700` and reads the next message. A JSON-RPC batch is answered as
+a batch too; it used to be dropped in silence, because an array carries no `id`.
+
+**What the tools ARE is now said out loud**, because compatibility only gets an agent connected. The rules
+that are not visible in any signature — read `phone_state` first, one job at a time and `phone_run` returns
+at the START, `map_state` before any `map_` tool and `map_open` when it answers that none is attached — ride the
+handshake as `instructions`, including from the bridge when there is no phone at all. Every tool carries a
+`title` and its behaviour annotations (an unannotated tool is read as destructive and open-world, which is
+wrong for the nine that only read), the no-argument tools state a closed schema, `map_mode`/`map_goto`
+enumerate the words they take, and every JSON answer rides as `structuredContent` beside its text.
+
+**Restart `panel:tunnel` after pulling this** — a running server keeps serving the code it started with, so
+the tunnel hands out the old handshake until it is restarted. What the channel costs, measured through the
+phone's own tunnel: [the round trip](../../docs/benchmarks/tools/2026-08-28-phone-mcp-round-trip.md).
 
 ### Wiring it to a Claude that is not on this phone
 
@@ -139,18 +191,36 @@ is blocked` — while `api.cloudflare.com:443` passed. The carrier allows 443 an
 only port cloudflared reaches its edge on, in either protocol; no config setting gets around that. So the
 order is by what survives a restrictive network, not by preference:
 
-| Provider        | Reaches its edge on             | Needs                                                                                               | On this phone, 2026-08-28     |
-| --------------- | ------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------- |
-| `ngrok`         | 443 (TLS)                       | a free account — the linux-arm64 binary in `$PREFIX/bin`, then `ngrok config add-authtoken <yours>` | not installed                 |
-| `localhost.run` | 22 (SSH)                        | `pkg install openssh` — no account, no key                                                          | **worked**                    |
-| `pinggy`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                  | asked for a password          |
-| `serveo`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                  | connection closed by the host |
-| `cloudflared`   | **7844** only                   | `pkg install cloudflared` — and a network that allows 7844                                          | cannot reach the edge         |
+| Provider        | Reaches its edge on             | Needs                                                                                                                     | On this phone, 2026-08-28     |
+| --------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `ngrok`         | 443 (TLS)                       | a free account — the linux-arm64 binary in `$PREFIX/bin`, `ngrok config add-authtoken <yours>`, and the DNS wrapper below | **worked**                    |
+| `localhost.run` | 22 (SSH)                        | `pkg install openssh` — no account, no key                                                                                | **worked**                    |
+| `pinggy`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                                        | asked for a password          |
+| `serveo`        | 443 (SSH, asked for explicitly) | `pkg install openssh` — no account                                                                                        | connection closed by the host |
+| `cloudflared`   | **7844** only                   | `pkg install cloudflared` — and a network that allows 7844                                                                | cannot reach the edge         |
 
 The order changed once the phone had a verdict: `localhost.run` is ahead of the two 443 providers because it
 is the one that came up, and every ssh provider carries `BatchMode=yes` — pinggy fell through to a password
 prompt on a phone with no key and spent the whole timeout waiting for a person to answer a prompt they could
 not see was one.
+
+**ngrok connects here, but only after two things that both look like a network problem.** Measured
+2026-08-28 on this phone, the day the account-less providers turned flaky and cloudflared stayed unreachable:
+
+1. **It resolves no names.** Android ships no `/etc/resolv.conf`, and ngrok is a static Go binary carrying its
+   own resolver — it finds no file, falls back to `127.0.0.1:53`, and nothing listens there, because a port
+   under 1024 is not bindable by an app uid. Every dial failed with `lookup connect.ngrok-agent.com on
+[::1]:53: read: connection refused`, which reads exactly like a carrier blocking 443. The fix belongs to
+   the phone rather than to this script — a `proot` wrapper that hands the binary a resolv.conf, in
+   [termux.md](../../docs/development/termux.md) under _Practical notes_. `netlinkrib: permission denied` in
+   the same log is unrelated and harmless.
+2. **The address it hands out is a `.dev` one now.** `https://prowling-volumes-smooth.ngrok-free.dev` — and
+   `tunnelUrl` knew only `ngrok-free.app`, so a tunnel that had already printed `client session established`
+   and `started tunnel` was given up on 45 s later as _"printed no working address"_ and killed on the way to
+   the next provider. The pattern takes `ngrok-free.{app,dev}` and `ngrok.{app,dev,io}` since. **A provider
+   that changes its domain again fails in exactly this shape**, and it is silent in the worst way: the
+   provider's own log says it is up while the script says it is waiting. That disagreement is the symptom to
+   read.
 
 `TUNNEL=pinggy` (or any other name) forces one. None installed is not fatal: the MCP server comes up anyway
 and the block names the localhost address, which is what a Claude running ON this phone wants.

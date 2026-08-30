@@ -18,10 +18,12 @@ function probe(overrides = {}) {
     identity: async () => ({ email: 'phone@users.noreply.github.com', name: 'phone', owner: 'sexorcist00' }),
     mtime: async (path) => (path === 'package-lock.json' ? 100 : 200),
     nodeVersion: 'v22.4.0',
+    openUrl: true,
     portOpen: async () => false,
     readJson: async () => ({ build: { at: '2026-08-23', textures: 'astc' } }),
     realpath: async (path) => `/home/user/opensa/${path}`,
     rebasing: async () => false,
+    signal: true,
     termux: true,
     tilesArchive: async () => null,
     wakeLock: true,
@@ -213,6 +215,20 @@ describe('phone console doctor', () => {
 
       expect(find(checks, 'wake').state).toBe('warn');
       expect(verdict(checks)).toEqual({ headline: 'ready · 1 to know about', state: 'warn' });
+    });
+
+    it('warns when nothing on this phone can open a url, and names the package', async () => {
+      const checks = await runChecks(probe({ openUrl: false }), TARGET);
+
+      expect(find(checks, 'open-url').state).toBe('warn');
+      expect(find(checks, 'open-url').fix).toBe('pkg install termux-tools');
+    });
+
+    it('warns when the phone cannot buzz, because then only the console itself says a run ended', async () => {
+      const checks = await runChecks(probe({ signal: false }), TARGET);
+
+      expect(find(checks, 'signal').state).toBe('warn');
+      expect(find(checks, 'signal').fix).toBe('pkg install termux-api');
     });
 
     it('offers the pull when the branch is behind', async () => {

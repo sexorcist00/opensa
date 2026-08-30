@@ -9,6 +9,7 @@ import type { GtaGround } from '../map/coords';
 import type { HistoryStats } from '../ops/history';
 import type { Operations, Selection } from '../ops/types';
 import type { DispatchActions } from '../ops/use-operations';
+import type { AgentStatus } from '../world/agent-link';
 import type { BootOptions, DispatchHandle, DispatchReadout } from '../world/boot';
 import type { BootedMode, MapMode, ModeReport } from '../world/mode-switch';
 
@@ -19,6 +20,7 @@ import { dispatchParams } from '../world/boot';
 import { bootStep } from '../world/boot-progress';
 import { ModeSwitch } from '../world/mode-switch';
 import { bootPlanMode } from '../world/plan-mode';
+import { AgentBand } from './agent-band';
 import { InventoryPanel } from './inventory-panel';
 import { styles } from './styles';
 
@@ -64,6 +66,8 @@ export function MapCanvas({
   const [degraded, setDegraded] = useState('');
   /** Which surface is drawing. Null until the first one is up, so the chrome shows no mode it does not have. */
   const [mode, setMode] = useState<MapMode | null>(null);
+  /** What the panel link is doing to this page. Null until a panel actually answers one of its polls. */
+  const [agent, setAgent] = useState<AgentStatus | null>(null);
   /** Held for the inventory panel only (201/1-01) — it reads the collector, it does not drive the loop. */
   const handleRef = useRef<DispatchHandle | null>(null);
   /** The last readout, for the agent link's heartbeat — a ref, so mirroring it costs no render. */
@@ -144,16 +148,20 @@ export function MapCanvas({
       // the first surface, and left alone by later switches: the link reads through the switcher, so what
       // it reports is whatever is drawing now.
       if (agentLink === null && dispatchParams().get('agent') === '1') {
-        agentLink = startAgentLink(panelUrl(), {
-          errors: () => handleRef.current?.inventory()?.errors ?? [],
-          image: () => handleRef.current?.exportImage() ?? Promise.resolve(null),
-          inventory: () => handleRef.current?.inventory() ?? null,
-          mode: () => switcher?.current() ?? null,
-          moveTo: (pose) => handleRef.current?.recallView(pose),
-          ops: () => liveRef.current.read.ops(),
-          readout: () => lastReadout.current,
-          setMode: (wanted) => void switcher?.to(wanted),
-        });
+        agentLink = startAgentLink(
+          panelUrl(),
+          {
+            errors: () => handleRef.current?.inventory()?.errors ?? [],
+            image: () => handleRef.current?.exportImage() ?? Promise.resolve(null),
+            inventory: () => handleRef.current?.inventory() ?? null,
+            mode: () => switcher?.current() ?? null,
+            moveTo: (pose) => handleRef.current?.recallView(pose),
+            ops: () => liveRef.current.read.ops(),
+            readout: () => lastReadout.current,
+            setMode: (wanted) => void switcher?.to(wanted),
+          },
+          setAgent,
+        );
       }
       // The cost the step owes, on whatever device is running it — the first open included, since that is
       // the number a field report compares a switch against.
@@ -191,6 +199,7 @@ export function MapCanvas({
       {/* The radar (201/7-04). Absent in plan mode, which has no 3D view to locate and draws its own board. */}
       {mode === 'live' && <canvas ref={minimapRef} style={compact ? styles.minimapCompact : styles.minimap} />}
       {children}
+      {agent && <AgentBand compact={compact} status={agent} />}
       {degraded && <DegradedBanner message={degraded} />}
       {dispatchParams().get('inventory') === '1' && (
         <InventoryPanel read={() => handleRef.current?.inventory() ?? null} />
