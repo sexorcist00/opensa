@@ -79,6 +79,17 @@ const runner = new JobRunner({
  *  new one has a different size or mtime, and nothing else can change what is inside it. */
 let archiveCache = null;
 
+/** Whether git holds a `branch.<name>.merge` line for this branch — its record that the branch was pushed
+ *  once, which is what separates "never had an upstream" from "the upstream was deleted". Local only: a
+ *  preflight runs every few seconds and may not depend on the network. */
+const tracks = async (branch) => {
+  try {
+    return (await run('git', ['config', '--get', `branch.${branch}.merge`], { cwd: REPO })).stdout.trim() !== '';
+  } catch {
+    return false;
+  }
+};
+
 const probe = {
   /**
    * The served app against the archive it should have come from, by content.
@@ -146,6 +157,8 @@ const probe = {
       const status = (await run('git', ['status', '--porcelain'], { cwd: REPO })).stdout;
       let ahead = 0;
       let behind = 0;
+      /** `ok` — origin carries this branch; `gone` — it did and no longer does; `none` — it never has. */
+      let upstream = 'ok';
       try {
         const counts = (
           await run('git', ['rev-list', '--left-right', '--count', `${branch}...origin/${branch}`], { cwd: REPO })
@@ -153,13 +166,19 @@ const probe = {
         // `--left-right` counts the local side first: what is here and not there, then the other way round.
         [ahead, behind] = counts.split(/\s+/).map((count) => Number(count) || 0);
       } catch {
-        ahead = 0; // no upstream yet — not a problem to report
+        // `origin/<branch>` does not resolve, and the two reasons for that are opposites. A branch that was
+        // never pushed is nothing to report. A branch that WAS pushed and has since been deleted — which is
+        // what this project does to every branch the moment its work lands (`CLAUDE.md`: main is the only
+        // branch that survives) — leaves the phone on a checkout no pull can move, running whatever code it
+        // froze at. Git's own record of the difference is the `branch.<name>.merge` line `git push -u` wrote.
+        ahead = 0;
         behind = 0;
+        upstream = (await tracks(branch)) ? 'gone' : 'none';
       }
 
       const paths = statusPaths(status);
 
-      return { ahead, behind, branch, dirty: paths.length, dirtyPaths: paths };
+      return { ahead, behind, branch, dirty: paths.length, dirtyPaths: paths, upstream };
     } catch {
       return null;
     }

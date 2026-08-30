@@ -14,7 +14,7 @@ function probe(overrides = {}) {
     credentials: async () => ({ helper: 'store', ok: true }),
     exists: async (path) => (overrides.missing ?? new Set()).has(path) === false && present.has(path),
     freeBytes: async () => 40 * 1024 ** 3,
-    git: async () => ({ ahead: 0, behind: 0, branch: 'main', dirty: 0, dirtyPaths: [] }),
+    git: async () => ({ ahead: 0, behind: 0, branch: 'main', dirty: 0, dirtyPaths: [], upstream: 'ok' }),
     identity: async () => ({ email: 'phone@users.noreply.github.com', name: 'phone', owner: 'sexorcist00' }),
     mtime: async (path) => (path === 'package-lock.json' ? 100 : 200),
     nodeVersion: 'v22.4.0',
@@ -173,6 +173,20 @@ describe('phone console doctor', () => {
       expect(find(checks, 'diverged').detail).toBe('1 here and 2 there — a fast-forward pull cannot take both');
     });
 
+    it('fails a branch the remote no longer has, because nothing here can be updated until it is left', async () => {
+      // 2026-08-30: the phone sat on a merged-and-deleted branch, `pull` had no ref to fetch, and the jobs
+      // kept running a checkout three days stale — while this row read `clean`.
+      const checks = await runChecks(
+        probe({
+          git: async () => ({ ahead: 0, behind: 0, branch: 'work', dirty: 0, dirtyPaths: [], upstream: 'gone' }),
+        }),
+        TARGET,
+      );
+
+      expect(find(checks, 'branch-gone')).toMatchObject({ job: 'main', state: 'fail' });
+      expect(find(checks, 'branch-gone').detail).toContain('origin/work is gone');
+    });
+
     it('says when a rebase stopped part-way, and how to leave that state', async () => {
       const checks = await runChecks(probe({ rebasing: async () => true }), TARGET);
 
@@ -244,6 +258,20 @@ describe('phone console doctor', () => {
       expect(find(checks, 'pull-blocked')).toBeUndefined();
       // Ahead AND behind is the diverged case; ahead alone is not.
       expect(find(checks, 'diverged')).toBeDefined();
+    });
+
+    it('says nothing about a branch that has simply never been pushed', async () => {
+      // The opposite of the case above and the reason it needs a name: both read as a missing
+      // `origin/<branch>`, and only one of them is a phone that can no longer be updated.
+      const checks = await runChecks(
+        probe({
+          git: async () => ({ ahead: 0, behind: 0, branch: 'work', dirty: 0, dirtyPaths: [], upstream: 'none' }),
+        }),
+        TARGET,
+      );
+
+      expect(find(checks, 'branch-gone')).toBeUndefined();
+      expect(find(checks, 'git')).toMatchObject({ state: 'ok' });
     });
 
     it('says a world with no pak yet is not an error', async () => {

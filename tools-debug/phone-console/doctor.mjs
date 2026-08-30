@@ -229,6 +229,22 @@ export async function runChecks(probe, target) {
       state: 'fail',
     });
   }
+  // The failure this device actually met on 2026-08-30, and the one the checks above could not see: the
+  // branch the phone was sitting on had been merged and deleted from origin, so `pull` answered "no such ref
+  // was fetched" and every job kept running the code the checkout froze at three days earlier — including a
+  // pak gate whose fix was already in `main`. The branch row said `clean`, because a missing `origin/<branch>`
+  // read as "no upstream yet". It is a fail rather than a warn: nothing here can be updated until it is
+  // resolved, so every other green light is a light on stale code.
+  if (git !== null && git.upstream === 'gone') {
+    add({
+      detail: `origin/${git.branch} is gone — merged and deleted, so a pull has no ref to fetch and every job runs the code this checkout froze at`,
+      fix: 'git checkout main   (then pull)',
+      id: 'branch-gone',
+      job: 'main',
+      label: 'the branch no longer exists on the remote',
+      state: 'fail',
+    });
+  }
   add({
     detail:
       git === null

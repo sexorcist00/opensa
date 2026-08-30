@@ -266,6 +266,17 @@ so nor reconnected; and **opening the console was still a person**, which is now
 are fixed. **The numbers below are unchanged and still owed** — read the panel plan's *"What the next agent
 does, in order"* before re-deriving any of this.
 
+**The second session on that channel took no measurement either, and this time the phone was three days
+stale** (2026-08-30). `phone_state` reported `ready` on nineteen checks and `npm run phone` then refused the
+pak with *"lodOnly: not recorded in this pak"* — the 08-27 defect the row above records as fixed on 08-28,
+because the phone was sitting on a branch that had been merged and deleted under the main-only rule, so its
+`pull` had no ref to fetch and every job was running the code that checkout froze at. **A stale checkout does
+not only mismeasure; it argues in the voice of a bug that no longer exists.** The panel's preflight now
+separates a branch that was never pushed from one whose upstream is GONE and **fails** on the second, and
+`main` is a job, so the recovery is two tool calls ([the run log](../../../tools-debug/phone-console/docs/plans/002-mcp.md),
+[the restriction](../../restrictions/architecture.md)). **The numbers below are still owed**, and returning
+the device to `main` is the one step of it a person has to take.
+
 **It is two buttons now, and that is deliberate** (2026-08-27, on the user's instruction that the panel
 should be made convenient rather than the work deferred): the phone panel's **THE FIELD RUN** link opens the
 console at the declared count (`units=150&calls=40&inventory=1`) with no query to type, and the console's
