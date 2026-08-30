@@ -277,6 +277,26 @@ separates a branch that was never pushed from one whose upstream is GONE and **f
 [the restriction](../../restrictions/architecture.md)). **The numbers below are still owed**, and returning
 the device to `main` is the one step of it a person has to take.
 
+**THE RUN ITSELF WAS TAKEN 2026-08-30, and it found a blocker that no camera work can get past:
+[THE FIELD RUN's own link measures 150 SYMBOLS, not 150 units](../../benchmarks/opensa-engine/2026-08-30-mobile-pinned-district-symbol-only.json).**
+The loop ran end to end with nobody touching the phone — `phone_state`, the pak accepted and served,
+`map_open` raising the page itself, eight `map_goto` flights the streamer followed, `map_snapshot` reading
+the report. What came back says `unitsAsModels: 0` and `unitsAsSymbolOnly: 150`, and the console names the
+cause three times in its own `errors`: the board's kinds are `copcarls`, `ambulan` and `firetruk`
+(`ops/seed.ts`) while `phone.sh` converts `admiral,infernus,comet`. **So [5/02](5-symbology-and-picking-as-product/readme.md)'s
+budget — 150 units each drawn as a MODEL with a symbol over it — has never once been on the table on this
+pak**, and every mobile row in the evidence table above was measuring the symbol-only path without saying
+so. The next field run is gated on a convert carrying those models, not on a flight.
+**The frame question is still unanswered, and for the old reason plus a new one.** The best window reached
+**125 frames against the collector's own 300 floor**: each raise of the console answered for 40–80 s and
+then stopped polling — Android suspending a tab that is not in front — and a re-raise is a fresh boot, so
+the flight that DID run with the world resident was lost before it could be read. Three raises, three
+freezes. **That condition is a person's to hold**, and it is the one part of this loop no tool surface
+closes. What the window does establish, filed as a capture that is explicitly NOT a row: 4/4 cells,
+resident **71.0 MB** (target 32.3, texture 25.8, cellVertex 10.3), 112 draws, 278 k triangles, 21.7 MB in 23
+requests with 19.0 from cache, boot open 553 ms — and **147 of 190 chips dropped** at 360x320 CSS, which is
+[3/03](3-the-operator-surface-on-a-phone/readme.md)'s budget measured in the field.
+
 **It is two buttons now, and that is deliberate** (2026-08-27, on the user's instruction that the panel
 should be made convenient rather than the work deferred): the phone panel's **THE FIELD RUN** link opens the
 console at the declared count (`units=150&calls=40&inventory=1`) with no query to type, and the console's
