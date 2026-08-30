@@ -99,11 +99,33 @@ export const SPACE = { lg: 16, md: 12, sm: 8, xl: 24, xs: 4, xxs: 2 } as const;
  * language of a web dashboard, not of an instrument. Nothing in a dispatch room has a rounded corner, and
  * the user's verdict on the old set was blunt and correct. `2` on a control is the smallest radius that
  * still reads as deliberate rather than as an unstyled box; a panel and a tag are square.
+ *
+ * **Since 2026-08-30 the values are the THEME's** (`ConsoleTheme.shape.radius`, 201/7-10) — the numbers
+ * above are what every preset shipping today declares, and a preset that wants a different corner says so
+ * as data rather than by forking this table.
  */
-export const RADIUS = { control: 2, pill: 2, surface: 0 } as const;
+export const RADIUS = {
+  control: 'var(--os-radius-control)',
+  pill: 'var(--os-radius-pill)',
+  surface: 'var(--os-radius-surface)',
+} as const;
 
-/** The type scale. `input` is what a finger types into; the rest is what it reads. */
-export const TEXT = { body: 12, bodyTouch: 13, caption: 11, input: 15, micro: 10, title: 17 } as const;
+/**
+ * The type scale. `input` is what a finger types into; the rest is what it reads.
+ *
+ * **`caption` and `body` are the theme's density lever** (201/7-10) and come through variables; the rest are
+ * fixed here on purpose. `input` at 15 px is the floor below which iOS zooms the page on focus, `title` is
+ * not a row, and `bodyTouch`/`micro` answer the pointer rather than the skin — none of them is a density
+ * question, so none of them moves when a denser preset is chosen.
+ */
+export const TEXT = {
+  body: 'var(--os-text-body)',
+  bodyTouch: 13,
+  caption: 'var(--os-text-caption)',
+  input: 15,
+  micro: 10,
+  title: 17,
+} as const;
 
 /**
  * Depth for the two things that float.
@@ -812,6 +834,16 @@ export const styles = {
     overflow: 'hidden',
     textTransform: 'none',
   },
+  /**
+   * The legend swatch beside a tally count, and it is ROUND on purpose while the console is square.
+   *
+   * A 6-px dot is a MARK, not a surface: it stands for the pillar the engine draws on the map, so its shape
+   * answers to the symbology rather than to the skin — which is the same reason its colour comes from
+   * `SET_COLORS` and not from the theme. Its radius therefore does not come from `RADIUS`, and it lives
+   * here rather than inline in `status-tally.tsx` so the theme guard can see one deliberate exception in
+   * the token table instead of a raw value in a component.
+   */
+  tallyDot: { borderRadius: '50%', height: 6, width: 6 },
   tallyItem: { alignItems: 'center', display: 'flex', gap: 4 },
   timeline: {
     alignItems: 'center',

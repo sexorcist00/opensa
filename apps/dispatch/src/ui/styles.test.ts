@@ -112,11 +112,20 @@ describe('dispatch styles', () => {
       expect(styles.rangeTouch.height).toBe(TOUCH_TARGET);
     });
 
-    it('keeps the three scales to their declared steps', () => {
-      // A scale with a value between its steps is not a scale. Radius was eight values, spacing thirteen.
-      expect(Object.values(RADIUS)).toEqual([2, 2, 0]);
+    it('keeps the fixed scales to their declared steps', () => {
+      // A scale with a value between its steps is not a scale. Spacing was thirteen values.
       expect([...Object.values(SPACE)].sort((a, b) => a - b)).toEqual([2, 4, 8, 12, 16, 24]);
-      expect([...Object.values(TEXT)].sort((a, b) => a - b)).toEqual([10, 11, 12, 13, 15, 17]);
+      // The type steps that are NOT the density lever, and each is fixed for a stated reason: 15 px is the
+      // floor below which iOS zooms on focus, and the other two answer the pointer rather than the skin.
+      expect([TEXT.bodyTouch, TEXT.input, TEXT.micro, TEXT.title]).toEqual([13, 15, 10, 17]);
+    });
+
+    it('takes every radius and both row type steps from the theme rather than from here', () => {
+      // 201/7-10: shape and density are theme data now. A number written back into this table would be a
+      // value the skin cannot reach — it renders, it lints, and it stays rounded under a square preset.
+      for (const token of [RADIUS.control, RADIUS.pill, RADIUS.surface, TEXT.body, TEXT.caption]) {
+        expect(token).toMatch(/^var\(--os-[a-z-]+\)$/u);
+      }
     });
 
     it('caps the phone sheet rather than reserving a share of the screen for it', () => {

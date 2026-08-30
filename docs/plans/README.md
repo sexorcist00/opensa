@@ -38,10 +38,12 @@ Newest first:
 - **[202 — PCAD Dispatch](./202-pcad-dispatch/readme.md)** — **THE FINAL PLAN**, opened 2026-08-06. The
   product every dispatch doc here now serves: a **web dispatch application for a SA-MP server**, paired with a
   client-side CAD plugin (PCAD). Three pieces — the plugin, a backend, and the web application — of which this
-  repository owns exactly one thing: **the 3D map component**. The field survey behind it: every dispatch map
-  in this market ([SonoranCAD](https://sonorancad.com/fivem),
-  [SnailyCAD](https://github.com/SnailyCAD/snaily-cadv4)) is a flat tile picture with dots on it, and both are
-  FiveM — nobody has the world, and nobody serves SA-MP. Carries the borrowings from the open-source map
+  repository owns exactly one thing: **the 3D map component**. The field survey behind it, **as corrected
+  2026-08-26**: [SonoranCAD](https://sonorancad.com/fivem) ships a **3D live map** and
+  [SnailyCAD](https://github.com/SnailyCAD/snaily-cadv4) a flat one — so "nobody has the world" is retracted
+  and this row must not be quoted for it. What survives is narrower and holds: both are **FiveM**, and
+  **nobody serves SA-MP** (re-checked 2026-08-29 by running the field); nobody has a **total-conversion**
+  world; and nobody makes the map **the main screen**. Carries the borrowings from the open-source map
   engines (screen-space-error LOD, time as an axis, label collision, layer models, the SanMap projection), the
   three seams and who owns them (self-reported positions are **claims**, not facts), five delivery phases
   starting with the engine, and the honest statement that the four named budgets may not hold at once.

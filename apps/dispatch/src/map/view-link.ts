@@ -16,6 +16,7 @@
  * | the world hour | the light is half of what a night scene looks like |
  * | how far behind live the shift clock was | 8/03: a moment is part of a view once time is an axis |
  * | the pak the world came from (`src`) and the named district | the same coordinates over a different build are a different place |
+ * | the skin (`theme`) | 7-10: a shared link reproduced the view but not the look, and an embedding host had no way at all to pin one |
  *
  * Not carried: the SELECTION and the board. A selection is a thing on someone else's screen — ids from a
  * mock board mean nothing across sessions, and once the feed is real (202 phase 2) a call id belongs to the
@@ -40,6 +41,15 @@ export interface SharedView {
   readonly projection?: MapProjection;
   /** The pak base the world was streamed from. */
   readonly src?: string;
+  /**
+   * The skin, by preset id.
+   *
+   * Read on open and **never persisted**: a link is someone else's view, not a change to how this operator's
+   * console looks from now on. Whoever opens it sees the sender's skin for that session and keeps their own
+   * stored choice — which is also what lets an embedding host pin a preset with `?embed=1&theme=…` without
+   * quietly rewriting the browser it is running in.
+   */
+  readonly theme?: string;
   /** Radians. */
   readonly yaw?: number;
 }
@@ -54,6 +64,7 @@ const VIEW_PARAMS = {
   pitch: 'pitch',
   projection: 'proj',
   src: 'src',
+  theme: 'theme',
   yaw: 'yaw',
 } as const;
 
@@ -103,6 +114,12 @@ export function readView(params: URLSearchParams): SharedView {
   if (src !== null && src !== '') {
     view.src = src;
   }
+  const theme = params.get(VIEW_PARAMS.theme);
+  if (theme !== null && theme !== '') {
+    // Not checked against the shipped list here: this module owns the parameter NAMES, and which presets
+    // exist is `ui/theme.ts`'s to know. `resolveHostTheme` refuses an id nobody ships, and says so.
+    view.theme = theme;
+  }
 
   return view;
 }
@@ -140,6 +157,9 @@ export function viewQuery(view: SharedView): URLSearchParams {
   }
   if (view.district !== undefined && view.district !== '') {
     params.set(VIEW_PARAMS.district, view.district);
+  }
+  if (view.theme !== undefined && view.theme !== '') {
+    params.set(VIEW_PARAMS.theme, view.theme);
   }
   if (view.at) {
     params.set(VIEW_PARAMS.at, `${round(view.at[0], 1)},${round(view.at[1], 1)}`);

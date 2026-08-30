@@ -22,29 +22,51 @@
  * on the app root, so these rules cannot reach past it.
  */
 import { ACCENT, RAMP } from './styles';
-import { DEFAULT_THEME, THEMES, themeVariables } from './theme';
+import { DEFAULT_THEME, densityVariables, THEMES, themeVariables } from './theme';
 
 /** The attribute every rule below is scoped under, and the app root carries. */
 export const DISPATCH_SCOPE = 'data-opensa-dispatch';
 
 const ID = 'opensa-dispatch-css';
 
+const DEFAULT_PRESET = THEMES.find((theme) => theme.id === DEFAULT_THEME) ?? THEMES[0];
+
 /**
  * Every skin's variables, one attribute-scoped block each — which is what makes switching a skin free.
  *
  * The token table (`styles.ts`) holds `var(--os-…)` rather than colours, so changing `data-theme` on the app
  * root repaints the whole console with **no React work at all**: no re-render, no new style objects, no
- * reconciliation. That is the reason colour left TypeScript, and it is why four skins cost about as much as
+ * reconciliation. That is the reason colour left TypeScript, and it is why five skins cost about as much as
  * one. `color-scheme` rides along per theme, so the browser paints the parts we do not draw — scrollbar
  * gutters, form control internals, the range track — the right way round for the ground underneath.
  *
  * The unqualified block comes first and carries the default, so a root that has lost its attribute renders
  * the shipping theme rather than an unstyled console.
+ *
+ * **The `(pointer: coarse)` tail is the density clamp** (201/7-10), and it is a media query rather than a
+ * hook for one reason: the refusal has to survive a skin change that React never sees. A preset asking for
+ * `dense` gets `resolveDensity`'s clamped steps on a phone whatever was chosen on a desk, at the cost of
+ * three re-declared variables per theme and no JavaScript at all. Only the density tokens are repeated —
+ * re-emitting the palette under the query would double this sheet to restate values that cannot change.
  */
 const THEME_CSS = [
-  `[${DISPATCH_SCOPE}] {\n${themeVariables(THEMES.find((theme) => theme.id === DEFAULT_THEME) ?? THEMES[0])}\n}`,
+  `[${DISPATCH_SCOPE}] {\n${themeVariables(DEFAULT_PRESET)}\n}`,
   ...THEMES.map((theme) => `[${DISPATCH_SCOPE}][data-theme='${theme.id}'] {\n${themeVariables(theme)}\n}`),
+  `@media (pointer: coarse) {\n${[DEFAULT_PRESET, ...THEMES]
+    .map((theme, at) => {
+      const selector = at === 0 ? `[${DISPATCH_SCOPE}]` : `[${DISPATCH_SCOPE}][data-theme='${theme.id}']`;
+
+      return `  ${selector} {\n${indent(densityVariables(theme, true))}\n  }`;
+    })
+    .join('\n')}\n}`,
 ].join('\n');
+
+function indent(block: string): string {
+  return block
+    .split('\n')
+    .map((line) => `  ${line}`)
+    .join('\n');
+}
 
 const CSS = `
 ${THEME_CSS}

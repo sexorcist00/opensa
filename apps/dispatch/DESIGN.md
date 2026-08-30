@@ -104,14 +104,26 @@ is `#a8bbd0` now, and three danger readouts moved for the same reason.
 
 **What a screen holds, and what a skin can take from it** (2026-08-28, reading Mark43 and Tickets CAD as
 skins — [201/7-10](../../docs/plans/201-dispatch-console/7-the-operator-map/readme.md)). A console screen is
-five layers, and only three of them are a theme's: **palette** and **typeface** wholly, **density** by one
-lever (`rowPadding`). **Shape and edge** — radius, and whether a surface is told apart by a line or by a
-value step and a shadow — is not expressible today (`RADIUS` is a module constant in `styles.ts`, and
-whether an edge is drawn is written into the style objects); it is the one addition the contract needs, as
-`shape: { radius, edge: 'line' | 'shadow' }`, plus a `density` enum **clamped by `useCoarsePointer()` in the
-resolver** so a dense preset cannot carry a desk row onto a phone. **Layout is the fifth layer and is never a
-theme's** — which is the part to remember when a screenshot is the brief, because most of what makes a
-screenshot recognisable is layout.
+five layers, and **four of them are a theme's since 2026-08-30**: **palette** and **typeface** wholly,
+**density** by one lever, and **shape and edge** — the two the contract grew to make the Mark43 preset
+expressible at all.
+
+- **`shape: { edge: 'line' | 'shadow'; radius: { control, pill, surface } }`.** The radii left `styles.ts`
+  for `--os-radius-*`, and `edge: 'line'` drops both shadows to `none` so a hairline does the separating.
+  There is **no `--os-edge-width`** to go with it, though the plan asked for one: it would read 1 px in
+  every preset we ship, because our floating surfaces carry a hairline BESIDE their shadow, and a constant
+  that never varies is a token that lies about being a lever.
+- **`density: 'comfortable' | 'compact' | 'dense'`**, moving row padding and the `caption`/`body` type steps
+  together — a row's height is its padding PLUS its type step, so padding alone runs out before it reaches a
+  Mark43 grid. Never `TOUCH_TARGET`, never `input` (15 px is the iOS-zoom floor), never the title.
+  **`dense` is refused where the pointer is coarse**, emitted as a `(pointer: coarse)` block rather than
+  resolved at mount, so the refusal survives a skin change React never sees.
+  The clamp's guard measures the TYPE, not only the height: the phone's row already carries
+  `minHeight: TOUCH_TARGET`, so a 44-px assertion there is true by construction and would pass on every
+  possible input — what actually travels from a desk to a phone is 10-px text inside a 44-px row.
+
+**Layout is the fifth layer and is never a theme's** — which is the part to remember when a screenshot is
+the brief, because most of what makes a screenshot recognisable is layout.
 
 **A colour-vision-safe STATUS palette is not a skin and is not shipped.** Red / amber / green is the worst
 triple for deuteranopia, and fixing it means rebuilding the engine's debug-line sets rather than writing a
@@ -207,7 +219,10 @@ every frame it drew.
 ## Spacing and shape
 
 - **Spacing:** 4-based — `2 · 4 · 8 · 12 · 16 · 24`. Nothing else.
-- **Radius:** `2` controls · `0` surfaces · `2` tags. Three values, and nearly zero on purpose — see below.
+- **Radius:** `2` controls · `0` surfaces · `2` tags — **the theme's now** (`shape.radius`, 2026-08-30), and
+  these are what every preset but Mark43 declares. Mark43 is square throughout. A radius written into a
+  component is refused by `theme.test.ts` exactly as a raw hex is; the one exception is `styles.tallyDot`,
+  round because a 6-px status dot is a symbology MARK rather than a surface and answers to the map.
 - **Shape:** **square.** Corrected 2026-08-26 on the user's verdict that the console read as generated. The
   old set (`4` / `8` / `999`) is the shape language of a web dashboard: a rounded control, a rounded card
   and a fully-round pill. Nothing in a dispatch room has a rounded corner. Together with the three changes
@@ -216,7 +231,7 @@ every frame it drew.
     it puts 11-px text on whatever happens to be under it;
   - **a status is a SOLID stamp**, not a translucent tint of its own colour behind matching text — the
     tinted pill is the default badge of every generated dashboard, and the solid block has more contrast;
-  - **rows are tight** — `5px 9px`, and `4px 8px` in the compact skin, down from `8px 12px`.
+  - **rows are tight** — `5px 9px` at `compact`, `4px 8px` at `dense`, down from `8px 12px`.
 - **Touch target:** `44` CSS px minimum in **both** axes where the pointer is coarse. Not a preference —
   WCAG 2.2 (2.5.5), Apple HIG and Material all agree on it.
 
@@ -287,4 +302,6 @@ test is whether removing it loses information: it does.
 | 2026-08-28 | Tickets CAD gets no preset until a screen is captured                                 | Its page says "modern dark theme" and nothing measurable; a preset built from prose is our own taste under a borrowed name, and the landscape rows above rest on captured screens                                                                                          |
 | 2026-08-29 | Tickets CAD was run locally, and still gets no preset — for a better reason           | Its Night skin measures Lc 0 on a live control and Lc 48–52 on the rows a dispatcher reads. What it donates is the MECHANISM (a skin picked at sign-in, status colour as agency data), not a palette                                                                       |
 | 2026-08-29 | The v4 NewUI was found and measured too; still no preset                              | Bootstrap 5 defaults are not an identity to borrow, and its own dark theme leaves 52 of 184 text pairs under Lc 60. What it does donate: a theme toggle in the CHROME (ours is sign-in only) and the proof that a tile map can follow a skin where a rendered world cannot |
+| 2026-08-30 | The contract grows `shape` and `density`, and nothing else                            | Mark43 is not expressible in colour: it separates surfaces with a line and casts nothing. Layout stays off limits, its 11 status hues stay `SET_COLORS`, and `dense` is refused at a coarse pointer in the resolver rather than in a review                                |
+| 2026-08-30 | APCA runs at RUNTIME, not only in the test                                            | Once an embedding host can supply a palette, the guard and the thing it guards must measure with one formula. Moving it found the hole: an unreadable colour yielded NaN, and `NaN < 60` is false — a malformed palette skipped the threshold rather than failing it       |
 | 2026-08-26 | Square shapes, opaque panels, solid status stamps, tight rows                         | The user's verdict: the built console read as generated. Rounded cards, translucent surfaces and tinted pill badges are the tells, and all three contradicted this file's own "instrument panel, no ornament"                                                              |

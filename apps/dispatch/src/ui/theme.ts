@@ -27,9 +27,17 @@
 import type { JsonStorage } from '../map/storage';
 
 import { readJson, STORAGE_KEYS, writeJson } from '../map/storage';
+import { readView } from '../map/view-link';
+import { contrastFailures } from './apca';
 
 export interface ConsoleTheme {
   readonly accent: ThemeAccent;
+  /**
+   * How tight the rows are. The density lever, and the ONLY one — it moves row padding and the two
+   * row-level type steps together, because a row's height is its padding PLUS its type step and moving one
+   * without the other cannot reach a grid as tight as Mark43's.
+   */
+  readonly density: ThemeDensity;
   /** The font stacks. A skin that changes the typeface changes its character more than any colour does. */
   readonly font: { readonly mono: string; readonly sans: string };
   readonly id: ThemeId;
@@ -45,10 +53,10 @@ export interface ConsoleTheme {
    */
   readonly onStatus: string;
   readonly ramp: ThemeRamp;
-  /** Row padding. The one density lever a theme gets; target sizes are not negotiable and stay in `styles.ts`. */
-  readonly rowPadding: string;
   readonly semantic: ThemeSemantic;
   readonly shadow: { readonly float: string; readonly modal: string };
+  /** How a surface is told apart from what is under it, and how sharp its corners are. */
+  readonly shape: ThemeShape;
   /**
    * What floats over the map, and it is **opaque**.
    *
@@ -60,6 +68,22 @@ export interface ConsoleTheme {
   readonly surfaces: { readonly float: string; readonly modal: string };
 }
 
+/**
+ * What a density step actually moves, and the list is deliberately short.
+ *
+ * A row's height is its padding PLUS the type step inside it, so `rowPadding` alone cannot reach a grid as
+ * tight as Mark43's — it runs out while the text still holds the row open. These three move together and
+ * **nothing else does**: never `TOUCH_TARGET` (WCAG 2.5.5, not a taste), never `input` (15 px is the floor
+ * below which iOS zooms the page on focus), never the title.
+ */
+export interface DensitySteps {
+  /** `TEXT.body` — what a row's own line is set in. */
+  readonly body: number;
+  /** `TEXT.caption` — the label above it and the meta beside it. */
+  readonly caption: number;
+  readonly rowPadding: string;
+}
+
 /** The accent, which means one thing: the operator's own mark — selection, focus, live, the primary action. */
 export interface ThemeAccent {
   readonly bg: string;
@@ -68,7 +92,19 @@ export interface ThemeAccent {
   readonly text: string;
 }
 
-export type ThemeId = 'amber' | 'contrast' | 'day' | 'night';
+export type ThemeDensity = 'comfortable' | 'compact' | 'dense';
+
+export type ThemeId = 'amber' | 'contrast' | 'day' | 'mark43' | 'night';
+
+/**
+ * The three steps. `compact` is what the console has always shipped, so the values here are the ones that
+ * were already in `styles.ts` — this table did not get to re-tune the console while adding a lever to it.
+ */
+const DENSITY: Readonly<Record<ThemeDensity, DensitySteps>> = {
+  comfortable: { body: 13, caption: 12, rowPadding: '7px 11px' },
+  compact: { body: 12, caption: 11, rowPadding: '5px 9px' },
+  dense: { body: 11, caption: 10, rowPadding: '4px 8px' },
+};
 
 /**
  * The neutral ramp, by Radix's step roles — the same ten values `styles.ts` documents, now per theme.
@@ -108,6 +144,47 @@ export interface ThemeSemantic {
   readonly warnText: string;
 }
 
+/**
+ * How a surface is told apart from what is under it — the layer a palette cannot carry.
+ *
+ * Added 2026-08-30 for the Mark43 preset (201/7-10), which is not expressible in colour alone: its surfaces
+ * are separated by a visible line and cast nothing, ours by a value step and a shadow. Both are legitimate
+ * depth strategies and the difference is structural, so it is a token rather than a fork of the style table.
+ */
+export interface ThemeShape {
+  /**
+   * `'line'` drops both shadows to `none` and leaves the hairline to do the separating; `'shadow'` keeps
+   * the shadows the preset declares.
+   *
+   * **There is no `--os-edge-width` to go with this, and the plan asked for one.** It would be 1 px in
+   * every preset we ship: our floating surfaces have always carried a hairline BESIDE their shadow, so the
+   * symmetric reading of `edge: 'shadow'` — a 0-px border — would restyle four shipped skins to make a
+   * token look like a lever. A constant that never varies is a token that lies about being one.
+   */
+  readonly edge: 'line' | 'shadow';
+  readonly radius: { readonly control: number; readonly pill: number; readonly surface: number };
+}
+
+/**
+ * The density a preset actually gets, which is not always the one it asked for.
+ *
+ * **`dense` is refused where the pointer is coarse**, and this is the whole point of the function existing
+ * rather than the table being read directly. A skin is chosen on a desk and travels to the same operator's
+ * phone through one `localStorage` key, and nothing on that path re-asks the question — so a desk-chosen
+ * `dense` would land 10-px text on a phone. That is a
+ * [cross-platform-surface](../../../../docs/restrictions/cross-platform-surface.md) violation of the exact
+ * kind that file exists for: it typechecks, it lints, every test stays green and it looks perfect on the
+ * machine that chose it. Clamping here makes it unrepresentable instead of reviewable.
+ *
+ * Note what the clamp protects and what it does not have to: the phone's own row (`styles.rowTouch`) carries
+ * `minHeight: TOUCH_TARGET` and its own padding, so 44 px is already true by construction whatever this
+ * returns. What travels is the TYPE, inside a row that stays 44 px tall while its text shrinks — which is
+ * why the guard measures the steps and not only the height.
+ */
+export function resolveDensity(density: ThemeDensity, coarsePointer: boolean): DensitySteps {
+  return DENSITY[coarsePointer && density === 'dense' ? 'compact' : density];
+}
+
 const SANS = 'ui-sans-serif, system-ui, sans-serif';
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 
@@ -119,6 +196,7 @@ const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
  */
 const NIGHT: ConsoleTheme = {
   accent: { bg: '#0c2634', border: '#1d5b7d', solid: '#38bdf8', text: '#6fd0fb' },
+  density: 'compact',
   font: { mono: MONO, sans: SANS },
   id: 'night',
   mode: 'dark',
@@ -136,7 +214,6 @@ const NIGHT: ConsoleTheme = {
     text: '#e8eff7',
     textMuted: '#a8bbd0',
   },
-  rowPadding: '5px 9px',
   semantic: {
     danger: '#ff92a6',
     dangerBg: '#4a1220',
@@ -147,6 +224,7 @@ const NIGHT: ConsoleTheme = {
     warnText: '#ffe8c4',
   },
   shadow: { float: '0 4px 16px rgba(0, 0, 0, 0.45)', modal: '0 12px 40px rgba(0, 0, 0, 0.6)' },
+  shape: { edge: 'shadow', radius: { control: 2, pill: 2, surface: 0 } },
   surfaces: { float: '#111a26', modal: '#16202e' },
 };
 
@@ -159,6 +237,7 @@ const NIGHT: ConsoleTheme = {
  */
 const DAY: ConsoleTheme = {
   accent: { bg: '#dbedf6', border: '#7fb6cf', solid: '#0b6f95', text: '#07536f' },
+  density: 'compact',
   font: { mono: MONO, sans: SANS },
   id: 'day',
   mode: 'light',
@@ -176,7 +255,6 @@ const DAY: ConsoleTheme = {
     text: '#0d1620',
     textMuted: '#46586b',
   },
-  rowPadding: '5px 9px',
   semantic: {
     danger: '#c31d38',
     dangerBg: '#ffe1e5',
@@ -187,6 +265,7 @@ const DAY: ConsoleTheme = {
     warnText: '#523500',
   },
   shadow: { float: '0 4px 16px rgba(15, 23, 32, 0.16)', modal: '0 12px 40px rgba(15, 23, 32, 0.26)' },
+  shape: { edge: 'shadow', radius: { control: 2, pill: 2, surface: 0 } },
   surfaces: { float: '#ffffff', modal: '#ffffff' },
 };
 
@@ -198,6 +277,7 @@ const DAY: ConsoleTheme = {
  */
 const CONTRAST: ConsoleTheme = {
   accent: { bg: '#06304a', border: '#4aa8d4', solid: '#6cd6ff', text: '#b3eaff' },
+  density: 'compact',
   font: { mono: MONO, sans: SANS },
   id: 'contrast',
   mode: 'dark',
@@ -215,7 +295,6 @@ const CONTRAST: ConsoleTheme = {
     text: '#ffffff',
     textMuted: '#c8d6e4',
   },
-  rowPadding: '5px 9px',
   semantic: {
     danger: '#ff9dac',
     dangerBg: '#5e0f1e',
@@ -226,6 +305,7 @@ const CONTRAST: ConsoleTheme = {
     warnText: '#fff2da',
   },
   shadow: { float: '0 4px 16px rgba(0, 0, 0, 0.7)', modal: '0 12px 40px rgba(0, 0, 0, 0.85)' },
+  shape: { edge: 'shadow', radius: { control: 2, pill: 2, surface: 0 } },
   surfaces: { float: '#0a0d12', modal: '#12171f' },
 };
 
@@ -239,6 +319,7 @@ const CONTRAST: ConsoleTheme = {
  */
 const AMBER: ConsoleTheme = {
   accent: { bg: '#3a2708', border: '#9a7526', solid: '#ffc247', text: '#ffd98a' },
+  density: 'dense',
   font: { mono: MONO, sans: MONO },
   id: 'amber',
   mode: 'dark',
@@ -256,7 +337,6 @@ const AMBER: ConsoleTheme = {
     text: '#f8eed6',
     textMuted: '#cbb894',
   },
-  rowPadding: '4px 8px',
   semantic: {
     danger: '#ffa19c',
     dangerBg: '#4d1414',
@@ -267,20 +347,262 @@ const AMBER: ConsoleTheme = {
     warnText: '#ffdfc6',
   },
   shadow: { float: '0 4px 16px rgba(0, 0, 0, 0.55)', modal: '0 12px 40px rgba(0, 0, 0, 0.7)' },
+  shape: { edge: 'shadow', radius: { control: 2, pill: 2, surface: 0 } },
   surfaces: { float: '#1b150d', modal: '#241c12' },
 };
 
+/**
+ * **Mark43** — the field preset, and the one that made the token contract grow (201/7-10).
+ *
+ * Read off the vendor's own product screenshot on 2026-08-28 (`Mark43CAD.pdf` page 2, 1071x549), because
+ * the best-designed CAD in the surveyed field turned out to be this console's own direction arrived at
+ * independently: square, opaque, ornament-free, and dark. Two things make it a different skin rather than a
+ * recolour of Night, and both are structural:
+ *
+ * **1. The ramp is ACHROMATIC and it starts much lighter.** R, G and B within a couple of levels on every
+ * step, against Night's cool slate at hue ~213; the ground is `#1e1f21` — 18.9 % of every pixel on their
+ * screen — where Night's is `#070a0f`.
+ *
+ * **2. Depth is a LINE, not a value step and a shadow.** Ground to panel is about 10/255 on their screen and
+ * there is no shadow anywhere; the `#333` separator does the work our layering and `shadow.float` do. That
+ * is `shape.edge: 'line'`, and it is the layer a palette could not carry before this preset existed.
+ *
+ * **What is measured and what is fitted, stated because the difference matters.** The ground, the panel and
+ * the separator are the source's own values, sampled from flat regions. The steps between them are FITTED:
+ * a literal luminance sort of their swatches is not monotone — their grid rows measure below their ground —
+ * and our layering rule is, so the ramp continues the measured span instead of copying an ordering our
+ * roles cannot express. **The text is fitted and not sampled at all**, per the step's own procedure: text in
+ * a resampled JPEG is blended with what is under it, and the source's contrast is not evidence that it
+ * passes. Both steps were walked until `theme.test.ts` cleared its thresholds with margin — which is where
+ * a borrowed palette becomes ours, and it is not a formality: **Night's own danger pink measures Lc 58 on
+ * this preset's lighter surface**, under the floor it clears comfortably on Night.
+ *
+ * Its status colours are NOT here. Mark43 encodes state with 11 saturated hues on filled pills; ours come
+ * from `SET_COLORS` in every preset, and 11 hues fails the read-by-more-than-colour rule the queue meets in
+ * three channels.
+ */
+const MARK43: ConsoleTheme = {
+  accent: { bg: '#132434', border: '#2f5f80', solid: '#74c2ff', text: '#9ad3ff' },
+  density: 'dense',
+  font: { mono: MONO, sans: SANS },
+  id: 'mark43',
+  mode: 'dark',
+  name: 'Mark43',
+  onStatus: '#06090d',
+  ramp: {
+    bg: '#1e1f21',
+    line: '#333335',
+    lineStrong: '#3f4041',
+    ring: '#555657',
+    surface: '#232426',
+    surfaceHover: '#2d2e30',
+    surfaceOn: '#313234',
+    surfaceRaised: '#28292b',
+    text: '#efeff1',
+    textMuted: '#bfbfc1',
+  },
+  semantic: {
+    danger: '#ffa3b5',
+    dangerBg: '#4e1924',
+    dangerText: '#ffb8c6',
+    warnBg: '#514324',
+    warnBorder: '#947427',
+    warnSolid: '#ddb557',
+    warnText: '#e5c67d',
+  },
+  // Declared and then overridden to `none` by `edge: 'line'`. Kept rather than blanked so the preset still
+  // says what it WOULD lift with, if a later edge strategy wants both.
+  shadow: { float: '0 4px 16px rgba(0, 0, 0, 0.45)', modal: '0 12px 40px rgba(0, 0, 0, 0.6)' },
+  shape: { edge: 'line', radius: { control: 0, pill: 0, surface: 0 } },
+  surfaces: { float: '#28292b', modal: '#2d2e30' },
+};
+
 /** Every skin, in the order the switcher offers them. Night first: the default must be the first choice. */
-export const THEMES: readonly ConsoleTheme[] = [NIGHT, DAY, CONTRAST, AMBER];
+export const THEMES: readonly ConsoleTheme[] = [NIGHT, DAY, CONTRAST, AMBER, MARK43];
 
 export const DEFAULT_THEME: ThemeId = 'night';
 
+/**
+ * Why a host's request resolved the way it did, so a refusal can be reported rather than guessed at.
+ *
+ * `reason` is `'none'`, `'id'` or `'preset'` when the request was honoured, and a sentence naming what was
+ * wrong when it was not.
+ */
+export interface HostThemeChoice {
+  readonly reason: string;
+  readonly theme: ConsoleTheme;
+}
+
+/**
+ * The three variables the density lever moves, on their own.
+ *
+ * Separate from `themeVariables` because `global-css.ts` re-declares exactly these — and nothing else —
+ * under `(pointer: coarse)`: repeating the palette there would double the sheet to restate values that
+ * cannot change with the pointer.
+ */
+export function densityVariables(theme: ConsoleTheme, coarsePointer: boolean): string {
+  const density = resolveDensity(theme.density, coarsePointer);
+
+  const entries: readonly (readonly [string, string])[] = [
+    ['--os-row-padding', density.rowPadding],
+    ['--os-text-caption', `${density.caption}px`],
+    ['--os-text-body', `${density.body}px`],
+  ];
+
+  return entries.map(declaration).join('\n');
+}
+
 /** The skin the operator last chose, or the default for anything unreadable or no longer shipped. */
-export function loadTheme(storage?: JsonStorage): ThemeId {
+/**
+ * The skin the console opens with, and the ONE place the four sources are ordered.
+ *
+ * They are ordered rather than merged, because every pair of them can disagree and a rule invented at each
+ * call site is how two surfaces end up opening in different skins:
+ *
+ * 1. **a link's or a host's `theme=`** — someone is showing this operator a specific thing, or a CAD shell
+ *    is pinning its own brand. Honoured for the session and **never persisted**: it is somebody else's
+ *    view, not a change to how this console looks from now on.
+ * 2. **the operator's stored choice** — an explicit decision, and it wins forever once made.
+ * 3. **what their machine asks for** — `prefers-contrast`, then `prefers-color-scheme`.
+ * 4. **Night.**
+ *
+ * An unknown id in (1) falls through to (2) rather than to Night, and says so: a typo in a shared link
+ * should cost the recipient the sender's skin, not their own.
+ */
+export function initialTheme(params?: URLSearchParams, storage?: JsonStorage): ThemeId {
+  const asked = params === undefined ? undefined : readView(params).theme;
+  if (asked !== undefined) {
+    const choice = resolveHostTheme(asked);
+    if (choice.reason === 'id') {
+      return choice.theme.id;
+    }
+    report(choice.reason);
+  }
+
+  return loadTheme(storage);
+}
+
+export function loadTheme(storage?: JsonStorage, preferred: ThemeId = preferredTheme()): ThemeId {
   const stored = readJson(STORAGE_KEYS.theme, storage);
 
-  return THEMES.some((theme) => theme.id === stored) ? (stored as ThemeId) : DEFAULT_THEME;
+  return THEMES.some((theme) => theme.id === stored) ? (stored as ThemeId) : preferred;
 }
+
+/**
+ * The skin the operator's own machine asks for, before they have said anything.
+ *
+ * Until 201/7-10 the first run was Night whatever the OS said, which meant a console opening dark on a
+ * phone in daylight had a Day preset it never offered — and `prefers-contrast` names exactly the person
+ * Contrast was built for. An explicit choice still wins forever: this is only consulted when nothing is
+ * stored, and the moment the operator picks a skin `saveTheme` takes over for good.
+ *
+ * Order matters. Contrast is checked FIRST because it answers a stronger statement — someone who has asked
+ * their system for more contrast has said something about their eyes or their screen, not about the light
+ * in the room — and it is a dark preset, so a light-preferring operator who also asks for contrast gets the
+ * one that serves the harder need.
+ */
+export function preferredTheme(): ThemeId {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return DEFAULT_THEME;
+  }
+  if (window.matchMedia('(prefers-contrast: more)').matches) {
+    return 'contrast';
+  }
+
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'day' : DEFAULT_THEME;
+}
+
+/**
+ * The skin a HOST asked for, checked before it is allowed to paint anything.
+ *
+ * `?embed=1` is the whole console inside a CAD shell that will have its own brand, so a host needs a way
+ * in. It has exactly two, and neither is the one the cascade would allow:
+ *
+ * - **an id** — `theme=mark43`, which is what a URL can carry and what an iframe embedder actually has.
+ * - **a full preset** — for a same-document host that mounts our chrome itself, validated here against the
+ *   same APCA thresholds every shipped preset clears, and refused loudly when it does not.
+ *
+ * **What must not happen is a host overriding `--os-*` from its own root.** The cascade permits it and no
+ * guard would ever see it: an unmeasured skin that renders, lints and screenshots fine — which is the exact
+ * failure 7-09's guard exists to catch, re-entering through the back door. That is why this returns a
+ * REASON as well as a theme, and why a refusal is reported rather than silently swallowed.
+ *
+ * A refusal falls back to the default rather than to a partially-applied palette: half a validated skin is
+ * a screen nobody has ever looked at.
+ */
+export function resolveHostTheme(asked: unknown): HostThemeChoice {
+  if (asked === undefined || asked === null || asked === '') {
+    return { reason: 'none', theme: shipped(DEFAULT_THEME) };
+  }
+  if (typeof asked === 'string') {
+    const found = THEMES.find((theme) => theme.id === asked);
+
+    return found === undefined
+      ? { reason: `no preset is called '${asked}'`, theme: shipped(DEFAULT_THEME) }
+      : { reason: 'id', theme: found };
+  }
+  const failures = validateTheme(asked);
+
+  return failures.length === 0
+    ? { reason: 'preset', theme: asked as ConsoleTheme }
+    : {
+        reason: `the supplied preset fails its contrast floor — ${failures.join('; ')}`,
+        theme: shipped(DEFAULT_THEME),
+      };
+}
+
+/**
+ * Everything wrong with a candidate theme, as sentences — empty when it may be used.
+ *
+ * Shape first, then contrast, because a missing field is not a contrast failure and reporting it as one
+ * sends the host looking in the wrong place.
+ */
+export function validateTheme(candidate: unknown): readonly string[] {
+  if (typeof candidate !== 'object' || candidate === null) {
+    return ['a theme must be an object'];
+  }
+  // `in` is not enough: `{ ...night, ramp: undefined }` carries the key and fails the CONTRAST check
+  // instead, which sends a host looking at its colours for a field it never sent.
+  const fields = candidate as Readonly<Record<string, unknown>>;
+  const missing = REQUIRED_FIELDS.filter((field) => fields[field] === undefined || fields[field] === null);
+  if (missing.length > 0) {
+    return [`missing: ${missing.join(', ')}`];
+  }
+
+  // `contrastFailures` reports an unmeasurable colour as a failed pair rather than throwing, so a host that
+  // sends `rebeccapurple` gets told which pair it broke instead of a blanket refusal.
+  return contrastFailures(candidate as ConsoleTheme);
+}
+
+/**
+ * How a refused host request is reported, and it is `console.error` for a reason that is not severity.
+ *
+ * It is not a thrown error: a bad `theme=` must never be why an operator cannot open the console. It is not
+ * swallowed either — the point of validating a host's palette is that a skin nobody measured does not get
+ * to paint the screen quietly. And it is `error` rather than `warn` because `world/error-log.ts` collects
+ * exactly that into the JSON the operator copies: the target device is a phone with no devtools to attach,
+ * so a refusal logged at `warn` is a refusal nobody will ever read.
+ */
+function report(reason: string): void {
+  // eslint-disable-next-line no-console -- picked up by `error-log.ts` into the capture; see above
+  console.error(`[dispatch] theme: ${reason}; keeping the operator's own choice`);
+}
+
+/** The fields `contrastFailures` and `themeVariables` both read; a theme missing one paints nothing. */
+const REQUIRED_FIELDS = [
+  'accent',
+  'density',
+  'font',
+  'id',
+  'mode',
+  'name',
+  'onStatus',
+  'ramp',
+  'semantic',
+  'shadow',
+  'shape',
+  'surfaces',
+] as const;
 
 export function saveTheme(id: ThemeId, storage?: JsonStorage): void {
   writeJson(STORAGE_KEYS.theme, id, storage);
@@ -292,8 +614,17 @@ export function saveTheme(id: ThemeId, storage?: JsonStorage): void {
  * Emitted once per theme into the console's single stylesheet (`global-css.ts`), each block scoped to
  * `[data-theme="…"]`. Switching is then an attribute write — the browser repaints and React is not involved
  * at all, which is the point of putting colour here instead of in the style objects.
+ *
+ * `coarsePointer` is what the density clamp is resolved against. It is a parameter rather than a hook call
+ * because the blocks are emitted ONCE into a static sheet: `global-css.ts` emits both sides and lets a
+ * `@media (pointer: coarse)` query pick, so the clamp costs no JavaScript and survives a skin change that
+ * React never sees.
  */
-export function themeVariables(theme: ConsoleTheme): string {
+export function themeVariables(theme: ConsoleTheme, coarsePointer = false): string {
+  // `edge: 'line'` is the whole of Mark43's depth strategy: a hairline separates the surfaces and nothing
+  // is lifted off anything. Emitting `none` here rather than branching in the style objects keeps the rule
+  // that a skin change is one attribute write.
+  const shadow = theme.shape.edge === 'line' ? { float: 'none', modal: 'none' } : theme.shadow;
   const entries: readonly (readonly [string, string])[] = [
     ['color-scheme', theme.mode],
     ['--os-bg', theme.ramp.bg],
@@ -320,14 +651,24 @@ export function themeVariables(theme: ConsoleTheme): string {
     ['--os-float-bg', theme.surfaces.float],
     ['--os-modal-bg', theme.surfaces.modal],
     ['--os-on-status', theme.onStatus],
-    ['--os-shadow-float', theme.shadow.float],
-    ['--os-shadow-modal', theme.shadow.modal],
+    ['--os-shadow-float', shadow.float],
+    ['--os-shadow-modal', shadow.modal],
     ['--os-font-sans', theme.font.sans],
     ['--os-font-mono', theme.font.mono],
-    ['--os-row-padding', theme.rowPadding],
+    ['--os-radius-control', `${theme.shape.radius.control}px`],
+    ['--os-radius-pill', `${theme.shape.radius.pill}px`],
+    ['--os-radius-surface', `${theme.shape.radius.surface}px`],
   ];
 
-  return entries.map(([name, value]) => `  ${name}: ${value};`).join('\n');
+  return [...entries.map(declaration), densityVariables(theme, coarsePointer)].join('\n');
+}
+
+function declaration([name, value]: readonly [string, string]): string {
+  return `  ${name}: ${value};`;
+}
+
+function shipped(id: ThemeId): ConsoleTheme {
+  return THEMES.find((theme) => theme.id === id) ?? THEMES[0];
 }
 
 /*

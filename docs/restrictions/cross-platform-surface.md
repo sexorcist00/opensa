@@ -77,7 +77,8 @@ component, a `touch` flag from `useCoarsePointer()`, and a second size token bes
 ([201/7-10](../plans/201-dispatch-console/7-the-operator-map/readme.md)). Real CAD is a desk product with
 three monitors, so a skin taken from one carries a desk's density: Mark43's grid is far tighter than
 anything this console may show a finger. A theme is allowed **one** density lever
-(`ConsoleTheme.rowPadding`, and the `density` enum 7-10 proposes beside it), and the rule for it is:
+(`ConsoleTheme.density`, built 2026-08-30 — it replaced the free-form `rowPadding` string and moves the row
+padding and the `caption`/`body` type steps together), and the rule for it is:
 
 **the lever is resolved against `useCoarsePointer()`, in the resolver — not offered to a reviewer.** A
 preset may ask for `dense`; where the pointer is coarse it resolves to the size that still clears 44 px in
@@ -88,8 +89,20 @@ picks it on a desk, and the same `localStorage` key paints their phone that even
 re-asks the question, so a lever that trusts the preset ships a desk row to a hand — and it is the same
 silence as the rest of this file (it typechecks, it lints, the suite is green, and it looks perfect on the
 machine that chose it). Clamping in the resolver makes the violation unrepresentable rather than
-reviewable, and the guard is one test: every preset, resolved at a coarse pointer, still yields a row that
-clears the criterion.
+reviewable.
+
+**BUILT 2026-08-30, and the guard this entry originally specified would never have failed.** It said *every
+preset, resolved at a coarse pointer, still yields a row that clears the criterion* — but the phone's row
+(`styles.rowTouch`) carries `minHeight: TOUCH_TARGET` and its own padding, so 44 px is true by construction
+whatever a preset asks for, and that assertion passes on every possible input including the ones it exists
+to catch. **What actually travels is the TYPE**: a desk-chosen `dense` lands 10-px text inside a row that
+stays 44 px tall, and no other guard here can see it. `theme.test.ts` now asserts both — the height, and
+that no preset resolves below the `compact` type steps at a coarse pointer.
+
+One more thing the build changed: the clamp is emitted as a `@media (pointer: coarse)` block in the
+stylesheet rather than resolved once at mount, because a skin change is one attribute write that React
+never sees — a value resolved at mount would be the density of whatever skin was current when the console
+opened.
 
 ## Caught, or silent?
 
