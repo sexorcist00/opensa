@@ -145,6 +145,14 @@ export interface InventoryReport {
    * cannot be compared without it.
    */
   readonly framesSkipped: number;
+  /**
+   * Whether anything was drawn OVER the map in this window — false under `?overlay=0`.
+   *
+   * A capture states what its run was configured with, or an A/B is not one: with this false the symbology
+   * counts below describe a board that was maintained and never drawn, and `overlay-2d` reads ~0 because
+   * the pass returned rather than because it got cheap.
+   */
+  readonly overlay: boolean;
   /** Per-frame cost centres, descending by mean. */
   readonly passes: readonly InventoryPass[];
   /** Between-frame named work, mean ms per sampled frame, descending. Empty means nothing was wrapped. */
@@ -396,6 +404,8 @@ export class FrameInventory {
      *  frame never reaches `sample`. */
     framesSkipped: number;
     hasTimestamps: boolean;
+    /** Whether the frame drew anything over the map — `?overlay=0` makes it false. */
+    overlay: boolean;
     /** `engine.cells.pickingBytes` — the host cost of the placement mapper the console picks against. */
     pickingBytes: number;
     surface: InventoryReport['surface'];
@@ -449,6 +459,7 @@ export class FrameInventory {
       },
       frames: this.dts.length,
       framesSkipped: context.framesSkipped,
+      overlay: context.overlay,
       passes,
       spans: [...this.spanTotals.entries()]
         .map(([name, ms]) => [name, ms / frames] as const)

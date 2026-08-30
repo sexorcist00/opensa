@@ -238,6 +238,12 @@ const IDLE_STREAM: StreamStats = {
 };
 
 /**
+ * What the render gate is shown instead of the board while `?overlay=0` is on — ONE frozen value, compared
+ * by identity, so a roster nobody is drawing cannot pace the frames the engine is being judged on.
+ */
+const NO_BOARD: Operations = { incidents: [], log: [], now: 0, units: [] };
+
+/**
  * What one press of the on-screen zoom control changes the framed span by. Halving and doubling is what a
  * map's `+`/`−` has meant since the first tile server, and it is one notch of the three zoom LEVELS' own
  * spacing rather than a number picked to feel right.
@@ -540,6 +546,20 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // 201/1-01. Off unless asked for: draining the span recorder is cheap, but a mode that measures by default
   // is a mode nobody can trust to have measured nothing.
   const inventory = params.get('inventory') === '1' ? new FrameInventory() : null;
+  /**
+   * Draw the WORLD and nothing over it — `?overlay=0`.
+   *
+   * The field round of 2026-08-30 put `overlay-2d` at 2.37 ms of CPU against `engine-frame`'s 0.57 on a
+   * phone at 150 units, and 5.53 against 1.67 on a continuously drawing one: a frame on this console is
+   * mostly its symbology and hardly its engine. Every number the streaming and texture work is judged on
+   * has to come off a frame that is not paying that tax, and the only honest way to get one is to STOP
+   * DRAWING IT — subtracting the segment afterwards would credit the engine with work the GPU still did.
+   *
+   * It turns off what is drawn over the map (the symbol pass, the chips, the sketches, the radar) and the
+   * per-frame update that feeds them. The layers themselves are still CONSTRUCTED, so this is the draw cost
+   * and never the allocation — a capture taken with it says which one it measured.
+   */
+  const overlayOn = params.get('overlay') !== '0';
   // A SECOND span recorder, deliberately not the shared `frameSpans`. That one is for work between frames,
   // and a span opened inside the loop body would be subtracted from `dt` twice
   // (restrictions/architecture.md). Nobody subtracts this one from anything: it is the CPU-side proxy for a
@@ -683,11 +703,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         created: lastStream.created,
         evicted: lastStream.evicted,
         hour,
-        ops,
+        ops: overlayOn ? ops : NO_BOARD,
         pending: lastStream.pendingCells,
         pose: camera.pose(),
-        selection: options.selection(),
-        sketch: sketch.revision(),
+        selection: overlayOn ? options.selection() : null,
+        sketch: overlayOn ? sketch.revision() : 0,
       })
     ) {
       if (!idleReported) {
@@ -701,10 +721,12 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     }
     idleReported = false;
     const state = camera.state(aspect);
-    time('board', () => {
-      beacons.update(ops, options.selection(), options.trails?.());
-      unitModels.update(ops.units);
-    });
+    if (overlayOn) {
+      time('board', () => {
+        beacons.update(ops, options.selection(), options.trails?.());
+        unitModels.update(ops.units);
+      });
+    }
     // Rings follow the ground point the view is over, never the eye: a camera a kilometre up sits outside
     // every ring and would stream nothing at all. The view goes with it, so what the frame will draw is what
     // the streamer fetches — judged at the DRAWING buffer's height, which is where a DPR of 3 lives.
@@ -720,6 +742,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     }
 
     time('overlay-2d', () => {
+      // `?overlay=0` (see `overlayOn`): the segment stays and reads ~0, so a capture SAYS the pass ran and
+      // drew nothing rather than leaving a reader to wonder which build it came off.
+      if (!overlayOn) {
+        return;
+      }
       /**
        * The first few overlay draws are SPLIT, and only those.
        *
@@ -764,7 +791,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     });
     // The radar is drawn LAST and only when something on it moved (201/7-04) — it is an inset over a map
     // that is already correct, and a repaint every frame is what chain 4 would have to undo.
-    radar?.draw(ops, options.selection(), camera, aspect);
+    if (overlayOn) {
+      radar?.draw(ops, options.selection(), camera, aspect);
+    }
 
     if (pendingCapture !== null) {
       const resolve = pendingCapture;
@@ -904,6 +933,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         firstFrames: engine.firstFrames.map((totals) => totals.byName),
         framesSkipped: gate.idleFrames,
         hasTimestamps: !engine.deviceReport.missing.includes('timestamp-query'),
+        overlay: overlayOn,
         pickingBytes: engine.cells.pickingBytes,
         surface: {
           cssHeight: canvas.clientHeight,
