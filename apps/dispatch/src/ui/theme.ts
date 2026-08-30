@@ -27,6 +27,8 @@
 import type { JsonStorage } from '../map/storage';
 
 import { readJson, STORAGE_KEYS, writeJson } from '../map/storage';
+import { readView } from '../map/view-link';
+import { contrastFailures } from './apca';
 
 export interface ConsoleTheme {
   readonly accent: ThemeAccent;
@@ -421,6 +423,17 @@ export const THEMES: readonly ConsoleTheme[] = [NIGHT, DAY, CONTRAST, AMBER, MAR
 export const DEFAULT_THEME: ThemeId = 'night';
 
 /**
+ * Why a host's request resolved the way it did, so a refusal can be reported rather than guessed at.
+ *
+ * `reason` is `'none'`, `'id'` or `'preset'` when the request was honoured, and a sentence naming what was
+ * wrong when it was not.
+ */
+export interface HostThemeChoice {
+  readonly reason: string;
+  readonly theme: ConsoleTheme;
+}
+
+/**
  * The three variables the density lever moves, on their own.
  *
  * Separate from `themeVariables` because `global-css.ts` re-declares exactly these — and nothing else —
@@ -440,11 +453,156 @@ export function densityVariables(theme: ConsoleTheme, coarsePointer: boolean): s
 }
 
 /** The skin the operator last chose, or the default for anything unreadable or no longer shipped. */
-export function loadTheme(storage?: JsonStorage): ThemeId {
+/**
+ * The skin the console opens with, and the ONE place the four sources are ordered.
+ *
+ * They are ordered rather than merged, because every pair of them can disagree and a rule invented at each
+ * call site is how two surfaces end up opening in different skins:
+ *
+ * 1. **a link's or a host's `theme=`** — someone is showing this operator a specific thing, or a CAD shell
+ *    is pinning its own brand. Honoured for the session and **never persisted**: it is somebody else's
+ *    view, not a change to how this console looks from now on.
+ * 2. **the operator's stored choice** — an explicit decision, and it wins forever once made.
+ * 3. **what their machine asks for** — `prefers-contrast`, then `prefers-color-scheme`.
+ * 4. **Night.**
+ *
+ * An unknown id in (1) falls through to (2) rather than to Night, and says so: a typo in a shared link
+ * should cost the recipient the sender's skin, not their own.
+ */
+export function initialTheme(params?: URLSearchParams, storage?: JsonStorage): ThemeId {
+  const asked = params === undefined ? undefined : readView(params).theme;
+  if (asked !== undefined) {
+    const choice = resolveHostTheme(asked);
+    if (choice.reason === 'id') {
+      return choice.theme.id;
+    }
+    report(choice.reason);
+  }
+
+  return loadTheme(storage);
+}
+
+export function loadTheme(storage?: JsonStorage, preferred: ThemeId = preferredTheme()): ThemeId {
   const stored = readJson(STORAGE_KEYS.theme, storage);
 
-  return THEMES.some((theme) => theme.id === stored) ? (stored as ThemeId) : DEFAULT_THEME;
+  return THEMES.some((theme) => theme.id === stored) ? (stored as ThemeId) : preferred;
 }
+
+/**
+ * The skin the operator's own machine asks for, before they have said anything.
+ *
+ * Until 201/7-10 the first run was Night whatever the OS said, which meant a console opening dark on a
+ * phone in daylight had a Day preset it never offered — and `prefers-contrast` names exactly the person
+ * Contrast was built for. An explicit choice still wins forever: this is only consulted when nothing is
+ * stored, and the moment the operator picks a skin `saveTheme` takes over for good.
+ *
+ * Order matters. Contrast is checked FIRST because it answers a stronger statement — someone who has asked
+ * their system for more contrast has said something about their eyes or their screen, not about the light
+ * in the room — and it is a dark preset, so a light-preferring operator who also asks for contrast gets the
+ * one that serves the harder need.
+ */
+export function preferredTheme(): ThemeId {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return DEFAULT_THEME;
+  }
+  if (window.matchMedia('(prefers-contrast: more)').matches) {
+    return 'contrast';
+  }
+
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'day' : DEFAULT_THEME;
+}
+
+/**
+ * The skin a HOST asked for, checked before it is allowed to paint anything.
+ *
+ * `?embed=1` is the whole console inside a CAD shell that will have its own brand, so a host needs a way
+ * in. It has exactly two, and neither is the one the cascade would allow:
+ *
+ * - **an id** — `theme=mark43`, which is what a URL can carry and what an iframe embedder actually has.
+ * - **a full preset** — for a same-document host that mounts our chrome itself, validated here against the
+ *   same APCA thresholds every shipped preset clears, and refused loudly when it does not.
+ *
+ * **What must not happen is a host overriding `--os-*` from its own root.** The cascade permits it and no
+ * guard would ever see it: an unmeasured skin that renders, lints and screenshots fine — which is the exact
+ * failure 7-09's guard exists to catch, re-entering through the back door. That is why this returns a
+ * REASON as well as a theme, and why a refusal is reported rather than silently swallowed.
+ *
+ * A refusal falls back to the default rather than to a partially-applied palette: half a validated skin is
+ * a screen nobody has ever looked at.
+ */
+export function resolveHostTheme(asked: unknown): HostThemeChoice {
+  if (asked === undefined || asked === null || asked === '') {
+    return { reason: 'none', theme: shipped(DEFAULT_THEME) };
+  }
+  if (typeof asked === 'string') {
+    const found = THEMES.find((theme) => theme.id === asked);
+
+    return found === undefined
+      ? { reason: `no preset is called '${asked}'`, theme: shipped(DEFAULT_THEME) }
+      : { reason: 'id', theme: found };
+  }
+  const failures = validateTheme(asked);
+
+  return failures.length === 0
+    ? { reason: 'preset', theme: asked as ConsoleTheme }
+    : {
+        reason: `the supplied preset fails its contrast floor — ${failures.join('; ')}`,
+        theme: shipped(DEFAULT_THEME),
+      };
+}
+
+/**
+ * Everything wrong with a candidate theme, as sentences — empty when it may be used.
+ *
+ * Shape first, then contrast, because a missing field is not a contrast failure and reporting it as one
+ * sends the host looking in the wrong place.
+ */
+export function validateTheme(candidate: unknown): readonly string[] {
+  if (typeof candidate !== 'object' || candidate === null) {
+    return ['a theme must be an object'];
+  }
+  // `in` is not enough: `{ ...night, ramp: undefined }` carries the key and fails the CONTRAST check
+  // instead, which sends a host looking at its colours for a field it never sent.
+  const fields = candidate as Readonly<Record<string, unknown>>;
+  const missing = REQUIRED_FIELDS.filter((field) => fields[field] === undefined || fields[field] === null);
+  if (missing.length > 0) {
+    return [`missing: ${missing.join(', ')}`];
+  }
+
+  // `contrastFailures` reports an unmeasurable colour as a failed pair rather than throwing, so a host that
+  // sends `rebeccapurple` gets told which pair it broke instead of a blanket refusal.
+  return contrastFailures(candidate as ConsoleTheme);
+}
+
+/**
+ * How a refused host request is reported, and it is `console.error` for a reason that is not severity.
+ *
+ * It is not a thrown error: a bad `theme=` must never be why an operator cannot open the console. It is not
+ * swallowed either — the point of validating a host's palette is that a skin nobody measured does not get
+ * to paint the screen quietly. And it is `error` rather than `warn` because `world/error-log.ts` collects
+ * exactly that into the JSON the operator copies: the target device is a phone with no devtools to attach,
+ * so a refusal logged at `warn` is a refusal nobody will ever read.
+ */
+function report(reason: string): void {
+  // eslint-disable-next-line no-console -- picked up by `error-log.ts` into the capture; see above
+  console.error(`[dispatch] theme: ${reason}; keeping the operator's own choice`);
+}
+
+/** The fields `contrastFailures` and `themeVariables` both read; a theme missing one paints nothing. */
+const REQUIRED_FIELDS = [
+  'accent',
+  'density',
+  'font',
+  'id',
+  'mode',
+  'name',
+  'onStatus',
+  'ramp',
+  'semantic',
+  'shadow',
+  'shape',
+  'surfaces',
+] as const;
 
 export function saveTheme(id: ThemeId, storage?: JsonStorage): void {
   writeJson(STORAGE_KEYS.theme, id, storage);
@@ -507,6 +665,10 @@ export function themeVariables(theme: ConsoleTheme, coarsePointer = false): stri
 
 function declaration([name, value]: readonly [string, string]): string {
   return `  ${name}: ${value};`;
+}
+
+function shipped(id: ThemeId): ConsoleTheme {
+  return THEMES.find((theme) => theme.id === id) ?? THEMES[0];
 }
 
 /*

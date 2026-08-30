@@ -33,7 +33,7 @@ import { Sheet } from './ui/sheet';
 import { StatusBar } from './ui/status-bar';
 import { StatusTally } from './ui/status-tally';
 import { styles } from './ui/styles';
-import { loadTheme, saveTheme, type ThemeId } from './ui/theme';
+import { initialTheme, saveTheme, type ThemeId } from './ui/theme';
 import { TimelineBar } from './ui/timeline-bar';
 import { TopBar } from './ui/top-bar';
 import { UnitsPanel, unitsTally } from './ui/units-panel';
@@ -87,8 +87,11 @@ export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}
    * The skin. It lives here only so the switcher can read it back; the actual repaint is the `data-theme`
    * attribute below, which the browser resolves against the variable blocks in `global-css.ts` — no
    * component re-renders because a skin changed.
+   *
+   * `initialTheme` settles the four sources in one place and in one order (7-10): a link's or a host's
+   * `theme=`, then the operator's stored choice, then what their machine asks for, then Night.
    */
-  const [theme, setTheme] = useState<ThemeId>(loadTheme);
+  const [theme, setTheme] = useState<ThemeId>(() => initialTheme(dispatchParams()));
   const applyTheme = useCallback((next: ThemeId) => {
     setTheme(next);
     saveTheme(next);

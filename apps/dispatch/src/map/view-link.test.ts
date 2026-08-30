@@ -48,7 +48,14 @@ describe('view-link', () => {
 
   describe('positive cases', () => {
     it('round-trips a whole view through a query string', () => {
-      const view = { ...viewOfPose(POSE), behindLive: 120, district: 'los-santos-centre', hour: 21.5, src: '/build' };
+      const view = {
+        ...viewOfPose(POSE),
+        behindLive: 120,
+        district: 'los-santos-centre',
+        hour: 21.5,
+        src: '/build',
+        theme: 'mark43',
+      };
       const back = readView(viewQuery(view));
 
       expect(back.at?.[0]).toBeCloseTo(1480.4, 1);
@@ -61,6 +68,7 @@ describe('view-link', () => {
       expect(back.behindLive).toBe(120);
       expect(back.district).toBe('los-santos-centre');
       expect(back.src).toBe('/build');
+      expect(back.theme).toBe('mark43');
     });
 
     it('writes angles in degrees, because a human edits these by hand', () => {

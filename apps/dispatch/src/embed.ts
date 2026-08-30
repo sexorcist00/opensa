@@ -46,6 +46,18 @@ export type {
   UnitStatus,
 } from './ops/types';
 
+/**
+ * The skin, for a host that mounts this console's chrome itself.
+ *
+ * An iframe embedder pins a preset by id with `?embed=1&theme=…` and needs nothing from here. A
+ * same-document host that wants its own palette passes a whole `ConsoleTheme` through `resolveHostTheme`,
+ * which measures it against the same APCA thresholds every shipped preset clears and refuses it — loudly,
+ * back to the default — when it does not. What a host must NOT do is override `--os-*` from its own root:
+ * the cascade permits it, and it is an unmeasured skin that renders, lints and screenshots fine (201/7-10).
+ */
+export type { ConsoleTheme, HostThemeChoice, ThemeDensity, ThemeId, ThemeShape } from './ui/theme';
+export { resolveHostTheme, THEMES, validateTheme } from './ui/theme';
+
 export type { BootOptions, DispatchHandle, DispatchReadout, MapClick, ZoomLevel } from './world/boot';
 export { bootDispatch, dispatchParams } from './world/boot';
 export { bootPlanMode } from './world/plan-mode';

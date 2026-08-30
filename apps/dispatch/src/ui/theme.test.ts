@@ -12,57 +12,28 @@
  * pairs that are genuinely hard to read and fails pairs that are fine. The thresholds are the ones DESIGN.md
  * declares: **Lc 90 for primary text, Lc 60 for secondary**.
  *
- * The implementation below is the published APCA 0.1.9 formula with its constants named, so the numbers can
- * be checked against the reference tool rather than trusted.
+ * The formula itself moved to `apca.ts` in 201/7-10, when an embedding host became able to supply a
+ * palette: the same measure now runs at runtime, and a guard that measures with its own private copy of
+ * the formula it guards is a guard that drifts. This file asserts; `apca.ts` measures.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import type { ConsoleTheme } from './theme';
-
+import { contrastFailures, luminance } from './apca';
 import { styles, TOUCH_TARGET } from './styles';
-import { DEFAULT_THEME, loadTheme, resolveDensity, saveTheme, THEMES, themeVariables } from './theme';
-
-/** Lc for primary text (ramp step 12) on any surface it is set on. */
-const LC_PRIMARY = 90;
-/** Lc for secondary text (ramp step 11), and for the semantic text colours on their own fills. */
-const LC_SECONDARY = 60;
-
-// APCA 0.1.9 constants, named as the spec names them.
-const TRC = 2.4;
-const R_CO = 0.2126729;
-const G_CO = 0.7151522;
-const B_CO = 0.072175;
-const NORM_BG = 0.56;
-const NORM_TXT = 0.57;
-const REV_TXT = 0.62;
-const REV_BG = 0.65;
-const BLK_THRS = 0.022;
-const BLK_CLMP = 1.414;
-const LO_CLIP = 0.1;
-const DELTA_Y_MIN = 0.0005;
-const SCALE = 1.14;
-const LO_OFFSET = 0.027;
-
-/** APCA lightness contrast, signed as the spec signs it; the tests compare its magnitude. */
-function apca(text: string, background: string): number {
-  const clamp = (y: number): number => (y > BLK_THRS ? y : y + (BLK_THRS - y) ** BLK_CLMP);
-  const txtY = clamp(luminance(text));
-  const bgY = clamp(luminance(background));
-  if (Math.abs(bgY - txtY) < DELTA_Y_MIN) {
-    return 0;
-  }
-  if (bgY > txtY) {
-    const sapc = (bgY ** NORM_BG - txtY ** NORM_TXT) * SCALE;
-
-    return (sapc < LO_CLIP ? 0 : sapc - LO_OFFSET) * 100;
-  }
-  const sapc = (bgY ** REV_BG - txtY ** REV_TXT) * SCALE;
-
-  return (sapc > -LO_CLIP ? 0 : sapc + LO_OFFSET) * 100;
-}
+import {
+  DEFAULT_THEME,
+  initialTheme,
+  loadTheme,
+  resolveDensity,
+  resolveHostTheme,
+  saveTheme,
+  THEMES,
+  themeVariables,
+  validateTheme,
+} from './theme';
 
 /** Every component file beside this test, as `[name, source]` — what the two raw-value guards read. */
 function components(): readonly (readonly [string, string])[] {
@@ -73,48 +44,12 @@ function components(): readonly (readonly [string, string])[] {
     .map((name) => [name, readFileSync(join(here, name), 'utf8')] as const);
 }
 
-/** Screen luminance of a `#rrggbb`. Alpha is not accepted: a translucent colour has no luminance of its own. */
-function luminance(hex: string): number {
-  const value = hex.replace('#', '');
-  const channel = (at: number): number => Number.parseInt(value.slice(at, at + 2), 16) / 255;
-
-  return R_CO * channel(0) ** TRC + G_CO * channel(2) ** TRC + B_CO * channel(4) ** TRC;
-}
-
-/** Every text-on-surface pair a theme actually renders, named so a failure says which one broke. */
-function pairs(
-  theme: ConsoleTheme,
-): readonly { readonly least: number; readonly on: string; readonly text: string; readonly what: string }[] {
-  const { accent, ramp, semantic } = theme;
-  const surfaces: readonly (readonly [string, string])[] = [
-    ['bg', ramp.bg],
-    ['surface', ramp.surface],
-    ['surfaceRaised', ramp.surfaceRaised],
-    ['surfaceHover', ramp.surfaceHover],
-    ['surfaceOn', ramp.surfaceOn],
-  ];
-
-  return [
-    ...surfaces.map(([name, on]) => ({ least: LC_PRIMARY, on, text: ramp.text, what: `text on ${name}` })),
-    ...surfaces.map(([name, on]) => ({ least: LC_SECONDARY, on, text: ramp.textMuted, what: `textMuted on ${name}` })),
-    { least: LC_SECONDARY, on: accent.bg, text: accent.text, what: 'accent text on accent bg' },
-    { least: LC_SECONDARY, on: ramp.surface, text: accent.solid, what: 'accent solid on surface' },
-    { least: LC_SECONDARY, on: semantic.dangerBg, text: semantic.dangerText, what: 'danger text on danger bg' },
-    { least: LC_SECONDARY, on: ramp.surface, text: semantic.danger, what: 'danger on surface' },
-  ];
-}
-
 describe('theme', () => {
   describe('negative cases', () => {
     it.each(THEMES.map((theme) => [theme.name, theme] as const))(
       'lets no text in %s fall under its APCA threshold',
       (_name, theme) => {
-        const failures = pairs(theme)
-          .map((pair) => ({ ...pair, lc: Math.round(Math.abs(apca(pair.text, pair.on))) }))
-          .filter((pair) => pair.lc < pair.least)
-          .map((pair) => `${pair.what}: Lc ${pair.lc}, wanted ${pair.least}`);
-
-        expect(failures).toEqual([]);
+        expect(contrastFailures(theme)).toEqual([]);
       },
     );
 
@@ -184,6 +119,34 @@ describe('theme', () => {
       expect(styles.rowTouch.minHeight).toBe(TOUCH_TARGET);
     });
 
+    it('refuses a host palette that cannot be read, and names every pair', () => {
+      // The back door 7-09's guard exists to close: a host CAN override `--os-*` from its own root and no
+      // guard would ever see it. The supported way in is measured with the same call the shipped presets
+      // are, so an unreadable palette is refused rather than rendered.
+      const night = THEMES[0];
+      const unreadable = { ...night, ramp: { ...night.ramp, text: '#0d0f13', textMuted: '#0a0c10' } };
+
+      expect(validateTheme(unreadable).length).toBeGreaterThan(0);
+      expect(validateTheme({ ...night, ramp: undefined })).toEqual([expect.stringContaining('missing')]);
+      expect(validateTheme('night')).toEqual(['a theme must be an object']);
+      // A colour APCA cannot measure must FAIL rather than pass. `luminance` yields NaN for one, and
+      // `NaN < 60` is false — so before 7-10 this palette cleared the guard on the pairs it broke.
+      expect(validateTheme({ ...night, ramp: { ...night.ramp, bg: 'rebeccapurple' } })).toEqual([
+        'text on bg: rebeccapurple is not an opaque #rrggbb',
+        'textMuted on bg: rebeccapurple is not an opaque #rrggbb',
+      ]);
+    });
+
+    it('keeps the operator their own skin when a link names one that is not shipped', () => {
+      // A typo in a shared link should cost the recipient the SENDER's skin, not their own — so an
+      // unknown id falls through to the stored choice rather than resetting the console to Night.
+      const storage = { getItem: (): string => '"amber"', setItem: (): void => undefined };
+
+      expect(initialTheme(new URLSearchParams('theme=chartreuse'), storage)).toBe('amber');
+      expect(resolveHostTheme('chartreuse').reason).toContain('chartreuse');
+      expect(resolveHostTheme('chartreuse').theme.id).toBe(DEFAULT_THEME);
+    });
+
     it('falls back to the default for a stored id that is not shipped any more', () => {
       expect(loadTheme({ getItem: () => '"chartreuse"', setItem: () => undefined })).toBe(DEFAULT_THEME);
       expect(loadTheme({ getItem: () => 'not json', setItem: () => undefined })).toBe(DEFAULT_THEME);
@@ -219,6 +182,31 @@ describe('theme', () => {
         'caption',
         'rowPadding',
       ]);
+    });
+
+    it('settles the four sources in one order, and persists none of the host half', () => {
+      const stored = { getItem: (): string => '"amber"', setItem: (): void => undefined };
+      const empty = { getItem: (): null => null, setItem: (): void => undefined };
+
+      // A link wins for the session...
+      expect(initialTheme(new URLSearchParams('theme=mark43'), stored)).toBe('mark43');
+      // ...over the stored choice, which itself wins over anything the machine asks for.
+      expect(initialTheme(new URLSearchParams(''), stored)).toBe('amber');
+      // Nothing asked and nothing stored: the machine's preference, and Night when it has none. jsdom is
+      // not present in this suite, so `preferredTheme` takes its no-`matchMedia` branch here.
+      expect(initialTheme(new URLSearchParams(''), empty)).toBe(DEFAULT_THEME);
+      expect(loadTheme(empty, 'day')).toBe('day');
+      // An explicit choice still beats the machine's, which is the half that must not regress.
+      expect(loadTheme(stored, 'day')).toBe('amber');
+    });
+
+    it('accepts a whole preset from a host when it measures', () => {
+      const choice = resolveHostTheme({ ...THEMES[0], id: 'night', name: 'Host Night' });
+
+      expect(choice.reason).toBe('preset');
+      expect(choice.theme.name).toBe('Host Night');
+      expect(resolveHostTheme('mark43').theme.id).toBe('mark43');
+      expect(resolveHostTheme(undefined).theme.id).toBe(DEFAULT_THEME);
     });
 
     it('remembers the chosen skin', () => {
