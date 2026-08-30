@@ -616,7 +616,25 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       return;
     }
     if (idle) {
-      idleTimer = setTimeout(loop, IDLE_WAKE_MS);
+      /**
+       * The handle is dropped as the timer FIRES, and that is the whole of it.
+       *
+       * It used to be `setTimeout(loop, …)`, so after every idle wake that drew, `idleTimer` kept a handle
+       * to a timer that had already run. `wake()` reads that handle as "an idle wake is pending", clears the
+       * corpse and arms a `requestAnimationFrame` — on top of the one the drawn frame had already armed. Two
+       * entries into the loop for one displayed frame, the second arriving 0-2 ms after the first.
+       *
+       * It is invisible in every way that matters: nothing errors, the picture is correct, and the second
+       * entry usually draws nothing because the gate compares values. It shows up only in a capture, as
+       * frames faster than a vsync interval — 192 of them under 8 ms in
+       * [the overlay A/B](../../../../docs/benchmarks/opensa-engine/2026-08-30-mobile-overlay-ab-150u.json),
+       * which is where it was found. What it costs is a whole loop prologue each time (the held keys, the
+       * camera advance, the gate) plus the wake-up itself, on the device where that is battery.
+       */
+      idleTimer = setTimeout(() => {
+        idleTimer = null;
+        loop();
+      }, IDLE_WAKE_MS);
     } else {
       requestAnimationFrame(loop);
     }
