@@ -875,10 +875,56 @@ The procedure, so the next one is not a taste exercise:
 - The switcher, the view-link parameter and the embedded default all resolve to the same preset for the same
   input.
 
-**Owes:** a phone verdict on the Mark43 preset in
-daylight (it is a lighter ground than Night and that cuts both ways); and the bundle delta per preset,
-measured with `bundle-inventory.ts` rather than assumed — the claim that a preset costs bytes and not frame
-time is exactly the kind this repository does not take on trust.
+#### BUILT 2026-08-30 — and three things came out different from the plan above
+
+**1. There is no `--os-edge-width`.** It would read 1 px in every preset we ship: our floating surfaces have
+always carried a hairline BESIDE their shadow, so the symmetric reading of `edge: 'shadow'` — a 0-px border
+— would restyle four shipped skins to make a token look like a lever. `edge` therefore governs the shadows
+alone, and `shape` is `{ edge, radius }`. A constant that never varies is a token that lies about being one.
+
+**2. The density guard specified above would have passed on every possible input.** *"Every preset, resolved
+at a coarse pointer, still yields a row that clears the criterion"* cannot fail: the phone's row
+(`styles.rowTouch`) carries `minHeight: TOUCH_TARGET` and its own hardcoded padding, so `--os-row-padding`
+never reaches it and 44 px is true by construction. **What actually travels from a desk to a phone is the
+TYPE** — a chosen `dense` lands 10-px text inside a row that stays 44 px tall, which is invisible to every
+other guard in this app. Both halves are asserted now, and the clamp is emitted as a `@media (pointer:
+coarse)` block rather than resolved at mount, so it survives a skin change React never sees.
+
+**3. Building the host validator found a hole in the guard itself, open since 7-09 wrote it.** APCA moved
+into `src/ui/apca.ts` so the runtime validator and the test measure with one formula — and doing that
+exposed the defect: `luminance` parses hex digits, so a colour it cannot read yields `NaN`, and `NaN < 60`
+is **false**. A malformed palette did not fail the threshold, it **skipped** it. An unmeasurable pair is a
+failure that names the colour now. Only the measured pairs are held to `#rrggbb`; a theme may still carry
+`rgba()` where nothing is written on it, as Night's `warnBg` does.
+
+**What shipped.** `shape` and `density` on every preset, emitted as `--os-radius-*`, `--os-text-caption`,
+`--os-text-body` and `--os-row-padding`; the raw-value guard grown to radius and shadow (it found one — the
+tally's 6-px dot, which moved into the token table as a deliberate exception, because a symbology MARK
+answers to the map rather than to the skin); the **Mark43 preset**; and the three switchability gaps closed
+against one stated ordering — a link's or host's `theme=`, then the stored choice, then `prefers-contrast` /
+`prefers-color-scheme`, then Night. A link's theme is never persisted and an unknown id falls through to the
+operator's own choice, so a typo in a shared link costs the recipient the sender's skin rather than theirs.
+
+**Mark43, and what is measured versus fitted.** The ground (`#1e1f21`), the panel (`#28292b`) and the
+separator (`#333`) are the source's own sampled values. The steps between them are **fitted**, because a
+literal luminance sort of their swatches is not monotone — their grid rows measure BELOW their ground — and
+our layering rule is. The text is fitted and not sampled at all, and that is not a formality: **Night's own
+danger pink measures Lc 58 on this preset's lighter surface**, under a floor it clears comfortably on Night.
+Every pair clears with margin — text Lc 92-96 against 90, muted 63-66, accent and danger 63-73 against 60.
+
+**The bundle number, which this step owed**
+([the row](../../../benchmarks/opensa-engine/2026-08-30-dispatch-bundle-theme-contract.json)): **one preset
+costs 689 B raw / 197 B gzipped**, measured across three builds rather than two so the palette is separated
+from the contract around it. The whole step is +4.5 kB raw / +1.56 kB gzip — so **87 % of it is the
+contract and the validator, not the skin.** The claim that a preset costs bytes and not frame time is now
+measured rather than asserted.
+
+Verified: `tsc --noEmit` clean, `eslint` 0 errors (18 warnings, the unchanged baseline), 406 dispatch tests.
+
+**Still owes:** the phone verdict on Mark43 in daylight — it is a lighter ground than Night and that cuts
+both ways, and it is the one thing a desk cannot answer. Also unconfirmed on a device: that a skin change is
+still one attribute write with no reflow of the board and no dropped frame on the map. Both need the same
+field run everything else in chains 1 and 2 is waiting on.
 
 ## The design rule for all of it
 

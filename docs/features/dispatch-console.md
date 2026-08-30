@@ -511,19 +511,40 @@ the style table would break that, and `styles.test.ts` fails the build if one ap
 
 ## Skins
 
-**201/7-09, since 2026-08-26.** Four themes in the header's picker — **Night** (the default), **Day** (a
-phone outdoors), **Contrast** (bad screen, bright sun, tired eyes) and **Amber** (warm near-black with a
-monospace chrome and tighter rows). The choice is remembered per browser under `opensa.dispatch.theme`.
+**201/7-09, since 2026-08-26; five since 7-10 on 2026-08-30.** In the header's picker: **Night** (the
+default), **Day** (a phone outdoors), **Contrast** (bad screen, bright sun, tired eyes), **Amber** (warm
+near-black with a monospace chrome and tighter rows) and **Mark43** (an achromatic ramp on a lighter ground,
+separating its surfaces with a hairline instead of a shadow — read off the vendor's own product screen).
 
 Switching is one attribute on the app root: the token table holds `var(--os-…)` and each skin is a block of
-custom properties, so the browser repaints and **React does no work at all**.
+custom properties, so the browser repaints and **React does no work at all**. A preset costs **197 gzipped
+bytes** ([measured](../benchmarks/opensa-engine/2026-08-30-dispatch-bundle-theme-contract.json)), which is
+what "a skin is data, not a fork" means in bytes.
 
-A skin carries the neutral ramp, the accent, the two semantic surfaces, the shadows, the font stacks and row
-padding. It cannot change the status colours (those are the map's own table — a chip in a list and a pillar
-on the map are the same number), the 44-px targets, or where anything sits.
+A skin carries the neutral ramp, the accent, the two semantic surfaces, the shadows, the font stacks, its
+**shape** (the three radii, and whether a surface is told apart by a line or by a shadow) and its
+**density** (row padding and the two row-level type steps, together). It cannot change the status colours
+(those are the map's own table — a chip in a list and a pillar on the map are the same number), the 44-px
+targets, the `input` step at 15 px (below it iOS zooms the page on focus), or where anything sits.
 
-**No skin can ship with unreadable text**: the test suite runs every preset through APCA and fails the build
-below Lc 90 for primary text and Lc 60 for secondary.
+**A dense preset does not reach a phone.** `dense` is refused where the pointer is coarse, in the resolver
+and emitted as a `(pointer: coarse)` block — a skin is chosen once on a desk and travels to the same
+operator's phone through one `localStorage` key, and nothing else on that path re-asks the question.
+
+**Which skin opens, in this order** (7-10): a link's or an embedding host's `theme=`, then the operator's
+stored choice (`opensa.dispatch.theme`), then what their machine asks for (`prefers-contrast`, then
+`prefers-color-scheme`), then Night. A link's theme applies for that session and is **never persisted** —
+it is somebody else's view — and an id nobody ships falls through to the operator's own skin rather than
+resetting them to Night.
+
+**An embedding host has two ways in and one that is refused.** It may name a preset id
+(`?embed=1&theme=mark43`), or — mounting the chrome itself — pass a whole `ConsoleTheme` through
+`resolveHostTheme`, which measures it and falls back loudly when it fails. What it may **not** do is
+override `--os-*` from its own root: the cascade would allow it and no guard would ever see it.
+
+**No skin can ship with unreadable text**, a host's included: every preset goes through APCA and fails
+below Lc 90 for primary text and Lc 60 for secondary. A colour the measure cannot read is a **failure**,
+not a skip — it used to yield `NaN` and slip through, which is the defect 7-10 closed.
 
 ## The workspace: the map is the desk
 
