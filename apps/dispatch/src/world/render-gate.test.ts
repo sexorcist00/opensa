@@ -113,3 +113,60 @@ describe('RenderGate', () => {
     });
   });
 });
+
+describe('RenderGate.boardChanged (201/9-03)', () => {
+  describe('negative cases', () => {
+    it('is false on a frame the CAMERA alone caused', () => {
+      // The defect: `beacons.update` and `unitModels.update` ran inside every drawn frame though neither
+      // reads a camera, so panning an unchanged roster repeated twelve line buffers and 150 root matrices.
+      const gate = new RenderGate();
+      gate.shouldDraw(signals());
+
+      expect(gate.shouldDraw(signals({ pose: pose({ height: 400 }) }))).toBe(true);
+      expect(gate.boardChanged).toBe(false);
+    });
+
+    it('is false when the world filled in under a still board', () => {
+      const gate = new RenderGate();
+      gate.shouldDraw(signals());
+
+      expect(gate.shouldDraw(signals({ created: 9, pending: 2 }))).toBe(true);
+      expect(gate.boardChanged).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is true on the first frame, when there is no board layer yet', () => {
+      const gate = new RenderGate();
+
+      expect(gate.shouldDraw(signals())).toBe(true);
+      expect(gate.boardChanged).toBe(true);
+    });
+
+    it('is true when the board is replaced or the selection moves', () => {
+      const gate = new RenderGate();
+      gate.shouldDraw(signals());
+
+      expect(gate.shouldDraw(signals({ ops: { ...BOARD, now: 1 } }))).toBe(true);
+      expect(gate.boardChanged).toBe(true);
+
+      gate.shouldDraw(signals({ ops: { ...BOARD, now: 1 }, selection: { id: 'UNIT-1', kind: 'unit' } }));
+
+      expect(gate.boardChanged).toBe(true);
+    });
+
+    it('is true on a WOKEN frame — a unit model finishing its load is not in the signals', () => {
+      // Without this the car appears whenever the board next ticks, which after 9/02 is up to four seconds.
+      const gate = new RenderGate();
+      gate.shouldDraw(signals());
+      gate.shouldDraw(signals({ pose: pose({ height: 400 }) }));
+
+      expect(gate.boardChanged).toBe(false);
+
+      gate.wake();
+
+      expect(gate.shouldDraw(signals({ pose: pose({ height: 400 }) }))).toBe(true);
+      expect(gate.boardChanged).toBe(true);
+    });
+  });
+});

@@ -766,7 +766,12 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     // bar and a filed capture must not disagree about which gaps were frames (201/3-05).
     const intervalKind = frameClock.drew(now, dt);
     const state = camera.state(aspect);
-    if (overlayOn) {
+    // The board layer runs on the BOARD's clock, never on the camera's (201/9-03). Neither of these reads a
+    // camera: `beacons` refills twelve line buffers and `unitModels` writes 150 root matrices, and both
+    // depend on `ops` and `selection` alone — so panning an unchanged roster repeated the whole thing at the
+    // display's rate. The gate compared those two values one line above to decide whether to draw at all,
+    // and `boardChanged` is that comparison kept rather than recomputed here.
+    if (overlayOn && gate.boardChanged) {
       time('board', () => {
         beacons.update(ops, options.selection(), options.trails?.());
         unitModels.update(ops.units);
