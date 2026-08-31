@@ -205,15 +205,44 @@ picture were the same sentence on screen, and a view that moves with no hand on 
 a defect. The wording lives in `describeCommand()` beside the switch that runs the commands, so a new command
 cannot be added without a sentence for the person whose phone it runs on.
 
-**Owes two things.** The phone run first: the change ships in `prebuilt/opensa-webapp.tar.gz`, so the device
-sees it after a pull and a re-unpack, and the first capture taken through the new counter is the one to file
-— **every on-screen `fps` in the record before 2026-08-30 was read off the old one**, so a field note quoting
-one is quoting the loop rather than the frames. The filed JSON is a different matter and is not touched here:
-the collector never samples a skipped wake, so its `frames` count and its histogram are of drawn frames only,
-but **the one interval that SPANS a rest is still sampled as that frame's `dt`** — which reaches `dtMaxMs`
-and `dtP95Ms` and, in a capture of a mostly-still map, `dtP50Ms` too. It is the same defect one layer down,
-it is deliberately left alone in this step because changing what a capture MEANS is a change that owes its
-own before/after, and it is the second thing this step owes.
+**DONE on the device 2026-08-31**, through the panel's MCP channel with no number relayed by a person:
+[the capture](../../../benchmarks/opensa-engine/2026-08-31-mobile-honest-frame-counter-150u.json), 150 units
+on `los-santos-centre`, app `016c1e7+` — the `+` being the proof it ran this chrome rather than `main`'s
+archive. **Three readings of one run, and the spread between them is the whole finding:**
+
+| Read by | fps | frame |
+| --- | --- | --- |
+| the collector's own field (`1000 / mean dt`) | **10** | `dtP50` 100.6 ms |
+| the new on-screen counter, mid-flight | **17** | 60.9 ms · cpu 10.3 ms |
+| derived by hand over the 129 moving frames | **21** | p50 48 ms (p95 68) |
+
+The old readout used the collector's formula, so it would have shown 9–10 here, and the heartbeat this page
+sent while the map stood still read 8–9. **The fix is worth about 7 fps of truth on this device: the console
+was under-reporting itself by nearly half while it worked.** The still-map reading came out
+`idle · last cpu 8.5 ms` — no two consecutive drawn frames in the last second, so the bar named the body,
+which is the fallback behaving as designed rather than a gap in it. `cpuMs` reads a real drawn body (10.3 ms)
+rather than a wake's ~0.1, so the `drawnBodyMs` split holds on the device too.
+
+**And the second owed item is now measured, and it is much bigger than this step first wrote it.** The
+understatement is corrected here rather than quietly: it said the collector's `frames` and histogram were of
+drawn frames only and that just `dtMaxMs`/`dtP95Ms` were affected. They are all of them affected, because of
+the SCHEDULER. The collector genuinely never samples a skipped pass — the call sits behind the gate — but a
+skipped pass arms the next loop entry with `setTimeout(IDLE_WAKE_MS)`, so the frame drawn after it carries a
+100 ms `dt` that is 99 % sleep. On a live 150-unit board the console alternates draw/skip continuously, and
+**706 of this window's 835 samples are that interval — 85 %.** So `dtP50` reads the idle poll, `dtMean`,
+`outsideMeanMs` and `shareOfFrame` (2.3 %) describe a resting loop rather than a busy frame, and the segment
+means are ~6.5× low in absolute terms while keeping their SHAPE (`overlay-2d` 1.33 ms against
+`engine-frame` 0.33 still reproduces 1/01's finding).
+
+This is not a new discovery and that matters: **the 2026-08-30 driven row already says it in its own note**
+and derives its moving half from the histogram by hand, as do 08-23, the three 08-25 rows and the four
+08-26 ones — every capture since render-on-demand landed on 2026-08-22 carries a large `framesSkipped` and
+has had this done in prose. `frame-clock.ts` now does that derivation in CODE for the screen. **Pushing it
+down into the collector is what is left**, and it is deliberately still not done in this step: it changes
+what `frames`, `dtP50Ms`, `dtP95Ms`, `dtMeanMs`, `outsideMeanMs` and `shareOfFrame` MEAN in a filed capture,
+which owes its own before/after — and the row above is now that before. What it does NOT change: the
+1/01 baseline of 2026-08-09 predates 4/01 (2026-08-22), so its `p50` 30.3 ms and its
+*"the frame is WAITING, not working — 21.2 % in the loop"* are clean and stand.
 
 ## Verification
 

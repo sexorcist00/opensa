@@ -211,11 +211,16 @@ bar prints `—` rather than an invented `0.0`. At rest it reads `idle · 16.7 m
 frames cost is what a touch gets back, and on a desk `cpu N ms` sits beside it: the loop body's own cost is
 the number that survives a second with a single frame in it.
 
-Two things this did NOT change, and the second one is owed. The capture's `frames` count and histogram were
-already of drawn frames only — the collector is never called on a skipped wake. But the one interval that
-**spans** a rest is still sampled as that frame's `dt`, so it reaches `dtMaxMs`, `dtP95Ms` and, on a capture
-of a mostly-still map, `dtP50Ms`. Changing what a filed capture means owes its own before/after, so it is
-named here rather than done quietly.
+**What this did NOT change, and it is bigger than it looks.** The collector is genuinely never called on a
+skipped wake — the call sits behind the gate. But a skipped pass arms the next loop entry with
+`setTimeout(100 ms)`, so the frame drawn *after* one carries a `dt` that is 99 % sleep, and on a live
+150-unit board the console alternates draw/skip continuously: **706 of 835 samples** in the 2026-08-31 phone
+capture were that interval. So a filed capture's `dtP50Ms` reads the idle poll, and `dtMeanMs`,
+`outsideMeanMs` and `shareOfFrame` describe a resting loop rather than a busy frame. Every row since
+2026-08-22 derives its moving half from the histogram by hand. Pushing that derivation down into the
+collector changes what a filed capture MEANS and owes its own before/after, so it is named here rather than
+done quietly — the [08-31 row](../benchmarks/opensa-engine/2026-08-31-mobile-honest-frame-counter-150u.json)
+is that before.
 
 **The `?inventory=1` panel folds** (201/3-05). Fourteen rows of monospace over a 360 CSS px phone is most of
 the screen the map is the subject of, so it opens folded where the pointer is coarse, open where it is a

@@ -781,14 +781,22 @@ The rule has two halves and both are needed:
   averaged in. `FrameClock` (`apps/dispatch/src/world/frame-clock.ts`) does both and is the one place either
   is computed; `plan-mode.ts` had the identical defect and takes the same clock.
 
-**Still live one layer down, and named rather than fixed:** the inventory collector is only called on drawn
-frames, so its `frames` count and its histogram are clean — but the interval that SPANS a rest is sampled as
-that frame's `dt` and reaches `dtMaxMs`, `dtP95Ms` and, on a capture of a mostly-still map, `dtP50Ms`.
+**Still live one layer down, and it is most of the capture rather than a tail.** The inventory collector is
+only ever called on a drawn frame — the call sits behind the gate — but a skipped pass arms the next loop
+entry with `setTimeout(IDLE_WAKE_MS)`, so **the frame drawn after one carries a 100 ms `dt` that is 99 %
+sleep**. On a live 150-unit board the console alternates draw/skip continuously: measured 2026-08-31 on the
+phone, **706 of 835 samples were that interval**. So `dtP50Ms` reads the idle poll (100.6 ms), while
+`dtMeanMs`, `outsideMeanMs` and `shareOfFrame` (2.3 %) describe a resting loop rather than a busy frame, and
+the per-segment means are ~6.5× low in absolute terms while keeping their shape. Every capture since
+2026-08-22 has had its moving half derived from the histogram **by hand, in the row's own prose**.
 
-**Caught:** the readout half is, in `apps/dispatch/src/world/frame-clock.test.ts`. Before that, **silent, and
-in the shape that costs the most**: every sample is a real measurement, the arithmetic is right, and the
-number is only wrong about what it is a number OF. It is also wrong exactly when it is read — a person
-looking at a still map to judge the frame rate is looking at the case that produces the worst answer.
+**Caught:** the readout half is, in `apps/dispatch/src/world/frame-clock.test.ts`. The capture half is not,
+and is worked around per row instead. Before that, **silent, and in the shape that costs the most**: every
+sample is a real measurement, the arithmetic is right, and the number is only wrong about what it is a
+number OF. It is also wrong exactly when it is read — a person looking at a still map to judge the frame
+rate is looking at the case that produces the worst answer. Measured cost of getting it wrong on the screen:
+the console reported **9–10 fps** where it was drawing **17**, and read **21** when the moving frames were
+derived properly ([2026-08-31](../benchmarks/opensa-engine/2026-08-31-mobile-honest-frame-counter-150u.json)).
 
 ## An effect that depends on a PROP the host recreates is a subscription that never runs
 
