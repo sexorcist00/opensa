@@ -220,9 +220,12 @@ interval, so `dtP50Ms` read the idle poll and `shareOfFrame` (2.3 %) described a
 
 `frame.*` is now the paced intervals alone; a `rest` block carries the other population (`frames`, `meanMs`,
 `maxMs`, `totalMs`) so a window can still be read, and `rest.totalMs` against `windowMs` says how much of a
-capture the console spent at rest on purpose. `outsideMeanMs` and `shareOfFrame` divide by that same paced
-population; `bodyMeanMs` deliberately does not, because a body is measured on the frame itself and a frame
-drawn after a rest ran a real one. The panel shows the split (`rest 706 of 835 frames · 65% of the window`).
+capture the console spent at rest on purpose. The whole CPU block divides by that same paced
+population, and that half was found by the field run rather than argued: `cpu.bodyMs` is paired one pass
+late on purpose, so after a skipped pass it carries the render gate's own ~0.2 ms — `bodyMeanMs` read
+**1.48 ms against a real 13.84**, every segment ~11× low. The streamer, the engine timings, the spans and
+the world stay over every drawn frame, because those are measured on the frame rather than paired to the
+pass before it. The panel shows the split (`rest 706 of 835 frames · 65% of the window`).
 **One owner decides which is which** — `FrameClock.drew()` returns the kind and the collector is told — so
 the status bar and a filed capture cannot disagree about the same loop.
 

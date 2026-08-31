@@ -243,6 +243,23 @@ describe('FrameInventory', () => {
       expect(report.cpu.outsideMeanMs).toBeCloseTo(8, 2);
     });
 
+    it('does not average a SKIPPED pass body in with the frames, which is what `cpu` carries after a rest', () => {
+      // Found by the field run of 2026-08-31, one layer below the dt split. `cpu.bodyMs` is paired one frame
+      // late on purpose — the body that ran inside the interval being reported is the previous pass's — but
+      // when the previous pass was SKIPPED that body is the gate's own ~0.2 ms, not a frame's. The capture
+      // reported bodyMeanMs 1.48 ms against a real paced body of 13.84: 480 skip bodies averaged in with 47.
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, cpu(12, [['engine-frame', 9]]), IDLE); // primes the clock
+      inventory.sample(16, stats(), NO_SPANS, cpu(12, [['engine-frame', 9]]), IDLE);
+      for (let rest = 0; rest < 8; rest += 1) {
+        inventory.sample(100, stats(), NO_SPANS, cpu(0.2), IDLE, 'after-rest');
+      }
+      const report = inventory.report(CONTEXT);
+
+      expect(report.cpu.bodyMeanMs).toBe(12);
+      expect(report.cpu.segmentsMs).toContainEqual(['engine-frame', 9]);
+    });
+
     it('READS the streamer running totals instead of summing them, whatever the window length', () => {
       const inventory = new FrameInventory();
       // Four cells created at boot and nothing since — what a settled district reports on every update.
@@ -262,19 +279,6 @@ describe('FrameInventory', () => {
   });
 
   describe('positive cases', () => {
-    it('reports a body over every drawn frame, since every drawn frame paid one', () => {
-      // The dt split is about INTERVALS. A body is measured on the frame itself, so the frame after a rest
-      // has a real one and it belongs in the mean — only the interval around it does not.
-      const inventory = new FrameInventory();
-      inventory.sample(16, stats(), NO_SPANS, cpu(4), IDLE); // primes the clock
-      inventory.sample(16, stats(), NO_SPANS, cpu(4), IDLE);
-      inventory.sample(100, stats(), NO_SPANS, cpu(10), IDLE, 'after-rest');
-      const report = inventory.report(CONTEXT);
-
-      expect(report.cpu.bodyMeanMs).toBe(7);
-      expect(report.cpu.bodyMaxMs).toBe(10);
-    });
-
     it('reports the p95 of dt, not its mean — a mean hides the hitches this is looking for', () => {
       const inventory = new FrameInventory();
       // 10 % of frames hitch. A mean would read 38 ms and hide both the healthy body and the stalls; p50 and

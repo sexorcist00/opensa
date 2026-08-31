@@ -793,8 +793,12 @@ Fixed the same day, and the shape of the fix is the rule's third clause: **one o
 is told.** `FrameClock.drew()` returns the interval's kind and the collector takes it as an argument — the
 status bar and a filed capture cannot disagree about which gaps were frames. The frame fields are the paced
 population, a `rest` block carries the other one rather than dropping it, and `shareOfFrame` divides by the
-same population its numerator came from. `bodyMeanMs` stays over every drawn frame on purpose: a body is
-measured on the frame, not on the gap.
+same population its numerator came from. The CPU block goes with it, and that half was found by the field run
+rather than argued: `cpu.bodyMs` is paired one pass late on purpose (the body that ran inside the interval
+being reported is the previous pass's), so after a SKIPPED pass it carries the render gate's own ~0.2 ms.
+The 2026-08-31 after-row read `bodyMeanMs` **1.48 ms against a real 13.84**, with every segment ~11× low.
+What does NOT move is everything measured on the frame itself — the streamer, the engine timings, the spans,
+the world — because those are not paired to the pass before them.
 
 **Caught:** both halves are now — `apps/dispatch/src/world/frame-clock.test.ts` for the readout and
 `inventory.test.ts` for the capture, each written against the numbers the phone actually produced. Before

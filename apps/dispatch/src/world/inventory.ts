@@ -50,10 +50,12 @@ export interface FrameCpuSample {
 
 /** Where the frame went on the CPU, averaged over the sampled window. */
 export interface InventoryCpu {
+  /** The worst body seen on a PACED frame — a frame after a rest carries the gate's body, not its own. */
   readonly bodyMaxMs: number;
-  /** Mean ms spent inside the rAF callback, over EVERY drawn frame. Not restricted the way `shareOfFrame`
-   *  is, and deliberately: a body is measured on the frame itself, so a frame drawn after a rest ran a real
-   *  one. Only the interval around it belongs to no frame. */
+  /** Mean ms spent inside the rAF callback, over the frames whose interval is a frame time — the same
+   *  population as `shareOfFrame`, and for a reason the field found rather than one anybody argued: the
+   *  sample is paired one pass late, so after a SKIPPED pass it carries the render gate's own ~0.2 ms
+   *  instead of a frame's. This read 1.48 ms against a real 13.84 on 2026-08-31 before the restriction. */
   readonly bodyMeanMs: number;
   /** Mean dt − mean body **over the frames whose interval is a frame time**. Present, GPU backpressure,
    *  vsync wait, other tasks and GC all live in here, and nothing on this device can separate them further —
@@ -61,7 +63,9 @@ export interface InventoryCpu {
    *  since 201/3-05: computed over every drawn frame it counted the render gate's idle wait as time the
    *  frame spent outside the CPU, which reads as "the frame is GPU-bound" and was the loop sleeping. */
   readonly outsideMeanMs: number;
-  /** Mean ms per sampled frame, descending. `other` is body time no segment claimed. */
+  /** Mean ms per PACED frame, descending — the same population as `bodyMeanMs`, and divided by it rather
+   *  than by every drawn frame; the latter read every segment ~11x low on the 2026-08-31 capture. `other`
+   *  is body time no segment claimed. */
   readonly segmentsMs: readonly (readonly [string, number])[];
   /** Body mean ÷ dt mean over the frames whose interval is a frame time, 0..1 — see `outsideMeanMs`. The
    *  2026-08-31 capture reported **2.3 %** before that restriction, against 85 % of its samples being the
@@ -455,11 +459,12 @@ export class FrameInventory {
   }): InventoryReport {
     const frames = Math.max(1, this.frames);
     const windowMs = this.started === 0 ? 0 : performance.now() - this.started;
-    // Over the FRAME intervals, not over every drawn frame: these two are what `outsideMeanMs` and
-    // `shareOfFrame` are made of, and dividing a body by a resting loop's interval is the whole defect.
+    // Over the FRAME intervals, never over every drawn frame. Both halves: dividing a body by a resting
+    // loop's interval was the first defect, and averaging a SKIPPED pass's body into the numerator was the
+    // second — the field run of 2026-08-31 found it after the first was fixed.
+    const paced = Math.max(1, this.frameIntervals.count);
     const dtMeanMs = this.frameIntervals.meanMs;
-    const pacedBodyMeanMs = this.frameIntervals.count === 0 ? 0 : this.consecutiveBodyMs / this.frameIntervals.count;
-    const bodyMeanMs = (this.sums.get('cpu-body') ?? 0) / frames;
+    const bodyMeanMs = this.consecutiveBodyMs / paced;
 
     const passes = TIMED.map(([key, needsTimestamps]) => ({
       available: !needsTimestamps || context.hasTimestamps,
@@ -483,9 +488,9 @@ export class FrameInventory {
       cpu: {
         bodyMaxMs: this.maxima.get('cpu-body') ?? 0,
         bodyMeanMs,
-        outsideMeanMs: Math.max(0, dtMeanMs - pacedBodyMeanMs),
-        segmentsMs: this.cpuSegments(frames, bodyMeanMs),
-        shareOfFrame: dtMeanMs > 0 ? pacedBodyMeanMs / dtMeanMs : 0,
+        outsideMeanMs: Math.max(0, dtMeanMs - bodyMeanMs),
+        segmentsMs: this.cpuSegments(paced, bodyMeanMs),
+        shareOfFrame: dtMeanMs > 0 ? bodyMeanMs / dtMeanMs : 0,
         worstFrame: this.worst,
       },
       device: context.device,
@@ -580,29 +585,38 @@ export class FrameInventory {
 
       return;
     }
+    // The interval decides where the CPU numbers go, and ONLY they are split this way. Everything below —
+    // the streamer, the engine timings, the spans, the world — is measured on the frame itself, so a frame
+    // drawn after a rest contributes to all of it.
+    //
+    // `cpu` does not, and that is arithmetic rather than taste: it is paired one pass late on purpose (the
+    // body that ran inside the interval being reported is the previous pass's), so when the previous pass
+    // was SKIPPED it carries the GATE's own body — ~0.2 ms of held keys, camera advance and the comparison
+    // itself. The 2026-08-31 field run reported `bodyMeanMs` **1.48 ms against a real 13.84** because 480
+    // of those were averaged in with 47 real ones, and every segment came out ~11x low with it.
     if (interval === 'consecutive') {
       this.frameIntervals.add(dtMs);
       this.consecutiveBodyMs += cpu.bodyMs;
+      this.bump('cpu-body', cpu.bodyMs);
+      for (const [name, ms] of cpu.segments.byName) {
+        this.cpuTotals.set(name, (this.cpuTotals.get(name) ?? 0) + ms);
+      }
+      if (cpu.bodyMs > this.worst.bodyMs) {
+        this.worst = {
+          atMs: performance.now() - this.started,
+          bodyMs: cpu.bodyMs,
+          canvasPixels: cpu.canvasPixels,
+          cellsCreated: Math.max(0, stream.created - this.previousStream.created),
+          cellsEvicted: Math.max(0, stream.evicted - this.previousStream.evicted),
+          cellsVisible: stats.cellsVisible,
+          draws: stats.drawsRecorded,
+          dtMs,
+          pending: stream.pendingCells,
+          segmentsMs: cpu.segments.byName,
+        };
+      }
     } else {
       this.restIntervals.add(dtMs);
-    }
-    this.bump('cpu-body', cpu.bodyMs);
-    for (const [name, ms] of cpu.segments.byName) {
-      this.cpuTotals.set(name, (this.cpuTotals.get(name) ?? 0) + ms);
-    }
-    if (cpu.bodyMs > this.worst.bodyMs) {
-      this.worst = {
-        atMs: performance.now() - this.started,
-        bodyMs: cpu.bodyMs,
-        canvasPixels: cpu.canvasPixels,
-        cellsCreated: Math.max(0, stream.created - this.previousStream.created),
-        cellsEvicted: Math.max(0, stream.evicted - this.previousStream.evicted),
-        cellsVisible: stats.cellsVisible,
-        draws: stats.drawsRecorded,
-        dtMs,
-        pending: stream.pendingCells,
-        segmentsMs: cpu.segments.byName,
-      };
     }
     // Only HALF the streamer's numbers are per-update. `blobMs` is reset every update and `uploadMs` is
     // assigned every update, so those two sum like the spans do; `created`, `evicted` and `lateCreates` are

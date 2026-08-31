@@ -266,8 +266,28 @@ precision the analysis already had, since every row since 08-22 was read off the
 range is two resolutions **because a test caught it**: a single tail at 100 ms would have saturated `dtP95`,
 and the 08-31 row's was 108.4.
 
-**Owes one thing: the AFTER on the phone.** Same link, same district, so the two rows differ in the code
-rather than in the run.
+**The AFTER was taken the same day** ([the row](../../../benchmarks/opensa-engine/2026-08-31-mobile-split-collector-after.json)),
+and it did two jobs. It settled the before/after **on one window, arithmetically**: over all 527 drawn
+frames the median lands at index 263 and only 46 of them fall below 100 ms, so the old collector's median
+was a rest interval and its `fps` would read **10** — over the 47 intervals that are frame times it reads
+**36** (p50 28 ms, p95 76), and `shareOfFrame` goes 1.5 % → **41 %**. The rest population is named rather
+than derived for the first time: **480 frames, mean 103.74 ms** — `IDLE_WAKE_MS` plus the loop prologue —
+which is **82 % of the 60.7 s window**. It is a STILL-MAP window (the `map_goto` answered but the pose never
+left the opening one, and Android throttled the tab throughout), so it is not a device comparison against
+the flown before-row, and the row says so.
+
+**And it found the next layer down, which is why a field run is not a formality.** `cpu.bodyMs` is paired
+one pass late on purpose — the body that ran inside the interval being reported is the previous pass's — so
+when that pass was SKIPPED it carries the render gate's own ~0.2 ms. `bodyMeanMs` read **1.48 ms against a
+real 13.84** (recoverable as `shareOfFrame` × `dtMeanMs`), with every segment ~11× low beside it.
+`shareOfFrame` and `outsideMeanMs` were already right, because restricting them to the paced population had
+incidentally fixed their pairing too — a paced frame's previous pass drew. The whole CPU block is restricted
+now, `segmentsMs` divides by the paced count, and the test carries the field numbers. Everything else —
+the streamer, the engine timings, the spans, the world — stays over every drawn frame, because those are
+measured on the frame rather than paired to the pass before it.
+
+**Owes:** a flown window on the phone, to give the device numbers a partner the before-row can be read
+against. The collector question is closed.
 
 ## Verification
 
