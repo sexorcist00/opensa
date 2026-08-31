@@ -1,5 +1,10 @@
 # The dispatch map opens VOID — cell bytes arrive, no cell is created, and nothing says so
 
+> **FIXED 2026-08-31, field-confirmed the same night.** The `field` arm on the phone, app `f0e7bdd`:
+> `cellsTotal` 4/4, 14 creates, 112 draws, 278 k triangles, `pendingCells` 0 and no VOID warning — where
+> two attempts hours earlier had 0 cells against fetched bytes. The cause was the render gate resting on an
+> unfinished world (below), not the streamer.
+
 **Found 2026-08-31 on the phone** (MGA-LX3 / ARM Bifrost, DPR 2), while taking
 [201/9-01](../plans/201-dispatch-console/9-the-mobile-frame/readme.md)'s three-arm circuit through the
 console's MCP channel. It killed one arm of that circuit — `field`, which is THE FIELD RUN itself — and
@@ -89,9 +94,12 @@ picture is not finished while this is above zero"* — the code now agrees with 
 which never finishes arriving keeps the loop awake instead of resting on a wrong picture, which is the trade
 a map surface should take. Three tests, and the whole 411 pass.
 
-**STILL OPEN until the device says so.** The diagnosis is a reading of the code against a capture, and the
-fix is unit-tested, not field-confirmed. It reaches the phone with `prebuilt/opensa-webapp.tar.gz` stamped
-`a2ccea1`; the confirmation is a `field` arm that streams. Move this file to `fixed/` then, not before.
+**CONFIRMED ON THE DEVICE 2026-08-31**, and the confirmation is the one this file asked for: a `field` arm
+that streams. `surface.pinned` true at 720x1218, `blockedOnBlob` 0, `blockedOnArrays` 0, `pendingCells` 0,
+`warnings` free of VOID. It took two archive rebuilds to get there for a reason unrelated to this bug — the
+first was built without `--base=./` and its absolute asset paths 404 under `/build/webapp/`, which is its own
+lesson and lives in [prebuilt/README.md](../../../prebuilt/README.md) and
+[scripts/debug/webapp-smoke.ts](../../../scripts/debug/webapp-smoke.ts).
 
 ## What was built alongside the fix (2026-08-31, the same day)
 
