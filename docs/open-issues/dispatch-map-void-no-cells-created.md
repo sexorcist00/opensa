@@ -37,8 +37,9 @@ Two attempts, both on app `4ce659b`, pak `19:23 28-08-2026` (ASTC), district `lo
 - **Not a fetch failure.** The bytes arrived: the request counts and byte totals above are the console's own
   `bytes.byKind`, and `cachedRequests` shows most of them served from the browser cache on the second
   attempt.
-- **Not (only) the render gate sleeping through an arrival.** That was the first hypothesis, and it is the
-  obvious one: [`world/boot.ts`](../../apps/dispatch/src/world/boot.ts) calls `world.follow()` — the only
+- **Not the render gate sleeping through an ARRIVAL** — which was the first hypothesis, and it was the right
+  neighbourhood with the wrong mechanism (see the cause above: it is not the arrival the gate sleeps through,
+  it is the UPLOAD it never budgets): [`world/boot.ts`](../../apps/dispatch/src/world/boot.ts) calls `world.follow()` — the only
   thing that turns an arrived blob into a cell — *after* `gate.shouldDraw()`, and the gate's signals carry
   `lastStream.pendingCells` / `created` / `evicted`, values refreshed only by a drawn frame. A blob landing
   while the loop is asleep changes none of them. **But a `map_goto` — a wake, a flight, and drawn frames,
@@ -57,11 +58,45 @@ Two attempts, both on app `4ce659b`, pak `19:23 28-08-2026` (ASTC), district `lo
    front. If it does, it is a resume path rather than a streaming bug, and the fix is still ours: a console
    that comes back from a freeze with bytes in hand and no cells must either create them or say so.
 
-## What was built instead of a fix (2026-08-31, the same day)
+## THE CAUSE, FOUND 2026-08-31 — and it is the render gate, not the streamer
 
-Nothing here is repaired — the cause is not known, and guessing at one would be a fix nobody could verify.
-What was built is the instrument the diagnosis needs, because every list above ends in *"we cannot tell from
-the capture"*:
+**`pending` was compared as a value where it is a predicate.** The chain, every link of it in code that was
+already written down:
+
+1. A cell's texture arrays finish uploading in `TextureArrays.drainUploads` — budgeted at `UPLOAD_BUDGET_MS`
+   (1.5 ms) and called from `StreamingDriver.update()`, which the host calls as `world.follow()`, **inside a
+   DRAWN frame and nowhere else**.
+2. `textures.has(ref)` stays false until the last write lands (`world/textures.ts`, and its own comment says
+   so), so `texturesReady()` is false and the cell is not created.
+3. Therefore `pendingCells` does not move, `created` does not move, `evicted` does not move.
+4. The pose, the board, the hour, the canvas and the sketch have not moved either — nobody is touching the
+   phone.
+5. `same()` says nothing happened, `RenderGate` skips the frame — **and the frame it skipped is the one that
+   would have finished the upload in (1)**.
+
+So the loop rests holding an unfinished world, and only an external change (a camera move, a board tick, an
+hour) can wake it — for a handful of frames, which buys 1.5 ms of upload budget each and is nowhere near
+what ~16 MB of texture arrays need. That is exactly the shape of the second attempt: **19 drawn frames
+against 851 skipped in 86 s**, `pendingCells` stuck at 4, bytes in, errors empty. And it explains the thing
+that made this look unexplainable — a `map_goto` DID draw frames and did not clear it.
+
+The other two arms escaped it because they were flown continuously while their cells were arriving: 12 and
+28 creates, hundreds of drawn frames in the window where it mattered.
+
+**Fixed the same day** (`world/render-gate.ts`): the gate may only rest when `pending === 0`.
+[`FrameSignals.pending`](../../apps/dispatch/src/world/render-gate.ts)'s own comment already said *"the
+picture is not finished while this is above zero"* — the code now agrees with it. The cost is that a world
+which never finishes arriving keeps the loop awake instead of resting on a wrong picture, which is the trade
+a map surface should take. Three tests, and the whole 411 pass.
+
+**STILL OPEN until the device says so.** The diagnosis is a reading of the code against a capture, and the
+fix is unit-tested, not field-confirmed. It reaches the phone with `prebuilt/opensa-webapp.tar.gz` stamped
+`a2ccea1`; the confirmation is a `field` arm that streams. Move this file to `fixed/` then, not before.
+
+## What was built alongside the fix (2026-08-31, the same day)
+
+Built BEFORE the cause was known, and kept: the capture could not say which of the three failures it was, and
+the next VOID — this one or another — should not cost a session to place:
 
 - **`StreamStats` counts what a wanted cell is blocked ON** — `blockedOnBlob` and `blockedOnArrays`, per
   update, a cell in exactly one of the two, blob first (`packages/engine/src/stream/streaming.ts`). The

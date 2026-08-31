@@ -100,7 +100,13 @@ requests / 5.29 MB, then 4 / 2.64 MB on a fresh load) and created **no cell**: `
 three links streamed 12 and 28 cells on the other two arms minutes earlier, which rules out the pak and the
 district. The only thing that reports it at all is the collector's own `VOID: no cells streamed` warning.
 **Diagnosing that void comes before re-flying the circuit**, because the arm it kills is the one every other
-number in this chain is meant to be subtracted from.
+number in this chain is meant to be subtracted from. **DONE the same day, and it was not the streamer:
+[4/01](../4-a-console-is-not-a-game/readme.md)'s render gate was resting on an unfinished world.** Texture
+uploads drain only inside a drawn frame (`drainUploads`, 1.5 ms, called from `world.follow()`), `has(ref)`
+stays false until the last write lands, so the cell is not created, `pendingCells` does not move, no other
+signal moves either — and the frame the gate skips is the one that would have finished the upload. `pending`
+is read as a predicate now ([the issue](../../../open-issues/dispatch-map-void-no-cells-created.md)), and
+the field arm's confirmation is the first thing the re-flight owes.
 
 **Both prerequisites were built the same day, and neither is a frame fix.** `?surface=WxH` pins the drawing
 buffer at that many device pixels whatever the viewport does (`world/capture-surface.ts`), the report says
