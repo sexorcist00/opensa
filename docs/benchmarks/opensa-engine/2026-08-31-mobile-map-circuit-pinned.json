@@ -1,0 +1,208 @@
+{
+  "note": "201/9-01's THREE-ARM CIRCUIT, taken in full on the phone and on a PINNED surface — the run the half-taken row of the same day (`2026-08-31-mobile-map-circuit-arms.json`) could not be. Every arm: MGA-LX3 / ARM Bifrost @ DPR 2 (no `timestamp-query`, so GPU time is not measurable at all), pak `19:23 28-08-2026` ASTC over `los-santos-centre`, app `f0e7bdd`, board EMPTY (`units=0&calls=0`), collector on, and the same six-pose route inside the pinned rect with ~9 s legs, driven by `map_goto`. Each arm is a FRESH page; its window is the DELTA of two `frame.dtHistogramMs` readings (one after streaming settled, one after the last leg), so boot and the settle are outside it, and 'moving' is the 08-31 method — every bin below the 100 ms tail.\n\nWHAT MAKES THIS ONE COMPARABLE, and it is the whole reason it exists: `?surface=720x640` pinned the drawing buffer on all three arms. The CSS box moved as the browser's chrome came and went — 550, 491, 609, 320 CSS px tall across the run — and `surface.deviceHeight` stayed 640 throughout, with `target` residency constant at 32.35 MB. The earlier attempt measured three arms at three buffer sizes 1.9x apart and could subtract nothing.\n\nTHE TWO SUBTRACTIONS THE CHAIN WAS OPENED FOR, and both are ZERO.\n  cleared - engine = THE LAYER            = 0 ms at p50 (32 vs 32), +2 at p95\n  field   - cleared = the EMPTY-BOARD PASS = -2 ms at p50 (30 vs 32), -2 at p95\nA second full-screen RGBA canvas, cleared and re-composited every frame over the WebGPU canvas, costs nothing measurable on this device: the `overlay:clear` CPU span reads 0.0006 ms. Neither does the overlay's pass with no units on it. The `field` arm coming out marginally FASTER is noise plus one recorded difference — it ended its flight on a lighter view (48 draws / 124 k triangles against 112 / 278 k on the other two, 16 cell creates against 4-8, more LOD in frame) — and that caveat is the reason the -2 ms is not claimed as a win.\n\nSO THE ~21 ms THAT `?overlay=0` REMOVED ON 2026-08-30 IS NEITHER OF THESE. It is the CONTENT — ~167 symbol paths and up to 153 chips rasterized per frame at the declared 150 units — which is `board` - `field`, 201/5-02's turn, and it now has a clean baseline to be subtracted from rather than an inference out of a window that carried everything at once.\n\nREAD THE ABSOLUTE NUMBERS AS A FLOOR, NOT AS A DISTRICT COST — the operator's correction, and it is the most important line in this file. The pak carries FOUR cells, 500x500 units, and the route flew at 450-900 m where the frustum covers many times that: most of every frame in every arm is EMPTY GROUND the pak does not carry, not city. So `p50 30-32 ms — 31-33 fps against a declared 60` is what a NEARLY EMPTY view costs on this device, and a loaded district can only be worse. That makes the finding sharper rather than weaker: half the budget is gone before a single unit is on screen AND before the world is really there, so the frame is the WORLD's and the PASSES', not the overlay's — which is where chain 9 always said the unexplained time was: 9/04's attachment set (48 B/px against a 16 B/px tile budget), 9/05's 16 full-screen bloom passes, 9/06's per-frame cloud bake, all of which are paid per PIXEL and per PASS whether or not there is anything to draw.\n\nAnd it is the reason the next circuit needs different ground: either a camera kept low enough that the frustum stays inside the loaded rect, or the 16-cell `los-santos-wide` pak (1000x1000, same centre) that 201 added for exactly this. THE SUBTRACTIONS ARE UNAFFECTED — all three arms flew the same route over the same content with the same pinned buffer, so what differs between them is only the overlay. The vsync ladders say the same thing in shape — every arm puts about a quarter of its frames on one display interval and half on two.\n\nCPU is not the story either, and the three bodies agree: 3.13 ms mean on `engine`, 3.04 on `cleared`, 3.51 on `field`, against frames of 30-32 ms.",
+  "app": "f0e7bdd",
+  "build": "19:23 28-08-2026",
+  "district": "los-santos-centre",
+  "device": {
+    "adapter": "arm bifrost",
+    "dpr": 2,
+    "missing": [
+      "texture-compression-bc",
+      "timestamp-query"
+    ]
+  },
+  "surface": {
+    "deviceWidth": 720,
+    "deviceHeight": 640,
+    "pinned": true,
+    "renderScale": 1,
+    "cssHeightsSeen": [
+      550,
+      491,
+      609,
+      320
+    ]
+  },
+  "route": [
+    [
+      1300,
+      -1600,
+      600
+    ],
+    [
+      1660,
+      -1580,
+      450
+    ],
+    [
+      1660,
+      -1880,
+      700
+    ],
+    [
+      1300,
+      -1900,
+      500
+    ],
+    [
+      1480,
+      -1720,
+      900
+    ],
+    [
+      1700,
+      -1750,
+      650
+    ]
+  ],
+  "howDerived": "per arm: delta of frame.dtHistogramMs between a post-settle reading and a post-route reading; moving = every bin below the 100 ms tail (the render gate's idle wake)",
+  "arms": {
+    "engine": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640&overlay=0",
+      "movingFrames": 4030,
+      "movingP50Ms": 32,
+      "movingP90Ms": 52,
+      "movingP95Ms": 54,
+      "movingP99Ms": 64,
+      "movingMaxMs": 98,
+      "movingP50Fps": 31,
+      "vsyncLadder": {
+        "1": 1076,
+        "2": 2061,
+        "3": 784,
+        "4": 100,
+        "5": 6,
+        "6": 3
+      },
+      "windowFrames": 4128,
+      "windowMs": 438405.9,
+      "framesSkipped": 2590,
+      "cpu": {
+        "bodyMeanMs": 3.135,
+        "engine-frame": 2.304,
+        "stream": 0.373,
+        "other": 0.434,
+        "overlay-2d": 0.013
+      },
+      "world": {
+        "cellsVisible": 4,
+        "cellsTotal": 4,
+        "draws": 112,
+        "triangles": 277970,
+        "residencyMb": 71.006,
+        "target": 32.349,
+        "texture": 25.811
+      },
+      "streaming": {
+        "cellsCreated": 8,
+        "blockedOnBlob": 0,
+        "blockedOnArrays": 0,
+        "pendingCells": 0,
+        "lateCreates": 0
+      }
+    },
+    "cleared": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640&overlay=clear",
+      "movingFrames": 3606,
+      "movingP50Ms": 32,
+      "movingP90Ms": 52,
+      "movingP95Ms": 56,
+      "movingP99Ms": 66,
+      "movingMaxMs": 88,
+      "movingP50Fps": 31,
+      "vsyncLadder": {
+        "1": 1138,
+        "2": 1710,
+        "3": 623,
+        "4": 124,
+        "5": 11
+      },
+      "windowFrames": 3969,
+      "windowMs": 454001.3,
+      "framesSkipped": 2631,
+      "cpu": {
+        "bodyMeanMs": 3.042,
+        "engine-frame": 1.932,
+        "overlay-2d": 0.404,
+        "other": 0.394,
+        "stream": 0.298,
+        "overlay:clear": 0.0006
+      },
+      "world": {
+        "cellsVisible": 4,
+        "cellsTotal": 4,
+        "draws": 112,
+        "triangles": 277970,
+        "residencyMb": 71.006,
+        "target": 32.349,
+        "texture": 25.811
+      },
+      "streaming": {
+        "cellsCreated": 4,
+        "blockedOnBlob": 0,
+        "blockedOnArrays": 0,
+        "pendingCells": 0,
+        "lateCreates": 0
+      }
+    },
+    "field": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640",
+      "movingFrames": 2725,
+      "movingP50Ms": 30,
+      "movingP90Ms": 50,
+      "movingP95Ms": 54,
+      "movingP99Ms": 66,
+      "movingMaxMs": 90,
+      "movingP50Fps": 33,
+      "vsyncLadder": {
+        "1": 1004,
+        "2": 1180,
+        "3": 475,
+        "4": 56,
+        "5": 10
+      },
+      "windowFrames": 2884,
+      "windowMs": 311884.2,
+      "framesSkipped": 2091,
+      "cpu": {
+        "bodyMeanMs": 3.509,
+        "engine-frame": 1.756,
+        "overlay-2d": 1.094,
+        "other": 0.33,
+        "stream": 0.313,
+        "overlay:symbols": 0.0019,
+        "board": 0.0032,
+        "overlay:clear": 0.0011
+      },
+      "world": {
+        "cellsVisible": 4,
+        "cellsTotal": 4,
+        "draws": 48,
+        "triangles": 124030,
+        "residencyMb": 61.882,
+        "target": 32.349,
+        "texture": 25.72
+      },
+      "streaming": {
+        "cellsCreated": 16,
+        "blockedOnBlob": 0,
+        "blockedOnArrays": 0,
+        "pendingCells": 0,
+        "lateCreates": 0
+      },
+      "caveat": "ended its flight on a lighter view than the other two — 48 draws / 124 k triangles against 112 / 278 k, and 16 creates against 4-8, so more of its route was drawn against LOD. Its -2 ms against `cleared` is not claimed as a win."
+    }
+  },
+  "subtractions": {
+    "layer (cleared - engine)": {
+      "p50Ms": 0,
+      "p95Ms": 2
+    },
+    "empty-board pass (field - cleared)": {
+      "p50Ms": -2,
+      "p95Ms": -2
+    },
+    "content (board - field)": "NOT TAKEN — 201/5-02's turn, and the only remaining candidate for the ~21 ms the 2026-08-30 A/B removed"
+  },
+  "caveat": "THE VIEW IS MOSTLY EMPTY. The pak is 4 cells / 500x500 units; the route flies at 450-900 m, where the frustum reaches far beyond it. The arm-to-arm subtractions hold (same route, same content, same surface); the absolute frame times are a floor for this device, not the cost of a loaded district."
+}

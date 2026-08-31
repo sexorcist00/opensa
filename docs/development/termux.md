@@ -161,6 +161,21 @@ reads exactly like "there is no copy of the game on this phone". Search `/storag
 side and `~` for the Termux-private side, and remember they are different filesystems with different free
 space.
 
+**So `npm run test:fixtures` can never produce the whole tree here, and that is the SOURCE's shape rather than
+a broken copy.** The distribution is `GTA_CORP/{data,models,SAMP}`: no `anim/`, no `text/`, no `gta_sa.exe`.
+Measured 2026-08-31 — `gta_sa.exe`, `anim/cuts.img` and `text/american.gxt` absent, all three `models/*.img`
+and `data/timecyc.dat` present — so every fixture drawn from those is out of reach until the copy grows, and
+the run is expected to end with a MISSING list rather than a clean tree.
+
+**What that cost before it was understood, the same day, and it is a defect worth remembering rather than a
+device fact.** `scripts/test-fixtures.ts` opened all four archives with one `ARCHIVES.map()`, so the absent
+`anim/cuts.img` threw the whole open — `archives ??=` never assigned, and the NEXT fixture re-read
+`gta3.img` (~1 GB) plus two more from shared storage and threw again. About a hundred archive-backed
+fixtures each did that: **over 100 GB of I/O through Android's FUSE layer, ~20 minutes, and 26 of 137
+fixtures written** — with everything inside `gta3.img` reported MISSING while the file sat there readable.
+The script prints nothing until it finishes, so it also looked hung. It reads the archives it HAS now and
+names the absent ones as the cause, once.
+
 ## Practical notes
 
 - **The whole setup is `pkg install nodejs-lts git` and then `npm run phone:setup`** — once per device. A
@@ -169,6 +184,123 @@ space.
   packages, none of which the convert path touches) and `HUSKY=0`, and it is idempotent, so re-running it
   after a failure or a reboot repeats nothing. Then `npm run phone` for every run
   ([mobile-pak.md](./mobile-pak.md)).
+- **`npm test` DOES NOT RUN ON THIS DEVICE, and the reason is two native binaries rather than the test tree.**
+  Measured 2026-08-31: `./node_modules/.bin/vitest --version` answers `vitest/4.1.6 android-arm64
+  node-v24.18.0`, and `vitest run` dies with **`Illegal instruction`** before a single line of output — the
+  crash is in what a RUN loads and `--version` does not. Required one at a time, two of the three napi
+  bindings vite 8 pulls in kill the process:
+
+  | binding | verdict |
+  | --- | --- |
+  | `@rolldown/binding-android-arm64` (rolldown 1.0.1, via `vite 8.0.13`) | **SIGILL** |
+  | `@oxc-resolver/binding-android-arm64` (11.20.0) | **SIGILL** |
+  | `@oxc-parser/binding-android-arm64` (0.130.0) | ok |
+
+  **`NAPI_RS_FORCE_WASI=1` does not help on its own**, and that is worth knowing before an hour is spent on
+  it: the generated loader calls `nativeBinding = requireNative()` UNCONDITIONALLY and only tests the
+  variable afterwards (`rolldown/dist/shared/binding-*.mjs:475`, `oxc-resolver/index.js:528`), so the
+  process is already dead when the WASM branch would be chosen. The native package has to become
+  *unloadable* — a `require` that THROWS is caught, a `require` that SIGILLs is not:
+
+  ```bash
+  cd ~/opensa
+  # --force, because both packages declare `"cpu": ["wasm32"]` and npm refuses them on arm64 with
+  # EBADPLATFORM — measured 2026-08-31, and it aborts the WHOLE install, so neither one lands.
+  npm i --no-save --force --no-audit --no-fund \
+    @rolldown/binding-wasm32-wasi@1.0.1 @oxc-resolver/binding-wasm32-wasi@11.20.0
+  # AFTER the install, never before: `npm i` re-resolves the tree and puts the native bindings back.
+  mv node_modules/@rolldown/binding-android-arm64 node_modules/@rolldown/.off-android-arm64
+  mv node_modules/@oxc-resolver/binding-android-arm64 node_modules/@oxc-resolver/.off-android-arm64
+  npx vitest run <paths>      # WASM: it runs, and it is slower
+  ```
+
+  `--no-save` is not optional here — see the `npm i` trap below; check `git status` afterwards and restore
+  `package.json` / `package-lock.json` if either moved. Undo the whole thing by restoring the two folder
+  names, or by re-running `npm run phone:setup`.
+
+  **And the WASM binding does not start here either, until it is told not to mount the root of the
+  filesystem.** Measured 2026-08-31: `UVWASI_EACCES, uvwasi_init` — the napi-rs loader does
+
+  ```js
+  const __rootDir = __nodePath.parse(process.cwd()).root   // "/"
+  new WASI({ version: 'preview1', env: process.env, preopens: { [__rootDir]: __rootDir } })
+  ```
+
+  and an Android app process may not open `/`, so WASI fails before the wasm is even read. The preopen only
+  has to cover the tree the build touches, so point it at Termux's own root — one `sed` per binding, in
+  `node_modules`, which nothing tracks:
+
+  ```bash
+  cd ~/opensa
+  for f in node_modules/@rolldown/binding-wasm32-wasi/rolldown-binding.wasi.cjs \
+           node_modules/@oxc-resolver/binding-wasm32-wasi/resolver.wasi.cjs; do
+    sed -i 's#__nodePath.parse(process.cwd()).root#(process.env.WASI_PREOPEN || __nodePath.parse(process.cwd()).root)#' "$f"
+  done
+  # ...and the WORKER, which builds its own WASI with its own copy of the same default. Patching only the
+  # first gets a main thread that starts and `worker (tid = N) sent an error! UVWASI_EACCES` a second later.
+  # The expression there carries no `__nodePath.` prefix, which is why one sed cannot do both — and why this
+  # one must not be pointed at the `.cjs` files, where it would nest inside the patch above and break them.
+  for f in node_modules/@rolldown/binding-wasm32-wasi/wasi-worker.mjs \
+           node_modules/@oxc-resolver/binding-wasm32-wasi/wasi-worker.mjs; do
+    sed -i 's#parse(process.cwd()).root#(process.env.WASI_PREOPEN || parse(process.cwd()).root)#' "$f"
+  done
+  WASI_PREOPEN=/data/data/com.termux/files npx vitest run <paths>
+  ```
+
+  `/data/data/com.termux/files` covers `home` (the repo) and `usr` (`$PREFIX`) in one mount, and with
+  `WASI_PREOPEN` unset the patched line behaves exactly as before. **Verified in a container** on the same
+  code path — native bindings renamed away, WASM only, both loaders patched, preopen pointed at a non-root
+  directory: **31 files / 408 tests pass in 3.95 s**, against 3.55 s on the native bindings — so WASM costs
+  about **11 %** on this suite rather than the multiple the word suggests.
+
+  **And then ON THE DEVICE, 2026-08-31, which is what the whole chain was for: the same 31 files / 408 tests
+  pass in 20.23 s** (`apps/dispatch/src/world`, `packages/engine/src/stream`, `tools-debug/phone-console`).
+  So a targeted suite is a twenty-second question on this phone, and the affected-tests rule `CLAUDE.md`
+  already states is not a compromise here — it is the only kind of run this device can do, and it can do it
+  comfortably.
+
+  **A pinned capture buffer is a MEMORY choice as much as a measurement one, measured 2026-08-31.** The
+  circuit's links pinned `720x1218` first — the phone's full-screen buffer, on the argument that no arm
+  should come out cheap in a smaller window. That confuses fairness with size (any CONSTANT size is fair),
+  and it costs what this device has least: `target` residency is **59.87 MB at 1218 against 32.35 MB at
+  640**, ~27 MB of render targets on top of a ~98 MB total, and the browser tab was killed part-way through
+  the first circuit flown that way. The links pin **`720x640`** since — which is also the buffer the
+  2026-08-31 150-unit row was taken at (`canvasPixels` 460 800), so the circuit lands on the existing record
+  rather than beside it.
+
+  **The patch lives in `node_modules` and does not survive a reinstall.** `npm ci`, `npm run phone:setup`
+  and anything else that rewrites the tree put the SIGILL bindings back and drop the four patched files, in
+  silence — the next run is an `Illegal instruction` again with no memory of why. Re-running the four
+  commands above is the fix; making it permanent (a `postinstall` step, or `patch-package`) is a repo-wide
+  decision nobody has taken yet, and is deliberately left as a note rather than done in passing. It is worth reporting upstream: preopening the filesystem root is a napi-rs
+  default that cannot work on Android.
+
+  **And when it still does not work, `NAPI_RS_FORCE_WASI=1` is the DIAGNOSTIC, not the fix.** The loader pushes a
+  WASI load failure into `loadErrors` only when that variable is set (`binding-*.mjs:485-493`), so without it
+  a failed WASM binding is reported as *"Cannot find native binding"* with a cause chain naming only the
+  NATIVE attempts — the thing that actually broke is invisible. Ask it directly instead:
+
+  ```bash
+  cd ~/opensa && NAPI_RS_FORCE_WASI=1 node -e "require('@rolldown/binding-wasm32-wasi');console.log('wasi ok')"
+  ```
+
+  **What is measured and what is not, as of 2026-08-31.** Measured: the two SIGILLs, the loader order, the
+  EBADPLATFORM refusal, and — the half that proves the approach — that with the native folder renamed the
+  loader raises a catchable `MODULE_NOT_FOUND` (`Cannot find native binding`, `binding-*.mjs:507`) instead
+  of killing the process. **The recipe itself is verified**, but on x64 rather than here: renaming both native
+  bindings in a container and installing only the `wasm32-wasi` pair, `vitest run` loads the WASM binding
+  (with node's `ExperimentalWarning: WASI`) and the suite passes. So the approach is sound and what remains
+  is device-specific. Not yet measured: the same on the phone — where the first attempt still failed with
+  the native bindings renamed and the WASM pair installed, which by the paragraph above means the WASI load
+  itself failed for a reason only that command will print. The runtime it needs (`@emnapi/*`,
+  `@napi-rs/wasm-runtime`) is in the tree.
+
+  **The consequence reaches further than the phone.** The `pre-push` hook is `npm test`, and the full suite
+  cannot pass anywhere this project actually works: not here (SIGILL), and not in a fresh web container
+  (no game files, so `test:fixtures` produces nothing and every fixture-backed suite fails). A push
+  therefore costs `--no-verify` or does not happen, which is a hook demanding what no machine of this
+  project can do. The verification that IS available is the affected-tests rule `CLAUDE.md` already states
+  — run the suites the change touches, in a container, and say which ones.
 - **`npm run phone` now takes the wake lock itself** for the duration of a convert and releases it on the way
   out (including on Ctrl+C and on the session closing), so there is nothing to remember. `termux-wake-lock` /
   `termux-wake-unlock` by hand still work for anything else long-running; both need `pkg install termux-api`.

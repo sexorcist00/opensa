@@ -146,10 +146,35 @@ Measured on the same Android 10 / arm64 device as the mobile row above, Termux, 
 | `vite` (dev, even in an empty folder with one `index.html`) | **Illegal instruction**, no output at all |
 | `NAPI_RS_FORCE_WASI=1` + `@rolldown/binding-wasm32-wasi` installed with `--force` | **still SIGILL** |
 
-The wasm escape hatch does not help, and the reason is the order inside the loader: it calls `requireNative()`
-FIRST and only consults `NAPI_RS_FORCE_WASI` with the result. On a CPU that lacks an instruction the binding
-was built with, that first call ends the process — the fallback is never reached. (Physically removing the
-native binding so the require throws is the only way to get there, untested here.)
+The wasm escape hatch does not help BY ITSELF, and the reason is the order inside the loader: it calls
+`requireNative()` FIRST and only consults `NAPI_RS_FORCE_WASI` with the result. On a CPU that lacks an
+instruction the binding was built with, that first call ends the process — the fallback is never reached.
+
+**LIFTED 2026-08-31: the sentence this entry closed with — *"physically removing the native binding so the
+require throws is the only way to get there, untested here"* — was right, and it is tested now.** The full
+recipe and its numbers are in [termux.md](../development/termux.md) (kept in one place rather than copied);
+what belongs here is what the 08-06 measurement could not see, because each link is invisible until the one
+before it is cleared:
+
+- **`@oxc-resolver/binding-android-arm64` SIGILLs too**, so removing rolldown's binding alone gets you a
+  second identical crash from a different package. `@oxc-parser/binding-android-arm64` is fine — the three
+  are not one verdict.
+- **npm refuses the wasm packages with `EBADPLATFORM`** (`"cpu": ["wasm32"]` against arm64) and aborts the
+  WHOLE install, so a command naming both lands neither. `--force` gets past it; `--cpu=wasm32` would too
+  but retargets the resolve and can drop the arm64 binaries that DO work.
+- **A failed WASI load is invisible**: the loader collects it into `loadErrors` only when
+  `NAPI_RS_FORCE_WASI` is set, so a broken wasm binding is reported as *"Cannot find native binding"* with a
+  cause chain naming only the native attempts. The variable's real use is as a diagnostic.
+- **The wasm binding then fails on Android for its own reason** — `UVWASI_EACCES` from `uvwasi_init`, because
+  napi-rs preopens the ROOT of the filesystem (`preopens: { "/": "/" }`) and an app process may not open `/`.
+  Pointing the preopen at `/data/data/com.termux/files` fixes it.
+- **And the worker thread has its own copy of that default**, in `wasi-worker.mjs`, so patching the loader
+  alone gets a main thread that starts and `worker (tid = N) sent an error! UVWASI_EACCES` a moment later.
+
+With all five cleared, **the phone runs a real suite: 31 files / 408 tests in 20.23 s** on the WASM bindings
+(2026-08-31). The patches live in `node_modules`, so any `npm ci` or `phone:setup` silently restores the
+SIGILL bindings. **`vite` itself is still UNTESTED this way** — only `vitest` was run — so the prebuilt-app
+path below stands as the documented answer for serving the app.
 
 **Consequence: on such a device the app cannot be served by vite at all** — not `dev`, not `build`. What works
 is a PREBUILT app served as static files: `scripts/phone.sh` uses `build/webapp/index.html` when it exists and

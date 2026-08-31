@@ -170,3 +170,38 @@ describe('RenderGate.boardChanged (201/9-03)', () => {
     });
   });
 });
+
+describe('RenderGate while the world is still arriving (the 2026-08-31 VOID)', () => {
+  describe('negative cases', () => {
+    it('does not rest while a cell is in flight, even though no signal moved', () => {
+      // The deadlock this fixes: the frame that would finish the texture upload is the frame the gate was
+      // refusing to draw, and the upload is what would have moved `pending` in the first place.
+      const gate = new RenderGate();
+      const arriving = signals({ created: 0, pending: 4 });
+
+      expect(gate.shouldDraw(arriving)).toBe(true);
+      expect(gate.shouldDraw(arriving)).toBe(true);
+      expect(gate.shouldDraw(arriving)).toBe(true);
+      expect(gate.idleFrames).toBe(0);
+    });
+
+    it('does not treat a pending count that never changes as "nothing happened"', () => {
+      const gate = new RenderGate();
+      gate.shouldDraw(signals({ pending: 1 }));
+
+      expect(gate.shouldDraw(signals({ pending: 1 }))).toBe(true);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('rests again once the queue has drained', () => {
+      const gate = new RenderGate();
+      gate.shouldDraw(signals({ created: 0, pending: 2 }));
+      gate.shouldDraw(signals({ created: 1, pending: 1 }));
+
+      expect(gate.shouldDraw(signals({ created: 2, pending: 0 }))).toBe(true);
+      expect(gate.shouldDraw(signals({ created: 2, pending: 0 }))).toBe(false);
+      expect(gate.idleFrames).toBe(1);
+    });
+  });
+});

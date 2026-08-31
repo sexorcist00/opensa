@@ -386,8 +386,32 @@ function extractEntry(name: string): null | Uint8Array {
   return null;
 }
 
+/**
+ * The archives this install does not carry — reported at the end, because one absent archive used to take
+ * every OTHER archive's fixtures down with it.
+ *
+ * Measured on the phone, 2026-08-31: a game copy with `models/` and `data/` but no `anim/` produced
+ * **26 of 137 fixtures**, and the 111 MISSING included everything inside `gta3.img` — which was sitting
+ * right there, readable. `ARCHIVES.map()` threw on the fourth entry, so `archives ??=` never assigned, so
+ * the NEXT fixture re-read `gta3.img` (~1 GB) + `gta_int.img` + `cutscene.img` from shared storage and
+ * threw again. About a hundred archive-backed fixtures did that: over 100 GB of I/O through Android's FUSE
+ * layer for nothing, ~20 minutes of it, and the script prints nothing until it finishes — so it looked
+ * hung, and the report blamed 111 files rather than one absent archive.
+ */
+const absentArchives: string[] = [];
+
 function openArchives(): ImgArchive[] {
-  archives ??= ARCHIVES.map((rel) => openArchive(new Uint8Array(readFileSync(join(ROOT, rel)))));
+  // `flatMap` rather than `map`: an archive that cannot be read drops OUT of the list instead of throwing
+  // the whole open. That also means the assignment always happens, which is what stops the re-read storm.
+  archives ??= ARCHIVES.flatMap((rel) => {
+    try {
+      return [openArchive(new Uint8Array(readFileSync(join(ROOT, rel))))];
+    } catch {
+      absentArchives.push(rel);
+
+      return [];
+    }
+  });
 
   return archives;
 }
@@ -537,6 +561,14 @@ if (customCount === null) {
   );
 } else {
   console.log(`test:fixtures (custom): mirrored ${customCount} from ${CUSTOM_SRC}/ into ${CUSTOM_OUT}/`);
+}
+if (absentArchives.length > 0) {
+  // Named BEFORE the file list, because it is the cause of most of it: every entry that lives in an archive
+  // this install does not carry is in the list below, and no amount of reading it tells you that.
+  console.error(
+    `\n  ABSENT ARCHIVES in ${ROOT}: ${absentArchives.join(', ')} —` +
+      ' every fixture extracted from one of these is in the MISSING list below, and no other archive is to blame.',
+  );
 }
 if (missing.length > 0) {
   console.error(`\n  MISSING ${missing.length} — source not found in ${ROOT}:`);

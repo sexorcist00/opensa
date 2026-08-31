@@ -87,6 +87,13 @@ A perf comparison is worthless without these held equal, so record them in `note
   LODs benchmarks faster than one that has them, and the numbers look like a code regression when nothing
   in the code moved. **Name the pak build.** Naming note: `build/original` was called `build/perfect`
   until 2026-07-23 (plan 086) — rows recorded before that date read the same folder under its old name.
+- **on the phone, the DRAWING BUFFER, because the browser moves it under you.** The console's canvas follows the
+  visible viewport (`overlay.width = clientWidth * dpr`), and the browser's chrome collapses and returns while a run
+  is being flown: one session on 2026-08-31 measured 720x1218, 720x864, 720x746 and 720x640 — a 1.9x spread in
+  pixels, with `target` residency moving 59.87 → 32.35 MB alongside it. Two arms of an A/B taken at two of those
+  sizes cannot be subtracted, and nothing in the capture complains: every field is internally consistent. Record
+  `surface` for each side, and treat an arm-to-arm delta over unequal surfaces as a band rather than a number
+  ([the circuit that found it](opensa-engine/2026-08-31-mobile-map-circuit-arms.json))
 - renderer flags (`?scale=`, `?draw=`, `?engine=`)
 
 ## Mobile runs: a different schema, and never a comparable one
