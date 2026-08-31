@@ -73,6 +73,7 @@ async function bootedGame(): Promise<{
   const engine = new Engine();
   await engine.init(harness.canvas);
   engine.cells.picking = true; // the viewer sets this before the first load; picking needs the mapper
+  engine.cells.placementEdits = true; // and this one, since hiding erases index ranges (201/9-07)
   const map = loadedMap();
   const camera = new ViewerCamera({ at: [125, 125], height: 400, pitch: -Math.PI / 2 + 0.01, yaw: Math.PI });
   const game = new ViewerMapGame(engine, map, camera, new CellRenderer(engine, map), vi.fn(), vi.fn());

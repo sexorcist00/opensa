@@ -130,17 +130,39 @@ export class CellStore {
    * What it costs is not free and not hidden either: read {@link pickingBytes}.
    */
   picking = false;
+  /**
+   * Also RETAIN each cell's index bytes, so a picked placement can be hidden (201/9-07).
+   *
+   * **It is a second capability because it has a second price, and only one host pays it.** `pick()`
+   * resolves against the placement mapper's world-space bounds and never reads an index; the index bytes
+   * exist for {@link CellStore.hidePlacement}, which only the map inspector calls. Until this split the two
+   * rode on {@link CellStore.picking} together, so `apps/dispatch` — which picks constantly and hides
+   * nothing — held a full copy of every resident cell's index data for a capability it does not have a
+   * button for. On the pinned district that was 1.18 MB of the 1.42 the console reported, and it grows with
+   * the district.
+   *
+   * A cell with breakables keeps its index bytes regardless: `breakPlacement` is the game's, and it is
+   * gated on the cell's own contents rather than on a host flag.
+   *
+   * Off by default, like {@link CellStore.picking}, and it takes effect on the NEXT load for the same
+   * reason: the bytes are dropped at upload time and a flag flipped afterwards cannot bring them back.
+   */
+  placementEdits = false;
   get count(): number {
     return this.cells.size;
   }
   /**
-   * What {@link picking} is costing right now, in HOST bytes, summed over the loaded cells.
+   * What {@link picking} and {@link placementEdits} are costing right now, in HOST bytes, summed over the
+   * loaded cells.
    *
-   * Two things, because the capability retains two (201/5-01 asked for the number *measured, not
+   * Two things, because the two capabilities retain one each (201/5-01 asked for the number *measured, not
    * estimated*): the mapper rows themselves — a `Float64Array(6)` per placement plus the row's own fields —
    * and the cell index bytes, which a cell with nothing smashable would otherwise drop on the floor after
    * upload. Both are CPU-side, which is exactly why they were invisible: `Engine.ledger()` counts GPU
    * residency by category, and a host reading only that sees a capability whose price is zero.
+   *
+   * **A host that only picks pays only the first half since 201/9-07**, and the sum says so by itself: the
+   * index term is zero on every cell whose bytes were dropped at upload.
    *
    * The model and TXD names are NOT counted. They are references into the cell's own name table, which the
    * decode allocated either way, and counting a shared string per row would inflate the number that has to
@@ -235,6 +257,11 @@ export class CellStore {
    */
   hidePlacement(id: number): number {
     let hidden = 0;
+    // A host that did not ask for {@link placementEdits} has no index bytes to erase — the cells dropped
+    // them at upload. Saying so is better than erasing nothing and returning a count that looks like work.
+    if (!this.placementEdits) {
+      return 0;
+    }
     for (const cell of this.cells.values()) {
       const rows = cell.placements.filter((placement) => placement.id === id);
       if (rows.length === 0) {
@@ -320,7 +347,7 @@ export class CellStore {
       draws: bundleGroups.length,
       index16: cell.index16,
       indexBuffer,
-      indexData: cell.breakables.length > 0 || this.picking ? cell.indexData : new Uint8Array(0),
+      indexData: cell.breakables.length > 0 || this.placementEdits ? cell.indexData : new Uint8Array(0),
       key,
       lights: cell.lights.map((light) => ({
         color: light.color,

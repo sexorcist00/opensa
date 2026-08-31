@@ -60,7 +60,13 @@ export class UnitModels {
   private disposed = false;
   private readonly drawnUnits = new Set<string>();
   private readonly instances = new Map<string, { instance: VehicleInstance; name: string }>();
+  /** The ids to release, collected before releasing any — `release` writes `instances`, and a scratch array
+   *  says that plainly where relying on Map-iterator semantics under deletion would only imply it. */
+  private readonly leaving: string[] = [];
   private readonly loading = new Set<string>();
+  /** Reused across updates, like {@link UnitModels.drawnUnits} beside it (201/9-07): a roster of 150 built
+   *  a fresh `Set` and a fresh array of ids on every call, for a membership test and nothing else. */
+  private readonly onBoard = new Set<string>();
   private readonly root = new Float32Array(16);
   private readonly types = new Map<string, ModelType>();
   /** Names asked for that this build cannot draw — never asked for twice, and reported once each. */
@@ -130,11 +136,18 @@ export class UnitModels {
       this.drawnUnits.add(unit.id);
     }
     this.withoutModelCount = withoutModel;
-    const onBoard = new Set(units.map((unit) => unit.id));
-    for (const id of [...this.instances.keys()]) {
-      if (!onBoard.has(id)) {
-        this.release(id);
+    this.onBoard.clear();
+    for (const unit of units) {
+      this.onBoard.add(unit.id);
+    }
+    this.leaving.length = 0;
+    for (const id of this.instances.keys()) {
+      if (!this.onBoard.has(id)) {
+        this.leaving.push(id);
       }
+    }
+    for (const id of this.leaving) {
+      this.release(id);
     }
     this.trim();
     this.engine.updateVehicles();

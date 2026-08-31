@@ -436,6 +436,10 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // what retains the per-placement mapper a click resolves against. It costs memory on a full map (read back
   // as `engine.cells.pickingBytes`, and reported by `?inventory=1`); this app is a map inspector with a
   // dispatch board on top, so it pays that cost by design and says so rather than borrowing a debug switch.
+  //
+  // `placementEdits` stays OFF, and that is the half this surface was paying for nothing (201/9-07): the
+  // retained index bytes exist for `hidePlacement`, which the map inspector calls and this console has no
+  // button for. `pick()` resolves against the placement mapper's bounds and reads no index at all.
   engine.cells.picking = true;
 
   // `?demo=1` skips the pak entirely and builds a synthetic block grid, so the console can be driven on a

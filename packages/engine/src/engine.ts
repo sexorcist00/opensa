@@ -529,6 +529,16 @@ interface ClutterModel {
 interface VehicleInstanceState {
   entity: RigidEntity;
   lamps: { brakes: boolean; headlights: boolean; intensity: number; smashed: number };
+  /**
+   * The OPAQUE phase's submesh order, cached until `setSubmeshVisible` changes something (201/9-07).
+   *
+   * It is a function of two things that do not move between frames — `submesh.array`, a constant of the
+   * model, and `submeshVisible` — while the translucent phase's order is a function of the EYE and is
+   * rebuilt every frame because it has to be. Rebuilding this one cost an array of objects, a sort and a
+   * `map()` per instance per frame: at 150 units that is ~150 of each, every frame, for an order that is
+   * the same every time.
+   */
+  opaqueOrder: null | number[];
   /** Kept so a capacity grow (which reallocates the buffer) can restore it — paint is not re-sent per frame. */
   paint: VehiclePaint;
   /** This car's plate, kept for the same reason as `paint`: a capacity grow must restore it (082/03). */
@@ -788,6 +798,25 @@ export class Engine {
    *  says which of its phases was one-shot. Summing them would hide exactly that. */
   private readonly firstFrameTotals: FrameSpanTotals[] = [];
   private frameBindGroup!: GPUBindGroup;
+  private readonly frameBlendBundles: GPURenderBundle[] = [];
+  private readonly frameBlendCells: { bundle: GPURenderBundle; distanceSq: number }[] = [];
+  /**
+   * The visible-cell scratch, three arrays reused across frames instead of rebuilt in one (201/9-07).
+   *
+   * `executeBundles` copies what it is handed and nothing outside `frame()` keeps a reference, so the only
+   * rule is the obvious one: reset the length before filling. The blend list is two arrays because the sort
+   * key is not the value — cells are ordered by distance and the pass wants bundles.
+   */
+  private readonly frameBundles: GPURenderBundle[] = [];
+  /**
+   * The frame uniform's staging array, one per engine rather than one per frame (201/9-07).
+   *
+   * Every element is rewritten before it is uploaded, with ONE exception that had to be made explicit for
+   * this to be safe: `scheduleProbe` leaves index 91 alone when it skips, and a freshly allocated array made
+   * that read as zero. It zeroes it now — a value nobody assigns is not a value, and relying on `new` to
+   * supply one is the kind of coupling that survives right up until somebody hoists the allocation.
+   */
+  private readonly frameData = new Float32Array(104);
   /** Triangles recorded by the out-of-bundle draw passes this frame; reset at the top of `frame`. A field
    *  rather than a return value because every `draw*` already returns its draw count. */
   private frameTriangles = 0;
@@ -831,9 +860,13 @@ export class Engine {
   /** Resolved scene (16f) + the godrays composite resources (074/09 stage 1); bind group is rebuilt on
    *  resize — it is NOT referenced by any bundle, so this is safe (unlike the frame bind group). */
   private postBindGroup!: GPUBindGroup;
+
   private postSampler!: GPUSampler;
+
   private postUniform!: GPUBuffer;
+
   private probe!: EnvProbe;
+
   private readonly probeFrameData = new Float32Array(104);
   private readonly probeFrustum = new Float32Array(24);
   private readonly probeInvViewProj: Mat4 = mat4Identity();
@@ -1020,6 +1053,7 @@ export class Engine {
     const state: VehicleInstanceState = {
       entity: new RigidEntity(parts),
       lamps: { brakes: false, headlights: false, intensity: 1, smashed: 0 },
+      opaqueOrder: null,
       paint: DEFAULT_PAINT,
       // Slot 0 of each array until the host assigns one: an unplated car shows the stock placeholder.
       plate: { city: 0, textSlot: 0 },
@@ -1056,7 +1090,15 @@ export class Engine {
         this.writeVehiclePlate(model, state.slot, textSlot, city);
       },
       setSubmeshVisible: (submesh: number, visible: boolean): void => {
-        state.submeshVisible[submesh] = visible ? 1 : 0;
+        const value = visible ? 1 : 0;
+        if (state.submeshVisible[submesh] === value) {
+          return;
+        }
+        state.submeshVisible[submesh] = value;
+        // The one input to the opaque order that can move. Dropped rather than rebuilt: a car whose
+        // visibility is set submesh by submesh (which is how `createVehicle`'s caller does it) would
+        // otherwise rebuild the order once per submesh instead of once before the next draw.
+        state.opaqueOrder = null;
       },
     };
   }
@@ -1209,7 +1251,7 @@ export class Engine {
     mat4LookAt(this.view, camera.eye, camera.target, camera.up);
     mat4Multiply(this.viewProj, this.proj, this.view);
     mat4Invert(this.invViewProj, this.viewProj);
-    const frameData = new Float32Array(104);
+    const frameData = this.frameData;
     frameData.set(this.viewProj, 0);
     frameData.set(this.invViewProj, 16);
     // camera.w = spare (held the retired cloud-panorama crossfade blend).
@@ -1280,8 +1322,10 @@ export class Engine {
       }
     };
     const cullStart = mark();
-    const bundles: GPURenderBundle[] = [];
-    const blendCells: { bundle: GPURenderBundle; distanceSq: number }[] = [];
+    const bundles = this.frameBundles;
+    const blendCells = this.frameBlendCells;
+    bundles.length = 0;
+    blendCells.length = 0;
     let draws = 0;
     let total = 0;
     let triangles = 0;
@@ -1320,7 +1364,7 @@ export class Engine {
     }
     // Blend phase back-to-front by CELL distance — cross-cell transparency ordering (per-group order inside
     // a cell stays baked; the standard within-bundle transparency caveat).
-    const blendBundles = blendCells.sort((a, b) => b.distanceSq - a.distanceSq).map((entry) => entry.bundle);
+    const blendBundles = this.orderBlendBundles(blendCells);
     since('frame:cull', cullStart);
 
     const recordStart = mark();
@@ -3057,6 +3101,23 @@ export class Engine {
     }
   }
 
+  /**
+   * The visible cells' blend bundles, back-to-front by cell distance, into the reused array (201/9-07).
+   *
+   * Two arrays rather than one because the sort key is not the value: cells carry a distance and the pass
+   * wants bundles. It was a `.sort().map()` on a fresh pair every frame.
+   */
+  private orderBlendBundles(cells: { bundle: GPURenderBundle; distanceSq: number }[]): GPURenderBundle[] {
+    cells.sort((a, b) => b.distanceSq - a.distanceSq);
+    const bundles = this.frameBlendBundles;
+    bundles.length = 0;
+    for (const entry of cells) {
+      bundles.push(entry.bundle);
+    }
+
+    return bundles;
+  }
+
   /** Rebuild the sky LUT when its environment inputs moved (quantized key — ~a few rebuilds per game
    *  minute under a day cycle; each build is ~5 k texels of scalar math + a 72 KB upload). */
   private refreshSkyLut(): void {
@@ -3190,6 +3251,9 @@ export class Engine {
   private scheduleProbe(frameData: Float32Array): void {
     const probeCenter = this.probeCenter;
     if (!probeCenter || this.environment.reflectionStrength <= 0) {
+      // Written rather than left: the staging array is reused now (201/9-07), so a skipped probe would
+      // otherwise ship the last frame's mix into a frame that has no reflection at all.
+      frameData[91] = 0;
       this.timers.probeSkipped();
 
       return;
@@ -3198,13 +3262,24 @@ export class Engine {
     frameData[91] = this.probeTick === 0 ? this.renderProbeFace(probeCenter, frameData) : this.probe.mix();
   }
 
-  /** Visible submesh indices for one phase; the translucent phase comes back-to-front (074/16 round 6). */
+  /**
+   * Visible submesh indices for one phase; the translucent phase comes back-to-front (074/16 round 6).
+   *
+   * **The two phases are not the same kind of question, and only one of them is per-frame** (201/9-07). The
+   * translucent order is a function of the EYE and is rebuilt every frame because it has to be. The opaque
+   * order is a function of `submesh.array` — a constant of the model — and `submeshVisible`, which moves
+   * only through `setSubmeshVisible`, so it is cached on the instance and dropped there. At 150 units that
+   * is ~150 arrays of objects, ~150 sorts and ~150 `map()`s a frame that no longer happen.
+   */
   private submeshDrawOrder(
     state: VehicleInstanceState,
     model: VehicleModel,
     translucent: boolean,
     eye: Vec3,
   ): number[] {
+    if (!translucent && state.opaqueOrder !== null) {
+      return state.opaqueOrder;
+    }
     const order: { distSq: number; index: number }[] = [];
     for (let index = 0; index < model.submeshes.length; index += 1) {
       const submesh = model.submeshes[index];
@@ -3214,13 +3289,15 @@ export class Engine {
     }
     if (translucent) {
       order.sort((a, b) => b.distSq - a.distSq);
-    } else {
-      // Opaque has no order requirement (depth decides), so group by texture ARRAY: a multi-array map object
-      // otherwise re-binds on every submesh. Translucency keeps its back-to-front order — correctness first.
-      order.sort((a, b) => (model.submeshes[a.index].array ?? 0) - (model.submeshes[b.index].array ?? 0));
-    }
 
-    return order.map((entry) => entry.index);
+      return order.map((entry) => entry.index);
+    }
+    // Opaque has no order requirement (depth decides), so group by texture ARRAY: a multi-array map object
+    // otherwise re-binds on every submesh. Translucency keeps its back-to-front order — correctness first.
+    order.sort((a, b) => (model.submeshes[a.index].array ?? 0) - (model.submeshes[b.index].array ?? 0));
+    state.opaqueOrder = order.map((entry) => entry.index);
+
+    return state.opaqueOrder;
   }
 
   /**

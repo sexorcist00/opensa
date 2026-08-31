@@ -71,7 +71,12 @@ export async function bootViewer(
   // Picking is ALWAYS on here (phase 3). In the game it is viewer-only because the placement mapper and the
   // retained index bytes cost tens of MB on a full map; this app is nothing but that viewer, and it must be
   // set BEFORE the first cell loads — the picking capability only takes effect on load.
+  //
+  // BOTH halves, and this is the one host that needs the second (201/9-07): `hidePlacement` erases index
+  // ranges, so the bytes have to survive the upload. The console picks and never hides, and since the split
+  // it no longer pays for them.
   engine.cells.picking = true;
+  engine.cells.placementEdits = true;
 
   const camera = new ViewerCamera(poseFromQuery(window.location.search, mapCenterGta(map)));
   const renderer = new CellRenderer(engine, map);
