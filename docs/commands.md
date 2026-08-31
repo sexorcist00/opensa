@@ -267,7 +267,8 @@ stays clean on the one machine where `git status` is hardest to read.
 command never changes and every knob is an env var: `REBUILD=1` re-converts, `BAKE=0` builds the other side of
 the collision A/B, `TEXTURES=` picks the texture format (default `astc`; `rgba8` is the A/B's other side),
 `MODELS=0` skips the model convert (fast, but then only `dispatch.html` is usable — it runs
-no physics), `VEHICLES=` / `PEDS=` set the model SUBSET (default `admiral,infernus,comet` + `bmycg,wmycr`;
+no physics), `VEHICLES=` / `PEDS=` set the model SUBSET (default `copcarla,ambulan,firetruk` + `bmycg,wmycr` — the
+dispatch board's own three, so THE FIELD RUN opens on a pak that can draw its units as models;
 `all` converts the roster — hours on a phone), `ASTC_THREADS=` caps astcenc's worker pool (default 2 — the library's one-per-core is what OOMs a phone), `DISTRICT=` picks the measurement district — its rect, its
 spawn and the map's opening point at once, from the table the console reads (`npx tsx scripts/district.ts`
 lists them; the default is the one 201/1-01 pinned), `RECT=` / `SPAWN=` / `OUT=` / `GAME=` / `APP_PORT=` /
