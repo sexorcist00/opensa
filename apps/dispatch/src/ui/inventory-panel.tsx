@@ -148,7 +148,7 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
         <span>{open ? '▾' : '▸'}</span>
         <strong>inventory</strong>
         <span>
-          {report.frames}f · {report.frame.dtP50Ms.toFixed(1)} ms
+          {report.frames - report.rest.frames}f · {report.frame.dtP50Ms.toFixed(0)} ms
         </span>
         {alerts > 0 && (
           <span style={styles.inventoryWarn} title="Warnings and errors — open the panel to read them">
@@ -162,9 +162,18 @@ export function InventoryPanel({ read }: { read: () => InventoryReport | null })
             window {(report.windowMs / 1000).toFixed(0)}s · {report.frames} frames
           </div>
           <div>
-            dt p50 {report.frame.dtP50Ms.toFixed(1)} · p95 {report.frame.dtP95Ms.toFixed(1)} · max{' '}
+            frame p50 {report.frame.dtP50Ms.toFixed(0)} · p95 {report.frame.dtP95Ms.toFixed(0)} · max{' '}
             {report.frame.dtMaxMs.toFixed(0)} ms
           </div>
+          {/* 201/3-05: how much of the window was the render gate resting rather than a frame costing
+              anything. Without it a capture whose numbers came from 129 frames out of 835 reads as though
+              every one of them was a frame — which is how the record read for nine days. */}
+          {report.rest.frames > 0 && (
+            <div>
+              rest {report.rest.frames} of {report.frames} frames ·{' '}
+              {Math.round((report.rest.totalMs / Math.max(1, report.windowMs)) * 100)}% of the window
+            </div>
+          )}
           <div>
             cpu {report.cpu.bodyMeanMs.toFixed(1)} · outside {report.cpu.outsideMeanMs.toFixed(1)} ms (
             {Math.round(report.cpu.shareOfFrame * 100)}% in the loop)

@@ -70,6 +70,18 @@ describe('FrameClock', () => {
       expect(clock.read(at).frameMs).toBe(16);
     });
 
+    it('says which kind of interval each drawn frame carried, so one rule serves both readers', () => {
+      // The status bar and the capture collector ask the same question — is this gap a frame time? — and
+      // two copies of the answer would be two consoles disagreeing about one loop. The clock decides.
+      const clock = new FrameClock();
+
+      expect(clock.drew(16, 16)).toBe('after-rest'); // the first interval is measured against page load
+      expect(clock.drew(32, 16)).toBe('consecutive');
+      clock.skipped();
+      expect(clock.drew(140, 108)).toBe('after-rest');
+      expect(clock.drew(156, 16)).toBe('consecutive');
+    });
+
     it('drops frames out of the window as they age past a second', () => {
       const clock = new FrameClock();
       const at = drawAt(clock, 0, 16, 200);

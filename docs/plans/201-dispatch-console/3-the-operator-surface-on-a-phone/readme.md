@@ -237,12 +237,37 @@ means are ~6.5× low in absolute terms while keeping their SHAPE (`overlay-2d` 1
 This is not a new discovery and that matters: **the 2026-08-30 driven row already says it in its own note**
 and derives its moving half from the histogram by hand, as do 08-23, the three 08-25 rows and the four
 08-26 ones — every capture since render-on-demand landed on 2026-08-22 carries a large `framesSkipped` and
-has had this done in prose. `frame-clock.ts` now does that derivation in CODE for the screen. **Pushing it
-down into the collector is what is left**, and it is deliberately still not done in this step: it changes
-what `frames`, `dtP50Ms`, `dtP95Ms`, `dtMeanMs`, `outsideMeanMs` and `shareOfFrame` MEAN in a filed capture,
-which owes its own before/after — and the row above is now that before. What it does NOT change: the
-1/01 baseline of 2026-08-09 predates 4/01 (2026-08-22), so its `p50` 30.3 ms and its
-*"the frame is WAITING, not working — 21.2 % in the loop"* are clean and stand.
+has had this done in prose. What it does NOT change: the 1/01 baseline of 2026-08-09 predates 4/01
+(2026-08-22), so its `p50` 30.3 ms and its *"the frame is WAITING, not working — 21.2 % in the loop"* are
+clean and stand.
+
+**CLOSED the same day, in code, with the 08-31 row as its before.** The rule now has ONE owner:
+`FrameClock.drew()` returns which kind of interval it was, and the collector is TOLD rather than deciding —
+the status bar and a filed capture cannot disagree about which gaps were frames. `frame.*` is the frame
+intervals alone, a new `rest` block carries the other population (`frames`, `meanMs`, `maxMs`, `totalMs`, so
+`rest.totalMs` against `windowMs` says how much of a capture was rest on purpose), and `outsideMeanMs` /
+`shareOfFrame` divide by the paced population — computed over every drawn frame they counted the idle wait
+as time the frame spent outside the CPU, which reads as *"GPU-bound"* and was the loop sleeping.
+`bodyMeanMs` is deliberately NOT restricted: a body is measured on the frame itself, so a frame drawn after
+a rest ran a real one and only the gap around it belongs to no frame. The panel says the split on screen
+(`rest 706 of 835 frames · 65% of the window`), so a window that is mostly rest can no longer read as one
+that was mostly work.
+
+**And the storage went with it, which is the second half of the same defect.** The collector kept every
+`dt` and copied-and-SORTED the whole array on every `report()` — a report the panel asks for every 500 ms.
+[Measured](../../../benchmarks/opensa-engine/2026-08-31-inventory-collector-storage.json): at 216 000
+frames (two hours at 30 drawn fps, which is exactly [4/02](../4-a-console-is-not-a-game/readme.md)'s long
+session) **one report cost 58.2 ms, so at 2 Hz the instrument was taking ~12 % of the main thread it was
+reporting on** — and no capture ever said so, because the collector does not measure itself. It is a bounded
+histogram now (2 ms bins to 100, 20 ms to a second, one tail; at most 96 entries however long the run) with
+the count, sum and maximum kept exact as running scalars: **0.002 ms a report, and 1.65 MB of held samples
+→ 0.** The price is a percentile that is a bin's floor — up to one bin low, never high — which is the
+precision the analysis already had, since every row since 08-22 was read off these bins by hand. The bin
+range is two resolutions **because a test caught it**: a single tail at 100 ms would have saturated `dtP95`,
+and the 08-31 row's was 108.4.
+
+**Owes one thing: the AFTER on the phone.** Same link, same district, so the two rows differ in the code
+rather than in the run.
 
 ## Verification
 

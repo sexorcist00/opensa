@@ -211,16 +211,27 @@ bar prints `—` rather than an invented `0.0`. At rest it reads `idle · 16.7 m
 frames cost is what a touch gets back, and on a desk `cpu N ms` sits beside it: the loop body's own cost is
 the number that survives a second with a single frame in it.
 
-**What this did NOT change, and it is bigger than it looks.** The collector is genuinely never called on a
-skipped wake — the call sits behind the gate. But a skipped pass arms the next loop entry with
-`setTimeout(100 ms)`, so the frame drawn *after* one carries a `dt` that is 99 % sleep, and on a live
-150-unit board the console alternates draw/skip continuously: **706 of 835 samples** in the 2026-08-31 phone
-capture were that interval. So a filed capture's `dtP50Ms` reads the idle poll, and `dtMeanMs`,
-`outsideMeanMs` and `shareOfFrame` describe a resting loop rather than a busy frame. Every row since
-2026-08-22 derives its moving half from the histogram by hand. Pushing that derivation down into the
-collector changes what a filed capture MEANS and owes its own before/after, so it is named here rather than
-done quietly — the [08-31 row](../benchmarks/opensa-engine/2026-08-31-mobile-honest-frame-counter-150u.json)
-is that before.
+**The filed capture is split the same way, and it had the defect worse.** The collector is never called on
+a skipped wake — the call sits behind the gate — but a skipped pass arms the next loop entry with
+`setTimeout(100 ms)`, so the frame drawn *after* one carries a `dt` that is 99 % sleep. On a live 150-unit
+board the console alternates draw/skip continuously: **706 of 835 samples** in the
+[2026-08-31 capture](../benchmarks/opensa-engine/2026-08-31-mobile-honest-frame-counter-150u.json) were that
+interval, so `dtP50Ms` read the idle poll and `shareOfFrame` (2.3 %) described a resting loop.
+
+`frame.*` is now the paced intervals alone; a `rest` block carries the other population (`frames`, `meanMs`,
+`maxMs`, `totalMs`) so a window can still be read, and `rest.totalMs` against `windowMs` says how much of a
+capture the console spent at rest on purpose. `outsideMeanMs` and `shareOfFrame` divide by that same paced
+population; `bodyMeanMs` deliberately does not, because a body is measured on the frame itself and a frame
+drawn after a rest ran a real one. The panel shows the split (`rest 706 of 835 frames · 65% of the window`).
+**One owner decides which is which** — `FrameClock.drew()` returns the kind and the collector is told — so
+the status bar and a filed capture cannot disagree about the same loop.
+
+**The collector also stopped growing.** It kept every `dt` and copied-and-sorted the whole array on each
+report, which the panel asks for twice a second: at two hours and 30 drawn fps that was
+[58.2 ms a report — ~12 % of the main thread it was reporting on](../benchmarks/opensa-engine/2026-08-31-inventory-collector-storage.json).
+A bounded histogram (2 ms bins to 100, 20 ms to a second, one tail) makes it 0.002 ms and 0 bytes of held
+samples, at the cost of a percentile that is a bin's floor — the precision every row since 2026-08-22
+already had, since they were all read off these bins by hand.
 
 **The `?inventory=1` panel folds** (201/3-05). Fourteen rows of monospace over a 360 CSS px phone is most of
 the screen the map is the subject of, so it opens folded where the pointer is coarse, open where it is a

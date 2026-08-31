@@ -31,8 +31,10 @@
 import type { EngineStats, FrameSpanTotals, PakTrafficKind, StreamStats } from '@opensa/engine';
 
 import type { MapProjection } from '../map/map-camera';
+import type { FrameIntervalKind } from './frame-clock';
 
 import { DISTRICTS, PINNED_DISTRICT } from './districts';
+import { FrameHistogram } from './frame-histogram';
 
 /** The CPU cost of ONE loop body, measured by the host around its own frame. */
 export interface FrameCpuSample {
@@ -49,15 +51,21 @@ export interface FrameCpuSample {
 /** Where the frame went on the CPU, averaged over the sampled window. */
 export interface InventoryCpu {
   readonly bodyMaxMs: number;
-  /** Mean ms spent inside the rAF callback. */
+  /** Mean ms spent inside the rAF callback, over EVERY drawn frame. Not restricted the way `shareOfFrame`
+   *  is, and deliberately: a body is measured on the frame itself, so a frame drawn after a rest ran a real
+   *  one. Only the interval around it belongs to no frame. */
   readonly bodyMeanMs: number;
-  /** Mean dt − mean body: the part of the frame the main thread was NOT running. Present, GPU backpressure,
+  /** Mean dt − mean body **over the frames whose interval is a frame time**. Present, GPU backpressure,
    *  vsync wait, other tasks and GC all live in here, and nothing on this device can separate them further —
-   *  the number's value is that it says how much room there is to separate. */
+   *  the number's value is that it says how much room there is to separate. Restricted to that population
+   *  since 201/3-05: computed over every drawn frame it counted the render gate's idle wait as time the
+   *  frame spent outside the CPU, which reads as "the frame is GPU-bound" and was the loop sleeping. */
   readonly outsideMeanMs: number;
   /** Mean ms per sampled frame, descending. `other` is body time no segment claimed. */
   readonly segmentsMs: readonly (readonly [string, number])[];
-  /** Body mean ÷ dt mean, 0..1. */
+  /** Body mean ÷ dt mean over the frames whose interval is a frame time, 0..1 — see `outsideMeanMs`. The
+   *  2026-08-31 capture reported **2.3 %** before that restriction, against 85 % of its samples being the
+   *  idle poll rather than a frame. */
   readonly shareOfFrame: number;
   /** The WORST body of the window, with its own segment breakdown rather than the window's averages. Two
    *  captures in a row made the worst frame the interesting one, and a mean cannot answer which part of it
@@ -126,17 +134,30 @@ export interface InventoryReport {
   /** The engine's own split of its FIRST frames, one entry per frame in order (201/4-03) — where the fixed
    *  77.9 ms of a first `engine-frame` went. Empty on a host that never reached a first frame. */
   readonly firstFrames: readonly (readonly (readonly [string, number])[])[];
+  /**
+   * The frame times, and ONLY those: every interval here had a drawn frame at both ends.
+   *
+   * Since 201/3-05 the interval that spans a skipped pass is kept apart in {@link InventoryReport.rest}
+   * rather than averaged in here. Before that these fields described the render gate's idle poll on any
+   * capture of a console that was not being flown continuously — 706 of 835 samples on the 2026-08-31 one,
+   * where `dtP50` read 100.6 ms and no frame had cost anything like it.
+   */
   readonly frame: {
-    /** dt counts per 2 ms bin, ascending, empty bins omitted. A frame waiting on a 60 Hz vsync piles into
-     *  the bins around 16.7 and 33.3; a frame that is simply slow spreads. The two look identical in a p50
-     *  and have opposite fixes, which is the whole reason the shape is kept. */
+    /** dt counts per bin, ascending, empty bins omitted — 2 ms up to 100, then 20 ms out to a second, then
+     *  one tail (`frame-histogram.ts`). A frame waiting on a 60 Hz vsync piles into the bins around 16.7 and
+     *  33.3; a frame that is simply slow spreads. The two look identical in a p50 and have opposite fixes,
+     *  which is the whole reason the shape is kept. */
     readonly dtHistogramMs: readonly (readonly [number, number])[];
+    /** Exact, never a bin's floor: the worst frame is the one a percentile is least able to describe. */
     readonly dtMaxMs: number;
     readonly dtMeanMs: number;
+    /** A BIN's floor since 201/3-05, so up to one bin low and never high — the price of a collector whose
+     *  memory does not grow with the capture. Exact percentiles cost a stored sample per frame. */
     readonly dtP50Ms: number;
     readonly dtP95Ms: number;
     readonly fps: number;
   };
+  /** Frames DRAWN over the window — both kinds of interval, so this plus `framesSkipped` is every loop pass. */
   readonly frames: number;
   /**
    * Frames the render gate SKIPPED over the window (201/4-01) — the other half of `frames`, and the number
@@ -156,6 +177,18 @@ export interface InventoryReport {
   /** Per-frame cost centres, descending by mean. */
   readonly passes: readonly InventoryPass[];
   /** Between-frame named work, mean ms per sampled frame, descending. Empty means nothing was wrapped. */
+  /**
+   * The half of the drawn frames whose interval was NOT a frame time (201/3-05): the previous loop pass was
+   * skipped, so the gap is mostly the render gate's 100 ms idle wait. Reported rather than dropped, because
+   * a window cannot be read without it — `frames` minus `rest.frames` is what the percentiles are over, and
+   * `rest.totalMs` against `windowMs` says how much of the capture the console spent at rest on purpose.
+   */
+  readonly rest: {
+    readonly frames: number;
+    readonly maxMs: number;
+    readonly meanMs: number;
+    readonly totalMs: number;
+  };
   readonly spans: readonly (readonly [string, number])[];
   /** What the streamer did over the window — the engine's own numbers, which the console used to drop. */
   readonly streaming: InventoryStreaming;
@@ -321,12 +354,6 @@ export const UNNAMED_DISTRICT = 'unnamed — pass ?district=';
  *  about twelve seconds — long enough to be past the load and into steady state. */
 const MIN_FRAMES = 300;
 
-/** dt histogram bin width, ms. Half a 60 Hz vsync interval: fine enough that 16.7 and 33.3 land in
- *  different bins from anything either side of them, coarse enough that the JSON stays readable. */
-const BIN_MS = 2;
-/** Everything at or above this lands in one tail bin — a 300 ms hitch must not open 150 empty bins. */
-const BIN_TAIL_MS = 100;
-
 /** The engine timings this collector averages, and whether each needs `timestamp-query` to mean anything. */
 const TIMED: readonly (readonly [keyof EngineStats, boolean])[] = [
   ['submitMs', false],
@@ -336,20 +363,34 @@ const TIMED: readonly (readonly [keyof EngineStats, boolean])[] = [
 ];
 
 /**
- * Accumulates frames until asked for a report. Deliberately unbounded in time but bounded in memory: only
- * `dt` keeps every sample (it needs percentiles — a mean hides exactly the hitches this is looking for),
- * everything else folds into a running sum and max.
+ * Accumulates frames until asked for a report, in memory that does not depend on how long it runs.
+ *
+ * **`dt` is TWO populations and mixing them was the defect** (201/3-05, measured on the phone 2026-08-31).
+ * This is only ever called on a DRAWN frame — the call sits behind the render gate — but a skipped pass
+ * arms the next loop entry with `setTimeout(IDLE_WAKE_MS)`, so the frame drawn after one carries a ~100 ms
+ * interval that is 99 % sleep. On a live 150-unit board the console alternates draw/skip continuously, and
+ * **706 of that capture's 835 samples were that interval**: `dtP50` read 100.6 ms, `shareOfFrame` 2.3 %,
+ * and both describe a loop resting on purpose rather than a frame costing anything. Every capture since
+ * render-on-demand landed (2026-08-22) had its moving half picked out of the histogram by hand, in the
+ * row's own prose. The caller now says which kind each interval is and the two are kept apart.
+ *
+ * The frame's own COST is not split, because it is not an interval: a frame drawn after a rest ran a real
+ * body and belongs in the body mean. Only the gap around it does not.
  */
 export class FrameInventory {
   get frames(): number {
-    return this.dts.length;
+    return this.frameIntervals.count + this.restIntervals.count;
   }
-  private readonly bins = new Map<number, number>();
+  /** Body time over the frames whose interval is a frame time — the population `shareOfFrame` divides. */
+  private consecutiveBodyMs = 0;
   private readonly cpuTotals = new Map<string, number>();
-  private readonly dts: number[] = [];
+  /** Intervals where BOTH ends drew: the frame times, and the only population a percentile may come from. */
+  private readonly frameIntervals = new FrameHistogram();
   private readonly maxima = new Map<string, number>();
   /** The driver's create/evict totals as of the previous sample, so a frame's own count is a DELTA. */
   private previousStream = { created: 0, evicted: 0 };
+  /** Intervals that span a skipped pass. Kept rather than dropped — a window cannot be read without them. */
+  private readonly restIntervals = new FrameHistogram();
   private readonly spanTotals = new Map<string, number>();
   private started = 0;
   private readonly stream = {
@@ -412,10 +453,12 @@ export class FrameInventory {
     symbology: InventoryReport['symbology'];
     tracks: InventoryReport['tracks'];
   }): InventoryReport {
-    const sorted = [...this.dts].sort((a, b) => a - b);
-    const frames = Math.max(1, this.dts.length);
+    const frames = Math.max(1, this.frames);
     const windowMs = this.started === 0 ? 0 : performance.now() - this.started;
-    const dtMeanMs = (this.sums.get('dt') ?? 0) / frames;
+    // Over the FRAME intervals, not over every drawn frame: these two are what `outsideMeanMs` and
+    // `shareOfFrame` are made of, and dividing a body by a resting loop's interval is the whole defect.
+    const dtMeanMs = this.frameIntervals.meanMs;
+    const pacedBodyMeanMs = this.frameIntervals.count === 0 ? 0 : this.consecutiveBodyMs / this.frameIntervals.count;
     const bodyMeanMs = (this.sums.get('cpu-body') ?? 0) / frames;
 
     const passes = TIMED.map(([key, needsTimestamps]) => ({
@@ -440,9 +483,9 @@ export class FrameInventory {
       cpu: {
         bodyMaxMs: this.maxima.get('cpu-body') ?? 0,
         bodyMeanMs,
-        outsideMeanMs: Math.max(0, dtMeanMs - bodyMeanMs),
+        outsideMeanMs: Math.max(0, dtMeanMs - pacedBodyMeanMs),
         segmentsMs: this.cpuSegments(frames, bodyMeanMs),
-        shareOfFrame: dtMeanMs > 0 ? bodyMeanMs / dtMeanMs : 0,
+        shareOfFrame: dtMeanMs > 0 ? pacedBodyMeanMs / dtMeanMs : 0,
         worstFrame: this.worst,
       },
       device: context.device,
@@ -450,17 +493,23 @@ export class FrameInventory {
       errors: context.errors,
       firstFrames: context.firstFrames,
       frame: {
-        dtHistogramMs: [...this.bins.entries()].sort((a, b) => a[0] - b[0]),
-        dtMaxMs: this.maxima.get('dt') ?? 0,
+        dtHistogramMs: this.frameIntervals.bins(),
+        dtMaxMs: this.frameIntervals.maxMs,
         dtMeanMs,
-        dtP50Ms: percentile(sorted, 0.5),
-        dtP95Ms: percentile(sorted, 0.95),
-        fps: percentile(sorted, 0.5) > 0 ? Math.round(1000 / percentile(sorted, 0.5)) : 0,
+        dtP50Ms: this.frameIntervals.percentileMs(0.5),
+        dtP95Ms: this.frameIntervals.percentileMs(0.95),
+        fps: this.frameIntervals.percentileMs(0.5) > 0 ? Math.round(1000 / this.frameIntervals.percentileMs(0.5)) : 0,
       },
-      frames: this.dts.length,
+      frames: this.frames,
       framesSkipped: context.framesSkipped,
       overlay: context.overlay,
       passes,
+      rest: {
+        frames: this.restIntervals.count,
+        maxMs: this.restIntervals.maxMs,
+        meanMs: this.restIntervals.meanMs,
+        totalMs: this.restIntervals.totalMs,
+      },
       spans: [...this.spanTotals.entries()]
         .map(([name, ms]) => [name, ms / frames] as const)
         .sort((a, b) => b[1] - a[1]),
@@ -481,7 +530,7 @@ export class FrameInventory {
         bodyMeanMs,
         cellsTotal: this.worldLast.cellsTotal,
         district: context.district,
-        frames: this.dts.length,
+        frames: this.frameIntervals.count,
       }),
       windowMs,
       world: {
@@ -507,7 +556,16 @@ export class FrameInventory {
    * so the body that ran inside the interval being reported is the one before it. Paired that way the body
    * can never exceed the frame it is a share of.
    */
-  sample(dtMs: number, stats: EngineStats, spans: FrameSpanTotals, cpu: FrameCpuSample, stream: StreamStats): void {
+  sample(
+    dtMs: number,
+    stats: EngineStats,
+    spans: FrameSpanTotals,
+    cpu: FrameCpuSample,
+    stream: StreamStats,
+    /** Whether the interval before this frame is a FRAME time. `after-rest` means the previous loop pass was
+     *  skipped, so the gap is mostly the render gate's idle wait and belongs to no frame. */
+    interval: FrameIntervalKind = 'consecutive',
+  ): void {
     if (this.started === 0) {
       // The FIRST delta is not a frame time. It is measured against whatever the loop did last — page load,
       // the pak's first fetch, device init — so it enters dtMax and the percentiles as a frame that never
@@ -522,10 +580,12 @@ export class FrameInventory {
 
       return;
     }
-    this.dts.push(dtMs);
-    this.bump('dt', dtMs);
-    const bin = dtMs >= BIN_TAIL_MS ? BIN_TAIL_MS : Math.floor(dtMs / BIN_MS) * BIN_MS;
-    this.bins.set(bin, (this.bins.get(bin) ?? 0) + 1);
+    if (interval === 'consecutive') {
+      this.frameIntervals.add(dtMs);
+      this.consecutiveBodyMs += cpu.bodyMs;
+    } else {
+      this.restIntervals.add(dtMs);
+    }
     this.bump('cpu-body', cpu.bodyMs);
     for (const [name, ms] of cpu.segments.byName) {
       this.cpuTotals.set(name, (this.cpuTotals.get(name) ?? 0) + ms);
@@ -591,15 +651,6 @@ export class FrameInventory {
     this.worldLast.residencyBytes = stats.residencyBytes;
     this.worldLast.triangles = stats.trianglesRecorded;
   }
-}
-
-function percentile(sorted: readonly number[], fraction: number): number {
-  if (sorted.length === 0) {
-    return 0;
-  }
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.round(fraction * (sorted.length - 1))));
-
-  return sorted[index];
 }
 
 /** What makes a capture unusable as a before-table, in the order it bites. */

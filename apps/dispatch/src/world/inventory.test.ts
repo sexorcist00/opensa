@@ -206,6 +206,43 @@ describe('FrameInventory', () => {
       expect(inventory.report(CONTEXT).cpu.outsideMeanMs).toBe(0);
     });
 
+    it('does not let the interval that SPANS a rest into the frame percentiles', () => {
+      // 201/3-05, measured on the phone 2026-08-31. The collector is never called on a skipped pass — but a
+      // skipped pass arms the next loop entry with setTimeout(IDLE_WAKE_MS), so the frame drawn AFTER one
+      // carries a ~100 ms dt that is 99 % sleep. On a live 150-unit board the console alternates draw/skip,
+      // and 706 of that capture's 835 samples were that interval: dtP50 read 100.6 ms, which is the idle
+      // poll rather than anything a frame cost.
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE); // primes the clock
+      for (let frame = 0; frame < 8; frame += 1) {
+        inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+        inventory.sample(100, stats(), NO_SPANS, NO_CPU, IDLE, 'after-rest');
+      }
+      const report = inventory.report(CONTEXT);
+
+      expect(report.frame.dtP50Ms).toBe(16);
+      expect(report.frame.fps).toBe(63);
+      // The rest is not thrown away — it is reported as what it is, so a window can still be read.
+      expect({ frames: report.rest.frames, totalMs: report.rest.totalMs }).toEqual({ frames: 8, totalMs: 800 });
+      // `frames` keeps meaning "frames drawn", so the two halves add up and neither is inferred.
+      expect(report.frames).toBe(16);
+    });
+
+    it('does not let a resting loop report itself as a frame that is 98 % outside the CPU', () => {
+      // The same defect where it read as a FINDING: shareOfFrame 2.3 % on the 08-31 capture, which invites
+      // "the frame is GPU-bound" when the truth is that the loop was asleep on purpose for most of it.
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, cpu(8), IDLE); // primes the clock
+      for (let frame = 0; frame < 8; frame += 1) {
+        inventory.sample(16, stats(), NO_SPANS, cpu(8), IDLE);
+        inventory.sample(100, stats(), NO_SPANS, cpu(8), IDLE, 'after-rest');
+      }
+      const report = inventory.report(CONTEXT);
+
+      expect(report.cpu.shareOfFrame).toBeCloseTo(0.5, 2);
+      expect(report.cpu.outsideMeanMs).toBeCloseTo(8, 2);
+    });
+
     it('READS the streamer running totals instead of summing them, whatever the window length', () => {
       const inventory = new FrameInventory();
       // Four cells created at boot and nothing since — what a settled district reports on every update.
@@ -225,6 +262,19 @@ describe('FrameInventory', () => {
   });
 
   describe('positive cases', () => {
+    it('reports a body over every drawn frame, since every drawn frame paid one', () => {
+      // The dt split is about INTERVALS. A body is measured on the frame itself, so the frame after a rest
+      // has a real one and it belongs in the mean — only the interval around it does not.
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, cpu(4), IDLE); // primes the clock
+      inventory.sample(16, stats(), NO_SPANS, cpu(4), IDLE);
+      inventory.sample(100, stats(), NO_SPANS, cpu(10), IDLE, 'after-rest');
+      const report = inventory.report(CONTEXT);
+
+      expect(report.cpu.bodyMeanMs).toBe(7);
+      expect(report.cpu.bodyMaxMs).toBe(10);
+    });
+
     it('reports the p95 of dt, not its mean — a mean hides the hitches this is looking for', () => {
       const inventory = new FrameInventory();
       // 10 % of frames hitch. A mean would read 38 ms and hide both the healthy body and the stalls; p50 and
@@ -310,12 +360,16 @@ describe('FrameInventory', () => {
       inventory.sample(33.4, stats(), NO_SPANS, NO_CPU, IDLE);
       inventory.sample(33.9, stats(), NO_SPANS, NO_CPU, IDLE);
       inventory.sample(16.7, stats(), NO_SPANS, NO_CPU, IDLE);
-      inventory.sample(240, stats(), NO_SPANS, NO_CPU, IDLE); // the tail bin — a hitch may not open 70 empty bins
+      inventory.sample(240, stats(), NO_SPANS, NO_CPU, IDLE);
 
+      // Past 100 ms the bins are 20 ms wide rather than one tail bucket (`frame-histogram.ts`). This row
+      // used to read [100, 1]: correct while the tail was only there to stop a hitch opening 70 empty bins,
+      // and wrong once a percentile is taken off these bins, because a p95 above 100 would saturate and
+      // report `100` for a window that ran far past it. The 2026-08-31 capture's was 108.4.
       expect(inventory.report(CONTEXT).frame.dtHistogramMs).toEqual([
         [16, 1],
         [32, 2],
-        [100, 1],
+        [240, 1],
       ]);
     });
 

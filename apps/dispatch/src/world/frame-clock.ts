@@ -23,6 +23,16 @@
  * interval to take at all.
  */
 
+/**
+ * What the interval before a drawn frame IS, and this module is its one owner.
+ *
+ * `consecutive` — the previous loop pass drew too, so the gap is a frame time. `after-rest` — the previous
+ * pass was skipped by the render gate, so the gap is mostly its 100 ms idle wait and describes the
+ * scheduler rather than the frame. The status bar and the capture collector both need this answer, and two
+ * copies of it would be two consoles disagreeing about one loop.
+ */
+export type FrameIntervalKind = 'after-rest' | 'consecutive';
+
 /** What the status bar reads. `frameMs` is 0 when the window holds no consecutive pair to measure. */
 export interface FrameRate {
   readonly fps: number;
@@ -48,11 +58,15 @@ export class FrameClock {
    *
    * @param atMs when the pass started, on the monotonic clock.
    * @param dtMs the interval since the previous pass — counted as a frame time only when that pass drew too.
+   * @returns which kind that interval was, for whoever else has to know (the capture collector does).
    */
-  drew(atMs: number, dtMs: number): void {
-    this.drawn.push({ atMs, dtMs: this.previousDrew ? dtMs : null });
+  drew(atMs: number, dtMs: number): FrameIntervalKind {
+    const kind: FrameIntervalKind = this.previousDrew ? 'consecutive' : 'after-rest';
+    this.drawn.push({ atMs, dtMs: kind === 'consecutive' ? dtMs : null });
     this.previousDrew = true;
     this.trim(atMs);
+
+    return kind;
   }
 
   /** Both numbers as of now, with anything older than the window dropped first. */

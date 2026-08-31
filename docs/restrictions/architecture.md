@@ -781,17 +781,24 @@ The rule has two halves and both are needed:
   averaged in. `FrameClock` (`apps/dispatch/src/world/frame-clock.ts`) does both and is the one place either
   is computed; `plan-mode.ts` had the identical defect and takes the same clock.
 
-**Still live one layer down, and it is most of the capture rather than a tail.** The inventory collector is
-only ever called on a drawn frame — the call sits behind the gate — but a skipped pass arms the next loop
-entry with `setTimeout(IDLE_WAKE_MS)`, so **the frame drawn after one carries a 100 ms `dt` that is 99 %
-sleep**. On a live 150-unit board the console alternates draw/skip continuously: measured 2026-08-31 on the
-phone, **706 of 835 samples were that interval**. So `dtP50Ms` reads the idle poll (100.6 ms), while
-`dtMeanMs`, `outsideMeanMs` and `shareOfFrame` (2.3 %) describe a resting loop rather than a busy frame, and
-the per-segment means are ~6.5× low in absolute terms while keeping their shape. Every capture since
-2026-08-22 has had its moving half derived from the histogram **by hand, in the row's own prose**.
+**It reached the CAPTURE too, and there it was most of the window rather than a tail.** The inventory
+collector is only ever called on a drawn frame — the call sits behind the gate — but a skipped pass arms the
+next loop entry with `setTimeout(IDLE_WAKE_MS)`, so **the frame drawn after one carries a 100 ms `dt` that
+is 99 % sleep**. On a live 150-unit board the console alternates draw/skip continuously: measured 2026-08-31
+on the phone, **706 of 835 samples were that interval**, so `dtP50Ms` read the idle poll (100.6 ms) and
+`shareOfFrame` (2.3 %) described a resting loop rather than a busy frame. Every capture from 2026-08-22 to
+that date had its moving half derived from the histogram **by hand, in the row's own prose**.
 
-**Caught:** the readout half is, in `apps/dispatch/src/world/frame-clock.test.ts`. The capture half is not,
-and is worked around per row instead. Before that, **silent, and in the shape that costs the most**: every
+Fixed the same day, and the shape of the fix is the rule's third clause: **one owner decides, everybody else
+is told.** `FrameClock.drew()` returns the interval's kind and the collector takes it as an argument — the
+status bar and a filed capture cannot disagree about which gaps were frames. The frame fields are the paced
+population, a `rest` block carries the other one rather than dropping it, and `shareOfFrame` divides by the
+same population its numerator came from. `bodyMeanMs` stays over every drawn frame on purpose: a body is
+measured on the frame, not on the gap.
+
+**Caught:** both halves are now — `apps/dispatch/src/world/frame-clock.test.ts` for the readout and
+`inventory.test.ts` for the capture, each written against the numbers the phone actually produced. Before
+that, **silent, and in the shape that costs the most**: every
 sample is a real measurement, the arithmetic is right, and the number is only wrong about what it is a
 number OF. It is also wrong exactly when it is read — a person looking at a still map to judge the frame
 rate is looking at the case that produces the worst answer. Measured cost of getting it wrong on the screen:

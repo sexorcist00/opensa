@@ -755,7 +755,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       return;
     }
     idleReported = false;
-    frameClock.drew(now, dt);
+    // The clock classifies the interval and the collector is TOLD, rather than both deciding: the status
+    // bar and a filed capture must not disagree about which gaps were frames (201/3-05).
+    const intervalKind = frameClock.drew(now, dt);
     const state = camera.state(aspect);
     if (overlayOn) {
       time('board', () => {
@@ -774,7 +776,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     // Drained every frame the mode is on, so a span never carries into the next frame's total. Plan 091's
     // rule: the frame that DRAINS is the frame that paid, because the work ran in the gap before it.
     if (inventory) {
-      inventory.sample(dt, stats, frameSpans.drain(), cpu, stream);
+      inventory.sample(dt, stats, frameSpans.drain(), cpu, stream, intervalKind);
     }
 
     time('overlay-2d', () => {
