@@ -75,6 +75,33 @@ cost that is a look question for the device rather than a reasoning one.
 **Owes:** the three-arm circuit (overlay on / cleared-only / off) on the 2/03 device with the vsync ladder for
 each; then the DPR-1 arm; then, only if the content half is guilty, the sprite cache with a before/after.
 
+**FLOWN 2026-08-31, AND IT CAME BACK HALF-ANSWERED** —
+[the row](../../../benchmarks/opensa-engine/2026-08-31-mobile-map-circuit-arms.json), app `4ce659b` over the
+pinned district, all three arms on the same six-pose route through the panel's MCP channel. Neither
+subtraction can be taken from it, and the reason is a prerequisite this step did not know it had: **the
+drawing buffer moved under the circuit.** The browser's viewport changes as its chrome collapses and returns
+— 720x1218, 720x864, 720x746 and 720x640 inside one session, a 1.9x spread in pixels — so `cleared` and
+`engine` priced two different surfaces and their difference is not the layer. **A capture has to state the
+size it was taken at and HOLD it**, which `overlay.width = clientWidth * dpr` (`world/boot.ts`) cannot; the
+same prerequisite belongs to [04](#04--what-the-frames-attachment-set-costs-on-a-tiler)'s `?scale=` arm and to
+[05](#05--the-post-chains-pass-count)'s derived pass count, both of which are read off a pixel count.
+
+What the two arms that reached a world do say, and it is not nothing: the empty-board map runs a moving
+**p50 of 32 ms (31 fps)** on both, at viewport sizes 1.9x apart — so **the frame does not track pixels over
+this range** (`engine` at 720x864 was p50 50 ms while `cleared` at 720x1218, 1.9x the pixels PLUS the second
+layer cleared every frame, was 32), the `overlay:clear` span itself costs **0.0016 ms** of CPU, and **`target`
+is a function of the viewport rather than a constant** — 59.87 MB at 1218 tall, 43.01 at 864, 32.35 at 640,
+which is exactly where this chain's quoted 59.87 comes from.
+
+**And the third arm — `field`, THE FIELD RUN itself — is VOID, twice.** The console fetched cell bytes (8
+requests / 5.29 MB, then 4 / 2.64 MB on a fresh load) and created **no cell**: `cellsCreated` 0, `pendingCells`
+0 and then stuck at 4, `errors` empty, the screen black. A `map_goto` — a wake, a flight and drawn frames, so
+`world.follow()` ran — did not clear it, which rules out the render gate sleeping through an arrival; the same
+three links streamed 12 and 28 cells on the other two arms minutes earlier, which rules out the pak and the
+district. The only thing that reports it at all is the collector's own `VOID: no cells streamed` warning.
+**Diagnosing that void comes before re-flying the circuit**, because the arm it kills is the one every other
+number in this chain is meant to be subtracted from.
+
 **And the circuit carries NO BOARD since 2026-08-31** (the user's call — THE FIELD RUN is the map, and the
 map is optimised first). That changes which subtraction answers which half, and it is a better split than the
 one this step was written with: all three arms open at `units=0&calls=0`, so **`cleared` − `engine` is the

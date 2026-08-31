@@ -1,0 +1,191 @@
+{
+  "note": "201/9-01's three-arm circuit, ATTEMPTED on the phone through the console's MCP channel and only HALF TAKEN. It is filed because two of its three arms carry the first windows of the redefined FIELD RUN (the map with no board, `units=0&calls=0&inventory=1` — the user's call of 2026-08-31), and because the third arm failed in a way that is a finding rather than an accident.\n\nDevice and content: MGA-LX3 / ARM Bifrost, DPR 2, no `timestamp-query` (so GPU time is not measurable at all), pak `19:23 28-08-2026` ASTC over `los-santos-centre`, app `4ce659b` — the prebuilt archive carrying chain 9's four built steps (9/01's arm, 9/02, 9/03, 9/07). Every arm was flown the SAME six-pose route inside the pinned rect ([1300,-1600] 600 m, [1660,-1580] 450, [1660,-1880] 700, [1300,-1900] 500, [1480,-1720] 900, [1700,-1750] 650) with ~6 s between legs, driven by `map_goto`; the moving statistics below are derived from `frame.dtHistogramMs` by the 08-31 row's method (every bin below the 100 ms tail is a frame whose interval did not span an idle wake).\n\nWHAT MAKES THIS ROW NON-COMPARABLE ARM TO ARM, and it is the methodological finding: THE DRAWING BUFFER MOVED. The browser's visible viewport changes as its chrome collapses and returns, so the same console measured 720x1218, 720x864, 720x746 and 720x640 within one session — a 1.9x spread in pixels, and `target` moved with it (59.87 MB at 1218 tall, 43.01 at 864, 32.35 at 640, which is also the first direct confirmation that 9/04's 59.87 MB figure is a function of the viewport rather than a constant). The circuit's two subtractions (`cleared` - `engine` = THE LAYER, `field` - `cleared` = THE CONTENT) need one surface held still and did not get it, so THEY ARE NOT COMPUTED HERE. Pinning the surface — a fixed drawing-buffer size for a capture, or a `?scale=` that derives from a declared size rather than from the viewport — is now a prerequisite of 9/01, 9/04 and 9/05, not a refinement.\n\nWhat the arms that reached a world nevertheless say: the empty-board map on this device runs a MOVING p50 of 32 ms (31 fps) in both of them, at two viewport sizes 1.9x apart, while the two 150-unit rows of 08-30/08-31 read 48 ms (21 fps). The empty map is ~16 ms cheaper than the same map under the declared board — but the two sides also differ by app (`016c1e7+` vs `4ce659b`, i.e. by 9/02, 9/03 and 9/07), so the delta is the board AND those three steps together, and no arm here separates them. The other thing both arms say is that the frame does NOT track the pixel count over this range: `engine` at 720x864 was p50 50 ms and `cleared` at 720x1218 — 1.9x the pixels, plus the second full-screen layer cleared every frame — was p50 32. Whatever the ~21 ms of 9/01's opening finding is, neither arm here reproduces it as fill, and the `overlay:clear` span itself costs 0.0016 ms of CPU.\n\nTHE FIELD ARM CAME UP VOID, TWICE, AND THAT IS THE SECOND FINDING. Opened at the same URL as the other two but with the overlay on (no `overlay=` at all), the console fetched cell bytes and created NO CELL: first attempt 8 `cell-hd` requests / 5,289,476 B with `cellsCreated` 0, `pendingCells` 0 and `errors` empty over 156 s and 343 drawn frames; second attempt, a fresh load, 4 requests / 2,644,738 B with `pendingCells` stuck at 4, `cellsCreated` 0, 19 drawn frames against 851 skipped in 86 s, and a screenshot that is BLACK with the scale bar reading 5000 m at a 600 m camera. A `map_goto` — a wake, a flight, drawn frames, and therefore `world.follow()` running — did not clear it. So it is NOT simply the render gate sleeping through an arrival, and it is not a fetch failure either: the bytes are in. Nothing in the app reports it; the ONLY thing that says the window is worthless is the collector's own `VOID: no cells streamed` warning, which is exactly why that warning exists. The same three links in the same session streamed 12 and 28 cells on the other two arms, so it is not the pak and not the district.\n\nRead this row as: the redefined field run's first two windows, a hard prerequisite discovered for the rest of chain 9, and a silent void that has to be diagnosed before the field arm can be taken at all.",
+  "app": "4ce659b",
+  "build": "19:23 28-08-2026",
+  "district": "los-santos-centre",
+  "device": {
+    "adapter": "arm bifrost",
+    "dpr": 2,
+    "missing": ["texture-compression-bc", "timestamp-query"]
+  },
+  "route": [
+    [1300, -1600, 600],
+    [1660, -1580, 450],
+    [1660, -1880, 700],
+    [1300, -1900, 500],
+    [1480, -1720, 900],
+    [1700, -1750, 650]
+  ],
+  "arms": [
+    {
+      "arm": "engine",
+      "query": "units=0&calls=0&inventory=1&overlay=0",
+      "legs": [
+        {
+          "leg": 1,
+          "surfaceAtSnapshot": "720x864 (css 360x432), renderScale 1 — 720x1140 at boot",
+          "windowMs": 158863.6,
+          "frames": 918,
+          "framesSkipped": 947,
+          "reportFrame": { "dtP50Ms": 54, "dtP95Ms": 100, "fps": 19 },
+          "derived": {
+            "howDerived": "bins below the 100 ms tail of frame.dtHistogramMs",
+            "movingFrames": 755,
+            "movingP50Ms": 50,
+            "movingP90Ms": 72,
+            "movingP95Ms": 94,
+            "movingP99Ms": 98,
+            "movingP50Fps": 20
+          },
+          "cpu": {
+            "bodyMeanMs": 2.868,
+            "segmentsMs": {
+              "engine-frame": 1.912,
+              "stream": 0.512,
+              "other": 0.41,
+              "readout": 0.018,
+              "overlay-2d": 0.016
+            }
+          },
+          "world": {
+            "cellsVisible": 4,
+            "cellsTotal": 4,
+            "draws": 112,
+            "triangles": 277970,
+            "residencyMb": 81.67,
+            "byCategoryMb": { "target": 43.01, "texture": 25.81, "cellVertex": 10.32, "cellIndex": 2.52 },
+            "pickingMb": 1.42
+          },
+          "streaming": { "cellsCreated": 12, "worstCreateMs": 22.6, "lateCreates": 0 }
+        },
+        {
+          "leg": 2,
+          "surfaceAtSnapshot": "720x640 (css 360x320), renderScale 1",
+          "windowMs": 326106.1,
+          "frames": 2389,
+          "framesSkipped": 1766,
+          "reportFrame": { "dtP50Ms": 34, "dtP95Ms": 100, "fps": 29 },
+          "derived": {
+            "howDerived": "the leg-2 delta of frame.dtHistogramMs (leg-2 snapshot minus leg-1 snapshot), bins below 100 ms",
+            "movingFrames": 1458,
+            "movingP50Ms": 32,
+            "movingP90Ms": 56,
+            "movingP95Ms": 62,
+            "movingP99Ms": 72,
+            "movingMaxMs": 84,
+            "movingP50Fps": 31,
+            "vsyncLadder": { "1": 358, "2": 754, "3": 237, "4": 100, "5": 9 }
+          },
+          "cpu": {
+            "bodyMeanMs": 2.897,
+            "segmentsMs": {
+              "engine-frame": 2.104,
+              "other": 0.397,
+              "stream": 0.369,
+              "readout": 0.015,
+              "overlay-2d": 0.012
+            }
+          },
+          "world": {
+            "cellsVisible": 4,
+            "cellsTotal": 4,
+            "draws": 112,
+            "triangles": 277970,
+            "residencyMb": 71.01,
+            "byCategoryMb": { "target": 32.35, "texture": 25.81, "cellVertex": 10.32, "cellIndex": 2.52 },
+            "pickingMb": 1.42
+          }
+        }
+      ]
+    },
+    {
+      "arm": "cleared",
+      "query": "units=0&calls=0&inventory=1&overlay=clear",
+      "surfaceAtSnapshot": "720x1218 (css 360x609), renderScale 1",
+      "windowMs": 162299.2,
+      "frames": 419,
+      "framesSkipped": 1303,
+      "reportFrame": { "dtP50Ms": 32, "dtP95Ms": 76, "fps": 31 },
+      "derived": {
+        "howDerived": "bins below the 100 ms tail of frame.dtHistogramMs",
+        "movingFrames": 367,
+        "movingP50Ms": 32,
+        "movingP90Ms": 66,
+        "movingP95Ms": 74,
+        "movingP99Ms": 84,
+        "movingMaxMs": 96,
+        "movingP50Fps": 31,
+        "vsyncLadder": { "1": 133, "2": 104, "3": 71, "4": 41, "5": 17, "6": 1 }
+      },
+      "cpu": {
+        "bodyMeanMs": 4.038,
+        "segmentsMs": {
+          "engine-frame": 2.081,
+          "stream": 1.036,
+          "other": 0.486,
+          "overlay-2d": 0.416,
+          "readout": 0.016,
+          "overlay:clear": 0.0016
+        }
+      },
+      "world": {
+        "cellsVisible": 4,
+        "cellsTotal": 4,
+        "draws": 112,
+        "triangles": 277970,
+        "residencyMb": 98.53,
+        "byCategoryMb": { "target": 59.87, "texture": 25.84, "cellVertex": 10.32, "cellIndex": 2.52 },
+        "pickingMb": 1.42
+      },
+      "streaming": { "cellsCreated": 28, "worstCreateMs": 24.8, "lateCreates": 0 }
+    },
+    {
+      "arm": "field",
+      "query": "units=0&calls=0&inventory=1",
+      "verdict": "VOID — no cells created, twice. Not a performance row.",
+      "attempts": [
+        {
+          "attempt": 1,
+          "windowMs": 155995.7,
+          "frames": 343,
+          "framesSkipped": 1357,
+          "cellsTotal": 0,
+          "cellsCreated": 0,
+          "pendingCells": 0,
+          "bytesFetched": { "cell-hd": 5289476, "cell-lod": 304166, "texture-array": 16413122 },
+          "draws": 12,
+          "triangles": 113494,
+          "errors": [],
+          "cpu": {
+            "bodyMeanMs": 5.467,
+            "segmentsMs": {
+              "engine-frame": 2.371,
+              "overlay-2d": 1.669,
+              "stream": 0.771,
+              "other": 0.601,
+              "readout": 0.031,
+              "board": 0.012,
+              "overlay:symbols": 0.008,
+              "overlay:clear": 0.003,
+              "overlay:sketches": 0.002
+            }
+          }
+        },
+        {
+          "attempt": 2,
+          "windowMs": 86446.6,
+          "frames": 19,
+          "framesSkipped": 851,
+          "cellsTotal": 0,
+          "cellsCreated": 0,
+          "pendingCells": 4,
+          "bytesFetched": { "cell-hd": 2644738, "texture-array": 16401085 },
+          "draws": 12,
+          "triangles": 113494,
+          "errors": [],
+          "afterAWake": "a map_goto (a wake, a flight and drawn frames, so world.follow() ran) did not create them; the screenshot is black"
+        }
+      ]
+    }
+  ]
+}
