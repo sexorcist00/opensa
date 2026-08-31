@@ -108,6 +108,38 @@ signal moves either — and the frame the gate skips is the one that would have 
 is read as a predicate now ([the issue](../../../open-issues/dispatch-map-void-no-cells-created.md)), and
 the field arm's confirmation is the first thing the re-flight owes.
 
+**THE CIRCUIT IS TAKEN, 2026-08-31, and both subtractions are ZERO** —
+[the row](../../../benchmarks/opensa-engine/2026-08-31-mobile-map-circuit-pinned.json). Three fresh pages,
+one six-pose route each, `?surface=720x640` holding the drawing buffer while the CSS box moved 550 → 491 →
+609 → 320, windows taken as the delta of two histogram readings so boot sits outside them:
+
+| arm | moving p50 | p90 | p95 | p99 |
+| --- | --- | --- | --- | --- |
+| `engine` — no overlay at all | 32 ms | 52 | 54 | 64 |
+| `cleared` — the canvas dirtied, nothing drawn | 32 ms | 52 | 56 | 66 |
+| `field` — the overlay's pass, empty board | 30 ms | 50 | 54 | 66 |
+
+**`cleared` − `engine` = 0 ms: the LAYER is free.** A second full-screen RGBA canvas cleared and
+re-composited over the WebGPU canvas every frame costs nothing measurable on this device, and the
+`overlay:clear` CPU span reads **0.0006 ms**. **`field` − `cleared` = −2 ms**, inside noise and against an
+arm that ended on a lighter view (48 draws / 124 k triangles against 112 / 278 k), so it is not claimed as a
+win either. **So the ~21 ms this step opened on — what `?overlay=0` removed in the 08-30 A/B — is neither
+the surface nor the empty pass. It is the CONTENT**, which is `board` − `field` and
+[5/02](../5-symbology-and-picking-as-product/readme.md)'s turn, and the exit this step was told not to take
+(symbology into the 3D pass) is now worth pricing rather than guessing at.
+
+**And the number nobody asked for is the one that matters most.** With nothing drawn over it, the map runs
+**p50 30–32 ms — 31–33 fps against a declared 60** — and it does so on a view that is MOSTLY EMPTY: the pak
+carries four cells (500x500 units) and the route flew at 450–900 m, where the frustum reaches far past
+them (the operator's correction, and it is recorded in the row). A loaded district can only be worse. So
+half the budget is gone before a single unit is on screen and before the world is really there, which puts
+the remaining time exactly where the rest of this chain says it is — [04](#04--what-the-frames-attachment-set-costs-on-a-tiler)'s
+attachment set, [05](#05--the-post-chains-pass-count)'s sixteen full-screen bloom passes and
+[06](#06--the-per-frame-bakes-that-are-already-cached-one-line-above)'s per-frame cloud bake, every one of
+them paid per pixel and per pass whether or not there is anything to draw. **The next circuit needs ground
+that is actually loaded**: a camera kept low enough to stay inside the rect, or the 16-cell
+`los-santos-wide` pak this chain already added for the purpose.
+
 **Both prerequisites were built the same day, and neither is a frame fix.** `?surface=WxH` pins the drawing
 buffer at that many device pixels whatever the viewport does (`world/capture-surface.ts`), the report says
 `surface.pinned` so a capture states which way it was taken, and the panel's four measurement links carry
