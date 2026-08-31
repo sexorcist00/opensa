@@ -236,13 +236,22 @@ names the absent ones as the cause, once.
            node_modules/@oxc-resolver/binding-wasm32-wasi/resolver.wasi.cjs; do
     sed -i 's#__nodePath.parse(process.cwd()).root#(process.env.WASI_PREOPEN || __nodePath.parse(process.cwd()).root)#' "$f"
   done
+  # ...and the WORKER, which builds its own WASI with its own copy of the same default. Patching only the
+  # first gets a main thread that starts and `worker (tid = N) sent an error! UVWASI_EACCES` a second later.
+  # The expression there carries no `__nodePath.` prefix, which is why one sed cannot do both — and why this
+  # one must not be pointed at the `.cjs` files, where it would nest inside the patch above and break them.
+  for f in node_modules/@rolldown/binding-wasm32-wasi/wasi-worker.mjs \
+           node_modules/@oxc-resolver/binding-wasm32-wasi/wasi-worker.mjs; do
+    sed -i 's#parse(process.cwd()).root#(process.env.WASI_PREOPEN || parse(process.cwd()).root)#' "$f"
+  done
   WASI_PREOPEN=/data/data/com.termux/files npx vitest run <paths>
   ```
 
   `/data/data/com.termux/files` covers `home` (the repo) and `usr` (`$PREFIX`) in one mount, and with
   `WASI_PREOPEN` unset the patched line behaves exactly as before. **Verified in a container** on the same
-  code path — native bindings renamed away, WASM only, preopen pointed at a non-root directory: the binding
-  loads and the suite passes. It is worth reporting upstream: preopening the filesystem root is a napi-rs
+  code path — native bindings renamed away, WASM only, both loaders patched, preopen pointed at a non-root
+  directory: **31 files / 408 tests pass in 3.95 s**, against 3.55 s on the native bindings — so WASM costs
+  about **11 %** on this suite rather than the multiple the word suggests. It is worth reporting upstream: preopening the filesystem root is a napi-rs
   default that cannot work on Android.
 
   **And when it still does not work, `NAPI_RS_FORCE_WASI=1` is the DIAGNOSTIC, not the fix.** The loader pushes a
