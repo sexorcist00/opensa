@@ -62,7 +62,12 @@ Newest first:
   unrecognised, in `opensa-lod-generator` and `plan-mode.ts`), **the operator's map** (orthographic mode,
   flyTo, follow, bookmarks, minimap, measuring, drawing, keys, embedding) and **the time axis**, moved forward
   from 0.6.0 because where time lives in the data model is cheap now and a rewrite later. Owns none of 200's
-  work and duplicates none of it.
+  work and duplicates none of it. **A ninth chain opened 2026-08-31, urgent and out of order — [the mobile
+  frame, audited](./201-dispatch-console/9-the-mobile-frame/readme.md)**: the console measures 21 fps on the
+  phone against a declared 60, and reading its own two captures against the code found ~38 ms of a 48 ms
+  frame with no owner, a symbology cost that is 3 ms of CPU carrying a 24 ms result, a mock feed running at
+  80× the protocol's publish rate, and a scene pass asking a tile-based GPU for three times the per-pixel
+  working set it budgets for. Seven fixes, most of them one constant; it runs before chains 1–8 resume.
 - **[200 — Platform reach](./200-platform-reach/readme.md)** — IN PROGRESS, opened 2026-08-04. The world on a
   phone, and the frame off the main thread. A phone boots the engine and cannot open the world, because a pak
   built from SA assets is BC throughout and no mobile GPU has BC — a build-time content decision no runtime

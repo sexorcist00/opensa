@@ -1,6 +1,8 @@
 # MSAA sample count — 24 MB of a phone's residency, spent on edges
 
-**Status:** priced, not taken. The number comes from
+**Status: REOPENED 2026-08-31 as [201/9-04](../../plans/201-dispatch-console/9-the-mobile-frame/readme.md), and this file priced the wrong half.** Everything below weighs the sample count as MEMORY and closes on *"residency does not press"*. Two things have moved. **The memory grew**: `target` is **59.87 MB of 96.45** on the 08-31 phone row — 62 % of residency and 2.3× every texture in the district. **And the frame-time half was never asked.** The scene pass's per-pixel tile working set is **48 bytes** (`rgba16float` × 4 = 32, `depth32float` × 4 = 16) against the **16 bytes per pixel** Arm budgets for a 16×16 tile on the GPU family this console runs on; past that the driver shrinks the tile and the per-tile fixed costs multiply. The console is at **21 fps against a declared 60**, so this is no longer a memory lever waiting on a residency squeeze — it is a candidate for the largest unexplained number in the frame. The question *"whether Mali's driver elides it is unknown"* below is still open and still the right question; what changed is that it now has a cheap answer, because 9/04 reads it off the **vsync ladder** rather than off a GPU timer this adapter does not have. Read that step before quoting anything under this line.
+
+**Status (as written 2026-08-12):** priced, not taken. The number comes from
 [the render-target attribution](../../benchmarks/opensa-engine/2026-08-12-dispatch-render-target-attribution.json),
 which reconciles exactly against the phone capture it was computed for
 ([2026-08-12, the pinned district on ASTC](../../benchmarks/opensa-engine/2026-08-12-mobile-pinned-district-astc.json)).
