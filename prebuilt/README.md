@@ -4,8 +4,12 @@ A built copy of the web app, committed on purpose. It is here for **one** case: 
 converter but cannot run vite.
 
 That case is real and measured — on an Android 10 / arm64 phone, rolldown's native binding is killed by SIGILL
-the moment it loads, and no wasm fallback is reachable, so neither `vite` nor `vite build` works there
-([edge-cases/browser-runtime.md](../docs/edge-cases/browser-runtime.md)). The converter and the static server
+the moment it loads, so neither `vite` nor `vite build` works there out of the box
+([edge-cases/browser-runtime.md](../docs/edge-cases/browser-runtime.md)). **A wasm fallback IS reachable since
+2026-08-31** — five things have to be cleared in order, and the recipe is in
+[development/termux.md](../docs/development/termux.md) — but it is five manual patches inside `node_modules`
+that no reinstall survives, and it has only been proven for `vitest`, not for `vite` itself. So this archive
+stays the answer for SERVING the app. The converter and the static server
 are untouched by it (tsx/esbuild run fine), so the only missing piece is the app itself — and an app is just
 static files.
 
