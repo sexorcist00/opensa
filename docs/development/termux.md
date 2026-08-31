@@ -251,7 +251,19 @@ names the absent ones as the cause, once.
   `WASI_PREOPEN` unset the patched line behaves exactly as before. **Verified in a container** on the same
   code path — native bindings renamed away, WASM only, both loaders patched, preopen pointed at a non-root
   directory: **31 files / 408 tests pass in 3.95 s**, against 3.55 s on the native bindings — so WASM costs
-  about **11 %** on this suite rather than the multiple the word suggests. It is worth reporting upstream: preopening the filesystem root is a napi-rs
+  about **11 %** on this suite rather than the multiple the word suggests.
+
+  **And then ON THE DEVICE, 2026-08-31, which is what the whole chain was for: the same 31 files / 408 tests
+  pass in 20.23 s** (`apps/dispatch/src/world`, `packages/engine/src/stream`, `tools-debug/phone-console`).
+  So a targeted suite is a twenty-second question on this phone, and the affected-tests rule `CLAUDE.md`
+  already states is not a compromise here — it is the only kind of run this device can do, and it can do it
+  comfortably.
+
+  **The patch lives in `node_modules` and does not survive a reinstall.** `npm ci`, `npm run phone:setup`
+  and anything else that rewrites the tree put the SIGILL bindings back and drop the four patched files, in
+  silence — the next run is an `Illegal instruction` again with no memory of why. Re-running the four
+  commands above is the fix; making it permanent (a `postinstall` step, or `patch-package`) is a repo-wide
+  decision nobody has taken yet, and is deliberately left as a note rather than done in passing. It is worth reporting upstream: preopening the filesystem root is a napi-rs
   default that cannot work on Android.
 
   **And when it still does not work, `NAPI_RS_FORCE_WASI=1` is the DIAGNOSTIC, not the fix.** The loader pushes a
