@@ -184,6 +184,42 @@ names the absent ones as the cause, once.
   packages, none of which the convert path touches) and `HUSKY=0`, and it is idempotent, so re-running it
   after a failure or a reboot repeats nothing. Then `npm run phone` for every run
   ([mobile-pak.md](./mobile-pak.md)).
+- **`npm test` DOES NOT RUN ON THIS DEVICE, and the reason is two native binaries rather than the test tree.**
+  Measured 2026-08-31: `./node_modules/.bin/vitest --version` answers `vitest/4.1.6 android-arm64
+  node-v24.18.0`, and `vitest run` dies with **`Illegal instruction`** before a single line of output — the
+  crash is in what a RUN loads and `--version` does not. Required one at a time, two of the three napi
+  bindings vite 8 pulls in kill the process:
+
+  | binding | verdict |
+  | --- | --- |
+  | `@rolldown/binding-android-arm64` (rolldown 1.0.1, via `vite 8.0.13`) | **SIGILL** |
+  | `@oxc-resolver/binding-android-arm64` (11.20.0) | **SIGILL** |
+  | `@oxc-parser/binding-android-arm64` (0.130.0) | ok |
+
+  **`NAPI_RS_FORCE_WASI=1` does not help on its own**, and that is worth knowing before an hour is spent on
+  it: the generated loader calls `nativeBinding = requireNative()` UNCONDITIONALLY and only tests the
+  variable afterwards (`rolldown/dist/shared/binding-*.mjs:475`, `oxc-resolver/index.js:528`), so the
+  process is already dead when the WASM branch would be chosen. The native package has to become
+  *unloadable* — a `require` that THROWS is caught, a `require` that SIGILLs is not:
+
+  ```bash
+  cd ~/opensa
+  npm i --no-save @rolldown/binding-wasm32-wasi@1.0.1 @oxc-resolver/binding-wasm32-wasi@11.20.0
+  mv node_modules/@rolldown/binding-android-arm64 node_modules/@rolldown/.off-android-arm64
+  mv node_modules/@oxc-resolver/binding-android-arm64 node_modules/@oxc-resolver/.off-android-arm64
+  npx vitest run <paths>      # WASM: it runs, and it is slower
+  ```
+
+  `--no-save` is not optional here — see the `npm i` trap below. Undo by restoring the two folder names, or
+  by re-running `npm run phone:setup`. **Untested as of 2026-08-31**: the SIGILL and the loader order are
+  measured, the workaround is derived from them and has not been run on the device yet.
+
+  **The consequence reaches further than the phone.** The `pre-push` hook is `npm test`, and the full suite
+  cannot pass anywhere this project actually works: not here (SIGILL), and not in a fresh web container
+  (no game files, so `test:fixtures` produces nothing and every fixture-backed suite fails). A push
+  therefore costs `--no-verify` or does not happen, which is a hook demanding what no machine of this
+  project can do. The verification that IS available is the affected-tests rule `CLAUDE.md` already states
+  — run the suites the change touches, in a container, and say which ones.
 - **`npm run phone` now takes the wake lock itself** for the duration of a convert and releases it on the way
   out (including on Ctrl+C and on the session closing), so there is nothing to remember. `termux-wake-lock` /
   `termux-wake-unlock` by hand still work for anything else long-running; both need `pkg install termux-api`.
