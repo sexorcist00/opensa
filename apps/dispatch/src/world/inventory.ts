@@ -212,6 +212,11 @@ export interface InventoryReport {
     readonly deviceHeight: number;
     readonly deviceWidth: number;
     readonly dpr: number;
+    /** Whether `?surface=WxH` PINNED the drawing buffer for this run, rather than the viewport deciding it.
+     *  A capture that does not say so cannot be subtracted from another one: the browser's chrome collapses
+     *  and returns mid-flight and the buffer moves with it — 1.9x of pixels inside one session on
+     *  2026-08-31, which is what cost 201/9-01 its circuit. */
+    readonly pinned: boolean;
     /** `?scale=` — the engine's own knob, which shrinks the scene and bloom targets (never the swapchain). */
     readonly renderScale: number;
   };
@@ -313,6 +318,11 @@ export interface InventoryReport {
  *  and a 1068 ms body with no owner, which is the same shape of question. */
 export interface InventoryStreaming {
   readonly blobMeanMs: number;
+  /** The LAST reading, not a sum: wanted cells that had their blob and were still waiting on a texture
+   *  array, and wanted cells whose blob had not landed. They are what turns `cellsTotal 0` from a symptom
+   *  into a cause — see the warning `warningsFor` builds out of them. */
+  readonly blockedOnArrays: number;
+  readonly blockedOnBlob: number;
   /** Cells created SINCE THE PAGE BOOTED, not over the sampled window — the driver keeps this as a running
    *  total and the collector reads it. The collector starts with the page, so the two are the same span in
    *  practice, and boot's own creates are inside it by design. */
@@ -321,6 +331,8 @@ export interface InventoryStreaming {
   /** Creates whose cell was already inside the fog cut — each one a visible pop. Since boot, like
    *  {@link cellsCreated}. */
   readonly lateCreates: number;
+  /** Cells that wanted a level on the last frame sampled — a READING, like the blocked pair beside it. */
+  readonly pendingCells: number;
   readonly uploadMeanMs: number;
   /** The single most expensive worker-handler call in the window: one huge upload and a pile-up of small
    *  ones are different problems, and only this tells them apart. */
@@ -404,9 +416,12 @@ export class FrameInventory {
   private started = 0;
   private readonly stream = {
     blobMs: 0,
+    blockedOnArrays: 0,
+    blockedOnBlob: 0,
     created: 0,
     evicted: 0,
     lateCreates: 0,
+    pendingCells: 0,
     uploadMs: 0,
     worstBlobMs: 0,
     worstCreateMs: 0,
@@ -525,9 +540,12 @@ export class FrameInventory {
         .sort((a, b) => b[1] - a[1]),
       streaming: {
         blobMeanMs: this.stream.blobMs / frames,
+        blockedOnArrays: this.stream.blockedOnArrays,
+        blockedOnBlob: this.stream.blockedOnBlob,
         cellsCreated: this.stream.created,
         cellsEvicted: this.stream.evicted,
         lateCreates: this.stream.lateCreates,
+        pendingCells: this.stream.pendingCells,
         uploadMeanMs: this.stream.uploadMs / frames,
         worstBlobMs: this.stream.worstBlobMs,
         worstCreateMs: this.stream.worstCreateMs,
@@ -537,10 +555,13 @@ export class FrameInventory {
       tracks: context.tracks,
       unavailable,
       warnings: warningsFor({
+        blockedOnArrays: this.stream.blockedOnArrays,
+        blockedOnBlob: this.stream.blockedOnBlob,
         bodyMeanMs,
         cellsTotal: this.worldLast.cellsTotal,
         district: context.district,
         frames: this.frameIntervals.count,
+        pendingCells: this.stream.pendingCells,
       }),
       windowMs,
       world: {
@@ -635,6 +656,11 @@ export class FrameInventory {
     this.stream.created = stream.created;
     this.stream.evicted = stream.evicted;
     this.stream.lateCreates = stream.lateCreates;
+    // Readings, like the world block below: what the LAST frame was waiting on. Summed they would say
+    // nothing — the same four cells blocked for a thousand frames is four, not four thousand.
+    this.stream.pendingCells = stream.pendingCells;
+    this.stream.blockedOnBlob = stream.blockedOnBlob;
+    this.stream.blockedOnArrays = stream.blockedOnArrays;
     this.stream.worstBlobMs = Math.max(this.stream.worstBlobMs, stream.worstBlobMs);
     this.stream.worstCreateMs = Math.max(this.stream.worstCreateMs, stream.worstCreateMs);
     this.previousStream = { created: stream.created, evicted: stream.evicted };
@@ -672,14 +698,51 @@ export class FrameInventory {
   }
 }
 
+/**
+ * WHY the world is not there, in the words of the streamer's own counters.
+ *
+ * *"No cells streamed"* is a symptom, and on 2026-08-31 it cost a field session: the console sat at
+ * `pendingCells` 4 with the cell bytes already fetched, `cellsCreated` 0 and an empty error log for 86 s,
+ * and reading the code afterwards could not say whether the blobs, the arrays or the ring was the reason
+ * ([the open issue](../../../../docs/open-issues/dispatch-map-void-no-cells-created.md)). Nothing here
+ * FIXES that — it makes the next occurrence answer the question instead of posing it, which is the only
+ * honest thing to build before the cause is known.
+ *
+ * The three cases are genuinely different failures: nothing wanted is the RING (or a camera outside the
+ * pak), blocked-on-blob is the fetch path, blocked-on-arrays is the texture upload path.
+ */
+function voidCause(capture: { blockedOnArrays: number; blockedOnBlob: number; pendingCells: number }): string {
+  const { blockedOnArrays, blockedOnBlob, pendingCells } = capture;
+  if (pendingCells === 0) {
+    return 'Nothing is even wanted: no cell asked for a level on the last frame, so this is the rings or the pose, not the fetch.';
+  }
+  if (blockedOnArrays > 0 || blockedOnBlob > 0) {
+    return (
+      `${pendingCells} cell(s) want a level and none was created: ${blockedOnBlob} waiting on their geometry ` +
+      `blob, ${blockedOnArrays} on a texture array. Bytes already fetched with a count stuck here is the ` +
+      'streamer holding, not the network.'
+    );
+  }
+
+  return `${pendingCells} cell(s) want a level and were deferred by the create budget rather than blocked — the world is still arriving.`;
+}
+
 /** What makes a capture unusable as a before-table, in the order it bites. */
-function warningsFor(capture: { bodyMeanMs: number; cellsTotal: number; district: string; frames: number }): string[] {
+function warningsFor(capture: {
+  blockedOnArrays: number;
+  blockedOnBlob: number;
+  bodyMeanMs: number;
+  cellsTotal: number;
+  district: string;
+  frames: number;
+  pendingCells: number;
+}): string[] {
   const { bodyMeanMs, cellsTotal, district, frames } = capture;
   const warnings: string[] = [];
   if (cellsTotal === 0) {
     warnings.push(
       'VOID: no cells streamed (cellsTotal 0) — these numbers describe an empty world. Wait for the world ' +
-        'to arrive before taking a report.',
+        `to arrive before taking a report. ${voidCause(capture)}`,
     );
   }
   if (frames < MIN_FRAMES) {

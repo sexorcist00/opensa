@@ -102,6 +102,17 @@ district. The only thing that reports it at all is the collector's own `VOID: no
 **Diagnosing that void comes before re-flying the circuit**, because the arm it kills is the one every other
 number in this chain is meant to be subtracted from.
 
+**Both prerequisites were built the same day, and neither is a frame fix.** `?surface=WxH` pins the drawing
+buffer at that many device pixels whatever the viewport does (`world/capture-surface.ts`), the report says
+`surface.pinned` so a capture states which way it was taken, and the panel's four measurement links carry
+`surface=720x1218` — this phone's full-screen buffer, the largest of the four sizes seen, so no arm comes out
+cheap for having been measured in a smaller window. Beside it the VOID now names its cause: `StreamStats`
+carries `blockedOnBlob` and `blockedOnArrays`, so the next occurrence reads *"4 cells want a level, 1 waiting
+on their geometry blob, 3 on a texture array"* — the RING, the fetch path and the upload path being three
+different failures the report could not tell apart. **That is an instrument, not a repair**; the void's cause
+is still unknown ([the open issue](../../../open-issues/dispatch-map-void-no-cells-created.md)), and both
+reach the device with the next `prebuilt/opensa-webapp.tar.gz`.
+
 **And the circuit carries NO BOARD since 2026-08-31** (the user's call — THE FIELD RUN is the map, and the
 map is optimised first). That changes which subtraction answers which half, and it is a better split than the
 one this step was written with: all three arms open at `units=0&calls=0`, so **`cleared` − `engine` is the

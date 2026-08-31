@@ -57,6 +57,25 @@ Two attempts, both on app `4ce659b`, pak `19:23 28-08-2026` (ASTC), district `lo
    front. If it does, it is a resume path rather than a streaming bug, and the fix is still ours: a console
    that comes back from a freeze with bytes in hand and no cells must either create them or say so.
 
+## What was built instead of a fix (2026-08-31, the same day)
+
+Nothing here is repaired — the cause is not known, and guessing at one would be a fix nobody could verify.
+What was built is the instrument the diagnosis needs, because every list above ends in *"we cannot tell from
+the capture"*:
+
+- **`StreamStats` counts what a wanted cell is blocked ON** — `blockedOnBlob` and `blockedOnArrays`, per
+  update, a cell in exactly one of the two, blob first (`packages/engine/src/stream/streaming.ts`). The
+  split costs nothing and it is the difference between the three failures above: nothing wanted is the RING,
+  blocked-on-blob is the fetch path, blocked-on-arrays is the texture-upload path.
+- **The `VOID` warning names the cause** rather than the symptom (`world/inventory.ts`, `voidCause`), so the
+  next occurrence arrives as *"4 cells want a level, 1 waiting on their geometry blob, 3 on a texture
+  array"* instead of *"no cells streamed"*.
+- The counters are READINGS in the report (`streaming.pendingCells` / `blockedOnBlob` / `blockedOnArrays`),
+  never sums: the same four cells blocked for a thousand frames are four, not four thousand.
+
+So the next field run either reproduces this with a named cause, or does not reproduce it — and both of
+those are progress from here. It reaches the device with the next `prebuilt/opensa-webapp.tar.gz`.
+
 ## What it blocks
 
 [201/9-01](../plans/201-dispatch-console/9-the-mobile-frame/readme.md)'s `field` arm, and with it the

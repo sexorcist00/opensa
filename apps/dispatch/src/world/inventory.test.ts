@@ -10,6 +10,8 @@ const NO_CPU: FrameCpuSample = { bodyMs: 0, canvasPixels: 806 * 668, segments: N
 /** A streamer with nothing to do — most tests are about the frame, not about what the world was loading. */
 const IDLE: StreamStats = {
   blobMs: 0,
+  blockedOnArrays: 0,
+  blockedOnBlob: 0,
   created: 0,
   evicted: 0,
   lateCreates: 0,
@@ -64,7 +66,15 @@ const CONTEXT = {
   hasTimestamps: true,
   overlay: 'on' as const,
   pickingBytes: 0,
-  surface: { cssHeight: 364, cssWidth: 360, deviceHeight: 728, deviceWidth: 720, dpr: 2, renderScale: 1 },
+  surface: {
+    cssHeight: 364,
+    cssWidth: 360,
+    deviceHeight: 728,
+    deviceWidth: 720,
+    dpr: 2,
+    pinned: false,
+    renderScale: 1,
+  },
   symbology: {
     beaconCapacity: 150,
     beaconGrowths: 0,
@@ -586,6 +596,69 @@ describe('FrameInventory overlay state (201/2 and 9-01, ?overlay=)', () => {
       inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
 
       expect(inventory.report({ ...CONTEXT, overlay: 'on' }).overlay).toBe('on');
+    });
+  });
+});
+
+describe('FrameInventory VOID cause (201/9-01)', () => {
+  /** A streamer holding a queue it cannot drain — what the 2026-08-31 phone capture was doing for 86 s. */
+  function blocked(overrides: Partial<StreamStats>): StreamStats {
+    return { ...IDLE, loadedCells: 0, ...overrides };
+  }
+
+  const VOID_WORLD = { cellsTotal: 0, cellsVisible: 0 };
+  const voidWarning = (inventory: FrameInventory): string =>
+    inventory.report(CONTEXT).warnings.find((warning) => warning.startsWith('VOID')) ?? '';
+
+  describe('negative cases', () => {
+    it('says nothing about a cause when the world is there', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, blocked({ blockedOnArrays: 2, pendingCells: 2 }));
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, blocked({ blockedOnArrays: 2, pendingCells: 2 }));
+
+      expect(voidWarning(inventory)).toBe('');
+    });
+
+    it('does not read the blocked counts as a running total — the same four cells are four, not four thousand', () => {
+      const inventory = new FrameInventory();
+      for (let frame = 0; frame < 20; frame += 1) {
+        inventory.sample(16, stats(VOID_WORLD), NO_SPANS, NO_CPU, blocked({ blockedOnArrays: 4, pendingCells: 4 }));
+      }
+
+      expect(voidWarning(inventory)).toContain('4 on a texture array');
+      expect(inventory.report(CONTEXT).streaming.blockedOnArrays).toBe(4);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('names the rings when nothing is even wanted', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(VOID_WORLD), NO_SPANS, NO_CPU, blocked({ pendingCells: 0 }));
+      inventory.sample(16, stats(VOID_WORLD), NO_SPANS, NO_CPU, blocked({ pendingCells: 0 }));
+
+      expect(voidWarning(inventory)).toContain('Nothing is even wanted');
+    });
+
+    it('splits the queue into the blob half and the array half', () => {
+      const inventory = new FrameInventory();
+      const stream = blocked({ blockedOnArrays: 3, blockedOnBlob: 1, pendingCells: 4 });
+      inventory.sample(16, stats(VOID_WORLD), NO_SPANS, NO_CPU, stream);
+      inventory.sample(16, stats(VOID_WORLD), NO_SPANS, NO_CPU, stream);
+
+      const warning = voidWarning(inventory);
+
+      expect(warning).toContain('4 cell(s) want a level');
+      expect(warning).toContain('1 waiting on their geometry blob');
+      expect(warning).toContain('3 on a texture array');
+    });
+
+    it('distinguishes a world still arriving from one that is stuck', () => {
+      // Wanted, nothing blocked: the create budget deferred them and the next frames will drain the queue.
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(VOID_WORLD), NO_SPANS, NO_CPU, blocked({ pendingCells: 2 }));
+      inventory.sample(16, stats(VOID_WORLD), NO_SPANS, NO_CPU, blocked({ pendingCells: 2 }));
+
+      expect(voidWarning(inventory)).toContain('still arriving');
     });
   });
 });

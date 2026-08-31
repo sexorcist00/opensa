@@ -47,6 +47,7 @@ import { UnitModels } from '../map/unit-models';
 import { readView, type SharedView, viewOfPose } from '../map/view-link';
 import { bootBytes, bootDone, bootStep } from './boot-progress';
 import { composeImage } from './capture';
+import { captureSurface } from './capture-surface';
 import { buildDemoCity, DEMO_EXTENT, DEMO_REACH } from './demo-city';
 import { DISTRICTS } from './districts';
 import { createErrorLog } from './error-log';
@@ -237,6 +238,8 @@ export const IDLE_WAKE_MS = 100;
 
 const IDLE_STREAM: StreamStats = {
   blobMs: 0,
+  blockedOnArrays: 0,
+  blockedOnBlob: 0,
   created: 0,
   evicted: 0,
   lateCreates: 0,
@@ -369,6 +372,8 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   const { canvas, overlay } = options;
   const params = dispatchParams();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  /** `?surface=WxH` — the drawing buffer held still for a measurement arm, see `capture-surface.ts`. */
+  const pinnedSurface = captureSurface(params);
   /**
    * Only ASSIGN when the size actually moved.
    *
@@ -378,8 +383,10 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
    * canvases on every observer tick for the rest of the session.
    */
   const resize = (): void => {
-    const width = Math.max(2, Math.floor(canvas.clientWidth * dpr));
-    const height = Math.max(2, Math.floor(canvas.clientHeight * dpr));
+    // A pinned buffer ignores the observer's numbers rather than the observer: the callback still runs, it
+    // just has nothing to assign, so the guard below keeps the backing store (and the boot's warm) intact.
+    const width = pinnedSurface?.width ?? Math.max(2, Math.floor(canvas.clientWidth * dpr));
+    const height = pinnedSurface?.height ?? Math.max(2, Math.floor(canvas.clientHeight * dpr));
     if (canvas.width === width && canvas.height === height) {
       return;
     }
@@ -1007,6 +1014,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           deviceHeight: canvas.height,
           deviceWidth: canvas.width,
           dpr,
+          pinned: pinnedSurface !== null,
           renderScale: engine.renderScale,
         },
         symbology: symbologyCounts(),

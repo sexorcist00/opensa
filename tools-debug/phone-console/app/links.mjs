@@ -47,14 +47,27 @@ export function consoleUrls(state = {}) {
   //   cleared = the overlay canvas dirtied, not drawn  `cleared` − `engine` .... the LAYER
   //   field   = the map's own overlay, empty board     `field`   − `cleared` ... the empty-board pass
   //   board   = the declared worst case, 150 units     `board`   − `field` ..... the CONTENT
-  const empty = `${query}&units=0&calls=0&inventory=1`;
+  //
+  // THE SURFACE IS PINNED ON EVERY MEASUREMENT LINK, and it is the second lesson of 2026-08-31. The
+  // circuit above only means something if its arms differ by one thing — and the drawing buffer is not one
+  // of the things a link controlled: the canvas follows the visible viewport, the browser's chrome
+  // collapses and returns mid-flight, and one session measured 720x1218, 720x864, 720x746 and 720x640, a
+  // 1.9x spread in pixels with `target` residency moving 59.87 -> 32.35 MB alongside it. Two arms taken at
+  // two of those sizes cannot be subtracted, and nothing in either capture complains.
+  //
+  // 720x1218 is this phone's FULL-SCREEN buffer (360x609 CSS at DPR 2) — the largest of the four, chosen so
+  // an arm cannot come out cheap by having been measured in a smaller window. The operator links below
+  // carry none of this: a pinned buffer is stretched into whatever room the layout gives it, which is right
+  // for a measurement and wrong for somebody working the map.
+  const capture = 'inventory=1&surface=720x1218';
+  const empty = `${query}&units=0&calls=0&${capture}`;
 
   return {
     bake: `${app}?${query}&bake=tiles&zmin=0&zmax=4`,
     // The declared worst case: 201's budget table says 150 units each drawn as a model with a symbol over
     // it, and every number 5/02 and 5/04 owe is measured AT it. It is no longer THE FIELD RUN — it is what
     // the field run is compared against once the map is the shape we want it.
-    board: `${app}?${query}&units=150&calls=40&inventory=1`,
+    board: `${app}?${query}&units=150&calls=40&${capture}`,
     // The overlay canvas cleared every frame with nothing drawn into it (201/9-01). `engine` below skips the
     // `clearRect` as well, so the compositor may skip the layer whole — which is why the two-arm pair could
     // not say whether the ~21 ms it removed was the layer or its content.
