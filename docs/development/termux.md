@@ -259,6 +259,15 @@ names the absent ones as the cause, once.
   already states is not a compromise here — it is the only kind of run this device can do, and it can do it
   comfortably.
 
+  **A pinned capture buffer is a MEMORY choice as much as a measurement one, measured 2026-08-31.** The
+  circuit's links pinned `720x1218` first — the phone's full-screen buffer, on the argument that no arm
+  should come out cheap in a smaller window. That confuses fairness with size (any CONSTANT size is fair),
+  and it costs what this device has least: `target` residency is **59.87 MB at 1218 against 32.35 MB at
+  640**, ~27 MB of render targets on top of a ~98 MB total, and the browser tab was killed part-way through
+  the first circuit flown that way. The links pin **`720x640`** since — which is also the buffer the
+  2026-08-31 150-unit row was taken at (`canvasPixels` 460 800), so the circuit lands on the existing record
+  rather than beside it.
+
   **The patch lives in `node_modules` and does not survive a reinstall.** `npm ci`, `npm run phone:setup`
   and anything else that rewrites the tree put the SIGILL bindings back and drop the four patched files, in
   silence — the next run is an `Illegal instruction` again with no memory of why. Re-running the four

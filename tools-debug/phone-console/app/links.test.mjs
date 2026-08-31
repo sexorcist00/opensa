@@ -43,14 +43,14 @@ describe('the panel links', () => {
       // meaning 150 units. Every window the map's own work is judged in is taken here.
       expect(consoleUrls(SERVED).field).toBe(
         'http://localhost:3001/build/webapp/dispatch.html?src=http://localhost:3001/build/phone' +
-          '&district=los-santos-centre&agent=1&units=0&calls=0&inventory=1&surface=720x1218',
+          '&district=los-santos-centre&agent=1&units=0&calls=0&inventory=1&surface=720x640',
       );
     });
 
     it('keeps the declared worst case reachable, as its own link', () => {
       expect(consoleUrls(SERVED).board).toBe(
         'http://localhost:3001/build/webapp/dispatch.html?src=http://localhost:3001/build/phone' +
-          '&district=los-santos-centre&agent=1&units=150&calls=40&inventory=1&surface=720x1218',
+          '&district=los-santos-centre&agent=1&units=150&calls=40&inventory=1&surface=720x640',
       );
     });
 
@@ -157,7 +157,7 @@ describe('the pinned capture surface (201/9-01)', () => {
       // Two arms taken at two viewport sizes cannot be subtracted, and nothing in either capture complains
       // — which is exactly what happened to the 2026-08-31 circuit.
       for (const arm of [links.field, links.cleared, links.engine, links.board]) {
-        expect(arm).toContain('surface=720x1218');
+        expect(arm).toContain('surface=720x640');
       }
     });
   });

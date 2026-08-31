@@ -55,11 +55,20 @@ export function consoleUrls(state = {}) {
   // 1.9x spread in pixels with `target` residency moving 59.87 -> 32.35 MB alongside it. Two arms taken at
   // two of those sizes cannot be subtracted, and nothing in either capture complains.
   //
-  // 720x1218 is this phone's FULL-SCREEN buffer (360x609 CSS at DPR 2) — the largest of the four, chosen so
-  // an arm cannot come out cheap by having been measured in a smaller window. The operator links below
-  // carry none of this: a pinned buffer is stretched into whatever room the layout gives it, which is right
-  // for a measurement and wrong for somebody working the map.
-  const capture = 'inventory=1&surface=720x1218';
+  // 720x640 is the SMALLEST of the four buffers this browser settled at, and both reasons to prefer it were
+  // learned the hard way on 2026-08-31. **Comparability needs the size to be CONSTANT, not maximal** — the
+  // first version of this line pinned 720x1218 on the argument that no arm should come out cheap in a
+  // smaller window, which confuses fairness with size. And the big buffer costs what the device has least:
+  // `target` residency is 59.87 MB at 1218 against 32.35 MB at 640, ~27 MB of render targets added to a
+  // ~98 MB total, and the tab was killed part-way through the first circuit flown that way.
+  //
+  // It also lands the circuit ON the existing record rather than beside it: the 2026-08-31 150-unit row was
+  // taken at `canvasPixels` 460 800, which is exactly 720x640 — so `board` − `field`, the CONTENT half, can
+  // be read against a row this repo already has.
+  //
+  // The operator links below carry none of this: a pinned buffer is stretched into whatever room the layout
+  // gives it, which is right for a measurement and wrong for somebody working the map.
+  const capture = 'inventory=1&surface=720x640';
   const empty = `${query}&units=0&calls=0&${capture}`;
 
   return {
