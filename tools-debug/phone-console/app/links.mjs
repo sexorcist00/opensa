@@ -11,7 +11,7 @@
  */
 
 /** The links the panel offers, in the order the page lists them. `phone_open`'s `LINK` knob takes one. */
-export const LINK_NAMES = ['map', 'inventory', 'field', 'engine', 'flat', 'bake', 'share'];
+export const LINK_NAMES = ['map', 'inventory', 'field', 'cleared', 'engine', 'flat', 'bake', 'share'];
 
 /**
  * Every link, for one panel state.
@@ -36,6 +36,11 @@ export function consoleUrls(state = {}) {
 
   return {
     bake: `${app}?${query}&bake=tiles&zmin=0&zmax=4`,
+    // The THIRD arm of the same circuit (201/9-01): the overlay canvas cleared every frame with nothing
+    // drawn into it. `engine` below skips the `clearRect` as well, so the compositor may skip the layer
+    // whole — which is why the two-arm pair could not say whether the ~21 ms it removed was the layer or its
+    // content. This link minus `engine` is the layer; `field` minus this link is the content.
+    cleared: `${app}?${query}&units=150&calls=40&inventory=1&overlay=clear`,
     // The field run's A/B PARTNER (201/2): the same board and the same collector, with `?overlay=0` — so the
     // window prices the engine rather than the symbology over it. The field round of 2026-08-30 measured the
     // 2D overlay at four times `engine-frame`'s own CPU, which is what makes the pair worth a link each: two

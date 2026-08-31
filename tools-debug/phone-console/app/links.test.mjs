@@ -75,3 +75,25 @@ describe('the engine link (201/2)', () => {
     });
   });
 });
+
+describe('the cleared link (201/9-01)', () => {
+  describe('negative cases', () => {
+    it('is not the engine arm — the whole point is that one skips the clearRect and this one does not', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.cleared).not.toBe(links.engine);
+      expect(links.cleared).not.toContain('overlay=0');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is the third arm of ONE circuit — the field run, differing only in the overlay switch', () => {
+      const links = consoleUrls(SERVED);
+
+      // Cleared − engine is the layer and field − cleared is the content, and neither subtraction means
+      // anything unless the overlay switch is the only thing that moved between the three.
+      expect(links.cleared).toBe(`${links.field}&overlay=clear`);
+      expect(links.engine).toBe(`${links.field}&overlay=0`);
+    });
+  });
+});

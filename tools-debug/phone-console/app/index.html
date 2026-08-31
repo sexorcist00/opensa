@@ -293,6 +293,9 @@
           <a class="linkbtn" id="link-field" href="#" target="_blank" rel="noreferrer"
             >THE FIELD RUN — 150 units, models, inventory</a
           >
+          <a class="linkbtn" id="link-cleared" href="#" target="_blank" rel="noreferrer"
+            >The same run with the overlay CLEARED but not drawn — the layer alone</a
+          >
           <a class="linkbtn" id="link-engine" href="#" target="_blank" rel="noreferrer"
             >The same run with NOTHING over the map — the engine alone</a
           >
@@ -304,6 +307,13 @@
           collector on — the run 2/03 owes. Fly the map for a minute, then press <b>file to the panel</b> in
           the readout: it lands under <code>docs/benchmarks/</code> with the pak’s own recipe stamped on it,
           and <b>Commit &amp; push</b> below sends it. Nothing is copied or typed.
+        </p>
+        <p class="muted">
+          Those three are ONE circuit, and 201/9-01 needs all three flown the same way: the field run draws
+          the layer and its content, <b>cleared</b> dirties the layer and draws nothing into it, and
+          <b>the engine alone</b> never touches it. Cleared minus engine is what the layer costs; the field
+          run minus cleared is what the symbols cost. The two-arm pair could not tell them apart, and ~21 ms
+          of a 48 ms frame is what is waiting on the answer.
         </p>
       </section>
 

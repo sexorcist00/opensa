@@ -53,6 +53,7 @@ import { createErrorLog } from './error-log';
 import { FrameClock } from './frame-clock';
 import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
 import { openModelSource } from './model-source';
+import { armDrawsContent, armTouchesSurface, overlayArm } from './overlay-arm';
 import { DEFAULT_SRC, type PakBase, resolvePakBase } from './pak-source';
 import { RenderGate } from './render-gate';
 import { bakeFlatMap } from './tile-bake-host';
@@ -567,8 +568,14 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
    * It turns off what is drawn over the map (the symbol pass, the chips, the sketches, the radar) and the
    * per-frame update that feeds them. The layers themselves are still CONSTRUCTED, so this is the draw cost
    * and never the allocation — a capture taken with it says which one it measured.
+   *
+   * **And it could not say WHICH cost it removed, which is why there is a third arm now** (201/9-01):
+   * `?overlay=0` skips the `clearRect` too, so the canvas is never dirtied and the compositor may skip the
+   * layer whole. `?overlay=clear` dirties it and draws nothing, so `clear` − `off` is the LAYER and `on` −
+   * `clear` is the CONTENT. See {@link overlayArm}.
    */
-  const overlayOn = params.get('overlay') !== '0';
+  const arm = overlayArm(params);
+  const overlayOn = armDrawsContent(arm);
   // A SECOND span recorder, deliberately not the shared `frameSpans`. That one is for work between frames,
   // and a span opened inside the loop body would be subtracted from `dt` twice
   // (restrictions/architecture.md). Nobody subtracts this one from anything: it is the CPU-side proxy for a
@@ -780,9 +787,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     }
 
     time('overlay-2d', () => {
-      // `?overlay=0` (see `overlayOn`): the segment stays and reads ~0, so a capture SAYS the pass ran and
+      // `?overlay=0` (see `arm`): the segment stays and reads ~0, so a capture SAYS the pass ran and
       // drew nothing rather than leaving a reader to wonder which build it came off.
-      if (!overlayOn) {
+      if (!armTouchesSurface(arm)) {
         return;
       }
       /**
@@ -809,11 +816,17 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         overlayDetail -= 1;
       }
       const step = <T>(name: string, run: () => T): T => (detail ? time(name, run) : run());
-      projector.update(state, overlay.clientWidth, overlay.clientHeight);
       step('overlay:clear', () => {
         context.setTransform(dpr, 0, 0, dpr, 0, 0);
         context.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
       });
+      // `?overlay=clear` stops HERE, and the stop is the measurement (201/9-01): the canvas was dirtied, so
+      // the compositor pays for the layer exactly as it does on the full arm, and nothing was rasterized
+      // into it. What separates this arm from `off` is the layer; what separates `on` from it is the content.
+      if (!overlayOn) {
+        return;
+      }
+      projector.update(state, overlay.clientWidth, overlay.clientHeight);
       step('overlay:symbols', () =>
         symbology.render(
           context,
@@ -977,7 +990,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         firstFrames: engine.firstFrames.map((totals) => totals.byName),
         framesSkipped: gate.idleFrames,
         hasTimestamps: !engine.deviceReport.missing.includes('timestamp-query'),
-        overlay: overlayOn,
+        overlay: arm,
         pickingBytes: engine.cells.pickingBytes,
         surface: {
           cssHeight: canvas.clientHeight,
