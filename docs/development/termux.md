@@ -161,6 +161,21 @@ reads exactly like "there is no copy of the game on this phone". Search `/storag
 side and `~` for the Termux-private side, and remember they are different filesystems with different free
 space.
 
+**So `npm run test:fixtures` can never produce the whole tree here, and that is the SOURCE's shape rather than
+a broken copy.** The distribution is `GTA_CORP/{data,models,SAMP}`: no `anim/`, no `text/`, no `gta_sa.exe`.
+Measured 2026-08-31 — `gta_sa.exe`, `anim/cuts.img` and `text/american.gxt` absent, all three `models/*.img`
+and `data/timecyc.dat` present — so every fixture drawn from those is out of reach until the copy grows, and
+the run is expected to end with a MISSING list rather than a clean tree.
+
+**What that cost before it was understood, the same day, and it is a defect worth remembering rather than a
+device fact.** `scripts/test-fixtures.ts` opened all four archives with one `ARCHIVES.map()`, so the absent
+`anim/cuts.img` threw the whole open — `archives ??=` never assigned, and the NEXT fixture re-read
+`gta3.img` (~1 GB) plus two more from shared storage and threw again. About a hundred archive-backed
+fixtures each did that: **over 100 GB of I/O through Android's FUSE layer, ~20 minutes, and 26 of 137
+fixtures written** — with everything inside `gta3.img` reported MISSING while the file sat there readable.
+The script prints nothing until it finishes, so it also looked hung. It reads the archives it HAS now and
+names the absent ones as the cause, once.
+
 ## Practical notes
 
 - **The whole setup is `pkg install nodejs-lts git` and then `npm run phone:setup`** — once per device. A
