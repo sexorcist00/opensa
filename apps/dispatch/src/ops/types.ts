@@ -79,7 +79,7 @@ export interface Unit {
   readonly incident: null | string;
   readonly kind: UnitKind;
   /**
-   * What the unit is driving — a bare model NAME the built game resolves (`copcarls`, `ambulan`), or `null`
+   * What the unit is driving — a bare model NAME the built game resolves (`copcarla`, `ambulan`), or `null`
    * for a unit whose vehicle is unknown, which draws the symbol alone (201/5-04).
    *
    * **It does not come from the position feed.** PCAD publishes a position (plus a `vehicleId` whose meaning

@@ -14,9 +14,13 @@
  *
  * **What happens when a model is absent is the step's real content**, because it is the normal case rather
  * than the error case: a pak deployed without its game dir, a build converted without `--vehicles`, a total
- * conversion that never had a car called `copcarls`, a board that does not know what a unit is in. Each leaves
+ * conversion that never had a car called `copcarla`, a board that does not know what a unit is in. Each leaves
  * the unit exactly as 5/02 drew it — chevron, chip and beacon — says so ONCE in the log, and counts itself
  * into `?inventory=1`. A hole where a unit should be is the one outcome that is not allowed.
+ *
+ * **The fallback is not a diagnosis, and 2026-08-30 is what that costs.** A name this build cannot draw and a
+ * name NO build can draw leave the same line in the log, so the mock board's `copcarls` — a model stock San
+ * Andreas does not have — read as a thin convert for a week while it was a typo (`ops/seed.ts`).
  */
 import type { Engine, VehicleInstance, VehicleModelId } from '@opensa/engine';
 

@@ -72,11 +72,23 @@ const FILL_KINDS: readonly Unit['kind'][] = ['patrol', 'patrol', 'patrol', 'ambu
  * carries a position, and what a unit is driving is known the way its callsign is. A total conversion ships
  * none of these names, which is not a defect to hide — it is the fallback path (symbol, and a line in the
  * log) doing its job.
+ *
+ * **`patrol` read `copcarls` until 2026-08-31, and stock San Andreas has no such model.** The LS police car
+ * is `copcarla` (`copcarsf`, `copcarvg`, `copcarru` are the other three); nothing named `copcarls` is in the
+ * roster, so every patrol unit — five of every seven generated, plus four of the named nine — resolved to
+ * nothing on EVERY pak, `--vehicles all` included, and fell back to a symbol. The fallback did its job and
+ * said so once, which is exactly why it went unread for a week: on the 2026-08-30 field run the console's
+ * three `errors` lines looked like one thin convert rather than one wrong name, and 201/5-02's budget
+ * (150 units each drawn as a MODEL) was unmeasurable on any pak while it stood.
+ *
+ * These three names are also what `scripts/phone.sh` converts by default, so THE FIELD RUN's link opens on a
+ * pak that carries them — {@link DEMO_MODELS} is the owner of that list and `seed.test.ts` holds the two
+ * sides together.
  */
-const DEMO_MODELS: Readonly<Record<Unit['kind'], string>> = {
+export const DEMO_MODELS: Readonly<Record<Unit['kind'], string>> = {
   ambulance: 'ambulan',
   fire: 'firetruk',
-  patrol: 'copcarls',
+  patrol: 'copcarla',
 };
 
 /**
