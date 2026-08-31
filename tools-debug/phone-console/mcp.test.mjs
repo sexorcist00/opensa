@@ -1,7 +1,14 @@
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LEGACY_VERSIONS, MODERN_VERSION, SUPPORTED_VERSIONS } from './mcp-protocol.mjs';
 import { handleRpc, toolList } from './mcp.mjs';
+
+/** The server is started as a PROCESS for the listen-failure case: the failure is the process exiting. */
+const MCP_ENTRY = join(dirname(fileURLToPath(import.meta.url)), 'mcp.mjs');
 
 /** A request in the modern era: the revision rides `_meta` and there is no handshake at all. */
 const modern = (request, version = MODERN_VERSION) => ({
@@ -37,6 +44,33 @@ function text(result) {
 
 describe('phone MCP server', () => {
   describe('negative cases', () => {
+    it('refuses a port already in use by NAME, and exits, rather than throwing an unhandled event', async () => {
+      // 2026-08-30: a second `panel:tunnel` met EADDRINUSE on 8788. A bare `listen` turns that into an
+      // unhandled 'error' event — a stack trace ending in `throw er` — and the reader has to know that it
+      // means "the last one is still running". The tunnel beside it then announced a URL and a token for a
+      // server that had already died.
+      const held = createServer(() => {});
+      await new Promise((resolve) => held.listen(0, '127.0.0.1', resolve));
+      const port = held.address().port;
+      try {
+        const child = spawn(process.execPath, [MCP_ENTRY, '--http', '--port', String(port)], {
+          stdio: ['ignore', 'ignore', 'pipe'],
+        });
+        let stderr = '';
+        child.stderr.on('data', (chunk) => {
+          stderr += chunk;
+        });
+        const code = await new Promise((resolve) => child.on('exit', resolve));
+
+        expect(code).toBe(1);
+        expect(stderr).toContain(`port ${port} is already in use`);
+        expect(stderr).toContain('panel:tunnel');
+        expect(stderr).toContain('PANEL_MCP_PORT');
+      } finally {
+        await new Promise((resolve) => held.close(resolve));
+      }
+    });
+
     it('answers a method it does not know with a JSON-RPC error, never a tool result', async () => {
       const answer = await handleRpc({ id: 1, jsonrpc: '2.0', method: 'resources/list' }, deps());
 
