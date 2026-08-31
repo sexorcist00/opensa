@@ -1,6 +1,8 @@
 # Automatic render-scale / quality-tier ladder
 
-**Status:** in reserve — measured and refused. [Plan 072](../../plans/072-quality-tiers-default-flip/readme.md) stays
+**Status: the MEASUREMENT is being re-run 2026-08-31 by [201/9-04](../../plans/201-dispatch-console/9-the-mobile-frame/readme.md); the POLICY stays refused.** The refusal below rests on a scale ladder taken on an **M3 Pro** — an immediate-mode GPU, where the pass floor is vertex/draw and quartering the pixels buys 0.4–1.4 ms. That conclusion does not transfer to a tile-based mobile GPU, where the same knob changes the tile COUNT linearly. This file's own reopening condition — *"a genuinely slower GPU class becomes a target. Then re-run the ladder there first"* — is met: the phone measures **21 fps against a declared 60**. What 9/04 re-runs is the ladder, as one arm beside the sample count and the scene format. **What it does not reopen is the automatic tier**: nothing picks for the operator, and `?scale=` stays the one manual knob.
+
+**Status (as written):** in reserve — measured and refused. [Plan 072](../../plans/072-quality-tiers-default-flip/readme.md) stays
 closed; the deciding run is
 [2026-07-21 scale ladder](../../benchmarks/opensa-engine/2026-07-21-scale-ladder.md) (index row #19).
 
