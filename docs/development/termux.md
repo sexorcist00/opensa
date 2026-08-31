@@ -218,7 +218,34 @@ names the absent ones as the cause, once.
   `package.json` / `package-lock.json` if either moved. Undo the whole thing by restoring the two folder
   names, or by re-running `npm run phone:setup`.
 
-  **And when it does not work, `NAPI_RS_FORCE_WASI=1` is the DIAGNOSTIC, not the fix.** The loader pushes a
+  **And the WASM binding does not start here either, until it is told not to mount the root of the
+  filesystem.** Measured 2026-08-31: `UVWASI_EACCES, uvwasi_init` — the napi-rs loader does
+
+  ```js
+  const __rootDir = __nodePath.parse(process.cwd()).root   // "/"
+  new WASI({ version: 'preview1', env: process.env, preopens: { [__rootDir]: __rootDir } })
+  ```
+
+  and an Android app process may not open `/`, so WASI fails before the wasm is even read. The preopen only
+  has to cover the tree the build touches, so point it at Termux's own root — one `sed` per binding, in
+  `node_modules`, which nothing tracks:
+
+  ```bash
+  cd ~/opensa
+  for f in node_modules/@rolldown/binding-wasm32-wasi/rolldown-binding.wasi.cjs \
+           node_modules/@oxc-resolver/binding-wasm32-wasi/resolver.wasi.cjs; do
+    sed -i 's#__nodePath.parse(process.cwd()).root#(process.env.WASI_PREOPEN || __nodePath.parse(process.cwd()).root)#' "$f"
+  done
+  WASI_PREOPEN=/data/data/com.termux/files npx vitest run <paths>
+  ```
+
+  `/data/data/com.termux/files` covers `home` (the repo) and `usr` (`$PREFIX`) in one mount, and with
+  `WASI_PREOPEN` unset the patched line behaves exactly as before. **Verified in a container** on the same
+  code path — native bindings renamed away, WASM only, preopen pointed at a non-root directory: the binding
+  loads and the suite passes. It is worth reporting upstream: preopening the filesystem root is a napi-rs
+  default that cannot work on Android.
+
+  **And when it still does not work, `NAPI_RS_FORCE_WASI=1` is the DIAGNOSTIC, not the fix.** The loader pushes a
   WASI load failure into `loadErrors` only when that variable is set (`binding-*.mjs:485-493`), so without it
   a failed WASM binding is reported as *"Cannot find native binding"* with a cause chain naming only the
   NATIVE attempts — the thing that actually broke is invisible. Ask it directly instead:
