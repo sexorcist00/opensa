@@ -218,11 +218,25 @@ names the absent ones as the cause, once.
   `package.json` / `package-lock.json` if either moved. Undo the whole thing by restoring the two folder
   names, or by re-running `npm run phone:setup`.
 
+  **And when it does not work, `NAPI_RS_FORCE_WASI=1` is the DIAGNOSTIC, not the fix.** The loader pushes a
+  WASI load failure into `loadErrors` only when that variable is set (`binding-*.mjs:485-493`), so without it
+  a failed WASM binding is reported as *"Cannot find native binding"* with a cause chain naming only the
+  NATIVE attempts — the thing that actually broke is invisible. Ask it directly instead:
+
+  ```bash
+  cd ~/opensa && NAPI_RS_FORCE_WASI=1 node -e "require('@rolldown/binding-wasm32-wasi');console.log('wasi ok')"
+  ```
+
   **What is measured and what is not, as of 2026-08-31.** Measured: the two SIGILLs, the loader order, the
   EBADPLATFORM refusal, and — the half that proves the approach — that with the native folder renamed the
   loader raises a catchable `MODULE_NOT_FOUND` (`Cannot find native binding`, `binding-*.mjs:507`) instead
-  of killing the process. Not yet measured: that the WASM bindings then carry a real vitest run, and what
-  they cost in time. The runtime they need (`@emnapi/*`, `@napi-rs/wasm-runtime`) is already in the tree.
+  of killing the process. **The recipe itself is verified**, but on x64 rather than here: renaming both native
+  bindings in a container and installing only the `wasm32-wasi` pair, `vitest run` loads the WASM binding
+  (with node's `ExperimentalWarning: WASI`) and the suite passes. So the approach is sound and what remains
+  is device-specific. Not yet measured: the same on the phone — where the first attempt still failed with
+  the native bindings renamed and the WASM pair installed, which by the paragraph above means the WASI load
+  itself failed for a reason only that command will print. The runtime it needs (`@emnapi/*`,
+  `@napi-rs/wasm-runtime`) is in the tree.
 
   **The consequence reaches further than the phone.** The `pre-push` hook is `npm test`, and the full suite
   cannot pass anywhere this project actually works: not here (SIGILL), and not in a fresh web container
