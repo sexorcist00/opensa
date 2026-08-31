@@ -461,6 +461,15 @@ function mapperCellBytes(origin: [number, number, number] = [0, 0, 0], indexData
 
 describe('CellStore placement mapper (074/22 picking)', () => {
   describe('negative cases', () => {
+    it('refuses to hide when the bytes it would erase were never kept, rather than reporting work', async () => {
+      const engine = await bootedEngine();
+      engine.cells.picking = true;
+      engine.cells.load('0,0', mapperCellBytes());
+
+      expect(engine.cells.hidePlacement(111)).toBe(0);
+      expect(engine.cells.pick([-100, 0, 0], [1, 0, 0])?.id).toBe(111);
+    });
+
     it('picks nothing while debug picking is off — the mapper is not even parsed', async () => {
       const engine = await bootedEngine();
       engine.cells.load('0,0', mapperCellBytes());
@@ -538,9 +547,22 @@ describe('CellStore placement mapper (074/22 picking)', () => {
       expect(hit?.distance).toBe(0);
     });
 
+    it('retains NO index bytes for a host that only picks (201/9-07)', async () => {
+      // The split: `pick()` resolves against the mapper's world-space bounds and reads no index at all, so
+      // a console that picks and never hides was holding a copy of every resident cell's geometry indices
+      // for a button it does not have. 1.18 MB of the 1.42 the pinned district reported.
+      const engine = await bootedEngine();
+      engine.cells.picking = true;
+      engine.cells.load('0,0', mapperCellBytes());
+
+      expect([...engine.cells.all()][0].indexData.byteLength).toBe(0);
+      expect(engine.cells.pick([-100, 0, 0], [1, 0, 0])?.id).toBe(111);
+    });
+
     it('hides a placement and stops picking it, leaving its neighbour alone', async () => {
       const engine = await bootedEngine();
       engine.cells.picking = true;
+      engine.cells.placementEdits = true; // hiding erases index ranges, so the bytes must survive the upload
       engine.cells.load('0,0', mapperCellBytes());
 
       expect(engine.cells.hidePlacement(111)).toBe(1);
@@ -551,6 +573,7 @@ describe('CellStore placement mapper (074/22 picking)', () => {
     it('STATES what it costs, and gives every byte back when the cell unloads', async () => {
       const engine = await bootedEngine();
       engine.cells.picking = true;
+      engine.cells.placementEdits = true;
       engine.cells.load('0,0', mapperCellBytes());
 
       // Two mapper rows plus the index bytes this cell would otherwise have dropped. 201/5-01 asks for the
@@ -576,6 +599,7 @@ describe('CellStore placement mapper (074/22 picking)', () => {
     it('counts the RETAINED INDEX BYTES too, not only the mapper rows', async () => {
       const engine = await bootedEngine();
       engine.cells.picking = true;
+      engine.cells.placementEdits = true;
       // The same two placements, one cell carrying 40 more index bytes than the other. Everything else is
       // identical, so the difference in the reported cost can only be the geometry the capability retained.
       engine.cells.load('0,0', mapperCellBytes());

@@ -44,9 +44,15 @@ offers — district, output folder, texture format, whether models are converted
 `scripts/phone.sh` is 369 lines of measured knowledge about this device, and a second copy of it inside a web
 server would be a second thing to keep true.
 
+**`Return to main` is the way back from a branch that no longer exists.** `main` is the only branch this
+project keeps, so the branch a phone was left on is deleted the day its work lands — and from that moment
+`pull` has no ref to fetch and every job here runs the code the checkout froze at (2026-08-30, which is how a
+pak gate whose fix was already in `main` went on refusing a good pak). It is `git checkout main` and nothing
+else: `pull` is what makes the checkout current, and one job doing both would hide which half failed.
+
 **`Baked 3D city map` is the third convert** (201/6-01): `LODONLY=1`, which welds the cell LOD tier and skips
 the HD one, into its own `-map3d` folder. It is a mode the operator picks rather than a frame that gave up —
-the LODs are a simplified city already, and it is where the console's hardest budget (150 units with models)
+the LODs are a simplified city already, and it is where the console's hardest budget (a full board with models)
 is close to free. Its folder is separate for the same reason `Map only`'s is, below.
 
 **`Map only` is the same ritual with the model half taken out**, because "just the ground" is the run that is
@@ -81,17 +87,19 @@ two paks welded into one folder.
 Every link is the ritual with its query already right, because a query typed on a phone is a query that does
 not get typed:
 
-| Link                        | What it opens                                                                                                                                                                                                                  |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **The map**                 | the console on the pak that was just built                                                                                                                                                                                     |
-| **Map + inventory capture** | the same, with the collector on                                                                                                                                                                                                |
-| **THE FIELD RUN**           | the board at the count 201 declared — `units=150&calls=40&inventory=1` — which is what [2/03](../../docs/plans/201-dispatch-console/2-real-device-truth/readme.md) owes and what every number 5/02 and 5/04 owe is measured AT |
-| **The engine alone**        | the field run's A/B partner — the same board and collector with `?overlay=0`, so the window prices the ENGINE rather than the symbology drawn over it (201/2). The pair is two links rather than one typed twice, because two halves typed by hand differ by something nobody wrote down                                  |
-| **The flat 2D map**         | `mode=flat`, the no-WebGPU surface                                                                                                                                                                                             |
-| **Bake the tile pyramid**   | `bake=tiles`, z0–z4                                                                                                                                                                                                            |
-| **The shareable console**   | `Build it` runs `npm run build:share:dispatch`, and the link opens that ONE file on a real pak — the check a build log cannot make ([2/02](../../docs/plans/201-dispatch-console/2-real-device-truth/readme.md))               |
+| Link                        | What it opens                                                                                                                                                                                                                                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The map**                 | the console on the pak that was just built                                                                                                                                                                                                                                                                      |
+| **Map + inventory capture** | the same, with the collector on                                                                                                                                                                                                                                                                                 |
+| **THE FIELD RUN**           | **the MAP, with no board on it** — `units=0&calls=0&inventory=1` on the pinned district, which is the window every number about the map is taken in. It was `units=150&calls=40` until 2026-08-31; the map and its optimisation come first (the user's call), so the declared count moved to its own link below |
+| **The overlay cleared**     | the field run's second arm — the overlay canvas dirtied every frame and nothing drawn into it (201/9-01). `cleared` − `engine` is what the LAYER costs, which `?overlay=0` alone cannot say because it skips the `clearRect` too and lets the compositor skip the layer whole                                   |
+| **The engine alone**        | the field run's A/B partner — the same run and collector with `?overlay=0`, so the window prices the ENGINE rather than anything drawn over it (201/2). The arms are separate links rather than one URL typed three times, because halves typed by hand differ by something nobody wrote down                   |
+| **The declared worst case** | `units=150&calls=40&inventory=1` — 201's budget table, and what 5/02 and 5/04 owe their numbers AT. `board` − `field` is what the symbology's CONTENT costs. Kept reachable, not what today's numbers are taken at                                                                                              |
+| **The flat 2D map**         | `mode=flat`, the no-WebGPU surface                                                                                                                                                                                                                                                                              |
+| **Bake the tile pyramid**   | `bake=tiles`, z0–z4                                                                                                                                                                                                                                                                                             |
+| **The shareable console**   | `Build it` runs `npm run build:share:dispatch`, and the link opens that ONE file on a real pak — the check a build log cannot make ([2/02](../../docs/plans/201-dispatch-console/2-real-device-truth/readme.md))                                                                                                |
 
-**An agent opens them too, since 2026-08-28** — `phone_run open` with `LINK=field` (or `map`, `inventory`, `engine`,
+**An agent opens them too, since 2026-08-28** — `phone_run open` with `LINK=field` (or `map`, `inventory`, `cleared`, `engine`, `board`,
 `flat`, `bake`, `share`). It was the last step in the measurement loop that still needed a person holding the
 phone: everything after it was already a tool call, but a page has to EXIST before any of it. It is a JOB
 rather than an MCP tool deliberately — the job table is read by the panel, which restarts for free, while
@@ -284,6 +292,12 @@ the session that leaked it.
 server refuses an unauthenticated request rather than answering it. Stop the tunnel when the session is over;
 the next one gets a new address anyway.
 
+**One `panel:tunnel` at a time.** A second one finds 8788 taken, and until 2026-08-30 that killed the MCP
+server while the tunnel carried on and printed a URL and token for it — credentials for nothing, whose only
+symptom was the provider's `connection refused` a minute later. The port collision now names itself and the
+command stops with its server rather than outliving it; `PANEL_MCP_PORT=<free port>` runs a second one on
+purpose.
+
 ## What it checks before you start
 
 `node` · **git identity** (a phone that has only ever pulled has none, and every commit then dies with
@@ -292,6 +306,11 @@ _"Author identity unknown"_ — which git says only when one is attempted) · de
 the game files · **GAME vs OUT resolving to one folder** (2026-08-09: the convert rewrote the archives it was
 reading) · the pak and what it was built from · the two run ports · free space on **both** filesystems (the
 repo is on internal storage, build output is routinely a symlink into shared) · the branch · the wake lock.
+
+**A branch the remote no longer has is a FAIL, not a note.** A missing `origin/<branch>` has two opposite
+causes — never pushed, or pushed and since deleted — and the second one means nothing on this device can be
+updated until it is left, so every other green light is a light on stale code. Git's own record of which one
+it is (`branch.<name>.merge`) is read locally, never from the network, and the fix carries the `main` job.
 
 **push credentials** — an https remote with no credential helper anywhere fails with _"could not read
 Username"_, and only when a push is attempted. Read from configuration, never by asking the network.

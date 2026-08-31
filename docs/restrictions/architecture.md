@@ -854,6 +854,27 @@ self-consistent and plausible, and every number in it is a real measurement of t
 and a stale run look identical. The check is the `app` field, and the half that lives outside this repo is
 the device's git state: a `git pull` that fetches without merging is a NO-OP with a zero exit code.
 
+**The same cause came back on 2026-08-30, one layer down, and cost the opening of a field run.** The phone
+was left on `claude/phone-state-mcp-map-launch-nptn5g`, which had been merged and deleted — `main` is the
+only branch this project keeps — so the checkout could no longer be moved by any means the panel has: `pull`
+answered *"no such ref was fetched"* and every job kept running the code that checkout froze at three days
+earlier. What it produced was not a wrong number but a wrong REFUSAL: `npm run phone` rejected a perfectly
+good pak with *"lodOnly: not recorded in this pak"* — the 08-27 defect whose fix was already in `main` and
+which the plan had recorded as closed. So a stale checkout does not only mismeasure; it argues, in the
+voice of a bug that no longer exists.
+
+**And the panel said `ok`.** Its preflight computed `ahead`/`behind` from `origin/<branch>` and treated the
+ref failing to resolve as *"no upstream yet — not a problem to report"*, which is true of a branch that was
+never pushed and exactly backwards for one that was pushed and then deleted. Git records the difference
+itself, offline: `branch.<name>.merge` exists only for a branch that has been pushed. The rule that follows
+is general — **a device that runs jobs out of a git checkout must be able to say that the checkout can no
+longer be updated**, and "no remote branch" is two opposite states that may not share an answer.
+
+**Caught since 2026-08-30**, and only on this device: the probe returns `upstream: 'ok' | 'gone' | 'none'`,
+the doctor fails on `gone` with the way back, and `main` is a job so the recovery is a tool call rather than
+a person with a keyboard. Both directions are tested. Nothing catches it in a plain checkout — a branch whose
+remote is gone is an ordinary local branch, and only the project's main-only rule makes it a trap.
+
 ## An effect's RETURN VALUE is its cleanup — a shorthand body must return a cleanup or nothing
 
 React calls whatever `useEffect` returns as the effect's cleanup function. A concise arrow body returns the

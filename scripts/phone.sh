@@ -10,7 +10,7 @@
 #   MODELS=0 npm run phone            # skip the model convert entirely: fast, but dispatch-only (no physics)
 #   MAPOBJ=0 npm run phone            # convert the whole ~14k map-object catalogue, not just what the rect places
 #   LODONLY=1 OUT=./build/phone-map3d npm run phone   # the baked 3D city map: the LOD tier as the only tier
-#   VEHICLES=admiral,infernus PEDS=bmycg npm run phone     # convert a different subset
+#   VEHICLES=admiral,infernus PEDS=bmycg npm run phone     # convert a different subset (default: the dispatch board's three)
 #   VEHICLES=all PEDS=all npm run phone                    # the whole roster (hours on a phone)
 #   TEXTURES=rgba8 OUT=./build/phone-rgba8 npm run phone   # the texture-format A/B's other side
 #   ASTC_THREADS=0 npm run phone      # one encoder worker per core (a desktop; it OOMs this phone)
@@ -84,8 +84,14 @@ ASTC_THREADS="${ASTC_THREADS:-1}"
 # The default is a SUBSET, because converting the roster costs hours on a phone and a field run needs a
 # handful of models. `all` restores the full convert. The player's model is added below whatever is asked
 # for: without it the game boots with nobody to move (`GAME_CONFIG.mainCharacter`).
+#
+# THE THREE VEHICLES ARE THE DISPATCH BOARD'S OWN, and that is the whole point of the default (201/5-02,
+# 2026-08-31). It read `admiral,infernus,comet` — three cars nothing on THE FIELD RUN's link asks for — from
+# before the console drew units as models at all, so the 2026-08-30 run measured 150 SYMBOLS against a budget
+# written for 150 models, and said so only in three `errors` lines nobody had a reason to read. The owner of
+# this list is `DEMO_MODELS` in `apps/dispatch/src/ops/seed.ts`; `seed.test.ts` fails if the two drift.
 PLAYER_PED="${PLAYER_PED:-bmycg}"
-VEHICLES="${VEHICLES:-admiral,infernus,comet}"
+VEHICLES="${VEHICLES:-copcarla,ambulan,firetruk}"
 PEDS="${PEDS:-bmycg,wmycr}"
 REBUILD="${REBUILD:-0}"
 APP_PORT="${APP_PORT:-5173}"

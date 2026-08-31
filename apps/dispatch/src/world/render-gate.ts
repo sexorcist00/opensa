@@ -52,11 +52,34 @@ export interface FrameSignals {
 }
 
 export class RenderGate {
+  /**
+   * Whether the BOARD changed for the decision this gate last took (201/9-03).
+   *
+   * The board layer — the beacons' twelve line buffers and the unit models' 150 root matrices — depends on
+   * `ops` and `selection` and reads no camera, so panning an unchanged roster repeated all of it at the
+   * display's rate. The gate already knows: it compared those two values one line earlier to decide whether
+   * to draw at all, and this is that comparison kept rather than thrown away.
+   *
+   * **A FORCED frame counts as changed**, and that is not caution. {@link RenderGate.wake} is what a host
+   * calls for a change the signals do not carry, and a unit model finishing its load is one: the type
+   * arrives between frames and only the board layer's next pass claims an instance for it. Without this the
+   * car would appear whenever the board next ticked, which after [9/02](../../../../docs/plans/201-dispatch-console/9-the-mobile-frame/readme.md)
+   * is up to four seconds later.
+   *
+   * Read it AFTER {@link RenderGate.shouldDraw}: it describes that call's decision, and it is only
+   * meaningful on a frame that drew.
+   */
+  get boardChanged(): boolean {
+    return this.boardDirty;
+  }
   /** Frames this gate has skipped since boot — the number `idle draws → 0` is read off. */
   get idleFrames(): number {
     return this.skipped;
   }
+  private boardDirty = true;
+
   private forced = true;
+
   private last: FrameSignals | null = null;
 
   private skipped = 0;
@@ -68,6 +91,8 @@ export class RenderGate {
 
       return false;
     }
+    this.boardDirty =
+      this.forced || this.last === null || this.last.ops !== signals.ops || this.last.selection !== signals.selection;
     this.forced = false;
     this.last = signals;
 

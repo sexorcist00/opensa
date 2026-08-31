@@ -17,12 +17,20 @@ import type { Operations, Selection } from './types';
 import { dispatchParams } from '../world/boot';
 import { seedSize } from './budget';
 import { addBookmark, advance, createClock, goLive, removeBookmark, scrubTo, setRate } from './clock';
+import { boardTickMs, REPLAY_TICK_MS } from './feed-rate';
 import { BoardHistory } from './history';
 import { initialOperations } from './seed';
 import { assignUnit, clearUnit, createIncidentAt, stepOperations } from './sim';
 
-/** Simulation tick. 20 Hz is smooth on the map and cheap for the panels; the render loop is independent. */
-const TICK_MS = 50;
+/**
+ * The board's tick — the feed's publish rate, not a simulation rate (201/9-02).
+ *
+ * It was 50 ms with the comment *"20 Hz is smooth on the map and cheap for the panels; the render loop is
+ * independent"*, and the render loop is NOT independent: `RenderGate` compares the board by identity and
+ * `stepOperations` returns a fresh object every tick, so 20 Hz was a floor under render-on-demand. See
+ * {@link boardTickMs}.
+ */
+const TICK_MS = boardTickMs(dispatchParams());
 
 export interface DispatchActions {
   assign: (unitId: string, incidentId: string) => void;
@@ -103,28 +111,42 @@ export function useOperations(): DispatchStore {
   selectionRef.current = selection;
   autoRef.current = autoDispatch;
 
+  // Two rates on one timer, and which one it runs at is the mode (201/9-02). The BOARD steps at the feed's
+  // rate in both modes; the CLOCK needs a cadence of its own only while replaying, because playback is the
+  // operator dragging time rather than the feed arriving. In `live` the clock is pinned to the wall clock by
+  // `advance` and the timeline reads its span off the history window, so a slow tick costs it nothing.
+  const replaying = clock.mode === 'replay';
+
   useEffect(() => {
+    const tickMs = replaying ? Math.min(REPLAY_TICK_MS, TICK_MS) : TICK_MS;
+    let lastBoard = performance.now();
     const timer = window.setInterval(() => {
-      // The time axis (201/8-01) observes the board OUTSIDE the state updater. A side effect inside one is
-      // run twice by StrictMode and again by any React retry, and a track written twice is a track that
-      // cannot be scrubbed. What it reads is the snapshot React last rendered — one tick behind, which for
-      // an observation at 20 Hz against a 4 s sampling policy is nothing.
-      // ALWAYS the live board, never the replayed one: recording what a scrub is showing would write the
-      // past back into the history as if it had just happened.
-      history.record(liveRef.current);
-      setLive((previous) =>
-        stepOperations(previous, {
-          autoDispatch: autoRef.current,
-          dtSeconds: TICK_MS / 1000,
-          now: performance.now(),
-          random: Math.random,
-        }),
-      );
-      setClock((previous) => advance(previous, performance.now(), TICK_MS, history.window()));
-    }, TICK_MS);
+      const now = performance.now();
+      if (now - lastBoard >= TICK_MS) {
+        lastBoard = now;
+        // The time axis (201/8-01) observes the board OUTSIDE the state updater. A side effect inside one is
+        // run twice by StrictMode and again by any React retry, and a track written twice is a track that
+        // cannot be scrubbed. What it reads is the snapshot React last rendered — one tick behind, which
+        // against a 4 s sampling policy is nothing.
+        // ALWAYS the live board, never the replayed one: recording what a scrub is showing would write the
+        // past back into the history as if it had just happened.
+        history.record(liveRef.current);
+        setLive((previous) =>
+          stepOperations(previous, {
+            // The tick's NOMINAL length, never the measured gap: a tab Android froze for thirty seconds
+            // would otherwise teleport every unit on the board when it came back.
+            autoDispatch: autoRef.current,
+            dtSeconds: TICK_MS / 1000,
+            now,
+            random: Math.random,
+          }),
+        );
+      }
+      setClock((previous) => advance(previous, now, tickMs, history.window()));
+    }, tickMs);
 
     return (): void => window.clearInterval(timer);
-  }, [history]);
+  }, [history, replaying]);
 
   const createAt = useCallback((at: GtaGround, district: null | string = null): void => {
     setLive((previous) => createIncidentAt(previous, at, performance.now(), Math.random, district));

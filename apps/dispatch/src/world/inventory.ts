@@ -32,6 +32,7 @@ import type { EngineStats, FrameSpanTotals, PakTrafficKind, StreamStats } from '
 
 import type { MapProjection } from '../map/map-camera';
 import type { FrameIntervalKind } from './frame-clock';
+import type { OverlayArm } from './overlay-arm';
 
 import { DISTRICTS, PINNED_DISTRICT } from './districts';
 import { FrameHistogram } from './frame-histogram';
@@ -171,13 +172,17 @@ export interface InventoryReport {
    */
   readonly framesSkipped: number;
   /**
-   * Whether anything was drawn OVER the map in this window — false under `?overlay=0`.
+   * Which of the overlay's three arms this window ran (201/9-01) — `on`, `clear` or `off` (`?overlay=0`).
    *
-   * A capture states what its run was configured with, or an A/B is not one: with this false the symbology
-   * counts below describe a board that was maintained and never drawn, and `overlay-2d` reads ~0 because
-   * the pass returned rather than because it got cheap.
+   * A capture states what its run was configured with, or an A/B is not one: on any arm but `on` the
+   * symbology counts below describe a board that was maintained and never drawn, and `overlay-2d` reads ~0
+   * or near it because the pass returned rather than because it got cheap.
+   *
+   * **It was a boolean until 2026-08-31 and a boolean could not say which run it was**, because there are
+   * three: `off` never touches the canvas, so the compositor may skip the layer whole, while `clear` dirties
+   * it and draws nothing. A row filed before that date carries `true`/`false` and reads as `on`/`off`.
    */
-  readonly overlay: boolean;
+  readonly overlay: OverlayArm;
   /** Per-frame cost centres, descending by mean. */
   readonly passes: readonly InventoryPass[];
   /** Between-frame named work, mean ms per sampled frame, descending. Empty means nothing was wrapped. */
@@ -449,8 +454,8 @@ export class FrameInventory {
      *  frame never reaches `sample`. */
     framesSkipped: number;
     hasTimestamps: boolean;
-    /** Whether the frame drew anything over the map — `?overlay=0` makes it false. */
-    overlay: boolean;
+    /** Which overlay arm the frame ran — `on`, `clear` (the layer without its content) or `off`. */
+    overlay: OverlayArm;
     /** `engine.cells.pickingBytes` — the host cost of the placement mapper the console picks against. */
     pickingBytes: number;
     surface: InventoryReport['surface'];

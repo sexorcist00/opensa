@@ -62,7 +62,7 @@ const CONTEXT = {
   firstFrames: [],
   framesSkipped: 0,
   hasTimestamps: true,
-  overlay: true,
+  overlay: 'on' as const,
   pickingBytes: 0,
   surface: { cssHeight: 364, cssWidth: 360, deviceHeight: 728, deviceWidth: 720, dpr: 2, renderScale: 1 },
   symbology: {
@@ -558,13 +558,25 @@ describe('FrameInventory idle frames (201/4-01)', () => {
   });
 });
 
-describe('FrameInventory overlay state (201/2, ?overlay=0)', () => {
+describe('FrameInventory overlay state (201/2 and 9-01, ?overlay=)', () => {
   describe('negative cases', () => {
     it('does not let a bare-engine window pass for an ordinary one', () => {
       const inventory = new FrameInventory();
       inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
 
-      expect(inventory.report({ ...CONTEXT, overlay: false }).overlay).toBe(false);
+      expect(inventory.report({ ...CONTEXT, overlay: 'off' }).overlay).toBe('off');
+    });
+
+    it('does not let the cleared arm pass for either of the two it sits between', () => {
+      // The whole point of 9/01: `clear` is neither run, and a boolean field could not have said so.
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+
+      const arm = inventory.report({ ...CONTEXT, overlay: 'clear' }).overlay;
+
+      expect(arm).toBe('clear');
+      expect(arm).not.toBe('on');
+      expect(arm).not.toBe('off');
     });
   });
 
@@ -573,7 +585,7 @@ describe('FrameInventory overlay state (201/2, ?overlay=0)', () => {
       const inventory = new FrameInventory();
       inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
 
-      expect(inventory.report({ ...CONTEXT, overlay: true }).overlay).toBe(true);
+      expect(inventory.report({ ...CONTEXT, overlay: 'on' }).overlay).toBe('on');
     });
   });
 });

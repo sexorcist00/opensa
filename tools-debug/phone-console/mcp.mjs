@@ -159,9 +159,12 @@ export const TOOLS = [
         out: { description: "Pak folder to read, default './build/phone'.", type: 'string' },
         view: {
           description:
-            "Which of the panel's own links to open: the map itself, its inventory report, the declared " +
-            'worst case (150 units), the flat 2D map, the tile bake, or the share build.',
-          enum: ['map', 'inventory', 'field', 'flat', 'bake', 'share'],
+            "Which of the panel's own links to open. `field` is THE FIELD RUN — the map with the collector " +
+            'on and no board, which is what every number about the map is taken in; `cleared` and `engine` ' +
+            'are its two arms (the overlay dirtied but not drawn, and no overlay at all); `board` is the ' +
+            'declared worst case of 150 units, kept for when 201/5-02 comes up rather than for today. Also ' +
+            'the map itself, its inventory report, the flat 2D map, the tile bake, or the share build.',
+          enum: ['map', 'inventory', 'field', 'cleared', 'engine', 'board', 'flat', 'bake', 'share'],
           type: 'string',
         },
       },
@@ -490,7 +493,7 @@ function serveHttp(port) {
     response.writeHead(status, { 'content-type': 'application/json' });
     response.end(payload === null ? '' : JSON.stringify(payload));
   };
-  createServer((request, response) => {
+  const server = createServer((request, response) => {
     const authorized = request.headers.authorization === `Bearer ${token}`;
     if (!authorized) {
       return send(response, 401, { error: 'bearer token required' });
@@ -525,7 +528,23 @@ function serveHttp(port) {
         .then((answer) => send(response, answer ? 200 : 202, answer))
         .catch((error) => send(response, 500, { error: message(error) }));
     });
-  }).listen(port, '127.0.0.1', () => {
+  });
+
+  // A port already taken reaches a bare `listen` as an unhandled 'error' event, which is a Node stack trace
+  // ending in `throw er` — and the reader has to know that EADDRINUSE means "the last panel:tunnel is still
+  // running" (2026-08-30, where it also left the tunnel announcing an address for a server that had died).
+  // Say the cause and the way out, and exit non-zero so the parent can see it went.
+  server.on('error', (error) => {
+    process.stderr.write(
+      error.code === 'EADDRINUSE'
+        ? `port ${port} is already in use — another \`npm run panel:tunnel\` (or \`panel:mcp\`) is still up on ` +
+            `this phone.\nStop it and re-run, or serve this one elsewhere with PANEL_MCP_PORT=<free port>.\n`
+        : `the MCP server could not start: ${message(error)}\n`,
+    );
+    process.exit(1);
+  });
+
+  server.listen(port, '127.0.0.1', () => {
     process.stdout.write(`opensa phone MCP on http://127.0.0.1:${port}/mcp\n`);
     process.stdout.write(`token: ${token}\n`);
     process.stdout.write(`panel: ${PANEL}\n`);

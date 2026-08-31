@@ -23,7 +23,7 @@ The format flag and `--max-texture` are meant to be used together. `--rgba8` alo
 affordable only at a very small `--rect`; with `--max-texture 256` the same memory buys roughly sixteen times
 the area. With `--textures astc` the cap becomes a quality dial rather than a survival one.
 
-**Convert a SUBSET of the models** (`--vehicles admiral,infernus,comet --peds bmycg,wmycr`) when the point is
+**Convert a SUBSET of the models** (`--vehicles copcarla,ambulan,firetruk --peds bmycg,wmycr`) when the point is
 a field run rather than a complete game: the roster costs minutes on a desktop and hours on a phone, and two
 cars are usually all a run touches. The catch is the reason `npm run phone` gates the spawners: a model left
 out keeps its `.dff`/`.txd` and therefore its ORIGINAL (BC) textures, so on a device without BC the first

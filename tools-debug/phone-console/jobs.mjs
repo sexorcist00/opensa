@@ -59,6 +59,17 @@ export const JOBS = {
     label: 'list the measurement districts',
     long: false,
   },
+  // The way back from a branch that is gone. `main` is the only branch this project keeps, so the branch a
+  // phone was left on is deleted the day its work lands — and from that moment `pull` has no ref to fetch
+  // (2026-08-30). Checkout only, deliberately: `pull` is the job that makes the checkout current, and one
+  // job doing both would hide which half failed. It refuses on its own if the tree is dirty, which is the
+  // one case where the answer is not "switch".
+  main: {
+    args: ['checkout', 'main'],
+    command: 'git',
+    label: 'return to main — the only branch that survives',
+    long: false,
+  },
   // The one-tap ground run. It is the `phone` ritual with two things forced OFF and its own output folder —
   // see MAP_ONLY below for why each of the three is not a default the operator is asked to remember.
   map: {

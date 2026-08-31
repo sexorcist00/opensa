@@ -11,7 +11,7 @@
  */
 
 /** The links the panel offers, in the order the page lists them. `phone_open`'s `LINK` knob takes one. */
-export const LINK_NAMES = ['map', 'inventory', 'field', 'engine', 'flat', 'bake', 'share'];
+export const LINK_NAMES = ['map', 'inventory', 'field', 'cleared', 'engine', 'board', 'flat', 'bake', 'share'];
 
 /**
  * Every link, for one panel state.
@@ -34,16 +34,38 @@ export function consoleUrls(state = {}) {
     : `http://localhost:${appPort}/dispatch.html`;
   const query = `src=${pak}&district=${encodeURIComponent(String(state.district ?? '').trim())}&agent=1`;
 
+  // THE FIELD RUN IS THE MAP, and the board is a separate link (the user's call, 2026-08-31). It carried
+  // `units=150&calls=40` until then, so every window the map's own work was to be judged on was taken
+  // through a 150-unit symbology layer measuring 3.09 ms of CPU and returning 24 ms of frame. The map and
+  // its optimisation come first; the board's own numbers (201/5-02, 5-04) are measured at `board` when
+  // their turn comes, and nothing about them is lost by not measuring them today.
+  //
+  // The four run-links are ONE circuit and differ by one thing each, which is what makes the subtractions
+  // mean anything:
+  //
+  //   engine  = the world, nothing over it            `engine`  ............... the 3D pass + streaming
+  //   cleared = the overlay canvas dirtied, not drawn  `cleared` − `engine` .... the LAYER
+  //   field   = the map's own overlay, empty board     `field`   − `cleared` ... the empty-board pass
+  //   board   = the declared worst case, 150 units     `board`   − `field` ..... the CONTENT
+  const empty = `${query}&units=0&calls=0&inventory=1`;
+
   return {
     bake: `${app}?${query}&bake=tiles&zmin=0&zmax=4`,
-    // The field run's A/B PARTNER (201/2): the same board and the same collector, with `?overlay=0` — so the
-    // window prices the engine rather than the symbology over it. The field round of 2026-08-30 measured the
-    // 2D overlay at four times `engine-frame`'s own CPU, which is what makes the pair worth a link each: two
-    // halves typed by hand differ by something nobody wrote down.
-    engine: `${app}?${query}&units=150&calls=40&inventory=1&overlay=0`,
     // The declared worst case: 201's budget table says 150 units each drawn as a model with a symbol over
-    // it, and every number 5/02 and 5/04 owe is measured AT it. Typed by hand it was never typed at all.
-    field: `${app}?${query}&units=150&calls=40&inventory=1`,
+    // it, and every number 5/02 and 5/04 owe is measured AT it. It is no longer THE FIELD RUN — it is what
+    // the field run is compared against once the map is the shape we want it.
+    board: `${app}?${query}&units=150&calls=40&inventory=1`,
+    // The overlay canvas cleared every frame with nothing drawn into it (201/9-01). `engine` below skips the
+    // `clearRect` as well, so the compositor may skip the layer whole — which is why the two-arm pair could
+    // not say whether the ~21 ms it removed was the layer or its content.
+    cleared: `${app}?${empty}&overlay=clear`,
+    // The field run's A/B PARTNER (201/2): the same board and the same collector, with `?overlay=0` — so the
+    // window prices the engine rather than the symbology over it. Two halves typed by hand differ by
+    // something nobody wrote down, which is what makes the pair worth a link each.
+    engine: `${app}?${empty}&overlay=0`,
+    // THE FIELD RUN: the pinned district, the collector on, and NO BOARD. This is the window every number
+    // about the map — streaming, textures, the frame — is taken in.
+    field: `${app}?${empty}`,
     flat: `${app}?${query}&mode=flat`,
     inventory: `${app}?${query}&inventory=1`,
     map: `${app}?${query}`,
