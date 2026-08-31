@@ -58,6 +58,10 @@ npm run build -- --base=./
 tar -czf prebuilt/opensa-webapp.tar.gz -C dist .
 ```
 
+**Check it before committing it**: `npx tsx scripts/debug/webapp-smoke.ts` serves the build from
+`/build/webapp/` — the path the phone uses — and fails if the page is still on `starting…` or any asset 404s.
+That is the exact failure below, and it reached the device once because nothing checked.
+
 **`--base=./` is not optional**: without it the asset paths are absolute (`/assets/…`) and every one of them
 404s when the app is served from a subfolder.
 
