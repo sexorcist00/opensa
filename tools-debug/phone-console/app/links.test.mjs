@@ -38,8 +38,17 @@ describe('the panel links', () => {
   });
 
   describe('positive cases', () => {
-    it('builds the field run at the count 201 declared', () => {
+    it('builds THE FIELD RUN as the MAP — no board on it at all', () => {
+      // The user's call, 2026-08-31: the map and its optimisation come first, so the field run stopped
+      // meaning 150 units. Every window the map's own work is judged in is taken here.
       expect(consoleUrls(SERVED).field).toBe(
+        'http://localhost:3001/build/webapp/dispatch.html?src=http://localhost:3001/build/phone' +
+          '&district=los-santos-centre&agent=1&units=0&calls=0&inventory=1',
+      );
+    });
+
+    it('keeps the declared worst case reachable, as its own link', () => {
+      expect(consoleUrls(SERVED).board).toBe(
         'http://localhost:3001/build/webapp/dispatch.html?src=http://localhost:3001/build/phone' +
           '&district=los-santos-centre&agent=1&units=150&calls=40&inventory=1',
       );
@@ -84,16 +93,46 @@ describe('the cleared link (201/9-01)', () => {
       expect(links.cleared).not.toBe(links.engine);
       expect(links.cleared).not.toContain('overlay=0');
     });
+
+    it('carries no board, like every arm of the map circuit', () => {
+      const links = consoleUrls(SERVED);
+
+      for (const arm of [links.field, links.cleared, links.engine]) {
+        expect(arm).toContain('units=0&calls=0');
+        expect(arm).not.toContain('units=150');
+      }
+    });
   });
 
   describe('positive cases', () => {
     it('is the third arm of ONE circuit — the field run, differing only in the overlay switch', () => {
       const links = consoleUrls(SERVED);
 
-      // Cleared − engine is the layer and field − cleared is the content, and neither subtraction means
-      // anything unless the overlay switch is the only thing that moved between the three.
+      // Cleared − engine is the layer, and neither subtraction means anything unless the overlay switch is
+      // the only thing that moved between the three.
       expect(links.cleared).toBe(`${links.field}&overlay=clear`);
       expect(links.engine).toBe(`${links.field}&overlay=0`);
+    });
+  });
+});
+
+describe('the board link (201/5-02)', () => {
+  describe('negative cases', () => {
+    it('is not an arm of the map circuit — it is what the map circuit is compared against', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.board).not.toContain('units=0');
+      expect(links.board).not.toContain('overlay=');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('differs from the field run by the BOARD and nothing else', () => {
+      const links = consoleUrls(SERVED);
+
+      // `board` − `field` is the content the symbology draws, so the two must agree on the pak, the
+      // district, the collector and the app — everything except how many units are on the board.
+      expect(links.board.replace('units=150&calls=40', 'units=0&calls=0')).toBe(links.field);
     });
   });
 });

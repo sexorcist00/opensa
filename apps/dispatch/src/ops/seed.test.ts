@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { UNITS_ON_SCREEN } from './budget';
+import { BoardHistory } from './history';
 import { DEMO_MODELS, initialOperations } from './seed';
 
 describe('initialOperations', () => {
@@ -66,6 +67,34 @@ function phoneDefaultVehicles(): readonly string[] {
 
   return declared ? declared[1].split(',') : [];
 }
+
+describe('the empty board THE FIELD RUN opens on', () => {
+  describe('negative cases', () => {
+    it('seeds nothing at all at `?units=0&calls=0`, rather than falling back to the default shift', () => {
+      // The user's call, 2026-08-31: the map is optimised first, so the field run carries no board. A
+      // fallback here would put nine units and two calls into every window meant to price the map.
+      const ops = initialOperations(0, { calls: 0, units: 0 });
+
+      expect(ops.units).toEqual([]);
+      expect(ops.incidents).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is a board the history can be asked about without a unit on it', () => {
+      const history = new BoardHistory();
+      const ops = initialOperations(0, { calls: 0, units: 0 });
+      history.record(ops);
+
+      expect(history.trails(ops.now).size).toBe(0);
+      expect(history.fixAges(ops.now).size).toBe(0);
+      // No samples means no span, and `null` is the honest answer rather than a zero-width one: the
+      // timeline disables its scrub on exactly this value (`timeline-bar.tsx`), so an invented window
+      // would give the operator a slider over nothing.
+      expect(history.window()).toBeNull();
+    });
+  });
+});
 
 describe('the mock board against the pak the field run converts', () => {
   describe('negative cases', () => {

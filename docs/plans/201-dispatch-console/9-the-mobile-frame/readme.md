@@ -74,6 +74,13 @@ cost that is a look question for the device rather than a reasoning one.
 **Budget:** the overlay's share of the frame, stated as a number, before any of it is rewritten.
 **Owes:** the three-arm circuit (overlay on / cleared-only / off) on the 2/03 device with the vsync ladder for
 each; then the DPR-1 arm; then, only if the content half is guilty, the sprite cache with a before/after.
+
+**And the circuit carries NO BOARD since 2026-08-31** (the user's call — THE FIELD RUN is the map, and the
+map is optimised first). That changes which subtraction answers which half, and it is a better split than the
+one this step was written with: all three arms open at `units=0&calls=0`, so **`cleared` − `engine` is the
+LAYER** exactly as before, while **the CONTENT moves to `board` − `field`** — measured against a run that
+carried none of it rather than inferred out of one that carried both. The sprite cache and the DPR-1 arm are
+questions for the content half, which means they are questions for `board`'s turn rather than for this one.
 **The exit this step must not take:** moving the symbology into the 3D pass as instanced quads plus a glyph
 atlas — MapLibre's model, and the honest end state — is a **plan**, not this step. It is what 5/02 is for, and
 it is only worth opening once this arm says the content is the cost.
@@ -98,8 +105,11 @@ once every four seconds.
 
 **Budget:** the board's tick is the feed's rate, from `PUBLISH_INTERVAL_MS`, with a query override for a
 capture that wants the old churn back.
-**Owes:** the 150-unit circuit re-taken at the protocol's rate — `framesSkipped`, the vsync ladder, and the
-battery half [4/01](../4-a-console-is-not-a-game/readme.md) still owes. **Every earlier 150-unit row becomes a
+**Owes:** the circuit re-taken at the protocol's rate — `framesSkipped`, the vsync ladder, and the battery
+half [4/01](../4-a-console-is-not-a-game/readme.md) still owes. **On the MAP run, not the 150-unit one**
+(2026-08-31): the rate is the board's and the board is empty there, so what this step buys the map is the
+whole of the rest — a still map wakes only for the camera. The 150-unit re-take is `board`'s, and it is the
+one that answers what the churn was costing the symbology. **Every earlier 150-unit row becomes a
 measurement of the mock rather than of the product, and this step says so in each of their notes rather than
 retiring them.**
 
@@ -236,6 +246,10 @@ Small, individually boring, and all of them on the phone's main thread every fra
 
 ## The order, and why it is this one
 
+0. **THE FIELD RUN IS THE MAP** (the user's call, 2026-08-31), which is a reordering rather than a step: the
+   circuit below is flown with `units=0&calls=0`, and the declared 150 units are their own link and their
+   own turn. Every window this chain reads is a window with nothing over the map but its own layer — which
+   is what 9/04, 9/05 and 9/06 were always about, and what 9/01's two subtractions get cleaner for.
 1. **9/01's third arm** and **9/02** first: both are one constant, both are free, and both can rewrite what
    every later number means. Measuring anything else before them is measuring the mock.
 2. **9/03**, because it is small and it is the other half of 9/02.

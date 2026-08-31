@@ -280,7 +280,7 @@
           Map only ignores the two selects above: no models, no collision bake, into its own
           <code>-map</code> folder so it never fights the full pak’s recipe. The baked 3D city map (201/6-01)
           builds the far tier alone into <code>-map3d</code> — a mode the operator picks, not a frame that
-          gave up, and the one where 150 units with models is close to free.
+          gave up, and the one where a full board with models is close to free.
         </p>
         <p class="muted" id="jobstate">nothing running</p>
       </section>
@@ -291,7 +291,7 @@
           <a class="linkbtn" id="link-map" href="#" target="_blank" rel="noreferrer">The map</a>
           <a class="linkbtn" id="link-inventory" href="#" target="_blank" rel="noreferrer">Map + inventory capture</a>
           <a class="linkbtn" id="link-field" href="#" target="_blank" rel="noreferrer"
-            >THE FIELD RUN — 150 units, models, inventory</a
+            >THE FIELD RUN — the map, no board, inventory</a
           >
           <a class="linkbtn" id="link-cleared" href="#" target="_blank" rel="noreferrer"
             >The same run with the overlay CLEARED but not drawn — the layer alone</a
@@ -299,21 +299,28 @@
           <a class="linkbtn" id="link-engine" href="#" target="_blank" rel="noreferrer"
             >The same run with NOTHING over the map — the engine alone</a
           >
+          <a class="linkbtn" id="link-board" href="#" target="_blank" rel="noreferrer"
+            >The declared worst case — 150 units, 40 calls (later, not now)</a
+          >
           <a class="linkbtn" id="link-flat" href="#" target="_blank" rel="noreferrer">The flat 2D map</a>
           <a class="linkbtn" id="link-bake" href="#" target="_blank" rel="noreferrer">Bake the tile pyramid</a>
         </div>
         <p class="muted">
-          The field run is the board at the count 201 declared (150 units, 40 calls) with the inventory
-          collector on — the run 2/03 owes. Fly the map for a minute, then press <b>file to the panel</b> in
-          the readout: it lands under <code>docs/benchmarks/</code> with the pak’s own recipe stamped on it,
-          and <b>Commit &amp; push</b> below sends it. Nothing is copied or typed.
+          <b>THE FIELD RUN IS THE MAP</b> — the pinned district with the inventory collector on and
+          <b>no board at all</b>. It carried 150 units until 2026-08-31; the map and its optimisation come
+          first, so every window the map’s own work is judged in is taken here. Fly the map for a minute,
+          then press <b>file to the panel</b> in the readout: it lands under <code>docs/benchmarks/</code>
+          with the pak’s own recipe stamped on it, and <b>Commit &amp; push</b> below sends it. Nothing is
+          copied or typed.
         </p>
         <p class="muted">
-          Those three are ONE circuit, and 201/9-01 needs all three flown the same way: the field run draws
-          the layer and its content, <b>cleared</b> dirties the layer and draws nothing into it, and
-          <b>the engine alone</b> never touches it. Cleared minus engine is what the layer costs; the field
-          run minus cleared is what the symbols cost. The two-arm pair could not tell them apart, and ~21 ms
-          of a 48 ms frame is what is waiting on the answer.
+          Those four are ONE circuit and differ by one thing each, which is what makes the subtractions mean
+          anything: <b>engine</b> is the world with nothing over it, <b>cleared</b> dirties the overlay and
+          draws nothing into it, <b>the field run</b> is the map’s own overlay over an empty board, and
+          <b>the board</b> is the declared worst case. So cleared minus engine is the LAYER, and board minus
+          the field run is the CONTENT. The two-arm pair could not tell them apart, and ~21 ms of a 48 ms
+          frame is what is waiting on the answer. The board link is there so 5/02 is one tap when its turn
+          comes — it is not what today’s numbers are taken at.
         </p>
       </section>
 
