@@ -792,3 +792,69 @@ describe('StreamingDriver residency (201/1-05)', () => {
     });
   });
 });
+
+describe('StreamingDriver blocked accounting (201/9-01, the VOID a phone capture could not explain)', () => {
+  describe('negative cases', () => {
+    it('counts nothing as blocked while nothing is wanted', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 1200 }, 2400, { '3,3,lod': [7] });
+
+      const stats = h.driver.update([100_000, 0, 0]); // far outside every ring
+
+      expect(stats.pendingCells).toBe(0);
+      expect(stats.blockedOnBlob).toBe(0);
+      expect(stats.blockedOnArrays).toBe(0);
+    });
+
+    it('does not keep counting a cell it has created', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 1200 }, 2400, { '3,3,lod': [7] });
+      h.driver.update([0, 0, 0]);
+      h.deliver('3,3,lod');
+      h.deliver('array-7');
+      h.driver.update([0, 0, 0]);
+
+      const stats = h.driver.update([0, 0, 0]);
+
+      expect(h.loaded).toEqual(['3,3,lod']);
+      expect(stats.blockedOnBlob).toBe(0);
+      expect(stats.blockedOnArrays).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('says a wanted cell is waiting on its geometry blob', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 1200 }, 2400, { '3,3,lod': [7] });
+      h.driver.update([0, 0, 0]); // requests the cell and array-7
+      h.deliver('array-7'); // the ARRAY lands first this time
+
+      const stats = h.driver.update([0, 0, 0]);
+
+      expect(stats.blockedOnBlob).toBe(1);
+      expect(stats.blockedOnArrays).toBe(0);
+    });
+
+    it('says a wanted cell is waiting on a texture array', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 1200 }, 2400, { '3,3,lod': [7] });
+      h.driver.update([0, 0, 0]);
+      h.deliver('3,3,lod'); // the blob is in; the array is not
+
+      const stats = h.driver.update([0, 0, 0]);
+
+      expect(stats.blockedOnArrays).toBe(1);
+      expect(stats.blockedOnBlob).toBe(0);
+      expect(h.loaded).toEqual([]);
+    });
+
+    it('counts a cell in exactly one half, blob first', () => {
+      // Both missing: the pair must not double-count, or a reader adds them and gets more blocked cells
+      // than there are pending ones.
+      const h = harness(['3,3,lod'], { lodRadius: 1200 }, 2400, { '3,3,lod': [7] });
+      h.driver.update([0, 0, 0]);
+
+      const stats = h.driver.update([0, 0, 0]);
+
+      expect(stats.blockedOnBlob).toBe(1);
+      expect(stats.blockedOnArrays).toBe(0);
+      expect(stats.blockedOnBlob + stats.blockedOnArrays).toBeLessThanOrEqual(stats.pendingCells);
+    });
+  });
+});

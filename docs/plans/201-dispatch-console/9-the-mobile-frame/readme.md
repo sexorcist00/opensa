@@ -75,6 +75,82 @@ cost that is a look question for the device rather than a reasoning one.
 **Owes:** the three-arm circuit (overlay on / cleared-only / off) on the 2/03 device with the vsync ladder for
 each; then the DPR-1 arm; then, only if the content half is guilty, the sprite cache with a before/after.
 
+**FLOWN 2026-08-31, AND IT CAME BACK HALF-ANSWERED** —
+[the row](../../../benchmarks/opensa-engine/2026-08-31-mobile-map-circuit-arms.json), app `4ce659b` over the
+pinned district, all three arms on the same six-pose route through the panel's MCP channel. Neither
+subtraction can be taken from it, and the reason is a prerequisite this step did not know it had: **the
+drawing buffer moved under the circuit.** The browser's viewport changes as its chrome collapses and returns
+— 720x1218, 720x864, 720x746 and 720x640 inside one session, a 1.9x spread in pixels — so `cleared` and
+`engine` priced two different surfaces and their difference is not the layer. **A capture has to state the
+size it was taken at and HOLD it**, which `overlay.width = clientWidth * dpr` (`world/boot.ts`) cannot; the
+same prerequisite belongs to [04](#04--what-the-frames-attachment-set-costs-on-a-tiler)'s `?scale=` arm and to
+[05](#05--the-post-chains-pass-count)'s derived pass count, both of which are read off a pixel count.
+
+What the two arms that reached a world do say, and it is not nothing: the empty-board map runs a moving
+**p50 of 32 ms (31 fps)** on both, at viewport sizes 1.9x apart — so **the frame does not track pixels over
+this range** (`engine` at 720x864 was p50 50 ms while `cleared` at 720x1218, 1.9x the pixels PLUS the second
+layer cleared every frame, was 32), the `overlay:clear` span itself costs **0.0016 ms** of CPU, and **`target`
+is a function of the viewport rather than a constant** — 59.87 MB at 1218 tall, 43.01 at 864, 32.35 at 640,
+which is exactly where this chain's quoted 59.87 comes from.
+
+**And the third arm — `field`, THE FIELD RUN itself — is VOID, twice.** The console fetched cell bytes (8
+requests / 5.29 MB, then 4 / 2.64 MB on a fresh load) and created **no cell**: `cellsCreated` 0, `pendingCells`
+0 and then stuck at 4, `errors` empty, the screen black. A `map_goto` — a wake, a flight and drawn frames, so
+`world.follow()` ran — did not clear it, which rules out the render gate sleeping through an arrival; the same
+three links streamed 12 and 28 cells on the other two arms minutes earlier, which rules out the pak and the
+district. The only thing that reports it at all is the collector's own `VOID: no cells streamed` warning.
+**Diagnosing that void comes before re-flying the circuit**, because the arm it kills is the one every other
+number in this chain is meant to be subtracted from. **DONE the same day, and it was not the streamer:
+[4/01](../4-a-console-is-not-a-game/readme.md)'s render gate was resting on an unfinished world.** Texture
+uploads drain only inside a drawn frame (`drainUploads`, 1.5 ms, called from `world.follow()`), `has(ref)`
+stays false until the last write lands, so the cell is not created, `pendingCells` does not move, no other
+signal moves either — and the frame the gate skips is the one that would have finished the upload. `pending`
+is read as a predicate now ([the issue](../../../open-issues/dispatch-map-void-no-cells-created.md)), and
+the field arm's confirmation is the first thing the re-flight owes.
+
+**THE CIRCUIT IS TAKEN, 2026-08-31, and both subtractions are ZERO** —
+[the row](../../../benchmarks/opensa-engine/2026-08-31-mobile-map-circuit-pinned.json). Three fresh pages,
+one six-pose route each, `?surface=720x640` holding the drawing buffer while the CSS box moved 550 → 491 →
+609 → 320, windows taken as the delta of two histogram readings so boot sits outside them:
+
+| arm | moving p50 | p90 | p95 | p99 |
+| --- | --- | --- | --- | --- |
+| `engine` — no overlay at all | 32 ms | 52 | 54 | 64 |
+| `cleared` — the canvas dirtied, nothing drawn | 32 ms | 52 | 56 | 66 |
+| `field` — the overlay's pass, empty board | 30 ms | 50 | 54 | 66 |
+
+**`cleared` − `engine` = 0 ms: the LAYER is free.** A second full-screen RGBA canvas cleared and
+re-composited over the WebGPU canvas every frame costs nothing measurable on this device, and the
+`overlay:clear` CPU span reads **0.0006 ms**. **`field` − `cleared` = −2 ms**, inside noise and against an
+arm that ended on a lighter view (48 draws / 124 k triangles against 112 / 278 k), so it is not claimed as a
+win either. **So the ~21 ms this step opened on — what `?overlay=0` removed in the 08-30 A/B — is neither
+the surface nor the empty pass. It is the CONTENT**, which is `board` − `field` and
+[5/02](../5-symbology-and-picking-as-product/readme.md)'s turn, and the exit this step was told not to take
+(symbology into the 3D pass) is now worth pricing rather than guessing at.
+
+**And the number nobody asked for is the one that matters most.** With nothing drawn over it, the map runs
+**p50 30–32 ms — 31–33 fps against a declared 60** — and it does so on a view that is MOSTLY EMPTY: the pak
+carries four cells (500x500 units) and the route flew at 450–900 m, where the frustum reaches far past
+them (the operator's correction, and it is recorded in the row). A loaded district can only be worse. So
+half the budget is gone before a single unit is on screen and before the world is really there, which puts
+the remaining time exactly where the rest of this chain says it is — [04](#04--what-the-frames-attachment-set-costs-on-a-tiler)'s
+attachment set, [05](#05--the-post-chains-pass-count)'s sixteen full-screen bloom passes and
+[06](#06--the-per-frame-bakes-that-are-already-cached-one-line-above)'s per-frame cloud bake, every one of
+them paid per pixel and per pass whether or not there is anything to draw. **The next circuit needs ground
+that is actually loaded**: a camera kept low enough to stay inside the rect, or the 16-cell
+`los-santos-wide` pak this chain already added for the purpose.
+
+**Both prerequisites were built the same day, and neither is a frame fix.** `?surface=WxH` pins the drawing
+buffer at that many device pixels whatever the viewport does (`world/capture-surface.ts`), the report says
+`surface.pinned` so a capture states which way it was taken, and the panel's four measurement links carry
+`surface=720x1218` — this phone's full-screen buffer, the largest of the four sizes seen, so no arm comes out
+cheap for having been measured in a smaller window. Beside it the VOID now names its cause: `StreamStats`
+carries `blockedOnBlob` and `blockedOnArrays`, so the next occurrence reads *"4 cells want a level, 1 waiting
+on their geometry blob, 3 on a texture array"* — the RING, the fetch path and the upload path being three
+different failures the report could not tell apart. **That is an instrument, not a repair**; the void's cause
+is still unknown ([the open issue](../../../open-issues/dispatch-map-void-no-cells-created.md)), and both
+reach the device with the next `prebuilt/opensa-webapp.tar.gz`.
+
 **And the circuit carries NO BOARD since 2026-08-31** (the user's call — THE FIELD RUN is the map, and the
 map is optimised first). That changes which subtraction answers which half, and it is a better split than the
 one this step was written with: all three arms open at `units=0&calls=0`, so **`cleared` − `engine` is the

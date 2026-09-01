@@ -569,6 +569,8 @@ function silentHost(): PerfRunsHost {
 function streamStats(pendingCells: number): StreamStats {
   return {
     blobMs: 0,
+    blockedOnArrays: 0,
+    blockedOnBlob: 0,
     created: 0,
     evicted: 0,
     lateCreates: 0,

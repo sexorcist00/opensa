@@ -43,14 +43,14 @@ describe('the panel links', () => {
       // meaning 150 units. Every window the map's own work is judged in is taken here.
       expect(consoleUrls(SERVED).field).toBe(
         'http://localhost:3001/build/webapp/dispatch.html?src=http://localhost:3001/build/phone' +
-          '&district=los-santos-centre&agent=1&units=0&calls=0&inventory=1',
+          '&district=los-santos-centre&agent=1&units=0&calls=0&inventory=1&surface=720x640',
       );
     });
 
     it('keeps the declared worst case reachable, as its own link', () => {
       expect(consoleUrls(SERVED).board).toBe(
         'http://localhost:3001/build/webapp/dispatch.html?src=http://localhost:3001/build/phone' +
-          '&district=los-santos-centre&agent=1&units=150&calls=40&inventory=1',
+          '&district=los-santos-centre&agent=1&units=150&calls=40&inventory=1&surface=720x640',
       );
     });
 
@@ -133,6 +133,32 @@ describe('the board link (201/5-02)', () => {
       // `board` − `field` is the content the symbology draws, so the two must agree on the pak, the
       // district, the collector and the app — everything except how many units are on the board.
       expect(links.board.replace('units=150&calls=40', 'units=0&calls=0')).toBe(links.field);
+    });
+  });
+});
+
+describe('the pinned capture surface (201/9-01)', () => {
+  describe('negative cases', () => {
+    it('does not pin the buffer on the links an operator opens', () => {
+      const links = consoleUrls(SERVED);
+
+      // A pinned buffer is stretched into whatever room the layout gives it — right for an arm, wrong for
+      // somebody working the map.
+      for (const operator of [links.map, links.inventory, links.flat, links.bake, links.share]) {
+        expect(operator).not.toContain('surface=');
+      }
+    });
+  });
+
+  describe('positive cases', () => {
+    it('pins the same buffer on all four measurement links', () => {
+      const links = consoleUrls(SERVED);
+
+      // Two arms taken at two viewport sizes cannot be subtracted, and nothing in either capture complains
+      // — which is exactly what happened to the 2026-08-31 circuit.
+      for (const arm of [links.field, links.cleared, links.engine, links.board]) {
+        expect(arm).toContain('surface=720x640');
+      }
     });
   });
 });

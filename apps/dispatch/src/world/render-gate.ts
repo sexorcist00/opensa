@@ -84,9 +84,25 @@ export class RenderGate {
 
   private skipped = 0;
 
-  /** Whether the frame that is about to run must draw. Records the signals when it says yes. */
+  /**
+   * Whether the frame that is about to run must draw. Records the signals when it says yes.
+   *
+   * **`pending` is a PREDICATE, not a value to compare, and reading it as a value deadlocked the map.**
+   * A cell's texture arrays finish uploading in `drainUploads`, which is budgeted at 1.5 ms and runs inside
+   * `world.follow()` — that is, only on a DRAWN frame; `textures.has(ref)` stays false until the last write
+   * lands, so the cell is not created and `pendingCells` does not move. Every other signal is equally
+   * unchanged, so `same()` said "nothing happened", the gate rested, and the frame that would have finished
+   * the upload never ran. The console then sat on a black map holding four fetched cells for as long as
+   * nobody touched it — 19 drawn frames against 851 skipped in 86 s on the phone, `errors` empty
+   * ([the open issue](../../../../docs/open-issues/dispatch-map-void-no-cells-created.md)).
+   *
+   * {@link FrameSignals.pending}'s own comment already said it — *"the picture is not finished while this is
+   * above zero"* — and this is the line that makes the code agree with it. The cost is honest and small: a
+   * world that never finishes arriving keeps the loop awake instead of resting on a picture that is wrong,
+   * which is the trade a map surface should take.
+   */
   shouldDraw(signals: FrameSignals): boolean {
-    if (!this.forced && this.last !== null && same(this.last, signals)) {
+    if (!this.forced && this.last !== null && signals.pending === 0 && same(this.last, signals)) {
       this.skipped += 1;
 
       return false;

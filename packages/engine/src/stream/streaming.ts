@@ -65,6 +65,20 @@ export interface StreamStats {
    * per-frame like the rest.
    */
   blobMs: number;
+  /**
+   * Wanted cells this update that had their geometry blob but NOT every texture array it names, and so were
+   * not created. Per-update, like {@link pendingCells}.
+   *
+   * It exists because *"the world never arrived"* and *"the world is still arriving"* look identical from
+   * outside: {@link pendingCells} says how many cells want a level, and nothing said what was stopping them.
+   * A phone capture on 2026-08-31 sat at `pendingCells` 4 with the cell bytes already fetched, `created` 0
+   * and an empty error log for 86 s ([the open issue](../../../../docs/open-issues/dispatch-map-void-no-cells-created.md)),
+   * and this pair is the difference between a diagnosis and another field session.
+   */
+  blockedOnArrays: number;
+  /** Wanted cells this update whose geometry blob has not landed yet — the other half of
+   *  {@link blockedOnArrays}. A cell counts in exactly one of the two, blob first. */
+  blockedOnBlob: number;
   /** RUNNING TOTAL since the driver was constructed — not a per-update count, unlike {@link blobMs} and
    *  {@link uploadMs}. A host that ADDS it up per frame counts every earlier create again on every later
    *  frame, and gets a plausible-looking number that means nothing: the 2026-08-12 phone capture reported
@@ -137,6 +151,8 @@ export class StreamingDriver {
   private readonly requested = new Set<string>();
   private readonly stats: StreamStats = {
     blobMs: 0,
+    blockedOnArrays: 0,
+    blockedOnBlob: 0,
     created: 0,
     evicted: 0,
     lateCreates: 0,
@@ -278,6 +294,8 @@ export class StreamingDriver {
     let loadedCells = loaded;
     let createSpentMs = 0;
     let creates = 0;
+    let blockedOnBlob = 0;
+    let blockedOnArrays = 0;
     for (const want of wanted) {
       if (!this.requested.has(want.key)) {
         this.requestBlob(want.key);
@@ -289,9 +307,17 @@ export class StreamingDriver {
       if (creates > 0 && (creates >= 2 || createSpentMs >= CREATE_BUDGET_MS)) {
         continue;
       }
+      // Split rather than short-circuited, and in this order, so the two are counted without changing when
+      // `texturesReady` runs (it REQUESTS what is missing, so calling it for a cell whose blob has not landed
+      // would move work, not just observe it).
       const blob = this.blobs.get(want.key);
-      if (!blob || !this.texturesReady(want.key)) {
-        continue; // arrays still in flight — a cell must never record against an unloaded array
+      if (!blob) {
+        blockedOnBlob += 1;
+        continue;
+      }
+      if (!this.texturesReady(want.key)) {
+        blockedOnArrays += 1; // arrays still in flight — a cell must never record against an unloaded array
+        continue;
       }
       const wasLoaded = want.slot.current !== null;
       createSpentMs += this.create(
@@ -309,6 +335,8 @@ export class StreamingDriver {
     }
     this.stats.pendingCells = pendingCells;
     this.stats.loadedCells = loadedCells;
+    this.stats.blockedOnBlob = blockedOnBlob;
+    this.stats.blockedOnArrays = blockedOnArrays;
     if (this.teleportGrace && pendingCells === 0) {
       this.teleportGrace = false; // the boot/teleport queue drained — late creates count again
     }
