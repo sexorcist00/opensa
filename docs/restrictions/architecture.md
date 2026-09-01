@@ -875,6 +875,22 @@ the doctor fails on `gone` with the way back, and `main` is a job so the recover
 a person with a keyboard. Both directions are tested. Nothing catches it in a plain checkout — a branch whose
 remote is gone is an ordinary local branch, and only the project's main-only rule makes it a trap.
 
+**And a third layer, 2026-08-31: the checkout can be current and the RUN still be the old one.** The app was
+right and the pak was right, and the panel opened `field` at `units=150&calls=40` more than an hour after the
+pull that made it `units=0&calls=0` — because the URLs are built by the PANEL PROCESS (`server.mjs` holds
+`consoleUrls`; `mcp.mjs` only asks it), and that process had been started before the pull. The returned URL
+is a perfectly ordinary URL; the only tell is reading its query character by character. **A long-lived
+process that hands out a table read from the repository is as stale as the moment it started**, and a `git
+pull` does not reach it — the same shape as the prebuilt archive that a pull updates while the unpacked copy
+it serves stays put.
+
+It bites here rather than elsewhere because the agent has no second route: `phone_run { id: 'open' }` is
+refused while any job runs, and the job that SERVES holds the slot for as long as the port is up (stopping it
+takes the server down — measured). So on a serving phone `map_open` is the only way to raise a link, and the
+panel's in-memory table is a dependency of every number that follows. **Caught:** no. The rule is
+operational and belongs with the restart: after a pull that touched `app/links.mjs`, restart the panel;
+restart the MCP too when a link NAME is new, since `map_open`'s enum is hardcoded there.
+
 ## An effect's RETURN VALUE is its cleanup — a shorthand body must return a cleanup or nothing
 
 React calls whatever `useEffect` returns as the effect's cleanup function. A concise arrow body returns the
