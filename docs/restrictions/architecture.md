@@ -875,21 +875,22 @@ the doctor fails on `gone` with the way back, and `main` is a job so the recover
 a person with a keyboard. Both directions are tested. Nothing catches it in a plain checkout — a branch whose
 remote is gone is an ordinary local branch, and only the project's main-only rule makes it a trap.
 
-**And a third layer, 2026-08-31: the checkout can be current and the RUN still be the old one.** The app was
-right and the pak was right, and the panel opened `field` at `units=150&calls=40` more than an hour after the
-pull that made it `units=0&calls=0` — because the URLs are built by the PANEL PROCESS (`server.mjs` holds
-`consoleUrls`; `mcp.mjs` only asks it), and that process had been started before the pull. The returned URL
-is a perfectly ordinary URL; the only tell is reading its query character by character. **A long-lived
-process that hands out a table read from the repository is as stale as the moment it started**, and a `git
-pull` does not reach it — the same shape as the prebuilt archive that a pull updates while the unpacked copy
-it serves stays put.
+**And a third layer, 2026-08-31: the checkout can be current and the TOOL still be the old one.** The tree was
+`main`, clean, 0 ahead and 0 behind, and the `pull` job answered *already up to date* — while the MCP surface
+beside it still advertised the previous day's six links, and opened `field` at `units=150&calls=40` more than
+an hour after the pull that made it `units=0&calls=0`. The returned URL is a perfectly ordinary URL; the only
+tell is reading its query character by character. **A long-lived process that hands out a table read from the
+repository is as stale as the moment it started**, and a `git pull` does not reach it — the same shape as the
+prebuilt archive that a pull updates while the unpacked copy it serves stays put, one level up.
 
-It bites here rather than elsewhere because the agent has no second route: `phone_run { id: 'open' }` is
-refused while any job runs, and the job that SERVES holds the slot for as long as the port is up (stopping it
-takes the server down — measured). So on a serving phone `map_open` is the only way to raise a link, and the
-panel's in-memory table is a dependency of every number that follows. **Caught:** no. The rule is
-operational and belongs with the restart: after a pull that touched `app/links.mjs`, restart the panel;
-restart the MCP too when a link NAME is new, since `map_open`'s enum is hardcoded there.
+**Caught:** no, and the mitigation is a session's SHAPE rather than a check. A tool whose schema and module
+graph are baked at startup can only be refreshed by restarting it, and here that rotates the address the
+agent is connected through — so the restart belongs at the start of a session, beside the pull and the
+archive re-unpack, and never in the middle of one, where it costs the connection that noticed. What is safe
+mid-session is the path that spawns a fresh process per call: the `open` job re-reads the table every time,
+and is unavailable only while another job holds the slot. Which process owns what, and why restarting the
+wrong one changes nothing, is in
+[the panel's plan](../../tools-debug/phone-console/docs/plans/002-mcp.md) rather than repeated here.
 
 ## An effect's RETURN VALUE is its cleanup — a shorthand body must return a cleanup or nothing
 
