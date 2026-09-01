@@ -283,6 +283,16 @@ page over one route, with the vsync ladder for each; **over LOADED ground**, whi
 (four cells, flown at 450-900 m where the frustum reaches far past them). Then the look verdict on `msaa1`,
 and - only if the tile-size hypothesis is confirmed - the row in `restrictions/gpu-and-shaders.md`.
 
+**The device half was attempted the same day and did not happen, for a reason worth writing down rather than
+retrying blind.** The phone pulled `main` at `0fa9cf9`, the `webapp` job unpacked the archive stamped
+`32b2f64`, and the static server came up on :3001 — and then the ngrok tunnel died between `map_open`
+launching the console and the console reporting back. Every call after that answered *"the phone is not
+answering"*, and **a running agent session cannot take a new tunnel address**, so the ladder is owed by a new
+session with `npm run panel:tunnel` restarted first. Two things learned on the way that the next attempt
+should not re-discover: the pak on the device is `rect 5,-7,6,-6` — **four render cells**, which is exactly
+the empty-sky problem this step inherited from 9/01 — and `npm run phone` refuses to serve it unless asked
+with `VEHICLES=admiral,comet,infernus`, because the job's default names three cars the pak does not carry.
+
 ### 05 — The post chain's pass count
 
 **The finding.** `BLOOM_LEVELS = 8` is a constant, and the prefilter runs at FULL resolution, so the chain is
