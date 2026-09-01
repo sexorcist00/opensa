@@ -162,9 +162,26 @@ export const TOOLS = [
             "Which of the panel's own links to open. `field` is THE FIELD RUN — the map with the collector " +
             'on and no board, which is what every number about the map is taken in; `cleared` and `engine` ' +
             'are its two arms (the overlay dirtied but not drawn, and no overlay at all); `board` is the ' +
-            'declared worst case of 150 units, kept for when 201/5-02 comes up rather than for today. Also ' +
-            'the map itself, its inventory report, the flat 2D map, the tile bake, or the share build.',
-          enum: ['map', 'inventory', 'field', 'cleared', 'engine', 'board', 'flat', 'bake', 'share'],
+            'declared worst case of 150 units, kept for when 201/5-02 comes up rather than for today. ' +
+            "`msaa1`, `rgb10a2`, `scale75` and `scale50` are 201/9-04's attachment ladder — the field run " +
+            "with ONE of the scene pass's constants moved, so each one's difference from `field` is what it " +
+            'is pricing and nothing else. Also the map itself, its inventory report, the flat 2D map, the ' +
+            'tile bake, or the share build.',
+          enum: [
+            'map',
+            'inventory',
+            'field',
+            'cleared',
+            'engine',
+            'board',
+            'msaa1',
+            'rgb10a2',
+            'scale75',
+            'scale50',
+            'flat',
+            'bake',
+            'share',
+          ],
           type: 'string',
         },
       },

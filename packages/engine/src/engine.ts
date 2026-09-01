@@ -23,15 +23,9 @@ import { Resources } from './core/resources';
 import { FrameSpans, type FrameSpanTotals } from './debug/frame-spans';
 import { GpuTimers } from './debug/gpu-timers';
 import { RigidEntity, type RigidPartInit } from './entities/rigid';
+import { DEFAULT_RENDER_BUDGET, type RenderBudget, sceneBytesPerPixel, sceneColorAttachment } from './render/budget';
 import { type DynamicParticleLibrary, DynamicParticles } from './render/dynamic-particles';
-import {
-  compileAll,
-  MSAA_SAMPLES,
-  type PipelineId,
-  pipelineIdFor,
-  type PipelineSet,
-  SCENE_FORMAT,
-} from './render/pipelines';
+import { compileAll, type PipelineId, pipelineIdFor, type PipelineSet } from './render/pipelines';
 import { EnvProbe, PROBE_RANGE } from './render/probe';
 import { SkidMarks, type SkidSegment } from './render/skid-marks';
 import { buildSkyLut, SKY_LUT_HEIGHT, SKY_LUT_WIDTH, skyLutKey } from './render/sky-lut';
@@ -605,6 +599,15 @@ const LIGHT_STRIDE = 12;
 const LIGHT_POINT = 2;
 
 export class Engine {
+  /**
+   * The scene pass's per-pixel working set (201/9-04): the sample count and the colour format every pipeline
+   * is compiled against, every bundle recorded against and every target allocated at.
+   *
+   * A CONSTRUCTOR input rather than a live knob like {@link renderScale}, because changing either invalidates
+   * the whole pipeline set — a surface that wants another budget builds another engine.
+   */
+  readonly budget: RenderBudget;
+
   cells!: CellStore;
 
   /**
@@ -827,7 +830,8 @@ export class Engine {
   private readonly invViewProj: Mat4 = mat4Identity();
   private lightPoolBuffer!: GPUBuffer;
   private readonly lightPoolScratch = new Float32Array(LIGHT_POOL_CAP * LIGHT_STRIDE);
-  private msaaView!: GPUTextureView;
+  /** `null` at one sample: the world pass writes {@link sceneColorView} directly and there is no resolve. */
+  private msaaView: GPUTextureView | null = null;
   private nextDebugLineId = 1;
   /** 2dfx particles (B6) — the whole map's emitters in two instance buffers, one per blend mode. */
   private particles: null | {
@@ -922,6 +926,16 @@ export class Engine {
     indices: GPUBuffer;
     vertices: GPUBuffer;
   } = null;
+
+  /**
+   * `coronaSprites` are the SA billboards (particle.txd): layer 0 = `coronastar` for lamps and headlights,
+   * layer 1 = `coronamoon`. They arrive at INIT because the frame bind group is recorded into every cell
+   * bundle and is immutable afterwards — the texture must exist before the first cell loads. Its size comes
+   * from the DATA, not from a constant, so a higher-resolution moon drops straight in.
+   */
+  constructor(budget: RenderBudget = DEFAULT_RENDER_BUDGET) {
+    this.budget = budget;
+  }
 
   /**
    * Smash one breakable clutter instance (074/20): collapse its matrix to a zero-area point so it stops
@@ -1381,13 +1395,11 @@ export class Engine {
     cloudFieldPass.end();
     const pass = encoder.beginRenderPass({
       colorAttachments: [
-        {
+        sceneColorAttachment({
           clearValue: this.skyColor,
-          loadOp: 'clear',
-          resolveTarget: this.sceneColorView,
-          storeOp: 'discard',
-          view: this.msaaView,
-        },
+          multisampled: this.msaaView,
+          resolved: this.sceneColorView,
+        }),
       ],
       depthStencilAttachment: {
         depthClearValue: 0, // reversed-Z far plane
@@ -1510,12 +1522,6 @@ export class Engine {
     return this.statsValue;
   }
 
-  /**
-   * `coronaSprites` are the SA billboards (particle.txd): layer 0 = `coronastar` for lamps and headlights,
-   * layer 1 = `coronamoon`. They arrive at INIT because the frame bind group is recorded into every cell
-   * bundle and is immutable afterwards — the texture must exist before the first cell loads. Its size comes
-   * from the DATA, not from a constant, so a higher-resolution moon drops straight in.
-   */
   async init(canvas: HTMLCanvasElement, coronaSprites?: CoronaSprites): Promise<void> {
     // Boot is split the way the first frames are (201/4-03), and for the same reason: the phone measured
     // `engine.init` at 2 607.5 ms on 2026-08-26 — larger than everything else in the boot put together —
@@ -1535,10 +1541,16 @@ export class Engine {
     at = bootPhase('init:canvas', at);
     // Scene pipelines target the 16-float offscreen (godrays bright-pass needs the HDR overshoot); only
     // the post pipeline writes the sRGB swapchain.
-    this.pipelines = await compileAll(this.device, SCENE_FORMAT, DEPTH_FORMAT, this.engineDevice.colorFormat);
+    this.pipelines = await compileAll(
+      this.device,
+      this.budget.sceneFormat,
+      DEPTH_FORMAT,
+      this.engineDevice.colorFormat,
+      this.budget.sampleCount,
+    );
     at = bootPhase('init:pipelines', at);
     // Scene env probe (074/16 step 2) — fixed-size, allocated once, BEFORE any vehicle model binds its cube.
-    this.probe = new EnvProbe(this.device, this.resources, this.pipelines);
+    this.probe = new EnvProbe(this.device, this.resources, this.pipelines, this.budget);
     // License-plate arrays (plan 082/03), allocated here for the same reason as the probe: their views go
     // into every vehicle bind group, so they must exist before the first car binds one. The text atlas is
     // final at its CAP size; the backgrounds start as a placeholder because their real size is whatever the
@@ -1671,12 +1683,13 @@ export class Engine {
       minFilter: 'linear',
     });
     this.cells = new CellStore({
-      colorFormat: SCENE_FORMAT,
+      colorFormat: this.budget.sceneFormat,
       depthFormat: DEPTH_FORMAT,
       device: this.device,
       frameBindGroup: this.frameBindGroup,
       pipelines: this.pipelines,
       resources: this.resources,
+      sampleCount: this.budget.sampleCount,
       textures: this.textures,
     });
     this.ensureTargets(canvas.width, canvas.height);
@@ -2303,11 +2316,11 @@ export class Engine {
     const textures: { bytes: number; texture: GPUTexture }[] = [];
     const uniforms: GPUBuffer[] = [];
     const makeTarget = (label: string, w: number, h: number): GPUTextureView => {
-      const bytes = w * h * 8;
+      const bytes = w * h * sceneBytesPerPixel(this.budget.sceneFormat);
       const texture = this.resources.createTexture(
         'target',
         {
-          format: SCENE_FORMAT,
+          format: this.budget.sceneFormat,
           label,
           size: { height: h, width: w },
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
@@ -2927,31 +2940,42 @@ export class Engine {
       this.resources.destroyTexture('target', texture, bytes);
     }
     this.sceneTargets.length = 0;
-    const bytes = width * height * (8 + 4) * MSAA_SAMPLES; // 16f color + depth estimate
-    const msaa = this.resources.createTexture(
-      'target',
-      {
-        format: SCENE_FORMAT,
-        label: 'msaa-color',
-        sampleCount: MSAA_SAMPLES,
-        size: { height, width },
-        usage: GPUTextureUsage.RENDER_ATTACHMENT,
-      },
-      bytes / 2,
-    );
-    this.sceneTargets.push({ bytes: bytes / 2, texture: msaa });
+    // 201/9-04: the colour cost is the FORMAT's, not a literal 8 — a `rgb10a2unorm` arm halves it, and a
+    // residency figure that did not follow would make the arm look free.
+    const colorBytes = sceneBytesPerPixel(this.budget.sceneFormat);
+    const msaaBytes = width * height * colorBytes * this.budget.sampleCount;
+    const depthBytes = width * height * 4 * this.budget.sampleCount;
+    // At one sample there is no second colour texture at all: the pass writes `scene-color` directly, which
+    // is where the sample count's ~22 MB (and its resolve) actually go.
+    const msaa =
+      this.budget.sampleCount === 1
+        ? null
+        : this.resources.createTexture(
+            'target',
+            {
+              format: this.budget.sceneFormat,
+              label: 'msaa-color',
+              sampleCount: this.budget.sampleCount,
+              size: { height, width },
+              usage: GPUTextureUsage.RENDER_ATTACHMENT,
+            },
+            msaaBytes,
+          );
+    if (msaa !== null) {
+      this.sceneTargets.push({ bytes: msaaBytes, texture: msaa });
+    }
     // The MSAA resolve lands here; the godrays post pass samples it and writes the swapchain.
     const sceneColor = this.resources.createTexture(
       'target',
       {
-        format: SCENE_FORMAT,
+        format: this.budget.sceneFormat,
         label: 'scene-color',
         size: { height, width },
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       },
-      width * height * 8,
+      width * height * colorBytes,
     );
-    this.sceneTargets.push({ bytes: width * height * 8, texture: sceneColor });
+    this.sceneTargets.push({ bytes: width * height * colorBytes, texture: sceneColor });
     this.sceneColorView = sceneColor.createView();
     this.buildBloomChain(width, height);
     const bloomChain = this.bloomChain;
@@ -2973,14 +2997,14 @@ export class Engine {
       {
         format: DEPTH_FORMAT,
         label: 'msaa-depth',
-        sampleCount: MSAA_SAMPLES,
+        sampleCount: this.budget.sampleCount,
         size: { height, width },
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
       },
-      bytes / 2,
+      depthBytes,
     );
-    this.sceneTargets.push({ bytes: bytes / 2, texture: depth });
-    this.msaaView = msaa.createView();
+    this.sceneTargets.push({ bytes: depthBytes, texture: depth });
+    this.msaaView = msaa === null ? null : msaa.createView();
     this.depthView = depth.createView();
   }
 

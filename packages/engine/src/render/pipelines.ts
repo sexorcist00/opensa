@@ -16,16 +16,20 @@
  */
 import { OSCELL_VERTEX_STRIDE } from '@opensa/engine-formats';
 
+import { DEFAULT_RENDER_BUDGET, type SampleCount } from './budget';
 import { resolveShader } from './shaders';
 
-/** MSAA sample count — FIXED at 4: WebGPU allows only 1|4, and 1 would disable alpha-to-coverage
- *  (the cutout alpha fix). The 074/09 msaa tier knob was field-tested and dropped. */
-export const MSAA_SAMPLES = 4;
+/** MSAA sample count — the DEFAULT, and what every capture before 2026-09-01 was taken at. WebGPU allows
+ *  only 1|4, and 1 disables alpha-to-coverage (the cutout alpha fix), which is why the 074/09 msaa tier knob
+ *  was field-tested and dropped. It is a {@link RenderBudget} field again since 201/9-04 — a number the
+ *  scene pass's per-pixel working set is read FROM (48 bytes against the 16 a Mali tile budgets for), passed
+ *  to {@link compileAll} rather than closed over, so a measurement arm cannot silently miss a pipeline. */
+export const MSAA_SAMPLES: SampleCount = DEFAULT_RENDER_BUDGET.sampleCount;
 
 /** The SCENE render target format (074/09 stage 1): the world/sky/entities render into a linear 16-float
  *  offscreen so the sun's HDR overshoot survives for the godrays bright-pass; the post pipeline composites
- *  into the sRGB swapchain view. */
-export const SCENE_FORMAT: GPUTextureFormat = 'rgba16float';
+ *  into the sRGB swapchain view. The DEFAULT — {@link RenderBudget} carries the surface's own. */
+export const SCENE_FORMAT: GPUTextureFormat = DEFAULT_RENDER_BUDGET.sceneFormat;
 
 export type PipelineId =
   | 'bloom-down'
@@ -106,6 +110,8 @@ export async function compileAll(
   colorFormat: GPUTextureFormat,
   depthFormat: GPUTextureFormat,
   outputFormat: GPUTextureFormat = colorFormat,
+  /** 201/9-04: the arm's sample count, not the module's — every pipeline below is compiled against it. */
+  sampleCount: SampleCount = MSAA_SAMPLES,
 ): Promise<PipelineSet> {
   const frameLayout = device.createBindGroupLayout({
     entries: [
@@ -221,7 +227,7 @@ export async function compileAll(
       },
       label: 'water',
       layout: device.createPipelineLayout({ bindGroupLayouts: [frameLayout, waterLayout], label: 'water' }),
-      multisample: { count: MSAA_SAMPLES },
+      multisample: multisample(sampleCount),
       primitive: { cullMode: 'none', topology: 'triangle-list' },
       vertex: {
         // Stride 20: engine-space position + baked shore distance (074/06 row 12 v2) + water class (plan 075:
@@ -338,7 +344,7 @@ export async function compileAll(
         },
         label: variant.id,
         layout: rigidPipelineLayout,
-        multisample: { count: MSAA_SAMPLES },
+        multisample: multisample(sampleCount),
         // Double-sided: SA vehicle interiors/glass are single-sided shells viewed from both sides.
         primitive: { cullMode: 'none', frontFace: 'ccw', topology: 'triangle-list' },
         vertex: { buffers: rigidBuffers, entryPoint: 'vsRigid', module: rigidModule },
@@ -353,7 +359,7 @@ export async function compileAll(
       fragment: { entryPoint: 'fsPed', module: pedModule, targets: [{ format: colorFormat }] },
       label: 'ped',
       layout: device.createPipelineLayout({ bindGroupLayouts: [frameLayout, pedLayout], label: 'ped' }),
-      multisample: { count: MSAA_SAMPLES },
+      multisample: multisample(sampleCount),
       // Double-sided for the probe: SA ped meshes carry single-sided skirts/hair shells.
       primitive: { cullMode: 'none', frontFace: 'ccw', topology: 'triangle-list' },
       vertex: {
@@ -425,7 +431,7 @@ export async function compileAll(
           bindGroupLayouts: [frameLayout, particleLayout],
           label: 'particle',
         }),
-        multisample: { count: MSAA_SAMPLES },
+        multisample: multisample(sampleCount),
         primitive: { topology: 'triangle-list' },
         vertex: {
           buffers: particleBuffers,
@@ -455,7 +461,7 @@ export async function compileAll(
       fragment: { entryPoint: 'fsSkid', module: skidModule, targets: [{ blend: premultBlend, format: colorFormat }] },
       label: 'skid',
       layout: device.createPipelineLayout({ bindGroupLayouts: [frameLayout, skidLayout], label: 'skid' }),
-      multisample: { count: MSAA_SAMPLES },
+      multisample: multisample(sampleCount),
       primitive: { cullMode: 'none', topology: 'triangle-list' },
       vertex: {
         buffers: [
@@ -496,7 +502,7 @@ export async function compileAll(
       },
       label: 'debris',
       layout: device.createPipelineLayout({ bindGroupLayouts: [frameLayout, debrisLayout], label: 'debris' }),
-      multisample: { count: MSAA_SAMPLES },
+      multisample: multisample(sampleCount),
       // Shards are single-sided triangles torn out of a closed mesh — both faces must draw.
       primitive: { cullMode: 'none', topology: 'triangle-list' },
       vertex: {
@@ -527,7 +533,7 @@ export async function compileAll(
     entries: [{ binding: 0, buffer: { type: 'uniform' }, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT }],
     label: 'debug-line',
   });
-  compileDebugLinePipelines(device, colorFormat, depthFormat, debugLineLayout, frameLayout, pipelines);
+  compileDebugLinePipelines(device, colorFormat, depthFormat, debugLineLayout, frameLayout, pipelines, sampleCount);
   const coronaModule = device.createShaderModule({ code: resolveShader('corona'), label: 'corona' });
   pipelines.set(
     'corona',
@@ -549,7 +555,7 @@ export async function compileAll(
       },
       label: 'corona',
       layout: skyLayout,
-      multisample: { count: MSAA_SAMPLES },
+      multisample: multisample(sampleCount),
       primitive: { topology: 'triangle-list' },
       vertex: {
         buffers: [
@@ -632,7 +638,7 @@ export async function compileAll(
       fragment: { entryPoint: 'fsProbeView', module: probeViewModule, targets: [{ format: colorFormat }] },
       label: 'probe-view',
       layout: device.createPipelineLayout({ bindGroupLayouts: [frameLayout, probeViewLayout], label: 'probe-view' }),
-      multisample: { count: MSAA_SAMPLES },
+      multisample: multisample(sampleCount),
       primitive: { topology: 'triangle-list' },
       vertex: { entryPoint: 'vsProbeView', module: probeViewModule },
     }),
@@ -646,7 +652,7 @@ export async function compileAll(
       fragment: { entryPoint: 'fsSky', module: skyModule, targets: [{ format: colorFormat }] },
       label: 'sky',
       layout: skyLayout,
-      multisample: { count: MSAA_SAMPLES },
+      multisample: multisample(sampleCount),
       primitive: { topology: 'triangle-list' },
       vertex: { entryPoint: 'vsSky', module: skyModule },
     }),
@@ -690,7 +696,7 @@ export async function compileAll(
         },
         label: cutout ? 'clutter-cutout' : 'clutter-opaque',
         layout: clutterPipelineLayout,
-        multisample: { alphaToCoverageEnabled: cutout, count: MSAA_SAMPLES },
+        multisample: multisample(sampleCount, cutout),
         // Double-sided: SA grass/bush cards are single-sided planes viewed from both sides.
         primitive: { cullMode: 'none', frontFace: 'ccw', topology: 'triangle-list' },
         vertex: { buffers: clutterBuffers, entryPoint: 'vsClutter', module: clutterModule },
@@ -717,7 +723,7 @@ export async function compileAll(
         },
         label: variant.id,
         layout,
-        multisample: { alphaToCoverageEnabled: variant.cutout, count: MSAA_SAMPLES },
+        multisample: multisample(sampleCount, variant.cutout),
         primitive: { cullMode: variant.cull, frontFace: 'ccw', topology: 'triangle-list' },
         vertex: { buffers: vertexBuffers, entryPoint: 'vsWorld', module },
       }),
@@ -826,6 +832,7 @@ function compileDebugLinePipelines(
   debugLineLayout: GPUBindGroupLayout,
   frameLayout: GPUBindGroupLayout,
   pipelines: Map<PipelineId, Promise<GPURenderPipeline>>,
+  sampleCount: SampleCount,
 ): void {
   const module = device.createShaderModule({ code: resolveShader('debug-line'), label: 'debug-line' });
   const layout = device.createPipelineLayout({ bindGroupLayouts: [frameLayout, debugLineLayout], label: 'debug-line' });
@@ -841,7 +848,7 @@ function compileDebugLinePipelines(
         fragment: { entryPoint: 'fsDebugLine', module, targets: [{ format: colorFormat }] },
         label: id,
         layout,
-        multisample: { count: MSAA_SAMPLES },
+        multisample: multisample(sampleCount),
         primitive: { topology: 'line-list' },
         vertex: {
           buffers: [{ arrayStride: 12, attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 0 }] }],
@@ -890,6 +897,18 @@ function compileProbePipelines(
   }
 
   return probeMipLayout;
+}
+
+/**
+ * The multisample state, in the one place that knows what one sample costs.
+ *
+ * Alpha-to-coverage is a MULTISAMPLE capability — WebGPU rejects it at one sample — so a `?msaa=1` arm
+ * silently loses the third leg of the 074 alpha-edge fix on every cutout pipeline. That is a look change the
+ * arm has to be judged on, and it belongs beside the count rather than restated at each of the fourteen
+ * pipelines compiled below.
+ */
+function multisample(sampleCount: SampleCount, cutout = false): GPUMultisampleState {
+  return { alphaToCoverageEnabled: cutout && sampleCount > 1, count: sampleCount };
 }
 
 /** Blend state for a world variant: none (a depth-writing class), premultiplied over, or additive light. */

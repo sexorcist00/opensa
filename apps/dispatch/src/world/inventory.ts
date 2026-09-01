@@ -219,6 +219,14 @@ export interface InventoryReport {
     readonly pinned: boolean;
     /** `?scale=` — the engine's own knob, which shrinks the scene and bloom targets (never the swapchain). */
     readonly renderScale: number;
+    /** `?msaa=` — the world pass's sample count (201/9-04). One removes the resolve AND the msaa colour
+     *  target whole; it also removes alpha-to-coverage from the cutout pipelines, which is a LOOK change. */
+    readonly sampleCount: number;
+    /** `?scene=` — the world pass's colour format, which the whole bloom chain and the env probe follow. */
+    readonly sceneFormat: string;
+    /** Bytes of tile working set per pixel — `(colour + depth) x samples`. 48 at the default, against the 16
+     *  Arm budgets for a 16x16 tile on the GPU family the 2/03 device runs. THE number 9/04 is about. */
+    readonly workingSetBytes: number;
   };
   /**
    * What the SYMBOLOGY layer was carrying — a reading of the last frame before the report was taken, like
