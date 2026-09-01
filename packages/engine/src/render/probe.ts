@@ -22,7 +22,7 @@ import {
   mat4PerspectiveZO,
   type Vec3,
 } from '../core/math';
-import { MSAA_SAMPLES, SCENE_FORMAT } from './pipelines';
+import { DEFAULT_RENDER_BUDGET, type RenderBudget, sceneBytesPerPixel, sceneColorAttachment } from './budget';
 
 /** Face edge, texels. 128 matches prod's cube probe (`PROBE_SIZE` in vehicle-reflection.plugin). */
 export const PROBE_SIZE = 128;
@@ -74,23 +74,32 @@ export class EnvProbe {
   private readonly lastCenter: [number, number, number] = [0, 0, 0];
   /** [face][mip − 1] bind groups reading (face, mip − 1) for the downsample into (face, mip). */
   private readonly mipBindGroups: GPUBindGroup[][];
-  private readonly msaaView: GPUTextureView;
+  /** `null` at one sample: there is no second texture, and the faces are written straight into `scratch`. */
+  private readonly msaaView: GPUTextureView | null;
   private nextFace = 0;
   private readonly pipelines: PipelineSet;
   private readonly proj: Mat4 = mat4Identity();
   private readonly scratchView: GPUTextureView;
   private readonly view: Mat4 = mat4Identity();
 
-  constructor(device: GPUDevice, resources: Resources, pipelines: PipelineSet) {
+  constructor(
+    device: GPUDevice,
+    resources: Resources,
+    pipelines: PipelineSet,
+    /** 201/9-04: the same budget the pipelines were compiled against — a probe at another sample count
+     *  cannot bind them, so this is passed rather than re-read from a module constant. */
+    budget: RenderBudget = DEFAULT_RENDER_BUDGET,
+  ) {
     this.device = device;
     this.pipelines = pipelines;
+    const colorBytes = sceneBytesPerPixel(budget.sceneFormat);
     // Reversed-Z like the main pass (swapped near/far, clear 0, `greater` compares in the shared pipelines).
     mat4PerspectiveZO(this.proj, Math.PI / 2, 1, PROBE_FAR, PROBE_NEAR);
-    const cubeBytes = Math.ceil(PROBE_SIZE * PROBE_SIZE * 8 * 6 * 1.34);
+    const cubeBytes = Math.ceil(PROBE_SIZE * PROBE_SIZE * colorBytes * 6 * 1.34);
     const cube = resources.createTexture(
       'target',
       {
-        format: SCENE_FORMAT,
+        format: budget.sceneFormat,
         label: 'env-probe',
         mipLevelCount: PROBE_MIPS,
         size: { depthOrArrayLayers: 6, height: PROBE_SIZE, width: PROBE_SIZE },
@@ -105,39 +114,42 @@ export class EnvProbe {
       minFilter: 'linear',
       mipmapFilter: 'linear',
     });
-    const msaa = resources.createTexture(
-      'target',
-      {
-        format: SCENE_FORMAT,
-        label: 'env-probe-msaa',
-        sampleCount: MSAA_SAMPLES,
-        size: { height: PROBE_SIZE, width: PROBE_SIZE },
-        usage: GPUTextureUsage.RENDER_ATTACHMENT,
-      },
-      PROBE_SIZE * PROBE_SIZE * 8 * MSAA_SAMPLES,
-    );
-    this.msaaView = msaa.createView();
+    const msaa =
+      budget.sampleCount === 1
+        ? null
+        : resources.createTexture(
+            'target',
+            {
+              format: budget.sceneFormat,
+              label: 'env-probe-msaa',
+              sampleCount: budget.sampleCount,
+              size: { height: PROBE_SIZE, width: PROBE_SIZE },
+              usage: GPUTextureUsage.RENDER_ATTACHMENT,
+            },
+            PROBE_SIZE * PROBE_SIZE * colorBytes * budget.sampleCount,
+          );
+    this.msaaView = msaa === null ? null : msaa.createView();
     const depth = resources.createTexture(
       'target',
       {
         format: PROBE_DEPTH_FORMAT,
         label: 'env-probe-depth',
-        sampleCount: MSAA_SAMPLES,
+        sampleCount: budget.sampleCount,
         size: { height: PROBE_SIZE, width: PROBE_SIZE },
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
       },
-      PROBE_SIZE * PROBE_SIZE * 4 * MSAA_SAMPLES,
+      PROBE_SIZE * PROBE_SIZE * 4 * budget.sampleCount,
     );
     this.depthView = depth.createView();
     const scratch = resources.createTexture(
       'target',
       {
-        format: SCENE_FORMAT,
+        format: budget.sceneFormat,
         label: 'env-probe-scratch',
         size: { height: PROBE_SIZE, width: PROBE_SIZE },
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       },
-      PROBE_SIZE * PROBE_SIZE * 8,
+      PROBE_SIZE * PROBE_SIZE * colorBytes,
     );
     this.scratchView = scratch.createView();
     this.blitBindGroup = device.createBindGroup({
@@ -222,13 +234,7 @@ export class EnvProbe {
   ): void {
     const pass = encoder.beginRenderPass({
       colorAttachments: [
-        {
-          clearValue: skyColor,
-          loadOp: 'clear',
-          resolveTarget: this.scratchView,
-          storeOp: 'discard',
-          view: this.msaaView,
-        },
+        sceneColorAttachment({ clearValue: skyColor, multisampled: this.msaaView, resolved: this.scratchView }),
       ],
       depthStencilAttachment: {
         depthClearValue: 0, // reversed-Z far plane

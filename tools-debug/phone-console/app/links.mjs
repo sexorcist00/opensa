@@ -11,7 +11,21 @@
  */
 
 /** The links the panel offers, in the order the page lists them. `phone_open`'s `LINK` knob takes one. */
-export const LINK_NAMES = ['map', 'inventory', 'field', 'cleared', 'engine', 'board', 'flat', 'bake', 'share'];
+export const LINK_NAMES = [
+  'map',
+  'inventory',
+  'field',
+  'cleared',
+  'engine',
+  'board',
+  'msaa1',
+  'rgb10a2',
+  'scale75',
+  'scale50',
+  'flat',
+  'bake',
+  'share',
+];
 
 /**
  * Every link, for one panel state.
@@ -71,6 +85,20 @@ export function consoleUrls(state = {}) {
   const capture = 'inventory=1&surface=720x640';
   const empty = `${query}&units=0&calls=0&${capture}`;
 
+  // 201/9-04's ladder: THE FIELD RUN with ONE attachment constant moved, so each arm's difference from
+  // `field` is the thing being priced and nothing else. The scene pass is `rgba16float` at 4x MSAA with a
+  // `depth32float` at 4x — 48 BYTES PER PIXEL of tile working set, against the 16 Arm budgets for a 16x16
+  // tile on the Bifrost/Valhall family this phone runs; past that the driver shrinks the tile and every
+  // per-tile fixed cost multiplies. `?scale=` is the engine's own knob and has existed since 2026-08-12, so
+  // the two resolution arms re-use it rather than inventing a second one.
+  //
+  //   msaa1   = one sample                12 B/px, and no resolve ... the tile configuration whole
+  //   rgb10a2 = the format halved         32 B/px .................. the price of rgba16float, AA kept
+  //   scale75 / scale50 = fewer pixels    linear ................... fill-bound against tile-bound
+  //
+  // `msaa1` also loses alpha-to-coverage on the cutout pipelines (WebGPU has no such thing at one sample),
+  // which is a LOOK change judged on the phone at map zoom — not a reason to skip the arm, a reason the arm
+  // owes a verdict as well as a number.
   return {
     bake: `${app}?${query}&bake=tiles&zmin=0&zmax=4`,
     // The declared worst case: 201's budget table says 150 units each drawn as a model with a symbol over
@@ -91,6 +119,10 @@ export function consoleUrls(state = {}) {
     flat: `${app}?${query}&mode=flat`,
     inventory: `${app}?${query}&inventory=1`,
     map: `${app}?${query}`,
+    msaa1: `${app}?${empty}&msaa=1`,
+    rgb10a2: `${app}?${empty}&scene=rgb10a2unorm`,
+    scale50: `${app}?${empty}&scale=0.5`,
+    scale75: `${app}?${empty}&scale=0.75`,
     // The share artifact is served as a plain file out of the repo, wherever the static server is.
     share: `http://localhost:${staticPort}/dist-share/dispatch.html?${query}&inventory=1`,
   };

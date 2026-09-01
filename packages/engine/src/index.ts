@@ -38,6 +38,13 @@ export {
   type VehicleSubmesh,
 } from './engine';
 export { quatMultiply, RigidEntity, type RigidPartInit } from './entities/rigid';
+export {
+  DEFAULT_RENDER_BUDGET,
+  type RenderBudget,
+  type SampleCount,
+  type SceneFormat,
+  sceneWorkingSetBytes,
+} from './render/budget';
 export { DYNAMIC_PARTICLE_CAP, type DynamicParticleLibrary } from './render/dynamic-particles';
 export { compileAll, MSAA_SAMPLES, type PipelineId, pipelineIdFor, type PipelineSet } from './render/pipelines';
 export { assertGuardrails, resolveShader, shaderModuleNames } from './render/shaders';

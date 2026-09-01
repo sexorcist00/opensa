@@ -16,7 +16,7 @@ import type { Resources } from '../core/resources';
 import type { PipelineSet } from '../render/pipelines';
 import type { TextureArrays } from './textures';
 
-import { MSAA_SAMPLES, pipelineIdFor } from '../render/pipelines';
+import { pipelineIdFor } from '../render/pipelines';
 import { alignedErase } from './degenerate';
 
 export interface CellHandle {
@@ -183,6 +183,8 @@ export class CellStore {
   private readonly frameBindGroup: GPUBindGroup;
   private readonly pipelines: PipelineSet;
   private readonly resources: Resources;
+  /** 201/9-04: a bundle is recorded against the pass's sample count and is unusable at any other. */
+  private readonly sampleCount: number;
 
   private readonly textures: TextureArrays;
 
@@ -193,6 +195,7 @@ export class CellStore {
     frameBindGroup: GPUBindGroup;
     pipelines: PipelineSet;
     resources: Resources;
+    sampleCount: number;
     textures: TextureArrays;
   }) {
     this.device = options.device;
@@ -202,6 +205,7 @@ export class CellStore {
     this.frameBindGroup = options.frameBindGroup;
     this.colorFormat = options.colorFormat;
     this.depthFormat = options.depthFormat;
+    this.sampleCount = options.sampleCount;
   }
 
   /** All loaded cells (culling + HUD iterate this). */
@@ -467,7 +471,7 @@ export class CellStore {
       colorFormats: [this.colorFormat],
       depthStencilFormat: this.depthFormat,
       label: key,
-      sampleCount: MSAA_SAMPLES,
+      sampleCount: this.sampleCount,
     });
     encoder.setBindGroup(0, this.frameBindGroup);
     encoder.setBindGroup(1, cellBindGroup);

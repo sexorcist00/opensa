@@ -74,6 +74,9 @@ const CONTEXT = {
     dpr: 2,
     pinned: false,
     renderScale: 1,
+    sampleCount: 4,
+    sceneFormat: 'rgba16float',
+    workingSetBytes: 48,
   },
   symbology: {
     beaconCapacity: 150,

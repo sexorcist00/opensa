@@ -162,3 +162,45 @@ describe('the pinned capture surface (201/9-01)', () => {
     });
   });
 });
+
+describe('the attachment ladder (201/9-04)', () => {
+  describe('negative cases', () => {
+    it('never moves two things at once — an arm differs from the field run by ONE parameter', () => {
+      const links = consoleUrls(SERVED);
+
+      // The whole ladder is a subtraction against `field`. An arm that also changed the overlay, the board
+      // or the buffer would be a measurement of something nobody wrote down, which is the defect the map
+      // circuit was rebuilt to avoid.
+      for (const [arm, added] of [
+        [links.msaa1, 'msaa=1'],
+        [links.rgb10a2, 'scene=rgb10a2unorm'],
+        [links.scale75, 'scale=0.75'],
+        [links.scale50, 'scale=0.5'],
+      ]) {
+        expect(arm.replace(`&${added}`, '')).toBe(links.field);
+      }
+    });
+
+    it('leaves the attachment knobs off every link that is not an arm', () => {
+      const links = consoleUrls(SERVED);
+
+      for (const other of [links.map, links.inventory, links.flat, links.bake, links.share, links.field]) {
+        expect(other).not.toContain('msaa=');
+        expect(other).not.toContain('scene=');
+        expect(other).not.toContain('scale=');
+      }
+    });
+  });
+
+  describe('positive cases', () => {
+    it('carries no board and the pinned buffer, like every arm of the map circuit', () => {
+      const links = consoleUrls(SERVED);
+
+      for (const arm of [links.msaa1, links.rgb10a2, links.scale75, links.scale50]) {
+        expect(arm).toContain('units=0&calls=0');
+        expect(arm).toContain('surface=720x640');
+        expect(arm).toContain('inventory=1');
+      }
+    });
+  });
+});

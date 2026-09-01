@@ -2,7 +2,15 @@ import type { OpenedPak, ResidencyView, StreamingHost, StreamStats } from '@open
 import type { TimecycSource } from '@opensa/renderware';
 
 import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
-import { Engine, FrameSpans, frameSpans, openPakSource, pakTraffic, setupStreaming } from '@opensa/engine';
+import {
+  Engine,
+  FrameSpans,
+  frameSpans,
+  openPakSource,
+  pakTraffic,
+  sceneWorkingSetBytes,
+  setupStreaming,
+} from '@opensa/engine';
 import {
   createEngineEnvironmentDriver,
   type EngineEnvironmentDriver,
@@ -47,6 +55,7 @@ import { UnitModels } from '../map/unit-models';
 import { readView, type SharedView, viewOfPose } from '../map/view-link';
 import { bootBytes, bootDone, bootStep } from './boot-progress';
 import { composeImage } from './capture';
+import { captureBudget } from './capture-budget';
 import { captureSurface } from './capture-surface';
 import { buildDemoCity, DEMO_EXTENT, DEMO_REACH } from './demo-city';
 import { DISTRICTS } from './districts';
@@ -398,7 +407,12 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   resize();
   new ResizeObserver(resize).observe(canvas);
 
-  const engine = new Engine();
+  /**
+   * `?msaa=` / `?scene=` — 9/04's two attachment arms. Chosen HERE because every pipeline is compiled against
+   * them: an engine cannot change its budget, so the arm is a page load rather than a key press.
+   */
+  const budget = captureBudget(params);
+  const engine = new Engine(budget);
   /**
    * The GPU and the radio are two different machines, and this boot used them one at a time: `engine.init`
    * measured **2 607.5 ms** on the phone (201/4-03) with the network idle, and only when it returned did the
@@ -1016,6 +1030,12 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           dpr,
           pinned: pinnedSurface !== null,
           renderScale: engine.renderScale,
+          // 9/04: the attachment set this window was measured at. `workingSetBytes` is the number the arm is
+          // ABOUT — 48 by default against the 16 a Mali tile budgets for — computed rather than restated, so
+          // a row cannot claim an arm it did not run.
+          sampleCount: engine.budget.sampleCount,
+          sceneFormat: engine.budget.sceneFormat,
+          workingSetBytes: sceneWorkingSetBytes(engine.budget),
         },
         symbology: symbologyCounts(),
         tracks: options.trackStats?.() ?? null,

@@ -246,6 +246,53 @@ in the same change, because it is structural, it is SILENT (the frame is correct
 invisible on every desktop GPU in this project's benchmark series), and nothing in the repo currently states
 it. It does not go there before the measurement: an unmeasured vendor rule is not our restriction.
 
+**THE LADDER IS BUILT 2026-09-01; the numbers are the device's.** The sample count and the scene format left
+`render/pipelines.ts` and became a [`RenderBudget`](../../../../packages/engine/src/render/budget.ts) — a
+CONSTRUCTOR input, because every pipeline is compiled against them, every cell's render bundle is recorded
+against them and the env probe allocates against them, so an arm is a page load rather than a key press.
+`?msaa=1` and `?scene=rgb10a2unorm` on the console; **the third arm needed nothing built** — `?scale=` is
+`Engine.renderScale` and has existed since 2026-08-12, which is what the deferral file already said.
+
+Three things the build settled that the step had left implicit:
+
+- **One sample removes a TEXTURE, not just a resolve.** `ensureTargets` skips `msaa-color` whole and the
+  world pass writes `scene-color` directly (`sceneColorAttachment`, the one owner both the world pass and the
+  probe's faces read — a `resolveTarget` on a one-sample view is a validation error, and a `storeOp:
+  'discard'` there throws the frame away). That is where the ~22 MB and the resolve bandwidth actually go.
+- **The residency figure follows the FORMAT.** The target accounting multiplied a literal `8` bytes per
+  pixel; `rgb10a2unorm` is 4, so the format arm would have come out looking free on the memory axis while
+  halving it. `sceneBytesPerPixel` is read by the scene targets, the bloom chain and the probe alike.
+- **`msaa=1` loses alpha-to-coverage**, because WebGPU has no such thing at one sample — the third leg of the
+  074 alpha-edge fix, on every cutout pipeline. It lives in `multisample()` beside the count rather than
+  restated at fourteen pipelines. It is not a reason to skip the arm; it is why the arm owes a LOOK verdict
+  from the phone at map zoom as well as a number.
+
+**A refused value falls back to the DEFAULT, per half** (`capture-budget.ts`, 10 tests): `?msaa=2` is not a
+neighbouring sample count, it is the default, and the report says so. The report's `surface` block carries
+`sampleCount`, `sceneFormat` and `workingSetBytes` — 48 by default, computed rather than restated — so a row
+cannot claim an arm it did not run, which is the same rule `surface.pinned` exists for.
+
+**The panel carries four new links** — `msaa1`, `rgb10a2`, `scale75`, `scale50` — each of which is `field`
+plus exactly one parameter, and `links.test.mjs` fails if an arm differs from the field run by anything else
+(it strips the added parameter and compares the whole URL). tsc clean, eslint 0 errors, 683 tests across the
+console, the engine and the panel.
+
+**Owed, and it is the whole of the next device session:** the ladder itself — `field` (the baseline the
+2026-08-31 pinned circuit already filed at moving p50 30 ms) against the four arms, each on its own fresh
+page over one route, with the vsync ladder for each; **over LOADED ground**, which the 08-31 circuit was not
+(four cells, flown at 450-900 m where the frustum reaches far past them). Then the look verdict on `msaa1`,
+and - only if the tile-size hypothesis is confirmed - the row in `restrictions/gpu-and-shaders.md`.
+
+**The device half was attempted the same day and did not happen, for a reason worth writing down rather than
+retrying blind.** The phone pulled `main` at `0fa9cf9`, the `webapp` job unpacked the archive stamped
+`32b2f64`, and the static server came up on :3001 — and then the ngrok tunnel died between `map_open`
+launching the console and the console reporting back. Every call after that answered *"the phone is not
+answering"*, and **a running agent session cannot take a new tunnel address**, so the ladder is owed by a new
+session with `npm run panel:tunnel` restarted first. Two things learned on the way that the next attempt
+should not re-discover: the pak on the device is `rect 5,-7,6,-6` — **four render cells**, which is exactly
+the empty-sky problem this step inherited from 9/01 — and `npm run phone` refuses to serve it unless asked
+with `VEHICLES=admiral,comet,infernus`, because the job's default names three cars the pak does not carry.
+
 ### 05 — The post chain's pass count
 
 **The finding.** `BLOOM_LEVELS = 8` is a constant, and the prefilter runs at FULL resolution, so the chain is
