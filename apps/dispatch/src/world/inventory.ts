@@ -206,6 +206,16 @@ export interface InventoryReport {
    *  block existed a capture could not be read for it at all: the CSS size, the DPR and the render scale
    *  were sentences somebody wrote by hand afterwards. An A/B must be self-describing (`CLAUDE.md`). */
   readonly surface: {
+    /** `?bloom=` — levels the chain was BUILT with (201/9-05), derived from the render size unless pinned. */
+    readonly bloomLevels: number;
+    /** Full-screen passes those levels cost: the prefilter, the downs and the ups. 16 at the old constant
+     *  `8`, 10 at the 720x640 the mobile circuit is pinned to — the number 9/05 is about. */
+    readonly bloomPasses: number;
+    /** Whether `?bloom=` pinned the count for this run rather than the size deriving it. */
+    readonly bloomPinned: boolean;
+    /** `?clouds=` — how many times a second the cumulus field is re-baked (201/9-06). `0` is every frame,
+     *  which is what the console did before that step and the side the default is priced against. */
+    readonly cloudFieldHz: number;
     readonly cssHeight: number;
     readonly cssWidth: number;
     /** The drawing buffer, device pixels — what the swapchain and the post pass are sized at. */

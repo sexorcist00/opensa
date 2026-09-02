@@ -165,8 +165,10 @@ export const TOOLS = [
             'declared worst case of 150 units, kept for when 201/5-02 comes up rather than for today. ' +
             "`msaa1`, `rgb10a2`, `scale75` and `scale50` are 201/9-04's attachment ladder — the field run " +
             "with ONE of the scene pass's constants moved, so each one's difference from `field` is what it " +
-            'is pricing and nothing else. Also the map itself, its inventory report, the flat 2D map, the ' +
-            'tile bake, or the share build.',
+            'is pricing and nothing else. `bloom8` and `clouds0` are the same shape run backwards (201/9-05, ' +
+            "9-06): the engine's default already carries the change, so the arm puts the OLD behaviour back " +
+            'and `field` minus the arm is what the step bought. Also the map itself, its inventory report, ' +
+            'the flat 2D map, the tile bake, or the share build.',
           enum: [
             'map',
             'inventory',
@@ -178,6 +180,8 @@ export const TOOLS = [
             'rgb10a2',
             'scale75',
             'scale50',
+            'bloom8',
+            'clouds0',
             'flat',
             'bake',
             'share',

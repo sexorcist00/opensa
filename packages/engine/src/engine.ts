@@ -23,7 +23,9 @@ import { Resources } from './core/resources';
 import { FrameSpans, type FrameSpanTotals } from './debug/frame-spans';
 import { GpuTimers } from './debug/gpu-timers';
 import { RigidEntity, type RigidPartInit } from './entities/rigid';
+import { bloomLevelsFor } from './render/bloom-levels';
 import { DEFAULT_RENDER_BUDGET, type RenderBudget, sceneBytesPerPixel, sceneColorAttachment } from './render/budget';
+import { CLOUD_FIELD_HZ, type CloudFieldBakeState, shouldBakeCloudField } from './render/cloud-field-bake';
 import { type DynamicParticleLibrary, DynamicParticles } from './render/dynamic-particles';
 import { compileAll, type PipelineId, pipelineIdFor, type PipelineSet } from './render/pipelines';
 import { EnvProbe, PROBE_RANGE } from './render/probe';
@@ -59,8 +61,8 @@ const SUN_SIZE_TO_RAD = 0.0045;
 const GODRAY_INTENSITY = 0.9;
 const GODRAY_DECAY = 0.93;
 const GODRAY_THRESHOLD = 1.25;
-/** Bloom (074/09 — prod BloomEffect values): 8 mip levels, tent-blend radius 0.7, threshold knee 0.3. */
-const BLOOM_LEVELS = 8;
+/** Bloom (074/09 — prod BloomEffect values): tent-blend radius 0.7, threshold knee 0.3. The LEVEL COUNT was
+ *  `8` here until 201/9-05 and is derived from the render size now — see {@link bloomLevelsFor}. */
 const BLOOM_RADIUS = 0.7;
 const BLOOM_SMOOTHING = 0.3;
 
@@ -600,6 +602,17 @@ const LIGHT_POINT = 2;
 
 export class Engine {
   /**
+   * Pin the bloom chain's level count instead of deriving it from the render size (201/9-05's arm).
+   *
+   * `null` derives — see {@link bloomLevelsFor}, which is what a run should normally do. A number puts the
+   * old constant back so a capture can price the difference; it is clamped rather than trusted, because a
+   * chain shorter than two levels leaves the composite binding nothing.
+   *
+   * Read when the targets are built, like {@link Engine.renderScale}: set it before `init`, or resize.
+   */
+  bloomLevels: null | number = null;
+
+  /**
    * The scene pass's per-pixel working set (201/9-04): the sample count and the colour format every pipeline
    * is compiled against, every bundle recorded against and every target allocated at.
    *
@@ -609,6 +622,15 @@ export class Engine {
   readonly budget: RenderBudget;
 
   cells!: CellStore;
+
+  /**
+   * How often the cumulus field is re-baked, Hz (201/9-06's arm).
+   *
+   * {@link CLOUD_FIELD_HZ} by default; `0` bakes every frame, which is the pre-9/06 behaviour and the other
+   * side of the A/B. A weather change still re-bakes that frame whatever this says — see
+   * {@link shouldBakeCloudField}.
+   */
+  cloudFieldHz: number = CLOUD_FIELD_HZ;
 
   /**
    * Draw the scattered procedural clutter at all. A debug toggle in the same shape as {@link waterEnabled}:
@@ -731,6 +753,17 @@ export class Engine {
    * from the loop body to print `unattributed` — a span from inside the frame would drive that negative,
    * which is the exact failure its own rule warns about. This one is the engine's, read once by the host.
    */
+  /**
+   * Levels the bloom chain was actually BUILT with — `0` before the targets exist (201/9-05).
+   *
+   * Derived from the render size unless {@link Engine.bloomLevels} pins it, so a capture reads this rather
+   * than restating the arm it asked for: a run that pinned an out-of-range count is clamped, and the row
+   * has to say what was clamped to.
+   */
+  get bloomChainLevels(): number {
+    return this.bloomChain?.downViews.length ?? 0;
+  }
+
   /** What `init` spent itself on, by phase — filled once, when `init` returns (201/4-03). */
   get bootPhases(): FrameSpanTotals {
     return this.bootTotals;
@@ -771,6 +804,7 @@ export class Engine {
   private canvasContext!: GPUCanvasContext;
   /** Kept for `deviceReport` — a capture states the CSS size it was taken at. */
   private canvasElement!: HTMLCanvasElement;
+  private cloudFieldBake: CloudFieldBakeState | null = null;
   private cloudFieldBindGroup!: GPUBindGroup;
   private cloudFieldTexture!: GPUTexture;
   private cloudFieldView!: GPUTextureView;
@@ -1385,14 +1419,11 @@ export class Engine {
     const encoder = this.device.createCommandEncoder({ label: 'frame' });
     // Cumulus field bake (sky v2 perf): rewrite the tiny fbm field before anything samples it this frame
     // (256² × 10 vnoise ≈ fixed ~0.05 ms — full-deck weathers stopped scaling with the swapchain).
-    const cloudFieldPass = encoder.beginRenderPass({
-      colorAttachments: [{ loadOp: 'clear', storeOp: 'store', view: this.cloudFieldView }],
-      label: 'cloud-field',
-    });
-    cloudFieldPass.setPipeline(this.pipelines.get('cloud-field'));
-    cloudFieldPass.setBindGroup(0, this.cloudFieldBindGroup);
-    cloudFieldPass.draw(3);
-    cloudFieldPass.end();
+    //
+    // 201/9-06: no longer EVERY frame. The field has two inputs of different kinds — `cloudScale` steps and
+    // time scrolls — so the rule keys the first and amortizes the second (`shouldBakeCloudField`), which is
+    // the two patterns `refreshSkyLut` and `scheduleProbe` were already using twenty lines apart.
+    this.bakeCloudField(encoder, seconds * 1000, env.cloudScale);
     const pass = encoder.beginRenderPass({
       colorAttachments: [
         sceneColorAttachment({
@@ -1595,7 +1626,9 @@ export class Engine {
       },
       SKY_LUT_WIDTH * SKY_LUT_HEIGHT * 8,
     );
-    // Cumulus field (sky v2 perf): the tiny bake target the cloud-field pass rewrites each frame.
+    // Cumulus field (sky v2 perf): the tiny bake target the cloud-field pass rewrites. Created ONCE here
+    // rather than with the render targets, so a resize does not blank it and 201/9-06's rebake rule has
+    // nothing to invalidate.
     this.cloudFieldTexture = this.resources.createTexture(
       'texture',
       {
@@ -2276,6 +2309,25 @@ export class Engine {
    * offset is part of the binding, so two submeshes sharing one array but animating differently still need
    * a rebind each. `current` is mutated — it is the caller's running state across the whole model.
    */
+  /**
+   * Rewrite the 256² cumulus field the sky pass samples, IF it is stale — every frame before 201/9-06. The
+   * decision is {@link shouldBakeCloudField}; this is the only place that records what was baked.
+   */
+  private bakeCloudField(encoder: GPUCommandEncoder, nowMs: number, scale: number): void {
+    if (!shouldBakeCloudField({ hz: this.cloudFieldHz, nowMs, previous: this.cloudFieldBake, scale })) {
+      return;
+    }
+    this.cloudFieldBake = { atMs: nowMs, scale };
+    const cloudFieldPass = encoder.beginRenderPass({
+      colorAttachments: [{ loadOp: 'clear', storeOp: 'store', view: this.cloudFieldView }],
+      label: 'cloud-field',
+    });
+    cloudFieldPass.setPipeline(this.pipelines.get('cloud-field'));
+    cloudFieldPass.setBindGroup(0, this.cloudFieldBindGroup);
+    cloudFieldPass.draw(3);
+    cloudFieldPass.end();
+  }
+
   private bindRigidSubmesh(
     pass: GPURenderPassEncoder,
     model: VehicleModel,
@@ -2304,6 +2356,10 @@ export class Engine {
    * scene targets this is a dozen-and-a-half small textures and uniforms.
    */
   private buildBloomChain(width: number, height: number): void {
+    // 201/9-05: how many levels this size is worth, not how many the constant used to say. `bloomLevels`
+    // pins it for the A/B arm; the frame loop already walks the arrays rather than a constant, so a shorter
+    // chain needs nothing else changed.
+    const levels = bloomLevelsFor(width, height, this.bloomLevels ?? undefined);
     const previous = this.bloomChain;
     if (previous) {
       for (const { bytes, texture } of previous.textures) {
@@ -2359,7 +2415,7 @@ export class Engine {
     const downBindGroups: GPUBindGroup[] = [];
     let w = width;
     let h = height;
-    for (let i = 0; i < BLOOM_LEVELS; i += 1) {
+    for (let i = 0; i < levels; i += 1) {
       const inputW = w;
       const inputH = h;
       w = Math.max(1, Math.round(w * 0.5));
@@ -2381,16 +2437,16 @@ export class Engine {
     // Upsample mips: up[i] = tent(coarser) blended over down[i]; the coarsest input is down[levels−1].
     const upViews: GPUTextureView[] = [];
     const upBindGroups: GPUBindGroup[] = [];
-    for (let i = 0; i < BLOOM_LEVELS - 1; i += 1) {
+    for (let i = 0; i < levels - 1; i += 1) {
       upViews.push(makeTarget(`bloom-up-${i}`, downSizes[i].width, downSizes[i].height));
     }
-    for (let i = 0; i < BLOOM_LEVELS - 1; i += 1) {
+    for (let i = 0; i < levels - 1; i += 1) {
       const input = downSizes[i + 1];
       upBindGroups.push(
         this.device.createBindGroup({
           entries: [
             { binding: 0, resource: { buffer: makeUniform(`bloom-up-${i}`, input.width, input.height, BLOOM_RADIUS) } },
-            { binding: 1, resource: i === BLOOM_LEVELS - 2 ? downViews[BLOOM_LEVELS - 1] : upViews[i + 1] },
+            { binding: 1, resource: i === levels - 2 ? downViews[levels - 1] : upViews[i + 1] },
             { binding: 2, resource: this.postSampler },
             { binding: 3, resource: downViews[i] },
           ],

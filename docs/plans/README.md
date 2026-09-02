@@ -67,7 +67,10 @@ Newest first:
   phone against a declared 60, and reading its own two captures against the code found ~38 ms of a 48 ms
   frame with no owner, a symbology cost that is 3 ms of CPU carrying a 24 ms result, a mock feed running at
   80× the protocol's publish rate, and a scene pass asking a tile-based GPU for three times the per-pixel
-  working set it budgets for. Seven fixes, most of them one constant; it runs before chains 1–8 resume.
+  working set it budgets for. Seven fixes, most of them one constant; it runs before chains 1–8 resume. **All
+  seven are BUILT as of 2026-09-02** — four in the container on 08-31, then 9/04, 9/05 and 9/06, each of
+  which ships an ARM beside its default because nothing here is tuned before its arm is run. What the chain
+  owes now is one device session: the field run against six arms, over loaded ground, with the vsync ladder.
 - **[200 — Platform reach](./200-platform-reach/readme.md)** — IN PROGRESS, opened 2026-08-04. The world on a
   phone, and the frame off the main thread. A phone boots the engine and cannot open the world, because a pak
   built from SA assets is BC throughout and no mobile GPU has BC — a build-time content decision no runtime

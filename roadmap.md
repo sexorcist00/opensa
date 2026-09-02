@@ -159,7 +159,7 @@ mobile work and the "trim the engine to what the map draws" work, with the world
 cars and peds are drawn, vegetation sways, the day turns, and one engine serves PC and mobile.
 Full chain: [docs/plans/201-dispatch-console/](docs/plans/201-dispatch-console/readme.md).
 
-**Its urgent work, as of 2026-08-31, is [chain 9 — the mobile frame](docs/plans/201-dispatch-console/9-the-mobile-frame/readme.md)**: the console measures **21 fps on the phone against a declared 60**, and an audit of its own captures against the code found that ~38 ms of a 48 ms frame belongs to no span this repo records. Seven fixes, most of them one constant; it runs before the rest of the chain.
+**Its urgent work, as of 2026-08-31, is [chain 9 — the mobile frame](docs/plans/201-dispatch-console/9-the-mobile-frame/readme.md)**: the console measures **21 fps on the phone against a declared 60**, and an audit of its own captures against the code found that ~38 ms of a 48 ms frame belongs to no span this repo records. Seven fixes, most of them one constant; it runs before the rest of the chain. **All seven are built as of 2026-09-02, and every one of them is owed a NUMBER rather than a change** — 9/04, 9/05 and 9/06 ship an arm beside each default, and which constant wins is a reading off the vsync ladder on the phone.
 
 What that console is FOR is the final plan: **a web dispatch application for a SA-MP server**, paired with a
 client-side CAD plugin (PCAD), in which OpenSA is one component — the 3D map. Product, field survey, seams,

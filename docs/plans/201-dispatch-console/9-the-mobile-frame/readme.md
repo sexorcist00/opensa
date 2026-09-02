@@ -316,6 +316,31 @@ all**, and it is the free half.
 **Owes:** the ladder with the derived count, then with the half-res prefilter, and a look verdict on the
 emitters at map zoom before the second one is kept.
 
+**THE FREE HALF IS BUILT 2026-09-02; the number is the device's.** `BLOOM_LEVELS = 8` is gone and the count
+is derived by [`bloomLevelsFor`](../../../../packages/engine/src/render/bloom-levels.ts) — halve until the
+SHORTER edge falls under 16 px. At the pinned 720x640 that is **5 levels and 10 passes against 16**, six
+full-screen passes removed; 6 levels at 1920x1080 and 7 at 3840x2160, which is the PC/mobile restriction's
+shape exactly — a number the frame reads, from one line of code, never a branch it executes.
+
+Three things the build settled:
+
+- **The floor is structural, not taste.** The composite binds `upViews[0]` and there are `levels - 1` up
+  views, so a one-level chain binds nothing. `BLOOM_MIN_LEVELS = 2`, and a pinned count is CLAMPED to it
+  rather than trusted — an out-of-range arm would otherwise build a chain that cannot be bound.
+- **The arm reports what was BUILT, not what was asked for.** `Engine.bloomChainLevels` reads the chain back
+  and the report carries `surface.bloomLevels`, `bloomPasses` and `bloomPinned`, for the same reason
+  `workingSetBytes` is computed rather than restated in 9/04.
+- **The step's own arithmetic was one pixel out.** The dropped levels at 720x640 are **11x10, 6x5 and 3x3**,
+  not 12x10 — 720 halves to 45 and then to 22, not 23. It changes nothing about the finding.
+
+**The half-resolution prefilter was NOT built, and that is the step's own split holding.** It is the look
+question, it was rejected once for sub-pixel emitters, and it is not touched until the derived count has a
+number on the ladder.
+
+**Owed:** `field` against `?bloom=8` on the device — and note the arm runs BACKWARDS from 9/04's ladder,
+because the default now carries the change: `field` minus `bloom8` is what the step bought. The panel serves
+it as `bloom8`.
+
 ### 06 — The per-frame bakes that are already cached one line above
 
 **The finding.** `engine.frame()` opens a `cloud-field` render pass **every frame, unconditionally**
@@ -330,6 +355,22 @@ of itself.
 **Budget:** a bake whose input changes on a scale of minutes is not paid at the display's rate. Name the
 rebake rate (a few Hz) before building it.
 **Owes:** the ladder with the bake amortized, and a look verdict that the clouds still move.
+
+**BUILT 2026-09-02 at 10 Hz; the number and the look verdict are the device's.** The rule is
+[`shouldBakeCloudField`](../../../../packages/engine/src/render/cloud-field-bake.ts), and the reason it is a
+file rather than an early return is that **it needs BOTH of the patterns sitting beside it, and neither is a
+fallback for the other.** The bake has two inputs of different kinds: `cloudScale` (`frame.cloudTop.w`) is a
+STEP — the weather changes it and the field must change that frame, so it is KEYED like `refreshSkyLut`;
+time is a SCROLL at `t * 0.004`, invisible frame to frame, so it is AMORTIZED like `scheduleProbe`. Keying
+alone would freeze the drift; amortizing alone would hold a wrong field across a weather change for up to a
+period.
+
+`CLOUD_FIELD_HZ = 10` is the one number here that is chosen rather than derived, so it is named in one place
+and it is an ARM — `?clouds=0` bakes every frame, which is the pre-9/06 behaviour and the side the default is
+priced against. The report carries `surface.cloudFieldHz`.
+
+**Owed:** `field` against `?clouds=0` on the device, and the look verdict this step named — that the clouds
+still move at 10 Hz — taken on `field` rather than on the arm. The panel serves the arm as `clouds0`.
 
 ### 07 — The per-frame allocations, and one capability that retains what it never reads
 

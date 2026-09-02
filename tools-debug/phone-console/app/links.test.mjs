@@ -176,6 +176,8 @@ describe('the attachment ladder (201/9-04)', () => {
         [links.rgb10a2, 'scene=rgb10a2unorm'],
         [links.scale75, 'scale=0.75'],
         [links.scale50, 'scale=0.5'],
+        [links.bloom8, 'bloom=8'],
+        [links.clouds0, 'clouds=0'],
       ]) {
         expect(arm.replace(`&${added}`, '')).toBe(links.field);
       }
@@ -188,6 +190,8 @@ describe('the attachment ladder (201/9-04)', () => {
         expect(other).not.toContain('msaa=');
         expect(other).not.toContain('scene=');
         expect(other).not.toContain('scale=');
+        expect(other).not.toContain('bloom=');
+        expect(other).not.toContain('clouds=');
       }
     });
   });
@@ -196,7 +200,7 @@ describe('the attachment ladder (201/9-04)', () => {
     it('carries no board and the pinned buffer, like every arm of the map circuit', () => {
       const links = consoleUrls(SERVED);
 
-      for (const arm of [links.msaa1, links.rgb10a2, links.scale75, links.scale50]) {
+      for (const arm of [links.msaa1, links.rgb10a2, links.scale75, links.scale50, links.bloom8, links.clouds0]) {
         expect(arm).toContain('units=0&calls=0');
         expect(arm).toContain('surface=720x640');
         expect(arm).toContain('inventory=1');

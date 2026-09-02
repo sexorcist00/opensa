@@ -67,6 +67,10 @@ const CONTEXT = {
   overlay: 'on' as const,
   pickingBytes: 0,
   surface: {
+    bloomLevels: 5,
+    bloomPasses: 10,
+    bloomPinned: false,
+    cloudFieldHz: 10,
     cssHeight: 364,
     cssWidth: 360,
     deviceHeight: 728,

@@ -38,6 +38,7 @@ export {
   type VehicleSubmesh,
 } from './engine';
 export { quatMultiply, RigidEntity, type RigidPartInit } from './entities/rigid';
+export { BLOOM_MAX_LEVELS, bloomLevelsFor, bloomPassCount } from './render/bloom-levels';
 export {
   DEFAULT_RENDER_BUDGET,
   type RenderBudget,
@@ -45,6 +46,7 @@ export {
   type SceneFormat,
   sceneWorkingSetBytes,
 } from './render/budget';
+export { CLOUD_FIELD_HZ } from './render/cloud-field-bake';
 export { DYNAMIC_PARTICLE_CAP, type DynamicParticleLibrary } from './render/dynamic-particles';
 export { compileAll, MSAA_SAMPLES, type PipelineId, pipelineIdFor, type PipelineSet } from './render/pipelines';
 export { assertGuardrails, resolveShader, shaderModuleNames } from './render/shaders';
