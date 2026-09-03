@@ -608,6 +608,18 @@ export class Engine {
    */
   readonly budget: RenderBudget;
 
+  /**
+   * A drawing buffer the HOST owns, in device pixels — set BEFORE {@link init} when the host has pinned it
+   * (a measurement arm's `?surface=WxH`) instead of letting the viewport decide. `null` keeps the historical
+   * behaviour: the buffer is derived from the canvas's CSS box at init.
+   *
+   * Not a live knob like {@link renderScale}: it is read once, by `configureCanvas`, and after that the
+   * canvas belongs to whoever maintains it. What it buys is that init stops OVERWRITING a size the host
+   * already chose — see `configureCanvas` for the run that was measured at the wrong buffer while reporting
+   * a pinned one.
+   */
+  canvasSize: null | { readonly height: number; readonly width: number } = null;
+
   cells!: CellStore;
 
   /**
@@ -1535,7 +1547,7 @@ export class Engine {
     this.engineDevice = await initDevice();
     let at = bootPhase('init:device', bootStarted);
     this.canvasElement = canvas;
-    this.canvasContext = configureCanvas(canvas, this.engineDevice);
+    this.canvasContext = configureCanvas(canvas, this.engineDevice, 2, this.canvasSize);
     this.resources = new Resources(this.device);
     this.timers = new GpuTimers(this.device, this.engineDevice.hasTimestamps);
     at = bootPhase('init:canvas', at);
