@@ -413,6 +413,10 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
    */
   const budget = captureBudget(params);
   const engine = new Engine(budget);
+  // `resize()` above already put the pinned buffer on the canvas, and `init` used to derive it again from
+  // the CSS box and overwrite both edges — so the pin lasted until the GPU came up and no further, while
+  // the report went on saying `pinned: true`. Handing it to the engine is what makes the pin survive boot.
+  engine.canvasSize = pinnedSurface;
   /**
    * The GPU and the radio are two different machines, and this boot used them one at a time: `engine.init`
    * measured **2 607.5 ms** on the phone (201/4-03) with the network idle, and only when it returned did the
