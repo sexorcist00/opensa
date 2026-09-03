@@ -105,8 +105,12 @@ export function consoleUrls(state = {}) {
   // 201/9-05 and 9-06 add two more rungs, and they run the OTHER WAY: the engine's default already carries
   // the change, so the arm puts the old behaviour BACK and the difference is what the step bought.
   //
-  //   bloom8  = the level count pinned to 8   6 extra full-screen passes ... what deriving the chain saved
-  //   clouds0 = the field re-baked every frame  256^2 x 2 fbm per frame ... what amortizing the bake saved
+  //   bloom8  = `bloomlevels=8`, the count pinned  6 extra passes ... what deriving the chain saved
+  //   clouds0 = `cloudhz=0`, re-baked every frame   256^2 x 2 fbm ... what amortizing the bake saved
+  //
+  // The parameters are `bloomlevels` and `cloudhz` rather than `bloom` and `clouds` because the game host
+  // already owns those two names for other things — bloom INTENSITY and cloud OPACITY — and a name that
+  // means two things across two surfaces of one engine is a capture nobody can read afterwards.
   //
   // `clouds0` also owes a LOOK verdict at the default (do the clouds still move?), which is taken on
   // `field` rather than here — this link is the number's other half.
@@ -114,7 +118,7 @@ export function consoleUrls(state = {}) {
     bake: `${app}?${query}&bake=tiles&zmin=0&zmax=4`,
     // The bloom chain pinned to the old constant 8 — 16 full-screen passes where the derived count builds
     // 10 at this buffer (201/9-05). The arm is the OLD behaviour, so `field` − `bloom8` is what it bought.
-    bloom8: `${app}?${empty}&bloom=8`,
+    bloom8: `${app}?${empty}&bloomlevels=8`,
     // The declared worst case: 201's budget table says 150 units each drawn as a model with a symbol over
     // it, and every number 5/02 and 5/04 owe is measured AT it. It is no longer THE FIELD RUN — it is what
     // the field run is compared against once the map is the shape we want it.
@@ -125,7 +129,7 @@ export function consoleUrls(state = {}) {
     cleared: `${app}?${empty}&overlay=clear`,
     // The cumulus field re-baked every frame — the pre-201/9-06 behaviour, put back so the amortized
     // default has something to be subtracted from.
-    clouds0: `${app}?${empty}&clouds=0`,
+    clouds0: `${app}?${empty}&cloudhz=0`,
     // The field run's A/B PARTNER (201/2): the same board and the same collector, with `?overlay=0` — so the
     // window prices the engine rather than the symbology over it. Two halves typed by hand differ by
     // something nobody wrote down, which is what makes the pair worth a link each.

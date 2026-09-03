@@ -337,7 +337,7 @@ Three things the build settled:
 question, it was rejected once for sub-pixel emitters, and it is not touched until the derived count has a
 number on the ladder.
 
-**Owed:** `field` against `?bloom=8` on the device — and note the arm runs BACKWARDS from 9/04's ladder,
+**Owed:** `field` against `?bloomlevels=8` on the device — and note the arm runs BACKWARDS from 9/04's ladder,
 because the default now carries the change: `field` minus `bloom8` is what the step bought. The panel serves
 it as `bloom8`.
 
@@ -366,11 +366,21 @@ alone would freeze the drift; amortizing alone would hold a wrong field across a
 period.
 
 `CLOUD_FIELD_HZ = 10` is the one number here that is chosen rather than derived, so it is named in one place
-and it is an ARM — `?clouds=0` bakes every frame, which is the pre-9/06 behaviour and the side the default is
+and it is an ARM — `?cloudhz=0` bakes every frame, which is the pre-9/06 behaviour and the side the default is
 priced against. The report carries `surface.cloudFieldHz`.
 
-**Owed:** `field` against `?clouds=0` on the device, and the look verdict this step named — that the clouds
+**Owed:** `field` against `?cloudhz=0` on the device, and the look verdict this step named — that the clouds
 still move at 10 Hz — taken on `field` rather than on the arm. The panel serves the arm as `clouds0`.
+
+**Both arms were renamed before either flew, and the reason is worth keeping.** They were `?bloom=` and
+`?clouds=` when they were built on 2026-09-02 — and both of those names have belonged to the GAME HOST since
+074/09: `bloom` is bloom INTENSITY and `clouds` is cloud OPACITY
+([the parameter table](../../../development/query-parameters.md)). Nothing would have collided at runtime,
+because the console and the game are different pages and no test compares them — which is exactly what makes
+it the chain's own kind of defect. What breaks is the RECORD: `?bloom=8` reads as "intensity 8" to anyone who
+knows the engine, and a capture filed under that name could not be re-read a month later. They are
+`?bloomlevels=` and `?cloudhz=` now, and `links.test.mjs` fails if a console arm is ever spelled with either
+of the host's two names.
 
 ### 07 — The per-frame allocations, and one capability that retains what it never reads
 

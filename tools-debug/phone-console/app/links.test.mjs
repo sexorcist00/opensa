@@ -176,10 +176,22 @@ describe('the attachment ladder (201/9-04)', () => {
         [links.rgb10a2, 'scene=rgb10a2unorm'],
         [links.scale75, 'scale=0.75'],
         [links.scale50, 'scale=0.5'],
-        [links.bloom8, 'bloom=8'],
-        [links.clouds0, 'clouds=0'],
+        [links.bloom8, 'bloomlevels=8'],
+        [links.clouds0, 'cloudhz=0'],
       ]) {
         expect(arm.replace(`&${added}`, '')).toBe(links.field);
+      }
+    });
+
+    it('never spells an arm with a name the GAME HOST already owns', () => {
+      const links = consoleUrls(SERVED);
+
+      // `bloom` is the game's bloom INTENSITY and `clouds` its cloud OPACITY, both since 074/09
+      // (`apps/web/src/ui/engine-canvas-host.tsx`). 201/9-05 and 9-06 reached for the same two names first;
+      // one name meaning two things across two surfaces of one engine is a capture nobody can read.
+      for (const arm of [links.bloom8, links.clouds0]) {
+        expect(arm).not.toContain('bloom=');
+        expect(arm).not.toContain('clouds=');
       }
     });
 
@@ -190,8 +202,8 @@ describe('the attachment ladder (201/9-04)', () => {
         expect(other).not.toContain('msaa=');
         expect(other).not.toContain('scene=');
         expect(other).not.toContain('scale=');
-        expect(other).not.toContain('bloom=');
-        expect(other).not.toContain('clouds=');
+        expect(other).not.toContain('bloomlevels=');
+        expect(other).not.toContain('cloudhz=');
       }
     });
   });

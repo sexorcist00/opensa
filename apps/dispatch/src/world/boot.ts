@@ -416,11 +416,15 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   const budget = captureBudget(params);
   const engine = new Engine(budget);
   /**
-   * `?bloom=` — 201/9-05's arm. The chain derives its level count from the render size now; a number here
-   * pins it, and `?bloom=8` is the constant every capture before 2026-09-01 was taken at, which is what the
-   * derived count has to be priced against. Set BEFORE `init`, because that is where the targets are built.
+   * `?bloomlevels=` — 201/9-05's arm. The chain derives its level count from the render size now; a number
+   * here pins it, and `?bloomlevels=8` is the constant every capture before 2026-09-01 was taken at, which
+   * is what the derived count has to be priced against. Set BEFORE `init`, where the targets are built.
+   *
+   * NOT `?bloom=`, and that is not fussiness: `?bloom=` is the game host's own knob and has been since
+   * 074/09 — it sets bloom INTENSITY (`apps/web/src/ui/engine-canvas-host.tsx`). One name meaning two
+   * things across two surfaces of one engine is a capture nobody can read afterwards.
    */
-  const bloomArm = params.get('bloom');
+  const bloomArm = params.get('bloomlevels');
   engine.bloomLevels = bloomArm === null ? null : Number(bloomArm);
   /**
    * The GPU and the radio are two different machines, and this boot used them one at a time: `engine.init`
@@ -462,10 +466,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // this number. Manual, per the refusal in performance/deferred-optimizations/render-scale-tier.md — the
   // console picks no tier for anybody. The report records it, so a capture says what it was drawn at.
   engine.renderScale = Math.min(1, Math.max(0.5, numberParam(params, 'scale', 1)));
-  // `?clouds=` — 201/9-06's arm: how many times a second the cumulus field is re-baked. `?clouds=0` bakes it
-  // every frame, which is what this console did until 9/06 and the side the amortized default is priced
-  // against. Live, unlike `?bloom=` — nothing is compiled against it.
-  engine.cloudFieldHz = Math.max(0, numberParam(params, 'clouds', CLOUD_FIELD_HZ));
+  // `?cloudhz=` — 201/9-06's arm: how many times a second the cumulus field is re-baked. `?cloudhz=0` bakes
+  // it every frame, which is what this console did until 9/06 and the side the amortized default is priced
+  // against. Live, unlike `?bloomlevels=` — nothing is compiled against it. The name avoids `?clouds=` for
+  // the same reason: that one is the game host's cloud OPACITY and has been for as long.
+  engine.cloudFieldHz = Math.max(0, numberParam(params, 'cloudhz', CLOUD_FIELD_HZ));
   // Picking must be armed BEFORE the first cell loads — the capability only takes effect on load, and it is
   // what retains the per-placement mapper a click resolves against. It costs memory on a full map (read back
   // as `engine.cells.pickingBytes`, and reported by `?inventory=1`); this app is a map inspector with a
@@ -1037,7 +1042,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         pickingBytes: engine.cells.pickingBytes,
         surface: {
           // 9/05: the bloom chain this size was actually built with, read back rather than restated —
-          // `?bloom=` is clamped, so the arm a run ASKED for is not always the one it got. `bloomPasses` is
+          // `?bloomlevels=` is clamped, so the arm a run ASKED for is not always the one it got. `bloomPasses` is
           // the number the step is about: 16 at the old constant, 10 at the 720x640 the circuit is pinned to.
           bloomLevels: engine.bloomChainLevels,
           bloomPasses: bloomPassCount(engine.bloomChainLevels),
