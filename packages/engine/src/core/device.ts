@@ -29,15 +29,33 @@ export interface EngineDevice {
   presentationFormat: GPUTextureFormat;
 }
 
-/** Configure a canvas for the device (opaque, device pixel ratio capped like the prod renderer). */
-export function configureCanvas(canvas: HTMLCanvasElement, engineDevice: EngineDevice, dprCap = 2): GPUCanvasContext {
+/**
+ * Configure a canvas for the device (opaque, device pixel ratio capped like the prod renderer).
+ *
+ * `size` is a drawing buffer the HOST owns, in device pixels — passed when the host has PINNED it rather
+ * than letting the viewport decide it (a measurement arm's `?surface=WxH`). Without it the buffer is
+ * derived from the CSS box exactly as before.
+ *
+ * **It is a parameter because the derivation used to be unconditional, and that silently undid the pin.**
+ * The dispatch console sizes its canvas before `Engine.init` and maintains it from a `ResizeObserver`; this
+ * function then overwrote both edges at init, and the observer never fired again because the CSS box had
+ * not changed — so the buffer stayed at the viewport's size for the rest of the run while the report went on
+ * saying `pinned: true`. On the 2026-09-03 device that read 720x1140 for a run asking for 720x640, which is
+ * the same un-subtractable circuit `?surface=` was built to prevent (201/9-01, 9-04).
+ */
+export function configureCanvas(
+  canvas: HTMLCanvasElement,
+  engineDevice: EngineDevice,
+  dprCap = 2,
+  size?: null | { readonly height: number; readonly width: number },
+): GPUCanvasContext {
   const context = canvas.getContext('webgpu');
   if (!context) {
     throw new Error('canvas.getContext("webgpu") returned null');
   }
   const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
-  canvas.width = Math.max(1, Math.floor(canvas.clientWidth * dpr));
-  canvas.height = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+  canvas.width = size?.width ?? Math.max(1, Math.floor(canvas.clientWidth * dpr));
+  canvas.height = size?.height ?? Math.max(1, Math.floor(canvas.clientHeight * dpr));
   context.configure({
     alphaMode: 'opaque',
     device: engineDevice.device,

@@ -415,6 +415,10 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
    */
   const budget = captureBudget(params);
   const engine = new Engine(budget);
+  // `resize()` above already put the pinned buffer on the canvas, and `init` used to derive it again from
+  // the CSS box and overwrite both edges — so the pin lasted until the GPU came up and no further, while
+  // the report went on saying `pinned: true`. Handing it to the engine is what makes the pin survive boot.
+  engine.canvasSize = pinnedSurface;
   /**
    * `?bloomlevels=` — 201/9-05's arm. The chain derives its level count from the render size now; a number
    * here pins it, and `?bloomlevels=8` is the constant every capture before 2026-09-01 was taken at, which

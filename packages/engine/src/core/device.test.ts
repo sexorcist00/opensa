@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { installFakeWebGpu } from '../test/fake-device';
-import { describeDevice, initDevice } from './device';
+import { configureCanvas, describeDevice, initDevice } from './device';
 
 /**
  * The no-BC emulation gate (plan 200/1-03).
@@ -83,6 +83,40 @@ describe('initDevice', () => {
 
       expect(device.presentationFormat).toBe('bgra8unorm');
       expect(device.colorFormat).toBe('bgra8unorm-srgb');
+    });
+  });
+});
+
+/**
+ * The host's pinned drawing buffer, which init used to overwrite (201/9-04).
+ *
+ * SILENT and expensive: the console pins `?surface=WxH` so an A/B's arms are the same number of pixels, and
+ * `configureCanvas` re-derived both edges from the CSS box at init. The observer that maintains the buffer
+ * only fires when the CSS box changes, so nothing ever put it back — the run measured the viewport's size
+ * while its report said `pinned: true`, which is the un-subtractable circuit the pin exists to prevent.
+ */
+describe('configureCanvas', () => {
+  describe('negative cases', () => {
+    it('does NOT overwrite a drawing buffer the host pinned', async () => {
+      const fake = install({});
+      const engineDevice = await initDevice();
+      fake.canvas.width = 720;
+      fake.canvas.height = 640;
+
+      configureCanvas(fake.canvas, engineDevice, 2, { height: 640, width: 720 });
+
+      expect([fake.canvas.width, fake.canvas.height]).toEqual([720, 640]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('derives the buffer from the CSS box when the host pinned nothing', async () => {
+      const fake = install({});
+      const engineDevice = await initDevice();
+
+      configureCanvas(fake.canvas, engineDevice, 2, null);
+
+      expect([fake.canvas.width, fake.canvas.height]).toEqual([1440, 900]);
     });
   });
 });
