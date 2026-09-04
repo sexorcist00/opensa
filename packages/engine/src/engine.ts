@@ -1406,10 +1406,12 @@ export class Engine {
         roadsignQuads += cell.roadsignQuads;
       }
     }
-    // The streamed world, removed as ONE thing for an ablation arm (201/9): the cull above still ran and
-    // `draws`/`triangles` still report what WOULD have been drawn, which is the number such a row has to
-    // state. Dropped here rather than at `executeBundles` so `cell.visible` — which also gates coronas,
-    // objects and lights — keeps meaning what it says.
+    // The streamed world, removed as ONE thing for an ablation arm (201/9). Dropped HERE rather than at
+    // `executeBundles` so `cell.visible` — which also gates coronas, objects and lights — keeps meaning
+    // what it says, and so the cull's own accumulators are already full: `draws` and `triangles` report
+    // what WOULD have been drawn, which is what such a row has to state, while `cellsVisible` is
+    // `bundles.length` and therefore reads 0. That pair is the arm's own proof — 0 visible against a
+    // non-zero triangle count is a frame that culled the world and then did not draw it.
     if (!this.ablation.cells) {
       bundles.length = 0;
       blendCells.length = 0;
