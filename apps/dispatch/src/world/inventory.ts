@@ -206,6 +206,11 @@ export interface InventoryReport {
    *  block existed a capture could not be read for it at all: the CSS size, the DPR and the render scale
    *  were sentences somebody wrote by hand afterwards. An A/B must be self-describing (`CLAUDE.md`). */
   readonly surface: {
+    /** `?ablate=` / `?bloomlevels=` — which of the frame's passes this run REMOVED, or `none` (201/9).
+     *  The device has no `timestamp-query` and no flag brings it, so a pass is priced by its absence: this
+     *  is the line that stops a row claiming an arm it did not take, exactly as `pinned` does for the
+     *  buffer. Read it before believing any number in the file. */
+    readonly ablated: string;
     readonly cssHeight: number;
     readonly cssWidth: number;
     /** The drawing buffer, device pixels — what the swapchain and the post pass are sized at. */

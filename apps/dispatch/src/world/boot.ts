@@ -3,6 +3,7 @@ import type { TimecycSource } from '@opensa/renderware';
 
 import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
 import {
+  ablationLabel,
   Engine,
   FrameSpans,
   frameSpans,
@@ -55,6 +56,7 @@ import { UnitModels } from '../map/unit-models';
 import { readView, type SharedView, viewOfPose } from '../map/view-link';
 import { bootBytes, bootDone, bootStep } from './boot-progress';
 import { composeImage } from './capture';
+import { captureAblation } from './capture-ablation';
 import { captureBudget } from './capture-budget';
 import { captureSurface } from './capture-surface';
 import { buildDemoCity, DEMO_EXTENT, DEMO_REACH } from './demo-city';
@@ -412,7 +414,13 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
    * them: an engine cannot change its budget, so the arm is a page load rather than a key press.
    */
   const budget = captureBudget(params);
-  const engine = new Engine(budget);
+  /**
+   * `?ablate=` / `?bloomlevels=` — 9's ablation arms, and a constructor input for the same reason the budget
+   * is: the bloom level count decides which textures and bind groups exist. This device has no
+   * `timestamp-query`, so removing a pass and re-flying the route is the only way its cost is read at all.
+   */
+  const ablation = captureAblation(params);
+  const engine = new Engine(budget, ablation);
   // `resize()` above already put the pinned buffer on the canvas, and `init` used to derive it again from
   // the CSS box and overwrite both edges — so the pin lasted until the GPU came up and no further, while
   // the report went on saying `pinned: true`. Handing it to the engine is what makes the pin survive boot.
@@ -1027,6 +1035,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         overlay: arm,
         pickingBytes: engine.cells.pickingBytes,
         surface: {
+          // 9: what this arm REMOVED from the frame. `none` on every shipping run — and the reason it is
+          // stated rather than assumed is that an ablated run is otherwise indistinguishable from a fast one.
+          ablated: ablationLabel(engine.ablation),
           cssHeight: canvas.clientHeight,
           cssWidth: canvas.clientWidth,
           deviceHeight: canvas.height,

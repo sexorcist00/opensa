@@ -168,8 +168,12 @@ export const TOOLS = [
             'declared worst case of 150 units, kept for when 201/5-02 comes up rather than for today. ' +
             "`msaa1`, `rgb10a2`, `scale75` and `scale50` are 201/9-04's attachment ladder — the field run " +
             "with ONE of the scene pass's constants moved, so each one's difference from `field` is what it " +
-            'is pricing and nothing else. Also the map itself, its inventory report, the flat 2D map, the ' +
-            'tile bake, or the share build.',
+            'is pricing and nothing else. `nocells`, `nocloud`, `nobloom`, `noprobe`, `noskylut` and ' +
+            "`bloom4` are 201/9's ABLATION arms, and they exist because this device has no " +
+            '`timestamp-query` and no browser flag brings it: a pass is priced by REMOVING it and re-flying ' +
+            'the same route, so each one is `field` minus one group of passes. Read `surface.ablated` in ' +
+            'the snapshot before believing any of them. Also the map itself, its inventory report, the ' +
+            'flat 2D map, the tile bake, or the share build.',
           enum: [
             'map',
             'inventory',
@@ -181,6 +185,12 @@ export const TOOLS = [
             'rgb10a2',
             'scale75',
             'scale50',
+            'nocells',
+            'nocloud',
+            'nobloom',
+            'bloom4',
+            'noprobe',
+            'noskylut',
             'flat',
             'bake',
             'share',

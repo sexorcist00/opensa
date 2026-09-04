@@ -28,6 +28,44 @@ every step below moves it by a whole rung or it did nothing. With the CPU body a
 landing on the third interval, **~38 ms of a 48 ms frame belongs to something no span in this repo names.**
 That sentence is the chain.
 
+## The instrument the rest of this chain is measured with
+
+**There is no `timestamp-query` on the 2/03 device and no browser flag brings it.** Both WebGPU flags were
+enabled in Yandex Browser 26.6.2.117 and the browser cold-restarted on 2026-09-04: the adapter's feature list
+came back byte-identical and the feature is still missing. It rests on timestamp support in the Vulkan queue
+family, which this Bifrost driver does not offer, so the ceiling is below the browser
+([edge-cases](../../../edge-cases/browser-runtime.md)). `report.passes` says `gpuPassMs` / `gpuPostMs` /
+`gpuProbeMs` are unavailable and means it.
+
+**So a pass is priced by its ABSENCE.** `?ablate=` removes one group from the frame and the same ten-leg
+route is flown again; the difference in the window's MEAN over ~450 moving frames is worth roughly half a
+millisecond, which is enough for a group and never enough for a single pass. Read the mean rather than p50 —
+p50 saturates on the 16.7 ms vsync floor, which is how [04](#04--what-the-frames-attachment-set-costs-on-a-tiler)'s
+`scale75` arm nearly read as nothing.
+
+| arm | link | what it removes |
+| --- | --- | --- |
+| the streamed world | `?ablate=cells` | every resident cell's opaque and blend bundles — the cull still runs, so `draws` and `triangles` still report what WOULD have drawn |
+| the cumulus bake | `?ablate=cloud` | [06](#06--the-per-frame-bakes-that-are-already-cached-one-line-above)'s 256² two-fbm pass. The world still SAMPLES the texture, so this prices producing it |
+| the bloom chain | `?ablate=bloom` | [05](#05--the-post-chains-pass-count)'s 1 + 8 + 7 full-screen passes, whole |
+| the chain's tail | `?bloomlevels=4` | the levels that are 12×10, 6×5 and 3×3 pixels at this surface — 05's actual lever rather than only a measurement |
+| the env probe | `?ablate=probe` | what is left after `PROBE_FRAME_INTERVAL` amortizes it |
+| the sky LUT | `?ablate=skylut` | what is left after its own input key short-circuits it |
+
+`?ablate=` takes a list (`?ablate=bloom,cloud` is one arm removing both), an unknown name is ignored while
+the rest of the list still applies, and **the report says what actually ran** in `surface.ablated` — the same
+rule `surface.pinned` and `surface.sampleCount` exist for, and it matters more here because an ablated run
+is otherwise indistinguishable from a fast one. Every arm is a `map_open` view (`nocells`, `nocloud`,
+`nobloom`, `bloom4`, `noprobe`, `noskylut`), and since 2026-09-04 an attached console navigates ITSELF
+between them, so a sweep costs no hands on the phone.
+
+**What an ablation may and may not conclude.** It says where the time is. It does NOT say the answer is to
+ship that pass off: the user's standing call (2026-09-04) is that frame time may not be bought with
+resolution, sampling or anti-aliasing, and a picture that got worse is not an optimisation. What this chain
+is allowed to remove is WASTE — a bloom level three pixels across, a bake whose input changes on a scale of
+minutes, a sort of a static order repeated per instance per frame — and a change that alters the picture at
+all goes to the operator as an A/B on the device before it is kept.
+
 ## The rule this chain does not get to break
 
 Every step here is a **budget the frame reads**, never a branch it executes, and never a second renderer —

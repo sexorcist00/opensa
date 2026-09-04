@@ -38,6 +38,7 @@ export {
   type VehicleSubmesh,
 } from './engine';
 export { quatMultiply, RigidEntity, type RigidPartInit } from './entities/rigid';
+export { ablationLabel, type FrameAblation, NOTHING_ABLATED } from './render/ablation';
 export {
   DEFAULT_RENDER_BUDGET,
   type RenderBudget,
