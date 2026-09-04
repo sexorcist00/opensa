@@ -293,6 +293,66 @@ should not re-discover: the pak on the device is `rect 5,-7,6,-6` — **four ren
 the empty-sky problem this step inherited from 9/01 — and `npm run phone` refuses to serve it unless asked
 with `VEHICLES=admiral,comet,infernus`, because the job's default names three cars the pak does not carry.
 
+**THE LADDER IS FLOWN, 2026-09-04, AND THE HYPOTHESIS IT WAS BUILT ON IS THE ONE THING IT DID NOT FIND** —
+[the row](../../../benchmarks/opensa-engine/2026-09-04-mobile-map-attachment-ladder.json), app `60e290f`,
+five fresh pages one parameter apart, each flown the same ten-leg route inside the loaded rect with
+`?surface=720x640` pinned, each window the delta of two histogram readings taken after a four-corner warm-up:
+
+| arm | B/px | scene px | moving p50 | mean | p90 | p95 | on rung 1 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `field` | 48 | 460 800 | 20 ms | 24.5 ms | 38 | 48 | 54 % |
+| `msaa1` | 12 | 460 800 | 18 ms | 21.6 ms | 36 | 36 | 66 % |
+| `rgb10a2` | 32 | 460 800 | 16 ms | 20.2 ms | 34 | 36 | 73 % |
+| `scale75` | 48 | 259 200 | 18 ms | 21.0 ms | 34 | 36 | 72 % |
+| `scale50` | 48 | 115 200 | 16 ms | **16.5 ms** | **18** | **24** | **95 %** |
+
+**The tile-size hypothesis is NOT confirmed, so the row this step owed
+[`restrictions/gpu-and-shaders.md`](../../../restrictions/gpu-and-shaders.md) is NOT written** — the step
+said it goes there only if the measurement confirms it, and an unmeasured vendor rule is not our restriction.
+If 48 B/px against Bifrost's 16 B/px tile budget were the frame, `msaa1` — one tile budget, and no resolve —
+would have won the most. It won the least of the three arms that moved bytes. **`rgb10a2unorm` at 32 B/px
+beat `msaa1` at 12 B/px while KEEPING 4x MSAA**, and the pair is what names the cost: one sample re-tiles the
+scene pass and changes nothing downstream (`scene-color` stays `rgba16float`), while the format halves the
+bytes of every full-screen pass that READS that texture. **The frame is the post chain's BANDWIDTH, not the
+scene pass's tile configuration** — which is [05](#05--the-post-chains-pass-count)'s sixteen bloom levels
+plus the post pass, now promoted from an argument to a measurement.
+
+**And the resolution axis is the only one that moves a whole rung.** `scale50` is the sole arm that reaches
+the declared 60: 95 % of its frames on ONE display interval, p90 18 ms against the baseline's 38. **Read the
+MEAN rather than p50** — p50 saturates on the 16.7 ms vsync floor and hides the shape — 24.5 -> 21.0 -> 16.5
+across 100 % -> 56 % -> 25 % of the pixels, so **at least 8 ms of the baseline's mean scales with pixel
+count**, and that is a lower bound because `scale50` is already sitting on the floor. `scale75` ALONE would
+have been filed as a weak lever (-3.5 ms of mean, no rung moved): the response is strongly non-linear against
+a quantized display, and one arm of a ladder is not a ladder.
+[`render-scale-tier.md`](../../../performance/deferred-optimizations/render-scale-tier.md)'s refusal was
+taken on an M3 Pro at 0.4-1.4 ms; its own reopening condition is met and this is the re-run it asked for.
+
+**What this step does NOT decide, and must not be read as deciding.** `rgb10a2unorm` is UNORM — it cannot
+hold a scene value above 1.0, so adopting it is a change to the HDR chain and this ladder does not claim it
+is free. **The honest next arm is `rg11b10ufloat`**: the same 4 bytes, the float range kept, and this adapter
+reports it renderable (`rg11b10ufloat-renderable` is in the device's own feature list in every snapshot of
+this run). It is not in the ladder because it was not built.
+
+**The look verdict, and the instrument gets in its way.** The operator judged `msaa1` on the phone at map
+zoom: *"noticeably worse - low resolution and no anti-aliasing"*. Only the second half belongs to the arm.
+**`?surface=720x640` pins the drawing buffer and the browser then UPSCALES it to a CSS box that was 320-609
+px tall across this run**, so every arm - the baseline included - is soft, and a look verdict taken through a
+pinned page conflates the pin with the parameter. The pin is not the bug (it is what made 08-31's circuit
+subtractable at all); the rule is that **a look arm is flown UNPINNED and a number arm is flown pinned, and
+they are two different flights.** The aliasing half stands on its own though - one sample loses MSAA and
+alpha-to-coverage on every cutout pipeline - and it is moot for the recommendation, since `msaa1` is not the
+arm the numbers point at.
+
+**Method notes the next ladder should not re-discover.** A leg is measured in SCREENFULS (`fly.ts` travels
+1.2 of them a second), so 150 m legs at ~310 m of span last under half a second: a first six-leg attempt
+yielded **58 moving frames**, against ~400-475 for ten ~300 m legs at 180-220 m. Every arm is warmed over the
+rect's four corners before its first reading, so the ~29 cell creates inside each window are re-creates
+rather than a cold stream. **The panel cannot switch arms by itself** — `map_open` will not cover an attached
+console (`opener.mjs`) and the `open` job cannot run while the `phone` job holds the server, so a five-arm
+ladder costs four human touches, one per switch. And **a backgrounded tab keeps answering the bus while
+`requestAnimationFrame` stops**: `scale50` recorded a 32 s `dtMax` from exactly that, outside its moving
+window, and the tell is `frames` and `framesSkipped` both standing still between two snapshots.
+
 ### 05 — The post chain's pass count
 
 **The finding.** `BLOOM_LEVELS = 8` is a constant, and the prefilter runs at FULL resolution, so the chain is

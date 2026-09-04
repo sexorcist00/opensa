@@ -1,0 +1,277 @@
+{
+  "note": "201/9-04's ATTACHMENT LADDER, taken in full on the phone: five arms, each one parameter away from the field run, each a fresh page over the SAME ten-leg route inside the loaded rect. MGA-LX3 / ARM Bifrost @ DPR 2 (no `timestamp-query`, so GPU time is not measurable at all and the vsync ladder is the only reading of the whole frame's cost), pak `19:23 28-08-2026` ASTC over `los-santos-centre`, app `60e290f`, board EMPTY (`units=0&calls=0`), `?surface=720x640` pinning the drawing buffer on every arm. Each window is the DELTA of two `frame.dtHistogramMs` readings \u2014 one after the route's four corners were warmed and the camera had settled at the centre pose, one after the last leg \u2014 so boot, pipeline compile and the first streaming pass are all outside it; `moving` is every bin below the 100 ms tail (the render gate's idle wake).\n\nWHAT THE LADDER SAYS, AND IT IS NOT WHAT THE STEP EXPECTED. The step opened on Arm's tile-buffer guidance: 48 B/px against a 16 B/px tile budget on Bifrost, so the driver shrinks the tile and the per-tile fixed costs multiply. If that were the frame, `msaa1` \u2014 12 B/px, ONE tile budget, and no resolve \u2014 should have won the most. It won the least of the three arms that moved bytes:\n\n  arm       B/px  scene px   moving p50   mean    on rung 1\n  field       48   460 800     20 ms     24.5 ms    54 %\n  msaa1       12   460 800     18 ms     21.6 ms    66 %\n  rgb10a2     32   460 800     16 ms     20.2 ms    73 %\n  scale75     48   259 200     18 ms     21.0 ms    72 %\n  scale50     48   115 200     16 ms     16.5 ms    95 %\n\nTHE TILE-SIZE HYPOTHESIS IS NOT CONFIRMED, so the row it owed `restrictions/gpu-and-shaders.md` is NOT written \u2014 an unmeasured vendor rule is not our restriction, and this is a measurement against it rather than for it. `rgb10a2unorm` at 32 B/px beat `msaa1` at 12 B/px by 1.4 ms of mean while KEEPING 4x MSAA, and the difference between those two arms is the thing that names the cost: one sample re-configures the scene pass's tile and changes nothing downstream (`scene-color` stays `rgba16float`), while the format halves the bytes of every full-screen pass that READS that texture \u2014 the 16 bloom passes and the post pass. The win tracks the POST CHAIN's bandwidth, not the scene pass's tile configuration.\n\nAND THE RESOLUTION AXIS IS THE ONE THAT MOVES A WHOLE RUNG. `scale50` puts 450 of 473 frames \u2014 95 % \u2014 on ONE display interval, p90 18 ms against the baseline's 38 and p95 24 against 48. It is the only arm that reaches the declared 60. Read the mean rather than p50 to see the shape, because p50 saturates at the 16.7 ms vsync floor: 24.5 -> 21.0 -> 16.5 across 100 % -> 56 % -> 25 % of the pixels. About 8 ms of the baseline's 24.5 ms mean scales with pixel count and that is a LOWER BOUND, since `scale50` is already sitting on the vsync floor and cannot show how far below it is. `scale75` alone would have been read as a weak lever (-3.5 ms of mean, no rung moved) \u2014 the response is strongly non-linear against a quantized display, and one arm of a ladder is not a ladder.\n\nWHAT THIS PROMOTES: 9/05, and it now has a measurement behind it instead of an argument. Sixteen full-screen bloom passes plus the post pass are exactly what `rgb10a2` made cheaper by halving their bytes and what `scale50` made cheaper by quartering their pixels, and 9/05's own finding is that the last three of those levels are 12x10, 6x5 and 3x3 pixels at this surface. `render-scale-tier.md`'s refusal was taken on an M3 Pro where resolution bought 0.4-1.4 ms; its own reopening condition \u2014 \"a genuinely slower GPU class becomes a target\" \u2014 is met, and on a tiler the same knob is worth a whole vsync rung.\n\nWHAT IS NOT DECIDED HERE. `rgb10a2unorm` is UNORM: it cannot hold a scene value above 1.0, so it is a LOOK change to the HDR chain and this row does not claim it is free. The honest next arm is `rg11b10ufloat`, which this adapter reports as renderable, costs the same 4 bytes and keeps the float range \u2014 it is not in this ladder because it was not built. Neither is any of this a mobile branch: the winner is a NUMBER the frame reads per surface (`RenderBudget`), which is what 9/04 was told to produce.\n\nREAD THE ABSOLUTE NUMBERS AGAINST THIS ROUTE AND NO OTHER. The camera flew at 180-220 m with pitch -1.3, ten legs of ~300 m between the corners of the pak's own rect (x 1250..1750, y -1750..-1250 at `CELL_SIZE` 250), so the frustum's footprint stays inside the four loaded cells \u2014 the correction the 2026-08-31 circuit owed, which flew at 450-900 m where most of every frame was empty sky. THAT MAKES THIS ROW NOT COMPARABLE TO 08-31'S ABSOLUTE NUMBERS, and the direction is the surprise: the loaded low view is FASTER (baseline p50 20 ms here against 30-32 there), because the high pose carried MORE geometry in frustum (112 draws / 278 k triangles against 96 / 242 k) rather than more pixels. So part of what 08-31 read as \"the frame is gone before anything is on screen\" was geometry after all, and the per-pixel half is what this ladder measures.\n\nMETHOD NOTES THE NEXT SESSION SHOULD NOT RE-DISCOVER. (1) A leg is measured in SCREENFULS: `fly.ts` travels at 1.2 of them a second, so the 150 m legs of a first attempt at ~310 m of span lasted under half a second and six of them yielded 58 frames \u2014 ten legs of ~300 m at 180-220 m of height yield ~400-475. (2) Every arm was warmed over the rect's four corners BEFORE its first reading, so the ~29 cell creates inside each window are re-creates rather than a cold stream, and they are recorded per arm. (3) `?surface=720x640` holds the buffer while the CSS box moves (320-609 CSS px were seen across the run) \u2014 but it also means the canvas is UPSCALED to the box, so a LOOK verdict may not be taken through a pinned page; the operator's verdict on `msaa1` (\"noticeably worse \u2014 low resolution and no anti-aliasing\") carries the pin's softness in it and only the aliasing half belongs to the arm. (4) The panel cannot switch arms by itself: `map_open` will not cover an attached console and the `open` job cannot run while the `phone` job holds the server, so each of the four switches cost a person backgrounding the browser. (5) A backgrounded tab keeps answering the bus but stops `requestAnimationFrame` \u2014 `scale50` recorded two 1000 ms bins and a 32 s `dtMax` from exactly that, all of it outside the moving window.",
+  "app": "60e290f",
+  "build": "19:23 28-08-2026",
+  "district": "los-santos-centre",
+  "device": {
+    "adapter": "arm bifrost",
+    "dpr": 2,
+    "missing": [
+      "texture-compression-bc",
+      "timestamp-query"
+    ]
+  },
+  "surfacePin": {
+    "deviceWidth": 720,
+    "deviceHeight": 640,
+    "pinned": true,
+    "cssHeightsSeen": [
+      320,
+      373,
+      491,
+      550,
+      570,
+      609
+    ]
+  },
+  "route": {
+    "pitch": -1.3,
+    "heights": [
+      180,
+      200,
+      220
+    ],
+    "legs": [
+      [
+        1380,
+        -1620
+      ],
+      [
+        1620,
+        -1380
+      ],
+      [
+        1380,
+        -1380
+      ],
+      [
+        1620,
+        -1620
+      ],
+      [
+        1380,
+        -1500
+      ],
+      [
+        1620,
+        -1500
+      ],
+      [
+        1500,
+        -1620
+      ],
+      [
+        1500,
+        -1380
+      ],
+      [
+        1380,
+        -1620
+      ],
+      [
+        1620,
+        -1380
+      ]
+    ],
+    "settle": [
+      1500,
+      -1500
+    ],
+    "warmup": "the rect's four corners, then the settle pose, before the first reading",
+    "rect": "x 1250..1750, y -1750..-1250 (cells 5,-7..6,-6 at CELL_SIZE 250)"
+  },
+  "howDerived": "per arm: delta of frame.dtHistogramMs between a post-warmup reading and a post-route reading; moving = every bin below the 100 ms tail (the render gate's idle wake); vsyncLadder = each moving bin rounded to the nearest 1/60 s interval",
+  "arms": {
+    "field": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640",
+      "surface": {
+        "renderScale": 1,
+        "sampleCount": 4,
+        "sceneFormat": "rgba16float",
+        "workingSetBytes": 48
+      },
+      "scenePixels": 460800,
+      "world": {
+        "draws": 96,
+        "residencyMb": 68.933,
+        "target": 32.349,
+        "texture": 25.826,
+        "triangles": 241863
+      },
+      "cellsCreatedInWindow": 29,
+      "cpuBodyMeanMs": 4.394,
+      "bootPipelinesMs": 4329.6,
+      "movingFrames": 396,
+      "movingMeanMs": 24.5,
+      "movingP50Ms": 20,
+      "movingP90Ms": 38,
+      "movingP95Ms": 48,
+      "movingP99Ms": 62,
+      "movingMaxMs": 98,
+      "movingP50Fps": 50,
+      "vsyncLadder": {
+        "1": 213,
+        "2": 154,
+        "3": 25,
+        "4": 3,
+        "6": 1
+      },
+      "windowMs": 61306.1,
+      "drawnFrames": 411,
+      "framesSkipped": 504,
+      "tailFrames": 0
+    },
+    "msaa1": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640&msaa=1",
+      "surface": {
+        "renderScale": 1,
+        "sampleCount": 1,
+        "sceneFormat": "rgba16float",
+        "workingSetBytes": 12
+      },
+      "scenePixels": 460800,
+      "world": {
+        "draws": 96,
+        "residencyMb": 48.91,
+        "target": 12.326,
+        "texture": 25.826,
+        "triangles": 241863
+      },
+      "cellsCreatedInWindow": 29,
+      "cpuBodyMeanMs": 4.326,
+      "bootPipelinesMs": 2954.5,
+      "movingFrames": 445,
+      "movingMeanMs": 21.6,
+      "movingP50Ms": 18,
+      "movingP90Ms": 36,
+      "movingP95Ms": 36,
+      "movingP99Ms": 54,
+      "movingMaxMs": 78,
+      "movingP50Fps": 56,
+      "vsyncLadder": {
+        "1": 294,
+        "2": 144,
+        "3": 5,
+        "4": 1,
+        "5": 1
+      },
+      "windowMs": 52346.6,
+      "drawnFrames": 464,
+      "framesSkipped": 416,
+      "tailFrames": 0
+    },
+    "rgb10a2": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640&scene=rgb10a2unorm",
+      "surface": {
+        "renderScale": 1,
+        "sampleCount": 4,
+        "sceneFormat": "rgb10a2unorm",
+        "workingSetBytes": 32
+      },
+      "scenePixels": 460800,
+      "world": {
+        "draws": 96,
+        "residencyMb": 56.399,
+        "target": 19.815,
+        "texture": 25.826,
+        "triangles": 241863
+      },
+      "cellsCreatedInWindow": 29,
+      "cpuBodyMeanMs": 3.302,
+      "bootPipelinesMs": 3013.8,
+      "movingFrames": 475,
+      "movingMeanMs": 20.2,
+      "movingP50Ms": 16,
+      "movingP90Ms": 34,
+      "movingP95Ms": 36,
+      "movingP99Ms": 48,
+      "movingMaxMs": 52,
+      "movingP50Fps": 63,
+      "vsyncLadder": {
+        "1": 349,
+        "2": 120,
+        "3": 6
+      },
+      "windowMs": 56127.5,
+      "drawnFrames": 491,
+      "framesSkipped": 454,
+      "tailFrames": 0
+    },
+    "scale75": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640&scale=0.75",
+      "surface": {
+        "renderScale": 0.75,
+        "sampleCount": 4,
+        "sceneFormat": "rgba16float",
+        "workingSetBytes": 48
+      },
+      "scenePixels": 259200,
+      "world": {
+        "draws": 96,
+        "residencyMb": 55.604,
+        "target": 19.019,
+        "texture": 25.826,
+        "triangles": 241863
+      },
+      "cellsCreatedInWindow": 29,
+      "cpuBodyMeanMs": 4.18,
+      "bootPipelinesMs": 3109.3,
+      "movingFrames": 460,
+      "movingMeanMs": 21,
+      "movingP50Ms": 18,
+      "movingP90Ms": 34,
+      "movingP95Ms": 36,
+      "movingP99Ms": 68,
+      "movingMaxMs": 80,
+      "movingP50Fps": 56,
+      "vsyncLadder": {
+        "1": 330,
+        "2": 115,
+        "3": 10,
+        "4": 4,
+        "5": 1
+      },
+      "windowMs": 51396.5,
+      "drawnFrames": 479,
+      "framesSkipped": 406,
+      "tailFrames": 0
+    },
+    "scale50": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640&scale=0.5",
+      "surface": {
+        "renderScale": 0.5,
+        "sampleCount": 4,
+        "sceneFormat": "rgba16float",
+        "workingSetBytes": 48
+      },
+      "scenePixels": 115200,
+      "world": {
+        "draws": 96,
+        "residencyMb": 46.082,
+        "target": 9.498,
+        "texture": 25.826,
+        "triangles": 241863
+      },
+      "cellsCreatedInWindow": 27,
+      "cpuBodyMeanMs": 4.431,
+      "bootPipelinesMs": 337.9,
+      "movingFrames": 473,
+      "movingMeanMs": 16.5,
+      "movingP50Ms": 16,
+      "movingP90Ms": 18,
+      "movingP95Ms": 24,
+      "movingP99Ms": 40,
+      "movingMaxMs": 52,
+      "movingP50Fps": 63,
+      "vsyncLadder": {
+        "1": 450,
+        "2": 19,
+        "3": 4
+      },
+      "windowMs": 55731.7,
+      "drawnFrames": 488,
+      "framesSkipped": 324,
+      "tailFrames": 1
+    }
+  }
+}
