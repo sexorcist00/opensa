@@ -150,8 +150,11 @@ export const TOOLS = [
     description:
       'Open the console ON THE PHONE\'S SCREEN and wait until it reaches the panel. This is what clears "no ' +
       'map is attached" — every other map_ tool talks to a page that is already open. Answers when the ' +
-      'page phones home, or says what it launched and why nothing arrived. A console already attached is ' +
-      'left alone rather than covered with a second tab.',
+      'page phones home, or says what it launched and why nothing arrived. **A console that is already ' +
+      'attached STEERS ITSELF to the view being asked for**, in its own tab and with nobody touching the ' +
+      'phone, so a ladder of measurement arms is a sequence of these calls rather than a sequence of ' +
+      'requests to the person holding it; the answer says `navigated: true`. Asking for the view it is ' +
+      'already on leaves it alone (`reused: true`) rather than throwing away a warmed world.',
     inputSchema: {
       additionalProperties: false,
       properties: {

@@ -19,6 +19,7 @@ const SURFACE: AgentSurface = {
   inventory: (): unknown => null,
   mode: () => null,
   moveTo: (): void => undefined,
+  navigate: (): void => undefined,
   ops: (): unknown => null,
   readout: (): unknown => null,
   setMode: (): void => undefined,
@@ -74,6 +75,18 @@ beforeEach(() => {
 
 describe('startAgentLink', () => {
   describe('negative cases', () => {
+    // The arm is a page load, so a `navigate` that fired inside `run` would cancel its own answer.
+    it('does not leave the page when the navigation is refused for having no url', async () => {
+      const navigate = vi.fn();
+      vi.stubGlobal('fetch', panel([{ args: {}, kind: 'navigate' }]));
+
+      const link = startAgentLink('http://localhost:8787', { ...SURFACE, navigate });
+      await settle();
+      link.stop();
+
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
     it('reports nothing at all while no panel answers, so a shared link never claims an agent', async () => {
       const seen: AgentStatus[] = [];
       vi.stubGlobal(
@@ -219,6 +232,49 @@ describe('describeCommand', () => {
 
     it('names the surface a mode switch is going to', () => {
       expect(describeCommand({ args: { mode: 'flat' }, kind: 'mode' }).detail).toBe('flat 2D map');
+    });
+    it('answers the panel BEFORE it leaves the page, so the arm switch is not lost with the tab', async () => {
+      const order: string[] = [];
+      const navigate = vi.fn(() => order.push('navigate'));
+      const fetchSpy = vi.fn((input: unknown): Promise<unknown> => {
+        if (String(input).includes('/api/map/poll')) {
+          return Promise.resolve({
+            json: () =>
+              Promise.resolve({
+                command: order.includes('result')
+                  ? null
+                  : { args: { url: 'http://x/?msaa=1' }, id: 1, kind: 'navigate' },
+              }),
+            ok: true,
+          });
+        }
+        order.push('result');
+
+        return Promise.resolve({ json: () => Promise.resolve({}), ok: true });
+      });
+      vi.stubGlobal('fetch', fetchSpy);
+
+      const link = startAgentLink('http://localhost:8787', { ...SURFACE, navigate });
+      await settle();
+      link.stop();
+
+      expect(order).toEqual(['result', 'navigate']);
+      expect(navigate).toHaveBeenCalledWith('http://x/?msaa=1');
+    });
+
+    it('stops polling once it has been sent away, so two consoles are never on the bus at once', async () => {
+      const navigate = vi.fn();
+      const fetchSpy = panel([{ args: { url: 'http://x/?msaa=1' }, kind: 'navigate' }]);
+      vi.stubGlobal('fetch', fetchSpy);
+
+      startAgentLink('http://localhost:8787', { ...SURFACE, navigate });
+      await settle();
+      const polls = (fetchSpy as unknown as { mock: { calls: unknown[][] } }).mock.calls.filter((call) =>
+        String(call[0]).includes('/api/map/poll'),
+      ).length;
+
+      expect(navigate).toHaveBeenCalledTimes(1);
+      expect(polls).toBe(1);
     });
   });
 });

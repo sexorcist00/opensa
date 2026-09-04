@@ -347,9 +347,11 @@ arm the numbers point at.
 1.2 of them a second), so 150 m legs at ~310 m of span last under half a second: a first six-leg attempt
 yielded **58 moving frames**, against ~400-475 for ten ~300 m legs at 180-220 m. Every arm is warmed over the
 rect's four corners before its first reading, so the ~29 cell creates inside each window are re-creates
-rather than a cold stream. **The panel cannot switch arms by itself** — `map_open` will not cover an attached
-console (`opener.mjs`) and the `open` job cannot run while the `phone` job holds the server, so a five-arm
-ladder costs four human touches, one per switch. And **a backgrounded tab keeps answering the bus while
+rather than a cold stream. **The panel could not switch arms by itself** — `map_open` would not cover an attached
+console (`opener.mjs`) and the `open` job cannot run while the `phone` job holds the server, so this
+five-arm ladder cost four human touches, one per switch. **FIXED the same day**: an attached console now
+navigates ITSELF when `map_open` asks for a different view (a `navigate` command over the bus it is already
+answering on), so the next ladder is a sequence of tool calls in one tab. And **a backgrounded tab keeps answering the bus while
 `requestAnimationFrame` stops**: `scale50` recorded a 32 s `dtMax` from exactly that, outside its moving
 window, and the tell is `frames` and `framesSkipped` both standing still between two snapshots.
 
