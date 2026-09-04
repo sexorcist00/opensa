@@ -23,6 +23,7 @@ import { Resources } from './core/resources';
 import { FrameSpans, type FrameSpanTotals } from './debug/frame-spans';
 import { GpuTimers } from './debug/gpu-timers';
 import { RigidEntity, type RigidPartInit } from './entities/rigid';
+import { type FrameAblation, NOTHING_ABLATED } from './render/ablation';
 import { DEFAULT_RENDER_BUDGET, type RenderBudget, sceneBytesPerPixel, sceneColorAttachment } from './render/budget';
 import { type DynamicParticleLibrary, DynamicParticles } from './render/dynamic-particles';
 import { compileAll, type PipelineId, pipelineIdFor, type PipelineSet } from './render/pipelines';
@@ -606,6 +607,13 @@ export class Engine {
    * A CONSTRUCTOR input rather than a live knob like {@link renderScale}, because changing either invalidates
    * the whole pipeline set — a surface that wants another budget builds another engine.
    */
+  /**
+   * Which of the frame's passes run (201/9). Fixed for the life of the engine for the same reason the
+   * budget is: the bloom level count decides what exists, and an arm that moved mid-capture is a capture
+   * of neither arm.
+   */
+  readonly ablation: FrameAblation;
+
   readonly budget: RenderBudget;
 
   /**
@@ -940,13 +948,23 @@ export class Engine {
   } = null;
 
   /**
+   * Whether the bloom chain runs this frame: it exists, the environment asks for it, and no ablation arm
+   * has removed it (201/9). At intensity 0 the composite multiplies a stale texture by zero, so skipping
+   * the chain cannot leak the last frame's highlights in.
+   */
+  private get bloomEnabled(): boolean {
+    return this.bloomChain !== null && this.environment.bloomIntensity > 0 && this.ablation.bloom;
+  }
+
+  /**
    * `coronaSprites` are the SA billboards (particle.txd): layer 0 = `coronastar` for lamps and headlights,
    * layer 1 = `coronamoon`. They arrive at INIT because the frame bind group is recorded into every cell
    * bundle and is immutable afterwards — the texture must exist before the first cell loads. Its size comes
    * from the DATA, not from a constant, so a higher-resolution moon drops straight in.
    */
-  constructor(budget: RenderBudget = DEFAULT_RENDER_BUDGET) {
+  constructor(budget: RenderBudget = DEFAULT_RENDER_BUDGET, ablation: FrameAblation = NOTHING_ABLATED) {
     this.budget = budget;
+    this.ablation = ablation;
   }
 
   /**
@@ -1388,6 +1406,14 @@ export class Engine {
         roadsignQuads += cell.roadsignQuads;
       }
     }
+    // The streamed world, removed as ONE thing for an ablation arm (201/9): the cull above still ran and
+    // `draws`/`triangles` still report what WOULD have been drawn, which is the number such a row has to
+    // state. Dropped here rather than at `executeBundles` so `cell.visible` — which also gates coronas,
+    // objects and lights — keeps meaning what it says.
+    if (!this.ablation.cells) {
+      bundles.length = 0;
+      blendCells.length = 0;
+    }
     // Blend phase back-to-front by CELL distance — cross-cell transparency ordering (per-group order inside
     // a cell stays baked; the standard within-bundle transparency caveat).
     const blendBundles = this.orderBlendBundles(blendCells);
@@ -1397,14 +1423,7 @@ export class Engine {
     const encoder = this.device.createCommandEncoder({ label: 'frame' });
     // Cumulus field bake (sky v2 perf): rewrite the tiny fbm field before anything samples it this frame
     // (256² × 10 vnoise ≈ fixed ~0.05 ms — full-deck weathers stopped scaling with the swapchain).
-    const cloudFieldPass = encoder.beginRenderPass({
-      colorAttachments: [{ loadOp: 'clear', storeOp: 'store', view: this.cloudFieldView }],
-      label: 'cloud-field',
-    });
-    cloudFieldPass.setPipeline(this.pipelines.get('cloud-field'));
-    cloudFieldPass.setBindGroup(0, this.cloudFieldBindGroup);
-    cloudFieldPass.draw(3);
-    cloudFieldPass.end();
+    this.bakeCloudField(encoder);
     const pass = encoder.beginRenderPass({
       colorAttachments: [
         sceneColorAttachment({
@@ -1471,7 +1490,7 @@ export class Engine {
     // Bloom chain (074/09): full-res luminance prefilter → 13-tap down mips → tent upsamples. Skipped
     // ENTIRELY at intensity 0 (the composite multiplies the stale texture by 0, so it can't leak in).
     const bloomChain = this.bloomChain;
-    const bloomOn = bloomChain !== null && this.environment.bloomIntensity > 0;
+    const bloomOn = this.bloomEnabled;
     if (bloomChain && bloomOn) {
       const scratch = this.bloomPrefilterScratch;
       scratch[4] = this.environment.bloomThreshold;
@@ -2281,6 +2300,28 @@ export class Engine {
   }
 
   /**
+   * Bake the cumulus field: 256² with two fbm evaluations per pixel, before anything samples it this frame.
+   *
+   * Its own method since 201/9, so the ablation gate is one line rather than an `if` around a pass inside
+   * `frame()`, which the complexity gate reads (correctly) as one more branch in an already long function.
+   * Skipping it leaves the PREVIOUS bake in the texture — the world still samples it, so what an arm
+   * prices is producing the field rather than reading it.
+   */
+  private bakeCloudField(encoder: GPUCommandEncoder): void {
+    if (!this.ablation.cloudField) {
+      return;
+    }
+    const cloudFieldPass = encoder.beginRenderPass({
+      colorAttachments: [{ loadOp: 'clear', storeOp: 'store', view: this.cloudFieldView }],
+      label: 'cloud-field',
+    });
+    cloudFieldPass.setPipeline(this.pipelines.get('cloud-field'));
+    cloudFieldPass.setBindGroup(0, this.cloudFieldBindGroup);
+    cloudFieldPass.draw(3);
+    cloudFieldPass.end();
+  }
+
+  /**
    * Put group 1 in the state this submesh needs, if it is not already. Returns false when the submesh's
    * WORLD texture array has not streamed in yet — the caller skips it and it appears the frame it lands.
    *
@@ -2308,6 +2349,32 @@ export class Engine {
     current.offset = offset;
 
     return true;
+  }
+
+  /**
+   * How many mip levels the bloom chain carries.
+   *
+   * A CONSTANT today ({@link BLOOM_LEVELS} = 8), which is what makes the chain 1 + 8 + 7 = 16 full-screen
+   * passes whatever the surface is: at the 720x640 this console's captures are taken at, the last three
+   * levels are 12x10, 6x5 and 3x3 pixels, and on a tiler each of them still costs a whole tile flush and
+   * reload for a mip smaller than a chip (201/9-05). The ablation knob is how that gets PRICED before the
+   * count is derived rather than written down.
+   *
+   * Bounded by what the chain can actually build: a level below 1 pixel is not a level, and the upsample
+   * pass needs at least two of them to blend between.
+   */
+  private bloomLevels(width: number, height: number): number {
+    const asked = this.ablation.bloomLevels ?? BLOOM_LEVELS;
+    let possible = 0;
+    let w = width;
+    let h = height;
+    while (w > 1 && h > 1 && possible < asked) {
+      w = Math.max(1, Math.round(w * 0.5));
+      h = Math.max(1, Math.round(h * 0.5));
+      possible += 1;
+    }
+
+    return Math.max(2, possible);
   }
 
   /**
@@ -2371,7 +2438,8 @@ export class Engine {
     const downBindGroups: GPUBindGroup[] = [];
     let w = width;
     let h = height;
-    for (let i = 0; i < BLOOM_LEVELS; i += 1) {
+    const levels = this.bloomLevels(width, height);
+    for (let i = 0; i < levels; i += 1) {
       const inputW = w;
       const inputH = h;
       w = Math.max(1, Math.round(w * 0.5));
@@ -2393,16 +2461,16 @@ export class Engine {
     // Upsample mips: up[i] = tent(coarser) blended over down[i]; the coarsest input is down[levels−1].
     const upViews: GPUTextureView[] = [];
     const upBindGroups: GPUBindGroup[] = [];
-    for (let i = 0; i < BLOOM_LEVELS - 1; i += 1) {
+    for (let i = 0; i < levels - 1; i += 1) {
       upViews.push(makeTarget(`bloom-up-${i}`, downSizes[i].width, downSizes[i].height));
     }
-    for (let i = 0; i < BLOOM_LEVELS - 1; i += 1) {
+    for (let i = 0; i < levels - 1; i += 1) {
       const input = downSizes[i + 1];
       upBindGroups.push(
         this.device.createBindGroup({
           entries: [
             { binding: 0, resource: { buffer: makeUniform(`bloom-up-${i}`, input.width, input.height, BLOOM_RADIUS) } },
-            { binding: 1, resource: i === BLOOM_LEVELS - 2 ? downViews[BLOOM_LEVELS - 1] : upViews[i + 1] },
+            { binding: 1, resource: i === levels - 2 ? downViews[levels - 1] : upViews[i + 1] },
             { binding: 2, resource: this.postSampler },
             { binding: 3, resource: downViews[i] },
           ],
@@ -3157,6 +3225,9 @@ export class Engine {
   /** Rebuild the sky LUT when its environment inputs moved (quantized key — ~a few rebuilds per game
    *  minute under a day cycle; each build is ~5 k texels of scalar math + a 72 KB upload). */
   private refreshSkyLut(): void {
+    if (!this.ablation.skyLut) {
+      return;
+    }
     const env = this.environment;
     // pbrNight (prod's uPbrNight): the gradient takes over only once the sun is BELOW the horizon — NOT
     // the litFade `dn`, which ramps during golden hour and suppressed the Preetham sunrise (074/09 sky
@@ -3285,6 +3356,9 @@ export class Engine {
    * flicker between the probe and the analytic fallback at half the frame rate.
    */
   private scheduleProbe(frameData: Float32Array): void {
+    if (!this.ablation.probe) {
+      return;
+    }
     const probeCenter = this.probeCenter;
     if (!probeCenter || this.environment.reflectionStrength <= 0) {
       // Written rather than left: the staging array is reused now (201/9-07), so a skipped probe would

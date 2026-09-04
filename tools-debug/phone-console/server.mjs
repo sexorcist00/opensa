@@ -428,6 +428,9 @@ async function handle(request, response) {
           attached: () => mapBus.attached(),
           exists: existsSync,
           launch: (url) => run(OPEN_URL_BIN, [url]),
+          // An attached console changes arms by navigating itself, in its own tab — the bus already reaches
+          // it, so this needs no activity start and no hand on the phone.
+          steer: (url) => mapBus.submit({ args: { url }, kind: 'navigate' }),
         },
         { timeoutMs: Number(body.timeoutMs) || undefined, url: links[view] },
       ),

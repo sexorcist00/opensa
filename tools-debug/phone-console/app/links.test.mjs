@@ -204,3 +204,42 @@ describe('the attachment ladder (201/9-04)', () => {
     });
   });
 });
+
+describe('the ablation arms (201/9)', () => {
+  describe('negative cases', () => {
+    // Same rule as the ladder above, and it matters more here: with no `timestamp-query` on the device
+    // there is no second signal that would catch an arm which moved two things at once.
+    it('differs from the field run by ONE parameter, exactly like a ladder arm', () => {
+      const links = consoleUrls(SERVED);
+
+      for (const [arm, added] of [
+        [links.nocells, 'ablate=cells'],
+        [links.nocloud, 'ablate=cloud'],
+        [links.nobloom, 'ablate=bloom'],
+        [links.noprobe, 'ablate=probe'],
+        [links.noskylut, 'ablate=skylut'],
+        [links.bloom4, 'bloomlevels=4'],
+      ]) {
+        expect(arm.replace(`&${added}`, '')).toBe(links.field);
+      }
+    });
+
+    it('leaves the ablation knobs off every link that is not an ablation arm', () => {
+      const links = consoleUrls(SERVED);
+
+      for (const other of [links.map, links.inventory, links.field, links.board, links.msaa1, links.share]) {
+        expect(other).not.toContain('ablate=');
+        expect(other).not.toContain('bloomlevels=');
+      }
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is offered by name, so `phone_run open LINK=` and `map_open view=` both reach it', () => {
+      for (const name of ['nocells', 'nocloud', 'nobloom', 'bloom4', 'noprobe', 'noskylut']) {
+        expect(LINK_NAMES).toContain(name);
+        expect(consoleUrls(SERVED)[name]).toBeTypeOf('string');
+      }
+    });
+  });
+});

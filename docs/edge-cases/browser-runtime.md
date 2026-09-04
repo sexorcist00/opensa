@@ -119,7 +119,7 @@ Yandex Browser 26.6.2 (Chromium 148), **Mali-G51 / ARM Bifrost, Android 10**, 36
 | `texture-compression-bc` | **no** |
 | `texture-compression-astc` | **yes** (+ `-astc-sliced-3d`) |
 | `texture-compression-etc2` | **yes** |
-| `timestamp-query` | no — the HUD's GPU timings fall back to CPU, as designed |
+| `timestamp-query` | **no, and no browser flag brings it** (re-tested 2026-09-04 — see below). The HUD's GPU timings fall back to CPU, as designed |
 | features | 12, including `core-features-and-limits`, so CORE limits apply (not the reduced compatibility set) |
 
 Three things this pins down. **The BC/ASTC split is real hardware, not theory** — the same adapter that
@@ -127,6 +127,32 @@ refuses BC offers both mobile formats. **Chromium's Android 12+ rule is about th
 ceiling: an Android 10 device reached a core adapter once the blocklist was lifted. And **the flag is a
 developer flag** — it carries a security warning and nobody else's phone has it on, so it proves the hardware
 is capable without being a shipping path.
+
+### `timestamp-query` is the DRIVER, not the browser — stop trying flags (2026-09-04)
+
+**GPU time is not measurable on this device by any means available to a web page, and the two flags that
+look like they would fix it do not.** Both were enabled in Yandex Browser 26.6.2.117 and the browser was
+cold-restarted:
+
+- `#enable-unsafe-webgpu` — the flag that DID matter here once, since it is what lifted the adapter
+  blocklist in the row above. It does nothing for this;
+- `#enable-webgpu-developer-features` — which is what un-quantizes timestamp results for a page that has
+  them, and cannot conjure the feature itself.
+
+The adapter's feature list came back **byte-identical to before the flags**, `timestamp-query` still in
+`missing`. `timestamp-query` in WebGPU rests on timestamp support in the Vulkan queue family, and this
+Bifrost driver does not offer it — so the ceiling is below the browser and no setting reaches it.
+(`#force-enable-webgpu-interop`, the third WebGPU flag the search turns up, is Linux-only and is listed
+under *Недоступные* on Android.)
+
+**What this costs, and it is the reason this entry exists rather than a line in a benchmark note.** Every
+per-pass claim about a frame on the 2/03 device is an INFERENCE — 201/9-04's ladder priced the scene pass's
+attachment set by flying five whole-frame arms and subtracting, and the only reading of the frame's total
+cost is the vsync ladder, quantized at 16.7 ms. The instrument for anything finer is **ablation**: remove a
+pass, fly the same route, and read the difference in the window's MEAN (~0.5 ms of resolution over ~450
+moving frames), which prices a GROUP of passes rather than one. `report.passes` already carries
+`gpuPassMs` / `gpuPostMs` / `gpuProbeMs` with `available: false` and says why — that is the code waiting for
+a device that has the feature, not a bug to chase.
 
 What it makes possible today: `?demo=1` and any `--rgba8` pak render in 3D on this phone. What it argued for
 next has since been built — `--textures astc` (200/2-02) — on the strength of this row: ASTC was never a

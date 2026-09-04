@@ -22,6 +22,12 @@ export const LINK_NAMES = [
   'rgb10a2',
   'scale75',
   'scale50',
+  'nocells',
+  'nocloud',
+  'nobloom',
+  'bloom4',
+  'noprobe',
+  'noskylut',
   'flat',
   'bake',
   'share',
@@ -101,6 +107,12 @@ export function consoleUrls(state = {}) {
   // owes a verdict as well as a number.
   return {
     bake: `${app}?${query}&bake=tiles&zmin=0&zmax=4`,
+    // 201/9's ABLATION arms. There is no `timestamp-query` on the 2/03 device and no browser flag brings it
+    // (`docs/edge-cases/browser-runtime.md`, re-tested 2026-09-04), so a pass is priced by REMOVING it and
+    // re-flying the same route: each of these is `field` minus one group, and the difference in the
+    // window's mean is what that group costs. `bloom4` is the odd one — it shortens the chain rather than
+    // removing it, which is 201/9-05's actual lever and not only a measurement.
+    bloom4: `${app}?${empty}&bloomlevels=4`,
     // The declared worst case: 201's budget table says 150 units each drawn as a model with a symbol over
     // it, and every number 5/02 and 5/04 owe is measured AT it. It is no longer THE FIELD RUN — it is what
     // the field run is compared against once the map is the shape we want it.
@@ -120,6 +132,11 @@ export function consoleUrls(state = {}) {
     inventory: `${app}?${query}&inventory=1`,
     map: `${app}?${query}`,
     msaa1: `${app}?${empty}&msaa=1`,
+    nobloom: `${app}?${empty}&ablate=bloom`,
+    nocells: `${app}?${empty}&ablate=cells`,
+    nocloud: `${app}?${empty}&ablate=cloud`,
+    noprobe: `${app}?${empty}&ablate=probe`,
+    noskylut: `${app}?${empty}&ablate=skylut`,
     rgb10a2: `${app}?${empty}&scene=rgb10a2unorm`,
     scale50: `${app}?${empty}&scale=0.5`,
     scale75: `${app}?${empty}&scale=0.75`,

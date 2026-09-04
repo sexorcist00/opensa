@@ -28,6 +28,44 @@ every step below moves it by a whole rung or it did nothing. With the CPU body a
 landing on the third interval, **~38 ms of a 48 ms frame belongs to something no span in this repo names.**
 That sentence is the chain.
 
+## The instrument the rest of this chain is measured with
+
+**There is no `timestamp-query` on the 2/03 device and no browser flag brings it.** Both WebGPU flags were
+enabled in Yandex Browser 26.6.2.117 and the browser cold-restarted on 2026-09-04: the adapter's feature list
+came back byte-identical and the feature is still missing. It rests on timestamp support in the Vulkan queue
+family, which this Bifrost driver does not offer, so the ceiling is below the browser
+([edge-cases](../../../edge-cases/browser-runtime.md)). `report.passes` says `gpuPassMs` / `gpuPostMs` /
+`gpuProbeMs` are unavailable and means it.
+
+**So a pass is priced by its ABSENCE.** `?ablate=` removes one group from the frame and the same ten-leg
+route is flown again; the difference in the window's MEAN over ~450 moving frames is worth roughly half a
+millisecond, which is enough for a group and never enough for a single pass. Read the mean rather than p50 —
+p50 saturates on the 16.7 ms vsync floor, which is how [04](#04--what-the-frames-attachment-set-costs-on-a-tiler)'s
+`scale75` arm nearly read as nothing.
+
+| arm | link | what it removes |
+| --- | --- | --- |
+| the streamed world | `?ablate=cells` | every resident cell's opaque and blend bundles — the cull still runs, so `draws` and `triangles` still report what WOULD have drawn |
+| the cumulus bake | `?ablate=cloud` | [06](#06--the-per-frame-bakes-that-are-already-cached-one-line-above)'s 256² two-fbm pass. The world still SAMPLES the texture, so this prices producing it |
+| the bloom chain | `?ablate=bloom` | [05](#05--the-post-chains-pass-count)'s 1 + 8 + 7 full-screen passes, whole |
+| the chain's tail | `?bloomlevels=4` | the levels that are 12×10, 6×5 and 3×3 pixels at this surface — 05's actual lever rather than only a measurement |
+| the env probe | `?ablate=probe` | what is left after `PROBE_FRAME_INTERVAL` amortizes it |
+| the sky LUT | `?ablate=skylut` | what is left after its own input key short-circuits it |
+
+`?ablate=` takes a list (`?ablate=bloom,cloud` is one arm removing both), an unknown name is ignored while
+the rest of the list still applies, and **the report says what actually ran** in `surface.ablated` — the same
+rule `surface.pinned` and `surface.sampleCount` exist for, and it matters more here because an ablated run
+is otherwise indistinguishable from a fast one. Every arm is a `map_open` view (`nocells`, `nocloud`,
+`nobloom`, `bloom4`, `noprobe`, `noskylut`), and since 2026-09-04 an attached console navigates ITSELF
+between them, so a sweep costs no hands on the phone.
+
+**What an ablation may and may not conclude.** It says where the time is. It does NOT say the answer is to
+ship that pass off: the user's standing call (2026-09-04) is that frame time may not be bought with
+resolution, sampling or anti-aliasing, and a picture that got worse is not an optimisation. What this chain
+is allowed to remove is WASTE — a bloom level three pixels across, a bake whose input changes on a scale of
+minutes, a sort of a static order repeated per instance per frame — and a change that alters the picture at
+all goes to the operator as an A/B on the device before it is kept.
+
 ## The rule this chain does not get to break
 
 Every step here is a **budget the frame reads**, never a branch it executes, and never a second renderer —
@@ -292,6 +330,68 @@ session with `npm run panel:tunnel` restarted first. Two things learned on the w
 should not re-discover: the pak on the device is `rect 5,-7,6,-6` — **four render cells**, which is exactly
 the empty-sky problem this step inherited from 9/01 — and `npm run phone` refuses to serve it unless asked
 with `VEHICLES=admiral,comet,infernus`, because the job's default names three cars the pak does not carry.
+
+**THE LADDER IS FLOWN, 2026-09-04, AND THE HYPOTHESIS IT WAS BUILT ON IS THE ONE THING IT DID NOT FIND** —
+[the row](../../../benchmarks/opensa-engine/2026-09-04-mobile-map-attachment-ladder.json), app `60e290f`,
+five fresh pages one parameter apart, each flown the same ten-leg route inside the loaded rect with
+`?surface=720x640` pinned, each window the delta of two histogram readings taken after a four-corner warm-up:
+
+| arm | B/px | scene px | moving p50 | mean | p90 | p95 | on rung 1 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `field` | 48 | 460 800 | 20 ms | 24.5 ms | 38 | 48 | 54 % |
+| `msaa1` | 12 | 460 800 | 18 ms | 21.6 ms | 36 | 36 | 66 % |
+| `rgb10a2` | 32 | 460 800 | 16 ms | 20.2 ms | 34 | 36 | 73 % |
+| `scale75` | 48 | 259 200 | 18 ms | 21.0 ms | 34 | 36 | 72 % |
+| `scale50` | 48 | 115 200 | 16 ms | **16.5 ms** | **18** | **24** | **95 %** |
+
+**The tile-size hypothesis is NOT confirmed, so the row this step owed
+[`restrictions/gpu-and-shaders.md`](../../../restrictions/gpu-and-shaders.md) is NOT written** — the step
+said it goes there only if the measurement confirms it, and an unmeasured vendor rule is not our restriction.
+If 48 B/px against Bifrost's 16 B/px tile budget were the frame, `msaa1` — one tile budget, and no resolve —
+would have won the most. It won the least of the three arms that moved bytes. **`rgb10a2unorm` at 32 B/px
+beat `msaa1` at 12 B/px while KEEPING 4x MSAA**, and the pair is what names the cost: one sample re-tiles the
+scene pass and changes nothing downstream (`scene-color` stays `rgba16float`), while the format halves the
+bytes of every full-screen pass that READS that texture. **The frame is the post chain's BANDWIDTH, not the
+scene pass's tile configuration** — which is [05](#05--the-post-chains-pass-count)'s sixteen bloom levels
+plus the post pass, now promoted from an argument to a measurement.
+
+**And the resolution axis is the only one that moves a whole rung.** `scale50` is the sole arm that reaches
+the declared 60: 95 % of its frames on ONE display interval, p90 18 ms against the baseline's 38. **Read the
+MEAN rather than p50** — p50 saturates on the 16.7 ms vsync floor and hides the shape — 24.5 -> 21.0 -> 16.5
+across 100 % -> 56 % -> 25 % of the pixels, so **at least 8 ms of the baseline's mean scales with pixel
+count**, and that is a lower bound because `scale50` is already sitting on the floor. `scale75` ALONE would
+have been filed as a weak lever (-3.5 ms of mean, no rung moved): the response is strongly non-linear against
+a quantized display, and one arm of a ladder is not a ladder.
+[`render-scale-tier.md`](../../../performance/deferred-optimizations/render-scale-tier.md)'s refusal was
+taken on an M3 Pro at 0.4-1.4 ms; its own reopening condition is met and this is the re-run it asked for.
+
+**What this step does NOT decide, and must not be read as deciding.** `rgb10a2unorm` is UNORM — it cannot
+hold a scene value above 1.0, so adopting it is a change to the HDR chain and this ladder does not claim it
+is free. **The honest next arm is `rg11b10ufloat`**: the same 4 bytes, the float range kept, and this adapter
+reports it renderable (`rg11b10ufloat-renderable` is in the device's own feature list in every snapshot of
+this run). It is not in the ladder because it was not built.
+
+**The look verdict, and the instrument gets in its way.** The operator judged `msaa1` on the phone at map
+zoom: *"noticeably worse - low resolution and no anti-aliasing"*. Only the second half belongs to the arm.
+**`?surface=720x640` pins the drawing buffer and the browser then UPSCALES it to a CSS box that was 320-609
+px tall across this run**, so every arm - the baseline included - is soft, and a look verdict taken through a
+pinned page conflates the pin with the parameter. The pin is not the bug (it is what made 08-31's circuit
+subtractable at all); the rule is that **a look arm is flown UNPINNED and a number arm is flown pinned, and
+they are two different flights.** The aliasing half stands on its own though - one sample loses MSAA and
+alpha-to-coverage on every cutout pipeline - and it is moot for the recommendation, since `msaa1` is not the
+arm the numbers point at.
+
+**Method notes the next ladder should not re-discover.** A leg is measured in SCREENFULS (`fly.ts` travels
+1.2 of them a second), so 150 m legs at ~310 m of span last under half a second: a first six-leg attempt
+yielded **58 moving frames**, against ~400-475 for ten ~300 m legs at 180-220 m. Every arm is warmed over the
+rect's four corners before its first reading, so the ~29 cell creates inside each window are re-creates
+rather than a cold stream. **The panel could not switch arms by itself** — `map_open` would not cover an attached
+console (`opener.mjs`) and the `open` job cannot run while the `phone` job holds the server, so this
+five-arm ladder cost four human touches, one per switch. **FIXED the same day**: an attached console now
+navigates ITSELF when `map_open` asks for a different view (a `navigate` command over the bus it is already
+answering on), so the next ladder is a sequence of tool calls in one tab. And **a backgrounded tab keeps answering the bus while
+`requestAnimationFrame` stops**: `scale50` recorded a 32 s `dtMax` from exactly that, outside its moving
+window, and the tell is `frames` and `framesSkipped` both standing still between two snapshots.
 
 ### 05 — The post chain's pass count
 

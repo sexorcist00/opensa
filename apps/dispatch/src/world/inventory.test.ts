@@ -67,6 +67,7 @@ const CONTEXT = {
   overlay: 'on' as const,
   pickingBytes: 0,
   surface: {
+    ablated: 'none',
     cssHeight: 364,
     cssWidth: 360,
     deviceHeight: 728,

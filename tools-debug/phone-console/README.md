@@ -130,8 +130,15 @@ console already computes and the picture is the one it already composes for a sh
 they all talk to a page somebody had already opened, so `"no map is attached"` stopped a field run until a
 person tapped a link. It launches the panel's own URL through `termux-open-url` — any of the six links in
 the table above, by name — and waits for the page to phone home, so a browser that started is reported as
-a launch and only an attached console is reported as a map. A console already attached is left alone rather
-than covered with a second tab. Without `termux-open-url` (`pkg install termux-tools`) it says so and hands
+a launch and only an attached console is reported as a map. **A console that is already attached STEERS
+ITSELF** to the view being asked for — the panel sends it a `navigate` command over the bus it is already
+answering on and the page replaces its own location, so the arm changes in the SAME tab, needs no activity
+start from a background app, and leaves exactly one console on the bus (`navigated: true` in the answer).
+Asking for the view it is already on leaves it alone (`reused: true`) rather than throwing away a warmed
+world. **That is what makes a measurement LADDER possible**: before it, an attached console was simply
+refused, and the only way to change arms was a person backgrounding the browser until the page fell off the
+bus 15 s later — four times for 201/9-04's five arms, and dozens for an ablation of the frame's passes.
+Without `termux-open-url` (`pkg install termux-tools`) it says so and hands
 back the URL; the doctor warns for it rather than failing, because a thumb still works. **The links it opens
 and the links the page hands out are built by one module** (`app/links.mjs`): two copies of that
 arithmetic would open different paks, and the capture would name the one nobody was looking at.

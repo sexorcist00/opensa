@@ -54,6 +54,10 @@ Nothing is cut — the [protected list](../1-the-map-profile/protected-list.md) 
 the frame carry, not about a still map — and the first input resumes all of it
 ([edge-cases](../../../edge-cases/dispatch-console.md)). If a field verdict says a frozen world reads as a
 hung one, the lever is an idle RATE rather than an idle stop.
+**THAT VERDICT ARRIVED 2026-09-04** — the operator, driving the console on the 2/03 device during 9/04's
+ladder: *"the palms sway from the wind once in a while rather than continuously, and that is critical — I
+want them moving all the time."* The clause above is what this step wrote it for, and it is now
+[04](#04--sway-on-an-idle-map-the-idle-rate-the-verdict-asked-for) rather than a hypothetical.
 
 **The claim is readable rather than asserted:** the status bar shows `idle` in place of a frame rate, and
 `?inventory=1`'s report carries **`framesSkipped`** beside `frames` — a capture with 400 frames and 0 skips
@@ -170,6 +174,41 @@ Also owed: the cold/warm boot pair, which is what decides whether `init:pipeline
 2.3 s one — none of the four runs cleared the site's data, so the hypothesis is still untested. And now that
 the overlap is in, the pair says something it could not before: whatever the cold GPU number turns out to be,
 that is how much of the world's open it hides.
+
+### 04 — Sway on an idle map: the idle RATE the verdict asked for
+
+**The finding is a field verdict, not a number** (the operator, 2026-09-04, on the 2/03 device, taken during
+9/04's ladder): the palms sway *"once in a while rather than continuously, and that is critical."* Nothing is
+broken — [01](#01--render-on-demand) works exactly as specified, and the paragraph above predicted this
+symptom by name. The world's own animation (wind sway, UV scrollers) advances only inside a DRAWN frame, and
+`RenderGate` has no signal for it: `FrameSignals` carries the pose, the board, the selection, the hour, the
+buffer size, the sketch revision and the streamer's counters, and **not one of them changes because time
+passed**. So sway moves only when something ELSE woke the frame, which from the operator's seat is exactly
+"once in a while".
+
+**Same observation, opposite direction, one chain over.** [9/06](../9-the-mobile-frame/readme.md) is about a
+bake paid every frame for a field that changes on a scale of minutes; this is a field that changes at the
+display's rate and is paid only when something else happens to pay for it. Both are the same missing idea:
+**a frame's rate should be the rate of the fastest thing that is actually moving in it**, and this repo
+currently has that number written down in neither direction.
+
+**The design question this step must answer before it is built, because it decides what gets built.**
+"Continuously" is a look requirement, and the honest lever is a RATE — but the rate is not free and its price
+is the whole of 01's win:
+
+- **at the display's rate whenever wind-animated geometry is in frame** — smooth, and render-on-demand is
+  effectively dead on any view with vegetation in it, which is most of this map;
+- **at a NAMED animation rate** (the shape 01 already uses for its 100 ms idle poll) — some fraction of the
+  frames, and the number has to be high enough that sway reads as sway rather than as stutter;
+- and either way it is **conditional on the geometry being in frame**, or a console looking at a car park
+  pays for foliage it cannot see.
+
+**Budget:** the animation rate is a NUMBER the frame reads — per surface, never a mobile branch
+([the restriction](../../../restrictions/architecture.md)) — and it is named before it is built, together
+with what it costs the battery figure 01 still owes.
+**Owes:** the rate, a look verdict from the phone that the sway reads as continuous at map zoom, `framesSkipped`
+before and after over a still map with foliage in frame, and the battery/thermal delta 01 owes re-taken under
+it — because this step is the thing most likely to have moved it.
 
 ## Verification
 
