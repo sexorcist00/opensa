@@ -9,10 +9,18 @@ import { installFakeWebGpu } from './test/fake-device';
 /**
  * The environment probe refreshes for a CONSUMER, not for a clock (201/9-05).
  *
- * Its only reader is the rigid lane's reflection term, and the sweep priced what the existing amortization
- * leaves at 1.6 ms of a 21.5 ms frame — a cube rendered for nobody on every frame of a map with no car on
- * it. What is asserted here is the rule and its release: no instance, no faces; an instance, and the
- * cadence is the shipped one again.
+ * Its only reader is the rigid lane's reflection term, so a cube rendered on a frame with no car on it is
+ * rendered for nobody. What is asserted here is the rule and its release: no instance, no faces; an
+ * instance, and the cadence is the shipped one again.
+ *
+ * **AND THAT THE COUNT IS REPORTED, which is the half that was missing** (201/9, 2026-09-05). The gate was
+ * built against an ablation arm that priced the probe at 1.6 ms on a surface where it has never run at all —
+ * `apps/dispatch` leaves {@link Engine.probeCenter} `null`, so `scheduleProbe` returns one condition ahead
+ * of this gate, and `?ablate=probe` there removes a single array store
+ * ([the row](../../../docs/benchmarks/opensa-engine/2026-09-05-mobile-ablation-null-arm.json)). Nothing in a
+ * capture said so: `gpuProbeMs` reads 0 both when the probe is skipped and when the adapter has no
+ * `timestamp-query`. {@link EngineStats.probeFacesRendered} is what makes a null arm visible, so it is
+ * pinned here beside the faces it counts.
  */
 
 let harness: ReturnType<typeof installFakeWebGpu>;
@@ -77,6 +85,20 @@ describe('the environment probe', () => {
       expect(faces()).toBe(0);
     });
 
+    it('reports zero faces when the host never gives the probe a centre — the null-arm case', async () => {
+      const engine = new Engine();
+      await engine.init(harness.canvas);
+      // What the map console does: probeCenter is left at its declared null, so the FIRST condition wins and
+      // the demand gate below is never even reached. A capture of this surface must be able to say so.
+      engine.createVehicle(engine.createVehicleModel(carInit()));
+      for (let frame = 0; frame < 24; frame += 1) {
+        engine.frame(camera());
+      }
+
+      expect(faces()).toBe(0);
+      expect(engine.stats.probeFacesRendered).toBe(0);
+    });
+
     it('renders no face when the environment asks for no reflection at all', async () => {
       const engine = new Engine();
       await engine.init(harness.canvas);
@@ -105,6 +127,21 @@ describe('the environment probe', () => {
       // One face every PROBE_FRAME_INTERVAL (2) frames: half of 24, and never all of them.
       expect(faces()).toBeGreaterThan(0);
       expect(faces()).toBeLessThan(24);
+    });
+
+    it('counts every face it renders, so a capture can tell a real arm from a null one', async () => {
+      const engine = new Engine();
+      await engine.init(harness.canvas);
+      engine.probeCenter = [0, 0, 0];
+      engine.createVehicle(engine.createVehicleModel(carInit()));
+      for (let frame = 0; frame < 24; frame += 1) {
+        engine.frame(camera());
+      }
+
+      // The counter is the recorder's own count, and it is CUMULATIVE — a reader takes the delta across a
+      // window rather than summing it (the running-counter restriction).
+      expect(engine.stats.probeFacesRendered).toBe(faces());
+      expect(engine.stats.probeFacesRendered).toBeGreaterThan(0);
     });
   });
 });

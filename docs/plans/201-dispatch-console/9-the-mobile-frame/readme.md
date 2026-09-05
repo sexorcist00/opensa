@@ -38,10 +38,19 @@ family, which this Bifrost driver does not offer, so the ceiling is below the br
 `gpuProbeMs` are unavailable and means it.
 
 **So a pass is priced by its ABSENCE.** `?ablate=` removes one group from the frame and the same ten-leg
-route is flown again; the difference in the window's MEAN over ~450 moving frames is worth roughly half a
-millisecond, which is enough for a group and never enough for a single pass. Read the mean rather than p50 —
-p50 saturates on the 16.7 ms vsync floor, which is how [04](#04--what-the-frames-attachment-set-costs-on-a-tiler)'s
-`scale75` arm nearly read as nothing.
+route is flown again; the difference in the window's MEAN is what that group costs. Read the mean rather than
+p50 — p50 saturates on the 16.7 ms vsync floor, which is how
+[04](#04--what-the-frames-attachment-set-costs-on-a-tiler)'s `scale75` arm nearly read as nothing.
+
+**AND THE INSTRUMENT'S RESOLUTION IS ~2.5 ms, NOT THE HALF-MILLISECOND THIS CHAIN ASSUMED**
+([the null arm](../../../benchmarks/opensa-engine/2026-09-05-mobile-ablation-null-arm.json), 2026-09-05).
+The half-millisecond was never measured; it was inferred from the frame count. It was measured the only way a
+noise floor can be — by flying an arm that removes nothing — and the same frame came back five times at
+18.11 / 18.40 / 20.17 / 20.58 / 18.13 ms. **So every arm in the sweep below under ~2.5 ms is a sample rather
+than a measurement**, and this chain may not cite it as a cost: `noprobe` 1.6, `nocloud` 1.8, `noskylut` 1.0,
+`bloom4` 0.2. What clears the floor, and what every conclusion this chain acted on rests on: **`nobloom` 7.7,
+`nocells` 3.8, and 9/05's two levers at −2.4 and −4.4** — each of which also moved the vsync ladder by whole
+rungs, which is the column to read when the mean is inside the band.
 
 | arm | link | what it removes |
 | --- | --- | --- |
@@ -49,7 +58,7 @@ p50 saturates on the 16.7 ms vsync floor, which is how [04](#04--what-the-frames
 | the cumulus bake | `?ablate=cloud` | [06](#06--the-per-frame-bakes-that-are-already-cached-one-line-above)'s 256² two-fbm pass. The world still SAMPLES the texture, so this prices producing it |
 | the bloom chain | `?ablate=bloom` | [05](#05--the-post-chains-pass-count)'s 1 + 8 + 7 full-screen passes, whole |
 | the chain's tail | `?bloomlevels=4` | the levels that are 12×10, 6×5 and 3×3 pixels at this surface — 05's actual lever rather than only a measurement |
-| the env probe | `?ablate=probe` | what is left after `PROBE_FRAME_INTERVAL` amortizes it |
+| the env probe | `?ablate=probe` | **NOTHING on this surface** — the console never sets `probeCenter`, so the probe has never run here and this arm is the instrument's own control |
 | the sky LUT | `?ablate=skylut` | what is left after its own input key short-circuits it |
 
 `?ablate=` takes a list (`?ablate=bloom,cloud` is one arm removing both), an unknown name is ignored while
@@ -551,18 +560,30 @@ which is which, 2026-09-05.** The sweep priced what is LEFT of each after its ow
 after their baseline, inside the same session whose `field` drifted 2.1 ms across the day. So the numbers are
 a band, not a reading — which is exactly why the next move was to READ THE CODE rather than to fix anything.
 
-- **The probe is real, and the amortization is thinner than the word suggests.** `PROBE_FRAME_INTERVAL` is
-  **2**: a cube face renders every OTHER frame, in its own submit. On a map with no car on it the whole cube
-  is rendered for nobody — the rigid lane's reflection term is its only reader. Fixed by demand rather than
-  by cadence (`Engine.hasReflectiveInstance`, 3 tests): no reflective instance, no faces, and nothing about
-  the latency or the sharpness moves. That is the variant
-  [the lever's own card](../../../performance/applied/env-probe-cadence.md) called the free one, and both
-  halves of its trigger had fired.
+- **The probe is real IN THE GAME and has never run here — and that took a paired re-flight to find out
+  (2026-09-05, [the null arm](../../../benchmarks/opensa-engine/2026-09-05-mobile-ablation-null-arm.json)).**
+  `PROBE_FRAME_INTERVAL` is **2**: a cube face renders every OTHER frame, in its own submit, and on a map
+  with no car on it the whole cube would be rendered for nobody — so it was fixed by demand rather than by
+  cadence (`Engine.hasReflectiveInstance`, 3 tests), which is the variant
+  [the lever's own card](../../../performance/applied/env-probe-cadence.md) called the free one.
+  **The gate is correct and it bought nothing here**, because a condition ahead of it was already true:
+  `apps/dispatch` never assigns `Engine.probeCenter` — only `apps/web` and `apps/engine-lab` do — so
+  `scheduleProbe` has returned at `!probeCenter` on every console capture ever taken. `?ablate=probe` on this
+  surface skips one store into a reused array and one counter tick. **It is a NULL ARM, and its 1.6 ms was
+  the instrument.** Flown five times, the same frame reads 20.17 / 18.40 / 20.58 / 18.13 / **18.11** — a
+  2.47 ms spread whose first three windows look exactly like a clean, thermally-bracketed 2 ms effect.
 - **The sky LUT cannot be what its arm says.** Its key is QUANTIZED (`skyLutKey`: elevation × 200, the
   colours × 100) and this console's hour is static unless an operator moves it, so `refreshSkyLut` builds a
   string and returns early on every frame after the first — microseconds, not a millisecond. Its 1.0 ms is
   the drift band, and there is nothing there to fix. **It is left alone deliberately**: a "fix" for a pass
   that is already an early return would have been a change with no defect behind it.
+
+**AND THE SKY LUT'S CASE IS NOW THE GENERAL ONE.** That paragraph reasoned its way to "this arm cannot be
+what it says" from the code, and declined to fix a pass that was already an early return. The probe turned
+out to be the same shape and was NOT caught the same way, because a plausible fix existed for it. The rule
+that falls out, and it is the chain's most useful product: **an ablation arm must be proven non-null before
+its number is read** — check what the pass is gated on in the HOST, not only in the engine. A null arm
+produces a perfectly ordinary capture with a believable number in it, and nothing anywhere complains.
 
 ### 07 — The per-frame allocations, and one capability that retains what it never reads
 

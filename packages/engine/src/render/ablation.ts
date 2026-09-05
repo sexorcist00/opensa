@@ -10,11 +10,27 @@
  * frame's cost is the vsync ladder — quantized at 16.7 ms, which cannot see a 2 ms pass.
  *
  * **Ablation is what is left, and it is a real instrument rather than a consolation.** Remove a pass, fly
- * the same route, and read the difference in the window's MEAN: ~450 moving frames give roughly half a
- * millisecond of resolution
+ * the same route, and read the difference in the window's MEAN
  * ([the ladder](../../../../docs/benchmarks/opensa-engine/2026-09-04-mobile-map-attachment-ladder.json)
  * priced its five arms exactly this way). What it prices is a GROUP of passes, never one pass in isolation,
  * and the group is what each field below names.
+ *
+ * **ITS RESOLUTION IS ~2.5 ms ON THE 2/03 DEVICE, NOT THE HALF-MILLISECOND THIS FILE USED TO CLAIM**
+ * ([the null arm](../../../../docs/benchmarks/opensa-engine/2026-09-05-mobile-ablation-null-arm.json)).
+ * That number was never measured; it was assumed from the frame count. It was measured on 2026-09-05 the
+ * only way a noise floor can be — by flying an arm that removes NOTHING and reading how far apart the
+ * windows land. Five windows of one identical frame spanned **18.11–20.58 ms**, and the first three of them
+ * looked exactly like a clean, thermally-bracketed 2 ms effect. **So an arm worth less than ~2.5 ms here has
+ * not been measured, it has been sampled**, and the number to read alongside the mean is the vsync ladder —
+ * the levers that survived moved rung 1 by whole steps (67 → 80 → 91 %) where the null arm wandered inside
+ * 74–86 %.
+ *
+ * **AND AN ARM MUST BE PROVEN NON-NULL BEFORE ITS NUMBER IS READ.** `probe` was priced at 1.6 ms on a
+ * surface where the probe has never rendered a face: `apps/dispatch` never assigns {@link Engine.probeCenter},
+ * so `scheduleProbe` returns at its FIRST condition and `?ablate=probe` skips one array store and a counter
+ * tick. Nothing in a report said so — which is the trap, because a null arm produces a perfectly ordinary
+ * capture with a plausible number in it. Read what the pass is gated on in the HOST before believing the
+ * arm that removes it.
  *
  * **An arm is a page load**, the same rule {@link RenderBudget} is a constructor input for: the bloom
  * chain's level count decides how many textures and bind groups exist, and the rest are read per frame but
@@ -61,7 +77,16 @@ export interface FrameAblation {
    * off, so what is priced is producing it rather than reading it.
    */
   readonly cloudField: boolean;
-  /** Schedule the environment probe — already amortized over `PROBE_FRAME_INTERVAL`, so this bounds what is left. */
+  /**
+   * Schedule the environment probe.
+   *
+   * **NULL on any surface that leaves {@link Engine.probeCenter} at `null`, and the map console is one** —
+   * `scheduleProbe` returns at that first condition, so this arm removes one store into a reused array and
+   * one counter tick. It prices the probe only where the host actually feeds a centre (`apps/web`,
+   * `apps/engine-lab`); on the console it is the instrument's own control, and the 2.47 ms it read there is
+   * this instrument's noise floor rather than a pass
+   * ([the null arm](../../../../docs/benchmarks/opensa-engine/2026-09-05-mobile-ablation-null-arm.json)).
+   */
   readonly probe: boolean;
   /** Refresh the sky LUT — already keyed on its input and usually an early return, so this bounds it too. */
   readonly skyLut: boolean;

@@ -232,6 +232,18 @@ export interface InventoryReport {
      *  and returns mid-flight and the buffer moves with it — 1.9x of pixels inside one session on
      *  2026-08-31, which is what cost 201/9-01 its circuit. */
     readonly pinned: boolean;
+    /**
+     * Env-probe FACES rendered over the window — the line that says whether `ablated: 'probe'` removed
+     * anything at all.
+     *
+     * **0 here means the arm was NULL and its number is the instrument's noise.** This console never
+     * assigns `Engine.probeCenter`, so `scheduleProbe` returns at its first condition and the probe has
+     * never rendered a face on this surface — while `?ablate=probe` still produced ordinary captures that
+     * were read as a 1.6 ms pass for a day (201/9, 2026-09-05:
+     * [the row](../../../../docs/benchmarks/opensa-engine/2026-09-05-mobile-ablation-null-arm.json)).
+     * `gpuProbeMs` cannot answer it — with no `timestamp-query` it reads 0 whether the probe ran or not.
+     */
+    readonly probeFaces: number;
     /** `?scale=` — the engine's own knob, which shrinks the scene and bloom targets (never the swapchain). */
     readonly renderScale: number;
     /** `?msaa=` — the world pass's sample count (201/9-04). One removes the resolve AND the msaa colour
