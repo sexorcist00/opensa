@@ -1,0 +1,48 @@
+{
+  "note": "THE FIRST SMOOTHNESS MEASUREMENT THIS REPOSITORY HAS EVER TAKEN, and it says something no frame-rate row could. The user's call the same day made smoothness a budget alongside the 45 fps one; nothing measured it, because a rate cannot — a flat 30 fps is smooth and a 60/30 alternation is not, and the two report the same mean. Nor can the histogram: a distribution has no order in it, so the same bins describe both. `frame-pacing.ts` counts TRANSITIONS as the frames arrive and the report carries `paceChangeRate`, `paceChanges` and `paceWorstRatio` from app `f91a688` on. Flown here on the arm this chain already knows best. THE RESULT: the empty map stutters on 44.6 % of consecutive frame pairs, and with the bloom chain removed that falls to 7.9 % — 5.6x fewer. The same arm's MEAN difference is 2.4 ms, which sits under the instrument's ~2.5 ms floor and reads as noise. So the two criteria disagree about the same change by an order of importance, and the smoothness one is the one the operator sees.",
+  "app": "f91a688",
+  "appNote": "the archive was rebuilt for this run and the stamp is clean, with no `+`: the tree was committed before the build. This is the first row taken on an app that reports pacing at all.",
+  "build": "07:40 05-09-2026",
+  "pak": { "out": "./build/phone-cars", "recipe": "MODELS=1 BAKE=1 TEXTURES=astc DISTRICT=los-santos-centre", "reused": true },
+  "device": "MGA-LX3 / ARM Bifrost @ DPR 2, ?surface=720x640 pinned on both arms",
+  "pose": "[1500,-1500] h900 pitch -1.15 yaw pi perspective",
+  "board": "EMPTY (units=0&calls=0)",
+  "route": {
+    "warmup": "the rect's four corners, then the settle pose, before the first reading",
+    "legs": [[1380,-1620],[1620,-1380],[1380,-1380],[1620,-1620],[1380,-1500],[1620,-1500],[1500,-1620],[1500,-1380],[1380,-1620],[1620,-1380]],
+    "settle": [1500,-1500]
+  },
+  "howDerived": "per arm: the DELTA of the report's cumulative `frames` and `paceChanges` between a post-warmup reading and a post-route reading, so no boot frame is in any window and the rate is the window's own rather than the page's. paceChangeRate in the report is cumulative and is not what is quoted here.",
+  "arms": [
+    {
+      "arm": "field",
+      "ablated": "none",
+      "windowFrames": 3262,
+      "paceChanges": 1456,
+      "stutterRate": 0.4464,
+      "meanMs": 20.29,
+      "p95Ms": 34
+    },
+    {
+      "arm": "nobloom",
+      "ablated": "bloom",
+      "windowFrames": 4634,
+      "paceChanges": 367,
+      "stutterRate": 0.0792,
+      "meanMs": 17.12,
+      "p95Ms": 18
+    }
+  ],
+  "reading": {
+    "headline": "44.6 % -> 7.9 % of consecutive frame pairs change pace. The bloom chain is not a marginal 2.4 ms item under a smoothness criterion; it is the difference between a console that stutters on nearly every other frame pair and one that almost never does.",
+    "whyThisIsNotTheMeanRestated": "It is the same underlying frames, but the two numbers rank the change completely differently. The mean difference (2.43 ms in the earlier re-flight, 3.2 here) is at or under the instrument's ~2.5 ms floor and a row is not allowed to claim it. The stutter difference is 5.6x and needs no floor argument at all, because it is a count of events rather than a difference of averages.",
+    "corroboration": "p95 34 against 18 on the same windows, and the live readout showed 60 fps on the nobloom arm where field sat at 49-50. The pacing number, the tail and the readout all move together.",
+    "whatItDoesNotSay": "Nothing about whether the map LOOKS acceptable without bloom. That is the operator's verdict and it has not been taken for removal — only for the half-resolution prefilter, at night, in 9-05. This row prices the option; it does not exercise it."
+  },
+  "caveats": {
+    "tabFreezes": "the console tab was frozen by Android several times during the field arm (it is backgrounded whenever anything else takes the screen). One freeze of 14.9 s landed in the field window and destroyed `paceWorstRatio` for it — 741 against nobloom's 7.2 — while adding 2 counts to 1 456, so `stutterRate` is unaffected and `paceWorstRatio` is NOT quoted for the field arm. A run where the phone is left alone would fix this.",
+    "cssBox": "not held constant (handoff's standing gap): 360x550 and 360x609 across the readings. The overlay follows the box; on an empty board it is ~0.07 ms and cannot account for a 5.6x difference in stutter.",
+    "single": "one pairing, not a bracket. The earlier re-flight the same day bracketed the same arm on frame TIME (19.57 / 16.80 / 18.88) and found it real, which is the reason this one pairing is being read at all. A second field arm after this one is still owed.",
+    "thermal": "still nothing records battery, charging state or die temperature."
+  }
+}
