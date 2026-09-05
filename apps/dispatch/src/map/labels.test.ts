@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CollisionIndex, labelCandidates, labelCeiling, labelRank } from './labels';
+import { CollisionIndex, labelCandidates, labelCeiling, labelRank, unitWantsLabel } from './labels';
 
 const CHIP = { height: 18, width: 80 };
 
@@ -121,6 +121,28 @@ describe('labelRank', () => {
 
     it('states a ceiling that shrinks with the screen — one rule for a phone and a desk', () => {
       expect(labelCeiling(360, 640, 80, 18)).toBeLessThan(labelCeiling(1920, 1080, 80, 18));
+    });
+  });
+});
+
+describe('unitWantsLabel', () => {
+  describe('negative cases', () => {
+    it('gives no name to a unit the shift is not about', () => {
+      expect(unitWantsLabel('available', false)).toBe(false);
+      // `busy` is unavailable for its own reasons rather than working a call this board is tracking.
+      expect(unitWantsLabel('busy', false)).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('names the units committed to a call', () => {
+      expect(unitWantsLabel('enRoute', false)).toBe(true);
+      expect(unitWantsLabel('onScene', false)).toBe(true);
+    });
+
+    it('names whatever the operator selected, whatever it was doing', () => {
+      expect(unitWantsLabel('available', true)).toBe(true);
+      expect(unitWantsLabel('busy', true)).toBe(true);
     });
   });
 });

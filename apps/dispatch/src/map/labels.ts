@@ -9,6 +9,9 @@
  *
  * Three parts, and each answers one thing the step owes:
  *
+ * - **Which label is asked for at all.** {@link unitWantsLabel} — the operator's call, 2026-09-05. Ranking
+ *   150 names and then fitting as many as the pixels allow answers the wrong question: every one of them
+ *   fought for the screen, and about thirty won it, which is a wall of text with a priority order inside it.
  * - **Which label wins.** {@link labelRank} — the operator's own priority, derived from the job rather than
  *   chosen: what they selected, then open calls worst-first, then the units committed to a call, then
  *   whatever is nearest the eye. Colour never carries it (`dataviz`), because the rank decides an ORDER and
@@ -16,13 +19,17 @@
  * - **What happens to the loser.** Its SYMBOL still draws — an icon is the datum and is never dropped — and
  *   only its name goes. The count comes back in `SymbologyCounts.chipsDropped` so the chrome can say how
  *   many names are hidden rather than letting the operator believe the map is complete.
- * - **The budget.** There is no constant: a screen holds `floor(area / chipArea)` labels and the index
- *   cannot place more than that however many are asked for. The ceiling is therefore a property of the
- *   viewport, which is what makes one rule serve a 360 px phone and a 4K desk alike.
+ * - **The budget.** The rule above is the budget, and it is a property of the SHIFT rather than of the
+ *   screen. {@link labelCeiling} is the viewport ceiling this module was written around — `floor(area /
+ *   chipArea)`, one rule for a 360 px phone and a 4K desk — and it is NOT on the draw path: it never bound
+ *   at any load the console has run (about seventy chips fit on this phone), which is exactly why the layer
+ *   filled up. It is kept because it is the right shape for a screen that ever asks for more names than it
+ *   has room for; today the collision index and the rule above settle it first.
  *
  * The index is grid-bucketed for the same reason MapLibre's is: at 150 units a naive all-pairs test is
  * ~11 000 comparisons a frame, and a 32 px grid turns each placement into a handful.
  */
+import type { UnitStatus } from '../ops/types';
 
 /** A label's claim on the screen, in CSS pixels of the overlay canvas. */
 export interface LabelBox {
@@ -157,6 +164,24 @@ export function labelRank(entry: {
 
   // The band decides; the depth only orders inside it, and is scaled so no distance can cross a band.
   return band + Math.min(0.999, entry.depth / 100_000);
+}
+
+/**
+ * Whether a unit's NAME is drawn at all — the operator's call, 2026-09-05, on seeing 150 of them at once.
+ *
+ * A name is for reading, and a dispatcher reads the units their shift is about: the one they have selected,
+ * and the ones committed to a call. A unit patrolling is a chevron with a heading and a colour, which is the
+ * whole of what an operator asks of it until it is dispatched — and its callsign is one tap away, on the
+ * symbol and in the units panel, so nothing is lost that was being read.
+ *
+ * **This is the rule the layer's density comes from**, and it belongs here rather than in the draw loop
+ * because it is a decision about the operator's job and not about pixels: at 150 units the previous answer
+ * (rank everything, place whatever fits) put about thirty plates on a phone, and thirty names an operator
+ * did not ask for read as noise however well they are ordered. `busy` is deliberately on the quiet side of
+ * the line: it is a unit unavailable for its own reasons, not one working a call this board is tracking.
+ */
+export function unitWantsLabel(status: UnitStatus, selected: boolean): boolean {
+  return selected || status === 'enRoute' || status === 'onScene';
 }
 
 /** Committed units first: an operator is tracking the ones working a call, not the ones patrolling. */

@@ -150,6 +150,37 @@ One rule, and the screen decides — which is what makes it work at both ends wi
 86 of 150 names reads as *enough* in an operator's hand is a field verdict, and the lever if it does not is
 collapsing a cluster into a count rather than dropping its members.
 
+**THE VERDICT CAME BACK 2026-09-05, and it went the other way: 86 was far too MANY.** The operator's words,
+on their own phone at the declared load, were that the abundance of plates and their size was *"definitely
+not what I want to see"*. Two causes, and only one of them was this step's:
+
+- **The size was a bug and not a choice** — the symbology was being drawn into a canvas sized to the
+  measurement pin while its coordinates came from the displayed box, so the layer was clipped at the store's
+  edge and stretched back over the box. That is
+  [architecture.md](../../../restrictions/architecture.md)'s camera-aspect rule, one canvas over, and it is
+  fixed there rather than here.
+- **The density was this step's, and its budget was answering the wrong question.** `floor(area / chipArea)`
+  is *how many names the screen can hold* — 152 on this phone — and the screen can hold far more names than
+  a person wants to read. It never bound at any load the console has run: about thirty plates won the
+  collision and thirty names nobody asked for read as noise however well they are ordered.
+
+**The rule that replaced it is a property of the SHIFT rather than of the screen** (`unitWantsLabel`,
+`apps/dispatch/src/map/labels.ts`): a unit's name is drawn when it is **selected** or **committed to a call**
+(`enRoute`, `onScene`), and a unit patrolling is a chevron with a heading and a colour — which is the whole
+of what an operator asks of it until it is dispatched. `busy` is deliberately on the quiet side of the line:
+it is a unit unavailable for its own reasons, not one working a call this board is tracking. Nothing is lost
+that was being read — the callsign is one tap away, on the symbol and in the units panel — and the drop is
+still counted, so `namesHidden` goes on telling the operator the map is not complete.
+
+It also moves the CPU line the chain is about to work on: a name that is not drawn is a name that is not
+`measureText`-ed, and at the declared load `overlay-2d` was **6.17 ms of an 11.65 ms body**
+([the first units-as-models capture](../../../benchmarks/opensa-engine/2026-09-05-mobile-units-as-models-first.json)).
+What that is worth is [owed as a measurement](../readme.md) rather than claimed here.
+
+**The ceiling is kept and is now honestly labelled.** `labelCeiling` stays in `labels.ts`, off the draw path,
+because it is the right shape for a screen that ever asks for more names than it has room for — and the
+module's header says so rather than going on describing it as the budget.
+
 ### 04 — The floor, measured
 
 `apps/dispatch/src/world/plan-mode.ts` already runs the same camera, gestures, symbology and board on a 2D

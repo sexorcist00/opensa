@@ -918,6 +918,27 @@ a whole evening of measurement had been taken through it. Caught since 2026-09-0
 (`apps/dispatch/src/world/capture-surface.ts`) and its five tests, which pin the divergent case rather than
 the agreeing one.
 
+**And the pin belongs to the SCENE's buffer alone — the same seam, one canvas over (2026-09-05).** The rule
+above repaired the camera and left the 2D overlay on the wrong side of it for a day: `boot.ts` sized BOTH
+canvases from one number, so `?surface=720x640` pinned the symbology's backing store too, while the layer is
+drawn in the displayed box's coordinates (`setTransform(dpr, …)` over `overlay.clientWidth/Height`). While
+the box happens to equal `pin / dpr` the two agree and it looks perfect; the moment it does not, the
+symbology is rasterized past the store's edge, **clipped there**, and then **stretched back over the box** by
+the browser. On the 2/03 phone that is one gesture: with the call drawer open the box is exactly 360x320 CSS
+against the 720x640 pin, and hiding the drawer takes it to ~360x595 — the bottom 46 % of the symbology
+stops being drawn at all and what remains is 1.9x too tall. The operator's report was that the label plates
+*grow* when the drawer is hidden, which is the visible half of a layer that had also stopped drawing half its
+content.
+
+Nothing about `?surface=` reaches a 2D canvas: it exists to hold the scene pass still — MSAA, `rgba16float`,
+the render targets that are 28 MB of this device's residency — so **the overlay follows what it is displayed
+in, and a pinned arm costs the scene resolution and the symbology nothing.** Its consequence for a
+measurement is stated rather than discovered: `overlay-2d` is now a cost of the DISPLAYED box, so an arm
+holds the chrome still rather than the pin (every row taken before this was captured at a 360x320 box
+against a 720x640 pin, where the two agreed, so none of them moves). **SILENT in the same three ways as its
+parent**, plus one of its own: a resize observer watching only the scene canvas re-introduces the assumption
+that both boxes move together, which plan mode already breaks by hiding one of them — so both are observed.
+
 ## An effect's RETURN VALUE is its cleanup — a shorthand body must return a cleanup or nothing
 
 React calls whatever `useEffect` returns as the effect's cleanup function. A concise arrow body returns the

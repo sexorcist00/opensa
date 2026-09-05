@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Incident, Operations, Unit } from '../ops/types';
+import type { Incident, Operations, Unit, UnitStatus } from '../ops/types';
 import type { ScreenPoint, ScreenProjector } from './projection';
 
 import { SymbologyLayer, warmTextMetrics } from './overlay-2d';
 
-function board(units: number, incidents = 0): Operations {
+/** `status` defaults to a unit the shift IS about, because that is the one with a name to place — the
+ *  quiet side of `unitWantsLabel` is asserted on its own below rather than inherited by every case. */
+function board(units: number, incidents = 0, status: UnitStatus = 'enRoute'): Operations {
   return {
     incidents: Array.from({ length: incidents }, (_, i) => call(i)),
     log: [],
     now: 0,
-    units: Array.from({ length: units }, (_, i) => unit(i)),
+    units: Array.from({ length: units }, (_, i) => unit(i, status)),
   };
 }
 
@@ -90,7 +92,7 @@ function spreadProjector(depth = 100): ScreenProjector {
   } as unknown as ScreenProjector;
 }
 
-function unit(index: number): Unit {
+function unit(index: number, status: UnitStatus = 'enRoute'): Unit {
   return {
     at: [1000 + index, -1000],
     callsign: `4-XRAY-${index}`,
@@ -100,7 +102,7 @@ function unit(index: number): Unit {
     incident: null,
     kind: 'patrol',
     model: 'copcarls',
-    status: 'available',
+    status,
     target: null,
   };
 }
@@ -155,6 +157,20 @@ describe('SymbologyLayer', () => {
       expect(calls.font - small).toBe(small);
     });
 
+    it('draws no name for a unit the shift is not about — the symbol is the datum, the name is not', () => {
+      const { calls, ctx } = fakeContext();
+      const layer = new SymbologyLayer();
+
+      // 24 patrolling units, spread so every one of them WOULD have found free pixels (the case above
+      // places all 24). Nothing is competing here: they are simply not what the operator is reading.
+      layer.render(ctx, spreadProjector(), board(24, 0, 'available'), null, { height: 900, width: 900 });
+
+      expect(layer.counted()).toMatchObject({ chips: 0, chipsDropped: 24, symbols: 24 });
+      expect(calls.text).not.toContain('4-XRAY-0');
+      // And the name it does not draw is a name it does not measure, which is the point on the CPU side.
+      expect(calls.measure).toBe(0);
+    });
+
     it('drops a chip past the depth cut and counts the drop', () => {
       const { ctx } = fakeContext();
       const layer = new SymbologyLayer();
@@ -188,6 +204,16 @@ describe('SymbologyLayer', () => {
       layer.render(ctx, spreadProjector(), board(24), null, { height: 900, width: 900 });
 
       expect(layer.counted()).toMatchObject({ chips: 24, chipsDropped: 0, symbols: 24 });
+    });
+
+    it('names a patrolling unit the operator has selected — asking for it is what puts it back', () => {
+      const { calls, ctx } = fakeContext();
+      const layer = new SymbologyLayer();
+
+      layer.render(ctx, spreadProjector(), board(24, 0, 'available'), { id: 'u7', kind: 'unit' }, SIZE);
+
+      expect(calls.text).toContain('4-XRAY-7');
+      expect(layer.counted()).toMatchObject({ chips: 1, chipsDropped: 23, symbols: 24 });
     });
 
     it('gives the pixels to the selection when everything stacks on one point', () => {

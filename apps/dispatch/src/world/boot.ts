@@ -393,22 +393,49 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
    * `ResizeObserver` below fires once on `observe()`, so the unguarded version threw away the store the boot
    * had just allocated (and every warm done against it) a tick after allocating it. It also cleared both
    * canvases on every observer tick for the rest of the session.
+   *
+   * **THE PIN IS THE SCENE'S BUFFER AND NEVER THE OVERLAY'S** (the operator's report, 2026-09-05). The two
+   * canvases were sized from one number until then, and the symbology is drawn in the DISPLAYED box's
+   * coordinates — `setTransform(dpr, …)` over `overlay.clientWidth/Height` — so the moment the box stopped
+   * matching `pin / dpr` the layer was drawn into a store too small for it, clipped at the store's edge, and
+   * then stretched back over the box by the browser. On this phone that is one gesture away: with the call
+   * drawer open the box is exactly 360x320 CSS against a 720x640 pin and everything agrees; hide the drawer
+   * and the box becomes ~360x595, so the bottom 46 % of the symbology is not drawn at all and what remains
+   * is 1.9x too tall. The operator's words for it were that the plates *grow* when the drawer is hidden.
+   *
+   * It is the same seam as the camera's, one canvas over: `?surface=` exists to hold the SCENE pass still
+   * (MSAA, `rgba16float`, the render targets that are 28 MB of this device's residency), and none of those
+   * reasons touch a 2D canvas. So the overlay follows what it is displayed in — the rule
+   * [architecture.md](../../../../docs/restrictions/architecture.md) already states for the camera aspect —
+   * and a pinned arm costs the scene resolution and the symbology nothing.
+   *
+   * What it means for a measurement: `overlay-2d` is now a cost of the DISPLAYED box, so an arm holds the
+   * chrome still rather than the pin. Every row taken before this was captured at a 360x320 box against a
+   * 720x640 pin, where the two agreed, so none of them moves.
    */
   const resize = (): void => {
     // A pinned buffer ignores the observer's numbers rather than the observer: the callback still runs, it
     // just has nothing to assign, so the guard below keeps the backing store (and the boot's warm) intact.
     const width = pinnedSurface?.width ?? Math.max(2, Math.floor(canvas.clientWidth * dpr));
     const height = pinnedSurface?.height ?? Math.max(2, Math.floor(canvas.clientHeight * dpr));
-    if (canvas.width === width && canvas.height === height) {
-      return;
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
     }
-    canvas.width = width;
-    canvas.height = height;
-    overlay.width = width;
-    overlay.height = height;
+    const overlayWidth = Math.max(2, Math.floor(overlay.clientWidth * dpr));
+    const overlayHeight = Math.max(2, Math.floor(overlay.clientHeight * dpr));
+    if (overlay.width !== overlayWidth || overlay.height !== overlayHeight) {
+      overlay.width = overlayWidth;
+      overlay.height = overlayHeight;
+    }
   };
   resize();
-  new ResizeObserver(resize).observe(canvas);
+  // BOTH canvases, since the overlay's size is now its own box's rather than the scene's: observing only the
+  // scene canvas would re-introduce the assumption this change exists to remove — that the two boxes always
+  // move together — and a surface that hides one of them (plan mode) is already in this repository.
+  const observer = new ResizeObserver(resize);
+  observer.observe(canvas);
+  observer.observe(overlay);
 
   /**
    * `?msaa=` / `?scene=` / `?bloom*=` — 9/04's attachment arms and 9/05's post-chain ones. Chosen HERE because

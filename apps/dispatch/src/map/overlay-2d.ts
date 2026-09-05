@@ -17,7 +17,7 @@ import type { ScreenProjector } from './projection';
 import { PUBLISH_INTERVAL_MS } from '../ops/tracks';
 import { incidentKey, type Rgba, SET_COLORS } from './beacons';
 import { aheadOf, gtaToEngine } from './coords';
-import { CollisionIndex, labelCandidates, labelRank } from './labels';
+import { CollisionIndex, labelCandidates, labelRank, unitWantsLabel } from './labels';
 
 /** What the last draw put on screen, and what a click at those pixels selects. */
 export interface HitArea {
@@ -33,7 +33,9 @@ export interface HitArea {
 export interface SymbologyCounts {
   /** Label chips drawn. */
   readonly chips: number;
-  /** Symbols whose chip was dropped for being past {@link CHIP_MAX_DEPTH} — the decluttering, counted. */
+  /** Symbols drawn without their name — past {@link CHIP_MAX_DEPTH}, not one the shift is about
+   *  (`unitWantsLabel`), or beaten to the pixels. The decluttering, counted, so the chrome can say how many
+   *  names are hidden rather than let the operator read the map as complete. */
   readonly chipsDropped: number;
   /** `measureText` calls this frame. It is the claim of the width cache, stated rather than asserted: with
    *  the cache warm this is 0 however many symbols are on screen, and every new label costs exactly one. */
@@ -264,7 +266,9 @@ export class SymbologyLayer {
     if (stale) {
       this.counts.stale += 1;
     }
-    if (point.depth > CHIP_MAX_DEPTH && !selected) {
+    // Two reasons a unit keeps its symbol and loses its name, and both count as a dropped chip: it is too far
+    // from the eye to be readable, or the shift is not about it (`unitWantsLabel`, the operator's call).
+    if (!unitWantsLabel(unit.status, selected) || (point.depth > CHIP_MAX_DEPTH && !selected)) {
       this.counts.chipsDropped += 1;
 
       return null;
