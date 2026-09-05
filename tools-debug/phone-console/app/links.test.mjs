@@ -252,6 +252,19 @@ describe('the bloom arms and the night look pair (201/9-05)', () => {
       expect(links.nighthalf).toBe(`${links.night}&bloomscale=0.5`);
     });
 
+    // The assertion above passed for a day while the pair it guards was DEAD. On 2026-09-05 the operator's
+    // verdict made `bloomPrefilterScale: 0.5` the console default, so `night` — carrying no `bloomscale` —
+    // renders at half, and `nighthalf` sets the same 0.5 explicitly: both halves became one run. Differing
+    // by one parameter is not enough; the parameter has to differ from what the DEFAULT already does.
+    it('never pairs the baseline against an arm that only restates the shipped default', () => {
+      const links = consoleUrls(SERVED);
+
+      // `apps/dispatch/src/world/console-budget.ts` ships `bloomPrefilterScale: 0.5`, so an arm asking for
+      // 0.5 asks for what `night` already does. The one that moves has to ask for the OTHER value.
+      expect(links.nightfull).toBe(`${links.night}&bloomscale=1`);
+      expect(links.nightfull).not.toContain('bloomscale=0.5');
+    });
+
     it('does not judge the half-res prefilter in daylight, where there is no lit emitter to lose', () => {
       const links = consoleUrls(SERVED);
 

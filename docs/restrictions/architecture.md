@@ -1013,6 +1013,32 @@ refused by name, every other field falls back to the pose the map holds, and the
 was FLOWN rather than the one that was asked for. Anywhere else a `MapPose` is cast rather than parsed, this
 is still silent.
 
+## A MEASUREMENT ARM is defined against the DEFAULT, so moving the default can kill the arm silently
+
+**The rule.** An A/B arm is only an arm while it asks for something the default does not already do. When a
+verdict moves the default ONTO an arm's value, that arm stops differing from the baseline — both halves
+become one run — and nothing about the link, the test or the capture changes to say so. **So a change to a
+default has to be followed through every arm defined against it, in the same change.**
+
+**What it cost.** On 2026-09-05 the operator's night verdict made `bloomPrefilterScale: 0.5` the dispatch
+console's default. The look pair for that very question is `night` (no `bloomscale`, so: the default) against
+`nighthalf` (`bloomscale=0.5`). From that moment the two rendered **identically**, and it was found a day
+later only because someone went to use the pair. The replacement is `nightfull` (`bloomscale=1`, the
+PRE-verdict default), which is the value the default is not.
+
+**SILENT in the worst way this folder means it, because a test was watching and passed.**
+`links.test.mjs` asserts *"never lets the look pair differ by anything but the arm"* — and it still held:
+the two links differ by exactly one parameter. The assertion was about the URL's SHAPE, and the defect was
+in its VALUE. Both links resolve, both pages load, the capture is complete, and an operator flipping between
+them sees no difference because there is none — which reads as *"the change is imperceptible, keep it"*
+rather than as *"you are looking at the same run twice"*. That inference is the damage: a null A/B does not
+report itself, it reports a verdict.
+
+**Caught since 2026-09-05** by a second test asserting the arm does not restate the shipped default, and by
+naming the trap where the links are defined. The general form has no guard: any arm whose value equals its
+budget's default is dead, and only a reader comparing the two by hand will know. Its neighbour one section
+down is the same family — a surface that disagrees with the checkout while both report themselves current.
+
 ## A long-lived process serves the TABLE IT STARTED WITH, never the one in the checkout
 
 **The rule.** A server that reads a module at boot and answers from it — a link list, a tool schema, a job

@@ -35,6 +35,7 @@ export const LINK_NAMES = [
   'bloomf16',
   'bloomvendor',
   'night',
+  'nightfull',
   'nighthalf',
   'nightnobloom',
   'noprobe',
@@ -187,6 +188,19 @@ export function consoleUrls(state = {}) {
     // to lose and the daylight A/B on 2026-09-05 was indistinguishable — which settles nothing. These two
     // differ by the arm alone (`links.test.mjs`), so what an operator sees between them IS the arm.
     night: `${app}?${empty}&hour=22`,
+    // THE PREFILTER question's live partner, and the one `nighthalf` STOPPED being on 2026-09-05. That day
+    // the operator's verdict made `bloomPrefilterScale: 0.5` the console's default, so `night` — which
+    // carries no `bloomscale` — has rendered at half ever since, and `nighthalf`, which sets 0.5 explicitly,
+    // renders the SAME THING. The pair went on looking like a pair: both links resolve, the test that pins
+    // them still passes because it only asserts they differ by that one parameter, and an operator flipping
+    // between them sees no difference because there is none. **An A/B whose two halves are one run is the
+    // exact failure `docs/restrictions/architecture.md` names**, and this is the second time this repo has
+    // met it in a week. `nightfull` is the arm that actually moves: `bloomscale=1` is the PRE-verdict
+    // default, so `night` minus this is what that verdict bought, re-flyable for as long as it matters.
+    nightfull: `${app}?${empty}&hour=22&bloomscale=1`,
+    // Kept, and no longer a partner to anything: it PINS the shipped default rather than moving it, which is
+    // worth having when a row needs to state the scale it ran at rather than inherit it. Rows filed before
+    // 2026-09-05 cite it as the arm, and they were right at the time.
     nighthalf: `${app}?${empty}&hour=22&bloomscale=0.5`,
     // THE REMOVAL question, which is a different question from the prefilter one above and has never been
     // put to an operator. 2026-09-05 measured what dropping the chain BUYS — the map stutters on 44.6 % of

@@ -172,9 +172,11 @@ export const TOOLS = [
             "`bloom4` are 201/9's ABLATION arms, and they exist because this device has no " +
             '`timestamp-query` and no browser flag brings it: a pass is priced by REMOVING it and re-flying ' +
             'the same route, so each one is `field` minus one group of passes. The LOOK arms are at hour 22 ' +
-            'and there are two different questions in them: `night` against `nighthalf` asks what the ' +
+            'and there are two different questions in them: `night` against `nightfull` asks what the ' +
             'HALF-RESOLUTION prefilter costs (it can only lose a sub-pixel emitter where there is one lit, ' +
-            'so daylight settles nothing), and `night` against `nightnobloom` asks what removing the chain ' +
+            'so daylight settles nothing; and note `nighthalf` is NOT that arm any more, since the console ' +
+            'default became half on 2026-09-05 and it now restates it), and `night` against ' +
+            '`nightnobloom` asks what removing the chain ' +
             'ENTIRELY costs — the question 2026-09-05 priced at 5.6x fewer stutters and never put to an ' +
             'operator. Read `surface.ablated` in ' +
             'the snapshot before believing any of them. Also the map itself, its inventory report, the ' +
@@ -201,6 +203,7 @@ export const TOOLS = [
             'bloomboth',
             'bloomfull',
             'night',
+            'nightfull',
             'nighthalf',
             'nightnobloom',
             'bloom4',
