@@ -11,7 +11,7 @@
  */
 import type { DebugLineSetId, Engine } from '@opensa/engine';
 
-import type { Operations, Selection, UnitStatus } from '../ops/types';
+import type { Operations, Selection, Unit, UnitStatus } from '../ops/types';
 import type { GtaGround } from './coords';
 
 import { UNITS_ON_SCREEN } from '../ops/budget';
@@ -161,7 +161,7 @@ export class Beacons {
     ops: Operations,
     selection: Selection,
     trails?: ReadonlyMap<string, Float32Array>,
-    hasModel?: (id: string) => boolean,
+    hasModel?: (unit: Unit) => boolean,
   ): void {
     const drawn = hasModel ?? never;
     this.counts.clear();
@@ -170,7 +170,7 @@ export class Beacons {
     this.marked.clear();
     for (const unit of ops.units) {
       const selected = selection?.kind === 'unit' && selection.id === unit.id;
-      if (!unitWantsSymbol(unit.status, selected, drawn(unit.id))) {
+      if (!unitWantsSymbol(unit.status, selected, drawn(unit))) {
         continue;
       }
       this.marked.add(unit.id);

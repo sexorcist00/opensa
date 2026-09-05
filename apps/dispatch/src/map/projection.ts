@@ -35,22 +35,37 @@ export class ScreenProjector {
    * is nowhere in the picture. Silent by construction: the label looks like any other label.
    */
   project(world: EnginePoint): null | ScreenPoint {
+    const out = { depth: 0, x: 0, y: 0 };
+
+    return this.projectInto(world[0], world[1], world[2], out) ? out : null;
+  }
+
+  /**
+   * The same projection, writing into a point the caller owns — for the loop that runs per UNIT per frame.
+   *
+   * **The allocation is the reason this exists, not the arithmetic.** The symbology layer projects every
+   * unit and every call every frame, and at the declared board `sym:units` measured **4.1 ms for 150 units**
+   * — 27 us each — while hiding 110 of the 150 marks moved it by 0.1 ms
+   * ([the decomposition](../../../../docs/benchmarks/opensa-engine/2026-09-05-mobile-board-decomposition.json)).
+   * So the cost is not the drawing and not this maths; it is what the per-unit path allocates on a phone's
+   * collector. Taking the coordinates as three numbers rather than an `EnginePoint` removes the array too,
+   * which is the other allocation this call used to force at its call sites.
+   */
+  projectInto(x: number, y: number, z: number, out: { depth: number; x: number; y: number }): boolean {
     const m = this.viewProj;
     const v = this.view;
-    const [x, y, z] = world;
     const depth = -(v[2] * x + v[6] * y + v[10] * z + v[14]);
     if (depth <= 0.0001) {
-      return null;
+      return false;
     }
     const w = m[3] * x + m[7] * y + m[11] * z + m[15];
     const clipX = m[0] * x + m[4] * y + m[8] * z + m[12];
     const clipY = m[1] * x + m[5] * y + m[9] * z + m[13];
+    out.depth = depth;
+    out.x = ((clipX / w) * 0.5 + 0.5) * this.width;
+    out.y = (0.5 - (clipY / w) * 0.5) * this.height;
 
-    return {
-      depth,
-      x: ((clipX / w) * 0.5 + 0.5) * this.width,
-      y: (0.5 - (clipY / w) * 0.5) * this.height,
-    };
+    return true;
   }
 
   /** Rebuild from the camera the frame is about to be drawn with, and the overlay's CSS size. */

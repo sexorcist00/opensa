@@ -182,6 +182,27 @@ describe('UnitModels', () => {
       expect(layer.stats()).toMatchObject({ drawn: 0, types: 0, withoutModel: 1 });
     });
 
+    it('says a car is coming while its model is still in flight — the boot flash', async () => {
+      // The defect the operator caught: the first version of this answered "is a car drawn RIGHT NOW",
+      // which at startup is no for every unit, so the console opened with 150 chevrons and dropped 110 of
+      // them the moment the fleet landed. A model in flight is a car a moment away, not a missing one.
+      const { engine } = fakeEngine();
+      const { source } = fakeSource({ copcarls: () => model() });
+      const layer = new UnitModels(engine, source, noWake);
+      const car = unit('u1');
+      layer.update([car]);
+
+      // Requested, not yet arrived: nothing is drawn, and nothing should be marked either.
+      expect(layer.stats().drawn).toBe(0);
+      expect(layer.willDraw(car)).toBe(true);
+
+      await settle();
+      layer.update([car]);
+
+      expect(layer.stats().drawn).toBe(1);
+      expect(layer.willDraw(car)).toBe(true);
+    });
+
     it('never trims a type that is on the board, however far past the allowance it is', async () => {
       const { engine, models } = fakeEngine();
       const { source } = fakeSource({ copcarls: () => model(UNIT_MODEL_TEXTURE_BYTES * 2) });
@@ -196,6 +217,24 @@ describe('UnitModels', () => {
   });
 
   describe('positive cases', () => {
+    it('says NO car is coming for a unit that names none, and for a name this build cannot supply', async () => {
+      // The two permanent cases, and the only ones that keep a 2D mark of their own: everything else has a
+      // car on its way.
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const { engine } = fakeEngine();
+      const { source } = fakeSource({});
+      const layer = new UnitModels(engine, source, noWake);
+      const nameless = unit('u1', { model: null });
+      const missing = unit('u2');
+      layer.update([nameless, missing]);
+      await settle();
+      layer.update([nameless, missing]);
+
+      expect(layer.willDraw(nameless)).toBe(false);
+      expect(layer.willDraw(missing)).toBe(false);
+      expect(warn).toHaveBeenCalled();
+    });
+
     it('uploads one model per TYPE and gives every unit its own instance', async () => {
       const fake = fakeEngine();
       const { source } = fakeSource({ copcarls: () => model() });

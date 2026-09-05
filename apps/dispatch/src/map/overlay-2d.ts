@@ -16,7 +16,7 @@ import type { ScreenProjector } from './projection';
 
 import { PUBLISH_INTERVAL_MS } from '../ops/tracks';
 import { incidentKey, type Rgba, SET_COLORS } from './beacons';
-import { aheadOf, gtaToEngine } from './coords';
+import { gtaToEngine } from './coords';
 import { CollisionIndex, labelCandidates, labelRank, unitWantsLabel, unitWantsSymbol } from './labels';
 import { quantizeAlpha, SymbolSprites } from './symbol-sprites';
 
@@ -56,6 +56,9 @@ export interface SymbologyCounts {
 
 /** Height above ground the unit/call icons are anchored at, so they clear the road surface. */
 const ICON_LIFT = 4;
+/** How far ahead of a unit the chevron's heading is projected from — `aheadOf`'s distance, inlined here
+ *  because that helper returns a fresh pair and this runs per marked unit per frame. */
+const AHEAD_DISTANCE = 14;
 /** How far above the anchor the chip floats, in screen pixels. */
 const CHIP_RISE = 26;
 const CHIP_HEIGHT = 18;
@@ -112,8 +115,10 @@ const SCALE_STEPS = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000] as const;
  * before: no models (so every mark draws, which is plan mode and every test) and no timing.
  */
 export interface RenderInputs {
-  /** Is this unit drawn as a car right now (`UnitModels.isDrawn`) — see `unitWantsSymbol`. */
-  readonly hasModel?: (id: string) => boolean;
+  /** Is a car going to draw this unit, now or as soon as what is in flight lands (`UnitModels.willDraw`)
+   *  — see `unitWantsSymbol`. Asking whether one is drawn RIGHT NOW is what made the console open with 150
+   *  chevrons and then drop 110 of them a second later. */
+  readonly hasModel?: (unit: Unit) => boolean;
   /**
    * The frame's span recorder, so this layer's own cost can be attributed rather than read as one number.
    *
@@ -140,11 +145,39 @@ interface LabelRequest {
   readonly y: number;
 }
 
+/** A pooled hit rect. {@link HitArea}'s fields, writable — the pool rewrites them rather than replacing the
+ *  record, which is the whole point of it. */
+interface MutableArea {
+  height: number;
+  id: string;
+  kind: 'incident' | 'unit';
+  width: number;
+  x: number;
+  y: number;
+}
+
 export class SymbologyLayer {
-  private areas: HitArea[] = [];
-  /** Chip rects of the frame, held apart so the ICONS can be appended after them (see {@link render}). */
-  private chipAreas: HitArea[] = [];
+  private readonly ahead = { depth: 0, x: 0, y: 0 };
+  private areaCount = 0;
+  /**
+   * Hit rects, POOLED — the records are reused frame to frame and only their fields are rewritten.
+   *
+   * **This is the per-unit allocation, and the per-unit allocation is the cost of this layer.** `sym:units`
+   * measured 4.1 ms for 150 units and hiding 110 of the marks moved it by 0.1
+   * ([the decomposition](../../../../docs/benchmarks/opensa-engine/2026-09-05-mobile-board-decomposition.json)),
+   * so what dominates is what runs for EVERY unit whether or not it draws: a projected point, a coordinate
+   * array and a hit rect, all three of them fresh objects, ~190 times a frame at ~50 fps.
+   *
+   * `iconCount` and `chipCount` say how much of each pool this frame filled; everything past them is last
+   * frame's, kept for its shape rather than its contents.
+   */
+  private readonly areaPool: MutableArea[] = [];
+  private chipCount = 0;
+  /** Chip rects of the frame, held apart so the ICONS win a hit test over them (see {@link hitTest}). */
+  private readonly chipPool: MutableArea[] = [];
   private counts = { chips: 0, chipsDropped: 0, marksHidden: 0, measures: 0, spriteVariants: 0, stale: 0, symbols: 0 };
+  /** Scratch for the projections, so the per-unit path allocates neither a point nor a coordinate array. */
+  private readonly point = { depth: 0, x: 0, y: 0 };
   /**
    * The symbol bitmaps this layer blits instead of re-tessellating (see `symbol-sprites.ts`).
    *
@@ -181,14 +214,12 @@ export class SymbologyLayer {
 
   /** What sits at a CSS-pixel position, topmost first. Chips count — they are half the click target. */
   hitTest(x: number, y: number): null | { id: string; kind: 'incident' | 'unit' } {
-    for (let i = this.areas.length - 1; i >= 0; i -= 1) {
-      const area = this.areas[i];
-      if (x >= area.x && x <= area.x + area.width && y >= area.y && y <= area.y + area.height) {
-        return { id: area.id, kind: area.kind };
-      }
-    }
+    // ICONS FIRST, then chips — an icon must win where a neighbour's chip covers it. That used to be
+    // expressed by concatenating the two lists and walking the result backwards, which copied every rect
+    // every frame; walking the pools in order says the same thing and copies nothing.
+    const hit = pick(this.areaPool, this.areaCount, x, y) ?? pick(this.chipPool, this.chipCount, x, y);
 
-    return null;
+    return hit ? { id: hit.id, kind: hit.kind } : null;
   }
 
   /**
@@ -213,8 +244,8 @@ export class SymbologyLayer {
     // test call this without one.
     const step = read?.step ?? passThrough;
     const hasModel = read?.hasModel ?? never;
-    this.areas = [];
-    this.chipAreas = [];
+    this.areaCount = 0;
+    this.chipCount = 0;
     this.counts = {
       chips: 0,
       chipsDropped: 0,
@@ -252,9 +283,6 @@ export class SymbologyLayer {
       for (const request of wanted) {
         this.placeChip(ctx, index, request, size);
       }
-      // A chip is a click target for its own entity, but an ICON must still win where a neighbour's chip
-      // covers it — so the icons go last in the list `hitTest` walks backwards.
-      this.areas = [...this.chipAreas, ...this.areas];
     });
     step('sym:scale', () => drawScaleBar(ctx, projector, ops, size));
   }
@@ -285,15 +313,15 @@ export class SymbologyLayer {
     selection: Selection,
     size: { readonly height: number; readonly width: number },
   ): LabelRequest | null {
-    const point = projector.project(gtaToEngine(incident.at, ICON_LIFT));
-    if (!point) {
+    const point = this.point;
+    if (!projector.projectInto(incident.at[0], ICON_LIFT, -incident.at[1], point)) {
       return null;
     }
     const color = css(SET_COLORS[incidentKey(incident.status, incident.priority)]);
     const selected = selection?.kind === 'incident' && selection.id === incident.id;
     diamond(ctx, this.sprites, point.x, point.y, incident.status === 'closed' ? 5 : 8, color, selected);
     this.counts.symbols += 1;
-    this.areas.push({ height: 20, id: incident.id, kind: 'incident', width: 20, x: point.x - 10, y: point.y - 10 });
+    this.areaCount = mark(this.areaPool, this.areaCount, incident.id, 'incident', point.x - 10, point.y - 10);
     if (point.depth > CHIP_MAX_DEPTH && !selected) {
       this.counts.chipsDropped += 1;
 
@@ -321,21 +349,23 @@ export class SymbologyLayer {
     selection: Selection,
     size: { readonly height: number; readonly width: number },
     ageMs: number,
-    hasModel: (id: string) => boolean,
+    hasModel: (unit: Unit) => boolean,
   ): LabelRequest | null {
-    const point = projector.project(gtaToEngine(unit.at, ICON_LIFT));
-    if (!point) {
+    // Projected into the layer's own scratch: `gtaToEngine` is [x, height, -y] and `project` returns a fresh
+    // point, so the pair allocated twice per unit per frame for arithmetic that fits in three arguments.
+    const point = this.point;
+    if (!projector.projectInto(unit.at[0], ICON_LIFT, -unit.at[1], point)) {
       return null;
     }
     const stale = ageMs > FIX_FRESH_MS;
     const selected = selection?.kind === 'unit' && selection.id === unit.id;
     // THE HIT AREA IS RECORDED WHETHER OR NOT A MARK IS DRAWN. Picking runs off what this layer remembers,
     // so a patrolling car that has lost its chevron must not also lose the pixels an operator taps.
-    this.areas.push({ height: 20, id: unit.id, kind: 'unit', width: 20, x: point.x - 10, y: point.y - 10 });
+    this.areaCount = mark(this.areaPool, this.areaCount, unit.id, 'unit', point.x - 10, point.y - 10);
     if (stale) {
       this.counts.stale += 1;
     }
-    if (!unitWantsSymbol(unit.status, selected, hasModel(unit.id))) {
+    if (!unitWantsSymbol(unit.status, selected, hasModel(unit))) {
       // BOTH counters, because both are true and they answer different questions: the mark is not drawn
       // (`marksHidden`) and so is the name (`chipsDropped`, which is what the chrome's "N names hidden"
       // reads). A unit that keeps neither must still be counted by the number an operator is shown, or the
@@ -348,9 +378,15 @@ export class SymbologyLayer {
     // The chevron's screen angle comes from projecting a point AHEAD of the unit, so it stays correct under
     // any camera yaw or tilt without the overlay having to know the camera's basis. Projected only for a
     // mark that will be drawn — it is the second projection of every unit on the board otherwise.
-    const ahead = projector.project(gtaToEngine(aheadOf(unit.at, unit.heading, 14), ICON_LIFT));
+    const ahead = this.ahead;
+    const facing = projector.projectInto(
+      unit.at[0] + Math.sin(unit.heading) * AHEAD_DISTANCE,
+      ICON_LIFT,
+      -(unit.at[1] + Math.cos(unit.heading) * AHEAD_DISTANCE),
+      ahead,
+    );
     const color = css(SET_COLORS[unit.status], stale ? fixAlpha(ageMs) : 1);
-    const angle = ahead ? Math.atan2(ahead.y - point.y, ahead.x - point.x) : 0;
+    const angle = facing ? Math.atan2(ahead.y - point.y, ahead.x - point.x) : 0;
     // A stale unit is drawn HOLLOW as well as faded: fade alone reads as distance on a tilted map, and the
     // difference between "far away" and "we have not heard from it" is the whole point of the mark.
     chevron(ctx, this.sprites, point.x, point.y, angle, color, selected, stale);
@@ -398,7 +434,15 @@ export class SymbologyLayer {
     }
     chip(ctx, request, box);
     this.counts.chips += 1;
-    this.chipAreas.push({ ...box, id: request.id, kind: request.kind });
+    const held = this.chipPool[this.chipCount] ?? { height: 0, id: '', kind: 'unit', width: 0, x: 0, y: 0 };
+    held.height = box.height;
+    held.id = request.id;
+    held.kind = request.kind;
+    held.width = box.width;
+    held.x = box.x;
+    held.y = box.y;
+    this.chipPool[this.chipCount] = held;
+    this.chipCount += 1;
   }
 
   /** One string's width, measured once and remembered. The chip's padding is the caller's, so a width can
@@ -677,6 +721,20 @@ function leaderEnd(x: number, y: number, box: LabelBox): { x: number; y: number 
   };
 }
 
+/** Write one 20x20 icon rect into the pool at `count`, growing it once per new entity and never again. */
+function mark(pool: MutableArea[], count: number, id: string, kind: 'incident' | 'unit', x: number, y: number): number {
+  const held = pool[count] ?? { height: 20, id: '', kind, width: 20, x: 0, y: 0 };
+  held.height = 20;
+  held.id = id;
+  held.kind = kind;
+  held.width = 20;
+  held.x = x;
+  held.y = y;
+  pool[count] = held;
+
+  return count + 1;
+}
+
 /** No host said, so nothing is drawn as a model — plan mode's answer, and every test's. */
 function never(): boolean {
   return false;
@@ -685,6 +743,18 @@ function never(): boolean {
 /** The split, absent. */
 function passThrough<T>(_name: string, run: () => T): T {
   return run();
+}
+
+/** The topmost rect of one pool under a point — last written wins, as the concatenated walk did. */
+function pick(pool: MutableArea[], count: number, x: number, y: number): MutableArea | null {
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const area = pool[i];
+    if (x >= area.x && x <= area.x + area.width && y >= area.y && y <= area.y + area.height) {
+      return area;
+    }
+  }
+
+  return null;
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {

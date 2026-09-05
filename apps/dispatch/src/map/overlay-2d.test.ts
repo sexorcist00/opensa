@@ -82,22 +82,41 @@ function fakeContext(): {
   return { calls, ctx: ctx as unknown as CanvasRenderingContext2D };
 }
 
-/** Everything lands at the same near point — the layer is being measured, not the camera. */
 /** Every point on ONE pixel — the worst case for decluttering, and what most of these tests want. */
 function fakeProjector(depth = 100): ScreenProjector {
-  return { project: (): ScreenPoint => ({ depth, x: 200, y: 200 }) } as unknown as ScreenProjector;
+  return {
+    project: (): ScreenPoint => ({ depth, x: 200, y: 200 }),
+    // The layer's per-unit path projects INTO a point it owns (no allocation), so a fake that only offers
+    // `project` no longer stands in for a projector.
+    projectInto: (_x: number, _y: number, _z: number, out: { depth: number; x: number; y: number }): boolean => {
+      out.depth = depth;
+      out.x = 200;
+      out.y = 200;
+
+      return true;
+    },
+  } as unknown as ScreenProjector;
 }
 
 /** Points spread along a grid, so labels have somewhere to go and the placement can be counted (3/03). */
 function spreadProjector(depth = 100): ScreenProjector {
   let n = 0;
   const columns = 8;
+  const at = (): ScreenPoint => {
+    const index = n++;
+
+    return { depth, x: 60 + (index % columns) * 110, y: 40 + Math.floor(index / columns) * 60 };
+  };
 
   return {
-    project: (): ScreenPoint => {
-      const index = n++;
+    project: at,
+    projectInto: (_x: number, _y: number, _z: number, out: { depth: number; x: number; y: number }): boolean => {
+      const point = at();
+      out.depth = point.depth;
+      out.x = point.x;
+      out.y = point.y;
 
-      return { depth, x: 60 + (index % columns) * 110, y: 40 + Math.floor(index / columns) * 60 };
+      return true;
     },
   } as unknown as ScreenProjector;
 }
@@ -249,6 +268,24 @@ describe('SymbologyLayer', () => {
       expect(layer.counted()).toMatchObject({ marksHidden: 0, symbols: 24 });
     });
 
+    it('does not answer a hit test with a unit that left the board — the pool is reused, not refilled', () => {
+      // The risk the pool introduces and the only one worth a test: the records survive the frame, so a
+      // count that did not shrink would keep answering for entities that are gone. Nothing throws if it
+      // does — an operator taps empty ground and selects a unit that is no longer on the map.
+      const { ctx } = fakeContext();
+      const layer = spriteLayer();
+
+      // A marked unit projects TWICE (its point, then the point ahead of it for the chevron's heading), so
+      // unit 11's own point is the spread's index 22 — (720, 160).
+      layer.render(ctx, spreadProjector(), board(24, 0, 'available'), null, { height: 900, width: 900 });
+      expect(layer.hitTest(720, 160)).toEqual({ id: 'u11', kind: 'unit' });
+
+      layer.render(ctx, spreadProjector(), board(2, 0, 'available'), null, { height: 900, width: 900 });
+
+      expect(layer.hitTest(720, 160)).toBeNull();
+      expect(layer.hitTest(60, 40)).toEqual({ id: 'u0', kind: 'unit' });
+    });
+
     it('drops a chip past the depth cut and counts the drop', () => {
       const { ctx } = fakeContext();
       const layer = new SymbologyLayer();
@@ -308,6 +345,18 @@ describe('SymbologyLayer', () => {
       });
 
       expect(seen).toEqual(['sym:calls', 'sym:units', 'sym:labels', 'sym:scale']);
+    });
+
+    it('lets an ICON win a hit test over a neighbour\u2019s chip', () => {
+      // Kept from the concatenated walk this replaced: a chip is a click target for its own entity, but
+      // where one covers another entity's icon the icon has to win.
+      const { ctx } = fakeContext();
+      const layer = spriteLayer();
+
+      layer.render(ctx, spreadProjector(), board(24, 0, 'enRoute'), null, { height: 900, width: 900 });
+
+      // u0's icon sits at (60,40); every chip drawn is somewhere above or beside its own icon.
+      expect(layer.hitTest(60, 40)).toEqual({ id: 'u0', kind: 'unit' });
     });
 
     it('gives the pixels to the selection when everything stacks on one point', () => {

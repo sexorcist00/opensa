@@ -98,18 +98,6 @@ export class UnitModels {
     this.types.clear();
   }
 
-  /**
-   * Is this unit currently drawn AS A MODEL — the question the symbology layer asks before it decides
-   * whether the unit needs a 2D mark at all (the operator's call, 2026-09-05).
-   *
-   * A car on the map is the datum once it is really there; a chevron over it is a second drawing of the same
-   * fact. But a unit whose model this build cannot carry has nothing else on screen, so the layer draws its
-   * mark unconditionally — which is why this is a question rather than an assumption.
-   */
-  isDrawn(id: string): boolean {
-    return this.drawnUnits.has(id);
-  }
-
   stats(): UnitModelStats {
     let textureBytes = 0;
     for (const type of this.types.values()) {
@@ -163,6 +151,38 @@ export class UnitModels {
     }
     this.trim();
     this.engine.updateVehicles();
+  }
+
+  /**
+   * Is a CAR going to draw this unit — now, or as soon as what is in flight lands?
+   *
+   * The symbology layer asks this before deciding whether the unit needs a 2D mark of its own (the
+   * operator's call, 2026-09-05). A car on the map is the datum once it is there; a chevron over it draws
+   * the same fact twice.
+   *
+   * **It is not `drawnUnits.has(id)`, and the difference is what an operator sees at boot.** That was the
+   * first version, and it answers *is a car drawn RIGHT NOW* — which at startup is "no" for every unit,
+   * because the models arrive over the network a second later. So the console opened with 150 chevrons and
+   * then dropped 110 of them the moment the fleet landed: a flash of exactly the clutter the rule exists to
+   * remove. The operator caught it immediately.
+   *
+   * The question is really *does this unit have something else to draw it*, and a model still LOADING does.
+   * So a mark is kept only where nothing is coming: the unit names no model at all, or it names one this
+   * build cannot supply ({@link UnitModels.unresolved}). Those two are permanent; everything else is a
+   * moment away.
+   *
+   * **The trade, stated rather than discovered:** a unit whose model is in flight has neither a car nor a
+   * mark, so it is absent for as long as the load takes. That is the calmer of the two at a second, and it
+   * would be the wrong answer if loads ran long — `unitsAsModels` in the report is what says whether they
+   * do.
+   */
+  willDraw(unit: { id: string; model: null | string }): boolean {
+    if (this.drawnUnits.has(unit.id)) {
+      return true;
+    }
+    const name = unit.model === null ? null : unit.model.toLowerCase();
+
+    return name !== null && !this.unresolved.has(name);
   }
 
   /** Take an instance of `type` for `unit`, replacing whatever it was driving before. */

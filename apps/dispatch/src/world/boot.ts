@@ -859,7 +859,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       time('board', () => {
         // Same rule as the overlay's marks, and passed the same way: this layer draws the SAME fact through
         // depth, so filtering one and not the other would move the clutter rather than remove it.
-        beacons.update(ops, options.selection(), options.trails?.(), (id) => unitModels.isDrawn(id));
+        beacons.update(ops, options.selection(), options.trails?.(), (unit) => unitModels.willDraw(unit));
         unitModels.update(ops.units);
       });
     }
@@ -934,7 +934,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           // The layer's own split (`sym:*`), and the one thing it cannot know: whether a car is already
           // drawing this unit. Both are HOST answers — the same reason the render gate is told about the
           // wind rather than deriving it.
-          { hasModel: (id) => unitModels.isDrawn(id), step },
+          { hasModel: (unit) => unitModels.willDraw(unit), step },
         ),
       );
       // Over the symbols: an operator's own mark is the last thing drawn, so nothing hides it (201/7-05).
