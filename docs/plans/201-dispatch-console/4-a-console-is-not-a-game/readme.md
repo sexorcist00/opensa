@@ -206,8 +206,35 @@ is the whole of 01's win:
 **Budget:** the animation rate is a NUMBER the frame reads — per surface, never a mobile branch
 ([the restriction](../../../restrictions/architecture.md)) — and it is named before it is built, together
 with what it costs the battery figure 01 still owes.
-**Owes:** the rate, a look verdict from the phone that the sway reads as continuous at map zoom, `framesSkipped`
-before and after over a still map with foliage in frame, and the battery/thermal delta 01 owes re-taken under
+**BUILT 2026-09-05, and the design question was answered by the user rather than by me.** Asked for the
+rate, the answer was *"a smooth continuous render — the palm swaying in the wind; we killed all the
+liveliness with this"*, which is the first option above: **the display's rate whenever wind-animated
+geometry is in frame.**
+
+**What was built, and the shape is the load-bearing part.** Sway is a CLOCK where every other frame signal is
+a STATE, so the gate could never derive it — it gets told. `EngineStats.swayVisible` answers three questions
+at once and needs all three: a visible cell carries geometry the wind moves, the wind is blowing
+(`windStrength > 0` — at zero the shader's displacement is zero however much amplitude the vertices hold),
+and the world is actually being drawn (so `?ablate=cells` does not quietly keep the loop awake and measure
+something other than what it removed).
+
+**The per-cell half costs no format version, which is why it is per-cell at all.** `CellHandle.sways` is
+computed at LOAD by one linear pass over one byte per vertex — `nightPrelit`'s alpha, the amplitude the
+shader multiplies — beside the upload that already touches every one of them. A flag in the pak would have
+been a `.oscell` version and a rebuild of every world for an answer the vertices already carry, and a pak
+built before this existed answers correctly.
+
+**The rate is a NUMBER the surface reads**, per the restriction: `RenderGate`'s `animationIntervalMs`
+defaults to 0, which is every wake, which is the display's rate. A surface that would rather trade
+smoothness for battery names a period instead.
+
+**What it costs, stated rather than discovered:** on a view with foliage in it this is the whole of
+[01](#01--render-on-demand)'s win, because most of this map has foliage in it. That is the trade the verdict
+chose. The condition is what keeps it from being worse: a view of a car park is still air and still rests,
+and the signal is read per frame rather than latched, so panning a palm out of view goes back to resting.
+
+**Owes:** a look verdict from the phone that the sway now reads as continuous at map zoom; `framesSkipped`
+before and after over a still map with foliage in frame; and the battery/thermal delta 01 owes re-taken under
 it — because this step is the thing most likely to have moved it.
 
 ## Verification

@@ -74,6 +74,17 @@ where every remaining item on this list either binds or does not.
 
 **So the ranking below is provisional by construction, and the first optimisation task is a measurement.**
 
+> **TAKEN THE SAME DAY, and it was worse than this section guessed**
+> ([the row](../benchmarks/opensa-engine/2026-09-05-mobile-units-as-models-first.json)). The blocker turned
+> out to be a convert rather than code — every pak the console had ever run was built with `MODELS=0` — and
+> once a pak carried cars, **150 units drew as 150 models: 12 197 draws against the empty map's 96, and
+> 1.30 M triangles against 242 k.** Not an order of magnitude, **127×**, at ~80 draws a car because a
+> vehicle is a part hierarchy rather than a mesh. **That promotes 3.3 outright** — GPU-driven work stops
+> being "interesting only at this load" and becomes the load — with instancing the unit models ahead of a
+> culling pipeline, exactly as 3.3 says. And it adds an entry this audit did not have: at the declared count
+> the largest CPU line in the frame is the **2D symbology layer** at 6.17 ms of an 11.65 ms body, twice
+> `engine-frame`'s 3.12.
+
 ### 3.2 — Opaque draw order is never sorted front-to-back
 
 Arm's Forward Pixel Kill has done automatic hidden-surface removal since Mali-T620, but **its efficiency is

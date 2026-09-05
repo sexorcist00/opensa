@@ -1,0 +1,90 @@
+{
+  "note": "THE FIRST CAPTURE IN THIS REPOSITORY WITH UNITS DRAWN AS MODELS. 201/5-02 and 5/04 have owed it since the budget was written (150 units, each drawn as a model with a symbol over it) and it has never been takeable: every pak the console ever ran was converted with MODELS=0, so `unitsAsModels` read 0 on every capture and the fallback drew symbols. The blocker was never code — the unit-model path resolved names, opened archives over Range requests and logged `this build carries no model of that name` exactly as designed. It was a convert.\n\nREAD THIS AS A FIRST LOOK, NOT AS A ROUTE ROW. It is deliberately filed apart from the 09-05 series and may not be subtracted from any of it:\n\n  - the pak is NEW (`07:40 05-09-2026`, built this session into its own OUT so the `19:23 28-08-2026` pak every other 09-05 row was measured on survives);\n  - the ten-leg route was NOT flown — the camera drifted under a hand during the window (it ends at h15 pitch -0.53, not the settle pose);\n  - 260 moving frames, below the 300 the collector itself asks for before a percentile is cited;\n  - three model TYPES, not the five the board asks for since this session's seed change — the app on the device is still the previous build.\n\nWHAT IT IS GOOD FOR is the structural counts, which are pose-independent in the way that matters: how many draws, how many triangles and how much memory 150 units as models actually cost. Those are the numbers 201's budget was written against and nobody had.\n\nTHE HEADLINE: 12 197 DRAWS. The empty field run on the same district draws 96. The frame audit written hours earlier predicted the draw count would move 'by an order of magnitude' at this load and ranked its whole gap list as provisional until somebody measured it; the real figure is 127x, and 1.3 M triangles against 242 k. That is not a frame with more objects in it, it is a different renderer's problem — and it moves the audit's GPU-driven-culling entry (its 3.3) from 'interesting only at 3.1's load' to the load itself.\n\nAND THE SECOND NUMBER IS THE SYMBOLOGY, which 5/02 owes separately: `overlay-2d` is 6.17 ms of an 11.65 ms CPU body at 150 units, against 0.5-0.9 ms on the empty map. The 2D layer is now the largest CPU line in the frame by a factor of two over `engine-frame`.\n\nMGA-LX3 / ARM Bifrost @ DPR 2, `los-santos-centre`, app `bd628f0`, `?surface=720x640` pinned, board `units=150&calls=40`.",
+  "app": "bd628f0",
+  "build": "07:40 05-09-2026",
+  "district": "los-santos-centre",
+  "device": { "adapter": "arm bifrost", "dpr": 2, "missing": ["texture-compression-bc", "timestamp-query"] },
+  "pak": {
+    "out": "./build/phone-cars",
+    "why": "its own OUT, on the user's call, so the pak the rest of the 09-05 series was measured on survives and those rows stay re-flyable",
+    "recipe": "MODELS=1 BAKE=1 TEXTURES=astc DISTRICT=los-santos-centre VEHICLES=copcarla,ambulan,firetruk,copcarsf,copcarvg",
+    "converted": "vehicles 5/201, 0 failed, osm 46.1 MB (dictionaries 43.8 MB of it); collision baked 9 cells, 49 870 triangles, 100 breakable regions"
+  },
+  "howTaken": "the console navigated to the `board` link against the new OUT and left to settle; NOT the ten-leg route, and the camera moved during the window",
+  "theBoard": {
+    "units": 150,
+    "unitsAsModels": 150,
+    "unitsAsSymbolOnly": 0,
+    "unitsUnresolvedModels": 0,
+    "modelTypes": 3,
+    "modelTextureMb": 6.286,
+    "incidents": 41,
+    "chips": 21,
+    "chipsDropped": 85
+  },
+  "structuralCounts": {
+    "draws": 12197,
+    "drawsOnTheEmptyMap": 96,
+    "drawsPerUnit": 80.7,
+    "triangles": 1297954,
+    "trianglesOnTheEmptyMap": 241863,
+    "residencyMb": 74.546,
+    "byCategoryMb": {
+      "texture": 32.096,
+      "target": 27.955,
+      "cellVertex": 11.508,
+      "cellIndex": 2.524,
+      "uniform": 0.463
+    },
+    "note": "cellsVisible 3 of 4 here against 4 on the empty run, so the world half is if anything UNDER-counted; the units are the whole of the difference"
+  },
+  "nineUnitsForScale": {
+    "why": "taken minutes earlier on the same pak at the default shift, before the 150-unit board — it is what makes the per-unit cost readable rather than inferred",
+    "units": 9,
+    "unitsAsModels": 9,
+    "modelTypes": 3,
+    "modelTextureMb": 6.286,
+    "draws": 837,
+    "triangles": 344000,
+    "residencyMb": 83.269,
+    "reading": "9 units add 725 draws over the empty map's 112 — about 80 a car, which is submeshes: a vehicle is a part hierarchy, not a mesh. modelTextureMb is the SAME 6.29 at 9 units and at 150, which is the type count doing exactly what ops/budget.ts says it does"
+  },
+  "cpu": {
+    "bodyMeanMs": 11.65,
+    "bodyMaxMs": 87.8,
+    "segmentsMs": {
+      "overlay-2d": 6.17,
+      "engine-frame": 3.12,
+      "stream": 0.79,
+      "other": 0.78,
+      "board": 0.58,
+      "overlay:symbols": 0.2
+    },
+    "worstFrame": {
+      "bodyMs": 87.8,
+      "dtMs": 94.5,
+      "draws": 12218,
+      "segmentsMs": { "board": 49.1, "engine-frame": 34.6, "overlay-2d": 3.3 }
+    },
+    "reading": "the 2D symbology layer is the largest CPU line in the frame at this load — 6.17 ms against `engine-frame`'s 3.12, which is the `board` − `field` subtraction 5/02 owes, seen from the inside. And the worst frame is not the renderer: 49.1 ms of `board` on one frame is the board layer rebuilding 150 units' worth of state at once"
+  },
+  "frame": {
+    "movingFrames": 260,
+    "meanMs": 31.81,
+    "p50Ms": 20,
+    "p95Ms": 72,
+    "maxMs": 623.9,
+    "framesSkipped": 60,
+    "caveat": "the camera moved by hand during this window and the route was not flown, so this is a first look at a frame time rather than a reading of one. The counts above are what this row is for"
+  },
+  "whatItChanges": {
+    "theAuditsRanking": "the 2026-09-05 frame audit ranked its whole gap list provisional until this frame existed, and named the load as its top item. It exists now: at 12 197 draws its GPU-driven-culling entry stops being 'interesting only at that load' and becomes the load. Instancing the unit models comes before a culling pipeline, as the audit already said",
+    "theSymbology": "5/02's `board` − `field` has never been measured on a fast map. `overlay-2d` at 6.17 ms says the answer is large and that the 2D layer, not the 3D one, is where the CPU goes at the declared count",
+    "whatIsStillOwed": "the ten-leg route flown at this load on a settled window with the five-type board, which is the comparable row this one is deliberately not"
+  },
+  "owed": {
+    "conditions": "no row in this folder records the battery level, the charging state or the die temperature, this one included",
+    "route": "not flown for this row, and stated rather than implied",
+    "types": "three, not the five the board asks for since this session — the device had not taken the new app yet"
+  }
+}

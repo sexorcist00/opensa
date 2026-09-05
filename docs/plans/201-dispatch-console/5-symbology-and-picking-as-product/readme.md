@@ -330,7 +330,38 @@ has to put back to the user with its cost attached, rather than answer by buildi
    the first frame in this repository's history with units drawn as models.
 4. **Then, and only then, the physics question above**, put back to the user with the five costs attached.
 
-**Owes:** the capture at step 3, and the decision at step 4.
+**STEP 3 CAME BACK THE SAME DAY, and it is the capture this chain has owed since the budget was written**
+([the row](../../../benchmarks/opensa-engine/2026-09-05-mobile-units-as-models-first.json)). Nine units drew
+as nine models on the first try — `unitsAsModels: 9`, `unresolved: 0` — and then the declared board did too:
+**150 units, 150 models, none falling back to a symbol.**
+
+| | empty map | 9 units | **150 units** |
+| --- | --- | --- | --- |
+| draws | 96 | 837 | **12 197** |
+| triangles | 242 k | 344 k | **1.30 M** |
+| `overlay-2d` | 0.5–0.9 ms | — | **6.17 ms** |
+
+**~80 draws a car, and that number is the finding.** A vehicle is a part hierarchy rather than a mesh, so
+the count is submeshes; the [frame audit](../../../audit/frame-path-vs-aaa.md) written hours earlier
+predicted the draw count would move "by an order of magnitude" at this load and ranked its whole gap list
+provisional until somebody measured it. It is **127×**, which moves that audit's GPU-driven entry from
+*interesting only at that load* to the load itself — with instancing the unit models ahead of a culling
+pipeline, as the audit already said.
+
+**And `modelTextureMb` is 6.29 at NINE units and 6.29 at 150**, which is `ops/budget.ts`'s axis doing exactly
+what it claims: a shift is a handful of TYPES however many units it has.
+
+**The second finding is 5/02's, not 5/04's.** `overlay-2d` is **6.17 ms of an 11.65 ms CPU body** — twice
+`engine-frame`'s 3.12. At the declared count the CPU goes into the **2D symbology layer**, not the 3D one,
+which is the `board` − `field` subtraction [02](#02--units-as-instanced-symbols) owes, seen from the inside.
+
+**Read as a FIRST LOOK rather than a route row**, and filed apart from the 09-05 series for it: the pak is
+new, the ten-leg route was not flown, the window is 260 frames against the 300 the collector asks for, and
+the board carried three types rather than the five it asks for since this session. The structural counts are
+what it is for.
+
+**Owes:** the ten-leg route flown at this load on a settled window with the five-type board — the comparable
+row this one deliberately is not — and the decision at step 4.
 
 ## Verification
 
