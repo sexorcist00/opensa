@@ -27,6 +27,20 @@ const ATTACH_TIMEOUT_MS = 40_000;
 const ATTACH_TICK_MS = 250;
 
 /**
+ * How long after its last poll a page is still treated as ASLEEP rather than gone.
+ *
+ * Android detaches a backgrounded tab after 15 s ({@link MapBus}'s own `ATTACHED_MS`) and the tab is not
+ * closed by it — it resumes on the same URL the moment it is in front again. Launching beside such a page
+ * puts a SECOND console on the bus, and two consoles sharing one GPU is not a measurement: it happened twice
+ * in one sweep on 2026-09-05, caught only by `surface.ablated` (201/9). So a page that polled this recently
+ * is steered and given a moment to come back before the launcher is reached for at all.
+ */
+const RESUME_WINDOW_MS = 180_000;
+
+/** How long a navigate queued for a sleeping page is given to be taken, before the launcher is used. */
+const RESUME_TIMEOUT_MS = 15_000;
+
+/**
  * Put a console URL on the phone's screen and wait until that page is the one on the bus.
  *
  * Two ways in, and the first is the one a ladder lives on. **An attached console STEERS ITSELF**: `steer`
@@ -99,6 +113,21 @@ export async function openConsole(deps, request) {
     return { attached: true, ok: true, page: before.page, reused: true, url };
   }
 
+  // NOT attached, but a page polled a moment ago: it is a backgrounded tab, not a closed one. The navigate
+  // is queued for it and taken the instant it resumes, so the arm changes in the tab that already exists.
+  if (steer && sleeping(before.page, now())) {
+    void steer(url).catch(() => undefined);
+    const until = now() + RESUME_TIMEOUT_MS;
+    while (now() < until) {
+      const state = attached();
+      if (state.attached && sameConsole(state.page?.url, url)) {
+        return { attached: true, navigated: true, ok: true, page: state.page, resumed: true, url };
+      }
+      await sleep(ATTACH_TICK_MS);
+    }
+    // It did not come back — the tab really is gone, or the phone is asleep. Fall through and launch one.
+  }
+
   try {
     await launch(url);
   } catch (error) {
@@ -153,6 +182,19 @@ export function sameConsole(a, b) {
   const left = parse(a);
 
   return left !== null && left === parse(b);
+}
+
+/**
+ * Whether the last page the bus saw is merely ASLEEP — polled inside {@link RESUME_WINDOW_MS}.
+ *
+ * The bus keeps what it last saw even after it stops counting the page as attached, which is what makes the
+ * distinction available at all: `at` is when that page last polled, and a page with no `at` is one that was
+ * never there.
+ */
+function sleeping(page, at) {
+  const seen = Number(page?.at);
+
+  return Number.isFinite(seen) && at - seen < RESUME_WINDOW_MS;
 }
 
 function wait(ms) {

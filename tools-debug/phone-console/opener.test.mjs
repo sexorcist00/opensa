@@ -36,6 +36,47 @@ function phone(options = {}) {
   };
 }
 
+/**
+ * A phone whose page has STOPPED polling but is still the last one the bus saw — a backgrounded tab, which
+ * is what Android leaves behind after 15 s. `wakesAfter` polls later it comes back on the steered URL.
+ */
+function sleepingPhone(options = {}) {
+  const { lastSeenAgoMs = 20_000, url = URL_, wakes = true, wakesAfter = 3 } = options;
+  let now = 1_000_000;
+  let polls = 0;
+  let here = url;
+  let wakeAt = null;
+  const launch = vi.fn(async () => {});
+  const steer = vi.fn(async (to) => {
+    if (wakes) {
+      here = to;
+      wakeAt = polls + wakesAfter;
+    }
+  });
+
+  return {
+    deps: {
+      attached: () => {
+        const awake = wakeAt !== null && polls >= wakeAt;
+        polls += 1;
+
+        return awake
+          ? { attached: true, page: { at: now, mode: 'live', url: here } }
+          : { attached: false, page: { at: now - lastSeenAgoMs, mode: 'live', url } };
+      },
+      exists: (path) => path === OPEN_URL_BIN,
+      launch,
+      now: () => now,
+      sleep: async (ms) => {
+        now += ms;
+      },
+      steer,
+    },
+    launch,
+    steer,
+  };
+}
+
 /** A phone whose attached page really does land on the URL it was steered to, after `landsAfter` polls. */
 function steerablePhone(options = {}) {
   const { landsAfter = 2, url = URL_ } = options;
@@ -118,6 +159,23 @@ describe('openConsole', () => {
 
       expect(answer.error).toContain('display over other apps');
     });
+
+    it('launches when the tab really is gone — a page nobody has seen for minutes is not asleep', async () => {
+      const { deps, launch, steer } = sleepingPhone({ lastSeenAgoMs: 10 * 60_000, wakes: false });
+
+      await openConsole(deps, { timeoutMs: 2000, url: ARM });
+
+      expect(steer).not.toHaveBeenCalled();
+      expect(launch).toHaveBeenCalledWith(ARM);
+    });
+
+    it('falls back to the launcher when a steered tab does not come back', async () => {
+      const { deps, launch } = sleepingPhone({ wakes: false });
+
+      await openConsole(deps, { timeoutMs: 2000, url: ARM });
+
+      expect(launch).toHaveBeenCalledWith(ARM);
+    });
   });
 
   describe('positive cases', () => {
@@ -141,6 +199,16 @@ describe('openConsole', () => {
     });
 
     // 201/9-04's ladder cost the operator four manual switches; this is the line that removes them.
+    it('steers a BACKGROUNDED tab rather than launching a second console beside it', async () => {
+      const { deps, launch, steer } = sleepingPhone();
+
+      const answer = await openConsole(deps, { url: ARM });
+
+      expect(steer).toHaveBeenCalledWith(ARM);
+      expect(launch).not.toHaveBeenCalled();
+      expect(answer).toMatchObject({ navigated: true, ok: true, resumed: true, url: ARM });
+    });
+
     it('steers an attached console to the next arm in the same tab, without the launcher', async () => {
       const { deps, steer } = steerablePhone();
 

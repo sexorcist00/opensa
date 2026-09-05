@@ -1,0 +1,121 @@
+{
+  "note": "201/9's ABLATION SWEEP, four arms of the planned seven, on the phone. There is no `timestamp-query` on this adapter and no browser flag brings it, so a pass is priced by REMOVING it and re-flying the route (201/9-00): each arm is a page carrying one `?ablate=` (or `?bloomlevels=`), flown over the SAME ten-leg route inside the pak's own rect, and its window is the DELTA of two `frame.dtHistogramMs` readings — one after the four corners were warmed and the camera had settled at the centre pose, one after the last leg. `moving` is every bin below the 100 ms tail (the render gate's idle wake). READ THE MEAN, not p50: p50 saturates on the 16.7 ms vsync floor. MGA-LX3 / ARM Bifrost @ DPR 2, pak `19:23 28-08-2026` ASTC over `los-santos-centre`, app `5937214+`, board EMPTY (`units=0&calls=0`), `?surface=720x640` pinning the drawing buffer on every arm. Every arm's `surface.ablated` was read back before its numbers were kept.\n\nTHE BASELINE IS ALSO A CONTROL, and it had to be. The session before this one flew its ladder through an agent link that could hand the camera an incomplete pose; a pose missing its heading gave a NaN eye, which draws BLACK — and a black frame is a CHEAP frame, so a window flown through one reads as fast rather than as broken. Nothing recorded said whether the 09-04 ladder had been flown that way. So the first arm here is `field` on the FIXED app over the identical route: moving mean 23.4 ms against the 09-04 ladder's 24.5, p50 20 against 20, 29 cell creates in the window against 29. The two agree, so THE 09-04 LADDER STANDS and its conclusions are not withdrawn.\n\nWHAT THE SWEEP SAYS, and it settles 201/9-05 by refuting the shape the step assumed.\n\n  arm       what it removes                       moving frames   mean     p50   p95   rung 1\n  field     nothing (the baseline)                      416      23.4 ms    20    38    59 %\n  nobloom   the whole bloom chain                       614      15.8 ms    16    18    99 %\n  bloom4    the chain's TAIL (8 levels -> 4)            437      23.2 ms    20    40    59 %\n  nocloud   the per-frame 256^2 cumulus bake            454      21.6 ms    18    38    67 %\n\nTHE BLOOM CHAIN IS 7.7 ms OF A 23.4 ms FRAME — a third of it — and removing it is the only change measured on this device that reaches the declared 60 fps: 607 of 614 frames on ONE display interval, p95 18 ms against 38. AND THE TAIL IS FREE. `bloom4` cuts the chain from 8 levels to 4 — every level 201/9-05 named as waste, the ones that are 12x10, 6x5 and 3x3 pixels at this surface — and costs 23.2 ms, which is the baseline. So the money is in the FIRST levels, the ones at full and half resolution, exactly where the 09-04 ladder's `rgb10a2` arm said it was: the post chain's BANDWIDTH, paid per pixel by the two or three biggest passes, not per pass by the small ones. Deriving the level count from the render size — 9/05 as written — would therefore buy approximately NOTHING, and the step needs re-aiming rather than building.\n\nTHE CLOUD BAKE IS 1.8 ms, and unlike the bloom result it is free to take: the field scrolls at `t * 0.004` and is visually identical for minutes, so amortizing it (201/9-06) changes no pixel a person can see. That is the one arm here that converts directly into a fix.\n\nWHAT IS NOT MEASURED, and why it is not in the table. `nocells`, `noprobe` and `noskylut` were not taken: switching arms opened a SECOND console tab twice (the panel steers an ATTACHED page and launches when it is not, and Android detaches a backgrounded tab after 15 s), and two consoles sharing one GPU is not a measurement. `surface.ablated` and the readout's pose caught both occurrences — a run was discarded rather than filed. The remaining three arms are owed, and the opener needs to steer a recently-detached page instead of launching beside it.\n\nAND NO ROW HERE RECORDS THE BATTERY OR THE CHARGING STATE, this one included. It stays an open debt against every mobile row in this folder.",
+  "app": "5937214+",
+  "build": "19:23 28-08-2026",
+  "district": "los-santos-centre",
+  "device": {
+    "adapter": "arm bifrost",
+    "dpr": 2,
+    "missing": ["texture-compression-bc", "timestamp-query"]
+  },
+  "surfacePin": { "deviceWidth": 720, "deviceHeight": 640, "pinned": true, "cssHeightsSeen": [550, 609] },
+  "route": {
+    "pitch": -1.3,
+    "yaw": 3.141592653589793,
+    "heights": [180, 200, 220],
+    "settle": [1500, -1500],
+    "legs": [
+      [1380, -1620],
+      [1620, -1380],
+      [1380, -1380],
+      [1620, -1620],
+      [1380, -1500],
+      [1620, -1500],
+      [1500, -1620],
+      [1500, -1380],
+      [1380, -1620],
+      [1620, -1380]
+    ],
+    "warmup": "the rect's four corners, then the settle pose, before the first reading",
+    "rect": "x 1250..1750, y -1750..-1250 (cells 5,-7..6,-6 at CELL_SIZE 250)"
+  },
+  "howDerived": "per arm: delta of frame.dtHistogramMs between a post-warmup reading and a post-route reading; moving = every bin below the 100 ms tail (the render gate's idle wake); vsyncLadder = each moving bin rounded to the nearest 1/60 s interval",
+  "arms": {
+    "field": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640",
+      "ablated": "none",
+      "movingFrames": 416,
+      "movingMeanMs": 23.44,
+      "movingP50Ms": 20,
+      "movingP90Ms": 38,
+      "movingP95Ms": 38,
+      "movingP99Ms": 58,
+      "movingMaxMs": 88,
+      "vsyncLadder": { "1": 246, "2": 153, "3": 14, "4": 2, "5": 1 },
+      "windowMs": 79315.6,
+      "drawnFrames": 436,
+      "framesSkipped": 679,
+      "tailFrames": 1,
+      "cellsCreatedInWindow": 29,
+      "world": { "draws": 96, "triangles": 241863, "residencyMb": 68.933, "cellsVisible": 4 }
+    },
+    "nobloom": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640&ablate=bloom",
+      "ablated": "bloom",
+      "movingFrames": 614,
+      "movingMeanMs": 15.75,
+      "movingP50Ms": 16,
+      "movingP90Ms": 16,
+      "movingP95Ms": 18,
+      "movingP99Ms": 28,
+      "movingMaxMs": 40,
+      "vsyncLadder": { "1": 607, "2": 7 },
+      "windowMs": 54016.2,
+      "drawnFrames": 632,
+      "framesSkipped": 432,
+      "tailFrames": 0,
+      "cellsCreatedInWindow": 29,
+      "world": { "draws": 96, "triangles": 241863, "residencyMb": 68.933, "cellsVisible": 4 }
+    },
+    "bloom4": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640&bloomlevels=4",
+      "ablated": "bloom-levels=4",
+      "movingFrames": 437,
+      "movingMeanMs": 23.21,
+      "movingP50Ms": 20,
+      "movingP90Ms": 38,
+      "movingP95Ms": 40,
+      "movingP99Ms": 52,
+      "movingMaxMs": 58,
+      "vsyncLadder": { "1": 256, "2": 162, "3": 19 },
+      "windowMs": 79284.8,
+      "drawnFrames": 458,
+      "framesSkipped": 676,
+      "tailFrames": 0,
+      "cellsCreatedInWindow": 32,
+      "world": { "draws": 96, "triangles": 241863, "residencyMb": 68.91, "cellsVisible": 4 }
+    },
+    "nocloud": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640&ablate=cloud",
+      "ablated": "cloud-field",
+      "movingFrames": 454,
+      "movingMeanMs": 21.61,
+      "movingP50Ms": 18,
+      "movingP90Ms": 36,
+      "movingP95Ms": 38,
+      "movingP99Ms": 54,
+      "movingMaxMs": 58,
+      "vsyncLadder": { "1": 305, "2": 133, "3": 16 },
+      "windowMs": 58252.1,
+      "drawnFrames": 471,
+      "framesSkipped": 471,
+      "tailFrames": 0,
+      "cellsCreatedInWindow": 29,
+      "world": { "draws": 96, "triangles": 241863, "residencyMb": 68.933, "cellsVisible": 4 }
+    }
+  },
+  "notTaken": {
+    "arms": ["nocells", "noprobe", "noskylut"],
+    "why": "switching arms launched a second console tab twice; two consoles sharing one GPU is not a measurement. Caught by surface.ablated and the readout's pose, and discarded rather than filed."
+  },
+  "control": {
+    "against": "docs/benchmarks/opensa-engine/2026-09-04-mobile-map-attachment-ladder.json",
+    "arm": "field",
+    "thenMeanMs": 24.5,
+    "nowMeanMs": 23.44,
+    "thenP50Ms": 20,
+    "nowP50Ms": 20,
+    "cellsCreatedInWindow": [29, 29],
+    "verdict": "the 09-04 ladder was not flown through a black frame; its numbers and its conclusions stand"
+  }
+}

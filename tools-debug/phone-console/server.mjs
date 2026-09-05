@@ -430,7 +430,10 @@ async function handle(request, response) {
           launch: (url) => run(OPEN_URL_BIN, [url]),
           // An attached console changes arms by navigating itself, in its own tab — the bus already reaches
           // it, so this needs no activity start and no hand on the phone.
-          steer: (url) => mapBus.submit({ args: { url }, kind: 'navigate' }),
+          // `queueWhileDetached` is what lets a BACKGROUNDED tab be steered: Android detaches one after 15 s
+          // and it resumes on the same URL, so the navigate waits in the queue rather than the panel opening
+          // a second console beside it (201/9, 2026-09-05).
+          steer: (url) => mapBus.submit({ args: { url }, kind: 'navigate', queueWhileDetached: true }),
         },
         { timeoutMs: Number(body.timeoutMs) || undefined, url: links[view] },
       ),

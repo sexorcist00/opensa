@@ -431,6 +431,32 @@ all**, and it is the free half.
 **Owes:** the ladder with the derived count, then with the half-res prefilter, and a look verdict on the
 emitters at map zoom before the second one is kept.
 
+**MEASURED 2026-09-05, AND THE FINDING ABOVE IS WRONG ABOUT WHERE THE TIME IS**
+([the sweep](../../../benchmarks/opensa-engine/2026-09-05-mobile-map-ablation-sweep.json)). Two arms, one
+route, same rect and pin as the 09-04 ladder:
+
+- **`nobloom` — the whole chain off — is 15.75 ms against the baseline's 23.44.** The chain is **7.7 ms of a
+  23.4 ms frame**, and without it **607 of 614 frames sit on ONE display interval**: the only change measured
+  on this device that reaches the declared 60 fps.
+- **`bloom4` — the chain cut from 8 levels to 4 — is 23.21 ms, which IS the baseline.** The four levels that
+  arm removes are exactly the ones this step called waste (12×10, 6×5, 3×3 px here). They cost **nothing
+  measurable**.
+
+So the tile-flush argument does not survive its own measurement: on this device a pass over a 3×3 mip is
+free, and the 7.7 ms belongs to the FIRST levels — the full-resolution prefilter and the first one or two
+downsamples, every one of them reading `scene-color` at or near full size. That is the same conclusion
+09-04's `rgb10a2` arm reached from the other direction (halving the bytes of every full-screen pass that
+READS the scene texture won more than removing 4× MSAA from the pass that WRITES it): **the frame is the post
+chain's bandwidth**.
+
+**What this step becomes.** Deriving the level count is not the lever and building it would buy ~0. The lever
+is the SIZE the chain starts at and how many full-resolution reads of `scene-color` exist at all — which is
+the half-resolution prefilter this step listed second and the 2026-08-12 attribution rejected for sub-pixel
+emitters at street level. That rejection is now the thing to re-price, at map zoom, with a look verdict; the
+level count is a tidy-up with no frame time in it. **Owes:** a `bloomhalf` arm (prefilter at half resolution,
+count unchanged) against `field` and `nobloom`, and the operator's eye on the emitters at 180–220 m before
+anything is kept.
+
 ### 06 — The per-frame bakes that are already cached one line above
 
 **The finding.** `engine.frame()` opens a `cloud-field` render pass **every frame, unconditionally**
@@ -445,6 +471,12 @@ of itself.
 **Budget:** a bake whose input changes on a scale of minutes is not paid at the display's rate. Name the
 rebake rate (a few Hz) before building it.
 **Owes:** the ladder with the bake amortized, and a look verdict that the clouds still move.
+
+**PRICED 2026-09-05: the bake is 1.8 ms** — `nocloud` reads 21.61 ms against the baseline's 23.44
+([the sweep](../../../benchmarks/opensa-engine/2026-09-05-mobile-map-ablation-sweep.json)), and it moves 8 %
+of the window's frames onto the vsync floor (rung 1: 67 % against 59 %). **It is the cheapest honest fix in
+this chain**: unlike the bloom result it changes no pixel anybody can see, because the field it re-bakes is
+identical for minutes. The amortized version still owes its own arm and a verdict that the clouds move.
 
 ### 07 — The per-frame allocations, and one capability that retains what it never reads
 
