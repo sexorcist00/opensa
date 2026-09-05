@@ -25,6 +25,40 @@ export interface CaptureSurface {
   readonly width: number;
 }
 
+/**
+ * The aspect the camera must frame for: the canvas as it is DISPLAYED, never the buffer it draws into.
+ *
+ * **The pin used to distort the world, and nothing in the report said so** (the operator's report,
+ * 2026-09-04, which is how it was found — by eye, on the phone, after a whole evening of measurement).
+ * The camera took `canvas.width / canvas.height`; with `?surface=720x640` inside a 360x550 CSS box that is
+ * a world framed for **1.125** and then stretched by the browser into a box of **0.655** — the map ~1.7x
+ * too tall, circles as ellipses. Every number was still honest (the GPU did the same work either way and
+ * all arms carried the same pin), and every LOOK verdict taken through a measurement link was worthless.
+ *
+ * Reading the box instead renders anamorphically — non-square pixels in the buffer — and the stretch undoes
+ * exactly that, so geometry is correct and the pin costs vertical RESOLUTION alone, which the report's
+ * `surface` block already states. **A look verdict still belongs on an unpinned page**: soft is soft.
+ *
+ * Picking rides the same number (`rayAt`, `groundFootprint`), so a thumb under a pin used to land where the
+ * operator did not aim it.
+ *
+ * SILENT in the way this repo's restrictions keep naming: it typechecks, it lints, every test passes — this
+ * is geometry, not behaviour — and it is invisible on any surface that does not pin, which is every
+ * shipping one.
+ */
+export function canvasAspect(canvas: {
+  clientHeight: number;
+  clientWidth: number;
+  height: number;
+  width: number;
+}): number {
+  const { clientHeight, clientWidth } = canvas;
+
+  // Before layout the box is 0x0 and the buffer's own ratio is a better guess than 1: the first frame can
+  // run before the element has been measured.
+  return clientWidth > 0 && clientHeight > 0 ? clientWidth / clientHeight : canvas.width / Math.max(1, canvas.height);
+}
+
 /** The largest buffer a phone GPU should be asked for by a typo — 4K either way, well past any viewport. */
 const MAX_EDGE = 4096;
 /** Below this a pass has no room to be measured, and `resize` already floors the live path at 2. */

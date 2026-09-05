@@ -112,6 +112,14 @@ export async function compileAll(
   outputFormat: GPUTextureFormat = colorFormat,
   /** 201/9-04: the arm's sample count, not the module's — every pipeline below is compiled against it. */
   sampleCount: SampleCount = MSAA_SAMPLES,
+  /**
+   * 201/9-05: the format the BLOOM chain's own targets carry, which need not be the scene's.
+   *
+   * The chain reads the scene once (the prefilter) and then only ever reads itself, so its storage is a
+   * private decision — and the sweep says that decision is most of the chain's cost. Defaults to the scene's
+   * format, which is what the engine did before the field existed.
+   */
+  bloomFormat: GPUTextureFormat = colorFormat,
 ): Promise<PipelineSet> {
   const frameLayout = device.createBindGroupLayout({
     entries: [
@@ -602,7 +610,7 @@ export async function compileAll(
       vertex: { entryPoint: 'vsPost', module: postModule },
     }),
   );
-  const { bloomLayout, bloomUpLayout } = compileBloomPipelines(device, colorFormat, pipelines);
+  const { bloomLayout, bloomUpLayout } = compileBloomPipelines(device, bloomFormat, pipelines);
   const probeMipLayout = compileProbePipelines(device, colorFormat, pipelines);
   // Cumulus field bake (sky v2 perf): a 256² rg16float target, the frame uniform alone — its own tiny
   // layout because the pass RENDERS INTO the texture the frame group binds (same-pass usage conflict).

@@ -27,16 +27,76 @@ const ATTACH_TIMEOUT_MS = 40_000;
 const ATTACH_TICK_MS = 250;
 
 /**
- * Launch the console and wait for it to attach.
+ * How long after its last poll a page is still treated as ASLEEP rather than gone.
+ *
+ * Android detaches a backgrounded tab after 15 s ({@link MapBus}'s own `ATTACHED_MS`) and the tab is not
+ * closed by it — it resumes on the same URL the moment it is in front again. Launching beside such a page
+ * puts a SECOND console on the bus, and two consoles sharing one GPU is not a measurement: it happened twice
+ * in one sweep on 2026-09-05, caught only by `surface.ablated` (201/9). So a page that polled this recently
+ * is steered and given a moment to come back before the launcher is reached for at all.
+ */
+const RESUME_WINDOW_MS = 180_000;
+
+/** How long a navigate queued for a sleeping page is given to be taken, before the launcher is used. */
+const RESUME_TIMEOUT_MS = 15_000;
+
+/**
+ * Put a console URL on the phone's screen and wait until that page is the one on the bus.
+ *
+ * Two ways in, and the first is the one a ladder lives on. **An attached console STEERS ITSELF**: `steer`
+ * sends it a `navigate` command and it replaces its own location, so the arm changes in the same tab with
+ * nobody touching the phone. Before that, an attached console was simply refused (`reused: true`) and the
+ * only way to change arms was a person backgrounding the browser until the page fell off the bus 15 s
+ * later — four times for 201/9-04's five-arm ladder, and dozens for an ablation.
+ *
+ * `termux-open-url` remains the way in when NOTHING is attached, and it is the half that cannot be made
+ * reliable: Android forbids a background app from starting an activity (see the module header), so the
+ * launch is only ever finished when the page phones home.
  *
  * @param {{attached: () => {attached: boolean, page: unknown}, exists: (path: string) => boolean,
  *   launch: (url: string) => Promise<unknown>, sleep?: (ms: number) => Promise<void>,
- *   now?: () => number}} deps
+ *   now?: () => number, steer?: (url: string) => Promise<unknown>}} deps
  * @param {{timeoutMs?: number, url: string}} request
  */
 export async function openConsole(deps, request) {
-  const { attached, exists, launch, now = () => Date.now(), sleep = wait } = deps;
+  const { attached, exists, launch, now = () => Date.now(), sleep = wait, steer } = deps;
   const { timeoutMs = ATTACH_TIMEOUT_MS, url } = request;
+
+  const before = attached();
+  // Already on the page being asked for: nothing to do, and re-navigating would throw away a warmed world.
+  if (before.attached && sameConsole(before.page?.url, url)) {
+    return { attached: true, ok: true, page: before.page, reused: true, url };
+  }
+  if (before.attached && steer) {
+    try {
+      await steer(url);
+    } catch (error) {
+      return { error: `the console did not take the navigation: ${String(error?.message ?? error)}`, ok: false, url };
+    }
+
+    // The old page stops polling as it unloads and the new one attaches in its place, so "arrived" is a page
+    // reporting the URL that was asked for — never merely something being attached, which was still true of
+    // the page we just sent away.
+    const until = now() + timeoutMs;
+    while (now() < until) {
+      const state = attached();
+      if (state.attached && sameConsole(state.page?.url, url)) {
+        return { attached: true, navigated: true, ok: true, page: state.page, url };
+      }
+      await sleep(ATTACH_TICK_MS);
+    }
+
+    return {
+      attached: false,
+      error:
+        `the console took the navigation and no page carrying that URL reached the panel within ` +
+        `${Math.round(timeoutMs / 1000)}s. The tab is on the new address but did not phone home: a bundle ` +
+        'that does not parse cannot report itself through this channel at all, and a console that cannot ' +
+        'fetch its pak needs the static server running (`npm run phone`).',
+      ok: false,
+      url,
+    };
+  }
 
   if (!exists(OPEN_URL_BIN)) {
     return {
@@ -47,11 +107,25 @@ export async function openConsole(deps, request) {
       url,
     };
   }
-
-  // Already attached: a second tab would take the bus over and leave the operator looking at the old one.
-  const before = attached();
+  // Attached, but there is no way to steer it: a second tab would take the bus over and leave the operator
+  // looking at the old one, so this stays a refusal rather than becoming two consoles.
   if (before.attached) {
     return { attached: true, ok: true, page: before.page, reused: true, url };
+  }
+
+  // NOT attached, but a page polled a moment ago: it is a backgrounded tab, not a closed one. The navigate
+  // is queued for it and taken the instant it resumes, so the arm changes in the tab that already exists.
+  if (steer && sleeping(before.page, now())) {
+    void steer(url).catch(() => undefined);
+    const until = now() + RESUME_TIMEOUT_MS;
+    while (now() < until) {
+      const state = attached();
+      if (state.attached && sameConsole(state.page?.url, url)) {
+        return { attached: true, navigated: true, ok: true, page: state.page, resumed: true, url };
+      }
+      await sleep(ATTACH_TICK_MS);
+    }
+    // It did not come back — the tab really is gone, or the phone is asleep. Fall through and launch one.
   }
 
   try {
@@ -82,6 +156,45 @@ export async function openConsole(deps, request) {
     ok: false,
     url,
   };
+}
+
+/**
+ * Whether two console URLs are the same page to a measurement.
+ *
+ * The attached page reports `window.location.href`, which is not the string the panel handed the browser:
+ * the app appends `mode=` once the surface has settled, and the browser percent-encodes `src`. Neither is a
+ * difference an arm cares about, and treating one as a difference would re-navigate a console that is
+ * already on the right page — a wasted page load in the middle of a ladder. Everything else IS the arm
+ * (`msaa`, `scene`, `scale`, `surface`, `district`), so it is compared exactly.
+ */
+export function sameConsole(a, b) {
+  const parse = (raw) => {
+    try {
+      const parsed = new URL(String(raw ?? ''), 'http://localhost');
+      parsed.searchParams.delete('mode');
+      parsed.searchParams.sort();
+
+      return `${parsed.pathname}?${parsed.searchParams.toString()}`;
+    } catch {
+      return null;
+    }
+  };
+  const left = parse(a);
+
+  return left !== null && left === parse(b);
+}
+
+/**
+ * Whether the last page the bus saw is merely ASLEEP — polled inside {@link RESUME_WINDOW_MS}.
+ *
+ * The bus keeps what it last saw even after it stops counting the page as attached, which is what makes the
+ * distinction available at all: `at` is when that page last polled, and a page with no `at` is one that was
+ * never there.
+ */
+function sleeping(page, at) {
+  const seen = Number(page?.at);
+
+  return Number.isFinite(seen) && at - seen < RESUME_WINDOW_MS;
 }
 
 function wait(ms) {

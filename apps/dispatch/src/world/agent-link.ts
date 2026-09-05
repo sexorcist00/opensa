@@ -28,6 +28,8 @@
 import type { MapPose } from '../map/map-camera';
 import type { MapMode } from './mode-switch';
 
+import { agentPose } from './agent-pose';
+
 /**
  * What the link is doing to this page, for the operator holding it.
  *
@@ -77,8 +79,23 @@ export interface AgentSurface {
   mode: () => MapMode | null;
   /** Fly the camera to a pose, the way a bookmark does. */
   moveTo: (pose: MapPose) => void;
+  /**
+   * Leave this page for another console URL, in THIS tab.
+   *
+   * A measurement arm is a page load (201/9-04: every pipeline is compiled against the budget, so an arm
+   * cannot be a key press), and the panel's only other way to put one on screen is `termux-open-url`, which
+   * opens a SECOND tab and cannot be used at all while a console is attached — so a five-arm ladder cost the
+   * person holding the phone four manual switches. The page navigating itself keeps one tab, needs no
+   * activity start from a background app, and leaves the bus with exactly one console on it.
+   */
+  navigate: (url: string) => void;
   /** The board as the operator has it: units, calls, the selection. */
   ops: () => unknown;
+  /**
+   * The pose the map is holding, or null before a surface exists — what a partial `pose` command completes
+   * against ({@link agentPose}). A tool that omits the heading means "keep mine", never "yaw: undefined".
+   */
+  pose: () => MapPose | null;
   /** The per-frame readout the chrome shows — fps, draws, resident MB, the pose. */
   readout: () => unknown;
   setMode: (mode: MapMode) => void;
@@ -124,6 +141,8 @@ export function describeCommand(command: { args: Record<string, unknown>; kind: 
         detail: command.args.mode === 'flat' ? 'flat 2D map' : '3D map',
         what: 'switching the map surface',
       };
+    case 'navigate':
+      return { detail: urlOf(command), what: 'opening another measurement arm' };
     case 'ops':
       return { detail: '', what: 'reading the board' };
     case 'pose': {
@@ -199,6 +218,17 @@ export function startAgentLink(
             kind: command.kind,
             ...(failure === null ? { state: 'done' } : { detail: failure, state: 'failed' }),
           });
+          // The one command whose EFFECT belongs after its answer rather than inside it: a navigation
+          // cancels every in-flight request, so calling it from `run` would race the POST that tells the
+          // panel the command succeeded — and the panel is waiting on exactly that before it looks for the
+          // new page. Stopping the loop here is not tidiness either: the old page keeps polling until it
+          // unloads, and a second console on the bus is the state this whole change exists to avoid.
+          if (command.kind === 'navigate' && failure === null) {
+            running = false;
+            surface.navigate(urlOf(command));
+
+            return;
+          }
         }
         report(released?.activity ?? 'held', released?.note ?? '');
       } catch {
@@ -302,15 +332,29 @@ async function run(command: AgentCommand, surface: AgentSurface): Promise<unknow
 
       return { asked: wanted };
     }
+    // Validated here and PERFORMED by the loop, once the answer is posted — see the loop for why.
+    case 'navigate': {
+      const url = urlOf(command);
+      if (url === '') {
+        throw new Error('navigate: no url given');
+      }
+
+      return { navigatingTo: url };
+    }
     case 'ops':
       return surface.ops();
     case 'pose': {
-      const pose = command.args.pose as MapPose | undefined;
-      if (!pose) {
-        throw new Error('pose: no pose given');
+      const current = surface.pose();
+      if (current === null) {
+        throw new Error('pose: no map is drawing yet — there is no pose to fly from');
       }
+      // Completed against what the map is holding rather than cast into a MapPose: an omitted field used to
+      // arrive as `undefined` and paint the frame black. See `agent-pose.ts`.
+      const pose = agentPose(command.args.pose, current);
       surface.moveTo(pose);
 
+      // The pose that was FLOWN, not the one that was asked for, so an answer cannot claim a heading nobody
+      // sent — the same rule the capture parsers follow for a refused parameter.
       return { flyingTo: pose };
     }
     // The agent letting go. It answers with what the page will now be showing, so a tool that says "you can
@@ -324,4 +368,11 @@ async function run(command: AgentCommand, surface: AgentSurface): Promise<unknow
     default:
       throw new Error(`unknown command '${command.kind}'`);
   }
+}
+
+/** The URL a `navigate` carries, or '' when it carries none — validated once, read in three places. */
+function urlOf(command: { args: Record<string, unknown> }): string {
+  const url = command.args.url;
+
+  return typeof url === 'string' ? url : '';
 }

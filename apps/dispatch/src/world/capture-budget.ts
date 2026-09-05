@@ -25,11 +25,27 @@
  * It is a knob a capture RECORDS, never a tier anything picks — the winner of this circuit becomes a number
  * a surface reads ([the PC/mobile restriction](../../../../docs/restrictions/architecture.md)), and until the
  * ladder says which arm won there is nothing to pick.
+ *
+ * **THE POST CHAIN'S THREE FIELDS ARRIVED WITH 201/9's SWEEP** (2026-09-05), which found the bloom chain to
+ * be 7.7 ms of a 23.4 ms frame while its cheap tail is free: `?bloomformat=` (the chain's own targets, apart
+ * from the scene's), `?bloomscale=` (where the pyramid starts) and `?bloomminpx=` (the floor under a level
+ * worth building). Every one of them is still a knob a capture records — what a SURFACE gets by default is
+ * `deviceBudget`'s business, and that function derives it from the device rather than from a name.
+ *
+ * The `base` argument is how the two meet: the derived budget goes in, the query overrides what it names,
+ * and a run that pins one field keeps the device's answer for the rest.
  */
-import { DEFAULT_RENDER_BUDGET, type RenderBudget, type SampleCount, type SceneFormat } from '@opensa/engine';
+import {
+  type BloomPrefilterScale,
+  DEFAULT_RENDER_BUDGET,
+  type RenderBudget,
+  type SampleCount,
+  type SceneFormat,
+} from '@opensa/engine';
 
 const SAMPLE_COUNTS: readonly SampleCount[] = [1, 4];
-const SCENE_FORMATS: readonly SceneFormat[] = ['rgb10a2unorm', 'rgba16float'];
+const SCENE_FORMATS: readonly SceneFormat[] = ['rg11b10ufloat', 'rgb10a2unorm', 'rgba16float'];
+const BLOOM_SCALES: readonly BloomPrefilterScale[] = [0.5, 1];
 
 /**
  * Read `?msaa=` and `?scene=`.
@@ -38,11 +54,24 @@ const SCENE_FORMATS: readonly SceneFormat[] = ['rgb10a2unorm', 'rgba16float'];
  * default format, which is the arm that was asked for. Anything unparseable in either is the default for
  * that half alone.
  */
-export function captureBudget(params: URLSearchParams): RenderBudget {
+export function captureBudget(params: URLSearchParams, base: RenderBudget = DEFAULT_RENDER_BUDGET): RenderBudget {
   return {
-    sampleCount: parse(params.get('msaa'), SAMPLE_COUNTS, DEFAULT_RENDER_BUDGET.sampleCount, Number),
-    sceneFormat: parse(params.get('scene'), SCENE_FORMATS, DEFAULT_RENDER_BUDGET.sceneFormat, (raw) => raw),
+    bloomFormat: parse(params.get('bloomformat'), SCENE_FORMATS, base.bloomFormat, (raw) => raw),
+    bloomMinLevelPx: minLevel(params.get('bloomminpx'), base.bloomMinLevelPx),
+    bloomPrefilterScale: parse(params.get('bloomscale'), BLOOM_SCALES, base.bloomPrefilterScale, Number),
+    sampleCount: parse(params.get('msaa'), SAMPLE_COUNTS, base.sampleCount, Number),
+    sceneFormat: parse(params.get('scene'), SCENE_FORMATS, base.sceneFormat, (raw) => raw),
   };
+}
+
+/** A pixel floor the chain can actually respect: below one there is no level, above the surface there is no chain. */
+function minLevel(asked: null | string, fallback: number): number {
+  if (asked === null) {
+    return fallback;
+  }
+  const value = Number(asked.trim());
+
+  return Number.isInteger(value) && value >= 1 && value <= 256 ? value : fallback;
 }
 
 function parse<T>(

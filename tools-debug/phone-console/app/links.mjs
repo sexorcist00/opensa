@@ -22,6 +22,18 @@ export const LINK_NAMES = [
   'rgb10a2',
   'scale75',
   'scale50',
+  'nocells',
+  'nocloud',
+  'nobloom',
+  'bloom4',
+  'bloomrg11',
+  'bloomhalf',
+  'bloomboth',
+  'bloomfull',
+  'night',
+  'nighthalf',
+  'noprobe',
+  'noskylut',
   'flat',
   'bake',
   'share',
@@ -82,6 +94,14 @@ export function consoleUrls(state = {}) {
   //
   // The operator links below carry none of this: a pinned buffer is stretched into whatever room the layout
   // gives it, which is right for a measurement and wrong for somebody working the map.
+  //
+  // **What that stretch does NOT do, since 2026-09-04: distort the world.** It used to. The camera framed
+  // for the BUFFER's aspect while the browser stretched that buffer into the CSS box, so a 720x640 pin
+  // inside a 360x550 box rendered for 1.125 and displayed at 0.655 — the whole map ~1.7x too tall, and
+  // every look verdict taken through a measurement link was worthless (the operator's report, and it is how
+  // this was found). The camera reads the displayed box now (`canvasAspect`, `world/boot.ts`), so a pin
+  // costs vertical RESOLUTION and nothing else. **A look verdict still belongs on an unpinned link**: soft
+  // is soft, and `map` is the one that is native.
   const capture = 'inventory=1&surface=720x640';
   const empty = `${query}&units=0&calls=0&${capture}`;
 
@@ -101,6 +121,27 @@ export function consoleUrls(state = {}) {
   // owes a verdict as well as a number.
   return {
     bake: `${app}?${query}&bake=tiles&zmin=0&zmax=4`,
+    // 201/9's ABLATION arms. There is no `timestamp-query` on the 2/03 device and no browser flag brings it
+    // (`docs/edge-cases/browser-runtime.md`, re-tested 2026-09-04), so a pass is priced by REMOVING it and
+    // re-flying the same route: each of these is `field` minus one group, and the difference in the
+    // window's mean is what that group costs. `bloom4` is the odd one — it shortens the chain rather than
+    // removing it, which is 201/9-05's actual lever and not only a measurement.
+    bloom4: `${app}?${empty}&bloomlevels=4`,
+    // 201/9-05's two REAL levers, after the sweep refuted the level count: the chain's own storage, and where
+    // its pyramid starts. `bloomrg11` moves no pixels and changes no resolution — it halves the bytes of every
+    // pass that reads or writes the chain, which is what the 09-04 ladder's `rgb10a2` arm implied and this one
+    // takes without UNORM's clipping. `bloomhalf` quarters the three passes that are 90 % of the chain and is
+    // a LOOK change: the bright-pass threshold then runs on a 2x2 average, so sub-pixel emitters dim.
+    // The candidate DEFAULT rather than a diagnostic: the two levers are independent (one halves the bytes of
+    // every pass in the chain, the other quarters the pixels of the three biggest), and separately they read
+    // -2.4 ms and -4.4 ms off a 21.5 ms baseline.
+    bloomboth: `${app}?${empty}&bloomformat=rg11b10ufloat&bloomscale=0.5`,
+    // The console's default became `bloomscale=0.5` on 2026-09-05 (the operator's night verdict), so THIS is
+    // the arm that re-flies what `field` used to be. A default that moved without leaving its predecessor
+    // reachable would make every row taken before it unrepeatable.
+    bloomfull: `${app}?${empty}&bloomscale=1`,
+    bloomhalf: `${app}?${empty}&bloomscale=0.5`,
+    bloomrg11: `${app}?${empty}&bloomformat=rg11b10ufloat`,
     // The declared worst case: 201's budget table says 150 units each drawn as a model with a symbol over
     // it, and every number 5/02 and 5/04 owe is measured AT it. It is no longer THE FIELD RUN — it is what
     // the field run is compared against once the map is the shape we want it.
@@ -120,6 +161,18 @@ export function consoleUrls(state = {}) {
     inventory: `${app}?${query}&inventory=1`,
     map: `${app}?${query}`,
     msaa1: `${app}?${empty}&msaa=1`,
+    // THE LOOK PAIR, and it has to be at NIGHT (201/9-05). `bloomhalf` is measured at −4.4 ms and its known
+    // cost is sub-pixel EMITTERS: at half resolution the bright-pass threshold runs on a 2x2 average, so a
+    // street light one pixel across is diluted below it and stops blooming. At hour 10 there is nothing lit
+    // to lose and the daylight A/B on 2026-09-05 was indistinguishable — which settles nothing. These two
+    // differ by the arm alone (`links.test.mjs`), so what an operator sees between them IS the arm.
+    night: `${app}?${empty}&hour=22`,
+    nighthalf: `${app}?${empty}&hour=22&bloomscale=0.5`,
+    nobloom: `${app}?${empty}&ablate=bloom`,
+    nocells: `${app}?${empty}&ablate=cells`,
+    nocloud: `${app}?${empty}&ablate=cloud`,
+    noprobe: `${app}?${empty}&ablate=probe`,
+    noskylut: `${app}?${empty}&ablate=skylut`,
     rgb10a2: `${app}?${empty}&scene=rgb10a2unorm`,
     scale50: `${app}?${empty}&scale=0.5`,
     scale75: `${app}?${empty}&scale=0.75`,

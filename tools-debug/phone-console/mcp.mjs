@@ -150,8 +150,11 @@ export const TOOLS = [
     description:
       'Open the console ON THE PHONE\'S SCREEN and wait until it reaches the panel. This is what clears "no ' +
       'map is attached" — every other map_ tool talks to a page that is already open. Answers when the ' +
-      'page phones home, or says what it launched and why nothing arrived. A console already attached is ' +
-      'left alone rather than covered with a second tab.',
+      'page phones home, or says what it launched and why nothing arrived. **A console that is already ' +
+      'attached STEERS ITSELF to the view being asked for**, in its own tab and with nobody touching the ' +
+      'phone, so a ladder of measurement arms is a sequence of these calls rather than a sequence of ' +
+      'requests to the person holding it; the answer says `navigated: true`. Asking for the view it is ' +
+      'already on leaves it alone (`reused: true`) rather than throwing away a warmed world.',
     inputSchema: {
       additionalProperties: false,
       properties: {
@@ -165,8 +168,14 @@ export const TOOLS = [
             'declared worst case of 150 units, kept for when 201/5-02 comes up rather than for today. ' +
             "`msaa1`, `rgb10a2`, `scale75` and `scale50` are 201/9-04's attachment ladder — the field run " +
             "with ONE of the scene pass's constants moved, so each one's difference from `field` is what it " +
-            'is pricing and nothing else. Also the map itself, its inventory report, the flat 2D map, the ' +
-            'tile bake, or the share build.',
+            'is pricing and nothing else. `nocells`, `nocloud`, `nobloom`, `noprobe`, `noskylut` and ' +
+            "`bloom4` are 201/9's ABLATION arms, and they exist because this device has no " +
+            '`timestamp-query` and no browser flag brings it: a pass is priced by REMOVING it and re-flying ' +
+            'the same route, so each one is `field` minus one group of passes. `night` and `nighthalf` are the LOOK ' +
+            'pair — the same map at hour 22, differing by the bloom arm alone, because a half-resolution bright ' +
+            'pass can only lose a sub-pixel emitter where there is one lit. Read `surface.ablated` in ' +
+            'the snapshot before believing any of them. Also the map itself, its inventory report, the ' +
+            'flat 2D map, the tile bake, or the share build.',
           enum: [
             'map',
             'inventory',
@@ -178,6 +187,18 @@ export const TOOLS = [
             'rgb10a2',
             'scale75',
             'scale50',
+            'nocells',
+            'nocloud',
+            'nobloom',
+            'bloomrg11',
+            'bloomhalf',
+            'bloomboth',
+            'bloomfull',
+            'night',
+            'nighthalf',
+            'bloom4',
+            'noprobe',
+            'noskylut',
             'flat',
             'bake',
             'share',

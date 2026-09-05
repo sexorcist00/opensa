@@ -875,6 +875,37 @@ the doctor fails on `gone` with the way back, and `main` is a job so the recover
 a person with a keyboard. Both directions are tested. Nothing catches it in a plain checkout — a branch whose
 remote is gone is an ordinary local branch, and only the project's main-only rule makes it a trap.
 
+## A camera's ASPECT comes from what is DISPLAYED, never from the buffer it draws into
+
+**The rule.** The projection's aspect ratio is the aspect of the box the viewer sees. It is not
+`canvas.width / canvas.height` — that is the drawing buffer, and the two are the same number only while
+nothing has pinned or scaled the buffer. Picking reads the same ratio, so it inherits whatever the camera got
+wrong.
+
+**Why it is not obvious.** On every ordinary surface the buffer IS the CSS box times the device pixel ratio,
+so the two expressions agree exactly and the wrong one looks correct forever. They diverge the moment
+anything fixes the buffer independently of the layout — which is precisely what a MEASUREMENT does, because
+comparable arms need a constant pixel count while the browser's chrome collapses and returns.
+
+**What it cost.** `apps/dispatch` framed the world for the buffer. With `?surface=720x640`
+([201/9-01](../plans/201-dispatch-console/9-the-mobile-frame/readme.md)) inside a 360x550 CSS box that is a
+world composed for an aspect of **1.125** and then stretched by the browser into a box of **0.655** — the
+whole map roughly **1.7x too tall**, circles drawn as ellipses, and a thumb landing where the operator had
+not aimed it. Every pinned page carried it: the entire 2026-09-04 ladder, and both look verdicts taken
+through one.
+
+**What survives such a bug and what does not**, because the split is the useful part: the GPU does identical
+work whatever the canvas is stretched to, and every arm carried the same pin, so the **frame-time numbers are
+untouched** — while **every judgement made by eye through a pinned page is worthless**. A measurement rig can
+be wrong about the picture and right about the cost at the same time.
+
+**SILENT, in the full sense this folder means it.** It typechecks. It lints. Every test passes — this is
+geometry, and a test asserts behaviour. It is invisible on every shipping surface, since none of them pins.
+It was found by an operator looking at their own phone and saying the map did not look right, an hour after
+a whole evening of measurement had been taken through it. Caught since 2026-09-04 by `canvasAspect`
+(`apps/dispatch/src/world/capture-surface.ts`) and its five tests, which pin the divergent case rather than
+the agreeing one.
+
 ## An effect's RETURN VALUE is its cleanup — a shorthand body must return a cleanup or nothing
 
 React calls whatever `useEffect` returns as the effect's cleanup function. A concise arrow body returns the
@@ -914,3 +945,37 @@ into a message naming the failure (`apps/cutscene-converter/src/renderer/error-b
 `scripts/debug/cutscene-converter-drive.ts` reproduces the class in seconds by driving the built app. Read
 an effect's body before you shorten it.
 
+
+## A POSE that crosses a tool boundary is COMPLETED against the one the map holds, never cast
+
+**The rule.** A camera pose arriving as JSON — from the phone panel's `map_goto`, from a shared link, from
+anything outside this bundle — is read field by field and completed against the pose the camera is already
+holding. `args as MapPose` is the defect: an omitted field arrives as `undefined` inside a type whose every
+field is a required number, and TypeScript has already been told it cannot happen.
+
+**What each missing field does, and neither is a degraded picture — both are a wrong one:**
+
+- **`yaw: undefined`** → `forwardFrom(undefined, pitch)` is `[NaN, NaN, NaN]` → the eye is NaN → the view
+  matrix is NaN and **the map draws BLACK**, while the readout says `NaN, NaN` and the streamer keeps
+  working (it follows the FOCUS, which is still finite). So `cellsVisible`, `draws`, `triangles`, resident MB
+  and every millisecond in the report go on describing an ordinary frame — of nothing.
+- **`projection: undefined`** → `state()` tests `projection === 'perspective'`, reads false, and composes
+  the frame **orthographically** with `near = 2·distance − far`. A lens the operator never chose, reported
+  by nothing.
+
+**What it cost** (2026-09-05): two flights into [201/9](../plans/201-dispatch-console/9-the-mobile-frame/readme.md)'s
+ablation sweep. The tool's own schema is right to make `yaw`, `pitch`, `height` and `projection` optional —
+"fly to [1500, −1500] at 200 m" is a complete instruction from something that is not holding the camera — so
+the completion is the CONSOLE's job and it was not being done.
+
+**SILENT, and worse than silent for a measurement.** It typechecks (the cast is the bug), it lints, no test
+sees it (every caller inside this repo has a complete `MapPose`, which is what the camera's own tests pass),
+nothing is logged, and `map_snapshot` answers with a full, plausible report. A black frame is also a CHEAP
+frame — the geometry clips away — so a window flown through one does not look broken, it looks fast. It was
+found by the operator saying *"you moved the camera to a black screen"*.
+
+**Caught since 2026-09-05** at the one seam where untrusted JSON becomes a pose:
+`apps/dispatch/src/world/agent-pose.ts` and its tests — `at` must be two finite numbers or the command is
+refused by name, every other field falls back to the pose the map holds, and the answer states the pose that
+was FLOWN rather than the one that was asked for. Anywhere else a `MapPose` is cast rather than parsed, this
+is still silent.

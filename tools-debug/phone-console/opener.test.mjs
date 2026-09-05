@@ -1,15 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { OPEN_URL_BIN, openConsole } from './opener.mjs';
+import { OPEN_URL_BIN, openConsole, sameConsole } from './opener.mjs';
 
 const URL_ = 'http://localhost:3001/build/webapp/dispatch.html?src=x&agent=1';
+/** The same console one measurement arm away — 201/9-04's ladder is five of these. */
+const ARM = `${URL_}&msaa=1`;
 
 /**
  * A phone whose clock and bus the test owns: `attachAfter` is how many polls pass before the page phones
  * home, so "it attached" and "it never did" are decisions rather than races.
  */
 function phone(options = {}) {
-  const { attachAfter = 0, hasOpener = true, launch = vi.fn(async () => {}) } = options;
+  const { attachAfter = 0, hasOpener = true, launch = vi.fn(async () => {}), url = null } = options;
   let now = 1000;
   let polls = 0;
 
@@ -19,7 +21,9 @@ function phone(options = {}) {
         const attached = polls >= attachAfter;
         polls += 1;
 
-        return attached ? { attached: true, page: { mode: 'live' } } : { attached: false, page: null };
+        const page = url === null ? { mode: 'live' } : { mode: 'live', url };
+
+        return attached ? { attached: true, page } : { attached: false, page: null };
       },
       exists: (path) => hasOpener && path === OPEN_URL_BIN,
       launch,
@@ -29,6 +33,82 @@ function phone(options = {}) {
       },
     },
     launch,
+  };
+}
+
+/**
+ * A phone whose page has STOPPED polling but is still the last one the bus saw — a backgrounded tab, which
+ * is what Android leaves behind after 15 s. `wakesAfter` polls later it comes back on the steered URL.
+ */
+function sleepingPhone(options = {}) {
+  const { lastSeenAgoMs = 20_000, url = URL_, wakes = true, wakesAfter = 3 } = options;
+  let now = 1_000_000;
+  let polls = 0;
+  let here = url;
+  let wakeAt = null;
+  const launch = vi.fn(async () => {});
+  const steer = vi.fn(async (to) => {
+    if (wakes) {
+      here = to;
+      wakeAt = polls + wakesAfter;
+    }
+  });
+
+  return {
+    deps: {
+      attached: () => {
+        const awake = wakeAt !== null && polls >= wakeAt;
+        polls += 1;
+
+        return awake
+          ? { attached: true, page: { at: now, mode: 'live', url: here } }
+          : { attached: false, page: { at: now - lastSeenAgoMs, mode: 'live', url } };
+      },
+      exists: (path) => path === OPEN_URL_BIN,
+      launch,
+      now: () => now,
+      sleep: async (ms) => {
+        now += ms;
+      },
+      steer,
+    },
+    launch,
+    steer,
+  };
+}
+
+/** A phone whose attached page really does land on the URL it was steered to, after `landsAfter` polls. */
+function steerablePhone(options = {}) {
+  const { landsAfter = 2, url = URL_ } = options;
+  let now = 1000;
+  let polls = 0;
+  let here = url;
+  let landAt = null;
+  let wanted = null;
+  const steer = vi.fn(async (to) => {
+    wanted = to;
+    landAt = polls + landsAfter;
+  });
+
+  return {
+    deps: {
+      attached: () => {
+        if (landAt !== null && polls >= landAt) {
+          here = wanted;
+        }
+        polls += 1;
+
+        return { attached: true, page: { mode: 'live', url: here } };
+      },
+      exists: (path) => path === OPEN_URL_BIN,
+      launch: vi.fn(async () => {}),
+      now: () => now,
+      sleep: async (ms) => {
+        now += ms;
+      },
+      steer,
+    },
+    steer,
   };
 }
 
@@ -79,6 +159,23 @@ describe('openConsole', () => {
 
       expect(answer.error).toContain('display over other apps');
     });
+
+    it('launches when the tab really is gone — a page nobody has seen for minutes is not asleep', async () => {
+      const { deps, launch, steer } = sleepingPhone({ lastSeenAgoMs: 10 * 60_000, wakes: false });
+
+      await openConsole(deps, { timeoutMs: 2000, url: ARM });
+
+      expect(steer).not.toHaveBeenCalled();
+      expect(launch).toHaveBeenCalledWith(ARM);
+    });
+
+    it('falls back to the launcher when a steered tab does not come back', async () => {
+      const { deps, launch } = sleepingPhone({ wakes: false });
+
+      await openConsole(deps, { timeoutMs: 2000, url: ARM });
+
+      expect(launch).toHaveBeenCalledWith(ARM);
+    });
   });
 
   describe('positive cases', () => {
@@ -99,6 +196,71 @@ describe('openConsole', () => {
 
       expect(answer).toMatchObject({ attached: true, ok: true, reused: true });
       expect(launch).not.toHaveBeenCalled();
+    });
+
+    // 201/9-04's ladder cost the operator four manual switches; this is the line that removes them.
+    it('steers a BACKGROUNDED tab rather than launching a second console beside it', async () => {
+      const { deps, launch, steer } = sleepingPhone();
+
+      const answer = await openConsole(deps, { url: ARM });
+
+      expect(steer).toHaveBeenCalledWith(ARM);
+      expect(launch).not.toHaveBeenCalled();
+      expect(answer).toMatchObject({ navigated: true, ok: true, resumed: true, url: ARM });
+    });
+
+    it('steers an attached console to the next arm in the same tab, without the launcher', async () => {
+      const { deps, steer } = steerablePhone();
+
+      const answer = await openConsole(deps, { url: ARM });
+
+      expect(answer).toMatchObject({ attached: true, navigated: true, ok: true, url: ARM });
+      expect(answer.page.url).toBe(ARM);
+      expect(steer).toHaveBeenCalledWith(ARM);
+      expect(deps.launch).not.toHaveBeenCalled();
+    });
+
+    it('leaves a console that is already on the asked-for page alone rather than reloading it', async () => {
+      const { deps, steer } = steerablePhone({ url: ARM });
+
+      const answer = await openConsole(deps, { url: ARM });
+
+      expect(answer).toMatchObject({ ok: true, reused: true });
+      expect(steer).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('sameConsole', () => {
+  describe('negative cases', () => {
+    it('tells two measurement arms apart, which is the whole reason it exists', () => {
+      expect(sameConsole(URL_, ARM)).toBe(false);
+      expect(sameConsole(`${URL_}&scale=0.5`, `${URL_}&scale=0.75`)).toBe(false);
+    });
+
+    it('is false rather than throwing on something that is not a URL', () => {
+      expect(sameConsole(undefined, URL_)).toBe(false);
+      expect(sameConsole(null, URL_)).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    // The page reports `window.location.href`, and the app has appended `mode=` by the time it does.
+    it('ignores the mode the app appends once its surface has settled', () => {
+      expect(sameConsole(`${ARM}&mode=live`, ARM)).toBe(true);
+    });
+
+    it('ignores the percent-encoding the browser applies to a nested url', () => {
+      const raw = 'http://localhost:3001/x.html?src=http://localhost:3001/build/phone&agent=1';
+      const encoded = 'http://localhost:3001/x.html?src=http%3A%2F%2Flocalhost%3A3001%2Fbuild%2Fphone&agent=1';
+
+      expect(sameConsole(raw, encoded)).toBe(true);
+    });
+
+    it('ignores the order the parameters happen to be in', () => {
+      expect(
+        sameConsole(`${URL_}&msaa=1`, 'http://localhost:3001/build/webapp/dispatch.html?msaa=1&agent=1&src=x'),
+      ).toBe(true);
     });
   });
 });

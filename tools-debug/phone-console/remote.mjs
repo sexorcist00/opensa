@@ -73,7 +73,13 @@ export class MapBus {
    */
   submit(command) {
     const attached = this.attached();
-    if (!attached.attached) {
+    // A command may be QUEUED for a page that has stopped polling — the tab is backgrounded, not closed, and
+    // it takes the queue the moment it is in front again. Only the opener asks for this, and only so that an
+    // arm change reaches the tab that already exists instead of launching a second one beside it (201/9,
+    // 2026-09-05). The refusal stays the default: a caller waiting on an answer wants to hear that nobody is
+    // listening, not to wait for somebody who may never come back. The timeout below removes what is never
+    // taken, so a queued command cannot fire into a page minutes later.
+    if (!attached.attached && command.queueWhileDetached !== true) {
       return Promise.resolve({
         error:
           'no map is attached — open the console on this phone with `&agent=1` in its query (the panel’s ' +

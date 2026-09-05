@@ -67,6 +67,10 @@ const CONTEXT = {
   overlay: 'on' as const,
   pickingBytes: 0,
   surface: {
+    ablated: 'none',
+    bloomFormat: 'rgba16float',
+    bloomMinLevelPx: 1,
+    bloomPrefilterScale: 1,
     cssHeight: 364,
     cssWidth: 360,
     deviceHeight: 728,

@@ -163,7 +163,11 @@ export function MapCanvas({
             inventory: () => handleRef.current?.inventory() ?? null,
             mode: () => switcher?.current() ?? null,
             moveTo: (pose) => handleRef.current?.recallView(pose),
+            // `replace` rather than `assign`: an arm is not a place the operator navigated to, and a ladder
+            // of five would otherwise leave five entries for their Back button to walk out through.
+            navigate: (url) => window.location.replace(url),
             ops: () => liveRef.current.read.ops(),
+            pose: () => handleRef.current?.pose() ?? null,
             readout: () => lastReadout.current,
             setMode: (wanted) => void switcher?.to(wanted),
           },

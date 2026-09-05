@@ -94,6 +94,17 @@ A perf comparison is worthless without these held equal, so record them in `note
   sizes cannot be subtracted, and nothing in the capture complains: every field is internally consistent. Record
   `surface` for each side, and treat an arm-to-arm delta over unequal surfaces as a band rather than a number
   ([the circuit that found it](opensa-engine/2026-08-31-mobile-map-circuit-arms.json))
+- **on the phone, WHEN in the session — an absolute mean drifts, a paired DELTA does not.** 2026-09-05: the
+  cumulus bake was amortized (201/9-06) and the `field` arm came back at **23.66 ms** against **23.44 ms**
+  before the fix, which reads as "the fix did nothing". It is not what happened. Re-flown as a PAIR minutes
+  apart, `field` − `nocloud` went from **1.83 ms** before the fix to **0.34 ms** after: the pass really was
+  removed, and the ~40 minutes of measuring between the two absolutes had moved the whole frame by about the
+  same amount as the win. The device heats, and nothing in the capture says so — **no row in this folder
+  records the battery level, the charging state or the die temperature**, which is an open debt this one
+  names rather than fixes. So: an arm is subtracted from a baseline flown in the SAME thermal window, an
+  absolute mean is a reading of one moment in one session, and a fix is never judged by comparing today's
+  absolute with an earlier one
+  ([the sweep](opensa-engine/2026-09-05-mobile-map-ablation-sweep.json))
 - renderer flags (`?scale=`, `?draw=`, `?engine=`)
 
 ## Mobile runs: a different schema, and never a comparable one

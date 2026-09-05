@@ -206,6 +206,21 @@ export interface InventoryReport {
    *  block existed a capture could not be read for it at all: the CSS size, the DPR and the render scale
    *  were sentences somebody wrote by hand afterwards. An A/B must be self-describing (`CLAUDE.md`). */
   readonly surface: {
+    /** `?ablate=` / `?bloomlevels=` — which of the frame's passes this run REMOVED, or `none` (201/9).
+     *  The device has no `timestamp-query` and no flag brings it, so a pass is priced by its absence: this
+     *  is the line that stops a row claiming an arm it did not take, exactly as `pinned` does for the
+     *  buffer. Read it before believing any number in the file. */
+    readonly ablated: string;
+    /** `?bloomformat=` — the format the BLOOM chain's own targets carry, EFFECTIVE rather than asked: a
+     *  device that cannot render `rg11b10ufloat` falls back and this says which one actually ran (201/9-05). */
+    readonly bloomFormat: string;
+    /** `?bloomminpx=` — the pixel floor under a level worth building. The levels below it measured 0.2 ms,
+     *  so this is textures and bind groups rather than frame time. */
+    readonly bloomMinLevelPx: number;
+    /** `?bloomscale=` — where the bloom pyramid STARTS, as a fraction of the render size. 1 is the full-res
+     *  prefilter the engine has always run; 0.5 quarters the three passes that are 90 % of the chain and is
+     *  a LOOK change (sub-pixel emitters are averaged before they are thresholded). */
+    readonly bloomPrefilterScale: number;
     readonly cssHeight: number;
     readonly cssWidth: number;
     /** The drawing buffer, device pixels — what the swapchain and the post pass are sized at. */

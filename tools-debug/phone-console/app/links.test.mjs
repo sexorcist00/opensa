@@ -204,3 +204,86 @@ describe('the attachment ladder (201/9-04)', () => {
     });
   });
 });
+
+describe('the ablation arms (201/9)', () => {
+  describe('negative cases', () => {
+    // Same rule as the ladder above, and it matters more here: with no `timestamp-query` on the device
+    // there is no second signal that would catch an arm which moved two things at once.
+    it('differs from the field run by ONE parameter, exactly like a ladder arm', () => {
+      const links = consoleUrls(SERVED);
+
+      for (const [arm, added] of [
+        [links.nocells, 'ablate=cells'],
+        [links.nocloud, 'ablate=cloud'],
+        [links.nobloom, 'ablate=bloom'],
+        [links.noprobe, 'ablate=probe'],
+        [links.noskylut, 'ablate=skylut'],
+        [links.bloom4, 'bloomlevels=4'],
+      ]) {
+        expect(arm.replace(`&${added}`, '')).toBe(links.field);
+      }
+    });
+
+    it('leaves the ablation knobs off every link that is not an ablation arm', () => {
+      const links = consoleUrls(SERVED);
+
+      for (const other of [links.map, links.inventory, links.field, links.board, links.msaa1, links.share]) {
+        expect(other).not.toContain('ablate=');
+        expect(other).not.toContain('bloomlevels=');
+      }
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is offered by name, so `phone_run open LINK=` and `map_open view=` both reach it', () => {
+      for (const name of ['nocells', 'nocloud', 'nobloom', 'bloom4', 'noprobe', 'noskylut']) {
+        expect(LINK_NAMES).toContain(name);
+        expect(consoleUrls(SERVED)[name]).toBeTypeOf('string');
+      }
+    });
+  });
+});
+
+describe('the bloom arms and the night look pair (201/9-05)', () => {
+  describe('negative cases', () => {
+    it('never lets the look pair differ by anything but the arm — otherwise the A/B is about something else', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.nighthalf).toBe(`${links.night}&bloomscale=0.5`);
+    });
+
+    it('does not judge the half-res prefilter in daylight, where there is no lit emitter to lose', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.night).toContain('hour=22');
+      expect(links.nighthalf).toContain('hour=22');
+      expect(links.bloomhalf).not.toContain('hour=');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is the field run with one budget field moved, for each measurement arm', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.bloomrg11).toBe(`${links.field}&bloomformat=rg11b10ufloat`);
+      expect(links.bloomhalf).toBe(`${links.field}&bloomscale=0.5`);
+      expect(links.bloomboth).toBe(`${links.field}&bloomformat=rg11b10ufloat&bloomscale=0.5`);
+    });
+
+    // The console's default became the half-res prefilter on 2026-09-05, so the arm that re-flies what
+    // `field` used to be has to keep existing — otherwise every row taken before that day is unrepeatable.
+    it('keeps the PREVIOUS default reachable, so an older row can still be re-flown', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.bloomfull).toBe(`${links.field}&bloomscale=1`);
+    });
+
+    it('carries no board on any of them, like every arm of the map circuit', () => {
+      const links = consoleUrls(SERVED);
+
+      for (const arm of [links.bloomrg11, links.bloomhalf, links.bloomboth, links.night, links.nighthalf]) {
+        expect(arm).toContain('units=0&calls=0');
+      }
+    });
+  });
+});

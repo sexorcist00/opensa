@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { captureSurface } from './capture-surface';
+import { canvasAspect, captureSurface } from './capture-surface';
 
 describe('captureSurface', () => {
   describe('negative cases', () => {
@@ -35,6 +35,53 @@ describe('captureSurface', () => {
         height: 864,
         width: 720,
       });
+    });
+  });
+});
+
+/** A canvas as the two halves see it: the buffer it draws into, and the box the browser stretches it to. */
+const canvas = (
+  width: number,
+  height: number,
+  clientWidth: number,
+  clientHeight: number,
+): Parameters<typeof canvasAspect>[0] => ({
+  clientHeight,
+  clientWidth,
+  height,
+  width,
+});
+
+describe('canvasAspect', () => {
+  describe('negative cases', () => {
+    // The whole finding: a pin the camera framed for made the map ~1.7x too tall on the phone.
+    it('does not take the aspect from a PINNED buffer, which is not what the viewer sees', () => {
+      const pinned = canvas(720, 640, 360, 550);
+
+      expect(canvasAspect(pinned)).not.toBeCloseTo(720 / 640, 3);
+      expect(canvasAspect(pinned)).toBeCloseTo(360 / 550, 3);
+    });
+
+    it('falls back to the buffer while the element has no layout yet, rather than to 1', () => {
+      expect(canvasAspect(canvas(720, 640, 0, 0))).toBeCloseTo(720 / 640, 3);
+      expect(canvasAspect(canvas(720, 640, 360, 0))).toBeCloseTo(720 / 640, 3);
+    });
+
+    it('never divides by zero on a canvas with no buffer either', () => {
+      expect(Number.isFinite(canvasAspect(canvas(0, 0, 0, 0)))).toBe(true);
+    });
+  });
+
+  describe('positive cases', () => {
+    // Unpinned the buffer IS the box times the DPR, so this changes nothing on any shipping surface.
+    it('is the same number as the buffer gives when nothing is pinned', () => {
+      expect(canvasAspect(canvas(720, 1100, 360, 550))).toBeCloseTo(720 / 1100, 3);
+      expect(canvasAspect(canvas(720, 1100, 360, 550))).toBeCloseTo(360 / 550, 3);
+    });
+
+    it('follows the box as the browser chrome collapses under a held pin', () => {
+      expect(canvasAspect(canvas(720, 640, 360, 609))).toBeCloseTo(360 / 609, 3);
+      expect(canvasAspect(canvas(720, 640, 360, 320))).toBeCloseTo(360 / 320, 3);
     });
   });
 });

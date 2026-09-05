@@ -3,6 +3,7 @@ import type { TimecycSource } from '@opensa/renderware';
 
 import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
 import {
+  ablationLabel,
   Engine,
   FrameSpans,
   frameSpans,
@@ -55,8 +56,10 @@ import { UnitModels } from '../map/unit-models';
 import { readView, type SharedView, viewOfPose } from '../map/view-link';
 import { bootBytes, bootDone, bootStep } from './boot-progress';
 import { composeImage } from './capture';
+import { captureAblation } from './capture-ablation';
 import { captureBudget } from './capture-budget';
-import { captureSurface } from './capture-surface';
+import { canvasAspect, captureSurface } from './capture-surface';
+import { CONSOLE_RENDER_BUDGET } from './console-budget';
 import { buildDemoCity, DEMO_EXTENT, DEMO_REACH } from './demo-city';
 import { DISTRICTS } from './districts';
 import { createErrorLog } from './error-log';
@@ -408,11 +411,21 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   new ResizeObserver(resize).observe(canvas);
 
   /**
-   * `?msaa=` / `?scene=` — 9/04's two attachment arms. Chosen HERE because every pipeline is compiled against
-   * them: an engine cannot change its budget, so the arm is a page load rather than a key press.
+   * `?msaa=` / `?scene=` / `?bloom*=` — 9/04's attachment arms and 9/05's post-chain ones. Chosen HERE because
+   * every pipeline is compiled against them: an engine cannot change its budget, so an arm is a page load
+   * rather than a key press.
+   *
+   * The BASE is {@link CONSOLE_RENDER_BUDGET} rather than the engine's default, so what a device gets when
+   * nobody pins anything is this surface's own ask — narrowed at `init` to what the adapter actually grants.
    */
-  const budget = captureBudget(params);
-  const engine = new Engine(budget);
+  const budget = captureBudget(params, CONSOLE_RENDER_BUDGET);
+  /**
+   * `?ablate=` / `?bloomlevels=` — 9's ablation arms, and a constructor input for the same reason the budget
+   * is: the bloom level count decides which textures and bind groups exist. This device has no
+   * `timestamp-query`, so removing a pass and re-flying the route is the only way its cost is read at all.
+   */
+  const ablation = captureAblation(params);
+  const engine = new Engine(budget, ablation);
   // `resize()` above already put the pinned buffer on the canvas, and `init` used to derive it again from
   // the CSS box and overwrite both edges — so the pin lasted until the GPU came up and no further, while
   // the report went on saying `pinned: true`. Handing it to the engine is what makes the pin survive boot.
@@ -757,7 +770,16 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     const cpu: FrameCpuSample = { bodyMs, canvasPixels: canvas.width * canvas.height, segments: loopCpu.drain() };
 
     const ops = options.ops();
-    const aspect = canvas.width / Math.max(1, canvas.height);
+    // The aspect of what the VIEWER sees, not of the buffer it is drawn into (the operator's report,
+    // 2026-09-04). Without a pin the two are identical — the buffer is the CSS box times the DPR — so this
+    // changes nothing on any shipping surface. WITH one they diverge, and the camera followed the wrong
+    // half: `?surface=720x640` inside a 360x550 CSS box framed the world for 1.125 and the browser then
+    // stretched that buffer into a box of 0.655, so the whole map was **vertically stretched by ~1.7x**.
+    // Reading the box instead renders anamorphically — non-square pixels in the buffer — which the stretch
+    // undoes, leaving geometry correct and only the vertical resolution soft, which is the pin's honest
+    // cost and is already in the report. `rayAt` and the footprint take the same number, so picking under a
+    // pin was wrong in exactly the same way: a thumb lands where the operator aimed it now.
+    const aspect = canvasAspect(canvas);
     // Before the state is read, so the streamer follows where the held keys and the flight have taken the
     // view THIS frame rather than where it was last frame.
     applyHeldKeys(camera, keyboard, dt);
@@ -1027,6 +1049,15 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         overlay: arm,
         pickingBytes: engine.cells.pickingBytes,
         surface: {
+          // 9: what this arm REMOVED from the frame. `none` on every shipping run — and the reason it is
+          // stated rather than assumed is that an ablated run is otherwise indistinguishable from a fast one.
+          ablated: ablationLabel(engine.ablation),
+          // 9/05: the post chain's own budget, EFFECTIVE rather than asked — `rg11b10ufloat` falls back to
+          // `rgba16float` on an adapter that cannot render it, and a row that did not state which one ran
+          // would be a row about a frame nobody can identify.
+          bloomFormat: engine.budget.bloomFormat,
+          bloomMinLevelPx: engine.budget.bloomMinLevelPx,
+          bloomPrefilterScale: engine.budget.bloomPrefilterScale,
           cssHeight: canvas.clientHeight,
           cssWidth: canvas.clientWidth,
           deviceHeight: canvas.height,
