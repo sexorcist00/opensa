@@ -146,10 +146,22 @@ not a smooth 45. A console that averages 45 fps this way looks worse than one th
 operator's complaint is ever *smoothness* rather than *throughput*, the budgets this panel offers are 60 and
 30, and the honest move is to pick one, not to tune within the band.
 
-**And it flips the bloom question's side.** At 60 the chain was load-bearing: it moved rung-1 occupancy from
-78 % to 95 %. At 45 the map clears the bar with the chain in. So bloom is now a **look and battery** decision
-for the operator, not a budget one — the same conclusion §3.1d reaches from the size of the levers, now with
-nothing riding on it.
+**And the bloom question changed sides TWICE in one session, which is worth watching happen.** At 60 fps the
+chain was load-bearing: it moved rung-1 occupancy from 78 % to 95 %. When the bar dropped to 45 the map
+cleared it with the chain in, so bloom looked like a pure look-and-battery decision. **Then the user added
+that SMOOTHNESS matters too (2026-09-05), and that puts it straight back.** Rung-1 occupancy is not a
+throughput number — it is the stutter rate, and 78 % means roughly one frame in five doubles while 95 % means
+one in twenty. **Measured across everything this chain flew, the bloom chain is the single largest lever on
+smoothness that exists**, and nothing else came close. So: not a budget item under the 45 fps bar, and a
+first-class item under the smoothness one.
+
+**Which is why the frame now REPORTS its steadiness** (`frame-pacing.ts`, 2026-09-05): `paceChangeRate`,
+`paceChanges` and `paceWorstRatio` are in the inventory report beside the histogram. **A distribution has no
+order in it** — the same bins describe a flat 30 and a 60/30 stutter — so smoothness was structurally
+unanswerable from `dtHistogramMs` and every row before this one read the ladder by hand in its own prose. The
+measure is a RATIO between neighbouring frames, so it carries no refresh rate and reads the same on a 144 Hz
+desk; 0 is a perfectly even frame at any rate and a 60/30 alternation approaches 1. **Take it on the next
+device round and the smoothness claims stop being adjectives.**
 
 ### 3.1d — So what is actually left to do
 

@@ -36,6 +36,7 @@ import type { OverlayArm } from './overlay-arm';
 
 import { DISTRICTS, PINNED_DISTRICT } from './districts';
 import { FrameHistogram } from './frame-histogram';
+import { FramePacing } from './frame-pacing';
 
 /** The CPU cost of ONE loop body, measured by the host around its own frame. */
 export interface FrameCpuSample {
@@ -161,6 +162,26 @@ export interface InventoryReport {
     readonly dtP50Ms: number;
     readonly dtP95Ms: number;
     readonly fps: number;
+    /**
+     * **How STEADY the frame was, 0..1 — and this is a different question from how fast it was.**
+     *
+     * Stutters per consecutive pair (`frame-pacing.ts`): 0 is a perfectly even frame at ANY rate, and a
+     * 60/30 alternation approaches 1. **A flat 30 fps is smooth and a 60/30 alternation is not, and the two
+     * report the same mean** — which is exactly what a 45 fps budget buys on a 60 Hz panel, since the frame
+     * is pinned to the display interval and 22.2 ms is two frames on it and one at double. Every field row
+     * before 2026-09-05 read that off `dtHistogramMs` by hand in its own prose; a distribution has no order
+     * in it, so it structurally cannot answer this and the transitions have to be counted as they arrive.
+     *
+     * Refresh-rate agnostic by construction — it is a ratio between neighbours, so it reads the same on a
+     * 144 Hz desk as on this phone. See the module for what that costs above the third rung.
+     */
+    readonly paceChangeRate: number;
+    /** The stutters themselves, for a row that wants a count rather than a rate. */
+    readonly paceChanges: number;
+    /** The largest ratio between two consecutive frames — separates ONE hitch from a frame doing this
+     *  constantly, which `paceChangeRate` alone cannot: a single 120 ms frame in a steady minute and a
+     *  permanent 60/30 alternation are different complaints with different fixes. */
+    readonly paceWorstRatio: number;
   };
   /** Frames DRAWN over the window — both kinds of interval, so this plus `framesSkipped` is every loop pass. */
   readonly frames: number;
@@ -474,6 +495,7 @@ export class FrameInventory {
   private readonly cpuTotals = new Map<string, number>();
   /** Intervals where BOTH ends drew: the frame times, and the only population a percentile may come from. */
   private readonly frameIntervals = new FrameHistogram();
+  private readonly framePacing = new FramePacing();
   private readonly maxima = new Map<string, number>();
   /** The driver's create/evict totals as of the previous sample, so a frame's own count is a DELTA. */
   private previousStream = { created: 0, evicted: 0 };
@@ -599,6 +621,9 @@ export class FrameInventory {
         dtP50Ms: this.frameIntervals.percentileMs(0.5),
         dtP95Ms: this.frameIntervals.percentileMs(0.95),
         fps: this.frameIntervals.percentileMs(0.5) > 0 ? Math.round(1000 / this.frameIntervals.percentileMs(0.5)) : 0,
+        paceChangeRate: this.framePacing.changeRate,
+        paceChanges: this.framePacing.changes,
+        paceWorstRatio: this.framePacing.worstRatio,
       },
       frames: this.frames,
       framesSkipped: context.framesSkipped,
@@ -699,6 +724,7 @@ export class FrameInventory {
     // of those were averaged in with 47 real ones, and every segment came out ~11x low with it.
     if (interval === 'consecutive') {
       this.frameIntervals.add(dtMs);
+      this.framePacing.add(dtMs);
       this.consecutiveBodyMs += cpu.bodyMs;
       this.bump('cpu-body', cpu.bodyMs);
       for (const [name, ms] of cpu.segments.byName) {

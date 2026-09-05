@@ -121,6 +121,19 @@ describe('FrameInventory', () => {
       expect(report.windowMs).toBe(0);
     });
 
+    it('reports an EVEN slow frame as perfectly steady — a rate would call this the worst case', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(41_026, stats(), NO_SPANS, NO_CPU, IDLE);
+      for (let frame = 0; frame < 40; frame += 1) {
+        inventory.sample(33.3, stats(), NO_SPANS, NO_CPU, IDLE);
+      }
+
+      const report = inventory.report(CONTEXT);
+
+      expect(report.frame.paceChangeRate).toBe(0);
+      expect(report.frame.paceChanges).toBe(0);
+    });
+
     it('discards the FIRST delta, which carries page load rather than a frame', () => {
       const inventory = new FrameInventory();
       inventory.sample(41_026, stats(), NO_SPANS, NO_CPU, IDLE); // the load stall the 2026-08-07 capture reported as dtMax
@@ -305,6 +318,21 @@ describe('FrameInventory', () => {
   });
 
   describe('positive cases', () => {
+    it('carries the stutter through to the REPORT, on the same path a frame arrives by', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(41_026, stats(), NO_SPANS, NO_CPU, IDLE);
+      // 45 fps on a 60 Hz panel: two frames on the display interval, one at double.
+      for (let frame = 0; frame < 60; frame += 1) {
+        inventory.sample(frame % 3 === 2 ? 33.4 : 16.7, stats(), NO_SPANS, NO_CPU, IDLE);
+      }
+
+      const report = inventory.report(CONTEXT);
+
+      expect(report.frame.paceChanges).toBeGreaterThan(30);
+      expect(report.frame.paceChangeRate).toBeGreaterThan(0.5);
+      expect(report.frame.paceWorstRatio).toBeCloseTo(2, 1);
+    });
+
     it('reports the p95 of dt, not its mean — a mean hides the hitches this is looking for', () => {
       const inventory = new FrameInventory();
       // 10 % of frames hitch. A mean would read 38 ms and hide both the healthy body and the stalls; p50 and
