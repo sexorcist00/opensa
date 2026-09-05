@@ -153,8 +153,15 @@
     }
   },
   "owed": {
-    "combined": "TAKEN: 17.38 ms, and it says the two levers overlap rather than add — see the note",
-    "look": "the night pair (`night` / `nighthalf`, hour 22, differing by the arm alone — a test pins that) was SHOT on 2026-09-05 and is with the operator; the verdict decides which arm ships",
     "conditions": "no row in this folder records the battery level, the charging state or the die temperature, this one included"
+  },
+  "verdict": {
+    "taken": "2026-09-05, by the operator, on the device",
+    "shown": "the panel's `night` / `nighthalf` pair — hour 22, the same pose, differing by `bloomscale` alone (pinned by links.test.mjs)",
+    "chosen": "bloomhalf",
+    "shipped": "the console's default is `bloomPrefilterScale: 0.5` (apps/dispatch/src/world/console-budget.ts). The game is untouched: it still reads DEFAULT_RENDER_BUDGET, because the verdict was taken at map zoom and the refusal it overturns was written for a street camera.",
+    "notShipped": "rg11b10ufloat — it adds nothing measurable on top of half-res (17.38 against 17.16) and stays an arm and the fallback for a surface that cannot take the look change",
+    "overturns": "the 2026-08-12 attribution kept the prefilter full-res 'so sub-pixel emitters survive thresholding; at night that is every street lamp and every headlight, and dimmer emissives are a protected-list item'. That refusal was not argued away — it was looked at, at night, on the device. A protected-list item is released by a field verdict and by nothing else.",
+    "baselineKept": "`?bloomscale=1` (panel link `bloomfull`) re-flies the previous default, so every row taken before this day stays repeatable"
   }
 }

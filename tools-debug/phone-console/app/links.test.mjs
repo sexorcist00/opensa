@@ -270,6 +270,14 @@ describe('the bloom arms and the night look pair (201/9-05)', () => {
       expect(links.bloomboth).toBe(`${links.field}&bloomformat=rg11b10ufloat&bloomscale=0.5`);
     });
 
+    // The console's default became the half-res prefilter on 2026-09-05, so the arm that re-flies what
+    // `field` used to be has to keep existing — otherwise every row taken before that day is unrepeatable.
+    it('keeps the PREVIOUS default reachable, so an older row can still be re-flown', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.bloomfull).toBe(`${links.field}&bloomscale=1`);
+    });
+
     it('carries no board on any of them, like every arm of the map circuit', () => {
       const links = consoleUrls(SERVED);
 

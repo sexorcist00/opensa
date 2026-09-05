@@ -29,6 +29,7 @@ export const LINK_NAMES = [
   'bloomrg11',
   'bloomhalf',
   'bloomboth',
+  'bloomfull',
   'night',
   'nighthalf',
   'noprobe',
@@ -135,6 +136,10 @@ export function consoleUrls(state = {}) {
     // every pass in the chain, the other quarters the pixels of the three biggest), and separately they read
     // -2.4 ms and -4.4 ms off a 21.5 ms baseline.
     bloomboth: `${app}?${empty}&bloomformat=rg11b10ufloat&bloomscale=0.5`,
+    // The console's default became `bloomscale=0.5` on 2026-09-05 (the operator's night verdict), so THIS is
+    // the arm that re-flies what `field` used to be. A default that moved without leaving its predecessor
+    // reachable would make every row taken before it unrepeatable.
+    bloomfull: `${app}?${empty}&bloomscale=1`,
     bloomhalf: `${app}?${empty}&bloomscale=0.5`,
     bloomrg11: `${app}?${empty}&bloomformat=rg11b10ufloat`,
     // The declared worst case: 201's budget table says 150 units each drawn as a model with a symbol over

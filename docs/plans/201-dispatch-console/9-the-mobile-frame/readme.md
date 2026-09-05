@@ -490,11 +490,24 @@ because at half resolution the bright-pass threshold runs on a 2×2 average and 
 across is diluted below it. That is a night question, so the night pair was built and shot the same day (`night` / `nighthalf`, hour 22,
 differing by the arm alone — a test pins it) and is with the operator.
 
-**Which arm ships is therefore a LOOK decision rather than a performance one.** If half-res passes the night
-verdict it is the arm and the format adds nothing measurable on top of it; if it fails, `bloomrg11` is the
-fallback that costs no resolution at all — −2.4 ms, 80 % of frames on one interval, and nothing changed but
-the mantissa of a blurred additive pass. **Owes:** the operator's verdict, and then one line in
-`apps/dispatch/src/world/console-budget.ts`.
+**THE VERDICT CAME THE SAME DAY AND THE STEP IS DONE.** The operator looked at the night pair on the device
+and chose the half-res arm, so **the console's default is `bloomPrefilterScale: 0.5`** — 17.16 ms against
+21.52, and **91 % of frames on one display interval** where the shipped default had 67 %. `rg11b10ufloat` is
+NOT shipped with it: it adds nothing measurable on top (17.38 against 17.16) and stays an arm and the
+fallback for a surface that cannot take the look change.
+
+**What that overturns, and how.** The
+[2026-08-12 attribution](../../../benchmarks/opensa-engine/2026-08-12-dispatch-render-target-attribution.json)
+kept the prefilter full-res *"on purpose (074/09) so sub-pixel emitters survive thresholding; at night that
+is every street lamp and every headlight, and dimmer emissives are a protected-list item"* — and that
+reasoning is exactly right about the cost. It was not argued away: it was **looked at**, at hour 22, on the
+device, in a pair differing by this one field. **A protected-list item is released by a field verdict and by
+nothing else** ([1/02](../1-the-map-profile/protected-list.md)).
+
+**Scoped to the console.** The verdict was taken at map zoom, 180–220 m, looking down; the refusal it
+overturns was written for a street camera, and the GAME still reads `DEFAULT_RENDER_BUDGET` untouched. The
+previous default stays reachable as `?bloomscale=1` (panel link `bloomfull`), because a default that moved
+without leaving its predecessor re-flyable would make every earlier row unrepeatable.
 
 ### 06 — The per-frame bakes that are already cached one line above
 

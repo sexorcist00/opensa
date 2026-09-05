@@ -193,6 +193,7 @@ export const TOOLS = [
             'bloomrg11',
             'bloomhalf',
             'bloomboth',
+            'bloomfull',
             'night',
             'nighthalf',
             'bloom4',
