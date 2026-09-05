@@ -13,8 +13,52 @@
   "board": "EMPTY (units=0&calls=0) — this prices the map, not the shift",
   "route": {
     "warmup": "the rect's four corners, then the settle pose, before the first reading",
-    "legs": [[1380,-1620],[1620,-1380],[1380,-1380],[1620,-1620],[1380,-1500],[1620,-1500],[1500,-1620],[1500,-1380],[1380,-1620],[1620,-1380]],
-    "settle": [1500,-1500],
+    "legs": [
+      [
+        1380,
+        -1620
+      ],
+      [
+        1620,
+        -1380
+      ],
+      [
+        1380,
+        -1380
+      ],
+      [
+        1620,
+        -1620
+      ],
+      [
+        1380,
+        -1500
+      ],
+      [
+        1620,
+        -1500
+      ],
+      [
+        1500,
+        -1620
+      ],
+      [
+        1500,
+        -1380
+      ],
+      [
+        1380,
+        -1620
+      ],
+      [
+        1620,
+        -1380
+      ]
+    ],
+    "settle": [
+      1500,
+      -1500
+    ],
     "rect": "x 1250..1750, y -1750..-1250 (cells 5,-7..6,-6 at CELL_SIZE 250)"
   },
   "howDerived": "per arm: delta of frame.dtHistogramMs between a post-warmup reading and a post-route reading, so no boot frame is in any window; moving = every bin below 100 ms (the render gate's idle wake) and no window here had any; vsyncLadder = each moving bin rounded to the nearest 1/60 s interval",
@@ -27,7 +71,12 @@
       "meanMs": 19.57,
       "p50Ms": 16,
       "p95Ms": 36,
-      "vsyncLadderPct": { "1": 78.0, "2": 21.7, "3": 0.2, "4": 0.1 },
+      "vsyncLadderPct": {
+        "1": 78.0,
+        "2": 21.7,
+        "3": 0.2,
+        "4": 0.1
+      },
       "draws": 112,
       "triangles": 277970,
       "cssBox": "360x491 -> 360x609"
@@ -37,10 +86,16 @@
       "url": "field + &ablate=bloom",
       "ablated": "bloom",
       "movingFrames": 3561,
-      "meanMs": 16.80,
+      "meanMs": 16.8,
       "p50Ms": 16,
       "p95Ms": 26,
-      "vsyncLadderPct": { "1": 95.0, "2": 3.6, "3": 0.7, "4": 0.5, "5": 0.2 },
+      "vsyncLadderPct": {
+        "1": 95.0,
+        "2": 3.6,
+        "3": 0.7,
+        "4": 0.5,
+        "5": 0.2
+      },
       "draws": 112,
       "triangles": 277970,
       "cssBox": "360x550 -> 360x609"
@@ -53,7 +108,11 @@
       "meanMs": 18.88,
       "p50Ms": 16,
       "p95Ms": 34,
-      "vsyncLadderPct": { "1": 81.0, "2": 18.8, "3": 0.2 },
+      "vsyncLadderPct": {
+        "1": 81.0,
+        "2": 18.8,
+        "3": 0.2
+      },
       "draws": 112,
       "triangles": 277970,
       "cssBox": "360x491 -> 360x373"
@@ -63,7 +122,8 @@
     "baseline": "19.57 and 18.88 — a 0.69 ms spread across the session, wider than the evening series' 0.4 but well inside the floor. Mean baseline 19.23.",
     "bloomChain": "19.23 - 16.80 = 2.43 ms. The sweep filed 7.7 ms for the same arm on the pre-half-res default. The half-resolution prefilter that shipped on 2026-09-05 evidently took most of it, which is what `bloomhalf`'s separately measured -4.4 ms already implied; this is the first time the two have been on one baseline.",
     "whyItIsNotJustNoise": "the arm is BRACKETED rather than trailing: 19.57 -> 16.80 -> 18.88 is not monotonic, so the warm-up story that has produced three false results in this chain does not fit it. And the ladder and the tail move together and by whole rungs — rung-1 occupancy +14 points, p95 down 8-10 ms — which is the column this chain's own rule says to read when the mean sits inside the band.",
-    "whatItMeansForThePlan": "THE POST CHAIN IS NOT WHERE THE FRAME IS. The handoff opened with '20.2 ms empty map is the whole remaining budget, and the post chain is the biggest thing in it'. Removing the post chain ENTIRELY buys 2.4 ms of it, at the instrument's floor, on a device where ~80 % of frames already sit on one display interval. Every lever INSIDE the chain is necessarily smaller than that, and 9-05b already showed two of them are unmeasurable here."
+    "whatItMeansForThePlan": "CORRECTED a few hours after this row was first filed, and the correction matters more than the number. The first version said 'the post chain is not where the frame is' and told the next agent to go find the remaining ~13 ms. THERE IS NO REMAINING 13 ms. On this device dtMean is not a measure of work: the frame is pinned to the display interval, and the rung MIX alone predicts every arm's mean to within a constant ~1 ms (field #1 20.40 predicted / 19.57 measured, nobloom 17.88 / 16.80, field #2 19.87 / 18.88 — the same -0.9 offset three times, which is the sub-interval frames the render gate lets through). So the mean IS the miss rate, restated in milliseconds, and subtracting ablation deltas from it to find 'unattributed work' is an arithmetic that has nothing on the other side of it. What this arm actually says is: THE BLOOM CHAIN IS WHAT PUSHES ROUGHLY ONE FRAME IN FIVE PAST THE DISPLAY DEADLINE — rung-1 occupancy 78 % and 81 % with it, 95 % without. That is the same fact as '2.43 ms', and it is the honest way to say it, because on a vsync-locked device work that fits under the deadline is FREE and work that does not costs a whole interval. The chain sits exactly on that boundary, which is why it reads as noise on the mean and as a whole rung on the ladder.",
+    "whatIsAndIsNotMeasurableHere": "CPU work IS measurable and finely: `cpu.bodyMeanMs` is timed directly and separates 3.54/3.40/3.11 from 2.97 across these arms. GPU work is NOT, and not just for want of `timestamp-query` — `outside` (frame minus body: 17.81/17.16/16.94 against 14.32/14.62) is GPU time and present WAIT added together, and nothing on this adapter separates them. So a GPU-side question at this pose can only be asked through the miss rate, and only about changes big enough to move a rung. Anything smaller is invisible here by construction, not by noise — which is the real reason 9-05b's two vendor levers came back indistinguishable, and it was pre-registered as a prediction without this being the stated reason."
   },
   "control": {
     "ablatedReadBack": "every arm's surface.ablated was read out of the report before its numbers were kept — none / bloom / none",

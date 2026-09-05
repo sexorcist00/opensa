@@ -542,12 +542,32 @@ merely confirming one.
 **2.43 is under the instrument's ~2.5 ms floor, so the row does not claim the mean** — it claims the ladder
 and the tail, which move together and by whole rungs, and the fact that the arm is BRACKETED rather than
 trailing (19.57 → 16.80 → 18.88 is not monotonic, which is exactly what the warm-up failures in this chain
-were). **The consequence for the plan is larger than the number**: removing the post chain entirely buys
-2.4 ms, so it is not where the frame is, every lever inside it is smaller than that, and 05b already showed
-two of those are unmeasurable on this device. What is left of the 19.2 ms is unattributed — the streamed
-world was 3.8, the CPU body is 3.1–3.5 — and with ~80 % of frames already on one display interval the next
-question is whether the device is presenting rather than computing, which is an INSTRUMENT question before
-it is an optimisation one.
+were).
+
+**AND THE FIRST READING OF WHAT THAT MEANS WAS WRONG — corrected the same day, before anyone acted on it.**
+It said *the post chain is not where the frame is; go find the remaining ~13 ms*. **There is no remaining
+13 ms.** The vsync rung MIX alone, with no cost model at all, predicts every arm's mean to within the same
+offset three times over — 20.40 against 19.57, 17.88 against 16.80, 19.87 against 18.88, all −0.9 (the
+sub-interval frames the render gate lets through). **So `dtMean` on this device is the MISS RATE restated in
+milliseconds**, the frame is pinned to the display interval, and the 19.2 ms is not 19.2 ms of anything the
+engine does. Subtracting ablation deltas from it to find "unattributed work" is an arithmetic with nothing
+on the other side.
+
+**Restated honestly, the arm found this:** the bloom chain is what pushes **roughly one frame in five past
+the display deadline** — rung-1 occupancy 78 % and 81 % with it, **95 %** without. Same fact as 2.43 ms, and
+the better sentence, because under a vsync lock work that fits under the deadline is FREE and work that does
+not costs a whole interval. The chain sits exactly on that boundary, which is why it reads as noise on the
+mean and as a whole rung on the ladder — **so it is not "nothing" either, and the first reading undersold it
+while overselling a hunt.**
+
+**The durable part is what this device can and cannot measure at all.** CPU work: measurable, and finely —
+`cpu.bodyMeanMs` separates 3.54 / 3.40 / 3.11 from 2.97 across these arms. GPU work: not, and not merely for
+want of `timestamp-query` — `outside` (frame minus body, 17.81 / 17.16 / 16.94 against 14.32 / 14.62) is GPU
+time and present WAIT added together, and nothing on this adapter separates them. **A GPU-side change
+smaller than a rung is therefore invisible here by CONSTRUCTION rather than by noise**, which is the real
+reason 05b's two vendor levers came back indistinguishable — a result correctly predicted, but not for this
+reason. Ask a GPU question where the frame is NOT on the floor (the declared board at 23.8 ms), or do not
+ask it here.
 
 **AN EARLIER BUILD OF THIS STEP EXISTS AND IS SUPERSEDED — do not resurrect it (recorded 2026-09-05).**
 A branch (`claude/chain9-desk-work`, built 2026-09-02) carried a `bloomLevelsFor` that halved until the

@@ -1,9 +1,10 @@
 # 201 — the handoff spec
 
 **Rewritten 2026-09-05 (evening) for the agent taking the POST CHAIN; §3.1 was flown later the same day
-and CLOSED that direction** — read it before anything else here, because the rest of §3 was written on a
-premise it removes. The `## Status` table in [readme.md](readme.md) is the chain's state of record; this is
-the working spec it points at.
+and answered it, and §3.1b then corrected what the answer MEANS** — read both before anything else here,
+because the rest of §3 was written on a premise §3.1 removes, and §3.1b removes a wrong replacement for it
+that stood in this file for a couple of hours. The `## Status` table in [readme.md](readme.md) is the
+chain's state of record; this is the working spec it points at.
 
 Read [`CLAUDE.md`](../../../CLAUDE.md)'s chain first, then this.
 
@@ -29,9 +30,10 @@ is now **+3.6 ms over the empty map**, and it took three changes today to get th
 | `sym:units` ([per-unit allocation](../../benchmarks/opensa-engine/2026-09-05-mobile-per-unit-allocation.json)) | 4.04 ms | **1.62** |
 | board over empty | +6.1 ms | **+3.6** |
 
-**So the 20.2 ms empty map is the whole remaining budget** — and the post chain, which this spec first
-named as the biggest thing in it, **is not**: §3.1 has been flown since and the whole bloom chain is 2.4 ms.
-The budget is still the map's; what is in it is an open question again.
+**And the 20.2 ms empty map is NOT 20.2 ms of work** — §3.1b: the frame is pinned to the display interval
+and `dtMean` here is the miss rate restated in milliseconds, so this table's left column measures how often
+the frame misses, not what it costs. Read it that way or it will be subtracted from, which is the mistake
+§3.1b exists to stop.
 
 ---
 
@@ -66,9 +68,9 @@ probe fetches now (throttled 60 s, bounded 8 s) and an unreachable origin shows 
 
 ---
 
-## 3. The work: NOT the post chain — §3.1 was flown and closed it
+## 3. The work: §3.1 was flown and it closed the 7.7 ms question — 3.1b says what the answer means
 
-### 3.1 — ANSWERED, 2026-09-05 (late): the bloom chain is 2.4 ms, and the post chain is NOT where the frame is
+### 3.1 — ANSWERED, 2026-09-05 (late): the bloom chain is 2.4 ms, not 7.7 — read 3.1b before acting on it
 
 The previous spec opened here with *"re-fly `nobloom` before designing anything, because 7.7 ms is stale"*.
 It was flown. [The row](../../benchmarks/opensa-engine/2026-09-05-mobile-nobloom-refly.json), against a
@@ -90,15 +92,54 @@ the ladder and the tail, which move together and by whole rungs — rung-1 occup
 ms — and the fact that the arm is **bracketed rather than trailing**: 19.57 → 16.80 → 18.88 is not monotonic,
 so the warm-up story that has produced three false results in this chain does not fit it.
 
-**So the premise this spec was written on is gone, and you should not spend a session on the post chain.**
-Removing it ENTIRELY buys 2.4 ms of a 19.2 ms frame, at the floor, on a device where ~80 % of frames already
-sit on one display interval. Every lever INSIDE the chain is necessarily smaller than that, and §3.2 already
-shows two of them are unmeasurable here. **What is left of the 19.2 ms is not attributed to anything** —
-the streamed world was 3.8 ms of a 23.4 ms frame in the sweep, the CPU body is 3.1–3.5, and the rest has no
-span in this repo naming it. That, not the post chain, is the next question: **find where the remaining
-~13 ms goes before optimising anything**, and note that a frame sitting on the vsync floor 80 % of the time
-may mean the honest answer is that the device is presenting, not computing — in which case the chain's
-instrument cannot see the work at all and the next step is a different instrument, not a different pass.
+### 3.1b — And what that number MEANS was got wrong once already, in this file, hours after §3.1 was flown
+
+The first version of §3.1 closed with *"the post chain is not where the frame is — go find the remaining
+~13 ms"*. **There is no remaining 13 ms, and an agent sent to look for it would have spent a session on a
+subtraction with nothing on the other side of it.** Here is the check that settles it — the vsync rung MIX
+alone, with no cost model at all, predicting each arm's mean:
+
+| arm | predicted from the rung mix | measured | offset |
+| --- | --- | --- | --- |
+| `field` #1 | 20.40 ms | 19.57 | −0.83 |
+| `nobloom` | 17.88 ms | 16.80 | −1.08 |
+| `field` #2 | 19.87 ms | 18.88 | −0.99 |
+
+The same offset three times (it is the sub-interval frames the render gate lets through). **So `dtMean` on
+this device is not a measure of work — it is the MISS RATE restated in milliseconds**, and the 19.2 ms
+"budget" is not 19.2 ms of anything the engine does. The frame is pinned to the display interval; what
+varies is how often it misses.
+
+**Restated honestly, then, this is what the arm found:** the bloom chain is what pushes **roughly one frame
+in five past the display deadline** — rung-1 occupancy 78 % and 81 % with it, **95 %** without. That is the
+same fact as "2.43 ms", and it is the better way to say it, because on a vsync-locked device work that fits
+under the deadline is FREE and work that does not costs a whole interval. The chain sits exactly on that
+boundary, which is why it reads as noise on the mean and as a whole rung on the ladder. **It is therefore
+not "nothing", and the first version of this section undersold it in the course of overselling the hunt.**
+
+**What is and is not measurable here, which is the durable part.** CPU work is measurable and finely —
+`cpu.bodyMeanMs` separates 3.54 / 3.40 / 3.11 from 2.97 across these arms. GPU work is not, and not merely
+for want of `timestamp-query`: `outside` (frame minus body — 17.81 / 17.16 / 16.94 against 14.32 / 14.62) is
+GPU time and present WAIT added together, and nothing on this adapter separates them. So a GPU-side question
+at this pose can only be asked through the miss rate, and only about a change big enough to move a rung.
+**Anything smaller is invisible here by construction rather than by noise** — which is the real reason
+§3.2's two vendor levers came back indistinguishable, a result that was correctly predicted without this
+being the stated reason.
+
+### 3.1c — So what is actually left to do
+
+Not a hunt for missing milliseconds. Three real options, in the order they cost:
+
+1. **Decide whether 78 % → 95 % on-vsync is worth buying, and with what.** That is a product question for
+   the operator, not a profiling one — and every candidate inside the chain is smaller than the chain, so
+   the honest form of it is "keep bloom or not", not "tune bloom".
+2. **If a GPU-side number is wanted, change where it is asked.** At this pose the frame is on the floor
+   ~80 % of the time and the instrument is blind under it. The declared board (23.8 ms) sits above the
+   floor; an ablation there is legible where the same ablation on the empty map is not. Beware that it
+   quantizes again one rung up.
+3. **The CPU side is open and properly instrumented**, and nobody has run out of road on it: the body is
+   3.1–3.5 ms with the spans already split (`sym:*`, `overlay-2d`, `stream`, `engine-frame`). That is the
+   part of this frame where a millisecond can still be found and PROVEN.
 
 ### 3.2 — What has already been tried, so you do not pay for it twice
 
