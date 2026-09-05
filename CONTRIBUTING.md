@@ -6,10 +6,10 @@ non-commercial fan project** — contributions are welcome.
 
 ## Ways to contribute
 
-- **Bugs / ideas** — open an [issue](https://github.com/AlexSergey/opensa/issues) (a repro, screenshot, or
-  world coordinates help a lot).
+- **Bugs / ideas** — open an issue on **this** repository (a repro, screenshot, or world coordinates
+  help a lot). Note that issues are currently disabled here; enable them, or name a contact instead.
 - **Code / docs** — open a pull request (see the workflow below).
-- **Write-ups** — dev notes are welcome in [`/blog`](./blog).
+- **Write-ups** — dev notes are welcome.
 
 ## Development setup
 
