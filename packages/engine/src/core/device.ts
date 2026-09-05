@@ -119,8 +119,20 @@ export async function initDevice(): Promise<EngineDevice> {
   // `texture-compression-astc` was refused with "this device does not have texture-compression-astc" — by
   // the one line that could have asked for it. The map fell back to 2D plan mode on a device that supports
   // the format natively, which is the whole point of the ASTC build.
+  //
+  // `rg11b10ufloat-renderable` is on the list for the same reason and for a measured one: it is what lets the
+  // post chain's targets be FOUR bytes a pixel instead of eight while staying floating-point, and the 2/03
+  // phone's frame is bandwidth (201/9's sweep — the bloom chain is 7.7 ms of a 23.4 ms frame, and its cheap
+  // tail is free, so the cost is bytes moved by the big passes). Requesting it costs nothing where it is
+  // absent; the budget reads `device.features` before it may pick the format.
   const required: GPUFeatureName[] = (
-    ['texture-compression-astc', 'texture-compression-bc', 'texture-compression-etc2', 'timestamp-query'] as const
+    [
+      'rg11b10ufloat-renderable',
+      'texture-compression-astc',
+      'texture-compression-bc',
+      'texture-compression-etc2',
+      'timestamp-query',
+    ] as const
   ).filter((feature) => adapter.features.has(feature));
   const hasBc = adapter.features.has('texture-compression-bc');
   const hasTimestamps = adapter.features.has('timestamp-query');

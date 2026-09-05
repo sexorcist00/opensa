@@ -188,6 +188,8 @@ export const TOOLS = [
             'nocells',
             'nocloud',
             'nobloom',
+            'bloomrg11',
+            'bloomhalf',
             'bloom4',
             'noprobe',
             'noskylut',

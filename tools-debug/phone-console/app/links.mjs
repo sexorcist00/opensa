@@ -26,6 +26,8 @@ export const LINK_NAMES = [
   'nocloud',
   'nobloom',
   'bloom4',
+  'bloomrg11',
+  'bloomhalf',
   'noprobe',
   'noskylut',
   'flat',
@@ -121,6 +123,13 @@ export function consoleUrls(state = {}) {
     // window's mean is what that group costs. `bloom4` is the odd one — it shortens the chain rather than
     // removing it, which is 201/9-05's actual lever and not only a measurement.
     bloom4: `${app}?${empty}&bloomlevels=4`,
+    // 201/9-05's two REAL levers, after the sweep refuted the level count: the chain's own storage, and where
+    // its pyramid starts. `bloomrg11` moves no pixels and changes no resolution — it halves the bytes of every
+    // pass that reads or writes the chain, which is what the 09-04 ladder's `rgb10a2` arm implied and this one
+    // takes without UNORM's clipping. `bloomhalf` quarters the three passes that are 90 % of the chain and is
+    // a LOOK change: the bright-pass threshold then runs on a 2x2 average, so sub-pixel emitters dim.
+    bloomhalf: `${app}?${empty}&bloomscale=0.5`,
+    bloomrg11: `${app}?${empty}&bloomformat=rg11b10ufloat`,
     // The declared worst case: 201's budget table says 150 units each drawn as a model with a symbol over
     // it, and every number 5/02 and 5/04 owe is measured AT it. It is no longer THE FIELD RUN — it is what
     // the field run is compared against once the map is the shape we want it.

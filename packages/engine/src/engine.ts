@@ -24,7 +24,13 @@ import { FrameSpans, type FrameSpanTotals } from './debug/frame-spans';
 import { GpuTimers } from './debug/gpu-timers';
 import { RigidEntity, type RigidPartInit } from './entities/rigid';
 import { type FrameAblation, NOTHING_ABLATED } from './render/ablation';
-import { DEFAULT_RENDER_BUDGET, type RenderBudget, sceneBytesPerPixel, sceneColorAttachment } from './render/budget';
+import {
+  DEFAULT_RENDER_BUDGET,
+  type RenderBudget,
+  resolveRenderBudget,
+  sceneBytesPerPixel,
+  sceneColorAttachment,
+} from './render/budget';
 import { type DynamicParticleLibrary, DynamicParticles } from './render/dynamic-particles';
 import { compileAll, type PipelineId, pipelineIdFor, type PipelineSet } from './render/pipelines';
 import { EnvProbe, PROBE_RANGE } from './render/probe';
@@ -53,6 +59,10 @@ export interface CoronaSprites {
 const CORONA_CAP = 2048;
 /** Cumulus field bake resolution (sky v2 perf) — the fbm is low-frequency, 256² resolves it fully. */
 const CLOUD_FIELD_SIZE = 256;
+/** The field-space width the cumulus bake covers: `p ∈ [−6, 6]` times the shader's own `0.45` (201/9-06). */
+const CLOUD_FIELD_SPAN = 12 * 0.45;
+/** How fast the field scrolls through that span: `‖(0.004, 0.002)‖` units per second, from the same shader. */
+const CLOUD_FIELD_SCROLL_PER_SECOND = Math.hypot(0.004, 0.002);
 /** timecyc `sunSize` (≈3–5) → angular core radius in radians (~1° at sunSize 4, prod-matched by eye). */
 const SUN_SIZE_TO_RAD = 0.0045;
 /** Godrays (074/09 stage 1): ray strength, per-tap decay, and the bright-pass floor (the sun disc's HDR
@@ -614,7 +624,8 @@ export class Engine {
    */
   readonly ablation: FrameAblation;
 
-  readonly budget: RenderBudget;
+  /** Narrowed to what the device granted at {@link init} — see `resolveRenderBudget`. */
+  budget: RenderBudget;
 
   /**
    * A drawing buffer the HOST owns, in device pixels — set BEFORE {@link init} when the host has pinned it
@@ -791,6 +802,8 @@ export class Engine {
   private canvasContext!: GPUCanvasContext;
   /** Kept for `deviceReport` — a capture states the CSS size it was taken at. */
   private canvasElement!: HTMLCanvasElement;
+  /** When the cumulus field was last baked, and at which clump scale — see {@link cloudFieldDue}. */
+  private cloudFieldBaked: null | { clump: number; seconds: number } = null;
   private cloudFieldBindGroup!: GPUBindGroup;
   private cloudFieldTexture!: GPUTexture;
   private cloudFieldView!: GPUTextureView;
@@ -1425,7 +1438,7 @@ export class Engine {
     const encoder = this.device.createCommandEncoder({ label: 'frame' });
     // Cumulus field bake (sky v2 perf): rewrite the tiny fbm field before anything samples it this frame
     // (256² × 10 vnoise ≈ fixed ~0.05 ms — full-deck weathers stopped scaling with the swapchain).
-    this.bakeCloudField(encoder);
+    this.bakeCloudField(encoder, seconds);
     const pass = encoder.beginRenderPass({
       colorAttachments: [
         sceneColorAttachment({
@@ -1574,12 +1587,17 @@ export class Engine {
     at = bootPhase('init:canvas', at);
     // Scene pipelines target the 16-float offscreen (godrays bright-pass needs the HDR overshoot); only
     // the post pipeline writes the sRGB swapchain.
+    // The budget the DEVICE can honour, before anything is compiled against it (201/9-05). A format the
+    // adapter never offered falls back here and the report states the effective set, so no capture can claim
+    // an arm the device refused.
+    this.budget = resolveRenderBudget(this.budget, this.device.features);
     this.pipelines = await compileAll(
       this.device,
       this.budget.sceneFormat,
       DEPTH_FORMAT,
       this.engineDevice.colorFormat,
       this.budget.sampleCount,
+      this.budget.bloomFormat,
     );
     at = bootPhase('init:pipelines', at);
     // Scene env probe (074/16 step 2) — fixed-size, allocated once, BEFORE any vehicle model binds its cube.
@@ -2302,15 +2320,24 @@ export class Engine {
   }
 
   /**
-   * Bake the cumulus field: 256² with two fbm evaluations per pixel, before anything samples it this frame.
+   * Bake the cumulus field: 256² with two fbm evaluations per pixel — **when it has moved far enough to be
+   * worth rebaking**, which is not every frame (201/9-06).
    *
    * Its own method since 201/9, so the ablation gate is one line rather than an `if` around a pass inside
    * `frame()`, which the complexity gate reads (correctly) as one more branch in an already long function.
    * Skipping it leaves the PREVIOUS bake in the texture — the world still samples it, so what an arm
    * prices is producing the field rather than reading it.
+   *
+   * **The rate is DERIVED, not chosen** — the ablation arm priced this pass at 1.8 ms of a 23.4 ms frame on
+   * the 2/03 phone, and a fix for it that picked a millisecond count somebody liked would be a hack with no
+   * argument. See {@link cloudFieldDue} for the derivation; the short form is that the field scrolls one
+   * texel every ~4.7 s, so a bake per frame redraws an image that has not changed.
    */
-  private bakeCloudField(encoder: GPUCommandEncoder): void {
+  private bakeCloudField(encoder: GPUCommandEncoder, seconds: number): void {
     if (!this.ablation.cloudField) {
+      return;
+    }
+    if (!this.cloudFieldDue(seconds)) {
       return;
     }
     const cloudFieldPass = encoder.beginRenderPass({
@@ -2356,21 +2383,23 @@ export class Engine {
   /**
    * How many mip levels the bloom chain carries.
    *
-   * A CONSTANT today ({@link BLOOM_LEVELS} = 8), which is what makes the chain 1 + 8 + 7 = 16 full-screen
-   * passes whatever the surface is: at the 720x640 this console's captures are taken at, the last three
-   * levels are 12x10, 6x5 and 3x3 pixels, and on a tiler each of them still costs a whole tile flush and
-   * reload for a mip smaller than a chip (201/9-05). The ablation knob is how that gets PRICED before the
-   * count is derived rather than written down.
+   * A CEILING ({@link BLOOM_LEVELS} = 8) and a FLOOR ({@link RenderBudget.bloomMinLevelPx}), and 201/9's
+   * sweep is why the floor exists: cutting the chain from eight levels to four — the levels that are 12x10,
+   * 6x5 and 3x3 pixels at 720x640 — cost **0.2 ms of a 23.4 ms frame**, which is noise. The tile-flush
+   * argument this step opened on is not what the device does; the money is in the FIRST levels, at full and
+   * half resolution. So the floor is not a frame-time lever and is not sold as one: it stops the engine
+   * building six textures, six bind groups and six uniforms for mips smaller than a chip.
    *
    * Bounded by what the chain can actually build: a level below 1 pixel is not a level, and the upsample
    * pass needs at least two of them to blend between.
    */
   private bloomLevels(width: number, height: number): number {
     const asked = this.ablation.bloomLevels ?? BLOOM_LEVELS;
+    const floor = Math.max(1, this.budget.bloomMinLevelPx);
     let possible = 0;
     let w = width;
     let h = height;
-    while (w > 1 && h > 1 && possible < asked) {
+    while (w > floor && h > floor && possible < asked) {
       w = Math.max(1, Math.round(w * 0.5));
       h = Math.max(1, Math.round(h * 0.5));
       possible += 1;
@@ -2397,11 +2426,11 @@ export class Engine {
     const textures: { bytes: number; texture: GPUTexture }[] = [];
     const uniforms: GPUBuffer[] = [];
     const makeTarget = (label: string, w: number, h: number): GPUTextureView => {
-      const bytes = w * h * sceneBytesPerPixel(this.budget.sceneFormat);
+      const bytes = w * h * sceneBytesPerPixel(this.budget.bloomFormat);
       const texture = this.resources.createTexture(
         'target',
         {
-          format: this.budget.sceneFormat,
+          format: this.budget.bloomFormat,
           label,
           size: { height: h, width: w },
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
@@ -2424,8 +2453,13 @@ export class Engine {
 
       return buffer;
     };
-    // Prefilter (FULL res — prod thresholds texel-wise before the chain so sub-pixel emitters survive).
-    const prefilterView = makeTarget('bloom-prefilter', width, height);
+    // Prefilter — the base of the pyramid, and 201/9's sweep says the base IS the chain: the prefilter, the
+    // first downsample and the last upsample are ~90 % of its output pixels. At `bloomPrefilterScale: 1` this
+    // is what the engine has always done (thresholds texel-wise at full res, so sub-pixel emitters survive);
+    // at 0.5 the threshold is applied to a 2×2 average instead, which is the trade that field states.
+    const baseWidth = Math.max(1, Math.round(width * this.budget.bloomPrefilterScale));
+    const baseHeight = Math.max(1, Math.round(height * this.budget.bloomPrefilterScale));
+    const prefilterView = makeTarget('bloom-prefilter', baseWidth, baseHeight);
     const prefilterBindGroup = this.device.createBindGroup({
       entries: [
         { binding: 0, resource: { buffer: this.bloomPrefilterUniform } },
@@ -2438,9 +2472,9 @@ export class Engine {
     const downSizes: { height: number; width: number }[] = [];
     const downViews: GPUTextureView[] = [];
     const downBindGroups: GPUBindGroup[] = [];
-    let w = width;
-    let h = height;
-    const levels = this.bloomLevels(width, height);
+    let w = baseWidth;
+    let h = baseHeight;
+    const levels = this.bloomLevels(baseWidth, baseHeight);
     for (let i = 0; i < levels; i += 1) {
       const inputW = w;
       const inputH = h;
@@ -2493,6 +2527,43 @@ export class Engine {
       upBindGroups,
       upViews,
     };
+  }
+
+  /**
+   * Whether the cumulus field has moved far enough since its last bake to be worth baking again (201/9-06).
+   *
+   * **The derivation, because a rate nobody derived is a constant somebody liked.** The bake's domain is
+   * `p ∈ [−6, 6]` scaled by `0.45 · cloudTop.w`, so the 256² texture covers `12 · 0.45 · w = 5.4w` units of
+   * field space and one texel is `5.4w / 256 ≈ 0.021w` of it. The field scrolls at `(0.004, 0.002)` units
+   * per second — `‖v‖ ≈ 0.00447` — so **one texel takes ~4.7·w seconds** and a 60 Hz bake redraws the same
+   * image about 280 times before a single texel of it changes. Rebaking at half a texel of travel keeps the
+   * error below what the texture can represent at all, which is the honest bound: not "it looks the same",
+   * but "the difference cannot be stored".
+   *
+   * **The clump scale is part of the key, not part of the timer.** `cloudTop.w` is the per-weather clump
+   * multiplier and it rescales the whole domain, so a weather change moves every texel at once however
+   * recently the last bake was: it invalidates rather than waits. Same shape as {@link refreshSkyLut}'s
+   * input key — this is the pattern that already existed twenty lines away.
+   *
+   * **Time may also go BACKWARDS or jump**, which is why the test is on the absolute travel rather than on
+   * a deadline: the console scrubs its clock (201/8-03) and a replay that steps back would otherwise hold a
+   * stale field until wall time caught up again.
+   */
+  private cloudFieldDue(seconds: number): boolean {
+    const clump = Math.max(1e-3, this.environment.cloudScale);
+    const last = this.cloudFieldBaked;
+    if (last === null || last.clump !== clump) {
+      this.cloudFieldBaked = { clump, seconds };
+
+      return true;
+    }
+    const travel = Math.abs(seconds - last.seconds) * CLOUD_FIELD_SCROLL_PER_SECOND;
+    if (travel < (CLOUD_FIELD_SPAN * clump) / CLOUD_FIELD_SIZE / 2) {
+      return false;
+    }
+    this.cloudFieldBaked = { clump, seconds };
+
+    return true;
   }
 
   /**

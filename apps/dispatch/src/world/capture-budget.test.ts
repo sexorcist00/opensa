@@ -21,8 +21,21 @@ describe('captureBudget', () => {
       expect(captureBudget(new URLSearchParams('scene=')).sceneFormat).toBe('rgba16float');
     });
 
+    it('refuses a bloom scale that is not a halving of the pyramid', () => {
+      expect(captureBudget(new URLSearchParams('bloomscale=0.75')).bloomPrefilterScale).toBe(1);
+      expect(captureBudget(new URLSearchParams('bloomscale=0')).bloomPrefilterScale).toBe(1);
+      expect(captureBudget(new URLSearchParams('bloomscale=half')).bloomPrefilterScale).toBe(1);
+    });
+
+    it('refuses a level floor the chain cannot respect', () => {
+      expect(captureBudget(new URLSearchParams('bloomminpx=0')).bloomMinLevelPx).toBe(1);
+      expect(captureBudget(new URLSearchParams('bloomminpx=1024')).bloomMinLevelPx).toBe(1);
+      expect(captureBudget(new URLSearchParams('bloomminpx=8.5')).bloomMinLevelPx).toBe(1);
+    });
+
     it('keeps the half that parsed when the other half does not', () => {
       expect(captureBudget(new URLSearchParams('msaa=1&scene=nonsense'))).toEqual({
+        ...DEFAULT_RENDER_BUDGET,
         sampleCount: 1,
         sceneFormat: 'rgba16float',
       });
@@ -31,11 +44,16 @@ describe('captureBudget', () => {
 
   describe('positive cases', () => {
     it('reads the sample arm — 12 bytes per pixel and no resolve', () => {
-      expect(captureBudget(new URLSearchParams('msaa=1'))).toEqual({ sampleCount: 1, sceneFormat: 'rgba16float' });
+      expect(captureBudget(new URLSearchParams('msaa=1'))).toEqual({
+        ...DEFAULT_RENDER_BUDGET,
+        sampleCount: 1,
+        sceneFormat: 'rgba16float',
+      });
     });
 
     it('reads the format arm — the anti-aliasing kept, the colour halved', () => {
       expect(captureBudget(new URLSearchParams('scene=rgb10a2unorm'))).toEqual({
+        ...DEFAULT_RENDER_BUDGET,
         sampleCount: 4,
         sceneFormat: 'rgb10a2unorm',
       });
@@ -43,11 +61,31 @@ describe('captureBudget', () => {
 
     it('reads both beside the other capture knobs', () => {
       const params = new URLSearchParams('units=0&calls=0&inventory=1&surface=720x1218&msaa=1&scene=rgb10a2unorm');
-      expect(captureBudget(params)).toEqual({ sampleCount: 1, sceneFormat: 'rgb10a2unorm' });
+      expect(captureBudget(params)).toEqual({
+        ...DEFAULT_RENDER_BUDGET,
+        sampleCount: 1,
+        sceneFormat: 'rgb10a2unorm',
+      });
     });
 
     it('accepts the capitals a hand-typed link tends to carry', () => {
       expect(captureBudget(new URLSearchParams('scene=RGB10A2Unorm')).sceneFormat).toBe('rgb10a2unorm');
+    });
+
+    it('reads the post chain arms — the format, the base of the pyramid and its floor', () => {
+      const params = new URLSearchParams('bloomformat=rg11b10ufloat&bloomscale=0.5&bloomminpx=16');
+      expect(captureBudget(params)).toEqual({
+        ...DEFAULT_RENDER_BUDGET,
+        bloomFormat: 'rg11b10ufloat',
+        bloomMinLevelPx: 16,
+        bloomPrefilterScale: 0.5,
+      });
+    });
+
+    it('overrides only what it names, keeping the rest of the base a surface asked for', () => {
+      const base = { ...DEFAULT_RENDER_BUDGET, bloomFormat: 'rg11b10ufloat', bloomMinLevelPx: 16 } as const;
+
+      expect(captureBudget(new URLSearchParams('bloomscale=0.5'), base)).toEqual({ ...base, bloomPrefilterScale: 0.5 });
     });
   });
 });

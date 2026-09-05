@@ -59,6 +59,7 @@ import { composeImage } from './capture';
 import { captureAblation } from './capture-ablation';
 import { captureBudget } from './capture-budget';
 import { canvasAspect, captureSurface } from './capture-surface';
+import { CONSOLE_RENDER_BUDGET } from './console-budget';
 import { buildDemoCity, DEMO_EXTENT, DEMO_REACH } from './demo-city';
 import { DISTRICTS } from './districts';
 import { createErrorLog } from './error-log';
@@ -410,10 +411,14 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   new ResizeObserver(resize).observe(canvas);
 
   /**
-   * `?msaa=` / `?scene=` — 9/04's two attachment arms. Chosen HERE because every pipeline is compiled against
-   * them: an engine cannot change its budget, so the arm is a page load rather than a key press.
+   * `?msaa=` / `?scene=` / `?bloom*=` — 9/04's attachment arms and 9/05's post-chain ones. Chosen HERE because
+   * every pipeline is compiled against them: an engine cannot change its budget, so an arm is a page load
+   * rather than a key press.
+   *
+   * The BASE is {@link CONSOLE_RENDER_BUDGET} rather than the engine's default, so what a device gets when
+   * nobody pins anything is this surface's own ask — narrowed at `init` to what the adapter actually grants.
    */
-  const budget = captureBudget(params);
+  const budget = captureBudget(params, CONSOLE_RENDER_BUDGET);
   /**
    * `?ablate=` / `?bloomlevels=` — 9's ablation arms, and a constructor input for the same reason the budget
    * is: the bloom level count decides which textures and bind groups exist. This device has no
@@ -1047,6 +1052,12 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           // 9: what this arm REMOVED from the frame. `none` on every shipping run — and the reason it is
           // stated rather than assumed is that an ablated run is otherwise indistinguishable from a fast one.
           ablated: ablationLabel(engine.ablation),
+          // 9/05: the post chain's own budget, EFFECTIVE rather than asked — `rg11b10ufloat` falls back to
+          // `rgba16float` on an adapter that cannot render it, and a row that did not state which one ran
+          // would be a row about a frame nobody can identify.
+          bloomFormat: engine.budget.bloomFormat,
+          bloomMinLevelPx: engine.budget.bloomMinLevelPx,
+          bloomPrefilterScale: engine.budget.bloomPrefilterScale,
           cssHeight: canvas.clientHeight,
           cssWidth: canvas.clientWidth,
           deviceHeight: canvas.height,
