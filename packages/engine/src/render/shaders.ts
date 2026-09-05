@@ -8,6 +8,21 @@
  */
 
 const MODULES: Record<string, string> = {
+  /** The bloom chain at f32 — what every capture before 2026-09-05 was taken at, and the game's default. */
+  bloom: /* wgsl */ `
+alias hf = f32;
+alias hf3 = vec3f;
+alias hf4 = vec4f;
+#include <bloom-src>
+`,
+  /** The same chain with its colour maths at half width (Arm: mediump is ~2x on their ALUs). */
+  'bloom-f16': /* wgsl */ `
+enable f16;
+alias hf = f16;
+alias hf3 = vec3<f16>;
+alias hf4 = vec4<f16>;
+#include <bloom-src>
+`,
   /**
    * Bloom (074/09 — prod parity with postprocessing's BloomEffect, mipmapBlur path). Three entry points
    * share the fullscreen-triangle vertex: PREFILTER (full-res luminance threshold — prod thresholds BEFORE
@@ -16,7 +31,20 @@ const MODULES: Record<string, string> = {
    * tent 1-2-1/16, blended over the same-size downsample mip with `mix(support, tent, radius)`).
    * All passes run on rgba16float targets — HDR overshoot IS the bloom energy (the plan-071 lesson).
    */
-  bloom: /* wgsl */ `
+  /**
+   * Bloom, PRECISION-NEUTRAL source (074/09 — prod parity with postprocessing's BloomEffect, mipmapBlur
+   * path). Three entry points share the fullscreen-triangle vertex: PREFILTER (luminance threshold — prod
+   * thresholds BEFORE the chain, texel-wise, so sub-pixel emitters survive), DOWNSAMPLE (two kernels, see
+   * below) and UPSAMPLE (9-tap tent 1-2-1/16, blended over the same-size downsample mip with
+   * `mix(support, tent, radius)`). All passes run on float targets — HDR overshoot IS the bloom energy (the
+   * plan-071 lesson).
+   *
+   * **Colour is `hf`, coordinates are `f32`, and the split is deliberate** (201/9, Arm's mediump guidance).
+   * The two wrappers below alias `hf` to `f16` or `f32`; a UV in `f16` would resolve to ~1/2048 near 0.5
+   * against a texel offset of 1/1440 here, so tap positions would collapse into each other. Only the
+   * sampled colour, the weights and the accumulators change width.
+   */
+  'bloom-src': /* wgsl */ `
 struct Bloom {
   // texel = [1/inputW, 1/inputH, 0, 0] of the INPUT texture; params = [threshold, smoothing, radius, 0].
   texel: vec4f,
@@ -44,67 +72,84 @@ fn vsBloom(@builtin(vertex_index) index: u32) -> BloomOut {
 }
 
 // Rec709 luminance — three's luminance() (the prod threshold is measured on this).
-fn bloomLuma(rgb: vec3f) -> f32 {
-  return dot(rgb, vec3f(0.2126, 0.7152, 0.0722));
+fn bloomLuma(rgb: hf3) -> hf {
+  return dot(rgb, hf3(0.2126, 0.7152, 0.0722));
 }
 
 @fragment
 fn fsBloomPrefilter(in: BloomOut) -> @location(0) vec4f {
-  let texel = textureSampleLevel(inputTex, inputSampler, in.uv, 0.0);
-  let mask = smoothstep(bloom.params.x, bloom.params.x + bloom.params.y, bloomLuma(texel.rgb));
-  return texel * mask;
+  let texel = hf4(textureSampleLevel(inputTex, inputSampler, in.uv, 0.0));
+  let mask = smoothstep(hf(bloom.params.x), hf(bloom.params.x + bloom.params.y), bloomLuma(texel.rgb));
+  return vec4f(texel * mask);
 }
 
-// 1 inside [0,1]², 0 outside — prod's clampToBorder (edge taps must not smear the frame border).
+// 1 inside [0,1] squared, 0 outside — prod's clampToBorder (edge taps must not smear the frame border).
+// The test is on the COORDINATE, so it stays f32 whatever the colour width is.
 fn insideFrame(uv: vec2f) -> f32 {
   let inside = step(vec2f(0.0), uv) * step(uv, vec2f(1.0));
   return inside.x * inside.y;
 }
 
-fn borderTap(uv: vec2f) -> vec4f {
-  return textureSampleLevel(inputTex, inputSampler, uv, 0.0) * insideFrame(uv);
+fn borderTap(uv: vec2f) -> hf4 {
+  return hf4(textureSampleLevel(inputTex, inputSampler, uv, 0.0)) * hf(insideFrame(uv));
 }
 
 const DOWN_INNER = 0.125;
 const DOWN_OUTER = 0.05556;
 
+// The 13-tap kernel (Jimenez, Call of Duty: Advanced Warfare). What this engine has always run.
 @fragment
 fn fsBloomDown(in: BloomOut) -> @location(0) vec4f {
   let t = bloom.texel.xy;
-  var c = vec4f(0.0);
+  var c = hf4(0.0);
   // Inner ring (half-texel corners at the input resolution).
-  c += borderTap(in.uv + t * vec2f(-1.0, 1.0)) * DOWN_INNER;
-  c += borderTap(in.uv + t * vec2f(1.0, 1.0)) * DOWN_INNER;
-  c += borderTap(in.uv + t * vec2f(-1.0, -1.0)) * DOWN_INNER;
-  c += borderTap(in.uv + t * vec2f(1.0, -1.0)) * DOWN_INNER;
+  c += borderTap(in.uv + t * vec2f(-1.0, 1.0)) * hf(DOWN_INNER);
+  c += borderTap(in.uv + t * vec2f(1.0, 1.0)) * hf(DOWN_INNER);
+  c += borderTap(in.uv + t * vec2f(-1.0, -1.0)) * hf(DOWN_INNER);
+  c += borderTap(in.uv + t * vec2f(1.0, -1.0)) * hf(DOWN_INNER);
   // Outer ring + centre.
-  c += borderTap(in.uv + t * vec2f(-2.0, 2.0)) * DOWN_OUTER;
-  c += borderTap(in.uv + t * vec2f(0.0, 2.0)) * DOWN_OUTER;
-  c += borderTap(in.uv + t * vec2f(2.0, 2.0)) * DOWN_OUTER;
-  c += borderTap(in.uv + t * vec2f(-2.0, 0.0)) * DOWN_OUTER;
-  c += borderTap(in.uv + t * vec2f(2.0, 0.0)) * DOWN_OUTER;
-  c += borderTap(in.uv + t * vec2f(-2.0, -2.0)) * DOWN_OUTER;
-  c += borderTap(in.uv + t * vec2f(0.0, -2.0)) * DOWN_OUTER;
-  c += borderTap(in.uv + t * vec2f(2.0, -2.0)) * DOWN_OUTER;
-  c += textureSampleLevel(inputTex, inputSampler, in.uv, 0.0) * DOWN_OUTER;
-  return c;
+  c += borderTap(in.uv + t * vec2f(-2.0, 2.0)) * hf(DOWN_OUTER);
+  c += borderTap(in.uv + t * vec2f(0.0, 2.0)) * hf(DOWN_OUTER);
+  c += borderTap(in.uv + t * vec2f(2.0, 2.0)) * hf(DOWN_OUTER);
+  c += borderTap(in.uv + t * vec2f(-2.0, 0.0)) * hf(DOWN_OUTER);
+  c += borderTap(in.uv + t * vec2f(2.0, 0.0)) * hf(DOWN_OUTER);
+  c += borderTap(in.uv + t * vec2f(-2.0, -2.0)) * hf(DOWN_OUTER);
+  c += borderTap(in.uv + t * vec2f(0.0, -2.0)) * hf(DOWN_OUTER);
+  c += borderTap(in.uv + t * vec2f(2.0, -2.0)) * hf(DOWN_OUTER);
+  c += hf4(textureSampleLevel(inputTex, inputSampler, in.uv, 0.0)) * hf(DOWN_OUTER);
+  return vec4f(c);
+}
+
+// DUAL FILTERING's downsample (Bjorge, Bandwidth-Efficient Rendering, SIGGRAPH 2015) — Arm's own kernel for
+// the Mali family this console's phone runs, and URP 17's Dual bloom mode. Five taps against thirteen:
+// centre x4 plus the four diagonal half-texel corners x1, over 8. The border test is kept, because the
+// reason it exists (a tap off the frame must not smear the edge inward) is ours rather than the kernel's.
+@fragment
+fn fsBloomDownDual(in: BloomOut) -> @location(0) vec4f {
+  let h = bloom.texel.xy * 0.5;
+  var c = hf4(textureSampleLevel(inputTex, inputSampler, in.uv, 0.0)) * hf(4.0);
+  c += borderTap(in.uv + vec2f(-h.x, -h.y));
+  c += borderTap(in.uv + vec2f(h.x, h.y));
+  c += borderTap(in.uv + vec2f(h.x, -h.y));
+  c += borderTap(in.uv + vec2f(-h.x, h.y));
+  return vec4f(c * hf(0.125));
 }
 
 @fragment
 fn fsBloomUp(in: BloomOut) -> @location(0) vec4f {
   let t = bloom.texel.xy;
-  var c = vec4f(0.0);
-  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(-1.0, 1.0), 0.0) * 0.0625;
-  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(0.0, 1.0), 0.0) * 0.125;
-  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(1.0, 1.0), 0.0) * 0.0625;
-  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(-1.0, 0.0), 0.0) * 0.125;
-  c += textureSampleLevel(inputTex, inputSampler, in.uv, 0.0) * 0.25;
-  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(1.0, 0.0), 0.0) * 0.125;
-  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(-1.0, -1.0), 0.0) * 0.0625;
-  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(0.0, -1.0), 0.0) * 0.125;
-  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(1.0, -1.0), 0.0) * 0.0625;
-  let support = textureSampleLevel(supportTex, inputSampler, in.uv, 0.0);
-  return mix(support, c, bloom.params.z);
+  var c = hf4(0.0);
+  c += hf4(textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(-1.0, 1.0), 0.0)) * hf(0.0625);
+  c += hf4(textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(0.0, 1.0), 0.0)) * hf(0.125);
+  c += hf4(textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(1.0, 1.0), 0.0)) * hf(0.0625);
+  c += hf4(textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(-1.0, 0.0), 0.0)) * hf(0.125);
+  c += hf4(textureSampleLevel(inputTex, inputSampler, in.uv, 0.0)) * hf(0.25);
+  c += hf4(textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(1.0, 0.0), 0.0)) * hf(0.125);
+  c += hf4(textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(-1.0, -1.0), 0.0)) * hf(0.0625);
+  c += hf4(textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(0.0, -1.0), 0.0)) * hf(0.125);
+  c += hf4(textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(1.0, -1.0), 0.0)) * hf(0.0625);
+  let support = hf4(textureSampleLevel(supportTex, inputSampler, in.uv, 0.0));
+  return vec4f(mix(support, c, hf(bloom.params.z)));
 }
 `,
   /**
@@ -1044,11 +1089,34 @@ fn fsPed(in: PedVsOut) -> @location(0) vec4f {
   return vec4f(color, 1.0);
 }
 `,
+  /** The post pass at f32 — the game's default and every capture before 2026-09-05. */
   post: /* wgsl */ `
-// Godrays composite (074/09 stage 1): the scene renders into a LINEAR rgba16float target (the sun disc's
-// 3–6× overshoot survives), and this fullscreen pass radial-blurs the thresholded brightness toward the
-// sun's screen position — occlusion is inherent (geometry in front of the sun leaves no bright pixels, so
-// rays only stream through gaps: the prod GodRaysEffect look). Output goes to the sRGB swapchain view.
+alias hf = f32;
+alias hf3 = vec3f;
+alias hf4 = vec4f;
+#include <post-src>
+`,
+  /** The same pass with its colour maths at half width (Arm: mediump is ~2x on their ALUs). */
+  'post-f16': /* wgsl */ `
+enable f16;
+alias hf = f16;
+alias hf3 = vec3<f16>;
+alias hf4 = vec4<f16>;
+#include <post-src>
+`,
+  /**
+   * Godrays composite + bloom composite + ACES, PRECISION-NEUTRAL source (074/09 stage 1). The scene renders
+   * into a LINEAR float target (the sun disc's 3-6x overshoot survives), and this fullscreen pass
+   * radial-blurs the thresholded brightness toward the sun's screen position — occlusion is inherent
+   * (geometry in front of the sun leaves no bright pixels, so rays only stream through gaps: the prod
+   * GodRaysEffect look). Output goes to the sRGB swapchain view.
+   *
+   * **Colour is `hf`; the godray WALK stays `f32`, and that one is not a style choice.** The loop steps a UV
+   * twenty times by an accumulated delta — at half width the step would quantize and the taps would bunch,
+   * which is visible as banding along the rays rather than as a precision figure. The ACES fit is safe at
+   * half width: it feeds an 8-bit sRGB encode, far coarser than f16's ~0.05 % relative precision.
+   */
+  'post-src': /* wgsl */ `
 struct Post {
   // sun = [uv.x, uv.y, intensity (0 = off), decay per tap]; tint = [rgb godray colour, brightness threshold].
   sun: vec4f,
@@ -1059,7 +1127,7 @@ struct Post {
 @group(0) @binding(0) var<uniform> post: Post;
 @group(0) @binding(1) var scene: texture_2d<f32>;
 @group(0) @binding(2) var sceneSampler: sampler;
-// Bloom chain result (half-res 16f, 074/09) — bilinear-upsampled here by the sampler.
+// Bloom chain result (074/09) — bilinear-upsampled here by the sampler.
 @group(0) @binding(3) var bloomTex: texture_2d<f32>;
 
 struct PostOut {
@@ -1081,54 +1149,55 @@ fn vsPost(@builtin(vertex_index) index: u32) -> PostOut {
 const GODRAY_TAPS = 20u;
 
 // ACES filmic (074/09): the EXACT curve prod is calibrated against — three's Stephen Hill fit as consumed
-// by postprocessing's ToneMappingEffect (exposure 1). Matrices carry sRGB↔AP1 (columns, transposed from
+// by postprocessing's ToneMappingEffect (exposure 1). Matrices carry sRGB<->AP1 (columns, transposed from
 // the source like three's); the /0.6 scale is three's brighter-viewing-environment adjustment (#19621).
-fn rrtAndOdtFit(v: vec3f) -> vec3f {
-  let a = v * (v + vec3f(0.0245786)) - vec3f(0.000090537);
-  let b = v * (0.983729 * v + vec3f(0.4329510)) + vec3f(0.238081);
+fn rrtAndOdtFit(v: hf3) -> hf3 {
+  let a = v * (v + hf3(0.0245786)) - hf3(0.000090537);
+  let b = v * (hf(0.983729) * v + hf3(0.4329510)) + hf3(0.238081);
   return a / b;
 }
 
-fn acesFilmic(color: vec3f) -> vec3f {
-  let inputMat = mat3x3f(
-    vec3f(0.59719, 0.07600, 0.02840),
-    vec3f(0.35458, 0.90834, 0.13383),
-    vec3f(0.04823, 0.01566, 0.83777),
+fn acesFilmic(color: hf3) -> hf3 {
+  let inputMat = mat3x3<hf>(
+    hf3(0.59719, 0.07600, 0.02840),
+    hf3(0.35458, 0.90834, 0.13383),
+    hf3(0.04823, 0.01566, 0.83777),
   );
-  let outputMat = mat3x3f(
-    vec3f(1.60475, -0.10208, -0.00327),
-    vec3f(-0.53108, 1.10813, -0.07276),
-    vec3f(-0.07367, -0.00605, 1.07602),
+  let outputMat = mat3x3<hf>(
+    hf3(1.60475, -0.10208, -0.00327),
+    hf3(-0.53108, 1.10813, -0.07276),
+    hf3(-0.07367, -0.00605, 1.07602),
   );
-  let mapped = outputMat * rrtAndOdtFit(inputMat * (color / 0.6));
-  return clamp(mapped, vec3f(0.0), vec3f(1.0));
+  let mapped = outputMat * rrtAndOdtFit(inputMat * (color / hf(0.6)));
+  return clamp(mapped, hf3(0.0), hf3(1.0));
 }
 
 @fragment
 fn fsPost(in: PostOut) -> @location(0) vec4f {
-  var col = textureSampleLevel(scene, sceneSampler, in.uv, 0.0).rgb;
+  var col = hf3(textureSampleLevel(scene, sceneSampler, in.uv, 0.0).rgb);
   if (post.sun.z > 0.0) {
+    // The WALK is f32: twenty accumulated steps of a delta this small do not survive half width.
     let delta = (post.sun.xy - in.uv) / f32(GODRAY_TAPS);
     var uv = in.uv;
-    var weight = 1.0;
-    var acc = vec3f(0.0);
+    var weight = hf(1.0);
+    var acc = hf3(0.0);
     for (var tap = 0u; tap < GODRAY_TAPS; tap += 1u) {
       uv += delta;
-      let sample_ = textureSampleLevel(scene, sceneSampler, uv, 0.0).rgb;
-      acc += max(sample_ - vec3f(post.tint.w), vec3f(0.0)) * weight;
-      weight *= post.sun.w;
+      let sample_ = hf3(textureSampleLevel(scene, sceneSampler, uv, 0.0).rgb);
+      acc += max(sample_ - hf3(hf(post.tint.w)), hf3(0.0)) * weight;
+      weight *= hf(post.sun.w);
     }
-    col += acc * post.tint.rgb * (post.sun.z / f32(GODRAY_TAPS));
+    col += acc * hf3(post.tint.rgb) * hf(post.sun.z / f32(GODRAY_TAPS));
   }
-  // Bloom composite (prod SCREEN blend: dst + src − min(dst·src, 1)); intensity 0 = a no-op.
-  let bloomSrc = textureSampleLevel(bloomTex, sceneSampler, in.uv, 0.0).rgb * post.params.y;
-  col = col + bloomSrc - min(col * bloomSrc, vec3f(1.0));
-  // Tonemap LAST (prod order: godrays → bloom → ACES) — the HDR overshoot feeds the effects above,
+  // Bloom composite (prod SCREEN blend: dst + src - min(dst.src, 1)); intensity 0 = a no-op.
+  let bloomSrc = hf3(textureSampleLevel(bloomTex, sceneSampler, in.uv, 0.0).rgb) * hf(post.params.y);
+  col = col + bloomSrc - min(col * bloomSrc, hf3(1.0));
+  // Tonemap LAST (prod order: godrays -> bloom -> ACES) — the HDR overshoot feeds the effects above,
   // ACES compresses the sum; the sRGB swapchain view encodes on write.
   if (post.params.x > 0.5) {
     col = acesFilmic(col);
   }
-  return vec4f(col, 1.0);
+  return vec4f(vec3f(col), 1.0);
 }
 `,
   /**
@@ -2254,7 +2323,7 @@ export function resolveShader(name: string): string {
       throw new Error(`unknown shader module <${moduleName}>`);
     }
 
-    return source.replace(/^#include <(\w+)>$/gm, (_, included: string) => expand(included));
+    return source.replace(/^#include <([\w-]+)>$/gm, (_, included: string) => expand(included));
   };
   const resolved = expand(name);
   assertGuardrails(name, resolved);

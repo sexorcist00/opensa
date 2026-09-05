@@ -25,6 +25,12 @@ describe('captureBudget', () => {
       expect(captureBudget(new URLSearchParams('bloomscale=0.75')).bloomPrefilterScale).toBe(1);
       expect(captureBudget(new URLSearchParams('bloomscale=0')).bloomPrefilterScale).toBe(1);
       expect(captureBudget(new URLSearchParams('bloomscale=half')).bloomPrefilterScale).toBe(1);
+      // The vendor arms refuse an unreadable value the same way: an arm that silently ran as the default is
+      // a measurement of the default filed under another name.
+      expect(captureBudget(new URLSearchParams('bloomdown=dual')).bloomDownsample).toBe('box13');
+      expect(captureBudget(new URLSearchParams('bloomdown=kawase')).bloomDownsample).toBe('box13');
+      expect(captureBudget(new URLSearchParams('postprec=half')).postPrecision).toBe('f32');
+      expect(captureBudget(new URLSearchParams('postprec=16')).postPrecision).toBe('f32');
     });
 
     it('refuses a level floor the chain cannot respect', () => {
@@ -72,13 +78,28 @@ describe('captureBudget', () => {
       expect(captureBudget(new URLSearchParams('scene=RGB10A2Unorm')).sceneFormat).toBe('rgb10a2unorm');
     });
 
-    it('reads the post chain arms — the format, the base of the pyramid and its floor', () => {
-      const params = new URLSearchParams('bloomformat=rg11b10ufloat&bloomscale=0.5&bloomminpx=16');
+    it('reads the post chain arms — the format, the base of the pyramid, its floor and the vendor levers', () => {
+      const params = new URLSearchParams(
+        'bloomformat=rg11b10ufloat&bloomscale=0.5&bloomminpx=16&bloomdown=dual5&postprec=f16',
+      );
       expect(captureBudget(params)).toEqual({
         ...DEFAULT_RENDER_BUDGET,
+        bloomDownsample: 'dual5',
         bloomFormat: 'rg11b10ufloat',
         bloomMinLevelPx: 16,
         bloomPrefilterScale: 0.5,
+        postPrecision: 'f16',
+      });
+    });
+
+    it('reads each vendor lever on its own, so an arm can carry exactly one of them', () => {
+      expect(captureBudget(new URLSearchParams('bloomdown=dual5'))).toEqual({
+        ...DEFAULT_RENDER_BUDGET,
+        bloomDownsample: 'dual5',
+      });
+      expect(captureBudget(new URLSearchParams('postprec=f16'))).toEqual({
+        ...DEFAULT_RENDER_BUDGET,
+        postPrecision: 'f16',
       });
     });
 

@@ -16,7 +16,7 @@
  */
 import { OSCELL_VERTEX_STRIDE } from '@opensa/engine-formats';
 
-import { DEFAULT_RENDER_BUDGET, type SampleCount } from './budget';
+import { DEFAULT_RENDER_BUDGET, type PostPrecision, type SampleCount } from './budget';
 import { resolveShader } from './shaders';
 
 /** MSAA sample count — the DEFAULT, and what every capture before 2026-09-01 was taken at. WebGPU allows
@@ -33,6 +33,7 @@ export const SCENE_FORMAT: GPUTextureFormat = DEFAULT_RENDER_BUDGET.sceneFormat;
 
 export type PipelineId =
   | 'bloom-down'
+  | 'bloom-down-dual'
   | 'bloom-prefilter'
   | 'bloom-up'
   | 'cloud-field'
@@ -120,6 +121,15 @@ export async function compileAll(
    * format, which is what the engine did before the field existed.
    */
   bloomFormat: GPUTextureFormat = colorFormat,
+  /**
+   * 201/9: the precision the BLOOM and POST fragment shaders compute colour at, EFFECTIVE rather than asked
+   * (`resolveRenderBudget` has already dropped it to `f32` on an adapter without `shader-f16`).
+   *
+   * It picks a shader MODULE rather than patching a source: the store enumerates `bloom` / `bloom-f16` and
+   * `post` / `post-f16`, each a three-line alias wrapper over one shared body, so every variant is
+   * snapshot-testable — the store's own rule since 074/01.
+   */
+  postPrecision: PostPrecision = 'f32',
 ): Promise<PipelineSet> {
   const frameLayout = device.createBindGroupLayout({
     entries: [
@@ -599,7 +609,8 @@ export async function compileAll(
     ],
     label: 'post',
   });
-  const postModule = device.createShaderModule({ code: resolveShader('post'), label: 'post' });
+  const postName = precisionVariant('post', postPrecision);
+  const postModule = device.createShaderModule({ code: resolveShader(postName), label: postName });
   pipelines.set(
     'post',
     device.createRenderPipelineAsync({
@@ -610,7 +621,7 @@ export async function compileAll(
       vertex: { entryPoint: 'vsPost', module: postModule },
     }),
   );
-  const { bloomLayout, bloomUpLayout } = compileBloomPipelines(device, bloomFormat, pipelines);
+  const { bloomLayout, bloomUpLayout } = compileBloomPipelines(device, bloomFormat, pipelines, postPrecision);
   const probeMipLayout = compileProbePipelines(device, colorFormat, pipelines);
   // Cumulus field bake (sky v2 perf): a 256² rg16float target, the frame uniform alone — its own tiny
   // layout because the pass RENDERS INTO the texture the frame group binds (same-pass usage conflict).
@@ -789,6 +800,7 @@ function compileBloomPipelines(
   device: GPUDevice,
   colorFormat: GPUTextureFormat,
   pipelines: Map<PipelineId, Promise<GPURenderPipeline>>,
+  postPrecision: PostPrecision,
 ): { bloomLayout: GPUBindGroupLayout; bloomUpLayout: GPUBindGroupLayout } {
   const bloomLayout = device.createBindGroupLayout({
     entries: [
@@ -807,10 +819,15 @@ function compileBloomPipelines(
     ],
     label: 'bloom-up',
   });
-  const bloomModule = device.createShaderModule({ code: resolveShader('bloom'), label: 'bloom' });
+  const bloomName = precisionVariant('bloom', postPrecision);
+  const bloomModule = device.createShaderModule({ code: resolveShader(bloomName), label: bloomName });
+  // BOTH downsample kernels are compiled, always. They differ only in an entry point, the budget picks one
+  // per frame, and a pipeline that is never set costs a compile at boot and nothing after it — which is
+  // cheaper than making the kernel a constructor input and rebuilding the engine to A/B it.
   const entries: readonly [PipelineId, string, GPUBindGroupLayout][] = [
     ['bloom-prefilter', 'fsBloomPrefilter', bloomLayout],
     ['bloom-down', 'fsBloomDown', bloomLayout],
+    ['bloom-down-dual', 'fsBloomDownDual', bloomLayout],
     ['bloom-up', 'fsBloomUp', bloomUpLayout],
   ];
   for (const [id, entryPoint, groupLayout] of entries) {
@@ -917,6 +934,17 @@ function compileProbePipelines(
  */
 function multisample(sampleCount: SampleCount, cutout = false): GPUMultisampleState {
   return { alphaToCoverageEnabled: cutout && sampleCount > 1, count: sampleCount };
+}
+
+/**
+ * The shader-store name for a module at a given precision (201/9, Arm's mediump guidance).
+ *
+ * The store enumerates `bloom` / `bloom-f16` and `post` / `post-f16` — each a three-line alias wrapper over
+ * one shared body, so a variant cannot drift from its source and every one stays snapshot-testable. This is
+ * the only place the naming convention is spelled out.
+ */
+function precisionVariant(module: 'bloom' | 'post', precision: PostPrecision): string {
+  return precision === 'f16' ? `${module}-f16` : module;
 }
 
 /** Blend state for a world variant: none (a depth-writing class), premultiplied over, or additive light. */

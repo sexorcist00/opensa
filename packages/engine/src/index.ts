@@ -40,8 +40,10 @@ export {
 export { quatMultiply, RigidEntity, type RigidPartInit } from './entities/rigid';
 export { ablationLabel, type FrameAblation, NOTHING_ABLATED } from './render/ablation';
 export {
+  type BloomDownsample,
   type BloomPrefilterScale,
   DEFAULT_RENDER_BUDGET,
+  type PostPrecision,
   type RenderBudget,
   resolveRenderBudget,
   type SampleCount,

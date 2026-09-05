@@ -23,10 +23,66 @@
  * at map zoom, never off a desktop screenshot.
  */
 
+/**
+ * Which kernel the chain's DOWNSAMPLE uses — the vendor lever, adapted rather than adopted whole.
+ *
+ * `box13` is what the engine has always run: the 13-tap kernel from Jimenez's *Next Generation Post
+ * Processing in Call of Duty: Advanced Warfare* (4 inner ×0.125 + 8 outer + centre ×0.05556), each tap
+ * multiplied by an in-frame test that emulates prod's `clampToBorder`.
+ *
+ * `dual5` is the downsample half of **dual filtering** — Bjørge, *Bandwidth-Efficient Rendering*
+ * (SIGGRAPH 2015), written for exactly the Mali family the console's phone runs and now shipping as URP
+ * 17's `Dual` bloom mode ([links](../../../../docs/links.md)). Five taps instead of thirteen: the centre
+ * weighted ×4 and the four diagonal half-texel corners ×1, over 8.
+ *
+ * **What the adaptation keeps, and why it is not the whole technique.** Dual filtering also replaces the
+ * upsample with an 8-tap kernel and drops the per-level blend — and that is the half that does NOT transfer,
+ * because our chain is already a PYRAMID whose look comes from `mix(support, tent, radius)` at every level.
+ * Bjørge's headline speedup is measured against a Gaussian, not against a pyramid. So the downsample kernel
+ * comes across, where the argument is arithmetic rather than aesthetic (**8 fewer texture fetches per pixel
+ * per level**, on a chain 201/9 measured as bandwidth), and the upsample stays ours.
+ *
+ * **It is still a LOOK change and it is not shipped by default.** Five taps have a smaller support than
+ * thirteen, so each level blurs slightly less and the pyramid's overall falloff tightens. That is an
+ * operator's verdict on the device, not a reasoned one — the standing call. `?bloomdown=dual5` is the arm.
+ */
+export type BloomDownsample = 'box13' | 'dual5';
+
 /** Where the bloom pyramid starts, as a fraction of the render size. Halves only — a mip chain has no thirds. */
 export type BloomPrefilterScale = 0.5 | 1;
 
+/**
+ * The precision the bloom and post fragment shaders compute COLOUR at.
+ *
+ * **Arm's own guidance, and the one shader-level lever they price in whole multiples**: their ALUs run
+ * `mediump` at roughly twice the rate of `highp`, and half-width registers relieve pressure, so a
+ * fragment-heavy chain is the canonical place to spend it.
+ *
+ * **Only the colour maths moves. Every coordinate stays f32, and that is the load-bearing detail** — an
+ * `f16` UV near 0.5 resolves to about 1/2048, while a texel offset on this surface is 1/1440, so tap
+ * positions would quantize into each other and the kernel would sample the wrong texels. Positions, UVs and
+ * texel offsets are `f32` in both variants; only the sampled colour, the weights and the accumulators
+ * change width.
+ *
+ * **Storage is unaffected, which is what makes it near-free of consequence:** the chain's targets are
+ * already 16-bit float (or `rg11b10ufloat`), so an f16 accumulator is rounded to the same result the f32 one
+ * is stored as, give or take an ULP. The post pass writes an 8-bit sRGB swapchain, where f16's ~0.05 %
+ * relative precision is far finer than the encoding it feeds.
+ *
+ * Requires `shader-f16`, which the device requests where the adapter offers it (the 2/03 phone does). A
+ * budget asking for it on an adapter without it falls back and the capture states which one ran.
+ */
+export type PostPrecision = 'f16' | 'f32';
+
 export interface RenderBudget {
+  /**
+   * Which kernel the chain's downsample passes use — see {@link BloomDownsample}.
+   *
+   * The downsample is where the chain's fetches are: it runs at every level, and at `box13` each of them
+   * costs thirteen bilinear taps plus an in-frame test per tap. `dual5` is Arm's own kernel for this GPU
+   * family and takes five.
+   */
+  readonly bloomDownsample: BloomDownsample;
   /**
    * Colour format of the bloom chain's own targets — read apart from {@link sceneFormat} since 201/9's sweep.
    *
@@ -65,6 +121,13 @@ export interface RenderBudget {
    * emitters, which is a LOOK verdict owed on the device before this ships as a default anywhere.
    */
   readonly bloomPrefilterScale: BloomPrefilterScale;
+  /**
+   * The precision the bloom and post fragment shaders compute colour at — see {@link PostPrecision}.
+   *
+   * EFFECTIVE rather than asked: {@link resolveRenderBudget} drops it to `f32` on an adapter without
+   * `shader-f16`, and the capture reports what actually ran.
+   */
+  readonly postPrecision: PostPrecision;
   /** MSAA samples for the world pass, its depth and every bundle recorded against it. */
   readonly sampleCount: SampleCount;
   /** Colour format of the world pass and the resolve target. */
@@ -86,9 +149,11 @@ export type SceneFormat = 'rg11b10ufloat' | 'rgb10a2unorm' | 'rgba16float';
 
 /** What the engine has always done, and what every capture before 2026-09-01 was taken at. */
 export const DEFAULT_RENDER_BUDGET: RenderBudget = {
+  bloomDownsample: 'box13',
   bloomFormat: 'rgba16float',
   bloomMinLevelPx: 1,
   bloomPrefilterScale: 1,
+  postPrecision: 'f32',
   sampleCount: 4,
   sceneFormat: 'rgba16float',
 };
@@ -118,7 +183,14 @@ export function resolveRenderBudget(asked: RenderBudget, granted: Iterable<strin
   const format = (wanted: SceneFormat): SceneFormat =>
     wanted === 'rg11b10ufloat' && !features.has('rg11b10ufloat-renderable') ? 'rgba16float' : wanted;
 
-  return { ...asked, bloomFormat: format(asked.bloomFormat), sceneFormat: format(asked.sceneFormat) };
+  return {
+    ...asked,
+    bloomFormat: format(asked.bloomFormat),
+    // Arm prices mediump at roughly 2x on their ALUs, so a surface asks for it and the DEVICE answers —
+    // the same shape as the format above, and for the same reason: nothing here reads a vendor name.
+    postPrecision: asked.postPrecision === 'f16' && features.has('shader-f16') ? 'f16' : 'f32',
+    sceneFormat: format(asked.sceneFormat),
+  };
 }
 
 /** Bytes one pixel of a scene colour target costs — the residency accounting reads this, not a literal 8. */

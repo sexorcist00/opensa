@@ -287,3 +287,36 @@ describe('the bloom arms and the night look pair (201/9-05)', () => {
     });
   });
 });
+
+describe('the vendor arms (201/9 — the Arm/Bjorge levers)', () => {
+  describe('negative cases', () => {
+    it('does not let the field run carry either lever — it is the baseline both are subtracted from', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.field).not.toContain('bloomdown=');
+      expect(links.field).not.toContain('postprec=');
+    });
+
+    it('keeps the two levers apart, so a combined reading can never be filed as one of them', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.bloomdual).not.toContain('postprec=');
+      expect(links.bloomf16).not.toContain('bloomdown=');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is the field run plus ONE field each — the property that makes a subtraction mean anything', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.bloomdual).toBe(`${links.field}&bloomdown=dual5`);
+      expect(links.bloomf16).toBe(`${links.field}&postprec=f16`);
+    });
+
+    it('offers both at once, because neither is expected to clear the 2.47 ms ablation floor alone', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.bloomvendor).toBe(`${links.field}&bloomdown=dual5&postprec=f16`);
+    });
+  });
+});
