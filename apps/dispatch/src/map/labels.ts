@@ -184,6 +184,33 @@ export function unitWantsLabel(status: UnitStatus, selected: boolean): boolean {
   return selected || status === 'enRoute' || status === 'onScene';
 }
 
+/**
+ * Whether a unit's MARK — the chevron itself, not its name — is drawn at all (the operator's call,
+ * 2026-09-05, once units began drawing as cars).
+ *
+ * **The datum moved.** 3/03 wrote *"an icon is the datum and is never dropped"*, and that was right while a
+ * unit WAS its icon. Since [5/04](../../../../docs/plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md)
+ * a unit is a car standing on the map, and a chevron over it draws the same fact twice — 150 of them, every
+ * frame, on a layer that is the largest CPU line in the frame. So the mark stops being the unit's presence
+ * and becomes what it is for on an operations map: a unit the shift is about.
+ *
+ * **Three ways to earn one**, and the third is the one that keeps this honest:
+ *
+ * - the operator SELECTED it;
+ * - it is COMMITTED to a call, the same line {@link unitWantsLabel} draws;
+ * - **or nothing else on screen is drawing it.** A unit whose model this build cannot carry
+ *   (`unitsAsSymbolOnly`, `unitsUnresolvedModels`) has no car under the mark, and dropping it would remove
+ *   the unit from the map altogether rather than declutter it. That is a disappearance, not a decluttering,
+ *   and it would be silent — the roster would still say 150.
+ *
+ * **Picking does NOT depend on this.** The layer records a hit area for every unit it projects, drawn or
+ * not, so a patrolling car is still tappable at the pixels it occupies. Losing the mark must not lose the
+ * unit.
+ */
+export function unitWantsSymbol(status: UnitStatus, selected: boolean, hasModel: boolean): boolean {
+  return !hasModel || unitWantsLabel(status, selected);
+}
+
 /** Committed units first: an operator is tracking the ones working a call, not the ones patrolling. */
 const UNIT_ORDER: Readonly<Record<'available' | 'busy' | 'enRoute' | 'onScene', number>> = {
   available: 2,

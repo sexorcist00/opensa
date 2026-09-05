@@ -929,6 +929,10 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           options.selection(),
           { height: overlay.clientHeight, width: overlay.clientWidth },
           options.fixAges?.(),
+          // The layer's own split (`sym:*`), and the one thing it cannot know: whether a car is already
+          // drawing this unit. Both are HOST answers — the same reason the render gate is told about the
+          // wind rather than deriving it.
+          { hasModel: (id) => unitModels.isDrawn(id), step },
         ),
       );
       // Over the symbols: an operator's own mark is the last thing drawn, so nothing hides it (201/7-05).

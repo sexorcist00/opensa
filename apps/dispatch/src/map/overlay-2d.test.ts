@@ -222,6 +222,33 @@ describe('SymbologyLayer', () => {
       expect(layer.counted().spriteVariants).toBeLessThanOrEqual(4);
     });
 
+    it('draws no mark for a unit a car is already drawing, and still records its hit area', () => {
+      // The operator's call, 2026-09-05: a unit IS the car now, and a chevron over it draws the same fact
+      // twice. Picking must not go with it — a patrolling car still has to be tappable.
+      const { calls, ctx } = fakeContext();
+      const layer = spriteLayer();
+
+      layer.render(ctx, spreadProjector(), board(24, 0, 'available'), null, { height: 900, width: 900 }, undefined, {
+        hasModel: () => true,
+      });
+
+      expect(layer.counted()).toMatchObject({ marksHidden: 24, symbols: 0 });
+      expect(calls.blits).toBe(0);
+      // Every one of them is still where an operator would tap it.
+      expect(layer.hitTest(60, 40)).toEqual({ id: 'u0', kind: 'unit' });
+    });
+
+    it('keeps the mark of a unit nothing else draws — a build with no model for it', () => {
+      const { ctx } = fakeContext();
+      const layer = spriteLayer();
+
+      layer.render(ctx, spreadProjector(), board(24, 0, 'available'), null, { height: 900, width: 900 }, undefined, {
+        hasModel: () => false,
+      });
+
+      expect(layer.counted()).toMatchObject({ marksHidden: 0, symbols: 24 });
+    });
+
     it('drops a chip past the depth cut and counts the drop', () => {
       const { ctx } = fakeContext();
       const layer = new SymbologyLayer();
@@ -265,6 +292,22 @@ describe('SymbologyLayer', () => {
 
       expect(calls.text).toContain('4-XRAY-7');
       expect(layer.counted()).toMatchObject({ chips: 1, chipsDropped: 23, symbols: 24 });
+    });
+
+    it('splits its own cost into the passes a capture can read', () => {
+      const { ctx } = fakeContext();
+      const layer = spriteLayer();
+      const seen: string[] = [];
+
+      layer.render(ctx, spreadProjector(), board(8, 4), null, SIZE, undefined, {
+        step: (name, run) => {
+          seen.push(name);
+
+          return run();
+        },
+      });
+
+      expect(seen).toEqual(['sym:calls', 'sym:units', 'sym:labels', 'sym:scale']);
     });
 
     it('gives the pixels to the selection when everything stacks on one point', () => {

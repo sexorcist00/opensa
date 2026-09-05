@@ -281,23 +281,28 @@ export interface InventoryReport {
     readonly beaconGrowths: number;
     readonly chips: number;
     /** Names not drawn — past the depth cut, not a unit the shift is about (3/03's rule since 2026-09-05),
-     *  or beaten to the pixels. `chips + chipsDropped` is every symbol that could have carried one. */
+     *  beaten to the pixels, or a unit a car is already drawing. This is what the chrome's *"N names
+     *  hidden"* reads. */
     readonly chipsDropped: number;
     readonly incidents: number;
+    /** Units whose MARK was not drawn because a car is already drawing them (the operator's call,
+     *  2026-09-05). Distinct from `chipsDropped`, which is about the NAME: at the declared board most units
+     *  are in both. `symbols + marksHidden` is every unit and call that projected onto the canvas. */
+    readonly marksHidden: number;
     /** `measureText` calls on that frame. 0 with a warm width cache, whatever the symbol count; one per
      *  label the layer had never drawn before. A capture where this tracks `chips` is one where the cache
      *  is not working. */
     readonly measures: number;
-    /** Symbol bitmaps rasterized this session (`symbol-sprites.ts`). The same claim as `measures`, one layer
-     *  down: a mark is tessellated once per VARIANT and blitted per instance, so this settles at a handful
-     *  and a capture where it tracks the unit count is one where a key is carrying something continuous. */
-    readonly spriteVariants: number;
     /** Texture megabytes the uploaded unit models hold (201/5-04) — the dominant per-type cost, and the
      *  half of a resident figure that belongs to the BOARD rather than to the world. */
     readonly modelTextureMb: number;
     /** Unit model TYPES uploaded right now. A shift of 150 cars is a handful of types, which is the whole
      *  reason a model layer is affordable at the declared count. */
     readonly modelTypes: number;
+    /** Symbol bitmaps rasterized this session (`symbol-sprites.ts`). The same claim as `measures`, one layer
+     *  down: a mark is tessellated once per VARIANT and blitted per instance, so this settles at a handful
+     *  and a capture where it tracks the unit count is one where a key is carrying something continuous. */
+    readonly spriteVariants: number;
     /** Units drawn with an AGING fix — older than PCAD's 4 s publish interval (201/8-02). On the mock this
      *  is 0 while live and grows during a scrub; on a real feed it is what a quiet channel looks like. */
     readonly stale: number;

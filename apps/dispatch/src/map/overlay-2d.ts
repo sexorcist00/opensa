@@ -17,7 +17,7 @@ import type { ScreenProjector } from './projection';
 import { PUBLISH_INTERVAL_MS } from '../ops/tracks';
 import { incidentKey, type Rgba, SET_COLORS } from './beacons';
 import { aheadOf, gtaToEngine } from './coords';
-import { CollisionIndex, labelCandidates, labelRank, unitWantsLabel } from './labels';
+import { CollisionIndex, labelCandidates, labelRank, unitWantsLabel, unitWantsSymbol } from './labels';
 import { quantizeAlpha, SymbolSprites } from './symbol-sprites';
 
 /** What the last draw put on screen, and what a click at those pixels selects. */
@@ -38,6 +38,10 @@ export interface SymbologyCounts {
    *  (`unitWantsLabel`), or beaten to the pixels. The decluttering, counted, so the chrome can say how many
    *  names are hidden rather than let the operator read the map as complete. */
   readonly chipsDropped: number;
+  /** Units whose MARK was not drawn because a car is already drawing them (`unitWantsSymbol`). The
+   *  decluttering the operator asked for on 2026-09-05, counted — a unit that vanished and one that was
+   *  never on the board look identical otherwise. */
+  readonly marksHidden: number;
   /** `measureText` calls this frame. It is the claim of the width cache, stated rather than asserted: with
    *  the cache warm this is 0 however many symbols are on screen, and every new label costs exactly one. */
   readonly measures: number;
@@ -101,6 +105,26 @@ const WIDTH_CACHE_CAP = 512;
 /** Round distances the scale bar is allowed to show. */
 const SCALE_STEPS = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000] as const;
 
+/**
+ * What the HOST can tell the layer that the layer cannot work out for itself.
+ *
+ * Both are optional and both default to the answer that keeps a caller without them behaving exactly as
+ * before: no models (so every mark draws, which is plan mode and every test) and no timing.
+ */
+export interface RenderInputs {
+  /** Is this unit drawn as a car right now (`UnitModels.isDrawn`) — see `unitWantsSymbol`. */
+  readonly hasModel?: (id: string) => boolean;
+  /**
+   * The frame's span recorder, so this layer's own cost can be attributed rather than read as one number.
+   *
+   * `overlay:symbols` was **6.0-7.0 ms at the declared board** and the frame's largest CPU line, with no
+   * breakdown at all — the same shape `overlay-2d` was in until its split was made permanent hours earlier,
+   * and the same fix. Four spans, matching the passes rather than inventing a structure: the calls, the
+   * units, the label placement, the scale bar.
+   */
+  readonly step?: <T>(name: string, run: () => T) => T;
+}
+
 /** One entity's bid for a label: everything the placement pass needs, and nothing about the camera. */
 interface LabelRequest {
   readonly color: string;
@@ -120,7 +144,7 @@ export class SymbologyLayer {
   private areas: HitArea[] = [];
   /** Chip rects of the frame, held apart so the ICONS can be appended after them (see {@link render}). */
   private chipAreas: HitArea[] = [];
-  private counts = { chips: 0, chipsDropped: 0, measures: 0, spriteVariants: 0, stale: 0, symbols: 0 };
+  private counts = { chips: 0, chipsDropped: 0, marksHidden: 0, measures: 0, spriteVariants: 0, stale: 0, symbols: 0 };
   /**
    * The symbol bitmaps this layer blits instead of re-tessellating (see `symbol-sprites.ts`).
    *
@@ -183,37 +207,56 @@ export class SymbologyLayer {
     selection: Selection,
     size: { readonly height: number; readonly width: number },
     fixAges?: ReadonlyMap<string, number>,
+    read?: RenderInputs,
   ): void {
+    // A pass-through by default, so the split costs nothing where nobody is measuring — plan mode and every
+    // test call this without one.
+    const step = read?.step ?? passThrough;
+    const hasModel = read?.hasModel ?? never;
     this.areas = [];
     this.chipAreas = [];
-    this.counts = { chips: 0, chipsDropped: 0, measures: 0, spriteVariants: 0, stale: 0, symbols: 0 };
+    this.counts = {
+      chips: 0,
+      chipsDropped: 0,
+      marksHidden: 0,
+      measures: 0,
+      spriteVariants: 0,
+      stale: 0,
+      symbols: 0,
+    };
     // Font and alignment are the chips' state and never vary, so they are set ONCE per frame rather than
     // once per chip: assigning `ctx.font` re-parses the shorthand every time.
     ctx.font = FONT;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const wanted: LabelRequest[] = [];
-    for (const incident of ops.incidents) {
-      const request = this.drawIncident(ctx, projector, incident, selection, size);
-      if (request) {
-        wanted.push(request);
+    step('sym:calls', () => {
+      for (const incident of ops.incidents) {
+        const request = this.drawIncident(ctx, projector, incident, selection, size);
+        if (request) {
+          wanted.push(request);
+        }
       }
-    }
-    for (const unit of ops.units) {
-      const request = this.drawUnit(ctx, projector, unit, selection, size, fixAges?.get(unit.id) ?? 0);
-      if (request) {
-        wanted.push(request);
+    });
+    step('sym:units', () => {
+      for (const unit of ops.units) {
+        const request = this.drawUnit(ctx, projector, unit, selection, size, fixAges?.get(unit.id) ?? 0, hasModel);
+        if (request) {
+          wanted.push(request);
+        }
       }
-    }
-    wanted.sort((a, b) => a.rank - b.rank);
-    const index = new CollisionIndex(size.width, size.height);
-    for (const request of wanted) {
-      this.placeChip(ctx, index, request, size);
-    }
-    // A chip is a click target for its own entity, but an ICON must still win where a neighbour's chip
-    // covers it — so the icons go last in the list `hitTest` walks backwards.
-    this.areas = [...this.chipAreas, ...this.areas];
-    drawScaleBar(ctx, projector, ops, size);
+    });
+    step('sym:labels', () => {
+      wanted.sort((a, b) => a.rank - b.rank);
+      const index = new CollisionIndex(size.width, size.height);
+      for (const request of wanted) {
+        this.placeChip(ctx, index, request, size);
+      }
+      // A chip is a click target for its own entity, but an ICON must still win where a neighbour's chip
+      // covers it — so the icons go last in the list `hitTest` walks backwards.
+      this.areas = [...this.chipAreas, ...this.areas];
+    });
+    step('sym:scale', () => drawScaleBar(ctx, projector, ops, size));
   }
 
   /** The chip's width for one label, padded. */
@@ -278,26 +321,40 @@ export class SymbologyLayer {
     selection: Selection,
     size: { readonly height: number; readonly width: number },
     ageMs: number,
+    hasModel: (id: string) => boolean,
   ): LabelRequest | null {
     const point = projector.project(gtaToEngine(unit.at, ICON_LIFT));
     if (!point) {
       return null;
     }
-    // The chevron's screen angle comes from projecting a point AHEAD of the unit, so it stays correct under
-    // any camera yaw or tilt without the overlay having to know the camera's basis.
-    const ahead = projector.project(gtaToEngine(aheadOf(unit.at, unit.heading, 14), ICON_LIFT));
     const stale = ageMs > FIX_FRESH_MS;
-    const color = css(SET_COLORS[unit.status], stale ? fixAlpha(ageMs) : 1);
     const selected = selection?.kind === 'unit' && selection.id === unit.id;
+    // THE HIT AREA IS RECORDED WHETHER OR NOT A MARK IS DRAWN. Picking runs off what this layer remembers,
+    // so a patrolling car that has lost its chevron must not also lose the pixels an operator taps.
+    this.areas.push({ height: 20, id: unit.id, kind: 'unit', width: 20, x: point.x - 10, y: point.y - 10 });
+    if (stale) {
+      this.counts.stale += 1;
+    }
+    if (!unitWantsSymbol(unit.status, selected, hasModel(unit.id))) {
+      // BOTH counters, because both are true and they answer different questions: the mark is not drawn
+      // (`marksHidden`) and so is the name (`chipsDropped`, which is what the chrome's "N names hidden"
+      // reads). A unit that keeps neither must still be counted by the number an operator is shown, or the
+      // map reads as complete.
+      this.counts.marksHidden += 1;
+      this.counts.chipsDropped += 1;
+
+      return null;
+    }
+    // The chevron's screen angle comes from projecting a point AHEAD of the unit, so it stays correct under
+    // any camera yaw or tilt without the overlay having to know the camera's basis. Projected only for a
+    // mark that will be drawn — it is the second projection of every unit on the board otherwise.
+    const ahead = projector.project(gtaToEngine(aheadOf(unit.at, unit.heading, 14), ICON_LIFT));
+    const color = css(SET_COLORS[unit.status], stale ? fixAlpha(ageMs) : 1);
     const angle = ahead ? Math.atan2(ahead.y - point.y, ahead.x - point.x) : 0;
     // A stale unit is drawn HOLLOW as well as faded: fade alone reads as distance on a tilted map, and the
     // difference between "far away" and "we have not heard from it" is the whole point of the mark.
     chevron(ctx, this.sprites, point.x, point.y, angle, color, selected, stale);
     this.counts.symbols += 1;
-    this.areas.push({ height: 20, id: unit.id, kind: 'unit', width: 20, x: point.x - 10, y: point.y - 10 });
-    if (stale) {
-      this.counts.stale += 1;
-    }
     // Two reasons a unit keeps its symbol and loses its name, and both count as a dropped chip: it is too far
     // from the eye to be readable, or the shift is not about it (`unitWantsLabel`, the operator's call).
     if (!unitWantsLabel(unit.status, selected) || (point.depth > CHIP_MAX_DEPTH && !selected)) {
@@ -618,6 +675,16 @@ function leaderEnd(x: number, y: number, box: LabelBox): { x: number; y: number 
     x: Math.min(Math.max(x, box.x), box.x + box.width),
     y: Math.min(Math.max(y, box.y), box.y + box.height),
   };
+}
+
+/** No host said, so nothing is drawn as a model — plan mode's answer, and every test's. */
+function never(): boolean {
+  return false;
+}
+
+/** The split, absent. */
+function passThrough<T>(_name: string, run: () => T): T {
+  return run();
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {

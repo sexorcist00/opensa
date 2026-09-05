@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CollisionIndex, labelCandidates, labelCeiling, labelRank, unitWantsLabel } from './labels';
+import { CollisionIndex, labelCandidates, labelCeiling, labelRank, unitWantsLabel, unitWantsSymbol } from './labels';
 
 const CHIP = { height: 18, width: 80 };
 
@@ -143,6 +143,28 @@ describe('unitWantsLabel', () => {
     it('names whatever the operator selected, whatever it was doing', () => {
       expect(unitWantsLabel('available', true)).toBe(true);
       expect(unitWantsLabel('busy', true)).toBe(true);
+    });
+  });
+});
+
+describe('unitWantsSymbol', () => {
+  describe('negative cases', () => {
+    it('drops the mark of a unit a car is already drawing', () => {
+      expect(unitWantsSymbol('available', false, true)).toBe(false);
+      expect(unitWantsSymbol('busy', false, true)).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('always marks a unit nothing else is drawing — losing it would remove the unit, not declutter it', () => {
+      expect(unitWantsSymbol('available', false, false)).toBe(true);
+      expect(unitWantsSymbol('busy', false, false)).toBe(true);
+    });
+
+    it('marks the units the shift is about even when a car is under them', () => {
+      expect(unitWantsSymbol('enRoute', false, true)).toBe(true);
+      expect(unitWantsSymbol('onScene', false, true)).toBe(true);
+      expect(unitWantsSymbol('available', true, true)).toBe(true);
     });
   });
 });

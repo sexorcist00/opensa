@@ -98,6 +98,18 @@ export class UnitModels {
     this.types.clear();
   }
 
+  /**
+   * Is this unit currently drawn AS A MODEL — the question the symbology layer asks before it decides
+   * whether the unit needs a 2D mark at all (the operator's call, 2026-09-05).
+   *
+   * A car on the map is the datum once it is really there; a chevron over it is a second drawing of the same
+   * fact. But a unit whose model this build cannot carry has nothing else on screen, so the layer draws its
+   * mark unconditionally — which is why this is a question rather than an assumption.
+   */
+  isDrawn(id: string): boolean {
+    return this.drawnUnits.has(id);
+  }
+
   stats(): UnitModelStats {
     let textureBytes = 0;
     for (const type of this.types.values()) {
