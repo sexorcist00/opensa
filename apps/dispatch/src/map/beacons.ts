@@ -16,6 +16,7 @@ import type { GtaGround } from './coords';
 
 import { UNITS_ON_SCREEN } from '../ops/budget';
 import { gtaToEngine } from './coords';
+import { unitWantsSymbol } from './labels';
 
 export type Rgba = readonly [number, number, number, number];
 
@@ -109,6 +110,9 @@ export class Beacons {
   private readonly counts = new Map<SetKey, number>();
   private readonly engine: Engine;
   private grownSets = 0;
+  /** The units that earned a beacon this frame — what {@link Beacons.pushTrails} filters against, so a
+   *  trail cannot outlive the mark of the unit that drew it. */
+  private readonly marked = new Set<string>();
   /** Sets whose buffer outgrew its GPU allocation this frame — recreated in {@link flush}. */
   private readonly resized = new Set<SetKey>();
   private readonly sets = new Map<SetKey, DebugLineSetId>();
@@ -141,10 +145,35 @@ export class Beacons {
     return { capacity, grownSets: this.grownSets };
   }
 
-  /** Refill every set from the current board. Called once per frame; allocates nothing. */
-  update(ops: Operations, selection: Selection, trails?: ReadonlyMap<string, Float32Array>): void {
+  /**
+   * Refill every set from the current board. Called once per frame; allocates nothing.
+   *
+   * **A unit earns a beacon the same way it earns a 2D mark** (`unitWantsSymbol`, the operator's call of
+   * 2026-09-05, extended here at their word). This layer and the symbology layer draw the same fact in two
+   * places — a pillar through depth and a chevron on the canvas — so a rule that removed one and left the
+   * other would have taken the clutter off the overlay and left it in the world. A unit nothing else draws
+   * still gets both, which is the clause that keeps it from being a disappearance.
+   *
+   * **Routes are NOT filtered and never were**: `pushRoutes` already draws only a unit that is `enRoute` to
+   * a call it can find, which is the same population by a different road.
+   */
+  update(
+    ops: Operations,
+    selection: Selection,
+    trails?: ReadonlyMap<string, Float32Array>,
+    hasModel?: (id: string) => boolean,
+  ): void {
+    const drawn = hasModel ?? never;
     this.counts.clear();
+    // Reused rather than rebuilt: a roster of 150 makes a fresh Set per frame otherwise, which is the
+    // allocation 9/07 already removed from `UnitModels` for the same reason.
+    this.marked.clear();
     for (const unit of ops.units) {
+      const selected = selection?.kind === 'unit' && selection.id === unit.id;
+      if (!unitWantsSymbol(unit.status, selected, drawn(unit.id))) {
+        continue;
+      }
+      this.marked.add(unit.id);
       this.pushMarker(unit.status, unit.at, UNIT_PILLAR);
     }
     for (const incident of ops.incidents) {
@@ -271,6 +300,9 @@ export class Beacons {
   }
 
   /** Every unit's leg so far, as a line list: each pair of points is one segment. */
+  /** A trail belongs to the unit it came from, so it follows that unit's mark: where the board is 150 cars
+   *  and the operator asked to see only the ones working, 150 tracks laid over the city are the same answer
+   *  to the same question. */
   private pushTrails(trails: ReadonlyMap<string, Float32Array> | undefined): void {
     let out = this.buffers.get('trail');
     let at = 0;
@@ -279,7 +311,10 @@ export class Beacons {
 
       return;
     }
-    for (const points of trails.values()) {
+    for (const [id, points] of trails) {
+      if (!this.marked.has(id)) {
+        continue;
+      }
       for (let i = 0; i + 3 < points.length; i += 2) {
         if (at + 6 > out.length) {
           const grown = this.grow('trail', at + 6);
@@ -304,6 +339,11 @@ export function incidentKey(status: string, priority: number): SetKey {
   }
 
   return priority === 1 ? 'call1' : priority === 2 ? 'call2' : 'call3';
+}
+
+/** No host said, so nothing is drawn as a model — plan mode's answer, and every test's. */
+function never(): boolean {
+  return false;
 }
 
 function selectionGround(ops: Operations, selection: Selection): GtaGround | null {

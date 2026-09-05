@@ -857,7 +857,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     // and `boardChanged` is that comparison kept rather than recomputed here.
     if (overlayOn && gate.boardChanged) {
       time('board', () => {
-        beacons.update(ops, options.selection(), options.trails?.());
+        // Same rule as the overlay's marks, and passed the same way: this layer draws the SAME fact through
+        // depth, so filtering one and not the other would move the clutter rather than remove it.
+        beacons.update(ops, options.selection(), options.trails?.(), (id) => unitModels.isDrawn(id));
         unitModels.update(ops.units);
       });
     }
