@@ -203,6 +203,14 @@ them before designing a pass, not after measuring one (the user's pointer, 2026-
 - <https://www.arm.com/technologies/graphics-technologies/arm-frame-buffer-compression> — AFBC, and the
   sentence that killed a compute-shader bloom before it was written: it cannot compress storage images, so a
   compute chain gives up framebuffer compression exactly where a tiler is bandwidth-bound.
+- <https://developer.chrome.com/blog/next-for-webgpu> — what WebGPU does NOT have yet, which bounds every
+  plan that reaches for a desktop technique: **multi-draw indirect and bindless are proposals**, not shipped
+  surface. Compute shaders and single `drawIndirect` are core, so compute culling is expressible and the
+  one-call-for-everything GPU-driven shape is not ([the frame audit](audit/frame-path-vs-aaa.md) §3.3).
+- <https://developer.arm.com/community/arm-community-blogs/b/mobile-graphics-and-gaming-blog/posts/immortalis-g925-the-fragment-prepass>
+  — Arm's Fragment Prepass, and the sentence that matters for OUR device rather than for theirs: it culls
+  *without* being sensitive to draw order, "enabling applications to disable front-to-back sorting". Which
+  is how you know every Mali before it IS sensitive to it — the 2/03 phone included.
 - <https://developer.arm.com/documentation/102643/latest/> — Arm's Mali best-practice guide, and the two
   things it puts FIRST. **Attachments**: clear rather than load, and never store a multisample attachment
   back to memory — checked 2026-09-05 and already true throughout this engine (`loadOp: 'clear'` everywhere,

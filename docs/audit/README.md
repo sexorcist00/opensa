@@ -5,6 +5,19 @@ numbers and links to the raw records — so the result survives the session and 
 without re-deriving it. Runtime numbers live in [`../benchmarks/`](../benchmarks/); these docs summarise and
 interpret them.
 
+- [`frame-path-vs-aaa.md`](./frame-path-vs-aaa.md) — the 2026-09-05 read of the whole frame path against
+  published AAA and mobile-vendor practice, taken after 201/9 closed with the frame on the display's floor
+  and the question became whether the SHAPE is right or only the constants. **The shape is right**: forward
+  with baked visibility, one world pass, reversed-Z, discarded multisample attachments, sky after opaque,
+  tonemap last, bundles for the static world — and three of those are places where following desktop AAA
+  would make this frame SLOWER (no depth prepass, because Arm's Forward Pixel Kill already does hidden-surface
+  removal and a prepass doubles draw calls and vertices; no compute post chain, because AFBC cannot compress
+  storage images). Its ranked gap list is led not by a technique but by a **load**: every number this project
+  has is from a map with no units on it, while the declared budget is 150 units drawn as models, and no
+  capture has ever been taken at it — so at 96 draws we are vsync-bound and every micro-lever is invisible,
+  which two arms proved the same day. Also bounds what is even reachable: **multi-draw indirect and bindless
+  are WebGPU proposals**, not shipped surface, so the desktop GPU-driven shape cannot be written here yet.
+
 - [`session-32-the-defect-our-own-decoder-could-not-see.md`](./session-32-the-defect-our-own-decoder-could-not-see.md)
   — the 2026-08-20 session after it: two named tasks closed, built, delivered and field-accepted
   (`mod-installer` 015, `cars-server` 003). Its subject is that the defect it fixed — a mod's PNG folder
