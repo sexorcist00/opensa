@@ -117,7 +117,7 @@ export class RenderGate {
    * unchanged, so `same()` said "nothing happened", the gate rested, and the frame that would have finished
    * the upload never ran. The console then sat on a black map holding four fetched cells for as long as
    * nobody touched it — 19 drawn frames against 851 skipped in 86 s on the phone, `errors` empty
-   * ([the open issue](../../../../docs/open-issues/dispatch-map-void-no-cells-created.md)).
+   * ([the open issue](../../../../docs/open-issues/fixed/dispatch-map-void-no-cells-created.md)).
    *
    * {@link FrameSignals.pending}'s own comment already said it — *"the picture is not finished while this is
    * above zero"* — and this is the line that makes the code agree with it. The cost is honest and small: a

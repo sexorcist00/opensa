@@ -159,7 +159,7 @@ number in this chain is meant to be subtracted from. **DONE the same day, and it
 uploads drain only inside a drawn frame (`drainUploads`, 1.5 ms, called from `world.follow()`), `has(ref)`
 stays false until the last write lands, so the cell is not created, `pendingCells` does not move, no other
 signal moves either — and the frame the gate skips is the one that would have finished the upload. `pending`
-is read as a predicate now ([the issue](../../../open-issues/dispatch-map-void-no-cells-created.md)), and
+is read as a predicate now ([the issue](../../../open-issues/fixed/dispatch-map-void-no-cells-created.md)), and
 the field arm's confirmation is the first thing the re-flight owes.
 
 **THE CIRCUIT IS TAKEN, 2026-08-31, and both subtractions are ZERO** —
@@ -202,7 +202,7 @@ cheap for having been measured in a smaller window. Beside it the VOID now names
 carries `blockedOnBlob` and `blockedOnArrays`, so the next occurrence reads *"4 cells want a level, 1 waiting
 on their geometry blob, 3 on a texture array"* — the RING, the fetch path and the upload path being three
 different failures the report could not tell apart. **That is an instrument, not a repair**; the void's cause
-is still unknown ([the open issue](../../../open-issues/dispatch-map-void-no-cells-created.md)), and both
+is still unknown ([the open issue](../../../open-issues/fixed/dispatch-map-void-no-cells-created.md)), and both
 reach the device with the next `prebuilt/opensa-webapp.tar.gz`.
 
 **And the circuit carries NO BOARD since 2026-08-31** (the user's call — THE FIELD RUN is the map, and the

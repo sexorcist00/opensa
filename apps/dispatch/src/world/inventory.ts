@@ -753,7 +753,7 @@ export class FrameInventory {
  * *"No cells streamed"* is a symptom, and on 2026-08-31 it cost a field session: the console sat at
  * `pendingCells` 4 with the cell bytes already fetched, `cellsCreated` 0 and an empty error log for 86 s,
  * and reading the code afterwards could not say whether the blobs, the arrays or the ring was the reason
- * ([the open issue](../../../../docs/open-issues/dispatch-map-void-no-cells-created.md)). Nothing here
+ * ([the open issue](../../../../docs/open-issues/fixed/dispatch-map-void-no-cells-created.md)). Nothing here
  * FIXES that — it makes the next occurrence answer the question instead of posing it, which is the only
  * honest thing to build before the cause is known.
  *

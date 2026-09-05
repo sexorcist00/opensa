@@ -72,7 +72,7 @@ export interface StreamStats {
    * It exists because *"the world never arrived"* and *"the world is still arriving"* look identical from
    * outside: {@link pendingCells} says how many cells want a level, and nothing said what was stopping them.
    * A phone capture on 2026-08-31 sat at `pendingCells` 4 with the cell bytes already fetched, `created` 0
-   * and an empty error log for 86 s ([the open issue](../../../../docs/open-issues/dispatch-map-void-no-cells-created.md)),
+   * and an empty error log for 86 s ([the open issue](../../../../docs/open-issues/fixed/dispatch-map-void-no-cells-created.md)),
    * and this pair is the difference between a diagnosis and another field session.
    */
   blockedOnArrays: number;
