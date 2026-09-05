@@ -66,6 +66,13 @@ is allowed to remove is WASTE — a bloom level three pixels across, a bake whos
 minutes, a sort of a static order repeated per instance per frame — and a change that alters the picture at
 all goes to the operator as an A/B on the device before it is kept.
 
+**THE SWEEP'S OWN HEADLINE, 2026-09-05** ([the row](../../../benchmarks/opensa-engine/2026-09-05-mobile-map-ablation-sweep.json)):
+seven arms over one route, and the frame does not divide the way this chain assumed. **The bloom chain is
+7.7 ms of a 23.4 ms frame** and its TAIL is free; **the whole streamed world — 96 draws, 242 k triangles — is
+3.8 ms**, half of it. The per-pixel work of the post chain outweighs the per-triangle work of the city two to
+one at map zoom, which is the sentence every step below should be read against: the frame is not expensive
+because of how much world is in it.
+
 ## The rule this chain does not get to break
 
 Every step here is a **budget the frame reads**, never a branch it executes, and never a second renderer —
@@ -477,6 +484,14 @@ rebake rate (a few Hz) before building it.
 of the window's frames onto the vsync floor (rung 1: 67 % against 59 %). **It is the cheapest honest fix in
 this chain**: unlike the bloom result it changes no pixel anybody can see, because the field it re-bakes is
 identical for minutes. The amortized version still owes its own arm and a verdict that the clouds move.
+
+**AND THE TWO PASSES THIS STEP HOLDS UP AS THE SOLVED EXAMPLES ARE NOT FREE EITHER.** The same sweep priced
+what is LEFT of each after its own amortization: **`noprobe` is 1.6 ms and `noskylut` is 1.0 ms** — together
+**2.6 ms, more than the cumulus bake this step was opened on**. That is not a refutation of the pattern (both
+would cost far more unamortized) but it does mean neither is the finished article this step assumed, and
+neither has a step of its own. What is owed is a read of what actually runs on a frame that should skip them:
+an early return that still records a pass, a uniform write, a bind-group rebuild, or an interval short enough
+that the amortization is thinner than it looks.
 
 ### 07 — The per-frame allocations, and one capability that retains what it never reads
 
