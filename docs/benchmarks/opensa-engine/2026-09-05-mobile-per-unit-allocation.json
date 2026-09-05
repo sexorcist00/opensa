@@ -1,0 +1,28 @@
+{
+  "note": "The per-unit path stops allocating. Measured against the decomposition taken 40 minutes earlier, with the empty-map baseline re-flown to prove the device had not moved.",
+  "app": "aa64e84+",
+  "build": "07:40 05-09-2026",
+  "pak": { "out": "./build/phone-cars", "recipe": "MODELS=1 BAKE=1 TEXTURES=astc DISTRICT=los-santos-centre" },
+  "device": "MGA-LX3 / ARM Bifrost @ DPR 2, ?surface=720x640 pinned",
+  "pose": "[1500,-1500] h900 pitch -1.15 yaw pi perspective",
+  "theChange": "three allocations per entity per frame removed: gtaToEngine's coordinate array, project's returned point, and the hit rect. `projectInto(x, y, z, out)` takes three numbers and writes into a point the layer owns; the hit rects are pooled and their records reused; the `[...chipAreas, ...areas]` concatenation that copied every rect every frame went with them.",
+  "why": "the decomposition said the cost was not the drawing — `sym:units` 4.1 ms for 150 units, and hiding 110 of the marks moved it 0.1 ms — so what dominates is what runs for EVERY unit whether or not it draws, ~190 times a frame at ~50 fps on a phone's collector.",
+  "control": {
+    "field before": [20.43, 20.03],
+    "field after": 20.25,
+    "reading": "the empty map is untouched by any of this (it has no units), so it is the check that the device is in the same state. 20.03-20.43 before, 20.25 after."
+  },
+  "board": {
+    "conditions": "150 units, ~40 calls, fleet loaded (unitsAsModels 150, draws 3571), 82/80 marks drawn, css 360x609 in both",
+    "before": { "dtMeanMs": 26.30, "p50": 18, "p95": 50, "cpuBodyMs": 11.04, "sym:units": 4.04, "sym:labels": 1.50, "sym:calls": 0.76, "frames": 562 },
+    "after": { "dtMeanMs": 23.81, "p50": 18, "p95": 38, "cpuBodyMs": 7.86, "sym:units": 1.62, "sym:labels": 1.55, "sym:calls": 0.81, "frames": 450 }
+  },
+  "reading": {
+    "sym:units": "4.04 -> 1.62 ms, -60 %, at the same mark count. The allocation WAS the cost, which is what the decomposition predicted and what three earlier drawing-side levers had each failed to move.",
+    "cpu": "11.04 -> 7.86 ms of body, -3.2 — more than sym:units alone, because the same allocations were being made for calls (`sym:calls`) and because the concatenation went too.",
+    "frame": "26.30 -> 23.81 ms, -2.5. The board's cost OVER the empty map falls from +6.1 to +3.6 ms — nearly halved — while p50 stays at 18 and p95 drops 50 -> 38, which is the shape of a tail losing its collector pauses rather than a floor moving.",
+    "whatDidNotMove": "p50, at 18 ms in both. Half the frames were already landing on one display interval and still do; what this bought is the other half."
+  },
+  "alsoFixed": "the boot flash the operator caught: the mark rule asked whether a car was drawn RIGHT NOW, which at startup is no for every unit, so the console opened with 150 chevrons and dropped 110 a second later. `willDraw` answers whether a car is COMING — a model in flight counts, only a unit that names none or names one this build cannot supply keeps a mark. Confirmed on the device in this session: marksHidden read 109 while unitsAsModels was still 0.",
+  "owed": "nothing here, but the next term is unchanged and named: the empty map is 20.2 ms of which 201/9's sweep priced the post chain at 7.7 and the world at 3.8. Every board-side lever now sums to +3.6."
+}
