@@ -185,6 +185,22 @@ export interface EngineStats {
   gpuPostMs: number;
   /** Env-probe span (face render + mips), ms — the plan-16 ≤0.5 ms gate is measured. 0 when skipped. */
   gpuProbeMs: number;
+  /**
+   * Probe FACES rendered since boot — a running total, so a capture can say whether the probe ran at all.
+   *
+   * **This exists because a pass that never ran was priced at 1.6 ms for a day** (201/9, 2026-09-05). The
+   * map console never assigns {@link Engine.probeCenter}, so `scheduleProbe` returns at its first condition
+   * and the env probe has never rendered a face on that surface — yet `?ablate=probe` produced an ordinary
+   * capture with a believable number in it, and nothing anywhere said the arm was null
+   * ([the row](../../../docs/benchmarks/opensa-engine/2026-09-05-mobile-ablation-null-arm.json)).
+   * `gpuProbeMs` could not answer it: this adapter has no `timestamp-query`, so that column reads 0 both
+   * when the probe is skipped and when it is merely unmeasurable.
+   *
+   * **It is a COUNT rather than a flag, and cumulative rather than per-frame**, so it survives the cadence
+   * (`PROBE_FRAME_INTERVAL`) — a reader takes the delta across a window and gets faces-per-window. Per the
+   * [running-counter restriction](../../../docs/restrictions/architecture.md) it is READ, never summed.
+   */
+  probeFacesRendered: number;
   residencyBytes: number;
   /**
    * Roadsign GLYPH QUADS in the cells drawn this frame (`.oscell` minor 8). Roadsign text welds into an
@@ -777,6 +793,15 @@ export class Engine {
     return this.firstFrameTotals;
   }
   /**
+   * The last frame's stats, for a reader that is not inside the frame loop.
+   *
+   * {@link frame} returns the same object; this is how the inventory report reaches a CUMULATIVE field
+   * ({@link EngineStats.probeFacesRendered}) when it is built between frames rather than during one.
+   */
+  get stats(): EngineStats {
+    return this.statsValue;
+  }
+  /**
    * Bloom chain resources (074/09): prefilter (full res) + `levels` downsample mips + `levels−1` upsample
    * mips, all 16f, rebuilt with the targets on resize (with the previous chain destroyed — unlike the
    * one-off scene targets these are many small textures). `result` (up mip 0, half res) feeds the composite.
@@ -806,8 +831,8 @@ export class Engine {
   private cloudFieldBaked: null | { clump: number; seconds: number } = null;
   private cloudFieldBindGroup!: GPUBindGroup;
   private cloudFieldTexture!: GPUTexture;
-  private cloudFieldView!: GPUTextureView;
 
+  private cloudFieldView!: GPUTextureView;
   /** Breakable clutter instances (074/20): key hash → the matrix slot to degenerate on a hit. */
   private readonly clutterBreakables = new Map<number, { matrixBuffer: GPUBuffer; offset: number }>();
   /** Per streamed cell → its clutter draws (one per model). Replaced/removed as cells stream. */
@@ -894,6 +919,7 @@ export class Engine {
   private plateBackTexture!: GPUTexture;
   /** The generated plate TEXT rasters, one layer per distinct plate the world is wearing. */
   private plateTexture!: GPUTexture;
+
   /** Resolved scene (16f) + the godrays composite resources (074/09 stage 1); bind group is rebuilt on
    *  resize — it is NOT referenced by any bundle, so this is safe (unlike the frame bind group). */
   private postBindGroup!: GPUBindGroup;
@@ -903,7 +929,6 @@ export class Engine {
   private postUniform!: GPUBuffer;
 
   private probe!: EnvProbe;
-
   private readonly probeFrameData = new Float32Array(104);
   private readonly probeFrustum = new Float32Array(24);
   private readonly probeInvViewProj: Mat4 = mat4Identity();
@@ -930,6 +955,7 @@ export class Engine {
     gpuPassMs: 0,
     gpuPostMs: 0,
     gpuProbeMs: 0,
+    probeFacesRendered: 0,
     residencyBytes: 0,
     roadsignQuadsRecorded: 0,
     submitMs: 0,
@@ -948,6 +974,7 @@ export class Engine {
   private vehicleModelSeq = 0;
   /** Part definitions per model — every instance builds its own `RigidEntity` from these. */
   private readonly vehicleParts = new Map<VehicleModelId, readonly RigidPartInit[]>();
+
   private readonly view: Mat4 = mat4Identity();
 
   private readonly viewProj: Mat4 = mat4Identity();
@@ -3287,10 +3314,18 @@ export class Engine {
    * Whether anything that READS the environment probe exists at all — the demand gate on its refresh.
    *
    * **The probe is not amortized to nothing; it is amortized to a face every other frame** — six faces a
-   * cube, `PROBE_FRAME_INTERVAL` frames apart — and 201/9's sweep priced what is left at **1.6 ms of a
-   * 21.5 ms frame** on the 2/03 phone, which is a top-three line rather than a rounding error. Its only
-   * consumer is the rigid lane's reflection term (the car pipe), so on a frame with no vehicle instance the
-   * whole cube is rendered for nobody.
+   * cube, `PROBE_FRAME_INTERVAL` frames apart. Its only consumer is the rigid lane's reflection term (the
+   * car pipe), so on a frame with no vehicle instance the whole cube is rendered for nobody.
+   *
+   * **WHAT THIS IS WORTH, CORRECTED 2026-09-05, AND THE CORRECTION IS THE INTERESTING PART.** This gate was
+   * built on 201/9's sweep pricing `?ablate=probe` at 1.6 ms of a 21.5 ms frame. That number was taken on
+   * the MAP CONSOLE, and the console never assigns {@link Engine.probeCenter} — so `scheduleProbe` was
+   * already returning at its first condition and there was no probe there to remove
+   * ([the null arm](../../../docs/benchmarks/opensa-engine/2026-09-05-mobile-ablation-null-arm.json): the
+   * same frame flown five times spans 2.47 ms, and both `noprobe` windows land inside the `field` ones).
+   * **So this gate bought nothing on the surface that motivated it.** It is kept because it is right where
+   * the probe DOES run — the game, which feeds a centre every frame and renders a cube for a car that may
+   * be nowhere on screen — and that is now the only claim it makes.
    *
    * **This is the variant [the lever's own card](../../../docs/performance/applied/env-probe-cadence.md)
    * calls the one that costs no quality**, as against a longer interval or a smaller face, which both trade
@@ -3477,7 +3512,13 @@ export class Engine {
       return;
     }
     this.probeTick = (this.probeTick + 1) % PROBE_FRAME_INTERVAL;
-    frameData[91] = this.probeTick === 0 ? this.renderProbeFace(probeCenter, frameData) : this.probe.mix();
+    if (this.probeTick !== 0) {
+      frameData[91] = this.probe.mix();
+
+      return;
+    }
+    this.statsValue.probeFacesRendered += 1;
+    frameData[91] = this.renderProbeFace(probeCenter, frameData);
   }
 
   /**

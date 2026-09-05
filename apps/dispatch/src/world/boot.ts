@@ -1064,6 +1064,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           deviceWidth: canvas.width,
           dpr,
           pinned: pinnedSurface !== null,
+          // 9: whether the probe rendered anything. 0 says `ablated: 'probe'` removed NOTHING, which is the
+          // case on this console — it never sets `probeCenter`, so the pass is gated off one condition
+          // earlier than the arm. A null arm is otherwise invisible: its capture is complete, consistent
+          // and carries a believable number, and one was read as 1.6 ms for a day.
+          probeFaces: engine.stats.probeFacesRendered,
           renderScale: engine.renderScale,
           // 9/04: the attachment set this window was measured at. `workingSetBytes` is the number the arm is
           // ABOUT — 48 by default against the 16 a Mali tile budgets for — computed rather than restated, so

@@ -29,6 +29,25 @@ comparing any two numbers** — the runs come from two different harnesses and s
 How to produce a run: [`../development/benchmarks.md`](../development/benchmarks.md) (`?bench=all`, the
 `[bench]` console protocol, the headless harness at `tools-debug/bench-harness/`).
 
+## Two rules an ablation row has to satisfy, both learned by breaking them
+
+**An arm is subtracted from a baseline flown in the SAME thermal window** (2026-09-05). The console's `field`
+read 23.44, 23.66 and 21.52 across one day with nothing changed — the device heats — so a fix is never judged
+by comparing today's absolute with an earlier one, and a row that quotes a delta says which baseline it came
+from.
+
+**An arm must be proven NON-NULL before its number is read, and the instrument's own floor must be measured
+rather than assumed** ([the null arm](opensa-engine/2026-09-05-mobile-ablation-null-arm.json), 2026-09-05).
+`?ablate=probe` was priced at 1.6 ms on a surface where the probe has never rendered a face: the map console
+never assigns `Engine.probeCenter`, so the pass was already gated off one condition earlier and the arm
+removed one array store. Flown five times as the null arm it is, one identical frame spanned **18.11–20.58 ms
+— 2.47 ms** — and its first three windows looked like a clean, thermally-bracketed 2 ms effect. **So the
+floor on that device is ~2.5 ms, not the half-millisecond the instrument's own doc claimed**, and anything
+under it is a sample rather than a measurement. A null arm is invisible in every capture it produces: the
+report is complete, self-consistent and plausible. The defence is to read what the pass is gated on in the
+HOST before believing the arm that removes it, and to fly a control that removes nothing whenever a delta
+matters.
+
 ## File naming
 
 `<engine>/YYYY-MM-DD-<surface>-<what>.json` — e.g. `opensa-engine/2026-07-20-ingame-regression.json`.

@@ -159,7 +159,7 @@ mobile work and the "trim the engine to what the map draws" work, with the world
 cars and peds are drawn, vegetation sways, the day turns, and one engine serves PC and mobile.
 Full chain: [docs/plans/201-dispatch-console/](docs/plans/201-dispatch-console/readme.md).
 
-**Its urgent work, as of 2026-08-31, is [chain 9 — the mobile frame](docs/plans/201-dispatch-console/9-the-mobile-frame/readme.md)**: the console measures **21 fps on the phone against a declared 60**, and an audit of its own captures against the code found that ~38 ms of a 48 ms frame belongs to no span this repo records. Seven fixes, most of them one constant; it runs before the rest of the chain.
+**[Chain 9 — the mobile frame](docs/plans/201-dispatch-console/9-the-mobile-frame/readme.md) opened 2026-08-31 as the urgent work and is SPENT as of 2026-09-05.** It began at **21 fps against a declared 60**, with ~38 ms of a 48 ms frame belonging to no span this repo records. The console now runs at **18–21 ms with 74–86 % of frames on ONE display interval**, and the win was the post chain rather than the world: removing the bloom chain is 7.7 ms of a 23.4 ms frame while the whole streamed city is 3.8, so the shipped fix is a half-resolution bloom prefilter, taken on the operator's night verdict. The chain also demoted its own instrument — an ablation arm that removes NOTHING reads **2.47 ms** on this device, so every arm under that is a sample rather than a measurement. The next millisecond is not in the frame; it is in the symbology (5/02, 5/04).
 
 What that console is FOR is the final plan: **a web dispatch application for a SA-MP server**, paired with a
 client-side CAD plugin (PCAD), in which OpenSA is one component — the 3D map. Product, field survey, seams,
