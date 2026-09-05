@@ -906,6 +906,39 @@ a whole evening of measurement had been taken through it. Caught since 2026-09-0
 (`apps/dispatch/src/world/capture-surface.ts`) and its five tests, which pin the divergent case rather than
 the agreeing one.
 
+## A long-lived process serves the TABLE IT STARTED WITH, never the one in the checkout
+
+A server that reads a module at boot and answers from it — a link list, a tool schema, a job table — keeps
+answering from the copy it loaded. `git pull` moves the checkout; it does not move the process. So the tree
+on disk and the surface an agent or a person is driving can disagree completely, and **both of them report
+themselves as current**: `git status` is clean, the panel's own preflight says `ok`, and the tool list looks
+like a tool list.
+
+Measured twice, and the two occurrences fail in opposite directions:
+
+- **2026-08-31 — the surface was BEHIND the checkout.** The phone's tree was `main` and clean, `git pull`
+  said *already up to date*, and the panel's MCP server still advertised the SIX links of the day before
+  `302bb2d` added three. `map_open`'s `view` offered no `cleared`, no `engine` and no `board`, and its
+  `field` was still the 150-unit board that THE FIELD RUN had stopped being that morning. An agent trusting
+  the tool would have measured the exact thing the user's call of that day removed.
+- **2026-09-03 — the surface was AHEAD of it.** The panel had been started while the checkout was on a
+  feature branch and went on offering that branch's two measurement arms after the checkout returned to
+  `main`, where the served app understood neither of their parameters. Opening one would have run the
+  DEFAULT and filed it under the arm's name — an A/B whose two halves are the same run, which is the one
+  failure the measurement rules exist to prevent.
+
+The rule: **a process that hands out a table which can change with the checkout must be restarted whenever
+the checkout moves**, and anything the table drives has to be able to say which of the two it came from. The
+job route is the shape that survives this on the phone — `open.mjs` is spawned per call and therefore reads
+the CURRENT `app/links.mjs`, which is how three arms were opened on 08-31 while the tool still denied they
+existed; the MCP surface has no such escape and needs `npm run panel:tunnel` restarted, which only the person
+holding the phone can do.
+
+**Caught:** no, and it is silent on both sides of the wire. Nothing errors, no check fails, and the two
+occurrences above look like an agent misreading a menu rather than a menu that is wrong. The only signal is
+arithmetic a reader has to do by hand — comparing what the surface offers against what the checkout contains
+— which is why it took a second occurrence to write this down.
+
 ## An effect's RETURN VALUE is its cleanup — a shorthand body must return a cleanup or nothing
 
 React calls whatever `useEffect` returns as the effect's cleanup function. A concise arrow body returns the
